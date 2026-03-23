@@ -98,9 +98,9 @@ across the entire agent network.
 
 ### CIDF Source
 ```
-single-agent/cidf/core/content_insertion_framework.py   ← decision engine
-single-agent/cidf/core/content_insertion_policy.json    ← policy v1.2
-single-agent/cidf/linter/policy_linter.py               ← lint guard
+single_agent/cidf/core/content_insertion_framework.py   ← decision engine
+single_agent/cidf/core/content_insertion_policy.json    ← policy v1.2
+single_agent/cidf/linter/policy_linter.py               ← lint guard
 ```
 
 ### Message Protocol Addition for Insertion Tasks

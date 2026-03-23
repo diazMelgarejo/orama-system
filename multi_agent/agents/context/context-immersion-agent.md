@@ -80,4 +80,4 @@ Output schema addition:
 }
 ```
 
-**Reference**: `single-agent/cidf/core/content_insertion_policy.json` (v1.2)
+**Reference**: `single_agent/cidf/core/content_insertion_policy.json` (v1.2)
