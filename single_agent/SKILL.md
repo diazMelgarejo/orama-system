@@ -1,6 +1,6 @@
 ---
 name: ultrathink-system-skill
-description: Master methodology for elegant problem solving. Unifies single-agent and multi-agent execution under the ultrathink 5-stage process. Routes automatically — runs inline for simple tasks (using CIDF v1.2 for any content insertion), escalates to the 7-agent network only when parallelism or scope demands it. Activates for any task requiring architectural thinking, systematic verification, content insertion decisions, or self-improvement.
+description: Master methodology for elegant problem solving. Unifies single_agent and multi_agent execution under the ultrathink 5-stage process. Routes automatically — runs inline for simple tasks (using CIDF v1.2 for any content insertion), escalates to the 7-agent network only when parallelism or scope demands it. Activates for any task requiring architectural thinking, systematic verification, content insertion decisions, or self-improvement.
 version: 2.0.0
 license: Apache 2.0
 compatibility: claude-code, cowork, clawdbot, moltbot, openclaw, ecc-tools
@@ -181,7 +181,7 @@ subagent("Prototype approach A"); subagent("Prototype approach B")
 ## MODE 3: Full Multi-Agent Network (Complex Tasks)
 
 **When**: 8+ steps, parallel modules, cross-system, large codebase.
-**Requires**: `python multi-agent/mcp_servers/ultrathink_orchestration_server.py`
+**Requires**: `python multi_agent/mcp_servers/ultrathink_orchestration_server.py`
 
 ### Agent Network
 ```
@@ -199,7 +199,7 @@ Orchestrator
 - The **Verifier Agent** enforces LINT-002 (`verification_required == True`) as a hard gate.
 - The **Orchestrator** routes insertion tasks through CIDF-aware executor instances only.
 
-Config: `multi-agent/config/agent_registry.json` · `multi-agent/config/routing_rules.json`
+Config: `multi_agent/config/agent_registry.json` · `multi_agent/config/routing_rules.json`
 
 ### autoresearch Integration (Mode 3 Task Type)
 
@@ -208,7 +208,7 @@ When the router detects `task_type == "autoresearch"`:
 - **Roles**: Three specialized agents (Coder / Evaluator / Orchestrator) orchestrated by Perplexity-Tools `AgentTracker`.
 - **CIDF**: The **Coder** agent calls `decide()` before editing `train.py` → uses rank 2 (`direct_typing` on local file) followed by `scp` deployment.
 - **Verification**: The **Evaluator** agent enforces LINT-002 (`verification_required == True`) by parsing `log.txt` programmatically (not visual confirmation).
-- **Config**: `multi-agent/config/agent_registry.json` registers `autoresearch-coder`, `autoresearch-evaluator`, `autoresearch-orchestrator` as pre-defined agent types.
+- **Config**: `multi_agent/config/agent_registry.json` registers `autoresearch-coder`, `autoresearch-evaluator`, `autoresearch-orchestrator` as pre-defined agent types.
 
 ---
 
