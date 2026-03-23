@@ -383,7 +383,7 @@ result = agent_executor.invoke({
 
 ### SKILL SET 3 — CrewAI (Python)
 
-**Purpose:** Assign the decision framework as a shared tool across a multi-agent crew.
+**Purpose:** Assign the decision framework as a shared tool across a multi_agent crew.
 **Files:** `skills/crewai/crewai_setup.py`
 **Requires:** `pip install crewai langchain`
 

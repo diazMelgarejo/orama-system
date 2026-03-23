@@ -7,7 +7,7 @@
 
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "single-agent"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "single_agent"))
 
 try:
     from cidf.core.content_insertion_framework import (
@@ -30,7 +30,7 @@ def cidf_insert(
     """
     CIDF-compliant content insertion wrapper for executor agents.
 
-    ALL content insertion in the multi-agent network goes through here.
+    ALL content insertion in the multi_agent network goes through here.
     Never call a write/insert directly — always use this wrapper.
 
     Args:
@@ -49,7 +49,7 @@ def cidf_insert(
     """
     if not CIDF_AVAILABLE:
         raise RuntimeError(
-            "CIDF package not found. Ensure single-agent/cidf/ is in the Python path."
+            "CIDF package not found. Ensure single_agent/cidf/ is in the Python path."
         )
 
     task = Task(
