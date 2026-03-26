@@ -1,6 +1,6 @@
 # Perplexity-Tools Bridge for UltraThink System
 
-## Version 0.9.4.0
+## Version 0.9.4.3
 
 ### Overview
 
@@ -290,13 +290,45 @@ curl http://localhost:8000/health
 
 **This integration requires:**
 
-- ultrathink-system >= v0.9.4.0
+- ultrathink-system >= v0.9.4.3
 - Perplexity-Tools >= v0.9.0.0
 - Ollama >= 0.1.20 (with Qwen3 support)
 - Redis >= 6.0
-- Python >= 3.10
+- Python >= 3.8
 
-### Changelog v0.9.4.0
+### Changelog
+
+#### v0.9.4.3 - 2026-03-26
+
+**Fixed:**
+- Root docs now use the real installer filenames: `install-single-agent.sh` and `install-multi-agent.sh`
+- `verify-package.sh` now validates the CIDF package before reporting final pass/fail
+- Package install verification now uses a local build-plus-wheel-install flow that works offline when tooling is present
+- Repository-root docs now distinguish `single_agent/scripts/...` commands from installed-skill `scripts/...` commands
+
+**Changed:**
+- Declared Hatchling explicitly as the build backend
+- Aligned package metadata, skill/config versions, and user-facing release surfaces to `0.9.4.3`
+- Expanded ignore rules for repo-local build outputs and disposable test environments
+
+#### v0.9.4.1 - 2026-03-23
+
+**Fixed:**
+- Directory naming: renamed `multi-agent/` → `multi_agent/` and `single-agent/` → `single_agent/` for valid Python package imports
+- Updated pyproject.toml wheel package list to use underscore names
+- Updated all tests, imports, and documentation references to underscore naming
+- Fixed routing_rules.json CIDF policy paths
+
+**Added:**
+- `test-package-install.py`: validates package metadata and pip install functionality
+- GitHub Actions CI workflow with pytest, build, and lint stages
+
+**Verified:**
+- 86 unit tests passing
+- sdist and wheel builds successful
+- Package install and import functionality working
+
+#### v0.9.4.0
 
 **Added:**
 - `/ultrathink` endpoint specification
