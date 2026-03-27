@@ -143,6 +143,38 @@ if task.requires_deep_reasoning and task.privacy_critical:
 | Finance/Real-time | Perplexity Grok 4.1 | N/A |
 | Critic review | Local Qwen3:30b | qwen3:30b (critic mode) |
 
+
+### Hardware Abstraction Layer (v0.9.5.0+)
+
+**Perplexity-Tools v0.9.5.0+ includes hardware-aware orchestration:**
+
+**Hardware profiles defined in PT:**
+- `mac-studio` (Apple Silicon M-series): Optimized for unified memory, MLX-accelerated models
+- `win-rtx3080` (Dell RTX 3080 10GB): Optimized for CUDA workloads, larger models with quantization
+
+**Key features:**
+1. **Role-based model assignment**: Different models automatically selected based on hardware capabilities
+2. **VRAM/RAM safety**: Automatic degradation when resource limits approached
+3. **Fallback chains**: Graceful degradation from distributed → Mac-only → LM Studio → Cloud
+4. **Hardware detection**: `agent_launcher.py` auto-detects available hardware (3s timeout)
+
+**Model assignments (typical):**
+
+| Role | Mac (M-series) | Windows (RTX 3080) |
+|------|----------------|--------------------|
+| Manager/Coordinator | `qwen3.5:9b-instruct` | `qwen3.5:9b-instruct` |
+| Coder | `qwen3.5:9b-instruct` | `frob/qwen3.5:35b-a3b-instruct-ud-q4_K_M` |
+| Critic | Local Qwen3:30b | `frob/qwen3.5:35b-a3b-instruct-ud-q4_K_M` |
+| Researcher | Local fallback | `qwen3-coder:14b` |
+
+**ultrathink integration with hardware profiles:**
+
+ultrathink-system remains **hardware-agnostic** by design (privacy layer). PT handles hardware-specific routing:
+- PT detects hardware → selects appropriate model → routes to ultrathink with model preference
+- ultrathink receives model hint in request payload but uses local best-available
+- Fallback: If PT's suggested model unavailable, ultrathink uses `DEFAULT_MODEL` from `.env`
+
+**Reference:** See `https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/hardware/SKILL.md` for complete hardware profiles.
 ### Idempotent Orchestration
 
 **Perplexity-Tools checks Redis before spawning ultrathink tasks:**
