@@ -1,7 +1,7 @@
 ---
 name: ultrathink-system-skill
 description: Master methodology for elegant problem solving. Unifies single_agent and multi_agent execution under the ultrathink 5-stage process. Routes automatically – runs inline for simple tasks (using CIDF v1.2 for any content insertion), escalates to the 7-agent network only when parallelism or scope demands it. Activates for any task requiring architectural thinking, systematic verification, content insertion decisions, or self-improvement.
-version: 0.9.6.0
+version: 0.9.7.0
 license: Apache 2.0
 compatibility: claude-code, cowork, clawdbot, moltbot, openclaw, ecc-tools
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-ultrathink
@@ -80,17 +80,17 @@ ultrathink network: [task]
 
 ## LAN Continuity & Reconciliation (Distributed State)
 
-As part of the **v0.9.6.0** synchronization, ultrathink now supports **LAN Detect & Resume** in coordination with **Perplexity-Tools**.
+Since **v0.9.6.0**, ultrathink supports **LAN Detect & Resume** in coordination with **Perplexity-Tools**.
 
 ### LAN Resume Logic
-* • **Detect & Re-attach**: On startup, ultrathink checks for an existing session on the LAN (Redis: `ultrathink:session:*`).
-* • **Short Logging**: Maintains minimal state logs in `.state/session.log` to allow resumption of complex 5-stage reasoning processes after interruption.
-* • **Distributed Discovery**: If a shared Redis is found (`REDIS_HOST`), state is synchronized globally; otherwise, local file-based state is used.
+* **Detect & Re-attach**: On startup, ultrathink checks for an existing session on the LAN (Redis: `ultrathink:session:*`).
+* **Short Logging**: Maintains minimal state logs in `.state/session.log` to allow resumption of complex 5-stage reasoning processes after interruption.
+* **Distributed Discovery**: If a shared Redis is found (`REDIS_HOST`), state is synchronized globally; otherwise, local file-based state is used.
 
 ### Spawn Reconciliation (Layer 2 Coordination)
-* • **Global Registry Check**: Before spawning any sub-agent or worker, ultrathink MUST reconcile the spawn with the **Perplexity-Tools Orchestrator** (if available) to ensure proper session planning and model assignment.
-* • **Model-Aware Assignment**: Reconcile with the hardware registry to prevent GPU contention on machines like the `win-rtx3080` (Ollama/CUDA).
-* • **Efficient Operations**: Do not spawn new agents for subtasks if a matching idle agent exists in the global registry.
+* **Global Registry Check**: Before spawning any sub-agent or worker, ultrathink MUST reconcile the spawn with the **Perplexity-Tools Orchestrator** (if available) to ensure proper session planning and model assignment.
+* **Model-Aware Assignment**: Reconcile with the hardware registry to prevent GPU contention on machines like the `win-rtx3080` (Ollama/CUDA).
+* **Efficient Operations**: Do not spawn new agents for subtasks if a matching idle agent exists in the global registry.
 
 ## Content Insertion — CIDF v1.2 (All Modes, Always Active)
 
@@ -177,20 +177,20 @@ Fix a typo · rename a variable · insert a content block · update a config val
 **When**: 3–7 steps. Apply full ultrathink 5-stage process inline.
 
 ### Stage 1 — Context Immersion
-* • Scan project structure, git history, CLAUDE.md/AGENTS.md/SKILL.md files.
-* • Identify constraints, patterns, idioms, historical lessons from `tasks/lessons.md`.
-* • Output: 2–3 paragraph context summary.
+* Scan project structure, git history, CLAUDE.md/AGENTS.md/SKILL.md files.
+* Identify constraints, patterns, idioms, historical lessons from `tasks/lessons.md`.
+* Output: 2–3 paragraph context summary.
 
 ### Stage 2 — Visionary Architecture
-* • Design modular breakdown with clean interfaces.
-* • **If content insertion involved → run CIDF `decide()` here** to select insertion method before any implementation begins.
-* • Ask: "What would the most elegant solution look like?"
+* Design modular breakdown with clean interfaces.
+* **If content insertion involved → run CIDF `decide()` here** to select insertion method before any implementation begins.
+* Ask: "What would the most elegant solution look like?"
 
 ### Stage 3 — Ruthless Refinement
 Apply quality rubric:
-* • ⭐⭐⭐⭐⭐ simplicity,
-* • ⭐⭐⭐⭐⭐ readability,
-* • ⭐⭐⭐⭐⭐ robustness.
+* ⭐⭐⭐⭐⭐ simplicity,
+* ⭐⭐⭐⭐⭐ readability,
+* ⭐⭐⭐⭐⭐ robustness.
 Remove everything non-essential. Elegance = nothing left to take away.
 
 ### Stage 4 — Masterful Execution
@@ -227,19 +227,19 @@ Orchestrator
 ```
 
 ### CIDF Integration in Mode 3
-* • Every **Executor Agent** calls `cidf/core/content_insertion_framework.py → decide()` before writing.
-* • The **Verifier Agent** enforces LINT-002 (`verification_required == True`) as a hard gate.
-* • The **Orchestrator** routes insertion tasks through CIDF-aware executor instances only.
+* Every **Executor Agent** calls `cidf/core/content_insertion_framework.py → decide()` before writing.
+* The **Verifier Agent** enforces LINT-002 (`verification_required == True`) as a hard gate.
+* The **Orchestrator** routes insertion tasks through CIDF-aware executor instances only.
 
 Config: `multi_agent/config/agent_registry.json` · `multi_agent/config/routing_rules.json`
 
 ### autoresearch Integration (Mode 3 Task Type)
 When the router detects `task_type == "autoresearch"`:
-* • **Execution**: Delegate to Perplexity-Tools `POST /autoresearch/sync` before any Mode 3 agent spawn.
-* • **Roles**: Three specialized agents (Coder / Evaluator / Orchestrator) orchestrated by Perplexity-Tools `AgentTracker`.
-* • **CIDF**: The **Coder** agent calls `decide()` before editing `train.py` → uses rank 2 (`direct_typing` on local file) followed by `scp` deployment.
-* • **Verification**: The **Evaluator** agent enforces LINT-002 (`verification_required == True`) by parsing `log.txt` programmatically (not visual confirmation).
-* • **Config**: `multi_agent/config/agent_registry.json` registers `autoresearch-coder`, `autoresearch-evaluator`, `autoresearch-orchestrator` as pre-defined agent types.
+* **Execution**: Delegate to Perplexity-Tools `POST /autoresearch/sync` before any Mode 3 agent spawn.
+* **Roles**: Three specialized agents (Coder / Evaluator / Orchestrator) orchestrated by Perplexity-Tools `AgentTracker`.
+* **CIDF**: The **Coder** agent calls `decide()` before editing `train.py` → uses rank 2 (`direct_typing` on local file) followed by `scp` deployment.
+* **Verification**: The **Evaluator** agent enforces LINT-002 (`verification_required == True`) by parsing `log.txt` programmatically (not visual confirmation).
+* **Config**: `multi_agent/config/agent_registry.json` registers `autoresearch-coder`, `autoresearch-evaluator`, `autoresearch-orchestrator` as pre-defined agent types.
 
 ## The 6 Directives (Always Active, All Modes)
 
@@ -255,23 +255,23 @@ When the router detects `task_type == "autoresearch"`:
 ## Boundaries
 
 ### Always Do
-* • Run CIDF `decide()` before any content insertion (all modes, no exceptions)
-* • Verify programmatically after every insertion (CIDF protocol step 6)
-* • Write `tasks/todo.md` before implementing anything with 3+ steps
-* • Start at CIDF rank 1 — never jump directly to scripting
+* Run CIDF `decide()` before any content insertion (all modes, no exceptions)
+* Verify programmatically after every insertion (CIDF protocol step 6)
+* Write `tasks/todo.md` before implementing anything with 3+ steps
+* Start at CIDF rank 1 — never jump directly to scripting
 
 ### Ask First
-* • Deleting files or directories
-* • Deploying to any live environment
-* • Modifying `config/`, `vendor/`, `.env` files
-* • Switching from Mode 2 → Mode 3 (resource cost)
+* Deleting files or directories
+* Deploying to any live environment
+* Modifying `config/`, `vendor/`, `.env` files
+* Switching from Mode 2 → Mode 3 (resource cost)
 
 ### Never Do
-* • Mark complete without programmatic verification
-* • Skip CIDF for any content insertion (even "quick" writes)
-* • Trust visual confirmation alone
-* • Hardcode secrets or credentials
-* • Change `cidf/core/content_insertion_policy.json` without updating all 5 version locations
+* Mark complete without programmatic verification
+* Skip CIDF for any content insertion (even "quick" writes)
+* Trust visual confirmation alone
+* Hardcode secrets or credentials
+* Change `cidf/core/content_insertion_policy.json` without updating all 5 version locations
 
 ## Task Management
 ```
@@ -331,12 +331,14 @@ ultrathink is activated by PT routing when:
 
 ## Changelog
 
+### v0.9.7.0 all changes leading up to the new Audience-First Response Protocol since 0.9.6.0 release
+
 ### v0.9.6.0 (2026-03-27)
-* • **LAN Continuity**: Synchronized **LAN Detect & Resume** logic with Perplexity-Tools.
-* • **Reconciliation**: Implemented **Layer 2 Spawn Reconciliation** to prevent redundant model spawns.
-* • **Distributed State**: Added support for shared Redis state for global session tracking across the LAN.
-* • **Hardening**: Reinforced phase transitions to be resume-aware.
-* • **AFRP**: Integrated Audience-First Response Protocol as mandatory pre-router gate (`afrp/SKILL.md`).
+* **LAN Continuity**: Synchronized **LAN Detect & Resume** logic with Perplexity-Tools.
+* **Reconciliation**: Implemented **Layer 2 Spawn Reconciliation** to prevent redundant model spawns.
+* **Distributed State**: Added support for shared Redis state for global session tracking across the LAN.
+* **Hardening**: Reinforced phase transitions to be resume-aware.
+* **AFRP**: Integrated Audience-First Response Protocol as mandatory pre-router gate (`afrp/SKILL.md`).
 
 ### v0.9.4.3 (2026-03-24)
-* • Master methodology refinement and CIDF v1.2 standardization.
+* Master methodology refinement and CIDF v1.2 standardization.
