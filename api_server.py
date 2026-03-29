@@ -9,8 +9,8 @@ Design principles
   .state/agents.json before calling this server.
 * Graceful degradation — if Ollama is unreachable the endpoint returns an
   error JSON with status="error"; PT then falls back to local Qwen3-30B.
-* Dependency-minimal — only FastAPI + httpx + python-dotenv (already in
-  requirements.txt or trivially addable).
+* Dependency-minimal — FastAPI + httpx + python-dotenv + slowapi (see
+  requirements.txt). No Redis, no agent registry.
 
 Usage
 -----
@@ -21,7 +21,7 @@ Usage
 import os
 import time
 import logging
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import httpx
 from dotenv import load_dotenv
@@ -54,7 +54,7 @@ CODE_MODEL = os.getenv("CODE_MODEL", "qwen3-coder:14b")
 _raw_timeout = int(os.getenv("OLLAMA_TIMEOUT", "120"))
 OLLAMA_TIMEOUT = max(1, min(_raw_timeout, 600))
 
-# v0.9.8.0 Security Hardening: rate limiting + input validation
+# v0.9.8.0: rate limiting + input validation + Pydantic V2 field_validator
 VERSION = "0.9.8.0"
 
 logging.basicConfig(level=logging.INFO)
@@ -112,7 +112,7 @@ class UltraThinkResponse(BaseModel):
     model_used: str
     execution_time_ms: int
     reasoning_depth: str
-    metadata: dict
+        metadata: Dict[str, Any]
 
 
 class HealthResponse(BaseModel):
@@ -121,7 +121,7 @@ class HealthResponse(BaseModel):
     # sec: do NOT expose internal IPs (OWASP API8 Security Misconfiguration)
     ollama_primary_reachable: bool
     ollama_fallback_reachable: bool
-    models: dict
+        models: Dict[str, str]
 
 
 # ---------------------------------------------------------------------------
@@ -137,9 +137,7 @@ def _select_model(task_type: str, reasoning_depth: str) -> str:
     """
     if task_type == "code":
         return CODE_MODEL
-    if reasoning_depth == "ultra":
-        return DEFAULT_MODEL
-    if reasoning_depth == "deep":
+    if reasoning_depth in ("ultra", "deep"):
         return DEFAULT_MODEL
     return FAST_MODEL
 
