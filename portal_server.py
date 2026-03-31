@@ -10,6 +10,12 @@ from fastapi import FastAPI, Response
 from fastapi.responses import HTMLResponse
 import httpx
 
+try:
+    from network_autoconfig import NetworkAutoConfig as _NetCfg
+    _net = _NetCfg()
+except Exception:
+    _net = None
+
 app = FastAPI(title="ultrathink-portal", version="1.0.0-rc")
 
 # === ENV CONFIG ===
@@ -120,6 +126,22 @@ async def api_status():
     }
 
 
+@app.get("/api/lan-agents")
+async def lan_agents():
+    """
+    Discover running LM Studio / Ollama / service instances on the LAN.
+    Uses NetworkAutoConfig.discover_lan_agents() — TCP probe, no auth required.
+    Mac-first: detects local subnet from the Mac IP, falls back to env hints.
+    Note: full /24 scan takes ~10–30s; results are cached per request only.
+    """
+    if _net is None:
+        return {"error": "network_autoconfig not available", "agents": {}}
+    loop = asyncio.get_event_loop()
+    # Run blocking scan in executor so we don't stall the event loop
+    agents = await loop.run_in_executor(None, _net.discover_lan_agents)
+    return {"timestamp": datetime.utcnow().isoformat(), "agents": agents}
+
+
 @app.get("/", response_class=HTMLResponse)
 async def root():
     """LAN dashboard HTML."""
@@ -145,6 +167,15 @@ async def root():
     for name, data in status["services"].items():
         badge = service_badge(data)
         services_html += f'<div class="card"><strong>{name}</strong> {badge}</div>'
+
+    # Default model hint (qwen3.5:35b-a3b-q4_K_M) + LAN agents link
+    agents_hint = (
+        '<div class="card" style="font-size:0.85rem;color:#94a3b8;">'
+        '<span>Default agent model: <code>qwen3.5:35b-a3b-q4_K_M</code> (Ollama shared)</span>'
+        '&nbsp;·&nbsp;'
+        '<a href="/api/lan-agents" style="color:#93c5fd;">Discover LAN agents ↗</a>'
+        '</div>'
+    )
 
     html = f"""
     <!DOCTYPE html>
@@ -201,6 +232,7 @@ async def root():
             <p>Orchestrator: <span class="role">Mac Studio</span></p>
             <div>
                 {services_html}
+                {agents_hint}
             </div>
             <div class="timestamp">
                 Last updated: {status['timestamp']}<br>
