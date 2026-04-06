@@ -3,9 +3,16 @@ on:
   push:
     tags: ["v*"]
 
+# Deny all permissions by default; grant only what each job needs.
+# This prevents "Resource not accessible by integration" surprises and
+# limits blast radius if a step is compromised.
+permissions: {}
+
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required: create GitHub release + upload assets
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,7 +25,7 @@ jobs:
           zip -r ultrathink-system-${{ github.ref_name }}.zip ultrathink-system/ \
             --exclude "*/\.*" --exclude "*/__pycache__/*"
           mv ultrathink-system-${{ github.ref_name }}.zip ultrathink-system/
-      - uses: softprops/action-gh-release@v1
+      - uses: softprops/action-gh-release@v2
         with:
           files: ultrathink-system-${{ github.ref_name }}.zip
           generate_release_notes: true
