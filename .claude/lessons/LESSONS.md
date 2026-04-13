@@ -395,3 +395,29 @@ Write it for an agent who has read neither this conversation nor the LESSONS.md.
 - Windows Ollama at `.108:11434` is probably not running — verify `windows_ollama_ok: false` path produces clean routing.json with `coder_backend: windows-lmstudio`.
 
 - If Mac LM Studio at `.110` is the Mac's own LAN IP, `mac_lms_is_local` will be True. Guard condition is `mac_lms_is_local AND mac_ok AND mac_lms_ok` — safe as long as Ollama isn't also running.
+
+---
+
+## 2026-04-13 — Claude — Portal update: visibility, user-input textbox, correct IPs
+
+### What was learned
+
+1. **portal_server.py never loaded .env** — default IPs `.100`/`.103` were always used, even when
+   `.env` had the correct `.108`/`.110` values. Fixed: added dotenv loading at module import.
+
+2. **Portal was missing hardware visibility** — no agent state display, no routing state, no user
+   input mechanism. All added this session.
+
+3. **Agents-as-services need a user-input gate** — autonomous loops with no stop condition make it
+   impossible to steer agents without killing the process. The 3-round confirmation pattern solves this:
+   agents confirm they're live, then wait for instructions. Both portal and CLI can send tasks.
+
+### Decisions made
+
+- Portal now loads `.env`/`.env.local` at startup (same pattern as agent_launcher.py and alphaclaw_bootstrap.py).
+- Added `POST /api/user-input` endpoint (proxies to PT `http://localhost:8000/user-input`).
+- HTML template now includes: Routing State section, Active Agents section, input textbox + JS fetch.
+- New CSS classes: `.tag-waiting`, `.tag-user`, `.state-pill`, `.s-waiting`, input styles.
+
+### Commits
+- `691787a` (UTS) — fix(portal): dotenv load, correct IPs, routing card, agent state, user input textbox
