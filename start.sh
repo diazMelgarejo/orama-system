@@ -49,7 +49,8 @@ _discover_pt_dir() {
       fi
     done
   fi
-  echo ""
+  echo "PT=${candidate}"
+  echo "root=${parent}"
 }
 
 _best_python() {
@@ -179,19 +180,17 @@ if command -v npm >/dev/null 2>&1 || command -v node >/dev/null 2>&1; then
     PT_HOME="$PT_HOME" UTS_HOME="$SCRIPT_DIR" \
       MAC_IP="${MAC_IP}" WIN_IP="${WIN_IP}" \
       "$US_PYTHON" "$ALPHACLAW_SCRIPT" --bootstrap \
-      2>&1 | sed 's/^/  /' \
+      </dev/null 2>&1 | sed 's/^/  /' \
       || echo "  AlphaClaw  non-fatal — continuing without gateway"
   else
     echo "  AlphaClaw  PT_HOME not found ($PT_HOME) — falling back to local shim"
     MAC_IP="${MAC_IP}" WIN_IP="${WIN_IP}" \
       "$US_PYTHON" "$SCRIPT_DIR/openclaw_bootstrap.py" --bootstrap \
-      2>&1 | sed 's/^/  /' \
+      </dev/null 2>&1 | sed 's/^/  /' \
       || echo "  AlphaClaw  non-fatal — continuing without gateway"
   fi
 fi
 
-<<<<<<< HEAD
-=======
 # ── 2b-sec. AlphaClaw security warning ───────────────────────────────────────
 # Show a banner if AlphaClaw is running on the default password.
 # onboarding.json is written by alphaclaw_bootstrap.py after Step 6 health poll.
@@ -213,7 +212,6 @@ sys.exit(0 if d.get('alphaclaw', {}).get('password_is_default') else 1)
   fi
 fi
 
->>>>>>> 89db467 (feat(v0.9.9.7): start.sh security warning + WIN_IP standardization + version bump)
 # ── 2c. Determine mode; auto-start researchers if distributed ─────────────────
 # Reads the routing.json written by agent_launcher --write-state and decides:
 #   distributed   → Mac + Windows both reachable: start tandem autoresearchers
@@ -262,9 +260,21 @@ wait_for_port() {
   while ! nc -z localhost "$port" 2>/dev/null; do
     sleep 0.5; tries=$((tries+1))
     printf "."
+    # Warn verbosely every 30 s of silence; show last 5 log lines for diagnosis
+    if [ $((tries % 60)) -eq 0 ] && [ $tries -gt 0 ]; then
+      local elapsed=$((tries / 2))
+      local logfile="$LOG_DIR/$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]').log"
+      printf "\n  ⚠  %s (:%s) unresponsive for %ds\n" "$label" "$port" "$elapsed"
+      if [ -f "$logfile" ]; then
+        echo "  last 5 lines of ${logfile}:"
+        tail -5 "$logfile" | sed 's/^/    /'
+      fi
+      printf "  still waiting for %s (:%s)" "$label" "$port"
+    fi
     # 150 tries = 75s — enough to outlast slow first-start tasks (e.g. ECC sync ~60s)
     if [ $tries -ge 150 ]; then
-      echo " TIMEOUT (check .logs/$(echo "$label" | tr '[:upper:]' '[:lower:]').log)"
+      local logfile="$LOG_DIR/$(printf '%s' "$label" | tr '[:upper:]' '[:lower:]').log"
+      printf " TIMEOUT — check %s\n" "$logfile"
       return 0  # non-fatal: continue starting remaining services
     fi
   done

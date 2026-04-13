@@ -355,4 +355,43 @@ Write it for an agent who has read neither this conversation nor the LESSONS.md.
 ---
 
 ### Commits
+
 - `71a15f7` (PT) — fix(health): restore 127.0.0.1 loopback defaults for ollama/lm_studio_host
+
+---
+
+## 2026-04-13 — Claude — Startup fix: IP detection, stdin deadlock, concurrent backend probing
+
+### Learned
+
+- **Abort trap: 6 root cause**: `_gather_alphaclaw_credentials()` spawned a daemon thread calling `input()`. After `t.join(30)` timed out the thread was still alive and held the stdin `BufferedReader` lock; Python interpreter shutdown then tried to flush/close that reader → SIGABRT. Three-layer fix: (1) `sys.stdin.isatty()` guard in Python skips the daemon thread in non-interactive mode, (2) `</dev/null` in start.sh redirects stdin so `input()` gets instant EOFError, (3) `stdin=subprocess.DEVNULL` on the AlphaClaw gateway `Popen` prevents the node process from inheriting the broken fd.
+
+- **IP misconfiguration was silent**: `agent_launcher.py` read `MAC_LMS_HOST` / `WINDOWS_IP` from env but neither was exported by start.sh or present in `.env`. Fallback hard-coded defaults (`.103`, `.100`) were always used. Actual LAN addresses are `.110` (Mac LM Studio) and `.108` (Windows).
+
+- **`.env.local` had wrong values**: `WINDOWS_IP=192.168.254.101` (off by several octets), `WINDOWS_PORT=1234` (LM Studio port incorrectly overriding the Ollama port — `REMOTE_WINDOWS_URL` pointed at LM Studio instead of Ollama). Fixed to `.108` / `11434`.
+
+- **`agent_launcher.py` never called `load_dotenv()`**: it only saw shell-exported vars. Added `load_dotenv(".env")` + `load_dotenv(".env.local", override=True)` so `.env` files are always honoured.
+
+- **`network_autoconfig.py` `preferred_ips` were stale** (`.103` Mac / `.100` Windows). These are the fallback IPs used when netifaces cannot detect real interfaces — wrong values caused start.sh to build `WIN_IP` / `MAC_IP` pointing at non-existent hosts.
+
+- **`asyncio.create_task()` fires immediately; `gather()` blocks**: firing all 4 backend probes as tasks at t=0 and awaiting in two phases (local first, then LAN) gives correct ordering without sequential delay — Win LM Studio (always online) is typically done before local model queries finish.
+
+- **`_persist_detected_ips()`**: after each successful probe run, confirmed live endpoints are written back to `.env`. This makes the configuration self-correcting — the correct IPs persist across restarts without manual edits.
+
+### Decided
+
+- Hard-coded defaults in `agent_launcher.py` updated: `.110` Mac LM Studio, `.108` Windows.
+
+- `network_autoconfig.py` `preferred_ips` updated to `.110` / `.108`.
+
+- `LM_STUDIO_MAC_ENDPOINT` in both repo `.env` files updated to `http://192.168.254.110:1234`.
+
+- `LM_STUDIO_MAC_ENDPOINT` (canonical .env key) is now parsed in `agent_launcher.py` to derive `MAC_LMS_HOST` / `MAC_LMS_PORT` — no separate `MAC_LMS_HOST` variable needed.
+
+- `.env.local` corrected: `WINDOWS_IP=192.168.254.108`, `WINDOWS_PORT=11434`.
+
+### Open
+
+- Windows Ollama at `.108:11434` is probably not running — verify `windows_ollama_ok: false` path produces clean routing.json with `coder_backend: windows-lmstudio`.
+
+- If Mac LM Studio at `.110` is the Mac's own LAN IP, `mac_lms_is_local` will be True. Guard condition is `mac_lms_is_local AND mac_ok AND mac_lms_ok` — safe as long as Ollama isn't also running.
