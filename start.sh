@@ -1,4 +1,10 @@
 #!/bin/bash
+
+# ── Auto-repair environment ──
+if [ ! -x ".venv/bin/python" ]; then
+  echo "[!] Environment broken, running repair_env.sh..."
+  ./repair_env.sh
+fi
 # start.sh — orama-system thin delegator  v0.9.9.8
 #
 # orama-system is Layer 3 — orchestration / meta-intelligence / delegate runtime.
@@ -29,7 +35,7 @@ PATHS_FILE="$SCRIPT_DIR/.paths"
 
 _discover_pt_dir() {
   local candidate
-  candidate="$(cd "$SCRIPT_DIR/../perplexity-api/Perplexity-Tools" 2>/dev/null && pwd || true)"
+  candidate="$(cd "$SCRIPT_DIR/../perplexity-api/Perpetua-Tools" 2>/dev/null && pwd || true)"
   if [ -f "${candidate}/orchestrator/fastapi_app.py" ]; then
     echo "$candidate"; return
   fi
@@ -161,7 +167,7 @@ if [ -n "${PT_DIR:-}" ] && [ -f "${PT_DIR}/orchestrator/alphaclaw_manager.py" ];
   fi
 else
   # Fallback: PT manager not available — delegate to bootstrap script directly
-  PT_HOME="${PT_HOME:-$HOME/Perplexity-Tools}"
+  PT_HOME="${PT_HOME:-$HOME/Perpetua-Tools}"
   ALPHACLAW_SCRIPT="$PT_HOME/alphaclaw_bootstrap.py"
   if [ -f "$ALPHACLAW_SCRIPT" ]; then
     echo "  AlphaClaw  bootstrapping via PT fallback ($ALPHACLAW_SCRIPT)…"
@@ -184,7 +190,7 @@ export WINDOWS_IP="${WINDOWS_IP:-${WIN_IP}}"
 export GPU_BOX="${GPU_BOX:-WINUSER@${WIN_IP}}"
 
 # AlphaClaw security warning — show if running on default password
-_AC_PT_HOME="${PT_DIR:-${PT_HOME:-$HOME/Perplexity-Tools}}"
+_AC_PT_HOME="${PT_DIR:-${PT_HOME:-$HOME/Perpetua-Tools}}"
 _AC_ONBOARDING="${_AC_PT_HOME}/.state/onboarding.json"
 if [ -f "$_AC_ONBOARDING" ]; then
   if "$US_PYTHON" -c "
