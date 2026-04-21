@@ -3,13 +3,13 @@ from __future__ import annotations
 """
 openclaw_bootstrap.py — ultrathink-system delegation shim
 ----------------------------------------------------------
-Bootstrap logic has moved to Perplexity-Tools/alphaclaw_bootstrap.py.
+Bootstrap logic has moved to Perpetua-Tools/alphaclaw_bootstrap.py.
 
 This shim delegates to the canonical PT script via PT_HOME env var,
 falling back to the inline logic below only when PT is not found.
 
-Set PT_HOME to the root of your Perplexity-Tools checkout:
-    export PT_HOME=/path/to/Perplexity-Tools
+Set PT_HOME to the root of your Perpetua-Tools checkout:
+    export PT_HOME=/path/to/Perpetua-Tools
 
 Usage (unchanged):
     python openclaw_bootstrap.py --bootstrap
@@ -28,7 +28,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 # ── delegation ────────────────────────────────────────────────────────────────
 
-_PT_HOME    = Path(os.getenv("PT_HOME", str(Path.home() / "Perplexity-Tools")))
+_PT_HOME    = Path(os.getenv("PT_HOME", str(Path.home() / "Perpetua-Tools")))
 _PT_SCRIPT  = _PT_HOME / "alphaclaw_bootstrap.py"
 
 
@@ -271,7 +271,8 @@ async def _bootstrap_inline(force: bool = False) -> bool:
     print("[openclaw] → Starting AlphaClaw gateway…")
     try:
         install_dir = Path.home() / ".alphaclaw"
-        subprocess.Popen(["npx", "alphaclaw", "start"], cwd=str(install_dir))
+        env = {**os.environ, "SETUP_PASSWORD": os.getenv("SETUP_PASSWORD", "localdev123")}
+        subprocess.Popen(["npx", "alphaclaw", "start"], cwd=str(install_dir), env=env)
         gateway_url = f"http://127.0.0.1:{OPENCLAW_GATEWAY_PORT}"
         os.environ["OPENCLAW_GATEWAY_URL"] = gateway_url
     except Exception as e:
@@ -336,10 +337,10 @@ if __name__ == "__main__":
         description="ultrathink-system OpenClaw/AlphaClaw bootstrap shim",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "Delegates to Perplexity-Tools/alphaclaw_bootstrap.py when PT_HOME is set.\n"
+            "Delegates to Perpetua-Tools/alphaclaw_bootstrap.py when PT_HOME is set.\n"
             "Falls back to inline logic if PT is unavailable.\n\n"
-            "Set PT_HOME to your Perplexity-Tools checkout root:\n"
-            "  export PT_HOME=/path/to/Perplexity-Tools\n"
+            "Set PT_HOME to your Perpetua-Tools checkout root:\n"
+            "  export PT_HOME=/path/to/Perpetua-Tools\n"
         ),
     )
     parser.add_argument("--bootstrap", action="store_true",
