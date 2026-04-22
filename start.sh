@@ -1,5 +1,27 @@
 #!/bin/bash
 
+# ── Garbage Collection ──
+find . -name "*.pyc" -type f -delete
+find . -name "__pycache__" -type d -exec rm -rf {} +
+# ── IP auto-detection ─────────────────────────────────────────────────────────
+_IP_VARS="$(cd "$SCRIPT_DIR" && "$US_PYTHON" -c "
+import sys, io, contextlib
+sys.path.insert(0, '.')
+try:
+    from network_autoconfig import NetworkAutoConfig
+    cfg = NetworkAutoConfig()
+    with contextlib.redirect_stdout(io.StringIO()):
+        mac_ip = cfg.get_working_local_ip()
+    win_ip = cfg.preferred_ips.get('Windows', '192.168.254.100')
+    print('MAC_IP=' + mac_ip)
+    print('WIN_IP=' + win_ip)
+except Exception:
+    print('MAC_IP=192.168.254.105')
+    print('WIN_IP=192.168.254.100')
+" 2>/dev/null)"
+
+eval "$_IP_VARS"
+
 # ── Auto-repair environment ──
 if [ ! -x ".venv/bin/python" ]; then
   echo "[!] Environment broken, running repair_env.sh..."
@@ -108,24 +130,6 @@ if [ -f "$SCRIPT_DIR/setup_macos.py" ]; then
   "$US_PYTHON" "$SCRIPT_DIR/setup_macos.py" --quiet 2>&1 | sed 's/^/  /' || true
 fi
 
-# ── IP auto-detection ─────────────────────────────────────────────────────────
-_IP_VARS="$(cd "$SCRIPT_DIR" && "$US_PYTHON" -c "
-import sys, io, contextlib
-sys.path.insert(0, '.')
-try:
-    from network_autoconfig import NetworkAutoConfig
-    cfg = NetworkAutoConfig()
-    with contextlib.redirect_stdout(io.StringIO()):
-        mac_ip = cfg.get_working_local_ip()
-    win_ip = cfg.preferred_ips.get('Windows', '192.168.254.100')
-    print('MAC_IP=' + mac_ip)
-    print('WIN_IP=' + win_ip)
-except Exception:
-    print('MAC_IP=192.168.254.105')
-    print('WIN_IP=192.168.254.100')
-" 2>/dev/null)"
-
-eval "$_IP_VARS"
 MAC_IP="${MAC_IP:-192.168.254.105}"
 WIN_IP="${WIN_IP:-192.168.254.100}"
 
