@@ -74,6 +74,8 @@
 - [ ] CHANGELOG.md updated (if user-facing change)
 - [ ] Migration guide written (if breaking change)
 - [ ] ADR created (if significant architectural decision)
+- [ ] Any changed `*.md` files keep relative links and preserve redirect/canonical-path notes
+- [ ] New `*.md` files over 200 lines and existing `*.md` files over 500 lines were split or explicitly approved
 
 ---
 

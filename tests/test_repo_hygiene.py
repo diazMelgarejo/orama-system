@@ -62,6 +62,53 @@ def test_git_internal_junk_is_blocked(tmp_path):
     ]
 
 
+def test_markdown_link_hygiene_blocks_absolute_paths(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    md = docs / "README.md"
+    md.write_text(
+        "\n".join(
+            [
+                "[relative](wiki/README.md)",
+                "[github](https://github.com/example/repo/blob/main/docs/README.md)",
+                "[absolute](</Users/example/repo/docs/wiki/README.md>)",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.check_markdown_link_hygiene(tmp_path, ["docs/README.md"])
+
+    assert errors == [
+        "markdown link must be repo-relative: docs/README.md -> /Users/example/repo/docs/wiki/README.md"
+    ]
+
+
+def test_markdown_size_warnings_for_changed_files(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    new_doc = docs / "new-guide.md"
+    old_doc = docs / "old-guide.md"
+    small_doc = docs / "small-guide.md"
+    new_doc.write_text("\n".join(["line"] * 201), encoding="utf-8")
+    old_doc.write_text("\n".join(["line"] * 501), encoding="utf-8")
+    small_doc.write_text("short\n", encoding="utf-8")
+
+    warnings = repo_hygiene.check_markdown_size_warnings(
+        tmp_path,
+        ["docs/new-guide.md", "docs/old-guide.md", "docs/small-guide.md"],
+        changed={"docs/new-guide.md", "docs/old-guide.md", "docs/small-guide.md"},
+        existing={"docs/old-guide.md", "docs/small-guide.md"},
+    )
+
+    assert warnings == [
+        "docs/new-guide.md has 201 lines; new markdown files over 200 lines should ask the user about offloading related content to references/ or sub-skills",
+        "docs/old-guide.md has 501 lines; existing markdown files over 500 lines should ask the user about splitting or redirecting detailed content elsewhere",
+    ]
+
+
 def test_repo_hygiene_script_runs_clean():
     result = subprocess.run(
         [sys.executable, "scripts/review/repo_hygiene.py", "."],

@@ -151,6 +151,18 @@ Version registry: **current version is `0.9.9.7`**. Never bump without explicit 
 
 ---
 
+## Skill 9 — Markdown Redirect & Size Rules
+
+Before editing any `*.md` file:
+
+1. Read `docs/LESSONS.md` and `docs/wiki/README.md` when the edit touches repo guidance, lessons, or moved docs.
+2. Keep links relative and GitHub-renderable. Do not write absolute filesystem links into tracked markdown.
+3. Preserve redirect/canonical-path notes when moving or renaming markdown.
+4. Warn and ask the user before adding a new markdown file over 200 lines or growing an existing markdown file over 500 lines. Suggest moving details to `references/`, `docs/wiki/`, or a sub-skill.
+5. Run `python3 scripts/review/repo_hygiene.py .` before committing markdown.
+
+---
+
 ## Quick Reference: Session Commands
 
 ```bash

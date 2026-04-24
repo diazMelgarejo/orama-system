@@ -150,8 +150,18 @@ visual_ok?  ──no──→  refresh_page()
                            ↓
                content_in_page?
                   yes → mark_complete()
-                  no  → log_failure(); try_next_rank()
+                no  → log_failure(); try_next_rank()
 ```
+
+### Markdown Edit Rule
+
+When the inserted content is markdown, treat link hygiene as part of the write:
+
+1. Read the repo markdown index and lessons log before editing repo guidance.
+2. Keep links relative and GitHub-renderable.
+3. If a markdown file moves or is renamed, preserve the redirect trail with a canonical-path note or updated index link before commit.
+4. Warn and ask the user before adding a new markdown file over 200 lines or growing an existing markdown file over 500 lines. Suggest offloading detailed material to `references/`, `docs/wiki/`, or a sub-skill.
+5. Review the diff for stale anchors and broken relative links before marking the write complete.
 
 ---
 

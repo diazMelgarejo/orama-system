@@ -4,7 +4,7 @@
 > All rules below are **non-negotiable** for every agent (ECC, AutoResearcher, Claude).
 >
 > **Repo renamed**: orama-system → orama-system (2026-04-20, ὅραμα = vision/revelation)
-> GitHub: https://github.com/diazMelgarejo/orama-system
+> GitHub: <https://github.com/diazMelgarejo/orama-system>
 
 ---
 
@@ -59,23 +59,27 @@ Primary mode: **uditgoenka/autoresearch Claude Code plugin** (runs anywhere).
 Secondary mode: GPU runner via SSH for `ml-experiment` task types.
 
 ### Plugin install (one-time, idempotent)
+
 ```bash
 claude plugin marketplace add uditgoenka/autoresearch
 claude plugin install autoresearch@autoresearch
 ```
 
 ### Activation (per session)
-```
+
+```claude
 /autoresearch          # research loop
 /autoresearch:debug    # verbose reasoning trace
 ```
 
 ### Hardware guard — Windows sequential load rule
+
 Never configure the system to load more than one model at a time on the
 Windows GPU. Check `swarm_state.md` for `GPU: BUSY` before dispatching any
 new experiment. This is enforced in the autoresearcher SOUL.md.
 
 When running AutoResearcher swarms:
+
 - Read `.claude/lessons/LESSONS.md` for prior experiment context
 - Record new findings in `.claude/lessons/LESSONS.md` under a dated session entry
 - Cross-reference Perpetua-Tools' `.claude/lessons/LESSONS.md` for joint context
@@ -86,7 +90,7 @@ When running AutoResearcher swarms:
 
 Before any significant change to this repo, load the mother skill:
 
-```
+```claude
 /skill bin/skills/SKILL.md
 ```
 
@@ -103,7 +107,7 @@ Before any significant change to this repo, load the mother skill:
 - **Companion repos**:
   - [AlphaClaw](https://github.com/diazMelgarejo/AlphaClaw) (Layer 1 — infrastructure)
   - [Perpetua-Tools](https://github.com/diazMelgarejo/Perpetua-Tools) (Layer 2 — adapters/middleware)
-- **Skill**: `.claude/skills/orama-system/SKILL.md` (rename target: `orama-system/SKILL.md`)
+- **Skill**: `.claude/skills/orama-system/SKILL.md` (renamed from: `ultrathink-system/SKILL.md`)
 - **Mother skill**: `bin/skills/SKILL.md` (v0.9.9.7 → 0.9.9.8 after migration)
 
 Git hygiene rules for clean-lineage work:
@@ -116,7 +120,7 @@ Git hygiene rules for clean-lineage work:
 
 ## 7. Three-Repo Architecture (read before any significant work)
 
-```
+```ascii
 AlphaClaw (Layer 1 — infrastructure)
     │  CLI + HTTP only
     ▼
@@ -143,6 +147,7 @@ orama-system (Layer 3 — THIS REPO — orchestration/meta-intelligence)
 ### AlphaClaw integration (via Perpetua-Tools adapter)
 
 orama talks to AlphaClaw through PT's adapter, not directly:
+
 ```
 orama orchestrator → PT adapter APIs → AlphaClaw HTTP/CLI
 ```
@@ -152,14 +157,17 @@ orama orchestrator → PT adapter APIs → AlphaClaw HTTP/CLI
 ### Lifecycle delegation — Gate 1+ (CRITICAL)
 
 `start.sh` now delegates ALL gateway/backend decisions to PT:
+
 ```bash
 eval "$(python -m orchestrator.alphaclaw_manager --resolve --env-only)"
 ```
+
 - `orchestrator/alphaclaw_manager.py` in PT owns: backend probe, mode determination, AlphaClaw bootstrap
 - orama's `start.sh` is a **pure process manager** — it reads PT's resolved payload and starts services
 - Never add gateway routing logic back to `start.sh` — that violates the PT-is-authoritative invariant
 
 **Files NOT to modify without understanding the invariant:**
+
 - `start.sh` — thin delegator; any new gateway logic must go to PT's `alphaclaw_manager.py`
 - `openclaw_bootstrap.py` — scope-down to apply-config only is Gate 2; do not add probe logic here
 
@@ -186,9 +194,10 @@ eval "$(python -m orchestrator.alphaclaw_manager --resolve --env-only)"
 
 ## 9. gstack
 
-gstack v1.3 is the agent skill framework for web browsing, planning, and review.
+gstack v1.3 is ingested as the agent skill framework for web browsing, planning, and review.
 
 **Rules:**
+
 - ALWAYS use `/browse` for web browsing — NEVER `mcp__Claude_in_Chrome__*` directly
 - Use `/investigate` for root-cause analysis of adapter or orchestration failures
 - Use `/ship` before any `npm publish`
