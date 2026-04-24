@@ -1,4 +1,4 @@
-# ὅραμα System
+# The ὅραμα System
 
 (inspired by *ultrathink*)
 > *"Technology married with humanities yields solutions that make hearts sing."*
@@ -35,18 +35,18 @@ AI doesn't replace judgment, it amplifies intent: ultrathink gives that intent s
 ## Quick Start (3 Minutes)
 
 ```bash
-# 1. Install bin/skills (Claude Code / Cowork / OpenClaw)
+# 1. Install bin/orama-system (Claude Code / Cowork / OpenClaw)
 ./install.sh
 
 # 2. Activate in Claude
 # "ultrathink this"
-# "Apply ultrathink system to: [your task]"
+# "Apply The ὅραμα System to: [your task]"
 
 # 3. Create a task plan
-./bin/skills/scripts/create_task_plan.sh "Build my feature"
+./bin/orama-system/scripts/create_task_plan.sh "Build my feature"
 
 # 4. Verify before marking done
-python bin/skills/scripts/verify_before_done.py --task "Build my feature"
+python bin/orama-system/scripts/verify_before_done.py --task "Build my feature"
 ```
 
 ---
@@ -56,7 +56,7 @@ python bin/skills/scripts/verify_before_done.py --task "Build my feature"
 ```ascii
 orama-system/
 │
-├── bin/skills/                   ← Install here for Claude Code / Cowork
+├── bin/orama-system/                   ← Install here for Claude Code / Cowork
 │   ├── SKILL.md                    ← Main intelligence layer (<500 lines)
 │   ├── references/                 ← Deep-dive documentation
 │   │   ├── ultrathink-5-stages.md
@@ -204,7 +204,7 @@ This skill follows the SKILL.md open standard and is compatible with
 
 ```bash
 # Add to your ECC profile
-cp -r bin/skills ~/.claude/skills/orama-system
+cp -r bin/orama-system ~/.claude/skills/orama-system
 
 # Then use with any ECC-compatible harness
 ```

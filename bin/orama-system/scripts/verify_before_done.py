@@ -2,7 +2,7 @@
 """
 verify_before_done.py
 =====================
-ultrathink System — Directive #4: Verification Before Done
+The ὅραμα System — Directive #4: Verification Before Done
 
 Runs a comprehensive pre-completion verification checklist.
 NEVER mark a task complete without running this script.

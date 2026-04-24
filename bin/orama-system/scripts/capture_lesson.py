@@ -2,7 +2,7 @@
 """
 capture_lesson.py
 =================
-ultrathink System — Directive #3: Self-Improvement Loop
+The ὅραμα System — Directive #3: Self-Improvement Loop
 
 Appends a structured lesson entry to tasks/lessons.md.
 Run this after ANY correction from the user or discovery of a recurring mistake.
@@ -100,7 +100,7 @@ def find_lessons_file(start_dir: Path) -> Path:
 
 def _lessons_header() -> str:
     return """# Lessons Learned — Self-Improvement Log
-**ultrathink System — Directive #3**
+**The ὅραμα System — Directive #3**
 
 This file is the institutional memory of this project.
 Every lesson written here prevents the same mistake from recurring.

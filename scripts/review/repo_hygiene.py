@@ -263,6 +263,8 @@ def classify_legacy_name_refs(root: Path, files: list[str]) -> tuple[int, int]:
     active = 0
     historical = 0
     for rel in files:
+        if rel == "scripts/review/repo_hygiene.py":
+            continue
         path = root / rel
         if not path.is_file() or is_binary(path):
             continue

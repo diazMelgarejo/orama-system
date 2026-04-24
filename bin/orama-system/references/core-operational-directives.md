@@ -1,7 +1,7 @@
 # Core Operational Directives: Deep Dive
 **Reference Document for orama-system**
 
-These six directives form the operational backbone of the ultrathink system.
+These six directives form the operational backbone of The ὅραμα System.
 They're always active, regardless of which stage of the methodology you're in.
 
 ---

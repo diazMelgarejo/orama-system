@@ -49,7 +49,7 @@ def cidf_insert(
     """
     if not CIDF_AVAILABLE:
         raise RuntimeError(
-            "CIDF package not found. Ensure bin/skills/cidf/ is in the Python path."
+            "CIDF package not found. Ensure bin/orama-system/cidf/ is in the Python path."
         )
 
     task = Task(

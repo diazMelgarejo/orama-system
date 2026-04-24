@@ -1,5 +1,5 @@
 # Lessons Learned — Self-Improvement Log
-**ultrathink System — Directive #3: Self-Improvement Loop**
+**The ὅραμα System — Directive #3: Self-Improvement Loop**
 **Project**: [Project Name]
 **Started**: YYYY-MM-DD
 
