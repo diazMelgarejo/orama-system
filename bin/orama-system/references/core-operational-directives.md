@@ -34,13 +34,13 @@ They're always active, regardless of which stage of the methodology you're in.
 - Tests reveal fundamental design flaw
 
 ### Anti-Patterns
-❌ "I'll just start coding, the plan will emerge" → Spaghetti code, multiple rewrites
-❌ "I already have a mental plan" → Can't collaborate, can't verify approach
+- ❌ "I'll just start coding, the plan will emerge" → Spaghetti code, multiple rewrites
+- ❌ "I already have a mental plan" → Can't collaborate, can't verify approach
 
 ### Success Criteria
-✅ Plan written down (not in your head)
-✅ Plan is specific and checkable
-✅ Plan reviewed before execution
+- ✅ Plan written down (not in your head)
+- ✅ Plan is specific and checkable
+- ✅ Plan reviewed before execution
 
 ---
 
@@ -85,20 +85,20 @@ Main agent: integrates all changes, runs integration tests.
 ```
 
 ### Anti-Patterns
-❌ Using subagents for everything (coordination overhead)
-❌ Vague subagent tasks (wrong output)
-❌ Not providing enough context (wrong assumptions)
+- ❌ Using subagents for everything (coordination overhead)
+- ❌ Vague subagent tasks (wrong output)
+- ❌ Not providing enough context (wrong assumptions)
 
 ### Success Criteria
-✅ Main context stays under 70% utilization
-✅ Subagents return actionable summaries (not data dumps)
-✅ One clear task per subagent
+- ✅ Main context stays under 70% utilization
+- ✅ Subagents return actionable summaries (not data dumps)
+- ✅ One clear task per subagent
 
 ---
 
 ## Directive 3: Self-Improvement Loop 🔄
 
-**Principle**: After ANY correction from user, update `tasks/lessons.md`. Ruthlessly iterate until mistake rate drops.
+**Principle**: After ANY correction from user, update `tasks/LESSONS.md`. Ruthlessly iterate until mistake rate drops.
 
 ### Always Trigger After
 - User corrects your approach
@@ -155,14 +155,14 @@ NEVER add performance optimizations until:
 - **Monthly**: Analyze patterns—are certain categories recurring?
 
 ### Anti-Patterns
-❌ Not writing lessons down (trusting memory)
-❌ Vague lessons ("be more careful" ← not actionable)
-❌ Write and forget (never reviewing)
+- ❌ Not writing lessons down (trusting memory)
+- ❌ Vague lessons ("be more careful" ← not actionable)
+- ❌ Write and forget (never reviewing)
 
 ### Success Criteria
-✅ Lessons file grows over time
-✅ Repeat mistakes decline measurably
-✅ Rules are specific and actionable
+- ✅ Lessons file grows over time
+- ✅ Repeat mistakes decline measurably
+- ✅ Rules are specific and actionable
 
 ---
 
@@ -214,22 +214,27 @@ def test_button_color():
 If "no" or "maybe" to any → it's not done.
 
 ### Anti-Patterns
-❌ Visual-only verification ("Looks good to me!")
-❌ Happy-path-only testing
-❌ Trusting CI blindly without local runs
+- ❌ Visual-only verification ("Looks good to me!")
+- ❌ Happy-path-only testing
+- ❌ Trusting CI blindly without local runs
 
 ### Success Criteria
-✅ All tests pass (comprehensive)
-✅ Feature works end-to-end realistically
-✅ No regressions detected
+- ✅ All tests pass (comprehensive)
+- ✅ Feature works end-to-end realistically
+- ✅ No regressions detected
 
 ---
 
 ## Directive 5: Demand Elegance (Balanced) ✨
 
-**Principle**: For non-trivial changes, pause and ask "Is there a more elegant way?" Skip for simple/obvious fixes.
+**Principle**: For non-trivial changes, [pause and ask](/bin/orama-system/references/amplifier-principle.md) "Is there a more elegant way?" [Skip for simple/obvious fixes.](/bin/orama-system/references/content-insertion-framework.md) The opportunity for elegance ususally comes before doing anything.
+
+References:
+- pause and ask - [amplifier-principle.md](/bin/orama-system/references/amplifier-principle.md) -> [Audience-First Response Protocol (AFRP)](/bin/orama-system/afrp/SKILL.md)
+- [content-insertion-framework.md](/bin/orama-system/references/content-insertion-framework.md)
 
 ### When to Demand Elegance
+
 **Pause for elegance when**:
 - Solution feels hacky or fragile
 - You're about to add "HACK" or "TODO" comment
@@ -260,13 +265,13 @@ Example:
 ```
 
 ### Elegance Signals
-**Needs elegance**: Hard to explain, copy-paste logic, 5+ parameters, can't find a good name
-**Has elegance**: Reads like English, only one way to do it, easy to extend, hard to misuse
+- **Needs elegance**: Hard to explain, copy-paste logic, 5+ parameters, can't find a good name
+- **Has elegance**: Reads like English, only one way to do it, easy to extend, hard to misuse
 
 ### Anti-Patterns
-❌ Premature elegance (elegant solution to wrong problem)
-❌ Over-abstraction (solving imaginary future problems)
-❌ Elegance as excuse ("can't ship until perfect")
+- ❌ Premature elegance (elegant solution to wrong problem)
+- ❌ Over-abstraction (solving imaginary future problems)
+- ❌ Elegance as excuse ("can't ship until perfect")
 
 ---
 
@@ -314,14 +319,24 @@ Fixed expected auth token format."
 ```
 
 ### The Zero Context Switching Rule
-User says: "Feature X is broken"
-You handle: ✅ logs ✅ reproduction ✅ root cause ✅ fix ✅ verification ✅ report
-User never needs to: ❌ find error messages ❌ guide debugging ❌ tell you which tests to run
+- User says: "Feature X is broken"
+- You handle:
+   - ✅ logs
+   - ✅ reproduction
+   - ✅ root cause
+   - ✅ fix
+   - ✅ verification
+   - ✅ report -goes to [loopback- Directive 3: Self-improvement](#directive-3-self-improvement-loop-)
+
+User never needs to:
+   - ❌ find error messages
+   - ❌ guide debugging
+   - ❌ tell you which tests to run
 
 ### Anti-Patterns
-❌ "Can you send me the error message?" (Look at logs yourself)
-❌ "Which test is failing?" (Run tests yourself)
-❌ "How should I fix this?" (That's your job to figure out)
+- ❌ "Can you send me the error message?" (Look at logs yourself)
+- ❌ "Which test is failing?" (Run tests yourself)
+- ❌ "How should I fix this?" (That's your job to figure out)
 
 ---
 
@@ -334,7 +349,7 @@ New feature request arrives
         ↓
 2. Subagent Strategy ── Offload research/exploration
         ↓
-3. Self-Improvement ── Check lessons.md for related patterns
+3. Self-Improvement ── Check LESSONS.md for related patterns
         ↓
 4. Demand Elegance ── Pause before committing to design
         ↓
@@ -344,7 +359,7 @@ New feature request arrives
         ↓
 7. Autonomous Bug Fix ── Fix any failures without asking
         ↓
-DONE ✅
+   DONE ✅
 ```
 
 ---
