@@ -29,7 +29,7 @@ bash /path/to/orama-system/install.sh --project
 
 ```bash
 # Copy the skill folder to your Claude skills directory
-cp -R bin/skills ~/.claude/skills/orama-system
+cp -R bin/orama-system ~/.claude/skills/orama-system
 ```
 
 ## What Gets Installed
@@ -128,4 +128,4 @@ rm -rf ~/.claude/skills/orama-system
 ## Source
 
 Distilled from [diazMelgarejo/orama-system](https://github.com/diazMelgarejo/orama-system)
-bin/skills/SKILL.md v0.9.9.7 -> unified install script v1.1.0
+bin/orama-system/SKILL.md v0.9.9.7 -> unified install script v1.1.0

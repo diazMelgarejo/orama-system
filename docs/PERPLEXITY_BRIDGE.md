@@ -1,4 +1,4 @@
-# Perplexity-Tools Bridge for UltraThink System
+# Perplexity-Tools Bridge for The ὅραμα System
 
 ## Version 0.9.9.7
 

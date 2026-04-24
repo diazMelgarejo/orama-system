@@ -22,7 +22,7 @@ All canonical locations that MUST be kept in sync:
 | File | Field |
 |------|-------|
 | `pyproject.toml:7` | `version = "0.9.9.7"` |
-| `bin/skills/SKILL.md:10` | `version: 0.9.9.7` |
+| `bin/orama-system/SKILL.md:10` | `version: 0.9.9.7` |
 | `bin/config/agent_registry.json:2` | `"version": "0.9.9.7"` |
 | `portal_server.py:26` | `VERSION = "0.9.9.7"` |
 | `bin/agents/*/agent.md:4` | `version: 0.9.9.7` |

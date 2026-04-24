@@ -9,7 +9,7 @@ allowed-tools: bash, file-operations
 
 # CIDF Sub-Skill — Content Insertion Decision Framework v1.2
 
-**Sub-skill of `bin/skills/SKILL.md`. Load on demand for any content insertion task.**
+**Sub-skill of `bin/orama-system/SKILL.md`. Load on demand for any content insertion task.**
 
 ---
 
@@ -91,7 +91,7 @@ When the content is markdown:
 ## Package Contents
 
 ```
-bin/skills/cidf/
+bin/orama-system/cidf/
 ├── SKILL.md                          ← this file (sub-skill)
 ├── FRAMEWORK.md                      ← canonical v1.2 spec
 ├── core/
@@ -124,5 +124,5 @@ bin/skills/cidf/
 ## Run Conformance Tests
 
 ```bash
-pytest bin/skills/cidf/tests/test_conformance.py -v   # must be 30 passed, 0 failed
+pytest bin/orama-system/cidf/tests/test_conformance.py -v   # must be 30 passed, 0 failed
 ```

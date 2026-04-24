@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # create_task_plan.sh
 # ====================
-# ultrathink System — Directive #1: Plan Node Default
+# The ὅραμα System — Directive #1: Plan Node Default
 #
 # Generates a structured tasks/todo.md plan template for a new task.
 # Run BEFORE starting any implementation with 3+ steps.
@@ -196,7 +196,7 @@ PLAN
 if [[ ! -f "$LESSONS_FILE" ]]; then
   cat > "$LESSONS_FILE" << LESSONS
 # Lessons Learned — Self-Improvement Log
-**ultrathink System — Directive #3**
+**The ὅραμα System — Directive #3**
 
 This file is the institutional memory of this project.
 Review at the start of each session.

@@ -193,7 +193,7 @@ A batch `sed -i` to replace `multi_agent\.` with `bin.` matched filename strings
 | File | Field | Status |
 |------|-------|--------|
 | `pyproject.toml:7` | `version = "0.9.9.7"` | ✓ current |
-| `bin/skills/SKILL.md:10` | `version: 0.9.9.7` | ✓ current |
+| `bin/orama-system/SKILL.md:10` | `version: 0.9.9.7` | ✓ current |
 | `bin/config/agent_registry.json:2` | `"version": "0.9.9.7"` | ✓ current |
 | `portal_server.py:26` | `VERSION = "0.9.9.7"` | ✓ current |
 | `bin/agents/*/agent.md:4` | `version: 0.9.9.7` | ✓ current (all 7 agents) |
@@ -346,7 +346,7 @@ both repos, and manual-port only reviewed intent.
 
 1. **Forensics First, Action Last**: Gemini's corrupted commits involved not just metadata shifts but destructive configuration purges (stripping `.env`). Never rebase a corrupted tail blindly. Map the drift first.
 2. **Identity Restoration via `.mailmap`**: Git's identity corruption (unauthorized email/name) is best fixed at the repo level with a canonical `.mailmap` file, ensuring all historical logs attribute correctly without rewriting every commit object.
-3. **Systematic Rename Strategy**: Moving from `ultrathink-system` to `orama-system` required a multi-stage approach:
+3. **Historical Rename Strategy**: The migration from `ultrathink-system` to `orama-system` required a multi-stage approach:
     - `sed` batch for internal references (excluding historical docs and hygiene configs).
     - `git mv` for folders and individual filenames.
     - Automated hygiene check to verify no "active" legacy references remained.

@@ -3,7 +3,7 @@
 > This file is loaded by Claude Code at the start of every session.
 > All rules below are **non-negotiable** for every agent (ECC, AutoResearcher, Claude).
 >
-> **Repo renamed**: orama-system → orama-system (2026-04-20, ὅραμα = vision/revelation)
+> **Repo renamed**: ultrathink-system → orama-system (2026-04-20, ὅραμα = vision/revelation)
 > GitHub: <https://github.com/diazMelgarejo/orama-system>
 
 ---
@@ -91,7 +91,7 @@ When running AutoResearcher swarms:
 Before any significant change to this repo, load the mother skill:
 
 ```claude
-/skill bin/skills/SKILL.md
+/skill bin/orama-system/SKILL.md
 ```
 
 - Run **AFRP gate** before generating non-trivial output
@@ -108,7 +108,7 @@ Before any significant change to this repo, load the mother skill:
   - [AlphaClaw](https://github.com/diazMelgarejo/AlphaClaw) (Layer 1 — infrastructure)
   - [Perpetua-Tools](https://github.com/diazMelgarejo/Perpetua-Tools) (Layer 2 — adapters/middleware)
 - **Skill**: `.claude/skills/orama-system/SKILL.md` (renamed from: `ultrathink-system/SKILL.md`)
-- **Mother skill**: `bin/skills/SKILL.md` (v0.9.9.7 → 0.9.9.8 after migration)
+- **Mother skill**: `bin/orama-system/SKILL.md` (v0.9.9.7 → 0.9.9.8 after migration)
 
 Git hygiene rules for clean-lineage work:
 
@@ -141,7 +141,7 @@ orama-system (Layer 3 — THIS REPO — orchestration/meta-intelligence)
 | `bin/agents/{architect,coder,crystallizer,executor,...}/` | Specialized agent definitions |
 | `bin/shared/bridge_contract.py` | Inter-agent messaging contract |
 | `bin/shared/message_bus.py` | Agent message bus |
-| `bin/skills/` | AFRP, CIDF, and other skill frameworks |
+| `bin/orama-system/` | AFRP, CIDF, and other skill frameworks |
 | `observability/` | Gate 3: OTel emitter, Tempo, Grafana (see system-design §6) |
 
 ### AlphaClaw integration (via Perpetua-Tools adapter)
@@ -183,12 +183,12 @@ eval "$(python -m orchestrator.alphaclaw_manager --resolve --env-only)"
 
 | Source | Runtime | Harness |
 |--------|---------|---------|
-| `bin/skills/SKILL.md` | `.claude/skills/orama-system/SKILL.md` | Claude Code (project) |
-| `bin/skills/SKILL.md` | `~/.claude/skills/orama-system/` | Claude Code (global) |
-| `bin/skills/SKILL.md` | `.agents/skills/orama-system/SKILL.md` | Codex/OpenCode |
+| `bin/orama-system/SKILL.md` | `.claude/skills/orama-system/SKILL.md` | Claude Code (project) |
+| `bin/orama-system/SKILL.md` | `~/.claude/skills/orama-system/` | Claude Code (global) |
+| `bin/orama-system/SKILL.md` | `.agents/skills/orama-system/SKILL.md` | Codex/OpenCode |
 | `bin/agents/*/` | `.claude/agents/ultrathink-*.md` | Claude Code subagents |
 
-> CIDF content (`bin/skills/cidf/`) is the canonical source. Install scripts copy it to
+> CIDF content (`bin/orama-system/cidf/`) is the canonical source. Install scripts copy it to
 > `.claude/skills/orama-system/cidf/` and `.agents/skills/orama-system/cidf/`
 > at runtime; checked idempotently on each run.
 
