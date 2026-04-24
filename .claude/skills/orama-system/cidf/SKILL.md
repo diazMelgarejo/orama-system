@@ -64,6 +64,16 @@ execute → visual_ok? ──no──→ refresh() → verify_programmatically(s
 
 **Never trust visual confirmation alone.**
 
+## Markdown Write Rule
+
+When the content is markdown:
+
+- Read the repo markdown index and lessons log before editing repo guidance.
+- Keep links relative and GitHub-renderable.
+- If a markdown file moves or gets renamed, preserve the redirect trail with a canonical-path note or an updated index link before commit.
+- Warn and ask the user before adding a new markdown file over 200 lines or growing an existing markdown file over 500 lines; suggest moving detail to `references/`, `docs/wiki/`, or a sub-skill.
+- Review the diff for stale anchors and broken relative links before the final write.
+
 ---
 
 ## Lint Rules (pre-execution guard)

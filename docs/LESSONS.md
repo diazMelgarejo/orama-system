@@ -395,3 +395,24 @@ both repos, and manual-port only reviewed intent.
 1. Before committing from a macOS/Xcode-touched checkout, run `python3 scripts/review/repo_hygiene.py .` and `git fsck --no-reflogs --full --unreachable --no-progress`.
 2. If `.git/refs/.DS_Store` appears, remove only that metadata file and rerun `git fsck`; do not reset or rewrite history for a local Finder artifact.
 3. For docs-only commits, verify the staged set with `git diff --cached --name-only` and keep it limited to markdown files.
+
+---
+
+## 2026-04-24 — Codex — Markdown redirect and size guardrails
+
+### What was learned
+
+Markdown edits need their own pre-commit discipline. Absolute local links, missing canonical-path notes after moves, and oversized single-file docs make future agent handoffs brittle even when tests pass.
+
+### Decisions made
+
+- `scripts/review/repo_hygiene.py` blocks absolute filesystem links in tracked markdown.
+- Changed markdown files now warn when a new file exceeds 200 lines or an existing file exceeds 500 lines.
+- Agents must ask before crossing those limits and suggest moving detail into `references/`, `docs/wiki/`, or sub-skills.
+- The root skill, packaged skill, Claude skill mirror, CIDF, and verification checklist all carry the same markdown edit rule.
+
+### Prevention rules
+
+1. Before committing markdown, run `python3 scripts/review/repo_hygiene.py .`.
+2. Keep links relative and GitHub-renderable unless the target is an intentional external URL.
+3. Preserve redirect or canonical-path breadcrumbs when moving markdown.

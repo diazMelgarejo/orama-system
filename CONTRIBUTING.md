@@ -37,6 +37,8 @@ Use this map to load only the context needed for the current task.
 - [ ] Scripts include docstrings and error handling
 - [ ] Templates include usage comments
 - [ ] Add or update tests for any new functionality
+- [ ] If any `*.md` files changed, preserve the redirect trail and keep links relative
+- [ ] If a new `*.md` file exceeds 200 lines or an existing `*.md` file exceeds 500 lines, ask whether to split details into `references/`, `docs/wiki/`, or a sub-skill before committing
 
 ### History Recovery Only
 
