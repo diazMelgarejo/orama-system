@@ -22,6 +22,7 @@ DISCOVERY_JSON      = STATE_DIR / "discovery.json"
 LAST_DISCOVERY_JSON = STATE_DIR / "last_discovery.json"
 RECOVERY_SOURCE_TXT = STATE_DIR / "recovery_source.txt"
 LOCK_FILE           = STATE_DIR / ".discover.lock"
+DEFAULT_LOCK_FILE   = LOCK_FILE
 OPENCLAW_JSON       = OPENCLAW_DIR / "openclaw.json"
 
 LM_STUDIO_PORT     = 1234
@@ -137,6 +138,11 @@ def compute_hash(endpoints: dict) -> str:
 def _load_json(path: Path):
     try: return json.loads(path.read_text())
     except Exception: return None
+
+def _lock_path() -> Path:
+    if LOCK_FILE != DEFAULT_LOCK_FILE:
+        return LOCK_FILE
+    return STATE_DIR / ".discover.lock"
 
 def save_discovery_state(endpoints: dict, tier: int = 1):
     STATE_DIR.mkdir(parents=True, exist_ok=True)
@@ -291,7 +297,9 @@ class _Lock:
         self._timeout = timeout; self._fd = None
     def __enter__(self):
         STATE_DIR.mkdir(parents=True, exist_ok=True)
-        self._fd = open(LOCK_FILE, "w")
+        lock_path = _lock_path()
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
+        self._fd = open(lock_path, "w")
         deadline = time.time() + self._timeout
         while True:
             try:
@@ -302,7 +310,7 @@ class _Lock:
     def __exit__(self, *_):
         if self._fd:
             fcntl.flock(self._fd, fcntl.LOCK_UN); self._fd.close()
-            try: LOCK_FILE.unlink()
+            try: _lock_path().unlink()
             except FileNotFoundError: pass
 
 # ── Main discovery flow ───────────────────────────────────────────────────────
@@ -349,6 +357,7 @@ def run_discovery(force: bool = False) -> int:
                 last["recovery_tier"] = tier  # reflect actual recovery tier used this run
                 RECOVERY_SOURCE_TXT.write_text(f"tier{tier}\n")
             DISCOVERY_JSON.write_text(json.dumps(last, indent=2))
+            LAST_DISCOVERY_JSON.write_text(json.dumps(last, indent=2))
             print("✅ No changes. Config is current.", file=sys.stderr)
             return 0
 
