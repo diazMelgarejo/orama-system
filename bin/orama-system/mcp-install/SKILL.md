@@ -6,7 +6,7 @@ description: >-
   (parallel background workers), and OpenClaw MCP registry. Activates for:
   install mcp stack, setup gemini mcp, register ai-cli, openclaw mcp set,
   mcp orchestration setup, install mcp tools, run install-mcp-stack.sh.
-version: 1.0.0
+version: 1.1.0
 license: Apache 2.0
 compatibility: claude-code
 parent_skill: orama-system
@@ -121,14 +121,32 @@ bash bin/orama-system/scripts/install-mcp-stack.sh --force
 
 Use `--force` after a version pin change or when debugging a silent failure.
 
+## Post-Install: Reduce Permission Prompts
+
+After the stack is installed, run `/fewer-permission-prompts` or manually add these
+read-only rules to `.claude/settings.json` to eliminate recurring prompts from the
+MCP verification steps:
+
+```json
+"permissions": {
+  "allow": [
+    "Bash(command -v *)",
+    "Bash(claude mcp list *)",
+    "Bash(~/.claude/skills/gstack/bin/gstack-config get *)",
+    "Bash(openclaw mcp list *)",
+    "Bash(openclaw mcp show *)"
+  ]
+}
+```
+
 ## Rollback
 
 If something goes wrong after installation:
 
 ```bash
 npm uninstall -g @google/gemini-cli ai-cli-mcp
-claude mcp remove gemini-cli 2>/dev/null || true
-claude mcp remove ai-cli 2>/dev/null || true
+claude mcp remove -s user gemini-cli 2>/dev/null || claude mcp remove gemini-cli 2>/dev/null || true
+claude mcp remove -s user ai-cli 2>/dev/null || claude mcp remove ai-cli 2>/dev/null || true
 openclaw mcp unset gemini-cli 2>/dev/null || true
 openclaw mcp unset ai-cli-mcp 2>/dev/null || true
 ```
@@ -137,6 +155,8 @@ openclaw mcp unset ai-cli-mcp 2>/dev/null || true
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
+| `gemini-cli` / `ai-cli` missing from `/mcp` in other projects | Registered at project scope instead of user scope | Re-run with `--force`; script now uses `-s user` |
+| `ai-cli --version` prints usage text, not a version | ai-cli outputs help to stdout | Expected; script detects via `command -v`, version shown as "via npx" |
 | `ai-cli worker hangs` | First-run prompt not accepted | Step 4 handles this; re-run the script |
 | `JSON parse error` in ai-cli | Debug logs on stdout | `MCP_CLAUDE_DEBUG=false` already set in OpenClaw config |
 | `gemini auth fails` | Not logged in | `gemini auth login` interactively |
