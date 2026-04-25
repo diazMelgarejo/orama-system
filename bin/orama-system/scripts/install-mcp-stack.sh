@@ -61,7 +61,7 @@ _log "Step 3: Register gemini-mcp-tool in Claude Code"
 if claude mcp list 2>/dev/null | grep -q "gemini-cli" && ! $FORCE; then
   _skip "gemini-cli already registered in Claude Code"
 else
-  _run "claude mcp add gemini-cli -- npx -y gemini-mcp-tool@latest"
+  _run "claude mcp add -s user gemini-cli -- npx -y gemini-mcp-tool@latest"
   _ok "gemini-cli registered. Restart Claude Code, then verify with /mcp"
 fi
 
@@ -82,8 +82,9 @@ fi
 
 # ── Step 5: Install ai-cli-mcp ────────────────────────────────────────────────
 _log "Step 5: ai-cli-mcp"
+_AICLI_VER=$(ai-cli --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo '')
 if command -v ai-cli >/dev/null 2>&1 && ! $FORCE; then
-  _skip "ai-cli already installed ($(ai-cli --version 2>/dev/null | head -1 || echo 'version unknown'))"
+  _skip "ai-cli already installed (${_AICLI_VER:-via npx})"
 else
   _log "Installing ai-cli-mcp globally..."
   _run "npm install -g ai-cli-mcp"
@@ -94,7 +95,7 @@ _log "Step 5b: Register ai-cli-mcp in Claude Code"
 if claude mcp list 2>/dev/null | grep -q "ai-cli" && ! $FORCE; then
   _skip "ai-cli already registered in Claude Code"
 else
-  _run "claude mcp add ai-cli -- npx -y ai-cli-mcp@latest"
+  _run "claude mcp add -s user ai-cli -- npx -y ai-cli-mcp@latest"
   _ok "ai-cli registered in Claude Code"
 fi
 
@@ -125,7 +126,7 @@ _log "Step 7: Verification summary"
 echo ""
 echo "  node:    $(node -v 2>/dev/null || echo 'missing')"
 echo "  gemini:  $(gemini --version 2>/dev/null | head -1 || echo 'missing')"
-echo "  ai-cli:  $(ai-cli --version 2>/dev/null | head -1 || echo 'not found (npx fallback ok)')"
+echo "  ai-cli:  $(ai-cli --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo 'via npx (ok)')"
 echo "  claude mcp list:"
 claude mcp list 2>/dev/null | grep -E "gemini-cli|ai-cli" | sed 's/^/    /' || echo "    (run 'claude mcp list' manually)"
 if command -v openclaw >/dev/null 2>&1; then
@@ -141,8 +142,8 @@ cat << 'ROLLBACK'
 
 ── ROLLBACK (if something went wrong) ──────────────────────────────────────────
   npm uninstall -g @google/gemini-cli ai-cli-mcp
-  claude mcp remove gemini-cli 2>/dev/null || true
-  claude mcp remove ai-cli 2>/dev/null || true
+  claude mcp remove -s user gemini-cli 2>/dev/null || claude mcp remove gemini-cli 2>/dev/null || true
+  claude mcp remove -s user ai-cli 2>/dev/null || claude mcp remove ai-cli 2>/dev/null || true
   openclaw mcp unset gemini-cli 2>/dev/null || true
   openclaw mcp unset ai-cli-mcp 2>/dev/null || true
 ────────────────────────────────────────────────────────────────────────────────
