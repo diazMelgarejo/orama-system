@@ -232,7 +232,7 @@ Append dated entry capturing:
 
 2. **`discover.py --force` after any IP change** — the 5-min TTL caches stale state and hides connectivity problems.
 
-3. **Gemini's commits cannot be merged** — bad author identities (`Lawrence@bettermind.ph`, `darth.serious@gmail.com` in commit author, `nimbosa` agent) must be discarded. Rescue content manually into LESSONS.md, then commit under correct identity.
+3. **Gemini's commits cannot be merged** — bad author identities (`<forbidden>`, `darth.serious@gmail.com` in commit author, `nimbosa` agent) must be discarded. Rescue content manually into LESSONS.md, then commit under correct identity.
 
 4. **`git fsck --unreachable` is the truth oracle** — 8 objects, all explained. Nothing lost. Run this before panicking about missing commits.
 
