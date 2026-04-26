@@ -12,6 +12,7 @@
     {
       "id": "orchestrator",
       "type": "coordinator",
+      "affinity": "mac",
       "skill_path": "agents/orchestrator/ultrathink-orchestrator.md",
       "logic_path": "agents/orchestrator/orchestrator_logic.py",
       "max_instances": 1,
@@ -20,6 +21,7 @@
     {
       "id": "context-agent",
       "type": "specialist",
+      "affinity": "mac",
       "stage": 1,
       "skill_path": "agents/context/context-immersion-agent.md",
       "logic_path": "agents/context/context_tools.py",
@@ -29,6 +31,7 @@
     {
       "id": "architect-agent",
       "type": "specialist",
+      "affinity": "mac",
       "stage": 2,
       "skill_path": "agents/architect/visionary-architect-agent.md",
       "logic_path": "agents/architect/architecture_tools.py",
@@ -38,6 +41,7 @@
     {
       "id": "refiner-agent",
       "type": "specialist",
+      "affinity": "mac",
       "stage": 3,
       "skill_path": "agents/refiner/ruthless-refiner-agent.md",
       "logic_path": "agents/refiner/refinement_tools.py",
@@ -47,6 +51,7 @@
     {
       "id": "executor-agent",
       "type": "worker",
+      "affinity": "win",
       "stage": 4,
       "skill_path": "agents/executor/masterful-executor-agent.md",
       "logic_path": "agents/executor/execution_tools.py",
@@ -56,6 +61,7 @@
     {
       "id": "verifier-agent",
       "type": "validator",
+      "affinity": "mac",
       "stage": 4.5,
       "skill_path": "agents/verifier/verification-agent.md",
       "logic_path": "agents/verifier/verification_tools.py",
@@ -65,6 +71,7 @@
     {
       "id": "crystallizer-agent",
       "type": "documenter",
+      "affinity": "mac",
       "stage": 5,
       "skill_path": "agents/crystallizer/vision-crystallizer-agent.md",
       "logic_path": "agents/crystallizer/documentation_tools.py",
