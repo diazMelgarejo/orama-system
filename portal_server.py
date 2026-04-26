@@ -13,6 +13,7 @@ Routes:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
@@ -58,6 +59,11 @@ OLLAMA_WIN = os.getenv("OLLAMA_WINDOWS_ENDPOINT", "http://192.168.254.108:11434"
 OLLAMA_MAC = os.getenv("OLLAMA_MAC_ENDPOINT", "http://127.0.0.1:11434")
 
 PROBE_TIMEOUT = 3.0
+
+REPO_ROOT = Path(__file__).resolve().parent
+PERPETUA_TOOLS_ROOT = Path(
+    os.getenv("PERPETUA_TOOLS_ROOT", REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools")
+)
 
 app = FastAPI(title="UltraThink LAN Portal", version=VERSION)
 app.add_middleware(
@@ -132,6 +138,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .s-waiting{{color:#fbbf24}}
   .s-error{{color:#f87171}}
   .s-stopped{{color:#475569}}
+  .policy-grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.75rem}}
+  .policy-ok{{border-color:#16a34a}}
+  .policy-bad{{border-color:#dc2626}}
+  .select-row{{display:flex;gap:.5rem;margin-top:.5rem;align-items:center}}
+  select{{background:#1e293b;border:1px solid #475569;color:#f8fafc;border-radius:3px;padding:.3rem;font-family:monospace;font-size:.75rem;min-width:12rem}}
 </style>
 </head>
 <body>
@@ -140,6 +151,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 {cards}
 </div>
 {routing_section}
+{hardware_policy_section}
 {agent_state_section}
 {activity_section}
 {input_section}
@@ -232,6 +244,47 @@ def _render_routing_section(routing: Dict[str, Any] | None) -> str:
         '<div class="section-title">Routing State</div>'
         '<div class="card">' + "".join(rows) + '</div>'
         '</div>'
+    )
+
+
+def _render_hardware_policy_section(policy_status: Dict[str, Any] | None) -> str:
+    if not policy_status:
+        return (
+            '<div class="section"><div class="section-title">Hardware Policy</div>'
+            '<div class="feed"><div class="none">Hardware policy unavailable</div></div></div>'
+        )
+    violations = policy_status.get("violations", [])
+    ok = not violations
+    badge = '<span class="ok">● CLEAN</span>' if ok else '<span class="err">● VIOLATIONS</span>'
+    policy = policy_status.get("policy", {})
+    live = policy_status.get("live", {})
+    safe = policy_status.get("safe_defaults", {})
+
+    def _items(values: list[str]) -> str:
+        return "".join(f'<div class="model">› {v}</div>' for v in values) or '<div class="none">none</div>'
+
+    mac_opts = "".join(f'<option>{m}</option>' for m in safe.get("mac", []))
+    win_opts = "".join(f'<option>{m}</option>' for m in safe.get("win", []))
+    violations_html = "".join(f'<div class="model err">✗ {v}</div>' for v in violations)
+    if not violations_html:
+        violations_html = '<div class="model ok">✓ no forbidden assignments found</div>'
+
+    return (
+        '<div class="section"><div class="section-title">Hardware Policy & Safe Defaults</div>'
+        '<div class="policy-grid">'
+        f'<div class="card {"policy-ok" if ok else "policy-bad"}"><div class="card-title">Policy Status</div>{badge}'
+        f'<div class="role">source: {policy_status.get("policy_path", "—")}</div>{violations_html}</div>'
+        '<div class="card"><div class="card-title">Mac Safe Models (NEVER_WIN)</div>'
+        f'{_items(live.get("mac_allowed", []))}'
+        f'<div class="select-row"><span class="role">choose:</span><select>{mac_opts}</select></div></div>'
+        '<div class="card"><div class="card-title">Win Safe Models (NEVER_MAC)</div>'
+        f'{_items(live.get("win_allowed", []))}'
+        f'<div class="select-row"><span class="role">choose:</span><select>{win_opts}</select></div></div>'
+        '<div class="card"><div class="card-title">Policy Lists</div>'
+        f'<div class="role">NEVER_MAC</div>{_items(policy.get("windows_only", [])[:4])}'
+        f'<div class="role" style="margin-top:.5rem">NEVER_WIN</div>{_items(policy.get("mac_only", [])[:4])}'
+        '<div class="role" style="margin-top:.5rem">CLI: ./start.sh --hardware-policy</div></div>'
+        '</div></div>'
     )
 
 
@@ -397,10 +450,12 @@ def _render_html(status: Dict[str, Any]) -> str:
     routing = status.get("routing")
     agents = status.get("agents", [])
     queue_depth = status.get("queue_depth", 0)
+    hardware_policy = status.get("hardware_policy")
     return HTML_TEMPLATE.format(
         version=VERSION,
         cards="\n".join(cards),
         routing_section=_render_routing_section(routing),
+        hardware_policy_section=_render_hardware_policy_section(hardware_policy),
         agent_state_section=_render_agent_state_section(agents),
         activity_section=_render_activity_section(activity_events),
         input_section=_render_input_section(queue_depth),
@@ -484,6 +539,59 @@ async def _probe_queue_depth(client: httpx.AsyncClient) -> int:
         return 0
 
 
+def _simple_policy_parse(text: str) -> Dict[str, List[str]]:
+    parsed: Dict[str, List[str]] = {"windows_only": [], "mac_only": [], "shared": []}
+    current: str | None = None
+    for raw_line in text.splitlines():
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        stripped = line.strip()
+        if stripped.endswith(":") and not stripped.startswith("-"):
+            key = stripped[:-1]
+            current = key if key in parsed else None
+            continue
+        if current and stripped.startswith("-"):
+            value = stripped[1:].strip().strip('"').strip("'")
+            if value:
+                parsed[current].append(value)
+    return parsed
+
+
+def _load_hardware_policy() -> tuple[Dict[str, List[str]], str]:
+    policy_path = PERPETUA_TOOLS_ROOT / "config" / "model_hardware_policy.yml"
+    if not policy_path.exists():
+        return {"windows_only": [], "mac_only": [], "shared": []}, str(policy_path)
+    return _simple_policy_parse(policy_path.read_text(encoding="utf-8")), str(policy_path)
+
+
+def _hardware_policy_status(services: Dict[str, Any]) -> Dict[str, Any]:
+    policy, policy_path = _load_hardware_policy()
+    win_only = {m.lower() for m in policy.get("windows_only", [])}
+    mac_only = {m.lower() for m in policy.get("mac_only", [])}
+    mac_models = services.get("lmstudio_mac", {}).get("models", []) or []
+    win_models: List[str] = []
+    for key, svc in services.items():
+        if key.startswith("lmstudio_win"):
+            win_models.extend(svc.get("models", []) or [])
+
+    violations = [f"NEVER_MAC {m} advertised by lmstudio-mac" for m in mac_models if m.lower() in win_only]
+    violations.extend(f"NEVER_WIN {m} advertised by lmstudio-win" for m in win_models if m.lower() in mac_only)
+    mac_allowed = [m for m in mac_models if m.lower() not in win_only and "embed" not in m.lower()]
+    win_allowed = [m for m in win_models if m.lower() not in mac_only and "embed" not in m.lower()]
+    return {
+        "ok": not violations,
+        "policy_path": policy_path,
+        "policy": policy,
+        "violations": violations,
+        "live": {"mac_allowed": mac_allowed, "win_allowed": win_allowed},
+        "safe_defaults": {
+            "mac": mac_allowed or [m for m in policy.get("mac_only", []) if m],
+            "win": win_allowed or [m for m in policy.get("windows_only", []) if m],
+        },
+    }
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -553,14 +661,23 @@ async def api_status():
         for i, (ok, models) in enumerate(lm_win_results):
             services[f"lmstudio_win_{i}"] = {"ok": ok, "models": models, "url": LMS_WIN_ENDPOINTS[i]}
 
+    hardware_policy = _hardware_policy_status(services)
+
     return {
         "portal_version": VERSION,
         "services": services,
         "activity": activity_events,
         "agents": agents,
         "routing": routing,
+        "hardware_policy": hardware_policy,
         "queue_depth": queue_depth,
     }
+
+
+@app.get("/api/hardware-policy")
+async def api_hardware_policy():
+    status = await api_status()
+    return status.get("hardware_policy", {})
 
 
 @app.get("/", response_class=None)

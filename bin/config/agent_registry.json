@@ -3,10 +3,10 @@
   "network_name": "ultrathink-agent-network",
   "description": "Unified ultrathink agent network — 7 ultrathink stage agents + 4 OpenClaw SOUL agents",
   "openclaw_agents": {
-    "mac-researcher":  { "soul": "bin/agents/mac-researcher/SOUL.md",  "provider": "lmstudio-mac",  "gateway": "http://127.0.0.1:18789" },
-    "win-researcher":  { "soul": "bin/agents/win-researcher/SOUL.md",  "provider": "lmstudio-win",  "gateway": "http://127.0.0.1:18789" },
-    "coder":           { "soul": "bin/agents/coder/SOUL.md",            "provider": "lmstudio-win",  "gateway": "http://127.0.0.1:18789" },
-    "autoresearcher":  { "soul": "bin/agents/autoresearcher/SOUL.md",   "provider": "ollama-win",    "gateway": "http://127.0.0.1:18789" }
+    "mac-researcher":  { "soul": "bin/agents/mac-researcher/SOUL.md",  "provider": "lmstudio-mac",  "model": "Qwen3.5-9B-MLX-4bit", "affinity": "mac", "gateway": "http://127.0.0.1:18789" },
+    "win-researcher":  { "soul": "bin/agents/win-researcher/SOUL.md",  "provider": "lmstudio-win",  "model": "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2", "affinity": "win", "gateway": "http://127.0.0.1:18789" },
+    "coder":           { "soul": "bin/agents/coder/SOUL.md",            "provider": "lmstudio-win",  "model": "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2", "affinity": "win", "gateway": "http://127.0.0.1:18789" },
+    "autoresearcher":  { "soul": "bin/agents/autoresearcher/SOUL.md",   "provider": "lmstudio-win",  "model": "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2", "affinity": "win", "gateway": "http://127.0.0.1:18789" }
   },
   "agents": [
     {

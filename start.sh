@@ -16,6 +16,7 @@
 #   ./start.sh --stop      — kill all three services
 #   ./start.sh --status    — show which ports are listening
 #   ./start.sh --discover  — re-run path discovery, rewrite .paths, exit
+#   ./start.sh --hardware-policy — validate model↔hardware affinity and exit
 #
 # Path config: .paths (gitignored, auto-generated, user-editable)
 # Template:    .paths.example
@@ -134,6 +135,27 @@ PORTAL_URL="http://localhost:${PORTAL_PORT}"
 
 LOG_DIR="$SCRIPT_DIR/.logs"
 mkdir -p "$LOG_DIR"
+
+# ── Hardware policy check (existing CLI surface; helper lives in PT) ──────────
+
+run_hardware_policy_check() {
+  local cli="${PT_DIR}/scripts/hardware_policy_cli.py"
+  if [ -n "${PT_DIR:-}" ] && [ -f "$cli" ]; then
+    echo ""
+    echo "=== Hardware model affinity policy ==="
+    PYTHONPATH="${PT_DIR}" "$PT_PYTHON" "$cli" --list || true
+    echo ""
+    PYTHONPATH="${PT_DIR}" "$PT_PYTHON" "$cli" --check-openclaw
+  else
+    _warn "policy" "hardware policy helper not found at ${cli:-unknown}"
+    return 1
+  fi
+}
+
+if [[ "${1:-}" == "--hardware-policy" ]]; then
+  run_hardware_policy_check
+  exit $?
+fi
 
 # ── macOS pre-flight ──────────────────────────────────────────────────────────
 # Applies idempotent fixes to the AlphaClaw binary (macOS compat patches).
@@ -375,6 +397,7 @@ if [[ "${1:-}" == "--status" ]]; then
       echo "  DOWN :$port"
     fi
   done
+  run_hardware_policy_check || true
   echo ""
   exit 0
 fi

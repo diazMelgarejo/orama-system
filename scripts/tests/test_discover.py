@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 import pytest
 
-sys.path.insert(0, str(Path.home() / ".openclaw/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import discover as D
 
 
@@ -26,6 +26,59 @@ def test_hash_none_endpoint():
     ep = {"mac": None, "win": None}
     assert isinstance(D.compute_hash(ep), str)
     assert len(D.compute_hash(ep)) == 40
+
+
+POLICY = {
+    "windows_only": [
+        "gemma-4-26b-a4b-it",
+        "gemma-4-26B-A4B-it-Q4_K_M",
+        "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
+        "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2",
+    ],
+    "mac_only": [
+        "gemma-4-e4b-it",
+        "qwen3.5-9b-mlx",
+        "qwen3.5-9b-mlx-4bit",
+        "Qwen3.5-9B-MLX-4bit",
+    ],
+    "shared": [],
+}
+
+
+def test_filter_models_for_mac_strips_windows_only_models():
+    models = [
+        "Qwen3.5-9B-MLX-4bit",
+        "gemma-4-e4b-it",
+        "gemma-4-26B-A4B-it-Q4_K_M",
+        "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2",
+    ]
+    assert D.filter_models_for_platform(models, "mac", POLICY) == [
+        "Qwen3.5-9B-MLX-4bit",
+        "gemma-4-e4b-it",
+    ]
+
+
+def test_filter_models_for_win_strips_mac_only_models():
+    models = [
+        "Qwen3.5-9B-MLX-4bit",
+        "qwen3.5-9b-mlx-4bit",
+        "gemma-4-26B-A4B-it-Q4_K_M",
+        "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2",
+    ]
+    assert D.filter_models_for_platform(models, "win", POLICY) == [
+        "gemma-4-26B-A4B-it-Q4_K_M",
+        "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2",
+    ]
+
+
+def test_filter_models_clean_input_no_change():
+    models = ["Qwen3.5-9B-MLX-4bit", "gemma-4-e4b-it"]
+    assert D.filter_models_for_platform(models, "mac", POLICY) == models
+
+
+def test_filter_models_unknown_model_passes_through():
+    models = ["unknown-local-experiment"]
+    assert D.filter_models_for_platform(models, "mac", POLICY) == models
 
 
 def test_backup_limit_enforced(tmp_path, monkeypatch):
@@ -103,9 +156,10 @@ def test_patch_openclaw_json(tmp_path, monkeypatch):
         "meta": {"lastTouchedAt": "2026-01-01T00:00:00Z"}
     }))
     monkeypatch.setattr(D, "OPENCLAW_JSON", oc)
+    monkeypatch.setattr(D, "load_policy", lambda policy_path=None: POLICY)
     endpoints = {
-        "mac": {"ip": "192.168.254.107", "models": ["qwen3.5-9b-mlx", "text-embedding-nomic"]},
-        "win": {"ip": "192.168.254.101", "models": ["qwen3.5-27b-distilled"]},
+        "mac": {"ip": "192.168.254.107", "models": ["qwen3.5-9b-mlx", "gemma-4-26B-A4B-it-Q4_K_M", "text-embedding-nomic"]},
+        "win": {"ip": "192.168.254.101", "models": ["qwen3.5-27b-distilled", "Qwen3.5-9B-MLX-4bit"]},
     }
     D.patch_openclaw_json(endpoints)
     cfg = json.loads(oc.read_text())
@@ -114,6 +168,9 @@ def test_patch_openclaw_json(tmp_path, monkeypatch):
     mac_ids = [m["id"] for m in cfg["models"]["providers"]["lmstudio-mac"]["models"]]
     assert "text-embedding-nomic" not in mac_ids
     assert "qwen3.5-9b-mlx" in mac_ids
+    assert "gemma-4-26B-A4B-it-Q4_K_M" not in mac_ids
+    win_ids = [m["id"] for m in cfg["models"]["providers"]["lmstudio-win"]["models"]]
+    assert "Qwen3.5-9B-MLX-4bit" not in win_ids
 
 
 def test_win_primary_prefers_27b(tmp_path, monkeypatch):
@@ -183,6 +240,6 @@ def test_no_write_when_hash_unchanged(tmp_path, monkeypatch):
     result = D.run_discovery(force=True)
     assert result == 0
     for f, mtime in files_before.items():
-        if f.name == "discovery.json":
+        if f.name in {"discovery.json", "last_discovery.json"}:
             continue
         assert f.stat().st_mtime == mtime, f"{f} should not have been rewritten"
