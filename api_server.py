@@ -56,6 +56,11 @@ if PERPETUA_TOOLS_ROOT.exists() and str(PERPETUA_TOOLS_ROOT) not in os.sys.path:
 try:
     from utils.hardware_policy import HardwareAffinityError, check_affinity, expected_platform_for_model
 except Exception:  # pragma: no cover - keeps API available if PT is not installed
+    logger.warning(
+        "hardware_policy unavailable (PERPETUA_TOOLS_ROOT=%s) — affinity checks disabled",
+        PERPETUA_TOOLS_ROOT,
+    )
+
     class HardwareAffinityError(RuntimeError):
         pass
 
