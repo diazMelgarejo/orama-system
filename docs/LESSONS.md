@@ -504,3 +504,51 @@ Do not preemptively downgrade.
 - Live Gbrain ↔ Codex test via Gstack
 - Live Gemini-coder test via `mcp__gemini-cli__ask-gemini`
 
+
+---
+
+## 2026-04-26 — Claude — Part 2 session: Gemini audit + registry schema fix + commit hygiene
+
+### What was learned
+
+**1. agent_registry.json schema gap (agents[] had no `affinity` keys)**
+The `agents` array (7 orama stage agents) was added before the hardware-policy work. None had
+`"affinity"` keys. The `openclaw_agents` section and `autoresearch_agents` section both had
+affinity info, but the stage agents were silently unguarded. Fixed in commit b2ed93b.
+
+**2. api_server.py silent stub degradation**
+When `PERPETUA_TOOLS_ROOT` doesn't exist or `utils.hardware_policy` can't be imported, the
+except block fell back to no-op stubs with zero log output. Operators had no way to know enforcement
+was disabled. Fixed: added `logger.warning()` with the PERPETUA_TOOLS_ROOT path in the except block.
+
+**3. `ultrathink_bridge` import regression was the real blocker**
+The prior session's attempt_completion was failing because `fastapi_app.py` still imported from
+`orchestrator.ultrathink_bridge`, which was renamed to `orama_bridge` during the repo rename.
+This caused ALL test collection to fail. Once fixed (from orchestrator.orama_bridge import ...),
+11/11 tests passed immediately. The 4 "open architectural questions" were not actually blocking —
+they were resolved in the implementation already.
+
+**4. MCP server registration must use `-s user` scope**
+`claude mcp add` without `-s user` scopes the server to the current working directory only.
+Running the installer from a different directory (or a new shell) means the servers are invisible.
+Always use: `claude mcp add -s user <name> -- <command>`.
+
+**5. `device_affinity` vs `affinity` key inconsistency**
+`autoresearch_agents` entries use `"device_affinity": "win-rtx3080"` while `agents` array entries
+now use `"affinity": "win"`. These need to be normalized (Part 2, Phase 7). Any routing code
+that reads `device_affinity` needs to be audited.
+
+### Decisions made
+
+- `executor-agent` gets `affinity: "win"` — it's the heavy compute worker (code_generator + performance_profiler)
+- All other stage agents (orchestrator, context, architect, refiner, verifier, crystallizer) get `affinity: "mac"` — they are Claude Code subagent types, not LM Studio GPU workers
+- `shared:` section in policy YAML stays empty until both machines are physically online and `discover.py --status` is run
+
+### Open questions
+
+- What models are genuinely cross-platform? (needs both machines online — Phase 5, Part 2)
+- Should `device_affinity` in autoresearch_agents be normalized to `affinity`? (Phase 7, Part 2)
+
+### Follow-up plan
+
+`docs/tripartite-plan/2026-04-26-hardware-model-routing-004-PART2-PLAN.md`
