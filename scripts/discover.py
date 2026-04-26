@@ -11,6 +11,7 @@ import argparse, asyncio, fcntl, hashlib, json, os, re, shutil, socket, sys, tim
 import urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 OPENCLAW_DIR        = Path.home() / ".openclaw"
@@ -56,6 +57,73 @@ def get_repo_paths() -> dict:
         else:
             result[name] = next((p for p in paths if p.exists()), None)
     return result
+
+# ── Hardware affinity policy ──────────────────────────────────────────────────
+
+def _simple_policy_parse(text: str) -> dict[str, list[str]]:
+    parsed: dict[str, list[str]] = {"windows_only": [], "mac_only": [], "shared": []}
+    current: str | None = None
+    for raw_line in text.splitlines():
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        stripped = line.strip()
+        if stripped.endswith(":") and not stripped.startswith("-"):
+            key = stripped[:-1]
+            current = key if key in parsed else None
+            continue
+        if current and stripped.startswith("-"):
+            value = stripped[1:].strip().strip('"').strip("'")
+            if value:
+                parsed[current].append(value)
+    return parsed
+
+def load_policy(policy_path: Path | None = None) -> dict[str, Any]:
+    """Load Perpetua-Tools' canonical hardware policy."""
+    if policy_path is None:
+        env_root = os.environ.get("PERPETUA_TOOLS_ROOT", "").strip()
+        pt_root = Path(env_root) if env_root else get_repo_paths().get("perpetua_tools")
+        if not pt_root:
+            return {"windows_only": [], "mac_only": [], "shared": []}
+        policy_path = Path(pt_root) / "config" / "model_hardware_policy.yml"
+    if not policy_path.exists():
+        return {"windows_only": [], "mac_only": [], "shared": []}
+    text = policy_path.read_text(encoding="utf-8")
+    try:
+        import yaml  # type: ignore
+        loaded = yaml.safe_load(text) or {}
+    except Exception:
+        loaded = _simple_policy_parse(text)
+    return {
+        "windows_only": list(loaded.get("windows_only", []) or []),
+        "mac_only": list(loaded.get("mac_only", []) or []),
+        "shared": list(loaded.get("shared", []) or []),
+    }
+
+def filter_models_for_platform(models: list, platform: str, policy: dict) -> list:
+    """Remove models that are forbidden on the given platform."""
+    normalized = platform.lower().strip()
+    if normalized == "mac":
+        forbidden = {m.lower() for m in policy.get("windows_only", [])}
+    elif normalized == "win":
+        forbidden = {m.lower() for m in policy.get("mac_only", [])}
+    else:
+        forbidden = set()
+    return [m for m in models if str(m).lower() not in forbidden]
+
+def filter_endpoints_for_policy(endpoints: dict, policy: dict | None = None) -> dict:
+    """Return a copy of endpoint discovery data with platform-forbidden models removed."""
+    policy = policy if policy is not None else load_policy()
+    filtered: dict[str, dict | None] = {}
+    for platform in ("mac", "win"):
+        endpoint = endpoints.get(platform)
+        if not endpoint:
+            filtered[platform] = endpoint
+            continue
+        copied = dict(endpoint)
+        copied["models"] = filter_models_for_platform(endpoint.get("models", []), platform, policy)
+        filtered[platform] = copied
+    return filtered
 
 # ── Probing ───────────────────────────────────────────────────────────────────
 
@@ -145,6 +213,7 @@ def _lock_path() -> Path:
     return STATE_DIR / ".discover.lock"
 
 def save_discovery_state(endpoints: dict, tier: int = 1):
+    endpoints = filter_endpoints_for_policy(endpoints)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
@@ -193,6 +262,7 @@ def patch_openclaw_json(endpoints: dict):
     if not OPENCLAW_JSON.exists(): return
     cfg = _load_json(OPENCLAW_JSON)
     if not cfg: return
+    endpoints = filter_endpoints_for_policy(endpoints)
     providers = cfg.setdefault("models", {}).setdefault("providers", {})
     mac = endpoints.get("mac")
     win = endpoints.get("win")
@@ -242,6 +312,7 @@ def patch_models_yml(mac_ip: str, win_ip: str, pt_repo: Path):
         f.write_text(content)
 
 def write_env_lmstudio(endpoints: dict, repo_paths: dict):
+    endpoints = filter_endpoints_for_policy(endpoints)
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
     mac_ip = mac.get("ip", "")
@@ -349,6 +420,7 @@ def run_discovery(force: bool = False) -> int:
                                            "models": last["models"][role]}
                         print(f"⚠️  {role} unreachable — preserving last-good", file=sys.stderr)
 
+        endpoints = filter_endpoints_for_policy(endpoints)
         new_hash = compute_hash(endpoints)
         last = _load_json(LAST_DISCOVERY_JSON)
         if last and last.get("hash") == new_hash:
@@ -404,6 +476,7 @@ def _cmd_restore(target: str):
         matches = sorted(BACKUPS_DIR.glob(f"{target}*.json")) if BACKUPS_DIR.exists() else []
         ep = _state_to_ep(_load_json(matches[-1])) if matches else None
     if not ep: print(f"Nothing found for '{target}'."); return
+    ep = filter_endpoints_for_policy(ep)
     backup_current_state()
     repo_paths = get_repo_paths()
     pt_repo = repo_paths.get("perpetua_tools")
