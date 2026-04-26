@@ -21,6 +21,7 @@ from typing import Optional, Any
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, field_validator, Field
 import httpx
 from bin.shared.bridge_contract import (
@@ -42,6 +43,27 @@ HOST            = os.getenv("ULTRATHINK_HOST", "127.0.0.1")
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "qwen3.5:35b-a3b-q4_K_M")
 FAST_MODEL = os.getenv("FAST_MODEL", "qwen3:8b-instruct")
 CODE_MODEL = os.getenv("CODE_MODEL", "qwen3-coder:14b")
+
+PERPETUA_TOOLS_ROOT = Path(
+    os.getenv(
+        "PERPETUA_TOOLS_ROOT",
+        Path(__file__).resolve().parent.parent / "perplexity-api" / "Perpetua-Tools",
+    )
+)
+if PERPETUA_TOOLS_ROOT.exists() and str(PERPETUA_TOOLS_ROOT) not in os.sys.path:
+    os.sys.path.insert(0, str(PERPETUA_TOOLS_ROOT))
+
+try:
+    from utils.hardware_policy import HardwareAffinityError, check_affinity, expected_platform_for_model
+except Exception:  # pragma: no cover - keeps API available if PT is not installed
+    class HardwareAffinityError(RuntimeError):
+        pass
+
+    def check_affinity(model_id: str, platform: str) -> None:
+        return None
+
+    def expected_platform_for_model(model_id: str) -> str | None:
+        return None
 
 
 def _load_pt_runtime_state() -> dict[str, Any] | None:
@@ -73,6 +95,7 @@ class UltraThinkRequest(BaseModel):
         default=None,
         description="Hint to route to a specific model tier (e.g. 'haiku', 'sonnet', 'opus')"
     )
+    platform:         Optional[str] = Field(default=None, pattern="^(mac|win)$")
     context:          Optional[dict] = Field(default_factory=dict)
     request_id:       Optional[str] = Field(default=None)
 
@@ -129,6 +152,26 @@ async def run_ultrathink(req: UltraThinkRequest, http_request: Request) -> Ultra
 
     # Select model
     model = req.model_hint or (DEFAULT_MODEL if reasoning_depth == "ultra" else FAST_MODEL)
+
+    requested_platform = req.platform or (req.context or {}).get("platform") or (req.context or {}).get("affinity")
+    if not requested_platform and "/" in model:
+        provider, raw_model = model.split("/", 1)
+        if provider in {"lmstudio-mac", "ollama-mac"}:
+            requested_platform = "mac"
+            model = raw_model
+        elif provider in {"lmstudio-win", "ollama-win"}:
+            requested_platform = "win"
+            model = raw_model
+    if not requested_platform:
+        requested_platform = expected_platform_for_model(model)
+    if requested_platform:
+        try:
+            check_affinity(model_id=model, platform=requested_platform)
+        except HardwareAffinityError as exc:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "HARDWARE_MISMATCH", "detail": str(exc)},
+            )
     
     logger.info("task_id=%s depth=%s model=%s", req.request_id, reasoning_depth, model)
 

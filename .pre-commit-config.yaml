@@ -46,6 +46,13 @@ repos:
         pass_filenames: false
         types: [python, yaml, toml]
 
+      - id: no-hallucinated-model-ids
+        name: "Reject hallucinated model IDs in executable config"
+        entry: python scripts/check_no_hallucinated_models.py
+        language: system
+        pass_filenames: false
+        types: [python, yaml, json]
+
       - id: simulate-ci
         name: "Simulate CI (quick) — catch import errors before push"
         entry: bash scripts/simulate_ci.sh --quick
