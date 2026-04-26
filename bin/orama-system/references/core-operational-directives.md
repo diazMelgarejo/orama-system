@@ -1,5 +1,6 @@
 # Core Operational Directives: Deep Dive
-**Reference Document for orama-system**
+
+> Reference Document for orama-system
 
 These six directives form the operational backbone of The ὅραμα System.
 They're always active, regardless of which stage of the methodology you're in.
@@ -11,10 +12,12 @@ They're always active, regardless of which stage of the methodology you're in.
 **Principle**: Enter plan mode for ANY non-trivial task (3+ steps). STOP and re-plan if something goes sideways.
 
 ### When to Plan
+
 **Always plan for**: 3+ step tasks, architectural decisions, multiple systems, ambiguous requirements, refactoring.
 **Skip planning for**: single-step tasks, obvious bug fixes with clear root cause, trivial formatting.
 
 ### Minimum Viable Plan
+
 ```markdown
 # Task: [Name]
 ## Goal
@@ -28,16 +31,19 @@ They're always active, regardless of which stage of the methodology you're in.
 ```
 
 ### Re-Planning Triggers (STOP immediately)
+
 - Estimate was off by 2x or more
 - Discovered a major new requirement
 - The approach isn't working
 - Tests reveal fundamental design flaw
 
 ### Anti-Patterns
+
 - ❌ "I'll just start coding, the plan will emerge" → Spaghetti code, multiple rewrites
 - ❌ "I already have a mental plan" → Can't collaborate, can't verify approach
 
 ### Success Criteria
+
 - ✅ Plan written down (not in your head)
 - ✅ Plan is specific and checkable
 - ✅ Plan reviewed before execution
@@ -49,6 +55,7 @@ They're always active, regardless of which stage of the methodology you're in.
 **Principle**: Use subagents liberally to keep main context clean. One task per subagent.
 
 ### When to Use Subagents
+
 - Research: "What's the best library for X?"
 - Exploration: "Try these 3 approaches and compare"
 - Parallel analysis: "Analyze these 5 files for common patterns"
@@ -57,16 +64,18 @@ They're always active, regardless of which stage of the methodology you're in.
 
 ### Delegation Patterns
 
-**Pattern 1: Research**
-```
+#### Pattern 1: Research
+
+```ascii
 Main agent: "I need to choose a caching strategy"
 Subagent 1: "Research Redis vs Memcached — performance, persistence, clustering. Return: comparison table."
 Subagent 2: "Research CDN caching — distribution, invalidation, cost. Return: comparison table."
 Main agent: evaluates both tables, makes informed decision.
 ```
 
-**Pattern 2: Divide & Conquer**
-```
+#### Pattern 2: Divide & Conquer
+
+```ascii
 Main agent: "Refactor 10 modules"
 Subagent 1: "Refactor modules 1-3"
 Subagent 2: "Refactor modules 4-6"
@@ -75,6 +84,7 @@ Main agent: integrates all changes, runs integration tests.
 ```
 
 ### Subagent Task Template
+
 ```markdown
 ## Subagent Task: [Name]
 ### Context: [What does the subagent need to know?]
@@ -85,11 +95,13 @@ Main agent: integrates all changes, runs integration tests.
 ```
 
 ### Anti-Patterns
+
 - ❌ Using subagents for everything (coordination overhead)
 - ❌ Vague subagent tasks (wrong output)
 - ❌ Not providing enough context (wrong assumptions)
 
 ### Success Criteria
+
 - ✅ Main context stays under 70% utilization
 - ✅ Subagents return actionable summaries (not data dumps)
 - ✅ One clear task per subagent
@@ -101,12 +113,14 @@ Main agent: integrates all changes, runs integration tests.
 **Principle**: After ANY correction from user, update `tasks/LESSONS.md`. Ruthlessly iterate until mistake rate drops.
 
 ### Always Trigger After
+
 - User corrects your approach
 - Tests reveal misunderstanding
 - Code review identifies issue
 - User says "actually…" or "no, I meant…"
 
 ### Lesson Format
+
 ```markdown
 ## YYYY-MM-DD — [Pattern Name]
 
@@ -131,6 +145,7 @@ Main agent: integrates all changes, runs integration tests.
 ```
 
 ### Example Lesson: Premature Optimization
+
 ```markdown
 ## 2026-03-20 — Premature Optimization
 ### What Went Wrong
@@ -150,16 +165,19 @@ NEVER add performance optimizations until:
 ```
 
 ### Review Cadence
+
 - **Daily**: Check lessons for current project context
 - **Weekly**: Review all lessons, remove duplicates, refine rules
 - **Monthly**: Analyze patterns—are certain categories recurring?
 
 ### Anti-Patterns
+
 - ❌ Not writing lessons down (trusting memory)
 - ❌ Vague lessons ("be more careful" ← not actionable)
 - ❌ Write and forget (never reviewing)
 
 ### Success Criteria
+
 - ✅ Lessons file grows over time
 - ✅ Repeat mistakes decline measurably
 - ✅ Rules are specific and actionable
@@ -171,6 +189,7 @@ NEVER add performance optimizations until:
 **Principle**: NEVER mark a task complete without proving it works programmatically.
 
 ### Verification Hierarchy
+
 ```
 1. Unit Tests       — All new code has tests; all pass locally
 2. Integration Tests — Feature works end-to-end; no regressions
@@ -181,6 +200,7 @@ NEVER add performance optimizations until:
 ```
 
 ### The Diff Technique
+
 ```bash
 git checkout main && git pull
 ./run_tests.sh > before.log
@@ -192,6 +212,7 @@ diff before.log after.log
 ```
 
 ### Programmatic vs Visual
+
 ```python
 # ❌ Visual: "I see the button is blue"
 # (CSS might not have loaded; only blue in dev)
@@ -203,6 +224,7 @@ def test_button_color():
 ```
 
 ### The Staff Engineer Questions
+
 1. Correctness: Does it actually solve the stated problem?
 2. Completeness: Are all edge cases handled?
 3. Quality: Is the code maintainable?
@@ -214,11 +236,13 @@ def test_button_color():
 If "no" or "maybe" to any → it's not done.
 
 ### Anti-Patterns
+
 - ❌ Visual-only verification ("Looks good to me!")
 - ❌ Happy-path-only testing
 - ❌ Trusting CI blindly without local runs
 
 ### Success Criteria
+
 - ✅ All tests pass (comprehensive)
 - ✅ Feature works end-to-end realistically
 - ✅ No regressions detected
@@ -227,27 +251,31 @@ If "no" or "maybe" to any → it's not done.
 
 ## Directive 5: Demand Elegance (Balanced) ✨
 
-**Principle**: For non-trivial changes, [pause and ask](/bin/orama-system/references/amplifier-principle.md) "Is there a more elegant way?" [Skip for simple/obvious fixes.](/bin/orama-system/references/content-insertion-framework.md) The opportunity for elegance ususally comes before doing anything.
+**Principle**: For non-trivial changes, [pause and ask](./amplifier-principle.md) "Is there a more elegant way?" [Skip for simple/obvious fixes.](./content-insertion-framework.md) The opportunity for elegance ususally comes before doing anything.
 
 References:
-- pause and ask - [amplifier-principle.md](/bin/orama-system/references/amplifier-principle.md) -> [Audience-First Response Protocol (AFRP)](/bin/orama-system/afrp/SKILL.md)
-- [content-insertion-framework.md](/bin/orama-system/references/content-insertion-framework.md)
+
+- pause and ask - [amplifier-principle.md](./amplifier-principle.md) -> [Audience-First Response Protocol (AFRP)](../afrp/SKILL.md)
+- [content-insertion-framework.md](./content-insertion-framework.md)
 
 ### When to Demand Elegance
 
 **Pause for elegance when**:
+
 - Solution feels hacky or fragile
 - You're about to add "HACK" or "TODO" comment
 - Code will be read/modified frequently
 - Affects public API or interface
 
 **Skip elegance when**:
+
 - Fix is obvious and simple
 - One-time script or throwaway code
 - Urgent hotfix (refactor later)
 - Explicit instruction to "just make it work"
 
 ### The Elegance Process
+
 ```
 Step 1: Recognize the hack
 Step 2: Ask "Knowing everything now, what's the elegant solution?"
@@ -265,10 +293,12 @@ Example:
 ```
 
 ### Elegance Signals
+
 - **Needs elegance**: Hard to explain, copy-paste logic, 5+ parameters, can't find a good name
 - **Has elegance**: Reads like English, only one way to do it, easy to extend, hard to misuse
 
 ### Anti-Patterns
+
 - ❌ Premature elegance (elegant solution to wrong problem)
 - ❌ Over-abstraction (solving imaginary future problems)
 - ❌ Elegance as excuse ("can't ship until perfect")
@@ -280,6 +310,7 @@ Example:
 **Principle**: When given a bug report: just fix it. Zero context switching from user. Investigate, diagnose, fix, verify, report.
 
 ### The Autonomous Bug Fix Process
+
 ```
 Phase 1: Gather Evidence (no user interaction)
   - Check logs (app, error, access)
@@ -307,6 +338,7 @@ Phase 4: Report Back (proactively)
 ```
 
 ### Failing CI Tests
+
 ```bash
 # Don't wait for instructions — just fix it:
 git fetch && git checkout failing-branch
@@ -319,21 +351,24 @@ Fixed expected auth token format."
 ```
 
 ### The Zero Context Switching Rule
+
 - User says: "Feature X is broken"
 - You handle:
-   - ✅ logs
-   - ✅ reproduction
-   - ✅ root cause
-   - ✅ fix
-   - ✅ verification
-   - ✅ report -goes to [loopback- Directive 3: Self-improvement](#directive-3-self-improvement-loop-)
+  - ✅ logs
+  - ✅ reproduction
+  - ✅ root cause
+  - ✅ fix
+  - ✅ verification
+  - ✅ report -goes to [loopback- Directive 3: Self-improvement](#directive-3-self-improvement-loop-)
 
 User never needs to:
-   - ❌ find error messages
-   - ❌ guide debugging
-   - ❌ tell you which tests to run
+
+- ❌ find error messages
+- ❌ guide debugging
+- ❌ tell you which tests to run
 
 ### Anti-Patterns
+
 - ❌ "Can you send me the error message?" (Look at logs yourself)
 - ❌ "Which test is failing?" (Run tests yourself)
 - ❌ "How should I fix this?" (That's your job to figure out)
