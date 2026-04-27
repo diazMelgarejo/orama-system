@@ -431,16 +431,16 @@ _print_banner() {
   local tier_label=""
   # tier_color: reserved for future ANSI colour output
 
-  # Determine tier from PT_MODE and reachability
+  # Determine tier from reachability (-w 1 = 1s timeout per probe, avoids 30s OS hang)
   local mac_up=0 win_up=0 oc_up=0
-  nc -z localhost 1234   >/dev/null 2>&1 && mac_up=1
-  nc -z "$win_ip" 1234   >/dev/null 2>&1 && win_up=1
-  nc -z localhost 18789  >/dev/null 2>&1 && oc_up=1
+  nc -z -w 1 localhost 1234   >/dev/null 2>&1 && mac_up=1
+  nc -z -w 1 "$win_ip" 1234   >/dev/null 2>&1 && win_up=1
+  nc -z -w 1 localhost 18789  >/dev/null 2>&1 && oc_up=1
 
-  if   [ "$mac_up" -eq 1 ] && [ "$win_up" -eq 1 ]; then tier=1; tier_label="FULL  · Mac + Win"
+  if   [ "$mac_up" -eq 1 ] && [ "$win_up" -eq 1 ]; then tier=1; tier_label="FULL  · Mac + Win (both nodes)"
   elif [ "$mac_up" -eq 1 ];                          then tier=2; tier_label="MAC   · Mac only"
   elif [ "$win_up" -eq 1 ];                          then tier=4; tier_label="WIN   · Win only"
-  else                                                    tier=3; tier_label="CLOUD · no local nodes"
+  else                                                    tier=3; tier_label="LOCAL DOWN · cloud fallback (check network)"
   fi
 
   local oc_status="●"; [ "$oc_up" -eq 0 ] && oc_status="○"
