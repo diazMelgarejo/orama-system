@@ -885,35 +885,60 @@ async def api_user_input(req: UserInputRequest):
             return {"status": "error", "message": str(exc)}
 
 
+def _parse_env_file(path: "Path") -> Dict[str, str]:
+    """Parse a .env file into a dict. Handles KEY=VAL, KEY = VAL, inline comments."""
+    result: Dict[str, str] = {}
+    if not path.exists():
+        return result
+    try:
+        for raw_line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, _, val = line.partition("=")
+            key = key.strip()
+            val = val.strip()
+            # Strip inline comments (but not comments inside quotes)
+            if val and val[0] not in ('"', "'"):
+                val = val.split("#")[0].strip()
+            # Strip surrounding quotes
+            if len(val) >= 2 and val[0] == val[-1] and val[0] in ('"', "'"):
+                val = val[1:-1]
+            if key:
+                result[key] = val
+    except Exception:
+        pass
+    return result
+
+
 def _probe_tools_sync() -> Dict[str, Any]:
     """Probe all tools/APIs synchronously (called from thread pool). Returns availability dict."""
     import shutil, subprocess, socket as _sock
 
     tools: Dict[str, Any] = {}
 
-    # ── env-var reader (searches os.environ + all .env files) ─────────────────
+    # ── Parse all env files ONCE into a merged dict ────────────────────────────
     _env_search_paths = [
-        REPO_ROOT / ".env.local",
         REPO_ROOT / ".env",
-        PERPETUA_TOOLS_ROOT / ".env.local",
+        REPO_ROOT / ".env.local",          # .local overrides base
         PERPETUA_TOOLS_ROOT / ".env",
+        PERPETUA_TOOLS_ROOT / ".env.local",
     ]
+    _env_cache: Dict[str, str] = {}
+    for fpath in _env_search_paths:
+        _env_cache.update(_parse_env_file(fpath))  # later paths override earlier
 
     def _key_state(env_var: str) -> tuple[bool, bool]:
-        """Return (key_present, key_valid)."""
-        val = os.getenv(env_var, "")
-        if not val:
-            for fpath in _env_search_paths:
-                if fpath.exists():
-                    for line in fpath.read_text().splitlines():
-                        stripped = line.strip()
-                        if stripped.startswith(f"{env_var}="):
-                            val = stripped.split("=", 1)[1].strip().strip('"').strip("'")
-                            break
-                if val:
-                    break
+        """Return (key_present, key_valid) — reads from process env or cached file parse."""
+        val = os.getenv(env_var) or _env_cache.get(env_var, "")
         present = bool(val)
-        valid = bool(val and not val.startswith("your_") and not val.startswith("sk-your") and len(val) > 8)
+        valid = bool(
+            val
+            and not val.lower().startswith("your_")
+            and not val.lower().startswith("sk-your")
+            and val != "lm-studio"
+            and len(val) > 8
+        )
         return present, valid
 
     # ── Table-driven key probing ───────────────────────────────────────────────
@@ -1076,6 +1101,24 @@ class ConfigureToolRequest(BaseModel):
     value: str       # the API key value
 
 
+# Simple in-memory rate limiter: max 5 configure-tool calls per 60s (per portal process)
+_CONFIGURE_RATE: Dict[str, list] = {}  # key → list of epoch timestamps
+_CONFIGURE_MAX_CALLS = 5
+_CONFIGURE_WINDOW_SEC = 60
+
+
+def _check_rate_limit(key: str) -> bool:
+    """Return True if request is allowed, False if rate limit exceeded."""
+    now = time.time()
+    window_start = now - _CONFIGURE_WINDOW_SEC
+    calls = [t for t in _CONFIGURE_RATE.get(key, []) if t > window_start]
+    if len(calls) >= _CONFIGURE_MAX_CALLS:
+        return False
+    calls.append(now)
+    _CONFIGURE_RATE[key] = calls
+    return True
+
+
 # ── All known API keys (mirrors AlphaClaw kKnownVars + PT-specific) ───────────
 # Each entry: (env_var, label, group, hint_link)
 _ALL_KNOWN_KEYS = [
@@ -1113,40 +1156,73 @@ _ENV_WRITE_TARGETS = [
 
 
 def _write_env_var(env_var: str, value: str) -> tuple[bool, str]:
-    """Write/update an env var in the nearest writable .env file."""
+    """Write/update an env var in .env.local. Atomic write + file lock to prevent races."""
+    import fcntl, tempfile, re as _re
     if env_var not in _ALLOWED_ENV_VARS:
         return False, f"Env var {env_var!r} not in allowlist"
     if not value or len(value) < 4:
         return False, "Value too short"
-    # Sanitize: no newlines or shell-injection chars
-    safe_value = value.replace("\n", "").replace("\r", "").replace('"', "")
+    # Sanitize: strip newlines + shell-injection chars (backticks, single quotes, semicolons)
+    safe_value = _re.sub(r'[`\'\n\r;$\\]', "", value).replace('"', "")
+    if len(safe_value) < 4:
+        return False, "Value too short after sanitization"
 
-    # Find or create .env.local in repo root
     target = REPO_ROOT / ".env.local"
+    lock_file = target.with_suffix(".lock")
 
-    # Read existing content if file exists
-    lines = target.read_text().splitlines() if target.exists() else []
-    updated = False
-    for i, line in enumerate(lines):
-        if line.startswith(f"{env_var}=") or line.startswith(f"# {env_var}="):
-            lines[i] = f'{env_var}="{safe_value}"'
-            updated = True
-            break
-    if not updated:
-        lines.append(f'{env_var}="{safe_value}"')
-
-    target.write_text("\n".join(lines) + "\n")
-    return True, f"Saved to {target.name}"
+    try:
+        # File lock: prevents concurrent writes
+        with open(lock_file, "w") as lf:
+            fcntl.flock(lf, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            try:
+                # Parse existing .env.local
+                lines = _parse_env_file(target)
+                # Update or insert
+                lines[env_var] = safe_value
+                # Reconstruct file content preserving other vars
+                raw_lines = target.read_text().splitlines() if target.exists() else []
+                updated = False
+                for i, raw in enumerate(raw_lines):
+                    stripped = raw.strip()
+                    if stripped.startswith(f"{env_var}=") or stripped.startswith(f"# {env_var}="):
+                        raw_lines[i] = f'{env_var}="{safe_value}"'
+                        updated = True
+                        break
+                if not updated:
+                    raw_lines.append(f'{env_var}="{safe_value}"')
+                new_content = "\n".join(raw_lines) + "\n"
+                # Atomic write: tmp file in same dir + rename
+                with tempfile.NamedTemporaryFile(
+                    mode="w", dir=target.parent, prefix=".env.tmp.", delete=False
+                ) as tf:
+                    tf.write(new_content)
+                    tf_path = Path(tf.name)
+                tf_path.replace(target)
+                return True, f"Saved to {target.name}"
+            finally:
+                fcntl.flock(lf, fcntl.LOCK_UN)
+    except BlockingIOError:
+        return False, "Config file is locked by another request — retry in a moment"
+    except Exception as exc:
+        return False, f"Write failed: {exc}"
 
 
 @app.post("/api/configure-tool")
 async def api_configure_tool(req: ConfigureToolRequest):
-    """Write an API key to .env.local — allows portal-based configuration with no terminal."""
+    """Write an API key to .env.local — allows portal-based configuration with no terminal.
+    Rate-limited to 5 calls/60s to prevent credential brute-forcing.
+    """
+    from fastapi import HTTPException
+    rl_key = f"configure:{req.env_var}"
+    if not _check_rate_limit(rl_key):
+        raise HTTPException(status_code=429, detail="Rate limit exceeded — max 5 changes/min")
     loop = asyncio.get_event_loop()
     ok, msg = await loop.run_in_executor(None, _write_env_var, req.env_var, req.value)
     if ok:
         # Reload env in current process so probes pick it up immediately
-        os.environ[req.env_var] = req.value.replace("\n", "").replace('"', "")
+        import re as _re
+        safe = _re.sub(r'[`\'\n\r;$\\]', "", req.value).replace('"', "")
+        os.environ[req.env_var] = safe
     return {"ok": ok, "message": msg}
 
 

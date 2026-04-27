@@ -48,6 +48,15 @@ LMS_API_KEY = os.getenv("LM_STUDIO_API_TOKEN", "lm-studio")
 # Windows GPU lock — one model at a time (CLAUDE.md §4 invariant)
 _WIN_GPU_LOCK = asyncio.Lock()
 
+
+def _is_event_loop_running() -> bool:
+    """Check if an asyncio event loop is already running (e.g. inside FastAPI)."""
+    try:
+        loop = asyncio.get_running_loop()
+        return loop.is_running()
+    except RuntimeError:
+        return False
+
 # ── Agent definitions ─────────────────────────────────────────────────────────
 
 @dataclass
@@ -69,12 +78,13 @@ def _probe_cli(cmd: List[str]) -> tuple[bool, str]:
         return False, ""
 
 
-def _probe_http_sync(url: str) -> bool:
-    """Quick sync probe for an HTTP endpoint."""
+async def _probe_http_async(url: str) -> bool:
+    """Async probe for an HTTP endpoint (non-blocking)."""
     try:
-        import urllib.request
-        with urllib.request.urlopen(url, timeout=3) as resp:
-            return resp.status < 500
+        import httpx
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            r = await client.get(f"{url}/v1/models")
+            return r.status_code < 500
     except Exception:
         return False
 
@@ -109,7 +119,7 @@ def discover_agents() -> Dict[str, AgentInfo]:
     )
 
     # ── LM Studio Mac ──────────────────────────────────────────────────────────
-    mac_ok = _probe_http_sync(f"{LMS_MAC_ENDPOINT}/v1/models")
+    mac_ok = asyncio.run(_probe_http_async(LMS_MAC_ENDPOINT)) if not _is_event_loop_running() else False
     agents["lmstudio-mac"] = AgentInfo(
         name="LM Studio Mac",
         kind="http",
@@ -118,7 +128,7 @@ def discover_agents() -> Dict[str, AgentInfo]:
     )
 
     # ── LM Studio Win ──────────────────────────────────────────────────────────
-    win_ok = _probe_http_sync(f"{LMS_WIN_ENDPOINT}/v1/models")
+    win_ok = asyncio.run(_probe_http_async(LMS_WIN_ENDPOINT)) if not _is_event_loop_running() else False
     agents["lmstudio-win"] = AgentInfo(
         name="LM Studio Win (RTX 3080)",
         kind="http",
