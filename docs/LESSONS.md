@@ -17,8 +17,9 @@
 ## continuous-learning-v2
 
 This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-claude-code/tree/main/skills/continuous-learning-v2).
-Instincts: `.claude/homunculus/instincts/inherited/orama-system-instincts.yaml`
-Import command: `/instinct-import .claude/homunculus/instincts/inherited/orama-system-instincts.yaml`
+
+- Instincts: `.claude/homunculus/instincts/inherited/orama-system-instincts.yaml`
+- Import command: `/instinct-import .claude/homunculus/instincts/inherited/orama-system-instincts.yaml`
 
 ---
 
