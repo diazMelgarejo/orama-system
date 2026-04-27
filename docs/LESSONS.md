@@ -1,8 +1,8 @@
 # Lessons — orama-system
 
-> **Canonical path**: `docs/LESSONS.md`
-> **Previous path**: `.claude/lessons/LESSONS.md` (now redirects here)
-> **Purpose**: GitHub-auditable persistent memory across all ECC, AutoResearcher, and Claude sessions.
+> **Canonical path**: `docs/LESSONS.md`<br/>
+> **Previous path**: `.claude/lessons/LESSONS.md` (now redirects here)<br/>
+> **Purpose**: GitHub-auditable persistent memory across all ECC, AutoResearcher, and Claude sessions.<br/>
 > **Cross-repo companion**: [Perplexity-Tools/docs/LESSONS.md](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/docs/LESSONS.md)
 >
 > **Rules**:
