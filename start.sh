@@ -421,6 +421,63 @@ open_browser() {
   fi
 }
 
+# ── ASCII art banner ───────────────────────────────────────────────────────────
+# Displays at every startup (not --stop/--status). Shows live tier + agent grid.
+_print_banner() {
+  local mode="${PT_MODE:-offline}"
+  local mac_ip="${MAC_IP:-localhost}"
+  local win_ip="${WIN_IP:-?"}"
+  local tier="?"
+  local tier_label=""
+  local tier_color=""
+
+  # Determine tier from PT_MODE and reachability
+  local mac_up=0 win_up=0 oc_up=0
+  nc -z localhost 1234    &>/dev/null 2>&1 && mac_up=1
+  nc -z "$win_ip" 1234    &>/dev/null 2>&1 && win_up=1
+  nc -z localhost 18789   &>/dev/null 2>&1 && oc_up=1
+
+  if   [ "$mac_up" -eq 1 ] && [ "$win_up" -eq 1 ]; then tier=1; tier_label="FULL  · Mac + Win"
+  elif [ "$mac_up" -eq 1 ];                          then tier=2; tier_label="MAC   · Mac only"
+  elif [ "$win_up" -eq 1 ];                          then tier=4; tier_label="WIN   · Win only"
+  else                                                    tier=3; tier_label="CLOUD · no local nodes"
+  fi
+
+  local oc_status="●"; [ "$oc_up" -eq 0 ] && oc_status="○"
+
+  # Agent readiness per tier
+  local mac_agents="main  mac-researcher  orchestrator"
+  local win_agents="win-researcher  coder  autoresearcher"
+  local mac_mark="✓"; [ "$mac_up" -eq 0 ] && mac_mark="✗"
+  local win_mark="✓"; [ "$win_up" -eq 0 ] && win_mark="✗"
+
+  echo ""
+  echo "╔══════════════════════════════════════════════════════════════════╗"
+  echo "║                                                                  ║"
+  printf "║   ██████╗ ██████╗  █████╗ ███╗   ███╗ █████╗                   ║\n"
+  printf "║  ██╔═══██╗██╔══██╗██╔══██╗████╗ ████║██╔══██╗                  ║\n"
+  printf "║  ██║   ██║██████╔╝███████║██╔████╔██║███████║                  ║\n"
+  printf "║  ██║   ██║██╔══██╗██╔══██║██║╚██╔╝██║██╔══██║                  ║\n"
+  printf "║  ╚██████╔╝██║  ██║██║  ██║██║ ╚═╝ ██║██║  ██║                  ║\n"
+  printf "║   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝  v0.9.9.8      ║\n"
+  echo "║                                                                  ║"
+  echo "║  ὅραμα — vision/revelation · Layer 3 orchestration/meta-intel   ║"
+  echo "╠══════════════════════════════════════════════════════════════════╣"
+  printf "║  OpenClaw  %s %-8s  AlphaClaw → Perpetua-Tools → orama     ║\n" "$oc_status" ":18789"
+  printf "║  Tier %-1s    %-52s║\n" "$tier" "$tier_label"
+  printf "║  Mode      %-52s║\n" "$mode"
+  echo "╠══════════════════════════════════════════════════════════════════╣"
+  printf "║  Mac %s  %-9s  %-45s║\n" "$mac_mark" "localhost" "qwen3.5-9b-mlx (MLX · ctx 56k)"
+  printf "║       %-63s║\n" "agents: $mac_agents"
+  printf "║  Win %s  %-9s  %-45s║\n" "$win_mark" "$win_ip" "qwen3.5-27b (GGUF RTX 3080 · ctx 131k)"
+  printf "║       %-63s║\n" "agents: $win_agents"
+  echo "╠══════════════════════════════════════════════════════════════════╣"
+  printf "║  PT   :%-5s   orama :%-5s   Portal :%-5s                      ║\n" \
+    "${PT_PORT:-8000}" "${US_PORT:-8001}" "${PORTAL_PORT:-8002}"
+  echo "╚══════════════════════════════════════════════════════════════════╝"
+  echo ""
+}
+
 # ── --stop ────────────────────────────────────────────────────────────────────
 
 if [[ "${1:-}" == "--stop" ]]; then
@@ -439,14 +496,14 @@ fi
 # ── --status ──────────────────────────────────────────────────────────────────
 
 if [[ "${1:-}" == "--status" ]]; then
-  echo ""
-  echo "=== orama-system service status ==="
+  _print_banner
+  echo "── service status ───────────────────────────────────────────────────"
   for port in $PT_PORT $US_PORT $PORTAL_PORT; do
     pid=$(pid_on_port "$port")
     if [ -n "$pid" ]; then
-      echo "  UP   :$port  (PID $pid)"
+      printf "  %-8s :%-5s  ● UP    (PID %s)\n" "" "$port" "$pid"
     else
-      echo "  DOWN :$port"
+      printf "  %-8s :%-5s  ○ DOWN\n" "" "$port"
     fi
   done
   run_hardware_policy_check || true
@@ -456,10 +513,7 @@ fi
 
 # ── start services ────────────────────────────────────────────────────────────
 
-echo ""
-echo "=== orama-system v0.9.9.8 — starting ==="
-echo "  Mode: ${PT_MODE}  |  PT → http://localhost:${PT_PORT}"
-echo ""
+_print_banner
 
 # 1. Perpetua-Tools (PT) orchestrator
 if [ -n "$PT_DIR" ] && [ -f "$PT_DIR/orchestrator.py" ]; then
@@ -498,17 +552,18 @@ else
   wait_for_port "$PORTAL_PORT" "Portal"
 fi
 
+echo "── services ready ───────────────────────────────────────────────────"
+printf "  ●  PT      http://localhost:%s/health\n" "$PT_PORT"
+printf "  ●  orama   http://localhost:%s/health\n" "$US_PORT"
+printf "  ●  Portal  %s\n" "$PORTAL_URL"
+printf "  ○  JSON    %s/api/status\n" "$PORTAL_URL"
 echo ""
-echo "  PT     http://localhost:${PT_PORT}/health"
-echo "  orama  http://localhost:${US_PORT}/health"
-echo "  Portal ${PORTAL_URL}"
-echo "  JSON   ${PORTAL_URL}/api/status"
+printf "  Logs  : %s/\n" "$LOG_DIR"
+printf "  Stop  : ./start.sh --stop\n"
+printf "  Debug : ORAMA_DEBUG=1 ./start.sh\n"
+echo "────────────────────────────────────────────────────────────────────"
 echo ""
 
 if [[ "${1:-}" != "--no-open" ]]; then
   open_browser "$PORTAL_URL"
 fi
-
-echo "Logs: $LOG_DIR/"
-echo "Stop: ./start.sh --stop"
-echo ""
