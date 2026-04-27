@@ -9,6 +9,9 @@ What it does:
   1. Create ~/.local/bin  (user-writable binary dir in PATH)
   2. Add ~/.local/bin to PATH in ~/.zshrc (if not already present)
   3. Validate and repair ~/.openclaw/openclaw.json (models arrays)
+  3b.Enforce thinkingLevel=off + budget_tokens=0 for all Mac LM Studio agents
+     (prevents 100-300s think blocks on Qwen3.5-9B MLX; idempotent + auto-restarts
+      OpenClaw if running so config isn't clobbered by shutdown write)
   5. Install ~/.openclaw/scripts/discover.py (LM Studio auto-discovery hub)
   6. Guard /self-discovery skill against version downgrade; announce on startup
   4. Patch ~/.alphaclaw/.../alphaclaw.js — 6 macOS compatibility fixes:
@@ -41,6 +44,7 @@ MARKER_FILE   = HOME / ".alphaclaw" / ".macos_patches.json"
 
 # alphaclaw package version this script was written for.
 # If the installed version differs, patches are re-checked regardless of marker.
+# Known working versions: 0.9.3 through 0.9.11 (all OpenClaw versions work).
 KNOWN_ALPHACLAW_VERSION = "0.9.3"
 
 DRY_RUN = "--dry-run" in sys.argv
@@ -173,6 +177,128 @@ def step_openclaw_json() -> None:
 
     if changed and not DRY_RUN:
         _write_text(OPENCLAW_JSON, json.dumps(cfg, indent=2) + "\n")
+
+
+# ── step 3b: enforce thinkingLevel=off for Mac LM Studio agents ───────────────
+#
+# Both Qwen3.5 models are reasoning/thinking models. On the Mac (MLX), the think
+# block adds 100–300 s per turn. Disable it at the openclaw.json level so no
+# manual LM Studio UI toggle is needed.
+#
+# Idempotent: skips each agent/field that is already correct.
+# Applied to: any agent whose model.primary starts with "lmstudio-mac/"
+#             and to agents.defaults when its primary also starts with "lmstudio-mac/"
+#
+_MAC_PROVIDER_PREFIX = "lmstudio-mac/"
+
+def step_mac_agent_thinking() -> None:
+    if not OPENCLAW_JSON.exists():
+        return
+    try:
+        cfg = json.loads(OPENCLAW_JSON.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return  # already warned in step_openclaw_json
+
+    changed = False
+
+    def _enforce(agent: dict, label: str) -> None:
+        nonlocal changed
+        primary = agent.get("model", {}).get("primary", "")
+        if not primary.startswith(_MAC_PROVIDER_PREFIX):
+            return
+        if agent.get("thinkingLevel") != "off":
+            agent["thinkingLevel"] = "off"
+            _applied(f"openclaw.json {label}", "thinkingLevel=off (Mac MLX reasoning model)")
+            changed = True
+        else:
+            _skip(f"openclaw.json {label}.thinkingLevel")
+
+        mp = agent.setdefault("modelParameters", {})
+        if mp.get("budget_tokens") != 0:
+            mp["budget_tokens"] = 0
+            _applied(f"openclaw.json {label}", "modelParameters.budget_tokens=0")
+            changed = True
+        else:
+            _skip(f"openclaw.json {label}.budget_tokens")
+
+    for agent in cfg.get("agents", {}).get("list", []):
+        _enforce(agent, agent.get("id", "?"))
+
+    defaults = cfg.get("agents", {}).get("defaults", {})
+    _enforce(defaults, "agents.defaults")
+
+    if changed:
+        patched = json.dumps(cfg, indent=2, ensure_ascii=False) + "\n"
+        # _restart_openclaw_if_running handles both cases:
+        #   • OpenClaw running  → SIGTERM, wait for exit, THEN write (avoids shutdown clobber)
+        #   • OpenClaw stopped  → write directly
+        # dry-run: prints preview without touching anything
+        _restart_openclaw_if_running(patched, "thinkingLevel config change requires reload")
+
+
+def _restart_openclaw_if_running(patched_config: str, reason: str) -> None:
+    """
+    If the `alphaclaw start` process is running:
+      1. Send SIGTERM and wait for it to fully exit (it writes its in-memory state
+         to openclaw.json on shutdown — we must wait for that write to complete).
+      2. Write our patched config AFTER the process has exited, so the shutdown
+         write doesn't clobber us.
+    If OpenClaw is not running, write the config directly (no race).
+    alphaclaw_manager.py (called by start.sh) will restart OpenClaw on the next
+    orama start with the updated config.
+    """
+    import signal as _signal, time as _time
+    try:
+        import subprocess as _sp
+        result = _sp.run(
+            ["pgrep", "-f", "alphaclaw start"],
+            capture_output=True, text=True, timeout=3,
+        )
+        pids = [int(p) for p in result.stdout.strip().split() if p.strip().isdigit()]
+    except Exception:
+        pids = []
+
+    if DRY_RUN:
+        if pids:
+            _applied("openclaw", f"[dry-run] would SIGTERM PIDs {pids} then rewrite config ({reason})")
+        return
+
+    import os as _os
+    if not pids:
+        # Not running — write config directly, no race possible
+        _write_text(OPENCLAW_JSON, patched_config)
+        return
+
+    # 1. Signal
+    for pid in pids:
+        try:
+            _os.kill(pid, _signal.SIGTERM)
+            _applied("openclaw", f"SIGTERM PID {pid} ({reason})")
+        except ProcessLookupError:
+            pass
+
+    # 2. Wait for exit (up to 8s; alphaclaw shutdown is typically <2s)
+    deadline = _time.monotonic() + 8
+    while _time.monotonic() < deadline:
+        _time.sleep(0.3)
+        alive = [p for p in pids if _os.path.exists(f"/proc/{p}")]
+        if not alive:
+            break
+        # macOS has no /proc — use kill(pid, 0) to probe
+        still_alive = []
+        for p in pids:
+            try:
+                _os.kill(p, 0)
+                still_alive.append(p)
+            except (ProcessLookupError, PermissionError):
+                pass
+        if not still_alive:
+            break
+
+    # 3. Write AFTER exit — shutdown write has already happened, ours wins
+    _write_text(OPENCLAW_JSON, patched_config)
+    _applied("openclaw", "openclaw.json re-written after exit — thinkingLevel=off will persist")
+
 
 # ── step 4: alphaclaw.js patches ──────────────────────────────────────────────
 #
@@ -481,6 +607,7 @@ def main() -> int:
     step_local_bin()
     step_path_entry()
     step_openclaw_json()
+    step_mac_agent_thinking()
     step_patch_alphaclaw()
     step_install_discover_hub()
     step_self_discovery_skill()
