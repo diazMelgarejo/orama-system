@@ -2,7 +2,7 @@
 """
 ~/.openclaw/scripts/discover.py
 LM Studio Auto-Discovery Hub — Layer A.
-Called by per-repo discover-lm-studio.sh when gossip is stale.
+Always probes by default (no TTL skip). Pass --cached to reuse warm gossip.
 Idempotent: writes nothing if state hash is unchanged.
 """
 
@@ -386,9 +386,16 @@ class _Lock:
 
 # ── Main discovery flow ───────────────────────────────────────────────────────
 
-def run_discovery(force: bool = False) -> int:
+def run_discovery(force: bool = True, cached: bool = False) -> int:
+    """Probe endpoints and update configs.
+
+    Default behaviour is always-fresh (force=True).  Pass cached=True (or
+    use the --cached CLI flag) to skip the probe when gossip is still warm
+    (within GOSSIP_TTL_SECONDS).  The legacy --force flag is kept for
+    backwards compatibility but is now a no-op (force is already the default).
+    """
     with _Lock():
-        if not force and DISCOVERY_JSON.exists():
+        if cached and not force and DISCOVERY_JSON.exists():
             state = _load_json(DISCOVERY_JSON)
             if state:
                 age = (datetime.now(timezone.utc) -
@@ -458,7 +465,7 @@ def run_discovery(force: bool = False) -> int:
 
 def _cmd_status():
     state = _load_json(LAST_DISCOVERY_JSON) or _load_json(DISCOVERY_JSON)
-    if not state: print("No discovery state. Run: discover.py --force"); return
+    if not state: print("No discovery state. Run: discover.py --status (after a probe)"); return
     print(f"Tier:    {state.get('recovery_tier', '?')}")
     print(f"Updated: {state.get('timestamp', '?')}")
     for role, ep in state.get("endpoints", {}).items():
@@ -491,16 +498,25 @@ def _cmd_restore(target: str):
     print(f"✅ Restored: Mac={mac.get('ip', '?')} Win={win.get('ip', '?')}")
 
 def main():
-    p = argparse.ArgumentParser(description="LM Studio Auto-Discovery")
-    p.add_argument("--force",   action="store_true", help="Re-probe now")
-    p.add_argument("--status",  action="store_true", help="Show current state")
+    p = argparse.ArgumentParser(
+        description="LM Studio Auto-Discovery (always probes by default; use --cached to skip when warm)",
+    )
+    p.add_argument("--cached",  action="store_true",
+                   help="Skip probe if gossip is still fresh (within TTL). Default is always re-probe.")
+    p.add_argument("--force",   action="store_true",
+                   help="[legacy no-op] Re-probe is now the default; kept for backwards compat.")
+    p.add_argument("--status",  action="store_true", help="Show current state (no probe)")
     p.add_argument("--restore", metavar="TARGET",    help="latest | YYYY-MM-DD | profile:name")
     p.add_argument("--prune",   action="store_true", help="Manually prune backups")
     args = p.parse_args()
     if args.status:  _cmd_status(); sys.exit(0)
     if args.restore: _cmd_restore(args.restore); sys.exit(0)
     if args.prune:   _enforce_backup_limits(); print("✅ Pruned."); sys.exit(0)
-    sys.exit(run_discovery(force=args.force))
+    # When --cached is given, respect TTL (skip if warm); otherwise always probe.
+    if args.cached:
+        sys.exit(run_discovery(force=False, cached=True))
+    else:
+        sys.exit(run_discovery(force=True, cached=False))
 
 if __name__ == "__main__":
     main()
