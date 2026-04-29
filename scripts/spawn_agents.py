@@ -49,7 +49,7 @@ try:
     from utils.ip_resolver import get_win_lms_url as _get_win_lms_url
     _WIN_LMS_DEFAULT = _get_win_lms_url()
 except Exception:
-    _WIN_LMS_DEFAULT = "http://192.168.254.103:1234"  # true last-resort
+    _WIN_LMS_DEFAULT = "http://192.168.254.105:1234"  # true last-resort
 
 LMS_MAC_ENDPOINT = os.getenv("LM_STUDIO_MAC_ENDPOINT", "http://localhost:1234")
 LMS_WIN_ENDPOINT = os.getenv("LM_STUDIO_WIN_ENDPOINTS", _WIN_LMS_DEFAULT).split(",")[0].strip()
