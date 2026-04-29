@@ -52,9 +52,9 @@ try:
     _WIN_IP_LABEL     = _get_win_ip()
 except Exception as _ip_exc:
     log.warning("ip_resolver import failed (%s) — using env/hardcoded fallback", _ip_exc)
-    _WIN_LMS_DEFAULT  = "http://192.168.254.103:1234"
-    _WIN_OLL_DEFAULT  = "http://192.168.254.103:11434"
-    _WIN_IP_LABEL     = "192.168.254.103"
+    _WIN_LMS_DEFAULT  = "http://192.168.254.105:1234"
+    _WIN_OLL_DEFAULT  = "http://192.168.254.105:11434"
+    _WIN_IP_LABEL     = "192.168.254.105"
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
