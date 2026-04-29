@@ -202,3 +202,91 @@ def test_runtime_state_reads_pt_payload(monkeypatch, tmp_path):
     body = response.json()
     assert body["available"] is True
     assert body["runtime"]["gateway"]["gateway_ready"] is True
+
+
+def test_hardware_mismatch_mac_provider_with_windows_model(monkeypatch):
+    """lmstudio-mac + Windows-only model → must return 400 HARDWARE_MISMATCH."""
+    async def fake_call_with_fallback(prompt, model, max_tokens, temperature):
+        return "should not reach here", "http://redacted"
+
+    monkeypatch.setattr(api_server, "_call_with_fallback", fake_call_with_fallback)
+
+    # Mock the resolver to raise HardwareAffinityError for NEVER_MAC models
+    original_resolver = api_server._policy_resolver
+    mock_resolver = type('MockResolver', (), {
+        'initialize': lambda self: None,
+        'check_affinity': lambda self, m, p: (
+            None if p != "mac" or "qwen3.5-27b" not in m.lower()
+            else (_ for _ in ()).throw(
+                api_server.HardwareAffinityError(
+                    f"[alphaclaw] Fatal: '{m}' is NEVER_MAC. Assign to lmstudio-win only."
+                )
+            )
+        ),
+        'expected_platform_for_model': lambda self, m: None,
+        'source': 'mock',
+        'pt_available': True,
+    })()
+    api_server._policy_resolver = mock_resolver
+
+    try:
+        with TestClient(api_server.app, raise_server_exceptions=True) as client:
+            response = client.post(
+                "/ultrathink",
+                json={
+                    "task_description": "Write a sorting algorithm",
+                    "task_type": "code",
+                    "model_hint": "lmstudio-mac/Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2",
+                },
+            )
+
+        assert response.status_code == 400
+        body = response.json()
+        assert body["error"] == "HARDWARE_MISMATCH"
+        assert "NEVER_MAC" in body["detail"]
+    finally:
+        api_server._policy_resolver = original_resolver
+
+
+def test_hardware_mismatch_win_provider_with_mac_model(monkeypatch):
+    """lmstudio-win + Mac-only MLX model → must return 400 HARDWARE_MISMATCH."""
+    async def fake_call_with_fallback(prompt, model, max_tokens, temperature):
+        return "should not reach here", "http://redacted"
+
+    monkeypatch.setattr(api_server, "_call_with_fallback", fake_call_with_fallback)
+
+    # Mock the resolver to raise HardwareAffinityError for NEVER_WIN models
+    original_resolver = api_server._policy_resolver
+    mock_resolver = type('MockResolver', (), {
+        'initialize': lambda self: None,
+        'check_affinity': lambda self, m, p: (
+            None if p != "win" or "qwen3.5-9b-mlx" not in m.lower()
+            else (_ for _ in ()).throw(
+                api_server.HardwareAffinityError(
+                    f"[alphaclaw] Fatal: '{m}' is NEVER_WIN. Assign to lmstudio-mac only."
+                )
+            )
+        ),
+        'expected_platform_for_model': lambda self, m: None,
+        'source': 'mock',
+        'pt_available': True,
+    })()
+    api_server._policy_resolver = mock_resolver
+
+    try:
+        with TestClient(api_server.app, raise_server_exceptions=True) as client:
+            response = client.post(
+                "/ultrathink",
+                json={
+                    "task_description": "Run MLX inference",
+                    "task_type": "code",
+                    "model_hint": "lmstudio-win/Qwen3.5-9B-MLX-4bit",
+                },
+            )
+
+        assert response.status_code == 400
+        body = response.json()
+        assert body["error"] == "HARDWARE_MISMATCH"
+        assert "NEVER_WIN" in body["detail"]
+    finally:
+        api_server._policy_resolver = original_resolver

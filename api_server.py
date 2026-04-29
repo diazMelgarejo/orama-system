@@ -43,7 +43,10 @@ HOST            = os.getenv("ULTRATHINK_HOST", "127.0.0.1")
 
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "qwen3.5:35b-a3b-q4_K_M")
 FAST_MODEL = os.getenv("FAST_MODEL", "qwen3:8b-instruct")
-CODE_MODEL = os.getenv("CODE_MODEL", "qwen3-coder:14b")
+CODE_MODEL = os.getenv(
+    "CODE_MODEL",
+    "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2",  # verified Windows-only model
+)
 
 PERPETUA_TOOLS_ROOT = Path(
     os.getenv(
@@ -198,9 +201,14 @@ class HardwarePolicyResolver:
 _policy_resolver = HardwarePolicyResolver()
 
 
-# Legacy module-level shims for backward compatibility with existing call sites
-class HardwareAffinityError(RuntimeError):
-    pass
+# Legacy module-level re-export — PT import succeeds during normal operation.
+# Fallback shim only activates when PT is unreachable (Layer-3 degraded mode).
+try:
+    from utils.hardware_policy import HardwareAffinityError as HardwareAffinityError  # type: ignore[import]
+except ImportError:
+    class HardwareAffinityError(RuntimeError):  # type: ignore[no-redef]
+        """Fallback shim — PT import failed. Active only in Layer-3 degraded mode."""
+        pass
 
 
 def check_affinity(model_id: str, platform: str) -> None:
