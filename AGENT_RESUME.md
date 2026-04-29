@@ -60,7 +60,7 @@ SessionStart → scripts/discover-lm-studio.sh (Layer B)
 
 ### Current Live State (last verified 2026-04-21)
 - Mac LM Studio: `localhost:1234` — 3 models (gemma-4-e4b-it, qwen3.5-9b-mlx, embed)
-- Win LM Studio: `192.168.254.101:1234` — 5 models (Win offline → using preserved last-good)
+- Win LM Studio: `192.168.254.105:1234` — 5 models (Win offline → using preserved last-good)
 - Recovery tier: 1 (config preserved from last live probe)
 - `LMS_WIN_MODEL=qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
 

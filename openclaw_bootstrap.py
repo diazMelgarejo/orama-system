@@ -59,7 +59,7 @@ OPENCLAW_CANDIDATE_PORTS: list[int] = list(dict.fromkeys(
 ))
 
 MAC_IP    = os.getenv("MAC_IP", "192.168.254.105")
-WIN_IP    = os.getenv("WIN_IP", "192.168.254.101")
+WIN_IP    = os.getenv("WIN_IP", "192.168.254.105")
 OLLAMA_MAC = os.getenv("OLLAMA_MAC_ENDPOINT",    f"http://{MAC_IP}:11434")
 OLLAMA_WIN = os.getenv("OLLAMA_WINDOWS_ENDPOINT", f"http://{WIN_IP}:11434")
 LMS_MAC   = os.getenv("LM_STUDIO_MAC_ENDPOINT",   f"http://{MAC_IP}:1234")

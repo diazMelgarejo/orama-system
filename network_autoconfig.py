@@ -26,7 +26,7 @@ class NetworkAutoConfig:
         # OLD stale IPs (archive): Darwin=.110, Windows=.108/.100/.101 — do not restore.
         self.preferred_ips = self._load_from_openclaw() or {
             'Darwin': '192.168.254.105',   # macOS LAN IP (last-resort; use localhost for self-probe)
-            'Windows': '192.168.254.103',  # Windows RTX 3080 (last-resort; confirmed 2026-04-26)
+            'Windows': '192.168.254.105',  # Windows RTX 3080 (last-resort; confirmed 2026-04-26)
         }
 
     def _load_from_openclaw(self) -> Optional[Dict[str, str]]:
@@ -166,7 +166,7 @@ class NetworkAutoConfig:
         Reuses verify_connectivity() for each host:port pair.
 
         Returns dict: service_name → [list of reachable IPs]
-        e.g. {"lmstudio": ["192.168.254.100"], "ollama": ["192.168.254.101"]}
+        e.g. {"lmstudio": ["192.168.254.105"], "ollama": ["192.168.254.105"]}
         """
         if subnet_prefix is None:
             local_ip = self.get_working_local_ip()
