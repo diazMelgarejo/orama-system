@@ -825,3 +825,65 @@ subnet-portable guess (Windows is always 3rd host on the /24), not the actual IP
 - Unified `/agent/dispatch` L2 API in PT
 
 **Repos synced:** PT pushed `c6b8cdf`, orama-system clean (all changes from previous session already committed).
+
+---
+
+## 2026-04-29 — G1/G3/G4 Closed; LM Studio Remote-as-Local Proxy Behavior Discovered
+
+**Trigger:** Both machines came online simultaneously — first time since policy was written.
+
+### Key Discovery: LM Studio proxies remote LAN endpoints as "local" models
+
+**What LM Studio does:** When you add a remote server (Win LMS at 192.168.254.105:1234) as
+a provider in Mac's LM Studio, ALL models on that remote server appear in Mac's own
+`/v1/models` response as if they were locally loaded. The reverse is also true.
+
+**Why this matters:**
+- The original policy assumed you could tell a model's physical home by which machine's
+  `/v1/models` endpoint it appeared in. **This assumption is WRONG.**
+- `qwen3.5-27b-...` appears in Mac's `/v1/models` — but it physically runs on Win RTX 3080.
+- `qwen3.5-9b-mlx` appears in Win's `/v1/models` — but it physically runs on Mac Apple Silicon.
+- Both machines return all 5 models, yet each model has a true physical home.
+
+**Correct mental model:**
+```
+Mac /v1/models  →  [mac-native models] + [win models proxied as local]
+Win /v1/models  →  [win-native models] + [mac models proxied as local]
+```
+
+**Routing rule that actually works:**
+- Do NOT use model presence in `/v1/models` to determine which machine to route to.
+- Use the **provider name** (`lmstudio-mac` vs `lmstudio-win`) as the routing key.
+- The policy YAML `mac_only` / `windows_only` enforces provider-level routing, not detection.
+
+**Policy fix applied:**
+- `mac_only: []`, `windows_only: []` — cleared; LMS proxy makes per-machine exclusion unenforceable at the API level
+- `shared:` — all 5 confirmed models added (accessible from either provider endpoint)
+- openclaw.json repaired: both `lmstudio-mac` and `lmstudio-win` now show 5 models each
+
+**discover.py result (2026-04-29, both machines online):**
+```
+mac: ✅ localhost:1234     — 5 models
+win: ✅ 192.168.254.105:1234 — 5 models
+```
+
+### Gaps Closed This Session
+
+| Gap | Status |
+|-----|--------|
+| G1 shared models populated | ✅ Closed — all 5 models confirmed shared |
+| G3 device_affinity → affinity key rename | ✅ Closed — 7/7 schema tests pass |
+| G4 live openclaw.json repaired | ✅ Closed — both machines show 5 models, no violations |
+| G2 PERPETUA_TOOLS_ROOT in .env.example | ✅ Already existed |
+
+### Model physical homes (for performance routing, not strict enforcement)
+
+| Model | Physical home | Notes |
+|-------|--------------|-------|
+| `qwen3.5-9b-mlx` | Mac (Apple Silicon) | MLX quantization — native on Mac |
+| `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2` | Win (RTX 3080) | Large GGUF — GPU preferred |
+| `gemma-4-26b-a4b-it` | Win (RTX 3080) | Large model — GPU preferred |
+| `gemma-4-e4b-it` | Mac or Win (small) | Small enough for either |
+| `text-embedding-nomic-embed-text-v1.5` | Mac or Win | Embedding model, low cost |
+
+**Win IP confirmed stable at .105 during this session.**
