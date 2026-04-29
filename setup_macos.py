@@ -9,9 +9,11 @@ What it does:
   1. Create ~/.local/bin  (user-writable binary dir in PATH)
   2. Add ~/.local/bin to PATH in ~/.zshrc (if not already present)
   3. Validate and repair ~/.openclaw/openclaw.json (models arrays)
-  3b.Enforce thinkingLevel=off + budget_tokens=0 for all Mac LM Studio agents
+  3b.Enforce thinkingDefault=off for all Mac LM Studio agents
      (prevents 100-300s think blocks on Qwen3.5-9B MLX; idempotent + auto-restarts
       OpenClaw if running so config isn't clobbered by shutdown write)
+     NOTE: correct field is thinkingDefault (NOT thinkingLevel/modelParameters) per
+           openclaw schema — verified from dist/zod-schema.agent-runtime-BPvFXsu0.js
   5. Install ~/.openclaw/scripts/discover.py (LM Studio auto-discovery hub)
   6. Guard /self-discovery skill against version downgrade; announce on startup
   4. Patch ~/.alphaclaw/.../alphaclaw.js — 6 macOS compatibility fixes:
@@ -21,6 +23,9 @@ What it does:
        d) gog install         → ~/.local/bin/gog      (not /usr/local/bin/gog)
        e) cron setup          → macOS user crontab    (not /etc/cron.d)
        f) systemctl shim      → skip on macOS entirely
+  4b. Patch ~/.alphaclaw/.../lib/server/gateway.js — 1 fix:
+       g) gatewayEnv() PATH   → prepend process.execPath dir so spawned openclaw
+          runs under Node v24 (not system default Node v14)
 
 Usage:
     python setup_macos.py              # full output
@@ -39,6 +44,7 @@ from urllib.request import urlopen
 HOME          = Path.home()
 LOCAL_BIN     = HOME / ".local" / "bin"
 ALPHACLAW_JS  = HOME / ".alphaclaw/node_modules/@chrysb/alphaclaw/bin/alphaclaw.js"
+GATEWAY_JS    = HOME / ".alphaclaw/node_modules/@chrysb/alphaclaw/lib/server/gateway.js"
 OPENCLAW_JSON = HOME / ".openclaw/openclaw.json"
 MARKER_FILE   = HOME / ".alphaclaw" / ".macos_patches.json"
 
@@ -206,20 +212,22 @@ def step_mac_agent_thinking() -> None:
         primary = agent.get("model", {}).get("primary", "")
         if not primary.startswith(_MAC_PROVIDER_PREFIX):
             return
-        if agent.get("thinkingLevel") != "off":
-            agent["thinkingLevel"] = "off"
-            _applied(f"openclaw.json {label}", "thinkingLevel=off (Mac MLX reasoning model)")
-            changed = True
-        else:
-            _skip(f"openclaw.json {label}.thinkingLevel")
 
-        mp = agent.setdefault("modelParameters", {})
-        if mp.get("budget_tokens") != 0:
-            mp["budget_tokens"] = 0
-            _applied(f"openclaw.json {label}", "modelParameters.budget_tokens=0")
+        # Remove any stale invalid keys (thinkingLevel, modelParameters were
+        # rejected by OpenClaw's strict Zod schema; correct field is thinkingDefault)
+        for stale_key in ("thinkingLevel", "modelParameters"):
+            if stale_key in agent:
+                del agent[stale_key]
+                _applied(f"openclaw.json {label}", f"removed invalid key '{stale_key}'")
+                changed = True
+
+        # thinkingDefault is the schema-valid field (enum: off|minimal|low|…|max)
+        if agent.get("thinkingDefault") != "off":
+            agent["thinkingDefault"] = "off"
+            _applied(f"openclaw.json {label}", "thinkingDefault=off (Mac MLX reasoning model)")
             changed = True
         else:
-            _skip(f"openclaw.json {label}.budget_tokens")
+            _skip(f"openclaw.json {label}.thinkingDefault")
 
     for agent in cfg.get("agents", {}).get("list", []):
         _enforce(agent, agent.get("id", "?"))
@@ -233,7 +241,7 @@ def step_mac_agent_thinking() -> None:
         #   • OpenClaw running  → SIGTERM, wait for exit, THEN write (avoids shutdown clobber)
         #   • OpenClaw stopped  → write directly
         # dry-run: prints preview without touching anything
-        _restart_openclaw_if_running(patched, "thinkingLevel config change requires reload")
+        _restart_openclaw_if_running(patched, "thinkingDefault config change requires reload")
 
 
 def _restart_openclaw_if_running(patched_config: str, reason: str) -> None:
@@ -297,7 +305,7 @@ def _restart_openclaw_if_running(patched_config: str, reason: str) -> None:
 
     # 3. Write AFTER exit — shutdown write has already happened, ours wins
     _write_text(OPENCLAW_JSON, patched_config)
-    _applied("openclaw", "openclaw.json re-written after exit — thinkingLevel=off will persist")
+    _applied("openclaw", "openclaw.json re-written after exit — thinkingDefault=off will persist")
 
 
 # ── step 4: alphaclaw.js patches ──────────────────────────────────────────────
@@ -479,6 +487,81 @@ _P_SYSTEMCTL = {
 ALL_PATCHES = [_P_GIT_DEST, _P_GIT_MKDIR, _P_GIT_SHIMPATH, _P_GOG, _P_CRON, _P_SYSTEMCTL]
 
 
+# ─── Patch G: gateway.js — prepend Node v24 bin dir to child PATH ─────────────
+#
+# Problem: gateway.js calls spawn("openclaw", ...) with the system PATH,
+# which resolves `openclaw` under Node v14 (the macOS default), causing
+# "Node.js v22.12+ is required" errors on every gateway restart.
+#
+# Fix: derive the Node bin directory from `process.execPath` (the Node binary
+# that launched alphaclaw.js itself, which IS v24) and prepend it to PATH in
+# gatewayEnv() so every spawned child uses the correct Node.
+#
+# detect = sentinel present only in the patched version
+# old    = verbatim from npm-installed lib/server/gateway.js
+# new    = patched replacement
+_P_GATEWAY = {
+    "name":   "gateway-node-path",
+    "detect": "// Prepend the Node.js bin dir that launched alphaclaw",
+    "old": (
+        "const gatewayEnv = () =>\n"
+        "  withOpenclawStartupEnv({\n"
+        "    ...process.env,\n"
+        "    HOME: kRootDir,\n"
+        "    OPENCLAW_HOME: kRootDir,\n"
+        "    OPENCLAW_CONFIG_PATH: `${OPENCLAW_DIR}/openclaw.json`,\n"
+        "    OPENCLAW_STATE_DIR: OPENCLAW_DIR,\n"
+        "    XDG_CONFIG_HOME: OPENCLAW_DIR,\n"
+        "  });"
+    ),
+    "new": (
+        "const gatewayEnv = () => {\n"
+        "  // Prepend the Node.js bin dir that launched alphaclaw so spawned\n"
+        "  // openclaw gateway uses Node v22+, not the system default Node v14.\n"
+        "  const nodeBinDir = path.dirname(process.execPath);\n"
+        "  const currentPath = process.env.PATH || \"\";\n"
+        "  const patchedPath = currentPath.split(path.delimiter).includes(nodeBinDir)\n"
+        "    ? currentPath\n"
+        "    : `${nodeBinDir}${path.delimiter}${currentPath}`;\n"
+        "  return withOpenclawStartupEnv({\n"
+        "    ...process.env,\n"
+        "    PATH: patchedPath,\n"
+        "    HOME: kRootDir,\n"
+        "    OPENCLAW_HOME: kRootDir,\n"
+        "    OPENCLAW_CONFIG_PATH: `${OPENCLAW_DIR}/openclaw.json`,\n"
+        "    OPENCLAW_STATE_DIR: OPENCLAW_DIR,\n"
+        "    XDG_CONFIG_HOME: OPENCLAW_DIR,\n"
+        "  });\n"
+        "};"
+    ),
+}
+
+
+def step_patch_gateway() -> None:
+    """Patch gateway.js so the spawned openclaw process inherits Node v22+ PATH."""
+    if not GATEWAY_JS.exists():
+        _warn("gateway.js", f"not found at {GATEWAY_JS} — skipping gateway PATH patch")
+        return
+
+    content = GATEWAY_JS.read_text(encoding="utf-8")
+    p = _P_GATEWAY
+    name, detect, old, new = p["name"], p["detect"], p["old"], p["new"]
+
+    if detect in content:
+        _skip(f"gateway.js/{name}")
+        return
+    if old in content:
+        content = content.replace(old, new, 1)
+        if not DRY_RUN:
+            GATEWAY_JS.write_text(content, encoding="utf-8")
+        _applied(f"gateway.js/{name}", "gatewayEnv() now prepends Node v24 bin dir to PATH")
+    else:
+        _warn(
+            f"gateway.js/{name}",
+            "neither patched nor original string found — npm version mismatch?",
+        )
+
+
 def _alphaclaw_version() -> str:
     pkg = ALPHACLAW_JS.parent.parent.parent / "package.json"
     try:
@@ -609,6 +692,7 @@ def main() -> int:
     step_openclaw_json()
     step_mac_agent_thinking()
     step_patch_alphaclaw()
+    step_patch_gateway()
     step_install_discover_hub()
     step_self_discovery_skill()
 
