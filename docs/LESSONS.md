@@ -887,3 +887,44 @@ win: ✅ 192.168.254.105:1234 — 5 models
 | `text-embedding-nomic-embed-text-v1.5` | Mac or Win | Embedding model, low cost |
 
 **Win IP confirmed stable at .105 during this session.**
+
+---
+
+## 2026-04-29 — Claude — Cross-repo sync gist (from PT docs/LESSONS.md)
+
+*(These are PT-owned lessons relevant to orama. Full text in PT/docs/LESSONS.md.)*
+
+### Hardware × Agent Matrix Test — All 6 OpenClaw Agents (confirmed 2026-04-27)
+
+- **Model IDs are case-sensitive** in LM Studio. Use all-lowercase: `qwen3.5-9b-mlx`, `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`. No `-4bit` suffix on Mac.
+- **openclaw CLI requires Node.js ≥ v22**. Default v14 fails instantly. Use full path: `/Users/lawrencecyremelgarejo/.nvm/versions/node/v24.14.1/bin/openclaw`
+- **All 6 agents pass**: win-researcher/coder/autoresearcher (Win 27B, 107–130s), main/mac-researcher/orchestrator (Mac 9B, 105–308s via Gemini fallback).
+- **Thinking models return empty `text`** — reply is in `reasoning_content`. Always check both fields.
+- **commandTimeout must be ≥ 300 000 ms** for reasoning model turns.
+
+### thinkingDefault fix (automated, 2026-04-27)
+
+- `thinkingLevel`/`modelParameters` fields are REJECTED by OpenClaw schema. Correct field: `thinkingDefault: "off"`.
+- `setup_macos.py` step 3b writes this and strips stale keys on every `start.sh`. No manual LM Studio toggle needed.
+- Win 27B: leave thinking as-is; it always returns `reasoning_content`.
+
+### Known working versions (2026-04-27)
+
+- AlphaClaw: **0.9.3–0.9.11** all confirmed working.
+- OpenClaw: all versions working.
+- `KNOWN_ALPHACLAW_VERSION` in setup_macos.py = `"0.9.3"` (minimum baseline).
+
+### Git status hang — node_modules was tracked (2026-04-29)
+
+- `packages/alphaclaw-mcp/node_modules/` (3818 files + 6 symlinks) was committed accidentally in PT.
+- `git status` hung indefinitely (lstat of 3818 files + APFS symlink chains).
+- Fix: add `node_modules/` to `.gitignore`, then `git rm -r --cached packages/*/node_modules`.
+- **Universal rule**: never track `node_modules/`, `__pycache__/`, `.venv/`, `dist/`, `build/`.
+
+### AutoResearcher migration: karpathy → uditgoenka (2026-04-11)
+
+- `AUTORESEARCH_REMOTE` is now an env var (default: `uditgoenka/autoresearch`).
+- Plugin install is primary mode: `claude plugin marketplace add uditgoenka/autoresearch`.
+- **Valid Windows model name**: `Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2`. `Qwen3.5-27B-Instruct` DOES NOT EXIST — never use it.
+- `uv sync --dev` replaces bare `pip install` in bootstrap paths.
+
