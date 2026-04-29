@@ -928,3 +928,22 @@ win: ✅ 192.168.254.105:1234 — 5 models
 - **Valid Windows model name**: `Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2`. `Qwen3.5-27B-Instruct` DOES NOT EXIST — never use it.
 - `uv sync --dev` replaces bare `pip install` in bootstrap paths.
 
+
+### Module rename: ultrathink → orama (2026-04-29)
+
+**Problem**: Phase B renamed files but left internal references stale, causing 16 test failures:
+1. `orama_bridge.py` still imported `from orchestrator.ultrathink_mcp_client import` (broken after file rename)
+2. Tests imported from `orchestrator.ultrathink_bridge` / `orchestrator.ultrathink_mcp_client` (old paths)
+3. Test assertions checked `ULTRATHINK_ENDPOINT` / `ultrathink_available` (routing.yml now uses `ORAMA_ENDPOINT` / `orama_available`)
+4. Hardware policy tests relied on live `model_hardware_policy.yml` which was correctly emptied (LM Studio proxy discovery)
+
+**Fixes**:
+- `orama_bridge.py`: fix import + logger name to use `orchestrator.orama_mcp_client` / `"orchestrator.orama_bridge"`
+- Tests: replace module paths and env var names to match new routing.yml contract
+- Hardware policy tests: pass explicit `policy=` dicts — self-contained, not coupled to live policy file
+- Add `.claude/hooks/pre-commit` to catch 5 categories of naming drift at commit time
+
+**Rule**: After any file rename, grep all test files for the old module path immediately. File renames break test `patch()` strings even when the rename is intentional and correct.
+
+**Pre-commit guard**: `.claude/hooks/pre-commit` in Perpetua-Tools blocks commits with stale:
+`orchestrator.ultrathink_bridge`, `orchestrator.ultrathink_mcp_client`, `ULTRATHINK_ENDPOINT`, `ultrathink_available`, `Perplexity-Tools` in ecc-tools.json.
