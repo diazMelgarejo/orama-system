@@ -96,6 +96,9 @@ These five tests are CI-blocking. A parity run with any of these failing does no
 | `HardwareAffinityError` class | `perpetua_core/policy.py` | Direct copy, namespace re-anchored |
 | `model_hardware_policy.yml` schema | `perpetua_core/config/model_hardware_policy.example.yml` | Schema lifted, content rebuilt per D8 |
 | `routing.json` LM Studio endpoints | example yaml | Mac `.110:1234`, Windows `.108:1234` carried |
+| `config/devices.yml` hardware topology | `perpetua_core/config/devices.yml` | `lan_ip` per physical machine; mirror annotation on `lmstudio-mac` |
+| `config/model_hardware_policy.yml` (v1 hard enforcement) | `perpetua_core/config/model_hardware_policy.yml` | Include `windows_only:` from day one — not `shared:`. See D14, `17-hardware-policy-enforcement.md`. |
+| `_MIRROR_BACKENDS` + `_TIER_HOSTS` pattern | `perpetua_core/discovery/selector.py` | Frozenset exclusion + tier→host allowlist; config-driven in v2 (OQ19) |
 | `api_server.py` FastAPI skeleton | `oramasys/api/server.py` | Husk recycled, internals replaced |
 | API request/response Pydantic shapes | `oramasys/api/contracts.py` | Shapes lifted, retyped for Pydantic v2 |
 | `bin/orama-system/references/api_contract.md` | reference for above | docs lift |

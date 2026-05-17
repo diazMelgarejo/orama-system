@@ -92,6 +92,71 @@
 
 ---
 
+---
+
+## Hardware Policy Enshrinement (2026-05-17/18) — v1 RC-1 post-ship
+
+> This section documents decisions made **after** the 2026-05-01 alpha build —
+> during the RC-1 policy audit of `diazMelgarejo/Perpetua-Tools`. They are
+> captured here because they define the **required policy surface** that v2 /
+> agate must have correct from day one. See `17-hardware-policy-enforcement.md`
+> for the full reference.
+
+### Key decisions locked (D14, D15)
+
+| Decision | Summary |
+|----------|---------|
+| D14 | LM Studio Mac = **MIRROR ONLY**. `_MIRROR_BACKENDS` frozenset + `windows_only:` in `model_hardware_policy.yml` + `_TIER_HOSTS["mac"] = {"ollama-local"}` only. Dispatching a `windows_only:` model to the mirror = proxy back to Win = double-barrel GPU = OOM. Fail closed. |
+| D15 | `orchestrator/agent_launcher.py` → `orchestrator/backend_resolver.py`. Pure policy function separated from 859-line operational CLI. No ambiguity between the two. |
+
+### v1 test count update
+
+| Repo | Tests (2026-05-01) | Tests (2026-05-18) | New |
+|------|--------------------|--------------------|-----|
+| `diazMelgarejo/Perpetua-Tools` | 33 | 36 | 3 mirror/resolver tests |
+| `oramasys/perpetua-core` | 32 | 38 (est.) | 6 mirror-exclusion tests |
+| `oramasys/oramasys` | 4 | 4 | — |
+
+### `model_hardware_policy.yml` hard enforcement
+
+Before (wrong — framed as "performance routing"):
+```yaml
+shared:
+  - qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2  # was here — WRONG
+```
+
+After (hard enforcement):
+```yaml
+windows_only:
+  - qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2  # RTX 3080 GGUF only
+  - gemma-4-26b-a4b-it                                  # RTX 3080 GGUF only
+```
+
+### `devices.yml` corrections
+
+| Field | Before | After |
+|-------|--------|-------|
+| `win-rtx3080.lan_ip` | `""` (empty) | `"192.168.254.103"` |
+| `mac-studio.default_backend` | `"mlx"` | `"ollama"` |
+| `mac-studio.secondary_backend` | present | removed (contradicted mirror policy) |
+| `shared-ollama.lan_ip` | `"192.168.254.103"` (wrong — was Win IP) | `""` |
+
+### agate design constraint from D14
+
+agate must distinguish three affinity levels:
+
+| Verdict | Meaning | v1 mechanism |
+|---------|---------|--------------|
+| `NEVER` | Hardware damage risk (OOM, double-barrel GPU) | `windows_only:` + `_MIRROR_BACKENDS` |
+| `PREFER` | Best fit; other tiers are fallback | `shared:` with sort-order priority |
+| `ALLOW` | Works but not optimal | `shared:` at secondary sort position |
+
+The agate JSON Schema must surface `NEVER` explicitly — it cannot be inferred
+from list membership. A tool consuming the schema needs to parse `NEVER` as a
+hard block, not a soft preference.
+
+---
+
 ## Note on `diazMelgarejo/perpetua-core` (divergent build)
 
 A divergent build (`9cb153a`, 2026-05-14) was accidentally created at the wrong local path
