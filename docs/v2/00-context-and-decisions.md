@@ -153,6 +153,47 @@ These constraints are verified by `01-kernel-spec.md` §Verification items 11–
 
 ---
 
+### D14 — LM Studio proxy gotcha: mirror ≠ runner (enshrined 2026-05-17)
+
+**Decision**: `lmstudio-mac` (Mac's local LM Studio at `localhost:1234`) is permanently
+classified as **MIRROR ONLY** — it appears in `/v1/models` because LM Studio proxies all
+configured remote LAN endpoints' models as local, but the Mac hardware cannot run the
+Win-native GGUF models. Dispatching a `windows_only:` model to the Mac mirror proxies back
+to the Windows machine; if Windows is already serving the same model, both hit the RTX 3080
+simultaneously — "double barrel" GPU load = OOM or driver instability.
+
+**Implementation**:
+1. `_MIRROR_BACKENDS = frozenset({"lmstudio-mac"})` in `selector.py` — exclusion from all
+   candidate selection regardless of tier, task type, or model hint.
+2. `windows_only:` list in `model_hardware_policy.yml` — `qwen3.5-27b` and `gemma-4-26b`
+   moved from `shared:` to `windows_only:` as hard enforcement (not performance routing).
+3. `_TIER_HOSTS["mac"] = {"ollama-local"}` only — Mac tier explicitly excludes lmstudio-mac.
+4. `_await_manager_override_async` in root `agent_launcher.py` fails closed when
+   `not sys.stdin.isatty()` — prevents CI/test hangs on affinity violation prompts.
+
+**agate implication**: Policy schema must distinguish `NEVER` (hardware damage risk) from
+`PREFER/ALLOW` (routing preference). See `17-hardware-policy-enforcement.md`.
+
+### D15 — `orchestrator/backend_resolver.py` split (2026-05-18)
+
+**Decision**: The 34-line pure function `orchestrator/agent_launcher.py` was renamed to
+`orchestrator/backend_resolver.py`. The root `agent_launcher.py` (859 lines, operational
+CLI with env-file patching, interactive prompts, HITL override) retains the original name.
+
+**Rationale**: Two files named `agent_launcher.py` with radically different purposes —
+the 34-line file was invisible to readers scanning the codebase, and the name implied it
+had operational CLI responsibilities it did not have. `backend_resolver.py` is
+semantically precise: pure policy function, no I/O, no side effects.
+
+**Interface unchanged**: `from orchestrator.backend_resolver import resolve_backend_for_spec`.
+The three callers (test suite + orchestration code) updated in the same commit.
+
+**v2 implication**: The v2 `perpetua-core` equivalent of this function should live in
+`perpetua_core/discovery/selector.py` and follow the same contract: pure function,
+no I/O, takes a `BackendRegistry` and a spec dict, returns a `Backend`.
+
+---
+
 ## Confirmed not-decisions (parked, not punted)
 
 - **Pydantic AI** as kernel schema lib — rejected per D7 (category error). Kept in `06-open-questions.md` as v2.1+ framework-comparison item.

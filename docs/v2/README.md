@@ -30,6 +30,8 @@ Local-first + airgapped capable. Dependency-minimal. MIT-licensed (matches LangC
 | **D8** | Kernel tier | **Revised 2026-04-30: 70-line kernel + `graph/plugins/`** — engine.py stays ~70 lines; checkpointer/interrupts/subgraphs/tool/streaming/structured_output ship as on-demand plugins (see `01-kernel-spec.md`) |
 | **D9** | Build approach | GPT Phase 1–4 order (primitives → graph → HTTP → parity tests); lift proven pieces from v1 |
 | **D10** | License | MIT (matches LangChain + LangGraph) |
+| **D14** | Mirror enforcement | `lmstudio-mac` = MIRROR ONLY; `windows_only:` hard enforcement in `model_hardware_policy.yml`; `_MIRROR_BACKENDS` frozenset in `selector.py`; fail-closed under non-TTY (2026-05-17) |
+| **D15** | `backend_resolver` split | `orchestrator/agent_launcher.py` → `orchestrator/backend_resolver.py`; pure function separated from 859-line CLI (2026-05-18) |
 
 Full rationale and the Perplexity/GPT/Gemini/Grok evidence behind each decision is in [`00-context-and-decisions.md`](./00-context-and-decisions.md).
 
@@ -157,7 +159,8 @@ orama-system/docs/v2/
 ├── 13-local-model-catalog-strategy.md  ← Codex model_catalog_json pattern; qwen3.5-local→qwen3.5:9b-nvfp4 rename; gen script
 ├── 14-supervisor-and-anthropic-patterns.md
 ├── 15-phase1-as-built.md              ← canonical oramasys/* v2.0-alpha.1 (2026-05-01); OQ resolutions
-└── 16-web-app-orchestration-plan.md   ← chosen FastAPI + React/Vite web-app path for portal/dashboard + PT swarm primitives
+├── 16-web-app-orchestration-plan.md   ← chosen FastAPI + React/Vite web-app path for portal/dashboard + PT swarm primitives
+└── 17-hardware-policy-enforcement.md  ← 4-layer enforcement chain (devices.yml → model_hardware_policy.yml → selector.py → agent_launcher.py); agate NEVER/PREFER/ALLOW implication; mirror exclusion patterns (D14, D15)
 ```
 
 ---
@@ -170,3 +173,5 @@ Tracked in [`06-open-questions.md`](./06-open-questions.md). Highlights:
 - LM Studio LAN endpoint canonicalization (Mac `.110:1234`, Windows `.108:1234` per user memory; `routing.json` already verified `distributed=true`)
 - GGUF spec extension RFC (community-pending since Oct 2024) for `system_requirements` metadata
 - Naming: hardware policy spec → publish as `agate` (Perplexity proposal) when stable
+- OQ18: agate `NEVER` verdict — must be explicit in schema, not inferred from list membership
+- OQ19: `_MIRROR_BACKENDS` / `_TIER_HOSTS` — should v2 derive these from YAML at runtime (config-driven) or remain module-level constants?
