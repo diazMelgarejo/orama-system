@@ -1,13 +1,53 @@
-# TDD — Test-Driven Development Checklists
+# TDD — Test-Driven Development Hints
 
 > **Canonical path**: `orama-system/docs/TDD.md`
 > **Companion**: parent-dir [`tdd.md`](../../tdd.md) — source-of-truth philosophy (SPECS → tests → code).
 > **External skill**: [`superpowers:test-driven-development`](file://~/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/test-driven-development/SKILL.md) — full methodology, anti-patterns. Do not duplicate here.
 > **Anti-patterns reference**: same dir, `testing-anti-patterns.md`.
 
-This file is the **prescriptive gate**. Two short checklists. Use them before every code change and every commit.
+This file is the **prescriptive gate**. Use them before every code change and every commit.
 
 ---
+
+## source of truth
+
+1. Create High level SPECS.md
+2. The tests.
+3. use [TDD](superpowers:test-driven-development), plan using gpt-5.5 and/or gemini-3.1-PRO
+
+### TESTS
+
+Agentic coding is the ideal mechanism for enforcing TDD and being strict with it.
+
+Here is a summary of the workflow I coded as part of my implementation skill in Claude Code:
+
+1. Before writing each code, write a test that fails for it
+2. Run the test and ensure it fails
+3. If you get an error, fix the test until it runs but fails
+4. Once the test fails, write the code
+5. Run the test and ensure it succeeds
+6. If the test fails, go back to step 4
+7. Once the test succeeds, verify that the task is complete (the original code's intent landed);
+8. If the task is not complete, go back to step 1.
+
+This loop forces the agent to write tests before writing any code, and tries to keep each test as simple as possible.
+
+This is token-hungry upfront, so be frugal on turns (outsource: all code plans to GPT-5.5; all code reviews to Gemini 3.1 Thinking; if any of these models are unavailable, get the next best thing), but it has many advantages:
+
+1. Simpler code
+2. More modular code
+3. Fewer bugs and regressions later
+4. Easier to troubleshoot
+
+---
+
+### v2 instructions (oramasys org)
+
+minimize kernel and ***MiniGraph*** as much as possible, it will call external modules and skills as necessary, it must still be extremely nimble and responsive even with the rich features by maximizing its adopted hybrid architecture?
+
+---
+
+Two short checklists:
 
 ## Pre-Code-Change Checklist
 
