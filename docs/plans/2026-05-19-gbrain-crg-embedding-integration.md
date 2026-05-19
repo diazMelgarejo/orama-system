@@ -1,7 +1,7 @@
 # Plan: gbrain Embeddings as Optional Feature of code-review-graph
 
 **Date:** 2026-05-19  
-**Status:** Draft — ready to implement Phase 0 today  
+**Status:** Phase 0 ✅ shipped · Phase 1 ✅ shipped (see `bin/orama-system/skills/code-review/scripts/crg-embed-mode`) · Phase 2 pending upstream PR · Phase 3 pending Phase 2  
 **Scope:** OpenClaw toolchain (local Mac only; no upstream commitment required for Phases 0–1)
 
 ---
@@ -88,7 +88,7 @@ Note: `CRG_ACCEPT_CLOUD_EGRESS=1` suppresses the localhost-egress warning since 
 **What:** Add a shell helper and a `.mcp.json` toggle so you can switch between `bge-m3` mode and the default `local` mode without editing JSON manually.
 
 **Files:**
-- `orama-system/bin/orama-system/crg-embed-mode` — bash script
+- `bin/orama-system/skills/code-review/scripts/crg-embed-mode` — bash script (lives inside the `code-review` skill, not at the bin root)
 
 ```bash
 #!/bin/bash
@@ -184,11 +184,11 @@ if provider == "gbrain":
 
 ---
 
-### Phase 3 — Unified recall: single query, both corpora (future, post-LanceDB migration)
+### Phase 3 — Unified recall: single query, both corpora (future, gated only by Phase 2)
 
 **What:** A unified `search` MCP tool that fans out to both CRG's structural graph and gbrain's semantic corpus, then merges via RRF. One call, two corpora, same model.
 
-**Prerequisite:** Phase 2 (same vector space). Also depends on orama-internal's LanceDB migration (v2.1 roadmap) settling — gbrain may move from pgvector to LanceDB, which changes the query path.
+**Prerequisite:** Phase 2 (same vector space). **No dependency on LanceDB** — gbrain stays on pgvector permanently (it is a separate upstream repo with its own roadmap). orama-system's optional LanceDB migration (v2.1, for job/decision history) is **decoupled** from this plan: even if orama-system moves to LanceDB, gbrain remains the codebase-index source of truth via pgvector, and CRG queries it directly.
 
 **Design:** Add a `/hybrid-search` tool to the OpenClaw MCP composite that:
 1. Calls `mcp__code-review-graph__semantic_search_nodes(query)`
@@ -207,9 +207,9 @@ This is an agent-level composition tool, not a change to either upstream tool.
 | 0 — env config | 5 min | Unified model, zero risk | **Today** |
 | 1 — toggle script | 2 hrs | Ergonomic, offline fallback | This week |
 | 2 — native provider | 4 hrs | Eliminate duplicate store, upstream PR | This sprint |
-| 3 — unified recall tool | 1 day | Power feature, fan-out search | Post LanceDB |
+| 3 — unified recall tool | 1 day | Power feature, fan-out search | After Phase 2 |
 
-**Recommendation:** Ship Phase 0 now (5-min `.mcp.json` edit + re-embed). Phase 1 adds operational comfort. Phase 2 is the right upstream contribution. Phase 3 waits for LanceDB clarity.
+**Recommendation:** Ship Phase 0 now (5-min `.mcp.json` edit + re-embed). Phase 1 adds operational comfort. Phase 2 is the right upstream contribution. Phase 3 unblocks as soon as Phase 2 lands — no LanceDB dependency (gbrain stays on pgvector).
 
 ---
 
@@ -228,4 +228,4 @@ This is an agent-level composition tool, not a change to either upstream tool.
 
 - The `gstack-code-stem-28787e52-61949f` source (0 pages, never synced) in gbrain `sources list` is an orphan — likely from an aborted registration. Safe to remove with `gbrain sources remove gstack-code-stem-28787e52-61949f` when convenient.
 - The gstack-gbrain-sync.ts orchestrator has a `list.find is not a function` bug in v1.40.0.0. Workaround: use `gbrain sync --source <id>` directly. File upstream issue against garrytan/gstack.
-- LanceDB (orama-internal RAG v2.1) and gbrain (pgvector) coexist — they serve different corpora. This plan stays on pgvector for CRG integration; LanceDB is for the orama query pipeline.
+- **LanceDB and gbrain are fully decoupled** (clarified 2026-05-20): gbrain is a separate upstream repo and will **always use pgvector** for the codebase index. orama-system **may** migrate parts of its job/decision history to LanceDB in v2.1, but that migration does not touch gbrain. This plan stays on pgvector for the CRG↔gbrain bridge in all phases.
