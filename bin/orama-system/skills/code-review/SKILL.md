@@ -143,3 +143,15 @@ CRG_OPENAI_DIMENSION=1024
 - "Let me look at the full repo structure" (→ use code-review-graph instead)
 - `Read` on more than 3 files without a prior blast-radius scan
 - Running `embed_graph_tool` without confirming Ollama + bge-m3 is running
+
+## MCP Tool Sequence
+
+| Step | Tool | When |
+|---|---|---|
+| 1 | `list_graph_stats_tool` | Confirm graph is fresh |
+| 2 | `semantic_search_nodes_tool` | Find entry points by symbol or keyword |
+| 3 | `query_graph_tool` (callers_of / callees_of / file_summary) | Trace flow |
+| 4 | `get_impact_radius_tool` | Blast radius of changes |
+| 5 | `get_affected_flows_tool` | Which execution paths break |
+
+Embedding setup: see `scripts/crg-embed-mode` and `references/crg-embed-mode.md`.

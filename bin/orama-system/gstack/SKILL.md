@@ -134,3 +134,7 @@ Configured by `/setup-gbrain` on 2026-04-25.
 | Repo policy | read-write (orama-system imported, embedding running in background) |
 
 To re-run setup or change engine: `/setup-gbrain`
+
+## Symbol vs Text Search
+
+For SYMBOL questions (def, refs, callers, callees), use `gbrain code-def / code-refs / code-callers / code-callees` — these return graph data. For TEXT with exact strings, regex, or file globs, use Grep. Never default to Grep first for code questions.
