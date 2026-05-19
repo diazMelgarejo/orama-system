@@ -19,6 +19,47 @@ Import command: `/instinct-import .claude/homunculus/instincts/inherited/orama-s
 
 ## Sessions Log
 
+## 2026-05-20 — Claude — fix(docs): file:// link broke repo_hygiene test
+
+### What was learned
+- `docs/TDD.md` was added in commit `dba34d6` with a `file://` absolute hyperlink
+  on line 5 pointing to a local plugin cache path.
+- `scripts/review/repo_hygiene.py` has a strict rule: all markdown hyperlinks
+  must be **repo-relative**. It rejects `file://`, `/absolute`, and drive-letter
+  paths outright (line 152–153 of the script).
+- The test `test_repo_hygiene_script_runs_clean` runs this script and asserts
+  `returncode == 0`, so any new `file://` link introduced in a doc will fail CI.
+
+### Root cause
+External plugin/skill references that live outside the repo (e.g.
+`~/.claude/plugins/...`) cannot be linked with a hyperlink in tracked docs.
+They can only be referenced as plain text / backtick code spans.
+
+### Decisions made
+- Replaced the hyperlink with an inline `code` reference so the path is still
+  human-readable but does not trigger the repo-relative link check.
+- Pattern to follow for **any future external path reference** in tracked docs:
+
+```
+# Bad  — triggers hygiene checker:
+[label](file:/home/user/.some/local/path)
+
+# Good — plain backtick, not a hyperlink:
+`~/.some/local/path`
+```
+
+### Prevention checklist
+Before committing any markdown file that references a local filesystem path:
+1. grep the diff for `file://` and `/absolute` and `~` inside `()` link syntax
+2. Run `python scripts/review/repo_hygiene.py .` locally before committing
+3. The TDD.md pre-commit checklist (docs/TDD.md) now covers this explicitly
+
+### Related
+- Failing test: `tests/test_repo_hygiene.py::test_repo_hygiene_script_runs_clean`
+- Hygiene rule: `scripts/review/repo_hygiene.py` lines 152–153
+- Fixed in: `fix/repo-hygiene-tdd-link`
+
+
 <!-- Append entries below. Format:
 ## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude> — <brief topic>
 ### What was learned
