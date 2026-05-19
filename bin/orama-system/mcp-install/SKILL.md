@@ -212,3 +212,7 @@ Output: Each command printed as "[dry-run] <cmd>" — nothing executed
 - [`scripts/install-mcp-stack.sh`](../scripts/install-mcp-stack.sh) — the installer
 - [`MCP-INSTALL-PLAN.md`](../../../../MCP-INSTALL-PLAN.md) — full autoplan review with 16 decisions
 - [`skill-architecture-guide.md`](../references/skill-architecture-guide.md) — frontmatter spec
+
+## code-review-graph + gbrain Installation
+
+See `OpenClaw/CLAUDE-instru.md § 0.4` for code-review-graph install steps. See `§ 0.5` for gbrain install. Embedding bootstrap script: `scripts/setup-embeddings` (see `references/setup-embeddings.md`).
