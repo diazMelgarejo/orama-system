@@ -114,6 +114,27 @@ chain; only the tool invocation differs:
 
 ---
 
+## Embedding Configuration (unified bge-m3 vector space)
+
+Both `code-review-graph` and `gbrain` use **Ollama bge-m3** (1024-dim). This puts
+`semantic_search_nodes` and `gbrain search` in the same vector space — their ranked
+results can be compared and merged directly.
+
+**Config in `OpenClaw/.mcp.json` (already set):**
+```
+CRG_OPENAI_API_KEY=ollama
+CRG_OPENAI_BASE_URL=http://localhost:11434/v1
+CRG_OPENAI_MODEL=bge-m3
+CRG_OPENAI_DIMENSION=1024
+```
+
+**If Ollama is down:** `semantic_search_nodes` falls back to FTS5-only (no vectors, still works).
+**To toggle:** `crg-embed-mode [gbrain|local|status]`
+**To re-embed after restart:** call `embed_graph_tool` via MCP.
+**Full plan:** `orama-system/docs/plans/2026-05-19-gbrain-crg-embedding-integration.md`
+
+---
+
 ## Red flags — when this skill is being violated
 
 - Reading `*.py` or `*.ts` files before running code-review-graph blast-radius
@@ -121,3 +142,4 @@ chain; only the tool invocation differs:
 - Architecture described from memory without a doc reference
 - "Let me look at the full repo structure" (→ use code-review-graph instead)
 - `Read` on more than 3 files without a prior blast-radius scan
+- Running `embed_graph_tool` without confirming Ollama + bge-m3 is running
