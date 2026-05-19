@@ -136,18 +136,23 @@ Load routing table + GBrain config:
 
 ---
 
-## § 8 — Next Stage: Semantic Memory (bge-m3 / Ollama)
+## § 8 — Semantic Memory: gbrain + code-review-graph Unified Embeddings
 
-gbrain is now fully indexed with **Ollama bge-m3** (local, free, 1024-dim vector).
-See [`../CLAUDE-instru.md § 5`](../CLAUDE-instru.md) for the full next-stage plan.
+Both gbrain and code-review-graph now use **Ollama bge-m3** (1024-dim, local, free).
+`semantic_search_nodes` and `gbrain search` operate in the same vector space.
 
-**Current state (2026-05-15):**
-- Embedding: `ollama:bge-m3` (1024 dims) — `~/.gbrain/config.json`
-- Backend: Supabase PostgreSQL via Session Pooler (port 6543)
-- 9,510/9,510 chunks embedded across 1,153 pages
-- Storage roadmap **decided** (2026-05-15) — see [`../CLAUDE-instru.md § 5`](../CLAUDE-instru.md):
-  - v2.1: LanceDB + bge-m3 for RAG/session memory; v2.5: DuckDB for fleet analytics
-  - gbrain (pgvector) = codebase index; LanceDB = orama job/decision history — these coexist
+**Current state (2026-05-19):**
+- gbrain: `ollama:bge-m3` (1024-dim) — `~/.gbrain/config.json`, Supabase pgvector
+- CRG: `openai` provider → Ollama `localhost:11434/v1` — wired via `.mcp.json`
+- Idempotent setup: `bash orama-system/bin/orama-system/setup-embeddings`
+- Toggle: `crg-embed-mode [gbrain|local|status]`
+
+**Storage roadmap (decided 2026-05-15):**
+- v2.1: LanceDB + bge-m3 for RAG/session memory; v2.5: DuckDB for fleet analytics
+- gbrain (pgvector) = codebase index; LanceDB = orama job/decision history — coexist
+
+**Full integration plan:** [`docs/plans/2026-05-19-gbrain-crg-embedding-integration.md`](docs/plans/2026-05-19-gbrain-crg-embedding-integration.md)
+See also: [`../CLAUDE-instru.md § 0.5.1`](../CLAUDE-instru.md)
 
 ---
 
