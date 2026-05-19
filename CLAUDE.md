@@ -144,8 +144,9 @@ Both gbrain and code-review-graph now use **Ollama bge-m3** (1024-dim, local, fr
 **Current state (2026-05-19):**
 - gbrain: `ollama:bge-m3` (1024-dim) — `~/.gbrain/config.json`, Supabase pgvector
 - CRG: `openai` provider → Ollama `localhost:11434/v1` — wired via `.mcp.json`
-- Idempotent setup: `bash orama-system/bin/orama-system/setup-embeddings`
-- Toggle: `crg-embed-mode [gbrain|local|status]`
+- Idempotent setup: `bash bin/orama-system/mcp-install/scripts/setup-embeddings`
+- Toggle: `bash bin/orama-system/skills/code-review/scripts/crg-embed-mode [gbrain|local|status]`
+- Reference docs: `bin/orama-system/mcp-install/references/setup-embeddings.md` + `bin/orama-system/skills/code-review/references/crg-embed-mode.md`
 
 **Storage roadmap (decided 2026-05-15):**
 - v2.1: LanceDB + bge-m3 for RAG/session memory; v2.5: DuckDB for fleet analytics

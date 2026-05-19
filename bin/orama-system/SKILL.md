@@ -389,3 +389,7 @@ This is the primary async channel between agents with no shared session memory.
 | File appears doubled/concatenated          | Both conflict sides appended        | Keep only `lines[N:]` (good half); strip duplicate header             |
 | CI fails with real LAN IP assertion        | IP leaked into source default       | Change source to `127.0.0.1`; test validates the env-agnostic default |
 | Module constant contaminated between tests | `importlib.reload()` side effect    | `autouse` fixture that reloads before AND after each test             |
+
+## Code Exploration Order
+
+Use code-review-graph MCP tools BEFORE Grep/Read for any multi-file question. Chain: code-review-graph (blast-radius) → gbrain code-def (symbols) → gbrain search (decisions) → Read (confirmed files only). Never default to Grep for code questions.
