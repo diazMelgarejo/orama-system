@@ -34,7 +34,9 @@ if [ "$CURRENT_MODEL" = "bge-m3" ]; then
   echo "[OK] .mcp.json already wired to bge-m3 (no change)"
 else
   SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-  "$SCRIPT_DIR/crg-embed-mode" gbrain
+  # crg-embed-mode now lives in the code-review skill subtree (2026-05-19 migration)
+  CRG_EMBED_MODE="$SCRIPT_DIR/../../skills/code-review/scripts/crg-embed-mode"
+  "$CRG_EMBED_MODE" gbrain
   echo "[SET] .mcp.json updated → bge-m3 mode"
 fi
 

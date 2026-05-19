@@ -762,3 +762,7 @@ The following files are superseded by THIS canonical SKILL.md:
 | `~/.claude/skills/mcp-orchestration/SKILL.md` | User-level mirror — keep in sync via `install -m 0644 bin/orama-system/mcp-orchestration/SKILL.md ~/.claude/skills/mcp-orchestration/SKILL.md` (run from repo root after edits). For installing the MCP stack itself, see [`bin/orama-system/mcp-install/SKILL.md`](../mcp-install/SKILL.md). |
 
 Update all references to point at `orama-system/bin/orama-system/mcp-orchestration/SKILL.md`.
+
+## D14 Mirror Enforcement
+
+Before dispatching a worker, verify the backend does not route a `windows_only` spec to `lmstudio-mac`. `resolve_backend_for_spec` in `orchestrator/backend_resolver.py` raises `PolicyUnavailable` on this. NEVER catch and silently fall back — fail closed.
