@@ -2344,14 +2344,17 @@ async def serve_assets(path: str):
     from fastapi import HTTPException
     from fastapi.responses import FileResponse
 
-    # Security: resolve to prevent path traversal outside web/dist/assets
+    # Security: resolve to prevent path traversal outside web/dist/assets.
+    # Use Path.is_relative_to() (Python 3.9+) rather than a string-prefix
+    # check so that sibling directories sharing the same prefix string
+    # (e.g. web/dist/assets_backup) cannot bypass the guard.
     try:
         file_path = (_WEB_ASSETS / path).resolve()
         assets_root = _WEB_ASSETS.resolve()
     except (ValueError, OSError):
         raise HTTPException(status_code=404)
 
-    if not str(file_path).startswith(str(assets_root)):
+    if not file_path.is_relative_to(assets_root):
         raise HTTPException(status_code=403)
 
     if not _WEB_ASSETS.is_dir() or not file_path.is_file():
