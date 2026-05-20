@@ -16,7 +16,7 @@ SUBMODULE_PATH="bin/orama-system/skills/openclaw-skills/cc-openclaw"
 # submodules, which left the working tree on a stale SHA after `git pull`
 # advanced the gitlink pointer without updating the submodule checkout.
 echo "[install-openclaw-skills] Syncing cc-openclaw submodule to pinned SHA..."
-git -C "$REPO_ROOT" submodule update --init --recursive "$SUBMODULE_PATH"
+git -C "$REPO_ROOT" submodule update --init --recursive --progress "$SUBMODULE_PATH"
 
 # 2. Verify Nine Skills are present (smoke check)
 # Upstream stores skills in .claude/skills/<id>/SKILL.md
