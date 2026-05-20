@@ -22,6 +22,10 @@ sub_skills:
     trigger: "create a skill, new skill, /skillify, add sub-skill, build a skill, make a skill"
   - path: mcp-install/SKILL.md
     trigger: "install mcp stack, setup gemini mcp, register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
+  - path: skills/code-review/SKILL.md
+    trigger: "code review, review the code, blast-radius, code-review-graph, semantic_search_nodes, /review, recursive code review"
+  - path: skills/openclaw-skills/SKILL.md
+    trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
 ---
 
 # The ὅραμα System Skill
