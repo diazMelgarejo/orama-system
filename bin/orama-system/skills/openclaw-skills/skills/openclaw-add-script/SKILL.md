@@ -3,6 +3,10 @@ name: openclaw-add-script
 description: Scaffold deterministic shell scripts with strict safety flags, shared JSON response helper, and agent tool docs.
 agent_compatibility: [Claude, Hermes, Gemini, Codex, Cursor, WindSurf, Antigravity, OpenCode, 8gent.dev]
 model_routing: ollama-first-then-openrouter
+version: "1.0"
+layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
+upstream: https://github.com/rahulsub-be/cc-openclaw
+upstream_license: MIT
 ---
 
 ## Purpose
@@ -100,3 +104,9 @@ bash -n "$script_path"
 - `../openclaw-new-agent/SKILL.md`
 - `../openclaw-status/SKILL.md`
 - `../openclaw-stow/SKILL.md`
+
+## References
+
+- [`references/openrouter-defaults.md`](../../references/openrouter-defaults.md) — model routing source of truth
+- [`references/universal-skill-protocol.md`](../../references/universal-skill-protocol.md) — invocation envelope standard
+- [`references/pt-orama-weave.md`](../../references/pt-orama-weave.md) — how PT + orama-system cooperate

@@ -1,6 +1,7 @@
 ---
 name: openclaw-skills
 description: Canonical master skill for The Nine Skills that configure OpenClaw instances deterministically across Claude, Hermes, Gemini, Codex, Cursor, WindSurf, Antigravity, OpenCode, and 8gent.dev.
+version: "1.0"
 agent_compatibility:
   - Claude
   - Hermes
@@ -11,6 +12,10 @@ agent_compatibility:
   - Antigravity
   - OpenCode
   - 8gent.dev
+layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
+upstream: https://github.com/rahulsub-be/cc-openclaw
+upstream_license: MIT
+upstream_path: bin/orama-system/skills/openclaw-skills/cc-openclaw
 ---
 
 # OpenClaw Skills
@@ -197,3 +202,48 @@ Every secret touches all three files:
 | 8gent.dev | Agent registry or MCP adapter | Dispatch normalized envelope and preserve output shape |
 
 If an agent cannot load markdown skills directly, it must use Perpetua-Tools or an equivalent wrapper that reads this folder and executes the same procedures.
+
+## Attribution
+
+The Nine Skills originate from [cc-openclaw](https://github.com/rahulsub-be/cc-openclaw)
+(MIT, Rahul Subramanian). The upstream lives at `cc-openclaw/` (git submodule).
+
+Extensions in this directory (`references/`, `templates/`, `scripts/`, this `SKILL.md`)
+are orama-system additions and are NOT in the upstream repo.
+
+Layer 0 (provider substrate): `v1/OpenRouter.md` — free model stack, openclaw.json shape,
+rate limits. See `references/openrouter-defaults.md` for the distilled routing table.
+
+cc-openclaw = `v1/OpenRouter.md` (Layer 0 substrate) + `openclaw-skills/` (Layer 1 ops).
+The upstream Nine Skills are in `openclaw-skills/cc-openclaw/` (submodule). Our extensions
+live at `openclaw-skills/` root.
+
+## Search Frugality Rule
+
+**RULE: Never guess when information is scarce.**
+Search in this order — stop at the first satisfying result:
+
+1. `/sync-gbrain` + `gbrain query "<question>"` — local semantic memory, zero cost
+2. `code-review-graph: semantic_search_nodes` — structural code context
+3. Brave Search API — web facts, current state
+4. Perplexity API (inline) — deep web synthesis
+5. Grok API — last resort only
+
+**NEVER:** parallel-fire all search tools. Use the cheapest first.
+**ALWAYS:** `AskUserQuestion` for decisions — never auto-select between ambiguous options.
+
+## Windows Coder Policy
+
+**RULE: Every available Windows coder MUST be given work as soon as it is idle.**
+
+Endpoint pool: `$WIN_CODER_ENDPOINTS` (default: `192.168.254.103:1234`)
+
+Dispatch protocol:
+1. Before routing any task to Mac-only paths, check if a Windows coder is free.
+2. If free AND task is compatible (Python, Go, TypeScript, general coding):
+   → dispatch to Windows coder FIRST.
+3. If offline or no model loaded: skip silently, log WARN, do not fail.
+4. As more Windows coders are added to `$WIN_CODER_ENDPOINTS`, they join the pool
+   automatically — same rule applies to all.
+
+**Never leave a Windows coder idle if pending compatible work exists.**
