@@ -3,6 +3,10 @@ name: openclaw-add-secret
 description: Store secrets in macOS Keychain and propagate them across runtime, shell, and provisioning files.
 agent_compatibility: [Claude, Hermes, Gemini, Codex, Cursor, WindSurf, Antigravity, OpenCode, 8gent.dev]
 model_routing: ollama-first-then-openrouter
+version: "1.0"
+layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
+upstream: https://github.com/rahulsub-be/cc-openclaw
+upstream_license: MIT
 ---
 
 ## Purpose
@@ -85,3 +89,9 @@ grep -n "$env_var" openclaw-secrets.sh openclaw-env.sh secrets.sh
 ## Notes
 - Rotate compromised secrets by re-running this skill with the same `secret_name` and new value.
 - Treat derived names as contract values; downstream config expects stable naming.
+
+## References
+
+- [`references/openrouter-defaults.md`](../../references/openrouter-defaults.md) — model routing source of truth
+- [`references/universal-skill-protocol.md`](../../references/universal-skill-protocol.md) — invocation envelope standard
+- [`references/pt-orama-weave.md`](../../references/pt-orama-weave.md) — how PT + orama-system cooperate

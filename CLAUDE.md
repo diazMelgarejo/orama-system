@@ -33,6 +33,8 @@ Read before any structural change. Below is a navigation summary only.
 | Verifier gate (crystallization blocked without approved result) | [§ 2 / Gates](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) |
 | V1 scope boundary (MAESTRO/HITL deferred) | [§ 2 / V1](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) |
 | HITL accountability classes | [`docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md`](docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md) |
+| Search frugality rule (gbrain → CRG → Brave → Perplexity → Grok) | [`bin/orama-system/SKILL.md § Search Policy`](bin/orama-system/SKILL.md) |
+| Win coder pool (`$WIN_CODER_ENDPOINTS`, always-utilized) | [`bin/orama-system/SKILL.md § Windows Coder Pool`](bin/orama-system/SKILL.md) |
 
 **Quick invariants (full detail in doc above):**
 - `orchestrator` only — never `coordinator` in public APIs, schemas, config, or headings
