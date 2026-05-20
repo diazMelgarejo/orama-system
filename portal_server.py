@@ -29,6 +29,7 @@ import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Load .env so IPs are correct whether portal is run from start.sh or directly.
@@ -108,6 +109,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Serve React/Vite build when present (Phase 8) ─────────────────────────────
+# Mount only when web/dist exists — avoids startup errors on fresh clone.
+_WEB_DIST = REPO_ROOT / "web" / "dist"
+_WEB_ASSETS = _WEB_DIST / "assets"
+if _WEB_ASSETS.is_dir():
+    app.mount("/assets", StaticFiles(directory=str(_WEB_ASSETS)), name="assets")
 
 # ── HTML template ──────────────────────────────────────────────────────────────
 
@@ -2309,7 +2317,11 @@ async def api_status_html():
 
 @app.get("/", response_class=None)
 async def index():
-    from fastapi.responses import HTMLResponse
+    from fastapi.responses import FileResponse, HTMLResponse
+    # Serve React app when web/dist is built; fall back to legacy HTML dashboard.
+    react_index = _WEB_DIST / "index.html"
+    if react_index.exists():
+        return FileResponse(str(react_index), media_type="text/html")
     status = await api_status()
     html = _render_html(status)
     return HTMLResponse(content=html)
