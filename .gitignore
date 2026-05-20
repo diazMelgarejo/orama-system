@@ -19,6 +19,7 @@ PR_BODY.md
 .paths
 .ecc
 dist/
+web/dist/
 build/
 DerivedData/
 *.xcuserstate
@@ -52,8 +53,9 @@ config/.policy_cache_refreshed
 # (content is managed externally; never commit here)
 lib/
 
-# Vite operator console (Goal 3, RC-1)
+# Vite operator console (web/ subdirectory)
 node_modules/
+web/node_modules/
 .vite/
 *.tsbuildinfo
 vite.config.d.ts
