@@ -2,18 +2,21 @@
 # install-openclaw-skills.sh — idempotent at every start.sh call and on fresh installs
 set -euo pipefail
 
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+# Resolve repo root from this script's location, not the caller's cwd.
+# This is safe whether start.sh is invoked from inside the repo, via an
+# absolute path, or from a symlink in another directory.
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+REPO_ROOT="$(git -C "$SCRIPT_DIR/.." rev-parse --show-toplevel)"
 SKILL_ROOT="$REPO_ROOT/bin/orama-system/skills/openclaw-skills"
 UPSTREAM_DIR="$SKILL_ROOT/cc-openclaw"
+SUBMODULE_PATH="bin/orama-system/skills/openclaw-skills/cc-openclaw"
 
-# 1. Initialize submodule if missing
-if [ ! -f "$UPSTREAM_DIR/README.md" ]; then
-  echo "[install-openclaw-skills] Initializing cc-openclaw submodule..."
-  git -C "$REPO_ROOT" submodule update --init --recursive \
-    bin/orama-system/skills/openclaw-skills/cc-openclaw
-else
-  echo "[install-openclaw-skills] cc-openclaw submodule already present, skipping init."
-fi
+# 1. Always run submodule update so the working tree tracks the pinned SHA.
+# The README.md guard previously skipped the update on already-initialized
+# submodules, which left the working tree on a stale SHA after `git pull`
+# advanced the gitlink pointer without updating the submodule checkout.
+echo "[install-openclaw-skills] Syncing cc-openclaw submodule to pinned SHA..."
+git -C "$REPO_ROOT" submodule update --init --recursive "$SUBMODULE_PATH"
 
 # 2. Verify Nine Skills are present (smoke check)
 # Upstream stores skills in .claude/skills/<id>/SKILL.md
