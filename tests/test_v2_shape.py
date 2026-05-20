@@ -2,7 +2,7 @@
 """
 test_v2_shape.py
 ================
-TDD backport: wire orama-system v0.9.9.8 API models to match the v2 external
+TDD backport: wire orama-system v0.9.9.9 API models to match the v2 external
 shape defined in orama-system/docs/v2/01-kernel-spec.md.
 
 RED tests written first — each will fail until api_server.py is updated.
