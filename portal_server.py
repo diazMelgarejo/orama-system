@@ -119,6 +119,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ── Serve React/Vite build when present (Phase 8) ─────────────────────────────
+_WEB_DIST = REPO_ROOT / "web" / "dist"
+_WEB_ASSETS = _WEB_DIST / "assets"
+
+# NOTE: StaticFiles is NOT mounted at startup time. A startup-time mount would
+# 404 on /assets/* if the frontend is built *after* the server starts (common in
+# dev/CI: start server first, then npm run build). The dynamic GET handler below
+# checks the directory on every request, so assets are served correctly as soon
+# as the build lands — without a server restart.
+
 # ── HTML template ──────────────────────────────────────────────────────────────
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -2323,9 +2333,47 @@ async def api_status_html():
     }
 
 
+@app.get("/assets/{path:path}")
+async def serve_assets(path: str):
+    """Serve Vite-built static assets dynamically.
+
+    Dynamic (per-request) rather than a startup-time StaticFiles mount so
+    that assets are served correctly even when the frontend build lands after
+    the server has already started — no restart required.
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+
+    # Security: resolve to prevent path traversal outside web/dist/assets.
+    # Use relative_to() in a try/except rather than is_relative_to() (3.9+)
+    # so this works on Python 3.8 (pyproject.toml requires-python = ">=3.8").
+    # relative_to() raises ValueError when the path escapes the root, which
+    # also avoids the string-prefix bypass that startswith() is vulnerable to
+    # (e.g. web/dist/assets_backup sharing the same prefix string).
+    try:
+        file_path = (_WEB_ASSETS / path).resolve()
+        assets_root = _WEB_ASSETS.resolve()
+    except (ValueError, OSError):
+        raise HTTPException(status_code=404)
+
+    try:
+        file_path.relative_to(assets_root)
+    except ValueError:
+        raise HTTPException(status_code=403)
+
+    if not _WEB_ASSETS.is_dir() or not file_path.is_file():
+        raise HTTPException(status_code=404)
+
+    return FileResponse(str(file_path))
+
+
 @app.get("/", response_class=None)
 async def index():
-    from fastapi.responses import HTMLResponse
+    from fastapi.responses import FileResponse, HTMLResponse
+    # Serve React app when web/dist is built; fall back to legacy HTML dashboard.
+    react_index = _WEB_DIST / "index.html"
+    if react_index.exists():
+        return FileResponse(str(react_index), media_type="text/html")
     status = await api_status()
     html = _render_html(status)
     return HTMLResponse(content=html)
