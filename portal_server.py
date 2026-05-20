@@ -8,7 +8,7 @@ Routes:
   GET  /           HTML dashboard (meta-refresh every 10s)
   GET  /api/status JSON status of all services
   POST /api/user-input  proxy to PT /user-input (portal textbox handler)
-  GET  /health     {"status": "ok", "version": "0.9.9.7"}
+GET  /health     {"status": "ok", "version": "0.9.9.9"}
 """
 from __future__ import annotations
 
@@ -29,7 +29,6 @@ import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 # Load .env so IPs are correct whether portal is run from start.sh or directly.
@@ -44,7 +43,7 @@ except ImportError:
 log = logging.getLogger("ultrathink.portal")
 logging.basicConfig(level=logging.INFO)
 
-VERSION = "0.9.9.8"
+VERSION = "0.9.9.9"
 
 # ── IP Resolution (authoritative — reads openclaw.json, never stale hardcodes) ─
 # Import shared resolver so portal works correctly whether started via start.sh
@@ -81,6 +80,16 @@ LMS_API_TOKEN = os.getenv("LM_STUDIO_API_TOKEN", "")
 
 OLLAMA_WIN = os.getenv("OLLAMA_WINDOWS_ENDPOINT", _WIN_OLL_DEFAULT)
 OLLAMA_MAC = os.getenv("OLLAMA_MAC_ENDPOINT", "http://127.0.0.1:11434")
+OPENROUTER_FREE_FALLBACKS = [
+    "ollama/qwen3.5:9b-nvfp4",
+    "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+    "openrouter/minimax/minimax-m2.5:free",
+    "openrouter/deepseek/deepseek-v4-flash:free",
+    "openrouter/openai/gpt-oss-120b:free",
+    "openrouter/z-ai/glm-4.5-air:free",
+    "openrouter/inclusionai/ling-2.6-flash:free",
+    "openrouter/openrouter/free",
+]
 
 PROBE_TIMEOUT = 3.0
 
@@ -111,11 +120,14 @@ app.add_middleware(
 )
 
 # ── Serve React/Vite build when present (Phase 8) ─────────────────────────────
-# Mount only when web/dist exists — avoids startup errors on fresh clone.
 _WEB_DIST = REPO_ROOT / "web" / "dist"
 _WEB_ASSETS = _WEB_DIST / "assets"
-if _WEB_ASSETS.is_dir():
-    app.mount("/assets", StaticFiles(directory=str(_WEB_ASSETS)), name="assets")
+
+# NOTE: StaticFiles is NOT mounted at startup time. A startup-time mount would
+# 404 on /assets/* if the frontend is built *after* the server starts (common in
+# dev/CI: start server first, then npm run build). The dynamic GET handler below
+# checks the directory on every request, so assets are served correctly as soon
+# as the build lands — without a server restart.
 
 # ── HTML template ──────────────────────────────────────────────────────────────
 
@@ -1904,6 +1916,12 @@ async def api_status():
         "agents": agents,
         "routing": routing,
         "hardware_policy": hardware_policy,
+        "openrouter": {
+            "policy_active": True,
+            "api_key_present": bool(os.getenv("OPENROUTER_API_KEY")),
+            "default_fallback_chain": OPENROUTER_FREE_FALLBACKS,
+            "gemini_policy": "analyzer-only",
+        },
         "queue_depth": queue_depth,
         "supervisor_jobs": supervisor_jobs,
         "tools": tools,
@@ -2313,6 +2331,33 @@ async def api_status_html():
         "timestamp": datetime.datetime.now().strftime("%H:%M:%S"),
         "manager_alert": routing_state.get("manager_affinity_alert"),
     }
+
+
+@app.get("/assets/{path:path}")
+async def serve_assets(path: str):
+    """Serve Vite-built static assets dynamically.
+
+    Dynamic (per-request) rather than a startup-time StaticFiles mount so
+    that assets are served correctly even when the frontend build lands after
+    the server has already started — no restart required.
+    """
+    from fastapi import HTTPException
+    from fastapi.responses import FileResponse
+
+    # Security: resolve to prevent path traversal outside web/dist/assets
+    try:
+        file_path = (_WEB_ASSETS / path).resolve()
+        assets_root = _WEB_ASSETS.resolve()
+    except (ValueError, OSError):
+        raise HTTPException(status_code=404)
+
+    if not str(file_path).startswith(str(assets_root)):
+        raise HTTPException(status_code=403)
+
+    if not _WEB_ASSETS.is_dir() or not file_path.is_file():
+        raise HTTPException(status_code=404)
+
+    return FileResponse(str(file_path))
 
 
 @app.get("/", response_class=None)

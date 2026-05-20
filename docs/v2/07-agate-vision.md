@@ -265,6 +265,62 @@ That gap closes in the next 12–18 months, either because someone publishes a s
 
 ---
 
+---
+
+## NEVER/PREFER/ALLOW — The Three Required Verdicts (from v1 enforcement, 2026-05-17)
+
+v1 `model_hardware_policy.yml` now implements a three-level system, revealed
+by the hardware mirror policy audit. This is the required starting point for
+the agate schema — it cannot ship with only two levels:
+
+| Verdict | Meaning | Physical risk if violated | v1 source |
+|---------|---------|--------------------------|-----------|
+| **NEVER** | Model physically cannot run on this tier. Attempting dispatch causes hardware damage (OOM, double-barrel GPU). | RTX 3080 OOM; driver crash | `windows_only:` + `_MIRROR_BACKENDS` |
+| **PREFER** | Best hardware tier for this model; others are allowed fallbacks. | Performance degradation | `shared:` first in sort order |
+| **ALLOW** | Works but not optimal; secondary fallback tier. | Performance degradation | `shared:` secondary in sort order |
+
+**The key distinction**: `PREFER` and `ALLOW` are routing preferences. `NEVER`
+is a **safety gate** — the LM Studio mirror gotcha showed that `PREFER`-vs-`ALLOW`
+is recoverable (slower inference), but `NEVER` violation is not (OOM/crash).
+
+The agate JSON Schema must surface this distinction explicitly. An `enforcement:`
+key or a dedicated `never:` list alongside `prefer:` and `allow:` are two options.
+See OQ18 in `06-open-questions.md` for the open design decision.
+
+### Concrete example from v1 (the blueprint)
+
+```yaml
+# model_hardware_policy.yml — current v1 (implicit NEVER via list membership)
+windows_only:
+  - qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2  # NEVER on mac/shared
+  - gemma-4-26b-a4b-it                                  # NEVER on mac/shared
+
+# agate v0.1 target (explicit NEVER verdict)
+models:
+  qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2:
+    windows: NEVER        # wait — this is actually PREFER on windows
+```
+
+Actually the correct mapping:
+
+```yaml
+# agate v0.1 — explicit verdict per tier per model
+models:
+  qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2:
+    windows: PREFER       # native home; RTX 3080 GGUF
+    mac:     NEVER        # no CUDA, no GGUF loader on Apple Silicon
+    shared:  NEVER        # "shared" without GPU = same failure
+  qwen3.5-9b-mlx:
+    mac:     PREFER       # native MLX quantization
+    windows: ALLOW        # GGUF mirror available
+    shared:  ALLOW
+```
+
+This is the schema direction. The current v1 `windows_only:`/`shared:` lists
+are a compact encoding of this; agate makes it explicit.
+
+---
+
 ## Next actions
 
 1. **Immediately**: `oramasys/agate` on GitHub — the repo is already initialized locally. Create the org, push.

@@ -1,0 +1,38 @@
+# CLAUDE.md - Coding Profile
+# Best for: dev projects, code review, debugging, refactoring
+# Source: drona23/claude-token-efficient (harmonized for orama-system ethos)
+
+## Output
+- Return code first. Explanation after, only if non-obvious.
+- No inline prose. Use comments sparingly — only where logic is unclear.
+- No boilerplate unless explicitly requested.
+
+## Code Rules
+- Simplest working solution. No over-engineering.
+- No abstractions for single-use operations.
+- No speculative features or "you might also want..."
+- Use code-review-graph before reading files inline (see CLAUDE-instru.md § 2).
+- Read the file before modifying it. Never edit blind.
+- No docstrings or type annotations on code not being changed.
+- No error handling for scenarios that cannot happen.
+- Three similar lines is better than a premature abstraction.
+
+## Review Rules
+- State the bug. Show the fix. Stop.
+- No suggestions beyond the scope of the review.
+- No compliments on the code before or after the review.
+
+## Debugging Rules
+- Never speculate about a bug without reading the relevant code first.
+- Use `gbrain code-def <symbol>` to locate the relevant code before opening the file.
+- State what you found, where, and the fix. One pass.
+- If cause is unclear: say so. Do not guess.
+
+## Architecture Questions
+- Check `docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md` first. Summarize, link, don't restate.
+- Check `docs/v2/` for v2-specific decisions.
+
+## Simple Formatting
+- No em dashes, smart quotes, or decorative Unicode symbols.
+- Plain hyphens and straight quotes only.
+- Code output must be copy-paste safe.
