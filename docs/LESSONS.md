@@ -1779,3 +1779,170 @@ When feature work spans multiple commits across a branch and partial work is alr
 - Merge foundation commits to main early (after a coherent milestone) so history stays linear
 - Use `git merge --ff-only` when the branch has only additive commits ahead of main — avoids a merge commit in the log
 - Do NOT squash multi-session work that has already been reviewed — preserves attribution per commit
+
+---
+
+## 2026-05-17 — Codex — Gemini is opt-in, gbrain sync comes from the gstack sync skill
+
+### What was learned
+
+- Gemini should not be treated as the default reader path. Keep it behind the explicit analyzer lane.
+- The default agent path is local ollama on Mac first, then OpenRouter free-model fallbacks, with Windows local coder lanes used when available.
+- From Codex, gbrain sync is driven by the gstack `sync-gbrain` skill and the `gstack-brain-sync` binary in the installed gstack toolchain.
+
+### Decisions made
+
+- Update orchestration docs so Gemini is analyzer-only by explicit request.
+- Use `~/.claude/skills/gstack/bin/gstack-brain-sync --discover-new` to refresh queued worktree changes, then `--once` to drain and push.
+
+### Runbook
+
+```bash
+~/.claude/skills/gstack/bin/gstack-brain-sync --discover-new
+~/.claude/skills/gstack/bin/gstack-brain-sync --once
+```
+
+---
+
+## 2026-05-17 — Operator console mockup: inspirational, not binding
+
+The generated 1440×1000 mockup of the orama Command Center captures the
+**aesthetic direction** (dark charcoal/slate panels, accent cyan, dense
+typography, segmented controls, table-heavy layouts) — it is **not a
+pixel-binding contract**. The shipped Vite operator console (commit `047ec27`)
+faithfully captures the direction without pixel-matching: layout positions,
+copy, icon glyphs, exact colors may diverge from the mockup as long as the
+aesthetic holds. Future visual upgrades should reference the mockup as a
+tone-setter, not a spec.
+
+This explicit "non-binding mockup" framing keeps the operator console
+**fluid**: the backend routes shipped first; the UI tracks the routes; the
+mockup tracks the UI's vibe. None of the three is a contract for the others.
+
+## 2026-05-17 — `install-mcp-stack.sh --mirror-skills` ships orama SKILL.md cross-platform
+
+Added `--mirror-skills` flag to `bin/orama-system/scripts/install-mcp-stack.sh`.
+Copies the 7 orama-system SKILL.md files (mother + afrp + cidf + gstack +
+mcp-install + mcp-orchestration + skillify) to:
+
+- `~/.claude/skills/<name>/SKILL.md` (Claude Code)
+- `~/.codex/skills/<name>/SKILL.md` (Codex CLI)
+- `~/.gemini/skills/<name>/SKILL.md` (Gemini CLI, if dir exists)
+- OpenClaw skill registry (via `openclaw skill set` if CLI present)
+
+Idempotent (sha256-compares before copy), dry-run-safe, silently skips
+absent platform directories. Hermes/ECC will adopt by adding their own
+target line to `_PLATFORMS` array — one-line extension per new platform.
+
+## 2026-05-17 — Salvage code translation spec written
+
+Spec at `docs/superpowers/specs/2026-05-17-salvage-translation-design.md`
+covers the *how* of porting wrong-repo
+(`diazMelgarejo/perpetua-core@9cb153a`) valuable assets into canonical
+(`oramasys/perpetua-core@2f717f5`) plugin structure. Companion to the
+existing selection spec (`2026-05-14-salvage-plugins-design.md`).
+
+Key decisions:
+- Multi-agent labor split: Gemini reads, Codex writes, Sonnet reviews,
+  Opus orchestrates
+- Branch model: local `feat/salvage-plugins-rc1` in canonical clone with
+  `PROGRESS.md` as living tasklist + git-native distributed locking
+- TDD: unit + integration + Hypothesis property-based, against canonical's
+  32 tests + new plugin tests
+- Waved ordering: Wave 0 parallel reads → Wave 1 engine foundation
+  (AFRP gate) → Waves 2+3 parallel ports → Wave 4 integrative decisions
+- Architectural revision protocol: kernel reshape permitted during port if
+  bounded and AFRP-gated
+
+## 2026-05-17 — Salvage translation + v1 IP-aware discovery landed (73 tests green)
+
+Generation labeling (per Canonical Repo Registry):
+
+- **v2-planning (`oramasys/perpetua-core` on `feat/salvage-plugins-rc1`):** max_steps cycle guard (Task 5, a3712b2); set_entry/compile (Task 6, ad67577); 5 new plugins — routing/LabelRouter (Task 7, 283af1a), tool_node/ToolNode async subprocess (Task 8), validator/Validated pre-post (Task 9), interrupt_guard/resume_policy (Task 10, a7c9772), parallel/parallel_dispatch (Task 11, 8eaba56); typed ChatMessage/ChatHistory closing OQ17 (Task 12, 309c60a); canonical perpetua_core/discovery/ verbatim port from v1 (Task 13, 222450b); Hypothesis invariants (Task 15, 8b1a3f1). Engine grew 66→102 lines; all 32 baseline tests still green; 24 new tests added; full suite 56/56.
+
+- **v2-planning (`oramasys/oramasys` on `feat/dispatch-discovery-bridge`):** dispatch_node now accepts an optional BackendRegistry and calls select_backend() from canonical perpetua_core.discovery; graceful degradation via state.error when registry empty (Task 14, 21605f6). 4 baseline tests preserved + 1 new = 5/5.
+
+- **v1-legacy (`diazMelgarejo/Perpetua-Tools` on `feat/ip-aware-discovery`):** tactical fix — perpetua/discovery/ with Backend dataclass (Task 1, 9b11e9d), async health_probe (Task 2, 7e4a40b), BackendRegistry autodetect + register_by_ip (Task 3, 06c1da3), tier+task selector (Task 4, 8d42f2e), orchestrator/agent_launcher.resolve_backend_for_spec (Task 4b, bf15d0d). Shape designed to match v2 canon (Task 13 copied it forward verbatim). 12/12 tests pass. New orchestrator/agent_launcher.py is additive — root agent_launcher.py untouched; a follow-up may consolidate.
+
+- **cross-cutting (`orama-system/docs/`):** plan at docs/superpowers/plans/2026-05-17-salvage-translation-v1-discovery.md (1962 lines, 16 tasks), spec at docs/superpowers/specs/2026-05-17-salvage-translation-design.md (315 lines), PROGRESS.md ledger at perpetua-core repo root, this LESSONS append.
+
+LangGraph concept map (CSV) mirrored 1:1 in v2-planning code: State=PerpetuaState · Node=async fn · Edge=string · ConditionalEdge=LabelRouter · Cycle=max_steps guard · START/END=sentinels · Checkpointer=plugin (shipped earlier) · Send()=parallel_dispatch · ToolNode=plugin · Validator=plugin · InterruptGuard=plugin.
+
+### Race-condition LESSON
+
+Wave 1A dispatched 7 parallel subagents on the same `oramasys/perpetua-core` branch. Three of them (C8/C9/C11) hit a `.git/index.lock` race and the serializing winner (C11) committed all three plugins under one SHA `8eaba56` mis-labeled "Task 11". **No work was lost** — each subagent verified its writes against the plan post-commit. But this is a pattern to avoid:
+
+**Lesson:** for parallel dispatch on the SAME branch, the orchestrator should either (a) own commits — subagents write files only, orchestrator git adds + commits each — or (b) give each parallel subagent its own worktree. Option (a) is simpler. Option (b) is cleaner for very long-running work.
+
+### Push policy
+
+All three code branches stay **local** until user reviews end-to-end on Mac+Win hardware (Mac Ollama localhost:11434 + Win LM Studio 192.168.254.103:1234). Only cross-cutting docs (this LESSONS append + plan doc) push immediately to `orama-system`.
+
+### Build philosophy reaffirmed
+
+Per user direction: "simultaneous top-down + bottoms-up development." v2-planning bakes architectural decisions first (engine + plugins + canonical discovery), v1-legacy ships the first implementation (discovery wired into agent_launcher), then Track D copies v1 → v2 verbatim so the shape lives in one canonical home. v1 is the live sandbox; v2 absorbs what works.
+
+---
+
+## 2026-05-17 — Policy enshrinement (hardware + Node.js)
+
+### HARD POLICY: Mac inference via Ollama only — LM Studio Mac is a MIRROR
+
+This is a **non-negotiable hardware safety rule**, not a preference.
+
+| Machine | Endpoint | Role | Inference? |
+|---------|----------|------|-----------|
+| Mac (Apple Silicon) | `localhost:11434` (Ollama) | Primary Mac inference | ✅ ALWAYS |
+| Mac (Apple Silicon) | `localhost:1234` (LM Studio Mac) | **MIRROR ONLY** | ❌ NEVER dispatch here |
+| Win (RTX 3080) | `192.168.254.103:1234` (LM Studio Win) | Primary Win inference + heavy models | ✅ ALWAYS |
+
+**Why this is a hard rule:**
+- `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2` physically runs on the RTX 3080.
+- LM Studio Mac proxies all Win models over the LAN — they appear in `/v1/models` on Mac but Mac cannot actually run them.
+- Dispatching the same heavy model to **both** LM Studio Mac and LM Studio Win simultaneously = "double barrel" = two concurrent requests funneled to one RTX 3080 = GPU contention → potential hardware damage.
+- See also `docs/LESSONS.md` 2026-04-29 entry: `/v1/models` endpoint presence does NOT indicate physical home.
+
+**Code enforcement (2026-05-17):**
+- `perpetua/discovery/registry.py` (v1) and `perpetua_core/discovery/registry.py` (v2): `lmstudio-mac` seed annotated `# MIRROR — discovery only`.
+- `perpetua/discovery/selector.py` (v1) and `perpetua_core/discovery/selector.py` (v2): added `_MIRROR_BACKENDS = frozenset({"lmstudio-mac"})`, filtered from ALL candidate selection including model_hint resolution. `_TIER_HOSTS["mac"]` now contains only `{"ollama-local"}`.
+
+**Agents / future plans:** Before dispatching inference, check `b.name not in _MIRROR_BACKENDS`. Never route by model presence in `/v1/models` alone.
+
+---
+
+### HARD POLICY: Node.js — always resolve explicit full path
+
+**Problem:** `node` in PATH resolves to system v14.21.3 (macOS bundled). Any script using `#!/usr/bin/env node` or bare `node` silently runs on v14 and fails with modern syntax (`??=`, optional chaining, top-level await, etc.) with cryptic errors.
+
+**Rule:** Whenever invoking Node for scripts or CLI tools, resolve to the explicit full NVM path:
+
+```bash
+# Check available versions
+ls ~/.nvm/versions/node/
+
+# Use the pinned v22+ binary directly
+~/.nvm/versions/node/v22.22.2/bin/node script.js
+
+# For npm-installed CLIs (openclaw, gemini, etc.)
+~/.nvm/versions/node/v22.22.2/bin/openclaw ...
+~/.nvm/versions/node/v22.22.2/bin/npx ...
+```
+
+**Wrapper pattern** (for Gemini CLI and others that use shebang):
+```bash
+# ~/.local/bin/gemini  (must be on PATH before ~/.nvm shims)
+#!/bin/bash
+exec ~/.nvm/versions/node/v22.22.2/bin/node \
+     ~/.nvm/versions/node/v22.22.2/bin/gemini "$@"
+```
+
+**Verification before any Node script:**
+```bash
+node --version   # if this returns v14.x.x → use explicit path
+~/.nvm/versions/node/v22.22.2/bin/node --version  # should return v22.22.2
+```
+
+**Prior instances of this lesson:**
+- 2026-04-xx: Gemini CLI broken because `#!/usr/bin/env node` resolved to v14 (wrapper fix applied).
+- 2026-04-29: `openclaw` CLI requires Node ≥ v22; full path used: `~/.nvm/versions/node/v24.14.1/bin/openclaw`.
+- 2026-05-17: General policy enshrined — applies to ALL Node tooling.
