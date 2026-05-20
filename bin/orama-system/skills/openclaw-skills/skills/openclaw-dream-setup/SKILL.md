@@ -3,6 +3,10 @@ name: openclaw-dream-setup
 description: Configure nightly dream-memory distillation with enforced token budgets, cron scheduling, and startup wiring.
 agent_compatibility: [Claude, Hermes, Gemini, Codex, Cursor, WindSurf, Antigravity, OpenCode, 8gent.dev]
 model_routing: ollama-first-then-openrouter
+version: "1.0"
+layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
+upstream: https://github.com/rahulsub-be/cc-openclaw
+upstream_license: MIT
 ---
 
 ## Purpose
@@ -111,3 +115,9 @@ sleep 5
 - `../openclaw-add-cron/SKILL.md`
 - `../openclaw-status/SKILL.md`
 - `../openclaw-restart/SKILL.md`
+
+## References
+
+- [`references/openrouter-defaults.md`](../../references/openrouter-defaults.md) — model routing source of truth
+- [`references/universal-skill-protocol.md`](../../references/universal-skill-protocol.md) — invocation envelope standard
+- [`references/pt-orama-weave.md`](../../references/pt-orama-weave.md) — how PT + orama-system cooperate

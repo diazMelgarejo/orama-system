@@ -3,6 +3,10 @@ name: openclaw-add-cron
 description: Add cron, every, or at scheduled OpenClaw jobs with isolated sessions and jobs.json-safe deployment.
 agent_compatibility: [Claude, Hermes, Gemini, Codex, Cursor, WindSurf, Antigravity, OpenCode, 8gent.dev]
 model_routing: ollama-first-then-openrouter
+version: "1.0"
+layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
+upstream: https://github.com/rahulsub-be/cc-openclaw
+upstream_license: MIT
 ---
 
 ## Purpose
@@ -90,3 +94,9 @@ log show --style syslog --last 5m --predicate 'eventMessage CONTAINS[c] "cron" O
 - `../openclaw-dream-setup/SKILL.md`
 - `../openclaw-restart/SKILL.md`
 - `../openclaw-stow/SKILL.md`
+
+## References
+
+- [`references/openrouter-defaults.md`](../../references/openrouter-defaults.md) — model routing source of truth
+- [`references/universal-skill-protocol.md`](../../references/universal-skill-protocol.md) — invocation envelope standard
+- [`references/pt-orama-weave.md`](../../references/pt-orama-weave.md) — how PT + orama-system cooperate
