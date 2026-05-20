@@ -3,6 +3,10 @@ name: openclaw-restart
 description: Perform the safe five-step OpenClaw gateway restart with cron conflict cleanup and channel verification.
 agent_compatibility: [Claude, Hermes, Gemini, Codex, Cursor, WindSurf, Antigravity, OpenCode, 8gent.dev]
 model_routing: ollama-first-then-openrouter
+version: "1.0"
+layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
+upstream: https://github.com/rahulsub-be/cc-openclaw
+upstream_license: MIT
 ---
 
 ## Purpose
@@ -81,3 +85,9 @@ jq -n '{status:"ok", step:"restart-complete"}'
 - Use this sequence after any config mutation, especially secrets or channel bindings.
 - Avoid parallel restarts from multiple terminals to prevent noisy diagnosis.
 - If health probe fails, run `openclaw-status` immediately to capture short-lived startup logs.
+
+## References
+
+- [`references/openrouter-defaults.md`](../../references/openrouter-defaults.md) — model routing source of truth
+- [`references/universal-skill-protocol.md`](../../references/universal-skill-protocol.md) — invocation envelope standard
+- [`references/pt-orama-weave.md`](../../references/pt-orama-weave.md) — how PT + orama-system cooperate
