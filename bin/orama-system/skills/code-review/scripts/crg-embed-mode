@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# crg-embed-mode — toggle code-review-graph embedding provider
+# Usage: crg-embed-mode [gbrain|local|status]
+#
+# gbrain: use Ollama bge-m3 (same model as gbrain, 1024-dim, unified vector space)
+# local:  use sentence-transformers all-MiniLM-L6-v2 (offline-safe, 384-dim)
+# status: show current mode (default)
+#
+# Idempotent: safe to run multiple times. After switching, restart Claude Code
+# to reload the MCP server, then call embed_graph_tool via MCP to re-embed.
+set -euo pipefail
+
+MCP_JSON="${OPENCLAW_MCP_JSON:-$HOME/Documents/Terminal xCode/claude/OpenClaw/.mcp.json}"
+MODE="${1:-status}"
+
+_require_jq() {
+  if ! command -v jq &>/dev/null; then
+    echo "Error: jq is required. Install with: brew install jq" >&2
+    exit 1
+  fi
+}
+
+_check_ollama_bge_m3() {
+  if ! curl -s http://localhost:11434/api/tags 2>/dev/null | grep -q "bge-m3"; then
+    echo "Warning: bge-m3 not found in Ollama. Pull with: ollama pull bge-m3" >&2
+    echo "Warning: CRG will fall back to FTS-only search until Ollama is running." >&2
+  fi
+}
+
+case "$MODE" in
+  gbrain)
+    _require_jq
+    _check_ollama_bge_m3
+    jq '.mcpServers["code-review-graph"].env |= . + {
+      "CRG_OPENAI_API_KEY": "ollama",
+      "CRG_OPENAI_BASE_URL": "http://localhost:11434/v1",
+      "CRG_OPENAI_MODEL": "bge-m3",
+      "CRG_OPENAI_DIMENSION": "1024",
+      "CRG_ACCEPT_CLOUD_EGRESS": "1"
+    }' "$MCP_JSON" > "$MCP_JSON.crg-embed.tmp" && mv "$MCP_JSON.crg-embed.tmp" "$MCP_JSON"
+    echo "CRG embedding: gbrain mode (Ollama bge-m3 @ localhost:11434, 1024-dim)"
+    echo "Next: restart Claude Code → call embed_graph_tool via MCP to re-embed"
+    ;;
+
+  local)
+    _require_jq
+    jq '.mcpServers["code-review-graph"].env |= del(
+      .CRG_OPENAI_API_KEY, .CRG_OPENAI_BASE_URL,
+      .CRG_OPENAI_MODEL, .CRG_OPENAI_DIMENSION, .CRG_ACCEPT_CLOUD_EGRESS
+    )' "$MCP_JSON" > "$MCP_JSON.crg-embed.tmp" && mv "$MCP_JSON.crg-embed.tmp" "$MCP_JSON"
+    echo "CRG embedding: local mode (all-MiniLM-L6-v2, 384-dim, offline-safe)"
+    echo "Note: switching models invalidates existing embeddings — re-embed via embed_graph_tool"
+    ;;
+
+  status)
+    _require_jq
+    CRG_MODEL=$(jq -r '.mcpServers["code-review-graph"].env.CRG_OPENAI_MODEL // "local (all-MiniLM-L6-v2)"' "$MCP_JSON" 2>/dev/null || echo "unknown")
+    CRG_URL=$(jq -r '.mcpServers["code-review-graph"].env.CRG_OPENAI_BASE_URL // "n/a"' "$MCP_JSON" 2>/dev/null || echo "n/a")
+    echo "CRG embedding mode: $CRG_MODEL @ $CRG_URL"
+    ;;
+
+  *)
+    echo "Usage: crg-embed-mode [gbrain|local|status]" >&2
+    echo "  gbrain — Ollama bge-m3 (unified vector space with gbrain)" >&2
+    echo "  local  — sentence-transformers all-MiniLM-L6-v2 (offline)" >&2
+    echo "  status — show current mode" >&2
+    exit 1
+    ;;
+esac

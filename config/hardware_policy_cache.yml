@@ -1,6 +1,6 @@
 # hardware_policy_cache.yml — orama-system offline DR fallback
 # Source:  /Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools/config/model_hardware_policy.yml
-# Refreshed: 2026-05-13T13:27:39Z  sha256:ca797d86dd4b
+# Refreshed: 2026-05-17T08:51:17Z  sha256:1e7dddeb624a
 #
 # This file is the Layer-2 disaster recovery fallback.
 # api_server.py uses it ONLY when PT is unreachable at startup.
@@ -9,17 +9,19 @@
 
 mac_only: []
 
-windows_only: []
+windows_only:
+  - qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2    # RTX 3080 GGUF — heavy reasoning
+  - gemma-4-26b-a4b-it                                    # RTX 3080 GGUF — large model
 
 shared:
   - qwen3.5-9b-mlx                                        # native: Mac MLX | proxied: Win
-  - qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2    # native: Win GGUF | proxied: Mac
   - gemma-4-e4b-it                                        # native: both confirmed
-  - gemma-4-26b-a4b-it                                    # native: Win GGUF | proxied: Mac
   - text-embedding-nomic-embed-text-v1.5                  # native: both confirmed
 
 shared_aliases:
   - Qwen3.5-9B-MLX-4bit
   - qwen3.5-9b-mlx-4bit
+
+windows_only_aliases:
   - Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2
   - gemma-4-26B-A4B-it-Q4_K_M
