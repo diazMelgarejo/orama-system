@@ -22,6 +22,10 @@ sub_skills:
     trigger: "create a skill, new skill, /skillify, add sub-skill, build a skill, make a skill"
   - path: mcp-install/SKILL.md
     trigger: "install mcp stack, setup gemini mcp, register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
+  - path: skills/code-review/SKILL.md
+    trigger: "code review, review the code, blast-radius, code-review-graph, semantic_search_nodes, /review, recursive code review"
+  - path: skills/openclaw-skills/SKILL.md
+    trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
 ---
 
 # The ὅραμα System Skill
@@ -393,3 +397,33 @@ This is the primary async channel between agents with no shared session memory.
 ## Code Exploration Order
 
 Use code-review-graph MCP tools BEFORE Grep/Read for any multi-file question. Chain: code-review-graph (blast-radius) → gbrain code-def (symbols) → gbrain search (decisions) → Read (confirmed files only). Never default to Grep for code questions.
+
+## Search Policy
+
+**RULE: Never guess when information is scarce.**
+Search in this order — stop at the first satisfying result:
+
+1. `/sync-gbrain` + `gbrain query "<question>"` — local semantic memory, zero cost
+2. `code-review-graph: semantic_search_nodes` — structural code context
+3. Brave Search API — web facts, current state
+4. Perplexity API (inline) — deep web synthesis
+5. Grok API — last resort only
+
+**NEVER:** parallel-fire all search tools. Use the cheapest first.
+**ALWAYS:** `AskUserQuestion` for decisions — never auto-select between ambiguous options.
+
+## Windows Coder Pool
+
+**RULE: Every available Windows coder MUST be given work as soon as it is idle.**
+
+Endpoint pool: `$WIN_CODER_ENDPOINTS` (default: `192.168.254.103:1234`)
+
+Dispatch protocol:
+1. Before routing any task to Mac-only paths, check if a Windows coder is free.
+2. If free AND task is compatible (Python, Go, TypeScript, general coding):
+   → dispatch to Windows coder FIRST.
+3. If offline or no model loaded: skip silently, log WARN, do not fail.
+4. As more Windows coders are added to `$WIN_CODER_ENDPOINTS`, they join the pool
+   automatically — same rule applies to all.
+
+**Never leave a Windows coder idle if pending compatible work exists.**

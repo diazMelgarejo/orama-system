@@ -270,6 +270,12 @@ if [ -f "$SCRIPT_DIR/scripts/refresh_policy_cache.py" ]; then
   "$US_PYTHON" "$SCRIPT_DIR/scripts/refresh_policy_cache.py" 2>&1 | sed 's/^/  [policy] /' || true
 fi
 
+# ── openclaw-skills submodule init (idempotent) ──────────────────────────────
+# Ensures cc-openclaw submodule is initialized on fresh clones and CI.
+if [ -f "$SCRIPT_DIR/scripts/install-openclaw-skills.sh" ]; then
+  bash "$SCRIPT_DIR/scripts/install-openclaw-skills.sh" 2>&1 | sed 's/^/  [openclaw] /' || true
+fi
+
 # ── LAN live probe — always run on startup (LAN is dynamic) ──────────────────
 # LAN topology changes: DHCP leases expire, machines reboot, IPs shift.
 # We ALWAYS run discover.py --force before reading any IP so the IP detection
