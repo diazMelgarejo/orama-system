@@ -80,6 +80,12 @@ graph/
 
 ## v2.1 — Circuit Breaker + Fallback Hardening
 
+> **v1 status (2026-05-21):** v1 FTS5 + LanceDB + RRF + MemoryNode + GbrainSearchTool +
+> LLMClient wiring is PLANNED and fully spec'd in
+> `docs/superpowers/plans/2026-05-21-rag-memory-v1-plan.md` (19-decision audit trail).
+> All v2.1 prerequisites (§ "v2 Implementation Prerequisites") are satisfied once v1 ships.
+> Follow-on sprint: implement this circuit breaker after v1 merges.
+
 **Goal:** After N consecutive LanceDB/Ollama failures, automatically switch to
 FTS5-only mode without operator intervention. Re-enable on successful health check.
 
