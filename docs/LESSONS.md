@@ -1945,4 +1945,84 @@ node --version   # if this returns v14.x.x → use explicit path
 **Prior instances of this lesson:**
 - 2026-04-xx: Gemini CLI broken because `#!/usr/bin/env node` resolved to v14 (wrapper fix applied).
 - 2026-04-29: `openclaw` CLI requires Node ≥ v22; full path used: `~/.nvm/versions/node/v24.14.1/bin/openclaw`.
+
+---
+
+## 2026-05-21 — Claude — RAG planning: answer search/memory questions via gbrain+CRG before designing
+
+### What was learned
+
+When asked "how are we implementing search/RAG?", ran gbrain + CRG queries BEFORE opening any files.
+GBrain returned the authoritative answer in one query: `docs/v2/02-modules/rag-and-memory` was a
+**stub** ("deferred from v2.0 kernel") — confirmed RAG was NOT yet implemented despite the repo
+appearing mature. CRG returned 0 nodes (unbuilt/unindexed for this session). This saved ~10 inline
+file reads and gave a more accurate architectural picture.
+
+**Rules:**
+1. For "what does this system do?" questions — gbrain query first, file reads second.
+2. A stub doc is a complete answer: "not implemented" is as definitive as an implementation.
+3. CRG returning 0 nodes = graph not built in current session. Fall back to gbrain. Never assume 0 = absent.
+
+---
+
+## 2026-05-21 — Claude — Spawning parallel agents: write plans first, implement second
+
+### What was learned
+
+User asked to "spawn the best agents suited to each subtask to finish this job soonest" for
+a large planning session. The right approach:
+
+1. **Brainstorm + design first** (single session) — get user agreement on architecture before spawning.
+2. **Write ALL plan docs to a branch** before spawning implementation agents.
+3. **Each agent gets one plan doc** — a well-scoped plan with exact file paths, failing test
+   code, exact commands is a complete agent brief. No additional context needed.
+4. **Use dispatching-parallel-agents** for tasks that are independent (FTS5 changes in
+   perpetua-core are independent of gstack submodule changes in orama-system).
+5. **Model selection by task complexity:**
+   - Mechanical wiring (ContextNode, ContextEndpoint): Claude Haiku
+   - Async + schema changes (GossipBus FTS5): Claude Sonnet
+   - Multi-file with shell scripts (gstack submodule): Claude Sonnet
+   - Tests + TDD compliance: Claude Sonnet
+
+**Anti-patterns to avoid:**
+- Spawning agents before plans are written — agents need exact file paths and failing tests, not vague goals.
+- Using the same model for every task — wastes budget on mechanical tasks.
+- Not writing v2 forward-plan docs during the brainstorm — v2 design is cheapest to capture during active design session.
+
+---
+
+## 2026-05-21 — Claude — GossipBus FTS5: zero-dep keyword recall for agents
+
+### What was learned
+
+The GossipBus `tail()` method returns recent-N events by time — no content search.
+Adding FTS5 to SQLite requires only:
+1. `CREATE VIRTUAL TABLE gossip_fts USING fts5(...)` with `content='gossip'` (backed by the gossip table)
+2. Two triggers (AFTER INSERT, AFTER DELETE) to keep FTS in sync
+3. One migration block in `init_db()` that populates FTS from existing rows if fts_count=0 and row_count>0
+
+This is zero new Python dependencies — FTS5 is bundled in Python's `sqlite3`. It gives BM25 ranking
+for free. Pattern: always check if SQLite FTS5 can solve a search problem before reaching for a
+vector store.
+
+**Key gotcha:** `gossip_fts MATCH ?` raises `OperationalError: fts5: syntax error` on empty query
+string. Always guard with `if not query.strip(): return []`.
+
+---
+
+## 2026-05-21 — Claude — gstack optional submodule: detection order matters
+
+### What was learned
+
+For optional tools that may be installed via multiple paths (PATH, skill, submodule, OCI),
+detection order must be explicit and idempotent:
+
+1. Check `shutil.which("gbrain")` FIRST — respects user's existing install regardless of how it was done.
+2. Check `~/.claude/skills/gstack` SECOND — covers Claude skill installs.
+3. Check `tools/gstack/` THIRD — covers submodule installs.
+
+Stop at the first hit. Never require all three to agree. Never raise on detection failure.
+
+**Pattern:** Always write `detect_gstack() -> dict` style detection functions (return a dict,
+never bool-only, never raise) so the caller can log the source and version alongside availability.
 - 2026-05-17: General policy enshrined — applies to ALL Node tooling.
