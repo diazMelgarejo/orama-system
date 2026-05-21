@@ -66,16 +66,16 @@ def test_detect_gstack_gbrain_on_path():
 
 def test_detect_gstack_skill_installed(tmp_path, monkeypatch):
     """When ~/.claude/skills/gstack exists but no PATH, available=True, source='skill'."""
+    # Build a real fake home so Path.exists checks pass without monkeypatching it
     fake_skill = tmp_path / ".claude" / "skills" / "gstack"
     fake_skill.mkdir(parents=True)
     with patch("shutil.which", return_value=None), \
          patch("pathlib.Path.home", return_value=tmp_path):
-        # Patch the specific path check used in detect_gstack
-        with patch("pathlib.Path.exists", side_effect=lambda self=None: str(self).endswith("gstack")):
-            m = _import_fresh()
-            result = m.detect_gstack()
-    # At minimum available should be based on the three checks
-    assert "available" in result
+        m = _import_fresh()
+        result = m.detect_gstack()
+    # With real fake dir present, detection must report available + source='skill'
+    assert result["available"] is True
+    assert result["source"] == "skill"
 
 
 def test_detect_gstack_nothing_installed():
