@@ -154,6 +154,30 @@ async def test_pending_embeds_set_prevents_gc(tmp_path):
     # OR be empty (task completed synchronously in test event loop).
     # Either is valid — what's NOT valid is the set being garbage collected itself.
     assert isinstance(_pending_embeds, set)
+
+
+@pytest.mark.asyncio
+async def test_emit_sets_embed_status_failed_on_error(tmp_path):
+    """When get_embedding() raises, embed_status must be set to 'failed'."""
+    from unittest.mock import patch, AsyncMock
+    db = str(tmp_path / "test.db")
+    bus = GossipBus(db)
+    await bus.init_db()
+
+    with patch(
+        "perpetua_core.memory.embed.get_embedding",
+        new_callable=AsyncMock,
+        side_effect=Exception("ollama down"),
+    ):
+        await bus.emit("dispatch", {"prompt": "failing embed row"})
+        # Allow the fire-and-forget task to complete
+        await asyncio.sleep(0.05)
+
+    import aiosqlite
+    async with aiosqlite.connect(db) as conn:
+        cursor = await conn.execute("SELECT embed_status FROM gossip LIMIT 1")
+        row = await cursor.fetchone()
+    assert row[0] == "failed"
 ```
 
 - [ ] **Step 2: Run tests — verify they all FAIL**
@@ -163,7 +187,7 @@ cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
 python -m pytest tests/test_gossip_search.py -v
 ```
 
-Expected: 7 failures (FTS5 + embed_status not yet implemented)
+Expected: 8 failures (FTS5 + embed_status not yet implemented)
 
 - [ ] **Step 3: Implement FTS5 + embed_status in gossip.py**
 
@@ -297,45 +321,9 @@ async def _update_embed_status(self, row_id: int, status: str) -> None:
         await db.commit()
 ```
 
-Add `search()` method:
+Add `search()` method (FTS5-safe — wraps MATCH in try/except):
 
 ```python
-async def search(
-    self,
-    query: str,
-    *,
-    limit: int = 10,
-    event_type: Optional[str] = None,
-) -> list[dict]:
-    """BM25 full-text search over GossipBus event history. Always works."""
-    if not query.strip():
-        return []
-    async with aiosqlite.connect(self._db_path) as db:
-        if event_type:
-            cursor = await db.execute(
-                """SELECT g.id, g.ts, g.event_type, g.payload_json
-                   FROM gossip_fts f
-                   JOIN gossip g ON g.id = f.rowid
-                   WHERE gossip_fts MATCH ? AND g.event_type = ?
-                   ORDER BY rank LIMIT ?""",
-                (query, event_type, limit),
-            )
-        else:
-            cursor = await db.execute(
-                """SELECT g.id, g.ts, g.event_type, g.payload_json
-                   FROM gossip_fts f
-                   JOIN gossip g ON g.id = f.rowid
-                   WHERE gossip_fts MATCH ?
-                   ORDER BY rank LIMIT ?""",
-                (query, limit),
-            )
-        rows = await cursor.fetchall()
-    return [
-        {"row_id": r[0], "ts": r[1], "event_type": r[2], "payload": json.loads(r[3])}
-        for r in rows
-    ]
-
-
 async def search(
     self,
     query: str,
@@ -379,7 +367,7 @@ async def search(
         return []  # FTS5 OperationalError on malformed query — degrade gracefully
 ```
 
-- [ ] **Step 4: Run tests — verify 7 pass**
+- [ ] **Step 4: Run tests — verify 8 pass**
 
 ```bash
 python -m pytest tests/test_gossip_search.py -v
@@ -393,7 +381,7 @@ Expected: 7 passed
 python -m pytest tests/ -v
 ```
 
-Expected: all prior tests pass + 7 new
+Expected: all prior tests pass + 8 new
 
 ---
 
@@ -415,6 +403,12 @@ Edit `pyproject.toml` — add to `[project] dependencies` (if not already presen
 "lancedb>=0.6",
 "aiohttp>=3.9",
 ```
+
+Also check `[project.optional-dependencies]` or `[tool.pytest.ini_options]` for `pytest-asyncio`. If not present, add to dev/test deps:
+```toml
+"pytest-asyncio>=0.23",
+```
+And ensure `asyncio_mode = "auto"` is set in `[tool.pytest.ini_options]` so `@pytest.mark.asyncio` works without explicit configuration on each test function.
 
 Note: `aiohttp` is used by `memory/embed.py` for Ollama bge-m3 calls. If `httpx` is already present in the deps, use that instead — update `embed.py` accordingly. Do NOT assume `aiohttp` is present without checking pyproject.toml first.
 
@@ -520,6 +514,7 @@ class EmbeddingStore:
     def __init__(self, db_path: str = "lance_memory.lance"):
         self._db_path = db_path
         self._table = None
+        self._lock = asyncio.Lock()  # prevents concurrent _ensure_table() race
 
     def _get_schema(self):
         import pyarrow as pa
@@ -532,19 +527,22 @@ class EmbeddingStore:
     async def _ensure_table(self):
         if not _LANCEDB_AVAILABLE or self._table is not None:
             return
-        loop = asyncio.get_event_loop()
-        def _open():
-            db = lancedb.connect(self._db_path)
-            if "gossip" in db.table_names():
-                return db.open_table("gossip")
-            return db.create_table("gossip", schema=self._get_schema())
-        self._table = await loop.run_in_executor(None, _open)
+        async with self._lock:
+            if self._table is not None:  # double-check after acquiring lock
+                return
+            loop = asyncio.get_running_loop()
+            def _open():
+                db = lancedb.connect(self._db_path)
+                if "gossip" in db.table_names():
+                    return db.open_table("gossip")
+                return db.create_table("gossip", schema=self._get_schema())
+            self._table = await loop.run_in_executor(None, _open)
 
     async def add(self, row_id: int, text: str, embedding: list[float]) -> None:
         if not _LANCEDB_AVAILABLE:
             return
         await self._ensure_table()
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         await loop.run_in_executor(
             None,
             lambda: self._table.add([{"row_id": row_id, "text": text, "vector": embedding}])
@@ -555,7 +553,7 @@ class EmbeddingStore:
             return []
         try:
             await self._ensure_table()
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             results = await loop.run_in_executor(
                 None,
                 lambda: self._table.search(query_embedding).limit(limit).to_list()
@@ -618,6 +616,7 @@ use `httpx` if that's already present.
 
 ```python
 """Reciprocal Rank Fusion — merges FTS5 and LanceDB result lists."""
+import uuid
 
 
 def rrf_merge(
@@ -629,20 +628,23 @@ def rrf_merge(
 
     Disaster recovery posture: if vec_hits is empty (Ollama down, LanceDB
     error), returns fts_hits unmodified so the system always has context.
+
+    Items without row_id get a unique UUID key so hits from both lists never
+    collide on synthetic keys (negative-int approach has range overlap).
     """
     if not vec_hits:
         return fts_hits
 
-    scores: dict[int, float] = {}
-    id_to_item: dict[int, dict] = {}
+    scores: dict = {}
+    id_to_item: dict = {}
 
     for rank, hit in enumerate(fts_hits):
-        rid = hit.get("row_id", -(rank + 1))
+        rid = hit.get("row_id") or str(uuid.uuid4())
         scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + rank + 1)
         id_to_item[rid] = hit
 
     for rank, hit in enumerate(vec_hits):
-        rid = hit.get("row_id", -(rank + 10000))
+        rid = hit.get("row_id") or str(uuid.uuid4())
         scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + rank + 1)
         if rid not in id_to_item:
             id_to_item[rid] = hit
@@ -682,36 +684,40 @@ from unittest.mock import patch
 from perpetua_core.graph.tools.gbrain_search import gbrain_search
 
 
-def test_gbrain_search_returns_empty_when_cli_absent():
+@pytest.mark.asyncio
+async def test_gbrain_search_returns_empty_when_cli_absent():
     """FileNotFoundError (gbrain not on PATH) → empty list, no raise."""
     with patch("subprocess.run", side_effect=FileNotFoundError):
-        result = gbrain_search(query="anything")
+        result = await gbrain_search(query="anything")
     assert result == []
 
 
-def test_gbrain_search_returns_empty_on_timeout():
+@pytest.mark.asyncio
+async def test_gbrain_search_returns_empty_on_timeout():
     """TimeoutExpired → empty list, no raise."""
     with patch("subprocess.run", side_effect=subprocess.TimeoutExpired(cmd="gbrain", timeout=10)):
-        result = gbrain_search(query="anything")
+        result = await gbrain_search(query="anything")
     assert result == []
 
 
-def test_gbrain_search_returns_empty_on_nonzero_exit():
+@pytest.mark.asyncio
+async def test_gbrain_search_returns_empty_on_nonzero_exit():
     """returncode != 0 → empty list."""
     fake = subprocess.CompletedProcess(args=[], returncode=1, stdout="", stderr="error")
     with patch("subprocess.run", return_value=fake):
-        result = gbrain_search(query="anything")
+        result = await gbrain_search(query="anything")
     assert result == []
 
 
-def test_gbrain_search_parses_json_output():
+@pytest.mark.asyncio
+async def test_gbrain_search_parses_json_output():
     """Valid JSON stdout → parsed list."""
     payload = [{"title": "test page", "score": 0.9}]
     fake = subprocess.CompletedProcess(
         args=[], returncode=0, stdout=json.dumps(payload), stderr=""
     )
     with patch("subprocess.run", return_value=fake):
-        result = gbrain_search(query="test")
+        result = await gbrain_search(query="test")
     assert result == payload
 ```
 
@@ -758,7 +764,7 @@ async def gbrain_search(query: str, limit: int = 5) -> list[dict]:
         except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
             return []
 
-    loop = asyncio.get_event_loop()
+    loop = asyncio.get_running_loop()
     return await loop.run_in_executor(None, _run)
 ```
 
@@ -875,41 +881,65 @@ python -m pytest tests/graph/test_memory_node.py -v
 
 ```python
 """MemoryNode — first graph node. Hybrid FTS5 + LanceDB recall with RRF merge."""
+import json as _json
 import os
+import aiosqlite
 from perpetua_core.state import PerpetuaState
 from perpetua_core.gossip import GossipBus
 from perpetua_core.memory.store import get_lance_store
 from perpetua_core.memory.embed import get_embedding
 from perpetua_core.memory.rrf import rrf_merge
 
-_GOSSIP_DB = os.environ.get("GOSSIP_DB_PATH", "perpetua_core.db")
-_LANCE_DB  = os.environ.get("LANCE_DB_PATH",  "lance_memory.lance")
-
-
 async def memory_node(state: PerpetuaState) -> dict:
     """Retrieve context via FTS5 (always) + LanceDB (try/except) + RRF merge.
 
     Disaster recovery posture: if LanceDB or Ollama is unavailable, FTS5
     keyword recall still works. RRF falls back to FTS5-only when vec_hits=[].
+
+    Env vars read inside the function so patch.dict() works in tests.
     """
+    gossip_db = os.environ.get("GOSSIP_DB_PATH", "perpetua_core.db")
+    lance_db  = os.environ.get("LANCE_DB_PATH",  "lance_memory.lance")
     prompt = state.scratchpad.get("prompt", "")
     if not prompt:
         return {"scratchpad": {**state.scratchpad, "context": []}}
 
     # FTS5 keyword recall — always works (stdlib, no external deps)
     try:
-        bus = GossipBus(_GOSSIP_DB)
+        bus = GossipBus(gossip_db)
         await bus.init_db()
         fts_hits = await bus.search(prompt, limit=10)
     except Exception:
         fts_hits = []
 
     # LanceDB vector recall — opportunistic, graceful fallback
+    # store.search() returns {row_id, text, score}; hydrate back to FTS5 shape
+    # {row_id, ts, event_type, payload} so dispatch_node sees a uniform format.
     vec_hits: list[dict] = []
     try:
         embedding = await get_embedding(prompt)
-        store = get_lance_store(_LANCE_DB)
-        vec_hits = await store.search(embedding, limit=10)
+        store = get_lance_store(lance_db)
+        raw_vec = await store.search(embedding, limit=10)
+        # Hydrate: look up full row in SQLite for each vector hit
+        fts_ids = {h["row_id"] for h in fts_hits}
+        async with aiosqlite.connect(gossip_db) as db:
+            for vh in raw_vec:
+                rid = vh.get("row_id")
+                if rid in fts_ids:
+                    continue  # already in fts_hits, RRF will merge by row_id
+                cursor = await db.execute(
+                    "SELECT id, ts, event_type, payload_json FROM gossip WHERE id = ?",
+                    (rid,),
+                )
+                row = await cursor.fetchone()
+                if row:
+                    vec_hits.append({
+                        "row_id": row[0], "ts": row[1],
+                        "event_type": row[2],
+                        "payload": _json.loads(row[3]),
+                    })
+                else:
+                    vec_hits.append(vh)  # fallback: keep raw if not in gossip
     except Exception:
         pass  # Fall through to FTS5-only via rrf_merge([...], [])
 
@@ -955,7 +985,7 @@ cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
 python -m pytest tests/ -v
 ```
 
-Expected: 32 prior + 17 new = 49 passing
+Expected: 32 prior + 18 new = 50 passing
 
 - [ ] **Step 2: Verify all tests pass in oramasys**
 
@@ -999,7 +1029,7 @@ Hybrid retrieval layer for GossipBus:
 Decision trail: AI proposed FTS5-only + background daemon.
 User overrode to hybrid LanceDB+FTS5 with inline fire-and-forget.
 
-Tests: 17 new passing (7 FTS5 + 3 LanceDB + 3 RRF + 4 gbrain tool).
+Tests: 18 new passing (8 FTS5 + 3 LanceDB + 3 RRF + 4 gbrain tool).
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>
 EOF
@@ -1061,16 +1091,20 @@ async def test_dispatch_node_calls_llm_with_context():
         session_id="t1",
         scratchpad={"prompt": "new task", "context": context_hits},
     )
+    from types import SimpleNamespace
+    mock_completion = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="LLM answer"))]
+    )
     mock_client = AsyncMock()
-    mock_client.chat = AsyncMock(return_value="LLM answer")
+    mock_client.chat = AsyncMock(return_value=mock_completion)
 
     with patch("orama.graph.nodes.dispatch_node.LLMClient", return_value=mock_client):
         from orama.graph.nodes.dispatch_node import dispatch_node
         delta = await dispatch_node(state)
 
     assert delta["scratchpad"]["response"] == "LLM answer"
-    call_args = mock_client.chat.call_args
-    messages = call_args[0][0]
+    call_kwargs = mock_client.chat.call_args.kwargs
+    messages = call_kwargs["messages"]
     system_msg = next(m for m in messages if m["role"] == "system")
     assert "prior task" in system_msg["content"]
 
@@ -1093,14 +1127,18 @@ async def test_dispatch_node_falls_back_on_llm_error():
 async def test_dispatch_node_empty_context_uses_default_string():
     """No context hits → system prompt contains fallback text."""
     state = PerpetuaState(session_id="t3", scratchpad={"prompt": "hello", "context": []})
+    from types import SimpleNamespace
+    mock_completion = SimpleNamespace(
+        choices=[SimpleNamespace(message=SimpleNamespace(content="response"))]
+    )
     mock_client = AsyncMock()
-    mock_client.chat = AsyncMock(return_value="response")
+    mock_client.chat = AsyncMock(return_value=mock_completion)
 
     with patch("orama.graph.nodes.dispatch_node.LLMClient", return_value=mock_client):
         from orama.graph.nodes.dispatch_node import dispatch_node
         delta = await dispatch_node(state)
 
-    messages = mock_client.chat.call_args[0][0]
+    messages = mock_client.chat.call_args.kwargs["messages"]
     system_msg = next(m for m in messages if m["role"] == "system")
     assert "No prior context" in system_msg["content"]
 ```
@@ -1155,10 +1193,14 @@ async def dispatch_node(state: PerpetuaState) -> dict:
 
     try:
         client = LLMClient(base_url=_LLM_BASE_URL, model=_LLM_MODEL)
-        response = await client.chat([
-            {"role": "system", "content": system},
-            {"role": "user",   "content": prompt},
-        ])
+        completion = await client.chat(
+            model=_LLM_MODEL,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user",   "content": prompt},
+            ],
+        )
+        response = completion.choices[0].message.content
     except Exception as exc:
         response = f"[dispatch error: {exc}]"
 
@@ -1220,7 +1262,7 @@ EOF
 ```bash
 # 1. perpetua-core: all tests green
 cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
-python -m pytest tests/ -v  # expect 49+ passing
+python -m pytest tests/ -v  # expect 50+ passing
 
 # 2. oramasys: all tests green
 cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
@@ -1236,3 +1278,31 @@ curl -s http://localhost:8000/run \
 # If Ollama not running → FTS5-only fallback still returns context
 # If LM Studio not running → "[dispatch error: ...]" — graceful
 ```
+
+---
+
+## Decision Audit Trail (autoplan Phase 4)
+
+> Recorded 2026-05-21 — all decisions made during /autoplan CEO + Eng + DX review.
+
+| # | Decision | Rationale | Phase |
+|---|----------|-----------|-------|
+| D1 | Hybrid FTS5 + LanceDB (not FTS5-only) | Ollama+bge-m3 is already a hard system requirement; LanceDB = zero marginal cost | User (premise gate) |
+| D2 | Fire-and-forget `asyncio.create_task()` in `emit()` | No daemon process needed in v1; background daemon deferred to v2.5 reaper | User (premise gate) |
+| D3 | Module-level `_pending_embeds: set[asyncio.Task]` | CPython holds only weak refs to tasks — without this, in-flight embeds get GC'd | User-required |
+| D4 | `_pending_embeds` cap at 500 tasks | Prevents unbounded growth if Ollama is consistently slow; rows stay `pending` for v2.5 reaper | CEO phase |
+| D5 | Path-keyed `_lance_stores` dict (not single global) | Single global locks to first path seen — test isolation failures when tests use `tmp_path` | CEO phase |
+| D6 | GbrainSearchTool as `async def` with `run_in_executor` | Blocking `subprocess.run()` in an async tool stalls the event loop for up to 10s | Eng phase |
+| D7 | FTS5 `search()` wrapped in `try/except` | Real prompts with quotes/colons/FTS operators raise `OperationalError` — degrade gracefully | Eng phase |
+| D8 | GbrainSearchTool tests changed to `async def + await` | Tool is async; sync tests compare coroutine objects to `[]` — false-green | Eng phase |
+| D9 | `LLMClient.chat()` called as `chat(model=..., messages=[...])` | Actual API is keyword-only; `chat([...])` positional is wrong — false-green tests | Eng phase |
+| D10 | `asyncio.get_event_loop()` → `asyncio.get_running_loop()` | `get_event_loop()` deprecated in Python 3.10+; raises DeprecationWarning → RuntimeError | Eng phase |
+| D11 | `_ensure_table()` guarded with `asyncio.Lock()` | Concurrent calls all see `_table is None` before first completes — race to create table | Eng phase |
+| D12 | Env vars read inside `memory_node()` body | Module-level constants captured at import time; `patch.dict` in tests won't affect them | Eng phase |
+| D13 | Vector hit hydration via SQLite lookup | LanceDB returns `{row_id, text, score}`; dispatch_node expects `{row_id, ts, event_type, payload}` | Eng phase |
+| D14 | `rrf_merge` uses `uuid4()` for keyless items | Negative-int synthetic keys (-rank-1) have range overlap across FTS5 and vec lists | Eng phase |
+| D15 | Added `embed_status='failed'` deterministic test | Original 7-test suite had no test proving `failed` status is set on embed error | Eng phase |
+| D16 | `pytest-asyncio` + `asyncio_mode = "auto"` documented | 18 async tests need it; not noting it causes silent skip/pass with wrong markers | DX phase |
+| D17 | `memory_node` hydration uses individual SQLite lookups | Simplest correct approach for v1 (≤10 hits); bulk `IN (...)` is v2.1 optimization | DX phase |
+| D18 | Outcome clarified: hybrid search available to ALL agents by default | Via `@tool gbrain_search` + MemoryNode; search in UI + Launcher Agent + orchestrator | Premise gate (user) |
+| D19 | v2.1 EmbeddingCircuitBreaker documented as follow-on | After this plan lands; design already in `docs/v2/18-rag-and-memory-design.md § v2.1` | Premise gate (user) |
