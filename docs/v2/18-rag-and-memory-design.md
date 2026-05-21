@@ -6,15 +6,42 @@
 
 ---
 
-## Why RAG is Deferred from v2.0 Kernel
+## What Shipped in v1 (2026-05-21 — pulled forward from v2.1)
 
-Per decision D4 (dependency-minimal kernel) from `00-context-and-decisions.md`: the v2.0
-kernel avoids vector DB dependencies. `GossipBus` provides sufficient "memory" for
-kernel-level routing decisions. Semantic retrieval is an application concern.
+> **Decision trail:** AI originally deferred LanceDB to v2.1 (vector DB dependency).
+> User overrode: Ollama+bge-m3 is already a hard system requirement per CLAUDE.md,
+> so LanceDB has zero marginal cost. Pulled forward to v1 this week.
 
-The v1 FTS5 implementation confirms this: zero new deps, ships this week, provides
-meaningful recall from the audit log. This validates the approach before introducing
-a vector store.
+### v1 retrieval layer (`diazMelgarejo/orama-system` branch `feat/rag-gstack-optional-v1`)
+
+| Module | File | Status |
+|--------|------|--------|
+| FTS5 on GossipBus | `perpetua_core/gossip.py` | Planned (v1) |
+| LanceDB EmbeddingStore | `perpetua_core/memory/store.py` | Planned (v1) |
+| Ollama bge-m3 embed | `perpetua_core/memory/embed.py` | Planned (v1) |
+| RRF merge (k=60) | `perpetua_core/memory/rrf.py` | Planned (v1) |
+| Fire-and-forget inline embed | `GossipBus.emit()` | Planned (v1) |
+| `_pending_embeds` GC guard | `gossip.py` module-level | Planned (v1) |
+| `embed_status` column | `gossip` table | Planned (v1) — groundwork for v2.5 reaper |
+| MemoryNode (FTS5+LanceDB+RRF) | `orama/graph/nodes/memory_node.py` | Planned (v1) |
+| GbrainSearchTool @tool | `perpetua_core/graph/tools/gbrain_search.py` | Planned (v1) |
+| LLMClient wiring | `orama/graph/nodes/dispatch_node.py` | Planned (v1) |
+
+**v1 embed sync strategy:** `asyncio.create_task()` inline in `emit()`. ~50ms latency
+added to every event emit. No daemon process. Module-level `_pending_embeds: set[asyncio.Task]`
+holds strong references to prevent GC of in-flight tasks.
+
+---
+
+## Why v1 Already Has LanceDB (Decision D4)
+
+Per `00-context-and-decisions.md` D4 (dependency-minimal kernel) — the kernel itself
+avoids vector DB deps, but the application layer (oramasys) always had leeway to add one.
+
+The original D4 rationale was "avoid vector DB at the kernel level." LanceDB lives in
+`perpetua_core/memory/` (a new sub-package, not the kernel) and in `oramasys`. It never
+touches the kernel's hot path. The `emit()` embed is fire-and-forget — it does not block
+any kernel operation.
 
 ---
 
@@ -24,141 +51,191 @@ a vector store.
 perpetua-core v2.1+
 ──────────────────────────────────────────────────────────────
 gossip.py
-  + FTS5 (v1 — already planned)                 ← DONE in v1
-  + search(query, limit, event_type)             ← DONE in v1
-  + vector_search(embedding, limit) [v2.1]       ← uses LanceDB
+  + FTS5 + LanceDB (v1 — DONE)
+  + search() + _embed_and_store()  (v1 — DONE)
+  + embed_status tracking           (v1 — DONE, enables v2.5 reaper)
 
 memory/
-  __init__.py
-  store.py       ← EmbeddingStore (LanceDB-backed)
-  ingest.py      ← doc ingestion pipeline: GossipBus + markdown docs
-  node.py        ← MemoryNode (subgraph node)
+  store.py       ← EmbeddingStore (LanceDB, v1 — DONE)
+  embed.py       ← get_embedding via Ollama bge-m3 (v1 — DONE)
+  rrf.py         ← rrf_merge k=60 (v1 — DONE)
+
+  # v2.1 additions:
+  circuit_breaker.py  ← EmbeddingCircuitBreaker — disables vector on N consecutive failures
+  reaper.py           ← DEFERRED to v2.5 — retries rows where embed_status='failed'
 
 graph/plugins/
-  memory.py      ← MemoryPlugin (wraps EmbeddingStore, registers MemoryNode)
-  tool.py        ← GbrainSearchTool (already planned in v1)
+  tool.py        ← GbrainSearchTool (v1 — DONE)
 
 oramasys v2.1+
 ──────────────────────────────────────────────────────────────
 graph/
   nodes/
-    context_node.py    ← FTS5 recall (v1 — already planned)
-    memory_node.py     ← LanceDB vector recall [v2.1]
-    dispatch_node.py   ← LLMClient wired (v1 — already planned)
+    memory_node.py    ← FTS5+LanceDB+RRF (v1 — DONE)
+    # v2.1: add HealthCheckNode or circuit-breaker awareness
+    dispatch_node.py  ← LLMClient wired (v1 — DONE)
 ```
 
 ---
 
-## v2.1 — LanceDB Vector Store
+## v2.1 — Circuit Breaker + Fallback Hardening
 
-### Rationale for LanceDB
+**Goal:** After N consecutive LanceDB/Ollama failures, automatically switch to
+FTS5-only mode without operator intervention. Re-enable on successful health check.
 
-| Property | LanceDB | Alternatives |
-|----------|---------|--------------|
-| Dependencies | 1 pip install (`lancedb`) | Chroma (heavy), Qdrant (server), pgvector (Postgres required) |
-| Storage | Local Arrow files, no server | n/a |
-| Embedding | Any `numpy` array | n/a |
-| Python version | 3.8+ | n/a |
-| Disk footprint | ~50MB for 10K docs | n/a |
-| Aligns with plan | `docs/plans/2026-05-19-gbrain-crg-embedding-integration.md` says LanceDB for orama-internal RAG | ✅ |
-
-### EmbeddingStore API
+Currently in v1, `memory_node` already falls back to FTS5-only via `try/except`.
+The v2.1 addition makes this state persistent across job invocations:
 
 ```python
-class EmbeddingStore:
-    """LanceDB-backed vector store for RAG retrieval.
+# perpetua_core/memory/circuit_breaker.py  (v2.1 addition)
 
-    Embedding model: Ollama bge-m3 (1024-dim) via localhost:11434
-    — same model as gbrain + code-review-graph for unified vector space.
-    Falls back to no-op if Ollama unavailable.
+class EmbeddingCircuitBreaker:
+    """Tracks LanceDB/Ollama failures. Opens after N consecutive errors.
+
+    State is in-memory (per process). Resets on first success after
+    the cooldown period.
     """
 
-    def __init__(self, db_path: str = "lance_memory.db"):
-        ...
+    def __init__(self, threshold: int = 5, cooldown_s: float = 60.0):
+        self._failures = 0
+        self._threshold = threshold
+        self._opened_at: float = 0.0
+        self._cooldown = cooldown_s
 
-    async def ingest_gossip(self, bus: GossipBus, since: float = 0.0) -> int:
-        """Embed and store GossipBus events. Returns count ingested."""
-        ...
+    def is_open(self) -> bool:
+        """True = circuit open = skip vector search, use FTS5 only."""
+        if self._failures < self._threshold:
+            return False
+        if time.monotonic() - self._opened_at > self._cooldown:
+            self._failures = 0  # allow one probe
+            return False
+        return True
 
-    async def ingest_docs(self, doc_dir: str) -> int:
-        """Embed and store markdown files from doc_dir. Returns count."""
-        ...
+    def record_success(self):
+        self._failures = 0
 
-    async def search(self, query: str, limit: int = 5) -> list[dict]:
-        """Vector similarity search. Returns top-k hits with scores."""
-        ...
+    def record_failure(self):
+        self._failures += 1
+        if self._failures >= self._threshold:
+            self._opened_at = time.monotonic()
 ```
 
-### MemoryNode
-
-Replaces `ContextNode` in v2.1. Queries both FTS5 (exact) and LanceDB (semantic),
-merges results with Reciprocal Rank Fusion (RRF), injects into scratchpad.
+Updated `memory_node` in v2.1:
 
 ```python
+_breaker = EmbeddingCircuitBreaker()
+
 async def memory_node(state: PerpetuaState) -> dict:
-    prompt = state.scratchpad.get("prompt", "")
-    fts_hits    = await gossip.search(prompt, limit=5)
-    vector_hits = await store.search(prompt, limit=5)
-    merged = _rrf(fts_hits, vector_hits, k=60)[:5]
+    fts_hits = await bus.search(prompt, limit=10)
+
+    vec_hits = []
+    if not _breaker.is_open():
+        try:
+            embedding = await get_embedding(prompt)
+            vec_hits = await store.search(embedding, limit=10)
+            _breaker.record_success()
+        except Exception:
+            _breaker.record_failure()
+
+    merged = rrf_merge(fts_hits, vec_hits)[:5]
     return {"scratchpad": {**state.scratchpad, "context": merged}}
 ```
 
 ---
 
-## v2.5 — DuckDB Fleet Analytics
+## v2.5 — Reaper Daemon + DuckDB + Fleet-Distributed Lance Dataset
 
-DuckDB enables analytical queries over the GossipBus history across all sessions and
-agents. Use cases:
-- "Which agents had the highest error rate this week?"
-- "What are the most common task_types routed to Windows?"
-- "Show me all sessions where the model timed out."
+> **Decision trail:** AI initially suggested the background daemon in v1.
+> User deferred it explicitly to v2.5 along with DuckDB and fleet features.
 
-**Schema:** Export GossipBus SQLite → DuckDB via `duckdb.connect().execute("ATTACH 'gossip.db' AS gossip_sqlite (TYPE SQLITE)")`
+### Reaper daemon
 
-**No new storage format** — DuckDB reads the existing SQLite file directly.
+Reads `embed_status='failed'` rows from GossipBus and retries embedding:
 
-**Planned endpoint:** `GET /api/analytics/sessions?since=7d&group_by=event_type`
+```python
+# perpetua_core/memory/reaper.py  (v2.5 addition)
+
+async def run_reaper(bus: GossipBus, store: EmbeddingStore, batch_size: int = 50):
+    """Retry embedding for rows where embed_status='failed'."""
+    async with aiosqlite.connect(bus._db_path) as db:
+        cursor = await db.execute(
+            "SELECT id, payload_json FROM gossip WHERE embed_status='failed' LIMIT ?",
+            (batch_size,)
+        )
+        rows = await cursor.fetchall()
+    for row_id, payload_json in rows:
+        try:
+            embedding = await get_embedding(payload_json)
+            await store.add(row_id=row_id, text=payload_json, embedding=embedding)
+            await bus._update_embed_status(row_id, "embedded")
+        except Exception:
+            pass
+```
+
+### DuckDB fleet analytics
+
+DuckDB reads the existing SQLite GossipBus directly — no new storage format:
+
+```python
+import duckdb
+conn = duckdb.connect()
+conn.execute("ATTACH 'perpetua_core.db' AS gossip_sqlite (TYPE SQLITE)")
+```
+
+Planned endpoint: `GET /api/analytics/sessions?since=7d&group_by=event_type`
+
+### Fleet-distributed Lance dataset
+
+LanceDB supports Arrow IPC serialization. The v2.5 plan:
+- Each node writes local `lance_memory.lance`
+- A fleet aggregator merges tables via Arrow Flight
+- No schema changes — the v1 LanceDB schema already supports this
 
 ---
 
-## v2 Kernel Spec Additions (OQ resolution targets)
+## OQ Resolutions
 
-| OQ | Topic | v2.1 resolution |
-|----|-------|----------------|
-| (new) OQ18 | MemoryNode in kernel vs. plugin | Plugin — wraps `EmbeddingStore`, registered via `MemoryPlugin` in `graph/plugins/memory.py`. Consistent with D4. |
+| OQ | Topic | Resolution |
+|----|-------|------------|
+| (new) OQ18 | MemoryNode in kernel vs. plugin | Plugin in `memory/` sub-package — consistent with D4. Kernel unchanged. |
 | (new) OQ19 | Embedding model for MemoryNode | Ollama bge-m3 (1024-dim) — unified with gbrain + CRG vector space |
-| (new) OQ20 | LanceDB vs. Chroma vs. Qdrant | LanceDB: no server, 1 dep, Arrow-backed, already planned in `2026-05-19-gbrain-crg-embedding-integration.md` |
-| (new) OQ21 | FTS5 + vector RRF merge strategy | k=60 Reciprocal Rank Fusion — same as CRG hybrid search implementation |
+| (new) OQ20 | LanceDB vs. Chroma vs. Qdrant | LanceDB: no server, 1 dep, Arrow-backed, pulled forward to v1 |
+| (new) OQ21 | FTS5 + vector RRF merge strategy | k=60 Reciprocal Rank Fusion — same as CRG hybrid search |
+| (new) OQ25 | Background daemon timing | Deferred to v2.5 — fire-and-forget inline in v1 |
+| (new) OQ26 | `_pending_embeds` GC guard | Module-level set — user-required; prevents task GC before completion |
+| (new) OQ27 | `embed_status` column | Added in v1 as groundwork — enables v2.5 reaper without schema migration |
 
 ---
 
 ## v2 Implementation Prerequisites
 
-Before implementing v2.1 RAG in oramasys/*:
+Before implementing v2.1 circuit breaker in `oramasys/*`:
 
-1. v1 FTS5 + ContextNode + LLMClient wiring must be DONE and tested
-2. Ollama bge-m3 must be running and verified via smoke test
-3. `docs/plans/2026-05-19-gbrain-crg-embedding-integration.md` Phase 0 must be complete
-4. OQ12 (max_steps safety guard) must be resolved in perpetua-core/engine.py
+1. v1 FTS5 + LanceDB + RRF + MemoryNode + LLMClient must be DONE and tested
+2. Ollama bge-m3 verified via smoke test in v1 environment
+3. v1 `embed_status` column confirmed in production schema
+4. `docs/plans/2026-05-19-gbrain-crg-embedding-integration.md` Phase 0 complete
+5. OQ12 (max_steps safety guard) resolved in perpetua-core/engine.py
 
-Do not start v2.1 until all four are green.
+Do not start v2.1 until all five are green.
 
 ---
 
-## Migration from v1 to v2
+## Migration from v1 to v2.1
 
-v1 (FTS5 only):
+v1 (FTS5 + LanceDB, fire-and-forget):
 ```
-ContextNode → gossip.search(prompt) → scratchpad["context"]
-```
-
-v2.1 (FTS5 + LanceDB):
-```
-MemoryNode → RRF(gossip.search(), store.search()) → scratchpad["context"]
+MemoryNode → FTS5 + LanceDB + RRF → scratchpad["context"]
+emit() → FTS5 trigger sync + async embed task
 ```
 
-The `scratchpad["context"]` key and shape are identical. `dispatch_node` requires no
-changes — context injection is already in place from v1.
+v2.1 (adds circuit breaker):
+```
+MemoryNode → FTS5 + (LanceDB if breaker closed) + RRF → scratchpad["context"]
+```
 
-**Upgrade path:** swap `context_node` for `memory_node` in `perpetua_graph.py` add_node call.
-One line change. All tests continue to pass (different retrieval backend, same interface).
+The `scratchpad["context"]` key and shape are identical. `dispatch_node` requires no changes.
+
+**Upgrade path:** add `EmbeddingCircuitBreaker` instance to `memory_node` module scope.
+Two new method calls (`is_open()`, `record_success()/failure()`). All v1 tests continue
+to pass — the circuit starts closed and only opens after real failures.

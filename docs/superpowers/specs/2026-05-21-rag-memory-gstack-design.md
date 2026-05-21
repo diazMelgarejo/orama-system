@@ -8,6 +8,22 @@
 
 ---
 
+## Decision Trail: AI Suggestion vs User Override
+
+This section documents each architectural decision with the original AI suggestion and the user override, so the reasoning is reproducible.
+
+| # | Topic | AI Suggestion | User Decision | Rationale |
+|---|-------|--------------|---------------|-----------|
+| D1 | Storage backend | FTS5 only (zero new deps) | **Hybrid LanceDB + FTS5 (RRF)** | Maximum robustness + disaster recovery; FTS5 always available as fallback |
+| D2 | Embed sync strategy | Background worker daemon | **Fire-and-forget `asyncio.create_task()` inline in `emit()`** | Eliminates background process complexity; revisit daemon in v2.5 for fleet-distributed dataset |
+| D3 | GC safety for tasks | Not addressed | **Module-level `_pending_embeds: set[asyncio.Task]`** | Prevents Python GC from collecting fire-and-forget tasks before completion |
+| D4 | LanceDB timing | v2.1 (deferred) | **v1 (this week, pulled forward)** | Ollama + bge-m3 already a hard system requirement (CLAUDE.md); zero marginal cost to add LanceDB now |
+| D5 | RAG merge strategy | Not specified | **RRF k=60** | Reciprocal Rank Fusion — same strategy as CRG hybrid search; proven approach |
+| D6 | Embed latency budget | Not specified | **`asyncio.create_task()` adds ~50ms to every `emit()`** | Acceptable; GossipBus is an audit log, not a hot path; emit() returns immediately |
+| D7 | v2.5 scope | Not specified | **Reaper daemon + DuckDB + fleet-distributed Lance dataset** | Deferred scope is explicit; prevents scope creep in v1 |
+
+---
+
 ## Problem Statement
 
 The orama-system v0.9.9.9 agent runtime has zero retrieval capability. Every `/v1/jobs`
@@ -25,14 +41,19 @@ users who already have it installed or who choose not to install it.
 
 ## Dependency Budget
 
-**v1 (this week):** Zero new Python dependencies.
-- FTS5: bundled in Python's `sqlite3` module (available since Python 3.4)
+**v1 (this week):**
+- FTS5: bundled in Python's `sqlite3` module (available since Python 3.4) — zero new deps
+- LanceDB: `pip install lancedb` — one new dep, ~50MB, no server required
+- Ollama bge-m3: already a hard system requirement per CLAUDE.md — zero marginal cost
 - gbrain @tool: subprocess call to existing `gbrain` CLI (already on PATH for dev machines)
 - LLMClient: already implemented in `perpetua_core/llm.py`
 - gstack submodule: `git submodule` only — no pip installs
 
-**v2.1 (future):** LanceDB replaces FTS5 for vector semantic recall.
-**v2.5 (future):** DuckDB for fleet analytics over GossipBus history.
+> **AI initially suggested:** FTS5-only (zero new deps).
+> **User override:** Add LanceDB now — Ollama+bge-m3 is already required, so the vector
+> store is nearly free to add. One dep for semantic recall is a net win at v1.
+
+**v2.5 (future):** Reaper daemon + DuckDB analytics + fleet-distributed Lance dataset.
 
 ---
 
@@ -41,17 +62,19 @@ users who already have it installed or who choose not to install it.
 ```
 perpetua-core (kernel changes)           oramasys (graph changes)
 ─────────────────────────────           ──────────────────────────
-GossipBus                                ContextNode  (NEW, node 0)
-  + FTS5 virtual table (NEW)              ├── gossip.search(prompt, k=5)
-  + search(query, limit) (NEW)            └── scratchpad["context"] = top-k hits
-  + _rebuild_fts() migration helper             ↓
-                                         route_node  (existing, node 1)
-perpetua_core/graph/tools/               dispatch_node  (WIRED, node 2)
-  gbrain_search.py (NEW)                  ├── LLMClient.chat(messages=[
-    @tool GbrainSearch                    │     system: context + policy,
-    subprocess: gbrain query              │     user: state.prompt
-    graceful: empty list if CLI absent    │   ])
-                                          └── scratchpad["response"] = LLM output
+GossipBus                                MemoryNode  (NEW, node 0 — replaces ContextNode)
+  + FTS5 virtual table (NEW)              ├── gossip.search(prompt, k=10)   [always works]
+  + LanceDB EmbeddingStore (NEW)          ├── lance.search(prompt, k=10)    [try/except]
+  + _pending_embeds: set[Task] (NEW)      ├── rrf_merge(fts_hits, vec_hits, k=60)[:5]
+  + embed_status column (NEW)             └── scratchpad["context"] = merged top-5
+  + search(query, limit) (NEW)                  ↓
+  + emit() fire-and-forget embed          route_node  (existing, node 1)
+                                          dispatch_node  (WIRED, node 2)
+perpetua_core/graph/tools/               ├── LLMClient.chat(messages=[
+  gbrain_search.py (NEW)                 │     system: context + policy,
+    @tool GbrainSearch                   │     user: state.prompt
+    subprocess: gbrain query             │   ])
+    graceful: empty list if CLI absent   └── scratchpad["response"] = LLM output
                                          respond_node  (existing, node 3)
                                            └── state.output = scratchpad["response"]
 ```
@@ -64,10 +87,11 @@ POST /v1/jobs {prompt: "..."}
   → OrchestrationSupervisor._dispatch()
   → oramasys /run endpoint
   → MiniGraph.ainvoke(state)
-      → ContextNode
-          gossip.search(state.prompt, limit=5)
-          → FTS5 BM25 query on payload_json
-          → top-k past events injected into scratchpad["context"]
+      → MemoryNode
+          fts_hits  = gossip.search(state.prompt, limit=10)    ← always
+          vec_hits  = lance.search(state.prompt, limit=10)     ← try/except []
+          merged    = rrf_merge(fts_hits, vec_hits)[:5]
+          scratchpad["context"] = merged
       → route_node (hardware affinity gate — unchanged)
       → dispatch_node
           LLMClient.chat([
@@ -82,7 +106,7 @@ POST /v1/jobs {prompt: "..."}
 
 ---
 
-## Sub-Project 1: GossipBus FTS5 Search
+## Sub-Project 1: GossipBus Hybrid Search
 
 **File:** `perpetua_core/gossip.py` (modify)
 **Tests:** `tests/test_gossip_search.py` (create)
@@ -90,12 +114,13 @@ POST /v1/jobs {prompt: "..."}
 ### Schema changes to `init_db()`
 
 ```python
-CREATE_FTS = """
+# 1. FTS5 virtual table + triggers (keyword recall — always available)
+_CREATE_FTS = """
 CREATE VIRTUAL TABLE IF NOT EXISTS gossip_fts
 USING fts5(event_type, payload_json, content='gossip', content_rowid='id')
 """
 
-CREATE_FTS_AI = """
+_CREATE_FTS_AI = """
 CREATE TRIGGER IF NOT EXISTS gossip_fts_ai
 AFTER INSERT ON gossip BEGIN
   INSERT INTO gossip_fts(rowid, event_type, payload_json)
@@ -103,16 +128,70 @@ AFTER INSERT ON gossip BEGIN
 END
 """
 
-CREATE_FTS_AD = """
+_CREATE_FTS_AD = """
 CREATE TRIGGER IF NOT EXISTS gossip_fts_ad
 AFTER DELETE ON gossip BEGIN
   INSERT INTO gossip_fts(gossip_fts, rowid, event_type, payload_json)
   VALUES ('delete', old.id, old.event_type, old.payload_json);
 END
 """
+
+# 2. embed_status column for disaster recovery tracking
+# AI didn't suggest this — added for v2.5 reaper daemon groundwork
+_ADD_EMBED_STATUS = """
+ALTER TABLE gossip ADD COLUMN embed_status TEXT NOT NULL DEFAULT 'pending'
+"""
+
+_CREATE_EMBED_IDX = """
+CREATE INDEX IF NOT EXISTS idx_gossip_embed_status
+ON gossip(embed_status) WHERE embed_status != 'embedded'
+"""
 ```
 
-### New method: `search()`
+### Module-level GC guard (user-requested, AI omission)
+
+```python
+# Prevent Python GC from collecting fire-and-forget embed tasks.
+# AI's initial design omitted this; user explicitly required it.
+# Without it, tasks scheduled via asyncio.create_task() can be GC'd
+# before completion if no strong reference is held anywhere.
+_pending_embeds: set[asyncio.Task] = set()
+```
+
+### New `emit()` with fire-and-forget embed
+
+```python
+async def emit(self, event_type: EventType, payload: dict) -> None:
+    async with aiosqlite.connect(self._db_path) as db:
+        cursor = await db.execute(
+            "INSERT INTO gossip (ts, event_type, payload_json, embed_status) "
+            "VALUES (?, ?, ?, 'pending')",
+            (time.time(), event_type, json.dumps(payload)),
+        )
+        row_id = cursor.lastrowid
+        await db.commit()
+    # Fire-and-forget embed — never blocks emit() return.
+    # AI initially suggested a background daemon; user chose inline task.
+    task = asyncio.create_task(self._embed_and_store(row_id, payload))
+    _pending_embeds.add(task)
+    task.add_done_callback(_pending_embeds.discard)
+```
+
+### `_embed_and_store()` — async embed + LanceDB write
+
+```python
+async def _embed_and_store(self, row_id: int, payload: dict) -> None:
+    """Embed payload and store in LanceDB. Updates embed_status column."""
+    try:
+        text = json.dumps(payload)
+        embedding = await _get_embedding(text)  # Ollama bge-m3
+        await _lance_store.add(row_id=row_id, text=text, embedding=embedding)
+        await _update_embed_status(self._db_path, row_id, "embedded")
+    except Exception:
+        await _update_embed_status(self._db_path, row_id, "failed")
+```
+
+### New method: `search()` — FTS5 keyword recall
 
 ```python
 async def search(
@@ -122,7 +201,7 @@ async def search(
     limit: int = 10,
     event_type: Optional[str] = None,
 ) -> list[dict]:
-    """BM25 full-text search over GossipBus event history."""
+    """BM25 full-text search over GossipBus event history. Always works."""
     if not query.strip():
         return []
     async with aiosqlite.connect(self._db_path) as db:
@@ -151,57 +230,121 @@ async def search(
     ]
 ```
 
-### Migration helper: `_rebuild_fts()`
-
-For databases created before FTS5 was added (existing deployments):
+### EmbeddingStore — LanceDB vector recall
 
 ```python
-async def _rebuild_fts(self) -> int:
-    """Populate gossip_fts from existing gossip rows. Returns rows rebuilt."""
-    async with aiosqlite.connect(self._db_path) as db:
-        cursor = await db.execute("SELECT COUNT(*) FROM gossip")
-        (total,) = await cursor.fetchone()
-        if total == 0:
-            return 0
-        await db.execute(
-            "INSERT INTO gossip_fts(rowid, event_type, payload_json) "
-            "SELECT id, event_type, payload_json FROM gossip"
-        )
-        await db.commit()
-    return total
+# perpetua_core/memory/store.py (new file)
+import lancedb
+import asyncio
+from pathlib import Path
+
+class EmbeddingStore:
+    """LanceDB-backed vector store. Falls back gracefully to no-op if unavailable."""
+
+    def __init__(self, db_path: str = "lance_memory.lance"):
+        self._db_path = db_path
+        self._table = None
+
+    async def _ensure_table(self):
+        if self._table is None:
+            db = lancedb.connect(self._db_path)
+            if "gossip" in db.table_names():
+                self._table = db.open_table("gossip")
+            else:
+                import pyarrow as pa
+                schema = pa.schema([
+                    pa.field("row_id", pa.int64()),
+                    pa.field("text", pa.utf8()),
+                    pa.field("vector", pa.list_(pa.float32(), 1024)),
+                ])
+                self._table = db.create_table("gossip", schema=schema)
+
+    async def add(self, row_id: int, text: str, embedding: list[float]) -> None:
+        await self._ensure_table()
+        self._table.add([{"row_id": row_id, "text": text, "vector": embedding}])
+
+    async def search(self, query_embedding: list[float], limit: int = 10) -> list[dict]:
+        try:
+            await self._ensure_table()
+            results = self._table.search(query_embedding).limit(limit).to_list()
+            return [{"row_id": r["row_id"], "text": r["text"], "score": r["_distance"]}
+                    for r in results]
+        except Exception:
+            return []
 ```
 
-Called once at `init_db()` if the fts table was just created with existing rows.
+### RRF merge
 
-### Test cases
+```python
+def rrf_merge(
+    fts_hits: list[dict],
+    vec_hits: list[dict],
+    k: int = 60,
+) -> list[dict]:
+    """Reciprocal Rank Fusion — merges FTS5 and vector results.
 
-1. `test_search_returns_empty_for_no_match` — FTS5 miss returns `[]`
-2. `test_search_finds_exact_payload_keyword` — emit an event, search for a word in its payload
-3. `test_search_filters_by_event_type` — emit dispatch + error events, filter to error only
-4. `test_search_ranking_by_relevance` — multiple emits, most-relevant appears first
-5. `test_search_empty_query_returns_empty` — guard against FTS5 empty-query exception
+    k=60 per CRG hybrid search convention. Falls back to fts_hits-only
+    if vec_hits is empty (disaster recovery posture).
+    """
+    if not vec_hits:
+        return fts_hits
+    scores: dict[int, float] = {}
+    id_to_item: dict[int, dict] = {}
+    for rank, hit in enumerate(fts_hits):
+        rid = hit.get("row_id", rank)
+        scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + rank + 1)
+        id_to_item[rid] = hit
+    for rank, hit in enumerate(vec_hits):
+        rid = hit.get("row_id", rank)
+        scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + rank + 1)
+        id_to_item[rid] = hit
+    ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+    return [id_to_item[rid] for rid, _ in ranked]
+```
 
 ---
 
-## Sub-Project 2: ContextNode + gbrain @tool
+## Sub-Project 2: MemoryNode + GbrainSearchTool
 
-### ContextNode (`orama/graph/nodes/context_node.py`, create)
+### MemoryNode (`orama/graph/nodes/memory_node.py`, create)
+
+Replaces the simpler ContextNode from the original FTS5-only design.
 
 ```python
 from perpetua_core.state import PerpetuaState
 from perpetua_core.gossip import GossipBus
+from perpetua_core.memory.store import EmbeddingStore
+from perpetua_core.memory.embed import get_embedding
+from perpetua_core.memory.rrf import rrf_merge
 import os
 
 _GOSSIP_DB = os.environ.get("GOSSIP_DB_PATH", "perpetua_core.db")
+_LANCE_DB  = os.environ.get("LANCE_DB_PATH",  "lance_memory.lance")
 
-async def context_node(state: PerpetuaState) -> dict:
-    """Retrieve relevant past GossipBus events and inject into scratchpad."""
-    bus = GossipBus(_GOSSIP_DB)
-    prompt = state.scratchpad.get("prompt", "") or state.prompt if hasattr(state, "prompt") else ""
+_lance_store = EmbeddingStore(_LANCE_DB)
+
+
+async def memory_node(state: PerpetuaState) -> dict:
+    """Retrieve context via FTS5 (always) + LanceDB (try/except) + RRF merge."""
+    prompt = state.scratchpad.get("prompt", "")
     if not prompt:
-        return {}
-    hits = await bus.search(prompt, limit=5)
-    return {"scratchpad": {**state.scratchpad, "context": hits}}
+        return {"scratchpad": {**state.scratchpad, "context": []}}
+
+    bus = GossipBus(_GOSSIP_DB)
+    await bus.init_db()
+
+    # FTS5 — always works (disaster recovery baseline)
+    fts_hits = await bus.search(prompt, limit=10)
+
+    # LanceDB — opportunistic, graceful fallback
+    try:
+        embedding = await get_embedding(prompt)
+        vec_hits = await _lance_store.search(embedding, limit=10)
+    except Exception:
+        vec_hits = []
+
+    merged = rrf_merge(fts_hits, vec_hits)[:5]
+    return {"scratchpad": {**state.scratchpad, "context": merged}}
 ```
 
 ### GbrainSearchTool (`perpetua_core/graph/tools/gbrain_search.py`, create)
@@ -230,33 +373,24 @@ def gbrain_search(query: str, limit: int = 5) -> list[dict]:
         return []
 ```
 
-### Wire ContextNode into graph (`orama/graph/perpetua_graph.py`, modify)
-
-Add `context_node` as node 0 before `route_node`:
+### Wire MemoryNode into graph (`orama/graph/perpetua_graph.py`, modify)
 
 ```python
-from orama.graph.nodes.context_node import context_node
+from orama.graph.nodes.memory_node import memory_node
 
 graph = (
     MiniGraph()
-    .add_node("context",  context_node)
+    .add_node("memory",   memory_node)
     .add_node("route",    route_node)
     .add_node("dispatch", dispatch_node)
     .add_node("respond",  respond_node)
-    .add_edge(START,       "context")
-    .add_edge("context",  "route")
+    .add_edge(START,      "memory")
+    .add_edge("memory",   "route")
     .add_edge("route",    "dispatch")
     .add_edge("dispatch", "respond")
     .add_edge("respond",  END)
 )
 ```
-
-### Test cases
-
-1. `test_context_node_empty_db_returns_empty_scratchpad`
-2. `test_context_node_injects_relevant_hits_into_scratchpad`
-3. `test_gbrain_search_returns_empty_when_cli_absent`
-4. `test_gbrain_search_returns_empty_on_timeout`
 
 ---
 
@@ -265,232 +399,50 @@ graph = (
 **File:** `orama/graph/nodes/dispatch_node.py` (modify — currently echo stub)
 **Tests:** `tests/graph/test_dispatch_node.py` (create)
 
-### Implementation
-
-```python
-import os
-from perpetua_core.state import PerpetuaState
-from perpetua_core.llm import LLMClient
-
-_LLM_BASE_URL = os.environ.get("LLM_BASE_URL", "http://localhost:1234/v1")
-_LLM_MODEL    = os.environ.get("LLM_MODEL", "default")
-
-_SYSTEM_TEMPLATE = """\
-You are an AI assistant with access to relevant context from past sessions.
-
-Context from memory:
-{context}
-
-Hardware tier: {tier}
-Task type: {task_type}
-"""
-
-async def dispatch_node(state: PerpetuaState) -> dict:
-    context_hits = state.scratchpad.get("context", [])
-    context_str = "\n".join(
-        f"[{h['event_type']}] {json.dumps(h['payload'])}"
-        for h in context_hits[:5]
-    ) if context_hits else "No prior context available."
-
-    system = _SYSTEM_TEMPLATE.format(
-        context=context_str,
-        tier=getattr(state, "target_tier", "unknown"),
-        task_type=getattr(state, "task_type", ""),
-    )
-    prompt = state.scratchpad.get("prompt", "")
-
-    client = LLMClient(base_url=_LLM_BASE_URL, model=_LLM_MODEL)
-    response = await client.chat([
-        {"role": "system", "content": system},
-        {"role": "user",   "content": prompt},
-    ])
-
-    return {"scratchpad": {**state.scratchpad, "response": response}}
-```
-
-### Fallback behavior
-
-If `LLMClient` raises (model unreachable, timeout), fall back to returning a structured
-error in `scratchpad["response"]` rather than propagating — preserving the graph
-completion contract. The error is also emitted to GossipBus as an `"error"` event.
-
-### Test cases
-
-1. `test_dispatch_node_calls_llm_with_context` — mock LLMClient, verify system prompt includes context
-2. `test_dispatch_node_falls_back_on_llm_error` — raise in LLMClient, verify no exception propagates
-3. `test_dispatch_node_empty_context_uses_default_string`
+Same as original design — LLMClient wiring is unchanged by the hybrid storage decision.
+Context is injected from `scratchpad["context"]` regardless of whether it came from FTS5,
+LanceDB, or RRF-merged results.
 
 ---
 
 ## Sub-Project 4: gstack Optional Git Submodule
 
-**Scope:** `diazMelgarejo/orama-system` only (not oramasys/*)
-**Files to create/modify:**
-
-| File | Action | Purpose |
-|------|--------|---------|
-| `.gitmodules` | Create/append | Register `tools/gstack` submodule |
-| `install-gstack.sh` | Create | Manual opt-in install script |
-| `install.sh` | Modify | Add idempotent gstack detection (skip if found) |
-| `portal_server.py` | Modify | Add `GET /api/tools/status` endpoint |
-| `scripts/tool_status.py` | Create | Detection logic (shared by install.sh + portal) |
-| `docs/v2/19-gstack-optional-integration.md` | Create | v2 plan |
-
-### Detection order (idempotent, fail-safe)
-
-```python
-def detect_gstack() -> dict:
-    """Returns gstack/gbrain detection state. Never raises."""
-    import shutil, subprocess, pathlib
-
-    results = {
-        "skill_installed": pathlib.Path("~/.claude/skills/gstack").expanduser().exists(),
-        "gbrain_on_path":  shutil.which("gbrain") is not None,
-        "submodule_present": pathlib.Path("tools/gstack").exists(),
-        "version": None,
-        "source": None,
-    }
-
-    if results["gbrain_on_path"]:
-        try:
-            v = subprocess.run(["gbrain", "--version"], capture_output=True, text=True, timeout=5)
-            results["version"] = v.stdout.strip() if v.returncode == 0 else None
-            results["source"] = "path"
-        except Exception:
-            pass
-    elif results["skill_installed"]:
-        results["source"] = "skill"
-    elif results["submodule_present"]:
-        results["source"] = "submodule"
-
-    results["available"] = any([
-        results["gbrain_on_path"],
-        results["skill_installed"],
-        results["submodule_present"],
-    ])
-    return results
-```
-
-### `install-gstack.sh` (user-invokable, idempotent)
-
-```bash
-#!/usr/bin/env bash
-set -e
-
-# Idempotent gstack install. Safe to run multiple times.
-# Skips gracefully if gbrain is already on PATH.
-
-if command -v gbrain &>/dev/null; then
-  echo "✓ gbrain already available at $(which gbrain). Nothing to install."
-  exit 0
-fi
-
-echo "Installing gstack submodule..."
-git submodule add https://github.com/garrytan/gstack tools/gstack 2>/dev/null || true
-git submodule update --init --recursive tools/gstack
-
-echo "Running gstack setup..."
-bash tools/gstack/setup --team
-
-echo "✓ gstack installed. Run 'gbrain --version' to verify."
-```
-
-### Portal endpoint `GET /api/tools/status`
-
-```python
-@app.get("/api/tools/status", tags=["tools"])
-async def tools_status():
-    from scripts.tool_status import detect_gstack
-    return {"gstack": detect_gstack()}
-```
-
-Future portal UI can poll this endpoint and offer an install button.
-
-### `install.sh` modification (idempotent guard)
-
-Add to the start of `install.sh`, before any gstack-dependent step:
-
-```bash
-# gstack / gbrain detection (optional — skip if already installed or not wanted)
-if command -v gbrain &>/dev/null; then
-  echo "✓ gbrain detected at $(which gbrain). Skipping gstack setup."
-elif [ -f "tools/gstack/setup" ]; then
-  echo "→ gstack submodule found. Running setup..."
-  bash tools/gstack/setup --team
-else
-  echo "⚠ gstack not detected. RAG semantic search will use keyword-only mode."
-  echo "  To install: bash install-gstack.sh"
-fi
-```
-
-### What gstack brings (why it's valuable)
-
-gstack ships:
-- `gbrain` CLI — hybrid pgvector + FTS semantic search over indexed knowledge
-- gstack skills — `/investigate`, `/qa`, `/context-save`, `/context-restore`, etc.
-- Continuous checkpoint auto-commit for Claude Code sessions
-
-On machines where gstack is installed, the `GbrainSearchTool` @tool automatically
-provides semantic (1024-dim bge-m3) recall in addition to FTS5 keyword recall.
-On machines without it, FTS5 keyword recall is the only mode — the system works
-identically, just without semantic search.
+Unchanged from original design. gstack is always optional, always idempotent.
+Detection order: (1) gbrain on PATH → (2) `~/.claude/skills/gstack` → (3) `tools/gstack/`.
 
 ---
 
 ## Commit Plan (v1 feature branch)
 
-**Commit 1 — Retrieval layer (perpetua-core + oramasys context node)**
+**Commit 1 — Retrieval layer**
 
-```bash
-git add perpetua_core/gossip.py \
-        tests/test_gossip_search.py \
-        perpetua_core/graph/tools/gbrain_search.py \
-        orama/graph/nodes/context_node.py \
-        orama/graph/perpetua_graph.py \
-        tests/graph/test_context_node.py
-git commit -m "feat(rag): FTS5 GossipBus.search() + ContextNode + GbrainSearchTool"
+```
+feat(rag): FTS5 + LanceDB hybrid GossipBus search + MemoryNode (RRF)
 ```
 
-**Commit 2 — Generation layer (LLMClient wiring)**
+Files: `perpetua_core/gossip.py`, `perpetua_core/memory/`, `orama/graph/nodes/memory_node.py`,
+`orama/graph/perpetua_graph.py`, all related tests.
 
-```bash
-git add orama/graph/nodes/dispatch_node.py \
-        tests/graph/test_dispatch_node.py
-git commit -m "feat(dispatch): wire LLMClient into dispatch_node with context injection"
+**Commit 2 — Generation layer**
+
 ```
+feat(dispatch): wire LLMClient into dispatch_node with context injection
+```
+
+Files: `orama/graph/nodes/dispatch_node.py`, `tests/graph/test_dispatch_node.py`.
 
 ---
 
 ## v2 Upgrade Path (planning only — implement in oramasys/* later)
 
-| v1 (this week) | v2.1 (LanceDB) | v2.5 (DuckDB) |
+| v1 (this week) | v2.1 | v2.5 |
 |---|---|---|
-| FTS5 keyword on GossipBus | LanceDB + bge-m3 vector search | DuckDB analytical queries over fleet |
-| gbrain @tool (subprocess) | gbrain as first-class ToolNode | gbrain as MCP server tool |
-| LLMClient direct call | perpetua_core LLMClient with hardware policy | Full streaming + HITL context injection |
-| gstack optional submodule | gstack optional sidecar (OCI image) | gstack fleet coordinator |
+| FTS5 + LanceDB hybrid (RRF k=60) | FTS5 fallback hardening + circuit breaker | Reaper daemon for `embed_status='failed'` rows |
+| Fire-and-forget inline embed | Auto-retry on embed failure | Fleet-distributed Lance dataset |
+| gbrain @tool subprocess | gbrain as first-class ToolNode | DuckDB analytical queries over GossipBus history |
+| gstack optional submodule | gstack optional sidecar (OCI) | gstack fleet coordinator |
 
-See `docs/v2/18-rag-and-memory-design.md` and `docs/v2/19-gstack-optional-integration.md`
-for full v2 forward-plan.
-
----
-
-## Agent Dispatch Plan for Implementation
-
-Each task maps to a specialized agent:
-
-| Task | Recommended model | Rationale |
-|------|------------------|-----------|
-| GossipBus FTS5 (perpetua-core) | Claude Sonnet | Python async + SQLite schema, needs reasoning |
-| ContextNode (oramasys) | Claude Haiku | Mechanical wiring, small file |
-| GbrainSearchTool | Claude Haiku | Mechanical subprocess wrapper |
-| dispatch_node LLMClient | Claude Sonnet | Async client + fallback logic |
-| gstack submodule + install.sh | Claude Sonnet | Multi-file, shell scripts |
-| portal /api/tools/status | Claude Haiku | Simple FastAPI endpoint |
-| Tests (all) | Claude Sonnet | TDD spec compliance |
-
-Use `superpowers:dispatching-parallel-agents` for Tasks 1+3 (independent) and
-Tasks 4+5 (independent). Tasks 2 is blocked by Task 1.
+See `docs/v2/18-rag-and-memory-design.md` for full v2 forward-plan.
 
 ---
 
@@ -498,8 +450,10 @@ Tasks 4+5 (independent). Tasks 2 is blocked by Task 1.
 
 | Question | Answer |
 |----------|--------|
-| LanceDB this week? | No — deferred to v2.1. FTS5 is sufficient and has zero deps. |
-| DuckDB this week? | No — deferred to v2.5. |
-| Which repo for plans? | diazMelgarejo/orama-system for v1; oramasys/* later for v2. |
-| gstack mandatory? | Never — always optional, always idempotent. |
-| gbrain at runtime? | Via @tool subprocess wrapper, graceful fallback to empty list. |
+| LanceDB this week? | **Yes** — user pulled forward from v2.1; Ollama+bge-m3 already required |
+| FTS5 still needed? | **Yes** — disaster recovery fallback; RRF merge uses both |
+| Background daemon for embeds? | **No** — fire-and-forget inline in emit() for v1; daemon deferred to v2.5 |
+| `_pending_embeds` GC guard needed? | **Yes** — explicitly user-required; prevents task GC before completion |
+| DuckDB this week? | **No** — deferred to v2.5 |
+| gstack mandatory? | **Never** — always optional, always idempotent |
+| gbrain at runtime? | Via @tool subprocess wrapper, graceful fallback to empty list |
