@@ -31,7 +31,7 @@
 | `perpetua_core/memory/rrf.py` | Create | `rrf_merge()` — Reciprocal Rank Fusion k=60 |
 | `perpetua_core/graph/tools/__init__.py` | Create | Package init |
 | `perpetua_core/graph/tools/gbrain_search.py` | Create | `@tool GbrainSearch` subprocess wrapper |
-| `tests/test_gossip_search.py` | Create | 5 FTS5 + 2 embed-status tests |
+| `tests/test_gossip_search.py` | Create | 5 FTS5 + 3 embed-status tests (8 total) |
 | `tests/memory/test_store.py` | Create | 3 LanceDB store tests |
 | `tests/memory/test_rrf.py` | Create | 3 RRF merge tests |
 | `tests/graph/tools/test_gbrain_search.py` | Create | 4 graceful degradation tests |
@@ -408,7 +408,7 @@ Also check `[project.optional-dependencies]` or `[tool.pytest.ini_options]` for 
 ```toml
 "pytest-asyncio>=0.23",
 ```
-And ensure `asyncio_mode = "auto"` is set in `[tool.pytest.ini_options]` so `@pytest.mark.asyncio` works without explicit configuration on each test function.
+And ensure `asyncio_mode = "auto"` is set in `[tool.pytest.ini_options]`. With `auto` mode, the `@pytest.mark.asyncio` marker becomes optional (any `async def test_*` is auto-discovered). We keep explicit markers in this plan for readability; either is fine.
 
 Note: `aiohttp` is used by `memory/embed.py` for Ollama bge-m3 calls. If `httpx` is already present in the deps, use that instead — update `embed.py` accordingly. Do NOT assume `aiohttp` is present without checking pyproject.toml first.
 
@@ -843,14 +843,17 @@ async def test_memory_node_graceful_on_lance_failure(tmp_path):
     await bus.emit("dispatch", {"prompt": "test prompt"})
 
     with patch.dict(os.environ, {"GOSSIP_DB_PATH": db}):
-        with patch("perpetua_core.memory.store.EmbeddingStore.search",
-                   new_callable=AsyncMock, side_effect=Exception("lance down")):
-            from orama.graph.nodes.memory_node import memory_node
-            state = PerpetuaState(session_id="t3", scratchpad={"prompt": "test prompt"})
-            try:
-                delta = await memory_node(state)
-            except Exception as e:
-                pytest.fail(f"memory_node raised: {e}")
+        # Patch get_embedding to succeed so we isolate the LanceDB failure branch
+        with patch("perpetua_core.memory.embed.get_embedding",
+                   new_callable=AsyncMock, return_value=[0.0] * 1024):
+            with patch("perpetua_core.memory.store.EmbeddingStore.search",
+                       new_callable=AsyncMock, side_effect=Exception("lance down")):
+                from orama.graph.nodes.memory_node import memory_node
+                state = PerpetuaState(session_id="t3", scratchpad={"prompt": "test prompt"})
+                try:
+                    delta = await memory_node(state)
+                except Exception as e:
+                    pytest.fail(f"memory_node raised: {e}")
 
     # Must have context from FTS5 fallback
     hits = delta.get("scratchpad", {}).get("context", [])
@@ -1147,8 +1150,21 @@ async def test_dispatch_node_empty_context_uses_default_string():
 
 ```bash
 cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
-python -m pytest tests/graph/test_dispatch_node.py -v
+.venv/bin/python -m pytest tests/graph/test_dispatch_node.py -v
 ```
+
+- [ ] **Step 2.5: Verify LLMClient.chat() actual signature**
+
+Before implementing, inspect the real API:
+
+```bash
+cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+grep -n "async def chat\|def chat" perpetua_core/llm.py
+# Verify: (a) does chat() accept model= kwarg or only the constructor?
+#         (b) what does chat() return — completion object, dict, or str?
+```
+
+If the actual signature differs from the assumption in Step 3 (kwargs-only `messages=`, return shape `completion.choices[0].message.content`), update Step 3 implementation accordingly. The defensive `hasattr/isinstance` block in the implementation already tolerates dict-style and raw-str returns — but if `chat()` requires `model=` per-call, add it back.
 
 - [ ] **Step 3: Implement dispatch_node.py**
 
@@ -1191,16 +1207,27 @@ async def dispatch_node(state: PerpetuaState) -> dict:
     )
     prompt = state.scratchpad.get("prompt", "")
 
+    # Verify LLMClient.chat signature before wiring — see Step 2.5 below.
+    # `model` is set in constructor; some LLMClient impls also accept `model=`
+    # in chat() (per-request override). Keep only what perpetua_core.llm uses.
     try:
         client = LLMClient(base_url=_LLM_BASE_URL, model=_LLM_MODEL)
         completion = await client.chat(
-            model=_LLM_MODEL,
             messages=[
                 {"role": "system", "content": system},
                 {"role": "user",   "content": prompt},
             ],
         )
-        response = completion.choices[0].message.content
+        # Handle both OpenAI-style (completion.choices[0].message.content)
+        # and dict-style ({"choices":[{"message":{"content":...}}]}) returns.
+        if hasattr(completion, "choices"):
+            response = completion.choices[0].message.content
+        elif isinstance(completion, dict) and "choices" in completion:
+            response = completion["choices"][0]["message"]["content"]
+        elif isinstance(completion, str):
+            response = completion  # some clients return raw content
+        else:
+            response = str(completion)
     except Exception as exc:
         response = f"[dispatch error: {exc}]"
 
