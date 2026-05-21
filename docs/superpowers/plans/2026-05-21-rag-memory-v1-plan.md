@@ -4,6 +4,10 @@
 
 **Goal:** Hybrid LanceDB + FTS5 recall on GossipBus, inject merged context into oramasys graph via MemoryNode (RRF), wire LLMClient into dispatch_node.
 
+**Outcome (clarified at autoplan gate):** Enable search in the operator UI + natural language instructions that the Launcher Agent and default orchestrator can understand. Hybrid search available to ALL agents by default via the `@tool gbrain_search` + MemoryNode. This is the retrieval substrate that unlocks UI-level search and context-aware agent routing.
+
+**Follow-on (after this plan lands):** Implement v2.1 EmbeddingCircuitBreaker in `docs/v2/18-rag-and-memory-design.md` — opens after N consecutive LanceDB/Ollama failures, auto-closes after cooldown. Next sprint after this merges.
+
 **Architecture:** Two commits on `feat/rag-gstack-optional-v1`. Commit 1 = retrieval layer (perpetua-core: FTS5 + LanceDB + RRF + MemoryNode). Commit 2 = generation layer (dispatch_node LLMClient wiring).
 
 **Decision trail:** AI initially proposed FTS5-only (zero new deps). User overrode to hybrid LanceDB+FTS5 with RRF — Ollama+bge-m3 is already a hard system requirement so LanceDB is nearly free. AI initially proposed a background daemon for embed sync; user chose fire-and-forget `asyncio.create_task()` inline in `emit()`. User also required a module-level `_pending_embeds: set[asyncio.Task]` to prevent GC of in-flight tasks.
@@ -262,18 +266,25 @@ async def emit(self, event_type: EventType, payload: dict) -> None:
     # Fire-and-forget embed — never blocks emit() return.
     # AI suggested a background daemon; user chose inline task.
     # _pending_embeds holds a strong reference so GC cannot collect the task.
-    task = asyncio.create_task(self._embed_and_store(row_id, payload))
-    _pending_embeds.add(task)
-    task.add_done_callback(_pending_embeds.discard)
+    # Size cap prevents unbounded accumulation if Ollama is consistently slow.
+    if len(_pending_embeds) < 500:
+        task = asyncio.create_task(self._embed_and_store(row_id, payload))
+        _pending_embeds.add(task)
+        task.add_done_callback(_pending_embeds.discard)
+    else:
+        # Backpressure: drop embed when queue is full, row stays 'pending'
+        # (reaper will retry in v2.5; FTS5 fallback still works)
+        pass
 
 async def _embed_and_store(self, row_id: int, payload: dict) -> None:
     """Embed payload via Ollama bge-m3 and store in LanceDB."""
     try:
         from perpetua_core.memory.embed import get_embedding
-        from perpetua_core.memory.store import _global_lance_store
+        from perpetua_core.memory.store import get_lance_store
         text = json.dumps(payload)
         embedding = await get_embedding(text)
-        await _global_lance_store.add(row_id=row_id, text=text, embedding=embedding)
+        store = get_lance_store()  # uses default path; overrideable via env
+        await store.add(row_id=row_id, text=text, embedding=embedding)
         await self._update_embed_status(row_id, "embedded")
     except Exception:
         await self._update_embed_status(row_id, "failed")
@@ -323,6 +334,49 @@ async def search(
         {"row_id": r[0], "ts": r[1], "event_type": r[2], "payload": json.loads(r[3])}
         for r in rows
     ]
+
+
+async def search(
+    self,
+    query: str,
+    *,
+    limit: int = 10,
+    event_type: Optional[str] = None,
+) -> list[dict]:
+    """BM25 full-text search over GossipBus event history. Always works.
+
+    Wraps FTS5 MATCH in try/except: real prompts with quotes, colons, or
+    FTS5 operators raise OperationalError — degrade gracefully to [].
+    """
+    if not query.strip():
+        return []
+    try:
+        async with aiosqlite.connect(self._db_path) as db:
+            if event_type:
+                cursor = await db.execute(
+                    """SELECT g.id, g.ts, g.event_type, g.payload_json
+                       FROM gossip_fts f
+                       JOIN gossip g ON g.id = f.rowid
+                       WHERE gossip_fts MATCH ? AND g.event_type = ?
+                       ORDER BY rank LIMIT ?""",
+                    (query, event_type, limit),
+                )
+            else:
+                cursor = await db.execute(
+                    """SELECT g.id, g.ts, g.event_type, g.payload_json
+                       FROM gossip_fts f
+                       JOIN gossip g ON g.id = f.rowid
+                       WHERE gossip_fts MATCH ?
+                       ORDER BY rank LIMIT ?""",
+                    (query, limit),
+                )
+            rows = await cursor.fetchall()
+        return [
+            {"row_id": r[0], "ts": r[1], "event_type": r[2], "payload": json.loads(r[3])}
+            for r in rows
+        ]
+    except Exception:
+        return []  # FTS5 OperationalError on malformed query — degrade gracefully
 ```
 
 - [ ] **Step 4: Run tests — verify 7 pass**
@@ -347,18 +401,22 @@ Expected: all prior tests pass + 7 new
 
 **Files:** `perpetua_core/memory/__init__.py`, `perpetua_core/memory/store.py`, `perpetua_core/memory/embed.py`, `perpetua_core/memory/rrf.py`
 
-- [ ] **Step 1: Install lancedb**
+- [ ] **Step 1: Install lancedb and verify aiohttp**
 
 ```bash
 cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
-.venv/bin/pip install lancedb
-# Also add to pyproject.toml dependencies
+.venv/bin/pip install lancedb aiohttp
+# Check if aiohttp already in pyproject.toml
+grep "aiohttp" pyproject.toml
 ```
 
-Edit `pyproject.toml` — add to `[project] dependencies`:
+Edit `pyproject.toml` — add to `[project] dependencies` (if not already present):
 ```toml
 "lancedb>=0.6",
+"aiohttp>=3.9",
 ```
+
+Note: `aiohttp` is used by `memory/embed.py` for Ollama bge-m3 calls. If `httpx` is already present in the deps, use that instead — update `embed.py` accordingly. Do NOT assume `aiohttp` is present without checking pyproject.toml first.
 
 - [ ] **Step 2: Write failing tests**
 
@@ -510,15 +568,16 @@ class EmbeddingStore:
             return []
 
 
-# Module-level singleton — shared across GossipBus instances
-_global_lance_store: Optional[EmbeddingStore] = None
+# Path-keyed singletons — one per db_path to avoid test isolation failures.
+# (A module-level singleton without path keying locks to the first path seen,
+# causing tests that use tmp_path to silently share state. Fixed in autoplan.)
+_lance_stores: dict[str, "EmbeddingStore"] = {}
 
 
-def get_lance_store(db_path: str = "lance_memory.lance") -> EmbeddingStore:
-    global _global_lance_store
-    if _global_lance_store is None:
-        _global_lance_store = EmbeddingStore(db_path)
-    return _global_lance_store
+def get_lance_store(db_path: str = "lance_memory.lance") -> "EmbeddingStore":
+    if db_path not in _lance_stores:
+        _lance_stores[db_path] = EmbeddingStore(db_path)
+    return _lance_stores[db_path]
 ```
 
 - [ ] **Step 6: Create `perpetua_core/memory/embed.py`**
@@ -672,29 +731,35 @@ python -m pytest tests/graph/tools/test_gbrain_search.py -v
 Gracefully returns [] if gbrain is not installed, times out, or errors.
 Never raises — callers treat absence as no results.
 """
+import asyncio
 import json
 import subprocess
 from perpetua_core.graph.plugins.tool import tool
 
 
 @tool
-def gbrain_search(query: str, limit: int = 5) -> list[dict]:
+async def gbrain_search(query: str, limit: int = 5) -> list[dict]:
     """Search gbrain semantic memory for relevant past knowledge.
 
     Returns an empty list if gbrain CLI is unavailable — never raises.
+    Runs subprocess in executor to avoid blocking the async event loop.
     """
-    try:
-        result = subprocess.run(
-            ["gbrain", "query", query, "--limit", str(limit), "--format", "json"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode != 0:
+    def _run():
+        try:
+            result = subprocess.run(
+                ["gbrain", "query", query, "--limit", str(limit), "--format", "json"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode != 0:
+                return []
+            return json.loads(result.stdout) if result.stdout.strip() else []
+        except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
             return []
-        return json.loads(result.stdout) if result.stdout.strip() else []
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
-        return []
+
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _run)
 ```
 
 - [ ] **Step 5: Run 4 tests — verify they pass**
