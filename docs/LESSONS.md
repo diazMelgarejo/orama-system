@@ -2026,3 +2026,55 @@ Stop at the first hit. Never require all three to agree. Never raise on detectio
 **Pattern:** Always write `detect_gstack() -> dict` style detection functions (return a dict,
 never bool-only, never raise) so the caller can log the source and version alongside availability.
 - 2026-05-17: General policy enshrined — applies to ALL Node tooling.
+
+---
+
+## 2026-05-21 — Claude — Hybrid LanceDB+FTS5 over FTS5-only: decision trail practice
+
+### What was learned
+
+**AI initial proposal:** FTS5-only retrieval (zero new dependencies). Rationale: YAGNI, maximum simplicity.
+
+**User override:** Hybrid LanceDB+FTS5 with RRF k=60. Rationale: Ollama+bge-m3 is already a hard
+system requirement (CLAUDE.md). LanceDB has nearly zero marginal cost. Semantic recall is worth one dep.
+
+**Key insight:** When evaluating "add a new dep?", check if its runtime prerequisites are already required.
+LanceDB alone is not free. LanceDB + bge-m3 on a machine that already requires bge-m3 is near-free.
+The question is "incremental cost given current constraints" not "absolute cost from zero."
+
+**Hybrid disaster recovery posture:** FTS5 always works (no Ollama, no LanceDB). LanceDB+bge-m3 is
+opportunistic — wrapped in `try/except`. RRF falls back to `fts_hits` when `vec_hits=[]`. This means
+the system degrades gracefully rather than failing hard when the embedding stack is down.
+
+**Pattern: Document AI suggestion vs user override.** When the user makes a non-obvious architectural
+choice that differs from the AI's recommendation, record both in the plan doc's decision trail table.
+This preserves the reasoning for future sessions and prevents "why did we do this?" questions.
+Format: `| # | Topic | AI Suggestion | User Decision | Rationale |` — one row per decision.
+
+---
+
+## 2026-05-21 — Claude — Fire-and-forget asyncio.create_task() + GC prevention
+
+### What was learned
+
+`asyncio.create_task()` creates a task that the event loop holds only via a **weak reference**.
+If the calling code doesn't hold a strong reference, the task can be garbage-collected before
+completion — silently. No exception, no warning.
+
+**Fix (user-required):** module-level `_pending_embeds: set[asyncio.Task] = set()` + pattern:
+
+```python
+task = asyncio.create_task(self._embed_and_store(row_id, payload))
+_pending_embeds.add(task)
+task.add_done_callback(_pending_embeds.discard)
+```
+
+This creates a strong reference (set membership) that is automatically released when the task
+completes (via `discard` callback). The set never grows unbounded.
+
+**Why AI missed it initially:** the GC hazard is a Python-specific subtlety that requires knowing
+CPython's weak-reference behavior for asyncio tasks. It's not obvious from the task's API.
+
+**Rule:** Any `asyncio.create_task()` that is fire-and-forget MUST register the task in a
+module-level strong-reference container with a done callback to clean up. No exceptions.
+
