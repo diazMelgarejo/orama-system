@@ -172,9 +172,12 @@ async def emit(self, event_type: EventType, payload: dict) -> None:
         await db.commit()
     # Fire-and-forget embed — never blocks emit() return.
     # AI initially suggested a background daemon; user chose inline task.
-    task = asyncio.create_task(self._embed_and_store(row_id, payload))
-    _pending_embeds.add(task)
-    task.add_done_callback(_pending_embeds.discard)
+    # Backpressure: cap _pending_embeds at 500 tasks. When full, drop the embed
+    # (row stays embed_status='pending' for v2.5 reaper); FTS5 still works.
+    if len(_pending_embeds) < 500:
+        task = asyncio.create_task(self._embed_and_store(row_id, payload))
+        _pending_embeds.add(task)
+        task.add_done_callback(_pending_embeds.discard)
 ```
 
 ### `_embed_and_store()` — async embed + LanceDB write
@@ -183,12 +186,22 @@ async def emit(self, event_type: EventType, payload: dict) -> None:
 async def _embed_and_store(self, row_id: int, payload: dict) -> None:
     """Embed payload and store in LanceDB. Updates embed_status column."""
     try:
+        from perpetua_core.memory.embed import get_embedding
+        from perpetua_core.memory.store import get_lance_store
         text = json.dumps(payload)
-        embedding = await _get_embedding(text)  # Ollama bge-m3
-        await _lance_store.add(row_id=row_id, text=text, embedding=embedding)
-        await _update_embed_status(self._db_path, row_id, "embedded")
+        embedding = await get_embedding(text)
+        store = get_lance_store()  # path-keyed singleton; overrideable via env
+        await store.add(row_id=row_id, text=text, embedding=embedding)
+        await self._update_embed_status(row_id, "embedded")
     except Exception:
-        await _update_embed_status(self._db_path, row_id, "failed")
+        await self._update_embed_status(row_id, "failed")
+
+async def _update_embed_status(self, row_id: int, status: str) -> None:
+    async with aiosqlite.connect(self._db_path) as db:
+        await db.execute(
+            "UPDATE gossip SET embed_status = ? WHERE id = ?", (status, row_id)
+        )
+        await db.commit()
 ```
 
 ### New method: `search()` — FTS5 keyword recall
