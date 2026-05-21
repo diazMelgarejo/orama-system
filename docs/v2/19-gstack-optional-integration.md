@@ -3,6 +3,10 @@
 > **Status:** Planning doc — v1 implementation is in `docs/superpowers/plans/2026-05-21-gstack-optional-submodule-plan.md`.
 > This document records the v2 canonical design for `oramasys/*`.
 > **No code changes to `oramasys/*` until this plan is reviewed.**
+>
+> **Updated 2026-05-21:** v2.5 section added. The reaper daemon that retries
+> `embed_status='failed'` rows is gstack-adjacent (gbrain fleet query) and
+> coordinates with the fleet-distributed Lance dataset. See `18-rag-and-memory-design.md § v2.5`.
 
 ---
 
@@ -127,6 +131,29 @@ sidecar module handles the transport.
 
 ---
 
+## v2.5 — gstack as Fleet Reaper Coordinator
+
+In v2.5, gstack gains a new coordination role: the reaper daemon (which retries
+`embed_status='failed'` rows — see `18-rag-and-memory-design.md § v2.5`) can optionally
+query gbrain for relevant knowledge to merge with the re-embedded row.
+
+**Invariant:** the reaper still runs without gstack. gbrain is a quality enhancement,
+not a correctness requirement. The retry loop completes whether or not gbrain responds.
+
+```python
+# v2.5 reaper with optional gbrain enrichment (sketch)
+async def run_reaper(bus, store, gbrain_available: bool = False):
+    for row_id, payload_json in failed_rows:
+        embedding = await get_embedding(payload_json)
+        if gbrain_available:
+            # optional: enrich with gbrain semantic context before storing
+            gbrain_hits = gbrain_search(json.loads(payload_json).get("prompt", ""))
+            # merge into payload if useful
+        await store.add(row_id=row_id, text=payload_json, embedding=embedding)
+```
+
+---
+
 ## OQ resolutions
 
 | OQ | Topic | Resolution |
@@ -134,11 +161,12 @@ sidecar module handles the transport.
 | (new) OQ22 | gstack hard dep? | Never. Optional sidecar in all versions. |
 | (new) OQ23 | gbrain vs. LanceDB for agent RAG | gbrain = semantic search over docs + gstack memory (developer-maintained). LanceDB = agent-local RAG over GossipBus + docs (agent-owned). Both coexist, different corpora. |
 | (new) OQ24 | gstack version pinning | `tools/gstack` submodule pinned to a specific commit. Operator updates manually. No auto-update. |
+| (new) OQ28 | Reaper daemon timing | Deferred to v2.5. v1 uses fire-and-forget inline embed per user decision. |
 
 ---
 
 ## See also
 
-- `18-rag-and-memory-design.md` — LanceDB vector store and MemoryNode design
+- `18-rag-and-memory-design.md` — LanceDB vector store, MemoryNode design, v2.5 reaper + DuckDB
 - `docs/superpowers/plans/2026-05-21-gstack-optional-submodule-plan.md` — v1 implementation plan
 - `docs/plans/2026-05-19-gbrain-crg-embedding-integration.md` — unified bge-m3 embedding plan
