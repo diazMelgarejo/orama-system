@@ -13,6 +13,7 @@ Non-kernel modules ship at their own pace. Each plugs into the kernel via the `M
 | RAG + memory | [rag-and-memory.md](./rag-and-memory.md) | v2.0+ | No | Stub |
 | Lessons + SKILL.md tooling | [lessons-and-skill-authoring.md](./lessons-and-skill-authoring.md) | v2.0+ | No | Stub |
 | Public Plugin API | [plugin-api-public.md](./plugin-api-public.md) | v2.1 | No | Stub |
+| AlphaClaw MCP smoke-test / OpenClaw opener | [alphaclaw-mcp-smoke-test.md](./alphaclaw-mcp-smoke-test.md) | v2.1 | No | **Spec ready** |
 
 ## Plug-in contract
 
