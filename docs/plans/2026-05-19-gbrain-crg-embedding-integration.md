@@ -96,7 +96,7 @@ Note: `CRG_ACCEPT_CLOUD_EGRESS=1` suppresses the localhost-egress warning since 
 # Toggles CRG embedding provider in OpenClaw/.mcp.json
 set -euo pipefail
 MODE="${1:-status}"
-MCP_JSON="/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/.mcp.json"
+MCP_JSON="<workspace>/.mcp.json"
 
 case "$MODE" in
   gbrain)
