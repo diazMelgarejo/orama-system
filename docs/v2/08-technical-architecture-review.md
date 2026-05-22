@@ -108,7 +108,7 @@ A special plugin that injects a `check_integrity()` call after every `N` nodes. 
 ## 7. Repository Locations (Amended 2026-05-02)
 
 The active v2 repositories are confirmed to be located at:
-\`/Users/lawrencecyremelgarejo/Documents/oramasys/\`
+\`~/Documents/oramasys/\`
 
 - \`agate/\`: Hardware Policy Specification
 - \`oramasys/\`: Orchestration & API Layer
