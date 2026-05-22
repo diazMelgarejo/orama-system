@@ -21,13 +21,29 @@
 | **v2-planning** | `oramasys/perpetua-core` + `oramasys/oramasys` | clean-slate kernel + methodology | **Primary target.** All file paths below assume this layout. |
 | **v1-legacy** | `diazMelgarejo/Perpetua-Tools` + `diazMelgarejo/orama-system` | working runtime + methodology | **Selective backport only.** Module layout differs (no `perpetua_core` package in PT — see `Perpetua-Tools/orchestrator/`). See "v1 Backport Candidates" near end of plan. |
 
-**Hard rule (recorded 2026-05-22):** Code goes to v1 (diazMelgarejo/*) for actual shipping. Plans, designs, and clean-slate architecture live in v2 (oramasys/*) BUT we **never write code directly to oramasys/\***. We plan in `/docs/v2/` of the v1 repos and the v2 repos absorb absorption-ready slices at v2 cut-time. Override of this rule requires explicit AskUserQuestion confirmation.
+> ## ⚠️ STOP — READ BEFORE EXECUTING ANY CHECKLIST ITEM
+>
+> **Every bash block in this plan that begins with `cd ~/oramasys/...` is
+> REFERENCE-ONLY documentation of what the v2-cut commit ceremony would
+> look like. DO NOT execute those commands. DO NOT write code into
+> `~/oramasys/perpetua-core` or `~/oramasys/oramasys`.**
+>
+> Actual implementation for v1 lands in `<workspace>/Perpetua-Tools/`
+> and `<workspace>/orama-system/`. Module layout differs from v2 —
+> see "v1 Backport Candidates" near end of plan for the real mapping
+> (no `perpetua_core/` package in PT; use `orchestrator/` + `perpetua/discovery/`).
+>
+> Override of the v2 no-write rule requires an explicit AskUserQuestion
+> confirmation in chat with the user. A coding agent that follows the
+> checklist literally without this gate is breaking the architectural contract.
 
-**Local paths (verified 2026-05-22):**
-- v1 orama-system (this repo): `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system`
-- v1 Perpetua-Tools: `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools` (no `perpetua_core` package — has `orchestrator/` + `perpetua/discovery/`)
-- v2 perpetua-core (reference only, do not write): `~/oramasys/perpetua-core`
-- v2 oramasys (reference only, do not write): `~/oramasys/oramasys`
+**Hard rule (recorded 2026-05-22):** Code goes to v1 (`diazMelgarejo/*`) for actual shipping. Plans, designs, and clean-slate architecture live in v2 (`oramasys/*`) BUT we **never write code directly to `oramasys/*`**. We plan in `/docs/v2/` of the v1 repos and the v2 repos absorb absorption-ready slices at v2 cut-time. Override of this rule requires explicit AskUserQuestion confirmation.
+
+**Workspace paths (anonymized for portability; resolve `<workspace>` to your local checkout root):**
+- v1 orama-system (this repo): `<workspace>/orama-system`
+- v1 Perpetua-Tools: `<workspace>/Perpetua-Tools` (no `perpetua_core` package — has `orchestrator/` + `perpetua/discovery/`)
+- v2 perpetua-core (REFERENCE-ONLY — do not write): `~/oramasys/perpetua-core`
+- v2 oramasys (REFERENCE-ONLY — do not write): `~/oramasys/oramasys`
 
 **Run tests with:** `python -m pytest tests/ -v` (in each repo root)
 
@@ -221,6 +237,7 @@ async def test_emit_sets_embed_status_failed_on_error(tmp_path):
 - [ ] **Step 2: Run tests — verify they all FAIL**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/perpetua-core
 python -m pytest tests/test_gossip_search.py -v
 ```
@@ -441,7 +458,7 @@ async def search(
 python -m pytest tests/test_gossip_search.py -v
 ```
 
-Expected: 7 passed
+Expected: 8 passed  (5 FTS5 + 3 embed-status — matches File Map)
 
 - [ ] **Step 5: Run full perpetua-core suite**
 
@@ -460,6 +477,7 @@ Expected: all prior tests pass + 8 new
 - [ ] **Step 1: Install lancedb and verify aiohttp**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/perpetua-core
 .venv/bin/pip install lancedb aiohttp
 # Check if aiohttp already in pyproject.toml
@@ -1018,6 +1036,7 @@ async def test_memory_node_empty_prompt_returns_empty(tmp_path):
 - [ ] **Step 2: Run tests — verify 4 fail**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/oramasys
 python -m pytest tests/graph/test_memory_node.py -v
 ```
@@ -1128,6 +1147,7 @@ python -m pytest tests/ -v
 - [ ] **Step 1: Verify all tests pass in perpetua-core**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/perpetua-core
 python -m pytest tests/ -v
 ```
@@ -1137,6 +1157,7 @@ Expected: 32 prior + 18 new = 50 passing
 - [ ] **Step 2: Verify all tests pass in oramasys**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/oramasys
 python -m pytest tests/ -v
 ```
@@ -1146,6 +1167,7 @@ Expected: 4 prior + 4 new = 8 passing
 - [ ] **Step 3: Commit perpetua-core**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/perpetua-core
 git add perpetua_core/gossip.py \
         perpetua_core/memory/__init__.py \
@@ -1186,6 +1208,7 @@ EOF
 - [ ] **Step 4: Commit oramasys**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/oramasys
 git add orama/graph/nodes/__init__.py \
         orama/graph/nodes/memory_node.py \
@@ -1293,6 +1316,7 @@ async def test_dispatch_node_empty_context_uses_default_string():
 - [ ] **Step 2: Run tests — verify 3 fail**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/oramasys
 .venv/bin/python -m pytest tests/graph/test_dispatch_node.py -v
 ```
@@ -1302,6 +1326,7 @@ cd ~/oramasys/oramasys
 Before implementing, inspect the real API:
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/perpetua-core
 grep -n "async def chat\|def chat" perpetua_core/llm.py
 # Verify: (a) does chat() accept model= kwarg or only the constructor?
@@ -1399,7 +1424,9 @@ Expected: 8 prior + 3 new = 11 passing
 - [ ] **Step 1: Final test run across both repos**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/perpetua-core && python -m pytest tests/ -v
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/oramasys && python -m pytest tests/ -v
 ```
 
@@ -1408,6 +1435,7 @@ All must be green.
 - [ ] **Step 2: Commit (oramasys)**
 
 ```bash
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/oramasys
 git add orama/graph/nodes/dispatch_node.py \
         tests/graph/test_dispatch_node.py
@@ -1432,10 +1460,12 @@ EOF
 
 ```bash
 # 1. perpetua-core: all tests green
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/perpetua-core
 python -m pytest tests/ -v  # expect 50+ passing
 
 # 2. oramasys: all tests green
+# REFERENCE-ONLY — DO NOT EXECUTE. v2-cut illustration; v1 work lives under <workspace>/Perpetua-Tools and <workspace>/orama-system.
 cd ~/oramasys/oramasys
 python -m pytest tests/ -v  # expect 11+ passing
 
