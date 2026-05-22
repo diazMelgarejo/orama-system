@@ -31,7 +31,7 @@ jobs:
       
       - name: Run package install test
         run: |
-          python test-package-install.py
+          python scripts/test-package-install.py
       
       - name: Build package
         run: |
