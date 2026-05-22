@@ -27,7 +27,7 @@ test = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-pythonpath = ["."]
+pythonpath = [".", "scripts"]
 filterwarnings = [
     "ignore:There is no current event loop:DeprecationWarning",
     "ignore::ResourceWarning",
@@ -42,15 +42,13 @@ include = [
     "bin",
     "examples",
     "docs",
+    "scripts",
     "tests",
     "LICENSE",
     "README.md",
     "CONTRIBUTING.md",
     "CHANGELOG.md",
     "install.sh",
-    "install-multi-agent.sh",
-    "verify-package.sh",
-    "test-package-install.py",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -59,12 +57,10 @@ packages = ["bin"]
 [tool.hatch.build.targets.wheel.force-include]
 "docs" = "docs"
 "examples" = "examples"
+"scripts" = "scripts"
 "api_server.py" = "api_server.py"
 "LICENSE" = "LICENSE"
 "README.md" = "README.md"
 "CONTRIBUTING.md" = "CONTRIBUTING.md"
 "CHANGELOG.md" = "CHANGELOG.md"
 "install.sh" = "install.sh"
-"install-multi-agent.sh" = "install-multi-agent.sh"
-"verify-package.sh" = "verify-package.sh"
-"test-package-install.py" = "test-package-install.py"
