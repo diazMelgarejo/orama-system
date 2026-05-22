@@ -40,7 +40,7 @@ Already in commit `7ee2819` on both repos:
 - [ ] **Step 1: Read current file**
 
 ```bash
-cat "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/AlphaClaw/.claude/skills/cherry-pick-down/SKILL.md" | head -12
+cat "<workspace>/AlphaClaw/.claude/skills/cherry-pick-down/SKILL.md" | head -12
 ```
 
 Expected: shows `name`, `description`, `disable-model-invocation`, `version`, `layer` but NO `agent_compatibility`.
@@ -73,7 +73,7 @@ agent_compatibility:
 
 ```bash
 grep -A 4 "agent_compatibility" \
-  "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/AlphaClaw/.claude/skills/cherry-pick-down/SKILL.md"
+  "<workspace>/AlphaClaw/.claude/skills/cherry-pick-down/SKILL.md"
 ```
 
 Expected output:
@@ -87,7 +87,7 @@ agent_compatibility:
 
 - [ ] **Step 4: Add `agent_compatibility` to frontmatter**
 
-Open `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/AlphaClaw/.claude/skills/macos-port-status/SKILL.md` and add after `layer: "agent-local"`:
+Open `<workspace>/AlphaClaw/.claude/skills/macos-port-status/SKILL.md` and add after `layer: "agent-local"`:
 
 ```yaml
 agent_compatibility:
@@ -99,7 +99,7 @@ agent_compatibility:
 
 ```bash
 grep -A 4 "agent_compatibility" \
-  "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/AlphaClaw/.claude/skills/macos-port-status/SKILL.md"
+  "<workspace>/AlphaClaw/.claude/skills/macos-port-status/SKILL.md"
 ```
 
 Expected: same output as Step 3.
@@ -111,7 +111,7 @@ The current frontmatter uses `metadata.version` instead of top-level `version` a
 - [ ] **Step 6: Read current frontmatter**
 
 ```bash
-head -15 "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/.agents/skills/supabase/SKILL.md"
+head -15 "<workspace>/.agents/skills/supabase/SKILL.md"
 ```
 
 - [ ] **Step 7: Add missing `layer` field**
@@ -144,7 +144,7 @@ agent_compatibility:
 
 ```bash
 grep "layer:" \
-  "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/.agents/skills/supabase/SKILL.md"
+  "<workspace>/.agents/skills/supabase/SKILL.md"
 ```
 
 Expected: `layer: "agent-local"`
@@ -179,7 +179,7 @@ agent_compatibility:
 
 ```bash
 grep -E "^layer:|agent_compatibility:" \
-  "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/.agents/skills/supabase-postgres-best-practices/SKILL.md"
+  "<workspace>/.agents/skills/supabase-postgres-best-practices/SKILL.md"
 ```
 
 Expected:
@@ -191,7 +191,7 @@ agent_compatibility:
 - [ ] **Step 11: Commit Task 1**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw"
+cd "<workspace>"
 # AlphaClaw skills are inside the AlphaClaw submodule — commit there first
 cd AlphaClaw
 git add .claude/skills/cherry-pick-down/SKILL.md .claude/skills/macos-port-status/SKILL.md
@@ -203,7 +203,7 @@ Adds Claude + Codex as these are repo-local coding agent skills.
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 
 # Then commit the .agents skills
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw"
+cd "<workspace>"
 git add .agents/skills/supabase/SKILL.md .agents/skills/supabase-postgres-best-practices/SKILL.md
 git commit -m "fix(skills): add layer field and normalize agent_compatibility for supabase skills
 
@@ -291,7 +291,7 @@ async def test_dispatch_skips_windows_coder_when_pool_empty(tmp_path, monkeypatc
 - [ ] **Step 2: Run tests to verify they fail**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools"
+cd "<workspace>/Perpetua-Tools"
 python -m pytest tests/test_supervisor_smoke.py::test_dispatch_prefers_windows_coder_when_reachable -v
 ```
 
@@ -377,7 +377,7 @@ async def _dispatch(self, spec: JobSpec) -> dict:
 - [ ] **Step 5: Run the new tests**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools"
+cd "<workspace>/Perpetua-Tools"
 python -m pytest tests/test_supervisor_smoke.py \
   -k "windows_coder" -v
 ```
@@ -482,7 +482,7 @@ Check in `orchestrator/supervisor.py`:
 
 ```bash
 grep -n "task_type" \
-  "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools/orchestrator/supervisor.py" \
+  "<workspace>/Perpetua-Tools/orchestrator/supervisor.py" \
   | head -5
 ```
 
@@ -558,7 +558,7 @@ Expected: All existing tests green + new tests green. Zero regressions.
 - [ ] **Step 8: Commit Task 3**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools"
+cd "<workspace>/Perpetua-Tools"
 git add tests/test_supervisor_smoke.py tests/test_contracts.py orchestrator/supervisor.py
 git commit -m "$(cat <<'EOF'
 feat(supervisor): implement Windows coder pool dispatch + test coverage
@@ -588,7 +588,7 @@ EOF
 - [ ] **Step 1: Run the spec verification checklist**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
 
 # A: Submodule
 echo "=== A: Submodule ===" && git submodule status bin/orama-system/skills/openclaw-skills/cc-openclaw
@@ -604,7 +604,7 @@ echo "=== C: Search frugality ===" && grep -c "Search Frugality Rule" bin/orama-
 echo "=== C: Win coder in CLAUDE.md ===" && grep "WIN_CODER" CLAUDE.md
 
 # D: contracts pool field
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools"
+cd "<workspace>/Perpetua-Tools"
 echo "=== D: contracts.py pool ===" && python -c "
 from orchestrator.contracts import OrchestrationSession
 import os; os.environ['WIN_CODER_ENDPOINTS'] = 'http://192.168.254.103:1234'
@@ -623,7 +623,7 @@ Expected for each:
 - [ ] **Step 2: Run full PT test suite one final time**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools"
+cd "<workspace>/Perpetua-Tools"
 python -m pytest tests/ -v --tb=short 2>&1 | grep -E "PASSED|FAILED|ERROR|warnings" | tail -30
 ```
 
@@ -632,7 +632,7 @@ Expected: Zero FAILED, zero ERROR.
 - [ ] **Step 3: Commit orama-system spec + plan**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
 git add docs/superpowers/plans/2026-05-20-cc-openclaw-master-alignment.md
 git commit -m "docs(plan): add cc-openclaw master alignment implementation plan
 
@@ -646,21 +646,21 @@ Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 - [ ] **Step 4: Push orama-system branch**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
 git push -u origin feat/openclaw-skills-submodule
 ```
 
 - [ ] **Step 5: Push PT branch**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools"
+cd "<workspace>/Perpetua-Tools"
 git push -u origin feat/openclaw-skills-submodule
 ```
 
 - [ ] **Step 6: Open orama-system PR**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
 gh pr create \
   --title "feat(openclaw-skills): cc-openclaw master alignment — submodule, compliance, search frugality, Windows coder policy" \
   --body "$(cat <<'EOF'
@@ -690,7 +690,7 @@ EOF
 - [ ] **Step 7: Open Perpetua-Tools PR**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools"
+cd "<workspace>/Perpetua-Tools"
 gh pr create \
   --title "feat(supervisor): Windows coder pool dispatch + skill envelope gate + test coverage" \
   --body "$(cat <<'EOF'

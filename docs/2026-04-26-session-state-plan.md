@@ -124,7 +124,7 @@ All 8 objects in `git fsck --unreachable` are accounted for. **Nothing was lost.
 gh pr merge 21 --merge --repo diazMelgarejo/Perpetua-Tools
 
 # Step 2: Merge orama-system salvage → main
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
 git checkout main && git pull origin main
 git merge 2026-04-24-001-orama-salvage --no-ff -m "chore(merge): orama-system salvage → main"
 git push origin main
@@ -133,7 +133,7 @@ git push origin main
 ### P1 — Rename Remaining Stale Skill Dir in orama-system
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
 git mv .claude/skills/ultrathink-system .claude/skills/orama
 git commit -m "feat(rename): ultrathink-system skill dir → orama"
 ```

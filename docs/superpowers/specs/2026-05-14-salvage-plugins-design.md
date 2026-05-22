@@ -594,8 +594,8 @@ The canonical shipped build (commit `2f717f5`, 2026-05-01) has zero references t
 
 This spec is docs-only. Before any of the above is implemented:
 
-1. Run `cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core && python -m pytest tests/ -v` → expect 32 passing
-2. Run `cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys && python -m pytest tests/ -v` → expect 4 passing
+1. Run `cd ~/Documents/oramasys/perpetua-core && python -m pytest tests/ -v` → expect 32 passing
+2. Run `cd ~/Documents/oramasys/oramasys && python -m pytest tests/ -v` → expect 4 passing
 3. Read all 6 plugins to confirm patterns
 4. Verify all 3 repos are 0 ahead/0 behind remote
 5. Open a NEW brainstorm session to plan Phase 2 implementation in detail using subagent-driven-development
