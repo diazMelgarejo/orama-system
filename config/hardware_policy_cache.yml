@@ -1,5 +1,5 @@
 # hardware_policy_cache.yml — orama-system offline DR fallback
-# Source:  /Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools/config/model_hardware_policy.yml
+# Source:  <workspace>/Perpetua-Tools/config/model_hardware_policy.yml
 # Refreshed: 2026-05-17T08:51:17Z  sha256:1e7dddeb624a
 #
 # This file is the Layer-2 disaster recovery fallback.

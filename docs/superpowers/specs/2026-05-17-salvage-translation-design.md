@@ -87,7 +87,7 @@ When two plugins share translation idioms (e.g., both use `state.scratchpad` dic
 
 ### Branch model
 
-- **Working branch:** `feat/salvage-plugins-rc1` in `/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core` (local only — **no push to `oramasys/*` without AFRP gate**)
+- **Working branch:** `feat/salvage-plugins-rc1` in `~/Documents/oramasys/perpetua-core` (local only — **no push to `oramasys/*` without AFRP gate**)
 - **Branch source of truth:** this spec; branch name is **pinned** so any agent that picks up work pushes to the same branch
 - **Atomic commits:** one logical port per commit. Conventional Commits format: `feat(plugin): port tool_node from wrong-repo` / `feat(engine): add set_entry + compile methods`
 - **Revert-clean:** any single commit can be `git revert <sha>`-ed without affecting other ports
@@ -308,8 +308,8 @@ The salvage port is **DONE** when:
 
 - Selection spec: [`2026-05-14-salvage-plugins-design.md`](2026-05-14-salvage-plugins-design.md) — *what* to port, this spec covers *how*.
 - Wrong-repo post-mortem: [`docs/wiki/10-wrong-repo-build-what-not-to-do.md`](../../wiki/10-wrong-repo-build-what-not-to-do.md)
-- Canonical repo: `/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core` (commit `2f717f5`)
-- Wrong-repo: `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perpetua-core` (commit `9cb153a`, remote `diazMelgarejo/perpetua-core`)
+- Canonical repo: `~/Documents/oramasys/perpetua-core` (commit `2f717f5`)
+- Wrong-repo: `<workspace>/perpetua-core` (commit `9cb153a`, remote `diazMelgarejo/perpetua-core`)
 - TDD discipline: `docs/TDD.md` + `superpowers:test-driven-development` skill
 - AFRP gate: `bin/orama-system/afrp/SKILL.md`
 - MCP orchestration: `bin/orama-system/mcp-orchestration/SKILL.md`
