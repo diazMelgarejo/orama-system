@@ -745,8 +745,8 @@ Gemini CLI (installed under nvm v24) uses `??=` (ES2021). But `#!/usr/bin/env no
 
 ```bash
 #!/usr/bin/env bash
-exec /Users/lawrencecyremelgarejo/.nvm/versions/node/v24.14.1/bin/node \
-     /Users/lawrencecyremelgarejo/.nvm/versions/node/v24.14.1/bin/gemini "$@"
+exec ~/.nvm/versions/node/v24.14.1/bin/node \
+     ~/.nvm/versions/node/v24.14.1/bin/gemini "$@"
 ```
 
 `~/.local/bin/` comes before nvm in PATH → wrapper always wins.
@@ -1002,7 +1002,7 @@ win: ✅ 192.168.254.105:1234 — 5 models
 ### Hardware × Agent Matrix Test — All 6 OpenClaw Agents (confirmed 2026-04-27)
 
 - **Model IDs are case-sensitive** in LM Studio. Use all-lowercase: `qwen3.5-9b-mlx`, `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`. No `-4bit` suffix on Mac.
-- **openclaw CLI requires Node.js ≥ v22**. Default v14 fails instantly. Use full path: `/Users/lawrencecyremelgarejo/.nvm/versions/node/v24.14.1/bin/openclaw`
+- **openclaw CLI requires Node.js ≥ v22**. Default v14 fails instantly. Use full path: `~/.nvm/versions/node/v24.14.1/bin/openclaw`
 - **All 6 agents pass**: win-researcher/coder/autoresearcher (Win 27B, 107–130s), main/mac-researcher/orchestrator (Mac 9B, 105–308s via Gemini fallback).
 - **Thinking models return empty `text`** — reply is in `reasoning_content`. Always check both fields.
 - **commandTimeout must be ≥ 300 000 ms** for reasoning model turns.
@@ -1092,7 +1092,7 @@ Three Python packages built and pushed to GitHub under `oramasys` org. All tests
 - `oramasys` 4/4 tests — FastAPI glass-window `/run` + `/health`, hardware-routed 3-node graph
 - `agate` — JSON Schema + examples for `model_hardware_policy.yml`
 
-Local paths: `/Users/lawrencecyremelgarejo/Documents/oramasys/{perpetua-core,oramasys,agate}`
+Local paths: `~/Documents/oramasys/{perpetua-core,oramasys,agate}`
 GitHub: `github.com/oramasys/{perpetua-core,oramasys,agate}`
 
 **Phase 4 (parity tests) is next.** `dispatch_node` is still an echo stub — needs real `LLMClient` wiring.
@@ -1104,7 +1104,7 @@ Missing from spec (still TODO): `message.py`, `graph/nodes.py`, `graph/edges.py`
 Two Python runtimes coexist:
 
 - **Python 3.13**: `/Library/Frameworks/Python.framework/Versions/3.13/bin/python3` — has oramasys packages installed
-- **Python 3.12**: `/Users/lawrencecyremelgarejo/miniconda3/bin/python` — does NOT have v2 packages
+- **Python 3.12**: `~/miniconda3/bin/python` — does NOT have v2 packages
 
 Use `python3` (or full path `pytest`) for v2 tests. Running `python -m pytest` from miniconda shell fails with `ModuleNotFoundError: No module named 'perpetua_core'`.
 

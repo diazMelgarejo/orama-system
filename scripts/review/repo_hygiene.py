@@ -25,6 +25,39 @@ IDENTITY_DOC_EXCEPTIONS = {
     # v2 spec doc — quotes forbidden tokens as YAML config examples, not leaks
     "docs/v2/11-idempotency-and-guard-patterns.md",
 }
+# Personal-path leak protection (OpSec) — block any tracked file from containing
+# an absolute path under /Users/<anything>/ or /home/<anything>/. Developer
+# workstation paths in public docs are a dox risk and hurt portability.
+# Pattern intentionally matches the username segment so the check fails even
+# if someone copies a teammate's path. Use ~, $REPO_ROOT, or <workspace> instead.
+PERSONAL_PATH_PATTERN = re.compile(r"(/Users/|/home/)([A-Za-z][A-Za-z0-9._-]+)/")
+# Username segments that are documentation placeholders, not real leaks.
+# These appear in .paths.example, skill protocol docs, etc., and should be
+# allowed so example commands stay readable. A real workstation username
+# like "lawrencecyremelgarejo" will not match this set.
+PERSONAL_PATH_PLACEHOLDERS = frozenset({
+    "you", "user", "example", "username", "name", "youruser", "yourname",
+    "<user>", "<username>", "USERNAME", "USER",
+})
+PERSONAL_PATH_EXCEPTIONS = {
+    # The script itself names the pattern in source as documentation.
+    "scripts/review/repo_hygiene.py",
+    # Hygiene test asserts the rule against fixture content — must contain
+    # a sample personal path to verify detection.
+    "tests/test_repo_hygiene.py",
+}
+# Hidden / bidirectional Unicode controls — these can hide malicious code in
+# diffs (Trojan-Source style). Block in all tracked files except the hygiene
+# script and its tests, which name the codepoints for documentation.
+BIDI_CONTROL_CHARS = {
+    "‪": "LRE", "‫": "RLE", "‬": "PDF",
+    "‭": "LRO", "‮": "RLO",
+    "⁦": "LRI", "⁧": "RLI", "⁨": "FSI", "⁩": "PDI",
+}
+BIDI_CONTROL_EXCEPTIONS = {
+    "scripts/review/repo_hygiene.py",
+    "tests/test_repo_hygiene.py",
+}
 PRIVATE_GENERATED_TRACKED = {".env", ".env.local", ".paths"}
 MARKDOWN_LINK_PATTERN = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 NEW_MARKDOWN_LINE_WARN = 200
@@ -121,6 +154,72 @@ def scan_forbidden_identity(root: Path, files: list[str]) -> list[str]:
             if token in text:
                 errors.append(f"forbidden identity token in tracked file: {rel}")
                 break
+    return errors
+
+
+def scan_personal_paths(root: Path, files: list[str]) -> list[str]:
+    """Block absolute /Users/<name>/ or /home/<name>/ paths in tracked files.
+
+    Workstation paths in committed files are an OpSec leak (developer name,
+    directory layout, sometimes machine hostname). They also break portability.
+    Use ~, $REPO_ROOT, or <workspace> placeholders instead.
+    """
+    errors: list[str] = []
+    for rel in files:
+        if rel in PERSONAL_PATH_EXCEPTIONS:
+            continue
+        path = root / rel
+        if not path.is_file() or is_binary(path):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for line_no, line in enumerate(text.splitlines(), 1):
+            m = PERSONAL_PATH_PATTERN.search(line)
+            if not m:
+                continue
+            # The captured username segment; allow well-known doc placeholders.
+            username = m.group(2)
+            if username in PERSONAL_PATH_PLACEHOLDERS:
+                continue
+            errors.append(
+                f"personal absolute path in tracked file: {rel}:{line_no}: "
+                f"matched {m.group(0)!r} — use ~, $REPO_ROOT, or <workspace>"
+            )
+            break
+    return errors
+
+
+def scan_bidi_controls(root: Path, files: list[str]) -> list[str]:
+    """Block Unicode BiDi control characters (Trojan-Source defense).
+
+    These invisible characters can reorder source code so the rendered
+    text differs from the parsed AST. CVE-2021-42574. Mostly relevant
+    in code, but markdown can hide them in code fences too.
+    """
+    errors: list[str] = []
+    for rel in files:
+        if rel in BIDI_CONTROL_EXCEPTIONS:
+            continue
+        path = root / rel
+        if not path.is_file() or is_binary(path):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for line_no, line in enumerate(text.splitlines(), 1):
+            for ch, name in BIDI_CONTROL_CHARS.items():
+                if ch in line:
+                    errors.append(
+                        f"BiDi control char in tracked file: {rel}:{line_no}: "
+                        f"U+{ord(ch):04X} ({name})"
+                    )
+                    break
+            else:
+                continue
+            break
     return errors
 
 
@@ -334,6 +433,8 @@ def main() -> int:
     errors: list[str] = []
     errors.extend(check_identity(root))
     errors.extend(scan_forbidden_identity(root, files))
+    errors.extend(scan_personal_paths(root, files))
+    errors.extend(scan_bidi_controls(root, files))
     errors.extend(check_private_generated_tracking(files))
     errors.extend(check_markdown_link_hygiene(root, files))
     errors.extend(check_generated_artifact_tracking(files))
