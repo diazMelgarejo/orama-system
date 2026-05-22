@@ -10,7 +10,10 @@
     "LM_STUDIO_URL": "http://localhost:1234/v1",
     "OPENAI_API_KEY": "sk-local",
     "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/scripts:$HOME/openclaw-v1/Perpetua-Tools",
-    "REPO_ROOT": "${workspaceFolder}"
+    "REPO_ROOT": "${workspaceFolder}",
+    "ULTRATHINK_PORT": "8001",
+    "PORTAL_PORT": "8002",
+    "ALPHACLAW_PORT": "3000"
   },
 
   "terminals": [
@@ -45,6 +48,18 @@
     {
       "name": "hygiene gate (PT)",
       "command": "source .venv/bin/activate && python $OPENCLAW_HOME/Perpetua-Tools/scripts/review/repo_hygiene.py $OPENCLAW_HOME/Perpetua-Tools"
+    },
+    {
+      "name": "orama API server (8001)",
+      "command": "source .venv/bin/activate && uvicorn api_server:app --reload --port 8001"
+    },
+    {
+      "name": "orama portal (8002)",
+      "command": "source .venv/bin/activate && python portal_server.py"
+    },
+    {
+      "name": "AlphaClaw server (3000)",
+      "command": "cd $OPENCLAW_HOME/AlphaClaw && node bin/alphaclaw.js start"
     }
   ]
 }
