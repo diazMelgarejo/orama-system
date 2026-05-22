@@ -111,6 +111,7 @@ Explicit list of things deferred to non-kernel modules or later versions. Don't 
 - ❌ Lessons / SKILL.md authoring tooling (deferred — see `02-modules/lessons-and-skill-authoring.md`)
 - ❌ Redis distributed coordination (deferred — see `02-modules/redis-coordination.md`)
 - ❌ MCP-Optional transport (deferred — see `02-modules/mcp-optional-transport.md`)
+- ❌ AlphaClaw MCP smoke-test / OpenClaw session opener (v2.1 — see `02-modules/alphaclaw-mcp-smoke-test.md`)
 
 ---
 
@@ -126,6 +127,7 @@ Explicit list of things deferred to non-kernel modules or later versions. Don't 
 | RAG / memory | new | v2.0+ | no | stub |
 | Lessons + SKILL.md | v1 carry-over | v2.0+ | no | stub |
 | Plugin API (public) | v2.1 promotion of internal | v2.1 | no | stub |
+| AlphaClaw MCP smoke-test / OpenClaw opener | PT Gate 2 → session pre-flight gate | v2.1 | no | **spec ready** |
 | MAESTRO + SWARM safety | new | v2.5 | no | stub |
 
 ---
@@ -145,7 +147,8 @@ orama-system/docs/v2/
 │   ├── self-improve-evaluator.md
 │   ├── rag-and-memory.md
 │   ├── lessons-and-skill-authoring.md
-│   └── plugin-api-public.md
+│   ├── plugin-api-public.md
+│   └── alphaclaw-mcp-smoke-test.md        ← OpenClaw opener + 14-tool verifier (v2.1 spec)
 ├── 03-safety-v2.5.md
 ├── 04-build-order.md
 ├── 05-feasibility-review.md
