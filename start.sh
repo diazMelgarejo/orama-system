@@ -166,7 +166,7 @@ if [ -n "${PT_DIR:-}" ]; then
   if [ -f "$_PT_NET_CONFIG" ]; then
     _REL_NET_CONFIG="$(_PYLINK_SRC="$_PT_NET_CONFIG" _PYLINK_BASE="$SCRIPT_DIR" \
       python3 -c "import os; print(os.path.relpath(os.environ['_PYLINK_SRC'],os.environ['_PYLINK_BASE']))" 2>/dev/null || true)"
-    [ -n "$_REL_NET_CONFIG" ] && (cd "$SCRIPT_DIR" && _ensure_symlink "network_autoconfig.py" "$_REL_NET_CONFIG")
+    [ -n "$_REL_NET_CONFIG" ] && (cd "$SCRIPT_DIR" && _ensure_symlink "scripts/network_autoconfig.py" "$_REL_NET_CONFIG")
   fi
 
   # lib/shared/agentic_stack — shared library from PT
@@ -250,10 +250,10 @@ fi
 # Non-fatal — startup continues on any error.
 # Guard: skip entirely on non-macOS (Linux / CI).
 _OS_NAME="$(uname -s 2>/dev/null || echo Unknown)"
-if [ "$_OS_NAME" = "Darwin" ] && [ -f "$SCRIPT_DIR/setup_macos.py" ]; then
-  "$US_PYTHON" "$SCRIPT_DIR/setup_macos.py" --quiet 2>&1 | sed 's/^/  /' || true
+if [ "$_OS_NAME" = "Darwin" ] && [ -f "$SCRIPT_DIR/scripts/setup_macos.py" ]; then
+  "$US_PYTHON" "$SCRIPT_DIR/scripts/setup_macos.py" --quiet 2>&1 | sed 's/^/  /' || true
 elif [ "$_OS_NAME" != "Darwin" ]; then
-  _info "svc" "Non-macOS host (${_OS_NAME}) — skipping setup_macos.py"
+  _info "svc" "Non-macOS host (${_OS_NAME}) — skipping scripts/setup_macos.py"
 fi
 
 # ── Codex PATH fix (idempotent) ───────────────────────────────────────────────
@@ -353,7 +353,7 @@ if not WIN_IP:
 # Uses OS network interface list — reflects current topology without prior state.
 if not WIN_IP:
     try:
-        sys.path.insert(0, '$SCRIPT_DIR')
+        sys.path.insert(0, '$SCRIPT_DIR/scripts')
         from network_autoconfig import NetworkAutoConfig
         cfg2 = NetworkAutoConfig()
         WIN_IP = cfg2.preferred_ips.get('Windows', '')
