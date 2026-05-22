@@ -2078,3 +2078,24 @@ CPython's weak-reference behavior for asyncio tasks. It's not obvious from the t
 **Rule:** Any `asyncio.create_task()` that is fire-and-forget MUST register the task in a
 module-level strong-reference container with a done callback to clean up. No exceptions.
 
+
+---
+
+## 2026-05-22 — Claude — RAG v1 Backport shipped to Perpetua-Tools
+
+**What shipped:** 4 RAG modules backported from `feat/rag-gstack-optional-v1` (this repo)
+into `diazMelgarejo/Perpetua-Tools` on branch `feat/rag-backport-v1` (PR #28).
+All 3 bug-class gaps from Gemini 3.5 Flash review applied. 345/345 tests pass.
+
+**Key adaptation:** v2 plan targets `oramasys/perpetua-core` paths (`perpetua_core.gossip`, etc.).
+v1 backport uses `orchestrator/` in PT. GossipBus is a NEW capability in v1 — PT had no
+event log / SQLite before this backport.
+
+**IMMUTABLE RULE re-confirmed:** `diazMelgarejo/*` = v1, implement code. `oramasys/*` = v2,
+plan only via `/docs/v2/`. Override requires AskUserQuestion.
+
+**Deferred items from v1 Backport Candidates table:**
+- Items 5–7 (GbrainSearchTool, MemoryNode, dispatch_node wiring) deferred to next sprint
+- v2.1 EmbeddingCircuitBreaker deferred — see `docs/v2/18-rag-and-memory-design.md`
+
+**Evidence doc:** `docs/2026-05-22-rag-v1-backport-shipped.md`
