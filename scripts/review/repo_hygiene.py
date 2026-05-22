@@ -12,6 +12,7 @@ from pathlib import Path
 
 APPROVED_IDENTITIES = {
     ("cyre", "Lawrence@cyre.me"),
+    ("cyre", "diazMelgarejo@gmail.com"),
     ("Codex", "codex@openai.com"),
 }
 FORBIDDEN_TOKENS = (
