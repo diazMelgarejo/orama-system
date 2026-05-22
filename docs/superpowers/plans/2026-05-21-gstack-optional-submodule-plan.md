@@ -177,13 +177,24 @@ def detect_gstack() -> dict:
             result["source"] = "skill"
             return result
 
-        # 3. tools/gstack submodule present
+        # 3. tools/gstack submodule present — but verify gbrain is callable
         submodule_path = pathlib.Path("tools") / "gstack"
         if submodule_path.exists():
             result["submodule_present"] = True
-            result["available"] = True
-            result["source"] = "submodule"
-            return result
+            # Directory presence alone is not enough — confirm gbrain is executable
+            try:
+                v = subprocess.run(
+                    ["gbrain", "--version"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                if v.returncode == 0:
+                    result["version"] = v.stdout.strip() or None
+                    result["available"] = True
+                    result["source"] = "submodule"
+                    return result
+            except Exception:
+                pass
+            # Submodule dir found but gbrain not runnable — report as not available
 
     except Exception:
         pass  # Never raise — return partial result

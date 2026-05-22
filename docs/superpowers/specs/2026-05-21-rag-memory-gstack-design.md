@@ -339,7 +339,7 @@ _lance_store = EmbeddingStore(_LANCE_DB)
 
 async def memory_node(state: PerpetuaState) -> dict:
     """Retrieve context via FTS5 (always) + LanceDB (try/except) + RRF merge."""
-    prompt = state.scratchpad.get("prompt", "")
+    prompt = state.prompt or state.scratchpad.get("prompt", "")
     if not prompt:
         return {"scratchpad": {**state.scratchpad, "context": []}}
 
@@ -368,21 +368,31 @@ import json
 from perpetua_core.graph.plugins.tool import tool
 
 @tool
-def gbrain_search(query: str, limit: int = 5) -> list[dict]:
+async def gbrain_search(query: str, limit: int = 5) -> list[dict]:
     """Search gbrain semantic memory for relevant past knowledge.
 
     Returns empty list if gbrain CLI is not installed (graceful degradation).
     Never raises — failure is treated as no results.
+    Uses run_in_executor to avoid blocking the async event loop.
     """
-    try:
-        result = subprocess.run(
-            ["gbrain", "query", query, "--limit", str(limit), "--format", "json"],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode != 0:
+    import asyncio
+
+    def _run() -> list[dict]:
+        try:
+            result = subprocess.run(
+                ["gbrain", "query", query, "--limit", str(limit), "--format", "json"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0:
+                return []
+            return json.loads(result.stdout) if result.stdout.strip() else []
+        except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
             return []
-        return json.loads(result.stdout) if result.stdout.strip() else []
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+
+    try:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _run)
+    except Exception:
         return []
 ```
 
