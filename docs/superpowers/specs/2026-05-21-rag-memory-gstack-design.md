@@ -207,6 +207,20 @@ async def _update_embed_status(self, row_id: int, status: str) -> None:
 ### New method: `search()` — FTS5 keyword recall
 
 ```python
+# FTS5 reserves these tokens — sanitize user input before passing to MATCH ?
+# Without this, an apostrophe or `AND` in user text raises sqlite3.OperationalError
+# and the search silently returns []. See v1 plan §_sanitize_fts_query for tests.
+import re
+
+_FTS5_RESERVED = re.compile(r'[^\w\s]')
+
+def _sanitize_fts_query(raw: str) -> str:
+    """Strip FTS5-reserved punctuation and wrap each token to avoid syntax errors."""
+    cleaned = _FTS5_RESERVED.sub(' ', raw)
+    tokens = [t for t in cleaned.split() if t]
+    return ' '.join(f'"{t}"' for t in tokens) if tokens else ''
+
+
 async def search(
     self,
     query: str,
@@ -215,7 +229,8 @@ async def search(
     event_type: Optional[str] = None,
 ) -> list[dict]:
     """BM25 full-text search over GossipBus event history. Always works."""
-    if not query.strip():
+    safe_query = _sanitize_fts_query(query)
+    if not safe_query:
         return []
     async with aiosqlite.connect(self._db_path) as db:
         if event_type:
@@ -225,7 +240,7 @@ async def search(
                    JOIN gossip g ON g.id = f.rowid
                    WHERE gossip_fts MATCH ? AND g.event_type = ?
                    ORDER BY rank LIMIT ?""",
-                (query, event_type, limit),
+                (safe_query, event_type, limit),
             )
         else:
             cursor = await db.execute(
@@ -234,7 +249,7 @@ async def search(
                    JOIN gossip g ON g.id = f.rowid
                    WHERE gossip_fts MATCH ?
                    ORDER BY rank LIMIT ?""",
-                (query, limit),
+                (safe_query, limit),
             )
         rows = await cursor.fetchall()
     return [
@@ -249,13 +264,27 @@ async def search(
 # perpetua_core/memory/store.py (new file)
 import lancedb
 import asyncio
+import os
 from pathlib import Path
 
-class EmbeddingStore:
-    """LanceDB-backed vector store. Falls back gracefully to no-op if unavailable."""
+# Embedding dim is determined at runtime by probe_embed_dim() (see v1 plan).
+# Default 1024 matches bge-m3 (Ollama default); override via EMBED_DIM env or
+# the EmbeddingStore(dim=...) ctor. Hardcoding here would force schema migration
+# every time the embedder changes.
+EMBED_DIM = int(os.environ.get("EMBED_DIM", "1024"))
 
-    def __init__(self, db_path: str = "lance_memory.lance"):
+
+class EmbeddingStore:
+    """LanceDB-backed vector store. Falls back gracefully to no-op if unavailable.
+
+    The vector column dimension is set at table-create time from `dim` (defaults
+    to module-level `EMBED_DIM`). Path-keyed singleton — different db_path =
+    different store, so swapping embedders mid-run doesn't collide schemas.
+    """
+
+    def __init__(self, db_path: str = "lance_memory.lance", dim: int = EMBED_DIM):
         self._db_path = db_path
+        self._dim = dim
         self._table = None
 
     async def _ensure_table(self):
@@ -268,7 +297,7 @@ class EmbeddingStore:
                 schema = pa.schema([
                     pa.field("row_id", pa.int64()),
                     pa.field("text", pa.utf8()),
-                    pa.field("vector", pa.list_(pa.float32(), 1024)),
+                    pa.field("vector", pa.list_(pa.float32(), self._dim)),
                 ])
                 self._table = db.create_table("gossip", schema=schema)
 
@@ -289,6 +318,8 @@ class EmbeddingStore:
 ### RRF merge
 
 ```python
+import uuid
+
 def rrf_merge(
     fts_hits: list[dict],
     vec_hits: list[dict],
@@ -298,17 +329,23 @@ def rrf_merge(
 
     k=60 per CRG hybrid search convention. Falls back to fts_hits-only
     if vec_hits is empty (disaster recovery posture).
+
+    Synthetic key strategy: when a hit lacks a real `row_id` (gbrain results,
+    rare GossipBus desync), we MUST NOT fall back to `rank` — that key
+    collides across fts_hits and vec_hits and silently dedupes unrelated
+    rows. UUID4 is generated per-hit, so synthetic keys never collide.
     """
     if not vec_hits:
         return fts_hits
-    scores: dict[int, float] = {}
-    id_to_item: dict[int, dict] = {}
+    # Use object keys (str) so int row_ids and uuid hex strings coexist.
+    scores: dict[str, float] = {}
+    id_to_item: dict[str, dict] = {}
     for rank, hit in enumerate(fts_hits):
-        rid = hit.get("row_id", rank)
+        rid = str(hit.get("row_id") or f"fts-{uuid.uuid4().hex}")
         scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + rank + 1)
         id_to_item[rid] = hit
     for rank, hit in enumerate(vec_hits):
-        rid = hit.get("row_id", rank)
+        rid = str(hit.get("row_id") or f"vec-{uuid.uuid4().hex}")
         scores[rid] = scores.get(rid, 0.0) + 1.0 / (k + rank + 1)
         id_to_item[rid] = hit
     ranked = sorted(scores.items(), key=lambda x: x[1], reverse=True)
@@ -339,7 +376,7 @@ _lance_store = EmbeddingStore(_LANCE_DB)
 
 async def memory_node(state: PerpetuaState) -> dict:
     """Retrieve context via FTS5 (always) + LanceDB (try/except) + RRF merge."""
-    prompt = state.scratchpad.get("prompt", "")
+    prompt = state.prompt or state.scratchpad.get("prompt", "")
     if not prompt:
         return {"scratchpad": {**state.scratchpad, "context": []}}
 
@@ -368,21 +405,31 @@ import json
 from perpetua_core.graph.plugins.tool import tool
 
 @tool
-def gbrain_search(query: str, limit: int = 5) -> list[dict]:
+async def gbrain_search(query: str, limit: int = 5) -> list[dict]:
     """Search gbrain semantic memory for relevant past knowledge.
 
     Returns empty list if gbrain CLI is not installed (graceful degradation).
     Never raises — failure is treated as no results.
+    Uses run_in_executor to avoid blocking the async event loop.
     """
-    try:
-        result = subprocess.run(
-            ["gbrain", "query", query, "--limit", str(limit), "--format", "json"],
-            capture_output=True, text=True, timeout=10,
-        )
-        if result.returncode != 0:
+    import asyncio
+
+    def _run() -> list[dict]:
+        try:
+            result = subprocess.run(
+                ["gbrain", "query", query, "--limit", str(limit), "--format", "json"],
+                capture_output=True, text=True, timeout=10,
+            )
+            if result.returncode != 0:
+                return []
+            return json.loads(result.stdout) if result.stdout.strip() else []
+        except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
             return []
-        return json.loads(result.stdout) if result.stdout.strip() else []
-    except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
+
+    try:
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _run)
+    except Exception:
         return []
 ```
 

@@ -1,7 +1,7 @@
 # 18 — Master Alignment & v2 Migration Plan
 
 **Date:** 2026-05-20
-**Context:** Analysis of `docs/superpowers/specs/2026-05-20-cc-openclaw-master-alignment-design.md` vs. the new v2 microkernel in `/Users/lawrencecyremelgarejo/Documents/oramasys/` (`oramasys`, `perpetua-core`, `agate`).
+**Context:** Analysis of `docs/superpowers/specs/2026-05-20-cc-openclaw-master-alignment-design.md` vs. the new v2 microkernel in `~/Documents/oramasys/` (`oramasys`, `perpetua-core`, `agate`).
 
 ## 1. Alignment Sanity & Efficiency Check
 
