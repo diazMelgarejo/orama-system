@@ -1,32 +1,50 @@
 {
-  "install": "bash -c 'python3.11 -m venv .venv && source .venv/bin/activate && ORAMASYS_DIR=\"$HOME/Documents/oramasys\" && [ -d \"$ORAMASYS_DIR/perpetua-core\" ] || git clone https://github.com/oramasys/perpetua-core \"$ORAMASYS_DIR/perpetua-core\" && [ -d \"$ORAMASYS_DIR/oramasys\" ] || git clone https://github.com/oramasys/oramasys \"$ORAMASYS_DIR/oramasys\" && [ -d \"$ORAMASYS_DIR/agate\" ] || git clone https://github.com/oramasys/agate \"$ORAMASYS_DIR/agate\" && pip install -q -e \"$ORAMASYS_DIR/perpetua-core[dev]\" && pip install -q -e \"$ORAMASYS_DIR/oramasys[dev]\" && pip install -q pyyaml pytest'",
+  "install": "bash -c 'set -e; python3.11 -m venv .venv && source .venv/bin/activate && OPENCLAW_HOME=\"${OPENCLAW_HOME:-$HOME/openclaw-v1}\" && mkdir -p \"$OPENCLAW_HOME\" && [ -d \"$OPENCLAW_HOME/Perpetua-Tools\" ] || git clone --branch main https://github.com/diazMelgarejo/Perpetua-Tools \"$OPENCLAW_HOME/Perpetua-Tools\" && [ -d \"$OPENCLAW_HOME/AlphaClaw\" ] || git clone --branch feature/MacOS-post-install https://github.com/diazMelgarejo/AlphaClaw \"$OPENCLAW_HOME/AlphaClaw\" && pip install -q -e \".[test]\" && pip install -q -e \"$OPENCLAW_HOME/Perpetua-Tools\" && pip install -q pytest pytest-asyncio pyyaml && (command -v pnpm >/dev/null || npm install -g pnpm) && (cd \"$OPENCLAW_HOME/AlphaClaw\" && pnpm install --frozen-lockfile) && (npm list -g openclaw >/dev/null 2>&1 || npm install -g openclaw@2026.5.6)'",
 
   "environment": {
-    "LLM_BASE_URL": "http://localhost:1234/v1",
+    "OPENCLAW_HOME": "$HOME/openclaw-v1",
+    "ORAMA_SYSTEM_PATH": "${workspaceFolder}",
+    "PERPETUA_TOOLS_PATH": "$HOME/openclaw-v1/Perpetua-Tools",
+    "ALPHACLAW_INSTALL_DIR": "$HOME/openclaw-v1/AlphaClaw",
+    "OPENCLAW_GATEWAY_URL": "http://127.0.0.1:18789",
+    "LM_STUDIO_URL": "http://localhost:1234/v1",
     "OPENAI_API_KEY": "sk-local",
-    "PERPETUA_CORE_PATH": "$HOME/Documents/oramasys/perpetua-core",
-    "ORAMASYS_PATH": "$HOME/Documents/oramasys/oramasys",
-    "AGATE_PATH": "$HOME/Documents/oramasys/agate",
-    "REPO_ROOT": "${workspaceFolder}",
-    "PYTHONPATH": "$HOME/Documents/oramasys/perpetua-core:$HOME/Documents/oramasys/oramasys"
+    "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/scripts:$HOME/openclaw-v1/Perpetua-Tools",
+    "REPO_ROOT": "${workspaceFolder}"
   },
 
   "terminals": [
     {
-      "name": "perpetua-core tests",
-      "command": "source .venv/bin/activate && cd $HOME/Documents/oramasys/perpetua-core && python -m pytest tests/ -v"
+      "name": "orama tests",
+      "command": "source .venv/bin/activate && python -m pytest tests/ -v"
     },
     {
-      "name": "oramasys tests",
-      "command": "source .venv/bin/activate && cd $HOME/Documents/oramasys/oramasys && python -m pytest tests/ -v"
+      "name": "PT tests",
+      "command": "source .venv/bin/activate && cd $OPENCLAW_HOME/Perpetua-Tools && python -m pytest tests/ -v"
     },
     {
-      "name": "oramasys server",
-      "command": "source .venv/bin/activate && cd $HOME/Documents/oramasys/oramasys && uvicorn orama.api.server:app --reload --port 8000"
+      "name": "AlphaClaw tests",
+      "command": "cd $OPENCLAW_HOME/AlphaClaw && pnpm test"
     },
     {
-      "name": "hygiene gate",
+      "name": "PT portal",
+      "command": "source .venv/bin/activate && cd $OPENCLAW_HOME/Perpetua-Tools && uvicorn orchestrator.api:app --reload --port 8000"
+    },
+    {
+      "name": "openclaw gateway",
+      "command": "openclaw gateway start --port 18789"
+    },
+    {
+      "name": "discover network",
+      "command": "source .venv/bin/activate && python scripts/discover.py --force"
+    },
+    {
+      "name": "hygiene gate (orama)",
       "command": "source .venv/bin/activate && python scripts/review/repo_hygiene.py ."
+    },
+    {
+      "name": "hygiene gate (PT)",
+      "command": "source .venv/bin/activate && python $OPENCLAW_HOME/Perpetua-Tools/scripts/review/repo_hygiene.py $OPENCLAW_HOME/Perpetua-Tools"
     }
   ]
 }
