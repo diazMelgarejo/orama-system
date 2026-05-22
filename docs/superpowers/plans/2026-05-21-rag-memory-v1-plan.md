@@ -14,7 +14,20 @@
 
 **Tech Stack:** Python 3.11+, aiosqlite, SQLite FTS5 (stdlib), lancedb (1 new dep), Ollama bge-m3 at localhost:11434 (already required), perpetua-core kernel, oramasys FastAPI graph, existing `perpetua_core.llm.LLMClient`
 
-**Repos:** `/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core` and `/Users/lawrencecyremelgarejo/Documents/oramasys/oramasys`
+## Targeting (CRITICAL — read first)
+
+| Repo type | Org | Role | This plan's relationship |
+|-----------|-----|------|--------------------------|
+| **v2-planning** | `oramasys/perpetua-core` + `oramasys/oramasys` | clean-slate kernel + methodology | **Primary target.** All file paths below assume this layout. |
+| **v1-legacy** | `diazMelgarejo/Perpetua-Tools` + `diazMelgarejo/orama-system` | working runtime + methodology | **Selective backport only.** Module layout differs (no `perpetua_core` package in PT — see `Perpetua-Tools/orchestrator/`). See "v1 Backport Candidates" near end of plan. |
+
+**Hard rule (recorded 2026-05-22):** Code goes to v1 (diazMelgarejo/*) for actual shipping. Plans, designs, and clean-slate architecture live in v2 (oramasys/*) BUT we **never write code directly to oramasys/\***. We plan in `/docs/v2/` of the v1 repos and the v2 repos absorb absorption-ready slices at v2 cut-time. Override of this rule requires explicit AskUserQuestion confirmation.
+
+**Local paths (verified 2026-05-22):**
+- v1 orama-system (this repo): `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system`
+- v1 Perpetua-Tools: `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools` (no `perpetua_core` package — has `orchestrator/` + `perpetua/discovery/`)
+- v2 perpetua-core (reference only, do not write): `/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core`
+- v2 oramasys (reference only, do not write): `/Users/lawrencecyremelgarejo/Documents/oramasys/oramasys`
 
 **Run tests with:** `python -m pytest tests/ -v` (in each repo root)
 
@@ -144,16 +157,41 @@ async def test_emit_sets_embed_status_pending(tmp_path):
 
 @pytest.mark.asyncio
 async def test_pending_embeds_set_prevents_gc(tmp_path):
-    """_pending_embeds module set must hold strong references to in-flight tasks."""
+    """Gap 3 fix (Antigravity Gemini 3.5 critique 2026-05-21):
+    Verify in-flight tasks are ACTUALLY registered in _pending_embeds
+    (not just that the set object exists — which was a tautology).
+
+    Strategy: patch _embed_and_store to sleep, so emit() must register
+    the task; observe set membership during the active window; ensure
+    the task is discarded once it completes.
+    """
+    from unittest.mock import patch
+    from perpetua_core import gossip as gossip_mod
     from perpetua_core.gossip import _pending_embeds
+
     db = str(tmp_path / "test.db")
     bus = GossipBus(db)
     await bus.init_db()
-    await bus.emit("dispatch", {"prompt": "gc test"})
-    # After emit() returns, the set must contain the task (not yet done)
-    # OR be empty (task completed synchronously in test event loop).
-    # Either is valid — what's NOT valid is the set being garbage collected itself.
+
+    # Sanity: set must be present and currently empty for this test.
     assert isinstance(_pending_embeds, set)
+    _pending_embeds.clear()
+
+    async def slow_embed(self, row_id, payload):
+        await asyncio.sleep(0.1)
+
+    with patch.object(gossip_mod.GossipBus, "_embed_and_store", slow_embed):
+        await bus.emit("dispatch", {"prompt": "gc test"})
+        # Immediately after emit(), the task must be in the set —
+        # this is what prevents asyncio's weak-ref GC from collecting it.
+        assert len(_pending_embeds) == 1, (
+            f"task not registered; set={_pending_embeds!r}"
+        )
+        # Drain: wait for task to complete; discard callback must remove it.
+        await asyncio.sleep(0.2)
+        assert len(_pending_embeds) == 0, (
+            f"done-callback failed to discard; set={_pending_embeds!r}"
+        )
 
 
 @pytest.mark.asyncio
@@ -321,7 +359,35 @@ async def _update_embed_status(self, row_id: int, status: str) -> None:
         await db.commit()
 ```
 
-Add `search()` method (FTS5-safe — wraps MATCH in try/except):
+Add `_sanitize_fts_query()` helper at module level (Gap 2 fix — Antigravity Gemini 3.5 critique 2026-05-21). Previously, FTS5 MATCH errored on real prompts containing quotes/colons/operators and the `except` clause returned `[]` — silently losing all keyword recall for that query. Now we strip the syntactic characters first and only fall back to `[]` on truly unrecoverable input:
+
+```python
+import re
+
+# FTS5 reserved characters and operators that must be stripped or quoted.
+# See https://sqlite.org/fts5.html#fts5_strings — quote/colon/star/plus/minus/
+# parens/braces/AND/OR/NOT/NEAR. Operators inside quoted phrases are literal.
+_FTS5_OPERATOR_RE = re.compile(r'[\"\':\*\+\-\(\)\[\]\{\}\^]')
+_FTS5_KEYWORDS = {"AND", "OR", "NOT", "NEAR"}
+
+
+def _sanitize_fts_query(query: str) -> str:
+    """Strip FTS5 syntactic characters so MATCH treats input as plain terms.
+
+    Quotes, colons, +/-/*, parens, and braces all have special meaning in
+    FTS5 query syntax. Real user prompts contain them constantly — without
+    sanitization the entire keyword recall channel goes dark. Reserved
+    keywords (AND/OR/NOT/NEAR) are lowercased to remove their operator
+    meaning; FTS5 only treats them as operators in uppercase.
+    """
+    if not query:
+        return ""
+    cleaned = _FTS5_OPERATOR_RE.sub(" ", query)
+    tokens = [t.lower() if t in _FTS5_KEYWORDS else t for t in cleaned.split()]
+    return " ".join(tokens).strip()
+```
+
+Now `search()` (FTS5-safe — sanitizes BEFORE MATCH, then wraps MATCH in try/except as defence in depth):
 
 ```python
 async def search(
@@ -333,10 +399,12 @@ async def search(
 ) -> list[dict]:
     """BM25 full-text search over GossipBus event history. Always works.
 
-    Wraps FTS5 MATCH in try/except: real prompts with quotes, colons, or
-    FTS5 operators raise OperationalError — degrade gracefully to [].
+    Sanitizes the query (strips FTS5 operators / quotes / colons) so real
+    user prompts work without raising OperationalError. The try/except
+    around MATCH remains as defence in depth.
     """
-    if not query.strip():
+    safe_query = _sanitize_fts_query(query)
+    if not safe_query:
         return []
     try:
         async with aiosqlite.connect(self._db_path) as db:
@@ -347,7 +415,7 @@ async def search(
                        JOIN gossip g ON g.id = f.rowid
                        WHERE gossip_fts MATCH ? AND g.event_type = ?
                        ORDER BY rank LIMIT ?""",
-                    (query, event_type, limit),
+                    (safe_query, event_type, limit),
                 )
             else:
                 cursor = await db.execute(
@@ -356,7 +424,7 @@ async def search(
                        JOIN gossip g ON g.id = f.rowid
                        WHERE gossip_fts MATCH ?
                        ORDER BY rank LIMIT ?""",
-                    (query, limit),
+                    (safe_query, limit),
                 )
             rows = await cursor.fetchall()
         return [
@@ -509,10 +577,18 @@ except ImportError:
 
 
 class EmbeddingStore:
-    """Local LanceDB vector store. Falls back to no-op if unavailable."""
+    """Local LanceDB vector store. Falls back to no-op if unavailable.
 
-    def __init__(self, db_path: str = "lance_memory.lance"):
+    Gap 1 fix (Antigravity Gemini 3.5 critique, 2026-05-21):
+    ``dim`` is now a constructor parameter, not hardcoded to 1024.
+    ``EMBED_DIM`` env var (or a runtime probe via ``embed.probe_embed_dim()``)
+    is the source of truth — switching ``EMBED_MODEL`` from ``bge-m3`` (1024)
+    to ``nomic-embed-text`` (768) no longer corrupts the LanceDB schema.
+    """
+
+    def __init__(self, db_path: str = "lance_memory.lance", *, dim: int = 1024):
         self._db_path = db_path
+        self._dim = int(dim)
         self._table = None
         self._lock = asyncio.Lock()  # prevents concurrent _ensure_table() race
 
@@ -521,7 +597,7 @@ class EmbeddingStore:
         return pa.schema([
             pa.field("row_id", pa.int64()),
             pa.field("text", pa.utf8()),
-            pa.field("vector", pa.list_(pa.float32(), 1024)),
+            pa.field("vector", pa.list_(pa.float32(), self._dim)),
         ])
 
     async def _ensure_table(self):
@@ -572,10 +648,37 @@ class EmbeddingStore:
 _lance_stores: dict[str, "EmbeddingStore"] = {}
 
 
-def get_lance_store(db_path: str = "lance_memory.lance") -> "EmbeddingStore":
-    if db_path not in _lance_stores:
-        _lance_stores[db_path] = EmbeddingStore(db_path)
-    return _lance_stores[db_path]
+def get_lance_store(
+    db_path: str = "lance_memory.lance",
+    *,
+    dim: Optional[int] = None,
+) -> "EmbeddingStore":
+    """Path-keyed EmbeddingStore singleton.
+
+    ``dim`` resolution order (Gap 1 fix):
+      1. Explicit ``dim`` arg (tests / callers that already know)
+      2. ``EMBED_DIM`` env var
+      3. ``perpetua_core.memory.embed.probe_embed_dim()`` — calls Ollama once
+         to discover the actual embedding dimension for the configured model
+      4. Final fallback: 1024 (bge-m3 default)
+
+    Key is ``(db_path, dim)`` to avoid silent dim mismatches across callers.
+    """
+    if dim is None:
+        import os
+        env_dim = os.environ.get("EMBED_DIM")
+        if env_dim:
+            dim = int(env_dim)
+        else:
+            try:
+                from perpetua_core.memory.embed import probe_embed_dim
+                dim = probe_embed_dim()
+            except Exception:
+                dim = 1024
+    key = f"{db_path}::dim{dim}"
+    if key not in _lance_stores:
+        _lance_stores[key] = EmbeddingStore(db_path, dim=dim)
+    return _lance_stores[key]
 ```
 
 - [ ] **Step 6: Create `perpetua_core/memory/embed.py`**
@@ -592,10 +695,15 @@ import aiohttp
 _OLLAMA_URL = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434")
 _EMBED_MODEL = os.environ.get("EMBED_MODEL", "bge-m3")
 
+# Cached probed dimension — populated by probe_embed_dim() on first call.
+_PROBED_DIM: Optional[int] = None
+
 
 async def get_embedding(text: str) -> list[float]:
-    """Call Ollama bge-m3 to embed text. Returns 1024-dim float list.
+    """Call Ollama to embed ``text``. Returns model-native float list.
 
+    Length depends on EMBED_MODEL: bge-m3 → 1024, nomic-embed-text → 768,
+    all-minilm → 384. Use ``probe_embed_dim()`` to discover at startup.
     Raises on failure — callers should try/except and fall back to FTS5-only.
     """
     async with aiohttp.ClientSession() as session:
@@ -607,6 +715,42 @@ async def get_embedding(text: str) -> list[float]:
             resp.raise_for_status()
             data = await resp.json()
             return data["embedding"]
+
+
+def probe_embed_dim() -> int:
+    """Discover the active model's embedding dimension via one synchronous probe.
+
+    Gap 1 fix (Antigravity Gemini 3.5 critique, 2026-05-21):
+    LanceDB schemas are immutable once written, so the dimension must be
+    known before the first ``EmbeddingStore.add()`` call. Synchronous so it
+    can run at startup without an event loop. Result is cached process-wide.
+
+    Override priority: ``EMBED_DIM`` env var > this probe > 1024 fallback.
+    Never raises; degrades to 1024 if Ollama is unreachable (LanceDB writes
+    will then fail loudly for non-bge-m3 models, which is the right signal).
+    """
+    global _PROBED_DIM
+    if _PROBED_DIM is not None:
+        return _PROBED_DIM
+    env_dim = os.environ.get("EMBED_DIM")
+    if env_dim:
+        _PROBED_DIM = int(env_dim)
+        return _PROBED_DIM
+    try:
+        import urllib.request
+        req = urllib.request.Request(
+            f"{_OLLAMA_URL}/api/embeddings",
+            data=json.dumps({"model": _EMBED_MODEL, "prompt": "probe"}).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read())
+            _PROBED_DIM = len(data["embedding"])
+            return _PROBED_DIM
+    except Exception:
+        _PROBED_DIM = 1024
+        return _PROBED_DIM
 ```
 
 Note: `aiohttp` is likely already a dep in perpetua-core; if not, add it. Alternatively
@@ -1333,3 +1477,106 @@ curl -s http://localhost:8000/run \
 | D17 | `memory_node` hydration uses individual SQLite lookups | Simplest correct approach for v1 (≤10 hits); bulk `IN (...)` is v2.1 optimization | DX phase |
 | D18 | Outcome clarified: hybrid search available to ALL agents by default | Via `@tool gbrain_search` + MemoryNode; search in UI + Launcher Agent + orchestrator | Premise gate (user) |
 | D19 | v2.1 EmbeddingCircuitBreaker documented as follow-on | After this plan lands; design already in `docs/v2/18-rag-and-memory-design.md § v2.1` | Premise gate (user) |
+| D20 | EmbeddingStore dim parameterized (not hardcoded 1024) | Antigravity Gemini 3.5 Gap 1 — `EMBED_MODEL` env var was already configurable but schema was not; switching to a non-1024 model corrupted writes | Critique phase 2026-05-21 |
+| D21 | `_sanitize_fts_query()` strips FTS5 operators before MATCH | Antigravity Gemini 3.5 Gap 2 — try/except returned `[]` silently on real prompts containing quotes/colons, losing keyword recall entirely | Critique phase 2026-05-21 |
+| D22 | Real GC test replaces `isinstance(set)` tautology | Antigravity Gemini 3.5 Gap 3 — patched `_embed_and_store` to sleep, asserts membership during active window and discard after completion | Critique phase 2026-05-21 |
+| D23 | Plan retargeted at v2 (`oramasys/*`) explicitly; v1 backport scope documented separately | User clarification 2026-05-22 — `diazMelgarejo/*` = v1 ship target, `oramasys/*` = v2 plan target, never write code directly to v2 | Critique phase 2026-05-22 |
+
+---
+
+## Status Taxonomy (Codex GPT-5.5 P0 — normalize across all RAG docs)
+
+| Label | Meaning | Where used |
+|-------|---------|------------|
+| **Planned** | Designed but no implementation merged | Default for all task checkboxes |
+| **In Progress** | Branch open, partial implementation | Tracked via TaskUpdate per task |
+| **Merged** | Lands on `feat/*` or PR'd to `main` of the targeted repo | Recorded in commit log + LESSONS.md |
+| **Released** | Tagged on the targeted repo (v2 today = scaffold, not released yet) | Used in `docs/v2/*` only |
+
+**Cross-doc invariant:** `docs/v2/18-rag-and-memory-design.md` and `docs/v2/19-gstack-optional-integration.md` use this same vocabulary. No mixed "DONE" / "complete" / "ready" labels. If a v2 doc says `DONE`, it must point at a merged or released commit in oramasys/*.
+
+---
+
+## Non-Goals (Codex P0)
+
+Explicitly NOT in scope for this plan:
+
+- ❌ Cross-tenant retrieval (no multi-user isolation in v1)
+- ❌ Encrypted-at-rest vectors (LanceDB is local plain Arrow files)
+- ❌ Auto-repair daemon for failed embeds (deferred to v2.5 Reaper)
+- ❌ Distributed vector store (Lance fleet — deferred to v2.5)
+- ❌ Cloud embedding fallback (Ollama bge-m3 is the hard requirement)
+- ❌ MAESTRO / HITL approval gates on retrieval (V1 scope boundary — see UNIFIED-ABSORPTION-PLAN § 2)
+- ❌ Backporting full plan to v1 (only selective slices — see "v1 Backport Candidates" below)
+
+---
+
+## Security / Privacy / Retention (Codex P0)
+
+| Concern | v1 policy | v2.1 hardening |
+|---------|-----------|----------------|
+| **Payload classification** | Whatever the agent emits is indexed; no automatic redaction | Add `sensitive=True` flag on `bus.emit()`; sensitive rows skip embedding |
+| **PII in `payload_json`** | Caller's responsibility to scrub before emit | Optional regex redaction hook |
+| **Retention** | Unbounded (rows + vectors live forever); FTS5 + Lance grow with disk | TTL parameter on `emit()`; v2.5 Reaper deletes expired rows + vectors |
+| **Right-to-delete** | Manual SQL: `DELETE FROM gossip WHERE session_id = ?` + LanceDB row delete by row_id | First-class `bus.forget(session_id=...)` API |
+| **Local-only by default** | `OLLAMA_BASE_URL` defaults to `localhost:11434`; LanceDB is on local disk | No change — privacy-preserving by construction |
+| **API keys / secrets in events** | Caller MUST scrub before emit; `payload_json` is plaintext | Same — no in-pipeline secret detection in V1 |
+
+**V1 enforcement:** none of the above is automated. Documented as caller contract.
+
+---
+
+## Acceptance Gate Table (Codex P0, per-phase)
+
+| Gate | Metric | Target | Evidence | Owner |
+|------|--------|--------|----------|-------|
+| **G1 — FTS5 functional** | Search correctness on synthetic corpus | 100% test pass (8 tests) | `pytest tests/test_gossip_search.py -v` | Eng |
+| **G2 — FTS5 robustness** | Real-prompt sanitizer prevents OperationalError | All real-world prompts return real hits, never `[]` from raw operator crash | Manual fuzz + `_sanitize_fts_query()` unit tests | Eng |
+| **G3 — LanceDB store** | Add + search idempotent across paths | 3 tests pass | `pytest tests/memory/test_store.py -v` | Eng |
+| **G4 — RRF merge** | FTS-only fallback + dedup + ranking | 3 tests pass | `pytest tests/memory/test_rrf.py -v` | Eng |
+| **G5 — Embed dim safety** | Schema matches active EMBED_MODEL | Probe agrees with first write; no Arrow dim error | `EMBED_MODEL=nomic-embed-text pytest` smoke run | Eng |
+| **G6 — GC integrity** | In-flight embed tasks not GC'd | Real GC test passes (`len(_pending_embeds) == 1` during active window) | `pytest tests/test_gossip_search.py::test_pending_embeds_set_prevents_gc -v` | Eng |
+| **G7 — Graceful degradation** | Ollama-down / Lance-down still returns FTS5 hits | 4 MemoryNode tests pass with mocked failures | `pytest tests/graph/test_memory_node.py -v` | Eng |
+| **G8 — End-to-end** | `/run` endpoint returns LLM response with context | Smoke run shows context from prior emits in system prompt | manual curl + observed system prompt | Eng/Ops |
+| **G9 — Migration safety** | Pre-existing gossip DB upgrades cleanly | `test_rebuild_fts_handles_existing_rows` passes | pytest + manual on copy of old DB | Eng |
+
+All gates must pass before merging to `main` of target repo.
+
+---
+
+## v1 Backport Candidates (NEW 2026-05-22)
+
+> **Context:** The plan above targets v2 (`oramasys/perpetua-core` + `oramasys/oramasys`). The v1 runtime (`diazMelgarejo/Perpetua-Tools`) has a different module layout: no `perpetua_core` package, code lives in `orchestrator/` and `perpetua/discovery/`. These items are explicit candidates for selective backport to v1; each item names the v1 destination and the adaptation cost.
+
+| Item | Backport priority | v1 destination | Adaptation cost | Stress-test value |
+|------|-------------------|----------------|-----------------|-------------------|
+| **FTS5 schema + triggers + `_sanitize_fts_query()`** | 🟢 High (cheap + safety win) | Wherever Perpetua-Tools owns its event log today; create `Perpetua-Tools/orchestrator/gossip_bus.py` if absent | Low — pure stdlib SQLite; no new deps | Validates FTS5 sanitizer against real production prompts |
+| **`_pending_embeds` GC guard pattern** | 🟢 High (general async correctness, not RAG-specific) | Anywhere `asyncio.create_task()` is used in `orchestrator/` | Low — module-level pattern | Catches latent GC bugs in v1 orchestrator |
+| **LanceDB EmbeddingStore w/ dim probe** | 🟡 Medium (1 new dep) | `Perpetua-Tools/orchestrator/memory_store.py` new file | Medium — pyarrow + lancedb deps; verify wheel availability for v1 Python target | Validates dim-probe on real Win + Mac LM Studio hardware |
+| **RRF merge** | 🟢 High (pure function, zero deps) | Stand-alone util in v1 | Trivial — copy file | Universal — useful anywhere hybrid retrieval lands |
+| **GbrainSearchTool `@tool`** | 🟠 Conditional | Only backport if v1 already has a `@tool` decorator equivalent; otherwise wrap as plain async fn | Medium — depends on v1 tool-registration model | Validates gbrain CLI integration end-to-end |
+| **MemoryNode** | 🔴 Low (requires v2 graph model) | Not directly backportable — v1 has no MiniGraph | High — would need a v1-shaped wrapper | Defer; v1 doesn't have the right substrate |
+| **dispatch_node LLMClient wiring** | 🔴 Low | v1 already has LLM dispatch via `orchestrator/control_plane.py` | High — different abstraction; learnings inform v2 only | Defer |
+
+**Recommended backport order:**
+1. RRF merge (zero risk, instantly useful)
+2. FTS5 + `_sanitize_fts_query()` (safety win, no new deps)
+3. `_pending_embeds` pattern (general async hygiene)
+4. LanceDB store (only if Perpetua-Tools accepts the new dep)
+5. Stop. Items 5+ require v1 graph refactor — wait for v2 cut.
+
+**Backport repo:** `diazMelgarejo/Perpetua-Tools`, branch `feat/rag-backport-v1` (created fresh from `main`, NOT from this orama-system feat branch).
+
+**Backport learnings flow:** Any issue discovered while shipping a backport item gets recorded in `docs/LESSONS.md` (this repo) AND incorporated into the v2 plan above (this file) before v2 cut.
+
+---
+
+## Steelman Audit Summary (Critique Phase 2026-05-21 → 2026-05-22)
+
+| Source | Verdict | P0 items applied here | Deferred |
+|--------|---------|------------------------|----------|
+| **Codex GPT-5.5** (`docs/2026-05-21-001--Critique-RAG-ChatGPT-codex-GPT-5.5.md`) | Approved with P0 hardening required | Status taxonomy, Non-Goals, Security/Privacy/Retention, Acceptance Gate Table | P1 rollback drills, P2 compatibility matrix → tracked in `docs/v2/18` |
+| **Antigravity Gemini 3.5** (`docs/2026-05-21-002--RAG-Gstack-Review--Antigravity-Gemini-3.5-Flash-Preview.md`) | Fully approved | Gap 1 (dim probe), Gap 2 (FTS sanitizer), Gap 3 (real GC test) | Gap 4 (v2.5 Reaper prioritization) → `docs/v2/18 § v2.5` |
+| **User reframing 2026-05-22** | Override prior docs-only constraint | Explicit v1/v2 targeting block; v1 Backport Candidates section | Backport branch creation → next session |
+
+All P0 items are now reflected in this plan. No silent failures, no tautological tests, no hardcoded dimensions.
