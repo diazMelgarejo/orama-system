@@ -11,7 +11,12 @@ chk_d() { [ -d "$1" ] && echo -e "  ${GREEN}✓${RESET} $1/" || { echo -e "  ${R
 echo -e "${BOLD}🔍 The ὅραμα System — Package Integrity Check${RESET}\n"
 
 echo "📄 Root:";    chk_f LICENSE; chk_f README.md; chk_f CONTRIBUTING.md; chk_f CHANGELOG.md
-chk_f install.sh; chk_f install-multi-agent.sh; chk_f verify-package.sh
+chk_f install.sh
+
+echo -e "\n🛠️ Scripts:"
+chk_f scripts/install-multi-agent.sh
+chk_f scripts/test-package-install.py
+chk_f scripts/verify-package.sh
 
 echo -e "\n📦 Skills (bin/orama-system):"; chk_f bin/orama-system/SKILL.md; chk_f bin/orama-system/README.md
 chk_d bin/orama-system/references; chk_d bin/orama-system/scripts; chk_d bin/orama-system/templates
