@@ -26,8 +26,8 @@
 **Local paths (verified 2026-05-22):**
 - v1 orama-system (this repo): `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system`
 - v1 Perpetua-Tools: `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools` (no `perpetua_core` package — has `orchestrator/` + `perpetua/discovery/`)
-- v2 perpetua-core (reference only, do not write): `/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core`
-- v2 oramasys (reference only, do not write): `/Users/lawrencecyremelgarejo/Documents/oramasys/oramasys`
+- v2 perpetua-core (reference only, do not write): `~/oramasys/perpetua-core`
+- v2 oramasys (reference only, do not write): `~/oramasys/oramasys`
 
 **Run tests with:** `python -m pytest tests/ -v` (in each repo root)
 
@@ -221,7 +221,7 @@ async def test_emit_sets_embed_status_failed_on_error(tmp_path):
 - [ ] **Step 2: Run tests — verify they all FAIL**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/oramasys/perpetua-core
 python -m pytest tests/test_gossip_search.py -v
 ```
 
@@ -460,7 +460,7 @@ Expected: all prior tests pass + 8 new
 - [ ] **Step 1: Install lancedb and verify aiohttp**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/oramasys/perpetua-core
 .venv/bin/pip install lancedb aiohttp
 # Check if aiohttp already in pyproject.toml
 grep "aiohttp" pyproject.toml
@@ -1018,7 +1018,7 @@ async def test_memory_node_empty_prompt_returns_empty(tmp_path):
 - [ ] **Step 2: Run tests — verify 4 fail**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
+cd ~/oramasys/oramasys
 python -m pytest tests/graph/test_memory_node.py -v
 ```
 
@@ -1128,7 +1128,7 @@ python -m pytest tests/ -v
 - [ ] **Step 1: Verify all tests pass in perpetua-core**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/oramasys/perpetua-core
 python -m pytest tests/ -v
 ```
 
@@ -1137,7 +1137,7 @@ Expected: 32 prior + 18 new = 50 passing
 - [ ] **Step 2: Verify all tests pass in oramasys**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
+cd ~/oramasys/oramasys
 python -m pytest tests/ -v
 ```
 
@@ -1146,7 +1146,7 @@ Expected: 4 prior + 4 new = 8 passing
 - [ ] **Step 3: Commit perpetua-core**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/oramasys/perpetua-core
 git add perpetua_core/gossip.py \
         perpetua_core/memory/__init__.py \
         perpetua_core/memory/store.py \
@@ -1186,7 +1186,7 @@ EOF
 - [ ] **Step 4: Commit oramasys**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
+cd ~/oramasys/oramasys
 git add orama/graph/nodes/__init__.py \
         orama/graph/nodes/memory_node.py \
         orama/graph/perpetua_graph.py \
@@ -1293,7 +1293,7 @@ async def test_dispatch_node_empty_context_uses_default_string():
 - [ ] **Step 2: Run tests — verify 3 fail**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
+cd ~/oramasys/oramasys
 .venv/bin/python -m pytest tests/graph/test_dispatch_node.py -v
 ```
 
@@ -1302,7 +1302,7 @@ cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
 Before implementing, inspect the real API:
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/oramasys/perpetua-core
 grep -n "async def chat\|def chat" perpetua_core/llm.py
 # Verify: (a) does chat() accept model= kwarg or only the constructor?
 #         (b) what does chat() return — completion object, dict, or str?
@@ -1399,8 +1399,8 @@ Expected: 8 prior + 3 new = 11 passing
 - [ ] **Step 1: Final test run across both repos**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core && python -m pytest tests/ -v
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys && python -m pytest tests/ -v
+cd ~/oramasys/perpetua-core && python -m pytest tests/ -v
+cd ~/oramasys/oramasys && python -m pytest tests/ -v
 ```
 
 All must be green.
@@ -1408,7 +1408,7 @@ All must be green.
 - [ ] **Step 2: Commit (oramasys)**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
+cd ~/oramasys/oramasys
 git add orama/graph/nodes/dispatch_node.py \
         tests/graph/test_dispatch_node.py
 git commit -m "$(cat <<'EOF'
@@ -1432,11 +1432,11 @@ EOF
 
 ```bash
 # 1. perpetua-core: all tests green
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/oramasys/perpetua-core
 python -m pytest tests/ -v  # expect 50+ passing
 
 # 2. oramasys: all tests green
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
+cd ~/oramasys/oramasys
 python -m pytest tests/ -v  # expect 11+ passing
 
 # 3. Smoke test (requires Ollama running at localhost:11434)
