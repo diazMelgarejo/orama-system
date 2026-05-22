@@ -31,7 +31,7 @@ Use this map to load only the context needed for the current task.
 ### Before Submitting
 
 - [ ] Keep `.env`, `.env.local`, and `.paths` untracked; update examples instead
-- [ ] Run `./verify-package.sh` — all checks must pass
+- [ ] Run `scripts/verify-package.sh` — all checks must pass
 - [ ] New skills follow the SKILL.md architecture standard (< 200 lines, YAML frontmatter)
 - [ ] Old skills should upgrade to SKILL.md architecture standard (< 500 lines, YAML frontmatter, offload to references/ and/or sub-skills/)
 - [ ] Scripts include docstrings and error handling
