@@ -88,7 +88,7 @@ orama-system/
 ├── examples/                       ← Real-world usage walkthroughs
 ├── docs/                           ← Installation, guides, FAQ
 ├── portal_server.py                ← LAN dashboard for PT, ultrathink, LM Studio, Ollama
-├── network_autoconfig.py           ← LAN IP / agent auto-discovery helper
+├── scripts/                        ← Helper scripts (setup, network, install)
 ├── tests/                          ← Full test suite (pytest)
 └── .github/                        ← CI/CD workflows
 ```
@@ -113,7 +113,7 @@ orama-system/
 ### Multi-Agent Network (Distributed / Parallel)
 
 ```bash
-./install-multi-agent.sh
+scripts/install-multi-agent.sh
 python bin/mcp_servers/ultrathink_orchestration_server.py
 ```
 
@@ -121,13 +121,13 @@ python bin/mcp_servers/ultrathink_orchestration_server.py
 
 ```bash
 # Probe a LAN-friendly host/IP and optionally scan for agents
-python network_autoconfig.py --scan
+python scripts/network_autoconfig.py --scan
 
 # Launch the slate-grey portal on port 8002
 python portal_server.py
 ```
 
-- `network_autoconfig.py` detects the preferred local IP and can scan for LM Studio, Ollama, PT, ultrathink, and portal services.
+- `scripts/network_autoconfig.py` detects the preferred local IP and can scan for LM Studio, Ollama, PT, ultrathink, and portal services.
 - `portal_server.py` shows a lightweight LAN dashboard for PT, ultrathink, LM Studio, and Ollama endpoints.
 
 ---
