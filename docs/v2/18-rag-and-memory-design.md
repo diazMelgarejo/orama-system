@@ -51,14 +51,14 @@ any kernel operation.
 perpetua-core v2.1+
 ──────────────────────────────────────────────────────────────
 gossip.py
-  + FTS5 + LanceDB (v1 — DONE)
-  + search() + _embed_and_store()  (v1 — DONE)
-  + embed_status tracking           (v1 — DONE, enables v2.5 reaper)
+  + FTS5 + LanceDB (v1 — Planned; shipped to diazMelgarejo/Perpetua-Tools PR#28, pending oramasys/perpetua-core)
+  + search() + _embed_and_store()  (v1 — Planned for oramasys)
+  + embed_status tracking           (v1 — Planned for oramasys; enables v2.5 reaper)
 
 memory/
-  store.py       ← EmbeddingStore (LanceDB, v1 — DONE)
-  embed.py       ← get_embedding via Ollama bge-m3 (v1 — DONE)
-  rrf.py         ← rrf_merge k=60 (v1 — DONE)
+  store.py       ← EmbeddingStore (LanceDB, v1 — Planned for oramasys)
+  embed.py       ← get_embedding via Ollama bge-m3 (v1 — Planned for oramasys)
+  rrf.py         ← rrf_merge k=60 (v1 — Planned for oramasys)
 
   # v2.1 additions:
   circuit_breaker.py  ← EmbeddingCircuitBreaker — disables vector on N consecutive failures
