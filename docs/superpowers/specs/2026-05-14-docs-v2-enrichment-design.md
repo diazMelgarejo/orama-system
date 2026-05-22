@@ -50,7 +50,7 @@ Rationale: "Preserve original plans and limit attack surface of potential damage
 - `03-safety-v2.5.md` — not affected
 - All `02-modules/` files — not affected
 - `05-feasibility-review.md` through `14-supervisor-and-anthropic-patterns.md` — not affected
-- Nothing in `/Users/lawrencecyremelgarejo/Documents/oramasys/` (manual review required first)
+- Nothing in `~/Documents/oramasys/` (manual review required first)
 
 ---
 

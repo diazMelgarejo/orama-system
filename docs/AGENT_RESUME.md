@@ -35,7 +35,7 @@ Successfully extracted architectural best practices without adopting external de
 ### 4. Repository Verification
 
 Confirmed current active v2 development path at:
-`/Users/lawrencecyremelgarejo/Documents/oramasys/`
+`~/Documents/oramasys/`
 (No git operations or file writes performed on new repositories; all work resides in old repo `/docs/v2/`).
 
 ---
