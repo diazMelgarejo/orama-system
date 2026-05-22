@@ -3,8 +3,8 @@
 **Date:** 2026-05-14
 **Target version:** v1.0.0.0 RC-1 (do NOT bump version — previous agent already did premature bump)
 **Status:** Planning only — NO execution until user approves the dispatch design
-**Source goals:** `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/v1/Organized-Goals.md`
-**Source defaults:** `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/v1/OpenRouter.md`
+**Source goals:** `<workspace>/v1/Organized-Goals.md`
+**Source defaults:** `<workspace>/v1/OpenRouter.md`
 
 ---
 
