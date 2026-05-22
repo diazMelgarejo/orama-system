@@ -8,7 +8,7 @@
 
 **Tech Stack:** `git submodule`, bash, Python stdlib (`subprocess`, `shutil`, `pathlib`), FastAPI
 
-**Repo:** `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system`
+**Repo:** `<workspace>/orama-system`
 
 ---
 
@@ -108,12 +108,53 @@ def test_detect_gstack_returns_required_keys():
     for key in ("available", "source", "version", "gbrain_on_path",
                 "skill_installed", "submodule_present"):
         assert key in result, f"Missing key: {key}"
+
+
+def test_detect_gstack_submodule_binary_without_path(tmp_path, monkeypatch):
+    """Regression test for Codex P2 #3288118303.
+
+    Scenario: gstack is installed as a submodule at tools/gstack/, the
+    submodule-local gbrain binary at tools/gstack/bin/gbrain exists and
+    runs, but gbrain is NOT on PATH and ~/.claude/skills/gstack is
+    absent. detect_gstack() must invoke the submodule binary directly
+    and report source='submodule' with the version it prints.
+
+    Bug class this guards: step 3 of detect_gstack() must NOT re-probe
+    PATH via shutil.which("gbrain"), because step 1 already returned
+    None — the path was disproven seconds ago. The correct probe is
+    `[str(tools/gstack/bin/gbrain), "--version"]`.
+    """
+    # Build a fake repo with submodule binary present and runnable.
+    repo = tmp_path
+    gbrain = repo / "tools" / "gstack" / "bin" / "gbrain"
+    gbrain.parent.mkdir(parents=True)
+    gbrain.write_text("#!/usr/bin/env bash\necho 'gbrain v1.2.3'\n")
+    gbrain.chmod(0o755)
+
+    monkeypatch.chdir(repo)
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+
+    with patch("shutil.which", return_value=None), \
+         patch("pathlib.Path.home", return_value=fake_home):
+        m = _import_fresh()
+        result = m.detect_gstack()
+
+    assert result["submodule_present"] is True, \
+        "submodule dir present should set submodule_present=True"
+    assert result["available"] is True, \
+        "runnable submodule-local gbrain should set available=True"
+    assert result["source"] == "submodule", \
+        f"expected source='submodule', got {result['source']!r}"
+    assert result["version"] == "gbrain v1.2.3", \
+        f"expected version captured from submodule binary, got {result['version']!r}"
 ```
 
-- [ ] **Step 2: Run tests — verify 5 fail**
+- [ ] **Step 2: Run tests — verify 6 fail**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "$REPO_ROOT"
 .venv/bin/python3 -m pytest tests/test_tool_status.py -v
 ```
 
@@ -177,13 +218,27 @@ def detect_gstack() -> dict:
             result["source"] = "skill"
             return result
 
-        # 3. tools/gstack submodule present
+        # 3. tools/gstack submodule present — invoke binary FROM submodule, not PATH
+        # PATH was already checked in step 1 and found empty; using shutil.which here
+        # again would always fail. Probe the submodule-local binary instead.
         submodule_path = pathlib.Path("tools") / "gstack"
         if submodule_path.exists():
             result["submodule_present"] = True
-            result["available"] = True
-            result["source"] = "submodule"
-            return result
+            gbrain_bin = submodule_path / "bin" / "gbrain"
+            if gbrain_bin.exists():
+                try:
+                    v = subprocess.run(
+                        [str(gbrain_bin), "--version"],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    if v.returncode == 0:
+                        result["version"] = v.stdout.strip() or None
+                        result["available"] = True
+                        result["source"] = "submodule"
+                        return result
+                except Exception:
+                    pass
+            # Submodule dir found but binary not present or not runnable
 
     except Exception:
         pass  # Never raise — return partial result
@@ -326,6 +381,10 @@ After the initial echo/header block in `install.sh`, add:
 
 ```bash
 # ─── gstack / gbrain detection (OPTIONAL — never blocks install) ───────────
+# One truth, one probe: install.sh uses the SAME availability rule as the
+# Python detect_gstack() in scripts/tool_status.py. The submodule branch
+# does NOT count as "available" until the submodule-local binary runs and
+# returns 0 — exactly mirroring detect_gstack() step 3 (Codex P2 #3288118303).
 _GSTACK_STATUS="not_detected"
 if command -v gbrain &>/dev/null; then
   echo "✓ gbrain detected at $(command -v gbrain). gstack features enabled."
@@ -335,7 +394,16 @@ elif [ -d "$HOME/.claude/skills/gstack" ]; then
   _GSTACK_STATUS="skill"
 elif [ -d "tools/gstack" ]; then
   echo "→ gstack submodule found. Running setup..."
-  bash tools/gstack/setup --team 2>/dev/null && _GSTACK_STATUS="submodule" || true
+  bash tools/gstack/setup --team 2>/dev/null || true
+  # Same probe as scripts/tool_status.py:detect_gstack() step 3.
+  # PATH was already disproven above; check the submodule-local binary.
+  if [ -x "tools/gstack/bin/gbrain" ] && tools/gstack/bin/gbrain --version >/dev/null 2>&1; then
+    echo "✓ tools/gstack/bin/gbrain runnable. gstack features enabled (source=submodule)."
+    _GSTACK_STATUS="submodule"
+  else
+    echo "  ⚠ tools/gstack/ present but tools/gstack/bin/gbrain not runnable; treating as absent."
+    _GSTACK_STATUS="absent"
+  fi
 else
   echo "  ℹ gstack not detected — running in keyword-only RAG mode."
   echo "    To enable semantic search: bash install-gstack.sh"
@@ -406,7 +474,7 @@ All 183+ tests must pass.
 - [ ] **Step 1: Verify no regressions**
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
 .venv/bin/python3 -m pytest tests/ -v
 ```
 

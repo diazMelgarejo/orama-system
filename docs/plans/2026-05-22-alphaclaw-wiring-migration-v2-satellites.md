@@ -80,7 +80,7 @@ Present in both (parity confirmed):
 - Validate: `orama_bridge.py` → PT API → `alphaclaw_manager.py` → HTTP call to AlphaClaw
 
 **Task 1.3** — Verify orama never calls AlphaClaw directly
-- `grep -r "AlphaClaw" orama-system/ --include="*.py"` must return zero runtime call sites
+- `grep -ri "alphaclaw" orama-system/ --include="*.py"` must return zero runtime call sites
 - Allowed: doc references, path string in `discover.py`
 
 **Task 1.4** — Verify PT `packages/alphaclaw-adapter` is used by `alphaclaw_manager.py`

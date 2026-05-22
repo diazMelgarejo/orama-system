@@ -53,8 +53,8 @@ Every task in this plan is labeled to one of three generations, and the labels a
 - cross-cutting (`orama-system/docs/`): push the plan, spec, and LESSONS append immediately — those are navigation, not code.
 
 **Hard rules:**
-- ALL canonical changes go to `/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/` on local branch `feat/salvage-plugins-rc1`. **Do NOT push** until full regression green.
-- ALL v1 changes go to `/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools/` on local branch `feat/ip-aware-discovery`.
+- ALL canonical changes go to `~/Documents/oramasys/perpetua-core/` on local branch `feat/salvage-plugins-rc1`. **Do NOT push** until full regression green.
+- ALL v1 changes go to `<workspace>/Perpetua-Tools/` on local branch `feat/ip-aware-discovery`.
 - v2 `oramasys/oramasys` dispatch wiring goes on local branch `feat/dispatch-discovery-bridge`.
 - Every task: failing test first, watch it fail, then code. No exceptions.
 - Commit per task. PROGRESS.md updated per task (claim → done).
@@ -68,7 +68,7 @@ Every task in this plan is labeled to one of three generations, and the labels a
 
 ## File map (with generation labels)
 
-### `oramasys/perpetua-core` — **v2-planning** (`/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/`)
+### `oramasys/perpetua-core` — **v2-planning** (`~/Documents/oramasys/perpetua-core/`)
 
 | Action | Path | Purpose |
 |---|---|---|
@@ -89,7 +89,7 @@ Every task in this plan is labeled to one of three generations, and the labels a
 | Create | `tests/property/test_engine_invariants.py` | Hypothesis property tests |
 | Create | `PROGRESS.md` | Multi-agent coordination ledger |
 
-### `diazMelgarejo/Perpetua-Tools` — **v1-legacy** (`/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools/`)
+### `diazMelgarejo/Perpetua-Tools` — **v1-legacy** (`<workspace>/Perpetua-Tools/`)
 
 | Action | Path | Purpose |
 |---|---|---|
@@ -103,7 +103,7 @@ Every task in this plan is labeled to one of three generations, and the labels a
 | Create | `tests/discovery/test_registry.py` | Autodetect, direct-IP, eviction |
 | Create | `tests/discovery/test_selector.py` | Routing rules |
 
-### `oramasys/oramasys` — **v2-planning** (`/Users/lawrencecyremelgarejo/Documents/oramasys/oramasys/`)
+### `oramasys/oramasys` — **v2-planning** (`~/Documents/oramasys/oramasys/`)
 
 | Action | Path | Purpose |
 |---|---|---|
@@ -118,14 +118,14 @@ Every task in this plan is labeled to one of three generations, and the labels a
 **Why:** Per spec §5, every salvage task is claimed in `PROGRESS.md` before work starts so concurrent Codex/Gemini agents don't collide on the same file.
 
 **Files:**
-- Create: `/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/PROGRESS.md`
+- Create: `~/Documents/oramasys/perpetua-core/PROGRESS.md`
 
 - [ ] **Step 1: Create local branches (do NOT push)**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core && git checkout -b feat/salvage-plugins-rc1
-cd /Users/lawrencecyremelgarejo/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools && git checkout -b feat/ip-aware-discovery
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys && git checkout -b feat/dispatch-discovery-bridge
+cd ~/Documents/oramasys/perpetua-core && git checkout -b feat/salvage-plugins-rc1
+cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools && git checkout -b feat/ip-aware-discovery
+cd ~/Documents/oramasys/oramasys && git checkout -b feat/dispatch-discovery-bridge
 ```
 
 - [ ] **Step 2: Write PROGRESS.md**
@@ -163,7 +163,7 @@ cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys && git checkout -b f
 - [ ] **Step 3: Commit ledger**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/Documents/oramasys/perpetua-core
 git add PROGRESS.md
 git commit -m "chore: PROGRESS.md ledger for salvage-plugins-rc1"
 ```
@@ -209,7 +209,7 @@ def test_backend_holds_identity_and_health():
 - [ ] **Step 2: Watch it fail**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
+cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
 pytest tests/discovery/test_backend.py -v
 ```
 Expected: `ModuleNotFoundError: No module named 'perpetua.discovery'`.
@@ -698,7 +698,7 @@ git commit -m "feat(discovery): selector with tier+task routing table (Task 4)"
 - [ ] **Step 1: Read current agent_launcher to find dispatch site**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
+cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
 grep -n "base_url\|LMSTUDIO\|OLLAMA_BASE" orchestrator/agent_launcher.py
 ```
 
@@ -781,7 +781,7 @@ git commit -m "feat(launcher): resolve_backend_for_spec via discovery registry (
 
 **Switch repos:**
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/Documents/oramasys/perpetua-core
 git checkout feat/salvage-plugins-rc1
 # Claim Task 5 in PROGRESS.md before starting.
 ```
@@ -1639,8 +1639,8 @@ git commit -m "feat(core): ChatMessage + ChatHistory typed wrapper (closes OQ17,
 **Why:** Avoid duplicating Backend/Registry/Selector logic in v2. The bridge re-exports the v1 shapes under canonical names, validates the contract holds. (v1 imports the bridge; v2 nodes import the bridge. One source of truth: v1's `perpetua/discovery/`.)
 
 **Files:**
-- Create: `/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/perpetua_core/discovery/__init__.py`
-- Create: `/Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/perpetua_core/discovery/adapter.py`
+- Create: `~/Documents/oramasys/perpetua-core/perpetua_core/discovery/__init__.py`
+- Create: `~/Documents/oramasys/perpetua-core/perpetua_core/discovery/adapter.py`
 - Create: `tests/test_discovery_adapter.py`
 
 **Decision:** the v2 `perpetua_core.discovery` package re-exports the *same dataclasses + selector* — copied verbatim from v1 (not imported, to keep v2 free of any v1 import). The bridge plugin merely declares the contract. Implementation is `cp -r perpetua/discovery/* perpetua_core/discovery/` then prune any v1-only deps.
@@ -1648,12 +1648,12 @@ git commit -m "feat(core): ChatMessage + ChatHistory typed wrapper (closes OQ17,
 - [ ] **Step 1: Copy v1 discovery sources into v2**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
-cp perpetua/discovery/backend.py /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/perpetua_core/discovery/backend.py
-cp perpetua/discovery/probe.py /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/perpetua_core/discovery/probe.py
-cp perpetua/discovery/registry.py /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/perpetua_core/discovery/registry.py
-cp perpetua/discovery/selector.py /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/perpetua_core/discovery/selector.py
-cp perpetua/discovery/errors.py /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core/perpetua_core/discovery/errors.py
+cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
+cp perpetua/discovery/backend.py ~/Documents/oramasys/perpetua-core/perpetua_core/discovery/backend.py
+cp perpetua/discovery/probe.py ~/Documents/oramasys/perpetua-core/perpetua_core/discovery/probe.py
+cp perpetua/discovery/registry.py ~/Documents/oramasys/perpetua-core/perpetua_core/discovery/registry.py
+cp perpetua/discovery/selector.py ~/Documents/oramasys/perpetua-core/perpetua_core/discovery/selector.py
+cp perpetua/discovery/errors.py ~/Documents/oramasys/perpetua-core/perpetua_core/discovery/errors.py
 ```
 
 - [ ] **Step 2: Create `__init__.py`**
@@ -1690,7 +1690,7 @@ def test_canonical_discovery_module_exports_full_v1_surface():
 - [ ] **Step 4: Tests pass**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/Documents/oramasys/perpetua-core
 pytest tests/test_discovery_adapter.py -v
 ```
 
@@ -1706,12 +1706,12 @@ git commit -m "feat(discovery): canonical port of v1 discovery shapes (Task 13)"
 ### Task 14 — Wire `dispatch_node` to discovery (oramasys/oramasys)
 
 **Files:**
-- Modify: `/Users/lawrencecyremelgarejo/Documents/oramasys/oramasys/orama/graph/perpetua_graph.py`
-- Create: `/Users/lawrencecyremelgarejo/Documents/oramasys/oramasys/tests/test_dispatch_with_discovery.py`
+- Modify: `~/Documents/oramasys/oramasys/orama/graph/perpetua_graph.py`
+- Create: `~/Documents/oramasys/oramasys/tests/test_dispatch_with_discovery.py`
 
 **Switch repos:**
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
+cd ~/Documents/oramasys/oramasys
 git checkout feat/dispatch-discovery-bridge
 ```
 
@@ -1804,13 +1804,13 @@ def build_graph(*, registry: BackendRegistry | None = None) -> "CompiledGraph":
 
 ```bash
 pytest tests/ -v  # this repo
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core && pytest tests/ -v
+cd ~/Documents/oramasys/perpetua-core && pytest tests/ -v
 ```
 
 - [ ] **Step 6: Commit**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
+cd ~/Documents/oramasys/oramasys
 git add orama/graph/perpetua_graph.py tests/test_dispatch_with_discovery.py
 git commit -m "feat(dispatch): wire perpetua_graph dispatch_node to discovery registry (Task 14)"
 ```
@@ -1837,7 +1837,7 @@ git commit -m "feat(dispatch): wire perpetua_graph dispatch_node to discovery re
 - [ ] **Step 1: Install hypothesis if missing**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/Documents/oramasys/perpetua-core
 pip install hypothesis pytest-asyncio respx
 ```
 
@@ -1901,7 +1901,7 @@ git commit -m "test(property): Hypothesis invariants for engine determinism + cy
 - [ ] **Step 1: Run full canonical suite**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/Documents/oramasys/perpetua-core
 pytest tests/ -v --tb=short 2>&1 | tail -40
 ```
 Expected: original 32 tests + new tests all green. Document the total count.
@@ -1909,21 +1909,21 @@ Expected: original 32 tests + new tests all green. Document the total count.
 - [ ] **Step 2: Run v1 suite**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
+cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
 pytest tests/discovery/ tests/test_agent_launcher_uses_registry.py -v
 ```
 
 - [ ] **Step 3: Run v2 suite**
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/oramasys
+cd ~/Documents/oramasys/oramasys
 pytest tests/ -v
 ```
 
 - [ ] **Step 4: Update PROGRESS.md** — fill in all `Status: DONE` + commit SHAs by running:
 
 ```bash
-cd /Users/lawrencecyremelgarejo/Documents/oramasys/perpetua-core
+cd ~/Documents/oramasys/perpetua-core
 git log feat/salvage-plugins-rc1 --oneline -25
 ```
 
@@ -1939,7 +1939,7 @@ git commit -m "chore(progress): mark all salvage tasks DONE with commit SHAs"
 In orama-system repo:
 
 ```bash
-cat >> "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system/docs/LESSONS.md" <<'EOF'
+cat >> "<workspace>/orama-system/docs/LESSONS.md" <<'EOF'
 
 ## 2026-05-17 — Salvage translation + v1 IP-aware discovery landed
 
@@ -1960,7 +1960,7 @@ EOF
 Then commit + push the LESSONS update in orama-system (this repo only):
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
 git add docs/LESSONS.md docs/superpowers/plans/2026-05-17-salvage-translation-v1-discovery.md
 git commit -m "docs: salvage + v1 discovery implementation plan + lessons note"
 git push origin main

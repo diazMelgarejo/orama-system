@@ -319,10 +319,90 @@ Before v2.0 kernel construction begins:
 
 ---
 
-## 8. Cross-references
+## 8. Pattern D — OpSec / Anti-DOX Guards (added 2026-05-22)
 
-- `docs/LESSONS.md` (2026-05-06 entry) — source incident
+> **Source**: `scripts/review/repo_hygiene.py` v2 additions — `scan_personal_paths`,
+> `scan_bidi_controls`. Promoted from PR #37 hygiene audit into this design doc.
+
+### Rule
+
+**No absolute personal paths in any tracked file.**
+
+Workstation paths (`/Users/<realname>/`, `/home/<realname>/`) committed to a repo:
+- leak developer identity and directory layout in public diffs
+- break portability (paths are machine-local)
+- violate opsec (directory structure = attack surface for social engineering)
+
+**Use `~`, `$REPO_ROOT`, or `<workspace>` placeholders instead.**
+
+### Canonical lints (`scripts/review/repo_hygiene.py`)
+
+```python
+# Blocks /Users/<realname>/ and /home/<realname>/ in all tracked files
+PERSONAL_PATH_PATTERN = re.compile(r"(/Users/|/home/)([A-Za-z][A-Za-z0-9._-]+)/")
+
+# Allowlisted placeholder usernames (doc examples, not real leaks)
+PERSONAL_PATH_PLACEHOLDERS = frozenset({
+    "you", "user", "example", "username", "name",
+    "youruser", "yourname", "<user>", "<username>", "USERNAME", "USER",
+})
+
+# Exceptions: the script itself names the pattern for documentation
+PERSONAL_PATH_EXCEPTIONS = {
+    "scripts/review/repo_hygiene.py",
+    "tests/test_repo_hygiene.py",
+}
+```
+
+The function `scan_personal_paths(root, files)` runs in `main()` alongside
+`scan_forbidden_identity` and `scan_bidi_controls`.
+
+### BiDi Unicode guard
+
+Bidirectional Unicode control characters (Trojan-Source / CVE-2021-42574) can
+reorder source-code rendering so the visible diff differs from the parsed AST.
+Nine characters are blocked in all tracked files:
+
+| Unicode | Name | Description |
+|---------|------|-------------|
+| U+202A | LRE | Left-to-Right Embedding |
+| U+202B | RLE | Right-to-Left Embedding |
+| U+202C | PDF | Pop Directional Formatting |
+| U+202D | LRO | Left-to-Right Override |
+| U+202E | RLO | Right-to-Left Override |
+| U+2066 | LRI | Left-to-Right Isolate |
+| U+2067 | RLI | Right-to-Left Isolate |
+| U+2068 | FSI | First Strong Isolate |
+| U+2069 | PDI | Pop Directional Isolate |
+
+Exceptions: `scripts/review/repo_hygiene.py` and `tests/test_repo_hygiene.py`
+name the codepoints for documentation purposes.
+
+### v2 enforcement requirement
+
+When `perpetua-core` and `oramasys` gain their own CI pipelines in Phase 3–4:
+
+- [ ] Port `scan_personal_paths` + `scan_bidi_controls` into `oramasys/perpetua-core`'s
+      lint suite (or import `repo_hygiene.py` as a shared library)
+- [ ] Add `PERSONAL_PATH_EXCEPTIONS` for the hygiene script itself
+- [ ] Add `test_scan_personal_paths_*` tests mirroring `tests/test_repo_hygiene.py`
+
+### Invariants for all code in this system
+
+1. Never commit `/Users/<realname>/` or `/home/<realname>/` in any tracked file.
+2. Machine-local config files (e.g., `.claude/settings.local.json`) go in `.gitignore`,
+   never in tracking.
+3. Absolute paths in CI scripts use `$GITHUB_WORKSPACE`, `$REPO_ROOT`, or `$(git rev-parse --show-toplevel)`.
+4. Documentation examples use `<workspace>`, `~`, or `$REPO_ROOT`.
+
+---
+
+## 9. Cross-references
+
+- `docs/LESSONS.md` (2026-05-06 entry) — source incident for Patterns A–C
 - PR #32 — three Codex findings (commit b7733f1)
+- PR #37 (`feat/rag-gstack-optional-v1`) — OpSec lint additions (commit a789a0e)
+- `scripts/review/repo_hygiene.py` — canonical implementation of all four patterns
 - `docs/v2/01-kernel-spec.md` — kernel surface that adopts these patterns
 - `docs/v2/04-build-order.md` — Phase 4 parity tests gate
 - `docs/v2/10-v1-hacks-automation-orbit.md` — Link Watcher Satellite, Pattern A
