@@ -69,5 +69,5 @@ Result: unified bge-m3 embeddings across gbrain (PostgreSQL+pgvector) and code-r
 ## See also
 
 - `../../skills/code-review/references/crg-embed-mode.md` — underlying CRG embedding toggle
-- `CLAUDE-instru.md § 0.5` — gbrain install
+- [`../../references/first-run-install.md`](../../references/first-run-install.md) § 0.5 — gbrain install
 - `docs/plans/2026-05-19-gbrain-crg-embedding-integration.md` — full integration plan
