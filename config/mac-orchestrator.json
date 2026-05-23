@@ -104,7 +104,7 @@
       "enabled": false
     },
     "telegram": {
-      "botToken": "8543428829:AAExz5YpoKTrxT7yuMlJZwvM6tFhGkcn-V4",
+      "botToken": "${env:OPENCLAW_TELEGRAM_BOT_TOKEN}",
       "enabled": true
     },
     "whatsapp": {
@@ -138,7 +138,7 @@
   "gateway": {
     "auth": {
       "mode": "token",
-      "token": "d3aea7fea7ba51a1dff69b84662ae97d53dd3c2bcb182781"
+      "token": "${env:OPENCLAW_GATEWAY_AUTH_TOKEN}"
     },
     "bind": "lan",
     "controlUi": {
@@ -181,7 +181,7 @@
     "providers": {
       "gemini-fallback": {
         "api": "openai-completions",
-        "apiKey": "AIzaSyBR4DfaiCs4EbQPv381e7tQXSmKTKAyPYQ",
+        "apiKey": "${env:OPENCLAW_MODELS_PROVIDERS_GEMINI_FALLBACK_APIKEY}",
         "baseUrl": "https://generativelanguage.googleapis.com/v1beta",
         "models": [
           {

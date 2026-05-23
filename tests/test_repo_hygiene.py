@@ -79,6 +79,36 @@ def test_scan_openclaw_workstation_layout_blocks_machine_path(tmp_path):
     assert "docs/setup.md" in errors[0]
 
 
+def test_scan_tracked_secrets_blocks_google_and_telegram_tokens(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    bad = cfg / "bad.json"
+    bad.write_text(
+        "\n".join(
+            [
+                '{"apiKey": "AIzaSy0123456789012345678901234567890"}',
+                '{"botToken": "1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdef"}',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    good = cfg / "good.json"
+    good.write_text(
+        '{"apiKey": "${env:OPENCLAW_GEMINI_APIKEY}", "botToken": "${env:OPENCLAW_TELEGRAM_BOT_TOKEN}"}',
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_tracked_secrets(
+        tmp_path,
+        ["config/bad.json", "config/good.json"],
+    )
+
+    assert len(errors) == 1
+    assert "config/bad.json" in errors[0]
+    assert "google_api_key" in errors[0]
+
+
 def test_scan_personal_paths_blocks_user_home(tmp_path):
     repo_hygiene = load_repo_hygiene()
     docs = tmp_path / "docs"
