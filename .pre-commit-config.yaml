@@ -40,7 +40,7 @@ repos:
         types: [python]
 
       - id: repo-hygiene
-        name: "Repo hygiene — identity, personal paths, markdown links"
+        name: "Repo hygiene — identity, paths, secrets, markdown links"
         entry: python scripts/review/repo_hygiene.py .
         language: system
         pass_filenames: false

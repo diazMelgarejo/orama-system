@@ -324,12 +324,21 @@ const RANK_CLASS = ["rank-1","rank-2","rank-3","rank-4"];
 
 // ── Log helper ────────────────────────────────────────────────────────────────
 const logWrap = document.getElementById("log-wrap");
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function logLine(level, msg) {
   const ts = new Date().toLocaleTimeString();
   const cls = { ok:"log-ok", warn:"log-warn", err:"log-err", info:"log-info" }[level] || "log-info";
   const div = document.createElement("div");
   div.className = "log-line";
-  div.innerHTML = `<span class="log-ts">${ts}</span><span class="${cls}">[${level.toUpperCase()}]</span> ${msg}`;
+  div.innerHTML = `<span class="log-ts">${escapeHtml(ts)}</span><span class="${cls}">[${escapeHtml(level).toUpperCase()}]</span> ${escapeHtml(msg)}`;
   logWrap.prepend(div);
   while (logWrap.children.length > 80) logWrap.removeChild(logWrap.lastChild);
 }

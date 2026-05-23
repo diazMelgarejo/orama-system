@@ -28,7 +28,7 @@ The AlphaClaw → Perpetua-Tools → orama-system layering means:
 
 | Channel | Status | Notes |
 |---------|--------|-------|
-| Telegram | ✅ Connected | Bot: @a1phaCLawbot (token in `channels.telegram.botToken`) |
+| Telegram | ✅ Connected | Bot: @a1phaCLawbot (set `OPENCLAW_TELEGRAM_BOT_TOKEN` → `channels.telegram.botToken`) |
 | WhatsApp | ⏳ Needs QR pairing | Plugin enabled, Baileys installed — run login once |
 
 ### Telegram notes
