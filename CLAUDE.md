@@ -116,7 +116,7 @@ Full setup: [`docs/wiki/06-multi-agent-collab.md`](docs/wiki/06-multi-agent-coll
 
 ## § 6 — Repository Identity & Git Hygiene
 
-- Commit identity: `cyre <Lawrence@cyre.me>` or `Codex <codex@openai.com>` — verify with `bash scripts/git/check_identity.sh`
+- Commit identity: `cyre <Lawrence@cyre.me>`, `cyre <diazMelgarejo@gmail.com>`, or `Codex <codex@openai.com>` — verify with `bash scripts/git/check_identity.sh`
 - Dated branches: `yyyy-mm-dd-NNN-brief-summary`
 - Never commit `.env`, `.env.local`, generated `.paths`
 - Full rules: [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md)
