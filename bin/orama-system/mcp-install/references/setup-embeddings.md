@@ -14,7 +14,7 @@ Idempotent wire-up of the **unified gbrain + code-review-graph embedding stack**
 |---|---|---|
 | 1 | Verify `gbrain`, `uvx`, `jq` on PATH — fail fast if missing | Yes — read-only probe |
 | 2 | Verify Ollama is reachable + `bge-m3` pulled — warn if not | Yes — read-only probe |
-| 3 | Check `.mcp.json` current CRG embedding model. If already `bge-m3`, skip. Else invoke `crg-embed-mode gbrain` to wire it. | Yes — checks state first |
+| 3 | Ensure `$OPENCLAW_ROOT/.mcp.json` exists (create via `code-review-graph install` or minimal template), then check CRG embedding model. If already `bge-m3`, skip. Else invoke `crg-embed-mode gbrain` to wire it. | Yes — checks state first |
 | 4 | For each of 3 worktrees (AlphaClaw, orama-system, Perpetua-Tools), verify `.gbrain-source` file is pinned — warn if missing | Yes — read-only probe |
 | 5 | Smoke test: POST to `localhost:11434/v1/embeddings` with `bge-m3` and assert 1024-dim response | Yes — pure side-effect-free probe |
 

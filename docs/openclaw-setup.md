@@ -71,7 +71,7 @@ openclaw config set commands.ownerAllowFrom '["telegram:123456789"]'
 ## Plugin Config: usage-tracker
 
 The `usage-tracker` plugin is the AlphaClaw dev build at:
-`~/Documents/Terminal xCode/claude/OpenClaw/AlphaClaw/lib/plugin/usage-tracker`
+`$OPENCLAW_ROOT/AlphaClaw/lib/plugin/usage-tracker` (set `OPENCLAW_ROOT` to your OpenClaw parent directory)
 
 The `llm_output` hook requires explicit access permission. Set via:
 ```bash

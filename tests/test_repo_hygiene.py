@@ -62,6 +62,40 @@ def test_git_internal_junk_is_blocked(tmp_path):
     ]
 
 
+def test_scan_openclaw_workstation_layout_blocks_machine_path(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    md = docs / "setup.md"
+    md.write_text(
+        'Clone at ${HOME}/Documents/Terminal xCode/claude/OpenClaw/orama-system\n',
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_openclaw_workstation_layout(tmp_path, ["docs/setup.md"])
+
+    assert len(errors) == 1
+    assert "machine-specific OpenClaw path" in errors[0]
+    assert "docs/setup.md" in errors[0]
+
+
+def test_scan_personal_paths_blocks_user_home(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    md = docs / "README.md"
+    md.write_text(
+        "Config path: /Users/janedoe/projects/orama-system/README.md\n",
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_personal_paths(tmp_path, ["docs/README.md"])
+
+    assert len(errors) == 1
+    assert "personal absolute path" in errors[0]
+    assert "/Users/janedoe/" in errors[0]
+
+
 def test_markdown_link_hygiene_blocks_absolute_paths(tmp_path):
     repo_hygiene = load_repo_hygiene()
     docs = tmp_path / "docs"

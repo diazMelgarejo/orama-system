@@ -217,4 +217,4 @@ Output: Each command printed as "[dry-run] <cmd>" — nothing executed
 
 See [`../references/first-run-install.md`](../references/first-run-install.md) §§ 0.4–0.5.1 for code-review-graph and gbrain. Run platform bootstrap first: [`../scripts/first-run-install.sh`](../scripts/first-run-install.sh). Embedding bootstrap: `scripts/setup-embeddings` ([`references/setup-embeddings.md`](references/setup-embeddings.md)).
 
-**PR multi-lens review:** after MCP stack is up, use [`../skills/code-review/references/review-lenses-pr.md`](../skills/code-review/references/review-lenses-pr.md) with dispatch in [`~/.claude/skills/mcp-orchestration/SKILL.md`](file:///Users/lawrencecyremelgarejo/.claude/skills/mcp-orchestration/SKILL.md) §5 (PR multi-lens code review).
+**PR multi-lens review:** after MCP stack is up, use [`../skills/code-review/references/review-lenses-pr.md`](../skills/code-review/references/review-lenses-pr.md) with dispatch in [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md) §5 (PR multi-lens code review).
