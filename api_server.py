@@ -36,6 +36,13 @@ from bin.shared.bridge_contract import (
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
+
+def _client_safe_detail(exc: BaseException, *, fallback: str = "Request rejected") -> str:
+    """Log server-side; return a client-safe detail string (no tracebacks)."""
+    logger.warning("request rejected: %s", exc, exc_info=True)
+    return fallback
+
+
 # ── Backend routing priority ──────────────────────────────────────────────────
 
 import platform as _platform_mod
@@ -594,7 +601,10 @@ async def run_ultrathink(req: UltraThinkRequest, http_request: Request) -> Ultra
     except PolicyUnavailableError as exc:
         return JSONResponse(
             status_code=400,
-            content={"error": "POLICY_UNAVAILABLE", "detail": str(exc)},
+            content={
+                "error": "POLICY_UNAVAILABLE",
+                "detail": _client_safe_detail(exc, fallback="Policy resolver unavailable"),
+            },
         )
     requested_platform = req.platform or (req.context or {}).get("platform") or (req.context or {}).get("affinity")
     explicit_hardware_provider = False
@@ -628,7 +638,10 @@ async def run_ultrathink(req: UltraThinkRequest, http_request: Request) -> Ultra
         except HardwareAffinityError as exc:
             return JSONResponse(
                 status_code=400,
-                content={"error": "HARDWARE_MISMATCH", "detail": str(exc)},
+                content={
+                    "error": "HARDWARE_MISMATCH",
+                    "detail": _client_safe_detail(exc, fallback="Model/platform affinity mismatch"),
+                },
             )
     
     # Resolve backend dispatch order: request field > env var > platform-default

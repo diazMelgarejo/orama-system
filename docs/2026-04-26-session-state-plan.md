@@ -180,7 +180,7 @@ Update `.claude/skills/alphaclaw-session/SKILL.md` with:
 ### Gateway unreachable (http_code 000)
 1. Check if AlphaClaw process is running: `ps aux | grep alphaclaw`
 2. Restart: `cd ~/.alphaclaw && node alphaclaw.js` (or via start.sh)
-3. Re-verify: `curl -s -H "Authorization: Bearer d3aea7fea7ba51a1dff69b84662ae97d53dd3c2bcb182781" http://localhost:18789/health`
+3. Re-verify: `curl -s -H "Authorization: Bearer $OPENCLAW_GATEWAY_AUTH_TOKEN" http://localhost:18789/health`
 ```
 
 ### P4 — Create Agent Definition Files
