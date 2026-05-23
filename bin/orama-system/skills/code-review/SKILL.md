@@ -1,157 +1,192 @@
 ---
 name: code-review
 description: |
-  Code-review cycle for ALL coding agents (Claude, Codex, Gemini, OpenClaw, Hermes, etc.).
-  Triggers on: multi-file review, PR review, before touching unfamiliar code, blast-radius
-  analysis before refactoring, "review this code", "what does this function touch".
+  Use when reviewing code across multiple files, PRs, or unfamiliar areas; before refactors;
+  when the user asks for blast-radius, detect_changes, get_review_context, semantic_search_nodes,
+  code-reviewer subagents, or multi-lens PR review. Applies to all coding agents in the stack.
 ---
 
-# Code-Review Cycle
+# Code Review
 
-> **Canonical doc:** `CLAUDE-instru.md § 1` (code-review-graph + gbrain chaining)
-> **Motivation:** Reading all files inline inflates context 8–49x vs. blast-radius mapping.
-> This skill enforces the correct tool chain for all coding agents in the stack.
+> **Canonical:** [`references/tool-chain.md`](references/tool-chain.md) (graph → gbrain → Read)
+> **Persona:** [`agents/code-reviewer.md`](agents/code-reviewer.md)
+> **Motivation:** Reading files inline costs 8–49× more tokens than blast-radius mapping. This skill enforces graph-first review for every host.
 
 ---
 
-## The Chain (use in this order, always)
+## Purpose
+
+Token-efficient, high-signal code review: map impact with **code-review-graph**, resolve symbols with **gbrain**, read only confirmed files, then judge with a **confidence-gated** reviewer persona (≥ 80 only).
+
+---
+
+## Persona (summary)
+
+Senior code reviewer — see full contract in [`agents/code-reviewer.md`](agents/code-reviewer.md):
+
+- Plan / guideline alignment, real bugs, architecture fit, proportional test/doc notes
+- **Confidence ≥ 80** only; Critical (90–100), Important (80–89)
+- Strengths briefly, then issues; **Ready to merge?** Yes | No | With fixes
+- Minimize false positives; no out-of-scope refactors
+
+---
+
+## Non-negotiable chain
 
 ```
-1. code-review-graph  →  blast-radius map
-2. gbrain code-def    →  symbol resolution
-3. gbrain search      →  past decisions / LESSONS.md
-4. Read               →  only confirmed-relevant files
+1. code-review-graph  →  blast-radius / detect_changes / review context
+2. gbrain             →  code-def, code-refs, search (LESSONS / decisions)
+3. Read               →  only graph-confirmed files
 ```
 
-Never skip to `Read` without completing step 1 first on multi-file tasks.
+Never skip step 1 on multi-file tasks. Never whole-repo `Read` before graph.
 
 ---
 
-## Step 1 — Blast-radius map (`code-review-graph` MCP)
+## Mode router
 
-**When:** Start of any multi-file review or before touching code in an unfamiliar area.
+| Choose | When |
+|--------|------|
+| **Delta** | Uncommitted changes, small diff, pre-commit, "review my changes", &lt; ~10 files and no PR context |
+| **PR** | `gh pr`, branch vs main, explicit PR review, large diff, or user asks for thorough / multi-lens review |
 
-MCP tool: `code-review-graph` (registered in `OpenClaw/.mcp.json`)
-- `uvx code-review-graph serve` starts the MCP server
-- Python 3.13 required; uvx handles the env
+```mermaid
+flowchart LR
+  start[Invoke skill] --> route{Scope?}
+  route -->|Delta| delta[Single-pass + graph]
+  route -->|PR| pr[Graph + 5 lenses + merge]
+  delta --> report[Report]
+  pr --> report
+```
 
-Available slash commands (Claude Code):
-| Command | When to use |
-|---------|-------------|
-| `/code-review-graph:build-graph` | Rebuild after major changes |
-| `/code-review-graph:review-delta` | Blast-radius of uncommitted changes |
-| `/code-review-graph:review-pr` | Full PR review with impact analysis |
-
-**Output:** File list (callers, dependents, affected tests) for the changed function/file.
-Feed this list to steps 2–4 instead of reading the full repo.
+- **Delta:** one reviewer pass after Phases A–C ([`output-format.md`](references/output-format.md)).
+- **PR:** Phases A–C, then fan-out per [`review-lenses-pr.md`](references/review-lenses-pr.md) + [`orchestration-dispatch.md`](references/orchestration-dispatch.md).
 
 ---
 
-## Step 2 — Symbol resolution (`gbrain`)
+## Phase A — Graph (code-review-graph MCP)
 
-**When:** After blast-radius identifies a symbol/function you need to understand.
+**Server:** `OpenClaw/.mcp.json` — `uvx code-review-graph serve` (Python 3.13+).
+
+Full tool matrix: [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md).
+
+| Tool | When |
+|------|------|
+| `list_graph_stats` | Stale / empty graph check |
+| `detect_changes` | Start of any diff review |
+| `semantic_search_nodes` | Unknown symbol or entry point |
+| `query_graph` | callers, callees, imports, tests |
+| `get_impact_radius` | Refactor / merge risk |
+| `get_affected_flows` | Broken execution paths |
+| `get_review_context` | Snippets before full Read |
+| `get_architecture_overview` | Unfamiliar area |
+| `refactor_tool` | Rename / dead-code planning only |
+
+**Embeddings:** CRG + gbrain share **bge-m3** (1024-dim). Toggle: `scripts/crg-embed-mode` · [`references/crg-embed-mode.md`](references/crg-embed-mode.md).
+
+Slash commands (Claude Code): `/code-review-graph:review-delta`, `review-pr`, `build-graph`. **Cursor:** use MCP tools directly.
+
+---
+
+## Phase B — Gbrain
+
+After blast-radius identifies symbols:
 
 ```bash
-gbrain code-def <symbol>         # where is X defined?
-gbrain code-refs <symbol>        # what uses X?
-gbrain code-callers <symbol>     # what calls X?
-gbrain code-callees <symbol>     # what does X call?
+gbrain code-def <symbol>
+gbrain code-refs <symbol>
+gbrain code-callers <symbol>
+gbrain code-callees <symbol>
+gbrain search "<intent>"
+gbrain search "<terms>" --source gstack-brain-<user>   # cross-session memory
 ```
 
-Each worktree is auto-pinned to its own indexed corpus via `.gbrain-source`.
-No `--source` flag needed when calling from within the repo directory.
+Worktree pinned via `.gbrain-source` — no `--source` when cwd is in repo.
+
+**Architecture?** → `docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md` (link section; do not restate).
+**HITL?** → `docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md`
 
 ---
 
-## Step 3 — Past decisions & LESSONS.md
+## Phase C — Context before Read
 
-**When:** Before making architectural or behavioral changes; or when reasoning about why code is structured a certain way.
-
-```bash
-gbrain search "<intent>"                                # this repo's history
-gbrain search "<terms>" --source gstack-brain-lawrencecyremelgarejo  # cross-session memory
-```
-
-**Architecture?** → Check `docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md` first.
-Briefly summarize (2-3 lines) + link section. Expand only if user asks.
-
-**HITL gates?** → `docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md`
-
-**Hardware affinity?** → `docs/v2/17-hardware-policy-enforcement.md`
+1. Call `get_review_context` for changed + impacted files from Phase A.
+2. Build **assigned file list** (delta: diff + impact; PR: diff ∪ blast radius).
+3. `Read` only those files — do not re-read if already in context.
 
 ---
 
-## Step 4 — Targeted file reads
+## Phase D — Review
 
-Only read files confirmed relevant by steps 1–3.
+### Delta (single-pass)
 
-```
-Read the file. Don't re-read if already in context.
-```
+1. Load persona: [`agents/code-reviewer.md`](agents/code-reviewer.md)
+2. Apply coding profile rules: [`profiles/CLAUDE.coding.md`](profiles/CLAUDE.coding.md)
+3. Default scope: `git diff` or `detect_changes` output
+4. Score issues; drop &lt; 80
 
----
+### PR (multi-lens)
 
-## Agent compatibility matrix
+1. Complete Phases A–C; build assigned file list + CLAUDE.md paths (root + per touched dir).
+2. Probe orchestration ([`orchestration-dispatch.md`](references/orchestration-dispatch.md)):
+   - OmniRoute → ai-cli-mcp → Cursor `Task` → sequential
+3. Run five lenses ([`review-lenses-pr.md`](references/review-lenses-pr.md))
+4. Merge, dedupe, confidence filter (≥ 80)
 
-This skill is designed for all agents in the stack. Each agent uses the same
-chain; only the tool invocation differs:
+**Workers:** use [`agents/code-reviewer.md`](agents/code-reviewer.md) + lens prompt. **No commits** from workers.
 
-| Agent | How to trigger step 1 | How to trigger step 2 |
-|-------|----------------------|----------------------|
-| **Claude Code** | `/code-review-graph:review-delta` | `gbrain code-def <symbol>` |
-| **Codex** | `codex mcp call code-review-graph review_delta` | `gbrain code-def <symbol>` |
-| **Gemini** | `gemini-mcp-tool` → `ask-gemini` to run codebase query | `gbrain search` |
-| **OpenClaw** | Route through `orchestrator/orama_bridge.py` → PT MCP adapter | Same |
-| **Hermes / ai-cli** | `ai-cli run` with prompt that invokes the MCP | Same |
+**Codex boundary:** workers must **not** execute `SKILL.md` under `skills/gstack` or gstack global skills as procedures.
 
 ---
 
-## Contract reference
+## Phase E — Report
 
-- Shared types: `Perpetua-Tools/orchestrator/contracts.py`
-- Hardware policy: `Perpetua-Tools/config/model_hardware_policy.yml`
-- Mirror exclusion: `_MIRROR_BACKENDS = frozenset({"lmstudio-mac"})` in `selector.py`
+Template and rubric: [`references/output-format.md`](references/output-format.md).
 
----
-
-## Embedding Configuration (unified bge-m3 vector space)
-
-Both `code-review-graph` and `gbrain` use **Ollama bge-m3** (1024-dim). This puts
-`semantic_search_nodes` and `gbrain search` in the same vector space — their ranked
-results can be compared and merged directly.
-
-**Config in `OpenClaw/.mcp.json` (already set):**
-```
-CRG_OPENAI_API_KEY=ollama
-CRG_OPENAI_BASE_URL=http://localhost:11434/v1
-CRG_OPENAI_MODEL=bge-m3
-CRG_OPENAI_DIMENSION=1024
-```
-
-**If Ollama is down:** `semantic_search_nodes` falls back to FTS5-only (no vectors, still works).
-**To toggle:** `crg-embed-mode [gbrain|local|status]`
-**To re-embed after restart:** call `embed_graph_tool` via MCP.
-**Full plan:** `orama-system/docs/plans/2026-05-19-gbrain-crg-embedding-integration.md`
+Minimum fields: scope, strengths (short), Critical / Important lists with `file:line`, verdict.
 
 ---
 
-## Red flags — when this skill is being violated
+## Red flags (skill violation)
 
-- Reading `*.py` or `*.ts` files before running code-review-graph blast-radius
-- `gbrain search` skipped in favor of reading `LESSONS.md` directly
-- Architecture described from memory without a doc reference
-- "Let me look at the full repo structure" (→ use code-review-graph instead)
-- `Read` on more than 3 files without a prior blast-radius scan
-- Running `embed_graph_tool` without confirming Ollama + bge-m3 is running
+- `Read` / `Grep` on many files before `detect_changes` or blast-radius
+- Skipping `get_review_context` then reading full files
+- `gbrain search` skipped in favor of reading `LESSONS.md` inline
+- Architecture from memory without doc link
+- "Let me scan the whole repo" without graph
+- Nitpicks reported as Critical
+- PR fan-out for a two-file local delta
+- Workers committing or following gstack SKILL.md
 
-## MCP Tool Sequence
+---
 
-| Step | Tool | When |
-|---|---|---|
-| 1 | `list_graph_stats_tool` | Confirm graph is fresh |
-| 2 | `semantic_search_nodes_tool` | Find entry points by symbol or keyword |
-| 3 | `query_graph_tool` (callers_of / callees_of / file_summary) | Trace flow |
-| 4 | `get_impact_radius_tool` | Blast radius of changes |
-| 5 | `get_affected_flows_tool` | Which execution paths break |
+## Profiles (drop-ins)
 
-Embedding setup: see `scripts/crg-embed-mode` and `references/crg-embed-mode.md`.
+| Profile | Use |
+|---------|-----|
+| [`profiles/CLAUDE.coding.md`](profiles/CLAUDE.coding.md) | Review, debug, refactor tone |
+| [`profiles/CLAUDE.agents.md`](profiles/CLAUDE.agents.md) | Multi-agent pipelines |
+| [`profiles/J-drona23-v5/`](profiles/J-drona23-v5/) | Default agentic coding (builder + workflow rules) |
+
+---
+
+## References
+
+| Doc | Content |
+|-----|---------|
+| [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md) | Full CRG MCP matrix + sequences |
+| [`references/output-format.md`](references/output-format.md) | Confidence rubric + report template |
+| [`references/review-lenses-pr.md`](references/review-lenses-pr.md) | Five PR lenses + prompts |
+| [`references/orchestration-dispatch.md`](references/orchestration-dispatch.md) | OmniRoute / ai-cli / Task probe |
+| [`references/agent-matrix.md`](references/agent-matrix.md) | Per-host invocation |
+| [`references/crg-embed-mode.md`](references/crg-embed-mode.md) | Embedding toggle |
+| [`references/pressure-test-notes.md`](references/pressure-test-notes.md) | Expected graph-first behavior |
+| [`agents/code-reviewer.md`](agents/code-reviewer.md) | Subagent / worker persona |
+
+---
+
+## Related skills
+
+- Mother: [`bin/orama-system/SKILL.md`](../../SKILL.md) (OmniRoute probe, search policy)
+- MCP stack: [`bin/orama-system/mcp-install/SKILL.md`](../../mcp-install/SKILL.md)
+- Orchestration: [`~/.claude/skills/mcp-orchestration/SKILL.md`](file:///Users/lawrencecyremelgarejo/.claude/skills/mcp-orchestration/SKILL.md)
