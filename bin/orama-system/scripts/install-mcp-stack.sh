@@ -3,6 +3,7 @@
 # Installs: ai-cli-mcp + OpenClaw MCP registry entries, and Gemini only when
 # explicitly requested via --include-gemini
 # Safe to run multiple times. Skips any step that is already complete.
+# Platform bootstrap (Node, Ollama, CRG, gbrain): scripts/first-run-install.sh
 # Usage: bash install-mcp-stack.sh [--dry-run] [--force] [--include-gemini] [--mirror-skills]
 #
 # --mirror-skills: copy SKILL.md files from bin/orama-system/*/SKILL.md to
@@ -209,6 +210,7 @@ if $INCLUDE_GEMINI; then
 else
   _log "Restart Claude Code, then run /mcp to confirm ai-cli-mcp is active."
 fi
+_log "Platform checklist (if not done): bash $(dirname "$0")/first-run-install.sh status"
 
 # ── Rollback instructions ────────────────────────────────────────────────────
 cat << 'ROLLBACK'

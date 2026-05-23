@@ -35,4 +35,4 @@
 - No explanatory text in agent output unless a human will read it.
 - Return the minimum viable output that satisfies the task spec.
 - Cap parallel subagents at 3 unless explicitly instructed otherwise.
-- Use code-review-graph blast-radius before reading files: see CLAUDE-instru.md § 2.
+- Use code-review-graph blast-radius before reading files: see [`../references/tool-chain.md`](../references/tool-chain.md).
