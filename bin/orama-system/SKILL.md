@@ -307,8 +307,8 @@ live provider (LM Studio / Ollama, Mac / Windows GPU).
 New machine or fresh checkout:
 
 ```bash
-bash bin/orama-system/scripts/first-run-install.sh status   # fast probe
-bash bin/orama-system/scripts/first-run-install.sh run      # idempotent §0 checklist
+bash bin/orama-system/scripts/first-run-install.sh status    # fast probe
+bash bin/orama-system/scripts/first-run-install.sh install  # idempotent §0 checklist
 bash bin/orama-system/scripts/install-mcp-stack.sh          # MCP workers (separate)
 ```
 
