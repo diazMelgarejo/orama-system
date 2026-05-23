@@ -11,8 +11,9 @@ Use this page when you pulled `main` and channels, gateway auth, or Gemini fallb
 1. `cd` to your **orama-system** clone and `git pull origin main`.
 2. `cp .env.example .env.local` — edit LAN IPs and paths; **never commit** `.env.local`.
 3. Set **`OPENCLAW_ROOT`** to the parent of `orama-system` (see below) and export the four **`OPENCLAW_*`** secrets from the table (rotate if they were ever in git history).
-4. `bash scripts/check-local-env.sh` — fix anything marked `MISSING`.
-5. `bash scripts/git/check_identity.sh` && `bash bin/orama-system/scripts/first-run-install.sh status` && `python3 scripts/review/repo_hygiene.py .`
+4. `source scripts/env/load-local.sh` (or run `./start.sh` — it sources this automatically).
+5. `bash scripts/check-local-env.sh` — fix anything marked `MISSING`.
+6. `bash scripts/git/check_identity.sh` && `bash bin/orama-system/scripts/first-run-install.sh status` && `python3 scripts/review/repo_hygiene.py .`
 
 ---
 
@@ -53,9 +54,11 @@ export OPENCLAW_ROOT="/absolute/path/to/OpenClaw"
 
 ```bash
 cd /path/to/orama-system
-cp .env.example .env.local
+cp -n .env.example .env.local
 # Optional: split non-secrets into .env and keep secrets only in .env.local
-# portal_server.py and api_server.py load .env then .env.local (override)
+source scripts/env/load-local.sh   # .env then .env.local (override)
+export OPENCLAW_ROOT="$(git rev-parse --show-toplevel)/.."
+bash scripts/check-local-env.sh
 ```
 
 Fill in:
@@ -135,7 +138,7 @@ Naming convention for new OpenClaw secrets: `OPENCLAW_<SERVICE>_<DETAIL>` (upper
 
 | Layer | How env reaches the gateway |
 |-------|---------------------------|
-| **orama-system** | `portal_server.py` / `api_server.py` read repo `.env` + `.env.local` |
+| **orama-system** | `scripts/env/load-local.sh`, `start.sh`, `portal_server.py`, `api_server.py` — `.env` then `.env.local` |
 | **OpenClaw gateway** | macOS LaunchAgent / `start-*.sh` / `openclaw-secrets.sh` under `$OPENCLAW_ROOT` (not in this repo) |
 | **mac-orchestrator.json** | `${env:VAR}` substitution at runtime — vars must be in the **gateway process environment** |
 

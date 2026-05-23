@@ -3,6 +3,7 @@ set -euo pipefail
 
 ALLOWED_IDENTITIES=(
   "cyre|Lawrence@cyre.me"
+  "cyre|diazMelgarejo@gmail.com"
   "Codex|codex@openai.com"
 )
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
