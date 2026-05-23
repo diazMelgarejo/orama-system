@@ -26,10 +26,10 @@ description: |
    bash bin/orama-system/scripts/first-run-install.sh status
    ```
 
-2. **Run** (idempotent install / validate):
+2. **Install** (idempotent install / validate):
 
    ```bash
-   bash bin/orama-system/scripts/first-run-install.sh run
+   bash bin/orama-system/scripts/first-run-install.sh install
    ```
 
 3. **MCP workers** (separate — not part of first-run.done):
