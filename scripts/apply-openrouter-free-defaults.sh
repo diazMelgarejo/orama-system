@@ -20,6 +20,8 @@ set -euo pipefail
 
 # ─── Defaults ─────────────────────────────────────────────────────────────────
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+# shellcheck source=../bin/orama-system/scripts/lib/openclaw-env.sh
+source "$REPO_ROOT/bin/orama-system/scripts/lib/openclaw-env.sh"
 LIVE_CONFIG="${HOME}/.openclaw/openclaw.json"
 POLICY_FILE="${REPO_ROOT}/deployments/macbook-pro-head/openclaw/openclaw.model-policy.jsonc"
 APPLY_LIVE=0
@@ -31,11 +33,15 @@ DRY_RUN=0
 # Repo templates to patch (always present in orama-system tree)
 REPO_TEMPLATES=()
 
-# Companion repo templates (only patch if found)
-COMPANION_TEMPLATES=(
-  "${HOME}/Documents/Terminal xCode/claude/OpenClaw/alphaclaw-observability/config/openclaw.json"
-  "${HOME}/Documents/Terminal xCode/claude/OpenClaw/AlphaClaw/lib/onboarding/defaults/openclaw.json.template"
-)
+# Companion repo templates under $OPENCLAW_ROOT (only patch if found)
+OPENCLAW_ROOT="$(detect_openclaw_root 2>/dev/null || true)"
+COMPANION_TEMPLATES=()
+if [ -n "$OPENCLAW_ROOT" ]; then
+  COMPANION_TEMPLATES=(
+    "$OPENCLAW_ROOT/alphaclaw-observability/config/openclaw.json"
+    "$OPENCLAW_ROOT/AlphaClaw/lib/onboarding/defaults/openclaw.json.template"
+  )
+fi
 
 # ─── Arg parsing ──────────────────────────────────────────────────────────────
 FORCE_PRIMARY=0
