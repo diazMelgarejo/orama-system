@@ -22,8 +22,10 @@ sub_skills:
     trigger: "create a skill, new skill, /skillify, add sub-skill, build a skill, make a skill"
   - path: mcp-install/SKILL.md
     trigger: "install mcp stack, setup gemini mcp, register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
+  - path: skills/first-run-setup/SKILL.md
+    trigger: "first-run install, bootstrap orama, setup new machine, first run, §0 checklist, first-run-install.sh"
   - path: skills/code-review/SKILL.md
-    trigger: "code review, review the code, blast-radius, code-review-graph, semantic_search_nodes, /review, recursive code review"
+    trigger: "code review, review the code, blast-radius, code-review-graph, detect_changes, get_review_context, semantic_search_nodes, code-reviewer, multi-lens PR review, /review, recursive code review"
   - path: skills/openclaw-skills/SKILL.md
     trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
 ---
@@ -300,10 +302,23 @@ live provider (LM Studio / Ollama, Mac / Windows GPU).
 - `openclaw_orchestrate`: Dispatch Stage 4 execution tasks via OpenClaw gateway
 - `openclaw_health`: Verify gateway is running at `127.0.0.1:18789`
 
+## First-Run Bootstrap
+
+New machine or fresh checkout:
+
+```bash
+bash bin/orama-system/scripts/first-run-install.sh status   # fast probe
+bash bin/orama-system/scripts/first-run-install.sh run      # idempotent §0 checklist
+bash bin/orama-system/scripts/install-mcp-stack.sh          # MCP workers (separate)
+```
+
+Full steps: [`references/first-run-install.md`](references/first-run-install.md) · Agent workflow: [`skills/first-run-setup/SKILL.md`](skills/first-run-setup/SKILL.md)
+
 ## References (Progressive Disclosure)
 
 Load on demand for deeper context:
 
+- `references/first-run-install.md` — §0 install checklist (canonical; CLAUDE-instru.md is navigator-only)
 - `afrp/SKILL.md` — Audience-First Response Protocol (pre-router gate)
 - `cidf/SKILL.md` — Content Insertion Decision Framework v1.2
 - `references/amplifier-principle.md` — foundational essay on intent-driven development

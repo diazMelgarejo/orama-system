@@ -7,7 +7,7 @@
 Documents own content. This file navigates.
 When in doubt: read the doc. Don't restate it here.
 Skills operationalize docs — they don't copy them.
-Full instructions if folder is not inside a repo → [`../../CLAUDE-instru.md`](../../CLAUDE-instru.md)
+Full instructions if folder is not inside a repo → [`../../../references/first-run-install.md`](../../../references/first-run-install.md)
 
 ## Profile structure
 
@@ -31,4 +31,4 @@ read `rules/workflow.md` first, then `agents/builder.md`. Drop-ins live one leve
 code-review-graph (MCP)  →  gbrain code-def / search  →  Read
 ```
 
-Never skip to `Read` on a multi-file task. See [`../../CLAUDE-instru.md § 4`](../../CLAUDE-instru.md).
+Never skip to `Read` on a multi-file task. See [`../../references/tool-chain.md`](../../references/tool-chain.md).
