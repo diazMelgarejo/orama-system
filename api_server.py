@@ -37,9 +37,15 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 
+_HARDWARE_POLICY_MARKERS = ("NEVER_MAC", "NEVER_WIN", "NEVER_CLOUD")
+
+
 def _client_safe_detail(exc: BaseException, *, fallback: str = "Request rejected") -> str:
     """Log server-side; return a client-safe detail string (no tracebacks)."""
     logger.warning("request rejected: %s", exc, exc_info=True)
+    msg = str(exc).strip()
+    if msg and any(marker in msg for marker in _HARDWARE_POLICY_MARKERS):
+        return msg[:500]
     return fallback
 
 
