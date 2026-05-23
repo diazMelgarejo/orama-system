@@ -5,7 +5,8 @@
 #
 # Usage:
 #   bash first-run-install.sh status
-#   bash first-run-install.sh run [--dry-run] [--force]
+#   bash first-run-install.sh install [--dry-run] [--force]
+#   bash first-run-install.sh run [--dry-run] [--force]   # alias of install
 #
 # Markers: ~/.orama-system/first-run.done  +  ~/.orama-system/first-run.json
 set -euo pipefail
@@ -528,9 +529,9 @@ json.dump(data, open(p, 'w'), indent=2)
 
 case "$CMD" in
   status) cmd_status ;;
-  run) cmd_run ;;
+  install|run) cmd_run ;;
   *)
-    echo "Usage: $0 {status|run} [--dry-run] [--force]" >&2
+    echo "Usage: $0 {status|install|run} [--dry-run] [--force]" >&2
     exit 2
     ;;
 esac
