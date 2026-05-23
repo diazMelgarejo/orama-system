@@ -1,6 +1,6 @@
 # Local environment catch-up
 
-> **After the 2026-05-23 secret redaction:** `config/mac-orchestrator.json` no longer contains literal API keys or bot tokens. Your machine must supply them via environment variables (typically `~/.env.local` in this repo, or OpenClaw launcher scripts under `$OPENCLAW_ROOT`).
+> **After the 2026-05-23 secret redaction:** `config/mac-orchestrator.json` no longer contains literal API keys or bot tokens. Redacted credential values belong in `.env.local` only (never back into tracked JSON). Your machine must supply them via environment variables (typically `orama-system/.env.local` in this repo, or OpenClaw launcher scripts under `$OPENCLAW_ROOT`).
 
 Use this page when you pulled `main` and channels, gateway auth, or Gemini fallbacks stopped working.
 
