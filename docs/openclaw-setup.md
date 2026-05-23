@@ -3,6 +3,8 @@
 > **Canonical copy lives in Perpetua-Tools**: `../perplexity-api/Perpetua-Tools/docs/openclaw-setup.md`
 > This file is a mirror — update the Perpetua-Tools copy first, then sync here.
 
+> **Local env catch-up (secrets + `OPENCLAW_ROOT`):** [`local-env-catch-up.md`](local-env-catch-up.md) — run `bash scripts/check-local-env.sh` after pulling `main`.
+
 Reference for the openclaw gateway on this machine (Mac M2 Pro, Apple Silicon).
 
 ---
