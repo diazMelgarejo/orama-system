@@ -10,7 +10,15 @@
 # to reload the MCP server, then call embed_graph_tool via MCP to re-embed.
 set -euo pipefail
 
-MCP_JSON="${OPENCLAW_MCP_JSON:-$HOME/Documents/Terminal xCode/claude/OpenClaw/.mcp.json}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../../scripts/lib/openclaw-env.sh
+source "$SCRIPT_DIR/../../../scripts/lib/openclaw-env.sh"
+
+ensure_openclaw_mcp_json echo || {
+  echo "Error: could not resolve or create OpenClaw .mcp.json (set OPENCLAW_MCP_JSON or OPENCLAW_ROOT)" >&2
+  exit 1
+}
+MCP_JSON="$(resolve_openclaw_mcp_json)"
 MODE="${1:-status}"
 
 _require_jq() {
