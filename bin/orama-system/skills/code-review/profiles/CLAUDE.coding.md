@@ -11,7 +11,7 @@
 - Simplest working solution. No over-engineering.
 - No abstractions for single-use operations.
 - No speculative features or "you might also want..."
-- Use code-review-graph before reading files inline (see CLAUDE-instru.md § 2).
+- Use code-review-graph before reading files inline (see [`../references/tool-chain.md`](../references/tool-chain.md)).
 - Read the file before modifying it. Never edit blind.
 - No docstrings or type annotations on code not being changed.
 - No error handling for scenarios that cannot happen.

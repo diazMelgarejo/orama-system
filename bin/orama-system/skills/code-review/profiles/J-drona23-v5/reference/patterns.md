@@ -20,4 +20,4 @@
 ## Multi-repo patterns
 - Always check `.gbrain-source` to know which corpus is indexed
 - Cross-repo: use `--source gstack-brain-lawrencecyremelgarejo` for LESSONS/decisions
-- Hard requirements live in `CLAUDE-instru.md § Installations & Hard Requirements`
+- Hard requirements live in [`../../../references/first-run-install.md`](../../../references/first-run-install.md) § 0.3 and orama-system `CLAUDE.md`
