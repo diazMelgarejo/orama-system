@@ -45,6 +45,33 @@ logging.basicConfig(level=logging.INFO)
 
 VERSION = "0.9.9.9"
 
+_CLIENT_ERROR_FALLBACK = "Request failed"
+
+
+def _client_safe_error(exc: BaseException, *, fallback: str = _CLIENT_ERROR_FALLBACK) -> str:
+    """Log full exception server-side; return a generic client-safe message."""
+    log.warning("request error: %s", exc, exc_info=True)
+    return fallback
+
+
+def _resolve_web_asset(path: str) -> Path:
+    """Resolve a user-supplied asset path under web/dist/assets (anti-traversal)."""
+    if not path or path.startswith(("/", "\\")):
+        raise HTTPException(status_code=403, detail="Invalid asset path")
+    if ".." in path.replace("\\", "/").split("/"):
+        raise HTTPException(status_code=403, detail="Invalid asset path")
+    assets_root = _WEB_ASSETS.resolve()
+    if not assets_root.is_dir():
+        raise HTTPException(status_code=404, detail="Assets not built")
+    try:
+        file_path = (assets_root / path).resolve()
+        file_path.relative_to(assets_root)
+    except (ValueError, OSError):
+        raise HTTPException(status_code=403, detail="Invalid asset path") from None
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return file_path
+
 # ── IP Resolution (authoritative — reads openclaw.json, never stale hardcodes) ─
 # Import shared resolver so portal works correctly whether started via start.sh
 # or directly.  Priority chain: AlphaClaw live → openclaw.json → discovery.json
@@ -1267,7 +1294,7 @@ async def _fetch_pt_section(
         return AppStateSection(
             available=False,
             data=default,
-            error=str(exc),
+            error=_client_safe_error(exc, fallback="Upstream unavailable"),
             source=source,
         )
 
@@ -1511,7 +1538,7 @@ async def api_user_input(req: UserInputRequest):
             r.raise_for_status()
             return r.json()
         except Exception as exc:
-            return {"status": "error", "message": str(exc)}
+            return {"status": "error", "message": _client_safe_error(exc)}
 
 
 @app.get("/api/app/state")
@@ -1612,7 +1639,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
             except Exception as exc:
                 failed_jobs.append({
                     "role": assignment["role"],
-                    "error": str(exc),
+                    "error": _client_safe_error(exc),
                     "request": payload,
                 })
 
@@ -1635,7 +1662,12 @@ async def api_jobs_proxy(status: Optional[str] = None):
             r.raise_for_status()
             return {"available": True, "source": "pt:/v1/jobs", "jobs": _normalize_jobs_payload(r.json())}
         except Exception as exc:
-            return {"available": False, "source": "pt:/v1/jobs", "jobs": [], "error": str(exc)}
+            return {
+                "available": False,
+                "source": "pt:/v1/jobs",
+                "jobs": [],
+                "error": _client_safe_error(exc),
+            }
 
 
 @app.get("/api/jobs/{job_id}")
@@ -1646,7 +1678,12 @@ async def api_job_detail_proxy(job_id: str):
             r.raise_for_status()
             return {"available": True, "source": "pt:/v1/jobs/{job_id}", "job": r.json()}
         except Exception as exc:
-            return {"available": False, "source": "pt:/v1/jobs/{job_id}", "job": None, "error": str(exc)}
+            return {
+                "available": False,
+                "source": "pt:/v1/jobs/{job_id}",
+                "job": None,
+                "error": _client_safe_error(exc),
+            }
 
 
 @app.post("/api/jobs/{job_id}/cancel")
@@ -1657,7 +1694,12 @@ async def api_job_cancel_proxy(job_id: str):
             r.raise_for_status()
             return {"available": True, "source": "pt:/cancel", "result": r.json()}
         except Exception as exc:
-            return {"available": False, "source": "pt:/cancel", "result": None, "error": str(exc)}
+            return {
+                "available": False,
+                "source": "pt:/cancel",
+                "result": None,
+                "error": _client_safe_error(exc),
+            }
 
 
 @app.post("/api/jobs/{job_id}/replay")
@@ -1668,7 +1710,12 @@ async def api_job_replay_proxy(job_id: str):
             r.raise_for_status()
             return {"available": True, "source": "pt:/replay", "result": r.json()}
         except Exception as exc:
-            return {"available": False, "source": "pt:/replay", "result": None, "error": str(exc)}
+            return {
+                "available": False,
+                "source": "pt:/replay",
+                "result": None,
+                "error": _client_safe_error(exc),
+            }
 
 
 @app.get("/api/jobs/{job_id}/artifacts")
@@ -1693,7 +1740,7 @@ async def api_job_artifacts_proxy(job_id: str):
                 "verification": None,
                 "replay": None,
                 "redacted_fields": [],
-                "error": str(exc),
+                "error": _client_safe_error(exc),
             }
 
 
@@ -2178,10 +2225,10 @@ async def api_restart(service: str):
         module = "api_server:app" if service == "orama" else "portal_server:app"
         cmd = [py, "-m", "uvicorn", module, "--host", "0.0.0.0", "--port", str(port)]
 
-    log_path = REPO_ROOT / ".logs" / f"{service}.log"
+    log_path = (REPO_ROOT / ".logs" / f"{service}.log").resolve()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with open(log_path, "ab") as lf:
+        with log_path.open("ab") as lf:
             subprocess.Popen(
                 cmd, cwd=cwd, env=env,
                 stdout=lf, stderr=lf,
@@ -2189,7 +2236,7 @@ async def api_restart(service: str):
             )
         return {"ok": True, "message": f"Restarting {service} on :{port} — check {log_path.name}"}
     except Exception as exc:
-        return {"ok": False, "message": f"Restart failed: {exc}"}
+        return {"ok": False, "message": _client_safe_error(exc, fallback="Restart failed")}
 
 
 @app.post("/api/rediscover")
@@ -2341,30 +2388,10 @@ async def serve_assets(path: str):
     that assets are served correctly even when the frontend build lands after
     the server has already started — no restart required.
     """
-    from fastapi import HTTPException
     from fastapi.responses import FileResponse
 
-    # Security: resolve to prevent path traversal outside web/dist/assets.
-    # Use relative_to() in a try/except rather than is_relative_to() (3.9+)
-    # so this works on Python 3.8 (pyproject.toml requires-python = ">=3.8").
-    # relative_to() raises ValueError when the path escapes the root, which
-    # also avoids the string-prefix bypass that startswith() is vulnerable to
-    # (e.g. web/dist/assets_backup sharing the same prefix string).
-    try:
-        file_path = (_WEB_ASSETS / path).resolve()
-        assets_root = _WEB_ASSETS.resolve()
-    except (ValueError, OSError):
-        raise HTTPException(status_code=404)
-
-    try:
-        file_path.relative_to(assets_root)
-    except ValueError:
-        raise HTTPException(status_code=403)
-
-    if not _WEB_ASSETS.is_dir() or not file_path.is_file():
-        raise HTTPException(status_code=404)
-
-    return FileResponse(str(file_path))
+    file_path = _resolve_web_asset(path)
+    return FileResponse(file_path)
 
 
 @app.get("/", response_class=None)

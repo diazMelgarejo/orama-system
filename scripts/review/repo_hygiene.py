@@ -120,6 +120,48 @@ HISTORICAL_HINTS = (
     "provenance",
     "carried over",
 )
+# High-confidence secret patterns — block literals in tracked files (pre-commit + CI).
+# Placeholders like ${env:VAR} and documentation examples are allowed.
+SECRET_PATTERN_EXCEPTIONS = {
+    "scripts/review/repo_hygiene.py",
+    "tests/test_repo_hygiene.py",
+}
+SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    (
+        "google_api_key",
+        re.compile(r"AIza[0-9A-Za-z_-]{20,}"),
+        "Google API key (AIza...)",
+    ),
+    (
+        "telegram_bot_token",
+        re.compile(r"\b\d{8,10}:[A-Za-z0-9_-]{30,}\b"),
+        "Telegram bot token (bot_id:secret)",
+    ),
+    (
+        "github_pat",
+        re.compile(r"\bghp_[0-9A-Za-z]{20,}\b"),
+        "GitHub personal access token",
+    ),
+    (
+        "openai_api_key",
+        re.compile(r"\bsk-[A-Za-z0-9]{20,}\b"),
+        "OpenAI API key",
+    ),
+    (
+        "anthropic_api_key",
+        re.compile(r"\bsk-ant-[A-Za-z0-9_-]{20,}\b"),
+        "Anthropic API key",
+    ),
+)
+SECRET_PLACEHOLDER_MARKERS = (
+    "${env:",
+    "${ENV:",
+    "<YOUR_",
+    "<your_",
+    "REPLACE_ME",
+    "CHANGEME",
+    "xxx",
+)
 
 
 def run_git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -418,6 +460,39 @@ def check_stale_skill_path_refs(root: Path, files: list[str]) -> list[str]:
     return errors
 
 
+def _line_has_secret_placeholder(line: str) -> bool:
+    return any(marker in line for marker in SECRET_PLACEHOLDER_MARKERS)
+
+
+def scan_tracked_secrets(root: Path, files: list[str]) -> list[str]:
+    """Block committed API keys, bot tokens, and other high-confidence secrets."""
+    errors: list[str] = []
+    for rel in files:
+        if rel in SECRET_PATTERN_EXCEPTIONS:
+            continue
+        path = root / rel
+        if not path.is_file() or is_binary(path):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for line_no, line in enumerate(text.splitlines(), 1):
+            if _line_has_secret_placeholder(line):
+                continue
+            for kind, pattern, label in SECRET_PATTERNS:
+                if pattern.search(line):
+                    errors.append(
+                        f"tracked secret pattern ({kind}): {rel}:{line_no} — {label}; "
+                        "use ${env:VAR} placeholders or move to .env"
+                    )
+                    break
+            else:
+                continue
+            break
+    return errors
+
+
 def classify_legacy_name_refs(root: Path, files: list[str]) -> tuple[int, int]:
     active = 0
     historical = 0
@@ -469,6 +544,7 @@ def main() -> int:
     errors.extend(scan_personal_paths(root, files))
     errors.extend(scan_openclaw_workstation_layout(root, files))
     errors.extend(scan_bidi_controls(root, files))
+    errors.extend(scan_tracked_secrets(root, files))
     errors.extend(check_private_generated_tracking(files))
     errors.extend(check_markdown_link_hygiene(root, files))
     errors.extend(check_generated_artifact_tracking(files))
