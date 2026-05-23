@@ -54,24 +54,6 @@ def _client_safe_error(exc: BaseException, *, fallback: str = _CLIENT_ERROR_FALL
     return fallback
 
 
-def _resolve_web_asset(path: str) -> Path:
-    """Resolve a user-supplied asset path under web/dist/assets (anti-traversal)."""
-    if not path or path.startswith(("/", "\\")):
-        raise HTTPException(status_code=403, detail="Invalid asset path")
-    if ".." in path.replace("\\", "/").split("/"):
-        raise HTTPException(status_code=403, detail="Invalid asset path")
-    assets_root = _WEB_ASSETS.resolve()
-    if not assets_root.is_dir():
-        raise HTTPException(status_code=404, detail="Assets not built")
-    try:
-        file_path = (assets_root / path).resolve()
-        file_path.relative_to(assets_root)
-    except (ValueError, OSError):
-        raise HTTPException(status_code=403, detail="Invalid asset path") from None
-    if not file_path.is_file():
-        raise HTTPException(status_code=404, detail="Asset not found")
-    return file_path
-
 # ── IP Resolution (authoritative — reads openclaw.json, never stale hardcodes) ─
 # Import shared resolver so portal works correctly whether started via start.sh
 # or directly.  Priority chain: AlphaClaw live → openclaw.json → discovery.json
@@ -149,6 +131,29 @@ app.add_middleware(
 # ── Serve React/Vite build when present (Phase 8) ─────────────────────────────
 _WEB_DIST = REPO_ROOT / "web" / "dist"
 _WEB_ASSETS = _WEB_DIST / "assets"
+
+
+def _resolve_web_asset(path: str) -> Path:
+    """Resolve a user-supplied asset path under web/dist/assets (anti-traversal)."""
+    if not path or path.startswith(("/", "\\")):
+        raise HTTPException(status_code=403, detail="Invalid asset path")
+    normalized = path.replace("\\", "/").strip("/")
+    if not normalized or ".." in normalized.split("/"):
+        raise HTTPException(status_code=403, detail="Invalid asset path")
+    assets_root = _WEB_ASSETS.resolve()
+    if not assets_root.is_dir():
+        raise HTTPException(status_code=404, detail="Assets not built")
+    try:
+        file_path = Path(os.path.realpath(os.path.join(str(assets_root), normalized)))
+    except OSError:
+        raise HTTPException(status_code=403, detail="Invalid asset path") from None
+    root_real = os.path.realpath(str(assets_root))
+    file_real = os.path.realpath(str(file_path))
+    if os.path.commonpath([root_real, file_real]) != root_real:
+        raise HTTPException(status_code=403, detail="Invalid asset path")
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Asset not found")
+    return file_path
 
 # NOTE: StaticFiles is NOT mounted at startup time. A startup-time mount would
 # 404 on /assets/* if the frontend is built *after* the server starts (common in
@@ -2168,6 +2173,7 @@ def _pid_on_port(port: int) -> Optional[int]:
 
 
 _SERVICE_PORTS = {"pt": 8000, "orama": 8001, "portal": 8002}
+_SERVICE_LOG_FILES = {"pt": "pt.log", "orama": "orama.log", "portal": "portal.log"}
 _SERVICE_CMDS = {
     "pt":     ["python", "-m", "uvicorn", "orchestrator.fastapi_app:app", "--host", "0.0.0.0", "--port", "8000"],
     "orama":  ["python", "-m", "uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8001"],
@@ -2186,7 +2192,8 @@ async def api_stop():
                 os.kill(pid, signal.SIGTERM)
                 killed.append(f"{name}:{port} (PID {pid})")
             except Exception as exc:
-                killed.append(f"{name}:{port} kill failed: {exc}")
+                log.warning("stop kill failed for %s:%s: %s", name, port, exc, exc_info=True)
+                killed.append(f"{name}:{port} kill failed")
         else:
             killed.append(f"{name}:{port} not running")
     return {"ok": True, "message": "Stop sent — " + "; ".join(killed)}
@@ -2225,7 +2232,7 @@ async def api_restart(service: str):
         module = "api_server:app" if service == "orama" else "portal_server:app"
         cmd = [py, "-m", "uvicorn", module, "--host", "0.0.0.0", "--port", str(port)]
 
-    log_path = (REPO_ROOT / ".logs" / f"{service}.log").resolve()
+    log_path = (REPO_ROOT / ".logs" / _SERVICE_LOG_FILES[service]).resolve()
     log_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         with log_path.open("ab") as lf:
