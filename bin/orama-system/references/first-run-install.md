@@ -13,7 +13,8 @@ Run components **in order**. The installer is idempotent: satisfied components a
 | Variable | Detection |
 |----------|-----------|
 | `ORAMA_REPO_ROOT` | Git root of orama-system (parent of `bin/`; script auto-detects via `git rev-parse` fallback) |
-| `OPENCLAW_ROOT` | `$OPENCLAW_ROOT` if set, else parent of `orama-system` when `CLAUDE-instru.md` or `AlphaClaw/` exists |
+| `OPENCLAW_ROOT` / `ORAMA_OPENCLAW_ROOT` | Explicit override, else parent of `ORAMA_REPO_ROOT` (package install: `…/OpenClaw/orama-system` → `…/OpenClaw`) |
+| `ORAMA_INSTALL_DIR` | Same as `ORAMA_REPO_ROOT` when set — package install discovery |
 | `NVM_NODE_BIN` | `$NVM_NODE_BIN` or `$HOME/.nvm/versions/node/v22.22.2/bin` |
 | `MCP_JSON` | `$OPENCLAW_ROOT/.mcp.json` |
 
@@ -116,7 +117,8 @@ Deeper auto-install: [`../../../scripts/ensure_requirements.sh`](../../../script
 
 ```bash
 uvx code-review-graph --version
-# Register MCP (from OPENCLAW_ROOT):
+# Register MCP (from OPENCLAW_ROOT) — first-run-install.sh and setup-embeddings
+# create $OPENCLAW_ROOT/.mcp.json when missing (template fallback if install fails):
 code-review-graph install --platform claude-code --repo "$OPENCLAW_ROOT"
 
 # Initial graph (once per machine / after large moves):

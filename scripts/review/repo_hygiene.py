@@ -46,6 +46,15 @@ PERSONAL_PATH_EXCEPTIONS = {
     # a sample personal path to verify detection.
     "tests/test_repo_hygiene.py",
 }
+# Machine-specific OpenClaw workstation layout — never commit; use $OPENCLAW_ROOT,
+# detect_openclaw_root(), or ~-relative placeholders in docs.
+OPENCLAW_WORKSTATION_LAYOUT = re.compile(
+    r"(?:\$\{HOME\}|\$HOME|~)?/?Documents/Terminal\s+xCode/claude/OpenClaw"
+)
+OPENCLAW_WORKSTATION_EXCEPTIONS = {
+    "scripts/review/repo_hygiene.py",
+    "tests/test_repo_hygiene.py",
+}
 # Hidden / bidirectional Unicode controls — these can hide malicious code in
 # diffs (Trojan-Source style). Block in all tracked files except the hygiene
 # script and its tests, which name the codepoints for documentation.
@@ -154,6 +163,30 @@ def scan_forbidden_identity(root: Path, files: list[str]) -> list[str]:
             if token in text:
                 errors.append(f"forbidden identity token in tracked file: {rel}")
                 break
+    return errors
+
+
+def scan_openclaw_workstation_layout(root: Path, files: list[str]) -> list[str]:
+    """Block committed references to the legacy machine-specific OpenClaw tree path."""
+    errors: list[str] = []
+    for rel in files:
+        if rel in OPENCLAW_WORKSTATION_EXCEPTIONS:
+            continue
+        path = root / rel
+        if not path.is_file() or is_binary(path):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for line_no, line in enumerate(text.splitlines(), 1):
+            if not OPENCLAW_WORKSTATION_LAYOUT.search(line):
+                continue
+            errors.append(
+                f"machine-specific OpenClaw path in tracked file: {rel}:{line_no} — "
+                "use $OPENCLAW_ROOT, detect_openclaw_root(), or ORAMA_INSTALL_DIR"
+            )
+            break
     return errors
 
 
@@ -434,6 +467,7 @@ def main() -> int:
     errors.extend(check_identity(root))
     errors.extend(scan_forbidden_identity(root, files))
     errors.extend(scan_personal_paths(root, files))
+    errors.extend(scan_openclaw_workstation_layout(root, files))
     errors.extend(scan_bidi_controls(root, files))
     errors.extend(check_private_generated_tracking(files))
     errors.extend(check_markdown_link_hygiene(root, files))

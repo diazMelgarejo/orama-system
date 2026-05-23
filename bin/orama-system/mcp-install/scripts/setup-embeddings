@@ -4,8 +4,16 @@
 # Safe to re-run — checks state before acting.
 set -euo pipefail
 
-OPENCLAW_DIR="${OPENCLAW_DIR:-$HOME/Documents/Terminal xCode/claude/OpenClaw}"
-MCP_JSON="$OPENCLAW_DIR/.mcp.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../../scripts/lib/openclaw-env.sh
+source "$SCRIPT_DIR/../../scripts/lib/openclaw-env.sh"
+
+ensure_openclaw_mcp_json echo || {
+  echo "ERROR: could not resolve or create OpenClaw .mcp.json (set OPENCLAW_ROOT)" >&2
+  exit 1
+}
+OPENCLAW_DIR="${OPENCLAW_DIR:-$(detect_openclaw_root)}"
+MCP_JSON="$(resolve_openclaw_mcp_json)"
 
 echo "=== setup-embeddings (idempotent) ==="
 echo "OpenClaw dir: $OPENCLAW_DIR"

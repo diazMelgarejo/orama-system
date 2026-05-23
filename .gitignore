@@ -52,6 +52,9 @@ config/.policy_cache_refreshed
 # lib/ — agentic_stack and other generated/vendored shared libraries
 # (content is managed externally; never commit here)
 lib/
+# Tracked install helpers (OpenClaw .mcp.json bootstrap for CRG)
+!bin/orama-system/scripts/lib/
+!bin/orama-system/scripts/lib/**
 
 # Vite operator console (web/ subdirectory)
 node_modules/

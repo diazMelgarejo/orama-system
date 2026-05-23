@@ -124,7 +124,7 @@ Every task in this plan is labeled to one of three generations, and the labels a
 
 ```bash
 cd ~/Documents/oramasys/perpetua-core && git checkout -b feat/salvage-plugins-rc1
-cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools && git checkout -b feat/ip-aware-discovery
+cd "$OPENCLAW_ROOT/perplexity-api/Perpetua-Tools" && git checkout -b feat/ip-aware-discovery
 cd ~/Documents/oramasys/oramasys && git checkout -b feat/dispatch-discovery-bridge
 ```
 
@@ -209,7 +209,7 @@ def test_backend_holds_identity_and_health():
 - [ ] **Step 2: Watch it fail**
 
 ```bash
-cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
+cd "$OPENCLAW_ROOT/perplexity-api/Perpetua-Tools"
 pytest tests/discovery/test_backend.py -v
 ```
 Expected: `ModuleNotFoundError: No module named 'perpetua.discovery'`.
@@ -698,7 +698,7 @@ git commit -m "feat(discovery): selector with tier+task routing table (Task 4)"
 - [ ] **Step 1: Read current agent_launcher to find dispatch site**
 
 ```bash
-cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
+cd "$OPENCLAW_ROOT/perplexity-api/Perpetua-Tools"
 grep -n "base_url\|LMSTUDIO\|OLLAMA_BASE" orchestrator/agent_launcher.py
 ```
 
@@ -1648,7 +1648,7 @@ git commit -m "feat(core): ChatMessage + ChatHistory typed wrapper (closes OQ17,
 - [ ] **Step 1: Copy v1 discovery sources into v2**
 
 ```bash
-cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
+cd "$OPENCLAW_ROOT/perplexity-api/Perpetua-Tools"
 cp perpetua/discovery/backend.py ~/Documents/oramasys/perpetua-core/perpetua_core/discovery/backend.py
 cp perpetua/discovery/probe.py ~/Documents/oramasys/perpetua-core/perpetua_core/discovery/probe.py
 cp perpetua/discovery/registry.py ~/Documents/oramasys/perpetua-core/perpetua_core/discovery/registry.py
@@ -1909,7 +1909,7 @@ Expected: original 32 tests + new tests all green. Document the total count.
 - [ ] **Step 2: Run v1 suite**
 
 ```bash
-cd ~/Documents/Terminal\ xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools
+cd "$OPENCLAW_ROOT/perplexity-api/Perpetua-Tools"
 pytest tests/discovery/ tests/test_agent_launcher_uses_registry.py -v
 ```
 

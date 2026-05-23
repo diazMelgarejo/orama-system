@@ -9,6 +9,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
+# shellcheck source=../bin/orama-system/scripts/lib/openclaw-env.sh
+source "$REPO_DIR/bin/orama-system/scripts/lib/openclaw-env.sh"
 DISCOVER_PY="$SCRIPT_DIR/discover.py"
 PLIST_TEMPLATE="$REPO_DIR/config/com.orama.network-watch.plist"
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
@@ -18,8 +20,7 @@ LABEL="com.orama.network-watch"
 # Resolve Perpetua-Tools root (best effort)
 PT_ROOT="${PERPETUA_TOOLS_ROOT:-${PERPETUATOOLSROOT:-}}"
 if [ -z "$PT_ROOT" ]; then
-    PT_CANDIDATE="$HOME/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools"
-    [ -d "$PT_CANDIDATE" ] && PT_ROOT="$PT_CANDIDATE"
+    PT_ROOT="$(detect_perpetua_tools_root 2>/dev/null || true)"
 fi
 
 _status() {

@@ -17,6 +17,8 @@ ORAMA_REPO_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
 if git -C "$BIN_ROOT" rev-parse --show-toplevel >/dev/null 2>&1; then
   ORAMA_REPO_ROOT="$(git -C "$BIN_ROOT" rev-parse --show-toplevel)"
 fi
+# shellcheck source=lib/openclaw-env.sh
+source "$SCRIPT_DIR/lib/openclaw-env.sh"
 
 DRY_RUN=false
 FORCE=false
@@ -45,23 +47,8 @@ _skip() { echo "[first-run] → skip: $*"; }
 _fail() { echo "[first-run] ✗ $*" >&2; }
 _run()  { $DRY_RUN && echo "[dry-run] $*" || eval "$*"; }
 
-detect_openclaw_root() {
-  if [ -n "${OPENCLAW_ROOT:-}" ] && [ -d "$OPENCLAW_ROOT" ]; then
-    echo "$OPENCLAW_ROOT"
-    return 0
-  fi
-  local candidate
-  candidate="$(cd "$ORAMA_REPO_ROOT/.." && pwd 2>/dev/null || true)"
-  if [ -n "$candidate" ] && { [ -f "$candidate/CLAUDE-instru.md" ] || [ -d "$candidate/AlphaClaw" ]; }; then
-    echo "$candidate"
-    return 0
-  fi
-  echo ""
-  return 1
-}
-
 OPENCLAW_ROOT="$(detect_openclaw_root || true)"
-MCP_JSON="${OPENCLAW_ROOT:+$OPENCLAW_ROOT/.mcp.json}"
+MCP_JSON="$(resolve_openclaw_mcp_json || true)"
 
 # ── JSON state helpers (minimal, no jq dependency for writes) ───────────────
 _json_get_component_status() {
@@ -317,10 +304,21 @@ check_crg() {
     _json_set_component "crg" "fail" "uvx failed"
     return 1
   fi
-  if [ -z "$OPENCLAW_ROOT" ] || [ ! -f "${MCP_JSON:-}" ]; then
-    _warn "0.4 code-review-graph: OPENCLAW_ROOT/.mcp.json not found — set OPENCLAW_ROOT"
-    _json_set_component "crg" "warn" "no mcp.json"
+  if [ -z "$OPENCLAW_ROOT" ]; then
+    _warn "0.4 code-review-graph: OPENCLAW_ROOT not found — set OPENCLAW_ROOT"
+    _json_set_component "crg" "warn" "no openclaw root"
     return 0
+  fi
+  if [ ! -f "${MCP_JSON:-}" ]; then
+    if $DRY_RUN; then
+      _skip "0.4 would create $MCP_JSON"
+    elif ensure_openclaw_mcp_json _log; then
+      _ok "0.4 code-review-graph: created $MCP_JSON"
+    else
+      _warn "0.4 code-review-graph: could not create .mcp.json — set OPENCLAW_ROOT"
+      _json_set_component "crg" "warn" "no mcp.json"
+      return 0
+    fi
   fi
   if command -v jq >/dev/null 2>&1; then
     if ! jq -e '.mcpServers["code-review-graph"]' "$MCP_JSON" >/dev/null 2>&1; then
@@ -387,7 +385,12 @@ run_embeddings() {
     return 0
   fi
   _json_set_component "embeddings" "running" "setup-embeddings"
-  if OPENCLAW_DIR="${OPENCLAW_ROOT:-$HOME/Documents/Terminal xCode/claude/OpenClaw}" bash "$setup"; then
+  if [ -z "$OPENCLAW_ROOT" ]; then
+    _warn "0.5.1 embeddings: OPENCLAW_ROOT not set — skip setup-embeddings"
+    _json_set_component "embeddings" "warn" "no openclaw root"
+    return 0
+  fi
+  if OPENCLAW_DIR="$OPENCLAW_ROOT" bash "$setup"; then
     _ok "0.5.1 embeddings: setup-embeddings complete"
     _json_set_component "embeddings" "ok" "bge-m3 wired"
     return 0
