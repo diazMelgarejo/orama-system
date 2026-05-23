@@ -91,6 +91,76 @@ Slash commands (Claude Code): `/code-review-graph:review-delta`, `review-pr`, `b
 
 ---
 
+## Graph Initialization & Repair (fresh clone / 0-node / disk error)
+
+`setup-embeddings` wires the env config but **cannot** call MCP tools — the graph must be seeded interactively inside Claude Code.
+
+### Check first
+
+```
+list_graph_stats_tool(repo_root=<path>)
+```
+
+| Result | Action |
+|--------|--------|
+| `nodes > 0`, `embeddings_count > 0` | Graph is healthy — skip to Phase A |
+| `nodes > 0`, `embeddings_count = 0` | Embeddings missing → run Step 2 only |
+| `nodes = 0` | Never built or wiped → run Steps 1 + 2 |
+| `disk I/O error` | Corrupted `graph.db` → delete it, then run Steps 1 + 2 |
+
+### Step 1 — Build graph (all 3 repos independently)
+
+```
+build_or_update_graph_tool(
+  repo_root = "<repo_path>",   # orama-system / AlphaClaw / Perpetua-Tools
+  full_rebuild = True,
+  postprocess = "full"
+)
+```
+
+Expected output per repo (ballpark):
+- **orama-system**: ~160 files, ~1 461 nodes, ~10 151 edges, 12 communities
+- **AlphaClaw**: ~464 files, ~3 730 nodes, ~43 638 edges, 14 communities
+- **Perpetua-Tools**: ~103 files, ~1 151 nodes, ~8 099 edges, 12 communities
+
+### Step 2 — Embed with bge-m3 (must match gbrain's model)
+
+```
+embed_graph_tool(
+  repo_root = "<repo_path>",
+  provider = "openai",   # OpenAI-compat shim → Ollama
+  model = "bge-m3"
+)
+```
+
+**Prerequisite:** Ollama running at `localhost:11434` with `bge-m3` pulled.
+If Ollama is down, omit the call — CRG falls back to FTS-only keyword search.
+
+### Fix: corrupted graph.db
+
+```bash
+rm "<repo_path>/.code-review-graph/graph.db"
+# then run Steps 1 + 2 above
+```
+
+### Fix: gbrain sync blocked
+
+```bash
+# Acknowledge YAML / embedding failures and continue
+gbrain sync --source <source-id> --skip-failed
+```
+
+Check `~/.gbrain/sync-failures.jsonl` to see which files failed and why.
+Old failures with `"acknowledged": true` are harmless.
+
+### Red flag: 0 nodes after install
+
+`setup-embeddings` ran but no one called `build_or_update_graph_tool`. Add a
+reminder to your first-session checklist: **after** `setup-embeddings`, call the
+build + embed tools once per repo before starting any review work.
+
+---
+
 ## Phase B — Gbrain
 
 After blast-radius identifies symbols:
