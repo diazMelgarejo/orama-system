@@ -16,6 +16,7 @@ import asyncio
 import html as _html
 import json
 import logging
+import mimetypes
 import os
 import signal
 import subprocess
@@ -133,8 +134,8 @@ _WEB_DIST = REPO_ROOT / "web" / "dist"
 _WEB_ASSETS = _WEB_DIST / "assets"
 
 
-def _resolve_web_asset(path: str) -> Path:
-    """Resolve a user-supplied asset path under web/dist/assets (anti-traversal)."""
+def _resolve_web_asset(path: str) -> tuple[bytes, str]:
+    """Resolve a user asset under web/dist/assets; return bytes + media type."""
     if not path or path.startswith(("/", "\\")):
         raise HTTPException(status_code=403, detail="Invalid asset path")
     normalized = path.replace("\\", "/").strip("/")
@@ -144,16 +145,14 @@ def _resolve_web_asset(path: str) -> Path:
     if not assets_root.is_dir():
         raise HTTPException(status_code=404, detail="Assets not built")
     try:
-        file_path = Path(os.path.realpath(os.path.join(str(assets_root), normalized)))
-    except OSError:
+        file_path = (assets_root / normalized).resolve()
+        file_path.relative_to(assets_root)
+    except (ValueError, OSError):
         raise HTTPException(status_code=403, detail="Invalid asset path") from None
-    root_real = os.path.realpath(str(assets_root))
-    file_real = os.path.realpath(str(file_path))
-    if os.path.commonpath([root_real, file_real]) != root_real:
-        raise HTTPException(status_code=403, detail="Invalid asset path")
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Asset not found")
-    return file_path
+    media_type = mimetypes.guess_type(file_path.name)[0] or "application/octet-stream"
+    return file_path.read_bytes(), media_type
 
 # NOTE: StaticFiles is NOT mounted at startup time. A startup-time mount would
 # 404 on /assets/* if the frontend is built *after* the server starts (common in
@@ -2395,10 +2394,10 @@ async def serve_assets(path: str):
     that assets are served correctly even when the frontend build lands after
     the server has already started — no restart required.
     """
-    from fastapi.responses import FileResponse
+    from fastapi.responses import Response
 
-    file_path = _resolve_web_asset(path)
-    return FileResponse(file_path)
+    body, media_type = _resolve_web_asset(path)
+    return Response(content=body, media_type=media_type)
 
 
 @app.get("/", response_class=None)
