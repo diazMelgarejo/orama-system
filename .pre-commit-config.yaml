@@ -39,6 +39,12 @@ repos:
         pass_filenames: false
         types: [python]
 
+      - id: repo-hygiene
+        name: "Repo hygiene — identity, personal paths, markdown links"
+        entry: python scripts/review/repo_hygiene.py .
+        language: system
+        pass_filenames: false
+
       - id: ci-deps-guard
         name: "CI dependency guard — block missing .[test] extras and bad install patterns"
         entry: python scripts/check_ci_deps.py

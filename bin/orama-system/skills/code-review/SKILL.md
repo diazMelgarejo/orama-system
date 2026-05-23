@@ -4,6 +4,9 @@ description: |
   Use when reviewing code across multiple files, PRs, or unfamiliar areas; before refactors;
   when the user asks for blast-radius, detect_changes, get_review_context, semantic_search_nodes,
   code-reviewer subagents, or multi-lens PR review. Applies to all coding agents in the stack.
+  (Claude, Codex, Gemini, OpenClaw, Hermes, etc.).
+  Triggers on: before touching unfamiliar code, code analysis,
+  "review this code", "what does this function touch".
 ---
 
 # Code Review
@@ -189,4 +192,4 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 
 - Mother: [`bin/orama-system/SKILL.md`](../../SKILL.md) (OmniRoute probe, search policy)
 - MCP stack: [`bin/orama-system/mcp-install/SKILL.md`](../../mcp-install/SKILL.md)
-- Orchestration: [`~/.claude/skills/mcp-orchestration/SKILL.md`](file:///Users/lawrencecyremelgarejo/.claude/skills/mcp-orchestration/SKILL.md)
+- Orchestration: [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md)
