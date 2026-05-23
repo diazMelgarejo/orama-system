@@ -5,6 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+ENV_LOCAL="$REPO_ROOT/.env.local"
 OPENCLAW_ENV_LIB="$REPO_ROOT/bin/orama-system/scripts/lib/openclaw-env.sh"
 
 RED='\033[0;31m'
@@ -68,9 +69,14 @@ _check_nonempty() {
 echo "Local env check — $REPO_ROOT"
 echo ""
 
-# Load repo dotenv (same order as portal_server.py)
-_load_dotenv_file "$REPO_ROOT/.env"
-_load_dotenv_file "$REPO_ROOT/.env.local"
+# Load repo dotenv (same order as scripts/env/load-local.sh / portal_server.py)
+if [ -f "$REPO_ROOT/scripts/env/load-local.sh" ]; then
+  # shellcheck source=env/load-local.sh
+  source "$REPO_ROOT/scripts/env/load-local.sh"
+else
+  _load_dotenv_file "$REPO_ROOT/.env"
+  _load_dotenv_file "$ENV_LOCAL"
+fi
 
 if [ -f "$REPO_ROOT/.env.local" ]; then
   _status ".env.local present" OK
@@ -119,7 +125,11 @@ for var in \
   OPENCLAW_GATEWAY_AUTH_TOKEN \
   OPENCLAW_MODELS_PROVIDERS_GEMINI_MAIN_APIKEY \
   OPENCLAW_MODELS_PROVIDERS_GEMINI_FALLBACK_APIKEY; do
-  _status "$var" "$(_check_nonempty "$var")"
+  state="$(_check_nonempty "$var")"
+  _status "$var" "$state"
+  if [ "$state" = "MISSING" ]; then
+    echo "    → Add to $ENV_LOCAL (see .env.example)"
+  fi
 done
 
 echo ""

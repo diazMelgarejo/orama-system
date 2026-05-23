@@ -19,6 +19,11 @@ if git -C "$BIN_ROOT" rev-parse --show-toplevel >/dev/null 2>&1; then
 fi
 # shellcheck source=lib/openclaw-env.sh
 source "$SCRIPT_DIR/lib/openclaw-env.sh"
+REPO_ROOT="$ORAMA_REPO_ROOT"
+if [ -f "$ORAMA_REPO_ROOT/scripts/env/load-local.sh" ]; then
+  # shellcheck source=../../../scripts/env/load-local.sh
+  source "$ORAMA_REPO_ROOT/scripts/env/load-local.sh"
+fi
 
 DRY_RUN=false
 FORCE=false

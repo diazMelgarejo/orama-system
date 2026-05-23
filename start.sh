@@ -25,6 +25,13 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PATHS_FILE="$SCRIPT_DIR/.paths"
+REPO_ROOT="$SCRIPT_DIR"
+
+# Gitignored env (.env → .env.local) before gateway/profile reads ${env:...} config
+if [ -f "$SCRIPT_DIR/scripts/env/load-local.sh" ]; then
+  # shellcheck source=scripts/env/load-local.sh
+  source "$SCRIPT_DIR/scripts/env/load-local.sh"
+fi
 
 # ── structured logging ─────────────────────────────────────────────────────────
 # Levels: INFO (normal flow), WARN (non-fatal, needs attention), ERROR (fatal),
