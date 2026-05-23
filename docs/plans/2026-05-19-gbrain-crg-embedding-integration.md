@@ -1,7 +1,8 @@
 # Plan: gbrain Embeddings as Optional Feature of code-review-graph
 
 **Date:** 2026-05-19  
-**Status:** Phase 0 ✅ shipped · Phase 1 ✅ shipped (see `bin/orama-system/skills/code-review/scripts/crg-embed-mode`) · Phase 2 pending upstream PR · Phase 3 pending Phase 2  
+**Status:** Phase 0 ✅ shipped · Phase 1 ✅ shipped · CRG graph ✅ built (2026-05-24, 1 461 nodes, 1 257 bge-m3 embeddings) · Phase 2 pending upstream PR · Phase 3 pending Phase 2  
+**As-built audit (2026-05-24):** CRG graph was never seeded after Phase 0/1 landed. Built and embedded today via `build_or_update_graph_tool` + `embed_graph_tool` (bge-m3, openai provider pointing at Ollama). Orphan gbrain source `gstack-code-stem-28787e52-61949f` (0 pages) removed. `orama-src` re-synced. Semantic search now active across both corpora in unified 1024-dim bge-m3 space.
 **Scope:** OpenClaw toolchain (local Mac only; no upstream commitment required for Phases 0–1)
 
 ---
@@ -215,10 +216,12 @@ This is an agent-level composition tool, not a change to either upstream tool.
 
 ## Phase 0 implementation checklist
 
-- [ ] Edit `OpenClaw/.mcp.json` — add Ollama bge-m3 env vars to code-review-graph entry
-- [ ] Restart Claude Code / reload MCP server
-- [ ] Call `embed_graph_tool` via MCP to re-embed CRG graph with bge-m3
-- [ ] Validate: `semantic_search_nodes("sanitizeOpenclawConfig")` returns relevant results
+- [x] Edit `OpenClaw/.mcp.json` — add Ollama bge-m3 env vars to code-review-graph entry (shipped 2026-05-19, commit `567d090`)
+- [x] Restart Claude Code / reload MCP server
+- [x] Build CRG graph: `build_or_update_graph_tool` — **1 461 nodes, 10 151 edges, 12 communities** (done 2026-05-24; this step is MCP-only, not in install chain)
+- [x] Embed graph: `embed_graph_tool` (provider=openai, model=bge-m3) — **1 257 embeddings** (done 2026-05-24)
+- [x] Validate: `semantic_search_nodes("gbrain embedding")` returns hybrid results — CONFIRMED
+- [ ] Validate: `gbrain search "sanitizeOpenclawConfig"` returns same top node (pending orama-src re-sync completing)
 - [ ] Validate: `gbrain search "sanitizeOpenclawConfig"` returns same top node
 - [ ] Commit `.mcp.json` to orama-system or OpenClaw (whichever owns it)
 
@@ -226,6 +229,6 @@ This is an agent-level composition tool, not a change to either upstream tool.
 
 ## Notes
 
-- The `gstack-code-stem-28787e52-61949f` source (0 pages, never synced) in gbrain `sources list` is an orphan — likely from an aborted registration. Safe to remove with `gbrain sources remove gstack-code-stem-28787e52-61949f` when convenient.
+- ~~The `gstack-code-stem-28787e52-61949f` source (0 pages, never synced) is an orphan.~~ **Removed 2026-05-24.** `gbrain sources list` now shows 4 clean sources: `default`, `gstack-code-claw-*` (AlphaClaw, 477pp), `gstack-code-ools-*` (Perpetua-Tools, 482pp), `orama-src` (148pp+).
 - The gstack-gbrain-sync.ts orchestrator has a `list.find is not a function` bug in v1.40.0.0. Workaround: use `gbrain sync --source <id>` directly. File upstream issue against garrytan/gstack.
 - **LanceDB and gbrain are fully decoupled** (clarified 2026-05-20): gbrain is a separate upstream repo and will **always use pgvector** for the codebase index. orama-system **may** migrate parts of its job/decision history to LanceDB in v2.1, but that migration does not touch gbrain. This plan stays on pgvector for the CRG↔gbrain bridge in all phases.

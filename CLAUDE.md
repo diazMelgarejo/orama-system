@@ -143,11 +143,12 @@ Load routing table + GBrain config:
 Both gbrain and code-review-graph now use **Ollama bge-m3** (1024-dim, local, free).
 `semantic_search_nodes` and `gbrain search` operate in the same vector space.
 
-**Current state (2026-05-19):**
-- gbrain: `ollama:bge-m3` (1024-dim) — `~/.gbrain/config.json`, Supabase pgvector
-- CRG: `openai` provider → Ollama `localhost:11434/v1` — wired via `.mcp.json`
-- Idempotent setup: `bash bin/orama-system/mcp-install/scripts/setup-embeddings`
+**Current state (2026-05-24):**
+- gbrain: `ollama:bge-m3` (1024-dim) — `~/.gbrain/config.json`, Supabase pgvector — 4 sources (AlphaClaw 477pp, PT 482pp, orama-src, default)
+- CRG: `openai` provider → Ollama `localhost:11434/v1` — wired via `.mcp.json` — **1 461 nodes, 1 257 bge-m3 embeddings, 12 communities** (orama-system graph)
+- Idempotent env setup: `bash bin/orama-system/mcp-install/scripts/setup-embeddings`
 - Toggle: `bash bin/orama-system/skills/code-review/scripts/crg-embed-mode [gbrain|local|status]`
+- **CRG graph build (MCP-only, not in install chain):** On fresh clone call `build_or_update_graph_tool` then `embed_graph_tool(provider="openai", model="bge-m3")` inside Claude Code
 - Reference docs: `bin/orama-system/mcp-install/references/setup-embeddings.md` + `bin/orama-system/skills/code-review/references/crg-embed-mode.md`
 
 **Storage roadmap (decided 2026-05-15):**
