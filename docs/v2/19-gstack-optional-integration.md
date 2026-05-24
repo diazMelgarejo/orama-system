@@ -6,7 +6,7 @@
 >
 > **Updated 2026-05-21:** v2.5 section added. The reaper daemon that retries
 > `embed_status='failed'` rows is gstack-adjacent (gbrain fleet query) and
-> coordinates with the fleet-distributed Lance dataset. See `18-rag-and-memory-design.md § v2.5`.
+> coordinates with the fleet-distributed Lance dataset. See `20-rag-and-memory-design.md § v2.5`.
 
 ---
 
@@ -134,7 +134,7 @@ sidecar module handles the transport.
 ## v2.5 — gstack as Fleet Reaper Coordinator
 
 In v2.5, gstack gains a new coordination role: the reaper daemon (which retries
-`embed_status='failed'` rows — see `18-rag-and-memory-design.md § v2.5`) can optionally
+`embed_status='failed'` rows — see `20-rag-and-memory-design.md § v2.5`) can optionally
 query gbrain for relevant knowledge to merge with the re-embedded row.
 
 **Invariant:** the reaper still runs without gstack. gbrain is a quality enhancement,
@@ -167,6 +167,6 @@ async def run_reaper(bus, store, gbrain_available: bool = False):
 
 ## See also
 
-- `18-rag-and-memory-design.md` — LanceDB vector store, MemoryNode design, v2.5 reaper + DuckDB
+- `20-rag-and-memory-design.md` — LanceDB vector store, MemoryNode design, v2.5 reaper + DuckDB
 - `docs/superpowers/plans/2026-05-21-gstack-optional-submodule-plan.md` — v1 implementation plan
 - `docs/plans/2026-05-19-gbrain-crg-embedding-integration.md` — unified bge-m3 embedding plan

@@ -2096,6 +2096,6 @@ plan only via `/docs/v2/`. Override requires AskUserQuestion.
 
 **Deferred items from v1 Backport Candidates table:**
 - Items 5–7 (GbrainSearchTool, MemoryNode, dispatch_node wiring) deferred to next sprint
-- v2.1 EmbeddingCircuitBreaker deferred — see `docs/v2/18-rag-and-memory-design.md`
+- v2.1 EmbeddingCircuitBreaker deferred — see `docs/v2/20-rag-and-memory-design.md`
 
 **Evidence doc:** `docs/2026-05-22-rag-v1-backport-shipped.md`
