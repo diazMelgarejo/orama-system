@@ -1,6 +1,7 @@
 """Tests for Cursor cloud commit-attribution guard scripts."""
 from __future__ import annotations
 
+import base64
 import subprocess
 from pathlib import Path
 
@@ -29,9 +30,11 @@ def test_strip_coauthor_hook_removes_cursor_trailers(tmp_path):
 
 def test_cursor_hooks_id_matches_workspace():
     lib = ROOT / "scripts/git/cursor-hooks-id.sh"
+    repo_abs = str(ROOT.resolve())
     out = subprocess.check_output(
         ["bash", "-c", f'source "{lib}" && cursor_hooks_id "{ROOT}"'],
         text=True,
         cwd=ROOT,
     ).strip()
-    assert out == "L3dvcmtzcGFjZQ"
+    expected = base64.b64encode(repo_abs.encode()).decode().rstrip("=")
+    assert out == expected
