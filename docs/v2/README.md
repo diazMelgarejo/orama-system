@@ -163,8 +163,18 @@ orama-system/docs/v2/
 ├── 14-supervisor-and-anthropic-patterns.md
 ├── 15-phase1-as-built.md              ← canonical oramasys/* v2.0-alpha.1 (2026-05-01); OQ resolutions
 ├── 16-web-app-orchestration-plan.md   ← chosen FastAPI + React/Vite web-app path for portal/dashboard + PT swarm primitives
-└── 17-hardware-policy-enforcement.md  ← 4-layer enforcement chain (devices.yml → model_hardware_policy.yml → selector.py → agent_launcher.py); agate NEVER/PREFER/ALLOW implication; mirror exclusion patterns (D14, D15)
+├── 17-hardware-policy-enforcement.md  ← 4-layer enforcement chain (devices.yml → model_hardware_policy.yml → selector.py → agent_launcher.py); agate NEVER/PREFER/ALLOW implication; mirror exclusion patterns (D14, D15)
+├── 18-master-alignment-v2-migration-plan.md  ← CC + OpenClaw skills submodule master-alignment plan (2026-05-20)
+├── 19-gstack-optional-integration.md  ← gstack as optional submodule; detect_gstack() pattern; install.sh probing
+├── 20-rag-and-memory-design.md        ← RAG + memory design; gbrain + LanceDB; gstack integration review
+├── 21-periscope-l4-glass.md           ← periscope L4 glass-window design; ActivityMinimap + ContextPage integration
+└── 22-worktree-parallel-agents.md     ← parallel-agent worktree doctrine; 4-quadrant decision rule; bootstrap + lifecycle
 ```
+
+> **Next free slot: `23-`**
+> Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
+> highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
+> MUST update this line — git conflict on it is the coordination signal for parallel agents.
 
 ---
 
