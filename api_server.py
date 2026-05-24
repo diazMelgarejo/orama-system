@@ -24,6 +24,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+
+from utils.control_plane_auth import (
+    cors_allow_origins,
+    default_bind_host,
+    control_plane_auth_failure,
+    redact_runtime_section,
+)
 from pydantic import BaseModel, ConfigDict, field_validator, Field
 import httpx
 from bin.shared.bridge_contract import (
@@ -175,7 +182,7 @@ class BackendRouter:
 PORT            = int(os.getenv("ULTRATHINK_PORT", "8001"))
 MAX_TASK_LENGTH = int(os.getenv("ULTRATHINK_MAX_TASK_LENGTH", "10000"))
 MAX_TIMEOUT     = int(os.getenv("ULTRATHINK_MAX_TIMEOUT", "300"))
-HOST            = os.getenv("ULTRATHINK_HOST", "127.0.0.1")
+HOST            = default_bind_host(lan_env="ORAMA_BIND_LAN", host_env="ULTRATHINK_HOST")
 
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "qwen3.5:35b-a3b-q4_K_M")
 FAST_MODEL = os.getenv("FAST_MODEL", "qwen3:8b-instruct")
@@ -571,10 +578,21 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_allow_origins(),
+    allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+@app.middleware("http")
+async def _control_plane_auth_middleware(request: Request, call_next):
+    if request.url.path in ("/ultrathink", "/runtime-state"):
+        failure = control_plane_auth_failure(request)
+        if failure is not None:
+            return failure
+    return await call_next(request)
+
 
 @app.post("/ultrathink", response_model=UltraThinkResponse)
 async def run_ultrathink(req: UltraThinkRequest, http_request: Request) -> UltraThinkResponse:
@@ -689,36 +707,30 @@ async def run_ultrathink(req: UltraThinkRequest, http_request: Request) -> Ultra
 @app.get("/health")
 async def health():
     runtime_state = _load_pt_runtime_state()
+    summary = redact_runtime_section({"runtime": runtime_state}) if runtime_state else {
+        "available": False,
+        "gateway_ready": False,
+        "distributed": False,
+    }
     return {
         "status": "ok",
         "version": __version__,
-        "lmstudio_win_reachable": True,
-        "lmstudio_mac_reachable": True,
-        "ollama_primary_reachable": True,
-        "ollama_fallback_reachable": True,
         "bridge_mode": "http_primary",
-        "orchestrator": "mac-studio",
-        "execution_target": "win-rtx3080",
-        "primary_contract": "lmstudio",
-        "mapping": OPTIMIZE_FOR_TO_REASONING_DEPTH,
-        "pt_runtime": {
-            "available": runtime_state is not None,
-            "gateway_ready": bool((runtime_state or {}).get("gateway", {}).get("gateway_ready")),
-            "distributed": bool((runtime_state or {}).get("routing", {}).get("distributed")),
-        },
+        "pt_runtime": summary,
         "hardware_policy": {
             "source": _policy_resolver.source,
             "pt_authoritative": _policy_resolver.pt_available,
         },
-        "backend_priority": BackendRouter().priority,
-        "backend_endpoints": BackendRouter().ordered_endpoints(),
     }
 
 
 @app.get("/runtime-state")
 async def runtime_state():
     payload = _load_pt_runtime_state()
-    return {"available": payload is not None, "runtime": payload}
+    return {
+        "available": payload is not None,
+        "runtime": redact_runtime_section({"runtime": payload}) if payload else None,
+    }
 
 # ── Entry point ───────────────────────────────────────────────────────────────
 

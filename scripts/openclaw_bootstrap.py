@@ -20,6 +20,7 @@ import argparse
 import asyncio
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -288,7 +289,22 @@ async def _bootstrap_inline(force: bool = False) -> bool:
     print("[openclaw] → Starting AlphaClaw gateway…")
     try:
         install_dir = Path.home() / ".alphaclaw"
-        env = {**os.environ, "SETUP_PASSWORD": os.getenv("SETUP_PASSWORD", "localdev123")}
+        setup_password = os.getenv("SETUP_PASSWORD", "").strip()
+        insecure_dev = os.getenv("ORAMA_INSECURE_DEV", "").strip().lower() in ("1", "true", "yes")
+        if not setup_password:
+            if insecure_dev:
+                setup_password = secrets.token_urlsafe(16)
+                print(
+                    "[openclaw] ORAMA_INSECURE_DEV=1 — generated ephemeral SETUP_PASSWORD "
+                    "(not printed; export SETUP_PASSWORD to use a known value)"
+                )
+            else:
+                print(
+                    "[openclaw] Refusing fallback bootstrap without SETUP_PASSWORD. "
+                    "Set SETUP_PASSWORD or ORAMA_INSECURE_DEV=1 for local-only dev."
+                )
+                return False
+        env = {**os.environ, "SETUP_PASSWORD": setup_password}
         subprocess.Popen(["npx", "alphaclaw", "start"], cwd=str(install_dir), env=env)
         gateway_url = f"http://127.0.0.1:{OPENCLAW_GATEWAY_PORT}"
         os.environ["OPENCLAW_GATEWAY_URL"] = gateway_url

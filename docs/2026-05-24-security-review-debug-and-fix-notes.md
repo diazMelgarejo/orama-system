@@ -4,9 +4,9 @@ Scope: follow-up documentation for the interrupted application-security review
 around PR 40 (`feat/multi-agent-ordinal-safety`) at commit
 `c22027e64a2750ae6bf6b4a5ee6d541efbcc7667`.
 
-No runtime code fixes were applied in this pass. This file records the debug
-work, validation results, and the recommended fixes to implement in follow-up
-patches.
+Runtime fixes were applied on branch `cursor/application-security-review-8a3d`
+(2026-05-24 follow-up). This file records the original debug work, validation
+results, and the fixes that were implemented.
 
 ## Executive summary
 
@@ -286,17 +286,18 @@ Fix notes:
 3. Bind fallback setup to loopback unless an explicit LAN flag is set.
 4. Add startup warnings and tests for default-password rejection.
 
-## Consolidated implementation plan
+## Consolidated implementation plan (completed 2026-05-24)
 
-1. Introduce shared auth middleware for PT, orama, and portal mutating/private
-   routes.
-2. Change service bind defaults in `start.sh` and `portal_server.py` to
-   loopback; require explicit environment flags for LAN binding.
-3. Split public health endpoints from private operator telemetry.
-4. Replace raw runtime/job forwarding with redacted response DTOs.
-5. Gate all job submission, queue mutation, lifecycle, rediscovery, and bootstrap
-   endpoints behind authenticated operator approval.
-6. Add regression tests for unauthenticated denial and redaction behavior.
+1. Shared control-plane auth (`utils/control_plane_auth.py`, PT
+   `orchestrator/control_plane_auth.py`) with `ORAMA_CONTROL_PLANE_TOKEN` and
+   `ORAMA_INSECURE_DEV` escape hatch for local pytest only.
+2. Loopback bind defaults in `start.sh`, `portal_server.py`, and `api_server.py`;
+   opt-in LAN via `PT_BIND_LAN`, `ORAMA_BIND_LAN`, and `PORTAL_BIND_LAN`.
+3. Minimal `/health` payloads; operator routes require auth.
+4. Redacted portal status/app-state and PT `/runtime` responses.
+5. Portal and PT mutating routes gated behind bearer auth middleware.
+6. Regression tests in `tests/test_control_plane_auth.py` (orama) and
+   `Perpetua-Tools/tests/test_control_plane_auth.py`.
 
 ## Verification commands for future fixes
 

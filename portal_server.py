@@ -28,9 +28,23 @@ from typing import Any, Dict, List, Optional
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from utils.control_plane_auth import (
+    auth_headers,
+    cors_allow_origins,
+    default_bind_host,
+    control_plane_auth_failure,
+    portal_requires_auth,
+    redact_activity_payload,
+    redact_agents_payload,
+    redact_jobs_payload,
+    redact_models_payload,
+    redact_portal_status_payload,
+    redact_runtime_section,
+)
 
 # Load .env so IPs are correct whether portal is run from start.sh or directly.
 try:
@@ -74,8 +88,12 @@ except Exception as _ip_exc:
 
 # ── Config ─────────────────────────────────────────────────────────────────────
 
-PORTAL_HOST = os.getenv("PORTAL_HOST", "0.0.0.0")
+PORTAL_HOST = default_bind_host(
+    lan_env="PORTAL_BIND_LAN",
+    host_env="PORTAL_HOST",
+)
 PORTAL_PORT = int(os.getenv("PORTAL_PORT", "8002"))
+_MAX_USER_INPUT_LEN = int(os.getenv("ORAMA_USER_INPUT_MAX_LEN", "4000"))
 
 PT_URL = os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8000")
 US_URL = os.getenv("ULTRATHINK_ENDPOINT", "http://localhost:8001")
@@ -124,10 +142,24 @@ def _read_routing_json() -> dict:
 app = FastAPI(title="orama portal", version=VERSION)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=cors_allow_origins(),
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
+
+
+def _portal_http_client(**kwargs: Any) -> httpx.AsyncClient:
+    return httpx.AsyncClient(headers=auth_headers(), **kwargs)
+
+
+@app.middleware("http")
+async def _control_plane_auth_middleware(request: Request, call_next):
+    if portal_requires_auth(request.url.path, request.method):
+        failure = control_plane_auth_failure(request)
+        if failure is not None:
+            return failure
+    return await call_next(request)
 
 # ── Serve React/Vite build when present (Phase 8) ─────────────────────────────
 _WEB_DIST = REPO_ROOT / "web" / "dist"
@@ -1270,7 +1302,7 @@ async def health():
 
 
 class UserInputRequest(BaseModel):
-    message: str
+    message: str = Field(..., min_length=1, max_length=4000)
     source: str = "portal"
 
 
@@ -1291,7 +1323,7 @@ async def _fetch_pt_section(
     default: Any,
 ) -> AppStateSection:
     try:
-        r = await client.get(f"{PT_URL}{path}", timeout=PROBE_TIMEOUT)
+        r = await client.get(f"{PT_URL}{path}", timeout=PROBE_TIMEOUT, headers=auth_headers())
         r.raise_for_status()
         return AppStateSection(available=True, data=r.json(), source=source)
     except Exception as exc:
@@ -1533,11 +1565,16 @@ def _safe_artifact_index(job_detail: Any) -> Dict[str, Any]:
 @app.post("/api/user-input")
 async def api_user_input(req: UserInputRequest):
     """Proxy user task from portal textbox to PT's /user-input queue."""
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    message = req.message.strip()
+    if not message:
+        raise HTTPException(status_code=422, detail="message is required")
+    if len(message) > _MAX_USER_INPUT_LEN:
+        raise HTTPException(status_code=422, detail="message is too long")
+    async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.post(
                 f"{PT_URL}/user-input",
-                json={"message": req.message, "source": "portal"},
+                json={"message": message, "source": req.source or "portal"},
             )
             r.raise_for_status()
             return r.json()
@@ -1550,7 +1587,7 @@ async def api_app_state():
     """Aggregate portal status and PT runtime sections for the operator app."""
     portal_status = await api_status()
 
-    async with httpx.AsyncClient(timeout=PROBE_TIMEOUT) as client:
+    async with _portal_http_client(timeout=PROBE_TIMEOUT) as client:
         runtime, models, activity, jobs = await asyncio.gather(
             _fetch_pt_section(client, "/runtime", source="pt:/runtime", default={}),
             _fetch_pt_section(client, "/models", source="pt:/models", default={}),
@@ -1562,21 +1599,46 @@ async def api_app_state():
         fallback_jobs = _normalize_jobs_payload(portal_status.get("supervisor_jobs", []))
         jobs = AppStateSection(
             available=bool(fallback_jobs),
-            data={"jobs": fallback_jobs},
+            data=redact_jobs_payload({"jobs": fallback_jobs}),
             error=jobs.error,
             source="portal:supervisor_jobs_fallback",
         )
+
+    runtime_data = runtime.data if runtime.available and isinstance(runtime.data, dict) else {}
+    models_data = models.data if models.available else {}
+    activity_data = activity.data if activity.available else {"events": []}
+    jobs_data = jobs.data if jobs.available else {"jobs": []}
 
     return {
         "portal": {
             "available": True,
             "source": "portal:/api/status",
-            "data": portal_status,
+            "data": redact_portal_status_payload(portal_status),
         },
-        "runtime": _dump_model(runtime),
-        "models": _dump_model(models),
-        "activity": _dump_model(activity),
-        "jobs": _dump_model(jobs),
+        "runtime": _dump_model(AppStateSection(
+            available=runtime.available,
+            data=redact_runtime_section(runtime_data),
+            error=runtime.error,
+            source=runtime.source,
+        )),
+        "models": _dump_model(AppStateSection(
+            available=models.available,
+            data=redact_models_payload(models_data),
+            error=models.error,
+            source=models.source,
+        )),
+        "activity": _dump_model(AppStateSection(
+            available=activity.available,
+            data=redact_activity_payload(activity_data),
+            error=activity.error,
+            source=activity.source,
+        )),
+        "jobs": _dump_model(AppStateSection(
+            available=jobs.available,
+            data=redact_jobs_payload(jobs_data),
+            error=jobs.error,
+            source=jobs.source,
+        )),
     }
 
 
@@ -1896,7 +1958,7 @@ async def api_status():
         _dyn_win_lms  = LMS_WIN_ENDPOINTS
         _dyn_ollama_win = OLLAMA_WIN
 
-    async with httpx.AsyncClient() as client:
+    async with _portal_http_client() as client:
         (
             (pt_ok, pt_ver),
             (us_ok, us_ver),
@@ -1960,7 +2022,7 @@ async def api_status():
     loop = asyncio.get_event_loop()
     tools = await loop.run_in_executor(None, _probe_tools_sync)
 
-    return {
+    payload = {
         "portal_version": VERSION,
         "services": services,
         "activity": activity_events,
@@ -1979,6 +2041,7 @@ async def api_status():
         "codex_available": tools.get("codex-cli", {}).get("ok", False),
         "gemini_available": tools.get("gemini-cli", {}).get("ok", False),
     }
+    return redact_portal_status_payload(payload)
 
 
 @app.get("/api/hardware-policy")
@@ -2173,10 +2236,15 @@ def _pid_on_port(port: int) -> Optional[int]:
 
 _SERVICE_PORTS = {"pt": 8000, "orama": 8001, "portal": 8002}
 _SERVICE_LOG_FILES = {"pt": "pt.log", "orama": "orama.log", "portal": "portal.log"}
+_SERVICE_BIND_HOSTS = {
+    "pt": default_bind_host(lan_env="PT_BIND_LAN", host_env="PT_HOST"),
+    "orama": default_bind_host(lan_env="ORAMA_BIND_LAN", host_env="ULTRATHINK_HOST"),
+    "portal": PORTAL_HOST,
+}
 _SERVICE_CMDS = {
-    "pt":     ["python", "-m", "uvicorn", "orchestrator.fastapi_app:app", "--host", "0.0.0.0", "--port", "8000"],
-    "orama":  ["python", "-m", "uvicorn", "api_server:app", "--host", "0.0.0.0", "--port", "8001"],
-    "portal": ["python", "-m", "uvicorn", "portal_server:app", "--host", "0.0.0.0", "--port", "8002"],
+    "pt":     ["python", "-m", "uvicorn", "orchestrator.fastapi_app:app", "--host", _SERVICE_BIND_HOSTS["pt"], "--port", "8000"],
+    "orama":  ["python", "-m", "uvicorn", "api_server:app", "--host", _SERVICE_BIND_HOSTS["orama"], "--port", "8001"],
+    "portal": ["python", "-m", "uvicorn", "portal_server:app", "--host", _SERVICE_BIND_HOSTS["portal"], "--port", "8002"],
 }
 
 
@@ -2222,14 +2290,16 @@ async def api_restart(service: str):
         cwd = str(PERPETUA_TOOLS_ROOT)
         py = sys.executable
         env = {**os.environ, "PYTHONPATH": cwd}
+        bind_host = _SERVICE_BIND_HOSTS["pt"]
         cmd = [py, "-m", "uvicorn", "orchestrator.fastapi_app:app",
-               "--host", "0.0.0.0", "--port", str(port)]
+               "--host", bind_host, "--port", str(port)]
     else:
         cwd = str(REPO_ROOT)
         py = sys.executable
         env = {**os.environ, "PYTHONPATH": cwd}
         module = "api_server:app" if service == "orama" else "portal_server:app"
-        cmd = [py, "-m", "uvicorn", module, "--host", "0.0.0.0", "--port", str(port)]
+        bind_host = _SERVICE_BIND_HOSTS[service]
+        cmd = [py, "-m", "uvicorn", module, "--host", bind_host, "--port", str(port)]
 
     log_path = (REPO_ROOT / ".logs" / _SERVICE_LOG_FILES[service]).resolve()
     log_path.parent.mkdir(parents=True, exist_ok=True)
