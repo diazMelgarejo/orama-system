@@ -1,5 +1,5 @@
 {
-  "install": "bash -c 'set -e; python3.11 -m venv .venv && source .venv/bin/activate && OPENCLAW_HOME=\"${OPENCLAW_HOME:-$HOME/openclaw-v1}\" && mkdir -p \"$OPENCLAW_HOME\" && [ -d \"$OPENCLAW_HOME/Perpetua-Tools\" ] || git clone --branch main https://github.com/diazMelgarejo/Perpetua-Tools \"$OPENCLAW_HOME/Perpetua-Tools\" && [ -d \"$OPENCLAW_HOME/AlphaClaw\" ] || git clone --branch feature/MacOS-post-install https://github.com/diazMelgarejo/AlphaClaw \"$OPENCLAW_HOME/AlphaClaw\" && pip install -q -e \".[test]\" && pip install -q -e \"$OPENCLAW_HOME/Perpetua-Tools\" && pip install -q pytest pytest-asyncio pyyaml && (command -v pnpm >/dev/null || npm install -g pnpm) && (cd \"$OPENCLAW_HOME/AlphaClaw\" && pnpm install --frozen-lockfile) && (npm list -g openclaw >/dev/null 2>&1 || npm install -g openclaw@2026.5.6)'",
+  "install": "bash -c 'set -e; (command -v apt-get >/dev/null && sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq python3-venv python3.12-venv 2>/dev/null || true); python3 -m venv .venv && source .venv/bin/activate && OPENCLAW_HOME=\"${OPENCLAW_HOME:-$HOME/openclaw-v1}\" && mkdir -p \"$OPENCLAW_HOME\" && [ -d \"$OPENCLAW_HOME/Perpetua-Tools\" ] || git clone --branch main https://github.com/diazMelgarejo/Perpetua-Tools \"$OPENCLAW_HOME/Perpetua-Tools\" && [ -d \"$OPENCLAW_HOME/AlphaClaw\" ] || git clone --branch main https://github.com/diazMelgarejo/AlphaClaw \"$OPENCLAW_HOME/AlphaClaw\" && pip install -q -e \".[test]\" && pip install -q -e \"$OPENCLAW_HOME/Perpetua-Tools\" && pip install -q pytest pytest-asyncio pyyaml && (cd \"$OPENCLAW_HOME/AlphaClaw\" && npm install) && (npm list -g openclaw >/dev/null 2>&1 || npm install -g openclaw@2026.5.6)'",
 
   "environment": {
     "OPENCLAW_HOME": "$HOME/openclaw-v1",
@@ -31,7 +31,7 @@
     },
     {
       "name": "AlphaClaw tests",
-      "command": "cd $OPENCLAW_HOME/AlphaClaw && pnpm test"
+      "command": "cd $OPENCLAW_HOME/AlphaClaw && npm test"
     },
     {
       "name": "PT portal",
