@@ -667,7 +667,7 @@ In `$OPENCLAW_ROOT/`:
 
 ```bash
 # This dir is NOT a git repo, so commit through the orama-system worktree:
-cd ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system
+cd $OPENCLAW_ROOT/orama-system
 # (CLAUDE-instru.md lives in the parent OpenClaw/ dir, not in orama-system —
 # do NOT git add it from this worktree. Instead, document the change inside
 # orama-system's CLAUDE.md § 4, which IS in-repo.)
@@ -706,7 +706,7 @@ Full design: [`docs/v2/21-periscope-l4-glass.md`](docs/v2/21-periscope-l4-glass.
 - [ ] **Step 5: Commit + push**
 
 ```bash
-cd ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system
+cd $OPENCLAW_ROOT/orama-system
 git add CLAUDE.md docs/v2/21-periscope-l4-glass.md docs/plans/2026-05-24-periscope-l4-integration-plan.md
 git commit -m "docs(v2): add Periscope as L4 glass layer
 
@@ -762,9 +762,9 @@ curl -H "X-Periscope-Token: $(grep cursor_secret ~/.periscope/config.toml | cut 
      http://127.0.0.1:8080/api/v1/openclaw/jobs | jq .
 
 # 3. orama-system docs updated
-grep "Four-Repo\|L4" ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system/CLAUDE.md
-ls ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system/docs/v2/21-periscope-l4-glass.md
-ls ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system/docs/plans/2026-05-24-periscope-l4-integration-plan.md
+grep "Four-Repo\|L4" $OPENCLAW_ROOT/orama-system/CLAUDE.md
+ls $OPENCLAW_ROOT/orama-system/docs/v2/21-periscope-l4-glass.md
+ls $OPENCLAW_ROOT/orama-system/docs/plans/2026-05-24-periscope-l4-integration-plan.md
 
 # 4. gbrain knows about periscope
 gbrain sources list | grep periscope
