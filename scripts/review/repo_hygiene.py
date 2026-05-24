@@ -445,6 +445,36 @@ def scan_macos_dedup_dirs(root: Path) -> list[str]:
 _DOCV2_ORDINAL_PATTERN = re.compile(r"^(\d+)-")
 
 
+def scan_macos_ghost_git_refs(root: Path) -> list[str]:
+    """Detect macOS APFS ghost files in .git/refs/ (D10 — ghost git ref files).
+
+    When APFS deduplication or Finder copies a git refs directory, it may
+    create files like ``main 2``, ``feat/my-branch 2`` alongside the real ref
+    files.  Git silently treats these as loose refs named
+    ``refs/heads/main 2`` (with a literal space), which breaks
+    ``git repack -Ad``, ``git gc``, and ``git fsck`` with::
+
+        fatal: bad object refs/heads/main 2
+
+    The fix is to delete these files — their SHA content is redundant with
+    the matching loose ref or packed-refs entry, and they carry no useful
+    information.
+    """
+    errors: list[str] = []
+    git_refs = root / ".git" / "refs"
+    if not git_refs.is_dir():
+        return errors
+    _ghost_pattern = re.compile(r".+\s+\d+$")
+    for path in git_refs.rglob("*"):
+        if path.is_file() and _ghost_pattern.match(path.name):
+            rel = path.relative_to(root)
+            errors.append(
+                f"macOS ghost git ref file: {rel} — "
+                f"fix: rm '{rel}' (duplicate of '{path.parent / path.name.rsplit(' ', 1)[0]}')"
+            )
+    return errors
+
+
 def scan_docv2_ordinal_collision(root: Path) -> list[str]:
     """Detect duplicate numeric prefixes in docs/v2/ (D7 — multi-agent collision).
 
@@ -647,6 +677,7 @@ def main() -> int:
     errors.extend(check_git_internal_junk(root))
     errors.extend(scan_stale_git_locks(root))
     errors.extend(scan_macos_dedup_dirs(root))
+    errors.extend(scan_macos_ghost_git_refs(root))
     errors.extend(scan_docv2_ordinal_collision(root))
     warnings = check_markdown_size_warnings(root, files)
     active_legacy, historical_legacy = classify_legacy_name_refs(root, files)
