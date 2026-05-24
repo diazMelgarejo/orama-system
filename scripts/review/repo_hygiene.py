@@ -14,6 +14,7 @@ APPROVED_IDENTITIES = {
     ("cyre", "Lawrence@cyre.me"),
     ("cyre", "diazMelgarejo@gmail.com"),
     ("Codex", "codex@openai.com"),
+    ("Cursor Agent", "cursoragent@cursor.com"),
 }
 FORBIDDEN_TOKENS = (
     "Lawrence " + "Melgarejo",
