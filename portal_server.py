@@ -1323,7 +1323,7 @@ async def _fetch_pt_section(
     default: Any,
 ) -> AppStateSection:
     try:
-        r = await client.get(f"{PT_URL}{path}", timeout=PROBE_TIMEOUT, headers=auth_headers())
+        r = await client.get(f"{PT_URL}{path}", timeout=PROBE_TIMEOUT)
         r.raise_for_status()
         return AppStateSection(available=True, data=r.json(), source=source)
     except Exception as exc:
@@ -1453,7 +1453,7 @@ async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
     portal_status = await api_status()
     hardware_policy = portal_status.get("hardware_policy", {})
 
-    async with httpx.AsyncClient(timeout=PROBE_TIMEOUT) as client:
+    async with _portal_http_client(timeout=PROBE_TIMEOUT) as client:
         routed = await asyncio.gather(
             *[
                 _route_preview_assignment(
@@ -1670,7 +1670,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
     session_id = f"swarm-{uuid.uuid4().hex}"
     accepted_jobs: List[Dict[str, Any]] = []
     failed_jobs: List[Dict[str, Any]] = []
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with _portal_http_client(timeout=10.0) as client:
         for assignment in preview["assignments"]:
             metadata = {
                 "role": assignment["role"],
@@ -1722,7 +1722,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
 @app.get("/api/jobs")
 async def api_jobs_proxy(status: Optional[str] = None):
     params = {"status": status} if status else {}
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs", params=params)
             r.raise_for_status()
@@ -1738,7 +1738,7 @@ async def api_jobs_proxy(status: Optional[str] = None):
 
 @app.get("/api/jobs/{job_id}")
 async def api_job_detail_proxy(job_id: str):
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs/{job_id}")
             r.raise_for_status()
@@ -1754,7 +1754,7 @@ async def api_job_detail_proxy(job_id: str):
 
 @app.post("/api/jobs/{job_id}/cancel")
 async def api_job_cancel_proxy(job_id: str):
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.post(f"{PT_URL}/cancel", json={"job_id": job_id})
             r.raise_for_status()
@@ -1770,7 +1770,7 @@ async def api_job_cancel_proxy(job_id: str):
 
 @app.post("/api/jobs/{job_id}/replay")
 async def api_job_replay_proxy(job_id: str):
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.post(f"{PT_URL}/replay", json={"job_id": job_id})
             r.raise_for_status()
@@ -1786,7 +1786,7 @@ async def api_job_replay_proxy(job_id: str):
 
 @app.get("/api/jobs/{job_id}/artifacts")
 async def api_job_artifacts_proxy(job_id: str):
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs/{job_id}")
             r.raise_for_status()
@@ -2194,7 +2194,7 @@ async def api_configure_tool(req: ConfigureToolRequest):
 async def api_get_jobs(status: Optional[str] = None):
     """Proxy to PT's /v1/jobs — used by the supervisor jobs panel JS poller."""
     params = {"status": status} if status else {}
-    async with httpx.AsyncClient(timeout=5.0) as client:
+    async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs", params=params)
             r.raise_for_status()

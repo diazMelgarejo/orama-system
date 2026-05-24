@@ -295,8 +295,8 @@ async def _bootstrap_inline(force: bool = False) -> bool:
             if insecure_dev:
                 setup_password = secrets.token_urlsafe(16)
                 print(
-                    "[openclaw] ORAMA_INSECURE_DEV=1 — generated ephemeral SETUP_PASSWORD "
-                    "(not printed; export SETUP_PASSWORD to use a known value)"
+                    "[openclaw] ORAMA_INSECURE_DEV=1 — generated one-time SETUP_PASSWORD "
+                    f"(local terminal only): {setup_password}"
                 )
             else:
                 print(
