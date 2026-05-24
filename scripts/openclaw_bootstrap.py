@@ -20,6 +20,7 @@ import argparse
 import asyncio
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -93,7 +94,7 @@ async def _find_any_gateway() -> str | None:
         return None
     async with httpx.AsyncClient(timeout=1.5) as client:
         for port in OPENCLAW_CANDIDATE_PORTS:
-            url = f"http://127.0.0.1:{port}"
+            url = f"http://localhost:{port}"
             if await _probe_url(url, client):
                 return url
     return None
@@ -288,9 +289,27 @@ async def _bootstrap_inline(force: bool = False) -> bool:
     print("[openclaw] → Starting AlphaClaw gateway…")
     try:
         install_dir = Path.home() / ".alphaclaw"
-        env = {**os.environ, "SETUP_PASSWORD": os.getenv("SETUP_PASSWORD", "localdev123")}
+        setup_password = os.getenv("SETUP_PASSWORD", "").strip()
+        insecure_dev = os.getenv("ORAMA_INSECURE_DEV", "").strip().lower() in ("1", "true", "yes")
+        if not setup_password:
+            if insecure_dev:
+                setup_password = secrets.token_urlsafe(16)
+                once_path = install_dir / ".setup-password-once"
+                once_path.write_text(f"{setup_password}\n", encoding="utf-8")
+                once_path.chmod(0o600)
+                print(
+                    "[openclaw] ORAMA_INSECURE_DEV=1 — generated one-time SETUP_PASSWORD; "
+                    f"read once from {once_path} (not logged)."
+                )
+            else:
+                print(
+                    "[openclaw] Refusing fallback bootstrap without SETUP_PASSWORD. "
+                    "Set SETUP_PASSWORD or ORAMA_INSECURE_DEV=1 for local-only dev."
+                )
+                return False
+        env = {**os.environ, "SETUP_PASSWORD": setup_password}
         subprocess.Popen(["npx", "alphaclaw", "start"], cwd=str(install_dir), env=env)
-        gateway_url = f"http://127.0.0.1:{OPENCLAW_GATEWAY_PORT}"
+        gateway_url = f"http://localhost:{OPENCLAW_GATEWAY_PORT}"
         os.environ["OPENCLAW_GATEWAY_URL"] = gateway_url
     except Exception as e:
         print(f"[openclaw] ✗ gateway start failed: {e}")
