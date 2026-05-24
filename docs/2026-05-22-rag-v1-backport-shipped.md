@@ -65,7 +65,7 @@ From `docs/superpowers/plans/2026-05-21-rag-memory-v1-plan.md`:
 
 ## Next sprint (v2.1)
 
-Per `docs/v2/18-rag-and-memory-design.md`:
+Per `docs/v2/20-rag-and-memory-design.md`:
 - `EmbeddingCircuitBreaker` — process-local breaker, opens after N failures, auto-closes
 - Observability: state metrics, open/close counters, cooldown events
 - Migration sequence: v1 → v2.1 rollback point documented
