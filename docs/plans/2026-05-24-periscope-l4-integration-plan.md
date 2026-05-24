@@ -9,7 +9,7 @@
 - Periscope (remote): `github.com/diazMelgarejo/periscope` (fork of `latentsignal-org/periscope`)
 - orama-system (this repo): `$OPENCLAW_ROOT/orama-system`
 
-**Design:** See `docs/v2/18-periscope-l4-glass.md` (mission, architecture, OQ register, risks).
+**Design:** See `docs/v2/21-periscope-l4-glass.md` (mission, architecture, OQ register, risks).
 
 **Hard constraints:**
 - Periscope is L4 — observation-only. Never writes to AlphaClaw / PT / orama.
@@ -700,14 +700,14 @@ AlphaClaw (L1 — infra) → Perpetua-Tools (L2 — middleware) → orama-system
 
 L4 lives at `~/Documents/oramasys/tools/periscope` (fork: `github.com/diazMelgarejo/periscope`).
 Periscope reads session/event JSONL from L1–L3; never writes back.
-Full design: [`docs/v2/18-periscope-l4-glass.md`](docs/v2/18-periscope-l4-glass.md)
+Full design: [`docs/v2/21-periscope-l4-glass.md`](docs/v2/21-periscope-l4-glass.md)
 ```
 
 - [ ] **Step 5: Commit + push**
 
 ```bash
 cd $OPENCLAW_ROOT/orama-system
-git add CLAUDE.md docs/v2/18-periscope-l4-glass.md docs/plans/2026-05-24-periscope-l4-integration-plan.md
+git add CLAUDE.md docs/v2/21-periscope-l4-glass.md docs/plans/2026-05-24-periscope-l4-integration-plan.md
 git commit -m "docs(v2): add Periscope as L4 glass layer
 
 Adds doc 18 (destiny + design) and the 2026-05-24 integration plan.
@@ -763,7 +763,7 @@ curl -H "X-Periscope-Token: $(grep cursor_secret ~/.periscope/config.toml | cut 
 
 # 3. orama-system docs updated
 grep "Four-Repo\|L4" $OPENCLAW_ROOT/orama-system/CLAUDE.md
-ls $OPENCLAW_ROOT/orama-system/docs/v2/18-periscope-l4-glass.md
+ls $OPENCLAW_ROOT/orama-system/docs/v2/21-periscope-l4-glass.md
 ls $OPENCLAW_ROOT/orama-system/docs/plans/2026-05-24-periscope-l4-integration-plan.md
 
 # 4. gbrain knows about periscope

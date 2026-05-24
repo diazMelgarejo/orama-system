@@ -6,7 +6,7 @@
 1. `docs/superpowers/specs/2026-05-21-rag-memory-gstack-design.md`
 2. `docs/superpowers/plans/2026-05-21-rag-memory-v1-plan.md`
 3. `docs/superpowers/plans/2026-05-21-gstack-optional-submodule-plan.md`
-4. `docs/v2/18-rag-and-memory-design.md`
+4. `docs/v2/20-rag-and-memory-design.md`
 5. `docs/v2/19-gstack-optional-integration.md`
 
 > Note: request says “6 docs” but only 5 were listed/provided in the prompt and present in repo.
@@ -145,7 +145,7 @@ Evaluate each along these dimensions:
 
 ---
 
-## 4. v2 RAG/memory design — `docs/v2/18-rag-and-memory-design.md`
+## 4. v2 RAG/memory design — `docs/v2/20-rag-and-memory-design.md`
 
 ### Strengths
 - Good staged maturity model: v1 base, v2.1 circuit breaker, v2.5 reaper/fleet analytics.
