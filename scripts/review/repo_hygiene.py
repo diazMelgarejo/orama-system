@@ -441,6 +441,46 @@ def scan_macos_dedup_dirs(root: Path) -> list[str]:
     return errors
 
 
+# Pattern that matches the leading numeric prefix in docs/v2/NN-slug.md filenames.
+_DOCV2_ORDINAL_PATTERN = re.compile(r"^(\d+)-")
+
+
+def scan_docv2_ordinal_collision(root: Path) -> list[str]:
+    """Detect duplicate numeric prefixes in docs/v2/ (D7 — multi-agent collision).
+
+    When parallel agents independently add a docs/v2/NN-*.md file, they each
+    compute "the current highest number" from disk and both claim the same
+    ordinal (e.g., two files named 18-*). Git silently accepts both because
+    the slugs differ — no merge conflict is raised. This scanner catches the
+    collision at commit time.
+
+    Fix: rename the newer file to the next free ordinal and update all
+    cross-references. Use `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1`
+    to determine the highest existing number, then claim next_free = highest + 1.
+    Update docs/v2/README.md "Next free slot" line accordingly.
+    """
+    docv2 = root / "docs" / "v2"
+    if not docv2.is_dir():
+        return []
+    seen: dict[int, list[str]] = {}
+    for p in docv2.iterdir():
+        if not p.is_file() or p.suffix != ".md":
+            continue
+        m = _DOCV2_ORDINAL_PATTERN.match(p.name)
+        if m:
+            n = int(m.group(1))
+            seen.setdefault(n, []).append(p.name)
+    errors: list[str] = []
+    for n, names in sorted(seen.items()):
+        if len(names) > 1:
+            colliders = ", ".join(sorted(names))
+            errors.append(
+                f"docs/v2 ordinal collision on prefix {n:02d}: {colliders} — "
+                f"rename all but the oldest to the next free slot and update refs"
+            )
+    return errors
+
+
 def check_git_internal_junk(root: Path) -> list[str]:
     git_dir = root / ".git"
     refs_dir = git_dir / "refs"
@@ -607,6 +647,7 @@ def main() -> int:
     errors.extend(check_git_internal_junk(root))
     errors.extend(scan_stale_git_locks(root))
     errors.extend(scan_macos_dedup_dirs(root))
+    errors.extend(scan_docv2_ordinal_collision(root))
     warnings = check_markdown_size_warnings(root, files)
     active_legacy, historical_legacy = classify_legacy_name_refs(root, files)
 
