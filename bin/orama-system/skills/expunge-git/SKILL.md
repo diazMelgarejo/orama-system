@@ -11,7 +11,7 @@ description: >
 
 # Expunge Git History — End-to-End Scrub
 
-> Real-time guidance. Git-hygiene doctrine: `docs/v2/19-worktree-parallel-agents.md`
+> Real-time guidance. Git-hygiene doctrine: `docs/v2/22-worktree-parallel-agents.md`
 > Branching context: `docs/wiki/08-git-hygiene-and-branching.md`
 > Canonical skill source: `orama-system/bin/orama-system/skills/expunge-git/SKILL.md`
 
@@ -257,7 +257,7 @@ not retroactively revoke credentials that were ever pushed to a remote.
 
 ## Section 7 — References
 
-- `docs/v2/19-worktree-parallel-agents.md` — git hygiene context, lock-file
+- `docs/v2/22-worktree-parallel-agents.md` — git hygiene context, lock-file
   rules, orphan-ref handling. Parallel-agent setups multiply the risk that a
   stale ref or unpushed worktree resurrects the bad object.
 - `docs/wiki/08-git-hygiene-and-branching.md` — branch lifecycle, naming, and

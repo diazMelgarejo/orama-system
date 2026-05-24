@@ -10,7 +10,7 @@ description: >
 
 # Using Git Worktrees — orama-system Stack
 
-> Real-time guidance. Full doctrine: `orama-system/docs/v2/19-worktree-parallel-agents.md`
+> Real-time guidance. Full doctrine: `orama-system/docs/v2/22-worktree-parallel-agents.md`
 > Hardware baseline (2026-05-24): 1 Win RTX3080 (LM Studio) + Mac Ollama.
 
 ---

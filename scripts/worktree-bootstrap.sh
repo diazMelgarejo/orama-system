@@ -11,7 +11,7 @@
 #     orama-src
 #
 # Idempotent: safe to re-run. If worktree already exists, skips creation.
-# See docs/v2/19-worktree-parallel-agents.md for full doctrine.
+# See docs/v2/22-worktree-parallel-agents.md for full doctrine.
 
 set -euo pipefail
 

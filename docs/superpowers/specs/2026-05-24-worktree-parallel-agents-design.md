@@ -75,7 +75,7 @@ Six artifacts ship with this doctrine:
 
 | # | Artifact | Path | Purpose |
 |---|----------|------|---------|
-| 1 | Canonical doc | `orama-system/docs/v2/19-worktree-parallel-agents.md` | Full reference + decision tree |
+| 1 | Canonical doc | `orama-system/docs/v2/22-worktree-parallel-agents.md` | Full reference + decision tree |
 | 2 | Cross-repo nav | `OpenClaw/CLAUDE-instru.md` §Worktrees | One-paragraph hook into canonical doc |
 | 3 | orama-system stub | `orama-system/CLAUDE.md` §Worktrees | Points to canonical doc |
 | 4 | Perpetua-Tools stub | `Perpetua-Tools/CLAUDE.md` §Worktrees | Points to canonical doc |
