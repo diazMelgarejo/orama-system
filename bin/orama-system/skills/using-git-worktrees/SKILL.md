@@ -120,6 +120,32 @@ mcp__code-review-graph__query_graph_tool(
 | orama-api | 8001 | 8101 | 8201 |
 | portal | 8002 | 8102 | 8202 |
 
+### Sequential Numbering Coordination (`docs/v2/` and similar)
+
+**Problem:** Two parallel agents both compute "the current highest number" independently and claim
+the same ordinal (e.g., both write `18-*.md`). Git silently accepts both because the slugs differ —
+no merge conflict is raised. `repo_hygiene.py` will catch this at commit time (`scan_docv2_ordinal_collision`),
+but it is cheaper to avoid the collision than to fix it after.
+
+**Protocol — before adding any `docs/v2/NN-slug.md`:**
+
+```bash
+# 1. Check the current highest ordinal on the target branch
+ls docs/v2/ | grep '^[0-9]' | sort -V | tail -3
+
+# 2. Read the "Next free slot" line in docs/v2/README.md
+grep "Next free slot" docs/v2/README.md
+
+# 3. Claim your number — update README.md FIRST, commit, THEN write the doc
+sed -i '' 's/Next free slot: `23-`/Next free slot: `24-`/' docs/v2/README.md
+git add docs/v2/README.md
+git commit -m "chore(docs/v2): reserve slot 23 for <slug>"
+# Now write 23-<slug>.md
+```
+
+**Rule:** The `README.md` "Next free slot" update is the reservation step. A git conflict on
+that line is the coordination signal — resolve it by taking the higher number.
+
 ---
 
 ## Step 5 — Cleanup (ALWAYS use finishing-a-development-branch)

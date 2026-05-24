@@ -268,5 +268,53 @@ def test_repo_hygiene_script_runs_clean():
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+def test_scan_docv2_ordinal_collision_detects_duplicate_prefix(tmp_path):
+    """Two files with the same NN- prefix should produce one error."""
+    repo_hygiene = load_repo_hygiene()
+    docv2 = tmp_path / "docs" / "v2"
+    docv2.mkdir(parents=True)
+    (docv2 / "18-master-alignment.md").write_text("# a\n", encoding="utf-8")
+    (docv2 / "18-rag-and-memory.md").write_text("# b\n", encoding="utf-8")
+    (docv2 / "19-gstack-optional.md").write_text("# c\n", encoding="utf-8")
+
+    errors = repo_hygiene.scan_docv2_ordinal_collision(tmp_path)
+
+    assert len(errors) == 1
+    assert "18" in errors[0]
+    assert "18-master-alignment.md" in errors[0] or "18-rag-and-memory.md" in errors[0]
+    assert "ordinal collision" in errors[0]
+
+
+def test_scan_docv2_ordinal_collision_three_way_collision(tmp_path):
+    """Three files with the same prefix produce exactly one error (per prefix)."""
+    repo_hygiene = load_repo_hygiene()
+    docv2 = tmp_path / "docs" / "v2"
+    docv2.mkdir(parents=True)
+    for slug in ("18-a.md", "18-b.md", "18-c.md"):
+        (docv2 / slug).write_text("# x\n", encoding="utf-8")
+
+    errors = repo_hygiene.scan_docv2_ordinal_collision(tmp_path)
+
+    assert len(errors) == 1
+    assert "18" in errors[0]
+
+
+def test_scan_docv2_ordinal_collision_clean_returns_empty(tmp_path):
+    """Sequential prefixes 00–22 with unique slugs must be accepted."""
+    repo_hygiene = load_repo_hygiene()
+    docv2 = tmp_path / "docs" / "v2"
+    docv2.mkdir(parents=True)
+    for i, slug in enumerate(["00-context.md", "01-kernel.md", "22-worktrees.md"]):
+        (docv2 / slug).write_text(f"# {i}\n", encoding="utf-8")
+
+    assert repo_hygiene.scan_docv2_ordinal_collision(tmp_path) == []
+
+
+def test_scan_docv2_ordinal_collision_no_docv2_dir(tmp_path):
+    """Repos without docs/v2/ must not error."""
+    repo_hygiene = load_repo_hygiene()
+    assert repo_hygiene.scan_docv2_ordinal_collision(tmp_path) == []
+
+
 def test_identity_check_script_is_shell_valid():
     subprocess.check_call(["bash", "-n", "scripts/git/check_identity.sh"], cwd=ROOT)
