@@ -388,6 +388,59 @@ def check_generated_artifact_tracking(files: list[str]) -> list[str]:
     return errors
 
 
+MACOS_DEDUP_DIR_PATTERN = re.compile(r" [2-9]$")
+MACOS_DEDUP_EXCLUDED_DIRS = frozenset({".git", ".venv", "node_modules", ".tox"})
+
+
+def scan_stale_git_locks(root: Path) -> list[str]:
+    """Block stale .git/*.lock files (D5) — these wedge git operations.
+
+    Interrupted git operations or macOS Finder activity can leave .lock files
+    inside the .git directory (index.lock, refs/heads/<branch>.lock, etc).
+    Until removed, subsequent git commands fail with "another process holds
+    the lock." Doctrine fix: `find .git -name '*.lock' -delete`.
+    """
+    errors: list[str] = []
+    git_dir = root / ".git"
+    if not git_dir.exists():
+        return errors
+    for dirpath, _dirnames, filenames in os.walk(git_dir):
+        for name in filenames:
+            if not name.endswith(".lock"):
+                continue
+            full = Path(dirpath) / name
+            rel = full.relative_to(root)
+            errors.append(
+                f"stale lock file: {rel} — fix: find .git -name '*.lock' -delete"
+            )
+    return errors
+
+
+def scan_macos_dedup_dirs(root: Path) -> list[str]:
+    """Block macOS Finder dedup directories (D6) — '<name> 2/', '<name> 3/'.
+
+    When Finder copies into a directory that already contains a file/dir of
+    the same name, it appends ' 2', ' 3', etc. These shadow real paths and
+    contaminate git status / worktree state. Doctrine fix: delete the dir
+    and ensure `.gitignore` contains the dedup patterns.
+    """
+    errors: list[str] = []
+    if not root.exists():
+        return errors
+    for dirpath, dirnames, _filenames in os.walk(root):
+        # Prune excluded directories in-place so os.walk skips them.
+        dirnames[:] = [d for d in dirnames if d not in MACOS_DEDUP_EXCLUDED_DIRS]
+        for d in dirnames:
+            if MACOS_DEDUP_DIR_PATTERN.search(d):
+                full = Path(dirpath) / d
+                rel = full.relative_to(root)
+                errors.append(
+                    f"macOS Finder dedup directory: {rel} — "
+                    f"fix: rm -rf '{rel}' and verify .gitignore contains '*\\ <N>/' pattern"
+                )
+    return errors
+
+
 def check_git_internal_junk(root: Path) -> list[str]:
     git_dir = root / ".git"
     refs_dir = git_dir / "refs"
@@ -552,6 +605,8 @@ def main() -> int:
     errors.extend(check_workflow_permissions(root))
     errors.extend(check_stale_skill_path_refs(root, files))
     errors.extend(check_git_internal_junk(root))
+    errors.extend(scan_stale_git_locks(root))
+    errors.extend(scan_macos_dedup_dirs(root))
     warnings = check_markdown_size_warnings(root, files)
     active_legacy, historical_legacy = classify_legacy_name_refs(root, files)
 
