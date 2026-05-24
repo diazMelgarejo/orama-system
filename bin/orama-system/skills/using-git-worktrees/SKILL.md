@@ -70,7 +70,30 @@ echo "AlphaClaw: $ALPHACLAW_PORT  PT: $PT_PORT"
 
 ---
 
-## Step 3 — Work Rules While in a Worktree
+## Step 3 — Hygiene Gate (MANDATORY before every `git commit`)
+
+```bash
+python3 scripts/review/repo_hygiene.py .
+# Must print "OK: repo hygiene checks passed"
+# WARNING = non-blocking; ERROR = fix before committing
+```
+
+**Why this matters especially for worktrees:** docs, plans, and bash snippets
+written from a worktree often embed the machine-local path. Those paths are
+invisible on your machine but leak developer identity and break CI when committed.
+
+| Rule enforced | What it catches | Correct form |
+|---------------|----------------|--------------|
+| `scan_openclaw_workstation_layout` | hardcoded machine-local OpenClaw tree path | `$OPENCLAW_ROOT` |
+| `scan_personal_paths` | `/Users/<name>/…` absolute paths | `~`, `$REPO_ROOT`, `<workspace>` |
+| `scan_bidi_controls` | Hidden Unicode direction controls | remove |
+| `scan_legacy_names` | Banned terms (coordinator, etc.) | correct term |
+
+**Never skip this step** — not even for "just a small doc change."
+
+---
+
+## Step 4 — Work Rules While in a Worktree
 
 ### Inference (GPU)
 - **Never POST directly to LM Studio or Ollama.** Always via PT.
@@ -99,7 +122,7 @@ mcp__code-review-graph__query_graph_tool(
 
 ---
 
-## Step 4 — Cleanup (ALWAYS use finishing-a-development-branch)
+## Step 5 — Cleanup (ALWAYS use finishing-a-development-branch)
 
 ```
 Invoke: superpowers:finishing-a-development-branch

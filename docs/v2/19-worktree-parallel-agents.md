@@ -216,7 +216,37 @@ git push origin --delete <branch>
 
 ---
 
-## 10. Dogfood Defenses (from `.experience-log/dogfood-notes.md`)
+## 10. Pre-commit Hygiene Gate
+
+**Run before every `git commit` from a worktree — especially when writing docs or plans.**
+
+```bash
+# From the worktree root:
+python3 scripts/review/repo_hygiene.py .
+```
+
+Must exit 0 before committing. Catches:
+
+| Rule | What it blocks | Correct substitute |
+|------|---------------|--------------------|
+| `scan_openclaw_workstation_layout` | hardcoded machine-local OpenClaw tree path | `$OPENCLAW_ROOT` |
+| `scan_personal_paths` | `/Users/<name>/…` absolute paths | `~`, `$REPO_ROOT`, `<workspace>` |
+| `scan_bidi_controls` | Hidden Unicode direction controls (Trojan-Source) | remove |
+| `scan_legacy_names` | Banned terminology (coordinator → orchestrator, etc.) | correct term |
+
+**The pattern this prevents:** writing docs or plans from a worktree that embed
+the machine-specific working path (e.g. in bash snippets, `cd` commands, file
+references). The worktree path is real on your machine but breaks CI and leaks
+developer identity into the public repo.
+
+**Alias for speed:**
+```bash
+alias hygiene="python3 scripts/review/repo_hygiene.py ."
+```
+
+---
+
+## 12. Dogfood Defenses (from `.experience-log/dogfood-notes.md`)
 
 | Datum | Problem | Defense |
 |-------|---------|---------|
@@ -228,10 +258,11 @@ git push origin --delete <branch>
 | D6 | `* 2/`, `* 3/` dirs from macOS dedup | bootstrap appends dedup patterns to `.gitignore` |
 | D7 | `.cursor/environment.json` port collisions | bootstrap writes `ENV_OFFSET`; ports offset by N×100 |
 | D8 | Multi-Win pool ignores extra devices | future PT enhancement; current: 1 Win is correct |
+| D9 | Machine-specific paths leak into committed docs | run `python3 scripts/review/repo_hygiene.py .` before every commit |
 
 ---
 
-## 11. Invocable Skill
+## 13. Invocable Skill
 
 For real-time agent guidance during a worktree session:
 
