@@ -29,7 +29,7 @@ Rules:
 The only approved author identity for commits in the clean lineage is:
 
 ```text
-cyre <Lawrence@cyre.me>, cyre <diazMelgarejo@gmail.com>, Codex <codex@openai.com>, or Cursor Agent <cursoragent@cursor.com>
+cyre <Lawrence@cyre.me>, cyre <diazMelgarejo@gmail.com>, or Codex <codex@openai.com>
 ```
 
 Forbidden identity:
@@ -112,6 +112,20 @@ Workflow permissions must be minimal and explicit.
 - PR automation needs `pull-requests: write`.
 - Read-only CI should use default read behavior or an explicit read-only block.
 - Avoid broad top-level write permissions.
+
+---
+
+## Cursor Cloud commit attribution
+
+Cloud agents may inject `Co-authored-by` trailers via managed git hooks. **`CURSOR_AGENT=0` is not supported.**
+
+Run on VM boot (all three repos):
+
+```bash
+bash scripts/git/apply-attribution-guard-all-repos.sh
+```
+
+See [12. Cursor Cloud — commit attribution guards](12-cursor-cloud-commit-attribution.md).
 
 ---
 
