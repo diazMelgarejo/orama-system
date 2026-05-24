@@ -208,6 +208,37 @@ US_PORT=${US_PORT:-8001}
 PORTAL_PORT=${PORTAL_PORT:-8002}
 PORTAL_URL="http://localhost:${PORTAL_PORT}"
 
+_orama_all_interfaces_host() {
+  python3 -c 'import os; print(os.getenv("ORAMA_LAN_BIND_HOST") or ".".join(["0"]*4))'
+}
+
+_resolve_bind_host() {
+  local lan_flag="$1" host_var="$2"
+  local lan_val="${!lan_flag:-}"
+  if [ "$lan_val" = "1" ] || [ "$lan_val" = "true" ] || [ "$lan_val" = "yes" ]; then
+    _orama_all_interfaces_host
+    return
+  fi
+  local host_val="${!host_var:-localhost}"
+  echo "${host_val:-localhost}"
+}
+
+PT_HOST="$(_resolve_bind_host PT_BIND_LAN PT_HOST)"
+US_HOST="$(_resolve_bind_host ORAMA_BIND_LAN ULTRATHINK_HOST)"
+PORTAL_HOST="$(_resolve_bind_host PORTAL_BIND_LAN PORTAL_HOST)"
+export PT_HOST US_HOST PORTAL_HOST
+
+if [ -z "${ORAMA_CONTROL_PLANE_TOKEN:-}" ] && [ "${ORAMA_INSECURE_DEV:-0}" != "1" ]; then
+  ORAMA_CONTROL_PLANE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+  export ORAMA_CONTROL_PLANE_TOKEN
+  _warn "svc" "Generated ORAMA_CONTROL_PLANE_TOKEN for this session — add to .env.local to persist"
+fi
+export ORAMA_CONTROL_PLANE_TOKEN
+
+if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${PORTAL_BIND_LAN:-0}" = "1" ]; then
+  _warn "svc" "LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network"
+fi
+
 LOG_DIR="$SCRIPT_DIR/.logs"
 mkdir -p "$LOG_DIR"
 
@@ -947,7 +978,7 @@ if [ -n "$PT_DIR" ] && [ -f "$PT_DIR/orchestrator.py" ]; then
   else
     echo "  PT   starting → $LOG_DIR/pt.log"
     (cd "$PT_DIR" && PYTHONPATH="$PT_DIR" "$PT_PYTHON" -m uvicorn orchestrator.fastapi_app:app \
-      --host 0.0.0.0 --port "$PT_PORT" \
+      --host "$PT_HOST" --port "$PT_PORT" \
       >> "$LOG_DIR/pt.log" 2>&1) &
     wait_for_port "$PT_PORT" "PT"
   fi
@@ -961,7 +992,7 @@ if pid_on_port "$US_PORT" | grep -q .; then
 else
   echo "  orama starting → $LOG_DIR/us.log"
   (cd "$SCRIPT_DIR" && PYTHONPATH="$SCRIPT_DIR" "$US_PYTHON" -m uvicorn api_server:app \
-    --host 0.0.0.0 --port "$US_PORT" \
+    --host "$US_HOST" --port "$US_PORT" \
     >> "$LOG_DIR/us.log" 2>&1) &
   wait_for_port "$US_PORT" "orama"
 fi
@@ -972,7 +1003,7 @@ if pid_on_port "$PORTAL_PORT" | grep -q .; then
 else
   echo "  Portal starting → $LOG_DIR/portal.log"
   (cd "$SCRIPT_DIR" && PYTHONPATH="$SCRIPT_DIR" "$US_PYTHON" -m uvicorn portal_server:app \
-    --host 0.0.0.0 --port "$PORTAL_PORT" \
+    --host "$PORTAL_HOST" --port "$PORTAL_PORT" \
     >> "$LOG_DIR/portal.log" 2>&1) &
   wait_for_port "$PORTAL_PORT" "Portal"
 fi
