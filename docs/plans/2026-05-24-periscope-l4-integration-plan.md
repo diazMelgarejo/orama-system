@@ -7,7 +7,7 @@
 **Repos & paths:**
 - Periscope (local): `~/Documents/oramasys/tools/periscope` — all 3 branches local (`main`, `merged`, `agentsview`)
 - Periscope (remote): `github.com/diazMelgarejo/periscope` (fork of `latentsignal-org/periscope`)
-- orama-system (this repo): `~/Documents/Terminal xCode/claude/OpenClaw/orama-system`
+- orama-system (this repo): `$OPENCLAW_ROOT/orama-system`
 
 **Design:** See `docs/v2/18-periscope-l4-glass.md` (mission, architecture, OQ register, risks).
 
