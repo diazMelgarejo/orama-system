@@ -195,6 +195,67 @@ def test_stale_skill_path_refs_are_blocked_in_hidden_tracked_files(tmp_path):
     ]
 
 
+def test_scan_stale_git_locks_detects_lock_files(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    git_dir = tmp_path / ".git"
+    (git_dir / "refs" / "heads").mkdir(parents=True)
+    (git_dir / "index.lock").write_text("", encoding="utf-8")
+    (git_dir / "refs" / "heads" / "main.lock").write_text("", encoding="utf-8")
+    (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+    errors = repo_hygiene.scan_stale_git_locks(tmp_path)
+
+    assert len(errors) == 2
+    joined = "\n".join(errors)
+    assert ".git/index.lock" in joined
+    assert ".git/refs/heads/main.lock" in joined
+    for err in errors:
+        assert "stale lock file" in err
+        assert "find .git -name '*.lock' -delete" in err
+
+
+def test_scan_stale_git_locks_clean_repo_returns_empty(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    git_dir = tmp_path / ".git" / "refs" / "heads"
+    git_dir.mkdir(parents=True)
+    (tmp_path / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+    assert repo_hygiene.scan_stale_git_locks(tmp_path) == []
+
+
+def test_scan_macos_dedup_dirs_detects_finder_dedup(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    (tmp_path / "foo 2").mkdir()
+    (tmp_path / "bar 3").mkdir()
+    # Negative cases — must NOT match.
+    (tmp_path / "foo2").mkdir()
+    (tmp_path / "foo 2.txt").write_text("not a dir", encoding="utf-8")
+    # Excluded paths — dedup-like dirs inside .git / .venv must be ignored.
+    (tmp_path / ".git" / "objects 2").mkdir(parents=True)
+    (tmp_path / "node_modules" / "pkg 2").mkdir(parents=True)
+
+    errors = repo_hygiene.scan_macos_dedup_dirs(tmp_path)
+
+    assert len(errors) == 2
+    joined = "\n".join(sorted(errors))
+    assert "foo 2" in joined
+    assert "bar 3" in joined
+    assert "foo2" not in joined
+    assert "objects 2" not in joined
+    assert "node_modules" not in joined
+    for err in errors:
+        assert "macOS Finder dedup directory" in err
+        assert "rm -rf" in err
+
+
+def test_scan_macos_dedup_dirs_clean_tree_returns_empty(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    (tmp_path / "src").mkdir()
+    (tmp_path / "src" / "foo2.py").write_text("x = 1\n", encoding="utf-8")
+
+    assert repo_hygiene.scan_macos_dedup_dirs(tmp_path) == []
+
+
 def test_repo_hygiene_script_runs_clean():
     result = subprocess.run(
         [sys.executable, "scripts/review/repo_hygiene.py", "."],
