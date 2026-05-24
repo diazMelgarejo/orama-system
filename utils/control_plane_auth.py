@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import secrets
+from pathlib import Path
 from typing import Any, Mapping, MutableMapping
 
 from fastapi import HTTPException, Request
@@ -99,8 +100,19 @@ def control_plane_auth_failure(request: Request) -> JSONResponse | None:
     return None
 
 
+def _read_pt_persisted_token() -> str:
+    """Load PT bearer token written by ensure_control_plane_token on :8000."""
+    root = os.getenv("PERPETUA_TOOLS_ROOT", "").strip()
+    if not root:
+        return ""
+    token_path = Path(root) / ".state" / "control_plane_token"
+    if token_path.is_file():
+        return token_path.read_text(encoding="utf-8").strip()
+    return ""
+
+
 def auth_headers() -> dict[str, str]:
-    token = control_plane_token()
+    token = control_plane_token() or _read_pt_persisted_token()
     if token:
         return {"Authorization": f"Bearer {token}"}
     return {}

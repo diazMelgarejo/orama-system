@@ -116,6 +116,20 @@ def test_auth_enforced_matrix(monkeypatch):
     assert auth_enforced() is True
 
 
+def test_auth_headers_reads_pt_persisted_token(monkeypatch, tmp_path):
+    from utils.control_plane_auth import auth_headers
+
+    token_path = tmp_path / ".state" / "control_plane_token"
+    token_path.parent.mkdir(parents=True)
+    token_path.write_text("pt-file-token", encoding="utf-8")
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+
+    headers = auth_headers()
+
+    assert headers == {"Authorization": "Bearer pt-file-token"}
+
+
 def test_pt_auth_module_available_in_sibling_checkout():
     pytest = __import__("pytest")
     from pathlib import Path
