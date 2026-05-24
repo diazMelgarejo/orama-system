@@ -6,7 +6,7 @@
 
 **Outcome (clarified at autoplan gate):** Enable search in the operator UI + natural language instructions that the Launcher Agent and default orchestrator can understand. Hybrid search available to ALL agents by default via the `@tool gbrain_search` + MemoryNode. This is the retrieval substrate that unlocks UI-level search and context-aware agent routing.
 
-**Follow-on (after this plan lands):** Implement v2.1 EmbeddingCircuitBreaker in `docs/v2/18-rag-and-memory-design.md` — opens after N consecutive LanceDB/Ollama failures, auto-closes after cooldown. Next sprint after this merges.
+**Follow-on (after this plan lands):** Implement v2.1 EmbeddingCircuitBreaker in `docs/v2/20-rag-and-memory-design.md` — opens after N consecutive LanceDB/Ollama failures, auto-closes after cooldown. Next sprint after this merges.
 
 **Architecture:** Two commits on `feat/rag-gstack-optional-v1`. Commit 1 = retrieval layer (perpetua-core: FTS5 + LanceDB + RRF + MemoryNode). Commit 2 = generation layer (dispatch_node LLMClient wiring).
 
@@ -1506,7 +1506,7 @@ curl -s http://localhost:8000/run \
 | D16 | `pytest-asyncio` + `asyncio_mode = "auto"` documented | 18 async tests need it; not noting it causes silent skip/pass with wrong markers | DX phase |
 | D17 | `memory_node` hydration uses individual SQLite lookups | Simplest correct approach for v1 (≤10 hits); bulk `IN (...)` is v2.1 optimization | DX phase |
 | D18 | Outcome clarified: hybrid search available to ALL agents by default | Via `@tool gbrain_search` + MemoryNode; search in UI + Launcher Agent + orchestrator | Premise gate (user) |
-| D19 | v2.1 EmbeddingCircuitBreaker documented as follow-on | After this plan lands; design already in `docs/v2/18-rag-and-memory-design.md § v2.1` | Premise gate (user) |
+| D19 | v2.1 EmbeddingCircuitBreaker documented as follow-on | After this plan lands; design already in `docs/v2/20-rag-and-memory-design.md § v2.1` | Premise gate (user) |
 | D20 | EmbeddingStore dim parameterized (not hardcoded 1024) | Antigravity Gemini 3.5 Gap 1 — `EMBED_MODEL` env var was already configurable but schema was not; switching to a non-1024 model corrupted writes | Critique phase 2026-05-21 |
 | D21 | `_sanitize_fts_query()` strips FTS5 operators before MATCH | Antigravity Gemini 3.5 Gap 2 — try/except returned `[]` silently on real prompts containing quotes/colons, losing keyword recall entirely | Critique phase 2026-05-21 |
 | D22 | Real GC test replaces `isinstance(set)` tautology | Antigravity Gemini 3.5 Gap 3 — patched `_embed_and_store` to sleep, asserts membership during active window and discard after completion | Critique phase 2026-05-21 |
@@ -1523,7 +1523,7 @@ curl -s http://localhost:8000/run \
 | **Merged** | Lands on `feat/*` or PR'd to `main` of the targeted repo | Recorded in commit log + LESSONS.md |
 | **Released** | Tagged on the targeted repo (v2 today = scaffold, not released yet) | Used in `docs/v2/*` only |
 
-**Cross-doc invariant:** `docs/v2/18-rag-and-memory-design.md` and `docs/v2/19-gstack-optional-integration.md` use this same vocabulary. No mixed "DONE" / "complete" / "ready" labels. If a v2 doc says `DONE`, it must point at a merged or released commit in oramasys/*.
+**Cross-doc invariant:** `docs/v2/20-rag-and-memory-design.md` and `docs/v2/19-gstack-optional-integration.md` use this same vocabulary. No mixed "DONE" / "complete" / "ready" labels. If a v2 doc says `DONE`, it must point at a merged or released commit in oramasys/*.
 
 ---
 

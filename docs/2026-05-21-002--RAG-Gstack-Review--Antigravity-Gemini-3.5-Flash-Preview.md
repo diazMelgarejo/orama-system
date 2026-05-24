@@ -9,7 +9,7 @@ This document provides a high-level and high-detail technical review of the five
 1. **`docs/superpowers/specs/2026-05-21-rag-memory-gstack-design.md`** (Design Specification)
 2. **`docs/superpowers/plans/2026-05-21-rag-memory-v1-plan.md`** (V1 Implementation Plan)
 3. **`docs/superpowers/plans/2026-05-21-gstack-optional-submodule-plan.md`** (gstack Submodule Plan)
-4. **`docs/v2/18-rag-and-memory-design.md`** (V2 RAG/Memory Forward Plan)
+4. **`docs/v2/20-rag-and-memory-design.md`** (V2 RAG/Memory Forward Plan)
 5. **`docs/v2/19-gstack-optional-integration.md`** (V2 gstack Integration Forward Plan)
 
 ---

@@ -502,7 +502,7 @@ Files: `orama/graph/nodes/dispatch_node.py`, `tests/graph/test_dispatch_node.py`
 | gbrain @tool subprocess | gbrain as first-class ToolNode | DuckDB analytical queries over GossipBus history |
 | gstack optional submodule | gstack optional sidecar (OCI) | gstack fleet coordinator |
 
-See `docs/v2/18-rag-and-memory-design.md` for full v2 forward-plan.
+See `docs/v2/20-rag-and-memory-design.md` for full v2 forward-plan.
 
 ---
 
