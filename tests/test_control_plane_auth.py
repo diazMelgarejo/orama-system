@@ -98,6 +98,24 @@ def test_api_server_runtime_state_redacts_payload(monkeypatch, tmp_path):
     assert "backend_url" not in str(body)
 
 
+def test_auth_enforced_matrix(monkeypatch):
+    from utils.control_plane_auth import auth_enforced
+
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
+    assert auth_enforced() is False
+
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "secret")
+    assert auth_enforced() is True
+
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
+    assert auth_enforced() is False
+
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    assert auth_enforced() is True
+
+
 def test_pt_auth_module_available_in_sibling_checkout():
     pytest = __import__("pytest")
     from pathlib import Path

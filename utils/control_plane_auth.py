@@ -47,10 +47,21 @@ def control_plane_token() -> str:
 
 
 def auth_enforced() -> bool:
-    """When True, protected routes require a matching Bearer token."""
+    """Return True when control-plane bearer auth must be checked.
+
+    Auth is enforced when a token is configured, or when ORAMA_INSECURE_DEV is
+    explicitly disabled (production mode). When neither is set, auth stays off so
+    existing local stacks (start.sh, portal, tests) keep working until operators
+    opt in with ORAMA_CONTROL_PLANE_TOKEN and/or ORAMA_INSECURE_DEV=0.
+    """
     if control_plane_token():
         return True
-    return os.getenv(ENV_INSECURE, "").strip().lower() not in ("1", "true", "yes")
+    insecure = os.getenv(ENV_INSECURE, "").strip().lower()
+    if insecure in ("1", "true", "yes"):
+        return False
+    if insecure in ("0", "false", "no"):
+        return True
+    return False
 
 
 def ensure_control_plane_token() -> str:
