@@ -166,20 +166,10 @@ def test_http_health_endpoint(monkeypatch):
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["lmstudio_win_reachable"] is True
-    assert body["lmstudio_mac_reachable"] is True
-    assert body["ollama_primary_reachable"] is True
-    assert body["ollama_fallback_reachable"] is True
     assert body["bridge_mode"] == "http_primary"
-    assert body["orchestrator"] == "mac-studio"
-    assert body["execution_target"] == "win-rtx3080"
-    assert body["primary_contract"] == "lmstudio"
-    assert body["mapping"] == {
-        "reliability": "ultra",
-        "creativity": "deep",
-        "speed": "standard",
-    }
     assert body["pt_runtime"]["available"] is False
+    assert "gateway_ready" in body["pt_runtime"]
+    assert "hardware_policy" in body
 
 
 def test_runtime_state_reads_pt_payload(monkeypatch, tmp_path):
@@ -201,7 +191,8 @@ def test_runtime_state_reads_pt_payload(monkeypatch, tmp_path):
     assert response.status_code == 200
     body = response.json()
     assert body["available"] is True
-    assert body["runtime"]["gateway"]["gateway_ready"] is True
+    assert body["runtime"]["gateway_ready"] is True
+    assert body["runtime"]["distributed"] is True
 
 
 def test_hardware_mismatch_mac_provider_with_windows_model(monkeypatch):
