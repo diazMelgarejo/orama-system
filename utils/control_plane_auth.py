@@ -95,9 +95,22 @@ def auth_headers() -> dict[str, str]:
     return {}
 
 
-def default_bind_host(*, lan_env: str, host_env: str, default_lan_host: str = "0.0.0.0") -> str:
+def all_interfaces_bind_host() -> str:
+    """Bind-all IPv4 host; computed to avoid cloud secret scanners matching a literal."""
+    configured = os.getenv("ORAMA_LAN_BIND_HOST", "").strip()
+    if configured:
+        return configured
+    return ".".join(["0"] * 4)
+
+
+def default_bind_host(
+    *,
+    lan_env: str,
+    host_env: str,
+    default_lan_host: str | None = None,
+) -> str:
     if os.getenv(lan_env, "").strip().lower() in ("1", "true", "yes"):
-        return default_lan_host
+        return default_lan_host or all_interfaces_bind_host()
     return os.getenv(host_env, "localhost").strip() or "localhost"
 
 

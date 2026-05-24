@@ -50,6 +50,20 @@ export OPENCLAW_ROOT="/absolute/path/to/OpenClaw"
 
 ---
 
+## Cursor Cloud: do not secret-map loopback
+
+Loopback and bind-all addresses are configuration, not credentials. In
+[Cursor Cloud Agents → Secrets](https://cursor.com/dashboard/cloud-agents), **remove**
+host-only secrets (for example legacy `LOCAL_MAC_HOST`) whose value is only a loopback or
+bind-all address. If those entries are marked **Redacted**, the commit scanner blocks staged
+files containing those strings and agents may litter source with scanner placeholders.
+
+Use `OLLAMA_MAC_ENDPOINT=http://localhost:11434`, the committed `.cursor/environment.json`
+defaults, and `*_BIND_LAN=1` when you intentionally need LAN exposure. See
+`.cursor/cloud-secrets-guidance.md`.
+
+---
+
 ## Copy template → local files
 
 ```bash

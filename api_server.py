@@ -712,10 +712,16 @@ async def health():
         "gateway_ready": False,
         "distributed": False,
     }
+    router = BackendRouter()
     return {
         "status": "ok",
         "version": __version__,
         "bridge_mode": "http_primary",
+        "backend_priority": router.priority,
+        "backend_endpoints": [
+            {"name": ep["name"], "tier": ep.get("tier", "")}
+            for ep in router.ordered_endpoints()
+        ],
         "pt_runtime": summary,
         "hardware_policy": {
             "source": _policy_resolver.source,

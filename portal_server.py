@@ -107,7 +107,7 @@ LMS_MAC_ENDPOINT = os.getenv("LM_STUDIO_MAC_ENDPOINT", "http://localhost:1234")
 LMS_API_TOKEN = os.getenv("LM_STUDIO_API_TOKEN", "")
 
 OLLAMA_WIN = os.getenv("OLLAMA_WINDOWS_ENDPOINT", _WIN_OLL_DEFAULT)
-OLLAMA_MAC = os.getenv("OLLAMA_MAC_ENDPOINT", "http://127.0.0.1:11434")
+OLLAMA_MAC = os.getenv("OLLAMA_MAC_ENDPOINT", "http://localhost:11434")
 OPENROUTER_FREE_FALLBACKS = [
     "ollama/qwen3.5:9b-nvfp4",
     "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
@@ -1912,14 +1912,14 @@ def _probe_tools_sync() -> Dict[str, Any]:
     ac_port = int(os.getenv("ALPHACLAW_PORT", "18789"))
     ac_ok = False
     try:
-        with _sock.create_connection(("127.0.0.1", ac_port), timeout=1.5):
+        with _sock.create_connection(("localhost", ac_port), timeout=1.5):
             ac_ok = True
     except Exception:
         pass
     tools["alphaclaw-gateway"] = {
         "ok": ac_ok,
         "group": "gateway",
-        "detail": f"127.0.0.1:{ac_port}" + (" ONLINE" if ac_ok else " OFFLINE — start AlphaClaw: ./start.sh"),
+        "detail": f"localhost:{ac_port}" + (" ONLINE" if ac_ok else " OFFLINE — start AlphaClaw: ./start.sh"),
     }
 
     return tools

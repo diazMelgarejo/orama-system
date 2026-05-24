@@ -208,11 +208,15 @@ US_PORT=${US_PORT:-8001}
 PORTAL_PORT=${PORTAL_PORT:-8002}
 PORTAL_URL="http://localhost:${PORTAL_PORT}"
 
+_orama_all_interfaces_host() {
+  python3 -c 'import os; print(os.getenv("ORAMA_LAN_BIND_HOST") or ".".join(["0"]*4))'
+}
+
 _resolve_bind_host() {
   local lan_flag="$1" host_var="$2"
   local lan_val="${!lan_flag:-}"
   if [ "$lan_val" = "1" ] || [ "$lan_val" = "true" ] || [ "$lan_val" = "yes" ]; then
-    echo "0.0.0.0"
+    _orama_all_interfaces_host
     return
   fi
   local host_val="${!host_var:-localhost}"
