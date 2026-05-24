@@ -2099,3 +2099,24 @@ plan only via `/docs/v2/`. Override requires AskUserQuestion.
 - v2.1 EmbeddingCircuitBreaker deferred — see `docs/v2/20-rag-and-memory-design.md`
 
 **Evidence doc:** `docs/2026-05-22-rag-v1-backport-shipped.md`
+
+---
+
+## 2026-05-24 — Claude — CI hygiene blocks machine-specific OpenClaw paths
+
+### What was learned
+
+- `scripts/review/repo_hygiene.py` scans all tracked Markdown files, including plan
+  docs under `docs/plans/`, for workstation-specific OpenClaw paths (the
+  `$OPENCLAW_ROOT/...` pattern the scanner blocks).
+- CI reports this only through `tests/test_repo_hygiene.py::test_repo_hygiene_script_runs_clean`,
+  so inspect the hygiene script output directly for the exact file and line.
+- PR #39 (Cursor DRAFT, closed 2026-05-24) was raised to fix this; the path scrub was
+  already absorbed in commit `fd2accd` (main) before #39 was reviewed.
+
+### Decision made
+
+- Use `$OPENCLAW_ROOT/...` in docs and command snippets whenever a path needs to reference
+  the parent OpenClaw checkout or any orama-system path beneath it.
+- The `$OPENCLAW_ROOT` convention is enforced by the `OPENCLAW_WORKSTATION_LAYOUT`
+  scanner in `repo_hygiene.py` (D9).
