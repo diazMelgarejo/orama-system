@@ -5,6 +5,7 @@ ALLOWED_IDENTITIES=(
   "cyre|Lawrence@cyre.me"
   "cyre|diazMelgarejo@gmail.com"
   "Codex|codex@openai.com"
+  "Cursor Agent|cursoragent@cursor.com"
 )
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
