@@ -228,13 +228,6 @@ US_HOST="$(_resolve_bind_host ORAMA_BIND_LAN ULTRATHINK_HOST)"
 PORTAL_HOST="$(_resolve_bind_host PORTAL_BIND_LAN PORTAL_HOST)"
 export PT_HOST US_HOST PORTAL_HOST
 
-if [ -z "${ORAMA_CONTROL_PLANE_TOKEN:-}" ] && [ "${ORAMA_INSECURE_DEV:-0}" != "1" ]; then
-  ORAMA_CONTROL_PLANE_TOKEN="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
-  export ORAMA_CONTROL_PLANE_TOKEN
-  _warn "svc" "Generated ORAMA_CONTROL_PLANE_TOKEN for this session — add to .env.local to persist"
-fi
-export ORAMA_CONTROL_PLANE_TOKEN
-
 if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${PORTAL_BIND_LAN:-0}" = "1" ]; then
   _warn "svc" "LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network"
 fi
