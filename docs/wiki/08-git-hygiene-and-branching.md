@@ -29,7 +29,7 @@ Rules:
 The only approved author identity for commits in the clean lineage is:
 
 ```text
-cyre <Lawrence@cyre.me>, cyre <diazMelgarejo@gmail.com>, or Codex <codex@openai.com>
+cyre <Lawrence@cyre.me>, cyre <diazMelgarejo@gmail.com>, Codex <codex@openai.com>, or Cursor Agent <cursoragent@cursor.com>
 ```
 
 Forbidden identity:
