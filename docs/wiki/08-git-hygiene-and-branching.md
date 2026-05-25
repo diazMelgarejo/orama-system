@@ -42,7 +42,7 @@ If this fails, do not commit. Correct your Git identity first:
 
 ```bash
 git config user.name "cyre"
-git config user.email "codex@openai.com"  # or Lawrence@cyre.me / diazMelgarejo@gmail.com
+git config user.email "Lawrence@cyre.me"  # or diazMelgarejo@gmail.com
 ```
 
 ### Local commit hooks (once per clone)
