@@ -2137,3 +2137,14 @@ Pressure Test B (skill loaded, graph-first) was run as an empirical **dry-run** 
 ### Open questions
 
 - Should pressure Test B script explicitly allow `git diff HEAD~N` when the tree is clean, or require a synthetic uncommitted edit?
+
+### Open items (2026-05-25 — do not duplicate here)
+
+Tracked as checklists elsewhere (read the owner doc, not this log):
+
+| Topic | Owner doc |
+|-------|-----------|
+| Fortify / Test B / MCP / policy gaps | [`bin/orama-system/skills/code-review/references/pressure-test-notes.md`](../bin/orama-system/skills/code-review/references/pressure-test-notes.md) § Fortify pass |
+| CLAUDE-instru weaning + CI grep | [`docs/plans/2026-05-23-claude-instru-weaning-autoplan.md`](plans/2026-05-23-claude-instru-weaning-autoplan.md) § Open TODOs |
+| Agent first-open surfaces (Cursor / Claude / OpenClaw) | [`docs/reference/agent-first-open-visibility.md`](reference/agent-first-open-visibility.md) |
+| E2E bootstrap known gaps | [`docs/how-to/first-run-and-code-review.md`](how-to/first-run-and-code-review.md) § Known gaps |

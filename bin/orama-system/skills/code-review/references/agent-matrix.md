@@ -31,3 +31,10 @@ CRG_OPENAI_DIMENSION=1024
 ```
 
 Toggle: `bash bin/orama-system/skills/code-review/scripts/crg-embed-mode [gbrain|local|status]`
+
+---
+
+## Open TODOs
+
+- [ ] **Naming:** table uses shortened Claude invocations (`detect_changes`, `/code-review-graph:review-delta`); MCP hosts expose `detect_changes_tool` etc. — confirm aliases are intentional and add one-line footer mapping to [`mcp-tools-crg.md`](mcp-tools-crg.md)
+- [ ] Host surface map: [`docs/reference/agent-first-open-visibility.md`](../../../../docs/reference/agent-first-open-visibility.md)
