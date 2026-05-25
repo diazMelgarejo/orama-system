@@ -186,6 +186,7 @@ bash bin/orama-system/scripts/install-mcp-stack.sh
 
 ## Related docs
 
+- [First-run through code review (E2E how-to)](how-to/first-run-and-code-review.md)
 - [First-run install reference](../bin/orama-system/references/first-run-install.md)
 - [OpenClaw setup (mirror)](openclaw-setup.md)
 - [Git hygiene wiki](wiki/08-git-hygiene-and-branching.md)
