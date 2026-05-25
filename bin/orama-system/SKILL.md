@@ -312,7 +312,7 @@ bash bin/orama-system/scripts/first-run-install.sh install  # idempotent §0 che
 bash bin/orama-system/scripts/install-mcp-stack.sh          # MCP workers (separate)
 ```
 
-Full steps: [`references/first-run-install.md`](references/first-run-install.md) · Agent workflow: [`skills/first-run-setup/SKILL.md`](skills/first-run-setup/SKILL.md) · **E2E (install → MCP → code review):** [`../../docs/how-to/first-run-and-code-review.md`](../../docs/how-to/first-run-and-code-review.md)
+Full steps: [`references/first-run-install.md`](references/first-run-install.md) · Agent workflow: [`skills/first-run-setup/SKILL.md`](skills/first-run-setup/SKILL.md) · **E2E (install → MCP → code review):** [`../../docs/how-to/first-run-and-code-review.md`](../../docs/how-to/first-run-and-code-review.md) · **Host surfaces:** [`../../docs/reference/agent-first-open-visibility.md`](../../docs/reference/agent-first-open-visibility.md)
 
 ## References (Progressive Disclosure)
 

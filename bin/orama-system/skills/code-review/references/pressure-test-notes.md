@@ -109,3 +109,35 @@ Per Phase A→E and [`mcp-tools-crg.md`](mcp-tools-crg.md) delta sequence:
 ### Naive baseline (Test A contrast, not re-run)
 
 Expected without skill: `git diff` → bulk `Read` of `docs/how-to/...` + skill tree + `Grep` for "first-run" — no blast-radius map, no `get_review_context_tool`.
+
+---
+
+## Fortify pass — open TODOs (2026-05-25)
+
+> Canonical gap index for this fortify pass. Other docs own their quadrant — cross-link only.
+
+### Environment / MCP
+
+- [ ] Register `code-review-graph` in **Cursor** project MCP (mirror `OpenClaw/.mcp.json`) — separate agent owns config; blocks full Test B in Cursor until done
+- [ ] Document or fix **gbrain** unreachable from some agent envs (`getaddrinfo ENOTFOUND` on DB URL in Test B) — see [`docs/local-env-catch-up.md`](../../../../docs/local-env-catch-up.md)
+- [ ] **`uvx code-review-graph --help` hang** — add probe timeout / fallback in first-run reference; do not block `first-run.done` on CLI help
+- [ ] **OpenClaw `CLAUDE.md` tool table** vs MCP `*_tool` invoke names — partial note added outside git; align tables in-repo when touching OpenClaw docs
+
+### Documentation / Diataxis
+
+- [ ] Add [`docs/how-to/README.md`](../../../../docs/how-to/README.md) index (single how-to exists today)
+- [ ] Link E2E how-to from [`orama-system/CLAUDE.md`](../../../../CLAUDE.md) §3 — tracked in weaning autoplan
+- [ ] **mcp-orchestration §5 PR fan-out** — recipe exists in `~/.claude/skills/mcp-orchestration/SKILL.md`; fortify copy into [`orchestration-dispatch.md`](orchestration-dispatch.md) or mark “verified in session”
+
+### Policy / enforcement
+
+- [ ] No **hook** enforcing `detect_changes_tool` before `Read` on multi-file tasks (policy-only today)
+- [ ] Pressure Test B script: allow explicit **`git diff HEAD~N`** when tree is clean (documented in Test B results; optional test-script update)
+
+### Naming (residual)
+
+- [ ] [`agent-matrix.md`](agent-matrix.md) — confirm Claude slash-command aliases vs MCP `*_tool` names are intentional; document in matrix footer
+
+### Agent onboarding
+
+- [ ] [`docs/reference/agent-first-open-visibility.md`](../../../../docs/reference/agent-first-open-visibility.md) — keep current as hosts change

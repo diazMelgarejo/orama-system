@@ -250,10 +250,22 @@ You have now used the same chain the code-review skill enforces: graph → gbrai
 
 ---
 
+## Known gaps (open TODOs)
+
+> Owner checklists elsewhere — do not restate full lists here.
+
+- [ ] Cursor workspace may lack **code-review-graph** MCP until project config mirrors `OpenClaw/.mcp.json` (see fortify list in [`pressure-test-notes.md`](../../bin/orama-system/skills/code-review/references/pressure-test-notes.md))
+- [ ] **gbrain** may be unreachable from sandboxed agent envs — [`docs/local-env-catch-up.md`](../local-env-catch-up.md)
+- [ ] No automated hook for graph-before-Read (policy in code-review skill only)
+- [ ] Diataxis **how-to index** missing — [`docs/plans/2026-05-23-claude-instru-weaning-autoplan.md`](../plans/2026-05-23-claude-instru-weaning-autoplan.md)
+
+---
+
 ## Related documentation
 
 | Doc | Quadrant | Content |
 |-----|----------|---------|
+| [`docs/reference/agent-first-open-visibility.md`](../reference/agent-first-open-visibility.md) | Reference | What each agent host sees on first open |
 | [`bin/orama-system/references/first-run-install.md`](../../bin/orama-system/references/first-run-install.md) | Reference | Per-component §0 matrix |
 | [`bin/orama-system/skills/first-run-setup/SKILL.md`](../../bin/orama-system/skills/first-run-setup/SKILL.md) | How-to | Agent workflow for bootstrap |
 | [`bin/orama-system/mcp-install/SKILL.md`](../../bin/orama-system/mcp-install/SKILL.md) | How-to | MCP stack installer |
