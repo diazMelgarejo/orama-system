@@ -254,7 +254,7 @@ You have now used the same chain the code-review skill enforces: graph → gbrai
 
 > Owner checklists elsewhere — do not restate full lists here.
 
-- [ ] Cursor workspace may lack **code-review-graph** MCP until project config mirrors `OpenClaw/.mcp.json` (see fortify list in [`pressure-test-notes.md`](../../bin/orama-system/skills/code-review/references/pressure-test-notes.md))
+- [x] Cursor: committed [`orama-system/.cursor/mcp.json`](../../.cursor/mcp.json) — reload MCP in Cursor after pull; CLI fallback: `uvx code-review-graph status --repo "$REPO"` and `detect-changes --repo "$REPO" --base <sha>` when MCP tools absent (see [`mcp-tools-crg.md`](../../bin/orama-system/skills/code-review/references/mcp-tools-crg.md) § CLI fallback)
 - [ ] **gbrain** may be unreachable from sandboxed agent envs — [`docs/local-env-catch-up.md`](../local-env-catch-up.md)
 - [ ] No automated hook for graph-before-Read (policy in code-review skill only)
 - [ ] Diataxis **how-to index** missing — [`docs/plans/2026-05-23-claude-instru-weaning-autoplan.md`](../plans/2026-05-23-claude-instru-weaning-autoplan.md)

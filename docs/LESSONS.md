@@ -2138,6 +2138,21 @@ Pressure Test B (skill loaded, graph-first) was run as an empirical **dry-run** 
 
 - Should pressure Test B script explicitly allow `git diff HEAD~N` when the tree is clean, or require a synthetic uncommitted edit?
 
+## 2026-05-25 — Cursor (subagent) — CRG + gbrain verify on orama-system
+
+### What was learned
+
+- `move_agent_to_root` → `orama-system` succeeded; committed `.cursor/mcp.json` enables Cursor CRG when the user reloads MCP (tools still absent from this subagent session’s `mcps/` folder).
+- **gbrain** `search` works from host shell with network (`first-run-install`, `crg-embed-mode` top hits).
+- **CRG CLI** (`uvx code-review-graph`) works after cold install: `status --repo "$REPO"` → 1489 nodes; `detect-changes --repo "$REPO" --base 51816ce5` on session delta (risk 0.65, 4 bash functions without tests in graph). Use `--repo`, not `--repo-root`; MCP-only names like `list-graph-stats` are invalid on CLI.
+- Fresh clone may show `nodes: 0` until `uvx code-review-graph build --repo <orama-system>` — not automatic in `first-run.done`.
+- Sandbox `first-run-install.sh status` cannot write `~/.orama-system/first-run.json` (PermissionError) but probes still print; use non-sandbox for state file updates.
+
+### Decisions made
+
+- Mark fortify TODOs done for Cursor `.cursor/mcp.json` and `--help` vs `--version` probe; keep gbrain sandbox ENOTFOUND and graph-before-Read hook as open.
+- No code fix required for merge; doc checklist updates only.
+
 ### Open items (2026-05-25 — do not duplicate here)
 
 Tracked as checklists elsewhere (read the owner doc, not this log):
