@@ -75,6 +75,6 @@ If Ollama is down: `semantic_search_nodes` may fall back to FTS5 (see [`crg-embe
 ## Red flags
 
 - Skipping `detect_changes_tool` on a diff review
-- `Read` on >3 files without `get_review_context` or blast-radius list
+- `Read` on >3 files without `get_review_context_tool` or blast-radius list
 - `refactor_tool` used as a substitute for review
 - Re-embedding without checking Ollama + `bge-m3`
