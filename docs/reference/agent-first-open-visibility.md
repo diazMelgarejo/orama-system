@@ -13,7 +13,7 @@ Canonical install and review procedure: [`../how-to/first-run-and-code-review.md
 |---------|--------|-------------|----------|
 | **Root workspace (typical)** | `orama-system/` repo root, or nested path e.g. `bin/orama-system/skills/code-review/` when task-scoped | `orama-system/` git root (`git rev-parse --show-toplevel`) | `OpenClaw/` parent folder (multi-repo layout; **not** one git root) |
 | **Navigator (`CLAUDE.md` / `AGENTS.md`)** | Repo [`orama-system/CLAUDE.md`](../../CLAUDE.md); parent [`OpenClaw/CLAUDE.md`](../../../CLAUDE.md) when workspace includes parent; Cursor may inject workspace rules from `.cursor/rules/` | [`orama-system/CLAUDE.md`](../../CLAUDE.md) at repo root; hub [`OpenClaw/CLAUDE-instru.md`](../../../CLAUDE-instru.md) for cross-repo registry | [`OpenClaw/CLAUDE.md`](../../../CLAUDE.md) (top-level navigator); [`CLAUDE-instru.md`](../../../CLAUDE-instru.md) for full doc index |
-| **`.mcp.json` location** | Often **none** in-repo until project MCP enabled; canonical CRG server: `$OPENCLAW_ROOT/.mcp.json` | `claude mcp` reads user/project config; CRG env block matches OpenClaw file when `OPENCLAW_ROOT` set | [`OpenClaw/.mcp.json`](../../../.mcp.json) — `code-review-graph` via `uvx code-review-graph serve` |
+| **`.mcp.json` location** | Committed [`orama-system/.cursor/mcp.json`](../../.cursor/mcp.json) when workspace is the repo root; OpenClaw hub still uses [`OpenClaw/.mcp.json`](../../../.mcp.json). Sync CRG env with `crg-embed-mode` or `openclaw-env.sh` | `claude mcp` reads user/project config; CRG env block matches OpenClaw file when `OPENCLAW_ROOT` set | [`OpenClaw/.mcp.json`](../../../.mcp.json) — `code-review-graph` via `uvx code-review-graph serve` |
 | **Mother skill** | Load `bin/orama-system/SKILL.md` via Cursor skills / rules | `/skill bin/orama-system/SKILL.md` | Same path under `orama-system/bin/orama-system/SKILL.md` |
 | **code-review skill** | `bin/orama-system/skills/code-review/SKILL.md` | Same | Same |
 | **First-run entry** | [`docs/how-to/first-run-and-code-review.md`](../how-to/first-run-and-code-review.md) | [`bin/orama-system/references/first-run-install.md`](../../bin/orama-system/references/first-run-install.md) + [`skills/first-run-setup/SKILL.md`](../../bin/orama-system/skills/first-run-setup/SKILL.md) | `CLAUDE-instru.md` §0 outline → in-repo [`first-run-install.md`](../../bin/orama-system/references/first-run-install.md) |
@@ -40,7 +40,7 @@ Detection: [`bin/orama-system/scripts/lib/openclaw-env.sh`](../../bin/orama-syst
 
 - Open **`orama-system`** (or skill subfolder with repo rules still applying from parent context).
 - Read **workspace rules** + repo **`CLAUDE.md`** → graph-first chain (CRG → gbrain → Read).
-- Confirm **MCP**: `code-review-graph` must appear in project MCP (mirror OpenClaw `.mcp.json` if missing).
+- Confirm **MCP**: `code-review-graph` in project MCP — reload after pull if `.cursor/mcp.json` changed (`crg-embed-mode status`).
 - For bootstrap: follow [`first-run-and-code-review.md`](../how-to/first-run-and-code-review.md); invoke **code-review** skill for reviews.
 
 ### Claude Code
