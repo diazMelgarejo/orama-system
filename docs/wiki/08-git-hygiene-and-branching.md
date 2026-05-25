@@ -107,6 +107,38 @@ git config user.email "codex@openai.com"
 
 Corporate and vendor agent domains are identifiable; random Gmail co-authors are not attributable and were used for mistaken or non-policy attribution.
 
+
+### Allowed bot committers (history scans only)
+
+Automated commits from GitHub bots are **not** policy violations in `scripts/git/audit_attribution.sh` history scans (`bad_author` is not incremented for these emails):
+
+| Repo | Bot author email |
+| --- | --- |
+| **orama-system** | `cursor[bot]@users.noreply.github.com` |
+| **Perpetua-Tools** | `dependabot[bot]@users.noreply.github.com` |
+
+The audit script accepts the union of both bot addresses on any repo it runs against. `scripts/git/check_identity.sh` still applies only to **your next commit** (human/cyre/Codex identity) — it does not rewrite historical bot authors.
+
+### VERBOTEN identities (history and new commits)
+
+These must **not** appear as commit author, committer, or in any `Co-authored-by` trailer (any case variant). If they exist on a branch you intend to push, **rewrite history first**, then `git push --force-with-lease` only after a clean scan.
+
+| Identity | Rule |
+| --- | --- |
+| `darth.Serious@gmail.com` | Banned — expunge from all refs before force-push |
+| `nimbosa` | Banned — any email containing `nimbosa`, or author/committer name `nimbosa` |
+
+Scan (all refs):
+
+```bash
+git log --all --format='%H %ae %ce %an %cn' | rg -i 'darth\.serious|nimbosa'
+git log --all --format='%B' | rg -i '^co-authored-by:.*(darth\.serious|nimbosa)'
+```
+
+### Explicit Cursor co-author allowlist
+
+`Co-authored-by: Cursor <cursoragent@cursor.com>` is **always allowed** — listed explicitly in `scripts/git/check_commit_message.sh` (`ALLOWED_EXACT_COAUTHOR_EMAILS`), not only via the `cursor.com` domain suffix.
+
 ### Why only known @gmail.com in co-author lines?
 
 Public AI helpers use stable, identifiable domains (`@openai.com`, `@anthropic.com`, `cursor.com`, and similar), so `Co-authored-by` trailers are auditable and match how those tools sign commits. A random `@gmail.com` in `Co-authored-by:` is usually a person or an unreviewed address — easy to add by mistake and hard to tie to our approved author policy. Letting every Gmail address through would weaken the hook; allowing only known Gmail addresses plus well-known agent domains keeps attribution clear without blocking Codex-, Cursor-, and Claude-style co-authors we want.
