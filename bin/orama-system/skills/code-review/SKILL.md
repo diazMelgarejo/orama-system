@@ -2,7 +2,7 @@
 name: code-review
 description: |
   Use when reviewing code across multiple files, PRs, or unfamiliar areas; before refactors;
-  when the user asks for blast-radius, detect_changes, get_review_context, semantic_search_nodes,
+  when the user asks for blast-radius, detect_changes_tool, get_review_context_tool, semantic_search_nodes_tool,
   code-reviewer subagents, or multi-lens PR review. Applies to all coding agents in the stack.
   (Claude, Codex, Gemini, OpenClaw, Hermes, etc.).
   Triggers on: before touching unfamiliar code, code analysis,
@@ -37,7 +37,7 @@ Senior code reviewer — see full contract in [`agents/code-reviewer.md`](agents
 ## Non-negotiable chain
 
 ```
-1. code-review-graph  →  blast-radius / detect_changes / review context
+1. code-review-graph  →  blast-radius / detect_changes_tool / review context
 2. gbrain             →  code-def, code-refs, search (LESSONS / decisions)
 3. Read               →  only graph-confirmed files
 ```
@@ -85,7 +85,7 @@ Full tool matrix: [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md).
 | `get_architecture_overview_tool` | Unfamiliar area |
 | `refactor_tool` | Rename / dead-code planning only |
 
-**MCP names:** `code-review-graph` serve (v2.3.3+) registers tools with a `*_tool` suffix. Prose elsewhere may shorten (e.g. `list_graph_stats` → same handler as `list_graph_stats_tool`).
+**MCP names:** `code-review-graph` serve (v2.3.3+) registers tools with a `*_tool` suffix. Prose elsewhere may shorten (e.g. `list_graph_stats_tool` → same handler as `list_graph_stats_tool`).
 
 **Embeddings:** CRG + gbrain share **bge-m3** (1024-dim). Toggle: `scripts/crg-embed-mode` · [`references/crg-embed-mode.md`](references/crg-embed-mode.md).
 
