@@ -65,3 +65,14 @@ def test_check_commit_message_rejects_unknown_gmail(tmp_path):
         text=True,
     )
     assert proc.returncode != 0
+
+def test_check_commit_message_allows_cursoragent_exact_email(tmp_path):
+    """cursoragent@cursor.com is on the explicit allowlist (not only cursor.com domain)."""
+    script = ROOT / "scripts/git/check_commit_message.sh"
+    msg = tmp_path / "msg-cursor-exact"
+    msg.write_text(
+        "feat: x\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["bash", str(script), str(msg)], check=True, cwd=ROOT)
+
