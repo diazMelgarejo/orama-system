@@ -85,6 +85,7 @@ Before significant changes, load the mother skill:
 | [`SKILL.md`](SKILL.md) | Agent behavioral rules — every "never" with commands |
 | [`bin/orama-system/SKILL.md`](bin/orama-system/SKILL.md) | Mother skill: AFRP gate, CIDF, gstack routing |
 | [`docs/how-to/first-run-and-code-review.md`](docs/how-to/first-run-and-code-review.md) | E2E: fresh machine → MCP → graph → code-review skill |
+| [`docs/SECURITY-POLICY.md`](docs/SECURITY-POLICY.md) | Canonical security posture (fixes 1–3 done; 4–6 queued) |
 | [`docs/reference/agent-first-open-visibility.md`](docs/reference/agent-first-open-visibility.md) | What Cursor / Claude Code / OpenClaw see on first open |
 | [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md) § [Official commit identity policy (2026-05-25)](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25) | Approved authors, co-author allowlist, `install-local-hooks.sh` |
 | [`docs/LESSONS.md`](docs/LESSONS.md) | Chronological session log |

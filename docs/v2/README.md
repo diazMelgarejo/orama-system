@@ -6,6 +6,12 @@
 
 ---
 
+## Security precondition (read first)
+
+v2 scaffold and parity work on a **shared LAN** requires [`23-security-preconditions.md`](23-security-preconditions.md). Fixes **1–3** (committed secrets, hygiene scanning, control-plane auth + memory redaction) are implemented in `orama-system` + `Perpetua-Tools` as of 2026-05-25. Fixes **4–6** (MCP path policy, endpoint URL allowlist, least-privilege MCP) are **queued** — see [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md).
+
+---
+
 ## Vision
 
 A **secure, hardware-aware, local-first multi-agent LLM orchestration system** built clean-slate from primitives, with a small ruthless kernel and modules that orbit at their own pace.
@@ -168,7 +174,8 @@ orama-system/docs/v2/
 ├── 19-gstack-optional-integration.md  ← gstack as optional submodule; detect_gstack() pattern; install.sh probing
 ├── 20-rag-and-memory-design.md        ← RAG + memory design; gbrain + LanceDB; gstack integration review
 ├── 21-periscope-l4-glass.md           ← periscope L4 glass-window design; ActivityMinimap + ContextPage integration
-└── 22-worktree-parallel-agents.md     ← parallel-agent worktree doctrine; 4-quadrant decision rule; bootstrap + lifecycle
+├── 22-worktree-parallel-agents.md     ← parallel-agent worktree doctrine; 4-quadrant decision rule; bootstrap + lifecycle
+└── 23-security-preconditions.md       ← v2 gate: fixes 1–3 done; fixes 4–6 queued before LAN/MCP expansion
 ```
 
 > **Next free slot: `23-`**
