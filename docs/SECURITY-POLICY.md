@@ -22,6 +22,8 @@ This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **P
 | **3b** | Wildcard CORS / `0.0.0.0` default | Portal: `cors_allow_origins()` + `default_bind_host()` loopback-first; PT FastAPI CORS allowlist |
 | **3c** | Raw memory persistence | `orchestrator/redaction.py` + `memory_governance.py`; GossipBus `emit()` redacts before SQLite/LanceDB |
 
+**Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see [79-commit audit — Appendix A](../../OpenClaw/v1/2026-05-23-security-markdown.md#appendix-a--79-commit-security-audit-2026-05-25) before assuming PT routes are protected on disk.
+
 **Operator checklist**
 
 1. Set `ORAMA_CONTROL_PLANE_TOKEN` in `.env.local` (orama + PT share via `.state/control_plane_token` when PT starts).
@@ -46,6 +48,7 @@ Do **not** treat 4–6 as shipped until a follow-up PR updates this section.
 
 ## Related docs
 
+- **79-commit audit + PR review (Appendix A):** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../OpenClaw/v1/2026-05-23-security-markdown.md) — implementation status table and finding cross-ref
 - Remediation plan: [`docs/plans/2026-05-23-security-remediation-plan.md`](plans/2026-05-23-security-remediation-plan.md)
 - v2 preconditions: [`docs/v2/23-security-preconditions.md`](v2/23-security-preconditions.md)
 - Debug notes: [`docs/2026-05-24-security-review-debug-and-fix-notes.md`](2026-05-24-security-review-debug-and-fix-notes.md)
