@@ -6,7 +6,7 @@
 
 ## Prerequisites (lead agent only)
 
-1. `detect_changes` + `get_impact_radius` + `get_affected_flows`
+1. `detect_changes_tool` + `get_impact_radius_tool` + `get_affected_flows_tool`
 2. Build **assigned file list** = PR diff files ∪ blast-radius files (deduped). **Not** whole repo.
 3. Optional: `gh pr diff --name-only` / `gh pr view` when reviewing a GitHub PR
 4. Collect CLAUDE.md / AGENTS.md paths: repo root + one per modified directory (paths only first)
@@ -32,7 +32,7 @@ ASSIGNED FILES (only these may be Read or reviewed):
 <file list from CRG blast radius>
 
 MANDATORY TOOL ORDER:
-1. code-review-graph: get_review_context for assigned files
+1. code-review-graph: get_review_context_tool for assigned files
 2. gbrain: code-def / search only for symbols in assigned files
 3. Read: assigned files only — no repo-wide scan
 
@@ -60,7 +60,7 @@ Return issues with confidence 0-100. Focus on explicit violations, not style pre
 ```text
 You are lens 2 (shallow bugs) for a PR review.
 
-Use get_review_context + diff hunks for assigned files only.
+Use get_review_context_tool + diff hunks for assigned files only.
 Scan for obvious logic bugs, null handling, race conditions, security holes.
 Ignore nitpicks, formatting, and issues linters/typecheckers will catch.
 Ignore likely false positives.
