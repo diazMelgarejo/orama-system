@@ -10,6 +10,8 @@
 **v1.0 RC shipped** (D3). The 5-task `2026-04-28-perpetua-orama-master-revamp.md` plan closed.
 v1 is at 0.9.9.8. **Gate cleared.**
 
+**Security precondition (2026-05-25):** Before enabling additional v2 HTTP/MCP/RAG surfaces on a shared LAN, complete [`23-security-preconditions.md`](23-security-preconditions.md). Fixes 1–3 (auth, secrets hygiene, memory redaction) are implemented in v1 repos; fixes 4–6 remain queued.
+
 ---
 
 ## Phase 0 — Repository Initialization ✅ DONE (2026-05-02)
