@@ -4,7 +4,8 @@
 
 | File | Role |
 |------|------|
-| `bin/orama-system/config/cursor-mcp.stack.json` | Canonical server definitions (CRG + ai-cli-mcp) |
+| `bin/orama-system/config/cursor-mcp.stack.json` | Elevated stack (CRG + ai-cli-mcp) |
+| `bin/orama-system/config/cursor-mcp.stack.readonly.json` | Readonly stack (CRG only — security fix 6) |
 | `orama-system/.cursor/mcp.json` | Project config — auto-loaded when the workspace root is this repo |
 | `~/.cursor/mcp.json` | User-global config (legacy home for `ai-cli-mcp` only) |
 | `OpenClaw/.mcp.json` | Claude Code / OpenClaw hub (CRG only; not Cursor) |
@@ -12,15 +13,21 @@
 ## Sync (idempotent)
 
 ```bash
-# Project stack (CRG + ai-cli-mcp) — run after pull or embed-mode changes
-bash bin/orama-system/scripts/sync-cursor-mcp.sh
+# Readonly (default): CRG only — no ai-cli-mcp subprocess workers
+bash bin/orama-system/scripts/sync-cursor-mcp.sh --profile readonly
+
+# Elevated: CRG + ai-cli-mcp (codex/gemini/claude workers via npx)
+bash bin/orama-system/scripts/sync-cursor-mcp.sh --profile elevated
+# Or: ORAMA_MCP_ENABLE_AI_CLI=1 bash bin/orama-system/scripts/sync-cursor-mcp.sh
 
 # Also add code-review-graph to ~/.cursor/mcp.json (OpenClaw parent workspace)
-bash bin/orama-system/scripts/sync-cursor-mcp.sh --also-user
+bash bin/orama-system/scripts/sync-cursor-mcp.sh --profile readonly --also-user
 
 # Optional Gemini analyzer lane
-bash bin/orama-system/scripts/sync-cursor-mcp.sh --include-gemini
+bash bin/orama-system/scripts/sync-cursor-mcp.sh --profile elevated --include-gemini
 ```
+
+**Env:** `ORAMA_MCP_PROFILE=readonly|elevated` (default readonly). `ORAMA_MCP_ENABLE_AI_CLI=1` forces elevated.
 
 Wired from:
 
