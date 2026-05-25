@@ -118,7 +118,7 @@ Expected without skill: `git diff` → bulk `Read` of `docs/how-to/...` + skill 
 
 ### Environment / MCP
 
-- [x] Register `code-review-graph` in **Cursor** project MCP — committed [`orama-system/.cursor/mcp.json`](../../../../.cursor/mcp.json) (`ff0b0279`); user must **reload MCP** in Cursor after pull
+- [x] Register `code-review-graph` in **Cursor** project MCP — stack [`cursor-mcp.stack.json`](../../../../bin/orama-system/config/cursor-mcp.stack.json) + `sync-cursor-mcp.sh` → [`.cursor/mcp.json`](../../../../.cursor/mcp.json); user must **reload MCP** in Cursor after pull
 - [ ] Document or fix **gbrain** unreachable from some agent envs (`getaddrinfo ENOTFOUND` on DB URL in Test B) — see [`docs/local-env-catch-up.md`](../../../../docs/local-env-catch-up.md)
 - [x] **`uvx code-review-graph --help` hang** — `first-run-install.sh` probes `--version` only (not `--help`); cold `uvx` may still take ~60s on first install — document in runbooks, not a `status` blocker
 - [ ] **OpenClaw `CLAUDE.md` tool table** vs MCP `*_tool` invoke names — partial note added outside git; align tables in-repo when touching OpenClaw docs
