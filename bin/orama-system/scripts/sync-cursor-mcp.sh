@@ -9,26 +9,42 @@
 # (CRG + ai-cli-mcp). --also-user merges only code-review-graph into the global
 # config so OpenClaw-parent workspaces get CRG without duplicating ai-cli-mcp.
 #
+# Profiles (security fix 6 — least privilege):
+#   readonly (default): code-review-graph only — no ai-cli-mcp subprocess workers
+#   elevated: full stack (CRG + ai-cli-mcp)
+#   ORAMA_MCP_ENABLE_AI_CLI=1 forces elevated; ORAMA_MCP_PROFILE overrides default
+#
 # Usage:
-#   bash bin/orama-system/scripts/sync-cursor-mcp.sh [--also-user] [--include-gemini] [--dry-run]
+#   bash bin/orama-system/scripts/sync-cursor-mcp.sh [--profile readonly|elevated] [--also-user] [--include-gemini] [--dry-run]
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/openclaw-env.sh
 source "$SCRIPT_DIR/lib/openclaw-env.sh"
 
-STACK_JSON="$SCRIPT_DIR/../config/cursor-mcp.stack.json"
+STACK_ELEVATED="$SCRIPT_DIR/../config/cursor-mcp.stack.json"
+STACK_READONLY="$SCRIPT_DIR/../config/cursor-mcp.stack.readonly.json"
+MCP_PROFILE="${ORAMA_MCP_PROFILE:-readonly}"
 ALSO_USER=false
 INCLUDE_GEMINI=false
 DRY_RUN=false
+next_is_profile=false
 
 for arg in "$@"; do
+  if $next_is_profile; then
+    MCP_PROFILE="$arg"
+    next_is_profile=false
+    continue
+  fi
   case "$arg" in
+    --profile)
+      next_is_profile=true
+      ;;
     --also-user) ALSO_USER=true ;;
     --include-gemini) INCLUDE_GEMINI=true ;;
     --dry-run) DRY_RUN=true ;;
     -h|--help)
-      sed -n '2,20p' "$0"
+      sed -n '2,24p' "$0"
       exit 0
       ;;
     *)
@@ -37,6 +53,28 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if $next_is_profile; then
+  echo "Error: --profile requires readonly or elevated" >&2
+  exit 2
+fi
+
+case "$MCP_PROFILE" in
+  readonly|elevated) ;;
+  *)
+    echo "Error: invalid ORAMA_MCP_PROFILE / --profile: $MCP_PROFILE (use readonly or elevated)" >&2
+    exit 2
+    ;;
+esac
+
+if [ "${ORAMA_MCP_ENABLE_AI_CLI:-}" = "1" ]; then
+  MCP_PROFILE="elevated"
+fi
+
+STACK_JSON="$STACK_READONLY"
+if [ "$MCP_PROFILE" = "elevated" ]; then
+  STACK_JSON="$STACK_ELEVATED"
+fi
 
 _log() { printf '[sync-cursor-mcp] %s\n' "$*"; }
 _run() { $DRY_RUN && _log "[dry-run] $*" || eval "$@"; }
@@ -107,6 +145,7 @@ _require_jq
 ORAMA_ROOT="$(orama_git_root)" || { echo "Not in orama-system repo (set ORAMA_REPO_ROOT)" >&2; exit 1; }
 PROJECT_MCP="$ORAMA_ROOT/.cursor/mcp.json"
 
+_log "Profile: $MCP_PROFILE"
 _log "Stack: $STACK_JSON"
 _log "Project MCP: $PROJECT_MCP"
 _sync_file "$PROJECT_MCP" "project"
