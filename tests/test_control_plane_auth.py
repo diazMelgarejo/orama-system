@@ -130,6 +130,61 @@ def test_auth_headers_reads_pt_persisted_token(monkeypatch, tmp_path):
     assert headers == {"Authorization": "Bearer pt-file-token"}
 
 
+def test_verify_accepts_pt_persisted_token_without_env(monkeypatch, tmp_path):
+    from utils.control_plane_auth import resolved_control_plane_token, verify_control_plane_auth
+
+    token_path = tmp_path / ".state" / "control_plane_token"
+    token_path.parent.mkdir(parents=True)
+    token_path.write_text("pt-only-token", encoding="utf-8")
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+
+    class _Req:
+        headers = {"authorization": "Bearer pt-only-token"}
+
+    verify_control_plane_auth(_Req())
+    assert resolved_control_plane_token() == "pt-only-token"
+
+
+def test_portal_loopback_index_injects_cp_fetch_when_enforced(monkeypatch):
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "loopback-ui-token")
+
+    async def _fake_status():
+        return {"services": {}, "routing": None, "activity": [], "agents": []}
+
+    monkeypatch.setattr(portal_server, "api_status", _fake_status)
+
+    with TestClient(portal_server.app, raise_server_exceptions=False) as client:
+        allowed = client.get("/")
+        api_denied = client.get("/api/status")
+        api_allowed = client.get(
+            "/api/status",
+            headers={"Authorization": "Bearer loopback-ui-token"},
+        )
+
+    assert allowed.status_code == 200
+    assert "cpFetch" in allowed.text
+    assert "loopback-ui-token" in allowed.text
+    assert api_denied.status_code == 401
+    assert api_allowed.status_code == 200
+
+
+def test_portal_index_requires_auth_when_not_loopback(monkeypatch):
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "loopback-ui-token")
+    monkeypatch.setattr(
+        "utils.control_plane_auth.request_is_loopback",
+        lambda _request: False,
+    )
+
+    with TestClient(portal_server.app, raise_server_exceptions=False) as client:
+        denied = client.get("/")
+
+    assert denied.status_code == 401
+
+
 def test_pt_auth_module_available_in_sibling_checkout():
     pytest = __import__("pytest")
     from pathlib import Path
