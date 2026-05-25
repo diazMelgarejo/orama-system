@@ -29,4 +29,4 @@ chmod +x "$REPO_ROOT/scripts/git/check_commit_message.sh" 2>/dev/null || true
 git config --local core.hooksPath .githooks
 echo "OK: core.hooksPath=$(git config --local --get core.hooksPath)"
 echo "Run: git config --local user.name && git config --local user.email"
-echo "Hooks: pre-commit (identity), commit-msg (forbidden Co-authored-by)"
+echo "Hooks: pre-commit (identity), commit-msg (Co-authored-by policy)"
