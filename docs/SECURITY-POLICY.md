@@ -12,7 +12,7 @@ This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **P
 
 ---
 
-## Implemented (fixes 1–4) — 2026-05-25
+## Implemented (fixes 1–5) — 2026-05-25
 
 | # | Finding | Implementation |
 |---|---------|----------------|
@@ -22,6 +22,7 @@ This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **P
 | **3b** | Wildcard CORS / `0.0.0.0` default | Portal: `cors_allow_origins()` + `default_bind_host()` loopback-first; PT FastAPI CORS allowlist |
 | **3c** | Raw memory persistence | `orchestrator/redaction.py` + `memory_governance.py`; GossipBus `emit()` redacts before SQLite/LanceDB |
 | **4** | MCP file/log read without path boundary | PT: `packages/local-agents/src/path-boundary.cjs` + `alphaclaw-mcp` log redaction; orama: `utils/mcp_path_boundary.py`; env roots `MCP_APPROVED_ROOTS`, `ALPHACLAW_ROOT`, `PERPETUA_TOOLS_ROOT`, `ORAMA_SYSTEM_ROOT` |
+| **5** | Remote LM Studio / Win coder URL policy | `utils/model_endpoint_url.py` (orama + PT); default loopback + RFC1918; `ALLOW_PUBLIC_MODEL_ENDPOINTS=1` opt-in; wired in PT `supervisor.py` + `worker_registry.py`, orama `api_server.py` |
 
 **Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see [79-commit audit — Appendix A](../../OpenClaw/v1/2026-05-23-security-markdown.md#appendix-a--79-commit-security-audit-2026-05-25) before assuming PT routes are protected on disk.
 
@@ -35,14 +36,13 @@ This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **P
 
 ---
 
-## Queued — next session (fixes 5–6) — document only, not implemented
+## Queued — next session (fix 6) — document only, not implemented
 
 | # | Finding | Planned work |
 |---|---------|--------------|
-| **5** | Remote LM Studio / Win coder URL policy | Central URL parser; default loopback + RFC1918; `ALLOW_PUBLIC_MODEL_ENDPOINTS` opt-in |
 | **6** | Least-privilege MCP profiles | Split read-only vs process-spawning tools; env-gated dangerous CLI workers |
 
-Do **not** treat 5–6 as shipped until a follow-up PR updates this section.
+Do **not** treat fix 6 as shipped until a follow-up PR updates this section.
 
 ---
 
