@@ -15,7 +15,7 @@
 | 3 | Control-plane auth + loopback bind + CORS allowlist | Yes | **done** — bearer middleware (orama + PT) |
 | 3c | Memory redaction before persist | Yes (RAG) | **done** — PT `memory_governance` + GossipBus |
 | 4 | MCP path boundary + log redaction | Yes (MCP modules) | **done** — PT `path-boundary.cjs` + orama `mcp_path_boundary.py` |
-| 5 | Endpoint URL egress policy | Yes (distributed) | **queued** — next session |
+| 5 | Endpoint URL egress policy | Yes (distributed) | **done** — `utils/model_endpoint_url.py` (orama + PT) |
 | 6 | Least-privilege MCP / worker profiles | Recommended | **queued** — next session |
 
 ---
@@ -39,4 +39,4 @@
 - [ ] No `AIza…` literals in tracked config (scanner clean)
 - [ ] Defaults bind to `localhost` unless `*_BIND_LAN=1` is explicit
 
-Fixes **5–6** remain open; do not check those boxes until implemented.
+Fix **6** remains open; do not check that box until implemented.
