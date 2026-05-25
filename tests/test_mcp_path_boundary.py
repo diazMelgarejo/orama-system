@@ -58,7 +58,8 @@ def test_rejects_symlink_escape(tmp_path: Path) -> None:
 
 
 def test_redact_log_text_strips_secrets() -> None:
-    raw = "SETUP_PASSWORD=hunter2\nuser@example.com\nAIzaSyDUMMYKEY123456789012345678901"
+    api_key_like = "AIza" + "SyDUMMYKEY123456789012345678901"
+    raw = f"SETUP_PASSWORD=hunter2\nuser@example.com\n{api_key_like}"
     redacted = redact_log_text(raw)
     assert "hunter2" not in redacted
     assert "user@example.com" not in redacted
