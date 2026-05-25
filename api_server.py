@@ -31,6 +31,7 @@ from utils.control_plane_auth import (
     control_plane_auth_failure,
     redact_runtime_section,
 )
+from utils.model_endpoint_url import ModelEndpointPolicyError, validate_model_endpoint_url
 from pydantic import BaseModel, ConfigDict, field_validator, Field
 import httpx
 from bin.shared.bridge_contract import (
@@ -92,14 +93,27 @@ def _detect_platform() -> str:
     return "mac" if _platform_mod.system() == "Darwin" else "windows"
 
 
-_LOCAL_LM_STUDIO_URL = os.getenv("LOCAL_LM_STUDIO_URL",  "http://localhost:1234/v1")
+def _lm_studio_base_from_env(env_key: str, default: str) -> str:
+    raw = os.getenv(env_key, default).strip().rstrip("/")
+    if raw.endswith("/v1"):
+        raw = raw[: -len("/v1")]
+    return validate_model_endpoint_url(raw or default.rstrip("/").removesuffix("/v1"))
+
+
+_LOCAL_LM_STUDIO_URL = f"{_lm_studio_base_from_env('LOCAL_LM_STUDIO_URL', 'http://localhost:1234/v1')}/v1"
 _CLOUD_API_URL       = os.getenv("CLOUD_API_URL",         "https://api.anthropic.com/v1")
 _WIN_LM_STUDIO_HOST  = os.getenv("WIN_LM_STUDIO_HOST", "").strip()
 _WIN_LM_STUDIO_PORT  = os.getenv("WIN_LM_STUDIO_PORT",   "1234")
-_WIN_LM_STUDIO_URL   = (
-    f"http://{_WIN_LM_STUDIO_HOST}:{_WIN_LM_STUDIO_PORT}/v1" if _WIN_LM_STUDIO_HOST else ""
-)
-if not _WIN_LM_STUDIO_HOST:
+_WIN_LM_STUDIO_URL   = ""
+if _WIN_LM_STUDIO_HOST:
+    try:
+        _win_base = validate_model_endpoint_url(
+            f"http://{_WIN_LM_STUDIO_HOST}:{_WIN_LM_STUDIO_PORT}"
+        )
+        _WIN_LM_STUDIO_URL = f"{_win_base}/v1"
+    except ModelEndpointPolicyError as exc:
+        logger.error("WIN_LM_STUDIO_HOST policy violation — %s", exc)
+else:
     logger.warning(
         "WIN_LM_STUDIO_HOST is not set. Windows LM Studio provider is disabled until configured."
     )
