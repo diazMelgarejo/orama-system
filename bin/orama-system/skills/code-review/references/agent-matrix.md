@@ -34,7 +34,23 @@ Toggle: `bash bin/orama-system/skills/code-review/scripts/crg-embed-mode [gbrain
 
 ---
 
+## MCP invoke names (footer)
+
+Cursor and Claude Code register **code-review-graph** handlers with a `*_tool` suffix. Prose in this skill may shorten names; they map 1:1:
+
+| Short name in docs | MCP tool name |
+|--------------------|---------------|
+| `detect_changes` | `detect_changes_tool` |
+| `get_review_context` | `get_review_context_tool` |
+| `get_impact_radius` | `get_impact_radius_tool` |
+| `query_graph` | `query_graph_tool` |
+| `semantic_search_nodes` | `semantic_search_nodes_tool` |
+| `list_graph_stats` | `list_graph_stats_tool` |
+| `build_or_update_graph` | `build_or_update_graph_tool` |
+
+Full parameter reference: [`mcp-tools-crg.md`](mcp-tools-crg.md).
+
 ## Open TODOs
 
-- [ ] **Naming:** table uses shortened Claude invocations (`detect_changes`, `/code-review-graph:review-delta`); MCP hosts expose `detect_changes_tool` etc. — confirm aliases are intentional and add one-line footer mapping to [`mcp-tools-crg.md`](mcp-tools-crg.md)
+- [x] **Naming:** footer mapping added (2026-05-25)
 - [ ] Host surface map: [`docs/reference/agent-first-open-visibility.md`](../../../../docs/reference/agent-first-open-visibility.md)

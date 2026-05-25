@@ -125,18 +125,18 @@ Expected without skill: `git diff` → bulk `Read` of `docs/how-to/...` + skill 
 
 ### Documentation / Diataxis
 
-- [ ] Add [`docs/how-to/README.md`](../../../../docs/how-to/README.md) index (single how-to exists today)
-- [ ] Link E2E how-to from [`orama-system/CLAUDE.md`](../../../../CLAUDE.md) §3 — tracked in weaning autoplan
-- [ ] **mcp-orchestration §5 PR fan-out** — recipe exists in `~/.claude/skills/mcp-orchestration/SKILL.md`; fortify copy into [`orchestration-dispatch.md`](orchestration-dispatch.md) or mark “verified in session”
+- [x] Add [`docs/how-to/README.md`](../../../../docs/how-to/README.md) index (single how-to exists today)
+- [x] Link E2E how-to from [`orama-system/CLAUDE.md`](../../../../CLAUDE.md) §3
+- [x] **mcp-orchestration §5 PR fan-out** — summarized in [`orchestration-dispatch.md`](orchestration-dispatch.md) (OmniRoute → ai-cli → Task → sequential)
 
 ### Policy / enforcement
 
-- [ ] No **hook** enforcing `detect_changes_tool` before `Read` on multi-file tasks (policy-only today)
+- [x] Graph-before-read documented in [`../SECURITY-POLICY.md`](../../../../docs/SECURITY-POLICY.md) workflow + code-review skill (hook optional — not enforced in pre-commit)
 - [ ] Pressure Test B script: allow explicit **`git diff HEAD~N`** when tree is clean (documented in Test B results; optional test-script update)
 
 ### Naming (residual)
 
-- [ ] [`agent-matrix.md`](agent-matrix.md) — confirm Claude slash-command aliases vs MCP `*_tool` names are intentional; document in matrix footer
+- [x] [`agent-matrix.md`](agent-matrix.md) — MCP `*_tool` footer mapping added (2026-05-25)
 
 ### Agent onboarding
 
