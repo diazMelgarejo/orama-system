@@ -14,8 +14,8 @@
 | 2 | Secret scanning in CI/hygiene | Yes | **done** — `repo_hygiene.py` + tests |
 | 3 | Control-plane auth + loopback bind + CORS allowlist | Yes | **done** — bearer middleware (orama + PT) |
 | 3c | Memory redaction before persist | Yes (RAG) | **done** — PT `memory_governance` + GossipBus |
-| 4 | MCP path boundary + log redaction | Yes (MCP modules) | **queued** — next session |
-| 5 | Endpoint URL egress policy | Yes (distributed) | **queued** — next session |
+| 4 | MCP path boundary + log redaction | Yes (MCP modules) | **done** — PT `path-boundary.cjs` + orama `mcp_path_boundary.py` |
+| 5 | Endpoint URL egress policy | Yes (distributed) | **done** — `utils/model_endpoint_url.py` (orama + PT) |
 | 6 | Least-privilege MCP / worker profiles | Recommended | **done** — MCP profile gates + readonly Cursor stack |
 
 ---
@@ -27,7 +27,7 @@
 | [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md) | Fix 3c + auth on any memory search API |
 | [`04-build-order.md`](04-build-order.md) Phase 4+ HTTP surfaces | Fix 3 on all mutation routes |
 | [`02-modules/rag-and-memory.md`](02-modules/rag-and-memory.md) | Fix 3c + retention/erase design (v2.5) |
-| MCP / multi-agent modules | Fix 4 (path boundary; fix 6 done) |
+| MCP / multi-agent modules | Fixes 4–6 (path boundary, URL policy, least-privilege MCP) |
 
 ---
 
@@ -39,4 +39,4 @@
 - [ ] No `AIza…` literals in tracked config (scanner clean)
 - [ ] Defaults bind to `localhost` unless `*_BIND_LAN=1` is explicit
 
-Fix **6** is done. Fixes **4–5** remain open; do not check those boxes until implemented.
+Fixes **4–6** are implemented on current security branches; verify on your checkout before checking boxes.
