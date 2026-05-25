@@ -2175,3 +2175,16 @@ Tracked as checklists elsewhere (read the owner doc, not this log):
 ### Decisions made
 
 - Document-release sync: `CLAUDE.md` §3/§6, `CONTRIBUTING.md`, `agent-first-open-visibility.md`, `.cursor/rules/no-commit-attribution.mdc` point at the official section without removing prior approved identities.
+
+## 2026-05-25 — Cursor — Security fixes 1–3 (orama + Perpetua-Tools)
+
+### What was learned
+
+- Fixes **1–3** from [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../OpenClaw/v1/2026-05-23-security-markdown.md) are implemented: env-based Gemini key, `scan_tracked_secrets` in hygiene, bearer auth on portal/API/PT jobs, memory redaction before GossipBus persist.
+- Fixes **4–6** (MCP path allowlist, remote endpoint URL policy, least-privilege MCP) stay **queued** — documented in [`docs/SECURITY-POLICY.md`](SECURITY-POLICY.md) and [`docs/v2/23-security-preconditions.md`](v2/23-security-preconditions.md).
+- `ORAMA_CONTROL_PLANE_TOKEN` + `ORAMA_INSECURE_DEV=0` is the production posture; dev stacks can set `ORAMA_INSECURE_DEV=1` without a token.
+
+### Decisions made
+
+- Canonical policy: [`docs/SECURITY-POLICY.md`](SECURITY-POLICY.md); v1 index: [`OpenClaw/v1/README.md`](../../OpenClaw/v1/README.md).
+- Perpetua-Tools mirrors orama git hooks via `scripts/git/check_identity.sh`.

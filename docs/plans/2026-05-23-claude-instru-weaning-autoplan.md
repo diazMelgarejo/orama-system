@@ -144,7 +144,7 @@
 1. **Forever in CLAUDE-instru:** repo registry (§1), cross-repo doc index, “start here” for new machines (one paragraph + link).
 2. **Migrate to in-repo:** install steps, hardware probe detail, tool-chain order, profile behavior.
 3. **Order of file classes:** skills (done) → scripts (`ensure_requirements.sh`) → docs/wiki → `CLAUDE.md` navigators (keep link only) → optional instru deprecation banner.
-4. **CI gate:** `rg 'Canonical:.*CLAUDE-instru' bin/orama-system/skills` → must be 0.
+4. **CI gate:** `rg 'Canonical:.*CLAUDE-instru' bin/orama-system/skills` → must be 0. *(Checklist item for future CI — run locally before merge until wired.)*
 5. **Deprecation:** Comment in `orama-system/CLAUDE.md`: “Install: see `bin/orama-system/references/first-run-install.md` (not CLAUDE-instru §0 body).”
 
 ---
