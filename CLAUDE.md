@@ -84,6 +84,8 @@ Before significant changes, load the mother skill:
 |----------|---------|
 | [`SKILL.md`](SKILL.md) | Agent behavioral rules — every "never" with commands |
 | [`bin/orama-system/SKILL.md`](bin/orama-system/SKILL.md) | Mother skill: AFRP gate, CIDF, gstack routing |
+| [`docs/how-to/first-run-and-code-review.md`](docs/how-to/first-run-and-code-review.md) | E2E: fresh machine → MCP → graph → code-review skill |
+| [`docs/reference/agent-first-open-visibility.md`](docs/reference/agent-first-open-visibility.md) | What Cursor / Claude Code / OpenClaw see on first open |
 | [`docs/LESSONS.md`](docs/LESSONS.md) | Chronological session log |
 | [`docs/wiki/README.md`](docs/wiki/README.md) | Wiki index — lesson deep-dives |
 
