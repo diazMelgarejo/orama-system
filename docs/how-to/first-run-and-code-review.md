@@ -13,6 +13,7 @@ One sentence: you will install the orama toolchain on a new machine, wire MCP an
 | macOS with Homebrew (typical) | Python 3.13, Ollama |
 | NVM Node ≥ v20 at `NVM_NODE_BIN` (not system `/usr/bin/node`) | CRG, Claude Code, npm globals |
 | Claude Code or Cursor with MCP enabled | CRG tools + optional ai-cli workers |
+| **Cursor:** open the **orama-system repo root** (not a nested subfolder) | Project MCP is `.cursor/mcp.json` at repo root |
 
 **Path variables** (full table): [`bin/orama-system/references/first-run-install.md`](../../bin/orama-system/references/first-run-install.md#path-variables)
 
@@ -107,6 +108,15 @@ bash bin/orama-system/skills/code-review/scripts/crg-embed-mode status
 Restart Claude Code / Cursor after `.mcp.json` changes.
 
 **Reference:** [`bin/orama-system/mcp-install/references/setup-embeddings.md`](../../bin/orama-system/mcp-install/references/setup-embeddings.md)
+
+### Cursor: enable code-review-graph MCP
+
+Claude Code reads `$OPENCLAW_ROOT/.mcp.json`. **Cursor** reads **`.cursor/mcp.json` in the workspace folder** (orama-system repo root). A committed template ships at [`.cursor/mcp.json`](../../.cursor/mcp.json) with the same `uvx code-review-graph serve` entry and Ollama `bge-m3` env as OpenClaw.
+
+1. Open **File → Open Folder** on the `orama-system` git root (parent of `bin/orama-system/`), not only `bin/orama-system/skills/code-review`.
+2. After first clone or after `setup-embeddings` / `crg-embed-mode`, **reload MCP**: Command Palette → **MCP: List Servers** → refresh, or restart Cursor.
+3. Confirm **Settings → MCP** shows `code-review-graph` connected; agent `mcps/` should include a `code-review-graph` (or `user-code-review-graph`) tools folder.
+4. `crg-embed-mode` syncs embedding env to both `$OPENCLAW_ROOT/.mcp.json` and `.cursor/mcp.json` when the Cursor file exists.
 
 ---
 
@@ -230,7 +240,7 @@ You have now used the same chain the code-review skill enforces: graph → gbrai
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | `first-run` fails on Ollama | Daemon down or models missing | Start Ollama; re-run `run` (resume pulls) |
-| CRG MCP missing in IDE | `.mcp.json` not registered | `code-review-graph install --platform claude-code --repo "$OPENCLAW_ROOT"` |
+| CRG MCP missing in IDE | `.mcp.json` not registered | Claude Code: `code-review-graph install --platform claude-code --repo "$OPENCLAW_ROOT"`. Cursor: open orama-system root; ensure `.cursor/mcp.json` exists; reload MCP / restart Cursor |
 | `nodes = 0` after install | Never ran `build_or_update_graph_tool` | Step 4 |
 | Semantic search empty | No embeddings | Step 4 embed; Ollama + bge-m3 |
 | Review reads whole repo | Skipped graph phase | Re-run with code-review skill; see red flags in SKILL.md |
