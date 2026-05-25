@@ -75,15 +75,17 @@ Full tool matrix: [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md).
 
 | Tool | When |
 |------|------|
-| `list_graph_stats` | Stale / empty graph check |
-| `detect_changes` | Start of any diff review |
-| `semantic_search_nodes` | Unknown symbol or entry point |
-| `query_graph` | callers, callees, imports, tests |
-| `get_impact_radius` | Refactor / merge risk |
-| `get_affected_flows` | Broken execution paths |
-| `get_review_context` | Snippets before full Read |
-| `get_architecture_overview` | Unfamiliar area |
+| `list_graph_stats_tool` | Stale / empty graph check |
+| `detect_changes_tool` | Start of any diff review |
+| `semantic_search_nodes_tool` | Unknown symbol or entry point |
+| `query_graph_tool` | callers, callees, imports, tests |
+| `get_impact_radius_tool` | Refactor / merge risk |
+| `get_affected_flows_tool` | Broken execution paths |
+| `get_review_context_tool` | Snippets before full Read |
+| `get_architecture_overview_tool` | Unfamiliar area |
 | `refactor_tool` | Rename / dead-code planning only |
+
+**MCP names:** `code-review-graph` serve (v2.3.3+) registers tools with a `*_tool` suffix. Prose elsewhere may shorten (e.g. `list_graph_stats` → same handler as `list_graph_stats_tool`).
 
 **Embeddings:** CRG + gbrain share **bge-m3** (1024-dim). Toggle: `scripts/crg-embed-mode` · [`references/crg-embed-mode.md`](references/crg-embed-mode.md).
 
@@ -183,7 +185,7 @@ Worktree pinned via `.gbrain-source` — no `--source` when cwd is in repo.
 
 ## Phase C — Context before Read
 
-1. Call `get_review_context` for changed + impacted files from Phase A.
+1. Call `get_review_context_tool` for changed + impacted files from Phase A.
 2. Build **assigned file list** (delta: diff + impact; PR: diff ∪ blast radius).
 3. `Read` only those files — do not re-read if already in context.
 
@@ -195,7 +197,7 @@ Worktree pinned via `.gbrain-source` — no `--source` when cwd is in repo.
 
 1. Load persona: [`agents/code-reviewer.md`](agents/code-reviewer.md)
 2. Apply coding profile rules: [`profiles/CLAUDE.coding.md`](profiles/CLAUDE.coding.md)
-3. Default scope: `git diff` or `detect_changes` output
+3. Default scope: `git diff` or `detect_changes_tool` output
 4. Score issues; drop &lt; 80
 
 ### PR (multi-lens)
@@ -222,8 +224,8 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 
 ## Red flags (skill violation)
 
-- `Read` / `Grep` on many files before `detect_changes` or blast-radius
-- Skipping `get_review_context` then reading full files
+- `Read` / `Grep` on many files before `detect_changes_tool` or blast-radius
+- Skipping `get_review_context_tool` then reading full files
 - `gbrain search` skipped in favor of reading `LESSONS.md` inline
 - Architecture from memory without doc link
 - "Let me scan the whole repo" without graph
