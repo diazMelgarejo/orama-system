@@ -24,6 +24,43 @@ Rules:
 
 ---
 
+## Official commit identity policy (2026-05-25)
+
+Canonical policy for **primary commit authors** and **`Co-authored-by`** trailers in this repo (and the OpenClaw stack). Enforcement is local via repo hooks — not honor system.
+
+| Role | Rule |
+| --- | --- |
+| **Approved primary authors** | `cyre <diazMelgarejo@gmail.com>` · `cyre <Lawrence@cyre.me>` · name containing `Lawrence` + `Lawrence@cyre.me` · `Codex <codex@openai.com>` |
+| **Co-authored-by — allowed** | Well-known public AI/vendor domains (`openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com`, subdomains) and matching name markers (`codex`, `claude`, `anthropic`, `cursor`, …) |
+| **Co-authored-by — allowed Gmail** | `diazMelgarejo@gmail.com`, `Lawrence@cyre.me` only |
+| **Co-authored-by — rejected** | Any other `@gmail.com` / `@googlemail.com` (unattributable personal inboxes) |
+| **Agent sessions (default)** | Do not add `Co-authored-by` to commits you author; use an approved primary identity only |
+
+**Install once per clone:**
+
+```bash
+bash scripts/git/install-local-hooks.sh
+```
+
+**Enforcement scripts:**
+
+| Script | Hook / use |
+| --- | --- |
+| [`scripts/git/check_identity.sh`](../../scripts/git/check_identity.sh) | `pre-commit` — primary `user.name` / `user.email` |
+| [`scripts/git/check_commit_message.sh`](../../scripts/git/check_commit_message.sh) | `commit-msg` — `Co-authored-by` allowlist |
+| [`scripts/git/install-local-hooks.sh`](../../scripts/git/install-local-hooks.sh) | Sets `core.hooksPath` → `.githooks/` |
+
+Manual preflight:
+
+```bash
+bash scripts/git/check_identity.sh
+bash scripts/git/check_commit_message.sh /path/to/COMMIT_EDITMSG
+```
+
+Cross-repo Cursor cloud guards: [`12-cursor-cloud-commit-attribution.md`](12-cursor-cloud-commit-attribution.md).
+
+---
+
 ## Identity Confirmation
 
 Approved **primary commit author** identities (any one):
@@ -40,7 +77,7 @@ After each fresh clone, run once:
 bash scripts/git/install-local-hooks.sh
 ```
 
-Local hooks enforce identity on `pre-commit` and reject forbidden agent **`Co-authored-by`** trailers on `commit-msg` (Cursor, Anthropic, Claude, Cursoragent, etc.). Using **Codex** as the primary author is allowed; injecting agent co-author attribution lines is not. Verify config before committing:
+Local hooks enforce identity on `pre-commit` and validate **`Co-authored-by`** trailers on `commit-msg`: well-known public AI/vendor co-authors are allowed; unknown `@gmail.com` co-authors are rejected (see table below). Using **Codex** as the primary author is allowed. Verify config before committing:
 
 ```bash
 bash scripts/git/check_identity.sh
@@ -54,6 +91,26 @@ git config user.email "Lawrence@cyre.me"  # or diazMelgarejo@gmail.com
 # or for Codex-authored commits:
 git config user.name "Codex"
 git config user.email "codex@openai.com"
+```
+
+
+
+### Co-authored-by policy (commit-msg hook)
+
+| Category | Rule |
+| --- | --- |
+| **Primary author** | `cyre` + `diazMelgarejo@gmail.com`, `cyre` + `Lawrence@cyre.me`, name containing `Lawrence` + `Lawrence@cyre.me`, or `Codex` + `codex@openai.com` (`scripts/git/check_identity.sh`) |
+| **Allowed co-author domains** | `openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com` (and subdomains) |
+| **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `copilot`, `openai`, `github`, `microsoft` (in the trailer line) |
+| **Allowed `@gmail.com` co-authors** | `diazMelgarejo@gmail.com`, `Lawrence@cyre.me` only |
+| **Rejected** | Any other `Co-authored-by` line with `@gmail.com` (unattributable personal inboxes) |
+
+Corporate and vendor agent domains are identifiable; random Gmail co-authors are not attributable and were used for mistaken or non-policy attribution.
+
+Manual check:
+
+```bash
+bash scripts/git/check_commit_message.sh /path/to/COMMIT_EDITMSG
 ```
 
 ### Local commit hooks (once per clone)

@@ -2163,3 +2163,15 @@ Tracked as checklists elsewhere (read the owner doc, not this log):
 | CLAUDE-instru weaning + CI grep | [`docs/plans/2026-05-23-claude-instru-weaning-autoplan.md`](plans/2026-05-23-claude-instru-weaning-autoplan.md) § Open TODOs |
 | Agent first-open surfaces (Cursor / Claude / OpenClaw) | [`docs/reference/agent-first-open-visibility.md`](reference/agent-first-open-visibility.md) |
 | E2E bootstrap known gaps | [`docs/how-to/first-run-and-code-review.md`](how-to/first-run-and-code-review.md) § Known gaps |
+
+## 2026-05-25 — Cursor — Official git identity + co-author policy (docs)
+
+### What was learned
+
+- **Canonical policy** lives in [`docs/wiki/08-git-hygiene-and-branching.md`](wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25): four approved primary authors (`cyre` × two emails, `Lawrence@cyre.me`, `Codex <codex@openai.com>`); `Co-authored-by` allows well-known public AI/vendor domains and only two Gmail addresses.
+- **Enforcement:** `bash scripts/git/install-local-hooks.sh` → `check_identity.sh` (pre-commit) + `check_commit_message.sh` (commit-msg). Replaced the old “forbid all agent co-author substrings” hook with an allowlist model aligned with `repo_hygiene.py`.
+- **Agent default:** sessions should not add `Co-authored-by` to their own commits even when hooks allow public AI attribution for human-authored merges.
+
+### Decisions made
+
+- Document-release sync: `CLAUDE.md` §3/§6, `CONTRIBUTING.md`, `agent-first-open-visibility.md`, `.cursor/rules/no-commit-attribution.mdc` point at the official section without removing prior approved identities.
