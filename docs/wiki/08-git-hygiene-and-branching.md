@@ -107,6 +107,10 @@ git config user.email "codex@openai.com"
 
 Corporate and vendor agent domains are identifiable; random Gmail co-authors are not attributable and were used for mistaken or non-policy attribution.
 
+### Why only known @gmail.com in co-author lines?
+
+Public AI helpers use stable, identifiable domains (`@openai.com`, `@anthropic.com`, `cursor.com`, and similar), so `Co-authored-by` trailers are auditable and match how those tools sign commits. A random `@gmail.com` in `Co-authored-by:` is usually a person or an unreviewed address — easy to add by mistake and hard to tie to our approved author policy. Letting every Gmail address through would weaken the hook; allowing only known Gmail addresses plus well-known agent domains keeps attribution clear without blocking Codex-, Cursor-, and Claude-style co-authors we want.
+
 Manual check:
 
 ```bash
