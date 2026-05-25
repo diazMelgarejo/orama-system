@@ -21,6 +21,8 @@ Agents without the code-review skill loaded will **Read/Grep first** on multi-fi
 
 **Prompt:** "Use the code-review skill. Review my uncommitted delta."
 
+**Clean tree variant:** When there is no uncommitted delta, use an explicit range, e.g. `git diff HEAD~5` or `git diff <base>...HEAD`, and state that range in the prompt so investigators do not assume a dirty working tree.
+
 **Expected behavior:**
 
 1. `list_graph_stats_tool` or `detect_changes_tool`
@@ -119,9 +121,9 @@ Expected without skill: `git diff` → bulk `Read` of `docs/how-to/...` + skill 
 ### Environment / MCP
 
 - [x] Register `code-review-graph` in **Cursor** project MCP — stack [`cursor-mcp.stack.json`](../../../../bin/orama-system/config/cursor-mcp.stack.json) + `sync-cursor-mcp.sh` → [`.cursor/mcp.json`](../../../../.cursor/mcp.json); user must **reload MCP** in Cursor after pull
-- [ ] Document or fix **gbrain** unreachable from some agent envs (`getaddrinfo ENOTFOUND` on DB URL in Test B) — see [`docs/local-env-catch-up.md`](../../../../docs/local-env-catch-up.md)
+- [x] Document or fix **gbrain** unreachable from some agent envs (`getaddrinfo ENOTFOUND` on DB URL in Test B) — see [`docs/local-env-catch-up.md`](../../../../docs/local-env-catch-up.md) § gbrain ENOTFOUND
 - [x] **`uvx code-review-graph --help` hang** — `first-run-install.sh` probes `--version` only (not `--help`); cold `uvx` may still take ~60s on first install — document in runbooks, not a `status` blocker
-- [ ] **OpenClaw `CLAUDE.md` tool table** vs MCP `*_tool` invoke names — partial note added outside git; align tables in-repo when touching OpenClaw docs
+- [x] **OpenClaw `CLAUDE.md` tool table** vs MCP `*_tool` invoke names — canonical `*_tool` rows added in OpenClaw navigator (outside git)
 
 ### Documentation / Diataxis
 
@@ -132,7 +134,7 @@ Expected without skill: `git diff` → bulk `Read` of `docs/how-to/...` + skill 
 ### Policy / enforcement
 
 - [x] Graph-before-read documented in [`../SECURITY-POLICY.md`](../../../../docs/SECURITY-POLICY.md) workflow + code-review skill (hook optional — not enforced in pre-commit)
-- [ ] Pressure Test B script: allow explicit **`git diff HEAD~N`** when tree is clean (documented in Test B results; optional test-script update)
+- [x] Pressure Test B script: allow explicit **`git diff HEAD~N`** when tree is clean (see Test B § clean tree variant + § Test B results 2026-05-25)
 
 ### Naming (residual)
 
