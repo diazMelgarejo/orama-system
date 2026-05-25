@@ -41,7 +41,7 @@ Full matrix: [`mcp-tools-crg.md`](mcp-tools-crg.md)
 
 ## First-run prerequisites
 
-Install and wire tools via [`../../references/first-run-install.md`](../../references/first-run-install.md) and:
+Install and wire tools via [`../../../references/first-run-install.md`](../../../references/first-run-install.md) and the E2E guide [`../../../../docs/how-to/first-run-and-code-review.md`](../../../../docs/how-to/first-run-and-code-review.md). Bootstrap:
 
 ```bash
 bash bin/orama-system/scripts/first-run-install.sh run

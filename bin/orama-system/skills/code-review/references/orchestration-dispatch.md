@@ -92,5 +92,5 @@ Run lenses 1→5 in one session with the code-reviewer persona. Slower but compl
 ## Cross-links
 
 - [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md) — install, OmniRoute, ai-cli patterns
-- [`bin/orama-system/mcp-install/SKILL.md`](../../mcp-install/SKILL.md) — stack install
+- [`bin/orama-system/mcp-install/SKILL.md`](../../../mcp-install/SKILL.md) — stack install
 - [`agent-matrix.md`](agent-matrix.md) — per-host tool invocation

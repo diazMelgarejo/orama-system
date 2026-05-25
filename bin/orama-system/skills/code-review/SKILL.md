@@ -261,5 +261,7 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 ## Related skills
 
 - Mother: [`bin/orama-system/SKILL.md`](../../SKILL.md) (OmniRoute probe, search policy)
+- E2E bootstrap: [`docs/how-to/first-run-and-code-review.md`](../../../docs/how-to/first-run-and-code-review.md) — fresh machine → first-run → MCP → graph → this skill
+- First-run: [`skills/first-run-setup/SKILL.md`](../first-run-setup/SKILL.md) · [`references/first-run-install.md`](../../references/first-run-install.md)
 - MCP stack: [`bin/orama-system/mcp-install/SKILL.md`](../../mcp-install/SKILL.md)
 - Orchestration: [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md)
