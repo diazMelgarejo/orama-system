@@ -111,7 +111,11 @@ Restart Claude Code / Cursor after `.mcp.json` changes.
 
 ### Cursor: enable code-review-graph MCP
 
-Claude Code reads `$OPENCLAW_ROOT/.mcp.json`. **Cursor** reads **`.cursor/mcp.json` in the workspace folder** (orama-system repo root). A committed template ships at [`.cursor/mcp.json`](../../.cursor/mcp.json) with the same `uvx code-review-graph serve` entry and Ollama `bge-m3` env as OpenClaw.
+Claude Code reads `$OPENCLAW_ROOT/.mcp.json`. **Cursor** reads **`.cursor/mcp.json` at the workspace root** (orama-system repo). The committed project file includes **code-review-graph** and **ai-cli-mcp** (canonical stack: `bin/orama-system/config/cursor-mcp.stack.json`). Refresh after pull:
+
+```bash
+bash bin/orama-system/scripts/sync-cursor-mcp.sh
+```
 
 1. Open **File → Open Folder** on the `orama-system` git root (parent of `bin/orama-system/`), not only `bin/orama-system/skills/code-review`.
 2. After first clone or after `setup-embeddings` / `crg-embed-mode`, **reload MCP**: Command Palette → **MCP: List Servers** → refresh, or restart Cursor.
