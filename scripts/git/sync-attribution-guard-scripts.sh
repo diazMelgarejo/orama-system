@@ -19,6 +19,8 @@ for rel in \
   hooks/commit-msg.strip-coauthor \
   disable-cursor-commit-attribution.sh \
   commit-clean.sh \
+  check_identity.sh \
+  check_commit_message.sh \
   apply-attribution-guard-all-repos.sh \
   sync-attribution-guard-scripts.sh; do
   install -m 0755 "$SCRIPT_DIR/$rel" "$target/scripts/git/$rel"
