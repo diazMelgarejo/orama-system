@@ -187,7 +187,7 @@ bash bin/orama-system/scripts/install-mcp-stack.sh
 ## Open TODOs (environment)
 
 - [ ] **gbrain** `getaddrinfo ENOTFOUND` from Cursor subagents / sandboxes — verify `~/.gbrain/config.json` host reaches from agent network; document “host-only gbrain” fallback in catch-up
-- [ ] **CRG MCP in Cursor** — env secrets OK but MCP server not in workspace until project `.mcp.json` or Cursor MCP settings mirror `$OPENCLAW_ROOT/.mcp.json` (config change tracked outside this doc)
+- [x] **CRG MCP in Cursor** — committed `orama-system/.cursor/mcp.json`; reload MCP in Cursor after pull. Until reload, use CLI: `uvx code-review-graph status --repo "$ORAMA_REPO_ROOT"` (see [`mcp-tools-crg.md`](../../bin/orama-system/skills/code-review/references/mcp-tools-crg.md) § CLI fallback)
 
 ---
 

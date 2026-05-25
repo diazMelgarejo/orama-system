@@ -245,7 +245,7 @@ Full install and daisy-chain documentation: user-managed; defer to operator docs
 
 ## Open TODOs (installer)
 
-- [ ] **`uvx code-review-graph --help`** — hung >85s in pressure Test B; add documented timeout or skip help probe in `status` (version probe only)
+- [x] **`uvx code-review-graph --help`** — `first-run-install.sh` uses `uvx code-review-graph --version` in `status` (not `--help`); cold `uvx` download can take ~60s once per machine
 - [ ] Cursor agents: CRG MCP registration is **not** part of `first-run.done` — see [`docs/reference/agent-first-open-visibility.md`](../../../docs/reference/agent-first-open-visibility.md)
 
 ---

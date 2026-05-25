@@ -24,6 +24,19 @@ Use MCP tools **before** `Grep`, `Glob`, or bulk `Read` on multi-file tasks.
 
 Slash commands (Claude Code) mirror some flows: `/code-review-graph:review-delta`, `review-pr`, `build-graph`. In **Cursor**, prefer MCP tools directly.
 
+## CLI fallback (no MCP in session)
+
+When `code-review-graph` is not registered in the IDE MCP list (common in Cursor until MCP reload after pull), use the same package from the repo root:
+
+```bash
+REPO="$(git -C orama-system rev-parse --show-toplevel 2>/dev/null || pwd)"
+uvx code-review-graph status --repo "$REPO"
+uvx code-review-graph detect-changes --repo "$REPO" --base <git-sha>
+uvx code-review-graph build --repo "$REPO"    # if status shows nodes: 0
+```
+
+**CLI vs MCP naming:** subcommands are kebab-case (`detect-changes`, `status`); flags use `--repo` (not `--repo-root`). MCP tools use `*_tool` suffix and JSON field `repo_root`. First cold `uvx` install can take ~60s; `first-run-install.sh` probes `--version` only (not `--help`).
+
 ## Typical sequences
 
 ### Delta (local / uncommitted)
