@@ -193,6 +193,17 @@ if $MIRROR_SKILLS; then
   echo ""
 fi
 
+# ── Step 5b: Cursor project MCP stack ─────────────────────────────────────────
+_log "Step 5b: Cursor MCP stack (orama-system/.cursor/mcp.json)"
+_SYNC_CURSOR="$(cd "$(dirname "$0")" && pwd)/sync-cursor-mcp.sh"
+if [ -f "$_SYNC_CURSOR" ]; then
+  _run "bash \"$_SYNC_CURSOR\""
+  _ok "Cursor project MCP: code-review-graph + ai-cli-mcp (see bin/orama-system/config/cursor-mcp.stack.json)"
+else
+  _skip "sync-cursor-mcp.sh not found"
+fi
+echo ""
+
 _log "Step 6: Verification summary"
 echo ""
 echo "  node:    $(node -v 2>/dev/null || echo 'missing')"

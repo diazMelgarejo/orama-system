@@ -113,14 +113,17 @@ sync_orama_cursor_crg_from() {
 
 ensure_orama_cursor_crg_mcp() {
   local log_fn="${1:-:}"
-  local cursor_mcp_json
-  cursor_mcp_json="$(resolve_orama_cursor_mcp_json)" || return 0
-  if [ -f "$cursor_mcp_json" ] \
-    && command -v jq >/dev/null 2>&1 \
-    && jq -e '.mcpServers["code-review-graph"]' "$cursor_mcp_json" >/dev/null 2>&1; then
-    _emit_log "$log_fn" "openclaw-env: $cursor_mcp_json already has code-review-graph"
+  local lib_dir sync_script
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  sync_script="$lib_dir/../sync-cursor-mcp.sh"
+  if [ -f "$sync_script" ]; then
+    while IFS= read -r line; do
+      _emit_log "$log_fn" "$line"
+    done < <(bash "$sync_script" 2>&1) || return 1
     return 0
   fi
+  local cursor_mcp_json
+  cursor_mcp_json="$(resolve_orama_cursor_mcp_json)" || return 0
   if _write_minimal_mcp_json "$cursor_mcp_json"; then
     _emit_log "$log_fn" "openclaw-env: wrote code-review-graph entry to $cursor_mcp_json"
     return 0
