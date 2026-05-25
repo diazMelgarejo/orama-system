@@ -6,7 +6,7 @@
 ## Order (non-negotiable)
 
 ```
-1. code-review-graph  →  blast-radius, detect_changes, review context
+1. code-review-graph  →  blast-radius, detect_changes_tool, review context
 2. gbrain             →  code-def, code-refs, search (decisions / LESSONS)
 3. Read               →  only graph-confirmed files
 ```
@@ -17,13 +17,13 @@ Never skip step 1 on multi-file tasks. Never whole-repo `Read` before the graph.
 
 | Tool | When |
 |------|------|
-| `detect_changes` | Start of any diff review |
-| `get_review_context` | Snippets before full file read |
-| `get_impact_radius` | Refactor / merge risk |
-| `get_affected_flows` | Broken execution paths |
-| `query_graph` | callers, callees, imports, tests |
-| `semantic_search_nodes` | Unknown symbol or keyword |
-| `get_architecture_overview` | Unfamiliar subsystem |
+| `detect_changes_tool` | Start of any diff review |
+| `get_review_context_tool` | Snippets before full file read |
+| `get_impact_radius_tool` | Refactor / merge risk |
+| `get_affected_flows_tool` | Broken execution paths |
+| `query_graph_tool` | callers, callees, imports, tests |
+| `semantic_search_nodes_tool` | Unknown symbol or keyword |
+| `get_architecture_overview_tool` | Unfamiliar subsystem |
 
 Full matrix: [`mcp-tools-crg.md`](mcp-tools-crg.md)
 
