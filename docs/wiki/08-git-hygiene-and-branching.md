@@ -26,13 +26,21 @@ Rules:
 
 ## Identity Confirmation
 
-The only approved committer emails are **diazMelgarejo@gmail.com** or **Lawrence@cyre.me** (typically `user.name=cyre`). After each fresh clone, run once:
+Approved **primary commit author** identities (any one):
+
+| Email | Typical `user.name` |
+| --- | --- |
+| diazMelgarejo@gmail.com | `cyre` |
+| Lawrence@cyre.me | `cyre` or a name containing `Lawrence` |
+| codex@openai.com | `Codex` |
+
+After each fresh clone, run once:
 
 ```bash
 bash scripts/git/install-local-hooks.sh
 ```
 
-Local hooks enforce identity on `pre-commit` and reject forbidden agent `Co-authored-by` lines on `commit-msg`. Verify config before committing:
+Local hooks enforce identity on `pre-commit` and reject forbidden agent **`Co-authored-by`** trailers on `commit-msg` (Cursor, Anthropic, Claude, Cursoragent, etc.). Using **Codex** as the primary author is allowed; injecting agent co-author attribution lines is not. Verify config before committing:
 
 ```bash
 bash scripts/git/check_identity.sh
@@ -43,6 +51,9 @@ If this fails, do not commit. Correct your Git identity first:
 ```bash
 git config user.name "cyre"
 git config user.email "Lawrence@cyre.me"  # or diazMelgarejo@gmail.com
+# or for Codex-authored commits:
+git config user.name "Codex"
+git config user.email "codex@openai.com"
 ```
 
 ### Local commit hooks (once per clone)
