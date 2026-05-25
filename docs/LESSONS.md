@@ -2120,3 +2120,20 @@ plan only via `/docs/v2/`. Override requires AskUserQuestion.
   the parent OpenClaw checkout or any orama-system path beneath it.
 - The `$OPENCLAW_ROOT` convention is enforced by the `OPENCLAW_WORKSTATION_LAYOUT`
   scanner in `repo_hygiene.py` (D9).
+
+---
+
+## 2026-05-25 — Claude (Cursor) — code-review pressure Test B (tool-order)
+
+### What was learned
+
+Pressure Test B (skill loaded, graph-first) was run as an empirical **dry-run** on `main` with delta `HEAD~5` (18 files; code-review touch: skill link fixes + new `docs/how-to/first-run-and-code-review.md`). The orama-system CRG index on disk is healthy (1417 nodes, 1257 bge-m3 embeddings via `graph.db`), but **this Cursor workspace does not expose `code-review-graph` MCP** — only `OpenClaw/.mcp.json` registers `uvx code-review-graph serve`. Observed investigator order was Read/git/Grep → sqlite proxy for stats → failed gbrain → hung `uvx` CLI; no `detect_changes` or `get_review_context` calls. Full matrix: `bin/orama-system/skills/code-review/references/pressure-test-notes.md` § Test B results 2026-05-25.
+
+### Decisions made
+
+- Treat Cursor sessions without CRG MCP as **documented partial compliance**; recommend registering the same server from `OpenClaw/.mcp.json` into the project/workspace MCP config before claiming full Test B pass.
+- Align init examples in `SKILL.md` (`*_tool` suffix) with `mcp-tools-crg.md` tool names in a follow-up doc fix.
+
+### Open questions
+
+- Should pressure Test B script explicitly allow `git diff HEAD~N` when the tree is clean, or require a synthetic uncommitted edit?
