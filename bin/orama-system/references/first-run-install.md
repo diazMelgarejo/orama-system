@@ -245,6 +245,7 @@ Full install and daisy-chain documentation: user-managed; defer to operator docs
 
 ## See also
 
+- [`../../../docs/how-to/first-run-and-code-review.md`](../../../docs/how-to/first-run-and-code-review.md) — **E2E:** fresh machine → first-run → MCP → CRG graph → code-review skill
 - [`../../../docs/local-env-catch-up.md`](../../../docs/local-env-catch-up.md) — `.env.local`, OpenClaw secrets after redaction, `check-local-env.sh`
 - [`../skills/code-review/references/tool-chain.md`](../skills/code-review/references/tool-chain.md) — code exploration order
 - [`../../../CLAUDE.md`](../../../CLAUDE.md) — repo navigator + hardware summary
