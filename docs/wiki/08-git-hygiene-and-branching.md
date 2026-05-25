@@ -26,19 +26,13 @@ Rules:
 
 ## Identity Confirmation
 
-The only approved author identity for commits in the clean lineage is:
+The only approved committer emails are **diazMelgarejo@gmail.com** or **Lawrence@cyre.me** (typically `user.name=cyre`). After each fresh clone, run once:
 
-```text
-cyre <Lawrence@cyre.me>, cyre <diazMelgarejo@gmail.com>, or Codex <codex@openai.com>
+```bash
+bash scripts/git/install-local-hooks.sh
 ```
 
-Forbidden identity:
-
-```text
-Lawrence Melgarejo <Lawrence@bettermind.ph>
-```
-
-Before committing, run:
+Local hooks enforce identity on `pre-commit` and reject forbidden agent `Co-authored-by` lines on `commit-msg`. Verify config before committing:
 
 ```bash
 bash scripts/git/check_identity.sh
@@ -50,6 +44,16 @@ If this fails, do not commit. Correct your Git identity first:
 git config user.name "cyre"
 git config user.email "codex@openai.com"  # or Lawrence@cyre.me / diazMelgarejo@gmail.com
 ```
+
+### Local commit hooks (once per clone)
+
+Install repo-local hooks (identity pre-commit + forbidden `Co-authored-by` commit-msg gate):
+
+```bash
+bash scripts/git/install-local-hooks.sh
+```
+
+This sets `git config --local core.hooksPath .githooks` only in this repository.
 
 ---
 
