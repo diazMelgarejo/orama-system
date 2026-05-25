@@ -29,7 +29,7 @@ flowchart TD
   C --> D[4. build_or_update_graph_tool per repo]
   D --> E[5. embed_graph_tool bge-m3]
   E --> F[6. gbrain sync /sync-gbrain]
-  F --> G[7. code-review skill: detect_changes → review]
+  F --> G[7. code-review skill: detect_changes_tool → review]
 ```
 
 | Phase | Installer / skill | Marker |
@@ -37,7 +37,7 @@ flowchart TD
 | Platform bootstrap | `first-run-install.sh` | `~/.orama-system/first-run.done` |
 | MCP workers (optional) | `install-mcp-stack.sh` | `claude mcp list` shows `ai-cli` |
 | CRG env only | `setup-embeddings` (also in first-run) | `.mcp.json` → `CRG_OPENAI_MODEL=bge-m3` |
-| Graph data | MCP `build_or_update_graph_tool` | `list_graph_stats` → nodes > 0 |
+| Graph data | MCP `build_or_update_graph_tool` | `list_graph_stats_tool` → nodes > 0 |
 | Semantic index | MCP `embed_graph_tool` | embeddings_count > 0 |
 | Review workflow | [`code-review` skill](../../bin/orama-system/skills/code-review/SKILL.md) | graph → gbrain → Read |
 
@@ -171,13 +171,13 @@ Worktrees use `.gbrain-source` pins; run sync per worktree after meaningful code
 
 ## Step 6 — Run your first code review
 
-Invoke the **code-review** skill (or follow it manually). Mother skill trigger: `code review`, `detect_changes`, `blast-radius`, etc.
+Invoke the **code-review** skill (or follow it manually). Mother skill trigger: `code review`, `detect_changes_tool`, `blast-radius`, etc.
 
 ### Delta review (local changes, single-pass)
 
-1. **Graph:** `detect_changes` (or `/code-review-graph:review-delta` in Claude Code)
+1. **Graph:** `detect_changes_tool` (or `/code-review-graph:review-delta` in Claude Code)
 2. **Gbrain:** `gbrain code-def` / `gbrain search` on symbols from blast radius
-3. **Context:** `get_review_context` for snippets
+3. **Context:** `get_review_context_tool` for snippets
 4. **Read:** only assigned files from steps 1–3
 5. **Judge:** persona in [`agents/code-reviewer.md`](../../bin/orama-system/skills/code-review/agents/code-reviewer.md), confidence ≥ 80, report per [`output-format.md`](../../bin/orama-system/skills/code-review/references/output-format.md)
 
@@ -190,7 +190,7 @@ Same Phases A–C, then fan-out five lenses per [`review-lenses-pr.md`](../../bi
 ```bash
 git diff --stat
 # In MCP session:
-#   detect_changes → get_impact_radius → get_review_context
+#   detect_changes_tool → get_impact_radius_tool → get_review_context_tool
 ```
 
 ---
@@ -205,9 +205,9 @@ git diff --stat
 | Embeddings wire-up | `bash bin/orama-system/mcp-install/scripts/setup-embeddings` |
 | CRG embed mode | `bash bin/orama-system/skills/code-review/scripts/crg-embed-mode status` |
 | Graph stats | MCP `list_graph_stats_tool` |
-| Start diff review | MCP `detect_changes` |
+| Start diff review | MCP `detect_changes_tool` |
 | Symbol lookup | `gbrain code-def <symbol>` |
-| Snippets before Read | MCP `get_review_context` |
+| Snippets before Read | MCP `get_review_context_tool` |
 
 ---
 
@@ -218,8 +218,8 @@ Learning-oriented shortest path (assumes clone already on disk):
 1. `bash bin/orama-system/scripts/first-run-install.sh status` — see what is red.
 2. `bash bin/orama-system/scripts/first-run-install.sh run` — wait for Ollama pulls to finish.
 3. Restart IDE; MCP `list_graph_stats_tool` on orama-system — if 0 nodes, build + embed (Step 4).
-4. Make a one-line change in any tracked file; run MCP `detect_changes`.
-5. Call `get_review_context` for one changed file; confirm you did **not** read the whole repo first.
+4. Make a one-line change in any tracked file; run MCP `detect_changes_tool`.
+5. Call `get_review_context_tool` for one changed file; confirm you did **not** read the whole repo first.
 
 You have now used the same chain the code-review skill enforces: graph → gbrain → Read.
 
