@@ -33,11 +33,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from utils.control_plane_auth import (
+    auth_enforced,
     auth_headers,
     cors_allow_origins,
     default_bind_host,
     control_plane_auth_failure,
     portal_requires_auth,
+    request_is_loopback,
+    resolved_control_plane_token,
     redact_activity_payload,
     redact_agents_payload,
     redact_jobs_payload,
@@ -155,7 +158,11 @@ def _portal_http_client(**kwargs: Any) -> httpx.AsyncClient:
 
 @app.middleware("http")
 async def _control_plane_auth_middleware(request: Request, call_next):
-    if portal_requires_auth(request.url.path, request.method):
+    if portal_requires_auth(
+        request.url.path,
+        request.method,
+        request=request,
+    ):
         failure = control_plane_auth_failure(request)
         if failure is not None:
             return failure
@@ -193,6 +200,24 @@ def _resolve_web_asset(path: str) -> tuple[bytes, str]:
 # as the build lands — without a server restart.
 
 # ── HTML template ──────────────────────────────────────────────────────────────
+
+
+def _portal_cp_fetch_bootstrap(browser_token: str) -> str:
+    """Inject loopback-only bearer helper for legacy dashboard API calls."""
+    if not browser_token:
+        return "function cpFetch(url, opts) { return fetch(url, opts); }\n"
+    token_js = json.dumps(browser_token)
+    return (
+        f"const ORAMA_CP_TOKEN = {token_js};\n"
+        "function cpFetch(url, opts) {\n"
+        "  opts = opts || {};\n"
+        "  const headers = Object.assign({}, opts.headers || {});\n"
+        "  if (ORAMA_CP_TOKEN) headers['Authorization'] = 'Bearer ' + ORAMA_CP_TOKEN;\n"
+        "  opts.headers = headers;\n"
+        "  return fetch(url, opts);\n"
+        "}\n"
+    )
+
 
 HTML_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -371,6 +396,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 {input_section}
 <div class="footer">Auto-refresh every 10s &bull; <span id="last-refresh">{timestamp}</span></div>
 <script>
+{cp_fetch_bootstrap}
 async function sendTask() {{
   const field = document.getElementById('task-input');
   const status = document.getElementById('input-status');
@@ -378,7 +404,7 @@ async function sendTask() {{
   if (!msg) {{ status.textContent = 'Enter a task first.'; return; }}
   status.textContent = 'Sending…';
   try {{
-    const r = await fetch('/api/user-input', {{
+    const r = await cpFetch('/api/user-input', {{
       method: 'POST',
       headers: {{'Content-Type': 'application/json'}},
       body: JSON.stringify({{message: msg}})
@@ -424,7 +450,7 @@ async function saveCfg(tool, envVar) {{
   if (!val) {{ status.textContent = 'Enter a key first.'; return; }}
   status.textContent = 'Saving…';
   try {{
-    const r = await fetch('/api/configure-tool', {{
+    const r = await cpFetch('/api/configure-tool', {{
       method: 'POST',
       headers: {{'Content-Type': 'application/json'}},
       body: JSON.stringify({{tool: tool, env_var: envVar, value: val}})
@@ -450,7 +476,7 @@ async function spawnAgent() {{
   status.textContent = 'Dispatching to ' + _selectedAgent + '…';
   output.style.display = 'none';
   try {{
-    const r = await fetch('/api/spawn-agent', {{
+    const r = await cpFetch('/api/spawn-agent', {{
       method: 'POST',
       headers: {{'Content-Type': 'application/json'}},
       body: JSON.stringify({{agent: _selectedAgent, task: task}})
@@ -472,7 +498,7 @@ async function spawnAgent() {{
 // ── Async data refresh (no page reload) ──────────────────────────────────
 async function refreshData() {{
   try {{
-    const r = await fetch('/api/status-html');
+    const r = await cpFetch('/api/status-html');
     if (!r.ok) return;
     const d = await r.json();
     const grid = document.getElementById('cards-grid');
@@ -529,7 +555,7 @@ async function svcAction(action, service) {{
   if (statusEl) statusEl.textContent = action + (service?' '+service:'') + '…';
   try {{
     const url = action === 'stop' ? '/api/stop' : '/api/restart/' + service;
-    const r = await fetch(url, {{method:'POST',headers:{{'Content-Type':'application/json'}},body:'{{}}'}});
+    const r = await cpFetch(url, {{method:'POST',headers:{{'Content-Type':'application/json'}},body:'{{}}'}});
     const d = await r.json();
     const msg = d.message || JSON.stringify(d);
     if (statusEl) statusEl.textContent = msg;
@@ -544,7 +570,7 @@ async function rediscover() {{
   const statusEl = document.getElementById('svc-ctrl-status');
   if (statusEl) statusEl.textContent = 'Re-discovering LAN…';
   try {{
-    const r = await fetch('/api/rediscover', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:'{{}}'}});
+    const r = await cpFetch('/api/rediscover', {{method:'POST',headers:{{'Content-Type':'application/json'}},body:'{{}}'}});
     const d = await r.json();
     const msg = d.message || JSON.stringify(d);
     if (statusEl) statusEl.textContent = msg;
@@ -558,7 +584,7 @@ async function recheckPolicy() {{
   const statusEl = document.getElementById('svc-ctrl-status');
   if (statusEl) statusEl.textContent = 'Re-checking hardware policy…';
   try {{
-    const r = await fetch('/api/hardware-policy');
+    const r = await cpFetch('/api/hardware-policy');
     const d = await r.json();
     const ok = d.ok;
     const violations = (d.violations||[]).join(', ');
@@ -574,7 +600,7 @@ async function refreshJobs() {{
   const tbody = document.getElementById('jobs-tbody');
   if (!tbody) return;
   try {{
-    const r = await fetch('/api/v1/jobs');
+    const r = await cpFetch('/api/v1/jobs');
     if (!r.ok) return;
     const jobs = await r.json();
     if (!jobs.length) {{
@@ -1045,7 +1071,7 @@ def _render_supervisor_jobs_section(jobs: List[Dict[str, Any]]) -> str:
     )
 
 
-def _render_html(status: Dict[str, Any]) -> str:
+def _render_html(status: Dict[str, Any], *, browser_token: str = "") -> str:
     import datetime
 
     cards = []
@@ -1127,6 +1153,7 @@ def _render_html(status: Dict[str, Any]) -> str:
     jobs = status.get("supervisor_jobs", [])
     return HTML_TEMPLATE.format(
         version=VERSION,
+        cp_fetch_bootstrap=_portal_cp_fetch_bootstrap(browser_token),
         cards="\n".join(cards),
         service_control_section=_render_service_control_section(),
         routing_section=_render_routing_section(routing),
@@ -2471,14 +2498,17 @@ async def serve_assets(path: str):
 
 
 @app.get("/", response_class=None)
-async def index():
+async def index(request: Request):
     from fastapi.responses import FileResponse, HTMLResponse
     # Serve React app when web/dist is built; fall back to legacy HTML dashboard.
     react_index = _WEB_DIST / "index.html"
     if react_index.exists():
         return FileResponse(str(react_index), media_type="text/html")
     status = await api_status()
-    html = _render_html(status)
+    browser_token = ""
+    if auth_enforced() and request_is_loopback(request):
+        browser_token = resolved_control_plane_token()
+    html = _render_html(status, browser_token=browser_token)
     return HTMLResponse(content=html)
 
 
