@@ -49,7 +49,12 @@ bash scripts/git/commit-clean.sh -m "type(scope): summary" --amend
 
 ## Cloud VM install
 
-`.cursor/environment.json` `install` runs `apply-attribution-guard-all-repos.sh` after sibling repos are cloned.
+`.cursor/environment.json` `install` runs `scripts/cursor/cloud-install.sh`, which:
+
+- Installs `python3.12-venv` when `ensurepip` is missing (Debian cloud images often lack it)
+- Recreates a broken `.venv` (partial venvs lack `bin/activate`)
+- Clones Perpetua-Tools and AlphaClaw under `$HOME/openclaw-v1` (guards against empty `OPENCLAW_HOME` cloning to `/Perpetua-Tools`)
+- Runs `apply-attribution-guard-all-repos.sh` after sibling repos are present
 
 ---
 
