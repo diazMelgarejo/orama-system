@@ -10,6 +10,7 @@
 #   # or locally:
 #   bash install.sh
 #   bash install.sh --project     # install to ./.claude/skills/ instead of global
+#   bash install.sh --with-test-deps  # also install Python deps for pytest/PoCs
 #   bash install.sh --uninstall   # remove the skill
 
 set -euo pipefail
@@ -28,6 +29,7 @@ SKILL_SOURCE="bin/orama-system"
 # Default: global install
 INSTALL_DIR="$HOME/.claude/skills/$SKILL_NAME"
 MODE="global"
+WITH_TEST_DEPS=0
 
 # ─── Argument parsing ────────────────────────────────────────────────────────
 for arg in "$@"; do
@@ -45,9 +47,13 @@ for arg in "$@"; do
       echo -e "${GREEN}Done.${RESET}"
       exit 0
       ;;
+    --with-test-deps)
+      WITH_TEST_DEPS=1
+      ;;
     --help|-h)
-      echo "Usage: install.sh [--project] [--uninstall]"
+      echo "Usage: install.sh [--project] [--with-test-deps] [--uninstall]"
       echo "  --project   Install to ./.claude/skills/ (project-local)"
+      echo "  --with-test-deps  Install runtime/test deps for pytest and FastAPI PoCs"
       echo "  --uninstall Remove the ultrathink skill"
       exit 0
       ;;
@@ -94,6 +100,16 @@ fi
 
 # ─── Make scripts executable ─────────────────────────────────────────────────
 chmod +x "$INSTALL_DIR/scripts/"*.py "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
+
+# ─── Optional Python test dependency bootstrap ────────────────────────────────
+if [[ "$WITH_TEST_DEPS" == "1" ]]; then
+  if [[ -f "$SCRIPT_DIR/scripts/install-test-deps.sh" ]]; then
+    info "Installing Python runtime/test dependencies for pytest and FastAPI PoCs..."
+    bash "$SCRIPT_DIR/scripts/install-test-deps.sh"
+  else
+    warn "scripts/install-test-deps.sh not found — skip Python dependency install"
+  fi
+fi
 
 # ─── ECC Harness Hook ────────────────────────────────────────────────────────
 for ECC_CANDIDATE in "$SCRIPT_DIR/.ecc" "$HOME/.ecc" ".ecc"; do

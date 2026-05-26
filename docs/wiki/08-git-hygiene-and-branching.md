@@ -30,8 +30,9 @@ Canonical policy for **primary commit authors** and **`Co-authored-by`** trailer
 
 | Role | Rule |
 | --- | --- |
-| **Approved primary authors** | `cyre <diazMelgarejo@gmail.com>` · `cyre <Lawrence@cyre.me>` · name containing `Lawrence` + `Lawrence@cyre.me` · `Codex <codex@openai.com>` |
+| **Approved primary authors** | Any configured `user.name` with `diazMelgarejo@gmail.com` or `Lawrence@cyre.me`; `Codex <codex@openai.com>` is also allowed |
 | **Co-authored-by — allowed** | Well-known public AI/vendor domains (`openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com`, subdomains) and matching name markers (`codex`, `claude`, `anthropic`, `cursor`, …) |
+| **Co-authored-by — additionally allowed AI/vendor signals** | `google.dev`, `perplexity.ai`, `x.ai`; matching name markers `gemini`, `google`, `copilot`, `perplexity`, `grok` |
 | **Co-authored-by — allowed Gmail** | `diazMelgarejo@gmail.com`, `Lawrence@cyre.me` only |
 | **Co-authored-by — rejected** | Any other `@gmail.com` / `@googlemail.com` (unattributable personal inboxes) |
 | **Agent sessions (default)** | Do not add `Co-authored-by` to commits you author; use an approved primary identity only |
@@ -99,9 +100,10 @@ git config user.email "codex@openai.com"
 
 | Category | Rule |
 | --- | --- |
-| **Primary author** | `cyre` + `diazMelgarejo@gmail.com`, `cyre` + `Lawrence@cyre.me`, name containing `Lawrence` + `Lawrence@cyre.me`, or `Codex` + `codex@openai.com` (`scripts/git/check_identity.sh`) |
+| **Primary author** | Any name with `diazMelgarejo@gmail.com` or `Lawrence@cyre.me`, or `Codex` + `codex@openai.com` (`scripts/git/check_identity.sh`) |
 | **Allowed co-author domains** | `openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com` (and subdomains) |
-| **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `copilot`, `openai`, `github`, `microsoft` (in the trailer line) |
+| **Additional allowed AI/vendor domains** | `google.dev`, `perplexity.ai`, `x.ai` (and subdomains) |
+| **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `google`, `copilot`, `openai`, `github`, `microsoft`, `perplexity`, `grok` (in the trailer line) |
 | **Allowed `@gmail.com` co-authors** | `diazMelgarejo@gmail.com`, `Lawrence@cyre.me` only |
 | **Rejected** | Any other `Co-authored-by` line with `@gmail.com` (unattributable personal inboxes) |
 
