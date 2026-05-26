@@ -24,3 +24,23 @@ bash scripts/git/commit-clean.sh -m "type(scope): short summary"
 - `AlphaClaw` (`$ALPHACLAW_INSTALL_DIR` or `$OPENCLAW_HOME/AlphaClaw`)
 
 See `docs/wiki/09-cursor-cloud-commit-attribution.md`.
+
+## Prime directives for agent-maintained records
+
+- Treat vulnerability memory, lessons, audits, and review ledgers as append-only
+  historical records. Do not erase, delete, replace, truncate, or rewrite prior
+  entries unless the user explicitly instructs that exact destructive action.
+- When a record is stale, defunct, remediated, duplicated, or superseded, update
+  it additively: add or change status/notes/feedback fields, append a follow-up
+  entry, or link to the replacement. Preserve the original evidence and dates.
+- For JSON records, load and write with structured parsers (`json.load` /
+  `json.dump(..., indent=4)` in Python). Never hand-edit by string
+  concatenation, ad hoc patches, or regex substitutions.
+- Before any destructive or ambiguity-prone record operation, use
+  AskUserQuestions: ask the user which record to change, what status to apply,
+  and whether deletion/replacement is truly intended.
+- Git attribution must stay policy-compliant: primary author may be one of the
+  approved owner emails or an approved well-known AI author such as
+  `Codex <codex@openai.com>`; `Co-authored-by` may include well-known public
+  AI/helper domains and markers, but random/unattributable Gmail co-authors are
+  blocked.
