@@ -44,3 +44,15 @@ See `docs/wiki/09-cursor-cloud-commit-attribution.md`.
   `Codex <codex@openai.com>`; `Co-authored-by` may include well-known public
   AI/helper domains and markers, but random/unattributable Gmail co-authors are
   blocked.
+
+## Security PR stacking directive
+
+- Before opening or preparing any security-remediation PR, read
+  `docs/SECURITY-POLICY.md` and follow its "Security PR stacking and merge
+  strategy" section.
+- Merge or revive existing security-priority branches before creating duplicate
+  replacement branches.
+- Stack security PRs in policy-priority order: `PR1` starts from `main`; each
+  `PR(N+1)` is rebased on the previous PR branch before opening.
+- Rebasing or force-updating an existing remote branch requires explicit current
+  user authorization.
