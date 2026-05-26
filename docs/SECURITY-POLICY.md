@@ -91,6 +91,67 @@ shape instead of inventing a parallel remediation.
 
 ---
 
+## Security PR stacking and merge strategy (mandatory)
+
+All agents working on security remediation must use a stacked PR strategy so
+reviewers can merge fixes in risk order without losing dependency context.
+
+### Required order of operations
+
+1. **Look back first.** Before opening new work, list open PRs and remote
+   branches that are not merged into `origin/main`; classify them against the
+   immediate TODO list above.
+2. **Existing security work wins.** If an existing branch precisely implements a
+   planned security fix, revive/rebase that branch before creating a new branch
+   for the same finding. Do not duplicate the patch line.
+3. **Stack by priority.** Build the stack in the same order as this policy:
+   planned duplicate workstreams first, then severity-ranked findings from
+   Critical to High to Medium.
+4. **Base rule.**
+   - `PR1` must branch from current `origin/main`.
+   - `PR2` must be rebased on top of `PR1`'s branch before opening.
+   - `PR(N+1)` must be rebased on top of `PR(N)` before opening.
+5. **One logical fix per PR.** Keep each PR scoped to one finding or one precise
+   planned workstream (for example auth/bind, model egress, MCP profile
+   pruning). Shared tests may live in the earliest PR that needs them.
+6. **Ask before rewriting.** Rebasing or force-updating any existing remote
+   branch is a history rewrite. AskUserQuestions first unless the user has
+   explicitly authorized that branch rewrite in the current turn.
+7. **No security record deletion.** If a PR supersedes another branch or marks a
+   finding remediated, annotate the finding/plan additively. Do not delete prior
+   finding records.
+
+### Stacked PR base example
+
+```text
+origin/main
+  └─ security/01-control-plane-auth-bind      → PR1 base: main
+      └─ security/02-model-egress-probes      → PR2 base: security/01-control-plane-auth-bind
+          └─ security/03-mcp-readonly-profile → PR3 base: security/02-model-egress-probes
+```
+
+### Current branch survey (2026-05-26)
+
+No open PRs were present in `orama-system`, `Perpetua-Tools`, or `AlphaClaw`
+when this directive was added. Remote branches not merged into `origin/main`
+that appear security-relevant and should be considered before opening new work:
+
+| Repo | Branch | Relevance to priority queue |
+|------|--------|-----------------------------|
+| `orama-system` | `origin/cursor/application-security-review-601e` | Current security policy/docs branch; merge before follow-up implementation branches so future agents inherit this strategy. |
+| `orama-system` | `origin/cursor/security-pr-review-4254` | Prior security review report; inspect for already-planned findings before duplicating review/docs work. |
+| `orama-system` | `origin/cursor/disable-cursor-coauthor-all-repos-6421` and `origin/cursor/allow-cursor-agent-identity-76c9` | Git attribution/agent identity guardrails; merge before attribution-policy follow-ups. |
+| `orama-system` | `origin/feat/worktree-doctrine` and `origin/feat/multi-agent-ordinal-safety` | Worktree/parallel-agent safety; inspect before fixing worktree bootstrap and branch-stack workflows. |
+| `Perpetua-Tools` | `origin/2026-05-25-security-fixes-1-3` | Existing security fixes for control-plane auth, redaction, and memory governance; highest priority to inspect/revive before duplicate PT auth/redaction work. |
+| `Perpetua-Tools` | `origin/cursor/critical-correctness-bugs-08b6`, `origin/cursor/critical-correctness-bugs-bfdd`, `origin/cursor/critical-correctness-bugs-c247`, `origin/cursor/critical-correctness-bugs-9b3e` | Hardware affinity and mirror-routing correctness; inspect before model-egress and endpoint policy changes. |
+| `Perpetua-Tools` | `origin/chore-env-precommit-hook` | Env assignment hygiene; inspect before adding secret/config hygiene gates. |
+| `AlphaClaw` | `origin/cursor/application-security-review-601e` | Current agent append-only directives branch; merge before follow-up AlphaClaw policy work. |
+
+If a GitHub PR creation tool is unavailable, agents must still push the
+prepared branch and report the intended PR base/head chain explicitly.
+
+---
+
 ### Fix 6 — operator reference (implemented)
 
 **Perpetua-Tools — AlphaClaw MCP**
