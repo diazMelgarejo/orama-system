@@ -8,7 +8,7 @@ This document captures **why v2 exists**, what each of the four source AI-conver
 
 The current `orama-system` (v0.9.9.8, approaching v1.0 RC) has matured into a working multi-agent system with a 5-stage methodology, 7 specialized agents, FastAPI HTTP bridge, MCP server stubs, and a LAN topology spanning Mac (LM Studio at `192.168.x.110:1234`) and Windows (LM Studio at `192.168.x.108:1234`) hosts. It works — but the architecture grew organically. State is scattered across `.env`, `openclaw.json`, hardcoded defaults; framework choices were never deliberate; and key safety primitives (hardware affinity gates, pre-spawn checks) are bolted on rather than baked in.
 
-v2 is the chance to **rebuild from primitives** with hardware affinity, microkernel modularity, and local-first orchestration as first-class design constraints — informed by everything v1 taught us, while shedding the accidental complexity.
+v2 is the chance to **rebuild from primitives** with hardware affinity, microkernel modularity, local-first orchestration, and security-first platform controls as first-class design constraints — informed by everything v1 taught us, while shedding the accidental complexity.
 
 ---
 
@@ -191,6 +191,29 @@ The three callers (test suite + orchestration code) updated in the same commit.
 **v2 implication**: The v2 `perpetua-core` equivalent of this function should live in
 `perpetua_core/discovery/selector.py` and follow the same contract: pure function,
 no I/O, takes a `BackendRegistry` and a spec dict, returns a `Backend`.
+
+### D16 — Security-first platform, not retrofit hardening (2026-05-26)
+
+**Decision**: Security controls are v2 platform features. They are not optional
+checklists after parity:
+
+1. control-plane auth and capability routing are part of the HTTP/MCP contract;
+2. loopback bind and no universal default tokens are baseline UX;
+3. model endpoint egress is positive-allowlist and never inherits privileged
+   control-plane headers;
+4. dashboard rendering treats all remote probe values as untrusted data;
+5. subprocess workers and lifecycle controls require explicit dangerous
+   capability grants and append-only audit events;
+6. supply-chain posture, provenance, and workflow token permissions are release
+   gates.
+
+**Rationale**: v1 security review found that bolting auth, bind policy, redaction,
+and MCP profiles on after features shipped created repeated regressions. v2
+therefore follows public secure-development baselines: NIST SSDF integrates
+security practices throughout the SDLC; OWASP ASVS gives technical verification
+requirements; CISA Secure by Design/Default shifts secure configuration away from
+users; OpenSSF Scorecard and SLSA cover open-source and build-integrity posture.
+See [`24-security-first-platform.md`](24-security-first-platform.md).
 
 ---
 
