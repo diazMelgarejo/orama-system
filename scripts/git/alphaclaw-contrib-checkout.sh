@@ -25,3 +25,9 @@ else
 fi
 
 echo "OK: AlphaClaw on contrib branch ${CONTRIB_BRANCH} (upstream tracking: origin/${UPSTREAM_BRANCH})"
+
+# After checkout, realign onto current upstream mirror if main moved.
+if [[ -x "$(dirname "$0")/alphaclaw-realign-contrib-branches.sh" ]]; then
+  ALPHACLAW_INSTALL_DIR="$AC_ROOT" ALPHACLAW_CONTRIB_BRANCHES="$contrib" \
+    bash "$(dirname "$0")/alphaclaw-realign-contrib-branches.sh" || true
+fi
