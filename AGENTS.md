@@ -23,7 +23,9 @@ bash scripts/git/commit-clean.sh -m "type(scope): short summary"
 - `Perpetua-Tools` (`$PERPETUA_TOOLS_PATH` or `$OPENCLAW_HOME/Perpetua-Tools`)
 - `AlphaClaw` (`$ALPHACLAW_INSTALL_DIR` or `$OPENCLAW_HOME/AlphaClaw`)
 
-See `docs/wiki/09-cursor-cloud-commit-attribution.md`.
+**AlphaClaw fork:** `main` is upstream-tracking only. All contributions (including attribution guards) use a contrib branch — default `cursor/sync-attribution-guards-6421` (`ALPHACLAW_CONTRIB_BRANCH`). Run `bash scripts/git/alphaclaw-contrib-checkout.sh` after clone. See `docs/wiki/13-alphaclaw-fork-contrib-branches.md`.
+
+See `docs/wiki/12-cursor-cloud-commit-attribution.md`.
 
 ## Prime directives for agent-maintained records
 
