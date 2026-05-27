@@ -23,7 +23,7 @@ bash scripts/git/commit-clean.sh -m "type(scope): short summary"
 - `Perpetua-Tools` (`$PERPETUA_TOOLS_PATH` or `$OPENCLAW_HOME/Perpetua-Tools`)
 - `AlphaClaw` (`$ALPHACLAW_INSTALL_DIR` or `$OPENCLAW_HOME/AlphaClaw`)
 
-**AlphaClaw fork:** `main` is upstream mirror only. Integration: `feature/MacOS-post-install` (must contain `origin/main`). Contrib: `cursor/sync-attribution-guards-6421` → PR into integration, **not** into `main`. Run `bash scripts/git/alphaclaw-align-all.sh` before every AlphaClaw commit. Push: `bash scripts/cursor/push-openclaw-stack.sh`. See `docs/wiki/13-alphaclaw-fork-contrib-branches.md`.
+**AlphaClaw fork:** `main` = upstream mirror. `pr-4-macos` = upstream [PR #63](https://github.com/chrysb/alphaclaw/pull/63) — cherry-pick down from `feature/MacOS-post-install`; **never** FF integration onto it. Integration: `feature/MacOS-post-install`. Contrib: `cursor/sync-attribution-guards-6421` → PR into integration. `alphaclaw-align-all.sh` does not touch `pr-4-macos`. See `docs/wiki/13-alphaclaw-fork-contrib-branches.md` and AlphaClaw `docs/wiki/01-branch-roles.md`.
 
 See `docs/wiki/12-cursor-cloud-commit-attribution.md`.
 
