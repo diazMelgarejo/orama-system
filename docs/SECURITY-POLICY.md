@@ -1,7 +1,7 @@
 # Security Policy — orama-system + Perpetua-Tools
 
 > **Canonical security posture** for the OpenClaw orchestration stack.  
-> **Last updated:** 2026-05-25  
+> **Last updated:** 2026-05-26  
 > **Source review:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../OpenClaw/v1/2026-05-23-security-markdown.md)
 
 ---
@@ -34,6 +34,121 @@ This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **P
 3. Run `bash scripts/git/install-local-hooks.sh` before commits in each repo clone.
 4. Run `python3 scripts/review/repo_hygiene.py` (orama) before push.
 5. Multi-file code exploration: **code-review-graph MCP first** (`detect_changes_tool`, `get_review_context_tool`), then gbrain, then scoped Read — see `bin/orama-system/skills/code-review/SKILL.md` (no pre-commit hook; required workflow).
+
+---
+
+## Immediate TODO list — validated findings from scheduled review (2026-05-26)
+
+These items are additive to the implemented fix table above. Some findings
+overlap precise planned work in
+[`docs/plans/2026-05-23-security-remediation-plan.md`](plans/2026-05-23-security-remediation-plan.md);
+those planned workstreams come first so agents continue the existing patch
+shape instead of inventing a parallel remediation.
+
+### A. Already planned / duplicate workstreams to reopen first
+
+| Workstream | Existing plan anchor | Covers findings | Next action |
+|------------|----------------------|-----------------|-------------|
+| **A1 — Control-plane auth, loopback, and LAN-bind hardening** | Remediation plan Phase 1 (`start.sh`: LAN bind requires token; portal route auth audit) and Phase 2 (shared bearer auth on PT + orama routes) | Critical/High/Medium portal takeover surfaces: spawn-agent execution, secret overwrite, swarm launch, lifecycle stop/restart, job detail exposure, copied example token, loopback dashboard token bootstrap, Windows all-interface launcher | Re-open Fix 3/3b as incomplete until every mutating/read-sensitive route is covered, no bearer is embedded in HTML, copied templates do not contain usable tokens, and all launchers use loopback-by-default with explicit `*_BIND_LAN=1` plus strong token. |
+| **A2 — Model endpoint discovery and egress policy** | Remediation plan Phase 3 (`Endpoint URL validator`, local-only/default-private endpoint policy) | LAN discovery endpoint hijack and status-probe bearer leakage to model endpoints | Pin/approve discovered model hosts before persistence, strip control-plane `Authorization` from LM Studio/Ollama probes, and keep public/non-approved model endpoints opt-in only. |
+| **A3 — Least-privilege MCP / worker profiles** | Implemented Fix 6 plus operator reference in this policy | Readonly Cursor MCP profile still preserving elevated `ai-cli-mcp` in active project config | Make readonly profile pruning verifiable against the merged on-disk config, not only dry-run stack output; keep dangerous CLI workers behind explicit elevated opt-in. |
+
+### B. Severity-ranked remediation queue
+
+| Priority | Severity | Finding | Primary location | Highest-leverage remediation |
+|----------|----------|---------|------------------|------------------------------|
+| 1 | Critical | Unauthenticated portal endpoint dispatches full-auto CLI agents with attacker-controlled tasks | `portal_server.py` | Require control-plane auth on `/api/spawn-agent`, disable HTTP access to full-auto CLI dispatch unless explicitly elevated, and add regression tests for unauthenticated denial. |
+| 2 | High | Loopback dashboard auth exemption leaks the control-plane bearer through local reverse proxies | `utils/control_plane_auth.py` | Remove bearer-in-HTML bootstrap and do not infer operator trust solely from `request.client.host`; use an explicit authenticated browser/session bootstrap. |
+| 3 | High | Windows launcher exposes control-plane services on all interfaces by default | `platform/windows/start.ps1` | Mirror `start.sh` loopback-first bind resolution and require explicit `*_BIND_LAN=1` plus strong token before any LAN bind. |
+| 4 | High | Unauthenticated portal clients can overwrite persisted integration secrets | `portal_server.py` | Gate `/api/configure-tool` behind authenticated operator auth and audit every secret write. |
+| 5 | High | Unauthenticated portal clients can launch multi-agent supervisor jobs with attacker-controlled prompts | `portal_server.py` | Replace request-body `approved=true` with server-side authenticated approval and PT-side auth rejection for unauthenticated job creation. |
+| 6 | High | LAN discovery trusts unauthenticated LM Studio responders and persists attacker endpoints | `scripts/discover.py` | Require explicit operator approval or trusted host pinning before persisting newly discovered model endpoints. |
+| 7 | High | Portal status probes leak the control-plane bearer token to untrusted model endpoints | `portal_server.py` | Split trusted PT/orama clients from untrusted model-probe clients and explicitly strip `Authorization` for LM Studio/Ollama/discovery-derived hosts. |
+| 8 | High | Unescaped model names from LAN model probes execute script in the portal dashboard | `portal_server.py` | Escape all remotely supplied model/status strings before HTML interpolation or render structured JSON via safe text nodes. |
+| 9 | High | Example control-plane token plus copied LAN bind gives same-LAN clients authenticated portal access | `.env.example` | Ship no usable example control-plane token; keep active template values loopback-safe and require generated/operator-provided strong tokens. |
+| 10 | High | Worktree bootstrap writes attacker-controlled slugs into a source-able shell file without quoting | `scripts/worktree-bootstrap.sh` | Enforce a narrow slug allowlist and write generated shell environment values with safe quoting. |
+| 11 | Medium | Unauthenticated lifecycle endpoints let remote clients kill or restart the orchestration stack | `portal_server.py` | Require authenticated operator auth and CSRF/origin protections for stop/restart or remove HTTP lifecycle controls from LAN-facing routes. |
+| 12 | Medium | Job detail proxy exposes unredacted prompts and worker results to unauthenticated clients | `portal_server.py` | Authenticate job APIs and return a redacted job DTO instead of raw PT `result.json`/prompt payloads. |
+| 13 | Medium | Readonly Cursor MCP profile still launches the elevated ai-cli worker from the tracked project config | `.cursor/mcp.json` | Make tracked/default Cursor MCP config readonly-safe and have `sync-cursor-mcp.sh --profile readonly` prune managed elevated servers. |
+
+### C. Immediate acceptance checks for agents
+
+- [ ] Unauthenticated `POST /api/spawn-agent`, `/api/configure-tool`,
+  `/api/swarm/launch`, `/api/stop`, `/api/restart/*`, and job detail routes
+  return 401 when auth is enforced.
+- [ ] `GET /` with auth enforced never returns the raw control-plane token in
+  HTML, even when the upstream peer is loopback.
+- [ ] `start.sh` and `platform/windows/start.ps1` both bind to loopback unless
+  the corresponding `*_BIND_LAN=1` flag is set and a strong token is present.
+- [ ] Status/model probes never send the control-plane bearer to LM Studio,
+  Ollama, discovered LAN hosts, or public model endpoints.
+- [ ] Legacy dashboard/status HTML escapes model names, URLs, routing labels,
+  activity text, and all other remote probe strings.
+- [ ] `scripts/worktree-bootstrap.sh` rejects slugs outside a safe
+  alphanumeric/dot/dash/underscore pattern and shell-quotes generated env files.
+- [ ] Readonly MCP profile tests validate the final merged `.cursor/mcp.json`
+  state, not only dry-run stack contents.
+
+---
+
+## Security PR stacking and merge strategy (mandatory)
+
+All agents working on security remediation must use a stacked PR strategy so
+reviewers can merge fixes in risk order without losing dependency context.
+
+### Required order of operations
+
+1. **Look back first.** Before opening new work, list open PRs and remote
+   branches that are not merged into `origin/main`; classify them against the
+   immediate TODO list above.
+2. **Existing security work wins.** If an existing branch precisely implements a
+   planned security fix, revive/rebase that branch before creating a new branch
+   for the same finding. Do not duplicate the patch line.
+3. **Stack by priority.** Build the stack in the same order as this policy:
+   planned duplicate workstreams first, then severity-ranked findings from
+   Critical to High to Medium.
+4. **Base rule.**
+   - `PR1` must branch from current `origin/main`.
+   - `PR2` must be rebased on top of `PR1`'s branch before opening.
+   - `PR(N+1)` must be rebased on top of `PR(N)` before opening.
+5. **One logical fix per PR.** Keep each PR scoped to one finding or one precise
+   planned workstream (for example auth/bind, model egress, MCP profile
+   pruning). Shared tests may live in the earliest PR that needs them.
+6. **Ask before rewriting.** Rebasing or force-updating any existing remote
+   branch is a history rewrite. AskUserQuestions first unless the user has
+   explicitly authorized that branch rewrite in the current turn.
+7. **No security record deletion.** If a PR supersedes another branch or marks a
+   finding remediated, annotate the finding/plan additively. Do not delete prior
+   finding records.
+
+### Stacked PR base example
+
+```text
+origin/main
+  └─ security/01-control-plane-auth-bind      → PR1 base: main
+      └─ security/02-model-egress-probes      → PR2 base: security/01-control-plane-auth-bind
+          └─ security/03-mcp-readonly-profile → PR3 base: security/02-model-egress-probes
+```
+
+### Current branch survey (2026-05-26)
+
+No open PRs were present in `orama-system`, `Perpetua-Tools`, or `AlphaClaw`
+when this directive was added. Remote branches not merged into `origin/main`
+that appear security-relevant and should be considered before opening new work:
+
+| Repo | Branch | Relevance to priority queue |
+|------|--------|-----------------------------|
+| `orama-system` | `origin/cursor/application-security-review-601e` | Current security policy/docs branch; merge before follow-up implementation branches so future agents inherit this strategy. |
+| `orama-system` | `origin/cursor/security-pr-review-4254` | Prior security review report; inspect for already-planned findings before duplicating review/docs work. |
+| `orama-system` | `origin/cursor/disable-cursor-coauthor-all-repos-6421` and `origin/cursor/allow-cursor-agent-identity-76c9` | Git attribution/agent identity guardrails; merge before attribution-policy follow-ups. |
+| `orama-system` | `origin/feat/worktree-doctrine` and `origin/feat/multi-agent-ordinal-safety` | Worktree/parallel-agent safety; inspect before fixing worktree bootstrap and branch-stack workflows. |
+| `Perpetua-Tools` | `origin/2026-05-25-security-fixes-1-3` | Existing security fixes for control-plane auth, redaction, and memory governance; highest priority to inspect/revive before duplicate PT auth/redaction work. |
+| `Perpetua-Tools` | `origin/cursor/critical-correctness-bugs-08b6`, `origin/cursor/critical-correctness-bugs-bfdd`, `origin/cursor/critical-correctness-bugs-c247`, `origin/cursor/critical-correctness-bugs-9b3e` | Hardware affinity and mirror-routing correctness; inspect before model-egress and endpoint policy changes. |
+| `Perpetua-Tools` | `origin/chore-env-precommit-hook` | Env assignment hygiene; inspect before adding secret/config hygiene gates. |
+| `AlphaClaw` | `origin/cursor/application-security-review-601e` | Current agent append-only directives branch; merge before follow-up AlphaClaw policy work. |
+
+If a GitHub PR creation tool is unavailable, agents must still push the
+prepared branch and report the intended PR base/head chain explicitly.
 
 ---
 
