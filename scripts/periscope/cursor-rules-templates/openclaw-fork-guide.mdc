@@ -1,0 +1,72 @@
+---
+description: OpenClaw fork — branch model, PR targets, salvage, and L4 invariants (Cursor only)
+alwaysApply: true
+---
+
+# Periscope — Cursor agent rules (OpenClaw fork)
+
+Canonical design: `orama-system` repo → `docs/v2/21-periscope-l4-glass.md` and
+`docs/plans/2026-05-24-periscope-l4-integration-plan.md` (read when changing integration
+or parsers).
+
+## Branch model (non-negotiable)
+
+| Branch | Role |
+|--------|------|
+| **`agentsview`** | **Grandmother** — latest upstream agentsview lineage; refresh feature work from here |
+| **`main`** | **Upstream mirror only** — tracks `latentsignal-org/periscope`; **not** the build target |
+| **`merged`** | **Build branch** — combines `agentsview` + `main` + fork-specific work |
+
+**Rules:**
+
+1. **All fork PRs** (deps, OpenClaw integration, docs, renames) use **`base = merged`**.
+2. **Never** merge build/integration work into **`main`**.
+3. **Never** use restored **`main`** as a salvage source — wrong-target merges were reset; only
+   cherry-pick **patch content** onto **`merged`**.
+4. **`agentsview` is fully absorbed into `merged`** when `git log merged..agentsview` is empty;
+   do not re-merge `agentsview` wholesale without operator approval.
+
+## Salvage (right commit, wrong target)
+
+When dependabot or agents merged to old **`main`**:
+
+| Change | Action on `merged` |
+|--------|-------------------|
+| Go `pgx` bump | Usually **already present** — verify `go.mod` before opening a PR |
+| npm (`svelte`, `postcss`, …) | Prefer **targeted** bumps on `merged`; do not downgrade `marked` |
+| cargo / `tauri` lock | **Cherry-pick or merge** cargo lock bump onto `merged` |
+| Stale doc branches (e.g. old `AGENTS.md` only) | **Cherry-pick the file hunk** onto `merged` — **never** merge a branch based on pre-`merged` history |
+
+Close PRs that target **`main`** (#5, #6, superseded #1–#3).
+
+## Stack position (L4)
+
+Periscope is **observation-only** (L4). **Never** write to AlphaClaw, Perpetua-Tools, or
+orama-system. Parsers and routes **read** their logs; OpenClaw-specific server routes stay in
+this fork unless explicitly upstreamed.
+
+## Git identity (Cursor / cloud)
+
+1. Author: **`cyre <diazMelgarejo@gmail.com>`** or **`cyre <Lawrence@cyre.me>`** only.
+2. **Do not** add `Co-authored-by:`, `Made-with: Cursor`, or trailers with **forbidden**
+   emails (`Lawrence@bettermind.ph`, `cursoragent@cursor.com`, etc.).
+3. Prefer clean commits without bot co-authors on doc-only salvage cherry-picks.
+
+## Cursor Cloud / VM (this repo)
+
+- **Go:** 1.25+; ensure `PATH` includes `/usr/local/go/bin` when the VM default is older.
+- **CGO:** `CGO_ENABLED=1` for all Go build/test (SQLite).
+- **Frontend before Go tests:** build `frontend` and populate `internal/web/dist/` before
+  tests that serve SPA HTML (`make frontend` or `cd frontend && npm run build` + copy dist).
+- **Lint:** `golangci-lint` in `$HOME/go/bin`; pre-existing lint on `merged` does not block
+  deps PRs unless you touched those files.
+- **Do not** register loopback hosts as Cursor Cloud secrets — use committed localhost URLs.
+
+## Operator script (orama-system)
+
+From `orama-system` checkout:
+
+```bash
+bash scripts/periscope/install-cursor-rules.sh
+bash scripts/periscope/rebuild-deps-prs-onto-merged.sh   # deps onto merged only
+```
