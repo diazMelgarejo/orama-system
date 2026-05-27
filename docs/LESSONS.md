@@ -2235,3 +2235,53 @@ Both integration and contrib branches must have **merge-base(branch, origin/main
 3. Never open AlphaClaw feature PRs with base `main` when commits belong on integration/contrib lines.
 4. Use `bash scripts/git/commit-clean.sh` if `git commit` still appends co-author trailers.
 
+
+---
+
+## 2026-05-27 — RAG items 5–7 + transport matrix + macOS ghost ref scanner (Claude)
+
+### What was accomplished
+
+1. **macOS ghost git refs (D10 scanner)**
+   - Root cause: macOS APFS dedup creates sibling `main 2` files inside `.git/refs/heads/`
+   - git's `repack -Ad` fatals on `bad object refs/heads/main 2`
+   - Fix: `rm "$repo/.git/refs/heads/main 2"` on perpetua-core / oramasys / agate
+   - Prevention: added `scan_macos_ghost_git_refs()` to `scripts/review/repo_hygiene.py` (D10)
+   - 4 new tests in `tests/test_repo_hygiene.py`
+
+2. **PR #38 / #39 cleanup (Perpetua-Tools)**
+   - Removed FORBIDDEN Co-authored-by trailer from feature branch commits via `git commit --amend` / cherry-pick
+   - Force-pushed both branches; ran `git reflog expire --expire=now --all && git gc --prune=now`
+
+3. **RAG items 5–7 (diazMelgarejo/Perpetua-Tools PR #49)**
+   - Item 5: `orchestrator/gbrain_search.py` — async `gbrain search --json` subprocess, returns `[]` on any failure
+   - Item 6: `orchestrator/memory_node.py` — `retrieve_context()` = FTS5 + LanceDB + optional gbrain + RRF
+   - Item 7: `supervisor._inject_memory_context()` — step 0 in `_dispatch()`, prepends `[MEMORY CONTEXT]`
+   - 25 new tests; 400 pass on full suite
+
+4. **Sidecar transport matrix (orama-system docs/v2/19-gstack-optional-integration.md)**
+   - Added missing table comparing v1 (subprocess CLI), v2 (sidecar module), v2.5 (MCP HTTP endpoint)
+   - All three share the same failure semantics: `[]` on any transport error
+
+### Key patterns learned
+
+- **v1 "MemoryNode" = async callable, not graph node** — v1 has no MiniGraph. Implement as plain `async def retrieve_context()`.
+- **v1 "GbrainSearchTool" = async fn, no `@tool`** — v1 has no tool registry. Skip decorator entirely.
+- **Memory injection goes in `_dispatch()`, not in workers** — prompt enrichment before routing means every backend gets context with zero per-worker changes.
+- **opt-out via `metadata["use_memory"]=False`** — keeps skill_envelope path (deterministic, zero-LLM) unaffected when needed.
+- **`shutil.which()` at call time** — never import-time. Prevents startup failures when gbrain not installed.
+- **Background pytest invocations via Bash don't return file output immediately** — use foreground (`timeout` set high) or `Read` the `.output` file after notification.
+- **Python 3.9 + `dataclass(slots=True)` = TypeError** — `slots=True` requires Python 3.10+; discovery tests pre-fail on macOS system Python.
+
+### Files changed
+
+- `orama-system/docs/v2/19-gstack-optional-integration.md` — transport matrix added
+- `orama-system/docs/2026-05-22-rag-v1-backport-shipped.md` — items 5–7 marked shipped
+- `orama-system/scripts/review/repo_hygiene.py` — `scan_macos_ghost_git_refs()` D10 scanner
+- `orama-system/tests/test_repo_hygiene.py` — 4 new ghost ref tests
+- `_pt-merge-work/orchestrator/gbrain_search.py` — new
+- `_pt-merge-work/orchestrator/memory_node.py` — new
+- `_pt-merge-work/orchestrator/supervisor.py` — `_inject_memory_context()` + step 0
+- `_pt-merge-work/tests/test_gbrain_search.py` — new (14 tests)
+- `_pt-merge-work/tests/test_memory_node.py` — new (7 tests)
+- `_pt-merge-work/tests/test_supervisor_smoke.py` — +4 injection tests
