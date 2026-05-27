@@ -6,7 +6,6 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-# Cursor may inject OPENCLAW_HOME before $HOME is set; never clone to filesystem root.
 HOME="${HOME:-/home/ubuntu}"
 case "${OPENCLAW_HOME:-}" in
   "" | "/" | '/openclaw-v1' | '$HOME/openclaw-v1')
@@ -63,21 +62,19 @@ clone_sibling() {
   git clone --branch "$branch" --depth 1 "$url" "$dest"
 }
 
-# AlphaClaw fork: main tracks upstream only — all agent commits go to a contrib branch.
 clone_alphaclaw_fork() {
   local url="https://github.com/diazMelgarejo/AlphaClaw"
   local dest="$OPENCLAW_HOME/AlphaClaw"
   local upstream="${ALPHACLAW_UPSTREAM_BRANCH:-main}"
-  local contrib="${ALPHACLAW_CONTRIB_BRANCH:-cursor/sync-attribution-guards-6421}"
   if [[ -d "$dest/.git" ]]; then
-    log "AlphaClaw present; ensure contrib branch $contrib"
-    ALPHACLAW_INSTALL_DIR="$dest"       ALPHACLAW_CONTRIB_BRANCH="$contrib"       ALPHACLAW_UPSTREAM_BRANCH="$upstream"       bash "$REPO_ROOT/scripts/git/alphaclaw-contrib-checkout.sh"
+    log "AlphaClaw present; align integration + contrib branches"
+    bash "$REPO_ROOT/scripts/git/alphaclaw-align-all.sh"
     return 0
   fi
   log "cloning AlphaClaw (upstream $upstream) -> $dest"
   mkdir -p "$OPENCLAW_HOME"
   git clone --branch "$upstream" --depth 1 "$url" "$dest"
-  ALPHACLAW_INSTALL_DIR="$dest"     ALPHACLAW_CONTRIB_BRANCH="$contrib"     ALPHACLAW_UPSTREAM_BRANCH="$upstream"     bash "$REPO_ROOT/scripts/git/alphaclaw-contrib-checkout.sh"
+  bash "$REPO_ROOT/scripts/git/alphaclaw-align-all.sh"
 }
 
 log "OPENCLAW_HOME=$OPENCLAW_HOME"
