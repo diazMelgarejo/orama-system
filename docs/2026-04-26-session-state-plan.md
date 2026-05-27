@@ -89,8 +89,8 @@ All 8 objects in `git fsck --unreachable` are accounted for. **Nothing was lost.
 
 | SHA | Type | Origin | Resolution |
 |-----|------|---------|-----------|
-| `eebb5f9` | commit | Gemini's "symlink portability" commit (bad auth identity) | Discarded intentionally; content rescued into LESSONS.md (`1a6b010`) |
-| `8362ce0` | commit | Gemini's "3-tier IP detection" commit (bad auth identity) | Discarded intentionally; IP logic rebuilt correctly in `discover.py` |
+| `eebb5f9` | commit | Gemini's "symlink portability" commit (not merged as-is) | Content rescued into LESSONS.md (`1a6b010`) under approved identity |
+| `8362ce0` | commit | Gemini's "3-tier IP detection" commit (not merged as-is) | IP logic rebuilt correctly in `discover.py` |
 | `ab197ef` | commit | Old combined submodule commit (force-pushed over) | Superseded by the split commits |
 | `28dcbff` | stash object | Stash `stash@{1}` root (dropped stash) | Dropped — content was recovered before drop |
 | `d0b62c0` | stash object | Another stash artifact | Same as above |
@@ -209,7 +209,7 @@ Create `.claude/skills/self-improve/SKILL.md` in both PT and orama-system:
 
 Append dated entry capturing:
 - IP fix methodology (cross-config audit, `--force` discovery)
-- Gemini commit rejection pattern (bad author identity → discard + rescue content)
+- Unmerged external commits: rescue content into LESSONS.md, then land under approved git identity
 - alphaclaw-session skill creation pattern (profile-based, not config-based)
 - Discovery tier model (Tier 1-4 graceful degradation)
 
@@ -232,7 +232,7 @@ Append dated entry capturing:
 
 2. **`discover.py --force` after any IP change** — the 5-min TTL caches stale state and hides connectivity problems.
 
-3. **Gemini's commits cannot be merged** — bad author identities (`<forbidden>`, `forbidden-legacy-identity` in commit author, `REDACTED` agent) must be discarded. Rescue content manually into LESSONS.md, then commit under correct identity.
+3. **Merge only commits that pass the repo identity gate** — run `bash scripts/git/check_identity.sh` before committing; rescue useful unmerged work into LESSONS.md and recommit under approved identity.
 
 4. **`git fsck --unreachable` is the truth oracle** — 8 objects, all explained. Nothing lost. Run this before panicking about missing commits.
 
