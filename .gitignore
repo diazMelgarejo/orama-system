@@ -18,6 +18,7 @@ PR_BODY.md
 .env.local
 .paths
 .ecc
+.ecc.bak
 dist/
 web/dist/
 build/
@@ -34,6 +35,11 @@ DerivedData/
 .idea/
 .vscode/
 .antigravity/
+# macOS dedup (Finder "name 2" ghosts; worktree-bootstrap Datum D6)
+*\ 2/
+*\ 2.*
+*\ 3/
+*\ 3.*
 * 2.md
 * 2.py
 * 3.md
