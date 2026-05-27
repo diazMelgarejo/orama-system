@@ -119,6 +119,28 @@ sidecar module handles the transport.
 
 ---
 
+## Sidecar Transport Matrix
+
+> Added 2026-05-27. Answers Q2 (user: "what happened to the sidecar transport matrix?").
+
+Shows how the `GbrainSearchTool` / `gbrain_search()` helper is invoked across transport generations.
+
+| Dimension | v1 (current, `diazMelgarejo/Perpetua-Tools`) | v2 (`oramasys/*`) | v2.5 (future) |
+|-----------|----------------------------------------------|-------------------|---------------|
+| **Transport** | Local subprocess CLI (`gbrain search … --json`) | Sidecar module (`perpetua_core.sidecar.gstack`) | MCP HTTP endpoint (`GBRAIN_MCP_URL`) |
+| **Detection** | `shutil.which("gbrain")` at call time | `gstack.is_available()` — same semantics, sidecar-wrapped | `GBRAIN_MCP_URL` env var check |
+| **Call site** | `orchestrator/gbrain_search.py` — `asyncio.create_subprocess_exec` | `perpetua_core/sidecar/gstack.py` — direct import | `perpetua_core/sidecar/gstack.py` — `httpx.post` to sidecar |
+| **Failure mode** | `returncode != 0` → `[]`; timeout → `[]`; JSON error → `[]` | Same — `is_available()` gate + try/except → `[]` | `httpx.ConnectError` / timeout → `[]` |
+| **opt-in gate** | `GBRAIN_MEMORY_ENABLED=1` env var OR `use_gbrain=True` arg | Graph-level: only agents that call `gbrain_search @tool` get it | Same as v2 + `GBRAIN_MCP_URL` set |
+| **System start without gbrain** | ✅ — subprocess absence is silent | ✅ — `is_available()` returns False | ✅ — URL absent → `[]` |
+| **Zero import-time side effect** | ✅ — probe is lazy | ✅ | ✅ |
+
+**v1 implementation note (2026-05-27):** `orchestrator/gbrain_search.py` and `orchestrator/memory_node.py`
+are now in `diazMelgarejo/Perpetua-Tools` on branch `2026-05-27-006-rag-items-5-7`.
+`_inject_memory_context()` in `supervisor.py` injects context into `spec.prompt` before routing.
+
+---
+
 ## Invariants (must hold across all versions)
 
 | Invariant | v1 | v2 |
