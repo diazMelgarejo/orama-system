@@ -21,6 +21,18 @@ export ALPHACLAW_CONTRIB_BRANCH=cursor/sync-attribution-guards-6421   # current 
 # or: feature/MacOS-post-install for general macOS integration work
 ```
 
+
+## Realign contrib branches after upstream sync
+
+When `origin/main` is force-updated to match [upstream `main`](https://github.com/diazMelgarejo/AlphaClaw/tree/main), rebuild local contrib branches on that tip (cherry-pick fork commits only):
+
+```bash
+export ALPHACLAW_CONTRIB_BRANCHES=cursor/sync-attribution-guards-6421
+bash scripts/git/alphaclaw-realign-contrib-branches.sh
+```
+
+Each branch is reset to `origin/main`, then unique commits touching `scripts/git`, `.cursor`, or `AGENTS.md` are replayed. Merge-base with `main` becomes `origin/main` itself.
+
 ## Checkout contrib branch
 
 After clone or on existing tree:
