@@ -402,6 +402,32 @@ async def run(req: RunRequest) -> RunResponse:
 
 Lifted/skeletonized from today's `orama-system/api_server.py` per D9. Internal-only contract for v2.0 (D5).
 
+Security requirement: every non-health handler must declare a route capability
+(`public`, `read`, `mutate`, `lifecycle`, `dangerous-worker`, etc.) and pass
+through shared auth/capability middleware before reaching graph code. OWASP ASVS
+V4 requires access control rules to be enforced on trusted server-side code and
+the principle of least privilege; v2 implements that as route metadata, not UI
+visibility or client-controlled booleans.
+
+---
+
+## 6b. Kernel-adjacent security contracts
+
+These contracts are not optional modules; they are platform primitives consumed
+by the kernel, graph plugins, API layer, and PT adapter boundary:
+
+| Contract | Required shape |
+|----------|----------------|
+| `Capability` enum | `public`, `read`, `mutate`, `lifecycle`, `file-read`, `file-write`, `model-egress`, `dangerous-worker`, `admin` |
+| `AuthContext` | actor id, auth method, scopes/capabilities, source address, correlation id |
+| `SecurityDecision` | allow/deny, required capability, reason, redaction class, audit event id |
+| `EndpointPolicy` | scheme/host/port allowlist, redirect policy, host pinning, public-endpoint opt-in |
+| `AuditEvent` | append-only event with actor, capability, target, decision, correlation id, redacted metadata |
+
+The contracts implement the design gates in
+[`24-security-first-platform.md`](24-security-first-platform.md) and keep
+security behavior testable before any non-kernel module ships.
+
 ---
 
 ## Verification (kernel acceptance criteria)
@@ -421,6 +447,10 @@ Lifted/skeletonized from today's `orama-system/api_server.py` per D9. Internal-o
 13. **HITL interrupt is always-escapable (Rule 3)**: `pytest tests/test_interrupts.py::test_interrupt_not_suppressible_by_node` — any node that internally catches `Interrupt` and does not re-raise causes this test to fail. `status="interrupted"` and `status="conflicted"` can only be cleared by `aresume()` with a caller-supplied payload.
 14. **GossipBus is append-only (Rule 4)**: `pytest tests/test_gossip.py::test_no_delete_or_update` — `GossipBus` exposes no `delete`, `update`, or `truncate` method. All events are permanent. Test queries the event count before and after a deliberately invalid operation and asserts no rows were removed.
 15. **Authorization event emitted before ToolNode subprocess (Rule 2)**: `pytest tests/test_tool_node.py::test_authorization_event_precedes_subprocess` — GossipBus receives an `authorization` event with non-empty `actor_id` and `tool_cmd` fields before any process is spawned. Test uses a mock bus and asserts event ordering.
+16. **Route capability manifest complete**: every non-health FastAPI route has a declared capability and test coverage for unauthenticated denial where capability is not `public`.
+17. **No bearer-in-HTML invariant**: UI/bootstrap tests assert no raw control-plane token appears in rendered HTML, JSON bootstrap blobs, logs, or frontend bundles.
+18. **Endpoint egress policy**: model probes use an unprivileged client, strip control-plane auth headers, reject unknown/public hosts by default, and pin or require approval before persistence.
+19. **Security event redaction**: audit tests include fake API keys, bearer tokens, prompts, and raw transcripts and assert stored/logged events contain only redacted metadata.
 
 ---
 
