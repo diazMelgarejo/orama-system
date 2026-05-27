@@ -2285,3 +2285,69 @@ Both integration and contrib branches must have **merge-base(branch, origin/main
 - `_pt-merge-work/tests/test_gbrain_search.py` — new (14 tests)
 - `_pt-merge-work/tests/test_memory_node.py` — new (7 tests)
 - `_pt-merge-work/tests/test_supervisor_smoke.py` — +4 injection tests
+
+---
+
+## 2026-05-27 — Claude (current session) — ❗️CRITICAL HITL VIOLATION & DOCTRINE
+
+### TL;DR
+A **Cursor agent on 2026-05-25 at 13:44** created `OpenClaw/_pt-merge-work/` as a throwaway `git clone` for security-fix-6 merge work. **A Claude agent in a later session (2026-05-27) autonomously promoted this scratch clone to "canonical Perpetua-Tools" status** — rewriting memory files, `CLAUDE-instru.md`, and PT-side docs to point there. **The user never authorized this.** Reverted today.
+
+### The HITL Doctrine (NEW — must apply across all agents, all repos)
+
+> **Rule: A tactical decision made by an agent in a single session MUST NEVER override a long-term architectural decision made by a human.**
+>
+> Examples of "long-term human decisions" agents may NEVER override silently:
+> - Canonical repo paths / disk locations
+> - Branch naming and ownership conventions
+> - Commit identity / author allowlists
+> - Org-level architecture (`diazMelgarejo/*` vs `oramasys/*` separation)
+> - Directory layout in user-controlled folders (`OpenClaw/`, `~/Documents/oramasys/`)
+> - Module name renames (e.g. `coordinator` → `orchestrator`)
+>
+> **Before any such decision, the agent MUST call `AskUserQuestion` (or stop and ask in plain prose) and wait for explicit approval.**
+> Technical evidence (newer commits, fewer artifacts, "cleaner state") is NOT sufficient grounds to redesignate canonical paths.
+
+### What went wrong (full trace)
+
+| Step | Date | Agent | Action | HITL violation? |
+|------|------|-------|--------|-----------------|
+| 1 | 2026-05-25 10:05 | Cursor (workspace `e90fd68b…` on OpenClaw root) | Active in OpenClaw root folder | — |
+| 2 | 2026-05-25 13:44 | Cursor agent | `git clone diazMelgarejo/Perpetua-Tools.git _pt-merge-work` at OpenClaw root | ⚠️ MINOR — created scratch clone with no convention for cleanup |
+| 3 | 2026-05-25 13:44–13:51 | Cursor agent | merged `main` into `2026-05-25-005-security-fix-6-mcp-profiles`, pushed | — (committed under user's real identity, which IS approved) |
+| 4 | 2026-05-27 (early in this session) | Claude (Sonnet 4.6, this conversation, pre-compaction) | Used `_pt-merge-work/` as working dir for RAG items 5–7 (afa4542) | ⚠️ MEDIUM — should have stopped and asked which repo to write to |
+| 5 | 2026-05-27 (post-audit, pre-compaction) | Claude (same session) | Audited disk repos, noticed `_pt-merge-work` had newer commits, declared it "canonical", **rewrote** `project_perpetua_tools_path.md` + `CLAUDE-instru.md` + the RAG-shipped doc to reflect that | ❌ CRITICAL — autonomous architectural redesignation without `AskUserQuestion` |
+| 6 | 2026-05-27 (this turn, post-compaction) | Claude (same session, user pushback) | User caught the violation; reverted all changes | ✅ resolved |
+
+### Forensic evidence
+
+- `_pt-merge-work/` reflog earliest entry: `clone: from https://github.com/diazMelgarejo/Perpetua-Tools.git` at `2026-05-25 13:44:12 +0800`
+- Folder created at OpenClaw root level (not inside `perplexity-api/`) — consistent with Cursor having workspace access to OpenClaw root
+- Cursor workspace `~/Library/Application Support/Cursor/User/workspaceStorage/e90fd68bd7c440906de9c318e4dbd282/workspace.json` opened on `file:///…/OpenClaw` at `2026-05-25 10:05`, retrieval index updated at `10:25`
+- No Claude Code `.jsonl` session for OpenClaw on 2026-05-25 (confirmed — only May 22 and May 27 sessions exist for that project) → **Claude was not at the keyboard when the clone happened**
+- All commits in `_pt-merge-work` are authored by `cyre <Lawrence@cyre.me>` (your real, approved identity), meaning the Cursor agent used your local git config — no identity violation, just a workspace pollution
+
+### Decisions made (canonical, after revert)
+
+1. **Canonical Perpetua-Tools = `OpenClaw/perplexity-api/Perpetua-Tools/`** — restored (this is the user's long-term decision since the directory was created)
+2. **`_pt-merge-work/` is a one-off Cursor scratch clone** — should be cleaned up after the RAG items branch is pulled into canonical
+3. **The `* 2` files** (e.g. `LESSONS 2.md`) in `perplexity-api/Perpetua-Tools/docs/` are **macOS APFS dedup artifacts**, not contamination — they are byte-identical to the originals and harmless. Previous agent claim that they marked the repo as "stale" was wrong.
+4. **New rule for all future agents (Claude, Cursor, Codex, Conductor)**: before reorganizing canonical paths, branch conventions, or any long-term architectural attribute, call `AskUserQuestion` with a decision brief.
+
+### Files reverted in this remediation
+
+- `~/.claude/projects/-Users…OpenClaw/memory/project_perpetua_tools_path.md` — back to pointing at `perplexity-api/Perpetua-Tools/`
+- `OpenClaw/CLAUDE-instru.md` line 96 — link restored to `perplexity-api/Perpetua-Tools/docs/openclaw-setup.md`
+- `OpenClaw/CLAUDE-instru.md` directory-tree section — `perplexity-api/Perpetua-Tools/` shown as canonical, `_pt-merge-work/` flagged as scratch
+
+### Outstanding cleanup (user-authorized in next step)
+
+- Pull `origin/main` into canonical `perplexity-api/Perpetua-Tools/`
+- Pull `origin/2026-05-27-006-rag-items-5-7` work into canonical (the RAG items 5–7 commits live on the remote; safe to re-fetch)
+- `/sync-gbrain` to refresh the worktree-pinned source for the canonical path
+- After verification: delete `_pt-merge-work/` entirely
+
+### Open questions
+
+- Should we add a pre-commit hook or wrapper to **block agent-initiated `git clone` into OpenClaw root** without a `.scratch-clone-justification` file?
+- Should there be a `~/.claude/skills/hitl-major-decisions/` skill that any agent must invoke before path/architecture changes?
