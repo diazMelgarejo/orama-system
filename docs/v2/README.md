@@ -6,6 +6,20 @@
 
 ---
 
+## Security precondition (read first)
+
+v2 scaffold and parity work on a **shared LAN** requires
+[`23-security-preconditions.md`](23-security-preconditions.md). Platform design
+must also follow
+[`24-security-first-platform.md`](24-security-first-platform.md): security is a
+first-class product feature, not post-release hardening. Fixes **1–6** have
+implementation paths in the v1 repos, but the 2026-05-26 immediate queue in
+[`../SECURITY-POLICY.md`](../SECURITY-POLICY.md#immediate-todo-list--validated-findings-from-scheduled-review-2026-05-26)
+re-opens auth/bind, model egress, and MCP profile work as v2 design blockers
+until the acceptance checks are green.
+
+---
+
 ## Vision
 
 A **secure, hardware-aware, local-first multi-agent LLM orchestration system** built clean-slate from primitives, with a small ruthless kernel and modules that orbit at their own pace.
@@ -32,6 +46,7 @@ Local-first + airgapped capable. Dependency-minimal. MIT-licensed (matches LangC
 | **D10** | License | MIT (matches LangChain + LangGraph) |
 | **D14** | Mirror enforcement | `lmstudio-mac` = MIRROR ONLY; `windows_only:` hard enforcement in `model_hardware_policy.yml`; `_MIRROR_BACKENDS` frozenset in `selector.py`; fail-closed under non-TTY (2026-05-17) |
 | **D15** | `backend_resolver` split | `orchestrator/agent_launcher.py` → `orchestrator/backend_resolver.py`; pure function separated from 859-line CLI (2026-05-18) |
+| **D16** | Security-first platform | Secure defaults, server-side authorization, capability-gated execution, safe model egress, append-only audit, and supply-chain provenance are first-class v2 features (2026-05-26) |
 
 Full rationale and the Perplexity/GPT/Gemini/Grok evidence behind each decision is in [`00-context-and-decisions.md`](./00-context-and-decisions.md).
 
@@ -61,6 +76,7 @@ Calendar-free. Each phase gates on completion criteria, not dates.
                  │      oramasys (orchestration)       │
                  │   • graph DSL composition           │
                  │   • FastAPI glass-window surface    │
+                 │   • capability-gated routes         │
                  │   • app-level node implementations  │
                  └────────────────┬────────────────────┘
                                   │  (one-way import only)
@@ -71,7 +87,8 @@ Calendar-free. Each phase gates on completion criteria, not dates.
                  │   • LLMClient (OpenAI-compat)       │
                  │   • HardwarePolicyResolver          │
                  │   • MiniGraph engine (70-line)      │
-                 │   • GossipBus (SQLite event log)    │
+                 │   • GossipBus (append-only audit)   │
+                 │   • security/capability contracts   │
                  └─────────────────────────────────────┘
                               ▲           ▲
                               │           │
@@ -128,6 +145,7 @@ Explicit list of things deferred to non-kernel modules or later versions. Don't 
 | Lessons + SKILL.md | v1 carry-over | v2.0+ | no | stub |
 | Plugin API (public) | v2.1 promotion of internal | v2.1 | no | stub |
 | AlphaClaw MCP smoke-test / OpenClaw opener | PT Gate 2 → session pre-flight gate | v2.1 | no | **spec ready** |
+| Security-first platform | 2026-05-26 review + public baselines | v2.0+ | **YES** | active gate |
 | MAESTRO + SWARM safety | new | v2.5 | no | stub |
 
 ---
@@ -168,10 +186,12 @@ orama-system/docs/v2/
 ├── 19-gstack-optional-integration.md  ← gstack as optional submodule; detect_gstack() pattern; install.sh probing
 ├── 20-rag-and-memory-design.md        ← RAG + memory design; gbrain + LanceDB; gstack integration review
 ├── 21-periscope-l4-glass.md           ← periscope L4 glass-window design; ActivityMinimap + ContextPage integration
-└── 22-worktree-parallel-agents.md     ← parallel-agent worktree doctrine; 4-quadrant decision rule; bootstrap + lifecycle
+├── 22-worktree-parallel-agents.md     ← parallel-agent worktree doctrine; 4-quadrant decision rule; bootstrap + lifecycle
+├── 23-security-preconditions.md       ← v2 gate: acceptance criteria before LAN/MCP expansion
+└── 24-security-first-platform.md      ← security as first-class platform feature; OWASP/NIST/CISA/OpenSSF/SLSA citations
 ```
 
-> **Next free slot: `23-`**
+> **Next free slot: `25-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

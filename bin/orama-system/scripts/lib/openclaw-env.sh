@@ -90,6 +90,48 @@ resolve_openclaw_mcp_json() {
   printf '%s\n' "$root/.mcp.json"
 }
 
+# Cursor project MCP config (orama-system repo root). Used when the IDE workspace
+# is the orama-system checkout rather than OpenClaw parent.
+resolve_orama_cursor_mcp_json() {
+  local orama_root
+  orama_root="$(orama_git_root)" || return 1
+  printf '%s\n' "$orama_root/.cursor/mcp.json"
+}
+
+# Keep Cursor CRG env in sync with OpenClaw .mcp.json when both exist.
+sync_orama_cursor_crg_from() {
+  local source_mcp_json="$1"
+  local cursor_mcp_json
+  cursor_mcp_json="$(resolve_orama_cursor_mcp_json)" || return 0
+  [ -f "$cursor_mcp_json" ] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  jq --slurpfile src <(jq '.mcpServers["code-review-graph"]' "$source_mcp_json") '
+    .mcpServers["code-review-graph"] = $src[0]
+  ' "$cursor_mcp_json" > "${cursor_mcp_json}.openclaw.tmp" \
+    && mv "${cursor_mcp_json}.openclaw.tmp" "$cursor_mcp_json"
+}
+
+ensure_orama_cursor_crg_mcp() {
+  local log_fn="${1:-:}"
+  local lib_dir sync_script
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  sync_script="$lib_dir/../sync-cursor-mcp.sh"
+  if [ -f "$sync_script" ]; then
+    while IFS= read -r line; do
+      _emit_log "$log_fn" "$line"
+    done < <(bash "$sync_script" 2>&1) || return 1
+    return 0
+  fi
+  local cursor_mcp_json
+  cursor_mcp_json="$(resolve_orama_cursor_mcp_json)" || return 0
+  if _write_minimal_mcp_json "$cursor_mcp_json"; then
+    _emit_log "$log_fn" "openclaw-env: wrote code-review-graph entry to $cursor_mcp_json"
+    return 0
+  fi
+  _emit_log "$log_fn" "openclaw-env: failed to create $cursor_mcp_json (need jq and python3.13+)"
+  return 1
+}
+
 _emit_log() {
   local log_fn="$1"
   shift

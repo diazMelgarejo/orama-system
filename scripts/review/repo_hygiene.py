@@ -15,6 +15,7 @@ APPROVED_IDENTITIES = {
     ("cyre", "diazMelgarejo@gmail.com"),
     ("Codex", "codex@openai.com"),
 }
+# Keep in sync with scripts/git/check_identity.sh (local hooks + pre-commit).
 FORBIDDEN_TOKENS = (
     "Lawrence " + "Melgarejo",
     "Lawrence" + "@bettermind.ph",

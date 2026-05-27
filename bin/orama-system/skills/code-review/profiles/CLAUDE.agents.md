@@ -17,7 +17,7 @@
 - `depth=0` validated server-side; workers cannot spawn sub-workers in V1.
 - Terminology: `orchestrator` only — never `coordinator` in output, schemas, config.
 - HITL: `status="interrupted"` and `status="conflicted"` are terminal-until-human.
-  → See `orama-system/docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md` for the 5 rules.
+  → See `docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md` for the 5 rules.
 - Hardware affinity: never route `windows_only` models to Mac LM Studio mirror.
   → See `orama-system/docs/v2/17-hardware-policy-enforcement.md`.
 

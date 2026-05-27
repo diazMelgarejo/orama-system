@@ -6,31 +6,46 @@
 
 Use MCP tools **before** `Grep`, `Glob`, or bulk `Read` on multi-file tasks.
 
+**Naming:** Invoke the `*_tool` names below (what Cursor/Claude MCP exposes). The Python package also documents shortened aliases without `_tool` (e.g. `list_graph_stats` = `list_graph_stats_tool`).
+
 ## Tool matrix
 
 | Tool | When to use |
 |------|-------------|
-| `list_graph_stats` | Graph empty, stale, or first run of session; confirm index health |
-| `detect_changes` | **Start** any diff review; risk-scored changed nodes and files |
-| `semantic_search_nodes` | Unknown symbol, entry point, or keyword; no exact string yet |
-| `query_graph` | Structural traces: `callers_of`, `callees_of`, `imports_of`, `tests_for`, `file_summary` |
-| `get_impact_radius` | Blast radius before approving refactor or large change |
-| `get_affected_flows` | Which execution paths / flows are touched |
-| `get_review_context` | Token-efficient snippets **before** full file `Read` |
-| `get_architecture_overview` | Unfamiliar subsystem; onboarding to a module |
+| `list_graph_stats_tool` | Graph empty, stale, or first run of session; confirm index health |
+| `detect_changes_tool` | **Start** any diff review; risk-scored changed nodes and files |
+| `semantic_search_nodes_tool` | Unknown symbol, entry point, or keyword; no exact string yet |
+| `query_graph_tool` | Structural traces: `callers_of`, `callees_of`, `imports_of`, `tests_for`, `file_summary` |
+| `get_impact_radius_tool` | Blast radius before approving refactor or large change |
+| `get_affected_flows_tool` | Which execution paths / flows are touched |
+| `get_review_context_tool` | Token-efficient snippets **before** full file `Read` |
+| `get_architecture_overview_tool` | Unfamiliar subsystem; onboarding to a module |
 | `refactor_tool` | Rename planning, dead-code hints — **not** for line-by-line review |
 
 Slash commands (Claude Code) mirror some flows: `/code-review-graph:review-delta`, `review-pr`, `build-graph`. In **Cursor**, prefer MCP tools directly.
+
+## CLI fallback (no MCP in session)
+
+When `code-review-graph` is not registered in the IDE MCP list (common in Cursor until MCP reload after pull), use the same package from the repo root:
+
+```bash
+REPO="$(git -C orama-system rev-parse --show-toplevel 2>/dev/null || pwd)"
+uvx code-review-graph status --repo "$REPO"
+uvx code-review-graph detect-changes --repo "$REPO" --base <git-sha>
+uvx code-review-graph build --repo "$REPO"    # if status shows nodes: 0
+```
+
+**CLI vs MCP naming:** subcommands are kebab-case (`detect-changes`, `status`); flags use `--repo` (not `--repo-root`). MCP tools use `*_tool` suffix and JSON field `repo_root`. First cold `uvx` install can take ~60s; `first-run-install.sh` probes `--version` only (not `--help`).
 
 ## Typical sequences
 
 ### Delta (local / uncommitted)
 
 ```
-list_graph_stats (if unsure)
-  → detect_changes
-  → query_graph / get_impact_radius on hot symbols
-  → get_review_context for changed + impacted files
+list_graph_stats_tool (if unsure)
+  → detect_changes_tool
+  → query_graph_tool / get_impact_radius_tool on hot symbols
+  → get_review_context_tool for changed + impacted files
   → gbrain code-def / search
   → Read (scoped list only)
 ```
@@ -38,9 +53,9 @@ list_graph_stats (if unsure)
 ### PR / branch review
 
 ```
-detect_changes (or PR file list + graph refresh)
-  → get_impact_radius + get_affected_flows
-  → get_review_context
+detect_changes_tool (or PR file list + graph refresh)
+  → get_impact_radius_tool + get_affected_flows_tool
+  → get_review_context_tool
   → gbrain + CLAUDE.md path discovery (see review-lenses-pr.md)
   → multi-lens fan-out (see orchestration-dispatch.md)
 ```
@@ -48,9 +63,9 @@ detect_changes (or PR file list + graph refresh)
 ### Explore unknown area (no diff yet)
 
 ```
-get_architecture_overview
-  → semantic_search_nodes
-  → query_graph (callers_of / callees_of)
+get_architecture_overview_tool
+  → semantic_search_nodes_tool
+  → query_graph_tool (callers_of / callees_of)
   → gbrain search
   → Read (minimal)
 ```
@@ -61,10 +76,10 @@ Both use **Ollama bge-m3** (1024-dim) when [`crg-embed-mode`](crg-embed-mode.md)
 
 | Need | Tool |
 |------|------|
-| Structure, callers, tests in graph | CRG `query_graph` |
+| Structure, callers, tests in graph | CRG `query_graph_tool` |
 | Symbol definition / refs | `gbrain code-def` / `code-refs` |
 | Past decisions, LESSONS | `gbrain search` |
-| Snippets for review | CRG `get_review_context` |
+| Snippets for review | CRG `get_review_context_tool` |
 
 ## Embedding fallback
 
@@ -72,7 +87,7 @@ If Ollama is down: `semantic_search_nodes` may fall back to FTS5 (see [`crg-embe
 
 ## Red flags
 
-- Skipping `detect_changes` on a diff review
-- `Read` on >3 files without `get_review_context` or blast-radius list
+- Skipping `detect_changes_tool` on a diff review
+- `Read` on >3 files without `get_review_context_tool` or blast-radius list
 - `refactor_tool` used as a substitute for review
 - Re-embedding without checking Ollama + `bge-m3`
