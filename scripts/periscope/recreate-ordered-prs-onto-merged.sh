@@ -12,6 +12,7 @@ set -euo pipefail
 
 REPO="${PERISCOPE_REPO:-$HOME/Documents/oramasys/tools/periscope}"
 ORIGIN="${PERISCOPE_ORIGIN:-https://github.com/diazMelgarejo/periscope.git}"
+ORAMA_ROOT="${ORAMA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 CARGO_SRC_BRANCH="${CARGO_SRC_BRANCH:-deps/3-cargo-tauri-onto-merged}"
 DOCS_SRC_SHA="${DOCS_SRC_SHA:-73eb23d12a0d02e3cce9b0f6bee915871726b4e0}"
 
@@ -32,6 +33,24 @@ git fetch origin merged "$CARGO_SRC_BRANCH" cursor/env-setup-cloud-instructions-
 
 BASE="$(git rev-parse origin/merged)"
 log "base merged = $BASE"
+
+# --- 0/3 cursor rules + git (from orama-system) ---
+log "[0/3] onto-merged/00-cursor-openclaw-rules"
+if [[ -x "$ORAMA_ROOT/scripts/periscope/install-cursor-rules.sh" ]]; then
+  PERISCOPE_REPO="$REPO" ORAMA_ROOT="$ORAMA_ROOT" bash "$ORAMA_ROOT/scripts/periscope/install-cursor-rules.sh"
+  git checkout -B onto-merged/00-cursor-openclaw-rules "$BASE"
+  git add .cursor/rules scripts/git AGENTS.md
+  if ! git diff --cached --quiet; then
+    git commit -m "chore(cursor): OpenClaw Cursor rules + git guards (orama-aligned)"
+  fi
+  git push -u origin onto-merged/00-cursor-openclaw-rules --force-with-lease
+  gh pr create --repo diazMelgarejo/periscope --base merged --head onto-merged/00-cursor-openclaw-rules \
+    --title "[0/3 → merged] chore: Cursor rules + git guards (orama-aligned)" \
+    --body "From orama-system install-cursor-rules.sh. Optional first merge." \
+    || log "PR [0/3] may already exist"
+else
+  log "skip [0/3]: orama install-cursor-rules.sh not found at $ORAMA_ROOT"
+fi
 
 # --- 1/3 cargo ---
 log "[1/3] onto-merged/01-deps-cargo-tauri"

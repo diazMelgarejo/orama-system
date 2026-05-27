@@ -55,10 +55,14 @@ this fork unless explicitly upstreamed.
 
 ## Git identity (Cursor / cloud)
 
-1. Author: **`cyre <diazMelgarejo@gmail.com>`** or **`cyre <Lawrence@cyre.me>`** only.
+Same policy as **orama-system** (`docs/wiki/12-cursor-cloud-commit-attribution.md`):
+
+1. Author: **`cyre <diazMelgarejo@gmail.com>`** or **`cyre <Lawrence@cyre.me>`** only (`scripts/git/check_identity.sh`).
 2. **Do not** add `Co-authored-by:`, `Made-with: Cursor`, or trailers with **forbidden**
-   emails (`Lawrence@bettermind.ph`, `cursoragent@cursor.com`, etc.).
-3. Prefer clean commits without bot co-authors on doc-only salvage cherry-picks.
+   emails (`Lawrence@bettermind.ph`, unattributed random `@gmail.com`, etc.).
+3. VM boot: `bash scripts/git/apply-attribution-guards.sh` then `bash scripts/git/check_identity.sh`.
+4. If hooks still inject trailers: `bash scripts/git/commit-clean.sh -m "type(scope): summary"`.
+5. Install once per clone: `bash scripts/git/install-local-hooks.sh` (from `install-cursor-rules.sh`).
 
 ## Cursor Cloud / VM (this repo)
 
@@ -75,6 +79,8 @@ this fork unless explicitly upstreamed.
 From `orama-system` checkout:
 
 ```bash
+# From orama-system checkout (installs .cursor/rules + scripts/git into periscope clone):
+export PERISCOPE_REPO=~/Documents/oramasys/tools/periscope
 bash scripts/periscope/install-cursor-rules.sh
-bash scripts/periscope/rebuild-deps-prs-onto-merged.sh   # deps onto merged only
+bash scripts/periscope/recreate-ordered-prs-onto-merged.sh
 ```
