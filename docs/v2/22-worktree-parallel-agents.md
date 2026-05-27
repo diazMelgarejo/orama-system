@@ -1,4 +1,4 @@
-# 19 — Git Worktrees for Parallel Agents
+# 22 — Git Worktrees for Parallel Agents
 
 > **Quick reference.** Full design rationale in `docs/superpowers/specs/2026-05-24-worktree-parallel-agents-design.md`.
 > Applies to: orama-system, Perpetua-Tools. Excludes: periscope, AlphaClaw.
