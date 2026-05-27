@@ -2,9 +2,10 @@
 # Recreate mistaken main-target deps/docs PRs as ordered branches → base merged.
 #
 # Merge order (into `merged` only):
+#   0. onto-merged/00-cursor-openclaw-rules — .cursor/rules + scripts/git (orama-aligned)
 #   1. onto-merged/01-deps-cargo-tauri     — cargo / tauri 2.11.1 (required)
 #   2. onto-merged/02-deps-npm-svelte-postcss — svelte + postcss only (not full deps/2)
-#   3. onto-merged/03-docs-cursor-cloud-agents — AGENTS.md Cursor Cloud section
+#   3. onto-merged/03-docs-cursor-cloud-agents — AGENTS.md Cursor Cloud VM section
 #
 # Also: close dependabot PRs #5/#6 (base main); supersede #1–#3.
 # Identity: cyre <diazMelgarejo@gmail.com> or Lawrence@cyre.me — no Co-authored-by trailers.

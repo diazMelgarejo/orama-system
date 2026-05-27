@@ -8,8 +8,8 @@ alwaysApply: true
 When committing in **this repository** (`diazMelgarejo/periscope`):
 
 1. **Do not** add `Co-authored-by:`, `Made-with: Cursor`, or other agent trailers you author.
-2. **Forbidden** co-author / author emails on fork commits: `Lawrence@bettermind.ph`, any address that is not
-   `diazMelgarejo@gmail.com` or `Lawrence@cyre.me` (see `scripts/git/check_commit_message.sh`).
+2. **Forbidden** co-author / author emails on fork commits: any address outside the allowlist in
+   `scripts/git/check_commit_message.sh` (mirrors orama `docs/wiki/08-git-hygiene-and-branching.md`).
 3. **Before** `git commit`, run `bash scripts/git/disable-cursor-commit-attribution.sh` if hooks may have been reset.
 4. **Prefer** `bash scripts/git/commit-clean.sh -m "type(scope): summary"` when Cursor keeps injecting trailers.
 5. Use only approved author identity: `cyre <diazMelgarejo@gmail.com>` (or `cyre <Lawrence@cyre.me>` /

@@ -3,7 +3,7 @@
 > **Date:** 2026-05-24 (plan authored)  
 > **Source:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../../OpenClaw/v1/2026-05-23-security-markdown.md)  
 > **Methodology:** gstack `/autoplan` (CEO → Eng → DX auto-decisions; security findings treated as **non-negotiable** user challenges, not taste calls)  
-> **Status:** Draft — implementation not started in this document
+> **Status:** Fixes **1–3 implemented** (2026-05-25). Fixes **4–6 queued** — see [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md).
 
 ---
 
@@ -283,7 +283,7 @@ Without parallel agents: roughly **2–3×** wall clock (order: S1 → S2 → S3
 - [ ] `/health` stays public
 - [ ] `repo_hygiene.py` passes on tracked files
 - [ ] No `AIzaSy…` / `xoxb-` patterns in tracked config
-- [ ] No `/Users/` or `Documents/Terminal xCode/claude/OpenClaw/` in docs
+- [ ] No `/Users/` or machine-specific OpenClaw layout paths in docs (use `$OPENCLAW_ROOT`)
 - [ ] LAN bind without token → `start.sh` exits non-zero (after phase 1)
 - [ ] Portal 404 does not echo dashboard filesystem path
 
