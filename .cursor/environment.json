@@ -6,6 +6,8 @@
     "ORAMA_SYSTEM_PATH": "${workspaceFolder}",
     "PERPETUA_TOOLS_PATH": "$HOME/openclaw-v1/Perpetua-Tools",
     "ALPHACLAW_INSTALL_DIR": "$HOME/openclaw-v1/AlphaClaw",
+    "ALPHACLAW_UPSTREAM_BRANCH": "main",
+    "ALPHACLAW_CONTRIB_BRANCH": "cursor/sync-attribution-guards-6421",
     "OPENCLAW_GATEWAY_URL": "http://localhost:18789",
     "LM_STUDIO_URL": "http://localhost:1234",
     "OLLAMA_MAC_ENDPOINT": "http://localhost:11434",

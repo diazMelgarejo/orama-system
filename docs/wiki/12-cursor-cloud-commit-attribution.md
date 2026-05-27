@@ -62,6 +62,8 @@ bash scripts/git/commit-clean.sh -m "type(scope): summary" --amend
 
 Sibling repos receive the same `scripts/git/*` files via `sync-attribution-guard-scripts.sh` (called from `apply-attribution-guard-all-repos.sh`).
 
+**AlphaClaw:** commit and PR on a contrib branch (`cursor/sync-attribution-guards-6421`), not on upstream-tracking `main` — see [13. AlphaClaw fork — contribution branches](13-alphaclaw-fork-contrib-branches.md).
+
 ---
 
 ## Related
