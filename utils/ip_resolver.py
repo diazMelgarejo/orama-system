@@ -11,14 +11,14 @@ Priority chain (first non-empty value wins):
   3. discovery.json state — last successful probe state (may be older)
   4. PT LAN discovery     — query Perpetua-Tools' lan_discovery.detect_active_tilting_ip()
   5. LM_STUDIO_WIN_ENDPOINTS env var — operator / start.sh override
-  6. Hardcoded 192.168.254.103       — confirmed subnet constant, true last resort
+  6. Hardcoded 192.168.254.108       — confirmed subnet constant, true last resort
 
 Why this chain matters
 ──────────────────────
 • AlphaClaw (P1) is the most live: if it's running it KNOWS its providers are reachable.
 • openclaw.json (P2) is authoritative: discover.py writes it after every successful scan.
 • discovery.json (P3) may lag if discover.py ran when Win was offline.
-• PT (P4) derives the IP from the local subnet — subnet-portable but assumes ".103" offset.
+• PT (P4) derives the IP from the local subnet via live network probe (Option B) with a 60s timeout.
 • env var (P5) lets start.sh / .env override everything.
 • Hardcoded (P6) is the true last-resort, never promoted above live data.
 
@@ -26,9 +26,9 @@ Usage
 ─────
     from utils.ip_resolver import get_win_ip, get_win_lms_url, get_win_ollama_url
 
-    WIN_IP  = get_win_ip()           # "192.168.254.103"
-    LMS_URL = get_win_lms_url()      # "http://192.168.254.103:1234"
-    OLL_URL = get_win_ollama_url()   # "http://192.168.254.103:11434"
+    WIN_IP  = get_win_ip()           # "192.168.254.108"
+    LMS_URL = get_win_lms_url()      # "http://192.168.254.108:1234"
+    OLL_URL = get_win_ollama_url()   # "http://192.168.254.108:11434"
 """
 from __future__ import annotations
 

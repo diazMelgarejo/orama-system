@@ -328,7 +328,7 @@ async def verify_oidc_token(bearer_token: str) -> dict:
     return claims
 ```
 
-**Recommended providers for Lord Serious's stack:**
+**Recommended providers for the operator stack:**
 - **GitHub OIDC** — Already part of the workflow; no new account needed.
   Use GitHub Actions OIDC tokens or a GitHub App for machine-to-human bridging.
 - **Cloudflare Access** — Zero-trust identity tied to domain; works with the
@@ -573,8 +573,8 @@ It does not deprecate.
 
 ---
 
-*Document version: 1.0 | Created: 2026-05-06 | Owner: Lord Serious / nimbosa*
+*Document version: 1.0 | Created: 2026-05-06*
 *Repo: `diazMelgarejo/orama-system` → `/docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md`*
 *Also sync to: `diazMelgarejo/Perpetua-Tools` → `/docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md`*
 *Classification: Governing Principle — Forward-Looking Statement*
-*Next review: Before v2.3 sprint planning*
+*Next review: Start after v2.1 release, end before v2.3 sprint planning*

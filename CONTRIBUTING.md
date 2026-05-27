@@ -44,6 +44,7 @@ Use this map to load only the context needed for the current task.
 
 - Use salvage branch names such as `yyyy-mm-dd-001-brief-summary`; see [git hygiene and branching](docs/wiki/08-git-hygiene-and-branching.md).
 - Confirm Git identity with `bash scripts/git/check_identity.sh` before committing.
+- Install repo hooks once per clone: `bash scripts/git/install-local-hooks.sh` (identity + `Co-authored-by` policy — [official policy (2026-05-25)](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25)).
 - Preserve dirty work before risky Git operations with `git stash push --include-untracked`.
 - Prefer manual salvage of reviewed intent over replaying tainted commit ranges; use the [commit salvage matrix](docs/recovery/2026-04-24-002-commit-salvage-matrix.md).
 

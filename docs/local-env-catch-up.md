@@ -184,8 +184,63 @@ bash bin/orama-system/scripts/install-mcp-stack.sh
 
 ---
 
+## gbrain: `getaddrinfo ENOTFOUND` (Cursor agents / sandboxes)
+
+**Symptom:** `gbrain search`, `gbrain query`, or `gbrain code-def` fail inside a Cursor subagent or sandbox with `getaddrinfo ENOTFOUND`, while the same command works in a normal Terminal on the Mac (host shell **PASS** as of 2026-05-25).
+
+**Why it happens:**
+
+| Cause | What to check |
+|-------|----------------|
+| **Sandbox network** | Cursor agent sandboxes may block outbound DNS/TCP to the host in `~/.gbrain/config.json` (common with Supabase `*.supabase.co` URLs). |
+| **Wrong backend URL** | Stale `database_url` / `DATABASE_URL` after machine migration or mode switch (local PGLite vs remote Postgres). |
+| **Host not running** | Local Postgres hostname in config but server not up (less common than ENOTFOUND — often `ECONNREFUSED` instead). |
+
+**Diagnose (run in the same environment that fails — agent terminal vs Mac Terminal):**
+
+```bash
+command -v gbrain && gbrain --version
+gbrain search "first-run" 2>&1 | head -5
+python3 - <<'PY'
+import json, pathlib
+p = pathlib.Path.home() / ".gbrain" / "config.json"
+if p.exists():
+    c = json.loads(p.read_text())
+    url = c.get("database_url") or c.get("DATABASE_URL") or ""
+    # redact credentials in output
+    if "@" in url:
+        url = url.split("@", 1)[1]
+    print("config host:", url.split("/")[0] if url else "(empty)")
+else:
+    print("missing:", p)
+PY
+```
+
+**Fixes (pick what matches your setup):**
+
+1. **Host-only workflow (recommended for agents):** Run `gbrain` from your Mac Terminal for sync and heavy queries; in agents use **CRG MCP first** (`detect_changes_tool`, `query_graph_tool`), then **Grep** for exact strings. See [`bin/orama-system/skills/code-review/references/tool-chain.md`](../bin/orama-system/skills/code-review/references/tool-chain.md).
+2. **Re-bootstrap gbrain:** `/setup-gbrain` or `bash bin/orama-system/scripts/first-run-install.sh run` — ensures `~/.gbrain/config.json` mode `0600` and embedding model aligned with CRG (`ollama:bge-m3`).
+3. **Local brain instead of remote:** If Supabase is blocked in sandboxes, prefer **local-stdio / PGLite** per [`bin/orama-system/mcp-install/references/setup-gbrain.md`](../bin/orama-system/mcp-install/references/setup-gbrain.md) so agents hit loopback, not cloud DNS.
+4. **Cursor permissions:** When the agent must call cloud gbrain, retry the tool invocation with **full network** (or run the query in a non-sandbox shell) — do not paste `config.json` contents into chat.
+5. **Worktree pin:** Ensure `.gbrain-source` exists in the repo root (gitignored) after `/sync-gbrain`; wrong source name does not cause ENOTFOUND but breaks empty search results.
+
+**Code-review fallback when gbrain is down:** Skip Phase B gbrain steps; continue `list_graph_stats_tool` → `detect_changes_tool` → `get_review_context_tool` → scoped `Read`. Document the skip in the review note.
+
+**Never commit:** `~/.gbrain/config.json`, `.gbrain-source`, or any literal `DATABASE_URL` in tracked files.
+
+---
+
+## Open TODOs (environment)
+
+- [x] **gbrain** `getaddrinfo ENOTFOUND` — documented above (host shell PASS 2026-05-25; sandboxes may still fail until local brain or network policy fixed)
+- [x] **CRG MCP in Cursor** — `cursor-mcp.stack.json` + `bash bin/orama-system/scripts/sync-cursor-mcp.sh` → `.cursor/mcp.json` (CRG + ai-cli-mcp); reload MCP after pull. Until reload, use CLI: `uvx code-review-graph status --repo "$ORAMA_REPO_ROOT"` (see [`mcp-tools-crg.md`](../../bin/orama-system/skills/code-review/references/mcp-tools-crg.md) § CLI fallback)
+
+---
+
 ## Related docs
 
+- [Agent first-open visibility map](reference/agent-first-open-visibility.md)
+- [First-run through code review (E2E how-to)](how-to/first-run-and-code-review.md)
 - [First-run install reference](../bin/orama-system/references/first-run-install.md)
 - [OpenClaw setup (mirror)](openclaw-setup.md)
 - [Git hygiene wiki](wiki/08-git-hygiene-and-branching.md)
