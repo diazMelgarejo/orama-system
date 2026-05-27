@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import secrets
+from pathlib import Path
 from typing import Any, Mapping, MutableMapping
 
 from fastapi import HTTPException, Request
@@ -10,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 ENV_TOKEN = "ORAMA_CONTROL_PLANE_TOKEN"
 ENV_INSECURE = "ORAMA_INSECURE_DEV"
+CONTROL_PLANE_COOKIE = "orama_control_plane_token"
 
 _SENSITIVE_TOP_LEVEL_KEYS = frozenset(
     {
@@ -64,10 +66,31 @@ def auth_enforced() -> bool:
     return False
 
 
+def _read_pt_persisted_token() -> str:
+    """Load PT bearer token written by ensure_control_plane_token on :8000."""
+    root = os.getenv("PERPETUA_TOOLS_ROOT", "").strip()
+    if not root:
+        return ""
+    token_path = Path(root) / ".state" / "control_plane_token"
+    if token_path.is_file():
+        return token_path.read_text(encoding="utf-8").strip()
+    return ""
+
+
+def resolved_control_plane_token() -> str:
+    """Env token first, then PT persisted file (shared stack token)."""
+    token = control_plane_token()
+    if token:
+        return token
+    return _read_pt_persisted_token()
+
+
 def ensure_control_plane_token() -> str:
     """Return configured token, generating one when insecure dev is off."""
-    existing = control_plane_token()
+    existing = resolved_control_plane_token()
     if existing:
+        if not control_plane_token():
+            os.environ[ENV_TOKEN] = existing
         return existing
     if not auth_enforced():
         return ""
@@ -76,14 +99,32 @@ def ensure_control_plane_token() -> str:
     return generated
 
 
+def request_is_loopback(request: Request) -> bool:
+    """True for local operator browsers (127.0.0.1 / ::1)."""
+    if request.client is None:
+        return False
+    host = (request.client.host or "").strip()
+    # "testclient" is Starlette's in-process host (pytest / TestClient).
+    return host in {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+def bearer_token_from_request(request: Request) -> str:
+    """Extract bearer token from Authorization header or control-plane cookie."""
+    auth_header = request.headers.get("authorization", "")
+    if auth_header.startswith("Bearer "):
+        return auth_header[7:].strip()
+    cookie = request.cookies.get(CONTROL_PLANE_COOKIE, "")
+    return cookie.strip()
+
+
 def verify_control_plane_auth(request: Request) -> None:
     if not auth_enforced():
         return
-    expected = control_plane_token()
+    expected = resolved_control_plane_token()
     if not expected:
         raise HTTPException(status_code=503, detail="Control plane token not configured")
-    auth_header = request.headers.get("authorization", "")
-    if auth_header == f"Bearer {expected}":
+    provided = bearer_token_from_request(request)
+    if provided and secrets.compare_digest(provided, expected):
         return
     raise HTTPException(status_code=401, detail="Unauthorized")
 
@@ -100,7 +141,7 @@ def control_plane_auth_failure(request: Request) -> JSONResponse | None:
 
 
 def auth_headers() -> dict[str, str]:
-    token = control_plane_token()
+    token = resolved_control_plane_token()
     if token:
         return {"Authorization": f"Bearer {token}"}
     return {}
@@ -141,10 +182,24 @@ def portal_path_is_public(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in _PUBLIC_PORTAL_PREFIXES)
 
 
-def portal_requires_auth(path: str, method: str) -> bool:
+def portal_requires_auth(
+    path: str,
+    method: str,
+    *,
+    request: Request | None = None,
+) -> bool:
     if portal_path_is_public(path):
         return False
     if method.upper() == "OPTIONS":
+        return False
+    # Loopback may load the HTML shell without a Bearer header; token is injected
+    # into the page for same-origin API calls (LAN clients must send Authorization).
+    if (
+        request is not None
+        and method.upper() == "GET"
+        and path in ("/", "/dashboard")
+        and request_is_loopback(request)
+    ):
         return False
     return True
 

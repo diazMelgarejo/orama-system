@@ -92,7 +92,10 @@ The script runs these steps in order — skipping any that are already complete:
 | 4b | `gemini auth login` | `gemini auth check` passes |
 | 4c | Register `gemini-cli` in Claude Code | `claude mcp list \| grep gemini-cli` |
 | 5 | Register OpenClaw registry entries | `openclaw mcp list \| grep` each name |
+| 5b | Sync Cursor project MCP stack | `sync-cursor-mcp.sh` → `.cursor/mcp.json` |
 | 6 | Verification summary | always runs |
+
+**Cursor:** See [`references/cursor-mcp.md`](references/cursor-mcp.md) for merge rules and `sync-cursor-mcp.sh --also-user`.
 
 ### Step 4: Verify inside Claude Code
 
@@ -217,4 +220,6 @@ Output: Each command printed as "[dry-run] <cmd>" — nothing executed
 
 See [`../references/first-run-install.md`](../references/first-run-install.md) §§ 0.4–0.5.1 for code-review-graph and gbrain. Run platform bootstrap first: [`../scripts/first-run-install.sh`](../scripts/first-run-install.sh). Embedding bootstrap: `scripts/setup-embeddings` ([`references/setup-embeddings.md`](references/setup-embeddings.md)).
 
-**PR multi-lens review:** after MCP stack is up, use [`../skills/code-review/references/review-lenses-pr.md`](../skills/code-review/references/review-lenses-pr.md) with dispatch in [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md) §5 (PR multi-lens code review).
+**End-to-end path (bootstrap → graph → review):** [`../../docs/how-to/first-run-and-code-review.md`](../../docs/how-to/first-run-and-code-review.md)
+
+**PR multi-lens review:** after MCP stack is up, use [`../skills/code-review/references/review-lenses-pr.md`](../skills/code-review/references/review-lenses-pr.md) with dispatch in [`../skills/code-review/references/orchestration-dispatch.md`](../skills/code-review/references/orchestration-dispatch.md) and [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md) §5 (PR multi-lens code review).

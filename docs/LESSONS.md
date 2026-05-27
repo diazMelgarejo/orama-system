@@ -2120,3 +2120,71 @@ plan only via `/docs/v2/`. Override requires AskUserQuestion.
   the parent OpenClaw checkout or any orama-system path beneath it.
 - The `$OPENCLAW_ROOT` convention is enforced by the `OPENCLAW_WORKSTATION_LAYOUT`
   scanner in `repo_hygiene.py` (D9).
+
+---
+
+## 2026-05-25 — Claude (Cursor) — code-review pressure Test B (tool-order)
+
+### What was learned
+
+Pressure Test B (skill loaded, graph-first) was run as an empirical **dry-run** on `main` with delta `HEAD~5` (18 files; code-review touch: skill link fixes + new `docs/how-to/first-run-and-code-review.md`). The orama-system CRG index on disk is healthy (1417 nodes, 1257 bge-m3 embeddings via `graph.db`), but **this Cursor workspace does not expose `code-review-graph` MCP** — only `OpenClaw/.mcp.json` registers `uvx code-review-graph serve`. Observed investigator order was Read/git/Grep → sqlite proxy for stats → failed gbrain → hung `uvx` CLI; no `detect_changes` or `get_review_context` calls. Full matrix: `bin/orama-system/skills/code-review/references/pressure-test-notes.md` § Test B results 2026-05-25.
+
+### Decisions made
+
+- Treat Cursor sessions without CRG MCP as **documented partial compliance**; recommend registering the same server from `OpenClaw/.mcp.json` into the project/workspace MCP config before claiming full Test B pass.
+- Align init examples in `SKILL.md` (`*_tool` suffix) with `mcp-tools-crg.md` tool names in a follow-up doc fix.
+
+### Open questions
+
+- Should pressure Test B script explicitly allow `git diff HEAD~N` when the tree is clean, or require a synthetic uncommitted edit?
+
+## 2026-05-25 — Cursor (subagent) — CRG + gbrain verify on orama-system
+
+### What was learned
+
+- `move_agent_to_root` → `orama-system` succeeded; committed `.cursor/mcp.json` enables Cursor CRG when the user reloads MCP (tools still absent from this subagent session’s `mcps/` folder).
+- **gbrain** `search` works from host shell with network (`first-run-install`, `crg-embed-mode` top hits).
+- **CRG CLI** (`uvx code-review-graph`) works after cold install: `status --repo "$REPO"` → 1489 nodes; `detect-changes --repo "$REPO" --base 51816ce5` on session delta (risk 0.65, 4 bash functions without tests in graph). Use `--repo`, not `--repo-root`; MCP-only names like `list-graph-stats` are invalid on CLI.
+- Fresh clone may show `nodes: 0` until `uvx code-review-graph build --repo <orama-system>` — not automatic in `first-run.done`.
+- Sandbox `first-run-install.sh status` cannot write `~/.orama-system/first-run.json` (PermissionError) but probes still print; use non-sandbox for state file updates.
+
+### Decisions made
+
+- Mark fortify TODOs done for Cursor `.cursor/mcp.json` and `--help` vs `--version` probe; keep gbrain sandbox ENOTFOUND and graph-before-Read hook as open.
+- No code fix required for merge; doc checklist updates only.
+
+### Open items (2026-05-25 — do not duplicate here)
+
+Tracked as checklists elsewhere (read the owner doc, not this log):
+
+| Topic | Owner doc |
+|-------|-----------|
+| Fortify / Test B / MCP / policy gaps | [`bin/orama-system/skills/code-review/references/pressure-test-notes.md`](../bin/orama-system/skills/code-review/references/pressure-test-notes.md) § Fortify pass |
+| CLAUDE-instru weaning + CI grep | [`docs/plans/2026-05-23-claude-instru-weaning-autoplan.md`](plans/2026-05-23-claude-instru-weaning-autoplan.md) § Open TODOs |
+| Agent first-open surfaces (Cursor / Claude / OpenClaw) | [`docs/reference/agent-first-open-visibility.md`](reference/agent-first-open-visibility.md) |
+| E2E bootstrap known gaps | [`docs/how-to/first-run-and-code-review.md`](how-to/first-run-and-code-review.md) § Known gaps |
+
+## 2026-05-25 — Cursor — Official git identity + co-author policy (docs)
+
+### What was learned
+
+- **Canonical policy** lives in [`docs/wiki/08-git-hygiene-and-branching.md`](wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25): four approved primary authors (`cyre` × two emails, `Lawrence@cyre.me`, `Codex <codex@openai.com>`); `Co-authored-by` allows well-known public AI/vendor domains and only two Gmail addresses.
+- **Enforcement:** `bash scripts/git/install-local-hooks.sh` → `check_identity.sh` (pre-commit) + `check_commit_message.sh` (commit-msg). Replaced the old “forbid all agent co-author substrings” hook with an allowlist model aligned with `repo_hygiene.py`.
+- **Agent default:** sessions should not add `Co-authored-by` to their own commits even when hooks allow public AI attribution for human-authored merges.
+
+### Decisions made
+
+- Document-release sync: `CLAUDE.md` §3/§6, `CONTRIBUTING.md`, `agent-first-open-visibility.md`, `.cursor/rules/no-commit-attribution.mdc` point at the official section without removing prior approved identities.
+
+## 2026-05-25 — Cursor — Security fixes 1–3 (orama + Perpetua-Tools)
+
+### What was learned
+
+- Fixes **1–3** from [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../OpenClaw/v1/2026-05-23-security-markdown.md) are implemented: env-based Gemini key, `scan_tracked_secrets` in hygiene, bearer auth on portal/API/PT jobs, memory redaction before GossipBus persist.
+- Fixes **4–6** (MCP path allowlist, remote endpoint URL policy, least-privilege MCP) stay **queued** — documented in [`docs/SECURITY-POLICY.md`](SECURITY-POLICY.md) and [`docs/v2/23-security-preconditions.md`](v2/23-security-preconditions.md).
+- `ORAMA_CONTROL_PLANE_TOKEN` + `ORAMA_INSECURE_DEV=0` is the production posture; dev stacks can set `ORAMA_INSECURE_DEV=1` without a token.
+
+### Decisions made
+
+- Canonical policy: [`docs/SECURITY-POLICY.md`](SECURITY-POLICY.md); v1 index: [`OpenClaw/v1/README.md`](../../OpenClaw/v1/README.md).
+- Perpetua-Tools mirrors orama git hooks via `scripts/git/check_identity.sh`.

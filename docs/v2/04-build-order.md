@@ -1,6 +1,7 @@
 # 04 — Build Order (GPT Phase 1–4 + lift-from-v1 mapping)
 
-> Implements D9. Sequence: primitives → graph engine → HTTP surface → parity tests.
+> Implements D9 plus D16. Sequence: security foundation → primitives → graph
+> engine → HTTP surface → parity/security tests.
 > Lift battle-tested code from today's `orama-system` where it fits.
 
 ---
@@ -10,6 +11,14 @@
 **v1.0 RC shipped** (D3). The 5-task `2026-04-28-perpetua-orama-master-revamp.md` plan closed.
 v1 is at 0.9.9.8. **Gate cleared.**
 
+**Security precondition (2026-05-26):** Before enabling additional v2
+HTTP/MCP/RAG surfaces on a shared LAN, complete
+[`23-security-preconditions.md`](23-security-preconditions.md) and design new
+surfaces against [`24-security-first-platform.md`](24-security-first-platform.md).
+The immediate queue in [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md)
+re-opens auth/bind, model egress, and MCP profile work as first-class v2
+platform features.
+
 ---
 
 ## Phase 0 — Repository Initialization ✅ DONE (2026-05-02)
@@ -17,6 +26,27 @@ v1 is at 0.9.9.8. **Gate cleared.**
 The 3 new repositories (\`agate\`, \`oramasys\`, \`perpetua-core\`) have been initialized at \`~/Documents/oramasys/\`. Initial code for state, LLM client, policy, and the MiniGraph engine has been committed.
 
 ---
+
+## Phase -1 — Security foundation (blocks new platform surface)
+
+This phase is now mandatory before Phase 3 API work and before any non-kernel
+module exposes HTTP, MCP, subprocess, file, or network egress.
+
+| Deliverable | Requirement | Public baseline |
+|-------------|-------------|-----------------|
+| Threat model stub | Every module answers attacker, controlled input, trust boundary, capability, fail-closed behavior, and CI proof. | NIST SSDF PW.1 risk/threat modeling; OWASP ASVS requirement-driven verification. |
+| Capability manifest | Every route/tool/worker declares capability before implementation. | OWASP ASVS V4 server-side access control + least privilege. |
+| Secure defaults | Loopback bind, no universal default passwords/tokens, no public egress without opt-in. | CISA Secure by Design/Default and CISA default-password alert. |
+| Egress policy | Endpoint parser + host approval + no privileged headers to untrusted model probes. | OWASP Top 10 A10 SSRF positive allowlists. |
+| Audit/redaction | Append-only security events with redaction before logs, SQLite, embeddings, or artifacts. | OWASP ASVS V16 logging/error handling and V13 secret management. |
+| Supply-chain posture | CI token least privilege, protected branches/status checks, provenance plan. | OpenSSF Scorecard, GitHub Actions hardening, SLSA. |
+
+Exit criteria:
+
+- `24-security-first-platform.md` §4 is answered for each active module.
+- Tests exist for auth denial, no bearer-in-HTML, endpoint header stripping, and
+  redacted audit events before feature work is marked done.
+- Any exception is recorded additively in `docs/SECURITY-POLICY.md`.
 
 ## Phase 1 — Primitives Hardening (\`perpetua-core\`) ✅ DONE (2026-05-01)
 
@@ -42,6 +72,9 @@ See \`15-phase1-as-built.md\` for full module table and OQ resolutions.
 
 - **Verify**: API Server properly consumes PT affinity signals.
 - **Wire**: LLMClient to \`dispatch_node\`.
+- **Gate**: No route reaches graph code without capability middleware.
+- **Assert**: No browser bootstrap includes raw control-plane bearer; operator UI
+  receives only session-scoped credentials.
 
 ## Phase 4 — Parity tests ← NEXT
 
@@ -58,6 +91,8 @@ Acceptance:
   v1.0 RC runs.
 - LM Studio LAN integration: same prompt routed through v2.0 graph hits the same
   Mac vs Windows endpoints as v1 routes it (per `model_hardware_policy.yml`).
+- Security parity: the v2 flow preserves or improves v1 security acceptance
+  checks in `23-security-preconditions.md`; any regression blocks parity.
 
 ### Phase 4 additional CI gates (from `11-idempotency-and-guard-patterns.md`)
 
