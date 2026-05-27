@@ -58,8 +58,8 @@ this fork unless explicitly upstreamed.
 Same policy as **orama-system** (`docs/wiki/12-cursor-cloud-commit-attribution.md`):
 
 1. Author: **`cyre <diazMelgarejo@gmail.com>`** or **`cyre <Lawrence@cyre.me>`** only (`scripts/git/check_identity.sh`).
-2. **Do not** add `Co-authored-by:`, `Made-with: Cursor`, or trailers with **forbidden**
-   emails (`Lawrence@bettermind.ph`, unattributed random `@gmail.com`, etc.).
+2. **Do not** add `Co-authored-by:`, `Made-with: Cursor`, or trailers with emails outside
+   `scripts/git/check_commit_message.sh` (unattributed random `@gmail.com`, etc.).
 3. VM boot: `bash scripts/git/apply-attribution-guards.sh` then `bash scripts/git/check_identity.sh`.
 4. If hooks still inject trailers: `bash scripts/git/commit-clean.sh -m "type(scope): summary"`.
 5. Install once per clone: `bash scripts/git/install-local-hooks.sh` (from `install-cursor-rules.sh`).

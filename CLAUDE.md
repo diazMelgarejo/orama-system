@@ -84,6 +84,10 @@ Before significant changes, load the mother skill:
 |----------|---------|
 | [`SKILL.md`](SKILL.md) | Agent behavioral rules — every "never" with commands |
 | [`bin/orama-system/SKILL.md`](bin/orama-system/SKILL.md) | Mother skill: AFRP gate, CIDF, gstack routing |
+| [`docs/how-to/first-run-and-code-review.md`](docs/how-to/first-run-and-code-review.md) | E2E: fresh machine → MCP → graph → code-review skill |
+| [`docs/SECURITY-POLICY.md`](docs/SECURITY-POLICY.md) | Canonical security posture (fixes 1–3 done; 4–6 queued) |
+| [`docs/reference/agent-first-open-visibility.md`](docs/reference/agent-first-open-visibility.md) | What Cursor / Claude Code / OpenClaw see on first open |
+| [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md) § [Official commit identity policy (2026-05-25)](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25) | Approved authors, co-author allowlist, `install-local-hooks.sh` |
 | [`docs/LESSONS.md`](docs/LESSONS.md) | Chronological session log |
 | [`docs/wiki/README.md`](docs/wiki/README.md) | Wiki index — lesson deep-dives |
 
@@ -117,6 +121,7 @@ Full setup: [`docs/wiki/06-multi-agent-collab.md`](docs/wiki/06-multi-agent-coll
 ## § 6 — Repository Identity & Git Hygiene
 
 - Commit identity: `cyre <Lawrence@cyre.me>`, `cyre <diazMelgarejo@gmail.com>`, or `Codex <codex@openai.com>` — verify with `bash scripts/git/check_identity.sh`
+- Official policy (authors + `Co-authored-by` allowlist): [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25) — install hooks with `bash scripts/git/install-local-hooks.sh`
 - Dated branches: `yyyy-mm-dd-NNN-brief-summary`
 - Never commit `.env`, `.env.local`, generated `.paths`
 - Full rules: [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md)
