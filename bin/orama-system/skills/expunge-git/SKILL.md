@@ -46,6 +46,16 @@ public remote MUST be rotated regardless of how clean the scrub is.
 
 ## Section 2 — Pre-flight
 
+0. **Disable live Cursor co-author injection** before writing new commits during a scrub:
+
+   ```bash
+   bash scripts/git/apply-attribution-guard-all-repos.sh
+   # or hook-free commits:
+   bash scripts/git/commit-clean.sh -m "type(scope): summary"
+   ```
+
+   See `docs/wiki/12-cursor-cloud-commit-attribution.md`.
+
 1. **Identify every contaminated commit and SHA.**
 
    ```bash

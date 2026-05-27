@@ -144,7 +144,7 @@
 1. **Forever in CLAUDE-instru:** repo registry (§1), cross-repo doc index, “start here” for new machines (one paragraph + link).
 2. **Migrate to in-repo:** install steps, hardware probe detail, tool-chain order, profile behavior.
 3. **Order of file classes:** skills (done) → scripts (`ensure_requirements.sh`) → docs/wiki → `CLAUDE.md` navigators (keep link only) → optional instru deprecation banner.
-4. **CI gate:** `rg 'Canonical:.*CLAUDE-instru' bin/orama-system/skills` → must be 0.
+4. **CI gate:** `rg 'Canonical:.*CLAUDE-instru' bin/orama-system/skills` → must be 0. *(Checklist item for future CI — run locally before merge until wired.)*
 5. **Deprecation:** Comment in `orama-system/CLAUDE.md`: “Install: see `bin/orama-system/references/first-run-install.md` (not CLAUDE-instru §0 body).”
 
 ---
@@ -167,3 +167,24 @@
 | Defer `run --only <component>` | Yes | |
 | Trim duplicate hardware prose in instru §5 | Optional taste — do when touching instru next | **Challenge if you want zero duplication now** |
 | gbrain re-index after doc moves | Run `/sync-gbrain` when DB up | |
+
+---
+
+## Open TODOs (session gaps — 2026-05-25)
+
+> Fortify / pressure-test gaps live in [`pressure-test-notes.md`](../../bin/orama-system/skills/code-review/references/pressure-test-notes.md). Agent host map: [`docs/reference/agent-first-open-visibility.md`](../reference/agent-first-open-visibility.md).
+
+### Phase 3 — scripts + docs (remaining)
+
+- [ ] Replace duplicated install/hardware prose in **`scripts/ensure_requirements.sh`** (and callers) with links to [`first-run-install.md`](../../bin/orama-system/references/first-run-install.md) — remove embedded `CLAUDE-instru` body strings
+- [ ] Add **`docs/how-to/README.md`** Diataxis index (one entry: [`first-run-and-code-review.md`](../how-to/first-run-and-code-review.md))
+- [ ] One-line E2E link in [`orama-system/CLAUDE.md`](../../CLAUDE.md) §3 skills table → how-to (DX 7/10 in autoplan)
+
+### Phase 3b — CI gate (accepted, not shipped)
+
+- [ ] Ship `scripts/check_no_instru_canonical_in_skills.sh` (or equivalent): `rg 'Canonical:.*CLAUDE-instru' bin/orama-system/skills` → must be 0
+- [ ] Wire gate into pre-commit or CI when touching skills tree
+
+### Cross-repo (out of repo scope)
+
+- [ ] OpenClaw `CLAUDE.md` discoverability line → [`first-run-install.md`](../../bin/orama-system/references/first-run-install.md) (DX autoplan item)

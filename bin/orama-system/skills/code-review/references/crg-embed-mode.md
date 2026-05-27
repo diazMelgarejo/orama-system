@@ -48,6 +48,6 @@ bash bin/orama-system/skills/code-review/scripts/crg-embed-mode status
 
 ## See also
 
-- [`../../references/first-run-install.md`](../../references/first-run-install.md) § 0.4 — code-review-graph install
+- [`../../../references/first-run-install.md`](../../../references/first-run-install.md) § 0.4 — code-review-graph install
 - `docs/plans/2026-05-19-gbrain-crg-embedding-integration.md` — full integration plan
 - `mcp-install/references/setup-embeddings.md` — the wrapper that invokes this script

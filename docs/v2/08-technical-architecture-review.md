@@ -7,7 +7,7 @@
 
 ## 1. Executive Summary
 
-The oramasys v2 architecture succeeds where other frameworks (LangGraph, CrewAI) fail by treating **hardware as a primary citizen**. This review hardens the "Ghost Orchestrator" model by introducing deterministic safety primitives, capability-based routing, and a high-performance event bus. We maintain the "ruthless minimalism" of v2 while ensuring that safety and reliability are baked into the kernel, not just the prompts.
+The oramasys v2 architecture succeeds where other frameworks (LangGraph, CrewAI) fail by treating **hardware and security as primary citizens**. This review hardens the "Ghost Orchestrator" model by introducing deterministic safety primitives, capability-based routing, and a high-performance event bus. We maintain the "ruthless minimalism" of v2 while ensuring that safety, authorization, egress policy, and auditability are baked into the platform, not just prompts or post-hoc middleware.
 
 ---
 
@@ -28,6 +28,23 @@ To address the "Compounding Failure" risk (March of Nines):
 
 - **LLM-Wiki Pattern**: Our `LESSONS.md` and `SKILL.md` documents are the "Project Memory." v2 will enforce that every graph run concludes with a `GossipBus` event that triggers a "Lesson Proposal."
 - **Test-Driven Spawning**: Agents must not spawn without a "Success Criterion" defined in their `PerpetuaState.scratchpad`.
+
+### C. Public security baseline (D16)
+
+Every architectural review must map controls to public security references:
+
+- **OWASP ASVS / Top 10** for server-side access control, least privilege,
+  secrets, logging, safe configuration, XSS/injection, and SSRF prevention.
+- **NIST SSDF** for security requirements, threat/risk modeling, and
+  vulnerability-response feedback into design.
+- **CISA Secure by Design / Secure by Default** for loopback/default-safe
+  configuration and eliminating universal default credentials.
+- **OpenSSF Scorecard / Security Insights** for open-source project posture and
+  machine-readable security metadata.
+- **SLSA** for provenance and supply-chain integrity of release artifacts.
+
+See [`24-security-first-platform.md`](24-security-first-platform.md) for the
+canonical citation table and release gate.
 
 ---
 
@@ -102,6 +119,8 @@ A special plugin that injects a `check_integrity()` call after every `N` nodes. 
 **Next Course of Action:**
 
 1. Update `perpetua_core/graph/engine.py` with the `max_steps` guard and `GraphPlugin` protocol.
+2. Add the security contracts from `01-kernel-spec.md` §6b before exposing new
+   HTTP/MCP/subprocess surfaces.
 
 ---
 
