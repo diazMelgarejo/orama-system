@@ -9,6 +9,7 @@ msg_file="${1:?commit message file required}"
 # Explicit allowlist entries (lowercase match) — always permitted in Co-authored-by.
 ALLOWED_EXACT_COAUTHOR_EMAILS=(
   cursoragent@cursor.com
+  lawrence@bettermind.ph
 )
 
 # Only these @gmail.com addresses may appear in Co-authored-by (lowercase match).
