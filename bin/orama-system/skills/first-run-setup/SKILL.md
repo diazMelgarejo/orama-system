@@ -61,5 +61,6 @@ Optional appendix only — first-run **probes** OmniRoute when `OMNIROUTE_TOKEN`
 
 ## See also
 
+- [`../../../docs/how-to/first-run-and-code-review.md`](../../../docs/how-to/first-run-and-code-review.md) — full E2E path through MCP stack and first review
 - [`../../mcp-install/SKILL.md`](../../mcp-install/SKILL.md) — ai-cli-mcp, optional Gemini
 - [`../code-review/SKILL.md`](../code-review/SKILL.md) — graph-first review after CRG is up

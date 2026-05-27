@@ -6,6 +6,17 @@
 
 ---
 
+## Memory governance (v1 — Perpetua-Tools, 2026-05-25)
+
+Before any event enters SQLite FTS or LanceDB, `orchestrator/memory_governance.classify_and_redact()` applies:
+
+- Classification: `operational` | `prompt` | `error` | `routing` | `heartbeat`
+- Redaction via shared `orchestrator/redaction.py` (API keys, tokens, emails, sensitive keys)
+
+GossipBus `emit()` persists only the redacted payload. This satisfies the v2 precondition for RAG until retention/erase semantics land in v2.5.
+
+---
+
 ## What Shipped in v1 (2026-05-21 — pulled forward from v2.1)
 
 > **Decision trail:** AI originally deferred LanceDB to v2.1 (vector DB dependency).

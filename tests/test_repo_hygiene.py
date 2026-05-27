@@ -316,5 +316,45 @@ def test_scan_docv2_ordinal_collision_no_docv2_dir(tmp_path):
     assert repo_hygiene.scan_docv2_ordinal_collision(tmp_path) == []
 
 
+def test_scan_macos_ghost_git_refs_detects_space_numbered_file(tmp_path):
+    """Files like .git/refs/heads/main 2 must be flagged as ghost refs."""
+    repo_hygiene = load_repo_hygiene()
+    refs_heads = tmp_path / ".git" / "refs" / "heads"
+    refs_heads.mkdir(parents=True)
+    (refs_heads / "main").write_text("56f2a6d7b63e8853b814d32f970b62971dc7768c\n")
+    (refs_heads / "main 2").write_text("56f2a6d7b63e8853b814d32f970b62971dc7768c\n")
+    errors = repo_hygiene.scan_macos_ghost_git_refs(tmp_path)
+    assert len(errors) == 1
+    assert "main 2" in errors[0]
+    assert "ghost git ref" in errors[0]
+
+
+def test_scan_macos_ghost_git_refs_detects_branch_with_number(tmp_path):
+    """Subdirectory refs like .git/refs/heads/feat/my-branch 3 are caught."""
+    repo_hygiene = load_repo_hygiene()
+    refs_feat = tmp_path / ".git" / "refs" / "heads" / "feat"
+    refs_feat.mkdir(parents=True)
+    (refs_feat / "my-branch 3").write_text("abcdef1234567890abcdef1234567890abcdef12\n")
+    errors = repo_hygiene.scan_macos_ghost_git_refs(tmp_path)
+    assert len(errors) == 1
+    assert "my-branch 3" in errors[0]
+
+
+def test_scan_macos_ghost_git_refs_clean_returns_empty(tmp_path):
+    """Repos with normal ref names must not flag any errors."""
+    repo_hygiene = load_repo_hygiene()
+    refs_heads = tmp_path / ".git" / "refs" / "heads"
+    refs_heads.mkdir(parents=True)
+    (refs_heads / "main").write_text("56f2a6d7b63e8853b814d32f970b62971dc7768c\n")
+    (refs_heads / "feat-my-branch").write_text("abcdef1234567890abcdef1234567890abcdef12\n")
+    assert repo_hygiene.scan_macos_ghost_git_refs(tmp_path) == []
+
+
+def test_scan_macos_ghost_git_refs_no_git_dir(tmp_path):
+    """Repos without a .git/refs dir must not error."""
+    repo_hygiene = load_repo_hygiene()
+    assert repo_hygiene.scan_macos_ghost_git_refs(tmp_path) == []
+
+
 def test_identity_check_script_is_shell_valid():
     subprocess.check_call(["bash", "-n", "scripts/git/check_identity.sh"], cwd=ROOT)
