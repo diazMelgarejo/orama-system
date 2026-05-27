@@ -2421,8 +2421,10 @@ async def dashboard():
     dashboard_path = REPO_ROOT / "docs" / "dashboard" / "routing-dashboard.html"
     if dashboard_path.exists():
         return FileResponse(str(dashboard_path), media_type="text/html")
+    log.warning("Dashboard HTML missing: %s", dashboard_path)
     return HTMLResponse(
-        f"<h2>Dashboard not found</h2><p>Expected: {dashboard_path}</p>",
+        "<h2>Dashboard not available</h2>"
+        "<p>The routing dashboard has not been built or is not deployed on this host.</p>",
         status_code=404,
     )
 
