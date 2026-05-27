@@ -53,6 +53,11 @@ if [[ "$actual_email_lc" == "lawrence@cyre.me" ]]; then
   exit 0
 fi
 
+if [[ "$actual_email_lc" == "lawrence@bettermind.ph" ]]; then
+  echo "OK: approved git identity"
+  exit 0
+fi
+
 if [[ "$actual_name" == "Codex" && "$actual_email_lc" == "codex@openai.com" ]]; then
   echo "OK: approved AI agent git identity"
   exit 0
