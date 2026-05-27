@@ -6,7 +6,6 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
-# Cursor may inject OPENCLAW_HOME before $HOME is set; never clone to filesystem root.
 HOME="${HOME:-/home/ubuntu}"
 case "${OPENCLAW_HOME:-}" in
   "" | "/" | '/openclaw-v1' | '$HOME/openclaw-v1')
@@ -52,21 +51,37 @@ ensure_venv() {
 clone_sibling() {
   local name="$1"
   local url="$2"
+  local branch="${3:-main}"
   local dest="$OPENCLAW_HOME/$name"
   if [[ -d "$dest/.git" ]]; then
     log "$name already present at $dest"
     return 0
   fi
-  log "cloning $name -> $dest"
+  log "cloning $name (branch $branch) -> $dest"
   mkdir -p "$OPENCLAW_HOME"
-  git clone --branch main --depth 1 "$url" "$dest"
+  git clone --branch "$branch" --depth 1 "$url" "$dest"
+}
+
+clone_alphaclaw_fork() {
+  local url="https://github.com/diazMelgarejo/AlphaClaw"
+  local dest="$OPENCLAW_HOME/AlphaClaw"
+  local upstream="${ALPHACLAW_UPSTREAM_BRANCH:-main}"
+  if [[ -d "$dest/.git" ]]; then
+    log "AlphaClaw present; align integration + contrib branches"
+    bash "$REPO_ROOT/scripts/git/alphaclaw-align-all.sh"
+    return 0
+  fi
+  log "cloning AlphaClaw (upstream $upstream) -> $dest"
+  mkdir -p "$OPENCLAW_HOME"
+  git clone --branch "$upstream" --depth 1 "$url" "$dest"
+  bash "$REPO_ROOT/scripts/git/alphaclaw-align-all.sh"
 }
 
 log "OPENCLAW_HOME=$OPENCLAW_HOME"
 ensure_venv
 
 clone_sibling Perpetua-Tools https://github.com/diazMelgarejo/Perpetua-Tools
-clone_sibling AlphaClaw https://github.com/diazMelgarejo/AlphaClaw
+clone_alphaclaw_fork
 
 log "pip install orama-system + siblings"
 pip install -q -e ".[test]"
@@ -83,7 +98,10 @@ if ! npm list -g openclaw >/dev/null 2>&1; then
   npm install -g openclaw@2026.5.6
 fi
 
-if [[ -x scripts/git/apply-attribution-guard-all-repos.sh ]]; then
+if [[ -x scripts/cursor/install-user-git-environment.sh ]]; then
+  log "install user-level git guards (~/.cursor/openclaw)"
+  bash scripts/cursor/install-user-git-environment.sh
+elif [[ -x scripts/git/apply-attribution-guard-all-repos.sh ]]; then
   log "apply git attribution guards"
   bash scripts/git/apply-attribution-guard-all-repos.sh
 fi
