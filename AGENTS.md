@@ -23,7 +23,9 @@ bash scripts/git/commit-clean.sh -m "type(scope): short summary"
 - `Perpetua-Tools` (`$PERPETUA_TOOLS_PATH` or `$OPENCLAW_HOME/Perpetua-Tools`)
 - `AlphaClaw` (`$ALPHACLAW_INSTALL_DIR` or `$OPENCLAW_HOME/AlphaClaw`)
 
-See `docs/wiki/09-cursor-cloud-commit-attribution.md`.
+**AlphaClaw fork:** `main` = upstream mirror. `pr-4-macos` = upstream [PR #63](https://github.com/chrysb/alphaclaw/pull/63) — cherry-pick down from `feature/MacOS-post-install`; **never** FF integration onto it. Integration: `feature/MacOS-post-install`. Contrib: `cursor/sync-attribution-guards-6421` → PR into integration. `alphaclaw-align-all.sh` does not touch `pr-4-macos`. See `docs/wiki/13-alphaclaw-fork-contrib-branches.md` and AlphaClaw `docs/wiki/01-branch-roles.md`.
+
+See `docs/wiki/12-cursor-cloud-commit-attribution.md`.
 
 ## Prime directives for agent-maintained records
 

@@ -1,11 +1,12 @@
 {
   "install": "bash scripts/cursor/cloud-install.sh",
-
   "environment": {
     "OPENCLAW_HOME": "$HOME/openclaw-v1",
     "ORAMA_SYSTEM_PATH": "${workspaceFolder}",
     "PERPETUA_TOOLS_PATH": "$HOME/openclaw-v1/Perpetua-Tools",
     "ALPHACLAW_INSTALL_DIR": "$HOME/openclaw-v1/AlphaClaw",
+    "ALPHACLAW_UPSTREAM_BRANCH": "main",
+    "ALPHACLAW_CONTRIB_BRANCH": "cursor/sync-attribution-guards-6421",
     "OPENCLAW_GATEWAY_URL": "http://localhost:18789",
     "LM_STUDIO_URL": "http://localhost:1234",
     "OLLAMA_MAC_ENDPOINT": "http://localhost:11434",
@@ -17,9 +18,9 @@
     "REPO_ROOT": "${workspaceFolder}",
     "ULTRATHINK_PORT": "8001",
     "PORTAL_PORT": "8002",
-    "ALPHACLAW_PORT": "3000"
+    "ALPHACLAW_PORT": "3000",
+    "ALPHACLAW_INTEGRATION_BRANCH": "feature/MacOS-post-install"
   },
-
   "terminals": [
     {
       "name": "orama tests",
