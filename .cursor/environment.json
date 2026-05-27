@@ -1,6 +1,5 @@
 {
   "install": "bash scripts/cursor/cloud-install.sh",
-
   "environment": {
     "OPENCLAW_HOME": "$HOME/openclaw-v1",
     "ORAMA_SYSTEM_PATH": "${workspaceFolder}",
@@ -19,9 +18,9 @@
     "REPO_ROOT": "${workspaceFolder}",
     "ULTRATHINK_PORT": "8001",
     "PORTAL_PORT": "8002",
-    "ALPHACLAW_PORT": "3000"
+    "ALPHACLAW_PORT": "3000",
+    "ALPHACLAW_INTEGRATION_BRANCH": "feature/MacOS-post-install"
   },
-
   "terminals": [
     {
       "name": "orama tests",
