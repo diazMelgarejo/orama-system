@@ -13,13 +13,12 @@ from pathlib import Path
 APPROVED_IDENTITIES = {
     ("cyre", "Lawrence@cyre.me"),
     ("cyre", "diazMelgarejo@gmail.com"),
+    ("cyre", "Lawrence@bettermind.ph"),
     ("Codex", "codex@openai.com"),
+    ("Cursor Agent", "cursoragent@cursor.com"),
 }
 # Keep in sync with scripts/git/check_identity.sh (local hooks + pre-commit).
-FORBIDDEN_TOKENS = (
-    "Lawrence " + "Melgarejo",
-    "Lawrence" + "@bettermind.ph",
-)
+FORBIDDEN_TOKENS: tuple[()] = ()
 IDENTITY_DOC_EXCEPTIONS = {
     ".mailmap",
     "docs/wiki/08-git-hygiene-and-branching.md",

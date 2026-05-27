@@ -10,12 +10,11 @@ STRIP_HOOK = ROOT / "scripts/git/hooks/commit-msg.strip-coauthor"
 
 
 def test_strip_coauthor_hook_removes_cursor_trailers(tmp_path):
-    legacy_domain = "bettermind" + ".ph"
     msg = tmp_path / "COMMIT_EDITMSG"
     msg.write_text(
         "feat: example\n\n"
         "Co-authored-by: Cursor <cursoragent@cursor.com>\n"
-        f"Co-authored-by: cyre <Lawrence@{legacy_domain}>\n",
+        "Co-authored-by: cyre <Lawrence@bettermind.ph>\n",
         encoding="utf-8",
     )
     subprocess.run(
@@ -24,7 +23,9 @@ def test_strip_coauthor_hook_removes_cursor_trailers(tmp_path):
         cwd=ROOT,
     )
     text = msg.read_text(encoding="utf-8")
-    assert "Co-authored-by" not in text
+    # Cursor auto-injection trailer is stripped; approved identity is preserved
+    assert "cursoragent@cursor.com" not in text
+    assert "bettermind.ph" in text
     assert "feat: example" in text
 
 
@@ -72,6 +73,17 @@ def test_check_commit_message_allows_cursoragent_exact_email(tmp_path):
     msg = tmp_path / "msg-cursor-exact"
     msg.write_text(
         "feat: x\n\nCo-authored-by: Cursor <cursoragent@cursor.com>\n",
+        encoding="utf-8",
+    )
+    subprocess.run(["bash", str(script), str(msg)], check=True, cwd=ROOT)
+
+
+def test_check_commit_message_allows_bettermind(tmp_path):
+    """Lawrence@bettermind.ph is always allowed."""
+    script = ROOT / "scripts/git/check_commit_message.sh"
+    msg = tmp_path / "msg-bettermind"
+    msg.write_text(
+        "feat: x\n\nCo-authored-by: cyre <Lawrence@bettermind.ph>\n",
         encoding="utf-8",
     )
     subprocess.run(["bash", str(script), str(msg)], check=True, cwd=ROOT)
