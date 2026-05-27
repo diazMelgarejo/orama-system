@@ -2188,3 +2188,50 @@ Tracked as checklists elsewhere (read the owner doc, not this log):
 
 - Canonical policy: [`docs/SECURITY-POLICY.md`](SECURITY-POLICY.md); v1 index: [`OpenClaw/v1/README.md`](../../OpenClaw/v1/README.md).
 - Perpetua-Tools mirrors orama git hooks via `scripts/git/check_identity.sh`.
+
+---
+
+## 2026-05-27 — Cursor Cloud — git attribution, AlphaClaw branch anchoring, push queue
+
+### What was learned
+
+**Cursor Cloud git (not fixable via `CURSOR_AGENT=0`):**
+
+- Cloud VMs set `CURSOR_AGENT=1`; there is no supported user toggle to disable it.
+- Cursor redirects `core.hookspath` to `~/.cursor/agent-hooks/<base64(workspace-path)>/` and may run `commit-msg.cursor.co-author` (injects unwanted `Co-authored-by` trailers).
+- Mitigations that work: `chmod -x` on `commit-msg.cursor.co-author`, restore repo `.githooks` via `install-local-hooks.sh`, user-level `~/.cursor/openclaw/` + `sessionStart` hook (`install-user-git-environment.sh`), and hook-free `git commit-tree` via `commit-clean.sh`.
+- Desktop **Agents → Attribution** does not reliably control cloud agent commits.
+
+**Approved identity:** `cyre <diazMelgarejo@gmail.com>`; `repo_hygiene.py` / `check_commit_message.sh` block unattributable Gmail co-authors.
+
+**AlphaClaw fork layout** ([`diazMelgarejo/AlphaClaw`](https://github.com/diazMelgarejo/AlphaClaw)):
+
+| Branch | Role |
+|--------|------|
+| `main` | Upstream mirror only ([`origin/main`](https://github.com/diazMelgarejo/AlphaClaw/tree/main)) |
+| `feature/MacOS-post-install` | Integration branch — must **contain** current `origin/main` |
+| `cursor/sync-attribution-guards-6421` | Contrib — PR target is **integration**, not `main` |
+
+Both integration and contrib branches must have **merge-base(branch, origin/main) = origin/main** (nearest common ancestor is upstream mirror tip). Shallow `git clone --depth 1` on a stale tip produced orphan roots (e.g. detached `a64d183`) — always run `bash scripts/git/alphaclaw-align-all.sh` after clone.
+
+**Push order when credentials available:**
+
+1. `bash scripts/cursor/push-openclaw-stack.sh` (orama branch + AlphaClaw)
+2. Push `feature/MacOS-post-install` (includes `merge(upstream): sync origin/main…`)
+3. Push `cursor/sync-attribution-guards-6421`
+4. PR: `cursor/sync-attribution-guards-6421` → `feature/MacOS-post-install`
+5. PR: `feature/MacOS-post-install` → `main` when integration is ready
+
+### Decisions made
+
+- Canonical automation in orama-system: `alphaclaw-sync-integration-with-main.sh`, `alphaclaw-align-all.sh`, `alphaclaw-realign-contrib-branches.sh`, `alphaclaw-contrib-checkout.sh`, `push-openclaw-stack.sh`.
+- `.cursor/environment.json`: `ALPHACLAW_INTEGRATION_BRANCH`, `ALPHACLAW_CONTRIB_BRANCH`, cloud `install` calls `alphaclaw-align-all` after AlphaClaw clone.
+- Wiki: `docs/wiki/12-cursor-cloud-commit-attribution.md`, `docs/wiki/13-alphaclaw-fork-contrib-branches.md`; rules: `.cursor/rules/cursor-cloud-environment.mdc`, `no-commit-attribution.mdc`.
+
+### Prevention checklist
+
+1. On every cloud session: `bash scripts/cursor/install-user-git-environment.sh` and `bash scripts/git/alphaclaw-align-all.sh`.
+2. Before AlphaClaw commit: verify `git merge-base HEAD origin/main` equals `git rev-parse origin/main`.
+3. Never open AlphaClaw feature PRs with base `main` when commits belong on integration/contrib lines.
+4. Use `bash scripts/git/commit-clean.sh` if `git commit` still appends co-author trailers.
+
