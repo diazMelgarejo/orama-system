@@ -58,12 +58,12 @@ trap 'rm -f "$tmp"' EXIT
 cat >"$tmp" <<'MSG'
 test: verify guards
 
-Co-authored-by: cyre <Lawrence@bettermind.ph>
+Co-authored-by: random <unknown-person@random-domain-xyz.io>
 MSG
 if bash "${REPO_ROOT}/scripts/git/check_commit_message.sh" "$tmp" 2>/dev/null; then
-  fail "check_commit_message.sh should reject forbidden co-author"
+  fail "check_commit_message.sh should reject unlisted co-author"
 else
-  ok "commit-msg policy blocks forbidden co-author"
+  ok "commit-msg policy blocks unlisted co-author"
 fi
 
 if [[ "$errors" -gt 0 ]]; then
