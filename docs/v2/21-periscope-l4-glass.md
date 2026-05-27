@@ -5,6 +5,18 @@
 > **Repo:** `diazMelgarejo/periscope` (fork of `latentsignal-org/periscope`, upstream tracks `wesm/agentsview`)
 > **Local path:** `~/Documents/oramasys/tools/periscope` (cloned 2026-05-24, all 3 branches local)
 
+### Branch model (canonical)
+
+| Branch | Role |
+|--------|------|
+| **`agentsview`** | Grandmother — latest upstream agentsview lineage |
+| **`main`** | Tracks **latentsignal-org/periscope** only (upstream mirror; **not** the build target) |
+| **`merged`** | **Build branch** — `agentsview` + `main` + fork work; **all fork PRs base here** |
+
+**Cursor agents:** install repo rules once per clone — `bash scripts/periscope/install-cursor-rules.sh`
+(from orama-system) → writes `.cursor/rules/openclaw-fork-guide.mdc` in the periscope repo.
+Reference: [`docs/reference/periscope-cursor-repo-rules.md`](../reference/periscope-cursor-repo-rules.md).
+
 ---
 
 ## Mission
@@ -221,10 +233,10 @@ Two categories — both addressed in the companion implementation plan.
 
 | # | Item | Branch state | Status |
 |---|------|--------------|--------|
-| A.1 | Rename `cmd/agentsview/` → `cmd/periscope/` (15 Go files) | `main` still on old name; `merged` partially renamed (Rust lib done) | **Open** |
-| A.2 | Merge `merged` branch (10 commits ahead of main) into `main` | Includes Rust lib rename, PEP 440 wheel fix, Docker tag fix, CI conditional signing, agentsview→periscope build-tool rename completion | **Open** |
+| A.1 | Rename `cmd/agentsview/` → `cmd/periscope/` (15 Go files) | Land on **`merged`**; `main` stays upstream mirror | **Open** |
+| A.2 | Keep fork build work on **`merged`** (do **not** merge `merged` → `main`) | Rust lib rename, wheel/Docker/CI fixes live on build branch | **Open** |
 | A.3 | Cherry-pick or rebase `agentsview` branch updates (5 commits: Piebald support #478, forge agent #476, dep batch #475, Claude subagent linking #459, tool input preview #463) | Tracking upstream `latentsignal-org/periscope` | **Open** |
-| A.4 | Triage 3 open dependabot PRs (#1 cargo, #2 npm, #3 Go pgx) | Active | **Open** |
+| A.4 | Deps onto **`merged`** (not `main`); close mistaken main-target PRs | See `scripts/periscope/rebuild-deps-prs-onto-merged.sh` | **In progress** |
 | A.5 | Rename `agentsview.io` mentions in README install URLs to `periscope.io` (or equivalent) | Not done — placeholder host | **Open** (depends on domain decision) |
 | A.6 | `agentsview` strings in `.air.toml` + `.roborev.toml` (dev tools) | Affects local dev hot-reload | **Open** |
 
