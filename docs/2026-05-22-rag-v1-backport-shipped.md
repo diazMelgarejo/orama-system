@@ -22,7 +22,7 @@
 | `pyproject.toml` | `aiosqlite>=0.19` core; `lancedb+pyarrow` as `[rag]` optional extras |
 | `docs/2026-05-22-rag-backport-v1-release-notes.md` | Full release notes |
 
-**Tests:** 345 passed, 2 skipped, 0 regressions.
+**Tests (items 1–4):** 345 passed, 2 skipped, 0 regressions.
 
 ---
 
@@ -46,9 +46,9 @@ From `docs/superpowers/plans/2026-05-21-rag-memory-v1-plan.md`:
 | 2 | FTS5 + `_sanitize_fts_query()` | High | ✅ **Shipped** — `orchestrator/gossip_bus.py` |
 | 3 | `_pending_embeds` GC guard | High | ✅ **Shipped** — `gossip_bus.py` + `fastapi_app.py` |
 | 4 | LanceDB `EmbeddingStore` + dim probe | Medium | ✅ **Shipped** — `orchestrator/memory_store.py` + `memory_embed.py` |
-| 5 | GbrainSearchTool | Conditional | Deferred — v1 has no `@tool` decorator equiv |
-| 6 | MemoryNode | Low/defer | Deferred — requires v2 graph model |
-| 7 | dispatch_node wiring | Low/defer | Deferred — v1 already has LLM dispatch |
+| 5 | GbrainSearchTool | Conditional | ✅ **Shipped (2026-05-27)** — `orchestrator/gbrain_search.py`: async fn, subprocess CLI, graceful `[]` on any failure (no `@tool` needed in v1) |
+| 6 | MemoryNode | Low/defer | ✅ **Shipped (2026-05-27)** — `orchestrator/memory_node.py`: `retrieve_context()` async callable, FTS5+LanceDB+optional gbrain+RRF; no v2 graph required |
+| 7 | dispatch_node wiring | Low/defer | ✅ **Shipped (2026-05-27)** — `supervisor._inject_memory_context()` prepends `[MEMORY CONTEXT]` block to `spec.prompt` before routing |
 
 ---
 
@@ -60,6 +60,28 @@ From `docs/superpowers/plans/2026-05-21-rag-memory-v1-plan.md`:
 > The RAG v1 plan targets `oramasys/perpetua-core` module paths. The v1 backport
 > adapts all paths to `orchestrator/` in Perpetua-Tools. This is intentional.
 > Override of this separation rule requires explicit `AskUserQuestion` confirmation.
+
+---
+
+## Items 5–7 shipped details (2026-05-27)
+
+Branch: `diazMelgarejo/Perpetua-Tools` `2026-05-27-006-rag-items-5-7`
+
+| File | Description |
+|------|-------------|
+| `orchestrator/gbrain_search.py` | `gbrain_search()` async fn — subprocess `gbrain search --json`, `_normalise_hits()`, env-configurable timeout, `[]` on any failure |
+| `orchestrator/memory_node.py` | `retrieve_context()` — FTS5 + LanceDB + optional gbrain + RRF; module-level bus/store singletons; `reset_singletons()` test helper |
+| `orchestrator/supervisor.py` | `_inject_memory_context()` method + step 0 in `_dispatch()` — opt-out via `metadata["use_memory"]=False` |
+| `tests/test_gbrain_search.py` | 14 tests — normalise, binary missing, empty query, list/dict response, bad JSON, timeout, nonzero exit |
+| `tests/test_memory_node.py` | 7 tests — empty query, FTS-only, RRF merge, gbrain blend, all-fail degradation, top_n |
+| `tests/test_supervisor_smoke.py` | +4 tests — inject prepends block, no hits unchanged, disabled by metadata, degrades on exception |
+
+**Tests (items 5–7):** 25 new tests, all passing. Total suite: 400 passed (excl. pre-existing Python 3.9 / aiosqlite env failures).
+
+**Env vars added:**
+- `GBRAIN_MEMORY_ENABLED=1` — enables gbrain in every `retrieve_context` call (default off)
+- `GBRAIN_SEARCH_TIMEOUT_SECONDS` — gbrain subprocess timeout in seconds (default 5)
+- `MEMORY_NODE_TOP_N` — max hits returned by `retrieve_context` (default 5)
 
 ---
 
