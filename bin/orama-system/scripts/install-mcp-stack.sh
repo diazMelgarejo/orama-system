@@ -25,20 +25,24 @@ for arg in "$@"; do
 done
 
 _log()  { echo "[mcp-install] $*"; }
+# _ok echoes a success message prefixed with "[mcp-install] ✓" followed by its arguments.
 _ok()   { echo "[mcp-install] ✓ $*"; }
+# _skip echoes a standardized skip message with the provided reason to stdout.
 _skip() { echo "[mcp-install] → skip: $*"; }
+# _fail writes a fatal error message prefixed with "[mcp-install] ✗ FATAL:" to stderr and exits the script with status 1.
 _fail() { echo "[mcp-install] ✗ FATAL: $*" >&2; exit 1; }
 # Security: validate any path interpolated into _run before calling.
 # eval "$*" word-splits and glob-expands; we still need it for compound
 # commands ("cmd1 && cmd2"), but every dynamic variable that flows into _run
-# MUST first pass through _safe_path() (see below). See PR for full threat model.
+# _run executes the given command string with eval, or if DRY_RUN is true echoes the command prefixed with "[dry-run]".
+# Arguments passed to _run must be validated (for example via _safe_path) before interpolation to avoid shell metacharacter injection.
 _run()  { $DRY_RUN && echo "[dry-run] $*" || eval "$*"; }
 
 # _safe_path: reject any path containing shell metacharacters before
 # interpolating into _run. Refuses paths with: spaces (handled by quoting at
 # call site), tabs, newlines, $, `, ;, &, |, <, >, (, ), {, }, *, ?, [, ],
 # backslash, single-quote, double-quote, or leading dash.
-# Returns: 0 if safe; non-zero (and prints error) if unsafe.
+# _safe_path validates that a path does not start with a dash or contain shell metacharacters and prints an error and returns non-zero if the path is unsafe.
 _safe_path() {
   local p="$1"
   case "$p" in

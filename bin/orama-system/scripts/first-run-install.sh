@@ -47,14 +47,18 @@ OLLAMA_MODELS=(qwen3.5:9b-nvfp4 bge-m3)
 
 _log()  { echo "[first-run] $*"; }
 _ok()   { echo "[first-run] ✓ $*"; }
+# _warn writes a warning message prefixed with "[first-run] !" to standard error.
 _warn() { echo "[first-run] ! $*" >&2; }
+# _skip prints a formatted "[first-run] → skip:" message followed by the provided arguments.
 _skip() { echo "[first-run] → skip: $*"; }
+# _fail prints an error message prefixed with "[first-run]" to stderr.
 _fail() { echo "[first-run] ✗ $*" >&2; }
 # Security: see install-mcp-stack.sh for full threat model. Any path
 # interpolated into _run MUST first pass through _safe_path() to reject
-# shell metacharacters before eval re-parses the command string.
+# _run echoes the command prefixed with "[dry-run]" when DRY_RUN is set, otherwise evaluates the command string.
 _run()  { $DRY_RUN && echo "[dry-run] $*" || eval "$*"; }
 
+# _safe_path validates that a path string does not start with '-' and contains no shell metacharacters; exits with an error if the path is unsafe.
 _safe_path() {
   local p="$1"
   case "$p" in
