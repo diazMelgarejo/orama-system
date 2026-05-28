@@ -154,7 +154,8 @@ class TestMcpSafePath:
 
     def test_home_tilde_expanded_path_accepted(self):
         # Tilde is already expanded by the caller; we test the expanded form.
-        result = _run_mcp_safe_path("/Users/testuser/.codex/skills/orama")
+        # Use /Users/user/ — a hygiene-scanner-approved generic placeholder.
+        result = _run_mcp_safe_path("/Users/user/.codex/skills/orama")
         assert result.returncode == 0
 
     # ── Leading-dash rejection ───────────────────────────────────────────────
