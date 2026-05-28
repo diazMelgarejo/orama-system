@@ -53,20 +53,41 @@ ALL_EXPECTED_IDS = {
 
 @pytest.fixture(scope="module")
 def config() -> dict:
-    """Return the parsed .opengrep.yml as a dictionary."""
+    """
+    Load and parse the repository's .opengrep.yml into a dictionary.
+    
+    Returns:
+        dict: Parsed contents of .opengrep.yml as a Python dictionary.
+    """
     with OPENGREP_PATH.open(encoding="utf-8") as fh:
         return yaml.safe_load(fh)
 
 
 @pytest.fixture(scope="module")
 def rules(config) -> list[dict]:
-    """Return the list of rule objects from the config."""
+    """
+    Retrieve the top-level "rules" list from a parsed .opengrep.yml configuration.
+    
+    Parameters:
+        config (dict): Parsed YAML document expected to contain a "rules" key.
+    
+    Returns:
+        list[dict]: The list of rule objects from the config.
+    """
     return config["rules"]
 
 
 @pytest.fixture(scope="module")
 def rules_by_id(rules) -> dict[str, dict]:
-    """Return a mapping of rule_id → rule dict for targeted lookups."""
+    """
+    Build a mapping from each rule's `id` to its rule dictionary.
+    
+    Parameters:
+        rules (list[dict]): Sequence of rule dictionaries; each must contain an `"id"` key.
+    
+    Returns:
+        dict[str, dict]: Mapping where keys are rule IDs and values are the corresponding rule dictionaries.
+    """
     return {r["id"]: r for r in rules}
 
 
@@ -78,17 +99,31 @@ def test_opengrep_yml_file_exists():
 
 
 def test_opengrep_yml_is_valid_yaml():
-    """The file must parse as valid YAML without raising an exception."""
+    """
+    Verify that .opengrep.yml parses as valid YAML.
+    """
     with OPENGREP_PATH.open(encoding="utf-8") as fh:
         parsed = yaml.safe_load(fh)
     assert parsed is not None
 
 
 def test_opengrep_yml_top_level_has_rules_key(config):
+    """
+    Assert that the parsed `.opengrep.yml` contains a top-level "rules" key.
+    
+    Parameters:
+        config (dict): Parsed YAML document from `.opengrep.yml` provided by the `config` fixture.
+    """
     assert "rules" in config, "Top-level 'rules' key is missing from .opengrep.yml"
 
 
 def test_rules_is_a_non_empty_list(rules):
+    """
+    Assert that the parsed `rules` value from `.opengrep.yml` is a non-empty list.
+    
+    Parameters:
+    	rules (list): The top-level `rules` sequence parsed from the configuration file; each entry is expected to be a rule mapping.
+    """
     assert isinstance(rules, list)
     assert len(rules) > 0, "rules list must not be empty"
 
@@ -106,7 +141,16 @@ def test_expected_total_rule_count(rules):
 
 @pytest.mark.parametrize("field", ["id", "message", "languages", "severity"])
 def test_all_rules_have_required_field(rules, field):
-    """Every rule must declare the four core semgrep fields."""
+    """
+    Assert that every rule in `rules` contains the specified `field`.
+    
+    Parameters:
+        rules (list[dict]): List of rule objects to check.
+        field (str): The required field name that each rule must have.
+    
+    Notes:
+        Fails the test with a list of rule IDs if any rule is missing `field`.
+    """
     missing = [r.get("id", "<no-id>") for r in rules if field not in r]
     assert not missing, f"Rules missing '{field}': {missing}"
 
@@ -121,12 +165,25 @@ def test_all_rules_have_pattern_or_patterns(rules):
 
 
 def test_all_rules_have_metadata(rules):
+    """
+    Assert that every rule dictionary in `rules` contains a `metadata` key.
+    
+    Parameters:
+        rules (list[dict]): Parsed rule objects from the `.opengrep.yml` configuration.
+    
+    Raises:
+        AssertionError: If one or more rules are missing the `metadata` key; the assertion message lists the offending rule ids.
+    """
     missing = [r["id"] for r in rules if "metadata" not in r]
     assert not missing, f"Rules missing 'metadata': {missing}"
 
 
 def test_all_rules_metadata_has_category(rules):
-    """metadata.category is mandatory for every rule."""
+    """
+    Ensure every rule defines a metadata.category field.
+    
+    If any rule is missing `metadata.category`, the test fails and the assertion message lists the offending rule IDs.
+    """
     missing = [
         r["id"]
         for r in rules
@@ -144,6 +201,12 @@ def test_rule_ids_use_orama_prefix(rules):
 
 
 def test_rule_ids_are_unique(rules):
+    """
+    Assert that all rule IDs in the provided rules list are unique.
+    
+    Parameters:
+        rules (list[dict]): List of rule objects parsed from .opengrep.yml, each expected to contain an "id" key.
+    """
     ids = [r["id"] for r in rules]
     seen: set[str] = set()
     duplicates = [rid for rid in ids if rid in seen or seen.add(rid)]  # type: ignore[func-returns-value]
@@ -159,6 +222,12 @@ def test_all_expected_rule_ids_are_present(rules_by_id):
 
 
 def test_severity_values_are_valid(rules):
+    """
+    Validate that every rule's `severity` is one of the allowed values.
+    
+    Parameters:
+        rules (list[dict]): Parsed list of rule dictionaries from `.opengrep.yml`. The test asserts each rule's `severity` is in VALID_SEVERITIES.
+    """
     invalid = [
         (r["id"], r["severity"])
         for r in rules
@@ -168,6 +237,15 @@ def test_severity_values_are_valid(rules):
 
 
 def test_no_rule_has_empty_message(rules):
+    """
+    Ensure every rule has a non-empty message.
+    
+    Parameters:
+        rules (list[dict]): List of rule objects parsed from .opengrep.yml.
+    
+    Raises:
+        AssertionError: If any rule's "message" is empty or contains only whitespace; the assertion error lists the offending rule IDs.
+    """
     empty = [r["id"] for r in rules if not str(r.get("message", "")).strip()]
     assert not empty, f"Rules with empty message: {empty}"
 
@@ -198,6 +276,12 @@ def test_no_rule_has_empty_languages_list(rules):
 
 
 def test_python_rules_target_only_python(rules_by_id):
+    """
+    Assert that the repository's expected Python-only rules target only Python.
+    
+    Parameters:
+        rules_by_id (dict): Mapping of rule ID to rule dictionary; used to look up each rule and verify its `languages` value is exactly `["python"]`.
+    """
     python_only_ids = [
         RULE_ID_NO_SHELL_TRUE,
         RULE_ID_NO_EVAL_PY,
@@ -223,6 +307,12 @@ def test_bash_rules_target_only_bash(rules_by_id):
 
 
 def test_ts_rules_target_typescript_and_javascript(rules_by_id):
+    """
+    Assert that TypeScript-specific rules include both "typescript" and "javascript" in their `languages` list.
+    
+    Parameters:
+        rules_by_id (dict): Mapping from rule ID to its rule dictionary.
+    """
     ts_ids = [RULE_ID_TS_NO_EVAL, RULE_ID_TS_NO_HARDCODED_SECRET]
     for rule_id in ts_ids:
         rule = rules_by_id[rule_id]
@@ -244,7 +334,9 @@ def test_python_error_rules_are_correct_severity(rules_by_id):
 
 
 def test_hardcoded_secret_rules_are_warning_severity(rules_by_id):
-    """Both hardcoded-secret rules (Python and TS) must be WARNING, not ERROR."""
+    """
+    Assert that the Python and TypeScript hardcoded-secret rules have severity "WARNING".
+    """
     for rule_id in (RULE_ID_NO_HARDCODED_SECRET_PY, RULE_ID_TS_NO_HARDCODED_SECRET):
         assert rules_by_id[rule_id]["severity"] == "WARNING", (
             f"{rule_id} must be WARNING severity"
@@ -252,11 +344,20 @@ def test_hardcoded_secret_rules_are_warning_severity(rules_by_id):
 
 
 def test_bash_eval_and_curl_are_error_severity(rules_by_id):
+    """
+    Verify the Bash 'eval' and 'curl' Semgrep rules have severity "ERROR".
+    
+    Parameters:
+        rules_by_id (dict): Mapping from rule ID to the rule dictionary as parsed from the .opengrep.yml configuration.
+    """
     for rule_id in (RULE_ID_BASH_EVAL, RULE_ID_BASH_CURL):
         assert rules_by_id[rule_id]["severity"] == "ERROR"
 
 
 def test_ts_eval_rule_is_error_severity(rules_by_id):
+    """
+    Assert that the TypeScript/JavaScript eval security rule is classified with severity "ERROR".
+    """
     assert rules_by_id[RULE_ID_TS_NO_EVAL]["severity"] == "ERROR"
 
 
@@ -285,7 +386,9 @@ def test_no_eval_py_uses_single_pattern(rules_by_id):
 
 
 def test_yaml_load_rule_has_fix_key(rules_by_id):
-    """orama-no-yaml-load must supply an autofix so semgrep can suggest yaml.safe_load."""
+    """
+    Ensure the "orama-no-yaml-load" rule provides a 'fix' that references yaml.safe_load.
+    """
     rule = rules_by_id[RULE_ID_NO_YAML_LOAD]
     assert "fix" in rule, "orama-no-yaml-load must have a 'fix' field"
     assert "safe_load" in rule["fix"], "fix must reference yaml.safe_load"
@@ -310,6 +413,11 @@ def test_hardcoded_secret_py_uses_metavariable_regex(rules_by_id):
 
 
 def test_hardcoded_secret_py_regex_covers_common_names(rules_by_id):
+    """
+    Verify the Python hardcoded-secret rule's `$VAR` metavariable regex matches common secret variable names.
+    
+    Extracts the `metavariable-regex` entries for metavariable `$VAR` from the Python hardcoded-secret rule, requires at least one such regex, joins them into a combined pattern, and asserts the combined pattern matches the example names: "api_key", "secret", "password", "token", "auth_key", and "private_key" (case-insensitive).
+    """
     import re
 
     rule = rules_by_id[RULE_ID_NO_HARDCODED_SECRET_PY]
@@ -329,6 +437,11 @@ def test_hardcoded_secret_py_regex_covers_common_names(rules_by_id):
 
 
 def test_bind_all_interfaces_covers_uvicorn_and_app(rules_by_id):
+    """
+    Assert that the bind-all-interfaces rule's patterns reference both server entrypoints and the 0.0.0.0 host.
+    
+    Verifies the rule identified by RULE_ID_BIND_ALL_INTERFACES contains a "patterns" entry and that its pattern text includes "uvicorn.run", "app.run", and "0.0.0.0".
+    """
     rule = rules_by_id[RULE_ID_BIND_ALL_INTERFACES]
     assert "patterns" in rule
     pattern_text = str(rule["patterns"])
@@ -338,7 +451,9 @@ def test_bind_all_interfaces_covers_uvicorn_and_app(rules_by_id):
 
 
 def test_bash_curl_rule_has_three_patterns(rules_by_id):
-    """orama-bash-curl-pipe-sh must cover: curl|sh, curl|bash, wget|sh."""
+    """
+    Assert that the `orama-bash-curl-pipe-sh` rule defines exactly three patterns covering the `curl | sh`, `curl | bash`, and `wget | sh` variants.
+    """
     rule = rules_by_id[RULE_ID_BASH_CURL]
     assert "patterns" in rule
     assert len(rule["patterns"]) == 3, (
@@ -347,6 +462,11 @@ def test_bash_curl_rule_has_three_patterns(rules_by_id):
 
 
 def test_bash_curl_patterns_cover_wget_variant(rules_by_id):
+    """
+    Asserts the bash 'curl-pipe-sh' rule's patterns include a wget variant.
+    
+    Checks the rule identified by RULE_ID_BASH_CURL contains the substring "wget" in its patterns text and fails the test if it does not.
+    """
     rule = rules_by_id[RULE_ID_BASH_CURL]
     pattern_text = str(rule["patterns"])
     assert "wget" in pattern_text, "curl-pipe-sh rule must also cover wget"
@@ -389,6 +509,11 @@ def test_ts_hardcoded_secret_uses_const_pattern(rules_by_id):
 
 
 def test_ts_hardcoded_secret_regex_covers_camel_and_snake_case(rules_by_id):
+    """
+    Verify the TypeScript hardcoded-secret rule's `$VAR` metavariable regex matches common camelCase and snake_case secret names.
+    
+    Asserts that the rule identified by RULE_ID_TS_NO_HARDCODED_SECRET contains at least one `metavariable-regex` entry for `$VAR`, combines those regexes, and ensures the combined pattern matches example secret identifier names such as "apiKey", "api_key", "secret", "password", "token", and "authKey". Fails with an AssertionError if the metavariable-regex is missing or does not match any of the example names.
+    """
     import re
 
     rule = rules_by_id[RULE_ID_TS_NO_HARDCODED_SECRET]
@@ -421,7 +546,12 @@ def test_error_severity_rules_have_owasp_or_cwe(rules):
 
 
 def test_injection_rules_reference_owasp_a03(rules_by_id):
-    """Injection-related rules must cite OWASP A03:2021."""
+    """
+    Assert that each injection-related rule references OWASP A03 (2021) in its metadata.
+    
+    Checks the rules identified as injection-related and fails the test if their
+    `metadata.owasp` value does not contain the substring "A03".
+    """
     injection_ids = [
         RULE_ID_NO_SHELL_TRUE,
         RULE_ID_NO_EVAL_PY,
@@ -449,13 +579,22 @@ def test_yaml_load_rule_references_cwe_502(rules_by_id):
 
 
 def test_hardcoded_secret_rules_reference_cwe_798(rules_by_id):
+    """
+    Asserts that the Python and TypeScript hardcoded-secret rules reference CWE-798 in their metadata.
+    
+    Checks the `cwe` metadata for the configured hardcoded-secret rule IDs and fails if it does not include the substring "CWE-798".
+    """
     for rule_id in (RULE_ID_NO_HARDCODED_SECRET_PY, RULE_ID_TS_NO_HARDCODED_SECRET):
         cwe = rules_by_id[rule_id].get("metadata", {}).get("cwe", "")
         assert "CWE-798" in cwe, f"{rule_id}: expected CWE-798, got '{cwe}'"
 
 
 def test_supply_chain_rules_reference_owasp_a08(rules_by_id):
-    """yaml.load and curl-pipe-sh both involve supply-chain / integrity failures."""
+    """
+    Assert that supply-chain-related rules reference OWASP A08.
+    
+    Checks that the yaml.load and curl-pipe-sh rules include "A08" in their `metadata.owasp` value; raises an assertion error if the expected OWASP reference is missing.
+    """
     for rule_id in (RULE_ID_NO_YAML_LOAD, RULE_ID_BASH_CURL):
         owasp = rules_by_id[rule_id].get("metadata", {}).get("owasp", "")
         assert "A08" in owasp, (
@@ -469,6 +608,11 @@ def test_bind_all_interfaces_references_owasp_a05(rules_by_id):
 
 
 def test_hardcoded_secret_rules_reference_owasp_a02(rules_by_id):
+    """
+    Assert that the hardcoded-secret rules include an OWASP A02 reference in their metadata.
+    
+    Checks the Python and TypeScript hardcoded-secret rules and fails if their `metadata.owasp` value does not contain the substring "A02".
+    """
     for rule_id in (RULE_ID_NO_HARDCODED_SECRET_PY, RULE_ID_TS_NO_HARDCODED_SECRET):
         owasp = rules_by_id[rule_id].get("metadata", {}).get("owasp", "")
         assert "A02" in owasp, f"{rule_id}: expected OWASP A02, got '{owasp}'"
