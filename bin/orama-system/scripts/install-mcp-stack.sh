@@ -28,7 +28,25 @@ _log()  { echo "[mcp-install] $*"; }
 _ok()   { echo "[mcp-install] ✓ $*"; }
 _skip() { echo "[mcp-install] → skip: $*"; }
 _fail() { echo "[mcp-install] ✗ FATAL: $*" >&2; exit 1; }
+# Security: validate any path interpolated into _run before calling.
+# eval "$*" word-splits and glob-expands; we still need it for compound
+# commands ("cmd1 && cmd2"), but every dynamic variable that flows into _run
+# MUST first pass through _safe_path() (see below). See PR for full threat model.
 _run()  { $DRY_RUN && echo "[dry-run] $*" || eval "$*"; }
+
+# _safe_path: reject any path containing shell metacharacters before
+# interpolating into _run. Refuses paths with: spaces (handled by quoting at
+# call site), tabs, newlines, $, `, ;, &, |, <, >, (, ), {, }, *, ?, [, ],
+# backslash, single-quote, double-quote, or leading dash.
+# Returns: 0 if safe; non-zero (and prints error) if unsafe.
+_safe_path() {
+  local p="$1"
+  case "$p" in
+    -*) _fail "_safe_path: path may not start with dash: $p" ;;
+    *[$'\t\n\$\`\;\&\|\<\>\(\)\{\}\*\?\[\]\\\'\"']*)
+      _fail "_safe_path: path contains shell metacharacters: $p" ;;
+  esac
+}
 
 _log "MCP orchestration stack installer — 2026-04-25"
 _log "Dry-run: $DRY_RUN | Force: $FORCE"
@@ -175,6 +193,10 @@ if $MIRROR_SKILLS; then
           continue
         fi
       fi
+      # Security: validate paths before interpolating into eval-based _run.
+      _safe_path "$_dst_dir"
+      _safe_path "$_src_skill"
+      _safe_path "$_dst"
       _run "mkdir -p \"$_dst_dir\" && install -m 0644 \"$_src_skill\" \"$_dst\""
       _ok "mirror $_skill_name → $_tool"
     done
@@ -184,6 +206,9 @@ if $MIRROR_SKILLS; then
     for _src_skill in "$_SKILLS_ROOT"/*/SKILL.md; do
       [ -f "$_src_skill" ] || continue
       _skill_name="$(basename "$(dirname "$_src_skill")")"
+      # Security: validate before eval-interpolation in _run.
+      _safe_path "$_skill_name"
+      _safe_path "$_src_skill"
       _run "openclaw skill set \"$_skill_name\" \"$_src_skill\""
       _ok "openclaw skill set $_skill_name"
     done

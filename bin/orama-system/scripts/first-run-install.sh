@@ -50,7 +50,19 @@ _ok()   { echo "[first-run] ✓ $*"; }
 _warn() { echo "[first-run] ! $*" >&2; }
 _skip() { echo "[first-run] → skip: $*"; }
 _fail() { echo "[first-run] ✗ $*" >&2; }
+# Security: see install-mcp-stack.sh for full threat model. Any path
+# interpolated into _run MUST first pass through _safe_path() to reject
+# shell metacharacters before eval re-parses the command string.
 _run()  { $DRY_RUN && echo "[dry-run] $*" || eval "$*"; }
+
+_safe_path() {
+  local p="$1"
+  case "$p" in
+    -*) _fail "_safe_path: path may not start with dash: $p"; exit 1 ;;
+    *[$'\t\n\$\`\;\&\|\<\>\(\)\{\}\*\?\[\]\\\'\"']*)
+      _fail "_safe_path: path contains shell metacharacters: $p"; exit 1 ;;
+  esac
+}
 
 OPENCLAW_ROOT="$(detect_openclaw_root || true)"
 MCP_JSON="$(resolve_openclaw_mcp_json || true)"
