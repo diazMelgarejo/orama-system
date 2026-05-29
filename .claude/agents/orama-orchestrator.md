@@ -7,6 +7,9 @@ compatibility: clawdbot, moltbot, openclaw, any-mcp-framework
 allowed-tools: state-manager, message-bus, agent-delegator, parallel-executor
 ---
 
+> **Claude Code runtime:** two install paths exist on this machine (`~/.local/bin/claude` + npm global).
+> Before updating or relocating the binary, read [`../../CLAUDE-CODE-RUNTIME.md`](../../CLAUDE-CODE-RUNTIME.md).
+
 # ultrathink Orchestrator Agent
 
 ## Purpose
