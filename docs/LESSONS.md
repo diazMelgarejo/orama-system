@@ -2351,3 +2351,44 @@ A **Cursor agent on 2026-05-25 at 13:44** created `OpenClaw/_pt-merge-work/` as 
 
 - Should we add a pre-commit hook or wrapper to **block agent-initiated `git clone` into OpenClaw root** without a `.scratch-clone-justification` file?
 - Should there be a `~/.claude/skills/hitl-major-decisions/` skill that any agent must invoke before path/architecture changes?
+
+---
+
+## 2026-05-16 — Claude — No sleep chains: `sleep N && cmd` is blocked
+
+> *First triggered: 2026-05-16 session (npm install wait). Re-triggered: 2026-05-29 session (claude update wait). Canonicalized as a low-level skill on 2026-05-29.*
+
+### What was learned
+
+The shell hook detects `sleep` as the leading token of a Bash command and rejects the entire call. This covers:
+- `sleep N && <command>`
+- `sleep N; <command>`
+- Chains of shorter sleeps attempting to work around the block (`sleep 5 && sleep 5 && cmd`)
+
+Correct mental model: **the block is on the first token, not on the sleep duration**. There is no threshold below which the chain becomes acceptable.
+
+Pattern that re-triggered the rule on 2026-05-29: waiting for a `claude update` background task output file by running `sleep 15 && cat <file>` then `sleep 20 && cat <file>`. Both rejected. The correct form — an until-loop or waiting for the `run_in_background` notification — was only reached on the third attempt.
+
+### Decisions made
+
+The rule is now **canonical** — ported from the ephemeral `~/.claude/projects/.../memory/feedback_no_sleep_chains.md` into:
+
+1. **`orama-system/bin/orama-system/skills/no-sleep-chains/SKILL.md`** — low-level skill with correct-pattern quick reference, invocable by any agent.
+2. **`docs/LESSONS.md`** (this entry) — dated audit trail.
+3. Original memory file retained in `~/.claude/projects/…/memory/` as the session-scoped pointer.
+
+### Correct patterns (canonical)
+
+| Situation | Correct form |
+|-----------|-------------|
+| `run_in_background: true` task | Wait for system notification — do nothing |
+| Poll file for keyword | `until grep -q "..." file; do sleep 3; done` |
+| Poll file for size | `until [ "$(wc -l < file)" -gt N ]; do sleep 3; done` |
+| Wait for service port | `until curl -s http://host/health >/dev/null; do sleep 2; done` |
+| Wait for PID to exit | `until ! kill -0 $PID 2>/dev/null; do sleep 2; done` |
+
+Full patterns with examples: [`bin/orama-system/skills/no-sleep-chains/SKILL.md`](../bin/orama-system/skills/no-sleep-chains/SKILL.md)
+
+### Open questions
+
+None — rule is fully specified and enforced at the shell level.
