@@ -3,7 +3,21 @@
 > **Canonical path**: `docs/LESSONS.md`<br/>
 > **Previous path**: `.claude/lessons/LESSONS.md` (now redirects here)<br/>
 > **Purpose**: GitHub-auditable persistent memory across all ECC, AutoResearcher, and Claude sessions.<br/>
-> **Cross-repo companion**: [Perpetua-Tools/docs/LESSONS.md](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)
+> **Cross-repo companions**:
+> - [Perpetua-Tools/docs/LESSONS.md](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)
+> - [AlphaClaw/docs/Lessons.MD](../../AlphaClaw/docs/Lessons.MD) · [GitHub](https://github.com/diazMelgarejo/AlphaClaw/blob/feature/MacOS-post-install/docs/Lessons.MD)
+>
+> **Cross-repo lesson index** (shared knowledge — check here when a problem spans repos):
+>
+> | Topic | Canonical doc | Also in |
+> |-------|--------------|---------|
+> | macOS ` 2`/` 3` dupes in `.git/` internals | [AlphaClaw wiki/07](../../AlphaClaw/docs/wiki/07-duplicate-files.md) | This file §2026-05-27 + §2026-05-31 |
+> | No sleep chains (`sleep N && cmd`) | [skills/no-sleep-chains/SKILL.md](../bin/orama-system/skills/no-sleep-chains/SKILL.md) | This file §2026-05-16 |
+> | Git identity + Cursor commit policy | [docs/wiki/08-git-hygiene-and-branching.md](wiki/08-git-hygiene-and-branching.md) | AlphaClaw `scripts/git/check_identity.sh` |
+> | gbrain pooler write failures + resync | [gstack/SKILL.md §GBrain Ops](../bin/orama-system/gstack/SKILL.md) | This file §2026-05-30 |
+> | Migration gate ladder (Gate 0→4) | [PT docs/MIGRATION.md](../../perplexity-api/Perpetua-Tools/docs/MIGRATION.md) | This file §2026-05-30 T7 survey |
+> | AlphaClaw branch roles + invariants | [AlphaClaw CLAUDE.md](../../AlphaClaw/CLAUDE.md) | AlphaClaw wiki/01 |
+>
 > **Architecture authority**: [2026-05-14--UNIFIED-ABSORPTION-PLAN.md](2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
 > **Navigation hub**: [CLAUDE-instru.md](../../../CLAUDE-instru.md)
 >
@@ -2248,6 +2262,7 @@ Both integration and contrib branches must have **merge-base(branch, origin/main
    - Fix: `rm "$repo/.git/refs/heads/main 2"` on perpetua-core / oramasys / agate
    - Prevention: added `scan_macos_ghost_git_refs()` to `scripts/review/repo_hygiene.py` (D10)
    - 4 new tests in `tests/test_repo_hygiene.py`
+   - **RE-ENCOUNTERED 2026-05-31 (AlphaClaw):** Same root cause. New variant: `.git/index 2` (56208B) and `.git/index 3` (59526B) — stale staging-area snapshots, NOT identical to live `.git/index` (60666B). Also `refs/remotes/origin/feature/MacOS-post-install 2`, `origin/main 2`, `origin/main 3` — remote-tracking ghost refs, all same SHA as canonical, cleared by `git remote prune origin`. `com.apple.provenance` xattr confirmed on `.git/` — iCloud Drive provenance is the trigger. **Agent note: I knew about this rule and still failed to check `.git/` for space-suffixed files during session startup. Add to pre-flight: `find .git -name "* 2" -o -name "* 3" | grep -v "/objects/"`.** Canonical doc: `AlphaClaw/docs/wiki/07-duplicate-files.md`.
 
 2. **PR #38 / #39 cleanup (Perpetua-Tools)**
    - Removed FORBIDDEN Co-authored-by trailer from feature branch commits via `git commit --amend` / cherry-pick
