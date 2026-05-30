@@ -18,10 +18,12 @@ sub_skills:
     trigger: "Any content insertion, file write, paste, upload, or scripted output"
   - path: gstack/SKILL.md
     trigger: "/browse, /qa, /ship, /review, /investigate, gbrain, web browsing, QA, deploy, design review, gstack skills, canary, benchmark"
-  - path: skillify/SKILL.md
+  - path: skills/skillify/SKILL.md
     trigger: "create a skill, new skill, /skillify, add sub-skill, build a skill, make a skill"
-  - path: mcp-install/SKILL.md
+  - path: skills/mcp-install/SKILL.md
     trigger: "install mcp stack, setup gemini mcp, register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
+  - path: skills/mcp-orchestration/SKILL.md
+    trigger: "mcp orchestration, connect mcp tools to openclaw, gemini large context, ai-cli-mcp, background agents, dispatch parallel ai cli, openclaw mcp, SKILL.md claude skills, mcp json tool setup"
   - path: skills/first-run-setup/SKILL.md
     trigger: "first-run install, bootstrap orama, setup new machine, first run, §0 checklist, first-run-install.sh"
   - path: skills/code-review/SKILL.md
@@ -30,6 +32,8 @@ sub_skills:
     trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
   - path: skills/no-sleep-chains/SKILL.md
     trigger: "sleep && cmd, sleep chain, wait for background task, poll output file, wait for npm install, wait for claude update, run_in_background polling, until loop, how to wait for a process"
+  - path: gstack/SKILL.md
+    trigger: "fix gbrain, resync gbrain, gbrain sync failed, prepared statement does not exist, CONNECTION_CLOSED supabase pooler, No database URL, GBRAIN_DATABASE_URL, gbrain doctor failures, createVersion failed, autopilot wedged, gbrain after history rewrite, gbrain list empty, gbrain prepare false, gbrain source pin"
 ---
 
 # The ὅραμα System Skill
