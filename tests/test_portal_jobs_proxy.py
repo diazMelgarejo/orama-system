@@ -44,6 +44,25 @@ class _FakeJobsClient:
         raise AssertionError(f"unexpected GET {url}")
 
     async def post(self, url: str, json=None, **kwargs):
+        """
+        Simulate a POST request to the fake PT jobs service and return a corresponding fake response.
+        
+        Parameters:
+            url (str): The request URL; specific suffixes determine the response:
+                - URL ending with "/cancel": responds with a cancel confirmation for the job.
+                - URL ending with "/replay": responds with a replay job record (original and new job IDs and state).
+                - any other URL: responds with a generic success payload, echoing `job_id` from `json` if present.
+            json (optional): JSON payload sent with the request; used only to extract `job_id` for the generic response.
+        
+        Side effects:
+            Appends ("POST", url, json) to self.calls. If self.fail is True, raises RuntimeError("pt down").
+        
+        Returns:
+            _FakeResponse: A fake HTTP response whose JSON payload is:
+                - {"job_id": <id>, "cancel_requested": True} for cancel requests.
+                - {"original_job_id": <id>, "new_job_id": "<id>-replay", "state": "queued"} for replay requests.
+                - {"ok": True, "job_id": "<job_id_from_json_or_empty>"} for other requests.
+        """
         self.calls.append(("POST", url, json))
         if self.fail:
             raise RuntimeError("pt down")
@@ -63,6 +82,11 @@ class _FakeJobsClient:
 
 
 def test_jobs_proxy_lists_pt_jobs(monkeypatch):
+    """
+    Ensures GET /api/jobs returns the job list provided by the PT jobs service.
+    
+    Sets up a fake PT jobs client and asserts the endpoint responds with HTTP 200 and a JSON body whose "jobs" field equals [{"id": "job-1"}].
+    """
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -87,6 +111,11 @@ def test_jobs_proxy_gets_detail(monkeypatch):
 
 
 def test_jobs_proxy_cancel_posts_to_pt(monkeypatch):
+    """
+    Verifies that POST /api/jobs/{job_id}/cancel is proxied to the PT cancel endpoint and returns the cancellation result.
+    
+    Asserts the endpoint responds with HTTP 200, the JSON result indicates the cancel request was accepted (`cancel_requested` is `True`), and the proxy issued a POST to `{PT_URL}/v1/jobs/{job_id}/cancel` with no JSON payload.
+    """
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)

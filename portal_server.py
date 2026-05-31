@@ -1781,6 +1781,18 @@ async def api_job_detail_proxy(job_id: str):
 
 @app.post("/api/jobs/{job_id}/cancel")
 async def api_job_cancel_proxy(job_id: str):
+    """
+    Proxy-cancels a supervisor job on the Perpetua-Tools v1 jobs API.
+    
+    Sends a POST to the PT `/v1/jobs/{job_id}/cancel` endpoint and returns a summary of the upstream result suitable for client consumption.
+    
+    Returns:
+        dict: A response object containing:
+            - `available` (bool): True if the upstream cancel request succeeded, False otherwise.
+            - `source` (str): The upstream route used (`pt:/v1/jobs/{job_id}/cancel`).
+            - `result` (object|None): Parsed JSON from the upstream response on success, or None on failure.
+            - `error` (str, optional): Client-safe error message present when `available` is False.
+    """
     async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/cancel")
@@ -1801,6 +1813,19 @@ async def api_job_cancel_proxy(job_id: str):
 
 @app.post("/api/jobs/{job_id}/replay")
 async def api_job_replay_proxy(job_id: str):
+    """
+    Proxy a replay request for a supervisor job to the Perpetua-Tools v1 jobs replay endpoint.
+    
+    Parameters:
+        job_id (str): Identifier of the job to replay.
+    
+    Returns:
+        dict: A payload describing the proxy outcome:
+            - `available`: True if the upstream replay request succeeded, False otherwise.
+            - `source`: The upstream route used (`pt:/v1/jobs/{job_id}/replay`).
+            - `result`: The upstream JSON response when `available` is True, `None` on failure.
+            - `error`: A client-safe error message present when `available` is False.
+    """
     async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/replay")
