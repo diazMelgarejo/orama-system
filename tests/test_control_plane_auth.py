@@ -130,6 +130,36 @@ def test_auth_headers_reads_pt_persisted_token(monkeypatch, tmp_path):
     assert headers == {"Authorization": "Bearer pt-file-token"}
 
 
+def test_auth_headers_discovers_pt_token_from_sibling_checkout(monkeypatch, tmp_path):
+    """Portal must read PT token without PERPETUA_TOOLS_ROOT when repos are siblings."""
+    from utils.control_plane_auth import auth_headers
+
+    pt_root = tmp_path / "Perpetua-Tools"
+    (pt_root / "orchestrator").mkdir(parents=True)
+    (pt_root / "orchestrator" / "fastapi_app.py").write_text("")
+    token_path = pt_root / ".state" / "control_plane_token"
+    token_path.parent.mkdir(parents=True)
+    token_path.write_text("sibling-token", encoding="utf-8")
+
+    orama_root = tmp_path / "orama-system"
+
+    def _fake_resolve():
+        for candidate in (
+            orama_root.parent / "perplexity-api" / "Perpetua-Tools",
+            orama_root.parent / "Perpetua-Tools",
+            orama_root.parent / "repos" / "Perpetua-Tools",
+        ):
+            if (candidate / "orchestrator" / "fastapi_app.py").is_file():
+                return candidate
+        return None
+
+    monkeypatch.setattr("utils.control_plane_auth._resolve_perpetua_tools_root", _fake_resolve)
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "ORAMA_CONTROL_PLANE_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+
+    assert auth_headers() == {"Authorization": "Bearer sibling-token"}
+
+
 def test_verify_accepts_pt_persisted_token_without_env(monkeypatch, tmp_path):
     from utils.control_plane_auth import resolved_control_plane_token, verify_control_plane_auth
 
@@ -194,3 +224,271 @@ def test_pt_auth_module_available_in_sibling_checkout():
     if not auth_module.is_file():
         pytest.skip("Perpetua-Tools sibling checkout not present")
     assert "ORAMA_CONTROL_PLANE_TOKEN" in auth_module.read_text(encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# Tests for _resolve_perpetua_tools_root() — added in this PR
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_pt_root_returns_perpetua_tools_root_env(monkeypatch, tmp_path):
+    """PERPETUA_TOOLS_ROOT env var is returned as a Path."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
+    monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
+    monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
+
+    result = _resolve_perpetua_tools_root()
+    assert result == tmp_path
+
+
+def test_resolve_pt_root_returns_perpetuatoolsroot_env(monkeypatch, tmp_path):
+    """PERPETUATOOLSROOT (no underscores) env var is returned as a Path."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.setenv("PERPETUATOOLSROOT", str(tmp_path))
+    monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
+
+    result = _resolve_perpetua_tools_root()
+    assert result == tmp_path
+
+
+def test_resolve_pt_root_returns_perpetua_tools_path_env(monkeypatch, tmp_path):
+    """PERPETUA_TOOLS_PATH env var is returned as a Path."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
+    monkeypatch.setenv("PERPETUA_TOOLS_PATH", str(tmp_path))
+
+    result = _resolve_perpetua_tools_root()
+    assert result == tmp_path
+
+
+def test_resolve_pt_root_env_var_priority_over_sibling(monkeypatch, tmp_path):
+    """Env var takes precedence over sibling path discovery."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    # Create a sibling that looks valid (sentinel file present).
+    sibling = tmp_path / "sibling" / "Perpetua-Tools"
+    (sibling / "orchestrator").mkdir(parents=True)
+    (sibling / "orchestrator" / "fastapi_app.py").write_text("")
+
+    env_path = tmp_path / "env-root"
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(env_path))
+    monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
+    monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
+
+    result = _resolve_perpetua_tools_root()
+    # Env var wins even when it does not contain the sentinel file.
+    assert result == env_path
+
+
+def test_resolve_pt_root_whitespace_env_var_is_ignored(monkeypatch, tmp_path):
+    """An env var containing only whitespace does not count as set."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", "   ")
+    monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
+    monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
+
+    # No sibling checkout exists, so None is expected.
+    result = _resolve_perpetua_tools_root()
+    assert result is None
+
+
+def test_resolve_pt_root_sibling_perplexity_api(monkeypatch, tmp_path):
+    """Discovers Perpetua-Tools under <parent>/perplexity-api/Perpetua-Tools."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    # Clear all env vars so sibling discovery runs.
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        monkeypatch.delenv(key, raising=False)
+
+    # Build: tmp_path/perplexity-api/Perpetua-Tools/orchestrator/fastapi_app.py
+    pt_root = tmp_path / "perplexity-api" / "Perpetua-Tools"
+    (pt_root / "orchestrator").mkdir(parents=True)
+    (pt_root / "orchestrator" / "fastapi_app.py").write_text("")
+
+    # Patch __file__ parent chain so repo_root.parent == tmp_path.
+    fake_module_path = tmp_path / "orama-system" / "utils" / "control_plane_auth.py"
+    monkeypatch.setattr("utils.control_plane_auth.__file__", str(fake_module_path))
+
+    result = _resolve_perpetua_tools_root()
+    assert result == pt_root
+
+
+def test_resolve_pt_root_sibling_direct(monkeypatch, tmp_path):
+    """Discovers Perpetua-Tools directly under <parent>/Perpetua-Tools."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        monkeypatch.delenv(key, raising=False)
+
+    pt_root = tmp_path / "Perpetua-Tools"
+    (pt_root / "orchestrator").mkdir(parents=True)
+    (pt_root / "orchestrator" / "fastapi_app.py").write_text("")
+
+    fake_module_path = tmp_path / "orama-system" / "utils" / "control_plane_auth.py"
+    monkeypatch.setattr("utils.control_plane_auth.__file__", str(fake_module_path))
+
+    result = _resolve_perpetua_tools_root()
+    assert result == pt_root
+
+
+def test_resolve_pt_root_sibling_repos_subdir(monkeypatch, tmp_path):
+    """Discovers Perpetua-Tools under <parent>/repos/Perpetua-Tools."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        monkeypatch.delenv(key, raising=False)
+
+    pt_root = tmp_path / "repos" / "Perpetua-Tools"
+    (pt_root / "orchestrator").mkdir(parents=True)
+    (pt_root / "orchestrator" / "fastapi_app.py").write_text("")
+
+    fake_module_path = tmp_path / "orama-system" / "utils" / "control_plane_auth.py"
+    monkeypatch.setattr("utils.control_plane_auth.__file__", str(fake_module_path))
+
+    result = _resolve_perpetua_tools_root()
+    assert result == pt_root
+
+
+def test_resolve_pt_root_returns_none_when_nothing_found(monkeypatch, tmp_path):
+    """Returns None when no env var is set and no sibling checkout is present."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        monkeypatch.delenv(key, raising=False)
+
+    # Point __file__ inside tmp_path so none of the sibling candidates exist.
+    fake_module_path = tmp_path / "orama-system" / "utils" / "control_plane_auth.py"
+    monkeypatch.setattr("utils.control_plane_auth.__file__", str(fake_module_path))
+
+    result = _resolve_perpetua_tools_root()
+    assert result is None
+
+
+def test_resolve_pt_root_requires_sentinel_file(monkeypatch, tmp_path):
+    """A sibling directory without orchestrator/fastapi_app.py is not accepted."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        monkeypatch.delenv(key, raising=False)
+
+    # Create the directory but NOT the sentinel file.
+    pt_root = tmp_path / "Perpetua-Tools" / "orchestrator"
+    pt_root.mkdir(parents=True)
+    # fastapi_app.py is intentionally absent.
+
+    fake_module_path = tmp_path / "orama-system" / "utils" / "control_plane_auth.py"
+    monkeypatch.setattr("utils.control_plane_auth.__file__", str(fake_module_path))
+
+    result = _resolve_perpetua_tools_root()
+    assert result is None
+
+
+def test_resolve_pt_root_expands_home_tilde(monkeypatch):
+    """Env var with ~ is expanded via Path.expanduser()."""
+    from utils.control_plane_auth import _resolve_perpetua_tools_root
+    from pathlib import Path
+
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", "~/some/path")
+    monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
+    monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
+
+    result = _resolve_perpetua_tools_root()
+    assert result == Path("~/some/path").expanduser()
+    assert "~" not in str(result)
+
+
+# ---------------------------------------------------------------------------
+# Tests for _read_pt_persisted_token() — refactored in this PR
+# ---------------------------------------------------------------------------
+
+
+def test_read_pt_persisted_token_returns_empty_when_root_none(monkeypatch):
+    """Returns '' when _resolve_perpetua_tools_root() returns None."""
+    from utils.control_plane_auth import _read_pt_persisted_token
+
+    monkeypatch.setattr(
+        "utils.control_plane_auth._resolve_perpetua_tools_root",
+        lambda: None,
+    )
+
+    assert _read_pt_persisted_token() == ""
+
+
+def test_read_pt_persisted_token_returns_empty_when_file_missing(monkeypatch, tmp_path):
+    """Returns '' when the token file does not exist."""
+    from utils.control_plane_auth import _read_pt_persisted_token
+
+    monkeypatch.setattr(
+        "utils.control_plane_auth._resolve_perpetua_tools_root",
+        lambda: tmp_path,
+    )
+    # .state/control_plane_token is intentionally not created.
+
+    assert _read_pt_persisted_token() == ""
+
+
+def test_read_pt_persisted_token_strips_whitespace(monkeypatch, tmp_path):
+    """Token file content is stripped of surrounding whitespace."""
+    from utils.control_plane_auth import _read_pt_persisted_token
+
+    token_path = tmp_path / ".state" / "control_plane_token"
+    token_path.parent.mkdir(parents=True)
+    token_path.write_text("  whitespace-token\n", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "utils.control_plane_auth._resolve_perpetua_tools_root",
+        lambda: tmp_path,
+    )
+
+    assert _read_pt_persisted_token() == "whitespace-token"
+
+
+def test_read_pt_persisted_token_via_perpetuatoolsroot(monkeypatch, tmp_path):
+    """PERPETUATOOLSROOT (no underscores) is accepted as root for token discovery."""
+    from utils.control_plane_auth import _read_pt_persisted_token
+
+    token_path = tmp_path / ".state" / "control_plane_token"
+    token_path.parent.mkdir(parents=True)
+    token_path.write_text("alt-env-token", encoding="utf-8")
+
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.setenv("PERPETUATOOLSROOT", str(tmp_path))
+    monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
+
+    assert _read_pt_persisted_token() == "alt-env-token"
+
+
+def test_read_pt_persisted_token_via_perpetua_tools_path(monkeypatch, tmp_path):
+    """PERPETUA_TOOLS_PATH env var is accepted as root for token discovery."""
+    from utils.control_plane_auth import _read_pt_persisted_token
+
+    token_path = tmp_path / ".state" / "control_plane_token"
+    token_path.parent.mkdir(parents=True)
+    token_path.write_text("path-env-token", encoding="utf-8")
+
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
+    monkeypatch.setenv("PERPETUA_TOOLS_PATH", str(tmp_path))
+
+    assert _read_pt_persisted_token() == "path-env-token"
+
+
+def test_read_pt_persisted_token_all_env_vars_empty_no_sibling(monkeypatch, tmp_path):
+    """Returns '' when all env vars are unset and no sibling checkout is present."""
+    from utils.control_plane_auth import _read_pt_persisted_token
+
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        monkeypatch.delenv(key, raising=False)
+
+    # Redirect __file__ so sibling discovery finds nothing.
+    fake_module_path = tmp_path / "orama-system" / "utils" / "control_plane_auth.py"
+    monkeypatch.setattr("utils.control_plane_auth.__file__", str(fake_module_path))
+
+    assert _read_pt_persisted_token() == ""
