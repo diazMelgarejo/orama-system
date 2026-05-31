@@ -1783,13 +1783,17 @@ async def api_job_detail_proxy(job_id: str):
 async def api_job_cancel_proxy(job_id: str):
     async with _portal_http_client(timeout=5.0) as client:
         try:
-            r = await client.post(f"{PT_URL}/cancel", json={"job_id": job_id})
+            r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/cancel")
             r.raise_for_status()
-            return {"available": True, "source": "pt:/cancel", "result": r.json()}
+            return {
+                "available": True,
+                "source": "pt:/v1/jobs/{job_id}/cancel",
+                "result": r.json(),
+            }
         except Exception as exc:
             return {
                 "available": False,
-                "source": "pt:/cancel",
+                "source": "pt:/v1/jobs/{job_id}/cancel",
                 "result": None,
                 "error": _client_safe_error(exc),
             }
@@ -1799,13 +1803,17 @@ async def api_job_cancel_proxy(job_id: str):
 async def api_job_replay_proxy(job_id: str):
     async with _portal_http_client(timeout=5.0) as client:
         try:
-            r = await client.post(f"{PT_URL}/replay", json={"job_id": job_id})
+            r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/replay")
             r.raise_for_status()
-            return {"available": True, "source": "pt:/replay", "result": r.json()}
+            return {
+                "available": True,
+                "source": "pt:/v1/jobs/{job_id}/replay",
+                "result": r.json(),
+            }
         except Exception as exc:
             return {
                 "available": False,
-                "source": "pt:/replay",
+                "source": "pt:/v1/jobs/{job_id}/replay",
                 "result": None,
                 "error": _client_safe_error(exc),
             }

@@ -47,7 +47,19 @@ class _FakeJobsClient:
         self.calls.append(("POST", url, json))
         if self.fail:
             raise RuntimeError("pt down")
-        return _FakeResponse({"ok": True, "job_id": json["job_id"]})
+        if url.endswith("/cancel"):
+            job_id = url.rsplit("/", 2)[-2]
+            return _FakeResponse({"job_id": job_id, "cancel_requested": True})
+        if url.endswith("/replay"):
+            job_id = url.rsplit("/", 2)[-2]
+            return _FakeResponse(
+                {
+                    "original_job_id": job_id,
+                    "new_job_id": f"{job_id}-replay",
+                    "state": "queued",
+                }
+            )
+        return _FakeResponse({"ok": True, "job_id": (json or {}).get("job_id", "")})
 
 
 def test_jobs_proxy_lists_pt_jobs(monkeypatch):
@@ -83,8 +95,12 @@ def test_jobs_proxy_cancel_posts_to_pt(monkeypatch):
         response = client.post("/api/jobs/job-1/cancel")
 
     assert response.status_code == 200
-    assert response.json()["result"]["ok"] is True
-    assert _FakeJobsClient.calls[0] == ("POST", f"{portal_server.PT_URL}/cancel", {"job_id": "job-1"})
+    assert response.json()["result"]["cancel_requested"] is True
+    assert _FakeJobsClient.calls[0] == (
+        "POST",
+        f"{portal_server.PT_URL}/v1/jobs/job-1/cancel",
+        None,
+    )
 
 
 def test_jobs_proxy_replay_posts_to_pt(monkeypatch):
@@ -96,8 +112,12 @@ def test_jobs_proxy_replay_posts_to_pt(monkeypatch):
         response = client.post("/api/jobs/job-1/replay")
 
     assert response.status_code == 200
-    assert response.json()["result"]["job_id"] == "job-1"
-    assert _FakeJobsClient.calls[0] == ("POST", f"{portal_server.PT_URL}/replay", {"job_id": "job-1"})
+    assert response.json()["result"]["original_job_id"] == "job-1"
+    assert _FakeJobsClient.calls[0] == (
+        "POST",
+        f"{portal_server.PT_URL}/v1/jobs/job-1/replay",
+        None,
+    )
 
 
 def test_jobs_proxy_handles_pt_down(monkeypatch):
