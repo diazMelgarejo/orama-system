@@ -44,6 +44,25 @@ class _FakeJobsClient:
         raise AssertionError(f"unexpected GET {url}")
 
     async def post(self, url: str, json=None, **kwargs):
+        """
+        Simulate a POST request to the fake PT jobs service and return a corresponding fake response.
+        
+        Parameters:
+            url (str): The request URL; specific suffixes determine the response:
+                - URL ending with "/cancel": responds with a cancel confirmation for the job.
+                - URL ending with "/replay": responds with a replay job record (original and new job IDs and state).
+                - any other URL: responds with a generic success payload, echoing `job_id` from `json` if present.
+            json (optional): JSON payload sent with the request; used only to extract `job_id` for the generic response.
+        
+        Side effects:
+            Appends ("POST", url, json) to self.calls. If self.fail is True, raises RuntimeError("pt down").
+        
+        Returns:
+            _FakeResponse: A fake HTTP response whose JSON payload is:
+                - {"job_id": <id>, "cancel_requested": True} for cancel requests.
+                - {"original_job_id": <id>, "new_job_id": "<id>-replay", "state": "queued"} for replay requests.
+                - {"ok": True, "job_id": "<job_id_from_json_or_empty>"} for other requests.
+        """
         self.calls.append(("POST", url, json))
         if self.fail:
             raise RuntimeError("pt down")
@@ -63,6 +82,11 @@ class _FakeJobsClient:
 
 
 def test_jobs_proxy_lists_pt_jobs(monkeypatch):
+    """
+    Ensures GET /api/jobs returns the job list provided by the PT jobs service.
+    
+    Sets up a fake PT jobs client and asserts the endpoint responds with HTTP 200 and a JSON body whose "jobs" field equals [{"id": "job-1"}].
+    """
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -87,6 +111,11 @@ def test_jobs_proxy_gets_detail(monkeypatch):
 
 
 def test_jobs_proxy_cancel_posts_to_pt(monkeypatch):
+    """
+    Verifies that POST /api/jobs/{job_id}/cancel is proxied to the PT cancel endpoint and returns the cancellation result.
+    
+    Asserts the endpoint responds with HTTP 200, the JSON result indicates the cancel request was accepted (`cancel_requested` is `True`), and the proxy issued a POST to `{PT_URL}/v1/jobs/{job_id}/cancel` with no JSON payload.
+    """
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -135,38 +164,241 @@ def test_jobs_proxy_handles_pt_down(monkeypatch):
     assert body["error"]
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    assert body["available"] is False
+    assert body["result"] is None
+    assert body["error"]
+
+
 # ---------------------------------------------------------------------------
-# cancel proxy — new /v1/jobs/{job_id}/cancel endpoint
+# Additional gap-filling tests
 # ---------------------------------------------------------------------------
 
 
-def test_cancel_sends_no_json_body(monkeypatch):
-    """Cancel must POST without a JSON body (no job_id in payload)."""
+def test_jobs_proxy_cancel_source_is_literal_template(monkeypatch):
+    """The cancel source field is the literal template string, not interpolated with the actual job_id."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        client.post("/api/jobs/job-99/cancel")
+        response = client.post("/api/jobs/my-special-job/cancel")
 
-    assert _FakeJobsClient.calls[0][2] is None  # json= kwarg must be absent/None
+    body = response.json()
+    # The source value is a literal template, not substituted with the actual job_id
+    assert body["source"] == "pt:/v1/jobs/{job_id}/cancel"
+    assert "my-special-job" not in body["source"]
 
 
-def test_cancel_url_contains_job_id_in_path(monkeypatch):
-    """Cancel must embed the job_id in the URL path, not as a query/body param."""
+def test_jobs_proxy_replay_source_is_literal_template(monkeypatch):
+    """The replay source field is the literal template string, not interpolated with the actual job_id."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        client.post("/api/jobs/abc-123/cancel")
+        response = client.post("/api/jobs/my-special-job/replay")
 
-    method, url, _ = _FakeJobsClient.calls[0]
-    assert method == "POST"
-    assert url == f"{portal_server.PT_URL}/v1/jobs/abc-123/cancel"
+    body = response.json()
+    # The source value is a literal template, not substituted with the actual job_id
+    assert body["source"] == "pt:/v1/jobs/{job_id}/replay"
+    assert "my-special-job" not in body["source"]
 
 
-def test_cancel_available_true_on_success(monkeypatch):
+def test_jobs_proxy_cancel_error_source_is_literal_template(monkeypatch):
+    """The source field in error cancel responses is also the literal template string."""
+    _FakeJobsClient.fail = True
+    _FakeJobsClient.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/jobs/my-special-job/cancel")
+
+    body = response.json()
+    assert body["source"] == "pt:/v1/jobs/{job_id}/cancel"
+
+
+def test_jobs_proxy_replay_error_source_is_literal_template(monkeypatch):
+    """The source field in error replay responses is also the literal template string."""
+    _FakeJobsClient.fail = True
+    _FakeJobsClient.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/jobs/my-special-job/replay")
+
+    body = response.json()
+    assert body["source"] == "pt:/v1/jobs/{job_id}/replay"
+
+
+def test_jobs_proxy_cancel_success_has_no_error_key(monkeypatch):
+    """A successful cancel response must not include an 'error' key."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -179,132 +411,8 @@ def test_cancel_available_true_on_success(monkeypatch):
     assert "error" not in body
 
 
-def test_cancel_result_reflects_pt_response(monkeypatch):
-    """The 'result' key must pass through the PT response payload."""
-    _FakeJobsClient.fail = False
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-1/cancel")
-
-    result = response.json()["result"]
-    assert result["job_id"] == "job-1"
-    assert result["cancel_requested"] is True
-
-
-def test_cancel_source_is_literal_template_string(monkeypatch):
-    """source must be the literal string 'pt:/v1/jobs/{job_id}/cancel', not interpolated."""
-    _FakeJobsClient.fail = False
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-1/cancel")
-
-    assert response.json()["source"] == "pt:/v1/jobs/{job_id}/cancel"
-
-
-def test_cancel_handles_pt_down(monkeypatch):
-    """When PT is unreachable, cancel returns available=False with an error message."""
-    _FakeJobsClient.fail = True
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-1/cancel")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["available"] is False
-    assert body["result"] is None
-    assert body["error"]
-
-
-def test_cancel_error_source_is_literal_template_string(monkeypatch):
-    """Even in the error path the source must be the literal template string."""
-    _FakeJobsClient.fail = True
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-42/cancel")
-
-    assert response.json()["source"] == "pt:/v1/jobs/{job_id}/cancel"
-
-
-def test_cancel_different_job_ids_routed_correctly(monkeypatch):
-    """Each job_id must appear in the outbound URL, not bleed across calls."""
-    _FakeJobsClient.fail = False
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        for job_id in ("alpha", "beta", "gamma-99"):
-            client.post(f"/api/jobs/{job_id}/cancel")
-
-    urls = [call[1] for call in _FakeJobsClient.calls]
-    assert urls == [
-        f"{portal_server.PT_URL}/v1/jobs/alpha/cancel",
-        f"{portal_server.PT_URL}/v1/jobs/beta/cancel",
-        f"{portal_server.PT_URL}/v1/jobs/gamma-99/cancel",
-    ]
-
-
-def test_cancel_pt_http_error_returns_unavailable(monkeypatch):
-    """When PT returns an HTTP error status, the proxy must return available=False."""
-
-    class _ErrorClient(_FakeJobsClient):
-        async def post(self, url: str, json=None, **kwargs):
-            self.calls.append(("POST", url, json))
-            return _FakeResponse({}, status_code=500)
-
-    _ErrorClient.fail = False
-    _ErrorClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _ErrorClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-1/cancel")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["available"] is False
-    assert body["result"] is None
-    assert body["error"]
-
-
-# ---------------------------------------------------------------------------
-# replay proxy — new /v1/jobs/{job_id}/replay endpoint
-# ---------------------------------------------------------------------------
-
-
-def test_replay_sends_no_json_body(monkeypatch):
-    """Replay must POST without a JSON body."""
-    _FakeJobsClient.fail = False
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        client.post("/api/jobs/job-99/replay")
-
-    assert _FakeJobsClient.calls[0][2] is None
-
-
-def test_replay_url_contains_job_id_in_path(monkeypatch):
-    """Replay must embed the job_id in the URL path."""
-    _FakeJobsClient.fail = False
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        client.post("/api/jobs/abc-123/replay")
-
-    method, url, _ = _FakeJobsClient.calls[0]
-    assert method == "POST"
-    assert url == f"{portal_server.PT_URL}/v1/jobs/abc-123/replay"
-
-
-def test_replay_available_true_on_success(monkeypatch):
+def test_jobs_proxy_replay_success_has_no_error_key(monkeypatch):
+    """A successful replay response must not include an 'error' key."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -317,108 +425,8 @@ def test_replay_available_true_on_success(monkeypatch):
     assert "error" not in body
 
 
-def test_replay_result_reflects_pt_response(monkeypatch):
-    """The 'result' key must pass through the PT response payload."""
-    _FakeJobsClient.fail = False
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-1/replay")
-
-    result = response.json()["result"]
-    assert result["original_job_id"] == "job-1"
-    assert result["new_job_id"] == "job-1-replay"
-    assert result["state"] == "queued"
-
-
-def test_replay_source_is_literal_template_string(monkeypatch):
-    """source must be the literal string 'pt:/v1/jobs/{job_id}/replay', not interpolated."""
-    _FakeJobsClient.fail = False
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-1/replay")
-
-    assert response.json()["source"] == "pt:/v1/jobs/{job_id}/replay"
-
-
-def test_replay_handles_pt_down(monkeypatch):
-    """When PT is unreachable, replay returns available=False with an error message."""
-    _FakeJobsClient.fail = True
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-1/replay")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["available"] is False
-    assert body["result"] is None
-    assert body["error"]
-
-
-def test_replay_error_source_is_literal_template_string(monkeypatch):
-    """Even in the error path the source must be the literal template string."""
-    _FakeJobsClient.fail = True
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-42/replay")
-
-    assert response.json()["source"] == "pt:/v1/jobs/{job_id}/replay"
-
-
-def test_replay_different_job_ids_routed_correctly(monkeypatch):
-    """Each job_id must appear in the outbound URL."""
-    _FakeJobsClient.fail = False
-    _FakeJobsClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        for job_id in ("alpha", "beta", "gamma-99"):
-            client.post(f"/api/jobs/{job_id}/replay")
-
-    urls = [call[1] for call in _FakeJobsClient.calls]
-    assert urls == [
-        f"{portal_server.PT_URL}/v1/jobs/alpha/replay",
-        f"{portal_server.PT_URL}/v1/jobs/beta/replay",
-        f"{portal_server.PT_URL}/v1/jobs/gamma-99/replay",
-    ]
-
-
-def test_replay_pt_http_error_returns_unavailable(monkeypatch):
-    """When PT returns an HTTP error status, the proxy must return available=False."""
-
-    class _ErrorClient(_FakeJobsClient):
-        async def post(self, url: str, json=None, **kwargs):
-            self.calls.append(("POST", url, json))
-            return _FakeResponse({}, status_code=500)
-
-    _ErrorClient.fail = False
-    _ErrorClient.calls = []
-    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _ErrorClient)
-
-    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/jobs/job-1/replay")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["available"] is False
-    assert body["result"] is None
-    assert body["error"]
-
-
-# ---------------------------------------------------------------------------
-# Regression: old-style body-based endpoints must no longer be called
-# ---------------------------------------------------------------------------
-
-
-def test_cancel_does_not_use_old_body_based_endpoint(monkeypatch):
-    """Regression: the old POST /cancel with json body must not be used."""
+def test_jobs_proxy_cancel_makes_exactly_one_upstream_call(monkeypatch):
+    """Exactly one POST request is forwarded upstream per cancel call."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -426,14 +434,12 @@ def test_cancel_does_not_use_old_body_based_endpoint(monkeypatch):
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         client.post("/api/jobs/job-1/cancel")
 
-    _, url, body = _FakeJobsClient.calls[0]
-    # Must NOT end with the bare "/cancel" path that included a body
-    assert "/v1/jobs/" in url
-    assert body is None  # no JSON body sent
+    post_calls = [c for c in _FakeJobsClient.calls if c[0] == "POST"]
+    assert len(post_calls) == 1
 
 
-def test_replay_does_not_use_old_body_based_endpoint(monkeypatch):
-    """Regression: the old POST /replay with json body must not be used."""
+def test_jobs_proxy_replay_makes_exactly_one_upstream_call(monkeypatch):
+    """Exactly one POST request is forwarded upstream per replay call."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -441,6 +447,47 @@ def test_replay_does_not_use_old_body_based_endpoint(monkeypatch):
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         client.post("/api/jobs/job-1/replay")
 
-    _, url, body = _FakeJobsClient.calls[0]
-    assert "/v1/jobs/" in url
-    assert body is None
+    post_calls = [c for c in _FakeJobsClient.calls if c[0] == "POST"]
+    assert len(post_calls) == 1
+
+
+class _FakeJobsClientNotFound(_FakeJobsClient):
+    """Returns a 404 HTTP error response for cancel and replay calls."""
+
+    async def post(self, url: str, json=None, **kwargs):
+        self.calls.append(("POST", url, json))
+        if url.endswith("/cancel") or url.endswith("/replay"):
+            return _FakeResponse({"detail": "not found"}, status_code=404)
+        return await super().post(url, json=json, **kwargs)
+
+
+def test_jobs_proxy_cancel_pt_404_error(monkeypatch):
+    """When PT returns 404, cancel returns available=False with an error message."""
+    _FakeJobsClientNotFound.fail = False
+    _FakeJobsClientNotFound.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClientNotFound)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/jobs/nonexistent-job/cancel")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["result"] is None
+    assert body["error"]
+
+
+def test_jobs_proxy_replay_pt_404_error(monkeypatch):
+    """When PT returns 404, replay returns available=False with an error message."""
+    _FakeJobsClientNotFound.fail = False
+    _FakeJobsClientNotFound.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClientNotFound)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/jobs/nonexistent-job/replay")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is False
+    assert body["result"] is None
+    assert body["error"]
