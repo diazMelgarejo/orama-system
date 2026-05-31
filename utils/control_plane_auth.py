@@ -48,6 +48,26 @@ def control_plane_token() -> str:
     return os.getenv(ENV_TOKEN, "").strip()
 
 
+def _resolve_perpetua_tools_root() -> Path | None:
+    """Resolve Perpetua-Tools checkout for reading PT's persisted control-plane token.
+
+    Matches portal_server / start.sh discovery: env vars first, then sibling paths.
+    """
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        raw = os.getenv(key, "").strip()
+        if raw:
+            return Path(raw).expanduser()
+    repo_root = Path(__file__).resolve().parent.parent
+    for candidate in (
+        repo_root.parent / "perplexity-api" / "Perpetua-Tools",
+        repo_root.parent / "Perpetua-Tools",
+        repo_root.parent / "repos" / "Perpetua-Tools",
+    ):
+        if (candidate / "orchestrator" / "fastapi_app.py").is_file():
+            return candidate
+    return None
+
+
 def auth_enforced() -> bool:
     """Return True when control-plane bearer auth must be checked.
 
@@ -68,10 +88,10 @@ def auth_enforced() -> bool:
 
 def _read_pt_persisted_token() -> str:
     """Load PT bearer token written by ensure_control_plane_token on :8000."""
-    root = os.getenv("PERPETUA_TOOLS_ROOT", "").strip()
-    if not root:
+    pt_root = _resolve_perpetua_tools_root()
+    if pt_root is None:
         return ""
-    token_path = Path(root) / ".state" / "control_plane_token"
+    token_path = pt_root / ".state" / "control_plane_token"
     if token_path.is_file():
         return token_path.read_text(encoding="utf-8").strip()
     return ""
