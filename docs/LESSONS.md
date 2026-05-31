@@ -2407,3 +2407,21 @@ Full patterns with examples: [`bin/orama-system/skills/no-sleep-chains/SKILL.md`
 ### Open questions
 
 None — rule is fully specified and enforced at the shell level.
+
+---
+
+## 2026-05-31 — Claude (Opus 4.8) — Tri-repo migration audit + alignment plan + tooling stabilization
+
+### What was learned
+- **Tri-repo migration is Gate-2 partial, not complete.** A 3-agent audit mapped AlphaClaw capabilities → PT counterparts: PT controls AlphaClaw fully (adapter 25 methods + `alphaclaw_manager.py`); controls OpenClaw *via* AlphaClaw by design; but orama's `bin/mcp_servers/openclaw_bridge.py` still calls AlphaClaw **directly** (Gate-3 gap). 8 gaps remain. **Canonical roadmap now: [`Perpetua-Tools/docs/2026-05-31-tri-repo-alignment-completion-plan.md`](../../perplexity-api/Perpetua-Tools/docs/2026-05-31-tri-repo-alignment-completion-plan.md).**
+- **gbrain fixed:** `prepare:true` against the Supabase pooler caused `prepared statement does not exist` write failures → set `prepare:false`. DB URL lives in `~/.gbrain/.env` (source it for CLI; MCP variant may need reconnect). Resynced all 3 per-repo sources. See [`bin/orama-system/gstack/SKILL.md` §GBrain Ops](../bin/orama-system/gstack/SKILL.md). **CRG registry is empty** — build per repo before relying on it.
+- **macOS dup ` 2` files: ruled OUT OneDrive/iCloud** (both audited + cleared). Historical Finder/IDE keep-both, dormant. Repo-wide dedup: quarantined to `~/dup-quarantine-2026-05-31` (nothing deleted). Cross-ref the 2026-05-27 ghost-ref entry + AlphaClaw `wiki/07`.
+
+### Decisions made
+- `lib/mcp`+`lib/agents` retirement is **held until Gate 2 is green** (live authenticated smoke-test + local-agents tests). Code is superseded; ceremony is not done.
+- `orama-system` local checkout is **volatile** (vanished twice this session; cause not OneDrive/iCloud). A background guardian auto-restores it (`~/.orama-guard.log`, mirror `~/.orama-system-backup.git`).
+
+### Open questions
+- What process deletes `orama-system`? (user running `sudo fs_usage` to catch it.) The 8 Gate-2/3 gaps remain (see alignment plan).
+
+**Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [AlphaClaw Lessons](../../AlphaClaw/docs/Lessons.MD)
