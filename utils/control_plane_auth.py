@@ -68,7 +68,9 @@ def _resolve_perpetua_tools_root() -> Path | None:
     for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
         raw = os.getenv(key, "").strip()
         if raw:
-            return Path(raw).expanduser()
+            p = Path(raw).expanduser()
+            if p.is_dir():
+                return p
     repo_root = Path(__file__).resolve().parent.parent
     for candidate in (
         repo_root.parent / "perplexity-api" / "Perpetua-Tools",

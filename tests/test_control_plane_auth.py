@@ -141,27 +141,10 @@ def test_auth_headers_discovers_pt_token_from_sibling_checkout(monkeypatch, tmp_
     token_path.parent.mkdir(parents=True)
     token_path.write_text("sibling-token", encoding="utf-8")
 
-    orama_root = tmp_path / "orama-system"
-
-    def _fake_resolve():
-        """
-        Locate a sibling Perpetua-Tools repository root by probing common candidate paths.
-        
-        Checks several likely locations adjacent to `orama_root` for a `Perpetua-Tools` checkout and verifies presence of `orchestrator/fastapi_app.py`.
-        
-        Returns:
-            pathlib.Path or None: The path to the discovered Perpetua-Tools root if found, otherwise `None`.
-        """
-        for candidate in (
-            orama_root.parent / "perplexity-api" / "Perpetua-Tools",
-            orama_root.parent / "Perpetua-Tools",
-            orama_root.parent / "repos" / "Perpetua-Tools",
-        ):
-            if (candidate / "orchestrator" / "fastapi_app.py").is_file():
-                return candidate
-        return None
-
-    monkeypatch.setattr("utils.control_plane_auth._resolve_perpetua_tools_root", _fake_resolve)
+    monkeypatch.setattr(
+        "utils.control_plane_auth._resolve_perpetua_tools_root",
+        lambda: pt_root,
+    )
     for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "ORAMA_CONTROL_PLANE_TOKEN"):
         monkeypatch.delenv(key, raising=False)
 
