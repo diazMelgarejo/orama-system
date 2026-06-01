@@ -49,13 +49,11 @@ appear in PT tracked files, commit messages, PR bodies, or LESSONS on GitHub.
 
 ## Banned identities (author, committer, Co-authored-by)
 
-| Token / identity | Rule |
-| --- | --- |
-| darth.Serious@gmail.com | Expunge from history before push |
-| nimbosa | Any email or name containing nimbosa |
-| Cursor Agent <cursoragent@cursor.com> | Never as primary git author |
+Read `~/.cursor/openclaw/banned-attribution-patterns` (one token per line). Never
+repeat those strings in commits, PRs, or tracked docs.
 
-Cursor may inject false Co-authored-by trailers — hooks strip them before commit.
+Cursor Agent must not be primary git author. Cursor may inject false Co-authored-by
+trailers — hooks strip them before commit.
 
 ## Agent mistakes to avoid
 
