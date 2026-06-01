@@ -93,7 +93,10 @@ function cleanupStagingDir(dir: string): void {
 
 - Issue #1802 open, no fix merged as of 2026-06-02
 - Comment posted confirming our case: https://github.com/garrytan/gstack/issues/1802#issuecomment-4589699900
-- PR draft ready in `docs/references/gstack-pr-1802-fix.md`
+- **Fix implemented + verified** (32 + 23 tests green) on local branch `fix/1802-staging-ownership-guard` in `~/.claude/skills/gstack`, steelmanned by a 4-model panel (Gemini, Codex, gpt-4o, qwen3.5-27b).
+- **Shipped design** (marker + structural + `.git` tripwire, fail-closed): [`reference/gstack-1802-submission-package.md`](../reference/gstack-1802-submission-package.md) — supersedes the v1 two-guard draft.
+- **Reusable method** dogfooded into orama: [`reference/multi-channel-steelman.md`](../reference/multi-channel-steelman.md).
+- **Pending operator go:** fork `garrytan/gstack` → push branch → open PR; file companion gbrain issue (Part B of the package).
 
 ---
 

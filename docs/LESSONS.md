@@ -2458,3 +2458,23 @@ None — rule is fully specified and enforced at the shell level.
 → [wiki/14-gbrain-checkpoint-rm-rf-bug.md](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
 
 **Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [AlphaClaw Lessons](../../AlphaClaw/docs/Lessons.MD)
+
+---
+
+## 2026-06-02 (cont.) — Claude (Opus 4.8 MAX) — #1802 fix shipped via multi-channel steelman
+
+### What was done
+- Implemented the fail-closed staging-ownership guard for gstack#1802 on branch `fix/1802-staging-ownership-guard` (`lib/staging-guard.ts` + 3 wire-ins + 23 new test assertions; 32+23 green).
+- **Multi-channel steelman** (Mode-3 orama): dispatched the design to 4 heterogeneous external models in parallel — Gemini CLI, OpenAI Codex, OpenRouter/gpt-4o, Windows LM Studio qwen3.5-27b @ 192.168.254.104. Verified each channel's reachability with a live round-trip first; reported Antigravity/AgentRouter/Cursor as **not dispatchable** rather than faking them. 27b/9b on the Windows box timed out / returned empty once — logged honestly.
+- Panel split 3-1 on the `.gstack-staging` marker; adopted on the **fail-safe asymmetry** argument (missing marker → extra re-stage, never a wrong delete). All 4 converged: inevitable fix is upstream in gbrain (companion issue drafted).
+
+### Dogfood (eat-your-own)
+- Codified the method into [`reference/multi-channel-steelman.md`](reference/multi-channel-steelman.md) and the **Fail-Closed Trust Boundary** principle (prove ownership before any recurse-delete; design the false-negative/false-positive cost asymmetry in on purpose).
+- Submission package: [`reference/gstack-1802-submission-package.md`](reference/gstack-1802-submission-package.md).
+
+### Decisions
+- Ship the minimal inevitable core (guard+marker+tripwire); defer the capability-object refactor to a separate PR (ruthless refinement).
+- Version train unified at **0.9.9.9** (operator instruction); `api_server.py` already there; legacy API-baseline pins NOT auto-bumped without instruction.
+- gstack fork/push/PR is GATED on operator confirmation (outward-facing, public, attributable).
+
+→ [wiki/14-gbrain-checkpoint-rm-rf-bug.md](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
