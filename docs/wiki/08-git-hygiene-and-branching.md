@@ -121,21 +121,21 @@ Automated commits from GitHub bots are **not** policy violations in `scripts/git
 
 The audit script accepts the union of both bot addresses on any repo it runs against. `scripts/git/check_identity.sh` still applies only to **your next commit** (human/cyre/Codex identity) — it does not rewrite historical bot authors.
 
-### VERBOTEN identities (history and new commits)
+### Banned identities (private list — never in tracked docs)
 
-These must **not** appear as commit author, committer, or in any `Co-authored-by` trailer (any case variant). If they exist on a branch you intend to push, **rewrite history first**, then `git push --force-with-lease` only after a clean scan.
+Forbidden author, committer, and `Co-authored-by` tokens live only in **gitignored**
+`.cursor/private/banned-attribution-patterns` (synced from `~/.cursor/openclaw/`).
+They must **not** appear in code, commit messages, author fields, PR text, or wiki on GitHub.
 
-| Identity | Rule |
-| --- | --- |
-| `darth.Serious@gmail.com` | Banned — expunge from all refs before force-push |
-| `nimbosa` | Banned — any email containing `nimbosa`, or author/committer name `nimbosa` |
-
-Scan (all refs):
+If a branch fails scan, rewrite history before push:
 
 ```bash
-git log --all --format='%H %ae %ce %an %cn' | rg -i 'darth\.serious|nimbosa'
-git log --all --format='%B' | rg -i '^co-authored-by:.*(darth\.serious|nimbosa)'
+bash /path/to/Perpetua-Tools/scripts/git/expunge-all-workspace-repos.sh
+bash scripts/git/scan-tracked-banned-tokens.sh
+GIT_AUDIT_RANGE=origin/main..HEAD GIT_AUDIT_STRICT=1 bash scripts/git/audit_attribution.sh
 ```
+
+Re-introducing a banned identity after an expunge forces another full `main` + all-branch rewrite.
 
 ### Explicit Cursor co-author allowlist
 

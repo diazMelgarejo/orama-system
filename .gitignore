@@ -81,3 +81,6 @@ lance_memory.lance/
 
 # Cursor private attribution (synced from ~/.cursor/openclaw — never commit)
 .cursor/private/
+
+# Accidental home-path mirror trees (never commit)
+~/
