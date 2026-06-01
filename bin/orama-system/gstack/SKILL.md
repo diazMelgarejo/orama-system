@@ -174,11 +174,14 @@ Two traps to avoid:
 **Always pass both `--repo` (quoted) and `--source`:**
 ```bash
 set -a; source "$HOME/.gbrain/.env" 2>/dev/null; set +a
-gbrain sync --repo "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/AlphaClaw" \
+OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
+PT_ROOT="${PERPETUA_TOOLS_PATH:-${PERPETUA_TOOLS_ROOT:-$OPENCLAW_HOME/Perpetua-Tools}}"
+ORAMA_ROOT="${ORAMA_INSTALL_DIR:-$REPO_ROOT}"
+gbrain sync --repo "$OPENCLAW_HOME/AlphaClaw" \
             --source gstack-code-claw-4dc4a8f3-aa4479 --skip-failed
-gbrain sync --repo "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools" \
+gbrain sync --repo "$PT_ROOT" \
             --source gstack-code-ools-27e2b79c-df8a28 --skip-failed
-gbrain sync --repo "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system" \
+gbrain sync --repo "$ORAMA_ROOT" \
             --source orama-src --skip-failed
 gbrain sources list
 ```

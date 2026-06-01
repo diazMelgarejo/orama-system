@@ -1759,6 +1759,7 @@ async def api_jobs_proxy(status: Optional[str] = None):
                 "available": False,
                 "source": "pt:/v1/jobs",
                 "jobs": [],
+                "result": None,
                 "error": _client_safe_error(exc),
             }
 
