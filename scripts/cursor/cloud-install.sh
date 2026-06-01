@@ -83,6 +83,11 @@ ensure_venv
 clone_sibling Perpetua-Tools https://github.com/diazMelgarejo/Perpetua-Tools
 clone_alphaclaw_fork
 
+if [[ -f "$OPENCLAW_HOME/Perpetua-Tools/install.sh" ]]; then
+  log "Perpetua-Tools install.sh (Claude Desktop MCPB build)"
+  bash "$OPENCLAW_HOME/Perpetua-Tools/install.sh" --skip-desktop || warn "MCPB build skipped"
+fi
+
 log "pip install orama-system + siblings"
 pip install -q -e ".[test]"
 pip install -q -e "$OPENCLAW_HOME/Perpetua-Tools"
