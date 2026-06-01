@@ -23,6 +23,7 @@ This wiki organizes hard-won lessons by topic. Each page contains root cause, ex
 | 12 | [Cursor Cloud Commit Attribution](12-cursor-cloud-commit-attribution.md) | Disable cloud-agent Co-authored-by injection across all OpenClaw repos |
 | 13 | [AlphaClaw Fork Contrib Branches](13-alphaclaw-fork-contrib-branches.md) | `main` = upstream only; all fork work on `feature/*` or `cursor/*` branches |
 | 11 | [Codex GitHub MCP Config](11-codex-github-mcp-config.md) | GitHub MCP is stdio; use command/args plus `[mcp_servers.github.env]`, not `bearer_token_env_var` |
+| 14 | [GBrain Checkpoint rm-rf Bug](14-gbrain-checkpoint-rm-rf-bug.md) | Autopilot SIGTERM poisons `import-checkpoint.json` → next sync `rm -rf`'s repo root. Shell guard + upstream PR #1802 |
 
 ---
 

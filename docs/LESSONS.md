@@ -2425,3 +2425,36 @@ None — rule is fully specified and enforced at the shell level.
 - What process deletes `orama-system`? (user running `sudo fs_usage` to catch it.) The 8 Gate-2/3 gaps remain (see alignment plan).
 
 **Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [AlphaClaw Lessons](../../AlphaClaw/docs/Lessons.MD)
+
+---
+
+## 2026-06-02 — Claude (Sonnet 4.6) — gbrain checkpoint poisoning: rm -rf of repo root identified and fixed
+
+### What was learned
+
+**Answer to the open question from 2026-05-31:** The process deleting `orama-system` was `bun` (PID 48174554) at 09:59:13 — the gbrain autopilot's `gstack-memory-ingest.ts` `finally` block calling `cleanupStagingDir(repoRoot)`. This is **[garrytan/gstack issue #1802](https://github.com/garrytan/gstack/issues/1802)**, an upstream bug confirmed by `fs_usage` trace.
+
+**Root cause:** Autopilot jobs were repeatedly SIGTERM'd on 600s timeout (confirmed in logs: `Job 693/724/726 hit per-job timeout`). One interrupted run wrote `~/.gbrain/import-checkpoint.json` with `dir` = the repo root (CWD at SIGTERM time). The next sync's `decideResume()` function found the directory exists and is a directory, returned `{ kind: "resume" }` with no ownership validation, and the `finally` block did `rmSync(repoRoot, { recursive: true, force: true })`.
+
+**The fix** is a 10-line TypeScript change in two files — `decideResume()` in `gstack-gbrain-sync.ts` + `cleanupStagingDir()` in `gstack-memory-ingest.ts`. See [`docs/reference/gstack-pr-1802-fix.md`](reference/gstack-pr-1802-fix.md) and wiki [`14-gbrain-checkpoint-rm-rf-bug.md`](wiki/14-gbrain-checkpoint-rm-rf-bug.md).
+
+### What was done
+
+- orama-system restored from GitHub (all commits intact; no work lost this time)
+- Poisoned checkpoint deleted (`~/.gbrain/import-checkpoint.json`)
+- Shell guard added to `~/.zshrc` — runs on every shell start, deletes any poisoned checkpoint before it can fire
+- `.gbrain-source` pin files created for orama-system, PT, and AlphaClaw
+- gbrain sources re-synced (orama-src: +1 added, ~5 modified; AlphaClaw: +2; PT: +3)
+- Comment posted on garrytan/gstack#1802 confirming our case
+- Draft PR ready for submission in `docs/reference/gstack-pr-1802-fix.md`
+
+### Rules going forward
+
+1. **Delete `~/.gbrain/import-checkpoint.json` before any manual `/sync-gbrain`** — the shell guard handles automated sessions, but manual runs inside a repo directory are risky until upstream fix lands.
+2. **Run `/sync-gbrain` from a neutral directory** (not inside the indexed repo). CWD at SIGTERM time = what gets written to checkpoint.
+3. **Watch for `Job NNN hit per-job timeout` in `~/.gbrain/autopilot.err`** — two or more in a row = checkpoint is likely poison, delete it.
+4. **Never run `/sync-gbrain` twice without checking the checkpoint** — a stale checkpoint from a previous interrupted run survives until the next clean run or manual deletion.
+
+→ [wiki/14-gbrain-checkpoint-rm-rf-bug.md](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
+
+**Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [AlphaClaw Lessons](../../AlphaClaw/docs/Lessons.MD)
