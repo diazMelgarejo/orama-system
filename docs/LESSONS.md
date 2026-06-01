@@ -2478,3 +2478,27 @@ None — rule is fully specified and enforced at the shell level.
 - gstack fork/push/PR is GATED on operator confirmation (outward-facing, public, attributable).
 
 → [wiki/14-gbrain-checkpoint-rm-rf-bug.md](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
+
+---
+
+## 2026-06-02 (cont.) — Claude (Opus 4.8 MAX) — fork self-heal patcher (survive gstack/gbrain upgrades)
+
+### What was learned
+- **Shipping a fix on a local branch is not durable.** `gstack upgrade` / `gbrain upgrade` overwrite `~/.claude/skills/gstack`, silently reverting any not-yet-merged upstream fix. For #1802 that means the repo-deleting `rm -rf` bug returns on the next upgrade. A local branch protects you only until the next update.
+- **The patch file is its own detector.** `git apply --reverse --check` succeeds iff the fix is already fully present; forward `--check` succeeds iff it's cleanly applicable. Combined with a `MARKERS` grep (catches an upstream reword that keeps the symbol), this makes the patcher a **silent no-op the moment upstream merges** — it retires itself.
+- **`git apply --3way` >> hand-rolled sed anchors** for re-applying an additive fix across versions: it 3-way-merges against blob context (survives line drift), is **atomic** (never half-applies), and **fails loudly** on real conflict instead of clobbering other upstream changes.
+- **A git worktree's `.git` is a file (gitlink), not a directory** — `[ -d "$root/.git" ]` wrongly rejects worktrees. Use `git rev-parse --is-inside-work-tree`. (Caught by my own re-apply test — the test earned its keep.)
+
+### What was built
+- `scripts/fork-patches/apply-fork-patches.sh` — registry-driven, detection-gated, fail-closed self-heal driver (`--quiet`/`--dry-run`). Detect → apply (`--check` then `--3way`) → `VERIFY` (bun test) → rollback-on-fail.
+- `scripts/fork-patches/patches/gstack-1802-staging-guard.{patch,meta}` — first registered patch.
+- `~/.zshrc` shell-start trigger (silent no-op when patched; sibling to the #1802 checkpoint guard).
+- Folded into the **mcp-install** skill ("Fork Self-Heal" section) per operator request — no new skill.
+- Proven: against an unpatched worktree it applies + passes `bun test` (55) + creates `lib/staging-guard.ts`; second run is an idempotent no-op.
+
+### Decisions
+- Merge into existing `mcp-install` skill, not a standalone skill (operator).
+- Trigger = shell-start hook (most robust; catches any update path) over wrapping `gstack upgrade` (misses other paths).
+- Retire each patch by deleting its `.patch`+`.meta` once the upstream PR merges (MARKERS grep already neutralizes it first).
+
+→ Driver: [`../scripts/fork-patches/README.md`](../scripts/fork-patches/README.md) · Method: [`reference/multi-channel-steelman.md`](reference/multi-channel-steelman.md) · Incident: [`wiki/14-gbrain-checkpoint-rm-rf-bug.md`](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
