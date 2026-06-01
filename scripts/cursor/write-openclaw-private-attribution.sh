@@ -63,13 +63,25 @@ Cursor may inject false Co-authored-by trailers — hooks strip them before comm
 - Putting base64 or plaintext tokens in PT scripts on GitHub.
 - Committing as Cursor Agent instead of cyre.
 - Leaving refs/original/ after filter-branch.
+- **Re-adding forbidden Co-authored-by after an expunge** — forces another full `main` + all-branch rewrite and force-push.
+
+## Daily enforcement (every session)
+
+```bash
+bash /path/to/Perpetua-Tools/scripts/git/daily-attribution-guard.sh
+bash /path/to/Perpetua-Tools/scripts/git/expunge-all-workspace-repos.sh   # when scan hits > 0
+```
+
+Log: `~/.cursor/openclaw/attribution-guard.log`
 
 ## Commands
 
 ```bash
 bash scripts/cursor/install-user-git-environment.sh   # orama or PT
 bash scripts/cursor/sync-private-attribution-from-home.sh
+bash scripts/git/daily-attribution-guard.sh
 bash scripts/git/scan-tracked-banned-tokens.sh
+bash scripts/git/commit-clean.sh -m "message"
 bash scripts/git/publish-clean-branch.sh <branch> main origin
 ```
 LESSON_EOF

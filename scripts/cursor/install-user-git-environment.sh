@@ -74,6 +74,11 @@ PY
 
 log "user guards installed under ${OPENCLAW_DIR}"
 
+if [[ -x "${REPO_ROOT}/scripts/cursor/write-openclaw-private-attribution.sh" ]]; then
+  log "write user-level private attribution (patterns + agent lesson)"
+  bash "${REPO_ROOT}/scripts/cursor/write-openclaw-private-attribution.sh"
+fi
+
 if [[ -x "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh" ]]; then
   log "apply repo guards (orama + siblings)"
   export ORAMA_SYSTEM_PATH="${ORAMA_SYSTEM_PATH:-$REPO_ROOT}"
@@ -81,6 +86,12 @@ if [[ -x "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh" ]]; the
   export PERPETUA_TOOLS_PATH="${PERPETUA_TOOLS_PATH:-$OPENCLAW_HOME/Perpetua-Tools}"
   export ALPHACLAW_INSTALL_DIR="${ALPHACLAW_INSTALL_DIR:-$OPENCLAW_HOME/AlphaClaw}"
   bash "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh"
+fi
+
+PT="${PERPETUA_TOOLS_PATH:-${OPENCLAW_HOME:-$HOME/openclaw-v1}/Perpetua-Tools}"
+if [[ -x "${PT}/scripts/git/daily-attribution-guard.sh" ]]; then
+  log "daily attribution guard (all workspace repos)"
+  PERPETUA_TOOLS_PATH="$PT" bash "${PT}/scripts/git/daily-attribution-guard.sh" || true
 fi
 
 log "complete"

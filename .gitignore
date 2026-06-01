@@ -78,3 +78,6 @@ lance_memory.lance/
 # permission allowlists. Tracked once accidentally; now gitignored (see
 # repo_hygiene PERSONAL_PATH_PATTERN for the lint that catches re-commits).
 .claude/settings.local.json
+
+# Cursor private attribution (synced from ~/.cursor/openclaw — never commit)
+.cursor/private/
