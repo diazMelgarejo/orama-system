@@ -140,7 +140,7 @@ A recursive delete against an immutable inode fails outright — this guard is i
 All commits were on GitHub, so restore is a simple reclone:
 ```bash
 git clone https://github.com/diazMelgarejo/orama-system.git \
-  "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+  "$OPENCLAW_ROOT/orama-system"
 ```
 
 Untracked files that hadn't been pushed would be permanently lost. Keep important untracked artifacts in the repo or a separate backup.

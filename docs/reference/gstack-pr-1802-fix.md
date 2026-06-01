@@ -254,9 +254,9 @@ describe("decideResume: poisoned checkpoint safety", () => {
 4. **macOS immutability on critical repos** (strongest guard — doesn't depend on gstack fixing anything):
    ```bash
    for repo in \
-     "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system" \
-     "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/perplexity-api/Perpetua-Tools" \
-     "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/AlphaClaw"; do
+     "$OPENCLAW_ROOT/orama-system" \
+     "$OPENCLAW_ROOT/perplexity-api/Perpetua-Tools" \
+     "$OPENCLAW_ROOT/AlphaClaw"; do
      chflags -R uchg "$repo/.git"
      echo "Protected .git in: $repo"
    done

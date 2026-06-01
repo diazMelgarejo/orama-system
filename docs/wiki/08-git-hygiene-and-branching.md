@@ -214,6 +214,26 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `recovery`
 
 ---
 
+## Portable paths in tracked files (no workstation leaks)
+
+`scripts/review/repo_hygiene.py` runs in CI (`tests/test_repo_hygiene.py::test_repo_hygiene_script_runs_clean`) and **fails the build** on any tracked file containing a hardcoded workstation path. This applies to docs, comments, and example commands — not just code. Two patterns are blocked:
+
+- **Personal absolute paths** — `/Users/<name>/…` or `/home/<name>/…` where `<name>` is a real login. Use `~`, `$REPO_ROOT`, or `<workspace>`.
+- **Machine-specific OpenClaw layout** — the literal `…/claude/OpenClaw` workstation tree (with or without a `~`/`$HOME` prefix). Use `$OPENCLAW_ROOT`, `detect_openclaw_root()`, or `ORAMA_INSTALL_DIR`.
+
+Rule of thumb when writing a runnable example or recovery command in any `*.md`, script, or comment — substitute the root with a variable:
+
+```bash
+# WRONG — a literal /Users/<login>/…/claude/OpenClaw/orama-system leaks the
+#         developer name + directory layout and fails CI.
+# RIGHT — portable, passes hygiene:
+git clone <url> "$OPENCLAW_ROOT/orama-system"
+```
+
+Abbreviated placeholders like `/Users/.../foo` are fine (the segment after `/Users/` must start with a letter to match). The script and its own test are the only allowlisted files (they must name the pattern to test it). **Run `python3 scripts/review/repo_hygiene.py .` before committing docs that contain shell commands** — it is the same check CI runs. (Learned 2026-06-02: the #1802 incident write-ups themselves leaked workstation paths and red-CI'd `main`.)
+
+---
+
 ## GitHub Actions Permissions
 
 Workflow permissions must be minimal and explicit.

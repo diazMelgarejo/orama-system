@@ -124,6 +124,7 @@ Full setup: [`docs/wiki/06-multi-agent-collab.md`](docs/wiki/06-multi-agent-coll
 - Official policy (authors + `Co-authored-by` allowlist): [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25) — install hooks with `bash scripts/git/install-local-hooks.sh`
 - Dated branches: `yyyy-mm-dd-NNN-brief-summary`
 - Never commit `.env`, `.env.local`, generated `.paths`
+- **No workstation paths in tracked files** (docs included): use `$OPENCLAW_ROOT`/`~`/`$REPO_ROOT`, never literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree. CI enforces via `scripts/review/repo_hygiene.py` — run it before committing docs with shell commands. See [wiki/08 § Portable paths](docs/wiki/08-git-hygiene-and-branching.md).
 - Full rules: [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md)
 
 ---
