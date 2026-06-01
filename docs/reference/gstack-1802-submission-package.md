@@ -1,7 +1,13 @@
-# gstack #1802 — Submission Package (shipped design)
+# gstack #1802 — Submission Package (SHIPPED)
 
-> Version: 0.9.9.9 · 2026-06-02 · Branch `fix/1802-staging-ownership-guard` (local, verified, 32+23 tests green)
-> Supersedes the v1 draft in `gstack-pr-1802-fix.md` (two-guard, name-only). This is the steelmanned v2.
+> Version: 0.9.9.9 · 2026-06-02 · 55 tests green · panel-hardened
+> **SUBMITTED:**
+> - gstack PR (mitigation): https://github.com/garrytan/gstack/pull/1827
+> - gbrain issue (prevention): https://github.com/garrytan/gbrain/issues/1728
+> - linked on #1802: https://github.com/garrytan/gstack/issues/1802#issuecomment-4591375714
+>
+> Branch `fix/1802-staging-ownership-guard` on `~/.claude/skills/gstack` (kept active on this machine per operator) + pushed to fork `diazMelgarejo/gstack`.
+> Supersedes the v1 draft in `gstack-pr-1802-fix.md` (two-guard, name-only). This is the steelmanned + eng-reviewed v2.
 
 ---
 
