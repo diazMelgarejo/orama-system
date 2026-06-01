@@ -130,6 +130,27 @@ def test_auth_headers_reads_pt_persisted_token(monkeypatch, tmp_path):
     assert headers == {"Authorization": "Bearer pt-file-token"}
 
 
+def test_auth_headers_discovers_pt_token_from_sibling_checkout(monkeypatch, tmp_path):
+    """Portal must read PT token without PERPETUA_TOOLS_ROOT when repos are siblings."""
+    from utils.control_plane_auth import auth_headers
+
+    pt_root = tmp_path / "Perpetua-Tools"
+    (pt_root / "orchestrator").mkdir(parents=True)
+    (pt_root / "orchestrator" / "fastapi_app.py").write_text("")
+    token_path = pt_root / ".state" / "control_plane_token"
+    token_path.parent.mkdir(parents=True)
+    token_path.write_text("sibling-token", encoding="utf-8")
+
+    monkeypatch.setattr(
+        "utils.control_plane_auth._resolve_perpetua_tools_root",
+        lambda: pt_root,
+    )
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "ORAMA_CONTROL_PLANE_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+
+    assert auth_headers() == {"Authorization": "Bearer sibling-token"}
+
+
 def test_verify_accepts_pt_persisted_token_without_env(monkeypatch, tmp_path):
     from utils.control_plane_auth import resolved_control_plane_token, verify_control_plane_auth
 
