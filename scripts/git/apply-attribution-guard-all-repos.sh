@@ -9,7 +9,8 @@ SYNC="$SCRIPT_DIR/sync-attribution-guard-scripts.sh"
 
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
 
-# Cursor may pass literal ${workspaceFolder} before expansion — fall back to this repo.
+# Additive path resolution: keep ORAMA_ROOT and ORAMA_SYSTEM_PATH when both are valid;
+# only substitute when the env var is an unexpanded Cursor placeholder or not a git repo.
 orama_system_path="${ORAMA_SYSTEM_PATH:-$ORAMA_ROOT}"
 if [[ "$orama_system_path" == *'${'* ]] || [[ ! -d "$orama_system_path/.git" ]]; then
   orama_system_path="$ORAMA_ROOT"
@@ -34,6 +35,8 @@ raw_candidates=(
   "${ALPHACLAW_INSTALL_DIR:-$OPENCLAW_HOME/AlphaClaw}"
 )
 
+# Deduplicate by resolved absolute path (non-destructive: skip invalid/duplicate
+# entries instead of failing the whole run with "skip (no .git)" noise).
 declare -A seen=()
 unique=()
 for r in "${raw_candidates[@]}"; do
