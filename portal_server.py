@@ -1748,6 +1748,20 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
 
 @app.get("/api/jobs")
 async def api_jobs_proxy(status: Optional[str] = None):
+    """
+    Proxy the Perpetua Tools (PT) /v1/jobs endpoint and return a normalized jobs response.
+    
+    Parameters:
+        status (Optional[str]): Optional PT `status` query parameter to filter jobs.
+    
+    Returns:
+        dict: A response object with the following keys:
+            - available (bool): `True` when PT responded successfully, `False` on error.
+            - source (str): The upstream source identifier, always "pt:/v1/jobs".
+            - jobs (list): Normalized list of job dictionaries when available; empty list on error.
+            - result (None): Always present with value `None` in the error case; omitted on success.
+            - error (str): Client-safe error message when `available` is `False`; omitted on success.
+    """
     params = {"status": status} if status else {}
     async with _portal_http_client(timeout=5.0) as client:
         try:

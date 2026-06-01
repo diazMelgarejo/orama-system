@@ -144,6 +144,15 @@ def test_auth_headers_discovers_pt_token_from_sibling_checkout(monkeypatch, tmp_
     orama_root = tmp_path / "orama-system"
 
     def _fake_resolve():
+        """
+        Find a sibling Perpetua-Tools checkout adjacent to the module's orama_root.
+        
+        Checks three candidate locations relative to `orama_root.parent`:
+        perplexity-api/Perpetua-Tools, Perpetua-Tools, and repos/Perpetua-Tools. A candidate is accepted only if it contains the sentinel file orchestrator/fastapi_app.py.
+        
+        Returns:
+        	Perpetua-Tools root (Path) if a valid checkout is found, `None` otherwise.
+        """
         for candidate in (
             orama_root.parent / "perplexity-api" / "Perpetua-Tools",
             orama_root.parent / "Perpetua-Tools",
@@ -357,7 +366,13 @@ def test_resolve_pt_root_sibling_repos_subdir(monkeypatch, tmp_path):
 
 
 def test_resolve_pt_root_returns_none_when_nothing_found(monkeypatch, tmp_path):
-    """Returns None when no env var is set and no sibling checkout is present."""
+    """
+    Check Perpetua-Tools root resolution when no env var or sibling checkout is available.
+    
+    Asserts that _resolve_perpetua_tools_root() yields None when the environment variables
+    PERPETUA_TOOLS_ROOT, PERPETUATOOLSROOT, and PERPETUA_TOOLS_PATH are unset and no sibling
+    Perpetua-Tools checkout exists relative to the module path.
+    """
     from utils.control_plane_auth import _resolve_perpetua_tools_root
 
     for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
@@ -422,7 +437,11 @@ def test_read_pt_persisted_token_returns_empty_when_root_none(monkeypatch):
 
 
 def test_read_pt_persisted_token_returns_empty_when_file_missing(monkeypatch, tmp_path):
-    """Returns '' when the token file does not exist."""
+    """
+    Ensure _read_pt_persisted_token returns an empty string when no token file exists under the resolved Perpetua-Tools root.
+    
+    Patches the resolver to point at `tmp_path` and verifies that absence of `.state/control_plane_token` yields an empty string.
+    """
     from utils.control_plane_auth import _read_pt_persisted_token
 
     monkeypatch.setattr(
