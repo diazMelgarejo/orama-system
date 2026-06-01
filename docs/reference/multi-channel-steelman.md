@@ -62,6 +62,8 @@ temp dir" path. Add it to the [CIDF](../../bin/orama-system/SKILL.md) lineage of
 "verify before the destructive act."
 
 ## Cross-refs
+- **Dispatch engine (canonical):** [bin/orama-system/skills/mcp-orchestration/SKILL.md](../../bin/orama-system/skills/mcp-orchestration/SKILL.md) — this method is an *application* of mcp-orchestration's parallel multi-CLI dispatch (ai-cli-mcp, Gemini, Codex, OpenRouter, local). Use it for the wiring; this doc for the review discipline.
+- **Review sibling:** [code-review `orchestration-dispatch`](../../bin/orama-system/skills/code-review/references/orchestration-dispatch.md) — the same fan-out applied to PR multi-lens review.
 - Incident + root cause: [wiki/14-gbrain-checkpoint-rm-rf-bug.md](../wiki/14-gbrain-checkpoint-rm-rf-bug.md)
 - Submission package: [reference/gstack-1802-submission-package.md](gstack-1802-submission-package.md)
 - Upstream: garrytan/gstack#1802
