@@ -1,0 +1,18 @@
+# Registry descriptor for the gstack #1802 staging-ownership guard fork patch.
+# Sourced by apply-fork-patches.sh. Keep keys stable.
+#
+# Upstream: garrytan/gstack#1827 (mitigation) · garrytan/gbrain#1728 (prevention)
+# When #1827 merges, MARKERS will be present in the released gstack → this
+# patch becomes a permanent no-op and can be retired.
+
+TARGET=gstack
+
+# Presence markers — if ANY is found in the target's tracked files, the fix is
+# considered already applied (we patched it, or upstream merged it) → no-op.
+# `checkOwnedStagingDir` is the load-bearing symbol; `.gstack-staging` is the
+# minted marker name. Either surviving an upstream reword still short-circuits.
+MARKERS="checkOwnedStagingDir .gstack-staging"
+
+# Verify command, run from the target repo root after applying. Only the two
+# affected test files — fast, and the exact regression surface for #1802.
+VERIFY="bun test test/regression-1611-gbrain-sync-resume.test.ts test/gstack-memory-ingest.test.ts"

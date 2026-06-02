@@ -15,6 +15,14 @@ esac
 export OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
 
 log() { printf '>>> [cloud-install] %s\n' "$*"; }
+warn() { printf '>>> [cloud-install] WARN: %s\n' "$*" >&2; }
+
+export_openclaw_paths() {
+  export ORAMA_SYSTEM_PATH="${ORAMA_SYSTEM_PATH:-$REPO_ROOT}"
+  export PERPETUA_TOOLS_PATH="${PERPETUA_TOOLS_PATH:-$OPENCLAW_HOME/Perpetua-Tools}"
+  export ALPHACLAW_INSTALL_DIR="${ALPHACLAW_INSTALL_DIR:-$OPENCLAW_HOME/AlphaClaw}"
+  export ALPHACLAW_CONTRIB_BRANCHES="${ALPHACLAW_CONTRIB_BRANCHES:-${ALPHACLAW_CONTRIB_BRANCH:-cursor/sync-attribution-guards-6421}}"
+}
 
 venv_healthy() {
   [[ -f .venv/bin/activate ]] && [[ -x .venv/bin/python ]] && .venv/bin/python -m pip --version >/dev/null 2>&1
@@ -54,7 +62,10 @@ clone_sibling() {
   local branch="${3:-main}"
   local dest="$OPENCLAW_HOME/$name"
   if [[ -d "$dest/.git" ]]; then
-    log "$name already present at $dest"
+    log "$name already present at $dest; syncing origin/${branch}"
+    git -C "$dest" fetch origin --prune
+    git -C "$dest" checkout "$branch" 2>/dev/null || git -C "$dest" checkout -B "$branch" "origin/${branch}"
+    git -C "$dest" reset --hard "origin/${branch}"
     return 0
   fi
   log "cloning $name (branch $branch) -> $dest"
@@ -80,8 +91,14 @@ clone_alphaclaw_fork() {
 log "OPENCLAW_HOME=$OPENCLAW_HOME"
 ensure_venv
 
-clone_sibling Perpetua-Tools https://github.com/diazMelgarejo/Perpetua-Tools
+clone_sibling Perpetua-Tools https://github.com/diazMelgarejo/Perpetua-Tools main
 clone_alphaclaw_fork
+export_openclaw_paths
+
+if [[ -f "$OPENCLAW_HOME/Perpetua-Tools/install.sh" ]]; then
+  log "Perpetua-Tools install.sh (Claude Desktop MCPB build)"
+  bash "$OPENCLAW_HOME/Perpetua-Tools/install.sh" --skip-desktop || warn "MCPB build skipped"
+fi
 
 log "pip install orama-system + siblings"
 pip install -q -e ".[test]"
@@ -98,9 +115,10 @@ if ! npm list -g openclaw >/dev/null 2>&1; then
   npm install -g openclaw@2026.5.6
 fi
 
-if [[ -x scripts/cursor/install-user-git-environment.sh ]]; then
-  log "install user-level git guards (~/.cursor/openclaw)"
-  bash scripts/cursor/install-user-git-environment.sh
+export_openclaw_paths
+if [[ -x scripts/cursor/cloud-attribution-bootstrap.sh ]]; then
+  log "cursor cloud attribution guards (unconditional)"
+  bash scripts/cursor/cloud-attribution-bootstrap.sh
 elif [[ -x scripts/git/apply-attribution-guard-all-repos.sh ]]; then
   log "apply git attribution guards"
   bash scripts/git/apply-attribution-guard-all-repos.sh
