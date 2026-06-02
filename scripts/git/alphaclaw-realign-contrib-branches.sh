@@ -7,7 +7,7 @@ OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
 AC_ROOT="${ALPHACLAW_INSTALL_DIR:-$OPENCLAW_HOME/AlphaClaw}"
 UPSTREAM_BRANCH="${ALPHACLAW_UPSTREAM_BRANCH:-main}"
 INTEGRATION_BRANCH="${ALPHACLAW_INTEGRATION_BRANCH:-feature/MacOS-post-install}"
-CONTRIB_BRANCHES="${ALPHACLAW_CONTRIB_BRANCHES:-cursor/sync-attribution-guards-6421}"
+CONTRIB_BRANCHES="${ALPHACLAW_CONTRIB_BRANCHES:-${ALPHACLAW_CONTRIB_BRANCH:-cursor/sync-attribution-guards-6421}}"
 
 if [[ ! -d "$AC_ROOT/.git" ]]; then
   echo "ERROR: AlphaClaw not cloned at $AC_ROOT" >&2
@@ -33,9 +33,16 @@ for branch in "${branches[@]}"; do
   branch="${branch%"${branch##*[![:space:]]}"}"
   [[ -n "$branch" ]] || continue
 
+  git fetch origin "${branch}" 2>/dev/null || true
+
   if ! git show-ref --verify --quiet "refs/heads/${branch}"; then
-    echo "skip: no local branch ${branch}"
-    continue
+    if git show-ref --verify --quiet "refs/remotes/origin/${branch}"; then
+      echo ">>> checkout ${branch} from origin"
+      git checkout -B "${branch}" "origin/${branch}"
+    else
+      echo "skip: no local or origin/${branch}"
+      continue
+    fi
   fi
 
   echo ">>> realign ${branch} onto ${INTEGRATION_BRANCH}"

@@ -1,5 +1,11 @@
 # Agent instructions — orama-system
 
+## Claude Code runtime — read before touching the binary
+
+Two install paths exist on this machine (`~/.local/bin/claude` + npm global) — intentionally.
+Before updating, relocating, or assuming only one exists, read:
+→ [`../CLAUDE-CODE-RUNTIME.md`](../CLAUDE-CODE-RUNTIME.md)
+
 ## Cursor Cloud: git commits
 
 Cloud agents set `CURSOR_AGENT=1` and redirect `core.hookspath` to `~/.cursor/agent-hooks/…`, which can append unwanted `Co-authored-by` trailers. **`CURSOR_AGENT=0` is not supported** and does not disable this.

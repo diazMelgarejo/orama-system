@@ -121,21 +121,21 @@ Automated commits from GitHub bots are **not** policy violations in `scripts/git
 
 The audit script accepts the union of both bot addresses on any repo it runs against. `scripts/git/check_identity.sh` still applies only to **your next commit** (human/cyre/Codex identity) — it does not rewrite historical bot authors.
 
-### VERBOTEN identities (history and new commits)
+### Banned identities (private list — never in tracked docs)
 
-These must **not** appear as commit author, committer, or in any `Co-authored-by` trailer (any case variant). If they exist on a branch you intend to push, **rewrite history first**, then `git push --force-with-lease` only after a clean scan.
+Forbidden author, committer, and `Co-authored-by` tokens live only in **gitignored**
+`.cursor/private/banned-attribution-patterns` (synced from `~/.cursor/openclaw/`).
+They must **not** appear in code, commit messages, author fields, PR text, or wiki on GitHub.
 
-| Identity | Rule |
-| --- | --- |
-| `REDACTED@gmail.com` | Banned — expunge from all refs before force-push |
-| `REDACTED` | Banned — any email containing `REDACTED`, or author/committer name `REDACTED` |
-
-Scan (all refs):
+If a branch fails scan, rewrite history before push:
 
 ```bash
-git log --all --format='%H %ae %ce %an %cn' | rg -i 'darth\.serious|REDACTED'
-git log --all --format='%B' | rg -i '^co-authored-by:.*(darth\.serious|REDACTED)'
+bash /path/to/Perpetua-Tools/scripts/git/expunge-all-workspace-repos.sh
+bash scripts/git/scan-tracked-banned-tokens.sh
+GIT_AUDIT_RANGE=origin/main..HEAD GIT_AUDIT_STRICT=1 bash scripts/git/audit_attribution.sh
 ```
+
+Re-introducing a banned identity after an expunge forces another full `main` + all-branch rewrite.
 
 ### Explicit Cursor co-author allowlist
 
@@ -211,6 +211,28 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `recovery`
 - `.paths` is generated runtime-local state and ignored.
 - `.paths.example` is the only tracked path template.
 - Do not commit shell-substitution-only values as the sole configuration representation.
+
+---
+
+## Portable paths in tracked files (no workstation leaks)
+
+`scripts/review/repo_hygiene.py` runs in CI (`tests/test_repo_hygiene.py::test_repo_hygiene_script_runs_clean`) and **fails the build** on any tracked file containing a hardcoded workstation path. This applies to docs, comments, and example commands — not just code. Two patterns are blocked:
+
+- **Personal absolute paths** — `/Users/<name>/…` or `/home/<name>/…` where `<name>` is a real login. Use `~`, `$REPO_ROOT`, or `<workspace>`.
+- **Machine-specific OpenClaw layout** — the literal `…/claude/OpenClaw` workstation tree (with or without a `~`/`$HOME` prefix). Use `$OPENCLAW_ROOT`, `detect_openclaw_root()`, or `ORAMA_INSTALL_DIR`.
+
+Rule of thumb when writing a runnable example or recovery command in any `*.md`, script, or comment — substitute the root with a variable:
+
+```bash
+# WRONG — a literal /Users/<login>/…/claude/OpenClaw/orama-system leaks the
+#         developer name + directory layout and fails CI.
+# RIGHT — portable, passes hygiene:
+git clone <url> "$OPENCLAW_ROOT/orama-system"
+```
+
+Abbreviated placeholders like `/Users/.../foo` are fine (the segment after `/Users/` must start with a letter to match). The script and its own test are the only allowlisted files (they must name the pattern to test it). **Run `python3 scripts/review/repo_hygiene.py .` before committing docs that contain shell commands** — it is the same check CI runs. (Learned 2026-06-02: the #1802 incident write-ups themselves leaked workstation paths and red-CI'd `main`.)
+
+**Prevention (catch it before history, not after).** The pre-commit hook (`.githooks/pre-commit`, activated by `bash scripts/git/install-local-hooks.sh`) runs the full `repo_hygiene.py` — the *same* check as CI — so a leaked path or token is blocked at commit time and never enters history. That makes the [`expunge-git`](../../bin/orama-system/skills/expunge-git/SKILL.md) scrub a last resort (only if something already landed before the hook was installed), not the routine. Install the hooks once per clone; CI is the backstop, the hook is the gate.
 
 ---
 
