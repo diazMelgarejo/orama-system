@@ -3,6 +3,14 @@
 **Date:** 2026-05-20
 **Context:** Analysis of `docs/superpowers/specs/2026-05-20-cc-openclaw-master-alignment-design.md` vs. the new v2 microkernel in `~/Documents/oramasys/` (`oramasys`, `perpetua-core`, `agate`).
 
+> **Cross-repo canonical (2026-06-01).** The active tri-repo (AlphaClaw → PT → orama) migration
+> resume anchor is **[`Perpetua-Tools/docs/2026-05-31-tri-repo-alignment-completion-plan.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/2026-05-31-tri-repo-alignment-completion-plan.md)**
+> — the combined A+B canonical plan (single-yardstick goal + locked decisions **D1–D5** + **SSEA**
+> gates + v2.0 multi-agent write-orchestration). That doc governs the live v1 `diazMelgarejo/*`
+> migration; this v2 doc is the forward-looking L3 microkernel design (`oramasys`/`perpetua-core`/`agate`).
+> ⚠ **Active blocker:** PT `main` is being churned to detached HEAD by a concurrent Cursor agent —
+> land PT edits via the GitHub API and confirm a stable checkout before any Gate-2 code work.
+
 ## 1. Alignment Sanity & Efficiency Check
 
 Using `gbrain query` and directory analysis, the master alignment design was checked against the 3 new repos.

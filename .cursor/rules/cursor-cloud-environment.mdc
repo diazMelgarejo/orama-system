@@ -16,8 +16,8 @@ alwaysApply: true
 Cursor redirects `core.hookspath` to `~/.cursor/agent-hooks/<base64-workspace>/` and may run `commit-msg.cursor.co-author`. Mitigations (run every session):
 
 ```bash
-bash scripts/cursor/install-user-git-environment.sh   # ~/.cursor/openclaw + sessionStart hook
-bash scripts/git/apply-attribution-guard-all-repos.sh # orama + PT + AlphaClaw
+bash scripts/cursor/cloud-attribution-bootstrap.sh    # unconditional; rules in ~/.cursor/openclaw only
+bash ~/.cursor/openclaw/install-cursor-cloud-attribution.sh   # re-run anytime
 ```
 
 Hook-free commit when needed:

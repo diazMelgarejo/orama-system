@@ -20,6 +20,13 @@ objects**, and **stale remote-tracking refs**. The first attempt of this
 procedure missed exactly those three places. The 15-step sequence below is the
 one that actually worked end-to-end.
 
+> **Prevention beats scrubbing.** The cheapest expunge is the one you never run.
+> The pre-commit hygiene gate ([`docs/wiki/08` § Portable paths](../../../../docs/wiki/08-git-hygiene-and-branching.md#portable-paths-in-tracked-files-no-workstation-leaks))
+> runs `repo_hygiene.py` and blocks workstation paths / leaked tokens *before*
+> they reach history — so this scrub is the last resort, not the routine. This
+> skill is itself **fail-closed**: prove it's safe to rewrite (Section 1) before
+> destroying anything. See the [Fail-Closed Trust Boundary](../../../../docs/reference/multi-channel-steelman.md).
+
 ---
 
 ## Section 1 — When to Invoke / When NOT To

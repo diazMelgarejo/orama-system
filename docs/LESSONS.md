@@ -3,7 +3,21 @@
 > **Canonical path**: `docs/LESSONS.md`<br/>
 > **Previous path**: `.claude/lessons/LESSONS.md` (now redirects here)<br/>
 > **Purpose**: GitHub-auditable persistent memory across all ECC, AutoResearcher, and Claude sessions.<br/>
-> **Cross-repo companion**: [Perpetua-Tools/docs/LESSONS.md](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)
+> **Cross-repo companions**:
+> - [Perpetua-Tools/docs/LESSONS.md](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)
+> - [AlphaClaw/docs/Lessons.MD](../../AlphaClaw/docs/Lessons.MD) · [GitHub](https://github.com/diazMelgarejo/AlphaClaw/blob/feature/MacOS-post-install/docs/Lessons.MD)
+>
+> **Cross-repo lesson index** (shared knowledge — check here when a problem spans repos):
+>
+> | Topic | Canonical doc | Also in |
+> |-------|--------------|---------|
+> | macOS ` 2`/` 3` dupes in `.git/` internals | [AlphaClaw wiki/07](../../AlphaClaw/docs/wiki/07-duplicate-files.md) | This file §2026-05-27 + §2026-05-31 |
+> | No sleep chains (`sleep N && cmd`) | [skills/no-sleep-chains/SKILL.md](../bin/orama-system/skills/no-sleep-chains/SKILL.md) | This file §2026-05-16 |
+> | Git identity + Cursor commit policy | [docs/wiki/08-git-hygiene-and-branching.md](wiki/08-git-hygiene-and-branching.md) | AlphaClaw `scripts/git/check_identity.sh` |
+> | gbrain pooler write failures + resync | [gstack/SKILL.md §GBrain Ops](../bin/orama-system/gstack/SKILL.md) | This file §2026-05-30 |
+> | Migration gate ladder (Gate 0→4) | [PT docs/MIGRATION.md](../../perplexity-api/Perpetua-Tools/docs/MIGRATION.md) | This file §2026-05-30 T7 survey |
+> | AlphaClaw branch roles + invariants | [AlphaClaw CLAUDE.md](../../AlphaClaw/CLAUDE.md) | AlphaClaw wiki/01 |
+>
 > **Architecture authority**: [2026-05-14--UNIFIED-ABSORPTION-PLAN.md](2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
 > **Navigation hub**: [CLAUDE-instru.md](../../../CLAUDE-instru.md)
 >
@@ -2248,6 +2262,7 @@ Both integration and contrib branches must have **merge-base(branch, origin/main
    - Fix: `rm "$repo/.git/refs/heads/main 2"` on perpetua-core / oramasys / agate
    - Prevention: added `scan_macos_ghost_git_refs()` to `scripts/review/repo_hygiene.py` (D10)
    - 4 new tests in `tests/test_repo_hygiene.py`
+   - **RE-ENCOUNTERED 2026-05-31 (AlphaClaw):** Same root cause. New variant: `.git/index 2` (56208B) and `.git/index 3` (59526B) — stale staging-area snapshots, NOT identical to live `.git/index` (60666B). Also `refs/remotes/origin/feature/MacOS-post-install 2`, `origin/main 2`, `origin/main 3` — remote-tracking ghost refs, all same SHA as canonical, cleared by `git remote prune origin`. `com.apple.provenance` xattr confirmed on `.git/` — iCloud Drive provenance is the trigger. **Agent note: I knew about this rule and still failed to check `.git/` for space-suffixed files during session startup. Add to pre-flight: `find .git -name "* 2" -o -name "* 3" | grep -v "/objects/"`.** Canonical doc: `AlphaClaw/docs/wiki/07-duplicate-files.md`.
 
 2. **PR #38 / #39 cleanup (Perpetua-Tools)**
    - Removed FORBIDDEN Co-authored-by trailer from feature branch commits via `git commit --amend` / cherry-pick
@@ -2351,3 +2366,139 @@ A **Cursor agent on 2026-05-25 at 13:44** created `OpenClaw/_pt-merge-work/` as 
 
 - Should we add a pre-commit hook or wrapper to **block agent-initiated `git clone` into OpenClaw root** without a `.scratch-clone-justification` file?
 - Should there be a `~/.claude/skills/hitl-major-decisions/` skill that any agent must invoke before path/architecture changes?
+
+---
+
+## 2026-05-16 — Claude — No sleep chains: `sleep N && cmd` is blocked
+
+> *First triggered: 2026-05-16 session (npm install wait). Re-triggered: 2026-05-29 session (claude update wait). Canonicalized as a low-level skill on 2026-05-29.*
+
+### What was learned
+
+The shell hook detects `sleep` as the leading token of a Bash command and rejects the entire call. This covers:
+- `sleep N && <command>`
+- `sleep N; <command>`
+- Chains of shorter sleeps attempting to work around the block (`sleep 5 && sleep 5 && cmd`)
+
+Correct mental model: **the block is on the first token, not on the sleep duration**. There is no threshold below which the chain becomes acceptable.
+
+Pattern that re-triggered the rule on 2026-05-29: waiting for a `claude update` background task output file by running `sleep 15 && cat <file>` then `sleep 20 && cat <file>`. Both rejected. The correct form — an until-loop or waiting for the `run_in_background` notification — was only reached on the third attempt.
+
+### Decisions made
+
+The rule is now **canonical** — ported from the ephemeral `~/.claude/projects/.../memory/feedback_no_sleep_chains.md` into:
+
+1. **`orama-system/bin/orama-system/skills/no-sleep-chains/SKILL.md`** — low-level skill with correct-pattern quick reference, invocable by any agent.
+2. **`docs/LESSONS.md`** (this entry) — dated audit trail.
+3. Original memory file retained in `~/.claude/projects/…/memory/` as the session-scoped pointer.
+
+### Correct patterns (canonical)
+
+| Situation | Correct form |
+|-----------|-------------|
+| `run_in_background: true` task | Wait for system notification — do nothing |
+| Poll file for keyword | `until grep -q "..." file; do sleep 3; done` |
+| Poll file for size | `until [ "$(wc -l < file)" -gt N ]; do sleep 3; done` |
+| Wait for service port | `until curl -s http://host/health >/dev/null; do sleep 2; done` |
+| Wait for PID to exit | `until ! kill -0 $PID 2>/dev/null; do sleep 2; done` |
+
+Full patterns with examples: [`bin/orama-system/skills/no-sleep-chains/SKILL.md`](../bin/orama-system/skills/no-sleep-chains/SKILL.md)
+
+### Open questions
+
+None — rule is fully specified and enforced at the shell level.
+
+---
+
+## 2026-05-31 — Claude (Opus 4.8) — Tri-repo migration audit + alignment plan + tooling stabilization
+
+### What was learned
+- **Tri-repo migration is Gate-2 partial, not complete.** A 3-agent audit mapped AlphaClaw capabilities → PT counterparts: PT controls AlphaClaw fully (adapter 25 methods + `alphaclaw_manager.py`); controls OpenClaw *via* AlphaClaw by design; but orama's `bin/mcp_servers/openclaw_bridge.py` still calls AlphaClaw **directly** (Gate-3 gap). 8 gaps remain. **Canonical roadmap now: [`Perpetua-Tools/docs/2026-05-31-tri-repo-alignment-completion-plan.md`](../../perplexity-api/Perpetua-Tools/docs/2026-05-31-tri-repo-alignment-completion-plan.md).**
+- **gbrain fixed:** `prepare:true` against the Supabase pooler caused `prepared statement does not exist` write failures → set `prepare:false`. DB URL lives in `~/.gbrain/.env` (source it for CLI; MCP variant may need reconnect). Resynced all 3 per-repo sources. See [`bin/orama-system/gstack/SKILL.md` §GBrain Ops](../bin/orama-system/gstack/SKILL.md). **CRG registry is empty** — build per repo before relying on it.
+- **macOS dup ` 2` files: ruled OUT OneDrive/iCloud** (both audited + cleared). Historical Finder/IDE keep-both, dormant. Repo-wide dedup: quarantined to `~/dup-quarantine-2026-05-31` (nothing deleted). Cross-ref the 2026-05-27 ghost-ref entry + AlphaClaw `wiki/07`.
+
+### Decisions made
+- `lib/mcp`+`lib/agents` retirement is **held until Gate 2 is green** (live authenticated smoke-test + local-agents tests). Code is superseded; ceremony is not done.
+- `orama-system` local checkout is **volatile** (vanished twice this session; cause not OneDrive/iCloud). A background guardian auto-restores it (`~/.orama-guard.log`, mirror `~/.orama-system-backup.git`).
+
+### Open questions
+- What process deletes `orama-system`? (user running `sudo fs_usage` to catch it.) The 8 Gate-2/3 gaps remain (see alignment plan).
+
+**Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [AlphaClaw Lessons](../../AlphaClaw/docs/Lessons.MD)
+
+---
+
+## 2026-06-02 — Claude (Sonnet 4.6) — gbrain checkpoint poisoning: rm -rf of repo root identified and fixed
+
+### What was learned
+
+**Answer to the open question from 2026-05-31:** The process deleting `orama-system` was `bun` (PID 48174554) at 09:59:13 — the gbrain autopilot's `gstack-memory-ingest.ts` `finally` block calling `cleanupStagingDir(repoRoot)`. This is **[garrytan/gstack issue #1802](https://github.com/garrytan/gstack/issues/1802)**, an upstream bug confirmed by `fs_usage` trace.
+
+**Root cause:** Autopilot jobs were repeatedly SIGTERM'd on 600s timeout (confirmed in logs: `Job 693/724/726 hit per-job timeout`). One interrupted run wrote `~/.gbrain/import-checkpoint.json` with `dir` = the repo root (CWD at SIGTERM time). The next sync's `decideResume()` function found the directory exists and is a directory, returned `{ kind: "resume" }` with no ownership validation, and the `finally` block did `rmSync(repoRoot, { recursive: true, force: true })`.
+
+**The fix** is a 10-line TypeScript change in two files — `decideResume()` in `gstack-gbrain-sync.ts` + `cleanupStagingDir()` in `gstack-memory-ingest.ts`. See [`docs/reference/gstack-pr-1802-fix.md`](reference/gstack-pr-1802-fix.md) and wiki [`14-gbrain-checkpoint-rm-rf-bug.md`](wiki/14-gbrain-checkpoint-rm-rf-bug.md).
+
+### What was done
+
+- orama-system restored from GitHub (all commits intact; no work lost this time)
+- Poisoned checkpoint deleted (`~/.gbrain/import-checkpoint.json`)
+- Shell guard added to `~/.zshrc` — runs on every shell start, deletes any poisoned checkpoint before it can fire
+- `.gbrain-source` pin files created for orama-system, PT, and AlphaClaw
+- gbrain sources re-synced (orama-src: +1 added, ~5 modified; AlphaClaw: +2; PT: +3)
+- Comment posted on garrytan/gstack#1802 confirming our case
+- Draft PR ready for submission in `docs/reference/gstack-pr-1802-fix.md`
+
+### Rules going forward
+
+1. **Delete `~/.gbrain/import-checkpoint.json` before any manual `/sync-gbrain`** — the shell guard handles automated sessions, but manual runs inside a repo directory are risky until upstream fix lands.
+2. **Run `/sync-gbrain` from a neutral directory** (not inside the indexed repo). CWD at SIGTERM time = what gets written to checkpoint.
+3. **Watch for `Job NNN hit per-job timeout` in `~/.gbrain/autopilot.err`** — two or more in a row = checkpoint is likely poison, delete it.
+4. **Never run `/sync-gbrain` twice without checking the checkpoint** — a stale checkpoint from a previous interrupted run survives until the next clean run or manual deletion.
+
+→ [wiki/14-gbrain-checkpoint-rm-rf-bug.md](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
+
+**Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [AlphaClaw Lessons](../../AlphaClaw/docs/Lessons.MD)
+
+---
+
+## 2026-06-02 (cont.) — Claude (Opus 4.8 MAX) — #1802 fix shipped via multi-channel steelman
+
+### What was done
+- Implemented the fail-closed staging-ownership guard for gstack#1802 on branch `fix/1802-staging-ownership-guard` (`lib/staging-guard.ts` + 3 wire-ins + 23 new test assertions; 32+23 green).
+- **Multi-channel steelman** (Mode-3 orama): dispatched the design to 4 heterogeneous external models in parallel — Gemini CLI, OpenAI Codex, OpenRouter/gpt-4o, Windows LM Studio qwen3.5-27b @ 192.168.254.104. Verified each channel's reachability with a live round-trip first; reported Antigravity/AgentRouter/Cursor as **not dispatchable** rather than faking them. 27b/9b on the Windows box timed out / returned empty once — logged honestly.
+- Panel split 3-1 on the `.gstack-staging` marker; adopted on the **fail-safe asymmetry** argument (missing marker → extra re-stage, never a wrong delete). All 4 converged: inevitable fix is upstream in gbrain (companion issue drafted).
+
+### Dogfood (eat-your-own)
+- Codified the method into [`reference/multi-channel-steelman.md`](reference/multi-channel-steelman.md) and the **Fail-Closed Trust Boundary** principle (prove ownership before any recurse-delete; design the false-negative/false-positive cost asymmetry in on purpose).
+- Submission package: [`reference/gstack-1802-submission-package.md`](reference/gstack-1802-submission-package.md).
+
+### Decisions
+- Ship the minimal inevitable core (guard+marker+tripwire); defer the capability-object refactor to a separate PR (ruthless refinement).
+- Version train unified at **0.9.9.9** (operator instruction); `api_server.py` already there; legacy API-baseline pins NOT auto-bumped without instruction.
+- gstack fork/push/PR is GATED on operator confirmation (outward-facing, public, attributable).
+
+→ [wiki/14-gbrain-checkpoint-rm-rf-bug.md](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
+
+---
+
+## 2026-06-02 (cont.) — Claude (Opus 4.8 MAX) — fork self-heal patcher (survive gstack/gbrain upgrades)
+
+### What was learned
+- **Shipping a fix on a local branch is not durable.** `gstack upgrade` / `gbrain upgrade` overwrite `~/.claude/skills/gstack`, silently reverting any not-yet-merged upstream fix. For #1802 that means the repo-deleting `rm -rf` bug returns on the next upgrade. A local branch protects you only until the next update.
+- **The patch file is its own detector.** `git apply --reverse --check` succeeds iff the fix is already fully present; forward `--check` succeeds iff it's cleanly applicable. Combined with a `MARKERS` grep (catches an upstream reword that keeps the symbol), this makes the patcher a **silent no-op the moment upstream merges** — it retires itself.
+- **`git apply --3way` >> hand-rolled sed anchors** for re-applying an additive fix across versions: it 3-way-merges against blob context (survives line drift), is **atomic** (never half-applies), and **fails loudly** on real conflict instead of clobbering other upstream changes.
+- **A git worktree's `.git` is a file (gitlink), not a directory** — `[ -d "$root/.git" ]` wrongly rejects worktrees. Use `git rev-parse --is-inside-work-tree`. (Caught by my own re-apply test — the test earned its keep.)
+
+### What was built
+- `scripts/fork-patches/apply-fork-patches.sh` — registry-driven, detection-gated, fail-closed self-heal driver (`--quiet`/`--dry-run`). Detect → apply (`--check` then `--3way`) → `VERIFY` (bun test) → rollback-on-fail.
+- `scripts/fork-patches/patches/gstack-1802-staging-guard.{patch,meta}` — first registered patch.
+- `~/.zshrc` shell-start trigger (silent no-op when patched; sibling to the #1802 checkpoint guard).
+- Folded into the **mcp-install** skill ("Fork Self-Heal" section) per operator request — no new skill.
+- Proven: against an unpatched worktree it applies + passes `bun test` (55) + creates `lib/staging-guard.ts`; second run is an idempotent no-op.
+
+### Decisions
+- Merge into existing `mcp-install` skill, not a standalone skill (operator).
+- Trigger = shell-start hook (most robust; catches any update path) over wrapping `gstack upgrade` (misses other paths).
+- Retire each patch by deleting its `.patch`+`.meta` once the upstream PR merges (MARKERS grep already neutralizes it first).
+
+→ Driver: [`../scripts/fork-patches/README.md`](../scripts/fork-patches/README.md) · Method: [`reference/multi-channel-steelman.md`](reference/multi-channel-steelman.md) · Incident: [`wiki/14-gbrain-checkpoint-rm-rf-bug.md`](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
