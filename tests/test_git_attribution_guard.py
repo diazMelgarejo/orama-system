@@ -14,7 +14,7 @@ def test_strip_coauthor_hook_removes_cursor_trailers(tmp_path):
     msg.write_text(
         "feat: example\n\n"
         "Co-authored-by: Cursor <cursoragent@cursor.com>\n"
-        "Co-authored-by: cyre <Lawrence@bettermind.ph>\n",
+        "Co-authored-by: cyre <Lawrence@cyre.me>\n",
         encoding="utf-8",
     )
     subprocess.run(
@@ -25,7 +25,7 @@ def test_strip_coauthor_hook_removes_cursor_trailers(tmp_path):
     text = msg.read_text(encoding="utf-8")
     # Cursor auto-injection trailer is stripped; approved identity is preserved
     assert "cursoragent@cursor.com" not in text
-    assert "bettermind.ph" in text
+    assert "Lawrence@cyre.me" in text
     assert "feat: example" in text
 
 
