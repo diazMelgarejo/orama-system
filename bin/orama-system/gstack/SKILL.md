@@ -123,18 +123,106 @@ A false positive is cheaper than a false negative.
 
 ## GBrain Configuration
 
-Configured by `/setup-gbrain` on 2026-04-25.
+Engine: **postgres** (Supabase pooler). Config: `~/.gbrain/config.json`.
+DB URL lives in `~/.gbrain/.env` as `GBRAIN_DATABASE_URL` — sourced by `~/.zshrc`
+and the MCP wrapper, NOT by non-interactive Bash shells.
 
-| Field | Value |
-|-------|-------|
-| Engine | pglite |
-| Config file | `~/.gbrain/config.json` (mode 0600) |
-| MCP registered | yes — user scope (`mcp__gbrain__*` tools active after Claude Code restart) |
-| Memory sync | full — `github.com/diazMelgarejo/gstack-brain-lawrencecyremelgarejo` |
-| Repo policy | read-write (orama-system imported, embedding running in background) |
+| Source | ID | Pages | Federated? |
+|--------|----|-------|-----------|
+| AlphaClaw | `gstack-code-claw-4dc4a8f3-aa4479` | ~478 | yes |
+| Perpetua-Tools | `gstack-code-ools-27e2b79c-df8a28` | ~725 | yes |
+| orama-system | `orama-src` | ~191 | no (isolated) |
+| periscope | `periscope-src` | ~14 | yes |
 
-To re-run setup or change engine: `/setup-gbrain`
+Re-run setup: `/setup-gbrain`
+
+## GBrain Ops — Failure Modes and Fixes
+
+> Hard-won 2026-05-30 after an agent rewrote git history across all three repos.
+
+### 0. Non-interactive shell missing DB URL
+
+`GBRAIN_DATABASE_URL` is in `~/.gbrain/.env`, not in the environment of a Bash tool
+shell. Always prefix:
+```bash
+set -a; source "$HOME/.gbrain/.env" 2>/dev/null; set +a
+```
+The "No database URL" message is diagnostic only — config.json intentionally omits
+the URL; env wins over config.
+
+### 1. Write failures: `prepared statement "x" does not exist` / `CONNECTION_CLOSED`
+
+Cause: `config.json` `"prepare": true` against a Supabase pooler. Pooled reconnects
+drop server-side prepared statements.
+
+Fix:
+```bash
+cp ~/.gbrain/config.json "~/.gbrain/config.json.bak.$(date +%Y%m%d-%H%M%S)"
+python3 -c "import json; p='$HOME/.gbrain/config.json'; d=json.load(open(p)); d['prepare']=False; json.dump(d,open(p,'w'),indent=2)"
+```
+Then restart any running gbrain process (autopilot, MCP server).
+
+### 2. Correct resync after a git history rewrite
+
+Two traps to avoid:
+- `gbrain sync` (pin-aware, from inside a repo with a space in the path) calls
+  `git pull` first and **fails silently** on `Terminal xCode`-style paths. Non-fatal
+  but pulls nothing.
+- `gbrain sync --repo "<path>"` without `--source` dumps into **`default`**, not the
+  repo's pinned source.
+
+**Always pass both `--repo` (quoted) and `--source`:**
+```bash
+set -a; source "$HOME/.gbrain/.env" 2>/dev/null; set +a
+OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
+PT_ROOT="${PERPETUA_TOOLS_PATH:-${PERPETUA_TOOLS_ROOT:-$OPENCLAW_HOME/Perpetua-Tools}}"
+ORAMA_ROOT="${ORAMA_INSTALL_DIR:-$REPO_ROOT}"
+gbrain sync --repo "$OPENCLAW_HOME/AlphaClaw" \
+            --source gstack-code-claw-4dc4a8f3-aa4479 --skip-failed
+gbrain sync --repo "$PT_ROOT" \
+            --source gstack-code-ools-27e2b79c-df8a28 --skip-failed
+gbrain sync --repo "$ORAMA_ROOT" \
+            --source orama-src --skip-failed
+gbrain sources list
+```
+
+`--skip-failed` also acknowledges stale `createVersion failed` history-rewrite
+failures. Verify with `gbrain doctor --fast` → health should reach ~95.
+
+### 3. Stale `createVersion failed` failures
+
+Acknowledged by `--skip-failed` (above). `gbrain doctor` then shows `all acknowledged`.
+
+### 4. `gbrain list` / `gbrain get` return wrong or empty results
+
+- Without `--source`, `list`/`get` target **`default`**, not the pinned source.
+- Slugs are **lowercased, `.md` stripped**: `docs/MIGRATION.md` → `docs/migration`.
+- Verify indexing via content search: `gbrain search "<distinctive first line>"`.
+
+### 5. Restarting a wedged autopilot daemon
+
+```bash
+PID=$(cat ~/.gbrain/autopilot.lock 2>/dev/null)
+kill "$PID" 2>/dev/null
+n=0; until ! kill -0 "$PID" 2>/dev/null; do n=$((n+1)); [ "$n" -ge 15 ] && kill -9 "$PID"; sleep 1; done
+rm -f ~/.gbrain/autopilot.lock
+pgrep -fl "gbrain autopilot" || echo "(stopped)"
+```
+Restart only after applying the `prepare:false` fix — otherwise it re-wedges
+on the same pooler write failures.
+
+### Quick Reference
+
+| Symptom | Fix |
+|---------|-----|
+| `No database URL` in a script | `set -a; source ~/.gbrain/.env; set +a` first |
+| `prepared statement does not exist` | set `"prepare": false` in config.json, restart procs |
+| Resync left per-repo source stale | `sync --repo "<quoted>" --source <id>` — never bare `--repo` |
+| `git pull failed in /Users/.../claude/` | non-fatal space-in-path; fs import still proceeds |
+| N unacknowledged `createVersion` failures | add `--skip-failed` to sync |
+| `gbrain get docs/MIGRATION` → not found | slug is lowercased: `docs/migration` |
+| autopilot wedged 12h+ | kill via lock pid, clear lock, apply `prepare:false`, restart |
 
 ## Symbol vs Text Search
 
-For SYMBOL questions (def, refs, callers, callees), use `gbrain code-def / code-refs / code-callers / code-callees` — these return graph data. For TEXT with exact strings, regex, or file globs, use Grep. Never default to Grep first for code questions.
+For SYMBOL questions (def, refs, callers, callees), use `gbrain code-def / code-refs / code-callers / code-callees` — graph data. For TEXT with exact strings, regex, or file globs, use Grep. Never default to Grep first for code questions.

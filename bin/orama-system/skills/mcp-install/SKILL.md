@@ -223,3 +223,28 @@ See [`../references/first-run-install.md`](../references/first-run-install.md) �
 **End-to-end path (bootstrap → graph → review):** [`../../docs/how-to/first-run-and-code-review.md`](../../docs/how-to/first-run-and-code-review.md)
 
 **PR multi-lens review:** after MCP stack is up, use [`../skills/code-review/references/review-lenses-pr.md`](../skills/code-review/references/review-lenses-pr.md) with dispatch in [`../skills/code-review/references/orchestration-dispatch.md`](../skills/code-review/references/orchestration-dispatch.md) and [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md) §5 (PR multi-lens code review).
+
+## Fork Self-Heal — keep our gstack/gbrain fixes applied across upgrades
+
+`gstack upgrade` / `gbrain upgrade` overwrite their install dirs with the released
+version. When we ship a fix UPSTREAM that has not merged yet (e.g. the #1802
+data-loss guard, [garrytan/gstack#1827](https://github.com/garrytan/gstack/pull/1827)),
+an upgrade silently reverts it and the bug returns. The fork self-heal re-applies
+our patches after any upgrade, idempotently and fail-closed.
+
+- **Driver:** [`../../../scripts/fork-patches/apply-fork-patches.sh`](../../../scripts/fork-patches/apply-fork-patches.sh)
+- **Registry:** `scripts/fork-patches/patches/<id>.patch` + `<id>.meta` (TARGET, MARKERS, VERIFY). Drop a new pair in to register a fork patch.
+- **Detection-gated:** if the fix is already present (we patched it, or upstream merged it — `MARKERS` grep, or the patch reverse-applies), it is a **silent no-op**. It only does real work right after an upgrade clobbered the fix.
+- **Safe:** `git apply --check` → apply → `--3way` on line drift; **atomic** (never half-applies); on conflict/drift it warns LOUDLY and rolls back the patch's files (never a blind clobber that regresses other upstream changes); after applying it runs `VERIFY` (e.g. `bun test`) and rolls back on failure.
+- **Trigger:** runs automatically on shell start from `~/.zshrc` (`apply-fork-patches.sh --quiet`), the most robust catch for any update path. Also invocable here manually:
+
+```bash
+# manual run (verbose) — preview, then heal:
+bash "$ORAMA_ROOT/scripts/fork-patches/apply-fork-patches.sh" --dry-run
+bash "$ORAMA_ROOT/scripts/fork-patches/apply-fork-patches.sh"
+```
+
+**Retire a patch** once its upstream PR merges: delete its `.patch` + `.meta`
+(the `MARKERS` grep already makes it a no-op, so retirement is just cleanup).
+
+Embodies the **Fail-Closed Trust Boundary** principle ([`../../../docs/reference/multi-channel-steelman.md`](../../../docs/reference/multi-channel-steelman.md)): prove the action is safe before taking it; if you cannot prove it, do nothing.

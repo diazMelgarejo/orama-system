@@ -1,4 +1,5 @@
 # Codex explorer agent role config
+# Claude Code runtime: two install paths exist — see ../../CLAUDE-CODE-RUNTIME.md before touching the binary
 [agent]
 role = "explorer"
 read_only = true

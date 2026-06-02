@@ -76,6 +76,10 @@ log "user guards installed under ${OPENCLAW_DIR}"
 
 if [[ -x "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh" ]]; then
   log "apply repo guards (orama + siblings)"
+  export ORAMA_SYSTEM_PATH="${ORAMA_SYSTEM_PATH:-$REPO_ROOT}"
+  export OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
+  export PERPETUA_TOOLS_PATH="${PERPETUA_TOOLS_PATH:-$OPENCLAW_HOME/Perpetua-Tools}"
+  export ALPHACLAW_INSTALL_DIR="${ALPHACLAW_INSTALL_DIR:-$OPENCLAW_HOME/AlphaClaw}"
   bash "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh"
 fi
 

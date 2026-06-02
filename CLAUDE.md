@@ -124,6 +124,7 @@ Full setup: [`docs/wiki/06-multi-agent-collab.md`](docs/wiki/06-multi-agent-coll
 - Official policy (authors + `Co-authored-by` allowlist): [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25) — install hooks with `bash scripts/git/install-local-hooks.sh`
 - Dated branches: `yyyy-mm-dd-NNN-brief-summary`
 - Never commit `.env`, `.env.local`, generated `.paths`
+- **No workstation paths in tracked files** (docs included): use `$OPENCLAW_ROOT`/`~`/`$REPO_ROOT`, never literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree. CI enforces via `scripts/review/repo_hygiene.py` — run it before committing docs with shell commands. See [wiki/08 § Portable paths](docs/wiki/08-git-hygiene-and-branching.md).
 - Full rules: [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md)
 
 ---
@@ -149,12 +150,12 @@ Both gbrain and code-review-graph now use **Ollama bge-m3** (1024-dim, local, fr
 `semantic_search_nodes` and `gbrain search` operate in the same vector space.
 
 **Current state (2026-05-24):**
-- gbrain: `ollama:bge-m3` (1024-dim) — `~/.gbrain/config.json`, Supabase pgvector — 4 sources (AlphaClaw 477pp, PT 482pp, orama-src, default)
+- gbrain: `ollama:bge-m3` (1024-dim) — `~/.gbrain/config.json`, Supabase pgvector — 5 sources (AlphaClaw 478pp, PT 725pp, orama-src 192pp, periscope 14pp, default 1599pp)
 - CRG: `openai` provider → Ollama `localhost:11434/v1` — wired via `.mcp.json` — **1 461 nodes, 1 257 bge-m3 embeddings, 12 communities** (orama-system graph)
-- Idempotent env setup: `bash bin/orama-system/mcp-install/scripts/setup-embeddings`
+- Idempotent env setup: `bash bin/orama-system/skills/mcp-install/scripts/setup-embeddings`
 - Toggle: `bash bin/orama-system/skills/code-review/scripts/crg-embed-mode [gbrain|local|status]`
 - **CRG graph build (MCP-only, not in install chain):** On fresh clone call `build_or_update_graph_tool` then `embed_graph_tool(provider="openai", model="bge-m3")` inside Claude Code
-- Reference docs: `bin/orama-system/mcp-install/references/setup-embeddings.md` + `bin/orama-system/skills/code-review/references/crg-embed-mode.md`
+- Reference docs: `bin/orama-system/skills/mcp-install/references/setup-embeddings.md` + `bin/orama-system/skills/code-review/references/crg-embed-mode.md`
 
 **Storage roadmap (decided 2026-05-15):**
 - v2.1: LanceDB + bge-m3 for RAG/session memory; v2.5: DuckDB for fleet analytics
@@ -176,11 +177,14 @@ identifier yet.
 `.gbrain-source` file in the repo root (kubectl-style context). Any
 `gbrain code-def`, `code-refs`, `code-callers`, `code-callees`, or `query`
 call from anywhere under this worktree routes to that source by default —
-no `--source` flag needed.
+no `--source` flag needed. Conductor sibling worktrees of the same repo
+each have their own pin and their own indexed pages, so semantic results
+match the actual code on disk in this worktree.
 
 Two indexed corpora available via the `gbrain` CLI:
 - This worktree's code (auto-pinned via `.gbrain-source` → `orama-src`).
-- `~/.gstack/` curated memory (registered as `gstack-brain-lawrencecyremelgarejo` source).
+- `~/.gstack/` curated memory (registered as `gstack-brain-lawrencecyremelgarejo` source via
+  the existing federation pipeline).
 
 Prefer gbrain when:
 - "Where is X handled?" / semantic intent, no exact string yet:
@@ -193,7 +197,12 @@ Prefer gbrain when:
     `gbrain search "<terms>" --source gstack-brain-lawrencecyremelgarejo`
 
 Grep is still right for known exact strings, regex, multiline patterns, and
-file globs. Run `/sync-gbrain` after meaningful code changes.
+file globs. If `gbrain` fails with `getaddrinfo ENOTFOUND` inside a Cursor
+agent sandbox, see [`orama-system/docs/local-env-catch-up.md`](orama-system/docs/local-env-catch-up.md)
+§ gbrain ENOTFOUND — use CRG MCP (`*_tool` names above) on the host, then scoped Read.
+Run `/sync-gbrain` after meaningful code changes; for ongoing
+auto-sync across all worktrees, run `gbrain autopilot --install` once per
+machine — gbrain's daemon handles incremental refresh on a schedule.
 
 <!-- gstack-gbrain-search-guidance:end -->
 

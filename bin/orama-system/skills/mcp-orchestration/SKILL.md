@@ -748,6 +748,8 @@ For Gemini-Analyzer use-cases (visual, large-context), use Gemini.
 For everything else, use OpenRouter free models or local ollama.
 For judgment, use Claude Sonnet 4.6 medium with prompt caching.
 
+**Applied pattern — multi-channel steelman:** for a small but high-stakes change, fan the design out to a heterogeneous model panel (verify reachability first) for adversarial review. Recipe: [`docs/reference/multi-channel-steelman.md`](../../../../docs/reference/multi-channel-steelman.md).
+
 ---
 
 ## Appendix: Legacy file disposition
