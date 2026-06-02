@@ -45,16 +45,55 @@ _PUBLIC_PORTAL_PREFIXES = (
 
 
 def control_plane_token() -> str:
+    """
+    Read the control-plane bearer token from the environment.
+    
+    The returned value is trimmed of leading and trailing whitespace and defaults to an empty string when the environment variable is not set.
+    
+    Returns:
+        The control-plane bearer token with surrounding whitespace removed, or an empty string if not configured.
+    """
     return os.getenv(ENV_TOKEN, "").strip()
 
 
-def auth_enforced() -> bool:
-    """Return True when control-plane bearer auth must be checked.
+def _resolve_perpetua_tools_root() -> Path | None:
+    """
+    Locate a Perpetua-Tools repository checkout on the filesystem.
+    
+    Checks the environment variables PERPETUA_TOOLS_ROOT, PERPETUATOOLSROOT, and PERPETUA_TOOLS_PATH (in that order) for a configured path; if none are set, searches a set of repo-relative candidate directories for a Perpetua-Tools checkout. Returns the discovered checkout root as a Path, or None if no valid checkout is found.
+         
+    Returns:
+        Path | None: Path to the Perpetua-Tools root when found, otherwise `None`.
+    """
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        raw = os.getenv(key, "").strip()
+        if raw:
+            p = Path(raw).expanduser()
+            if p.is_dir():
+                return p
+    repo_root = Path(__file__).resolve().parent.parent
+    for candidate in (
+        repo_root.parent / "perplexity-api" / "Perpetua-Tools",
+        repo_root.parent / "Perpetua-Tools",
+        repo_root.parent / "repos" / "Perpetua-Tools",
+    ):
+        if (candidate / "orchestrator" / "fastapi_app.py").is_file():
+            return candidate
+    return None
 
-    Auth is enforced when a token is configured, or when ORAMA_INSECURE_DEV is
-    explicitly disabled (production mode). When neither is set, auth stays off so
-    existing local stacks (start.sh, portal, tests) keep working until operators
-    opt in with ORAMA_CONTROL_PLANE_TOKEN and/or ORAMA_INSECURE_DEV=0.
+
+def auth_enforced() -> bool:
+    """
+    Determine whether control-plane bearer authentication is required.
+    
+    Auth is required when a control-plane token is configured or when
+    ORAMA_INSECURE_DEV is explicitly set to a production value (`0`, `false`, `no`).
+    Auth is disabled when ORAMA_INSECURE_DEV is explicitly set to an insecure value
+    (`1`, `true`, `yes`). When neither a token nor an explicit insecure setting
+    is provided, authentication is not enforced to preserve existing local workflows.
+    
+    Returns:
+        `true` if control-plane authentication must be enforced, `false` otherwise.
     """
     if control_plane_token():
         return True
@@ -67,11 +106,19 @@ def auth_enforced() -> bool:
 
 
 def _read_pt_persisted_token() -> str:
-    """Load PT bearer token written by ensure_control_plane_token on :8000."""
-    root = os.getenv("PERPETUA_TOOLS_ROOT", "").strip()
-    if not root:
+    """
+    Read a persisted control-plane token from a Perpetua-Tools checkout, if available.
+    
+    If a Perpetua-Tools root can be located, this function reads the file
+    `.state/control_plane_token` and returns its contents trimmed of whitespace.
+    
+    Returns:
+        str: The token string if present, otherwise an empty string.
+    """
+    pt_root = _resolve_perpetua_tools_root()
+    if pt_root is None:
         return ""
-    token_path = Path(root) / ".state" / "control_plane_token"
+    token_path = pt_root / ".state" / "control_plane_token"
     if token_path.is_file():
         return token_path.read_text(encoding="utf-8").strip()
     return ""

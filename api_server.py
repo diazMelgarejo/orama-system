@@ -49,11 +49,20 @@ _HARDWARE_POLICY_MARKERS = ("NEVER_MAC", "NEVER_WIN", "NEVER_CLOUD")
 
 
 def _client_safe_detail(exc: BaseException, *, fallback: str = "Request rejected") -> str:
-    """Log server-side; return a client-safe detail string (no tracebacks)."""
+    """Log server-side; return a client-safe detail string (no tracebacks).
+
+    The exception is logged with full detail server-side. The response only
+    carries a sanitised string: either a matched policy marker (a developer-
+    defined constant, not user input) or the caller-supplied fallback. This
+    prevents CodeQL py/stack-trace-exposure by ensuring exception-derived
+    data never flows directly to the HTTP response body.
+    """
     logger.warning("request rejected: %s", exc, exc_info=True)
-    msg = str(exc).strip()
-    if msg and any(marker in msg for marker in _HARDWARE_POLICY_MARKERS):
-        return msg[:500]
+    exc_str = str(exc)
+    for marker in _HARDWARE_POLICY_MARKERS:
+        if marker in exc_str:
+            # Return only the constant marker name — not the full exception string.
+            return f"Hardware policy: {marker}"
     return fallback
 
 

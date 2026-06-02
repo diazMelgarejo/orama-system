@@ -153,6 +153,24 @@ if [[ -f "$INSTALL_DIR/SKILL.md" ]]; then
   echo -e "    Claude CLI:     Auto-activates on relevant queries"
   echo -e "    Manual load:    ${BLUE}/skill ultrathink${RESET} in Claude Code"
   echo ""
+
+  # Layer 2: Claude Desktop MCPB (Perpetua-Tools — optional, no AlphaClaw required)
+  PT_INSTALL=""
+  for PT_CANDIDATE in \
+    "${PERPETUA_TOOLS_PATH:-}" \
+    "${PERPETUA_TOOLS_ROOT:-}" \
+    "${OPENCLAW_HOME:-$HOME/openclaw-v1}/Perpetua-Tools" \
+  ; do
+    if [[ -n "$PT_CANDIDATE" && -f "$PT_CANDIDATE/install.sh" ]]; then
+      PT_INSTALL="$PT_CANDIDATE/install.sh"
+      break
+    fi
+  done
+  if [[ -n "$PT_INSTALL" ]]; then
+    info "Installing Claude Desktop LLM extensions (Perpetua-Tools MCPB)..."
+    bash "$PT_INSTALL" --skip-desktop 2>/dev/null || warn "Perpetua-Tools MCPB install skipped (see Perpetua-Tools/install.sh)"
+  fi
+  echo ""
 else
   echo -e "  ${RED}Installation failed — SKILL.md not found${RESET}"
   exit 1

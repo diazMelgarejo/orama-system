@@ -228,6 +228,11 @@ US_HOST="$(_resolve_bind_host ORAMA_BIND_LAN ULTRATHINK_HOST)"
 PORTAL_HOST="$(_resolve_bind_host PORTAL_BIND_LAN PORTAL_HOST)"
 export PT_HOST US_HOST PORTAL_HOST
 
+# Portal and orama HTTP clients read PT's auto-generated bearer from this path.
+if [ -n "${PT_DIR:-}" ]; then
+  export PERPETUA_TOOLS_ROOT="${PT_DIR}"
+fi
+
 if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${PORTAL_BIND_LAN:-0}" = "1" ]; then
   _warn "svc" "LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network"
 fi
