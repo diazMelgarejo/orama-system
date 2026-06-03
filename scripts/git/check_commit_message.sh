@@ -19,6 +19,9 @@ ALLOWED_GMAIL_COAUTHORS=(
 )
 
 # Public agent / vendor domains (match email domain or subdomain).
+# Mainstream AI models and autonomous coding agents are allowed co-authors — the
+# only hard ban is the VERBOTEN pattern (private pattern lib). Extend as new
+# mainstream agents appear; keep in sync with scripts/git/check_identity.sh.
 WELL_KNOWN_COAUTHOR_DOMAIN_SUFFIXES=(
   openai.com
   anthropic.com
@@ -31,6 +34,14 @@ WELL_KNOWN_COAUTHOR_DOMAIN_SUFFIXES=(
   azure.com
   perplexity.ai
   x.ai
+  coderabbit.ai
+  mistral.ai
+  deepseek.com
+  cohere.com
+  meta.com
+  sourcegraph.com
+  devin.ai
+  codeium.com
 )
 
 # Match in Co-authored-by display name / address when domain alone is ambiguous.
@@ -48,6 +59,17 @@ WELL_KNOWN_COAUTHOR_NAME_MARKERS=(
   microsoft
   perplexity
   grok
+  coderabbit
+  coderabbitai
+  mistral
+  deepseek
+  cohere
+  llama
+  devin
+  cody
+  codeium
+  windsurf
+  qwen
 )
 
 email_domain_ok() {

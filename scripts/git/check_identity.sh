@@ -38,6 +38,14 @@ WELL_KNOWN_AUTHOR_DOMAIN_SUFFIXES=(
   azure.com
   perplexity.ai
   x.ai
+  coderabbit.ai
+  mistral.ai
+  deepseek.com
+  cohere.com
+  meta.com
+  sourcegraph.com
+  devin.ai
+  codeium.com
 )
 
 author_domain_ok() {
