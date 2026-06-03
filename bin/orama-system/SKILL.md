@@ -32,6 +32,8 @@ sub_skills:
     trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
   - path: skills/no-sleep-chains/SKILL.md
     trigger: "sleep && cmd, sleep chain, wait for background task, poll output file, wait for npm install, wait for claude update, run_in_background polling, until loop, how to wait for a process"
+  - path: skills/git-reanchor/SKILL.md
+    trigger: "branches 600 behind, orphaned branch after rewrite, re-anchor branch to main, reconcile branches after force-push, recover deleted branch, byte-identical common ancestor, branches all became the same, git history rewrite recovery, branches lost common ancestor"
   - path: gstack/SKILL.md
     trigger: "fix gbrain, resync gbrain, gbrain sync failed, prepared statement does not exist, CONNECTION_CLOSED supabase pooler, No database URL, GBRAIN_DATABASE_URL, gbrain doctor failures, createVersion failed, autopilot wedged, gbrain after history rewrite, gbrain list empty, gbrain prepare false, gbrain source pin"
 ---
