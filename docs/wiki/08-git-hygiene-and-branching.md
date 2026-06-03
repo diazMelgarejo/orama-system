@@ -102,12 +102,22 @@ git config user.email "codex@openai.com"
 | --- | --- |
 | **Primary author** | Any name with `diazMelgarejo@gmail.com` or `Lawrence@cyre.me`, or `Codex` + `codex@openai.com` (`scripts/git/check_identity.sh`) |
 | **Allowed co-author domains** | `openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com` (and subdomains) |
-| **Additional allowed AI/vendor domains** | `google.dev`, `perplexity.ai`, `x.ai` (and subdomains) |
-| **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `google`, `copilot`, `openai`, `github`, `microsoft`, `perplexity`, `grok` (in the trailer line) |
+| **Additional allowed AI/vendor domains** | `google.dev`, `perplexity.ai`, `x.ai`, `coderabbit.ai`, `mistral.ai`, `deepseek.com`, `cohere.com`, `meta.com`, `sourcegraph.com`, `devin.ai`, `codeium.com` (and subdomains) |
+| **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `google`, `copilot`, `openai`, `github`, `microsoft`, `perplexity`, `grok`, `coderabbit`, `coderabbitai`, `mistral`, `deepseek`, `cohere`, `llama`, `devin`, `cody`, `codeium`, `windsurf`, `qwen` (in the trailer line) |
 | **Allowed `@gmail.com` co-authors** | `diazMelgarejo@gmail.com`, `Lawrence@cyre.me` only |
 | **Rejected** | Any other `Co-authored-by` line with `@gmail.com` (unattributable personal inboxes) |
 
 Corporate and vendor agent domains are identifiable; random Gmail co-authors are not attributable and were used for mistaken or non-policy attribution.
+
+**Policy (2026-06-03): mainstream AI models and autonomous coding agents are allowed**
+as authors, committers, and `Co-authored-by` — including `Cursor Agent <cursoragent@cursor.com>`
+and `CodeRabbit <noreply@coderabbit.ai>`. The agent *identity* is never the thing we ban.
+The single hard ban is the VERBOTEN auto-injected pattern (held in the gitignored private
+pattern lib, stripped by `commit-msg.strip-coauthor` and caught by `audit_attribution.sh`
+`banned_attribution_hit`). Cursor-environment detection (`is_cursor_environment` /
+`is_cursor_agent`) is only a *proxy* for when to run the guard, since the Cursor environment
+is where the VERBOTEN gets injected. Extend the allowlists above as new mainstream agents
+appear; keep `check_commit_message.sh`, `check_identity.sh`, and `repo_hygiene.py` in sync.
 
 
 ### Allowed bot committers (history scans only)

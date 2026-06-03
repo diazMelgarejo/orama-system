@@ -15,7 +15,11 @@ APPROVED_IDENTITIES = {
     ("cyre", "diazMelgarejo@gmail.com"),
     ("cyre", "Lawrence@bettermind.ph"),
     ("Codex", "codex@openai.com"),
+    # Mainstream AI coding agents are allowed authors/committers (the hard ban is
+    # the VERBOTEN pattern, not the agent identity). cursoragent@cursor.com stays
+    # approved; CodeRabbit commits as a GitHub bot but is listed for parity.
     ("Cursor Agent", "cursoragent@cursor.com"),
+    ("CodeRabbit", "noreply@coderabbit.ai"),
 }
 # Keep in sync with scripts/git/check_identity.sh (local hooks + pre-commit).
 FORBIDDEN_TOKENS: tuple[()] = ()
@@ -512,6 +516,12 @@ def scan_docv2_ordinal_collision(root: Path) -> list[str]:
 
 
 def check_git_internal_junk(root: Path) -> list[str]:
+    """
+    Detect macOS metadata files stored under the repository's Git refs directory.
+    
+    Returns:
+        list[str]: A list of error messages, one for each `.DS_Store` file found under `.git/refs`, or an empty list if the refs directory does not exist.
+    """
     git_dir = root / ".git"
     refs_dir = git_dir / "refs"
     if not refs_dir.exists():
@@ -522,10 +532,58 @@ def check_git_internal_junk(root: Path) -> list[str]:
     ]
 
 
+def is_cursor_environment(name: str, email: str) -> bool:
+    """
+    Detect whether the current environment or provided identity indicates a Cursor agent commit.
+
+    This returns true when one of the Cursor-specific environment variables is present (CURSOR_AGENT, CURSOR_TRACE_ID, CURSOR_SESSION_ID) or when the provided git identity appears Cursor-related (the name contains "cursor" or the email ends with "@cursor.com" or "@cursor.sh"). Mirrors the is_cursor_agent() gate in scripts/git/check_identity.sh — keep the two in sync.
+
+    Detection is only a PROXY for *when* to run the attribution guard: the Cursor
+    environment is the one place the VERBOTEN personal email gets auto-injected as
+    a co-author, so that is where we enforce. Cursor Agent itself is an allowed
+    author/co-author identity; the actual hard ban is the VERBOTEN pattern (held in
+    the private pattern lib + stripped by commit-msg.strip-coauthor).
+
+    Parameters:
+        name (str): Git committer name (e.g., output of `git config user.name`).
+        email (str): Git committer email (e.g., output of `git config user.email`).
+
+    Returns:
+        true if the environment or identity indicates a Cursor agent commit, false otherwise.
+    """
+    for var in ("CURSOR_AGENT", "CURSOR_TRACE_ID", "CURSOR_SESSION_ID"):
+        if os.getenv(var):
+            return True
+    name_lc = name.lower()
+    email_lc = email.lower()
+    if "cursor" in name_lc:
+        return True
+    if email_lc.endswith("@cursor.com") or email_lc.endswith("@cursor.sh"):
+        return True
+    return False
+
+
 def check_identity(root: Path) -> list[str]:
+    """
+    Check the repository's configured git user identity and enforce approved Cursor-agent identities.
+    
+    Parameters:
+        root (Path): Repository root where git configuration is read.
+    
+    Returns:
+        list[str]: A list of error messages describing identity problems; empty if the configured identity is acceptable or enforcement is not applicable.
+    """
     name = run_git(root, "config", "user.name").stdout.strip()
     email = run_git(root, "config", "user.email").stdout.strip()
     if os.getenv("GITHUB_ACTIONS") == "true" and not name and not email:
+        return []
+    # Identity enforcement is scoped to Cursor agent commits only — Cursor is the
+    # only environment that injects non-approved authors / co-author trailers.
+    # Human, Codex, and Claude CLI commits pass through unchecked (mirrors
+    # scripts/git/check_identity.sh). Every OTHER hygiene check in this file
+    # (forbidden identity tokens, workstation paths, secrets, bidi, links)
+    # stays global and unconditional.
+    if not is_cursor_environment(name, email):
         return []
     if (name, email) not in APPROVED_IDENTITIES:
         expected = " or ".join(f"{n} <{e}>" for n, e in sorted(APPROVED_IDENTITIES))
