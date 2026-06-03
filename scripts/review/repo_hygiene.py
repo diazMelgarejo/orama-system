@@ -15,7 +15,6 @@ APPROVED_IDENTITIES = {
     ("cyre", "diazMelgarejo@gmail.com"),
     ("cyre", "Lawrence@bettermind.ph"),
     ("Codex", "codex@openai.com"),
-    ("Cursor Agent", "cursoragent@cursor.com"),
 }
 # Keep in sync with scripts/git/check_identity.sh (local hooks + pre-commit).
 FORBIDDEN_TOKENS: tuple[()] = ()
@@ -531,17 +530,17 @@ def check_git_internal_junk(root: Path) -> list[str]:
 def is_cursor_environment(name: str, email: str) -> bool:
     """
     Detect whether the current environment or provided identity indicates a Cursor agent commit.
-    
-    This returns true when one of the Cursor-specific environment variables is present (CURSOR_AGENT, CURSOR_TRACE_ID, CURSOR_SESSION_ID) or when the provided git identity appears Cursor-related (the name contains "cursor" or the email ends with "@cursor.com" or "@cursor.sh").
-    
+
+    This returns true when one of the Cursor-specific environment variables is present (CURSOR_TRACE_ID, CURSOR_SESSION_ID) or when the provided git identity appears Cursor-related (the name contains "cursor" or the email ends with "@cursor.com" or "@cursor.sh").
+
     Parameters:
         name (str): Git committer name (e.g., output of `git config user.name`).
         email (str): Git committer email (e.g., output of `git config user.email`).
-    
+
     Returns:
         true if the environment or identity indicates a Cursor agent commit, false otherwise.
     """
-    for var in ("CURSOR_AGENT", "CURSOR_TRACE_ID", "CURSOR_SESSION_ID"):
+    for var in ("CURSOR_TRACE_ID", "CURSOR_SESSION_ID"):
         if os.getenv(var):
             return True
     name_lc = name.lower()
