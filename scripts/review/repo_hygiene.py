@@ -15,6 +15,11 @@ APPROVED_IDENTITIES = {
     ("cyre", "diazMelgarejo@gmail.com"),
     ("cyre", "Lawrence@bettermind.ph"),
     ("Codex", "codex@openai.com"),
+    # Mainstream AI coding agents are allowed authors/committers (the hard ban is
+    # the VERBOTEN pattern, not the agent identity). cursoragent@cursor.com stays
+    # approved; CodeRabbit commits as a GitHub bot but is listed for parity.
+    ("Cursor Agent", "cursoragent@cursor.com"),
+    ("CodeRabbit", "noreply@coderabbit.ai"),
 }
 # Keep in sync with scripts/git/check_identity.sh (local hooks + pre-commit).
 FORBIDDEN_TOKENS: tuple[()] = ()
@@ -531,7 +536,13 @@ def is_cursor_environment(name: str, email: str) -> bool:
     """
     Detect whether the current environment or provided identity indicates a Cursor agent commit.
 
-    This returns true when one of the Cursor-specific environment variables is present (CURSOR_TRACE_ID, CURSOR_SESSION_ID) or when the provided git identity appears Cursor-related (the name contains "cursor" or the email ends with "@cursor.com" or "@cursor.sh").
+    This returns true when one of the Cursor-specific environment variables is present (CURSOR_AGENT, CURSOR_TRACE_ID, CURSOR_SESSION_ID) or when the provided git identity appears Cursor-related (the name contains "cursor" or the email ends with "@cursor.com" or "@cursor.sh"). Mirrors the is_cursor_agent() gate in scripts/git/check_identity.sh — keep the two in sync.
+
+    Detection is only a PROXY for *when* to run the attribution guard: the Cursor
+    environment is the one place the VERBOTEN personal email gets auto-injected as
+    a co-author, so that is where we enforce. Cursor Agent itself is an allowed
+    author/co-author identity; the actual hard ban is the VERBOTEN pattern (held in
+    the private pattern lib + stripped by commit-msg.strip-coauthor).
 
     Parameters:
         name (str): Git committer name (e.g., output of `git config user.name`).
@@ -540,7 +551,7 @@ def is_cursor_environment(name: str, email: str) -> bool:
     Returns:
         true if the environment or identity indicates a Cursor agent commit, false otherwise.
     """
-    for var in ("CURSOR_TRACE_ID", "CURSOR_SESSION_ID"):
+    for var in ("CURSOR_AGENT", "CURSOR_TRACE_ID", "CURSOR_SESSION_ID"):
         if os.getenv(var):
             return True
     name_lc = name.lower()
