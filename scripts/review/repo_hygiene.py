@@ -522,10 +522,37 @@ def check_git_internal_junk(root: Path) -> list[str]:
     ]
 
 
+def is_cursor_environment(name: str, email: str) -> bool:
+    """True when the commit is being made by a Cursor agent.
+
+    Cursor sets these env vars in its agent/cloud subprocess; we also treat a
+    cursor-flavored committer identity as a positive signal. Mirrors the
+    is_cursor_agent() gate in scripts/git/check_identity.sh.
+    """
+    for var in ("CURSOR_AGENT", "CURSOR_TRACE_ID", "CURSOR_SESSION_ID"):
+        if os.getenv(var):
+            return True
+    name_lc = name.lower()
+    email_lc = email.lower()
+    if "cursor" in name_lc:
+        return True
+    if email_lc.endswith("@cursor.com") or email_lc.endswith("@cursor.sh"):
+        return True
+    return False
+
+
 def check_identity(root: Path) -> list[str]:
     name = run_git(root, "config", "user.name").stdout.strip()
     email = run_git(root, "config", "user.email").stdout.strip()
     if os.getenv("GITHUB_ACTIONS") == "true" and not name and not email:
+        return []
+    # Identity enforcement is scoped to Cursor agent commits only — Cursor is the
+    # only environment that injects non-approved authors / co-author trailers.
+    # Human, Codex, and Claude CLI commits pass through unchecked (mirrors
+    # scripts/git/check_identity.sh). Every OTHER hygiene check in this file
+    # (forbidden identity tokens, workstation paths, secrets, bidi, links)
+    # stays global and unconditional.
+    if not is_cursor_environment(name, email):
         return []
     if (name, email) not in APPROVED_IDENTITIES:
         expected = " or ".join(f"{n} <{e}>" for n, e in sorted(APPROVED_IDENTITIES))
