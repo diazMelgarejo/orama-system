@@ -512,6 +512,12 @@ def scan_docv2_ordinal_collision(root: Path) -> list[str]:
 
 
 def check_git_internal_junk(root: Path) -> list[str]:
+    """
+    Detect macOS metadata files stored under the repository's Git refs directory.
+    
+    Returns:
+        list[str]: A list of error messages, one for each `.DS_Store` file found under `.git/refs`, or an empty list if the refs directory does not exist.
+    """
     git_dir = root / ".git"
     refs_dir = git_dir / "refs"
     if not refs_dir.exists():
@@ -523,11 +529,17 @@ def check_git_internal_junk(root: Path) -> list[str]:
 
 
 def is_cursor_environment(name: str, email: str) -> bool:
-    """True when the commit is being made by a Cursor agent.
-
-    Cursor sets these env vars in its agent/cloud subprocess; we also treat a
-    cursor-flavored committer identity as a positive signal. Mirrors the
-    is_cursor_agent() gate in scripts/git/check_identity.sh.
+    """
+    Detect whether the current environment or provided identity indicates a Cursor agent commit.
+    
+    This returns true when one of the Cursor-specific environment variables is present (CURSOR_AGENT, CURSOR_TRACE_ID, CURSOR_SESSION_ID) or when the provided git identity appears Cursor-related (the name contains "cursor" or the email ends with "@cursor.com" or "@cursor.sh").
+    
+    Parameters:
+        name (str): Git committer name (e.g., output of `git config user.name`).
+        email (str): Git committer email (e.g., output of `git config user.email`).
+    
+    Returns:
+        true if the environment or identity indicates a Cursor agent commit, false otherwise.
     """
     for var in ("CURSOR_AGENT", "CURSOR_TRACE_ID", "CURSOR_SESSION_ID"):
         if os.getenv(var):
@@ -542,6 +554,15 @@ def is_cursor_environment(name: str, email: str) -> bool:
 
 
 def check_identity(root: Path) -> list[str]:
+    """
+    Check the repository's configured git user identity and enforce approved Cursor-agent identities.
+    
+    Parameters:
+        root (Path): Repository root where git configuration is read.
+    
+    Returns:
+        list[str]: A list of error messages describing identity problems; empty if the configured identity is acceptable or enforcement is not applicable.
+    """
     name = run_git(root, "config", "user.name").stdout.strip()
     email = run_git(root, "config", "user.email").stdout.strip()
     if os.getenv("GITHUB_ACTIONS") == "true" and not name and not email:
