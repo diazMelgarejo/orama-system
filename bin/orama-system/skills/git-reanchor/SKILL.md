@@ -107,19 +107,35 @@ The branch shows `+K/-M` against main: its `K` real commits above the shared anc
 > merge"` is almost always an **untracked/generated file** (`__pycache__`, `.pyc`,
 > build output) colliding with a replayed add — `git clean -fdq` first, then retry.
 
-## Section 5 — Verification (every branch, no orphans)
+## Section 5 — Detection & verification (use TREE-twins, NOT graph merge-base)
+
+⚠️ **CRITICAL — the trap that caused handwaving (2026-06-04):** `git merge-base` is a
+**graph** proxy. After a rewrite/rebundle, a branch can show `merge-base != root` and
+"+472 ahead" yet its **content converges with main 1–2 commits back** (byte-identical
+tree-twin on a divergent SHA line). Concluding "not orphaned, nothing to do" from
+`merge-base != root` is WRONG — it hides exactly the branches that need re-anchoring.
+**The real test is the tree-twin search (Sections 3–4), per branch, always.**
 
 ```bash
-MAIN=$(git rev-parse origin/main)
+MAIN=$(git rev-parse origin/main); git log "$MAIN" --format='%H %T' > /tmp/main_trees.txt
 for b in <branches>; do
-  mb=$(git merge-base origin/$b $MAIN)
-  ab=$(git rev-list --left-right --count $MAIN...origin/$b)   # behind / ahead
-  root=$(git rev-list --max-parents=0 origin/main | head -1)
-  [ "$mb" = "$root" ] && echo "$b ORPHAN ✗" || echo "$b ok mb=${mb:0:9} $ab"
+  tip=$(git rev-parse origin/$b)
+  # PRIMARY: deepest first-parent commit whose TREE has a twin in main + how far up:
+  C=""; DT=""; above=0
+  for c in $(git rev-list --first-parent "$tip" | head -250); do
+    m=$(awk -v t="$(git rev-parse ${c}^{tree})" '$2==t{print $1;exit}' /tmp/main_trees.txt)
+    [ -n "$m" ] && { C="$c"; DT="$m"; break; }; above=$((above+1))
+  done
+  if [ -z "$DT" ]; then echo "$b NO-TWIN (truly disjoint — investigate)";
+  elif [ "$C" = "$(git rev-parse origin/$b)" ] && git merge-base --is-ancestor "$DT" "$MAIN"; then
+    echo "$b already-anchored (tip is in-main commit ${DT:0:9})"
+  else echo "$b NEEDS-REANCHOR: graft $above commit(s) onto twin ${DT:0:9}"; fi
 done
 ```
 
-Pass = no branch's merge-base is the root commit; each shares a recent ancestor.
+Pass = every branch either is already an in-main ancestor OR has been grafted onto its
+twin (Section 4). A branch reporting `NEEDS-REANCHOR` is the work — even if its naive
+`merge-base` is not the root. Never report "no orphans" without having run this per-branch.
 
 ## Section 6 — Do NOT confuse re-anchor with content-merge
 
