@@ -2502,3 +2502,24 @@ None — rule is fully specified and enforced at the shell level.
 - Retire each patch by deleting its `.patch`+`.meta` once the upstream PR merges (MARKERS grep already neutralizes it first).
 
 → Driver: [`../scripts/fork-patches/README.md`](../scripts/fork-patches/README.md) · Method: [`reference/multi-channel-steelman.md`](reference/multi-channel-steelman.md) · Incident: [`wiki/14-gbrain-checkpoint-rm-rf-bug.md`](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
+
+---
+
+## 2026-06-04 — Re-anchoring orphaned branches after a `main` history rewrite (byte-identical twin)
+
+**Context.** After the PR #70 rewrite (squash-rebundle of post-#60 work), ~50 branches showed as "600 commits behind / orphaned" — they descended from pre-rewrite SHAs no longer in `main`. We restored 12 deleted refs for audit, then needed to reconcile them to the clean line.
+
+**The journey (incl. the two wrong turns):**
+1. **Wrong fix #1 — flatten.** Reset all branches to `origin/main`. Made every branch *identical* to HEAD ("why are all branches the same???"). Destroys identity. Reverted.
+2. **Wrong idea — `git replace --graft`.** Re-parents locally but replace-refs are local-only → never show on GitHub. Not a remote fix.
+3. **Right fix — byte-identical twin re-anchor.** A rewrite gives every old commit a content-twin (same tree `%T`, new SHA) in new `main`. Build a tree index (`git log origin/main --format='%H %T'`); for each branch tip find the commit with the identical tree and point the branch there (a real ancestor of main → `+0/-N`, distinct per branch). No exact tip-twin (recent rebundled commits)? Walk first-parent to the deepest twin ancestor and `git rebase --onto <twin> <base>` — conflict-free because base trees are byte-identical — then force-push (`+K/-M` above the shared ancestor).
+
+**Results:** 11/11 re-anchored — 8 to exact tip-twins, 3 grafted onto the #60 twin `146a416`. Zero orphans; each shares a real recent ancestor with main; none flattened.
+
+**Gotchas:**
+- Mid-rebase `"local changes would be overwritten by merge"` = untracked/generated file collision → `git clean -fdq` first.
+- `git fetch --prune` with the default refspec deletes the `refs/pull/*` recovery vault — re-fetch with the explicit `+refs/pull/*/head:refs/remotes/origin/pr/*`.
+- Re-anchor moves the *ref* for a clean graph; it does NOT merge branch content into main (that would regress the canonical tree). Merge only genuinely-unique forward work via a reviewed PR.
+- Always wrap network git ops in a `timeout` (a `git fetch upstream` once hung ~14h).
+
+**Canonical skill:** [`../bin/orama-system/skills/git-reanchor/SKILL.md`](../bin/orama-system/skills/git-reanchor/SKILL.md) · Fork variant: [`wiki/13-alphaclaw-fork-contrib-branches.md`](wiki/13-alphaclaw-fork-contrib-branches.md) · Rewrite companion: [`../bin/orama-system/skills/expunge-git/SKILL.md`](../bin/orama-system/skills/expunge-git/SKILL.md)
