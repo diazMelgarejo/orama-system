@@ -358,3 +358,21 @@ def test_scan_macos_ghost_git_refs_no_git_dir(tmp_path):
 
 def test_identity_check_script_is_shell_valid():
     subprocess.check_call(["bash", "-n", "scripts/git/check_identity.sh"], cwd=ROOT)
+
+
+def test_identity_enforcement_is_scoped_to_cursor(monkeypatch):
+    """Identity enforcement applies only to Cursor agents; humans/Codex/Claude
+    pass through. Mirrors is_cursor_agent() in scripts/git/check_identity.sh."""
+    repo_hygiene = load_repo_hygiene()
+    for var in ("CURSOR_AGENT", "CURSOR_TRACE_ID", "CURSOR_SESSION_ID"):
+        monkeypatch.delenv(var, raising=False)
+
+    bad = ("Random Person", "random@gmail.com")
+    # Non-Cursor environment: not detected as Cursor -> identity not enforced.
+    assert repo_hygiene.is_cursor_environment(*bad) is False
+    # Any Cursor env var present -> detected -> identity enforced.
+    monkeypatch.setenv("CURSOR_AGENT", "1")
+    assert repo_hygiene.is_cursor_environment(*bad) is True
+    monkeypatch.delenv("CURSOR_AGENT", raising=False)
+    # Cursor-flavored identity is a positive signal even without env vars.
+    assert repo_hygiene.is_cursor_environment("Cursor Agent", "cursoragent@cursor.com") is True
