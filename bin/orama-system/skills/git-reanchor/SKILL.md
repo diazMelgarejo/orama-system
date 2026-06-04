@@ -122,7 +122,10 @@ for b in <branches>; do
   tip=$(git rev-parse origin/$b)
   # PRIMARY: deepest first-parent commit whose TREE has a twin in main + how far up:
   C=""; DT=""; above=0
-  for c in $(git rev-list --first-parent "$tip" | head -250); do
+  # Walk the FULL first-parent history (no head cap): a deeper-than-N twin is
+  # exactly the case a truncated scan would falsely report as NO-TWIN — that
+  # truncation IS the handwaving this section guards against.
+  for c in $(git rev-list --first-parent "$tip"); do
     m=$(awk -v t="$(git rev-parse ${c}^{tree})" '$2==t{print $1;exit}' /tmp/main_trees.txt)
     [ -n "$m" ] && { C="$c"; DT="$m"; break; }; above=$((above+1))
   done
