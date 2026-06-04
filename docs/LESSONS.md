@@ -2523,3 +2523,27 @@ None — rule is fully specified and enforced at the shell level.
 - Always wrap network git ops in a `timeout` (a `git fetch upstream` once hung ~14h).
 
 **Canonical skill:** [`../bin/orama-system/skills/git-reanchor/SKILL.md`](../bin/orama-system/skills/git-reanchor/SKILL.md) · Fork variant: [`wiki/13-alphaclaw-fork-contrib-branches.md`](wiki/13-alphaclaw-fork-contrib-branches.md) · Rewrite companion: [`../bin/orama-system/skills/expunge-git/SKILL.md`](../bin/orama-system/skills/expunge-git/SKILL.md)
+
+---
+
+## 2026-06-04 — Meta: anti-handwaving (clarify intent + use the real method, not a proxy)
+
+**The deeper failure behind the branch work.** Across the orama/AlphaClaw/periscope
+reconciliation the agent handwaved **three times**, each corrected by the user, not the agent:
+1. "No data loss → nothing to restore" (user wanted refs reconciled regardless).
+2. "No orphans, because `git merge-base != root`" — a **graph proxy**. The real question was
+   *content* convergence: every branch had a **byte-identical tree-twin** in main (content
+   matched 1–79 commits back) while the SHA graph showed "+472 ahead." merge-base HID it.
+3. Acted on the wrong mechanic for "re-anchor" (flattened branches to HEAD) without
+   confirming what the user meant.
+
+**Root cause:** substituting a cheap proxy for the real question, and acting on a first-pass
+interpretation, without confirming intent or reflecting. = **Failure Mode 7 (Handwaving).**
+
+**Fix (now encoded in AFRP):** the **Intent-Verification Gate** — on interpretation risk, or
+before any "nothing to do" conclusion, **AskUserQuestion FIRST and reflect**; replace the
+proxy with the method that truly answers the question (tree-twin search, not merge-base);
+trust the user's domain signal over a first-pass check. Don't assert "fine/done" from a
+narrow check — name what was actually verified.
+
+→ AFRP gate: [`../bin/orama-system/afrp/SKILL.md`](../bin/orama-system/afrp/SKILL.md) § Intent-Verification · Catalog: [`../bin/orama-system/afrp/failure-modes.md`](../bin/orama-system/afrp/failure-modes.md) § Failure Mode 7 · Skill fix: [`../bin/orama-system/skills/git-reanchor/SKILL.md`](../bin/orama-system/skills/git-reanchor/SKILL.md) § 5 (tree-twins, not merge-base)
