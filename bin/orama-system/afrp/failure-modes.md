@@ -103,6 +103,23 @@ This document provides extended examples and recovery procedures for each AFRP f
 
 ---
 
+## Failure Mode 7: Handwaving (Proxy Conclusion)
+
+**Trigger:** Asserting "already fine / no problem / nothing to do / done" from a cheap proxy check, OR acting on the first interpretation of an ambiguous request, without confirming the user's intent or running the method that actually answers the question.
+
+**Mechanism:** The agent substitutes an easy-to-compute signal for the real question and reports the proxy's verdict with confidence. When the user insists otherwise, it re-explains the proxy instead of switching methods. Misinterpreting intent compounds it — the agent "solves" a problem the user didn't ask about.
+
+**Symptom:** The user corrects the agent repeatedly ("you misunderstood", "did you even check", "we already did this"). Each correction reveals the agent never confirmed intent or used the right tool.
+
+**Example (2026-06-04, real):**
+- Proxy: `git merge-base != root` ⇒ agent declares "no orphaned branches, nothing to do."
+- Real question: does the branch's *content* converge with main? The tree-twin search showed every branch HAD a byte-identical twin needing re-anchor.
+- Also: user said "re-anchor"; agent *flattened* branches to HEAD (wrong mechanic) without confirming the meaning.
+
+**Recovery:** Stop. Run the **Intent-Verification Gate** (`SKILL.md`): clarify intent via AskUserQuestion FIRST when there's interpretation risk or before any negative conclusion; replace the proxy with the method that truly answers the question; trust the user's domain signal over a first-pass check.
+
+---
+
 ## Diagnostic Decision Tree
 
 ```
@@ -112,5 +129,6 @@ Response feels wrong but you can't pinpoint why?
 ├── Does it work for 10 different audiences? → Failure Mode 1 (Slop) or 5 (Omnibus)
 ├── Can the audience act on it immediately? → Failure Mode 2 (Abstraction Mismatch)
 ├── Remove citations — does advice change? → Failure Mode 3 (Citation Theater)
-└── Was the query classified correctly? → Failure Mode 6 (Premature Confidence)
+├── Was the query classified correctly? → Failure Mode 6 (Premature Confidence)
+└── Did I confirm intent + use the real method (not a proxy)? → Failure Mode 7 (Handwaving)
 ```
