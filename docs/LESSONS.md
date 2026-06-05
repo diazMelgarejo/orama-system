@@ -2547,3 +2547,53 @@ trust the user's domain signal over a first-pass check. Don't assert "fine/done"
 narrow check — name what was actually verified.
 
 → AFRP gate: [`../bin/orama-system/afrp/SKILL.md`](../bin/orama-system/afrp/SKILL.md) § Intent-Verification · Catalog: [`../bin/orama-system/afrp/failure-modes.md`](../bin/orama-system/afrp/failure-modes.md) § Failure Mode 7 · Skill fix: [`../bin/orama-system/skills/git-reanchor/SKILL.md`](../bin/orama-system/skills/git-reanchor/SKILL.md) § 5 (tree-twins, not merge-base)
+
+## 2026-06-05 — I repeated FM7 one hour after shipping the fix (the durable lesson)
+
+**What happened.** Right after merging PR #73 (which *added* Failure Mode 7 and the
+tree-twin §5 to git-reanchor), and after **moving `reanchor_scan.sh` into the workspace**,
+I was asked to check Perpetua-Tools branches. I reflexively hand-rolled a fresh `git
+rev-list --count` / `merge-base` ahead-behind table — **the exact proxy the skill I'd just
+written forbids** — and declared PT "no orphans, nothing to do." The user caught the tell:
+a branch read `479 behind` while its tip was byte-identical to a main commit. That is
+**impossible unless `main` was rewritten** — which it had been. PT's branches were
+pre-rewrite SHA lines needing tree-twin re-anchor, not healthy branches.
+
+**Root cause — not knowledge, point-of-use.** The method existed in three files I'd
+authored. Knowing a skill ≠ invoking it. Under a "just check the branches" prompt I grabbed
+the fast familiar command instead of running the canonical tool. This is the
+using-superpowers "I remember this skill" red flag, made concrete.
+
+**The non-negotiable rule** (now also in the [`scripts/git/reanchor_scan.sh`](../scripts/git/reanchor_scan.sh)
+header and [`AGENTS.md`](../AGENTS.md) § History-rewrite protocol):
+- Across any repo whose `main` may have been rewritten, **never** judge orphan/divergence
+  with `ahead/behind`, `rev-list --count`, or `merge-base` — they are SHA-graph proxies,
+  meaningless across a rewrite boundary.
+- **Always run the tree-twin scan** — `scripts/git/reanchor_scan.sh <repo> <main-ref> [scope]`
+  — then `git cherry -v <main> <tip> <base>` to separate genuinely-missing commits (`+`)
+  from work already in main (`-`).
+- "N behind + byte-identical content" is a contradiction that must HALT you, not be reported.
+
+**Why prose alone failed, and what makes it stick.** A lesson in a doc only helps if I
+remember to read it — the very thing that failed. Durable fixes, in reliability order:
+(1) determinism — one sanctioned script, no improvised `rev-list`; (2) a PreToolUse hook
+that flags ahead/behind/merge-base used for orphan judgment and points at the script;
+(3) a top-of-`CLAUDE.md`/`AGENTS.md` banner, because those load every session. Cross-agent
+propagation lives in [`AGENTS.md`](../AGENTS.md) § History-rewrite protocol so Codex, Cursor,
+CodeRabbit, and Greptile inherit it too — destructive git ops by fellow agents are recurring,
+not one-off.
+
+**PT finding (the missing link).** PT `main` was rewritten; tree-twin scan of local branches:
+5 already in-main (twin tip), 10 with commits above their twin. `git cherry` isolated the
+genuinely-unmerged work — chiefly **`fix/pt71-review-v2`** (9 missing: `alphaclaw_manager`
+bootstrap-JSON progress-prefix parse, `startServer` pidFile ReferenceError fix + regression
+tests, `install.sh` exec-bit, remaining PT#71 review fixes), **`fix/ci-69`** (MCPB
+`Claude-Desktop-LLM` submodule + fail-fast Ollama probe), **`temp-recovery`** (3-tier IP
+detection), **`recover/…codex-plan-revision`** (queue test isolation). Salvage = re-anchor
+onto twin, then PR the `+` commits. Details: PT [`docs/LESSONS.md`](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md)
+· [GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md).
+
+**Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) ·
+canonical method [git-reanchor SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-reanchor/SKILL.md) ·
+tool [`scripts/git/reanchor_scan.sh`](../scripts/git/reanchor_scan.sh). periscope excluded —
+its `main`/`agentsview` are pure upstream mirrors, not rewritten by us.
