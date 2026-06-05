@@ -2622,3 +2622,25 @@ Discoveries + fixes (canonical guard scripts live in orama, synced outward):
 
 **Cross-repo:** mirrored in PT [`docs/LESSONS.md` § 2026-06-05](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) ·
 [GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md).
+
+### 2026-06-05 (cont.) — a 40-minute stall: hard deadlines + never bundle hang-prone calls
+
+While running `/sync-gbrain`, the local gbrain engine was `broken-config`. I ran `gbrain
+search` inside a multi-part Bash command wrapped in `timeout 20`. gbrain forked a child that
+**survived the SIGTERM**, so the wrapper never killed it — the turn hung ~40 minutes until the
+user interrupted. (Same failure class as the earlier bare `git fetch upstream` that hung ~14h
+on a credential prompt.)
+
+**Rule (now enforced for every agent):**
+- Every external/network/db call (`gbrain *`, `git fetch/push/ls-remote`, `npm/bun install`,
+  `curl`, MCP) needs a **hard deadline**, and if it can hang past timeout it must run as a
+  **killable background job** (`run_in_background`), polled with a bounded check count — not a
+  foreground `timeout N cmd` (timeout only SIGTERMs the direct child; forking tools escape it).
+- **Never bundle a hang-prone call into a multi-part `&&`/pipe command** — one hang stalls
+  everything and you can't tell which part blocked.
+- If `gbrain_local_status != ok` (e.g. `broken-config`), **do not call `gbrain` at all** — it
+  will hang on the unreachable engine. Repair via `/setup-gbrain` first.
+
+This is a public, cross-agent record of a private operating lesson (memory
+`feedback_hard_deadlines_no_hang`); see also [`docs/v2/27`](v2/27-git-governance-zero-fragmentation.md)
+and the AlphaClaw/periscope network-git safety notes. Sleep chains were already banned.
