@@ -2644,3 +2644,76 @@ on a credential prompt.)
 This is a public, cross-agent record of a private operating lesson (memory
 `feedback_hard_deadlines_no_hang`); see also [`docs/v2/27`](v2/27-git-governance-zero-fragmentation.md)
 and the AlphaClaw/periscope network-git safety notes. Sleep chains were already banned.
+
+## 2026-06-06 — AI agents do destructive git ops; every agent must know this protocol
+
+**Incident class: recurring.** A Cursor agent rewrote PT's git history (force-push to main)
+during a parallel session. A second agent rewrote orama-system (PR #70 rewrite). This
+session encountered both consequences. This lesson is written for *every successor agent* —
+it is not one-off; it will happen again.
+
+**Pattern:** An AI coding agent is given a task ("fix the CI", "clean up commits", "merge
+this PR"). It reaches for a `git rebase -i`, `git push --force`, or a `git commit --amend`
+on a shared branch. No human explicitly authorised the rewrite. The agent believes it is
+being helpful. The result: all SHA-based reasoning across the stack (ahead/behind,
+merge-base, branch divergence counts) becomes meaningless for that repo.
+
+**What breaks downstream (from this session alone):**
+- `git log origin/main..HEAD` showed `[ahead 454, behind 478]` for PT — looked catastrophic,
+  was a stale tracking ref across a rewrite boundary. Caused a near-destructive reset.
+- gbrain's sync anchor commit disappeared → full re-import needed; checkpoint lost.
+- CRG graph went stale (all node SHAs outdated).
+- All other agents working on that repo with local clones have orphaned branches.
+
+**The hard rules (encode in every new repo's `AGENTS.md` and `CLAUDE.md`):**
+
+1. **Never force-push to `main`, `master`, or any shared branch** without explicit human
+   instruction naming the exact branch and the word "force-push" or "rewrite history".
+   Git safety rule G3 in orama-system docs 25/26 covers this.
+
+2. **After ANY suspected rewrite** (saw force-push, unusual divergence, missing SHAs),
+   **run the tree-twin scan before ANY git operation:**
+   ```bash
+   bash scripts/git/reanchor_scan.sh <repo> origin/main [heads|all]
+   ```
+   then `git cherry -v <main> <branch-tip> <twin>` to separate real new work (`+`) from
+   already-merged shadow copies (`-`).
+
+3. **Never judge orphan/divergence with proxy metrics** (ahead/behind counts, `rev-list
+   --count`, `merge-base` comparisons). Across a rewrite boundary they lie. "N behind +
+   byte-identical content" = tree-twin, not orphan. HALT; run the scan.
+
+4. **If gbrain is `broken-config` or the sync anchor is missing**, do NOT call `gbrain`
+   and do NOT push a resync — diagnose first. Follow the `feedback_gbrain_checkpoint_bug`
+   memory: force-sync against a poisoned checkpoint can recurse-delete the repo root.
+
+5. **Multi-agent write coordination gate** (doc 25 §4 heartbeat): all agentic code writes
+   to shared branches require the worktree-per-agent doctrine
+   (`docs/v2/22-worktree-parallel-agents.md`). Two agents writing to the same branch without
+   coordination = the root cause of most branch collisions this stack has seen.
+
+**Recovery playbook** (when rewrite already happened — `scripts/git/reanchor_scan.sh` first):
+```bash
+# 1. Find the pre-rewrite tip in reflog or pull/*/head refs
+git log --all --oneline | head -30   # look for familiar commit messages
+gh api repos/<org>/<repo>/git/refs --paginate -q '.[] | .ref' | grep refs/pull  # GitHub keeps PR heads
+
+# 2. Tree-twin scan — gives you the set of branches + their twin commits on new main
+bash scripts/git/reanchor_scan.sh . origin/main heads
+
+# 3. For branches with `+` commits (real new work not in new main):
+git cherry -v <new-main-tip> <branch-tip>   # + = must rescue, - = already there
+git checkout -b recover/<branch> <old-tip>
+# cherry-pick the `+` commits only, open PR
+
+# 4. Verify gbrain + CRG sync anchors; resync if clean
+gbrain sources list   # check last sync timestamps
+```
+
+**Cross-agent propagation:** This lesson is in both LESSONS.md files (orama + PT), in
+`AGENTS.md` § History-rewrite protocol in every repo, and in the git-reanchor SKILL.md.
+The docs/v2/27 governance plan covers the org-wide rollout to future `oramasys/*` repos.
+
+**Canonical references:** `scripts/git/reanchor_scan.sh` · `bin/orama-system/skills/git-reanchor/SKILL.md`
+· `docs/v2/22-worktree-parallel-agents.md` · memory `feedback_git_guards_single_source`
+· memory `project_orama_main_rewrite_pr70`.
