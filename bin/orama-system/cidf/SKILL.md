@@ -70,6 +70,7 @@ When the content is markdown:
 
 - Read the repo markdown index and lessons log before editing repo guidance.
 - Keep links relative and GitHub-renderable.
+- **Paths: relative in-repo links + GitHub URLs only — NEVER absolute workstation paths.** A literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree doxes the owner and fails CI (`scripts/review/repo_hygiene.py`). For cross-repo references use a relative path (`../<repo>/…`) or a `https://github.com/diazMelgarejo/<repo>/blob/<branch>/…` URL; for runtime paths use `$OPENCLAW_ROOT`/`$REPO_ROOT`/`~`. Same rule as the git-hygiene "no workstation paths" check.
 - If a markdown file moves or gets renamed, preserve the redirect trail with a canonical-path note or an updated index link before commit.
 - Warn and ask the user before adding a new markdown file over 200 lines or growing an existing markdown file over 500 lines; suggest moving detail to `references/`, `docs/wiki/`, or a sub-skill.
 - Review the diff for stale anchors and broken relative links before the final write.
@@ -85,6 +86,7 @@ When the content is markdown:
 | LINT-003 | Complexity bias (chosen rank > min eligible) |
 | LINT-004 | Scripting for one-time static task |
 | LINT-005 | No fallback chain defined (warning) |
+| LINT-006 | Absolute workstation path in tracked content (`/Users/<name>/…` or `…/claude/OpenClaw`) — use relative/GitHub link or `$REPO_ROOT` |
 
 ---
 

@@ -6,6 +6,20 @@ Two install paths exist on this machine (`~/.local/bin/claude` + npm global) —
 Before updating, relocating, or assuming only one exists, read:
 → [`../CLAUDE-CODE-RUNTIME.md`](../CLAUDE-CODE-RUNTIME.md)
 
+## History-rewrite & branch re-anchor — MANDATORY before judging any branch
+
+**Applies to every AI agent in this repo — Claude, Codex, Cursor, CodeRabbit, Greptile, and any future agent.** This repo's `main` has been **rewritten** (squash-rebundle / expunge / force-push). After a rewrite every pre-rewrite commit keeps its content but gets a **new SHA**.
+
+- **NEVER** judge whether a branch is orphaned, behind, or divergent using `git rev-list --count`, ahead/behind, or `git merge-base`. Across a rewrite boundary these are SHA-graph proxies and are **provably meaningless** — a branch can read "N behind" while its tip is byte-identical to a commit already in `main`. If you ever see "N behind + identical content," **HALT** — that contradiction means a rewrite, not a healthy branch.
+- **ALWAYS** use the **tree-twin** test (`%T` match) via the canonical tool:
+  ```bash
+  scripts/git/reanchor_scan.sh <repo_path> origin/main [remotes|heads|all]
+  git cherry -v origin/main <branch_tip> <branch_base>   # + = missing from main, - = already in main
+  ```
+- Method + worked examples: [`bin/orama-system/skills/git-reanchor/SKILL.md`](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-reanchor/SKILL.md) § 5. Why this keeps recurring and how we make it stick: [`docs/LESSONS.md` § 2026-06-05](https://github.com/diazMelgarejo/orama-system/blob/main/docs/LESSONS.md#2026-06-05) · failure catalog [`bin/orama-system/afrp/failure-modes.md` § Failure Mode 7](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/afrp/failure-modes.md).
+- **Rebasing/force-updating/reviving a remote branch requires explicit current-user authorization** (see § Security PR stacking). Always preserve old tips (vault `refs/pull/*/head` + `backup/*` tags) before any force-push.
+- Companion repo with the same protocol: [Perpetua-Tools `AGENTS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/AGENTS.md). **periscope is excluded** — its `main`/`agentsview` are pure upstream mirrors, never rewritten by us.
+
 ## Cursor Cloud: git commits
 
 Cloud agents set `CURSOR_AGENT=1` and redirect `core.hookspath` to `~/.cursor/agent-hooks/…`, which can append unwanted `Co-authored-by` trailers. **`CURSOR_AGENT=0` is not supported** and does not disable this.
