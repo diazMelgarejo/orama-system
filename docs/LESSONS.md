@@ -2597,3 +2597,28 @@ onto twin, then PR the `+` commits. Details: PT [`docs/LESSONS.md`](../../perple
 canonical method [git-reanchor SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-reanchor/SKILL.md) ·
 tool [`scripts/git/reanchor_scan.sh`](../scripts/git/reanchor_scan.sh). periscope excluded —
 its `main`/`agentsview` are pure upstream mirrors, not rewritten by us.
+
+### 2026-06-05 (cont.) — attribution-guard fragmentation between orama and PT
+
+While pushing the docs above, PT's `pre-push` (`.githooks/pre-push` → `audit_attribution.sh`
+with `GIT_AUDIT_STRICT=1`) **blocked a clean commit**: strict mode audits the full reachable
+history and PT's copy still flagged 79 mainstream-AI bot co-authors (`coderabbitai`,
+`dependabot`) + 7 AI authors that **orama's allowlist already permits** (added in PR #71).
+Root cause: PT's `audit_attribution.sh`, `check_commit_message.sh`, `check_identity.sh` were
+**stale forks** of orama's canonical guards — silent fragmentation.
+
+Discoveries + fixes (canonical guard scripts live in orama, synced outward):
+- The sync tool [`scripts/git/sync-attribution-guard-scripts.sh`](../scripts/git/sync-attribution-guard-scripts.sh)
+  **omitted `check_commit_message.sh` and `check_identity.sh`** from its copy list — so those
+  two drifted forever. Added them; re-synced → all 4 guards now byte-identical orama↔PT
+  (`bad_author` 7→0, `bad_coauthor` 79→3; push range clean).
+- The same sync wrote a *thin wrapper* for `daily-attribution-guard.sh` (full impl is canonical
+  in PT) — which, run against PT itself, made the script **exec itself (infinite recursion)**.
+  Guarded: skip the wrapper when target basename is `Perpetua-Tools`.
+- **Rule:** never hand-edit a guard script in a downstream repo. Edit orama's canonical copy,
+  then `sync-attribution-guard-scripts.sh <target>`. Org-wide governance plan so future
+  `oramasys/*` repos inherit identical hooks with zero drift:
+  [`docs/v2/`](v2/) (attribution-guard single-source-of-truth).
+
+**Cross-repo:** mirrored in PT [`docs/LESSONS.md` § 2026-06-05](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) ·
+[GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md).
