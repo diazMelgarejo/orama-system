@@ -142,6 +142,7 @@ When using Claude Sonnet 4.6 via the Anthropic SDK:
 - `model: claude-sonnet-4-6`
 - `thinking.effort: medium`
 - Set `cache_control` on **stable** system prompts, tool definitions, and context prefixes
+- **Simplest option — automatic placement:** pass a single `cache_control` field at the **top level** of the `messages.create()` request and the SDK auto-places the breakpoint on the last cacheable block. Reach for explicit per-block `cache_control` (shown below) only when you need fine-grained control over multiple breakpoints (max 4).
 - Sonnet 4.6 minimum cacheable prompt: **1,024 tokens** (anything smaller is not cached)
 - TTL: 5 minutes default (90 minutes with `ttl: "extended"`)
 - **NEVER cache** changing suffixes — timestamps, per-run user payloads, request IDs, response IDs
