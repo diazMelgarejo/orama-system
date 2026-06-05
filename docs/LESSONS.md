@@ -2714,6 +2714,45 @@ gbrain sources list   # check last sync timestamps
 `AGENTS.md` § History-rewrite protocol in every repo, and in the git-reanchor SKILL.md.
 The docs/v2/27 governance plan covers the org-wide rollout to future `oramasys/*` repos.
 
+### 2026-06-06 (cont.) — zero-fragmentation gate SHIPPED + a live concurrent-write collision (2nd this session)
+
+Two concrete outcomes today, both reinforcing the multi-agent doctrine above:
+
+**1. Guard-parity gate shipped.** The attribution-guard drift (stale PT forks rejecting
+mainstream-AI co-authors) is now *enforced*, not just documented:
+[`scripts/git/verify-guard-parity.sh`](../scripts/git/verify-guard-parity.sh) — fail-closed,
+two checks: (a) **completeness** (every canonical guard is in the sync copy list — catches the
+exact omission that let `check_commit_message.sh`/`check_identity.sh` drift); (b) **parity**
+(downstream copies byte-identical to orama canonical via `cmp -s`). Verified PASS on orama +
+PT (9/9). Added to the sync copy list so it self-propagates. Doctrine: [`docs/v2/27`](v2/27-git-governance-zero-fragmentation.md).
+
+**2. Concurrent-agent collision during the opus-4-8 migration — caught a 404 regression.**
+While doing the `/claude-api migrate` task, a parallel agent (same approved identity
+`cyre <Lawrence@cyre.me>`) was running the *same* migration and pushed to PT `main`
+concurrently. Two specific failures it introduced, both caught before harm:
+- **Malformed model IDs that would 404 at runtime:** `claude-4-6-sonnet-thinking`,
+  `claude-4-6-sonnet`, `claude-4-5-haiku`. The correct order is `claude-<family>-<major>-<minor>`
+  → `claude-sonnet-4-6` / `claude-haiku-4-5`; `thinking` is a request param, never part of the
+  ID. **Lesson: validate every model-ID string against the real catalog — `claude-4-6-sonnet`
+  is a plausible-looking typo that silently 404s only when the call fires.**
+- **Stray upstream tracking + a racing dependabot push to `main`:** my local `main` was
+  tracking a dated branch another agent created (so `git push` reported "up-to-date" while 2
+  commits behind), and a dependabot starlette bump (#107) landed on `origin/main` mid-push.
+  Fix: explicit `git push origin HEAD:main`, then rebased onto the dep commit (no overlap),
+  FF'd, and **returned the shared checkout to `main`** so the next agent doesn't inherit a
+  stray HEAD. Don't trust a bare `git push` in a shared working dir — check `@{u}` and the
+  current branch first.
+
+**Reinforced rule:** in a shared checkout, before committing/pushing, run
+`git rev-parse --abbrev-ref HEAD` + `git rev-parse --abbrev-ref @{u}` — a fellow agent may
+have moved HEAD onto their branch. Land via explicit `HEAD:main` refspec, then restore `main`.
+
+**Cross-repo:** [PT LESSONS § 2026-06-06](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) ·
+[GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md). Open
+priorities after today: **(P1)** repair gbrain (`broken-config` → `/setup-gbrain`); **(P2)**
+resume tri-repo Gate 2→3 ([[project_tri_repo_migration_state]]); **(P3)** wire
+`verify-guard-parity.sh` into each repo's CI + `daily-attribution-guard.sh`.
+
 **Canonical references:** `scripts/git/reanchor_scan.sh` · `bin/orama-system/skills/git-reanchor/SKILL.md`
 · `docs/v2/22-worktree-parallel-agents.md` · memory `feedback_git_guards_single_source`
 · memory `project_orama_main_rewrite_pr70`.
