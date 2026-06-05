@@ -260,6 +260,17 @@ For gstack target: also write a `SKILL.md.tmpl` stub:
 <copy of SKILL.md body without the auto-generation comment>
 ```
 
+### Path discipline (every link and path you write)
+
+Use **relative in-repo links + GitHub URLs only — NEVER absolute workstation paths.** A
+literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree doxes the owner and fails CI
+(`scripts/review/repo_hygiene.py`). For cross-repo references use a relative path
+(`../<repo>/…`) or `https://github.com/diazMelgarejo/<repo>/blob/<branch>/…`; for runtime
+paths use `$OPENCLAW_ROOT`/`$REPO_ROOT`/`~`. This is the same rule CIDF enforces as LINT-006
+([`cidf/SKILL.md`](../../cidf/SKILL.md) § Markdown Write Rule) and git-hygiene enforces as
+"no workstation paths." Review the diff for stale anchors and broken relative links before
+the final write.
+
 ---
 
 ## Step 7: Register in Mother Skill (orama-system targets only)
