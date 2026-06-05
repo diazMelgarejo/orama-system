@@ -43,6 +43,9 @@ jobs:
       - name: Verify git guards
         run: bash scripts/git/verify-git-guards.sh
 
+      - name: Guard-parity completeness (zero fragmentation, docs/v2/27)
+        run: bash scripts/git/verify-guard-parity.sh
+
       - name: Repo hygiene gate
         run: python3 scripts/review/repo_hygiene.py .
 
