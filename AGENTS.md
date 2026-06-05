@@ -20,6 +20,16 @@ Before updating, relocating, or assuming only one exists, read:
 - **Rebasing/force-updating/reviving a remote branch requires explicit current-user authorization** (see § Security PR stacking). Always preserve old tips (vault `refs/pull/*/head` + `backup/*` tags) before any force-push.
 - Companion repo with the same protocol: [Perpetua-Tools `AGENTS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/AGENTS.md). **periscope is excluded** — its `main`/`agentsview` are pure upstream mirrors, never rewritten by us.
 
+## Attribution guards: single source of truth — ZERO fragmentation
+
+**Applies to every agent.** The attribution/identity guard scripts are **canonical in orama `scripts/git/`** and **byte-identical in every repo**: `audit_attribution.sh`, `banned_attribution_lib.sh`, `check_commit_message.sh`, `check_identity.sh`, `daily-attribution-guard.sh` (+ `neutralize-cursor-coauthor-hook.sh`, `expunge-all-workspace-repos.sh`, `verify-git-guards.sh`).
+
+- **NEVER hand-edit a guard script in a downstream repo.** Forks drift silently — a stale copy once made PT's strict `pre-push` reject the mainstream-AI co-authors (`coderabbitai`, `dependabot`, `anthropic.com`) that orama's allowlist already permits, blocking valid pushes.
+- To change policy: edit orama's canonical copy, then redistribute — `bash scripts/git/sync-attribution-guard-scripts.sh <target-repo>`. The sync copies all guards; `check_commit_message.sh` + `check_identity.sh` are now in that list (they were the silent gap).
+- `daily-attribution-guard.sh` is **self-contained** (derives its own `REPO_ROOT`, scans the whole workspace) — never a thin wrapper to another repo (a wrapper hardcodes a path and execs itself ⇒ infinite recursion).
+- **Mainstream AI models / autonomous agents are allowed** as author and `Co-authored-by` (Codex, Cursor, CodeRabbit, Claude, Mistral, DeepSeek, …). The only hard ban is the VERBOTEN pattern in the gitignored private lib.
+- Org-wide governance so future `oramasys/*` repos inherit identical hooks with zero drift: [`docs/v2/`](https://github.com/diazMelgarejo/orama-system/tree/main/docs/v2).
+
 ## Cursor Cloud: git commits
 
 Cloud agents set `CURSOR_AGENT=1` and redirect `core.hookspath` to `~/.cursor/agent-hooks/…`, which can append unwanted `Co-authored-by` trailers. **`CURSOR_AGENT=0` is not supported** and does not disable this.
