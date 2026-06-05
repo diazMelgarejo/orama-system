@@ -69,8 +69,14 @@ URL so the canonical source is unambiguous.
 
 ## Enforcement roadmap (so drift is caught, not just discouraged)
 
-- **CI parity check (next):** a job that fails if any repo's guard script differs from orama's
-  canonical copy (hash compare). Turns "don't hand-edit" from convention into a gate.
+- **CI parity check (SHIPPED 2026-06-06):** [`scripts/git/verify-guard-parity.sh`](../../scripts/git/verify-guard-parity.sh)
+  is the gate. It runs two fail-closed checks: (1) **completeness** — every canonical guard is
+  in the sync tool's copy list (catches the exact omission bug that let `check_commit_message.sh`
+  / `check_identity.sh` drift); (2) **parity** — each downstream repo's guard copies are
+  byte-identical to orama's canonical (`cmp -s`). Usage: `verify-guard-parity.sh` for
+  completeness-only (single-repo CI), or `verify-guard-parity.sh <repo>…` / `--workspace`
+  (with `WORKSPACE_ROOT`) to add the cross-repo parity pass. Wire it into each repo's CI and
+  into `daily-attribution-guard.sh`.
 - **Sync completeness test:** assert `sync-attribution-guard-scripts.sh`'s copy list covers
   every file in the canonical set (the omission of `check_commit_message.sh` /
   `check_identity.sh` is exactly what this would have caught).
