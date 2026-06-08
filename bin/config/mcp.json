@@ -1,9 +1,9 @@
 {
   "mcpServers": {
-    "ultrathink-lmstudio": {
+    "oramasys": {
       "command": "python",
       "args": ["bin/mcp_servers/openclaw_mcp_server.py"],
-      "id": "mcp/ultrathink-lmstudio"
+      "id": "mcp/oramasys"
     }
   }
 }

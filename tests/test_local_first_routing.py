@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 test_local_first_routing.py
 ===========================
@@ -7,19 +7,19 @@ TDD: Platform-aware, task-type-aware backend routing.
 Priority matrix (no override):
 
   On Mac:
-    1. mac_main      — localhost:1234 (LM Studio Mac)
-    2. win_coding    — Windows LM Studio (for task_type="code" only)
-    3. win_main      — Windows LM Studio (all other task types)
-    4. cloud         — Anthropic API
-    5. other         — remaining fallbacks (Ollama, etc.)
+    1. mac_main      â€” localhost:1234 (LM Studio Mac)
+    2. win_coding    â€” Windows LM Studio (for task_type="code" only)
+    3. win_main      â€” Windows LM Studio (all other task types)
+    4. cloud         â€” Anthropic API
+    5. other         â€” remaining fallbacks (Ollama, etc.)
 
   On Windows:
-    1. win_main      — Windows LM Studio
-    2. cloud         — Anthropic API
-    3. other         — remaining fallbacks
+    1. win_main      â€” Windows LM Studio
+    2. cloud         â€” Anthropic API
+    3. other         â€” remaining fallbacks
 
 Overrides (in precedence order, highest first):
-  - Per-request: UltraThinkRequest.backend_priority  ("local" | "cloud" | "windows")
+  - Per-request: OramasysRequest.backend_priority  ("local" | "cloud" | "windows")
   - Env var:     ORAMA_BACKEND_PRIORITY              ("local" | "cloud" | "windows")
   - Auto-detect: current platform via ORAMA_PLATFORM env or sys detection
   - Default:     "local" (Mac behavior)
@@ -35,7 +35,7 @@ import api_server
 from api_server import BackendRouter, BackendPriority
 
 
-# ── BackendPriority enum ──────────────────────────────────────────────────────
+# â”€â”€ BackendPriority enum â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_backend_priority_has_local_cloud_windows():
     assert BackendPriority.LOCAL == "local"
@@ -43,10 +43,10 @@ def test_backend_priority_has_local_cloud_windows():
     assert BackendPriority.WINDOWS == "windows"
 
 
-# ── Mac platform: mac_main first for all task types ──────────────────────────
+# â”€â”€ Mac platform: mac_main first for all task types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_mac_default_non_code_order(monkeypatch):
-    """On Mac, non-code: mac_main → win_main → cloud → …"""
+    """On Mac, non-code: mac_main â†’ win_main â†’ cloud â†’ â€¦"""
     monkeypatch.setenv("ORAMA_PLATFORM", "mac")
     router = BackendRouter(task_type="analysis")
     endpoints = router.ordered_endpoints()
@@ -57,7 +57,7 @@ def test_mac_default_non_code_order(monkeypatch):
 
 
 def test_mac_code_task_uses_win_coding_second(monkeypatch):
-    """On Mac, coding tasks: mac_main → win_coding → win_main → cloud → …"""
+    """On Mac, coding tasks: mac_main â†’ win_coding â†’ win_main â†’ cloud â†’ â€¦"""
     monkeypatch.setenv("ORAMA_PLATFORM", "mac")
     router = BackendRouter(task_type="code")
     endpoints = router.ordered_endpoints()
@@ -75,10 +75,10 @@ def test_mac_mac_main_url_is_localhost(monkeypatch):
     assert "localhost:1234" in mac_ep["url"]
 
 
-# ── Windows platform: win_main first ─────────────────────────────────────────
+# â”€â”€ Windows platform: win_main first â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_windows_default_order(monkeypatch):
-    """On Windows: win_main → cloud → mac_main → …"""
+    """On Windows: win_main â†’ cloud â†’ mac_main â†’ â€¦"""
     monkeypatch.setenv("ORAMA_PLATFORM", "windows")
     router = BackendRouter(task_type="analysis")
     endpoints = router.ordered_endpoints()
@@ -95,7 +95,7 @@ def test_windows_coding_still_uses_win_main_first(monkeypatch):
     assert names[0] == "win_main"
 
 
-# ── BackendRouter: default platform auto-detects as mac on Darwin ─────────────
+# â”€â”€ BackendRouter: default platform auto-detects as mac on Darwin â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_auto_detect_platform_darwin_defaults_to_mac(monkeypatch):
     monkeypatch.delenv("ORAMA_PLATFORM", raising=False)
@@ -110,7 +110,7 @@ def test_orama_platform_env_overrides_auto_detect(monkeypatch):
     assert router.platform == "windows"
 
 
-# ── BackendRouter: env-var ORAMA_BACKEND_PRIORITY override ───────────────────
+# â”€â”€ BackendRouter: env-var ORAMA_BACKEND_PRIORITY override â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_backend_router_cloud_priority_from_env(monkeypatch):
     monkeypatch.setenv("ORAMA_BACKEND_PRIORITY", "cloud")
@@ -130,14 +130,14 @@ def test_backend_router_windows_priority_from_env(monkeypatch):
 
 
 def test_backend_router_ignores_unknown_env_value(monkeypatch):
-    """Unknown ORAMA_BACKEND_PRIORITY → fall back to platform-default (never crash)."""
+    """Unknown ORAMA_BACKEND_PRIORITY â†’ fall back to platform-default (never crash)."""
     monkeypatch.setenv("ORAMA_BACKEND_PRIORITY", "garbage")
     monkeypatch.setenv("ORAMA_PLATFORM", "mac")
     router = BackendRouter()
     assert router.priority == BackendPriority.LOCAL
 
 
-# ── BackendRouter: per-request override beats env ────────────────────────────
+# â”€â”€ BackendRouter: per-request override beats env â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_backend_router_with_override_cloud(monkeypatch):
     monkeypatch.setenv("ORAMA_PLATFORM", "mac")
@@ -160,27 +160,27 @@ def test_backend_router_override_beats_env(monkeypatch):
     assert router.priority == BackendPriority.WINDOWS
 
 
-# ── UltraThinkRequest: backend_priority field ─────────────────────────────────
+# â”€â”€ OramasysRequest: backend_priority field â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_ultrathink_request_accepts_backend_priority():
-    from api_server import UltraThinkRequest
-    req = UltraThinkRequest(task_description="test", backend_priority="cloud")
+    from api_server import OramasysRequest
+    req = OramasysRequest(task_description="test", backend_priority="cloud")
     assert req.backend_priority == "cloud"
 
 
 def test_ultrathink_request_backend_priority_defaults_to_local():
-    from api_server import UltraThinkRequest
-    req = UltraThinkRequest(task_description="test")
+    from api_server import OramasysRequest
+    req = OramasysRequest(task_description="test")
     assert req.backend_priority == "local"
 
 
 def test_ultrathink_request_backend_priority_rejects_invalid():
-    from api_server import UltraThinkRequest
+    from api_server import OramasysRequest
     with pytest.raises(Exception):
-        UltraThinkRequest(task_description="test", backend_priority="badvalue")
+        OramasysRequest(task_description="test", backend_priority="badvalue")
 
 
-# ── HTTP endpoint: backend_priority in request → response metadata ────────────
+# â”€â”€ HTTP endpoint: backend_priority in request â†’ response metadata â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_http_endpoint_local_priority_in_metadata(monkeypatch):
     from fastapi.testclient import TestClient
@@ -191,7 +191,7 @@ def test_http_endpoint_local_priority_in_metadata(monkeypatch):
     monkeypatch.setattr(api_server, "_call_with_fallback", fake_call)
     client = TestClient(api_server.app)
 
-    resp = client.post("/ultrathink", json={"task_description": "route me"})
+    resp = client.post("/oramasys", json={"task_description": "route me"})
     assert resp.status_code == 200
     body = resp.json()
     assert body["metadata"]["backend_priority"] == "local"
@@ -207,7 +207,7 @@ def test_http_endpoint_cloud_override_in_metadata(monkeypatch):
     monkeypatch.setattr(api_server, "_call_with_fallback", fake_call)
     client = TestClient(api_server.app)
 
-    resp = client.post("/ultrathink", json={
+    resp = client.post("/oramasys", json={
         "task_description": "route me to cloud",
         "backend_priority": "cloud",
     })
@@ -216,7 +216,7 @@ def test_http_endpoint_cloud_override_in_metadata(monkeypatch):
     assert body["metadata"]["backend_priority"] == "cloud"
 
 
-# ── /health: expose backend routing ──────────────────────────────────────────
+# â”€â”€ /health: expose backend routing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_health_endpoint_exposes_backend_priority():
     from fastapi.testclient import TestClient
@@ -227,3 +227,4 @@ def test_health_endpoint_exposes_backend_priority():
     assert "backend_priority" in body
     assert body["backend_priority"] in ("local", "cloud", "windows")
     assert "backend_endpoints" in body
+

@@ -99,7 +99,7 @@ PORTAL_PORT = int(os.getenv("PORTAL_PORT", "8002"))
 _MAX_USER_INPUT_LEN = int(os.getenv("ORAMA_USER_INPUT_MAX_LEN", "4000"))
 
 PT_URL = os.getenv("ORCHESTRATOR_ENDPOINT", "http://localhost:8000")
-US_URL = os.getenv("ULTRATHINK_ENDPOINT", "http://localhost:8001")
+US_URL = os.getenv("ORAMASYS_ENDPOINT", os.getenv("ULTRATHINK_ENDPOINT", "http://localhost:8001"))
 
 LMS_WIN_ENDPOINTS: List[str] = [
     ep.strip()
@@ -2299,7 +2299,9 @@ _SERVICE_PORTS = {"pt": 8000, "orama": 8001, "portal": 8002}
 _SERVICE_LOG_FILES = {"pt": "pt.log", "orama": "orama.log", "portal": "portal.log"}
 _SERVICE_BIND_HOSTS = {
     "pt": default_bind_host(lan_env="PT_BIND_LAN", host_env="PT_HOST"),
-    "orama": default_bind_host(lan_env="ORAMA_BIND_LAN", host_env="ULTRATHINK_HOST"),
+    "orama": default_bind_host(lan_env="ORAMA_BIND_LAN", host_env="ORAMASYS_HOST")
+    if os.getenv("ORAMASYS_HOST") or not os.getenv("ULTRATHINK_HOST")
+    else os.getenv("ULTRATHINK_HOST", "localhost"),
     "portal": PORTAL_HOST,
 }
 _SERVICE_CMDS = {

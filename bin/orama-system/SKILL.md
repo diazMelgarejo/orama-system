@@ -7,10 +7,11 @@ description: >-
   complex multi-step tasks, code quality reviews, and self-improvement workflows.
   Triggers on: "ultrathink", "think deeply", "5-stage", "systematic approach",
   "elegant solution", "verify before done", "content insertion", "AFRP", "CIDF".
+  Treat legacy "ultrathink" prompts as oramasys invocations.
 version: 0.9.9.9
 license: Apache 2.0
 compatibility: claude-code, claude-desktop
-allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-ultrathink-lmstudio
+allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
 sub_skills:
   - path: afrp/SKILL.md
     trigger: "Query is non-trivial, audience-dependent, or open-ended (Type B/C/D)"
@@ -294,11 +295,11 @@ Follow the 6 directives in every non-trivial task:
 - **AFRP**: Pre-router gate. Classifies and clarifies intent before architecture.
 - **CIDF v1.2**: Content insertion governance. Start at rank 1 (direct_form_input) for every write.
 
-> **Historical Note:** The legacy backup HTTP `/ultrathink` is implemented via `api_server.py` for v1.0 compatibility.
+> **Historical Note:** The canonical HTTP path is `/oramasys`; legacy `/ultrathink` is implemented via `api_server.py` as a deprecated v1.x compatibility shim.
 
 ## OpenClaw Multi-Agent Bridge (Tier 2)
 
-Use the `mcp-ultrathink-openclaw` tool to offload heavy reasoning through the
+Use the `mcp-oramasys` tool to offload heavy reasoning through the
 OpenClaw gateway at `127.0.0.1:18789`. Model selection is automatic — OpenClaw
 reads `~/.openclaw/openclaw.json` and routes each `agent_id` to the correct
 live provider (LM Studio / Ollama, Mac / Windows GPU).
