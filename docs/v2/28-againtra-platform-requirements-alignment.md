@@ -1,4 +1,4 @@
-# 27 — agAIntra / againtra-platform v2 Requirements Alignment
+# 28 — agAIntra / againtra-platform v2 Requirements Alignment
 
 > **Status:** CANONICAL — establishes that `oramasys/againtra-platform` (the v2 trading
 > platform, formerly "agentra" — renamed to avoid copyright collision) MUST align its
