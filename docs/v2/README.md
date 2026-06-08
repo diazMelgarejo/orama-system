@@ -188,10 +188,14 @@ orama-system/docs/v2/
 ├── 21-periscope-l4-glass.md           ← periscope L4 glass-window design; ActivityMinimap + ContextPage integration
 ├── 22-worktree-parallel-agents.md     ← parallel-agent worktree doctrine; 4-quadrant decision rule; bootstrap + lifecycle
 ├── 23-security-preconditions.md       ← v2 gate: acceptance criteria before LAN/MCP expansion
-└── 24-security-first-platform.md      ← security as first-class platform feature; OWASP/NIST/CISA/OpenSSF/SLSA citations
+├── 24-security-first-platform.md      ← security as first-class platform feature; OWASP/NIST/CISA/OpenSSF/SLSA citations
+├── 25-autoresearcher-doctrine-and-againtra-flagship.md  ← autoresearcher doctrine + agAIntra flagship migration plan
+├── 26-tdd-and-outsourced-review-doctrine.md  ← TDD + outsourced review doctrine
+├── 28-againtra-platform-requirements-alignment.md  ← agAIntra/againtra-platform v2 requirements alignment
+└── 29-git-governance-zero-fragmentation.md  ← git governance zero-fragmentation doctrine
 ```
 
-> **Next free slot: `25-`**
+> **Next free slot: `30-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
