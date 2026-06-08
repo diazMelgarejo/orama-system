@@ -224,7 +224,8 @@ _resolve_bind_host() {
 }
 
 PT_HOST="$(_resolve_bind_host PT_BIND_LAN PT_HOST)"
-US_HOST="$(_resolve_bind_host ORAMA_BIND_LAN ULTRATHINK_HOST)"
+ORAMASYS_HOST="${ORAMASYS_HOST:-${ULTRATHINK_HOST:-}}"
+US_HOST="$(_resolve_bind_host ORAMA_BIND_LAN ORAMASYS_HOST)"
 PORTAL_HOST="$(_resolve_bind_host PORTAL_BIND_LAN PORTAL_HOST)"
 export PT_HOST US_HOST PORTAL_HOST
 

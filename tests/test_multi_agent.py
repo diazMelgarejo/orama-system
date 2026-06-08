@@ -61,7 +61,10 @@ class TestAgentStructure:
 
 
 class TestSharedUtilities:
-    def test_ultrathink_core_exists(self):
+    def test_oramasys_core_exists(self):
+        assert (MULTI / "shared" / "oramasys_core.py").exists()
+
+    def test_legacy_ultrathink_core_wrapper_exists(self):
         assert (MULTI / "shared" / "ultrathink_core.py").exists()
 
     def test_state_manager_exists(self):
@@ -71,12 +74,12 @@ class TestSharedUtilities:
         assert (MULTI / "shared" / "message_bus.py").exists()
 
     def test_core_has_stage_enum(self):
-        content = (MULTI / "shared" / "ultrathink_core.py").read_text(encoding="utf-8")
+        content = (MULTI / "shared" / "oramasys_core.py").read_text(encoding="utf-8")
         assert "class Stage" in content
         assert "context_immersion" in content
 
     def test_core_has_task_state(self):
-        content = (MULTI / "shared" / "ultrathink_core.py").read_text(encoding="utf-8")
+        content = (MULTI / "shared" / "oramasys_core.py").read_text(encoding="utf-8")
         assert "class TaskState" in content
         assert "elegance_score" in content
 
@@ -104,5 +107,6 @@ class TestConfig:
         assert len(data["rules"]) > 5
 
     def test_mcp_servers_exist(self):
+        assert (MULTI / "mcp_servers" / "oramasys_orchestration_server.py").exists()
         assert (MULTI / "mcp_servers" / "ultrathink_orchestration_server.py").exists()
         assert (MULTI / "mcp_servers" / "agent_communication_server.py").exists()

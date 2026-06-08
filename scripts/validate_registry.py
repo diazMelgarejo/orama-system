@@ -95,8 +95,8 @@ KNOWN_AGENTS = [
         "model_default": None,
     },
     {
-        "name": "UltraThink API (this service)",
-        "env_key": "ULTRATHINK_ENDPOINT",
+        "name": "Oramasys API (this service)",
+        "env_key": "ORAMASYS_ENDPOINT",
         "default": "http://localhost:8001",
         "probe_path": "/health",
         "required": False,
@@ -287,7 +287,7 @@ def offer_defaults(results: list[ProbeResult], auto_yes: bool, quiet: bool) -> N
         "Ollama Win (fallback)": "ollama serve  # on Windows",
         "Ollama Mac (fallback)": "ollama serve  # on Mac",
         "Portal (LAN dashboard)": "python portal_server.py",
-        "UltraThink API (this service)": "python api_server.py",
+        "Oramasys API (this service)": "python api_server.py",
     }
 
     if not quiet:

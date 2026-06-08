@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """Regression tests for control-plane authentication and redaction."""
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ def test_api_server_ultrathink_requires_token_when_enforced(monkeypatch):
 
     with TestClient(api_server.app, raise_server_exceptions=False) as client:
         denied = client.post(
-            "/ultrathink",
+            "/oramasys",
             json={
                 "task_description": "test task",
                 "optimize_for": "speed",
@@ -58,7 +58,7 @@ def test_api_server_ultrathink_requires_token_when_enforced(monkeypatch):
             },
         )
         allowed = client.post(
-            "/ultrathink",
+            "/oramasys",
             json={
                 "task_description": "test task",
                 "optimize_for": "speed",
@@ -215,3 +215,4 @@ def test_pt_auth_module_available_in_sibling_checkout():
     if not auth_module.is_file():
         pytest.skip("Perpetua-Tools sibling checkout not present")
     assert "ORAMA_CONTROL_PLANE_TOKEN" in auth_module.read_text(encoding="utf-8")
+
