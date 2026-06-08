@@ -3,7 +3,7 @@
 api_server.py
 =============
 The ὅραμα System — REST API Entry Point
-POST /ultrathink on port 8001
+POST /oramasys on port 8001
 
 This is a stateless execution endpoint. No Redis dependency.
 Durable state is owned by the Perpetua-Tools orchestrator (Repo #1).
@@ -76,7 +76,7 @@ class BackendPriority:
     Backend dispatch priority token (per-request or env var override).
 
     Priority resolution (highest → lowest):
-      1. per-request UltraThinkRequest.backend_priority
+      1. per-request OramasysRequest.backend_priority
       2. ORAMA_BACKEND_PRIORITY env var
       3. platform-default (mac→LOCAL, windows→WINDOWS)
 
@@ -202,10 +202,12 @@ class BackendRouter:
 
 
 # ── Constants ─────────────────────────────────────────────────────────────────
-PORT            = int(os.getenv("ULTRATHINK_PORT", "8001"))
-MAX_TASK_LENGTH = int(os.getenv("ULTRATHINK_MAX_TASK_LENGTH", "10000"))
-MAX_TIMEOUT     = int(os.getenv("ULTRATHINK_MAX_TIMEOUT", "300"))
-HOST            = default_bind_host(lan_env="ORAMA_BIND_LAN", host_env="ULTRATHINK_HOST")
+PORT            = int(os.getenv("ORAMASYS_PORT", os.getenv("ULTRATHINK_PORT", "8001")))
+MAX_TASK_LENGTH = int(os.getenv("ORAMASYS_MAX_TASK_LENGTH", os.getenv("ULTRATHINK_MAX_TASK_LENGTH", "10000")))
+MAX_TIMEOUT     = int(os.getenv("ORAMASYS_MAX_TIMEOUT", os.getenv("ULTRATHINK_MAX_TIMEOUT", "300")))
+if not os.getenv("ORAMASYS_HOST") and os.getenv("ULTRATHINK_HOST"):
+    os.environ["ORAMASYS_HOST"] = os.getenv("ULTRATHINK_HOST", "")
+HOST            = default_bind_host(lan_env="ORAMA_BIND_LAN", host_env="ORAMASYS_HOST")
 
 DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "qwen3.5:35b-a3b-q4_K_M")
 FAST_MODEL = os.getenv("FAST_MODEL", "qwen3:8b-instruct")
@@ -510,9 +512,9 @@ def _load_pt_runtime_state() -> dict[str, Any] | None:
 
 # ── Request / Response models ─────────────────────────────────────────────────
 
-class UltraThinkRequest(BaseModel):
+class OramasysRequest(BaseModel):
     """
-    POST /ultrathink request body.
+    POST /oramasys request body.
     model_hint selects execution mode (ADR-001, v0.9.9.9).
     v2 shape: session_id added for correlation across the perpetua-core/oramasys stack.
     """
@@ -547,9 +549,9 @@ class UltraThinkRequest(BaseModel):
         return v.strip()
 
 
-class UltraThinkResponse(BaseModel):
+class OramasysResponse(BaseModel):
     """
-    POST /ultrathink response.
+    POST /oramasys response.
     v2 shape: session_id, nodes_visited, retry_count added for perpetua-core compatibility.
     """
     model_config = ConfigDict(protected_namespaces=())
@@ -563,6 +565,11 @@ class UltraThinkResponse(BaseModel):
     session_id:       Optional[str] = Field(default=None)
     nodes_visited:    list[str] = Field(default_factory=list)
     retry_count:      int = Field(default=0)
+
+
+# Backward-compatible aliases for one v1.x release.
+UltraThinkRequest = OramasysRequest
+UltraThinkResponse = OramasysResponse
 
 
 # ── Model Call Stub (Mockable for tests) ──────────────────────────────────────
@@ -594,7 +601,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="The ὅραμα System API",
-    description="Stateless POST /ultrathink endpoint. State owned by Perpetua-Tools.",
+    description="Stateless POST /oramasys endpoint. State owned by Perpetua-Tools.",
     version=__version__,
     lifespan=lifespan,
 )
@@ -610,15 +617,15 @@ app.add_middleware(
 
 @app.middleware("http")
 async def _control_plane_auth_middleware(request: Request, call_next):
-    if request.url.path in ("/ultrathink", "/runtime-state"):
+    if request.url.path in ("/oramasys", "/ultrathink", "/runtime-state"):
         failure = control_plane_auth_failure(request)
         if failure is not None:
             return failure
     return await call_next(request)
 
 
-@app.post("/ultrathink", response_model=UltraThinkResponse)
-async def run_ultrathink(req: UltraThinkRequest, http_request: Request) -> UltraThinkResponse:
+@app.post("/oramasys", response_model=OramasysResponse)
+async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysResponse:
     start = time.perf_counter()
     
     # Resolve reasoning depth and optimize_for (sync them)
@@ -706,14 +713,14 @@ async def run_ultrathink(req: UltraThinkRequest, http_request: Request) -> Ultra
 
     elapsed_ms = int((time.perf_counter() - start) * 1000)
 
-    return UltraThinkResponse(
+    return OramasysResponse(
         status="success",
         result=result,
         model_used=model,
         execution_time_ms=elapsed_ms,
         reasoning_depth=reasoning_depth,
         session_id=req.session_id,
-        nodes_visited=["ultrathink_node"],
+        nodes_visited=["oramasys_node"],
         metadata={
             "mapped_optimize_for": mapped_optimize_for,
             "mapping_source": mapping_source,
@@ -726,6 +733,11 @@ async def run_ultrathink(req: UltraThinkRequest, http_request: Request) -> Ultra
             "pt_authoritative": _policy_resolver.pt_available,
         }
     )
+
+
+@app.post("/ultrathink", response_model=OramasysResponse, deprecated=True, include_in_schema=False)
+async def run_ultrathink_legacy(req: OramasysRequest, http_request: Request) -> OramasysResponse:
+    return await run_oramasys(req, http_request)
 
 @app.get("/health")
 async def health():
@@ -765,5 +777,5 @@ async def runtime_state():
 
 if __name__ == "__main__":
     import uvicorn
-    logger.info("Starting ultrathink API on %s:%d", HOST, PORT)
+    logger.info("Starting oramasys API on %s:%d", HOST, PORT)
     uvicorn.run(app, host=HOST, port=PORT, log_level="info")

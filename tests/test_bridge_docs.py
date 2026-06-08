@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from bin.mcp_servers.ultrathink_orchestration_server import TOOL_SCHEMAS
+from bin.mcp_servers.oramasys_orchestration_server import TOOL_SCHEMAS
 
 
 ROOT = Path(__file__).parent.parent
@@ -40,9 +40,9 @@ def test_legacy_http_docs_are_marked_as_backup_or_historical():
     docs = {
         # SYNC_ANALYSIS.md now has v1.0 RC transport clarification block
         SYNC_ANALYSIS_DOC: "v1.0 RC transport clarification",
-        AFRP_SKILL: "implemented backup HTTP `/ultrathink` path",
-        AFRP_README: "implemented backup HTTP `/ultrathink` path",
-        SINGLE_AGENT_SKILL: "backup HTTP `/ultrathink` is implemented via `api_server.py`",
+        AFRP_SKILL: "implemented HTTP `/oramasys` path",
+        AFRP_README: "implemented HTTP `/oramasys` path",
+        SINGLE_AGENT_SKILL: "canonical HTTP path is `/oramasys`",
     }
 
     for path, expected_text in docs.items():

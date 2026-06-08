@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 test_api_server.py
 ==================
@@ -62,7 +62,7 @@ def test_http_bridge_maps_optimize_for_to_reasoning_depth(monkeypatch):
 
     with TestClient(api_server.app, raise_server_exceptions=True) as client:
         response = client.post(
-            "/ultrathink",
+            "/oramasys",
             json={
                 "task_description": "Design a resilient orchestration layer",
                 "optimize_for": "reliability",
@@ -90,7 +90,7 @@ def test_http_bridge_prefers_explicit_reasoning_depth(monkeypatch):
 
     with TestClient(api_server.app, raise_server_exceptions=True) as client:
         response = client.post(
-            "/ultrathink",
+            "/oramasys",
             json={
                 "task_description": "Review a code migration plan",
                 "reasoning_depth": "standard",
@@ -115,7 +115,7 @@ def test_http_bridge_preserves_legacy_default_reasoning_depth(monkeypatch):
 
     with TestClient(api_server.app, raise_server_exceptions=True) as client:
         response = client.post(
-            "/ultrathink",
+            "/oramasys",
             json={
                 "task_description": "Analyze a backup path",
                 "task_type": "analysis",
@@ -141,7 +141,7 @@ def test_http_bridge_honors_model_hint(monkeypatch):
 
     with TestClient(api_server.app, raise_server_exceptions=True) as client:
         response = client.post(
-            "/ultrathink",
+            "/oramasys",
             json={
                 "task_description": "Analyze failover design",
                 "task_type": "analysis",
@@ -155,6 +155,24 @@ def test_http_bridge_honors_model_hint(monkeypatch):
     assert body["model_used"] == "custom-model"
     assert body["metadata"]["model_hint_used"] is True
     assert captured["model"] == "custom-model"
+
+
+def test_legacy_ultrathink_route_shims_to_oramasys(monkeypatch):
+    async def fake_call_with_fallback(prompt, model, max_tokens, temperature):
+        return "legacy shim output", "http://redacted"
+
+    monkeypatch.setattr(api_server, "_call_with_fallback", fake_call_with_fallback)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/ultrathink",
+            json={"task_description": "verify old route compatibility"},
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"] == "legacy shim output"
+    assert body["nodes_visited"] == ["oramasys_node"]
 
 
 def test_http_health_endpoint(monkeypatch):
@@ -196,7 +214,7 @@ def test_runtime_state_reads_pt_payload(monkeypatch, tmp_path):
 
 
 def test_hardware_mismatch_mac_provider_with_windows_model(monkeypatch):
-    """lmstudio-mac + Windows-only model → must return 400 HARDWARE_MISMATCH."""
+    """lmstudio-mac + Windows-only model â†’ must return 400 HARDWARE_MISMATCH."""
     async def fake_call_with_fallback(prompt, model, max_tokens, temperature):
         return "should not reach here", "http://redacted"
 
@@ -223,7 +241,7 @@ def test_hardware_mismatch_mac_provider_with_windows_model(monkeypatch):
     try:
         with TestClient(api_server.app, raise_server_exceptions=True) as client:
             response = client.post(
-                "/ultrathink",
+                "/oramasys",
                 json={
                     "task_description": "Write a sorting algorithm",
                     "task_type": "code",
@@ -240,7 +258,7 @@ def test_hardware_mismatch_mac_provider_with_windows_model(monkeypatch):
 
 
 def test_hardware_mismatch_win_provider_with_mac_model(monkeypatch):
-    """lmstudio-win + Mac-only MLX model → must return 400 HARDWARE_MISMATCH."""
+    """lmstudio-win + Mac-only MLX model â†’ must return 400 HARDWARE_MISMATCH."""
     async def fake_call_with_fallback(prompt, model, max_tokens, temperature):
         return "should not reach here", "http://redacted"
 
@@ -267,7 +285,7 @@ def test_hardware_mismatch_win_provider_with_mac_model(monkeypatch):
     try:
         with TestClient(api_server.app, raise_server_exceptions=True) as client:
             response = client.post(
-                "/ultrathink",
+                "/oramasys",
                 json={
                     "task_description": "Run MLX inference",
                     "task_type": "code",
@@ -300,7 +318,7 @@ def test_fail_closed_when_perpetuatoolsroot_missing(monkeypatch):
     try:
         with TestClient(api_server.app, raise_server_exceptions=True) as client:
             response = client.post(
-                "/ultrathink",
+                "/oramasys",
                 json={
                     "task_description": "Run routed check",
                     "task_type": "code",
@@ -331,7 +349,7 @@ def test_fail_closed_when_platform_and_provider_hint_both_present(monkeypatch):
     try:
         with TestClient(api_server.app, raise_server_exceptions=True) as client:
             response = client.post(
-                "/ultrathink",
+                "/oramasys",
                 json={
                     "task_description": "Run routed check",
                     "task_type": "code",
@@ -363,7 +381,7 @@ def test_fail_closed_when_only_legacy_path_env_is_set(monkeypatch):
     try:
         with TestClient(api_server.app, raise_server_exceptions=True) as client:
             response = client.post(
-                "/ultrathink",
+                "/oramasys",
                 json={
                     "task_description": "Run routed check",
                     "task_type": "code",
@@ -374,3 +392,4 @@ def test_fail_closed_when_only_legacy_path_env_is_set(monkeypatch):
         assert response.json()["error"] == "POLICY_UNAVAILABLE"
     finally:
         api_server._policy_resolver = original_resolver
+
