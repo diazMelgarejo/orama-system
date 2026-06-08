@@ -2682,7 +2682,7 @@ on a credential prompt.)
   will hang on the unreachable engine. Repair via `/setup-gbrain` first.
 
 This is a public, cross-agent record of a private operating lesson (memory
-`feedback_hard_deadlines_no_hang`); see also [`docs/v2/27`](v2/27-git-governance-zero-fragmentation.md)
+`feedback_hard_deadlines_no_hang`); see also [`docs/v2/29`](v2/29-git-governance-zero-fragmentation.md)
 and the AlphaClaw/periscope network-git safety notes. Sleep chains were already banned.
 
 ## 2026-06-06 — AI agents do destructive git ops; every agent must know this protocol
@@ -2752,7 +2752,7 @@ gbrain sources list   # check last sync timestamps
 
 **Cross-agent propagation:** This lesson is in both LESSONS.md files (orama + PT), in
 `AGENTS.md` § History-rewrite protocol in every repo, and in the git-reanchor SKILL.md.
-The docs/v2/27 governance plan covers the org-wide rollout to future `oramasys/*` repos.
+The docs/v2/29 governance plan covers the org-wide rollout to future `oramasys/*` repos.
 
 ### 2026-06-06 (cont.) — zero-fragmentation gate SHIPPED + a live concurrent-write collision (2nd this session)
 
@@ -2764,7 +2764,7 @@ mainstream-AI co-authors) is now *enforced*, not just documented:
 two checks: (a) **completeness** (every canonical guard is in the sync copy list — catches the
 exact omission that let `check_commit_message.sh`/`check_identity.sh` drift); (b) **parity**
 (downstream copies byte-identical to orama canonical via `cmp -s`). Verified PASS on orama +
-PT (9/9). Added to the sync copy list so it self-propagates. Doctrine: [`docs/v2/27`](v2/27-git-governance-zero-fragmentation.md).
+PT (9/9). Added to the sync copy list so it self-propagates. Doctrine: [`docs/v2/29`](v2/29-git-governance-zero-fragmentation.md).
 
 **2. Concurrent-agent collision during the opus-4-8 migration — caught a 404 regression.**
 While doing the `/claude-api migrate` task, a parallel agent (same approved identity
