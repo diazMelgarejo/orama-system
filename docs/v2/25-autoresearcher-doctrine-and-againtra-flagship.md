@@ -139,7 +139,7 @@ For each: public contract, dependency direction (acyclic; orama imports PT types
 reverse), security/safety/alignment posture, release cadence (independent per hybrid
 satellite model), v2-org readiness gaps.
 
-**Output:** `docs/v2/30-oramasys-v2-harmonization-blueprint.md` — the "intentional community"
+**Output:** `docs/v2/29-oramasys-v2-harmonization-blueprint.md` — the "intentional community"
 target architecture every lego conforms to. Adversarially reviewed.
 
 ---
