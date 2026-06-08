@@ -215,13 +215,15 @@ It is machine-specific. Add it to `.gitignore` if you see it untracked. See LESS
 
 ## Skill 10 — External Agent Integration (Gemini · Codex · OpenClaw)
 
-orama-system exposes `POST /ultrathink` at port 8001. Any external agent (Gemini, Codex, OpenClaw,
+orama-system exposes canonical `POST /oramasys` at port 8001. The legacy
+`POST /ultrathink` route remains as a deprecated compatibility shim for one
+v1.x release. Any external agent (Gemini, Codex, OpenClaw,
 LangGraph, etc.) can drive orama as a black-box reasoning endpoint.
 
 ### Direct HTTP (any agent)
 
 ```bash
-curl http://localhost:8001/ultrathink \
+curl http://localhost:8001/oramasys \
   -H "Content-Type: application/json" \
   -d '{
     "task_description": "Analyse the failing test and propose a fix",
@@ -244,7 +246,7 @@ Register orama's MCP server:
 # In ~/.gemini/settings.json → mcpServers block:
 "orama": {
   "command": "python",
-  "args": ["-m", "bin.mcp_servers.ultrathink_orchestration_server"],
+  "args": ["-m", "bin.mcp_servers.oramasys_orchestration_server"],
   "cwd": "/path/to/orama-system"
 }
 ```
@@ -260,7 +262,7 @@ orama exposes a `.agents/skills/orama-system/` harness (Codex-compatible):
 skill .agents/skills/orama-system/SKILL.md
 
 # Or call the endpoint directly from a Codex tool-use block:
-curl http://localhost:8001/ultrathink -d '{"task_description":"…","session_id":"codex-001"}'
+curl http://localhost:8001/oramasys -d '{"task_description":"…","session_id":"codex-001"}'
 ```
 
 Codex harness path: `.agents/skills/orama-system/` (mirrored from `bin/orama-system/`).
@@ -280,8 +282,8 @@ Codex harness docs: https://docs.openclaw.ai/plugins/codex-harness
 
 Register the MCP server with Claude Code:
 ```bash
-claude mcp add --transport stdio orama-ultrathink \
-  -- python -m bin.mcp_servers.ultrathink_orchestration_server
+claude mcp add --transport stdio oramasys \
+  -- python -m bin.mcp_servers.oramasys_orchestration_server
 ```
 
 ### Simultaneous multi-agent pattern

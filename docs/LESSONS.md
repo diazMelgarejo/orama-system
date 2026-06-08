@@ -2796,3 +2796,9 @@ resume tri-repo Gate 2→3 ([[project_tri_repo_migration_state]]); **(P3)** wire
 **Canonical references:** `scripts/git/reanchor_scan.sh` · `bin/orama-system/skills/git-reanchor/SKILL.md`
 · `docs/v2/22-worktree-parallel-agents.md` · memory `feedback_git_guards_single_source`
 · memory `project_orama_main_rewrite_pr70`.
+
+### 2026-06-08 — Claude patch review: accept canonical aliasing, reject duplicate skill tree
+
+Claude's attached recommendations were useful for the P0 rename only where they added missing contract clarity: successor aliasing (`ultrathink` prompts map to oramasys), canonical MCP naming (`mcp/oramasys`, `oramasys_*` tools), and explicit compatibility shims for one v1.x release. The proposed standalone `oramasys-method` skill duplicated content already present in the current orama skill stack (5-stage method, CIDF, AFRP, CRG/gbrain frugality, first-run references), so copying it wholesale would fragment the operator surface.
+
+Decision: consolidate, do not duplicate. Keep the existing skill tree as the source of truth and fold in only the new alias/MCP naming rules. Preserve existing MCP entries (`code-review-graph`, `ai-cli-mcp`, GitHub/LM Studio style stdio configs) when adding `oramasys`; never replace the whole `.cursor/mcp.json` from a patch that only intends to add one server. P1/P2 pipeline/version-bump work stays deferred until after the P0 `/oramasys` contract is stable.
