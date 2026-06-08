@@ -191,11 +191,11 @@ orama-system/docs/v2/
 ├── 24-security-first-platform.md      ← security as first-class platform feature; OWASP/NIST/CISA/OpenSSF/SLSA citations
 ├── 25-autoresearcher-doctrine-and-againtra-flagship.md  ← autoresearcher doctrine + agAIntra flagship migration plan
 ├── 26-tdd-and-outsourced-review-doctrine.md  ← TDD + outsourced review doctrine
-├── 28-againtra-platform-requirements-alignment.md  ← agAIntra/againtra-platform v2 requirements alignment
-└── 29-git-governance-zero-fragmentation.md  ← git governance zero-fragmentation doctrine
+├── 27-git-governance-zero-fragmentation.md  ← git governance zero-fragmentation doctrine
+└── 28-againtra-platform-requirements-alignment.md  ← agAIntra/againtra-platform v2 requirements alignment
 ```
 
-> **Next free slot: `30-`**
+> **Next free slot: `29-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

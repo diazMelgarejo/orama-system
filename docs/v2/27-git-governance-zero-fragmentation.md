@@ -1,4 +1,4 @@
-# 29 — Git Governance: One Source of Truth, Zero Fragmentation (org-wide)
+# 27 — Git Governance: One Source of Truth, Zero Fragmentation (org-wide)
 
 > **Status:** active doctrine (2026-06-05). Companion: [`11-idempotency-and-guard-patterns.md`](11-idempotency-and-guard-patterns.md),
 > [`23-security-preconditions.md`](23-security-preconditions.md). Skill: [git-reanchor](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-reanchor/SKILL.md).
