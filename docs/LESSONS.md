@@ -2802,3 +2802,31 @@ resume tri-repo Gate 2→3 ([[project_tri_repo_migration_state]]); **(P3)** wire
 Claude's attached recommendations were useful for the P0 rename only where they added missing contract clarity: successor aliasing (`ultrathink` prompts map to oramasys), canonical MCP naming (`mcp/oramasys`, `oramasys_*` tools), and explicit compatibility shims for one v1.x release. The proposed standalone `oramasys-method` skill duplicated content already present in the current orama skill stack (5-stage method, CIDF, AFRP, CRG/gbrain frugality, first-run references), so copying it wholesale would fragment the operator surface.
 
 Decision: consolidate, do not duplicate. Keep the existing skill tree as the source of truth and fold in only the new alias/MCP naming rules. Preserve existing MCP entries (`code-review-graph`, `ai-cli-mcp`, GitHub/LM Studio style stdio configs) when adding `oramasys`; never replace the whole `.cursor/mcp.json` from a patch that only intends to add one server. P1/P2 pipeline/version-bump work stays deferred until after the P0 `/oramasys` contract is stable.
+
+### 2026-06-08 (cont.) — Windows Git shim must expose GitHub Desktop's HTTPS helper path
+
+During the P0 oramasys commit/rebase flow, `git pull --rebase origin main` failed
+with `git: 'remote-https' is not a git command` even though `git --exec-path`
+pointed inside GitHub Desktop. Root cause: the local `C:\Users\lab\.lmstudio\bin\git.cmd`
+shim launches GitHub Desktop's `cmd\git.exe`, but it does not put the bundled
+`mingw64\bin` helper directory on `PATH` or set `GIT_EXEC_PATH` to the directory
+that contains `git-remote-https.exe`.
+
+Temporary working command:
+```powershell
+$gitRoot = "$env:LOCALAPPDATA\GitHubDesktop\app-3.5.9-beta3\resources\app\git"
+$env:PATH = "$gitRoot\mingw64\bin;$gitRoot\cmd;$env:PATH"
+$env:GIT_EXEC_PATH = "$gitRoot\mingw64\bin"
+& "$gitRoot\cmd\git.exe" pull --rebase origin main
+```
+
+Permanent shim rule: keep the LM Studio-style lightweight wrapper, but when it
+finds a GitHub Desktop app directory, prepend both `resources\app\git\mingw64\bin`
+and `resources\app\git\cmd` before invoking `cmd\git.exe`, or set
+`GIT_EXEC_PATH` for that child process. Do not replace the shim with a hardcoded
+single GitHub Desktop version path; keep edition/version discovery frugal.
+
+PowerShell gotchas from the same run:
+- Quote upstream shorthand as `git rev-parse --abbrev-ref '@{u}'`; bare `@{u}` is parsed as a hashtable.
+- Do not use `&&` in this Windows PowerShell session; run commands separately or use PowerShell-native control flow.
+- If the HTTPS helper error disappears and the next failure is `Failed to connect to github.com ... 127.0.0.1`, the Git shim is fixed enough for HTTPS and the remaining issue is network/proxy access, not Git packaging.
