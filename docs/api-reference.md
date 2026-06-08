@@ -42,7 +42,7 @@ Creates: tasks/todo.md, tasks/lessons.md (if not exists)
 
 ## MCP Tools (Multi-Agent)
 
-### ultrathink_solve
+### oramasys_solve
 ```json
 {
   "task": "string (required)",
@@ -52,7 +52,7 @@ Creates: tasks/todo.md, tasks/lessons.md (if not exists)
 → { "task_id": "uuid", "status": "started" }
 ```
 
-### ultrathink_delegate
+### oramasys_delegate
 ```json
 {
   "stage": "context|architecture|refinement|execution|verification|crystallization",
@@ -62,13 +62,13 @@ Creates: tasks/todo.md, tasks/lessons.md (if not exists)
 → { "delegated_to": "agent-id", "status": "queued" }
 ```
 
-### ultrathink_status
+### oramasys_status
 ```json
 { "task_id": "uuid" }
 → TaskState object
 ```
 
-### ultrathink_lessons
+### oramasys_lessons
 ```json
 { "domain": "optional filter", "limit": 10 }
 → { "lessons": [...], "total": N }
@@ -110,14 +110,17 @@ The ὅραμα System exposes a stateless HTTP API.
 # Start (requires: pip install fastapi uvicorn pydantic)
 python api_server.py
 
-# POST /ultrathink
-curl -X POST http://localhost:8001/ultrathink \
+# POST /oramasys
+curl -X POST http://localhost:8001/oramasys \
   -H "Content-Type: application/json" \
   -d '{"task_description": "Build auth system", "optimize_for": "reliability"}'
 
 # GET /health
 curl http://localhost:8001/health
 ```
+
+`POST /ultrathink` remains as a deprecated compatibility shim for one v1.x
+release. New clients should use `/oramasys`.
 
 ### Request Body
 ```json

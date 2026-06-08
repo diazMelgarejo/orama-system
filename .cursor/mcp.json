@@ -24,6 +24,13 @@
       "env": {
         "MCP_CLAUDE_DEBUG": "false"
       }
+    },
+    "oramasys": {
+      "command": "python",
+      "args": [
+        "bin/mcp_servers/openclaw_mcp_server.py"
+      ],
+      "id": "mcp/oramasys"
     }
   }
 }

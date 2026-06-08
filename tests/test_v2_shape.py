@@ -1,11 +1,11 @@
-#!/usr/bin/env python3
+﻿#!/usr/bin/env python3
 """
 test_v2_shape.py
 ================
 TDD backport: wire orama-system v0.9.9.9 API models to match the v2 external
 shape defined in orama-system/docs/v2/01-kernel-spec.md.
 
-RED tests written first — each will fail until api_server.py is updated.
+RED tests written first â€” each will fail until api_server.py is updated.
 """
 from __future__ import annotations
 
@@ -13,25 +13,25 @@ import pytest
 from pydantic import ValidationError
 
 import api_server
-from api_server import UltraThinkRequest, UltraThinkResponse
+from api_server import OramasysRequest, OramasysResponse
 
 
-# ── session_id on request ─────────────────────────────────────────────────────
+# â”€â”€ session_id on request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_ultrathink_request_accepts_session_id():
-    req = UltraThinkRequest(task_description="hello", session_id="abc-123")
+    req = OramasysRequest(task_description="hello", session_id="abc-123")
     assert req.session_id == "abc-123"
 
 
 def test_ultrathink_request_session_id_defaults_to_none():
-    req = UltraThinkRequest(task_description="hello")
+    req = OramasysRequest(task_description="hello")
     assert req.session_id is None
 
 
-# ── session_id on response ────────────────────────────────────────────────────
+# â”€â”€ session_id on response â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_ultrathink_response_accepts_session_id():
-    resp = UltraThinkResponse(
+    resp = OramasysResponse(
         status="success",
         result="ok",
         model_used="some-model",
@@ -44,7 +44,7 @@ def test_ultrathink_response_accepts_session_id():
 
 
 def test_ultrathink_response_session_id_defaults_to_none():
-    resp = UltraThinkResponse(
+    resp = OramasysResponse(
         status="success",
         result="ok",
         model_used="some-model",
@@ -55,10 +55,10 @@ def test_ultrathink_response_session_id_defaults_to_none():
     assert resp.session_id is None
 
 
-# ── nodes_visited on response ─────────────────────────────────────────────────
+# â”€â”€ nodes_visited on response â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_ultrathink_response_accepts_nodes_visited():
-    resp = UltraThinkResponse(
+    resp = OramasysResponse(
         status="success",
         result="ok",
         model_used="some-model",
@@ -71,7 +71,7 @@ def test_ultrathink_response_accepts_nodes_visited():
 
 
 def test_ultrathink_response_nodes_visited_defaults_to_empty_list():
-    resp = UltraThinkResponse(
+    resp = OramasysResponse(
         status="success",
         result="ok",
         model_used="some-model",
@@ -82,10 +82,10 @@ def test_ultrathink_response_nodes_visited_defaults_to_empty_list():
     assert resp.nodes_visited == []
 
 
-# ── retry_count on response ───────────────────────────────────────────────────
+# â”€â”€ retry_count on response â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def test_ultrathink_response_accepts_retry_count():
-    resp = UltraThinkResponse(
+    resp = OramasysResponse(
         status="success",
         result="ok",
         model_used="some-model",
@@ -98,7 +98,7 @@ def test_ultrathink_response_accepts_retry_count():
 
 
 def test_ultrathink_response_retry_count_defaults_to_zero():
-    resp = UltraThinkResponse(
+    resp = OramasysResponse(
         status="success",
         result="ok",
         model_used="some-model",
@@ -109,16 +109,16 @@ def test_ultrathink_response_retry_count_defaults_to_zero():
     assert resp.retry_count == 0
 
 
-# ── no pydantic protected-namespace warning for model_hint / model_used ───────
+# â”€â”€ no pydantic protected-namespace warning for model_hint / model_used â”€â”€â”€â”€â”€â”€â”€
 
 def test_ultrathink_request_no_model_hint_namespace_warning(recwarn):
-    UltraThinkRequest(task_description="test")
+    OramasysRequest(task_description="test")
     pydantic_warns = [w for w in recwarn.list if "model_hint" in str(w.message)]
     assert pydantic_warns == [], "model_hint triggers Pydantic protected-namespace warning"
 
 
 def test_ultrathink_response_no_model_used_namespace_warning(recwarn):
-    UltraThinkResponse(
+    OramasysResponse(
         status="success",
         result="ok",
         model_used="some-model",
@@ -130,10 +130,10 @@ def test_ultrathink_response_no_model_used_namespace_warning(recwarn):
     assert pydantic_warns == [], "model_used triggers Pydantic protected-namespace warning"
 
 
-# ── /ultrathink endpoint includes session_id and nodes_visited in JSON output ─
+# â”€â”€ /oramasys endpoint includes session_id and nodes_visited in JSON output â”€
 
 def test_http_endpoint_returns_session_id_and_nodes_visited(monkeypatch):
-    """End-to-end: POST /ultrathink with session_id → response JSON has both fields."""
+    """End-to-end: POST /oramasys with session_id â†’ response JSON has both fields."""
     from fastapi.testclient import TestClient
 
     async def fake_call(prompt, model, max_tokens, temperature):
@@ -142,7 +142,7 @@ def test_http_endpoint_returns_session_id_and_nodes_visited(monkeypatch):
     monkeypatch.setattr(api_server, "_call_with_fallback", fake_call)
 
     client = TestClient(api_server.app)
-    resp = client.post("/ultrathink", json={
+    resp = client.post("/oramasys", json={
         "task_description": "test v2 shape",
         "session_id": "sess-xyz",
     })
@@ -155,7 +155,7 @@ def test_http_endpoint_returns_session_id_and_nodes_visited(monkeypatch):
     assert isinstance(body["retry_count"], int)
 
 
-# ── qwen3.5-9b-mlx thinking-model response extraction contract ───────────────
+# â”€â”€ qwen3.5-9b-mlx thinking-model response extraction contract â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Documents the expected behavior for the future real LM Studio HTTP client.
 # The stub _call_with_fallback is mocked here; the real implementation must
 # extract `content` not `reasoning_content` from thinking model responses.
@@ -207,3 +207,4 @@ def test_extract_content_handles_non_thinking_model():
         }]
     }
     assert _extract_content_from_lm_studio_response(standard_response) == "Hello!"
+
