@@ -15,6 +15,14 @@ description: >
 
 ---
 
+## Windows PowerShell Runtime Bootstrap
+
+Before git pushes, rebases, PR-branch syncs, or local test runs on the Windows
+RTX/LM Studio host, use the shared bootstrap reference:
+[`git-history-surgery/references/windows-powershell-runtime-bootstrap.md`](../git-history-surgery/references/windows-powershell-runtime-bootstrap.md).
+
+---
+
 ## Step 0 — Should You Use a Worktree?
 
 Ask two questions:
