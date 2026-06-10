@@ -6,6 +6,33 @@
 
 ---
 
+## § 0 — Active Goal (read this first, every session)
+
+```
+GOAL.md is active. Do not skip it.
+```
+
+1. **Read [`GOAL.md`](GOAL.md)** at the start of every session — before any
+   other work, before reading the mother skill, before any tool call.
+2. **Run the § 4.0 baseline scan** from GOAL.md immediately after reading it:
+   ```bash
+   grep -rn "ultrathink" \
+     --include="*.py" --include="*.json" --include="SKILL.md" \
+     --include="*.sh" --include="*.toml" \
+     bin/ .claude/ .agents/ api_server.py \
+     | grep -vi "legacy\|deprecated\|historical\|shim\|alias\|compat\|successor"
+   ```
+3. **Check which ACs already pass.** Do not redo passing work.
+4. **If GOAL.md does not yet say `GOAL COMPLETE`:** pick the highest-leverage
+   failing AC, fix it, re-run the full gate. Loop until all 10 ACs are green.
+5. **If GOAL.md says `GOAL COMPLETE`:** proceed with the session's primary task.
+
+> This block stays in CLAUDE.md until GOAL.md prints `GOAL COMPLETE — oramasys
+> rename consistent, all gates green.` At that point, remove § 0 and delete
+> GOAL.md in the same commit.
+
+---
+
 ## Meta-rule: Progressive Disclosure (Horse Pulls Cart)
 
 **Documents own content. This file navigates.**
@@ -50,7 +77,7 @@ Read before any structural change. Below is a navigation summary only.
 
 ## § 1 — Continuous Learning
 
-Every session: read [`docs/LESSONS.md`](docs/LESSONS.md) at start; append discoveries before exit.
+Every session: read [`docs/LESSONS.md`](docs/LESSONS.md) (human-browsable) and [`.claude/lessons/LESSONS.md`](.claude/lessons/LESSONS.md) (ECC canonical) at start; append discoveries before exit.
 Instinct path: `.claude/homunculus/instincts/inherited/orama-system-instincts.yaml`
 Full spec: [continuous-learning-v2](https://github.com/affaan-m/everything-claude-code/tree/main/skills/continuous-learning-v2)
 
@@ -125,7 +152,7 @@ Full setup: [`docs/wiki/06-multi-agent-collab.md`](docs/wiki/06-multi-agent-coll
 - Dated branches: `yyyy-mm-dd-NNN-brief-summary`
 - Never commit `.env`, `.env.local`, generated `.paths`
 - **No workstation paths in tracked files** (docs included): use `$OPENCLAW_ROOT`/`~`/`$REPO_ROOT`, never literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree. CI enforces via `scripts/review/repo_hygiene.py` — run it before committing docs with shell commands. See [wiki/08 § Portable paths](docs/wiki/08-git-hygiene-and-branching.md).
-- **History was rewritten — judging branches:** NEVER use ahead/behind, `rev-list --count`, or `merge-base` to decide if a branch is orphaned/divergent (meaningless across a rewrite). Run the tree-twin scan `scripts/git/reanchor_scan.sh <repo> origin/main [scope]`. Protocol: [`AGENTS.md` § History-rewrite](AGENTS.md) · method [git-reanchor SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-reanchor/SKILL.md) · why [LESSONS § 2026-06-05](docs/LESSONS.md).
+- **History was rewritten — judging branches:** NEVER use ahead/behind, `rev-list --count`, or `merge-base` to decide if a branch is orphaned/divergent (meaningless across a rewrite). Run the tree-twin scan `scripts/git/reanchor_scan.sh <repo> origin/main [scope]`. Protocol: [`AGENTS.md` § History-rewrite](AGENTS.md) · method [git-history-surgery SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md) · why [LESSONS § 2026-06-05](docs/LESSONS.md).
 - **Attribution guards: single source of truth (ZERO fragmentation).** orama `scripts/git/` is canonical for `audit_attribution.sh`, `banned_attribution_lib.sh`, `check_commit_message.sh`, `check_identity.sh`, `daily-attribution-guard.sh` (+ deps). They are **byte-identical in every repo**. NEVER hand-edit a guard in a downstream repo (causes silent drift — e.g. a stale strict-mode allowlist blocking valid pushes). Edit orama's copy, then `bash scripts/git/sync-attribution-guard-scripts.sh <target>`. `daily-attribution-guard.sh` is self-contained (derives `REPO_ROOT`) — never a thin wrapper. Org-wide plan: [`docs/v2/`](docs/v2/).
 - Full rules: [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md)
 

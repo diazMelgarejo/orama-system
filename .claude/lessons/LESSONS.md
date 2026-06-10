@@ -19,6 +19,61 @@ Import command: `/instinct-import .claude/homunculus/instincts/inherited/orama-s
 
 ## Sessions Log
 
+## 2026-06-10 — Claude — oramasys rename audit, skill eval, GOAL.md
+
+### What was learned
+- The `mcp.json` server name (`ultrathink-lmstudio`), the mother SKILL.md
+  allowed-tools field (`mcp-ultrathink-lmstudio`), and the body reference
+  (`mcp-ultrathink-openclaw`) were three different names — none aligned.
+  The fix had already landed on origin/main (`mcp-oramasys` canonical) but
+  two downstream clients and several config JSONs still used legacy names.
+- `bin/shared/ultrathink_core.py` is still the live module name; 67 residual
+  `ultrathink` refs remain in production code/skills (not counting deliberate
+  legacy/shim lines). This is the P0 blocker for v1.1.
+- `.claude/skills/agent-methodology/SKILL.md` defines a 5-stage sequence
+  (Crystallize→Architect→Execute→Refine→Verify) that diverges from the
+  canonical `references/ultrathink-5-stages.md`. The card was added without
+  syncing to the canonical source. Dogfood defect: found by applying the
+  methodology's own Stage 3 (Ruthless Refinement — eliminate inconsistency)
+  to orama-system itself.
+- `bin/orama-system/afrp/SKILL.md` line 3 has a UTF-8 mojibake artifact
+  (`â€"` instead of `—`). Likely introduced by a copy-paste through a
+  non-UTF-8 tool.
+
+### Prevention
+- Add a hygiene check: `grep -rn "ultrathink" --include="*.py" --include="*.json" --include="SKILL.md" bin/ .claude/ .agents/` should return 0 lines
+  (excluding deliberate legacy/shim/alias lines). Wire into `test_repo_hygiene.py`.
+- When creating a background-knowledge skill card (user-invocable: false), add a
+  frontmatter comment: `# source-of-truth: references/oramasys-5-stages.md` so
+  future editors know where to look before editing.
+- Before any `cp` or paste of a markdown file across tools, verify encoding:
+  `python3 -c "open('file.md').read().encode('utf-8')"` — silent = clean.
+
+### Decisions made
+- `GOAL.md` written at repo root to give Claude Code a persistent, self-contained
+  goal with 10 verifiable acceptance criteria (AC1-AC10). Each criterion is an
+  exact bash command; a green checkbox = observed exit-0, not an assumption.
+- The oramasys-method skill is the user-invocable front door replacing ultrathink-system.
+  It is intentionally thin: it delegates to the mother skill, agent-methodology card,
+  and references/ rather than duplicating their content.
+- The eval revealed "re-architecting the orchestrator" did not trigger the skill.
+  Fix: broadened description with "re-architecture work", "multi-step plan",
+  "complex refactor", "system overhaul", "design-heavy", "non-trivial".
+  Final eval: Precision 1.00, Recall 0.86 (honest parse from real description).
+
+### Open questions
+- AC9 (Perpetua-Tools lockstep): the scan found `ultrathink-agent-network` in
+  PT's orchestrator/. Needs a separate pass on the PT branch.
+- The frugality eval harness (`scripts/eval/oramasys_trigger_eval.py`) is
+  referenced in AC8 but not yet committed. Should be added in the P0 rename PR.
+
+### Cross-references
+- GOAL.md (repo root) — the persistent execution goal
+- docs/plans/2026-05-29-03-v1.1-definitive.md — the full v1.1 plan
+- docs/plans/2026-06-10-oramasys-method-skill-eval.md — eval report
+- bin/orama-system/skills/oramasys-method/ — the replacement skill
+
+
 ## 2026-05-20 — Claude — fix(docs): file:// link broke repo_hygiene test
 
 ### What was learned
