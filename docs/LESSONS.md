@@ -2562,7 +2562,7 @@ None — rule is fully specified and enforced at the shell level.
 - Re-anchor moves the *ref* for a clean graph; it does NOT merge branch content into main (that would regress the canonical tree). Merge only genuinely-unique forward work via a reviewed PR.
 - Always wrap network git ops in a `timeout` (a `git fetch upstream` once hung ~14h).
 
-**Canonical skill:** [`../bin/orama-system/skills/git-reanchor/SKILL.md`](../bin/orama-system/skills/git-reanchor/SKILL.md) · Fork variant: [`wiki/13-alphaclaw-fork-contrib-branches.md`](wiki/13-alphaclaw-fork-contrib-branches.md) · Rewrite companion: [`../bin/orama-system/skills/expunge-git/SKILL.md`](../bin/orama-system/skills/expunge-git/SKILL.md)
+**Canonical skill:** [`../bin/orama-system/skills/git-history-surgery/SKILL.md`](../bin/orama-system/skills/git-history-surgery/SKILL.md) · Fork variant: [`wiki/13-alphaclaw-fork-contrib-branches.md`](wiki/13-alphaclaw-fork-contrib-branches.md)
 
 ---
 
@@ -2586,12 +2586,12 @@ proxy with the method that truly answers the question (tree-twin search, not mer
 trust the user's domain signal over a first-pass check. Don't assert "fine/done" from a
 narrow check — name what was actually verified.
 
-→ AFRP gate: [`../bin/orama-system/afrp/SKILL.md`](../bin/orama-system/afrp/SKILL.md) § Intent-Verification · Catalog: [`../bin/orama-system/afrp/failure-modes.md`](../bin/orama-system/afrp/failure-modes.md) § Failure Mode 7 · Skill fix: [`../bin/orama-system/skills/git-reanchor/SKILL.md`](../bin/orama-system/skills/git-reanchor/SKILL.md) § 5 (tree-twins, not merge-base)
+→ AFRP gate: [`../bin/orama-system/afrp/SKILL.md`](../bin/orama-system/afrp/SKILL.md) § Intent-Verification · Catalog: [`../bin/orama-system/afrp/failure-modes.md`](../bin/orama-system/afrp/failure-modes.md) § Failure Mode 7 · Skill fix: [`../bin/orama-system/skills/git-history-surgery/SKILL.md`](../bin/orama-system/skills/git-history-surgery/SKILL.md) § B5 (tree-twins, not merge-base)
 
 ## 2026-06-05 — I repeated FM7 one hour after shipping the fix (the durable lesson)
 
 **What happened.** Right after merging PR #73 (which *added* Failure Mode 7 and the
-tree-twin §5 to git-reanchor), and after **moving `reanchor_scan.sh` into the workspace**,
+tree-twin §B5 to git-history-surgery), and after **moving `reanchor_scan.sh` into the workspace**,
 I was asked to check Perpetua-Tools branches. I reflexively hand-rolled a fresh `git
 rev-list --count` / `merge-base` ahead-behind table — **the exact proxy the skill I'd just
 written forbids** — and declared PT "no orphans, nothing to do." The user caught the tell:
@@ -2634,7 +2634,7 @@ onto twin, then PR the `+` commits. Details: PT [`docs/LESSONS.md`](../../perple
 · [GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md).
 
 **Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) ·
-canonical method [git-reanchor SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-reanchor/SKILL.md) ·
+canonical method [git-history-surgery SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md) ·
 tool [`scripts/git/reanchor_scan.sh`](../scripts/git/reanchor_scan.sh). periscope excluded —
 its `main`/`agentsview` are pure upstream mirrors, not rewritten by us.
 
@@ -2751,7 +2751,7 @@ gbrain sources list   # check last sync timestamps
 ```
 
 **Cross-agent propagation:** This lesson is in both LESSONS.md files (orama + PT), in
-`AGENTS.md` § History-rewrite protocol in every repo, and in the git-reanchor SKILL.md.
+`AGENTS.md` § History-rewrite protocol in every repo, and in the git-history-surgery SKILL.md.
 The docs/v2/27 governance plan covers the org-wide rollout to future `oramasys/*` repos.
 
 ### 2026-06-06 (cont.) — zero-fragmentation gate SHIPPED + a live concurrent-write collision (2nd this session)
@@ -2793,7 +2793,7 @@ priorities after today: **(P1)** repair gbrain (`broken-config` → `/setup-gbra
 resume tri-repo Gate 2→3 ([[project_tri_repo_migration_state]]); **(P3)** wire
 `verify-guard-parity.sh` into each repo's CI + `daily-attribution-guard.sh`.
 
-**Canonical references:** `scripts/git/reanchor_scan.sh` · `bin/orama-system/skills/git-reanchor/SKILL.md`
+**Canonical references:** `scripts/git/reanchor_scan.sh` · `bin/orama-system/skills/git-history-surgery/SKILL.md`
 · `docs/v2/22-worktree-parallel-agents.md` · memory `feedback_git_guards_single_source`
 · memory `project_orama_main_rewrite_pr70`.
 
