@@ -4,9 +4,10 @@ description: >-
   Successor and drop-in replacement for the legacy ultrathink-system method.
   Applies the orama-system 5-stage methodology (Context Immersion → Visionary
   Architecture → Ruthless Refinement → Masterful Execution → Crystallize) with
-  the AFRP pre-router gate and CIDF content-insertion guard, routing heavy
-  reasoning through the orama MCP server and always searching local gbrain +
-  gstack memory before any paid tool. ALWAYS use this skill when the user says
+  the AFRP pre-router gate and CIDF content-insertion guard. Prefer local
+  memory/search tools before paid or external tools, and route heavy reasoning
+  through the orama MCP server when the current agent harness exposes it. ALWAYS
+  use this skill when the user says
   "ultrathink", "ultrathink this", "think deeply", "5-stage", "systematic
   approach", "oramasys", "apply oramasys", or asks for deep multi-step problem
   solving, architecture or re-architecture work, a rigorous or multi-step plan,
@@ -23,8 +24,9 @@ allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasy
 
 # oramasys-method
 
-The orama-system methodology (oramma = *vision / revelation*), packaged as a
-user-invocable skill. **This is the successor to the legacy `ultrathink-system`.**
+The orama-system methodology (orama = *vision / revelation*), packaged as a
+user-invocable skill for Claude, Codex, OpenClaw, and other agent harnesses.
+**This is the successor to the legacy `ultrathink-system`.**
 Any "ultrathink" trigger activates this skill and is handled by the orama-system
 path — same muscle memory, new engine.
 
@@ -33,7 +35,18 @@ path — same muscle memory, new engine.
 > is Claude-only background knowledge (`user-invocable: false`). This skill is the
 > user-invocable front door tying them together and guaranteeing the legacy
 > "ultrathink" alias keeps working. The 5 stages below match the repo's canonical
-> `references/ultrathink-5-stages.md` exactly.
+> 5-stage methodology exactly.
+
+## Agent Harness Compatibility
+
+This skill is intentionally agent-neutral:
+
+- Use native planning, shell, file, browser, and MCP tools from the current harness.
+- Treat named integrations such as `gbrain`, `gstack`, CRG, and `mcp-oramasys` as
+  preferred local tiers when available, not as permission to invent unavailable tools.
+- If a tier is unavailable, state the fallback briefly and use the cheapest
+  available equivalent before escalating to network or paid tools.
+- Preserve the method and verification standard even when the exact tool names differ.
 
 ---
 
@@ -63,7 +76,8 @@ Type → Mode mapping:
 
 ## Step 1 — Search FIRST (frugality, non-negotiable)
 
-Before Grep, Read, or any web/paid tool, query local semantic memory.
+Before broad Grep, Read, or any web/paid tool, query local semantic memory when
+the current harness exposes it.
 See `references/search-frugality.md` for the full decision tree.
 
 **Frugality chain (stop at first that answers):**
@@ -71,14 +85,15 @@ See `references/search-frugality.md` for the full decision tree.
 gbrain → code-review-graph (CRG) → Brave → Perplexity → Grok
 ```
 
-Quick rules:
+Quick rules when the tool exists:
 - Semantic intent → `gbrain search "<terms>"` or `gbrain query "<q>"`
 - Symbol defined where? → `gbrain code-def <symbol>`
 - What calls Y? → `gbrain code-callers <symbol>`
 - Past decisions/plans → `gbrain search "<terms>" --source gstack-brain-<user>`
 - Multi-file code question → CRG MCP tools BEFORE Grep
 - Known exact string → Grep is correct
-- Web → ALWAYS `/browse` (gstack), NEVER `mcp__claude-in-chrome__*` directly
+- Web → prefer the harness-approved browser/search path; in Claude/gstack
+  environments, use `/browse` rather than raw browser MCP calls.
 
 ---
 
@@ -99,8 +114,8 @@ Before Done, Demand Elegance, Autonomous Bug Fixing.
 
 ## Step 3 — Route heavy reasoning through the MCP server
 
-For Mode 2/3, offload deep reasoning to the orama MCP server.
-- MCP tool: **`mcp-oramasys`** (canonical)
+For Mode 2/3, offload deep reasoning to the orama MCP server when available.
+- MCP tool: **`mcp-oramasys`** (canonical, when exposed by the harness)
 - Legacy `mcp-ultrathink-*` names are deprecated aliases pointing to the same server
 - HTTP backup: `POST /oramasys` port 8001
 
@@ -118,7 +133,7 @@ For Mode 2/3, offload deep reasoning to the orama MCP server.
 
 ### Always Do
 - Run AFRP gate before any non-trivial output
-- Search gbrain/gstack/CRG before Grep/Read/web
+- Search local memory/CRG equivalents before broad Grep/Read/web when available
 - Apply CIDF `decide()` before any content insertion (start at rank 1)
 - Treat "ultrathink" and "oramasys" as the same trigger
 
@@ -130,7 +145,7 @@ For Mode 2/3, offload deep reasoning to the orama MCP server.
 ### Never Do
 - Skip the AFRP gate for complex queries
 - Parallel-fire all search tools at once (frugality violation)
-- Use `mcp__claude-in-chrome__*` directly — always `/browse`
+- Bypass the current harness's approved browser/search path
 - Trust visual confirmation as verification
 - Reintroduce `mcp-ultrathink-*` names in new config or skills
 

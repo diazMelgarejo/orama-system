@@ -19,7 +19,7 @@ Verify programmatically after insertion — never trust the visual alone.
 
 | Purpose | Canonical name |
 |---|---|
-| Offload heavy reasoning (Mode 2/3) | **`mcp-oramasys`** |
+| Offload heavy reasoning (Mode 2/3) | **`mcp-oramasys`** when exposed by the harness |
 | Local HTTP backup | `POST /oramasys` port 8001 |
 | Mode-3 agent network | orchestrator + 6 specialist agents |
 

@@ -1,7 +1,8 @@
 # Search Frugality — gbrain + gstack + CRG
 
-The data-context layer. The machine already indexes its own code and curated
-knowledge locally and for free. Always exhaust local memory before any paid tool.
+The data-context layer. Prefer local code indexes and curated memory before any
+paid or external tool. Tool names vary by harness; preserve the ordering even
+when the exact integration is unavailable.
 
 ## The chain (stop at the first tier that answers)
 
@@ -26,19 +27,20 @@ Two indexed corpora:
 | "What does Y depend on?" | `gbrain code-callees <symbol>` |
 | "What did we decide?" | `gbrain search "<terms>" --source gstack-brain-<user>` |
 
-Run `/sync-gbrain` after meaningful code changes.
-Sandbox fallback: if gbrain errors `getaddrinfo ENOTFOUND`, use CRG MCP tools instead.
+Run `/sync-gbrain` after meaningful code changes when gbrain/gstack is installed.
+Fallback: if gbrain is unavailable or errors, use CRG MCP tools or the current
+harness's cheapest local code-search equivalent before broad Grep.
 
 ## code-review-graph (CRG)
 
-For multi-file code questions, use CRG MCP tools BEFORE Grep/Read.
+For multi-file code questions, use CRG MCP tools BEFORE Grep/Read when available.
 Chain: CRG (blast-radius) → gbrain code-def → gbrain search → Read (confirmed files only).
 
 ## When Grep is right
 
 Known exact strings, regex, multiline patterns, file globs.
 
-## Web — always through gstack
+## Web — use the approved harness path
 
-ALWAYS `/browse`. NEVER `mcp__claude-in-chrome__*` directly.
-gstack v1.37.0.0 at `~/.claude/skills/gstack`.
+Use the current harness's approved browser/search path. In Claude/gstack
+environments, prefer `/browse` and avoid raw browser MCP calls.

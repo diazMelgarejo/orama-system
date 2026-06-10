@@ -11,7 +11,9 @@ Exit 1 otherwise (prints failing cases).
 Usage:
     python scripts/eval/oramasys_trigger_eval.py
 """
-import sys, yaml, pathlib, re
+import pathlib
+import re
+import sys
 
 SKILL_PATH = pathlib.Path(__file__).parents[2] / \
     "bin/orama-system/skills/oramasys-method/SKILL.md"
@@ -40,9 +42,18 @@ PHRASES = [
 
 def load_triggers():
     text = SKILL_PATH.read_text()
-    fm = yaml.safe_load(text.split("---")[1])
-    desc = fm["description"].lower()
+    desc = load_frontmatter_description(text).lower()
     return [p for p in PHRASES if p in desc]
+
+def load_frontmatter_description(text):
+    """Extract a folded YAML frontmatter description without a PyYAML dependency."""
+    match = re.search(r"^description:\s*>-\s*\n(?P<body>(?:[ \t]+.*\n)+)", text, re.MULTILINE)
+    if match:
+        return " ".join(line.strip() for line in match.group("body").splitlines())
+    match = re.search(r'^description:\s*"?([^"\n]+)"?\s*$', text, re.MULTILINE)
+    if match:
+        return match.group(1)
+    raise SystemExit(f"description not found in {SKILL_PATH}")
 
 def fires(q, trigger_phrases):
     ql = q.lower()

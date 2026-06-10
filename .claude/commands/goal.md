@@ -25,7 +25,7 @@ echo "=== AC1 ===" && \
 for s in "Context Immersion" "Visionary Architecture" "Ruthless Refinement" \
          "Masterful Execution" "Crystallize Vision"; do
   grep -q "$s" .claude/skills/agent-methodology/SKILL.md \
-    || { echo "MISSING: $s"; break; }
+    || { echo "MISSING: $s"; exit 1; }
 done && echo "AC1 PASS"
 
 echo "=== AC2 ===" && \
