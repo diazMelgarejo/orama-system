@@ -53,6 +53,13 @@ public remote MUST be rotated regardless of how clean the scrub is.
 
 ## Section 2 — Pre-flight
 
+> **Windows PowerShell note:** before any scrub fetch, force-push, or verification
+> on the Windows LM Studio host, run the runtime bootstrap in
+> [`using-git-worktrees`](../using-git-worktrees/SKILL.md#windows-powershell-runtime-bootstrap).
+> It injects GitHub Desktop's `mingw64\bin` HTTPS helper path, sets
+> `GIT_EXEC_PATH`, pins LM Studio's Node/npm path, and records the explicit venv
+> Python path so agents do not hit the Windows Store `python.exe` alias.
+
 0. **Disable live Cursor co-author injection** before writing new commits during a scrub:
 
    ```bash

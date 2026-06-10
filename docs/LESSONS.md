@@ -2830,3 +2830,28 @@ PowerShell gotchas from the same run:
 - Quote upstream shorthand as `git rev-parse --abbrev-ref '@{u}'`; bare `@{u}` is parsed as a hashtable.
 - Do not use `&&` in this Windows PowerShell session; run commands separately or use PowerShell-native control flow.
 - If the HTTPS helper error disappears and the next failure is `Failed to connect to github.com ... 127.0.0.1`, the Git shim is fixed enough for HTTPS and the remaining issue is network/proxy access, not Git packaging.
+
+### 2026-06-10 — Windows local verification needs explicit Git/Python toolchain bootstrap
+
+While reviewing PR #74 from Windows, the local full pytest suite first failed
+because subprocesses could not find literal `bash`, then improved once a temporary
+`bash.exe` shim pointed at GitHub Desktop's `usr\bin\sh.exe`. Remaining failures
+were environment-shaped: no `jq`, Windows path separator expectations in tests,
+and shell subprocesses resolving `python` to the Windows Store alias.
+
+Operational rule now lives in the git skills: run the Windows PowerShell runtime
+bootstrap from `bin/orama-system/skills/using-git-worktrees/SKILL.md` before
+rebases, pushes, or Windows local verification. The bootstrap:
+- prepends `C:\Users\lab\.lmstudio\bin`;
+- discovers the latest GitHub Desktop `app-*` git bundle;
+- prepends `mingw64\bin` and `cmd`, then sets `GIT_EXEC_PATH`;
+- uses LM Studio's bundled `node.exe` at `C:\Users\lab\.lmstudio\.internal\utils\node.exe`;
+- records the explicit venv Python path
+  `C:\Users\lab\Downloads\SKILLS.md\ultrathink\Perplexity-Tools\.venv\Scripts\python.exe`;
+- optionally creates a temp-only `bash.exe` shim from `usr\bin\sh.exe` for tests
+  that invoke literal `bash`.
+
+Do not claim GitHub Desktop provides full Bash on this host: current evidence
+shows `sh.exe` exists and `bash.exe` does not. Prefer a real Git for Windows
+install if Bash semantics matter; otherwise use the temp shim only for local
+verification and keep it outside the repo.
