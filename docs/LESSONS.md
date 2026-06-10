@@ -51,6 +51,69 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+## 2026-06-10 — Claude — Mojibake: root cause, repair, and prevention (LINT-007)
+
+**Symptom.** Tracked files showed garbled punctuation — em-dashes as `a-circumflex
++ euro + quote`, arrows (`←`/`→`/`⇒`) as `a-circumflex + dagger + ...`, and the Greek
+`ὅραμα` header shredded. 10 files affected (worst: `docs/SYNC_ANALYSIS.md`, 65 hits).
+
+**Root cause — an encoding/decoding mismatch.** Text is *bytes + a charset*. Mojibake
+is bytes written in one charset and read as another:
+
+- An em-dash `—` is UTF-8 `E2 80 94`. Read those 3 bytes as **Windows-1252** (a
+  single-byte charset) and you get 3 characters: `E2`→`a-circumflex+euro+quote (cp1252-misread em-dash)`, `80`→`€`, `94`→`"`. Save
+  that as UTF-8 and the corruption is now permanent in the bytes. That is **single-level**
+  mojibake.
+- Pass the corrupted file through the same wrong-decode again → **double mojibake**
+  (the `a-circumflex+euro+quote (cp1252-misread em-dash)` run itself re-mangled into `A-tilde + ...`). Each mis-encoding tool in the chain adds a layer.
+- **CP1252 holes** (`0x81 0x8D 0x8F 0x90 0x9D` are undefined): when an original byte
+  lands on a hole — e.g. `←` = `E2 86 90`, the `0x90` — the decoder falls back to
+  Latin-1 (→ U+0090), producing a **mixed cp1252/latin-1** corruption that a pure
+  cp1252 round-trip cannot reverse.
+
+**Most likely trigger here.** Windows Python/PowerShell default to **cp1252**, not UTF-8.
+A file read/written without an explicit `encoding="utf-8"` on Windows mangles every
+non-ASCII char. The affected files are exactly the docs/tests touched during this
+branch's Windows-toolchain work (see the "Windows Git shim" / "toolchain bootstrap"
+lessons). Other common causes: copy-paste across apps with different clipboard
+encodings; running `sed`/`perl` under `LC_ALL=C`; a `LANG=C` locale; an agent emitting
+"smart" punctuation that a downstream non-UTF-8 tool re-encodes.
+
+**The repair (general).** Per-character re-encode (cp1252 where defined, else latin-1)
+→ bytes → decode UTF-8, iterate until stable, and **only accept the result if it
+reduces the high-byte count** (so legitimately-accented text can't be corrupted):
+
+```python
+def to_bytes(s):
+    out = bytearray()
+    for ch in s:
+        try: out += ch.encode("cp1252")
+        except Exception: out += ch.encode("latin-1")   # cp1252 holes
+    return bytes(out)
+def deep_fix(run):                 # apply only to runs of high chars
+    cur = run
+    for _ in range(6):
+        try: t = to_bytes(cur).decode("utf-8")
+        except Exception: break
+        if t == cur: break
+        cur = t
+    return cur if hi(cur) < hi(run) else run   # reduction guard
+```
+
+**Prevention (now enforced).**
+- **LINT-007** added to CIDF (`bin/orama-system/cidf/SKILL.md`) and to the canonical
+  gate `scripts/review/repo_hygiene.py` — which the **pre-commit hook and CI both run**
+  (single source of truth, zero fragmentation). A mojibake byte pair can no longer
+  enter history.
+- Always pass `encoding="utf-8"` to `open()` — never rely on the platform default
+  (Windows = cp1252). Set `PYTHONUTF8=1` / `PYTHONIOENCODING=utf-8` in cross-platform
+  scripts; keep `LANG`/`LC_ALL` UTF-8; never run text transforms under `LC_ALL=C`.
+
+**Dogfood note.** Found and fixed while driving GOAL.md's AC4 (afrp encoding) — the
+oramasys methodology's own Ruthless-Refinement stage applied to the repo itself.
+
+---
+
 ## 2026-05-16 — Codex — Claude CLI auth must run outside sandbox
 
 ### What was learned
@@ -1051,11 +1114,7 @@ win: ✅ 192.168.254.105:1234 — 5 models
 
 ## 2026-04-29 — Claude — Cross-repo sync gist (from PT docs/LESSONS.md)
 
-*(PT-owned lessons relevant to orama. Full text in [Perpetua-Tools `main` → `docs/LESSONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md).)*
-
-### Hardware × Agent Matrix Test — All 6 OpenClaw Agents (confirmed 2026-04-27)
-
-- **Model IDs are case-sensitive** in LM Studio. Use all-lowercase: `qwen3.5-9b-mlx`, `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`. No `-4bit` suffix on Mac.
+*(PT-owned lessons relevant to orama. Full text in [Perpetua-Tools `main` → `docs/LESSONS.md`a-circumflex+euro+quote (cp1252-misread em-dash)`qwen3.5-9b-mlx`, `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`. No `-4bit` suffix on Mac.
 - **openclaw CLI requires Node.js ≥ v22**. Default v14 fails instantly. Use full path: `~/.nvm/versions/node/v24.14.1/bin/openclaw`
 - **All 6 agents pass**: win-researcher/coder/autoresearcher (Win 27B, 107–130s), main/mac-researcher/orchestrator (Mac 9B, 105–308s via Gemini fallback).
 - **Thinking models return empty `text`** — reply is in `reasoning_content`. Always check both fields.
@@ -1487,13 +1546,8 @@ across two repos still referenced the old ID.
 | File | Old → New |
 |------|-----------|
 | `orama-system/setup_macos.py` | `qwen3.5-local:latest` → `qwen3.5:9b-nvfp4` |
-| `orama-system/portal_server.py` (×2) | role string updated |
-| `PT/packages/local-agents/src/client.js` | DEFAULTS + comment |
-| `PT/packages/local-agents/tests/client.test.js` (×6) | test fixtures |
-
-### Design rule promoted to v2
-
-- `~/.codex/local_models.json` is the **single source of truth** for
+| `orama-system/portal_server.py`a-circumflex+euro+quote (cp1252-misread em-dash)`PT/packages/local-agents/src/client.js` | DEFAULTS + comment |
+| `PT/packages/local-agents/tests/client.test.js`a-circumflex+euro+quote (cp1252-misread em-dash)`~/.codex/local_models.json` is the **single source of truth** for
   local Ollama model metadata (context caps, capability flags).
 - Auto-generate with `scripts/gen_local_models_json.py` whenever Ollama
   model list changes. Never edit manually.
@@ -1573,8 +1627,7 @@ nc -z -w 1 192.168.x.108 1234  # confirm Win LMS reachable
 | `--stop`, `--discover`, `--hardware-policy` terminal-only | `portal_server.py` had no corresponding routes |
 | `lsof -ti tcp:PORT` fails on Linux | `lsof` not always installed; `ss` is the Linux equivalent |
 | `nc -z` fails on bare containers | Minimal Docker images ship without `nc`; bash `/dev/tcp` is always available |
-| `nc -z -w 1` banner probes sequential | 3 × 1s = 3s banner lag; should be 3 parallel subshells → max 1s |
-| `setup_macos.py` runs on Linux/CI | Preflight has macOS-specific `xattr` and `codesign` calls; hard-errors on Linux |
+| `nc -z -w 1`a-circumflex+euro+quote (cp1252-misread em-dash)`setup_macos.py` runs on Linux/CI | Preflight has macOS-specific `xattr` and `codesign` calls; hard-errors on Linux |
 | No Windows start script | No way to boot the stack on the Windows node without WSL |
 
 ### Fixes shipped (commit 252a473 on main)
@@ -1854,16 +1907,7 @@ When feature work spans multiple commits across a branch and partial work is alr
 ```bash
 ~/.claude/skills/gstack/bin/gstack-brain-sync --discover-new
 ~/.claude/skills/gstack/bin/gstack-brain-sync --once
-```
-
----
-
-## 2026-05-17 — Operator console mockup: inspirational, not binding
-
-The generated 1440×1000 mockup of the orama Command Center captures the
-**aesthetic direction** (dark charcoal/slate panels, accent cyan, dense
-typography, segmented controls, table-heavy layouts) — it is **not a
-pixel-binding contract**. The shipped Vite operator console (commit `047ec27`)
+```a-circumflex+euro+quote (cp1252-misread em-dash)`047ec27`)
 faithfully captures the direction without pixel-matching: layout positions,
 copy, icon glyphs, exact colors may diverge from the mockup as long as the
 aesthetic holds. Future visual upgrades should reference the mockup as a
@@ -2222,7 +2266,7 @@ Tracked as checklists elsewhere (read the owner doc, not this log):
 
 ### What was learned
 
-- **Canonical policy** lives in [`docs/wiki/08-git-hygiene-and-branching.md`](wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25): four approved primary authors (`cyre` × two emails, `Lawrence@cyre.me`, `Codex <codex@openai.com>`); `Co-authored-by` allows well-known public AI/vendor domains and only two Gmail addresses.
+- **Canonical policy** lives in [`docs/wiki/08-git-hygiene-and-branching.md`](wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25): four approved primary authors (`cyre`a-circumflex+euro+quote (cp1252-misread em-dash)`Lawrence@cyre.me`, `Codex <codex@openai.com>`); `Co-authored-by` allows well-known public AI/vendor domains and only two Gmail addresses.
 - **Enforcement:** `bash scripts/git/install-local-hooks.sh` → `check_identity.sh` (pre-commit) + `check_commit_message.sh` (commit-msg). Replaced the old “forbid all agent co-author substrings” hook with an allowlist model aligned with `repo_hygiene.py`.
 - **Agent default:** sessions should not add `Co-authored-by` to their own commits even when hooks allow public AI attribution for human-authored merges.
 

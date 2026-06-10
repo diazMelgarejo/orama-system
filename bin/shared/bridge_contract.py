@@ -7,7 +7,7 @@ the backup HTTP bridge.
 """
 from __future__ import annotations
 
-from bin.shared.ultrathink_core import OptimizeFor
+from bin.shared.oramasys_core import OptimizeFor
 
 
 DEFAULT_OPTIMIZE_FOR = OptimizeFor.RELIABILITY

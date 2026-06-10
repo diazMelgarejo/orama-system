@@ -100,7 +100,7 @@ class MessageBus:
         tasks: list of (agent_id, payload) tuples
         Returns: list of results in same order as tasks
         """
-        from ultrathink_core import AgentMessage, MessageType
+        from oramasys_core import AgentMessage, MessageType
 
         futures = []
         trace_ids = []

@@ -1,7 +1,7 @@
 {
   "version": "0.9.9.9",
-  "network_name": "ultrathink-agent-network",
-  "description": "Unified ultrathink agent network — 7 ultrathink stage agents + 4 OpenClaw SOUL agents",
+  "network_name": "oramasys-agent-network",
+  "description": "Unified oramasys agent network — 7 oramasys stage agents + 4 OpenClaw SOUL agents",
   "worker_template": {
     "type": "worker",
     "contract": "TaskEnvelope in, WorkerResult out",
@@ -24,7 +24,7 @@
       "id": "orchestrator",
       "type": "orchestrator",
       "affinity": "mac",
-      "skill_path": "agents/orchestrator/ultrathink-orchestrator.md",
+      "skill_path": "agents/orchestrator/oramasys-orchestrator.md",
       "logic_path": "agents/orchestrator/orchestrator_logic.py",
       "max_instances": 1,
       "tools": ["state_manager", "message_bus", "all_agent_delegators"]
@@ -91,7 +91,7 @@
     }
   ],
   "autoresearch_agents": {
-    "_comment": "Pre-defined agent types for autoresearch swarm (task_type=autoresearch). Spawned by Perpetua-Tools AgentTracker; registered here for ultrathink Mode 3 awareness only.",
+    "_comment": "Pre-defined agent types for autoresearch swarm (task_type=autoresearch). Spawned by Perpetua-Tools AgentTracker; registered here for oramasys Mode 3 awareness only.",
     "autoresearch-coder": {
       "id": "autoresearch-coder",
       "type": "worker",

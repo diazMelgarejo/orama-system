@@ -65,7 +65,7 @@ class TestSharedUtilities:
         assert (MULTI / "shared" / "oramasys_core.py").exists()
 
     def test_legacy_ultrathink_core_wrapper_exists(self):
-        assert (MULTI / "shared" / "ultrathink_core.py").exists()
+        assert (MULTI / "shared" / "ultrathink_core.py").exists()  # back-compat shim retained until v2.0
 
     def test_state_manager_exists(self):
         assert (MULTI / "shared" / "state_manager.py").exists()
