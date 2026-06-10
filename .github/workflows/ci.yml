@@ -171,10 +171,10 @@ jobs:
           fi
           echo "OK: Quick Start section present"
 
-      - name: Verify mcp-ultrathink-openclaw in allowed-tools
+      - name: Verify mcp-oramasys in allowed-tools
         run: |
-          if ! grep -q "mcp-ultrathink-openclaw" bin/orama-system/SKILL.md; then
-            echo "FAIL: mcp-ultrathink-openclaw missing from allowed-tools in SKILL.md"
+          if ! grep -q "mcp-oramasys" bin/orama-system/SKILL.md; then
+            echo "FAIL: mcp-oramasys missing from allowed-tools in SKILL.md"
             exit 1
           fi
-          echo "OK: mcp-ultrathink-openclaw present in allowed-tools"
+          echo "OK: mcp-oramasys present in allowed-tools"
