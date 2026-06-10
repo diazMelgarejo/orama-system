@@ -3,14 +3,14 @@ name: orama-system
 description: Development conventions and patterns for orama-system. Python multi-agent system with conventional commits and the oramasys 5-stage methodology. Treat legacy "ultrathink" prompts as oramasys invocations.
 ---
 
-# The á½…ÏÎ±Î¼Î± System Conventions
+# The ὅραμα System Conventions
 
 > Generated from [diazMelgarejo/orama-system](https://github.com/diazMelgarejo/orama-system) on 2026-03-29
 > Mother skill: [`bin/orama-system/SKILL.md`](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/SKILL.md) (v0.9.9.7)
 
 ## Overview
 
-This skill teaches Claude the development patterns and conventions used in orama-system â€” a Python multi-agent system implementing the oramasys 5-stage methodology with an AFRP pre-router gate, CIDF v1.2 content insertion framework, and a 7-agent execution network.
+This skill teaches Claude the development patterns and conventions used in orama-system — a Python multi-agent system implementing the oramasys 5-stage methodology with an AFRP pre-router gate, CIDF v1.2 content insertion framework, and a 7-agent execution network.
 
 ## Mother Skill
 
@@ -18,8 +18,8 @@ The canonical system skill lives at `bin/orama-system/SKILL.md` (since v0.9.9.7)
 
 Sub-skills (load on demand):
 
-- `bin/orama-system/afrp/SKILL.md` â€” Audience-First Response Protocol (mandatory pre-router gate)
-- `bin/orama-system/cidf/SKILL.md` â€” Content Insertion Decision Framework v1.2
+- `bin/orama-system/afrp/SKILL.md` — Audience-First Response Protocol (mandatory pre-router gate)
+- `bin/orama-system/cidf/SKILL.md` — Content Insertion Decision Framework v1.2
 
 ## Tech Stack
 
@@ -40,12 +40,12 @@ Sub-skills (load on demand):
 
 ```
 orama-system/
-â”œâ”€â”€ bin/orama-system/SKILL.md      â† mother skill (v0.9.9.7)
-â”œâ”€â”€ bin/orama-system/afrp/         â† AFRP sub-skill
-â”œâ”€â”€ bin/orama-system/cidf/         â† CIDF v1.2 sub-skill
-â”œâ”€â”€ bin/                   â† unified package (agents/, mcp_servers/, shared/)
-â”œâ”€â”€ api_server.py              â† POST /oramasys (port 8001, stateless)
-â””â”€â”€ tests/
+├── bin/orama-system/SKILL.md      ← mother skill (v0.9.9.7)
+├── bin/orama-system/afrp/         ← AFRP sub-skill
+├── bin/orama-system/cidf/         ← CIDF v1.2 sub-skill
+├── bin/                   ← unified package (agents/, mcp_servers/, shared/)
+├── api_server.py              ← POST /oramasys (port 8001, stateless)
+└── tests/
 ```
 
 ## Best Practices
@@ -54,7 +54,7 @@ orama-system/
 - Run AFRP gate before generating non-trivial output
 - Use CIDF `decide()` before any content insertion
 - Use `@field_validator` (Pydantic V2), never `@validator`
-- Keep the á½…ÏÎ±Î¼Î± API stateless (no Redis dependency)
+- Keep the ὅραμα API stateless (no Redis dependency)
 - Use snake_case for file names
 - Write `tasks/todo.md` before any 3+ step task
 - For `*.md`, keep links relative and preserve redirect/canonical-path notes

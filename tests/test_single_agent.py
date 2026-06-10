@@ -37,7 +37,7 @@ class TestPackageIntegrity:
 
     def test_references_exist(self):
         refs = SINGLE / "references"
-        expected = ["ultrathink-5-stages.md", "core-operational-directives.md",
+        expected = ["oramasys-5-stages.md", "core-operational-directives.md",
                     "content-insertion-framework.md", "skill-architecture-guide.md"]
         for f in expected:
             assert (refs / f).exists(), f"Missing reference: {f}"
@@ -70,7 +70,7 @@ class TestContentQuality:
         assert "automation_gate" in cidf, "CIDF missing automation_gate"
 
     def test_5stages_covers_all_stages(self):
-        content = (SINGLE / "references" / "ultrathink-5-stages.md").read_text(encoding="utf-8")
+        content = (SINGLE / "references" / "oramasys-5-stages.md").read_text(encoding="utf-8")
         for stage in ["Context Immersion", "Visionary Architecture",
                       "Ruthless Refinement", "Masterful Execution", "Crystallize"]:
             assert stage in content, f"5-stages doc missing: {stage}"

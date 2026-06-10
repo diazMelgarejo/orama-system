@@ -29,11 +29,11 @@ Refinement — eliminate inconsistency, one canonical form) surfaced:
 
 | Source | Stage sequence |
 |---|---|
-| `references/ultrathink-5-stages.md` (canonical) | Context Immersion → Visionary Architecture → Ruthless Refinement → Masterful Execution → Crystallize Vision |
+| `references/oramasys-5-stages.md` (canonical) | Context Immersion → Visionary Architecture → Ruthless Refinement → Masterful Execution → Crystallize Vision |
 | `agent-methodology` card | Crystallize → Architect → Execute → Refine → Verify |
 
 **Fix:** Align the card to the canonical sequence. The card is not the source
-of truth; `references/ultrathink-5-stages.md` is. See GOAL.md AC1.
+of truth; `references/oramasys-5-stages.md` is. See GOAL.md AC1.
 
 ## Skill Improvements Applied (this session)
 

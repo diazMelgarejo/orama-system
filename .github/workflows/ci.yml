@@ -111,7 +111,7 @@ jobs:
       - name: Check imports
         run: |
           pip install -q ".[test]"
-          python -c "from bin.shared.ultrathink_core import Stage, TaskState; print('✓ ultrathink_core imports OK')"
+          python -c "from bin.shared.oramasys_core import Stage, TaskState; print('✓ oramasys_core imports OK')"
           python -c "import bin, pathlib, sys; sys.path.insert(0, str(pathlib.Path(bin.__file__).parent / 'orama-system')); from cidf.core.content_insertion_framework import decide; print('✓ CIDF imports OK')"
 
   build:

@@ -20,7 +20,7 @@ chk_f scripts/verify-package.sh
 
 echo -e "\n📦 Skills (bin/orama-system):"; chk_f bin/orama-system/SKILL.md; chk_f bin/orama-system/README.md
 chk_d bin/orama-system/references; chk_d bin/orama-system/scripts; chk_d bin/orama-system/templates
-chk_f bin/orama-system/references/ultrathink-5-stages.md
+chk_f bin/orama-system/references/oramasys-5-stages.md
 chk_f bin/orama-system/references/core-operational-directives.md
 chk_f bin/orama-system/references/content-insertion-framework.md
 chk_f bin/orama-system/references/skill-architecture-guide.md
@@ -35,7 +35,7 @@ echo -e "\n🤖 Agents (bin/agents):"; chk_d bin/agents
 for a in orchestrator context architect refiner executor verifier crystallizer; do
   chk_d "bin/agents/$a"
 done
-chk_f bin/shared/ultrathink_core.py
+chk_f bin/shared/oramasys_core.py
 chk_f bin/shared/state_manager.py
 chk_f bin/shared/message_bus.py
 chk_f bin/config/agent_registry.json
