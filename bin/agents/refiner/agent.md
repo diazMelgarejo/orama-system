@@ -33,12 +33,12 @@ Specialized agent for ultrathink Stage 3: Ruthless Refinement.
 
 ## Input / Output
 
-See `../shared/ultrathink_core.py` for full type definitions.
+See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
 
 - Tool implementation: see `refiner_tools.py`
-- Shared types: `../shared/ultrathink_core.py`
+- Shared types: `../shared/oramasys_core.py`
 
 ## CIDF Alignment
 

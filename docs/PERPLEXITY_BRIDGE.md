@@ -1,17 +1,17 @@
-﻿# Perplexity-Tools Bridge for The á½…ÏÎ±Î¼Î± System
+﻿# Perplexity-Tools Bridge for The ὅραμα System
 
 ## Version 0.9.9.9
 
 ## Current Contract (v1.0 RC)
 
 **Active transport:** HTTP Bridge (`POST /oramasys` on port 8001 via `api_server.py`).
-MCP-Optional transport is planned for v1.1 â€” see [MCP-Optional Transport (v1.1)](#mcp-optional-transport-v11) below.
+MCP-Optional transport is planned for v1.1 — see [MCP-Optional Transport (v1.1)](#mcp-optional-transport-v11) below.
 
 - `Perplexity-Tools` remains the top-level orchestrator and selects ultrathink
   behavior through `task_type` routing (`deep_reasoning`, `code_analysis`).
 - `orama-system` serves the HTTP bridge via `api_server.py` (FastAPI, port 8001).
 - The MCP server (`bin/mcp_servers/oramasys_orchestration_server.py`)
-  exposes the tool surface below but its `_solve()` is a stub â€” it does not yet
+  exposes the tool surface below but its `_solve()` is a stub — it does not yet
   call Ollama. All production traffic flows through the HTTP bridge.
 - MCP tool surface (v1.1+ target):
   - `oramasys_solve`
@@ -62,13 +62,13 @@ python bin/mcp_servers/oramasys_orchestration_server.py
 The MCP server publishes the tool schemas defined in `TOOL_SCHEMAS` and is the
 current source of truth for bridge behavior in this repository.
 
-## HTTP Bridge Status (v1.0 RC â€” Primary Transport)
+## HTTP Bridge Status (v1.0 RC — Primary Transport)
 
 The HTTP `/oramasys` path via `api_server.py` is the **primary v1.0 RC transport**.
 The legacy `/ultrathink` path remains as a deprecated compatibility shim.
 
 - Fully implemented: FastAPI + uvicorn, port 8001, rate-limited, Pydantic V2 validated.
-- All production PTâ†’oramasys calls go through this path.
+- All production PT→oramasys calls go through this path.
 - Semantically aligned with MCP through shared `bridge_contract.py` mapping helpers.
 - Will remain supported when MCP-Optional transport lands in v1.1 (HTTP is not deprecated).
 
@@ -96,8 +96,8 @@ opt in to MCP when the environment supports it. HTTP bridge remains fully suppor
 
 | Release | Transport | Status |
 |---------|-----------|--------|
-| v1.0 RC | HTTP Bridge (`POST /oramasys`) | **Active â€” ships now** |
-| v1.1 | MCP-Optional (stdio JSON-RPC) | Planned â€” opt-in alongside HTTP |
+| v1.0 RC | HTTP Bridge (`POST /oramasys`) | **Active — ships now** |
+| v1.1 | MCP-Optional (stdio JSON-RPC) | Planned — opt-in alongside HTTP |
 | Future | MCP-Primary (if HTTP ever retired) | Not scheduled |
 
 ### Why MCP `_solve()` currently falls back to HTTP
@@ -111,19 +111,19 @@ any MCP client will fall back to HTTP automatically.
 
 ### Implementation sequencing (Tier 2 before Tier 1)
 
-**Step 1 â€” Tier 2 (orama-system, do this first):**
+**Step 1 — Tier 2 (orama-system, do this first):**
 Extract Ollama pipeline into `bin/shared/ollama_client.py`, then implement
-`_solve()` to call Ollama synchronously and return the full result inline â€”
+`_solve()` to call Ollama synchronously and return the full result inline —
 matching the HTTP synchronous contract, no polling loop needed.
 
-**Step 2 â€” Tier 1 (Perplexity-Tools, do this after Tier 2 is merged):**
+**Step 2 — Tier 1 (Perplexity-Tools, do this after Tier 2 is merged):**
 Build `orchestrator/ultrathink_mcp_client.py` (subprocess lifecycle + JSON-RPC
 framing), add `call_ultrathink_mcp_or_bridge()` to `ultrathink_bridge.py` with
 HTTP fallback, expose `"transport": "mcp"` or `"transport": "http"` in the
 response envelope.
 
 **Why this order:** Tier 1 infrastructure without Tier 2 means every call falls
-back to HTTP anyway â€” the client would be untestable end-to-end. Building the
+back to HTTP anyway — the client would be untestable end-to-end. Building the
 real server backend first makes Tier 1 immediately verifiable.
 
 **The HTTP bridge stays fully functional at every intermediate state.**

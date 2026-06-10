@@ -1,6 +1,6 @@
 # The oramasys 5-Stage Methodology
 
-Canonical sequence. Matches `references/ultrathink-5-stages.md` exactly.
+Canonical sequence. Matches `references/oramasys-5-stages.md` exactly.
 
 ## Stage 1 — Context Immersion
 Understand before acting. Gather context from the cheapest source first:

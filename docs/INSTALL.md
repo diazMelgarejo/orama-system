@@ -43,7 +43,7 @@ cp -R bin/orama-system ~/.claude/skills/orama-system
 │   └── SKILL.md                          <- Content Insertion Decision Framework v1.2
 ├── references/
 │   ├── amplifier-principle.md            <- Foundational essay: intent-driven development
-│   ├── ultrathink-5-stages.md            <- Deep dive: 5-stage methodology
+│   ├── oramasys-5-stages.md            <- Deep dive: 5-stage methodology
 │   ├── core-operational-directives.md    <- Deep dive: the 6 directives
 │   ├── content-insertion-framework.md    <- CIDF human reference + JSON policy
 │   └── skill-architecture-guide.md       <- How to build SKILL.md files

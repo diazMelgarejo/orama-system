@@ -44,7 +44,7 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 
-# â”€â”€ Tool schemas â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Tool schemas ─────────────────────────────────────────────────────────────
 
 TOOL_SCHEMAS = [
     {
@@ -117,7 +117,7 @@ TOOL_SCHEMAS = [
 ]
 
 
-# â”€â”€ Server implementation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Server implementation ────────────────────────────────────────────────────
 
 class OramasysMCPServer:
     """
@@ -228,7 +228,7 @@ class OramasysMCPServer:
         return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
 
 
-# â”€â”€ Stdio transport (Claude Code / MCP standard) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Stdio transport (Claude Code / MCP standard) ─────────────────────────────
 
 async def run_stdio_server():
     """Run server over stdin/stdout (standard MCP transport)."""

@@ -87,6 +87,12 @@ When the content is markdown:
 | LINT-004 | Scripting for one-time static task |
 | LINT-005 | No fallback chain defined (warning) |
 | LINT-006 | Absolute workstation path in tracked content (`/Users/<name>/…` or `…/claude/OpenClaw`) — use relative/GitHub link or `$REPO_ROOT` |
+| LINT-007 | **UTF-8 mojibake** — a multibyte lead char (U+00C2–U+00EF) followed by a continuation byte (U+0080–U+00BF) or a cp1252 high-punctuation codepoint. Caused by UTF-8 bytes read as Windows-1252/Latin-1 then re-saved (e.g. an em-dash U+2014 becoming `a-circumflex+euro+quote`); most often a tool reading/writing without explicit `encoding="utf-8"` on a cp1252-default platform (Windows). **Fix:** repair the bytes (per-char cp1252→latin-1 re-encode → decode UTF-8); always pass `encoding="utf-8"` to `open()`. **When documenting mojibake, describe it by codepoint — never paste a literal example, or you trip this rule.** |
+
+> LINT-006 and LINT-007 are enforced by `scripts/review/repo_hygiene.py`
+> (`scan_personal_paths` / `scan_openclaw_workstation_layout`, `scan_mojibake`),
+> which the **pre-commit hook and CI both run** — single source of truth, zero
+> fragmentation. Root cause + repair recipe: `docs/LESSONS.md` 2026-06-10.
 
 ---
 
