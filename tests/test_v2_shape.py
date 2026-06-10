@@ -5,7 +5,7 @@ test_v2_shape.py
 TDD backport: wire orama-system v0.9.9.9 API models to match the v2 external
 shape defined in orama-system/docs/v2/01-kernel-spec.md.
 
-RED tests written first â€” each will fail until api_server.py is updated.
+RED tests written first — each will fail until api_server.py is updated.
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import api_server
 from api_server import OramasysRequest, OramasysResponse
 
 
-# â”€â”€ session_id on request â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── session_id on request ─────────────────────────────────────────────────────
 
 def test_ultrathink_request_accepts_session_id():
     req = OramasysRequest(task_description="hello", session_id="abc-123")
@@ -28,7 +28,7 @@ def test_ultrathink_request_session_id_defaults_to_none():
     assert req.session_id is None
 
 
-# â”€â”€ session_id on response â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── session_id on response ────────────────────────────────────────────────────
 
 def test_ultrathink_response_accepts_session_id():
     resp = OramasysResponse(
@@ -55,7 +55,7 @@ def test_ultrathink_response_session_id_defaults_to_none():
     assert resp.session_id is None
 
 
-# â”€â”€ nodes_visited on response â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── nodes_visited on response ─────────────────────────────────────────────────
 
 def test_ultrathink_response_accepts_nodes_visited():
     resp = OramasysResponse(
@@ -82,7 +82,7 @@ def test_ultrathink_response_nodes_visited_defaults_to_empty_list():
     assert resp.nodes_visited == []
 
 
-# â”€â”€ retry_count on response â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── retry_count on response ───────────────────────────────────────────────────
 
 def test_ultrathink_response_accepts_retry_count():
     resp = OramasysResponse(
@@ -109,7 +109,7 @@ def test_ultrathink_response_retry_count_defaults_to_zero():
     assert resp.retry_count == 0
 
 
-# â”€â”€ no pydantic protected-namespace warning for model_hint / model_used â”€â”€â”€â”€â”€â”€â”€
+# ── no pydantic protected-namespace warning for model_hint / model_used ───────
 
 def test_ultrathink_request_no_model_hint_namespace_warning(recwarn):
     OramasysRequest(task_description="test")
@@ -130,10 +130,10 @@ def test_ultrathink_response_no_model_used_namespace_warning(recwarn):
     assert pydantic_warns == [], "model_used triggers Pydantic protected-namespace warning"
 
 
-# â”€â”€ /oramasys endpoint includes session_id and nodes_visited in JSON output â”€
+# ── /oramasys endpoint includes session_id and nodes_visited in JSON output ─
 
 def test_http_endpoint_returns_session_id_and_nodes_visited(monkeypatch):
-    """End-to-end: POST /oramasys with session_id â†’ response JSON has both fields."""
+    """End-to-end: POST /oramasys with session_id → response JSON has both fields."""
     from fastapi.testclient import TestClient
 
     async def fake_call(prompt, model, max_tokens, temperature):
@@ -155,7 +155,7 @@ def test_http_endpoint_returns_session_id_and_nodes_visited(monkeypatch):
     assert isinstance(body["retry_count"], int)
 
 
-# â”€â”€ qwen3.5-9b-mlx thinking-model response extraction contract â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── qwen3.5-9b-mlx thinking-model response extraction contract ───────────────
 # Documents the expected behavior for the future real LM Studio HTTP client.
 # The stub _call_with_fallback is mocked here; the real implementation must
 # extract `content` not `reasoning_content` from thinking model responses.

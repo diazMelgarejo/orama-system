@@ -32,7 +32,7 @@ Auto-triggers on: "complex task", "architect", "production-ready", "elegant solu
 | File | Purpose |
 |------|---------|
 | `SKILL.md` | Main intelligence layer — loaded by agent |
-| `references/ultrathink-5-stages.md` | Deep dive: 5-stage methodology |
+| `references/oramasys-5-stages.md` | Deep dive: 5-stage methodology |
 | `references/core-operational-directives.md` | Deep dive: 6 directives |
 | `references/content-insertion-framework.md` | Simplicity-first insertion |
 | `references/skill-architecture-guide.md` | How to create new skills |

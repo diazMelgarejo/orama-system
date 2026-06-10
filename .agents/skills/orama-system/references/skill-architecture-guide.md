@@ -239,4 +239,4 @@ For OpenClaw lab automation (LAN-first, WhatsApp-controlled), skills should:
 
 ---
 
-*See also: `references/ultrathink-5-stages.md` for the methodology this skill architecture serves.*
+*See also: `references/oramasys-5-stages.md` for the methodology this skill architecture serves.*
