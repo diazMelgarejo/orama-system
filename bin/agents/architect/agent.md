@@ -33,12 +33,12 @@ Specialized agent for ultrathink Stage 2: Visionary Architecture.
 
 ## Input / Output
 
-See `../shared/ultrathink_core.py` for full type definitions.
+See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
 
 - Tool implementation: see `architect_tools.py`
-- Shared types: `../shared/ultrathink_core.py`
+- Shared types: `../shared/oramasys_core.py`
 
 ## CIDF Integration (Stage 2 Decision Point)
 

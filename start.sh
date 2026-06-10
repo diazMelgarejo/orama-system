@@ -313,6 +313,12 @@ if [ -f "$SCRIPT_DIR/scripts/install-openclaw-skills.sh" ]; then
   bash "$SCRIPT_DIR/scripts/install-openclaw-skills.sh" 2>&1 | sed 's/^/  [openclaw] /' || true
 fi
 
+# ── global Claude skills refresh (copy + auto-resync, idempotent) ────────────
+# Keeps ~/.claude/skills current with the repo's canonical skills every start.
+if [ -f "$SCRIPT_DIR/scripts/install-skills.sh" ]; then
+  bash "$SCRIPT_DIR/scripts/install-skills.sh" 2>&1 | sed 's/^/  [skills] /' || true
+fi
+
 # ── LAN live probe — always run on startup (LAN is dynamic) ──────────────────
 # LAN topology changes: DHCP leases expire, machines reboot, IPs shift.
 # We ALWAYS run discover.py --force before reading any IP so the IP detection

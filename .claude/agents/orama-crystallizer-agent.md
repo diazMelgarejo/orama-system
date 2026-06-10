@@ -28,11 +28,11 @@ Specialized agent for ultrathink Stage 5: Crystallize the Vision.
 - Return partial results without flagging them as partial
 
 ## Input / Output
-See `../shared/ultrathink_core.py` for full type definitions.
+See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
 - Tool implementation: see `crystallizer_tools.py`
-- Shared types: `../shared/ultrathink_core.py`
+- Shared types: `../shared/oramasys_core.py`
 
 ## CIDF Documentation Step
 
