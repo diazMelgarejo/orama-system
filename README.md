@@ -62,7 +62,7 @@ orama-system/
 ├── bin/orama-system/               ← Install here for Claude Code / Cowork
 │   ├── SKILL.md                    ← Main intelligence layer (<500 lines)
 │   ├── references/                 ← Deep-dive documentation
-│   │   ├── ultrathink-5-stages.md
+│   │   ├── oramasys-5-stages.md
 │   │   ├── core-operational-directives.md
 │   │   ├── content-insertion-framework.md
 │   │   └── skill-architecture-guide.md

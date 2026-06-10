@@ -31,6 +31,6 @@ Verify programmatically after insertion — never trust the visual alone.
 | `mcp-ultrathink-openclaw` | `mcp-oramasys` |
 | `POST /ultrathink` | `POST /oramasys` (deprecated shim, one release) |
 | trigger word "ultrathink" | alias for "oramasys" |
-| `references/ultrathink-5-stages.md` | `references/oramasys-5-stages.md` |
+| `references/oramasys-5-stages.md` | `references/oramasys-5-stages.md` |
 
 **Rule:** never reintroduce legacy MCP names in new config or skills.
