@@ -108,7 +108,7 @@ wastes the user's time and erodes trust.
 
 > Earned 2026-06-04 (orama/AlphaClaw/periscope branch reconciliation): three successive
 > handwaved conclusions, each corrected by the user. See `failure-modes.md` and the
-> [`git-reanchor`](../skills/git-reanchor/SKILL.md) skill.
+> [`git-history-surgery`](../skills/git-history-surgery/SKILL.md) skill.
 
 ---
 

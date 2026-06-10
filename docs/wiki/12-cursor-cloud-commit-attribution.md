@@ -70,4 +70,4 @@ Sibling repos receive the same `scripts/git/*` files via `sync-attribution-guard
 
 - [08. Git hygiene and branching](08-git-hygiene-and-branching.md)
 - `scripts/git/check_identity.sh`
-- `bin/orama-system/skills/expunge-git/SKILL.md`
+- `bin/orama-system/skills/git-history-surgery/SKILL.md`
