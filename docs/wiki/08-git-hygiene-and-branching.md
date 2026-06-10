@@ -242,7 +242,7 @@ git clone <url> "$OPENCLAW_ROOT/orama-system"
 
 Abbreviated placeholders like `/Users/.../foo` are fine (the segment after `/Users/` must start with a letter to match). The script and its own test are the only allowlisted files (they must name the pattern to test it). **Run `python3 scripts/review/repo_hygiene.py .` before committing docs that contain shell commands** — it is the same check CI runs. (Learned 2026-06-02: the #1802 incident write-ups themselves leaked workstation paths and red-CI'd `main`.)
 
-**Prevention (catch it before history, not after).** The pre-commit hook (`.githooks/pre-commit`, activated by `bash scripts/git/install-local-hooks.sh`) runs the full `repo_hygiene.py` — the *same* check as CI — so a leaked path or token is blocked at commit time and never enters history. That makes the [`expunge-git`](../../bin/orama-system/skills/expunge-git/SKILL.md) scrub a last resort (only if something already landed before the hook was installed), not the routine. Install the hooks once per clone; CI is the backstop, the hook is the gate.
+**Prevention (catch it before history, not after).** The pre-commit hook (`.githooks/pre-commit`, activated by `bash scripts/git/install-local-hooks.sh`) runs the full `repo_hygiene.py` — the *same* check as CI — so a leaked path or token is blocked at commit time and never enters history. That makes the [`git-history-surgery`](../../bin/orama-system/skills/git-history-surgery/SKILL.md) scrub a last resort (only if something already landed before the hook was installed), not the routine. Install the hooks once per clone; CI is the backstop, the hook is the gate.
 
 ---
 
