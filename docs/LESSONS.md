@@ -2562,7 +2562,7 @@ None — rule is fully specified and enforced at the shell level.
 - Re-anchor moves the *ref* for a clean graph; it does NOT merge branch content into main (that would regress the canonical tree). Merge only genuinely-unique forward work via a reviewed PR.
 - Always wrap network git ops in a `timeout` (a `git fetch upstream` once hung ~14h).
 
-**Canonical skill:** [`../bin/orama-system/skills/git-reanchor/SKILL.md`](../bin/orama-system/skills/git-reanchor/SKILL.md) · Fork variant: [`wiki/13-alphaclaw-fork-contrib-branches.md`](wiki/13-alphaclaw-fork-contrib-branches.md) · Rewrite companion: [`../bin/orama-system/skills/expunge-git/SKILL.md`](../bin/orama-system/skills/expunge-git/SKILL.md)
+**Canonical skill:** [`../bin/orama-system/skills/git-history-surgery/SKILL.md`](../bin/orama-system/skills/git-history-surgery/SKILL.md) · Fork variant: [`wiki/13-alphaclaw-fork-contrib-branches.md`](wiki/13-alphaclaw-fork-contrib-branches.md)
 
 ---
 
@@ -2586,12 +2586,12 @@ proxy with the method that truly answers the question (tree-twin search, not mer
 trust the user's domain signal over a first-pass check. Don't assert "fine/done" from a
 narrow check — name what was actually verified.
 
-→ AFRP gate: [`../bin/orama-system/afrp/SKILL.md`](../bin/orama-system/afrp/SKILL.md) § Intent-Verification · Catalog: [`../bin/orama-system/afrp/failure-modes.md`](../bin/orama-system/afrp/failure-modes.md) § Failure Mode 7 · Skill fix: [`../bin/orama-system/skills/git-reanchor/SKILL.md`](../bin/orama-system/skills/git-reanchor/SKILL.md) § 5 (tree-twins, not merge-base)
+→ AFRP gate: [`../bin/orama-system/afrp/SKILL.md`](../bin/orama-system/afrp/SKILL.md) § Intent-Verification · Catalog: [`../bin/orama-system/afrp/failure-modes.md`](../bin/orama-system/afrp/failure-modes.md) § Failure Mode 7 · Skill fix: [`../bin/orama-system/skills/git-history-surgery/SKILL.md`](../bin/orama-system/skills/git-history-surgery/SKILL.md) § B5 (tree-twins, not merge-base)
 
 ## 2026-06-05 — I repeated FM7 one hour after shipping the fix (the durable lesson)
 
 **What happened.** Right after merging PR #73 (which *added* Failure Mode 7 and the
-tree-twin §5 to git-reanchor), and after **moving `reanchor_scan.sh` into the workspace**,
+tree-twin §B5 to git-history-surgery), and after **moving `reanchor_scan.sh` into the workspace**,
 I was asked to check Perpetua-Tools branches. I reflexively hand-rolled a fresh `git
 rev-list --count` / `merge-base` ahead-behind table — **the exact proxy the skill I'd just
 written forbids** — and declared PT "no orphans, nothing to do." The user caught the tell:
@@ -2634,7 +2634,7 @@ onto twin, then PR the `+` commits. Details: PT [`docs/LESSONS.md`](../../perple
 · [GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md).
 
 **Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) ·
-canonical method [git-reanchor SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-reanchor/SKILL.md) ·
+canonical method [git-history-surgery SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md) ·
 tool [`scripts/git/reanchor_scan.sh`](../scripts/git/reanchor_scan.sh). periscope excluded —
 its `main`/`agentsview` are pure upstream mirrors, not rewritten by us.
 
@@ -2751,7 +2751,7 @@ gbrain sources list   # check last sync timestamps
 ```
 
 **Cross-agent propagation:** This lesson is in both LESSONS.md files (orama + PT), in
-`AGENTS.md` § History-rewrite protocol in every repo, and in the git-reanchor SKILL.md.
+`AGENTS.md` § History-rewrite protocol in every repo, and in the git-history-surgery SKILL.md.
 The docs/v2/27 governance plan covers the org-wide rollout to future `oramasys/*` repos.
 
 ### 2026-06-06 (cont.) — zero-fragmentation gate SHIPPED + a live concurrent-write collision (2nd this session)
@@ -2793,7 +2793,7 @@ priorities after today: **(P1)** repair gbrain (`broken-config` → `/setup-gbra
 resume tri-repo Gate 2→3 ([[project_tri_repo_migration_state]]); **(P3)** wire
 `verify-guard-parity.sh` into each repo's CI + `daily-attribution-guard.sh`.
 
-**Canonical references:** `scripts/git/reanchor_scan.sh` · `bin/orama-system/skills/git-reanchor/SKILL.md`
+**Canonical references:** `scripts/git/reanchor_scan.sh` · `bin/orama-system/skills/git-history-surgery/SKILL.md`
 · `docs/v2/22-worktree-parallel-agents.md` · memory `feedback_git_guards_single_source`
 · memory `project_orama_main_rewrite_pr70`.
 
@@ -2830,3 +2830,28 @@ PowerShell gotchas from the same run:
 - Quote upstream shorthand as `git rev-parse --abbrev-ref '@{u}'`; bare `@{u}` is parsed as a hashtable.
 - Do not use `&&` in this Windows PowerShell session; run commands separately or use PowerShell-native control flow.
 - If the HTTPS helper error disappears and the next failure is `Failed to connect to github.com ... 127.0.0.1`, the Git shim is fixed enough for HTTPS and the remaining issue is network/proxy access, not Git packaging.
+
+### 2026-06-10 — Windows local verification needs explicit Git/Python toolchain bootstrap
+
+While reviewing PR #74 from Windows, the local full pytest suite first failed
+because subprocesses could not find literal `bash`, then improved once a temporary
+`bash.exe` shim pointed at GitHub Desktop's `usr\bin\sh.exe`. Remaining failures
+were environment-shaped: no `jq`, Windows path separator expectations in tests,
+and shell subprocesses resolving `python` to the Windows Store alias.
+
+Operational rule now lives in the git skills: run the Windows PowerShell runtime
+bootstrap from `bin/orama-system/skills/using-git-worktrees/SKILL.md` before
+rebases, pushes, or Windows local verification. The bootstrap:
+- prepends `C:\Users\lab\.lmstudio\bin`;
+- discovers the latest GitHub Desktop `app-*` git bundle;
+- prepends `mingw64\bin` and `cmd`, then sets `GIT_EXEC_PATH`;
+- uses LM Studio's bundled `node.exe` at `C:\Users\lab\.lmstudio\.internal\utils\node.exe`;
+- records the explicit venv Python path
+  `C:\Users\lab\Downloads\SKILLS.md\ultrathink\Perplexity-Tools\.venv\Scripts\python.exe`;
+- optionally creates a temp-only `bash.exe` shim from `usr\bin\sh.exe` for tests
+  that invoke literal `bash`.
+
+Do not claim GitHub Desktop provides full Bash on this host: current evidence
+shows `sh.exe` exists and `bash.exe` does not. Prefer a real Git for Windows
+install if Bash semantics matter; otherwise use the temp shim only for local
+verification and keep it outside the repo.
