@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
-from ultrathink_core import AgentMessage, MessageType
+from oramasys_core import AgentMessage, MessageType
 from state_manager import StateManager
 from message_bus import MessageBus
 

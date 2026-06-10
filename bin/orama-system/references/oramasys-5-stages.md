@@ -1,4 +1,4 @@
-# ultrathink 5-Stage Methodology: Deep Dive
+# oramasys 5-Stage Methodology: Deep Dive
 
 ## Reference Document for orama-system
 
@@ -16,7 +16,7 @@ Your work should:
 - Solve the *real* problem, not just the stated one
 - Leave the codebase, product, and team wiser than you found them
 
-When something seems impossible, that's your cue to **ultrathink harder.**
+When something seems impossible, that's your cue to **oramasys harder.**
 
 ---
 
@@ -394,7 +394,7 @@ Run `python scripts/capture_lesson.py` if any corrections occurred.
 
 ## Success Metrics
 
-A project using ultrathink succeeds when:
+A project using oramasys succeeds when:
 - ✅ **Inevitability** — The solution feels obvious in retrospect
 - ✅ **Simplicity** — Explainable to a new team member in 10 minutes
 - ✅ **Robustness** — Handles edge cases gracefully

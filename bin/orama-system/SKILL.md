@@ -331,7 +331,7 @@ Load on demand for deeper context:
 - `afrp/SKILL.md` — Audience-First Response Protocol (pre-router gate)
 - `cidf/SKILL.md` — Content Insertion Decision Framework v1.2
 - `references/amplifier-principle.md` — foundational essay on intent-driven development
-- `references/ultrathink-5-stages.md` — deep dive on the 5-stage methodology
+- `references/oramasys-5-stages.md` — deep dive on the 5-stage methodology
 - `references/core-operational-directives.md` — the 6 directives in detail
 - `references/content-insertion-framework.md` — CIDF human reference + JSON policy
 - `references/skill-architecture-guide.md` — how to build SKILL.md files

@@ -16,7 +16,7 @@ sys.path.insert(0, str(ROOT / "bin" / "shared"))
 sys.path.insert(0, str(ROOT / "bin" / "agents" / "orchestrator"))
 
 try:
-    from ultrathink_core import (
+    from oramasys_core import (
         ArchitectureOutput,
         AgentMessage,
         ELEGANCE_THRESHOLD,
