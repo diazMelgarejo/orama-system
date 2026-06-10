@@ -214,7 +214,7 @@ def test_runtime_state_reads_pt_payload(monkeypatch, tmp_path):
 
 
 def test_hardware_mismatch_mac_provider_with_windows_model(monkeypatch):
-    """lmstudio-mac + Windows-only model â†’ must return 400 HARDWARE_MISMATCH."""
+    """lmstudio-mac + Windows-only model → must return 400 HARDWARE_MISMATCH."""
     async def fake_call_with_fallback(prompt, model, max_tokens, temperature):
         return "should not reach here", "http://redacted"
 
@@ -258,7 +258,7 @@ def test_hardware_mismatch_mac_provider_with_windows_model(monkeypatch):
 
 
 def test_hardware_mismatch_win_provider_with_mac_model(monkeypatch):
-    """lmstudio-win + Mac-only MLX model â†’ must return 400 HARDWARE_MISMATCH."""
+    """lmstudio-win + Mac-only MLX model → must return 400 HARDWARE_MISMATCH."""
     async def fake_call_with_fallback(prompt, model, max_tokens, temperature):
         return "should not reach here", "http://redacted"
 

@@ -15,7 +15,7 @@ from datetime import datetime, timezone
 from enum import Enum
 
 
-# â”€â”€ Enumerations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Enumerations ──────────────────────────────────────────────────────────────
 
 class Stage(str, Enum):
     CONTEXT       = "context_immersion"
@@ -44,7 +44,7 @@ class OptimizeFor(str, Enum):
     SPEED       = "speed"
 
 
-# â”€â”€ Core data types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Core data types ───────────────────────────────────────────────────────────
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -179,7 +179,7 @@ class ArchitectureOutput:
         }
 
 
-# â”€â”€ Constants â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# ── Constants ─────────────────────────────────────────────────────────────────
 
 ELEGANCE_THRESHOLD   = 0.8
 MAX_REFINEMENT_LOOPS = 3
@@ -197,7 +197,7 @@ QUALITY_RUBRIC_WEIGHTS = {
 }
 
 def calculate_elegance_score(rubric_scores: dict[str, float]) -> float:
-    """Weighted average of rubric scores â†’ elegance score 0.0â€“1.0."""
+    """Weighted average of rubric scores → elegance score 0.0–1.0."""
     weights = QUALITY_RUBRIC_WEIGHTS
     weighted_sum = sum(rubric_scores.get(k, 0.5) * w for k, w in weights.items())
     total_weight = sum(weights.values())

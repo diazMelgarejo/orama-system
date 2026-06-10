@@ -302,6 +302,53 @@ def scan_bidi_controls(root: Path, files: list[str]) -> list[str]:
     return errors
 
 
+# Mojibake (LINT-007) — UTF-8 text mis-decoded as cp1252/latin-1 then re-saved.
+# Signature: a UTF-8 multibyte lead char (U+00C2-U+00EF) immediately followed by a
+# continuation byte (U+0080-U+00BF) OR a cp1252 high-punctuation codepoint. In clean
+# English/Greek UTF-8 these never co-occur; in mojibake they always do. Markers are
+# written as \u escapes so this file contains no literal mojibake to self-trip on.
+MOJIBAKE_RE = re.compile(
+    "[\u00c2-\u00ef](?:"
+    "[\u0080-\u00bf]"
+    "|[\u2013\u2014\u2018-\u201e\u2020-\u2022\u2026\u2030\u2039\u203a\u20ac\u2122"
+    "\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u0192\u02c6\u02dc]"
+    ")"
+)
+
+
+def scan_mojibake(root: Path, files: list[str]) -> list[str]:
+    """Block UTF-8 mojibake byte pairs in tracked text (LINT-007).
+
+    Mojibake is text written in one charset and read as another — classically
+    UTF-8 bytes decoded as Windows-1252 (e.g. an em-dash U+2014 = E2 80 94 becomes
+    the three chars a-circumflex + euro + quote). The most common trigger is a tool
+    reading/writing a file without an explicit encoding on a cp1252-default platform
+    (Windows). Root cause + repair: docs/LESSONS.md 2026-06-10.
+
+    Describe mojibake by codepoint, never with a literal example, or this gate will
+    flag your own doc — there are intentionally no content exceptions.
+    """
+    errors: list[str] = []
+    for rel in files:
+        path = root / rel
+        if not path.is_file() or is_binary(path):
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+        for line_no, line in enumerate(text.splitlines(), 1):
+            m = MOJIBAKE_RE.search(line)
+            if m:
+                errors.append(
+                    f"UTF-8 mojibake in tracked file: {rel}:{line_no}: "
+                    f"U+{ord(m.group()[0]):04X} mis-decoded sequence "
+                    f"(see docs/LESSONS.md 2026-06-10 / CIDF LINT-007)"
+                )
+                break
+    return errors
+
+
 def check_private_generated_tracking(files: list[str]) -> list[str]:
     return [
         f"private/generated config is tracked: {rel}"
@@ -725,6 +772,7 @@ def main() -> int:
     errors.extend(scan_personal_paths(root, files))
     errors.extend(scan_openclaw_workstation_layout(root, files))
     errors.extend(scan_bidi_controls(root, files))
+    errors.extend(scan_mojibake(root, files))
     errors.extend(scan_tracked_secrets(root, files))
     errors.extend(check_private_generated_tracking(files))
     errors.extend(check_markdown_link_hygiene(root, files))
