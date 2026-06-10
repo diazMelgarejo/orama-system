@@ -32,12 +32,12 @@ Import command: `/instinct-import .claude/homunculus/instincts/inherited/orama-s
   legacy/shim lines). This is the P0 blocker for v1.1.
 - `.claude/skills/agent-methodology/SKILL.md` defines a 5-stage sequence
   (Crystallize→Architect→Execute→Refine→Verify) that diverges from the
-  canonical `references/ultrathink-5-stages.md`. The card was added without
+  canonical `references/oramasys-5-stages.md`. The card was added without
   syncing to the canonical source. Dogfood defect: found by applying the
   methodology's own Stage 3 (Ruthless Refinement — eliminate inconsistency)
   to orama-system itself.
 - `bin/orama-system/afrp/SKILL.md` line 3 has a UTF-8 mojibake artifact
-  (`â€"` instead of `—`). Likely introduced by a copy-paste through a
+  (`a-circumflex+euro+quote (cp1252-misread em-dash)` instead of `—`). Likely introduced by a copy-paste through a
   non-UTF-8 tool.
 
 ### Prevention
