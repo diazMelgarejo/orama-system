@@ -2925,3 +2925,10 @@ node <repo>/AlphaClaw/node_modules/openclaw/openclaw.mjs gateway --port 18789 --
 - **Pattern**: enforce "no workstation/absolute paths in tracked files" at WRITE time, not only at commit/CI. PreToolUse hook `~/.claude/hooks/no-workstation-paths.py` (matcher `Write|Edit`) blocks (exit 2) when an edit injects an absolute home path or a synced-tree path into a git-tracked, non-gitignored file; allows scratch/`/tmp` and gitignored files.
 - **Rule**: use repo-relative paths — `"$(git rev-parse --show-toplevel)/…"` or sibling `"../../<repo>/…"`. `repo_hygiene.py` (pre-commit + CI) remains the backstop.
 - **Why**: relying on memory failed (a workstation path re-leaked into a tracked skill); a deterministic harness guard is the durable fix. Fresh-install bootstrap imperative for the guard lives in the CIDF skill.
+
+---
+
+## [2026-06-12] One canonical skill source; .claude/skills are thin wrappers
+
+- **Pattern**: `bin/orama-system/` is the permanent canonical; `.claude/skills/*` become thin read-through wrappers (frontmatter + redirect). `scripts/consolidate-skills.sh` does it idempotently — union-merge (never overwrite/delete; differing files preserved as `.from-claude-<stamp>`), `--wrapper-only` for repos already superseded by orama.
+- **Fact**: ultrathink-system's 4 skills unified into orama (cross-repo wrappers); verified bin is a semantic superset before treating .claude copies as stale.
