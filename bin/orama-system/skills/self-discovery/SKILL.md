@@ -107,6 +107,28 @@ for repo, branch, path in checks:
 
 ---
 
+## Codex Local Skill Wrapper Snapshot
+
+When local Codex skills are part of the session, verify they are thin wrappers around canonical in-repo cards:
+
+```bash
+ls ~/.codex/skills
+cat ~/.codex/skills/_perpetua-orama-install-manifest.json 2>/dev/null || true
+cat ~/.codex/skills/_perpetua-orama-wrapper-audit.json 2>/dev/null || true
+```
+
+Expected wrapper invariants:
+
+- Each local repo skill directory contains only `SKILL.md`.
+- Each wrapper names a canonical repo root and canonical `SKILL.md` path.
+- Each wrapper requires `git fetch origin --prune` and safe `git pull --ff-only` before using the canonical card.
+- The canonical card path exists in the current worktree.
+- Wrapper roots validate with Codex `quick_validate.py` under `PYTHONUTF8=1`.
+
+If the manifest points to stale `.claude/skills/*` paths when `bin/orama-system/skills/*` exists, update the wrapper manifest to the canonical `bin/` path.
+
+---
+
 ## Hub State Files
 
 | Path | Purpose |
