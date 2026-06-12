@@ -2943,3 +2943,12 @@ node <repo>/AlphaClaw/node_modules/openclaw/openclaw.mjs gateway --port 18789 --
 - **Validation gates**: run Codex `quick_validate.py` on each wrapper; verify canonical paths exist; verify wrapper dirs contain only `SKILL.md`; scan wrapper roots for mojibake markers; save an audit JSON beside the manifest.
 - **Qwen/LM Studio testing**: use compact `/no_think` JSON prompts. Large canonical excerpts can time out on `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`; prefer deterministic path/frontmatter audits first, then ask Qwen to review the compact name/description manifest. Save raw responses and parsed summaries under `~/.codex/skill-test-results/`.
 - **Penultimate completion habit**: before declaring a long-running goal achieved, collect the session lessons and update the canonical skills/docs first, then refresh local wrappers if trigger text or canonical paths changed.
+
+---
+
+## [2026-06-12] Local Qwen delegation is project-controlled, not hosted Codex-controlled
+
+- **Fact**: Hosted Codex multi-agent `spawn_agent` only exposes its configured hosted model menu; it does not accept arbitrary local LM Studio model IDs such as `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`.
+- **Decision**: exact local Qwen delegation belongs in repo-controlled routing surfaces: orama agent registry entries, Perpetua routing/model registries, and PT-MCP/local-agent model discovery. Treat hosted subagents as useful when their model menu is sufficient, but do not promise exact LM Studio model affinity through that surface.
+- **Pattern**: for exact local model work, first verify LM Studio `/v1/models`, then expose loaded/callable model metadata through the project MCP or local-agent bridge, and route coder/priority-subagent roles to the exact returned model ID.
+- **Windows validation lesson**: when validating Node-based MCP packages on this host, account for LM Studio's bundled Node/npm layout and Windows ESM path rules. Use `pathToFileURL` for absolute imports, run npm through the current `npm_execpath` when spawning from tests, and prefer cross-platform npm scripts such as `"build": "tsc"`.
