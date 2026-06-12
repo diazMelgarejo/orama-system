@@ -2932,3 +2932,14 @@ node <repo>/AlphaClaw/node_modules/openclaw/openclaw.mjs gateway --port 18789 --
 
 - **Pattern**: `bin/orama-system/` is the permanent canonical; `.claude/skills/*` become thin read-through wrappers (frontmatter + redirect). `scripts/consolidate-skills.sh` does it idempotently — union-merge (never overwrite/delete; differing files preserved as `.from-claude-<stamp>`), `--wrapper-only` for repos already superseded by orama.
 - **Fact**: ultrathink-system's 4 skills unified into orama (cross-repo wrappers); verified bin is a semantic superset before treating .claude copies as stale.
+
+---
+
+## [2026-06-12] Codex skill installs are thin wrappers; canonical skills stay in repo
+
+- **Decision**: local Codex installs under `~/.codex/skills` must be thin wrappers only. They should contain a Codex-valid `SKILL.md` with trigger text, canonical repo root, canonical in-repo `SKILL.md` path, and an origin-sync rule. Do not copy canonical skill bodies, references, scripts, or assets into the local install.
+- **Origin rule**: before using a canonical card, run `git fetch origin --prune`. Run `git pull --ff-only` only when the repo is clean and on a tracking branch. If dirty or non-fast-forward, preserve local work, report drift, and read the current canonical card with that caveat.
+- **Windows encoding rule**: generated skill roots must be UTF-8 without BOM. In Windows PowerShell, set console/output encodings explicitly and use `[System.Text.UTF8Encoding]::new($false)` with `[System.IO.File]::WriteAllText(...)`. `Set-Content -Encoding utf8` can leave a BOM in Windows PowerShell 5.1; Python validators may also need `PYTHONUTF8=1`.
+- **Validation gates**: run Codex `quick_validate.py` on each wrapper; verify canonical paths exist; verify wrapper dirs contain only `SKILL.md`; scan wrapper roots for mojibake markers; save an audit JSON beside the manifest.
+- **Qwen/LM Studio testing**: use compact `/no_think` JSON prompts. Large canonical excerpts can time out on `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`; prefer deterministic path/frontmatter audits first, then ask Qwen to review the compact name/description manifest. Save raw responses and parsed summaries under `~/.codex/skill-test-results/`.
+- **Penultimate completion habit**: before declaring a long-running goal achieved, collect the session lessons and update the canonical skills/docs first, then refresh local wrappers if trigger text or canonical paths changed.

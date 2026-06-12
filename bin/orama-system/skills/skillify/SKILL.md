@@ -6,7 +6,8 @@ description: >-
   and harness registration — by asking you questions, then writing the files.
   Activates when asked to: create a skill, new skill, add a sub-skill, /skillify,
   build a new tool as a skill, make a skill, install a skill.
-  Supports targets: raw-claude, orama-system sub-skill, gstack global skill, all.
+  Supports targets: raw-claude, orama-system sub-skill, gstack global skill,
+  Codex local thin wrapper, all.
 version: 1.0.0
 license: Apache 2.0
 compatibility: claude-code, gstack
@@ -32,6 +33,7 @@ guessing the frontmatter format. You answer questions; skillify writes the files
 and wires up registration.
 
 Spec reference: [`references/skill-architecture-guide.md`](../references/skill-architecture-guide.md)
+Codex wrapper policy: [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md)
 
 ---
 
@@ -41,8 +43,25 @@ Use skillify when you need a new:
 - **orama-system sub-skill** — lives in `bin/orama-system/<name>/`, registered in the mother skill
 - **gstack global skill** — lives in `~/.claude/skills/<name>/`, invokable as `/<name>` anywhere
 - **raw Claude Code skill** — a standalone `SKILL.md` that can be loaded with `/skill path/SKILL.md`
+- **Codex local thin wrapper** — lives in `~/.codex/skills/<name>/SKILL.md`, points to a canonical in-repo skill, and must not copy canonical bodies/references/scripts
 
 Do NOT use skillify to edit existing skills. Use it to create new ones.
+
+---
+
+## Codex Local Install Policy
+
+When asked to install repo skills for Codex, install **thin wrappers only**:
+
+1. Keep the canonical skill in the repo and update that source first.
+2. Put only a small Codex-valid wrapper in `~/.codex/skills/<name>/SKILL.md`.
+3. Include the canonical repo root and canonical `SKILL.md` path in the wrapper.
+4. Require `git fetch origin --prune` before reading the canonical card.
+5. Run `git pull --ff-only` only when the repo is clean and on a tracking branch.
+6. Do not cache upstream `SKILL.md`, references, scripts, or assets in the local Codex skill dir.
+7. Validate the wrapper with Codex `quick_validate.py`, then run a compact local-model smoke test if requested.
+
+For the full checklist, read [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md).
 
 ---
 
