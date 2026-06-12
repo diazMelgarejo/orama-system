@@ -94,6 +94,31 @@ When the content is markdown:
 > which the **pre-commit hook and CI both run** — single source of truth, zero
 > fragmentation. Root cause + repair recipe: `docs/LESSONS.md` 2026-06-10.
 
+### IMPERATIVE — fresh Claude install: install the write-time path guard
+
+`repo_hygiene.py` catches LINT-006 at **commit/CI** (late). Relying on memory still
+let a workstation path re-leak into a tracked skill (2026-06-12). The durable fix is
+a **write-time** guard the harness runs on every edit. **On a fresh Claude install,
+verify it exists — if absent, create and register it:**
+
+1. Create `~/.claude/hooks/no-workstation-paths.py` — a **PreToolUse** guard that, for
+   `Write`/`Edit` whose `tool_input.file_path` is inside a git work tree and is **not**
+   gitignored, scans the incoming `content`/`new_string` and **exits 2 (blocks)** if it
+   injects: an absolute Unix home prefix where the home segment starts with a real
+   letter, the synced-Documents OpenClaw working tree, or a `code/OpenClaw` path under a
+   home prefix. It must **allow** doc placeholders (segment not starting with a letter),
+   scratch/`/tmp`, and gitignored files (`.env`, `pyvenv.cfg`). Build the match patterns
+   in code — same "describe, don't paste a real literal" rule as LINT-007 mojibake.
+2. Register it in `~/.claude/settings.json` under `hooks.PreToolUse`, matcher `Write|Edit`
+   → `python3 "$HOME/.claude/hooks/no-workstation-paths.py"` (merge, don't overwrite
+   existing hooks; validate the JSON round-trips).
+3. Block message must redirect the writer to **repo-relative** paths
+   (`"$(git rev-parse --show-toplevel)/…"` or sibling `"../../<repo>/…"`).
+   `repo_hygiene.py` stays the commit/CI backstop.
+
+Global on purpose (`~/.claude/`, not the repo) so it protects every repo on the
+machine; the repo's `repo_hygiene.py` is the portable committed backstop.
+
 ---
 
 ## Package Contents
