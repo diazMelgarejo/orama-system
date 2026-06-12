@@ -61,7 +61,11 @@ for a in d.get("agents",{}).get("list",[]):
         a["model"]={"primary":"ollama/qwen3.5:9b-nvfp4","fallbacks":["lmstudio-mac/qwen3.5-9b-mlx"]}; ch=True
     if a.get("id")=="coder" and "fallbacks" not in a.get("model",{}):
         a.setdefault("model",{})["fallbacks"]=["ollama/qwen3.5:9b-nvfp4","lmstudio-mac/qwen3.5-9b-mlx"]; ch=True
-if ch: json.dump(d,open(p,"w"),indent=2); print("[bootstrap-env] gateway routing: orchestrator ollama-primary, coder +fallback")
+    # autoresearcher runs on the same Win box / coder model (GPU runner)
+    _coder="lmstudio-win/qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2"
+    if a.get("id")=="autoresearcher" and a.get("model",{}).get("primary")!=_coder:
+        a["model"]={"primary":_coder,"fallbacks":["ollama/qwen3.5:9b-nvfp4","lmstudio-mac/qwen3.5-9b-mlx"]}; ch=True
+if ch: json.dump(d,open(p,"w"),indent=2); print("[bootstrap-env] gateway routing: orchestrator ollama-primary, coder+autoresearcher routed")
 PY
 }
 
