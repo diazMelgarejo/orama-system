@@ -1,8 +1,8 @@
 # ORAMASYS-MASTERY v3 — Implementation Plan
 
-> **File:** `docs/v2/30-oramasys-mastery-implementation-plan.md`
+> **File:** `docs/v2/29-oramasys-mastery-implementation-plan.md`
 > **Status:** Approved for execution — v2 migration
-> **Human reference:** `docs/v2/29-oramasys-mastery-v3.md` (verbatim, review first)
+> **Human reference:** `docs/v2/references/ORAMASYS-MASTERY-v3.md` (verbatim, review first)
 > **Repo v2:** `github.com/oramasys/oramasys`
 
 ---
@@ -32,7 +32,7 @@ bin/orama-system/
     content-insertion-framework.md
 
 docs/v2/
-  29-oramasys-mastery-v3.md  ← human-facing unified reference (NEW, verbatim)
+  references/ORAMASYS-MASTERY-v3.md  ← human-facing unified reference (verbatim)
 
 .claude/skills/
   agent-methodology/SKILL.md  ← DEFECTIVE (divergent 5-stage sequence — GOAL.md AC1)
@@ -70,7 +70,7 @@ docs/v2/
 ## Pre-Flight: Spec Contract
 
 Run before the AFRP gate. Sets the contract that AFRP then routes.
-Full template: `docs/v2/29-oramasys-mastery-v3.md § M1`
+Full template: `docs/v2/references/ORAMASYS-MASTERY-v3.md § M1`
 
 Three questions every task must answer before execution:
 
@@ -139,7 +139,7 @@ Full principle: `references/amplifier-principle.md`
 | `references/oramasys-5-stages.md` | Deep dive on 5-stage methodology |
 | `references/collaborative-reasoning-safety.md` | Multi-agent safety (M3) — NEW |
 | `references/communication-guidelines.md` | Writing guidelines (M6) — NEW |
-| `docs/v2/29-oramasys-mastery-v3.md` | Human-facing unified mastery reference |
+| `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |
 ```
 
 ---
@@ -148,7 +148,7 @@ Full principle: `references/amplifier-principle.md`
 
 ### 3a. `references/collaborative-reasoning-safety.md`
 
-Content: The full M3 section from `docs/v2/29-oramasys-mastery-v3.md`:
+Content: The full M3 section from `docs/v2/references/ORAMASYS-MASTERY-v3.md`:
 - Four mandatory roles (Builder, Critic, Adversary, Judge)
 - Every conclusion must answer: "what is the strongest argument against this?"
 - Confidence tracking (4 axes: confidence, uncertainty, consensus, disagreement)
@@ -158,7 +158,7 @@ Content: The full M3 section from `docs/v2/29-oramasys-mastery-v3.md`:
 
 ### 3b. `references/communication-guidelines.md`
 
-Content: The full M6 section from `docs/v2/29-oramasys-mastery-v3.md`:
+Content: The full M6 section from `docs/v2/references/ORAMASYS-MASTERY-v3.md`:
 - Core principle: tell it straight
 - Language to avoid (the AI tells list)
 - Document type guidance table (formal vs working)
@@ -198,7 +198,7 @@ This is the migration path:
 | `bin/orama-system/SKILL.md` | `skills/oramasys/SKILL.md` | After § 2 diffs applied |
 | `bin/orama-system/references/` | `references/` | All reference files |
 | `bin/orama-system/skills/oramasys-method/` | `skills/oramasys-method/` | The user-invocable skill |
-| `docs/v2/29-oramasys-mastery-v3.md` | `docs/ORAMASYS-MASTERY.md` | Pinned at root of docs |
+| `docs/v2/references/ORAMASYS-MASTERY-v3.md` | `docs/ORAMASYS-MASTERY.md` | Pinned at root of docs |
 | `docs/LESSONS.md` | `docs/LESSONS.md` | Canonical, with thin wrappers |
 
 ### 5b. What changes in v2
@@ -310,7 +310,7 @@ These extend GOAL.md for the mastery implementation pass:
 - [ ] **AC-M4** Mother SKILL.md Stage 5 mentions the 6-section output shape
 - [ ] **AC-M6** `references/communication-guidelines.md` exists and is linked from SKILL.md
 - [ ] **AC-M7** `check_mastery_no_duplication()` returns 0 errors
-- [ ] **AC-M8** `docs/v2/29-oramasys-mastery-v3.md` verbatim == uploaded source
+- [ ] **AC-M8** `docs/v2/references/ORAMASYS-MASTERY-v3.md` verbatim == uploaded source
 - [ ] **AC-M9** `.claude/lessons/LESSONS.md` is a thin wrapper (<= 30 lines, no session entries)
 - [ ] **AC-M10** `docs/LESSONS.md` sorted newest-first, contains all entries from both files
 
