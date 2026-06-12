@@ -56,7 +56,7 @@ orama-system is meant to become:
 ## Pre-Flight: Spec Contract
 
 Before the AFRP gate. Sets the contract that AFRP then routes.
-Full template and rationale: `docs/v2/29-oramasys-mastery-v3.md § M1`
+Full template and rationale: `docs/v2/references/ORAMASYS-MASTERY-v3.md § M1`
 
 Three questions every task must answer before execution:
 
@@ -551,4 +551,4 @@ echo "OMNIROUTE: $_OMNIROUTE"
 | `references/oramasys-5-stages.md` | Deep dive: 5-stage methodology |
 | `references/collaborative-reasoning-safety.md` | Multi-agent safety (M3) |
 | `references/communication-guidelines.md` | Writing guidelines (M6) |
-| `docs/v2/29-oramasys-mastery-v3.md` | Human-facing unified mastery reference |
+| `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |
