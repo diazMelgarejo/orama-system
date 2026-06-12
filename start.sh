@@ -319,6 +319,14 @@ if [ -f "$SCRIPT_DIR/scripts/install-skills.sh" ]; then
   bash "$SCRIPT_DIR/scripts/install-skills.sh" 2>&1 | sed 's/^/  [skills] /' || true
 fi
 
+# ── environment bootstrap (idempotent) — reproduce the cross-cutting fixes ───
+# Write-time path-hygiene hook, PERPETUA_TOOLS_ROOT, ollama keep-alive, gateway
+# orchestrator=ollama routing, .claude/skills thin-wrapper consolidation. Safe to
+# run every start; a fresh clone gets all of these with no manual steps.
+if [ -f "$SCRIPT_DIR/scripts/bootstrap-environment.sh" ]; then
+  bash "$SCRIPT_DIR/scripts/bootstrap-environment.sh" 2>&1 | sed 's/^/  [bootstrap] /' || true
+fi
+
 # ── LAN live probe — always run on startup (LAN is dynamic) ──────────────────
 # LAN topology changes: DHCP leases expire, machines reboot, IPs shift.
 # We ALWAYS run discover.py --force before reading any IP so the IP detection
