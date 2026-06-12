@@ -53,6 +53,43 @@ orama-system is meant to become:
 - An **orchestration** layer — a meta-intelligence/delegation runtime above infrastructure and middleware, with clear boundaries/invariants.
 - A “delegate, not decider” runtime — it should orchestrate and execute resolved decisions, not re-derive gateway policy (teleology of humility + clarity in system role).
 
+## Pre-Flight: Spec Contract
+
+Before the AFRP gate. Sets the contract that AFRP then routes.
+Full template and rationale: `docs/v2/29-oramasys-mastery-v3.md § M1`
+
+Three questions every task must answer before execution:
+
+**Role** — who are we in this context?
+(Systems Architect / Research Scientist / Engineer / Teacher / Operator)
+
+**Goal** — what outcome actually matters?
+Not the activity. The outcome. What must be true before success is declared?
+
+**Constraints** — reality always wins.
+Time, budget, security, compliance, compatibility. Constraints define the shape of the solution.
+
+```text
+ROLE: <who you are>
+GOAL: <what must be true when done>
+CONSTRAINTS: <assumptions, limits, what to avoid>
+```
+
+## Amplifier Objective Tree
+
+Every task has three layers. Identify all three before starting.
+Full principle: `references/amplifier-principle.md`
+
+| Layer | Question |
+|---|---|
+| Explicit objective | What was requested? |
+| Hidden objective | What problem is actually being solved? |
+| System objective | What improves the larger system? |
+
+Most failures optimize only the explicit objective.
+
+---
+
 ## Pre-Router Gate: AFRP (Mandatory)
 
 Before the Execution Mode Router fires, every non-trivial query passes through
@@ -195,7 +232,19 @@ When context > 70% -- offload, one task per subagent:
   subagent("Prototype approach A"); subagent("Prototype approach B")
 ```
 
-## MODE 3: Full Multi-Agent Network (Complex Tasks)
+
+**Output shape** -- every substantial deliverable contains six sections:
+
+1. ASSUMPTIONS: what you decided, guessed, or ruled out
+2. ARCHITECTURE / PLAN: structure and component relationships
+3. ARTIFACT: the actual deliverable
+4. TEST & VERIFICATION: how correctness is validated
+5. RISKS + MITIGATIONS: failure modes and mitigations
+6. NEXT ACTIONS: numbered, concrete, with clear ownership
+
+## MODE 3: Full Multi-Agent Network
+> **Multi-agent safety:** See `references/collaborative-reasoning-safety.md` — mandatory Builder/Critic/Adversary/Judge roles, anti-groupthink rules, confidence tracking.
+ (Complex Tasks)
 
 ### Agent Network
 
@@ -491,3 +540,15 @@ echo "OMNIROUTE: $_OMNIROUTE"
 - Fail, warn, or degrade visibly when OmniRoute is absent
 - Block on OmniRoute being rate-limited or unreliable
 - Retry more than once per session if start fails**
+
+---
+
+## Extended References
+
+| Reference | Content |
+|---|---|
+| `references/amplifier-principle.md` | Full Amplifier Principle essay |
+| `references/oramasys-5-stages.md` | Deep dive: 5-stage methodology |
+| `references/collaborative-reasoning-safety.md` | Multi-agent safety (M3) |
+| `references/communication-guidelines.md` | Writing guidelines (M6) |
+| `docs/v2/29-oramasys-mastery-v3.md` | Human-facing unified mastery reference |
