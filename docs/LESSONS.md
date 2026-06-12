@@ -2899,3 +2899,36 @@ Do not claim GitHub Desktop provides full Bash on this host: current evidence
 shows `sh.exe` exists and `bash.exe` does not. Prefer a real Git for Windows
 install if Bash semantics matter; otherwise use the temp shim only for local
 verification and keep it outside the repo.
+---
+
+## 2026-06-12 — OpenClaw gateway :18789 won't start ("Not onboarded"): drive the openclaw CLI directly (don't guess)
+
+**Symptom:** Gateway `:18789` down. AlphaClaw manager (`:3000`) `POST /api/gateway/restart` → `{"ok":false,"error":"Not onboarded"}` even though `~/.alphaclaw/onboarded.json` exists.
+
+**Root cause:** That "Not onboarded" is AlphaClaw's OWN read-only onboarding-marker gate (`onboarded.json` `{"readOnly":true,"reason":"read_only_complete"}`) — SEPARATE from OpenClaw gateway readiness. It is not the gateway's blocker.
+
+**Fix (verified live 2026-06-12; OpenClaw is a PUBLIC project — docs.openclaw.ai, github.com/openclaw/openclaw — search, don't reinvent):** bypass AlphaClaw's manager and drive the bundled `openclaw` CLI directly:
+```
+node <repo>/AlphaClaw/node_modules/openclaw/openclaw.mjs gateway --port 18789 --force
+```
+- Needs `gateway.mode=local` in `~/.openclaw/openclaw.json`. Docs: gateway refuses to start without it; a clobbered config that lost `gateway.mode` is "broken" → repair via `openclaw onboard --mode local` or `openclaw setup`. Ad-hoc/dev override: `openclaw gateway --allow-unconfigured`.
+- Verify: `openclaw gateway status --deep --json` → port `busy` + listener pid on 18789.
+- Durable service: `openclaw gateway install` + `openclaw gateway restart --force` (LaunchAgent `ai.openclaw.gateway`; keep service PATH minimal — doctor warns on version-manager PATHs).
+- Non-interactive onboard (scripts): `openclaw onboard --non-interactive --mode local --auth-choice apiKey --anthropic-api-key "$KEY" --gateway-port 18789 --gateway-bind loopback --install-daemon --daemon-runtime node --skip-skills`.
+- Port/bind precedence: `--port` → `OPENCLAW_GATEWAY_PORT` → `gateway.port` → 18789.
+
+**Relevant OpenClaw-operation skills:** `alphaclaw-session` (commandeer/self-heal runtime — PRIMARY owner of this fix), `model-routing-check` (gateway must be live before dispatch), `self-discovery` (gateway status = live-state probe).
+---
+
+## [2026-06-12] Write-time path-hygiene guard (don't rely on memory)
+
+- **Pattern**: enforce "no workstation/absolute paths in tracked files" at WRITE time, not only at commit/CI. PreToolUse hook `~/.claude/hooks/no-workstation-paths.py` (matcher `Write|Edit`) blocks (exit 2) when an edit injects an absolute home path or a synced-tree path into a git-tracked, non-gitignored file; allows scratch/`/tmp` and gitignored files.
+- **Rule**: use repo-relative paths — `"$(git rev-parse --show-toplevel)/…"` or sibling `"../../<repo>/…"`. `repo_hygiene.py` (pre-commit + CI) remains the backstop.
+- **Why**: relying on memory failed (a workstation path re-leaked into a tracked skill); a deterministic harness guard is the durable fix. Fresh-install bootstrap imperative for the guard lives in the CIDF skill.
+
+---
+
+## [2026-06-12] One canonical skill source; .claude/skills are thin wrappers
+
+- **Pattern**: `bin/orama-system/` is the permanent canonical; `.claude/skills/*` become thin read-through wrappers (frontmatter + redirect). `scripts/consolidate-skills.sh` does it idempotently — union-merge (never overwrite/delete; differing files preserved as `.from-claude-<stamp>`), `--wrapper-only` for repos already superseded by orama.
+- **Fact**: ultrathink-system's 4 skills unified into orama (cross-repo wrappers); verified bin is a semantic superset before treating .claude copies as stale.

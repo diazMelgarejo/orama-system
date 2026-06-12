@@ -4,25 +4,12 @@ description: Post-merge ECC Tools sync — run after any ECC Tools PR merges int
 disable-model-invocation: true
 ---
 
-Run immediately after any ECC Tools PR is merged:
+<!-- THIN-WRAPPER: canonical skill lives in bin/orama-system -->
 
-```bash
-git pull origin main
-```
+# ecc-sync (thin wrapper)
 
-Then in Claude Code:
-```
-/instinct-import .claude/homunculus/instincts/inherited/orama-system-instincts.yaml
-/instinct-status
-```
+The canonical, permanent implementation lives in the repo at
+`../../../bin/orama-system/skills/ecc-sync/` (under `bin/orama-system/`). **Read it before proceeding** —
+this wrapper only carries discovery metadata; the substance is canonical there.
 
-Then commit:
-```bash
-git add -A
-git commit -m "chore(ecc): post-merge instinct import sync $(date +%Y-%m-%d)"
-git push origin main
-```
-
-If `/instinct-import` unavailable: check ECC Tools MCP is running, or run `python .claude/homunculus/import_instincts.py` directly.
-
-Related: `.claude/lessons/LESSONS.md` · `.claude/commands/ecc-sync.md` (legacy alias)
+Original pre-wrapper body preserved at `SKILL.md.premerge---stamp.bak`.
