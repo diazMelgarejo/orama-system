@@ -21,6 +21,7 @@ SKILL_NAMES = {
     "verifier":     "agent.md",
     "crystallizer": "agent.md",
 }
+QWEN_PRIORITY_MODEL = "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2"
 
 
 class TestAgentStructure:
@@ -98,6 +99,15 @@ class TestConfig:
         for agent in ["orchestrator", "context-agent", "architect-agent",
                       "refiner-agent", "executor-agent", "verifier-agent", "crystallizer-agent"]:
             assert agent in ids, f"{agent} missing from registry"
+
+    def test_qwen_priority_subagent_registered(self):
+        data = json.loads((MULTI / "config" / "agent_registry.json").read_text(encoding="utf-8"))
+        openclaw_agents = data["openclaw_agents"]
+
+        assert openclaw_agents["coder"]["model"] == QWEN_PRIORITY_MODEL
+        assert openclaw_agents["priority-subagent"]["model"] == QWEN_PRIORITY_MODEL
+        assert openclaw_agents["priority-subagent"]["provider"] == "lmstudio-win"
+        assert openclaw_agents["priority-subagent"]["soul"] == openclaw_agents["coder"]["soul"]
 
     def test_routing_rules_valid_json(self):
         path = MULTI / "config" / "routing_rules.json"
