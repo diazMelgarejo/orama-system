@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — eval/dogfood report complete; findings live in the `oramasys-method` skill (`bin/orama-system/skills/oramasys-method/`).
+
 # oramasys-method Skill — Eval Report & Dogfood Findings
 
 **Date:** 2026-06-10  |  **Method:** Ipso/dogfood eval (skill applied to orama-system itself)
