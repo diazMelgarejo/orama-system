@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — weaning goal met: 0 `Canonical:.*CLAUDE-instru` refs in skills, `docs/how-to/` present; regression guard `scripts/check_no_instru_canonical_in_skills.sh` shipped.
+
 # CLAUDE-instru Progressive Weaning — Autoplan
 
 > **Date:** 2026-05-23  
