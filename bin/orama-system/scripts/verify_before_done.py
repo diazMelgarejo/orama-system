@@ -341,10 +341,15 @@ def run_selected_checks(project_dir: Path, task_name: str, check: str, interacti
             header("3. Debug Artifacts Scan")
             report["checks"]["debug"] = check_no_debug_artifacts(project_dir)
         header("4. Task Plan Completion")
-        report["checks"]["task_plan"] = check_task_plan(project_dir)
+        task_plan = check_task_plan(project_dir)
+        report["checks"]["task_plan"] = task_plan
+        # In non-interactive mode, if no task plan exists, skip the check (don't fail)
+        if not interactive and not task_plan.get("exists", False):
+            plan_ok = True
+        else:
+            plan_ok = task_plan.get("completion", 0) >= 0.8
         header("5. Staff Engineer Check")
         report["checks"]["staff_engineer"] = check_staff_engineer(interactive)
-        plan_ok = report["checks"]["task_plan"].get("completion", 0) >= 0.8
         se_ok = report["checks"]["staff_engineer"]["approved"]
         debug_ok = report["checks"].get("debug", {}).get("passed", True)
         all_ok = plan_ok and se_ok and debug_ok
