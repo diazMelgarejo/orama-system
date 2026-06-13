@@ -1,3 +1,5 @@
+> ⚠️ **PARTIAL (2026-06-14)** — core landed (legacy `server.js` deleted; `alphaclaw-mcp` canonical) but this draft spec's residual packaging/verification checklist (`packages/net_utils/`, doc sweep, build-green) is still open. NOT fully resolved.
+
 # Perpetua-Tools MCP + net_utils Migration — Design Spec
 
 **Date:** 2026-05-25  
