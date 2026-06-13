@@ -326,9 +326,9 @@ def main(argv=None) -> int:
     )
     ap.add_argument(
         "--non-interactive",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         default=True,
-        help="Non-interactive mode (default; hooks run with --no-interact / --review)",
+        help="Run hooks non-interactively (default: true; use --no-non-interactive to opt into interactive mode)",
     )
     ap.add_argument(
         "--output-dir",
@@ -368,19 +368,19 @@ def main(argv=None) -> int:
     _write_proposed_artifacts(run_dir, messages, session_name)
 
     # Stage 5: Crystallize the Vision — run hooks (always; fail closed on non-zero)
-    vbd_result = _run_hook(
-        _SCRIPTS_DIR / "verify_before_done.py",
-        [
-            "--task", f"distillation:{session_name}",
-            "--dir", ".",
-            "--check", "plan",
-            "--no-interact",
-        ],
-    )
+    vbd_argv = [
+        "--task", f"distillation:{session_name}",
+        "--dir", str(_REPO_ROOT),
+        "--check", "plan",
+    ]
+    if args.non_interactive:
+        vbd_argv.append("--no-interact")
+
+    vbd_result = _run_hook(_SCRIPTS_DIR / "verify_before_done.py", vbd_argv)
 
     cl_result = _run_hook(
         _SCRIPTS_DIR / "capture_lesson.py",
-        ["--review"],
+        ["--review"] if args.non_interactive else [],
     )
 
     # Write verification summary

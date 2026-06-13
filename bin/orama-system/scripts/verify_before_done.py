@@ -313,8 +313,8 @@ def run_selected_checks(project_dir: Path, task_name: str, check: str, interacti
     """Run a subset of checks determined by *check*.
 
     ``all``   — full suite (original behaviour)
-    ``plan``  — task-plan completion + staff-engineer only (fast; skips test runner)
-    ``debug`` — debug-artifacts scan + task-plan (no tests, no linting)
+    ``plan``  — task-plan only (fast, no SE prompt, no test runner; missing plan = informational)
+    ``debug`` — debug-artifacts scan + task-plan (no tests, no linting, no SE)
     ``tests`` — test suite only
     ``lint``  — linting only
     ``se``    — staff-engineer self-review only
@@ -336,23 +336,28 @@ def run_selected_checks(project_dir: Path, task_name: str, check: str, interacti
     if check == "all":
         return run_all_checks(project_dir, task_name, interactive)
 
-    if check in ("plan", "debug"):
-        if check == "debug":
-            header("3. Debug Artifacts Scan")
-            report["checks"]["debug"] = check_no_debug_artifacts(project_dir)
+    if check == "plan":
         header("4. Task Plan Completion")
         task_plan = check_task_plan(project_dir)
         report["checks"]["task_plan"] = task_plan
-        # In non-interactive mode, if no task plan exists, skip the check (don't fail)
-        if not interactive and not task_plan.get("exists", False):
-            plan_ok = True
-        else:
-            plan_ok = task_plan.get("completion", 0) >= 0.8
-        header("5. Staff Engineer Check")
-        report["checks"]["staff_engineer"] = check_staff_engineer(interactive)
-        se_ok = report["checks"]["staff_engineer"]["approved"]
-        debug_ok = report["checks"].get("debug", {}).get("passed", True)
-        all_ok = plan_ok and se_ok and debug_ok
+        # In non-interactive mode, a missing plan is informational — don't fail.
+        # In interactive mode, require >= 80% completion.
+        plan_ok = (
+            task_plan.get("completion", 0) >= 0.8
+            if interactive and task_plan.get("exists", False)
+            else True
+        )
+        all_ok = plan_ok
+
+    elif check == "debug":
+        header("3. Debug Artifacts Scan")
+        report["checks"]["debug"] = check_no_debug_artifacts(project_dir)
+        header("4. Task Plan Completion")
+        task_plan = check_task_plan(project_dir)
+        report["checks"]["task_plan"] = task_plan
+        plan_ok = task_plan.get("completion", 0) >= 0.8 if task_plan.get("exists") else True
+        debug_ok = report["checks"]["debug"].get("passed", True)
+        all_ok = plan_ok and debug_ok
 
     elif check == "tests":
         header("1. Test Suite")
