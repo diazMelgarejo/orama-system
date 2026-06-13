@@ -191,6 +191,18 @@ bit us live (2026-06-13):
    `embed_graph_tool(provider="openai")` already does this over MCP — the `--provider`
    flag is only needed on the CLI path, where `local` is the unfortunate default.
 
+3. **Semantic search is MCP-only — fall back to gbrain.** `semantic_search_nodes_tool`,
+   `query_graph_tool`, `get_impact_radius_tool`, `get_review_context_tool` exist **only**
+   over MCP — there is **no `uvx` CLI equivalent** (the CLI does build/update/embed/status,
+   not search). So any skill that calls them **fails outright when the MCP is disconnected**.
+   When you can't reconnect immediately, use **gbrain** for the semantic lane — it shares the
+   **same bge-m3 vector space**, so results are directly comparable:
+   - "where is X handled / find by meaning" → `gbrain search "<terms>"` · `gbrain query "<q>"`
+   - "where is symbol Y" · "what calls Y" → `gbrain code-def Y` · `gbrain code-callers Y`
+   Reconnect CRG (`/mcp`) when you specifically need graph-native blast-radius
+   (`get_impact_radius`, flows, communities) that gbrain doesn't model. Never block a review
+   on a dead MCP — degrade to gbrain + FTS and say so in the report.
+
 ---
 
 ## Phase B — Gbrain
