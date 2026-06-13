@@ -1,3 +1,5 @@
+> ⚠️ **PARTIAL (2026-06-14)** — Backend Phases 1-5 shipped (2026-05-16); frontend Phases 6-9 remain. NOT fully done.
+
 # Web-App Orchestration Implementation Plan
 
 > **Status:** Backend Phases 1-5 shipped on 2026-05-16; frontend Phases 6-9 remain.
