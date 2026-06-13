@@ -42,6 +42,23 @@ Runtime changes (routing/cost) land later via a separate PT PR that applies the 
 ### Tests (v1)
 - Parser fixture test; dry-run output structure/snapshot test; hook-invocation test (mocked); no-network regression test; unknown-format rejection test.
 
+### Group A — tools already in Claude (immediately usable with Fable 5)
+
+> **Emulation, not importation** — but Group A is different: these tools are built INTO Claude,
+> not external OSS to evaluate or pip-install. They are usable right now with actual Fable 5 runs.
+> No waiting for a "future Desktop trial" — the v2 kickoff is immediately achievable.
+
+| # | Tool | Role |
+|---|------|------|
+| [6] | Claude Chat Exporter | Export real Fable 5 sessions → input for `distill_session.py`; the export format drives `FableExportParser` |
+| [8] | AI Distiller | Distillation pipeline available in Claude directly; `distill_session.py` operationalizes this as an orama-native CLI |
+| [11] | Claude Pre-commit | SKILL.md structural validation — available now for CI wiring |
+| [12] | Pre-commit Framework | Hook framework — wired as orama hooks (`verify_before_done.py`, `capture_lesson.py`) |
+
+**Kickoff path (immediate):** Run Claude Chat Exporter on a real Fable 5 session → pass the output to
+`distill_session.py --input <export>` → discover actual Fable 5 JSON schema → build `FableExportParser`
+as a drop-in `SessionExportParser` adapter. This IS the v2 kickoff, not a future prerequisite.
+
 ---
 
 ## V2 — Backlog (deferred; ADR-gated)
@@ -58,9 +75,20 @@ before build because it adds runtime state, cost, or a dependency.
   **when those providers are actually called**; cloud escalation **default-deny**; "4x Fable budget" gate
   **fails closed** (blocks), keys via Keychain/.env never config.
 - Eval: a **minimal output-diff harness** on a fixed prompt set first; DeepEval only if that proves insufficient.
-- OSS-pattern emulation (Langfuse traces → extend `capture_lesson.py`/`LESSONS.md`, ClawRouter scoring,
-  Manifest cost-tiering, Helicone proxy-caching). Langfuse-style "trace tree" must stay **additive methodology**
-  in orama and **not** become runtime observability/state (that belongs in PT).
+- **OSS-pattern emulation** (emulation not importation; ADR per tool before any code):
+
+  **Group B — v2 routing/caching patterns (4 tools, ADR-gated):**
+
+  | # | Tool | v2 emulation target |
+  |---|------|---------------------|
+  | [1] | Langfuse | Trace-tree pattern → additive extension of `capture_lesson.py`/`LESSONS.md`; stays **methodology in orama**, never runtime state in PT |
+  | [2] | Helicone | Proxy-caching pattern → hash-based LRU inside PT's `_dispatch`; never a separate service |
+  | [3] | Manifest | Cost-tiering pattern → extend `cost_guard.py` escalation rules |
+  | [4] | ClawRouter | 15-dim weighted scoring → extend `model_registry.py` dynamic thresholding |
+
+  **Fully deferred — v2 ADR or cut (9 tools):**
+  [5] NadirRouter · [7] Claude Artifact Unpacker · [9] DeepEval · [10] Agent-Distillation · [13] Cozeloop
+  — each needs an ADR justifying inclusion before any implementation. Full 13-tool parity is a v2 goal, not a v2 mandate.
 - Batch API "save 50%" claim: unproven for this workload — treat as a hypothesis to measure, not a target.
 
 ### V2 rationale (preserved from the original draft — caching/batching analysis)
@@ -72,14 +100,50 @@ before build because it adds runtime state, cost, or a dependency.
 > (track `time.time()` per provider; on `RateLimitError`, fail over). This caching/cost-guarding logic
 > **lives firmly in Perpetua-Tools** (L2 runtime), never in orama (L3 stateless methodology).
 
+### V2 implementation notes (corrected — supersede Grok's AntiGravity reference)
+
+**`perpetua-core/multi_llm_router.py` framing:** This path is the v2 target package structure from
+Grok's architectural reference (AntiGravity-in.md). It is greenfield — NOT an adaptation of anything
+existing. The correct v1 seam is `OrchestrationSupervisor._dispatch` at `supervisor.py:534`; the v2
+caching/batching decorator wraps `_dispatch`, not the individual workers.
+
+**Grok's model ID errors (correct before any v2 code):**
+
+| Grok draft (wrong) | Correct API model ID |
+|--------------------|----------------------|
+| `claude-4-sonnet-4.6` | `claude-sonnet-4-6` |
+| `claude-fable-5-max` | `claude-fable-5` |
+| `claude-opus-4.8` | `claude-opus-4-8` |
+
+**Anthropic API — not OpenAI-compatible:** Grok's reference uses `AsyncOpenAI(base_url="https://api.anthropic.com")`.
+This is architecturally valid as a routing pattern, but Anthropic's API is `POST /v1/messages`,
+not `POST /v1/chat/completions`. The v2 Anthropic leg must use `anthropic.AsyncAnthropic()`, not
+the OpenAI client. Other providers (OpenRouter, Grok, GPT-5.5) may use the OpenAI-compatible path.
+
+**ADR gate:** each v2 item needs an ADR before build. Next free number: ADR-030
+(see `orama-system/docs/v2/` for existing ADRs).
+
 ---
 
 ## Resolved questions
-- **Export format (was Open Q#1):** v1 fixes ONE supported format with a real fixture; the parser
-  interface lets the Fable 5 format slot in as an adapter once we have a real Fable 5 export (via Desktop).
+- **Export format (was Open Q#1):** v1 ships with `orama-session-export-v1` + `json-transcript-list`.
+  `FableExportParser` is next: Claude Chat Exporter is built into Claude and can produce a real Fable 5
+  export immediately — run it, observe the schema, drop in the adapter (one `_PARSERS` append, no other changes).
 - **Mock vs real scripts (was Open Q#2):** `verify_before_done.py` + `capture_lesson.py` already exist —
   call them through their current CLI contract; no stubs.
 - **Toolchain deliberation (Langfuse/Helicone/ClawRouter/Manifest):** deferred to v2 ADRs; not a v1 decision.
+
+## Program-level success metrics (v1 → v2 progression)
+
+Three compounding metrics track whether distillation is working:
+
+| Metric | v1 baseline | v2 target | Measurement |
+|--------|------------|-----------|-------------|
+| **Compounding Score** | 0% tasks solvable locally post-distill | Rising % over 30 days | Manual: count tasks completed without cloud model |
+| **Mistake Rate Decline** | Baseline from current `capture_lesson.py --stats` | Declining category totals | `capture_lesson.py --stats` diff month-over-month |
+| **Cost Reduction** | Baseline frontier model $ per week (PT cost_guard.log) | Declining $/equivalent task | PT `cost_guard.py` weekly report |
+
+These are measured, not assumed. "Batch API saves 50%" is a hypothesis; measure first.
 
 ## Decision audit trail (/autoplan, 2026-06-13)
 
