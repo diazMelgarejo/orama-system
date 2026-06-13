@@ -1,3 +1,5 @@
+> ⚠️ **PARTIAL (2026-06-14)** — Sub-A/B/C landed (`7ee2819`); Sub-D Windows coder-pool dispatch + tests unconfirmed on main. NOT fully done.
+
 # cc-openclaw Master Alignment Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
