@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — RAG Memory v1 shipped (backport); see the 2026-05-22 release-notes / what-shipped docs.
+
 # RAG Memory Pipeline v1 — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
