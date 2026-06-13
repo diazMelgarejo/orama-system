@@ -162,12 +162,11 @@ class TestInstallShPtDiscovery:
     def test_perpetua_tools_root_used_when_path_env_not_set(self, tmp_path):
         pt_root = tmp_path / "pt-root-only"
         _make_fake_install_sh(pt_root)
-        env = {"PERPETUA_TOOLS_ROOT": str(pt_root)}
-        # Explicitly unset PERPETUA_TOOLS_PATH
-        env_copy = os.environ.copy()
-        env_copy.pop("PERPETUA_TOOLS_PATH", None)
-        env_copy.update(env)
-        result = _bash(_PT_DISCOVERY_HARNESS, env=env_copy)
+        result = _run_discovery({
+            "PERPETUA_TOOLS_PATH": "",   # must override live env; pop() doesn't unset in _bash
+            "PERPETUA_TOOLS_ROOT": str(pt_root),
+            "OPENCLAW_HOME": "",
+        })
         assert result.returncode == 0
         assert f"PT_INSTALL={pt_root}/install.sh" in result.stdout
 
