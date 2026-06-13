@@ -75,9 +75,17 @@ ensure_skills_wrappers() {
   bash "$REPO/scripts/consolidate-skills.sh" --apply >/dev/null 2>&1 && log "skills consolidated (wrappers current)"
 }
 
+# 6) RAG MCP parity — gbrain + CRG wired in BOTH Claude Code CLI and the Desktop app.
+# Single source of truth: scripts/ensure-rag-mcp.py (skills point here, never re-implement).
+ensure_rag_mcp() {
+  [ -f "$REPO/scripts/ensure-rag-mcp.py" ] || return
+  python3 "$REPO/scripts/ensure-rag-mcp.py" --apply >/dev/null 2>&1 && log "RAG MCP wiring ensured (CLI + Desktop)"
+}
+
 install_hygiene_hook
 ensure_pt_root_env
 ensure_ollama_warm
 ensure_gateway_routing
 ensure_skills_wrappers
+ensure_rag_mcp
 log "done"

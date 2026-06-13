@@ -403,6 +403,8 @@ agent's SOUL.md and session start.
 
 Use code-review-graph MCP tools BEFORE Grep/Read for any multi-file question. Chain: code-review-graph (blast-radius) → gbrain code-def (symbols) → gbrain search (decisions) → Read (confirmed files only). Never default to Grep for code questions.
 
+**RAG wiring (CLI + Desktop) — single enforcer:** the semantic lane needs the gbrain + CRG MCP servers registered in both surfaces. Do NOT re-check this per skill — run the canonical `python3 scripts/ensure-rag-mcp.py [--apply]` (also run by `start.sh`). If CRG's MCP is down, its semantic search has no CLI fallback → degrade to `gbrain search`/`code-def` (same bge-m3 vector space). Reconnect recipe: `code-review` skill § "Fix: MCP disconnected".
+
 ## Search Policy
 
 **RULE: Never guess when information is scarce.**
