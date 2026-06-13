@@ -2306,8 +2306,8 @@ _SERVICE_BIND_HOSTS = {
 }
 _SERVICE_CMDS = {
     "pt":     ["python", "-m", "uvicorn", "orchestrator.fastapi_app:app", "--host", _SERVICE_BIND_HOSTS["pt"], "--port", "8000"],
-    "orama":  ["python", "-m", "uvicorn", "api_server:app", "--host", _SERVICE_BIND_HOSTS["orama"], "--port", "8001"],
-    "portal": ["python", "-m", "uvicorn", "portal_server:app", "--host", _SERVICE_BIND_HOSTS["portal"], "--port", "8002"],
+    "orama":  ["python", "-m", "uvicorn", "orama_system.api_server:app", "--host", _SERVICE_BIND_HOSTS["orama"], "--port", "8001"],
+    "portal": ["python", "-m", "uvicorn", "orama_system.portal_server:app", "--host", _SERVICE_BIND_HOSTS["portal"], "--port", "8002"],
 }
 
 
@@ -2352,15 +2352,18 @@ async def api_restart(service: str):
     if service == "pt":
         cwd = str(PERPETUA_TOOLS_ROOT)
         py = sys.executable
-        env = {**os.environ, "PYTHONPATH": cwd}
+        # src/ layout: the package lives under src/; keep repo root on the path
+        # too for the top-level orchestrator/ package.
+        env = {**os.environ, "PYTHONPATH": f"{cwd}/src{os.pathsep}{cwd}"}
         bind_host = _SERVICE_BIND_HOSTS["pt"]
         cmd = [py, "-m", "uvicorn", "orchestrator.fastapi_app:app",
                "--host", bind_host, "--port", str(port)]
     else:
         cwd = str(REPO_ROOT)
         py = sys.executable
-        env = {**os.environ, "PYTHONPATH": cwd}
-        module = "api_server:app" if service == "orama" else "portal_server:app"
+        env = {**os.environ, "PYTHONPATH": f"{cwd}/src{os.pathsep}{cwd}"}
+        module = ("orama_system.api_server:app" if service == "orama"
+                  else "orama_system.portal_server:app")
         bind_host = _SERVICE_BIND_HOSTS[service]
         cmd = [py, "-m", "uvicorn", module, "--host", bind_host, "--port", str(port)]
 

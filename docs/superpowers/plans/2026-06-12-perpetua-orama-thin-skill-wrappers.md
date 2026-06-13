@@ -172,6 +172,12 @@ def target_path(root: str, slug: str) -> Path:
     return root_path / slug / "SKILL.md"
 
 
+# NOTE (superseded): the snippet below is the ORIGINAL plan draft and embeds
+# absolute paths (`{ROOT}`, `{canonical_abs}`). The SHIPPED implementation in
+# bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py is
+# repo-relative (resolves the repo root at runtime via `git rev-parse`) and a
+# verify() guard rejects any absolute /Users/ or $HOME path. Treat the canonical
+# script — not this draft — as the source of truth.
 def wrapper(spec: SkillSpec) -> str:
     canonical_abs = ROOT / spec.canonical
     return f'''---

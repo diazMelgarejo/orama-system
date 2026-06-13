@@ -286,8 +286,8 @@ def offer_defaults(results: list[ProbeResult], auto_yes: bool, quiet: bool) -> N
         ),
         "Ollama Win (fallback)": "ollama serve  # on Windows",
         "Ollama Mac (fallback)": "ollama serve  # on Mac",
-        "Portal (LAN dashboard)": "python -m orama_system.portal_server",
-        "Oramasys API (this service)": "python -m orama_system.api_server",
+        "Portal (LAN dashboard)": "PYTHONPATH=src python -m orama_system.portal_server",
+        "Oramasys API (this service)": "PYTHONPATH=src python -m orama_system.api_server",
     }
 
     if not quiet:

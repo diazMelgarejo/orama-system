@@ -90,6 +90,22 @@ def slug_for(path: str) -> str:
     return re.sub(r"[^a-z0-9-]+", "-", parent.lower()).strip("-")
 
 
+def _truncate(value: str, limit: int = 240) -> str:
+    value = value.strip()
+    if len(value) <= limit:
+        return value
+    cut = value[:limit]
+    space = cut.rfind(" ")
+    # snap to a word boundary so we never cut mid-word (e.g. "...Trigger")
+    return (cut[:space] if space > 80 else cut).rstrip(" ,.;") + "…"
+
+
+# Metadata lines that must NOT be mistaken for a description: markdown bold
+# (**Version:**), table rows (| ... |), and single-token YAML keys (name:, version:).
+# A multi-word prose lead like "Use when: ..." is NOT skipped (space before colon).
+_META_LINE = re.compile(r"^(\*\*|\||[A-Za-z][\w-]*:(\s|$))")
+
+
 def frontmatter_value(text: str, key: str) -> str | None:
     if not text.startswith("---"):
         return None
@@ -97,13 +113,25 @@ def frontmatter_value(text: str, key: str) -> str | None:
     if end == -1:
         return None
     body = text[3:end]
-    match = re.search(rf"^{re.escape(key)}:\s*(.+)$", body, re.MULTILINE)
+    match = re.search(rf"^{re.escape(key)}:\s*(.*)$", body, re.MULTILINE)
     if not match:
         return None
-    value = match.group(1).strip().strip('"').strip("'")
-    if value in {">", ">-", "|", "|-"}:
-        return None
-    return value if value else None
+    value = match.group(1).strip()
+    # YAML folded/literal block scalar (`>`, `>-`, `|`, `|-`, or empty): the real
+    # value is the indented continuation block, not the indicator on this line.
+    if value in {">", ">-", ">+", "|", "|-", "|+", ""}:
+        collected = []
+        for line in body[match.end():].splitlines():
+            if line.strip() == "":
+                if collected:
+                    break
+                continue
+            if not line.startswith((" ", "\t")):
+                break
+            collected.append(line.strip())
+        folded = " ".join(collected).strip()
+        return folded or None
+    return value.strip('"').strip("'") or None
 
 
 def first_heading(text: str) -> str:
@@ -115,13 +143,16 @@ def first_heading(text: str) -> str:
 
 def compact_description(text: str, fallback: str) -> str:
     value = frontmatter_value(text, "description")
-    if value:
-        return value[:240]
+    if value and not value.lower().startswith("name:"):
+        return _truncate(value)
     for line in text.splitlines():
         stripped = line.strip()
-        if stripped and not stripped.startswith(("#", "---", ">", "-")):
-            return stripped[:240]
-    return fallback[:240]
+        if not stripped or stripped.startswith(("#", "---", ">", "-")):
+            continue
+        if _META_LINE.match(stripped):
+            continue
+        return _truncate(stripped)
+    return _truncate(fallback)
 
 
 def build_specs() -> list[SkillSpec]:
