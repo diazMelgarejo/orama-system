@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — shipped; the in-repo implementation supersedes this draft (see superseded-snippet note below).
+
 # Perpetua Orama Thin Skill Wrappers Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
