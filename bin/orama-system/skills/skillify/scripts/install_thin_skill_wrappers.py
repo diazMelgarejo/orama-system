@@ -83,6 +83,16 @@ SLUG_OVERRIDES = {
 }
 
 
+# Renamed skills: {old_slug: new_slug}. On every run the installer (1) leaves a
+# REDIRECT stub at the old slug in each target root so stale references still
+# resolve to the new skill, and (2) rewrites stale `skills/<old>/` path references
+# inside managed canonical docs. Add a line here whenever a skill is renamed —
+# never just delete the old wrapper (that orphans every reference to it).
+SKILL_RENAMES = {
+    "no-sleep-chains": "shell-hygiene",
+}
+
+
 def slug_for(path: str) -> str:
     if path in SLUG_OVERRIDES:
         return SLUG_OVERRIDES[path]
@@ -247,29 +257,86 @@ $env:PYTHONUTF8='1'
 '''
 
 
+def redirect_stub(old_slug: str, new_spec: SkillSpec) -> str:
+    """A thin redirect left at a RENAMED skill's old slug so stale references and
+    muscle-memory still resolve. It points at the new skill; it is not a full card."""
+    return f'''---
+name: {old_slug}
+description: "Renamed to `{new_spec.slug}`. Redirect stub — use {new_spec.slug}: {new_spec.description}"
+---
+
+# {old_slug} → renamed to `{new_spec.slug}`
+
+This skill was renamed. The canonical skill now lives under the slug **`{new_spec.slug}`**.
+
+- Use `{new_spec.slug}` going forward (same behavior, broader scope).
+- Canonical: `{repo_relative(new_spec.canonical)}` (relative to the repo root).
+
+This stub only redirects; do not add content here.
+'''
+
+
+def _clean_thin_dir(path: Path) -> None:
+    if path.parent.is_symlink():
+        path.parent.unlink()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    for child in path.parent.iterdir():
+        if child.name != "SKILL.md":
+            shutil.rmtree(child) if child.is_dir() else child.unlink()
+    if path.is_symlink():
+        path.unlink()
+
+
 def install(dry_run: bool) -> list[Path]:
     written = []
-    for spec in build_specs():
+    specs = build_specs()
+    by_slug = {s.slug: s for s in specs}
+    for spec in specs:
         content = wrapper(spec)
         for root in TARGET_ROOTS:
             path = target_path(root, spec.slug)
             if dry_run:
                 print(path)
                 continue
-            if path.parent.is_symlink():
-                path.parent.unlink()
-            path.parent.mkdir(parents=True, exist_ok=True)
-            for child in path.parent.iterdir():
-                if child.name != "SKILL.md":
-                    if child.is_dir():
-                        shutil.rmtree(child)
-                    else:
-                        child.unlink()
-            if path.is_symlink():
-                path.unlink()
+            _clean_thin_dir(path)
             path.write_text(content, encoding="utf-8")
             written.append(path)
+    # Rename redirects: leave a stub at every old slug so references keep resolving.
+    for old_slug, new_slug in SKILL_RENAMES.items():
+        new_spec = by_slug.get(new_slug)
+        if not new_spec:
+            continue  # new skill not in this manifest; nothing to redirect to
+        stub = redirect_stub(old_slug, new_spec)
+        for root in TARGET_ROOTS:
+            path = target_path(root, old_slug)
+            if dry_run:
+                print(f"{path} (redirect -> {new_slug})")
+                continue
+            _clean_thin_dir(path)
+            path.write_text(stub, encoding="utf-8")
+            written.append(path)
+    if not dry_run:
+        rewrite_stale_references()
     return written
+
+
+def rewrite_stale_references() -> list[Path]:
+    """On every run, rewrite stale `skills/<old>/` path references in managed
+    canonical docs to the renamed slug — so the mother skill and sibling skill
+    docs keep pointing at renamed skills without manual edits."""
+    changed = []
+    for canonical in dict.fromkeys(CANONICAL_SKILLS):
+        doc = ROOT / canonical
+        if not doc.is_file():
+            continue
+        text = doc.read_text(encoding="utf-8")
+        new = text
+        for old_slug, new_slug in SKILL_RENAMES.items():
+            new = new.replace(f"skills/{old_slug}/", f"skills/{new_slug}/")
+        if new != text:
+            doc.write_text(new, encoding="utf-8")
+            changed.append(doc)
+    return changed
 
 
 def verify() -> list[str]:
@@ -299,6 +366,25 @@ def verify() -> list[str]:
             for leak in ("/Users/", "/home/", str(HOME), str(ROOT)):
                 if leak and leak in text:
                     errors.append(f"absolute path leak {leak!r}: {path}")
+    # Rename hygiene: every old slug resolves to a redirect pointing at the new
+    # one, and no managed canonical doc keeps a live `skills/<old>/` reference.
+    live_slugs = {s.slug for s in specs}
+    for old_slug, new_slug in SKILL_RENAMES.items():
+        if new_slug not in live_slugs:
+            errors.append(f"rename target missing from manifest: {new_slug}")
+        for root in TARGET_ROOTS:
+            rp = target_path(root, old_slug)
+            if not rp.is_file():
+                errors.append(f"missing rename redirect: {rp}")
+            elif new_slug not in rp.read_text(encoding="utf-8"):
+                errors.append(f"redirect does not point to {new_slug!r}: {rp}")
+    for canonical in dict.fromkeys(CANONICAL_SKILLS):
+        doc = ROOT / canonical
+        if doc.is_file():
+            doctext = doc.read_text(encoding="utf-8")
+            for old_slug, new_slug in SKILL_RENAMES.items():
+                if f"skills/{old_slug}/" in doctext:
+                    errors.append(f"stale skills/{old_slug}/ reference in {canonical} (rename to {new_slug})")
     return errors
 
 
