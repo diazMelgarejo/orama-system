@@ -161,6 +161,36 @@ Old failures with `"acknowledged": true` are harmless.
 reminder to your first-session checklist: **after** `setup-embeddings`, call the
 build + embed tools once per repo before starting any review work.
 
+### Fix: MCP disconnected, or refreshing from the CLI (two live gotchas)
+
+The graph tools above run *inside* Claude Code via MCP. When the `code-review-graph`
+MCP shows **disconnected**, drive the `uvx` CLI directly — but mind two traps that
+bit us live (2026-06-13):
+
+1. **Cold-start timeout = the usual disconnect cause.** The first
+   `uvx code-review-graph serve` of a session downloads tree-sitter-language-pack
+   (~74 packages, ~31 MiB) and can blow past the MCP handshake window, so the harness
+   marks it disconnected. Pre-warm the cache once, then reconnect:
+   ```bash
+   uvx code-review-graph --help    # one-time download; warms the uvx cache
+   # then in Claude Code:  /mcp  → reconnect code-review-graph  (warm = connects fast)
+   ```
+
+2. **CLI `embed` defaults to `local` (NOT the unified provider).**
+   `uvx code-review-graph embed` defaults to `--provider local` (sentence-transformers,
+   not installed → hard error). You MUST pass the provider for the bge-m3 vector space.
+   Full CLI refresh after a big change (mirrors the MCP build+embed path):
+   ```bash
+   export CRG_OPENAI_API_KEY=ollama CRG_OPENAI_BASE_URL=http://localhost:11434/v1 \
+          CRG_OPENAI_MODEL=bge-m3 CRG_OPENAI_DIMENSION=1024 CRG_ACCEPT_CLOUD_EGRESS=1
+   uvx code-review-graph update                                  # incremental re-parse
+   uvx code-review-graph embed --provider openai --model bge-m3  # NEVER omit --provider
+   uvx code-review-graph postprocess                             # flows / communities / FTS
+   uvx code-review-graph status                                  # confirm nodes + embeddings
+   ```
+   `embed_graph_tool(provider="openai")` already does this over MCP — the `--provider`
+   flag is only needed on the CLI path, where `local` is the unfortunate default.
+
 ---
 
 ## Phase B — Gbrain
