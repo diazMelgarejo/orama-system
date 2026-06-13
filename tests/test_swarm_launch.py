@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
-import portal_server
+import orama_system.portal_server as portal_server
 
 
 class _FakeResponse:

@@ -31,8 +31,8 @@ from __future__ import annotations
 import os
 import pytest
 
-import api_server
-from api_server import BackendRouter, BackendPriority
+import orama_system.api_server as api_server
+from orama_system.api_server import BackendRouter, BackendPriority
 
 
 # ── BackendPriority enum ──────────────────────────────────────────────────────
@@ -163,19 +163,19 @@ def test_backend_router_override_beats_env(monkeypatch):
 # ── OramasysRequest: backend_priority field ─────────────────────────────────
 
 def test_ultrathink_request_accepts_backend_priority():
-    from api_server import OramasysRequest
+    from orama_system.api_server import OramasysRequest
     req = OramasysRequest(task_description="test", backend_priority="cloud")
     assert req.backend_priority == "cloud"
 
 
 def test_ultrathink_request_backend_priority_defaults_to_local():
-    from api_server import OramasysRequest
+    from orama_system.api_server import OramasysRequest
     req = OramasysRequest(task_description="test")
     assert req.backend_priority == "local"
 
 
 def test_ultrathink_request_backend_priority_rejects_invalid():
-    from api_server import OramasysRequest
+    from orama_system.api_server import OramasysRequest
     with pytest.raises(Exception):
         OramasysRequest(task_description="test", backend_priority="badvalue")
 

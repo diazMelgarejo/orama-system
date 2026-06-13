@@ -6,8 +6,8 @@ import os
 
 from fastapi.testclient import TestClient
 
-import api_server
-import portal_server
+import orama_system.api_server as api_server
+import orama_system.portal_server as portal_server
 
 
 def test_portal_operator_routes_require_token_when_enforced(monkeypatch):

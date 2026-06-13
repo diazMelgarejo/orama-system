@@ -57,11 +57,11 @@
     },
     {
       "name": "orama API server (8001)",
-      "command": "source .venv/bin/activate && uvicorn api_server:app --reload --port 8001"
+      "command": "source .venv/bin/activate && PYTHONPATH=src uvicorn orama_system.api_server:app --reload --port 8001"
     },
     {
       "name": "orama portal (8002)",
-      "command": "source .venv/bin/activate && python portal_server.py"
+      "command": "source .venv/bin/activate && PYTHONPATH=src python -m orama_system.portal_server"
     },
     {
       "name": "AlphaClaw server (3000)",
