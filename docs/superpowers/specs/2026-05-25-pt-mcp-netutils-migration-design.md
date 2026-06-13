@@ -1,4 +1,4 @@
-> ⚠️ **PARTIAL (2026-06-14)** — core landed (legacy `server.js` deleted; `alphaclaw-mcp` canonical) but this draft spec's residual packaging/verification checklist (`packages/net_utils/`, doc sweep, build-green) is still open. NOT fully resolved.
+> ✅ **RESOLVED 2026-06-14** — migration complete: `packages/net_utils/` present, `network_autoconfig.py` tracked, legacy `mcp/server.js` deleted, `alphaclaw-mcp` canonical.
 
 # Perpetua-Tools MCP + net_utils Migration — Design Spec
 
