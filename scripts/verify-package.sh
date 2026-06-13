@@ -57,7 +57,8 @@ chk_f bin/orama-system/cidf/tests/conformance.test.ts
 echo -e "\n🔌 AFRP + API:"
 chk_f bin/orama-system/afrp/SKILL.md
 chk_f bin/orama-system/cidf/SKILL.md
-chk_f api_server.py
+chk_f src/orama_system/api_server.py
+chk_f src/orama_system/portal_server.py
 
 echo -e "\n📚 Examples:"; chk_d examples/financial-validator; chk_d examples/api-integration; chk_d examples/architecture-refactor
 echo -e "\n📖 Docs:";    chk_f docs/installation.md; chk_f docs/quick-start.md; chk_f docs/faq.md; chk_f docs/troubleshooting.md; chk_f docs/api-reference.md
