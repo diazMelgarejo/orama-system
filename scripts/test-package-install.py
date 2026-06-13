@@ -109,10 +109,10 @@ def main():
     print(f"✓ built wheel: {wheel_path.name}")
     with zipfile.ZipFile(wheel_path) as wheel_zip:
         wheel_entries = set(wheel_zip.namelist())
-    if "api_server.py" not in wheel_entries:
-        print("❌ wheel is missing api_server.py")
+    if "orama_system/api_server.py" not in wheel_entries:
+        print("❌ wheel is missing orama_system/api_server.py")
         return False
-    print("✓ wheel includes api_server.py")
+    print("✓ wheel includes orama_system/api_server.py")
 
     # 4. Install the built wheel into an isolated temp venv and test imports.
     print("\n[4/4] Installing built wheel and testing imports...")

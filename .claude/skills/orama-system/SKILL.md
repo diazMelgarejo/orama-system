@@ -1,30 +1,45 @@
 ---
 name: orama-system
-description: >-
-  Elegant problem-solving methodology with 5-stage process, AFRP pre-router gate,
-  CIDF v1.2 content insertion framework, and 7-agent execution network. Activates
-  for architectural thinking, systematic verification, content insertion decisions,
-  complex multi-step tasks, code quality reviews, and self-improvement workflows.
-  Triggers on: "ultrathink", "think deeply", "5-stage", "systematic approach",
-  "elegant solution", "verify before done", "content insertion", "AFRP", "CIDF".
-  Treat legacy "ultrathink" prompts as oramasys invocations.
-version: 0.9.9.7
-license: Apache 2.0
-compatibility: claude-code, claude-desktop
-allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
-sub_skills:
-  - path: afrp/SKILL.md
-    trigger: "Query is non-trivial, audience-dependent, or open-ended (Type B/C/D)"
-  - path: cidf/SKILL.md
-    trigger: "Any content insertion, file write, paste, upload, or scripted output"
+description: "Elegant problem-solving methodology with 5-stage process, AFRP pre-router gate, CIDF v1.2 content insertion framework, and 7-agent execution network. Activates for architectural thinking, systematic verification, content insertion…"
 ---
 
-<!-- THIN-WRAPPER: canonical skill lives in bin/orama-system -->
+# orama-system
 
-# orama-system (thin wrapper)
+This is a thin wrapper. The canonical skill lives in this repo at the path below
+(resolve the repo root at runtime — paths are never hardcoded).
 
-The canonical, permanent implementation lives in the repo at
-`../../../bin/orama-system/` (under `bin/orama-system/`). **Read it before proceeding** —
-this wrapper only carries discovery metadata; the substance is canonical there.
+- Canonical skill path (repo-relative): `bin/orama-system/SKILL.md`
 
-Original pre-wrapper body preserved at `SKILL.md.premerge---stamp.bak`.
+## Before Use
+
+Before relying on the canonical card, check whether the canonical repository can safely sync:
+
+```bash
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT/bin/orama-system"
+git fetch origin --prune
+git status --short --branch
+```
+
+If the repo is on a tracking branch and the worktree is clean:
+
+```bash
+git pull --ff-only
+```
+
+If the worktree is dirty, the branch is not tracking origin, or fast-forward is impossible, do not overwrite local work. Report the drift and read the current canonical card with that caveat.
+
+## Load Canonical Skill
+
+Open and follow `bin/orama-system/SKILL.md` (relative to the repo root). Do not copy behavior from this wrapper.
+
+## Windows UTF-8 Note
+
+On Windows PowerShell, set UTF-8 explicitly before reading or writing skill files:
+
+```powershell
+[Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$env:PYTHONUTF8='1'
+```
