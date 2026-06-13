@@ -38,7 +38,7 @@ CANONICAL_SKILLS = [
     "orama-system/bin/orama-system/skills/git-history-surgery/SKILL.md",
     "orama-system/bin/orama-system/skills/mcp-install/SKILL.md",
     "orama-system/bin/orama-system/skills/mcp-orchestration/SKILL.md",
-    "orama-system/bin/orama-system/skills/no-sleep-chains/SKILL.md",
+    "orama-system/bin/orama-system/skills/shell-hygiene/SKILL.md",
     "orama-system/bin/orama-system/skills/openclaw-skills/SKILL.md",
     "orama-system/bin/orama-system/skills/openclaw-skills/skills/openclaw-add-channel/SKILL.md",
     "orama-system/bin/orama-system/skills/openclaw-skills/skills/openclaw-add-cron/SKILL.md",

@@ -1,14 +1,19 @@
 ---
-name: no-sleep-chains
+name: shell-hygiene
 description: >
-  Enforced rule for all agents: sleep N && <command> chains are blocked by the
-  shell hook. Invoke this skill whenever you need to wait for a background
-  process, a file to grow, or a condition to become true. Covers: background
-  task output polling, npm install completion, claude update, any long-running
-  subprocess.
+  Safe shell command execution for agents in this environment. Covers two enforced
+  gotchas: (1) sleep N && <command> chains are blocked — wait on background processes,
+  file growth, or conditions with Monitor until-loops / run_in_background instead;
+  (2) the shell is zsh, which does NOT word-split unquoted $vars or `for x in $var`,
+  so iterate multiline output with `while IFS= read -r` and pass lists as arrays.
+  Invoke when waiting on long-running work (background tasks, npm install, claude
+  update, port/health, PID exit) or when looping over command output / file lists.
 ---
 
-# No Sleep Chains — Waiting for Background Work
+# Shell Hygiene — Safe Command Execution for Agents
+
+> Renamed from `no-sleep-chains` (2026-06-13) — broadened to cover all agent shell
+> execution gotchas in this environment, not just sleep chains.
 
 > **This rule is enforced at the shell level.** A leading `sleep` followed by
 > any command is detected and rejected before execution. There is no workaround
