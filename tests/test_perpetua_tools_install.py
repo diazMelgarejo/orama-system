@@ -136,6 +136,8 @@ class TestInstallShPtDiscovery:
         # No install.sh created
         result = _run_discovery({
             "PERPETUA_TOOLS_PATH": str(pt_dir),
+            "PERPETUA_TOOLS_ROOT": "",   # must override live env; pop() doesn't unset in _bash
+            "OPENCLAW_HOME": "",
             "HOME": str(tmp_path),
         })
         assert result.returncode == 0
@@ -189,9 +191,10 @@ class TestInstallShPtDiscovery:
         pt_dir = openclaw / "Perpetua-Tools"
         _make_fake_install_sh(pt_dir)
         env_copy = os.environ.copy()
-        env_copy.pop("OPENCLAW_HOME", None)
-        env_copy.pop("PERPETUA_TOOLS_PATH", None)
-        env_copy.pop("PERPETUA_TOOLS_ROOT", None)
+        # Use "" not pop() — _bash starts from os.environ.copy() so pops don't unset
+        env_copy["OPENCLAW_HOME"] = ""
+        env_copy["PERPETUA_TOOLS_PATH"] = ""
+        env_copy["PERPETUA_TOOLS_ROOT"] = ""
         env_copy["HOME"] = str(tmp_path)
         result = _bash(_PT_DISCOVERY_HARNESS, env=env_copy)
         assert result.returncode == 0
@@ -245,9 +248,10 @@ class TestInstallShPtDiscovery:
     def test_no_candidate_found_pt_install_stays_empty(self, tmp_path):
         """When no candidate has install.sh, PT_INSTALL is empty and nothing runs."""
         env_copy = os.environ.copy()
-        env_copy.pop("PERPETUA_TOOLS_PATH", None)
-        env_copy.pop("PERPETUA_TOOLS_ROOT", None)
-        env_copy.pop("OPENCLAW_HOME", None)
+        # Use "" not pop() — _bash starts from os.environ.copy() so pops don't unset
+        env_copy["PERPETUA_TOOLS_PATH"] = ""
+        env_copy["PERPETUA_TOOLS_ROOT"] = ""
+        env_copy["OPENCLAW_HOME"] = ""
         env_copy["HOME"] = str(tmp_path)   # no openclaw-v1 directory created
         result = _bash(_PT_DISCOVERY_HARNESS, env=env_copy)
         assert result.returncode == 0
