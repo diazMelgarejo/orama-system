@@ -26,7 +26,7 @@
 - [ ] **FableExportParser** — add a `SessionExportParser` subclass for the actual Fable 5 export format (discovered by running Claude Chat Exporter on a real session and passing to `distill_session.py`). Drop-in: append to `_PARSERS` in `distill_session.py`, no other changes.
 - [ ] **Build** `MultiLLMRouter` (greenfield) as a caching/batching **decorator over** existing `worker_registry`/`model_registry` dispatch — in Perpetua-Tools, never a parallel router. Target path: `perpetua.core.multi_llm_router` (v2 package; Grok's AntiGravity reference). Seam: `OrchestrationSupervisor._dispatch` at `orchestrator/supervisor.py:534`. Anthropic leg: `anthropic.AsyncAnthropic()` (NOT OpenAI-compatible endpoint).
 - [ ] Cache correctness/safety: temp-0 + success-only caching, TTL, redaction, key isolation, invalidation.
-- [ ] `Perpetua-Tools/config/{models,routing,devices}.yml`: add Fable 5 + fallback chain (Oramasys → LM Studio Win → LM Studio Mac → Ollama) **when providers are live**.
+- [ ] `Perpetua-Tools/config/{models,routing,devices}.yml`: add Fable 5 + fallback chain (Oramasys → LM Studio Win → Ollama → LM Studio Mac) **when providers are live**.
 - [ ] `model_registry.py` dynamic thresholding; `cost_guard.py` Fable budget + escalation rules, **default-deny + fail-closed**, keys via Keychain/.env.
 - [ ] Eval: minimal output-diff harness on a fixed prompt set first; DeepEval only if needed.
 - [ ] `.github/workflows/ci.yml`: SKILL.md/YAML structural validation (pre-commit) — after v1 lands.

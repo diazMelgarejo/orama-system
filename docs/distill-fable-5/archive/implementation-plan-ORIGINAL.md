@@ -67,7 +67,7 @@ Update Perpetua-Tools to handle new heuristics, local-first routing, and cost gu
 
 #### [MODIFY] Config YAMLs (`models.yml`, `routing.yml`, `devices.yml`)
 
-- Update schema/stubs to include fallback chains (e.g., `Oramasys → LM Studio Win → LM Studio Mac → Ollama`).
+- Update schema/stubs to include fallback chains (e.g., `Oramasys → LM Studio Win → Ollama → LM Studio Mac`).
 
 ### 3. Testing and Verification Pipelines
 

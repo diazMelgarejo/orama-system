@@ -12,7 +12,7 @@
 ## Phase 2: Configuration & Orchestration
 
 - [ ] Update `Perpetua-Tools/config/models.yml` with Fable 5 definition.
-- [ ] Update `Perpetua-Tools/config/routing.yml` with Oramasys -> LM Studio Win -> LM Studio Mac -> Ollama fallback chain.
+- [ ] Update `Perpetua-Tools/config/routing.yml` with Oramasys -> LM Studio Win -> Ollama -> LM Studio Mac fallback chain.
 - [ ] Update `Perpetua-Tools/config/devices.yml` with device threshold capabilities.
 - [ ] Modify `Perpetua-Tools/orchestrator/model_registry.py` to support dynamic thresholding.
 - [ ] Update `Perpetua-Tools/orchestrator/cost_guard.py` with budget and escalation rules.
