@@ -1,38 +1,48 @@
 # Plan Completion Tracker — Meta-Plan (youngest → oldest)
 
 > **Date:** 2026-06-14 · **Owner repo:** orama-system (L3) · **Status:** living tracker
-> **Scope:** every *dated* plan/spec across the 3 repos — AlphaClaw (L1), Perpetua-Tools (L2),
-> orama-system (L3). Sorted **youngest → oldest**. Finish the most recent first, then work down.
+> **Scope:** every *dated* plan/spec across AlphaClaw (L1), Perpetua-Tools (L2), orama-system (L3).
+> Sorted **youngest → oldest**. Finish the most recent first, then work down.
 
-## How to use this tracker
+## Recent resolution pass (2026-06-14)
 
-- **Order:** top-down (newest first), per the completion directive. Update a row's status as you go.
-- **`Open` signal:** count of `- [ ]` checkboxes in the doc — a rough proxy for unfinished work.
-  `0` can mean *done* **or** *prose/gate-style* (no checkboxes) — those get 🔍 (confirm before skipping).
-- **Status key:** ⬜ to-finish (N open items) · 🔍 review (no checkboxes — confirm done vs prose) ·
-  ✅ done · ⤵️ superseded. Edit the Status cell as plans close out.
-- **No December-2025 dated plans exist** in `/docs/` — the dated corpus starts `2026-04-13`. Undated
-  reference docs (wiki/, LESSONS, MIGRATION, ADRs, contracts) are intentionally excluded (not plans).
+Verified the **2026-06-12 → 2026-05-25** window against repo state and stamped each doc with a
+resolution banner:
 
-## Canonical anchors (read first)
+- ✅ **6 done:** thin-skill-wrappers (shipped) · oramasys-method eval (report) · Track B+C MCPB
+  (impl on branch) · Gate-2 #4/#6/#7 (landed in `929b627`) · v1.1 definitive + `/oramasys` rename
+  (PR #76 `89283e8`).
+- ⤵️ **1 superseded:** 2026-05-28 v1.1 release plan → by the 2026-05-29 definitive plan.
+- ⚠️ **1 partial:** 2026-05-25 PT-MCP + net_utils spec — core landed (legacy `server.js` deleted,
+  `alphaclaw-mcp` canonical) but draft checklist (packages/net_utils, doc sweep, build-green) open.
+- ⏭️ **Deferred (user):** 2026-05-24 Periscope L4 Glass (52 open) — skipped for now.
+- 🔄 **Active anchor:** 2026-05-31 tri-repo alignment plan stays in-progress (Gate 2 done in code,
+  Gates 3/4 open). Its Work-items #4/#6/#7 are now done via `929b627` — reconcile that table next pass.
 
-- Tri-repo migration: **[`Perpetua-Tools/docs/2026-05-31-tri-repo-alignment-completion-plan.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/2026-05-31-tri-repo-alignment-completion-plan.md)** (+ its `MIGRATION.md` gate ladder)
-- ⚠ **Active blocker:** PT `main` is churned to detached HEAD by a concurrent Cursor agent — land PT edits via the GitHub API and confirm a stable checkout before any PT code work.
+## How to use
+
+- Status key: ✅ done · ⤵️ superseded · ⚠️ partial · ⏭️ deferred · 🔄 active · ⬜ to-finish (N open) · 🔍 review.
+- `Open` = `- [ ]` count (rough signal). No December-2025 dated plans exist — corpus starts 2026-04-13.
+
+## Canonical anchors
+
+- Tri-repo migration: **[PT/docs/2026-05-31-tri-repo-alignment-completion-plan.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/2026-05-31-tri-repo-alignment-completion-plan.md)** (+ `MIGRATION.md`).
+- ⚠ PT `main` churned to detached HEAD by a concurrent Cursor agent — land PT edits via the GitHub API.
 
 ## Backlog (youngest → oldest)
 
-| # | Date | Repo | Status (open items) | Plan | Path |
-|---|------|------|---------------------|------|------|
-| 1 | 2026-06-12 | orama | 🔍 review | Perpetua Orama Thin Skill Wrappers Implementation Plan | `docs/superpowers/plans/2026-06-12-perpetua-orama-thin-skill-wrappers.md` |
-| 2 | 2026-06-10 | orama | 🔍 review | oramasys-method Skill — Eval Report & Dogfood Findings | `docs/plans/2026-06-10-oramasys-method-skill-eval.md` |
-| 3 | 2026-05-31 | PT | 🔍 review | Tri-Repo Migration & Consolidation — Alignment & Completion Plan | `docs/2026-05-31-tri-repo-alignment-completion-plan.md` |
-| 4 | 2026-05-31 | PT | 🔍 review | Track B+C — Claude-Desktop-LLM submodule + real MCPB | `docs/plans/2026-05-31-track-bc-claude-desktop-mcpb.md` |
-| 5 | 2026-05-31 | PT | 🔍 review | Gate 2 Implementation Plan — Work Items #4, #6, #7 | `docs/plans/2026-05-31-gate2-implementation-plan.md` |
-| 6 | 2026-05-29 | orama | 🔍 review | v1.1 Definitive Execution Plan — Rename · Frugality · Tiered OpenRou | `docs/plans/2026-05-29-03-v1.1-definitive.md` |
-| 7 | 2026-05-29 | orama | 🔍 review | 2026-05-29-01 — Cursor plan: `/oramasys` rename + tiered OpenRouter  | `docs/plans/2026-05-29-01-cursor-PLAN.md` |
-| 8 | 2026-05-28 | orama | 🔍 review | v1.1 Release Plan — Orama × Perpetua-Tools Frugality & Harness Optim | `docs/plans/2026-05-28-v1.1-frugality-harness-release.md` |
-| 9 | 2026-05-25 | orama | ⬜ 23 open | Perpetua-Tools MCP + net_utils Migration — Design Spec | `docs/superpowers/specs/2026-05-25-pt-mcp-netutils-migration-design.md` |
-| 10 | 2026-05-24 | orama | ⬜ 52 open | Periscope L4 Glass — Implementation Plan | `docs/plans/2026-05-24-periscope-l4-integration-plan.md` |
+| # | Date | Repo | Status | Plan | Path |
+|---|------|------|--------|------|------|
+| 1 | 2026-06-12 | orama | ✅ done | Perpetua Orama Thin Skill Wrappers Implementation Plan | `docs/superpowers/plans/2026-06-12-perpetua-orama-thin-skill-wrappers.md` |
+| 2 | 2026-06-10 | orama | ✅ done | oramasys-method Skill — Eval Report & Dogfood Findings | `docs/plans/2026-06-10-oramasys-method-skill-eval.md` |
+| 3 | 2026-05-31 | PT | 🔄 active | Tri-Repo Migration & Consolidation — Alignment & Completion Plan | `docs/2026-05-31-tri-repo-alignment-completion-plan.md` |
+| 4 | 2026-05-31 | PT | ✅ done | Track B+C — Claude-Desktop-LLM submodule + real MCPB | `docs/plans/2026-05-31-track-bc-claude-desktop-mcpb.md` |
+| 5 | 2026-05-31 | PT | ✅ done | Gate 2 Implementation Plan — Work Items #4, #6, #7 | `docs/plans/2026-05-31-gate2-implementation-plan.md` |
+| 6 | 2026-05-29 | orama | ✅ done | v1.1 Definitive Execution Plan — Rename · Frugality · Tiered OpenRou | `docs/plans/2026-05-29-03-v1.1-definitive.md` |
+| 7 | 2026-05-29 | orama | ✅ done | 2026-05-29-01 — Cursor plan: `/oramasys` rename + tiered OpenRouter  | `docs/plans/2026-05-29-01-cursor-PLAN.md` |
+| 8 | 2026-05-28 | orama | ⤵️ superseded | v1.1 Release Plan — Orama × Perpetua-Tools Frugality & Harness Optim | `docs/plans/2026-05-28-v1.1-frugality-harness-release.md` |
+| 9 | 2026-05-25 | orama | ⚠️ partial | Perpetua-Tools MCP + net_utils Migration — Design Spec | `docs/superpowers/specs/2026-05-25-pt-mcp-netutils-migration-design.md` |
+| 10 | 2026-05-24 | orama | ⏭️ deferred | Periscope L4 Glass — Implementation Plan | `docs/plans/2026-05-24-periscope-l4-integration-plan.md` |
 | 11 | 2026-05-24 | orama | 🔍 review | Git Worktrees for Parallel Agents — Design Spec | `docs/superpowers/specs/2026-05-24-worktree-parallel-agents-design.md` |
 | 12 | 2026-05-24 | orama | 🔍 review | 2026-05-24 Security Review Debug and Fix Notes | `docs/2026-05-24-security-review-debug-and-fix-notes.md` |
 | 13 | 2026-05-23 | orama | ⬜ 13 open | Security Remediation Plan — Post PR Review (2026-05-23) | `docs/plans/2026-05-23-security-remediation-plan.md` |
@@ -74,11 +84,7 @@
 
 ## Notes
 
-- This tracker is **generated from a mine of the three `docs/` trees** (canonical refs: PT/orama
-  `origin/main`, AlphaClaw `origin/feature/MacOS-post-install`). Re-mine and regenerate after large
-  doc changes.
-- High open-item plans worth triaging first (by signal): Salvage Translation (95), Periscope L4 (52),
-  Web-App Orchestration (46), cc-openclaw Master Alignment (39), RAG Memory v1 (38), LM Studio
-  Auto-Discovery (37), PT-MCP net_utils migration (23), AlphaClaw macOS PR (22).
-- Many `🔍 review` rows are likely already shipped (release notes, "what shipped", design specs that
-  fed an execution plan) — confirm and mark ✅/⤵️ rather than re-doing.
+- Generated from a mine of the three `docs/` trees (PT/orama `origin/main`, AlphaClaw `origin/feature`).
+- Next finish-targets below the resolved window: 2026-05-24 (Periscope L4, deferred), 2026-05-23
+  Security Remediation (13) + CLAUDE-instru Weaning (10), then the high-signal older plans
+  (Salvage Translation 95, Web-App Orchestration 46, cc-openclaw Alignment 39, RAG Memory v1 38).
