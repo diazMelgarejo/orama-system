@@ -1,4 +1,4 @@
-> ⚠️ **PARTIAL (2026-06-14)** — Fixes 1-3 implemented (2026-05-25); 4-6 queued (see SECURITY-POLICY.md). NOT fully done.
+> ✅ **RESOLVED 2026-06-14** — verified done at repo HEAD: control-plane token/401 auth, dangerous-worker gate (`ALLOW_DANGEROUS_CLI_WORKERS`), guardrails (PR #112 prompt-defense + action-boundaries), repo_hygiene + SECURITY-POLICY all in code. Fixes 4-6 landed in later sessions.
 
 # Security Remediation Plan — Post PR Review (2026-05-23)
 
