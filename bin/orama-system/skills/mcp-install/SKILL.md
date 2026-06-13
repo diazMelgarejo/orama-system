@@ -222,6 +222,8 @@ See [`../references/first-run-install.md`](../references/first-run-install.md) �
 
 **End-to-end path (bootstrap → graph → review):** [`../../docs/how-to/first-run-and-code-review.md`](../../docs/how-to/first-run-and-code-review.md)
 
+**RAG parity (CLI + Desktop) — single enforcer:** RAG semantic search must be wired in BOTH the Claude Code CLI and the Claude Desktop app. Do NOT hand-edit configs per skill — run the canonical `python3 $REPO/scripts/ensure-rag-mcp.py [--apply]` (idempotent; checks/repairs gbrain + code-review-graph in both `claude mcp` and `claude_desktop_config.json`, absolute paths). `start.sh` runs it via `bootstrap-environment.sh`. Restart Claude Desktop after a first apply.
+
 **PR multi-lens review:** after MCP stack is up, use [`../skills/code-review/references/review-lenses-pr.md`](../skills/code-review/references/review-lenses-pr.md) with dispatch in [`../skills/code-review/references/orchestration-dispatch.md`](../skills/code-review/references/orchestration-dispatch.md) and [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md) §5 (PR multi-lens code review).
 
 ## Fork Self-Heal — keep our gstack/gbrain fixes applied across upgrades
