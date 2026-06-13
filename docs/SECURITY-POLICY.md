@@ -171,6 +171,32 @@ Examples: `Perpetua-Tools/packages/alphaclaw-mcp/examples/mcp.readonly.json`, `m
 
 ---
 
+## Credential and Artifact Hygiene
+
+The enforceable contract, byte-aligned with Perpetua-Tools' `SECURITY.md`:
+
+- **No secrets in source** — API keys, OAuth tokens, private keys, service-account
+  files, and credentials are never committed. Commit `.env.example`; never `.env`.
+  Enforced by `scripts/review/repo_hygiene.py` `SECRET_PATTERNS` (OpenAI `sk-`,
+  Anthropic `sk-ant-`, GitHub `ghp_`/`github_pat_`, Google `AIza`, AWS `AKIA`,
+  Telegram bot tokens, `BEGIN … PRIVATE KEY`) in pre-commit + CI.
+- **Secure storage** — runtime secrets live in the OS keychain via the
+  `openclaw-add-secret` skill, never in source, settings JSON, package metadata,
+  logs, or UI captures. The gateway Bearer token is never propagated into tracked files.
+- **Local environments** — secrets load from git-ignored `.env`; `.env.example` (empty
+  values) is the only env file committed.
+- **Artifact protection** — logs, databases, recordings, browser traces, screenshots,
+  hook logs (`.claude/hooks/.logs/`), and UI-capture artifacts are git-ignored; redact
+  before attaching to a private ticket.
+- **No workstation paths** — tracked files use repo-relative references
+  (`"$(git rev-parse --show-toplevel)"`, `~`, `$REPO_ROOT`); `repo_hygiene.py` blocks
+  literal `/Users/<name>/…` so they cannot doxx the owner in a public repo.
+
+**If a secret is committed:** rotate it first, remove it from active code,
+`git rm --cached` the file, then treat history cleanup as secondary.
+
+---
+
 ## Related docs
 
 - **79-commit audit + PR review (Appendix A):** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../OpenClaw/v1/2026-05-23-security-markdown.md) — implementation status table and finding cross-ref
