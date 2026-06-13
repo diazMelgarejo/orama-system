@@ -114,3 +114,25 @@ wasted turns, guaranteed delivery, no timeout tuning required.
 | Need a service to be up | `until curl -s http://host/health >/dev/null; do sleep 2; done` |
 | Need a PID to exit | `until ! kill -0 $PID 2>/dev/null; do sleep 2; done` |
 | "I'll just use a shorter sleep" | **No. Use one of the above.** |
+
+## Shell Portability — zsh Word-Splitting (get it right the first time)
+
+The agent shell here is **zsh**, not bash. zsh does **not** word-split unquoted parameter
+expansions by default (`SH_WORD_SPLIT` is off). Bash habits silently break:
+
+```bash
+# WRONG — zsh treats the whole multiline blob as ONE iteration / ONE argument
+for id in $IDS; do resolve "$id"; done       # fires once with all IDs joined
+perl -i -pe 's/x/y/' $FILES                   # "Can't open <all-files-as-one-name>"
+
+# CORRECT — iterate line-by-line; pass lists as explicit args or a real array
+printf '%s\n' "$IDS" | while IFS= read -r id; do [ -n "$id" ] && resolve "$id"; done
+cmd | while IFS= read -r item; do :; done
+files=(a.py b.py c.py); perl -i -pe 's/x/y/' "${files[@]}"
+```
+
+Rules:
+- Never `for x in $multiline_var` or `cmd $list_var` and expect splitting.
+- Iterate command output with `… | while IFS= read -r x`.
+- Pass file/argument lists as explicit args or `"${array[@]}"`.
+- Quote every expansion (`"$var"`). These forms work identically in bash and zsh.
