@@ -1,3 +1,5 @@
+> ⚠️ **PARTIAL (2026-06-14)** — Fixes 1-3 implemented (2026-05-25); 4-6 queued (see SECURITY-POLICY.md). NOT fully done.
+
 # Security Remediation Plan — Post PR Review (2026-05-23)
 
 > **Date:** 2026-05-24 (plan authored)  
