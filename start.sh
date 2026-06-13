@@ -524,12 +524,12 @@ PYEOF
 else
   # Fallback: PT manager not available — delegate to bootstrap script directly
   PT_HOME="${PT_HOME:-$HOME/Perpetua-Tools}"
-  ALPHACLAW_SCRIPT="$PT_HOME/alphaclaw_bootstrap.py"
+  ALPHACLAW_SCRIPT="$PT_HOME/src/perpetua_tools/alphaclaw_bootstrap.py"
   if [ -f "$ALPHACLAW_SCRIPT" ]; then
-    _warn "pt" "alphaclaw_manager.py not found — using fallback bootstrap at ${ALPHACLAW_SCRIPT}"
+    _warn "pt" "alphaclaw_manager.py not found — using fallback bootstrap module perpetua_tools.alphaclaw_bootstrap"
     PT_HOME="$PT_HOME" UTS_HOME="$SCRIPT_DIR" \
-      MAC_IP="${MAC_IP}" WIN_IP="${WIN_IP}" \
-      "$US_PYTHON" "$ALPHACLAW_SCRIPT" --bootstrap \
+      MAC_IP="${MAC_IP}" WIN_IP="${WIN_IP}" PYTHONPATH="$PT_HOME/src${PYTHONPATH:+:$PYTHONPATH}" \
+      "$US_PYTHON" -m perpetua_tools.alphaclaw_bootstrap --bootstrap \
       </dev/null 2>&1 | sed 's/^/  /' \
       || _warn "pt" "fallback bootstrap non-fatal — continuing without gateway"
   else
@@ -985,12 +985,12 @@ _openclaw_select_profile
 _print_banner
 
 # 1. Perpetua-Tools (PT) orchestrator
-if [ -n "$PT_DIR" ] && [ -f "$PT_DIR/orchestrator.py" ]; then
+if [ -n "$PT_DIR" ] && [ -f "$PT_DIR/orchestrator/fastapi_app.py" ]; then
   if pid_on_port "$PT_PORT" | grep -q .; then
     echo "  PT   :$PT_PORT already running"
   else
     echo "  PT   starting → $LOG_DIR/pt.log"
-    (cd "$PT_DIR" && PYTHONPATH="$PT_DIR" "$PT_PYTHON" -m uvicorn orchestrator.fastapi_app:app \
+    (cd "$PT_DIR" && PYTHONPATH="$PT_DIR/src:$PT_DIR" "$PT_PYTHON" -m uvicorn orchestrator.fastapi_app:app \
       --host "$PT_HOST" --port "$PT_PORT" \
       >> "$LOG_DIR/pt.log" 2>&1) &
     wait_for_port "$PT_PORT" "PT"
@@ -1004,7 +1004,7 @@ if pid_on_port "$US_PORT" | grep -q .; then
   echo "  orama :$US_PORT already running"
 else
   echo "  orama starting → $LOG_DIR/us.log"
-  (cd "$SCRIPT_DIR" && PYTHONPATH="$SCRIPT_DIR" "$US_PYTHON" -m uvicorn api_server:app \
+  (cd "$SCRIPT_DIR" && PYTHONPATH="$SCRIPT_DIR/src:$SCRIPT_DIR" "$US_PYTHON" -m uvicorn orama_system.api_server:app \
     --host "$US_HOST" --port "$US_PORT" \
     >> "$LOG_DIR/us.log" 2>&1) &
   wait_for_port "$US_PORT" "orama"
@@ -1015,7 +1015,7 @@ if pid_on_port "$PORTAL_PORT" | grep -q .; then
   echo "  Portal :$PORTAL_PORT already running"
 else
   echo "  Portal starting → $LOG_DIR/portal.log"
-  (cd "$SCRIPT_DIR" && PYTHONPATH="$SCRIPT_DIR" "$US_PYTHON" -m uvicorn portal_server:app \
+  (cd "$SCRIPT_DIR" && PYTHONPATH="$SCRIPT_DIR/src:$SCRIPT_DIR" "$US_PYTHON" -m uvicorn orama_system.portal_server:app \
     --host "$PORTAL_HOST" --port "$PORTAL_PORT" \
     >> "$LOG_DIR/portal.log" 2>&1) &
   wait_for_port "$PORTAL_PORT" "Portal"

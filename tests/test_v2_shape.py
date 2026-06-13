@@ -12,8 +12,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-import api_server
-from api_server import OramasysRequest, OramasysResponse
+import orama_system.api_server as api_server
+from orama_system.api_server import OramasysRequest, OramasysResponse
 
 
 # ── session_id on request ─────────────────────────────────────────────────────

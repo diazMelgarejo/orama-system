@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from fastapi.testclient import TestClient
 
-import api_server
+import orama_system.api_server as api_server
 from bin.shared.bridge_contract import (
     optimize_for_to_reasoning_depth,
     reasoning_depth_to_optimize_for,

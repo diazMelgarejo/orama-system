@@ -43,7 +43,7 @@ Use skillify when you need a new:
 - **orama-system sub-skill** — lives in `bin/orama-system/<name>/`, registered in the mother skill
 - **gstack global skill** — lives in `~/.claude/skills/<name>/`, invokable as `/<name>` anywhere
 - **raw Claude Code skill** — a standalone `SKILL.md` that can be loaded with `/skill path/SKILL.md`
-- **Codex local thin wrapper** — lives in `~/.codex/skills/<name>/SKILL.md`, points to a canonical in-repo skill, and must not copy canonical bodies/references/scripts
+- **Codex local thin wrapper** — lives in `$HOME/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`, points to a canonical in-repo skill, and must not copy canonical bodies/references/scripts. `~/.codex/skills` may be written as a compatibility root for Codex Desktop installs that still expose it.
 
 Do NOT use skillify to edit existing skills. Use it to create new ones.
 
@@ -54,7 +54,7 @@ Do NOT use skillify to edit existing skills. Use it to create new ones.
 When asked to install repo skills for Codex, install **thin wrappers only**:
 
 1. Keep the canonical skill in the repo and update that source first.
-2. Put only a small Codex-valid wrapper in `~/.codex/skills/<name>/SKILL.md`.
+2. Put only a small Codex-valid wrapper in `$HOME/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`. Write `~/.codex/skills/<name>/SKILL.md` only as a compatibility mirror.
 3. Include the canonical repo root and canonical `SKILL.md` path in the wrapper.
 4. Require `git fetch origin --prune` before reading the canonical card.
 5. Run `git pull --ff-only` only when the repo is clean and on a tracking branch.
