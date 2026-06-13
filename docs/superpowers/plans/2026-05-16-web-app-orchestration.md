@@ -1,4 +1,4 @@
-> ⚠️ **PARTIAL (2026-06-14)** — Backend Phases 1-5 shipped (2026-05-16); frontend Phases 6-9 remain. NOT fully done.
+> ✅ **RESOLVED 2026-06-14** — frontend shipped: `web/` React/Vite app present (30 files: App.tsx + the 5 screens) at repo HEAD. Phases 6-9 built in later sessions.
 
 # Web-App Orchestration Implementation Plan
 
