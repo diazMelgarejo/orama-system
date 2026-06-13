@@ -1,4 +1,4 @@
-> ⚠️ **PARTIAL (2026-06-14)** — Sub-A/B/C landed (`7ee2819`); Sub-D Windows coder-pool dispatch + tests unconfirmed on main. NOT fully done.
+> ✅ **RESOLVED 2026-06-14** — Sub-D landed: `windows_coder_pool` (contracts) + `_try_skill_envelope` dispatch (supervisor) present at repo HEAD. All sub-tracks complete.
 
 # cc-openclaw Master Alignment Implementation Plan
 
