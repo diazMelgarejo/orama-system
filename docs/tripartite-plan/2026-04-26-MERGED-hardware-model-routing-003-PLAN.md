@@ -1,3 +1,5 @@
+> 📄 **REFERENCE 2026-06-14** — tripartite input, merged into the 2026-04-26 hardware-model-routing plan (shipped).
+
 # Hardware-Bound Model Routing — Final Merged Plan
 
 **Version:** 3.0 (Codex + Gemini + Grok corrections applied)  
