@@ -1,3 +1,5 @@
+> 📄 **REFERENCE 2026-06-14** — review/critique/notes input, not an execution plan.
+
 # Critique: RAG + Memory + Optional gstack Planning Set
 
 **Date:** 2026-05-21
