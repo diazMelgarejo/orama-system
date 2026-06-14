@@ -1,3 +1,5 @@
+> 📄 **REFERENCE 2026-06-14** — review/critique/notes input, not an execution plan.
+
 # 2026-05-24 Security Review Debug and Fix Notes
 
 Scope: follow-up documentation for the interrupted application-security review
