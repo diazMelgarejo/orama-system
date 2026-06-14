@@ -251,6 +251,13 @@ gemini auth login
 gemini --version
 ```
 
+**Non-interactive subagent dispatch (verified 2026-06-14):** `gemini -p "/goal <task>"` delegates to
+agent personas (`codebase_investigator`, `generalist`, `cli_help`). The **Antigravity** CLI
+(`agy -p "/goal <task>"`, multi-model: Gemini 3.x / Claude Sonnet+Opus 4.6 / GPT-OSS 120B; list with
+`agy models`) is the parallel-orchestrator sibling. Full command guide: `agy-gemini.md` at the workspace
+root. Dispatch lanes, model picks, and bounding (`gtimeout`, never `sleep` chains) are in
+[`code-review/references/orchestration-dispatch.md`](../code-review/references/orchestration-dispatch.md).
+
 ### Install Codex CLI (optional, Codex worker support)
 
 ```bash
