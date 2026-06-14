@@ -450,45 +450,10 @@ continue silently on the standard stack — never warn or suggest installing it.
 
 ## Local API Fallback (when no external API is reachable)
 
-**RULE: When OmniRoute is disabled OR no external API responds (Anthropic, OpenRouter, etc.), fall back
-to local inference in this fixed priority order. Never leave the session broken.**
+**Priority: Ollama (`localhost:11434`, always-on Mac) → LM Studio (`$LM_STUDIO_WIN_ENDPOINTS`) → surface outage.**
+Every tier check: ≤3s timeout. Fail loudly if `$LM_STUDIO_WIN_ENDPOINTS` is set but unreachable.
 
-### Priority 1 — Ollama (Mac, always-on)
-
-```bash
-# Verify reachability:
-curl -s --max-time 3 http://localhost:11434/api/tags \
-  | python3 -c "import json,sys; m=json.load(sys.stdin).get('models',[]); print('MODELS:', [x['name'] for x in m])"
-```
-
-Preferred inference model: `qwen3.5:9b-nvfp4` — required per § 0 hard requirements.
-Embeddings model: `bge-m3` — required for gbrain + CRG semantic search.
-
-Use Ollama first: always running locally (Mac hard requirement), zero-cost, works offline.
-
-### Priority 2 — LM Studio (Windows GPU coder pool)
-
-```bash
-# Endpoint pool:
-echo "$LM_STUDIO_WIN_ENDPOINTS"    # e.g. 192.168.254.103:1234
-# Verify:
-curl -s --max-time 3 "http://${LM_STUDIO_WIN_ENDPOINTS%%,*}/v1/models" \
-  | python3 -c "import json,sys; d=json.load(sys.stdin); print('MODELS:', [m['id'] for m in d.get('data',[])])"
-```
-
-OpenAI-compatible API on Windows GPU. **Fail loudly if the variable is set but host is unreachable.**
-If `$LM_STUDIO_WIN_ENDPOINTS` is unset, skip this tier silently.
-
-### Fallback decision table
-
-| External API | Ollama | LM Studio | → Use |
-|---|---|---|---|
-| OK | any | any | External API (normal path) |
-| DOWN | running | any | Ollama |
-| DOWN | DOWN | running | LM Studio |
-| DOWN | DOWN | DOWN | Surface outage; do not hallucinate |
-
-**Every tier check must have a ≤3s timeout. Never hang silently.**
+→ Full procedure + decision table: `references/local-api-fallback.md`
 
 ---
 
@@ -501,5 +466,6 @@ If `$LM_STUDIO_WIN_ENDPOINTS` is unset, skip this tier silently.
 | `references/collaborative-reasoning-safety.md` | Multi-agent safety (M3) |
 | `references/communication-guidelines.md` | Writing guidelines (M6) |
 | `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
-| `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset |
+| `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook |
+| `references/local-api-fallback.md` | Local API fallback full procedure (Ollama → LM Studio → surface outage) |
 | `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |
