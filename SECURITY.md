@@ -1,14 +1,19 @@
-# Security Policy — orama-system + Perpetua-Tools
+# Security Policy - orama-system + Perpetua-Tools
 
-> **Canonical security posture** for the OpenClaw orchestration stack.  
-> **Last updated:** 2026-05-26  
-> **Source review:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../OpenClaw/v1/2026-05-23-security-markdown.md)
+> **Canonical security posture** for the OpenClaw orchestration stack.
+> **Last updated:** 2026-06-14
+> **Source review:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../OpenClaw/v1/2026-05-23-security-markdown.md)
 
 ---
 
 ## Scope
 
 This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **Perpetua-Tools** (job control plane, workers, RAG memory, MCP packages). AlphaClaw MCP code lives in the Perpetua-Tools tree.
+
+Root security entrypoints:
+
+- orama-system: [`SECURITY.md`](SECURITY.md)
+- Perpetua-Tools: [`../perplexity-api/Perpetua-Tools/SECURITY.md`](../perplexity-api/Perpetua-Tools/SECURITY.md)
 
 ---
 
@@ -25,7 +30,7 @@ This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **P
 | **5** | Remote LM Studio / Win coder URL policy | `utils/model_endpoint_url.py` (orama + PT); default loopback + RFC1918; `ALLOW_PUBLIC_MODEL_ENDPOINTS=1` opt-in; wired in PT `supervisor.py` + `worker_registry.py`, orama `api_server.py` |
 | **6** | Least-privilege MCP profiles | PT: `alphaclaw-mcp` profile gate + `PT_ALLOW_DANGEROUS_CLI_WORKERS`; orama: `cursor-mcp.stack.readonly.json` + `sync-cursor-mcp.sh --profile` |
 
-**Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see [79-commit audit — Appendix A](../../OpenClaw/v1/2026-05-23-security-markdown.md#appendix-a--79-commit-security-audit-2026-05-25) before assuming PT routes are protected on disk.
+**Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see [79-commit audit — Appendix A](../OpenClaw/v1/2026-05-23-security-markdown.md#appendix-a--79-commit-security-audit-2026-05-25) before assuming PT routes are protected on disk.
 
 **Operator checklist**
 
@@ -41,7 +46,7 @@ This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **P
 
 These items are additive to the implemented fix table above. Some findings
 overlap precise planned work in
-[`docs/plans/2026-05-23-security-remediation-plan.md`](plans/2026-05-23-security-remediation-plan.md);
+[`docs/plans/2026-05-23-security-remediation-plan.md`](docs/plans/2026-05-23-security-remediation-plan.md);
 those planned workstreams come first so agents continue the existing patch
 shape instead of inventing a parallel remediation.
 
@@ -192,15 +197,85 @@ The enforceable contract, byte-aligned with Perpetua-Tools' `SECURITY.md`:
   (`"$(git rev-parse --show-toplevel)"`, `~`, `$REPO_ROOT`); `repo_hygiene.py` blocks
   literal `/Users/<name>/…` so they cannot doxx the owner in a public repo.
 
-**If a secret is committed:** rotate it first, remove it from active code,
-`git rm --cached` the file, then treat history cleanup as secondary.
+## Defense-in-Depth Credential Policy
+
+### Gemini / Google API Keys
+
+Gemini keys are high-risk billing and data-access credentials. They must follow
+the current Gemini API key guidance:
+
+- Prefer Gemini **auth keys** or explicitly restricted keys. Unrestricted
+  standard keys are not acceptable for new setup.
+- Restrict keys to the Gemini API where applicable. Apply request-origin
+  restrictions such as IP, website, or app restrictions when the deployment
+  shape allows it.
+- Read keys from environment variables, not source or tracked config. Supported
+  local names are `GEMINI_API_KEY`, `GOOGLE_API_KEY`, and
+  `GOOGLE_GENERATIVE_AI_API_KEY`. If two Gemini accounts are required, use a
+  secondary variable such as `GEMINI_API_KEY_2`; do not invent typo aliases.
+- Never expose Gemini keys in production browser or mobile client code. Use a
+  backend proxy or server-side worker for production calls.
+- Enable billing and usage alerts for every project that owns an active key.
+- Treat the 2026 Gemini transition deadlines as operational risk: unrestricted
+  standard keys stop working first, and standard-key migration should be planned
+  before September 2026.
+
+### MCP, Control Plane, and Bearer Tokens
+
+- Control-plane tokens, OmniRoute tokens, MCP bearer headers, and local gateway
+  tokens are runtime secrets. They may live in git-ignored local config, OS
+  keychain/editor secret storage, or process environment only.
+- Do not copy bearer headers into tracked `mcp.json`, examples, screenshots,
+  issue bodies, logs, or rendered portal output.
+- Model-status and discovery probes must not forward the control-plane bearer
+  to LM Studio, Ollama, discovered LAN endpoints, or public model endpoints.
+- LAN binding remains loopback-first. Any LAN bind requires explicit operator
+  opt-in and strong authenticated control-plane protection.
+
+### Local Runtime Surfaces
+
+- `.env`, `.env.local`, `.env.lmstudio`, `/tasks/`, `/runtime/`, `/state/`,
+  `/sessions/`, logs, captures, traces, databases, and screenshots are runtime
+  surfaces only and must remain ignored.
+- `.env.example` documents variable names with empty or placeholder values only.
+- Tracked docs and config must use repo-relative paths, `~`, or environment
+  variables; never literal personal workstation paths.
+- Hidden bidirectional Unicode controls and mojibake are blocked because they
+  can hide malicious diffs or corrupt policy text.
+
+### Enforcement Layers
+
+1. `.gitignore` blocks local secret, runtime, and artifact paths before staging.
+2. `scripts/review/repo_hygiene.py` scans tracked files for secret-shaped
+   literals, private artifacts, workstation paths, hidden Unicode controls, and
+   generated runtime files.
+3. Local hooks installed by `scripts/git/install-local-hooks.sh` run the hygiene
+   gate before commits.
+4. CI must run the same hygiene gate so bypassing local hooks cannot land
+   secrets.
+5. GitHub secret scanning and provider-side leak detection are backstops, not
+   primary controls.
+
+## Leak Response
+
+If a secret is committed or exposed:
+
+1. Generate and deploy a replacement credential first.
+2. Verify the replacement works.
+3. Disable or revoke the exposed credential; do not wait for history cleanup.
+4. Audit provider usage, billing, and logs for unauthorized access.
+5. Remove the secret from active code and config.
+6. If a private file was tracked, remove it from the index with
+   `git rm --cached`.
+7. Treat Git history cleanup as secondary and coordinate it explicitly because
+   history rewrites disrupt other agents and clones.
 
 ---
 
 ## Related docs
 
-- **79-commit audit + PR review (Appendix A):** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../OpenClaw/v1/2026-05-23-security-markdown.md) — implementation status table and finding cross-ref
-- Remediation plan: [`docs/plans/2026-05-23-security-remediation-plan.md`](plans/2026-05-23-security-remediation-plan.md)
-- v2 preconditions: [`docs/v2/23-security-preconditions.md`](v2/23-security-preconditions.md)
-- Debug notes: [`docs/2026-05-24-security-review-debug-and-fix-notes.md`](2026-05-24-security-review-debug-and-fix-notes.md)
-- Git identity: [`docs/wiki/08-git-hygiene-and-branching.md`](wiki/08-git-hygiene-and-branching.md)
+- **79-commit audit + PR review (Appendix A):** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../OpenClaw/v1/2026-05-23-security-markdown.md) — implementation status table and finding cross-ref
+- Remediation plan: [`docs/plans/2026-05-23-security-remediation-plan.md`](docs/plans/2026-05-23-security-remediation-plan.md)
+- v2 preconditions: [`docs/v2/23-security-preconditions.md`](docs/v2/23-security-preconditions.md)
+- Debug notes: [`docs/2026-05-24-security-review-debug-and-fix-notes.md`](docs/2026-05-24-security-review-debug-and-fix-notes.md)
+- Git identity: [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md)
