@@ -1,3 +1,5 @@
+> ⤵️ **SUPERSEDED 2026-06-14** — folded into UNIFIED-ABSORPTION-PLAN + the v1.1 definitive plan.
+
 # Perpetua-Tools & orama-system — Master Revamp Plan (2026-Q2)
 
 **Strategy:** Opportunistic Hardening — Minimalist, Cross-Repo Synchronized  
