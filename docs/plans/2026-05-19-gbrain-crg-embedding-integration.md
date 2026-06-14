@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — unified bge-m3 embeddings shipped (setup-embeddings + crg-embed-mode).
+
 # Plan: gbrain Embeddings as Optional Feature of code-review-graph
 
 **Date:** 2026-05-19  
