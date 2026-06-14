@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — RAG v1 backport shipped — this is the ship record.
+
 # RAG v1 Backport — What Shipped (2026-05-22)
 
 > **Status:** Released on `diazMelgarejo/Perpetua-Tools` branch `feat/rag-backport-v1` (PR #28)
