@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — realized by the tri-repo migration (alphaclaw-adapter + alphaclaw_manager in PT).
+
 # AlphaClaw Wiring Audit + Migration + v2.1 Satellite Plan
 
 > Created: 2026-05-22 | Branch: unknown (cross-repo plan)
