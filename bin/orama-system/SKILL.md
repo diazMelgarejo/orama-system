@@ -438,13 +438,15 @@ Dispatch protocol:
 ## OmniRoute Lazy-Sidecar (Optional Parallel Dispatch)
 
 > **NEVER install. NEVER require. NEVER fail if absent.**
+> **CURRENTLY DISABLED (2026-06-14).** Skip probe entirely. Use Local API Fallback below.
+> To re-enable: see `skills/omniroute/SKILL.md § Re-enable OmniRoute`.
 
 Optional local HTTP MCP server (port 20128) that fans tasks to free OpenRouter/AgentRouter
 models in parallel. Probe once at session start (token from `$OMNIROUTE_TOKEN`, never
 hardcoded); if `running`/`started`, route fan-out subtasks through it; if `unavailable`,
 continue silently on the standard stack — never warn or suggest installing it.
 
-→ Canonical sidecar (probe + parallel-dispatch + ops/config/password reset): `skills/omniroute/SKILL.md` (merges the former `references/omniroute-lazy-sidecar.md`).
+→ Canonical sidecar (probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook): `skills/omniroute/SKILL.md`.
 
 ## Local API Fallback (when no external API is reachable)
 
