@@ -444,7 +444,7 @@ models in parallel. Probe once at session start (token from `$OMNIROUTE_TOKEN`, 
 hardcoded); if `running`/`started`, route fan-out subtasks through it; if `unavailable`,
 continue silently on the standard stack — never warn or suggest installing it.
 
-→ Probe script + workflow/never rules: `references/omniroute-lazy-sidecar.md`.
+→ Canonical sidecar (probe + parallel-dispatch + ops/config/password reset): `skills/omniroute/SKILL.md` (merges the former `references/omniroute-lazy-sidecar.md`).
 
 ---
 
@@ -457,5 +457,5 @@ continue silently on the standard stack — never warn or suggest installing it.
 | `references/collaborative-reasoning-safety.md` | Multi-agent safety (M3) |
 | `references/communication-guidelines.md` | Writing guidelines (M6) |
 | `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
-| `references/omniroute-lazy-sidecar.md` | Optional parallel-dispatch sidecar (probe + workflow) |
+| `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset |
 | `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |
