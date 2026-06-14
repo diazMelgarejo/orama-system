@@ -1,3 +1,5 @@
+> 📄 **REFERENCE 2026-06-14** — review/critique/notes input, not an execution plan.
+
 # 2026-05-08 — V1 Persistent Supervisor Brainstorm
 
 > **Inputs to this doc**
