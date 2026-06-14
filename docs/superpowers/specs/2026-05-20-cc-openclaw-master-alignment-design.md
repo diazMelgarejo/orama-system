@@ -1,3 +1,5 @@
+> 📄 **REFERENCE 2026-06-14** — design spec (input to a shipped execution plan), not an open work item.
+
 # cc-openclaw Master Alignment Design (2026-05-20)
 
 > **For agentic workers:** Implement with `superpowers:subagent-driven-development` on branch
