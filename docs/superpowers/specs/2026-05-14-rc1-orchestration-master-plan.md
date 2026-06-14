@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — orchestration/supervisor built out (41 PT files at HEAD); RC-1 milestone realized.
+
 # RC-1 Master Orchestration Plan — Parallel Agent Dispatch
 
 **Date:** 2026-05-14
