@@ -1,3 +1,5 @@
+> ⤵️ **SUPERSEDED 2026-06-14** — submodule approach dropped for copy+auto-resync (install-skills.sh); gstack is a synced global skill, not a git submodule.
+
 # gstack Optional Git Submodule — Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
