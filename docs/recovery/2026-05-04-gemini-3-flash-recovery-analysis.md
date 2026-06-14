@@ -1,3 +1,5 @@
+> 📄 **REFERENCE 2026-06-14** — review/critique/notes input, not an execution plan.
+
 # Git Tag Conflict & Feature Regression Analysis
 
 **Date:** 2026-05-04
