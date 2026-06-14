@@ -438,13 +438,22 @@ Dispatch protocol:
 ## OmniRoute Lazy-Sidecar (Optional Parallel Dispatch)
 
 > **NEVER install. NEVER require. NEVER fail if absent.**
+> **CURRENTLY DISABLED (2026-06-14).** Skip probe entirely. Use Local API Fallback below.
+> To re-enable: see `skills/omniroute/SKILL.md § Re-enable OmniRoute`.
 
 Optional local HTTP MCP server (port 20128) that fans tasks to free OpenRouter/AgentRouter
 models in parallel. Probe once at session start (token from `$OMNIROUTE_TOKEN`, never
 hardcoded); if `running`/`started`, route fan-out subtasks through it; if `unavailable`,
 continue silently on the standard stack — never warn or suggest installing it.
 
-→ Canonical sidecar (probe + parallel-dispatch + ops/config/password reset): `skills/omniroute/SKILL.md` (merges the former `references/omniroute-lazy-sidecar.md`).
+→ Canonical sidecar (probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook): `skills/omniroute/SKILL.md`.
+
+## Local API Fallback (when no external API is reachable)
+
+**Priority: Ollama (`localhost:11434`, always-on Mac) → LM Studio (`$LM_STUDIO_WIN_ENDPOINTS`) → surface outage.**
+Every tier check: ≤3s timeout. Fail loudly if `$LM_STUDIO_WIN_ENDPOINTS` is set but unreachable.
+
+→ Full procedure + decision table: `references/local-api-fallback.md`
 
 ---
 
@@ -457,5 +466,6 @@ continue silently on the standard stack — never warn or suggest installing it.
 | `references/collaborative-reasoning-safety.md` | Multi-agent safety (M3) |
 | `references/communication-guidelines.md` | Writing guidelines (M6) |
 | `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
-| `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset |
+| `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook |
+| `references/local-api-fallback.md` | Local API fallback full procedure (Ollama → LM Studio → surface outage) |
 | `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |

@@ -2,18 +2,29 @@
 name: omniroute
 description: >
   Optional LAZY SIDECAR for OmniRoute (the local "Unified AI API Proxy" DMG app).
-  Covers Claude Code MCP-endpoint config, GUI password reset, and the storage.sqlite
-  settings/keys layout. Activates ONLY when OmniRoute is installed/running
-  (~/.omniroute or /Applications/OmniRoute.app present); skip entirely if absent.
-  Neither required by nor a dependency of any other skill — pure sidecar.
+  Covers Claude Code MCP-endpoint config, GUI password reset, storage.sqlite layout,
+  and the full verified disable/re-enable runbook. Activates ONLY when OmniRoute is
+  installed/running (~/.omniroute or /Applications/OmniRoute.app present); skip entirely
+  if absent. Neither required by nor a dependency of any other skill — pure sidecar.
 metadata:
   type: reference
   optional: true
   sidecar: true
   verified: 2026-06-14
+  status: DISABLED  # set to ENABLED when re-enabled; update probe section accordingly
 ---
 
 # OmniRoute — lazy sidecar (optional, machine-specific)
+
+## Current Status
+
+> **DISABLED as of 2026-06-14.** Do not probe, start, or route work through OmniRoute.
+> Continue on the standard stack (code-review-graph → gbrain → Gemini → ai-cli).
+> When no external API is reachable, fall back to Local API Fallback (Ollama → LM Studio).
+>
+> To re-enable: see **§ Re-enable OmniRoute** below.
+
+---
 
 > **Activation guard — skip if OmniRoute is absent.** Run first; if it prints SKIP, do nothing else.
 > ```bash
@@ -123,3 +134,154 @@ echo "OMNIROUTE: $_OMNIROUTE"
 Reference-only and machine-specific. It is **not** imported, required, or depended on by any other skill —
 keep it out of every skill's hard dependency graph. If OmniRoute isn't installed, the activation guard
 exits and nothing runs. Use it if present; skip it if not.
+
+---
+
+## Root Cause: "ConnectionRefused" during compaction (verified 2026-06-14)
+
+When OmniRoute is running it acts as a **local AI routing proxy** — Claude Code's outbound API calls
+pass through it. Stopping OmniRoute mid-session leaves live requests pointing at the now-dead local
+port → `Error during compaction: API Error: Unable to connect to API (ConnectionRefused)`.
+
+**This is not a network outage.** Verify direct reachability:
+```bash
+# Expect HTTP 401 (Anthropic server answered — auth required, not refused)
+curl -s --max-time 5 -o /dev/null -w "HTTP %{http_code} in %{time_total}s" https://api.anthropic.com/v1/models
+```
+If you get `000` or `ECONNREFUSED`, OmniRoute (or another local proxy) is still intercepting. Check:
+```bash
+pgrep -la omniroute cloudflared
+lsof -iTCP -sTCP:LISTEN | grep -E "20128|3000|4000|8080"
+```
+
+---
+
+## Disable OmniRoute — Full Verified Procedure (2026-06-14)
+
+Run in order. Each step is independent — skip any that was already done.
+
+### 1. Remove from Claude Code MCP config
+
+```bash
+# Remove the "omniroute" key from global + all project-scoped mcpServers in ~/.claude.json
+python3 - <<'EOF'
+import json, os
+path = os.path.expanduser('~/.claude.json')
+with open(path) as f: d = json.load(f)
+removed = d.get('mcpServers', {}).pop('omniroute', None)
+for proj in d.get('projects', {}).values():
+    proj.get('mcpServers', {}).pop('omniroute', None)
+with open(path, 'w') as f: json.dump(d, f, indent=2); f.write('\n')
+print("Removed:", removed)
+EOF
+```
+
+Verify: `claude mcp list | grep -i omni` → should print nothing.
+
+### 2. Remove OmniRoute permission allowlist entries
+
+Edit `$OPENCLAW_ROOT/.claude/settings.local.json` and remove any `omniroute`-keyed
+entries from the `permissions.allow` array.
+
+### 3. Mark sidecar docs as temporarily disabled
+
+Update this file's `## Current Status` section (and any SKILL.md that loads OmniRoute
+as a sidecar) to show `DISABLED`.
+
+### 4. Stop the running process
+
+```bash
+pkill -f "omniroute serve" 2>/dev/null || true
+pkill -f cloudflared 2>/dev/null || true          # if cloudflared tunnel was running
+```
+
+### 5. Permanently disable the LaunchAgent (survives reboots; plist kept for easy restore)
+
+```bash
+launchctl disable "gui/$(id -u)/com.omniroute.autostart"
+# Confirm:
+launchctl print "gui/$(id -u)/com.omniroute.autostart" 2>/dev/null \
+  | grep -E "state|disabled" || echo "Not in boot domain — correctly inactive"
+```
+
+The plist remains at `~/Library/LaunchAgents/com.omniroute.autostart.plist` for restore.
+
+### 6. Backup
+
+```bash
+STAMP=$(date +%Y%m%d-%H%M%S)
+DEST="$HOME/claude-config-backups/claude-config-backup-$STAMP"
+mkdir -p "$DEST"
+cp -r ~/.claude "$DEST/"
+cp ~/.claude.json "$DEST/"
+cp ~/Library/LaunchAgents/com.omniroute.autostart.plist "$DEST/" 2>/dev/null || true
+echo "Backed up to $DEST"
+```
+
+---
+
+## Re-enable OmniRoute — Full Verified Procedure
+
+### 1. Start the LaunchAgent
+
+```bash
+launchctl enable "gui/$(id -u)/com.omniroute.autostart"
+launchctl bootstrap "gui/$(id -u)" ~/Library/LaunchAgents/com.omniroute.autostart.plist
+sleep 2 && pgrep -la omniroute && echo "Running" || echo "Failed to start"
+```
+
+### 2. Restore MCP config
+
+Get the Bearer token from `~/.omniroute/storage.sqlite`:
+```bash
+sqlite3 ~/.omniroute/storage.sqlite \
+  "SELECT value FROM registered_keys LIMIT 3;" 2>/dev/null \
+  || sqlite3 ~/.omniroute/storage.sqlite \
+  "SELECT value FROM api_keys LIMIT 3;" 2>/dev/null
+```
+
+Add back to `~/.claude.json` via:
+```bash
+claude mcp add-json omniroute \
+  '{"type":"http","url":"http://127.0.0.1:20128/api/mcp/stream","headers":{"Authorization":"Bearer <TOKEN>"}}'
+```
+
+**Gotchas (all verified 2026-06-14):**
+- Use `http://127.0.0.1:20128/api/mcp/stream` — NOT `https://cloud.omniroute.online` (dead/404).
+- Transport must be `streamable-http` — verify: `sqlite3 ~/.omniroute/storage.sqlite "SELECT value FROM key_value WHERE key='mcpTransport';"`
+- A **project-scoped** `mcpServers.omniroute` overrides the global one — harmonize both to the local URL.
+- Bearer token is a **registered API key** in `registered_keys`/`api_keys`, not in `.env`.
+
+### 3. Re-enable sidecar docs
+
+Update this file's `## Current Status` to `ENABLED` and restore the probe command.
+Re-enable any SKILL.md sections that were marked disabled.
+
+### 4. Re-add permission allowlist entries
+
+Restore OmniRoute entries to `$OPENCLAW_ROOT/.claude/settings.local.json`.
+
+### 5. Verify
+
+```bash
+pgrep -la omniroute && echo "Process: OK"
+curl -s --max-time 5 -o /dev/null -w "HTTP %{http_code}\n" \
+  http://127.0.0.1:20128/api/mcp/stream \
+  -H "Authorization: Bearer $OMNIROUTE_TOKEN"    # expect HTTP 200 (SSE stream holds) or 400
+claude mcp list | grep omni && echo "MCP: OK"
+```
+
+---
+
+## Quick Status Check
+
+```bash
+pgrep -la omniroute && echo "RUNNING" || echo "NOT running"
+launchctl print "gui/$(id -u)/com.omniroute.autostart" 2>/dev/null \
+  | grep -E "state|disabled" || echo "Not in boot domain"
+claude mcp list | grep -i omni || echo "Not in claude mcp list"
+curl -s --max-time 3 -o /dev/null -w "HTTP %{http_code}\n" https://api.anthropic.com/v1/models
+# ↑ expect 401 (Anthropic answered directly) — NOT 000 (local proxy still intercepting)
+```
+
+**Full off-repo ops reference:** `$OPENCLAW_ROOT/OmniRoute-config.md`
