@@ -32,6 +32,23 @@ Creates a complete, production-grade skill from scratch — no copy-pasting, no
 guessing the frontmatter format. You answer questions; skillify writes the files
 and wires up registration.
 
+## Relationship to `gstack-skillify` (canonical primary)
+
+This skill and gstack's `skillify` share `name: skillify` **by design** — they are
+complementary, not competing:
+
+| Skill | Role | When |
+|-------|------|------|
+| **`gstack-skillify`** (gstack, auto-generated) | **PRIMARY** — codifies the most recent `/scrape` flow into a permanent browser-skill | wins the bare `skillify` name; use to turn a scrape into a browser-skill |
+| **this skill** (orama-system) | **EXTENSION** — interactive *authoring* of brand-new skills (orama sub-skill / raw Claude Code / gstack global / Codex wrapper) | use to create a new skill |
+
+`gstack-skillify` is the canonical **primary**; this orama skill **extends and enhances**
+it by nesting orama-system's skill-authoring (and the orama sub-skill registry) as the
+authoring layer. Defer to `gstack-skillify` to *codify a scrape*; use this to *author a
+new skill*. (gstack-skillify's file is auto-generated from the gstack template, so this
+cross-reference is maintained here, on the orama extension side; to embed it inside
+gstack-skillify itself would require a gstack-template fork-patch.)
+
 Spec reference: [`references/skill-architecture-guide.md`](../references/skill-architecture-guide.md)
 Codex wrapper policy: [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md)
 
