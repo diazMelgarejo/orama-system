@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — hardware-bound model routing shipped (model_registry + MODEL_HARDWARE_MATRIX).
+
 # Hardware Model Routing — Part 2 Plan
 **File:** `2026-04-26-hardware-model-routing-004-PART2-PLAN.md`
 **Continues:** `2026-04-26-MERGED-hardware-model-routing-003-PLAN.md`
