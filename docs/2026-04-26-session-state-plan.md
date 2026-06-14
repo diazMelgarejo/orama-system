@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — session-state persistence shipped.
+
 # Twin System Session State — April 26, 2026
 
 > **Purpose:** Posterity record of what changed, what stayed the same, and what must happen next. Read this at the start of the next session. Both AlphaClaw and orama-system developers should read §3 (Immediate Next Steps) before touching anything.
