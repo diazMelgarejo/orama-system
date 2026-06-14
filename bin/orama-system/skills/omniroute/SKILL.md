@@ -143,6 +143,16 @@ When OmniRoute is running it acts as a **local AI routing proxy** — Claude Cod
 pass through it. Stopping OmniRoute mid-session leaves live requests pointing at the now-dead local
 port → `Error during compaction: API Error: Unable to connect to API (ConnectionRefused)`.
 
+**The persistent cause (verified 2026-06-14) is an `env` block in `~/.claude/settings.json`** that
+hard-codes `ANTHROPIC_BASE_URL` to the OmniRoute port (e.g. `http://localhost:20128`) plus an
+`ANTHROPIC_AUTH_TOKEN` that is an OmniRoute key, not a real Anthropic key. Once OmniRoute is stopped,
+**every** terminal-launched `claude` call — Pro, API, or a local-model backend — hits the dead port
+and fails, because this `env` block overrides whatever backend you pick. The Claude **Desktop** app
+keeps working because it injects `ANTHROPIC_BASE_URL=https://api.anthropic.com` into its own process
+env at launch, overriding settings.json. The **terminal CLI** gets no such injection → it is the one
+that breaks. Removing the `env` block (Disable § 1b) is the actual fix; stopping the process is not
+enough on its own.
+
 **This is not a network outage.** Verify direct reachability:
 ```bash
 # Expect HTTP 401 (Anthropic server answered — auth required, not refused)
@@ -177,6 +187,37 @@ EOF
 ```
 
 Verify: `claude mcp list | grep -i omni` → should print nothing.
+
+### 1b. Remove the API-routing `env` block — THE actual ConnectionRefused fix
+
+This is the step that actually unblocks the terminal `claude` CLI. The MCP entry (§ 1) is unrelated
+to API routing — the routing override lives in `~/.claude/settings.json`'s `env` block.
+
+```bash
+# Back up first, then drop the whole OmniRoute env block (base URL + auth token + cc/ model overrides)
+cp ~/.claude/settings.json "$HOME/.claude/settings.json.bak-omniroute-$(date +%Y%m%d-%H%M%S)"
+python3 - <<'EOF'
+import json, os
+path = os.path.expanduser('~/.claude/settings.json')
+with open(path) as f: d = json.load(f)
+removed = d.pop('env', None)   # entire block is OmniRoute wiring; remove all of it
+with open(path, 'w') as f: json.dump(d, f, indent=2); f.write('\n')
+print("Removed env keys:", list(removed.keys()) if removed else None)
+EOF
+```
+
+**Why remove the whole block, not just the URL:** the `ANTHROPIC_AUTH_TOKEN` is an OmniRoute key — if
+you only fix `ANTHROPIC_BASE_URL` back to `https://api.anthropic.com` but leave that token, the CLI
+then 401s against real Anthropic. The `cc/`-prefixed model overrides are also OmniRoute/relay format.
+Dropping the whole `env` block restores vanilla OAuth + default endpoint for the terminal CLI; the
+Desktop app is unaffected (it injects its own env at launch).
+
+Verify (avoid leaving any dead-port reference):
+```bash
+grep -n "ANTHROPIC_BASE_URL\|ANTHROPIC_AUTH_TOKEN" ~/.claude/settings.json \
+  && echo "STILL PRESENT (bad)" || echo "clean"
+curl -s --max-time 6 -o /dev/null -w "HTTP %{http_code}\n" https://api.anthropic.com/v1/models  # expect 401
+```
 
 ### 2. Remove OmniRoute permission allowlist entries
 
@@ -251,6 +292,27 @@ claude mcp add-json omniroute \
 - Transport must be `streamable-http` — verify: `sqlite3 ~/.omniroute/storage.sqlite "SELECT value FROM key_value WHERE key='mcpTransport';"`
 - A **project-scoped** `mcpServers.omniroute` overrides the global one — harmonize both to the local URL.
 - Bearer token is a **registered API key** in `registered_keys`/`api_keys`, not in `.env`.
+
+### 2b. Restore the API-routing `env` block (only if you want the terminal CLI to route through OmniRoute)
+
+Skip this unless you specifically want the terminal `claude` CLI's API traffic to go through OmniRoute
+(the Desktop app routes independently and does not need it). Restore from the backup made in Disable § 1b:
+
+```bash
+# List backups; pick the newest:
+ls -t ~/.claude/settings.json.bak-omniroute-* 2>/dev/null | head -1
+# Then merge its env block back, OR re-add manually with the CURRENT OmniRoute token:
+python3 - <<'EOF'
+import json, os, glob
+path = os.path.expanduser('~/.claude/settings.json')
+baks = sorted(glob.glob(os.path.expanduser('~/.claude/settings.json.bak-omniroute-*')), reverse=True)
+with open(path) as f: d = json.load(f)
+with open(baks[0]) as f: old = json.load(f)
+if 'env' in old: d['env'] = old['env']    # confirm ANTHROPIC_AUTH_TOKEN still valid in storage.sqlite
+with open(path, 'w') as f: json.dump(d, f, indent=2); f.write('\n')
+print("Restored env from", baks[0])
+EOF
+```
 
 ### 3. Re-enable sidecar docs
 
