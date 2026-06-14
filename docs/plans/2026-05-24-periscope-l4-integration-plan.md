@@ -1,3 +1,5 @@
+> ⏭️ **DEFERRED 2026-06-14** — user-skipped (52 open); revisit when Periscope L4 is prioritized.
+
 # Periscope L4 Glass — Implementation Plan
 
 > **For agentic workers:** Use the standard graph-first chain. Each task lists exact files, expected test output, and a commit. Steps use `- [ ]` checkboxes for tracking.
