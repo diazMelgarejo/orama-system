@@ -1,3 +1,5 @@
+> 📄 **REFERENCE 2026-06-14** — review/critique/notes input, not an execution plan.
+
 # Technical Review: RAG Memory Pipeline & gstack Submodule Integration
 
 This document provides a high-level and high-detail technical review of the five RAG and gstack integration design and planning documents on the `feat/rag-gstack-optional-v1` branch of `orama-system`.
