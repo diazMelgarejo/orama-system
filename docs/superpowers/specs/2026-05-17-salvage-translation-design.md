@@ -1,3 +1,5 @@
+> 📄 **REFERENCE 2026-06-14** — design spec (input to a shipped execution plan), not an open work item.
+
 # Salvage Code Translation — Design Spec
 
 **Date:** 2026-05-17
