@@ -108,10 +108,12 @@ grep -rn "ultrathink" \
 ```
 
 - [ ] **AC1 — agent-methodology matches canonical 5 stages**
+  > `.claude/skills/agent-methodology/SKILL.md` is a thin wrapper (since PR #81 skill-wrapper
+  > generator). Check the canonical file it points to.
   ```bash
   for s in "Context Immersion" "Visionary Architecture" "Ruthless Refinement" \
            "Masterful Execution" "Crystallize Vision"; do
-    grep -q "$s" .claude/skills/agent-methodology/SKILL.md \
+    grep -q "$s" bin/orama-system/skills/agent-methodology/SKILL.md \
       || { echo "MISSING: $s"; exit 1; }
   done && echo "AC1 PASS"
   ```
@@ -136,9 +138,12 @@ grep -rn "ultrathink" \
   ```
 
 - [ ] **AC4 — afrp/SKILL.md encoding fixed + methodology refs updated**
+  > Deliberate deprecated-shim mentions (e.g. "The old `/ultrathink` route is a deprecated
+  > compatibility shim") are KEPT per §6 anti-patterns — filter them out like the §4.0 scan.
   ```bash
   ! grep -nP '\xc3\xa2' bin/orama-system/afrp/SKILL.md \
     && ! grep -ni "ultrathink" bin/orama-system/afrp/SKILL.md \
+         | grep -vi "legacy\|deprecated\|historical\|shim\|alias\|compat" \
     && echo "AC4 PASS"
   ```
 
@@ -175,8 +180,9 @@ grep -rn "ultrathink" \
   ```
 
 - [ ] **AC10 — lesson captured**
+  > `.claude/lessons/LESSONS.md` is a wrapper; all entries live in `docs/LESSONS.md`.
   ```bash
-  grep -q "oramasys rename" .claude/lessons/LESSONS.md && echo "AC10 PASS"
+  grep -q "oramasys rename" docs/LESSONS.md && echo "AC10 PASS"
   ```
 
 ---
@@ -242,6 +248,26 @@ Then open the PR.
 ### Still failing: ...
 ### Next action: ...
 -->
+
+## 2026-06-13 — Session 2 (post-Fable-5 AC regression repair)
+### All 10 ACs PASS this session
+- AC1 ✓ grep target corrected: `.claude/skills/agent-methodology/` is now a thin wrapper
+  (PR #81 skill-wrapper generator); canonical check now targets `bin/orama-system/skills/`
+- AC2 ✓ unchanged — oramasys_core canonical, shim retained
+- AC3 ✓ unchanged
+- AC4 ✓ grep filter updated to honor keep-list (deprecated-shim line at afrp/SKILL.md:139)
+- AC5 ✓ unchanged
+- AC6 ✓ **505 passed, 1 skipped** — 3 regressions fixed in `test_perpetua_tools_install.py`
+  (env isolation bug: pop() doesn't unset from `os.environ.copy()` base; must use `""` override)
+- AC7 ✓ repo hygiene green
+- AC8 ✓ Precision 1.00, Recall 1.00
+- AC9 ✓ PT lockstep clean
+- AC10 ✓ grep target corrected from `.claude/lessons/` (wrapper) to `docs/LESSONS.md` (canonical)
+### Changed
+- `GOAL.md`: AC1/AC4/AC10 grep targets updated; §8 log appended
+- `tests/test_perpetua_tools_install.py`: 3 tests fixed (pop→"" for PERPETUA_TOOLS_ROOT override)
+### Next action
+- Commit fixes on a branch; confirm CI stays green.
 
 ## 2026-06-10 — Session 1 (v1.1 ACs driven green)
 ### All 10 ACs PASS this session
