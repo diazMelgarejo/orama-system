@@ -1,3 +1,5 @@
+> 📄 **REFERENCE 2026-06-14** — design spec (input to a shipped execution plan), not an open work item.
+
 # docs/v2 Enrichment — Canonical As-Built + OQ Resolution Design
 
 **Date:** 2026-05-14
