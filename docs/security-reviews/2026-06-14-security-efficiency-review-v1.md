@@ -2,7 +2,7 @@
 
 **Date:** 2026-06-14
 **Reviewer:** Claude (oramasys-method, Mode 2)
-**Scope:** Static review grounded in actual code. Every finding cites file:line.
+**Scope:** Static scan of *new* findings only — grep, read, and diff. Every finding cites file:line. **This review does not cover the open finding queue in `SECURITY.md`. See `SECURITY.md § B` for the active 1 Critical + 8 High + 3 Medium findings that pre-date this scan.**
 **Repos:** orama-system (104 py, 69 sh), Perpetua-Tools (114 py, 38 sh)
 
 > **Evidence update (2026-06-15):** This copy preserves the original static review while reframing absolute claims as static-scan findings. The original remains at [`../2026-06-14-security-efficiency-review-v1.md`](../2026-06-14-security-efficiency-review-v1.md). Treat statements like “no hardcoded secrets” as “no matches found by the listed static scans,” not as formal proof of absence.
@@ -12,16 +12,16 @@
 
 ## Executive Summary
 
-The two repos are in **good security posture overall**. No hardcoded secrets, no shell injection, no unsafe deserialization, async HTTP throughout, a timing-safe token comparison, and dedicated boundary modules for auth and path traversal. The codebase shows evidence of prior security hardening (control_plane_auth.py, mcp_path_boundary.py).
+> **Scope note:** This executive summary covers only the *new* findings from the June 14 static scan. The repo carries **1 Critical + 8 High** open items documented in `SECURITY.md § B` (unauthenticated portal endpoints, loopback dashboard token leak, Windows all-interface bind, secret-overwrite, swarm-launch, LAN discovery trust, bearer-in-probe, XSS via model names, example token). Those findings are not repeated here. Work the `SECURITY.md` queue first — stacked PR order in `SECURITY.md § Security PR stacking`.
 
-The findings below are mostly **medium and low severity** — hardening opportunities, not active exploits. The two items worth prompt attention are the **default-open auth posture** (S1) and **unpinned dependencies** (S2).
+**Within the scope of this scan** (new patterns not yet in the SECURITY.md queue): no new hardcoded secrets, no shell injection, no unsafe deserialization, async HTTP throughout, timing-safe token comparison, dedicated boundary modules. New findings from this scan are medium and low severity only. The two highest-priority new items are the **default-open auth posture** (S1) and **unpinned dependencies** (S2).
 
-| Severity | Security | Efficiency |
-|---|---|---|
-| High | 0 | 0 |
-| Medium | 2 (S1, S2) | 1 (E1) |
-| Low | 3 (S3, S4, S5) | 3 (E2, E3, E4) |
-| Positive findings | 6 | 4 |
+| Severity | Security | Efficiency | Notes |
+|---|---|---|---|
+| High | 0 (this scan) | 0 | **Active queue: 1 Critical + 8 High in `SECURITY.md § B`** — not covered here |
+| Medium | 2 (S1, S2) | 1 (E1) | New findings from this scan |
+| Low | 3 (S3, S4, S5) | 3 (E2, E3, E4) | New findings from this scan |
+| Positive findings | 6 | 4 | Verified by static scan |
 
 ---
 
