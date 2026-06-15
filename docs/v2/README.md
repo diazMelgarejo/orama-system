@@ -192,10 +192,15 @@ orama-system/docs/v2/
 ├── 25-autoresearcher-doctrine-and-againtra-flagship.md  ← autoresearcher doctrine + agAIntra flagship migration plan
 ├── 26-tdd-and-outsourced-review-doctrine.md  ← TDD + outsourced review doctrine
 ├── 27-git-governance-zero-fragmentation.md  ← git governance zero-fragmentation doctrine
-└── 28-againtra-platform-requirements-alignment.md  ← agAIntra/againtra-platform v2 requirements alignment
+├── 28-againtra-platform-requirements-alignment.md  ← agAIntra/againtra-platform v2 requirements alignment
+├── 29-oramasys-mastery-implementation-plan.md  ← oramasys mastery implementation plan
+├── 31-security-harness-excellence-plan.md  ← canonical security-harness strategy, threat model, roadmap, acceptance gates
+├── 32-agentic-security-controls.md  ← implementation guidance for auth, tools, memory, supply chain, observability
+├── 33-security-harness-source-material.md  ← verbatim preserved prior mixed security-harness plan
+└── 34-local-model-runtime-profile.md  ← local model/Ollama/MLX/Qwen runtime guidance
 ```
 
-> **Next free slot: `29-`**
+> **Next free slot: `35-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
