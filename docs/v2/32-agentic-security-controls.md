@@ -22,7 +22,7 @@ A local developer default can become a LAN exposure when the service binds beyon
 
 ### Acceptance
 
-`pytest tests/security/test_control_plane_auth.py` should prove no-token defaults are not open on LAN and unauthenticated sensitive routes return 401 when auth is enforced.
+`pytest tests/test_control_plane_auth.py` is the current runnable auth-test entrypoint. Extend that file, or intentionally create `tests/security/test_control_plane_auth.py`, before marking no-token/LAN-bind denial complete.
 
 ---
 

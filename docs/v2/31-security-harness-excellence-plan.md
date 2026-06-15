@@ -188,13 +188,13 @@ Every gate must include an exact command, expected result, artifact path, and ro
 
 | Gate | Command target | Expected result |
 |---|---|---|
-| AC-AUTH | `pytest tests/security/test_control_plane_auth.py` | no-token default enforces auth; insecure dev is loopback-scoped; LAN bind refuses open auth |
-| AC-RATE | `pytest tests/security/test_rate_limits.py` | model/tool endpoint returns 429 or budget error after configured request/token/concurrency limits |
-| AC-COOKIE | `pytest tests/security/test_control_plane_cookie.py` | token cookie, if present, is centralized and has secure attributes appropriate to dev/prod mode |
-| AC-TOOLS | `pytest tests/security/test_tool_mediator.py` | denied paths, denied egress, and disallowed tools fail before subprocess launch |
-| AC-MEM | `pytest tests/security/test_memory_acl.py` | deny/read-only/read-write memory modes are enforced at retrieval and write time |
-| AC-SCAN | `pytest tests/security/test_prompt_injection_scanner.py` | canary leakage blocks; known benign fixtures stay below false-positive threshold |
-| AC-TRACE | `pytest tests/security/test_agent_trace.py` | every tool call has principal, session, tool, resource, policy decision, and timestamp |
+| AC-AUTH | `pytest tests/test_control_plane_auth.py` | existing auth tests run from the current test tree; extend this file or add a future `tests/security/` suite for no-token/LAN-bind cases |
+| AC-RATE | future `pytest tests/security/test_rate_limits.py` | create this test suite with model/tool endpoint 429 or budget-error coverage before marking the gate complete |
+| AC-COOKIE | future `pytest tests/security/test_control_plane_cookie.py` | create this test suite if cookie auth remains; verify centralized issuance and secure dev/prod attributes |
+| AC-TOOLS | future `pytest tests/security/test_tool_mediator.py` | create this test suite when the mediator lands; denied paths/egress/tools must fail before subprocess launch |
+| AC-MEM | future `pytest tests/security/test_memory_acl.py` | create this test suite when memory ACLs land; deny/read-only/read-write modes must be enforced at retrieval and write time |
+| AC-SCAN | future `pytest tests/security/test_prompt_injection_scanner.py` | create this test suite when the scanner lands; canary leakage must block and benign fixtures must stay below the false-positive threshold |
+| AC-TRACE | future `pytest tests/security/test_agent_trace.py` | create this test suite when tracing lands; every tool call must include principal/session/tool/resource/policy decision/timestamp |
 | AC-SUPPLY | `pip-audit -r requirements.lock` plus CI lockfile install | dependency audit result is stored; CI installs from hashes/lockfile |
 
 ---

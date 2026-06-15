@@ -31,7 +31,7 @@ These are real strengths, not filler. Each was checked against the code by stati
 
 | Area | Evidence |
 |---|---|
-| No hardcoded secrets found by static scan | Full regex scan across py/json/yml/toml/sh for `sk-`, `ghp_`, `github_pat`, `AKIA`, `xoxb-`, and `key=`/`token=` literals returned **zero** hits |
+| No hardcoded production secrets found by static scan | `python3 scripts/review/repo_hygiene.py` passed on 2026-06-15. A raw `rg -n 'sk-|ghp_|github_pat|AKIA|xoxb-|token=|key=' --glob '!*.md'` is intentionally **not** a zero-hit reproducer on the current tree because it also matches guard regex definitions, UI identifiers, test strings, and placeholders such as `docs/v2/references/cursor-environment-v2-oramasys.json` containing `sk-local`. Treat the claim as "no production secret findings from the canonical hygiene scanner," not as no textual matches to broad keywords. |
 | No `.env` committed | Only `.env.example` present |
 | No direct shell-injection primitives found by static scan | Zero `shell=True`, `os.system`, `eval()`, `exec()` in production code (one benign `stdin=subprocess.DEVNULL` in PT) |
 | No unsafe deserialization primitives found by static scan | Zero `pickle.load`, `yaml.load(` (unsafe), `marshal` — `yaml.safe_load` used where needed |
@@ -278,8 +278,17 @@ The original review did not preserve exact command output artifacts. Future reru
 git -C /workspace/orama-system rev-parse HEAD
 rg -n 'shell=True|os\.system|eval\(|exec\(' src scripts tests
 rg -n 'pickle\.load|yaml\.load\(|marshal' src scripts tests
-rg -n 'sk-|ghp_|github_pat|AKIA|xoxb-|token=|key=' --glob '!*.md'
+python3 scripts/review/repo_hygiene.py
+# Optional broad triage scan; expect known false positives from guard regexes, UI IDs, tests, and placeholders.
+rg -n 'sk-|ghp_|github_pat|AKIA|xoxb-|token=|key=' --glob '!*.md' | tee docs/security-artifacts/2026-06-14-secret-triage.txt
 pip-audit -r requirements.lock
 ```
 
 If companion repositories are included, capture their SHAs and run equivalent scans from each repository root.
+
+Known broad-scan false-positive classes to classify before making any "zero hits" claim:
+
+- guard regex definitions in `src/utils/mcp_path_boundary.py` and `scripts/review/repo_hygiene.py`
+- UI/test identifiers containing `task` or `key`
+- local placeholder values such as `sk-local` in v2 reference fixtures
+- shell variable parsing code that uses a local variable named `key`
