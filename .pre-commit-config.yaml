@@ -65,3 +65,10 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+
+      - id: docs-v2-pointer-sync
+        name: "docs/v2 → downstream pointers in sync (zero-fragmentation)"
+        entry: bash scripts/check_docs_v2_pointer_sync.sh
+        language: system
+        pass_filenames: false
+        always_run: true

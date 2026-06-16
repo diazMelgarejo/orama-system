@@ -14,7 +14,8 @@
 - [x] Call existing `verify_before_done.py` (`--no-interact`) + `capture_lesson.py` (`--review`) via their current CLI; **fail closed** on non-zero.
 - [x] Tests: `tests/test_distill_session.py` already exists with 7 tests covering all acceptance criteria (RED until distill_session.py shipped).
 - [x] Harmonize `docs/distill-fable-5/implementation-plan.md`: frugal emulation principle, 13-tool catalog grouped (Group A v1 / Group B v2 / 9 deferred), 3 success metrics, corrected MultiLLMRouter framing + Grok model IDs, ADR cross-links.
-- [ ] **[USER ACTION]** Run `pytest tests/test_distill_session.py -v` to verify acceptance (tests go GREEN → v1 DONE).
+- [x] **[USER ACTION]** Run `pytest tests/test_distill_session.py -v` to verify acceptance (tests go GREEN → v1 DONE).
+      → Verified 2026-06-14: `7 passed in 0.28s`. **V1 COMPLETE.** Next motion is the v2 gate (ADR-030) + FableExportParser (needs a real Fable 5 export).
 
 ## V2 — Backlog (ADR-gated; kickoff is IMMEDIATELY available)
 
@@ -33,4 +34,4 @@
 - [ ] OSS Group B emulation (ADR each): [1] Langfuse traces (additive to `capture_lesson.py`/`LESSONS.md`, methodology only), [4] ClawRouter scoring, [3] Manifest cost-tiering, [2] Helicone proxy-caching.
 - [ ] OSS Group deferred (ADR or cut before any build): [5] NadirRouter, [7] Claude Artifact Unpacker, [9] DeepEval, [10] Agent-Distillation, [13] Cozeloop.
 - [ ] **[PROBE 2026-06-14 05:00]** Verify Win coder (`$LM_STUDIO_WIN_ENDPOINTS`) is online → update delegation plan; see `$OPENCLAW_ROOT/agy-gemini.md` for AgentRouter config.
-- [ ] **ADR-030** (next free): `MultiLLMRouter` caching/batching decorator — write and approve before any v2 build starts.
+- [x] **docs/v2/30** (`MultiLLMRouter` caching/batching decorator) — drafted 2026-06-15 at canonical home `docs/v2/30-multi-llm-router-caching-batching-decorator.md` (locks decision **D17**). `Perpetua-Tools/docs/adr/ADR-002-…` is a generated pointer kept in lockstep via `scripts/git/sync-docs-v2-pointers.sh` (`--check` wired into both repos' pre-commit). Status: Proposed. **Approve before any v2 build starts.**
