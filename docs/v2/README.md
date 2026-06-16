@@ -194,6 +194,7 @@ orama-system/docs/v2/
 ├── 27-git-governance-zero-fragmentation.md  ← git governance zero-fragmentation doctrine
 ├── 28-againtra-platform-requirements-alignment.md  ← agAIntra/againtra-platform v2 requirements alignment
 ├── 29-oramasys-mastery-implementation-plan.md  ← oramasys mastery implementation plan
+├── 30-multi-llm-router-caching-batching-decorator.md  ← MultiLLMRouter caching/batching decorator (v2 gate; D17)
 ├── 31-security-harness-excellence-plan.md  ← canonical security-harness strategy, threat model, roadmap, acceptance gates
 ├── 32-agentic-security-controls.md  ← implementation guidance for auth, tools, memory, supply chain, observability
 ├── 33-security-harness-source-material.md  ← verbatim preserved prior mixed security-harness plan
