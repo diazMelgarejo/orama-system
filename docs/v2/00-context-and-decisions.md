@@ -235,6 +235,37 @@ guard extends `cost_guard.py` with a fail-closed `gate()`; the Anthropic leg use
 `anthropic.AsyncAnthropic()` + `POST /v1/messages`. Full spec:
 [`30-multi-llm-router-caching-batching-decorator.md`](30-multi-llm-router-caching-batching-decorator.md).
 
+### D18 — Langfuse trace-tree is a methodology annotation layer in orama, not a service (2026-06-17)
+
+Emulate Langfuse's trace-tree pattern as an additive JSONL annotation layer
+(`trace_session.py`) alongside existing `capture_lesson.py`/`LESSONS.md`. Never
+a Langfuse installation, never runtime state, never a PT change. Gate doc:
+[`35-langfuse-trace-tree-pattern.md`](35-langfuse-trace-tree-pattern.md).
+
+### D19 — ClawRouter scoring is a weighted multi-dimensional scorer inside `model_registry.py`, PT-only (2026-06-17)
+
+PT emulates ClawRouter's weighted scoring as `score_candidates()` in
+`model_registry.py`. 5 dimensions initially (hardware_affinity, availability,
+capability_tier, cost_tier, latency_estimate). Configurable weights in `routing.yml`.
+Fail-closed: falls back to static routing on scorer failure. Gate doc:
+[`36-clawrouter-scoring-pattern.md`](36-clawrouter-scoring-pattern.md).
+
+### D20 — Manifest cost-tiering is a `gate(spec)` method on `CostGuard`, wired into `supervisor.py:_run_worker`, fail-closed (2026-06-17)
+
+PT emulates Manifest's cost-tiering as `CostGuard.gate(spec)` raising
+`CostBudgetExceeded` on deny. Tiers in `config/models.yml`. `cloud_escalation`
+tier empty by default. Wired at `supervisor.py:_run_worker` before `_dispatch`.
+In-memory budget in v2; SQLite in v2.1. Gate doc:
+[`37-manifest-cost-tiering-pattern.md`](37-manifest-cost-tiering-pattern.md).
+
+### D21 — Helicone proxy-caching is an in-process LRU cache inside `MultiLLMRouter`, key = HMAC-SHA256(redacted+canonicalized request), fail-open (2026-06-17)
+
+PT emulates Helicone's proxy-caching as `_LRUCache` inside `MultiLLMRouter`.
+Key = HMAC-SHA256 of redacted+canonicalized request (salt from env). Cache only
+successes. In-memory LRU (512 entries, 1 h TTL, runtime kill-switch). Temperature
+not a caching gate. `ORAMA_CACHE_SALT` required at startup. Gate doc:
+[`38-helicone-proxy-caching-pattern.md`](38-helicone-proxy-caching-pattern.md).
+
 ---
 
 ## Confirmed not-decisions (parked, not punted)
