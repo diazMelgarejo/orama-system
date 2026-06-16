@@ -120,8 +120,7 @@ This is architecturally valid as a routing pattern, but Anthropic's API is `POST
 not `POST /v1/chat/completions`. The v2 Anthropic leg must use `anthropic.AsyncAnthropic()`, not
 the OpenAI client. Other providers (OpenRouter, Grok, GPT-5.5) may use the OpenAI-compatible path.
 
-**ADR gate:** each v2 item needs an ADR before build. Next free number: ADR-030
-(see `orama-system/docs/v2/` for existing ADRs).
+**ADR gate:** each v2 item needs an ADR before build. The canonical ADR/decision home is `orama-system/docs/v2/` (`30-multi-llm-router-caching-batching-decorator.md` drafted 2026-06-15, locks D17; Status: Proposed). `Perpetua-Tools/docs/adr/ADR-002-…` is a generated pointer synced from it via `scripts/git/sync-docs-v2-pointers.sh`.
 
 ---
 

@@ -217,6 +217,26 @@ See [`24-security-first-platform.md`](24-security-first-platform.md).
 
 ---
 
+### D17 — MultiLLMRouter is a caching/batching decorator over `_dispatch`, L2-only (2026-06-15)
+
+**Decision**: The greenfield `MultiLLMRouter` (`perpetua.core.multi_llm_router`,
+Perpetua-Tools) is a caching/batching **decorator** wrapping
+`OrchestrationSupervisor._dispatch` (`orchestrator/supervisor.py:534`) — never a
+parallel router, never in orama (L3). It is the **gate** that must be approved
+before any v2 routing/caching/batching build starts.
+
+**Rationale**: `worker_registry` / `model_registry` / `backend_resolver` already
+own routing, model pinning, affinity, and Windows pre-emption; a second router
+violates DRY and will drift. orama stays stateless; a cache is L2 runtime state.
+The cache is deterministic-per-provider (NOT `temperature==0` — that param is
+removed on Fable 5 / Opus 4.8), redact → canonicalize → salted-hash → store, keyed
+on the full canonical request, TTL + global purge + runtime kill-switch; the cost
+guard extends `cost_guard.py` with a fail-closed `gate()`; the Anthropic leg uses
+`anthropic.AsyncAnthropic()` + `POST /v1/messages`. Full spec:
+[`30-multi-llm-router-caching-batching-decorator.md`](30-multi-llm-router-caching-batching-decorator.md).
+
+---
+
 ## Confirmed not-decisions (parked, not punted)
 
 - **Pydantic AI** as kernel schema lib — rejected per D7 (category error). Kept in `06-open-questions.md` as v2.1+ framework-comparison item.
