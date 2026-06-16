@@ -31,7 +31,12 @@
 - [ ] `model_registry.py` dynamic thresholding; `cost_guard.py` Fable budget + escalation rules, **default-deny + fail-closed**, keys via Keychain/.env.
 - [ ] Eval: minimal output-diff harness on a fixed prompt set first; DeepEval only if needed.
 - [x] `.github/workflows/ci.yml`: docs/v2 pointer sync gate wired to both repos' CI (orama: new `docs-pointer-sync` job checks out PT sibling + runs `--check`; PT: `git-hygiene` job runs check via `ORAMA_ROOT` env after existing orama checkout). SKILL.md structural validation was already present in both CIs. 2026-06-17.
-- [ ] OSS Group B emulation (ADR each): [1] Langfuse traces (additive to `capture_lesson.py`/`LESSONS.md`, methodology only), [4] ClawRouter scoring, [3] Manifest cost-tiering, [2] Helicone proxy-caching.
+- [x] OSS Group B ADRs drafted (2026-06-17):
+  - `docs/v2/35` D18 — Langfuse trace-tree → `trace_session.py` JSONL annotation, orama-only
+  - `docs/v2/36` D19 — ClawRouter 5-dim scorer → `score_candidates()` in `model_registry.py`, PT-only
+  - `docs/v2/37` D20 — Manifest cost-tiering → `CostGuard.gate(spec)` in `supervisor.py:_run_worker`, PT-only
+  - `docs/v2/38` D21 — Helicone proxy-caching → `_LRUCache` inside `MultiLLMRouter`, PT-only
+  All four Status: Proposed. Approve before any Group B implementation starts.
 - [ ] OSS Group deferred (ADR or cut before any build): [5] NadirRouter, [7] Claude Artifact Unpacker, [9] DeepEval, [10] Agent-Distillation, [13] Cozeloop.
 - [x] **[PROBE 2026-06-17]** Win coder confirmed ONLINE at `192.168.254.102:1234` (IP changed from .101). Models: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`, `gemma-4-26b-a4b-it`, `qwen3.5-9b-mlx`. Action needed: set `LM_STUDIO_WIN_ENDPOINTS=http://192.168.254.102:1234` in env/config and update `config/devices.yml` in PT.
 - [x] **docs/v2/30** (`MultiLLMRouter` caching/batching decorator) — drafted 2026-06-15 at canonical home `docs/v2/30-multi-llm-router-caching-batching-decorator.md` (locks decision **D17**). `Perpetua-Tools/docs/adr/ADR-002-…` is a generated pointer kept in lockstep via `scripts/git/sync-docs-v2-pointers.sh` (`--check` wired into both repos' pre-commit). Status: Proposed. **Approve before any v2 build starts.**
