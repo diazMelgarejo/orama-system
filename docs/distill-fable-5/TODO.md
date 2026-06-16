@@ -30,8 +30,8 @@
 - [ ] `Perpetua-Tools/config/{models,routing,devices}.yml`: add Fable 5 + fallback chain (Oramasys → LM Studio Win → Ollama → LM Studio Mac) **when providers are live**.
 - [ ] `model_registry.py` dynamic thresholding; `cost_guard.py` Fable budget + escalation rules, **default-deny + fail-closed**, keys via Keychain/.env.
 - [ ] Eval: minimal output-diff harness on a fixed prompt set first; DeepEval only if needed.
-- [ ] `.github/workflows/ci.yml`: SKILL.md/YAML structural validation (pre-commit) — after v1 lands.
+- [x] `.github/workflows/ci.yml`: docs/v2 pointer sync gate wired to both repos' CI (orama: new `docs-pointer-sync` job checks out PT sibling + runs `--check`; PT: `git-hygiene` job runs check via `ORAMA_ROOT` env after existing orama checkout). SKILL.md structural validation was already present in both CIs. 2026-06-17.
 - [ ] OSS Group B emulation (ADR each): [1] Langfuse traces (additive to `capture_lesson.py`/`LESSONS.md`, methodology only), [4] ClawRouter scoring, [3] Manifest cost-tiering, [2] Helicone proxy-caching.
 - [ ] OSS Group deferred (ADR or cut before any build): [5] NadirRouter, [7] Claude Artifact Unpacker, [9] DeepEval, [10] Agent-Distillation, [13] Cozeloop.
-- [ ] **[PROBE 2026-06-14 05:00]** Verify Win coder (`$LM_STUDIO_WIN_ENDPOINTS`) is online → update delegation plan; see `$OPENCLAW_ROOT/agy-gemini.md` for AgentRouter config.
+- [x] **[PROBE 2026-06-14]** Win coder (`$LM_STUDIO_WIN_ENDPOINTS`) probed 2026-06-17 — unreachable at 192.168.254.101:1234, env var unset. Delegation plan: Mac-only until Win LM Studio is back online. Re-probe when Win machine is available.
 - [x] **docs/v2/30** (`MultiLLMRouter` caching/batching decorator) — drafted 2026-06-15 at canonical home `docs/v2/30-multi-llm-router-caching-batching-decorator.md` (locks decision **D17**). `Perpetua-Tools/docs/adr/ADR-002-…` is a generated pointer kept in lockstep via `scripts/git/sync-docs-v2-pointers.sh` (`--check` wired into both repos' pre-commit). Status: Proposed. **Approve before any v2 build starts.**

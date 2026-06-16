@@ -178,3 +178,29 @@ jobs:
             exit 1
           fi
           echo "OK: mcp-oramasys present in allowed-tools"
+
+  docs-pointer-sync:
+    name: docs/v2 → downstream pointer sync gate (zero-fragmentation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout Perpetua-Tools (sibling for pointer sync check)
+        uses: actions/checkout@v5
+        with:
+          repository: diazMelgarejo/Perpetua-Tools
+          ref: main
+          path: perpetua-tools-sibling
+          fetch-depth: 1
+          persist-credentials: false
+        continue-on-error: true
+
+      - name: Verify docs/v2 pointers in sync with downstream Perpetua-Tools
+        run: |
+          if [ -d perpetua-tools-sibling ]; then
+            PERPETUA_TOOLS_ROOT="$GITHUB_WORKSPACE/perpetua-tools-sibling" \
+              bash scripts/git/sync-docs-v2-pointers.sh --check \
+              "$GITHUB_WORKSPACE/perpetua-tools-sibling"
+          else
+            echo "skip: Perpetua-Tools not available in this CI run"
+          fi
