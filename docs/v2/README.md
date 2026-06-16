@@ -198,7 +198,11 @@ orama-system/docs/v2/
 ├── 31-security-harness-excellence-plan.md  ← canonical security-harness strategy, threat model, roadmap, acceptance gates
 ├── 32-agentic-security-controls.md  ← implementation guidance for auth, tools, memory, supply chain, observability
 ├── 33-security-harness-source-material.md  ← verbatim preserved prior mixed security-harness plan
-└── 34-local-model-runtime-profile.md  ← local model/Ollama/MLX/Qwen runtime guidance
+├── 34-local-model-runtime-profile.md  ← local model/Ollama/MLX/Qwen runtime guidance
+├── 35-langfuse-trace-tree-pattern.md  ← Langfuse trace-tree as JSONL annotation layer on capture_lesson.py (D18; orama-only)
+├── 36-clawrouter-scoring-pattern.md   ← ClawRouter 5-dim weighted scorer in model_registry.py (D19; PT-only)
+├── 37-manifest-cost-tiering-pattern.md ← Manifest cost-tiering as CostGuard.gate() in supervisor.py (D20; PT-only)
+└── 38-helicone-proxy-caching-pattern.md ← Helicone hash-based LRU cache inside MultiLLMRouter (D21; PT-only)
 ```
 
 > **Next free slot: `35-`**
