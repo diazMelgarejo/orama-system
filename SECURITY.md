@@ -2,7 +2,7 @@
 
 > **Canonical security posture** for the OpenClaw orchestration stack.
 > **Last updated:** 2026-06-14
-> **Source review:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../OpenClaw/v1/2026-05-23-security-markdown.md)
+> **Source review:** `OpenClaw/v1/2026-05-23-security-markdown.md` in the private operator workspace.
 
 ---
 
@@ -13,7 +13,7 @@ This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **P
 Root security entrypoints:
 
 - orama-system: [`SECURITY.md`](SECURITY.md)
-- Perpetua-Tools: [`../perplexity-api/Perpetua-Tools/SECURITY.md`](../perplexity-api/Perpetua-Tools/SECURITY.md)
+- Perpetua-Tools: [`SECURITY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SECURITY.md)
 
 ---
 
@@ -30,7 +30,7 @@ Root security entrypoints:
 | **5** | Remote LM Studio / Win coder URL policy | `utils/model_endpoint_url.py` (orama + PT); default loopback + RFC1918; `ALLOW_PUBLIC_MODEL_ENDPOINTS=1` opt-in; wired in PT `supervisor.py` + `worker_registry.py`, orama `api_server.py` |
 | **6** | Least-privilege MCP profiles | PT: `alphaclaw-mcp` profile gate + `PT_ALLOW_DANGEROUS_CLI_WORKERS`; orama: `cursor-mcp.stack.readonly.json` + `sync-cursor-mcp.sh --profile` |
 
-**Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see [79-commit audit — Appendix A](../OpenClaw/v1/2026-05-23-security-markdown.md#appendix-a--79-commit-security-audit-2026-05-25) before assuming PT routes are protected on disk.
+**Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see the private operator-workspace 79-commit audit appendix before assuming PT routes are protected on disk.
 
 **Operator checklist**
 
@@ -274,7 +274,7 @@ If a secret is committed or exposed:
 
 ## Related docs
 
-- **79-commit audit + PR review (Appendix A):** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../OpenClaw/v1/2026-05-23-security-markdown.md) — implementation status table and finding cross-ref
+- **79-commit audit + PR review (Appendix A):** `OpenClaw/v1/2026-05-23-security-markdown.md` in the private operator workspace — implementation status table and finding cross-ref
 - Remediation plan: [`docs/plans/2026-05-23-security-remediation-plan.md`](docs/plans/2026-05-23-security-remediation-plan.md)
 - v2 preconditions: [`docs/v2/23-security-preconditions.md`](docs/v2/23-security-preconditions.md)
 - Debug notes: [`docs/2026-05-24-security-review-debug-and-fix-notes.md`](docs/2026-05-24-security-review-debug-and-fix-notes.md)
