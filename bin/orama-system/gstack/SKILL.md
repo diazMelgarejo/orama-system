@@ -240,6 +240,35 @@ pgrep -fl "gbrain autopilot" || echo "(stopped)"
 Restart only after applying the `prepare:false` fix — otherwise it re-wedges
 on the same pooler write failures.
 
+### 6. Autopilot watching `/` (launchd cwd misconfig) — blocks sync, never refreshes
+
+Symptom: `/sync-gbrain` code stage is refused (`autopilot active`); `gbrain sources list`
+shows the real sources stuck at an old `last sync` **and** orphan `gstack-code-*` sources with
+`0 pages`; the autopilot pid's cwd is `/`. Killing the pid just spawns a new one (KeepAlive).
+
+Cause: `~/Library/LaunchAgents/com.gbrain.autopilot.plist` runs `~/.gbrain/autopilot-run.sh`
+(`exec gbrain autopilot --repo '.'`) with **no `WorkingDirectory`**, so launchd starts it in `/`
+and `--repo '.'` watches the filesystem root — useless work, but it holds the lock and blocks
+manual sync. `gbrain autopilot --install` generated this without pinning a repo.
+
+Fix (full remediation):
+```bash
+# 1. Stop the respawn — unload the KeepAlive agent (a plain kill won't stick)
+launchctl unload ~/Library/LaunchAgents/com.gbrain.autopilot.plist
+rm -f ~/.gbrain/autopilot.lock
+# 2. Remove orphan 0-page sources (spawned by the misconfig or a re-anchor)
+gbrain sources list                  # find the 0-page gstack-code-* dupes
+gbrain sources remove <orphan-id>    # repeat per orphan
+# 3. Re-pin each worktree to its POPULATED source
+echo "<populated-source-id>" > <repo>/.gbrain-source
+# 4. Reindex now-unblocked, from each repo root
+/sync-gbrain --full
+# 5. Reinstall autopilot CORRECTLY: add a WorkingDirectory to the plist (or `cd "$REPO"`
+#    in autopilot-run.sh) so `--repo .` resolves to a real repo, then `launchctl load` —
+#    OR leave it unloaded and rely on manual /sync-gbrain (safer for a multi-repo workspace).
+```
+A misconfigured autopilot is worse than none: it blocks manual sync while indexing nothing.
+
 ### Quick Reference
 
 | Symptom | Fix |
@@ -251,6 +280,7 @@ on the same pooler write failures.
 | N unacknowledged `createVersion` failures | add `--skip-failed` to sync |
 | `gbrain get docs/MIGRATION` → not found | slug is lowercased: `docs/migration` |
 | autopilot wedged 12h+ | kill via lock pid, clear lock, apply `prepare:false`, restart |
+| autopilot pid cwd is `/`, sources stale + 0-page dupes | `launchctl unload ~/Library/LaunchAgents/com.gbrain.autopilot.plist`; remove orphan sources; fix plist `WorkingDirectory` or use manual `/sync-gbrain` (mode 6) |
 
 ## Symbol vs Text Search
 
