@@ -35,6 +35,8 @@ no Langfuse dependency, no runtime state in PT (L2).
 - Not a new service or daemon.
 - Not runtime state (no Redis, no DB, no PT changes).
 - Not a replacement for `capture_lesson.py` — strictly additive.
+- Not fatal to the calling session: trace annotation is **best-effort**. If `trace_session.py` fails (file write error, schema validation error, missing gitignore), it emits a `WARNING` to stderr but does **not** raise or block the caller. A non-zero exit from `trace_session.py` is a warning condition only.
+- Not implementable before D17 is approved: the trace schema receives route-context from the D17 §3.7 route-provenance stripping normalization (`:607` return). **D18 implementation is blocked until D17 is approved.**
 
 **Form:** A thin wrapper / helper (`orama-system/bin/orama-system/scripts/trace_session.py`)
 that produces structured JSONL trace records alongside existing LESSONS.md entries.
@@ -46,13 +48,26 @@ as richer input for pattern extraction.
 ## 3. Trace schema
 
 ```jsonl
-{"trace_id": "<uuid>", "session_id": "<slug>", "root": true, "ts_start": "<iso>", "ts_end": "<iso>", "model": "<id>", "tokens_in": N, "tokens_out": N, "cost_usd": N, "tags": [...]}
-{"trace_id": "<uuid>", "parent_id": "<root_uuid>", "span": "generation", "label": "<step>", "ts_start": "...", "ts_end": "...", "model": "<id>", "tokens_in": N, "tokens_out": N}
+{"trace_id": "<uuid>", "session_id": "<slug>", "root": true, "ts_start": "<iso>", "ts_end": "<iso>", "model": "<id>", "tags": [...]}
+{"trace_id": "<uuid>", "parent_id": "<root_uuid>", "span": "generation", "label": "<step>", "ts_start": "...", "ts_end": "...", "model": "<id>"}
 {"trace_id": "<uuid>", "parent_id": "<root_uuid>", "span": "lesson", "label": "<category>", "body": "<lesson text>", "lesson_id": "<capture_lesson ref>"}
 ```
 
-Output location: `docs/distill-fable-5/traces/<session-slug>.jsonl` (gitignored by
-default; opt in to commit for audit).
+> **L2/L3 boundary — token/cost data lives in PT (L2), not in orama traces:** `tokens_in`,
+> `tokens_out`, and `cost_usd` are **excluded** from this L3 trace schema. orama (L3) cannot
+> self-compute these values — they come from provider responses that L3 never sees.
+>
+> **Where the data lives (D17 + D20):** D17's decorator extracts provider-reported usage
+> from the real `_inner` result and calls `CostGuard.record_spend(model_id, tokens_in,
+> tokens_out, cost_usd)` (D20). This is the canonical home for token/cost data in PT (L2).
+>
+> **v2.1 path (future ADR):** If trace spans need token/cost annotation, PT L2 may forward
+> the recorded values to `trace_session.py` as optional caller-supplied metadata after each
+> dispatch — orama stores what L2 gives it, never computes it. This requires its own ADR.
+
+Output location: `docs/distill-fable-5/traces/<session-slug>.jsonl`.
+
+> **REQUIRED pre-condition:** `.gitignore` entries `docs/distill-fable-5/traces/` and `docs/distill-fable-5/runs/` **MUST be committed** before this implementation begins and before any trace file is written. This is a correctness requirement, not a recommendation — trace files may contain session prompt content. Verify with `git check-ignore -v docs/distill-fable-5/traces/` before the first `trace_session.py` invocation.
 
 ---
 
@@ -60,7 +75,7 @@ default; opt in to commit for audit).
 
 | Existing hook | Change |
 |--------------|--------|
-| `capture_lesson.py --review` | Append `trace_id` field to emitted entry (backwards-compatible; old consumers ignore unknown fields) |
+| `capture_lesson.py --review` | `capture_lesson.py` emits **Markdown** to `LESSONS.md` — not JSON. A `trace_id` field **cannot** be injected into a Markdown template. Instead, `trace_session.py` writes a companion `lesson_ref` span entry in the JSONL trace file that records the session slug and timestamp, enabling correlation without mutating `LESSONS.md` or `capture_lesson.py`. |
 | `distill_session.py --input` | Accepts optional `--trace <file.jsonl>`; enriches extracted lessons with span context |
 | `LESSONS.md` | No change — flat chronological format preserved; trace file is a companion, not a replacement |
 
@@ -93,7 +108,7 @@ purposes; PT never reads or writes them.
 
 **Positive:**
 - `distill_session.py` gains per-span cost and latency context → better proposals.
-- Session replay becomes possible: reconstruct what happened from trace + lessons.
+- Session replay is possible **within a single completed session**: reconstruct what happened from trace + lessons for post-session analysis. Trace files are **ephemeral and machine-local** — not designed for cross-session aggregation or cross-machine durability in v2 (v3 concern). Do not treat trace files as a durable budget ledger or a cross-session audit record.
 - Zero new dependencies; zero runtime risk; no PT changes.
 
 **Negative / constraints:**
