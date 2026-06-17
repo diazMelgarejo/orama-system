@@ -5,6 +5,7 @@
 > **Companions:** [`14-supervisor-and-anthropic-patterns.md`](14-supervisor-and-anthropic-patterns.md) (supervisor + Anthropic API patterns this decorator inherits), [`29-oramasys-mastery-implementation-plan.md`](29-oramasys-mastery-implementation-plan.md), and [`00-context-and-decisions.md`](00-context-and-decisions.md) (decision registry — this doc locks **D17**). The three-repo L2/L3 boundary is [`Perpetua-Tools ADR-001`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/adr/ADR-001-three-repo-adapter-architecture.md).
 > **Code paths** below are relative to the **Perpetua-Tools** repo (L2 runtime), where `MultiLLMRouter` is implemented (e.g. `orchestrator/supervisor.py`).
 > Added: 2026-06-15.
+> **Identifier map:** This decision = **D17** (registry) = `orama docs/v2/30` (canonical) = `PT ADR-002` (generated pointer). Cite **D17** in prose; never cite ADR-002 as the decision number.
 
 ---
 
@@ -31,7 +32,7 @@ The existing dispatch path already owns every routing concern, and the decorator
 |---------|----------|--------------------|
 | Backend selection / route order | `_dispatch` resolve chain (`supervisor.py:534`) | re-route, re-resolve, or add a second echo fallback |
 | Model pinning + affinity-shaping of the spec | `_prepare_spec_for_inference` (`supervisor.py:722`; called on the dispatch path at `:616`, and for the Win leg at `:592`) | re-pin a model or re-shape the spec |
-| Pure backend policy function + mirror exclusion (`_MIRROR_BACKENDS`) | `orchestrator/backend_resolver.py:24` (CLI path; caller `agent_launcher.py:611`) | import or duplicate it into the dispatch path |
+| Pure backend policy function + mirror exclusion (`_MIRROR_BACKENDS`) | `orchestrator/backend_resolver.py:24` (CLI path; caller `src/perpetua_tools/agent_launcher.py:611`) | import or duplicate it into the dispatch path |
 | HTTP route-task entry | `ModelRegistry.route_task` (`model_registry.py:173`; HTTP `/orchestrate` only) | call it from the dispatch path |
 | Windows pre-emption (probe, endpoint inject, `routed_to_windows`, lines 575–611) | `_dispatch` Win-preempt block | re-probe Windows or re-inject endpoints |
 
@@ -107,10 +108,11 @@ The cache stores a single sample as if it were canonical, so it may only do so w
 
 The pipeline order is **binding and fixed**:
 
-> **redact → canonicalize → hash(key) → store(redacted value)**
+> **redact → canonicalize → HMAC(stable-per-namespace-salt, canonical-form) → store(redacted value)**
 
 - Redact PII/secrets **first**, before the canonical form is computed.
 - The key is computed over the **post-redaction canonical form**, so raw secrets never enter the keyspace.
+- The hash is **HMAC-based** (see §3.2 keyed/salted hash). The salt is **stable per namespace**: it comes from macOS Keychain or `.env` only, is identical on every read, write, and restart within a namespace, and **never** varies per-call. A per-call random salt would make every restart a total cache miss, breaking correctness. The salt value **must never appear in `models.yml`, config files, or tracked files**.
 - Only the **redacted** value is stored. **Output redaction** runs on the model response too (not just input), because model outputs can reproduce secrets present in the input even after input redaction.
 
 ### 3.4 — Substrate, at-rest, invalidation
@@ -118,11 +120,35 @@ The pipeline order is **binding and fixed**:
 | Rule | Binding requirement |
 |------|---------------------|
 | **Cache a successful, deterministic call only** | Cache **only** when the call passed the §3.1 determinism gate **and** succeeded. Never cache errors, partial/streamed-aborted results, or nondeterministic-provider results. |
+| **2 MiB result ceiling** | `cache.put()` enforces the same `_MAX_RESULT_BYTES = 2 MiB` ceiling as `_run_worker:410`. Results whose serialized size exceeds 2 MiB are **not cached** (they are still returned to the caller unchanged). |
 | **Substrate named + scoped** | Default substrate is an **in-process LRU inside PT (L2)**. Any **persistent** substrate (on-disk or Redis) MUST: (a) be **PT-local and tenant-scoped**, (b) **encrypt values at rest** *or* store no value that can contain secrets, and (c) apply **output redaction**. **Redis is permitted in PT L2** only under that tenant isolation; it remains **forbidden in orama L3** (§8). |
 | **TTL** | Every entry carries a TTL and is absent once expired. No unbounded-lifetime entries. Nondeterministic-provider dedupe (if enabled) uses a **short** TTL. |
 | **Invalidation** | Explicit invalidation by **key**, by **model id** (a model-version bump must miss — the model id is in the key), and by **TTL**. **Plus a global / namespace-wide purge** and a **runtime feature-flag to disable caching entirely**, so a discovered **redaction or poisoning defect can be contained without a redeploy** (§7). |
 
 This is the Helicone-style emulation locus (§9): a **hash-based LRU inside PT's `_dispatch` path**, never a separate proxy service, never a Langfuse-style trace tree promoted into runtime state.
+
+### 3.5 — Read-path fail-closed (binding)
+
+Any exception raised during key computation, `cache.get()`, or `_class_gate_ok()` evaluation MUST be treated as a **cache MISS** — never as a hit, and never re-raised in a way that blocks the dispatch. The real `_dispatch` (`_inner`) is called as normal on any read-path error.
+
+| Rule | Binding requirement |
+|------|---------------------|
+| **Exception = MISS** | `try/except` wraps the entire read path. Any exception (including `HMAC` failures, serialization errors, TTL calculation errors) → treat as MISS, proceed to `gate()` + `_inner`. |
+| **No raw prompt logging** | Exceptions on the read path **must never log raw spec content** (prompt, messages, constraints). Log the exception type + key prefix only. Same requirement applies to `cache.set()` failures. |
+
+### 3.6 — Audit and event stream redaction (binding)
+
+The audit/event stream (`RUNNING`/`SUCCEEDED`/`FAILED`/`CANCELLED` events emitted by `_run_worker`) and any gossip payload built from a `JobSpec` are subject to the **same redaction requirement as the cache**: no raw prompt, PII, or secret may appear in any log line, event payload, or gossip message. This applies to all code paths in the decorator and in extensions to `cost_guard.py` and `_run_worker` that this ADR introduces.
+
+### 3.7 — Route-provenance stripping (binding)
+
+`supervisor.py:607` injects `routed_to_windows` and `windows_endpoint` into the result dict when the Windows backend wins. These keys are **routing metadata, not model output** and MUST be stripped before caching and before returning a cache hit.
+
+| Rule | Binding requirement |
+|------|---------------------|
+| **Strip before store** | Before calling `cache.set()`, remove `routed_to_windows` and `windows_endpoint` from the result. The cache stores **content only** — stripping these prevents a stale Windows endpoint from being re-injected on a future miss against a different backend. |
+| **Strip on cache hit** | Route-provenance keys are **not** re-injected from a cache hit. A cache hit returns the stored content-only dict. |
+| **Skill-envelope leg is non-cacheable** | `supervisor.py:567` returns `{status: "ok", skill_envelope: ...}` — there are **no** route-provenance keys here, and this path is **not cacheable** (skill envelopes are stateful/session-scoped). `_is_cacheable()` must return `False` for results that contain a `skill_envelope` key. |
 
 ---
 
@@ -163,6 +189,8 @@ Cost/escalation routing rules and the Fable budget belong in **`orchestrator/cos
 | **"4x Fable budget" gate fails closed** | When the budget ceiling is hit (or the guard cannot evaluate), `gate()` **raises** → the call is **blocked**. No silent reroute, no degraded best-effort spend. |
 | **Keys via Keychain/.env, never config** | Provider API keys come from macOS Keychain or `.env` **only**. Keys are **never** committed to config files (`openclaw.json`, YAML, JSON) and never appear in tracked files. |
 | **Thresholds added on first real call** | Fable 5 / Opus 4.8 / GPT-5.5 / Grok thresholds are added to `cost_guard.py` **only when that provider is actually called** — no speculative thresholds for providers not yet wired. |
+| **Single CostGuard instance (injection)** | The decorator **receives** the `CostGuard` instance constructed at `fastapi_app.py:134` via constructor injection — it **never constructs a second instance**. A second `CostGuard` would maintain a separate budget ledger, enabling double-counting or bypassed ceilings. The `fastapi_app.py:134` construction site remains the single source of truth for budgets. |
+| **Actual spend recording (post-`_inner`, binding)** | After `result = await self._inner(spec)` returns on a real (non-cached) dispatch, the decorator **MUST** extract provider-reported token/cost data from the result and call `self._cost_guard.record_spend(model_id, tokens_in, tokens_out, cost_usd)`. This is the **sole point** where actual per-call token/cost data enters the PT (L2) budget ledger. Provider response fields: Anthropic — `result.get("usage", {}).get("input_tokens")` / `"output_tokens"`; OpenAI-compatible — `result.get("usage", {}).get("prompt_tokens")` / `"completion_tokens"`. Never estimate or proxy these values — record only what the provider returned. If usage fields are absent, call `record_spend` with `tokens_in=0, tokens_out=0, cost_usd=0.0` and log a warning (do not silently skip the record). |
 
 This ADR extends `cost_guard.py` and introduces the **first** cost-guard wiring into the dispatch path, via the decorator — it does not bolt cost logic onto individual workers.
 
@@ -173,7 +201,7 @@ This ADR extends `cost_guard.py` and introduces the **first** cost-guard wiring 
 Because the decorator wraps the supervisor's dispatch seam, it inherits the supervisor contract as it exists in `orchestrator/supervisor.py` today. Symbols below are the **real dispatch-path symbols** (an earlier draft cited names that do not exist in this repo; those have been replaced with verified ones). None of the following may be weakened:
 
 - **Concurrency/depth ceilings — `submit_job`.** `MAX_DEPTH = 1` (`supervisor.py:33`; enforced in `submit_job` at `:276`) and `MAX_THREADS = 25` (`:34`; enforced in `submit_job` at `:282`) are inherited as-is. Workers cannot spawn sub-workers; the `JobSpec.depth` validator (`:99`) rejects `depth != 0`. The decorator adds no path that lets a cached/batched call spawn deeper or exceed the thread ceiling.
-- **Hardware affinity is fail-closed.** Affinity is enforced via `check_affinity` / `HardwareAffinityError` (imported from `utils.hardware_policy`, `supervisor.py:29`; the `HardwareAffinityError` branch is handled in `_run_worker` at `:432`, recording a `FAILED` event with `policy: True` and **no silent reroute**). The decorator's cost gate and cache check do not bypass this: any real dispatch still runs the affinity path. The `_MIRROR_BACKENDS` mirror-exclusion lives in `backend_resolver.py:24` (the **CLI path**, caller `agent_launcher.py:611`) — it is **not** on the `_dispatch` path, so the decorator does **not** assume `_MIRROR_BACKENDS` runs on every dispatch. Mirror exclusion on the dispatch path, if needed, is a **to-be-built requirement**, not an inherited one.
+- **Hardware affinity is fail-closed.** Affinity is enforced via `check_affinity` / `HardwareAffinityError` (imported from `utils.hardware_policy`, `supervisor.py:29`; the `HardwareAffinityError` branch is handled in `_run_worker` at `:432`, recording a `FAILED` event with `policy: True` and **no silent reroute**). The decorator's cost gate and cache check do not bypass this: any real dispatch still runs the affinity path. The `_MIRROR_BACKENDS` mirror-exclusion lives in `backend_resolver.py:24` (the **CLI path**, caller `src/perpetua_tools/agent_launcher.py:611`) — it is **not** on the `_dispatch` path, so the decorator does **not** assume `_MIRROR_BACKENDS` runs on every dispatch. Mirror exclusion on the dispatch path, if needed, is a **to-be-built requirement**, not an inherited one.
 - **Checkpoint-before-cancel ordering — `_run_worker`.** `_run_worker` (`supervisor.py:384`) writes the **CANCELLED checkpoint before propagating cancellation** (`:428` comment, `:429` `_append_event(... JobStatus.CANCELLED)`), then re-raises `asyncio.CancelledError`. A cache write is **not** a checkpoint and must not reorder or substitute for this, nor block on cache I/O in a way that delays the checkpoint.
 - **Result-event audit stays intact.** The supervisor's event stream (`RUNNING` → `SUCCEEDED`/`FAILED`/`CANCELLED`, emitted in `_run_worker`) is the audit record. A **cache hit still surfaces the normal result event** — a hit is an observable result, not a silent bypass. The decorator exposes no method that clears interrupt/conflicted state without authenticated caller verification.
 - **MAESTRO gate classes.** Any new action/endpoint introduced for routing/caching/batching is classified Class 2 (intent log + HITL confirm) / Class 3 (approval token) / Class 4 (cryptographic token + immutable audit) and gated accordingly. Triggering paid cloud escalation is treated as **at least** the same class as the underlying dispatch it decorates — never lower. **A cache hit re-applies the same class gate as a miss** for Class 3/4 paid/sensitive paths: serving a cached result MUST NOT skip a required HITL confirm or approval token. Caching may only short-circuit *gating* for classes where re-serving without re-gating is explicitly safe (Class ≤ 1); §2's `_class_gate_ok(spec)` encodes this.
@@ -218,7 +246,7 @@ The repo idiom: each open question carries a "best guess" line.
 - **Q1 — Batch API savings.** Two claims must be kept separate: **(a) fact** — the Anthropic Batches API applies a **flat 50% price reduction** on token usage by design; **(b) hypothesis to measure** — whether *this* deterministic dispatch mix nets ~50% **real** savings given latency tolerance, batch fill, and cache interaction. (a) is not in doubt; (b) is. **Treat (b) as a HYPOTHESIS to MEASURE, not a target.** *Best guess:* batching helps for large, latency-tolerant fan-outs of deterministic calls; measure real savings on a representative job set before committing the batching path to the hot path.
 - **Q2 — Eval harness before DeepEval.** What proves a cached/batched result is equivalent to a fresh one? *Best guess:* start with a **minimal output-diff harness** (deterministic-in vs. cached/batched-out) as the first gate; defer DeepEval (semantic/LLM-graded eval) until the diff harness is green and we actually need semantic scoring.
 - **Q3 — Group B OSS emulation, one ADR each.** OSS-pattern emulation is **emulation, not importation**, and each tool needs its **own follow-on ADR before any code**: **Langfuse** trace-tree stays methodology in orama and **never** becomes PT runtime state; **Helicone** is a hash-based LRU **inside** PT's `_dispatch` (never a separate service); **Manifest** extends `cost_guard.py` escalation; **ClawRouter** extends `model_registry.py` dynamic thresholding. *Best guess:* land this ADR-002 (cache + cost gate) first, then Helicone-emulation detail, then Manifest, then ClawRouter, then a Langfuse-stays-in-orama note — each as its own ADR-NNN.
-- **Q4 — Cost-guard wiring into the dispatch path.** `CostGuard` is HTTP-only today (`fastapi_app.py:134`); the supervisor never imports it. *Best guess:* the decorator constructs/receives a `CostGuard` and is the **only** new place it touches the dispatch path, keeping the HTTP construction site authoritative for budgets and avoiding a second budget source of truth.
+- **Q4 — Cost-guard wiring into the dispatch path (resolved).** `CostGuard` is HTTP-only today (`fastapi_app.py:134`); the supervisor never imports it. *Resolution:* the decorator **receives** (by injection) the `CostGuard` instance constructed at `fastapi_app.py:134` — it is the **only** new place `CostGuard` touches the dispatch path, keeping the HTTP construction site authoritative for budgets and avoiding a second budget source of truth. Never construct a new `CostGuard` inside the decorator (§5 single-instance rule).
 
 ---
 
@@ -246,8 +274,8 @@ This ADR locks a new cross-cutting decision. The detail lives here; the pointer 
 ## 11 — Cross-references
 
 - [`ADR-001-three-repo-adapter-architecture.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/adr/ADR-001-three-repo-adapter-architecture.md) — three-repo adapter architecture and the L2 (Perpetua-Tools, runtime/stateful) vs. L3 (orama, methodology/stateless) layer boundary this decorator inherits.
-- `orchestrator/supervisor.py` — the dispatch seam (`_dispatch:534`) and the verified invariants this decorator inherits: `submit_job:268` (depth `:276` / threads `:282`), `_run_worker:384` (checkpoint-before-cancel `:428/429`), `_prepare_spec_for_inference:722` (dispatch-path call `:616`, Win-leg call `:592`), Win pre-emption block `575–611`, affinity via `check_affinity`/`HardwareAffinityError` (`:29`, `:432`).
-- `orchestrator/backend_resolver.py:24` — `_MIRROR_BACKENDS` mirror-exclusion (CLI path; caller `agent_launcher.py:611`), explicitly **not** on the dispatch path.
+- `orchestrator/supervisor.py` — the dispatch seam (`_dispatch:534`) and the verified invariants this decorator inherits: `submit_job:268` (depth `:276` / threads `:282`), `_run_worker:384` (checkpoint-before-cancel `:428/429`), `_prepare_spec_for_inference:722` (dispatch-path call `:616`, Win-leg call `:592`), Win pre-emption block `575–611` — route-provenance keys (`routed_to_windows`, `windows_endpoint`) are injected **only at `:607`** (the Windows-success return); line `:567` is the skill-envelope return (`{status: "ok", skill_envelope: ...}`) with **no** route-provenance keys and is a **non-cacheable leg** (see §3.7); affinity via `check_affinity`/`HardwareAffinityError` (`:29`, `:432`); `_MAX_RESULT_BYTES = 2 MiB` at `:410`.
+- `orchestrator/backend_resolver.py:24` — `_MIRROR_BACKENDS` mirror-exclusion (CLI path; caller `src/perpetua_tools/agent_launcher.py:611`), explicitly **not** on the dispatch path.
 - `orchestrator/cost_guard.py` — guard to be extended: `can_spend:66`, `record_spend:74`, `snapshot:80`, `set_budget:87` (HTTP-only construction at `fastapi_app.py:134`); `gate()` added by this ADR.
 - `orchestrator/model_registry.py:173` — `route_task` (HTTP `/orchestrate` only), and the locus for ClawRouter-style dynamic thresholding (§9).
 

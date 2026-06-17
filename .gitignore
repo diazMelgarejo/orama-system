@@ -103,6 +103,10 @@ pnpm-debug.log*
 /recordings/
 /playwright-report/
 /test-results/
+# Distillation run artifacts — contain session transcripts + trace JSONL (may contain prompt content)
+docs/distill-fable-5/traces/
+docs/distill-fable-5/runs/
+*.jsonl
 trace.zip
 *.har
 *.webm
