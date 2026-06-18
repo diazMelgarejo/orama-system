@@ -35,7 +35,7 @@ was missing:
    threat table in `31-security-harness-excellence-plan.md` §3 previously
    used local IDs T1–T7, which collided textually (but not semantically)
    with OWASP's T1–T47. Resolved 2026-06-18 by renaming the local IDs to
-   `PT-T1`–`PT-T7`, with an explicit "local ID, not an OWASP T-code"
+   `PT-01`–`PT-07`, with an explicit "local ID, not an OWASP T-code"
    annotation at the table header. See §6 below for the rationale and the
    approximate cross-reference mapping.
 
@@ -75,7 +75,7 @@ be cross-checked.
 attack chains — vertical propagation (poisoned data at L2 → corrupted model
 behavior at L1 → harmful action at L7), horizontal lateral movement within a
 layer, and emergent vulnerabilities that exist in no single layer. This is
-the same intent behind this repo's existing "PT-T7 Inter-agent cascade" entry
+the same intent behind this repo's existing "PT-07 Inter-agent cascade" entry
 and the SWARM-style system-objective-audit control.
 
 ---
@@ -161,27 +161,27 @@ Primary sources: OWASP MAS Guide §5 (MCP worked example, T39–T47); OWASP
 
 ---
 
-## 6. Numbering disambiguation: this repo's local PT-T1–PT-T7 vs. OWASP's T1–T47
+## 6. Numbering disambiguation: this repo's local PT-01–PT-07 vs. OWASP's T1–T47
 
 **Resolved 2026-06-18.** `31-security-harness-excellence-plan.md` §3
 previously had a 7-row threat table using bare local IDs T1 through T7. These
 are **this repo's own IDs**, defined before this research pass and unrelated
 to the OWASP MAS Guide's T1–T47 — but the textual collision (same prefix,
 same numbers 1–7) was confusing anyone cross-referencing both documents.
-**Renamed to `PT-T1`–`PT-T7`**, with an explicit "local ID, not an OWASP
+**Renamed to `PT-01`–`PT-07`**, with an explicit "local ID, not an OWASP
 T-code" annotation at the table header in `31` §3. Approximate
 OWASP-equivalent mapping below, for orientation only — **this is not a
 semantic equivalence, just the nearest neighbor**:
 
 | This repo's local ID (31 §3) | Closest OWASP T-code(s) | Closest ASI code |
 |---|---|---|
-| PT-T1 LAN control-plane exposure | T43 Network Exposure of MCP Server | ASI03 Identity & Privilege Abuse |
-| PT-T2 Prompt injection to tool misuse | T2 Tool Misuse, T6 Intent Breaking | ASI02 Tool Misuse & Exploitation |
-| PT-T3 Memory poisoning | T1 Memory Poisoning | ASI06 Memory & Context Poisoning |
-| PT-T4 Credential exposure | T22 Service Account Exposure | ASI03 Identity & Privilege Abuse |
-| PT-T5 Unbounded consumption | T4 Resource Overload | (OWASP LLM10 Unbounded Consumption) |
-| PT-T6 Supply-chain compromise | T25 Workflow Disruption via Dependency Exploitation | ASI04 Agentic Supply Chain Vulnerabilities |
-| PT-T7 Inter-agent cascade | T5 Cascading Hallucinations, T12 Agent Communication Poisoning | ASI08 Cascading Failures |
+| PT-01 LAN control-plane exposure | T43 Network Exposure of MCP Server | ASI03 Identity & Privilege Abuse |
+| PT-02 Prompt injection to tool misuse | T2 Tool Misuse, T6 Intent Breaking | ASI02 Tool Misuse & Exploitation |
+| PT-03 Memory poisoning | T1 Memory Poisoning | ASI06 Memory & Context Poisoning |
+| PT-04 Credential exposure | T22 Service Account Exposure | ASI03 Identity & Privilege Abuse |
+| PT-05 Unbounded consumption | T4 Resource Overload | (OWASP LLM10 Unbounded Consumption) |
+| PT-06 Supply-chain compromise | T25 Workflow Disruption via Dependency Exploitation | ASI04 Agentic Supply Chain Vulnerabilities |
+| PT-07 Inter-agent cascade | T5 Cascading Hallucinations, T12 Agent Communication Poisoning | ASI08 Cascading Failures |
 
 Note the right two columns are genuine OWASP T-codes / ASI codes (no prefix
 — those are the canonical external IDs) and are intentionally left
@@ -234,7 +234,7 @@ Huang's framing" rather than implying a single OWASP source document.
 
 1. **Done (2026-06-18):** added the T1–T47 namespace as a citable reference
    (this file); resolved the local/OWASP numbering collision by renaming
-   this repo's threat table to `PT-T1`–`PT-T7` (§6).
+   this repo's threat table to `PT-01`–`PT-07` (§6).
 2. **Next:** commit the OWASP MAESTRO Playbook into this repo and run it
    once against the 7-agent architecture; record `state.json` as an audit
    artifact. Fill the L1/L2/L4 gap in `08-technical-architecture-review.md`
