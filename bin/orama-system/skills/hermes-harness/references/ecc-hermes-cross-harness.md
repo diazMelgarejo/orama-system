@@ -87,6 +87,35 @@ For PT-orama:
 - Codex, Gemini, AGY, and Hermes are coding partners only when bounded by an
   explicit prompt and reviewed before edits land.
 
+### PT-orama Loading Map
+
+The canonical behavior remains in orama-system. Each harness receives only the
+smallest adapter needed to locate and invoke it:
+
+| Harness | PT-orama loading surface | Boundary |
+|---|---|---|
+| Codex | Thin local wrappers generated from the canonical skill manifest | Do not copy references or scripts into the local skill directory |
+| Hermes | `install_hermes_thin_skills.py` installs `/pt-orama-*` wrappers | Keep provider config, credentials, and workspace memory local |
+| Antigravity | `ANTIGRAVITY.md` and `.agent/` point back to canonical cards | Treat AGY output as advisory and require a visible readiness canary |
+| Claude Code | Thin `.claude/skills/` wrappers and project instructions | Canonical skill bodies stay under `bin/orama-system/skills/` |
+| OpenClaw | `openclaw-skills` owns gateway, channel, cron, and secret operations | Hermes onboarding must not replace or guess OpenClaw procedures |
+
+Do not create another council skill merely to represent a harness. Extend the
+canonical Hermes command/reference cards, then update only the relevant thin
+adapter when its trigger or path changes.
+
+## Authority And Defaults
+
+- The council is an optional risk-control pattern, not the default for every
+  onboarding task or one-shot operation.
+- The main orama agent owns decisions, edits, verification, and final synthesis.
+- Reviewer labels and scores are advisory; no external lane has veto authority.
+- A missing, quota-limited, unauthenticated, or timed-out lane is recorded as
+  unavailable rather than simulated.
+- Hermes is a harness, not proof of local execution. Treat a task as private
+  only when the active provider is verified as the intended loopback endpoint
+  and its completion canary succeeds.
+
 ## Partner Prompt Contract
 
 Use this shape for Hermes, Gemini, AGY, or Codex CLI workers:
