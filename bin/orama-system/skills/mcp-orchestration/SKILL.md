@@ -271,6 +271,12 @@ emits visible stdout; exit 0 with empty stdout is not a usable worker. Full comm
 model picks, and bounding (`gtimeout`, never `sleep` chains) are in
 [`code-review/references/orchestration-dispatch.md`](../code-review/references/orchestration-dispatch.md).
 
+If AGY exits 0 with empty stdout, rerun once with `--log-file <path>` before
+debugging PATH or shell quoting. On Windows this can mean silent auth succeeded
+but the hosted model call failed with quota exhaustion; in that case AGY is
+installed but not dispatchable until quota resets or another authenticated
+model/account is selected. Do not loop on `agy -p` without checking the log.
+
 ### Install Codex CLI (optional, Codex worker support)
 
 ```bash
