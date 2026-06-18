@@ -195,16 +195,16 @@ Hermes is useful for tool-call format and hosted-agent patterns. The Hermes 3 te
 
 Every gate must include an exact command, expected result, artifact path, and rollback note. Initial gates:
 
-| Gate | Command target | Expected result |
-|---|---|---|
-| AC-AUTH | `pytest tests/test_control_plane_auth.py` | existing auth tests run from the current test tree; extend this file or add a future `tests/security/` suite for no-token/LAN-bind cases |
-| AC-RATE | future `pytest tests/security/test_rate_limits.py` | create this test suite with model/tool endpoint 429 or budget-error coverage before marking the gate complete |
-| AC-COOKIE | future `pytest tests/security/test_control_plane_cookie.py` | create this test suite if cookie auth remains; verify centralized issuance and secure dev/prod attributes |
-| AC-TOOLS | future `pytest tests/security/test_tool_mediator.py` | create this test suite when the mediator lands; denied paths/egress/tools must fail before subprocess launch |
-| AC-MEM | future `pytest tests/security/test_memory_acl.py` | create this test suite when memory ACLs land; deny/read-only/read-write modes must be enforced at retrieval and write time |
-| AC-SCAN | future `pytest tests/security/test_prompt_injection_scanner.py` | create this test suite when the scanner lands; canary leakage must block and benign fixtures must stay below the false-positive threshold |
-| AC-TRACE | future `pytest tests/security/test_agent_trace.py` | create this test suite when tracing lands; every tool call must include principal/session/tool/resource/policy decision/timestamp |
-| AC-SUPPLY | `pip-audit -r requirements.lock` plus CI lockfile install | dependency audit result is stored; CI installs from hashes/lockfile |
+| Gate | Command target | Expected result | Artifact path | Rollback note |
+|---|---|---|---|---|
+| AC-AUTH | `pytest tests/test_control_plane_auth.py` | existing auth tests run from the current test tree; extend this file or add a future `tests/security/` suite for no-token/LAN-bind cases | CI test-run log (pytest output) | `git revert` the auth-posture commit; `ORAMA_INSECURE=1` is the explicit, narrow dev-only bypass — never a silent default |
+| AC-RATE | future `pytest tests/security/test_rate_limits.py` | create this test suite with model/tool endpoint 429 or budget-error coverage before marking the gate complete | CI test-run log; once created, the new test file itself | remove/disable the limiter middleware registration |
+| AC-COOKIE | future `pytest tests/security/test_control_plane_cookie.py` | create this test suite if cookie auth remains; verify centralized issuance and secure dev/prod attributes | CI test-run log; once created, the new test file itself | revert to bearer-only auth, dropping cookie issuance entirely |
+| AC-TOOLS | future `pytest tests/security/test_tool_mediator.py` | create this test suite when the mediator lands; denied paths/egress/tools must fail before subprocess launch | CI test-run log; once created, the new test file itself | disable the mediator and fall back to the pre-mediator allow-list, if any |
+| AC-MEM | future `pytest tests/security/test_memory_acl.py` | create this test suite when memory ACLs land; deny/read-only/read-write modes must be enforced at retrieval and write time | CI test-run log; once created, the new test file itself | revert to the pre-ACL memory-governance commit (classify_and_redact only) |
+| AC-SCAN | future `pytest tests/security/test_prompt_injection_scanner.py` | create this test suite when the scanner lands; canary leakage must block and benign fixtures must stay below the false-positive threshold | CI test-run log; once created, the new test file itself | set the scanner's kill switch env var to disable, then revert the commit |
+| AC-TRACE | future `pytest tests/security/test_agent_trace.py` | create this test suite when tracing lands; every tool call must include principal/session/tool/resource/policy decision/timestamp | CI test-run log; once created, the new test file itself | revert to pre-tracing logging; no data-loss risk since tracing is additive |
+| AC-SUPPLY | `uv export --frozen --no-hashes -o requirements-export.txt && uvx pip-audit -r requirements-export.txt` plus CI lockfile install | dependency audit result is stored; CI installs from hashes/lockfile | `requirements-export.txt` (gitignored, regenerated each run) + audit output saved under `docs/security-artifacts/` | `uv lock --revert` or pin to the last-known-good `uv.lock` commit SHA |
 
 ---
 

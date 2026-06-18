@@ -112,6 +112,8 @@ pip-compile requirements.txt -o requirements.lock --generate-hashes
 
 Also: address the open Dependabot high at `/security/dependabot/5` directly.
 
+> **Resolved (2026-06-18):** this repo now uses `uv.lock` (not `pip-compile`/`requirements.lock`) for reproducible installs — same intent as the fix above, different tool. `pyproject.toml` + `uv.lock` are the source of truth; `requirements.txt` floors remain for human reference. See `31-security-harness-excellence-plan.md` AC-SUPPLY for the current lockfile-audit acceptance gate.
+
 ---
 
 ### S3 — No application-level rate limiting (LOW)
@@ -276,12 +278,20 @@ The original review did not preserve exact command output artifacts. Future reru
 
 ```bash
 git -C /workspace/orama-system rev-parse HEAD
-rg -n 'shell=True|os\.system|eval\(|exec\(' src scripts tests
-rg -n 'pickle\.load|yaml\.load\(|marshal' src scripts tests
+# Production-code scope only, matching the "in production code" claims above.
+rg -n 'shell=True|os\.system|eval\(|exec\(' src scripts
+rg -n 'pickle\.load|yaml\.load\(|marshal' src scripts
 python3 scripts/review/repo_hygiene.py
+# Optional: same patterns in tests/. Hits here are NOT a violation of the
+# production-code claims above -- test fixtures/mocks may legitimately use
+# these patterns. Classify separately; do not fold into the production count.
+rg -n 'shell=True|os\.system|eval\(|exec\(|pickle\.load|yaml\.load\(|marshal' tests
 # Optional broad triage scan; expect known false positives from guard regexes, UI IDs, tests, and placeholders.
+mkdir -p docs/security-artifacts
 rg -n 'sk-|ghp_|github_pat|AKIA|xoxb-|token=|key=' --glob '!*.md' | tee docs/security-artifacts/2026-06-14-secret-triage.txt
-pip-audit -r requirements.lock
+# This repo uses uv; pip-audit doesn't read uv.lock directly, so export first.
+uv export --frozen --no-hashes -o requirements-export.txt
+uvx pip-audit -r requirements-export.txt
 ```
 
 If companion repositories are included, capture their SHAs and run equivalent scans from each repository root.
