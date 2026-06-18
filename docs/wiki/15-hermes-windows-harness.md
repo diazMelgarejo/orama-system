@@ -43,6 +43,28 @@ hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free `
 Use the default LM Studio route only after verifying the loaded model answers
 quickly through the OpenAI-compatible local API.
 
+Install AGY/Antigravity on native Windows with the official PowerShell command:
+
+```powershell
+irm https://antigravity.google/cli/install.ps1 | iex
+agy --version
+agy --print "Reply with exactly: AGY_READY"
+```
+
+Treat AGY as dispatchable only if the print canary emits visible stdout.
+
+Install PT-orama local Hermes slash-command wrappers from the canonical repo:
+
+```powershell
+python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install
+hermes skills list --source local
+```
+
+Expected wrappers: `/pt-orama-council`, `/pt-orama-review`, and
+`/pt-orama-delegate`. These wrappers point back to canonical orama-system skill
+paths under `bin/orama-system/skills/hermes-harness/commands/` and must not
+contain copied canonical bodies or private Hermes state.
+
 ## Verification
 
 ```powershell
@@ -50,6 +72,7 @@ hermes --version
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
 hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free `
   -z "Reply with exactly: HERMES_READY"
+agy --print "Reply with exactly: AGY_READY"
 ```
 
 Pass criteria:
@@ -57,6 +80,7 @@ Pass criteria:
 - `hermes.exe` resolves from `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts`.
 - Git Bash prints `hermes-bash-ok`.
 - Hermes one-shot prints `HERMES_READY` without starting an interactive TUI.
+- AGY prints `AGY_READY`; exit 0 with empty stdout is not readiness.
 
 ## Rules
 
