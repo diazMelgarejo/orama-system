@@ -36,8 +36,8 @@ if ($gitBash) {
 For bounded coding-partner prompts, route explicitly:
 
 ```powershell
-hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free `
-  -z "Reply with exactly: HERMES_READY"
+hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
+  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 ```
 
 Use the default LM Studio route only after verifying the loaded model answers
@@ -73,8 +73,8 @@ contain copied canonical bodies or private Hermes state.
 ```powershell
 hermes --version
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
-hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free `
-  -z "Reply with exactly: HERMES_READY"
+hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
+  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 agy --print "Reply with exactly: AGY_READY"
 ```
 
