@@ -10,6 +10,10 @@
 > (Ken Huang / Akram Sheriff, MAESTRO talk).
 > **Referenced by:** `08-technical-architecture-review.md` §2.A,
 > `31-security-harness-excellence-plan.md` §3–§4, `32-agentic-security-controls.md` §6/§10.
+> **Local source artifacts incorporated:** `MAESTRO and OWASP GenAI Security_
+> Research Brief for orama-system v2 Security Plan.md` and `Multi-Agent
+> Environment, Security, Threat, Risk, and Outcome.pdf.pdf` from the private
+> operator tools folder.
 
 ---
 
@@ -38,6 +42,40 @@ was missing:
    `PT-01`–`PT-07`, with an explicit "local ID, not an OWASP T-code"
    annotation at the table header. See §6 below for the rationale and the
    approximate cross-reference mapping.
+7. A source-provenance rule: the local research brief is treated as the
+   high-density synthesis; the two-page MAESTRO PDF is treated as the summit
+   transcript/brief that anchors the five-factor talk framing, seven-layer
+   overview, and MCP micro-segmentation/tool-hash emphasis.
+
+---
+
+## 1.1 Source incorporation ledger
+
+The two attached source documents have been folded into this repo as follows.
+The intent is to preserve their complete security substance inside our own
+canonical docs while avoiding a second raw-source tree that would drift.
+
+| Source material | Incorporated here | Also propagated to |
+|---|---|---|
+| Research brief TL;DR and key findings | §§2–10 below | `31` §4, `32` §6/§10, `08` §2.A, `20` memory controls |
+| Research brief MAESTRO/OWASP taxonomy | §§2–3, §6 | `31` local `PT-01`-style table and standards traceability |
+| Research brief MCP controls | §5 | `32` MCP tool-definition pinning and PT runtime ADR |
+| Research brief AIVSS rubric | §7 | `31` quarterly standards-refresh source list |
+| Research brief caveats/source quality | §10 | this file's citation discipline |
+| MAESTRO PDF summit notes | §§2, §5, §8, §9.1 | `08` architecture review and PT ADR |
+
+Key MAESTRO PDF substance now represented here:
+
+- Traditional methods such as STRIDE, DREAD, and PASTA are insufficient alone
+  for agentic AI because they do not model non-determinism, autonomy, expanded
+  trust boundaries, ephemeral identity, and blast-radius cascades.
+- MAESTRO uses seven layers: Foundation Models, Data Operations, Agent
+  Frameworks, Deployment/Infrastructure, Evaluation/Observability, Security &
+  Compliance, and Agent Ecosystem.
+- MCP needs runtime containment, especially micro-segmentation and hash-based
+  baselines for tool calls, so tool changes can be detected and blocked.
+- The summit material should enrich v2 planning without replacing this repo's
+  own existing architecture and control vocabulary.
 
 ---
 
@@ -247,6 +285,42 @@ Huang's framing" rather than implying a single OWASP source document.
    treating either as a committed standard (already covered by `31` §9's
    quarterly refresh cadence — add AIVSS and the MAS Guide to that source
    list explicitly).
+
+---
+
+## 9.1 v2.0.0-STABLE foundation and v2.1 target
+
+This material is a **v2.1 security target**, but v2.0.0-STABLE must lay the
+foundation so later runtime work does not need a redesign.
+
+### v2.0.0-STABLE foundation
+
+- Keep the local threat namespace as `PT-01`, `PT-02`, ... `PT-09`, ... for
+  all repo-owned threats. Never insert an extra `T` after the repo prefix or
+  use any pattern that visually resembles OWASP's `T1`–`T47` namespace.
+- Treat `31`, `32`, and this file as the canonical kernel/orbit security
+  scaffold:
+  - `31` defines the local threat model and acceptance gates.
+  - `32` defines implementation controls that can become tests.
+  - `39` maps external MAESTRO/OWASP/AIVSS/MCP source material.
+- Keep orama stateless in the kernel path; PT owns stateful runtime controls:
+  memory TTLs, source-attributed writes, tool pinning, live worker profiles,
+  and model endpoint egress policy.
+- Every new orbit integration must declare its MAESTRO layer, local
+  `PT-01`-style threat trace, and whether it adds state, egress, tool
+  execution, or cross-agent communication.
+
+### v2.1 target
+
+- Run the 10-phase MAESTRO Playbook against the 7-agent architecture and store
+  the resulting threat register as an audit artifact.
+- Add AIVSS candidate scoring to every high-risk `PT-01`-style finding, but do
+  not hard-code a formula until AIVSS reaches v1.0.
+- Implement and test PT runtime controls for MCP tool-definition pinning,
+  hashed/source-attributed memory writes, session isolation, TTLs, and
+  micro-segmented model/MCP egress.
+- Add dynamic identity gates: short-lived, task-scoped credentials for agents;
+  no long-lived secrets in prompts, memory, MCP config, or worker environment.
 
 ---
 
