@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[5]
 LOCALAPPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", LOCALAPPDATA / "hermes"))
 HERMES_SKILLS = HERMES_HOME / "skills" / "pt-orama"
+MANAGED_MARKER = "created_by: agent"
 
 
 @dataclass(frozen=True)
@@ -81,7 +82,7 @@ Canonical source of truth:
 
 ## Windows Readiness
 
-- Hermes one-shot: `hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free -z \"Reply with exactly: HERMES_READY\"`
+- Hermes one-shot: `hermes chat --query \"Reply with exactly: HERMES_READY\" --quiet --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1`
 - AGY install: `irm https://antigravity.google/cli/install.ps1 | iex`
 - AGY readiness: `agy --print \"Reply with exactly: AGY_READY\"` must print visible stdout.
 - LM Studio readiness: `/v1/models` is not enough; require a fast chat-completions canary.
@@ -99,6 +100,24 @@ HANDOFF NOTES:
 """
 
 
+def is_managed_wrapper(path: Path) -> bool:
+    """Return whether *path* has our marker in its YAML frontmatter."""
+    if not path.is_file():
+        return False
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+    if not lines or lines[0].strip() != "---":
+        return False
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return False
+        if line.strip() == MANAGED_MARKER:
+            return True
+    return False
+
+
 def install(dry_run: bool = False) -> list[Path]:
     written: list[Path] = []
     missing = [spec.canonical for spec in WRAPPERS if not (REPO_ROOT / spec.canonical).is_file()]
@@ -114,6 +133,10 @@ def install(dry_run: bool = False) -> list[Path]:
         )
     for spec in WRAPPERS:
         target = HERMES_SKILLS / spec.slug.removeprefix("pt-orama-") / "SKILL.md"
+        if target.exists() and not is_managed_wrapper(target):
+            action = "would skip" if dry_run else "skipped"
+            print(f"{action} unmanaged wrapper: {target}")
+            continue
         if dry_run:
             print(target)
             continue
@@ -129,6 +152,9 @@ def verify() -> list[str]:
         target = HERMES_SKILLS / spec.slug.removeprefix("pt-orama-") / "SKILL.md"
         if not target.is_file():
             errors.append(f"missing wrapper: {target}")
+            continue
+        if not is_managed_wrapper(target):
+            errors.append(f"unmanaged wrapper preserved: {target}")
             continue
         text = target.read_text(encoding="utf-8")
         for required in ("thin local Hermes", spec.canonical, "AGY_READY", "HERMES_READY"):
