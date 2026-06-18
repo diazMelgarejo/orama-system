@@ -51,6 +51,7 @@ gstack-skillify itself would require a gstack-template fork-patch.)
 
 Spec reference: [`references/skill-architecture-guide.md`](../references/skill-architecture-guide.md)
 Codex wrapper policy: [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md)
+ECC cross-harness authoring: [`references/ecc-cross-harness-authoring.md`](references/ecc-cross-harness-authoring.md)
 
 ---
 
@@ -61,6 +62,7 @@ Use skillify when you need a new:
 - **gstack global skill** — lives in `~/.claude/skills/<name>/`, invokable as `/<name>` anywhere
 - **raw Claude Code skill** — a standalone `SKILL.md` that can be loaded with `/skill path/SKILL.md`
 - **Codex local thin wrapper** — lives in `$HOME/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`, points to a canonical in-repo skill, and must not copy canonical bodies/references/scripts. `~/.codex/skills` may be written as a compatibility root for Codex Desktop installs that still expose it.
+- **ECC cross-harness skill** — lives in an ECC-style flat `skills/<name>/SKILL.md` tree and uses harness adapters only at the edge.
 
 Do NOT use skillify to edit existing skills. Use it to create new ones.
 
@@ -79,6 +81,9 @@ When asked to install repo skills for Codex, install **thin wrappers only**:
 7. Validate the wrapper with Codex `quick_validate.py`, then run a compact local-model smoke test if requested.
 
 For the full checklist, read [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md).
+
+For ECC/PT-orama skills consumed by multiple harnesses, read
+[`references/ecc-cross-harness-authoring.md`](references/ecc-cross-harness-authoring.md).
 
 ---
 
