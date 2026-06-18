@@ -7,11 +7,19 @@ Idempotent: writes nothing if state hash is unchanged.
 """
 
 from __future__ import annotations
-import argparse, asyncio, fcntl, hashlib, json, logging, os, re, shutil, socket, sys, time
+import argparse, asyncio, hashlib, json, logging, os, re, shutil, socket, sys, time
 import urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl  # type: ignore
+except ImportError:
+    fcntl = None  # type: ignore[assignment]
+    import msvcrt  # type: ignore
+else:
+    msvcrt = None  # type: ignore[assignment]
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 OPENCLAW_DIR        = Path.home() / ".openclaw"
@@ -485,6 +493,25 @@ def _load_tier4(profile="lan-full"):
 
 # ── File lock ─────────────────────────────────────────────────────────────────
 
+def _try_lock_file(handle) -> None:
+    if fcntl is not None:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return
+    handle.seek(0)
+    handle.write("0")
+    handle.flush()
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+
+
+def _unlock_file(handle) -> None:
+    if fcntl is not None:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+        return
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+
 class _Lock:
     def __init__(self, timeout=10.0):
         self._timeout = timeout; self._fd = None
@@ -496,13 +523,13 @@ class _Lock:
         deadline = time.time() + self._timeout
         while True:
             try:
-                fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB); return self
-            except BlockingIOError:
+                _try_lock_file(self._fd); return self
+            except (BlockingIOError, OSError):
                 if time.time() > deadline: raise TimeoutError("discovery lock timeout")
                 time.sleep(0.2)
     def __exit__(self, *_):
         if self._fd:
-            fcntl.flock(self._fd, fcntl.LOCK_UN); self._fd.close()
+            _unlock_file(self._fd); self._fd.close()
             try: _lock_path().unlink()
             except FileNotFoundError: pass
 

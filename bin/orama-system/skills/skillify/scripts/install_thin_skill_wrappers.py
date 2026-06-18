@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 import argparse
 import re
 import shutil
@@ -21,6 +21,35 @@ ROOT = Path(__file__).resolve().parents[6]
 HOME = Path.home()
 
 
+WORKSPACE_PATH_ALIASES = {
+    "orama-system": ("orama-system", "ultrathink-system"),
+    "perplexity-api/Perpetua-Tools": (
+        "perplexity-api/Perpetua-Tools",
+        "Perplexity-Tools",
+    ),
+}
+
+
+def workspace_candidates(rel: str) -> list[Path]:
+    candidates = [rel]
+    for prefix, aliases in WORKSPACE_PATH_ALIASES.items():
+        if rel == prefix or rel.startswith(prefix + "/"):
+            suffix = rel[len(prefix):].lstrip("/")
+            for alias in aliases:
+                replacement = f"{alias}/{suffix}" if suffix else alias
+                if replacement not in candidates:
+                    candidates.append(replacement)
+    return [ROOT / candidate for candidate in candidates]
+
+
+def workspace_path(rel: str) -> Path:
+    candidates = workspace_candidates(rel)
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+
 CANONICAL_SKILLS = [
     "perplexity-api/Perpetua-Tools/SKILL.md",
     "perplexity-api/Perpetua-Tools/config/SKILL.md",
@@ -36,6 +65,7 @@ CANONICAL_SKILLS = [
     "orama-system/bin/orama-system/skills/ecc-sync/SKILL.md",
     "orama-system/bin/orama-system/skills/first-run-setup/SKILL.md",
     "orama-system/bin/orama-system/skills/git-history-surgery/SKILL.md",
+    "orama-system/bin/orama-system/skills/hermes-harness/SKILL.md",
     "orama-system/bin/orama-system/skills/mcp-install/SKILL.md",
     "orama-system/bin/orama-system/skills/mcp-orchestration/SKILL.md",
     "orama-system/bin/orama-system/skills/shell-hygiene/SKILL.md",
@@ -169,7 +199,7 @@ def build_specs() -> list[SkillSpec]:
     specs = []
     slugs = set()
     for canonical in CANONICAL_SKILLS:
-        path = ROOT / canonical
+        path = workspace_path(canonical)
         if not path.is_file():
             raise FileNotFoundError(path)
         text = path.read_text(encoding="utf-8-sig")
@@ -187,7 +217,7 @@ def target_path(root: str, slug: str) -> Path:
     if root.startswith("~/"):
         root_path = Path(root.replace("~", str(HOME), 1))
     else:
-        root_path = ROOT / root
+        root_path = workspace_path(root)
     return root_path / slug / "SKILL.md"
 
 
@@ -197,6 +227,11 @@ def repo_relative(canonical: str) -> str:
     ROOT — never an absolute workstation path. e.g.
     "orama-system/bin/orama-system/cidf/SKILL.md" -> "bin/orama-system/cidf/SKILL.md".
     """
+    for prefix in sorted(WORKSPACE_PATH_ALIASES, key=len, reverse=True):
+        if canonical == prefix:
+            return "."
+        if canonical.startswith(prefix + "/"):
+            return canonical[len(prefix) + 1:]
     return canonical.split("/", 1)[1] if "/" in canonical else canonical
 
 
@@ -208,7 +243,7 @@ def wrapper(spec: SkillSpec) -> str:
     # root at runtime via `git rev-parse --show-toplevel`. verify() enforces this.
     description = spec.description.replace('"', "'")
     rel = repo_relative(spec.canonical)
-    rel_dir = str(Path(rel).parent)
+    rel_dir = PurePosixPath(rel).parent.as_posix()
     return f'''---
 name: {spec.slug}
 description: "{description}"
@@ -326,7 +361,7 @@ def rewrite_stale_references() -> list[Path]:
     docs keep pointing at renamed skills without manual edits."""
     changed = []
     for canonical in dict.fromkeys(CANONICAL_SKILLS):
-        doc = ROOT / canonical
+        doc = workspace_path(canonical)
         if not doc.is_file():
             continue
         text = doc.read_text(encoding="utf-8")
@@ -344,7 +379,7 @@ def verify() -> list[str]:
     specs = build_specs()
     bad_markers = ("Ã", "Â", "â", "�", "\ufeff")
     for spec in specs:
-        if not (ROOT / spec.canonical).is_file():
+        if not workspace_path(spec.canonical).is_file():
             errors.append(f"missing canonical: {spec.canonical}")
         for root in TARGET_ROOTS:
             path = target_path(root, spec.slug)
@@ -379,7 +414,7 @@ def verify() -> list[str]:
             elif new_slug not in rp.read_text(encoding="utf-8"):
                 errors.append(f"redirect does not point to {new_slug!r}: {rp}")
     for canonical in dict.fromkeys(CANONICAL_SKILLS):
-        doc = ROOT / canonical
+        doc = workspace_path(canonical)
         if doc.is_file():
             doctext = doc.read_text(encoding="utf-8")
             for old_slug, new_slug in SKILL_RENAMES.items():
