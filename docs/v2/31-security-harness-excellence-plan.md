@@ -89,6 +89,13 @@ The previous framing — “exceed gstack + GBrain + Hermes and pass agentic sta
 
 ## 3. Threat model
 
+> **Note:** the T-prefixed IDs below are **local to this table**, not OWASP
+> T-codes. See [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md)
+> §6 for an approximate cross-reference to the OWASP MAS Guide's T1–T47
+> namespace and the OWASP Agentic ASI Top 10 — the textual overlap (both use
+> "T1"–"T7"/"T15") is coincidental, flagged there rather than silently
+> resolved.
+
 | Threat | Description | Primary controls |
 |---|---|---|
 | T1 LAN control-plane exposure | Unauthenticated or weakly authenticated local-network caller reaches control endpoints | fail-closed auth, loopback-first bind, token/session bootstrap, route tests |
@@ -111,6 +118,7 @@ Use standards to check coverage, not to claim compliance.
 | OWASP Top 10 for LLM Applications 2025 | Model/app risks: prompt injection, sensitive information disclosure, supply chain, data/model poisoning, output handling, excessive agency, prompt leakage, vector weaknesses, misinformation, unbounded consumption | https://genai.owasp.org/llm-top-10/ |
 | MITRE ATLAS | AI-specific adversary tactics, techniques, mitigations, and case studies; use as a living TTP vocabulary | https://atlas.mitre.org/ and https://github.com/mitre-atlas/atlas-data |
 | CSA MAESTRO | Layered threat modeling for agentic AI systems; useful for cross-layer failure analysis | https://cloudsecurityalliance.org/blog/2025/02/06/agentic-ai-threat-modeling-framework-maestro |
+| OWASP MAS Threat Modelling Guide v1.0 + AIVSS | T1–T47 threat-ID namespace, MCP-specific threats (T39–T47), quantitative 0–10 scoring rubric | See [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md) §3, §7 |
 | Morris II research | Evidence that self-replicating adversarial prompts can propagate through GenAI application workflows | https://arxiv.org/html/2403.02817v2 |
 
 ---
@@ -220,7 +228,7 @@ Follow the repository security PR stacking policy in [`../../SECURITY.md`](../..
 
 At least quarterly:
 
-1. Re-check OWASP Agentic Applications, OWASP LLM, MITRE ATLAS, and CSA MAESTRO sources.
+1. Re-check OWASP Agentic Applications, OWASP LLM, MITRE ATLAS, CSA MAESTRO, OWASP AIVSS, and the OWASP MAS Threat Modelling Guide sources — see [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md) for AIVSS's pre-1.0 status and what to watch for in a v1.0 release.
 2. Diff the standards traceability table.
 3. Update acceptance gates if new threats affect local controls.
 4. Record the refresh date and commands/source URLs in a docs PR.
