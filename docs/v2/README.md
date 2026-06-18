@@ -202,10 +202,11 @@ orama-system/docs/v2/
 ├── 35-langfuse-trace-tree-pattern.md  ← Langfuse trace-tree as JSONL annotation layer on capture_lesson.py (D18; orama-only)
 ├── 36-clawrouter-scoring-pattern.md   ← ClawRouter 5-dim weighted scorer in model_registry.py (D19; PT-only)
 ├── 37-manifest-cost-tiering-pattern.md ← Manifest cost-tiering as CostGuard.gate() in supervisor.py (D20; PT-only)
-└── 38-helicone-proxy-caching-pattern.md ← Helicone hash-based LRU cache inside MultiLLMRouter (D21; PT-only)
+├── 38-helicone-proxy-caching-pattern.md ← Helicone hash-based LRU cache inside MultiLLMRouter (D21; PT-only)
+└── 39-maestro-owasp-genai-reference.md ← MAESTRO/OWASP GenAI deep-dive: T1–T47 namespace, MCP runtime controls, AIVSS scoring (additive to 08 §2.A, 31 §3–4, 32 §6)
 ```
 
-> **Next free slot: `35-`**
+> **Next free slot: `40-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

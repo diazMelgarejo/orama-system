@@ -8,6 +8,16 @@
 
 ## Memory governance (v1 — Perpetua-Tools, 2026-05-25)
 
+> **Cross-reference (2026-06-18):** this is the MAESTRO Layer 2 (Data
+> Operations) surface — RAG/memory poisoning, semantic drift — currently
+> unmapped in `08-technical-architecture-review.md` §2.A. See
+> [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md)
+> §2 for the layer detail and OWASP T1 Memory Poisoning / T18 RAG Input
+> Manipulation, and [`32-agentic-security-controls.md`](32-agentic-security-controls.md)
+> §7 (Memory ACL and provenance) for the implementation-guidance side. The
+> classification/redaction step below is a partial control; provenance
+> tracking and retrieval-time ACLs are the gap §7 calls out.
+
 Before any event enters SQLite FTS or LanceDB, `orchestrator/memory_governance.classify_and_redact()` applies:
 
 - Classification: `operational` | `prompt` | `error` | `routing` | `heartbeat`
