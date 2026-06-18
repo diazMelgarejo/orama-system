@@ -116,13 +116,29 @@ gstack is a useful pattern source for layered defenses: local classifier, transc
 - Add canary tokens to detect leakage into tool args, URLs, files, and responses.
 - Require bypass fixtures and false-positive fixtures before blocking in production.
 
+### MCP-specific addition: tool-definition pinning
+
+> Additive reference: [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md) §5
+> (Akram Sheriff, OWASP MAS Guide MCP worked example, T39–T47).
+
+- Hash each MCP tool definition (SHA-256) on first contact; cache as the
+  baseline.
+- Diff every subsequent `tools/list` response against the cached baseline;
+  block on mismatch rather than silently accepting a changed tool
+  description ("rug-pull"/tool-poisoning pattern).
+- Reference implementations to evaluate: Invariant Labs' `mcp-scan`, the
+  MCPDome gateway.
+- Pairs with this section's existing canary-token approach: tool-definition
+  pinning catches a changed *contract*, the canary catches *leakage*
+  through an unchanged one.
+
 ---
 
 ## 7. Memory ACL and provenance
 
 ### Problem
 
-Memory risk is not only who can read/write. It is also why a fact became retrievable, what evidence supports it, and under what task scope it may influence an agent. OWASP Agentic Applications identifies memory and context poisoning as a top agentic risk: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/. OWASP LLM 2025 includes vector and embedding weaknesses as LLM08: https://genai.owasp.org/llm-top-10/.
+Memory risk is not only who can read/write. It is also why a fact became retrievable, what evidence supports it, and under what task scope it may influence an agent. OWASP Agentic Applications identifies memory and context poisoning as a top agentic risk: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/. OWASP LLM 2025 includes vector and embedding weaknesses as LLM08: https://genai.owasp.org/llm-top-10/. See also [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md) §3 for the specific OWASP T1 (Memory Poisoning) and T18 (RAG Input Manipulation) threat IDs, and `20-rag-and-memory-design.md` for this repo's current (partial) implementation status against the fields below.
 
 ### Required memory fields
 
