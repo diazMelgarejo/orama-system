@@ -30,6 +30,8 @@ $gitBash = Get-ChildItem `
 
 if ($gitBash) {
   $env:HERMES_GIT_BASH_PATH = $gitBash.FullName
+} else {
+  throw "Could not find GitHub Desktop Git Bash under $env:LOCALAPPDATA\GitHubDesktop; set HERMES_GIT_BASH_PATH manually to any bash.exe (e.g. from Git for Windows or WSL2 via %LOCALAPPDATA%\hermes\git\usr\bin\bash.exe installed by the Hermes installer)."
 }
 ```
 

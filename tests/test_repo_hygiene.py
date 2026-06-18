@@ -485,8 +485,16 @@ def test_check_git_internal_junk_paths_use_posix_separators(tmp_path):
 
 # ── find_bash (new helper in test_repo_hygiene.py) ───────────────────────────
 
-def test_find_bash_returns_existing_file():
-    """find_bash() must return a path to an existing file."""
+def test_find_bash_returns_existing_file(tmp_path, monkeypatch):
+    """find_bash() must return a path to an existing file.
+
+    Uses monkeypatching so the outcome is deterministic regardless of what
+    binaries happen to be installed on the executing machine -- avoiding
+    cross-runner flakiness (e.g. Windows runners without Git Bash on PATH).
+    """
+    fake_bash = tmp_path / "bash"
+    fake_bash.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    monkeypatch.setenv("HERMES_GIT_BASH_PATH", str(fake_bash))
     bash = find_bash()
     assert Path(bash).is_file(), f"find_bash() returned non-existent path: {bash}"
 
@@ -499,16 +507,30 @@ def test_find_bash_prefers_hermes_git_bash_path(tmp_path, monkeypatch):
     assert find_bash() == str(fake_bash)
 
 
-def test_find_bash_ignores_nonexistent_hermes_git_bash_path(monkeypatch):
-    """HERMES_GIT_BASH_PATH pointing at a missing file must be skipped."""
+def test_find_bash_ignores_nonexistent_hermes_git_bash_path(tmp_path, monkeypatch):
+    """HERMES_GIT_BASH_PATH pointing at a missing file must be skipped.
+
+    Monkeypatches shutil.which so the fallback returns a deterministic
+    result instead of depending on machine-installed binaries.
+    """
     monkeypatch.setenv("HERMES_GIT_BASH_PATH", "/no/such/bash.exe")
-    # Should fall through to shutil.which or the glob; must not raise.
+    # Inject a fake which()-found bash so the result is machine-independent.
+    fake_bash = tmp_path / "bash_from_which"
+    fake_bash.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    monkeypatch.setattr(shutil, "which", lambda name: str(fake_bash) if name == "bash" else None)
     result = find_bash()
-    assert Path(result).is_file()
+    assert result == str(fake_bash)
 
 
-def test_find_bash_falls_back_without_env_var(monkeypatch):
-    """Without HERMES_GIT_BASH_PATH, find_bash() still locates a bash binary."""
+def test_find_bash_falls_back_without_env_var(tmp_path, monkeypatch):
+    """Without HERMES_GIT_BASH_PATH, find_bash() falls back to shutil.which.
+
+    Monkeypatches shutil.which to a deterministic fake so the test passes
+    on any runner (including Windows without Git Bash installed).
+    """
     monkeypatch.delenv("HERMES_GIT_BASH_PATH", raising=False)
+    fake_bash = tmp_path / "bash_fallback"
+    fake_bash.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    monkeypatch.setattr(shutil, "which", lambda name: str(fake_bash) if name == "bash" else None)
     result = find_bash()
-    assert Path(result).is_file()
+    assert result == str(fake_bash)
