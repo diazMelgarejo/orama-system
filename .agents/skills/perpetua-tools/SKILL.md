@@ -1,6 +1,6 @@
 ---
 name: perpetua-tools
-description: "This orchestrator is designed for **full hardware profile awareness** [web:40] across a distributed LAN environment. It adapts standard multi-agent orchestration strategies [web:23][web:25] (sequential, concurrent, routing) to physical…"
+description: "Top-level agent lifecycle and model-selection orchestrator for Perpetua-Tools: ModelRegistry, config/models.yml and routing.yml, the FastAPI /orchestrate endpoint, and file-based agent-instance/budget/queue state. Use when routing or selecting models for agent tasks, configuring orchestration, or working with Perpetua-Tools' dispatch layer. Don't use for reasoning methodology or AFRP/CIDF process questions -- that's orama-system's role, not this orchestrator's."
 ---
 
 # perpetua-tools

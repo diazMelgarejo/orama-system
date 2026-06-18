@@ -43,11 +43,60 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 ## Sessions Log
 
 <!-- Append entries below. Format:
-## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude> — <brief topic>
+## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude | Codex> — <brief topic>
 ### What was learned
 ### Decisions made
 ### Open questions
 -->
+
+---
+
+## 2026-06-18 — Codex — Hermes Windows one-shot routing and Antigravity adapter
+
+### What was learned
+
+- Hermes installed under `%LOCALAPPDATA%\hermes\hermes-agent`, but `hermes.exe`
+  was not on the active PowerShell `PATH`; use the venv `Scripts` directory or
+  add it to `PATH` before one-shot calls.
+- `HERMES_GIT_BASH_PATH` must point to a literal `bash.exe`. GitHub Desktop's
+  bundled Git Bash works when resolved from
+  `%LOCALAPPDATA%\GitHubDesktop\app-*\resources\app\git\usr\bin\bash.exe`.
+- On this host, `hermes -z` through the default LM Studio model timed out, while
+  `hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free -z`
+  returned promptly. Use explicit provider/model routing for bounded partner
+  review loops unless the local LM Studio model has already been proven fast.
+- Native Windows AGY install is `irm https://antigravity.google/cli/install.ps1 | iex`.
+  `agy --print` can exit 0 with empty stdout in this PowerShell session. Treat
+  Antigravity as ready only after a visible `AGY_READY` canary, not merely after
+  `agy` appears on `PATH` or the installer completes.
+- If AGY print mode exits 0 with empty stdout, run it once with `--log-file`.
+  In this session the log showed silent auth followed by hosted-model quota
+  exhaustion, so AGY was installed/authenticated but not dispatchable until
+  quota reset or a different authenticated model/account is selected.
+- Gemini CLI `--prompt` is separate from Antigravity OAuth state. A local
+  Antigravity OAuth settings file can exist while Gemini CLI still reports that
+  no auth method is selected; verify Gemini with a small `--prompt` canary
+  before treating it as a Gemini-Analyzer worker.
+- Antigravity project wiring should stay as a thin adapter (`ANTIGRAVITY.md`
+  plus `.agent/`) that points back to canonical orama skills, lessons, and
+  permissions instead of copying private Hermes/OpenClaw state.
+- Hermes local slash commands should follow the same pattern: install thin
+  wrappers with `install_hermes_thin_skills.py`; keep rich command behavior in
+  canonical `bin/orama-system/skills/hermes-harness/commands/` cards, not the
+  Hermes local skill directory.
+
+### Decisions made
+
+- Added `hermes-harness` as the canonical Hermes/ECC onboarding skill beside
+  `openclaw-skills`.
+- Kept `.agents` and `.claude` Hermes installs as thin wrappers.
+- Documented the Windows Hermes launcher, Git Bash, and explicit one-shot route
+  in [wiki/15-hermes-windows-harness.md](wiki/15-hermes-windows-harness.md).
+
+### Open questions
+
+- The wider Windows suite still has unrelated jq, shell-quoting, path, and
+  fixture failures that should remain a separate Windows-suite repair branch.
 
 ---
 
@@ -1138,7 +1187,7 @@ Before committing any markdown file that references a local filesystem path:
 
 
 <!-- Append entries below. Format:
-## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude> — <brief topic>
+## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude | Codex> — <brief topic>
 ### What was learned
 ### Decisions made
 ### Open questions
