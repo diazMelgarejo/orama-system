@@ -94,8 +94,8 @@ The previous framing — “exceed gstack + GBrain + Hermes and pass agentic sta
 > the shared "T" letter and overlapping numbers 1–7. Prefixed `PT-` (2026-06-18)
 > specifically to remove a prior textual collision with OWASP's IDs. See
 > [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md)
-> §6 for the approximate cross-reference table mapping each `PT-T` ID to its
-> closest OWASP T-code and OWASP Agentic ASI Top 10 code.
+> §6 for the approximate cross-reference table mapping each `PT-01`-style local
+> ID to its closest OWASP T-code and OWASP Agentic ASI Top 10 code.
 
 | Threat (local ID, not an OWASP T-code) | Description | Primary controls |
 |---|---|---|
