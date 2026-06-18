@@ -52,6 +52,9 @@ agy --print "Reply with exactly: AGY_READY"
 ```
 
 Treat AGY as dispatchable only if the print canary emits visible stdout.
+If the command exits 0 with no output, rerun with `--log-file <path>`. A log
+showing silent auth followed by hosted-model quota exhaustion means the CLI and
+auth are present, but AGY is not currently a usable worker.
 
 Install PT-orama local Hermes slash-command wrappers from the canonical repo:
 
@@ -81,6 +84,8 @@ Pass criteria:
 - Git Bash prints `hermes-bash-ok`.
 - Hermes one-shot prints `HERMES_READY` without starting an interactive TUI.
 - AGY prints `AGY_READY`; exit 0 with empty stdout is not readiness.
+- Gemini CLI answers a small `--prompt` probe only after it has a selected auth
+  method; Antigravity OAuth metadata alone may not satisfy Gemini CLI auth.
 
 ## Rules
 

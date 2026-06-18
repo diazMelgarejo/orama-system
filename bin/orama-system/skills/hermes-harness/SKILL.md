@@ -116,7 +116,10 @@ codex --version; gemini --version; agy --version
 ```
 
 If `agy` is absent, or if `agy --print "Reply with exactly: AGY_READY"`
-exits with empty stdout, skip it and continue with Hermes/Gemini/Codex.
+exits with empty stdout, skip it and continue with Hermes/Gemini/Codex. To
+differentiate a shell problem from a hosted-model problem, rerun once with
+`--log-file <path>`; silent auth followed by quota exhaustion means AGY is
+installed but not dispatchable.
 
 ### 4. Import Skills Safely
 
@@ -149,9 +152,10 @@ commits/deletes/deploys/secrets, forbid copying private harness state, cite the
 canonical skills to inspect, and request JSON with assumptions, findings,
 proposed edits, tests, and risks.
 
-Use AGY for non-interactive Gemini-style partner work, Gemini CLI only for
-authenticated Gemini-Analyzer use-cases, and Codex CLI for approved mechanical
-repo edits. The main orama agent keeps judgment.
+Use AGY for non-interactive Gemini-style partner work only after the visible
+canary passes, Gemini CLI only for authenticated Gemini-Analyzer use-cases, and
+Codex CLI for approved mechanical repo edits. The main orama agent keeps
+judgment.
 
 ## Verification
 
