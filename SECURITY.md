@@ -1,7 +1,7 @@
 # Security Policy - orama-system + Perpetua-Tools
 
 > **Canonical security posture** for the OpenClaw orchestration stack.
-> **Last updated:** 2026-06-17
+> **Last updated:** 2026-06-18
 > **Source review:** `OpenClaw/v1/2026-05-23-security-markdown.md` in the private operator workspace.
 
 ---
@@ -14,6 +14,16 @@ Root security entrypoints:
 
 - orama-system: [`SECURITY.md`](SECURITY.md)
 - Perpetua-Tools: [`SECURITY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SECURITY.md)
+
+MAESTRO/OWASP GenAI v2 foundation:
+
+- [`docs/v2/31-security-harness-excellence-plan.md`](docs/v2/31-security-harness-excellence-plan.md)
+- [`docs/v2/32-agentic-security-controls.md`](docs/v2/32-agentic-security-controls.md)
+- [`docs/v2/39-maestro-owasp-genai-reference.md`](docs/v2/39-maestro-owasp-genai-reference.md)
+
+Local repo-owned threat IDs use the `PT-01`, `PT-02`, ... `PT-09` format.
+Do not insert an extra `T` after the repo prefix or use similar local IDs that
+visually collide with OWASP Agentic/MCP `T1`-style identifiers.
 
 ---
 
