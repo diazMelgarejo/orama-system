@@ -14,7 +14,7 @@ skills, while Hermes-local files remain thin adapters or private operator state.
 | Hermes correction packet | `Hermes-input-02.md` operator handoff | Treat as local correction source, not tracked canonical content | `../commands/*/SKILL.md`, `../../../mcp-orchestration/SKILL.md` |
 | Naive Hermes output | `Hermes-Output-01.md` operator transcript | Mine for useful ideas; do not trust claims without verification | This inventory plus follow-up skill edits |
 | Hermes skill authoring fork | `%LOCALAPPDATA%/hermes/skills/software-development/hermes-agent-skill-authoring/SKILL.md` | Distill cross-harness authoring rules only | `../../skillify/SKILL.md` and `../../skillify/references/` |
-| ECC cross-harness template | `%LOCALAPPDATA%/hermes/skills/software-development/hermes-agent-skill-authoring/references/ecc-cross-harness-skill-template.md` | Distill checklist if needed; do not copy template wholesale | `../../skillify/references/codex-thin-wrapper-installs.md` or a new skillify reference |
+| ECC cross-harness template | `%LOCALAPPDATA%/hermes/skills/software-development/hermes-agent-skill-authoring/references/ecc-cross-harness-skill-template.md` | Distill checklist; do not copy template wholesale | `../../skillify/references/ecc-cross-harness-authoring.md` |
 | Hermes Agent checkout | `%LOCALAPPDATA%/hermes/hermes-agent` | Treat as upstream runtime checkout, not canonical PT-orama source | `../SKILL.md` for onboarding and adapter boundaries |
 
 ## Distillation Decisions
@@ -30,15 +30,15 @@ skills, while Hermes-local files remain thin adapters or private operator state.
 - The useful council fork workflow is distilled into
   `hermes-council-review-gates.md`; `../commands/pt-orama-council/SKILL.md`
   points to it without creating another subskill or activation surface.
+- Hermes/ECC authoring conventions are distilled into
+  `../../skillify/references/ecc-cross-harness-authoring.md`.
 - Windows readiness is captured in `docs/wiki/15-hermes-windows-harness.md`.
 
-### Useful follow-up distillation
+### Remaining follow-up distillation
 
-- Move Hermes/ECC authoring conventions into `skillify` only when they apply to
-  all cross-harness skill authoring; keep Hermes-specific validator details out
-  of orama unless they affect wrapper generation.
-- If ECC-native skill packaging becomes a recurring PT-orama task, add a small
-  `skillify` reference for ECC-style frontmatter and harness adapter checks.
+- No separate Hermes/ECC authoring subskill is needed right now. Extend the
+  existing `skillify` reference card only if future migrations reveal a
+  recurring packaging gap that cannot be handled by references.
 
 ### Do not import
 
