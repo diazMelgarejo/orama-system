@@ -51,6 +51,42 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+## 2026-06-18 - Codex - Hermes Windows one-shot routing and Antigravity adapter
+
+### What was learned
+
+- Hermes installed under `%LOCALAPPDATA%\hermes\hermes-agent`, but `hermes.exe`
+  was not on the active PowerShell `PATH`; use the venv `Scripts` directory or
+  add it to `PATH` before one-shot calls.
+- `HERMES_GIT_BASH_PATH` must point to a literal `bash.exe`. GitHub Desktop's
+  bundled Git Bash works when resolved from
+  `%LOCALAPPDATA%\GitHubDesktop\app-*\resources\app\git\usr\bin\bash.exe`.
+- On this host, `hermes -z` through the default LM Studio model timed out, while
+  `hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free -z`
+  returned promptly. Use explicit provider/model routing for bounded partner
+  review loops unless the local LM Studio model has already been proven fast.
+- `agy --print` can exit 0 with empty stdout in this PowerShell session. Treat
+  Antigravity as ready only after a visible `AGY_READY` canary, not merely after
+  `agy` appears on `PATH`.
+- Antigravity project wiring should stay as a thin adapter (`ANTIGRAVITY.md`
+  plus `.agent/`) that points back to canonical orama skills, lessons, and
+  permissions instead of copying private Hermes/OpenClaw state.
+
+### Decisions made
+
+- Added `hermes-harness` as the canonical Hermes/ECC onboarding skill beside
+  `openclaw-skills`.
+- Kept `.agents` and `.claude` Hermes installs as thin wrappers.
+- Documented the Windows Hermes launcher, Git Bash, and explicit one-shot route
+  in [wiki/15-hermes-windows-harness.md](wiki/15-hermes-windows-harness.md).
+
+### Open questions
+
+- The wider Windows suite still has unrelated jq, shell-quoting, path, and
+  fixture failures that should remain a separate Windows-suite repair branch.
+
+---
+
 ## 2026-06-12 — OpenClaw gateway :18789 won't start ("Not onboarded"): drive the openclaw CLI directly (don't guess)
 
 **Symptom:** Gateway `:18789` down. AlphaClaw manager (`:3000`) `POST /api/gateway/restart` → `{"ok":false,"error":"Not onboarded"}` even though `~/.alphaclaw/onboarded.json` exists.

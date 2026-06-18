@@ -373,6 +373,15 @@ secrets, personal memory, or local business artifacts into the repo.
 Hermes worker default: bounded coding partner. The main orama agent keeps
 judgment, CIDF write discipline, and final synthesis.
 
+Companion context:
+
+- `skills/hermes-harness/references/ecc-hermes-cross-harness.md` for ECC import
+  decisions and cross-harness boundaries.
+- `../../ANTIGRAVITY.md` and `../../.agent/AGENTS.md` for Antigravity project
+  wiring that points back to canonical orama skills instead of copying them.
+- `../../docs/wiki/15-hermes-windows-harness.md` for the Windows PATH,
+  `HERMES_GIT_BASH_PATH`, and explicit Hermes one-shot provider route.
+
 ## First-Run Bootstrap
 
 New machine or fresh checkout:
@@ -481,5 +490,6 @@ Every tier check: ≤3s timeout. Fail loudly if `$LM_STUDIO_WIN_ENDPOINTS` is se
 | `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
 | `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook |
 | `skills/hermes-harness/SKILL.md` | Hermes onboarding, ECC cross-harness import rules, Nous Portal/LM Studio provider setup, and bounded Hermes/Gemini/AGY/Codex partner prompts |
+| `docs/wiki/15-hermes-windows-harness.md` | Windows Hermes launcher, Git Bash, and one-shot provider routing notes |
 | `references/local-api-fallback.md` | Local API fallback full procedure (Ollama → LM Studio → surface outage) |
 | `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |
