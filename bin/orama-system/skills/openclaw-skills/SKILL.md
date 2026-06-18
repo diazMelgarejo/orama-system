@@ -189,6 +189,11 @@ Every secret touches all three files:
 
 ## Agent Compatibility Notes
 
+Hermes support is intentionally cross-harness: use
+[`../hermes-harness/SKILL.md`](../hermes-harness/SKILL.md) for Hermes
+installation, Nous Portal/LM Studio provider setup, and ECC skill-import rules.
+Use this OpenClaw skill pack for OpenClaw configuration and gateway operations.
+
 | Agent | Discovery | Invocation |
 |-------|-----------|------------|
 | Claude | Skill tool or local skill folder scan | Load this master `SKILL.md`, then the selected subskill |

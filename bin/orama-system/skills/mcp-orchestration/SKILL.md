@@ -40,6 +40,13 @@ Use the right tool for the right layer. Use the cheapest agent that can succeed.
 
 ---
 
+## Hermes Operator Shell
+
+Use [`../hermes-harness/SKILL.md`](../hermes-harness/SKILL.md) when Hermes is
+the chat, CLI, cron, or workspace-state surface consuming canonical ECC/orama
+skills. Hermes is a harness edge; keep durable behavior in skills and keep
+OpenClaw operations on `openclaw-skills`.
+
 ## 1. MCP Fundamentals
 
 MCP lets Claude and other agents call external tools through a standard tool protocol.
@@ -251,11 +258,14 @@ gemini auth login
 gemini --version
 ```
 
-**Non-interactive subagent dispatch (verified 2026-06-14):** `gemini -p "/goal <task>"` delegates to
-agent personas (`codebase_investigator`, `generalist`, `cli_help`). The **Antigravity** CLI
-(`agy -p "/goal <task>"`, multi-model: Gemini 3.x / Claude Sonnet+Opus 4.6 / GPT-OSS 120B; list with
-`agy models`) is the parallel-orchestrator sibling. Full command guide: `agy-gemini.md` at the workspace
-root. Dispatch lanes, model picks, and bounding (`gtimeout`, never `sleep` chains) are in
+**Non-interactive subagent dispatch (verified 2026-06-14; updated 2026-06-18):** prefer the
+**Antigravity** CLI (`agy -p "/goal <task>"`) as the successor path for general Gemini-style
+agent dispatch. `gemini -p "/goal <task>"` remains useful when Gemini CLI is explicitly
+authenticated or needed for Gemini-Analyzer use-cases. `agy` is multi-model (Gemini 3.x /
+Claude Sonnet+Opus 4.6 / GPT-OSS 120B; list with `agy models`) and should be bounded like
+any other worker: no commits, deletes, deploys, or account changes without explicit user
+confirmation. Full command guide: `agy-gemini.md` at the workspace root. Dispatch lanes,
+model picks, and bounding (`gtimeout`, never `sleep` chains) are in
 [`code-review/references/orchestration-dispatch.md`](../code-review/references/orchestration-dispatch.md).
 
 ### Install Codex CLI (optional, Codex worker support)
@@ -264,6 +274,13 @@ root. Dispatch lanes, model picks, and bounding (`gtimeout`, never `sleep` chain
 npm install -g @openai/codex
 codex login
 ```
+
+### Install Hermes Agent (operator shell support)
+
+Use [`../hermes-harness/SKILL.md`](../hermes-harness/SKILL.md) for the
+Windows-aware bring-up. Hermes consumes canonical ECC/orama skills and bounded
+partner prompts; it must not become a source of copied private state. Keep
+OpenClaw operations on `openclaw-skills`.
 
 ### Install ai-cli-mcp
 
