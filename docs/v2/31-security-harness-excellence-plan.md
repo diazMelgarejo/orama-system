@@ -89,23 +89,23 @@ The previous framing — “exceed gstack + GBrain + Hermes and pass agentic sta
 
 ## 3. Threat model
 
-> **Local IDs, not OWASP T-codes.** Every `PT-T` ID below is **local to this
+> **Local IDs, not OWASP T-codes.** Every `PT-` ID below is **local to this
 > table** — it is not part of the OWASP MAS Guide's T1–T47 namespace, despite
 > the shared "T" letter and overlapping numbers 1–7. Prefixed `PT-` (2026-06-18)
 > specifically to remove a prior textual collision with OWASP's IDs. See
 > [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md)
-> §6 for the approximate cross-reference table mapping each `PT-T` ID to its
+> §6 for the approximate cross-reference table mapping each `PT-` ID to its
 > closest OWASP T-code and OWASP Agentic ASI Top 10 code.
 
 | Threat (local ID, not an OWASP T-code) | Description | Primary controls |
 |---|---|---|
-| PT-T1 LAN control-plane exposure | Unauthenticated or weakly authenticated local-network caller reaches control endpoints | fail-closed auth, loopback-first bind, token/session bootstrap, route tests |
-| PT-T2 Prompt injection to tool misuse | Untrusted content causes unsafe command/file/network action | content scanner, datamarking, tool mediator, path/egress policy |
-| PT-T3 Memory poisoning | Untrusted or stale memory influences future decisions | memory provenance, ACLs, quarantine, retrieval logging |
-| PT-T4 Credential exposure | Tool/model process inherits broad secrets or forwards bearer tokens | env scrub, scoped credentials, egress mediator, no bearer to probes |
-| PT-T5 Unbounded consumption | Model/tool loops saturate local hardware | rate limits, token budgets, concurrency caps, deadlines |
-| PT-T6 Supply-chain compromise | Unpinned deps, unverified model files, compromised tool/plugin | lockfiles, audit, ML-BOM, hashes, signing where practical |
-| PT-T7 Inter-agent cascade | Local agent goals pass but system goal drifts | objective contract, trace replay, SWARM-style system audit |
+| PT-01 LAN control-plane exposure | Unauthenticated or weakly authenticated local-network caller reaches control endpoints | fail-closed auth, loopback-first bind, token/session bootstrap, route tests |
+| PT-02 Prompt injection to tool misuse | Untrusted content causes unsafe command/file/network action | content scanner, datamarking, tool mediator, path/egress policy |
+| PT-03 Memory poisoning | Untrusted or stale memory influences future decisions | memory provenance, ACLs, quarantine, retrieval logging |
+| PT-04 Credential exposure | Tool/model process inherits broad secrets or forwards bearer tokens | env scrub, scoped credentials, egress mediator, no bearer to probes |
+| PT-05 Unbounded consumption | Model/tool loops saturate local hardware | rate limits, token budgets, concurrency caps, deadlines |
+| PT-06 Supply-chain compromise | Unpinned deps, unverified model files, compromised tool/plugin | lockfiles, audit, ML-BOM, hashes, signing where practical |
+| PT-07 Inter-agent cascade | Local agent goals pass but system goal drifts | objective contract, trace replay, SWARM-style system audit |
 
 ---
 

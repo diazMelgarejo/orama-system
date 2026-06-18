@@ -8,7 +8,7 @@
 
 ## 1. Authentication and LAN-bind hardening
 
-**Threat trace:** [`PT-T1`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-T4`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-01`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-04`](31-security-harness-excellence-plan.md#3-threat-model).
 
 ### Problem
 
@@ -30,7 +30,7 @@ A local developer default can become a LAN exposure when the service binds beyon
 
 ## 2. Cookie/session hardening
 
-**Threat trace:** [`PT-T1`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-T4`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-01`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-04`](31-security-harness-excellence-plan.md#3-threat-model).
 
 ### Problem
 
@@ -47,7 +47,7 @@ Bearer-in-cookie support is convenient for a browser portal but widens CSRF/sess
 
 ## 3. Rate, token, and concurrency budgets
 
-**Threat trace:** [`PT-T5`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-05`](31-security-harness-excellence-plan.md#3-threat-model).
 
 ### Problem
 
@@ -71,7 +71,7 @@ Return structured 429/budget errors with the exhausted dimension.
 
 ## 4. Tool-executor mediator
 
-**Threat trace:** [`PT-T2`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-T4`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-04`](31-security-harness-excellence-plan.md#3-threat-model).
 
 ### Problem
 
@@ -95,7 +95,7 @@ Deny by default. Log every decision.
 
 ## 5. Sandboxing and egress ladder
 
-**Threat trace:** [`PT-T2`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-T4`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-04`](31-security-harness-excellence-plan.md#3-threat-model).
 
 Do not block early security wins on a microVM migration. Implement an isolation ladder:
 
@@ -114,7 +114,7 @@ Docker alone is not a complete isolation story because it shares the host kernel
 
 ## 6. Prompt-injection scanner
 
-**Threat trace:** [`PT-T2`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-T3`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-03`](31-security-harness-excellence-plan.md#3-threat-model).
 
 ### References
 
@@ -148,7 +148,7 @@ gstack is a useful pattern source for layered defenses: local classifier, transc
 
 ## 7. Memory ACL and provenance
 
-**Threat trace:** [`PT-T3`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-03`](31-security-harness-excellence-plan.md#3-threat-model).
 
 ### Problem
 
@@ -179,7 +179,7 @@ Memory risk is not only who can read/write. It is also why a fact became retriev
 
 ## 8. Supply chain
 
-**Threat trace:** [`PT-T6`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-06`](31-security-harness-excellence-plan.md#3-threat-model).
 
 ### Recommendation
 
@@ -195,7 +195,7 @@ Do not make signing theater. Signing is useful only if verification is enforced 
 
 ## 9. Observability and replay
 
-**Threat trace:** [`PT-T5`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-T7`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-05`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-07`](31-security-harness-excellence-plan.md#3-threat-model).
 
 ### Recommendation
 
@@ -210,7 +210,7 @@ OpenTelemetry maintains GenAI semantic conventions for AI spans/attributes: http
 
 ## 10. SWARM-style system objective audit
 
-**Threat trace:** [`PT-T7`](31-security-harness-excellence-plan.md#3-threat-model).
+**Threat trace:** [`PT-07`](31-security-harness-excellence-plan.md#3-threat-model).
 
 The durable insight from multi-agent risk literature is that individually plausible agents can still produce system-level drift. The local implementation should use an objective contract:
 
