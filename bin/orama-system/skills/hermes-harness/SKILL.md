@@ -93,16 +93,15 @@ This avoids piping into `Invoke-Expression` when the installer needs parameters.
 
 ### 2. Configure Provider Defaults
 
-Recommended default for Nous Portal coding work: `qwen/qwen3-coder:free`.
-For local LM Studio, the key is usually a dummy OpenAI-compatible value:
+Recommended Nous Portal default for coding work: `qwen/qwen3-coder:free`.
+For local LM Studio, use OpenAI-compatible local settings:
 
 ```text
 Base URL: http://127.0.0.1:1234/v1
 API key: lm-studio
 ```
 
-Use a real API key only for hosted providers. Never commit keys to Hermes,
-orama, Perpetua, OpenClaw, or ECC repos.
+Use a real API key only for hosted providers. Never commit keys.
 
 ### 3. Install Coding Partner CLIs on Windows
 
@@ -112,9 +111,8 @@ Use the LM Studio Node/npm toolchain already present on this host:
 $env:PATH = "$env:USERPROFILE\.lmstudio\.internal\utils;$env:PATH"
 npm install -g @openai/codex@latest
 npm install -g @google/gemini-cli
-codex --version
-gemini --version
-agy models
+irm https://antigravity.google/cli/install.ps1 | iex
+codex --version; gemini --version; agy --version
 ```
 
 If `agy` is absent, or if `agy --print "Reply with exactly: AGY_READY"`
@@ -123,11 +121,17 @@ exits with empty stdout, skip it and continue with Hermes/Gemini/Codex.
 ### 4. Import Skills Safely
 
 Import only reusable skill text or thin pointers into Hermes. Do not mirror
-private workspace state. If Hermes has a local skill directory, use an `ecc-imports`
-style folder and preserve canonical repo paths in comments or metadata.
+private workspace state. Hermes local commands must be thin wrappers that point
+back to canonical command cards under `commands/<slug>/SKILL.md`.
 
-Source candidates: `hermes-harness`, `openclaw-skills`, `mcp-orchestration`,
-`code-review`, and `git-history-surgery` under `bin/orama-system/skills/`.
+Create or refresh Hermes local commands from the canonical repo:
+
+```powershell
+python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install
+```
+
+The expected slash commands are `/pt-orama-council`, `/pt-orama-review`, and
+`/pt-orama-delegate`; never paste a full canonical skill body into Hermes.
 
 ### 5. Use Hermes as a Coding Partner
 
@@ -145,10 +149,9 @@ commits/deletes/deploys/secrets, forbid copying private harness state, cite the
 canonical skills to inspect, and request JSON with assumptions, findings,
 proposed edits, tests, and risks.
 
-Use AGY/Antigravity for general non-interactive Gemini-style partner work. Use
-Gemini CLI only when it is authenticated or explicitly needed for Gemini-Analyzer
-use-cases. Use Codex CLI for mechanical repo edits when explicitly approved. The
-main orama agent keeps judgment.
+Use AGY for non-interactive Gemini-style partner work, Gemini CLI only for
+authenticated Gemini-Analyzer use-cases, and Codex CLI for approved mechanical
+repo edits. The main orama agent keeps judgment.
 
 ## Verification
 
@@ -161,13 +164,9 @@ gemini --version
 git -C "$env:HERMES_HOME\hermes-agent" status --short --branch
 ```
 
-Pass criteria:
-
-- Hermes repo exists and is on a tracking branch.
-- Bash probe prints `hermes-bash-ok`.
-- Hermes one-shot prints `HERMES_READY` with the explicit provider/model route.
-- Provider keys are outside git; imported skills are reusable and sanitized.
-- OpenClaw operations still route through `openclaw-skills`.
+Pass criteria: Hermes repo exists, Bash prints `hermes-bash-ok`, one-shot
+prints `HERMES_READY`, provider keys stay outside git, imported skills are
+sanitized, and OpenClaw operations still route through `openclaw-skills`.
 
 ## Boundaries
 
