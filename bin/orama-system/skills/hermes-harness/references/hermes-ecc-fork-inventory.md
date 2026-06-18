@@ -27,12 +27,13 @@ skills, while Hermes-local files remain thin adapters or private operator state.
 - Council safety rules are present in canonical command cards:
   verified branches only, no secrets, exact model IDs only, LM Studio chat
   canary, visible AGY readiness, and Codex/orama final judgment.
+- The useful council fork workflow is distilled into
+  `hermes-council-review-gates.md`; `../commands/pt-orama-council/SKILL.md`
+  points to it without creating another subskill or activation surface.
 - Windows readiness is captured in `docs/wiki/15-hermes-windows-harness.md`.
 
 ### Useful follow-up distillation
 
-- Move the rich council fork's review-gate language into the canonical
-  council command only if it improves the current concise command card.
 - Move Hermes/ECC authoring conventions into `skillify` only when they apply to
   all cross-harness skill authoring; keep Hermes-specific validator details out
   of orama unless they affect wrapper generation.
