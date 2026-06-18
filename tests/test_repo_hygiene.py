@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import importlib.util
+import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -16,6 +18,27 @@ def load_repo_hygiene():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def find_bash() -> str:
+    candidates: list[str | None] = [
+        os.environ.get("HERMES_GIT_BASH_PATH"),
+        shutil.which("bash"),
+    ]
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    if local_app_data:
+        candidates.extend(
+            str(path)
+            for path in sorted(
+                Path(local_app_data).glob(
+                    "GitHubDesktop/app-*/resources/app/git/usr/bin/bash.exe"
+                )
+            )
+        )
+    for candidate in candidates:
+        if candidate and Path(candidate).is_file():
+            return candidate
+    raise AssertionError("bash.exe not found; set HERMES_GIT_BASH_PATH or install Git Bash")
 
 
 def test_private_generated_config_is_not_tracked():
@@ -357,7 +380,7 @@ def test_scan_macos_ghost_git_refs_no_git_dir(tmp_path):
 
 
 def test_identity_check_script_is_shell_valid():
-    subprocess.check_call(["bash", "-n", "scripts/git/check_identity.sh"], cwd=ROOT)
+    subprocess.check_call([find_bash(), "-n", "scripts/git/check_identity.sh"], cwd=ROOT)
 
 
 def test_identity_enforcement_is_scoped_to_cursor(monkeypatch):
