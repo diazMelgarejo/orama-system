@@ -65,12 +65,17 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
   `hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free -z`
   returned promptly. Use explicit provider/model routing for bounded partner
   review loops unless the local LM Studio model has already been proven fast.
-- `agy --print` can exit 0 with empty stdout in this PowerShell session. Treat
+- Native Windows AGY install is `irm https://antigravity.google/cli/install.ps1 | iex`.
+  `agy --print` can exit 0 with empty stdout in this PowerShell session. Treat
   Antigravity as ready only after a visible `AGY_READY` canary, not merely after
-  `agy` appears on `PATH`.
+  `agy` appears on `PATH` or the installer completes.
 - Antigravity project wiring should stay as a thin adapter (`ANTIGRAVITY.md`
   plus `.agent/`) that points back to canonical orama skills, lessons, and
   permissions instead of copying private Hermes/OpenClaw state.
+- Hermes local slash commands should follow the same pattern: install thin
+  wrappers with `install_hermes_thin_skills.py`; keep rich command behavior in
+  canonical `bin/orama-system/skills/hermes-harness/commands/` cards, not the
+  Hermes local skill directory.
 
 ### Decisions made
 
