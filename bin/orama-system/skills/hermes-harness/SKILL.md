@@ -140,11 +140,11 @@ The expected slash commands are `/pt-orama-council`, `/pt-orama-review`, and
 
 For bounded non-interactive review on this Windows host, prefer explicit
 provider/model routing because the default LM Studio model can be reachable but
-slow enough for `hermes -z` to appear hung.
+slow enough for `hermes chat` to appear hung.
 
 ```powershell
-hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free `
-  -z "Reply with exactly: HERMES_READY"
+hermes chat --query "Reply with exactly: HERMES_READY" `
+  --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 ```
 
 Prompt Hermes with a bounded, evidence-first contract: state the goal, forbid
@@ -162,7 +162,8 @@ judgment.
 ```powershell
 Test-Path "$env:HERMES_HOME\hermes-agent\.git"
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
-hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free -z 'Reply with exactly: HERMES_READY'
+hermes chat --query 'Reply with exactly: HERMES_READY' `
+  --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 codex --version
 gemini --version
 git -C "$env:HERMES_HOME\hermes-agent" status --short --branch
