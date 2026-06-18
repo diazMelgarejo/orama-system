@@ -19,11 +19,18 @@ allowed-tools: bash, file-operations
 Use this command when Hermes is asked to help with PT-orama, ECC, OpenClaw,
 Antigravity, Codex, or cross-harness work.
 
+## Council Protocol
+
+Use [`../../references/hermes-council-review-gates.md`](../../references/hermes-council-review-gates.md)
+for roles, review gates, and review package shape. Treat that file as support
+for this command, not a separate subskill or activation surface.
+
 ## Canonical Sources
 
 Read relevant excerpts from:
 
 - [`../../SKILL.md`](../../SKILL.md)
+- [`../../references/hermes-council-review-gates.md`](../../references/hermes-council-review-gates.md)
 - [`../../../../../../docs/wiki/15-hermes-windows-harness.md`](../../../../../../docs/wiki/15-hermes-windows-harness.md)
 - [`../../../../../../ANTIGRAVITY.md`](../../../../../../ANTIGRAVITY.md)
 - [`../../../../../../docs/LESSONS.md`](../../../../../../docs/LESSONS.md)
