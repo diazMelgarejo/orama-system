@@ -10,6 +10,11 @@ import sys
 from pathlib import Path
 
 
+def repo_relative(path: Path, root: Path) -> str:
+    """Return repo-relative paths with POSIX separators for stable messages."""
+    return path.relative_to(root).as_posix()
+
+
 APPROVED_IDENTITIES = {
     ("cyre", "Lawrence@cyre.me"),
     ("cyre", "diazMelgarejo@gmail.com"),
@@ -491,7 +496,7 @@ def scan_stale_git_locks(root: Path) -> list[str]:
             if not name.endswith(".lock"):
                 continue
             full = Path(dirpath) / name
-            rel = full.relative_to(root)
+            rel = repo_relative(full, root)
             errors.append(
                 f"stale lock file: {rel} — fix: find .git -name '*.lock' -delete"
             )
@@ -515,7 +520,7 @@ def scan_macos_dedup_dirs(root: Path) -> list[str]:
         for d in dirnames:
             if MACOS_DEDUP_DIR_PATTERN.search(d):
                 full = Path(dirpath) / d
-                rel = full.relative_to(root)
+                rel = repo_relative(full, root)
                 errors.append(
                     f"macOS Finder dedup directory: {rel} — "
                     f"fix: rm -rf '{rel}' and verify .gitignore contains '*\\ <N>/' pattern"
@@ -549,7 +554,7 @@ def scan_macos_ghost_git_refs(root: Path) -> list[str]:
     _ghost_pattern = re.compile(r".+\s+\d+$")
     for path in git_refs.rglob("*"):
         if path.is_file() and _ghost_pattern.match(path.name):
-            rel = path.relative_to(root)
+            rel = repo_relative(path, root)
             errors.append(
                 f"macOS ghost git ref file: {rel} — "
                 f"fix: rm '{rel}' (duplicate of '{path.parent / path.name.rsplit(' ', 1)[0]}')"
@@ -605,7 +610,7 @@ def check_git_internal_junk(root: Path) -> list[str]:
     if not refs_dir.exists():
         return []
     return [
-        f"macOS metadata file inside git refs: {path.relative_to(root)}"
+        f"macOS metadata file inside git refs: {repo_relative(path, root)}"
         for path in refs_dir.rglob(".DS_Store")
     ]
 

@@ -1,14 +1,14 @@
 ---
-name: orama-repo-rules
-description: "Mandatory behavioral ruleset for working in the orama-system repo. Read before any code change. Covers: reading docs/LESSONS.md first each session, rules derived from real prior bugs, and links into docs/wiki/ for full rule context. Use when starting a new session in this repo, before making any change, or when unsure which repo-specific convention applies. Don't use for general coding questions unrelated to this repo's own history and conventions."
+name: hermes-harness
+description: "Onboards Hermes Agent as a cross-harness operator shell for PT-orama and ECC workflows. Use when installing Hermes, configuring Nous Portal or LM Studio, adding Hermes beside OpenClaw, or dispatching Hermes/Gemini/AGY/Codex partners."
 ---
 
-# orama-repo-rules
+# hermes-harness
 
 This is a thin wrapper. The canonical skill lives in this repo at the path below
-(resolve the repo root at runtime — paths are never hardcoded).
+(resolve the repo root at runtime; paths are never hardcoded).
 
-- Canonical skill path (repo-relative): `SKILL.md`
+- Canonical skill path (repo-relative): `bin/orama-system/skills/hermes-harness/SKILL.md`
 
 ## Before Use
 
@@ -16,7 +16,7 @@ Before relying on the canonical card, check whether the canonical repository can
 
 ```bash
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$ROOT/."
+cd "$ROOT/bin/orama-system/skills/hermes-harness"
 git fetch origin --prune
 git status --short --branch
 ```
@@ -31,7 +31,7 @@ If the worktree is dirty, the branch is not tracking origin, or fast-forward is 
 
 ## Load Canonical Skill
 
-Open and follow `SKILL.md` (relative to the repo root). Do not copy behavior from this wrapper.
+Open and follow `bin/orama-system/skills/hermes-harness/SKILL.md` (relative to the repo root). Do not copy behavior from this wrapper.
 
 ## Windows UTF-8 Note
 
