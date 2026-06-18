@@ -31,6 +31,8 @@ sub_skills:
     trigger: "code review, review the code, blast-radius, code-review-graph, detect_changes, get_review_context, semantic_search_nodes, code-reviewer, multi-lens PR review, /review, recursive code review"
   - path: skills/openclaw-skills/SKILL.md
     trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
+  - path: skills/hermes-harness/SKILL.md
+    trigger: "hermes setup, hermes onboarding, nous portal, hermes openclaw migration, ecc harness, cross-harness, install codex cli on windows, hermes coding partner"
   - path: skills/shell-hygiene/SKILL.md
     trigger: "sleep && cmd, sleep chain, wait for background task, poll output file, wait for npm install, wait for claude update, run_in_background polling, until loop, how to wait for a process"
   - path: skills/git-history-surgery/SKILL.md
@@ -360,6 +362,17 @@ live provider (LM Studio / Ollama, Mac / Windows GPU).
 - `openclaw_orchestrate`: Dispatch Stage 4 execution tasks via OpenClaw gateway
 - `openclaw_health`: Verify gateway is running at `127.0.0.1:18789`
 
+## Hermes Cross-Harness Bridge (Tier 2 sibling)
+
+Use [`skills/hermes-harness/SKILL.md`](skills/hermes-harness/SKILL.md) when
+Hermes is the operator shell for PT-orama work. Hermes consumes canonical
+skills, MCP conventions, and bounded partner prompts; OpenClaw remains the
+runtime gateway/configuration fabric. Do not import raw `~/.hermes` state,
+secrets, personal memory, or local business artifacts into the repo.
+
+Hermes worker default: bounded coding partner. The main orama agent keeps
+judgment, CIDF write discipline, and final synthesis.
+
 ## First-Run Bootstrap
 
 New machine or fresh checkout:
@@ -467,5 +480,6 @@ Every tier check: ≤3s timeout. Fail loudly if `$LM_STUDIO_WIN_ENDPOINTS` is se
 | `references/communication-guidelines.md` | Writing guidelines (M6) |
 | `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
 | `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook |
+| `skills/hermes-harness/SKILL.md` | Hermes onboarding, ECC cross-harness import rules, Nous Portal/LM Studio provider setup, and bounded Hermes/Gemini/AGY/Codex partner prompts |
 | `references/local-api-fallback.md` | Local API fallback full procedure (Ollama → LM Studio → surface outage) |
 | `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |
