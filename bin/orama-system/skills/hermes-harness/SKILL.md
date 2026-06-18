@@ -194,5 +194,6 @@ sanitized, and OpenClaw operations still route through `openclaw-skills`.
 ## References
 
 - [`references/ecc-hermes-cross-harness.md`](references/ecc-hermes-cross-harness.md)
+- [`references/hermes-ecc-fork-inventory.md`](references/hermes-ecc-fork-inventory.md)
 - [`../openclaw-skills/SKILL.md`](../openclaw-skills/SKILL.md)
 - [`../mcp-orchestration/SKILL.md`](../mcp-orchestration/SKILL.md)
