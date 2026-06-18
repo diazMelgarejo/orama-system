@@ -24,6 +24,7 @@ This wiki organizes hard-won lessons by topic. Each page contains root cause, ex
 | 13 | [AlphaClaw Fork Contrib Branches](13-alphaclaw-fork-contrib-branches.md) | `main` = upstream only; all fork work on `feature/*` or `cursor/*` branches |
 | 11 | [Codex GitHub MCP Config](11-codex-github-mcp-config.md) | GitHub MCP is stdio; use command/args plus `[mcp_servers.github.env]`, not `bearer_token_env_var` |
 | 14 | [GBrain Checkpoint rm-rf Bug](14-gbrain-checkpoint-rm-rf-bug.md) | Autopilot SIGTERM poisons `import-checkpoint.json` → next sync `rm -rf`'s repo root. Shell guard + upstream PR #1802 |
+| 15 | [Hermes Windows Harness](15-hermes-windows-harness.md) | Put Hermes venv on PATH, set `HERMES_GIT_BASH_PATH`, and use explicit provider/model routing for one-shot partner prompts |
 
 ---
 

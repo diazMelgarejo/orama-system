@@ -52,6 +52,10 @@ Default `HERMES_HOME` to `$env:LOCALAPPDATA\hermes`; the repo lives at
 `$env:HERMES_HOME\hermes-agent`, managed uv at `$env:HERMES_HOME\bin\uv.exe`,
 and `HERMES_GIT_BASH_PATH` points at Git Bash.
 
+Before using one-shot or agent modes, put the installed venv launcher on
+`PATH` and set `HERMES_GIT_BASH_PATH` to a literal `bash.exe`. Detailed Windows
+recipe: `docs/wiki/15-hermes-windows-harness.md`.
+
 `HERMES_GIT_BASH_PATH` must point to a literal `bash.exe`. Prefer full Git for
 Windows. If reusing GitHub Desktop's bundled Git, a `bash.exe` hardlink beside
 `usr\bin\sh.exe` is acceptable only if this passes:
@@ -113,7 +117,8 @@ gemini --version
 agy models
 ```
 
-If `agy` is absent, skip it and continue with Hermes/Gemini/Codex.
+If `agy` is absent, or if `agy --print "Reply with exactly: AGY_READY"`
+exits with empty stdout, skip it and continue with Hermes/Gemini/Codex.
 
 ### 4. Import Skills Safely
 
@@ -121,32 +126,24 @@ Import only reusable skill text or thin pointers into Hermes. Do not mirror
 private workspace state. If Hermes has a local skill directory, use an `ecc-imports`
 style folder and preserve canonical repo paths in comments or metadata.
 
-Source candidates:
-
-- `bin/orama-system/skills/hermes-harness/SKILL.md`
-- `bin/orama-system/skills/openclaw-skills/SKILL.md`
-- `bin/orama-system/skills/mcp-orchestration/SKILL.md`
-- `bin/orama-system/skills/code-review/SKILL.md`
-- `bin/orama-system/skills/git-history-surgery/SKILL.md`
+Source candidates: `hermes-harness`, `openclaw-skills`, `mcp-orchestration`,
+`code-review`, and `git-history-surgery` under `bin/orama-system/skills/`.
 
 ### 5. Use Hermes as a Coding Partner
 
-Prompt Hermes with a bounded, evidence-first contract:
+For bounded non-interactive review on this Windows host, prefer explicit
+provider/model routing because the default LM Studio model can be reachable but
+slow enough for `hermes -z` to appear hung.
 
-```text
-You are Hermes acting as a PT-orama coding partner.
-
-Goal: help implement <task> in <repo>.
-Boundaries: do not commit, delete, deploy, or reveal secrets. Do not copy
-private Hermes/OpenClaw state into the repo. Prefer reusable ECC/orama skills
-over one-off prompts.
-Context to read:
-- bin/orama-system/skills/hermes-harness/SKILL.md
-- bin/orama-system/skills/openclaw-skills/SKILL.md
-- bin/orama-system/skills/mcp-orchestration/SKILL.md
-- docs/LESSONS.md
-Return JSON with: assumptions, findings, proposed_edits, tests, risks.
+```powershell
+hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free `
+  -z "Reply with exactly: HERMES_READY"
 ```
+
+Prompt Hermes with a bounded, evidence-first contract: state the goal, forbid
+commits/deletes/deploys/secrets, forbid copying private harness state, cite the
+canonical skills to inspect, and request JSON with assumptions, findings,
+proposed edits, tests, and risks.
 
 Use AGY/Antigravity for general non-interactive Gemini-style partner work. Use
 Gemini CLI only when it is authenticated or explicitly needed for Gemini-Analyzer
@@ -158,6 +155,7 @@ main orama agent keeps judgment.
 ```powershell
 Test-Path "$env:HERMES_HOME\hermes-agent\.git"
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
+hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free -z 'Reply with exactly: HERMES_READY'
 codex --version
 gemini --version
 git -C "$env:HERMES_HOME\hermes-agent" status --short --branch
@@ -167,6 +165,7 @@ Pass criteria:
 
 - Hermes repo exists and is on a tracking branch.
 - Bash probe prints `hermes-bash-ok`.
+- Hermes one-shot prints `HERMES_READY` with the explicit provider/model route.
 - Provider keys are outside git; imported skills are reusable and sanitized.
 - OpenClaw operations still route through `openclaw-skills`.
 
