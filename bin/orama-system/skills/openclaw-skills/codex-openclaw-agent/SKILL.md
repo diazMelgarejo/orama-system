@@ -34,18 +34,18 @@ Codex CLI with GPT-5.5 as its backend. Invoked explicitly via
 
 ## What this skill does
 
-1. Probes Codex CLI auth and (optionally) the `openclaw-codex-app-server`
-   plugin.
-2. Registers a new `codex` provider block in `openclaw.json`
-   (`models.providers.codex`) pointing to Codex's local OpenAI-compatible
-   app-server endpoint.
+1. Probes Codex CLI auth and the real native `codex-supervisor` plugin.
+2. Registers a new `codex` provider block through `openclaw config patch`
+   pointing to Codex's local OpenAI-compatible app-server endpoint when the
+   native plugin path is unavailable.
 3. Creates the `codex-agent` agent entry in `openclaw.json` with
-   `model.primary = "codex/gpt-5.5"` and `model_reasoning_effort = "high"`.
-4. Writes the six directive files under
-   `agents/codex-agent/` (SOUL / IDENTITY / USER / AGENTS / TOOLS / SECURITY).
-5. Generates `~/.codex/config.toml` (or merges into it) with `model = "gpt-5.5"`.
-6. Stows and restarts OpenClaw.
-7. Verifies backend identity is Codex/GPT-5.5, not Ollama.
+   `model.primary = "codex/gpt-5.5"` and `model_reasoning_effort = "medium"`
+   unless the operator explicitly opts into `high` or `xhigh`.
+4. Writes or merges generated sections for the agent runtime files under
+   `$OPENCLAW_HOME/.openclaw/agents/codex-agent/`.
+5. Generates `CODEX.md` plus a redacted binding record that references auth by
+   location only.
+6. Verifies backend identity is Codex/GPT-5.5, not Ollama.
 
 ## When to Use
 
@@ -65,7 +65,8 @@ Codex CLI with GPT-5.5 as its backend. Invoked explicitly via
 
 - Required: none (all paths are derived from `$OPENCLAW_ROOT` and `~/.codex`)
 - Optional:
-  - `effort` (`medium` | `high`, default `high`)
+  - `effort` (`medium` | `high` | `xhigh`, default `medium`;
+    `high` and `xhigh` are opt-in)
   - `dry_run` (`true` | `false`, default `false`)
   - `force` (`true` | `false`, default `false` — skip probe assertions)
 
@@ -75,11 +76,10 @@ Run `scripts/bind_codex_backend.sh` (see references for the full resolver
 ladder). The steps in order:
 
 1. **Probe** — read-only checks, no mutation.
-2. **Provider registration** — add `codex` provider to `openclaw.json`.
+2. **Provider registration** — add `codex` provider through `openclaw config patch`.
 3. **Agent creation** — `openclaw-new-agent` overlay for `codex-agent`.
-4. **Codex config** — write/merge `~/.codex/config.toml`.
-5. **Stow + restart** — `openclaw-stow` → `openclaw-restart`.
-6. **Verify** — assert backend identity.
+4. **Profile generation** — merge marked generated sections and write redacted refs.
+5. **Verify** — assert backend identity.
 
 Full data flow and edge cases: [`references/codex-backend-binding.md`](references/codex-backend-binding.md)
 
@@ -90,7 +90,7 @@ Full data flow and edge cases: [`references/codex-backend-binding.md`](reference
   "status": "ok|error",
   "agent_id": "codex-agent",
   "backend": "codex/gpt-5.5",
-  "effort": "high",
+  "effort": "medium",
   "binding_path": "primary|idempotent-install|fallback",
   "verify_result": "ok|fail",
   "files_modified": [],
@@ -111,6 +111,6 @@ Full data flow and edge cases: [`references/codex-backend-binding.md`](reference
 - [`references/codex-backend-binding.md`](references/codex-backend-binding.md)
 - [`scripts/bind_codex_backend.sh`](scripts/bind_codex_backend.sh)
 - [`scripts/generate_codex_openclaw_profile.py`](scripts/generate_codex_openclaw_profile.py)
-- [`../openclaw-skills/skills/openclaw-new-agent/SKILL.md`](../openclaw-skills/skills/openclaw-new-agent/SKILL.md)
-- [`../openclaw-skills/skills/openclaw-stow/SKILL.md`](../openclaw-skills/skills/openclaw-stow/SKILL.md)
-- [`../hermes-harness/SKILL.md`](../hermes-harness/SKILL.md)
+- [`../skills/openclaw-new-agent/SKILL.md`](../skills/openclaw-new-agent/SKILL.md)
+- [`../skills/openclaw-stow/SKILL.md`](../skills/openclaw-stow/SKILL.md)
+- [`../../hermes-harness/SKILL.md`](../../hermes-harness/SKILL.md)
