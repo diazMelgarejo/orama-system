@@ -79,8 +79,10 @@ if [ "$FORCE" = "false" ]; then
 
     command -v codex >/dev/null 2>&1 || fail "Codex CLI not found — install with: npm install -g @openai/codex"
 
-    # Auth check: inspect config.toml structure only, never print values
-    if [ -f "$CODEX_CONFIG" ]; then
+    # Auth check: accept Codex's real auth surfaces, never print values.
+    if [ -n "${CODEX_API_KEY:-}" ] || [ -n "${OPENAI_API_KEY:-}" ] || [ -f "$HOME/.codex/auth.json" ]; then
+        log "Codex auth reference found"
+    elif [ -f "$CODEX_CONFIG" ]; then
         python3 - <<'PYEOF'
 import sys, pathlib
 try:
@@ -100,7 +102,7 @@ if not auth_keys:
 sys.exit(0)
 PYEOF
     else
-        warn "~/.codex/config.toml not found — you may need to run: codex auth"
+        fail "Codex auth not found — run: codex login"
     fi
 
     PLUGIN_PRESENT=1
@@ -224,9 +226,9 @@ if dry_check "write codex provider + codex-agent to openclaw.json"; then
     log "openclaw.json updated"
 fi
 
-# ── Write directive files via openclaw-new-agent overlay ─────────────────────
+# ── Write directive files into the runtime OpenClaw home ─────────────────────
 log "Creating directive files for codex-agent"
-AGENT_DIR="agents/codex-agent"
+AGENT_DIR="$OPENCLAW_HOME/.openclaw/agents/codex-agent"
 
 if dry_check "mkdir + write directive files for $AGENT_DIR"; then
     mkdir -p "$AGENT_DIR/memory/archives" "$AGENT_DIR/scripts/lib"
@@ -323,11 +325,9 @@ if dry_check "wire codex-agent into agents.bindings.main.allowAgents"; then
     ' "$OC_JSON" > "$OC_JSON.tmp" && mv "$OC_JSON.tmp" "$OC_JSON"
 fi
 
-# ── Stow + restart ───────────────────────────────────────────────────────────
-if dry_check "stow + openclaw restart"; then
+# ── Restart ──────────────────────────────────────────────────────────────────
+if dry_check "openclaw restart"; then
     rm -f ~/.openclaw/cron/jobs.json 2>/dev/null || true
-    stow --no-folding -t "$OPENCLAW_HOME" . \
-        || warn "stow had conflicts — check manually before continuing"
     openclaw restart 2>/dev/null || warn "openclaw restart returned non-zero"
     sleep 2
 fi
