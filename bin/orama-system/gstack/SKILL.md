@@ -127,12 +127,20 @@ Engine: **postgres** (Supabase pooler). Config: `~/.gbrain/config.json`.
 DB URL lives in `~/.gbrain/.env` as `GBRAIN_DATABASE_URL` — sourced by `~/.zshrc`
 and the MCP wrapper, NOT by non-interactive Bash shells.
 
-| Source | ID | Pages | Federated? |
-|--------|----|-------|-----------|
-| AlphaClaw | `gstack-code-claw-4dc4a8f3-aa4479` | ~478 | yes |
-| Perpetua-Tools | `gstack-code-ools-27e2b79c-df8a28` | ~725 | yes |
-| orama-system | `orama-src` | ~191 | no (isolated) |
-| periscope | `periscope-src` | ~14 | yes |
+> **Source IDs migrated 2026-06-17 (old → new).** After the 2026-06-14 security re-anchor,
+> gbrain's `deriveCodeSourceId` moved from the legacy scheme (`orama-src`,
+> `gstack-code-ools-…`, `gstack-code-claw-…`) to current per-worktree `gstack-code-<hash>` IDs,
+> and all three repos were reindexed against current HEAD. **`.gbrain-source` pins already point
+> at the CURRENT IDs** — query those. The old sources are stale (@2026-06-05), superseded, and
+> quarantined (exported to `~/repo-backups/gbrain-stale-quarantine-20260618/`; code also preserved
+> in git) — pending removal.
+
+| Repo | Current source ID (reindexed 2026-06-17) | Pages | Federated | Superseded ID (@06-05, quarantined) |
+|------|------|-------|-----------|------|
+| AlphaClaw | `gstack-code-alphaclaw-875d5b82` | ~476 | yes | `gstack-code-claw-4dc4a8f3-aa4479` (489p) |
+| Perpetua-Tools | `gstack-code-078b0b90-f6179f` | ~736 | yes | `gstack-code-ools-27e2b79c-df8a28` (721p) |
+| orama-system | `gstack-code-2159b4b9-595bce` | ~223 | yes (was isolated) | `orama-src` (306p) |
+| periscope | `periscope-src` | ~14 | yes | — current (separate dormant repo, last commit 2026-04-19) |
 
 Re-run setup: `/setup-gbrain`
 
@@ -207,11 +215,11 @@ OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
 PT_ROOT="${PERPETUA_TOOLS_PATH:-${PERPETUA_TOOLS_ROOT:-$OPENCLAW_HOME/Perpetua-Tools}}"
 ORAMA_ROOT="${ORAMA_INSTALL_DIR:-$REPO_ROOT}"
 gbrain sync --repo "$OPENCLAW_HOME/AlphaClaw" \
-            --source gstack-code-claw-4dc4a8f3-aa4479 --skip-failed
+            --source gstack-code-alphaclaw-875d5b82 --skip-failed
 gbrain sync --repo "$PT_ROOT" \
-            --source gstack-code-ools-27e2b79c-df8a28 --skip-failed
+            --source gstack-code-078b0b90-f6179f --skip-failed
 gbrain sync --repo "$ORAMA_ROOT" \
-            --source orama-src --skip-failed
+            --source gstack-code-2159b4b9-595bce --skip-failed
 gbrain sources list
 ```
 
