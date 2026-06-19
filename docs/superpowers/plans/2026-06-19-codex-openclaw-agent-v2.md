@@ -22,7 +22,7 @@ These resolve the two gating unknowns from the spec's "Multi-Model Pressure-Test
 | **PT-MM2 RESOLVED** | OpenAI-compatible provider schema proven across 5 live providers: `{api:"openai-completions", apiKey, baseUrl, models:[{id,name,contextWindow,maxTokens,cost}]}` | Stage 3 writes a `codex` provider block of exactly this shape via `openclaw config patch` |
 | Config write path | `openclaw config patch --file <f>` (and `--dry-run`) — validated, atomic, gateway-aware; `null` deletes a key; arrays replace | Binder NEVER hand-edits `openclaw.json` |
 | Codex app-server endpoint | Discoverable from `~/.codex/cache/codex_apps_server_info/<hash>.json` (per-session server-info files) | Stage 0 probe parses these for `base_url`; canaries `GET /v1/models` |
-| Auth | `~/.codex/config.toml` has `model="gpt-5.5"`, `model_reasoning_effort="high"`; `gstack-codex-probe` reports auth | Auth by reference only — never copy values |
+| Auth | `~/.codex/config.toml` has `model="gpt-5.5"` and may carry an operator-selected `model_reasoning_effort`; `gstack-codex-probe` reports auth | Auth by reference only — never copy values; skill default remains `medium`, with `high`/`xhigh` opt-in |
 
 **Net change to spec ordering:** the spec said "implementation MUST start with two spikes." Both are now answered. Task 0 keeps a *live confirmation canary* (PT-MM2's `GET /v1/models` check) but is no longer a blocking research spike.
 
@@ -232,52 +232,44 @@ git commit -m "feat(codex-openclaw-agent): scaffold skill + codex probe lib (end
 
 - [ ] **Step 1: Write the doctrine document**
 
-Create the file with these sections (this is documentation, not code — write the full content):
+Create the doctrine at the path above, not at the older top-level
+`bin/orama-system/skills/codex-openclaw-agent/` path.
 
-```markdown
-# Codex Backend Binding Doctrine
+The doctrine must include these sections:
 
-> Owned by `codex-openclaw-agent`. Companion and equal to `hermes-harness`.
+- `Non-Negotiable Invariants`
+- `OpenClaw Invocation`
+- `Resolution Ladder`
+- `Stage 0 Probe Rules`
+- `Provider Strings`
+- `Reasoning Effort`
+- `OpenAI-Compatible Fallback Shape`
+- `Mutation Boundaries`
+- `Verification Gate`
+- `Binding Record Contract`
+- `Failure Output`
+- `Test Requirements`
 
-## Resolution ladder (fail-forward, opportunistic)
+Required corrections versus the stale draft:
 
-| Stage | Action | Mutates? |
-|-------|--------|----------|
-| 0 Probe | Gather evidence via `scripts/lib/codex_probe.sh`. Trust live canaries, not stale `~/.codex` state (PT-MM3). | No |
-| 1 Primary | Bind via the native `codex-supervisor` plugin; create/bind session first, `/cas_resume` only for an existing session (PT-MM4); set agent `model.primary`. | Yes |
-| 2 Install | If `codex-supervisor` is present-but-disabled, enable via `openclaw config patch`; if absent but installable, `openclaw plugins install`; re-run Stage 1. | Yes |
-| 3 Fallback | Register the running Codex app-server as an OpenAI-compatible provider (verified schema). `model.primary=codex/gpt-5.5`. | Yes |
-| 4 Verify | Start/resume a session, run a harmless task, parse the resolved model prefix and OTEL trace; assert Codex not Ollama. | Yes (session) |
-| 5 Record | Write `refs/codex-backend-binding.json` (redacted, repo-safe). | Yes (refs) |
-
-## Provider strings
-- Native: `codex-supervisor`-managed provider (probe reports its key).
-- Fallback: provider key `codex`, model id `gpt-5.5`, provider string `codex/gpt-5.5`.
-
-## OpenAI-compatible fallback provider shape (PT-MM2, verified)
-\`\`\`json
-{ "api": "openai-completions", "apiKey": "${env:OPENAI_API_KEY}",
-  "baseUrl": "http://127.0.0.1:<port>/v1",
-  "models": [ { "id": "gpt-5.5", "name": "Codex GPT-5.5",
-    "contextWindow": 200000, "maxTokens": 65536, "cost": {"input":0,"output":0} } ] }
-\`\`\`
-Written only via `openclaw config patch` (validated/atomic). Never hand-edit `openclaw.json`.
-
-## Auth by reference
-Never copy bearer tokens, OAuth material, or raw `codex_apps_server_info` into files,
-refs, logs, or prompts. Reference `~/.codex` and `${env:OPENAI_API_KEY}` only (PT-MM6).
-
-## Verification (the release gate — PT-MM1)
-Backend identity is the resolved `<provider-key>/<model-id>`. PASS requires the
-prefix to be the Codex provider (`codex/` or the `codex-supervisor` provider key)
-AND the model to be `gpt-5.5`. A prefix of `ollama/` is a hard FAIL.
-
-## Failure messages + manual recovery
-Every failure prints: stage, expected vs actual, redacted auth ref, endpoint ref,
-and one of: `codex login`, `codex --version`,
-`codex-openclaw-agent --agent-id <id> --prefer compat --refresh`,
-`codex-openclaw-agent --agent-id <id> --bind-only --verify`.
-```
+- Use the real native plugin name: `codex-supervisor`.
+- Default reasoning effort to `medium`; allow `high` and `xhigh` only when the
+  operator explicitly opts in.
+- Route all OpenClaw calls through `scripts/openclaw/resolve-openclaw.sh`.
+- Accept Codex auth references from `CODEX_API_KEY`, `OPENAI_API_KEY`,
+  `~/.codex/auth.json`, or structurally valid `~/.codex/config.toml`; never
+  print secret values.
+- Discover the app-server endpoint from live Codex server-info files and
+  validate `GET <endpoint>/v1/models`; never trust stale state files alone.
+- Write OpenClaw runtime changes with `openclaw config patch --file`, not
+  direct `jq` edits to `openclaw.json`.
+- Write target agent runtime files under
+  `$OPENCLAW_HOME/.openclaw/agents/<agent_id>/`.
+- Forbid arbitrary-cwd stow such as `stow --no-folding -t "$OPENCLAW_HOME" .`.
+- Treat fallback (`codex/gpt-5.5`) as first-class and verified, not degraded.
+- Verification must fail if the resolved runtime provider prefix is `ollama/`.
+- Binding records must be redacted and must not serialize raw server-info or
+  auth payloads.
 
 - [ ] **Step 2: Verify no workstation paths / secrets leaked**
 

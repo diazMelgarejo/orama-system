@@ -4,7 +4,7 @@
 # Codex CLI / GPT-5.5. Safe to re-run (idempotent).
 #
 # Usage:
-#   bash bind_codex_backend.sh [--effort medium|high] [--dry-run] [--force]
+#   bash bind_codex_backend.sh [--effort medium|high|xhigh] [--dry-run] [--force]
 #
 # What this script NEVER does:
 #   - Modify agents.defaults.model.primary  (ollama/qwen3.5:9b-nvfp4)
@@ -18,7 +18,7 @@
 set -euo pipefail
 
 # ── args ────────────────────────────────────────────────────────────────────
-EFFORT="${EFFORT:-high}"
+EFFORT="${EFFORT:-medium}"
 DRY_RUN="${DRY_RUN:-false}"
 FORCE="${FORCE:-false}"
 while [[ $# -gt 0 ]]; do
@@ -29,6 +29,10 @@ while [[ $# -gt 0 ]]; do
         *)          echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
+case "$EFFORT" in
+    medium|high|xhigh) ;;
+    *) echo "Invalid --effort '$EFFORT' (expected: medium, high, or xhigh)" >&2; exit 1 ;;
+esac
 
 # ── paths ───────────────────────────────────────────────────────────────────
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME}"
@@ -106,7 +110,7 @@ PYEOF
     fi
 
     PLUGIN_PRESENT=1
-    openclaw plugins list 2>/dev/null | grep -q "openclaw-codex-app-server" && PLUGIN_PRESENT=0
+    openclaw plugins list 2>/dev/null | grep -q "codex-supervisor" && PLUGIN_PRESENT=0
 
     APPSERVER_UP=1
     curl -sf --max-time 2 "http://127.0.0.1:${CODEX_PORT}/v1/models" >/dev/null 2>&1 \
@@ -126,8 +130,8 @@ fi
 # ── (c) IDEMPOTENT INSTALL (if plugin absent) ────────────────────────────────
 if [ "$PLUGIN_PRESENT" -ne 0 ]; then
     log "Step (c): plugin absent — attempting install"
-    if dry_check "openclaw plugins install openclaw-codex-app-server"; then
-        if openclaw plugins install openclaw-codex-app-server; then
+    if dry_check "openclaw plugins install codex-supervisor"; then
+        if openclaw plugins install codex-supervisor; then
             PLUGIN_PRESENT=0
             # Start app-server now that plugin is ready
             codex serve --port "$CODEX_PORT" --background 2>/dev/null || true
@@ -143,7 +147,7 @@ fi
 # ── (b) PRIMARY path ─────────────────────────────────────────────────────────
 BINDING_PATH=""
 if [ "$PLUGIN_PRESENT" -eq 0 ] && [ "$APPSERVER_UP" -eq 0 ]; then
-    log "Step (b): primary — native openclaw-codex-app-server plugin"
+    log "Step (b): primary — native codex-supervisor plugin"
     if dry_check "openclaw onboard + /cas_resume + openclaw.json patch (primary)"; then
         openclaw onboard --auth-choice openai-codex 2>/dev/null || warn "onboard returned non-zero — continuing"
         openclaw /cas_resume 2>/dev/null || warn "/cas_resume returned non-zero — continuing"
