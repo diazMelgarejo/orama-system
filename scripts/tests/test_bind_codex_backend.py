@@ -4,7 +4,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SKILL = REPO / "bin/orama-system/skills/openclaw-skills/codex-openclaw-agent"
 PROBE_LIB = SKILL / "scripts/lib/codex_probe.sh"
-BINDER = REPO / "bin/orama-system/skills/codex-openclaw-agent/scripts/bind_codex_backend.sh"
+BINDER = SKILL / "scripts/bind_codex_backend.sh"
 FIX = Path(__file__).parent / "fixtures/codex"
 
 
@@ -42,3 +42,16 @@ def test_binder_accepts_codex_auth_json_or_api_key_env_refs():
     assert 'CODEX_API_KEY' in body
     assert 'OPENAI_API_KEY' in body
     assert '$HOME/.codex/auth.json' in body
+
+
+def test_binder_defaults_medium_and_allows_xhigh_opt_in():
+    body = BINDER.read_text(encoding="utf-8")
+    assert 'EFFORT="${EFFORT:-medium}"' in body
+    assert "[--effort medium|high|xhigh]" in body
+    assert "medium|high|xhigh)" in body
+
+
+def test_binder_uses_real_codex_supervisor_plugin_name():
+    body = BINDER.read_text(encoding="utf-8")
+    assert "codex-supervisor" in body
+    assert "openclaw-codex-app-server" not in body

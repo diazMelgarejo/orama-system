@@ -11,7 +11,7 @@ Auth is NEVER written into generated files. Only path references.
 
 Usage:
     python3 generate_codex_openclaw_profile.py [--binding-path primary|idempotent-install|fallback]
-                                               [--effort medium|high]
+                                               [--effort medium|high|xhigh]
                                                [--openclaw-home PATH]
                                                [--dry-run]
 """
@@ -37,7 +37,7 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser()
     p.add_argument("--binding-path", default="primary",
                    choices=["primary", "idempotent-install", "fallback", "dry-run-primary"])
-    p.add_argument("--effort", default="high", choices=["medium", "high"])
+    p.add_argument("--effort", default="medium", choices=["medium", "high", "xhigh"])
     p.add_argument("--openclaw-home", default=str(pathlib.Path.home()))
     p.add_argument("--dry-run", action="store_true")
     return p.parse_args()
@@ -96,11 +96,14 @@ def main() -> None:
 
 | Path | Condition |
 |---|---|
-| `primary` | `openclaw-codex-app-server` plugin present AND app-server health ping OK |
+| `primary` | `codex-supervisor` plugin present AND app-server health ping OK |
 | `idempotent-install` | Plugin was absent, installed successfully, then primary succeeded |
 | `fallback` | Plugin unavailable or install failed; codex app-server registered as openai-completions provider directly |
 
 Winning path: **`{args.binding_path}`**
+
+`high` and `xhigh` reasoning effort are explicit opt-ins; regeneration defaults
+to `medium` unless an operator passes `--effort`.
 
 ## Preserved routing invariants (verified after binding)
 
@@ -128,7 +131,7 @@ declaring success.
 ## Regeneration
 
 ```bash
-python3 bin/orama-system/skills/codex-openclaw-agent/scripts/generate_codex_openclaw_profile.py \\
+python3 bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/generate_codex_openclaw_profile.py \\
     --binding-path {args.binding_path} \\
     --effort {args.effort}
 ```
