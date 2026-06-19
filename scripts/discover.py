@@ -519,12 +519,16 @@ class _Lock:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         lock_path = _lock_path()
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        self._fd = open(lock_path, "w")
         deadline = time.time() + self._timeout
         while True:
             try:
+                self._fd = open(lock_path, "w")
                 _try_lock_file(self._fd); return self
             except (BlockingIOError, OSError):
+                if self._fd:
+                    try: self._fd.close()
+                    except Exception: pass
+                    self._fd = None
                 if time.time() > deadline: raise TimeoutError("discovery lock timeout")
                 time.sleep(0.2)
     def __exit__(self, *_):
