@@ -7,7 +7,12 @@ version: "1.0"
 layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
 upstream: https://github.com/rahulsub-be/cc-openclaw
 upstream_license: MIT
+extends: ../cc-openclaw/.claude/skills/openclaw-add-script/SKILL.md
+overlay_role: orama-normalized cross-harness extension
 ---
+
+## Overlay Source
+This Orama-normalized skill extends the upstream cc-openclaw skill at [`../cc-openclaw/.claude/skills/openclaw-add-script/SKILL.md`](../cc-openclaw/.claude/skills/openclaw-add-script/SKILL.md). Use the upstream file as the behavioral baseline and this file as the cross-harness overlay for Orama, Perpetua-Tools, Codex, Hermes, Gemini, and other agent runners.
 
 ## Purpose
 Create production-safe shell scripts for deterministic operations. This skill enforces strict shell mode, structured JSON output, and separated logging streams. It also ensures shared response helpers exist so scripts return consistent payloads.

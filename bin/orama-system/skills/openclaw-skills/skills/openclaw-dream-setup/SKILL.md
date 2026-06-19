@@ -7,7 +7,12 @@ version: "1.0"
 layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
 upstream: https://github.com/rahulsub-be/cc-openclaw
 upstream_license: MIT
+extends: ../cc-openclaw/.claude/skills/openclaw-dream-setup/SKILL.md
+overlay_role: orama-normalized cross-harness extension
 ---
+
+## Overlay Source
+This Orama-normalized skill extends the upstream cc-openclaw skill at [`../cc-openclaw/.claude/skills/openclaw-dream-setup/SKILL.md`](../cc-openclaw/.claude/skills/openclaw-dream-setup/SKILL.md). Use the upstream file as the behavioral baseline and this file as the cross-harness overlay for Orama, Perpetua-Tools, Codex, Hermes, Gemini, and other agent runners.
 
 ## Purpose
 Install a consistent nightly memory distillation pipeline for one agent. This skill creates the required memory docs and archive structure, schedules execution, and updates startup references. It enforces strict token budgets to preserve operational context for real tasks.
