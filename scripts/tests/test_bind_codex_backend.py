@@ -4,6 +4,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 SKILL = REPO / "bin/orama-system/skills/openclaw-skills/codex-openclaw-agent"
 PROBE_LIB = SKILL / "scripts/lib/codex_probe.sh"
+BINDER = REPO / "bin/orama-system/skills/codex-openclaw-agent/scripts/bind_codex_backend.sh"
 FIX = Path(__file__).parent / "fixtures/codex"
 
 
@@ -28,3 +29,16 @@ def test_models_canary_unreachable_is_nonzero():
     rc, out, err = _run('codex_models_canary "http://127.0.0.1:59999/v1" 1 && echo UP || echo DOWN')
     assert rc == 0
     assert out == "DOWN", out
+
+
+def test_binder_writes_runtime_agent_dir_without_stowing_cwd():
+    body = BINDER.read_text(encoding="utf-8")
+    assert 'AGENT_DIR="$OPENCLAW_HOME/.openclaw/agents/codex-agent"' in body
+    assert 'stow --no-folding -t "$OPENCLAW_HOME" .' not in body
+
+
+def test_binder_accepts_codex_auth_json_or_api_key_env_refs():
+    body = BINDER.read_text(encoding="utf-8")
+    assert 'CODEX_API_KEY' in body
+    assert 'OPENAI_API_KEY' in body
+    assert '$HOME/.codex/auth.json' in body
