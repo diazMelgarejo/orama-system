@@ -4,6 +4,7 @@
 **Scope:** orama-system skill design only
 **Status:** Approved design inputs captured; ready for implementation planning
 **Primary skill name:** `codex-openclaw-agent`
+**Skill location:** `bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/`
 
 ---
 
@@ -13,6 +14,15 @@ Create a composable meta-skill that initializes a fresh OpenClaw coding agent
 with a Codex backend. The skill should feel like `hermes-harness`: a thin
 operator harness that wires existing durable skills and profiles together,
 rather than copying their bodies into a new source of truth.
+
+The underlying purpose is not only "make an agent." It is to make Codex a
+first-class OpenClaw worker that inherits OpenClaw's runtime rules, Orama's
+skill discipline, and the code-review profile stack without forcing each
+harness to rediscover that contract. The skill is an adapter between intent
+and operating substrate: it turns a request for a Codex coding worker into a
+versioned OpenClaw agent with auditable prompts, predictable interaction
+surfaces, and generated files that can be refreshed as the source profiles
+improve.
 
 The first supported workflow is:
 
@@ -26,6 +36,9 @@ The first supported workflow is:
 
 - Use generated profile files with source-path and source-hash headers.
 - Name the skill `codex-openclaw-agent`.
+- Place the skill under
+  `bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/` because it is
+  an OpenClaw agent initializer, not a generic top-level Orama harness.
 - Default regeneration behavior is merge marked generated sections while
   preserving operator-authored sections.
 - Generate substantive marked sections in all four OpenClaw directive files:
@@ -34,6 +47,10 @@ The first supported workflow is:
 - Support standalone agents, sub-agents under an orchestrator, and ask-each-time
   interactive selection; default interactive behavior is ask-each-time, and
   future autoplan may select a mode explicitly.
+- Expose interactivity through the active surface: interrupt envelopes for
+  agent/harness runtimes, `AskUserQuestion` on desktop apps, CLI prompts or
+  flags in terminal/cmd, and portal GUI controls when running through the
+  portal.
 
 ## Non-Goals
 
@@ -42,6 +59,8 @@ The first supported workflow is:
 - Do not replace `openclaw-new-agent`; call it as the creation primitive.
 - Do not mutate `.claude/skills`; this is an Orama/OpenClaw/Codex harness.
 - Do not create a general OpenClaw UI or runtime manager.
+- Do not hardcode a single interaction mechanism. User choice must flow through
+  the surface the operator is actually using.
 
 ## Source Inputs
 
@@ -66,6 +85,12 @@ Use a thin harness skill plus a deterministic profile generator.
 `codex-openclaw-agent/SKILL.md` should remain concise. It should describe
 when to use the harness, which source files to read, what command/script to run,
 and how to verify the resulting OpenClaw agent.
+
+The mother skill remains the first filter. The new skill lives under
+`openclaw-skills/` so agents discover it through the OpenClaw skill pack, then
+it composes code-review profiles only after `openclaw-skills/SKILL.md` has set
+the operational rules, model routing, invocation envelope, and OpenClaw safety
+constraints.
 
 A bundled script should generate the Codex profile artifacts for the target
 OpenClaw agent. The generated files should include source-path and source-hash
@@ -121,7 +146,7 @@ Decision: Option B.
 ## Proposed Skill Shape
 
 ```
-bin/orama-system/skills/codex-openclaw-agent/
+bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/
   SKILL.md
   scripts/
     generate_codex_openclaw_profile.py
@@ -134,6 +159,7 @@ bin/orama-system/skills/codex-openclaw-agent/
 - Use when spawning or refreshing a Codex-backed OpenClaw coding agent.
 - Ensure cc-openclaw exists through `scripts/install-openclaw-skills.sh`.
 - Load `openclaw-new-agent` through the Orama overlay path.
+- Route operator choices through the active interaction surface.
 - Compose profiles using the source precedence below.
 - Run verification and report generated files.
 
@@ -144,10 +170,13 @@ bin/orama-system/skills/codex-openclaw-agent/
 - Generated file layout.
 - Source-hash format.
 - Regeneration behavior.
+- Interaction-surface mapping.
 
 `scripts/generate_codex_openclaw_profile.py` should:
 
 - Accept `--openclaw-home`, `--agent-id`, and `--repo-root`.
+- Accept `--mode ask|sub-agent|standalone`, with `ask` as the interactive
+  default and explicit mode required for non-interactive runs.
 - Read the source profile files.
 - Validate all required sources exist.
 - Generate deterministic markdown files under the target agent directory.
@@ -158,15 +187,22 @@ bin/orama-system/skills/codex-openclaw-agent/
 
 ## Composition Rules
 
+Profile composition must be iterative and filtered, not a blind concatenation.
+The generator should apply the mother skill first, then the OpenClaw overlay,
+then the code-review profiles, keeping only content that serves the Codex
+OpenClaw agent's runtime contract.
+
 Profile precedence should be:
 
-1. `J-drona23-v5/CLAUDE.md` defines what must be read and constrains scope.
-2. `J-drona23-v5/rules/workflow.md` supplies hard MUST and NEVER rules.
-3. `J-drona23-v5/agents/builder.md` supplies budget and builder protocol.
-4. `CLAUDE.coding.md` supplies coding, review, debugging, and architecture style.
-5. `CLAUDE.agents.md` supplies multi-agent and structured-output discipline.
-6. `openclaw-new-agent` supplies OpenClaw file layout, registration, stow, restart,
+1. `openclaw-skills/SKILL.md` supplies OpenClaw operational rules, universal
+   invocation, model routing, and cross-harness boundaries.
+2. `openclaw-new-agent` supplies OpenClaw file layout, registration, stow, restart,
    and verification behavior.
+3. `J-drona23-v5/CLAUDE.md` defines what must be read and constrains profile scope.
+4. `J-drona23-v5/rules/workflow.md` supplies hard MUST and NEVER rules.
+5. `J-drona23-v5/agents/builder.md` supplies budget and builder protocol.
+6. `CLAUDE.coding.md` supplies coding, review, debugging, and architecture style.
+7. `CLAUDE.agents.md` supplies multi-agent and structured-output discipline.
 
 When sources conflict, the generator should keep the stricter rule. Examples:
 
@@ -176,6 +212,10 @@ When sources conflict, the generator should keep the stricter rule. Examples:
 - If one file allows defaults and another requires explicit requirements, the
   generated profile should require explicit inputs for file writes and use
   defaults only for non-destructive configuration values.
+
+The generator should also remove or down-rank content that belongs to Claude
+only, raw `.claude/skills` install flows, or generic coding advice that is
+already enforced by the OpenClaw mother skill.
 
 ## Generated Artifact Layout
 
@@ -258,11 +298,36 @@ Default interactive behavior is `ask`. Non-interactive runs must pass
 `--mode sub-agent` or `--mode standalone`. A future autoplan layer may choose
 the mode from task context before invoking this skill.
 
+## Interaction Surface Policy
+
+The skill must express the same decisions through different operator surfaces:
+
+| Surface | Interaction mechanism |
+|---------|-----------------------|
+| Agent or harness runtime | Return an interrupt envelope with required fields and choices |
+| Codex or Claude desktop apps | Use `AskUserQuestion` when available |
+| Terminal/cmd | Use CLI flags first; if missing, prompt on stdin only when interactive |
+| Portal GUI | Render the same fields as form controls and submit a normalized envelope |
+
+Required choices should be stable across surfaces:
+
+- `agent_id`
+- display name
+- spawn mode: `ask`, `sub-agent`, or `standalone`
+- parent orchestrator when mode is `sub-agent`
+- profile regeneration mode
+- channel wiring preference
+
+The normalized answer shape should feed the same downstream generator and
+`openclaw-new-agent` invocation regardless of source. Portal GUI, CLI, desktop,
+and interrupt flows must not fork behavior.
+
 ## Data Flow
 
 ```text
 operator
   -> codex-openclaw-agent
+  -> interaction surface resolves missing choices
   -> scripts/install-openclaw-skills.sh
   -> openclaw-new-agent overlay
   -> generate_codex_openclaw_profile.py
@@ -280,6 +345,8 @@ The harness should stop before file writes if:
 - any required profile source is missing.
 - `openclaw_home` is not absolute.
 - target `agent_id` is invalid.
+- an interactive choice is required but no interrupt, desktop question, CLI
+  prompt, portal GUI, or explicit flag is available.
 - target files cannot be merged safely because generated markers are malformed.
 
 The harness should report:
@@ -302,11 +369,15 @@ Implementation should include targeted checks:
 7. Assert hash drift warns, continues, and regenerates marked sections when safe.
 8. Assert `--mode sub-agent`, `--mode standalone`, and interactive ask mode
    produce the expected `openclaw-new-agent` inputs.
-9. Run skill validation for the new skill folder.
+9. Assert interrupt, desktop, CLI, and portal input surfaces normalize to the
+   same envelope.
+10. Run skill validation for the new skill folder.
 
 ## Recommendation
 
 Proceed with `codex-openclaw-agent`, generated profile files, source hashes, and
 merge-marked regeneration. Generate substantive sections in all four OpenClaw
 directive files, warn and auto-regenerate on source drift, and keep spawn mode
-flexible with ask-each-time as the interactive default.
+flexible with ask-each-time as the interactive default. Keep the skill under
+`openclaw-skills/` so it is governed by the OpenClaw mother skill before it
+composes code-review profile material.
