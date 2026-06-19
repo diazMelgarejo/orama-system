@@ -38,6 +38,19 @@ The skills are designed for deterministic use through direct skill loading, MCP 
 | `openclaw-restart` | Performs the canonical restart sequence: remove transient cron state, stow, kickstart, wait, and verify channels. | [skills/openclaw-restart/SKILL.md](skills/openclaw-restart/SKILL.md) |
 | `openclaw-stow` | Deploys OpenClaw config through GNU Stow with `jobs.json` conflict handling baked in. | [skills/openclaw-stow/SKILL.md](skills/openclaw-stow/SKILL.md) |
 
+## Upstream Initialization
+
+Before resolving any of The Nine Skills directly, ensure the upstream submodule is present:
+
+```bash
+bash scripts/install-openclaw-skills.sh
+```
+
+This is idempotent and is also called by `start.sh`. Orama-normalized Nine Skill
+overlays live under `skills/<skill-id>/SKILL.md`; each overlay declares the
+upstream cc-openclaw card it extends under
+`cc-openclaw/.claude/skills/<skill-id>/SKILL.md`.
+
 ## Universal Invocation Protocol
 
 All agents must follow [references/universal-skill-protocol.md](references/universal-skill-protocol.md).
@@ -211,7 +224,8 @@ If an agent cannot load markdown skills directly, it must use Perpetua-Tools or 
 ## Attribution
 
 The Nine Skills originate from [cc-openclaw](https://github.com/rahulsub-be/cc-openclaw)
-(MIT, Rahul Subramanian). The upstream lives at `cc-openclaw/` (git submodule).
+(MIT, Rahul Subramanian). The upstream lives at `cc-openclaw/` (git submodule), with
+canonical upstream skill cards in `cc-openclaw/.claude/skills/`.
 
 Extensions in this directory (`references/`, `templates/`, `scripts/`, this `SKILL.md`)
 are orama-system additions and are NOT in the upstream repo.
@@ -219,9 +233,9 @@ are orama-system additions and are NOT in the upstream repo.
 Layer 0 (provider substrate): `v1/OpenRouter.md` — free model stack, openclaw.json shape,
 rate limits. See `references/openrouter-defaults.md` for the distilled routing table.
 
-cc-openclaw = `v1/OpenRouter.md` (Layer 0 substrate) + `openclaw-skills/` (Layer 1 ops).
-The upstream Nine Skills are in `openclaw-skills/cc-openclaw/` (submodule). Our extensions
-live at `openclaw-skills/` root.
+cc-openclaw = `v1/OpenRouter.md` (Layer 0 substrate) + `.claude/skills/` (Layer 1 ops).
+The Orama-normalized overlay cards are in `openclaw-skills/skills/`. Shared
+extensions live at `openclaw-skills/` root.
 
 ## Search Frugality Rule
 
