@@ -12,7 +12,7 @@ Do **not** warn the user if backends are missing. Degrade silently.
 |----------|---------|------|
 | 1 | **OmniRoute** | `OMNIROUTE: running`/`started` — fan via OmniRoute MCP. ⚠ **Quarantined/disabled 2026-06-14** (config backed up to `~/claude-config-backups/`; see the `omniroute` sidecar skill) — skip to lower lanes until re-enabled. |
 | 2 | **ai-cli-mcp** | `run` per lens + `wait` / `get_result` |
-| 3 | **agy / gemini CLI** | Non-interactive subagent dispatch — `agy -p "/goal …"` (multi-model) or `gemini -p "/goal …"`. **Verified 2026-06-14.** See § below. |
+| 3 | **agy** | Non-interactive subagent dispatch — `agy -p "/goal …"` (multi-model). **Verified 2026-06-14. ⚠ gemini CLI DEAD 2026-06-19** (`IneligibleTierError` — Google deprecated Code Assist for individuals; use `agy` only). See § below. |
 | 4 | **Win coder (LM Studio)** | LAN `.104:1234` OpenAI-compat (`qwen3.5-27b` claude-distilled) — self-contained codegen lenses; discovery self-corrects the IP |
 | 5 | **Cursor Task** | Up to 5 parallel `Task` calls with [`agents/code-reviewer.md`](../agents/code-reviewer.md) + lens prompt |
 | 6 | **Sequential** | Same lenses in one agent session |
@@ -60,17 +60,19 @@ Rules:
 - Workers: findings only — **no commit, push, or file writes**
 - Kill stuck PIDs with `kill_process`
 
-## agy / gemini CLI subagent dispatch (priority 3 — verified 2026-06-14)
+## agy subagent dispatch (priority 3 — verified 2026-06-14)
 
-Both are non-interactive subagent orchestrators (full command guide: `agy-gemini.md` at the workspace root):
+> **⚠ gemini CLI DEAD 2026-06-19**: Google deprecated Code Assist for individuals.
+> `gemini -p "…"` returns `IneligibleTierError`. Use `agy` exclusively for this lane.
+
+`agy` is a non-interactive parallel orchestrator (full command guide: `agy-gemini.md` at the workspace root):
 
 ```bash
 agy -p "/goal <task>"      # Antigravity parallel orchestrator → spawns research/worker subagents
-gemini -p "/goal <task>"   # Gemini CLI multi-step plan → delegates to agent personas
+# gemini -p "/goal …"      # DEAD — IneligibleTierError since 2026-06-19; do not use
 ```
 
 - **agy models** (`agy models`): Gemini 3.5 Flash (Low/Med/High), Gemini 3.1 Pro (Low/High), Claude Sonnet 4.6, Claude Opus 4.6, GPT-OSS 120B. Pick with `agy --model "<name>"`; `--dangerously-skip-permissions` for unattended runs.
-- **gemini personas**: `codebase_investigator` (deep analysis / architecture map), `generalist` (high-volume refactor / lint), `cli_help`. Tool-level delegation: `invoke_agent(name, prompt)`.
 - macOS has **no `timeout`** — bound long calls with `gtimeout <s>` or run as a killable background job (never a foreground `sleep` chain).
 - Workers return findings per the lens; lead merges. Same rules as other lanes: absolute `workFolder`, no secrets in prompts, fail open if a CLI is absent.
 

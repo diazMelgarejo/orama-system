@@ -65,6 +65,42 @@ orama_openclaw_root() {
   detect_openclaw_root "$@"
 }
 
+# ── OpenClaw CLI resolution ────────────────────────────────────────────────
+# The `openclaw` command on PATH (~/.local/bin/openclaw) is a pnpm cmd-shim
+# reached through a symlink; its $0-derived basedir resolves to a non-existent
+# ~/.local/openclaw/openclaw.mjs → "Cannot find module". Up to three openclaw
+# installs can coexist (npm-global gateway / AlphaClaw pnpm / stale ~/.alphaclaw).
+# These helpers route through the canonical resolver, which prefers the install
+# that actually runs the gateway and never the stale one. Full rationale:
+# scripts/openclaw/resolve-openclaw.sh (single source of truth).
+
+openclaw_resolver_path() {
+  local root
+  root="$(orama_git_root 2>/dev/null)" || return 1
+  printf '%s\n' "$root/scripts/openclaw/resolve-openclaw.sh"
+}
+
+# Echo "<node>\t<entrypoint>" for the canonical openclaw, or fail (3).
+resolve_openclaw_cli() {
+  local r
+  r="$(openclaw_resolver_path)" || return 1
+  [ -x "$r" ] || return 1
+  "$r" --which
+}
+
+# Run openclaw with args via the canonical resolver; fall back to bare
+# `openclaw` on PATH if the resolver is unavailable. Use this in scripts
+# instead of calling `openclaw` directly when robustness matters.
+openclaw_cmd() {
+  local r
+  r="$(openclaw_resolver_path 2>/dev/null)"
+  if [ -n "$r" ] && [ -x "$r" ]; then
+    "$r" "$@"
+    return $?
+  fi
+  command openclaw "$@"
+}
+
 detect_perpetua_tools_root() {
   if [ -n "${PERPETUA_TOOLS_ROOT:-}" ] && [ -d "$PERPETUA_TOOLS_ROOT" ]; then
     printf '%s\n' "$PERPETUA_TOOLS_ROOT"
