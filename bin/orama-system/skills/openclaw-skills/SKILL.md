@@ -80,6 +80,32 @@ The required result shape is:
 
 Wrappers may add transport metadata, but they must preserve the envelope fields and the result fields. Skill chaining is allowed only when the parent skill declares the internal call and preserves the same `openclaw_home`.
 
+## OpenClaw CLI Resolution (when `openclaw` seems broken)
+
+Before concluding "openclaw is not installed" or acting on a `Cannot find module '.../.local/openclaw/openclaw.mjs'` error, **look at the right places.** That error is a known false alarm: `~/.local/bin/openclaw` is a pnpm cmd-shim reached through a symlink, and its `$0`-derived basedir resolves to a path that never existed. Meanwhile up to **three** openclaw installs can coexist on one machine:
+
+| Install | Role |
+|---------|------|
+| npm-global under nvm node (e.g. `~/.nvm/.../vNN/lib/node_modules/openclaw`) | **canonical** — runs the launchd gateway, newest |
+| `$OPENCLAW_ROOT/AlphaClaw/node_modules/openclaw` (pnpm) | older, repo-local |
+| `~/.alphaclaw/node_modules/openclaw` | **stale orphan — never use** (disabled to `.disabled-*-STALE`) |
+
+**Always resolve through the canonical resolver** rather than trusting the bare command blindly:
+
+```bash
+# one-liner (echoes "<node>\t<entrypoint>")
+"$(orama_git_root)/scripts/openclaw/resolve-openclaw.sh" --which
+
+# or source the lib and use the helpers
+source bin/orama-system/scripts/lib/openclaw-env.sh
+openclaw_cmd plugins list        # runs canonical openclaw, never the stale one
+resolve_openclaw_cli             # prints node + entrypoint of the canonical install
+```
+
+The resolver prefers the install that actually runs the gateway (parsed from the launchd plist), falls back to npm-global then the AlphaClaw repo copy, blacklists the stale `~/.alphaclaw` install, and verifies `--version` before returning. `setup_macos.py` installs `~/.local/bin/openclaw` as a thin wrapper around it, so the bare `openclaw` command self-heals on every `start.sh`. Full rationale: [`scripts/openclaw/resolve-openclaw.sh`](../../../scripts/openclaw/resolve-openclaw.sh) header.
+
+Note the active config may be written by a newer OpenClaw than a given on-disk CLI (e.g. config `2026.6.8` vs a pnpm `2026.5.6`). Prefer the gateway's own version for config writes; `config patch`/`config set` from the canonical CLI is the gateway-aware, validated, atomic path (never hand-edit live `openclaw.json`).
+
 ## Default Model Routing
 
 Use [references/openrouter-defaults.md](references/openrouter-defaults.md) as the source of truth for default model routing.
