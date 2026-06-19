@@ -4,11 +4,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Install all canonical Perpetua-Tools and orama-system skills as thin wrappers for Codex, Claude, and generic agent harness skill roots.
+**Goal:** Install all canonical Perpetua-Tools and orama-system skills as thin wrappers for Codex and `.agents` harness skill roots. Claude skill roots must stay restored to their original state and are intentionally excluded.
 
-**Architecture:** Keep canonical skill content inside `perplexity-api/Perpetua-Tools` and `orama-system`. Generate small wrapper `SKILL.md` files in global and repo-local harness skill roots; wrappers point to canonical paths and include origin-sync and Windows UTF-8 rules.
+**Architecture:** Keep canonical skill content inside `perplexity-api/Perpetua-Tools` and `orama-system`. Generate small wrapper `SKILL.md` files in global Codex and `.agents` harness skill roots; wrappers point to canonical paths and include origin-sync and Windows UTF-8 rules.
 
-**Tech Stack:** Python 3 standard library, Markdown skill cards, Codex `.agents/skills`, Claude `.claude/skills`, user-level `~/.codex/skills`, `~/.claude/skills`, and `~/.agents/skills`.
+**Tech Stack:** Python 3 standard library, Markdown skill cards, repo-local `.agents/skills`, user-level `~/.codex/skills`, and user-level `~/.agents/skills`.
 
 ---
 
@@ -83,14 +83,10 @@ CANONICAL_SKILLS = [
 
 TARGET_ROOTS = [
     "~/.codex/skills",
-    "~/.claude/skills",
     "~/.agents/skills",
     ".agents/skills",
-    ".claude/skills",
     "orama-system/.agents/skills",
-    "orama-system/.claude/skills",
     "perplexity-api/Perpetua-Tools/.agents/skills",
-    "perplexity-api/Perpetua-Tools/.claude/skills",
 ]
 
 
@@ -304,14 +300,10 @@ if __name__ == "__main__":
 
 **Files:**
 - Modify: `~/.codex/skills/*/SKILL.md`
-- Modify: `~/.claude/skills/*/SKILL.md`
 - Modify: `~/.agents/skills/*/SKILL.md`
 - Modify: `.agents/skills/*/SKILL.md`
-- Modify: `.claude/skills/*/SKILL.md`
 - Modify: `orama-system/.agents/skills/*/SKILL.md`
-- Modify: `orama-system/.claude/skills/*/SKILL.md`
 - Modify: `perplexity-api/Perpetua-Tools/.agents/skills/*/SKILL.md`
-- Modify: `perplexity-api/Perpetua-Tools/.claude/skills/*/SKILL.md`
 
 - [x] **Step 1: Dry-run generated paths**
 
@@ -331,7 +323,7 @@ Run:
 python3 orama-system/bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py --install
 ```
 
-Expected: `wrote 288 wrapper files`.
+Expected: `wrote 165 wrapper files` (32 canonical wrappers plus the `no-sleep-chains` redirect stub across 5 non-Claude roots).
 
 ### Task 3: Verify Completion
 
@@ -357,14 +349,10 @@ python3 - <<'PY'
 from pathlib import Path
 roots = [
     Path.home()/'.codex/skills',
-    Path.home()/'.claude/skills',
     Path.home()/'.agents/skills',
     Path('.agents/skills'),
-    Path('.claude/skills'),
     Path('orama-system/.agents/skills'),
-    Path('orama-system/.claude/skills'),
     Path('perplexity-api/Perpetua-Tools/.agents/skills'),
-    Path('perplexity-api/Perpetua-Tools/.claude/skills'),
 ]
 bad = []
 for root in roots:
