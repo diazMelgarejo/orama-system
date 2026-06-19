@@ -291,7 +291,7 @@ if dry_check "write model = gpt-5.5 to $CODEX_CONFIG"; then
         # Remove existing model / model_reasoning_effort lines, re-add at end
         TMP=$(mktemp)
         grep -v -E '^model\s*=' "$CODEX_CONFIG" \
-            | grep -v -E '^model_reasoning_effort\s*=' > "$TMP"
+            | grep -v -E '^model_reasoning_effort\s*=' > "$TMP" || true
         {
             cat "$TMP"
             echo ""
