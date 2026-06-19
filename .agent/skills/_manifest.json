@@ -1,0 +1,22 @@
+[
+  {
+    "name": "orama-system",
+    "path": "bin/orama-system/SKILL.md",
+    "triggers": ["orama", "oramasys", "ultrathink", "systematic task"]
+  },
+  {
+    "name": "hermes-harness",
+    "path": "bin/orama-system/skills/hermes-harness/SKILL.md",
+    "triggers": ["hermes", "ecc harness", "cross-harness"]
+  },
+  {
+    "name": "mcp-orchestration",
+    "path": "bin/orama-system/skills/mcp-orchestration/SKILL.md",
+    "triggers": ["agy", "antigravity", "gemini", "codex cli", "mcp"]
+  },
+  {
+    "name": "openclaw-skills",
+    "path": "bin/orama-system/skills/openclaw-skills/SKILL.md",
+    "triggers": ["openclaw", "gateway", "agent config"]
+  }
+]

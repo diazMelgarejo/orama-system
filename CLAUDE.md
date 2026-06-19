@@ -211,7 +211,7 @@ each have their own pin and their own indexed pages, so semantic results
 match the actual code on disk in this worktree.
 
 Two indexed corpora available via the `gbrain` CLI:
-- This worktree's code (auto-pinned via `.gbrain-source` → `orama-src`).
+- This worktree's code (auto-pinned via `.gbrain-source` → `gstack-code-2159b4b9-595bce`; supersedes `orama-src` (was isolated → now federated, stale @2026-06-05, reindexed 2026-06-17).
 - `~/.gstack/` curated memory (registered as `gstack-brain-lawrencecyremelgarejo` source via
   the existing federation pipeline).
 

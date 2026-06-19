@@ -10,6 +10,10 @@
 > (Ken Huang / Akram Sheriff, MAESTRO talk).
 > **Referenced by:** `08-technical-architecture-review.md` §2.A,
 > `31-security-harness-excellence-plan.md` §3–§4, `32-agentic-security-controls.md` §6/§10.
+> **Local source artifacts incorporated:** `MAESTRO and OWASP GenAI Security_
+> Research Brief for orama-system v2 Security Plan.md` and `Multi-Agent
+> Environment, Security, Threat, Risk, and Outcome.pdf.pdf` from the private
+> operator tools folder.
 
 ---
 
@@ -38,6 +42,40 @@ was missing:
    `PT-01`–`PT-07`, with an explicit "local ID, not an OWASP T-code"
    annotation at the table header. See §6 below for the rationale and the
    approximate cross-reference mapping.
+7. A source-provenance rule: the local research brief is treated as the
+   high-density synthesis; the two-page MAESTRO PDF is treated as the summit
+   transcript/brief that anchors the five-factor talk framing, seven-layer
+   overview, and MCP micro-segmentation/tool-hash emphasis.
+
+---
+
+## 1.1 Source incorporation ledger
+
+The two attached source documents have been folded into this repo as follows.
+The intent is to preserve their complete security substance inside our own
+canonical docs while avoiding a second raw-source tree that would drift.
+
+| Source material | Incorporated here | Also propagated to |
+|---|---|---|
+| Research brief TL;DR and key findings | §§2–10 below | `31` §4, `32` §6/§10, `08` §2.A, `20` memory controls |
+| Research brief MAESTRO/OWASP taxonomy | §§2–3, §6 | `31` local `PT-01`-style table and standards traceability |
+| Research brief MCP controls | §5 | `32` MCP tool-definition pinning and PT runtime ADR |
+| Research brief AIVSS rubric | §7 | `31` quarterly standards-refresh source list |
+| Research brief caveats/source quality | §10 | this file's citation discipline |
+| MAESTRO PDF summit notes | §§2, §5, §8, §9.1 | `08` architecture review and PT ADR |
+
+Key MAESTRO PDF substance now represented here:
+
+- Traditional methods such as STRIDE, DREAD, and PASTA are insufficient alone
+  for agentic AI because they do not model non-determinism, autonomy, expanded
+  trust boundaries, ephemeral identity, and blast-radius cascades.
+- MAESTRO uses seven layers: Foundation Models, Data Operations, Agent
+  Frameworks, Deployment/Infrastructure, Evaluation/Observability, Security &
+  Compliance, and Agent Ecosystem.
+- MCP needs runtime containment, especially micro-segmentation and hash-based
+  baselines for tool calls, so tool changes can be detected and blocked.
+- The summit material should enrich v2 planning without replacing this repo's
+  own existing architecture and control vocabulary.
 
 ---
 
@@ -250,7 +288,107 @@ Huang's framing" rather than implying a single OWASP source document.
 
 ---
 
+## 9.1 v2.0.0-STABLE foundation and v2.1 target
+
+This material is a **v2.1 security target**, but v2.0.0-STABLE must lay the
+foundation so later runtime work does not need a redesign.
+
+### v2.0.0-STABLE foundation
+
+- Keep the local threat namespace as `PT-01`, `PT-02`, ... `PT-09`, ... for
+  all repo-owned threats. Never insert an extra `T` after the repo prefix or
+  use any pattern that visually resembles OWASP's `T1`–`T47` namespace.
+- Treat `31`, `32`, and this file as the canonical kernel/orbit security
+  scaffold:
+  - `31` defines the local threat model and acceptance gates.
+  - `32` defines implementation controls that can become tests.
+  - `39` maps external MAESTRO/OWASP/AIVSS/MCP source material.
+- Keep orama stateless in the kernel path; PT owns stateful runtime controls:
+  memory TTLs, source-attributed writes, tool pinning, live worker profiles,
+  and model endpoint egress policy.
+- Every new orbit integration must declare its MAESTRO layer, local
+  `PT-01`-style threat trace, and whether it adds state, egress, tool
+  execution, or cross-agent communication.
+
+### v2.1 target
+
+- Run the 10-phase MAESTRO Playbook against the 7-agent architecture and store
+  the resulting threat register as an audit artifact.
+- Add AIVSS candidate scoring to every high-risk `PT-01`-style finding, but do
+  not hard-code a formula until AIVSS reaches v1.0.
+- Implement and test PT runtime controls for MCP tool-definition pinning,
+  hashed/source-attributed memory writes, session isolation, TTLs, and
+  micro-segmented model/MCP egress.
+- Add dynamic identity gates: short-lived, task-scoped credentials for agents;
+  no long-lived secrets in prompts, memory, MCP config, or worker environment.
+
+---
+
 ## 10. Source quality notes
+
+Online verification links below were checked on **2026-06-18**. Prefer these
+URLs over secondary mirrors when re-validating this file.
+
+### Primary online verification links
+
+| Source | Verification URL |
+|---|---|
+| CSA MAESTRO blog | <https://cloudsecurityalliance.org/blog/2025/02/06/agentic-ai-threat-modeling-framework-maestro> |
+| CSA MAESTRO landing page | <https://labs.cloudsecurityalliance.org/maestro/> |
+| CSA MAESTRO Threat Analyzer repo | <https://github.com/CloudSecurityAlliance/MAESTRO> |
+| OWASP Multi-Agentic System Threat Modelling Guide v1.0 | <https://genai.owasp.org/resource/multi-agentic-system-threat-modeling-guide-v1-0/> |
+| OWASP Agentic AI: Threats and Mitigations | <https://genai.owasp.org/resource/agentic-ai-threats-and-mitigations/> |
+| OWASP Top 10 for Agentic Applications 2026 | <https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/> |
+| OWASP Agentic Security Initiative | <https://genai.owasp.org/initiatives/agentic-security-initiative/> |
+| OWASP GenAI Security Project | <https://genai.owasp.org/> |
+| OWASP Securely Using Third-Party MCP Servers | <https://genai.owasp.org/resource/cheatsheet-a-practical-guide-for-securely-using-third-party-mcp-servers-1-0/> |
+| OWASP Secure MCP Server Development | <https://genai.owasp.org/resource/a-practical-guide-for-secure-mcp-server-development/> |
+| OWASP MCP Top 10 | <https://owasp.org/www-project-mcp-top-10/> |
+| OWASP MCP Security Cheat Sheet | <https://cheatsheetseries.owasp.org/cheatsheets/MCP_Security_Cheat_Sheet.html> |
+| OWASP AIVSS project | <https://aivss.owasp.org/> |
+| OWASP AIVSS v0.5 PDF | <https://aivss.owasp.org/assets/publications/AIVSS%20Scoring%20System%20For%20OWASP%20Agentic%20AI%20Core%20Security%20Risks%20v0.5.pdf> |
+| OWASP AIVSS v0.8 PDF | <https://aivss.owasp.org/assets/publications/AIVSS%20Scoring%20System%20For%20OWASP%20Agentic%20AI%20Core%20Security%20Risks%20v0.8.pdf> |
+| OWASP AIVSS website source repo | <https://github.com/OWASP/www-project-artificial-intelligence-vulnerability-scoring-system> |
+| OWASP MAESTRO Threat Modeling Playbook repo | <https://github.com/agentic-threat-modeling/MAESTRO> |
+| OWASP MAESTRO Threat Modeling Playbook site | <https://agentic-threat-modeling.github.io/MAESTRO/> |
+| CSA Agentic AI Identity Management Approach | <https://cloudsecurityalliance.org/blog/2025/03/11/agentic-ai-identity-management-approach> |
+| CSA ORCHIDEAS framework | <https://cloudsecurityalliance.org/blog/2026/06/05/designing-agentic-ai-systems-with-the-orchideas-framework> |
+| CSA A2A MAESTRO threat model | <https://cloudsecurityalliance.org/blog/2025/04/30/threat-modeling-google-s-a2a-protocol-with-the-maestro-framework> |
+| TITO repo | <https://github.com/Leathal1/TITO> |
+
+### Secondary or corroboration links
+
+| Source | Verification URL |
+|---|---|
+| Snyk Labs MAESTRO explainer | <https://labs.snyk.io/resources/maestro-threat-modeling/> |
+| CSA/TITO CI/CD article | <https://cloudsecurityalliance.org/blog/2026/02/11/applying-maestro-to-real-world-agentic-ai-threat-models-from-framework-to-ci-cd-pipeline> |
+| Ken Huang "Is Agentic AI Layer 8?" | <https://kenhuangus.substack.com/p/is-agentic-ai-layer-8> |
+| Ken Huang Substack identity mirror | <https://kenhuangus.substack.com/p/agentic-ai-identity-management-approach> |
+| OWASP MCP Top 10 repo | <https://github.com/OWASP/www-project-mcp-top-10> |
+| AIVSS v0.8 release writeup | <https://kenhuangus.substack.com/p/owasp-aivss-project-announces-the> |
+| PipeLab OWASP MCP Top 10 summary | <https://pipelab.org/learn/owasp-mcp-top10/> |
+| PipeLab MCP security summary | <https://pipelab.org/learn/mcp-security/> |
+| Auth0 OWASP Agentic Top 10 notes | <https://auth0.com/blog/owasp-top-10-agentic-applications-lessons/> |
+| F5 OWASP Agentic Top 10 notes | <https://www.f5.com/company/blog/securing-agentic-ai-how-f5-maps-to-the-owasp-agentic-top-10> |
+| F5 OWASP Agentic glossary | <https://www.f5.com/glossary/owasp-top-10-for-agentic-ai-applications> |
+| Teleport OWASP Agentic Top 10 notes | <https://goteleport.com/blog/owasp-top-10-agentic-applications/> |
+| Promptfoo OWASP Agentic testing notes | <https://www.promptfoo.dev/docs/red-team/owasp-agentic-ai/> |
+| Palo Alto Networks OWASP Agentic Top 10 note | <https://www.paloaltonetworks.com/blog/cloud-security/owasp-agentic-ai-security/> |
+| Idan Habler Medium OWASP Agentic Top 10 note | <https://idanhabler.medium.com/demystifying-the-owasp-top-10-for-agentic-applications-4eedba941b2c> |
+| Zenity OWASP Agentic Top 10 note | <https://zenity.io/blog/research/the-owasp-top-10-for-agentic-applications> |
+
+Secondary source classes named in the private brief but not assigned a stable
+canonical URL here: Practical DevSecOps session promo, Grokipedia summaries,
+and Trent AI/vendor commentary. If any of those are relied on later, add the
+exact URL and retrieval date before treating them as a citation.
+
+### Private local input artifacts
+
+These private files were user-provided source artifacts and have no known public
+canonical URL in this workspace:
+
+- `MAESTRO and OWASP GenAI Security_ Research Brief for orama-system v2 Security Plan.md`
+- `Multi-Agent Environment, Security, Threat, Risk, and Outcome.pdf.pdf`
 
 Primary sources (high confidence): CSA MAESTRO blog; OWASP MAS Threat
 Modelling Guide v1.0 (full text retrieved); CSA MAESTRO GitHub repo; OWASP

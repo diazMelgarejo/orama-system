@@ -130,8 +130,9 @@ gstack is a useful pattern source for layered defenses: local classifier, transc
 
 ### MCP-specific addition: tool-definition pinning
 
-> Additive reference: [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md) §5
-> (Akram Sheriff, OWASP MAS Guide MCP worked example, T39–T47).
+> Additive reference: [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md)
+> §3 for the OWASP T39–T47 namespace and §5 for the MCP runtime controls
+> (Akram Sheriff, OWASP MAS Guide MCP worked example).
 
 - Hash each MCP tool definition (SHA-256) on first contact; cache as the
   baseline.
