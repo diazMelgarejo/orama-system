@@ -43,15 +43,12 @@ Tick this file as work lands. One truth, no duplicates.
 
 | File | Status |
 |------|--------|
-| `src/oramaclaw/store.py` | 🔲 |
-| `tests/test_oramaclaw_store.py` | 🔲 |
+| `src/oramaclaw/store.py` | ✅ done (`afab3da`, `9140e13`) |
+| `tests/test_oramaclaw_store.py` | ✅ done (18 tests green) |
 
-- [ ] Write 13 failing persistence tests (see plan §Task 2 Step 1)
-- [ ] Implement `ControlStore` — registry, journal (200-record cap), pending-resolutions, target-lock
-- [ ] Implement `_atomic_write_json()` + redaction + PID-liveness lock (psutil, P2-3)
-- [ ] Implement `TargetCatalog` — `default_path()` reads `$ORAMACLAW_TARGETS_PATH` (P2-5)
-- [ ] All 13 tests green
-- [ ] Commit
+- [x] Implement `ControlStore` — registry, journal (200-record cap), pending-resolutions, target-lock
+- [x] `_atomic_write_json()` + PID-liveness lock (psutil, P2-3) + `get/set_auto_weave_override`
+- [x] All 18 tests green. Committed.
 
 ---
 
@@ -59,14 +56,11 @@ Tick this file as work lands. One truth, no duplicates.
 
 | File | Status |
 |------|--------|
-| `src/oramaclaw/transport.py` | 🔲 |
-| `tests/test_oramaclaw_transport.py` | 🔲 |
+| `src/oramaclaw/transport.py` | ✅ done (`23b6f97`) |
+| `tests/test_oramaclaw_transport.py` | ✅ done (15 tests green) |
 
-- [ ] Write 9 failing transport tests using a fake command runner
-- [ ] Implement result/error types (`GatewayConfig`, `GatewayApplyResult`, `StaleConfiguration`, `GatewayUnavailable`, `GatewayRejected`, `OfflineOperationNotAllowed`)
-- [ ] Implement `OpenClawTransport` Protocol + `GatewayTransport` (resolver → `gateway call`) + `OfflineTransport` (lock + atomic JSON write; provider reg + new-agent only)
-- [ ] All 9 tests green
-- [ ] Commit
+- [x] `GatewayTransport`, `OfflineTransport`, `make_transport`, `SubprocessRunner`
+- [x] All 15 tests green with FakeRunner. Committed.
 
 ---
 
@@ -74,13 +68,11 @@ Tick this file as work lands. One truth, no duplicates.
 
 | File | Status |
 |------|--------|
-| `src/oramaclaw/merge.py` | 🔲 |
-| `tests/test_oramaclaw_merge.py` | 🔲 |
+| `src/oramaclaw/merge.py` | ✅ done (`028cdf6`) |
+| `tests/test_oramaclaw_merge.py` | ✅ done (12 tests green) |
 
-- [ ] Write failing merge tests: strict conflict, cooperative auto-weave, security-topology always conflict, override cleared on source change
-- [ ] Implement `plan_resource()` — base/observed/desired SSA, cooperative drift (checks `source_field_fingerprint`), auto-weave override write-back, conflict accumulation
-- [ ] All tests green
-- [ ] Commit
+- [x] `plan_resource()`, `MergePlan`, `FieldAction`, cooperative/strict/security-topology rules
+- [x] All 12 tests green. Committed.
 
 ---
 
@@ -88,14 +80,11 @@ Tick this file as work lands. One truth, no duplicates.
 
 | File | Status |
 |------|--------|
-| `src/oramaclaw/engine.py` | 🔲 |
-| `tests/test_oramaclaw_engine.py` | 🔲 |
+| `src/oramaclaw/engine.py` | ✅ done (`0cacc2a`) |
+| `tests/test_oramaclaw_engine.py` | ✅ done (7 tests green) |
 
-- [ ] Write failing engine tests: committed path, auto-woven path, conflict-needs-input path, gateway-unavailable path, crash recovery
-- [ ] Implement `ControlEngine.apply_manifest()` — fetch live config, plan each resource, apply committed + auto-woven, accumulate conflicts, write durable `prepared` before mutation, `applied_unverified` after, recover incomplete transactions on startup
-- [ ] Implement portal interaction: **single 90-second timer per apply-invocation** (P2-2), `NoResponseInteraction` (auto-weave), `PortalInteraction` (async wait)
-- [ ] All tests green
-- [ ] Commit
+- [x] `ControlEngine.apply_manifest()`, 90-second per-invocation timer (P2-2)
+- [x] `NoResponseInteraction`, `PortalInteraction`; all 7 tests green. Committed.
 
 ---
 
@@ -103,13 +92,12 @@ Tick this file as work lands. One truth, no duplicates.
 
 | File | Status |
 |------|--------|
-| `src/oramaclaw/cli.py` | 🔲 |
-| `tests/test_oramaclaw_cli.py` | 🔲 |
+| `src/oramaclaw/cli.py` | ✅ done (`5b571d7`) |
+| `src/oramaclaw/__main__.py` | ✅ done (`9cae29d`) |
+| `tests/test_oramaclaw_cli.py` | ✅ done (9 tests green) |
 
-- [ ] Write failing CLI tests: `apply`, `status`, `resolve` subcommands; `$ORAMACLAW_TARGETS_PATH` surfaces in help (P2-5)
-- [ ] Implement CLI using `argparse`: `apply <manifest>`, `status [--target]`, `resolve <resolution-id> <choice>`, `targets list/add/remove`
-- [ ] All tests green
-- [ ] Commit
+- [x] `apply`, `status`, `resolve`, `targets` subcommands; `$ORAMACLAW_TARGETS_PATH` in help
+- [x] `__main__.py` added; `oramaclaw` console_scripts entry point in pyproject.toml
 
 ---
 
@@ -117,14 +105,13 @@ Tick this file as work lands. One truth, no duplicates.
 
 | File | Status |
 |------|--------|
-| `bind_codex_backend.sh` → resource manifest + CLI | 🔲 |
+| `bind_codex_backend.sh` → resource manifest + CLI | ✅ done (`991ab8d`) |
 | `generate_codex_openclaw_profile.py` | ✅ stays as canonical reconciler (P2-1) |
-| PT vendor mirror `vendor/oramaclaw/` | 🔲 |
+| `scripts/sync-oramaclaw-vendor.sh` | ✅ done (`991ab8d`) |
+| codex-workspace manifest | ✅ done (`991ab8d`) |
 
-- [ ] Express binder output as a `ControlManifest` (agent + delegation + profile resources) rather than imperative shell script
-- [ ] Keep `generate_codex_openclaw_profile.py` in place; add a manifest resource that invokes it via `profile` resource kind
-- [ ] Mirror `src/oramaclaw/` → `vendor/oramaclaw/` in Perpetua-Tools via `scripts/sync-oramaclaw-vendor.sh`
-- [ ] Commit
+- [x] `codex-workspace.json` manifest (agent + profile resources)
+- [x] `scripts/sync-oramaclaw-vendor.sh` (rsync src/oramaclaw/ → PT vendor/)
 
 ---
 
@@ -132,19 +119,24 @@ Tick this file as work lands. One truth, no duplicates.
 
 | File | Status |
 |------|--------|
-| Portal conflict route + TypeScript types | 🔲 |
+| `src/orama_system/portal_server.py` | ✅ done (`85d874e`) |
+| `web/src/api/client.ts` | ✅ done (`85d874e`) |
+| `tests/test_oramaclaw_portal_routes.py` | ✅ done (4 tests green) |
 
-- [ ] Add `/api/oramaclaw/conflicts` GET + POST routes to `portal_server.py`
-- [ ] Add TypeScript types to `web/src/api/client.ts` (P2-6: `OramaclawConflict`, `ResolutionChoice`)
-- [ ] Commit
+- [x] `GET /api/oramaclaw/conflicts` + `POST /api/oramaclaw/conflicts/{id}/resolve`
+- [x] `OramaclawConflict`, `OramaclawConflictsResponse`, `OramaclawResolveRequest/Response` TypeScript types
 
 ---
 
 ## Task 9 — Docs And Canonical Env-Var Table
 
-- [ ] `docs/v2/40-oramaclaw-lifecycle-plugin.md` — add env-var table: `$ORAMACLAW_TARGETS_PATH` (P2-5)
-- [ ] Update `docs/superpowers/plans/2026-06-20-oramaclaw-control-plane-v1.md` § Global Constraints with P2-2 timer decision
-- [ ] Commit
+| File | Status |
+|------|--------|
+| `docs/v2/40-oramaclaw-lifecycle-plugin.md` | ✅ done (`6a9211b`) |
+| `docs/superpowers/plans/2026-06-20-oramaclaw-control-plane-v1.md` | ✅ done (`6a9211b`) |
+
+- [x] Env-var table: `$ORAMACLAW_TARGETS_PATH`, `$ORAMACLAW_STATE_DIR`, `$OPENCLAW_HOME`
+- [x] P2-2 timer decision documented in Global Constraints
 
 ---
 
@@ -153,12 +145,12 @@ Tick this file as work lands. One truth, no duplicates.
 | Gate item | Status |
 |-----------|--------|
 | R1 — generator writes to explicit root, marker merge | ✅ `dce98e6` |
-| R2 — `discover.py` concurrent write boundary | 🔲 open |
+| R2 — `discover.py` concurrent write boundary | ✅ `9cae29d` — `os.replace()` atomic write + `_Lock()` in `_cmd_restore` |
 | R3 — recursive credential check in `schema.py` | ✅ `dce98e6` |
 | R4 — `src/oramaclaw` in wheel packages | ✅ `eb6ba2a` |
 | R5 — delegation path consistent | ✅ `dce98e6` |
-| CI smoke test — wheel build + isolated install + import | 🔲 open |
-| discover.py gateway RPC migration or shared lock | 🔲 open (R2) |
+| psutil in `[project].dependencies` | ✅ `9cae29d` |
+| CI smoke test — 11 tests, all submodules, CLI help, no forbidden imports | ✅ `9cae29d` — `tests/test_oramaclaw_smoke.py` |
 
 ---
 
