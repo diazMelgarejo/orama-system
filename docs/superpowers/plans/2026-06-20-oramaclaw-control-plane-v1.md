@@ -142,7 +142,7 @@ class PendingResolution:
 class ControlResult:
     """Returned by ControlEngine.apply_manifest()."""
     transaction_id: str
-    state: Literal["committed", "auto_woven", "conflicted", "needs_input", "failed"]
+    state: Literal["committed", "auto_woven", "conflicted", "needs_input", "gateway_unavailable", "failed"]
     applied: tuple[str, ...]        # resource_keys successfully committed
     auto_woven: tuple[str, ...]     # resource_key + path pairs auto-woven
     conflicts: tuple[Conflict, ...]
