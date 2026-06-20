@@ -1,6 +1,6 @@
 # Oramaclaw v1 Plan — Punch List
 
-**Source plan:** `docs/superpowers/plans/2026-06-20-oramaclaw-control-plane-v1.md`
+**Source plan:** [`2026-06-20-oramaclaw-control-plane-v1.md`](2026-06-20-oramaclaw-control-plane-v1.md)
 **Reviewed:** 2026-06-20 via `/autoplan` (targeted punch-list mode)
 **Branch:** `feat/openclaw-codex-app-server`
 
@@ -18,10 +18,10 @@ Step 3 said "Add to *both* repository `pyproject.toml` files after generated sou
 
 ---
 
-### [P1-2] Missing test fixture: `tests/fixtures/oramaclaw-codex-provider.json`
+### [P1-2] Missing native Codex-agent fixture
 **Status: FIXED — all 4 scenario fixtures created.**
 
-`tests/fixtures/oramaclaw-codex-provider.json` (3-resource: provider + agent + delegation), `tests/fixtures/oramaclaw-stale-gateway.json`, `tests/fixtures/oramaclaw-cooperative-drift.json`, `tests/fixtures/oramaclaw-security-topology.json`. All use `__TMP__` target prefix; `parse_manifest()` handles them without resolving paths on disk.
+`tests/fixtures/oramaclaw-native-codex-agent.json` (native agent + delegation), `tests/fixtures/oramaclaw-stale-gateway.json`, `tests/fixtures/oramaclaw-cooperative-drift.json`, and `tests/fixtures/oramaclaw-security-topology.json` cover the native and generic-provider cases separately. All use `__TMP__` target prefix; `parse_manifest()` handles them without resolving paths on disk.
 
 ---
 
@@ -42,7 +42,7 @@ Step 3 said "Add to *both* repository `pyproject.toml` files after generated sou
 ### [P1-5] Test helpers `provider_manifest_with_medium_effort()` and `NoResponseInteraction()` undefined
 **Status: FIXED — both defined in `tests/conftest.py`.**
 
-`provider_manifest_with_medium_effort(tmp_path)` builds a `ControlManifest` for the codex-app-server provider with `effort=medium`; skips if oramaclaw not installed yet. `NoResponseInteraction.choose()` always returns `None` to simulate the 90-second portal timeout (auto-weave path).
+`provider_manifest_with_medium_effort(tmp_path)` builds a generic provider `ControlManifest` with `effort=medium`; it avoids modeling Codex as a custom provider. `NoResponseInteraction.choose()` always returns `None` to simulate the 90-second portal timeout (auto-weave path).
 
 ---
 
@@ -55,12 +55,22 @@ Step 3 said "Add to *both* repository `pyproject.toml` files after generated sou
 
 ## P2 — Decisions needed
 
-### [P2-1] `generate_codex_openclaw_profile.py` (269 lines, exists) absent from Task 7 migration scope
-**Status: OPEN — decision needed.**
+### [P2-1] `generate_codex_openclaw_profile.py` absent from Task 7 migration scope
+**Status: RESOLVED — migrate it as the idempotent canonical-workspace reconciler.**
 
-This script writes `CODEX.md`, `AGENTS.md`, `TOOLS.md` using source hashes. Task 7 says the Codex binder becomes a "manifest producer" and `CODEX.md` records only marker-delimited metadata — but the existing generator is not listed in Task 7 Files. If left unchanged it will produce content outside the `oramaclaw:generated` markers, conflicting with Task 5 Step 5's profile merge.
+The generator now targets `~/.openclaw/agents/codex-agent`, creates only missing scaffold directories and `SECURITY.md`, and owns paired `oramaclaw:generated` regions in `CODEX.md`, `IDENTITY.md`, `AGENTS.md`, and `TOOLS.md`. It preserves all operator-authored content outside markers and writes nothing on a converged rerun. Task 7 must keep this generator in scope rather than retire it.
 
-**Decision:** Migrate/retire the generator in Task 7, or document explicitly that it stays unchanged and why.
+---
+
+### [P1-7] Legacy Codex app-server fallback and agent fields diverge from current OpenClaw schema
+**Status: RESOLVED — native schema backported.**
+
+The former binder described `codex serve`, a localhost `models.providers.codex` endpoint, nested `model.reasoning_effort`, and `agents.bindings.*.allowAgents`. The installed schema uses `model: "codex/gpt-5.5"`, `thinkingDefault`, `tools.profile`, `agentDir`, and `agents.defaults.subagents.allowAgents`. Native Codex authentication is the interactive `openai-codex` flow and is not a configuration provider resource. The control-plane plan now models native Codex as an agent plus delegation resource, reports `needs_auth` without rollback, and treats `~/.openclaw/agents/codex-agent` as its canonical first-run template.
+
+### [P1-8] Native `openai-codex` login can fail before OAuth when the official provider is excluded
+**Status: RESOLVED — provider-plugin prerequisite added.**
+
+`openclaw models auth login --provider openai-codex` requires a loaded provider plugin. The bundled `openai` provider may be absent or blocked by `plugins.allow`, producing `No provider plugins found`. The binder now installs the bundled provider when absent, preserves the allowlist, appends only `openai`, enables the plugin, restarts when activation changes, verifies loaded status, and emits `needs_plugin` only when automated installation fails. OAuth remains an interactive operator step.
 
 ---
 
@@ -143,7 +153,9 @@ Three issues surfaced by `codex review` on the branch. All fixed in the same bat
 | P1-6 | P1 | ✅ Fixed (schema.py) |
 | CR-1 | P1 | ✅ Fixed (codex review) |
 | CR-3 | P1 | ✅ Fixed (codex review) |
-| P2-1 | P2 | OPEN — decision |
+| P2-1 | P2 | Resolved — marker-only canonical-workspace reconciler |
+| P1-7 | P1 | Resolved — native provider and agent schema backported |
+| P1-8 | P1 | Resolved — allowlisted bundled OpenAI provider prerequisite |
 | P2-2 | P2 | OPEN — decision |
 | P2-3 | P2 | OPEN — decision |
 | P2-4 | P2 | OPEN — decision |

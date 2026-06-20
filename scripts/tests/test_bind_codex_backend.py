@@ -1,4 +1,4 @@
-import json, os, subprocess, shutil, tempfile
+import json, os, subprocess, shutil
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -31,27 +31,82 @@ def test_models_canary_unreachable_is_nonzero():
     assert out == "DOWN", out
 
 
-def test_binder_writes_runtime_agent_dir_without_stowing_cwd():
+def test_binder_uses_canonical_workspace_without_stowing_cwd():
     body = BINDER.read_text(encoding="utf-8")
-    assert 'AGENT_DIR="$OPENCLAW_HOME/.openclaw/agents/codex-agent"' in body
+    assert 'WORKSPACE="$OPENCLAW_HOME/.openclaw/agents/codex-agent"' in body
+    assert 'AGENT_DIR="$WORKSPACE/agent"' in body
+    assert 'agents add codex-agent' in body
     assert 'stow --no-folding -t "$OPENCLAW_HOME" .' not in body
 
 
-def test_binder_accepts_codex_auth_json_or_api_key_env_refs():
+def test_binder_uses_native_codex_auth_without_copying_credential_refs():
     body = BINDER.read_text(encoding="utf-8")
-    assert 'CODEX_API_KEY' in body
-    assert 'OPENAI_API_KEY' in body
-    assert '$HOME/.codex/auth.json' in body
+    assert 'openai-codex' in body
+    assert 'needs_auth' in body
+    assert 'CODEX_API_KEY_REF' not in body
+    assert 'models.providers.codex' not in body
+    assert 'plugins.allow' in body
+    assert 'plugins install openai' in body
+    assert 'plugins enable openai' in body
+    assert 'needs_plugin' in body
 
 
 def test_binder_defaults_medium_and_allows_xhigh_opt_in():
     body = BINDER.read_text(encoding="utf-8")
-    assert 'EFFORT="${EFFORT:-medium}"' in body
-    assert "[--effort medium|high|xhigh]" in body
+    assert 'EFFORT="medium"' in body
     assert "medium|high|xhigh)" in body
 
 
-def test_binder_uses_real_codex_supervisor_plugin_name():
+def test_binder_uses_current_agent_schema_and_reconciliation_guards():
     body = BINDER.read_text(encoding="utf-8")
-    assert "codex-supervisor" in body
-    assert "openclaw-codex-app-server" not in body
+    assert '"codex/gpt-5.5"' in body
+    assert 'thinkingDefault' in body
+    assert 'tools.profile' in body
+    assert 'agents.defaults.subagents.allowAgents' in body
+    assert 'current_workspace' in body
+    assert 'needs_agent_update' in body
+    assert 'config set --batch-json' in body
+    assert 'codex serve' not in body
+    assert 'openai-completions' not in body
+
+
+def test_profile_generator_preserves_operator_text_and_converges(tmp_path):
+    generator = SKILL / "scripts/generate_codex_openclaw_profile.py"
+    workspace = tmp_path / "codex-agent"
+
+    first = subprocess.run(
+        ["python3", str(generator), "--workspace", str(workspace)],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    assert set(json.loads(first.stdout)["changed"]) == {
+        "CODEX.md", "IDENTITY.md", "AGENTS.md", "TOOLS.md", "SECURITY.md"
+    }
+
+    codex_md = workspace / "CODEX.md"
+    codex_md.write_text(codex_md.read_text(encoding="utf-8") + "\nOperator note.\n", encoding="utf-8")
+    security = workspace / "SECURITY.md"
+    security.write_text("Operator security policy.\n", encoding="utf-8")
+
+    second = subprocess.run(
+        ["python3", str(generator), "--workspace", str(workspace)],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    assert json.loads(second.stdout)["changed"] == ["CODEX.md"]
+
+    third = subprocess.run(
+        ["python3", str(generator), "--workspace", str(workspace)],
+        capture_output=True,
+        check=True,
+        text=True,
+    )
+    assert json.loads(third.stdout)["changed"] == []
+    content = codex_md.read_text(encoding="utf-8")
+    assert content.count("<!-- oramaclaw:generated:start -->") == 1
+    assert content.count("<!-- oramaclaw:generated:end -->") == 1
+    assert "model: codex/gpt-5.5" in content
+    assert "Operator note." in content
+    assert security.read_text(encoding="utf-8") == "Operator security policy.\n"
