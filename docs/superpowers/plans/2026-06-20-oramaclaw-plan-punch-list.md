@@ -116,16 +116,16 @@ The task says modify the API client without showing which methods to add or the 
 ## P3 — Hygiene / consistency
 
 ### [P3-1] Broken Markdown table in Task 7 Step 1 — 4 header columns, 3 separator cells
-The `| --- | --- | --- |` separator has 3 cells for a 4-column table. Fixes itself in GitHub preview but renders wrong in some viewers.
+**Status: FIXED.** Added the missing 4th `---` cell to the separator row.
 
 ### [P3-2] Delegation path abbreviated inconsistently in Task 7
-Global Constraints and Task 4 use the full path `agents.defaults.subagents.allowAgents`. Task 7 Steps 2 and 3 use the short form `subagents.allowAgents`. Use the full dotted path throughout.
+**Status: FIXED.** Task 7 Steps 2 and 3 now use the full dotted path `agents.defaults.subagents.allowAgents` / `agents.list[].subagents.allowAgents` matching Global Constraints and Task 4.
 
 ### [P3-3] Hardcoded absolute paths in Task 4 Step 1 fixture (`/work/openclaw`)
-Planning-only test so paths need not exist, but inconsistent with every other test task that uses `tmp_path`. Document "planning-only fixture, paths need not exist" or use `tmp_path`.
+**Status: FIXED.** Added note: "planning-only fixture — paths need not exist on disk; use `tmp_path` when the planner is invoked from pytest."
 
 ### [P3-4] No `pyproject.toml` stub or Python version constraint
-Task 1 Step 5 says "Include `src/oramaclaw` in Hatch package discovery" but provides no `pyproject.toml` diff. The Hatch `src/` layout config is non-obvious.
+**Status: FIXED.** Task 1 Step 5 now includes the Hatch `src/` layout `pyproject.toml` diff with `[tool.hatch.build.targets.wheel] packages = ["src/oramaclaw"]`.
 
 ---
 
@@ -145,7 +145,7 @@ Task 1 Step 5 says "Include `src/oramaclaw` in Hatch package discovery" but prov
 | P2-4 | P2 | OPEN — decision |
 | P2-5 | P2 | OPEN |
 | P2-6 | P2 | OPEN |
-| P3-1 | P3 | OPEN |
-| P3-2 | P3 | OPEN |
-| P3-3 | P3 | OPEN |
-| P3-4 | P3 | OPEN |
+| P3-1 | P3 | ✅ Fixed |
+| P3-2 | P3 | ✅ Fixed |
+| P3-3 | P3 | ✅ Fixed |
+| P3-4 | P3 | ✅ Fixed |
