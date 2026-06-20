@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "target": {
+    "workspace_root": "__TMP__/workspace",
+    "config_path": "__TMP__/openclaw.json",
+    "state_dir": "__TMP__"
+  },
+  "resources": [
+    {
+      "kind": "provider",
+      "id": "codex-app-server",
+      "manager": "codex-binder",
+      "policy": "cooperative",
+      "spec": {
+        "api": "openai-completions",
+        "baseUrl": "http://127.0.0.1:61234/v1",
+        "authReference": "~/.codex/config.toml",
+        "models": [
+          {
+            "id": "gpt-5.5",
+            "name": "Codex — GPT-5.5",
+            "contextWindow": 200000
+          }
+        ]
+      },
+      "managed_paths": [
+        "/models/providers/codex-app-server"
+      ]
+    },
+    {
+      "kind": "agent",
+      "id": "codex-agent",
+      "manager": "codex-binder",
+      "policy": "cooperative",
+      "spec": {
+        "name": "Codex Agent (GPT-5.5)",
+        "mode": "sub-agent",
+        "model": {
+          "primary": "codex/gpt-5.5",
+          "reasoning_effort": "medium"
+        },
+        "tools": {
+          "profile": "coding"
+        }
+      },
+      "managed_paths": [
+        "/agents/list/id=codex-agent"
+      ]
+    },
+    {
+      "kind": "delegation",
+      "id": "main-allows-codex-agent",
+      "manager": "codex-binder",
+      "policy": "strict",
+      "spec": {
+        "parent": "main",
+        "allow": "codex-agent",
+        "delegation_path": "agents.defaults.subagents.allowAgents"
+      },
+      "managed_paths": [
+        "/agents/defaults/subagents/allowAgents"
+      ]
+    }
+  ]
+}
