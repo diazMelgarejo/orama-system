@@ -77,13 +77,19 @@ _FORBIDDEN_SPEC_KEYS = frozenset({
 })
 
 
-def _check_no_raw_credentials(spec: dict[str, Any], resource_key: str) -> None:
-    for key in spec:
-        if key in _FORBIDDEN_SPEC_KEYS:
-            raise ManifestValidationError(
-                f"{resource_key}: spec.{key} looks like a raw credential. "
-                "Use an authReference path instead (e.g. '~/.codex/config.toml')."
-            )
+def _check_no_raw_credentials(spec: Any, resource_key: str, path: str = "spec") -> None:
+    if isinstance(spec, dict):
+        for key, value in spec.items():
+            key_text = str(key)
+            if key_text in _FORBIDDEN_SPEC_KEYS:
+                raise ManifestValidationError(
+                    f"{resource_key}: {path}.{key_text} looks like a raw credential. "
+                    "Use an authReference path instead (e.g. '~/.codex/config.toml')."
+                )
+            _check_no_raw_credentials(value, resource_key, f"{path}.{key_text}")
+    elif isinstance(spec, list):
+        for index, value in enumerate(spec):
+            _check_no_raw_credentials(value, resource_key, f"{path}[{index}]")
 
 
 # ── Errors ───────────────────────────────────────────────────────────────────
@@ -115,11 +121,11 @@ def parse_manifest(path: Path) -> ControlManifest:
 
     # Target is optional in manifest (may be supplied via CLI flags).
     target_data = data.get("target", {})
-    target = _parse_target(target_data, path) if target_data else None  # type: ignore[assignment]
+    target = _parse_target(target_data, path) if target_data else None
 
     return ControlManifest(
         version=data["version"],
-        target=target,  # type: ignore[arg-type]  # None when CLI-supplied
+        target=target,
         resources=resources,
         source_path=path,
         source_fingerprint=fingerprint,
@@ -182,6 +188,10 @@ def _parse_target(data: dict[str, Any], path: Path) -> ConfigTarget:
         if field not in data:
             raise ManifestValidationError(
                 f"{path}: target.{field} is required when 'target' is present"
+            )
+        if not isinstance(data[field], str) or not data[field]:
+            raise ManifestValidationError(
+                f"{path}: target.{field} must be a non-empty string"
             )
     return ConfigTarget(
         workspace_root=Path(data["workspace_root"]).expanduser().resolve()

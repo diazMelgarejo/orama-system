@@ -59,7 +59,7 @@ class Resource:
 class ControlManifest:
     """Parsed and validated declarative manifest (from JSON on disk)."""
     version: int                    # must be 1 for V1
-    target: ConfigTarget
+    target: ConfigTarget | None
     resources: tuple[Resource, ...]
     source_path: Path               # original file path (for error messages)
     source_fingerprint: str         # SHA-256 of raw bytes

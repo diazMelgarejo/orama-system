@@ -25,7 +25,7 @@ RIGHT  (only Claude's orchestrator tokens count against the cap):
 
 ## Canonical implementation
 
-`/tmp/cox_panel.py` (created 2026-06-19) is the reference implementation.
+`$TMPDIR/cox_panel.py` (created 2026-06-19) is the reference implementation.
 Copy it to `scripts/panels/` when you want a permanent version.
 
 Key structural decisions from that run:
@@ -34,7 +34,7 @@ Key structural decisions from that run:
 |----------|-------|
 | Execution model | `concurrent.futures.ThreadPoolExecutor`, one thread per lane |
 | Timeout per lane | codex 260s, agy 260s, ollama 240s, openrouter 180s, gemini 220s |
-| Output isolation | Each lane writes `/tmp/cox_<lane>.out` — no shared state |
+| Output isolation | Each lane writes `$TMPDIR/cox_<lane>.out` — no shared state |
 | HTTP calls | `subprocess.run(["curl", ...])` NOT `urllib.request` (avoids macOS SSL CA issue) |
 | Secrets | Read from `os.environ`, never printed, never copied into files |
 | Failure mode | Fail-open: a lane returning `(lane, False, 0)` is skipped during synthesis |
@@ -67,8 +67,8 @@ const ollamaResult = await agent("call ollama ...", { model: "sonnet" })
 ```
 
 The fix in `cox_panel.py`: Python threads, direct `subprocess.run` and `curl`.
-No Claude agent wrappers. The orchestrator calls `python3 /tmp/cox_panel.py`
-from a single Bash tool call; it reads the results from `/tmp/cox_*.out`.
+No Claude agent wrappers. The orchestrator calls `python3 $TMPDIR/cox_panel.py`
+from a single Bash tool call; it reads the results from `$TMPDIR/cox_*.out`.
 
 ## MCP orchestration adaptation
 
@@ -78,8 +78,8 @@ For workflows that use the Workflow tool (`agent()` calls):
 // Pattern: orchestrator calls a single Bash lane that runs the external panel
 phase('ExternalPanel')
 const panelScript = await agent(
-  "Generate /tmp/panel_<run>.py based on the digest and run it. " +
-  "Return the content of each /tmp/panel_<lane>.out file.",
+  "Generate $TMPDIR/panel_<run>.py based on the digest and run it. " +
+  "Return the content of each $TMPDIR/panel_<lane>.out file.",
   { label: "panel-runner", phase: "ExternalPanel" }
 )
 // Only ONE Claude agent call for the whole panel — the synthesis step.

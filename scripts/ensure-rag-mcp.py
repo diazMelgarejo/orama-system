@@ -141,13 +141,22 @@ def cli_apply(name: str, spec: dict) -> bool:
 
 # ── Desktop app scope ────────────────────────────────────────────────────────
 
+def _load_json_config(path: Path, label: str) -> dict:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return {}
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"Invalid JSON in {label} config {path}: {exc}") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Failed reading {label} config {path}: {exc}") from exc
+    if not isinstance(data, dict):
+        raise RuntimeError(f"Invalid JSON in {label} config {path}: expected an object")
+    return data
+
+
 def desktop_load() -> dict:
-    if DESKTOP_CFG.is_file():
-        try:
-            return json.loads(DESKTOP_CFG.read_text())
-        except Exception:
-            return {}
-    return {}
+    return _load_json_config(DESKTOP_CFG, "Claude Desktop")
 
 
 def desktop_present(cfg: dict, name: str) -> bool:
@@ -258,12 +267,7 @@ def codex_apply(servers: dict) -> bool:
 # ── OpenClaw project MCP scope ───────────────────────────────────────────────
 
 def openclaw_load() -> dict:
-    if OPENCLAW_MCP.is_file():
-        try:
-            return json.loads(OPENCLAW_MCP.read_text())
-        except Exception:
-            return {}
-    return {}
+    return _load_json_config(OPENCLAW_MCP, "OpenClaw MCP")
 
 
 def openclaw_present(cfg: dict, name: str) -> bool:
