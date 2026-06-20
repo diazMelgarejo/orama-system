@@ -51,6 +51,31 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+## 2026-06-20 — Codex + Claude — Native codex/gpt-5.5 agent and workspace template reconciler
+
+### What was learned
+
+- The old `codex-openclaw-agent` used a custom `openai-completions` provider block pointing at `http://127.0.0.1:61234/v1` plus a `codex-supervisor` observation plugin as the model runtime. Both are wrong: `codex-supervisor` is a supervision/observation plugin, not a model runtime; the real native provider is the OpenClaw `openai` bundled plugin with model string `codex/gpt-5.5` from the catalog.
+- The correct agent registration flow is `openclaw agents add codex-agent --model codex/gpt-5.5`; reconcile managed fields through `openclaw config set --batch-json`; never hand-write a `models.providers.codex` block.
+- Plugin allowlist (`plugins.allow`) is a security boundary. The binder must read the existing list, append only `openai`, and never widen it beyond that.
+- `generate_codex_openclaw_profile.py` must be an idempotent marker-region reconciler (`<!-- oramaclaw:generated:start/end -->`), not a full-file writer. Operator content outside the markers and `SECURITY.md` once written must survive reruns.
+- The workspace at `~/.openclaw/agents/codex-agent` is already registered (OpenClaw Gateway Agent Main confirmed registration). The generator converged immediately (no files changed) because `CODEX.md` and `IDENTITY.md` were already reconciled from a prior run. `AGENTS.md` and `TOOLS.md` had no `oramaclaw:generated` sections yet and received them.
+- `codex review --commit HEAD < /dev/null` stalled mid-review when `list_graph_stats_tool` MCP call blocked — CRG MCP was interrupted. Have a direct-read fallback ready for codex review output files and rely on CRG semantic search + manual diff for correctness when this happens.
+
+### Decisions made
+
+- `codex-agent` canonical workspace: `~/.openclaw/agents/codex-agent`; `agentDir`: `~/.openclaw/agents/codex-agent/agent`; model: `codex/gpt-5.5`; `thinkingDefault`: `medium`; `tools.profile`: `coding`.
+- Delegation path: `agents.defaults.subagents.allowAgents` (not `agents.bindings.*.allowAgents` — that key is rejected by the oramaclaw control plane).
+- Auth flow: `openclaw models auth login --provider openai-codex` (interactive, never in unattended automation).
+- `bind_codex_backend.sh` drops `--force`; reports `needs_plugin` and `needs_auth` as structured exit states; restarts gateway only when provider or agent config actually changed.
+- Fixture rename: `oramaclaw-codex-provider.json` → `oramaclaw-native-codex-agent.json`; cooperative-drift fixture uses `example-provider` so it doesn't imply the old custom-provider path.
+
+### Open questions
+
+- None blocking. P2 items (90-second timer scope, psutil vs os.kill, `__init__.py` surface) remain open by design.
+
+---
+
 ## 2026-06-18 — Codex — Hermes Windows one-shot routing and Antigravity adapter
 
 ### What was learned
