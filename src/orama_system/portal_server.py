@@ -1871,6 +1871,67 @@ async def api_job_artifacts_proxy(job_id: str):
             }
 
 
+# ── OramaClaw conflict resolution routes (P2-6) ───────────────────────────────
+
+_ORAMACLAW_STATE_DIR_DEFAULT = Path.home() / ".openclaw" / "state" / "oramaclaw"
+
+
+def _oramaclaw_state_dir() -> Path:
+    raw = os.environ.get("ORAMACLAW_STATE_DIR", "")
+    if raw:
+        return Path(raw)
+    return _ORAMACLAW_STATE_DIR_DEFAULT
+
+
+def _read_pending_resolutions() -> list:
+    state_file = _oramaclaw_state_dir() / "pending-resolutions.json"
+    try:
+        if state_file.exists():
+            return json.loads(state_file.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return []
+
+
+def _write_pending_resolutions(records: list) -> None:
+    from datetime import datetime, timezone as _tz
+    state_dir = _oramaclaw_state_dir()
+    state_dir.mkdir(parents=True, exist_ok=True)
+    dest = state_dir / "pending-resolutions.json"
+    tmp = state_dir / "pending-resolutions.json.tmp"
+    tmp.write_text(json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, dest)
+
+
+class OramaclawResolveRequest(BaseModel):
+    choice: str
+
+
+@app.get("/api/oramaclaw/conflicts")
+async def api_oramaclaw_conflicts():
+    """Return all pending oramaclaw conflict resolutions."""
+    records = _read_pending_resolutions()
+    return {"conflicts": records}
+
+
+@app.post("/api/oramaclaw/conflicts/{resolution_id}/resolve")
+async def api_oramaclaw_resolve(resolution_id: str, req: OramaclawResolveRequest):
+    """Mark a pending oramaclaw conflict as resolved with the given choice."""
+    from datetime import datetime, timezone as _tz
+    records = _read_pending_resolutions()
+    found = False
+    for record in records:
+        if record.get("resolution_id") == resolution_id:
+            record["resolved_at"] = datetime.now(_tz.utc).isoformat()
+            record["chosen"] = req.choice
+            found = True
+            break
+    if not found:
+        raise HTTPException(status_code=404, detail={"error": "not found"})
+    _write_pending_resolutions(records)
+    return {"ok": True, "resolution_id": resolution_id, "chosen": req.choice}
+
+
 def _parse_env_file(path: "Path") -> Dict[str, str]:
     """Parse a .env file into a dict. Handles KEY=VAL, KEY = VAL, inline comments."""
     result: Dict[str, str] = {}
