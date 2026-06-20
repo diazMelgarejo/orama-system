@@ -19,6 +19,7 @@
 - Offline mutation is restricted to provider registration and creation of a new agent. It locks, parses, preserves mode, atomically writes, and revalidates JSON.
 - Resource adoption is explicit. Existing matching state is not silently adopted.
 - Normal, schema-valid cooperative drift may auto-weave the observed value into a manager-scoped effective-desired override after 90 seconds, preserving live configuration. The override applies only while the manifest source field remains unchanged; an explicit source change clears it. Security topology always remains conflict-only.
+- The 90-second cooperative auto-weave timer is **per-apply-invocation**, not per-resource. A single `apply_manifest()` call opens one 90-second window covering all cooperative resources in that batch. Per-resource timers create nondeterminism in multi-resource batches.
 - Security topology includes credentials, execution policy, delegation, and agent create/remove. It is never auto-adopted, auto-woven, or overwritten after a timeout.
 - Before any configuration mutation, write a durable `prepared` transaction. After mutation, record `applied_unverified`; startup and status recover incomplete transactions by re-reading live state and committing or conflicting, never guessing.
 - Registered targets are named entries in a local catalog at `$ORAMACLAW_TARGETS_PATH` or `~/.oramaclaw/targets.json`; portal clients select only these names.
