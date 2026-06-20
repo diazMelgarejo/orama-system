@@ -27,12 +27,14 @@ metadata:
 ---
 
 > **Activation guard — skip if OmniRoute is absent.** Run first; if it prints SKIP, do nothing else.
+>
 > ```bash
 > { [ -d "$HOME/.omniroute" ] || [ -d "/Applications/OmniRoute.app" ]; } \
 >   || { echo "OmniRoute not installed — SKIP sidecar"; exit 0; }
 > ```
 
 ## What it is
+
 - **OmniRoute** = local "Unified AI API Proxy" (multi-provider routing, load-balancing, usage tracking),
   shipped as a macOS **DMG app** (`/Applications/OmniRoute.app`, e.g. v3.8.3) running a bundled Next.js
   **`next-server` on `http://127.0.0.1:20128`**.
@@ -44,12 +46,15 @@ metadata:
   clone running; `~/.omniroute` is just the DMG's data dir, **not** a git checkout).
 
 ## Claude Code MCP config (verified 2026-06-14)
+
 - Transport is **`streamable-http`**: `sqlite3 ~/.omniroute/storage.sqlite "SELECT value FROM key_value WHERE key='mcpTransport';"`
 - **Correct server entry** (`~/.claude.json` → global `mcpServers.omniroute` or a project scope):
+
   ```json
   { "type": "http", "url": "http://127.0.0.1:20128/api/mcp/stream",
     "headers": { "Authorization": "Bearer <registered-key>" } }
   ```
+
 - **Gotchas that cause `/doctor` "Unable to connect — Is the computer able to access the url?":**
   - `https://cloud.omniroute.online/...` is **dead (404)** — stale cloud endpoint. Use the **local** URL,
     or the current tunnel from `~/.omniroute/cloudflared/quick-tunnel.log`.
@@ -66,11 +71,13 @@ metadata:
     holding open, **not** a failure; unauth returns `401`.
 
 ## GUI password reset — PROVEN (sets a SPECIFIC password, live, no restart)
+
 - Login auth is **bcrypt `$2b$12`**, stored JSON-string-encoded at `key_value['password']` in
   `storage.sqlite`. `requireLogin` / `setupComplete` / `hasPassword` live in the same table.
 - `Default password: CHANGEME` applies **only** when `INITIAL_PASSWORD` is unset on a *fresh* setup. Once
   set up, it's the user's custom password (hashed → unrecoverable; you can only **reset**).
 - **Set it to a known value (verified: login returns HTTP 200 immediately, no app restart):**
+
   ```bash
   DB="$HOME/.omniroute/storage.sqlite"
   NEWPASS='bd0735'                                            # your desired password
@@ -80,6 +87,7 @@ metadata:
   curl -s -o /dev/null -w '%{http_code}\n' -X POST http://127.0.0.1:20128/api/auth/login \
        -H 'Content-Type: application/json' -d "{\"password\":\"$NEWPASS\"}"        # expect 200
   ```
+
   - **bcrypt source order (use the first available):** `htpasswd -B` (Apache; macOS `/usr/sbin/htpasswd`)
     → any on-disk `bcryptjs` module via `node -e "require('<dir>').hashSync(p,12)"` → `python3 -c 'import bcrypt'`.
     The app's own bcrypt is webpacked in `.next` and **not** `require`-able.
@@ -89,6 +97,7 @@ metadata:
   set `INITIAL_PASSWORD` in `~/.omniroute/.env`, clear `key_value['password']`, restart.
 
 ## storage.sqlite quick map
+
 - `key_value` — settings KV: `mcpTransport`, `mcpEnabled`, `requireLogin`, `setupComplete`, `password`,
   `apiKeySecret`, `jwtSecret`, plus model/cache/compression flags.
 - `registered_keys` / `api_keys` — MCP/API Bearer keys. `command_code_auth_sessions` — OAuth/session state.
@@ -105,6 +114,7 @@ OpenRouter/AgentRouter models in parallel. Its tools surface in Claude Code as M
 Export `OMNIROUTE_TOKEN` in a gitignored `.env`.
 
 ### Probe (run once at session start, silent on any failure)
+
 ```bash
 _OR_URL="http://127.0.0.1:20128/api/mcp/stream"
 _OR_TOK="${OMNIROUTE_TOKEN:-}"        # injected from env/.env; never hardcode a token here
@@ -119,18 +129,21 @@ echo "OMNIROUTE: $_OMNIROUTE"
 ```
 
 ### Workflow rule
+
 | `OMNIROUTE` | Action |
 |-------------|--------|
 | `running` / `started` | Route fan-out subtasks (review passes, drafts, A/B model compares) through OmniRoute MCP tools |
 | `unavailable` | Continue on the standard stack (code-review-graph → gbrain → Gemini → ai-cli). Do **not** warn the user. |
 
 ### Never
+
 - Install or upgrade OmniRoute inside any setup script or `start.sh`.
 - Fail, warn, or degrade visibly when OmniRoute is absent.
 - Block on OmniRoute being rate-limited / unreliable; retry at most **once** per session if start fails.
 - Hardcode the bearer token in a tracked file — read `$OMNIROUTE_TOKEN` from env.
 
 ## Why "lazy sidecar"
+
 Reference-only and machine-specific. It is **not** imported, required, or depended on by any other skill —
 keep it out of every skill's hard dependency graph. If OmniRoute isn't installed, the activation guard
 exits and nothing runs. Use it if present; skip it if not.
@@ -154,11 +167,14 @@ that breaks. Removing the `env` block (Disable § 1b) is the actual fix; stoppin
 enough on its own.
 
 **This is not a network outage.** Verify direct reachability:
+
 ```bash
 # Expect HTTP 401 (Anthropic server answered — auth required, not refused)
 curl -s --max-time 5 -o /dev/null -w "HTTP %{http_code} in %{time_total}s" https://api.anthropic.com/v1/models
 ```
+
 If you get `000` or `ECONNREFUSED`, OmniRoute (or another local proxy) is still intercepting. Check:
+
 ```bash
 pgrep -la omniroute cloudflared
 lsof -iTCP -sTCP:LISTEN | grep -E "20128|3000|4000|8080"
@@ -213,6 +229,7 @@ Dropping the whole `env` block restores vanilla OAuth + default endpoint for the
 Desktop app is unaffected (it injects its own env at launch).
 
 Verify (avoid leaving any dead-port reference):
+
 ```bash
 grep -n "ANTHROPIC_BASE_URL\|ANTHROPIC_AUTH_TOKEN" ~/.claude/settings.json \
   && echo "STILL PRESENT (bad)" || echo "clean"
@@ -274,6 +291,7 @@ sleep 2 && pgrep -la omniroute && echo "Running" || echo "Failed to start"
 ### 2. Restore MCP config
 
 Get the Bearer token from `~/.omniroute/storage.sqlite`:
+
 ```bash
 sqlite3 ~/.omniroute/storage.sqlite \
   "SELECT value FROM registered_keys LIMIT 3;" 2>/dev/null \
@@ -282,12 +300,14 @@ sqlite3 ~/.omniroute/storage.sqlite \
 ```
 
 Add back to `~/.claude.json` via:
+
 ```bash
 claude mcp add-json omniroute \
   '{"type":"http","url":"http://127.0.0.1:20128/api/mcp/stream","headers":{"Authorization":"Bearer <TOKEN>"}}'
 ```
 
 **Gotchas (all verified 2026-06-14):**
+
 - Use `http://127.0.0.1:20128/api/mcp/stream` — NOT `https://cloud.omniroute.online` (dead/404).
 - Transport must be `streamable-http` — verify: `sqlite3 ~/.omniroute/storage.sqlite "SELECT value FROM key_value WHERE key='mcpTransport';"`
 - A **project-scoped** `mcpServers.omniroute` overrides the global one — harmonize both to the local URL.
