@@ -89,6 +89,43 @@ Use `--dry-run` to preview. The normal rerun must make no configuration or
 workspace write when state already matches. Operator-authored content outside
 the `<!-- oramaclaw:generated:* -->` region is never replaced.
 
+## Workspace Template
+
+The workspace template generator reconciles only the `<!-- oramaclaw:generated:start/end -->`
+marker regions in the four managed files and scaffolds `SECURITY.md` when absent.
+All operator-authored content outside those markers is preserved. Reruns with
+unchanged state write nothing and exit `{"changed": [], "status": "ok"}`.
+
+Run from the skill directory:
+
+```bash
+python scripts/generate_codex_openclaw_profile.py \
+  --workspace ~/.openclaw/agents/codex-agent \
+  --effort medium
+```
+
+Options:
+
+| Flag | Default | Effect |
+| --- | --- | --- |
+| `--workspace PATH` | `~/.openclaw/agents/codex-agent` | Target workspace directory |
+| `--effort medium\|high\|xhigh` | `medium` | Sets the `thinkingDefault` written into the `IDENTITY.md` marker region |
+| `--dry-run` | off | Reports which files would change without writing |
+
+Managed files and their marker content:
+
+| File | Marker section | Scaffold-only |
+| --- | --- | --- |
+| `CODEX.md` | Model, workspace, and tool-profile summary | no |
+| `IDENTITY.md` | Agent name, role, model, and thinking level | no |
+| `AGENTS.md` | Operational rules for the Codex sub-agent | no |
+| `TOOLS.md` | Tool-profile and credential-handling rules | no |
+| `SECURITY.md` | Security contract (credentials, approval gates) | **yes — created only when absent** |
+
+The binder (`bind_codex_backend.sh`) calls this generator as step 6 of its
+reconciliation pass. Run the generator directly when you only need to refresh
+workspace defaults without touching the OpenClaw config or restarting the gateway.
+
 ## Boundaries
 
 - Do not modify `agents.defaults.model`, the Main Agent, `coder`, or gateway/LaunchAgent settings.
