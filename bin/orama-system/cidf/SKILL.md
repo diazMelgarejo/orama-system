@@ -14,6 +14,7 @@ allowed-tools: bash, file-operations
 ---
 
 ## The One Rule
+>
 > Use the simplest tool that works. Complexity is a cost, not a feature.
 
 ---
@@ -33,7 +34,7 @@ lint_strict(decision, task, env)  # raises LintError on LINT-001–005
 ## Method Priority (always top-to-bottom, stop at first eligible)
 
 | Rank | Method | Eligible When | Complexity |
-|------|--------|---------------|-----------|
+| ------ | -------- | --------------- | ----------- |
 | 1 | `direct_form_input` | `field_accessible == True`, content < 10k | ★☆☆☆☆ |
 | 2 | `direct_typing` | `editor_visible == True`, content < 5k | ★★☆☆☆ |
 | 3 | `clipboard_paste` | `paste_supported == True` | ★★☆☆☆ |
@@ -44,7 +45,7 @@ lint_strict(decision, task, env)  # raises LintError on LINT-001–005
 
 ## Automation Gate
 
-```
+```text
 OPEN (any one true):   frequency ≥ 5 · conditional_logic · transformation · external_integration
 CLOSED (any one true): one_time + static · simpler_method_available · setup_time > run_time
 ```
@@ -55,7 +56,7 @@ When gate is CLOSED and ranks 1–4 all fail → notify user. Do NOT script.
 
 ## Verification (mandatory)
 
-```
+```text
 execute → visual_ok? ──no──→ refresh() → verify_programmatically(signature)
                                               ↓
                                     found? → ✅ complete
@@ -73,6 +74,7 @@ When the content is markdown:
 - **Paths: relative in-repo links + GitHub URLs only — NEVER absolute workstation paths.** A literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree doxes the owner and fails CI (`scripts/review/repo_hygiene.py`). For cross-repo references use a relative path (`../<repo>/…`) or a `https://github.com/diazMelgarejo/<repo>/blob/<branch>/…` URL; for runtime paths use `$OPENCLAW_ROOT`/`$REPO_ROOT`/`~`. Same rule as the git-hygiene "no workstation paths" check.
 - If a markdown file moves or gets renamed, preserve the redirect trail with a canonical-path note or an updated index link before commit.
 - Warn and ask the user before adding a new markdown file over 200 lines or growing an existing markdown file over 500 lines; suggest moving detail to `references/`, `docs/wiki/`, or a sub-skill.
+- Format all markdown tables with spaces inside the pipe characters to comply with MD060 table-column-style (compact). Delimiter rows must use `| ----- | --------- |` instead of `|-------|-----------|` to avoid lint warnings. Remove one ("-") and add one space (" ") on each side of the pipe.
 - Review the diff for stale anchors and broken relative links before the final write.
 
 ---
@@ -80,7 +82,7 @@ When the content is markdown:
 ## Lint Rules (pre-execution guard)
 
 | Rule | What it catches |
-|------|----------------|
+| ------ | ---------------- |
 | LINT-001 | Scripting chosen while simpler rank eligible |
 | LINT-002 | `verification_required == False` — hard block |
 | LINT-003 | Complexity bias (chosen rank > min eligible) |
@@ -123,7 +125,7 @@ machine; the repo's `repo_hygiene.py` is the portable committed backstop.
 
 ## Package Contents
 
-```
+```text
 bin/orama-system/cidf/
 ├── SKILL.md                          ← this file (sub-skill)
 ├── FRAMEWORK.md                      ← canonical v1.2 spec
@@ -144,7 +146,7 @@ bin/orama-system/cidf/
 ## Version Alignment (all must match)
 
 | File | Must say |
-|------|---------|
+| ------ | --------- |
 | This SKILL.md `version:` | `1.2.0` |
 | `cidf/FRAMEWORK.md` header | `Version: 1.2` |
 | `cidf/core/content_insertion_policy.json` → `framework_version` | `"1.2"` |
