@@ -383,8 +383,9 @@ def patch_openclaw_json(endpoints: dict):
         ]
     cfg.setdefault("meta", {})["lastTouchedAt"] = datetime.now(timezone.utc).isoformat()
     try:
-        with open(str(OPENCLAW_JSON), "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(cfg, indent=2))
+        tmp = OPENCLAW_JSON.with_suffix(".json.tmp~")
+        tmp.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        os.replace(tmp, OPENCLAW_JSON)
     except OSError as exc:
         logging.warning("patch_openclaw_json: cannot write %s: %s", OPENCLAW_JSON, exc)
 
@@ -641,7 +642,8 @@ def _cmd_restore(target: str):
     repo_paths = get_repo_paths()
     pt_repo = repo_paths.get("perpetua_tools")
     mac = ep.get("mac") or {}; win = ep.get("win") or {}
-    patch_openclaw_json(ep)
+    with _Lock():
+        patch_openclaw_json(ep)
     if pt_repo:
         patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
         patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
