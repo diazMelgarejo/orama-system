@@ -434,6 +434,16 @@ Acceptance:
 | `28-againtra-platform-requirements-alignment.md` | Precedent for the orbit-plugin pattern this doc applies to OpenClaw and AlphaClaw lifecycle. |
 | `README.md` | D22 in locked decisions; module roadmap row; spec tree entry `40-`. Next free slot: `41-`. |
 
+## Environment Variables
+
+Oramaclaw respects the following environment variables to customize discovery, state storage, and fallback behavior:
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `$ORAMACLAW_TARGETS_PATH` | `~/.openclaw/oramaclaw-targets.json` | Path to the named-target catalog JSON file. Overrides the default catalog location. Surfaced in `oramaclaw targets list` and `--target` flag help. |
+| `$ORAMACLAW_STATE_DIR` | `~/.openclaw/state/oramaclaw` | Base directory for registry, journal, pending-resolutions, and PID lock files. |
+| `$OPENCLAW_HOME` | (none) | Legacy: deprecated workspace root. Triggers a migration warning; use explicit target fields instead. |
+
 ## Related Material
 
 - [V1 control-plane implementation plan](../superpowers/plans/2026-06-20-oramaclaw-control-plane-v1.md)
