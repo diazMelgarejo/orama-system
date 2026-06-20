@@ -329,13 +329,15 @@ TOMLEOF
 fi
 
 # ── Sub-agent parent binding (main agent can call codex-agent) ───────────────
-if dry_check "wire codex-agent into agents.bindings.main.allowAgents"; then
+# Use agents.defaults.subagents.allowAgents per the oramaclaw delegation contract.
+# The legacy agents.bindings.*.allowAgents path is rejected by the new control plane.
+if dry_check "wire codex-agent into agents.defaults.subagents.allowAgents"; then
     jq '
-        (.agents.bindings //= {}) |
-        (.agents.bindings.main //= {}) |
-        (.agents.bindings.main.allowAgents //= []) |
-        if (.agents.bindings.main.allowAgents | index("codex-agent")) then .
-        else .agents.bindings.main.allowAgents += ["codex-agent"] end
+        (.agents.defaults //= {}) |
+        (.agents.defaults.subagents //= {}) |
+        (.agents.defaults.subagents.allowAgents //= []) |
+        if (.agents.defaults.subagents.allowAgents | index("codex-agent")) then .
+        else .agents.defaults.subagents.allowAgents += ["codex-agent"] end
     ' "$OC_JSON" > "$OC_JSON.tmp" && mv "$OC_JSON.tmp" "$OC_JSON"
 fi
 
@@ -347,11 +349,21 @@ if dry_check "openclaw restart"; then
 fi
 
 # ── (e) VERIFY ───────────────────────────────────────────────────────────────
+# Use gtimeout (Homebrew coreutils) when available; fall back to timeout
+# (Linux); run unwrapped if neither is present. Avoids "timeout: command not
+# found" on stock macOS and false rollback of a successful binding.
+_TIMEOUT_BIN=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
 log "Step (e): verify backend identity"
 if [ "$DRY_RUN" = "false" ]; then
-    IDENTITY=$(timeout 60 openclaw run codex-agent \
-        --task "reply with exactly: CODEX_BACKEND_OK" \
-        --no-save 2>&1 || true)
+    if [ -n "$_TIMEOUT_BIN" ]; then
+        IDENTITY=$("$_TIMEOUT_BIN" 60 openclaw run codex-agent \
+            --task "reply with exactly: CODEX_BACKEND_OK" \
+            --no-save 2>&1 || true)
+    else
+        IDENTITY=$(openclaw run codex-agent \
+            --task "reply with exactly: CODEX_BACKEND_OK" \
+            --no-save 2>&1 || true)
+    fi
 
     if echo "$IDENTITY" | grep -q "CODEX_BACKEND_OK"; then
         log "VERIFY OK — codex-agent confirmed on GPT-5.5/Codex backend"

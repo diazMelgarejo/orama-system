@@ -129,6 +129,16 @@ The task says modify the API client without showing which methods to add or the 
 
 ---
 
+## Codex review findings (2026-06-20)
+
+Three issues surfaced by `codex review` on the branch. All fixed in the same batch as P3 hygiene:
+
+- **[CR-1] P1 — `bind_codex_backend.sh:332`** used `agents.bindings.main.allowAgents` (rejected by new control plane). Fixed to `agents.defaults.subagents.allowAgents`.
+- **[CR-2] P2 — `ControlResult.state` Literal** omitted `gateway_unavailable` (exit code 3). Added.
+- **[CR-3] P1 — `bind_codex_backend.sh:352`** used bare `timeout` (not on stock macOS). Fixed to gtimeout→timeout→unwrapped fallback.
+
+---
+
 ## Open items summary
 
 | ID | Priority | Status |
@@ -139,12 +149,15 @@ The task says modify the API client without showing which methods to add or the 
 | P1-4 | P1 | ✅ Fixed |
 | P1-5 | P1 | OPEN |
 | P1-6 | P1 | OPEN |
+| CR-1 | P1 | ✅ Fixed (codex review) |
+| CR-3 | P1 | ✅ Fixed (codex review) |
 | P2-1 | P2 | OPEN — decision |
 | P2-2 | P2 | OPEN — decision |
 | P2-3 | P2 | OPEN — decision |
 | P2-4 | P2 | OPEN — decision |
 | P2-5 | P2 | OPEN |
 | P2-6 | P2 | OPEN |
+| CR-2 | P2 | ✅ Fixed (codex review) |
 | P3-1 | P3 | ✅ Fixed |
 | P3-2 | P3 | ✅ Fixed |
 | P3-3 | P3 | ✅ Fixed |
