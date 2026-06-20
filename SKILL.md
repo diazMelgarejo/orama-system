@@ -38,6 +38,7 @@ test = [
 ```
 
 Verify before commit:
+
 ```bash
 python -c "import fastapi, httpx, uvicorn, pydantic, slowapi, pytest, hatchling, build"
 ```
@@ -49,6 +50,7 @@ python -c "import fastapi, httpx, uvicorn, pydantic, slowapi, pytest, hatchling,
 ## Skill 3 — Idempotent Install Rules
 
 After any `npm install -g`:
+
 1. Check execute bits: `stat $(which binary) | grep Mode` — `+x` must be set
 2. Auto-fix if missing: `chmod +x $(which binary)`
 3. Catch `PermissionError` **separately** from `CalledProcessError` in every subprocess block
@@ -71,6 +73,7 @@ After any `npm install -g`:
 ```
 
 **Crash recovery is always ≥ 30 seconds.** Immediate retry after 503/404 triggers GPU thrashing. Classify errors before sleeping:
+
 - `503` = model loading (LM Studio startup)
 - `404` = model unloaded (Ollama eviction)
 - `ConnectError` = backend offline
@@ -187,9 +190,11 @@ All lessons, root-cause analyses, and architectural decisions:
 **[docs/wiki/README.md](docs/wiki/README.md)**
 
 Session logs:
+
 - [docs/LESSONS.md](docs/LESSONS.md) — chronological, all agents
 
 Companion repo:
+
 - [Perplexity-Tools/SKILL.md](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/SKILL.md)
 - [Perplexity-Tools/docs/LESSONS.md](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/docs/LESSONS.md)
 
@@ -201,6 +206,7 @@ An AI agent built the v2 kernel in the wrong local directory, pushed to the wron
 and documented it as canonical. Read this before any `docs/v2/` or `oramasys/*` work.
 
 **The 4 checks that would have prevented it:**
+
 1. `git remote -v` — verify remote matches `oramasys/*` before any v2 push
 2. `ls ~/Documents/oramasys/<repo>/` — confirm canonical build doesn't already exist
 3. Consult `CLAUDE-instru.md §1` or `project_repo_registry.md` — v1=`diazMelgarejo/*`, v2=`oramasys/*`
@@ -237,11 +243,13 @@ curl http://localhost:8001/oramasys \
 ### Gemini CLI (gemini-mcp-tool)
 
 Install once:
+
 ```bash
 npm i -g @ahoylabs/gemini-mcp-tool   # or: pip install gemini-mcp-tool
 ```
 
 Register orama's MCP server:
+
 ```bash
 # In ~/.gemini/settings.json → mcpServers block:
 "orama": {
@@ -278,9 +286,10 @@ openclaw run --plugin orama_bridge --task "your task here"
 python bin/mcp_servers/openclaw_bridge.py
 ```
 
-Codex harness docs: https://docs.openclaw.ai/plugins/codex-harness
+Codex harness docs: <https://docs.openclaw.ai/plugins/codex-harness>
 
 Register the MCP server with Claude Code:
+
 ```bash
 claude mcp add --transport stdio oramasys \
   -- python -m bin.mcp_servers.oramasys_orchestration_server

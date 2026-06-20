@@ -26,7 +26,7 @@ Codex CLI with GPT-5.5 as its backend. Invoked explicitly via
 ## Preserved defaults (DO NOT TOUCH)
 
 | Setting | Value | Owner |
-|---|---|---|
+| --- | --- | --- |
 | Global `agents.defaults.model.primary` | `ollama/qwen3.5:9b-nvfp4` | LaunchAgent |
 | `main` agent primary | `lmstudio-mac/qwen3.5-9b-mlx` | Existing config |
 | `coder` agent primary | `lmstudio-win/qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2` | Existing config |
@@ -115,6 +115,7 @@ plane — do not use it in any binder, bootstrap, or manifest.
 
 **macOS `timeout`:** Never use bare `timeout N <cmd>` in shell scripts.
 Use the gtimeout→timeout→unwrapped pattern:
+
 ```bash
 _TIMEOUT_BIN=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
 if [ -n "$_TIMEOUT_BIN" ]; then "$_TIMEOUT_BIN" N <cmd>; else <cmd>; fi
@@ -122,6 +123,7 @@ if [ -n "$_TIMEOUT_BIN" ]; then "$_TIMEOUT_BIN" N <cmd>; else <cmd>; fi
 
 **`codex review` invocation:** Always pass `< /dev/null`. Without it the process
 blocks on stdin and hangs silently. Canonical form:
+
 ```bash
 codex review "<prompt>" -c 'model_reasoning_effort="high"' < /dev/null
 ```
