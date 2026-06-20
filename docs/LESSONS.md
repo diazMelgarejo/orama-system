@@ -3362,3 +3362,78 @@ Replacing `pip install pkg1 pkg2 pkg3` with `pip install ".[extras]"` without fi
 → [wiki/01-ci-deps.md](wiki/01-ci-deps.md)
 
 ---
+
+## 2026-06-20 — `codex review` invocation, delegation path contract, macOS timeout
+
+**Session:** `feat/openclaw-codex-app-server` — codex-openclaw-agent v2 + oramaclaw control-plane plan
+
+### What Broke
+
+Three silent correctness issues found via `codex review` after all tests passed:
+
+1. **`bind_codex_backend.sh` wrote to `agents.bindings.main.allowAgents`** — the old OpenClaw delegation key. The new oramaclaw contract (written in the same session's plan) rejects `agents.bindings.*` in favour of `agents.defaults.subagents.allowAgents` / `agents.list[].subagents.allowAgents`. The agent would bind successfully but be invisible to any code following the new contract.
+
+2. **`ControlResult.state` Literal omitted `gateway_unavailable`** — exit code 3 (`gateway unavailable, offline path invalid`) had no typed counterpart. JSON/portal callers could not distinguish it from code-5 transport failures.
+
+3. **`timeout 60 openclaw run …` fails on stock macOS** — `timeout` is a GNU coreutils command absent on vanilla macOS. The verify step would raise `timeout: command not found`, capture that as the identity string, and trigger a false rollback of an otherwise-successful binding.
+
+### Root Cause
+
+These issues were not caught by the 6-test suite because:
+- The tests mock the `openclaw` CLI and `jq` calls — they confirm the correct *field names* for the fields they test, but the delegation key update wrote to a different JSON path not covered by any test.
+- `ControlResult.state` is a plan-level type stub; no runtime test validates its Literal values against the CLI exit-code table.
+- The macOS `timeout` path is not exercised in the test environment (CI or local sandbox both have GNU coreutils).
+
+### Lesson
+
+**`codex review` must always use `< /dev/null`.** Without it, the process blocks on stdin and appears to hang. The correct invocation pattern (from gstack's `/review` skill line 1715):
+
+```bash
+codex review "<prompt>" -c 'model_reasoning_effort="high"' < /dev/null
+```
+
+Never omit `< /dev/null`. A codex review hanging indefinitely looks identical to it running — you cannot tell without reading the process stdin state.
+
+### Delegation Path Contract (applies to all agents)
+
+The canonical OpenClaw sub-agent delegation key is:
+- `agents.defaults.subagents.allowAgents` — apply to all agents by default
+- `agents.list[id].subagents.allowAgents` — apply to a specific named agent
+
+The key `agents.bindings.*.allowAgents` is **rejected** by the oramaclaw control plane and must not be written by any binder, bootstrap script, or manifest.
+
+### macOS Compatibility: use gtimeout→timeout→unwrapped
+
+Any script calling `timeout N <cmd>` must use this pattern:
+
+```bash
+_TIMEOUT_BIN=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+if [ -n "$_TIMEOUT_BIN" ]; then
+    "$_TIMEOUT_BIN" N <cmd>
+else
+    <cmd>
+fi
+```
+
+`gtimeout` comes from Homebrew coreutils. `timeout` is Linux-native. Neither is guaranteed on stock macOS.
+
+### Prevention Rules
+
+1. **Use `< /dev/null` in every `codex review` invocation** — missing it causes an invisible hang.
+2. **Write delegation with `agents.defaults.subagents.allowAgents`** — not `agents.bindings.*`.
+3. **Never use bare `timeout` in shell scripts targeting macOS** — use gtimeout→timeout→unwrapped.
+4. **Match `ControlResult.state` Literal to the CLI exit-code table** — every distinct exit code needs a named state, not just `failed`.
+
+### Fixes
+
+| Finding | File | Fix |
+| --- | --- | --- |
+| CR-1: wrong delegation key | `bind_codex_backend.sh:332-338` | Rewrote to `agents.defaults.subagents.allowAgents` |
+| CR-2: missing state literal | `oramaclaw-control-plane-v1.md:145` | Added `"gateway_unavailable"` to Literal |
+| CR-3: bare `timeout` on macOS | `bind_codex_backend.sh:352` | gtimeout→timeout→unwrapped fallback |
+
+### Commits
+
+- `8b64518` — apply CR-1, CR-2, CR-3 + P3 hygiene fixes
+
+---
