@@ -14,9 +14,8 @@
       "manager": "codex-binder",
       "policy": "conflict",
       "spec": {
-        "parent": "main",
-        "allow": "codex-agent",
-        "delegation_path": "agents.defaults.subagents.allowAgents"
+        "path": "agents.defaults.subagents.allowAgents",
+        "allow_agent": "codex-agent"
       },
       "managed_paths": ["/agents/defaults/subagents/allowAgents"],
       "security_topology": true

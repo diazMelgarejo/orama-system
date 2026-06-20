@@ -35,6 +35,22 @@ The parent allowlist is a separate managed field:
 Preserve every other existing allowlisted agent. Do not use
 `agents.bindings.*.allowAgents`.
 
+The equivalent OramaClaw delegation resource is:
+
+```json
+{
+  "kind": "delegation",
+  "id": "main-allows-codex-agent",
+  "manager": "codex-binder",
+  "policy": "conflict",
+  "spec": {
+    "path": "agents.defaults.subagents.allowAgents",
+    "allow_agent": "codex-agent"
+  },
+  "managed_paths": ["/agents/defaults/subagents/allowAgents"]
+}
+```
+
 ## Native Model Route
 
 The native Codex model reference is `codex/gpt-5.5`. It is not a custom
@@ -73,7 +89,7 @@ provider.
 4. Read the existing agent by id.
 5. If absent, call `openclaw agents add` with the canonical workspace, state directory, and model.
 6. If present with another workspace, stop without changing it.
-7. Compare and update only the managed agent fields and the union-preserved allowlist.
+7. Compare and update only the managed agent fields and the union-preserved allowlist. For the delegation resource, `spec.path` must equal `agents.defaults.subagents.allowAgents`; a mismatch is a conflict and reconciliation stops without writing. Union-merge the non-empty `spec.allow_agent` into that array, preserving every existing value. No other delegation `spec` fields are managed, interpreted, or rewritten.
 8. Run the profile generator. It owns only paired `oramaclaw:generated` marker regions and creates `SECURITY.md` only when absent.
 9. Run `openclaw config validate`; restart the gateway only when provider or agent config changed.
 10. Report `needs_auth` when the model status lists `codex` as missing. Do not roll back a valid agent definition.
@@ -85,7 +101,7 @@ workspace files.
 
 - Keep OAuth profiles, bearer headers, API keys, cookies, and credential-store files outside the workspace and generated records.
 - Do not change the Main Agent, global default routing, `coder`, channel bindings, or LaunchAgent configuration.
-- The configured state requires `resolvedDefault == "codex/gpt-5.5"` and no fallback models.
+- The Codex agent's configured state requires `resolvedDefault == "codex/gpt-5.5"` and no fallback models. The binder enforces this by reconciling the agent's `model` to the scalar `codex/gpt-5.5`, which replaces any model object that could contain fallbacks. `openclaw config validate` checks configuration syntax, not this policy; the post-restart `openclaw models status --agent codex-agent` identity check is separate. An implementation that observes a non-empty Codex-agent fallback list after reconciliation must fail rather than report `ok`.
 - The executable state additionally requires no missing `codex` provider in `openclaw models status --agent codex-agent`.
 
 See the [control-plane plan](../../../../../docs/superpowers/plans/2026-06-20-oramaclaw-control-plane-v1.md) for the eventual Gateway-first manifest writer.

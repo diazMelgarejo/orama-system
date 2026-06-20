@@ -28,7 +28,7 @@ def _try_import_oramaclaw():
         return None
 
 
-def provider_manifest_with_medium_effort(tmp_path: Path | None = None) -> Any:
+def provider_manifest_with_medium_effort(tmp_path: Path) -> Any:
     """Return a generic provider ControlManifest with effort=medium.
 
     Used in Task 5 engine tests to exercise the cooperative-drift auto-weave path.
@@ -40,7 +40,7 @@ def provider_manifest_with_medium_effort(tmp_path: Path | None = None) -> Any:
     ConfigTarget, ControlManifest, MergePolicy, Resource, ResourceKind = imported
     import hashlib, json  # noqa: E401
 
-    target_dir = tmp_path or Path("/tmp/oramaclaw-test-fixture")
+    target_dir = tmp_path
     spec: Mapping[str, Any] = {
         "api": "openai-responses",
         "baseUrl": "https://example.invalid/v1",
