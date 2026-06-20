@@ -1,199 +1,91 @@
-# Codex Backend Binding Doctrine
+# Native Codex Binding Contract
 
-**Skill:** `codex-openclaw-agent`
-**Purpose:** Define the runtime contract that proves an OpenClaw agent is
-Codex-backed, not merely Codex-profiled.
+## Purpose
 
-This document is binding guidance for `scripts/bind_codex_backend.sh`, the
-profile generator, and the thin skill orchestrator. It is a peer substrate to
-`hermes-harness`: reusable, probe-first, idempotent, and safe to re-run.
+Define the idempotent OpenClaw configuration contract for `codex-agent`.
+This reference applies to the binder, profile generator, and OramaClaw
+manifest migration. It reflects the OpenClaw schema installed on 2026-06-20.
 
-## Non-Negotiable Invariants
-
-- Do not change `agents.defaults.model.primary`.
-- Do not change the existing `main` or `coder` primary models.
-- Do not edit the OpenClaw LaunchAgent plist.
-- Do not copy API keys, OAuth material, bearer tokens, or raw auth files into
-  generated docs, refs, logs, prompts, or config patches.
-- Do not hand-edit `openclaw.json`; use `openclaw config patch --file`.
-- Do not run `stow --no-folding -t "$OPENCLAW_HOME" .` from an arbitrary cwd.
-- Do not declare success until runtime backend identity resolves to Codex.
-
-## OpenClaw Invocation
-
-All OpenClaw CLI calls must go through the repo resolver:
-
-```bash
-scripts/openclaw/resolve-openclaw.sh <openclaw-args...>
-```
-
-Never call a bare `openclaw` binary from this substrate. The resolver avoids
-stale pnpm shims and prefers the install that actually runs the gateway.
-
-## Resolution Ladder
-
-| Stage | Action | Mutates? |
-| --- | --- | --- |
-| 0 Probe | Gather evidence only: Codex CLI, auth reference, app-server endpoint, plugin state, existing agent/provider config. | No |
-| 1 Primary | Bind through the real native plugin, `codex-supervisor`, when it is enabled and the gateway has loaded it. | Yes |
-| 2 Install | If `codex-supervisor` is present but disabled, enable it with `openclaw config patch`; if absent but installable, install and re-probe. | Yes |
-| 3 Fallback | Register the discovered Codex app-server as an OpenAI-compatible provider with provider key `codex`. | Yes |
-| 4 Verify | Run a harmless task and assert resolved backend identity is Codex/GPT-5.5, not Ollama. | Session only |
-| 5 Record | Write a redacted `refs/codex-backend-binding.json` for the generator. | Yes |
-
-The resolver is opportunistic: prefer the first path that passes probe and
-verify. Fallback is a first-class path, not an exceptional degraded mode.
-
-## Stage 0 Probe Rules
-
-Probe output must be JSON on stdout and diagnostics on stderr. It must not
-mutate files.
-
-Required checks:
-
-- `codex --version` succeeds.
-- Auth reference exists through at least one accepted surface:
-  `CODEX_API_KEY`, `OPENAI_API_KEY`, `~/.codex/auth.json`, or a structurally
-  valid `~/.codex/config.toml`. Values are never printed.
-- App-server endpoint is discovered from
-  `~/.codex/cache/codex_apps_server_info/*.json`.
-- `GET <endpoint>/v1/models` returns `200`, `401`, or `403`.
-- `.app-server-state-reconciled-v1` is treated only as a stale-prone hint.
-- `codex-supervisor` state is read through the OpenClaw resolver.
-- Existing `openclaw.json` state is inspected through `openclaw config` or a
-  dry-run patch target, not modified.
-
-## Provider Strings
-
-- Native path: use the provider key reported by `codex-supervisor` probe.
-- Fallback path: provider key `codex`, model id `gpt-5.5`, provider string
-  `codex/gpt-5.5`.
-
-If the runtime resolves to `ollama/*`, verification must fail.
-
-## Reasoning Effort
-
-Default effort is `medium` for cost and latency control. `high` and `xhigh`
-are explicit operator opt-ins and must only be written when passed through the
-skill, binder, or profile generator arguments.
-
-## OpenAI-Compatible Fallback Shape
-
-The fallback provider patch must use this schema:
+## Managed Surface
 
 ```json
 {
-  "models": {
-    "providers": {
-      "codex": {
-        "api": "openai-completions",
-        "apiKey": "${env:OPENAI_API_KEY}",
-        "baseUrl": "http://127.0.0.1:<port>/v1",
-        "models": [
-          {
-            "id": "gpt-5.5",
-            "name": "Codex GPT-5.5",
-            "contextWindow": 200000,
-            "maxTokens": 65536,
-            "cost": {"input": 0, "output": 0}
-          }
-        ]
-      }
+  "id": "codex-agent",
+  "name": "codex-agent",
+  "workspace": "~/.openclaw/agents/codex-agent",
+  "agentDir": "~/.openclaw/agents/codex-agent/agent",
+  "model": "codex/gpt-5.5",
+  "thinkingDefault": "medium",
+  "tools": {"profile": "coding"}
+}
+```
+
+The parent allowlist is a separate managed field:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "subagents": {"allowAgents": ["codex-agent"]}
     }
   }
 }
 ```
 
-Write this with `openclaw config patch --file <patch.json>`. The endpoint port
-comes from the live Codex server-info canary unless the operator explicitly
-passes an override.
+Preserve every other existing allowlisted agent. Do not use
+`agents.bindings.*.allowAgents`.
 
-## Mutation Boundaries
+## Native Model Route
 
-Use a per-`openclaw-home` lock before any write.
+The native Codex model reference is `codex/gpt-5.5`. It is not a custom
+`models.providers.codex` configuration block. Do not create an app-server
+endpoint, run `codex serve`, use `openai-completions`, or write a placeholder
+token reference into configuration.
 
-Allowed writes:
+`codex-supervisor` is an optional observation plugin. Its presence does not
+prove that a Codex model provider or ACP runtime is available.
 
-- OpenClaw config patch for the target provider and target agent only.
-- Target agent runtime scaffolds under
-  `$OPENCLAW_HOME/.openclaw/agents/<agent_id>/` when needed.
-- Redacted binding record under the target agent `refs/` directory.
-- Generated profile sections owned by the profile generator.
+The accepted credential route is OpenClaw's `openai-codex` flow. Configuration
+may be complete while execution remains blocked by missing provider auth:
 
-Disallowed writes:
-
-- Global defaults, `main`, or `coder` routing.
-- LaunchAgent plist.
-- Literal secrets.
-- Whole-file replacement of operator-authored directive files unless the
-  operator explicitly passes a force flag.
-
-## Verification Gate
-
-Verification must prove runtime identity, not just file shape.
-
-PASS requires all of:
-
-1. A harmless task returns the expected canary text.
-2. The resolved model string is `codex/gpt-5.5` or the verified
-   `codex-supervisor` provider key plus `/gpt-5.5`.
-3. The resolved provider prefix is not `ollama`.
-4. The binding record captures expected vs actual provider/model.
-
-OTEL traces are a secondary signal. They strengthen evidence but do not replace
-the resolved model-prefix check.
-
-## Binding Record Contract
-
-`refs/codex-backend-binding.json` must be redacted and repo-safe:
-
-```json
-{
-  "schema_version": "1",
-  "winning_path": "plugin|idempotent-install|fallback",
-  "provider_key": "codex",
-  "provider_string": "codex/gpt-5.5",
-  "model": "gpt-5.5",
-  "effort": "medium",
-  "auth_source_ref": "~/.codex/auth.json",
-  "endpoint_ref": "http://127.0.0.1:<port>/v1",
-  "verification": {
-    "status": "pass",
-    "expected": "codex/gpt-5.5",
-    "actual": "codex/gpt-5.5",
-    "method": "model-prefix"
-  },
-  "timestamp": "2026-06-19T00:00:00Z",
-  "binder_version": "1.0.0",
-  "agent_id": "codex-agent"
-}
+```bash
+openclaw models status --agent codex-agent
+openclaw models auth login --provider openai-codex
 ```
 
-Use references only. Do not serialize raw server-info files or auth payloads.
+The login command is interactive and never belongs in unattended first-run
+automation. Do not copy credentials from another agent's profile.
 
-## Failure Output
+Before login, ensure the official bundled `openai` provider plugin is loaded.
+When absent, run `openclaw plugins install openai`; that bare spec resolves to
+the bundled plugin in supported OpenClaw releases. An explicit `plugins.allow`
+list blocks it unless `openai` is included. Preserve all existing allowed plugin
+ids, append only `openai`, enable the bundled plugin, restart the gateway, and
+re-check its loaded state. Return `needs_plugin` only when that automated
+bundled-plugin installation fails; do not fall back to a custom localhost
+provider.
 
-Every failure must print:
+## Idempotent Reconciliation
 
-- Stage that failed.
-- Expected provider/model and actual provider/model when known.
-- Redacted auth source reference.
-- Endpoint reference.
-- Whether files were modified.
-- One safe recovery command.
+1. Resolve the active OpenClaw executable through `scripts/openclaw/resolve-openclaw.sh`.
+2. Install the official bundled `openai` provider when absent; return `needs_plugin` only if installation fails.
+3. When an explicit plugin allowlist exists, append only `openai`; enable the plugin and mark the gateway for restart when needed.
+4. Read the existing agent by id.
+5. If absent, call `openclaw agents add` with the canonical workspace, state directory, and model.
+6. If present with another workspace, stop without changing it.
+7. Compare and update only the managed agent fields and the union-preserved allowlist.
+8. Run the profile generator. It owns only paired `oramaclaw:generated` marker regions and creates `SECURITY.md` only when absent.
+9. Run `openclaw config validate`; restart the gateway only when provider or agent config changed.
+10. Report `needs_auth` when the model status lists `codex` as missing. Do not roll back a valid agent definition.
 
-Preferred recovery commands:
+Rerunning with unchanged input must neither modify `openclaw.json` nor rewrite
+workspace files.
 
-- `codex login`
-- `codex --version`
-- `codex-openclaw-agent --agent-id <id> --prefer compat --refresh`
-- `codex-openclaw-agent --agent-id <id> --bind-only --verify`
+## Security And Verification
 
-## Test Requirements
+- Keep OAuth profiles, bearer headers, API keys, cookies, and credential-store files outside the workspace and generated records.
+- Do not change the Main Agent, global default routing, `coder`, channel bindings, or LaunchAgent configuration.
+- The configured state requires `resolvedDefault == "codex/gpt-5.5"` and no fallback models.
+- The executable state additionally requires no missing `codex` provider in `openclaw models status --agent codex-agent`.
 
-- Unit-test probe JSON and endpoint canary behavior.
-- Unit-test auth reference detection for env keys and `~/.codex/auth.json`.
-- Unit-test fallback provider patch shape.
-- Unit-test that no binder path stows arbitrary cwd.
-- Unit-test that generated records contain no workstation paths or secrets.
-- End-to-end smoke must fail if runtime identity resolves to Ollama.
+See the [control-plane plan](../../../../../docs/superpowers/plans/2026-06-20-oramaclaw-control-plane-v1.md) for the eventual Gateway-first manifest writer.

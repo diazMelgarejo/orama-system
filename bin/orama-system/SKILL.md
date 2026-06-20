@@ -31,6 +31,8 @@ sub_skills:
     trigger: "code review, review the code, blast-radius, code-review-graph, detect_changes, get_review_context, semantic_search_nodes, code-reviewer, multi-lens PR review, /review, recursive code review"
   - path: skills/openclaw-skills/SKILL.md
     trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
+  - path: skills/openclaw-skills/codex-openclaw-agent/SKILL.md
+    trigger: "codex openclaw agent, codex-agent, GPT-5.5 sub-agent, native Codex provider, create Codex workspace, reconcile Codex agent, openai-codex auth"
   - path: skills/hermes-harness/SKILL.md
     trigger: "hermes setup, hermes onboarding, nous portal, hermes openclaw migration, ecc harness, cross-harness, install codex cli on windows, hermes coding partner"
   - path: skills/shell-hygiene/SKILL.md
