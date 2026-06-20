@@ -70,7 +70,7 @@ class ControlManifest:
 @dataclass(frozen=True)
 class Conflict:
     """A field that cannot be automatically resolved."""
-    resource_key: str               # e.g. "provider:codex-app-server"
+    resource_key: str               # e.g. "provider:example-provider"
     manager: str
     managed_path: str               # JSON Pointer e.g. "/effort"
     base_fingerprint: str | None

@@ -7,55 +7,36 @@
   },
   "resources": [
     {
-      "kind": "provider",
-      "id": "codex-app-server",
-      "manager": "codex-binder",
-      "policy": "cooperative",
-      "spec": {
-        "api": "openai-completions",
-        "baseUrl": "http://127.0.0.1:61234/v1",
-        "authReference": "~/.codex/config.toml",
-        "models": [
-          {
-            "id": "gpt-5.5",
-            "name": "Codex — GPT-5.5",
-            "contextWindow": 200000
-          }
-        ]
-      },
-      "managed_paths": [
-        "/models/providers/codex-app-server"
-      ]
-    },
-    {
       "kind": "agent",
       "id": "codex-agent",
       "manager": "codex-binder",
-      "policy": "cooperative",
+      "policy": "conflict",
       "spec": {
-        "name": "Codex Agent (GPT-5.5)",
-        "mode": "sub-agent",
-        "model": {
-          "primary": "codex/gpt-5.5",
-          "reasoning_effort": "medium"
-        },
+        "name": "codex-agent",
+        "workspace": "~/.openclaw/agents/codex-agent",
+        "agentDir": "~/.openclaw/agents/codex-agent/agent",
+        "model": "codex/gpt-5.5",
+        "thinkingDefault": "medium",
         "tools": {
           "profile": "coding"
         }
       },
       "managed_paths": [
-        "/agents/list/id=codex-agent"
+        "/agents/list/id=codex-agent/workspace",
+        "/agents/list/id=codex-agent/agentDir",
+        "/agents/list/id=codex-agent/model",
+        "/agents/list/id=codex-agent/thinkingDefault",
+        "/agents/list/id=codex-agent/tools/profile"
       ]
     },
     {
       "kind": "delegation",
       "id": "main-allows-codex-agent",
       "manager": "codex-binder",
-      "policy": "strict",
+      "policy": "conflict",
       "spec": {
-        "parent": "main",
-        "allow": "codex-agent",
-        "delegation_path": "agents.defaults.subagents.allowAgents"
+        "path": "agents.defaults.subagents.allowAgents",
+        "allow_agent": "codex-agent"
       },
       "managed_paths": [
         "/agents/defaults/subagents/allowAgents"
