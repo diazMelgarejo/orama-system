@@ -1,0 +1,25 @@
+{
+  "_fixture": "security-topology",
+  "_note": "Security topology resource — conflict-only policy; timeout must NOT auto-weave.",
+  "version": 1,
+  "target": {
+    "workspace_root": "__TMP__/workspace",
+    "config_path": "__TMP__/openclaw.json",
+    "state_dir": "__TMP__"
+  },
+  "resources": [
+    {
+      "kind": "delegation",
+      "id": "main-allows-codex-agent",
+      "manager": "codex-binder",
+      "policy": "conflict",
+      "spec": {
+        "parent": "main",
+        "allow": "codex-agent",
+        "delegation_path": "agents.defaults.subagents.allowAgents"
+      },
+      "managed_paths": ["/agents/defaults/subagents/allowAgents"],
+      "security_topology": true
+    }
+  ]
+}

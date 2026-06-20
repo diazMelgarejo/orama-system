@@ -1,0 +1,26 @@
+{
+  "_fixture": "cooperative-drift",
+  "_note": "Normal (non-security) field drift; engine may auto-weave after 90s timeout.",
+  "version": 1,
+  "target": {
+    "workspace_root": "__TMP__/workspace",
+    "config_path": "__TMP__/openclaw.json",
+    "state_dir": "__TMP__"
+  },
+  "resources": [
+    {
+      "kind": "provider",
+      "id": "codex-app-server",
+      "manager": "codex-binder",
+      "policy": "cooperative",
+      "spec": {
+        "api": "openai-completions",
+        "baseUrl": "http://127.0.0.1:61234/v1",
+        "authReference": "~/.codex/config.toml",
+        "models": [{ "id": "gpt-5.5", "name": "Codex — GPT-5.5", "contextWindow": 200000 }],
+        "effort": "medium"
+      },
+      "managed_paths": ["/models/providers/codex-app-server", "/models/providers/codex-app-server/effort"]
+    }
+  ]
+}
