@@ -10,16 +10,15 @@
   "resources": [
     {
       "kind": "provider",
-      "id": "codex-app-server",
-      "manager": "codex-binder",
+      "id": "example-provider",
+      "manager": "example-manager",
       "policy": "strict",
       "spec": {
-        "api": "openai-completions",
-        "baseUrl": "http://127.0.0.1:61234/v1",
-        "authReference": "~/.codex/config.toml",
-        "models": [{ "id": "gpt-5.5", "name": "Codex — GPT-5.5", "contextWindow": 200000 }]
+        "api": "openai-responses",
+        "baseUrl": "https://example.invalid/v1",
+        "models": [{ "id": "example-model", "name": "Example model", "contextWindow": 200000 }]
       },
-      "managed_paths": ["/models/providers/codex-app-server"]
+      "managed_paths": ["/models/providers/example-provider"]
     }
   ]
 }

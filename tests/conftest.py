@@ -29,7 +29,7 @@ def _try_import_oramaclaw():
 
 
 def provider_manifest_with_medium_effort(tmp_path: Path | None = None) -> Any:
-    """Return a ControlManifest for the codex-app-server provider with effort=medium.
+    """Return a generic provider ControlManifest with effort=medium.
 
     Used in Task 5 engine tests to exercise the cooperative-drift auto-weave path.
     The manifest's target points to tmp_path so it never touches live config.
@@ -42,21 +42,20 @@ def provider_manifest_with_medium_effort(tmp_path: Path | None = None) -> Any:
 
     target_dir = tmp_path or Path("/tmp/oramaclaw-test-fixture")
     spec: Mapping[str, Any] = {
-        "api": "openai-completions",
-        "baseUrl": "http://127.0.0.1:61234/v1",
-        "authReference": "~/.codex/config.toml",
-        "models": [{"id": "gpt-5.5", "name": "Codex — GPT-5.5", "contextWindow": 200000}],
+        "api": "openai-responses",
+        "baseUrl": "https://example.invalid/v1",
+        "models": [{"id": "example-model", "name": "Example model", "contextWindow": 200000}],
         "effort": "medium",
     }
     resource = Resource(
         kind=ResourceKind.PROVIDER,
-        identifier="codex-app-server",
-        manager="codex-binder",
+        identifier="example-provider",
+        manager="example-manager",
         spec=spec,
-        managed_paths=("/models/providers/codex-app-server", "/models/providers/codex-app-server/effort"),
+        managed_paths=("/models/providers/example-provider", "/models/providers/example-provider/effort"),
         policy=MergePolicy.COOPERATIVE,
     )
-    raw = json.dumps({"version": 1, "resources": [{"kind": "provider", "id": "codex-app-server"}]}).encode()
+    raw = json.dumps({"version": 1, "resources": [{"kind": "provider", "id": "example-provider"}]}).encode()
     return ControlManifest(
         version=1,
         target=ConfigTarget(
