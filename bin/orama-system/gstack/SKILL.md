@@ -29,20 +29,23 @@ review, QA, and deployment workflows. Installed globally at
 ## Install / Update
 
 Fresh install:
+
 ```bash
 git clone --single-branch --depth 1 https://github.com/garrytan/gstack.git ~/.claude/skills/gstack && cd ~/.claude/skills/gstack && ./setup
 ```
 
 Upgrade to latest:
+
 ```
 /skill ~/.claude/skills/gstack/gstack-upgrade/SKILL.md
 ```
+
 Or: `/gstack-upgrade`
 
 ## Available Skills
 
 | Skill | Purpose |
-|-------|---------|
+| ------- | --------- |
 | `/browse` | Headless browser for web browsing and site docs |
 | `/qa` | Systematically QA test a web application and fix issues |
 | `/qa-only` | Report-only QA testing |
@@ -86,7 +89,7 @@ Multi-step workflows and quality gates produce better results than ad-hoc answer
 A false positive is cheaper than a false negative.
 
 | Signal | Invoke |
-|--------|--------|
+| -------- | -------- |
 | Product ideas, "is this worth building", brainstorming | `/office-hours` |
 | Strategy, scope, "think bigger", "what should we build" | `/plan-ceo-review` |
 | Architecture, "does this design make sense" | `/plan-eng-review` |
@@ -136,7 +139,7 @@ and the MCP wrapper, NOT by non-interactive Bash shells.
 > in git) — pending removal.
 
 | Repo | Current source ID (reindexed 2026-06-17) | Pages | Federated | Superseded ID (@06-05, quarantined) |
-|------|------|-------|-----------|------|
+| ------ | ------ | ------- | ----------- | ------ |
 | AlphaClaw | `gstack-code-alphaclaw-875d5b82` | ~476 | yes | `gstack-code-claw-4dc4a8f3-aa4479` (489p) |
 | Perpetua-Tools | `gstack-code-078b0b90-f6179f` | ~736 | yes | `gstack-code-ools-27e2b79c-df8a28` (721p) |
 | orama-system | `gstack-code-2159b4b9-595bce` | ~223 | yes (was isolated) | `orama-src` (306p) |
@@ -159,17 +162,21 @@ and the server shows disconnected. The CLI works only because it inherits the te
 
 **Canonical Desktop wrapper** (`.mcpServers.gbrain`) — source `.env` for the DB URL AND
 prepend `~/.bun/bin`:
+
 ```json
 {
   "command": "/bin/sh",
   "args": ["-c", ". \"$HOME/.gbrain/.env\"; export PATH=\"$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"; exec \"$HOME/.bun/bin/gbrain\" serve"]
 }
 ```
+
 Restart Claude Desktop after editing (MCP servers load at app start). Verify in a Desktop-like
 minimal env before restarting:
+
 ```bash
 env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/sh -c '. "$HOME/.gbrain/.env"; export PATH="$HOME/.bun/bin:$PATH"; gbrain doctor --json' | head
 ```
+
 `code-review-graph` is already PATH-safe (absolute `/opt/homebrew/bin/uvx` command) — no wrapper
 needed. Back up the config (`cp … config.json config.json.bak-<ts>`) before editing.
 
@@ -181,9 +188,11 @@ needed. Back up the config (`cp … config.json config.json.bak-<ts>`) before ed
 
 `GBRAIN_DATABASE_URL` is in `~/.gbrain/.env`, not in the environment of a Bash tool
 shell. Always prefix:
+
 ```bash
 set -a; source "$HOME/.gbrain/.env" 2>/dev/null; set +a
 ```
+
 The "No database URL" message is diagnostic only — config.json intentionally omits
 the URL; env wins over config.
 
@@ -193,15 +202,18 @@ Cause: `config.json` `"prepare": true` against a Supabase pooler. Pooled reconne
 drop server-side prepared statements.
 
 Fix:
+
 ```bash
 cp ~/.gbrain/config.json "~/.gbrain/config.json.bak.$(date +%Y%m%d-%H%M%S)"
 python3 -c "import json; p='$HOME/.gbrain/config.json'; d=json.load(open(p)); d['prepare']=False; json.dump(d,open(p,'w'),indent=2)"
 ```
+
 Then restart any running gbrain process (autopilot, MCP server).
 
 ### 2. Correct resync after a git history rewrite
 
 Two traps to avoid:
+
 - `gbrain sync` (pin-aware, from inside a repo with a space in the path) calls
   `git pull` first and **fails silently** on `Terminal xCode`-style paths. Non-fatal
   but pulls nothing.
@@ -209,6 +221,7 @@ Two traps to avoid:
   repo's pinned source.
 
 **Always pass both `--repo` (quoted) and `--source`:**
+
 ```bash
 set -a; source "$HOME/.gbrain/.env" 2>/dev/null; set +a
 OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
@@ -245,6 +258,7 @@ n=0; until ! kill -0 "$PID" 2>/dev/null; do n=$((n+1)); [ "$n" -ge 15 ] && kill 
 rm -f ~/.gbrain/autopilot.lock
 pgrep -fl "gbrain autopilot" || echo "(stopped)"
 ```
+
 Restart only after applying the `prepare:false` fix — otherwise it re-wedges
 on the same pooler write failures.
 
@@ -260,6 +274,7 @@ and `--repo '.'` watches the filesystem root — useless work, but it holds the 
 manual sync. `gbrain autopilot --install` generated this without pinning a repo.
 
 Fix (full remediation):
+
 ```bash
 # 1. Stop the respawn — unload the KeepAlive agent (a plain kill won't stick)
 launchctl unload ~/Library/LaunchAgents/com.gbrain.autopilot.plist
@@ -275,12 +290,13 @@ echo "<populated-source-id>" > <repo>/.gbrain-source
 #    in autopilot-run.sh) so `--repo .` resolves to a real repo, then `launchctl load` —
 #    OR leave it unloaded and rely on manual /sync-gbrain (safer for a multi-repo workspace).
 ```
+
 A misconfigured autopilot is worse than none: it blocks manual sync while indexing nothing.
 
 ### Quick Reference
 
 | Symptom | Fix |
-|---------|-----|
+| --------- | ----- |
 | `No database URL` in a script | `set -a; source ~/.gbrain/.env; set +a` first |
 | `prepared statement does not exist` | set `"prepare": false` in config.json, restart procs |
 | Resync left per-repo source stale | `sync --repo "<quoted>" --source <id>` — never bare `--repo` |

@@ -50,7 +50,7 @@ description: |
 ## Environment
 
 | Variable | Purpose |
-|----------|---------|
+| ---------- | --------- |
 | `OPENCLAW_ROOT` | OpenClaw tree (auto-detected if unset) |
 | `NVM_NODE_BIN` | Preferred Node bin dir (default `~/.nvm/versions/node/v22.22.2/bin`) |
 | `ORAMA_STATE_DIR` | Override `~/.orama-system` state directory |

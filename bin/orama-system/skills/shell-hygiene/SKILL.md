@@ -28,12 +28,14 @@ description: >
 ## The Rule
 
 **Never** write:
+
 ```bash
 sleep N && <command>
 sleep N; <command>
 ```
 
 **Never** split into shorter sleeps to work around the block:
+
 ```bash
 sleep 5 && sleep 5 && cmd   # also blocked
 ```
@@ -112,7 +114,7 @@ wasted turns, guaranteed delivery, no timeout tuning required.
 ## Quick Reference
 
 | Situation | Correct tool |
-|-----------|-------------|
+| ----------- | ------------- |
 | Started a task with `run_in_background: true` | Wait for system notification — do nothing |
 | Need to poll a file for content | `until grep -q "..." file; do sleep 3; done` |
 | Need to poll a file for size | `until [ "$(wc -l < file)" -gt N ]; do sleep 3; done` |
@@ -137,6 +139,7 @@ files=(a.py b.py c.py); perl -i -pe 's/x/y/' "${files[@]}"
 ```
 
 Rules:
+
 - Never `for x in $multiline_var` or `cmd $list_var` and expect splitting.
 - Iterate command output with `… | while IFS= read -r x`.
 - Pass file/argument lists as explicit args or `"${array[@]}"`.
