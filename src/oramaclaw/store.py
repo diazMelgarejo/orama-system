@@ -224,6 +224,53 @@ class ControlStore:
         entry = self.get_ownership(resource_key, managed_path)
         return entry["fingerprint"] if entry else None
 
+    # ── Auto-weave overrides ───────────────────────────────────────────────
+
+    def get_auto_weave_override(self, resource_key: str, managed_path: str) -> dict[str, Any] | None:
+        """Return the cooperative auto-weave override for a field, or None.
+
+        Override dict shape: {
+          "source_field_fingerprint": str,   # fingerprint of desired when override was recorded
+          "observed_value": Any,             # the live drift value that was auto-woven
+          "observed_fingerprint": str,
+          "auto_woven_at": str,              # ISO-8601
+        }
+        """
+        registry = self.load_registry()
+        entry = registry.get(f"{resource_key}{managed_path}")
+        if entry is None:
+            return None
+        return entry.get("auto_weave_override")
+
+    def set_auto_weave_override(
+        self,
+        manager: str,
+        resource_key: str,
+        managed_path: str,
+        observed_value: Any,
+        source_field_fingerprint: str,
+        *,
+        iso_timestamp: str | None = None,
+    ) -> None:
+        """Record a cooperative drift override for a field."""
+        registry = self.load_registry()
+        entry_key = f"{resource_key}{managed_path}"
+        entry = registry.get(entry_key, {
+            "manager": manager,
+            "resource_key": resource_key,
+            "managed_path": managed_path,
+            "fingerprint": _fingerprint(observed_value),
+            "timestamp": iso_timestamp or _iso_now(),
+        })
+        entry["auto_weave_override"] = {
+            "source_field_fingerprint": source_field_fingerprint,
+            "observed_value": observed_value,
+            "observed_fingerprint": _fingerprint(observed_value),
+            "auto_woven_at": iso_timestamp or _iso_now(),
+        }
+        registry[entry_key] = entry
+        _atomic_write_json(self._registry_path, registry)
+
     # ── Journal (transaction log) ──────────────────────────────────────────
 
     def load_journal(self) -> list[dict[str, Any]]:
