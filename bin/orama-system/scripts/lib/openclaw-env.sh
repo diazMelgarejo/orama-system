@@ -83,8 +83,8 @@ openclaw_resolver_path() {
 # Echo "<node>\t<entrypoint>" for the canonical openclaw, or fail (3).
 resolve_openclaw_cli() {
   local r
-  r="$(openclaw_resolver_path)" || return 1
-  [ -x "$r" ] || return 1
+  r="$(openclaw_resolver_path)" || return 3
+  [ -x "$r" ] || return 3
   "$r" --which
 }
 

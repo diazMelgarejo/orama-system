@@ -8,14 +8,19 @@
 codex_discover_endpoint() {
   local dir="${1:-$HOME/.codex/cache/codex_apps_server_info}"
   [ -d "$dir" ] || return 1
-  local newest
-  newest="$(ls -t "$dir"/*.json 2>/dev/null | head -1)"
-  [ -n "$newest" ] || return 1
-  python3 - "$newest" <<'PY'
-import json, sys
+  python3 - "$dir" <<'PY'
+import json
+from pathlib import Path
+import sys
+
 try:
-    d = json.load(open(sys.argv[1]))
-except Exception:
+    directory = Path(sys.argv[1])
+    newest = max(
+        (path for path in directory.glob("*.json") if path.is_file()),
+        key=lambda path: (path.stat().st_mtime_ns, path.name),
+    )
+    d = json.loads(newest.read_text(encoding="utf-8"))
+except (OSError, ValueError, json.JSONDecodeError):
     sys.exit(1)
 url = d.get("base_url") or d.get("baseUrl") or ""
 if not url:

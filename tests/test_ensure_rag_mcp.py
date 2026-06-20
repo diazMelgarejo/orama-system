@@ -4,6 +4,8 @@ import importlib.util
 import json
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "ensure-rag-mcp.py"
@@ -49,3 +51,13 @@ def test_openclaw_apply_merges_missing_server(tmp_path, monkeypatch):
     assert "existing" in data["mcpServers"]
     assert data["mcpServers"]["gbrain"]["command"] == "/bin/sh"
     assert "gbrain serve" in data["mcpServers"]["gbrain"]["args"][1]
+
+
+def test_openclaw_apply_rejects_malformed_json(tmp_path, monkeypatch):
+    mod = _load_module()
+    mcp_json = tmp_path / ".mcp.json"
+    mcp_json.write_text('{"mcpServers": ', encoding="utf-8")
+    monkeypatch.setattr(mod, "OPENCLAW_MCP", mcp_json)
+
+    with pytest.raises(RuntimeError, match="Invalid JSON"):
+        mod.openclaw_apply({"gbrain": mod.canonical_servers()["gbrain"]})

@@ -25,8 +25,17 @@ def test_discover_endpoint_from_server_info_dir(tmp_path):
     assert out == "http://127.0.0.1:1455", out
 
 
+def test_discover_endpoint_accepts_newlines_in_json_filenames(tmp_path):
+    d = tmp_path / "codex_apps_server_info"
+    d.mkdir()
+    shutil.copy(FIX / "server_info_sample.json", d / "server\ninfo.json")
+    rc, out, err = _run(f'codex_discover_endpoint "{d}"')
+    assert rc == 0, err
+    assert out == "http://127.0.0.1:1455", out
+
+
 def test_models_canary_unreachable_is_nonzero():
-    rc, out, err = _run('codex_models_canary "http://127.0.0.1:59999/v1" 1 && echo UP || echo DOWN')
+    rc, out, _err = _run('codex_models_canary "http://127.0.0.1:0/v1" 1 && echo UP || echo DOWN')
     assert rc == 0
     assert out == "DOWN", out
 
@@ -110,3 +119,24 @@ def test_profile_generator_preserves_operator_text_and_converges(tmp_path):
     assert "model: codex/gpt-5.5" in content
     assert "Operator note." in content
     assert security.read_text(encoding="utf-8") == "Operator security policy.\n"
+
+
+def test_profile_generator_rejects_trailing_start_marker(tmp_path):
+    generator = SKILL / "scripts/generate_codex_openclaw_profile.py"
+    workspace = tmp_path / "codex-agent"
+    workspace.mkdir()
+    (workspace / "CODEX.md").write_text(
+        "<!-- oramaclaw:generated:start -->\nmanaged\n"
+        "<!-- oramaclaw:generated:end -->\n"
+        "<!-- oramaclaw:generated:start -->\n",
+        encoding="utf-8",
+    )
+
+    result = subprocess.run(
+        ["python3", str(generator), "--workspace", str(workspace)],
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode != 0
+    assert "duplicate oramaclaw generated marker pairs" in result.stderr
