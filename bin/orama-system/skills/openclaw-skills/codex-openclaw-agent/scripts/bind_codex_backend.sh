@@ -59,10 +59,20 @@ command -v jq >/dev/null 2>&1 || fail "jq is required but not installed"
 command -v openclaw >/dev/null 2>&1 || fail "openclaw CLI not found"
 [ -f "$OC_JSON" ] || fail "openclaw.json not found at $OC_JSON"
 
-# ── acquire lock (skip in dry-run) ──────────────────────────────────────────
+# ── acquire lock (PT-MM5) ────────────────────────────────────────────────────
+# Try flock if available (Linux, brew-flock macOS); fall back to POSIX atomic
+# mkdir lock (vanilla macOS). Never silently skip the lock.
+LOCK_DIR="${OPENCLAW_HOME:-$HOME}/.openclaw/.codex-bind.lockdir"
 if [ "$DRY_RUN" = "false" ]; then
-    exec 9>"$LOCK_FILE"
-    flock -w 10 9 || fail "Could not acquire lock $LOCK_FILE — another bind may be running"
+    if command -v flock >/dev/null 2>&1; then
+        exec 9>"$LOCK_FILE"
+        flock -w 10 9 || fail "Could not acquire lock $LOCK_FILE — another bind may be running"
+    else
+        if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+            fail "Could not acquire lock $LOCK_DIR — another bind may be running (remove manually if stale)"
+        fi
+        trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
+    fi
 fi
 
 # ── backup ──────────────────────────────────────────────────────────────────
