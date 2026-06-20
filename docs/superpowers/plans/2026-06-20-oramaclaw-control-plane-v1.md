@@ -157,7 +157,21 @@ Require all three explicit target fields together. Resolve paths with `Path.expa
 
 - [ ] **Step 5: Register and verify.**
 
-Include `src/oramaclaw` in Hatch package discovery. Run the focused tests again; all must pass.
+Include `src/oramaclaw` in Hatch package discovery. Add to `pyproject.toml`:
+
+```toml
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oramaclaw"]
+
+[project.optional-dependencies]
+oramaclaw = []
+```
+
+Run the focused tests again; all must pass.
 
 - [ ] **Step 6: Commit.**
 
@@ -443,7 +457,7 @@ Cover:
 11. A resource from a different manager cannot claim a field already owned by another manager.
 12. An unchanged manifest field uses its persisted effective-desired override, while an explicit source-field change clears that override before merge.
 
-Use a representative manifest:
+Use a representative manifest (planning-only fixture — paths need not exist on disk; use `tmp_path` when the planner is invoked from pytest):
 
 ```json
 {
@@ -809,7 +823,7 @@ git -C ../perplexity-api/Perpetua-Tools commit -m "feat(oramaclaw): vendor contr
 Include this table in the implementation PR description:
 
 | Existing writer | Manager | Current mutation | Replacement |
-| --- | --- | --- |
+| --- | --- | --- | --- |
 | Codex `bind_codex_backend.sh` | `codex-binder` | `jq` plus temp-file replacement | Build manifest and invoke `oramaclaw apply` |
 | `openclaw-new-agent` skill | `openclaw-agent-workflow` | Direct configuration instructions | Build manifest and corrected delegation resource |
 | Orama bootstrap | `orama-bootstrap` | Direct JSON mutation | Package API and manifest |
@@ -828,7 +842,7 @@ Replace the blanket instruction “Do not hand-edit openclaw.json; use openclaw 
 3. `openclaw config patch --file` remains a reviewed operator fallback for manually approved whole-document changes; arrays replace, so it is not the delegation-management path.
 4. Direct `jq` writing is removed from managed binder flows.
 5. `oramaclaw unsafe-direct-config` is the sole direct emergency path and requires acknowledgement.
-6. Delegation always uses `subagents.allowAgents`.
+6. Delegation always uses `agents.defaults.subagents.allowAgents` or `agents.list[].subagents.allowAgents`.
 
 The Codex binding resolver becomes a manifest producer: native plugin first, idempotent plugin install when allowed, local app-server compatibility fallback, then backend verification. `CODEX.md` records metadata only in its generated marker region and never copies bearer tokens.
 
@@ -840,7 +854,7 @@ Test:
 2. Missing but installable plugin invokes one idempotent installation attempt.
 3. Unavailable plugin creates app-server compatibility provider with a path-based auth reference.
 4. `--effort high` and `--effort xhigh` are explicit overrides.
-5. Parent delegation plans to `subagents.allowAgents`.
+5. Parent delegation plans to `agents.defaults.subagents.allowAgents` or `agents.list[].subagents.allowAgents`.
 6. AlphaClaw absence does not prevent plan, apply, or status.
 7. Migrated writers contain no normal-flow `jq` write of `openclaw.json`.
 
