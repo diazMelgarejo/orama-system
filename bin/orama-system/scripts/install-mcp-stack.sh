@@ -95,7 +95,12 @@ else
   _log "Accepting Claude first-run prompts (required for ai-cli background workers)..."
   _log "Note: --dangerously-skip-permissions applies to this one-time acceptance only."
   if ! $DRY_RUN; then
-    echo "" | timeout 5 claude --dangerously-skip-permissions 2>/dev/null || true
+    _TIMEOUT_BIN=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+    if [ -n "$_TIMEOUT_BIN" ]; then
+      echo "" | "$_TIMEOUT_BIN" 5 claude --dangerously-skip-permissions 2>/dev/null || true
+    else
+      echo "" | claude --dangerously-skip-permissions 2>/dev/null || true
+    fi
     touch "$CLAUDE_ACCEPTED_MARKER"
   fi
   _ok "Claude first-run prompt accepted"
