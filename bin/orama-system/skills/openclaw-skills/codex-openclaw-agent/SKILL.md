@@ -106,6 +106,26 @@ Full data flow and edge cases: [`references/codex-backend-binding.md`](reference
 - The `SECURITY.md` for `codex-agent` is operator-owned; this skill writes
   a scaffold only.
 
+## Invariants (enforced by oramaclaw contract)
+
+**Delegation path:** Sub-agent delegation is always written to
+`agents.defaults.subagents.allowAgents` or `agents.list[id].subagents.allowAgents`.
+The key `agents.bindings.*.allowAgents` is **rejected** by the oramaclaw control
+plane — do not use it in any binder, bootstrap, or manifest.
+
+**macOS `timeout`:** Never use bare `timeout N <cmd>` in shell scripts.
+Use the gtimeout→timeout→unwrapped pattern:
+```bash
+_TIMEOUT_BIN=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+if [ -n "$_TIMEOUT_BIN" ]; then "$_TIMEOUT_BIN" N <cmd>; else <cmd>; fi
+```
+
+**`codex review` invocation:** Always pass `< /dev/null`. Without it the process
+blocks on stdin and hangs silently. Canonical form:
+```bash
+codex review "<prompt>" -c 'model_reasoning_effort="high"' < /dev/null
+```
+
 ## See Also
 
 - [`references/codex-backend-binding.md`](references/codex-backend-binding.md)
