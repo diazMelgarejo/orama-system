@@ -12,7 +12,7 @@ git pull origin main
 
 Then in Claude Code:
 
-```
+```bash
 /instinct-import .claude/homunculus/instincts/inherited/orama-system-instincts.yaml
 /instinct-status
 ```

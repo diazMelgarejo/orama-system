@@ -24,7 +24,7 @@ export const meta = {
 
 const RESOURCE_ORDER = ["ollama", "codex", "gemini", "agy", "openrouter", "agentrouter"]
 const REVIEWED_DESIGN =
-  "docs/superpowers/specs/2026-06-19-codex-openclaw-agent-design.md"
+  "docs/superpowers/specs/2026-06-19-codex-openclaw-agent-re-design-v2.md"
 const DEFAULT_REFERENCE = "set OPENCLAW_REFERENCE to the local OpenClaw.md reference path"
 
 function env(name, fallback = "") {

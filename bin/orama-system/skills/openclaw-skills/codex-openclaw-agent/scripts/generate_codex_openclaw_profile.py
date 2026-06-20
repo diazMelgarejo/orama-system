@@ -32,7 +32,7 @@ def merge_generated_region(existing: str, heading: str, generated: str) -> str:
     if has_start:
         first = existing.index(START)
         last = existing.index(END, first) + len(END)
-        if START in existing[first + len(START):last] or END in existing[last:]:
+        if START in existing[first + len(START):last] or END in existing[last:] or START in existing[last:]:
             raise ValueError("found duplicate oramaclaw generated marker pairs")
         return existing[:first] + block + existing[last:].lstrip("\n")
     prefix = existing.rstrip()
