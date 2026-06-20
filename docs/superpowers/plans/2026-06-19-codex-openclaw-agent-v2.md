@@ -92,14 +92,14 @@ Stage 0 probe JSON (binder `--mode probe` stdout):
 - Create: `scripts/tests/test_bind_codex_backend.py`
 - Create: `scripts/tests/fixtures/codex/server_info_sample.json`
 
-- [ ] **Step 1: Create the skill directory tree**
+- [x] **Step 1: Create the skill directory tree**
 
 ```bash
 SKILL_DIR="bin/orama-system/skills/openclaw-skills/codex-openclaw-agent"
 mkdir -p "$SKILL_DIR/references" "$SKILL_DIR/scripts/lib" scripts/tests/fixtures/codex
 ```
 
-- [ ] **Step 2: Write the endpoint-discovery fixture**
+- [x] **Step 2: Write the endpoint-discovery fixture**
 
 Create `scripts/tests/fixtures/codex/server_info_sample.json` (mirrors the real `~/.codex/cache/codex_apps_server_info/<hash>.json` shape — a base_url + pid):
 
@@ -112,7 +112,7 @@ Create `scripts/tests/fixtures/codex/server_info_sample.json` (mirrors the real 
 }
 ```
 
-- [ ] **Step 3: Write the failing test for endpoint discovery**
+- [x] **Step 3: Write the failing test for endpoint discovery**
 
 Create `scripts/tests/test_bind_codex_backend.py`:
 
@@ -141,12 +141,12 @@ def test_discover_endpoint_from_server_info_dir(tmp_path):
     assert out == "http://127.0.0.1:1455", out
 ```
 
-- [ ] **Step 4: Run the test to verify it fails**
+- [x] **Step 4: Run the test to verify it fails**
 
 Run: `cd "$(git rev-parse --show-toplevel)" && python3 -m pytest scripts/tests/test_bind_codex_backend.py::test_discover_endpoint_from_server_info_dir -v`
 Expected: FAIL — `codex_probe.sh` does not exist / `codex_discover_endpoint: command not found`.
 
-- [ ] **Step 5: Write minimal `codex_probe.sh` with endpoint discovery**
+- [x] **Step 5: Write minimal `codex_probe.sh` with endpoint discovery**
 
 Create `bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/lib/codex_probe.sh`:
 
@@ -178,12 +178,12 @@ PY
 }
 ```
 
-- [ ] **Step 6: Run the test to verify it passes**
+- [x] **Step 6: Run the test to verify it passes**
 
 Run: `python3 -m pytest scripts/tests/test_bind_codex_backend.py::test_discover_endpoint_from_server_info_dir -v`
 Expected: PASS
 
-- [ ] **Step 7: Add the live `GET /v1/models` canary helper + its test**
+- [x] **Step 7: Add the live `GET /v1/models` canary helper + its test**
 
 Append to `codex_probe.sh`:
 
@@ -210,12 +210,12 @@ def test_models_canary_unreachable_is_nonzero():
 
 Note: 401/403 count as "reachable" because an auth-gated endpoint is still a live OpenAI-compatible server (PT-MM2 only needs the route to exist).
 
-- [ ] **Step 8: Run canary test**
+- [x] **Step 8: Run canary test**
 
 Run: `python3 -m pytest scripts/tests/test_bind_codex_backend.py -v`
 Expected: PASS (both tests)
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 git add bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/lib/codex_probe.sh \
@@ -230,7 +230,7 @@ git commit -m "feat(codex-openclaw-agent): scaffold skill + codex probe lib (end
 **Files:**
 - Create: `bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/references/codex-backend-binding.md`
 
-- [ ] **Step 1: Write the doctrine document**
+- [x] **Step 1: Write the doctrine document**
 
 Create the doctrine at the path above, not at the older top-level
 `bin/orama-system/skills/codex-openclaw-agent/` path.
@@ -271,12 +271,12 @@ Required corrections versus the stale draft:
 - Binding records must be redacted and must not serialize raw server-info or
   auth payloads.
 
-- [ ] **Step 2: Verify no workstation paths / secrets leaked**
+- [x] **Step 2: Verify no workstation paths / secrets leaked**
 
 Run: `python3 scripts/review/repo_hygiene.py bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/references/codex-backend-binding.md 2>&1 | tail -5`
 Expected: no workstation-path hits (home-dir literals or the OpenClaw tree).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/references/codex-backend-binding.md
@@ -293,7 +293,7 @@ git commit -m "docs(codex-openclaw-agent): binding doctrine reference (5-stage l
 
 PT-MM5: the atomicity boundary (a per-`openclaw-home` flock) is established now, before any stage writes.
 
-- [ ] **Step 1: Write the failing test for arg validation + flock**
+- [x] **Step 1: Write the failing test for arg validation + flock**
 
 Add to `scripts/tests/test_bind_codex_backend.py`:
 
@@ -316,12 +316,12 @@ def test_binder_rejects_bad_agent_id():
     assert "agent" in err.lower()
 ```
 
-- [ ] **Step 2: Run to verify failure**
+- [x] **Step 2: Run to verify failure**
 
 Run: `python3 -m pytest scripts/tests/test_bind_codex_backend.py -k binder_rejects -v`
 Expected: FAIL — script missing.
 
-- [ ] **Step 3: Write the binder skeleton**
+- [x] **Step 3: Write the binder skeleton**
 
 Create `bind_codex_backend.sh`:
 
@@ -397,17 +397,21 @@ do_probe() { echo '{"schema_version":"1","stub":true}'; }   # replaced in Task 3
 with_lock main
 ```
 
-- [ ] **Step 4: Run to verify the rejection tests pass**
+- [x] **Step 4: Run to verify the rejection tests pass**
 
 Run: `python3 -m pytest scripts/tests/test_bind_codex_backend.py -k binder_rejects -v`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/bind_codex_backend.sh scripts/tests/test_bind_codex_backend.py
 git commit -m "feat(codex-openclaw-agent): bind_codex_backend.sh skeleton (args, validation, flock boundary)"
 ```
+
+---
+
+> **PROGRESS (2026-06-20):** Tasks 0, 1, and 2 are complete. Commits: `3b07d99` (Task 0 — probe lib + canary), `04ba748/cb2967e/7a2111e` (Task 1 — doctrine + SKILL.md), `2abbbdb` (Task 2 flock PT-MM5 fix). All 6 tests green. `bind_codex_backend.sh` (377 lines) shipped with POSIX mkdir fallback lock for vanilla macOS. Oramaclaw control-plane plan written: `docs/superpowers/plans/2026-06-20-oramaclaw-control-plane-v1.md` (Tasks 1-10 of the config write path). Next: Task 3 (live probe) or oramaclaw Tasks 1-6 first.
 
 ---
 
