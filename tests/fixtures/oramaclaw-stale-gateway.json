@@ -1,0 +1,25 @@
+{
+  "_fixture": "stale-gateway",
+  "_note": "Gateway returns stale baseHash on first apply; engine must retry once then conflict.",
+  "version": 1,
+  "target": {
+    "workspace_root": "__TMP__/workspace",
+    "config_path": "__TMP__/openclaw.json",
+    "state_dir": "__TMP__"
+  },
+  "resources": [
+    {
+      "kind": "provider",
+      "id": "codex-app-server",
+      "manager": "codex-binder",
+      "policy": "strict",
+      "spec": {
+        "api": "openai-completions",
+        "baseUrl": "http://127.0.0.1:61234/v1",
+        "authReference": "~/.codex/config.toml",
+        "models": [{ "id": "gpt-5.5", "name": "Codex — GPT-5.5", "contextWindow": 200000 }]
+      },
+      "managed_paths": ["/models/providers/codex-app-server"]
+    }
+  ]
+}
