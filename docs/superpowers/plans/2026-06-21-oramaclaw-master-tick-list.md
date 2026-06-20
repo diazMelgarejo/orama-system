@@ -29,13 +29,13 @@ Tick this file as work lands. One truth, no duplicates.
 | `src/oramaclaw/types.py` | ✅ done |
 | `src/oramaclaw/schema.py` | ✅ done |
 | `pyproject.toml` — wheel includes `src/oramaclaw` | ✅ done (`eb6ba2a`) |
-| `src/oramaclaw/target.py` | 🔲 **next** |
-| `tests/test_oramaclaw_target.py` | 🔲 **next** |
+| `src/oramaclaw/target.py` | ✅ done (`6bb53ed`) |
+| `tests/test_oramaclaw_target.py` | ✅ done (17 tests green) |
 | `tests/test_oramaclaw_schema.py` | ✅ done (5 tests green) |
 
-- [ ] Implement `target.py` — `resolve_target()`, legacy `openclaw_home` migration, `TargetCatalog`
-- [ ] Write and pass `tests/test_oramaclaw_target.py`
-- [ ] Commit Task 1 completion
+- [x] Implement `target.py` — `resolve_target()`, legacy `openclaw_home` migration, `TargetCatalog`
+- [x] Write and pass `tests/test_oramaclaw_target.py`
+- [x] Commit Task 1 completion (`6bb53ed`)
 
 ---
 
