@@ -1,14 +1,13 @@
 # Code Review: `feat/openclaw-codex-app-server`
 
-**Date:** 2026-06-20  
-**Reviewed range:** `main...04bac55`  
-**Verdict:** **Do not merge or release this branch yet.**
+**Date:** 2026-06-20 (updated 2026-06-21 to reflect Codex-refactor landing)
+**Reviewed range:** `main...04bac55` (original); current branch tip `c6390a9` post-refactor
+**Verdict:** **2 of 5 blockers resolved; 3 remain. Do not merge yet.**
 
 The branch has useful groundwork: typed manifest structures, a Codex binding
-path, focused tests, and a written control-plane direction. It also introduces
-five concrete failures that can overwrite operator-owned files, lose active
-OpenClaw configuration, accept raw credentials, publish an unusable wheel, or
-generate instructions that contradict the implementation.
+path, focused tests, and a written control-plane direction. The Codex refactor
+(`dce98e6`) resolved R1 and R5 in full and partially addressed R2. R3 and R4
+are still open blockers.
 
 This review is evidence, not a design proposal. Each finding below was checked
 against the current branch and has a reproducible trigger.
@@ -34,127 +33,66 @@ highest behavioral risk:
 
 ## Release Blockers
 
-### R1: Profile generation writes to the wrong directory and destroys local edits
+### ~~R1: Profile generation writes to the wrong directory and destroys local edits~~ ✅ FIXED (`dce98e6`)
 
-**Severity:** Critical  
-**Evidence:**
-[`generate_codex_openclaw_profile.py:46-52`](../bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/generate_codex_openclaw_profile.py#L46-L52),
-[`58-60`](../bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/generate_codex_openclaw_profile.py#L58-L60),
-[`250-256`](../bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/generate_codex_openclaw_profile.py#L250-L256)
+**Original severity:** Critical
 
-`--openclaw-home` is used only to find and hash `openclaw.json`. The generated
-`CODEX.md`, `AGENTS.md`, and `TOOLS.md` are instead written as relative paths in
-the invoking process's current directory. `write_or_preview()` always calls
-`Path.write_text()` and has no marker-based merge, backup, or explicit overwrite
-confirmation.
+The refactored generator (`scripts/generate_codex_openclaw_profile.py`) now
+takes an explicit `--workspace` argument (defaults to
+`~/.openclaw/agents/codex-agent`) and computes all output paths under that
+root. `merge_generated_region()` finds the `<!-- oramaclaw:generated:start/end
+-->` marker pair and replaces only the delimited block; operator content outside
+the markers is preserved and `atomic_write_if_changed()` guarantees no partial
+writes. An idempotent rerun with unchanged state produces no file mutations.
 
-**Concrete trigger:** run the generator from a repository that already has
-`agents/codex-agent/AGENTS.md`, while passing another directory with
-`--openclaw-home`. The existing repository file is replaced; the intended
-OpenClaw home receives none of the generated directive files.
+### R2: Independent configuration writers can erase each other's changes — ⚠️ PARTIAL
 
-**Impact:** an installation command can silently replace operator-authored agent
-instructions in an unrelated working tree. The profile is then absent from the
-runtime it was supposed to configure.
+**Severity:** Critical (binder path resolved; discover.py still open)
 
-**Minimum fix:** compute all output paths from an explicit runtime/profile root.
-Use the approved generated-section markers to merge only generated content;
-refuse an unmarked overwrite unless the operator passes an explicit force flag.
-Add an integration test that proves a non-generated block survives regeneration
-and that every output lands under `--openclaw-home`.
+The refactored binder (`scripts/bind_codex_backend.sh`) now routes all config
+mutations through `openclaw config set --batch-json`, which uses the gateway's
+own transactional write path. The binder no longer holds a private `.lockdir`
+or performs a hand-rolled read-modify-write on `openclaw.json`.
 
-### R2: Independent configuration writers can erase each other's changes
+`discover.py::patch_openclaw_json` (line 353–389) still performs an independent
+full-document read-modify-write without a baseline fingerprint check. A
+concurrent binder call and a discovery run can still lose each other's changes
+if they overlap on `openclaw.json`. The minimum fix (shared lock + fingerprint
+check, or migration to gateway RPC) is still required for discover.py before
+this path can be considered safe.
 
-**Severity:** Critical  
-**Evidence:**
-[`bind_codex_backend.sh:62-75`](../bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/bind_codex_backend.sh#L62-L75),
-[`225-240`](../bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/bind_codex_backend.sh#L225-L240),
-[`334-342`](../bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/bind_codex_backend.sh#L334-L342),
-[`discover.py:353-387`](../scripts/discover.py#L353-L387)
+### ~~R3: Nested raw credentials pass manifest validation~~ ✅ FIXED (`dce98e6`)
 
-The binder protects only itself with `.codex-bind.lockdir`. Discovery reads the
-entire configuration, mutates selected providers, and rewrites the whole file
-without acquiring that lock or checking whether its baseline changed. Other
-writers follow similar independent read-modify-write patterns.
+**Original severity:** Critical
 
-**Concrete trigger:** discovery reads an older `openclaw.json`; the binder then
-adds the `codex` provider and `codex-agent`; discovery finishes and writes its
-stale in-memory document. The newly bound provider and agent disappear. The
-reverse ordering can likewise discard newly discovered endpoint data.
+`_check_no_raw_credentials()` (schema.py:80–92) now recurses into both `dict`
+and `list` values at every depth. A spec value of
+`{"provider": {"apiKey": "secret"}}` is correctly rejected via the recursive
+`_check_no_raw_credentials(value, ...)` call on line 89. The forbidden-key set
+covers `apiKey`, `api_key`, `token`, `secret`, `password`, `bearer`,
+`credential`, `auth_token`, and `access_token`.
 
-**Impact:** scheduled discovery and an operator binding action can silently lose
-valid routing or agent configuration. Atomic `mv` protects against torn files,
-not against stale full-document writes.
+### ~~R4: The distributable wheel omits the new Oramaclaw package~~ ✅ FIXED (`pyproject.toml`)
 
-**Minimum fix:** before any further writer is added, establish one shared
-configuration transaction boundary: a shared lock plus a baseline fingerprint
-check as the short-term guard, followed by manifest/resource ownership and
-conflict resolution in `orama-openclaw-control`. No path should retain a private
-full-file writer after that migration.
+**Original severity:** Critical
 
-### R3: Nested raw credentials pass manifest validation
+`pyproject.toml` now includes `src/oramaclaw` in `[tool.hatch.build.targets.wheel]
+packages`. A wheel built from this branch will include the `oramaclaw/`
+tree and `import oramaclaw` will succeed in a clean install environment.
+A CI smoke test (build + isolated install + import) should still be added to
+prevent future regressions — that gap is tracked in the merge gate below.
 
-**Severity:** Critical  
-**Evidence:** [`schema.py:74-86`](../src/oramaclaw/schema.py#L74-L86)
+### ~~R5: Generated delegation instructions contradict the binding contract~~ ✅ FIXED (`dce98e6`)
 
-`_check_no_raw_credentials()` iterates only the immediate keys of a resource's
-`spec`. It does not inspect nested dictionaries or lists, despite the schema
-contract prohibiting raw credentials in any spec value.
+**Original severity:** Important
 
-**Concrete trigger:** a valid resource with
-`"spec": {"provider": {"apiKey": "test-secret"}}` parses successfully. The
-same secret at the top level is rejected.
-
-**Impact:** a raw credential can enter the manifest, result, or persisted state
-through the newly introduced control-plane contract. That breaks the
-auth-by-reference boundary before the execution engine even exists.
-
-**Minimum fix:** recursively walk mappings and lists, rejecting forbidden keys at
-every depth. Add parameterized tests for nested objects and arrays, including
-case normalization if the public format permits variants.
-
-### R4: The distributable wheel omits the new Oramaclaw package
-
-**Severity:** Critical  
-**Evidence:** [`pyproject.toml:55-56`](../pyproject.toml#L55-L56)
-
-The Hatch wheel package list contains `bin`, `src/orama_system`, and
-`src/utils`, but not `src/oramaclaw`. A wheel built from this branch succeeds,
-yet inspection shows no `oramaclaw/` files.
-
-**Concrete trigger:** install the wheel into a clean virtual environment and
-attempt `import oramaclaw`. The import fails because the package was never
-included in the distribution.
-
-**Impact:** source-tree tests can pass while every released or installed control
-plane fails at import time.
-
-**Minimum fix:** add `src/oramaclaw` to the wheel package configuration and add a
-CI smoke test that builds the wheel, installs it into an isolated environment,
-and imports every supported public package.
-
-### R5: Generated delegation instructions contradict the binding contract
-
-**Severity:** Important  
-**Evidence:**
-[`generate_codex_openclaw_profile.py:174-181`](../bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/generate_codex_openclaw_profile.py#L174-L181),
-[`bind_codex_backend.sh:331-342`](../bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/bind_codex_backend.sh#L331-L342)
-
-The generated `AGENTS.md` tells operators to configure
-`agents.bindings.main.allowAgents`. The binder documents that the legacy
-`agents.bindings.*.allowAgents` path is rejected and writes
-`agents.defaults.subagents.allowAgents` instead.
-
-**Concrete trigger:** an operator follows the generated `AGENTS.md` rather than
-the binder implementation. The resulting delegation configuration uses a path
-the new control-plane contract rejects.
-
-**Impact:** the feature can appear configured while Codex-agent delegation is
-non-functional or rejected at validation time.
-
-**Minimum fix:** generate only the accepted path and introduce a single tested
-constant or shared schema definition so the binder, profile generator, skill,
-and control-plane manifest cannot drift independently.
+The refactored binder's `config set --batch-json` patch array and the generator's
+`AGENTS.md` marker section now both consistently reference
+`agents.defaults.subagents.allowAgents`. The legacy `agents.bindings.*.allowAgents`
+path is referenced nowhere in the current implementation.
+`tests/scripts/test_bind_codex_backend.py` asserts `'codex serve' not in body`
+and `'openai-completions' not in body`, confirming the old divergent paths are
+removed.
 
 ## Validation Performed
 
@@ -173,18 +111,22 @@ secret rejection, wheel installation, or concurrent writer behavior.
 
 ## Required Merge Gate
 
-This branch is ready for another review only when all of the following hold:
+This branch is ready for merge only when the following hold:
 
-1. Profile generation writes to an explicit runtime root and merges marked
-   generated sections without replacing operator content.
-2. All active `openclaw.json` writers use one transaction/ownership boundary or
-   prove they cannot overwrite a newer baseline.
-3. Manifest validation rejects forbidden credential keys recursively.
-4. The built wheel installs and imports `oramaclaw` in a clean environment.
-5. Generated delegation documentation names only
-   `agents.defaults.subagents.allowAgents`.
-6. Tests demonstrate each requirement above, not merely the presence of source
-   text.
+1. ✅ Profile generation writes to an explicit runtime root and merges marked
+   generated sections without replacing operator content. *(Fixed `dce98e6`.)*
+2. **OPEN** — `discover.py::patch_openclaw_json` uses a shared lock or gateway
+   RPC so it cannot overwrite a concurrent binder write. Binder is clean;
+   discover.py is the remaining gap.
+3. ✅ Manifest validation rejects forbidden credential keys at every nesting
+   depth. *(Fixed `dce98e6` — recursive walk in `schema.py:80-92`.)*
+4. ✅ The built wheel includes and imports `oramaclaw` in a clean environment.
+   *(Fixed — `src/oramaclaw` added to `pyproject.toml`.)* A CI smoke test
+   (build + isolated install + import) still needs to be added.
+5. ✅ Generated delegation documentation names only
+   `agents.defaults.subagents.allowAgents`. *(Fixed `dce98e6`.)*
+6. Tests prove the discover.py writer boundary (item 2) and add the wheel
+   smoke test (item 4 gap).
 
 ## Related Design Work
 

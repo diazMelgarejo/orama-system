@@ -168,14 +168,17 @@ def test_patch_openclaw_json(tmp_path, monkeypatch):
     }
     D.patch_openclaw_json(endpoints)
     cfg = json.loads(oc.read_text())
-    assert "192.168.254.107" in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    # Mac always routes to localhost — the LAN IP is discovery metadata only.
+    assert "localhost" in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    assert "192.168.254.107" not in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
     assert "192.168.254.101" in cfg["models"]["providers"]["lmstudio-win"]["baseUrl"]
     mac_ids = [m["id"] for m in cfg["models"]["providers"]["lmstudio-mac"]["models"]]
-    assert "text-embedding-nomic" not in mac_ids
+    assert "text-embedding-nomic" not in mac_ids  # embedding models always excluded
     assert "qwen3.5-9b-mlx" in mac_ids
-    assert "gemma-4-26B-A4B-it-Q4_K_M" not in mac_ids
+    assert "gemma-4-26B-A4B-it-Q4_K_M" not in mac_ids  # policy marks it windows_only
     win_ids = [m["id"] for m in cfg["models"]["providers"]["lmstudio-win"]["models"]]
-    assert "Qwen3.5-9B-MLX-4bit" not in win_ids
+    assert "qwen3.5-27b-distilled" in win_ids
+    assert "Qwen3.5-9B-MLX-4bit" not in win_ids  # policy marks it mac_only
 
 
 def test_win_primary_prefers_27b(tmp_path, monkeypatch):
@@ -268,14 +271,19 @@ def test_get_repo_paths_uses_resolved_perpetua_root(monkeypatch):
     assert paths["perpetua_tools"] == Path("/tmp/pt-root")
 
 
-def test_discover_fails_closed_when_perpetuatoolsroot_missing(monkeypatch, tmp_path):
+def test_discover_skips_pt_checks_when_perpetuatoolsroot_missing(monkeypatch, tmp_path, caplog):
+    # PT root is only needed for PT-specific policy operations; openclaw.json
+    # IP patching proceeds with a warning when PT root is absent.
+    import logging
     monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
     monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
-    monkeypatch.setattr(D, "OPENCLAW_JSON", tmp_path / "openclaw.json")
-    (tmp_path / "openclaw.json").write_text("{}")
-    with pytest.raises(SystemExit):
+    oc = tmp_path / "openclaw.json"
+    oc.write_text("{}")
+    monkeypatch.setattr(D, "OPENCLAW_JSON", oc)
+    with caplog.at_level(logging.WARNING):
         D.patch_openclaw_json({"mac": None, "win": None})
+    assert any("PERPETUATOOLSROOT" in r.message for r in caplog.records)
 
 
 def test_perpetuatoolsroot_takes_precedence_over_legacy_path(monkeypatch, tmp_path):
