@@ -8,6 +8,8 @@
 
 **Tech Stack:** Python, pytest, OpenClaw CLI and gateway RPC, existing Orama portal server and React portal.
 
+**Review companion:** [`2026-06-20-oramaclaw-plan-punch-list.md`](2026-06-20-oramaclaw-plan-punch-list.md)
+
 ## Global Constraints
 
 - Canonical source: `src/oramaclaw/`; generated Perpetua-Tools mirror: `../perplexity-api/Perpetua-Tools/oramaclaw/`.
@@ -23,6 +25,9 @@
 - Default Codex effort is `medium`; `high` and `xhigh` are opt-in.
 - Delegation uses `agents.defaults.subagents.allowAgents` or `agents.list[].subagents.allowAgents`, never `agents.bindings.*.allowAgents`.
 - Generated profiles replace only a marker-delimited section and retain operator-authored content elsewhere.
+- The canonical native Codex template is `~/.openclaw/agents/codex-agent`, with state in `~/.openclaw/agents/codex-agent/agent`. First run creates it only when `codex-agent` is absent; later runs reconcile only OramaClaw-owned fields and marker regions.
+- Native Codex uses the model reference `codex/gpt-5.5` and the managed `openai-codex` auth flow. It is not a custom `models.providers.codex` resource: do not create a localhost app-server provider, call `codex serve`, or write credential placeholders into config.
+- Native Codex auth requires the official bundled `openai` provider plugin. When absent, install it with `openclaw plugins install openai`; when `plugins.allow` exists, preserve its contents and append only `openai`; enable the plugin and restart before attempting interactive `openai-codex` authentication. `needs_plugin` is reserved for an automated bundled-plugin install failure, never a custom-provider fallback.
 - Keep `.claude/skills`, unrelated Perpetua-Tools drift, and the `cc-openclaw` submodule state out of scope.
 
 ---
@@ -44,7 +49,7 @@
 
 - [ ] **Step 1: Write the failing tests.**
 
-Cover explicit target normalization, one-time `openclaw_home` migration, rejection of partial targets, manifest version validation, unique resource keys, required non-empty manager names, default `medium` effort, opt-in `high` and `xhigh`, and rejection of obsolete delegation fields.
+Cover explicit target normalization, one-time `openclaw_home` migration, rejection of partial targets, manifest version validation, unique resource keys, required non-empty manager names, default `medium` effort, opt-in `high` and `xhigh`, and rejection of obsolete delegation fields. Cover the native Codex agent shape: string `model`, `thinkingDefault`, `tools.profile`, canonical `workspace` plus `agentDir`, no fallback list, and no custom `models.providers.codex` resource.
 
 ```python
 def test_legacy_openclaw_home_resolves_explicit_target(tmp_path: Path) -> None:
@@ -116,7 +121,7 @@ class ControlManifest:
 @dataclass(frozen=True)
 class Conflict:
     """A field that cannot be automatically resolved."""
-    resource_key: str               # e.g. "provider:codex-app-server"
+    resource_key: str               # e.g. "provider:example-provider"
     manager: str
     managed_path: str               # JSON Pointer e.g. "/effort"
     base_fingerprint: str | None
@@ -241,8 +246,8 @@ Ownership ledger record:
 
 ```json
 {
-  "resource_key": "provider:codex-app-server",
-  "manager": "codex-binder",
+  "resource_key": "provider:example-provider",
+  "manager": "example-manager",
   "policy": "cooperative",
   "base": {
     "base_url": "http://127.0.0.1:8080/v1",
@@ -444,7 +449,7 @@ git commit -m "feat(oramaclaw): add gateway-first transport"
 
 Cover:
 
-1. Provider and binding compile before an agent that refers to them.
+1. Generic provider and binding resources compile before agents that refer to them; native Codex requires no custom provider resource.
 2. Agent creation compiles before delegation grants it to a parent.
 3. Delegation compiles to `agents.defaults.subagents.allowAgents` or `agents.list[].subagents.allowAgents`.
 4. Identical base and observed state with changed desired state produces one apply operation.
@@ -469,22 +474,29 @@ Use a representative manifest (planning-only fixture — paths need not exist on
   },
   "resources": [
     {
-      "kind": "provider",
-      "id": "codex-app-server",
-      "base_url": "http://127.0.0.1:8080/v1",
-      "model": "gpt-5.5",
-      "effort": "medium",
-      "auth_reference": "~/.codex"
-    },
-    {
       "kind": "agent",
-      "id": "codex-openclaw-agent",
-      "provider": "codex-app-server"
+      "id": "codex-agent",
+      "manager": "codex-binder",
+      "policy": "conflict",
+      "managed_paths": ["/workspace", "/agentDir", "/model", "/thinkingDefault", "/tools/profile"],
+      "spec": {
+        "workspace": "~/.openclaw/agents/codex-agent",
+        "agentDir": "~/.openclaw/agents/codex-agent/agent",
+        "model": "codex/gpt-5.5",
+        "thinkingDefault": "medium",
+        "tools": {"profile": "coding"}
+      }
     },
     {
       "kind": "delegation",
-      "parent_agent": "orchestrator",
-      "allow_agent": "codex-openclaw-agent"
+      "id": "codex-agent-default-delegation",
+      "manager": "codex-binder",
+      "policy": "conflict",
+      "managed_paths": ["/agents/defaults/subagents/allowAgents"],
+      "spec": {
+        "path": "agents.defaults.subagents.allowAgents",
+        "allow_agent": "codex-agent"
+      }
     }
   ]
 }
@@ -594,7 +606,7 @@ def test_timeout_auto_weaves_live_value_without_overwrite(engine) -> None:
     )
 
     assert result.applied == ()
-    assert result.auto_woven == ("provider:codex-app-server:/effort",)
+    assert result.auto_woven == ("provider:example-provider:/effort",)
     assert engine.transport.config_writes == []
 ```
 
@@ -689,7 +701,7 @@ Verify:
 1. `oramaclaw plan --manifest manifest.json` is deterministic and makes no write.
 2. `oramaclaw apply` selects gateway transport by default.
 3. `oramaclaw apply --offline` rejects a delegation fixture with a stable nonzero result.
-4. `oramaclaw adopt provider:codex-app-server` records explicit ownership only.
+4. `oramaclaw adopt provider:example-provider` records explicit ownership only.
 5. `oramaclaw status` exposes managed resources, pending conflicts, and redacted transaction summaries.
 6. `oramaclaw resolve` accepts only valid pending-resolution actions.
 7. `oramaclaw vendor verify` fails on a changed header or body.
@@ -844,19 +856,23 @@ Replace the blanket instruction “Do not hand-edit openclaw.json; use openclaw 
 5. `oramaclaw unsafe-direct-config` is the sole direct emergency path and requires acknowledgement.
 6. Delegation always uses `agents.defaults.subagents.allowAgents` or `agents.list[].subagents.allowAgents`.
 
-The Codex binding resolver becomes a manifest producer: native plugin first, idempotent plugin install when allowed, local app-server compatibility fallback, then backend verification. `CODEX.md` records metadata only in its generated marker region and never copies bearer tokens.
+The Codex binding resolver becomes a manifest producer for the native agent and delegation resources. It first installs the official bundled `openai` provider when absent, then ensures it is permitted by the existing allowlist and enabled, without widening the allowlist beyond that one id. It then creates `~/.openclaw/agents/codex-agent` only when absent, then reconciles string `model`, `thinkingDefault`, `tools.profile`, `agentDir`, and the union-preserved delegation allowlist. The native credential route is `openai-codex`; it is an interactive prerequisite, never a provider resource or copied credential. A bundled-provider install failure reports `needs_plugin`; `CODEX.md` records metadata only in its generated marker region and never copies bearer tokens.
 
 - [ ] **Step 3: Add migration contract tests.**
 
 Test:
 
-1. Native plugin path yields `gpt-5.5` and `medium`.
-2. Missing but installable plugin invokes one idempotent installation attempt.
-3. Unavailable plugin creates app-server compatibility provider with a path-based auth reference.
-4. `--effort high` and `--effort xhigh` are explicit overrides.
-5. Parent delegation plans to `agents.defaults.subagents.allowAgents` or `agents.list[].subagents.allowAgents`.
-6. AlphaClaw absence does not prevent plan, apply, or status.
-7. Migrated writers contain no normal-flow `jq` write of `openclaw.json`.
+1. Native agent uses `codex/gpt-5.5`, string `model`, and `thinkingDefault=medium`.
+2. First run creates the canonical workspace and state directory only when the id is absent.
+3. A rerun makes no config or workspace write when managed values and marker blocks already match.
+4. A conflicting existing workspace stops without mutation.
+5. No binder path creates `models.providers.codex`, a localhost app-server endpoint, `codex serve`, or a copied credential reference.
+6. `--effort high` and `--effort xhigh` are explicit overrides.
+7. Parent delegation plans to `agents.defaults.subagents.allowAgents` or `agents.list[].subagents.allowAgents` while retaining existing entries.
+8. A missing native Codex profile reports `needs_auth` and the `openai-codex` login command without rollback.
+9. An absent bundled `openai` plugin is installed automatically; an explicit plugin allowlist retains its entries and gains only `openai`; an installation failure reports `needs_plugin`.
+10. AlphaClaw absence does not prevent plan, apply, or status.
+11. Migrated writers contain no normal-flow `jq` write of `openclaw.json`.
 
 - [ ] **Step 4: Run migration-focused tests.**
 
@@ -917,7 +933,7 @@ Response shape:
 {
   "transaction_id": "tx_...",
   "state": "conflicted",
-  "applied": ["provider:codex-app-server"],
+  "applied": ["provider:example-provider"],
   "auto_woven": [],
   "conflicts": [
     {
@@ -1007,7 +1023,7 @@ Use these as design evidence, not as a claim that OpenClaw implements their prot
 
 - [ ] **Step 2: Update Codex-agent documentation.**
 
-Point the Codex-agent redesign and `SKILL.md` at the control-plane document. State that `CODEX.md` is a generated profile record and its marker-delimited block is owned by `oramaclaw`. The skill is a manifest producer and no longer a direct OpenClaw configuration writer.
+Point the Codex-agent redesign and `SKILL.md` at the control-plane document. State that `~/.openclaw/agents/codex-agent` is the canonical template path, `CODEX.md` is a generated profile record, and its marker-delimited block is owned by `oramaclaw`. Document the current native schema (`model` string, `thinkingDefault`, `tools.profile`, `agentDir`) and native `openai-codex` credential prerequisite. The skill is a manifest producer and no longer a direct OpenClaw configuration writer.
 
 - [ ] **Step 3: Update V2 index.**
 
@@ -1090,11 +1106,11 @@ tmpdir="$(mktemp -d)"
 mkdir -p "$tmpdir/workspace"
 printf '%s\n' '{"models":{"providers":{}},"agents":{"list":[]}}' > "$tmpdir/openclaw.json"
 
-oramaclaw plan --manifest tests/fixtures/oramaclaw-codex-provider.json \
+oramaclaw plan --manifest tests/fixtures/oramaclaw-native-codex-agent.json \
   --workspace-root "$tmpdir/workspace" \
   --config-path "$tmpdir/openclaw.json" \
   --state-dir "$tmpdir" --json
-oramaclaw apply --manifest tests/fixtures/oramaclaw-codex-provider.json \
+oramaclaw apply --manifest tests/fixtures/oramaclaw-cooperative-drift.json \
   --workspace-root "$tmpdir/workspace" \
   --config-path "$tmpdir/openclaw.json" \
   --state-dir "$tmpdir" --offline --json
@@ -1106,8 +1122,8 @@ oramaclaw status \
 
 Expected:
 
-- Plan reports a provider with `medium` effort.
-- Offline provider apply succeeds and status shows it managed.
+- Plan reports the native `codex-agent` without creating a custom Codex provider resource.
+- Offline generic-provider apply succeeds and status shows it managed.
 - Journal and status contain no raw credentials.
 - Offline delegation fixture exits with documented rejection and leaves configuration unchanged.
 - Gateway fixture proves `baseHash` is present.
@@ -1136,16 +1152,18 @@ Commit only scoped control-plane source, tests, generated mirror, skill integrat
 Operator-authored instructions remain outside this region.
 
 <!-- oramaclaw:generated:start -->
-binding_provider: codex-app-server
-model: gpt-5.5
-effort: medium
-source_path: bin/orama-system/skills/openclaw-skills/codex-openclaw-agent
-source_hash: sha256:...
-verified_at: 2026-06-20T00:00:00Z
+agent_id: codex-agent
+workspace: ~/.openclaw/agents/codex-agent
+agent_dir: ~/.openclaw/agents/codex-agent/agent
+model: codex/gpt-5.5
+thinking_default: medium
+tools_profile: coding
+delegation_path: agents.defaults.subagents.allowAgents
+auth_provider: openai-codex
 <!-- oramaclaw:generated:end -->
 ```
 
-The generated block may contain provider metadata, model, effort, source path, source hash, verification timestamp, and an auth *path reference*. It must never include bearer tokens, API keys, cookies, or authorization headers.
+The generated block contains only stable agent metadata and native auth-provider identity. It must never include bearer tokens, API keys, cookies, authorization headers, timestamps that force rewrites, or an auth payload.
 
 ## Final Review Checklist
 
@@ -1163,7 +1181,8 @@ The generated block may contain provider metadata, model, effort, source path, s
 - [ ] Migrated writers no longer make normal-flow `jq` edits to `openclaw.json`.
 - [ ] Delegation never uses `agents.bindings.*.allowAgents`.
 - [ ] Default Codex effort is `medium`, with `high` and `xhigh` opt-in.
-- [ ] Generated profile merge preserves all content outside markers.
+- [ ] `codex-agent` uses the current native schema and canonical workspace path, without a custom `models.providers.codex` block or app-server fallback.
+- [ ] Generated profile merge preserves all content outside markers and performs no rewrite when its managed block is unchanged.
 - [ ] Portal APIs use existing auth and expose neither credentials nor arbitrary local paths.
 - [ ] Docs have no absolute local paths and retain verification links.
 - [ ] Commits are scoped and unrelated drift is unstaged.
