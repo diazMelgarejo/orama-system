@@ -32,7 +32,7 @@ case "$SLUG" in
 esac
 GBRAIN_SOURCE="${4:-}"   # optional; falls back to canonical's .gbrain-source
 
-WORKTREE_HUB="$HOME/Documents/oramasys/worktrees"
+WORKTREE_HUB="$HOME/code/oramasys/worktrees"
 WORKTREE_PATH="$WORKTREE_HUB/$SLUG"
 
 # Resolve repo path (expand ~)

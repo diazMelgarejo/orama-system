@@ -157,8 +157,11 @@ done
 | iCloud re-materializes source after delete → split-brain | Zero dataless stubs + materialized before removing source |
 | Cross-volume `cp` strips xattrs/quarantine | `ditto` or `rsync -aHAX`; strip quarantine on `$DST` |
 
-## References
+## Related skills
 
-- [[openclaw-skills]] — the OpenClaw tree was moved out of iCloud the same way (prior art).
-- [[git-history-surgery]] — re-anchor / tree-twin verification if a moved repo looks orphaned.
+This skill is cross-linked with every git skill in orama-system:
+
+- [[git-history-surgery]] — re-anchor / tree-twin verification if a moved repo looks orphaned after the move; shared fail-closed posture.
+- [[using-git-worktrees]] — the worktree doctrine. This move relocates where worktrees physically live, and step 3 repairs them; it is the **permanent fix** for the "`* 2/` duplicate dirs" symptom listed in that skill's pre-flight table.
 - [[cidf]] — LINT-006 portable-path rule (`scripts/review/repo_hygiene.py` + `no-workstation-paths.py` hook) that step 6 must satisfy.
+- [[openclaw-skills]] — the OpenClaw tree was moved out of iCloud the same way (prior art).

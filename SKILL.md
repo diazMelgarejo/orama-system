@@ -208,7 +208,7 @@ and documented it as canonical. Read this before any `docs/v2/` or `oramasys/*` 
 **The 4 checks that would have prevented it:**
 
 1. `git remote -v` — verify remote matches `oramasys/*` before any v2 push
-2. `ls ~/Documents/oramasys/<repo>/` — confirm canonical build doesn't already exist
+2. `ls ~/code/oramasys/<repo>/` — confirm canonical build doesn't already exist
 3. Consult `CLAUDE-instru.md §1` or `project_repo_registry.md` — v1=`diazMelgarejo/*`, v2=`oramasys/*`
 4. Never skip `AskUserQuestion` gates in a plan that modifies `docs/v2/`
 

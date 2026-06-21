@@ -97,6 +97,8 @@ When the content is markdown:
 > which the **pre-commit hook and CI both run** — single source of truth, zero
 > fragmentation. Root cause + repair recipe: `docs/LESSONS.md` 2026-06-10.
 >
+> Relocating a repo tree out of iCloud and re-portablizing its paths afterward: see [[icloud-escape-move]].
+>
 > LINT-008 is enforced by `scripts/git/check_commit_message.sh` (pre-commit hook +
 > `audit_attribution.sh` pre-push). **Single source of truth in orama-system —
 > never hand-edit the downstream copy in PT or AlphaClaw.** Sync via
