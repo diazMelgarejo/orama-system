@@ -101,3 +101,7 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 - [`scripts/git/reanchor_scan.sh`](../../../../scripts/git/reanchor_scan.sh)
 - [`scripts/sync_version.py`](../../../../scripts/sync_version.py) — version propagation
 - [`src/orama_system/_version.py`](../../../../src/orama_system/_version.py) — single source of truth
+
+## Related skills
+
+- [[icloud-escape-move]] — relocate a repo tree out of iCloud to a plain local path (mv → worktree repair → compatibility symlink); a freshly-moved tree can look orphaned until re-anchored with this skill.
