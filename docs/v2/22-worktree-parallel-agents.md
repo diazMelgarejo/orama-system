@@ -49,7 +49,7 @@ Will this agent write files?
 ## 2. Canonical Worktree Location
 
 ```
-~/Documents/oramasys/worktrees/<slug>/
+~/code/oramasys/worktrees/<slug>/
 ```
 
 **Slug format:** `yyyy-mm-dd-<brief-purpose>` — e.g. `2026-05-24-worktree-doctrine`
@@ -57,7 +57,7 @@ Will this agent write files?
 Why external to the repo directory:
 - Avoids `.gitignore` conflicts with tracked files
 - Prevents macOS Finder `* 2` dedup contamination
-- Lets multiple orama-family repos share the same hub at `~/Documents/oramasys/worktrees/`
+- Lets multiple orama-family repos share the same hub at `~/code/oramasys/worktrees/`
 
 ---
 
@@ -77,7 +77,7 @@ scripts/worktree-bootstrap.sh \
 
 Bootstrap does (in order):
 1. **Pre-flight**: removes stale `.git/*.lock` files; detects orphan refs with spaces
-2. **`git worktree add`** `~/Documents/oramasys/worktrees/<slug>` `-b <branch>` (or attaches if the worktree already exists)
+2. **`git worktree add`** `~/code/oramasys/worktrees/<slug>` `-b <branch>` (or attaches if the worktree already exists)
 3. **`.gbrain-source`**: writes from argument, or copies from canonical if omitted
 4. **`.gitignore`**: appends macOS dedup patterns (`*\ 2/`, `*\ 2.*`, `*\ 3/`, `*\ 3.*`)
 5. **Port offset**: assigns `ENV_OFFSET = index × 100`, writes `.worktree-env`
@@ -202,7 +202,7 @@ ls | grep " 2$" || true
 Manual cleanup (if skill unavailable):
 ```bash
 # 1. From canonical checkout:
-git worktree remove ~/Documents/oramasys/worktrees/<slug>
+git worktree remove ~/code/oramasys/worktrees/<slug>
 
 # 2. Verify
 git worktree list

@@ -7,7 +7,7 @@
 **Goal:** Wire periscope into OpenClaw as the L4 observability layer + close out the pending upstream-maintenance work (rename, branch merges, dep PRs).
 
 **Repos & paths:**
-- Periscope (local): `~/Documents/oramasys/tools/periscope` — all 3 branches local (`main`, `merged`, `agentsview`)
+- Periscope (local): `~/code/oramasys/tools/periscope` — all 3 branches local (`main`, `merged`, `agentsview`)
 - Periscope (remote): `github.com/diazMelgarejo/periscope` (fork of `latentsignal-org/periscope`)
 - orama-system (this repo): `$OPENCLAW_ROOT/orama-system`
 
@@ -57,7 +57,7 @@ This plan covers Phase A and Phase B. Phase C is its own future plan.
 - [ ] **Step 1: Verify branches are aligned with origin**
 
 ```bash
-cd ~/Documents/oramasys/tools/periscope
+cd ~/code/oramasys/tools/periscope
 git fetch --all
 git log --oneline main..origin/merged | head -15
 ```
@@ -134,7 +134,7 @@ EOF
 - [ ] **Step 1: Branch from current `main`**
 
 ```bash
-cd ~/Documents/oramasys/tools/periscope
+cd ~/code/oramasys/tools/periscope
 git checkout main && git pull
 git checkout -b chore/rename-cmd-agentsview-2026-05-24
 ```
@@ -263,7 +263,7 @@ gh pr merge --repo diazMelgarejo/periscope --auto --squash 1  # if green
 - [ ] **Step 1: Inspect what each commit touches**
 
 ```bash
-cd ~/Documents/oramasys/tools/periscope
+cd ~/code/oramasys/tools/periscope
 git log --oneline main..origin/agentsview
 git show --stat origin/agentsview~0..origin/agentsview~4 | head -50
 ```
@@ -439,7 +439,7 @@ Add a fixture-driven test that loads from `testdata/openclaw/sample.jsonl` and a
 - [ ] **Step 7: Commit**
 
 ```bash
-cd ~/Documents/oramasys/tools/periscope
+cd ~/code/oramasys/tools/periscope
 git checkout -b feat/parser-openclaw-2026-05-24
 git add internal/parser/openclaw.go internal/parser/openclaw_test.go internal/parser/registry.go testdata/openclaw/
 git commit -m "feat(parser): add OpenClaw envelope parser
@@ -511,7 +511,7 @@ Adds 4 read-only HTTP routes. Reuses existing periscope IPC token middleware.
 - [ ] **Step 1: Find the existing route registration pattern**
 
 ```bash
-cd ~/Documents/oramasys/tools/periscope
+cd ~/code/oramasys/tools/periscope
 grep -rln "HandleFunc\|http.Handler\|mux.Handle\|router.GET" internal/server/ | head -10
 ```
 
@@ -656,7 +656,7 @@ grep -n "## .*Repo.*Registry\|repository topology\|L1.*AlphaClaw" "$OPENCLAW_ROO
 Below the AlphaClaw / PT / orama rows:
 
 ```markdown
-| `~/Documents/oramasys/tools/periscope/` (local) · `github.com/diazMelgarejo/periscope` | **L4 — Glass** | Session-level observability for AI coding agents. Read-only sidecar; never writes to L1–L3. Reads OpenClaw envelopes, AlphaClaw events, PT orchestrator events. Go + Svelte + TypeScript + Rust desktop + Kotlin plugin. |
+| `~/code/oramasys/tools/periscope/` (local) · `github.com/diazMelgarejo/periscope` | **L4 — Glass** | Session-level observability for AI coding agents. Read-only sidecar; never writes to L1–L3. Reads OpenClaw envelopes, AlphaClaw events, PT orchestrator events. Go + Svelte + TypeScript + Rust desktop + Kotlin plugin. |
 ```
 
 - [ ] **Step 3: Add cross-link in the "Code exploration rule" section**
@@ -700,7 +700,7 @@ AlphaClaw (L1 — infra) → Perpetua-Tools (L2 — middleware) → orama-system
                                                                               Periscope (L4 — observability glass, read-only)
 ```
 
-L4 lives at `~/Documents/oramasys/tools/periscope` (fork: `github.com/diazMelgarejo/periscope`).
+L4 lives at `~/code/oramasys/tools/periscope` (fork: `github.com/diazMelgarejo/periscope`).
 Periscope reads session/event JSONL from L1–L3; never writes back.
 Full design: [`docs/v2/21-periscope-l4-glass.md`](docs/v2/21-periscope-l4-glass.md)
 ```
@@ -754,7 +754,7 @@ After Phase B lands:
 
 ```bash
 # 1. Periscope sees OpenClaw envelopes
-cd ~/Documents/oramasys/tools/periscope
+cd ~/code/oramasys/tools/periscope
 go run ./cmd/periscope sync --source openclaw
 go run ./cmd/periscope                       # opens UI
 # Navigate to http://127.0.0.1:8080/openclaw/jobs — should show recent orama jobs
