@@ -48,10 +48,31 @@ Read relevant excerpts from:
 ## Readiness Rules
 
 - Hermes one-shot: prefer `--safe-mode --provider nous --model nvidia/nemotron-3-ultra:free`.
-- LM Studio: usable only after a fast `/v1/chat/completions` canary.
+- LM Studio first fast path: target `qwen3.5-9b-mlx` with `/v1/chat/completions` and generous `max_tokens` (≥2048); canary typically completes under 10s.
+- LM Studio fallback: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2` is valid but slower (~6s–90s depending on reuse and token budget). Use up to a 90s timeout for the first request after load; if it still times out, fall back to the 9B lane or Hermes+Nous.
+- `max_tokens` must account for reasoning tokens. A 64-token budget on a reasoning model can finish with `finish_reason=length` and empty visible output even though the call succeeded.
 - AGY native Windows install: `irm https://antigravity.google/cli/install.ps1 | iex`.
-- AGY usability: `agy --print "Reply with exactly: AGY_READY"` must print visible stdout.
+- AGY usability: `agy --print "Reply with exactly: AGY_READY"` must print visible stdout. (Note: quota exhaustion is observed; retry after June 28, 2026 or when hosted quota resets).
 - Exact Qwen names must come from live `/v1/models`; never invent model IDs.
+
+## Lane Availability & Degraded Operations
+
+### Readiness Matrix (check before dispatch)
+
+| Lane | Canary | Current State | Degraded Path |
+|------|--------|---------------|---------------|
+| Codex | `codex --version` | ✅ Installed | None (host live) |
+| AGY/Antigravity | `agy --print "AGY_READY"` | ❌ Quota exhausted / empty stdout (Retry +7 days, Jun 28 2026) | Use Codex as reviewer; skip Antigravity gate |
+| LM Studio | `/v1/chat/completions` up to 45s | ⚠️ Heavy model loading | Use Hermes + Nous provider; skip local delegation |
+
+### Degraded Fallback Rules
+
+When a lane fails its canary:
+1. **AGY unavailable** → Reviewer role falls back to Codex (main orama agent retains judgment). Check quota status weekly.
+2. **LM Studio unavailable** → Local specialist falls back to Hermes + Nous provider, or the host executes inline.
+3. **Codex unavailable** → Pause; host cannot execute. Alert user.
+
+Never block a task solely because a non-host lane failed its canary.
 
 ## Output Format
 
