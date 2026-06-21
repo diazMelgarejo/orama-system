@@ -1,22 +1,23 @@
 ---
 name: gstack
 description: >-
-  gstack v1.12.2.0 integration sub-skill. Full routing table for web browsing,
+  gstack v1.58.3.0 integration sub-skill. Full routing table for web browsing,
   QA, shipping, planning reviews, design, DX audits, retros, and GBrain.
   Activates for: /browse, /qa, /ship, /review, /investigate, /design-review,
   /canary, /benchmark, /retro, gbrain, gstack skills, web browsing, QA testing,
   deploy, design review, canary monitoring, performance benchmarks.
+  Also covers: gstack fork-patch upgrades, gbrain upgrades.
 version: 1.0.0
 license: Apache 2.0
 compatibility: claude-code
 parent_skill: orama-system
-gstack_version: "1.12.2.0"
-gstack_install: "~/.claude/skills/gstack (global-git)"
+gstack_version: "1.58.3.0"
+gstack_install: "~/.claude/skills/gstack (global-git, fix/1802-staging-ownership-guard fork)"
 ---
 
 # gstack Integration
 
-gstack v1.12.2.0 is the agent skill framework for web browsing, planning,
+gstack v1.58.3.0 is the agent skill framework for web browsing, planning,
 review, QA, and deployment workflows. Installed globally at
 `~/.claude/skills/gstack` (global-git).
 
@@ -41,6 +42,70 @@ Upgrade to latest:
 ```
 
 Or: `/gstack-upgrade`
+
+### Fork-patch upgrade (when `pull --ff-only` fails)
+
+`~/.claude/skills/gstack` is a **forked checkout** carrying local patches (e.g.
+`fix/1802-staging-ownership-guard`). Fast-forward upgrades break because the local
+branch has diverged from upstream. Use merge instead:
+
+```bash
+cd ~/.claude/skills/gstack
+
+# 1. Stash working-tree dirt
+git stash
+
+# 2. Fetch + merge (NOT rebase — keeps patch history legible)
+git fetch origin
+git merge origin/main --no-edit
+#    Conflicts appear only in patch-touched files. Resolve with --theirs when
+#    upstream is a strict superset (adds features on top of the patch).
+
+# 3. Resolve conflicts — take upstream when additive
+git checkout --theirs <conflicted-file> ...
+git add <conflicted-file> ...
+git commit --no-edit
+
+# 4. Regenerate skill files
+./setup
+
+# 5. Re-apply fork patches (idempotent — no-ops if upstream already merged them)
+bash "$OPENCLAW_ROOT/orama-system/scripts/fork-patches/apply-fork-patches.sh"
+
+# 6. Verify
+cat VERSION
+```
+
+**Conflict resolution rule:** if `apply-fork-patches.sh` prints
+`✓ already present (patched or upstream-merged)`, the patch is absorbed — retire
+the patch file from `scripts/fork-patches/patches/` and remove the branch entry
+from `~/.zshrc`.
+
+**zshrc guard (auto-heal on every shell):**
+```zsh
+_ORAMA_FORK_HEAL="$OPENCLAW_ROOT/orama-system/scripts/fork-patches/apply-fork-patches.sh"
+[ -f "$_ORAMA_FORK_HEAL" ] && fork-heal() { bash "$_ORAMA_FORK_HEAL" "$@"; }
+```
+Run `fork-heal` manually after any upgrade — idempotent and safe to repeat.
+
+### gbrain upgrade
+
+gbrain uses a standard npm package — no fork, no patches.
+
+```bash
+# Check current version
+gbrain --version
+
+# Upgrade (prefer bun in this environment)
+bun add -g gbrain@latest
+
+# Verify config survived
+gbrain doctor --fast
+```
+
+After upgrade: confirm `~/.gbrain/config.json` still has `"prepare": false`
+(Supabase pooler requires this) and `ollama:bge-m3` for embeddings. If
+`gbrain doctor` reports broken sources, run `/sync-gbrain --full`.
 
 ## Available Skills
 
