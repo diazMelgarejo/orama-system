@@ -71,7 +71,7 @@ Per plugin, four roles work in sequence (with parallelization across plugins):
 | Stage | Tool | MCP entry point | Output |
 |---|---|---|---|
 | **Read + translate-table** | Gemini Pro | `mcp__gemini-cli__ask-gemini` (model=pro) | `salvage/<plugin>/translation-table.md` — three columns: wrong-repo line/concept, canonical idiom translation, target plugin shape |
-| **Write plugin + tests** | Codex | `mcp__ai-cli__run` (model=`gpt-5.2-codex`) | `perpetua_core/graph/plugins/<plugin>.py` + `tests/test_<plugin>.py` |
+| **Write plugin + tests** | Codex | `mcp__ai-cli__run` (model=`gpt-5.5`) | `perpetua_core/graph/plugins/<plugin>.py` + `tests/test_<plugin>.py` |
 | **Review against canonical** | Claude Sonnet 4.6 | `mcp__ai-cli__run` (model=`sonnet`) | Pass/fail verdict + diff comments referencing canonical's 32 tests |
 | **Orchestrate + decide** | Claude Opus 4.7 (this session) | — | C-feature decisions (mapping/merge/state fields); integration; commit |
 
