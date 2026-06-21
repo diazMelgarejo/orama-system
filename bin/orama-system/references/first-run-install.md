@@ -206,7 +206,8 @@ First-run does **not** install ai-cli-mcp or Gemini. After first-run completes:
 ```bash
 bash "${ORAMA_REPO_ROOT}/bin/orama-system/scripts/install-mcp-stack.sh"
 # Optional analyzer lane:
-bash "${ORAMA_REPO_ROOT}/bin/orama-system/scripts/install-mcp-stack.sh" --include-gemini
+# Gemini is deprecated for unpaid tiers (cutoff 2026-06-18).
+# bash "${ORAMA_REPO_ROOT}/bin/orama-system/scripts/install-mcp-stack.sh" --include-gemini
 ```
 
 See [`../mcp-install/SKILL.md`](../mcp-install/SKILL.md).

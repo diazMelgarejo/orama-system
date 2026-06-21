@@ -48,12 +48,11 @@ Read relevant excerpts from:
 ## Readiness Rules
 
 - Hermes one-shot: prefer `--safe-mode --provider nous --model nvidia/nemotron-3-ultra:free`.
-- LM Studio first fast path: target `qwen3.5-9b-mlx` with `/v1/chat/completions` and generous `max_tokens` (≥2048); canary typically completes under 10s.
-- LM Studio fallback: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2` is valid but slower (~6s–90s depending on reuse and token budget). Use up to a 90s timeout for the first request after load; if it still times out, fall back to the 9B lane or Hermes+Nous.
+- LM Studio on Windows: target `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2` via `/v1/chat/completions`. Use up to a 180s timeout; tested completion time in this environment is ~28s when `max_tokens` is generous (≥2048). Do not list or rely on `qwen3.5-9b-mlx` as a Windows fast path — it is macOS/MLX-only.
 - `max_tokens` must account for reasoning tokens. A 64-token budget on a reasoning model can finish with `finish_reason=length` and empty visible output even though the call succeeded.
 - AGY native Windows install: `irm https://antigravity.google/cli/install.ps1 | iex`.
 - AGY usability: `agy --print "Reply with exactly: AGY_READY"` must print visible stdout. (Note: quota exhaustion is observed; retry after June 28, 2026 or when hosted quota resets).
-- Exact Qwen names must come from live `/v1/models`; never invent model IDs.
+- Exact model names must come from live `/v1/models`; never invent model IDs.
 
 ## Lane Availability & Degraded Operations
 
@@ -63,7 +62,7 @@ Read relevant excerpts from:
 |------|--------|---------------|---------------|
 | Codex | `codex --version` | ✅ Installed | None (host live) |
 | AGY/Antigravity | `agy --print "AGY_READY"` | ❌ Quota exhausted / empty stdout (Retry +7 days, Jun 28 2026) | Use Codex as reviewer; skip Antigravity gate |
-| LM Studio | `/v1/chat/completions` up to 45s | ⚠️ Heavy model loading | Use Hermes + Nous provider; skip local delegation |
+| LM Studio | `/v1/chat/completions` up to 180s | ⚠️ Heavy model loading; ~28s tested with generous max_tokens | Use Hermes + Nous provider; skip local delegation |
 
 ### Degraded Fallback Rules
 
