@@ -1877,6 +1877,9 @@ _ORAMACLAW_STATE_DIR_DEFAULT = Path.home() / ".openclaw" / "state" / "oramaclaw"
 
 
 def _oramaclaw_state_dir() -> Path:
+    # V1 limitation: only the default/env-var state dir is visible to the portal.
+    # Targets with a custom state_dir field in their ConfigTarget are invisible here.
+    # Track for v2: accept a target parameter and thread it from the API routes.
     raw = os.environ.get("ORAMACLAW_STATE_DIR", "")
     if raw:
         return Path(raw)
@@ -1910,6 +1913,13 @@ class OramaclawResolveRequest(BaseModel):
 @app.get("/api/oramaclaw/conflicts")
 async def api_oramaclaw_conflicts():
     """Return all pending oramaclaw conflict resolutions."""
+    state_file = _oramaclaw_state_dir() / "pending-resolutions.json"
+    if not state_file.exists():
+        log.warning(
+            "oramaclaw state file not found at %s; portal conflict queue will be "
+            "empty until oramaclaw apply runs",
+            state_file,
+        )
     records = _read_pending_resolutions()
     return {"conflicts": records}
 

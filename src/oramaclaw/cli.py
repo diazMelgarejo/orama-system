@@ -220,8 +220,8 @@ def _cmd_targets_list() -> int:
 
 
 def _cmd_targets_add(args: argparse.Namespace) -> int:  # noqa: ARG001
-    print("Not yet implemented")
-    return _EXIT_OK
+    print("targets add: not yet implemented (V2 feature)", file=sys.stderr)
+    return _EXIT_NEEDS_INPUT
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
