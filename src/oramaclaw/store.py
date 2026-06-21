@@ -14,8 +14,8 @@ to prevent concurrent apply runs. Stale lock detection uses:
   1. ``os.kill(pid, 0)`` to check if the process is still alive
   2. ``psutil.Process(pid).create_time()`` to verify it is the SAME process
      (handles PID reuse on macOS/Linux)
-  If psutil is unavailable, a lock older than ``LOCK_STALE_SECONDS`` is
-  considered stale.
+  If liveness cannot be determined, a lock older than ``LOCK_STALE_SECONDS`` is
+  considered stale as a last-resort fallback.
 
 All writes use ``os.replace()`` for atomic single-file updates.  No field in
 any persisted JSON carries a raw secret (auth is reference-only).
@@ -73,8 +73,9 @@ class LockHeld(Exception):
         super().__init__(f"oramaclaw lock held by PID {pid} ({lock_path})")
 
 
-def _pid_is_alive(pid: int, expected_create_time: float | None) -> bool:
-    """Return True if pid is a live process that matches the expected start time."""
+def _pid_is_alive(pid: int, expected_create_time: float | None) -> bool | None:
+    """Return whether pid is a live process matching the expected start time."""
+    os_kill_failed = False
     try:
         os.kill(pid, 0)
     except ProcessLookupError:
@@ -82,18 +83,34 @@ def _pid_is_alive(pid: int, expected_create_time: float | None) -> bool:
     except PermissionError:
         # Process exists but we don't own it — still alive.
         pass
+    except Exception:
+        os_kill_failed = True
 
-    if expected_create_time is None:
+    if expected_create_time is None and not os_kill_failed:
         return True
 
     try:
         import psutil  # type: ignore[import]
+    except Exception:
+        if not os_kill_failed:
+            return True
+        return None
+
+    try:
         actual = psutil.Process(pid).create_time()
         # Allow a small delta for clock granularity.
+        if expected_create_time is None:
+            return True
         return abs(actual - expected_create_time) < 2.0
-    except Exception:
-        # psutil unavailable or process just died — treat as alive (conservative).
+    except psutil.NoSuchProcess:
+        return False
+    except psutil.AccessDenied:
         return True
+    except Exception:
+        # If os.kill already proved the PID exists, stay conservative.
+        if not os_kill_failed:
+            return True
+        return None
 
 
 def _acquire_lock(lock_path: Path) -> None:
@@ -107,14 +124,24 @@ def _acquire_lock(lock_path: Path) -> None:
             held_ts: float = data.get("acquired_at", 0.0)
             expected_create_time: float | None = data.get("create_time")
 
-            stale_by_age = (time.time() - held_ts) > LOCK_STALE_SECONDS
-            if not stale_by_age and _pid_is_alive(held_pid, expected_create_time):
+            age = time.time() - held_ts
+            alive = _pid_is_alive(held_pid, expected_create_time)
+            if alive is True:
                 raise LockHeld(held_pid, lock_path)
-            _log.warning(
-                "ControlStore: overwriting stale lock (PID %d, age %.0fs)",
-                held_pid,
-                time.time() - held_ts,
-            )
+            if alive is False:
+                _log.warning(
+                    "ControlStore: overwriting stale lock from dead process (PID %d, age %.0fs)",
+                    held_pid,
+                    age,
+                )
+            elif age > LOCK_STALE_SECONDS:
+                _log.warning(
+                    "ControlStore: overwriting stale lock with unknown liveness (PID %d, age %.0fs)",
+                    held_pid,
+                    age,
+                )
+            else:
+                raise LockHeld(held_pid, lock_path)
         except LockHeld:
             raise
         except Exception as exc:
@@ -137,8 +164,17 @@ def _acquire_lock(lock_path: Path) -> None:
 
 def _release_lock(lock_path: Path) -> None:
     try:
+        if lock_path.exists():
+            data = json.loads(lock_path.read_bytes())
+            held_pid = data.get("pid")
+            if held_pid != os.getpid():
+                _log.warning(
+                    "ControlStore: lock stolen before release (held by PID %s), skipping unlink",
+                    held_pid,
+                )
+                return
         lock_path.unlink(missing_ok=True)
-    except OSError as exc:
+    except (OSError, json.JSONDecodeError) as exc:
         _log.warning("ControlStore: could not release lock %s — %s", lock_path, exc)
 
 
