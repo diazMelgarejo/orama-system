@@ -65,6 +65,32 @@ git reflog --all | wc -l                          # should be near-zero after sc
 For PR branch cleanup without contamination, rebase or merge normally; do not use
 this skill unless history was rewritten or contaminated.
 
+## Version Bump in a Git Commit
+
+When a commit includes a version bump, always use the centralized sync script —
+**never** `sed -i` or manual multi-file edits:
+
+```bash
+# 1. Edit the single source of truth only
+#    src/orama_system/_version.py  →  __version__ = "X.Y.Z.W"
+
+# 2. Propagate to all 25+ canonical surfaces
+python3 scripts/sync_version.py
+
+# 3. Verify
+python3 -m pytest tests/test_version_docs.py
+
+# 4. Commit everything together
+git add -A
+git commit -m "chore(version): bump to X.Y.Z.W"
+```
+
+If `scripts/sync_version.py --check` exits 1 after a commit, a surface is stale.
+Run the script (no flags) to fix it, then amend or add a follow-up commit.
+
+See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
+See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
+
 ## References
 
 - [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md)
@@ -73,3 +99,5 @@ this skill unless history was rewritten or contaminated.
 - [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md)
 - [`docs/wiki/13-alphaclaw-fork-contrib-branches.md`](../../../../docs/wiki/13-alphaclaw-fork-contrib-branches.md)
 - [`scripts/git/reanchor_scan.sh`](../../../../scripts/git/reanchor_scan.sh)
+- [`scripts/sync_version.py`](../../../../scripts/sync_version.py) — version propagation
+- [`src/orama_system/_version.py`](../../../../src/orama_system/_version.py) — single source of truth
