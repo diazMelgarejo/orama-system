@@ -437,7 +437,7 @@ Use ai-cli-mcp to run three workers in parallel:
    workFolder=/absolute/path/project
    prompt="Review src/backend for risky refactors. Return findings only."
 
-2. model=gpt-5.2-codex
+2. model=gpt-5.5
    workFolder=/absolute/path/project
    prompt="Write test suggestions for src/frontend. Do not edit files."
 
