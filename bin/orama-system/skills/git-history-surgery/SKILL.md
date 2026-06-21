@@ -18,7 +18,7 @@ former split between separate rewrite-scrub and branch-recovery skills.
 Use it for two related jobs:
 
 | Situation | Procedure |
-|---|---|
+| --- | --- |
 | A secret, forbidden identity, token, or workstation path landed in history | [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md) |
 | `main` was rewritten and branches look 600 commits behind/orphaned | [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md) |
 
