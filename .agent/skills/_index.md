@@ -9,6 +9,7 @@ Load the canonical in-repo skill, not a copied body.
 | AGY/Gemini/Codex/Hermes dispatch and MCP setup | `bin/orama-system/skills/mcp-orchestration/SKILL.md` |
 | OpenClaw configuration and gateway operations | `bin/orama-system/skills/openclaw-skills/SKILL.md` |
 | Git branch repair, reanchor, and history scrubbing | `bin/orama-system/skills/git-history-surgery/SKILL.md` |
+| gstack/gbrain upgrades, fork-patch lifecycle, attribution allowlist | `bin/orama-system/skills/gstack-toolchain/SKILL.md` |
 | Code review | `bin/orama-system/skills/code-review/SKILL.md` |
 | Skill creation and thin wrapper installs | `bin/orama-system/skills/skillify/SKILL.md` |
 | oramasys 5-stage method (AFRP/CIDF) | `.agents/skills/oramasys-method/SKILL.md` |
