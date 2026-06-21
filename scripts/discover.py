@@ -644,11 +644,11 @@ def _cmd_restore(target: str):
     mac = ep.get("mac") or {}; win = ep.get("win") or {}
     with _Lock():
         patch_openclaw_json(ep)
-    if pt_repo:
-        patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-        patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-    write_env_lmstudio(ep, repo_paths)
-    save_discovery_state(ep, tier=99)
+        if pt_repo:
+            patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+            patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+        write_env_lmstudio(ep, repo_paths)
+        save_discovery_state(ep, tier=99)
     RECOVERY_SOURCE_TXT.write_text("manual_restore\n")
     print(f"✅ Restored: Mac={mac.get('ip', '?')} Win={win.get('ip', '?')}")
 
