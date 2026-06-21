@@ -170,7 +170,7 @@ The expected slash commands are `/pt-orama-council`, `/pt-orama-review`, and
 
 For bounded non-interactive review on this Windows host, prefer explicit
 provider/model routing because the default LM Studio model can be reachable but
-slow enough for `hermes -z` to appear hung.
+slow enough for `hermes chat` to appear hung.
 
 ```powershell
 hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `

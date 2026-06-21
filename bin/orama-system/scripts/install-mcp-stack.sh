@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # install-mcp-stack.sh — Idempotent MCP orchestration stack installer
-# Installs: ai-cli-mcp + OpenClaw MCP registry entries, and Gemini only when
-# explicitly requested via --include-gemini
+# Installs: ai-cli-mcp + OpenClaw MCP registry entries.
+# Gemini is DEPRECATED for unpaid tiers (cutoff 2026-06-18) and is only
+# installed when explicitly requested via --include-gemini. Prefer AGY.
 # Safe to run multiple times. Skips any step that is already complete.
 # Platform bootstrap (Node, Ollama, CRG, gbrain): scripts/first-run-install.sh
 # Usage: bash install-mcp-stack.sh [--dry-run] [--force] [--include-gemini] [--mirror-skills]
@@ -106,7 +107,9 @@ else
   _ok "Claude first-run prompt accepted"
 fi
 
-# ── Step 4: Optional Gemini analyzer lane ────────────────────────────────────
+# ── Step 4: Optional Gemini analyzer lane (DEPRECATED) ────────────────────────
+# Gemini CLI is deprecated for unpaid tiers. Prefer Antigravity (AGY).
+# This section only runs if --include-gemini is passed.
 _log "Step 4: Gemini analyzer lane"
 if ! $INCLUDE_GEMINI; then
   _skip "Gemini not requested; analyzer lane remains opt-in"
@@ -173,7 +176,7 @@ if $MIRROR_SKILLS; then
   _PLATFORMS=(
     "$HOME/.claude/skills:claude"
     "$HOME/.codex/skills:codex"
-    "$HOME/.gemini/skills:gemini"
+    "$HOME/.gemini/skills:gemini (DEPRECATED)"
   )
   # Each subdir of $_SKILLS_ROOT that has a SKILL.md is a mirrorable skill.
   for _src_skill in "$_SKILLS_ROOT"/*/SKILL.md "$_SKILLS_ROOT/SKILL.md"; do
@@ -251,6 +254,7 @@ fi
 echo ""
 _log "Installation complete."
 if $INCLUDE_GEMINI; then
+  _log "NOTE: Gemini is deprecated for unpaid tiers (cutoff 2026-06-18). Migrate reviewer work to AGY."
   _log "Restart Claude Code, then run /mcp to confirm gemini-cli and ai-cli-mcp are active."
 else
   _log "Restart Claude Code, then run /mcp to confirm ai-cli-mcp is active."
@@ -266,5 +270,7 @@ cat << 'ROLLBACK'
   claude mcp remove -s user ai-cli 2>/dev/null || claude mcp remove ai-cli 2>/dev/null || true
   openclaw mcp unset gemini-cli 2>/dev/null || true
   openclaw mcp unset ai-cli-mcp 2>/dev/null || true
+  NOTE: gemini-cli cleanup is retained for backward compatibility, but Gemini is
+  deprecated for unpaid tiers as of 2026-06-18. Prefer AGY for reviewer lanes.
 ────────────────────────────────────────────────────────────────────────────────
 ROLLBACK
