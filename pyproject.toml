@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "orama-system"
-version = "0.9.9.9"
+version = "1.1.0.0"
 description = "Orama multi-agent reasoning and orchestration system"
 requires-python = ">=3.10"
 dependencies = [

@@ -8,7 +8,7 @@ Routes:
   GET  /           HTML dashboard (meta-refresh every 10s)
   GET  /api/status JSON status of all services
   POST /api/user-input  proxy to PT /user-input (portal textbox handler)
-GET  /health     {"status": "ok", "version": "0.9.9.9"}
+GET  /health     {"status": "ok", "version": "1.1.0.0"}
 """
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ except ImportError:
 log = logging.getLogger("ultrathink.portal")
 logging.basicConfig(level=logging.INFO)
 
-VERSION = "0.9.9.9"
+VERSION = "1.1.0.0"
 
 _CLIENT_ERROR_FALLBACK = "Request failed"
 
