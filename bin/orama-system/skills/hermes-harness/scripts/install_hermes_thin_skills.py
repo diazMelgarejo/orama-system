@@ -82,7 +82,7 @@ Canonical source of truth:
 ## Windows Readiness
 
 - Hermes one-shot: `hermes chat --query \"Reply with exactly: HERMES_READY\" --quiet --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1`
-- AGY install: save-first — `Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\agy-install.ps1"; Get-Content "$env:TEMP\agy-install.ps1" | Select-Object -First 40; & powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\agy-install.ps1"`
+- AGY install: save-first — `Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\\agy-install.ps1"; Get-Content "$env:TEMP\\agy-install.ps1" | Select-Object -First 40; & powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\\agy-install.ps1"`
 - AGY readiness: `agy --print \"Reply with exactly: AGY_READY\"` must print visible stdout.
 - LM Studio readiness: `/v1/models` is not enough; require a fast chat-completions canary.
 
@@ -162,14 +162,69 @@ def verify() -> list[str]:
     return errors
 
 
+def run_tests() -> int:
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        global HERMES_SKILLS
+        original_skills = HERMES_SKILLS
+        HERMES_SKILLS = tmp_path / "skills"
+
+        try:
+            # 1. Fresh install
+            install()
+            council_path = HERMES_SKILLS / "council" / "SKILL.md"
+            if not council_path.is_file():
+                print("FAIL: council wrapper not created")
+                return 1
+
+            # 2. Verify managed marker is present
+            if not is_managed_wrapper(council_path):
+                print("FAIL: managed marker not found in fresh wrapper")
+                return 1
+
+            # 3. Check required content
+            text = council_path.read_text(encoding="utf-8")
+            if "hermes chat --query" not in text:
+                print("FAIL: hermes chat command missing from wrapper")
+                return 1
+            if "--max-turns 1" not in text:
+                print("FAIL: turn bound missing in wrapper")
+                return 1
+
+            # 4. Non-clobber: re-install updates agent-owned wrappers
+            council_path.write_text(text.replace("version: 1.0.0", "version: 1.0.1"), encoding="utf-8")
+            install()
+            if "version: 1.0.0" not in council_path.read_text(encoding="utf-8"):
+                print("FAIL: agent-owned wrapper not updated on re-install")
+                return 1
+
+            # 5. Non-clobber: protect user-owned (no managed marker in frontmatter)
+            user_text = text.replace(f"\n{MANAGED_MARKER}\n", "\ncreated_by: user\n")
+            council_path.write_text(user_text, encoding="utf-8")
+            install()
+            if "created_by: user" not in council_path.read_text(encoding="utf-8"):
+                print("FAIL: user-owned wrapper was clobbered")
+                return 1
+
+            print("all tests passed")
+            return 0
+        finally:
+            HERMES_SKILLS = original_skills
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--test", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    if not args.install and not args.verify:
-        parser.error("choose --install and/or --verify")
+    if not args.install and not args.verify and not args.test:
+        parser.error("choose --install, --verify, and/or --test")
+    if args.test:
+        return run_tests()
     if args.install:
         written = install(args.dry_run)
         if not args.dry_run:
