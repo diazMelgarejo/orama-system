@@ -253,7 +253,70 @@ class ControlEngine:
         # 5. Apply the merged patch (retry once on a stale hash).
         if merged_patch:
             try:
-                self._apply_with_retry(transport, target, merged_patch, base_hash)
+                transport.gateway_config_apply(target, merged_patch, base_hash)
+            except StaleConfiguration:
+                # Re-fetch live config and re-plan every resource against the
+                # fresh state before retrying. Avoids silently overwriting
+                # concurrent mutations that arrived between the initial fetch
+                # and the first apply attempt.
+                fresh = transport.gateway_config_get(target)
+                live_config = fresh.configuration
+                base_hash = fresh.base_hash
+                merged_patch = {}
+                applied_keys = []
+                auto_woven_pairs = []
+                conflicts = []
+                for resource in manifest.resources:
+                    plan = plan_resource(resource, live_config, store)
+                    resource_key = plan.resource_key
+                    applied_this_resource = False
+                    for action in plan.actions:
+                        kind = action.kind
+                        if kind == "apply":
+                            self._set_path(merged_patch, action.managed_path, action.desired_value)
+                            store.record_ownership(
+                                resource.manager,
+                                resource_key,
+                                action.managed_path,
+                                action.desired_value,
+                            )
+                            applied_this_resource = True
+                        elif kind == "auto_weave":
+                            self._set_path(merged_patch, action.managed_path, action.desired_value)
+                            store.record_ownership(
+                                resource.manager,
+                                resource_key,
+                                action.managed_path,
+                                action.desired_value,
+                            )
+                            auto_woven_pairs.append(f"{resource_key}{action.managed_path}")
+                            applied_this_resource = True
+                        elif kind == "conflict":
+                            conflict = self._conflict_from_action(resource_key, resource.manager, action)
+                            conflicts.append(conflict)
+                            store.add_pending(
+                                PendingResolution(
+                                    resolution_id=conflict.resolution_id,
+                                    conflict=conflict,
+                                    transaction_id=transaction_id,
+                                    created_at=_iso_now(),
+                                )
+                            )
+                    for conflict in plan.conflicts:
+                        if conflict not in conflicts:
+                            conflicts.append(conflict)
+                            store.add_pending(
+                                PendingResolution(
+                                    resolution_id=conflict.resolution_id,
+                                    conflict=conflict,
+                                    transaction_id=transaction_id,
+                                    created_at=_iso_now(),
+                                )
+                            )
+                    if applied_this_resource:
+                        applied_keys.append(resource_key)
+                if merged_patch:
+                    transport.gateway_config_apply(target, merged_patch, base_hash)
             except GatewayUnavailable as exc:
                 _log.warning("gateway unavailable on apply: %s", exc)
                 warnings.append(f"gateway unavailable on apply: {exc}")
@@ -288,20 +351,6 @@ class ControlEngine:
         )
 
     # -- helpers --------------------------------------------------------------
-
-    def _apply_with_retry(
-        self,
-        transport: OpenClawTransport,
-        target: ConfigTarget,
-        merged_patch: Mapping[str, Any],
-        base_hash: str,
-    ) -> None:
-        try:
-            transport.gateway_config_apply(target, merged_patch, base_hash)
-        except StaleConfiguration:
-            # Refresh the base hash and retry exactly once.
-            fresh = transport.gateway_config_get(target)
-            transport.gateway_config_apply(target, merged_patch, fresh.base_hash)
 
     @staticmethod
     def _determine_state(
@@ -348,7 +397,7 @@ class ControlEngine:
             desired_fingerprint=getattr(action, "fingerprint", "") or "",
             security_topology=False,
             choices=("apply-desired", "keep-current", "show-diff"),
-            resolution_id=f"{resource_key}{action.managed_path}",
+            resolution_id=f"{resource_key}{action.managed_path}#{(getattr(action, 'fingerprint', '') or '')[:12]}",
         )
 
     @classmethod
