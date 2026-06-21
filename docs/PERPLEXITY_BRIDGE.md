@@ -1,6 +1,6 @@
 ﻿# Perplexity-Tools Bridge for The ὅραμα System
 
-## Version 0.9.9.9
+## Version 1.1.0.0
 
 ## Current Contract (v1.0 RC)
 
