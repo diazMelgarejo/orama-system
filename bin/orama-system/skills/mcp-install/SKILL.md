@@ -83,7 +83,7 @@ bash bin/orama-system/scripts/install-mcp-stack.sh
 The script runs these steps in order — skipping any that are already complete:
 
 | Step | Action | Skip condition |
-|------|--------|----------------|
+| ------ | -------- | ---------------- |
 | 1 | Node.js ≥20 hard gate | Node <20 → fatal error |
 | 2 | Install `ai-cli-mcp` globally | `ai-cli` already in PATH |
 | 2b | Register `ai-cli` in Claude Code | `claude mcp list \| grep ai-cli` |
@@ -109,6 +109,7 @@ Expected output: `ai-cli-mcp` listed as **active**; `gemini-cli` appears only wh
 `--include-gemini` was passed.
 
 **What success looks like at each stage:**
+
 - Step 2: `ai-cli doctor` shows installed CLIs detected
 - Step 2b: `claude mcp list` shows `ai-cli`
 - Step 4: `gemini --version` returns a version string only if `--include-gemini` was passed
@@ -164,7 +165,7 @@ openclaw mcp unset ai-cli-mcp 2>/dev/null || true
 ## Known Failure Modes
 
 | Symptom | Cause | Fix |
-|---------|-------|-----|
+| --------- | ------- | ----- |
 | `gemini-cli` / `ai-cli` missing from `/mcp` in other projects | Registered at project scope instead of user scope | Re-run with `--force`; script now uses `-s user` |
 | `ai-cli --version` prints usage text, not a version | ai-cli outputs help to stdout | Expected; script detects via `command -v`, version shown as "via npx" |
 | `ai-cli worker hangs` | First-run prompt not accepted | Step 4 handles this; re-run the script |
@@ -178,15 +179,18 @@ openclaw mcp unset ai-cli-mcp 2>/dev/null || true
 ## Boundaries
 
 ### Always Do
+
 - Run `--dry-run` first when uncertain about machine state
 - Check `claude mcp list` and `openclaw mcp list` before and after to confirm
 - Restart Claude Code after any `mcp add` step completes
 
 ### Ask First
+
 - Running with `--force` on a machine that is partially configured
 - Uninstalling/rollback — confirm target machine before running rollback commands
 
 ### Never Do
+
 - Hardcode API keys or auth tokens in the script or in MCP JSON configs
 - Skip the Node.js ≥20 hard gate check
 - Run with `--dangerously-skip-permissions` outside the first-run acceptance context (Step 4)
@@ -194,24 +198,28 @@ openclaw mcp unset ai-cli-mcp 2>/dev/null || true
 ## Examples
 
 ### Example 1: Fresh machine setup (golden path)
+
 ```
 Input: bash bin/orama-system/scripts/install-mcp-stack.sh
 Output: All 7 steps complete, gemini-cli and ai-cli-mcp active in /mcp
 ```
 
 ### Example 2: Already installed — idempotent run
+
 ```
 Input: bash bin/orama-system/scripts/install-mcp-stack.sh
 Output: All steps print "→ skip:" — no changes made
 ```
 
 ### Example 3: Dry-run preview
+
 ```
 Input: bash bin/orama-system/scripts/install-mcp-stack.sh --dry-run
 Output: Each command printed as "[dry-run] <cmd>" — nothing executed
 ```
 
 ## References
+
 - [`scripts/install-mcp-stack.sh`](../scripts/install-mcp-stack.sh) — the installer
 - [`MCP-INSTALL-PLAN.md`](../../../../MCP-INSTALL-PLAN.md) — full autoplan review with 16 decisions
 - [`skill-architecture-guide.md`](../references/skill-architecture-guide.md) — frontmatter spec
