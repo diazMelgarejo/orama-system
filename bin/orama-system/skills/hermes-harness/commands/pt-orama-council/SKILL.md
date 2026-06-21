@@ -22,7 +22,8 @@ Antigravity, Codex, or cross-harness work.
 ## Council Protocol
 
 Use [`../../references/hermes-council-review-gates.md`](../../references/hermes-council-review-gates.md)
-for roles, review gates, and review package shape.
+for roles, review gates, and review package shape. Treat that file as support
+for this command, not a separate subskill or activation surface.
 
 ## Canonical Sources
 
@@ -47,10 +48,11 @@ Read relevant excerpts from:
 
 ## Readiness Rules
 
-- Hermes one-shot: prefer `--safe-mode --provider nous --model nvidia/nemotron-3-ultra:free`.
+- Hermes one-shot: prefer `--quiet --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free`.
 - LM Studio on Windows: target `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2` via `/v1/chat/completions`. Use up to a 180s timeout; tested completion time in this environment is ~28s when `max_tokens` is generous (≥2048). Do not list or rely on `qwen3.5-9b-mlx` as a Windows fast path — it is macOS/MLX-only.
 - `max_tokens` must account for reasoning tokens. A 64-token budget on a reasoning model can finish with `finish_reason=length` and empty visible output even though the call succeeded.
-- AGY native Windows install: `irm https://antigravity.google/cli/install.ps1 | iex`.
+- LM Studio: usable only after a fast `/v1/chat/completions` canary passes.
+- AGY native Windows install: save installer first — see `docs/wiki/15-hermes-windows-harness.md`.
 - AGY usability: `agy --print "Reply with exactly: AGY_READY"` must print visible stdout. (Note: quota exhaustion is observed; retry after June 28, 2026 or when hosted quota resets).
 - Exact model names must come from live `/v1/models`; never invent model IDs.
 
@@ -86,7 +88,7 @@ HANDOFF NOTES:
 
 ## References
 
-- `C:\Users\lab\Downloads\SKILLS.md\ultrathink\Perplexity-Tools\SKILL.md` (Perpetua-Tools)
+- Perpetua-Tools hardware profiles (canonical hardware routing source):
   - `Profile A — mac-studio`: `Qwen3.5-9B-MLX-4bit` via LM Studio on Metal (macOS/MLX-only).
   - `Profile B — win-rtx3080`: `Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2` via LM Studio with `gpu_offload=40`, `context 16384`.
   - These hardware profiles are the authoritative reason `qwen3.5-9b-mlx`/MLX models must not be listed for Windows lanes.

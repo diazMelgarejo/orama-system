@@ -30,14 +30,16 @@ $gitBash = Get-ChildItem `
 
 if ($gitBash) {
   $env:HERMES_GIT_BASH_PATH = $gitBash.FullName
+} else {
+  throw "Could not find GitHub Desktop Git Bash under $env:LOCALAPPDATA\GitHubDesktop; set HERMES_GIT_BASH_PATH manually to any bash.exe (e.g. from Git for Windows or WSL2 via %LOCALAPPDATA%\hermes\git\usr\bin\bash.exe installed by the Hermes installer)."
 }
 ```
 
 For bounded coding-partner prompts, route explicitly:
 
 ```powershell
-hermes chat --query "Reply with exactly: HERMES_READY" `
-  --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
+  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 ```
 
 Use the default LM Studio route only after verifying the loaded model answers
@@ -73,8 +75,8 @@ contain copied canonical bodies or private Hermes state.
 ```powershell
 hermes --version
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
-hermes chat --query 'Reply with exactly: HERMES_READY' `
-  --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
+  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 agy --print "Reply with exactly: AGY_READY"
 ```
 

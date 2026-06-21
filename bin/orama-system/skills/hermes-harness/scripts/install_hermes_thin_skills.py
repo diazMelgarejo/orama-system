@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[5]
 LOCALAPPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", LOCALAPPDATA / "hermes"))
 HERMES_SKILLS = HERMES_HOME / "skills" / "pt-orama"
+MANAGED_MARKER = "created_by: agent"
 
 
 @dataclass(frozen=True)
@@ -66,7 +67,6 @@ Purpose: {spec.purpose}
 Canonical source of truth:
 
 - Repo: `diazMelgarejo/orama-system`
-- Branch/PR at install time: `codex/hermes-ecc-harness-skills` / PR #96
 - Canonical path: `{spec.canonical}`
 
 ## Before Use
@@ -81,8 +81,8 @@ Canonical source of truth:
 
 ## Windows Readiness
 
-- Hermes one-shot: `hermes chat --query \"Reply with exactly: HERMES_READY\" --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1`
-- AGY install: `irm https://antigravity.google/cli/install.ps1 | iex`
+- Hermes one-shot: `hermes chat --query \"Reply with exactly: HERMES_READY\" --quiet --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1`
+- AGY install: save-first — `Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\\agy-install.ps1"; Get-Content "$env:TEMP\\agy-install.ps1" | Select-Object -First 40; & powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\\agy-install.ps1"`
 - AGY readiness: `agy --print \"Reply with exactly: AGY_READY\"` must print visible stdout.
 - LM Studio readiness: `/v1/models` is not enough; require a fast chat-completions canary.
 
@@ -97,6 +97,24 @@ RISKS:
 HANDOFF NOTES:
 ```
 """
+
+
+def is_managed_wrapper(path: Path) -> bool:
+    """Return whether *path* has our marker in its YAML frontmatter."""
+    if not path.is_file():
+        return False
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        return False
+    if not lines or lines[0].strip() != "---":
+        return False
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return False
+        if line.strip() == MANAGED_MARKER:
+            return True
+    return False
 
 
 def install(dry_run: bool = False) -> list[Path]:
@@ -114,16 +132,13 @@ def install(dry_run: bool = False) -> list[Path]:
         )
     for spec in WRAPPERS:
         target = HERMES_SKILLS / spec.slug.removeprefix("pt-orama-") / "SKILL.md"
+        if target.exists() and not is_managed_wrapper(target):
+            action = "would skip" if dry_run else "skipped"
+            print(f"{action} unmanaged wrapper: {target}")
+            continue
         if dry_run:
             print(target)
             continue
-
-        if target.is_file():
-            existing_text = target.read_text(encoding="utf-8")
-            if "created_by: agent" not in existing_text:
-                print(f"skipping user-owned wrapper: {target}")
-                continue
-
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(wrapper_text(spec), encoding="utf-8")
         written.append(target)
@@ -137,6 +152,9 @@ def verify() -> list[str]:
         if not target.is_file():
             errors.append(f"missing wrapper: {target}")
             continue
+        if not is_managed_wrapper(target):
+            errors.append(f"unmanaged wrapper preserved: {target}")
+            continue
         text = target.read_text(encoding="utf-8")
         for required in ("thin local Hermes", spec.canonical, "AGY_READY", "HERMES_READY"):
             if required not in text:
@@ -146,11 +164,9 @@ def verify() -> list[str]:
 
 def run_tests() -> int:
     import tempfile
-    import shutil
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         tmp_path = Path(tmp_dir)
-        # Mock HERMES_SKILLS
         global HERMES_SKILLS
         original_skills = HERMES_SKILLS
         HERMES_SKILLS = tmp_path / "skills"
@@ -163,31 +179,36 @@ def run_tests() -> int:
                 print("FAIL: council wrapper not created")
                 return 1
 
-            # 2. Check syntax update
+            # 2. Verify managed marker is present
+            if not is_managed_wrapper(council_path):
+                print("FAIL: managed marker not found in fresh wrapper")
+                return 1
+
+            # 3. Check required content
             text = council_path.read_text(encoding="utf-8")
             if "hermes chat --query" not in text:
-                print("FAIL: legacy syntax found in wrapper")
+                print("FAIL: hermes chat command missing from wrapper")
                 return 1
             if "--max-turns 1" not in text:
                 print("FAIL: turn bound missing in wrapper")
                 return 1
 
-            # 3. Non-clobber: overwrite agent-owned
+            # 4. Non-clobber: re-install updates agent-owned wrappers
             council_path.write_text(text.replace("version: 1.0.0", "version: 1.0.1"), encoding="utf-8")
             install()
             if "version: 1.0.0" not in council_path.read_text(encoding="utf-8"):
-                print("FAIL: agent-owned wrapper not updated")
+                print("FAIL: agent-owned wrapper not updated on re-install")
                 return 1
 
-            # 4. Non-clobber: protect user-owned
-            user_text = text.replace("created_by: agent", "created_by: user")
+            # 5. Non-clobber: protect user-owned (no managed marker in frontmatter)
+            user_text = text.replace(f"\n{MANAGED_MARKER}\n", "\ncreated_by: user\n")
             council_path.write_text(user_text, encoding="utf-8")
             install()
             if "created_by: user" not in council_path.read_text(encoding="utf-8"):
                 print("FAIL: user-owned wrapper was clobbered")
                 return 1
 
-            print("non-clobber and syntax tests passed")
+            print("all tests passed")
             return 0
         finally:
             HERMES_SKILLS = original_skills

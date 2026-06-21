@@ -24,22 +24,26 @@ allowed-tools: bash, file-operations, web-search
 # Hermes Harness
 
 ## Purpose
+
 Use Hermes as an operator shell that consumes durable PT-orama/ECC skills,
 prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the runtime gateway/agent fabric.
 
 ## When to Use
+
 - A Windows or Mac operator needs Hermes installed or repaired.
 - Hermes must consume orama/OpenClaw/ECC skills without copying private state.
 - Nous Portal, LM Studio, OpenRouter, Gemini, AGY, or Codex CLI are being wired as coding partners.
 - A Hermes/OpenClaw artifact must become a reusable skill, command, hook, doc, or issue.
 
 ## Operating Thesis
+
 1. **Durable source:** orama-system and ECC own reusable skills and rules.
 2. **Harness edge:** Hermes and other tools adapt loading/invocation only at the edge.
 3. **No private imports:** never ship raw `~/.hermes`, secrets, personal memory, or account tokens.
 4. **Parallel to OpenClaw:** `openclaw-skills` owns OpenClaw config; this skill owns Hermes onboarding and partner prompts.
 
 ## Windows Bring-Up
+
 Use PowerShell with explicit UTF-8 when writing files:
 
 ```powershell
@@ -90,6 +94,10 @@ Invoke-WebRequest -Uri https://hermes-agent.nousresearch.com/install.ps1 -OutFil
 ```
 
 This avoids piping into `Invoke-Expression` when the installer needs parameters.
+NousResearch does not publish a hash or Authenticode signature for this
+installer (confirmed against their docs and FAQ as of 2026-06-19) -- saving
+the script to a file first is the most practical integrity step actually
+available here, not a placeholder for a stronger check we skipped.
 
 ### 2. Configure Provider Defaults
 
@@ -109,11 +117,33 @@ Use the LM Studio Node/npm toolchain already present on this host:
 
 ```powershell
 $env:PATH = "$env:USERPROFILE\.lmstudio\.internal\utils;$env:PATH"
-npm install -g @openai/codex@latest
-npm install -g @google/gemini-cli
-irm https://antigravity.google/cli/install.ps1 | iex
+npm install -g @openai/codex@latest --audit=moderate
+npm install -g @google/gemini-cli --audit=moderate
+```
+
+`--audit=moderate` flags known-vulnerable transitive packages at install time
+without pinning to a version number that will immediately go stale in this
+doc. If `npm audit` reports a moderate-or-higher finding, stop and review
+before continuing.
+
+Install Antigravity CLI by saving the installer first rather than piping
+directly into `Invoke-Expression` -- consistent with the Hermes installer
+pattern above:
+
+```powershell
+$agyInstaller = Join-Path $env:TEMP "antigravity-install.ps1"
+Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile $agyInstaller
+Get-Content $agyInstaller | Select-Object -First 40   # eyeball it before running
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $agyInstaller
 codex --version; gemini --version; agy --version
 ```
+
+The Antigravity installer itself downloads the `agy` binary and verifies a
+SHA-512 checksum against its release manifest before extracting it -- the
+binary is checksummed, but the bootstrap script that does that checking is
+not independently signed, which is the same residual trust step as any
+`curl|bash`-style installer. Saving and skimming the script first closes
+that one remaining gap cheaply.
 
 If `agy` is absent, or if `agy --print "Reply with exactly: AGY_READY"`
 exits with empty stdout, skip it and continue with Hermes/Gemini/Codex. To
@@ -143,8 +173,8 @@ provider/model routing because the default LM Studio model can be reachable but
 slow enough for `hermes chat` to appear hung.
 
 ```powershell
-hermes chat --query "Reply with exactly: HERMES_READY" `
-  --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
+  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 ```
 
 Prompt Hermes with a bounded, evidence-first contract: state the goal, forbid
@@ -162,8 +192,7 @@ judgment.
 ```powershell
 Test-Path "$env:HERMES_HOME\hermes-agent\.git"
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
-hermes chat --query 'Reply with exactly: HERMES_READY' `
-  --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+hermes chat --query 'Reply with exactly: HERMES_READY' --quiet --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 codex --version
 gemini --version
 git -C "$env:HERMES_HOME\hermes-agent" status --short --branch
