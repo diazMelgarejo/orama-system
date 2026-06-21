@@ -15,6 +15,33 @@ The main orama agent always keeps judgment. Workers may critique, propose, or
 specialize; they do not commit, delete, deploy, force-push, change accounts, or
 handle secrets directly.
 
+## Workflow Diagram
+
+```mermaid
+flowchart TD
+    A[Start Task] --> B[Create Detailed Plan]
+    B --> C[Send Plan to Antigravity]
+    C --> D{Antigravity Review}
+    D -- NEEDS_REVISION --> B
+    D -- CLEAN --> E[Execute Step]
+    E --> F[Major Delivery?]
+    F -- Yes --> G[Send to Antigravity]
+    G --> H{Review}
+    H -- NEEDS_REVISION --> E
+    H -- CLEAN --> I[Next Step]
+    F -- No --> I
+    I --> J{All Steps Done?}
+    J -- No --> E
+    J -- Yes --> K[Final Review by Antigravity]
+    K --> L[CLEAN?]
+    L -- No --> E
+    L -- Yes --> M[Finalize & Commit]
+
+    E -.->|Private/Sensitive| N[Delegate to Hermes Qwen]
+    N --> O[Return Result to Host]
+    O --> E
+```
+
 ## Gate Loop
 
 Use the council only for multi-step, high-risk, private, or cross-harness work:
