@@ -51,6 +51,31 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+## 2026-06-20 — Codex + Claude — Native codex/gpt-5.5 agent and workspace template reconciler
+
+### What was learned
+
+- The old `codex-openclaw-agent` used a custom `openai-completions` provider block pointing at `http://127.0.0.1:61234/v1` plus a `codex-supervisor` observation plugin as the model runtime. Both are wrong: `codex-supervisor` is a supervision/observation plugin, not a model runtime; the real native provider is the OpenClaw `openai` bundled plugin with model string `codex/gpt-5.5` from the catalog.
+- The correct agent registration flow is `openclaw agents add codex-agent --model codex/gpt-5.5`; reconcile managed fields through `openclaw config set --batch-json`; never hand-write a `models.providers.codex` block.
+- Plugin allowlist (`plugins.allow`) is a security boundary. The binder must read the existing list, append only `openai`, and never widen it beyond that.
+- `generate_codex_openclaw_profile.py` must be an idempotent marker-region reconciler (`<!-- oramaclaw:generated:start/end -->`), not a full-file writer. Operator content outside the markers and `SECURITY.md` once written must survive reruns.
+- The workspace at `~/.openclaw/agents/codex-agent` is already registered (OpenClaw Gateway Agent Main confirmed registration). The generator converged immediately (no files changed) because `CODEX.md` and `IDENTITY.md` were already reconciled from a prior run. `AGENTS.md` and `TOOLS.md` had no `oramaclaw:generated` sections yet and received them.
+- `codex review --commit HEAD < /dev/null` stalled mid-review when `list_graph_stats_tool` MCP call blocked — CRG MCP was interrupted. Have a direct-read fallback ready for codex review output files and rely on CRG semantic search + manual diff for correctness when this happens.
+
+### Decisions made
+
+- `codex-agent` canonical workspace: `~/.openclaw/agents/codex-agent`; `agentDir`: `~/.openclaw/agents/codex-agent/agent`; model: `codex/gpt-5.5`; `thinkingDefault`: `medium`; `tools.profile`: `coding`.
+- Delegation path: `agents.defaults.subagents.allowAgents` (not `agents.bindings.*.allowAgents` — that key is rejected by the oramaclaw control plane).
+- Auth flow: `openclaw models auth login --provider openai-codex` (interactive, never in unattended automation).
+- `bind_codex_backend.sh` drops `--force`; reports `needs_plugin` and `needs_auth` as structured exit states; restarts gateway only when provider or agent config actually changed.
+- Fixture rename: `oramaclaw-codex-provider.json` → `oramaclaw-native-codex-agent.json`; cooperative-drift fixture uses `example-provider` so it doesn't imply the old custom-provider path.
+
+### Open questions
+
+- None blocking. P2 items (90-second timer scope, psutil vs os.kill, `__init__.py` surface) remain open by design.
+
+---
+
 ## 2026-06-18 — Codex — Hermes Windows one-shot routing and Antigravity adapter
 
 ### What was learned
@@ -3360,5 +3385,80 @@ Replacing `pip install pkg1 pkg2 pkg3` with `pip install ".[extras]"` without fi
 - `710fc47` — added hatchling+build to [test] extras (final fix)
 
 → [wiki/01-ci-deps.md](wiki/01-ci-deps.md)
+
+---
+
+## 2026-06-20 — `codex review` invocation, delegation path contract, macOS timeout
+
+**Session:** `feat/openclaw-codex-app-server` — codex-openclaw-agent v2 + oramaclaw control-plane plan
+
+### What Broke
+
+Three silent correctness issues found via `codex review` after all tests passed:
+
+1. **`bind_codex_backend.sh` wrote to `agents.bindings.main.allowAgents`** — the old OpenClaw delegation key. The new oramaclaw contract (written in the same session's plan) rejects `agents.bindings.*` in favour of `agents.defaults.subagents.allowAgents` / `agents.list[].subagents.allowAgents`. The agent would bind successfully but be invisible to any code following the new contract.
+
+2. **`ControlResult.state` Literal omitted `gateway_unavailable`** — exit code 3 (`gateway unavailable, offline path invalid`) had no typed counterpart. JSON/portal callers could not distinguish it from code-5 transport failures.
+
+3. **`timeout 60 openclaw run …` fails on stock macOS** — `timeout` is a GNU coreutils command absent on vanilla macOS. The verify step would raise `timeout: command not found`, capture that as the identity string, and trigger a false rollback of an otherwise-successful binding.
+
+### Root Cause
+
+These issues were not caught by the 6-test suite because:
+- The tests mock the `openclaw` CLI and `jq` calls — they confirm the correct *field names* for the fields they test, but the delegation key update wrote to a different JSON path not covered by any test.
+- `ControlResult.state` is a plan-level type stub; no runtime test validates its Literal values against the CLI exit-code table.
+- The macOS `timeout` path is not exercised in the test environment (CI or local sandbox both have GNU coreutils).
+
+### Lesson
+
+**`codex review` must always use `< /dev/null`.** Without it, the process blocks on stdin and appears to hang. The correct invocation pattern (from gstack's `/review` skill line 1715):
+
+```bash
+codex review "<prompt>" -c 'model_reasoning_effort="high"' < /dev/null
+```
+
+Never omit `< /dev/null`. A codex review hanging indefinitely looks identical to it running — you cannot tell without reading the process stdin state.
+
+### Delegation Path Contract (applies to all agents)
+
+The canonical OpenClaw sub-agent delegation key is:
+- `agents.defaults.subagents.allowAgents` — apply to all agents by default
+- `agents.list[id].subagents.allowAgents` — apply to a specific named agent
+
+The key `agents.bindings.*.allowAgents` is **rejected** by the oramaclaw control plane and must not be written by any binder, bootstrap script, or manifest.
+
+### macOS Compatibility: use gtimeout→timeout→unwrapped
+
+Any script calling `timeout N <cmd>` must use this pattern:
+
+```bash
+_TIMEOUT_BIN=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+if [ -n "$_TIMEOUT_BIN" ]; then
+    "$_TIMEOUT_BIN" N <cmd>
+else
+    <cmd>
+fi
+```
+
+`gtimeout` comes from Homebrew coreutils. `timeout` is Linux-native. Neither is guaranteed on stock macOS.
+
+### Prevention Rules
+
+1. **Use `< /dev/null` in every `codex review` invocation** — missing it causes an invisible hang.
+2. **Write delegation with `agents.defaults.subagents.allowAgents`** — not `agents.bindings.*`.
+3. **Never use bare `timeout` in shell scripts targeting macOS** — use gtimeout→timeout→unwrapped.
+4. **Match `ControlResult.state` Literal to the CLI exit-code table** — every distinct exit code needs a named state, not just `failed`.
+
+### Fixes
+
+| Finding | File | Fix |
+| --- | --- | --- |
+| CR-1: wrong delegation key | `bind_codex_backend.sh:332-338` | Rewrote to `agents.defaults.subagents.allowAgents` |
+| CR-2: missing state literal | `oramaclaw-control-plane-v1.md:145` | Added `"gateway_unavailable"` to Literal |
+| CR-3: bare `timeout` on macOS | `bind_codex_backend.sh:352` | gtimeout→timeout→unwrapped fallback |
+
+### Commits
+
+- `8b64518` — apply CR-1, CR-2, CR-3 + P3 hygiene fixes
 
 ---

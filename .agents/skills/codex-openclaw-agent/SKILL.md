@@ -30,4 +30,3 @@ openclaw run codex-agent --task "your task here"
 $env:PYTHONUTF8 = "1"
 [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
 ```
-

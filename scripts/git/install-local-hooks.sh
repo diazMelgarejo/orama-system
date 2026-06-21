@@ -14,7 +14,7 @@ fi
 hooks_dir="$REPO_ROOT/.githooks"
 mkdir -p "$hooks_dir"
 
-for hook in pre-commit commit-msg; do
+for hook in pre-commit commit-msg post-commit; do
   src="$hooks_dir/$hook"
   if [[ ! -f "$src" ]]; then
     echo "ERROR: missing $src (expected tracked hook in .githooks/)" >&2

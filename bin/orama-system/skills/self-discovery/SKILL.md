@@ -42,7 +42,7 @@ for repo, branch, f in repos:
 Expected (current baseline):
 
 | Repo | Branch | Version |
-|------|--------|---------|
+| ------ | -------- | --------- |
 | AlphaClaw | `feature/MacOS-post-install` | `0.9.9.6` |
 | Perpetua-Tools | `main` | `0.9.9.7` |
 | orama-system | `main` | `0.9.9.7` |
@@ -57,6 +57,7 @@ python3 ~/.openclaw/scripts/discover.py --force    # bypass 5-min TTL, re-probe 
 ```
 
 Expected when both nodes live:
+
 ```
 Tier:    1
   mac: ✅ localhost:1234 — N models
@@ -132,7 +133,7 @@ If the manifest points to stale `.claude/skills/*` paths when `bin/orama-system/
 ## Hub State Files
 
 | Path | Purpose |
-|------|---------|
+| ------ | --------- |
 | `~/.openclaw/state/discovery.json` | Live gossip (5-min TTL) |
 | `~/.openclaw/state/last_discovery.json` | Last-good snapshot |
 | `~/.openclaw/state/recovery_source.txt` | Active tier (tier1–tier4) |
