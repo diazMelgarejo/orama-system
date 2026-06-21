@@ -1,0 +1,35 @@
+{
+  "version": 1,
+  "resources": [
+    {
+      "kind": "agent",
+      "id": "codex-agent",
+      "manager": "oramaclaw",
+      "policy": "cooperative",
+      "spec": {
+        "model": "codex/gpt-5.5",
+        "thinkingDefault": "auto",
+        "authReference": "~/.openclaw/plugins/openai/credentials.json"
+      },
+      "managed_paths": [
+        "/agents/list/codex-agent/model",
+        "/agents/list/codex-agent/thinkingDefault"
+      ]
+    },
+    {
+      "kind": "profile",
+      "id": "codex-workspace-profile",
+      "manager": "oramaclaw",
+      "policy": "strict",
+      "spec": {
+        "generator": "generate_codex_openclaw_profile.py",
+        "workspace": "~/.openclaw/agents/codex-agent",
+        "effort": "medium",
+        "authReference": "~/.openclaw/plugins/openai/credentials.json"
+      },
+      "managed_paths": [
+        "/agents/list/codex-agent/profile"
+      ]
+    }
+  ]
+}

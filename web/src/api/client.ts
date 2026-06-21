@@ -58,3 +58,37 @@ export async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promis
   }
   return (await res.json()) as T;
 }
+
+// oramaclaw conflict resolution types (P2-6)
+export interface OramaclawConflict {
+  resolution_id: string;
+  transaction_id: string;
+  created_at: string;
+  resolved_at: string | null;
+  chosen: string | null;
+  conflict: {
+    resource_key: string;
+    manager: string;
+    managed_path: string;
+    base_fingerprint: string | null;
+    observed_fingerprint: string | null;
+    desired_fingerprint: string;
+    security_topology: boolean;
+    choices: string[];
+    resolution_id: string;
+  };
+}
+
+export interface OramaclawConflictsResponse {
+  conflicts: OramaclawConflict[];
+}
+
+export interface OramaclawResolveRequest {
+  choice: string;
+}
+
+export interface OramaclawResolveResponse {
+  ok: boolean;
+  resolution_id: string;
+  chosen: string;
+}
