@@ -87,6 +87,18 @@ python3 scripts/review/repo_hygiene.py .
 # WARNING = non-blocking; ERROR = fix before committing
 ```
 
+**If this commit includes a version bump**, run the version sync first:
+
+```bash
+# Edit src/orama_system/_version.py only, then:
+python3 scripts/sync_version.py          # propagate to all 25+ surfaces
+python3 -m pytest tests/test_version_docs.py  # verify
+# Then continue with repo_hygiene.py check above
+```
+
+See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
+See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
+
 **Why this matters especially for worktrees:** docs, plans, and bash snippets
 written from a worktree often embed the machine-local path. Those paths are
 invisible on your machine but leak developer identity and break CI when committed.
