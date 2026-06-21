@@ -3462,3 +3462,95 @@ fi
 - `8b64518` — apply CR-1, CR-2, CR-3 + P3 hygiene fixes
 
 ---
+
+---
+
+## 2026-06-21 — Claude — Centralized version system: _version.py + sync_version.py
+
+**Session:** `main` — CI fix for `test_active_version_surfaces_are_09998` + version consolidation
+
+### What broke
+
+CI run 27893218322 failed on a single test: `test_version_docs.py::test_active_version_surfaces_are_09998`.
+`pyproject.toml` had already been bumped to `1.1.0.0` in a prior commit but the test
+still asserted `0.9.9.9`, and 25+ other canonical surfaces (SKILL.md frontmatter,
+`CLAUDE.md`, `bin/agents/*/agent.md`, JSON registries, Python docstring headers, etc.)
+were still at old version strings — some as far back as `0.9.9.0`.
+
+The root cause was **no single source of truth**: each version bump required manually
+hunting and updating 25+ files, and the test hardcoded a literal version string that
+drifted out of sync.
+
+### What we built
+
+**`src/orama_system/_version.py`** — the single source of truth:
+
+```python
+__version__ = "1.1.0.0"
+```
+
+**`pyproject.toml`** — now reads version dynamically via hatch:
+
+```toml
+dynamic = ["version"]
+[tool.hatch.version]
+path = "src/orama_system/_version.py"
+```
+
+**`scripts/sync_version.py`** — propagates `_version.py` to every canonical surface:
+
+```bash
+python3 scripts/sync_version.py            # write all surfaces
+python3 scripts/sync_version.py --dry-run  # preview only
+python3 scripts/sync_version.py --check    # exit 1 if any surface is stale (CI gate)
+```
+
+### Bump procedure (authoritative)
+
+1. Edit `__version__` in `src/orama_system/_version.py` — **nowhere else**
+2. `python3 scripts/sync_version.py`
+3. `python3 -m pytest tests/test_version_docs.py`
+4. `git add -A && git commit -m "chore(version): bump to X.Y.Z.W"`
+
+### Surfaces managed by sync_version.py
+
+`bin/orama-system/SKILL.md`, `CLAUDE.md`, `README.md` badge, root `SKILL.md`,
+`docs/PERPLEXITY_BRIDGE.md`, `docs/SYNC_ANALYSIS.md`, `src/orama_system/portal_server.py`,
+`bin/config/agent_registry.json`, `bin/orama-system/config/agent_registry.json`,
+`bin/orama-system/config/routing_rules.json`, `bin/agents/*/agent.md` (7 files),
+`bin/mcp_servers/*.py` docstring headers (2 files), `bin/shared/*.py` headers (3 files),
+`platform/windows/install.ps1`, `bin/orama-system/afrp/README.md`,
+`bin/orama-system/skills/self-discovery/SKILL.md`, reference docs.
+
+### Surfaces intentionally NOT managed (never bump these)
+
+| Surface | Reason |
+|---|---|
+| `CHANGELOG.md`, `docs/LESSONS.md` | Historical records — accurate as-is |
+| `docs/plans/`, `docs/superpowers/specs/` | Historical planning snapshots |
+| `scripts/setup_macos.py` `KNOWN_ALPHACLAW_VERSION` | AlphaClaw runtime version train — separate |
+| `openrouter-defaults.md` `Version:` | Skill-doc revision, not package version |
+
+### Test change
+
+`tests/test_version_docs.py` no longer hardcodes any version literal. All 6 tests
+import `EXPECTED` from `orama_system._version`:
+
+```python
+from orama_system._version import __version__ as EXPECTED
+```
+
+The new `test_sync_version_script_leaves_no_stale_surfaces` test runs
+`scripts/sync_version.py --check` as part of every CI run — any future drift is
+caught before merge.
+
+### Decision
+
+Do **not** reach for `sed -i` or `grep -r … | xargs sed` when bumping versions.
+Always use `scripts/sync_version.py`. If a new surface is added (new config file,
+new Python module with a `Version:` header), register it in `sync_version.py`'s
+`SURFACES` list at the same time it's created.
+
+See: [`docs/wiki/06-multi-agent-collab.md`](../wiki/06-multi-agent-collab.md) (version registry + full surface table)
+See: [`src/orama_system/_version.py`](../../src/orama_system/_version.py)
+See: [`scripts/sync_version.py`](../../scripts/sync_version.py)
