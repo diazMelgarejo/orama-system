@@ -528,7 +528,7 @@ def _load_pt_runtime_state() -> dict[str, Any] | None:
 class OramasysRequest(BaseModel):
     """
     POST /oramasys request body.
-    model_hint selects execution mode (ADR-001, v0.9.9.9).
+    model_hint selects execution mode (ADR-001, v1.1.0.0).
     v2 shape: session_id added for correlation across the perpetua-core/oramasys stack.
     """
     model_config = ConfigDict(protected_namespaces=())

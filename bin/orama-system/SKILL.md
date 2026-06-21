@@ -8,7 +8,7 @@ description: >-
   Triggers on: "ultrathink", "think deeply", "5-stage", "systematic approach",
   "elegant solution", "verify before done", "content insertion", "AFRP", "CIDF".
   Treat legacy "ultrathink" prompts as oramasys invocations.
-version: 0.9.9.9
+version: 1.1.0.0
 license: Apache 2.0
 compatibility: claude-code, claude-desktop
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
