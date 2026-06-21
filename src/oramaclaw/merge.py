@@ -206,7 +206,13 @@ def plan_resource(resource: Resource, live_config: dict, store: Any) -> MergePla
                 if effective == observed:
                     actions.append(FieldAction(path, "skip", None, desired_fp))
                 else:
-                    actions.append(FieldAction(path, "apply", effective, _fingerprint(effective)))
+                    # Live has changed since the override was recorded — the
+                    # override baseline is stale. Escalate to conflict rather
+                    # than silently overwriting the newer live value.
+                    conflicts.append(
+                        _conflict(rkey, resource, path, base_fp, observed_fp, desired_fp, security=False)
+                    )
+                    actions.append(FieldAction(path, "conflict", None, desired_fp))
                 continue
 
             # No override, or the source field changed → re-weave the drift.
