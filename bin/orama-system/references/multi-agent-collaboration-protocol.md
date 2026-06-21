@@ -47,10 +47,10 @@ When bumping version, update ALL of these atomically:
 
 **Legacy markers** (do not auto-bump — they pin a stable API baseline):
 
-- `api_server.py` / `bin/shared/*.py` / `bin/mcp_servers/*.py` → `0.9.9.2`
-- `bin/orama-system/config/`, templates, `afrp/README.md` → `0.9.9.0`
+- `api_server.py` / `bin/shared/*.py` / `bin/mcp_servers/*.py` → `1.1.0.0`
+- `bin/orama-system/config/`, templates, `afrp/README.md` → `1.1.0.0`
 
-**Current version: `0.9.9.7`** — do not bump until explicitly instructed.
+**Current version: `1.1.0.0`** — do not bump until explicitly instructed.
 
 ## Embedded Git Repo: `.ecc/`
 

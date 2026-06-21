@@ -1,6 +1,6 @@
 ---
 name: self-discovery
-version: 0.9.9.7
+version: 1.1.0.0
 description: Query live state across all 3 repos — versions, branch status, LM Studio endpoints, file manifests. Run whenever you need a situational snapshot of the stack.
 user-invocable: true
 ---
@@ -44,8 +44,8 @@ Expected (current baseline):
 | Repo | Branch | Version |
 | ------ | -------- | --------- |
 | AlphaClaw | `feature/MacOS-post-install` | `0.9.9.6` |
-| Perpetua-Tools | `main` | `0.9.9.7` |
-| orama-system | `main` | `0.9.9.7` |
+| Perpetua-Tools | `main` | `1.1.0.0` |
+| orama-system | `main` | `1.1.0.0` |
 
 ---
 

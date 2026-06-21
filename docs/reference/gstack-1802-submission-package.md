@@ -1,6 +1,6 @@
 # gstack #1802 — Submission Package (SHIPPED)
 
-> Version: 0.9.9.9 · 2026-06-02 · 55 tests green · panel-hardened
+> Version: 1.1.0.0 · 2026-06-02 · 55 tests green · panel-hardened
 > **SUBMITTED:**
 > - gstack PR (mitigation): https://github.com/garrytan/gstack/pull/1827
 > - gbrain issue (prevention): https://github.com/garrytan/gbrain/issues/1728
