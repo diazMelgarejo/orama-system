@@ -261,7 +261,7 @@ sync code walk for them requires an explicit `--allow-reclone` opt-in.
 | Done with worktree | invoke `finishing-a-development-branch` skill |
 | Query CRG from worktree | pass `repo_root=<canonical-path>` — never rebuild from worktree |
 
-**Location:** `~/Documents/oramasys/worktrees/<slug>/`
+**Location:** `~/code/oramasys/worktrees/<slug>/`
 **Full doctrine:** `docs/v2/22-worktree-parallel-agents.md`
 **Real-time skill:** `~/.claude/skills/using-git-worktrees/SKILL.md`
 **Hardware (2026-05-24):** 1 Win RTX3080 + Mac Ollama. All inference via PT dispatch.

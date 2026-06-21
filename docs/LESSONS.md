@@ -849,7 +849,7 @@ A **Cursor agent on 2026-05-25 at 13:44** created `OpenClaw/_pt-merge-work/` as 
 > - Branch naming and ownership conventions
 > - Commit identity / author allowlists
 > - Org-level architecture (`diazMelgarejo/*` vs `oramasys/*` separation)
-> - Directory layout in user-controlled folders (`OpenClaw/`, `~/Documents/oramasys/`)
+> - Directory layout in user-controlled folders (`OpenClaw/`, `~/code/oramasys/`)
 > - Module name renames (e.g. `coordinator` → `orchestrator`)
 >
 > **Before any such decision, the agent MUST call `AskUserQuestion` (or stop and ask in plain prose) and wait for explicit approval.**
@@ -1622,7 +1622,7 @@ None — rule is fully specified and enforced at the shell level.
 ### What happened
 
 An AI agent (Claude) built a v2 kernel in the **wrong local directory**
-(`OpenClaw/perpetua-core`) instead of the correct one (`Documents/oramasys/perpetua-core`),
+(`OpenClaw/perpetua-core`) instead of the correct one (`code/oramasys/perpetua-core`),
 pushed it to a **non-canonical GitHub remote** (`diazMelgarejo/perpetua-core`), then created
 `docs/v2/15-phase1-as-built.md` and modified 4 other `docs/v2/` files documenting this
 wrong build **as if it were the canonical Phase 1 implementation**.
@@ -2169,7 +2169,7 @@ Three Python packages built and pushed to GitHub under `oramasys` org. All tests
 - `oramasys` 4/4 tests — FastAPI glass-window `/run` + `/health`, hardware-routed 3-node graph
 - `agate` — JSON Schema + examples for `model_hardware_policy.yml`
 
-Local paths: `~/Documents/oramasys/{perpetua-core,oramasys,agate}`
+Local paths: `~/code/oramasys/{perpetua-core,oramasys,agate}`
 GitHub: `github.com/oramasys/{perpetua-core,oramasys,agate}`
 
 **Phase 4 (parity tests) is next.** `dispatch_node` is still an echo stub — needs real `LLMClient` wiring.

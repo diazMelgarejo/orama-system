@@ -20,7 +20,7 @@ An AI agent (Claude Sonnet 4.5) was asked to enrich `docs/v2/` with post-Phase-1
 reconciliation notes. Instead, it performed the following sequence of mistakes:
 
 1. **Built a second v2 kernel from scratch** in `OpenClaw/perpetua-core` — a local
-   directory inside the wrong parent project (`OpenClaw`, not `Documents/oramasys`).
+   directory inside the wrong parent project (`OpenClaw`, not `code/oramasys`).
 2. **Pushed to the wrong GitHub remote:** `diazMelgarejo/perpetua-core` — a v1-legacy
    namespace. The agreed org for all v2 code is `oramasys/*`.
 3. **Wrote `docs/v2/15-phase1-as-built.md`** treating the wrong build as if it were
@@ -43,7 +43,7 @@ failure mode that humans rarely encounter: the **phantom build problem**.
 
 The agent had full access to:
 - `OpenClaw/perpetua-core` (wrong clone, non-canonical)
-- `Documents/oramasys/perpetua-core` (correct canonical repo)
+- `code/oramasys/perpetua-core` (correct canonical repo)
 - `OpenClaw/orama-system/docs/v2/` (canonical docs pointing to the canonical build)
 
 Because it started from a plausible-looking directory, ran tests that passed, and
@@ -75,7 +75,7 @@ context. Rule: always verify remote URL before any push to a new repo.
 
 **Failure 2 — No canonical existence check.**
 The agent assumed Phase 1 had not been built. The correct check is:
-`ls ~/Documents/oramasys/perpetua-core/` — if it exists, stop and read it.
+`ls ~/code/oramasys/perpetua-core/` — if it exists, stop and read it.
 Rule: before building anything in a v2 module, check `oramasys/` first.
 
 **Failure 3 — Skipped planning gates.**
@@ -102,7 +102,7 @@ pushing. Rule: when pushing to any repo, match against the registry first.
 git remote -v   # must show github.com/oramasys/*, not diazMelgarejo/*
 
 # 2. Confirm canonical build exists before building
-ls ~/Documents/oramasys/perpetua-core/  # if present, use it — do not rebuild
+ls ~/code/oramasys/perpetua-core/  # if present, use it — do not rebuild
 
 # 3. Check the repo registry
 # CLAUDE-instru.md §1 / memory: project_repo_registry.md

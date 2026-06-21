@@ -55,7 +55,7 @@ Bootstrap handles automatically (no manual steps needed):
 
 - ✅ Removes stale `.git/*.lock` files
 - ✅ Warns on orphan refs with spaces
-- ✅ Creates `~/Documents/oramasys/worktrees/<slug>/`
+- ✅ Creates `~/code/oramasys/worktrees/<slug>/`
 - ✅ Writes `.gbrain-source`
 - ✅ Appends macOS dedup patterns to `.gitignore`
 - ✅ Assigns `ENV_OFFSET = worktree_index × 100`
@@ -67,7 +67,7 @@ Bootstrap handles automatically (no manual steps needed):
 ## Step 2 — Enter and Configure
 
 ```bash
-cd ~/Documents/oramasys/worktrees/<slug>
+cd ~/code/oramasys/worktrees/<slug>
 source .worktree-env    # loads ENV_OFFSET, port vars
 
 # Verify gbrain pin
@@ -187,7 +187,7 @@ The skill will:
 
 ```bash
 # From canonical checkout:
-git worktree remove ~/Documents/oramasys/worktrees/<slug>
+git worktree remove ~/code/oramasys/worktrees/<slug>
 git worktree list    # verify removed
 git branch -d <branch>
 ```
@@ -224,7 +224,7 @@ cat .worktree-env
 | `git fetch` fails: `bad object refs/heads/... 2` | `find .git/refs -name "* *"` then `git update-ref -d "refs/heads/<name>"` |
 | `git checkout` / `git stash` blocked | `find .git -name "*.lock" -delete` |
 | `.gbrain-source` missing in new worktree | `echo "<source-id>" > .gbrain-source` |
-| `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/` |
+| `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/`. **Permanent fix — move the tree out of iCloud: see [[icloud-escape-move]].** |
 | Port collision with sibling worktree | Check `.worktree-env`; ENV_OFFSET must differ per worktree |
 | `/autoplan` Step 0 fails (base branch) | `cd` to a git repo root before invoking any skill |
 
