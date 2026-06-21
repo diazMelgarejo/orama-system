@@ -90,11 +90,62 @@ When the content is markdown:
 | LINT-005 | No fallback chain defined (warning) |
 | LINT-006 | Absolute workstation path in tracked content (`/Users/<name>/…` or `…/claude/OpenClaw`) — use relative/GitHub link or `$REPO_ROOT` |
 | LINT-007 | **UTF-8 mojibake** — a multibyte lead char (U+00C2–U+00EF) followed by a continuation byte (U+0080–U+00BF) or a cp1252 high-punctuation codepoint. Caused by UTF-8 bytes read as Windows-1252/Latin-1 then re-saved (e.g. an em-dash U+2014 becoming `a-circumflex+euro+quote`); most often a tool reading/writing without explicit `encoding="utf-8"` on a cp1252-default platform (Windows). **Fix:** repair the bytes (per-char cp1252→latin-1 re-encode → decode UTF-8); always pass `encoding="utf-8"` to `open()`. **When documenting mojibake, describe it by codepoint — never paste a literal example, or you trip this rule.** |
+| LINT-008 | **Unapproved `Co-authored-by:` co-author** — a `Co-authored-by:` trailer whose email domain is not in `WELL_KNOWN_COAUTHOR_DOMAIN_SUFFIXES` AND whose name contains no substring from `WELL_KNOWN_COAUTHOR_NAME_MARKERS` in `scripts/git/check_commit_message.sh`. **Fix:** add the agent's domain + name to BOTH arrays in that file (single source of truth in orama-system), verify with a `check_commit_message.sh` smoke test, then sync to PT via `sync-attribution-guard-scripts.sh`. |
 
 > LINT-006 and LINT-007 are enforced by `scripts/review/repo_hygiene.py`
 > (`scan_personal_paths` / `scan_openclaw_workstation_layout`, `scan_mojibake`),
 > which the **pre-commit hook and CI both run** — single source of truth, zero
 > fragmentation. Root cause + repair recipe: `docs/LESSONS.md` 2026-06-10.
+>
+> LINT-008 is enforced by `scripts/git/check_commit_message.sh` (pre-commit hook +
+> `audit_attribution.sh` pre-push). **Single source of truth in orama-system —
+> never hand-edit the downstream copy in PT or AlphaClaw.** Sync via
+> `sync-attribution-guard-scripts.sh <target>`.
+
+### LINT-008 — Co-Author Attribution Policy
+
+The canonical allowlist lives in `scripts/git/check_commit_message.sh` (orama-system
+repo root). Two arrays control approval:
+
+| Array | Purpose |
+| ----- | ------- |
+| `WELL_KNOWN_COAUTHOR_DOMAIN_SUFFIXES` | Email domain suffix → always allowed |
+| `WELL_KNOWN_COAUTHOR_NAME_MARKERS` | Substring in name or email → always allowed |
+
+#### Adding a new AI contributor
+
+1. Edit `scripts/git/check_commit_message.sh` (orama-system single source of truth —
+   never the copy in PT or AlphaClaw).
+2. Add the email domain to `WELL_KNOWN_COAUTHOR_DOMAIN_SUFFIXES` AND the agent
+   name substring to `WELL_KNOWN_COAUTHOR_NAME_MARKERS` (belt + suspenders).
+3. Smoke-test:
+   ```bash
+   tmp=$(mktemp)
+   printf 'test\n\nCo-authored-by: Agent Name <agent@vendor.example>\n' > "$tmp"
+   bash scripts/git/check_commit_message.sh "$tmp" && echo PASS
+   rm "$tmp"
+   ```
+4. Sync to downstream repos:
+   ```bash
+   bash scripts/git/sync-attribution-guard-scripts.sh "$PT_PATH"
+   ```
+5. Commit message convention:
+   `chore(attribution): add <AgentName> (vendor.example) to co-author allowlist`
+
+#### Current approved AI contributors
+
+| Agent | Email | Added |
+| ----- | ----- | ----- |
+| Claude (Anthropic) | `noreply@anthropic.com` | founding |
+| Codex (OpenAI) | `codex@openai.com` | founding |
+| CursorAgent | `cursoragent@cursor.com` | 2026-05-xx |
+| Gemini / Google agents | `*@google.com`, `*@google.dev` | founding |
+| GitHub Copilot | `*@github.com` | founding |
+| Hermes Agent (NousResearch) | `hermes@nousresearch.com` | 2026-06-21 |
+
+Hermes is the orama-system cross-harness operator shell for Windows PT workflows.
+Its commits are produced by the `hermes-harness` skill and are indistinguishable
+from authorized agent work — treating them as `bad_coauthor` is a false positive.
 
 ### IMPERATIVE — fresh Claude install: install the write-time path guard
 

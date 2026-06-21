@@ -29,9 +29,4 @@
     "path": ".agents/skills/perpetua-tools/SKILL.md",
     "triggers": ["perpetua", "perpetua-tools", "orchestrator", "model selection"]
   },
-  {
-    "name": "gstack-toolchain",
-    "path": "bin/orama-system/skills/gstack-toolchain/SKILL.md",
-    "triggers": ["gstack upgrade", "gbrain upgrade", "fork patch", "co-author allowlist", "attribution allowlist", "fork-heal"]
-  }
 ]
