@@ -81,6 +81,15 @@ cat VERSION
 the patch file from `scripts/fork-patches/patches/` and remove the branch entry
 from `~/.zshrc`.
 
+**Active fork patches** (idempotent — safe to re-apply any time):
+
+| Patch | What it fixes | Retire when |
+| ----- | ------------- | ----------- |
+| `gstack-1802-staging-guard` | Prevents gbrain autopilot SIGTERM from poisoning `import-checkpoint.json` | upstream `garrytan/gstack#1827` merges |
+| `gstack-probe-timeout-30s` | Raises `PROBE_TIMEOUT_MS` from 5 s → 30 s (env-overridable via `GSTACK_PROBE_TIMEOUT_MS`); Supabase postgres cold-connect takes 20-25 s so 5 s causes false `broken-config` verdicts from `gstack-gbrain-detect` | upstream ships configurable probe timeout |
+
+If `gstack-gbrain-detect` returns `gbrain_local_status: "broken-config"` after a fresh install or upgrade, run `fork-heal` first before diagnosing further — the probe timeout patch may have been reverted.
+
 **zshrc guard (auto-heal on every shell):**
 ```zsh
 _ORAMA_FORK_HEAL="$OPENCLAW_ROOT/orama-system/scripts/fork-patches/apply-fork-patches.sh"
