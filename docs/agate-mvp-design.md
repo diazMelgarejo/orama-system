@@ -371,28 +371,24 @@ be conservative in what you require, liberal in what you accept.
 
 ## Relationship to Perpetua-Tools and Orama-System
 
+Perpetua-Tools is the **source of truth** for hardware routing logic.
+Orama-system's `hardware-affinity-gate` skill imports from Perpetua-Tools
+one-way. When `agate` publishes as a standalone package, both repos will
+import from `agate` instead of self-hosting the rules.
+
 ```
-perpetua-core/               (Python primitives)
-└── perpetua/core/policy.py  (imports agate.schema)
+perpetua-core/               (Python primitives — source of truth)
+└── perpetua/core/policy.py  (owns HardwarePolicyResolver + AffinityPolicy)
 
 oramasys/                    (orchestration)
-└── orama/graph/nodes.py     (imports perpetua.core.policy)
+└── bin/orama-system/skills/hardware-affinity-gate/SKILL.md
+    imports from perpetua.core.policy
 
 agate/                       (the spec — framework-agnostic)
 ├── SPEC.md
 ├── schema.json
 └── validate.py
 ```
-
-Perpetua-Tools and orama-system are **reference implementations** of the agate
-spec. When the spec stabilizes, they import from `agate` instead of
-self-hosting the rules.
-
-This is the same relationship as:
-- **BSD sockets** (spec) → **Python `socket`** (reference implementation)
-- **HTTP** (spec) → **FastAPI / Flask** (implementations)
-
-agate is the spec. PT and orama are the first implementations.
 
 ---
 
