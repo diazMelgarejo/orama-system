@@ -53,19 +53,30 @@ Exit criteria:
 **Shipped:** \`oramasys/perpetua-core\` commit \`2f717f5\` — async \`GossipBus\` (aiosqlite), all 6 \`graph/plugins/\` implemented, 32 tests passing (Python 3.11+).
 See \`15-phase1-as-built.md\` for full module table and OQ resolutions.
 
-## Phase 2 — Engine & Safety Integration (\`perpetua-core/graph/\`) — PARTIALLY DONE
+## Phase 2 — Engine & Safety Integration (`perpetua-core/graph/`) — ✅ DONE (2026-05-17, RC-1)
 
-**Done (shipped in 2f717f5):**
-- \`GraphPlugin\` protocol: all 6 plugins in \`graph/plugins/\`
-- Conditional edges (callable in \`add_edge\`)
-- HITL interrupts (duck-typed \`Interrupt\` exception)
+**Done (shipped in `2f717f5` + RC-1 `56f2a6d`):**
+- `GraphPlugin` protocol: all 6 plugins in `graph/plugins/`
+- Conditional edges (callable in `add_edge`)
+- HITL interrupts (duck-typed `Interrupt` exception)
 - Streaming (plugin)
 - Subgraphs (plugin)
-- \`@tool\` decorator (plugin)
+- `@tool` decorator (plugin)
+- `max_steps` safety guard in `ainvoke` ✅ (OQ12 resolved, RC-1)
+- `perpetua_core/message.py` typed Message wrapper ✅ (OQ17 resolved, RC-1)
+- `set_entry()` + `compile()` engine methods ✅ (RC-1)
+- Salvaged plugins: `tool_node`, `routing`, `validator`, `interrupt_guard`, `parallel` ✅ (RC-1)
+- Discovery layer verbatim port from v1 ✅ (RC-1, Tasks 13–14)
+- Hypothesis property tests for engine invariants ✅ (RC-1, Task 15)
 
-**Still needed (Phase 2 next work):**
-- \`max_steps\` safety guard in \`ainvoke\` (OQ12 — prevents infinite loops)
+**Not yet done (deferred to Phase 3 setup):**
 - Sentinel Node for SWARM misalignment monitoring
+
+Phase 2 is effectively complete. Branch `feat/salvage-plugins-rc1` at
+`oramasys/perpetua-core` HEAD `56f2a6d` — local-only pending Mac+Win hardware review.
+See [`15-phase1-as-built.md § Salvage Translation RC-1`](15-phase1-as-built.md) for the
+full as-built record. Phase 3 is unblocked once the hardware review gate clears.
+
 - \`perpetua_core/message.py\` typed Message wrapper (OQ17 — before Phase 3 LLMClient wiring)
 
 ## Phase 3 — Orchestration & API Layer (\`oramasys/\`) ← NEXT
