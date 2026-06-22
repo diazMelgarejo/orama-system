@@ -14,6 +14,7 @@ allowed-tools: bash, file-operations
 ---
 
 ## The One Rule
+>
 > Use the simplest tool that works. Complexity is a cost, not a feature.
 
 ---
@@ -33,7 +34,7 @@ lint_strict(decision, task, env)  # raises LintError on LINT-001–005
 ## Method Priority (always top-to-bottom, stop at first eligible)
 
 | Rank | Method | Eligible When | Complexity |
-|------|--------|---------------|-----------|
+| ------ | -------- | --------------- | ----------- |
 | 1 | `direct_form_input` | `field_accessible == True`, content < 10k | ★☆☆☆☆ |
 | 2 | `direct_typing` | `editor_visible == True`, content < 5k | ★★☆☆☆ |
 | 3 | `clipboard_paste` | `paste_supported == True` | ★★☆☆☆ |
@@ -44,7 +45,7 @@ lint_strict(decision, task, env)  # raises LintError on LINT-001–005
 
 ## Automation Gate
 
-```
+```text
 OPEN (any one true):   frequency ≥ 5 · conditional_logic · transformation · external_integration
 CLOSED (any one true): one_time + static · simpler_method_available · setup_time > run_time
 ```
@@ -55,7 +56,7 @@ When gate is CLOSED and ranks 1–4 all fail → notify user. Do NOT script.
 
 ## Verification (mandatory)
 
-```
+```text
 execute → visual_ok? ──no──→ refresh() → verify_programmatically(signature)
                                               ↓
                                     found? → ✅ complete
@@ -63,6 +64,28 @@ execute → visual_ok? ──no──→ refresh() → verify_programmatically(s
 ```
 
 **Never trust visual confirmation alone.**
+
+## Target Verification (pre-insert) — Mandatory
+
+Before inserting content **anywhere**, verify the *destination*, not just the method:
+
+1. **An explicit user-given target is authoritative.** If the user named a path / dir /
+   file (e.g. `.agent/memory`), write to exactly that — never silently "correct" it to a
+   tidier guess. Mismatch between your instinct and the instruction → STOP and ask (AFRP
+   Intent-Verification trigger 3).
+2. **Read the area's conventions first.** If the destination has an `AGENTS.md` / `_index` /
+   README, read it before writing — it may dictate a rendered-vs-hand-edited rule, a tool
+   (`learn.py`), or a different file entirely.
+3. **Confirm you are current.** On a repo target, verify you are not on a stale branch
+   (compare HEAD tree to origin) so you do not write into a directory the canonical tree has
+   already migrated away from.
+
+> **Reference DO-NOT example (2026-06-22).** Asked to write memory to `.agent/memory`, the
+> agent inserted into `.agents/memory` (a guessed, tidier-looking name) on a stale branch,
+> never reading `.agent/AGENTS.md` — which defined `.agent/` as the canonical brain and
+> required `learn.py` (rendered `LESSONS.md`, never hand-edited). Result: a wrong commit in a
+> dead directory. Root cause = skipped Target Verification + [[afrp]] Intent-Verification
+> trigger 3. Full write-up: orama [`docs/LESSONS.md` §2026-06-22](../../../docs/LESSONS.md).
 
 ## Markdown Write Rule
 
@@ -73,6 +96,7 @@ When the content is markdown:
 - **Paths: relative in-repo links + GitHub URLs only — NEVER absolute workstation paths.** A literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree doxes the owner and fails CI (`scripts/review/repo_hygiene.py`). For cross-repo references use a relative path (`../<repo>/…`) or a `https://github.com/diazMelgarejo/<repo>/blob/<branch>/…` URL; for runtime paths use `$OPENCLAW_ROOT`/`$REPO_ROOT`/`~`. Same rule as the git-hygiene "no workstation paths" check.
 - If a markdown file moves or gets renamed, preserve the redirect trail with a canonical-path note or an updated index link before commit.
 - Warn and ask the user before adding a new markdown file over 200 lines or growing an existing markdown file over 500 lines; suggest moving detail to `references/`, `docs/wiki/`, or a sub-skill.
+- Format all markdown tables with spaces inside the pipe characters to comply with MD060 table-column-style (compact). Delimiter rows must use `| ----- | --------- |` instead of `|-------|-----------|` to avoid lint warnings. Remove one ("-") and add one space (" ") on each side of the pipe.
 - Review the diff for stale anchors and broken relative links before the final write.
 
 ---
@@ -80,7 +104,7 @@ When the content is markdown:
 ## Lint Rules (pre-execution guard)
 
 | Rule | What it catches |
-|------|----------------|
+| ------ | ---------------- |
 | LINT-001 | Scripting chosen while simpler rank eligible |
 | LINT-002 | `verification_required == False` — hard block |
 | LINT-003 | Complexity bias (chosen rank > min eligible) |
@@ -88,11 +112,64 @@ When the content is markdown:
 | LINT-005 | No fallback chain defined (warning) |
 | LINT-006 | Absolute workstation path in tracked content (`/Users/<name>/…` or `…/claude/OpenClaw`) — use relative/GitHub link or `$REPO_ROOT` |
 | LINT-007 | **UTF-8 mojibake** — a multibyte lead char (U+00C2–U+00EF) followed by a continuation byte (U+0080–U+00BF) or a cp1252 high-punctuation codepoint. Caused by UTF-8 bytes read as Windows-1252/Latin-1 then re-saved (e.g. an em-dash U+2014 becoming `a-circumflex+euro+quote`); most often a tool reading/writing without explicit `encoding="utf-8"` on a cp1252-default platform (Windows). **Fix:** repair the bytes (per-char cp1252→latin-1 re-encode → decode UTF-8); always pass `encoding="utf-8"` to `open()`. **When documenting mojibake, describe it by codepoint — never paste a literal example, or you trip this rule.** |
+| LINT-008 | **Unapproved `Co-authored-by:` co-author** — a `Co-authored-by:` trailer whose email domain is not in `WELL_KNOWN_COAUTHOR_DOMAIN_SUFFIXES` AND whose name contains no substring from `WELL_KNOWN_COAUTHOR_NAME_MARKERS` in `scripts/git/check_commit_message.sh`. **Fix:** add the agent's domain + name to BOTH arrays in that file (single source of truth in orama-system), verify with a `check_commit_message.sh` smoke test, then sync to PT via `sync-attribution-guard-scripts.sh`. |
 
 > LINT-006 and LINT-007 are enforced by `scripts/review/repo_hygiene.py`
 > (`scan_personal_paths` / `scan_openclaw_workstation_layout`, `scan_mojibake`),
 > which the **pre-commit hook and CI both run** — single source of truth, zero
 > fragmentation. Root cause + repair recipe: `docs/LESSONS.md` 2026-06-10.
+>
+> Relocating a repo tree out of iCloud and re-portablizing its paths afterward: see [[icloud-escape-move]].
+>
+> LINT-008 is enforced by `scripts/git/check_commit_message.sh` (pre-commit hook +
+> `audit_attribution.sh` pre-push). **Single source of truth in orama-system —
+> never hand-edit the downstream copy in PT or AlphaClaw.** Sync via
+> `sync-attribution-guard-scripts.sh <target>`.
+
+### LINT-008 — Co-Author Attribution Policy
+
+The canonical allowlist lives in `scripts/git/check_commit_message.sh` (orama-system
+repo root). Two arrays control approval:
+
+| Array | Purpose |
+| ----- | ------- |
+| `WELL_KNOWN_COAUTHOR_DOMAIN_SUFFIXES` | Email domain suffix → always allowed |
+| `WELL_KNOWN_COAUTHOR_NAME_MARKERS` | Substring in name or email → always allowed |
+
+#### Adding a new AI contributor
+
+1. Edit `scripts/git/check_commit_message.sh` (orama-system single source of truth —
+   never the copy in PT or AlphaClaw).
+2. Add the email domain to `WELL_KNOWN_COAUTHOR_DOMAIN_SUFFIXES` AND the agent
+   name substring to `WELL_KNOWN_COAUTHOR_NAME_MARKERS` (belt + suspenders).
+3. Smoke-test:
+   ```bash
+   tmp=$(mktemp)
+   printf 'test\n\nCo-authored-by: Agent Name <agent@vendor.example>\n' > "$tmp"
+   bash scripts/git/check_commit_message.sh "$tmp" && echo PASS
+   rm "$tmp"
+   ```
+4. Sync to downstream repos:
+   ```bash
+   bash scripts/git/sync-attribution-guard-scripts.sh "$PT_PATH"
+   ```
+5. Commit message convention:
+   `chore(attribution): add <AgentName> (vendor.example) to co-author allowlist`
+
+#### Current approved AI contributors
+
+| Agent | Email | Added |
+| ----- | ----- | ----- |
+| Claude (Anthropic) | `noreply@anthropic.com` | founding |
+| Codex (OpenAI) | `codex@openai.com` | founding |
+| CursorAgent | `cursoragent@cursor.com` | 2026-05-xx |
+| Gemini / Google agents | `*@google.com`, `*@google.dev` | founding |
+| GitHub Copilot | `*@github.com` | founding |
+| Hermes Agent (NousResearch) | `hermes@nousresearch.com` | 2026-06-21 |
+
+Hermes is the orama-system cross-harness operator shell for Windows PT workflows.
+Its commits are produced by the `hermes-harness` skill and are indistinguishable
+from authorized agent work — treating them as `bad_coauthor` is a false positive.
 
 ### IMPERATIVE — fresh Claude install: install the write-time path guard
 
@@ -123,7 +200,7 @@ machine; the repo's `repo_hygiene.py` is the portable committed backstop.
 
 ## Package Contents
 
-```
+```text
 bin/orama-system/cidf/
 ├── SKILL.md                          ← this file (sub-skill)
 ├── FRAMEWORK.md                      ← canonical v1.2 spec
@@ -144,7 +221,7 @@ bin/orama-system/cidf/
 ## Version Alignment (all must match)
 
 | File | Must say |
-|------|---------|
+| ------ | --------- |
 | This SKILL.md `version:` | `1.2.0` |
 | `cidf/FRAMEWORK.md` header | `Version: 1.2` |
 | `cidf/core/content_insertion_policy.json` → `framework_version` | `"1.2"` |

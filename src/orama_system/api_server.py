@@ -8,7 +8,7 @@ POST /oramasys on port 8001
 This is a stateless execution endpoint. No Redis dependency.
 Durable state is owned by the Perpetua-Tools orchestrator (Repo #1).
 
-Version: 0.9.9.9 | License: Apache 2.0
+Version: 1.1.0.0 | License: Apache 2.0
 """
 from __future__ import annotations
 
@@ -220,7 +220,7 @@ CODE_MODEL = os.getenv(
 try:
     __version__ = pkg_version("orama-system")
 except Exception:
-    __version__ = "0.9.9.9"
+    __version__ = "1.1.0.0"
 
 
 def _resolve_perpetua_root_env() -> str:
@@ -528,7 +528,7 @@ def _load_pt_runtime_state() -> dict[str, Any] | None:
 class OramasysRequest(BaseModel):
     """
     POST /oramasys request body.
-    model_hint selects execution mode (ADR-001, v0.9.9.9).
+    model_hint selects execution mode (ADR-001, v1.1.0.0).
     v2 shape: session_id added for correlation across the perpetua-core/oramasys stack.
     """
     model_config = ConfigDict(protected_namespaces=())

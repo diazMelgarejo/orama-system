@@ -8,7 +8,7 @@
 **Author:** cyre
 **Status:** Approved — proceeding to implementation plan
 
-> This spec was written FROM a worktree (`~/Documents/oramasys/worktrees/worktree-doctrine`),
+> This spec was written FROM a worktree (`~/code/oramasys/worktrees/worktree-doctrine`),
 > dogfooding the very workflow it describes. Eight real friction datums were captured in
 > `.experience-log/dogfood-notes.md` and resolved into specific defenses below.
 
@@ -61,7 +61,7 @@ Will this agent write files?
 ### Canonical Location
 
 ```
-~/Documents/oramasys/worktrees/<slug>/
+~/code/oramasys/worktrees/<slug>/
 ```
 
 Where `<slug>` = `<yyyy-mm-dd>-<brief-purpose>` (e.g. `2026-05-24-worktree-doctrine`).
@@ -90,7 +90,7 @@ Accepts: `<repo-path> <branch> <slug> [gbrain-source-id]`
 
 Steps (idempotent — safe to re-run):
 1. Pre-flight: check no stale `.git/*.lock`, no orphan refs with spaces
-2. `git worktree add ~/Documents/oramasys/worktrees/<slug> -b <branch>` (or attach if exists)
+2. `git worktree add ~/code/oramasys/worktrees/<slug> -b <branch>` (or attach if exists)
 3. Write `.gbrain-source` from argument or copy from canonical
 4. Write `.gitignore` lines: `*\ 2/`, `*\ 2.*`, `*\ 3/`, `*\ 3.*` (macOS dedup junk)
 5. Print assigned port offset and ENV_OFFSET value
@@ -114,7 +114,7 @@ worktree-bootstrap.sh <repo> <branch> <slug> [gbrain-source]
       └─ Port offset printed
       │
       ▼
-Agent works in ~/Documents/oramasys/worktrees/<slug>/
+Agent works in ~/code/oramasys/worktrees/<slug>/
       │
       ├─ Writes files, runs tests
       ├─ git add / git commit on isolated branch
@@ -219,7 +219,7 @@ Five verification approaches (in order of cost):
 
 | OQ | Resolution |
 |----|------------|
-| OQ1 — worktree location | `~/Documents/oramasys/worktrees/<slug>/` — external hub, not in-repo |
+| OQ1 — worktree location | `~/code/oramasys/worktrees/<slug>/` — external hub, not in-repo |
 | OQ2 — port allocation | Static index×100 offset; written to `.worktree-env` by bootstrap |
 | OQ3 — GPU serialization | PT dispatch queue is the chokepoint; no separate filesystem lock |
 | OQ4 — CRG concurrency | Worktrees query canonical `graph.db` via `repo_root=`; no parallel rebuilds |

@@ -1,20 +1,27 @@
+
+[tool.hatch.version]
+path = "src/orama_system/_version.py"
 [build-system]
 requires = ["hatchling>=1.26.0"]
 build-backend = "hatchling.build"
 
 [project]
 name = "orama-system"
-version = "0.9.9.9"
+dynamic = ["version"]
 description = "Orama multi-agent reasoning and orchestration system"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.109.0",
     "httpx>=0.26.0",
+    "psutil>=5.9.0",
     "python-dotenv>=1.2.2",
     "slowapi>=0.1.9,<0.2",
-    "starlette>=0.49.1",
+    "starlette>=1.3.1",
     "uvicorn>=0.27.0",
 ]
+
+[project.scripts]
+oramaclaw = "oramaclaw.cli:main"
 
 [project.optional-dependencies]
 test = [
@@ -53,7 +60,7 @@ include = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["bin", "src/orama_system", "src/utils"]
+packages = ["bin", "src/orama_system", "src/oramaclaw", "src/utils"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "docs" = "docs"

@@ -74,7 +74,7 @@ flowchart LR
 Full tool matrix: [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md).
 
 | Tool | When |
-|------|------|
+| ------ | ------ |
 | `list_graph_stats_tool` | Stale / empty graph check |
 | `detect_changes_tool` | Start of any diff review |
 | `semantic_search_nodes_tool` | Unknown symbol or entry point |
@@ -104,7 +104,7 @@ list_graph_stats_tool(repo_root=<path>)
 ```
 
 | Result | Action |
-|--------|--------|
+| -------- | -------- |
 | `nodes > 0`, `embeddings_count > 0` | Graph is healthy — skip to Phase A |
 | `nodes > 0`, `embeddings_count = 0` | Embeddings missing → run Step 2 only |
 | `nodes = 0` | Never built or wiped → run Steps 1 + 2 |
@@ -121,6 +121,7 @@ build_or_update_graph_tool(
 ```
 
 Expected output per repo (ballpark):
+
 - **orama-system**: ~160 files, ~1 461 nodes, ~10 151 edges, 12 communities
 - **AlphaClaw**: ~464 files, ~3 730 nodes, ~43 638 edges, 14 communities
 - **Perpetua-Tools**: ~103 files, ~1 151 nodes, ~8 099 edges, 12 communities
@@ -171,6 +172,7 @@ bit us live (2026-06-13):
    `uvx code-review-graph serve` of a session downloads tree-sitter-language-pack
    (~74 packages, ~31 MiB) and can blow past the MCP handshake window, so the harness
    marks it disconnected. Pre-warm the cache once, then reconnect:
+
    ```bash
    uvx code-review-graph --help    # one-time download; warms the uvx cache
    # then in Claude Code:  /mcp  → reconnect code-review-graph  (warm = connects fast)
@@ -180,6 +182,7 @@ bit us live (2026-06-13):
    `uvx code-review-graph embed` defaults to `--provider local` (sentence-transformers,
    not installed → hard error). You MUST pass the provider for the bge-m3 vector space.
    Full CLI refresh after a big change (mirrors the MCP build+embed path):
+
    ```bash
    export CRG_OPENAI_API_KEY=ollama CRG_OPENAI_BASE_URL=http://localhost:11434/v1 \
           CRG_OPENAI_MODEL=bge-m3 CRG_OPENAI_DIMENSION=1024 CRG_ACCEPT_CLOUD_EGRESS=1
@@ -188,6 +191,7 @@ bit us live (2026-06-13):
    uvx code-review-graph postprocess                             # flows / communities / FTS
    uvx code-review-graph status                                  # confirm nodes + embeddings
    ```
+
    `embed_graph_tool(provider="openai")` already does this over MCP — the `--provider`
    flag is only needed on the CLI path, where `local` is the unfortunate default.
 
@@ -280,7 +284,7 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 ## Profiles (drop-ins)
 
 | Profile | Use |
-|---------|-----|
+| --------- | ----- |
 | [`profiles/CLAUDE.coding.md`](profiles/CLAUDE.coding.md) | Review, debug, refactor tone |
 | [`profiles/CLAUDE.agents.md`](profiles/CLAUDE.agents.md) | Multi-agent pipelines |
 | [`profiles/J-drona23-v5/`](profiles/J-drona23-v5/) | Default agentic coding (builder + workflow rules) |
@@ -290,7 +294,7 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 ## References
 
 | Doc | Content |
-|-----|---------|
+| ----- | --------- |
 | [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md) | Full CRG MCP matrix + sequences |
 | [`references/output-format.md`](references/output-format.md) | Confidence rubric + report template |
 | [`references/review-lenses-pr.md`](references/review-lenses-pr.md) | Five PR lenses + prompts |

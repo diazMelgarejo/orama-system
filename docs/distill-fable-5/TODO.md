@@ -14,7 +14,8 @@
 - [x] Call existing `verify_before_done.py` (`--no-interact`) + `capture_lesson.py` (`--review`) via their current CLI; **fail closed** on non-zero.
 - [x] Tests: `tests/test_distill_session.py` already exists with 7 tests covering all acceptance criteria (RED until distill_session.py shipped).
 - [x] Harmonize `docs/distill-fable-5/implementation-plan.md`: frugal emulation principle, 13-tool catalog grouped (Group A v1 / Group B v2 / 9 deferred), 3 success metrics, corrected MultiLLMRouter framing + Grok model IDs, ADR cross-links.
-- [ ] **[USER ACTION]** Run `pytest tests/test_distill_session.py -v` to verify acceptance (tests go GREEN → v1 DONE).
+- [x] **[USER ACTION]** Run `pytest tests/test_distill_session.py -v` to verify acceptance (tests go GREEN → v1 DONE).
+      → Verified 2026-06-14: `7 passed in 0.28s`. **V1 COMPLETE.** Next motion is the v2 gate (ADR-030) + FableExportParser (needs a real Fable 5 export).
 
 ## V2 — Backlog (ADR-gated; kickoff is IMMEDIATELY available)
 
@@ -29,8 +30,13 @@
 - [ ] `Perpetua-Tools/config/{models,routing,devices}.yml`: add Fable 5 + fallback chain (Oramasys → LM Studio Win → Ollama → LM Studio Mac) **when providers are live**.
 - [ ] `model_registry.py` dynamic thresholding; `cost_guard.py` Fable budget + escalation rules, **default-deny + fail-closed**, keys via Keychain/.env.
 - [ ] Eval: minimal output-diff harness on a fixed prompt set first; DeepEval only if needed.
-- [ ] `.github/workflows/ci.yml`: SKILL.md/YAML structural validation (pre-commit) — after v1 lands.
-- [ ] OSS Group B emulation (ADR each): [1] Langfuse traces (additive to `capture_lesson.py`/`LESSONS.md`, methodology only), [4] ClawRouter scoring, [3] Manifest cost-tiering, [2] Helicone proxy-caching.
+- [x] `.github/workflows/ci.yml`: docs/v2 pointer sync gate wired to both repos' CI (orama: new `docs-pointer-sync` job checks out PT sibling + runs `--check`; PT: `git-hygiene` job runs check via `ORAMA_ROOT` env after existing orama checkout). SKILL.md structural validation was already present in both CIs. 2026-06-17.
+- [x] OSS Group B ADRs drafted (2026-06-17):
+  - `docs/v2/35` D18 — Langfuse trace-tree → `trace_session.py` JSONL annotation, orama-only
+  - `docs/v2/36` D19 — ClawRouter 5-dim scorer → `score_candidates()` in `model_registry.py`, PT-only
+  - `docs/v2/37` D20 — Manifest cost-tiering → `CostGuard.gate(spec)` in `supervisor.py:_run_worker`, PT-only
+  - `docs/v2/38` D21 — Helicone proxy-caching → `_LRUCache` inside `MultiLLMRouter`, PT-only
+  All four Status: Proposed. Approve before any Group B implementation starts.
 - [ ] OSS Group deferred (ADR or cut before any build): [5] NadirRouter, [7] Claude Artifact Unpacker, [9] DeepEval, [10] Agent-Distillation, [13] Cozeloop.
-- [ ] **[PROBE 2026-06-14 05:00]** Verify Win coder (`$LM_STUDIO_WIN_ENDPOINTS`) is online → update delegation plan; see `$OPENCLAW_ROOT/agy-gemini.md` for AgentRouter config.
-- [ ] **ADR-030** (next free): `MultiLLMRouter` caching/batching decorator — write and approve before any v2 build starts.
+- [x] **[PROBE 2026-06-17]** Win coder confirmed ONLINE at `192.168.254.102:1234` (IP changed from .101). Models: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`, `gemma-4-26b-a4b-it`, `qwen3.5-9b-mlx`. Action needed: set `LM_STUDIO_WIN_ENDPOINTS=http://192.168.254.102:1234` in env/config and update `config/devices.yml` in PT.
+- [x] **docs/v2/30** (`MultiLLMRouter` caching/batching decorator) — drafted 2026-06-15 at canonical home `docs/v2/30-multi-llm-router-caching-batching-decorator.md` (locks decision **D17**). `Perpetua-Tools/docs/adr/ADR-002-…` is a generated pointer kept in lockstep via `scripts/git/sync-docs-v2-pointers.sh` (`--check` wired into both repos' pre-commit). Status: Proposed. **Approve before any v2 build starts.**

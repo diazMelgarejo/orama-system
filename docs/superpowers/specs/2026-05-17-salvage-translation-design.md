@@ -71,7 +71,7 @@ Per plugin, four roles work in sequence (with parallelization across plugins):
 | Stage | Tool | MCP entry point | Output |
 |---|---|---|---|
 | **Read + translate-table** | Gemini Pro | `mcp__gemini-cli__ask-gemini` (model=pro) | `salvage/<plugin>/translation-table.md` — three columns: wrong-repo line/concept, canonical idiom translation, target plugin shape |
-| **Write plugin + tests** | Codex | `mcp__ai-cli__run` (model=`gpt-5.2-codex`) | `perpetua_core/graph/plugins/<plugin>.py` + `tests/test_<plugin>.py` |
+| **Write plugin + tests** | Codex | `mcp__ai-cli__run` (model=`gpt-5.5`) | `perpetua_core/graph/plugins/<plugin>.py` + `tests/test_<plugin>.py` |
 | **Review against canonical** | Claude Sonnet 4.6 | `mcp__ai-cli__run` (model=`sonnet`) | Pass/fail verdict + diff comments referencing canonical's 32 tests |
 | **Orchestrate + decide** | Claude Opus 4.7 (this session) | — | C-feature decisions (mapping/merge/state fields); integration; commit |
 
@@ -89,7 +89,7 @@ When two plugins share translation idioms (e.g., both use `state.scratchpad` dic
 
 ### Branch model
 
-- **Working branch:** `feat/salvage-plugins-rc1` in `~/Documents/oramasys/perpetua-core` (local only — **no push to `oramasys/*` without AFRP gate**)
+- **Working branch:** `feat/salvage-plugins-rc1` in `~/code/oramasys/perpetua-core` (local only — **no push to `oramasys/*` without AFRP gate**)
 - **Branch source of truth:** this spec; branch name is **pinned** so any agent that picks up work pushes to the same branch
 - **Atomic commits:** one logical port per commit. Conventional Commits format: `feat(plugin): port tool_node from wrong-repo` / `feat(engine): add set_entry + compile methods`
 - **Revert-clean:** any single commit can be `git revert <sha>`-ed without affecting other ports
@@ -310,7 +310,7 @@ The salvage port is **DONE** when:
 
 - Selection spec: [`2026-05-14-salvage-plugins-design.md`](2026-05-14-salvage-plugins-design.md) — *what* to port, this spec covers *how*.
 - Wrong-repo post-mortem: [`docs/wiki/10-wrong-repo-build-what-not-to-do.md`](../../wiki/10-wrong-repo-build-what-not-to-do.md)
-- Canonical repo: `~/Documents/oramasys/perpetua-core` (commit `2f717f5`)
+- Canonical repo: `~/code/oramasys/perpetua-core` (commit `2f717f5`)
 - Wrong-repo: `<workspace>/perpetua-core` (commit `9cb153a`, remote `diazMelgarejo/perpetua-core`)
 - TDD discipline: `docs/TDD.md` + `superpowers:test-driven-development` skill
 - AFRP gate: `bin/orama-system/afrp/SKILL.md`

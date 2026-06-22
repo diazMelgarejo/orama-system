@@ -8,6 +8,8 @@
 
 ## 1. Authentication and LAN-bind hardening
 
+**Threat trace:** [`PT-01`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-04`](31-security-harness-excellence-plan.md#3-threat-model).
+
 ### Problem
 
 A local developer default can become a LAN exposure when the service binds beyond loopback. The safest default is fail-closed control-plane auth, with explicit and narrow insecure-dev affordances.
@@ -28,6 +30,8 @@ A local developer default can become a LAN exposure when the service binds beyon
 
 ## 2. Cookie/session hardening
 
+**Threat trace:** [`PT-01`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-04`](31-security-harness-excellence-plan.md#3-threat-model).
+
 ### Problem
 
 Bearer-in-cookie support is convenient for a browser portal but widens CSRF/session-confusion risk if cookie issuance is scattered or attributes are not tested.
@@ -42,6 +46,8 @@ Bearer-in-cookie support is convenient for a browser portal but widens CSRF/sess
 ---
 
 ## 3. Rate, token, and concurrency budgets
+
+**Threat trace:** [`PT-05`](31-security-harness-excellence-plan.md#3-threat-model).
 
 ### Problem
 
@@ -65,6 +71,8 @@ Return structured 429/budget errors with the exhausted dimension.
 
 ## 4. Tool-executor mediator
 
+**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-04`](31-security-harness-excellence-plan.md#3-threat-model).
+
 ### Problem
 
 Tool-call syntax, model refusals, and prompt rules are not security boundaries. The boundary must sit between the model and filesystem/network/process capabilities.
@@ -87,6 +95,8 @@ Deny by default. Log every decision.
 
 ## 5. Sandboxing and egress ladder
 
+**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-04`](31-security-harness-excellence-plan.md#3-threat-model).
+
 Do not block early security wins on a microVM migration. Implement an isolation ladder:
 
 | Level | Control | Purpose |
@@ -104,6 +114,8 @@ Docker alone is not a complete isolation story because it shares the host kernel
 
 ## 6. Prompt-injection scanner
 
+**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-03`](31-security-harness-excellence-plan.md#3-threat-model).
+
 ### References
 
 gstack is a useful pattern source for layered defenses: local classifier, transcript check, canary leak detection, and combiner logic are described in its repo/design docs: https://github.com/garrytan/gstack and https://github.com/garrytan/gstack/blob/main/docs/designs/ML_PROMPT_INJECTION_KILLER.md. TestSavantAI describes prompt-injection classifier models on Hugging Face: https://huggingface.co/testsavantai/prompt-injection-defender-large-v0.
@@ -116,6 +128,23 @@ gstack is a useful pattern source for layered defenses: local classifier, transc
 - Add canary tokens to detect leakage into tool args, URLs, files, and responses.
 - Require bypass fixtures and false-positive fixtures before blocking in production.
 
+### MCP-specific addition: tool-definition pinning
+
+> Additive reference: [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md)
+> §3 for the OWASP T39–T47 namespace and §5 for the MCP runtime controls
+> (Akram Sheriff, OWASP MAS Guide MCP worked example).
+
+- Hash each MCP tool definition (SHA-256) on first contact; cache as the
+  baseline.
+- Diff every subsequent `tools/list` response against the cached baseline;
+  block on mismatch rather than silently accepting a changed tool
+  description ("rug-pull"/tool-poisoning pattern).
+- Reference implementations to evaluate: Invariant Labs' `mcp-scan`, the
+  MCPDome gateway.
+- Pairs with this section's existing canary-token approach: tool-definition
+  pinning catches a changed *contract*, the canary catches *leakage*
+  through an unchanged one.
+
 ---
 
 ## 7. Memory ACL and provenance
@@ -123,6 +152,11 @@ gstack is a useful pattern source for layered defenses: local classifier, transc
 ### Problem
 
 Memory risk is not only who can read/write. It is also why a fact became retrievable, what evidence supports it, and under what task scope it may influence an agent. OWASP Agentic Applications identifies memory and context poisoning as a top agentic risk: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/. OWASP LLM 2025 includes vector and embedding weaknesses as LLM08: https://genai.owasp.org/llm-top-10/.
+**Threat trace:** [`PT-03`](31-security-harness-excellence-plan.md#3-threat-model).
+
+### Problem
+
+Memory risk is not only who can read/write. It is also why a fact became retrievable, what evidence supports it, and under what task scope it may influence an agent. OWASP Agentic Applications identifies memory and context poisoning as a top agentic risk: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/. OWASP LLM 2025 includes vector and embedding weaknesses as LLM08: https://genai.owasp.org/llm-top-10/. See also [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md) §3 for the specific OWASP T1 (Memory Poisoning) and T18 (RAG Input Manipulation) threat IDs, and `20-rag-and-memory-design.md` for this repo's current (partial) implementation status against the fields below.
 
 ### Required memory fields
 
@@ -149,6 +183,8 @@ Memory risk is not only who can read/write. It is also why a fact became retriev
 
 ## 8. Supply chain
 
+**Threat trace:** [`PT-06`](31-security-harness-excellence-plan.md#3-threat-model).
+
 ### Recommendation
 
 - Install from lockfiles in CI.
@@ -163,6 +199,8 @@ Do not make signing theater. Signing is useful only if verification is enforced 
 
 ## 9. Observability and replay
 
+**Threat trace:** [`PT-05`](31-security-harness-excellence-plan.md#3-threat-model), [`PT-07`](31-security-harness-excellence-plan.md#3-threat-model).
+
 ### Recommendation
 
 - Emit spans/events for `invoke_agent`, `execute_tool`, model calls, retrievals, and egress attempts.
@@ -175,6 +213,8 @@ OpenTelemetry maintains GenAI semantic conventions for AI spans/attributes: http
 ---
 
 ## 10. SWARM-style system objective audit
+
+**Threat trace:** [`PT-07`](31-security-harness-excellence-plan.md#3-threat-model).
 
 The durable insight from multi-agent risk literature is that individually plausible agents can still produce system-level drift. The local implementation should use an objective contract:
 

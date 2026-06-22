@@ -1,0 +1,37 @@
+[
+  {
+    "name": "orama-system",
+    "path": "bin/orama-system/SKILL.md",
+    "triggers": ["orama", "oramasys", "ultrathink", "systematic task"]
+  },
+  {
+    "name": "hermes-harness",
+    "path": "bin/orama-system/skills/hermes-harness/SKILL.md",
+    "triggers": ["hermes", "ecc harness", "cross-harness"]
+  },
+  {
+    "name": "mcp-orchestration",
+    "path": "bin/orama-system/skills/mcp-orchestration/SKILL.md",
+    "triggers": ["agy", "antigravity", "gemini", "codex cli", "mcp"]
+  },
+  {
+    "name": "openclaw-skills",
+    "path": "bin/orama-system/skills/openclaw-skills/SKILL.md",
+    "triggers": ["openclaw", "gateway", "agent config"]
+  },
+  {
+    "name": "oramasys-method",
+    "path": ".agents/skills/oramasys-method/SKILL.md",
+    "triggers": ["oramasys", "method", "orama-system", "ultrathink"]
+  },
+  {
+    "name": "perpetua-tools",
+    "path": ".agents/skills/perpetua-tools/SKILL.md",
+    "triggers": ["perpetua", "perpetua-tools", "orchestrator", "model selection"]
+  },
+  {
+    "name": "icloud-escape-move",
+    "path": "bin/orama-system/skills/icloud-escape-move/SKILL.md",
+    "triggers": ["icloud", "escape icloud", "move repos out of icloud", "icloud eviction", "git worktree repair", "compatibility symlink after move", "relocate git tree"]
+  }
+]

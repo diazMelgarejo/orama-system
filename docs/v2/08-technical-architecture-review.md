@@ -22,6 +22,14 @@ We will map our kernel hooks directly to MAESTRO layers to ensure no security "w
 - **Layer 6 (Security/Compliance)**: Resolved via `HardwarePolicyResolver` (P8) — hard affinity gate.
 - **Layer 7 (Ecosystem)**: Resolved via `HITL Interrupts` (4d) — mandatory human-in-the-loop for high-risk tool calls.
 
+> **Gap flagged (2026-06-18):** Layers 1 (Foundation Models), 2 (Data
+> Operations), and 4 (Deployment & Infrastructure) have no kernel-hook
+> mapping above. See [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md)
+> §2 for the full layer table, the T1–T47 OWASP threat-ID namespace, two
+> open-source MAESTRO tools, MCP-specific runtime controls, and the OWASP
+> AIVSS scoring rubric — additive reference material, not a replacement for
+> this section.
+
 ### B. Karpathy’s "Agentic Engineering" (Ref: 2-GPT-5.5)
 
 To address the "Compounding Failure" risk (March of Nines):
@@ -127,7 +135,7 @@ A special plugin that injects a `check_integrity()` call after every `N` nodes. 
 ## 7. Repository Locations (Amended 2026-05-02)
 
 The active v2 repositories are confirmed to be located at:
-\`~/Documents/oramasys/\`
+\`~/code/oramasys/\`
 
 - \`agate/\`: Hardware Policy Specification
 - \`oramasys/\`: Orchestration & API Layer

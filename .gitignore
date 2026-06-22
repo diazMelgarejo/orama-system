@@ -103,6 +103,10 @@ pnpm-debug.log*
 /recordings/
 /playwright-report/
 /test-results/
+# Distillation run artifacts — contain session transcripts + trace JSONL (may contain prompt content)
+docs/distill-fable-5/traces/
+docs/distill-fable-5/runs/
+*.jsonl
 trace.zip
 *.har
 *.webm
@@ -121,6 +125,9 @@ lib/
 # Tracked install helpers (OpenClaw .mcp.json bootstrap for CRG)
 !bin/orama-system/scripts/lib/
 !bin/orama-system/scripts/lib/**
+# codex-openclaw-agent probe lib (skill-local scripts/lib — tracked)
+!bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/lib/
+!bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/lib/**
 
 # Vite operator console (web/ subdirectory)
 node_modules/

@@ -27,7 +27,7 @@ last_updated: 2026-05-14
 Use the right tool for the right layer. Use the cheapest agent that can succeed.
 
 | Layer | Tool | Job |
-|---|---|---|
+| --- | --- | --- |
 | Main reasoning + judgment | Claude Sonnet 4.6 medium + prompt caching | Decide, edit, review, synthesize, content insertion |
 | Default coding/text agent | OpenRouter free-model stack (Nemotron → MiniMax → DeepSeek → …) | Generic worker, long-context, coding, structured output |
 | Large-context reading, when explicitly requested | `gemini-mcp-tool` | Gemini-Analyzer use-cases only, architecture mapping, visual diff, screenshot comparison, multi-file audit |
@@ -39,6 +39,13 @@ Use the right tool for the right layer. Use the cheapest agent that can succeed.
 **Two routing rules below override the legacy "Gemini = default reader" pattern.** See §2.
 
 ---
+
+## Hermes Operator Shell
+
+Use [`../hermes-harness/SKILL.md`](../hermes-harness/SKILL.md) when Hermes is
+the chat, CLI, cron, or workspace-state surface consuming canonical ECC/orama
+skills. Hermes is a harness edge; keep durable behavior in skills and keep
+OpenClaw operations on `openclaw-skills`.
 
 ## 1. MCP Fundamentals
 
@@ -110,7 +117,7 @@ See `docs/OPENROUTER_FREE_MODELS.md` for the full policy and `scripts/apply-open
 **Gemini is NOT the default reader.** Gemini has unique strengths but also access constraints (GitHub auth issues, rate limits). Reserve it for explicitly-specified "Gemini-Analyzer use-cases":
 
 | Use-case | Why Gemini |
-|----------|------------|
+| ---------- | ------------ |
 | **Visual diff / screenshot comparison** | 2M-token vision context, sandbox testing |
 | **Whole-repo architecture mapping** | Largest single-shot context window available |
 | **Multi-file stale-doc detection** | Reads entire `docs/` + `src/` in one pass |
@@ -131,6 +138,7 @@ For ANY OTHER reading task (single file, narrow audit, dependency scan), route t
 ### Rule 3 — Claude Sonnet 4.6 medium for judgment + prompt caching
 
 Reserve Claude Sonnet 4.6 (this session's main agent) for:
+
 - Final judgment, taste calls, conflict resolution
 - Reviewing worker outputs and detecting drift
 - Content insertion decisions (CIDF gate)
@@ -139,6 +147,7 @@ Reserve Claude Sonnet 4.6 (this session's main agent) for:
 **Prompt caching policy (Goal 2 from RC-1 plan):**
 
 When using Claude Sonnet 4.6 via the Anthropic SDK:
+
 - `model: claude-sonnet-4-6`
 - `thinking.effort: medium`
 - Set `cache_control` on **stable** system prompts, tool definitions, and context prefixes
@@ -176,6 +185,7 @@ Source: <https://platform.claude.com/docs/en/build-with-claude/prompt-caching>
 ### Rule 4 — Use ai-cli-mcp as the parallel worker pool
 
 Use ai-cli-mcp when:
+
 - Tasks are independent (different files, different concerns)
 - Multiple models should inspect the same repo
 - You need background agents with PID tracking
@@ -251,12 +261,24 @@ gemini auth login
 gemini --version
 ```
 
-**Non-interactive subagent dispatch (verified 2026-06-14):** `gemini -p "/goal <task>"` delegates to
-agent personas (`codebase_investigator`, `generalist`, `cli_help`). The **Antigravity** CLI
-(`agy -p "/goal <task>"`, multi-model: Gemini 3.x / Claude Sonnet+Opus 4.6 / GPT-OSS 120B; list with
-`agy models`) is the parallel-orchestrator sibling. Full command guide: `agy-gemini.md` at the workspace
-root. Dispatch lanes, model picks, and bounding (`gtimeout`, never `sleep` chains) are in
+**Non-interactive subagent dispatch (verified 2026-06-14; updated 2026-06-18):** prefer the
+**Antigravity** CLI (`agy -p "/goal <task>"`) as the successor path for general Gemini-style
+agent dispatch. `gemini -p "/goal <task>"` remains useful when Gemini CLI is explicitly
+authenticated or needed for Gemini-Analyzer use-cases. `agy` is multi-model (Gemini 3.x /
+Claude Sonnet+Opus 4.6 / GPT-OSS 120B; list with `agy models`) and should be bounded like
+any other worker: no commits, deletes, deploys, or account changes without explicit user
+confirmation. On native Windows, install with
+`irm https://antigravity.google/cli/install.ps1 | iex`. Treat AGY as ready only after `agy --print "Reply with exactly: AGY_READY"`
+emits visible stdout; exit 0 with empty stdout is not a usable worker. Full command guide:
+`agy-gemini.md` at the workspace root. Dispatch lanes,
+model picks, and bounding (`gtimeout`, never `sleep` chains) are in
 [`code-review/references/orchestration-dispatch.md`](../code-review/references/orchestration-dispatch.md).
+
+If AGY exits 0 with empty stdout, rerun once with `--log-file <path>` before
+debugging PATH or shell quoting. On Windows this can mean silent auth succeeded
+but the hosted model call failed with quota exhaustion; in that case AGY is
+installed but not dispatchable until quota resets or another authenticated
+model/account is selected. Do not loop on `agy -p` without checking the log.
 
 ### Install Codex CLI (optional, Codex worker support)
 
@@ -264,6 +286,13 @@ root. Dispatch lanes, model picks, and bounding (`gtimeout`, never `sleep` chain
 npm install -g @openai/codex
 codex login
 ```
+
+### Install Hermes Agent (operator shell support)
+
+Use [`../hermes-harness/SKILL.md`](../hermes-harness/SKILL.md) for the
+Windows-aware bring-up. Hermes consumes canonical ECC/orama skills and bounded
+partner prompts; it must not become a source of copied private state. Keep
+OpenClaw operations on `openclaw-skills`.
 
 ### Install ai-cli-mcp
 
@@ -324,11 +353,13 @@ Restart Claude Desktop.
 4. Let Claude decide
 
 Good:
+
 ```text
 Ask Gemini to identify stale architecture claims in @README.md and @docs/. Return file, claim, contradiction, confidence.
 ```
 
 Bad:
+
 ```text
 Ask Gemini to fix the repo.
 ```
@@ -336,7 +367,7 @@ Ask Gemini to fix the repo.
 ### Model selection
 
 | Model | Use |
-|---|---|
+| --- | --- |
 | Gemini Pro | architecture, whole-repo reading, security review, visual diff |
 | Gemini Flash | quick review, smaller files, routine docs |
 
@@ -389,7 +420,7 @@ claude mcp add ai-cli '{"name":"ai-cli","command":"npx","args":["-y","ai-cli-mcp
 ### Core tools
 
 | Tool | Purpose |
-|---|---|
+| --- | --- |
 | `run` | Launch a background AI CLI process |
 | `wait` | Wait for one or more PIDs |
 | `peek` | Watch short live output from a running worker |
@@ -406,7 +437,7 @@ Use ai-cli-mcp to run three workers in parallel:
    workFolder=/absolute/path/project
    prompt="Review src/backend for risky refactors. Return findings only."
 
-2. model=gpt-5.2-codex
+2. model=gpt-5.5
    workFolder=/absolute/path/project
    prompt="Write test suggestions for src/frontend. Do not edit files."
 
@@ -435,7 +466,7 @@ Do not modify files until I approve.
 ### Two roles
 
 | Role | Command | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | OpenClaw as MCP server | `openclaw mcp serve` | Claude or Codex talks to OpenClaw |
 | OpenClaw as MCP client registry | `openclaw mcp set/list/show/unset` | OpenClaw stores outbound MCP servers |
 
@@ -614,7 +645,7 @@ ENABLE_TOOL_SEARCH=auto:5 claude
 ```
 
 | Tool count | Setting |
-|---|---|
+| --- | --- |
 | < 10 tools | default usually fine |
 | Many tools | `ENABLE_TOOL_SEARCH=auto` |
 | Proxy / custom backend | configure explicitly if supported |
@@ -624,7 +655,7 @@ ENABLE_TOOL_SEARCH=auto:5 claude
 ## 10. Troubleshooting
 
 | Symptom | Likely cause | Fix |
-|---|---|---|
+| --- | --- | --- |
 | MCP server missing | Not registered or client not restarted | Run `/mcp` and `claude mcp list` |
 | Gemini tool fails | Gemini CLI not authenticated | `gemini auth login` |
 | Wrong Gemini package | Old guide used wrong package | Use `@google/gemini-cli` |
@@ -667,7 +698,7 @@ Promote to skill:
 Promotion rule:
 
 | Repetitions | Action |
-|---|---|
+| --- | --- |
 | 1 | Store in `learnings.md` |
 | 2–3 | Add checklist item |
 | 4+ | Promote into `SKILL.md` |
@@ -691,6 +722,7 @@ openclaw mcp list
 Inside Claude Code: `/mcp`
 
 Pass criteria:
+
 - `gemini-cli` appears (if installed) — used for Gemini-Analyzer use-cases only
 - `ai-cli-mcp` appears and is active
 - ollama `qwen3.5:9b-nvfp4` listed (Mac default)
@@ -728,7 +760,7 @@ Use this in `CLAUDE.md`, OpenClaw instructions, or project agent docs:
 ## 14. Decision Table
 
 | Need | Use |
-|---|---|
+| --- | --- |
 | One-time direct task | Claude Code (this session) |
 | Generic worker reading or coding | OpenRouter Nemotron / MiniMax (per fallback chain) |
 | Local-only lint, format, bash | ollama qwen3.5 (Mac) |
@@ -765,7 +797,7 @@ For judgment, use Claude Sonnet 4.6 medium with prompt caching.
 The following files are superseded by THIS canonical SKILL.md:
 
 | Legacy path | New status |
-|-------------|------------|
+| ------------- | ------------ |
 | `OpenClaw/MCP_ORCHESTRATION_SKILL.md` | Redirect stub — points here |
 | `OpenClaw/MCP_ORCHESTRATION_SKILL_v2.md` | Redirect stub — points here |
 | `OpenClaw/MCP-INSTALL-PLAN.md` | Reference companion — kept for installation procedure |

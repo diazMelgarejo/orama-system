@@ -7,7 +7,7 @@ ORAMA_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RULES_DIR="$ORAMA_ROOT/scripts/periscope/cursor-rules-templates"
 GUARD_TPL="$ORAMA_ROOT/scripts/periscope/git-guard-templates"
 GIT_SRC="$ORAMA_ROOT/scripts/git"
-PERISCOPE_REPO="${PERISCOPE_REPO:-$HOME/Documents/oramasys/tools/periscope}"
+PERISCOPE_REPO="${PERISCOPE_REPO:-$HOME/code/oramasys/tools/periscope}"
 
 GIT_FILES=(
   disable-cursor-commit-attribution.sh

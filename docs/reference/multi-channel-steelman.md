@@ -1,6 +1,6 @@
 # Multi-Channel Steelman — an orama execution pattern
 
-> Version: 0.9.9.9 · Dogfooded 2026-06-02 from the gstack#1802 fix session.
+> Version: 1.1.0.0 · Dogfooded 2026-06-02 from the gstack#1802 fix session.
 > A concrete Mode-3 recipe: how to use heterogeneous external models as a real
 > review panel instead of theater. Pairs with the 6 Directives and the 5-stage flow.
 

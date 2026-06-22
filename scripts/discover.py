@@ -7,11 +7,19 @@ Idempotent: writes nothing if state hash is unchanged.
 """
 
 from __future__ import annotations
-import argparse, asyncio, fcntl, hashlib, json, logging, os, re, shutil, socket, sys, time
+import argparse, asyncio, hashlib, json, logging, os, re, shutil, socket, sys, time
 import urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+try:
+    import fcntl  # type: ignore
+except ImportError:
+    fcntl = None  # type: ignore[assignment]
+    import msvcrt  # type: ignore
+else:
+    msvcrt = None  # type: ignore[assignment]
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 OPENCLAW_DIR        = Path.home() / ".openclaw"
@@ -375,8 +383,9 @@ def patch_openclaw_json(endpoints: dict):
         ]
     cfg.setdefault("meta", {})["lastTouchedAt"] = datetime.now(timezone.utc).isoformat()
     try:
-        with open(str(OPENCLAW_JSON), "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(cfg, indent=2))
+        tmp = OPENCLAW_JSON.with_suffix(".json.tmp~")
+        tmp.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        os.replace(tmp, OPENCLAW_JSON)
     except OSError as exc:
         logging.warning("patch_openclaw_json: cannot write %s: %s", OPENCLAW_JSON, exc)
 
@@ -485,6 +494,25 @@ def _load_tier4(profile="lan-full"):
 
 # ── File lock ─────────────────────────────────────────────────────────────────
 
+def _try_lock_file(handle) -> None:
+    if fcntl is not None:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return
+    handle.seek(0)
+    handle.write("0")
+    handle.flush()
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+
+
+def _unlock_file(handle) -> None:
+    if fcntl is not None:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+        return
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+
 class _Lock:
     def __init__(self, timeout=10.0):
         self._timeout = timeout; self._fd = None
@@ -492,17 +520,21 @@ class _Lock:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         lock_path = _lock_path()
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        self._fd = open(lock_path, "w")
         deadline = time.time() + self._timeout
         while True:
             try:
-                fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB); return self
+                self._fd = open(lock_path, "w")
+                _try_lock_file(self._fd); return self
             except BlockingIOError:
+                if self._fd:
+                    try: self._fd.close()
+                    except Exception: pass
+                    self._fd = None
                 if time.time() > deadline: raise TimeoutError("discovery lock timeout")
                 time.sleep(0.2)
     def __exit__(self, *_):
         if self._fd:
-            fcntl.flock(self._fd, fcntl.LOCK_UN); self._fd.close()
+            _unlock_file(self._fd); self._fd.close()
             try: _lock_path().unlink()
             except FileNotFoundError: pass
 
@@ -610,12 +642,13 @@ def _cmd_restore(target: str):
     repo_paths = get_repo_paths()
     pt_repo = repo_paths.get("perpetua_tools")
     mac = ep.get("mac") or {}; win = ep.get("win") or {}
-    patch_openclaw_json(ep)
-    if pt_repo:
-        patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-        patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-    write_env_lmstudio(ep, repo_paths)
-    save_discovery_state(ep, tier=99)
+    with _Lock():
+        patch_openclaw_json(ep)
+        if pt_repo:
+            patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+            patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+        write_env_lmstudio(ep, repo_paths)
+        save_discovery_state(ep, tier=99)
     RECOVERY_SOURCE_TXT.write_text("manual_restore\n")
     print(f"✅ Restored: Mac={mac.get('ip', '?')} Win={win.get('ip', '?')}")
 

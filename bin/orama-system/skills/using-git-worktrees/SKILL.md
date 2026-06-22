@@ -52,9 +52,10 @@ scripts/worktree-bootstrap.sh \
 ```
 
 Bootstrap handles automatically (no manual steps needed):
+
 - ✅ Removes stale `.git/*.lock` files
 - ✅ Warns on orphan refs with spaces
-- ✅ Creates `~/Documents/oramasys/worktrees/<slug>/`
+- ✅ Creates `~/code/oramasys/worktrees/<slug>/`
 - ✅ Writes `.gbrain-source`
 - ✅ Appends macOS dedup patterns to `.gitignore`
 - ✅ Assigns `ENV_OFFSET = worktree_index × 100`
@@ -66,7 +67,7 @@ Bootstrap handles automatically (no manual steps needed):
 ## Step 2 — Enter and Configure
 
 ```bash
-cd ~/Documents/oramasys/worktrees/<slug>
+cd ~/code/oramasys/worktrees/<slug>
 source .worktree-env    # loads ENV_OFFSET, port vars
 
 # Verify gbrain pin
@@ -86,12 +87,24 @@ python3 scripts/review/repo_hygiene.py .
 # WARNING = non-blocking; ERROR = fix before committing
 ```
 
+**If this commit includes a version bump**, run the version sync first:
+
+```bash
+# Edit src/orama_system/_version.py only, then:
+python3 scripts/sync_version.py          # propagate to all 25+ surfaces
+python3 -m pytest tests/test_version_docs.py  # verify
+# Then continue with repo_hygiene.py check above
+```
+
+See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
+See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
+
 **Why this matters especially for worktrees:** docs, plans, and bash snippets
 written from a worktree often embed the machine-local path. Those paths are
 invisible on your machine but leak developer identity and break CI when committed.
 
 | Rule enforced | What it catches | Correct form |
-|---------------|----------------|--------------|
+| --------------- | ---------------- | -------------- |
 | `scan_openclaw_workstation_layout` | hardcoded machine-local OpenClaw tree path | `$OPENCLAW_ROOT` |
 | `scan_personal_paths` | `/Users/<name>/…` absolute paths | `~`, `$REPO_ROOT`, `<workspace>` |
 | `scan_bidi_controls` | Hidden Unicode direction controls | remove |
@@ -104,11 +117,13 @@ invisible on your machine but leak developer identity and break CI when committe
 ## Step 4 — Work Rules While in a Worktree
 
 ### Inference (GPU)
+
 - **Never POST directly to LM Studio or Ollama.** Always via PT.
 - Start PT on your offset port: `PT_PORT=$PT_PORT python -m perpetua_tools.server`
 - Win LM Studio serializes heavy models automatically — no extra lock needed.
 
 ### CRG (graph.db)
+
 ```python
 # ✅ Query canonical graph — always pass repo_root
 mcp__code-review-graph__query_graph_tool(
@@ -122,7 +137,7 @@ mcp__code-review-graph__query_graph_tool(
 ### Port Map (ENV_OFFSET = N × 100, where N = worktree index)
 
 | Service | Canonical | Worktree-1 | Worktree-2 |
-|---------|-----------|------------|------------|
+| --------- | ----------- | ------------ | ------------ |
 | AlphaClaw | 3000 | 3100 | 3200 |
 | PT | 8000 | 8100 | 8200 |
 | orama-api | 8001 | 8101 | 8201 |
@@ -163,14 +178,16 @@ Invoke: superpowers:finishing-a-development-branch
 ```
 
 The skill will:
+
 1. Verify tests pass
 2. Ask: merge / PR / keep / discard
 3. On merge or discard → run `git worktree remove <path>` automatically
 
 **Manual fallback only if skill unavailable:**
+
 ```bash
 # From canonical checkout:
-git worktree remove ~/Documents/oramasys/worktrees/<slug>
+git worktree remove ~/code/oramasys/worktrees/<slug>
 git worktree list    # verify removed
 git branch -d <branch>
 ```
@@ -203,11 +220,11 @@ cat .worktree-env
 ## Pre-flight Defenses (Dogfood Datums)
 
 | Symptom | Fix |
-|---------|-----|
+| --------- | ----- |
 | `git fetch` fails: `bad object refs/heads/... 2` | `find .git/refs -name "* *"` then `git update-ref -d "refs/heads/<name>"` |
 | `git checkout` / `git stash` blocked | `find .git -name "*.lock" -delete` |
 | `.gbrain-source` missing in new worktree | `echo "<source-id>" > .gbrain-source` |
-| `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/` |
+| `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/`. **Permanent fix — move the tree out of iCloud: see [[icloud-escape-move]].** |
 | Port collision with sibling worktree | Check `.worktree-env`; ENV_OFFSET must differ per worktree |
 | `/autoplan` Step 0 fails (base branch) | `cd` to a git repo root before invoking any skill |
 

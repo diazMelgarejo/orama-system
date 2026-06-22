@@ -1,8 +1,8 @@
 # Security Policy - orama-system + Perpetua-Tools
 
 > **Canonical security posture** for the OpenClaw orchestration stack.
-> **Last updated:** 2026-06-14
-> **Source review:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../OpenClaw/v1/2026-05-23-security-markdown.md)
+> **Last updated:** 2026-06-18
+> **Source review:** `OpenClaw/v1/2026-05-23-security-markdown.md` in the private operator workspace.
 
 ---
 
@@ -13,7 +13,17 @@ This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **P
 Root security entrypoints:
 
 - orama-system: [`SECURITY.md`](SECURITY.md)
-- Perpetua-Tools: [`../perplexity-api/Perpetua-Tools/SECURITY.md`](../perplexity-api/Perpetua-Tools/SECURITY.md)
+- Perpetua-Tools: [`SECURITY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SECURITY.md)
+
+MAESTRO/OWASP GenAI v2 foundation:
+
+- [`docs/v2/31-security-harness-excellence-plan.md`](docs/v2/31-security-harness-excellence-plan.md)
+- [`docs/v2/32-agentic-security-controls.md`](docs/v2/32-agentic-security-controls.md)
+- [`docs/v2/39-maestro-owasp-genai-reference.md`](docs/v2/39-maestro-owasp-genai-reference.md)
+
+Local repo-owned threat IDs use the `PT-01`, `PT-02`, ... `PT-09` format.
+Do not insert an extra `T` after the repo prefix or use similar local IDs that
+visually collide with OWASP Agentic/MCP `T1`-style identifiers.
 
 ---
 
@@ -30,15 +40,37 @@ Root security entrypoints:
 | **5** | Remote LM Studio / Win coder URL policy | `utils/model_endpoint_url.py` (orama + PT); default loopback + RFC1918; `ALLOW_PUBLIC_MODEL_ENDPOINTS=1` opt-in; wired in PT `supervisor.py` + `worker_registry.py`, orama `api_server.py` |
 | **6** | Least-privilege MCP profiles | PT: `alphaclaw-mcp` profile gate + `PT_ALLOW_DANGEROUS_CLI_WORKERS`; orama: `cursor-mcp.stack.readonly.json` + `sync-cursor-mcp.sh --profile` |
 
-**Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see [79-commit audit — Appendix A](../OpenClaw/v1/2026-05-23-security-markdown.md#appendix-a--79-commit-security-audit-2026-05-25) before assuming PT routes are protected on disk.
+**Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see the private operator-workspace 79-commit audit appendix before assuming PT routes are protected on disk.
 
 **Operator checklist**
 
 1. Set `ORAMA_CONTROL_PLANE_TOKEN` in `.env.local` (orama + PT share via `.state/control_plane_token` when PT starts).
 2. For LAN exposure: set `PORTAL_BIND_LAN=1` / `PT_BIND_LAN=1` **and** keep bearer auth enforced (`ORAMA_INSECURE_DEV=0` or token set).
 3. Run `bash scripts/git/install-local-hooks.sh` before commits in each repo clone.
-4. Run `python3 scripts/review/repo_hygiene.py` (orama) before push.
+4. Run `python3 scripts/review/repo_hygiene.py .` in both repos before push.
 5. Multi-file code exploration: **code-review-graph MCP first** (`detect_changes_tool`, `get_review_context_tool`), then gbrain, then scoped Read — see `bin/orama-system/skills/code-review/SKILL.md` (no pre-commit hook; required workflow).
+
+---
+
+## Defense-in-Depth Operating Baseline — 2026-06-17
+
+Security fixes must land as layered controls, not as single-point patches. For
+each sensitive surface, require a preventive control, a runtime guard, a
+verification gate, and an operator recovery path.
+
+| Surface | Prevent | Runtime guard | Verify |
+|---------|---------|---------------|--------|
+| Credentials | `.env*` ignored except `.env.example`; no literals in tracked config | OS keychain or process env only; rotate any exposed key | `repo_hygiene.py`, provider secret scanning, billing/usage alerts |
+| Control plane | Loopback default; LAN bind requires explicit opt-in | Strong bearer auth on mutating/read-sensitive routes | unauthenticated route tests + no bearer in HTML/logs |
+| MCP and workers | readonly default profiles; dangerous workers opt-in only | path boundary roots + log redaction + no tracked bearer headers | profile tests verify final merged config, not only dry-run output |
+| Model discovery | trusted host pinning before persistence | strip `Authorization` from LM Studio/Ollama/public probes | tests assert control-plane tokens never reach model endpoints |
+| Memory and artifacts | redact before persistence; runtime dirs ignored | store only sanitized prompts/results; private tickets for raw artifacts | hygiene blocks databases, traces, screenshots, logs, and `/tasks/` |
+| Dependencies | lockfiles are security surfaces; override vulnerable transitives at package-manager root | builds/tests must pass after lock refresh | Dependabot alerts close on the exact target lockfile |
+
+Cross-repo changes must keep this file and
+[`Perpetua-Tools/SECURITY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SECURITY.md)
+in policy sync. If a rule applies to both repos, update both in the same branch
+or explain why the repo-specific surface differs.
 
 ---
 
@@ -196,13 +228,17 @@ The enforceable contract, byte-aligned with Perpetua-Tools' `SECURITY.md`:
 - **No workstation paths** — tracked files use repo-relative references
   (`"$(git rev-parse --show-toplevel)"`, `~`, `$REPO_ROOT`); `repo_hygiene.py` blocks
   literal `/Users/<name>/…` so they cannot doxx the owner in a public repo.
+- **Dependency integrity** — lockfiles and workspace package-manager settings are
+  security policy surfaces. Vulnerable transitive dependencies must be fixed in
+  the lockfile that Dependabot names, not only by adding unrelated direct deps.
 
 ## Defense-in-Depth Credential Policy
 
 ### Gemini / Google API Keys
 
 Gemini keys are high-risk billing and data-access credentials. They must follow
-the current Gemini API key guidance:
+the current [Gemini API key guidance](https://ai.google.dev/gemini-api/docs/api-key)
+checked on 2026-06-17:
 
 - Prefer Gemini **auth keys** or explicitly restricted keys. Unrestricted
   standard keys are not acceptable for new setup.
@@ -217,8 +253,8 @@ the current Gemini API key guidance:
   backend proxy or server-side worker for production calls.
 - Enable billing and usage alerts for every project that owns an active key.
 - Treat the 2026 Gemini transition deadlines as operational risk: unrestricted
-  standard keys stop working first, and standard-key migration should be planned
-  before September 2026.
+  standard keys are rejected starting 2026-06-19, and all standard-key usage
+  should migrate to auth keys before September 2026.
 
 ### MCP, Control Plane, and Bearer Tokens
 
@@ -274,7 +310,7 @@ If a secret is committed or exposed:
 
 ## Related docs
 
-- **79-commit audit + PR review (Appendix A):** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../OpenClaw/v1/2026-05-23-security-markdown.md) — implementation status table and finding cross-ref
+- **79-commit audit + PR review (Appendix A):** `OpenClaw/v1/2026-05-23-security-markdown.md` in the private operator workspace — implementation status table and finding cross-ref
 - Remediation plan: [`docs/plans/2026-05-23-security-remediation-plan.md`](docs/plans/2026-05-23-security-remediation-plan.md)
 - v2 preconditions: [`docs/v2/23-security-preconditions.md`](docs/v2/23-security-preconditions.md)
 - Debug notes: [`docs/2026-05-24-security-review-debug-and-fix-notes.md`](docs/2026-05-24-security-review-debug-and-fix-notes.md)

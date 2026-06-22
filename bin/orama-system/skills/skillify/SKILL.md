@@ -51,16 +51,19 @@ gstack-skillify itself would require a gstack-template fork-patch.)
 
 Spec reference: [`references/skill-architecture-guide.md`](../references/skill-architecture-guide.md)
 Codex wrapper policy: [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md)
+ECC cross-harness authoring: [`references/ecc-cross-harness-authoring.md`](references/ecc-cross-harness-authoring.md)
 
 ---
 
 ## When to Use
 
 Use skillify when you need a new:
+
 - **orama-system sub-skill** — lives in `bin/orama-system/<name>/`, registered in the mother skill
 - **gstack global skill** — lives in `~/.claude/skills/<name>/`, invokable as `/<name>` anywhere
 - **raw Claude Code skill** — a standalone `SKILL.md` that can be loaded with `/skill path/SKILL.md`
-- **Codex local thin wrapper** — lives in `$HOME/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`, points to a canonical in-repo skill, and must not copy canonical bodies/references/scripts. `~/.codex/skills` may be written as a compatibility root for Codex Desktop installs that still expose it.
+- **Codex local thin wrapper** — lives in `~/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`, points to a canonical in-repo skill, and must not copy canonical bodies/references/scripts. `~/.codex/skills` may be written as a compatibility root for Codex Desktop installs that still expose it.
+- **ECC cross-harness skill** — lives in an ECC-style flat `skills/<name>/SKILL.md` tree and uses harness adapters only at the edge.
 
 Do NOT use skillify to edit existing skills. Use it to create new ones.
 
@@ -71,7 +74,7 @@ Do NOT use skillify to edit existing skills. Use it to create new ones.
 When asked to install repo skills for Codex, install **thin wrappers only**:
 
 1. Keep the canonical skill in the repo and update that source first.
-2. Put only a small Codex-valid wrapper in `$HOME/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`. Write `~/.codex/skills/<name>/SKILL.md` only as a compatibility mirror.
+2. Put only a small Codex-valid wrapper in `~/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`. Write `~/.codex/skills/<name>/SKILL.md` only as a compatibility mirror.
 3. Include the canonical repo root and canonical `SKILL.md` path in the wrapper.
 4. Require `git fetch origin --prune` before reading the canonical card.
 5. Run `git pull --ff-only` only when the repo is clean and on a tracking branch.
@@ -79,6 +82,9 @@ When asked to install repo skills for Codex, install **thin wrappers only**:
 7. Validate the wrapper with Codex `quick_validate.py`, then run a compact local-model smoke test if requested.
 
 For the full checklist, read [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md).
+
+For ECC/PT-orama skills consumed by multiple harnesses, read
+[`references/ecc-cross-harness-authoring.md`](references/ecc-cross-harness-authoring.md).
 
 ---
 
@@ -122,6 +128,7 @@ Ask via AskUserQuestion:
 > files from a plain-English schema change description" beats "database helper".
 
 Questions to ask (two separate AskUserQuestion calls if needed):
+
 1. Skill name (kebab-case, matches directory name): e.g. `sql-migrator`, `pr-triage`
 2. One-sentence purpose (third-person, specific, includes trigger phrases): e.g.
    "Generates SQL migration files from plain-English schema change descriptions.
@@ -146,6 +153,7 @@ Ask via AskUserQuestion:
 > actually use it in.
 
 Options:
+
 - A) **orama-system sub-skill** — `bin/orama-system/<name>/SKILL.md`, registered in mother skill
 - B) **gstack global skill** — `~/.claude/skills/<name>/SKILL.md`, invokable as `/<name>` anywhere
 - C) **raw Claude Code** — custom path you specify, loaded manually with `/skill path`
@@ -185,6 +193,7 @@ Ask via AskUserQuestion:
 > Stakes: missing boundaries leads to the "it deleted the wrong thing" 2am incident.
 
 Present three preset options + custom:
+
 - A) **Conservative** — Always: verify before done. Ask: any file write, any delete, any external call. Never: modify files outside the skill's target directory.
 - B) **Standard** — Always: verify before done, follow CIDF for content insertion. Ask: destructive operations, deploys. Never: hardcode secrets, skip verification.
 - C) **Permissive** — Always: verify before done. Ask: irreversible operations only. Never: hardcode secrets.
@@ -197,6 +206,7 @@ Present three preset options + custom:
 Generate the complete frontmatter based on D1-D4 answers.
 
 **For orama-system target:**
+
 ```yaml
 ---
 name: <name>
@@ -213,6 +223,7 @@ allowed-tools: bash, file-operations
 ```
 
 **For gstack target, add:**
+
 ```yaml
 preamble-tier: 1
 ```
@@ -290,6 +301,7 @@ Output: `<expected result>`
 ```
 
 For gstack target: also write a `SKILL.md.tmpl` stub:
+
 ```markdown
 <!-- SKILL.md.tmpl — edit this, then run: bun run gen:skill-docs -->
 <!-- This is the source template. SKILL.md is auto-generated. -->
@@ -314,6 +326,7 @@ the final write.
 Read `bin/orama-system/SKILL.md`. Locate the `sub_skills:` block.
 
 Check if `<name>/SKILL.md` is already listed:
+
 ```bash
 grep -n "<name>/SKILL.md" bin/orama-system/SKILL.md
 ```
@@ -321,6 +334,7 @@ grep -n "<name>/SKILL.md" bin/orama-system/SKILL.md
 If already present: skip with note "already registered".
 
 If not present: use the Edit tool to append to the `sub_skills:` block:
+
 ```yaml
   - path: <name>/SKILL.md
     trigger: "<comma-separated triggers from D3>"
@@ -331,6 +345,7 @@ If not present: use the Edit tool to append to the `sub_skills:` block:
 ## Step 8: Update CLAUDE.md Pointer (orama-system targets only)
 
 First, check if CLAUDE.md already has a pointer to this skill:
+
 ```bash
 grep -n "<name>" CLAUDE.md
 ```
@@ -338,6 +353,7 @@ grep -n "<name>" CLAUDE.md
 If found: skip with note "CLAUDE.md already references this skill".
 
 If not found, apply CIDF decide() — use the simplest method:
+
 - Locate `## 9. gstack` section
 - Confirm with AskUserQuestion before any write:
 
@@ -359,7 +375,7 @@ If approved: use the Edit tool to insert the line into §9.
 Read `references/skill-architecture-guide.md`. Check the created SKILL.md against each criterion:
 
 | C | Check | Pass condition |
-|---|-------|----------------|
+| --- | ------- | ---------------- |
 | Clarity | Instructions are unambiguous | No "it depends" without a decision rule |
 | Completeness | Edge cases and failure modes addressed | Boundaries section has all three tiers |
 | Conciseness | Every sentence earns its tokens | No section repeats another |
@@ -412,17 +428,20 @@ fi
 ## Boundaries
 
 ### Always Do
+
 - Run clobber guard before any write
 - Run CIDF confirm gate before writing to CLAUDE.md
 - Validate skill name is kebab-case before creating the directory
 - Report 6Cs result before declaring DONE
 
 ### Ask First
+
 - Overwriting an existing skill directory
 - Writing to CLAUDE.md
 - Registering in the mother skill (if the file was already present)
 
 ### Never Do
+
 - Write to any file outside the target skill directory, `bin/orama-system/SKILL.md`, and `CLAUDE.md`
 - Create documentation files (README.md, CHANGELOG.md) unless explicitly requested
 - Source or execute any `.md` file as a shell script
