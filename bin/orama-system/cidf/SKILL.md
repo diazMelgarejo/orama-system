@@ -65,6 +65,28 @@ execute → visual_ok? ──no──→ refresh() → verify_programmatically(s
 
 **Never trust visual confirmation alone.**
 
+## Target Verification (pre-insert) — Mandatory
+
+Before inserting content **anywhere**, verify the *destination*, not just the method:
+
+1. **An explicit user-given target is authoritative.** If the user named a path / dir /
+   file (e.g. `.agent/memory`), write to exactly that — never silently "correct" it to a
+   tidier guess. Mismatch between your instinct and the instruction → STOP and ask (AFRP
+   Intent-Verification trigger 3).
+2. **Read the area's conventions first.** If the destination has an `AGENTS.md` / `_index` /
+   README, read it before writing — it may dictate a rendered-vs-hand-edited rule, a tool
+   (`learn.py`), or a different file entirely.
+3. **Confirm you are current.** On a repo target, verify you are not on a stale branch
+   (compare HEAD tree to origin) so you do not write into a directory the canonical tree has
+   already migrated away from.
+
+> **Reference DO-NOT example (2026-06-22).** Asked to write memory to `.agent/memory`, the
+> agent inserted into `.agents/memory` (a guessed, tidier-looking name) on a stale branch,
+> never reading `.agent/AGENTS.md` — which defined `.agent/` as the canonical brain and
+> required `learn.py` (rendered `LESSONS.md`, never hand-edited). Result: a wrong commit in a
+> dead directory. Root cause = skipped Target Verification + [[afrp]] Intent-Verification
+> trigger 3. Full write-up: orama [`docs/LESSONS.md` §2026-06-22](../../../docs/LESSONS.md).
+
 ## Markdown Write Rule
 
 When the content is markdown:
