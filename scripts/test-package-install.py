@@ -6,6 +6,7 @@ Test that the package metadata is valid, builds locally, and can be installed
 from a built wheel without relying on network access.
 Run: python test-package-install.py
 """
+import ast
 import importlib.util
 import os
 import subprocess
@@ -70,10 +71,21 @@ def main():
             )
             if version_path:
                 try:
-                    ns: dict = {}
-                    exec(Path(version_path).read_text(), ns)
-                    version = ns.get("__version__", "<dynamic>")
-                except Exception:
+                    version_tree = ast.parse(Path(version_path).read_text())
+                    version = next(
+                        (
+                            node.value.value
+                            for node in version_tree.body
+                            if isinstance(node, ast.Assign)
+                            for target in node.targets
+                            if isinstance(target, ast.Name)
+                            and target.id == "__version__"
+                            and isinstance(node.value, ast.Constant)
+                            and isinstance(node.value.value, str)
+                        ),
+                        "<dynamic>",
+                    )
+                except (OSError, SyntaxError):
                     version = "<dynamic>"
             else:
                 version = "<dynamic>"
