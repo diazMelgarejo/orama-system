@@ -104,7 +104,13 @@ curl -s http://<host>:11434/api/tags | jq -r '.models[].name'
 
 ## Implementation
 
-### Python Gate Function
+> **v1 note:** This skill contains a reference Python implementation because
+> `perpetua-core` (v2) does not exist yet. In v2, `oramasys` will import
+> `HardwarePolicyResolver` and `HardwareAffinityError` from
+> `perpetua_core.policy`. The SKILL.md becomes a lightweight pointer + policy
+> document; the code lives in `perpetua-core`.
+
+### Python Gate Function (reference implementation)
 
 ```python
 from __future__ import annotations
