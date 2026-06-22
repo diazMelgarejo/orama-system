@@ -51,6 +51,26 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+## 2026-06-22 — Claude — DO-NOT: catastrophic assumption (`.agents` vs explicit `.agent`) + stay-on-task
+
+### What was learned
+
+- **DO NOT example (anti-pattern, anathema to AFRP):** the user said write memory to `.agent/memory`. I silently "corrected" it to `.agents/memory` — rationalizing "avoid a parallel dir" — and committed there. `.agent/` was in fact the **canonical, structured portable-brain** on `origin/main` (its own `AGENTS.md`, `memory/{semantic,episodic,personal,working}`, `tools/learn.py` + dream pipeline). I had never read `AGENTS.md` and never checked origin. **Know the purpose first and ASK; NEVER assume.** Overriding an explicit, unambiguous user instruction with a guess is the exact failure the orama method exists to prevent.
+- **I was outdated and did not know it:** local `main` was stale (branched at the merge-base, never saw the `.agents/`→`.agent/` migration). I wrote into the dead dir because I judged "ahead 1 / behind 0" instead of comparing the HEAD **tree** to origin. Reinforces [§ 6 tree-twin rule](../CLAUDE.md) and [LESSONS § 2026-06-05](#) — never trust ahead/behind across a rewrite; compare trees, adopt upstream structural migrations before writing.
+- **Stayed off-task:** the stated **#1 task** was code review + clean `/src` `/bin` restructure of `oramasys/perpetua-core`; I let an iCloud-move/cleanup tangent replace it and never delivered it. Getting distracted from the explicit primary task is itself a failure.
+- **Memory protocol:** `.agent/memory/semantic/LESSONS.md` is **rendered from `lessons.jsonl`** (`AGENTS.md` Rule 5) — never hand-edit it; teach via `.agent/tools/learn.py`. This canonical `docs/LESSONS.md` *is* hand-edited (newest-first), so the two systems differ — know which is which before writing.
+
+### Decisions made
+
+- Erased the wrong commit (unpushed) by re-anchoring local `main` to `origin/main`; re-recorded the four lessons through the PT `.agent/` pipeline. Crosslink: [PT `.agent/memory/semantic/LESSONS.md`](../../perplexity-api/Perpetua-Tools/.agent/memory/semantic/LESSONS.md) — lessons `2e154f1b55ab` (assume-not-ask), `d892d844cf60` (do-related-now), `0afc8c5f2778` (stale-branch), `a7374ba4b00d` (stay-on-task).
+- These four are the cross-repo "DO NOT" companions to this entry; check both when a correction recurs.
+
+### Open questions
+
+- Resume the original task: code review `perpetua-core@feat/salvage-plugins-rc1` + src-layout restructure (tests inside `/src` per `src-struc.md`).
+
+---
+
 ## 2026-06-20 — Codex + Claude — Native codex/gpt-5.5 agent and workspace template reconciler
 
 ### What was learned
