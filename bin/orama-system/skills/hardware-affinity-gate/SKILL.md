@@ -4,8 +4,9 @@ description: >-
   Use when enforcing hardware-model affinity before dispatch on Mac or Windows.
   Provides fail-closed pre-dispatch validation, live model inventory verification,
   and canonical Mac/Windows routing rules for LM Studio and Ollama backends.
-  This is the single source of truth for hardware affinity in the orama-system
-  skill tree; Perpetua-Tools and other harnesses import from here one-way.
+  This skill lives in orama-system but imports scripts and rules from
+  Perpetua-Tools one-way. Perpetua-Tools is the source of truth for
+  hardware routing logic; orama-system references it.
 version: 1.0.0
 author: Hermes Agent
 license: MIT
@@ -17,9 +18,10 @@ metadata:
 
 # Hardware Affinity Gate
 
-Canonical hardware-model affinity enforcement for the PT-orama/ECC stack.
-Imports flow **one-way**: Perpetua-Tools and other repos import rules and
-scripts from this skill. This skill never imports from Perpetua-Tools.
+Hardware-model affinity enforcement for the PT-orama/ECC stack.
+Imports flow **one-way**: this skill (in orama-system) references scripts and
+rules from Perpetua-Tools. Perpetua-Tools is the source of truth; orama-system
+never re-declares those rules independently.
 
 ## The Rule (non-negotiable)
 
@@ -247,21 +249,22 @@ model's internal chain-of-thought buffer. The test always passes with
 
 ## Integration with Perpetua-Tools
 
-Perpetua-Tools references this skill as the **methodology layer** for
-hardware routing. PT's root `SKILL.md` links here (`hardware-affinity-gate/SKILL.md`).
-No import from PT to orama-system flows upstream.
+This skill (in orama-system) **imports hardware routing rules and scripts
+from Perpetua-Tools** as its source of truth. Perpetua-Tools owns the
+enforcement logic; orama-system references it for methodology.
 
-### What PT Gets from This Skill
+### What This Skill Gets from Perpetua-Tools
 
 - `AffinityPolicy.from_env()` — single source of truth for NEVER lists
 - `check_affinity()` — pre-dispatch gate called before any agent spawn
 - `resolve_model()` — default model selection per tier + task type
 - `HardwareAffinityError` — explicit exception, never silent
 
-### What PT Must NOT Do
+### What This Skill Must NOT Do
 
 - Re-declare Mac/Windows NEVER rules inside its own SKILL.md (duplication drifts)
-- Import orama-system Python modules in a way that creates a circular dependency
+- Override or shadow Perpetua-Tools policy files — PT is the canonical runtime
+- Import orama-system Python modules that create a circular dependency
   (PT is the top-level orchestrator; orama-system is the reasoning/methodology layer)
 
 ## Agate Alignment
