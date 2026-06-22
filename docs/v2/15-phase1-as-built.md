@@ -164,3 +164,99 @@ and pushed to `diazMelgarejo/perpetua-core`. It is SUPERSEDED by this canonical 
 See `docs/wiki/10-wrong-repo-build-what-not-to-do.md` for the full post-mortem.
 
 No further work goes to `diazMelgarejo/perpetua-core`.
+
+---
+
+## Salvage Translation RC-1 (2026-05-17) — v2 kernel completion
+
+> Ports 6 assets from the divergent wrong-repo into canonical `oramasys/perpetua-core`.
+> All 16 tasks completed same-day. Branch `feat/salvage-plugins-rc1` is local-only,
+> pending Mac+Win hardware review before push to perpetua-core `main`.
+> **Spec:** [`docs/superpowers/specs/2026-05-17-salvage-translation-design.md`](../superpowers/specs/2026-05-17-salvage-translation-design.md)
+> **Plan:** [`docs/superpowers/plans/2026-05-17-salvage-translation-v1-discovery.md`](../superpowers/plans/2026-05-17-salvage-translation-v1-discovery.md)
+> **PROGRESS.md:** [`github.com/oramasys/perpetua-core/blob/feat/salvage-plugins-rc1/PROGRESS.md`](https://github.com/oramasys/perpetua-core/blob/feat/salvage-plugins-rc1/PROGRESS.md)
+
+**Commit:** `56f2a6d` "feat: salvage translation RC-1 — 16 tasks, 62 tests, mirror safety (v2-planning)"
+**Branch:** `feat/salvage-plugins-rc1` (local-only — push gate: Mac+Win hardware review)
+**Tests after RC-1:** 56 passing in `perpetua-core` (32 baseline + 24 new)
+
+### New modules shipped in RC-1
+
+| Module | File | Lines | Notes |
+|--------|------|------:|-------|
+| Discovery: backend | `perpetua_core/discovery/backend.py` | 38 | `Backend` dataclass, tier/task fields |
+| Discovery: probe | `perpetua_core/discovery/probe.py` | 29 | async `health_probe()` |
+| Discovery: registry | `perpetua_core/discovery/registry.py` | 60 | autodetect + `register_by_ip` |
+| Discovery: selector | `perpetua_core/discovery/selector.py` | 67 | tier+task routing, `_MIRROR_BACKENDS` safety |
+| Discovery: errors | `perpetua_core/discovery/errors.py` | 6 | typed error hierarchy |
+| Typed message wrapper | `perpetua_core/message.py` | 43 | **OQ17 RESOLVED** — `Message` typed wrapper, replaces plain `dict` |
+| Plugin: tool_node | `perpetua_core/graph/plugins/tool_node.py` | 55 | async subprocess `ToolNode` |
+| Plugin: routing | `perpetua_core/graph/plugins/routing.py` | 24 | `LabelRouter` (callable in `add_edge`) |
+| Plugin: validator | `perpetua_core/graph/plugins/validator.py` | 38 | pre/post gate `Validated` |
+| Plugin: interrupt_guard | `perpetua_core/graph/plugins/interrupt_guard.py` | 27 | `resume_policy` (shipped separate, not merged) |
+| Plugin: parallel | `perpetua_core/graph/plugins/parallel.py` | 31 | `parallel_dispatch` fan-out via `Send` |
+
+### Engine changes in RC-1
+
+| Change | Detail |
+|--------|--------|
+| `max_steps` cycle guard | `test_engine_max_steps.py` — prevents infinite loops (OQ12 **RESOLVED**) |
+| `set_entry()` method | selects graph entry node; returns `self` for chaining |
+| `compile()` method | returns `CompiledGraph`; lazy-compile guard; frozen after compile |
+| `nodes_visited: list[str]` | added to `PerpetuaState` (RC-1 state-field decision) |
+| `retry_count: int` | added to `PerpetuaState` (RC-1 state-field decision) |
+| Engine size | **102 lines** (up from 65 — compile path added; still within spirit of D8) |
+
+### OQs resolved by RC-1
+
+| OQ | Resolution | Date |
+|----|------------|------|
+| OQ12 — `max_steps` safety guard | **Resolved:** `engine.ainvoke` raises `RuntimeError` after `max_steps`; `tests/graph/test_engine_max_steps.py` | 2026-05-17 |
+| OQ17 — typed `Message` wrapper | **Resolved:** `perpetua_core/message.py` ships `Message(BaseModel)` with role/content/metadata; `tests/test_message.py` | 2026-05-17 |
+| OQ19 — selector mirror exclusion | **Resolved:** `selector.py` derives `_MIRROR_BACKENDS` from config; `_TIER_HOSTS["mac"]` enforces mirror-only; `test_discovery_selector.py` covers 12 cases | 2026-05-17 |
+
+### Phase 2 status after RC-1
+
+| Item | Status |
+|------|--------|
+| `GraphPlugin` protocol + 6 original plugins | ✅ Done (2f717f5) |
+| `max_steps` cycle guard | ✅ Done (RC-1) |
+| `perpetua_core/message.py` typed wrapper | ✅ Done (RC-1) |
+| `set_entry` + `compile` engine methods | ✅ Done (RC-1) |
+| Salvaged plugins: tool_node, routing, validator, interrupt_guard, parallel | ✅ Done (RC-1) |
+| Discovery layer (v1 → v2 verbatim port) | ✅ Done (RC-1) |
+| Sentinel Node (SWARM misalignment monitoring) | ⏳ Not yet — Phase 2 remainder |
+
+**Phase 2 is effectively complete** modulo the Sentinel Node. Phase 3 (Orchestration & API
+Layer) is unblocked once the hardware review gate clears and RC-1 lands on `perpetua-core` main.
+
+### Test breakdown after RC-1
+
+| Suite | Count | Location |
+|-------|------:|----------|
+| Baseline (2f717f5 — Phase 1) | 32 | `tests/test_*.py` (top-level) |
+| Engine: compile + max_steps | 2 | `tests/graph/test_engine_*.py` |
+| Plugin: interrupt_guard | 4 | `tests/graph/plugins/test_interrupt_guard.py` |
+| Plugin: parallel | 6 | `tests/graph/plugins/test_parallel.py` |
+| Plugin: routing | 5 | `tests/graph/plugins/test_routing.py` |
+| Plugin: tool_node | 4 | `tests/graph/plugins/test_tool_node.py` |
+| Plugin: validator | 5 | `tests/graph/plugins/test_validator.py` |
+| Property tests (Hypothesis) | 4 | `tests/property/test_engine_invariants.py` |
+| **Total** | **56** | all green |
+
+Cross-repo total (all three repos, three generations): **73 tests green** (perpetua-core 56 + oramasys 5 + Perpetua-Tools 12).
+
+### Push gate
+
+All branches are **local-only** until user end-to-end review on:
+- Mac: Ollama `localhost:11434` (`qwen3.5:9b-nvfp4`, `qwen3-coder:480b-cloud`)
+- Win: LM Studio `192.168.254.103:1234` (`qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`)
+
+After review + push: tag canonical `v0.2.0-alpha` (or per user versioning preference).
+
+### Memory
+
+Inspection findings and push-gate status recorded in Perpetua-Tools agent memory:
+- [`Perpetua-Tools/.agent/memory/working/WORKSPACE.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/WORKSPACE.md) — current task state
+- [`Perpetua-Tools/.agent/memory/semantic/DECISIONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/semantic/DECISIONS.md) — architectural decision record
+- [`Perpetua-Tools/.agent/memory/episodic/AGENT_LEARNINGS.jsonl`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/episodic/AGENT_LEARNINGS.jsonl) — raw experience log
