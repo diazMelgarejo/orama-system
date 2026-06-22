@@ -40,33 +40,33 @@ Restart OpenClaw using the canonical sequence rather than raw `launchctl`. This 
 set -euo pipefail
 rm -f ~/.openclaw/cron/jobs.json
 ```
-1. Re-apply symlinks with GNU stow.
+2. Re-apply symlinks with GNU stow.
 
 ```bash
 stow --no-folding -t "$HOME" .
 ```
-1. Kickstart launchd service.
+3. Kickstart launchd service.
 
 ```bash
 launchctl kickstart -k "gui/$(id -u)/com.openclaw.gateway"
 ```
-1. Wait for initialization.
+4. Wait for initialization.
 
 ```bash
 sleep "${wait_seconds:-5}"
 ```
-1. Verify channel reconnect and service health.
+5. Verify channel reconnect and service health.
 
 ```bash
 curl -fsS "${health_url:-http://127.0.0.1:7331/health}" >/dev/null
 log show --style syslog --last 5m --predicate 'eventMessage CONTAINS[c] "telegram" OR eventMessage CONTAINS[c] "slack" OR eventMessage CONTAINS[c] "whatsapp"' | tail -n 100
 ```
-1. Verify launchd state transitioned out of crash-loop mode.
+6. Verify launchd state transitioned out of crash-loop mode.
 
 ```bash
 launchctl print "gui/$(id -u)/com.openclaw.gateway" | tail -n 40
 ```
-1. Emit summary JSON for callers.
+7. Emit summary JSON for callers.
 
 ```bash
 jq -n '{status:"ok", step:"restart-complete"}'

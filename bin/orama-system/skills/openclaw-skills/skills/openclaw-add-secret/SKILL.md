@@ -45,32 +45,32 @@ service="openclaw.$secret_name"
 env_var="${env_var_name:-OPENCLAW_$(printf '%s' "$secret_name" | tr '[:lower:]-' '[:upper:]_')}"
 printf '%s' "$env_var" | grep -Eq '^OPENCLAW_[A-Z0-9_]+$'
 ```
-1. Store secret in Keychain.
+2. Store secret in Keychain.
 
 ```bash
 security add-generic-password -a "$USER" -s "$service" -w "$secret_value" -U
 ```
-1. Update `openclaw-secrets.sh` (launchd/gateway source).
+3. Update `openclaw-secrets.sh` (launchd/gateway source).
 
 ```bash
 # Add export that reads from keychain service "$service" into "$env_var".
 ```
-1. Update `openclaw-env.sh` (shell source).
+4. Update `openclaw-env.sh` (shell source).
 
 ```bash
 # Mirror the same export for CLI sessions.
 ```
-1. Update provisioning `secrets.sh`.
+5. Update provisioning `secrets.sh`.
 
 ```bash
 # Add bootstrap logic to recreate "$service" and "$env_var" mapping on new machines.
 ```
-1. Verify mapping and non-empty resolve.
+6. Verify mapping and non-empty resolve.
 
 ```bash
 security find-generic-password -s "$service" -w >/dev/null
 ```
-1. Validate shell loaders reference the expected env var exactly once.
+7. Validate shell loaders reference the expected env var exactly once.
 
 ```bash
 grep -n "$env_var" openclaw-secrets.sh openclaw-env.sh secrets.sh
