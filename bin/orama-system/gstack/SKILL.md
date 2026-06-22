@@ -209,8 +209,20 @@ and the MCP wrapper, NOT by non-interactive Bash shells.
 > `gstack-code-ools-…`, `gstack-code-claw-…`) to current per-worktree `gstack-code-<hash>` IDs,
 > and all three repos were reindexed against current HEAD. **`.gbrain-source` pins already point
 > at the CURRENT IDs** — query those. The old sources are stale (@2026-06-05), superseded, and
-> quarantined (exported to `~/repo-backups/gbrain-stale-quarantine-20260618/`; code also preserved
-> in git) — pending removal.
+> **ARCHIVED 2026-06-22** via `gbrain sources archive` (soft-delete, reversible with
+> `gbrain sources restore <id>`). Defs exported to BOTH
+> `~/repo-backups/gbrain-stale-quarantine-20260618/` and `…-20260622/orphan-sources.json`
+> (and code preserved in git). `periscope-src` was also archived — its path moved to
+> `~/code/oramasys/tools/periscope`; re-add with
+> `gbrain sources add --path ~/code/oramasys/tools/periscope` if periscope work resumes.
+>
+> **Lesson (do NOT leave "pending removal"):** these sat un-removed from 2026-06-18→06-22 and
+> kept resurfacing as `sync_freshness`/`multi_source_drift` warnings every session. **Complete
+> the archive in the same pass you decide it** — a deferred removal is a recurring false alarm.
+> Note: archive is reversible but `gbrain doctor` still lists archived sources in freshness
+> (noise, not breakage); `gbrain sources purge <id> --confirm-destructive` removes them fully
+> (recoverable via the exported manifest above). The idempotent guard
+> `scripts/gbrain/gbrain-selfheal.sh` surfaces orphan sources automatically.
 
 | Repo | Current source ID (reindexed 2026-06-17) | Pages | Federated | Superseded ID (@06-05, quarantined) |
 | ------ | ------ | ------- | ----------- | ------ |
@@ -367,6 +379,35 @@ echo "<populated-source-id>" > <repo>/.gbrain-source
 
 A misconfigured autopilot is worse than none: it blocks manual sync while indexing nothing.
 
+### 7. Durable self-heal — stop re-fixing the same rot (2026-06-22)
+
+The failures in §2/§5/§6 recur because the fixes lived only as knowledge, not automation,
+and removal steps were deferred. The idempotent guard
+[`scripts/gbrain/gbrain-selfheal.sh`](../../../scripts/gbrain/gbrain-selfheal.sh) makes the
+SAFE remediations automatic and SURFACES the rest:
+
+- skips entirely if `gstack-gbrain-detect` says `gbrain_local_status != ok`;
+- warns if autopilot's cwd is `/` (the §6 jam);
+- acks transient failures and refreshes each LIVE source with `--repo "<path>" --source <id> --skip-failed`;
+- reports orphan sources whose `local_path` is missing (quarantine candidates) — never auto-deletes.
+
+Wire-in: `start.sh` calls it best-effort/non-fatal each session. Run manually any time:
+`bash scripts/gbrain/gbrain-selfheal.sh`. Update its `PAIRS` map when a repo moves (and archive
+the old source in the same pass).
+
+Two gotchas it encodes:
+
+- **Bare `gbrain sync` from a non-git cwd only acks failures, then refuses** with
+  `Not a git repository: GBrain sync requires a git-initialized repo`. Per-source sync MUST
+  `cd` into the repo (or pass `--repo "<path>"`) AND `--source <id>` (§2).
+- **Prefer `gbrain sources archive` (reversible) over `remove`/`purge`** for orphans; always
+  export the def first (`gbrain sources list --json | jq` → `~/repo-backups/…`) so it's
+  restorable, and record where you put it.
+
+**Multi-repo note:** a single `gbrain autopilot --repo .` can only watch one tree, so for this
+multi-repo workspace the self-heal script (or manual `/sync-gbrain` per repo) is the refresh
+mechanism — NOT the launchd autopilot, which is left unloaded (§6).
+
 ### Quick Reference
 
 | Symptom | Fix |
@@ -379,6 +420,9 @@ A misconfigured autopilot is worse than none: it blocks manual sync while indexi
 | `gbrain get docs/MIGRATION` → not found | slug is lowercased: `docs/migration` |
 | autopilot wedged 12h+ | kill via lock pid, clear lock, apply `prepare:false`, restart |
 | autopilot pid cwd is `/`, sources stale + 0-page dupes | `launchctl unload ~/Library/LaunchAgents/com.gbrain.autopilot.plist`; remove orphan sources; fix plist `WorkingDirectory` or use manual `/sync-gbrain` (mode 6) |
+| `Not a git repository: GBrain sync requires…` | bare `gbrain sync` from a non-git cwd only acks failures; `cd` into the repo (or `--repo "<path>"`) + `--source <id>` (§7) |
+| sources stale every session despite "fixing" | old-path duplicate sources left un-archived ("pending removal"); archive + export def in the SAME pass; run `scripts/gbrain/gbrain-selfheal.sh` (§7) |
+| recurring gbrain rot in general | `bash scripts/gbrain/gbrain-selfheal.sh` (idempotent: ack + refresh live sources + report orphans/misconfig) |
 
 ## Symbol vs Text Search
 
