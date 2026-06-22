@@ -63,7 +63,21 @@ def main():
         print(f"✓ pyproject.toml valid")
         package_name = config["project"]["name"]
         print(f"  name: {package_name}")
-        print(f"  version: {config['project']['version']}")
+        version = config["project"].get("version")
+        if version is None and "version" in config["project"].get("dynamic", []):
+            version_path = (
+                config.get("tool", {}).get("hatch", {}).get("version", {}).get("path")
+            )
+            if version_path:
+                try:
+                    ns: dict = {}
+                    exec(Path(version_path).read_text(), ns)
+                    version = ns.get("__version__", "<dynamic>")
+                except Exception:
+                    version = "<dynamic>"
+            else:
+                version = "<dynamic>"
+        print(f"  version: {version}")
         print(f"  build backend: {config['build-system']['build-backend']}")
     except Exception as e:
         print(f"❌ Failed to parse pyproject.toml: {e}")

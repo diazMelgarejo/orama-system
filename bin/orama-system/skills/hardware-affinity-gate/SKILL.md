@@ -164,6 +164,11 @@ def check_affinity(
     """
     Return a verdict for `model_id` on `tier`.
     Raises HardwareAffinityError on NEVER.
+
+    v2 design note: this signature (model_id, tier, policy) is the target
+    interface for perpetua-core v2. The current v1 implementation in
+    api_server.py uses check_affinity(model_id, platform) → None and raises
+    inline on NEVER. This reference implementation is aspirational v2 code.
     """
     policy = policy or AffinityPolicy.from_env()
 
@@ -202,15 +207,22 @@ def check_affinity(
 def resolve_model(
     task_type: str,
     optimize_for: str,
-    tier: Literal["mac", "windows", "shared"],
+    tier: Literal["mac", "windows", "shared"] | None = None,
     policy: AffinityPolicy | None = None,
 ) -> str:
     """
     Pick a model for `task_type` on `tier` using policy defaults.
     Coding and heavy reasoning prefer the Windows tier primary;
     everything else defaults to Mac primary.
+
+    `task_type` drives tier selection when `tier` is not given explicitly:
+      - "code" / "reasoning" → "windows" tier (CUDA, heavy compute)
+      - anything else         → "mac" tier (MLX, light-weight)
+    `optimize_for` is reserved for future routing hints (e.g. "speed", "quality").
     """
     policy = policy or AffinityPolicy.from_env()
+    if tier is None:
+        tier = "windows" if task_type in ("code", "reasoning") else "mac"
     decision = check_affinity(
         policy.win_prefer[0] if tier == "windows" else policy.mac_prefer[0],
         tier,
@@ -225,6 +237,10 @@ def resolve_model(
 # bin/orama-system/scripts/check_affinity.sh
 # Usage: check_affinity.sh <tier> <model_id>
 # Exit 0 = allowed, exit 1 = NEVER, prints reason to stderr.
+#
+# v2 note: imports from `hardware_affinity_gate` — the standalone module
+# produced when perpetua-core v2 ships. In v1, the equivalent logic lives
+# in api_server.py (check_affinity(model_id, platform) → None, raises inline).
 python3 -c "
 import sys
 from hardware_affinity_gate import check_affinity, HardwareAffinityError
