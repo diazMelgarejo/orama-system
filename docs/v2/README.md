@@ -181,7 +181,7 @@ orama-system/docs/v2/
 ├── 12-xai-model-migration-2026-05.md   ← xAI retirements 2026-05-15; grok-4.3 + grok-4.20-non-reasoning defaults
 ├── 13-local-model-catalog-strategy.md  ← Codex model_catalog_json pattern; qwen3.5-local→qwen3.5:9b-nvfp4 rename; gen script
 ├── 14-supervisor-and-anthropic-patterns.md
-├── 15-phase1-as-built.md              ← canonical oramasys/* v2.0-alpha.1 (2026-05-01); OQ resolutions
+├── 15-phase1-as-built.md              ← canonical oramasys/* v2.0-alpha.1 (2026-05-01) + RC-1 salvage port (2026-05-17); Phase 2 complete; 56 tests
 ├── 16-web-app-orchestration-plan.md   ← chosen FastAPI + React/Vite web-app path for portal/dashboard + PT swarm primitives
 ├── 17-hardware-policy-enforcement.md  ← 4-layer enforcement chain (devices.yml → model_hardware_policy.yml → selector.py → agent_launcher.py); agate NEVER/PREFER/ALLOW implication; mirror exclusion patterns (D14, D15)
 ├── 18-master-alignment-v2-migration-plan.md  ← CC + OpenClaw skills submodule master-alignment plan (2026-05-20)
