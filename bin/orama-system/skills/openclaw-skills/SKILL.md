@@ -27,7 +27,7 @@ The skills are designed for deterministic use through direct skill loading, MCP 
 ## The Nine Skills
 
 | Skill ID | Purpose | Skill File |
-|----------|---------|------------|
+| ---------- | --------- | ------------ |
 | `openclaw-new-agent` | Creates a complete agent entry, directory tree, required directive files, script folders, and optional parent/child wiring. | [skills/openclaw-new-agent/SKILL.md](skills/openclaw-new-agent/SKILL.md) |
 | `openclaw-add-channel` | Adds Telegram, Slack, or WhatsApp channels and runs the full secrets, config, stow, restart, and verification pipeline. | [skills/openclaw-add-channel/SKILL.md](skills/openclaw-add-channel/SKILL.md) |
 | `openclaw-add-cron` | Adds recurring, interval, or one-shot scheduled jobs while handling transient `jobs.json` safely. | [skills/openclaw-add-cron/SKILL.md](skills/openclaw-add-cron/SKILL.md) |
@@ -37,6 +37,19 @@ The skills are designed for deterministic use through direct skill loading, MCP 
 | `openclaw-status` | Runs the standard health check for gateway, launchd, channels, agents, cron jobs, and recent errors. | [skills/openclaw-status/SKILL.md](skills/openclaw-status/SKILL.md) |
 | `openclaw-restart` | Performs the canonical restart sequence: remove transient cron state, stow, kickstart, wait, and verify channels. | [skills/openclaw-restart/SKILL.md](skills/openclaw-restart/SKILL.md) |
 | `openclaw-stow` | Deploys OpenClaw config through GNU Stow with `jobs.json` conflict handling baked in. | [skills/openclaw-stow/SKILL.md](skills/openclaw-stow/SKILL.md) |
+
+## Upstream Initialization
+
+Before resolving any of The Nine Skills directly, ensure the upstream submodule is present:
+
+```bash
+bash scripts/install-openclaw-skills.sh
+```
+
+This is idempotent and is also called by `start.sh`. Orama-normalized Nine Skill
+overlays live under `skills/<skill-id>/SKILL.md`; each overlay declares the
+upstream cc-openclaw card it extends under
+`cc-openclaw/.claude/skills/<skill-id>/SKILL.md`.
 
 ## Universal Invocation Protocol
 
@@ -67,6 +80,32 @@ The required result shape is:
 
 Wrappers may add transport metadata, but they must preserve the envelope fields and the result fields. Skill chaining is allowed only when the parent skill declares the internal call and preserves the same `openclaw_home`.
 
+## OpenClaw CLI Resolution (when `openclaw` seems broken)
+
+Before concluding "openclaw is not installed" or acting on a `Cannot find module '.../.local/openclaw/openclaw.mjs'` error, **look at the right places.** That error is a known false alarm: `~/.local/bin/openclaw` is a pnpm cmd-shim reached through a symlink, and its `$0`-derived basedir resolves to a path that never existed. Meanwhile up to **three** openclaw installs can coexist on one machine:
+
+| Install | Role |
+| --------- | ------ |
+| npm-global under nvm node (e.g. `~/.nvm/.../vNN/lib/node_modules/openclaw`) | **canonical** — runs the launchd gateway, newest |
+| `$OPENCLAW_ROOT/AlphaClaw/node_modules/openclaw` (pnpm) | older, repo-local |
+| `~/.alphaclaw/node_modules/openclaw` | **stale orphan — never use** (disabled to `.disabled-*-STALE`) |
+
+**Always resolve through the canonical resolver** rather than trusting the bare command blindly:
+
+```bash
+# one-liner (echoes "<node>\t<entrypoint>")
+"$(orama_git_root)/scripts/openclaw/resolve-openclaw.sh" --which
+
+# or source the lib and use the helpers
+source bin/orama-system/scripts/lib/openclaw-env.sh
+openclaw_cmd plugins list        # runs canonical openclaw, never the stale one
+resolve_openclaw_cli             # prints node + entrypoint of the canonical install
+```
+
+The resolver prefers the install that actually runs the gateway (parsed from the launchd plist), falls back to npm-global then the AlphaClaw repo copy, blacklists the stale `~/.alphaclaw` install, and verifies `--version` before returning. `setup_macos.py` installs `~/.local/bin/openclaw` as a thin wrapper around it, so the bare `openclaw` command self-heals on every `start.sh`. Full rationale: [`scripts/openclaw/resolve-openclaw.sh`](../../../scripts/openclaw/resolve-openclaw.sh) header.
+
+Note the active config may be written by a newer OpenClaw than a given on-disk CLI (e.g. config `2026.6.8` vs a pnpm `2026.5.6`). Prefer the gateway's own version for config writes; `config patch`/`config set` from the canonical CLI is the gateway-aware, validated, atomic path (never hand-edit live `openclaw.json`).
+
 ## Default Model Routing
 
 Use [references/openrouter-defaults.md](references/openrouter-defaults.md) as the source of truth for default model routing.
@@ -80,7 +119,7 @@ Local-first on Mac:
 OpenRouter fallback stack:
 
 | Tier | Model ID | Role |
-|------|----------|------|
+| ------ | ---------- | ------ |
 | A | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | Default agent brain |
 | B | `openrouter/minimax/minimax-m2.5:free` | Coding fallback |
 | C | `openrouter/deepseek/deepseek-v4-flash:free` | Fast triage |
@@ -96,7 +135,7 @@ Gemini is specialized only and is not the default fallback. Reserve it for visua
 OpenClaw deployment is recursive across three layers:
 
 | Layer | Role | Responsibility |
-|-------|------|----------------|
+| ------- | ------ | ---------------- |
 | L3 | `orama-system` | Owns these canonical skill definitions and routing policy. |
 | L2 | Perpetua-Tools middleware | Receives agent-neutral skill envelopes, resolves `openclaw_home`, runs tools, and returns normalized results. |
 | L1 | OpenClaw instance | Applies config changes, starts agents, routes messages, schedules jobs, and may spawn child OpenClaw instances. |
@@ -132,7 +171,7 @@ Recursive spawn constraints:
 ## Naming Conventions Enforced
 
 | Item | Convention | Example |
-|------|------------|---------|
+| ------ | ------------ | --------- |
 | Keychain service | `openclaw.<name>`, lowercase, hyphens | `openclaw.telegram-bot-token` |
 | Environment variable | `OPENCLAW_<NAME>`, uppercase, underscores | `OPENCLAW_TELEGRAM_BOT_TOKEN` |
 | Agent ID | lowercase, hyphens | `insurance-agent` |
@@ -142,7 +181,7 @@ Recursive spawn constraints:
 Every generated agent requires:
 
 | File or Directory | Purpose |
-|-------------------|---------|
+| ------------------- | --------- |
 | `SOUL.md` | Identity, personality, operating principles |
 | `IDENTITY.md` | Name, role, model assignment |
 | `USER.md` | Relationship context and user preferences |
@@ -157,7 +196,7 @@ Every generated agent requires:
 Every secret touches all three files:
 
 | File | Purpose | Consequence if missing |
-|------|---------|------------------------|
+| ------ | --------- | ------------------------ |
 | `openclaw-secrets.sh` | Loaded by launchd at gateway startup | Gateway cannot read the secret |
 | `openclaw-env.sh` | Sourced by shell for CLI commands | Terminal can raise `MissingEnvVarError` while gateway works |
 | `secrets.sh` | Provisioning script for fresh machines | Disaster recovery fails silently |
@@ -176,7 +215,7 @@ Every secret touches all three files:
 ## Quick Reference
 
 | Command | When to Use |
-|---------|-------------|
+| --------- | ------------- |
 | `openclaw-new-agent` | Creating any new agent |
 | `openclaw-add-channel` | Adding Telegram, Slack, or WhatsApp integration |
 | `openclaw-add-cron` | Scheduling any recurring or one-shot job |
@@ -195,7 +234,7 @@ installation, Nous Portal/LM Studio provider setup, and ECC skill-import rules.
 Use this OpenClaw skill pack for OpenClaw configuration and gateway operations.
 
 | Agent | Discovery | Invocation |
-|-------|-----------|------------|
+| ----- | --------- | ---------- |
 | Claude | Skill tool or local skill folder scan | Load this master `SKILL.md`, then the selected subskill |
 | Hermes | MCP or local markdown skill registry | Send universal JSON envelope to the skill runner |
 | Gemini | `gemini-mcp-tool` wrapper | Invoke through MCP with the universal envelope |
@@ -211,7 +250,8 @@ If an agent cannot load markdown skills directly, it must use Perpetua-Tools or 
 ## Attribution
 
 The Nine Skills originate from [cc-openclaw](https://github.com/rahulsub-be/cc-openclaw)
-(MIT, Rahul Subramanian). The upstream lives at `cc-openclaw/` (git submodule).
+(MIT, Rahul Subramanian). The upstream lives at `cc-openclaw/` (git submodule), with
+canonical upstream skill cards in `cc-openclaw/.claude/skills/`.
 
 Extensions in this directory (`references/`, `templates/`, `scripts/`, this `SKILL.md`)
 are orama-system additions and are NOT in the upstream repo.
@@ -219,9 +259,9 @@ are orama-system additions and are NOT in the upstream repo.
 Layer 0 (provider substrate): `v1/OpenRouter.md` — free model stack, openclaw.json shape,
 rate limits. See `references/openrouter-defaults.md` for the distilled routing table.
 
-cc-openclaw = `v1/OpenRouter.md` (Layer 0 substrate) + `openclaw-skills/` (Layer 1 ops).
-The upstream Nine Skills are in `openclaw-skills/cc-openclaw/` (submodule). Our extensions
-live at `openclaw-skills/` root.
+cc-openclaw = `v1/OpenRouter.md` (Layer 0 substrate) + `.claude/skills/` (Layer 1 ops).
+The Orama-normalized overlay cards are in `openclaw-skills/skills/`. Shared
+extensions live at `openclaw-skills/` root.
 
 ## Search Frugality Rule
 
@@ -244,6 +284,7 @@ Search in this order — stop at the first satisfying result:
 Endpoint pool: `$WIN_CODER_ENDPOINTS` (default: `192.168.254.103:1234`)
 
 Dispatch protocol:
+
 1. Before routing any task to Mac-only paths, check if a Windows coder is free.
 2. If free AND task is compatible (Python, Go, TypeScript, general coding):
    → dispatch to Windows coder FIRST.

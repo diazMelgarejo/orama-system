@@ -58,7 +58,7 @@ def test_generated_artifact_patterns_are_blocked():
         [
             ".DS_Store",
             "bin/shared/__pycache__/state_manager.cpython-312.pyc",
-            "dist/orama_system-0.9.9.9.whl",
+            "dist/orama_system-1.1.0.0.whl",
             "DerivedData/Build/Intermediates.noindex/file",
             "Project.xcodeproj/xcuserdata/user.xcuserdatad/UserInterfaceState.xcuserstate",
             "README.md",
@@ -68,7 +68,7 @@ def test_generated_artifact_patterns_are_blocked():
     assert errors == [
         "generated artifact is tracked: .DS_Store",
         "generated artifact is tracked: bin/shared/__pycache__/state_manager.cpython-312.pyc",
-        "generated artifact is tracked: dist/orama_system-0.9.9.9.whl",
+        "generated artifact is tracked: dist/orama_system-1.1.0.0.whl",
         "generated artifact is tracked: DerivedData/Build/Intermediates.noindex/file",
         "generated artifact is tracked: Project.xcodeproj/xcuserdata/user.xcuserdatad/UserInterfaceState.xcuserstate",
     ]

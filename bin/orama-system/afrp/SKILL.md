@@ -20,7 +20,7 @@ Before generating output, classify the incoming query on two axes:
 ### Axis 1 — Query Type
 
 | Type | Description | Response calibration |
-|------|-------------|----------------------|
+| ---- | ----------- | -------------------- |
 | **A** | Direct factual / lookup | Concise, direct answer. No elaboration. |
 | **B** | Analytical / reasoning | Structured explanation, medium depth. |
 | **C** | Implementation / build | Full oramasys 5-stage process. |
@@ -29,7 +29,7 @@ Before generating output, classify the incoming query on two axes:
 ### Axis 2 — Audience Level
 
 | Level | Signals | Calibration |
-|-------|---------|-------------|
+| ----- | ------- | ----------- |
 | Novice | "explain", "what is", "how do I" | Plain language, analogies, step-by-step |
 | Practitioner | domain vocabulary, specific tools | Technical precision, skip basics |
 | Expert | edge cases, architecture, tradeoffs | Peer-level depth, no hand-holding |
@@ -38,20 +38,18 @@ Before generating output, classify the incoming query on two axes:
 
 ## Protocol Steps
 
-```
 1. READ the query fully before classifying
 2. CLASSIFY: Type (A/B/C/D) × Level (Novice/Practitioner/Expert)
 3. DECLARE scope: "This is a Type C / Practitioner query. Applying oramasys MODE 2."
 4. CALIBRATE output format and depth
 5. PROCEED with the appropriate oramasys mode
-```
 
 ---
 
 ## Type × Mode Mapping
 
 | Query Type | oramasys Mode | When |
-|-----------|----------------|------|
+| --------- | -------------- | ---- |
 | A | MODE 1 (inline, no plan) | Simple lookup, 1-2 steps |
 | B | MODE 1–2 | Analysis, explanation |
 | C (small) | MODE 2 (5-stage, subagents) | Build task, 3-7 steps |
@@ -62,13 +60,14 @@ Before generating output, classify the incoming query on two axes:
 
 ## Scope Declaration Format
 
-```
+```text
 AFRP Gate: Type [A/B/C/D] | Level [Novice/Practitioner/Expert] | Mode [1/2/3]
 Scope: [one sentence describing what will be done]
 ```
 
 **Example**:
-```
+
+```text
 AFRP Gate: Type C | Level Practitioner | Mode 2
 Scope: Implement CIDF-compliant content insertion for the form submission flow.
 ```
@@ -95,13 +94,23 @@ wastes the user's time and erodes trust.
    checked. If a proxy disagrees with the user's insistence, run the real method
    exhaustively before reporting a negative.
 
+3. **Explicit instruction vs. my guess (catastrophic assumption).** The user gave an exact
+   name / path / structure (e.g. write to `.agent/memory`) and I am tempted to silently
+   "correct" it to something that seems cleaner (`.agents/memory`), or to write into an area
+   whose conventions I have not read. → Use the explicit value **verbatim**; read the area's
+   `AGENTS.md` / `_index` first; verify I am not on a stale branch (compare HEAD **tree** to
+   origin, not ahead/behind). If it still seems wrong, **ASK** — never substitute a guess for
+   an explicit instruction. Overriding an unambiguous instruction is not a judgment call; it
+   is the failure this protocol exists to prevent.
+
 **Proxy ≠ real question (examples that bit us):**
 
 | Cheap proxy I used | The real question | Right method |
-|--------------------|-------------------|--------------|
+| ---------------- | ---------------- | ------------ |
 | `git merge-base != root` ⇒ "not orphaned" | does the branch's *content* converge with main? | byte-identical **tree-twin** search (`git log main --format='%H %T'`) |
 | "no commits absent ⇒ no data loss ⇒ nothing to restore" | does the user want the *refs/history* reconciled regardless? | ask; reconcile per their model |
 | "tests pass" | does the feature actually work? | run it / observe behavior |
+| "`.agents/` is tidier than the user's `.agent/`" ⇒ wrote there | which dir does the user/repo actually use? | take the explicit name verbatim; read `.agent/AGENTS.md`; check origin (the canonical dir already existed) |
 
 **Reflect, then route:** TRUE intent (clarify if ambiguous) → correct method (not a proxy)
 → act. Trust the user's domain signal over my first-pass check — their context exceeds mine.
@@ -109,26 +118,35 @@ wastes the user's time and erodes trust.
 > Earned 2026-06-04 (orama/AlphaClaw/periscope branch reconciliation): three successive
 > handwaved conclusions, each corrected by the user. See `failure-modes.md` and the
 > [`git-history-surgery`](../skills/git-history-surgery/SKILL.md) skill.
+>
+> Trigger 3 earned 2026-06-22 (Perpetua-Tools memory): the user said write to `.agent/memory`;
+> I silently used `.agents/memory` and committed there, on a stale branch, never reading the
+> canonical `.agent/AGENTS.md`. The reference DO-NOT example lives in
+> [`cidf/SKILL.md`](../cidf/SKILL.md) (verify-target) and orama [`docs/LESSONS.md` §2026-06-22](../../../docs/LESSONS.md).
 
 ---
 
 ## Boundaries
 
 ### Always Do
+
 - Run AFRP gate before any Type B, C, or D response
 - State the gate result explicitly when using Mode 2 or 3
 - Re-run gate if the user clarifies a Type D query
 - **Run the Intent-Verification gate** on interpretation risk or before any "nothing to do" conclusion — AskUserQuestion FIRST, reflect, use the real method not a proxy
 
 ### Ask First
+
 - Reclassifying from C to D (means the task is ambiguous — confirm with user)
 - Any request open to ≥2 interpretations, or where the user insists against my first check — confirm intent before acting
 
 ### Never Do
+
 - Skip the gate for complex or audience-dependent queries
 - Proceed with Mode 3 without declaring it explicitly
 - Assume expert level without signals confirming it
 - **Handwave**: assert "done / fine / nothing needed" from a narrow proxy without confirming intent or running the method that truly answers the question
+- **Override an explicit instruction with a guess**: silently substitute your own name/path/structure for the exact one the user gave, or write into an area without reading its `AGENTS.md`/`_index` (see Intent-Verification trigger 3)
 
 ---
 
@@ -143,4 +161,3 @@ Query arrives → AFRP Gate → Mode Router → MODE 1 / 2 / 3
 ```
 
 *See `bin/orama-system/SKILL.md` for the full execution mode router.*
-

@@ -11,12 +11,14 @@ git pull origin main
 ```
 
 Then in Claude Code:
-```
+
+```bash
 /instinct-import .claude/homunculus/instincts/inherited/orama-system-instincts.yaml
 /instinct-status
 ```
 
 Then commit:
+
 ```bash
 git add -A
 git commit -m "chore(ecc): post-merge instinct import sync $(date +%Y-%m-%d)"

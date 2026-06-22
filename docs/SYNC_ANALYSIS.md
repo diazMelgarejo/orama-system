@@ -1,6 +1,6 @@
 ﻿# Sync Analysis: orama-system ↔ Perplexity-Tools
 
-**Date:** 2026-04-11 | **Version:** ultrathink v0.9.9.9 · PT v0.9.9.9
+**Date:** 2026-04-11 | **Version:** orama-system v1.1.0.0 · PT v1.1.0.0
 
 > **v1.0 RC transport clarification:** HTTP Bridge (`POST /oramasys` via `api_server.py`)
 > is the **active primary transport** for v1.0 RC. MCP-Optional transport (stdio JSON-RPC)
@@ -15,9 +15,9 @@
 
 | Dimension | Status | Notes |
 |---|---|---|
-| **Version** | ✅ IN SYNC | Both at v0.9.9.9 |
+| **Version** | ✅ IN SYNC | Both at v1.1.0.0 |
 | **Architecture contract** | ✅ IN SYNC | 4-layer hierarchy documented + upheld |
-| **Bridge doc** | ✅ IN SYNC | PERPLEXITY_BRIDGE.md aligned to v0.9.9.9; HAL cross-link complete 
+| **Bridge doc** | ✅ IN SYNC | PERPLEXITY_BRIDGE.md aligned to v1.1.0.0; HAL cross-link complete 
 | **API endpoint spec** | ✅ IN SYNC | HTTP Bridge (`POST /oramasys`) is v1.0 RC primary transport; `/ultrathink` is a deprecated shim; MCP-Optional planned for v1.1 |
 | **Idempotency contract** | ✅ RESOLVED | PT owns all state via `.state/agents.json`; ultrathink stateless (no Redis). Redis deferred to PT v1.1+ |
 | **Shared `.env` contract** | ✅ IN SYNC | Vars in both `.env.example` files match BRIDGE doc |

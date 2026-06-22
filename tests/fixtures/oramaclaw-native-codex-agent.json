@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "target": {
+    "workspace_root": "__TMP__/workspace",
+    "config_path": "__TMP__/openclaw.json",
+    "state_dir": "__TMP__"
+  },
+  "resources": [
+    {
+      "kind": "agent",
+      "id": "codex-agent",
+      "manager": "codex-binder",
+      "policy": "conflict",
+      "spec": {
+        "name": "codex-agent",
+        "workspace": "~/.openclaw/agents/codex-agent",
+        "agentDir": "~/.openclaw/agents/codex-agent/agent",
+        "model": "codex/gpt-5.5",
+        "thinkingDefault": "medium",
+        "tools": {
+          "profile": "coding"
+        }
+      },
+      "managed_paths": [
+        "/agents/list/id=codex-agent/workspace",
+        "/agents/list/id=codex-agent/agentDir",
+        "/agents/list/id=codex-agent/model",
+        "/agents/list/id=codex-agent/thinkingDefault",
+        "/agents/list/id=codex-agent/tools/profile"
+      ]
+    },
+    {
+      "kind": "delegation",
+      "id": "main-allows-codex-agent",
+      "manager": "codex-binder",
+      "policy": "conflict",
+      "spec": {
+        "path": "agents.defaults.subagents.allowAgents",
+        "allow_agent": "codex-agent"
+      },
+      "managed_paths": [
+        "/agents/defaults/subagents/allowAgents"
+      ]
+    }
+  ]
+}

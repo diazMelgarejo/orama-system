@@ -55,19 +55,21 @@ This skill is intentionally agent-neutral:
 Classify the query on two axes **before** any stage or tool. Never skip.
 
 | Axis 1 — Query Type | Axis 2 — Audience |
-|---|---|
+| --- | --- |
 | **A** factual/lookup → answer direct | Novice → plain language |
 | **B** analytical → structured explanation | Practitioner → technical, skip basics |
 | **C** implementation/build → full 5-stage | Expert → peer depth, no hand-holding |
 | **D** ambiguous → clarify first | (detect from vocabulary) |
 
 State the gate result for any Type B/C/D task:
+
 ```
 AFRP: Type [A/B/C/D] | Level [Novice/Practitioner/Expert] | Mode [1/2/3]
 Scope: <one sentence>
 ```
 
 Type → Mode mapping:
+
 - A / small B → **Mode 1** (inline, no subagents)
 - C (3-7 steps) → **Mode 2** (5-stage, optional subagents)
 - C (8+ steps, parallel) → **Mode 3** (full 7-agent network via MCP)
@@ -81,11 +83,13 @@ the current harness exposes it.
 See `references/search-frugality.md` for the full decision tree.
 
 **Frugality chain (stop at first that answers):**
+
 ```
 gbrain → code-review-graph (CRG) → Brave → Perplexity → Grok
 ```
 
 Quick rules when the tool exists:
+
 - Semantic intent → `gbrain search "<terms>"` or `gbrain query "<q>"`
 - Symbol defined where? → `gbrain code-def <symbol>`
 - What calls Y? → `gbrain code-callers <symbol>`
@@ -115,6 +119,7 @@ Before Done, Demand Elegance, Autonomous Bug Fixing.
 ## Step 3 — Route heavy reasoning through the MCP server
 
 For Mode 2/3, offload deep reasoning to the orama MCP server when available.
+
 - MCP tool: **`mcp-oramasys`** (canonical, when exposed by the harness)
 - Legacy `mcp-ultrathink-*` names are deprecated aliases pointing to the same server
 - HTTP backup: `POST /oramasys` port 8001
@@ -132,17 +137,20 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 ## Boundaries
 
 ### Always Do
+
 - Run AFRP gate before any non-trivial output
 - Search local memory/CRG equivalents before broad Grep/Read/web when available
 - Apply CIDF `decide()` before any content insertion (start at rank 1)
 - Treat "ultrathink" and "oramasys" as the same trigger
 
 ### Ask First
+
 - Escalating to a paid search tier (Perplexity/Grok)
 - Spawning the full Mode-3 7-agent network
 - Any destructive action
 
 ### Never Do
+
 - Skip the AFRP gate for complex queries
 - Parallel-fire all search tools at once (frugality violation)
 - Bypass the current harness's approved browser/search path

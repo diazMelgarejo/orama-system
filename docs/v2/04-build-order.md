@@ -23,7 +23,7 @@ platform features.
 
 ## Phase 0 — Repository Initialization ✅ DONE (2026-05-02)
 
-The 3 new repositories (\`agate\`, \`oramasys\`, \`perpetua-core\`) have been initialized at \`~/Documents/oramasys/\`. Initial code for state, LLM client, policy, and the MiniGraph engine has been committed.
+The 3 new repositories (\`agate\`, \`oramasys\`, \`perpetua-core\`) have been initialized at \`~/code/oramasys/\`. Initial code for state, LLM client, policy, and the MiniGraph engine has been committed.
 
 ---
 

@@ -24,22 +24,26 @@ allowed-tools: bash, file-operations, web-search
 # Hermes Harness
 
 ## Purpose
+
 Use Hermes as an operator shell that consumes durable PT-orama/ECC skills,
 prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the runtime gateway/agent fabric.
 
 ## When to Use
+
 - A Windows or Mac operator needs Hermes installed or repaired.
 - Hermes must consume orama/OpenClaw/ECC skills without copying private state.
 - Nous Portal, LM Studio, OpenRouter, Gemini, AGY, or Codex CLI are being wired as coding partners.
 - A Hermes/OpenClaw artifact must become a reusable skill, command, hook, doc, or issue.
 
 ## Operating Thesis
+
 1. **Durable source:** orama-system and ECC own reusable skills and rules.
 2. **Harness edge:** Hermes and other tools adapt loading/invocation only at the edge.
 3. **No private imports:** never ship raw `~/.hermes`, secrets, personal memory, or account tokens.
 4. **Parallel to OpenClaw:** `openclaw-skills` owns OpenClaw config; this skill owns Hermes onboarding and partner prompts.
 
 ## Windows Bring-Up
+
 Use PowerShell with explicit UTF-8 when writing files:
 
 ```powershell
@@ -167,6 +171,7 @@ The expected slash commands are `/pt-orama-council`, `/pt-orama-review`, and
 For bounded non-interactive review on this Windows host, prefer explicit
 provider/model routing because the default LM Studio model can be reachable but
 slow enough for `hermes -z` to appear hung.
+slow enough for `hermes chat` to appear hung.
 
 ```powershell
 hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
