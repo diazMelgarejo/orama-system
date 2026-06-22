@@ -6,6 +6,7 @@ Test that the package metadata is valid, builds locally, and can be installed
 from a built wheel without relying on network access.
 Run: python test-package-install.py
 """
+import ast
 import importlib.util
 import os
 import subprocess
@@ -63,7 +64,32 @@ def main():
         print(f"✓ pyproject.toml valid")
         package_name = config["project"]["name"]
         print(f"  name: {package_name}")
-        print(f"  version: {config['project']['version']}")
+        version = config["project"].get("version")
+        if version is None and "version" in config["project"].get("dynamic", []):
+            version_path = (
+                config.get("tool", {}).get("hatch", {}).get("version", {}).get("path")
+            )
+            if version_path:
+                try:
+                    version_tree = ast.parse(Path(version_path).read_text())
+                    version = next(
+                        (
+                            node.value.value
+                            for node in version_tree.body
+                            if isinstance(node, ast.Assign)
+                            for target in node.targets
+                            if isinstance(target, ast.Name)
+                            and target.id == "__version__"
+                            and isinstance(node.value, ast.Constant)
+                            and isinstance(node.value.value, str)
+                        ),
+                        "<dynamic>",
+                    )
+                except (OSError, SyntaxError):
+                    version = "<dynamic>"
+            else:
+                version = "<dynamic>"
+        print(f"  version: {version}")
         print(f"  build backend: {config['build-system']['build-backend']}")
     except Exception as e:
         print(f"❌ Failed to parse pyproject.toml: {e}")
