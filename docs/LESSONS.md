@@ -51,6 +51,27 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+## 2026-06-22 — Claude — gbrain durability: why we kept re-fixing sync, and the self-heal that ends it
+
+### What was learned
+
+- **Why gbrain sync kept needing manual fixes:** the fixes lived only as knowledge, not automation, and removal steps were deferred. Concrete regenerating causes: (1) `gbrain autopilot --repo .` (launchd `com.gbrain.autopilot`, **KeepAlive=true** — a kill won't stop it, only `launchctl unload -w`) jammed on **204 unacked parse failures** and silently let sources go 16–29d stale; (2) every repo path move (iCloud-escape, →`~/code`) spawned a NEW per-path source and left the OLD-path one as a stale **duplicate** — quarantined 2026-06-18 but left **"pending removal"**, so it resurfaced as `sync_freshness`/`multi_source_drift` warnings every session.
+- **The existing home was already there:** `bin/orama-system/gstack/SKILL.md` §GBrain Ops (§2/§5/§6) already documented the resync/autopilot/orphan procedures — I'd missed it by searching only `bin/orama-system/skills/`. Lesson: gbrain ops is an orama-OWNED skill (gstack/ sibling of cidf/ & afrp/), extend it, don't reinvent.
+- **Gotcha:** a bare `gbrain sync` from a non-git cwd only acks failures then refuses (`Not a git repository`); per-source sync needs `--repo "<path>" --source <id>`.
+
+### Decisions made
+
+- Archived (soft-delete, reversible) the 4 orphan sources (`orama-src`, `gstack-code-ools-27e2b79c`, `gstack-code-claw-4dc4a8f3`, `periscope-src`); defs exported to `~/repo-backups/gbrain-stale-quarantine-20260622/orphan-sources.json`. periscope re-add: `gbrain sources add --path ~/code/oramasys/tools/periscope`.
+- Built `scripts/gbrain/gbrain-selfheal.sh` (idempotent: ack failures, refresh live sources with `--repo`+`--source`, report orphans/misconfig, never auto-delete) and wired it into `start.sh` (backgrounded, non-fatal). Extended `gstack/SKILL.md` §GBrain Ops with §7 + Quick-Ref rows.
+- Left the launchd autopilot **unloaded**: for a multi-repo workspace a single `--repo .` autopilot is the bug (§6), so the self-heal script / manual `/sync-gbrain` is the refresh mechanism.
+- Cross-repo lesson companion: PT `.agent/memory` lesson `d0d49b68ab24` (+ `36f924c161e1` cd-gotcha).
+
+### Open questions
+
+- Acked-but-archived sources still show in `gbrain doctor` freshness (noise); `purge --confirm-destructive` removes fully (recoverable via the manifest) if zero-noise is wanted.
+
+---
+
 ## 2026-06-22 — Claude — DO-NOT: catastrophic assumption (`.agents` vs explicit `.agent`) + stay-on-task
 
 ### What was learned
