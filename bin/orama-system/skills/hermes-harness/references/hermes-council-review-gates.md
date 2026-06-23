@@ -33,8 +33,8 @@ flowchart TD
     I --> J{All Steps Done?}
     J -- No --> E
     J -- Yes --> K[Final Review by Antigravity]
-    K --> L[CLEAN?]
-    L -- No --> E
+    K --> L{CLEAN?}
+    L -- No --> B[Create Detailed Plan]
     L -- Yes --> M[Finalize & Commit]
 
     E -.->|Private/Sensitive| N[Delegate to Hermes Qwen]

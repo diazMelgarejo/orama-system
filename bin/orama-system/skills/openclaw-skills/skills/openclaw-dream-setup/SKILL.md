@@ -44,7 +44,7 @@ agent_dir="agents/$agent_id"
 [ -d "$agent_dir" ] || { echo "agent not found" >&2; exit 1; }
 mkdir -p "$agent_dir/memory/archives"
 ```
-1. Create `DREAM-ROUTINE.md` with fixed token budgets.
+2. Create `DREAM-ROUTINE.md` with fixed token budgets.
 
 ```bash
 cat > "$agent_dir/DREAM-ROUTINE.md" <<'EOT'
@@ -55,7 +55,7 @@ cat > "$agent_dir/DREAM-ROUTINE.md" <<'EOT'
 - Never exceed caps; trim low-signal memory first.
 EOT
 ```
-1. Create `MEMORY.md` if missing.
+3. Create `MEMORY.md` if missing.
 
 ```bash
 [ -f "$agent_dir/MEMORY.md" ] || cat > "$agent_dir/MEMORY.md" <<'EOT'
@@ -64,7 +64,7 @@ EOT
 Curated long-term facts, preferences, and durable project decisions.
 EOT
 ```
-1. Add cron job in `openclaw.json` for dream routine.
+4. Add cron job in `openclaw.json` for dream routine.
 
 ```bash
 job_id="${job_id:-$agent_id-dream-nightly}"
@@ -80,7 +80,7 @@ jq --arg id "$job_id" --arg aid "$agent_id" --arg rt "$run_time" '
   }]
 ' openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
 ```
-1. Add QMD index references in `openclaw.json`.
+5. Add QMD index references in `openclaw.json`.
 
 ```bash
 jq --arg aid "$agent_id" '
@@ -89,7 +89,7 @@ jq --arg aid "$agent_id" '
   .agents.indexes[$aid].qmd = ["agents/"+$aid+"/MEMORY.md", "agents/"+$aid+"/memory/archives"]
 ' openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
 ```
-1. Update `AGENTS.md` startup sequence for memory preloads.
+6. Update `AGENTS.md` startup sequence for memory preloads.
 
 ```bash
 grep -q 'DREAM-ROUTINE.md' "$agent_dir/AGENTS.md" || cat >> "$agent_dir/AGENTS.md" <<'EOT'
@@ -100,7 +100,7 @@ grep -q 'DREAM-ROUTINE.md' "$agent_dir/AGENTS.md" || cat >> "$agent_dir/AGENTS.m
 3. Respect DREAM-ROUTINE.md token caps
 EOT
 ```
-1. Deploy and verify.
+7. Deploy and verify.
 
 ```bash
 rm -f ~/.openclaw/cron/jobs.json
