@@ -15,19 +15,19 @@ During a 48-hour window two agents worked simultaneously on overlapping files:
 
 ## Version Registry
 
-**Current version: `0.9.9.7`.** Do NOT bump without explicit user instruction.
+**Current version: `1.1.0.0`.** Do NOT bump without explicit user instruction.
 
 All canonical locations that MUST be kept in sync:
 
 | File | Field |
 |------|-------|
-| `pyproject.toml:7` | `version = "0.9.9.7"` |
-| `bin/orama-system/SKILL.md:10` | `version: 0.9.9.7` |
-| `bin/config/agent_registry.json:2` | `"version": "0.9.9.7"` |
-| `portal_server.py:26` | `VERSION = "0.9.9.7"` |
-| `bin/agents/*/agent.md:4` | `version: 0.9.9.7` |
-| `CLAUDE.md` | `(v0.9.9.7)` |
-| `docs/PERPLEXITY_BRIDGE.md:3` | `Version 0.9.9.7` |
+| `pyproject.toml:7` | `version = "1.1.0.0"` |
+| `bin/orama-system/SKILL.md:10` | `version: 1.1.0.0` |
+| `bin/config/agent_registry.json:2` | `"version": "1.1.0.0"` |
+| `portal_server.py:26` | `VERSION = "1.1.0.0"` |
+| `bin/agents/*/agent.md:4` | `version: 1.1.0.0` |
+| `CLAUDE.md` | `(v1.1.0.0)` |
+| `docs/PERPLEXITY_BRIDGE.md:3` | `Version 1.1.0.0` |
 
 ---
 
