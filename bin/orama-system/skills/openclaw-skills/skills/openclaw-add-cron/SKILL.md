@@ -46,7 +46,7 @@ set -euo pipefail
 case "$schedule_type" in cron|every|at) ;; *) echo "invalid schedule_type" >&2; exit 1;; esac
 [ -n "$job_id" ] && [ -n "$agent_id" ] && [ -n "$schedule_value" ] && [ -n "$prompt" ]
 ```
-1. Append or update cron job in `openclaw.json`.
+2. Append or update cron job in `openclaw.json`.
 
 ```bash
 jq --arg id "$job_id" --arg aid "$agent_id" --arg t "$schedule_type" --arg v "$schedule_value" --arg p "$prompt" '
@@ -61,28 +61,28 @@ jq --arg id "$job_id" --arg aid "$agent_id" --arg t "$schedule_type" --arg v "$s
   }]
 ' openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
 ```
-1. Remove transient `jobs.json` before deployment.
+3. Remove transient `jobs.json` before deployment.
 
 ```bash
 rm -f ~/.openclaw/cron/jobs.json
 ```
-1. Deploy with stow.
+4. Deploy with stow.
 
 ```bash
 stow --no-folding -t "$HOME" .
 ```
-1. Restart gateway and wait.
+5. Restart gateway and wait.
 
 ```bash
 launchctl kickstart -k "gui/$(id -u)/com.openclaw.gateway"
 sleep 5
 ```
-1. Verify job materialization.
+6. Verify job materialization.
 
 ```bash
 jq '.cron.jobs[] | select(.id=="'"$job_id"'")' openclaw.json
 ```
-1. Verify runtime logs for scheduler load.
+7. Verify runtime logs for scheduler load.
 
 ```bash
 log show --style syslog --last 5m --predicate 'eventMessage CONTAINS[c] "cron" OR eventMessage CONTAINS[c] "scheduler"' | tail -n 120

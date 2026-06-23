@@ -67,6 +67,7 @@ Purpose: {spec.purpose}
 Canonical source of truth:
 
 - Repo: `diazMelgarejo/orama-system`
+- Branch/PR at install time: `codex/hermes-ecc-harness-skills` / PR #96
 - Canonical path: `{spec.canonical}`
 
 ## Before Use
@@ -82,6 +83,7 @@ Canonical source of truth:
 ## Windows Readiness
 
 - Hermes one-shot: `hermes chat --query \"Reply with exactly: HERMES_READY\" --quiet --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1`
+- AGY install: `irm https://antigravity.google/cli/install.ps1 | iex`
 - AGY install: save-first — `Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\\agy-install.ps1"; Get-Content "$env:TEMP\\agy-install.ps1" | Select-Object -First 40; & powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\\agy-install.ps1"`
 - AGY readiness: `agy --print \"Reply with exactly: AGY_READY\"` must print visible stdout.
 - LM Studio readiness: `/v1/models` is not enough; require a fast chat-completions canary.
@@ -218,6 +220,11 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--test", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args()
+    if not args.install and not args.verify:
+        parser.error("choose --install and/or --verify")
     parser.add_argument("--test", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

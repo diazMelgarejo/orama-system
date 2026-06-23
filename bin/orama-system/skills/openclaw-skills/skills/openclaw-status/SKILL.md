@@ -42,37 +42,37 @@ set -euo pipefail
 lookback_minutes="${lookback_minutes:-15}"
 health_url="${health_url:-http://127.0.0.1:7331/health}"
 ```
-1. Probe gateway health endpoint.
+2. Probe gateway health endpoint.
 
 ```bash
 gateway_json="$(curl -fsS "$health_url" || true)"
 ```
-1. Check launchd service status.
+3. Check launchd service status.
 
 ```bash
 launchctl print "gui/$(id -u)/com.openclaw.gateway" >/tmp/openclaw-launchd.txt 2>&1 || true
 ```
-1. Check channel indicators (Telegram/Slack/WhatsApp) from logs.
+4. Check channel indicators (Telegram/Slack/WhatsApp) from logs.
 
 ```bash
 log show --style syslog --last "${lookback_minutes}m" --predicate 'eventMessage CONTAINS[c] "telegram" OR eventMessage CONTAINS[c] "slack" OR eventMessage CONTAINS[c] "whatsapp"' > /tmp/openclaw-channels.log || true
 ```
-1. Check configured agent count.
+5. Check configured agent count.
 
 ```bash
 agent_count="$(jq '.agents.list | length' openclaw.json 2>/dev/null || echo 0)"
 ```
-1. Check cron run/error signals.
+6. Check cron run/error signals.
 
 ```bash
 log show --style syslog --last "${lookback_minutes}m" --predicate 'eventMessage CONTAINS[c] "cron" OR eventMessage CONTAINS[c] "scheduler" OR eventMessage CONTAINS[c] "error"' > /tmp/openclaw-cron.log || true
 ```
-1. Emit JSON status summary.
+7. Emit JSON status summary.
 
 ```bash
 jq -n --arg gateway "$gateway_json" --arg launchd "$(tail -n 20 /tmp/openclaw-launchd.txt | tr '\n' ' ')" --argjson agents "$agent_count" '{status:"ok",gateway:$gateway,launchd:$launchd,agent_count:$agents}'
 ```
-1. Print actionable tail snippets for operators.
+8. Print actionable tail snippets for operators.
 
 ```bash
 tail -n 40 /tmp/openclaw-channels.log || true

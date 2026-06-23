@@ -47,12 +47,12 @@ printf '%s' "$agent_id" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$'
 [ "$mode" = "standalone" ] || [ "$mode" = "sub-agent" ]
 if [ "$mode" = "sub-agent" ]; then [ -n "${parent_agent_id:-}" ]; fi
 ```
-1. Create required directory tree.
+2. Create required directory tree.
 
 ```bash
 mkdir -p "agents/$agent_id/memory/archives" "agents/$agent_id/scripts/lib"
 ```
-1. Create six directive files if missing.
+3. Create six directive files if missing.
 
 ```bash
 for f in SOUL.md IDENTITY.md USER.md AGENTS.md TOOLS.md SECURITY.md; do
@@ -65,7 +65,7 @@ Populate this file for agent: $agent_id
 EOT
 done
 ```
-1. Set identity and default model in `IDENTITY.md`.
+4. Set identity and default model in `IDENTITY.md`.
 
 ```bash
 cat > "agents/$agent_id/IDENTITY.md" <<EOT
@@ -76,7 +76,7 @@ cat > "agents/$agent_id/IDENTITY.md" <<EOT
 - Primary Model: ${model_primary:-ollama/qwen3.5:9b-nvfp4}
 EOT
 ```
-1. Add agent entry in `openclaw.json` under `agents.list`.
+5. Add agent entry in `openclaw.json` under `agents.list`.
 
 ```bash
 jq --arg id "$agent_id" --arg name "$display_name" --arg model "${model_primary:-ollama/qwen3.5:9b-nvfp4}" '
@@ -85,7 +85,7 @@ jq --arg id "$agent_id" --arg name "$display_name" --arg model "${model_primary:
   else .agents.list += [{id:$id,name:$name,model:{primary:$model}}] end
 ' openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
 ```
-1. If `mode=sub-agent`, wire parent allow-list/binding.
+6. If `mode=sub-agent`, wire parent allow-list/binding.
 
 ```bash
 if [ "$mode" = "sub-agent" ]; then
@@ -98,7 +98,7 @@ if [ "$mode" = "sub-agent" ]; then
   ' openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
 fi
 ```
-1. If channel requested, delegate to `openclaw-add-channel` after create.
+7. If channel requested, delegate to `openclaw-add-channel` after create.
 
 ```bash
 if [ "${channel:-none}" != "none" ]; then
