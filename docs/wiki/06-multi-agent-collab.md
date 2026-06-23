@@ -15,19 +15,43 @@ During a 48-hour window two agents worked simultaneously on overlapping files:
 
 ## Version Registry
 
-**Current version: `1.1.0.0`.** Do NOT bump without explicit user instruction.
+**Single source of truth: `src/orama_system/_version.py`.**
+Import as `from orama_system._version import __version__`.
 
-All canonical locations that MUST be kept in sync:
+**To bump:** edit `__version__` in `_version.py` only, then run:
+```bash
+python3 scripts/sync_version.py              # propagates to all surfaces below
+python3 -m pytest tests/test_version_docs.py # verify
+git add -A && git commit -m "chore(version): bump to X.Y.Z.W"
+```
 
-| File | Field |
-|------|-------|
-| `pyproject.toml:7` | `version = "1.1.0.0"` |
-| `bin/orama-system/SKILL.md:10` | `version: 1.1.0.0` |
-| `bin/config/agent_registry.json:2` | `"version": "1.1.0.0"` |
-| `portal_server.py:26` | `VERSION = "1.1.0.0"` |
-| `bin/agents/*/agent.md:4` | `version: 1.1.0.0` |
-| `CLAUDE.md` | `(v1.1.0.0)` |
-| `docs/PERPLEXITY_BRIDGE.md:3` | `Version 1.1.0.0` |
+Canonical surfaces managed by `scripts/sync_version.py` (never edit manually):
+
+| File | Field | Status |
+|------|-------|--------|
+| `src/orama_system/_version.py` | `__version__` | **SOURCE — edit only here** |
+| `pyproject.toml` | `dynamic = ["version"]` via hatch | auto |
+| `bin/orama-system/SKILL.md` | `version:` frontmatter | auto |
+| `CLAUDE.md` | package ref | auto |
+| `README.md` | version badge | auto |
+| `bin/config/agent_registry.json` | `"version"` | auto |
+| `bin/orama-system/config/agent_registry.json` | `"version"` | auto |
+| `bin/orama-system/config/routing_rules.json` | `"version"` | auto |
+| `src/orama_system/portal_server.py` | `VERSION =` | auto |
+| `bin/agents/*/agent.md` | `version:` frontmatter | auto |
+| `bin/mcp_servers/*.py` | `Version: X` docstring header | auto |
+| `bin/shared/*.py` | `Version: X` docstring header | auto |
+| `platform/windows/install.ps1` | `version = 'X'` | auto |
+| `docs/PERPLEXITY_BRIDGE.md` | `## Version X` | auto |
+| `docs/SYNC_ANALYSIS.md` | version refs | auto |
+| `bin/orama-system/afrp/README.md` | `**Version:**` | auto |
+| `bin/orama-system/skills/self-discovery/SKILL.md` | `version:` | auto |
+
+**Not managed — intentional:**
+- `CHANGELOG.md`, `docs/LESSONS.md` — accurate historical records
+- `docs/plans/`, `docs/superpowers/specs/` — historical planning docs
+- `scripts/setup_macos.py` `KNOWN_ALPHACLAW_VERSION` — AlphaClaw runtime (separate version train)
+- `openrouter-defaults.md` `Version:` — skill-doc revision, not package version
 
 ---
 

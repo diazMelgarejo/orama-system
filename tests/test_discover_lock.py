@@ -143,6 +143,7 @@ def test_lock_timeout_raises(tmp_path, monkeypatch):
     with pytest.raises(TimeoutError, match="discovery lock timeout"):
         with discover._Lock(timeout=0.1):
             pass
+            pass
 
 
 def test_lock_propagates_non_contention_os_error(tmp_path, monkeypatch):

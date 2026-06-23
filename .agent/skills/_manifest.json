@@ -28,5 +28,10 @@
     "name": "perpetua-tools",
     "path": ".agents/skills/perpetua-tools/SKILL.md",
     "triggers": ["perpetua", "perpetua-tools", "orchestrator", "model selection"]
+  },
+  {
+    "name": "icloud-escape-move",
+    "path": "bin/orama-system/skills/icloud-escape-move/SKILL.md",
+    "triggers": ["icloud", "escape icloud", "move repos out of icloud", "icloud eviction", "git worktree repair", "compatibility symlink after move", "relocate git tree"]
   }
 ]

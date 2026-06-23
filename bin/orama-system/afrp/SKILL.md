@@ -94,6 +94,15 @@ wastes the user's time and erodes trust.
    checked. If a proxy disagrees with the user's insistence, run the real method
    exhaustively before reporting a negative.
 
+3. **Explicit instruction vs. my guess (catastrophic assumption).** The user gave an exact
+   name / path / structure (e.g. write to `.agent/memory`) and I am tempted to silently
+   "correct" it to something that seems cleaner (`.agents/memory`), or to write into an area
+   whose conventions I have not read. → Use the explicit value **verbatim**; read the area's
+   `AGENTS.md` / `_index` first; verify I am not on a stale branch (compare HEAD **tree** to
+   origin, not ahead/behind). If it still seems wrong, **ASK** — never substitute a guess for
+   an explicit instruction. Overriding an unambiguous instruction is not a judgment call; it
+   is the failure this protocol exists to prevent.
+
 **Proxy ≠ real question (examples that bit us):**
 
 | Cheap proxy I used | The real question | Right method |
@@ -101,6 +110,7 @@ wastes the user's time and erodes trust.
 | `git merge-base != root` ⇒ "not orphaned" | does the branch's *content* converge with main? | byte-identical **tree-twin** search (`git log main --format='%H %T'`) |
 | "no commits absent ⇒ no data loss ⇒ nothing to restore" | does the user want the *refs/history* reconciled regardless? | ask; reconcile per their model |
 | "tests pass" | does the feature actually work? | run it / observe behavior |
+| "`.agents/` is tidier than the user's `.agent/`" ⇒ wrote there | which dir does the user/repo actually use? | take the explicit name verbatim; read `.agent/AGENTS.md`; check origin (the canonical dir already existed) |
 
 **Reflect, then route:** TRUE intent (clarify if ambiguous) → correct method (not a proxy)
 → act. Trust the user's domain signal over my first-pass check — their context exceeds mine.
@@ -108,6 +118,11 @@ wastes the user's time and erodes trust.
 > Earned 2026-06-04 (orama/AlphaClaw/periscope branch reconciliation): three successive
 > handwaved conclusions, each corrected by the user. See `failure-modes.md` and the
 > [`git-history-surgery`](../skills/git-history-surgery/SKILL.md) skill.
+>
+> Trigger 3 earned 2026-06-22 (Perpetua-Tools memory): the user said write to `.agent/memory`;
+> I silently used `.agents/memory` and committed there, on a stale branch, never reading the
+> canonical `.agent/AGENTS.md`. The reference DO-NOT example lives in
+> [`cidf/SKILL.md`](../cidf/SKILL.md) (verify-target) and orama [`docs/LESSONS.md` §2026-06-22](../../../docs/LESSONS.md).
 
 ---
 
@@ -131,6 +146,7 @@ wastes the user's time and erodes trust.
 - Proceed with Mode 3 without declaring it explicitly
 - Assume expert level without signals confirming it
 - **Handwave**: assert "done / fine / nothing needed" from a narrow proxy without confirming intent or running the method that truly answers the question
+- **Override an explicit instruction with a guess**: silently substitute your own name/path/structure for the exact one the user gave, or write into an area without reading its `AGENTS.md`/`_index` (see Intent-Verification trigger 3)
 
 ---
 

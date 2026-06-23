@@ -55,7 +55,7 @@ Bootstrap handles automatically (no manual steps needed):
 
 - ✅ Removes stale `.git/*.lock` files
 - ✅ Warns on orphan refs with spaces
-- ✅ Creates `~/Documents/oramasys/worktrees/<slug>/`
+- ✅ Creates `~/code/oramasys/worktrees/<slug>/`
 - ✅ Writes `.gbrain-source`
 - ✅ Appends macOS dedup patterns to `.gitignore`
 - ✅ Assigns `ENV_OFFSET = worktree_index × 100`
@@ -67,7 +67,7 @@ Bootstrap handles automatically (no manual steps needed):
 ## Step 2 — Enter and Configure
 
 ```bash
-cd ~/Documents/oramasys/worktrees/<slug>
+cd ~/code/oramasys/worktrees/<slug>
 source .worktree-env    # loads ENV_OFFSET, port vars
 
 # Verify gbrain pin
@@ -86,6 +86,18 @@ python3 scripts/review/repo_hygiene.py .
 # Must print "OK: repo hygiene checks passed"
 # WARNING = non-blocking; ERROR = fix before committing
 ```
+
+**If this commit includes a version bump**, run the version sync first:
+
+```bash
+# Edit src/orama_system/_version.py only, then:
+python3 scripts/sync_version.py          # propagate to all 25+ surfaces
+python3 -m pytest tests/test_version_docs.py  # verify
+# Then continue with repo_hygiene.py check above
+```
+
+See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
+See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
 
 **Why this matters especially for worktrees:** docs, plans, and bash snippets
 written from a worktree often embed the machine-local path. Those paths are
@@ -175,7 +187,7 @@ The skill will:
 
 ```bash
 # From canonical checkout:
-git worktree remove ~/Documents/oramasys/worktrees/<slug>
+git worktree remove ~/code/oramasys/worktrees/<slug>
 git worktree list    # verify removed
 git branch -d <branch>
 ```
@@ -212,7 +224,7 @@ cat .worktree-env
 | `git fetch` fails: `bad object refs/heads/... 2` | `find .git/refs -name "* *"` then `git update-ref -d "refs/heads/<name>"` |
 | `git checkout` / `git stash` blocked | `find .git -name "*.lock" -delete` |
 | `.gbrain-source` missing in new worktree | `echo "<source-id>" > .gbrain-source` |
-| `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/` |
+| `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/`. **Permanent fix — move the tree out of iCloud: see [[icloud-escape-move]].** |
 | Port collision with sibling worktree | Check `.worktree-env`; ENV_OFFSET must differ per worktree |
 | `/autoplan` Step 0 fails (base branch) | `cd` to a git repo root before invoking any skill |
 
