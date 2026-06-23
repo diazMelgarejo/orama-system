@@ -40,7 +40,11 @@ def test_active_version_surfaces_match_version_file():
     # pyproject: accept static declaration OR correct hatch dynamic wiring
     if f'version = "{EXPECTED}"' in pyproject:
         pass
-    elif "dynamic" in pyproject and 'path = "src/orama_system/_version.py"' in pyproject:
+    elif (
+        'dynamic = ["version"]' in pyproject
+        and "[tool.hatch.version]" in pyproject
+        and 'path = "src/orama_system/_version.py"' in pyproject
+    ):
         pass
     else:
         raise AssertionError(
