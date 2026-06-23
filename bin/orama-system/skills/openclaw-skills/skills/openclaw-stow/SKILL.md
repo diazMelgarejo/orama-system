@@ -41,27 +41,27 @@ set -euo pipefail
 target_dir="${target_dir:-$HOME}"
 command -v stow >/dev/null
 ```
-1. Resolve known cron conflict by removing transient file.
+2. Resolve known cron conflict by removing transient file.
 
 ```bash
 rm -f ~/.openclaw/cron/jobs.json
 ```
-1. Run GNU stow with no-folding.
+3. Run GNU stow with no-folding.
 
 ```bash
 stow --no-folding -t "$target_dir" .
 ```
-1. Detect unresolved conflicts.
+4. Detect unresolved conflicts.
 
 ```bash
 stow --no-folding -n -v -t "$target_dir" .
 ```
-1. Confirm critical symlinks exist.
+5. Confirm critical symlinks exist.
 
 ```bash
 [ -e "$target_dir/.openclaw" ] || true
 ```
-1. If dry-run requested, preview without mutating and exit.
+6. If dry-run requested, preview without mutating and exit.
 
 ```bash
 if [ "${dry_run:-false}" = "true" ]; then
@@ -69,7 +69,7 @@ if [ "${dry_run:-false}" = "true" ]; then
   exit 0
 fi
 ```
-1. Report deployment completion status.
+7. Report deployment completion status.
 
 ```bash
 echo "{\"status\":\"ok\",\"target_dir\":\"$target_dir\"}"
