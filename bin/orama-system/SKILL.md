@@ -22,9 +22,9 @@ sub_skills:
   - path: skills/skillify/SKILL.md
     trigger: "create a skill, new skill, /skillify, add sub-skill, build a skill, make a skill"
   - path: skills/mcp-install/SKILL.md
-    trigger: "install mcp stack, setup gemini mcp (deprecated), register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
+    trigger: "install mcp stack, setup gemini mcp, register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
   - path: skills/mcp-orchestration/SKILL.md
-    trigger: "mcp orchestration, connect mcp tools to openclaw, gemini large context (deprecated), ai-cli-mcp, background agents, dispatch parallel ai cli, openclaw mcp, SKILL.md claude skills, mcp json tool setup"
+    trigger: "mcp orchestration, connect mcp tools to openclaw, gemini large context, ai-cli-mcp, background agents, dispatch parallel ai cli, openclaw mcp, SKILL.md claude skills, mcp json tool setup"
   - path: skills/first-run-setup/SKILL.md
     trigger: "first-run install, bootstrap orama, setup new machine, first run, §0 checklist, first-run-install.sh"
   - path: skills/code-review/SKILL.md
