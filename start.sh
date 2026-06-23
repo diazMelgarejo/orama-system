@@ -1,5 +1,5 @@
 #!/bin/bash
-# start.sh — orama-system thin delegator  v0.9.9.8
+# start.sh — orama-system thin delegator  v1.1.0.0
 #
 # orama-system is Layer 3 — orchestration / meta-intelligence / delegate runtime.
 # All gateway/backend/mode decisions are PT's responsibility (Perpetua-Tools).
@@ -915,7 +915,7 @@ _print_banner() {
   printf "║  ██║   ██║██████╔╝███████║██╔████╔██║███████║                    ║\n"
   printf "║  ██║   ██║██╔══██╗██╔══██║██║╚██╔╝██║██╔══██║                    ║\n"
   printf "║  ╚██████╔╝██║  ██║██║  ██║██║ ╚═╝ ██║██║  ██║                    ║\n"
-  printf "║   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝  v0.9.9.8          ║\n"
+  printf "║   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝  v1.1.0.0          ║\n"
   echo "║                                                                  ║"
   echo "║  ὅραμα — vision/revelation · Layer 3 orchestration/meta-intel    ║"
   echo "╠══════════════════════════════════════════════════════════════════╣"

@@ -1,5 +1,5 @@
 # scripts/ensure_requirements.ps1 — Windows hard-requirements probe + installer
-# orama-system v0.9.9.8 — Run on the Windows GPU box
+# orama-system v1.1.0.0 — Run on the Windows GPU box
 #
 # HARD requirements:
 #   LM Studio — auto-installed via winget if missing

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # scripts/ensure_requirements.sh — idempotent hard-requirements probe + installer
-# orama-system v0.9.9.8
+# orama-system v1.1.0.0
 #
 # HARD requirements (fail closed — startup aborts if absent and can't be fixed):
 #   Ollama binary + server at localhost:11434  (auto-installed on Linux/macOS/Docker)

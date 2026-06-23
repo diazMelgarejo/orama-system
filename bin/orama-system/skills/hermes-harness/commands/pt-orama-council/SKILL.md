@@ -90,7 +90,7 @@ HANDOFF NOTES:
 
 - Perpetua-Tools hardware profiles (canonical hardware routing source):
   - `Profile A — mac-studio`: `Qwen3.5-9B-MLX-4bit` via LM Studio on Metal (macOS/MLX-only).
-  - `Profile B — win-rtx3080`: `Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2` via LM Studio with `gpu_offload=40`, `context 16384`.
+  - `Profile B — win-rtx3080`: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2` via LM Studio with `gpu_offload=40`, `context 16384`.
   - These hardware profiles are the authoritative reason `qwen3.5-9b-mlx`/MLX models must not be listed for Windows lanes.
 - Canonical skill source: `bin/orama-system/skills/hermes-harness/commands/pt-orama-council/SKILL.md` (this file)
 - Hermes Windows harness: `docs/wiki/15-hermes-windows-harness.md`

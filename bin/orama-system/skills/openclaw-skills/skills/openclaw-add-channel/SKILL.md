@@ -52,22 +52,22 @@ case "$channel_type" in
   *) echo "unsupported channel_type" >&2; exit 1 ;;
 esac
 ```
-1. Update `openclaw-secrets.sh` for launchd/gateway startup.
+2. Update `openclaw-secrets.sh` for launchd/gateway startup.
 
 ```bash
 # Add export lines that read from keychain service names above.
 ```
-1. Update `openclaw-env.sh` for CLI/shell sessions.
+3. Update `openclaw-env.sh` for CLI/shell sessions.
 
 ```bash
 # Mirror launchd exports so terminal commands do not fail with MissingEnvVarError.
 ```
-1. Update provisioning `secrets.sh` for disaster recovery.
+4. Update provisioning `secrets.sh` for disaster recovery.
 
 ```bash
 # Ensure new keychain service is recreated on fresh machines.
 ```
-1. Add channel config and agent binding in `openclaw.json`.
+5. Add channel config and agent binding in `openclaw.json`.
 
 ```bash
 jq --arg c "$channel_type" --arg a "$agent_id" '
@@ -80,7 +80,7 @@ jq --arg c "$channel_type" --arg a "$agent_id" '
   else .agents.bindings[$a].channels += [$c] end
 ' openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
 ```
-1. Deploy and restart.
+6. Deploy and restart.
 
 ```bash
 rm -f ~/.openclaw/cron/jobs.json
@@ -88,7 +88,7 @@ stow --no-folding -t "$HOME" .
 launchctl kickstart -k "gui/$(id -u)/com.openclaw.gateway"
 sleep 5
 ```
-1. Verify channel connectivity in logs.
+7. Verify channel connectivity in logs.
 
 ```bash
 log show --style syslog --last 5m --predicate 'eventMessage CONTAINS[c] "telegram" OR eventMessage CONTAINS[c] "slack" OR eventMessage CONTAINS[c] "whatsapp"' | tail -n 80

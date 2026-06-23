@@ -45,7 +45,7 @@ scripts/worktree-bootstrap.sh <repo-path> <branch> <slug> [gbrain-source-id]
 
 # Example
 scripts/worktree-bootstrap.sh \
-  ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system \
+  $OPENCLAW_ROOT \
   feat/my-feature \
   2026-05-24-my-feature \
   orama-src
