@@ -10,7 +10,7 @@ Use this when working on **feature-development** in `orama-system`.
 
 ## Mother Skill
 
-Always load `bin/orama-system/SKILL.md` (v0.9.9.3) first for the full ultrathink methodology, AFRP gate, CIDF rules, and 6 directives.
+Always load `bin/orama-system/SKILL.md` (v1.1.0.0) first for the full ultrathink methodology, AFRP gate, CIDF rules, and 6 directives.
 
 ## Common Files
 

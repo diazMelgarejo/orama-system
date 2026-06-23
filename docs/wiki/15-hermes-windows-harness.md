@@ -10,7 +10,6 @@ reviews.
 
 Hermes installed correctly under `%LOCALAPPDATA%\hermes`, but `hermes.exe` was
 not on the active PowerShell `PATH`. The default provider was LM Studio with a
-local model that was reachable but slow enough for `hermes -z` to time out.
 local model that was reachable but slow enough for `hermes chat` to time out.
 Hermes terminal tools also need a real `bash.exe`; relying on a generic `bash`
 lookup can miss GitHub Desktop's bundled Git Bash.

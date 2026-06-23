@@ -1,6 +1,6 @@
 # Cross-Platform Compatibility
 
-> **Status:** v0.9.9.8 — macOS (primary), Linux (supported), Windows (via `windows/start.ps1`)
+> **Status:** v1.1.0.0 — macOS (primary), Linux (supported), Windows (via `windows/start.ps1`)
 >
 > **Last updated:** 2026-05-08
 

@@ -19,8 +19,18 @@ def test_active_version_surfaces_match_version_file():
     claude    = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     skill     = (ROOT / "bin" / "orama-system" / "SKILL.md").read_text(encoding="utf-8")
 
-    assert EXPECTED in pyproject or f'version = "{EXPECTED}"' in pyproject or "dynamic" in pyproject, \
-        f"pyproject.toml does not reference {EXPECTED} (may be dynamic — OK if [tool.hatch.version] present)"
+    # Dynamic hatch version: pyproject must declare dynamic=["version"] AND
+    # [tool.hatch.version] must point to _version.py.  A bare "dynamic" anywhere
+    # is not sufficient — we verify the path key explicitly.
+    if f'version = "{EXPECTED}"' in pyproject:
+        pass  # static version declaration
+    elif "dynamic" in pyproject and 'path = "src/orama_system/_version.py"' in pyproject:
+        pass  # correct hatch dynamic wiring
+    else:
+        raise AssertionError(
+            f"pyproject.toml must either have version = \"{EXPECTED}\" or "
+            "dynamic=[version] with [tool.hatch.version] path = src/orama_system/_version.py"
+        )
     assert EXPECTED in claude, f"CLAUDE.md missing {EXPECTED}"
     assert f"version: {EXPECTED}" in skill, f"bin/orama-system/SKILL.md missing 'version: {EXPECTED}'"
 
@@ -62,7 +72,8 @@ def test_sync_version_script_leaves_no_stale_surfaces():
     import subprocess, sys
     r = subprocess.run(
         [sys.executable, str(ROOT / "scripts" / "sync_version.py"), "--check"],
-        capture_output=True, text=True, cwd=str(ROOT)
+        capture_output=True, text=True, cwd=str(ROOT),
+        timeout=60,  # prevent CI hang if sync_version.py stalls
     )
     assert r.returncode == 0, \
         f"sync_version.py --check found stale surfaces:\n{r.stdout}\n{r.stderr}"

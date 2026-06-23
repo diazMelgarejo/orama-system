@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    start.ps1 — orama-system Windows counterpart to start.sh  v0.9.9.8
+    start.ps1 — orama-system Windows counterpart to start.sh  v1.1.0.0
 
 .DESCRIPTION
     Starts the three orama services on a Windows host that runs LM Studio as the
@@ -281,7 +281,7 @@ _Info 'env' 'Endpoints exported'
 # ── Banner ────────────────────────────────────────────────────────────────────
 Write-Host ''
 Write-Host '╔══════════════════════════════════════════════════════════════════╗'
-Write-Host '║  orama-system  v0.9.9.8  (Windows)                              ║'
+Write-Host '║  orama-system  v1.1.0.0  (Windows)                              ║'
 Write-Host '║  ὅραμα — vision/revelation · Layer 3 orchestration/meta-intel   ║'
 Write-Host '╠══════════════════════════════════════════════════════════════════╣'
 Write-Host ("║  Mac  {0,-9}  LM Studio expected on port 1234              ║" -f "${MacIp}:")

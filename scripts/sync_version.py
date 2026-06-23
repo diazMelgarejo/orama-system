@@ -34,11 +34,16 @@ def _re_replace(pattern: str, repl_template: str):
         return re.sub(pattern, repl_template.replace("{ver}", ver), text)
     return fn
 
-def _json_key(key: str):
+def _json_key(key: str, indent: int = 2):
+    """Structured JSON update — always uses the repo-standard indentation.
+
+    Never uses regex on JSON: load → mutate → dump, preserving key order.
+    indent=2 matches every tracked JSON file in this repo.
+    """
     def fn(text: str, ver: str) -> str:
         data = json.loads(text)
         data[key] = ver
-        return json.dumps(data, indent=2) + "\n"
+        return json.dumps(data, indent=indent) + "\n"
     return fn
 
 SURFACES: list[tuple[Path, ...]] = [
