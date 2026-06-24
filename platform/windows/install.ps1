@@ -8,8 +8,8 @@
     verifies LM Studio port, creates .venv if missing, and writes openclaw.json
     defaults for Windows node.
 
-    Run once after cloning:
-        powershell -ExecutionPolicy Bypass -File .\windows\install.ps1
+    Run once after cloning (from **orama-system repo root**):
+        powershell -ExecutionPolicy Bypass -File .\platform\windows\install.ps1
 
 .NOTES
     Execution policy: run as:
@@ -21,7 +21,7 @@
 $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
-$RepoRoot  = Split-Path -Parent $ScriptDir
+$RepoRoot  = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
 
 function _Step { param([string]$Msg) Write-Host "  [+] $Msg" -ForegroundColor Cyan }
 function _OK   { param([string]$Msg) Write-Host "  ✓  $Msg" -ForegroundColor Green }
@@ -149,7 +149,7 @@ Write-Host ''
 Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor DarkCyan
 _OK 'Install complete!'
 Write-Host ''
-Write-Host '  Start services:  .\windows\start.ps1'
-Write-Host '  Stop services:   .\windows\start.ps1 --stop'
-Write-Host '  Check status:    .\windows\start.ps1 --status'
+Write-Host '  Start services:  .\platform\windows\start.ps1'
+Write-Host '  Stop services:   .\platform\windows\start.ps1 --stop'
+Write-Host '  Check status:    .\platform\windows\start.ps1 --status'
 Write-Host ''
