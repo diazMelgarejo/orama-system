@@ -267,8 +267,9 @@ agent dispatch. `gemini -p "/goal <task>"` remains useful when Gemini CLI is exp
 authenticated or needed for Gemini-Analyzer use-cases. `agy` is multi-model (Gemini 3.x /
 Claude Sonnet+Opus 4.6 / GPT-OSS 120B; list with `agy models`) and should be bounded like
 any other worker: no commits, deletes, deploys, or account changes without explicit user
-confirmation. On native Windows, install with
-`irm https://antigravity.google/cli/install.ps1 | iex`. Treat AGY as ready only after `agy --print "Reply with exactly: AGY_READY"`
+confirmation. On native Windows, save the installer first (never pipe to `iex`):
+`Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\agy-install.ps1"`;
+skim the first 40 lines, then run with `-ExecutionPolicy Bypass`. Treat AGY as ready only after `agy --print "Reply with exactly: AGY_READY"`
 emits visible stdout; exit 0 with empty stdout is not a usable worker. Full command guide:
 `agy-gemini.md` at the workspace root. Dispatch lanes,
 model picks, and bounding (`gtimeout`, never `sleep` chains) are in

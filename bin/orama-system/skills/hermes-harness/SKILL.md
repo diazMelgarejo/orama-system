@@ -41,6 +41,23 @@ prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the runtime 
 2. **Harness edge:** Hermes and other tools adapt loading/invocation only at the edge.
 3. **No private imports:** never ship raw `~/.hermes`, secrets, personal memory, or account tokens.
 4. **Parallel to OpenClaw:** `openclaw-skills` owns OpenClaw config; this skill owns Hermes onboarding and partner prompts.
+5. **Shared hardware policy:** Perpetua-Tools `config/model_hardware_policy.yml` + `src/utils/hardware_policy.py` are the **only** affinity SSoT. Hermes must **consume** PT policy via CLI/API — never infer NEVER_MAC/NEVER_WIN independently at runtime.
+
+## Platform Harness Model
+
+| Host OS | Primary harness | LM Studio role | Orchestrator role |
+|---------|-----------------|----------------|-------------------|
+| **macOS** | OpenClaw (`start.sh`) | Mac MLX home (`lmstudio-mac`); Win GGUF = NEVER_MAC | Mac orchestrator / thin orchestrator |
+| **Linux** | OpenClaw (`start.sh`) | Same software as macOS; can host **any** documented profile from PT `hardware/SKILL.md` | Dev/CI orchestrator; full hardware matrix |
+| **Windows 11** | Hermes + `start.ps1` | Win GGUF home (`lmstudio-win` → `localhost:1234`) | Hermes = local orchestrator / autoresearcher counterpart |
+
+**Role reversal on Windows:** Mac orchestrator historically reached Win LM Studio over LAN
+(`192.168.x.x:1234`). On the Windows Hermes host, LM Studio is **localhost** and
+`windows_only` models are **allowed** — the same YAML policy, inverted platform verdict.
+
+**Linux note:** Linux runs the same OpenClaw harness binary as macOS (`start.sh`). It is not
+a second-class consumer — it may run Mac profiles, Win profiles, or both per `hardware/SKILL.md`
+and `model_hardware_policy.yml`, subject to what physical GPUs/backends are present.
 
 ## Windows Bring-Up
 
@@ -111,6 +128,23 @@ API key: lm-studio
 
 Use a real API key only for hosted providers. Never commit keys.
 
+**Hardware policy (mandatory before LM Studio dispatch):** Hermes must not guess
+affinity from `/v1/models`. Run the PT canonical gate (path resolution:
+[`references/workspace-path-resolution.md`](references/workspace-path-resolution.md)):
+
+```powershell
+# From orama-system repo root on Windows (preferred — resolves PT + runs CLI)
+.\platform\windows\start.ps1 --hardware-policy
+
+# Direct PT CLI only when launcher unavailable (set PERPETUA_TOOLS_PATH or PT_HOME)
+$PtDir = if ($env:PERPETUA_TOOLS_PATH) { $env:PERPETUA_TOOLS_PATH } else { $env:PT_HOME }
+python (Join-Path $PtDir 'scripts\hardware_policy_cli.py') --check-openclaw
+```
+
+After `.\platform\windows\install.ps1` writes `openclaw.json` (`lmstudio-win` →
+`http://localhost:1234`), verify assignments against PT `config/model_hardware_policy.yml`.
+Load `commands/pt-hardware-policy/SKILL.md` or install `/pt-hardware-policy` via step 4.
+
 ### 3. Install Coding Partner CLIs on Windows
 
 Use the LM Studio Node/npm toolchain already present on this host:
@@ -163,8 +197,8 @@ Create or refresh Hermes local commands from the canonical repo:
 python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install
 ```
 
-The expected slash commands are `/pt-orama-council`, `/pt-orama-review`, and
-`/pt-orama-delegate`; never paste a full canonical skill body into Hermes.
+The expected slash commands are `/pt-hardware-policy`, `/pt-orama-council`,
+`/pt-orama-review`, and `/pt-orama-delegate`; never paste a full canonical skill body into Hermes.
 
 ### 5. Use Hermes as a Coding Partner
 
@@ -190,6 +224,9 @@ judgment.
 ## Verification
 
 ```powershell
+# Hardware affinity (PT canonical — must pass before LM Studio orchestration)
+.\platform\windows\start.ps1 --hardware-policy
+
 Test-Path "$env:HERMES_HOME\hermes-agent\.git"
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
 hermes chat --query 'Reply with exactly: HERMES_READY' --quiet --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
@@ -198,7 +235,7 @@ gemini --version
 git -C "$env:HERMES_HOME\hermes-agent" status --short --branch
 ```
 
-Pass criteria: Hermes repo exists, Bash prints `hermes-bash-ok`, one-shot
+Pass criteria: **hardware policy check passes**, Hermes repo exists, Bash prints `hermes-bash-ok`, one-shot
 prints `HERMES_READY`, provider keys stay outside git, imported skills are
 sanitized, and OpenClaw operations still route through `openclaw-skills`.
 
@@ -227,6 +264,9 @@ sanitized, and OpenClaw operations still route through `openclaw-skills`.
 
 ## References
 
+- [`references/workspace-path-resolution.md`](references/workspace-path-resolution.md)
+- [`commands/pt-hardware-policy/SKILL.md`](commands/pt-hardware-policy/SKILL.md)
+- [`../hardware-affinity-gate/SKILL.md`](../hardware-affinity-gate/SKILL.md) (pointer only — PT is SSoT)
 - [`references/ecc-hermes-cross-harness.md`](references/ecc-hermes-cross-harness.md)
 - [`references/hermes-ecc-fork-inventory.md`](references/hermes-ecc-fork-inventory.md)
 - [`../openclaw-skills/SKILL.md`](../openclaw-skills/SKILL.md)
