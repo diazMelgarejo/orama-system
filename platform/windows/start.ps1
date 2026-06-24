@@ -88,7 +88,12 @@ function Get-BestPython {
 
 # ── PT directory discovery ────────────────────────────────────────────────────
 function Find-PtDir {
-    foreach ($root in @($env:PERPETUA_TOOLS_PATH, $env:PT_HOME)) {
+    foreach ($root in @(
+        $env:PERPETUA_TOOLS_PATH,
+        $env:PT_HOME,
+        $env:PERPETUA_TOOLS_ROOT,
+        $env:PERPETUATOOLSROOT
+    )) {
         if ($root -and (Test-Path (Join-Path $root 'orchestrator\fastapi_app.py'))) {
             return $root
         }
