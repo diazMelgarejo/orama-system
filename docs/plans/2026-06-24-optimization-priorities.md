@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-012 -->
 # Optimization Priorities — Strategic Backlog (2026-06-24)
 
 > **Date:** 2026-06-24 · **Owner:** orama-system (L3) + Perpetua-Tools (L2)
@@ -82,7 +83,7 @@ Three linter rules to add, each catching a recurring silent failure pattern:
 |------|---------|----------------|
 | `LINT-010` | All-`1.` numbered lists in `## Procedure` sections outside code fences | The openclaw step bug (9 SKILL.md files had `1.` for every step; agent runtimes read raw text) |
 | `LINT-011` | `(deprecated)` inside `trigger:` strings in SKILL.md frontmatter | Routing matchers see literal `(deprecated)` — breaks existing routes silently |
-| `LINT-012` | `hermes -z` in any tracked `.md` file | Deprecated flag; `hermes chat --query` is the current syntax |
+| `LINT-012` | `hermes -z` flag in any tracked `.md` file (see description) | Deprecated flag; `hermes chat --query` is the current syntax |
 
 **Implementation pattern** (follow existing `check_stale_skill_path_refs` pattern):
 ```python
