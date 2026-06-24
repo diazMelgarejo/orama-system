@@ -145,18 +145,21 @@ subprocess.Popen(
 
 ---
 
-## Windows (`windows/start.ps1`)
+## Windows (`platform/windows/start.ps1`)
+
+Run from **orama-system repository root**. Path resolution:
+`bin/orama-system/skills/hermes-harness/references/workspace-path-resolution.md`.
 
 ### CLI parity
 
 | `start.sh` | `start.ps1` |
 |---|---|
-| `./start.sh` | `.\windows\start.ps1` |
-| `./start.sh --no-open` | `.\windows\start.ps1 --no-open` |
-| `./start.sh --stop` | `.\windows\start.ps1 --stop` (or `-Stop`) |
-| `./start.sh --status` | `.\windows\start.ps1 --status` |
-| `./start.sh --discover` | `.\windows\start.ps1 --discover` |
-| `./start.sh --hardware-policy` | `.\windows\start.ps1 --hardware-policy` |
+| `./start.sh` | `.\platform\windows\start.ps1` |
+| `./start.sh --no-open` | `.\platform\windows\start.ps1 --no-open` |
+| `./start.sh --stop` | `.\platform\windows\start.ps1 --stop` (or `-Stop`) |
+| `./start.sh --status` | `.\platform\windows\start.ps1 --status` |
+| `./start.sh --discover` | `.\platform\windows\start.ps1 --discover` |
+| `./start.sh --hardware-policy` | `.\platform\windows\start.ps1 --hardware-policy` |
 
 ### Tool translations
 
