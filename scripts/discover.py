@@ -524,19 +524,26 @@ class _Lock:
         while True:
             self._fd = open(lock_path, "w")
             try:
-                _try_lock_file(self._fd); return self
+                _try_lock_file(self._fd)
+                return self
             except BlockingIOError:
-                self._fd.close(); self._fd = None
-            except OSError:
-                self._fd.close(); self._fd = None
-                raise
-            # contention only:
                 if self._fd:
-                    try: self._fd.close()
-                    except Exception: pass
+                    try:
+                        self._fd.close()
+                    except OSError:
+                        pass
                     self._fd = None
-                if time.time() > deadline: raise TimeoutError("discovery lock timeout")
+                if time.time() > deadline:
+                    raise TimeoutError("discovery lock timeout")
                 time.sleep(0.2)
+            except OSError:
+                if self._fd:
+                    try:
+                        self._fd.close()
+                    except OSError:
+                        pass
+                    self._fd = None
+                raise
     def __exit__(self, *_):
         if self._fd:
             _unlock_file(self._fd); self._fd.close()

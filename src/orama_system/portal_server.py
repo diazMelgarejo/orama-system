@@ -1890,7 +1890,10 @@ def _read_pending_resolutions() -> list:
     state_file = _oramaclaw_state_dir() / "pending-resolutions.json"
     try:
         if state_file.exists():
-            return json.loads(state_file.read_text(encoding="utf-8"))
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                return data
+            log.warning("pending-resolutions is not a list: %s", state_file)
     except (json.JSONDecodeError, OSError) as exc:
         log.warning("_read_pending_resolutions: cannot read %s: %s", state_file, exc)
     return []
@@ -1928,17 +1931,31 @@ async def api_oramaclaw_conflicts():
 async def api_oramaclaw_resolve(resolution_id: str, req: OramaclawResolveRequest):
     """Mark a pending oramaclaw conflict as resolved with the given choice."""
     from datetime import datetime, timezone as _tz
-    records = _read_pending_resolutions()
-    found = False
-    for record in records:
-        if record.get("resolution_id") == resolution_id:
-            record["resolved_at"] = datetime.now(_tz.utc).isoformat()
-            record["chosen"] = req.choice
-            found = True
-            break
-    if not found:
-        raise HTTPException(status_code=404, detail={"error": "not found"})
-    _write_pending_resolutions(records)
+    from oramaclaw.store import LockHeld, _acquire_lock, _release_lock
+
+    state_dir = _oramaclaw_state_dir()
+    lock_path = state_dir / "oramaclaw.lock"
+    try:
+        _acquire_lock(lock_path)
+    except LockHeld as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "oramaclaw lock held", "pid": exc.pid},
+        ) from exc
+    try:
+        records = _read_pending_resolutions()
+        found = False
+        for record in records:
+            if record.get("resolution_id") == resolution_id:
+                record["resolved_at"] = datetime.now(_tz.utc).isoformat()
+                record["chosen"] = req.choice
+                found = True
+                break
+        if not found:
+            raise HTTPException(status_code=404, detail={"error": "not found"})
+        _write_pending_resolutions(records)
+    finally:
+        _release_lock(lock_path)
     return {"ok": True, "resolution_id": resolution_id, "chosen": req.choice}
 
 

@@ -50,17 +50,17 @@ printf '%s' "$env_var" | grep -Eq '^OPENCLAW_[A-Z0-9_]+$'
 ```bash
 security add-generic-password -a "$USER" -s "$service" -w "$secret_value" -U
 ```
-3. Update `openclaw-secrets.sh` (launchd/gateway source).
+3. Wire `openclaw-secrets.sh` (launchd/gateway source).
 
 ```bash
 # Add export that reads from keychain service "$service" into "$env_var".
 ```
-4. Update `openclaw-env.sh` (shell source).
+4. Sync `openclaw-env.sh` (shell source).
 
 ```bash
 # Mirror the same export for CLI sessions.
 ```
-5. Update provisioning `secrets.sh`.
+5. Reflect the same export in provisioning `secrets.sh`.
 
 ```bash
 # Add bootstrap logic to recreate "$service" and "$env_var" mapping on new machines.
