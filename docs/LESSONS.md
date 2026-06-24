@@ -127,8 +127,8 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 - `HERMES_GIT_BASH_PATH` must point to a literal `bash.exe`. GitHub Desktop's
   bundled Git Bash works when resolved from
   `%LOCALAPPDATA%\GitHubDesktop\app-*\resources\app\git\usr\bin\bash.exe`.
-- On this host, `hermes -z` through the default LM Studio model timed out, while
-  `hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free -z`
+- On this host, `hermes chat` (legacy: the retired `-z` flag) through the default LM Studio model timed out, while
+  `hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free` (legacy `-z` flag, retired)
   returned promptly. Use explicit provider/model routing for bounded partner
   review loops unless the local LM Studio model has already been proven fast.
 - Native Windows AGY install is `irm https://antigravity.google/cli/install.ps1 | iex`.
