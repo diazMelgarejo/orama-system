@@ -65,7 +65,39 @@ git reflog --all | wc -l                          # should be near-zero after sc
 For PR branch cleanup without contamination, rebase or merge normally; do not use
 this skill unless history was rewritten or contaminated.
 
-## Version Bump in a Git Commit
+## Multi-Agent Branch Merge
+
+When independent agents produce concurrent branches, use this protocol before
+any merge. This is distinct from history surgery — no rewrite is involved, but
+the same discipline (simulate before touching, record lease targets) applies.
+
+### Quick protocol (full detail in reference)
+
+```bash
+# 1. Simulate BOTH merges before touching either
+git merge --no-commit --no-ff <branch-A>
+git diff --name-only --diff-filter=U   # enumerate conflicts
+git merge --abort
+# repeat for branch-B
+
+# 2. Present every conflict to human; wait for direction
+# 3. Resolve all in one pass (union/superset/additive/correct strategy)
+# 4. Verify: pytest + hygiene + no remaining conflict markers
+# 5. Push → CI → GitHub API merge
+# 6. Wait 10 minutes; confirm mergeable_state: clean; proceed to next merge
+```
+
+**Conflict resolution strategies:** `additive` (empty+content→take content),
+`union` (both partial→concatenate), `superset` (verify inclusion→take larger),
+`architecturally-correct` (bug→take fix), `api-correct` (casing→take lowercase).
+
+**Key invariant:** `"merged": true` on GitHub ≠ content on branch.
+Always verify: `git diff origin/main...origin/<branch>` after any merge.
+
+See full decision tree and verification commands:
+[`references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](references/multi-agent-collaboration-protocol.md)
+
+
 
 When a commit includes a version bump, always use the centralized sync script —
 **never** `sed -i` or manual multi-file edits:
