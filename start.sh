@@ -64,7 +64,19 @@ _var()   {
 # ── path resolution: .paths → git siblings → hardcoded sibling default ─────────
 
 _discover_pt_dir() {
-  local candidate
+  local candidate var
+  for var in PERPETUA_TOOLS_PATH PT_HOME PERPETUA_TOOLS_ROOT PERPETUATOOLSROOT; do
+    candidate="${!var:-}"
+    if [ -n "$candidate" ] && [ -f "${candidate}/orchestrator/fastapi_app.py" ]; then
+      echo "$candidate"; return
+    fi
+  done
+  if [ -n "${OPENCLAW_HOME:-}" ]; then
+    candidate="${OPENCLAW_HOME}/Perpetua-Tools"
+    if [ -f "${candidate}/orchestrator/fastapi_app.py" ]; then
+      echo "$candidate"; return
+    fi
+  fi
   candidate="$(cd "$SCRIPT_DIR/../perplexity-api/Perpetua-Tools" 2>/dev/null && pwd || true)"
   if [ -f "${candidate}/orchestrator/fastapi_app.py" ]; then
     echo "$candidate"; return
