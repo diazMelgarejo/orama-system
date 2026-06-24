@@ -99,6 +99,17 @@ python3 -m pytest tests/test_version_docs.py  # verify
 See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
 See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
 
+**If this worktree is being merged into another agent's branch or into main**, invoke
+the nested-branch merge protocol before pushing:
+
+1. **Simulate** — `git merge --no-commit --no-ff <this-branch>` from the target; enumerate conflicts; abort
+2. **Enumerate to human** — show both sides of every conflict; never resolve without explicit direction
+3. **Resolution strategies**: `additive` / `union` / `superset` / `architecturally-correct` / `api-correct`
+4. **Verify**: `pytest -q` + `repo_hygiene.py` + confirm no `<<<<<<<` markers remain
+5. **Buffer**: wait 10 minutes after each GitHub merge; confirm `mergeable_state: clean`
+
+Full detail: [`git-history-surgery/references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](../git-history-surgery/references/multi-agent-collaboration-protocol.md)
+
 **Why this matters especially for worktrees:** docs, plans, and bash snippets
 written from a worktree often embed the machine-local path. Those paths are
 invisible on your machine but leak developer identity and break CI when committed.

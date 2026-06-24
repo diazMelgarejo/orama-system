@@ -68,7 +68,125 @@ Every commit body must state:
 
 This is the primary async channel between agents with no shared session memory.
 
-## Conflict Recovery Playbook
+## Nested-Branch Merge Protocol
+
+When two or more agents produce branches concurrently against a moving `main`, follow
+this sequence exactly. Guessing conflict resolution corrupts the codebase silently.
+
+### Merge order
+
+Always establish a topological ordering before starting:
+- Identify the parent-child relationship between branches (which was created first / is based on which)
+- Merge leaf → parent first, then parent → main
+- Wait 10 minutes and confirm `mergeable_state: clean` via GitHub API before the next merge
+
+### Step 1 — Simulate; touch nothing
+
+```bash
+# For EACH merge in the planned sequence:
+git merge --no-commit --no-ff <branch>
+git diff --name-only --diff-filter=U    # enumerate ALL real conflicts
+git merge --abort
+
+# Do this for ALL merges BEFORE resolving any conflict.
+# Knowing the full conflict surface prevents mid-resolution surprises.
+```
+
+### Step 2 — Present every conflict to the human
+
+For every conflicting file, show **both sides** explicitly:
+
+```python
+import re
+text = Path(conflicted_file).read_text()
+for m in re.finditer(r'<<<<<<< HEAD\n(.*?)=======\n(.*?)>>>>>>> [^\n]+\n', text, re.DOTALL):
+    print("OURS:  ", m.group(1)[:400])
+    print("THEIRS:", m.group(2)[:400])
+```
+
+One question per file. Never proceed without explicit human direction.
+
+### Step 3 — Resolution strategies (human-directed)
+
+| Strategy | When | Action |
+|---|---|---|
+| `additive` | One side empty, other has content | Take the content side |
+| `union` | Both sides partial/complementary | Concatenate — ours first, theirs appended |
+| `superset` | One side structurally contains all rows of the other | Verify inclusion, take the superset |
+| `architecturally-correct` | One side has a bug the other fixes | Take the correct side regardless of branch origin |
+| `api-correct` | Casing/type mismatch | Take the API-correct form (lowercase IDs, typed values) |
+| `archive` | Content must be removed | Move to `docs/archive/` or `bin/orama-system/skills/archive/`; never delete |
+
+### Step 4 — Resolve all conflicts in one pass
+
+```python
+import re
+from pathlib import Path
+
+def resolve_union(path):
+    text = Path(path).read_text()
+    resolved = re.sub(
+        r'<<<<<<< HEAD\n(.*?)=======\n(.*?)>>>>>>> [^\n]+\n',
+        lambda m: m.group(1) + m.group(2),   # union
+        text, flags=re.DOTALL
+    )
+    assert '<<<<<<' not in resolved
+    Path(path).write_text(resolved)
+```
+
+Special cases for memory files:
+- `AGENT_LEARNINGS.jsonl` / `lessons.jsonl` → union then dedup by `run_id` / `id` (keep **first** occurrence per key)
+- `LESSONS.md` → rendered from `lessons.jsonl`; never hand-merge — run `graduate.py`
+
+### Step 5 — Verify before committing
+
+```bash
+python3 -m pytest -q
+python3 scripts/review/repo_hygiene.py .
+git diff --name-only --diff-filter=U    # must be empty
+```
+
+### Step 6 — Push, CI, merge, buffer
+
+```bash
+git push origin <experiment-branch>
+
+# Poll CI until green:
+curl -s -H "Authorization: Bearer $GH_TOKEN" \
+  "https://api.github.com/repos/diazMelgarejo/orama-system/commits/<sha>/check-runs" \
+  | python3 -c "import json,sys; d=json.loads(sys.stdin.read()); ..."
+
+# GitHub API merge (squash preferred):
+curl -X PUT \
+  -H "Authorization: Bearer $GH_TOKEN" \
+  "https://api.github.com/repos/diazMelgarejo/orama-system/pulls/<N>/merge" \
+  -d '{"merge_method":"squash","commit_title":"..."}'
+
+# Undraft if needed first:
+curl -X POST .../graphql -d '{"query":"mutation{markPullRequestReadyForReview(...)}"}'
+```
+
+### Step 7 — Wait 10 minutes; repeat for next merge
+
+After each GitHub merge, GitHub recomputes `mergeable_state`. Do not proceed to the
+next merge until the API returns `mergeable_state: clean`.
+
+```bash
+sleep 600   # or poll every 60s
+curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
+```
+
+### Key invariants
+
+| Invariant | What to do |
+|---|---|
+| `"merged": true` on GitHub ≠ content on target branch | Always verify: `git diff origin/main...origin/<branch>` |
+| CodeRabbit re-scans on every push | Run post-merge sweep after **every** merge, not once |
+| PR branch base may be stale vs current main | Check `git merge-base` before simulating |
+| Draft PRs cannot be merged via API | Run `markPullRequestReadyForReview` GraphQL mutation first |
+| `scan_tracked_secrets` catches token in commit body | Never paste tokens in PR titles, commit messages, or docs |
+
+
 
 | Symptom                                    | Cause                               | Fix                                                                   |
 | ------------------------------------------ | ----------------------------------- | --------------------------------------------------------------------- |
