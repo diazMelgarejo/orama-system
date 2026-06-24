@@ -72,7 +72,7 @@ jobs:
           PYEOF
 
       - name: Comment summary on PR
-        if: steps.threads.outputs.unresolved_count != '0'
+        if: steps.threads.outputs.unresolved_count != '0' && steps.threads.outputs.unresolved_count != ''
         uses: actions/github-script@v7
         with:
           script: |
