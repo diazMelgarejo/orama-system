@@ -119,6 +119,10 @@ class GatewayTransport:
             data = json.loads(result.stdout)
         except json.JSONDecodeError as exc:
             raise GatewayUnavailable(f"gateway returned non-JSON: {exc}") from exc
+        if not isinstance(data, dict):
+            raise GatewayUnavailable(
+                f"gateway returned {type(data).__name__} instead of object"
+            )
 
         return GatewayConfig(
             configuration=data.get("configuration", {}),
@@ -247,7 +251,7 @@ class OfflineTransport:
         raise OfflineOperationNotAllowed(f"agent:update:{agent_id}")
 
     def offline_apply_provider(self, target: ConfigTarget, resource: Resource) -> None:
-        if resource.kind not in _OFFLINE_ALLOWED_KINDS:
+        if resource.kind != ResourceKind.PROVIDER:
             raise OfflineOperationNotAllowed(f"{resource.kind.value}:{resource.identifier}")
         config = dict(_load_json(target.config_path, {}))
         providers = dict(config.get("models", {}).get("providers", {}))

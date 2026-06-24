@@ -1891,8 +1891,8 @@ def _read_pending_resolutions() -> list:
     try:
         if state_file.exists():
             return json.loads(state_file.read_text(encoding="utf-8"))
-    except Exception:
-        pass
+    except (json.JSONDecodeError, OSError) as exc:
+        log.warning("_read_pending_resolutions: cannot read %s: %s", state_file, exc)
     return []
 
 

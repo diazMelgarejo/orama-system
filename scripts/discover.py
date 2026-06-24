@@ -522,10 +522,15 @@ class _Lock:
         lock_path.parent.mkdir(parents=True, exist_ok=True)
         deadline = time.time() + self._timeout
         while True:
+            self._fd = open(lock_path, "w")
             try:
-                self._fd = open(lock_path, "w")
                 _try_lock_file(self._fd); return self
             except BlockingIOError:
+                self._fd.close(); self._fd = None
+            except OSError:
+                self._fd.close(); self._fd = None
+                raise
+            # contention only:
                 if self._fd:
                     try: self._fd.close()
                     except Exception: pass
