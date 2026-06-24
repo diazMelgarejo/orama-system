@@ -18,6 +18,13 @@ metadata:
 
 # Hardware Affinity Gate
 
+> **Hermes / orama agents:** Do not execute affinity logic from this skill's embedded
+> reference Python. Consume Perpetua-Tools canonical policy only:
+> `config/model_hardware_policy.yml` → `src/utils/hardware_policy.py` →
+> `scripts/hardware_policy_cli.py`. On Windows Hermes, use
+> `hermes-harness` → `commands/pt-hardware-policy/SKILL.md` or
+> `.\platform\windows\start.ps1 --hardware-policy`.
+
 Hardware-model affinity enforcement for the PT-orama/ECC stack.
 Imports flow **one-way**: this skill (in orama-system) references scripts and
 rules from Perpetua-Tools. Perpetua-Tools is the source of truth; orama-system

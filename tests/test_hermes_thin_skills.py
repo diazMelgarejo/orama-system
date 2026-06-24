@@ -107,7 +107,7 @@ def test_is_managed_wrapper_empty_file(installer, tmp_path):
 # ── wrapper_text ──────────────────────────────────────────────────────────────
 
 def test_wrapper_text_contains_slug_and_canonical(installer):
-    spec = installer.WRAPPERS[0]  # pt-orama-council
+    spec = next(s for s in installer.WRAPPERS if s.slug == "pt-orama-council")
     text = installer.wrapper_text(spec)
     assert f"name: {spec.slug}" in text
     assert spec.canonical in text
@@ -123,9 +123,14 @@ def test_wrapper_text_contains_required_readiness_strings(installer):
         assert "created_by: agent" in text
 
 
-def test_wrapper_text_all_three_slugs(installer):
+def test_wrapper_text_all_slugs(installer):
     slugs = {spec.slug for spec in installer.WRAPPERS}
-    assert slugs == {"pt-orama-council", "pt-orama-review", "pt-orama-delegate"}
+    assert slugs == {
+        "pt-hardware-policy",
+        "pt-orama-council",
+        "pt-orama-review",
+        "pt-orama-delegate",
+    }
 
 
 # ── install ───────────────────────────────────────────────────────────────────
