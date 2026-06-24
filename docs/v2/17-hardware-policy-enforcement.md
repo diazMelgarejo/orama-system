@@ -4,6 +4,10 @@
 > RC-1 post-ship policy audit. These patterns are the **required blueprint**
 > for v2 / agate — the policy surface must be at least this complete, and
 > ideally stricter, from day one.
+>
+> **2026-06-24 update:** Cross-harness wiring (OpenClaw + Hermes) and gap closure
+> #128–#131 are documented in
+> [Cross-Harness Hardware Policy Architecture](../hermes-hardware-policy-cross-harness.md).
 
 Status: **canonical reference** — describes v1 (`diazMelgarejo/Perpetua-Tools`) as-built.
 

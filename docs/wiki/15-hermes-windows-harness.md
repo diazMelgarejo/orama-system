@@ -118,6 +118,7 @@ Pass criteria:
 
 ## Related
 
+- [Cross-Harness Hardware Policy Architecture](../hermes-hardware-policy-cross-harness.md)
 - [Hermes Windows walkthrough plan (live host, deferred)](../plans/2026-06-24-hermes-windows-hardware-policy-walkthrough.md)
 - [Hermes harness skill](../../bin/orama-system/skills/hermes-harness/SKILL.md)
 - [ECC Hermes cross-harness notes](../../bin/orama-system/skills/hermes-harness/references/ecc-hermes-cross-harness.md)

@@ -27,6 +27,8 @@
 
 ## Harness roles and hardware policy (2026-06-24)
 
+> **Deep dive:** [Cross-Harness Hardware Policy Architecture](hermes-hardware-policy-cross-harness.md) — flowchart, gap table, enforcement stack.
+
 All harnesses consume **one** Perpetua-Tools policy file (`config/model_hardware_policy.yml`)
 via `src/utils/hardware_policy.py`. No harness may infer NEVER_MAC/NEVER_WIN at runtime.
 
