@@ -10,10 +10,11 @@ git toplevel — same order as `start.sh` / `platform/windows/start.ps1`.
 |----------|--------|------|
 | 1 | `$PERPETUA_TOOLS_PATH` / `%PERPETUA_TOOLS_PATH%` | Explicit operator override |
 | 2 | `$PT_HOME` / `%PT_HOME%` | Legacy alias (same semantics) |
-| 3 | `.paths` / `.paths.ps1` → `PT_DIR` | Written by `start.sh` / `start.ps1 --discover` |
-| 4 | `$OPENCLAW_HOME/Perpetua-Tools` | Cloud / stack layout |
-| 5 | Sibling discovery | Walk parent of orama repo root for `orchestrator/fastapi_app.py` |
-| 6 | Legacy default | `../perplexity-api/Perpetua-Tools` (may be absent) |
+| 3 | `$PERPETUA_TOOLS_ROOT` / `%PERPETUA_TOOLS_ROOT%` | orama canonical (also `PERPETUATOOLSROOT`) |
+| 4 | `.paths` / `.paths.ps1` → `PT_DIR` | Written by `start.sh` / `start.ps1 --discover` |
+| 5 | `$OPENCLAW_HOME/Perpetua-Tools` | Cloud / stack layout |
+| 6 | Sibling discovery | Walk parent of orama repo root for `orchestrator/fastapi_app.py` |
+| 7 | Legacy default | `../perplexity-api/Perpetua-Tools` (may be absent) |
 
 **Validate:** `orchestrator/fastapi_app.py` exists under the resolved root.
 
@@ -40,8 +41,8 @@ Direct PT CLI (only when launcher is unavailable):
 
 | Platform | Snippet |
 |----------|---------|
-| Bash | `"${PT_DIR:?set PERPETUA_TOOLS_PATH}/scripts/hardware_policy_cli.py" --check-openclaw` |
-| PowerShell | `python (Join-Path $env:PERPETUA_TOOLS_PATH 'scripts\hardware_policy_cli.py') --check-openclaw` |
+| Bash | `"${PERPETUA_TOOLS_ROOT:-${PERPETUA_TOOLS_PATH:?set PT root}}/scripts/hardware_policy_cli.py" --check-openclaw` |
+| PowerShell | `python (Join-Path $env:PERPETUA_TOOLS_ROOT 'scripts\hardware_policy_cli.py') --check-openclaw` |
 
 ## Windows script paths (repo-root relative)
 

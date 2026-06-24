@@ -45,10 +45,13 @@ hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
 Use the default LM Studio route only after verifying the loaded model answers
 quickly through the OpenAI-compatible local API.
 
-Install AGY/Antigravity on native Windows with the official PowerShell command:
+Install AGY/Antigravity on native Windows — save the installer first (never pipe to `iex`):
 
 ```powershell
-irm https://antigravity.google/cli/install.ps1 | iex
+$agyInstaller = Join-Path $env:TEMP "antigravity-install.ps1"
+Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile $agyInstaller
+Get-Content $agyInstaller | Select-Object -First 40
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File $agyInstaller
 agy --version
 agy --print "Reply with exactly: AGY_READY"
 ```
