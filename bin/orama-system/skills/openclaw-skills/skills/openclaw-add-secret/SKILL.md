@@ -45,11 +45,24 @@ service="openclaw.$secret_name"
 env_var="${env_var_name:-OPENCLAW_$(printf '%s' "$secret_name" | tr '[:lower:]-' '[:upper:]_')}"
 printf '%s' "$env_var" | grep -Eq '^OPENCLAW_[A-Z0-9_]+$'
 ```
-2. Store secret in Keychain.
+2. Collect secret without argv exposure, then store in Keychain.
+
+Never pass the secret on the `security` command line or as a skill argument.
+Disable shell history for this step, read silently from the terminal, pipe via
+stdin to the helper (secret stays off the caller's argv):
 
 ```bash
-security add-generic-password -a "$USER" -s "$service" -w "$secret_value" -U
+set +o history
+read -rs secret_value
+printf '\n' >&2
+printf '%s' "$secret_value" | bash "$REPO_ROOT/scripts/openclaw/store_keychain_secret.sh" "$service" "$USER"
+unset secret_value
+set -o history
 ```
+
+The helper reads stdin only; callers must not substitute `$secret_value` into
+`-w` flags. Provisioning scripts store key names and retrieval commands only,
+never literal secret values.
 3. Wire `openclaw-secrets.sh` (launchd/gateway source).
 
 ```bash
@@ -74,6 +87,14 @@ security find-generic-password -s "$service" -w >/dev/null
 
 ```bash
 grep -n "$env_var" openclaw-secrets.sh openclaw-env.sh secrets.sh
+```
+
+8. Post-run scan: confirm the secret value does not appear in modified files or logs.
+
+```bash
+# After storing, verify no literal secret leaked into git-tracked files.
+git diff --name-only | xargs -I{} grep -l "$env_var" {} 2>/dev/null || true
+# env_var name is fine; literal secret value must not appear in any diff.
 ```
 
 ## Output Contract
