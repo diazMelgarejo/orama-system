@@ -195,3 +195,12 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 | File appears doubled/concatenated          | Both conflict sides appended        | Keep only `lines[N:]` (good half); strip duplicate header             |
 | CI fails with real LAN IP assertion        | IP leaked into source default       | Change source to `127.0.0.1`; test validates the env-agnostic default |
 | Module constant contaminated between tests | `importlib.reload()` side effect    | `autouse` fixture that reloads before AND after each test             |
+
+---
+
+## See also
+
+- [`skills/git-history-surgery/SKILL.md`](../skills/git-history-surgery/SKILL.md) — history rewrite, re-anchor after rewrite, version-bump commit discipline; contains the Multi-Agent Branch Merge quick reference
+- [`skills/using-git-worktrees/SKILL.md`](../skills/using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge-protocol trigger
+- [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry, Nested-Branch Merge Protocol table, cross-links to PT AGENTS.md
+- [`PT/.agent/AGENTS.md` § Multi-agent merge conflict protocol](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md) — harness-agnostic portable brain entry point
