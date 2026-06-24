@@ -233,3 +233,44 @@ def test_open_conflicts_excludes_resolved(tmp_path):
         open_c = store.open_conflicts()
     assert len(open_c) == 1
     assert open_c[0]["resolution_id"] == "r2"
+
+
+# ── TOCTOU lock regression tests ──────────────────────────────────────────────
+
+def test_acquire_lock_atomic_first_attempt(tmp_path):
+    """Happy path: lock acquired on first O_CREAT|O_EXCL attempt."""
+    import os, time
+    from oramaclaw.store import _acquire_lock, _release_lock
+    lock_path = tmp_path / "test.lock"
+    _acquire_lock(lock_path)
+    assert lock_path.exists()
+    _release_lock(lock_path)
+    assert not lock_path.exists()
+
+
+def test_acquire_lock_stale_overwrite_then_reacquire(tmp_path):
+    """Stale lock (dead PID) is overwritten and our PID wins on retry."""
+    import json
+    from oramaclaw.store import _acquire_lock, _release_lock, LockHeld
+    lock_path = tmp_path / "test.lock"
+    # Write a stale lock: PID 999999 (almost certainly dead), very old timestamp
+    stale = {"pid": 999999, "acquired_at": 0.0, "create_time": None}
+    lock_path.write_text(json.dumps(stale))
+    # Should overwrite stale lock without raising
+    _acquire_lock(lock_path)
+    data = json.loads(lock_path.read_text())
+    assert data["pid"] != 999999, "stale PID should be replaced by our PID"
+    _release_lock(lock_path)
+
+
+def test_acquire_lock_live_pid_raises_lock_held(tmp_path):
+    """Live lock (our own PID) raises LockHeld — not silently overwritten."""
+    import json, os
+    from oramaclaw.store import _acquire_lock, LockHeld
+    import pytest, time
+    lock_path = tmp_path / "test.lock"
+    # Write a lock with our own PID (definitely alive)
+    live = {"pid": os.getpid(), "acquired_at": time.time(), "create_time": None}
+    lock_path.write_text(json.dumps(live))
+    with pytest.raises(LockHeld):
+        _acquire_lock(lock_path)
