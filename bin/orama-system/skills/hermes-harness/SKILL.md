@@ -129,19 +129,21 @@ API key: lm-studio
 Use a real API key only for hosted providers. Never commit keys.
 
 **Hardware policy (mandatory before LM Studio dispatch):** Hermes must not guess
-affinity from `/v1/models`. Run the PT canonical gate:
+affinity from `/v1/models`. Run the PT canonical gate (path resolution:
+[`references/workspace-path-resolution.md`](references/workspace-path-resolution.md)):
 
 ```powershell
-# From orama-system repo root on Windows
+# From orama-system repo root on Windows (preferred — resolves PT + runs CLI)
 .\platform\windows\start.ps1 --hardware-policy
 
-# Or direct PT CLI (same enforcement)
-python ..\Perpetua-Tools\scripts\hardware_policy_cli.py --check-openclaw
+# Direct PT CLI only when launcher unavailable (set PERPETUA_TOOLS_PATH or PT_HOME)
+$PtDir = if ($env:PERPETUA_TOOLS_PATH) { $env:PERPETUA_TOOLS_PATH } else { $env:PT_HOME }
+python (Join-Path $PtDir 'scripts\hardware_policy_cli.py') --check-openclaw
 ```
 
-After `install.ps1` writes `openclaw.json` (`lmstudio-win` → `http://localhost:1234`),
-verify assignments against `config/model_hardware_policy.yml`. Load
-`commands/pt-hardware-policy/SKILL.md` or install `/pt-hardware-policy` via step 4.
+After `.\platform\windows\install.ps1` writes `openclaw.json` (`lmstudio-win` →
+`http://localhost:1234`), verify assignments against PT `config/model_hardware_policy.yml`.
+Load `commands/pt-hardware-policy/SKILL.md` or install `/pt-hardware-policy` via step 4.
 
 ### 3. Install Coding Partner CLIs on Windows
 
@@ -262,6 +264,7 @@ sanitized, and OpenClaw operations still route through `openclaw-skills`.
 
 ## References
 
+- [`references/workspace-path-resolution.md`](references/workspace-path-resolution.md)
 - [`commands/pt-hardware-policy/SKILL.md`](commands/pt-hardware-policy/SKILL.md)
 - [`../hardware-affinity-gate/SKILL.md`](../hardware-affinity-gate/SKILL.md) (pointer only — PT is SSoT)
 - [`references/ecc-hermes-cross-harness.md`](references/ecc-hermes-cross-harness.md)

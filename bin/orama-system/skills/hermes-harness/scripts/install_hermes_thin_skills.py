@@ -3,11 +3,26 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[5]
+def resolve_repo_root() -> Path:
+    """Return orama-system git toplevel; fall back to parents[5] when not in a worktree."""
+    script = Path(__file__).resolve()
+    try:
+        top = subprocess.check_output(
+            ["git", "-C", str(script.parent), "rev-parse", "--show-toplevel"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        return Path(top)
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return script.parents[5]
+
+
+REPO_ROOT = resolve_repo_root()
 LOCALAPPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", LOCALAPPDATA / "hermes"))
 HERMES_SKILLS = HERMES_HOME / "skills" / "pt-orama"
