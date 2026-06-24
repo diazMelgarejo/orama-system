@@ -5,6 +5,7 @@
 > **Branch:** `cursor/hermes-hardware-policy-wire-c4ae` (orama #107) + PT `cursor/critical-bug-investigation-a924` (#134)
 > **Author:** Cursor Cloud Agent + cyre
 > **Review trigger:** Next Windows Hermes bring-up OR before merging orama #107 / PT #134
+> **Canonical architecture:** [Cross-Harness Hardware Policy Architecture](../hermes-hardware-policy-cross-harness.md)
 
 ---
 
