@@ -38,9 +38,12 @@ powershell -File .\windows\install.ps1
 # Re-run LAN discovery
 .\windows\start.ps1 --discover
 
-# Validate model↔hardware affinity policy
+# Validate model↔hardware affinity policy (delegates to Perpetua-Tools CLI)
 .\windows\start.ps1 --hardware-policy
 ```
+
+Same policy as `start.sh --hardware-policy` on Mac/Linux OpenClaw. Hermes agents must
+consume PT `model_hardware_policy.yml` — see `hermes-harness` → `pt-hardware-policy`.
 
 ## CLI parity table
 
@@ -65,3 +68,5 @@ powershell -File .\windows\install.ps1
 - The Mac machine's LM Studio IP is read from `~/.openclaw/openclaw.json`
 - Services log to `../.logs/{pt,orama,portal}.log` (same as macOS)
 - `.paths.ps1` caches discovered paths (gitignored, auto-generated)
+- **Hermes on Windows** is the local orchestrator counterpart to Mac OpenClaw; `install.ps1`
+  writes `lmstudio-win` → `localhost:1234` for `windows_only` GGUF models

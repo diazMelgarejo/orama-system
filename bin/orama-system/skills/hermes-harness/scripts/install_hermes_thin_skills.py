@@ -24,6 +24,12 @@ class HermesWrapper:
 
 WRAPPERS = [
     HermesWrapper(
+        slug="pt-hardware-policy",
+        description="Thin Hermes command for PT canonical hardware affinity validation.",
+        canonical="bin/orama-system/skills/hermes-harness/commands/pt-hardware-policy/SKILL.md",
+        purpose="Validate model↔hardware affinity via Perpetua-Tools policy before LM Studio dispatch.",
+    ),
+    HermesWrapper(
         slug="pt-orama-council",
         description="Thin Hermes command for PT-orama council coordination.",
         canonical="bin/orama-system/skills/hermes-harness/commands/pt-orama-council/SKILL.md",
@@ -220,11 +226,6 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--verify", action="store_true")
-    parser.add_argument("--test", action="store_true")
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
-    if not args.install and not args.verify:
-        parser.error("choose --install and/or --verify")
     parser.add_argument("--test", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()

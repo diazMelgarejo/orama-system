@@ -65,14 +65,27 @@ python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills
 hermes skills list --source local
 ```
 
-Expected wrappers: `/pt-orama-council`, `/pt-orama-review`, and
+Expected wrappers: `/pt-hardware-policy`, `/pt-orama-council`, `/pt-orama-review`, and
 `/pt-orama-delegate`. These wrappers point back to canonical orama-system skill
 paths under `bin/orama-system/skills/hermes-harness/commands/` and must not
 contain copied canonical bodies or private Hermes state.
 
+### Hardware policy (same as Mac OpenClaw)
+
+Hermes on Windows consumes **Perpetua-Tools** affinity policy — never infers rules
+from LM Studio model lists. After `install.ps1` sets `lmstudio-win` → localhost:1234:
+
+```powershell
+.\platform\windows\start.ps1 --hardware-policy
+```
+
+`windows_only` models (27B GGUF, gemma quant) are **allowed** on this host.
+MLX / `mac_only` models are NEVER_WIN here. See PT `config/model_hardware_policy.yml`.
+
 ## Verification
 
 ```powershell
+.\platform\windows\start.ps1 --hardware-policy
 hermes --version
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
 hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
@@ -97,6 +110,8 @@ Pass criteria:
 4. Do not copy raw `%LOCALAPPDATA%\hermes` state, secrets, or personal memory
    into tracked repo files.
 5. Keep durable behavior in canonical orama/ECC skills; keep Hermes files thin.
+6. Run `.\platform\windows\start.ps1 --hardware-policy` before LM Studio orchestration —
+   same PT policy as Mac `start.sh --hardware-policy`.
 
 ## Related
 
