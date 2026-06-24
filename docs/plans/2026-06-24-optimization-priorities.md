@@ -2,7 +2,7 @@
 # Optimization Priorities — Strategic Backlog (2026-06-24)
 
 > **Date:** 2026-06-24 · **Owner:** orama-system (L3) + Perpetua-Tools (L2)
-> **Status:** 🔄 ACTIVE — distilled from extended multi-session (2026-06-21→24)
+> **Status:** 🔄 ACTIVE — L1 skipped (user decision); L2-L5 ✅ shipped `890e0c8`
 > **Author:** claude-sonnet-4.6 + cyre
 > **Review trigger:** next substantive session start OR when perpetua-core gate clears
 
@@ -47,7 +47,7 @@ Generated after completing:
 
 ---
 
-### L2 — Critical bug: oramaclaw store.py TOCTOU lock
+### L2 — ✅ DONE (`890e0c8`): oramaclaw store.py TOCTOU lock
 
 **File:** `orama-system/src/oramaclaw/store.py:163`
 **Severity:** 🔴 Critical (CodeRabbit) — concurrent data corruption
@@ -73,7 +73,7 @@ def _acquire_lock(lock_path: Path) -> None:
 
 ---
 
-### L3 — Systemic: repo_hygiene.py linter rules
+### L3 — ✅ DONE (`55ec2f4`): repo_hygiene.py LINT-010/011/012
 
 **File:** `orama-system/scripts/review/repo_hygiene.py`
 
@@ -100,7 +100,7 @@ def check_skill_trigger_quality(root: Path) -> list[str]:
 
 ---
 
-### L4 — Efficiency: automated post-merge CodeRabbit sweep
+### L4 — ✅ DONE (`890e0c8`): post-merge-review-sweep.yml GitHub Action
 
 **What:** A GitHub Action (or PT `.agent` scheduled task) that runs after any PR merge and creates a summary of unresolved review comments, so the manual polling step is replaced.
 
@@ -127,7 +127,7 @@ jobs:
 
 ---
 
-### L5 — Protocol: encode combine-never-replace in AGENTS.md
+### L5 — ✅ DONE (PT `c91a4f6`): combine-never-replace in PT/.agent/AGENTS.md
 
 **File:** `Perpetua-Tools/.agent/AGENTS.md`
 
