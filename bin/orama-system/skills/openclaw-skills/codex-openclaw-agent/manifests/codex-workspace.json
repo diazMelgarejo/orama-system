@@ -9,7 +9,7 @@
       "spec": {
         "model": "codex/gpt-5.5",
         "thinkingDefault": "auto",
-        "authReference": "~/.openclaw/plugins/openai/credentials.json"
+        "authReference": "~/.codex/config.toml"
       },
       "managed_paths": [
         "/agents/list/codex-agent/model",
@@ -25,7 +25,7 @@
         "generator": "generate_codex_openclaw_profile.py",
         "workspace": "~/.openclaw/agents/codex-agent",
         "effort": "medium",
-        "authReference": "~/.openclaw/plugins/openai/credentials.json"
+        "authReference": "~/.codex/config.toml"
       },
       "managed_paths": [
         "/agents/list/codex-agent/profile"
