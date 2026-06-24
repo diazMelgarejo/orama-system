@@ -125,6 +125,9 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 
 ## References
 
+- [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
+- [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
+- [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table
 - [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md)
 - [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
 - [`references/windows-powershell-runtime-bootstrap.md`](references/windows-powershell-runtime-bootstrap.md)

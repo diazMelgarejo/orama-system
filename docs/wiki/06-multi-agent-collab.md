@@ -154,5 +154,10 @@ python -m pytest -q
 
 ## Related
 
+- [`bin/orama-system/references/multi-agent-collaboration-protocol.md`](../../bin/orama-system/references/multi-agent-collaboration-protocol.md) — authoritative reference: full 7-step protocol, strategy table, GitHub API commands
+- [`bin/orama-system/skills/git-history-surgery/SKILL.md`](../../bin/orama-system/skills/git-history-surgery/SKILL.md) — Multi-Agent Branch Merge quick reference + version-bump commit discipline
+- [`bin/orama-system/skills/using-git-worktrees/SKILL.md`](../../bin/orama-system/skills/using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 has the merge-protocol trigger
+- [`PT/.agent/AGENTS.md` § Multi-agent merge conflict protocol](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md) — portable brain entry point
+
 - [Session log 2026-04-12](../LESSONS.md#2026-04-12--claude--48-hour-multi-agent-sprint-collaboration-patterns--version-registry)
 - Commit: `71a15f7` (PT) — fix(health): restore 127.0.0.1 loopback defaults
