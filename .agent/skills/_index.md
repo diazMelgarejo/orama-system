@@ -3,7 +3,7 @@
 Load the canonical in-repo skill, not a copied body.
 
 | Need | Canonical Skill |
-|---|---|
+| ---- | --- |
 | orama method, AFRP, CIDF, task routing | `bin/orama-system/SKILL.md` |
 | Hermes onboarding and ECC cross-harness imports | `bin/orama-system/skills/hermes-harness/SKILL.md` |
 | AGY/Gemini/Codex/Hermes dispatch and MCP setup | `bin/orama-system/skills/mcp-orchestration/SKILL.md` |
