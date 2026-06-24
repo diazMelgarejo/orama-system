@@ -185,11 +185,6 @@ def _parse_resources(raw: list[dict[str, Any]]) -> tuple[Resource, ...]:
 
 def _parse_target(data: dict[str, Any], path: Path) -> ConfigTarget:
     for field in ("workspace_root", "config_path", "state_dir"):
-        val = data.get(field)
-        if val is not None and not isinstance(val, str):
-            raise ManifestValidationError(
-                f"{path}: target.{field} must be a string, got {type(val).__name__}"
-            )
         if field not in data:
             raise ManifestValidationError(
                 f"{path}: target.{field} is required when 'target' is present"
