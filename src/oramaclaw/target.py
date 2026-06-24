@@ -174,6 +174,9 @@ class TargetCatalog:
         except (OSError, json.JSONDecodeError) as exc:
             _log.warning("TargetCatalog: could not read %s — %s; treating as empty", resolved, exc)
             return cls({}, resolved)
+        if not isinstance(data, dict):
+            _log.warning("TargetCatalog: %s is valid JSON but not an object; treating as empty", resolved)
+            return cls({}, resolved)
 
         raw_targets = data.get("targets", {})
         if not isinstance(raw_targets, dict):
