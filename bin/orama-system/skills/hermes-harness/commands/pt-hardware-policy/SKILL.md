@@ -46,19 +46,20 @@ On Mac/Linux OpenClaw hosts the mirror applies: Mac MLX safe, Win GGUF is NEVER_
 
 ## Procedure (run before LM Studio dispatch)
 
-From orama-system checkout on Windows:
+From **orama-system repository root** on Windows. Path resolution order:
+[`../../references/workspace-path-resolution.md`](../../references/workspace-path-resolution.md).
 
 ```powershell
 # Preferred — full gate (list + openclaw.json check)
 .\platform\windows\start.ps1 --hardware-policy
 
-# Or direct PT CLI (same enforcement path)
-$PtDir = $env:PERPETUA_TOOLS_PATH  # or sibling path to Perpetua-Tools
-python "$PtDir\scripts\hardware_policy_cli.py" --check-openclaw
-python "$PtDir\scripts\hardware_policy_cli.py" --validate "gemma-4-26B-A4B-it-Q4_K_M" win
+# Direct PT CLI only when launcher unavailable (PERPETUA_TOOLS_PATH or PT_HOME)
+$PtDir = if ($env:PERPETUA_TOOLS_PATH) { $env:PERPETUA_TOOLS_PATH } else { $env:PT_HOME }
+python (Join-Path $PtDir 'scripts\hardware_policy_cli.py') --check-openclaw
+python (Join-Path $PtDir 'scripts\hardware_policy_cli.py') --validate "gemma-4-26B-A4B-it-Q4_K_M" win
 ```
 
-After `install.ps1` writes `openclaw.json` defaults (`lmstudio-win` → localhost:1234),
+After `.\platform\windows\install.ps1` writes `openclaw.json` defaults (`lmstudio-win` → localhost:1234),
 always run `--check-openclaw` before trusting model assignments.
 
 ## Rules for Hermes agents
@@ -71,6 +72,7 @@ always run `--check-openclaw` before trusting model assignments.
 
 ## Related
 
+- [`../../references/workspace-path-resolution.md`](../../references/workspace-path-resolution.md)
 - [`../../SKILL.md`](../../SKILL.md) § Platform Harness Model
 - [`../../../../../../docs/wiki/15-hermes-windows-harness.md`](../../../../../../docs/wiki/15-hermes-windows-harness.md)
 - PT [`hardware-policy`](../../../../../../../Perpetua-Tools/.claude/skills/hardware-policy/SKILL.md) skill (sibling repo)
