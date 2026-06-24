@@ -110,7 +110,16 @@ def test_stale_lock_dead_pid_overwritten(tmp_path):
 
 # ── Registry ──────────────────────────────────────────────────────────────────
 
-def test_record_ownership_and_retrieve(tmp_path):
+def test_clear_pending_for_transaction(tmp_path):
+    t = _target(tmp_path)
+    with ControlStore.open(t) as store:
+        store.add_pending(_pending("r1", "tx-a"))
+        store.add_pending(_pending("r2", "tx-b"))
+        store.clear_pending_for_transaction("tx-a")
+        remaining = {r["resolution_id"] for r in store.load_pending()}
+    assert remaining == {"r2"}
+
+
     t = _target(tmp_path)
     with ControlStore.open(t) as store:
         store.record_ownership("mgr", "provider:x", "/effort", "high")

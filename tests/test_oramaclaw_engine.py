@@ -248,3 +248,54 @@ def test_cooperative_timeout_downgrades_auto_weave(tmp_path, monkeypatch):
     assert result.conflicts  # downgraded
     assert not result.auto_woven
     assert result.state == "needs_input"
+
+
+def test_stale_retry_clears_orphan_pending_conflicts(tmp_path, monkeypatch):
+    """Stale replan drops pending records from the aborted first pass."""
+    plan_calls = {"n": 0}
+
+    def _plan(resource, live_config, store):
+        plan_calls["n"] += 1
+        key = f"{resource.kind.value}:{resource.identifier}"
+        if plan_calls["n"] == 1:
+            actions = (
+                FakeFieldAction(managed_path="/effort", kind="conflict", desired_value="high"),
+                FakeFieldAction(managed_path="/effort", kind="apply", desired_value="high"),
+            )
+        else:
+            actions = (FakeFieldAction(managed_path="/effort", kind="apply", desired_value="high"),)
+        return FakeMergePlan(resource_key=key, actions=actions)
+
+    monkeypatch.setattr("oramaclaw.engine.plan_resource", _plan)
+    target = _target(tmp_path)
+    transport = FakeTransport(raise_on_apply=StaleConfiguration("hash-abc"))
+    engine = ControlEngine(transport=transport)
+
+    result = engine.apply_manifest(_manifest(target), target)
+
+    assert result.state == "committed"
+    from oramaclaw.store import ControlStore
+
+    with ControlStore.open(target) as store:
+        assert store.open_conflicts() == []
+
+
+def test_stale_retry_honors_cooperative_timeout_on_auto_weave(tmp_path, monkeypatch):
+    """Stale retry must downgrade auto-weave after the 90s cooperative budget."""
+    monkeypatch.setattr("oramaclaw.engine.plan_resource", _plan_factory("auto_weave"))
+    target = _target(tmp_path)
+    transport = FakeTransport(raise_on_apply=StaleConfiguration("hash-abc"))
+    clock_calls = {"n": 0}
+
+    def _clock():
+        clock_calls["n"] += 1
+        # started + first-pass planning stay under budget; retry pass exceeds it.
+        return 0.0 if clock_calls["n"] <= 2 else 1000.0
+
+    engine = ControlEngine(transport=transport, clock=_clock)
+    result = engine.apply_manifest(_manifest(target), target)
+
+    assert result.conflicts
+    assert not result.auto_woven
+    assert result.state == "needs_input"
+    assert len(transport.apply_calls) == 1
