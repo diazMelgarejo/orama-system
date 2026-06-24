@@ -64,6 +64,40 @@ Canonical surfaces managed by `scripts/sync_version.py` (never edit manually):
 5. **Never hardcode ephemeral runtime values** — `127.0.0.1` as default in source code, real IP in `.env` only
 6. **One canonical source per constant** — if two files both define the same IP string, they will diverge
 
+## Nested-Branch Merge Protocol
+
+When agents produce concurrent branches, follow this sequence. Guessing = data loss.
+
+### Merge order
+- Establish topological order (leaf → parent → main)
+- Merge leaf first; wait 10 min + `mergeable_state: clean` before next merge
+
+### 7-step protocol
+
+| Step | Action |
+|------|--------|
+| **1 Simulate** | `git merge --no-commit --no-ff <branch>` → enumerate `--diff-filter=U` → `git merge --abort`. Do for ALL merges before touching any file. |
+| **2 Present** | Show both sides of every conflict. One question per file. Wait for explicit direction. |
+| **3 Strategy** | `additive` (empty+content→take content) · `union` (both partial→concat) · `superset` (verify inclusion→take larger) · `architecturally-correct` (bug→take fix) · `api-correct` (casing→take lowercase) |
+| **4 Resolve** | One pass, directed strategy. Never delete — archive if needed. |
+| **5 Verify** | `pytest -q` + `repo_hygiene.py` + confirm no `<<<<<<` remain |
+| **6 Merge** | Push → CI → GitHub API squash merge. Undraft via GraphQL if needed. |
+| **7 Buffer** | 10 minutes. Poll `mergeable_state: clean` before next merge. |
+
+### Key invariants
+
+```
+"merged: true" on GitHub ≠ content on branch
+  → always: git diff origin/main...origin/<branch> after any merge
+
+CodeRabbit re-scans on every push → run post-merge sweep after EVERY merge
+
+Draft PR blocks API merge → markPullRequestReadyForReview mutation first
+```
+
+Full reference with code snippets: [`bin/orama-system/references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](../../bin/orama-system/references/multi-agent-collaboration-protocol.md)
+PT portable brain: [`PT/.agent/AGENTS.md` § Multi-agent merge conflict protocol](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md)
+
 ## Clean-Lineage Git Hygiene
 
 For recovery branches and other high-risk Git work:
