@@ -52,17 +52,17 @@ gateway_json="$(curl -fsS "$health_url" || true)"
 ```bash
 launchctl print "gui/$(id -u)/com.openclaw.gateway" >/tmp/openclaw-launchd.txt 2>&1 || true
 ```
-4. Check channel indicators (Telegram/Slack/WhatsApp) from logs.
+4. Inspect channel indicators (Telegram/Slack/WhatsApp) from logs.
 
 ```bash
 log show --style syslog --last "${lookback_minutes}m" --predicate 'eventMessage CONTAINS[c] "telegram" OR eventMessage CONTAINS[c] "slack" OR eventMessage CONTAINS[c] "whatsapp"' > /tmp/openclaw-channels.log || true
 ```
-5. Check configured agent count.
+5. Verify configured agent count.
 
 ```bash
 agent_count="$(jq '.agents.list | length' openclaw.json 2>/dev/null || echo 0)"
 ```
-6. Check cron run/error signals.
+6. Review cron run/error signals.
 
 ```bash
 log show --style syslog --last "${lookback_minutes}m" --predicate 'eventMessage CONTAINS[c] "cron" OR eventMessage CONTAINS[c] "scheduler" OR eventMessage CONTAINS[c] "error"' > /tmp/openclaw-cron.log || true

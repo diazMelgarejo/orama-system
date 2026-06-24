@@ -117,7 +117,21 @@ def _acquire_lock(lock_path: Path) -> None:
     """Write a PID lock file, raising LockHeld if another live process holds it."""
     lock_path.parent.mkdir(parents=True, exist_ok=True)
 
-    if lock_path.exists():
+    my_pid = os.getpid()
+    create_time: float | None = None
+    try:
+        import psutil  # type: ignore[import]
+        create_time = psutil.Process(my_pid).create_time()
+    except Exception:
+        pass
+
+    payload = {
+        "pid": my_pid,
+        "acquired_at": time.time(),
+        "create_time": create_time,
+    }
+
+    def _should_overwrite_existing() -> bool:
         try:
             data = json.loads(lock_path.read_bytes())
             held_pid: int = data.get("pid", -1)
@@ -134,32 +148,33 @@ def _acquire_lock(lock_path: Path) -> None:
                     held_pid,
                     age,
                 )
-            elif age > LOCK_STALE_SECONDS:
+                return True
+            if age > LOCK_STALE_SECONDS:
                 _log.warning(
                     "ControlStore: overwriting stale lock with unknown liveness (PID %d, age %.0fs)",
                     held_pid,
                     age,
                 )
-            else:
-                raise LockHeld(held_pid, lock_path)
+                return True
+            raise LockHeld(held_pid, lock_path)
         except LockHeld:
             raise
         except Exception as exc:
             _log.warning("ControlStore: could not parse lock file %s — %s; overwriting", lock_path, exc)
+            return True
 
-    my_pid = os.getpid()
-    create_time: float | None = None
-    try:
-        import psutil  # type: ignore[import]
-        create_time = psutil.Process(my_pid).create_time()
-    except Exception:
-        pass
-
-    _atomic_write_json(lock_path, {
-        "pid": my_pid,
-        "acquired_at": time.time(),
-        "create_time": create_time,
-    })
+    for attempt in range(2):
+        try:
+            fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, indent=2)
+            return
+        except FileExistsError:
+            if _should_overwrite_existing():
+                lock_path.unlink(missing_ok=True)
+                if attempt == 0:
+                    continue
+            raise LockHeld(-1, lock_path)
 
 
 def _release_lock(lock_path: Path) -> None:
@@ -372,6 +387,13 @@ class ControlStore:
         if found:
             _atomic_write_json(self._pending_path, records)
         return found
+
+    def clear_pending_for_transaction(self, transaction_id: str) -> None:
+        """Drop pending records for a transaction (e.g. before stale-hash replan)."""
+        records = self.load_pending()
+        filtered = [r for r in records if r.get("transaction_id") != transaction_id]
+        if len(filtered) != len(records):
+            _atomic_write_json(self._pending_path, filtered)
 
     def pending_by_id(self, resolution_id: str) -> dict[str, Any] | None:
         """Return the raw pending record with the given ID, or None."""

@@ -259,6 +259,7 @@ class ControlEngine:
                 # fresh state before retrying. Avoids silently overwriting
                 # concurrent mutations that arrived between the initial fetch
                 # and the first apply attempt.
+                store.clear_pending_for_transaction(transaction_id)
                 fresh = transport.gateway_config_get(target)
                 live_config = fresh.configuration
                 base_hash = fresh.base_hash
@@ -282,6 +283,20 @@ class ControlEngine:
                             )
                             applied_this_resource = True
                         elif kind == "auto_weave":
+                            if (self._clock() - started) > COOPERATIVE_TIMEOUT_SECONDS:
+                                conflicts.append(
+                                    self._conflict_from_action(resource_key, resource.manager, action)
+                                )
+                                store.add_pending(
+                                    self._pending_from_action(
+                                        resource_key, resource.manager, action, transaction_id
+                                    )
+                                )
+                                warnings.append(
+                                    f"auto-weave downgraded to conflict (>90s): "
+                                    f"{resource_key}{action.managed_path}"
+                                )
+                                continue
                             self._set_path(merged_patch, action.managed_path, action.desired_value)
                             store.record_ownership(
                                 resource.manager,

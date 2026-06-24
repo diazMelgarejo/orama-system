@@ -1,4 +1,4 @@
-import json, os, subprocess, shutil
+import json, os, subprocess, shutil, sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -84,7 +84,7 @@ def test_profile_generator_preserves_operator_text_and_converges(tmp_path):
     workspace = tmp_path / "codex-agent"
 
     first = subprocess.run(
-        ["python3", str(generator), "--workspace", str(workspace)],
+        [sys.executable, str(generator), "--workspace", str(workspace)],
         capture_output=True,
         check=True,
         text=True,
@@ -99,7 +99,7 @@ def test_profile_generator_preserves_operator_text_and_converges(tmp_path):
     security.write_text("Operator security policy.\n", encoding="utf-8")
 
     second = subprocess.run(
-        ["python3", str(generator), "--workspace", str(workspace)],
+        [sys.executable, str(generator), "--workspace", str(workspace)],
         capture_output=True,
         check=True,
         text=True,
@@ -107,7 +107,7 @@ def test_profile_generator_preserves_operator_text_and_converges(tmp_path):
     assert json.loads(second.stdout)["changed"] == ["CODEX.md"]
 
     third = subprocess.run(
-        ["python3", str(generator), "--workspace", str(workspace)],
+        [sys.executable, str(generator), "--workspace", str(workspace)],
         capture_output=True,
         check=True,
         text=True,
@@ -133,7 +133,7 @@ def test_profile_generator_rejects_trailing_start_marker(tmp_path):
     )
 
     result = subprocess.run(
-        ["python3", str(generator), "--workspace", str(workspace)],
+        [sys.executable, str(generator), "--workspace", str(workspace)],
         capture_output=True,
         text=True,
     )
