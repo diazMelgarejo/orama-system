@@ -163,18 +163,31 @@ def _acquire_lock(lock_path: Path) -> None:
             _log.warning("ControlStore: could not parse lock file %s — %s; overwriting", lock_path, exc)
             return True
 
-    for attempt in range(2):
+    # Attempt 0: optimistic O_CREAT|O_EXCL (no contention expected).
+    # Attempt 1: after a stale-lock unlink, the window between unlink and the
+    #   next O_CREAT|O_EXCL is a TOCTOU race — another process can sneak in.
+    #   We re-evaluate after a brief yield before the second attempt so that a
+    #   concurrent winner's lock file is visible and we raise LockHeld instead
+    #   of silently overwriting a live lock.
+    for attempt in range(3):
         try:
-            fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            fd = os.open(str(lock_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 json.dump(payload, fh, indent=2)
             return
         except FileExistsError:
+            if attempt == 2:
+                # Two stale-lock cycles without winning — give up.
+                raise LockHeld(-1, lock_path)
             if _should_overwrite_existing():
+                # Stale lock confirmed; unlink and loop.  The next iteration
+                # re-evaluates with O_CREAT|O_EXCL — if another process wins
+                # the race we'll hit FileExistsError again and _should_overwrite
+                # will see a *live* lock, correctly raising LockHeld.
                 lock_path.unlink(missing_ok=True)
-                if attempt == 0:
-                    continue
-            raise LockHeld(-1, lock_path)
+                time.sleep(0)  # yield to OS scheduler before retry
+            else:
+                raise LockHeld(-1, lock_path)
 
 
 def _release_lock(lock_path: Path) -> None:
