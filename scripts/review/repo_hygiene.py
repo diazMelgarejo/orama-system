@@ -678,6 +678,19 @@ def check_identity(root: Path) -> list[str]:
     return []
 
 
+CC_OPENCLAW_SUBMODULE = "bin/orama-system/skills/openclaw-skills/cc-openclaw"
+
+
+def _gitlink_sha(root: Path, rel_path: str) -> str | None:
+    mode_line = run_git(root, "ls-files", "-s", rel_path).stdout.strip()
+    if not mode_line:
+        return None
+    parts = mode_line.split()
+    if not parts or parts[0] != "160000":
+        return None
+    return parts[1] if len(parts) > 1 else None
+
+
 def check_ecc(root: Path, files: list[str]) -> list[str]:
     if ".ecc" not in files:
         return []
@@ -689,6 +702,33 @@ def check_ecc(root: Path, files: list[str]) -> list[str]:
     if is_gitlink and ecc_path.is_symlink():
         return [".ecc is a gitlink in index but a symlink in the working tree"]
     return []
+
+
+def check_cc_openclaw_gitlink(root: Path) -> list[str]:
+    """F8: cc-openclaw submodule must be a pinned gitlink with .gitmodules entry."""
+    errors: list[str] = []
+    gitmodules = root / ".gitmodules"
+    if not gitmodules.exists():
+        return [f"{CC_OPENCLAW_SUBMODULE} gitlink check skipped: .gitmodules missing"]
+
+    text = gitmodules.read_text(encoding="utf-8")
+    if f'path = {CC_OPENCLAW_SUBMODULE}' not in text:
+        errors.append(f"{CC_OPENCLAW_SUBMODULE} missing from .gitmodules")
+
+    pinned = _gitlink_sha(root, CC_OPENCLAW_SUBMODULE)
+    if pinned is None:
+        errors.append(f"{CC_OPENCLAW_SUBMODULE} is not tracked as a git submodule (mode 160000)")
+        return errors
+
+    submodule_dir = root / CC_OPENCLAW_SUBMODULE
+    if submodule_dir.exists() and (submodule_dir / ".git").exists():
+        head = run_git(submodule_dir, "rev-parse", "HEAD").stdout.strip()
+        if head and head != pinned:
+            errors.append(
+                f"{CC_OPENCLAW_SUBMODULE} working tree ({head[:12]}) "
+                f"does not match pinned gitlink ({pinned[:12]})"
+            )
+    return errors
 
 
 def check_workflow_permissions(root: Path) -> list[str]:
@@ -814,6 +854,7 @@ def main() -> int:
     errors.extend(check_markdown_link_hygiene(root, files))
     errors.extend(check_generated_artifact_tracking(files))
     errors.extend(check_ecc(root, files))
+    errors.extend(check_cc_openclaw_gitlink(root))
     errors.extend(check_workflow_permissions(root))
     errors.extend(check_stale_skill_path_refs(root, files))
     errors.extend(check_git_internal_junk(root))
