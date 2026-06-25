@@ -3666,3 +3666,20 @@ The Platform Harness Model is now explicit in
 [`bin/orama-system/skills/hermes-harness/SKILL.md`](../bin/orama-system/skills/hermes-harness/SKILL.md)
 and the routing algorithm with anti-patterns lives in
 [`bin/orama-system/skills/hermes-harness/references/platform-affinity-routing.md`](../bin/orama-system/skills/hermes-harness/references/platform-affinity-routing.md).
+
+---
+
+## 2026-06-26 — cursor-agent model defaults: composer-2.5 primary, auto fallback
+
+Default model for cursor-agent light tasks is `composer-2.5` (or `auto` as fallback
+when composer-2.5 is unavailable). `claude-4.6-sonnet-medium` is NOT the default —
+it is only dispatched when an orchestrator (Opus 4.8 Ultracode or Fable 5 workflow)
+explicitly demands it for a subtask.
+
+| Tier | Model | When |
+|------|-------|------|
+| Default | `composer-2.5` | All light/parallel tasks |
+| Fallback | `auto` | When composer-2.5 unavailable or task ambiguous |
+| Orchestrator-override | `claude-4.6-sonnet-medium` | Only when Opus 4.8 Ultracode / Fable 5 workflow explicitly requests it |
+
+Skill: bin/orama-system/skills/cursor-agent/SKILL.md
