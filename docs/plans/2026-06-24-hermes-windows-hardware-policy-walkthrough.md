@@ -7,7 +7,7 @@
 > **Review trigger:** Next Windows Hermes bring-up (orama #107 no longer gates this — it is merged)
 > **Canonical architecture:** [Cross-Harness Hardware Policy Architecture](../hermes-hardware-policy-cross-harness.md) — **single source of truth for the harness model below; do not re-edit it in three places.**
 
-> **Cross-repo path contract:** every `$PERPETUA_TOOLS_PATH/…` below is the L2 repo (canonical name **Perpetua-Tools**; on this host the on-disk clone is `…/ultrathink/Perplexity-Tools`). Reference it through the env var, never a literal sibling name.
+> **Cross-repo path contract:** every `$PERPETUA_TOOLS_PATH/…` below is the L2 repo (canonical name **Perpetua-Tools**; on-disk clone name varies by host). Reference it through the env var, never a literal sibling name.
 
 ---
 

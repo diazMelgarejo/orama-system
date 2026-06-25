@@ -258,23 +258,17 @@ def test_main_command_uses_current_interpreter(sw, tmp_path, monkeypatch):
     assert cmd_args[0] == sys.executable
 
 
-def test_main_verify_only_takes_priority_over_dry_run(sw, tmp_path, monkeypatch):
-    """When both --verify-only and --dry-run are given, --verify wins (argparse first-match)."""
+def test_main_mutual_exclusion_dry_run_and_verify_only(sw, tmp_path, monkeypatch):
+    """--dry-run and --verify-only are mutually exclusive; argparse rejects both."""
     _make_fake_installer(tmp_path)
     monkeypatch.setattr(sw, "resolve_repo_root", lambda: tmp_path)
 
-    run_mock = MagicMock(return_value=MagicMock(returncode=0))
-    monkeypatch.setattr(sw.subprocess, "run", run_mock)
-
     old_argv = sys.argv
-    # argparse: both flags set — verify_only branch checked first in main()
     sys.argv = ["sync_hermes_thin_wrappers.py", "--verify-only", "--dry-run"]
     try:
-        sw.main()
+        with pytest.raises(SystemExit) as exc_info:
+            sw.main()
     finally:
         sys.argv = old_argv
 
-    cmd_args = run_mock.call_args[0][0]
-    # --verify-only branch in main(): if args.verify_only: cmd.append("--verify")
-    # Since verify_only is checked first, --verify should appear.
-    assert "--verify" in cmd_args
+    assert exc_info.value.code == 2  # argparse exits 2 on usage error

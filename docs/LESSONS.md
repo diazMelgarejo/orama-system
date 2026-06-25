@@ -52,11 +52,11 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 2. **`resolve_local_or_remote()` is a fiction** — the Hermes canonical onboarding plan (Phase 1 task 1) told agents to extract this function from `agent_launcher.py`. It does not exist. The real locality primitives are `_loopback_host_from_endpoint()` (L89), `_is_local_endpoint()` (L376), `_get_local_ips()` (L344). Plan corrected in-place.
 
-3. **Perpetua-Tools on-disk clone name** — the L2 repo's canonical name is `Perpetua-Tools` but the on-disk clone on this host is `Perplexity-Tools` (rename in-flight). All tracked files must use `$PERPETUA_TOOLS_PATH` env var, never the literal sibling name. PT absolute path confirmed: `C:\Users\lab\Downloads\SKILLS.md\ultrathink\Perplexity-Tools`.
+3. **Perpetua-Tools on-disk clone name** — the L2 repo's canonical name is `Perpetua-Tools` but the on-disk clone name varies by host (rename in-flight). All tracked files must use `$PERPETUA_TOOLS_PATH` env var, never the literal sibling name.
 
-4. **utils.hardware_policy import path** — `PERPETUA_TOOLS_ROOT` must resolve to the **directory containing the Python package** (i.e., the root of PT where `src/` lives, so `sys.path.insert(0, str(pt_root))` can resolve `utils.hardware_policy`). On this host set: `PERPETUA_TOOLS_ROOT=C:\Users\lab\Downloads\SKILLS.md\ultrathink\Perplexity-Tools`.
+4. **utils.hardware_policy import path** — `PERPETUA_TOOLS_ROOT` must resolve to the **directory containing the Python package** (i.e., the root of PT where `src/` lives, so `sys.path.insert(0, str(pt_root))` can resolve `utils.hardware_policy`). Set: `PERPETUA_TOOLS_ROOT=$PERPETUA_TOOLS_PATH`.
 
-5. **Windows LM Studio live at** `http://192.168.254.102:1234` — loaded models: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`, `gemma-4-26b-a4b-it`, `text-embedding-nomic-embed-text-v1.5`.
+5. **Windows LM Studio** at `$LM_STUDIO_WIN_ENDPOINT` — loaded models: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`, `gemma-4-26b-a4b-it`, `text-embedding-nomic-embed-text-v1.5`.
 
 6. **gstack/gbrain not installed on Windows** — neither CLI is on PATH; no `~/.gbrain/config.json`, no `~/.gstack`. Install path: gstack is a Claude Code skill (install separately); gbrain is a separate CLI (install command not found in this repo — check mcp-install `references/first-run-install.md §§ 0.4–0.5.1` on a Mac that has it). For Windows, use `text-embedding-nomic-embed-text-v1.5` via LM Studio OpenAI-compat endpoint as the embedding backend instead of Ollama bge-m3.
 
