@@ -678,6 +678,20 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
                         print(f"⚠️  {role} unreachable — preserving last-good", file=sys.stderr)
 
         endpoints = filter_endpoints_for_policy(endpoints)
+
+        # Normalize Win IP before hashing so compute_hash and save_discovery_state
+        # use the same resolved address — otherwise the stored hash diverges and
+        # Windows re-patches on every run even when nothing changed.
+        mac = endpoints.get("mac") or {}
+        win = endpoints.get("win") or {}
+        if RUNNING_ON_WINDOWS:
+            _raw_win_ip = win.get("ip", "")
+            if _raw_win_ip in ("localhost", "127.0.0.1"):
+                _resolved = os.getenv("WIN_IP") or _win_lan_ip() or _raw_win_ip
+                if _resolved != _raw_win_ip:
+                    win = {**win, "ip": _resolved}
+                    endpoints = {**endpoints, "win": win}
+
         new_hash = compute_hash(endpoints)
         last = _load_json(LAST_DISCOVERY_JSON)
         if last and last.get("hash") == new_hash:
@@ -694,18 +708,6 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         backup_current_state()
         repo_paths = get_repo_paths()
         pt_repo = repo_paths.get("perpetua_tools")
-        mac = endpoints.get("mac") or {}
-        win = endpoints.get("win") or {}
-
-        # On Windows the runtime win IP is "localhost"; resolve the real LAN IP
-        # so ALL shared config files store a network-reachable address.
-        if RUNNING_ON_WINDOWS:
-            _raw_win_ip = win.get("ip", "")
-            if _raw_win_ip in ("localhost", "127.0.0.1"):
-                _resolved = os.getenv("WIN_IP") or _win_lan_ip() or _raw_win_ip
-                if _resolved != _raw_win_ip:
-                    win = {**win, "ip": _resolved}
-                    endpoints = {**endpoints, "win": win}
 
         patch_openclaw_json(endpoints)
         print("  ✓ openclaw.json", file=sys.stderr)
