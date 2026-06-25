@@ -42,6 +42,10 @@ MAX_BACKUPS        = 30
 ARCHIVE_DAYS       = 30
 GOSSIP_TTL_SECONDS = 300
 
+# Platform role: on Windows, localhost IS the Win box and the Mac is remote.
+# On Mac/Linux, localhost IS the Mac box and Windows is on the LAN.
+RUNNING_ON_WINDOWS = sys.platform == "win32"
+
 # ── Repo discovery ────────────────────────────────────────────────────────────
 
 def _resolve_perpetua_root_env() -> Path | None:
@@ -218,19 +222,54 @@ def _mac_lan_ip():
 def discover_endpoints() -> dict:
     """Probe Mac and Windows LM Studio instances.
 
-    Mac identification strategy (in order):
+    Platform role reversal on Windows:
+      When running ON Windows, localhost IS the Windows box and the Mac is remote.
+      When running ON Mac/Linux, localhost IS the Mac box and Windows is on the LAN.
+
+    Mac identification strategy (Mac/Linux host, in order):
       1. localhost:1234  — classic single-machine dev setup
       2. mac_lan_ip:1234 — LM Studio bound to all interfaces (common after
          power cycle or when LAN access is needed from other machines)
       3. Seed from last_discovery.json mac.ip — avoids full subnet scan on
          unchanged topologies
 
-    Windows identification:
+    Windows identification (Mac/Linux host):
       Any responding LM Studio on the subnet that is NOT the Mac's own IP.
       Falls back to last-known-good IP, then full subnet scan.
+
+    Windows host (RUNNING_ON_WINDOWS=True):
+      localhost:1234  → win  (the local LM Studio GGUF box)
+      $MAC_IP:1234    → mac  (the remote Mac MLX box, if reachable)
     """
     result = {"mac": None, "win": None}
 
+    if RUNNING_ON_WINDOWS:
+        # ── Windows host: localhost = win, $MAC_IP = mac ────────────────────
+        win_models = probe_models("http://localhost:1234")
+        if win_models:
+            result["win"] = {"ip": "localhost", "models": win_models}
+        else:
+            print("  ⚠️  Windows LM Studio not reachable at localhost:1234", file=sys.stderr)
+
+        mac_ip = os.getenv("MAC_IP", "").strip()
+        if mac_ip:
+            mac_models = probe_models(f"http://{mac_ip}:1234")
+            if mac_models:
+                result["mac"] = {"ip": mac_ip, "models": mac_models}
+            else:
+                print(f"  ⚠️  Mac LM Studio not reachable at {mac_ip}:1234 ($MAC_IP)", file=sys.stderr)
+        else:
+            # Fall back to last-known-good mac IP from cache
+            last = _load_json(LAST_DISCOVERY_JSON)
+            mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
+            if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1"):
+                mac_models_cached = probe_models(f"http://{mac_last_ip}:1234")
+                if mac_models_cached:
+                    result["mac"] = {"ip": mac_last_ip, "models": mac_models_cached}
+                    print(f"  ℹ️  Mac LM Studio found at cached IP {mac_last_ip} (set $MAC_IP to avoid scan)", file=sys.stderr)
+        return result
+
+    # ── Mac/Linux host: localhost = mac, subnet scan = win ──────────────────
     # Step 1: try localhost first (zero network traffic, instant)
     mac_models = probe_models("http://localhost:1234")
     if mac_models:
