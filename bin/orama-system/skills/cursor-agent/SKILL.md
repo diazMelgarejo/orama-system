@@ -81,18 +81,31 @@ Key models for task fanout (from `cursor-agent models`):
 
 | Model string | Display name | When to use |
 |---|---|---|
-| `claude-4.6-sonnet-medium` | Sonnet 4.6 1M | **Default for light tasks** — fast, capable |
+| `composer-2.5` | Composer 2.5 | **Default for all light/parallel tasks** |
+| `auto` | Auto | Fallback when composer-2.5 unavailable or task ambiguous |
 | `claude-opus-4-8-low` | Opus 4.8 Low | Mechanical tasks (format, rename, scaffold) |
 | `claude-opus-4-8-medium` | Opus 4.8 Medium | Standard coding tasks |
 | `claude-opus-4-8-high` | Opus 4.8 1M | Complex refactors |
-| `auto` | Auto | Let Cursor pick per task |
 | `gpt-5.3-codex-low` | Codex 5.3 Low | Fast, cheap file edits |
+| `claude-4.6-sonnet-medium` | Sonnet 4.6 1M | **Orchestrator-override only** — dispatched exclusively when Opus 4.8 Ultracode / Fable 5 workflow explicitly demands it |
 
 Parameterised model override syntax (bracket notation):
 
 ```bash
 cursor-agent --model 'claude-opus-4-8[context=1m,effort=high,fast=false]' ...
 ```
+
+## Model Selection Policy
+
+Three tiers — apply in order:
+
+| Tier | Model | When |
+|------|-------|------|
+| 1 — Default | `composer-2.5` | All light/parallel tasks; use unless there is an explicit reason not to |
+| 2 — Fallback | `auto` | When `composer-2.5` is unavailable or the task is ambiguous and Cursor should self-select |
+| 3 — Orchestrator-override | `claude-4.6-sonnet-medium` | ONLY when an orchestrator (Opus 4.8 Ultracode or Fable 5 workflow) explicitly demands it for a fan-out subtask. NOT a general default. |
+
+**Never use `claude-4.6-sonnet-medium` as a default.** If no orchestrator has demanded it, use `composer-2.5` (or `auto` as fallback).
 
 ## Key Options (from `cursor-agent --help`)
 
@@ -114,12 +127,13 @@ cursor-agent --model 'claude-opus-4-8[context=1m,effort=high,fast=false]' ...
 
 ## Light Task Fanout Pattern
 
-**Sonnet 4.6 Medium** (`claude-4.6-sonnet-medium`) is the right model for parallelising
-light work alongside the main orchestration session.
+**Composer 2.5** (`composer-2.5`) is the default model for parallelising light work
+alongside the main orchestration session. Use `auto` as fallback when `composer-2.5`
+is unavailable.
 
 ```bash
 # Parallel single-turn jobs (background)
-cursor-agent --print --model claude-4.6-sonnet-medium \
+cursor-agent --print --model composer-2.5 \
   "Add type annotations to scripts/discover.py; only functions, no variables" \
   --output-format json > /tmp/task-a.json &
 
@@ -132,8 +146,8 @@ wait   # collect when done
 
 **Division of labour:**
 
-| Main session (Sonnet 4.6 full orchestration) | cursor-agent (Sonnet 4.6 Medium) |
-|----------------------------------------------|----------------------------------|
+| Main session (Sonnet 4.6 full orchestration) | cursor-agent (composer-2.5 default) |
+|----------------------------------------------|-------------------------------------|
 | Architecture decisions | Mechanical file edits |
 | CIDF write discipline | Grep-and-replace tasks |
 | Cross-repo synthesis | Doc generation |
@@ -142,7 +156,7 @@ wait   # collect when done
 | AFRP gate | Single-file refactors |
 
 **Budget note:** `cursor-agent` consumes Cursor credits (not Anthropic API tokens).
-Light tasks = `--model claude-4.6-sonnet-medium` or `gpt-5.3-codex-low`.
+Light tasks = `--model composer-2.5` (default) or `--model auto` (fallback) or `gpt-5.3-codex-low`.
 
 ## Worktree Isolation
 
@@ -150,7 +164,7 @@ For tasks that write files and must not collide with the main session:
 
 ```bash
 cursor-agent -w cursor-fix-$(date +%s) \
-  --print --model claude-4.6-sonnet-medium \
+  --print --model composer-2.5 \
   "Refactor scripts/foo.py to add structured logging"
 # Runs in ~/.cursor/worktrees/<repo>/cursor-fix-<ts>/
 # Review and merge back with git after the agent completes
@@ -165,7 +179,7 @@ headless jobs while the main session handles judgment work:
 # Example Stage 4 parallel dispatch
 _JOBS=()
 
-cursor-agent --print --model claude-4.6-sonnet-medium \
+cursor-agent --print --model composer-2.5 \
   "Scan bin/ for TODO comments; output as JSON list" \
   --output-format json > /tmp/todos.json &
 _JOBS+=($!)
@@ -193,7 +207,7 @@ cursor-agent mcp add --name my-server --command "npx my-mcp-server"
 Approve all MCPs automatically in headless mode:
 
 ```bash
-cursor-agent --print --approve-mcps --model claude-4.6-sonnet-medium "..."
+cursor-agent --print --approve-mcps --model composer-2.5 "..."
 ```
 
 ## Windows / Hermes Harness
@@ -201,7 +215,7 @@ cursor-agent --print --approve-mcps --model claude-4.6-sonnet-medium "..."
 On Windows, invoke from PowerShell or Git Bash:
 
 ```powershell
-cursor-agent --print --model claude-4.6-sonnet-medium "task here" --trust
+cursor-agent --print --model composer-2.5 "task here" --trust
 ```
 
 From a Hermes-scripted workflow:
