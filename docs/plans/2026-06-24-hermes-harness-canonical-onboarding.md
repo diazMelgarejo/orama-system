@@ -1,377 +1,371 @@
-<!-- lint-ignore LINT-012 -->
 # Hermes-Harness Canonical Onboarding & Skill Absorption (2026-06-24)
 
 > **Date:** 2026-06-24 · **Owner:** orama-system (canonical skills) · **Consumer:** Hermes local harness (L1)
-> **Status:** 📋 PLANNED — 4 Hermes plans steelmanned + 3 architecture decisions (2026-06-24): parametrize IPs, localhost-when-local, preserve-then-migrate Windows
-> **Author:** claude-sonnet-4.6 + cyre
-> **Review trigger:** before next hermes-harness enrichment session
+> **Status:** 📋 PLANNED — 4 Hermes plans steelmanned + 3 architecture decisions (2026-06-24): parametrize IPs, localhost-when-local, preserve-then-migrate Windows  — refined: missing absorption targets may be created; scripts allowed; phases restructured for dependency order
+> **Author:** orama-system canonical skill leads
 > **Approval gate:** explicit "approve" from user before any execution
 
 ---
 
-## Provenance & honest framing
+## Provenance
 
-This plan synthesizes four Hermes-authored planning documents:
-1. `2026-06-22_204500-orama-skill-enrichment.md` — skill absorption (merge duplicates)
-2. `2026-06-23_hermes-harness-canonical-onboarding.md` — enrich hermes-harness to authority
-3. `2026-06-23_hermes-harness-part-02-PLAN.md` — Part 02, with evidence matrix + canaries
+This plan synthesizes five verified sources:
+
+1. `skill-comparison-2026-06-22.md` — Hermes-vs-orama absorption map
+2. `2026-06-22_204500-orama-skill-enrichment.md` — skill-merge tasks
+3. `2026-06-23_hermes-harness-part-02-PLAN.md` — evidence matrix + canaries + `/v1/models` resolution
 4. `2026-06-22_215500-windows-install-startup.md` — Windows/Mac install parity
+5. `2026-06-24-hermes-windows-hardware-policy-walkthrough.md` — live hardware-affinity architecture and Windows walkthrough plan
 
-**Ground-truth correction (verified against the live repo before writing this plan):**
+All paths are repo-relative to `orama-system` root.
 
-The source plans repeatedly reference five skills as if they live in orama-system:
-`hermes-agent`, `pt-orama-harness-integration`, `local-inference`, `perpetua-hardware`,
-and a PR #96 on branch `codex/hermes-ecc-harness-skills`. **None of these exist in
-orama-system `main` today.** They are Hermes *local-environment* skills (per
-`skill-comparison-2026-06-22.md`, which is a Hermes-vs-orama listing). The absorption
-targets named in the plans (`perpetua-hardware`, etc.) are also absent.
+---
 
-What orama-system actually has today:
-- `bin/orama-system/skills/hermes-harness/SKILL.md` — already exists, already has
-  Purpose / Operating Thesis / Platform Harness Model / Windows Bring-Up / Procedure /
-  Verification / Boundaries / References sections
-- `bin/orama-system/skills/hermes-harness/commands/` — 4 thin wrappers already exist:
-  `pt-orama-council`, `pt-orama-review`, `pt-orama-delegate`, `pt-hardware-policy`
-- `bin/orama-system/skills/hermes-harness/references/` — 6 reference files including
-  `ecc-hermes-cross-harness.md`, `hermes-windows-partner-readiness.md`,
-  `hermes-council-review-gates.md`, `workspace-path-resolution.md`
+## Ground-Truth Reframing
+
+The source plans reference five skills as canonical targets: `hermes-agent`, `pt-orama-harness-integration`, `local-inference`, `perpetua-hardware`, and PR #96. **None of these exist in `orama-system` `main` today.** They are Hermes local-environment skills or aspirational targets.
+
+What `orama-system` actually has:
+
+- `bin/orama-system/skills/hermes-harness/SKILL.md` — exists
+- `bin/orama-system/skills/hermes-harness/commands/pt-orama-council/SKILL.md` — exists
+- `bin/orama-system/skills/hermes-harness/commands/pt-orama-review/SKILL.md` — exists
+- `bin/orama-system/skills/hermes-harness/commands/pt-orama-delegate/SKILL.md` — exists
+- `bin/orama-system/skills/hermes-harness/commands/pt-hardware-policy/SKILL.md` — exists
+- `bin/orama-system/skills/hermes-harness/references/` — 6 reference files including `ecc-hermes-cross-harness.md`, `hermes-windows-partner-readiness.md`, `hermes-council-review-gates.md`
 - `bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py` — exists
-- `bin/orama-system/skills/openclaw-skills/SKILL.md` — the 295-line authority to mirror
+- `bin/orama-system/skills/openclaw-skills/SKILL.md` — the authority to mirror
 
-**Therefore this plan is reframed from "absorb 5 skills" to "enrich what exists":**
-the genuine, executable value in the four Hermes plans is (a) bringing `hermes-harness`
-to structural parity with `openclaw-skills`, (b) hardening partner-lane canaries with
-exact success text and timeouts, (c) enforcing live LM Studio `/v1/models` resolution,
-and (d) distilling the existing `ecc-hermes-cross-harness.md` into focused ≤150-line cards.
-The "absorption" of non-existent skills is dropped as a no-op; if those Hermes skills are
-ever upstreamed, a separate migration plan will handle them.
+**Reframed outcome:** enrich what exists first, then create any missing absorption targets as redirect-only stubs so the canonical tree is complete. The real value is structural parity with `openclaw-skills`, hardened canaries, live `/v1/models` resolution, ECC distillation, Windows parity, hardware-policy wiring, and helper scripts under `scripts/`.
 
 ---
 
-## Goals (measurable)
+## Measurable Goals
 
-1. `hermes-harness/SKILL.md` matches `openclaw-skills/SKILL.md` section-for-section in
-   the authority-bearing sections (compatibility matrix, model routing, attribution,
-   verification gates, search frugality, Windows coder policy).
-2. All four partner lanes (Hermes, AGY, LM Studio, Codex) have a canary with **exact
-   expected output, timeout ≤15 s, and a documented degraded fallback**.
-3. LM Studio dispatch is gated on a live `GET /v1/models` fetch — no invented model IDs
-   in any tracked file; session-scoped cache with canary-triggered invalidation.
-4. The 700+ line `ecc-hermes-cross-harness.md` is distilled into ≤4 focused reference
-   cards (≤150 lines each), and the original is retained (not deleted) as the source.
-5. `install_hermes_thin_skills.py --verify` exits 0 for all wrappers; user-edited
-   wrappers (`created_by: user`) are never clobbered.
-
----
-
-## Non-goals
-
-- Creating `perpetua-hardware`, `hermes-agent`, `local-inference`, or
-  `pt-orama-harness-integration` skills (they don't exist here; out of scope).
-- Any change to the live Windows machine, `~/.hermes`, or LM Studio config.
-- Any executable logic in `references/` files (references are read-only cards).
-- Auto-merging Hermes local skills into orama (would require a separate upstream plan).
+| #   | Goal                                                                                                    |
+| --- | ------------------------------------------------------------------------------------------------------- |
+| 1   | `hermes-harness/SKILL.md` matches `openclaw-skills/SKILL.md` in authority-bearing sections              |
+| 2   | All partner lanes have a canary with exact expected output, timeout ≤15 s, and degraded fallback        |
+| 3   | LM Studio dispatch is gated on live `/v1/models` fetch; zero invented model IDs in tracked files        |
+| 4   | `ecc-hermes-cross-harness.md` is distilled into ≤4 reference cards (≤150 lines each); original retained |
+| 5   | `install_hermes_thin_skills.py --verify` exits 0; user wrappers never clobbered                         |
+| 6   | Windows reaches Mac/Linux parity via thin wrappers → canonical; no deletion until verified migration    |
+| 7   | All LAN IPs are parametrized to env vars; no hardcoded literals in skills/plans/docs                    |
+| 8   | Locality rule enforced: own-machine services reach via `localhost`; cross-machine via `$IP`             |
+| 9   | Missing absorption-target stubs exist with redirect headers where canonical targets are absent          |
+| 10  | Helper scripts under `scripts/` exist where automation is missing; `references/` remains read-only      |
 
 ---
 
-## Phase 1 — Enrich `hermes-harness/SKILL.md` to canonical authority
+## Non-Goals
 
-**Target:** structural parity with `openclaw-skills/SKILL.md`.
-
-Add or expand these sections (keep all existing ones; additive only):
-
-| Section | Mirror source in openclaw-skills | Adaptation for Hermes |
-|---|---|---|
-| The Three Commands | "The Nine Skills" table | Table: `pt-orama-council` / `pt-orama-review` / `pt-orama-delegate` + canonical paths + one-line purpose |
-| Universal Invocation Protocol | OpenClaw envelope | Hermes slash-command envelope: `{"command": "pt-orama-council", "args": {...}}` |
-| Default Model Routing | OpenRouter fallback stack | LM Studio localhost-first → Nous provider → OpenRouter free tier |
-| Agent Compatibility Matrix | 9-agent matrix | Hermes, Codex, AGY, LM Studio (Gemini row marked retired per 2026-06-18) |
-| Attribution & Layering | L3→L2→L1 | orama-system (L3) → Perpetua-Tools (L2) → Hermes local (L1) |
-| Verification Gates | — | The 4-lane canary block (see Phase 3) |
-| Search Frugality Rule | openclaw-skills rule | Same rule, Hermes-scoped |
-
-**Acceptance:** `diff` section-heading coverage vs `openclaw-skills/SKILL.md` shows no
-authority gap; no machine-specific paths; renders as the onboarding reference.
+- Any change to the live Windows machine, `~/.hermes`, or LM Studio config
+- Any executable logic in `references/` files
+- Auto-merging Hermes local skills into orama without upstream plan
+- Deleting Windows-local references before verified thin-wrapper parity
+- Changing orama-system attribution/history-rewrite policy
 
 ---
 
-## Phase 2 — Distill ECC cross-harness rules into ≤150-line cards
+## Skill Absorption Decisions (from skill-comparison-2026-06-22)
 
-**Source:** existing `references/ecc-hermes-cross-harness.md` (retain it, don't delete).
+| Hermes Skill                                             | Category             | orama-system Target    | Decision                                                         |
+| -------------------------------------------------------- | -------------------- | ---------------------- | ---------------------------------------------------------------- |
+| `pt-orama-harness-integration`                           | autonomous-ai-agents | `hermes-harness`       | **Absorb** — cross-harness thin-adapter logic belongs in harness |
+| `hermes-agent`                                           | autonomous-ai-agents | `hermes-harness`       | **Absorb** — self-config/setup is harness territory              |
+| `local-inference`                                        | mlops                | `perpetua-hardware`    | **Absorb** — hardware-aware model selection, canary, affinity    |
+| `perpetua-hardware`                                      | mlops                | `perpetua-hardware`    | **Create if missing** — hardware policy SSoT target              |
+| `pt-orama-council`                                       | autonomous-ai-agents | `hermes-harness`       | Keep separate — user-facing council command                      |
+| `plan`, `systematic-debugging`, `requesting-code-review` | software-development | adjacent orama skills  | Keep separate                                                    |
+| `claude-code`, `codex`                                   | autonomous-ai-agents | `codex-openclaw-agent` | Keep separate                                                    |
 
-Create under `hermes-harness/references/`:
-
-| New card | Purpose | Source section |
-|---|---|---|
-| `ecc-setup-distilled.md` | PT-orama adaptation table, bring-up order, import-vs-skip | §26-53 |
-| `ecc-migration-rules.md` | Decision map: source artifact → durable target | §54-74 |
-| `cross-harness-protocol.md` | Shared-source-first; harness-specific only for loading/cmd-names/platform | §75-89 |
-| `partner-prompt-contract.md` | Bounded worker contract: role/goal/constraints/output shape | §90-111 |
-
-**Constraints:** each ≤150 lines, no duplicate content across cards, canonical command
-cards point to these (not to raw ECC docs). LINT-010/011/012 must pass on all new files.
+**Outcome:** if `perpetua-hardware`, `hermes-agent`, `local-inference`, or `pt-orama-harness-integration` do not exist under `bin/orama-system/skills/`, create them as **redirect-only stubs** pointing to the canonical target. Never delete history.
 
 ---
 
-## Phase 3 — Harden partner-lane canaries
+## Phase 0 — Repo Hygiene + Branch Prep
 
-Single canonical canary table (lives in `hermes-harness/SKILL.md` + referenced by
-`hermes-windows-partner-readiness.md`):
-
-| Lane | Command | Expected exact output | Timeout | Degraded path |
-|---|---|---|---|---|
-| Hermes | `hermes chat --query "Reply with exactly: HERMES_READY" --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1` | `HERMES_READY` | 15 s | Mark UNAVAILABLE; continue with remaining verified lanes |
-| AGY | `agy --print "Reply with exactly: AGY_READY"` | visible `AGY_READY` | 10 s | Mark UNAVAILABLE; Codex reviewer fallback |
-| LM Studio | `GET http://127.0.0.1:1234/v1/models` + chat canary | valid JSON + completion <15 s | 15 s | Mark UNAVAILABLE; fall back to Nous provider |
-| Codex | `codex --version` | version string | 5 s | Mark UNAVAILABLE; no reviewer fallback |
-| Git Bash | `$HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'` | `hermes-bash-ok` | 5 s | Mark UNAVAILABLE; block Windows coder lane |
-
-**Rule:** failure, empty stdout, timeout, auth error, or quota exhaustion → UNAVAILABLE.
-Remaining verified lanes continue. (This matches the AGY retirement reality from 2026-06-18.)
-
-**Note:** the canary commands use `hermes chat`, never the retired `hermes -z` (LINT-012).
+| Task                  | Command / Action                                                                                                                                    |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Sync `orama-system`   | `git fetch origin && git checkout main && git reset --hard origin/main && git clean -fd`                                                            |
+| Sync `Perpetua-Tools` | `git fetch origin && git checkout main && git reset --hard origin/main && git clean -fd`                                                            |
+| Create branch         | `git checkout -b feat/hermes-harness-onboarding`                                                                                                    |
+| Verify paths          | Confirm canonical skill roots under `bin/orama-system/skills/`                                                                                      |
+| Hygiene check         | `grep -rn 'C:\\\\Users\\\\lab' bin/orama-system/skills/hermes-harness docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md` → must be empty |
 
 ---
 
-## Phase 4 — Live LM Studio `/v1/models` resolution
+## Phase 1 — Parametrize LAN IPs + Locality Rule (foundational)
 
-Enhance `references/hermes-windows-partner-readiness.md`:
+**Decision (user, 2026-06-24):** every machine IP must be an environment variable; no tracked IP literals in skills/plans/docs. When code runs **on** a machine, it must reach that machine's services via `localhost`; parametrized IP is used **only** for cross-machine calls.
 
-```
-Before ANY LM Studio dispatch:
-1. GET http://localhost:1234/v1/models  (LAN fallback: configured .env value, not hardcoded)
-2. Parse data[].id for exact model identifiers
-3. Reject invented model names (e.g. "Qwen 3.6 Coder")
-4. Select by capability tag (reasoning / coding / fast)
-5. Cache for session ONLY; re-validate on canary failure or >15 min elapsed
-6. Never trust a cached ID across restarts
-```
-
-This aligns with the PT hardware-affinity work already on `main`: the canonical
-`hardware_policy.load_policy()` enforces NEVER_MAC; this adds the live-ID-resolution
-layer the policy assumes. Cross-link `pt-hardware-policy` command card → this section.
-
-**Resolved (was open question):** the LAN-fallback IP is now governed by the
-parametrization contract in Phase 7 below. No tracked literal; the canonical source is
-the env-var set documented there. The `/v1/models` fetch uses the host resolved by the
-locality rule (Phase 8) — `localhost` when PT runs on the same OS as the LM Studio host,
-the parametrized remote IP only for genuine cross-machine calls.
-
----
-
-## Phase 5 — Windows config as references-only
-
-Create (references-only, no executable logic):
-
-| File | Contents |
-|---|---|
-| `references/windows-onboarding-config.md` | PowerShell encoding, `HERMES_GIT_BASH_PATH`, `HERMES_HOME`, uv path, Node/npm from LM Studio (`%USERPROFILE%`-relative, never absolute) |
-| `references/windows-provider-routing.md` | Nous default `qwen/qwen3-coder:free`, LM Studio `http://127.0.0.1:1234/v1`, OpenRouter free-tier fallback |
-
-**Hard rule:** no executable logic; thin wrappers read these. All paths `%USERPROFILE%`-
-relative or env-var form (anti-doxxing / LINT-006).
-
----
-
-## Phase 6 — Installer verification
-
-`install_hermes_thin_skills.py --install --verify --test`:
-- exits 0; all wrappers exist and validate
-- `created_by: user` wrappers never clobbered
-- wrapper metadata records canonical_source, repo, branch_at_install
-- council wrapper references `cross-harness-protocol.md` + `partner-prompt-contract.md`
-
----
-
-## Phase 7 — Parametrize all LAN IPs to env-interpretable variables
-
-**Decision (user, 2026-06-24):** every machine IP must be an environment variable that
-both orama-system and Perpetua-Tools code resolve at runtime. No tracked IP literals in
-source, skills, or docs — only fallback defaults inside the var-resolution code.
-
-**Ground truth (verified):** PT `src/perpetua_tools/agent_launcher.py` already implements
-this contract: `MAC_IP`, `WIN_IP`, `LM_STUDIO_MAC_ENDPOINT`, `LM_STUDIO_WIN_ENDPOINTS`,
-`MAC_LMS_HOST/PORT`, `WINDOWS_IP/PORT` are all `os.getenv(...)` with documented fallbacks.
-The gap is **inconsistent application** — `src/perpetua_tools/alphaclaw_bootstrap.py`
-defines `MAC_IP`/`WIN_IP` as bare LAN defaults without the locality preference, and the
-Hermes plans/docs carry raw literals.
-
-**Canonical variable contract** (single source — document in PT `.env.example` + a new
-`hermes-harness/references/lan-endpoint-contract.md`):
-
-| Variable | Meaning | Fallback (code-only) |
-|---|---|---|
-| `MAC_IP` | Mac host LAN IP | `192.168.254.110` |
-| `WIN_IP` | Windows host LAN IP | `192.168.254.108` |
-| `MAC_LMS_HOST` / `MAC_LMS_PORT` | Mac LM Studio endpoint parts | from `LM_STUDIO_MAC_ENDPOINT` then `MAC_IP`:1234 |
-| `WINDOWS_IP` / `WINDOWS_PORT` | Win Ollama/LM Studio endpoint parts | from `LM_STUDIO_WIN_ENDPOINTS` then `WIN_IP`:11434 |
-| `LM_STUDIO_MAC_ENDPOINT` | full Mac LM Studio URL | `http://{MAC_IP}:1234` |
-| `LM_STUDIO_WIN_ENDPOINTS` | comma-list of Win LM Studio URLs | `http://{WIN_IP}:1234` |
-| `OLLAMA_MAC_ENDPOINT` | Mac Ollama URL | `http://{localhost-or-MAC_IP}:11434` |
-| `OLLAMA_WINDOWS_ENDPOINT` | Win Ollama URL | `http://{localhost-or-WIN_IP}:11434` |
-| `LM_STUDIO_API_TOKEN` | bearer token | `lm-studio` (dev) |
-
-**Tasks:**
-1. Bring `alphaclaw_bootstrap.py` to the same locality-aware resolution as
-   `agent_launcher.py` (it currently lacks the `RUNNING_ON_*` → localhost preference).
-2. Add `hermes-harness/references/lan-endpoint-contract.md` documenting the full var set
-   (references-only; no executable logic). orama Windows installer + start scripts read it.
-3. Replace every raw IP literal in tracked Hermes plans/docs with the variable name.
-4. `start.sh` / `start.ps1` export the resolved values so child processes inherit them.
-
-**Acceptance:** `grep -rn '192\.168\.' src/ scripts/ bin/ docs/` returns only
-fallback-default lines inside resolution code (clearly commented), never a hardcoded
-endpoint in a skill, plan, or doc. A new hygiene rule (LINT-013, optional) can enforce this.
-
----
-
-## Phase 8 — Locality rule: prefer localhost when on the same machine
-
-**Decision (user, 2026-06-24):** when code runs **on** a machine, it must reach that
-machine's own services via `localhost`, never the LAN IP. The remote/parametrized IP is
-used **only** for genuine cross-machine calls (Mac→Windows or Windows→Mac).
-
-**Ground truth (verified):** `agent_launcher.py` already does this:
-- Mac Ollama: `"http://localhost:11434" if RUNNING_ON_MAC else f"http://{MAC_IP}:11434"`
-  (lines 106-110), with an explicit self-heal that normalizes any non-loopback Mac
-  endpoint to localhost when `RUNNING_ON_MAC` (lines 119-126).
-- Win endpoint: `"localhost" if RUNNING_ON_WINDOWS else "192.168.254.108"` (lines 225-227).
-
-**The rule, stated canonically:**
+**Canonical helper contract:**
 
 ```
 resolve_endpoint(target_machine, service):
-    if running_on(target_machine):        # I am the Mac, asking for Mac's LM Studio
-        return f"http://localhost:{port}" # → loopback, always
-    else:                                 # I am the Mac, asking for Windows' LM Studio
-        return f"http://{env_ip(target_machine)}:{port}"  # → parametrized LAN IP
+    if running_on(target_machine): return f"http://localhost:{port}"
+    else: return f"http://{env_ip(target_machine)}:{port}"
 ```
 
 | Caller runs on | Wants service on | Resolves to |
-|---|---|---|
-| Mac | Mac | `localhost` |
-| Mac | Windows | `$WIN_IP` (parametrized) |
-| Windows | Windows | `localhost` |
-| Windows | Mac | `$MAC_IP` (parametrized) |
+| -------------- | ---------------- | ----------- |
+| Mac            | Mac              | `localhost` |
+| Mac            | Windows          | `$WIN_IP`   |
+| Windows        | Windows          | `localhost` |
+| Windows        | Mac              | `$MAC_IP`   |
+
+**Env-var contract** (document in `references/lan-endpoint-contract.md`):
+
+| Variable                  | Meaning             | Code-only fallback                   |
+| ------------------------- | ------------------- | ------------------------------------ |
+| `MAC_IP`                  | Mac host LAN IP     | `192.168.254.110`                    |
+| `WIN_IP`                  | Windows host LAN IP | `192.168.254.108`                    |
+| `LM_STUDIO_MAC_ENDPOINT`  | Mac LM Studio URL   | `http://{MAC_IP}:1234`               |
+| `LM_STUDIO_WIN_ENDPOINTS` | Win LM Studio URLs  | `http://{WIN_IP}:1234`               |
+| `OLLAMA_MAC_ENDPOINT`     | Mac Ollama URL      | `http://{localhost-or-MAC_IP}:11434` |
+| `OLLAMA_WINDOWS_ENDPOINT` | Win Ollama URL      | `http://{localhost-or-WIN_IP}:11434` |
 
 **Tasks:**
-1. Extract the locality rule into one shared helper (e.g. `resolve_local_or_remote(host_role)`),
-   currently duplicated inline for Mac and Win in `agent_launcher.py`. One canonical
-   implementation; both Mac and Win paths call it. (Duplicate-parser elimination — see
-   PT DECISIONS.md 2026-06-24.)
-2. Apply the same helper in `alphaclaw_bootstrap.py` (currently missing the rule entirely).
-3. The Hermes `hermes-harness` `/v1/models` resolution (Phase 4) uses this helper:
-   on Windows it hits `http://localhost:1234/v1/models`; only a Mac→Windows council call
-   uses `$WIN_IP`.
-4. Self-heal log on mismatch (already present for Mac; add the symmetric Win self-heal):
-   if a non-loopback endpoint is configured for the local machine, normalize to localhost
-   and warn — "live/canonical localhost beats stale LAN config."
 
-**Acceptance:** on Windows, `resolve_endpoint("windows", "lmstudio")` → `localhost`; a
-Mac-orchestrator council call to the Windows coder uses `$WIN_IP`. Symmetric for Mac.
-No code path reaches its own machine via LAN IP.
+1. Extract `resolve_local_or_remote()` from `Perpetua-Tools/src/perpetua_tools/agent_launcher.py` into shared helper; apply in `alphaclaw_bootstrap.py`
+2. Add `bin/orama-system/skills/hermes-harness/references/lan-endpoint-contract.md`
+3. Replace every raw IP literal in tracked Hermes plans/docs with variable names
+4. Add symmetric Windows self-heal: non-loopback local endpoint → normalize to `localhost` + warn
+
+**Acceptance:** `grep -rn '192\.168\.' src/ scripts/ bin/ docs/` returns only fallback-defaults inside resolution code.
 
 ---
 
-## Phase 9 — Preserve Hermes local Windows references until migration completes
+## Phase 2 — Create Missing Absorption Targets (if absent)
 
-**Decision (user, 2026-06-24):** do **not** delete or break the Hermes local Windows
-references yet. Keep them functional until the bulk of their information has been
-successfully redirected to the canonical orama-system location and converted to thin
-wrappers — the same end-state Mac/Linux already have (thin local wrappers pointing to
-canonical `bin/orama-system/skills/...`).
+For each missing skill, create a **redirect-only stub** under `bin/orama-system/skills/<slug>/SKILL.md`:
 
-**Why this sequencing matters:** the four Hermes plans assume canonical targets that
-don't exist yet (see Provenance). Deleting the Windows-local references before the
-canonical content is in place and verified would strand the Windows harness with no
-working skills. Mac/Linux already point at canonical; Windows must reach the same state
-**by migration, not by deletion**.
+```markdown
+---
+name: <slug>
+description: "Redirect stub. Canonical guidance lives in <target>."
+version: 1.0.0
+redirect_to: bin/orama-system/skills/<target>/SKILL.md
+status: absorbed
+---
 
-**Migration sequence (no deletion until the final step):**
-1. Enrich canonical `hermes-harness` (Phases 1-8) — canonical content lands first.
-2. Generate Windows thin wrappers from canonical via `install_hermes_thin_skills.py`,
-   pointing to `bin/orama-system/skills/hermes-harness/...` (mirrors Mac/Linux wrappers).
-3. Run both in parallel: Windows-local references AND new thin wrappers coexist.
-   Verify the thin wrappers resolve correctly on the live Windows machine.
-4. Only after verification: mark the Windows-local references as superseded
-   (redirect header, `created_by: agent` retained for regeneration) — **still not deleted**.
-5. Deletion of the now-redundant local copies is a **separate, later, explicit step**
-   requiring its own approval — never bundled into this enrichment work.
+# <Display Name>
 
-**Invariant:** at no point does Windows lose working skill access. The transition is
-additive (wrappers added alongside) → verified → redirect headers → (much later) cleanup.
-`created_by: user` wrappers are never touched at any stage.
+This skill has been absorbed into `<target>`.
 
-**Acceptance:** Windows reaches Mac/Linux parity — thin wrappers pointing to canonical —
-with the original local references still present and functional until an explicit,
-separately-approved cleanup step.
+Use `bin/orama-system/skills/<target>/SKILL.md` for canonical guidance.
+```
+
+**Creation checklist:**
+
+- [ ] `perpetua-hardware` → `perpetua-hardware` (creates canonical root if missing)
+- [ ] `hermes-agent` → `hermes-harness`
+- [ ] `local-inference` → `perpetua-hardware`
+- [ ] `pt-orama-harness-integration` → `hermes-harness`
+
+**Rule:** redirect stubs are never executable. They contain no procedure, no script, no secret, no machine path.
 
 ---
 
+## Phase 3 — Enrich `hermes-harness/SKILL.md` to Canonical Authority
 
+Target: structural parity with `openclaw-skills/SKILL.md`.
 
-| Phase | Depends on | Verification |
-|---|---|---|
-| 1 — enrich SKILL.md | — | section-heading diff vs openclaw-skills; hygiene OK |
-| 2 — 4 ECC cards | 1 | ≤150 lines each; xref checks; LINT-010/011/012 pass |
-| 3 — canary table | 1 | every lane has exact text + timeout + degraded path |
-| 7 — parametrize LAN IPs | — | no raw IP literals outside resolution-code fallbacks |
-| 8 — locality rule (localhost-when-local) | 7 | own-machine → localhost; cross-machine → `$IP`; shared helper |
-| 4 — /v1/models resolution | 2, 8 | canary fetches real IDs via locality-resolved host |
-| 5 — Windows references | 2, 7 | references-only; paths sanitized; IPs parametrized |
-| 9 — preserve Windows locals → thin wrappers | 1-8 | Windows parity (wrappers) with locals still functional; no deletion |
-| 6 — installer verify | 3,4,5,9 | `--verify` exit 0; user wrappers preserved |
-| 10 — approval gate | all | explicit "approve" from user before merge |
+Add/expand (additive only):
 
-**Note on ordering:** Phases 7 and 8 (parametrization + locality) have no dependency on
-the skill-enrichment phases and can land first as a self-contained PT/orama code change.
-Phase 9 (Windows migration) is deliberately last and its *deletion* step is explicitly
-deferred to a separate future plan.
+| Section                       | Adaptation                                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------- |
+| The Three Commands            | Table of `pt-orama-council`, `pt-orama-review`, `pt-orama-delegate` + canonical paths + purpose |
+| Universal Invocation Protocol | Hermes slash-command envelope                                                                   |
+| Default Model Routing         | LM Studio localhost-first → Nous provider → OpenRouter fallback                                 |
+| Agent Compatibility Matrix    | Hermes, Codex, AGY, LM Studio (Gemini retired 2026-06-18)                                       |
+| Attribution & Layering        | orama-system (L3) → Perpetua-Tools (L2) → Hermes local (L1)                                     |
+| Verification Gates            | 5-lane canary block (see Phase 6)                                                               |
+| Search Frugality Rule         | Same as openclaw-skills, Hermes-scoped                                                          |
+| Hardware Policy Gate          | Mandatory PT hardware-affinity check before model dispatch                                      |
 
----
-
-## Risk register
-
-| Risk | Mitigation |
-|---|---|
-| Plans reference non-existent skills | This plan drops those as no-ops; only enriches what exists |
-| Windows/Mac divergence | Shared contract in references; harness-specific only in wrappers |
-| Thin wrappers drift from canonical | `install_hermes_thin_skills.py --verify` in CI/pre-commit |
-| LM Studio model IDs invented | Mandatory live `/v1/models` fetch before dispatch |
-| AGY quota blocks reviewer | Codex fallback documented (AGY already retired 2026-06-18) |
-| Hardcoded LAN IP leaks / drifts | Phase 7: all IPs parametrized to env vars; only code-fallback defaults remain; optional LINT-013 |
-| Code reaches own machine via LAN IP (slow/fragile) | Phase 8: locality rule — localhost when on-machine, `$IP` only cross-machine; shared helper + self-heal |
-| Windows stranded with no skills if locals deleted early | Phase 9: additive migration — wrappers added alongside locals → verified → redirect → (later, separate) cleanup; never lose working access |
-| Locality rule duplicated Mac/Win and drifts | Phase 8 task 1: extract single shared `resolve_local_or_remote()` helper (duplicate-parser elimination) |
-| Private state leaks into tracked files | `created_by: agent` guard; `%USERPROFILE%`-relative paths; never copy `~/.hermes` raw |
-| Absolute workstation paths in docs | repo_hygiene LINT-006 gate; all paths relative/env-var |
+**Acceptance:** section-heading diff vs `openclaw-skills/SKILL.md` shows no authority gap; no machine-specific paths; renders as onboarding reference.
 
 ---
 
-## Success metrics
+## Phase 4 — Distill ECC Cross-Harness Rules into Reference Cards
 
-- [ ] `hermes-harness/SKILL.md` section coverage ≥ `openclaw-skills/SKILL.md`
-- [ ] 4 ECC reference cards exist, ≤150 lines each, referenced from canonical cards
-- [ ] All 5 canary lanes have exact success text, timeout ≤15 s, degraded fallback
+Source: existing `references/ecc-hermes-cross-harness.md` (retain, don't delete).
+
+Create under `bin/orama-system/skills/hermes-harness/references/`:
+
+| Card                         | Purpose                                                                   | Source section |
+| ---------------------------- | ------------------------------------------------------------------------- | -------------- |
+| `ecc-setup-distilled.md`     | PT-orama adaptation table, bring-up order, import-vs-skip                 | §26-53         |
+| `ecc-migration-rules.md`     | Decision map: source artifact → durable target                            | §54-74         |
+| `cross-harness-protocol.md`  | Shared-source-first; harness-specific only for loading/cmd-names/platform | §75-89         |
+| `partner-prompt-contract.md` | Bounded worker contract: role/goal/constraints/output shape               | §90-111        |
+
+Constraints: each ≤150 lines, no duplicate content, canonical command cards point to these (not raw ECC docs).
+
+---
+
+## Phase 5 — Hardware-Affinity Integration
+
+From `2026-06-24-hermes-windows-hardware-policy-walkthrough.md`:
+
+- Canonical policy: `Perpetua-Tools/config/model_hardware_policy.yml`
+- Canonical API: `Perpetua-Tools/src/utils/hardware_policy.py`
+- Hermes must call PT hardware-affinity gate before model dispatch
+- `pt-hardware-policy` command card wires Hermes to the same enforcement path as OpenClaw
+- `start.sh --hardware-policy` and `platform/windows/start.ps1 --hardware-policy` both call the same CLI
+
+Acceptance: Hermes Windows dispatch respects `NEVER_MAC`, `NEVER_WIN`, and alias normalization; no duplicate parser logic.
+
+---
+
+## Phase 6 — Harden Partner-Lane Canaries
+
+Single canonical table (lives in `hermes-harness/SKILL.md` + referenced by `hermes-windows-partner-readiness.md`):
+
+| Lane      | Command                                                                                                                                 | Expected Exact Output         | Timeout | Degraded Path                                  |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- | ------- | ---------------------------------------------- |
+| Hermes    | `hermes chat --query "Reply with exactly: HERMES_READY" --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1` | `HERMES_READY`                | 15 s    | Mark UNAVAILABLE; continue with verified lanes |
+| AGY       | `agy --print "Reply with exactly: AGY_READY"`                                                                                           | visible `AGY_READY`           | 10 s    | Mark UNAVAILABLE; Codex reviewer fallback      |
+| LM Studio | `GET http://localhost:1234/v1/models` + chat canary                                                                                     | valid JSON + completion <15 s | 15 s    | Mark UNAVAILABLE; fall back to Nous provider   |
+| Codex     | `codex --version`                                                                                                                       | version string                | 5 s     | Mark UNAVAILABLE; no reviewer fallback         |
+| Git Bash  | `$HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'`                                                                    | `hermes-bash-ok`              | 5 s     | Mark UNAVAILABLE; block Windows coder lane     |
+
+Rule: failure, empty stdout, timeout, auth error, or quota exhaustion → UNAVAILABLE. Remaining verified lanes continue.
+
+---
+
+## Phase 7 — Live LM Studio `/v1/models` Resolution
+
+Enhance `references/hermes-windows-partner-readiness.md`:
+
+1. `GET http://localhost:1234/v1/models` (LAN fallback via env var, never hardcoded)
+2. Parse `data[].id` for exact model identifiers
+3. Reject invented model names
+4. Select by capability tag (reasoning / coding / fast)
+5. Cache for session ONLY; re-validate on canary failure or >15 min elapsed
+6. Never trust cached ID across restarts
+
+This uses the locality-resolved host from Phase 1. Cross-link `pt-hardware-policy` command card → this section.
+
+---
+
+## Phase 8 — Windows Config as References-Only
+
+Create (references-only, no executable logic):
+
+| File                                      | Contents                                                                                                                |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `references/windows-onboarding-config.md` | PowerShell encoding, `HERMES_GIT_BASH_PATH`, `HERMES_HOME`, uv path, Node/npm from LM Studio (`%USERPROFILE%`-relative) |
+| `references/windows-provider-routing.md`  | Nous default `qwen/qwen3-coder:free`, LM Studio `http://127.0.0.1:1234/v1`, OpenRouter free-tier fallback               |
+
+Hard rule: no executable logic; thin wrappers read these.
+
+---
+
+## Phase 9 — Windows Additive Migration (Preserve-Then-Migrate)
+
+**Decision:** do not delete Windows-local references until verified thin-wrapper parity.
+
+Sequence:
+
+1. Enrich canonical `hermes-harness` (Phases 1–8)
+2. Generate Windows thin wrappers via `install_hermes_thin_skills.py` pointing to `bin/orama-system/skills/hermes-harness/...`
+3. Run Windows-local references **and** new thin wrappers in parallel; verify on live Windows machine
+4. Only after verification: mark Windows-local references as superseded (redirect header), still not deleted
+5. Deletion of redundant local copies is a separate, later, explicit step requiring its own approval
+
+Invariant: Windows never loses working skill access during transition. `created_by: user` wrappers never touched.
+
+---
+
+## Phase 10 — Helper Scripts (allowance)
+
+Scripts may be added under `bin/orama-system/skills/hermes-harness/scripts/` when automation is missing. Guardrails:
+
+| Rule                                 | Detail                                                            |
+| ------------------------------------ | ----------------------------------------------------------------- |
+| No executable logic in `references/` | references are read-only markdown cards                           |
+| Scripts are additive                 | never modify or delete existing scripts without explicit approval |
+| Scripts must be linted               | pass `python -m py_compile` or shellcheck before commit           |
+| Scripts must be idempotent           | re-running produces same result; no destructive side effects      |
+| Scripts must not touch `~/.hermes`   | they operate on canonical repo files only                         |
+
+Candidate scripts (create only if absent):
+
+- `scripts/repo_hygiene.py` — scan for absolute paths, raw IPs, secrets in tracked docs
+- `scripts/sync_hermes_thin_wrappers.py` — refresh local Hermes wrappers from canonical source
+- `scripts/verify_partner_canaries.py` — run canary table and report PASS/FAIL/UNAVAILABLE
+
+---
+
+## Executable Roll-up
+
+| Phase | Tasks                                           | Depends On     | Verification                                         |
+| ----- | ----------------------------------------------- | -------------- | ---------------------------------------------------- |
+| 0     | Repo sync + branch prep                         | —              | clean tree on `feat/hermes-harness-onboarding`       |
+| 1     | Parametrize LAN IPs + locality helper           | —              | no raw IP literals outside resolution-code fallbacks |
+| 2     | Create missing absorption-target redirect stubs | 0              | redirect-only; no executable logic                   |
+| 3     | Enrich `hermes-harness/SKILL.md`                | 0, 2           | section-heading diff vs `openclaw-skills/SKILL.md`   |
+| 4     | Distill 4 ECC reference cards                   | 3              | ≤150 lines each; xref checks pass                    |
+| 5     | Hardware-affinity wiring                        | 1              | Hermes calls PT policy before dispatch               |
+| 6     | Partner-lane canary table                       | 3              | exact text + timeout + degraded path for every lane  |
+| 7     | `/v1/models` resolution                         | 4, 1           | canary fetches real IDs via locality-resolved host   |
+| 8     | Windows references-only cards                   | 4, 1           | no executable logic; paths sanitized                 |
+| 9     | Windows additive migration                      | 3, 5, 8        | thin wrappers verified; locals still functional      |
+| 10    | Helper scripts (if needed)                      | 0              | lint/typecheck pass; idempotent                      |
+| 11    | Installer verification                          | 6, 7, 8, 9, 10 | `install_hermes_thin_skills.py --verify` exit 0      |
+
+---
+
+## Risk Register
+
+| Risk                                | Mitigation                                                                    |
+| ----------------------------------- | ----------------------------------------------------------------------------- |
+| Plans reference non-existent skills | Create redirect stubs; no-op absorption dropped                               |
+| Windows/Mac divergence              | Shared contract in references; harness-specific only in wrappers              |
+| Thin wrappers drift from canonical  | `install_hermes_thin_skills.py --verify` in CI/pre-commit                     |
+| LM Studio model IDs invented        | Mandatory live `/v1/models` fetch before dispatch                             |
+| AGY quota blocks reviewer lane      | Codex fallback documented (AGY retired 2026-06-18)                            |
+| Hardcoded LAN IP leaks              | Phase 1: all IPs parametrized; only code-fallback defaults remain             |
+| Own-machine reachable via LAN IP    | Phase 1: locality rule + shared helper + self-heal                            |
+| Windows stranded with no skills     | Phase 9: additive migration; locals preserved until separate cleanup approval |
+| Locality helper drift               | Single `resolve_local_or_remote()`; duplicate-parser elimination              |
+| Private state leaks                 | `created_by: agent` guard; never copy `~/.hermes` raw                         |
+| Absolute paths in tracked files     | Repo-relative or env-var forms only                                           |
+| Scripts overreach                   | Scripts guardrails: references-only markdown; no live-env mutation            |
+
+---
+
+## Success Metrics
+
+- [ ] `hermes-harness/SKILL.md` authority coverage ≥ `openclaw-skills/SKILL.md`
+- [ ] 4 ECC reference cards exist, are ≤150 lines each, and are referenced from canonical cards
+- [ ] All 5 canary lanes have exact success text, timeout ≤15 s, and degraded fallback
 - [ ] `/v1/models` resolution mandatory before LM Studio dispatch; zero invented IDs
 - [ ] Windows config lives only in `references/`, no executable logic
 - [ ] `install_hermes_thin_skills.py --verify` exits 0; user wrappers preserved
 - [ ] Main orama agent retains final judgment in all council workflows
 - [ ] No commits/deploys/deletes/account-changes by worker agents
-- [ ] Zero absolute workstation paths in any tracked file (LINT-006)
-- [ ] Phase 7: no raw IP literal in any skill/plan/doc; only env-var-resolution fallbacks
-- [ ] Phase 8: on each OS, own-machine services resolve to `localhost`; cross-machine to `$IP`; one shared helper
-- [ ] Phase 8: `alphaclaw_bootstrap.py` brought to locality-rule parity with `agent_launcher.py`
-- [ ] Phase 9: Windows reaches Mac/Linux parity (thin wrappers → canonical) with local references still functional; no deletion in this plan
+- [ ] Zero absolute workstation paths in tracked files
+- [ ] No raw IP literals in skills/plans/docs; only env-var resolution code
+- [ ] Own-machine services resolve to `localhost`; cross-machine to `$IP`; one shared helper
+- [ ] `alphaclaw_bootstrap.py` at locality-rule parity with `agent_launcher.py`
+- [ ] Windows reaches Mac/Linux parity via thin wrappers → canonical; locals still functional
+- [ ] Missing absorption targets created as redirect stubs where absent
+- [ ] Helper scripts added only under `scripts/`; `references/` remains read-only
 
 ---
 
-## Approval gate
+## Approval Gate
 
 Before execution:
-1. Confirm the ground-truth reframing above is correct (skills to absorb don't exist here).
-2. Confirm the three architectural decisions (2026-06-24): parametrize IPs (Phase 7),
-   localhost-when-local locality rule (Phase 8), preserve-then-migrate Windows locals (Phase 9).
-3. Review the enriched `hermes-harness/SKILL.md` draft.
-4. Review the 4 new ECC reference card drafts + `lan-endpoint-contract.md`.
-5. Explicit **"approve"** from user. (Phase 9 deletion step is separately approved, later.)
+
+1. Confirm missing absorption targets may be created as redirect stubs where absent.
+2. Confirm helper scripts may be added under `scripts/` with the guardrails above.
+3. Confirm two architectural decisions: parametrize IPs + localhost-when-local + preserve-then-migrate Windows.
+4. Confirm ECC2 references are preferred over ECC 1.x for Hermes integration.
+5. Review enriched `hermes-harness/SKILL.md` draft.
+6. Review 4 new ECC reference card drafts + `lan-endpoint-contract.md`.
+7. Review hardware-affinity wiring plan (`pt-hardware-policy`).
+8. Explicit **"approve"** from user.
