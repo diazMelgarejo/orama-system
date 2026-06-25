@@ -75,6 +75,40 @@ and `model_hardware_policy.yml`, subject to what physical GPUs/backends are pres
 
 ## Windows Bring-Up
 
+### Line Endings (CRLF) — mandatory for `.cmd` / `.bat` files
+
+Windows batch files (`.cmd`, `.bat`) **MUST** use CRLF (`\r\n`) line endings.
+A `.cmd` file with LF-only line endings will silently fail or produce garbled output
+because `cmd.exe` tokenises on `\r\n`.
+
+**When writing `.cmd` files in Python:**
+
+```python
+lines = ["@echo off", "rem my script", "exit /b 0"]
+with open("my.cmd", "wb") as f:
+    f.write("\r\n".join(lines).encode("utf-8"))
+```
+
+**Verify with xxd:**
+
+```bash
+xxd my.cmd | grep -c "0d 0a"   # should equal number of lines
+xxd my.cmd | grep -c "0d$"     # should be 0 (no bare CR)
+```
+
+**Git autocrlf:** set `core.autocrlf=false` in the repo `.gitattributes` for `.cmd`
+files to prevent git from silently stripping `\r`. Or use explicit line ending:
+
+```gitattributes
+*.cmd  text  eol=crlf
+*.bat  text  eol=crlf
+```
+
+This rule was discovered during PR #108 (`gstack-brain-sync.cmd` was LF-only and
+caused silent failures on Windows).
+
+### UTF-8 console (PowerShell)
+
 Use PowerShell with explicit UTF-8 when writing files:
 
 ```powershell
