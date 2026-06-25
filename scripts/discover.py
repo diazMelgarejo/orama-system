@@ -219,6 +219,16 @@ def _mac_lan_ip():
     except Exception:
         return None
 
+def _win_lan_ip():
+    """Return this Windows machine's LAN IP on the 192.168.254.* subnet."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("192.168.254.1", 80))
+        ip = s.getsockname()[0]; s.close()
+        return ip if ip.startswith("192.168.254.") else None
+    except Exception:
+        return None
+
 def discover_endpoints() -> dict:
     """Probe Mac and Windows LM Studio instances.
 
@@ -452,16 +462,24 @@ def patch_devices_yml(mac_ip: str, win_ip: str, pt_repo: Path):
     if not f.exists(): return
     content = original = _read_text_safe(f)
     if content is None: return
-    content = re.sub(
-        r'(- id: "mac-studio".*?lan_ip:\s*")[^"]+(")',
-        lambda m: m.group(1) + mac_ip + m.group(2),
-        content, flags=re.DOTALL
-    )
-    content = re.sub(
-        r'(- id: "win-rtx3080".*?lan_ip:\s*")[^"]+(")',
-        lambda m: m.group(1) + win_ip + m.group(2),
-        content, flags=re.DOTALL
-    )
+    # (?:(?!- id:).)*? is a device-boundary anchor: the match cannot cross into
+    # another device entry.  This prevents the win-rtx3080 regex from drifting
+    # to cloud.lan_ip when win-rtx3080's lan_ip is currently empty.
+    # Skip patching entirely for loopback/empty values — those are runtime
+    # addresses and must never be stored in LAN IP fields.
+    _LOOPBACK = {"", "localhost", "127.0.0.1"}
+    if mac_ip not in _LOOPBACK:
+        content = re.sub(
+            r'(- id: "mac-studio"(?:(?!- id:).)*?lan_ip:\s*")[^"]*(")',
+            lambda m: m.group(1) + mac_ip + m.group(2),
+            content, flags=re.DOTALL
+        )
+    if win_ip not in _LOOPBACK:
+        content = re.sub(
+            r'(- id: "win-rtx3080"(?:(?!- id:).)*?lan_ip:\s*")[^"]*(")',
+            lambda m: m.group(1) + win_ip + m.group(2),
+            content, flags=re.DOTALL
+        )
     if content != original:
         _write_text_safe(f, content)
 
@@ -655,8 +673,13 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         patch_openclaw_json(endpoints)
         print("  ✓ openclaw.json", file=sys.stderr)
         if pt_repo:
-            patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-            patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+            # On Windows the runtime win IP is "localhost"; resolve the real LAN IP
+            # so shared config files store a network-reachable address.
+            _win_patch_ip = win.get("ip", "")
+            if RUNNING_ON_WINDOWS and _win_patch_ip in ("localhost", "127.0.0.1"):
+                _win_patch_ip = os.getenv("WIN_IP") or _win_lan_ip() or _win_patch_ip
+            patch_devices_yml(mac.get("ip", ""), _win_patch_ip, pt_repo)
+            patch_models_yml(mac.get("ip", ""), _win_patch_ip, pt_repo)
             print("  ✓ Perpetua-Tools config/", file=sys.stderr)
         write_env_lmstudio(endpoints, repo_paths)
         print("  ✓ .env.lmstudio written", file=sys.stderr)
