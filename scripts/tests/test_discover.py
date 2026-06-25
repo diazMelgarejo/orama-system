@@ -303,3 +303,37 @@ def test_legacy_path_works_as_fallback_when_root_absent(monkeypatch, tmp_path):
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
     monkeypatch.setenv("PERPETUA_TOOLS_PATH", str(legacy))
     assert D._resolve_perpetua_root_env() == legacy
+
+
+def test_load_policy_merges_windows_only_aliases(tmp_path, monkeypatch):
+    policy_dir = tmp_path / "config"
+    policy_dir.mkdir()
+    (policy_dir / "model_hardware_policy.yml").write_text(
+        "windows_only:\n  - gemma-4-26b-a4b-it\n"
+        "windows_only_aliases:\n  - gemma-4-26B-A4B-it-Q4_K_M\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
+    policy = D.load_policy()
+    assert "gemma-4-26B-A4B-it-Q4_K_M" in policy["windows_only"]
+
+
+def test_patch_devices_yml_skips_loopback_ips(tmp_path):
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "devices.yml").write_text(DEVICES_YML, encoding="utf-8")
+    D.patch_devices_yml("localhost", "127.0.0.1", tmp_path)
+    result = (cfg / "devices.yml").read_text()
+    assert "192.168.254.103" in result
+    assert "192.168.254.100" in result
+
+
+def test_discover_endpoints_windows_localhost_is_win(monkeypatch):
+    """On Windows hosts, localhost LM Studio must map to win — not mac."""
+    monkeypatch.setattr(D, "RUNNING_ON_WINDOWS", True)
+    monkeypatch.setattr(D, "probe_models", lambda url: ["qwen3.5-27b-distilled"] if "localhost" in url else None)
+    monkeypatch.setattr(D, "_load_json", lambda path: None)
+    endpoints = D.discover_endpoints()
+    assert endpoints["win"] == {"ip": "localhost", "models": ["qwen3.5-27b-distilled"]}
+    assert endpoints["mac"] is None
+
