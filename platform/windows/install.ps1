@@ -139,6 +139,26 @@ _Step 'Generating .paths.ps1...'
 & $VenvPython (Join-Path $ScriptDir 'start.ps1') --discover
 _OK '.paths.ps1 written'
 
+# ── gstack brain-sync Windows shim (fix #1731) ───────────────────────────────
+# gstack-brain-sync is a bash shebang script. bun/Node.js spawns it via
+# cmd.exe on Windows (NEEDS_SHELL_ON_WINDOWS=true), which can't exec shebangs.
+# The .cmd wrapper calls bash.exe explicitly. Without it, /sync-gbrain's
+# brain-sync stage always fails with "not recognized as an internal command".
+_Step 'Installing gstack-brain-sync.cmd Windows shim...'
+$GstackBin = Join-Path $HOME '.claude\skills\gstack\bin'
+if (Test-Path $GstackBin) {
+    $ShimSrc = Join-Path $ScriptDir 'gstack-brain-sync.cmd'
+    $ShimDst = Join-Path $GstackBin 'gstack-brain-sync.cmd'
+    if (Test-Path $ShimSrc) {
+        Copy-Item -Path $ShimSrc -Destination $ShimDst -Force
+        _OK "gstack-brain-sync.cmd installed to $ShimDst"
+    } else {
+        _Warn "gstack-brain-sync.cmd not found at $ShimSrc — skipping"
+    }
+} else {
+    _Warn "gstack not installed at $GstackBin — run gstack setup first, then re-run this script"
+}
+
 # ── GPU parallel limit (Windows LM Studio rule) ───────────────────────────────
 _Warn 'IMPORTANT: Windows GPU loads ONE model at a time.'
 _Warn '           Never configure parallel inference on Windows.'
