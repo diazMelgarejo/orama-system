@@ -42,6 +42,10 @@ MAX_BACKUPS        = 30
 ARCHIVE_DAYS       = 30
 GOSSIP_TTL_SECONDS = 300
 
+# Platform role: on Windows, localhost IS the Win box and the Mac is remote.
+# On Mac/Linux, localhost IS the Mac box and Windows is on the LAN.
+RUNNING_ON_WINDOWS = sys.platform == "win32"
+
 # ── Repo discovery ────────────────────────────────────────────────────────────
 
 def _resolve_perpetua_root_env() -> Path | None:
@@ -87,7 +91,14 @@ def get_repo_paths() -> dict:
 # ── Hardware affinity policy ──────────────────────────────────────────────────
 
 def _simple_policy_parse(text: str) -> dict[str, list[str]]:
-    parsed: dict[str, list[str]] = {"windows_only": [], "mac_only": [], "shared": []}
+    parsed: dict[str, list[str]] = {
+        "windows_only": [],
+        "mac_only": [],
+        "shared": [],
+        "windows_only_aliases": [],
+        "mac_only_aliases": [],
+        "shared_aliases": [],
+    }
     current: str | None = None
     for raw_line in text.splitlines():
         line = raw_line.split("#", 1)[0].rstrip()
@@ -104,8 +115,24 @@ def _simple_policy_parse(text: str) -> dict[str, list[str]]:
                 parsed[current].append(value)
     return parsed
 
+
+def _normalize_policy(loaded: dict[str, Any]) -> dict[str, list[str]]:
+    """Merge *_aliases sections so quant-suffixed LM Studio ids enforce NEVER_MAC."""
+    windows_only = list(loaded.get("windows_only", []) or [])
+    windows_only.extend(loaded.get("windows_only_aliases", []) or [])
+    mac_only = list(loaded.get("mac_only", []) or [])
+    mac_only.extend(loaded.get("mac_only_aliases", []) or [])
+    shared = list(loaded.get("shared", []) or [])
+    shared.extend(loaded.get("shared_aliases", []) or [])
+    return {
+        "windows_only": windows_only,
+        "mac_only": mac_only,
+        "shared": shared,
+    }
+
+
 def load_policy(policy_path: Path | None = None) -> dict[str, Any]:
-    """Load Perpetua-Tools' canonical hardware policy."""
+    """Load Perpetua-Tools' canonical hardware policy (alias-normalized)."""
     if policy_path is None:
         pt_root = _resolve_perpetua_root_env() or get_repo_paths().get("perpetua_tools")
         if not pt_root:
@@ -124,11 +151,7 @@ def load_policy(policy_path: Path | None = None) -> dict[str, Any]:
         loaded = yaml.safe_load(text) or {}
     except Exception:
         loaded = _simple_policy_parse(text)
-    return {
-        "windows_only": list(loaded.get("windows_only", []) or []),
-        "mac_only": list(loaded.get("mac_only", []) or []),
-        "shared": list(loaded.get("shared", []) or []),
-    }
+    return _normalize_policy(loaded)
 
 def _import_pt_hardware_policy():
     pt_root = _resolve_perpetua_root_env()
@@ -215,22 +238,67 @@ def _mac_lan_ip():
     except Exception:
         return None
 
+def _win_lan_ip():
+    """Return this Windows machine's LAN IP on the 192.168.254.* subnet."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("192.168.254.1", 80))
+        ip = s.getsockname()[0]; s.close()
+        return ip if ip.startswith("192.168.254.") else None
+    except Exception:
+        return None
+
 def discover_endpoints() -> dict:
     """Probe Mac and Windows LM Studio instances.
 
-    Mac identification strategy (in order):
+    Platform role reversal on Windows:
+      When running ON Windows, localhost IS the Windows box and the Mac is remote.
+      When running ON Mac/Linux, localhost IS the Mac box and Windows is on the LAN.
+
+    Mac identification strategy (Mac/Linux host, in order):
       1. localhost:1234  — classic single-machine dev setup
       2. mac_lan_ip:1234 — LM Studio bound to all interfaces (common after
          power cycle or when LAN access is needed from other machines)
       3. Seed from last_discovery.json mac.ip — avoids full subnet scan on
          unchanged topologies
 
-    Windows identification:
+    Windows identification (Mac/Linux host):
       Any responding LM Studio on the subnet that is NOT the Mac's own IP.
       Falls back to last-known-good IP, then full subnet scan.
+
+    Windows host (RUNNING_ON_WINDOWS=True):
+      localhost:1234  → win  (the local LM Studio GGUF box)
+      $MAC_IP:1234    → mac  (the remote Mac MLX box, if reachable)
     """
     result = {"mac": None, "win": None}
 
+    if RUNNING_ON_WINDOWS:
+        # ── Windows host: localhost = win, $MAC_IP = mac ────────────────────
+        win_models = probe_models("http://localhost:1234")
+        if win_models:
+            result["win"] = {"ip": "localhost", "models": win_models}
+        else:
+            print("  ⚠️  Windows LM Studio not reachable at localhost:1234", file=sys.stderr)
+
+        mac_ip = os.getenv("MAC_IP", "").strip()
+        if mac_ip:
+            mac_models = probe_models(f"http://{mac_ip}:1234")
+            if mac_models:
+                result["mac"] = {"ip": mac_ip, "models": mac_models}
+            else:
+                print(f"  ⚠️  Mac LM Studio not reachable at {mac_ip}:1234 ($MAC_IP)", file=sys.stderr)
+        else:
+            # Fall back to last-known-good mac IP from cache
+            last = _load_json(LAST_DISCOVERY_JSON)
+            mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
+            if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1"):
+                mac_models_cached = probe_models(f"http://{mac_last_ip}:1234")
+                if mac_models_cached:
+                    result["mac"] = {"ip": mac_last_ip, "models": mac_models_cached}
+                    print(f"  ℹ️  Mac LM Studio found at cached IP {mac_last_ip} (set $MAC_IP to avoid scan)", file=sys.stderr)
+        return result
+
+    # ── Mac/Linux host: localhost = mac, subnet scan = win ──────────────────
     # Step 1: try localhost first (zero network traffic, instant)
     mac_models = probe_models("http://localhost:1234")
     if mac_models:
@@ -413,16 +481,24 @@ def patch_devices_yml(mac_ip: str, win_ip: str, pt_repo: Path):
     if not f.exists(): return
     content = original = _read_text_safe(f)
     if content is None: return
-    content = re.sub(
-        r'(- id: "mac-studio".*?lan_ip:\s*")[^"]+(")',
-        lambda m: m.group(1) + mac_ip + m.group(2),
-        content, flags=re.DOTALL
-    )
-    content = re.sub(
-        r'(- id: "win-rtx3080".*?lan_ip:\s*")[^"]+(")',
-        lambda m: m.group(1) + win_ip + m.group(2),
-        content, flags=re.DOTALL
-    )
+    # (?:(?!- id:).)*? is a device-boundary anchor: the match cannot cross into
+    # another device entry.  This prevents the win-rtx3080 regex from drifting
+    # to cloud.lan_ip when win-rtx3080's lan_ip is currently empty.
+    # Skip patching entirely for loopback/empty values — those are runtime
+    # addresses and must never be stored in LAN IP fields.
+    _LOOPBACK = {"", "localhost", "127.0.0.1"}
+    if mac_ip not in _LOOPBACK:
+        content = re.sub(
+            r'(- id: "mac-studio"(?:(?!- id:).)*?lan_ip:\s*")[^"]*(")',
+            lambda m: m.group(1) + mac_ip + m.group(2),
+            content, flags=re.DOTALL
+        )
+    if win_ip not in _LOOPBACK:
+        content = re.sub(
+            r'(- id: "win-rtx3080"(?:(?!- id:).)*?lan_ip:\s*")[^"]*(")',
+            lambda m: m.group(1) + win_ip + m.group(2),
+            content, flags=re.DOTALL
+        )
     if content != original:
         _write_text_safe(f, content)
 
@@ -616,8 +692,13 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         patch_openclaw_json(endpoints)
         print("  ✓ openclaw.json", file=sys.stderr)
         if pt_repo:
-            patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-            patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+            # On Windows the runtime win IP is "localhost"; resolve the real LAN IP
+            # so shared config files store a network-reachable address.
+            _win_patch_ip = win.get("ip", "")
+            if RUNNING_ON_WINDOWS and _win_patch_ip in ("localhost", "127.0.0.1"):
+                _win_patch_ip = os.getenv("WIN_IP") or _win_lan_ip() or _win_patch_ip
+            patch_devices_yml(mac.get("ip", ""), _win_patch_ip, pt_repo)
+            patch_models_yml(mac.get("ip", ""), _win_patch_ip, pt_repo)
             print("  ✓ Perpetua-Tools config/", file=sys.stderr)
         write_env_lmstudio(endpoints, repo_paths)
         print("  ✓ .env.lmstudio written", file=sys.stderr)
