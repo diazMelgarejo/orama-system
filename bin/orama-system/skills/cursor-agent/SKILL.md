@@ -1,10 +1,11 @@
 ---
 name: cursor-agent
 description: >-
-  Install, configure, and operate the Cursor background agent CLI (`agent`) for
+  Install, configure, and operate the Cursor Agent CLI (`cursor-agent`) for
   fanning out light tasks in parallel alongside the main Sonnet 4.6 session.
   Cross-platform: macOS/Linux via bash installer, Windows via PowerShell.
-version: 1.0.0
+  DO NOT confuse with `agent` (Grok Build TUI at ~/.grok/bin/agent) — different tool.
+version: 1.1.0
 license: Apache 2.0
 compatibility: darwin, linux, windows, orama-system, openclaw, hermes-harness
 parent_skill: orama-system
@@ -13,20 +14,22 @@ triggers:
   - cursor-agent
   - fan out tasks
   - cursor cli
-  - grok agent
-  - agent --help
+  - cursor background agent
 allowed-tools: bash, file-operations
 ---
 
 # Cursor Agent Skill
 
-## Purpose
+## Disambiguation
 
-Use the Cursor background agent (`agent` CLI, binary at `~/.grok/bin/agent`) to
-fan out **light, parallelisable tasks** alongside the main Sonnet 4.6 orchestration
-session. The pattern: Sonnet 4.6 keeps judgment, architecture, and synthesis; cursor
-agents handle mechanical subtasks (file rewriting, grep-and-replace, doc generation,
-test scaffolding) concurrently.
+**`cursor-agent`** (`~/.local/bin/cursor-agent`) is Cursor's native background agent CLI.
+It is **NOT** the same as `agent` (`~/.grok/bin/agent`, the Grok Build TUI).
+Always invoke Cursor agents as `cursor-agent`, never as bare `agent`.
+
+| Command | Binary | What it is |
+|---------|--------|------------|
+| `cursor-agent` | `~/.local/bin/cursor-agent` | Cursor's background agent — use this |
+| `agent` | `~/.grok/bin/agent` | Grok Build TUI — separate product |
 
 ## Install
 
@@ -34,150 +37,205 @@ test scaffolding) concurrently.
 
 ```bash
 curl https://cursor.com/install -fsS | bash
-# Adds ~/.grok/bin/ to PATH. Re-source shell or open a new terminal.
+# Installs to ~/.local/bin/cursor-agent; adds ~/.local/bin to PATH
 ```
 
 Verify:
 
 ```bash
-agent --version     # should print a version string
-agent models        # confirm at least one model is listed
+cursor-agent --version    # e.g. 2026.06.24-00-45-58-9f61de7
+cursor-agent models       # list available models
 ```
 
 ### Windows (PowerShell 5+)
 
 ```powershell
-iex (iwr -UseBasicParsing https://cursor.com/install.ps1).Content
-# Appends %LOCALAPPDATA%\Programs\cursor to PATH
+iwr -UseBasicParsing https://cursor.com/install.ps1 | iex
+# Installs cursor-agent.exe to %LOCALAPPDATA%\Programs\cursor-agent\
 ```
 
 Verify (PowerShell):
 
 ```powershell
-agent --version
-agent models
+cursor-agent --version
+cursor-agent models
 ```
 
 ### Authentication
 
 ```bash
-agent login          # opens browser OAuth flow; tokens stored in OS keychain
-agent login --oauth  # explicit OAuth (same as default; useful for scripting)
+cursor-agent login          # browser OAuth flow; tokens stored in OS keychain
+cursor-agent status         # verify login, show account info
 ```
 
-## Key Commands (from `agent --help`)
+Set API key via env var instead of browser flow:
 
-| Command | Purpose |
-|---------|---------|
-| `agent -p "prompt"` | Single-turn headless prompt — prints result to stdout and exits |
-| `agent -m <model>` | Override model (default: `grok-build`) |
-| `agent --effort <level>` | Effort level: `low`, `medium`, `high`, `xhigh`, `max` |
-| `agent --output-format json` | Machine-readable JSON output (headless only) |
-| `agent --max-turns <N>` | Cap agent turns (prevents runaway loops) |
-| `agent --cwd <dir>` | Run in a different directory |
-| `agent -w [name]` | Start in a new git worktree |
-| `agent models` | List available models |
-| `agent mcp` | Manage MCP server configurations |
-| `agent memory` | Manage cross-session memory |
-| `agent sessions` | List, search, or restore sessions |
-| `agent agent stdio` | Run agent over stdio (programmatic pipe integration) |
-| `agent agent headless` | Run headlessly over Cursor WebSocket relay |
-| `agent inspect` | Show configuration Grok discovers for this directory |
+```bash
+export CURSOR_API_KEY="sk-..."   # never commit; load from macOS Keychain or .env
+cursor-agent models              # confirms key is accepted
+```
+
+## Available Models
+
+Key models for task fanout (from `cursor-agent models`):
+
+| Model string | Display name | When to use |
+|---|---|---|
+| `claude-4.6-sonnet-medium` | Sonnet 4.6 1M | **Default for light tasks** — fast, capable |
+| `claude-opus-4-8-low` | Opus 4.8 Low | Mechanical tasks (format, rename, scaffold) |
+| `claude-opus-4-8-medium` | Opus 4.8 Medium | Standard coding tasks |
+| `claude-opus-4-8-high` | Opus 4.8 1M | Complex refactors |
+| `auto` | Auto | Let Cursor pick per task |
+| `gpt-5.3-codex-low` | Codex 5.3 Low | Fast, cheap file edits |
+
+Parameterised model override syntax (bracket notation):
+
+```bash
+cursor-agent --model 'claude-opus-4-8[context=1m,effort=high,fast=false]' ...
+```
+
+## Key Options (from `cursor-agent --help`)
+
+| Option | Purpose |
+|--------|---------|
+| `--print` / `-p` | Headless single-turn — prints result to stdout (all tools: write, shell) |
+| `--model <id>` | Override model |
+| `--output-format <fmt>` | `text` \| `json` \| `stream-json` (with `--print`) |
+| `--mode plan` | Read-only planning mode (no file edits) |
+| `--mode ask` | Q&A explanations, read-only |
+| `--auto-review` | Smart Auto: auto-run safe tool calls, prompt on risky ones |
+| `--force` / `--yolo` | Auto-approve all tool calls (trusted CI only) |
+| `--worktree [-w] [name]` | Isolated git worktree at `~/.cursor/worktrees/<repo>/<name>` |
+| `--worktree-base <ref>` | Branch/ref to base new worktree on |
+| `--trust` | Trust workspace without prompting (headless mode only) |
+| `--sandbox enabled\|disabled` | Override sandbox mode |
+| `--resume [chatId]` | Resume a previous session |
+| `--continue` | Continue most recent session |
 
 ## Light Task Fanout Pattern
 
-Use `agent -p` single-turn mode to parallelize tasks that don't need judgment:
+**Sonnet 4.6 Medium** (`claude-4.6-sonnet-medium`) is the right model for parallelising
+light work alongside the main orchestration session.
 
 ```bash
-# Dispatch 3 light tasks in parallel (background jobs)
-agent -p "Add type annotations to scripts/discover.py" \
-      -m grok-build --effort medium --output-format json &
+# Parallel single-turn jobs (background)
+cursor-agent --print --model claude-4.6-sonnet-medium \
+  "Add type annotations to scripts/discover.py; only functions, no variables" \
+  --output-format json > /tmp/task-a.json &
 
-agent -p "Write docstrings for all public functions in bin/orama-system/skills/cursor-agent/SKILL.md" \
-      -m grok-build --effort low --output-format json &
+cursor-agent --print --model gpt-5.3-codex-low \
+  "Rename all snake_case variables in tests/test_foo.py to camelCase" \
+  --output-format json > /tmp/task-b.json &
 
-agent -p "Run tests and report failures" \
-      -m grok-build --effort low &
-
-wait  # collect all when done
+wait   # collect when done
 ```
 
 **Division of labour:**
 
-| Main session (Sonnet 4.6) | Cursor agent (grok-build) |
-|--------------------------|--------------------------|
+| Main session (Sonnet 4.6 full orchestration) | cursor-agent (Sonnet 4.6 Medium) |
+|----------------------------------------------|----------------------------------|
 | Architecture decisions | Mechanical file edits |
 | CIDF write discipline | Grep-and-replace tasks |
 | Cross-repo synthesis | Doc generation |
-| Security & CIDF review | Test scaffolding |
-| Final crystallisation | Format/lint fixes |
+| Security & policy review | Test scaffolding |
+| Final crystallisation | Format / lint fixes |
+| AFRP gate | Single-file refactors |
 
-**Budget rule:** cursor agents consume Cursor API credits (not Anthropic tokens).
-Light tasks = `--effort low` or `medium`. Reserve `high`/`xhigh` for cases where
-a cursor agent is the primary solver, not a helper.
-
-## Integrating with orama-system Workflow
-
-In Stage 4 (Masterful Execution), dispatch mechanical subtasks as cursor agent
-single-turns and await them while the main session proceeds with judgment work:
-
-```bash
-# Stage 4 parallel dispatch example
-_AGENT_JOBS=()
-agent -p "Scan bin/ for TODO comments and produce a markdown list" \
-      --output-format json > /tmp/todos.json &
-_AGENT_JOBS+=($!)
-
-# ... do judgment work in main session ...
-
-# Collect when done
-wait "${_AGENT_JOBS[@]}"
-cat /tmp/todos.json | python3 -c "import sys,json; [print(l) for l in json.load(sys.stdin).get('lines',[])]"
-```
-
-## Windows / Hermes Harness
-
-On Windows, the install adds `agent` to the user `PATH` automatically.
-Run from PowerShell or Git Bash — both work.
-
-```powershell
-# PowerShell single-turn
-agent -p "List all .py files modified in the last 24h" --output-format json
-```
-
-From Hermes one-shot, prefix with `hermes chat --provider nous` for provider tasks;
-use `agent -p` directly for file/code tasks that don't need Nous Portal credentials.
+**Budget note:** `cursor-agent` consumes Cursor credits (not Anthropic API tokens).
+Light tasks = `--model claude-4.6-sonnet-medium` or `gpt-5.3-codex-low`.
 
 ## Worktree Isolation
 
-For tasks that write files, use `agent -w` to isolate in a git worktree and avoid
-conflicts with the main session:
+For tasks that write files and must not collide with the main session:
 
 ```bash
-agent -w cursor-agent-fix -p "Refactor scripts/foo.py to add logging"
-# Works in a fresh worktree; merge back with git after review
+cursor-agent -w cursor-fix-$(date +%s) \
+  --print --model claude-4.6-sonnet-medium \
+  "Refactor scripts/foo.py to add structured logging"
+# Runs in ~/.cursor/worktrees/<repo>/cursor-fix-<ts>/
+# Review and merge back with git after the agent completes
+```
+
+## orama-system Stage 4 Integration
+
+In Stage 4 (Masterful Execution), dispatch mechanical subtasks as cursor-agent
+headless jobs while the main session handles judgment work:
+
+```bash
+# Example Stage 4 parallel dispatch
+_JOBS=()
+
+cursor-agent --print --model claude-4.6-sonnet-medium \
+  "Scan bin/ for TODO comments; output as JSON list" \
+  --output-format json > /tmp/todos.json &
+_JOBS+=($!)
+
+cursor-agent --print --model gpt-5.3-codex-low \
+  "Generate pytest stubs for every function in scripts/new_module.py" \
+  --trust > /tmp/test-stubs.py &
+_JOBS+=($!)
+
+# Main session does judgment work here ...
+
+wait "${_JOBS[@]}"
 ```
 
 ## MCP Integration
 
-Cursor agents can use MCP servers. Register servers the same way as Claude Code:
+Cursor agents inherit the MCP servers configured in the workspace `.cursor/mcp.json`.
+Manage them:
 
 ```bash
-agent mcp add --name my-server --command "npx my-mcp-server"
-agent mcp list
+cursor-agent mcp list
+cursor-agent mcp add --name my-server --command "npx my-mcp-server"
 ```
 
-MCP config is shared across Cursor projects unless `--cwd` overrides the project root.
+Approve all MCPs automatically in headless mode:
 
-## Caution
+```bash
+cursor-agent --print --approve-mcps --model claude-4.6-sonnet-medium "..."
+```
 
-- `--always-approve` skips all tool permission prompts — use only in trusted CI/CD
-- `agent agent headless` uses Cursor's WebSocket relay (requires network); prefer `stdio` for local CI
-- Log output is written to `~/.grok/logs/` — check there if an agent run hangs
-- On Windows, `%LOCALAPPDATA%\Programs\cursor\agent.exe` — ensure it is on `PATH` before invoking from PT scripts
+## Windows / Hermes Harness
+
+On Windows, invoke from PowerShell or Git Bash:
+
+```powershell
+cursor-agent --print --model claude-4.6-sonnet-medium "task here" --trust
+```
+
+From a Hermes-scripted workflow:
+
+```bash
+# In Git Bash on Windows
+cursor-agent --print --model gpt-5.3-codex-low \
+  "List all .py files modified in the last 24h" --output-format json
+```
+
+## Update
+
+```bash
+cursor-agent update      # update to latest version
+cursor-agent about       # show version + system info
+```
+
+## Commands Summary
+
+| Command | Purpose |
+|---------|---------|
+| `cursor-agent login` | Authenticate via browser OAuth |
+| `cursor-agent logout` | Sign out and clear stored auth |
+| `cursor-agent status` | Show auth status and account |
+| `cursor-agent models` | List available models |
+| `cursor-agent mcp` | Manage MCP servers |
+| `cursor-agent worker` | Start private cloud worker |
+| `cursor-agent update` | Update to latest version |
+| `cursor-agent about` | Version + system info |
+| `cursor-agent ls` | Resume a chat session |
+| `cursor-agent resume` | Resume latest chat session |
 
 ## References
 
-- Platform affinity (when to use cursor agents vs Hermes vs OpenClaw): [`../hermes-harness/references/platform-affinity-routing.md`](../hermes-harness/references/platform-affinity-routing.md)
-- orama-system Stage 4 execution: [`../../../SKILL.md § MODE 2 Stage 4`](../../../SKILL.md)
+- Platform affinity (when to use cursor-agent vs Hermes vs OpenClaw): [`../hermes-harness/references/platform-affinity-routing.md`](../hermes-harness/references/platform-affinity-routing.md)
+- orama-system Stage 4: [`../../../SKILL.md § MODE 2 Stage 4`](../../../SKILL.md)
 - Win PATH bootstrap: [`../hermes-harness/SKILL.md § Windows Bring-Up`](../hermes-harness/SKILL.md)
