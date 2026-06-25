@@ -270,6 +270,42 @@ Workflow permissions must be minimal and explicit.
 
 ---
 
+## Windows batch file line endings (CRLF)
+
+Windows `.cmd` and `.bat` files **MUST** use CRLF (`\r\n`) line endings.
+A file with LF-only (`\n`) endings will silently fail or produce garbled output
+because `cmd.exe` tokenises on `\r\n`.
+
+**Git attributes — declare CRLF explicitly** in `.gitattributes`:
+
+```gitattributes
+*.cmd  text  eol=crlf
+*.bat  text  eol=crlf
+```
+
+Without this, `core.autocrlf` may strip `\r` silently on checkout, breaking
+files that work on the author's machine.
+
+**Writing `.cmd` files from Python** — always open in binary mode and join with `\r\n`:
+
+```python
+lines = ["@echo off", "rem my script", "exit /b 0"]
+with open("my.cmd", "wb") as f:
+    f.write("\r\n".join(lines).encode("utf-8"))
+```
+
+**Verification:**
+
+```bash
+xxd my.cmd | grep -c "0d 0a"   # should equal line count
+xxd my.cmd | grep -c "0d$"     # 0 = no stray bare CR
+```
+
+*Root cause discovered in PR #108 (`gstack-brain-sync.cmd` was LF-only, silently
+broke cmd.exe shell dispatch on Windows).*
+
+---
+
 ## Cursor Cloud commit attribution
 
 Cloud agents may inject `Co-authored-by` trailers via managed git hooks. **`CURSOR_AGENT=0` is not supported.**
