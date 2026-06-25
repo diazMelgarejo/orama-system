@@ -122,6 +122,31 @@ If `gbrain doctor` reports broken sources, run `/sync-gbrain --full`.
 
 ---
 
+### Windows — gstack-brain-sync.cmd shim (fix #1731)
+
+On Windows, gstack's orchestrator spawns `gstack-brain-sync` via `cmd.exe`
+(`NEEDS_SHELL_ON_WINDOWS = process.platform === "win32"` in `lib/gbrain-exec.ts`).
+`cmd.exe` cannot execute bash shebang scripts, so `/sync-gbrain`'s brain-sync stage
+fails with `'gstack-brain-sync' is not recognized as an internal or external command`.
+
+The fix — a `.cmd` wrapper — is tracked in this repo and installed by `install.ps1`:
+
+```powershell
+# From orama-system root — idempotent, safe to re-run after any gstack upgrade
+powershell -ExecutionPolicy Bypass -File .\platform\windows\install.ps1
+```
+
+The shim (`platform/windows/gstack-brain-sync.cmd`) calls
+`C:\Program Files\Git\usr\bin\bash.exe` directly — bash is NOT on `cmd.exe`'s
+PATH even when Git for Windows is installed (it's only on the Git Bash session PATH).
+Retire this shim when `garrytan/gstack#1731` ships an upstream `.cmd` wrapper.
+
+> **Why bash.exe doesn't appear in cmd.exe's PATH:** Git for Windows appends its
+> `usr\bin\` to PATH only when launching a Git Bash session. A plain cmd.exe or
+> bun-spawned subprocess never receives that PATH extension.
+
+---
+
 ### gbrain — Windows / LM Studio Setup
 
 Windows uses LM Studio (port 1234) instead of Ollama. gbrain talks to it via the
@@ -506,6 +531,7 @@ mechanism — NOT the launchd autopilot, which is left unloaded (§6).
 | `Not a git repository: GBrain sync requires…` | bare `gbrain sync` from a non-git cwd only acks failures; `cd` into the repo (or `--repo "<path>"`) + `--source <id>` (§7) |
 | sources stale every session despite "fixing" | old-path duplicate sources left un-archived ("pending removal"); archive + export def in the SAME pass; run `scripts/gbrain/gbrain-selfheal.sh` (§7) |
 | recurring gbrain rot in general | `bash scripts/gbrain/gbrain-selfheal.sh` (idempotent: ack + refresh live sources + report orphans/misconfig) |
+| `/sync-gbrain` brain-sync fails on Windows: `'gstack-brain-sync' is not recognized` | run `platform/windows/install.ps1` — installs `gstack-brain-sync.cmd` shim (fix #1731); shim tracked in this repo |
 
 ## Symbol vs Text Search
 
