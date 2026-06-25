@@ -43,7 +43,21 @@ prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the runtime 
 4. **Parallel to OpenClaw:** `openclaw-skills` owns OpenClaw config; this skill owns Hermes onboarding and partner prompts.
 5. **Shared hardware policy:** Perpetua-Tools `config/model_hardware_policy.yml` + `src/utils/hardware_policy.py` are the **only** affinity SSoT. Hermes must **consume** PT policy via CLI/API — never infer NEVER_MAC/NEVER_WIN independently at runtime.
 
-## Platform Harness Model
+## Platform Affinity Bias (v1 + v2)
+
+**Mac/Linux defaults to AlphaClaw + OpenClaw. Windows defaults to Hermes. ECC bridges both.**
+
+| Platform | **Preferred harness** | Entry point | Interop |
+|----------|-----------------------|-------------|---------|
+| macOS | **AlphaClaw + OpenClaw** | `start.sh` | ECC skill import |
+| Linux | **AlphaClaw + OpenClaw** | `start.sh` | ECC skill import |
+| Windows 11 | **Hermes Harness** | `start.ps1` | ECC skill import |
+
+ECC ensures orama-system skills run in **both** environments without modification —
+now (v1, `vendor/ecc-tools`) and in v2 (oramasys, structured manifest).
+Full routing algorithm and anti-patterns: [`references/platform-affinity-routing.md`](references/platform-affinity-routing.md)
+
+## Platform Harness Model (detail)
 
 | Host OS | Primary harness | LM Studio role | Orchestrator role |
 |---------|-----------------|----------------|-------------------|
