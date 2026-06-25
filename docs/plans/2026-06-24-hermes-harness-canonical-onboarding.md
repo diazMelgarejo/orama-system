@@ -5,7 +5,7 @@
 > **Author:** orama-system canonical skill leads + session synthesis
 > **Review trigger:** user review of this artifact before any skill/code execution
 
-> **Cross-repo path contract (read before any path below):** the L2 middleware repo's canonical name is **Perpetua-Tools**, but its on-disk clone name varies by host (this host: `…/ultrathink/Perplexity-Tools`). **Always reference it through `$PERPETUA_TOOLS_PATH`** — never a literal sibling name. This repo (L3) is `$ORAMA_SYSTEM_PATH`. The ECC vendor mirror is `$PERPETUA_TOOLS_PATH/vendor/ecc-tools`. Literal `Perpetua-Tools/…` / `Perplexity-Tools/…` paths are treated as defects.
+> **Cross-repo path contract (read before any path below):** the L2 middleware repo's canonical name is **Perpetua-Tools**, but its on-disk clone name varies by host. **Always reference it through `$PERPETUA_TOOLS_PATH`** — never a literal sibling name. This repo (L3) is `$ORAMA_SYSTEM_PATH`. The ECC vendor mirror is `$PERPETUA_TOOLS_PATH/vendor/ecc-tools`. Literal `Perpetua-Tools/…` / `Perplexity-Tools/…` paths are treated as defects.
 
 ---
 
@@ -240,7 +240,7 @@ Use `bin/orama-system/skills/<target>/SKILL.md` for canonical guidance.
 | Task | Action | Status |
 |------|--------|--------|
 | Sync orama-system | `git fetch origin`; branch `feat/hermes-harness-onboarding` from current tree (local plan edits preserved) | ✅ done |
-| Sync Perpetua-Tools | `git fetch origin`; verified `main...origin/main` in `$PERPETUA_TOOLS_PATH` (this host: `…/ultrathink/Perplexity-Tools`) | ✅ done |
+| Sync Perpetua-Tools | `git fetch origin`; verified `main...origin/main` in `$PERPETUA_TOOLS_PATH` | ✅ done |
 | Sync ECC vendor | `$PERPETUA_TOOLS_PATH/vendor/ecc-tools` checked out on `main` @ latest `origin/main` | ✅ done |
 | Verify skill roots | Confirm paths under `bin/orama-system/skills/hermes-harness/` | ✅ done |
 | Hygiene grep | No workstation absolute paths in plan or hermes-harness tracked paths | ✅ verified |
@@ -534,7 +534,7 @@ pytest tests/test_hermes_thin_skills.py -q
 | Hardcoded LAN IP leaks | Phase 1: all IPs parametrized |
 | Own-machine reachable via LAN IP | Phase 1: locality rule + shared helper + self-heal |
 | Windows stranded with no skills | Phase 9: additive migration; locals preserved |
-| Locality helper drift | Single `resolve_local_or_remote()`; eliminate duplicate parsers |
+| Locality helper drift | Share `_is_local_endpoint()` / `_loopback_host_from_endpoint()` from `agent_launcher.py`; eliminate duplicate parsers |
 | Private state leaks | `created_by: agent` guard; never copy `~/.hermes` raw |
 | Absolute paths in tracked files | Repo-relative or env-var forms only |
 | ECC2 migration conflated with harness onboarding | ECC2 section is parallel track; requires separate approval |
@@ -578,7 +578,7 @@ Confirm the standing decisions before any tier:
 1. Missing absorption targets may be created as redirect stubs where absent.
 2. Helper scripts may be added under `scripts/` with the guardrails above.
 3. Architectural decisions: cross-repo path contract (`$PERPETUA_TOOLS_PATH`) + parametrize IPs + localhost-when-local + preserve-then-migrate Windows.
-4. ECC URLs remain `affaan-m/ECC`; local vendor mirror is `$PERPETUA_TOOLS_PATH/vendor/ecc-tools` (on this host the clone is `…/ultrathink/Perplexity-Tools`).
+4. ECC URLs remain `affaan-m/ECC`; local vendor mirror is `$PERPETUA_TOOLS_PATH/vendor/ecc-tools`.
 5. ECC2 migration is a parallel track — not in scope for initial harness phases unless separately approved.
 6. Review enriched `hermes-harness/SKILL.md` draft (Phase 3).
 7. Review 4 new ECC reference card drafts + `lan-endpoint-contract.md` (Phases 1, 4).

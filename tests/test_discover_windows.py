@@ -32,7 +32,13 @@ def _load_discover():
     spec = importlib.util.spec_from_file_location("discover_win_test", DISCOVER_SCRIPT)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Stub utils.hardware_policy before exec_module so the module-level
+    # _import_pt_hardware_policy() call does not depend on PERPETUA_TOOLS_ROOT
+    # being set in the test environment.
+    stub = MagicMock()
+    stub.filter_models_for_platform.side_effect = lambda models, platform, policy: models
+    with patch.dict(sys.modules, {"utils.hardware_policy": stub}):
+        spec.loader.exec_module(module)
     return module
 
 

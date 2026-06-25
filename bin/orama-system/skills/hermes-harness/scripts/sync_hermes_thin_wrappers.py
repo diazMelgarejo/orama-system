@@ -31,9 +31,10 @@ def resolve_repo_root() -> Path:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--dry-run", action="store_true", help="Print what would be done; make no changes")
+    mode = p.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true", help="Print what would be done; make no changes")
+    mode.add_argument("--verify-only", action="store_true", help="Check wrapper freshness without updating")
     p.add_argument("--hermes-home", default=None, help="Override HERMES_HOME (default: auto-detect from env)")
-    p.add_argument("--verify-only", action="store_true", help="Check wrapper freshness without updating")
     args = p.parse_args()
 
     repo_root = resolve_repo_root()

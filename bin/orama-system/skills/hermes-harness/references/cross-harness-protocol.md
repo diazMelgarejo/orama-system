@@ -19,7 +19,7 @@ platform limits.
 
 Standard L3 → L1 dispatch path:
 
-```
+```text
 orama-system
   → Perpetua-Tools skill dispatcher
   → orama-system/skills/{skill_id}/SKILL.md (canonical procedure)
@@ -45,7 +45,7 @@ canonical skills. Canonical skill bodies always stay under
 
 Hermes thin wrappers invoke canonical skills via slash commands:
 
-```
+```text
 /pt-hardware-policy   → commands/pt-hardware-policy/SKILL.md
 /pt-orama-council     → commands/pt-orama-council/SKILL.md
 /pt-orama-delegate    → commands/pt-orama-delegate/SKILL.md
