@@ -99,22 +99,105 @@ Run `fork-heal` manually after any upgrade — idempotent and safe to repeat.
 
 ### gbrain upgrade
 
-gbrain uses a standard npm package — no fork, no patches.
+gbrain is a **private GitHub repo** (`garrytan/gbrain`) — do NOT use npm/bun global install
+(that installs a different unrelated package). Upgrade by pulling and rebuilding:
 
 ```bash
-# Check current version
+cd ~/gbrain
+git pull
+bun install
+bun build --compile --outfile bin/gbrain src/cli.ts
+bun link
 gbrain --version
-
-# Upgrade (prefer bun in this environment)
-bun add -g gbrain@latest
-
-# Verify config survived
 gbrain doctor --fast
 ```
 
-After upgrade: confirm `~/.gbrain/config.json` still has `"prepare": false`
-(Supabase pooler requires this) and `ollama:bge-m3` for embeddings. If
-`gbrain doctor` reports broken sources, run `/sync-gbrain --full`.
+**Mac:** confirm `~/.gbrain/config.json` still has `"prepare": false`
+(Supabase pooler requires this) and `ollama:bge-m3` for embeddings.
+
+**Windows:** confirm `embedding_model` is `llama-server:text-embedding-qwen3-embedding-8b-i1-gguf-q6-k`
+and `LLAMA_SERVER_BASE_URL=http://localhost:1234/v1` is set (see Windows section below).
+
+If `gbrain doctor` reports broken sources, run `/sync-gbrain --full`.
+
+---
+
+### gbrain — Windows / LM Studio Setup
+
+Windows uses LM Studio (port 1234) instead of Ollama. gbrain talks to it via the
+`llama-server` recipe, which uses the OpenAI-compatible `/v1/embeddings` endpoint.
+
+**Required env var (add to PowerShell profile or session):**
+```powershell
+$env:LLAMA_SERVER_BASE_URL = "http://localhost:1234/v1"
+```
+
+**gbrain install (private repo, bun):**
+```bash
+# Bash / Git Bash
+export PATH="/c/Users/$USER/.bun/bin:$PATH"
+cd ~
+git clone https://github.com/garrytan/gbrain.git
+cd gbrain
+bun install
+bun build --compile --outfile bin/gbrain src/cli.ts
+bun link
+gbrain --version
+```
+
+**Brain init (Qwen3-Embedding-8B, 4096-dim — best for code):**
+```bash
+export LLAMA_SERVER_BASE_URL="http://localhost:1234/v1"
+cd ~/gbrain && bun run src/cli.ts init \
+  --pglite \
+  --embedding-model "llama-server:text-embedding-qwen3-embedding-8b-i1-gguf-q6-k" \
+  --embedding-dimensions 4096 \
+  --yes
+```
+
+> **Why Qwen3 works now:** gbrain's `migrate.ts` (v45 facts, v55 query_cache) is patched
+> to skip HNSW index creation when `embeddingDim > 4000` (pgvector HALFVEC HNSW cap).
+> `content_chunks` was already guarded by `applyChunkEmbeddingIndexPolicy`.
+> Exact scans are used instead — correct for a personal brain.
+>
+> **Fallback:** if Qwen3 is not loaded in LM Studio, use
+> `--embedding-model "llama-server:text-embedding-nomic-embed-text-v1.5" --embedding-dimensions 768`
+
+**Expected `~/.gbrain/config.json` on Windows:**
+```json
+{
+  "engine": "pglite",
+  "database_path": "C:\\Users\\<user>\\.gbrain\\brain.pglite",
+  "embedding_model": "llama-server:text-embedding-qwen3-embedding-8b-i1-gguf-q6-k",
+  "embedding_dimensions": 4096,
+  "schema_pack": "gbrain-base-v2",
+  "mcp": { "publish_skills": true },
+  "self_upgrade": { "mode": "notify", "mode_prompted": true }
+}
+```
+
+> `embedding_disabled` must NOT be present. If it appears (from a failed prior init),
+> remove it manually and re-run `gbrain doctor --fast`.
+
+**gbrain MCP server in Claude Code (`~/.claude.json` or settings UI):**
+```json
+{
+  "mcpServers": {
+    "gbrain": {
+      "command": "cmd",
+      "args": ["/c", "set LLAMA_SERVER_BASE_URL=http://localhost:1234/v1 && gbrain serve"],
+      "env": { "LLAMA_SERVER_BASE_URL": "http://localhost:1234/v1" }
+    }
+  }
+}
+```
+
+**Verification:**
+```bash
+export LLAMA_SERVER_BASE_URL="http://localhost:1234/v1"
+gbrain doctor --fast
+# Expect: Brain ready, embedding OK, 4096-dim
+```
 
 ## Available Skills
 
