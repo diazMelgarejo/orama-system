@@ -29,7 +29,7 @@ Generated after completing:
 
 **Hardware targets:**
 - Mac: Ollama `localhost:11434` — models: `qwen3.5:9b-nvfp4`, `qwen3-coder:480b-cloud`
-- Win: LM Studio `$LM_STUDIO_WIN_ENDPOINT` (default `192.168.254.x:1234`) — model: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
+- Win: LM Studio `$LM_STUDIO_WIN_ENDPOINT` (e.g. `<win-lan-ip>:1234` — read from `~/.openclaw/state/last_discovery.json`) — model: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
 
 **Why blocking:** Phase 3 (Orchestration & API Layer) cannot start until `v0.2.0-alpha` is tagged. All three repos (oramasys/perpetua-core, Perpetua-Tools, orama-system) have downstream work waiting on this milestone.
 

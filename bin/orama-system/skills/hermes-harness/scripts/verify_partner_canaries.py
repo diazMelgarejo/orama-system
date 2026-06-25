@@ -46,21 +46,49 @@ def _run(cmd: list[str], timeout: int = 30) -> tuple[int, str, str]:
         return p.returncode, p.stdout.strip(), p.stderr.strip()
     except subprocess.TimeoutExpired:
         return -1, "", "timed out"
-    except FileNotFoundError:
+    except (FileNotFoundError, PermissionError):
         return -2, "", f"{cmd[0]!r} not found on PATH"
 
 
 def check_lm_studio(base_url: str, timeout: int) -> Result:
-    models_url = base_url.rstrip("/").removesuffix("/v1") + "/v1/models"
+    base = base_url.rstrip("/").removesuffix("/v1")
+    models_url = base + "/v1/models"
     try:
-        req = urllib.request.urlopen(models_url, timeout=timeout)
-        data = json.loads(req.read())
-        count = len(data.get("data", []))
-        return Result("LM Studio /v1/models", Status.PASS, f"{count} model(s) listed")
+        resp = urllib.request.urlopen(models_url, timeout=timeout)
+        data = json.loads(resp.read())
+        models = data.get("data", [])
+        count = len(models)
+        if count == 0:
+            return Result("LM Studio", Status.FAIL, "no models loaded")
     except urllib.error.URLError as e:
-        return Result("LM Studio /v1/models", Status.FAIL, str(e))
+        return Result("LM Studio", Status.FAIL, str(e))
     except Exception as e:
-        return Result("LM Studio /v1/models", Status.FAIL, str(e))
+        return Result("LM Studio", Status.FAIL, str(e))
+
+    # Completion probe: /v1/models only confirms LM Studio is up; this verifies
+    # inference actually works. Expected round-trip: <15 s per Hermes SLA.
+    model_id = models[0].get("id", "") if models else ""
+    payload = json.dumps({
+        "model": model_id,
+        "messages": [{"role": "user", "content": "Reply with exactly: LM_READY"}],
+        "max_tokens": 10,
+        "temperature": 0,
+    }).encode()
+    req2 = urllib.request.Request(
+        base + "/v1/chat/completions",
+        data=payload,
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        resp2 = urllib.request.urlopen(req2, timeout=timeout)
+        reply = json.loads(resp2.read())
+        text = reply.get("choices", [{}])[0].get("message", {}).get("content", "")
+        return Result("LM Studio", Status.PASS, f"{count} model(s); completion ok ({text.strip()[:30]!r})")
+    except urllib.error.URLError as e:
+        return Result("LM Studio", Status.FAIL, f"{count} model(s) listed but completion failed: {e}")
+    except Exception as e:
+        return Result("LM Studio", Status.FAIL, f"{count} model(s) listed but completion failed: {e}")
 
 
 def check_hermes(timeout: int) -> Result:

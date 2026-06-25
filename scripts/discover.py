@@ -286,9 +286,17 @@ def discover_endpoints() -> dict:
             if mac_models:
                 result["mac"] = {"ip": mac_ip, "models": mac_models}
             else:
-                print(f"  ⚠️  Mac LM Studio not reachable at {mac_ip}:1234 ($MAC_IP)", file=sys.stderr)
+                print(f"  ⚠️  Mac LM Studio not reachable at {mac_ip}:1234 ($MAC_IP) — trying cache", file=sys.stderr)
+                # MAC_IP set but unreachable: fall back to last-known-good cache
+                last = _load_json(LAST_DISCOVERY_JSON)
+                mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
+                if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1", mac_ip):
+                    mac_models_cached = probe_models(f"http://{mac_last_ip}:1234")
+                    if mac_models_cached:
+                        result["mac"] = {"ip": mac_last_ip, "models": mac_models_cached}
+                        print(f"  ℹ️  Mac found at cached IP {mac_last_ip} (update $MAC_IP)", file=sys.stderr)
         else:
-            # Fall back to last-known-good mac IP from cache
+            # MAC_IP not set: fall back to last-known-good mac IP from cache
             last = _load_json(LAST_DISCOVERY_JSON)
             mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
             if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1"):
@@ -689,16 +697,21 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         mac = endpoints.get("mac") or {}
         win = endpoints.get("win") or {}
 
+        # On Windows the runtime win IP is "localhost"; resolve the real LAN IP
+        # so ALL shared config files store a network-reachable address.
+        if RUNNING_ON_WINDOWS:
+            _raw_win_ip = win.get("ip", "")
+            if _raw_win_ip in ("localhost", "127.0.0.1"):
+                _resolved = os.getenv("WIN_IP") or _win_lan_ip() or _raw_win_ip
+                if _resolved != _raw_win_ip:
+                    win = {**win, "ip": _resolved}
+                    endpoints = {**endpoints, "win": win}
+
         patch_openclaw_json(endpoints)
         print("  ✓ openclaw.json", file=sys.stderr)
         if pt_repo:
-            # On Windows the runtime win IP is "localhost"; resolve the real LAN IP
-            # so shared config files store a network-reachable address.
-            _win_patch_ip = win.get("ip", "")
-            if RUNNING_ON_WINDOWS and _win_patch_ip in ("localhost", "127.0.0.1"):
-                _win_patch_ip = os.getenv("WIN_IP") or _win_lan_ip() or _win_patch_ip
-            patch_devices_yml(mac.get("ip", ""), _win_patch_ip, pt_repo)
-            patch_models_yml(mac.get("ip", ""), _win_patch_ip, pt_repo)
+            patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+            patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
             print("  ✓ Perpetua-Tools config/", file=sys.stderr)
         write_env_lmstudio(endpoints, repo_paths)
         print("  ✓ .env.lmstudio written", file=sys.stderr)

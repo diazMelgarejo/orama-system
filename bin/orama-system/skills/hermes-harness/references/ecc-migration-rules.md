@@ -28,7 +28,7 @@ safe PT-orama/ECC surface:
 - [ ] Artifact triaged to one of: skill / command / doc / do-not-ship
 - [ ] No workstation paths in tracked files — use env vars
 - [ ] No credentials, OAuth tokens, or account state included
-- [ ] Redirect stub created for absorbed entry point (see [`../perpetua-hardware/SKILL.md`](../perpetua-hardware/SKILL.md) as example)
+- [ ] Redirect stub created for absorbed entry point (see [`../../perpetua-hardware/SKILL.md`](../../perpetua-hardware/SKILL.md) as example)
 - [ ] New file referenced from `hermes-harness/SKILL.md § References` (if skill/command)
 - [ ] Verification step documented
 
