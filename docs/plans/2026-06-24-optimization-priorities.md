@@ -29,14 +29,14 @@ Generated after completing:
 
 **Hardware targets:**
 - Mac: Ollama `localhost:11434` — models: `qwen3.5:9b-nvfp4`, `qwen3-coder:480b-cloud`
-- Win: LM Studio `192.168.254.103:1234` — model: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
+- Win: LM Studio `$LM_STUDIO_WIN_ENDPOINT` (default `192.168.254.x:1234`) — model: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
 
 **Why blocking:** Phase 3 (Orchestration & API Layer) cannot start until `v0.2.0-alpha` is tagged. All three repos (oramasys/perpetua-core, Perpetua-Tools, orama-system) have downstream work waiting on this milestone.
 
 **Verification checklist:**
 - [ ] `python3 -m pytest` — all 56 tests in perpetua-core green
 - [ ] Mac Ollama: `python3 -c "from perpetua_core.discovery import probe; ..."` → health OK
-- [ ] Win LM Studio: `curl http://192.168.254.103:1234/v1/models` → 27B model listed
+- [ ] Win LM Studio: `curl http://$LM_STUDIO_WIN_ENDPOINT/v1/models` → 27B model listed
 - [ ] `engine.ainvoke` round-trip on both hardware targets
 - [ ] `git push origin feat/salvage-plugins-rc1` → `git tag v0.2.0-alpha`
 
