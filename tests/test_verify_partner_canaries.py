@@ -119,11 +119,27 @@ class _MockResponse:
 
 
 def test_check_lm_studio_pass(vc):
-    payload = {"data": [{"id": "model-a"}, {"id": "model-b"}]}
-    with patch("urllib.request.urlopen", return_value=_MockResponse(payload)):
+    models_payload = {"data": [{"id": "model-a"}, {"id": "model-b"}]}
+    completion_payload = {"choices": [{"message": {"content": "LM_READY"}}]}
+    with patch("urllib.request.urlopen", side_effect=[
+        _MockResponse(models_payload),
+        _MockResponse(completion_payload),
+    ]):
         result = vc.check_lm_studio("http://localhost:1234/v1", timeout=5)
     assert result.status == vc.Status.PASS
     assert "2 model(s)" in result.detail
+
+
+def test_check_lm_studio_fail_missing_marker(vc):
+    models_payload = {"data": [{"id": "model-a"}]}
+    completion_payload = {"choices": [{"message": {"content": "Hello there!"}}]}
+    with patch("urllib.request.urlopen", side_effect=[
+        _MockResponse(models_payload),
+        _MockResponse(completion_payload),
+    ]):
+        result = vc.check_lm_studio("http://localhost:1234/v1", timeout=5)
+    assert result.status == vc.Status.FAIL
+    assert "readiness marker missing" in result.detail
 
 
 def test_check_lm_studio_fail_zero_models(vc):

@@ -84,6 +84,8 @@ def check_lm_studio(base_url: str, timeout: int) -> Result:
         resp2 = urllib.request.urlopen(req2, timeout=timeout)
         reply = json.loads(resp2.read())
         text = reply.get("choices", [{}])[0].get("message", {}).get("content", "")
+        if "LM_READY" not in text:
+            return Result("LM Studio", Status.FAIL, f"{count} model(s) listed but readiness marker missing ({text.strip()[:30]!r})")
         return Result("LM Studio", Status.PASS, f"{count} model(s); completion ok ({text.strip()[:30]!r})")
     except urllib.error.URLError as e:
         return Result("LM Studio", Status.FAIL, f"{count} model(s) listed but completion failed: {e}")
