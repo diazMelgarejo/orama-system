@@ -78,7 +78,7 @@ def test_run_captures_stdout_stderr(vc, tmp_path):
 
 
 def test_run_nonzero_returncode(vc):
-    rc, out, err = vc._run([sys.executable, "-c", "import sys; sys.exit(42)"])
+    rc, _out, _err = vc._run([sys.executable, "-c", "import sys; sys.exit(42)"])
     assert rc == 42
 
 
@@ -97,7 +97,7 @@ def test_run_file_not_found_returns_minus_two(vc):
 
 
 def test_run_strips_whitespace(vc):
-    rc, out, err = vc._run([sys.executable, "-c", "print('  hello  ')"])
+    _rc, out, _err = vc._run([sys.executable, "-c", "print('  hello  ')"])
     assert out == "hello"
 
 
@@ -126,12 +126,12 @@ def test_check_lm_studio_pass(vc):
     assert "2 model(s)" in result.detail
 
 
-def test_check_lm_studio_pass_zero_models(vc):
+def test_check_lm_studio_fail_zero_models(vc):
     payload = {"data": []}
     with patch("urllib.request.urlopen", return_value=_MockResponse(payload)):
         result = vc.check_lm_studio("http://localhost:1234/v1", timeout=5)
-    assert result.status == vc.Status.PASS
-    assert "0 model(s)" in result.detail
+    assert result.status == vc.Status.FAIL
+    assert "no models loaded" in result.detail
 
 
 def test_check_lm_studio_url_normalisation_no_double_v1(vc):
@@ -172,7 +172,7 @@ def test_check_lm_studio_fail_on_url_error(vc):
     with patch("urllib.request.urlopen", side_effect=urllib.error.URLError("connection refused")):
         result = vc.check_lm_studio("http://localhost:1234/v1", timeout=1)
     assert result.status == vc.Status.FAIL
-    assert result.name == "LM Studio /v1/models"
+    assert result.name == "LM Studio"
     assert result.required is True
 
 
@@ -193,7 +193,7 @@ def test_check_hermes_unavailable_when_not_on_path(vc):
 
 
 def test_check_hermes_pass_when_ready_string_present(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/hermes"):
+    with patch("shutil.which", return_value="hermes"):
         with patch.object(vc, "_run", return_value=(0, "HERMES_READY", "")):
             result = vc.check_hermes(timeout=15)
     assert result.status == vc.Status.PASS
@@ -201,7 +201,7 @@ def test_check_hermes_pass_when_ready_string_present(vc):
 
 
 def test_check_hermes_fail_when_ready_string_missing(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/hermes"):
+    with patch("shutil.which", return_value="hermes"):
         with patch.object(vc, "_run", return_value=(0, "something else", "")):
             result = vc.check_hermes(timeout=15)
     assert result.status == vc.Status.FAIL
@@ -209,7 +209,7 @@ def test_check_hermes_fail_when_ready_string_missing(vc):
 
 
 def test_check_hermes_fail_on_nonzero_returncode(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/hermes"):
+    with patch("shutil.which", return_value="hermes"):
         with patch.object(vc, "_run", return_value=(1, "", "provider error")):
             result = vc.check_hermes(timeout=15)
     assert result.status == vc.Status.FAIL
@@ -217,14 +217,14 @@ def test_check_hermes_fail_on_nonzero_returncode(vc):
 
 def test_check_hermes_unavailable_on_minus_two(vc):
     """rc=-2 means the binary wasn't found by subprocess (PATH mismatch)."""
-    with patch("shutil.which", return_value="/usr/local/bin/hermes"):
+    with patch("shutil.which", return_value="hermes"):
         with patch.object(vc, "_run", return_value=(-2, "", "hermes not found")):
             result = vc.check_hermes(timeout=15)
     assert result.status == vc.Status.UNAVAILABLE
 
 
 def test_check_hermes_fail_on_timeout(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/hermes"):
+    with patch("shutil.which", return_value="hermes"):
         with patch.object(vc, "_run", return_value=(-1, "", "timed out")):
             result = vc.check_hermes(timeout=15)
     assert result.status == vc.Status.FAIL
@@ -240,7 +240,7 @@ def test_check_agy_unavailable_when_not_on_path(vc):
 
 
 def test_check_agy_pass_when_ready_string_present(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/agy"):
+    with patch("shutil.which", return_value="agy"):
         with patch.object(vc, "_run", return_value=(0, "AGY_READY", "")):
             result = vc.check_agy(timeout=10)
     assert result.status == vc.Status.PASS
@@ -249,7 +249,7 @@ def test_check_agy_pass_when_ready_string_present(vc):
 
 def test_check_agy_unavailable_on_empty_stdout_rc0(vc):
     """rc=0 with empty stdout means quota exhausted — should be UNAVAILABLE not FAIL."""
-    with patch("shutil.which", return_value="/usr/local/bin/agy"):
+    with patch("shutil.which", return_value="agy"):
         with patch.object(vc, "_run", return_value=(0, "", "")):
             result = vc.check_agy(timeout=10)
     assert result.status == vc.Status.UNAVAILABLE
@@ -257,14 +257,14 @@ def test_check_agy_unavailable_on_empty_stdout_rc0(vc):
 
 
 def test_check_agy_fail_on_nonzero_returncode(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/agy"):
+    with patch("shutil.which", return_value="agy"):
         with patch.object(vc, "_run", return_value=(1, "", "error")):
             result = vc.check_agy(timeout=10)
     assert result.status == vc.Status.FAIL
 
 
 def test_check_agy_unavailable_on_minus_two(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/agy"):
+    with patch("shutil.which", return_value="agy"):
         with patch.object(vc, "_run", return_value=(-2, "", "agy not found")):
             result = vc.check_agy(timeout=10)
     assert result.status == vc.Status.UNAVAILABLE
@@ -272,7 +272,7 @@ def test_check_agy_unavailable_on_minus_two(vc):
 
 def test_check_agy_fail_output_does_not_contain_ready(vc):
     """Output present but missing AGY_READY → FAIL, not UNAVAILABLE."""
-    with patch("shutil.which", return_value="/usr/local/bin/agy"):
+    with patch("shutil.which", return_value="agy"):
         with patch.object(vc, "_run", return_value=(0, "something else", "")):
             result = vc.check_agy(timeout=10)
     assert result.status == vc.Status.FAIL
@@ -288,7 +288,7 @@ def test_check_codex_unavailable_when_not_on_path(vc):
 
 
 def test_check_codex_pass_when_version_present(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/codex"):
+    with patch("shutil.which", return_value="codex"):
         with patch.object(vc, "_run", return_value=(0, "codex-cli 1.2.3", "")):
             result = vc.check_codex(timeout=5)
     assert result.status == vc.Status.PASS
@@ -296,21 +296,21 @@ def test_check_codex_pass_when_version_present(vc):
 
 
 def test_check_codex_uses_first_line_of_version(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/codex"):
+    with patch("shutil.which", return_value="codex"):
         with patch.object(vc, "_run", return_value=(0, "codex-cli 1.2.3\nother line", "")):
             result = vc.check_codex(timeout=5)
     assert result.detail == "codex-cli 1.2.3"
 
 
 def test_check_codex_fail_on_nonzero_rc(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/codex"):
+    with patch("shutil.which", return_value="codex"):
         with patch.object(vc, "_run", return_value=(1, "", "")):
             result = vc.check_codex(timeout=5)
     assert result.status == vc.Status.FAIL
 
 
 def test_check_codex_fail_when_rc0_but_empty_output(vc):
-    with patch("shutil.which", return_value="/usr/local/bin/codex"):
+    with patch("shutil.which", return_value="codex"):
         with patch.object(vc, "_run", return_value=(0, "", "")):
             result = vc.check_codex(timeout=5)
     assert result.status == vc.Status.FAIL
