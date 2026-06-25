@@ -514,6 +514,8 @@ The key `agents.bindings.*.allowAgents` is rejected by the oramaclaw control pla
 | `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
 | `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook |
 | `skills/hermes-harness/SKILL.md` | Hermes onboarding, ECC cross-harness import rules, Nous Portal/LM Studio provider setup, and bounded Hermes/Gemini/AGY/Codex partner prompts |
+| `skills/hermes-harness/references/platform-affinity-routing.md` | Platform affinity bias — Mac/Linux → OpenClaw; Windows → Hermes; ECC bridges both (v1 + v2) |
+| `skills/cursor-agent/SKILL.md` | Cursor background agent (`agent` CLI) — install, auth, light-task fanout alongside Sonnet 4.6, worktree isolation, MCP integration |
 | `docs/wiki/15-hermes-windows-harness.md` | Windows Hermes launcher, Git Bash, and one-shot provider routing notes |
 | `references/local-api-fallback.md` | Local API fallback full procedure (Ollama → LM Studio → surface outage) |
 | `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |
