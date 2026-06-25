@@ -3613,3 +3613,56 @@ new Python module with a `Version:` header), register it in `sync_version.py`'s
 See: [`docs/wiki/06-multi-agent-collab.md`](../wiki/06-multi-agent-collab.md) (version registry + full surface table)
 See: [`src/orama_system/_version.py`](../../src/orama_system/_version.py)
 See: [`scripts/sync_version.py`](../../scripts/sync_version.py)
+
+---
+
+## 2026-06-26 — cursor-agent vs agent disambiguation
+
+`cursor-agent` (`~/.local/bin/cursor-agent`) and `agent` (`~/.grok/bin/agent`) are
+**different tools**. `agent` is the Grok Build TUI; `cursor-agent` is Cursor's
+native background agent CLI. Always invoke Cursor agents as `cursor-agent`.
+
+The `cursor-agent` binary supports Claude models natively (`claude-4.6-sonnet-medium`
+maps to Sonnet 4.6 Medium, the recommended model for light-task fanout). Model IDs
+in cursor-agent use a different format from the Anthropic API — always run
+`cursor-agent models` to get the exact strings rather than guessing.
+
+Key light-task pattern: `cursor-agent --print --model claude-4.6-sonnet-medium "task"`.
+
+Skill: [`bin/orama-system/skills/cursor-agent/SKILL.md`](../bin/orama-system/skills/cursor-agent/SKILL.md)
+
+---
+
+## 2026-06-26 — Windows `.cmd`/`.bat` files require CRLF line endings
+
+`cmd.exe` tokenises on `\r\n`. A `.cmd` or `.bat` file with LF-only endings will
+silently fail or produce garbled output on Windows. Root cause confirmed in PR #108:
+`gstack-brain-sync.cmd` was LF-only; dispatch from Hermes produced silent failures.
+
+**Fix pattern (Python):** open in binary mode, join lines with `'\r\n'`:
+
+```python
+with open("my.cmd", "wb") as f:
+    f.write("\r\n".join(lines).encode("utf-8"))
+```
+
+**Verification:** `xxd my.cmd | grep -c "0d 0a"` must equal line count.
+
+**Git prevention:** declare `*.cmd text eol=crlf` in `.gitattributes` so checkout
+never silently strips `\r`.
+
+Documented in: [`docs/wiki/08-git-hygiene-and-branching.md § Windows batch file line endings`](wiki/08-git-hygiene-and-branching.md) and [`bin/orama-system/skills/hermes-harness/SKILL.md § Windows Bring-Up`](../bin/orama-system/skills/hermes-harness/SKILL.md).
+
+---
+
+## 2026-06-26 — Platform affinity bias: Mac/Linux → OpenClaw, Windows → Hermes
+
+Mac and Linux installations are biased toward **AlphaClaw + OpenClaw** (`start.sh`).
+Windows installations are biased toward **Hermes Harness** (`start.ps1`).
+**ECC** (`vendor/ecc-tools`) bridges the two environments — orama-system skills run
+unmodified in both harnesses, now (v1) and in v2/oramasys.
+
+The Platform Harness Model is now explicit in
+[`bin/orama-system/skills/hermes-harness/SKILL.md`](../bin/orama-system/skills/hermes-harness/SKILL.md)
+and the routing algorithm with anti-patterns lives in
+[`bin/orama-system/skills/hermes-harness/references/platform-affinity-routing.md`](../bin/orama-system/skills/hermes-harness/references/platform-affinity-routing.md).
