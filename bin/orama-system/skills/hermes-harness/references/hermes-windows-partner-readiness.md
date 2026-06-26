@@ -68,6 +68,28 @@ If `agy --print` exits with status 0 but empty stdout, run once with `--log-file
 ### LM Studio Latency
 Local models can be reachable but slow. If the completion canary (e.g., "Reply with exactly: READY") takes more than 15 seconds, the lane is considered **Unavailable for fast dispatch**.
 
+### LM Studio Cross-Platform Model Listing
+
+`/v1/models` lists ALL models known to LM Studio, regardless of hardware
+compatibility. On Windows, the list may include Mac-only MLX models (confirmed:
+`qwen3.5-9b-mlx` appears in Windows LM Studio alongside GGUF models).
+
+**Filtering before dispatch:**
+
+```powershell
+# List loaded models — filter to GGUF-compatible (exclude mlx, metal, coreml)
+$models = (Invoke-RestMethod http://localhost:1234/v1/models).data
+$windowsModels = $models | Where-Object {
+    $_.id -notmatch '(?i)mlx|metal|coreml'
+}
+$windowsModels | Select-Object id
+```
+
+Always run the PT hardware policy check against the result — never dispatch to a
+`windows_only`-unconfirmed model based on `/v1/models` presence alone.
+
+See [`lan-endpoint-contract.md`](lan-endpoint-contract.md) for the full locality rule.
+
 ## Path & Environment Setup
 
 ### Git Bash
