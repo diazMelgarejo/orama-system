@@ -208,9 +208,10 @@ orama-system/docs/v2/
 ├── 39-maestro-owasp-genai-reference.md ← MAESTRO/OWASP GenAI deep-dive: T1–T47 namespace, MCP runtime controls, AIVSS scoring (additive to 08 §2.A, 31 §3–4, 32 §6)
 └── 40-oramaclaw-lifecycle-plugin.md   ← D22: oramaclaw orbit plugin — OpenClaw + AlphaClaw lifecycle under one perpetua-core-only package; v1 migration as dogfood
 └── 41-agentic-stack-gstack-gbrain-memory-blend.md  ← vendor/agentic-stack union-merge; upgrade --dry-run; Gbrain canonical; Brain blocked; harness matrix
+└── 42-agate-hardware-policy-orbit.md  ← agate repo absorbs model matrix + policy API/CLI; devices.yml adjacent; PT→perpetua-core orbit
 ```
 
-> **Next free slot: `42-`**
+> **Next free slot: `43-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

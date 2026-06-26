@@ -1,6 +1,7 @@
 # agate — MVP Design for Hardware Affinity Standardization
 
 > **Status:** Draft — miniman initial design for `github.com/oramasys/agate`  
+> **v2 orbit:** Full migration plan in [`docs/v2/42-agate-hardware-policy-orbit.md`](docs/v2/42-agate-hardware-policy-orbit.md)  
 > **Audience:** LangChain / LangGraph / CrewAI / AutoGen communities, plus
 > local-first AI builders.  
 > **Goal:** A 3-file MVP that any framework can adopt in one afternoon.
