@@ -12,6 +12,11 @@
 
 Status: **canonical reference** — describes v1 (`diazMelgarejo/Perpetua-Tools`) as-built.
 
+> **v2 orbit (2026-06-26):** Hardware policy logic, schema, API, and CLI migrate to
+> [`42-agate-hardware-policy-orbit.md`](42-agate-hardware-policy-orbit.md) —
+> `github.com/oramasys/agate` satellite around `perpetua-core`. `devices.yml` stays
+> topology-adjacent; affinity moves to agate contract.
+
 ---
 
 ## The Core Problem: LM Studio's LAN Proxy

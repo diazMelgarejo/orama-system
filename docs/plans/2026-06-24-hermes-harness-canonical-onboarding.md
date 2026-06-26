@@ -7,6 +7,8 @@
 > **Review trigger:** user review of this artifact before any skill/code execution
 
 > **Cross-repo path contract (read before any path below):** the L2 middleware repo's canonical name is **Perpetua-Tools**, but its on-disk clone name varies by host. **Always reference it through `$PERPETUA_TOOLS_PATH`** — never a literal sibling name. This repo (L3) is `$ORAMA_SYSTEM_PATH`. The ECC vendor mirror is `$PERPETUA_TOOLS_PATH/vendor/ecc-tools`. Literal `Perpetua-Tools/…` / `Perplexity-Tools/…` paths are treated as defects.
+>
+> **v2 orbit:** agate repo migration plan → [`docs/v2/42-agate-hardware-policy-orbit.md`](../v2/42-agate-hardware-policy-orbit.md)
 
 ---
 
