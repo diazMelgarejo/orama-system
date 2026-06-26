@@ -2,7 +2,7 @@
 # Hermes-Harness Canonical Onboarding & Skill Absorption (2026-06-24)
 
 > **Date:** 2026-06-24 (enriched 2026-06-25) · **Owner:** orama-system (L3 canonical skills) · **Consumer:** Hermes local harness (L1)
-> **Status:** 📋 PLANNED — synthesis complete on branch `feat/hermes-harness-onboarding`; Phase 0 prep done; **review pass applied 2026-06-25** (B1 env-var path contract, M2 IP-grep scope, M3 single-source harness model, M4 stale-PR, S1–S6 hardenings); Phases 1–11 await explicit user **"approve"**
+> **Status:** 🔄 IN PROGRESS — Phases 1–5+7+8 ✅ shipped (`a75ad68`, `40d3f65`); Phases 6+9 ⏳ need live Windows; PR #108 ✅ merged (`a81a364`); LINT-013 ✅ (`2bad649`)
 > **Author:** orama-system canonical skill leads + session synthesis
 > **Review trigger:** user review of this artifact before any skill/code execution
 
@@ -563,6 +563,34 @@ pytest tests/test_hermes_thin_skills.py -q
 - [ ] Live Windows walkthrough (hardware policy Phases A–F) recorded when executed
 
 ---
+
+
+---
+
+## Session addendum (2026-06-26)
+
+### What landed (no live Windows needed)
+
+| Phase | Commit | What |
+|---|---|---|
+| 1 — SKILL.md authority | `a75ad68` | Three Commands, Universal Invocation, Model Routing, Compatibility Matrix, Verification Gates |
+| 2 — 4 ECC reference cards | `a75ad68` | `ecc-setup-distilled`, `ecc-migration-rules`, `cross-harness-protocol`, `partner-prompt-contract` |
+| 3 — Canary table | `a75ad68` | Inside SKILL.md § Verification Gates |
+| 4 — `/v1/models` resolution | `a75ad68` | `hermes-windows-partner-readiness.md` |
+| 5 — Windows config cards | `a75ad68` | `windows-onboarding-config.md`, `windows-provider-routing.md` |
+| 7+8 — Locality rule | `a75ad68` + `40d3f65` | `lan-endpoint-contract.md`; PT `resolve_local_or_remote()`; `alphaclaw_bootstrap.py` |
+| PR #108 merge | `a81a364` | hash/runtime split; 5 new skills; 1135 test lines |
+| LINT-013 | `2bad649` | Blocks raw LAN IP literals in skill/plan/doc files |
+
+### Still deferred (need live Windows)
+- Phase 6 — `install_hermes_thin_skills.py --install --verify --test`
+- Phase 9 — Windows thin wrapper migration + verification
+
+### Merlin adaptations accepted (2026-06-26)
+- Plans going forward: one-page index + sub-spec links (progressive disclosure for planning docs)
+- Schema extraction as next evolution beyond LINT-013:
+  `schemas/topology.schema.json` · `schemas/devices.schema.json` · `schemas/skills.schema.json`
+- Step 8 dashboard (Vanilla JS / Chart.js) — separate work stream, not yet scheduled
 
 ## Approval Gate
 
