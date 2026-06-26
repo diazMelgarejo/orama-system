@@ -1,6 +1,7 @@
 # Cross-Harness Hardware Policy Architecture
 
 > **Date:** 2026-06-24 · **Status:** canonical reference (orama PR #107 + Perpetua-Tools PR #134)
+> **v2:** Policy API/CLI orbit → [`docs/v2/42-agate-hardware-policy-orbit.md`](docs/v2/42-agate-hardware-policy-orbit.md)
 > **Companion:** [Live Windows walkthrough plan](plans/2026-06-24-hermes-windows-hardware-policy-walkthrough.md) · [Cross-platform harness table](cross-platform.md#harness-roles-and-hardware-policy-2026-06-24)
 
 ---
