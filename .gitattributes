@@ -1,0 +1,3 @@
+# Windows batch files must stay CRLF — cmd.exe tokenizes on 0d0a (PR #108).
+*.cmd  text  eol=crlf
+*.bat  text  eol=crlf
