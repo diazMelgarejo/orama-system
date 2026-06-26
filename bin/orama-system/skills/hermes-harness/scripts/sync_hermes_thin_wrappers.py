@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -52,11 +53,11 @@ def main() -> int:
     else:
         cmd.append("--install")
 
-    if args.hermes_home:
-        cmd += ["--hermes-home", args.hermes_home]
-
     print(f"sync_hermes_thin_wrappers: running {' '.join(cmd)}")
-    result = subprocess.run(cmd)
+    env = os.environ.copy()
+    if args.hermes_home:
+        env["HERMES_HOME"] = args.hermes_home
+    result = subprocess.run(cmd, env=env)
     return result.returncode
 
 
