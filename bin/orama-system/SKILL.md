@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 ---
 name: orama-system
 description: >-

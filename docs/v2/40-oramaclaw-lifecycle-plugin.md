@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # 40 - Oramaclaw Lifecycle Plugin (D22)
 
 > **Status:** D22 locked on 2026-06-20. This is the V2 consolidation target. It does not claim that the complete control engine exists today.

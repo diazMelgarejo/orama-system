@@ -12,8 +12,8 @@
 |---|---|---|
 | `HERMES_HOME` | `%LOCALAPPDATA%\hermes` | Hermes install root |
 | `HERMES_GIT_BASH_PATH` | *(must be set)* | Absolute path to `bash.exe` — full Git for Windows preferred |
-| `WIN_IP` | `192.168.254.108` | This machine's LAN IP (used by Mac→Win cross-machine calls only) |
-| `MAC_IP` | `192.168.254.110` | Mac host LAN IP (used by Win→Mac cross-machine calls only) |
+| `WIN_IP` | *(fallback in code only — set in `.env`)* | This machine's LAN IP (used by Mac→Win cross-machine calls only) |
+| `MAC_IP` | *(fallback in code only — set in `.env`)* | Mac host LAN IP (used by Win→Mac cross-machine calls only) |
 | `LM_STUDIO_WIN_ENDPOINTS` | `http://localhost:1234` | LM Studio URL — `localhost` when on Windows |
 | `OLLAMA_WINDOWS_ENDPOINT` | `http://localhost:11434` | Ollama URL — `localhost` when on Windows |
 | `LM_STUDIO_API_TOKEN` | `lm-studio` | Bearer token for local LM Studio (dev only) |

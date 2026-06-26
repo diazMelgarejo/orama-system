@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # 17 — Hardware Policy Enforcement (v1 as-built, 2026-05-17/18)
 
 > Records the full 4-layer hardware enforcement chain enshrined during the

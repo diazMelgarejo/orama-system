@@ -818,6 +818,25 @@ def check_skill_quality(root: Path, files: list[str]) -> list[str]:
                 f"LINT-012: retired 'hermes -z' flag in markdown — use 'hermes chat --query': {rel}"
             )
 
+        # LINT-013: raw LAN IP literals in skill, plan, or reference docs.
+        # IPs must come from env vars (WIN_IP, MAC_IP, LM_STUDIO_*_ENDPOINT).
+        # Code-fallback defaults (in .py files) are allowed; docs are not.
+        # Exempt: files that document the variable contract itself (lan-endpoint-contract.md)
+        # and files with <!-- lint-ignore LINT-013 --> pragma.
+        if not rel.endswith(".py") and "<!-- lint-ignore LINT-013 -->" not in text:
+            _LAN_RE = re.compile(
+                r"(?<!\w)(?:192\.168\.|10\.\d+\.|172\.(?:1[6-9]|2\d|31)\.)\d+\.\d+(?!\w)"
+            )
+            _ip_hits = [m.group() for m in _LAN_RE.finditer(text)
+                        if "lan-endpoint-contract" not in rel
+                        and "windows-provider-routing" not in rel]
+            if _ip_hits:
+                errors.append(
+                    f"LINT-013: raw LAN IP literal(s) {_ip_hits[:3]} in {rel}"
+                    " — use $WIN_IP/$MAC_IP/LM_STUDIO_*_ENDPOINT env vars"
+                )
+
+
         # LINT-010: only scan SKILL.md ## Procedure sections
         if not path.name == "SKILL.md":
             continue

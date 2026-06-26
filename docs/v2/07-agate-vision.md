@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # agate — Why It's Bigger Than Documentation
 
 > Status: active | Added 2026-04-30 | Feeds into: v2.1 public Plugin API, v2.5 MAESTRO

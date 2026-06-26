@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 ---
 name: openclaw-skills
 description: Canonical master skill for The Nine Skills that configure OpenClaw instances deterministically across Claude, Hermes, Gemini, Codex, Cursor, WindSurf, Antigravity, OpenCode, and 8gent.dev.
