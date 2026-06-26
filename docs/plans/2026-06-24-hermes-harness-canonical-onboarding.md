@@ -614,3 +614,12 @@ grep -rn '192\.168\.' docs/plans/2026-06-24-hermes-harness-canonical-onboarding.
 |------|-------|
 | 2026-06-24 | Initial plan: 4 Hermes plans steelmanned + 3 architecture decisions |
 | 2026-06-25 | Full cohesive rewrite: Cross-Repo-Memory invariants, ECC2 section, hardware walkthrough integration, Phase 0 branch prep on `feat/hermes-harness-onboarding` |
+| 2026-06-25 | Code review saved: [`docs/2026-06-25-pr108-hermes-discover-code-review.md`](../2026-06-25-pr108-hermes-discover-code-review.md) (`bb62766` hash/runtime split) |
+
+---
+
+## Related
+
+- [PR #108 code review](../2026-06-25-pr108-hermes-discover-code-review.md)
+- [Cross-harness hardware policy architecture](../hermes-hardware-policy-cross-harness.md)
+- [Hermes Windows hardware walkthrough](2026-06-24-hermes-windows-hardware-policy-walkthrough.md)
