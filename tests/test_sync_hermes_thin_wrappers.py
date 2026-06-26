@@ -181,7 +181,7 @@ def test_main_dry_run_passes_dry_run_flag(sw, tmp_path, monkeypatch):
 
 
 def test_main_hermes_home_is_forwarded(sw, tmp_path, monkeypatch):
-    """--hermes-home DIR must be appended to the installer command."""
+    """--hermes-home DIR must be passed via HERMES_HOME env to the installer subprocess."""
     _make_fake_installer(tmp_path)
     monkeypatch.setattr(sw, "resolve_repo_root", lambda: tmp_path)
 
@@ -196,14 +196,14 @@ def test_main_hermes_home_is_forwarded(sw, tmp_path, monkeypatch):
     finally:
         sys.argv = old_argv
 
+    _, kwargs = run_mock.call_args
+    assert kwargs["env"]["HERMES_HOME"] == hermes_home
     cmd_args = run_mock.call_args[0][0]
-    assert "--hermes-home" in cmd_args
-    idx = cmd_args.index("--hermes-home")
-    assert cmd_args[idx + 1] == hermes_home
+    assert "--hermes-home" not in cmd_args
 
 
 def test_main_no_hermes_home_when_not_provided(sw, tmp_path, monkeypatch):
-    """When --hermes-home is absent, installer command must not contain it."""
+    """When --hermes-home is absent, subprocess env must not override HERMES_HOME."""
     _make_fake_installer(tmp_path)
     monkeypatch.setattr(sw, "resolve_repo_root", lambda: tmp_path)
 
@@ -219,6 +219,8 @@ def test_main_no_hermes_home_when_not_provided(sw, tmp_path, monkeypatch):
 
     cmd_args = run_mock.call_args[0][0]
     assert "--hermes-home" not in cmd_args
+    _, kwargs = run_mock.call_args
+    assert "HERMES_HOME" not in kwargs.get("env", {})
 
 
 def test_main_propagates_installer_returncode(sw, tmp_path, monkeypatch):
