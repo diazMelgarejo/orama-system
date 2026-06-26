@@ -1,4 +1,3 @@
-<!-- lint-ignore LINT-013 -->
 ---
 name: orama-system
 description: >-
@@ -43,6 +42,7 @@ sub_skills:
   - path: gstack/SKILL.md
     trigger: "fix gbrain, resync gbrain, gbrain sync failed, prepared statement does not exist, CONNECTION_CLOSED supabase pooler, No database URL, GBRAIN_DATABASE_URL, gbrain doctor failures, createVersion failed, autopilot wedged, gbrain after history rewrite, gbrain list empty, gbrain prepare false, gbrain source pin"
 ---
+<!-- lint-ignore LINT-013 -->
 
 # The ὅραμα System Skill
 
