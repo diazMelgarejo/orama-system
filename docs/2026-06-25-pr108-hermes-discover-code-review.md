@@ -23,7 +23,7 @@ PR #108 wires **Windows platform role reversal** into `scripts/discover.py` (loc
 |------|--------|
 | Substance (discover + Hermes onboarding) | ✅ Strong |
 | Overlap with `origin/main` (`a75ad68`) | ⚠️ Much merged via #107 + #109; branch adds MAC_IP cache fallback, LM_READY gate, `cursor-agent` skill, refined hash logic |
-| CodeRabbit threads | ✅ Resolved (`d218d5f`) |
+| CodeRabbit threads | ✅ All resolved — including r3480506247 (`patch_models_yml` loopback) on `main` @ `b4f0e4b` |
 | Rebase onto `main` | ❌ Conflicts on skill docs duplicated in `a75ad68` — use **merge commit** or cherry-pick `bb62766` |
 
 ---
@@ -106,7 +106,13 @@ Helpers added: `_win_lan_patch_ip()`, `_endpoints_for_hash()`, consolidated `_la
 
 ---
 
-## Remaining recommendations (not blocking)
+## CodeRabbit follow-up — r3480506247 (resolved `main` @ `b4f0e4b`)
+
+**Thread:** [discussion_r3480506247](https://github.com/diazMelgarejo/orama-system/pull/108#discussion_r3480506247)  
+**Issue:** `patch_models_yml` lacked `_LOOPBACK` guard — asymmetric with `patch_devices_yml`.  
+**Fix:** `_LOOPBACK` guard + `LM_STUDIO_WIN_ENDPOINT(S)` regex alignment + regression tests.  
+**Review thread status:** resolved via GraphQL (2026-06-26). PT memory: `lesson_e7d62d7a5ed9`.
+
 
 1. **Merge strategy:** Merge `main` into branch; resolve skill-doc conflicts by keeping `main` + applying `bb62766` discover changes.
 2. **`load_policy()` fallback:** Local `_simple_policy_parse` in `discover.py` is acceptable offline; consider full PT delegation when `PERPETUA_TOOLS_ROOT` is set (same pattern as #107).
