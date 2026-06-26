@@ -29,7 +29,7 @@ Before moving any Hermes or ECC artifact into orama-system:
 - [ ] **Is it reusable?** Operator-agnostic, not tied to one machine or session.
 - [ ] **What kind of asset?** Knowledge → skill. Procedure → command/hook. Runtime → adapter.
 - [ ] **No leaks?** No secrets, local absolute paths, personal datasets, or private state.
-- [ ] **Sanitized?** Paths use env vars (`$HERMES_HOME`, `%USERPROFILE%`) not `/Users/lab/...`.
+- [ ] **Sanitized?** Paths use env vars (`$HERMES_HOME`, `%USERPROFILE%`) not bare workstation paths like `/Users/<name>/...`.
 - [ ] **Anti-doxxing pass?** Run `python scripts/review/repo_hygiene.py .` before committing.
 - [ ] **Thin-wrapper only?** Hermes local commands point to canonical; they don't duplicate bodies.
 

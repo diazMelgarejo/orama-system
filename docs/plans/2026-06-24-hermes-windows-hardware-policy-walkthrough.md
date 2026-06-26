@@ -1,11 +1,13 @@
 # Hermes Windows Hardware Policy — Live Walkthrough Plan
 
-> **Date:** 2026-06-24 · **Owner:** orama-system (L3) + Perpetua-Tools (L2)
-> **Status:** 📋 PLANNED — execute on live Windows 11 host (deferred session)
-> **Branch:** `cursor/hermes-hardware-policy-wire-c4ae` (orama #107) + PT `cursor/critical-bug-investigation-a924` (#134)
+> **Date:** 2026-06-24 (review pass 2026-06-25) · **Owner:** orama-system (L3) + Perpetua-Tools (L2)
+> **Status:** 📋 PLANNED (live Windows walkthrough only) — execute Phases A–F on a live Windows 11 host (deferred session). **orama #107 is already MERGED** (`6e850f8`); only PT #134 may remain open.
+> **Branch:** orama #107 merged → `feat/hermes-harness-onboarding` carries it; PT `cursor/critical-bug-investigation-a924` (#134) in `$PERPETUA_TOOLS_PATH`
 > **Author:** Cursor Cloud Agent + cyre
-> **Review trigger:** Next Windows Hermes bring-up OR before merging orama #107 / PT #134
-> **Canonical architecture:** [Cross-Harness Hardware Policy Architecture](../hermes-hardware-policy-cross-harness.md)
+> **Review trigger:** Next Windows Hermes bring-up (orama #107 no longer gates this — it is merged)
+> **Canonical architecture:** [Cross-Harness Hardware Policy Architecture](../hermes-hardware-policy-cross-harness.md) — **single source of truth for the harness model below; do not re-edit it in three places.**
+
+> **Cross-repo path contract:** every `$PERPETUA_TOOLS_PATH/…` below is the L2 repo (canonical name **Perpetua-Tools**; on-disk clone name varies by host). Reference it through the env var, never a literal sibling name.
 
 ---
 
@@ -55,7 +57,7 @@ Three hosts, two harness families, **one** policy file:
 Mac OpenClaw orchestrator              Windows Hermes orchestrator
 ─────────────────────────              ───────────────────────────
 LM Studio Win over LAN                 LM Studio Win at localhost:1234
-(192.168.x.x:1234)                     (install.ps1 → lmstudio-win)
+($WIN_IP:1234)                         (install.ps1 → lmstudio-win)
 
 windows_only models = NEVER_MAC        windows_only models = ALLOWED (physical home)
 Mac MLX = home                         Mac MLX = NEVER_WIN
@@ -69,7 +71,7 @@ Linux is not a reduced policy consumer — it may run any profile documented in 
 
 ## The invariant (why this exists)
 
-From `Perpetua-Tools/config/model_hardware_policy.yml`:
+From `$PERPETUA_TOOLS_PATH/config/model_hardware_policy.yml`:
 
 > Dispatching `windows_only` models to Mac = OOM, missing CUDA kernel, or
 > **"double barrel" GPU damage** when Mac LM Studio mirrors a Win model via LAN
@@ -148,7 +150,7 @@ flowchart LR
 
 ### Step 1 — Policy YAML
 
-**File:** `Perpetua-Tools/config/model_hardware_policy.yml`
+**File:** `$PERPETUA_TOOLS_PATH/config/model_hardware_policy.yml`
 
 - `windows_only` + `windows_only_aliases` → NEVER on Mac
 - `mac_only` + `mac_only_aliases` → NEVER on Win
@@ -159,7 +161,7 @@ flowchart LR
 
 ### Step 2 — Resolver logic
 
-**File:** `Perpetua-Tools/scripts/launch_researchers.py`
+**File:** `$PERPETUA_TOOLS_PATH/scripts/launch_researchers.py`
 
 ```
 run_researcher(role)
@@ -178,7 +180,7 @@ PT CLI before dispatch — not read `/v1/models` and guess.
 
 ### Step 3 — Alias merge
 
-**File:** `Perpetua-Tools/src/utils/hardware_policy.py` → `_normalize_policy()`
+**File:** `$PERPETUA_TOOLS_PATH/src/utils/hardware_policy.py` → `_normalize_policy()`
 
 LM Studio reports quant-suffixed ids (e.g. `gemma-4-26B-A4B-it-Q4_K_M`) that differ
 from base `windows_only` entries. Policy YAML keeps aliases in `*_aliases` keys;
@@ -191,7 +193,7 @@ from base `windows_only` entries. Policy YAML keeps aliases in `*_aliases` keys;
 
 ### Step 4 — OpenClaw validation
 
-**File:** `Perpetua-Tools/scripts/hardware_policy_cli.py`
+**File:** `$PERPETUA_TOOLS_PATH/scripts/hardware_policy_cli.py`
 
 - `--check-openclaw` iterates `lmstudio-*` providers in `~/.openclaw/openclaw.json`
 - OpenClaw dispatches **directly** from this file — bypasses supervisor
@@ -333,12 +335,12 @@ echo "exit=$LASTEXITCODE"
 | Policy lists | (output of `--list` via start.ps1) | `windows_only` includes gemma quant alias |
 | OpenClaw clean | `--check-openclaw` section | `✅ openclaw.json clean` OR actionable violations |
 | NEVER_WIN probe | Direct CLI validate MLX on win | exit 0 or N/A if no MLX assigned |
-| windows_only allowed | `python ..\Perpetua-Tools\scripts\hardware_policy_cli.py --validate "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2" win` | exit 0 |
+| windows_only allowed | `python $env:PERPETUA_TOOLS_PATH\scripts\hardware_policy_cli.py --validate "<27B reasoning id from policy YAML>" win` | exit 0 |
 
 Direct PT CLI (same enforcement path):
 
 ```powershell
-$PtDir = "<path-to-Perpetua-Tools>"
+$PtDir = $env:PERPETUA_TOOLS_PATH   # on this host: ...\ultrathink\Perplexity-Tools
 python "$PtDir\scripts\hardware_policy_cli.py" --list
 python "$PtDir\scripts\hardware_policy_cli.py" --check-openclaw
 python "$PtDir\scripts\hardware_policy_cli.py" --validate "gemma-4-26B-A4B-it-Q4_K_M" win
@@ -366,6 +368,8 @@ Model: <windows_only model from policy YAML>
 
 **Rule:** Never bind a model from `/v1/models` list alone — confirm against policy first.
 
+> **Model-ID provenance (verified 2026-06-25):** the IDs used as examples in this plan — `Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2`, `gemma-4-26B-A4B-it-Q4_K_M`, `gemma-4-e4b-it` — are real entries in `$PERPETUA_TOOLS_PATH/config/model_hardware_policy.yml` (lines 44/50/60/61), not invented. Do not confuse the valid `gemma-4-e4b-it` with `gemma4:e4b`, which the canonical onboarding plan lists as a **known-invalid** malformed form. Always resolve the exact id from a live `/v1/models` probe and cross-check against the YAML.
+
 ### Phase E — Negative test (optional but recommended)
 
 Temporarily assign a `mac_only` / MLX model to `lmstudio-win` in `openclaw.json`, then:
@@ -379,9 +383,9 @@ Expected: **exit non-zero**, NEVER_WIN violation reported. Revert `openclaw.json
 ### Phase F — Record results
 
 - [ ] Append dated entry to `orama-system/docs/LESSONS.md`
-- [ ] Append to `Perpetua-Tools/docs/LESSONS.md` if PT-specific finding
+- [ ] Append to `$PERPETUA_TOOLS_PATH/docs/LESSONS.md` if PT-specific finding
 - [ ] Update this plan status: PLANNED → DONE with date + host spec
-- [ ] Mark orama #107 / PT #134 ready for merge if all gates green
+- [ ] Mark PT #134 ready for merge if all gates green (orama #107 already merged)
 
 ---
 
@@ -404,19 +408,19 @@ pytest tests/test_launch_researchers_affinity.py tests/test_hardware_routing.py 
 | Resource | Path |
 |----------|------|
 | Hermes harness (canonical) | `bin/orama-system/skills/hermes-harness/SKILL.md` |
-| PT hardware policy | `Perpetua-Tools/.claude/skills/hardware-policy/SKILL.md` |
+| PT hardware policy | `$PERPETUA_TOOLS_PATH/.claude/skills/hardware-policy/SKILL.md` |
 | Hermes Windows wiki | `docs/wiki/15-hermes-windows-harness.md` |
-| PT affinity wiki | `Perpetua-Tools/docs/wiki/09-hardware-affinity.md` |
+| PT affinity wiki | `$PERPETUA_TOOLS_PATH/docs/wiki/09-hardware-affinity.md` |
 | Cross-platform harness roles | `docs/cross-platform.md` § Harness roles |
 | Windows platform README | `platform/windows/README.md` |
-| PT policy YAML | `Perpetua-Tools/config/model_hardware_policy.yml` |
+| PT policy YAML | `$PERPETUA_TOOLS_PATH/config/model_hardware_policy.yml` |
 
 ---
 
 ## Open PRs (merge order suggestion)
 
-1. **Perpetua-Tools #134** — docstrings + skills wiring (affinity closure on PT side)
-2. **orama-system #107** — Hermes harness policy consumption (depends conceptually on PT policy SSoT; can merge in parallel if PT main already has #128–#131)
+1. **Perpetua-Tools #134** — docstrings + skills wiring (affinity closure on PT side). Status: verify against `$PERPETUA_TOOLS_PATH` `main` — may already be merged.
+2. ~~**orama-system #107**~~ — **MERGED** (`6e850f8` on `feat/hermes-harness-onboarding`). Hermes harness policy consumption is already in this branch's history; no longer an open PR.
 
 ---
 
