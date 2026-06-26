@@ -1,7 +1,7 @@
 # Hermes Windows Hardware Policy — Live Walkthrough Plan
 
 > **Date:** 2026-06-24 (review pass 2026-06-25) · **Owner:** orama-system (L3) + Perpetua-Tools (L2)
-> **Status:** 📋 PLANNED (live Windows walkthrough only) — execute Phases A–F on a live Windows 11 host (deferred session). **orama #107 is already MERGED** (`6e850f8`); only PT #134 may remain open.
+> **Status:** 📋 PLANNED (live Windows walkthrough only) — execute Phases A–F on a live Windows 11 host (deferred session). **orama #107 ✅ MERGED** (`6e850f8`); **PR #108 ✅ MERGED** (`a81a364`): hash/runtime split in `discover.py` landed (runtime dispatch=localhost, topology hash=LAN IP); 70 targeted tests pass.
 > **Branch:** orama #107 merged → `feat/hermes-harness-onboarding` carries it; PT `cursor/critical-bug-investigation-a924` (#134) in `$PERPETUA_TOOLS_PATH`
 > **Author:** Cursor Cloud Agent + cyre
 > **Review trigger:** Next Windows Hermes bring-up (orama #107 no longer gates this — it is merged)

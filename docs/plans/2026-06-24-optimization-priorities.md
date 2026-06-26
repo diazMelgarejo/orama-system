@@ -2,7 +2,7 @@
 # Optimization Priorities — Strategic Backlog (2026-06-24)
 
 > **Date:** 2026-06-24 · **Owner:** orama-system (L3) + Perpetua-Tools (L2)
-> **Status:** 🔄 ACTIVE — L1 skipped (user decision); L2-L5 ✅ shipped `890e0c8`
+> **Status:** 🔄 ACTIVE — L1 skipped; L2-L5 ✅ `890e0c8`; LINT-013 ✅ `2bad649`; L6 schemas/ 📋 planned
 > **Author:** claude-sonnet-4.6 + cyre
 > **Review trigger:** next substantive session start OR when perpetua-core gate clears
 
@@ -162,6 +162,8 @@ jobs:
 |------|------|-------------|
 | `engine.py` orphan conflicts | `src/oramaclaw/engine.py:269` | Requires understanding retry loop semantics fully |
 | `engine.py` timeout bypass | `src/oramaclaw/engine.py:293` | Coupled to orphan conflict fix |
+
+| L6 (schemas/) | `schemas/topology.schema.json` + `devices.schema.json` + `skills.schema.json` (Merlin suggestion — next evolution beyond LINT-013) | 📋 Planned |
 | Periscope L4 integration | `docs/plans/2026-05-24-periscope-l4-integration-plan.md` | 52 open items, separate session |
 
 ---
