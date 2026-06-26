@@ -328,6 +328,35 @@ def test_patch_devices_yml_skips_loopback_ips(tmp_path):
     assert "192.168.254.100" in result
 
 
+MODELS_YML = """\
+models:
+  - name: win-model
+    host: "${LM_STUDIO_WIN_ENDPOINT:-http://192.168.254.100}"
+  - name: mac-model
+    host: "${LM_STUDIO_MAC_ENDPOINT:-http://192.168.254.103:1234}"
+"""
+
+
+def test_patch_models_yml_skips_loopback_win_ip(tmp_path):
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "models.yml").write_text(MODELS_YML, encoding="utf-8")
+    D.patch_models_yml("192.168.254.107", "localhost", tmp_path)
+    result = (cfg / "models.yml").read_text()
+    assert "http://localhost:1234" in result
+    assert "192.168.254.100" in result  # win endpoint unchanged when win_ip is loopback
+
+
+def test_patch_models_yml_patches_lan_win_ip(tmp_path):
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "models.yml").write_text(MODELS_YML, encoding="utf-8")
+    D.patch_models_yml("192.168.254.107", "192.168.254.101", tmp_path)
+    result = (cfg / "models.yml").read_text()
+    assert "http://192.168.254.101}" in result
+    assert "192.168.254.100" not in result
+
+
 def test_discover_endpoints_windows_localhost_is_win(monkeypatch):
     """On Windows hosts, localhost LM Studio must map to win — not mac."""
     monkeypatch.setattr(D, "RUNNING_ON_WINDOWS", True)

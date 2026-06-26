@@ -538,7 +538,14 @@ def patch_models_yml(mac_ip: str, win_ip: str, pt_repo: Path):
     if content is None: return
     # lmstudio-mac ALWAYS localhost — LAN IP is informational only, never in Mac configs.
     content = re.sub(r'(\$\{LM_STUDIO_MAC_ENDPOINT:-)[^}]+(\})', r'\g<1>http://localhost:1234\2', content)
-    content = re.sub(r'(\$\{LM_STUDIO_WIN_ENDPOINTS:-)[^}:,\n]+', rf'\g<1>http://{win_ip}', content)
+    # Mirror patch_devices_yml: never persist loopback/empty IPs into shared YAML.
+    _LOOPBACK = {"", "localhost", "127.0.0.1"}
+    if win_ip not in _LOOPBACK:
+        content = re.sub(
+            r'(\$\{LM_STUDIO_WIN_ENDPOINTS?:-)[^}]+(\})',
+            rf'\g<1>http://{win_ip}\2',
+            content,
+        )
     if content != original:
         _write_text_safe(f, content)
 
