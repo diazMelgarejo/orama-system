@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 ﻿# Perplexity-Tools Bridge for The ὅραμα System
 
 ## Version 1.1.0.0

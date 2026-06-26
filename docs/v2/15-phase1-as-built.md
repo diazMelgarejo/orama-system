@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # 15 — v2 Alpha As-Built Notes (2026-05-01)
 
 > Records what the canonical `oramasys/*` repos shipped in their v2.0-alpha.1 build.

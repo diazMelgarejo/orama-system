@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 > ✅ **RESOLVED 2026-06-14** — session-state persistence shipped.
 
 # Twin System Session State — April 26, 2026

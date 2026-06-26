@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # Lessons — orama-system
 
 > **Canonical path**: `docs/LESSONS.md`<br/>

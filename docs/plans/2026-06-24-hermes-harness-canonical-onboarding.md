@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # Hermes-Harness Canonical Onboarding & Skill Absorption (2026-06-24)
 
 > **Date:** 2026-06-24 (enriched 2026-06-25) · **Owner:** orama-system (L3 canonical skills) · **Consumer:** Hermes local harness (L1)

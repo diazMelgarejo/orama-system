@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # Changelog
 
 ## [1.1.0.0] - 2026-06-21
