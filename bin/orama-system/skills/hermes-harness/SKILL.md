@@ -221,6 +221,141 @@ canary passes, Gemini CLI only for authenticated Gemini-Analyzer use-cases, and
 Codex CLI for approved mechanical repo edits. The main orama agent keeps
 judgment.
 
+
+## The Three Commands
+
+| Command | Purpose | Canonical card |
+|---|---|---|
+| `/pt-orama-council` | Bounded multi-lane review: Hermes + AGY + LM Studio + Codex each score a proposal; main orama agent decides | [`commands/pt-orama-council/SKILL.md`](commands/pt-orama-council/SKILL.md) |
+| `/pt-orama-review` | Single-pass findings-first code or doc review by one partner lane | [`commands/pt-orama-review/SKILL.md`](commands/pt-orama-review/SKILL.md) |
+| `/pt-orama-delegate` | Bounded specialist: one lane, one goal, explicit constraints, structured output | [`commands/pt-orama-delegate/SKILL.md`](commands/pt-orama-delegate/SKILL.md) |
+
+All three enforce the output shape: **ASSUMPTIONS / FINDINGS / PROPOSED ACTIONS / TESTS / RISKS / HANDOFF NOTES**.
+No partner lane may commit, deploy, delete, or change account settings. The main orama agent owns final judgment.
+
+Install all three with one command:
+```powershell
+python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install
+```
+
+---
+
+## Universal Invocation Protocol
+
+Hermes slash-command envelope — use for all three commands:
+
+```json
+{
+  "command": "pt-orama-council",
+  "args": {
+    "task": "<specific goal>",
+    "scope": ["<file1>", "<file2>"],
+    "constraints": ["no commits", "no deploys", "cite evidence"]
+  }
+}
+```
+
+For non-interactive (one-shot / subagent) dispatch — required flags to prevent silent hang in non-TTY environments:
+
+```powershell
+# Hermes one-shot (safe-mode, explicit provider)
+hermes chat --query "your task here" --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+
+# AGY one-shot (dangerously-skip-permissions prevents TTY stall in subagent context)
+agy -p "your task here" --dangerously-skip-permissions
+```
+
+See `references/partner-prompt-contract.md` for the full bounded-worker prompt shape.
+
+---
+
+## Default Model Routing
+
+| Priority | Provider | Endpoint | Notes |
+|---|---|---|---|
+| 1 | LM Studio (local) | `http://localhost:1234/v1` (Windows) · `http://localhost:1234/v1` (Mac) | Locality rule: always `localhost` when on the same OS. LAN IP only for cross-machine. |
+| 2 | Nous Portal | `qwen/qwen3-coder:free` | Default coding fallback; requires `NOUS_API_KEY` |
+| 3 | OpenRouter | `qwen/qwen3-coder:free` or equivalent free tier | Outer fallback when Nous quota exhausted |
+
+**Before any LM Studio dispatch:** fetch `GET http://localhost:1234/v1/models`, parse `data[].id`,
+reject invented IDs, select by capability tag. Cache for session; invalidate on canary failure or >15 min.
+See `references/hermes-windows-partner-readiness.md` § LM Studio Model Resolution.
+
+**IP parametrization:** endpoints are resolved from env vars (`WIN_IP`, `MAC_IP`,
+`LM_STUDIO_WIN_ENDPOINTS`, etc.) — never hardcoded LAN literals in tracked files.
+See `references/lan-endpoint-contract.md` for the full variable contract.
+
+---
+
+## Agent Compatibility Matrix
+
+| Agent | Role | Invocation | Status |
+|---|---|---|---|
+| **Hermes** | Primary Windows operator shell | `hermes chat --query ... --safe-mode --provider nous` | ✅ Active |
+| **Codex** | Mechanical repo edits; CI reviewer | `codex --version` canary | ✅ Active |
+| **AGY (Antigravity)** | Non-interactive Gemini-style partner | `agy -p "..." --dangerously-skip-permissions` | ✅ Active |
+| **LM Studio** | Local GGUF inference (Windows GGUF; Mac MLX via OpenClaw) | `/v1/models` → `/v1/chat/completions` | ✅ Active (localhost-first) |
+| **Gemini CLI** | ~~`gemini -p "..."`~~ | Retired 2026-06-18 (`IneligibleTierError`) | ❌ Retired |
+
+---
+
+## Attribution & Layering
+
+```
+L3 — orama-system        canonical skills, rules, references (this repo)
+L2 — Perpetua-Tools      middleware, hardware policy, startup intelligence
+L1 — Hermes local        harness-specific loading, provider config, workspace memory
+```
+
+orama-system and PT own durable knowledge. Hermes adapts loading at the edge only.
+No private state (`~/.hermes`, secrets, personal memory) ever crosses into tracked files.
+
+---
+
+## Search Frugality Rule
+
+Before opening any search tool or spawning a sub-agent:
+1. Check whether `references/ecc-hermes-cross-harness.md` or any reference card already answers the question.
+2. Check whether an existing command card under `commands/` covers the task.
+3. Only search externally if the skill tree is genuinely silent on the topic.
+
+Budget: ≤3 search calls per task unless the task is explicitly research-scoped.
+Prefer quoting the canonical card over re-deriving it from first principles.
+
+---
+
+## Quick Reference
+
+| Task | Entry point |
+|---|---|
+| Install / repair Hermes | Procedure §1 |
+| Configure Nous / LM Studio | Procedure §2 |
+| Install Codex, AGY on Windows | Procedure §3 |
+| Import skills safely | Procedure §4 |
+| Run a council review | `/pt-orama-council` → `commands/pt-orama-council/SKILL.md` |
+| Check hardware affinity | `start.ps1 --hardware-policy` or `commands/pt-hardware-policy/SKILL.md` |
+| Verify all partner lanes | § Verification Gates below |
+| Parametrized LAN endpoints | `references/lan-endpoint-contract.md` |
+| ECC setup/migration rules | `references/ecc-setup-distilled.md` |
+| Cross-harness protocol | `references/cross-harness-protocol.md` |
+| Bounded worker prompt | `references/partner-prompt-contract.md` |
+| Windows config reference | `references/windows-onboarding-config.md` |
+
+---
+
+## Verification Gates
+
+Run all five before any council dispatch. A failing lane is recorded as UNAVAILABLE;
+remaining verified lanes continue. Never simulate a missing lane.
+
+| Lane | Command | Expected exact output | Timeout | Degraded path |
+|---|---|---|---|---|
+| Hermes | `hermes chat --query "Reply with exactly: HERMES_READY" --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1` | `HERMES_READY` | 15 s | Mark UNAVAILABLE; continue with remaining lanes |
+| AGY | `agy --print "Reply with exactly: AGY_READY"` | `AGY_READY` | 10 s | Mark UNAVAILABLE; Codex reviewer fallback |
+| LM Studio | `GET http://localhost:1234/v1/models` + fast chat completion | Valid JSON + completion <15 s | 15 s | Mark UNAVAILABLE; fall back to Nous provider |
+| Codex | `codex --version` | Version string | 5 s | Mark UNAVAILABLE; no reviewer fallback |
+| Git Bash | `$env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'` | `hermes-bash-ok` | 5 s | Mark UNAVAILABLE; blocks Windows coder lane |
+
 ## Verification
 
 ```powershell
@@ -264,10 +399,28 @@ sanitized, and OpenClaw operations still route through `openclaw-skills`.
 
 ## References
 
-- [`references/workspace-path-resolution.md`](references/workspace-path-resolution.md)
+**Canonical command cards**
+- [`commands/pt-orama-council/SKILL.md`](commands/pt-orama-council/SKILL.md)
+- [`commands/pt-orama-review/SKILL.md`](commands/pt-orama-review/SKILL.md)
+- [`commands/pt-orama-delegate/SKILL.md`](commands/pt-orama-delegate/SKILL.md)
 - [`commands/pt-hardware-policy/SKILL.md`](commands/pt-hardware-policy/SKILL.md)
-- [`../hardware-affinity-gate/SKILL.md`](../hardware-affinity-gate/SKILL.md) (pointer only — PT is SSoT)
-- [`references/ecc-hermes-cross-harness.md`](references/ecc-hermes-cross-harness.md)
+
+**ECC reference cards (distilled)**
+- [`references/ecc-setup-distilled.md`](references/ecc-setup-distilled.md)
+- [`references/ecc-migration-rules.md`](references/ecc-migration-rules.md)
+- [`references/cross-harness-protocol.md`](references/cross-harness-protocol.md)
+- [`references/partner-prompt-contract.md`](references/partner-prompt-contract.md)
+
+**Windows config + endpoint contract**
+- [`references/lan-endpoint-contract.md`](references/lan-endpoint-contract.md)
+- [`references/windows-onboarding-config.md`](references/windows-onboarding-config.md)
+- [`references/windows-provider-routing.md`](references/windows-provider-routing.md)
+- [`references/hermes-windows-partner-readiness.md`](references/hermes-windows-partner-readiness.md)
+
+**Other**
+- [`references/workspace-path-resolution.md`](references/workspace-path-resolution.md)
+- [`references/ecc-hermes-cross-harness.md`](references/ecc-hermes-cross-harness.md) (full source)
 - [`references/hermes-ecc-fork-inventory.md`](references/hermes-ecc-fork-inventory.md)
+- [`../hardware-affinity-gate/SKILL.md`](../hardware-affinity-gate/SKILL.md) (pointer — PT is SSoT)
 - [`../openclaw-skills/SKILL.md`](../openclaw-skills/SKILL.md)
 - [`../mcp-orchestration/SKILL.md`](../mcp-orchestration/SKILL.md)
