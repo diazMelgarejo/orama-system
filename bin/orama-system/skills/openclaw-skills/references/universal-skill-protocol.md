@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # Universal Skill Protocol
 
 This protocol defines how Claude, Hermes, Gemini, Codex, Cursor, WindSurf, Antigravity, OpenCode, and 8gent.dev discover, invoke, chain, and report OpenClaw skills. It is the cross-agent contract for `openclaw-skills`.

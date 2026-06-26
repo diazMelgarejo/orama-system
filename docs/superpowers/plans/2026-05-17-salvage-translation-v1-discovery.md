@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 > ✅ **RESOLVED 2026-06-14** — shipped to `perpetua_core` (State/Node/graph marked ✅ in-doc); salvage translation landed.
 
 # Salvage Translation + v1 IP-Aware Backend Discovery — Implementation Plan

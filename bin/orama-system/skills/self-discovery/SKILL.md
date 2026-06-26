@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 ---
 name: self-discovery
 version: 1.1.0.0

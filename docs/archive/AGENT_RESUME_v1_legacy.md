@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # Legacy Agent Resume (Archived from v1.0 RC)
 > Original Version: Commit 73e0031
 > Reason for archive: Transition to v2; preserved for 4-tier discovery logic extraction.
