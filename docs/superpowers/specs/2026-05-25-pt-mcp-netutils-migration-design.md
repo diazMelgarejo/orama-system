@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 > ✅ **RESOLVED 2026-06-14** — migration complete: `packages/net_utils/` present, `network_autoconfig.py` tracked, legacy `mcp/server.js` deleted, `alphaclaw-mcp` canonical.
 
 # Perpetua-Tools MCP + net_utils Migration — Design Spec

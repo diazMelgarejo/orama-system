@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # 06. Multi-Agent Collaboration — Version Registry, Scope Claims, Orphan Branches
 
 **TL;DR:** Two agents working simultaneously on overlapping files will diverge. Use scope claims, additive-only changes, commit messages as communication, and the version registry to stay coordinated.

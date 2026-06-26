@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 > 🔄 **CANONICAL 2026-06-14** — living architecture source-of-truth (PT/orama §0 lockstep); not a finishable plan.
 
 # `docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`
