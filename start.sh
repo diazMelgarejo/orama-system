@@ -189,7 +189,7 @@ if [ -n "${PT_DIR:-}" ]; then
   fi
 
   # lib/shared/agentic_stack — shared library from PT
-  _PT_STACK="${PT_DIR}/packages/agentic-stack"
+  _PT_STACK="${PT_DIR}/vendor/agentic-stack"
   if [ -d "$_PT_STACK" ]; then
     mkdir -p "$SCRIPT_DIR/lib/shared"
     _REL_STACK="$(_PYLINK_SRC="$_PT_STACK" _PYLINK_BASE="$SCRIPT_DIR/lib/shared" \
