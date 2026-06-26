@@ -218,7 +218,7 @@ symbols; on a non-code-aware pack `--dream` completes but the graph stays empty
 and reports a WARN. `code-def`/`code-refs` need the same extraction.
 
 Two indexed corpora available via the `gbrain` CLI:
-- This worktree's code (auto-pinned via `.gbrain-source` → `gstack-code-2159b4b9-595bce`; supersedes `orama-src` (was isolated → now federated, stale @2026-06-05, reindexed 2026-06-17).
+- This worktree's code (auto-pinned via `.gbrain-source`).
 - `~/.gstack/` curated memory (registered as `gstack-brain-lawrencecyremelgarejo` source via
   the existing federation pipeline).
 
@@ -233,10 +233,7 @@ Prefer gbrain when:
     `gbrain search "<terms>" --source gstack-brain-lawrencecyremelgarejo`
 
 Grep is still right for known exact strings, regex, multiline patterns, and
-file globs. If `gbrain` fails with `getaddrinfo ENOTFOUND` inside a Cursor
-agent sandbox, see [`orama-system/docs/local-env-catch-up.md`](orama-system/docs/local-env-catch-up.md)
-§ gbrain ENOTFOUND — use CRG MCP (`*_tool` names above) on the host, then scoped Read.
-Run `/sync-gbrain` after meaningful code changes; for ongoing
+file globs. Run `/sync-gbrain` after meaningful code changes; for ongoing
 auto-sync across all worktrees, run `gbrain autopilot --install` once per
 machine — gbrain's daemon handles incremental refresh on a schedule.
 

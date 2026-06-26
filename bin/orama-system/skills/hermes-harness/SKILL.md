@@ -43,7 +43,21 @@ prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the runtime 
 4. **Parallel to OpenClaw:** `openclaw-skills` owns OpenClaw config; this skill owns Hermes onboarding and partner prompts.
 5. **Shared hardware policy:** Perpetua-Tools `config/model_hardware_policy.yml` + `src/utils/hardware_policy.py` are the **only** affinity SSoT. Hermes must **consume** PT policy via CLI/API — never infer NEVER_MAC/NEVER_WIN independently at runtime.
 
-## Platform Harness Model
+## Platform Affinity Bias (v1 + v2)
+
+**Mac/Linux defaults to AlphaClaw + OpenClaw. Windows defaults to Hermes. ECC bridges both.**
+
+| Platform | **Preferred harness** | Entry point | Interop |
+|----------|-----------------------|-------------|---------|
+| macOS | **AlphaClaw + OpenClaw** | `start.sh` | ECC skill import |
+| Linux | **AlphaClaw + OpenClaw** | `start.sh` | ECC skill import |
+| Windows 11 | **Hermes Harness** | `start.ps1` | ECC skill import |
+
+ECC ensures orama-system skills run in **both** environments without modification —
+now (v1, `vendor/ecc-tools`) and in v2 (oramasys, structured manifest).
+Full routing algorithm and anti-patterns: [`references/platform-affinity-routing.md`](references/platform-affinity-routing.md)
+
+## Platform Harness Model (detail)
 
 | Host OS | Primary harness | LM Studio role | Orchestrator role |
 |---------|-----------------|----------------|-------------------|
@@ -60,6 +74,40 @@ a second-class consumer — it may run Mac profiles, Win profiles, or both per `
 and `model_hardware_policy.yml`, subject to what physical GPUs/backends are present.
 
 ## Windows Bring-Up
+
+### Line Endings (CRLF) — mandatory for `.cmd` / `.bat` files
+
+Windows batch files (`.cmd`, `.bat`) **MUST** use CRLF (`\r\n`) line endings.
+A `.cmd` file with LF-only line endings will silently fail or produce garbled output
+because `cmd.exe` tokenises on `\r\n`.
+
+**When writing `.cmd` files in Python:**
+
+```python
+lines = ["@echo off", "rem my script", "exit /b 0"]
+with open("my.cmd", "wb") as f:
+    f.write("\r\n".join(lines).encode("utf-8"))
+```
+
+**Verify with xxd:**
+
+```bash
+xxd my.cmd | grep -c "0d 0a"   # should equal number of lines
+xxd my.cmd | grep -c "0d$"     # should be 0 (no bare CR)
+```
+
+**Git autocrlf:** set `core.autocrlf=false` in the repo `.gitattributes` for `.cmd`
+files to prevent git from silently stripping `\r`. Or use explicit line ending:
+
+```gitattributes
+*.cmd  text  eol=crlf
+*.bat  text  eol=crlf
+```
+
+This rule was discovered during PR #108 (`gstack-brain-sync.cmd` was LF-only and
+caused silent failures on Windows).
+
+### UTF-8 console (PowerShell)
 
 Use PowerShell with explicit UTF-8 when writing files:
 
@@ -396,6 +444,130 @@ sanitized, and OpenClaw operations still route through `openclaw-skills`.
 - Replace OpenClaw procedures with Hermes guesses.
 - Let worker agents commit, deploy, delete, or change account settings without
   explicit confirmation.
+
+## Universal Invocation Protocol
+
+Hermes thin wrappers installed by `install_hermes_thin_skills.py` expose four
+slash commands that proxy to canonical orama-system skills:
+
+| Slash Command | Canonical Skill Card |
+|---|---|
+| `/pt-hardware-policy` | [`commands/pt-hardware-policy/SKILL.md`](commands/pt-hardware-policy/SKILL.md) |
+| `/pt-orama-council` | [`commands/pt-orama-council/SKILL.md`](commands/pt-orama-council/SKILL.md) |
+| `/pt-orama-delegate` | [`commands/pt-orama-delegate/SKILL.md`](commands/pt-orama-delegate/SKILL.md) |
+| `/pt-orama-review` | [`commands/pt-orama-review/SKILL.md`](commands/pt-orama-review/SKILL.md) |
+
+Every thin wrapper must:
+1. Point back to the canonical `SKILL.md` in orama-system.
+2. Carry no procedure body of its own.
+3. Be regenerated via `install_hermes_thin_skills.py --install` on every sync.
+
+For bounded coding-partner dispatch, see
+[`references/partner-prompt-contract.md`](references/partner-prompt-contract.md)
+and [`references/cross-harness-protocol.md`](references/cross-harness-protocol.md).
+
+## Default Model Routing
+
+**Windows Hermes host — local-first:**
+
+1. **LM Studio `localhost:1234`** — primary; GGUF only; hardware policy required
+   before dispatch (run `/pt-hardware-policy` or
+   `.\platform\windows\start.ps1 --hardware-policy`).
+2. **Nous Portal `qwen/qwen3-coder:free`** — default hosted, no GPU dependency.
+
+**OpenRouter fallback stack** (same as `openclaw-skills`):
+
+| Tier | Model ID | Role |
+|---|---|---|
+| A | `openrouter/nvidia/nemotron-3-super-120b-a12b:free` | Default agent brain |
+| B | `openrouter/minimax/minimax-m2.5:free` | Coding fallback |
+| C | `openrouter/deepseek/deepseek-v4-flash:free` | Fast triage |
+| D | `openrouter/openai/gpt-oss-120b:free` | Reasoning and tool use |
+| E | `openrouter/z-ai/glm-4.5-air:free` | Agentic backup |
+| F | `openrouter/inclusionai/ling-2.6-flash:free` | Lightweight tasks |
+| Z | `openrouter/openrouter/free` | Last-resort auto-router |
+
+Reserve Gemini (AGY) for visual diff, screenshot comparison, whole-repo
+architecture mapping, stale-doc detection, or explicit second-opinion review —
+it is not the default fallback.
+
+**LM Studio cross-platform model listing warning:** `/v1/models` lists ALL
+known models regardless of hardware compatibility. A Windows LM Studio instance
+may list Mac MLX models (e.g., `qwen3.5-9b-mlx`) that cannot run on Windows.
+Always enforce hardware policy before dispatch; never trust model presence as a
+load-ready signal. See [`references/lan-endpoint-contract.md`](references/lan-endpoint-contract.md).
+
+## Partner Canaries
+
+Run all canaries before starting any council session or delegated task.
+See [`references/hermes-windows-partner-readiness.md`](references/hermes-windows-partner-readiness.md)
+for full setup details (AGY one-shot mode, quota failure mode, path setup).
+
+| Tool | Verification Command | Pass Criteria | Fail Mode |
+|---|---|---|---|
+| **LM Studio** | `curl -s localhost:1234/v1/models` + completion canary | Valid JSON + `READY` stdout in <15 s | >15 s = Unavailable for fast dispatch |
+| **Hardware policy** | `.\platform\windows\start.ps1 --hardware-policy` | All assigned models pass | Blocked model detected → stop |
+| **Hermes** | `hermes chat --query 'Reply with exactly: HERMES_READY' --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1` | `HERMES_READY` | Provider not reachable |
+| **AGY** | `agy --print "Reply with exactly: AGY_READY"` | `AGY_READY` stdout | Empty stdout + exit 0 = quota exhausted |
+| **Codex** | `codex --version` | `codex-cli` version string | Not installed |
+
+All five must pass before a multi-partner council session. A single failure
+does not block use of the remaining tools — exclude the failing partner and log
+`WARN`.
+
+## Attribution & Layering
+
+```
+L3 orama-system (this repo)
+   → stateless methodology, canonical skills, routing policy
+   → NEVER holds runtime state
+
+L2 Perpetua-Tools
+   → middleware, hardware policy SSoT, skill dispatcher
+   → receives agent-neutral envelopes; resolves openclaw_home
+
+L1 Hermes (local, this host)
+   → operator shell; thin wrappers; provider config; workspace memory
+   → consumes L3 skills; never re-declares L2 policy
+```
+
+orama-system is authoritative for skill text and routing rules.
+Perpetua-Tools is authoritative for hardware affinity and state.
+Hermes is authoritative for nothing — it adapts and invokes.
+
+See [`references/cross-harness-protocol.md`](references/cross-harness-protocol.md).
+
+## Search Frugality Rule
+
+**RULE: Never guess when information is scarce.**
+Search in this order — stop at the first satisfying result:
+
+1. `/sync-gbrain` + `gbrain query "<question>"` — local semantic memory, zero cost
+2. `code-review-graph: semantic_search_nodes` — structural code context
+3. Brave Search API — web facts, current state
+4. Perplexity API (inline) — deep web synthesis
+5. Grok API — last resort only
+
+**NEVER:** parallel-fire all search tools. Use the cheapest first.
+**ALWAYS:** `AskUserQuestion` for decisions — never auto-select between ambiguous options.
+
+## Windows Coder Policy
+
+**RULE: When running on Windows, LM Studio at `localhost:1234` IS the local coder.
+Never route Windows LM Studio dispatch over LAN from the Windows host itself.**
+
+Locality rule (see [`references/lan-endpoint-contract.md`](references/lan-endpoint-contract.md)):
+
+- On Windows host: `LLAMA_SERVER_BASE_URL=http://localhost:1234/v1` — GGUF models are allowed.
+- `windows_only` models are **permitted** on the Windows host (hardware policy yields inverted verdict locally).
+- `$WIN_CODER_ENDPOINTS` (default: `$WIN_IP:1234`) is for Mac→Win dispatch only.
+- When a compatible coding task arrives and LM Studio has a GGUF model loaded, dispatch to it before any cloud provider.
+
+Dispatch protocol:
+1. Check hardware policy for the task's model tier.
+2. If a Windows-compatible model is loaded and the task is code-compatible: dispatch locally.
+3. If LM Studio is offline or no compatible model is loaded: fall back to Nous Portal `qwen/qwen3-coder:free`.
+4. Log `WARN` and continue — never silently fail the task.
 
 ## References
 

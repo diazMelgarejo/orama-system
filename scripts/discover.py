@@ -229,24 +229,42 @@ async def scan_subnet_async(subnet: str, port: int, exclude: set):
              if f"{subnet}.{i}" not in exclude]
     return [ip for ip in await asyncio.gather(*tasks) if ip]
 
-def _mac_lan_ip():
+def _lan_ip_on_subnet(subnet_prefix: str = "192.168.254.") -> str | None:
+    """Return this host's LAN IP on the given subnet via UDP route probe."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("192.168.254.1", 80))
-        ip = s.getsockname()[0]; s.close()
-        return ip if ip.startswith("192.168.254.") else None
+        ip = s.getsockname()[0]
+        s.close()
+        return ip if ip.startswith(subnet_prefix) else None
     except Exception:
         return None
 
+
+def _mac_lan_ip():
+    return _lan_ip_on_subnet()
+
+
 def _win_lan_ip():
-    """Return this Windows machine's LAN IP on the 192.168.254.* subnet."""
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("192.168.254.1", 80))
-        ip = s.getsockname()[0]; s.close()
-        return ip if ip.startswith("192.168.254.") else None
-    except Exception:
-        return None
+    return _lan_ip_on_subnet()
+
+
+def _win_lan_patch_ip(win_ip: str) -> str:
+    """LAN IP for shared PT config files — never loopback on Windows host."""
+    if RUNNING_ON_WINDOWS and win_ip in ("localhost", "127.0.0.1"):
+        return os.getenv("WIN_IP") or _win_lan_ip() or win_ip
+    return win_ip
+
+
+def _endpoints_for_hash(endpoints: dict) -> dict:
+    """Hash/snapshot view: resolve Windows localhost to LAN IP for stable comparisons."""
+    win = endpoints.get("win") or {}
+    if not win:
+        return endpoints
+    patch_ip = _win_lan_patch_ip(win.get("ip", ""))
+    if patch_ip == win.get("ip", ""):
+        return endpoints
+    return {**endpoints, "win": {**win, "ip": patch_ip}}
 
 def discover_endpoints() -> dict:
     """Probe Mac and Windows LM Studio instances.
@@ -286,9 +304,17 @@ def discover_endpoints() -> dict:
             if mac_models:
                 result["mac"] = {"ip": mac_ip, "models": mac_models}
             else:
-                print(f"  ⚠️  Mac LM Studio not reachable at {mac_ip}:1234 ($MAC_IP)", file=sys.stderr)
+                print(f"  ⚠️  Mac LM Studio not reachable at {mac_ip}:1234 ($MAC_IP) — trying cache", file=sys.stderr)
+                # MAC_IP set but unreachable: fall back to last-known-good cache
+                last = _load_json(LAST_DISCOVERY_JSON)
+                mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
+                if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1", mac_ip):
+                    mac_models_cached = probe_models(f"http://{mac_last_ip}:1234")
+                    if mac_models_cached:
+                        result["mac"] = {"ip": mac_last_ip, "models": mac_models_cached}
+                        print(f"  ℹ️  Mac found at cached IP {mac_last_ip} (update $MAC_IP)", file=sys.stderr)
         else:
-            # Fall back to last-known-good mac IP from cache
+            # MAC_IP not set: fall back to last-known-good mac IP from cache
             last = _load_json(LAST_DISCOVERY_JSON)
             mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
             if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1"):
@@ -443,7 +469,10 @@ def patch_openclaw_json(endpoints: dict):
             for m in mac["models"] if "embed" not in m.lower()
         ]
     if win:
-        providers.setdefault("lmstudio-win", {})["baseUrl"] = f"http://{win['ip']}:1234/v1"
+        win_ip = win["ip"]
+        if RUNNING_ON_WINDOWS and win_ip in ("localhost", "127.0.0.1"):
+            win_ip = "localhost"
+        providers.setdefault("lmstudio-win", {})["baseUrl"] = f"http://{win_ip}:1234/v1"
         providers["lmstudio-win"]["models"] = [
             {"id": m, "name": f"Win LMS — {m}", "contextWindow": 32768,
              "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
@@ -670,7 +699,12 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
                         print(f"⚠️  {role} unreachable — preserving last-good", file=sys.stderr)
 
         endpoints = filter_endpoints_for_policy(endpoints)
-        new_hash = compute_hash(endpoints)
+
+        mac = endpoints.get("mac") or {}
+        win = endpoints.get("win") or {}
+        hash_endpoints = _endpoints_for_hash(endpoints)
+
+        new_hash = compute_hash(hash_endpoints)
         last = _load_json(LAST_DISCOVERY_JSON)
         if last and last.get("hash") == new_hash:
             last["timestamp"] = datetime.now(timezone.utc).isoformat()
@@ -686,23 +720,17 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         backup_current_state()
         repo_paths = get_repo_paths()
         pt_repo = repo_paths.get("perpetua_tools")
-        mac = endpoints.get("mac") or {}
-        win = endpoints.get("win") or {}
 
         patch_openclaw_json(endpoints)
         print("  ✓ openclaw.json", file=sys.stderr)
         if pt_repo:
-            # On Windows the runtime win IP is "localhost"; resolve the real LAN IP
-            # so shared config files store a network-reachable address.
-            _win_patch_ip = win.get("ip", "")
-            if RUNNING_ON_WINDOWS and _win_patch_ip in ("localhost", "127.0.0.1"):
-                _win_patch_ip = os.getenv("WIN_IP") or _win_lan_ip() or _win_patch_ip
-            patch_devices_yml(mac.get("ip", ""), _win_patch_ip, pt_repo)
-            patch_models_yml(mac.get("ip", ""), _win_patch_ip, pt_repo)
+            win_patch_ip = _win_lan_patch_ip(win.get("ip", ""))
+            patch_devices_yml(mac.get("ip", ""), win_patch_ip, pt_repo)
+            patch_models_yml(mac.get("ip", ""), win_patch_ip, pt_repo)
             print("  ✓ Perpetua-Tools config/", file=sys.stderr)
         write_env_lmstudio(endpoints, repo_paths)
         print("  ✓ .env.lmstudio written", file=sys.stderr)
-        save_discovery_state(endpoints, tier)
+        save_discovery_state(hash_endpoints, tier)
         print(f"  ✓ state saved (tier {tier})", file=sys.stderr)
         if mac.get("ip"): print(f"  Mac: {mac['ip']} — {len(mac.get('models', []))} models", file=sys.stderr)
         if win.get("ip"): print(f"  Win: {win['ip']} — {len(win.get('models', []))} models", file=sys.stderr)
