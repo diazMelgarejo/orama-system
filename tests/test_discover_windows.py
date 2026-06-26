@@ -36,9 +36,9 @@ def _load_discover():
     # _import_pt_hardware_policy() call does not depend on PERPETUA_TOOLS_ROOT
     # being set in the test environment.
     stub = MagicMock()
-    stub.filter_models_for_platform.side_effect = lambda models, platform, policy: models
     with patch.dict(sys.modules, {"utils.hardware_policy": stub}):
         spec.loader.exec_module(module)
+    module.filter_models_for_platform = module._filter_models_for_platform_local
     return module
 
 
@@ -337,10 +337,10 @@ def test_mac_host_localhost_assigned_to_mac():
     D._mac_lan_ip = lambda: None
     D._load_json = lambda path: None
 
-    # Prevent the full subnet scan from running
-    import asyncio
-    D.asyncio = MagicMock()
-    D.asyncio.run = lambda coro: []
+    async def _empty_scan(*_args, **_kwargs):
+        return []
+
+    D.scan_subnet_async = _empty_scan
 
     result = D.discover_endpoints()
 
@@ -369,3 +369,18 @@ def test_filter_endpoints_for_policy_win_entry():
     win_models = filtered["win"]["models"]
     assert "qwen3.5-27b-distilled" in win_models   # windows_only → allowed on win
     assert "qwen3.5-9b-mlx" not in win_models       # mac_only → forbidden on win
+
+
+def test_endpoints_for_hash_resolves_win_lan_without_mutating_runtime():
+    """Hash snapshot uses LAN IP; runtime endpoints keep localhost on Windows."""
+    D = _load_discover()
+    endpoints = {
+        "mac": None,
+        "win": {"ip": "localhost", "models": ["qwen3.5-27b"]},
+    }
+    with patch.object(D, "RUNNING_ON_WINDOWS", True), patch.object(
+        D.os, "getenv", side_effect=lambda k, d="": "192.168.254.103" if k == "WIN_IP" else d
+    ):
+        hashed = D._endpoints_for_hash(endpoints)
+    assert endpoints["win"]["ip"] == "localhost"
+    assert hashed["win"]["ip"] == "192.168.254.103"
