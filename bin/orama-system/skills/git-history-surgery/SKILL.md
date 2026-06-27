@@ -50,6 +50,13 @@ LM Studio host, run
 - Never flatten branches to `origin/main` unless the user explicitly asks to
   destroy their distinct branch identity.
 - Never treat a clean git rewrite as secret remediation. Rotation is separate.
+- **Platform line endings:** do not convert Windows-serving files (`platform/windows/**`,
+  `*.cmd`, `*.bat`, `*.ps1`) to LF from macOS/Linux. Mac/Linux-owned sources stay LF.
+  See [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md).
+- **Bash 3.2 hook scripts:** macOS `/bin/bash` lacks `mapfile`. New or edited
+  `scripts/git/*.sh` must use `while read` loops (see
+  [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md)).
+  Install hooks: `bash scripts/git/install-local-hooks.sh` (includes TDD `commit-msg` gate).
 
 ## Verification
 
@@ -128,9 +135,11 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 - [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
 - [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
 - [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table
+- [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md) — CRLF on Windows turf; LF on Mac/Linux; no cross-platform EOL tug-of-war
 - [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md)
 - [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
 - [`references/windows-powershell-runtime-bootstrap.md`](references/windows-powershell-runtime-bootstrap.md)
+- [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md) — macOS bash 3.2; no `mapfile` in hook scripts; `check_tdd_commit.sh` pattern
 - [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md)
 - [`docs/wiki/13-alphaclaw-fork-contrib-branches.md`](../../../../docs/wiki/13-alphaclaw-fork-contrib-branches.md)
 - [`scripts/git/reanchor_scan.sh`](../../../../scripts/git/reanchor_scan.sh)
