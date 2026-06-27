@@ -87,7 +87,7 @@ When agents produce concurrent branches, follow this sequence. Guessing = data l
 
 ### Key invariants
 
-```
+```json
 "merged: true" on GitHub ≠ content on branch
   → always: git diff origin/main...origin/<branch> after any merge
 
