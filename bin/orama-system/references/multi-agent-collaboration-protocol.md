@@ -5,6 +5,9 @@
 >
 > Offloaded from `bin/orama-system/SKILL.md` for progressive disclosure — load before any
 > multi-agent session. Content is canonical here; SKILL.md carries only the navigational stub.
+>
+> **PR merge doctrine (user-facing):** [`skills/oramasys-method/references/integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md) —
+> additive harmonization, six resolution modes, synthesize-never-amputate. Load via **oramasys-method** when modifying PRs.
 
 ## Pre-Session Sync Check
 
@@ -18,7 +21,7 @@ git log --oneline HEAD..origin/main   # other agents' recent pushes
 
 Append to `.claude/lessons/LESSONS.md` before touching any file:
 
-```
+```text
 ## [IN PROGRESS] YYYY-MM-DD — Claude — <topic>
 Files: <list of files you plan to modify>
 ```
@@ -113,6 +116,7 @@ One question per file. Never proceed without explicit human direction.
 | `additive` | One side empty, other has content | Take the content side |
 | `union` | Both sides partial/complementary | Concatenate — ours first, theirs appended |
 | `superset` | One side structurally contains all rows of the other | Verify inclusion, take the superset |
+| `synthesize` | Both sides changed the same region for different valid reasons | Blend both intents (e.g. hardened API + incoming tests) |
 | `architecturally-correct` | One side has a bug the other fixes | Take the correct side regardless of branch origin |
 | `api-correct` | Casing/type mismatch | Take the API-correct form (lowercase IDs, typed values) |
 | `archive` | Content must be removed | Move to `docs/archive/` or `bin/orama-system/skills/archive/`; never delete |
@@ -200,6 +204,7 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 
 ## See also
 
+- [`skills/oramasys-method/references/integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md) — **canonical PR merge / harmonization doctrine (orama-way)**
 - [`skills/git-history-surgery/SKILL.md`](../skills/git-history-surgery/SKILL.md) — history rewrite, re-anchor after rewrite, version-bump commit discipline; contains the Multi-Agent Branch Merge quick reference
 - [`skills/using-git-worktrees/SKILL.md`](../skills/using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge-protocol trigger
 - [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry, Nested-Branch Merge Protocol table, cross-links to PT AGENTS.md

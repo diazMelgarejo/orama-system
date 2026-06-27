@@ -79,15 +79,15 @@ When agents produce concurrent branches, follow this sequence. Guessing = data l
 |------|--------|
 | **1 Simulate** | `git merge --no-commit --no-ff <branch>` → enumerate `--diff-filter=U` → `git merge --abort`. Do for ALL merges before touching any file. |
 | **2 Present** | Show both sides of every conflict. One question per file. Wait for explicit direction. |
-| **3 Strategy** | `additive` (empty+content→take content) · `union` (both partial→concat) · `superset` (verify inclusion→take larger) · `architecturally-correct` (bug→take fix) · `api-correct` (casing→take lowercase) |
-| **4 Resolve** | One pass, directed strategy. Never delete — archive if needed. |
+| **3 Strategy** | `additive` (empty+content→take content) · `union` (both partial→concat) · `superset` (verify inclusion→take larger) · `synthesize` (blend both valid intents) · `architecturally-correct` (bug→take fix) · `api-correct` (casing→take lowercase) |
+| **4 Resolve** | One pass, directed strategy. Never delete — archive if needed. Full doctrine: [`oramasys-method/references/integrative-merge.md`](../../bin/orama-system/skills/oramasys-method/references/integrative-merge.md) |
 | **5 Verify** | `pytest -q` + `repo_hygiene.py` + confirm no `<<<<<<` remain |
 | **6 Merge** | Push → CI → GitHub API squash merge. Undraft via GraphQL if needed. |
 | **7 Buffer** | 10 minutes. Poll `mergeable_state: clean` before next merge. |
 
 ### Key invariants
 
-```
+```json
 "merged: true" on GitHub ≠ content on branch
   → always: git diff origin/main...origin/<branch> after any merge
 
