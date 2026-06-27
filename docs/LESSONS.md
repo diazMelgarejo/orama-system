@@ -56,6 +56,19 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 - PT owns `path_hygiene.py` + `scrub_memory_paths.py`; orama `repo_hygiene.py` Windows pattern kept in sync (LINT-006).
 - Follow-up PR `cursor/critical-bug-investigation-a924-followup` continues branch `a924` for joint sweep.
+
+### 2026-06-26 — PR #135 CodeRabbit closure: tracked-memory path hygiene | Cursor
+
+**What was learned**
+
+- Merging a PR before verifying all review threads against `main` is a Stage-5 (Crystallize) failure — especially when hygiene gives false negatives (`LINT-006` missed Windows user-profile paths until extended).
+- CodeRabbit autofix (`80926a3` on PT branch `a924`) replaced queue preview text with `<local-path>` but did not fix episodic JSONL, lessons rationales, or write-boundary hooks — symptom-only.
+- **Root cause:** workstation paths must be sanitized at every `.agent/memory` writer (`path_hygiene.py` in PT), not in one renderer. Scrub tool + re-render for legacy rows.
+
+**Decisions made**
+
+- PT owns `path_hygiene.py` + `scrub_memory_paths.py`; orama `repo_hygiene.py` Windows pattern kept in sync (LINT-006).
+- Follow-up PR `cursor/critical-bug-investigation-a924-followup` continues branch `a924` for joint sweep.
 <!-- Append entries below. Format:
 ## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude | Codex> — <brief topic>
 ### What was learned
