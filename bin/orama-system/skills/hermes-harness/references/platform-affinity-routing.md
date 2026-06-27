@@ -21,7 +21,7 @@ status: active
 ECC (`vendor/ecc-tools`, canonical: `affaan-m/ECC`) ensures that orama-system skills work
 in **both** harness environments without modification — now (v1) and in the future (v2/oramasys).
 
-```
+```text
 orama-system skill
        │
        ├─ consumed by OpenClaw (Mac/Linux)  ──► AlphaClaw dispatch
@@ -33,7 +33,7 @@ Cross-harness protocol: [`cross-harness-protocol.md`](cross-harness-protocol.md)
 
 ## Harness Selection Algorithm
 
-```
+```text
 1. Determine host OS: sys.platform == "win32" → Windows; otherwise → Mac/Linux
 2. Windows?
    └─ YES: activate Hermes (start.ps1 → HERMES_HOME)

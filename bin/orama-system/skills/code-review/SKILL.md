@@ -36,7 +36,7 @@ Senior code reviewer — see full contract in [`agents/code-reviewer.md`](agents
 
 ## Non-negotiable chain
 
-```
+```text
 1. code-review-graph  →  blast-radius / detect_changes_tool / review context
 2. gbrain             →  code-def, code-refs, search (LESSONS / decisions)
 3. Read               →  only graph-confirmed files
@@ -99,7 +99,7 @@ Slash commands (Claude Code): `/code-review-graph:review-delta`, `review-pr`, `b
 
 ### Check first
 
-```
+```text
 list_graph_stats_tool(repo_root=<path>)
 ```
 
@@ -112,7 +112,7 @@ list_graph_stats_tool(repo_root=<path>)
 
 ### Step 1 — Build graph (all 3 repos independently)
 
-```
+```text
 build_or_update_graph_tool(
   repo_root = "<repo_path>",   # orama-system / AlphaClaw / Perpetua-Tools
   full_rebuild = True,
@@ -128,7 +128,7 @@ Expected output per repo (ballpark):
 
 ### Step 2 — Embed with bge-m3 (must match gbrain's model)
 
-```
+```text
 embed_graph_tool(
   repo_root = "<repo_path>",
   provider = "openai",   # OpenAI-compat shim → Ollama

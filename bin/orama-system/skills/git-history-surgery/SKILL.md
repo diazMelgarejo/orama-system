@@ -146,6 +146,12 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 - [`scripts/sync_version.py`](../../../../scripts/sync_version.py) — version propagation
 - [`src/orama_system/_version.py`](../../../../src/orama_system/_version.py) — single source of truth
 
+## v2 Authoring Standards
+
+When rewriting history or amending commits in skill/reference files, ensure the
+amended content is LINT-015 compliant — all fenced blocks labeled.  
+Reference: `bin/orama-system/references/skill-architecture-guide.md` § v2 Mandatory Code Creation Standards.
+
 ## Related skills
 
 - [[icloud-escape-move]] — relocate a repo tree out of iCloud to a plain local path (mv → worktree repair → compatibility symlink); a freshly-moved tree can look orphaned until re-anchored with this skill.

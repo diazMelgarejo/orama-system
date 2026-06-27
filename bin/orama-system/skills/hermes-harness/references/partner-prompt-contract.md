@@ -8,7 +8,7 @@
 
 ## Prompt Shape (copy-paste template)
 
-```
+```text
 ROLE: coding partner for PT-orama
 GOAL: <specific, single outcome — one task per call>
 CONSTRAINTS:
@@ -88,7 +88,7 @@ Before accepting a partner's `proposed_actions`:
 
 Every partner task prompt must include all five elements:
 
-```
+```text
 1. GOAL       — one sentence: what outcome is expected
 2. CONSTRAINTS — forbid commits / deletes / deploys / secrets
 3. SCOPE      — cite the canonical skills or files to inspect
@@ -98,7 +98,7 @@ Every partner task prompt must include all five elements:
 
 ### Minimal Compliant Prompt Template
 
-```
+```text
 Goal: <one-sentence outcome>.
 
 Constraints:
