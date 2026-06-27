@@ -114,8 +114,31 @@ jobs:
           python -c "from bin.shared.oramasys_core import Stage, TaskState; print('✓ oramasys_core imports OK')"
           python -c "import bin, pathlib, sys; sys.path.insert(0, str(pathlib.Path(bin.__file__).parent / 'orama-system')); from cidf.core.content_insertion_framework import decide; print('✓ CIDF imports OK')"
 
+  web-test:
+    name: Operator console (Vitest)
+    needs: [git-hygiene]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install and test web/
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+
   build:
-    needs: [test, lint]
+    needs: [test, lint, web-test]
     runs-on: ubuntu-latest
     permissions:
       contents: read

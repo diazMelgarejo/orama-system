@@ -4,6 +4,7 @@
  */
 import { StatusBadge } from "@/components/StatusBadge";
 import type { AppState } from "@/api/appState";
+import { selectFallbackChain } from "./routingState";
 
 interface RoutingViewProps {
   state: AppState | undefined;
@@ -28,9 +29,7 @@ export function RoutingView({ state }: RoutingViewProps) {
   const runtime = (state?.runtime?.data ?? {}) as Record<string, string>;
   const lmStatus = runtime.lmstudio_win ?? "unknown";
   const lmOnline = lmStatus === "online";
-  const fallbackChain = lmOnline
-    ? FALLBACK_CHAIN
-    : FALLBACK_CHAIN.filter((row) => row.model !== "lmstudio-win/qwen3.5-27b-*");
+  const fallbackChain = selectFallbackChain(FALLBACK_CHAIN, lmOnline);
 
   return (
     <div className="space-y-6">
