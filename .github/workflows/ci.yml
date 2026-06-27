@@ -129,7 +129,7 @@ jobs:
       - name: Enable pnpm
         uses: pnpm/action-setup@v4
         with:
-          version: 9
+          version: 10
 
       - name: Install and test web/
         working-directory: web
