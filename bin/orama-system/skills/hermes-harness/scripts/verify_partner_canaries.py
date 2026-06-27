@@ -144,7 +144,37 @@ def main() -> int:
     p.add_argument("--skip-agy", action="store_true")
     p.add_argument("--skip-codex", action="store_true")
     p.add_argument("--json", dest="json_out", action="store_true", help="Emit JSON summary to stdout")
+    p.add_argument(
+        "--prepare",
+        action="store_true",
+        help="Offline prep: print Win localhost runtime checklist; skip live probes",
+    )
     args = p.parse_args()
+
+    if args.prepare:
+        checklist = [
+            "1. PowerShell UTF-8 bootstrap — run first:",
+            "   bin\\orama-system\\skills\\git-history-surgery\\references\\windows-powershell-runtime-bootstrap.md",
+            "2. Verify env vars resolve: $env:PERPETUA_TOOLS_PATH  $env:ORAMA_SYSTEM_PATH",
+            "3. LM Studio listening on http://localhost:1234 (own-machine locality — NOT LAN IP when on Win)",
+            "4. Hermes on PATH; HERMES_GIT_BASH_PATH set for Git Bash lane",
+            "5. Run canary probe (repo-relative, any cwd):",
+            "   cd $env:ORAMA_SYSTEM_PATH",
+            "   python bin\\orama-system\\skills\\hermes-harness\\scripts\\verify_partner_canaries.py --lm-studio-url http://localhost:1234/v1",
+            "   Optional: add --skip-hermes --skip-agy when those lanes are intentionally absent",
+            "6. Install + verify + test thin wrappers (Phase 9):",
+            "   python bin\\orama-system\\skills\\hermes-harness\\scripts\\install_hermes_thin_skills.py --install",
+            "   python bin\\orama-system\\skills\\hermes-harness\\scripts\\install_hermes_thin_skills.py --verify",
+            "   python bin\\orama-system\\skills\\hermes-harness\\scripts\\install_hermes_thin_skills.py --test",
+            "Full reference: bin\\orama-system\\skills\\hermes-harness\\references\\win-localhost-runtime-checklist.md",
+        ]
+        if args.json_out:
+            print(json.dumps({"prepare": True, "checklist": checklist}, indent=2))
+        else:
+            print("Hermes harness — offline prepare (no live probes)")
+            for i, line in enumerate(checklist, 1):
+                print(f"  {i}. {line}")
+        return 0
 
     results: list[Result] = []
     results.append(check_lm_studio(args.lm_studio_url, args.timeout))
