@@ -101,7 +101,7 @@ tail -30 docs/LESSONS.md 2>/dev/null || tail -30 .claude/lessons/LESSONS.md 2>/d
 
 Compose the proposed addition. Show it to the user clearly:
 
-```
+```text
 === PROPOSED ADDITION TO docs/LESSONS.md ===
 
 ## [YYYY-MM-DD] <Session Summary>
@@ -119,7 +119,7 @@ Compose the proposed addition. Show it to the user clearly:
 
 Present:
 
-```
+```text
 Self-improve proposal ready.
 
 Options:

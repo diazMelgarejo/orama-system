@@ -27,7 +27,7 @@ read `rules/workflow.md` first, then `agents/builder.md`. Drop-ins live one leve
 
 ## Tool-chain reminder
 
-```
+```text
 code-review-graph (MCP)  →  gbrain code-def / search  →  Read
 ```
 

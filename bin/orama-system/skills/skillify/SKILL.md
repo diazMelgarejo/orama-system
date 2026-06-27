@@ -391,7 +391,7 @@ Report any failing Cs. If any fail: offer to fix inline or note for manual follo
 
 Report:
 
-```
+```text
 STATUS: DONE
 
 Created:

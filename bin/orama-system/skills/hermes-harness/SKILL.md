@@ -349,7 +349,7 @@ See `references/lan-endpoint-contract.md` for the full variable contract.
 
 ## Attribution & Layering
 
-```
+```text
 L3 — orama-system        canonical skills, rules, references (this repo)
 L2 — Perpetua-Tools      middleware, hardware policy, startup intelligence
 L1 — Hermes local        harness-specific loading, provider config, workspace memory
@@ -517,7 +517,7 @@ does not block use of the remaining tools — exclude the failing partner and lo
 
 ## Attribution & Layering
 
-```
+```text
 L3 orama-system (this repo)
    → stateless methodology, canonical skills, routing policy
    → NEVER holds runtime state

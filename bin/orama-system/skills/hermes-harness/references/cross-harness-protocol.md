@@ -11,7 +11,7 @@
 **Put durable behaviour in the shared source first.**  
 Use harness-specific files only for: loading mechanics, command names, event shapes, and platform limits.
 
-```
+```text
 orama-system/bin/orama-system/skills/   ← canonical skill bodies (shared source)
 Perpetua-Tools/                         ← middleware, hardware policy, startup intelligence
 ~/.hermes/skills/pt-orama-*/            ← thin wrappers that point at the above (harness edge)

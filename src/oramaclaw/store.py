@@ -160,8 +160,8 @@ def _acquire_lock(lock_path: Path) -> None:
         except LockHeld:
             raise
         except Exception as exc:
-            _log.warning("ControlStore: could not parse lock file %s — %s; overwriting", lock_path, exc)
-            return True
+            _log.warning("ControlStore: could not parse lock file %s — %s; treating as held", lock_path, exc)
+            raise LockHeld(-1, lock_path) from exc
 
     # Attempt 0: optimistic O_CREAT|O_EXCL (no contention expected).
     # Attempt 1: after a stale-lock unlink, the window between unlink and the
@@ -238,6 +238,11 @@ class ControlStore:
         store = cls(target)
         _acquire_lock(store._lock_path)
         store._lock_held = True
+        try:
+            store.sweep_orphan_pending()
+        except Exception:
+            store.close()
+            raise
         return store
 
     def close(self) -> None:
@@ -402,11 +407,70 @@ class ControlStore:
         return found
 
     def clear_pending_for_transaction(self, transaction_id: str) -> None:
-        """Drop pending records for a transaction (e.g. before stale-hash replan)."""
+        """Drop pending records for a transaction (e.g. before stale-hash replan).
+
+        Removed records are archived under ``registry/orphan-conflicts/`` for audit.
+        """
         records = self.load_pending()
+        removed = [r for r in records if r.get("transaction_id") == transaction_id]
         filtered = [r for r in records if r.get("transaction_id") != transaction_id]
-        if len(filtered) != len(records):
+        if removed:
+            self._archive_pending_records(
+                removed, reason=f"clear_pending_for_transaction:{transaction_id}"
+            )
             _atomic_write_json(self._pending_path, filtered)
+
+    def sweep_orphan_pending(self) -> int:
+        """Archive unresolved pending tied to failed or unknown transactions."""
+        records = self.load_pending()
+        open_records = [r for r in records if r.get("resolved_at") is None]
+        if not open_records:
+            return 0
+
+        journal = self.load_journal()
+        tx_state: dict[str, str] = {}
+        for entry in journal:
+            tx_state[entry.get("transaction_id", "")] = entry.get("state", "")
+
+        orphans: list[dict[str, Any]] = []
+        for record in open_records:
+            tx = record.get("transaction_id", "")
+            state = tx_state.get(tx)
+            if state == "failed":
+                orphans.append(record)
+            # Missing journal entry may mean the tx was trimmed — leave unresolved.
+
+        if not orphans:
+            return 0
+
+        self._archive_pending_records(orphans, reason="sweep_orphan_pending")
+        orphan_ids = {r.get("resolution_id") for r in orphans}
+        remaining = [r for r in records if r.get("resolution_id") not in orphan_ids]
+        _atomic_write_json(self._pending_path, remaining)
+        return len(orphans)
+
+    def _archive_pending_records(self, records: list[dict[str, Any]], *, reason: str) -> None:
+        """Persist removed pending records for audit (T3-C)."""
+        if not records:
+            return
+        import uuid
+
+        archive_dir = self._target.state_dir / "registry" / "orphan-conflicts"
+        archive_dir.mkdir(parents=True, exist_ok=True)
+        stamp = time.strftime("%Y%m%dT%H%M%S")
+        path = archive_dir / f"orphan-{stamp}-{os.getpid()}-{uuid.uuid4().hex[:8]}.json"
+        payload = {
+            "reason": reason,
+            "archived_at": _iso_now(),
+            "records": records,
+        }
+        _atomic_write_json(path, payload)
+        _log.info(
+            "ControlStore: archived %d pending record(s) to %s (%s)",
+            len(records),
+            path,
+            reason,
+        )
 
     def pending_by_id(self, resolution_id: str) -> dict[str, Any] | None:
         """Return the raw pending record with the given ID, or None."""

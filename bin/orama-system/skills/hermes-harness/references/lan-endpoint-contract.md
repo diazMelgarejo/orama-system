@@ -55,7 +55,7 @@
 `agent_launcher.py` logs a warning and normalizes to `localhost` if a non-loopback endpoint
 is configured for the local machine (e.g. a stale DHCP IP left in `.env`):
 
-```
+```text
 WARNING: OLLAMA_MAC_ENDPOINT=http://192.168.x.x:11434 is non-loopback;
 PT runs on the Mac so its ollama is localhost — normalizing to http://localhost:11434
 ```
