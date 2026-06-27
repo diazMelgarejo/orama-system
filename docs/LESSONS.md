@@ -57,9 +57,9 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 4. **utils.hardware_policy import path** — `PERPETUA_TOOLS_ROOT` must resolve to the **directory containing the Python package** (i.e., the root of PT where `src/` lives, so `sys.path.insert(0, str(pt_root))` can resolve `utils.hardware_policy`). Set: `PERPETUA_TOOLS_ROOT=$PERPETUA_TOOLS_PATH`.
 
-5. **Windows LM Studio** at `$LM_STUDIO_WIN_ENDPOINT` — loaded models: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`, `gemma-4-26b-a4b-it`, `text-embedding-nomic-embed-text-v1.5`.
+5. **Windows LM Studio** at `$LM_STUDIO_WIN_ENDPOINT` — loaded models: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`, `gemma-4-26b-a4b-it`, `text-embedding-qwen3-embedding-8b-i1-gguf-q6-k` (4096-dim).
 
-6. **gstack/gbrain not installed on Windows** — neither CLI is on PATH; no `~/.gbrain/config.json`, no `~/.gstack`. Install path: gstack is a Claude Code skill (install separately); gbrain is a separate CLI (install command not found in this repo — check mcp-install `references/first-run-install.md §§ 0.4–0.5.1` on a Mac that has it). For Windows, use `text-embedding-nomic-embed-text-v1.5` via LM Studio OpenAI-compat endpoint as the embedding backend instead of Ollama bge-m3.
+6. **gstack/gbrain not installed on Windows** — neither CLI is on PATH; no `~/.gbrain/config.json`, no `~/.gstack`. Install path: gstack is a Claude Code skill (install separately); gbrain is a separate CLI (install command not found in this repo — check mcp-install `references/first-run-install.md §§ 0.4–0.5.1` on a Mac that has it). For Windows, use `text-embedding-qwen3-embedding-8b-i1-gguf-q6-k` via LM Studio OpenAI-compat endpoint as the embedding backend instead of Ollama `bge-m3` (1024-dim). **Do not use** `text-embedding-nomic-embed-text-v1.5` — 768-dim hard limit breaks gbrain sync.
 
 ---
 
@@ -79,6 +79,8 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 - **T4-C:** SBOM snapshot `docs/sbom/sbom-v1.1.1.0.json`
 
 **Cross-repo (PT PR #154):** T1 routing.json schema validation, T2-B model allowlist, T3-B commit-message fuzz tests.
+
+**Hardware policy (2026-06-27 follow-up):** `mac_only` now enforces Ollama `qwen3.5:9b-nvfp4` + `bge-m3`; Win embedding is `text-embedding-qwen3-embedding-8b-i1-gguf-q6-k` (4096-dim). Removed stale `text-embedding-nomic-embed-text-v1.5` (768-dim breaks gbrain sync).
 
 **Tomorrow (real machines only):** `start.sh --status` green, Ollama model probes, Win LM Studio LAN probes, `--hardware-policy` harness, keychain flows. **T5 freeze** (tags `v1.1.1`, release, `oramasys/v2-foundation`) blocked until E2E passes.
 

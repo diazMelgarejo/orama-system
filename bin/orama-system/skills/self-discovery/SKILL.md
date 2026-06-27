@@ -1,7 +1,7 @@
 <!-- lint-ignore LINT-013 -->
 ---
 name: self-discovery
-version: 1.1.0.0
+version: 1.1.1.0
 description: Query live state across all 3 repos — versions, branch status, LM Studio endpoints, file manifests. Run whenever you need a situational snapshot of the stack.
 user-invocable: true
 ---

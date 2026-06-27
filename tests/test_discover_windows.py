@@ -168,7 +168,8 @@ def test_windows_win_entry_absent_when_lm_studio_unreachable():
 
 POLICY_WIN_MODELS = {
     "windows_only": ["qwen3.5-27b-distilled", "gemma-4-26b"],
-    "mac_only": ["qwen3.5-9b-mlx"],
+    # Ollama mac_only models must not appear on win platform filter
+    "mac_only": ["qwen3.5:9b-nvfp4", "bge-m3", "qwen3.5-9b-mlx"],
     "shared": [],
 }
 
@@ -219,7 +220,7 @@ def test_regression_windows_only_models_not_removed_on_windows_host():
     all_models = [
         "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",  # windows_only
         "gemma-4-26b-a4b-it",                                   # windows_only
-        "text-embedding-nomic-embed-text-v1.5",                 # shared/embedding
+        "text-embedding-qwen3-embedding-8b-i1-gguf-q6-k",       # windows_only embedding
     ]
 
     D.probe_models = lambda url: all_models if "localhost" in url else None
@@ -362,7 +363,8 @@ def test_filter_endpoints_for_policy_win_entry():
     }
     policy = {
         "windows_only": ["qwen3.5-27b-distilled"],
-        "mac_only": ["qwen3.5-9b-mlx"],
+        # Ollama mac_only models must not appear on win platform filter
+    "mac_only": ["qwen3.5:9b-nvfp4", "bge-m3", "qwen3.5-9b-mlx"],
         "shared": [],
     }
     filtered = D.filter_endpoints_for_policy(endpoints, policy)
