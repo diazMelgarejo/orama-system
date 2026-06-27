@@ -59,6 +59,35 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ### 2026-06-26 — PR #135 CodeRabbit closure: tracked-memory path hygiene | Cursor
 
+5. **Windows LM Studio** at `$LM_STUDIO_WIN_ENDPOINT` — loaded models: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`, `gemma-4-26b-a4b-it`, `text-embedding-qwen3-embedding-8b-i1-gguf-q6-k` (4096-dim).
+
+6. **gstack/gbrain not installed on Windows** — neither CLI is on PATH; no `~/.gbrain/config.json`, no `~/.gstack`. Install path: gstack is a Claude Code skill (install separately); gbrain is a separate CLI (install command not found in this repo — check mcp-install `references/first-run-install.md §§ 0.4–0.5.1` on a Mac that has it). For Windows, use `text-embedding-qwen3-embedding-8b-i1-gguf-q6-k` via LM Studio OpenAI-compat endpoint as the embedding backend instead of Ollama `bge-m3` (1024-dim). **Do not use** `text-embedding-nomic-embed-text-v1.5` — 768-dim hard limit breaks gbrain sync.
+
+---
+
+### 2026-06-27 — Pre-v2 security hardening: Linux tiers shipped, Mac/Win E2E deferred | Cursor
+
+**Branch:** `cursor/security-hardening-pre-v2-c4ae` · **PR #113** · **Version:** `1.1.1.0`
+
+**Plan:** [`docs/plans/2026-06-27-security-hardening-pre-v2.md`](plans/2026-06-27-security-hardening-pre-v2.md) — includes platform schedule table (🐧 Linux vs 🍎 macOS vs 🪟 Windows 11).
+
+**Shipped on Linux cloud (commits `de5c820` + PT `627d3a3`):**
+
+- **T2-C:** Line-level LINT-013 — `<!-- LINT-013-ok -->` / `# lint-ignore-line LINT-013` on same line as historical IPs; file-level pragma deprecated for new files
+- **T3-A:** `tests/test_concurrent_lock.py` — proves ≤1 simultaneous lock holder under 8-thread stress
+- **T3-C:** `ControlStore` archives cleared/orphan pending to `registry/orphan-conflicts/`; `sweep_orphan_pending()` on `open()`
+- **T4-A:** `scripts/check_dep_pins.py` + `~=` pins on `[project.optional-dependencies] test`
+- **T4-B:** `check-local-env.sh` warns when `LM_STUDIO_API_TOKEN` is default `lm-studio` / `lmstudio`
+- **T4-C:** SBOM snapshot `docs/sbom/sbom-v1.1.1.0.json`
+
+**Cross-repo (PT PR #154):** T1 routing.json schema validation, T2-B model allowlist, T3-B commit-message fuzz tests.
+
+**Hardware policy (2026-06-27 follow-up):** `mac_only` now enforces Ollama `qwen3.5:9b-nvfp4` + `bge-m3`; Win embedding is `text-embedding-qwen3-embedding-8b-i1-gguf-q6-k` (4096-dim). Removed stale `text-embedding-nomic-embed-text-v1.5` (768-dim breaks gbrain sync).
+
+**Tomorrow (real machines only):** `start.sh --status` green, Ollama model probes, Win LM Studio LAN probes, `--hardware-policy` harness, keychain flows. **T5 freeze** (tags `v1.1.1`, release, `oramasys/v2-foundation`) blocked until E2E passes.
+
+**Steelman principle (S8):** fixing `_canonical_endpoint()` on helper return paths does not protect module-level URL constants assigned at import from bare env vars — canonicalize at import time (PT T1-B).
+
 **What was learned**
 
 - Merging a PR before verifying all review threads against `main` is a Stage-5 (Crystallize) failure — especially when hygiene gives false negatives (`LINT-006` missed Windows user-profile paths until extended).

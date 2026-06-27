@@ -20,7 +20,7 @@ We strictly adhere to the **"Never Adopt, Always Mine"** policy for external fra
 
 Most frameworks treat hardware as a config string (\`device=\"cuda\"\`). **oramasys v2** is the only system where the **Policy Resolver** (L2) can veto an execution plan (L3) based on live LAN telemetry before the LLM is even called.
 
-For a detailed breakdown of how v2 primitives improve upon our v1 baseline and mined features, see [**primitive-evolution.md**](./references/primitive-evolution.md).
+For a detailed breakdown of how v2 primitives improve upon our v1 baseline and mined features, see [**primitive-evolution.md**](./references/patterns/primitive-evolution.md).
 
 ---
 
@@ -65,10 +65,10 @@ Based on the technical review of Karpathy's "March of Nines":
 
 1. **Audit existing tests** in \`~/code/oramasys/perpetua-core/tests/\` to ensure they don't depend on \"Monkey Patching.\"
 2. **Draft the \`GraphPlugin\` base class** and prepare to migrate the existing \`checkpointer.py\` to use the new protocol.
-3. **Analyze \`Pydantic AI Slim\`'s tool extractor** (see \`references/pydantic-ai-extraction-deep-dive.md\`).
+3. **Analyze \`Pydantic AI Slim\`'s tool extractor** (see \`references/patterns/pydantic-ai-extraction-deep-dive.md\`).
 4. **Define Orbit Satellite Schemas**: Draft the GossipBus events for the Port Manager and GC Worker (see [**10-v1-hacks-automation-orbit.md**](./10-v1-hacks-automation-orbit.md)).
-5. **Implement State Reducers**: Refactor \`PerpetuaState.merge()\` to support list accumulation and dictionary merging (see \`references/state-reducer-patterns.md\`).
-6. **Migrate Persona Templates**: Move v1 \`SOUL.md\` files to \`agent_registry.json\` format and implement the \`build_agent_prompt\` utility (see \`references/prompt-and-task-primitives.md\`).
+5. **Implement State Reducers**: Refactor \`PerpetuaState.merge()\` to support list accumulation and dictionary merging (see \`references/patterns/state-reducer-patterns.md\`).
+6. **Migrate Persona Templates**: Move v1 \`SOUL.md\` files to \`agent_registry.json\` format and implement the \`build_agent_prompt\` utility (see \`references/patterns/prompt-and-task-primitives.md\`).
 
 ---
 

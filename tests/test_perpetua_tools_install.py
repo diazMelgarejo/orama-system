@@ -327,6 +327,7 @@ class TestInstallShPtDiscovery:
         result = _run_discovery({
             "PERPETUA_TOOLS_PATH": "",
             "PERPETUA_TOOLS_ROOT": "",
+            "OPENCLAW_HOME": "",
             "HOME": str(tmp_path),
         })
         assert result.returncode == 0

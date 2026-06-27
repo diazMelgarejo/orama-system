@@ -3,7 +3,7 @@
 oramasys_core.py
 ==================
 Shared types, constants, and base classes for the oramasys multi-agent system.
-Version: 1.1.0.0 | License: Apache 2.0
+Version: 1.1.1.0 | License: Apache 2.0
 
 This is the single source of truth for data contracts between agents.
 """

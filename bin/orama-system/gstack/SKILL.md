@@ -185,8 +185,9 @@ cd ~/gbrain && bun run src/cli.ts init \
 > `content_chunks` was already guarded by `applyChunkEmbeddingIndexPolicy`.
 > Exact scans are used instead — correct for a personal brain.
 >
-> **Fallback:** if Qwen3 is not loaded in LM Studio, use
-> `--embedding-model "llama-server:text-embedding-nomic-embed-text-v1.5" --embedding-dimensions 768`
+> **Fallback (legacy only):** if Qwen3 is not loaded in LM Studio, prefer loading
+> `text-embedding-qwen3-embedding-8b-i1-gguf-q6-k` before any 768-dim model — nomic
+> breaks gbrain dimension sync.
 
 **Expected `~/.gbrain/config.json` on Windows:**
 ```json

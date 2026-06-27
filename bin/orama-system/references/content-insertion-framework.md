@@ -106,7 +106,7 @@ Before writing any script, check both columns. **One BLOCKED item vetoes scripti
 
 ### Execution Flow
 
-```
+```text
 START
   │
   ▼
@@ -141,7 +141,7 @@ After any method executes:
 
 **Never trust visual alone.** Pages lag, caches mislead, async renders deceive.
 
-```
+```text
 execute_method()
     ↓
 visual_ok?  ──no──→  refresh_page()
@@ -167,7 +167,7 @@ When the inserted content is markdown, treat link hygiene as part of the write:
 
 ### Quick Reference Card
 
-```
+```text
 ┌──────────────────────────────────────────────────────────┐
 │            CONTENT INSERTION — DECISION CARD             │
 │                                                          │
@@ -262,7 +262,7 @@ def verify_with_read_page(content):
 This document is the **human-readable reference** for CIDF v1.2.
 The **executable source of truth** lives in the `cidf/` package alongside this file:
 
-```
+```text
 bin/orama-system/
 ├── references/
 │   └── content-insertion-framework.md   ← you are here (human reference)
