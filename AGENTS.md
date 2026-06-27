@@ -77,6 +77,19 @@ See `docs/wiki/12-cursor-cloud-commit-attribution.md`.
   AI/helper domains and markers, but random/unattributable Gmail co-authors are
   blocked.
 
+## PR merge & conflict resolution — oramasys-method (MANDATORY)
+
+**Applies to every agent when modifying, merging, or resolving conflicts on a PR.**
+
+Load the **oramasys-method** skill and follow
+[`bin/orama-system/skills/oramasys-method/references/integrative-merge.md`](bin/orama-system/skills/oramasys-method/references/integrative-merge.md):
+
+- **Synthesize, never amputate** — additive, blending, union, superset; archive instead of delete.
+- **Six modes:** additive → union → superset → synthesize → architecturally-correct → api-correct.
+- **Simulate merges first**; one harmonization pass; pytest before push.
+- Wrappers: `.claude/skills/oramasys-method/SKILL.md`, `.agents/skills/oramasys-method/SKILL.md`.
+- Full 7-step protocol: [`bin/orama-system/references/multi-agent-collaboration-protocol.md`](bin/orama-system/references/multi-agent-collaboration-protocol.md).
+
 ## Security PR stacking directive
 
 - Before opening or preparing any security-remediation PR, read
