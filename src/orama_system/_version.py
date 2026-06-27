@@ -12,4 +12,4 @@ Bump procedure:
     3. Commit all changed files together (see docs/wiki/06-multi-agent-collab.md).
 """
 
-__version__ = "1.1.0.0"
+__version__ = "1.1.1.0"
