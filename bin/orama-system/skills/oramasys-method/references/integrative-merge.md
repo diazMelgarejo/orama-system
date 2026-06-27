@@ -58,7 +58,7 @@ locality/canonical-loopback tests from the incoming branch.
 
 Run this **before** editing conflicted files:
 
-```
+```text
 1. Simulate   git merge --no-commit --no-ff <incoming>
               git diff --name-only --diff-filter=U
               git merge --abort
@@ -94,7 +94,7 @@ merge **leaf → parent → main**; wait for `mergeable_state: clean` between me
 
 ## AFRP gate for merge tasks
 
-```
+```text
 AFRP: Type C | Level Practitioner | Mode 2
 Scope: Integratively merge <branch> into <base> without losing either side's intent
 ```
