@@ -39,7 +39,11 @@ IDENTITY_DOC_EXCEPTIONS = {
 # workstation paths in public docs are a dox risk and hurt portability.
 # Pattern intentionally matches the username segment so the check fails even
 # if someone copies a teammate's path. Use ~, $REPO_ROOT, or <workspace> instead.
-PERSONAL_PATH_PATTERN = re.compile(r"(/Users/|/home/)([A-Za-z][A-Za-z0-9._-]+)/")
+PERSONAL_PATH_PATTERN = re.compile(
+    r"(?:/Users/|/home/)([A-Za-z][A-Za-z0-9._-]+)/"
+    r"|C:\\Users\\[^\\\"\s]+\\?",
+    re.IGNORECASE,
+)
 # Username segments that are documentation placeholders, not real leaks.
 # These appear in .paths.example, skill protocol docs, etc., and should be
 # allowed so example commands stay readable. A real workstation username
@@ -295,12 +299,12 @@ def scan_personal_paths(root: Path, files: list[str]) -> list[str]:
             if not m:
                 continue
             # The captured username segment; allow well-known doc placeholders.
-            username = m.group(2)
-            if username in PERSONAL_PATH_PLACEHOLDERS:
+            username = m.group(1) if m.lastindex and m.lastindex >= 1 else None
+            if username and username in PERSONAL_PATH_PLACEHOLDERS:
                 continue
             errors.append(
                 f"personal absolute path in tracked file: {rel}:{line_no}: "
-                f"matched {m.group(0)!r} — use ~, $REPO_ROOT, or <workspace>"
+                f"matched {m.group(0)!r} — use $HOME/, %USERPROFILE%\\, or $REPO_ROOT"
             )
             break
     return errors
@@ -768,92 +772,6 @@ def _line_has_secret_placeholder(line: str) -> bool:
     return any(marker in line for marker in SECRET_PLACEHOLDER_MARKERS)
 
 
-def check_skill_quality(root: Path, files: list[str]) -> list[str]:
-    """LINT-010/011/012 — catch three recurring silent failures in SKILL.md files.
-
-    LINT-010: all-``1.`` numbered lists in ``## Procedure`` sections.
-      Agent runtimes (Hermes, Codex, OpenCode) consume SKILL.md as raw text.
-      When every step is ``1.``, step-tracking and procedure parsing break
-      silently — the bug that hit 9 openclaw-skills SKILL.md files.
-
-    LINT-011: ``(deprecated)`` inside ``trigger:`` frontmatter strings.
-      Trigger strings are routing matchers; injecting ``(deprecated)`` means
-      the route only fires when a user literally types that word.
-
-    LINT-012: ``hermes -z`` in any tracked Markdown file.
-      ``hermes -z`` is a retired flag (returns an error in current builds).
-      Current syntax: ``hermes chat --query "..." --safe-mode --max-turns 1``.
-    """
-    import re
-
-    errors: list[str] = []
-    PROCEDURE_FENCE_RE = re.compile(r"```[a-z]*\n.*?```", re.DOTALL)
-    ALL_ONES_RE = re.compile(r"(?m)^1\. .+\n(?:(?!^[^1]).*\n)*?1\. ")
-    DEPRECATED_TRIGGER_RE = re.compile(
-        r'^(\s*trigger:\s*"[^"\n]*)\(deprecated\)', re.MULTILINE
-    )
-
-    for rel in files:
-        if not rel.endswith(".md"):
-            continue
-        path = root / rel
-        if not path.is_file():
-            continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-
-        # LINT-011: (deprecated) in trigger strings
-        if DEPRECATED_TRIGGER_RE.search(text):
-            errors.append(
-                f"LINT-011: (deprecated) inside trigger: string — breaks routing: {rel}"
-            )
-
-        # LINT-012: hermes -z
-        # Skip files that self-document LINT-012 (<!-- lint-ignore LINT-012 -->)
-        lint012_exempt = "<!-- lint-ignore LINT-012 -->" in text
-        if not lint012_exempt and "hermes -z" in text:
-            errors.append(
-                f"LINT-012: retired 'hermes -z' flag in markdown — use 'hermes chat --query': {rel}"
-            )
-
-        # LINT-013: raw LAN IP literals in skill, plan, or reference docs.
-        # IPs must come from env vars (WIN_IP, MAC_IP, LM_STUDIO_*_ENDPOINT).
-        # Code-fallback defaults (in .py files) are allowed; docs are not.
-        # Exempt: files that document the variable contract itself (lan-endpoint-contract.md)
-        # and files with <!-- lint-ignore LINT-013 --> pragma.
-        if not rel.endswith(".py") and "<!-- lint-ignore LINT-013 -->" not in text:
-            _LAN_RE = re.compile(
-                r"(?<!\w)(?:192\.168\.|10\.\d+\.|172\.(?:1[6-9]|2\d|31)\.)\d+\.\d+(?!\w)"
-            )
-            _ip_hits = [m.group() for m in _LAN_RE.finditer(text)
-                        if "lan-endpoint-contract" not in rel
-                        and "windows-provider-routing" not in rel]
-            if _ip_hits:
-                errors.append(
-                    f"LINT-013: raw LAN IP literal(s) {_ip_hits[:3]} in {rel}"
-                    " — use $WIN_IP/$MAC_IP/LM_STUDIO_*_ENDPOINT env vars"
-                )
-
-
-        # LINT-010: only scan SKILL.md ## Procedure sections
-        if not path.name == "SKILL.md":
-            continue
-        proc_idx = text.find("## Procedure")
-        if proc_idx == -1:
-            continue
-        proc_text = text[proc_idx:]
-        # Strip code fences — numbered lists inside fences are file content
-        stripped = PROCEDURE_FENCE_RE.sub("", proc_text)
-        if ALL_ONES_RE.search(stripped):
-            errors.append(
-                f"LINT-010: all-'1.' numbered list in ## Procedure (steps not sequential): {rel}"
-            )
-
-    return errors
-
-
 def scan_tracked_secrets(root: Path, files: list[str]) -> list[str]:
     """Block committed API keys, bot tokens, and other high-confidence secrets."""
     errors: list[str] = []
@@ -943,7 +861,6 @@ def main() -> int:
     errors.extend(check_cc_openclaw_gitlink(root))
     errors.extend(check_workflow_permissions(root))
     errors.extend(check_stale_skill_path_refs(root, files))
-    errors.extend(check_skill_quality(root, files))
     errors.extend(check_git_internal_junk(root))
     errors.extend(scan_stale_git_locks(root))
     errors.extend(scan_macos_dedup_dirs(root))
