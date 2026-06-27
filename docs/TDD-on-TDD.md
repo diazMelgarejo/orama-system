@@ -11,13 +11,15 @@
 
 - **Toolchain:** Vitest 3 + jsdom + React Testing Library + `@testing-library/jest-dom`
 - **Scripts:** `pnpm test`, `pnpm test:watch` in `web/package.json`
-- **13 tests across 4 files** (RC-1 minimum gate from `TDD.md`):
+- **16 tests across 5 files** (RC-1 minimum gate from `TDD.md`):
   - `src/api/client.test.ts` — `apiFetch` success / error / POST body
   - `src/features/command-center/commandCenterState.test.ts` — mock-state fallback, empty job id
+  - `src/features/command-center/CommandCenter.test.tsx` — composer / runs / artifacts nav smokes
   - `src/features/routing/RoutingView.test.tsx` — LM Studio online/offline branch
   - `src/App.test.tsx` — smoke render + API error banner
 - **Pure helpers extracted** for testable fallbacks: `commandCenterState.ts`, `routingState.ts`
 - **CI:** new `web-test` job in `.github/workflows/ci.yml` (`pnpm` + `pnpm test`)
+- **Commit-msg:** `scripts/git/check_tdd_commit.sh` (paired `web/src` prod + test, or `tdd-skip:`)
 
 ### Docs & skill wiring
 
@@ -39,4 +41,4 @@ cd orama-system/web && pnpm install && pnpm test
 cd orama-system && python3 -m pytest tests/test_repo_hygiene.py -q
 ```
 
-All 13 Vitest tests and repo hygiene checks pass. Incremental work left per `TDD.md`: per-route smoke tests beyond the default `command` page, and optional `check_tdd_commit.sh` pre-commit hook (called out in v2/26, not in RC-1 minimum scope).
+All 16 Vitest tests and repo hygiene checks pass. `check_tdd_commit.sh` is wired via `install-local-hooks.sh`. Playwright E2E deferred until after the Vitest gate merges to `main`.
