@@ -836,6 +836,22 @@ def check_skill_quality(root: Path, files: list[str]) -> list[str]:
                     " — use $WIN_IP/$MAC_IP/LM_STUDIO_*_ENDPOINT env vars"
                 )
 
+        # LINT-014: argv-form secret passing in skill/plan/doc files (S1).
+        lint014_exempt = (
+            "<!-- lint-ignore LINT-014 -->" in text
+            or "lint-ignore" in text and "LINT-014" in text
+        )
+        if not lint014_exempt and not rel.endswith(".py"):
+            _ARGV_SECRET_RE = re.compile(
+                r"security\s+add-generic-password\s+.*-w\s+[\"']?\$",
+                re.IGNORECASE,
+            )
+            if _ARGV_SECRET_RE.search(text):
+                errors.append(
+                    f"LINT-014: argv secret passing in {rel}"
+                    " — use store_keychain_secret.sh (stdin pipe)"
+                )
+
 
         # LINT-010: only scan SKILL.md ## Procedure sections
         if not path.name == "SKILL.md":

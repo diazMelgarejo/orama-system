@@ -1,7 +1,7 @@
 # orama-system — Claude Code Navigation
 
 > Renamed: ultrathink-system → orama-system (2026-04-20, ὅραμα = "that which is seen / vision / revelation")
-> Package: `@diazmelgarejo/orama-system@1.1.0.0`
+> Package: `@diazmelgarejo/orama-system@1.1.1.0`
 > GitHub: <https://github.com/diazMelgarejo/orama-system>
 
 ---

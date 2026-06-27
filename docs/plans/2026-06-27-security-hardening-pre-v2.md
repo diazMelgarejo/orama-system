@@ -1,9 +1,9 @@
-<!-- lint-ignore LINT-013 -->
+<!-- lint-ignore LINT-013 LINT-014 -->
 # Security-in-Depth Hardening — Pre-v2 Feature Freeze
 
-> **Status:** 📋 PLANNED  
+> **Status:** 🚧 IN PROGRESS (`cursor/security-hardening-pre-v2-c4ae`)  
 > **Target:** Last release before snapshot as `v1.x-stable` → migration to `oramasys/*`  
-> **Versions:** orama-system `1.1.0.0` · Perpetua-Tools `0.9.9.9` → freeze at `1.1.1` / `1.0.0`  
+> **Versions:** orama-system `1.1.1.0` · Perpetua-Tools `1.1.1.0` → freeze tag `v1.1.1`  
 > **Approval gate:** Explicit "approve" from user before any execution tier.
 
 ---

@@ -135,7 +135,7 @@ When two agents may be working simultaneously:
 8. **Confirm Git identity before committing**: `bash scripts/git/check_identity.sh`
 9. **Stash untracked files before branch surgery**: `git stash push --include-untracked -m "preserve work before <operation>"`
 
-Version registry: **current version is `1.1.0.0`**. Never bump without explicit user instruction. All canonical locations are listed in [docs/wiki/06-multi-agent-collab.md](docs/wiki/06-multi-agent-collab.md).
+Version registry: **current version is `1.1.1.0`**. Never bump without explicit user instruction. All canonical locations are listed in [docs/wiki/06-multi-agent-collab.md](docs/wiki/06-multi-agent-collab.md).
 
 → [docs/wiki/06-multi-agent-collab.md](docs/wiki/06-multi-agent-collab.md)
 
