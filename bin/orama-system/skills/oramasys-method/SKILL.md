@@ -15,8 +15,10 @@ description: >-
   the exact word "ultrathink" or "oramasys" is absent, and even if they use the
   old "ultrathink" name. If a request is non-trivial, multi-step, or design-heavy,
   prefer this skill. It replaces ultrathink-system; treat any ultrathink
-  invocation as an oramasys invocation.
-version: "1.1.0"
+  invocation as an oramasys invocation. **Also use for PR merges, conflict
+  resolution, nested-branch integration, and any edit that must harmonize two
+  divergent branches additively (never delete-and-replace).**
+version: "1.2.0"
 license: Apache 2.0
 compatibility: claude-code, cowork, codex, openclaw
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
@@ -114,6 +116,21 @@ Full detail in `references/5-stage-methodology.md`.
 The **6 directives** stay active: Plan Node, Subagents, Self-Improvement, Verification
 Before Done, Demand Elegance, Autonomous Bug Fixing.
 
+### Integrative PR merge (mandatory when modifying PRs)
+
+**Before resolving any merge conflict or pushing PR fixes**, load
+`references/integrative-merge.md` and apply the **orama-way** merge doctrine:
+
+- **Synthesize, never amputate** — blend, union, and supersede; do not delete working
+  content from either branch.
+- **Six modes:** additive → union → superset → synthesize → architecturally-correct →
+  api-correct; archive instead of delete when content must leave the active path.
+- **Simulate first** (`git merge --no-commit --no-ff` + `--diff-filter=U` + abort).
+- **One harmonization pass** — no `<<<<<<<` markers; run targeted pytest before push.
+
+This is the same protocol as `bin/orama-system/references/multi-agent-collaboration-protocol.md`
+§ Nested-Branch Merge, packaged for PR work and agent harnesses.
+
 ---
 
 ## Step 3 — Route heavy reasoning through the MCP server
@@ -142,6 +159,7 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - Search local memory/CRG equivalents before broad Grep/Read/web when available
 - Apply CIDF `decide()` before any content insertion (start at rank 1)
 - Treat "ultrathink" and "oramasys" as the same trigger
+- **On PR/conflict work:** follow `references/integrative-merge.md` (additive harmonization)
 
 ### Ask First
 
@@ -156,11 +174,13 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - Bypass the current harness's approved browser/search path
 - Trust visual confirmation as verification
 - Reintroduce `mcp-ultrathink-*` names in new config or skills
+- **Resolve merge conflicts by wholesale `--ours` / `--theirs` without classifying mode**
 
 ---
 
 ## References
 
 - `references/5-stage-methodology.md` — full 5-stage process + 6 directives
+- `references/integrative-merge.md` — **PR merge / conflict harmonization (additive, never-delete)**
 - `references/search-frugality.md` — gbrain + gstack + CRG decision tree
 - `references/cidf-and-mcp.md` — CIDF ranks, MCP names, legacy compatibility map

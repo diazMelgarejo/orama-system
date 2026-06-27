@@ -33,6 +33,8 @@ If the worktree is dirty, the branch is not tracking origin, or fast-forward is 
 
 Open and follow `bin/orama-system/skills/oramasys-method/SKILL.md` (relative to the repo root). Do not copy behavior from this wrapper.
 
+**PR merge / conflict work:** also load `bin/orama-system/skills/oramasys-method/references/integrative-merge.md` — additive harmonization (synthesize, never amputate).
+
 ## Windows UTF-8 Note
 
 On Windows PowerShell, set UTF-8 explicitly before reading or writing skill files:
