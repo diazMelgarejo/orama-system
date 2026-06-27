@@ -4,7 +4,7 @@
  */
 import { StatusBadge } from "@/components/StatusBadge";
 import type { AppState } from "@/api/appState";
-import { selectFallbackChain } from "./routingState";
+import { selectFallbackChain, LMSTUDIO_WIN_ROW_MODEL } from "./routingState";
 
 interface RoutingViewProps {
   state: AppState | undefined;
@@ -18,7 +18,7 @@ const ROUTING_PRECEDENCE = [
 
 const FALLBACK_CHAIN = [
   { model: "ollama/qwen3.5:9b-nvfp4", device: "mac", status: "primary" },
-  { model: "lmstudio-win/qwen3.5-27b-*", device: "win-lan", status: "launchable" },
+  { model: LMSTUDIO_WIN_ROW_MODEL, device: "win-lan", status: "launchable" },
   { model: "openrouter/nvidia/nemotron-3-super-120b-a12b:free", device: "cloud", status: "fallback-1" },
   { model: "openrouter/minimax/minimax-m2.5:free", device: "cloud", status: "fallback-2" },
   { model: "openrouter/deepseek/deepseek-v4-5:free", device: "cloud", status: "fallback-3" },
