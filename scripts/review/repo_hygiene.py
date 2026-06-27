@@ -821,19 +821,28 @@ def check_skill_quality(root: Path, files: list[str]) -> list[str]:
         # LINT-013: raw LAN IP literals in skill, plan, or reference docs.
         # IPs must come from env vars (WIN_IP, MAC_IP, LM_STUDIO_*_ENDPOINT).
         # Code-fallback defaults (in .py files) are allowed; docs are not.
-        # Exempt: files that document the variable contract itself (lan-endpoint-contract.md)
-        # and files with <!-- lint-ignore LINT-013 --> pragma.
+        # Exempt: lan-endpoint-contract.md, file-level <!-- lint-ignore LINT-013 -->,
+        # or line-level <!-- LINT-013-ok --> / # lint-ignore-line LINT-013 on same line.
         if not rel.endswith(".py") and "<!-- lint-ignore LINT-013 -->" not in text:
             _LAN_RE = re.compile(
                 r"(?<!\w)(?:192\.168\.|10\.\d+\.|172\.(?:1[6-9]|2\d|31)\.)\d+\.\d+(?!\w)"
             )
-            _ip_hits = [m.group() for m in _LAN_RE.finditer(text)
-                        if "lan-endpoint-contract" not in rel
-                        and "windows-provider-routing" not in rel]
+            _LINE_OK_RE = re.compile(
+                r"(?:<!--\s*LINT-013-ok\s*-->|#\s*lint-ignore-line\s+LINT-013)",
+                re.IGNORECASE,
+            )
+            _ip_hits: list[str] = []
+            if "lan-endpoint-contract" not in rel and "windows-provider-routing" not in rel:
+                for line_no, line in enumerate(text.splitlines(), start=1):
+                    if _LINE_OK_RE.search(line):
+                        continue
+                    for match in _LAN_RE.finditer(line):
+                        _ip_hits.append(f"{match.group()}:{line_no}")
             if _ip_hits:
                 errors.append(
                     f"LINT-013: raw LAN IP literal(s) {_ip_hits[:3]} in {rel}"
                     " — use $WIN_IP/$MAC_IP/LM_STUDIO_*_ENDPOINT env vars"
+                    " or line-level <!-- LINT-013-ok -->"
                 )
 
         # LINT-014: argv-form secret passing in skill/plan/doc files (S1).

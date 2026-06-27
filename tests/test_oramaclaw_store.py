@@ -118,8 +118,15 @@ def test_clear_pending_for_transaction(tmp_path):
         store.clear_pending_for_transaction("tx-a")
         remaining = {r["resolution_id"] for r in store.load_pending()}
     assert remaining == {"r2"}
+    archive_dir = t.state_dir / "registry" / "orphan-conflicts"
+    assert archive_dir.is_dir()
+    archives = list(archive_dir.glob("orphan-*.json"))
+    assert archives, "cleared pending should be archived"
+    payload = json.loads(archives[0].read_text(encoding="utf-8"))
+    assert payload["records"][0]["resolution_id"] == "r1"
 
 
+def test_record_ownership(tmp_path):
     t = _target(tmp_path)
     with ControlStore.open(t) as store:
         store.record_ownership("mgr", "provider:x", "/effort", "high")
@@ -128,6 +135,46 @@ def test_clear_pending_for_transaction(tmp_path):
     assert entry["manager"] == "mgr"
     assert entry["managed_path"] == "/effort"
     assert entry["fingerprint"] == _fingerprint("high")
+
+
+def test_sweep_orphan_pending_archives_failed_transaction(tmp_path):
+    t = _target(tmp_path)
+    t.state_dir.mkdir(parents=True, exist_ok=True)
+    pending_path = t.state_dir / "pending-resolutions.json"
+    journal_path = t.state_dir / "journal.json"
+    pending_path.write_text(
+        json.dumps(
+            [
+                {
+                    "resolution_id": "r-orphan",
+                    "transaction_id": "tx-failed",
+                    "created_at": "2026-06-21T00:00:00+00:00",
+                    "resolved_at": None,
+                    "chosen": None,
+                    "conflict": {"managed_path": "/effort"},
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    journal_path.write_text(
+        json.dumps(
+            [
+                {
+                    "transaction_id": "tx-failed",
+                    "state": "failed",
+                    "resources": [],
+                    "auto_woven": [],
+                    "conflicts": [],
+                }
+            ]
+        ),
+        encoding="utf-8",
+    )
+    with ControlStore.open(t) as store:
+        assert store.load_pending() == []
+    archive_dir = t.state_dir / "registry" / "orphan-conflicts"
+    assert list(archive_dir.glob("orphan-*.json"))
 
 
 def test_record_ownership_overwrites(tmp_path):
