@@ -145,6 +145,7 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 
 ## Step 4 — Verify before done
 
+- Apply the **TDD gate** (`references/tdd-gate.md` → canonical `docs/TDD.md`) before marking Stage 4 complete
 - Run tests / programmatic check (never visual only)
 - Confirm the artifact actually changed: re-read it, check the signature
 - For multi-agent work: confirm each subagent output before aggregating
@@ -184,3 +185,4 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - `references/integrative-merge.md` — **PR merge / conflict harmonization (additive, never-delete)**
 - `references/search-frugality.md` — gbrain + gstack + CRG decision tree
 - `references/cidf-and-mcp.md` — CIDF ranks, MCP names, legacy compatibility map
+- `references/tdd-gate.md` — TDD prescriptive gate (links `docs/TDD.md`)

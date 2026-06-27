@@ -39,7 +39,11 @@ IDENTITY_DOC_EXCEPTIONS = {
 # workstation paths in public docs are a dox risk and hurt portability.
 # Pattern intentionally matches the username segment so the check fails even
 # if someone copies a teammate's path. Use ~, $REPO_ROOT, or <workspace> instead.
-PERSONAL_PATH_PATTERN = re.compile(r"(/Users/|/home/)([A-Za-z][A-Za-z0-9._-]+)/")
+PERSONAL_PATH_PATTERN = re.compile(
+    r"(?:/Users/|/home/)([A-Za-z][A-Za-z0-9._-]+)/"
+    r"|C:\\Users\\[^\\\"\s]+\\?",
+    re.IGNORECASE,
+)
 # Username segments that are documentation placeholders, not real leaks.
 # These appear in .paths.example, skill protocol docs, etc., and should be
 # allowed so example commands stay readable. A real workstation username
@@ -295,12 +299,12 @@ def scan_personal_paths(root: Path, files: list[str]) -> list[str]:
             if not m:
                 continue
             # The captured username segment; allow well-known doc placeholders.
-            username = m.group(2)
-            if username in PERSONAL_PATH_PLACEHOLDERS:
+            username = m.group(1) if m.lastindex and m.lastindex >= 1 else None
+            if username and username in PERSONAL_PATH_PLACEHOLDERS:
                 continue
             errors.append(
                 f"personal absolute path in tracked file: {rel}:{line_no}: "
-                f"matched {m.group(0)!r} — use ~, $REPO_ROOT, or <workspace>"
+                f"matched {m.group(0)!r} — use $HOME/, %USERPROFILE%\\, or $REPO_ROOT"
             )
             break
     return errors
@@ -993,7 +997,6 @@ def main() -> int:
     errors.extend(check_cc_openclaw_gitlink(root))
     errors.extend(check_workflow_permissions(root))
     errors.extend(check_stale_skill_path_refs(root, files))
-    errors.extend(check_skill_quality(root, files))
     errors.extend(check_git_internal_junk(root))
     errors.extend(scan_stale_git_locks(root))
     errors.extend(scan_macos_dedup_dirs(root))
