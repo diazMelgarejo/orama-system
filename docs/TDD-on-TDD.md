@@ -11,7 +11,7 @@
 
 - **Toolchain:** Vitest 3 + jsdom + React Testing Library + `@testing-library/jest-dom`
 - **Scripts:** `pnpm test`, `pnpm test:watch` in `web/package.json`
-- **16 tests across 5 files** (RC-1 minimum gate from `TDD.md`):
+- **17 tests across 5 files** (RC-1 minimum gate from `TDD.md`):
   - `src/api/client.test.ts` — `apiFetch` success / error / POST body
   - `src/features/command-center/commandCenterState.test.ts` — mock-state fallback, empty job id
   - `src/features/command-center/CommandCenter.test.tsx` — composer / runs / artifacts nav smokes
