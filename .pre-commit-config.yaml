@@ -59,6 +59,13 @@ repos:
         pass_filenames: false
         types: [python, yaml, json]
 
+      - id: dep-pin-check
+        name: "Optional-dependencies use pinned specifiers (T4-A)"
+        entry: python scripts/check_dep_pins.py
+        language: system
+        pass_filenames: false
+        always_run: true
+
       - id: simulate-ci
         name: "Simulate CI (quick) — catch import errors before push"
         entry: bash scripts/simulate_ci.sh --quick

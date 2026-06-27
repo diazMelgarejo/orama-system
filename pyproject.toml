@@ -25,11 +25,11 @@ oramaclaw = "oramaclaw.cli:main"
 
 [project.optional-dependencies]
 test = [
-    "pytest>=9.0.3",
-    "pytest-asyncio>=0.23.0",
-    "hatchling>=1.26.0",
-    "build>=1.2.0",
-    "tomli>=2.0.1; python_version < \"3.11\"",
+    "pytest~=9.0.3",
+    "pytest-asyncio~=0.23.0",
+    "hatchling~=1.26.0",
+    "build~=1.2.0",
+    "tomli~=2.0.1; python_version < \"3.11\"",
 ]
 
 [tool.pytest.ini_options]
