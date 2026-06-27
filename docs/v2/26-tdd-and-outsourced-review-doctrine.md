@@ -126,8 +126,7 @@ must have:
 - Evidence of the GREEN state (test run after implementation).
 - The commit that closes the cycle follows RED → GREEN → REFACTOR order.
 
-This is enforced by the pre-commit hook (`scripts/git/check_tdd_commit.sh` — to be added
-in Phase 1, item TDD-hook in doc 25 §4).
+This is enforced by the commit-msg hook (`scripts/git/check_tdd_commit.sh`, wired from `.githooks/commit-msg` via `install-local-hooks.sh`).
 
 ---
 
