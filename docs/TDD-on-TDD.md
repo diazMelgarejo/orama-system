@@ -41,4 +41,4 @@ cd orama-system/web && pnpm install && pnpm test
 cd orama-system && python3 -m pytest tests/test_repo_hygiene.py -q
 ```
 
-All 16 Vitest tests and repo hygiene checks pass. `check_tdd_commit.sh` is wired via `install-local-hooks.sh`. Playwright E2E deferred until after the Vitest gate merges to `main`.
+All 17 Vitest tests and repo hygiene checks pass. `check_tdd_commit.sh` is wired via `install-local-hooks.sh`. Playwright E2E deferred until after the Vitest gate merges to `main`.
