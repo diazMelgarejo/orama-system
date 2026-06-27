@@ -160,8 +160,8 @@ def _acquire_lock(lock_path: Path) -> None:
         except LockHeld:
             raise
         except Exception as exc:
-            _log.warning("ControlStore: could not parse lock file %s — %s; overwriting", lock_path, exc)
-            return True
+            _log.warning("ControlStore: could not parse lock file %s — %s; treating as held", lock_path, exc)
+            raise LockHeld(-1, lock_path) from exc
 
     # Attempt 0: optimistic O_CREAT|O_EXCL (no contention expected).
     # Attempt 1: after a stale-lock unlink, the window between unlink and the
@@ -238,7 +238,11 @@ class ControlStore:
         store = cls(target)
         _acquire_lock(store._lock_path)
         store._lock_held = True
-        store.sweep_orphan_pending()
+        try:
+            store.sweep_orphan_pending()
+        except Exception:
+            store.close()
+            raise
         return store
 
     def close(self) -> None:
@@ -432,8 +436,9 @@ class ControlStore:
         for record in open_records:
             tx = record.get("transaction_id", "")
             state = tx_state.get(tx)
-            if state is None or state == "failed":
+            if state == "failed":
                 orphans.append(record)
+            # Missing journal entry may mean the tx was trimmed — leave unresolved.
 
         if not orphans:
             return 0
@@ -448,10 +453,12 @@ class ControlStore:
         """Persist removed pending records for audit (T3-C)."""
         if not records:
             return
+        import uuid
+
         archive_dir = self._target.state_dir / "registry" / "orphan-conflicts"
         archive_dir.mkdir(parents=True, exist_ok=True)
         stamp = time.strftime("%Y%m%dT%H%M%S")
-        path = archive_dir / f"orphan-{stamp}-{os.getpid()}.json"
+        path = archive_dir / f"orphan-{stamp}-{os.getpid()}-{uuid.uuid4().hex[:8]}.json"
         payload = {
             "reason": reason,
             "archived_at": _iso_now(),

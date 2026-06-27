@@ -380,7 +380,7 @@ def generate_one_time_authorization(
 
 def consume_one_time_authorization(token: str, record: dict) -> bool:
     """Returns True if token is valid, unexpired, and unused. Marks as used."""
-    if record["token"] != token:
+    if not secrets.compare_digest(record["token"], token):
         return False
     if time.time() > record["expires_at"]:
         return False

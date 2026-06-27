@@ -30,7 +30,7 @@ VERSION = _load_version()
 
 def _re_replace(pattern: str, repl_template: str):
     """Factory: regex replace with {ver} in repl_template."""
-    flags = re.MULTILINE if pattern.startswith("^") else 0
+    flags = re.MULTILINE if pattern.startswith("^") else 0  # SURFACES literals only
 
     def fn(text: str, ver: str) -> str:
         return re.sub(pattern, repl_template.replace("{ver}", ver), text, flags=flags)
