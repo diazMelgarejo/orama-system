@@ -3,7 +3,7 @@
 > **Status:** Active v2 plan (v1 operational in Perpetua-Tools today)  
 > **Date:** 2026-06-26  
 > **Repo target:** [github.com/oramasys/agate](https://github.com/oramasys/agate)  
-> **Cross-refs:** [`07-agate-vision.md`](07-agate-vision.md), [`17-hardware-policy-enforcement.md`](17-hardware-policy-enforcement.md), [`../agate-mvp-design.md`](../agate-mvp-design.md), [`../hermes-hardware-policy-cross-harness.md`](../hermes-hardware-policy-cross-harness.md)
+> **Cross-refs:** [`07-agate-vision.md`](07-agate-vision.md), [`17-hardware-policy-enforcement.md`](17-hardware-policy-enforcement.md), [`references/agate-mvp-design.md`](references/agate-mvp-design.md), [`../hermes-hardware-policy-cross-harness.md`](../hermes-hardware-policy-cross-harness.md)
 
 ---
 
@@ -67,7 +67,7 @@ github.com/oramasys/agate/
 ```
 
 **Publication path:** PyPI `agate-validator` (schema only) → `agate` (API + CLI).
-See [`agate-mvp-design.md`](../agate-mvp-design.md) 3-file MVP.
+See [`references/agate-mvp-design.md`](references/agate-mvp-design.md) 3-file MVP.
 
 ---
 
@@ -163,7 +163,7 @@ perpetua-core but **must call agate API** — no forked parsers (lesson from PT 
 | [`plans/2026-06-24-hermes-harness-canonical-onboarding.md`](../plans/2026-06-24-hermes-harness-canonical-onboarding.md) | Phased harness wiring; one-policy invariant; env var contract |
 | [`plans/2026-06-24-hermes-windows-hardware-policy-walkthrough.md`](../plans/2026-06-24-hermes-windows-hardware-policy-walkthrough.md) | Live Win verification checklist; PR #128–#131 gap chain |
 | [`hermes-hardware-policy-cross-harness.md`](../hermes-hardware-policy-cross-harness.md) | Mermaid cross-harness architecture; platform role reversal |
-| [`agate-mvp-design.md`](../agate-mvp-design.md) | 3-file community MVP; LangChain pain points; schema sketch |
+| [`references/agate-mvp-design.md`](references/agate-mvp-design.md) | 3-file community MVP; LangChain pain points; schema sketch |
 
 v2 agate repo **ingests** the normative content from these docs; orama-system keeps
 pointers (no duplication of NEVER lists in markdown).

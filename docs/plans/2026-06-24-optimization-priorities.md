@@ -158,10 +158,10 @@ jobs:
 
 ## Deferred (not blocking, schedule separately)
 
-| Item | File | Why deferred |
-|------|------|-------------|
-| `engine.py` orphan conflicts | `src/oramaclaw/engine.py:269` | Requires understanding retry loop semantics fully |
-| `engine.py` timeout bypass | `src/oramaclaw/engine.py:293` | Coupled to orphan conflict fix |
+| Item | File | Status |
+|------|------|--------|
+| `engine.py` orphan conflicts | `src/oramaclaw/engine.py:262` | ✅ `cc8c581` — `clear_pending_for_transaction` on stale retry |
+| `engine.py` cooperative timeout | `src/oramaclaw/engine.py:286` | ✅ `cc8c581` — P2-2 downgrade enforced in stale replan loop |
 
 | L6 (schemas/) | `schemas/topology.schema.json` + `devices.schema.json` + `skills.schema.json` (Merlin suggestion — next evolution beyond LINT-013) | 📋 Planned |
 | Periscope L4 integration | `docs/plans/2026-05-24-periscope-l4-integration-plan.md` | 52 open items, separate session |
