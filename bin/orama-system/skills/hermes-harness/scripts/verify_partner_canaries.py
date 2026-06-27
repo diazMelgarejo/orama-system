@@ -153,11 +153,20 @@ def main() -> int:
 
     if args.prepare:
         checklist = [
-            "Win Coder online on localhost (not remote RDP-only): LM Studio :1234",
-            "Hermes on PATH; HERMES_GIT_BASH_PATH set for Git Bash lane",
-            "Run: python verify_partner_canaries.py --lm-studio-url http://localhost:1234/v1",
-            "Then: install_hermes_thin_skills.py --install && --verify",
-            "See references/win-localhost-runtime-checklist.md",
+            "1. PowerShell UTF-8 bootstrap — run first:",
+            "   bin\\orama-system\\skills\\git-history-surgery\\references\\windows-powershell-runtime-bootstrap.md",
+            "2. Verify env vars resolve: $env:PERPETUA_TOOLS_PATH  $env:ORAMA_SYSTEM_PATH",
+            "3. LM Studio listening on http://localhost:1234 (own-machine locality — NOT LAN IP when on Win)",
+            "4. Hermes on PATH; HERMES_GIT_BASH_PATH set for Git Bash lane",
+            "5. Run canary probe (repo-relative, any cwd):",
+            "   cd $env:ORAMA_SYSTEM_PATH",
+            "   python bin\\orama-system\\skills\\hermes-harness\\scripts\\verify_partner_canaries.py --lm-studio-url http://localhost:1234/v1",
+            "   Optional: add --skip-hermes --skip-agy when those lanes are intentionally absent",
+            "6. Install + verify + test thin wrappers (Phase 9):",
+            "   python bin\\orama-system\\skills\\hermes-harness\\scripts\\install_hermes_thin_skills.py --install",
+            "   python bin\\orama-system\\skills\\hermes-harness\\scripts\\install_hermes_thin_skills.py --verify",
+            "   python bin\\orama-system\\skills\\hermes-harness\\scripts\\install_hermes_thin_skills.py --test",
+            "Full reference: bin\\orama-system\\skills\\hermes-harness\\references\\win-localhost-runtime-checklist.md",
         ]
         if args.json_out:
             print(json.dumps({"prepare": True, "checklist": checklist}, indent=2))

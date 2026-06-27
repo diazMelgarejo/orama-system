@@ -7,11 +7,16 @@ import {
   resolveLatestJobId,
 } from "./commandCenterState";
 
-const emptyJobsState = (jobs: JobSummary[] | undefined): AppState => ({
+// Produces a state where the jobs section data is null (absent from API response).
+// Use this to test the guard path in resolveJobs; pass an array to test
+// the present-but-empty path.
+const stateWithJobsData = (
+  data: { jobs: JobSummary[] } | null,
+): AppState => ({
   ...mockState,
   jobs: {
     ...mockState.jobs,
-    data: { jobs: jobs as JobSummary[] },
+    data,
   },
 });
 
@@ -30,15 +35,15 @@ describe("resolveDisplayState", () => {
 });
 
 describe("resolveJobs", () => {
-  it("falls back to mock jobs when the jobs section is missing", () => {
-    const state = emptyJobsState(undefined);
+  it("falls back to mock jobs when the jobs section is absent (data: null)", () => {
+    const state = stateWithJobsData(null);
     expect(resolveJobs(state, mockState.jobs.data.jobs)).toEqual(
       mockState.jobs.data.jobs,
     );
   });
 
   it("preserves an explicit empty jobs array from the API", () => {
-    const state = emptyJobsState([]);
+    const state = stateWithJobsData({ jobs: [] });
     expect(resolveJobs(state, mockState.jobs.data.jobs)).toEqual([]);
   });
 });
