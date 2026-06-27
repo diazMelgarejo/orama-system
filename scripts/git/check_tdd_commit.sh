@@ -32,11 +32,29 @@ if ((${#prod[@]} == 0)); then
   exit 0
 fi
 
-if ((${#tests[@]} > 0)); then
+# Per-file pairing: each production file must have a test with the same stem
+# in the same directory (e.g. Widget.tsx → Widget.test.tsx or Widget.test.ts).
+# Allowing "any staged test anywhere" would let an unrelated test satisfy the
+# gate for a completely different production file, weakening the TDD contract.
+missing=()
+for f in "${prod[@]}"; do
+  stem="${f%.*}"          # strip final extension: web/src/foo/Widget.tsx → web/src/foo/Widget
+  matched=0
+  for t in "${tests[@]}"; do
+    if [[ "$t" == "${stem}.test.ts" || "$t" == "${stem}.test.tsx" ]]; then
+      matched=1
+      break
+    fi
+  done
+  ((matched)) || missing+=("$f")
+done
+
+if ((${#missing[@]} == 0)); then
   exit 0
 fi
 
-echo "ERROR: TDD gate — web/src/ production file(s) staged without accompanying *.test.ts(x)." >&2
-printf '  %s\n' "${prod[@]}" >&2
-echo "Add a test in the same commit, or document tdd-skip: <reason> in the commit message (docs/TDD.md)." >&2
+echo "ERROR: TDD gate — web/src/ production file(s) staged without an adjacent *.test.ts(x)." >&2
+printf '  %s\n' "${missing[@]}" >&2
+echo "Each changed file needs its own test staged in the same commit (docs/TDD.md)." >&2
+echo "To override: add  tdd-skip: <reason>  to the commit message." >&2
 exit 1
