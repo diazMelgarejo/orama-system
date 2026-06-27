@@ -65,7 +65,7 @@ Classify the query on two axes **before** any stage or tool. Never skip.
 
 State the gate result for any Type B/C/D task:
 
-```
+```text
 AFRP: Type [A/B/C/D] | Level [Novice/Practitioner/Expert] | Mode [1/2/3]
 Scope: <one sentence>
 ```
@@ -86,7 +86,7 @@ See `references/search-frugality.md` for the full decision tree.
 
 **Frugality chain (stop at first that answers):**
 
-```
+```text
 gbrain → code-review-graph (CRG) → Brave → Perplexity → Grok
 ```
 
