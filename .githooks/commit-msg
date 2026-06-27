@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
-exec "$ROOT/scripts/git/check_commit_message.sh" "$1"
+"$ROOT/scripts/git/check_commit_message.sh" "$1"
+exec "$ROOT/scripts/git/check_tdd_commit.sh" "$1"
