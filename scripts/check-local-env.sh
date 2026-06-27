@@ -167,7 +167,7 @@ echo ""
 echo "LM Studio security:"
 
 _lm_token="${LM_STUDIO_API_TOKEN:-}"
-if [ -z "${_lm_token// }" ]; then
+if [ -z "$(printf '%s' "$_lm_token" | tr -d '[:space:]')" ]; then
   _status "LM_STUDIO_API_TOKEN" WARN
   echo "    → Set a non-empty token in .env.local before production use"
 elif [ "$_lm_token" = "lm-studio" ] || [ "$_lm_token" = "lmstudio" ]; then

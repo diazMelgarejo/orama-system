@@ -825,7 +825,7 @@ def check_skill_quality(root: Path, files: list[str]) -> list[str]:
         # or line-level <!-- LINT-013-ok --> / # lint-ignore-line LINT-013 on same line.
         if not rel.endswith(".py") and "<!-- lint-ignore LINT-013 -->" not in text:
             _LAN_RE = re.compile(
-                r"(?<!\w)(?:192\.168\.|10\.\d+\.|172\.(?:1[6-9]|2\d|31)\.)\d+\.\d+(?!\w)"
+                r"(?<!\w)(?:192\.168\.|10\.\d+\.|172\.(?:1[6-9]|2[0-9]|3[01])\.)\d+\.\d+(?!\w)"
             )
             _LINE_OK_RE = re.compile(
                 r"(?:<!--\s*LINT-013-ok\s*-->|#\s*lint-ignore-line\s+LINT-013)",

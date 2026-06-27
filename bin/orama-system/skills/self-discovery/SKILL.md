@@ -181,7 +181,7 @@ def _skill_ver(path: Path) -> tuple:
     return (0, 0, 0)
 
 BUNDLED = '0.9.9.7'
-installed = _skill_ver(Path(".claude/skills/self-discovery/SKILL.md"))
+installed = _skill_ver(Path("bin/orama-system/skills/self-discovery/SKILL.md"))
 if installed >= tuple(int(x) for x in BUNDLED.split(".")):
     print(f"  [·] skip  self-discovery skill (installed={'.'.join(map(str,installed))} >= {BUNDLED})")
 else:

@@ -71,7 +71,23 @@ def _parse_port_list(raw: str) -> list[int]:
     return ports
 
 
-OPENCLAW_GATEWAY_PORT: int = int(os.getenv("OPENCLAW_GATEWAY_PORT", "18789"))
+def _parse_single_port(raw: str, *, default: int, env_name: str) -> int:
+    try:
+        port = int(raw)
+    except ValueError:
+        print(f"[openclaw] ⚠  Invalid {env_name}: {raw!r}; using {default}")
+        return default
+    if not 1 <= port <= 65535:
+        print(f"[openclaw] ⚠  Out-of-range {env_name}: {port}; using {default}")
+        return default
+    return port
+
+
+OPENCLAW_GATEWAY_PORT: int = _parse_single_port(
+    os.getenv("OPENCLAW_GATEWAY_PORT", "18789"),
+    default=18789,
+    env_name="OPENCLAW_GATEWAY_PORT",
+)
 _extra_ports = _parse_port_list(os.getenv("OPENCLAW_EXTRA_PORTS", ""))
 OPENCLAW_CANDIDATE_PORTS: list[int] = list(dict.fromkeys(
     [OPENCLAW_GATEWAY_PORT, 11435, 8080, 3000, 4000, 9000] + _extra_ports
