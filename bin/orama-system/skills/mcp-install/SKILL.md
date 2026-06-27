@@ -46,7 +46,7 @@ call multiple times — all steps are idempotent.
 
 The canonical installer lives at:
 
-```
+```text
 bin/orama-system/scripts/install-mcp-stack.sh
 ```
 
@@ -101,7 +101,7 @@ The script runs these steps in order — skipping any that are already complete:
 
 After the script completes, restart Claude Code, then run:
 
-```
+```text
 /mcp
 ```
 
@@ -199,21 +199,21 @@ openclaw mcp unset ai-cli-mcp 2>/dev/null || true
 
 ### Example 1: Fresh machine setup (golden path)
 
-```
+```text
 Input: bash bin/orama-system/scripts/install-mcp-stack.sh
 Output: All 7 steps complete, gemini-cli and ai-cli-mcp active in /mcp
 ```
 
 ### Example 2: Already installed — idempotent run
 
-```
+```text
 Input: bash bin/orama-system/scripts/install-mcp-stack.sh
 Output: All steps print "→ skip:" — no changes made
 ```
 
 ### Example 3: Dry-run preview
 
-```
+```text
 Input: bash bin/orama-system/scripts/install-mcp-stack.sh --dry-run
 Output: Each command printed as "[dry-run] <cmd>" — nothing executed
 ```

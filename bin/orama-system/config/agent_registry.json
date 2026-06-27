@@ -1,5 +1,5 @@
 {
-  "version": "1.1.0.0",
+  "version": "1.1.1.0",
   "network_name": "oramasys-agent-network",
   "description": "Unified oramasys agent network \u2014 7 oramasys stage agents + 4 OpenClaw SOUL agents",
   "worker_template": {

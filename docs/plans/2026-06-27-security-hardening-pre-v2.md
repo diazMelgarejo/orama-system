@@ -1,10 +1,44 @@
-<!-- lint-ignore LINT-013 -->
+<!-- lint-ignore LINT-013 LINT-014 -->
 # Security-in-Depth Hardening — Pre-v2 Feature Freeze
 
-> **Status:** 📋 PLANNED  
+> **Status:** 🚧 IN PROGRESS (`cursor/security-hardening-pre-v2-c4ae`)  
 > **Target:** Last release before snapshot as `v1.x-stable` → migration to `oramasys/*`  
-> **Versions:** orama-system `1.1.0.0` · Perpetua-Tools `0.9.9.9` → freeze at `1.1.1` / `1.0.0`  
+> **Versions:** orama-system `1.1.1.0` · Perpetua-Tools `1.1.1.0` → freeze tag `v1.1.1`  
 > **Approval gate:** Explicit "approve" from user before any execution tier.
+
+---
+
+## Platform schedule (tomorrow vs Linux cloud)
+
+Steps marked **🍎 macOS** or **🪟 Windows 11** require the main machines — schedule for tomorrow.  
+Steps marked **🐧 Linux** run non-interactively on the cloud VM (Gstack/Gbrain/Ollama/LM Studio CLI where available).
+
+| Tier | Item | Platform | Status |
+|------|------|----------|--------|
+| T1-A | routing.json schema validation | 🐧 Linux | ✅ done |
+| T1-B | Module URL canonicalization | 🐧 Linux | ✅ done |
+| T1-C | Policy enforcement audit | 🐧 Linux | ✅ done |
+| T2-A | LINT-014 argv secret scan | 🐧 Linux | ✅ done |
+| T2-B | Model ID allowlist (`check_model_ids.py`) | 🐧 Linux | ✅ done |
+| T2-C | Line-level LINT-013 | 🐧 Linux | ✅ done |
+| T3-A | Concurrent lock stress test | 🐧 Linux | ✅ done |
+| T3-B | Commit-message fuzz tests | 🐧 Linux | ✅ done |
+| T3-C | Engine orphan conflict archive | 🐧 Linux | ✅ done |
+| T4-A | Dependency pinning verification | 🐧 Linux | ✅ done |
+| T4-B | LM Studio token default warning | 🐧 Linux (script only) | ✅ done |
+| T4-C | SBOM stub (`cyclonedx-py`) | 🐧 Linux | ✅ done |
+| E2E | `start.sh` full stack | 🍎 macOS + 🪟 Windows 11 | ⏳ tomorrow |
+| E2E | `probe_required_endpoints` Ollama + models | 🍎 macOS | ⏳ tomorrow |
+| E2E | `LM_STUDIO_WIN_ENDPOINTS` LAN probes | 🪟 Windows 11 | ⏳ tomorrow |
+| E2E | `start.sh --hardware-policy` live harness | 🍎 macOS + 🪟 Windows 11 | ⏳ tomorrow |
+| E2E | Claude Desktop MCPB `--open` install | 🍎 macOS | ⏳ tomorrow |
+| E2E | Keychain credential flows (`security` CLI) | 🍎 macOS | ⏳ tomorrow |
+| E2E | Cross-harness hardware affinity verification | 🍎 macOS + 🪟 Windows 11 | ⏳ tomorrow |
+| T5 | Git tags `v1.1.1`, releases, `oramasys/v2-foundation` | After Mac/Win E2E green | ⏳ blocked |
+
+**Tomorrow checklist (Mac):** `bash start.sh --status` → green hard-requirements; Ollama `qwen3.5:9b-nvfp4` + `bge-m3`; `bash scripts/check-local-env.sh`; hardware-policy harness.
+
+**Tomorrow checklist (Win 11):** LM Studio server up; `LM_STUDIO_WIN_ENDPOINTS` reachable from Mac LAN; Windows Ollama probes if configured.
 
 ---
 

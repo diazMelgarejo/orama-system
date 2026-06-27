@@ -104,9 +104,9 @@ async def ainvoke(self, state: PerpetuaState, max_steps: int = 50) -> PerpetuaSt
 | **OQ2** | **GGUF Spec** | **Do not wait.** \`agate\` (OQ3) will be our de facto bridge. If GGUF adds metadata later, we will update our \`HardwarePolicyResolver\` to read it as a priority hint. |
 | **OQ10** | **Capability-Based** | **Approved.** The \`model_hardware_policy.yml\` schema will support a \`requirements\` block (e.g., \`vram_min_gb: 12\`). |
 | **OQ8** | **Naming** | Standardize on **\`optimize_for\`** (GPT scaffold) for consistency across the LAN API. |
-| **OQ13** | **Shadow Model Pattern** | **Approved.** Adopt the Pydantic AI pattern of using \`inspect\` + \`create_model\` to generate tool schemas (MCP-ready) at import time. See \`references/pydantic-ai-extraction-deep-dive.md\`. |
-| **OQ14** | **State Reducers** | **Approved.** Implement LangGraph-style reducers in \`PerpetuaState.merge()\` to handle parallel node updates without data loss. See \`references/state-reducer-patterns.md\`. |
-| **OQ15** | **Prompt Primitives** | **Approved.** Move personas and task templates to \`agent_registry.json\`. Use a runtime \`build_agent_prompt\` utility to inject state variables. See \`references/prompt-and-task-primitives.md\`. |
+| **OQ13** | **Shadow Model Pattern** | **Approved.** Adopt the Pydantic AI pattern of using \`inspect\` + \`create_model\` to generate tool schemas (MCP-ready) at import time. See \`references/patterns/pydantic-ai-extraction-deep-dive.md\`. |
+| **OQ14** | **State Reducers** | **Approved.** Implement LangGraph-style reducers in \`PerpetuaState.merge()\` to handle parallel node updates without data loss. See \`references/patterns/state-reducer-patterns.md\`. |
+| **OQ15** | **Prompt Primitives** | **Approved.** Move personas and task templates to \`agent_registry.json\`. Use a runtime \`build_agent_prompt\` utility to inject state variables. See \`references/patterns/prompt-and-task-primitives.md\`. |
 
 ---
 

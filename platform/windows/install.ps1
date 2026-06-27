@@ -1,7 +1,7 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    install.ps1 — One-time Windows setup for orama-system  v1.1.0.0
+    install.ps1 — One-time Windows setup for orama-system  v1.1.1.0
 
 .DESCRIPTION
     Idempotent setup script (safe to re-run).  Installs Python dependencies,
@@ -30,7 +30,7 @@ function _Err  { param([string]$Msg) Write-Host "  ✗  $Msg" -ForegroundColor R
 
 Write-Host ''
 Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor DarkCyan
-Write-Host '  orama-system Windows installer  v1.1.0.0' -ForegroundColor Cyan
+Write-Host '  orama-system Windows installer  v1.1.1.0' -ForegroundColor Cyan
 Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor DarkCyan
 Write-Host ''
 
@@ -111,7 +111,7 @@ $template = @{
     }
     distributed = $false
     platform    = 'windows'
-    version     = '1.1.0.0'
+    version     = '1.1.1.0'
 }
 
 if (Test-Path $OcJson) {

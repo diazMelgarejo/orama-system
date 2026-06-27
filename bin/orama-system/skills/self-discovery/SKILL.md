@@ -1,7 +1,7 @@
 <!-- lint-ignore LINT-013 -->
 ---
 name: self-discovery
-version: 1.1.0.0
+version: 1.1.1.0
 description: Query live state across all 3 repos — versions, branch status, LM Studio endpoints, file manifests. Run whenever you need a situational snapshot of the stack.
 user-invocable: true
 ---
@@ -59,7 +59,7 @@ python3 ~/.openclaw/scripts/discover.py --force    # bypass 5-min TTL, re-probe 
 
 Expected when both nodes live:
 
-```
+```text
 Tier:    1
   mac: ✅ localhost:1234 — N models
   win: ✅ 192.168.254.105:1234 — N models
@@ -181,7 +181,7 @@ def _skill_ver(path: Path) -> tuple:
     return (0, 0, 0)
 
 BUNDLED = '0.9.9.7'
-installed = _skill_ver(Path(".claude/skills/self-discovery/SKILL.md"))
+installed = _skill_ver(Path("bin/orama-system/skills/self-discovery/SKILL.md"))
 if installed >= tuple(int(x) for x in BUNDLED.split(".")):
     print(f"  [·] skip  self-discovery skill (installed={'.'.join(map(str,installed))} >= {BUNDLED})")
 else:
