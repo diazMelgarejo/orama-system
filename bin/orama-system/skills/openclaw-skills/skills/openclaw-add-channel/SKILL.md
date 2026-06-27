@@ -41,7 +41,7 @@ Attach a messaging channel to OpenClaw safely and repeatably. This skill enforce
 
 ```bash
 set -euo pipefail
-REPO_ROOT="${ORAMA_SYSTEM_ROOT:-$HOME/code/PERPETUA/orama-system}"
+REPO_ROOT="${ORAMA_SYSTEM_ROOT:-${REPO_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "$HOME/orama-system")}}"
 store="${REPO_ROOT}/scripts/openclaw/store_keychain_secret.sh"
 case "$channel_type" in
   telegram)
@@ -50,7 +50,9 @@ case "$channel_type" in
     printf '%s' "$bot_token" | bash "$store" openclaw.slack-bot-token "$USER"
     printf '%s' "$app_token" | bash "$store" openclaw.slack-app-token "$USER" ;;
   whatsapp)
-    printf '%s' "${bot_token:-placeholder}" | bash "$store" openclaw.whatsapp-session-secret "$USER" ;;
+    if [ -n "${bot_token:-}" ]; then
+      printf '%s' "$bot_token" | bash "$store" openclaw.whatsapp-session-secret "$USER"
+    fi ;;
   *) echo "unsupported channel_type" >&2; exit 1 ;;
 esac
 ```
