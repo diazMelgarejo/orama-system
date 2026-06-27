@@ -31,6 +31,13 @@ Minimum gate (see `docs/TDD.md` § Vite Frontend Gap):
 
 - `pnpm test` in `web/` must pass in CI
 - Any `web/src/` production change needs an accompanying `*.test.ts(x)` unless `tdd-skip:`
+- Enforced on commit: `scripts/git/check_tdd_commit.sh` (via `bash scripts/git/install-local-hooks.sh`)
+
+### Bash 3.2 portability (macOS)
+
+**Root cause:** macOS ships bash 3.2, which lacks `mapfile`. `check_tdd_commit.sh` uses a
+`while read` loop instead — see
+[`git-history-surgery/references/bash-32-git-script-portability.md`](../../git-history-surgery/references/bash-32-git-script-portability.md).
 
 ## Outsourced review (frugality)
 
