@@ -49,7 +49,7 @@ sleep 5 && sleep 5 && cmd   # also blocked
 Do nothing. You will receive an automatic notification when it completes.
 Read the output file only **after** the notification fires.
 
-```
+```text
 # Wrong
 Bash(command: "sleep 30 && cat /tmp/.../task.output")
 

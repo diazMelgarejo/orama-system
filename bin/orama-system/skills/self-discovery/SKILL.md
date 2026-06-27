@@ -59,7 +59,7 @@ python3 ~/.openclaw/scripts/discover.py --force    # bypass 5-min TTL, re-probe 
 
 Expected when both nodes live:
 
-```
+```text
 Tier:    1
   mac: ✅ localhost:1234 — N models
   win: ✅ 192.168.254.105:1234 — N models

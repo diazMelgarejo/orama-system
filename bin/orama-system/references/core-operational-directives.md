@@ -190,7 +190,7 @@ NEVER add performance optimizations until:
 
 ### Verification Hierarchy
 
-```
+```text
 1. Unit Tests       — All new code has tests; all pass locally
 2. Integration Tests — Feature works end-to-end; no regressions
 3. Manual Testing   — Tested with realistic data and edge cases
@@ -276,7 +276,7 @@ References:
 
 ### The Elegance Process
 
-```
+```text
 Step 1: Recognize the hack
 Step 2: Ask "Knowing everything now, what's the elegant solution?"
 Step 3: Identify the underlying pattern
@@ -311,7 +311,7 @@ Example:
 
 ### The Autonomous Bug Fix Process
 
-```
+```text
 Phase 1: Gather Evidence (no user interaction)
   - Check logs (app, error, access)
   - Reproduce the issue
@@ -377,7 +377,7 @@ User never needs to:
 
 ## Integration: All 6 Directives Together
 
-```
+```text
 New feature request arrives
         ↓
 1. Plan Node Default ── Write tasks/todo.md

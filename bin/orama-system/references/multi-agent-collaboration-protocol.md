@@ -61,6 +61,25 @@ When bumping version, update ALL of these atomically:
 "embedded git repository" — this is expected. Contents do not clone automatically.
 To initialize: `git submodule update --init .ecc`. Do NOT delete or gitignore it.
 
+## Skill and Reference File Authoring Standard (v2 mandatory)
+
+When creating or editing any file under `bin/orama-system/skills/` or
+`bin/orama-system/references/`:
+
+1. **LINT-015**: all fenced code blocks must have a language specifier — `bash`, `python`,
+   `yaml`, `json`, `text`, etc. Bare ` ``` ` fences are a CI error.
+2. **LINT-013**: no raw LAN IP literals — use `$WIN_IP` / `$MAC_IP` env var names.
+3. **LINT-014**: no argv secret exposure — reference `store_keychain_secret.sh`.
+
+Quick-verify before committing:
+```bash
+python3 scripts/review/repo_hygiene.py .
+```
+
+See `references/skill-architecture-guide.md` § v2 Mandatory Code Creation Standards.
+
+---
+
 ## Commit Message Contract
 
 Every commit body must state:

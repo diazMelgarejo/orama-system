@@ -6,7 +6,7 @@ when the exact integration is unavailable.
 
 ## The chain (stop at the first tier that answers)
 
-```
+```bash
 gbrain  →  code-review-graph (CRG)  →  Brave  →  Perplexity  →  Grok
 (local)    (local graph)              (free)    (paid)         (last resort)
 ```

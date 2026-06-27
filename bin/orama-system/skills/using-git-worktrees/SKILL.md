@@ -30,7 +30,7 @@ Ask two questions:
 1. **Will this agent write files?**
 2. **Is another agent currently writing to the same repo?**
 
-```
+```text
 Both yes? → Worktree.  Run Step 1.
 Either no? → Use canonical checkout.  Stop here.
 ```
@@ -184,7 +184,7 @@ that line is the coordination signal — resolve it by taking the higher number.
 
 ## Step 5 — Cleanup (ALWAYS use finishing-a-development-branch)
 
-```
+```text
 Invoke: superpowers:finishing-a-development-branch
 ```
 

@@ -862,6 +862,31 @@ def check_skill_quality(root: Path, files: list[str]) -> list[str]:
                 )
 
 
+
+        # LINT-015: unlabeled fenced code blocks in skill/reference markdown (v2 mandatory).
+        # Every opening ``` fence must carry a language specifier (bash, python, text, yaml,
+        # json, etc.). Unlabeled fences prevent syntax highlighting, confuse renderers, and
+        # signal intent ambiguity. Only skill/reference .md files are scanned (not docs/v2,
+        # CHANGELOG, or historical docs that are too large to fix retroactively).
+        # Exempt: files with <!-- lint-ignore LINT-015 --> pragma.
+        _SKILL_PATHS = ("bin/orama-system/skills/", "bin/orama-system/references/",
+                        ".agents/skills/", ".claude/skills/")
+        _in_skill_tree = any(rel.startswith(p) for p in _SKILL_PATHS)
+        if (rel.endswith(".md") and _in_skill_tree
+                and "<!-- lint-ignore LINT-015 -->" not in text):
+            lines_list = text.splitlines()
+            fence_depth = 0
+            for lno, ln in enumerate(lines_list, 1):
+                if re.match(r"^```\s*$", ln):
+                    if fence_depth % 2 == 0:  # opening fence
+                        errors.append(
+                            f"LINT-015: unlabeled fenced code block at {rel}:{lno} "
+                            "— add a language specifier (bash/python/text/yaml/json/…)"
+                        )
+                    fence_depth += 1
+                elif re.match(r"^```", ln):
+                    fence_depth += 1
+
         # LINT-010: only scan SKILL.md ## Procedure sections
         if not path.name == "SKILL.md":
             continue

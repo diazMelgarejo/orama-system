@@ -86,7 +86,7 @@ The single most important architectural principle.
 
 **Solution**: Body = table of contents. Details = `references/` folder.
 
-```
+```text
 SKILL.md body (always loaded):
   "For date parsing, see references/date-formats.md"
 
@@ -182,7 +182,7 @@ Every production-grade skill must score well on:
 
 ## File Naming Conventions
 
-```
+```text
 skill-directory-name/          # Matches 'name' field in frontmatter
 ├── SKILL.md                   # Always uppercase, always .md
 ├── references/
@@ -219,6 +219,65 @@ description: Validates structured data (JSON, CSV, YAML) against schemas and
   business rules. Returns PASS/WARNING/FAIL reports. Activates for "validate
   this data", "check if this JSON is valid", "does this conform to the schema".
 ```
+
+---
+
+## v2 Mandatory Code Creation Standards
+
+These rules are enforced by `scripts/review/repo_hygiene.py` and apply to every
+new skill, reference card, and plan file created from v2 onwards.
+
+### LINT-015 — All fenced code blocks must have a language specifier
+
+Every opening ` ``` ` fence in a skill or reference markdown file must carry a
+language specifier. Unlabeled fences prevent syntax highlighting, confuse renderer
+engines, and signal intent ambiguity to agent runtimes.
+
+**Rule:** Opening fences must match ` ```<lang> ` — never bare ` ``` `.
+
+**Allowed specifiers:**
+
+| Content type | Specifier |
+|---|---|
+| Shell commands (bash, zsh, ps1) | `bash` or `powershell` |
+| Python source | `python` |
+| YAML config | `yaml` |
+| JSON data | `json` |
+| Pseudocode, diagrams, ASCII art, plain lists | `text` |
+| Diff output | `diff` |
+| TypeScript/JavaScript | `typescript` / `javascript` |
+
+**Quick rule:** when in doubt, use ` ```text `.
+
+**Enforcement:** LINT-015 in `scripts/review/repo_hygiene.py` — fires in CI
+(`python3 scripts/review/repo_hygiene.py .`).  
+**Exempt:** files with `<!-- lint-ignore LINT-015 -->` at the top (use sparingly).
+
+**Example (wrong → right):**
+
+```diff
+-```
+-git merge --no-commit --no-ff origin/feature
+-```
++```bash
++git merge --no-commit --no-ff origin/feature
++```
+```
+
+### LINT-013 — No raw LAN IP literals in skill, plan, or reference docs
+
+Use env var names (`$WIN_IP`, `$MAC_IP`, `$LM_STUDIO_*_ENDPOINT`) instead of
+bare IP addresses. Raw IPs cause doc branches to conflict with networking branches
+(the root cause of the PR #108 / a75ad68 conflict). See `lan-endpoint-contract.md`.
+
+### LINT-014 — No argv-form secret passing
+
+Never document `security add-generic-password -w $secret_value` in skill files.
+Always reference `scripts/openclaw/store_keychain_secret.sh` (stdin pipe form).
+
+*See also: `references/skill-architecture-guide.md` § File Naming Conventions for
+structural conventions.*
+
 
 ---
 
