@@ -21,7 +21,7 @@ git log --oneline HEAD..origin/main   # other agents' recent pushes
 
 Append to `.claude/lessons/LESSONS.md` before touching any file:
 
-```
+```text
 ## [IN PROGRESS] YYYY-MM-DD — Claude — <topic>
 Files: <list of files you plan to modify>
 ```
