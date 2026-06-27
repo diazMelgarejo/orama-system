@@ -15,6 +15,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 import openclaw_bootstrap as bootstrap
 
 
+def test_parse_port_list_ignores_invalid_tokens(capsys):
+    ports = bootstrap._parse_port_list("8081,not-a-port,9090")
+    assert ports == [8081, 9090]
+    assert "Ignoring invalid port" in capsys.readouterr().out
+
+
 @pytest.mark.asyncio
 async def test_inline_bootstrap_refuses_without_setup_password(monkeypatch, tmp_path):
     monkeypatch.setattr(bootstrap, "_PT_SCRIPT", tmp_path / "missing-pt-bootstrap.py")

@@ -1,7 +1,7 @@
 <!-- lint-ignore LINT-013 -->
 ﻿# Perplexity-Tools Bridge for The ὅραμα System
 
-## Version 1.1.0.0
+## Version 1.1.1.0
 
 ## Current Contract (v1.0 RC)
 

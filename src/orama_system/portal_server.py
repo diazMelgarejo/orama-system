@@ -61,7 +61,7 @@ except ImportError:
 log = logging.getLogger("ultrathink.portal")
 logging.basicConfig(level=logging.INFO)
 
-VERSION = "1.1.0.0"
+VERSION = "1.1.1.0"
 
 _CLIENT_ERROR_FALLBACK = "Request failed"
 
