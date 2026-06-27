@@ -3,7 +3,7 @@
 > **Canonical path**: `orama-system/docs/TDD.md`
 > **Companion**: parent-dir [`tdd.md`](../../tdd.md) — source-of-truth philosophy (SPECS → tests → code).
 > **External skill**: `superpowers:test-driven-development` — install path: `~/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/test-driven-development/SKILL.md` — full methodology, anti-patterns. Do not duplicate here.
-> **Anti-patterns reference**: same dir, `testing-anti-patterns.md`.
+> **Anti-patterns reference**: same dir, [`testing-anti-patterns.md`](testing-anti-patterns.md).
 
 This file is the **prescriptive gate**. Use them before every code change and every commit.
 
