@@ -50,6 +50,9 @@ LM Studio host, run
 - Never flatten branches to `origin/main` unless the user explicitly asks to
   destroy their distinct branch identity.
 - Never treat a clean git rewrite as secret remediation. Rotation is separate.
+- **Platform line endings:** do not convert Windows-serving files (`platform/windows/**`,
+  `*.cmd`, `*.bat`, `*.ps1`) to LF from macOS/Linux. Mac/Linux-owned sources stay LF.
+  See [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md).
 
 ## Verification
 
@@ -128,6 +131,7 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 - [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
 - [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
 - [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table
+- [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md) — CRLF on Windows turf; LF on Mac/Linux; no cross-platform EOL tug-of-war
 - [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md)
 - [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
 - [`references/windows-powershell-runtime-bootstrap.md`](references/windows-powershell-runtime-bootstrap.md)
