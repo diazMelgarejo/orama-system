@@ -14,14 +14,18 @@
 | 5 | Empty-string job id does not enable artifact polling | `src/features/command-center/commandCenterState.test.ts` | PASS |
 | 6 | Routing hides Win LM Studio row when offline | `src/features/routing/RoutingView.test.tsx` | PASS |
 | 7 | App smoke: renders nav + mock fallback banner on API error | `src/App.test.tsx` | PASS |
+| 8 | Composer nav: swarm composer page without command-dashboard runs table | `src/features/command-center/CommandCenter.test.tsx` | PASS |
+| 9 | Runs nav: runs table without swarm composer panel | `src/features/command-center/CommandCenter.test.tsx` | PASS |
+| 10 | Artifacts nav: artifacts panel without swarm composer panel | `src/features/command-center/CommandCenter.test.tsx` | PASS |
 
 ## Validation commands
 
 ```bash
 cd web && pnpm install && pnpm test
+bash scripts/git/install-local-hooks.sh   # wires commit-msg → check_tdd_commit.sh
 ```
 
-Output (2026-06-26): 4 files, 13 tests, all PASS.
+Output (2026-06-27): 5 files, 16 tests, all PASS.
 
 ## Toolchain
 
@@ -29,6 +33,8 @@ Output (2026-06-26): 4 files, 13 tests, all PASS.
 - `@testing-library/react` + `@testing-library/jest-dom`
 - `vitest.config.ts`, `src/test/setup.ts`
 - CI: `orama-system/.github/workflows/ci.yml` job `web-test`
+- Commit-msg gate: `scripts/git/check_tdd_commit.sh` (`tdd-skip:` escape hatch per `docs/TDD.md`)
+- **Bash 3.2:** macOS lacks `mapfile`; hook uses `while read` — [`bash-32-git-script-portability.md`](../../bin/orama-system/skills/git-history-surgery/references/bash-32-git-script-portability.md)
 
 ## Progress status (2026-06-27 triage)
 
@@ -42,7 +48,9 @@ Output (2026-06-26): 4 files, 13 tests, all PASS.
 |------|---------------|------------|
 | Vitest 3 + jsdom + RTL + `pnpm test` | Done | No |
 | `web-test` CI job | Done | No |
-| 13 tests / 4 files (this evidence report) | Done | No |
+| 16 tests / 5 files (this evidence report) | Done | No |
+| Nav smokes (`composer`, `runs`, `artifacts`) | Done (`CommandCenter.test.tsx`) | No |
+| `scripts/git/check_tdd_commit.sh` | Done (commit-msg hook) | No |
 | `commandCenterState.ts` / `routingState.ts` extractions + wired into components | Done (#118; scratch may lag) | No |
 | `docs/testing-anti-patterns.md`, `tdd-gate.md`, this `.tdd.md` | Done | No |
 | `docs/TDD.md` “gate closed” section | On branch only | Main still says “gap” |
@@ -50,27 +58,23 @@ Output (2026-06-26): 4 files, 13 tests, all PASS.
 
 The largest remaining step is **merge**, not greenfield implementation.
 
-### RC-1 minimum — still open on branch
+### RC-1 minimum — branch status (2026-06-27)
 
-`docs/TDD.md` minimum checklist items not fully satisfied even on the feature branches:
-
-| Gap | Current coverage | Still needed |
-|-----|------------------|--------------|
-| One test per top-level page/route | `command` (App smoke + state unit tests), `routing` (`RoutingView.test.tsx`) | Nav smokes for **composer**, **runs**, **artifacts** |
-| `CommandCenter.test.tsx` (RC-1 `:33` fallback) | Logic covered via `commandCenterState.test.ts` | Optional full component-level test |
-| `client.ts:26` dead ternary (RC-1) | Fixed on branch (comment at line 26); `client.test.ts` covers success/error | None unless explicit regression test desired |
+| Item | Status |
+|------|--------|
+| One test per top-level page/route | Done — `command` (App + state), `routing`, `composer` / `runs` / `artifacts` (nav smokes) |
+| `CommandCenter.test.tsx` | Done — nav smokes (fallback logic remains in `commandCenterState.test.ts`) |
+| `client.ts:26` dead ternary | Fixed; covered by `client.test.ts` |
+| `check_tdd_commit.sh` | Done — `.githooks/commit-msg` |
 
 `CommandCenter` pages: `command`, `composer`, `runs`, `routing`, `artifacts` (`settings` / `docs` are footer nav placeholders).
 
-### Incremental backlog (post-gate)
+### Incremental backlog (post-merge)
 
 | Item | Notes |
 |------|--------|
-| Per-route smokes (`composer`, `runs`, `artifacts`) | Satisfies “one test per top-level page” in `docs/TDD.md` |
-| E2E / Playwright | Out of RC-1 minimum scope |
-| `scripts/git/check_tdd_commit.sh` | v2/26 — “to be added”; not in RC-1 scope |
+| E2E / Playwright | **Deferred until after #118 lands on `main`** |
 | PT pointer layer | `docs/TDD.md` pointer + ADR-004 — [Perpetua-Tools PR #163](https://github.com/diazMelgarejo/Perpetua-Tools/pull/163) |
-| `tdd-skip:` enforcement habit | Policy written in `docs/TDD.md`; pre-commit hook not yet |
 
 ### PR housekeeping
 
@@ -80,14 +84,12 @@ The largest remaining step is **merge**, not greenfield implementation.
 
 ### Recommended next steps (ordered)
 
-1. Merge #118 (after #116 or coordinated) → toolchain + CI + first 13 tests on `main`.
+1. Merge #118 (after #116 or coordinated) → toolchain + CI + 16 tests on `main`.
 2. Close or fold #117 if superseded.
-3. Follow-up PR: three nav smokes (`composer`, `runs`, `artifacts`).
-4. Optional later: `check_tdd_commit.sh`, Playwright, `CommandCenter.test.tsx`.
+3. **After merge:** Playwright E2E spike (out of RC-1 minimum).
 
-**Summary:** ~80% done on branches; `main` still has zero Vitest. Remaining work is merge + ~3 route smokes + optional hook/E2E.
+**Summary:** RC-1 gate complete on branch; `main` still unmerged. Playwright deferred post-merge.
 
 ## Known gaps (incremental)
 
-- Per-route smoke tests beyond default `command` page (incremental per `docs/TDD.md`)
-- E2E / Playwright (out of RC-1 minimum gate scope)
+- E2E / Playwright — deferred until Vitest gate is merged to `main` (see post-merge backlog above)

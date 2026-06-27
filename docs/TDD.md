@@ -84,13 +84,13 @@ RC-1 flagged **zero `*.test.ts*` in `web/src/`**. The minimum gate is now landed
 `feat/vitest-tdd-gate-scratch` (evidence: [`docs/testing/2026-06-26-vite-frontend-tdd-gate.tdd.md`](testing/2026-06-26-vite-frontend-tdd-gate.tdd.md)):
 
 - **Toolchain:** Vitest + React Testing Library + `@testing-library/jest-dom`; `pnpm test` in `web/`; CI job `web-test`.
-- **13 tests / 4 files** covering `apiFetch`, command-center fallbacks (including empty-string job id), routing offline branch, and App smoke.
+- **16 tests / 5 files** covering `apiFetch`, command-center fallbacks (including empty-string job id), routing offline branch, App smoke, and composer/runs/artifacts nav smokes (`CommandCenter.test.tsx`).
+- **Commit-msg TDD gate:** `scripts/git/check_tdd_commit.sh` (install via `bash scripts/git/install-local-hooks.sh`).
 - **Production rule (unchanged):** no `web/src/` change without an accompanying `*.test.ts(x)` unless `tdd-skip:` is documented.
 
 ### Incremental backlog (post-gate)
 
-- Per-route smoke tests beyond default `command` page.
-- E2E / Playwright (out of RC-1 minimum scope).
+- E2E / Playwright — start after this gate merges to `main`.
 
 ---
 
