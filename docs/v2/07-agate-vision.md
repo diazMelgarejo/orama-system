@@ -15,7 +15,7 @@ That is like calling TCP/IP "companion documentation for BSD sockets." **agate i
 > model matrix, `model_hardware_policy.yml`, canonical API, and CLI consolidate in
 > [`42-agate-hardware-policy-orbit.md`](42-agate-hardware-policy-orbit.md) under
 > [github.com/oramasys/agate](https://github.com/oramasys/agate). See also
-> [`../agate-mvp-design.md`](../agate-mvp-design.md) and
+> [`references/agate-mvp-design.md`](references/agate-mvp-design.md) and
 > [`../hermes-hardware-policy-cross-harness.md`](../hermes-hardware-policy-cross-harness.md).
 
 ---
