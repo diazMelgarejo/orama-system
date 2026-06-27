@@ -78,26 +78,19 @@ Before `git commit`:
 
 ---
 
-## Vite Frontend Gap (RC-1 Code Review Finding)
+## Vite Frontend Gate (RC-1 → closed 2026-06-26)
 
-As of the RC-1 review, the Vite frontend has **zero `*.test.ts*` files in `src/`**. This is the single largest TDD gap in the repo.
+RC-1 flagged **zero `*.test.ts*` in `web/src/`**. The minimum gate is now landed on branch
+`feat/vitest-tdd-gate-scratch` (evidence: [`docs/testing/2026-06-26-vite-frontend-tdd-gate.tdd.md`](testing/2026-06-26-vite-frontend-tdd-gate.tdd.md)):
 
-### Minimum acceptance gate before any production rollout
+- **Toolchain:** Vitest + React Testing Library + `@testing-library/jest-dom`; `pnpm test` in `web/`; CI job `web-test`.
+- **13 tests / 4 files** covering `apiFetch`, command-center fallbacks (including empty-string job id), routing offline branch, and App smoke.
+- **Production rule (unchanged):** no `web/src/` change without an accompanying `*.test.ts(x)` unless `tdd-skip:` is documented.
 
-- **Toolchain installed and wired:** Vitest + React Testing Library + `@testing-library/jest-dom`. `vitest` script in `package.json`. CI runs it.
-- **At least one test per top-level page/route component**, covering the happy-path render and one branch in any conditional logic.
-- **Every fallback / default-value branch is tested.** The RC-1 review surfaced two such branches that would have been caught:
-  - `src/components/CommandCenter.tsx:33` — fallback logic on missing/empty model id; test must cover empty string AND undefined.
-  - `src/lib/client.ts:26` — dead ternary branch; a test asserting both sides forces the dead branch to be removed or justified.
-- **No PR merged to main that touches `src/` without at least one accompanying test**, unless `tdd-skip:` reason is documented and approved.
+### Incremental backlog (post-gate)
 
-### Recommended first tests to write (in order)
-
-1. `CommandCenter.test.tsx` — covers the `:33` fallback (both branches).
-2. `client.test.ts` — covers the `:26` ternary (forces decision: keep both branches with assertions, or delete the dead one).
-3. One smoke test per top-level route component (renders without crashing).
-
-These three unblock the gate. Everything else is incremental.
+- Per-route smoke tests beyond default `command` page.
+- E2E / Playwright (out of RC-1 minimum scope).
 
 ---
 
