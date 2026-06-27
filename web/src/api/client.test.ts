@@ -36,7 +36,22 @@ describe("apiFetch", () => {
     } satisfies Partial<ApiError>);
   });
 
-  it("uses GET by default and serializes POST bodies", async () => {
+  it("uses GET by default when no options are supplied", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: "1" }), { status: 200 }),
+    );
+
+    await apiFetch("/api/jobs");
+
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/jobs",
+      expect.objectContaining({ method: "GET" }),
+    );
+    const [, init] = vi.mocked(fetch).mock.calls[0];
+    expect((init as RequestInit).body).toBeUndefined();
+  });
+
+  it("serializes POST body as JSON string", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ id: "1" }), { status: 200 }),
     );
