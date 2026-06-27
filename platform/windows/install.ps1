@@ -111,7 +111,7 @@ $template = @{
     }
     distributed = $false
     platform    = 'windows'
-    version     = '1.1.0.0'
+    version     = '1.1.1.0'
 }
 
 if (Test-Path $OcJson) {
