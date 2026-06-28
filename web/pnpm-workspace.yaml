@@ -1,0 +1,7 @@
+# pnpm configuration for this single-package project.
+# 'packages' is intentionally omitted — this is not a monorepo workspace.
+# Settings here follow the pnpm v9.7+ format (pnpm field in package.json is ignored).
+onlyBuiltDependencies:
+  - esbuild
+overrides:
+  esbuild: "0.28.1"

@@ -1,6 +1,6 @@
-# AFRP — Audience-First Response Protocol
+﻿# AFRP — Audience-First Response Protocol
 
-**Version:** 0.9.9.0
+**Version:** 1.1.1.0
 **Status:** Active — mandatory pre-router gate for orama-system
 
 ## Quick Start
@@ -24,7 +24,7 @@ afrp/
 
 - **Always** on non-trivial queries before the Execution Mode Router fires
 - **Explicitly** when queries contain: "write for," "guidance for," "framework for," "how should [group]," "develop this for," or any third-party audience indicator
-- **Cross-agent** when Perplexity-Tools delegates to ultrathink via the current MCP bridge, or via the implemented backup HTTP `/ultrathink` path
+- **Cross-agent** when Perplexity-Tools delegates to oramasys via the current MCP bridge, or via the implemented HTTP `/oramasys` path. The old `/ultrathink` route is a deprecated compatibility shim
 
 ## Core Principle
 
@@ -39,3 +39,4 @@ AFRP is the operational implementation of the Amplifier Principle. It ensures in
 | [`../SKILL.md`](../SKILL.md) | Parent skill — Execution Mode Router, 5-stage methodology |
 | [`../cidf/SKILL.md`](../cidf/SKILL.md) | Content insertion decisions (runs after AFRP) |
 | [`../references/amplifier-principle.md`](../references/amplifier-principle.md) | Foundational philosophy |
+

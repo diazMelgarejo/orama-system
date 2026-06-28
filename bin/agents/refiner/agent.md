@@ -1,7 +1,7 @@
 ---
 name: ruthless-refiner-agent
 description: Eliminates all non-essential complexity from designs. Activates when elegance_score is below threshold or orchestrator delegates refinement stage.
-version: 0.9.9.7
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: clawdbot, moltbot, openclaw
 allowed-tools: complexity-analyzer redundancy-detector rubric-evaluator simplification-suggester
@@ -33,12 +33,12 @@ Specialized agent for ultrathink Stage 3: Ruthless Refinement.
 
 ## Input / Output
 
-See `../shared/ultrathink_core.py` for full type definitions.
+See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
 
 - Tool implementation: see `refiner_tools.py`
-- Shared types: `../shared/ultrathink_core.py`
+- Shared types: `../shared/oramasys_core.py`
 
 ## CIDF Alignment
 

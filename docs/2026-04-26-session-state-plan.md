@@ -1,3 +1,6 @@
+<!-- lint-ignore LINT-013 -->
+> ✅ **RESOLVED 2026-06-14** — session-state persistence shipped.
+
 # Twin System Session State — April 26, 2026
 
 > **Purpose:** Posterity record of what changed, what stayed the same, and what must happen next. Read this at the start of the next session. Both AlphaClaw and orama-system developers should read §3 (Immediate Next Steps) before touching anything.
@@ -89,8 +92,8 @@ All 8 objects in `git fsck --unreachable` are accounted for. **Nothing was lost.
 
 | SHA | Type | Origin | Resolution |
 |-----|------|---------|-----------|
-| `eebb5f9` | commit | Gemini's "symlink portability" commit (bad auth identity) | Discarded intentionally; content rescued into LESSONS.md (`1a6b010`) |
-| `8362ce0` | commit | Gemini's "3-tier IP detection" commit (bad auth identity) | Discarded intentionally; IP logic rebuilt correctly in `discover.py` |
+| `eebb5f9` | commit | Gemini's "symlink portability" commit (bad auth identity; not merged as-is) | Content rescued into LESSONS.md (`1a6b010`) under approved identity |
+| `8362ce0` | commit | Gemini's "3-tier IP detection" commit (bad auth identity; not merged as-is) | IP logic rebuilt correctly in `discover.py` |
 | `ab197ef` | commit | Old combined submodule commit (force-pushed over) | Superseded by the split commits |
 | `28dcbff` | stash object | Stash `stash@{1}` root (dropped stash) | Dropped — content was recovered before drop |
 | `d0b62c0` | stash object | Another stash artifact | Same as above |
@@ -124,7 +127,8 @@ All 8 objects in `git fsck --unreachable` are accounted for. **Nothing was lost.
 gh pr merge 21 --merge --repo diazMelgarejo/Perpetua-Tools
 
 # Step 2: Merge orama-system salvage → main
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
+# historical session path: /Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system
 git checkout main && git pull origin main
 git merge 2026-04-24-001-orama-salvage --no-ff -m "chore(merge): orama-system salvage → main"
 git push origin main
@@ -133,7 +137,8 @@ git push origin main
 ### P1 — Rename Remaining Stale Skill Dir in orama-system
 
 ```bash
-cd "/Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system"
+cd "<workspace>/orama-system"
+# historical session path: /Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system
 git mv .claude/skills/ultrathink-system .claude/skills/orama
 git commit -m "feat(rename): ultrathink-system skill dir → orama"
 ```
@@ -180,7 +185,7 @@ Update `.claude/skills/alphaclaw-session/SKILL.md` with:
 ### Gateway unreachable (http_code 000)
 1. Check if AlphaClaw process is running: `ps aux | grep alphaclaw`
 2. Restart: `cd ~/.alphaclaw && node alphaclaw.js` (or via start.sh)
-3. Re-verify: `curl -s -H "Authorization: Bearer d3aea7fea7ba51a1dff69b84662ae97d53dd3c2bcb182781" http://localhost:18789/health`
+3. Re-verify: `curl -s -H "Authorization: Bearer $OPENCLAW_GATEWAY_AUTH_TOKEN" http://localhost:18789/health`
 ```
 
 ### P4 — Create Agent Definition Files
@@ -210,6 +215,7 @@ Create `.claude/skills/self-improve/SKILL.md` in both PT and orama-system:
 Append dated entry capturing:
 - IP fix methodology (cross-config audit, `--force` discovery)
 - Gemini commit rejection pattern (bad author identity → discard + rescue content)
+- Unmerged external commits: rescue content into LESSONS.md, then land under approved git identity
 - alphaclaw-session skill creation pattern (profile-based, not config-based)
 - Discovery tier model (Tier 1-4 graceful degradation)
 
@@ -232,7 +238,7 @@ Append dated entry capturing:
 
 2. **`discover.py --force` after any IP change** — the 5-min TTL caches stale state and hides connectivity problems.
 
-3. **Gemini's commits cannot be merged** — bad author identities (`<forbidden>`, `darth.serious@gmail.com` in commit author, `nimbosa` agent) must be discarded. Rescue content manually into LESSONS.md, then commit under correct identity.
+3. **Merge only commits that pass the repo identity gate** — run `bash scripts/git/check_identity.sh` before committing; rescue useful unmerged work into LESSONS.md and recommit under approved identity. Historical note: Gemini-authored commits with forbidden identities were not merged as-is; content was rescued manually.
 
 4. **`git fsck --unreachable` is the truth oracle** — 8 objects, all explained. Nothing lost. Run this before panicking about missing commits.
 
@@ -244,5 +250,63 @@ Append dated entry capturing:
 
 ---
 
+## 7. Session Continuation — Answers & Execution Status
+
+*Updated: 2026-04-26 (same session, second context window)*
+
+### Q1 Answer — Gbrain Identity
+
+> **Gbrain = `mcp__gbrain__*` tools**, consumed by Gstack commands.  
+> Gstack v1.12.2.0 is installed at `~/.claude/skills/gstack` (global-git).  
+> Invoke the Gstack skill first (`Skill tool → gstack`), then use `mcp__gbrain__query/put_page/search` etc. for persistent memory.  
+> Bidirectional Codex ↔ Gbrain test: documented in `.claude/agents/codex-coder.md` under "Gbrain Integration".
+
+### Q2 Answer — Self-Improve Trigger
+
+> **Option C selected**: Auto-suggest at session end + commit only when user approves.  
+> Implementation: `.claude/skills/self-improve/SKILL.md` v1.0.0 created in both PT and orama-system.  
+> Trigger: Claude invokes at natural session end. Gate: hard STOP before any write — user must type A/B/C.
+
+### Q3 Answer — Model ID Case Resolution
+
+> **Try mixed-case first (keep current openclaw.json agent refs).**  
+> If `coder` or `win-researcher` agents fail with a model-not-found error when OpenClaw is live, run the lowercase fix script documented in `alphaclaw-session v1.1 → Self-Healing → Model ID mismatch`.  
+> Test was blocked this session: gateway was offline (OpenClaw process not running). Retry next session.  
+> **Document the result in LESSONS.md after testing.** Whichever works becomes the canonical default.
+
+### GPT-5.5 / Codex Model Fallback Rule (added during execution)
+
+> Try `gpt-5.5` first.  
+> Downgrade to `gpt-5.4` **only** when this exact error is received:  
+> `{"type":"invalid_request_error","message":"The 'gpt-5.5' model is not supported when using Codex with a ChatGPT account."}`  
+> Do NOT preemptively downgrade. Documented in `.claude/agents/codex-coder.md`.
+
+---
+
+### Execution Status — All 8 Segments
+
+| Seg | Task | Status | Commit / Note |
+|-----|------|--------|---------------|
+| 1 | Merge PT PR #21 → main | ✅ Done | `bd5b0d5` (merge), `9631c6d` (IP fix CP), `a32aee6` (skills CP) |
+| 2 | Rename `ultrathink-system` skill dir in orama | ✅ Done | Was empty dirs (never tracked) — purged with `rm -rf` |
+| 3 | Test model ID case | ⚠️ Blocked | Gateway offline; keep mixed-case for now; retest next session |
+| 4 | alphaclaw-session v1.1 (DO's/DON'Ts + self-healing) | ✅ Done | `a32aee6` on PT main |
+| 5 | Self-improve skill (Option C) in PT + orama | ✅ Done | `a32aee6` (PT); committed to orama this session |
+| 6 | gemini-analyzer.md + codex-coder.md agent files | ✅ Done | `a32aee6` on PT main; incl. gpt-5.4 fallback rule |
+| 7 | Update this plan doc (Q1-Q3 + status) | ✅ Done | This edit |
+| 8 | LESSONS.md update + orama pushes | 🔄 In progress | See next commit |
+
+### Still Pending (carry to next session)
+
+- **Model ID case test** — run when gateway is live; document in LESSONS.md
+- **orama-system merge** — merge `2026-04-24-001-orama-salvage` → main
+- **Gbrain ↔ Codex live test** — use Gstack skill + `mcp__gbrain__*` + `mcp__ai-cli__run`
+- **Gemini-coder live test** — verify `mcp__gemini-cli__ask-gemini` responds correctly
+- **PT root SKILL.md upgrade** — multi-platform routing table, GPT-5.5/Gemini/Claude Code interop
+
+---
+
 *Generated: 2026-04-26 | Branch: 2026-04-24-001-orama-salvage | Author: Claude (session recovery)*
-*Next session: start with § 4 Immediate Next Steps, P0 first.*
+*Next session: start with §4 Immediate Next Steps, P0 first.*
+*Continuation: 2026-04-26 second context window — see §7 for Q1–Q3 answers and execution status.*
+*Integrative merge note: 2026-06-28 — harmonized branch + main session-state records (additive, chronological).*

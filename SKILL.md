@@ -38,6 +38,7 @@ test = [
 ```
 
 Verify before commit:
+
 ```bash
 python -c "import fastapi, httpx, uvicorn, pydantic, slowapi, pytest, hatchling, build"
 ```
@@ -49,6 +50,7 @@ python -c "import fastapi, httpx, uvicorn, pydantic, slowapi, pytest, hatchling,
 ## Skill 3 — Idempotent Install Rules
 
 After any `npm install -g`:
+
 1. Check execute bits: `stat $(which binary) | grep Mode` — `+x` must be set
 2. Auto-fix if missing: `chmod +x $(which binary)`
 3. Catch `PermissionError` **separately** from `CalledProcessError` in every subprocess block
@@ -71,6 +73,7 @@ After any `npm install -g`:
 ```
 
 **Crash recovery is always ≥ 30 seconds.** Immediate retry after 503/404 triggers GPU thrashing. Classify errors before sleeping:
+
 - `503` = model loading (LM Studio startup)
 - `404` = model unloaded (Ollama eviction)
 - `ConnectError` = backend offline
@@ -132,7 +135,7 @@ When two agents may be working simultaneously:
 8. **Confirm Git identity before committing**: `bash scripts/git/check_identity.sh`
 9. **Stash untracked files before branch surgery**: `git stash push --include-untracked -m "preserve work before <operation>"`
 
-Version registry: **current version is `0.9.9.7`**. Never bump without explicit user instruction. All canonical locations are listed in [docs/wiki/06-multi-agent-collab.md](docs/wiki/06-multi-agent-collab.md).
+Version registry: **current version is `1.1.1.0`**. Never bump without explicit user instruction. All canonical locations are listed in [docs/wiki/06-multi-agent-collab.md](docs/wiki/06-multi-agent-collab.md).
 
 → [docs/wiki/06-multi-agent-collab.md](docs/wiki/06-multi-agent-collab.md)
 
@@ -187,8 +190,181 @@ All lessons, root-cause analyses, and architectural decisions:
 **[docs/wiki/README.md](docs/wiki/README.md)**
 
 Session logs:
+
 - [docs/LESSONS.md](docs/LESSONS.md) — chronological, all agents
 
 Companion repo:
+
 - [Perplexity-Tools/SKILL.md](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/SKILL.md)
 - [Perplexity-Tools/docs/LESSONS.md](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/docs/LESSONS.md)
+
+### Critical cautionary reference: Wrong Repo Build (2026-05-14)
+
+**[docs/wiki/10-wrong-repo-build-what-not-to-do.md](docs/wiki/10-wrong-repo-build-what-not-to-do.md)**
+
+An AI agent built the v2 kernel in the wrong local directory, pushed to the wrong GitHub org,
+and documented it as canonical. Read this before any `docs/v2/` or `oramasys/*` work.
+
+**The 4 checks that would have prevented it:**
+
+1. `git remote -v` — verify remote matches `oramasys/*` before any v2 push
+2. `ls ~/code/oramasys/<repo>/` — confirm canonical build doesn't already exist
+3. Consult `CLAUDE-instru.md §1` or `project_repo_registry.md` — v1=`diazMelgarejo/*`, v2=`oramasys/*`
+4. Never skip `AskUserQuestion` gates in a plan that modifies `docs/v2/`
+
+### .gbrain-source is machine-local — never commit it
+
+`.gbrain-source` is written by `/sync-gbrain` to pin this worktree to a gbrain indexed source.
+It is machine-specific. Add it to `.gitignore` if you see it untracked. See LESSONS.md §"2026-05-16: `.gbrain-source` is machine-local".
+
+---
+
+## Skill 10 — External Agent Integration (Gemini · Codex · OpenClaw)
+
+orama-system exposes canonical `POST /oramasys` at port 8001. The legacy
+`POST /ultrathink` route remains as a deprecated compatibility shim for one
+v1.x release. Any external agent (Gemini, Codex, OpenClaw,
+LangGraph, etc.) can drive orama as a black-box reasoning endpoint.
+
+### Direct HTTP (any agent)
+
+```bash
+curl http://localhost:8001/oramasys \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task_description": "Analyse the failing test and propose a fix",
+    "session_id": "gemini-sess-001",
+    "task_type": "code",
+    "optimize_for": "reliability"
+  }'
+# Response includes: status, result, session_id, nodes_visited, retry_count
+```
+
+### Gemini CLI (gemini-mcp-tool)
+
+Install once:
+
+```bash
+npm i -g @ahoylabs/gemini-mcp-tool   # or: pip install gemini-mcp-tool
+```
+
+Register orama's MCP server:
+
+```bash
+# In ~/.gemini/settings.json → mcpServers block:
+"orama": {
+  "command": "python",
+  "args": ["-m", "bin.mcp_servers.oramasys_orchestration_server"],
+  "cwd": "/path/to/orama-system"
+}
+```
+
+Then from any Gemini session: `@orama run_ultrathink task="…"`.
+
+### Codex / OpenCode harness
+
+orama exposes a `.agents/skills/orama-system/` harness (Codex-compatible):
+
+```bash
+# From inside a Codex session, activate the skill:
+skill .agents/skills/orama-system/SKILL.md
+
+# Or call the endpoint directly from a Codex tool-use block:
+curl http://localhost:8001/oramasys -d '{"task_description":"…","session_id":"codex-001"}'
+```
+
+Codex harness path: `.agents/skills/orama-system/` (mirrored from `bin/orama-system/`).
+Tool mapping: `.agents/skills/orama-system/agents/openai.yaml`.
+
+### OpenClaw plugin
+
+OpenClaw can route tasks to orama via the `orama_bridge` plugin:
+
+```bash
+openclaw run --plugin orama_bridge --task "your task here"
+# or via the bridge:
+python bin/mcp_servers/openclaw_bridge.py
+```
+
+Codex harness docs: <https://docs.openclaw.ai/plugins/codex-harness>
+
+Register the MCP server with Claude Code:
+
+```bash
+claude mcp add --transport stdio oramasys \
+  -- python -m bin.mcp_servers.oramasys_orchestration_server
+```
+
+### Simultaneous multi-agent pattern
+
+Run Gemini and Codex concurrently against orama:
+
+```bash
+# Terminal 1 — Gemini reviews (--yolo auto-approves tool calls; required for non-interactive)
+gemini --yolo "Review the diff in $(pwd) and call @orama for deep analysis"
+
+# Terminal 2 — Codex implements
+codex "Fix the failing test using the orama API at localhost:8001 for reasoning"
+```
+
+Key rule: **never load more than one model on the Windows GPU simultaneously** — check
+`docs/swarm_state.md` for `GPU: BUSY` before dispatching Windows-tier tasks.
+
+### qwen3.5-9b-mlx — Mac thinking model
+
+`qwen3.5-9b-mlx` is active at `localhost:1234` (LM Studio Mac, `mac_only` tier).
+It is a **thinking model** — use `max_tokens ≥ 500` or content will be truncated.
+Extract `choices[0].message.content`, not `reasoning_content`, in any HTTP client.
+
+→ See `docs/LESSONS.md` entry: *qwen3.5-9b-mlx is a thinking model (2026-05-01)*
+
+### Optional xAI fallback provider
+
+- If `XAI_API_KEY` is set, `openclaw_bootstrap.py` injects an `xai` provider into
+  `~/.openclaw/openclaw.json` with `grok-4.1-fast` and `grok-code-fast`.
+- Intended scope: finance / market / M&A / factcheck fallback when primary
+  providers are unavailable.
+
+---
+
+## Skill 11 — Codex MCP Config Postmortem Rule
+
+**Trigger:** Any Codex MCP config error, especially `invalid transport`, GitHub MCP, OAuth/PAT confusion,
+or `bearer_token_env_var`.
+
+**Pattern:** classify transport before editing auth.
+
+```toml
+[mcp_servers.github]
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+
+[mcp_servers.github.env]
+GITHUB_PERSONAL_ACCESS_TOKEN = "${CODEX_GITHUB_PERSONAL_ACCESS_TOKEN}"
+```
+
+**Never treat this as the whole GitHub stdio fix:**
+
+```toml
+[mcp_servers.github]
+bearer_token_env_var = "CODEX_GITHUB_PERSONAL_ACCESS_TOKEN"
+```
+
+That field belongs to HTTP MCP config. For stdio servers, pass credentials through
+`[mcp_servers.<name>.env]`.
+
+Verify every MCP config fix with:
+
+```bash
+codex mcp list
+```
+
+`Auth: Unsupported` is expected for stdio and is not the failure.
+
+**Why this rule exists:** Codex previously failed by treating the GitHub warning as a missing-token
+problem. Claude fixed it by running `codex mcp list`, recognizing `invalid transport` as a schema
+failure, and switching to transport-specific config. Preserve the nuance: `bearer_token_env_var` is
+valid for GitHub's remote HTTP MCP endpoint, but wrong for the local npm stdio server.
+
+→ [docs/wiki/11-codex-github-mcp-config.md](docs/wiki/11-codex-github-mcp-config.md)

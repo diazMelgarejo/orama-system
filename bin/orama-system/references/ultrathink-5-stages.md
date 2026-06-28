@@ -24,7 +24,7 @@ When something seems impossible, that's your cue to **ultrathink harder.**
 
 The 5 stages are not strictly sequential — they form a feedback loop:
 
-```
+```text
 Context Immersion ←─────────────┐
         ↓                       │
 Visionary Architecture          │
@@ -119,7 +119,7 @@ solution possible. Think like a designer: what would the ideal look like?
 
 ### Unconstrained Visioning
 
-```
+```text
 Question: If I had unlimited time and resources, what would
           the perfect solution look like?
 
@@ -322,12 +322,12 @@ Document the journey, not just the destination.
 ## Assumptions Made
 - **Assumption**: [What you assumed]
   **Justification**: [Why you made this choice]
-  **Risk**:       [What could go wrong]
+  **Risk**: [What could go wrong]
   **Mitigation**: [How you handled it]
 
 ## Design Choices
-- **Chose**:     [Technology/approach A] over [B]
-  **Reason**:    [Why]
+- **Chose**: [Technology/approach A] over [B]
+  **Reason**: [Why]
   **Trade-off**: [What you gave up]
 ```
 
@@ -336,12 +336,12 @@ Document the journey, not just the destination.
 ```markdown
 ## Complexity Removed
 1. **Removed**: [X] (N lines)
-   **Why**:     [Reason]
-   **Impact**:  [Effect on codebase]
+   **Why**: [Reason]
+   **Impact**: [Effect on codebase]
 
 ## Abstractions Streamlined
-- Before:  [Old structure]
-- After:   [New structure]
+- Before: [Old structure]
+- After: [New structure]
 - Benefit: [What improved]
 ```
 
@@ -395,8 +395,8 @@ Run `python scripts/capture_lesson.py` if any corrections occurred.
 ## Success Metrics
 
 A project using ultrathink succeeds when:
-- ✅ **Inevitability** — The solution feels obvious in retrospect
-- ✅ **Simplicity** — Explainable to a new team member in 10 minutes
-- ✅ **Robustness** — Handles edge cases gracefully
-- ✅ **Maintainability** — Future changes are easy to implement
-- ✅ **Beauty** — The code/design makes you proud
+✅ **Inevitability** — The solution feels obvious in retrospect
+✅ **Simplicity** — Explainable to a new team member in 10 minutes
+✅ **Robustness** — Handles edge cases gracefully
+✅ **Maintainability** — Future changes are easy to implement
+✅ **Beauty** — The code/design makes you proud

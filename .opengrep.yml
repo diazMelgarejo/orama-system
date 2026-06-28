@@ -1,0 +1,152 @@
+# OpenGrep / Semgrep configuration for orama-system
+# Runs during CodeRabbit PR reviews and can be invoked locally:
+#   semgrep scan --config .opengrep.yml .
+
+rules:
+  # ── Python security (OWASP Top-10 subset) ────────────────────────────────
+
+  - id: orama-no-shell-true
+    patterns:
+      - pattern: subprocess.$FUNC(..., shell=True, ...)
+    message: >
+      subprocess with shell=True is a command-injection vector.
+      Use list-form command: subprocess.run(["cmd", arg], ...).
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      owasp: A03:2021 - Injection
+      cwe: CWE-78
+
+  - id: orama-no-eval
+    pattern: eval(...)
+    message: eval() on untrusted data enables arbitrary code execution.
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      owasp: A03:2021 - Injection
+
+  - id: orama-no-yaml-load
+    patterns:
+      - pattern: yaml.load($X)
+      - pattern: yaml.load($X, ...)
+    fix: yaml.safe_load($X)
+    message: yaml.load() can execute arbitrary Python. Use yaml.safe_load().
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: security
+      owasp: A08:2021 - Software and Data Integrity Failures
+      cwe: CWE-502
+
+  - id: orama-no-hardcoded-secret
+    patterns:
+      - pattern: |
+          $VAR = "..."
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: "(?i)(api_key|secret|password|token|auth_key|private_key)"
+      - metavariable-regex:
+          metavariable: "..."
+          regex: ".{8,}"
+    message: >
+      Possible hardcoded credential in $VAR. Store in env vars or secrets manager.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      owasp: A02:2021 - Cryptographic Failures
+      cwe: CWE-798
+
+  - id: orama-no-deprecated-validator
+    pattern: "@validator(...)"
+    message: "@validator is deprecated in Pydantic v2. Use @field_validator."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: correctness
+
+  - id: orama-bind-all-interfaces
+    patterns:
+      - pattern: uvicorn.run(..., host="0.0.0.0", ...)
+      - pattern: app.run(..., host="0.0.0.0", ...)
+    message: >
+      Binding to 0.0.0.0 exposes the service on all interfaces.
+      Use host="127.0.0.1"; require BIND_LAN=1 for LAN exposure.
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: security
+      owasp: A05:2021 - Security Misconfiguration
+
+  # ── Bash security (install / bootstrap scripts) ───────────────────────────
+
+  - id: orama-bash-eval-with-external-input
+    patterns:
+      - pattern: eval "$($CMD)"
+      - pattern: eval "`$CMD`"
+    message: >
+      eval with command substitution from an external command can execute
+      attacker-controlled code. Validate all inputs before eval.
+    languages: [bash]
+    severity: ERROR
+    metadata:
+      category: security
+      cwe: CWE-78
+      owasp: A03:2021 - Injection
+
+  - id: orama-bash-curl-pipe-sh
+    patterns:
+      - pattern: curl $URL | sh
+      - pattern: curl $URL | bash
+      - pattern: wget $URL -O- | sh
+    message: >
+      Piping curl/wget output directly to sh/bash is a supply-chain risk.
+      Download, verify checksum, then execute.
+    languages: [bash]
+    severity: ERROR
+    metadata:
+      category: security
+      owasp: A08:2021 - Software and Data Integrity Failures
+
+  - id: orama-bash-slug-not-validated
+    patterns:
+      - pattern: SLUG="$1"
+      - pattern: SLUG="${1}"
+    message: >
+      SLUG from a positional parameter flows into heredocs and file paths.
+      Validate with: [[ "$SLUG" =~ ^[A-Za-z0-9._-]+$ ]] before use.
+    languages: [bash]
+    severity: WARNING
+    metadata:
+      category: security
+      cwe: CWE-78
+
+  # ── TypeScript / JavaScript security ─────────────────────────────────────
+
+  - id: orama-ts-no-eval
+    patterns:
+      - pattern: eval(...)
+      - pattern: new Function(...)
+    message: eval/Function constructor from untrusted input enables code injection.
+    languages: [typescript, javascript]
+    severity: ERROR
+    metadata:
+      category: security
+      owasp: A03:2021 - Injection
+
+  - id: orama-ts-no-hardcoded-secret
+    patterns:
+      - pattern: |
+          const $VAR = "..."
+      - metavariable-regex:
+          metavariable: $VAR
+          regex: "(?i)(apiKey|api_key|secret|password|token|authKey)"
+    message: Possible hardcoded credential in $VAR. Use environment variable.
+    languages: [typescript, javascript]
+    severity: WARNING
+    metadata:
+      category: security
+      owasp: A02:2021 - Cryptographic Failures
+      cwe: CWE-798

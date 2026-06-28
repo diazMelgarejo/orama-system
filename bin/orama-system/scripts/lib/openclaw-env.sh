@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+# openclaw-env.sh — resolve orama install root, OpenClaw parent tree, and bootstrap .mcp.json
+#
+# Package install layout (predominant): orama-system lives at
+#   $OPENCLAW_ROOT/orama-system/   (or any path under ORAMA_INSTALL_DIR)
+# with OpenClaw sibling repos (AlphaClaw, Perpetua-Tools, …) under $OPENCLAW_ROOT.
+# Standalone clone: parent of the git root is still used when it looks like OpenClaw.
+#
+# Env overrides (portable — never commit /Users/<name>/…):
+#   ORAMA_REPO_ROOT / ORAMA_INSTALL_DIR — orama-system git root (install dir)
+#   OPENCLAW_ROOT / ORAMA_OPENCLAW_ROOT — OpenClaw multi-repo parent
+#   OPENCLAW_MCP_JSON — path to .mcp.json (default: $OPENCLAW_ROOT/.mcp.json)
+#   PERPETUA_TOOLS_ROOT — Perpetua-Tools checkout (optional)
+#
+# Sourced by first-run-install.sh, setup-embeddings, crg-embed-mode, and repo scripts.
+set -euo pipefail
+
+orama_git_root() {
+  if [ -n "${ORAMA_REPO_ROOT:-}" ] && [ -d "${ORAMA_REPO_ROOT}/.git" ]; then
+    printf '%s\n' "$ORAMA_REPO_ROOT"
+    return 0
+  fi
+  if [ -n "${ORAMA_INSTALL_DIR:-}" ] && [ -d "${ORAMA_INSTALL_DIR}/.git" ]; then
+    printf '%s\n' "$ORAMA_INSTALL_DIR"
+    return 0
+  fi
+  local d="$PWD"
+  while [ "$d" != "/" ]; do
+    if [ -d "$d/.git" ] && [ -d "$d/bin/orama-system" ]; then
+      printf '%s\n' "$d"
+      return 0
+    fi
+    d="$(dirname "$d")"
+  done
+  return 1
+}
+
+# Alias for package installers — same as orama_git_root().
+orama_install_dir() {
+  orama_git_root "$@"
+}
+
+detect_openclaw_root() {
+  local candidate=""
+  if [ -n "${OPENCLAW_ROOT:-}" ] && [ -d "$OPENCLAW_ROOT" ]; then
+    candidate="$OPENCLAW_ROOT"
+  elif [ -n "${ORAMA_OPENCLAW_ROOT:-}" ] && [ -d "$ORAMA_OPENCLAW_ROOT" ]; then
+    candidate="$ORAMA_OPENCLAW_ROOT"
+  else
+    local orama_root parent
+    orama_root="$(orama_git_root)" || return 1
+    parent="$(dirname "$orama_root")"
+    # Default: parent of orama-system repo (package install: …/OpenClaw/orama-system → …/OpenClaw)
+    if [ -d "$parent" ]; then
+      candidate="$parent"
+    else
+      return 1
+    fi
+  fi
+  printf '%s\n' "$candidate"
+}
+
+# Public alias used in docs/skills.
+orama_openclaw_root() {
+  detect_openclaw_root "$@"
+}
+
+# ── OpenClaw CLI resolution ────────────────────────────────────────────────
+# The `openclaw` command on PATH (~/.local/bin/openclaw) is a pnpm cmd-shim
+# reached through a symlink; its $0-derived basedir resolves to a non-existent
+# ~/.local/openclaw/openclaw.mjs → "Cannot find module". Up to three openclaw
+# installs can coexist (npm-global gateway / AlphaClaw pnpm / stale ~/.alphaclaw).
+# These helpers route through the canonical resolver, which prefers the install
+# that actually runs the gateway and never the stale one. Full rationale:
+# scripts/openclaw/resolve-openclaw.sh (single source of truth).
+
+openclaw_resolver_path() {
+  local root
+  root="$(orama_git_root 2>/dev/null)" || return 1
+  printf '%s\n' "$root/scripts/openclaw/resolve-openclaw.sh"
+}
+
+# Echo "<node>\t<entrypoint>" for the canonical openclaw, or fail (3).
+resolve_openclaw_cli() {
+  local r
+  r="$(openclaw_resolver_path)" || return 3
+  [ -x "$r" ] || return 3
+  "$r" --which
+}
+
+# Run openclaw with args via the canonical resolver; fall back to bare
+# `openclaw` on PATH if the resolver is unavailable. Use this in scripts
+# instead of calling `openclaw` directly when robustness matters.
+openclaw_cmd() {
+  local r
+  r="$(openclaw_resolver_path 2>/dev/null)"
+  if [ -n "$r" ] && [ -x "$r" ]; then
+    "$r" "$@"
+    return $?
+  fi
+  command openclaw "$@"
+}
+
+detect_perpetua_tools_root() {
+  if [ -n "${PERPETUA_TOOLS_ROOT:-}" ] && [ -d "$PERPETUA_TOOLS_ROOT" ]; then
+    printf '%s\n' "$PERPETUA_TOOLS_ROOT"
+    return 0
+  fi
+  local openclaw_root
+  openclaw_root="$(detect_openclaw_root)" || return 1
+  local candidate="$openclaw_root/perplexity-api/Perpetua-Tools"
+  if [ -d "$candidate" ]; then
+    printf '%s\n' "$candidate"
+    return 0
+  fi
+  return 1
+}
+
+resolve_openclaw_mcp_json() {
+  if [ -n "${OPENCLAW_MCP_JSON:-}" ]; then
+    printf '%s\n' "$OPENCLAW_MCP_JSON"
+    return 0
+  fi
+  local root
+  root="$(detect_openclaw_root)" || return 1
+  printf '%s\n' "$root/.mcp.json"
+}
+
+# Cursor project MCP config (orama-system repo root). Used when the IDE workspace
+# is the orama-system checkout rather than OpenClaw parent.
+resolve_orama_cursor_mcp_json() {
+  local orama_root
+  orama_root="$(orama_git_root)" || return 1
+  printf '%s\n' "$orama_root/.cursor/mcp.json"
+}
+
+# Keep Cursor CRG env in sync with OpenClaw .mcp.json when both exist.
+sync_orama_cursor_crg_from() {
+  local source_mcp_json="$1"
+  local cursor_mcp_json
+  cursor_mcp_json="$(resolve_orama_cursor_mcp_json)" || return 0
+  [ -f "$cursor_mcp_json" ] || return 0
+  command -v jq >/dev/null 2>&1 || return 0
+  jq --slurpfile src <(jq '.mcpServers["code-review-graph"]' "$source_mcp_json") '
+    .mcpServers["code-review-graph"] = $src[0]
+  ' "$cursor_mcp_json" > "${cursor_mcp_json}.openclaw.tmp" \
+    && mv "${cursor_mcp_json}.openclaw.tmp" "$cursor_mcp_json"
+}
+
+ensure_orama_cursor_crg_mcp() {
+  local log_fn="${1:-:}"
+  local lib_dir sync_script
+  lib_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  sync_script="$lib_dir/../sync-cursor-mcp.sh"
+  if [ -f "$sync_script" ]; then
+    while IFS= read -r line; do
+      _emit_log "$log_fn" "$line"
+    done < <(bash "$sync_script" 2>&1) || return 1
+    return 0
+  fi
+  local cursor_mcp_json
+  cursor_mcp_json="$(resolve_orama_cursor_mcp_json)" || return 0
+  if _write_minimal_mcp_json "$cursor_mcp_json"; then
+    _emit_log "$log_fn" "openclaw-env: wrote code-review-graph entry to $cursor_mcp_json"
+    return 0
+  fi
+  _emit_log "$log_fn" "openclaw-env: failed to create $cursor_mcp_json (need jq and python3.13+)"
+  return 1
+}
+
+_emit_log() {
+  local log_fn="$1"
+  shift
+  case "$log_fn" in
+    :|"") ;;
+    echo) printf '%s\n' "$@" ;;
+    *)
+      if declare -F "$log_fn" >/dev/null 2>&1; then
+        "$log_fn" "$@"
+      else
+        printf '%s\n' "$@" >&2
+      fi
+      ;;
+  esac
+}
+
+_crg_python_bin() {
+  if command -v python3.13 >/dev/null 2>&1; then
+    command -v python3.13
+  elif command -v python3 >/dev/null 2>&1; then
+    command -v python3
+  else
+    return 1
+  fi
+}
+
+_write_minimal_mcp_json() {
+  local mcp_json="$1"
+  local pybin
+  pybin="$(_crg_python_bin)" || return 1
+  command -v jq >/dev/null 2>&1 || return 1
+  mkdir -p "$(dirname "$mcp_json")"
+  if [ -f "$mcp_json" ]; then
+    jq --arg py "$pybin" '
+      .mcpServers["code-review-graph"] = {
+        "command": "uvx",
+        "args": ["code-review-graph", "serve"],
+        "env": (
+          (.mcpServers["code-review-graph"].env // {})
+          + {
+            "PYTHON": $py,
+            "CRG_OPENAI_API_KEY": "ollama",
+            "CRG_OPENAI_BASE_URL": "http://localhost:11434/v1",
+            "CRG_OPENAI_MODEL": "bge-m3",
+            "CRG_OPENAI_DIMENSION": "1024",
+            "CRG_ACCEPT_CLOUD_EGRESS": "1"
+          }
+        )
+      }
+    ' "$mcp_json" > "${mcp_json}.openclaw.tmp" && mv "${mcp_json}.openclaw.tmp" "$mcp_json"
+  else
+    jq -n --arg py "$pybin" '{
+      "mcpServers": {
+        "code-review-graph": {
+          "command": "uvx",
+          "args": ["code-review-graph", "serve"],
+          "env": {
+            "PYTHON": $py,
+            "CRG_OPENAI_API_KEY": "ollama",
+            "CRG_OPENAI_BASE_URL": "http://localhost:11434/v1",
+            "CRG_OPENAI_MODEL": "bge-m3",
+            "CRG_OPENAI_DIMENSION": "1024",
+            "CRG_ACCEPT_CLOUD_EGRESS": "1"
+          }
+        }
+      }
+    }' > "$mcp_json"
+  fi
+}
+
+ensure_openclaw_mcp_json() {
+  local log_fn="${1:-:}"
+  local root mcp_json
+
+  mcp_json="$(resolve_openclaw_mcp_json)" || {
+    _emit_log "$log_fn" "openclaw-env: could not resolve OpenClaw root (set OPENCLAW_ROOT)"
+    return 1
+  }
+  root="$(dirname "$mcp_json")"
+
+  if [ -f "$mcp_json" ] && command -v jq >/dev/null 2>&1; then
+    if jq -e '.mcpServers["code-review-graph"]' "$mcp_json" >/dev/null 2>&1; then
+      _emit_log "$log_fn" "openclaw-env: $mcp_json already has code-review-graph"
+      return 0
+    fi
+  fi
+
+  if command -v uvx >/dev/null 2>&1; then
+    _emit_log "$log_fn" "openclaw-env: code-review-graph install --platform claude-code --repo <openclaw>"
+    if uvx code-review-graph install --platform claude-code --repo "$root" >/dev/null 2>&1; then
+      if [ -f "$mcp_json" ] && jq -e '.mcpServers["code-review-graph"]' "$mcp_json" >/dev/null 2>&1; then
+        _emit_log "$log_fn" "openclaw-env: install registered code-review-graph in $mcp_json"
+        return 0
+      fi
+    fi
+    _emit_log "$log_fn" "openclaw-env: install incomplete; writing minimal template"
+  fi
+
+  if _write_minimal_mcp_json "$mcp_json"; then
+    _emit_log "$log_fn" "openclaw-env: wrote code-review-graph entry to $mcp_json"
+    return 0
+  fi
+
+  _emit_log "$log_fn" "openclaw-env: failed to create $mcp_json (need jq and python3.13+)"
+  return 1
+}

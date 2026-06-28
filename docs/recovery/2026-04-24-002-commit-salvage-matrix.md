@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — orama history recovery completed; git-safety guardrails shipped.
+
 # Commit Salvage Matrix
 
 Range reviewed: `f66976b..1e93f07`

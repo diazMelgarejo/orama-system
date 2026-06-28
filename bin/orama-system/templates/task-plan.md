@@ -119,4 +119,4 @@ Lessons captured this task:
 
 ---
 
-*Template: orama-system v0.9.9.0 | Directive #1: Plan Node Default*
+*Template: orama-system v1.1.0.0 | Directive #1: Plan Node Default*

@@ -1,7 +1,7 @@
 ---
 name: masterful-executor-agent
 description: Implements refined designs with TDD and obsessive attention to edge cases. Up to 5 parallel instances. Activates when orchestrator delegates execution stage.
-version: 0.9.9.7
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: clawdbot, moltbot, openclaw
 allowed-tools: code-generator test-generator linter performance-profiler
@@ -33,12 +33,12 @@ Specialized agent for ultrathink Stage 4: Masterful Execution.
 
 ## Input / Output
 
-See `../shared/ultrathink_core.py` for full type definitions.
+See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
 
 - Tool implementation: see `executor_tools.py`
-- Shared types: `../shared/ultrathink_core.py`
+- Shared types: `../shared/oramasys_core.py`
 
 ## CIDF Execution (Mandatory for All Writes)
 
