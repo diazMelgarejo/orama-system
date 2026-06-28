@@ -208,7 +208,25 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Checkout Perpetua-Tools (sibling for pointer sync check)
+      - name: Checkout Perpetua-Tools (PR branch for stacked cross-repo parity)
+        if: github.event_name == 'pull_request'
+        id: checkout-pt-pr
+        uses: actions/checkout@v5
+        with:
+          repository: diazMelgarejo/Perpetua-Tools
+          ref: ${{ github.head_ref }}
+          path: perpetua-tools-sibling
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+        continue-on-error: true
+
+      - name: Clear perpetua-tools-sibling before main fallback
+        if: github.event_name != 'pull_request' || steps.checkout-pt-pr.outcome != 'success'
+        run: rm -rf perpetua-tools-sibling
+
+      - name: Checkout Perpetua-Tools (main fallback)
+        if: github.event_name != 'pull_request' || steps.checkout-pt-pr.outcome != 'success'
         uses: actions/checkout@v5
         with:
           repository: diazMelgarejo/Perpetua-Tools
@@ -216,7 +234,17 @@ jobs:
           path: perpetua-tools-sibling
           fetch-depth: 1
           persist-credentials: false
+          submodules: false
         continue-on-error: true
+
+      - name: Verify model endpoint policy parity with Perpetua-Tools
+        run: |
+          if [ -d perpetua-tools-sibling ]; then
+            PERPETUA_TOOLS_ROOT="$GITHUB_WORKSPACE/perpetua-tools-sibling" \
+              python3 scripts/review/verify_model_endpoint_policy_parity.py
+          else
+            echo "skip: Perpetua-Tools not available in this CI run"
+          fi
 
       - name: Verify docs/v2 pointers in sync with downstream Perpetua-Tools
         run: |

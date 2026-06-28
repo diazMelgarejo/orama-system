@@ -227,8 +227,23 @@ function Sync-ControlPlaneToken {
     _Warn 'lan-peer' 'Generated ORAMA_CONTROL_PLANE_TOKEN — copy PT/.state/control_plane_token to Mac .env.local'
 }
 
-if ($LanPeer -or ($env:PORTAL_BIND_LAN -match '^(1|true|yes)$')) {
+function Test-LanBindConfigured {
+    foreach ($name in @('PORTAL_BIND_LAN', 'ORAMA_BIND_LAN', 'PT_BIND_LAN')) {
+        $value = (Get-Item -Path "Env:$name" -ErrorAction SilentlyContinue).Value
+        if ($value -match '^(1|true|yes)$') { return $true }
+    }
+    return $false
+}
+
+if ($LanPeer -or (Test-LanBindConfigured)) {
     Sync-ControlPlaneToken
+    $weak = @('', 'change-me-before-network-use', 'changeme', 'change-me', 'placeholder', 'test', 'secret')
+    $tokenVal = $env:ORAMA_CONTROL_PLANE_TOKEN
+    if ($null -eq $tokenVal) { $tokenVal = '' }
+    if ($weak -contains $tokenVal.Trim().ToLower()) {
+        Write-Error 'LAN bind requires a strong ORAMA_CONTROL_PLANE_TOKEN (set in .env.local or generated in PT/.state/control_plane_token)'
+        exit 1
+    }
 }
 
 function Invoke-LanPeerProbe {

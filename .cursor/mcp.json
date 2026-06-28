@@ -15,16 +15,6 @@
         "CRG_ACCEPT_CLOUD_EGRESS": "1"
       }
     },
-    "ai-cli-mcp": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "ai-cli-mcp@latest"
-      ],
-      "env": {
-        "MCP_CLAUDE_DEBUG": "false"
-      }
-    },
     "oramasys": {
       "command": "python",
       "args": [
