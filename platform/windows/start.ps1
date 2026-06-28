@@ -14,6 +14,7 @@
       .\start.ps1 --status    — show port-listener status
       .\start.ps1 --discover  — re-run LAN path discovery, rewrite .paths.ps1, exit
       .\start.ps1 --hardware-policy — validate model↔hardware affinity and exit
+      .\start.ps1 --lan-peer    — set LAN bind env + run peer probe after start
 
 .NOTES
     Windows-only requirements live in this /windows folder.
@@ -39,7 +40,8 @@ param(
     [switch]$Stop,
     [switch]$Status,
     [switch]$Discover,
-    [switch]$HardwarePolicy
+    [switch]$HardwarePolicy,
+    [switch]$LanPeer
 )
 
 Set-StrictMode -Version Latest
@@ -154,6 +156,40 @@ $PtPort     = if ($env:PT_PORT)     { [int]$env:PT_PORT }     else { 8000 }
 $UsPort     = if ($env:US_PORT)     { [int]$env:US_PORT }     else { 8001 }
 $PortalPort = if ($env:PORTAL_PORT) { [int]$env:PORTAL_PORT } else { 8002 }
 $PortalUrl  = "http://localhost:$PortalPort"
+
+if ($LanPeer) {
+    if (-not $env:PORTAL_BIND_LAN) { $env:PORTAL_BIND_LAN = '1' }
+    if (-not $env:ORAMA_BIND_LAN)  { $env:ORAMA_BIND_LAN  = '1' }
+    if (-not $env:PT_BIND_LAN)     { $env:PT_BIND_LAN     = '1' }
+    _Info 'lan-peer' 'LAN bind env set (services bind 0.0.0.0 on Windows)'
+}
+
+function Sync-ControlPlaneToken {
+    if ($env:ORAMA_CONTROL_PLANE_TOKEN) { return }
+    if (-not $PtDir) { return }
+    $tokenPath = Join-Path $PtDir '.state\control_plane_token'
+    if (Test-Path $tokenPath) {
+        $env:ORAMA_CONTROL_PLANE_TOKEN = (Get-Content $tokenPath -Raw).Trim()
+        _Info 'lan-peer' 'ORAMA_CONTROL_PLANE_TOKEN loaded from PT .state'
+    } else {
+        _Warn 'lan-peer' 'No ORAMA_CONTROL_PLANE_TOKEN — portal-status probe will SKIP'
+    }
+}
+
+function Invoke-LanPeerProbe {
+    $probe = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py'
+    if (-not (Test-Path $probe)) {
+        _Warn 'lan-peer' "probe script missing: $probe"
+        return
+    }
+    Sync-ControlPlaneToken
+    if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
+    _Info 'lan-peer' 'running probe_lan_peer.py --json ...'
+    & $UsPython $probe --json
+    if ($LASTEXITCODE -ne 0) {
+        _Warn 'lan-peer' 'peer probe reported failures (Mac peer may need ./start.sh --lan-peer)'
+    }
+}
 
 # ── Hardware policy check ─────────────────────────────────────────────────────
 function Invoke-HardwarePolicyCheck {
@@ -416,8 +452,13 @@ Write-Host ("  ○  JSON    {0}/api/status" -f $PortalUrl)
 Write-Host ''
 Write-Host ("  Logs  : {0}\" -f $LogDir)
 Write-Host '  Stop  : .\platform\windows\start.ps1 --stop'
+Write-Host '  LAN   : .\platform\windows\start.ps1 --lan-peer'
 Write-Host '────────────────────────────────────────────────────────────────────'
 Write-Host ''
+
+if ($LanPeer) {
+    Invoke-LanPeerProbe
+}
 
 if (-not $NoOpen) {
     Open-Browser $PortalUrl

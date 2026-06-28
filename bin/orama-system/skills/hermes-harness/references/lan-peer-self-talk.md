@@ -42,6 +42,8 @@
    Windows: use `python` instead of `python3`.
 
 6. **Restart portal/stack** if already running so `PORTAL_BIND_LAN=1` takes effect.
+   Shortcut on Mac: `./start.sh --stop && ./start.sh --lan-peer --no-open` (sets bind flags
+   and runs `probe_lan_peer.py` after start). Windows: `.\platform\windows\start.ps1 --lan-peer`.
 
 **Note:** Mac→Win **inference** (models over LAN) works without portal bind. Portal bind
 is required only for peer `/health` and `/api/status` on port 8002.
@@ -90,6 +92,12 @@ python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json
 | `portal-health` | Peer portal `GET /health` on LAN `:8002` |
 | `portal-status` | Peer `GET /api/status` with shared bearer token |
 | `peer-lmstudio` | Peer `GET /v1/models` at discovery IP + port |
+
+On **SUCCESS**, probe writes a local-only artifact (never commit):
+
+`~/.openclaw/state/last_lan_peer_probe.json`
+
+Hermes must print `SUCCESS` and the full path in the operator reply.
 
 ### D. If a check fails
 

@@ -17,6 +17,7 @@
 #   ./start.sh --status    — show which ports are listening
 #   ./start.sh --discover  — re-run path discovery, rewrite .paths, exit
 #   ./start.sh --hardware-policy — validate model↔hardware affinity and exit
+#   ./start.sh --lan-peer    — LAN-bind PT/orama/Portal + run peer probe after start
 #
 # Path config: .paths (gitignored, auto-generated, user-editable)
 # Template:    .paths.example
@@ -215,6 +216,20 @@ PATHSEOF
   [[ "${1:-}" == "--discover" ]] && exit 0
 fi
 
+# ── --lan-peer (enable LAN bind before host resolution) ───────────────────────
+_LAN_PEER_MODE=0
+for _early in "$@"; do
+  case "$_early" in
+    --lan-peer) _LAN_PEER_MODE=1 ;;
+  esac
+done
+if [ "$_LAN_PEER_MODE" = "1" ]; then
+  export PT_BIND_LAN="${PT_BIND_LAN:-1}"
+  export ORAMA_BIND_LAN="${ORAMA_BIND_LAN:-1}"
+  export PORTAL_BIND_LAN="${PORTAL_BIND_LAN:-1}"
+  _info "lan-peer" "LAN bind enabled (PT/ORAMA/PORTAL) — peer HTTP on this host"
+fi
+
 PT_PORT=${PT_PORT:-8000}
 US_PORT=${US_PORT:-8001}
 PORTAL_PORT=${PORTAL_PORT:-8002}
@@ -249,6 +264,35 @@ fi
 if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${PORTAL_BIND_LAN:-0}" = "1" ]; then
   _warn "svc" "LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network"
 fi
+
+_sync_control_plane_token() {
+  if [ -n "${ORAMA_CONTROL_PLANE_TOKEN:-}" ]; then
+    return 0
+  fi
+  local token_file="${PT_DIR:-}/.state/control_plane_token"
+  if [ -f "$token_file" ]; then
+    ORAMA_CONTROL_PLANE_TOKEN="$(tr -d '[:space:]' < "$token_file")"
+    export ORAMA_CONTROL_PLANE_TOKEN
+    _info "lan-peer" "ORAMA_CONTROL_PLANE_TOKEN loaded from PT .state/control_plane_token"
+  else
+    _warn "lan-peer" "No ORAMA_CONTROL_PLANE_TOKEN — portal-status probe will SKIP (set in .env.local)"
+  fi
+}
+
+_run_lan_peer_probe() {
+  local probe="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py"
+  if [ ! -f "$probe" ]; then
+    _warn "lan-peer" "probe script missing: $probe"
+    return 1
+  fi
+  _info "lan-peer" "running probe_lan_peer.py --json ..."
+  _sync_control_plane_token
+  PERPETUA_TOOLS_ROOT="${PT_DIR:-}" ORAMA_CONTROL_PLANE_TOKEN="${ORAMA_CONTROL_PLANE_TOKEN:-}" \
+    "$US_PYTHON" "$probe" --json || {
+    _warn "lan-peer" "peer probe reported failures (Win peer may need PORTAL_BIND_LAN=1 + restart)"
+    return 1
+  }
+}
 
 LOG_DIR="$SCRIPT_DIR/.logs"
 mkdir -p "$LOG_DIR"
@@ -958,6 +1002,7 @@ for _prearg in "$@"; do
     --no-mcp)         export WITH_MCP=0 ;;
     --no-ollama)      export OLLAMA_AUTO_START=0 ;;
     --install-watcher) export INSTALL_NETWORK_WATCHER=1 ;;
+    --lan-peer)       export _LAN_PEER_MODE=1 ;;
   esac
 done
 
@@ -1053,11 +1098,16 @@ printf "  Stop  : ./start.sh --stop\n"
 printf "  Debug : ORAMA_DEBUG=1 ./start.sh\n"
 printf "  MCP   : ./start.sh --with-mcp  (exposes swarm to Claude/Codex/Gemini)\n"
 printf "  Profile: OPENCLAW_PROFILE=mac-orchestrator ./start.sh\n"
+printf "  LAN   : ./start.sh --lan-peer  (bind 0.0.0.0 + probe peer after start)\n"
 echo "────────────────────────────────────────────────────────────────────"
 echo ""
 
 # Register MCP endpoints after all services are confirmed up
 _register_mcp_endpoints
+
+if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
+  _run_lan_peer_probe || true
+fi
 
 # ── network watcher install (--install-watcher flag or first-time setup) ──────
 _WATCHER_SCRIPT="$SCRIPT_DIR/scripts/install_network_watch.sh"
