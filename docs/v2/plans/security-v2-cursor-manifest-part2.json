@@ -1,0 +1,83 @@
+{
+  "version": "v2",
+  "name": "OramaSys v2 Cursor Execution Manifest (Part 2 Addendum)",
+  "crosslink": {
+    "part1": "docs/v2/plans/security-v2-roadmap.md",
+    "part2": "docs/v2/plans/security-v2-roadmap-part2.md"
+  },
+  "execution_model": "cursor-agent",
+  "strategy": "deterministic-minimal-diff-security-remediation",
+
+  "tasks": [
+    {
+      "id": "AUTH-001",
+      "layer": "control_plane_auth",
+      "action": "secure_token_persistence",
+      "instructions": [
+        "Replace all token writes with _secure_write_token",
+        "Ensure 0600 permissions at file creation time",
+        "Eliminate umask-dependent writes"
+      ]
+    },
+    {
+      "id": "PORTAL-001",
+      "layer": "portal_server",
+      "action": "xss_hardening",
+      "instructions": [
+        "Escape all external inputs using html.escape",
+        "Apply to event labels, messages, and metadata",
+        "Ensure _tag receives sanitized values only"
+      ]
+    },
+    {
+      "id": "SSRF-001",
+      "layer": "endpoint_policy_core",
+      "action": "enforce_policy_boundary",
+      "instructions": [
+        "Ensure all URL parsing flows through validate_base_url",
+        "Block raw urlparse usage outside policy module",
+        "Preserve scheme integrity during reconstruction"
+      ]
+    },
+    {
+      "id": "WIN-001",
+      "layer": "start_ps1",
+      "action": "verify_false_positive",
+      "instructions": [
+        "Confirm no ?? operator exists in actual file",
+        "Do not patch unless verified in full file context"
+      ]
+    },
+    {
+      "id": "SEC-001",
+      "layer": "security_md",
+      "action": "clarify_policy",
+      "instructions": [
+        "CSRF/origin protections are MANDATORY",
+        "session-cookie UX is OPTIONAL"
+      ]
+    },
+    {
+      "id": "MODELREG-001",
+      "layer": "orchestrator/model_registry",
+      "action": "preserve_url_scheme_on_rewrite",
+      "instructions": [
+        "Fix detect_active_tilting_ip URL reconstruction logic",
+        "Preserve original scheme (http/https) from override input",
+        "Only default scheme when missing",
+        "Avoid hardcoding http during rebuild",
+        "Maintain hostname/port reconstruction integrity"
+      ]
+    }
+  ],
+
+  "final_validation": {
+    "must_pass": [
+      "no raw urlparse usage in production paths",
+      "no token leakage in HTML or logs",
+      "no SSRF bypass via scheme stripping",
+      "all portal inputs escaped",
+      "control plane token writes are 0600 secure"
+    ]
+  }
+}
