@@ -3,6 +3,113 @@
 > **Goal:** Two orama-system clones (Mac + Win) on the same LAN can **see** and **probe**
 > each other without new RPC infrastructure. Reuse discovery, HTTP probes, and the
 > Hermes envelope — do not build a second control plane.
+>
+> **Canonical operator playbook (Mac + Win — identical text):** [§ Operator playbook](#operator-playbook)
+
+---
+
+## Operator playbook
+
+> **SSOT:** Both machines `git pull --ff-only origin main` and follow **this section**
+> verbatim. Do not maintain forked Mac-only or Win-only copies of these steps.
+
+### A. One-time setup (run on **each** host)
+
+1. **Sync orama-system on `main`:**
+   ```bash
+   export ORAMA_SYSTEM_PATH="$(git -C /path/to/orama-system rev-parse --show-toplevel)"
+   cd "$ORAMA_SYSTEM_PATH"
+   git fetch origin --prune && git checkout main && git pull --ff-only origin main
+   ```
+
+2. **`.env.local`** in the orama-system clone root (never commit; **same token on both hosts**):
+   ```dotenv
+   PORTAL_BIND_LAN=1
+   ORAMA_BIND_LAN=1
+   ORAMA_CONTROL_PLANE_TOKEN=<same-secret-on-Mac-and-Win>
+   ```
+
+3. **Discovery fresh** — peer IP must come from `~/.openclaw/state/last_discovery.json`
+   (never hardcode DHCP). Refresh via PT `discover-lm-studio.sh` or the LAN watcher.
+
+4. **Inference running locally** — LM Studio on Win (`localhost:1234`); Ollama/LMS on Mac
+   per hardware policy.
+
+5. **Install Hermes thin wrapper** (once per host after pull):
+   ```bash
+   python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py --install --verify
+   ```
+   Windows: use `python` instead of `python3`.
+
+6. **Restart portal/stack** if already running so `PORTAL_BIND_LAN=1` takes effect.
+
+**Note:** Mac→Win **inference** (models over LAN) works without portal bind. Portal bind
+is required only for peer `/health` and `/api/status` on port 8002.
+
+### B. What to tell Hermes (copy-paste)
+
+**Slash command (preferred):**
+```
+/lan-peer-self-talk
+```
+
+**Plain English:**
+```
+Probe the LAN peer orama install. Use last_discovery.json for the peer IP, run
+probe_lan_peer.py --json from ORAMA_SYSTEM_PATH, and report every check in checks[].
+```
+
+**JSON envelope** (programmatic dispatch):
+```json
+{
+  "skill_id": "lan-peer-self-talk",
+  "args": { "probe": "full", "json": true },
+  "agent_id": "hermes",
+  "harness": "hermes",
+  "orama_system_root": "$ORAMA_SYSTEM_PATH",
+  "transport": { "partner": "hermes", "profile": "lan-peer-probe" }
+}
+```
+
+Hermes must run (from `$ORAMA_SYSTEM_PATH`):
+
+```bash
+python3 bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py --json
+```
+
+Windows equivalent:
+
+```powershell
+python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json
+```
+
+### C. Pass criteria (`checks[]`)
+
+| Check | PASS means |
+|-------|------------|
+| `portal-health` | Peer portal `GET /health` on LAN `:8002` |
+| `portal-status` | Peer `GET /api/status` with shared bearer token |
+| `peer-lmstudio` | Peer `GET /v1/models` at discovery IP + port |
+
+### D. If a check fails
+
+| Failure | Fix |
+|---------|-----|
+| `portal-health` FAIL | Set `PORTAL_BIND_LAN=1`, restart portal on **peer** |
+| `portal-status` FAIL | Same `ORAMA_CONTROL_PLANE_TOKEN` in both `.env.local` files |
+| `peer-lmstudio` FAIL | Re-run discovery; ensure LM Studio listening on peer |
+| No peer IP | Refresh `last_discovery.json`; do not hardcode LAN IP |
+
+### E. What Hermes cannot do (today)
+
+| Not supported | Why |
+|---------------|-----|
+| Run Hermes/Codex **on** the peer host | Partners are local PATH per machine — probe only |
+| SSH to Win for setup | Use HTTP only (`:22` not required) |
+| Remote `api_server` dispatch | v2 increment — not shipped yet |
+
+For cross-host **inference** (e.g. Mac using Win 27B), use `verify_partner_canaries.py`
+and `start.sh --status` / `start.ps1 --status` — not a separate Hermes RPC layer.
 
 ---
 
