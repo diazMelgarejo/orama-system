@@ -221,6 +221,10 @@ jobs:
           submodules: false
         continue-on-error: true
 
+      - name: Clear perpetua-tools-sibling before main fallback
+        if: github.event_name != 'pull_request' || steps.checkout-pt-pr.outcome != 'success'
+        run: rm -rf perpetua-tools-sibling
+
       - name: Checkout Perpetua-Tools (main fallback)
         if: github.event_name != 'pull_request' || steps.checkout-pt-pr.outcome != 'success'
         uses: actions/checkout@v5
