@@ -5,13 +5,13 @@ Drop topic files to the peer portal inbox instead of streaming large payloads ov
 
 Usage:
     # Drop assignment to peer (reads discovery JSON for peer IP)
-    python lan_peer_assign.py drop --file ./mac-hypothesis.md --assignee mac --topic autoresearch/hypothesis
+    python lan_peer_assign.py --peer drop --file ./mac-hypothesis.md --assignee mac --topic autoresearch/hypothesis
 
     # List peer inbox
-    python lan_peer_assign.py list --peer
+    python lan_peer_assign.py --peer list
 
     # Read one file from peer inbox
-    python lan_peer_assign.py read --peer --name 2026-06-28-mac-hypothesis.md
+    python lan_peer_assign.py --peer read --name 2026-06-28-mac-hypothesis.md
 
     # Fan out manifest to peers (local paths → HTTP drop per assignee)
     python lan_peer_assign.py fanout --manifest assignments.json
