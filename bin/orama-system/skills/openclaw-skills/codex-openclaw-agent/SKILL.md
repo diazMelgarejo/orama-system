@@ -148,6 +148,7 @@ provider is authenticated.
 ## Related
 
 - [Native binding contract](references/codex-backend-binding.md)
+- [Codex CLI v0.142.x dispatch profiles](../../../../references/codex-cli-v142-dispatch.md) — fanout flags, `-C` repo root, no hardcoded paths
 - [OramaClaw control-plane plan](../../../../../docs/superpowers/plans/2026-06-20-oramaclaw-control-plane-v1.md)
 - [OramaClaw plan punch list](../../../../../docs/superpowers/plans/2026-06-20-oramaclaw-plan-punch-list.md)
 - [OpenClaw new-agent skill](../skills/openclaw-new-agent/SKILL.md)

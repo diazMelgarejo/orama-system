@@ -59,7 +59,7 @@ All examples assume **current working directory = orama-system repository root**
 | CLI | Windows (User PATH) | macOS/Linux |
 |-----|---------------------|-------------|
 | Hermes | `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts` | `$HERMES_HOME/hermes-agent/venv/bin` |
-| Codex | `%USERPROFILE%\.lmstudio\bin` or `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` | npm global / `~/.local/bin` |
+| Codex | `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` (WinGet) **preferred**; fallback `%USERPROFILE%\.lmstudio\bin` | npm global / `~/.local/bin` |
 | AGY | `%LOCALAPPDATA%\agy\bin` | Antigravity installer default |
 | cursor-agent | `%LOCALAPPDATA%\cursor-agent` | `~/.local/bin` |
 
