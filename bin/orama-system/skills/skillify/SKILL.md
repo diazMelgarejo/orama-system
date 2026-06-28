@@ -256,6 +256,24 @@ If `SKILL_EXISTS: true` — ask via AskUserQuestion:
 
 If cancel: STOP with `STATUS: BLOCKED — user cancelled, existing skill preserved`.
 
+### Validator constraints (post-create guard)
+
+After any write, run this check before continuing:
+
+```python
+import yaml, re, pathlib
+path = pathlib.Path("<target_dir>/SKILL.md")
+content = path.read_text(encoding="utf-8")
+assert content.startswith("---")
+m = re.search(r'\n---\s*\n', content[3:])
+fm = yaml.safe_load(content[3:m.start()+3])
+assert "name" in fm and "description" in fm
+assert len(fm["description"]) <= 1024
+assert len(content) <= 100_000
+```
+
+Fix any failure before moving on.
+
 ### Write SKILL.md
 
 Use the Write tool to create `<target_dir>/SKILL.md`.

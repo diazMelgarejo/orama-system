@@ -282,6 +282,19 @@ This skill (in orama-system) **imports hardware routing rules and scripts
 from Perpetua-Tools** as its source of truth. Perpetua-Tools owns the
 enforcement logic; orama-system references it for methodology.
 
+### Hermes harness entry points (absorbed from `local-inference` + `perpetua-hardware`)
+
+| Host | Launcher | Command skill |
+|------|----------|---------------|
+| macOS / Linux OpenClaw | `./start.sh --hardware-policy` | N/A (launcher resolves PT) |
+| Windows Hermes | `.\platform\windows\start.ps1 --hardware-policy` | [`../hermes-harness/commands/pt-hardware-policy/SKILL.md`](../hermes-harness/commands/pt-hardware-policy/SKILL.md) |
+| Hermes operator docs | — | [`../hermes-harness/references/lan-endpoint-contract.md`](../hermes-harness/references/lan-endpoint-contract.md) |
+
+Absorption map: [`../hermes-harness/references/hermes-skill-absorption-map.md`](../hermes-harness/references/hermes-skill-absorption-map.md).
+
+Redirect stubs `perpetua-hardware` and `local-inference` point here — do not
+add procedure to those stubs.
+
 ### What This Skill Gets from Perpetua-Tools
 
 - `AffinityPolicy.from_env()` — single source of truth for NEVER lists
@@ -321,6 +334,19 @@ self-hosting the rules.
 5. **Cross-platform model listing.** Listing a Mac-only MLX model on Windows,
    or a Windows GGUF model on Mac, is a configuration bug, not a routing bug.
    The gate catches it before dispatch.
+
+## Post-Edit Validation
+
+If you update this skill file, run the quick guard before declaring DONE:
+
+```python
+import pathlib
+content = pathlib.Path("bin/orama-system/skills/hardware-affinity-gate/SKILL.md").read_text(encoding="utf-8")
+assert content.startswith("---")
+assert len(content) <= 100_000
+```
+
+Keep changes additive. Do not erase prior entries or rewrite history.
 
 ## Verification Checklist
 
