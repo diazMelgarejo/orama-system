@@ -249,7 +249,10 @@ def step_mac_agent_thinking() -> None:
 
     def _enforce(agent: dict, label: str) -> None:
         nonlocal changed
-        primary = agent.get("model", {}).get("primary", "")
+        _model = agent.get("model", {})
+        if isinstance(_model, str):
+            return  # string model shorthand — no "primary" key to enforce
+        primary = _model.get("primary", "")
         if not primary.startswith(_MAC_PROVIDER_PREFIX):
             return
 
