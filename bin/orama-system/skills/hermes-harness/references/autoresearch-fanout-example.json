@@ -1,0 +1,17 @@
+{
+  "fanout_id": "2026-06-28-autoresearch-001",
+  "assignments": [
+    {
+      "assignee": "mac",
+      "topic": "autoresearch/hypothesis",
+      "filename": "mac-hypothesis.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/autoresearch-mac-hypothesis.md"
+    },
+    {
+      "assignee": "win",
+      "topic": "autoresearch/gpu-run",
+      "filename": "win-gpu.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/autoresearch-win-gpu.md"
+    }
+  ]
+}

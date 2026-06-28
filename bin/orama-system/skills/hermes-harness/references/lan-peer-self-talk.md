@@ -123,8 +123,8 @@ Peer reads files from `~/.openclaw/state/lan_peer/inbox/` on the receiving host.
 
 ```powershell
 cd $env:ORAMA_SYSTEM_PATH
-python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py drop `
-  --peer --file .\tasks\mac-hypothesis.md `
+python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py --peer drop `
+  --file .\tasks\mac-hypothesis.md `
   --assignee mac --topic autoresearch/hypothesis `
   --fanout-id 2026-06-28-001
 ```
@@ -132,8 +132,8 @@ python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py drop `
 **Mac reads peer inbox:**
 
 ```bash
-python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py list --peer
-python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py read --peer \
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py --peer list
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py --peer read \
   --name 2026-06-28-mac-hypothesis.md
 ```
 
@@ -150,7 +150,8 @@ python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py read -
 ```
 
 ```bash
-python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py fanout --manifest assignments.json
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py fanout \
+  --manifest bin/orama-system/skills/hermes-harness/references/autoresearch-fanout-example.json
 ```
 
 HTTP API (Bearer token): `POST /api/peer-file`, `GET /api/peer-inbox`, `GET /api/peer-inbox/{filename}`.
