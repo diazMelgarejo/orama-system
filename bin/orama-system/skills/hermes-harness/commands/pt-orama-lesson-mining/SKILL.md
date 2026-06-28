@@ -1,12 +1,14 @@
 ---
 name: pt-orama-lesson-mining
 description: >-
-  Graduate session findings into Perpetua-Tools semantic memory via learn.py.
-  Thin Hermes command; canonical lesson pipeline lives in Perpetua-Tools.
-version: 1.0.0
+  Optional Hermes command for graduating durable session insights into semantic
+  memory. Not required for harness operation; Perpetua-Tools is not a dependency.
+version: 1.1.0.0
 license: Apache 2.0
 compatibility: hermes, codex, windows
 parent_skill: hermes-harness
+optional: true
+status: optional-extension
 triggers:
   - pt-orama-lesson-mining
   - lesson mining
@@ -14,21 +16,21 @@ triggers:
 allowed-tools: bash, file-operations
 ---
 
-# PT-orama Lesson Mining
+# PT-orama Lesson Mining (optional)
 
-Use when a Hermes or Codex session produced durable operational insight that
-should graduate into Perpetua-Tools `.agent` memory.
+**Optional extension.** Hermes harness authority, bootstrap, council, review, and
+delegate flows do **not** require this command. orama-system has **no runtime
+dependency** on Perpetua-Tools.
 
-## Canonical runtime
+Use only when an operator explicitly wants to graduate a durable insight from a
+session into a local semantic memory store they control.
 
-Perpetua-Tools owns the lesson pipeline:
+## When to use
 
-- Tool: `.agent/tools/learn.py`
-- Semantic sink: `.agent/memory/semantic/LESSONS.md`
-- Working audits: `.agent/memory/working/`
-
-Resolve `PERPETUA_TOOLS_ROOT` at runtime (sibling checkout or env). Never
-hardcode workstation paths in envelopes or commits.
+- Insight is reusable (saves 5+ minutes next time), not a one-off error.
+- Operator has a memory graduation tool available (any harness-local `learn` CLI,
+  MCP memory server, or manual LESSONS.md edit).
+- User opted in via `--include-optional` on the thin-skill installer.
 
 ## Invocation envelope (L3/L2)
 
@@ -40,27 +42,24 @@ hardcode workstation paths in envelopes or commits.
     "confidence": 8
   },
   "agent_id": "hermes",
-  "executor_id": "codex",
+  "executor_id": "hermes",
   "harness": "hermes",
-  "orama_system_root": "$ORAMA_SYSTEM_PATH",
-  "transport": {
-    "partner": "codex",
-    "profile": "bounded"
-  }
+  "orama_system_root": "$ORAMA_SYSTEM_PATH"
 }
 ```
 
 ## Boundaries
 
-- Do not commit secrets, raw `~/.hermes` exports, or personal memory blobs.
-- Do not overwrite LESSONS.md without user-visible summary in the result envelope.
-- Prefer `learn.py` graduation over hand-editing semantic files.
+- Do not commit secrets or raw harness home exports.
+- Do not assume any specific memory product, graduation CLI, or repo layout exists.
+- If no graduation tool is configured, return `needs_input` with setup steps.
 
 ## Execution contract
 
-1. Confirm insight is durable (saves 5+ minutes next time), not a one-off error.
-2. Run or delegate `learn.py` with bounded args from `args`.
-3. Return core result shape with `files_modified` relative to `PERPETUA_TOOLS_ROOT`.
+1. Confirm the insight is durable and operator-approved.
+2. If a local graduation tool is configured in `args.tool` or env, invoke it.
+3. Otherwise return structured `output.summary` for manual paste into memory.
+4. Populate core result shape (`status`, `files_modified`, `follow_up_actions`).
 
 ## Response shape
 
