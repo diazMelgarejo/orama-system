@@ -1,0 +1,17 @@
+{
+  "fanout_id": "2026-06-28-code-sections-001",
+  "assignments": [
+    {
+      "assignee": "mac",
+      "topic": "code-review/lan-peer-stack",
+      "filename": "code-review-mac-lan-peer.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/code-review-mac-lan-peer.md"
+    },
+    {
+      "assignee": "win",
+      "topic": "code-review/autoresearch-bridge",
+      "filename": "code-review-win-autoresearch.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/code-review-win-autoresearch.md"
+    }
+  ]
+}
