@@ -34,11 +34,13 @@ Generated after completing:
 **Why blocking:** Phase 3 (Orchestration & API Layer) cannot start until `v0.2.0-alpha` is tagged. All three repos (oramasys/perpetua-core, Perpetua-Tools, orama-system) have downstream work waiting on this milestone.
 
 **Verification checklist:**
-- [ ] `python3 -m pytest` — all 56 tests in perpetua-core green
-- [ ] Mac Ollama: `python3 -c "from perpetua_core.discovery import probe; ..."` → health OK
-- [ ] Win LM Studio: `curl http://$LM_STUDIO_WIN_ENDPOINT/v1/models` → 27B model listed
+- [x] `python3 -m pytest` — 62 tests in perpetua-core green (2026-06-28)
+- [x] Mac Ollama: `qwen3.5:9b-nvfp4` + `bge-m3` via `check-local-env.sh` (2026-06-28)
+- [x] Win LM Studio: `LM_READY` on 27B via Mac canary → `192.168.254.100:1234` (2026-06-28)
 - [ ] `engine.ainvoke` round-trip on both hardware targets
-- [ ] `git push origin feat/salvage-plugins-rc1` → `git tag v0.2.0-alpha`
+- [ ] `git push origin main` + `git tag v0.2.0-alpha` (after human sign-off)
+
+Evidence: `docs/testing/2026-06-28-mac-win-e2e-evidence.md`
 
 **Refs:**
 - `oramasys/perpetua-core` HEAD `56f2a6d`
