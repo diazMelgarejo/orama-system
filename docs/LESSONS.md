@@ -47,6 +47,16 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-06-28 — Queue prune + coord reconcile + monitor (operator approved) | Cursor
+
+**Approval:** operator `approve lessons` (round 6)  
+**Tool:** `win_job_queue.py` (`prune`, `complete-pending`) · **PT memory:** `lesson_c6e4f1a89d20`, `lesson_9b3d7e2f41ac`
+
+- Prune drops stale mac-* / ops noise from pending on enqueue; coord-003 jobs reconciled without re-run.
+- Win queues idle; Mac H5 `mac-h5-comparison.md` still pending on Mac lane.
+
+---
+
 ### 2026-06-28 — Cycle 004 sequential job queues (operator approved) | Cursor
 
 **Approval:** operator `approve lessons` (round 5) · **Fan-out:** `2026-06-28-coord-004`  
