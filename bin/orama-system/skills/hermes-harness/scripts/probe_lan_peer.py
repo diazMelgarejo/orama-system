@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 
 class Status(str, Enum):
@@ -129,9 +130,14 @@ def check_ws_peer(peer_ip: str, portal_port: int, token: str) -> Check:
         async def _probe() -> str:
             import websockets
 
-            qs = f"?token={token}" if token else ""
+            headers = {"Authorization": f"Bearer {token}"} if token else None
+            qs = f"?token={quote(token, safe='')}" if token else ""
             url = f"ws://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
-            async with websockets.connect(url, open_timeout=5) as ws:
+            async with websockets.connect(
+                url,
+                open_timeout=10,
+                additional_headers=headers,
+            ) as ws:
                 await ws.send(json.dumps({"type": "probe", "source": local_role()}))
                 raw = await asyncio.wait_for(ws.recv(), timeout=5)
                 return raw[:200]
@@ -141,8 +147,16 @@ def check_ws_peer(peer_ip: str, portal_port: int, token: str) -> Check:
             return Check("ws-peer", Status.PASS, detail[:120])
         return Check("ws-peer", Status.FAIL, detail[:120])
     except Exception as exc:
-        hint = "portal P2P endpoints not deployed on peer yet" if "404" in str(exc) else str(exc)[:80]
-        return Check("ws-peer", Status.FAIL, hint)
+        msg = str(exc)
+        if "404" in msg or "HTTP 404" in msg:
+            return Check(
+                "ws-peer",
+                Status.SKIP,
+                "peer has no /ws/portal-peer yet — pull orama >= 85ec1df and restart portal",
+            )
+        if "401" in msg:
+            return Check("ws-peer", Status.FAIL, "HTTP 401 — check ORAMA_CONTROL_PLANE_TOKEN on peer")
+        return Check("ws-peer", Status.FAIL, msg[:80])
 
 
 def run_checks(peer_ip: str, lms_port: int, portal_port: int, token: str) -> list[Check]:
@@ -160,9 +174,11 @@ def run_checks(peer_ip: str, lms_port: int, portal_port: int, token: str) -> lis
 
     if token:
         status_url = f"http://{peer_ip}:{portal_port}/api/status"
-        code, body = http_get(status_url, token=token)
+        code, body = http_get(status_url, token=token, timeout=30)
         if code == 200:
             checks.append(Check("portal-status", Status.PASS, "authenticated /api/status"))
+        elif code == -1 and "timed out" in body.lower():
+            checks.append(Check("portal-status", Status.FAIL, f"timeout (>30s) — peer portal slow: {body[:60]}"))
         else:
             checks.append(Check("portal-status", Status.FAIL, f"http {code} — check ORAMA_CONTROL_PLANE_TOKEN"))
     else:
