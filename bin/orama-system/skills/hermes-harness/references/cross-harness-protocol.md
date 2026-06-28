@@ -36,7 +36,7 @@ Perpetua-Tools/                         ← middleware, hardware policy, startup
 | Harness | What lives here | What lives in canonical |
 |---|---|---|
 | Hermes | `~/.hermes/skills/pt-orama-*/SKILL.md` (thin wrappers) | `commands/<slug>/SKILL.md` skill bodies |
-| Codex | `.codex/` thin wrappers | `bin/orama-system/skills/` |
+| Codex | `.codex/` thin wrappers | `bin/orama-system/skills/` + [`references/codex-cli-v142-dispatch.md`](../../../references/codex-cli-v142-dispatch.md) |
 | AGY | `agy-gemini.md` + `.agents/` pointers | `bin/orama-system/references/` |
 | Claude Code | `.claude/skills/` thin wrappers | `bin/orama-system/skills/` |
 | OpenClaw | `openclaw-skills/` (its own canonical) | `openclaw-skills/` is itself canonical |

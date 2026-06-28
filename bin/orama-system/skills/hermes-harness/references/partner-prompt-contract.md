@@ -153,12 +153,24 @@ proposal as a `proposed_edit` requiring main-agent review.
 
 ### Codex (bounded mechanical edits only)
 
+**Canonical flag table and profiles:** [`bin/orama-system/references/codex-cli-v142-dispatch.md`](../../../references/codex-cli-v142-dispatch.md)
+
+**Always resolve paths at runtime** — never hardcode host paths in prompts or committed
+examples. Use `-C <repo-root>` so pytest and scripts use repo-relative paths.
+
+Preferred launcher:
+
 ```bash
-codex --approval-mode approve-all "<bounded task>"
+python bin/orama-system/skills/hermes-harness/scripts/dispatch_codex_partner.py \
+  --pytest tests/test_verify_partner_canaries.py
 ```
 
-Only use `--approval-mode approve-all` for tasks where the scope is already
-verified by the main agent (never for open-ended exploration).
+```powershell
+python bin\orama-system\skills\hermes-harness\scripts\dispatch_codex_partner.py `
+  --pytest tests\test_verify_partner_canaries.py
+```
+
+Dry-run: `--dry-run`. Profiles: `fanout` (default), `bounded`, `interactive` — see canonical card.
 
 ---
 

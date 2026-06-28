@@ -33,7 +33,10 @@ local/private specialist.
 3. If local LM Studio is requested, verify a fast chat-completions canary first.
 4. If AGY is requested, install with `irm https://antigravity.google/cli/install.ps1 | iex`
    when absent, then require visible `AGY_READY` output first.
-5. Return focused output only for the delegated subtask.
+5. If Codex is requested for mechanical work, use
+   [`codex-cli-v142-dispatch.md`](../../../references/codex-cli-v142-dispatch.md)
+   or `dispatch_codex_partner.py` — never `--approval-mode` or hardcoded host paths.
+6. Return focused output only for the delegated subtask.
 
 ## Response Shape
 
