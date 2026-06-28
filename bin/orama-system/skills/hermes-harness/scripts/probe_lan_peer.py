@@ -19,6 +19,7 @@ import sys
 import urllib.error
 import urllib.request
 from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -39,6 +40,18 @@ class Check:
 
 def discovery_path() -> Path:
     return Path.home() / ".openclaw" / "state" / "last_discovery.json"
+
+
+def probe_result_path() -> Path:
+    """Local-only probe artifact (gitignored via ~/.openclaw/). Never commit."""
+    return Path.home() / ".openclaw" / "state" / "last_lan_peer_probe.json"
+
+
+def write_probe_result(payload: dict[str, Any]) -> Path:
+    path = probe_result_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def load_discovery() -> dict[str, Any]:
@@ -92,6 +105,21 @@ def http_get(url: str, token: str = "", timeout: int = 8) -> tuple[int, str]:
         return -1, str(exc)
 
 
+def resolve_control_plane_token() -> str:
+    """Env token first, then PT persisted .state/control_plane_token."""
+    token = os.environ.get("ORAMA_CONTROL_PLANE_TOKEN", "").strip()
+    if token:
+        return token
+    for var in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "PT_HOME"):
+        root = os.environ.get(var, "").strip()
+        if not root:
+            continue
+        token_path = Path(root) / ".state" / "control_plane_token"
+        if token_path.is_file():
+            return token_path.read_text(encoding="utf-8").strip()
+    return ""
+
+
 def run_checks(peer_ip: str, lms_port: int, portal_port: int, token: str) -> list[Check]:
     if not peer_ip:
         return [Check("peer-ip", Status.FAIL, "no peer IP in discovery or env")]
@@ -113,7 +141,7 @@ def run_checks(peer_ip: str, lms_port: int, portal_port: int, token: str) -> lis
         else:
             checks.append(Check("portal-status", Status.FAIL, f"http {code} — check ORAMA_CONTROL_PLANE_TOKEN"))
     else:
-        checks.append(Check("portal-status", Status.SKIP, "no ORAMA_CONTROL_PLANE_TOKEN in env"))
+        checks.append(Check("portal-status", Status.SKIP, "no ORAMA_CONTROL_PLANE_TOKEN (env or PT .state)"))
 
     models_url = f"http://{peer_ip}:{lms_port}/v1/models"
     code, body = http_get(models_url)
@@ -145,29 +173,39 @@ def main(argv: list[str] | None = None) -> int:
     if args.lms_port:
         lms_port = args.lms_port
 
-    token = os.environ.get("ORAMA_CONTROL_PLANE_TOKEN", "").strip()
+    token = resolve_control_plane_token()
     checks = run_checks(peer_ip, lms_port, args.portal_port, token)
 
     payload = {
+        "status": "pending",
         "local_role": role,
         "peer_ip": peer_ip,
         "discovery_path": str(discovery_path()),
         "checks": [asdict(c) for c in checks],
     }
 
+    failed = [c for c in checks if c.status == Status.FAIL]
+    if failed:
+        payload["status"] = "fail"
+        if args.json_out:
+            print(json.dumps(payload, indent=2))
+        else:
+            for c in checks:
+                print(f"  {c.name:16} {c.status.value:6} {c.detail}")
+            print("FAIL — peer probe had failures", file=sys.stderr)
+        return 1
+
+    payload["status"] = "success"
+    payload["probed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    result_path = write_probe_result(payload)
+    payload["result_path"] = str(result_path)
+
     if args.json_out:
         print(json.dumps(payload, indent=2))
     else:
         for c in checks:
             print(f"  {c.name:16} {c.status.value:6} {c.detail}")
-
-    failed = [c for c in checks if c.status == Status.FAIL]
-    if failed:
-        if not args.json_out:
-            print("FAIL — peer probe had failures", file=sys.stderr)
-        return 1
-    if not args.json_out:
-        print("OK — peer probe passed (or skipped optional checks)")
+        print(f"SUCCESS — peer probe passed; wrote {result_path}")
     return 0
 
 

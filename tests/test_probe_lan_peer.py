@@ -52,6 +52,24 @@ def test_run_checks_lmstudio_pass(peer_mod, monkeypatch):
     assert by_name["portal-status"] == peer_mod.Status.SKIP
 
 
+def test_resolve_control_plane_token_from_pt_state(peer_mod, monkeypatch, tmp_path):
+    token_file = tmp_path / ".state" / "control_plane_token"
+    token_file.parent.mkdir(parents=True)
+    token_file.write_text("pt-secret-token\n", encoding="utf-8")
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
+    assert peer_mod.resolve_control_plane_token() == "pt-secret-token"
+
+
+def test_write_probe_result_on_success(peer_mod, monkeypatch, tmp_path):
+    out = tmp_path / "last_lan_peer_probe.json"
+    monkeypatch.setattr(peer_mod, "probe_result_path", lambda: out)
+    written = peer_mod.write_probe_result({"status": "success", "peer_ip": "10.0.0.50"})
+    assert written == out
+    data = json.loads(out.read_text(encoding="utf-8"))
+    assert data["status"] == "success"
+
+
 def test_main_json_exit_zero_when_lmstudio_ok(peer_mod, monkeypatch, capsys, tmp_path):
     disc = tmp_path / "last_discovery.json"
     disc.write_text(
@@ -60,6 +78,8 @@ def test_main_json_exit_zero_when_lmstudio_ok(peer_mod, monkeypatch, capsys, tmp
     )
     monkeypatch.setattr(peer_mod, "discovery_path", lambda: disc)
     monkeypatch.setattr(peer_mod, "local_role", lambda: "mac")
+    result_file = tmp_path / "last_lan_peer_probe.json"
+    monkeypatch.setattr(peer_mod, "probe_result_path", lambda: result_file)
 
     def fake_get(url: str, token: str = "", timeout: int = 8):
         if "/health" in url:
@@ -71,3 +91,6 @@ def test_main_json_exit_zero_when_lmstudio_ok(peer_mod, monkeypatch, capsys, tmp
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
     assert out["peer_ip"] == "10.0.0.50"
+    assert out["status"] == "success"
+    assert out["result_path"] == str(result_file)
+    assert result_file.is_file()
