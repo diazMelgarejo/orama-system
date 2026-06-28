@@ -7,6 +7,8 @@ description: >-
 version: 1.0.0
 license: Apache 2.0
 parent_skill: orama-system
+status: absorbed
+redirect_to: bin/orama-system/skills/hardware-affinity-gate/SKILL.md
 ---
 
 # Perpetua Hardware

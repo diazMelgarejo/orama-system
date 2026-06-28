@@ -52,6 +52,7 @@ skills, while Hermes-local files remain thin adapters or private operator state.
 | `perpetua-hardware` (orama) | `hardware-affinity-gate` | ✅ redirect |
 | `hermes-agent-skill-authoring` | `skillify` + references | ✅ distilled |
 | `pt-orama-council` fork rules | `commands/` + gates ref | ✅ distilled |
+| `llm-council-orchestration` (archive) | `pt-orama-council` + gates | ✅ superseded 2026-06-28 |
 
 See [`hermes-skill-absorption-map.md`](hermes-skill-absorption-map.md) for the full table.
 

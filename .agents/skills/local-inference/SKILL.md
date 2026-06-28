@@ -1,17 +1,17 @@
 ---
-name: perpetua-hardware
+name: local-inference
 description: >-
-  Thin wrapper → hardware-affinity-gate (orama methodology). PT runtime policy
-  SSoT remains in Perpetua-Tools; Hermes edge uses pt-hardware-policy command.
+  Thin wrapper → hardware-affinity-gate. Local-inference routing absorbed into
+  canonical hardware-affinity-gate (orama methodology). PT runtime SSoT via
+  pt-hardware-policy command. Load canonical card before acting.
 ---
 
-# perpetua-hardware
+# local-inference
 
-This is a thin wrapper. **orama methodology** lives in hardware-affinity-gate; **PT
-runtime enforcement** lives in Perpetua-Tools (one-way import).
+This is a thin wrapper. The canonical skill lives in this repo at the path below
+(resolve the repo root at runtime; paths are never hardcoded).
 
-- Canonical orama path (repo-relative): `bin/orama-system/skills/hardware-affinity-gate/SKILL.md`
-- PT runtime playbook (sibling repo): `$PERPETUA_TOOLS_PATH/.claude/skills/hardware-policy/SKILL.md`
+- Canonical skill path (repo-relative): `bin/orama-system/skills/hardware-affinity-gate/SKILL.md`
 - Hermes command edge: `bin/orama-system/skills/hermes-harness/commands/pt-hardware-policy/SKILL.md`
 - Absorption map: `bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md`
 
