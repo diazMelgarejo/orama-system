@@ -59,12 +59,14 @@ Mac keeps `mac-*` assignments locally; Win-bound files POST to Win peer inbox.
 | Host | URL |
 |------|-----|
 | Mac | `http://localhost:8002/co-orchestration/macos` |
-| Win | `http://localhost:8002/co-orchestration/windows` |
-| Either | `http://localhost:8002/co-orchestration` (auto skin) |
+| Win | `http://localhost:8002/peer-inbox` |
+| Either | `http://localhost:8002/co-orchestration` (auto skin; Mac lane) |
 
 Bidirectional inbox queue, direction badges (inbound/outbound), fan-out filter, click-to-preview markdown. Navbar: **Co-orchestration inbox** (Mac links to `/macos`).
 
-**Code:** `src/orama_system/portals/co_orchestration_macos.py` · Win parallel: `co_orchestration_windows.py` · `platform/macos/README.md`
+Legacy `/co-orchestration/windows` 307-redirects to `/peer-inbox` — use the Win lane URL directly.
+
+**Code:** `src/orama_system/portals/co_orchestration_macos.py` · Win lane: `platform/windows/peer_inbox_portal.py` · `platform/macos/README.md`
 
 ---
 
