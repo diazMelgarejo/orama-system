@@ -1,0 +1,17 @@
+{
+  "fanout_id": "2026-06-28-autoresearch-002",
+  "assignments": [
+    {
+      "assignee": "mac",
+      "topic": "self-improve/routing",
+      "filename": "mac-routing-policy-review.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/mac-routing-policy-review.md"
+    },
+    {
+      "assignee": "win",
+      "topic": "autoresearch/gpu-run",
+      "filename": "win-autoresearch-h4-gpu.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/win-autoresearch-h4-gpu.md"
+    }
+  ]
+}
