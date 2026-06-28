@@ -27,7 +27,9 @@ allowed-tools: bash, file-operations
 1. Load the [Operator playbook](../../references/lan-peer-self-talk.md#operator-playbook).
 2. Verify prerequisites (`.env.local`, discovery, thin wrapper installed).
 3. Run `probe_lan_peer.py --json` or accept the slash command `/lan-peer-self-talk`.
-4. Return core result with `checks[]` from probe output.
+4. Return core result with `checks[]` from probe output. On success, report
+   `SUCCESS` and the local artifact path `~/.openclaw/state/last_lan_peer_probe.json`
+   (`result_path` in JSON mode).
 
 ## Envelope
 
