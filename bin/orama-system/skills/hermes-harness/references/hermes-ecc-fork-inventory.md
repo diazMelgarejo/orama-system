@@ -9,13 +9,13 @@ skills, while Hermes-local files remain thin adapters or private operator state.
 
 | Source class | Example surface | Decision | Canonical target |
 |---|---|---|---|
-| Corrected local wrappers | `%LOCALAPPDATA%/hermes/skills/pt-orama/*/SKILL.md` | Keep local and thin; regenerate from repo | `../scripts/install_hermes_thin_skills.py` |
-| Rich Hermes council fork | `%LOCALAPPDATA%/hermes/skills/autonomous-ai-agents/pt-orama-council/SKILL.md` | Distill only reusable workflow rules | `../commands/pt-orama-council/SKILL.md` and `../SKILL.md` |
+| Corrected local wrappers | `~/.hermes/skills/pt-orama/*/SKILL.md` | Keep local and thin; regenerate from repo | `../scripts/install_hermes_thin_skills.py` |
+| Rich Hermes council fork | `~/.hermes/skills/autonomous-ai-agents/pt-orama-council/SKILL.md` | Distill only reusable workflow rules | `../commands/pt-orama-council/SKILL.md` and `../SKILL.md` |
 | Hermes correction packet | `Hermes-input-02.md` operator handoff | Treat as local correction source, not tracked canonical content | `../commands/*/SKILL.md`, `../../../mcp-orchestration/SKILL.md` |
 | Naive Hermes output | `Hermes-Output-01.md` operator transcript | Mine for useful ideas; do not trust claims without verification | This inventory plus follow-up skill edits |
-| Hermes skill authoring fork | `%LOCALAPPDATA%/hermes/skills/software-development/hermes-agent-skill-authoring/SKILL.md` | Distill cross-harness authoring rules only | `../../skillify/SKILL.md` and `../../skillify/references/` |
-| ECC cross-harness template | `%LOCALAPPDATA%/hermes/skills/software-development/hermes-agent-skill-authoring/references/ecc-cross-harness-skill-template.md` | Distill checklist; do not copy template wholesale | `../../skillify/references/ecc-cross-harness-authoring.md` |
-| Hermes Agent checkout | `%LOCALAPPDATA%/hermes/hermes-agent` | Treat as upstream runtime checkout, not canonical PT-orama source | `../SKILL.md` for onboarding and adapter boundaries |
+| Hermes skill authoring fork | `~/.hermes/skills/software-development/hermes-agent-skill-authoring/SKILL.md` | Distill cross-harness authoring rules only | `../../skillify/SKILL.md` and `../../skillify/references/` |
+| ECC cross-harness template | `~/.hermes/skills/software-development/hermes-agent-skill-authoring/references/ecc-cross-harness-skill-template.md` | Distill checklist; do not copy template wholesale | `../../skillify/references/ecc-cross-harness-authoring.md` |
+| Hermes Agent checkout | `~/.hermes/hermes-agent` | Treat as upstream runtime checkout, not canonical PT-orama source | `../SKILL.md` for onboarding and adapter boundaries |
 
 ## Distillation Decisions
 

@@ -37,6 +37,7 @@ ORAMA_GH="https://github.com/diazMelgarejo/orama-system/blob/main"
 # Add a line per cross-repo pointer. Pipe-delimited.
 MAPPINGS=(
   "docs/v2/30-multi-llm-router-caching-batching-decorator.md|docs/adr/ADR-002-multi-llm-router-caching-batching-decorator.md|ADR-002"
+  "docs/v2/26-tdd-and-outsourced-review-doctrine.md|docs/adr/ADR-004-tdd-and-outsourced-review-doctrine.md|ADR-004"
 )
 
 sha256() {

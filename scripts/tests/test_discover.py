@@ -168,14 +168,17 @@ def test_patch_openclaw_json(tmp_path, monkeypatch):
     }
     D.patch_openclaw_json(endpoints)
     cfg = json.loads(oc.read_text())
-    assert "192.168.254.107" in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    # Mac always routes to localhost — the LAN IP is discovery metadata only.
+    assert "localhost" in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    assert "192.168.254.107" not in cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"]
     assert "192.168.254.101" in cfg["models"]["providers"]["lmstudio-win"]["baseUrl"]
     mac_ids = [m["id"] for m in cfg["models"]["providers"]["lmstudio-mac"]["models"]]
-    assert "text-embedding-nomic" not in mac_ids
+    assert "text-embedding-nomic" not in mac_ids  # embedding models always excluded
     assert "qwen3.5-9b-mlx" in mac_ids
-    assert "gemma-4-26B-A4B-it-Q4_K_M" not in mac_ids
+    assert "gemma-4-26B-A4B-it-Q4_K_M" not in mac_ids  # policy marks it windows_only
     win_ids = [m["id"] for m in cfg["models"]["providers"]["lmstudio-win"]["models"]]
-    assert "Qwen3.5-9B-MLX-4bit" not in win_ids
+    assert "qwen3.5-27b-distilled" in win_ids
+    assert "Qwen3.5-9B-MLX-4bit" not in win_ids  # policy marks it mac_only
 
 
 def test_win_primary_prefers_27b(tmp_path, monkeypatch):
@@ -268,14 +271,19 @@ def test_get_repo_paths_uses_resolved_perpetua_root(monkeypatch):
     assert paths["perpetua_tools"] == Path("/tmp/pt-root")
 
 
-def test_discover_fails_closed_when_perpetuatoolsroot_missing(monkeypatch, tmp_path):
+def test_discover_skips_pt_checks_when_perpetuatoolsroot_missing(monkeypatch, tmp_path, caplog):
+    # PT root is only needed for PT-specific policy operations; openclaw.json
+    # IP patching proceeds with a warning when PT root is absent.
+    import logging
     monkeypatch.delenv("PERPETUATOOLSROOT", raising=False)
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
     monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
-    monkeypatch.setattr(D, "OPENCLAW_JSON", tmp_path / "openclaw.json")
-    (tmp_path / "openclaw.json").write_text("{}")
-    with pytest.raises(SystemExit):
+    oc = tmp_path / "openclaw.json"
+    oc.write_text("{}")
+    monkeypatch.setattr(D, "OPENCLAW_JSON", oc)
+    with caplog.at_level(logging.WARNING):
         D.patch_openclaw_json({"mac": None, "win": None})
+    assert any("PERPETUATOOLSROOT" in r.message for r in caplog.records)
 
 
 def test_perpetuatoolsroot_takes_precedence_over_legacy_path(monkeypatch, tmp_path):
@@ -295,3 +303,66 @@ def test_legacy_path_works_as_fallback_when_root_absent(monkeypatch, tmp_path):
     monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
     monkeypatch.setenv("PERPETUA_TOOLS_PATH", str(legacy))
     assert D._resolve_perpetua_root_env() == legacy
+
+
+def test_load_policy_merges_windows_only_aliases(tmp_path, monkeypatch):
+    policy_dir = tmp_path / "config"
+    policy_dir.mkdir()
+    (policy_dir / "model_hardware_policy.yml").write_text(
+        "windows_only:\n  - gemma-4-26b-a4b-it\n"
+        "windows_only_aliases:\n  - gemma-4-26B-A4B-it-Q4_K_M\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
+    policy = D.load_policy()
+    assert "gemma-4-26B-A4B-it-Q4_K_M" in policy["windows_only"]
+
+
+def test_patch_devices_yml_skips_loopback_ips(tmp_path):
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "devices.yml").write_text(DEVICES_YML, encoding="utf-8")
+    D.patch_devices_yml("localhost", "127.0.0.1", tmp_path)
+    result = (cfg / "devices.yml").read_text()
+    assert "192.168.254.103" in result
+    assert "192.168.254.100" in result
+
+
+MODELS_YML = """\
+models:
+  - name: win-model
+    host: "${LM_STUDIO_WIN_ENDPOINT:-http://192.168.254.100}"
+  - name: mac-model
+    host: "${LM_STUDIO_MAC_ENDPOINT:-http://192.168.254.103:1234}"
+"""
+
+
+def test_patch_models_yml_skips_loopback_win_ip(tmp_path):
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "models.yml").write_text(MODELS_YML, encoding="utf-8")
+    D.patch_models_yml("192.168.254.107", "localhost", tmp_path)
+    result = (cfg / "models.yml").read_text()
+    assert "http://localhost:1234" in result
+    assert "192.168.254.100" in result  # win endpoint unchanged when win_ip is loopback
+
+
+def test_patch_models_yml_patches_lan_win_ip(tmp_path):
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    (cfg / "models.yml").write_text(MODELS_YML, encoding="utf-8")
+    D.patch_models_yml("192.168.254.107", "192.168.254.101", tmp_path)
+    result = (cfg / "models.yml").read_text()
+    assert "http://192.168.254.101}" in result
+    assert "192.168.254.100" not in result
+
+
+def test_discover_endpoints_windows_localhost_is_win(monkeypatch):
+    """On Windows hosts, localhost LM Studio must map to win — not mac."""
+    monkeypatch.setattr(D, "RUNNING_ON_WINDOWS", True)
+    monkeypatch.setattr(D, "probe_models", lambda url: ["qwen3.5-27b-distilled"] if "localhost" in url else None)
+    monkeypatch.setattr(D, "_load_json", lambda path: None)
+    endpoints = D.discover_endpoints()
+    assert endpoints["win"] == {"ip": "localhost", "models": ["qwen3.5-27b-distilled"]}
+    assert endpoints["mac"] is None
+

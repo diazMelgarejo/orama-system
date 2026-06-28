@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 > ✅ **RESOLVED 2026-06-14** — Sub-D landed: `windows_coder_pool` (contracts) + `_try_skill_envelope` dispatch (supervisor) present at repo HEAD. All sub-tracks complete.
 
 # cc-openclaw Master Alignment Implementation Plan

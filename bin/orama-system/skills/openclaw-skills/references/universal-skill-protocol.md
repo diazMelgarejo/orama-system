@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # Universal Skill Protocol
 
 This protocol defines how Claude, Hermes, Gemini, Codex, Cursor, WindSurf, Antigravity, OpenCode, and 8gent.dev discover, invoke, chain, and report OpenClaw skills. It is the cross-agent contract for `openclaw-skills`.
@@ -22,12 +23,21 @@ Applies to these skill IDs:
 
 ## Discovery
 
+Before discovery, runners must ensure the upstream submodule is initialized by running
+`bash scripts/install-openclaw-skills.sh` from the `orama-system` repo root, or by performing
+the equivalent `git submodule update --init --recursive` for
+`bin/orama-system/skills/openclaw-skills/cc-openclaw`.
+
+Runners resolve active skills through the Orama-normalized overlay cards in
+`openclaw-skills/skills/{skill_id}/SKILL.md`. Each overlay card names the
+upstream cc-openclaw baseline it extends.
+
 | Agent | Discovery Method | Required Behavior |
 |-------|------------------|-------------------|
 | Claude | Native Skill tool or `.claude/skills/` style scan | Load master `SKILL.md`, then load the selected subskill file before acting. |
 | Hermes | Local skill registry, MCP, or Perpetua-Tools adapter | Resolve `skill_id` against `openclaw-skills/skills/{skill_id}/SKILL.md`. |
 | Gemini | `gemini-mcp-tool` | Treat each skill as an MCP callable and pass the common envelope unchanged. |
-| Codex | `ai-cli-mcp`, local filesystem, or configured skill loader | Read the selected skill file and execute only inside `openclaw_home`. |
+| Codex | `ai-cli-mcp`, local filesystem, or configured skill loader | Read `openclaw-skills/skills/{skill_id}/SKILL.md` and execute only inside `openclaw_home`. |
 | Cursor | `.cursor/rules/` mirror, symlink, or workspace rule | Rules must point to this protocol and call by canonical skill ID. |
 | WindSurf | Workspace rules, MCP, or local adapter | Resolve the skill ID from this folder and preserve protocol fields. |
 | Antigravity | Agent rule registry or MCP adapter | Dispatch to Perpetua-Tools or equivalent runner with explicit `openclaw_home`. |

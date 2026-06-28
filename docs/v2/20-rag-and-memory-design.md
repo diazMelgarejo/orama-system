@@ -3,6 +3,9 @@
 > **Status:** Planning doc — v1 implementation is in `docs/superpowers/plans/2026-05-21-rag-memory-v1-plan.md`.
 > This document records the v2 canonical design for `oramasys/perpetua-core` and `oramasys/oramasys`.
 > **No code changes to `oramasys/*` until this plan is reviewed and the v2 brainstorm session begins.**
+>
+> **Agentic-stack + Gbrain blend (2026-06-26):** project `.agent/` memory vs Gbrain RAG vs
+> blocked upstream Brain — see [`41-agentic-stack-gstack-gbrain-memory-blend.md`](41-agentic-stack-gstack-gbrain-memory-blend.md).
 
 ---
 

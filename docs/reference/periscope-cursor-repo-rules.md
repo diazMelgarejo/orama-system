@@ -8,7 +8,7 @@
 From **orama-system** root:
 
 ```bash
-export PERISCOPE_REPO=~/Documents/oramasys/tools/periscope   # your clone
+export PERISCOPE_REPO=~/code/oramasys/tools/periscope   # your clone
 bash scripts/periscope/install-cursor-rules.sh
 bash scripts/periscope/recreate-ordered-prs-onto-merged.sh   # deps/docs PRs → merged
 ```

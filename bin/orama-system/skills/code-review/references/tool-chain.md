@@ -5,7 +5,7 @@
 
 ## Order (non-negotiable)
 
-```
+```text
 1. code-review-graph  →  blast-radius, detect_changes_tool, review context
 2. gbrain             →  code-def, code-refs, search (decisions / LESSONS)
 3. Read               →  only graph-confirmed files
