@@ -162,7 +162,14 @@ function Invoke-HardwarePolicyCheck {
         Write-Host "`n=== Hardware model affinity policy ==="
         $env:PYTHONPATH = $PtDir
         & $PtPython $cli --list
-        & $PtPython $cli --check-openclaw
+        $OcJson = Join-Path $HOME '.openclaw\openclaw.json'
+        if (Test-Path $OcJson) {
+            _Info 'policy' 'openclaw.json found - running --check-openclaw'
+            & $PtPython $cli --check-openclaw
+        } else {
+            _Info 'policy' 'No openclaw.json (Hermes-only OK) - skipping --check-openclaw'
+        }
+        & $PtPython $cli --validate 'qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2' win
     } else {
         _Warn 'policy' "hardware_policy_cli.py not found at: $cli"
     }
@@ -178,7 +185,7 @@ function Get-PidOnPort {
     param([int]$Port)
     try {
         # netstat -ano | findstr :PORT
-        $lines = & netstat -ano 2>$null | Select-String ":$Port\s"
+        $lines = & netstat -ano 2>$null | Select-String (":$($Port)\s")
         foreach ($line in $lines) {
             if ($line -match 'LISTENING\s+(\d+)') {
                 return [int]$Matches[1]
@@ -190,7 +197,7 @@ function Get-PidOnPort {
 
 function Wait-ForPort {
     param([int]$Port, [string]$Label, [int]$MaxSeconds = 75)
-    Write-Host -NoNewline "  waiting for $Label (:$Port)"
+    Write-Host -NoNewline "  waiting for $Label (port $Port)"
     $deadline = (Get-Date).AddSeconds($MaxSeconds)
     while ((Get-Date) -lt $deadline) {
         try {
@@ -206,7 +213,8 @@ function Wait-ForPort {
         Write-Host -NoNewline '.'
         Start-Sleep -Milliseconds 500
     }
-    Write-Host " TIMEOUT — check $LogDir\$($Label.ToLower()).log"
+    $timeoutLog = Join-Path $LogDir ($Label.ToLower() + '.log')
+    Write-Host " TIMEOUT - check $timeoutLog"
     return $false
 }
 
@@ -222,9 +230,9 @@ if ($Stop) {
         $pid = Get-PidOnPort $port
         if ($pid) {
             Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-            Write-Host "  killed PID $pid (:$port)"
+            Write-Host "  killed PID $pid (port $port)"
         } else {
-            Write-Host "  nothing on :$port"
+            Write-Host "  nothing on port $port"
         }
     }
     exit 0
@@ -250,7 +258,9 @@ if ($Status) {
     exit 0
 }
 
-# ── LAN discovery ─────────────────────────────────────────────────────────────
+# ── LAN discovery (optional — OpenClaw/Mac only) ────────────────────────────
+# Hermes-only Windows hosts do not install OpenClaw; discover.py is absent by
+# design. IP resolution below uses env vars + gateway heuristic — no hard dep.
 $DiscoverScript = Join-Path $HOME '.openclaw\scripts\discover.py'
 if (Test-Path $DiscoverScript) {
     _Info 'ip' 'Probing LAN topology (discover.py --force)...'
@@ -258,29 +268,50 @@ if (Test-Path $DiscoverScript) {
         & $UsPython $DiscoverScript --force 2>&1 | ForEach-Object { "  [discover] $_" } | Tee-Object -FilePath (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Append
         _Info 'ip' 'LAN probe complete'
     } catch {
-        _Warn 'ip' "discover.py failed: $_"
+        _Warn 'ip' "discover.py failed: $_ — continuing with env/heuristic IPs"
     }
 } else {
-    _Warn 'ip' "discover.py not found at $DiscoverScript — skipping LAN probe"
+    _Info 'ip' 'No OpenClaw discover.py (Hermes-only Windows) — skipping LAN probe'
 }
 
-# ── IP resolution ─────────────────────────────────────────────────────────────
-$WinIp = 'localhost'
-$MacIp = $null
-try {
-    $json = Get-Content (Join-Path $HOME '.openclaw\openclaw.json') -Raw | ConvertFrom-Json
-    $url  = $json.models.providers.'lmstudio-win'.baseUrl
-    if ($url) { $MacIp = ([uri]$url).Host }
-} catch {}
+# ── IP resolution (Hermes-only: env vars + gateway heuristic) ─────────────────
+# Priority for Mac LM Studio IP (cross-machine routing hint):
+#   1. LM_STUDIO_MAC_ENDPOINT / OLLAMA_MAC_ENDPOINT env (operator override)
+#   2. ~/.openclaw/openclaw.json lmstudio-mac baseUrl (legacy, if present)
+#   3. Default-gateway subnet .110 heuristic
+#   4. Hardcoded fallback 192.168.254.110
+# Windows LM Studio is always localhost:1234 on this host — no openclaw.json needed.
+$MacIp    = $null
+$IpSource = 'unset'
+
+if ($env:LM_STUDIO_MAC_ENDPOINT) {
+    try { $MacIp = ([uri]$env:LM_STUDIO_MAC_ENDPOINT).Host; $IpSource = 'LM_STUDIO_MAC_ENDPOINT' } catch {}
+}
+if (-not $MacIp -and $env:OLLAMA_MAC_ENDPOINT) {
+    try { $MacIp = ([uri]$env:OLLAMA_MAC_ENDPOINT).Host; $IpSource = 'OLLAMA_MAC_ENDPOINT' } catch {}
+}
+
+$OcJson = Join-Path $HOME '.openclaw\openclaw.json'
+if (-not $MacIp -and (Test-Path $OcJson)) {
+    try {
+        $json = Get-Content $OcJson -Raw | ConvertFrom-Json
+        $url  = $json.models.providers.'lmstudio-mac'.baseUrl
+        if ($url) { $MacIp = ([uri]$url).Host; $IpSource = 'openclaw.json' }
+    } catch {}
+}
+
 if (-not $MacIp) {
-    # Derive Mac IP from default gateway subnet (subnet.104 heuristic)
     try {
         $gw = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).NextHop
         $parts = $gw.Split('.')
         $MacIp = "$($parts[0]).$($parts[1]).$($parts[2]).110"
-    } catch { $MacIp = '192.168.254.110' }
+        $IpSource = 'gateway-heuristic'
+    } catch {
+        $MacIp = '192.168.254.110'
+        $IpSource = 'fallback-constant'
+    }
 }
-_Info 'ip' "Mac LMS endpoint derived as: $MacIp:1234"
+_Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
 
 # ── Export env vars for child processes ───────────────────────────────────────
 $env:OLLAMA_MAC_ENDPOINT       = if ($env:OLLAMA_MAC_ENDPOINT)       { $env:OLLAMA_MAC_ENDPOINT }       else { "http://${MacIp}:11434" }
@@ -298,10 +329,10 @@ Write-Host '╔═════════════════════�
 Write-Host '║  orama-system  v1.1.0.0  (Windows)                              ║'
 Write-Host '║  ὅραμα — vision/revelation · Layer 3 orchestration/meta-intel   ║'
 Write-Host '╠══════════════════════════════════════════════════════════════════╣'
-Write-Host ("║  Mac  {0,-9}  LM Studio expected on port 1234              ║" -f "${MacIp}:")
+Write-Host ("║  Mac  {0,-9}  LM Studio expected on port 1234              ║" -f ($MacIp + ':'))
 Write-Host ("║  Win  localhost   LM Studio on port 1234 (this machine)        ║")
 Write-Host ('╠══════════════════════════════════════════════════════════════════╣')
-Write-Host ("║  PT   :$PtPort     orama :$UsPort     Portal :$PortalPort                      ║")
+Write-Host ("║  PT   port $PtPort     orama port $UsPort     Portal port $PortalPort                      ║")
 Write-Host '╚══════════════════════════════════════════════════════════════════╝'
 Write-Host ''
 
@@ -315,7 +346,7 @@ function Start-Service {
         [hashtable]$EnvExtra = @{}
     )
     if (Get-PidOnPort $Port) {
-        Write-Host "  $Name  :$Port already running"
+        Write-Host "  $Name  port $Port already running"
         return
     }
     $logFile = Join-Path $LogDir "$($Name.ToLower()).log"
