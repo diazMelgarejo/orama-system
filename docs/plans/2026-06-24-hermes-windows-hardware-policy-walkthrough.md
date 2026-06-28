@@ -357,7 +357,7 @@ $hermesScripts = Join-Path $env:LOCALAPPDATA "hermes\hermes-agent\venv\Scripts"
 $env:PATH = "$hermesScripts;$env:PATH"
 
 hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
-  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+  --provider nous --model stepfun/step-3.7-flash:free --max-turns 1
 ```
 
 For LM Studio local routing (after verifying model responds quickly):

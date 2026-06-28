@@ -29,12 +29,12 @@ Steps marked **🐧 Linux** run non-interactively on the cloud VM (Gstack/Gbrain
 | T4-C | SBOM stub (`cyclonedx-py`) | 🐧 Linux | ✅ done |
 | E2E | `start.sh` full stack | 🍎 macOS + 🪟 Windows 11 | ✅ Mac clean (b1aaff0 fix); 🪟 ⏳ pending |
 | E2E | `probe_required_endpoints` Ollama + models | 🍎 macOS | ✅ done — qwen3.5:9b-nvfp4 + bge-m3 OK |
-| E2E | `LM_STUDIO_WIN_ENDPOINTS` LAN probes | 🪟 Windows 11 | ⏳ pending |
-| E2E | `start.sh --hardware-policy` live harness | 🍎 macOS + 🪟 Windows 11 | ✅ Mac clean; 🪟 ⏳ pending |
+| E2E | `LM_STUDIO_WIN_ENDPOINTS` LAN probes | 🪟 Windows 11 | ⏳ pending Mac-side cross-probe |
+| E2E | `start.sh --hardware-policy` live harness | 🍎 macOS + 🪟 Windows 11 | ✅ Mac clean; ✅ Win `--validate` (OpenClaw optional) |
 | E2E | Claude Desktop MCPB `--open` install | 🍎 macOS | ✅ done — gbrain+CRG both `ClaudeDesktop=ok` |
 | E2E | Keychain credential flows (`security` CLI) | 🍎 macOS | ⚠️ partial — Gemini main + fallback ✅ stored; TELEGRAM_BOT_TOKEN ✅ stored (2026-06-28); `load_keychain_secrets.sh` helper added; **user must still store `openclaw.gateway-auth-token`** |
-| E2E | Cross-harness hardware affinity verification | 🍎 macOS + 🪟 Windows 11 | ⏳ pending Windows |
-| T5 | Git tags `v1.1.1`, releases, `oramasys/v2-foundation` | After Mac/Win E2E green | ⏳ blocked on Win E2E |
+| E2E | Cross-harness hardware affinity verification | 🍎 macOS + 🪟 Windows 11 | ⏳ pending Mac LAN probe to Win |
+| T5 | Git tags `v1.1.1`, releases, `oramasys/v2-foundation` | After Mac/Win E2E green | ⏳ blocked on Mac↔Win cross-harness |
 
 **Tomorrow checklist (Mac):** `bash start.sh --status` → green hard-requirements; Ollama `qwen3.5:9b-nvfp4` + `bge-m3`; `bash scripts/check-local-env.sh`; hardware-policy harness.
 
@@ -266,7 +266,7 @@ ALLOWED_MODEL_IDS = {
     "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
     # Remote / Nous
     "qwen/qwen3-coder:free",
-    "nvidia/nemotron-3-ultra:free",
+    "stepfun/step-3.7-flash:free",
     # OpenRouter stack
     "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
     "openrouter/minimax/minimax-m2.5:free",
