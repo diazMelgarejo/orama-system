@@ -123,13 +123,14 @@ def test_wrapper_text_contains_required_readiness_strings(installer):
         assert "created_by: agent" in text
 
 
-def test_wrapper_text_all_three_slugs(installer):
+def test_wrapper_text_all_core_wrappers(installer):
     slugs = {spec.slug for spec in installer.WRAPPERS}
     assert slugs == {
         "pt-hardware-policy",
         "pt-orama-council",
         "pt-orama-review",
         "pt-orama-delegate",
+        "lan-peer-self-talk",
     }
     optional = {spec.slug for spec in installer.OPTIONAL_WRAPPERS}
     assert optional == {"pt-orama-lesson-mining"}
