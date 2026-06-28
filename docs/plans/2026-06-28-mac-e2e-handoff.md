@@ -79,6 +79,19 @@ Or run discovery:
 bash "$PERPETUA_TOOLS_PATH/scripts/discover-lm-studio.sh"
 ```
 
+### Mac ↔ Win LAN peer probe (Hermes)
+
+**Canonical playbook (identical on Mac and Win):**
+[`bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md` § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook)
+
+After playbook §A setup:
+
+```bash
+python3 bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py --json
+```
+
+Hermes: `/lan-peer-self-talk` or the plain-English prompt in playbook §B.
+
 ### Mac → Win LM Studio probe
 
 ```bash
@@ -123,7 +136,7 @@ git push --tags origin
 | [Windows handoff](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/2026-06-28-windows-handoff.md) | Perpetua-Tools |
 | [Security hardening pre-v2](2026-06-27-security-hardening-pre-v2.md) | orama-system |
 | [Hermes onboarding](2026-06-24-hermes-harness-canonical-onboarding.md) | orama-system |
-| [Codex v0.142 dispatch](../bin/orama-system/references/codex-cli-v142-dispatch.md) | orama-system |
+| [LAN peer playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) | orama-system |
 
 ## Punch list (Mac operator)
 
