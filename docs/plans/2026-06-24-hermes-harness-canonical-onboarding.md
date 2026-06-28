@@ -2,7 +2,7 @@
 # Hermes-Harness Canonical Onboarding & Skill Absorption (2026-06-24)
 
 > **Date:** 2026-06-24 (enriched 2026-06-25) · **Owner:** orama-system (L3 canonical skills) · **Consumer:** Hermes local harness (L1)
-> **Status:** 🔄 IN PROGRESS — Phases 1–5+7+8 ✅ shipped (`a75ad68`, `40d3f65`); Phases 6+9 ⏳ need live Windows; PR #108 ✅ merged (`a81a364`); LINT-013 ✅ (`2bad649`)
+> **Status:** 🔄 IN PROGRESS — Phases 1–5+7+8 ✅ shipped; **Phase 6+9 ✅ Win testdrive 2026-06-28** (`verify_partner_canaries` + thin wrappers); PR #108 ✅ merged; LINT-013 ✅
 > **Author:** orama-system canonical skill leads + session synthesis
 > **Review trigger:** user review of this artifact before any skill/code execution
 
@@ -384,7 +384,7 @@ Canonical table (lives in `hermes-harness/SKILL.md` + `hermes-windows-partner-re
 
 | Lane | Command | Expected Exact Output | Timeout | Degraded Path |
 |------|---------|----------------------|---------|---------------|
-| Hermes | `hermes chat --query "Reply with exactly: HERMES_READY" --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1` | `HERMES_READY` | 15 s | Mark UNAVAILABLE; continue with verified lanes |
+| Hermes | `hermes chat --query "Reply with exactly: HERMES_READY" --safe-mode --provider nous --model stepfun/step-3.7-flash:free --max-turns 1` | `HERMES_READY` | 15 s | Mark UNAVAILABLE; continue with verified lanes |
 | AGY | `agy --print "Reply with exactly: AGY_READY"` | visible `AGY_READY` | 10 s | Mark UNAVAILABLE; Codex reviewer fallback |
 | LM Studio | `GET http://localhost:1234/v1/models` + chat canary | valid JSON + completion <15 s | 15 s | Mark UNAVAILABLE; fall back to Nous provider |
 | Codex | `codex --version` | version string | 5 s | Mark UNAVAILABLE; no reviewer fallback |
@@ -585,8 +585,13 @@ pytest tests/test_hermes_thin_skills.py -q
 | LINT-013 | `2bad649` | Blocks raw LAN IP literals in skill/plan/doc files |
 
 ### Still deferred (need live Windows)
-- Phase 6 — `install_hermes_thin_skills.py --install --verify --test`
-- Phase 9 — Windows thin wrapper migration + verification
+- ~~Phase 6 — `install_hermes_thin_skills.py --install --verify --test`~~ ✅ 2026-06-28 Win
+- ~~Phase 9 — Windows thin wrapper migration + verification~~ ✅ 2026-06-28 Win
+
+### Win testdrive evidence (2026-06-28)
+- `verify_partner_canaries.py`: LM Studio + Hermes PASS; Codex + cursor-agent PASS; AGY UNAVAILABLE (timeout)
+- `ensure-partner-cli-paths.ps1`: User PATH idempotent for partner CLIs
+- Canary model: `stepfun/step-3.7-flash:free` (Nous); LM Studio uses `/api/v0/models` `state=loaded` only
 
 ### Merlin adaptations accepted (2026-06-26)
 - Plans going forward: one-page index + sub-spec links (progressive disclosure for planning docs)
