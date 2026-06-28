@@ -29,6 +29,10 @@
    PORTAL_BIND_LAN=1
    ORAMA_BIND_LAN=1
    ORAMA_CONTROL_PLANE_TOKEN=<same-secret-on-Mac-and-Win>
+   # Joint-account (optional): PT lane + orama lane — when both set, either unlocks both
+   # PT_CONTROL_PLANE_TOKEN=<PT/.state or explicit PT key>
+   # ORAMA_CONTROL_PLANE_TOKEN_LOCAL=<orama portal key this host accepts>
+   # ORAMA_CONTROL_PLANE_TOKEN_PEER=<peer key to try first on outbound probe>
    ```
 
 3. **Discovery fresh** — peer IP must come from `~/.openclaw/state/last_discovery.json`
@@ -106,7 +110,7 @@ Hermes must print `SUCCESS` and the full path in the operator reply.
 | Failure | Fix |
 |---------|-----|
 | `portal-health` FAIL | Set `PORTAL_BIND_LAN=1`, restart portal on **peer** |
-| `portal-status` FAIL | Same `ORAMA_CONTROL_PLANE_TOKEN` in both `.env.local` files |
+| `portal-status` FAIL | Align tokens: same `ORAMA_CONTROL_PLANE_TOKEN` on both hosts, or set `ORAMA_CONTROL_PLANE_TOKEN_PEER` to the peer's token (probe tries all candidates) |
 | `peer-lmstudio` FAIL | Re-run discovery; ensure LM Studio listening on peer |
 | No peer IP | Refresh `last_discovery.json`; do not hardcode LAN IP |
 

@@ -45,7 +45,7 @@ def test_run_checks_lmstudio_pass(peer_mod, monkeypatch):
         return 404, "nope"
 
     monkeypatch.setattr(peer_mod, "http_get", fake_get)
-    checks = peer_mod.run_checks("10.0.0.50", 1234, 8002, token="")
+    checks = peer_mod.run_checks("10.0.0.50", 1234, 8002, tokens=[])
     by_name = {c.name: c.status for c in checks}
     assert by_name["portal-health"] == peer_mod.Status.PASS
     assert by_name["peer-lmstudio"] == peer_mod.Status.PASS
@@ -57,8 +57,47 @@ def test_resolve_control_plane_token_from_pt_state(peer_mod, monkeypatch, tmp_pa
     token_file.parent.mkdir(parents=True)
     token_file.write_text("pt-secret-token\n", encoding="utf-8")
     monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", raising=False)
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
     assert peer_mod.resolve_control_plane_token() == "pt-secret-token"
+
+
+def test_outbound_peer_token_tried_first(peer_mod, monkeypatch):
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "local-symmetric")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", "peer-handoff")
+    for var in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "PT_HOME"):
+        monkeypatch.delenv(var, raising=False)
+    tokens = peer_mod.outbound_control_plane_tokens()
+    assert tokens[:2] == ["peer-handoff", "local-symmetric"]
+
+
+def test_portal_status_tries_second_token(peer_mod, monkeypatch):
+    calls: list[str] = []
+
+    def fake_get(url: str, token: str = "", timeout: int = 8):
+        if token:
+            calls.append(token)
+        if url.endswith("/health"):
+            return 200, '{"status":"ok"}'
+        if "/api/status" in url:
+            if token == "bad-token":
+                return 401, "Unauthorized"
+            if token == "good-token":
+                return 200, "{}"
+        if url.endswith("/v1/models"):
+            return 200, json.dumps({"data": []})
+        return 404, "nope"
+
+    monkeypatch.setattr(peer_mod, "http_get", fake_get)
+    monkeypatch.setattr(
+        peer_mod,
+        "check_ws_peer",
+        lambda peer_ip, portal_port, tokens: peer_mod.Check("ws-peer", peer_mod.Status.SKIP, ""),
+    )
+    checks = peer_mod.run_checks("10.0.0.50", 1234, 8002, ["bad-token", "good-token"])
+    by_name = {c.name: c for c in checks}
+    assert by_name["portal-status"].status == peer_mod.Status.PASS
+    assert calls[:2] == ["bad-token", "good-token"]
 
 
 def test_write_probe_result_on_success(peer_mod, monkeypatch, tmp_path):
@@ -90,7 +129,7 @@ def test_main_json_exit_zero_when_lmstudio_ok(peer_mod, monkeypatch, capsys, tmp
     monkeypatch.setattr(
         peer_mod,
         "check_ws_peer",
-        lambda peer_ip, portal_port, token: peer_mod.Check("ws-peer", peer_mod.Status.PASS, "mocked"),
+        lambda peer_ip, portal_port, tokens: peer_mod.Check("ws-peer", peer_mod.Status.PASS, "mocked"),
     )
     rc = peer_mod.main(["--json"])
     assert rc == 0

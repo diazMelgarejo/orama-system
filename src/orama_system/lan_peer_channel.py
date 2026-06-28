@@ -146,27 +146,38 @@ class LanPeerChannel:
             await asyncio.sleep(RETRY_WAIT_S)
 
     async def _ws_client_session(self, peer_ip: str, port: int) -> None:
-        from utils.control_plane_auth import resolved_control_plane_token
+        from utils.control_plane_auth import outbound_control_plane_tokens
 
-        token = resolved_control_plane_token()
-        qs = f"?token={token}" if token else ""
-        url = f"ws://{peer_ip}:{port}/ws/portal-peer{qs}"
+        tokens = outbound_control_plane_tokens()
+        if not tokens:
+            tokens = [""]
+        last_exc: Exception | None = None
         import websockets
 
-        async with websockets.connect(url, open_timeout=WS_OPEN_TIMEOUT_S) as ws:
-            self.state = "ws_connected"
-            heartbeat = asyncio.create_task(self._heartbeat_ws(ws))
+        for token in tokens:
+            qs = f"?token={token}" if token else ""
+            url = f"ws://{peer_ip}:{port}/ws/portal-peer{qs}"
             try:
-                async for raw in ws:
+                async with websockets.connect(url, open_timeout=WS_OPEN_TIMEOUT_S) as ws:
+                    self.state = "ws_connected"
+                    heartbeat = asyncio.create_task(self._heartbeat_ws(ws))
                     try:
-                        event = json.loads(raw)
-                    except json.JSONDecodeError:
-                        continue
-                    await self.on_inbound(event)
-            finally:
-                heartbeat.cancel()
-                with contextlib.suppress(asyncio.CancelledError):
-                    await heartbeat
+                        async for raw in ws:
+                            try:
+                                event = json.loads(raw)
+                            except json.JSONDecodeError:
+                                continue
+                            await self.on_inbound(event)
+                    finally:
+                        heartbeat.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await heartbeat
+                    return
+            except Exception as exc:
+                last_exc = exc
+                continue
+        if last_exc:
+            raise last_exc
 
     async def _heartbeat_ws(self, ws: Any) -> None:
         while True:
