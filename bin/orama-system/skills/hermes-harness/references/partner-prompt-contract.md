@@ -48,7 +48,7 @@ Always run the partner's canary before sending it a bounded task:
 
 ```powershell
 # Hermes
-hermes chat --query "Reply with exactly: HERMES_READY" --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+hermes chat --query "Reply with exactly: HERMES_READY" --safe-mode --provider nous --model stepfun/step-3.7-flash:free --max-turns 1
 
 # AGY
 agy --print "Reply with exactly: AGY_READY"
@@ -129,7 +129,7 @@ The main orama agent (Claude Code) reviews all output before any action is taken
 
 ```powershell
 hermes chat --query "<prompt>" --quiet --safe-mode `
-  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+  --provider nous --model stepfun/step-3.7-flash:free --max-turns 1
 ```
 
 `--safe-mode` disables autonomous file writes. `--max-turns 1` prevents
