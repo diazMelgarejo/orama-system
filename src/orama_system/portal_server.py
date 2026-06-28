@@ -6,9 +6,9 @@ All probes run concurrently via asyncio.gather.
 
 Routes:
   GET  /           HTML dashboard (meta-refresh every 10s)
-  GET  /co-orchestration  HTML inbox queue (auto macOS or Windows skin)
+  GET  /co-orchestration  HTML inbox queue (macOS skin; Win hosts redirect to /peer-inbox)
   GET  /co-orchestration/macos  HTML inbox queue — OpenClaw skin
-  GET  /co-orchestration/windows  HTML inbox queue — Hermes skin
+  GET  /co-orchestration/windows  → 307 redirect to /peer-inbox (Win lane)
   GET  /api/co-orchestration  JSON local + peer inbox summary
   GET  /api/co-orchestration/file/{filename}  Markdown body (scope=local|peer)
   GET  /peer-inbox        HTML bidirectional queue + server-side markdown (Win lane — platform/windows/)
@@ -1633,6 +1633,15 @@ async def api_co_orchestration(platform: str | None = None):
     )
 
 
+PEER_INBOX_PATH = "/peer-inbox"
+
+
+def _peer_inbox_redirect():
+    from fastapi.responses import RedirectResponse
+
+    return RedirectResponse(url=PEER_INBOX_PATH, status_code=307)
+
+
 def _co_orchestration_html_response(
     request: Request,
     *,
@@ -1655,6 +1664,8 @@ def _co_orchestration_html_response(
 
 @app.get("/co-orchestration", response_class=None)
 async def co_orchestration_page(request: Request):
+    if local_platform() == "win":
+        return _peer_inbox_redirect()
     return _co_orchestration_html_response(request)
 
 
@@ -1664,8 +1675,8 @@ async def co_orchestration_macos_page(request: Request):
 
 
 @app.get("/co-orchestration/windows", response_class=None)
-async def co_orchestration_windows_page(request: Request):
-    return _co_orchestration_html_response(request, platform_skin="windows")
+async def co_orchestration_windows_page():
+    return _peer_inbox_redirect()
 
 
 @app.get("/api/co-orchestration/file/{filename}")
