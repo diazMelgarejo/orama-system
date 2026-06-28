@@ -5,8 +5,8 @@
 
 .DESCRIPTION
     Idempotent setup script (safe to re-run).  Installs Python dependencies,
-    verifies LM Studio port, creates .venv if missing, and writes openclaw.json
-    defaults for Windows node.
+    verifies LM Studio port, creates .venv if missing.  openclaw.json is
+    optional (skipped by default — Hermes is the sole Windows orchestrator).
 
     Run once after cloning (from **orama-system repo root**):
         powershell -ExecutionPolicy Bypass -File .\platform\windows\install.ps1
@@ -16,6 +16,12 @@
         Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
     or use the one-liner above.
 #>
+
+[CmdletBinding()]
+param(
+    # Legacy OpenClaw config stub — not required on Hermes-only Windows hosts.
+    [switch]$WriteOpenClawConfig
+)
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = 'Stop'
@@ -96,42 +102,59 @@ try {
     _Warn "LM Studio check failed: $_"
 }
 
-# ── openclaw.json defaults ────────────────────────────────────────────────────
-_Step 'Writing openclaw.json Windows defaults...'
-$OcDir  = Join-Path $HOME '.openclaw'
-$OcJson = Join-Path $OcDir 'openclaw.json'
-$null   = New-Item -ItemType Directory -Force -Path $OcDir
+# ── openclaw.json defaults (optional — Hermes-only Windows skips by default) ───
+# Windows deliberately has no OpenClaw/AlphaClaw install. Hermes is the sole
+# local orchestrator. Pass -WriteOpenClawConfig only for legacy cross-repo stubs.
+if ($WriteOpenClawConfig) {
+    _Step 'Writing openclaw.json Windows defaults (legacy stub)...'
+    $OcDir  = Join-Path $HOME '.openclaw'
+    $OcJson = Join-Path $OcDir 'openclaw.json'
+    $null   = New-Item -ItemType Directory -Force -Path $OcDir
 
-$template = @{
-    models = @{
-        providers = @{
-            'lmstudio-win' = @{ baseUrl = 'http://localhost:1234' }
-            'ollama-win'   = @{ baseUrl = 'http://localhost:11434' }
+    $template = @{
+        models = @{
+            providers = @{
+                'lmstudio-win' = @{ baseUrl = 'http://localhost:1234' }
+                'ollama-win'   = @{ baseUrl = 'http://localhost:11434' }
+            }
         }
+        distributed = $false
+        platform    = 'windows'
+        version     = '1.1.1.0'
     }
-    distributed = $false
-    platform    = 'windows'
-    version     = '1.1.1.0'
-}
 
-if (Test-Path $OcJson) {
-    try {
-        $existing = Get-Content $OcJson -Raw | ConvertFrom-Json
-        # Merge — don't overwrite user customizations
-        if (-not $existing.models) {
-            $existing | Add-Member -NotePropertyName 'models' -NotePropertyValue $template.models
-            $existing | ConvertTo-Json -Depth 10 | Set-Content $OcJson -Encoding UTF8
-            _OK "openclaw.json updated (merged defaults)"
-        } else {
-            _OK "openclaw.json already configured"
+    if (Test-Path $OcJson) {
+        try {
+            $existing = Get-Content $OcJson -Raw | ConvertFrom-Json
+            # Merge — don't overwrite user customizations
+            if (-not $existing.models) {
+                $existing | Add-Member -NotePropertyName 'models' -NotePropertyValue $template.models
+                $existing | ConvertTo-Json -Depth 10 | Set-Content $OcJson -Encoding UTF8
+                _OK "openclaw.json updated (merged defaults)"
+            } else {
+                _OK "openclaw.json already configured"
+            }
+        } catch {
+            _Warn "Could not read existing openclaw.json: $_ — writing fresh copy"
+            $template | ConvertTo-Json -Depth 10 | Set-Content $OcJson -Encoding UTF8
         }
-    } catch {
-        _Warn "Could not read existing openclaw.json: $_ — writing fresh copy"
+    } else {
         $template | ConvertTo-Json -Depth 10 | Set-Content $OcJson -Encoding UTF8
+        _OK "openclaw.json created at $OcJson"
     }
 } else {
-    $template | ConvertTo-Json -Depth 10 | Set-Content $OcJson -Encoding UTF8
-    _OK "openclaw.json created at $OcJson"
+    _Step 'Skipping openclaw.json (Hermes-only Windows — use -WriteOpenClawConfig for legacy stub)'
+    _OK 'No OpenClaw config written (not required)'
+}
+
+# ── Partner CLI PATH (Hermes, Codex, AGY, cursor-agent) ───────────────────────
+_Step 'Ensuring partner CLI paths on User PATH...'
+$PathScript = Join-Path $ScriptDir 'ensure-partner-cli-paths.ps1'
+if (Test-Path $PathScript) {
+    & $PathScript
+    _OK 'Partner CLI PATH check complete'
+} else {
+    _Warn "ensure-partner-cli-paths.ps1 not found — skip PATH update"
 }
 
 # ── .paths.ps1 cache ──────────────────────────────────────────────────────────
@@ -159,10 +182,16 @@ if (Test-Path $GstackBin) {
     _Warn "gstack not installed at $GstackBin — run gstack setup first, then re-run this script"
 }
 
-# ── GPU parallel limit (Windows LM Studio rule) ───────────────────────────────
-_Warn 'IMPORTANT: Windows GPU loads ONE model at a time.'
-_Warn '           Never configure parallel inference on Windows.'
-_Warn '           LM Studio handles this automatically in single-model mode.'
+# ── LM Studio operational invariant ───────────────────────────────────────────
+_Warn 'IMPORTANT: LM Studio loads ONE model at a time on any machine (Mac/Linux/Windows).'
+_Warn '           Loading a second model fails (e.g. gemma-4-e4b-it: Operation canceled).'
+_Warn '           Multiple models at once require different machine IPs (Mac + Win on LAN).'
+_Warn '           Windows GPU: never configure parallel inference on one host.'
+_Warn ''
+_Warn 'LM Studio server logs after failed canary probes:'
+_Warn '  Windows:   %USERPROFILE%\.lmstudio\server-logs (e.g. 2026-06\2026-06-28.1.log)'
+_Warn '  Mac/Linux: ~/.lmstudio/server-logs'
+_Warn '  Quick tail: python bin\orama-system\skills\hermes-harness\scripts\verify_partner_canaries.py --tail-lmstudio-logs'
 
 # ── Done ──────────────────────────────────────────────────────────────────────
 Write-Host ''
