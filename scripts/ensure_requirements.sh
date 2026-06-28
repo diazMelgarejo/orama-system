@@ -290,11 +290,23 @@ if [ -d "${SCRIPT_DIR}/.venv" ]; then
   if [ "$MODE_FORCE" -eq 1 ] || [ "$VENV_FRESH" -eq 1 ] || [ "$CURRENT_HASH" != "$EXPECTED_HASH" ]; then
     if [ "$MODE_CHECK" -eq 0 ]; then
       _info "Installing Python deps (requirements.txt changed)..."
-      "${SCRIPT_DIR}/.venv/bin/pip" install -q -r "${SCRIPT_DIR}/requirements.txt" \
-        >>"${LOG_DIR}/install.log" 2>&1 && {
+      _pip_ok=0
+      if [ -x "${SCRIPT_DIR}/.venv/bin/pip" ]; then
+        "${SCRIPT_DIR}/.venv/bin/pip" install -q -r "${SCRIPT_DIR}/requirements.txt" \
+          >>"${LOG_DIR}/install.log" 2>&1 && _pip_ok=1
+      elif command -v uv >/dev/null 2>&1; then
+        (cd "${SCRIPT_DIR}" && uv pip install -q -r requirements.txt) \
+          >>"${LOG_DIR}/install.log" 2>&1 && _pip_ok=1
+      elif "${SCRIPT_DIR}/.venv/bin/python" -m pip --version >/dev/null 2>&1; then
+        "${SCRIPT_DIR}/.venv/bin/python" -m pip install -q -r "${SCRIPT_DIR}/requirements.txt" \
+          >>"${LOG_DIR}/install.log" 2>&1 && _pip_ok=1
+      fi
+      if [ "$_pip_ok" -eq 1 ]; then
         _stamp_write
         _ok "Python deps installed (stamp updated)"
-      } || _warn "pip install failed — see ${LOG_DIR}/install.log"
+      else
+        _warn "pip install failed — see ${LOG_DIR}/install.log"
+      fi
     else
       _warn "requirements.txt hash mismatch — run without --check to update"
     fi
