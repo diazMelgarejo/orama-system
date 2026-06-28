@@ -385,7 +385,7 @@ def portal_requires_auth(
     if (
         request is not None
         and method.upper() == "GET"
-        and path in ("/", "/dashboard", "/co-orchestration")
+        and path in ("/", "/dashboard", "/co-orchestration", "/peer-inbox")
         and request_is_loopback(request)
     ):
         return False
