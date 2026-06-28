@@ -218,20 +218,93 @@ perpetua-security-core
 
 ---
 
-### 6.2 SSRF Defense Spec v2.0 Formalization
-- Convert this document into a versioned RFC
-- Add compliance test suite
-- Define backward compatibility guarantees
+### 6.2 SSRF Defense Spec v2.0 Formalization (RFC DRAFT)
+
+This section defines a **formal RFC draft** for SSRF defense standardization across the OramaSys ecosystem.
+
+#### Scope
+- All inbound URL / host / endpoint inputs
+- All agent-to-agent communication channels
+- All runtime external fetch operations
+
+#### Threat Model
+Explicitly models:
+- SSRF via cloud metadata services (169.254.169.254)
+- DNS rebinding attacks with TTL switching
+- IPv6-to-IPv4 mapped bypass techniques
+- malformed URL parsing edge cases (stdlib inconsistencies)
+
+#### Security Properties
+The system MUST guarantee:
+- deterministic classification of all inputs
+- zero leakage of raw parsing exceptions
+- uniform rejection semantics across services
+
+#### Compliance Levels
+- L1: baseline SSRF filtering (loopback + RFC1918)
+- L2: full metadata + IPv6 + rebinding protection
+- L3: cross-repo invariant enforcement with fuzz validation CI
+
+#### Validation Contract
+All inputs MUST pass through:
+```
+validate_base_url()
+```
+
+Outputs MUST be one of:
+- normalized URL string
+- ModelEndpointPolicyError
+
+#### Test Vector Suite (Draft)
+- localhost:1234
+- 127.0.0.1:11434
+- http://169.254.169.254/latest/meta-data/
+- http://[::ffff:169.254.169.254]:80
+- http://evil.example.com:1234
 
 ---
 
-### 6.3 Security Boundary Contract Tests
+### 6.3 Security Boundary Contract Tests (CI Harness)
 
-A shared test suite enforcing:
+This section defines a **cross-repo deterministic enforcement system**.
 
-- identical behavior across repos
-- identical exception taxonomy
-- identical SSRF handling rules
+#### Objective
+Guarantee behavioral equivalence across:
+- orama-system
+- Perpetua-Tools
+
+#### Architecture
+A shared CI test suite:
+
+```
+security-contract-tests/
+  ├── test_ssrf_equivalence.py
+  ├── test_exception_taxonomy.py
+  ├── test_url_parser_fuzz.py
+  ├── test_cross_repo_parity.py
+```
+
+#### Enforcement Model
+CI MUST enforce:
+- identical validation outcomes across repos
+- identical exception types for identical inputs
+- SSRF rule parity across all services
+
+#### Failure Modes
+- HARD FAIL: security divergence between repos
+- HARD FAIL: exception mismatch
+- SOFT WARN: non-deterministic edge behavior
+
+#### Execution Strategy
+- GitHub Actions matrix across repos
+- shared test artifacts between pipelines
+- deterministic fuzz seeds for reproducibility
+
+#### CI Gates
+Pipeline MUST fail if:
+- any repo accepts invalid SSRF input
+- any repo differs in exception taxonomy
+- any parser divergence is detected
 
 ---
 
@@ -243,51 +316,78 @@ A shared test suite enforcing:
 
 ## 8. Upgrade Path Options (v2 Expansion)
 
-### Option 1 — SSRF v2 Specification RFC
-Formalize this document into a **versioned security RFC**:
-- versioned threat model
-- compliance ruleset
-- backward compatibility guarantees
-- reference test vectors
+### Option 1 — SSRF v2 Specification RFC (Formal Security Standard)
 
-Outcome:
-A publishable security standard for OramaSys ecosystem.
+Convert this roadmap into a versioned RFC.
+
+#### Includes
+- formal threat model specification
+- standardized SSRF ruleset
+- deterministic validation contract
+- canonical test vector suite
+- explicit backward compatibility guarantees
+
+#### Deliverable
+A publishable security specification for the OramaSys ecosystem.
 
 ---
 
 ### Option 2 — pip-installable Security Package
-Scaffold and publish:
+
+Scaffold reusable package:
 
 ```
 oramasys-endpoint-policy
 ```
 
-Includes:
-- `endpoint_policy_core`
-- validation API
-- fuzz harness
-- versioned contract
+or unified:
 
-Outcome:
-Reusable dependency across all Orama/Perpetua systems.
+```
+perpetua-security-core
+```
+
+#### Includes
+- endpoint_policy_core module
+- SSRF-safe validation API
+- fuzz + property test suite
+- versioned contract enforcement
+- CI integration hooks
+
+#### Outcome
+Reusable security primitive across all Orama/Perpetua systems.
 
 ---
 
-### Option 3 — Cross-Repo Contract Test Harness
-Introduce CI-enforced parity suite:
+### Option 3 — Cross-Repo Contract Test Harness (CI Enforcement Layer)
 
-- identical validator behavior across repos
-- shared SSRF regression tests
-- enforced exception taxonomy alignment
-- drift detection between versions
+A distributed CI enforcement system ensuring parity across repositories.
 
-Outcome:
-Prevents divergence across multi-repo agent ecosystem.
+#### Responsibilities
+- enforce identical validator behavior across repos
+- detect SSRF rule drift
+- validate exception taxonomy consistency
+- run shared fuzz + regression suites
+- enforce deterministic behavior under CI matrix runs
+
+#### Architecture
+- GitHub Actions multi-repo matrix
+- shared test package or submodule
+- centralized SSRF test corpus
+- versioned compatibility gates
+
+#### Failure Semantics
+- HARD FAIL: security divergence detected
+- HARD FAIL: SSRF bypass regression
+- HARD FAIL: exception mismatch
+- WARN: nondeterministic edge behavior
+
+#### Outcome
+Prevents architectural drift in multi-repo agent ecosystem.
 
 ---
 
 ## Status
 
-- v1: implemented (current PR work)
+- v1: implemented
 - v2: formalization + packaging + CI enforcement
 - v3: distributed agent-wide enforcement (future)
