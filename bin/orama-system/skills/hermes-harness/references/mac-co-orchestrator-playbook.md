@@ -2,7 +2,9 @@
 
 > **SSOT:** This file. **Operator index:** [`lan-peer-self-talk.md`](lan-peer-self-talk.md) §F.  
 > **Win mirror:** [`co-orchestrator-handoff.md`](co-orchestrator-handoff.md)  
-> **PT memory (Mac + subagents):** `Perpetua-Tools/.agent/memory/working/CO_ORCHESTRATOR_LAN_PEER_2026-06-28.md`  
+> **PT memory (Mac + subagents):** `Perpetua-Tools/.agent/memory/working/MAC_CO_ORCHESTRATOR_WHERE_TO_LOOK_2026-06-28.md`  
+> **PT subagents:** `Perpetua-Tools/.agent/memory/working/MAC_SUBAGENTS_WHERE_TO_LOOK_2026-06-28.md`  
+> **Shared landmark:** `Perpetua-Tools/.agent/memory/working/CO_ORCHESTRATOR_LAN_PEER_2026-06-28.md`  
 > **Rendered lessons:** `Perpetua-Tools/.agent/memory/semantic/LESSONS.md`  
 > **GitHub:** https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md
 
