@@ -83,7 +83,7 @@ Add these to **User PATH** (idempotent script: `platform/windows/ensure-partner-
 |-----|------------------|--------|
 | **Hermes** | `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts` | `hermes --version` |
 | **Hermes uv** | `%LOCALAPPDATA%\hermes\bin` | `uv --version` |
-| **Codex** | `%USERPROFILE%\.lmstudio\bin` (npm shim) or `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` | `codex --version` |
+| **Codex** | `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` (WinGet `OpenAI.Codex`) **preferred**; fallback `%USERPROFILE%\.lmstudio\bin` (npm) | `codex --version` |
 | **AGY** | `%LOCALAPPDATA%\agy\bin` | `agy --version` |
 | **cursor-agent** | `%LOCALAPPDATA%\cursor-agent` | `cursor-agent --version` |
 
@@ -97,6 +97,22 @@ macOS/Linux equivalents:
 | hermes | `$HERMES_HOME/hermes-agent/venv/bin` |
 
 OpenClaw on Windows is **optional** — Hermes is the primary orchestrator. Partner CLIs above are independent of OpenClaw.
+
+**Codex install (pick one; native preferred):**
+
+```powershell
+# Native WinGet CLI (recommended) — installs to %LOCALAPPDATA%\Programs\OpenAI\Codex\bin
+winget install OpenAI.Codex
+
+# Or npm global (often lands in %USERPROFILE%\.lmstudio\bin via LM Studio)
+npm install -g @openai/codex@latest
+```
+
+After install, run `platform/windows/ensure-partner-cli-paths.ps1` so native Codex
+precedes the LM Studio npm shim on User PATH.
+
+**Bounded dispatch:** [`bin/orama-system/references/codex-cli-v142-dispatch.md`](../../../references/codex-cli-v142-dispatch.md)
+or `dispatch_codex_partner.py` (runtime path resolution).
 
 Session-only (do **not** add permanently — changes on LM Studio upgrade):
 

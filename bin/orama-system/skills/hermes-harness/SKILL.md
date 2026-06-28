@@ -117,7 +117,7 @@ Permanent **User PATH** entries (idempotent — safe to re-run):
 
 | CLI | Windows path | Verify |
 |-----|--------------|--------|
-| Codex | `%USERPROFILE%\.lmstudio\bin` or `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` | `codex --version` |
+| Codex | `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` (WinGet) **preferred**; fallback `%USERPROFILE%\.lmstudio\bin` | `codex --version` |
 | AGY | `%LOCALAPPDATA%\agy\bin` | `agy --version` |
 | cursor-agent | `%LOCALAPPDATA%\cursor-agent` | `cursor-agent --version` |
 | Hermes | `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts` | `hermes --version` |
@@ -240,5 +240,6 @@ sanitized, and OpenClaw operations still route through `openclaw-skills`.
 
 - [`references/ecc-hermes-cross-harness.md`](references/ecc-hermes-cross-harness.md)
 - [`references/hermes-ecc-fork-inventory.md`](references/hermes-ecc-fork-inventory.md)
+- [`../../references/codex-cli-v142-dispatch.md`](../../references/codex-cli-v142-dispatch.md) — Codex CLI v0.142.x profiles (fanout / bounded / interactive)
 - [`../openclaw-skills/SKILL.md`](../openclaw-skills/SKILL.md)
 - [`../mcp-orchestration/SKILL.md`](../mcp-orchestration/SKILL.md)
