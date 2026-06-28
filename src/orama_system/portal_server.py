@@ -1376,7 +1376,7 @@ async def ws_portal_peer(ws: WebSocket):
         await _lan_peer_channel.unregister_ws_peer(ws)
 
 
-@app.get("/events/peer-stream")
+@app.get("/events/peer-stream", response_class=StreamingResponse)
 async def sse_peer_stream(request: Request):
     async def generator():
         async for event in _lan_peer_channel.outbound_queue():
