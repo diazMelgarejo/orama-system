@@ -12,7 +12,7 @@ Canonical skill: `bin/orama-system/skills/codex-openclaw-agent/SKILL.md`
 ```bash
 # Update canonical first
 git fetch origin --prune
-git pull --ff-only
+git pull --ff-only   # dirty tree: bin/orama-system/skills/git-history-surgery/references/safe-cross-host-sync-reference-card.md
 
 # Bind codex-agent (idempotent)
 bash bin/orama-system/skills/codex-openclaw-agent/scripts/bind_codex_backend.sh
