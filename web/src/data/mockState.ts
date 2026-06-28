@@ -183,7 +183,7 @@ export const mockState: AppState = {
     available: true,
     source: "mock:portal",
     data: {
-      version: "0.9.9.9",
+      version: "1.1.1.0",
       env: "production",
       region: "us-east-1",
       stage: "RC-1",
