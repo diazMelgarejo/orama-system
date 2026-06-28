@@ -120,6 +120,31 @@ def resolve_control_plane_token() -> str:
     return ""
 
 
+def check_ws_peer(peer_ip: str, portal_port: int, token: str) -> Check:
+    if not peer_ip:
+        return Check("ws-peer", Status.SKIP, "no peer IP")
+    try:
+        import asyncio
+
+        async def _probe() -> str:
+            import websockets
+
+            qs = f"?token={token}" if token else ""
+            url = f"ws://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
+            async with websockets.connect(url, open_timeout=5) as ws:
+                await ws.send(json.dumps({"type": "probe", "source": local_role()}))
+                raw = await asyncio.wait_for(ws.recv(), timeout=5)
+                return raw[:200]
+
+        detail = asyncio.run(_probe())
+        if "probe-ack" in detail or '"ok"' in detail:
+            return Check("ws-peer", Status.PASS, detail[:120])
+        return Check("ws-peer", Status.FAIL, detail[:120])
+    except Exception as exc:
+        hint = "portal P2P endpoints not deployed on peer yet" if "404" in str(exc) else str(exc)[:80]
+        return Check("ws-peer", Status.FAIL, hint)
+
+
 def run_checks(peer_ip: str, lms_port: int, portal_port: int, token: str) -> list[Check]:
     if not peer_ip:
         return [Check("peer-ip", Status.FAIL, "no peer IP in discovery or env")]
@@ -153,6 +178,8 @@ def run_checks(peer_ip: str, lms_port: int, portal_port: int, token: str) -> lis
             checks.append(Check("peer-lmstudio", Status.PASS, models_url))
     else:
         checks.append(Check("peer-lmstudio", Status.FAIL, f"{models_url} — http {code}"))
+
+    checks.append(check_ws_peer(peer_ip, portal_port, token))
 
     return checks
 

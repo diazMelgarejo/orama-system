@@ -87,6 +87,11 @@ def test_main_json_exit_zero_when_lmstudio_ok(peer_mod, monkeypatch, capsys, tmp
         return 200, json.dumps({"data": []})
 
     monkeypatch.setattr(peer_mod, "http_get", fake_get)
+    monkeypatch.setattr(
+        peer_mod,
+        "check_ws_peer",
+        lambda peer_ip, portal_port, token: peer_mod.Check("ws-peer", peer_mod.Status.PASS, "mocked"),
+    )
     rc = peer_mod.main(["--json"])
     assert rc == 0
     out = json.loads(capsys.readouterr().out)
