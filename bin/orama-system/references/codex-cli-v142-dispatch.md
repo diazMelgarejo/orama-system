@@ -12,7 +12,7 @@ Cite this card; do not fork flag tables into skill bodies.
 |--------------------|--------|
 | Codex binary | Native `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` **before** `%USERPROFILE%\.lmstudio\bin`; see `platform/windows/ensure-partner-cli-paths.ps1` |
 | Repo root (`-C`) | `$ORAMA_SYSTEM_PATH` / `$ORAMA_SYSTEM_ROOT` / `$ORAMA_REPO_ROOT`, else `git rev-parse --show-toplevel` |
-| Test/script paths in prompt | **Repo-relative** (`tests/foo.py`) — never `C:\Users\…` or `/Users/…` in committed examples |
+| Test/script paths in prompt | **Repo-relative** (`tests/foo.py`) — never `C:\<user>\…` or `/<user>/…` absolute host paths in committed examples |
 | Python for pytest | `python` on PATH inside `-C` repo root, or Hermes venv when harness docs say so |
 
 Preferred launcher (resolves Codex + repo root):
