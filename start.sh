@@ -279,13 +279,21 @@ _require_control_plane_token_for_lan() {
   case "${ORAMA_INSECURE_DEV:-}" in 1|true|yes|TRUE|YES) return 0 ;; esac
   _sync_control_plane_token
   local token="${ORAMA_CONTROL_PLANE_TOKEN:-}"
-  if [ -n "$token" ] && [ "$token" != "change-me-before-network-use" ]; then
-    return 0
+  local py="${US_PYTHON:-}"
+  if [ -z "$py" ]; then
+    py="$(command -v python3 2>/dev/null || true)"
   fi
-  if [ -x "${US_PYTHON:-python3}" ] && [ -d "$SCRIPT_DIR/src" ]; then
+  if [ -n "$token" ] && [ -d "$SCRIPT_DIR/src" ] && [ -n "$py" ]; then
+    if PYTHONPATH="$SCRIPT_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
+      ORAMA_CONTROL_PLANE_TOKEN="$token" \
+      "$py" -c 'from utils.control_plane_auth import is_weak_control_plane_token; import os, sys; sys.exit(0 if not is_weak_control_plane_token(os.environ["ORAMA_CONTROL_PLANE_TOKEN"]) else 1)' 2>/dev/null; then
+      return 0
+    fi
+  fi
+  if [ -n "$py" ] && [ -d "$SCRIPT_DIR/src" ]; then
     token="$(
       PYTHONPATH="$SCRIPT_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
-        "${US_PYTHON:-python3}" -c 'from utils.control_plane_auth import ensure_control_plane_token; print(ensure_control_plane_token())' 2>/dev/null \
+        "$py" -c 'from utils.control_plane_auth import ensure_control_plane_token; print(ensure_control_plane_token())' 2>/dev/null \
         || true
     )"
     if [ -n "$token" ]; then
