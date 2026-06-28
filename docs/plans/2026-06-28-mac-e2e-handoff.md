@@ -7,12 +7,13 @@
 ## Sync both repos on Mac
 
 ```bash
-export ORAMA_SYSTEM_PATH=~/code/OpenClaw/orama-system   # adjust to your clone
-export PERPETUA_TOOLS_PATH=~/code/OpenClaw/Perpetua-Tools
-
+# orama-system clone:
+export ORAMA_SYSTEM_PATH="$(git rev-parse --show-toplevel)"
 cd "$ORAMA_SYSTEM_PATH"
 git fetch origin --prune && git checkout main && git pull --ff-only origin main
 
+# Perpetua-Tools clone (separate terminal):
+export PERPETUA_TOOLS_PATH="$(git rev-parse --show-toplevel)"
 cd "$PERPETUA_TOOLS_PATH"
 git fetch origin --prune && git checkout main && git pull --ff-only origin main
 ```
@@ -61,7 +62,7 @@ source scripts/openclaw/load_keychain_secrets.sh
 
 Already stored (2026-06-28): Gemini main + fallback, `TELEGRAM_BOT_TOKEN`.
 
-## Cross-harness Mac↔Win (blocked until Win LM Studio LAN up)
+## Cross-harness Mac↔Win (live 2026-06-28 re-verify ✅)
 
 **Prerequisite on Windows:** LM Studio serving on LAN port 1234 with one loaded chat model.
 
@@ -126,10 +127,12 @@ git push --tags origin
 
 ## Punch list (Mac operator)
 
-- [ ] `git pull --ff-only` both repos on `main`
-- [ ] `start.sh --status` green
-- [ ] Ollama `qwen3.5:9b-nvfp4` + `bge-m3`
+- [x] `git pull --ff-only` both repos on `main` (2026-06-28 re-verify)
+- [x] `start.sh --status` Tier 1 FULL — Mac + Win nodes green
+- [x] Ollama `qwen3.5:9b-nvfp4` + `bge-m3`
 - [ ] `openclaw.gateway-auth-token` in Keychain
-- [ ] Win LM Studio LAN reachable from Mac (`curl` probes)
-- [ ] `start.sh --hardware-policy` cross-harness green
-- [ ] T5 tags `v1.1.1` / `v1.0.0` both repos
+- [x] Win LM Studio LAN reachable from Mac (`curl` + `LM_READY` canary)
+- [x] `start.sh --hardware-policy` cross-harness green
+- [x] T5 tags `v1.1.1` both repos (2026-06-28 prior session)
+
+Evidence: [`docs/testing/2026-06-28-mac-win-e2e-evidence.md`](../testing/2026-06-28-mac-win-e2e-evidence.md)
