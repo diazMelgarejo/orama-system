@@ -210,7 +210,12 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str]) -> Check:
             import asyncio
 
             async def _probe(tok: str) -> str:
-                import websockets
+                try:
+                    import websockets
+                except ImportError as imp_exc:
+                    raise ImportError(
+                        "missing websockets — pip install websockets or restart after requirements.txt update"
+                    ) from imp_exc
 
                 headers = {"Authorization": f"Bearer {tok}"} if tok else None
                 qs = f"?token={quote(tok, safe='')}" if tok else ""
