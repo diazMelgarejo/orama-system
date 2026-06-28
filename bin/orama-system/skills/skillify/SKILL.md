@@ -77,7 +77,7 @@ When asked to install repo skills for Codex, install **thin wrappers only**:
 2. Put only a small Codex-valid wrapper in `~/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`. Write `~/.codex/skills/<name>/SKILL.md` only as a compatibility mirror.
 3. Include the canonical repo root and canonical `SKILL.md` path in the wrapper.
 4. Require `git fetch origin --prune` before reading the canonical card.
-5. Run `git pull --ff-only` only when the repo is clean and on a tracking branch.
+5. Run `git pull --ff-only` only when the repo is clean and on a tracking branch. If dirty, use [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md). If dirty, use [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md).
 6. Do not cache upstream `SKILL.md`, references, scripts, or assets in the local Codex skill dir.
 7. Validate the wrapper with Codex `quick_validate.py`, then run a compact local-model smoke test if requested.
 

@@ -4,6 +4,11 @@ Use this before git pushes, rebases, PR-branch syncs, or test runs on the Window
 RTX/LM Studio host. It keeps the setup frugal: reuse LM Studio's bundled Node and
 GitHub Desktop's bundled Git instead of maintaining separate toolchains.
 
+**Mac ↔ Win sync with local edits:** after bootstrap, follow
+[`safe-cross-host-sync-reference-card.md`](safe-cross-host-sync-reference-card.md)
+(stash → `pull --ff-only` → pop → commit → push). Never `git reset --hard` or
+force-push `main`.
+
 ## Bootstrap
 
 ```powershell

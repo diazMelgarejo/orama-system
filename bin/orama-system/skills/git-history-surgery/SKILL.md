@@ -39,6 +39,9 @@ LM Studio host, run
    Use the re-anchor reference and tree-twin scan. Do not trust ahead/behind counts.
 3. Is this only a normal bad commit?
    Do not perform history surgery. Use a normal PR or revert.
+4. Mac ↔ Win (or any peer) must sync `main` while the worktree is dirty?
+   Use [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) —
+   stash → `pull --ff-only` → pop → commit → push. Never `reset --hard` or force-push `main`.
 
 ## Non-Negotiables
 
@@ -132,6 +135,7 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 
 ## References
 
+- [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
 - [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
 - [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
 - [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table

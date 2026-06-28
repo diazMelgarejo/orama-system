@@ -4,7 +4,9 @@ description: Post-merge ECC Tools sync — run after any ECC Tools PR merges int
 disable-model-invocation: true
 ---
 
-Run immediately after any ECC Tools PR is merged:
+Run immediately after any ECC Tools PR is merged.
+
+**Dirty worktree?** Stash first — [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md).
 
 ```bash
 git pull origin main

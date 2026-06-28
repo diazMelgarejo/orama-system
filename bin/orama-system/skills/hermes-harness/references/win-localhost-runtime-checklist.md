@@ -6,8 +6,9 @@
 ## Pre-flight
 
 1. PowerShell UTF-8 bootstrap: `bin/orama-system/skills/git-history-surgery/references/windows-powershell-runtime-bootstrap.md`
-2. `$env:PERPETUA_TOOLS_PATH` and `$env:ORAMA_SYSTEM_PATH` resolve to real dirs
-3. LM Studio listening on **`http://localhost:1234`** (own-machine locality rule — not LAN IP when on Win)
+2. If syncing `main` with local edits: `bin/orama-system/skills/git-history-surgery/references/safe-cross-host-sync-reference-card.md`
+3. `$env:PERPETUA_TOOLS_PATH` and `$env:ORAMA_SYSTEM_PATH` resolve to real dirs
+4. LM Studio listening on **`http://localhost:1234`** (own-machine locality rule — not LAN IP when on Win)
 
 ## LM Studio operational invariant
 

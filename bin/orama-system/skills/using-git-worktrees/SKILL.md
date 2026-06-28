@@ -26,6 +26,10 @@ hygiene, Co-authored-by policy, and TDD `commit-msg` gate (`check_tdd_commit.sh`
 Hook scripts must stay bash 3.2–safe on macOS (no `mapfile`); see
 [`git-history-surgery/references/bash-32-git-script-portability.md`](../git-history-surgery/references/bash-32-git-script-portability.md).
 
+**Dirty worktree + need `main` from peer host (Mac ↔ Win):** use
+[`git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md)
+— stash → `pull --ff-only` → pop → commit → push. Never `git reset --hard` or force-push `main`.
+
 ---
 
 ## Step 0 — Should You Use a Worktree?
