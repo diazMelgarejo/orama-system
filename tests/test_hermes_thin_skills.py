@@ -130,11 +130,22 @@ def test_wrapper_text_all_three_slugs(installer):
         "pt-orama-council",
         "pt-orama-review",
         "pt-orama-delegate",
-        "pt-orama-lesson-mining",
     }
+    optional = {spec.slug for spec in installer.OPTIONAL_WRAPPERS}
+    assert optional == {"pt-orama-lesson-mining"}
 
 
 # ── install ───────────────────────────────────────────────────────────────────
+
+def test_optional_wrapper_not_installed_by_default(installer):
+    installer.install()
+    assert not (installer.HERMES_SKILLS / "lesson-mining" / "SKILL.md").is_file()
+
+
+def test_optional_wrapper_installed_with_flag(installer):
+    installer.install(include_optional=True)
+    assert (installer.HERMES_SKILLS / "lesson-mining" / "SKILL.md").is_file()
+
 
 def test_install_fresh_creates_all_wrappers(installer):
     written = installer.install()

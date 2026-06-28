@@ -80,14 +80,24 @@ WRAPPERS = [
         canonical="bin/orama-system/skills/hermes-harness/commands/pt-orama-delegate/SKILL.md",
         purpose="Handle narrow delegated subtasks without committing or leaking private state.",
     ),
+]
+
+# Optional — never required for harness bootstrap or default thin-wrapper install.
+OPTIONAL_WRAPPERS = [
     HermesWrapper(
         slug="pt-orama-lesson-mining",
-        description="Thin Hermes command for PT lesson graduation via learn.py.",
+        description="Optional Hermes command for session insight graduation (no PT dependency).",
         canonical="bin/orama-system/skills/hermes-harness/commands/pt-orama-lesson-mining/SKILL.md",
-        purpose="Graduate durable session insights into Perpetua-Tools semantic memory.",
+        purpose="Graduate durable insights when operator opts in; not required for core harness.",
     ),
 ]
 
+
+def all_wrappers(include_optional: bool = False) -> list[HermesWrapper]:
+    specs = list(WRAPPERS)
+    if include_optional:
+        specs.extend(OPTIONAL_WRAPPERS)
+    return specs
 
 def hermes_local_dir(slug: str) -> str:
     """Map canonical slug to Hermes local command folder name."""
@@ -170,9 +180,10 @@ def is_managed_wrapper(path: Path) -> bool:
     return False
 
 
-def install(dry_run: bool = False) -> list[Path]:
+def install(dry_run: bool = False, include_optional: bool = False) -> list[Path]:
     written: list[Path] = []
-    missing = [spec.canonical for spec in WRAPPERS if not (REPO_ROOT / spec.canonical).is_file()]
+    specs = all_wrappers(include_optional)
+    missing = [spec.canonical for spec in specs if not (REPO_ROOT / spec.canonical).is_file()]
     if missing:
         raise FileNotFoundError(f"missing canonical command cards: {', '.join(missing)}")
     if not dry_run:
@@ -183,7 +194,7 @@ def install(dry_run: bool = False) -> list[Path]:
             "Canonical behavior lives in the orama-system repo.\n",
             encoding="utf-8",
         )
-    for spec in WRAPPERS:
+    for spec in specs:
         target = HERMES_SKILLS / hermes_local_dir(spec.slug) / "SKILL.md"
         if dry_run:
             if target.is_file() and not is_managed_wrapper(target):
@@ -202,9 +213,9 @@ def install(dry_run: bool = False) -> list[Path]:
     return written
 
 
-def verify() -> list[str]:
+def verify(include_optional: bool = False) -> list[str]:
     errors: list[str] = []
-    for spec in WRAPPERS:
+    for spec in all_wrappers(include_optional):
         target = HERMES_SKILLS / hermes_local_dir(spec.slug) / "SKILL.md"
         if not target.is_file():
             errors.append(f"missing wrapper: {target}")
@@ -272,17 +283,22 @@ def main() -> int:
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--test", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--include-optional",
+        action="store_true",
+        help="Also install optional wrappers (e.g. pt-orama-lesson-mining).",
+    )
     args = parser.parse_args()
     if not args.install and not args.verify and not args.test:
         parser.error("choose --install, --verify, and/or --test")
     if args.test:
         return run_tests()
     if args.install:
-        written = install(args.dry_run)
+        written = install(args.dry_run, include_optional=args.include_optional)
         if not args.dry_run:
             print(f"wrote {len(written)} Hermes wrapper files")
     if args.verify:
-        errors = verify()
+        errors = verify(include_optional=args.include_optional)
         if errors:
             for error in errors:
                 print(error)

@@ -181,7 +181,7 @@ These are the Hermes-primary entry points into canonical PT-orama skills. Each m
 | `pt-orama-council` | `hermes-harness/commands/pt-orama-council/SKILL.md` | Hermes / Codex | 5-model council |
 | `pt-orama-review` | `hermes-harness/commands/pt-orama-review/SKILL.md` | Hermes / Codex | Findings-first review |
 | `pt-orama-delegate` | `hermes-harness/commands/pt-orama-delegate/SKILL.md` | Hermes / AGY | Bounded delegation |
-| `pt-orama-lesson-mining` | `hermes-harness/commands/pt-orama-lesson-mining/SKILL.md` | Hermes / Codex | **Create stub** → PT `.agent/tools/learn.py` |
+| `pt-orama-lesson-mining` | `hermes-harness/commands/pt-orama-lesson-mining/SKILL.md` | Hermes / Codex | **Optional** — not installed by default; no PT dependency |
 | `pt-hardware-policy` | `hermes-harness/commands/pt-hardware-policy/SKILL.md` | Hermes | Thin wrapper over `hardware-affinity-gate` |
 | `hermes-harness` | `hermes-harness/SKILL.md` | Hermes | Install / provider / import |
 | `local-inference` | `local-inference/SKILL.md` (redirect stub) | Hermes | Redirect → `hardware-affinity-gate` |
