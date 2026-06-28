@@ -208,7 +208,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Checkout Perpetua-Tools (sibling for pointer sync check)
+      - name: Checkout Perpetua-Tools (PR branch for stacked cross-repo parity)
+        if: github.event_name == 'pull_request'
+        id: checkout-pt-pr
+        uses: actions/checkout@v5
+        with:
+          repository: diazMelgarejo/Perpetua-Tools
+          ref: ${{ github.head_ref }}
+          path: perpetua-tools-sibling
+          fetch-depth: 1
+          persist-credentials: false
+          submodules: false
+        continue-on-error: true
+
+      - name: Checkout Perpetua-Tools (main fallback)
+        if: github.event_name != 'pull_request' || steps.checkout-pt-pr.outcome != 'success'
         uses: actions/checkout@v5
         with:
           repository: diazMelgarejo/Perpetua-Tools
@@ -216,6 +230,7 @@ jobs:
           path: perpetua-tools-sibling
           fetch-depth: 1
           persist-credentials: false
+          submodules: false
         continue-on-error: true
 
       - name: Verify model endpoint policy parity with Perpetua-Tools
