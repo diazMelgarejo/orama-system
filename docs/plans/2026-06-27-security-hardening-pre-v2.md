@@ -32,7 +32,7 @@ Steps marked **🐧 Linux** run non-interactively on the cloud VM (Gstack/Gbrain
 | E2E | `LM_STUDIO_WIN_ENDPOINTS` LAN probes | 🪟 Windows 11 | ⏳ pending |
 | E2E | `start.sh --hardware-policy` live harness | 🍎 macOS + 🪟 Windows 11 | ✅ Mac clean; 🪟 ⏳ pending |
 | E2E | Claude Desktop MCPB `--open` install | 🍎 macOS | ✅ done — gbrain+CRG both `ClaudeDesktop=ok` |
-| E2E | Keychain credential flows (`security` CLI) | 🍎 macOS | ⚠️ partial — Gemini main + fallback ✅ stored (2026-06-28); `load_keychain_secrets.sh` helper added to `scripts/openclaw/`; **user must still run `store_keychain_secret.sh` for `openclaw.telegram-bot-token` and `openclaw.gateway-auth-token`** |
+| E2E | Keychain credential flows (`security` CLI) | 🍎 macOS | ⚠️ partial — Gemini main + fallback ✅ stored; TELEGRAM_BOT_TOKEN ✅ stored (2026-06-28); `load_keychain_secrets.sh` helper added; **user must still store `openclaw.gateway-auth-token`** |
 | E2E | Cross-harness hardware affinity verification | 🍎 macOS + 🪟 Windows 11 | ⏳ pending Windows |
 | T5 | Git tags `v1.1.1`, releases, `oramasys/v2-foundation` | After Mac/Win E2E green | ⏳ blocked on Win E2E |
 
