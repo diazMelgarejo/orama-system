@@ -5,6 +5,7 @@ import pytest
 
 from utils.model_endpoint_url import (
     ModelEndpointPolicyError,
+    parse_model_endpoint_list,
     validate_model_endpoint_url,
 )
 
@@ -30,3 +31,10 @@ def test_public_blocked_without_opt_in():
 def test_public_allowed_with_opt_in(monkeypatch):
     monkeypatch.setenv("ALLOW_PUBLIC_MODEL_ENDPOINTS", "1")
     assert validate_model_endpoint_url("http://1.1.1.1:1234") == "http://1.1.1.1:1234"
+
+
+def test_parse_required_set_in_env_sentinel_skipped():
+    raw = "REQUIRED_SET_IN_ENV, http://127.0.0.1:11434"
+    assert parse_model_endpoint_list(raw, skip_invalid=True) == [
+        "http://127.0.0.1:11434"
+    ]
