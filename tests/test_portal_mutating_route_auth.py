@@ -38,7 +38,7 @@ def test_configure_tool_requires_bearer_when_enforced(monkeypatch):
     with _auth_client() as client:
         denied = client.post(
             "/api/configure-tool",
-            json={"env_var": "GITHUB_TOKEN", "value": "ghp_test1234567890123456789012345678"},
+            json={"env_var": "GITHUB_TOKEN", "value": "test-configure-tool-placeholder"},
         )
     assert denied.status_code == 401
 
