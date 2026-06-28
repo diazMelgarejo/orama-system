@@ -36,9 +36,24 @@ skills, while Hermes-local files remain thin adapters or private operator state.
 
 ### Remaining follow-up distillation
 
-- No separate Hermes/ECC authoring subskill is needed right now. Extend the
-  existing `skillify` reference card only if future migrations reveal a
-  recurring packaging gap that cannot be handled by references.
+- ✅ **Complete (2026-06-28).** Validator constraints absorbed into `skillify/SKILL.md`;
+  post-edit guards into `hardware-affinity-gate/SKILL.md`; full map in
+  [`hermes-skill-absorption-map.md`](hermes-skill-absorption-map.md).
+- Extend `skillify` references only if a **new** recurring packaging gap appears
+  that cannot be handled by existing reference cards.
+
+## Absorption status (2026-06-28)
+
+| Hermes source | Target | Status |
+|---------------|--------|--------|
+| `hermes-agent` | `hermes-harness` | ✅ redirect + body absorbed |
+| `pt-orama-harness-integration` | `hermes-harness` | ✅ redirect + references |
+| `local-inference` | `hardware-affinity-gate` | ✅ redirect chain |
+| `perpetua-hardware` (orama) | `hardware-affinity-gate` | ✅ redirect |
+| `hermes-agent-skill-authoring` | `skillify` + references | ✅ distilled |
+| `pt-orama-council` fork rules | `commands/` + gates ref | ✅ distilled |
+
+See [`hermes-skill-absorption-map.md`](hermes-skill-absorption-map.md) for the full table.
 
 ### Do not import
 

@@ -19,3 +19,5 @@ parent_skill: orama-system
 >
 > This stub exists so links to `pt-orama-harness-integration` resolve; load
 > `hermes-harness` to act.
+>
+> Absorption map: [`../hermes-harness/references/hermes-skill-absorption-map.md`](../hermes-harness/references/hermes-skill-absorption-map.md).

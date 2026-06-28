@@ -178,15 +178,18 @@ config/model_hardware_policy.yml  →  src/utils/hardware_policy.py  →  script
 
 From `skill-comparison-2026-06-22.md` and skill-enrichment plan:
 
-| Hermes / source skill | Category | orama-system target | Decision |
-|-----------------------|----------|---------------------|----------|
-| `pt-orama-harness-integration` | autonomous-ai-agents | `hermes-harness` | **Absorb** — cross-harness thin-adapter logic |
-| `hermes-agent` | autonomous-ai-agents | `hermes-harness` | **Absorb** — self-config/setup is harness territory |
-| `local-inference` | mlops | `perpetua-hardware` | **Absorb** — hardware-aware selection, canary, affinity |
-| `perpetua-hardware` | mlops | `perpetua-hardware` | **Create if missing** — hardware policy SSoT skill target |
-| `pt-orama-council` | autonomous-ai-agents | `hermes-harness/commands/` | **Keep separate** — user-facing council command |
-| `plan`, `systematic-debugging`, `requesting-code-review` | software-development | adjacent orama skills | **Keep separate** |
-| `claude-code`, `codex` | autonomous-ai-agents | `codex-openclaw-agent` | **Keep separate** |
+| Hermes / source skill | Category | orama-system target | Decision | Status |
+|-----------------------|----------|---------------------|----------|--------|
+| `pt-orama-harness-integration` | autonomous-ai-agents | `hermes-harness` | **Absorb** — cross-harness thin-adapter logic | ✅ 2026-06-28 |
+| `hermes-agent` | autonomous-ai-agents | `hermes-harness` | **Absorb** — self-config/setup is harness territory | ✅ redirect |
+| `local-inference` | mlops | `perpetua-hardware` → `hardware-affinity-gate` | **Absorb** — hardware-aware selection, canary, affinity | ✅ redirect chain |
+| `perpetua-hardware` | mlops | `hardware-affinity-gate` | **Canonical** — hardware policy methodology in orama | ✅ redirect |
+| `hermes-agent-skill-authoring` | software-development | `skillify` + references | **Distill** — cross-harness authoring only | ✅ 2026-06-28 |
+| `pt-orama-council` | autonomous-ai-agents | `hermes-harness/commands/` | **Keep separate** — user-facing council command | ✅ distilled |
+| `plan`, `systematic-debugging`, `requesting-code-review` | software-development | adjacent orama skills | **Keep separate** | — |
+| `claude-code`, `codex` | autonomous-ai-agents | `codex-openclaw-agent` | **Keep separate** | — |
+
+**Full map:** [`bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md`](../bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md)
 
 **Redirect stub pattern** (when target missing):
 
