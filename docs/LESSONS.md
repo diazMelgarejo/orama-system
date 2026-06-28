@@ -47,6 +47,15 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-06-28 — Self-improve cycle 005 (operator approved ALL) | Cursor
+
+**Approval:** operator `approve lessons` (round 8) · **Fan-out:** `2026-06-28-coord-005`  
+**PT memory:** `lesson_c391481ca104`, `lesson_8b5d45070494`, `lesson_82ab64772b2b`, `lesson_2a476c761ca1`
+
+- PS ASCII-only ops scripts; PT memory union-merge on concurrent push; H5 finalize synthesis pattern; monitor caught coord-005 at tick 5.
+
+---
+
 ### 2026-06-28 — Cycle 005 H5 closed (operator approved) | Cursor
 
 **Approval:** operator `approve lessons` (round 7) · **Fan-out:** `2026-06-28-coord-005`  
