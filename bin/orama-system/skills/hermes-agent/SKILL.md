@@ -15,3 +15,5 @@ parent_skill: orama-system
 > [`../hermes-harness/SKILL.md`](../hermes-harness/SKILL.md).
 >
 > This stub exists so links to `hermes-agent` resolve; load `hermes-harness` to act.
+>
+> Absorption map: [`../hermes-harness/references/hermes-skill-absorption-map.md`](../hermes-harness/references/hermes-skill-absorption-map.md).
