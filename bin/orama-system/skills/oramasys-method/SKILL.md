@@ -184,5 +184,6 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - `references/5-stage-methodology.md` — full 5-stage process + 6 directives
 - `references/integrative-merge.md` — **PR merge / conflict harmonization (additive, never-delete)**
 - `references/search-frugality.md` — gbrain + gstack + CRG decision tree
+- `references/graceful-degradation.md` — unified fallback ladders (oramasys + PT model selection)
 - `references/cidf-and-mcp.md` — CIDF ranks, MCP names, legacy compatibility map
 - `references/tdd-gate.md` — TDD prescriptive gate (links `docs/TDD.md`)
