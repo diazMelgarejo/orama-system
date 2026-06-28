@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 import orama_system.portal_server as portal_server
 from orama_system.co_orchestration_portal import build_co_orchestration_summary
+from orama_system.portals.co_orchestration import resolve_skin_id
 
 
 def test_build_co_orchestration_summary_directions():
@@ -39,6 +40,12 @@ def test_build_co_orchestration_summary_directions():
     assert summary["stats"]["outbound_on_peer"] == 1
 
 
+def test_resolve_skin_id_defaults_by_role():
+    assert resolve_skin_id("mac") == "macos"
+    assert resolve_skin_id("win") == "windows"
+    assert resolve_skin_id("mac", explicit="windows") == "windows"
+
+
 def test_api_co_orchestration_local_only(monkeypatch, tmp_path):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "co-orch-test")
@@ -58,7 +65,8 @@ def test_api_co_orchestration_local_only(monkeypatch, tmp_path):
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         resp = client.get("/api/co-orchestration", headers=headers)
-        page = client.get("/co-orchestration")
+        page = client.get("/co-orchestration/macos")
+        macos = client.get("/co-orchestration/macos")
 
     assert resp.status_code == 200
     body = resp.json()
@@ -66,6 +74,18 @@ def test_api_co_orchestration_local_only(monkeypatch, tmp_path):
     assert len(body["local_inbox"]) == 1
     assert page.status_code == 200
     assert "co-orchestration" in page.text.lower()
+    assert "OpenClaw" in macos.text
+
+
+def test_co_orchestration_windows_skin_page(monkeypatch):
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "co-orch-token")
+
+    with TestClient(portal_server.app, raise_server_exceptions=False) as client:
+        win_page = client.get("/co-orchestration/windows")
+
+    assert win_page.status_code == 200
+    assert "Hermes" in win_page.text
 
 
 def test_co_orchestration_file_local_roundtrip(monkeypatch, tmp_path):
