@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
-from orama_system.lan_peer_channel import LanPeerChannel, make_envelope, read_discovery_peer_ip
+from orama_system.lan_peer_channel import LanPeerChannel, local_platform, make_envelope, read_discovery_peer_ip
 
 from utils.control_plane_auth import (
     accepted_control_plane_tokens,
@@ -1396,6 +1396,53 @@ class PeerEventBody(BaseModel):
 async def post_peer_event(body: PeerEventBody):
     await _lan_peer_channel.on_inbound(body.model_dump())
     return {"ok": True}
+
+
+class PeerFileBody(BaseModel):
+    filename: str = Field(..., min_length=1, max_length=128)
+    body: str = Field(..., max_length=512_000)
+    assignee: str = ""
+    topic: str = ""
+    fanout_id: str = ""
+    source: str = ""
+
+
+@app.post("/api/peer-file")
+async def post_peer_file(body: PeerFileBody):
+    from orama_system.lan_peer_files import write_inbox_file
+
+    try:
+        record = write_inbox_file(
+            body.filename,
+            body.body,
+            assignee=body.assignee,
+            topic=body.topic,
+            source=body.source or local_platform(),
+            fanout_id=body.fanout_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True, **record}
+
+
+@app.get("/api/peer-inbox")
+async def get_peer_inbox():
+    from orama_system.lan_peer_files import list_inbox
+
+    return {"files": list_inbox()}
+
+
+@app.get("/api/peer-inbox/{filename}")
+async def get_peer_inbox_file(filename: str):
+    from orama_system.lan_peer_files import read_inbox_file
+
+    try:
+        body, meta = read_inbox_file(filename)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="not found") from None
+    return {"filename": filename, "body": body, "meta": meta}
 
 
 @app.get("/health")

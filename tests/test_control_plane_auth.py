@@ -28,6 +28,39 @@ def test_portal_operator_routes_require_token_when_enforced(monkeypatch):
     assert "runtime" not in body.get("routing", {})
 
 
+def test_peer_file_inbox_roundtrip(monkeypatch, tmp_path):
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "portal-test-token")
+    monkeypatch.setattr(
+        "orama_system.lan_peer_files.lan_peer_state_dir",
+        lambda: tmp_path / "lan_peer",
+    )
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        denied = client.post(
+            "/api/peer-file",
+            json={"filename": "mac-task.md", "body": "# Mac task\n", "assignee": "mac"},
+        )
+        posted = client.post(
+            "/api/peer-file",
+            json={"filename": "mac-task.md", "body": "# Mac task\n", "assignee": "mac"},
+            headers={"Authorization": "Bearer portal-test-token"},
+        )
+        listing = client.get(
+            "/api/peer-inbox",
+            headers={"Authorization": "Bearer portal-test-token"},
+        )
+        fetched = client.get(
+            "/api/peer-inbox/mac-task.md",
+            headers={"Authorization": "Bearer portal-test-token"},
+        )
+
+    assert denied.status_code == 401
+    assert posted.status_code == 200
+    assert listing.json()["files"]
+    assert "Mac task" in fetched.json()["body"]
+
+
 def test_portal_health_stays_public_when_enforced(monkeypatch):
     monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "portal-test-token")
