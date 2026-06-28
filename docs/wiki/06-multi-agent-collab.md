@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # 06. Multi-Agent Collaboration — Version Registry, Scope Claims, Orphan Branches
 
 **TL;DR:** Two agents working simultaneously on overlapping files will diverge. Use scope claims, additive-only changes, commit messages as communication, and the version registry to stay coordinated.
@@ -15,19 +16,43 @@ During a 48-hour window two agents worked simultaneously on overlapping files:
 
 ## Version Registry
 
-**Current version: `0.9.9.7`.** Do NOT bump without explicit user instruction.
+**Single source of truth: `src/orama_system/_version.py`.**
+Import as `from orama_system._version import __version__`.
 
-All canonical locations that MUST be kept in sync:
+**To bump:** edit `__version__` in `_version.py` only, then run:
+```bash
+python3 scripts/sync_version.py              # propagates to all surfaces below
+python3 -m pytest tests/test_version_docs.py # verify
+git add -A && git commit -m "chore(version): bump to X.Y.Z.W"
+```
 
-| File | Field |
-|------|-------|
-| `pyproject.toml:7` | `version = "0.9.9.7"` |
-| `bin/orama-system/SKILL.md:10` | `version: 0.9.9.7` |
-| `bin/config/agent_registry.json:2` | `"version": "0.9.9.7"` |
-| `portal_server.py:26` | `VERSION = "0.9.9.7"` |
-| `bin/agents/*/agent.md:4` | `version: 0.9.9.7` |
-| `CLAUDE.md` | `(v0.9.9.7)` |
-| `docs/PERPLEXITY_BRIDGE.md:3` | `Version 0.9.9.7` |
+Canonical surfaces managed by `scripts/sync_version.py` (never edit manually):
+
+| File | Field | Status |
+|------|-------|--------|
+| `src/orama_system/_version.py` | `__version__` | **SOURCE — edit only here** |
+| `pyproject.toml` | `dynamic = ["version"]` via hatch | auto |
+| `bin/orama-system/SKILL.md` | `version:` frontmatter | auto |
+| `CLAUDE.md` | package ref | auto |
+| `README.md` | version badge | auto |
+| `bin/config/agent_registry.json` | `"version"` | auto |
+| `bin/orama-system/config/agent_registry.json` | `"version"` | auto |
+| `bin/orama-system/config/routing_rules.json` | `"version"` | auto |
+| `src/orama_system/portal_server.py` | `VERSION =` | auto |
+| `bin/agents/*/agent.md` | `version:` frontmatter | auto |
+| `bin/mcp_servers/*.py` | `Version: X` docstring header | auto |
+| `bin/shared/*.py` | `Version: X` docstring header | auto |
+| `platform/windows/install.ps1` | `version = 'X'` | auto |
+| `docs/PERPLEXITY_BRIDGE.md` | `## Version X` | auto |
+| `docs/SYNC_ANALYSIS.md` | version refs | auto |
+| `bin/orama-system/afrp/README.md` | `**Version:**` | auto |
+| `bin/orama-system/skills/self-discovery/SKILL.md` | `version:` | auto |
+
+**Not managed — intentional:**
+- `CHANGELOG.md`, `docs/LESSONS.md` — accurate historical records
+- `docs/plans/`, `docs/superpowers/specs/` — historical planning docs
+- `scripts/setup_macos.py` `KNOWN_ALPHACLAW_VERSION` — AlphaClaw runtime (separate version train)
+- `openrouter-defaults.md` `Version:` — skill-doc revision, not package version
 
 ---
 
@@ -39,6 +64,40 @@ All canonical locations that MUST be kept in sync:
 4. **Commit message as communication** — state which constants/APIs changed; this is the only async channel between agents sharing no session context
 5. **Never hardcode ephemeral runtime values** — `127.0.0.1` as default in source code, real IP in `.env` only
 6. **One canonical source per constant** — if two files both define the same IP string, they will diverge
+
+## Nested-Branch Merge Protocol
+
+When agents produce concurrent branches, follow this sequence. Guessing = data loss.
+
+### Merge order
+- Establish topological order (leaf → parent → main)
+- Merge leaf first; wait 10 min + `mergeable_state: clean` before next merge
+
+### 7-step protocol
+
+| Step | Action |
+|------|--------|
+| **1 Simulate** | `git merge --no-commit --no-ff <branch>` → enumerate `--diff-filter=U` → `git merge --abort`. Do for ALL merges before touching any file. |
+| **2 Present** | Show both sides of every conflict. One question per file. Wait for explicit direction. |
+| **3 Strategy** | `additive` (empty+content→take content) · `union` (both partial→concat) · `superset` (verify inclusion→take larger) · `synthesize` (blend both valid intents) · `architecturally-correct` (bug→take fix) · `api-correct` (casing→take lowercase) |
+| **4 Resolve** | One pass, directed strategy. Never delete — archive if needed. Full doctrine: [`oramasys-method/references/integrative-merge.md`](../../bin/orama-system/skills/oramasys-method/references/integrative-merge.md) |
+| **5 Verify** | `pytest -q` + `repo_hygiene.py` + confirm no `<<<<<<` remain |
+| **6 Merge** | Push → CI → GitHub API squash merge. Undraft via GraphQL if needed. |
+| **7 Buffer** | 10 minutes. Poll `mergeable_state: clean` before next merge. |
+
+### Key invariants
+
+```json
+"merged: true" on GitHub ≠ content on branch
+  → always: git diff origin/main...origin/<branch> after any merge
+
+CodeRabbit re-scans on every push → run post-merge sweep after EVERY merge
+
+Draft PR blocks API merge → markPullRequestReadyForReview mutation first
+```
+
+Full reference with code snippets: [`bin/orama-system/references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](../../bin/orama-system/references/multi-agent-collaboration-protocol.md)
+PT portable brain: [`PT/.agent/AGENTS.md` § Multi-agent merge conflict protocol](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md)
 
 ## Clean-Lineage Git Hygiene
 
@@ -95,6 +154,11 @@ python -m pytest -q
 ---
 
 ## Related
+
+- [`bin/orama-system/references/multi-agent-collaboration-protocol.md`](../../bin/orama-system/references/multi-agent-collaboration-protocol.md) — authoritative reference: full 7-step protocol, strategy table, GitHub API commands
+- [`bin/orama-system/skills/git-history-surgery/SKILL.md`](../../bin/orama-system/skills/git-history-surgery/SKILL.md) — Multi-Agent Branch Merge quick reference + version-bump commit discipline
+- [`bin/orama-system/skills/using-git-worktrees/SKILL.md`](../../bin/orama-system/skills/using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 has the merge-protocol trigger
+- [`PT/.agent/AGENTS.md` § Multi-agent merge conflict protocol](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md) — portable brain entry point
 
 - [Session log 2026-04-12](../LESSONS.md#2026-04-12--claude--48-hour-multi-agent-sprint-collaboration-patterns--version-registry)
 - Commit: `71a15f7` (PT) — fix(health): restore 127.0.0.1 loopback defaults

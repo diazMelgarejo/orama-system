@@ -2,6 +2,9 @@
 
 Windows counterpart to `start.sh`. All Windows-specific files live here.
 
+**Working directory:** examples below assume **orama-system repository root**
+(the directory that contains `start.sh` and `platform/windows/`).
+
 ## Files
 
 | File | Purpose |
@@ -17,41 +20,44 @@ Windows counterpart to `start.sh`. All Windows-specific files live here.
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
 # Install dependencies + write openclaw.json defaults
-powershell -File .\windows\install.ps1
+powershell -File .\platform\windows\install.ps1
 ```
 
 ## Usage
 
 ```powershell
 # Start all services + open browser
-.\windows\start.ps1
+.\platform\windows\start.ps1
 
 # Start without opening browser
-.\windows\start.ps1 --no-open
+.\platform\windows\start.ps1 --no-open
 
 # Stop all
-.\windows\start.ps1 --stop
+.\platform\windows\start.ps1 --stop
 
 # Status (port check + policy)
-.\windows\start.ps1 --status
+.\platform\windows\start.ps1 --status
 
 # Re-run LAN discovery
-.\windows\start.ps1 --discover
+.\platform\windows\start.ps1 --discover
 
-# Validate model↔hardware affinity policy
-.\windows\start.ps1 --hardware-policy
+# Validate model↔hardware affinity policy (delegates to Perpetua-Tools CLI)
+.\platform\windows\start.ps1 --hardware-policy
 ```
+
+Same policy as `start.sh --hardware-policy` on Mac/Linux OpenClaw. Hermes agents must
+consume PT `model_hardware_policy.yml` — see `hermes-harness` → `pt-hardware-policy`.
 
 ## CLI parity table
 
 | `start.sh` mode | `start.ps1` equivalent |
 |---|---|
-| `./start.sh` | `.\windows\start.ps1` |
-| `./start.sh --no-open` | `.\windows\start.ps1 --no-open` |
-| `./start.sh --stop` | `.\windows\start.ps1 --stop` |
-| `./start.sh --status` | `.\windows\start.ps1 --status` |
-| `./start.sh --discover` | `.\windows\start.ps1 --discover` |
-| `./start.sh --hardware-policy` | `.\windows\start.ps1 --hardware-policy` |
+| `./start.sh` | `.\platform\windows\start.ps1` |
+| `./start.sh --no-open` | `.\platform\windows\start.ps1 --no-open` |
+| `./start.sh --stop` | `.\platform\windows\start.ps1 --stop` |
+| `./start.sh --status` | `.\platform\windows\start.ps1 --status` |
+| `./start.sh --discover` | `.\platform\windows\start.ps1 --discover` |
+| `./start.sh --hardware-policy` | `.\platform\windows\start.ps1 --hardware-policy` |
 | `lsof -ti tcp:PORT` | `netstat -ano` + `Stop-Process` |
 | `nc -z localhost PORT` | `TcpClient.ConnectAsync` |
 | `open URL` | `Start-Process URL` |
@@ -65,3 +71,5 @@ powershell -File .\windows\install.ps1
 - The Mac machine's LM Studio IP is read from `~/.openclaw/openclaw.json`
 - Services log to `../.logs/{pt,orama,portal}.log` (same as macOS)
 - `.paths.ps1` caches discovered paths (gitignored, auto-generated)
+- **Hermes on Windows** is the local orchestrator counterpart to Mac OpenClaw; `install.ps1`
+  writes `lmstudio-win` → `localhost:1234` for `windows_only` GGUF models

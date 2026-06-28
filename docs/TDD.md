@@ -3,7 +3,7 @@
 > **Canonical path**: `orama-system/docs/TDD.md`
 > **Companion**: parent-dir [`tdd.md`](../../tdd.md) — source-of-truth philosophy (SPECS → tests → code).
 > **External skill**: `superpowers:test-driven-development` — install path: `~/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.7/skills/test-driven-development/SKILL.md` — full methodology, anti-patterns. Do not duplicate here.
-> **Anti-patterns reference**: same dir, `testing-anti-patterns.md`.
+> **Anti-patterns reference**: same dir, [`testing-anti-patterns.md`](testing-anti-patterns.md).
 
 This file is the **prescriptive gate**. Use them before every code change and every commit.
 
@@ -78,26 +78,19 @@ Before `git commit`:
 
 ---
 
-## Vite Frontend Gap (RC-1 Code Review Finding)
+## Vite Frontend Gate (RC-1 → closed 2026-06-26)
 
-As of the RC-1 review, the Vite frontend has **zero `*.test.ts*` files in `src/`**. This is the single largest TDD gap in the repo.
+RC-1 flagged **zero `*.test.ts*` in `web/src/`**. The minimum gate is now landed on branch
+`feat/vitest-tdd-gate-scratch` (evidence: [`docs/testing/2026-06-26-vite-frontend-tdd-gate.tdd.md`](testing/2026-06-26-vite-frontend-tdd-gate.tdd.md)):
 
-### Minimum acceptance gate before any production rollout
+- **Toolchain:** Vitest + React Testing Library + `@testing-library/jest-dom`; `pnpm test` in `web/`; CI job `web-test`.
+- **17 tests / 5 files** covering `apiFetch`, command-center fallbacks (including empty-string job id), routing online/offline branches, App smoke, and composer/runs/artifacts nav smokes (`CommandCenter.test.tsx`). Full inventory: [`docs/testing/2026-06-26-vite-frontend-tdd-gate.tdd.md`](testing/2026-06-26-vite-frontend-tdd-gate.tdd.md).
+- **Commit-msg TDD gate:** `scripts/git/check_tdd_commit.sh` (install via `bash scripts/git/install-local-hooks.sh`).
+- **Production rule (unchanged):** no `web/src/` change without an accompanying `*.test.ts(x)` unless `tdd-skip:` is documented.
 
-- **Toolchain installed and wired:** Vitest + React Testing Library + `@testing-library/jest-dom`. `vitest` script in `package.json`. CI runs it.
-- **At least one test per top-level page/route component**, covering the happy-path render and one branch in any conditional logic.
-- **Every fallback / default-value branch is tested.** The RC-1 review surfaced two such branches that would have been caught:
-  - `src/components/CommandCenter.tsx:33` — fallback logic on missing/empty model id; test must cover empty string AND undefined.
-  - `src/lib/client.ts:26` — dead ternary branch; a test asserting both sides forces the dead branch to be removed or justified.
-- **No PR merged to main that touches `src/` without at least one accompanying test**, unless `tdd-skip:` reason is documented and approved.
+### Incremental backlog (post-gate)
 
-### Recommended first tests to write (in order)
-
-1. `CommandCenter.test.tsx` — covers the `:33` fallback (both branches).
-2. `client.test.ts` — covers the `:26` ternary (forces decision: keep both branches with assertions, or delete the dead one).
-3. One smoke test per top-level route component (renders without crashing).
-
-These three unblock the gate. Everything else is incremental.
+- E2E / Playwright — start after this gate merges to `main`.
 
 ---
 

@@ -1,0 +1,24 @@
+{
+  "_fixture": "stale-gateway",
+  "_note": "Gateway returns stale baseHash on first apply; engine must retry once then conflict.",
+  "version": 1,
+  "target": {
+    "workspace_root": "__TMP__/workspace",
+    "config_path": "__TMP__/openclaw.json",
+    "state_dir": "__TMP__"
+  },
+  "resources": [
+    {
+      "kind": "provider",
+      "id": "example-provider",
+      "manager": "example-manager",
+      "policy": "strict",
+      "spec": {
+        "api": "openai-responses",
+        "baseUrl": "https://example.invalid/v1",
+        "models": [{ "id": "example-model", "name": "Example model", "contextWindow": 200000 }]
+      },
+      "managed_paths": ["/models/providers/example-provider"]
+    }
+  ]
+}
