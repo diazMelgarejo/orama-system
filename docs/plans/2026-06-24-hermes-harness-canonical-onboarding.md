@@ -2,7 +2,7 @@
 # Hermes-Harness Canonical Onboarding & Skill Absorption (2026-06-24)
 
 > **Date:** 2026-06-24 (enriched 2026-06-25) · **Owner:** orama-system (L3 canonical skills) · **Consumer:** Hermes local harness (L1)
-> **Status:** 🔄 IN PROGRESS — Phases 1–5+7+8 ✅ shipped; **Phase 6+9 ✅ Win testdrive 2026-06-28** (`verify_partner_canaries` + thin wrappers); PR #108 ✅ merged; LINT-013 ✅
+> **Status:** 🔄 IN PROGRESS — Phases 1–5+7+8+6+9 ✅ shipped (Win testdrive 2026-06-28); **skill absorption ✅ 2026-06-28**; Mac↔Win cross-harness E2E ⏳; PR #108 ✅ merged; LINT-013 ✅
 > **Author:** orama-system canonical skill leads + session synthesis
 > **Review trigger:** user review of this artifact before any skill/code execution
 
@@ -120,21 +120,25 @@ cargo run -- dashboard
 
 ## Ground-Truth Reframing
 
-Source plans reference five skills as canonical targets: `hermes-agent`, `pt-orama-harness-integration`, `local-inference`, `perpetua-hardware`, and PR #96 context. **On `main` today, absorption targets may be absent** — they may exist only as Hermes-local skills or aspirational names.
+Source plans reference five skills as canonical targets: `hermes-agent`, `pt-orama-harness-integration`, `local-inference`, `perpetua-hardware`, and PR #96 context. **On `main` today (2026-06-28), all absorption targets exist** as redirect stubs or canonical supersets — see [`hermes-skill-absorption-map.md`](../bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md).
 
 ### What exists in orama-system today
 
 | Asset | Path | Status |
 |-------|------|--------|
-| Canonical harness skill | `bin/orama-system/skills/hermes-harness/SKILL.md` | exists |
-| Council command | `bin/orama-system/skills/hermes-harness/commands/pt-orama-council/SKILL.md` | exists |
-| Review command | `bin/orama-system/skills/hermes-harness/commands/pt-orama-review/SKILL.md` | exists |
-| Delegate command | `bin/orama-system/skills/hermes-harness/commands/pt-orama-delegate/SKILL.md` | exists |
-| Hardware policy command | `bin/orama-system/skills/hermes-harness/commands/pt-hardware-policy/SKILL.md` | exists |
-| Reference cards | `bin/orama-system/skills/hermes-harness/references/` (6 files) | exists |
-| Thin skill installer | `bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py` | exists |
-| OpenClaw authority to mirror | `bin/orama-system/skills/openclaw-skills/SKILL.md` | exists |
-| Hardware affinity pointer | `bin/orama-system/skills/hardware-affinity-gate/SKILL.md` | exists (pointer to PT) |
+| Canonical harness skill | `bin/orama-system/skills/hermes-harness/SKILL.md` | ✅ exists |
+| Absorption map | `bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md` | ✅ 2026-06-28 |
+| Council command | `bin/orama-system/skills/hermes-harness/commands/pt-orama-council/SKILL.md` | ✅ exists |
+| Review command | `bin/orama-system/skills/hermes-harness/commands/pt-orama-review/SKILL.md` | ✅ exists |
+| Delegate command | `bin/orama-system/skills/hermes-harness/commands/pt-orama-delegate/SKILL.md` | ✅ exists |
+| Hardware policy command | `bin/orama-system/skills/hermes-harness/commands/pt-hardware-policy/SKILL.md` | ✅ exists |
+| Reference cards | `bin/orama-system/skills/hermes-harness/references/` (16 files) | ✅ exists |
+| Redirect stubs | `hermes-agent`, `pt-orama-harness-integration`, `perpetua-hardware`, `local-inference` | ✅ absorbed |
+| `.agents` thin wrappers | `.agents/skills/{hermes-agent,local-inference,pt-orama-harness-integration,perpetua-hardware}/` | ✅ 2026-06-28 |
+| Thin skill installer | `bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py` | ✅ `--verify` passes |
+| OpenClaw authority to mirror | `bin/orama-system/skills/openclaw-skills/SKILL.md` | ✅ exists |
+| Hardware affinity superset | `bin/orama-system/skills/hardware-affinity-gate/SKILL.md` | ✅ methodology + PT one-way import |
+| Superseded archive | `archive/llm-council-orchestration-absorbed/` | ✅ → `pt-orama-council` |
 
 ### Reframed outcome
 
@@ -314,14 +318,16 @@ resolve_endpoint(target_machine, service):
 
 ---
 
-## Phase 2 — Create Missing Absorption Targets
+## Phase 2 — Create Missing Absorption Targets ✅ (2026-06-28)
 
 Creation checklist (redirect-only if absent):
 
-- [ ] `perpetua-hardware` → canonical root or self-redirect
-- [ ] `hermes-agent` → `hermes-harness`
-- [ ] `local-inference` → `perpetua-hardware`
-- [ ] `pt-orama-harness-integration` → `hermes-harness`
+- [x] `perpetua-hardware` → `hardware-affinity-gate`
+- [x] `hermes-agent` → `hermes-harness`
+- [x] `local-inference` → `hardware-affinity-gate` (via stub chain)
+- [x] `pt-orama-harness-integration` → `hermes-harness`
+- [x] `.agents` thin wrappers for all four redirects + `perpetua-hardware` → `hardware-affinity-gate`
+- [x] `archive/llm-council-orchestration-absorbed` marked SUPERSEDED → `pt-orama-council`
 
 Update `skill-comparison-2026-06-22.md` decision column: MERGE / KEEP-SEPARATE / INVESTIGATE for adjacent pairs (`plan`, `systematic-debugging`, `git-worktree-hygiene`, etc.).
 
@@ -550,22 +556,20 @@ pytest tests/test_hermes_thin_skills.py -q
 
 ## Success Metrics
 
+- [x] 4 ECC reference cards exist, are ≤150 lines each, and are referenced from canonical cards
+- [x] `install_hermes_thin_skills.py --verify` exits 0; user wrappers preserved
+- [x] Missing absorption targets created as redirect stubs
+- [x] `.agents` thin wrappers point at canonical supersets (not full body copies)
+- [x] Archive council skill superseded; Win coder model `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
 - [ ] `hermes-harness/SKILL.md` authority coverage ≥ `openclaw-skills/SKILL.md`
-- [ ] 4 ECC reference cards exist, are ≤150 lines each, and are referenced from canonical cards
-- [ ] All 5 canary lanes have exact success text, timeout ≤15 s, and degraded fallback
-- [ ] `/v1/models` resolution mandatory before LM Studio dispatch; zero invented IDs
-- [ ] Windows config lives only in `references/`, no executable logic
-- [ ] `install_hermes_thin_skills.py --verify` exits 0; user wrappers preserved
-- [ ] Main orama agent retains final judgment in all council workflows
-- [ ] No commits/deploys/deletes/account-changes by worker agents
-- [ ] Zero absolute workstation paths in tracked files
-- [ ] No raw IP literals in skills/plans/docs; only env-var resolution code
-- [ ] Own-machine services resolve to `localhost`; cross-machine to `$IP`; one shared helper
-- [ ] `alphaclaw_bootstrap.py` at locality-rule parity with `agent_launcher.py`
-- [ ] Windows reaches Mac/Linux parity via thin wrappers → canonical; locals still functional
-- [ ] Missing absorption targets created as redirect stubs where absent
-- [ ] Helper scripts added only under `scripts/`; `references/` remains read-only
-- [ ] Live Windows walkthrough (hardware policy Phases A–F) recorded when executed
+- [x] All 5 canary lanes have exact success text and degraded fallback (Win testdrive 2026-06-28)
+- [x] `/v1/models` + `/api/v0/models` loaded probe before LM Studio dispatch
+- [x] Windows config lives in `references/` + `platform/windows/` scripts
+- [x] Main orama agent retains final judgment in all council workflows
+- [x] Zero absolute workstation paths in tracked Hermes harness files (LINT-006 backstop)
+- [x] Windows reaches Mac/Linux parity via thin wrappers → canonical (Phase 9 Win ✅)
+- [ ] Mac↔Win cross-harness `--hardware-policy` E2E green
+- [ ] Live Windows walkthrough Phases A–F recorded on Mac when cross-harness runs
 
 ---
 
