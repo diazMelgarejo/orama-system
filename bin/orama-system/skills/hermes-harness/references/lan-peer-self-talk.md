@@ -123,7 +123,7 @@ Peer reads files from `~/.openclaw/state/lan_peer/inbox/` on the receiving host.
 
 ```powershell
 cd $env:ORAMA_SYSTEM_PATH
-python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py --peer drop `
+python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py drop --peer `
   --file .\tasks\mac-hypothesis.md `
   --assignee mac --topic autoresearch/hypothesis `
   --fanout-id 2026-06-28-001
@@ -132,8 +132,8 @@ python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py --peer 
 **Mac reads peer inbox:**
 
 ```bash
-python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py --peer list
-python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py --peer read \
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py list --peer
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py read --peer \
   --name 2026-06-28-mac-hypothesis.md
 ```
 

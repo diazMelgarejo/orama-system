@@ -1,0 +1,17 @@
+{
+  "fanout_id": "2026-06-28-self-improve-001",
+  "assignments": [
+    {
+      "assignee": "mac",
+      "topic": "self-improve/lessons",
+      "filename": "mac-self-improve-lessons.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/self-improve-mac-lessons.md"
+    },
+    {
+      "assignee": "win",
+      "topic": "self-improve/gpu-runtime",
+      "filename": "win-self-improve-runtime.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/self-improve-win-runtime.md"
+    }
+  ]
+}
