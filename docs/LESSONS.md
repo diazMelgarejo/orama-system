@@ -47,6 +47,16 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-06-28 — Cycle 004 sequential job queues (operator approved) | Cursor
+
+**Approval:** operator `approve lessons` (round 5) · **Fan-out:** `2026-06-28-coord-004`  
+**Tool:** `win_job_queue.py` · **PT memory:** `lesson_a3f8e2b91c04`, `lesson_7d2c1e8f5b90`
+
+- Sequential queues for `autoresearcher` + `coder`; coord-004 jobs completed and dropped to Mac.
+- Mac H4 latency leg closed; H5 cross-host synthesis shipped.
+
+---
+
 ### 2026-06-28 — Self-improve merge FINAL approved (round 4) | Cursor
 
 **Approval:** operator `approve lessons` (round 4) — union with rounds 1–3  
