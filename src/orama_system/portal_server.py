@@ -794,11 +794,28 @@ def _ollama_mac_busy_flag(svc: Dict[str, Any]) -> bool:
     return bool(svc.get("ollama_mac", {}).get("busy", False))
 
 
+def _unwrap_redacted_list(payload: Any, key: str) -> List[Any]:
+    """Unwrap list payloads after redact_portal_status_payload (dict wrapper)."""
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        items = payload.get(key, [])
+        return items if isinstance(items, list) else []
+    return []
+
+
 def _lmstudio_mac_busy_flag(agents: List[Dict[str, Any]]) -> bool:
     """True when any running agent is dispatched to the Mac LM Studio backend."""
     for a in agents:
+        if not isinstance(a, dict):
+            continue
         if a.get("status") == "running":
-            backend = (a.get("backend") or a.get("coder_backend") or "").lower()
+            backend = (
+                a.get("backend")
+                or a.get("coder_backend")
+                or a.get("backend_hint")
+                or ""
+            ).lower()
             if "lmstudio" in backend or "lms-mac" in backend or "lmstudio-mac" in backend:
                 return True
     return False
@@ -931,6 +948,8 @@ def _render_agent_state_section(agents: List[Dict[str, Any]]) -> str:
         )
     pills = []
     for a in agents:
+        if not isinstance(a, dict):
+            continue
         status = a.get("status", "unknown")
         role = a.get("role", a.get("agent_id", "?"))
         model = a.get("model", "")
@@ -1148,9 +1167,9 @@ def _render_html(status: Dict[str, Any], *, browser_token: str = "") -> str:
     ))
 
     ts = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    activity_events = status.get("activity", [])
+    activity_events = _unwrap_redacted_list(status.get("activity", []), "events")
     routing = status.get("routing")
-    agents = status.get("agents", [])
+    agents = _unwrap_redacted_list(status.get("agents", []), "agents")
     queue_depth = status.get("queue_depth", 0)
     hardware_policy = status.get("hardware_policy")
     tools = status.get("tools", {})
