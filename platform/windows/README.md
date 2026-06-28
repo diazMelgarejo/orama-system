@@ -12,6 +12,19 @@ Windows counterpart to `start.sh`. All Windows-specific files live here.
 | `start.ps1` | Full Windows equivalent of `../start.sh` — same CLI modes |
 | `install.ps1` | One-time idempotent setup (venv, deps; optional legacy `openclaw.json` stub) |
 | `requirements-windows.txt` | Windows-only Python deps (pywin32, colorama, etc.) |
+| `peer_inbox_portal.py` | Win lane `/peer-inbox` HTML + remote peer fetch helpers |
+| `markdown_render.py` | Server-side markdown → HTML for inbox previews (no CDN) |
+
+## Peer inbox portal (Win lane)
+
+Canonical operator URL: **`http://localhost:8002/peer-inbox`**
+
+- Bidirectional LAN file inbox (local + peer columns)
+- Server-side markdown preview via `/api/peer-inbox/{file}/html`
+- Mac lane co-orchestration UI remains at `/co-orchestration` until manual merge
+
+Shared inbox core stays in `src/orama_system/` (`lan_peer_files.py`, `/api/peer-file`).
+Win-specific presentation lives here under `platform/windows/`.
 
 ## First-time setup
 
