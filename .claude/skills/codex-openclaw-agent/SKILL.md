@@ -3,30 +3,11 @@ name: codex-openclaw-agent
 description: "Creates and wires a named OpenClaw sub-agent (codex-agent) backed exclusively by Codex CLI + GPT-5.5. Invoked via `openclaw run codex-agent`. Does NOT touch the default routing (ollama/qwen3.5:9b-nvfp4), the main agent, or the coder agent (lmstudio-win). Use only when you need an explicit GPT-5.5/Codex execution path."
 ---
 
-# codex-openclaw-agent thin wrapper
+<!-- THIN-WRAPPER: canonical skill lives in orama-system/bin/orama-system -->
 
-Canonical skill: `bin/orama-system/skills/codex-openclaw-agent/SKILL.md`
+# codex-openclaw-agent (thin wrapper)
 
-## Quick start
+Canonical, permanent implementation: `../../../bin/orama-system/skills/codex-openclaw-agent/`.
+**Read it before proceeding** — this wrapper only carries discovery metadata.
 
-```bash
-# Update canonical first
-git fetch origin --prune
-git pull --ff-only
-
-# Bind codex-agent (idempotent)
-bash bin/orama-system/skills/codex-openclaw-agent/scripts/bind_codex_backend.sh
-
-# Preview without writing
-bash bin/orama-system/skills/codex-openclaw-agent/scripts/bind_codex_backend.sh --dry-run
-
-# Invoke the agent
-openclaw run codex-agent --task "your task here"
-```
-
-## Windows UTF-8 note
-
-```powershell
-$env:PYTHONUTF8 = "1"
-[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
-```
+Pre-wrapper body preserved at `SKILL.md.premerge-20260628.bak`.
