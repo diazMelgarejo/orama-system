@@ -114,6 +114,49 @@ Hermes must print `SUCCESS` and the full path in the operator reply.
 | `peer-lmstudio` FAIL | Re-run discovery; ensure LM Studio listening on peer |
 | No peer IP | Refresh `last_discovery.json`; do not hardcode LAN IP |
 
+### F. File-based work assignments (autoresearch fan-out)
+
+Use **markdown/plain-text drops** instead of streaming large payloads over WS.
+Peer reads files from `~/.openclaw/state/lan_peer/inbox/` on the receiving host.
+
+**Win → Mac assignment:**
+
+```powershell
+cd $env:ORAMA_SYSTEM_PATH
+python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py drop `
+  --peer --file .\tasks\mac-hypothesis.md `
+  --assignee mac --topic autoresearch/hypothesis `
+  --fanout-id 2026-06-28-001
+```
+
+**Mac reads peer inbox:**
+
+```bash
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py list --peer
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py read --peer \
+  --name 2026-06-28-mac-hypothesis.md
+```
+
+**Fan-out manifest (split topics per host):**
+
+```json
+{
+  "fanout_id": "2026-06-28-autoresearch-001",
+  "assignments": [
+    {"assignee": "mac", "topic": "hypothesis", "filename": "mac-hypothesis.md", "path": "./tasks/mac.md"},
+    {"assignee": "win", "topic": "gpu-run", "filename": "win-gpu.md", "path": "./tasks/win.md"}
+  ]
+}
+```
+
+```bash
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py fanout --manifest assignments.json
+```
+
+HTTP API (Bearer token): `POST /api/peer-file`, `GET /api/peer-inbox`, `GET /api/peer-inbox/{filename}`.
+
+WS/SSE remain for **heartbeat + probe** only; assignments travel as files.
+
 ### E. What Hermes cannot do (today)
 
 | Not supported | Why |
@@ -136,6 +179,7 @@ and `start.sh --status` / `start.ps1 --status` — not a separate Hermes RPC lay
 | Discovery | Both | `~/.openclaw/state/last_discovery.json` | PT `lan_discovery.py`, `discover-lm-studio.sh` |
 | Affinity | Both | `start.sh` / `start.ps1 --hardware-policy` | Shared policy files |
 | Tier-1 status | Mac UI | `start.sh --status` aggregates Mac + Win models | Reads discovery + probes |
+| Work assignments | Both | HTTP file inbox (`/api/peer-file`) | `lan_peer_assign.py`, `~/.openclaw/state/lan_peer/inbox/` |
 
 **Proof (2026-06-28):** Mac `verify_partner_canaries.py` against Win LAN URL returned
 `LM_READY` on 27B; `start.sh --status` showed Tier 1 FULL for both nodes.
