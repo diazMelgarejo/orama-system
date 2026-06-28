@@ -61,6 +61,33 @@ def test_peer_file_inbox_roundtrip(monkeypatch, tmp_path):
     assert "Mac task" in fetched.json()["body"]
 
 
+def test_peer_inbox_html_preview(monkeypatch, tmp_path):
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "portal-test-token")
+    monkeypatch.setattr(
+        "orama_system.lan_peer_files.lan_peer_state_dir",
+        lambda: tmp_path / "lan_peer",
+    )
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        client.post(
+            "/api/peer-file",
+            json={"filename": "task.md", "body": "# Hello\n\n**peer**", "assignee": "mac"},
+            headers={"Authorization": "Bearer portal-test-token"},
+        )
+        html_resp = client.get(
+            "/api/peer-inbox/task.md/html",
+            headers={"Authorization": "Bearer portal-test-token"},
+        )
+        page = client.get("/peer-inbox")
+
+    assert html_resp.status_code == 200
+    assert "<h1>Hello</h1>" in html_resp.json()["html"]
+    assert page.status_code == 200
+    assert "LAN peer inbox" in page.text
+    assert "/api/peer-inbox" in page.text
+
+
 def test_portal_health_stays_public_when_enforced(monkeypatch):
     monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "portal-test-token")
