@@ -1,6 +1,6 @@
 # Cross-Platform Compatibility
 
-> **Status:** v0.9.9.8 — macOS (primary), Linux (supported), Windows (via `windows/start.ps1`)
+> **Status:** v1.1.0.0 — macOS (primary), Linux (supported), Windows (via `windows/start.ps1`)
 >
 > **Last updated:** 2026-05-08
 
@@ -22,6 +22,28 @@
 | Browser open | `open URL` | `xdg-open URL` | `Start-Process URL` |
 | `setup_macos.py` | ✅ runs | ⏭ skipped (guard) | ⏭ not applicable |
 | CI/Docker | ✅ with guard | ✅ minimal deps | N/A |
+
+---
+
+## Harness roles and hardware policy (2026-06-24)
+
+> **Deep dive:** [Cross-Harness Hardware Policy Architecture](hermes-hardware-policy-cross-harness.md) — flowchart, gap table, enforcement stack.
+
+All harnesses consume **one** Perpetua-Tools policy file (`config/model_hardware_policy.yml`)
+via `src/utils/hardware_policy.py`. No harness may infer NEVER_MAC/NEVER_WIN at runtime.
+
+| Host | Harness | Startup gate | LM Studio default |
+|------|---------|--------------|-------------------|
+| macOS | OpenClaw (`start.sh`) | `./start.sh --hardware-policy` | Mac MLX home; Win GGUF forbidden |
+| Linux | OpenClaw (`start.sh`) | same as macOS | Any documented PT profile (physical hardware permitting) |
+| Windows 11 | Hermes + `start.ps1` | `.\platform\windows\start.ps1 --hardware-policy` | Win GGUF home at `localhost:1234` |
+
+**Windows role reversal:** On the Hermes Windows host, `windows_only` models are the
+**allowed** local workload (27B GGUF, gemma quant). Hermes is the parallel local
+orchestrator/autoresearcher counterpart to the Mac OpenClaw orchestrator.
+
+**Linux:** Same OpenClaw software as macOS. Linux is a full peer for documented hardware
+profiles in PT `hardware/SKILL.md` — not a stripped-down policy consumer.
 
 ---
 
@@ -125,18 +147,21 @@ subprocess.Popen(
 
 ---
 
-## Windows (`windows/start.ps1`)
+## Windows (`platform/windows/start.ps1`)
+
+Run from **orama-system repository root**. Path resolution:
+`bin/orama-system/skills/hermes-harness/references/workspace-path-resolution.md`.
 
 ### CLI parity
 
 | `start.sh` | `start.ps1` |
 |---|---|
-| `./start.sh` | `.\windows\start.ps1` |
-| `./start.sh --no-open` | `.\windows\start.ps1 --no-open` |
-| `./start.sh --stop` | `.\windows\start.ps1 --stop` (or `-Stop`) |
-| `./start.sh --status` | `.\windows\start.ps1 --status` |
-| `./start.sh --discover` | `.\windows\start.ps1 --discover` |
-| `./start.sh --hardware-policy` | `.\windows\start.ps1 --hardware-policy` |
+| `./start.sh` | `.\platform\windows\start.ps1` |
+| `./start.sh --no-open` | `.\platform\windows\start.ps1 --no-open` |
+| `./start.sh --stop` | `.\platform\windows\start.ps1 --stop` (or `-Stop`) |
+| `./start.sh --status` | `.\platform\windows\start.ps1 --status` |
+| `./start.sh --discover` | `.\platform\windows\start.ps1 --discover` |
+| `./start.sh --hardware-policy` | `.\platform\windows\start.ps1 --hardware-policy` |
 
 ### Tool translations
 

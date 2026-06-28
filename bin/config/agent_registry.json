@@ -1,24 +1,57 @@
 {
-  "version": "0.9.9.9",
+  "version": "1.1.1.0",
   "network_name": "oramasys-agent-network",
-  "description": "Unified oramasys agent network — 7 oramasys stage agents + 4 OpenClaw SOUL agents",
+  "description": "Unified oramasys agent network \u2014 7 oramasys stage agents + 4 OpenClaw SOUL agents",
   "worker_template": {
     "type": "worker",
     "contract": "TaskEnvelope in, WorkerResult out",
     "hard_rules": [
-      "Return compact summary only — no raw session logs in output",
+      "Return compact summary only \u2014 no raw session logs in output",
       "Write artifacts to disk before returning status=done",
       "Set verification_hints for any low-confidence output",
-      "depth is always 0 — workers do not enqueue sub-workers"
+      "depth is always 0 \u2014 workers do not enqueue sub-workers"
     ],
-    "default_constraints": ["max_tokens:4096", "no_external_api_without_approval"]
+    "default_constraints": [
+      "max_tokens:4096",
+      "no_external_api_without_approval"
+    ]
   },
   "openclaw_agents": {
-    "mac-researcher":  { "soul": "bin/agents/mac-researcher/SOUL.md",  "provider": "lmstudio-mac",  "model": "Qwen3.5-9B-MLX-4bit", "affinity": "mac", "gateway": "http://127.0.0.1:18789" },
-    "win-researcher":  { "soul": "bin/agents/win-researcher/SOUL.md",  "provider": "lmstudio-win",  "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2", "affinity": "win", "gateway": "http://127.0.0.1:18789" },
-    "coder":           { "soul": "bin/agents/coder/SOUL.md",            "provider": "lmstudio-win",  "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2", "affinity": "win", "gateway": "http://127.0.0.1:18789" },
-    "priority-subagent": { "soul": "bin/agents/coder/SOUL.md",          "provider": "lmstudio-win",  "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2", "affinity": "win", "gateway": "http://127.0.0.1:18789" },
-    "autoresearcher":  { "soul": "bin/agents/autoresearcher/SOUL.md",   "provider": "lmstudio-win",  "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2", "affinity": "win", "gateway": "http://127.0.0.1:18789" }
+    "mac-researcher": {
+      "soul": "bin/agents/mac-researcher/SOUL.md",
+      "provider": "lmstudio-mac",
+      "model": "Qwen3.5-9B-MLX-4bit",
+      "affinity": "mac",
+      "gateway": "http://127.0.0.1:18789"
+    },
+    "win-researcher": {
+      "soul": "bin/agents/win-researcher/SOUL.md",
+      "provider": "lmstudio-win",
+      "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
+      "affinity": "win",
+      "gateway": "http://127.0.0.1:18789"
+    },
+    "coder": {
+      "soul": "bin/agents/coder/SOUL.md",
+      "provider": "lmstudio-win",
+      "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
+      "affinity": "win",
+      "gateway": "http://127.0.0.1:18789"
+    },
+    "priority-subagent": {
+      "soul": "bin/agents/coder/SOUL.md",
+      "provider": "lmstudio-win",
+      "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
+      "affinity": "win",
+      "gateway": "http://127.0.0.1:18789"
+    },
+    "autoresearcher": {
+      "soul": "bin/agents/autoresearcher/SOUL.md",
+      "provider": "lmstudio-win",
+      "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
+      "affinity": "win",
+      "gateway": "http://127.0.0.1:18789"
+    }
   },
   "agents": [
     {
@@ -28,7 +61,11 @@
       "skill_path": "agents/orchestrator/oramasys-orchestrator.md",
       "logic_path": "agents/orchestrator/orchestrator_logic.py",
       "max_instances": 1,
-      "tools": ["state_manager", "message_bus", "all_agent_delegators"]
+      "tools": [
+        "state_manager",
+        "message_bus",
+        "all_agent_delegators"
+      ]
     },
     {
       "id": "context-agent",
@@ -38,7 +75,12 @@
       "skill_path": "agents/context/context-immersion-agent.md",
       "logic_path": "agents/context/context_tools.py",
       "max_instances": 3,
-      "tools": ["git_history", "documentation_reader", "code_analyzer", "lessons_db"]
+      "tools": [
+        "git_history",
+        "documentation_reader",
+        "code_analyzer",
+        "lessons_db"
+      ]
     },
     {
       "id": "architect-agent",
@@ -48,7 +90,11 @@
       "skill_path": "agents/architect/visionary-architect-agent.md",
       "logic_path": "agents/architect/architecture_tools.py",
       "max_instances": 2,
-      "tools": ["module_decomposer", "interface_designer", "diagram_generator"]
+      "tools": [
+        "module_decomposer",
+        "interface_designer",
+        "diagram_generator"
+      ]
     },
     {
       "id": "refiner-agent",
@@ -58,7 +104,11 @@
       "skill_path": "agents/refiner/ruthless-refiner-agent.md",
       "logic_path": "agents/refiner/refinement_tools.py",
       "max_instances": 2,
-      "tools": ["complexity_analyzer", "redundancy_detector", "rubric_evaluator"]
+      "tools": [
+        "complexity_analyzer",
+        "redundancy_detector",
+        "rubric_evaluator"
+      ]
     },
     {
       "id": "executor-agent",
@@ -68,7 +118,12 @@
       "skill_path": "agents/executor/masterful-executor-agent.md",
       "logic_path": "agents/executor/execution_tools.py",
       "max_instances": 5,
-      "tools": ["code_generator", "test_generator", "linter", "performance_profiler"]
+      "tools": [
+        "code_generator",
+        "test_generator",
+        "linter",
+        "performance_profiler"
+      ]
     },
     {
       "id": "verifier-agent",
@@ -78,7 +133,11 @@
       "skill_path": "agents/verifier/verification-agent.md",
       "logic_path": "agents/verifier/verification_tools.py",
       "max_instances": 2,
-      "tools": ["test_runner", "diff_analyzer", "scenario_generator"]
+      "tools": [
+        "test_runner",
+        "diff_analyzer",
+        "scenario_generator"
+      ]
     },
     {
       "id": "crystallizer-agent",
@@ -88,7 +147,11 @@
       "skill_path": "agents/crystallizer/vision-crystallizer-agent.md",
       "logic_path": "agents/crystallizer/documentation_tools.py",
       "max_instances": 1,
-      "tools": ["diagram_generator", "lessons_db", "documentation_writer"]
+      "tools": [
+        "diagram_generator",
+        "lessons_db",
+        "documentation_writer"
+      ]
     }
   ],
   "autoresearch_agents": {
@@ -102,7 +165,7 @@
         "Call CIDF decide() before editing train.py (rank 2: direct_typing on local file)",
         "Deploy train.py via autoresearch_bridge.deploy_train_py() (scp)",
         "Dispatch run via autoresearch_bridge.run_experiment_on_gpu()",
-        "Flip swarm_state.md GPU: IDLE→BUSY before run, BUSY→IDLE after fetch_run_log()"
+        "Flip swarm_state.md GPU: IDLE\u2192BUSY before run, BUSY\u2192IDLE after fetch_run_log()"
       ],
       "max_instances": 1,
       "idempotency": "AgentTracker.find_existing('autoresearch-coder', task_hash)"
@@ -114,7 +177,7 @@
       "model_role": "autoresearch-critic",
       "responsibilities": [
         "Read log.txt via autoresearch_bridge.fetch_run_log()",
-        "Parse val_bpb programmatically — LINT-002 verification_required=True (no visual confirmation)",
+        "Parse val_bpb programmatically \u2014 LINT-002 verification_required=True (no visual confirmation)",
         "Write findings to swarm_state.md evaluator_findings section"
       ],
       "max_instances": 1,
@@ -135,22 +198,22 @@
     }
   },
   "routing": {
-    "task_received":          "orchestrator",
-    "context_needed":         "context-agent",
-    "design_needed":          "architect-agent",
-    "refinement_needed":      "refiner-agent",
-    "implementation_needed":  "executor-agent",
-    "verification_needed":    "verifier-agent",
-    "documentation_needed":   "crystallizer-agent",
-    "autoresearch_received":  "autoresearch-orchestrator",
-    "autoresearch_coding":    "autoresearch-coder",
-    "autoresearch_eval":      "autoresearch-evaluator"
+    "task_received": "orchestrator",
+    "context_needed": "context-agent",
+    "design_needed": "architect-agent",
+    "refinement_needed": "refiner-agent",
+    "implementation_needed": "executor-agent",
+    "verification_needed": "verifier-agent",
+    "documentation_needed": "crystallizer-agent",
+    "autoresearch_received": "autoresearch-orchestrator",
+    "autoresearch_coding": "autoresearch-coder",
+    "autoresearch_eval": "autoresearch-evaluator"
   },
   "quality_gates": {
     "context_confidence_min": 0.7,
-    "elegance_threshold":     0.8,
-    "max_refinement_loops":   3,
-    "max_executor_agents":    5,
-    "max_nesting_depth":      3
+    "elegance_threshold": 0.8,
+    "max_refinement_loops": 3,
+    "max_executor_agents": 5,
+    "max_nesting_depth": 3
   }
 }

@@ -41,7 +41,7 @@ uvx code-review-graph build --repo "$REPO"    # if status shows nodes: 0
 
 ### Delta (local / uncommitted)
 
-```
+```text
 list_graph_stats_tool (if unsure)
   → detect_changes_tool
   → query_graph_tool / get_impact_radius_tool on hot symbols
@@ -52,7 +52,7 @@ list_graph_stats_tool (if unsure)
 
 ### PR / branch review
 
-```
+```text
 detect_changes_tool (or PR file list + graph refresh)
   → get_impact_radius_tool + get_affected_flows_tool
   → get_review_context_tool
@@ -62,7 +62,7 @@ detect_changes_tool (or PR file list + graph refresh)
 
 ### Explore unknown area (no diff yet)
 
-```
+```text
 get_architecture_overview_tool
   → semantic_search_nodes_tool
   → query_graph_tool (callers_of / callees_of)

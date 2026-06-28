@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # Fable 5 Distillation To-Do List
 
 > /autoplan-reviewed 2026-06-13 (Codex + Claude, 6/6 consensus). v1 = offline distiller; v2 = live/stateful infra.

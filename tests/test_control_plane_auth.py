@@ -168,9 +168,12 @@ def test_verify_accepts_pt_persisted_token_without_env(monkeypatch, tmp_path):
     assert resolved_control_plane_token() == "pt-only-token"
 
 
-def test_portal_loopback_index_injects_cp_fetch_when_enforced(monkeypatch):
+def test_portal_loopback_index_injects_cp_fetch_when_enforced(monkeypatch, tmp_path):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "loopback-ui-token")
+    # Redirect _WEB_DIST to an empty tmp dir so the React FileResponse path is
+    # skipped and the legacy HTML template (which injects cpFetch) is served.
+    monkeypatch.setattr(portal_server, "_WEB_DIST", tmp_path)
 
     async def _fake_status():
         return {"services": {}, "routing": None, "activity": [], "agents": []}

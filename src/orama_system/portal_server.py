@@ -8,7 +8,7 @@ Routes:
   GET  /           HTML dashboard (meta-refresh every 10s)
   GET  /api/status JSON status of all services
   POST /api/user-input  proxy to PT /user-input (portal textbox handler)
-GET  /health     {"status": "ok", "version": "0.9.9.9"}
+GET  /health     {"status": "ok", "version": "1.1.0.0"}
 """
 from __future__ import annotations
 
@@ -61,7 +61,7 @@ except ImportError:
 log = logging.getLogger("ultrathink.portal")
 logging.basicConfig(level=logging.INFO)
 
-VERSION = "0.9.9.9"
+VERSION = "1.1.1.0"
 
 _CLIENT_ERROR_FALLBACK = "Request failed"
 
@@ -1869,6 +1869,94 @@ async def api_job_artifacts_proxy(job_id: str):
                 "redacted_fields": [],
                 "error": _client_safe_error(exc),
             }
+
+
+# ── OramaClaw conflict resolution routes (P2-6) ───────────────────────────────
+
+_ORAMACLAW_STATE_DIR_DEFAULT = Path.home() / ".openclaw" / "state" / "oramaclaw"
+
+
+def _oramaclaw_state_dir() -> Path:
+    # V1 limitation: only the default/env-var state dir is visible to the portal.
+    # Targets with a custom state_dir field in their ConfigTarget are invisible here.
+    # Track for v2: accept a target parameter and thread it from the API routes.
+    raw = os.environ.get("ORAMACLAW_STATE_DIR", "")
+    if raw:
+        return Path(raw)
+    return _ORAMACLAW_STATE_DIR_DEFAULT
+
+
+def _read_pending_resolutions() -> list:
+    state_file = _oramaclaw_state_dir() / "pending-resolutions.json"
+    try:
+        if state_file.exists():
+            data = json.loads(state_file.read_text(encoding="utf-8"))
+            if isinstance(data, list):
+                return data
+            log.warning("pending-resolutions is not a list: %s", state_file)
+    except (json.JSONDecodeError, OSError) as exc:
+        log.warning("_read_pending_resolutions: cannot read %s: %s", state_file, exc)
+    return []
+
+
+def _write_pending_resolutions(records: list) -> None:
+    from datetime import datetime, timezone as _tz
+    state_dir = _oramaclaw_state_dir()
+    state_dir.mkdir(parents=True, exist_ok=True)
+    dest = state_dir / "pending-resolutions.json"
+    tmp = state_dir / "pending-resolutions.json.tmp"
+    tmp.write_text(json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, dest)
+
+
+class OramaclawResolveRequest(BaseModel):
+    choice: str
+
+
+@app.get("/api/oramaclaw/conflicts")
+async def api_oramaclaw_conflicts():
+    """Return all pending oramaclaw conflict resolutions."""
+    state_file = _oramaclaw_state_dir() / "pending-resolutions.json"
+    if not state_file.exists():
+        log.warning(
+            "oramaclaw state file not found at %s; portal conflict queue will be "
+            "empty until oramaclaw apply runs",
+            state_file,
+        )
+    records = _read_pending_resolutions()
+    return {"conflicts": records}
+
+
+@app.post("/api/oramaclaw/conflicts/{resolution_id}/resolve")
+async def api_oramaclaw_resolve(resolution_id: str, req: OramaclawResolveRequest):
+    """Mark a pending oramaclaw conflict as resolved with the given choice."""
+    from datetime import datetime, timezone as _tz
+    from oramaclaw.store import LockHeld, _acquire_lock, _release_lock
+
+    state_dir = _oramaclaw_state_dir()
+    lock_path = state_dir / "oramaclaw.lock"
+    try:
+        _acquire_lock(lock_path)
+    except LockHeld as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={"error": "oramaclaw lock held", "pid": exc.pid},
+        ) from exc
+    try:
+        records = _read_pending_resolutions()
+        found = False
+        for record in records:
+            if record.get("resolution_id") == resolution_id:
+                record["resolved_at"] = datetime.now(_tz.utc).isoformat()
+                record["chosen"] = req.choice
+                found = True
+                break
+        if not found:
+            raise HTTPException(status_code=404, detail={"error": "not found"})
+        _write_pending_resolutions(records)
+    finally:
+        _release_lock(lock_path)
+    return {"ok": True, "resolution_id": resolution_id, "chosen": req.choice}
 
 
 def _parse_env_file(path: "Path") -> Dict[str, str]:
