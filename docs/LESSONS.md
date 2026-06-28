@@ -47,6 +47,20 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-06-28 — Self-improve merge FINAL approved (round 4) | Cursor
+
+**Approval:** operator `approve lessons` (round 4) — union with rounds 1–3  
+**Sources:** `self-improve-merge-final-proposed.md` (peer inbox)  
+**PT memory:** `lesson_1f9c927792ba`, `lesson_203c342c1e85`
+
+**What was learned**
+
+- **H3 falsified** — Win 27B latency penalty on trivial prompts; `routing.yml` routes by task class, not universal Win speed win.
+- **Monitor URLs** — Mac `/co-orchestration/macos`; Win `/peer-inbox`.
+- **Merge FINAL** — remaining PROPOSED bullets union into existing lessons (no duplicate rows).
+
+---
+
 ### 2026-06-28 — Cycle 003 + graceful degradation ladders (operator approved) | Cursor
 
 **Approval:** operator `approve lessons` (round 3) · **Fan-out:** `2026-06-28-coord-003`  
