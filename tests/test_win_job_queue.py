@@ -37,3 +37,15 @@ def test_skip_mac_deliverables():
     q = _load_queue()
     assert q.is_actionable_assignment("mac-h4-comparison.md", "autoresearch/gpu-done", "mac") is False
     assert q.is_actionable_assignment("win-autoresearcher-h5-cross-frugal.md", "autoresearch/gpu-run", "mac") is True
+
+
+def test_prune_pending_drops_noise():
+    q = _load_queue()
+    state = q._empty_state()
+    state["autoresearcher"]["pending"] = [
+        {"id": "mac-h4-comparison.md", "filename": "mac-h4-comparison.md", "topic": "autoresearch/gpu-done"},
+        {"id": "win-autoresearcher-h5-gpu.md", "filename": "win-autoresearcher-h5-gpu.md", "topic": "autoresearch/gpu-run"},
+    ]
+    removed = q.prune_pending(state)
+    assert "mac-h4-comparison.md" in removed
+    assert [j["id"] for j in state["autoresearcher"]["pending"]] == ["win-autoresearcher-h5-gpu.md"]

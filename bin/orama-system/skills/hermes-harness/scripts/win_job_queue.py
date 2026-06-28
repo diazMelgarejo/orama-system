@@ -117,7 +117,25 @@ def _job_id(filename: str) -> str:
     return filename
 
 
+def prune_pending(state: dict[str, Any]) -> list[str]:
+    """Drop pending jobs that fail is_actionable_assignment (stale inbox noise)."""
+    removed: list[str] = []
+    for role in ROLES:
+        kept: list[dict[str, Any]] = []
+        for job in state[role]["pending"]:
+            filename = str(job.get("filename") or job.get("id") or "")
+            topic = str(job.get("topic") or "")
+            source = str(job.get("source") or "")
+            if is_actionable_assignment(filename, topic, source):
+                kept.append(job)
+            else:
+                removed.append(filename)
+        state[role]["pending"] = kept
+    return removed
+
+
 def enqueue_from_inbox(state: dict[str, Any]) -> list[dict[str, Any]]:
+    prune_pending(state)
     known = set()
     for role in ROLES:
         if state[role]["active"]:
@@ -150,6 +168,7 @@ def enqueue_from_inbox(state: dict[str, Any]) -> list[dict[str, Any]]:
             "id": jid,
             "filename": filename,
             "topic": topic,
+            "source": source,
             "fanout_id": meta.get("fanout_id") or "",
             "priority": _priority(meta, body),
             "enqueued_at": int(time.time()),
@@ -213,6 +232,36 @@ def cmd_next(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_prune(_args: argparse.Namespace) -> int:
+    state = load_queue()
+    removed = prune_pending(state)
+    save_queue(state)
+    print(json.dumps({"removed": removed, "status": cmd_status_data(state)}, indent=2))
+    return 0
+
+
+def cmd_complete_pending(args: argparse.Namespace) -> int:
+    """Move a pending job to done without claiming (reconcile already-finished work)."""
+    state = load_queue()
+    role = args.role
+    jid = args.job_id
+    found: dict[str, Any] | None = None
+    for job in state[role]["pending"]:
+        if job["id"] == jid:
+            found = job
+            break
+    if not found:
+        raise SystemExit(f"pending job not found: {jid} in {role}")
+    state[role]["pending"] = [j for j in state[role]["pending"] if j["id"] != jid]
+    found["completed_at"] = int(time.time())
+    if args.note:
+        found["note"] = args.note
+    state[role]["done"].append(found)
+    save_queue(state)
+    print(json.dumps({"status": "reconciled", "job": found}, indent=2))
+    return 0
+
+
 def cmd_complete(args: argparse.Namespace) -> int:
     role = args.role
     state = load_queue()
@@ -253,6 +302,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("enqueue", help="Add inbox jobs to pending queues").set_defaults(
         func=cmd_enqueue
     )
+    sub.add_parser("prune", help="Remove non-actionable jobs from pending").set_defaults(
+        func=cmd_prune
+    )
     sub.add_parser("status", help="Show queue state").set_defaults(func=cmd_status)
     sub.add_parser("run-once", help="Enqueue + claim one job per idle role").set_defaults(
         func=cmd_run_once
@@ -266,6 +318,12 @@ def main(argv: list[str] | None = None) -> int:
     done.add_argument("role", choices=ROLES)
     done.add_argument("--note", default="", help="Completion note / deliverable")
     done.set_defaults(func=cmd_complete)
+
+    recon = sub.add_parser("complete-pending", help="Mark a pending job done (reconcile)")
+    recon.add_argument("role", choices=ROLES)
+    recon.add_argument("job_id", help="Pending job id (filename)")
+    recon.add_argument("--note", default="", help="Completion note")
+    recon.set_defaults(func=cmd_complete_pending)
 
     args = p.parse_args(argv)
     return int(args.func(args))
