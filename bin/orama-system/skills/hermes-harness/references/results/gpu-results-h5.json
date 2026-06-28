@@ -1,0 +1,68 @@
+{
+  "fanout_id": "2026-06-28-coord-003",
+  "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
+  "base_url": "http://localhost:1234/v1",
+  "max_iterations": 5,
+  "tasks": [
+    {
+      "task_id": "h5-clamp",
+      "title": "Implement clamp(value, lo, hi)",
+      "iterations_to_pass": 1,
+      "total_wall_s": 63.57,
+      "total_tokens": 287,
+      "passed": true,
+      "iterations": [
+        {
+          "iteration": 1,
+          "wall_s": 63.57,
+          "prompt_tokens": 49,
+          "completion_tokens": 238,
+          "total_tokens": 287,
+          "passed": true,
+          "rubric_notes": "clamp passes edge cases",
+          "content_chars": 864
+        }
+      ]
+    },
+    {
+      "task_id": "h5-pytest",
+      "title": "Minimal pytest for add(a, b)",
+      "iterations_to_pass": 1,
+      "total_wall_s": 70.46,
+      "total_tokens": 314,
+      "passed": true,
+      "iterations": [
+        {
+          "iteration": 1,
+          "wall_s": 70.46,
+          "prompt_tokens": 47,
+          "completion_tokens": 267,
+          "total_tokens": 314,
+          "passed": true,
+          "rubric_notes": "pytest module parses; has test + assert for add",
+          "content_chars": 1062
+        }
+      ]
+    },
+    {
+      "task_id": "h5-refactor",
+      "title": "DRY refactor for area helpers",
+      "iterations_to_pass": 1,
+      "total_wall_s": 145.88,
+      "total_tokens": 679,
+      "passed": true,
+      "iterations": [
+        {
+          "iteration": 1,
+          "wall_s": 145.88,
+          "prompt_tokens": 103,
+          "completion_tokens": 576,
+          "total_tokens": 679,
+          "passed": true,
+          "rubric_notes": "refactor shows shared pi / DRY structure",
+          "content_chars": 2072
+        }
+      ]
+    }
+  ]
+}
