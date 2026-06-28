@@ -365,11 +365,15 @@ function Invoke-DiscoverEndpoints {
         $env:PERPETUA_TOOLS_PATH = $PtDir
     }
     _Info 'ip' "Probing LAN topology ($([IO.Path]::GetFileName($discover)) --force)..."
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
     $discoverOutput = & $UsPython $discover --force 2>&1
+    $discoverExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
     $discoverOutput | ForEach-Object { "  [discover] $_" } |
         Tee-Object -FilePath (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Append
-    if ($LASTEXITCODE -ne 0) {
-        _Warn 'ip' "discover.py exited $LASTEXITCODE — continuing with discovery state / env"
+    if ($discoverExit -ne 0) {
+        _Warn 'ip' "discover.py exited $discoverExit — continuing with discovery state / env"
     } else {
         _Info 'ip' 'LAN probe complete'
     }
