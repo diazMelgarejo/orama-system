@@ -74,3 +74,22 @@ category-nested Hermes skill paths.
 - Raw Hermes hub cache, usage telemetry, lock files, or provider configuration.
 - Invented local model names. Use live provider IDs and require a fast
   chat-completions canary before dispatch.
+
+## Post-Edit Validation
+
+After editing any ECC/PT-orama skill body, run before declaring DONE:
+
+```python
+import yaml, re, pathlib
+path = pathlib.Path("bin/orama-system/skills/<skill-name>/SKILL.md")
+content = path.read_text(encoding="utf-8")
+assert content.startswith("---")
+m = re.search(r'\n---\s*\n', content[3:])
+fm = yaml.safe_load(content[3:m.start()+3])
+assert "name" in fm and "description" in fm
+assert len(fm["description"]) <= 1024
+assert len(content) <= 100_000
+```
+
+Keep changes additive. Redirect stubs stay pointer-only — enrich the canonical
+superset named in [`hermes-harness/references/hermes-skill-absorption-map.md`](../hermes-harness/references/hermes-skill-absorption-map.md).
