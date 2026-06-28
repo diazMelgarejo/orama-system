@@ -1,7 +1,7 @@
 # Hermes Skill Absorption Map
 
-> **Status:** ✅ Complete on `main` (2026-06-28). Hermes-local skills are thin
-> adapters; durable behavior lives in orama-system canonical cards below.
+> **Status:** ✅ Complete on `main` (2026-06-28, audit follow-up). Hermes-local skills
+> are thin adapters; durable behavior lives in orama-system canonical cards below.
 >
 > Inventory audit: [`hermes-ecc-fork-inventory.md`](hermes-ecc-fork-inventory.md)  
 > Onboarding plan: [`docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md`](../../../../docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md) § Skill Absorption
@@ -13,7 +13,35 @@
 | `hermes-agent` | Redirect | `hermes-harness` | `bin/orama-system/skills/hermes-harness/SKILL.md` |
 | `pt-orama-harness-integration` | Redirect | `hermes-harness` | same |
 | `perpetua-hardware` | Redirect | `hardware-affinity-gate` | `bin/orama-system/skills/hardware-affinity-gate/SKILL.md` |
-| `local-inference` | Redirect | `hardware-affinity-gate` | same (via `perpetua-hardware` stub) |
+| `local-inference` | Redirect | `hardware-affinity-gate` | same (via `perpetua-hardware` stub chain) |
+
+## Superseded archive (do not use)
+
+| Archive slug | State | Superseded by | Win LM Studio coder (canonical) |
+|--------------|-------|---------------|----------------------------------|
+| `archive/llm-council-orchestration-absorbed` | **SUPERSEDED** | `commands/pt-orama-council` + `references/hermes-council-review-gates.md` | `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2` (not invented "Qwen 3.6 Coder") |
+
+Archive path: `bin/orama-system/skills/archive/llm-council-orchestration-absorbed/SKILL.md` — pointer only.
+
+## `.agents` thin wrappers (Codex / repo skills)
+
+| Slug | `.agents` path | Canonical target |
+|------|----------------|------------------|
+| `hermes-agent` | `.agents/skills/hermes-agent/SKILL.md` | `hermes-harness` |
+| `pt-orama-harness-integration` | `.agents/skills/pt-orama-harness-integration/SKILL.md` | `hermes-harness` |
+| `local-inference` | `.agents/skills/local-inference/SKILL.md` | `hardware-affinity-gate` |
+| `perpetua-hardware` | `.agents/skills/perpetua-hardware/SKILL.md` | `hardware-affinity-gate` (orama methodology) |
+| `hermes-harness` | `.agents/skills/hermes-harness/SKILL.md` | `hermes-harness` |
+
+**Dual-layer hardware routing:**
+
+| Layer | Where | Role |
+|-------|-------|------|
+| orama methodology | `hardware-affinity-gate` | PREFER/ALLOW/NEVER, canaries, Hermes launchers |
+| PT runtime SSoT | `$PERPETUA_TOOLS_PATH` policy YAML + `hardware_policy_cli.py` | Enforcement at dispatch |
+| Hermes edge | `commands/pt-hardware-policy` | Windows Hermes → PT CLI |
+
+`.agents/perpetua-hardware` points at **hardware-affinity-gate**, not `Perpetua-Tools/hardware/`.
 
 ## Absorbed into `hermes-harness` (superset)
 
@@ -21,7 +49,8 @@
 |--------|------------------|-------------------|
 | Hermes Agent onboarding | Install, providers, thin wrappers, Windows bring-up | `hermes-harness/SKILL.md` |
 | `pt-orama-harness-integration` | Cross-harness protocol, partner dispatch | `references/cross-harness-protocol.md`, `references/partner-prompt-contract.md` |
-| `pt-orama-council` (fork) | Council safety gates | `references/hermes-council-review-gates.md`, `commands/pt-orama-council/SKILL.md` |
+| `llm-council-orchestration` (archive) | Council gates + protocol | `commands/pt-orama-council/SKILL.md`, `references/hermes-council-review-gates.md` |
+| `pt-orama-council` (fork) | Council safety gates | same |
 | `pt-orama-review` | Review command | `commands/pt-orama-review/SKILL.md` |
 | `pt-orama-delegate` | Delegate command | `commands/pt-orama-delegate/SKILL.md` |
 | Windows harness | Install, canaries, PATH, OpenClaw optional | `platform/windows/*`, `references/win-localhost-runtime-checklist.md` |
@@ -75,7 +104,7 @@ Wrappers must contain `created_by: agent` marker; user wrappers are never clobbe
 
 ```bash
 # Redirect stubs have no procedure beyond pointer
-grep -l "REDIRECT" bin/orama-system/skills/*/SKILL.md
+grep -l "REDIRECT\|SUPERSEDED" bin/orama-system/skills/*/SKILL.md bin/orama-system/skills/archive/*/SKILL.md
 
 # Thin Hermes wrappers
 python bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py --verify

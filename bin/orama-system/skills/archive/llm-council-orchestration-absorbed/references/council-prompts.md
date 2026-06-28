@@ -1,5 +1,11 @@
 # LLM Council Prompts
 
+> **ARCHIVED / SUPERSEDED.** Use
+> [`../../hermes-harness/commands/pt-orama-council/SKILL.md`](../../hermes-harness/commands/pt-orama-council/SKILL.md)
+> and [`../../hermes-harness/references/hermes-council-review-gates.md`](../../hermes-harness/references/hermes-council-review-gates.md).
+> Win LM Studio coder model: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
+> (not "Qwen 3.6 Coder" below).
+
 Use these prompt templates to coordinate the three-model council.
 
 ## 1. Host/Executor Prompt (Codex/orama)
