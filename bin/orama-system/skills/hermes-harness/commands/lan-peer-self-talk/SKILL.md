@@ -3,7 +3,7 @@ name: lan-peer-self-talk
 description: >-
   Probe and coordinate with the parallel orama-system install on the LAN peer
   (Mac↔Win). Uses discovery JSON + HTTP — no SSH required.
-version: 1.0.0
+version: 1.0.1
 license: Apache 2.0
 compatibility: hermes, macos, windows
 parent_skill: hermes-harness
@@ -17,55 +17,36 @@ allowed-tools: bash, file-operations
 
 # LAN Peer Self-Talk
 
-Use when both orama-system clones (Mac + Win) are on the same LAN and you need
-to verify they can see each other — inference endpoints **and** optional portal
-health — without inventing new RPC.
+> **Canonical operator instructions (Mac + Win — identical):**
+> [`../../references/lan-peer-self-talk.md` § Operator playbook](../../references/lan-peer-self-talk.md#operator-playbook)
+>
+> Both machines must `git pull --ff-only origin main` and follow that section verbatim.
 
-## Prerequisites
+## Procedure
 
-1. `last_discovery.json` fresh (`scripts/discover-lm-studio.sh` or PT watcher).
-2. On **both** hosts when portal peer access is needed:
-
-   ```dotenv
-   PORTAL_BIND_LAN=1
-   ORAMA_CONTROL_PLANE_TOKEN=<shared-secret>
-   ```
-
-3. Locality rule: probe peer inference via LAN IP; probe local via `localhost`.
-   See [`../../references/lan-endpoint-contract.md`](../../references/lan-endpoint-contract.md).
-
-## Run probe
-
-```bash
-python3 bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py --json
-```
-
-Windows:
-
-```powershell
-python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json
-```
+1. Load the [Operator playbook](../../references/lan-peer-self-talk.md#operator-playbook).
+2. Verify prerequisites (`.env.local`, discovery, thin wrapper installed).
+3. Run `probe_lan_peer.py --json` or accept the slash command `/lan-peer-self-talk`.
+4. Return core result with `checks[]` from probe output.
 
 ## Envelope
 
 ```json
 {
   "skill_id": "lan-peer-self-talk",
-  "args": { "probe": "full" },
+  "args": { "probe": "full", "json": true },
   "agent_id": "hermes",
   "harness": "hermes",
-  "orama_system_root": "$ORAMA_SYSTEM_PATH"
+  "orama_system_root": "$ORAMA_SYSTEM_PATH",
+  "transport": { "partner": "hermes", "profile": "lan-peer-probe" }
 }
 ```
 
-Return core result with `checks` populated from probe output.
-
-## Windows operator checklist
-
-Full PowerShell TODO: [`../../../../../../docs/plans/2026-06-28-windows-powershell-todo.md`](../../../../../../docs/plans/2026-06-28-windows-powershell-todo.md)
-
 ## References
 
-- [`../../references/lan-peer-self-talk.md`](../../references/lan-peer-self-talk.md) — architecture + minimal changes
+- [`../../references/lan-peer-self-talk.md`](../../references/lan-peer-self-talk.md) — architecture + operator playbook
+- [`../../references/lan-endpoint-contract.md`](../../references/lan-endpoint-contract.md) — localhost vs LAN IP
 - [`../../references/win-localhost-runtime-checklist.md`](../../references/win-localhost-runtime-checklist.md)
 - [`../../scripts/probe_lan_peer.py`](../../scripts/probe_lan_peer.py)
+- Mac handoff: [`../../../../../../docs/plans/2026-06-28-mac-e2e-handoff.md`](../../../../../../docs/plans/2026-06-28-mac-e2e-handoff.md)
+- Win checklist: [`../../../../../../docs/plans/2026-06-28-windows-powershell-todo.md`](../../../../../../docs/plans/2026-06-28-windows-powershell-todo.md)

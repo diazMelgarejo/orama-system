@@ -90,31 +90,21 @@ Expected slash commands: `/pt-hardware-policy`, `/pt-orama-council`, `/pt-orama-
 
 ## 5. LAN peer self-talk (Mac ↔ Win orama installs)
 
-Enable LAN bind **on both hosts** (`.env.local`, not committed):
+**Follow the canonical operator playbook** (identical on Mac and Win):
 
-```dotenv
-PORTAL_BIND_LAN=1
-ORAMA_BIND_LAN=1
-ORAMA_CONTROL_PLANE_TOKEN=<shared-secret-both-machines>
-```
+[`bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md` § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook)
 
-From **Windows**, probe Mac peer:
+Quick probe after playbook setup:
 
 ```powershell
 python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json
 ```
 
-From **Mac** (bash), probe Win peer:
+Hermes slash: `/lan-peer-self-talk`
 
-```bash
-python3 bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py --json
-```
-
-- [ ] Peer `/health` on port 8002 (after `PORTAL_BIND_LAN=1`)
-- [ ] Peer LM Studio `/v1/models` via discovery IP
-- [ ] Optional: peer `/api/status` with shared bearer token
-
-See: [`lan-peer-self-talk.md`](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md)
+- [ ] Playbook §A complete on both hosts
+- [ ] `probe_lan_peer.py --json` all checks PASS or expected SKIP
+- [ ] Hermes thin wrapper installed (`install_hermes_thin_skills.py --verify`)
 
 ---
 
