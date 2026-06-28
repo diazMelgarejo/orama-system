@@ -233,5 +233,6 @@ Command card: [`../commands/lan-peer-self-talk/SKILL.md`](../commands/lan-peer-s
 ## Related
 
 - [`win-localhost-runtime-checklist.md`](win-localhost-runtime-checklist.md)
+- [`docs/guides/lan-peer-mac-win-operator.md`](../../../../docs/guides/lan-peer-mac-win-operator.md) — `docs/` navigation entry (links here)
 - [`docs/plans/2026-06-28-windows-powershell-todo.md`](../../../../docs/plans/2026-06-28-windows-powershell-todo.md)
 - [`ecc-hermes-cross-harness.md`](ecc-hermes-cross-harness.md)
