@@ -1,4 +1,4 @@
-"""Minimal safe markdown → HTML for LAN peer inbox previews (no extra deps)."""
+"""Minimal safe markdown → HTML for LAN peer inbox previews (Windows lane, no CDN)."""
 from __future__ import annotations
 
 import html
