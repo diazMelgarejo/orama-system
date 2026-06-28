@@ -20,7 +20,7 @@ while ((Get-Date) -lt $end) {
     try {
         git fetch origin main --quiet 2>&1 | Out-Null
         $behind = (git rev-list HEAD..origin/main --count 2>$null)
-        if ($behind -gt 0) { "git: behind origin/main by $behind — run git pull" | Tee-Object -FilePath $Log -Append }
+        if ($behind -gt 0) { "git: behind origin/main by $behind - run git pull" | Tee-Object -FilePath $Log -Append }
         else { "git: up to date with origin/main" | Tee-Object -FilePath $Log -Append }
 
         python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json 2>&1 |
