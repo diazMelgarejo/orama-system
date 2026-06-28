@@ -122,7 +122,7 @@ Canonical source of truth:
 
 ## Windows Readiness
 
-- Hermes one-shot: `hermes chat --query \"Reply with exactly: HERMES_READY\" --quiet --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1`
+- Hermes one-shot: `hermes chat --query \"Reply with exactly: HERMES_READY\" --quiet --safe-mode --provider nous --model stepfun/step-3.7-flash:free --max-turns 1`
 - AGY install (save-first — never pipe remote script to iex): `Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile \"$env:TEMP\\agy-install.ps1\"; Get-Content \"$env:TEMP\\agy-install.ps1\" | Select-Object -First 40; & powershell -NoProfile -ExecutionPolicy Bypass -File \"$env:TEMP\\agy-install.ps1\"`
 - AGY readiness: `agy --print \"Reply with exactly: AGY_READY\"` must print visible stdout.
 - LM Studio readiness: `/v1/models` is not enough; require a fast chat-completions canary.
