@@ -127,9 +127,10 @@ No PT code change required if orama portal is the only swarm entrypoint. Confirm
 
 ### Design
 
-1. **Origin guard** on `POST /api/stop`, `/api/restart/*`, `/api/rediscover/approve`:
+1. **Origin guard** on `POST /api/stop`, `/api/restart/*`, `/api/rediscover` (and future `/api/rediscover/approve`):
    - If `Origin` or `Referer` present and not loopback/same-host → 403
    - Loopback requests without Origin allowed (curl/cli)
+   - **Same-host policy:** compare hostnames only (port ignored) so localhost operators on portal :8002, PT :8000, and orama :8001 may POST lifecycle actions without full origin equality
 2. **`POST /api/auth/session`** (auth required):
    - Validates bearer → sets `HttpOnly; SameSite=Strict; Path=/` cookie (short TTL, e.g. 8h)
    - Legacy dashboard `cpFetch` sends `credentials: 'include'`
