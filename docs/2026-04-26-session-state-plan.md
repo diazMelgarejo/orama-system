@@ -92,8 +92,8 @@ All 8 objects in `git fsck --unreachable` are accounted for. **Nothing was lost.
 
 | SHA | Type | Origin | Resolution |
 |-----|------|---------|-----------|
-| `eebb5f9` | commit | Gemini's "symlink portability" commit (not merged as-is) | Content rescued into LESSONS.md (`1a6b010`) under approved identity |
-| `8362ce0` | commit | Gemini's "3-tier IP detection" commit (not merged as-is) | IP logic rebuilt correctly in `discover.py` |
+| `eebb5f9` | commit | Gemini's "symlink portability" commit (bad auth identity; not merged as-is) | Content rescued into LESSONS.md (`1a6b010`) under approved identity |
+| `8362ce0` | commit | Gemini's "3-tier IP detection" commit (bad auth identity; not merged as-is) | IP logic rebuilt correctly in `discover.py` |
 | `ab197ef` | commit | Old combined submodule commit (force-pushed over) | Superseded by the split commits |
 | `28dcbff` | stash object | Stash `stash@{1}` root (dropped stash) | Dropped — content was recovered before drop |
 | `d0b62c0` | stash object | Another stash artifact | Same as above |
@@ -128,6 +128,7 @@ gh pr merge 21 --merge --repo diazMelgarejo/Perpetua-Tools
 
 # Step 2: Merge orama-system salvage → main
 cd "<workspace>/orama-system"
+# historical session path: /Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system
 git checkout main && git pull origin main
 git merge 2026-04-24-001-orama-salvage --no-ff -m "chore(merge): orama-system salvage → main"
 git push origin main
@@ -137,6 +138,7 @@ git push origin main
 
 ```bash
 cd "<workspace>/orama-system"
+# historical session path: /Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system
 git mv .claude/skills/ultrathink-system .claude/skills/orama
 git commit -m "feat(rename): ultrathink-system skill dir → orama"
 ```
@@ -212,6 +214,7 @@ Create `.claude/skills/self-improve/SKILL.md` in both PT and orama-system:
 
 Append dated entry capturing:
 - IP fix methodology (cross-config audit, `--force` discovery)
+- Gemini commit rejection pattern (bad author identity → discard + rescue content)
 - Unmerged external commits: rescue content into LESSONS.md, then land under approved git identity
 - alphaclaw-session skill creation pattern (profile-based, not config-based)
 - Discovery tier model (Tier 1-4 graceful degradation)
@@ -235,7 +238,7 @@ Append dated entry capturing:
 
 2. **`discover.py --force` after any IP change** — the 5-min TTL caches stale state and hides connectivity problems.
 
-3. **Merge only commits that pass the repo identity gate** — run `bash scripts/git/check_identity.sh` before committing; rescue useful unmerged work into LESSONS.md and recommit under approved identity.
+3. **Merge only commits that pass the repo identity gate** — run `bash scripts/git/check_identity.sh` before committing; rescue useful unmerged work into LESSONS.md and recommit under approved identity. Historical note: Gemini-authored commits with forbidden identities were not merged as-is; content was rescued manually.
 
 4. **`git fsck --unreachable` is the truth oracle** — 8 objects, all explained. Nothing lost. Run this before panicking about missing commits.
 
@@ -244,8 +247,6 @@ Append dated entry capturing:
 6. **Skill version guards prevent overwrite** — the `BUNDLED` pattern in alphaclaw-session ensures future automation doesn't regress an already-upgraded skill file.
 
 7. **`localhost` is always right on the home node** — don't use LAN IPs for self-referencing. Mac uses `localhost:1234`, Win uses its own `localhost:1234`. LAN IPs are for cross-node calls only.
-
----
 
 ---
 
@@ -305,5 +306,7 @@ Append dated entry capturing:
 
 ---
 
-*Generated: 2026-04-26 | Branch: 2026-04-24-001-orama-salvage | Author: Claude (session recovery + continuation)*
-*Next session: check Seg 3 (gateway up?), then merge orama salvage branch, then live tests.*
+*Generated: 2026-04-26 | Branch: 2026-04-24-001-orama-salvage | Author: Claude (session recovery)*
+*Next session: start with §4 Immediate Next Steps, P0 first.*
+*Continuation: 2026-04-26 second context window — see §7 for Q1–Q3 answers and execution status.*
+*Integrative merge note: 2026-06-28 — harmonized branch + main session-state records (additive, chronological).*
