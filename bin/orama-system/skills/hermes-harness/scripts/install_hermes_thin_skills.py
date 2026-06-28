@@ -99,6 +99,19 @@ HANDOFF NOTES:
 """
 
 
+def is_managed_wrapper(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        return False
+    end = text.find("\n---\n", 4)
+    if end == -1:
+        return False
+    frontmatter = text[4:end]
+    return "created_by: agent" in frontmatter
+
+
 def install(dry_run: bool = False) -> list[Path]:
     written: list[Path] = []
     missing = [spec.canonical for spec in WRAPPERS if not (REPO_ROOT / spec.canonical).is_file()]
@@ -115,14 +128,15 @@ def install(dry_run: bool = False) -> list[Path]:
     for spec in WRAPPERS:
         target = HERMES_SKILLS / spec.slug.removeprefix("pt-orama-") / "SKILL.md"
         if dry_run:
-            print(target)
+            if target.is_file() and not is_managed_wrapper(target):
+                print(f"would skip unmanaged wrapper: {target}")
+            else:
+                print(target)
             continue
 
-        if target.is_file():
-            existing_text = target.read_text(encoding="utf-8")
-            if "created_by: agent" not in existing_text:
-                print(f"skipping user-owned wrapper: {target}")
-                continue
+        if target.is_file() and not is_managed_wrapper(target):
+            print(f"skipped unmanaged wrapper: {target}")
+            continue
 
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(wrapper_text(spec), encoding="utf-8")
@@ -136,6 +150,9 @@ def verify() -> list[str]:
         target = HERMES_SKILLS / spec.slug.removeprefix("pt-orama-") / "SKILL.md"
         if not target.is_file():
             errors.append(f"missing wrapper: {target}")
+            continue
+        if not is_managed_wrapper(target):
+            errors.append(f"unmanaged wrapper preserved: {target}")
             continue
         text = target.read_text(encoding="utf-8")
         for required in ("thin local Hermes", spec.canonical, "AGY_READY", "HERMES_READY"):
