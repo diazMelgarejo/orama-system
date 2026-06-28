@@ -47,3 +47,10 @@ $env:PYTHONIOENCODING = "utf-8"
 ```
 
 See [`windows-onboarding-config.md`](windows-onboarding-config.md) § Partner CLI Paths.
+
+## Git sync (Mac ↔ Win)
+
+Before council or LAN peer work with a dirty tree, use
+[`../../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../git-history-surgery/references/safe-cross-host-sync-reference-card.md)
+— never `git reset --hard` or force-push `main`. Bootstrap Git first:
+[`../../git-history-surgery/references/windows-powershell-runtime-bootstrap.md`](../../git-history-surgery/references/windows-powershell-runtime-bootstrap.md).

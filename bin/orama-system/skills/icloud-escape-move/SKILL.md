@@ -161,7 +161,7 @@ done
 
 This skill is cross-linked with every git skill in orama-system:
 
-- [[git-history-surgery]] — re-anchor / tree-twin verification if a moved repo looks orphaned after the move; shared fail-closed posture.
+- [[git-history-surgery]] — re-anchor / tree-twin verification if a moved repo looks orphaned after the move; shared fail-closed posture. Cross-host `main` sync (non-destructive): [`git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md).
 - [[using-git-worktrees]] — the worktree doctrine. This move relocates where worktrees physically live, and step 3 repairs them; it is the **permanent fix** for the "`* 2/` duplicate dirs" symptom listed in that skill's pre-flight table.
 - [[oramasys-method]] / `references/tdd-gate.md` — after a move, re-run `bash scripts/git/install-local-hooks.sh`; hook scripts must avoid bash 4+ features (`mapfile`). See [`git-history-surgery/references/bash-32-git-script-portability.md`](../git-history-surgery/references/bash-32-git-script-portability.md).
 - [[cidf]] — LINT-006 portable-path rule (`scripts/review/repo_hygiene.py` + `no-workstation-paths.py` hook) that step 6 must satisfy.

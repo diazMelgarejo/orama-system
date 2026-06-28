@@ -124,6 +124,7 @@ $env:PATH = "$env:USERPROFILE\.lmstudio\.internal\utils;$env:PATH"
 
 ## Related
 
+- [`../../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (before push/pull handoff)
 - [`lan-endpoint-contract.md`](lan-endpoint-contract.md) — full IP variable contract
 - [`windows-provider-routing.md`](windows-provider-routing.md) — provider fallback stack
 - [`hermes-windows-partner-readiness.md`](hermes-windows-partner-readiness.md) — canary + readiness matrix

@@ -370,6 +370,7 @@ Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw ow
 ## References
 
 - [`references/lan-peer-self-talk.md`](references/lan-peer-self-talk.md) — Mac↔Win operator playbook (SSOT) · [`docs/guides/lan-peer-mac-win-operator.md`](../../../../docs/guides/lan-peer-mac-win-operator.md)
+- [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive)
 - [`references/hermes-universal-invocation-protocol.md`](references/hermes-universal-invocation-protocol.md) — envelope, layers, result superset
 - [`references/hermes-skill-absorption-map.md`](references/hermes-skill-absorption-map.md) — Hermes → orama absorption status (redirects + supersets)
 - [`references/hermes-ecc-fork-inventory.md`](references/hermes-ecc-fork-inventory.md)

@@ -20,7 +20,9 @@ allowed-tools: bash, file-operations
 > **Canonical operator instructions (Mac + Win — identical):**
 > [`../../references/lan-peer-self-talk.md` § Operator playbook](../../references/lan-peer-self-talk.md#operator-playbook)
 >
-> Both machines must `git pull --ff-only origin main` and follow that section verbatim.
+> Both machines must sync `main` before LAN peer work. Clean tree: `git pull --ff-only origin main`.
+> Dirty tree: [`../../../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../../git-history-surgery/references/safe-cross-host-sync-reference-card.md).
+> Then follow the operator playbook verbatim.
 
 ## Procedure
 
@@ -46,6 +48,7 @@ allowed-tools: bash, file-operations
 
 ## References
 
+- [`../../../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win sync before operator steps
 - [`../../references/lan-peer-self-talk.md`](../../references/lan-peer-self-talk.md) — architecture + operator playbook
 - [`../../references/lan-endpoint-contract.md`](../../references/lan-endpoint-contract.md) — localhost vs LAN IP
 - [`../../references/win-localhost-runtime-checklist.md`](../../references/win-localhost-runtime-checklist.md)

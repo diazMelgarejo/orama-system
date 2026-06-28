@@ -123,7 +123,7 @@ Expected wrapper invariants:
 
 - Each local repo skill directory contains only `SKILL.md`.
 - Each wrapper names a canonical repo root and canonical `SKILL.md` path.
-- Each wrapper requires `git fetch origin --prune` and safe `git pull --ff-only` before using the canonical card.
+- Each wrapper requires `git fetch origin --prune` and safe `git pull --ff-only` before using the canonical card. If the worktree is dirty, use [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md).
 - The canonical card path exists in the current worktree.
 - Wrapper roots validate with Codex `quick_validate.py` under `PYTHONUTF8=1`.
 
