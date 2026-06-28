@@ -3677,3 +3677,45 @@ new Python module with a `Version:` header), register it in `sync_version.py`'s
 See: [`docs/wiki/06-multi-agent-collab.md`](../wiki/06-multi-agent-collab.md) (version registry + full surface table)
 See: [`src/orama_system/_version.py`](../../src/orama_system/_version.py)
 See: [`scripts/sync_version.py`](../../scripts/sync_version.py)
+
+## 2026-06-28 — Claude Sonnet 4.6 — Security hardening COMPLETE, T5 v1.1.1 tagged
+
+### Context
+
+Mac session following Win testdrive (Hermes Phase 6+9 already done). Goal: verify Mac↔Win cross-harness, cut T5 release tags, close all open PRs.
+
+### Learnings
+
+**1. LINT-006 fires on anti-pattern examples in policy docs.**
+Writing a path-policy warning using the real word triggers LINT-006 the same as an actual forbidden path.
+Fix: replace the literal `Users` component with `<user>` in ALL docs that demonstrate what NOT to do.
+Affected: `bin/orama-system/references/codex-cli-v142-dispatch.md`, PT working memory card.
+
+**2. `start.sh --hardware-policy` ≠ live Win LM Studio probe.**
+The flag validates `openclaw.json` model assignments but does NOT curl the Win endpoint.
+Full E2E requires both: (1) `start.sh --hardware-policy` (config clean), then (2) `curl -s --max-time 5 http://${WIN_IP}:1234/v1/models` (live probe). Both must pass for T5 gate.
+
+**3. T5 tagging procedure (both repos, same session).**
+When version files already reflect target (`__version__ = "1.1.1.0"`), just tag:
+```bash
+git tag v1.1.1 -m "message" && git push origin v1.1.1
+```
+Do this in both PT and orama within the same session. Gate: all E2E checks green first.
+
+**4. Win session changes state — REVIEW_QUEUE.md is the sync point.**
+At Mac session start after a Win session, read `PT/.agent/memory/working/REVIEW_QUEUE.md` before doing anything else. The Win session may have completed tasks that were listed as pending. Redoing them wastes cycles and can cause merge conflicts.
+
+**5. `git commit ... | tail -N` truncates failures silently.**
+Pre-commit LINT-006 failure output gets cut off when piped through `| tail -3`. Commit looks like it succeeded (last 3 lines are the push output). Always run `git status --short` immediately after a tail-piped commit to confirm the file is no longer staged.
+
+**6. `git pull --rebase` for divergent branches; content-identical commits dropped silently.**
+When a local commit contains content already upstream (common with episodic memory that was pushed by another session), `git pull --rebase` drops it with "dropping...patch contents already upstream". This is correct, not data loss.
+
+### Outcome
+
+- Both PRs merged (#154 PT, #113 orama) — CI all green.
+- Mac→Win cross-probe ✅ (6 models returned from 192.168.254.100:1234).
+- `v1.1.1` tagged and pushed in both repos.
+- Security hardening plan marked COMPLETE.
+- 6 semantic lessons graduated to PT `.agent/memory`.
+- Only remaining: `openclaw.gateway-auth-token` keychain entry (user must provide value).
