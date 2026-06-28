@@ -642,9 +642,9 @@ fi
 # ── helpers ───────────────────────────────────────────────────────────────────
 
 pid_on_port() {
-  # Cross-platform: lsof (macOS + Linux), then ss (Linux), then fuser (Linux)
+  # Cross-platform: listeners only (ignore outbound/CLOSE_WAIT clients on the port)
   if command -v lsof &>/dev/null; then
-    lsof -ti "tcp:$1" 2>/dev/null | head -1 || true
+    lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1 || true
   elif command -v ss &>/dev/null; then
     ss -tlnp "sport = :$1" 2>/dev/null | grep -oP 'pid=\K\d+' | head -1 || true
   elif command -v fuser &>/dev/null; then
