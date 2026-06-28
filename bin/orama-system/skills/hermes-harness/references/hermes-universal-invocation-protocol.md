@@ -80,6 +80,13 @@ Periscope. v2 may expand schema in `/docs/v2`.
 
 Path casing mismatch on expansion → `warnings[]`, not `blocked` (Windows-safe).
 
+## Optional extensions
+
+`pt-orama-lesson-mining` is an **optional** command card. It is not installed by
+default, is not required for bootstrap or partner dispatch, and does not introduce a
+Perpetua-Tools dependency. Install only with
+`install_hermes_thin_skills.py --include-optional`.
+
 ## Path expansion (runtime only)
 
 1. Read placeholder from envelope (`$ORAMA_SYSTEM_PATH`, `$OPENCLAW_HOME`).
