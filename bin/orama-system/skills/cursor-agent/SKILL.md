@@ -51,7 +51,20 @@ cursor-agent models       # list available models
 
 ```powershell
 iwr -UseBasicParsing https://cursor.com/install.ps1 | iex
-# Installs cursor-agent.exe to %LOCALAPPDATA%\Programs\cursor-agent\
+# Installs to %LOCALAPPDATA%\cursor-agent\ (versioned shims under versions\)
+```
+
+Canonical paths (cross-platform):
+
+| OS | `cursor-agent` binary | Permanent PATH entry |
+|----|----------------------|----------------------|
+| macOS / Linux | `~/.local/bin/cursor-agent` | `~/.local/bin` |
+| Windows | `%LOCALAPPDATA%\cursor-agent\cursor-agent.cmd` | `%LOCALAPPDATA%\cursor-agent` |
+
+Idempotent PATH bootstrap (orama-system repo root):
+
+```powershell
+.\platform\windows\ensure-partner-cli-paths.ps1
 ```
 
 Verify (PowerShell):

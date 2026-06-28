@@ -37,10 +37,10 @@ orama-system **references** PT; it never re-declares NEVER lists in Hermes skill
 
 On the Windows 11 Hermes host:
 
-- **LM Studio** is `http://localhost:1234` (`lmstudio-win` in `openclaw.json`)
+- **LM Studio** is `http://localhost:1234` (local GGUF backend — no `openclaw.json` required)
 - **windows_only** models (27B GGUF, gemma quant) are **allowed here** — this is their physical home
 - **mac_only** / MLX models are **NEVER_WIN** on this host
-- Hermes acts as de facto local orchestrator and/or autoresearcher parallel to Mac orchestrator
+- Hermes is the **sole local orchestrator** on Windows — OpenClaw/AlphaClaw are **not installed** here by operational decision
 
 On Mac/Linux OpenClaw hosts the mirror applies: Mac MLX safe, Win GGUF is NEVER_MAC.
 
@@ -50,24 +50,24 @@ From **orama-system repository root** on Windows. Path resolution order:
 [`../../references/workspace-path-resolution.md`](../../references/workspace-path-resolution.md).
 
 ```powershell
-# Preferred — full gate (list + openclaw.json check)
+# Preferred — list policy + validate Win LM Studio model (no OpenClaw on Windows)
 .\platform\windows\start.ps1 --hardware-policy
 
 # Direct PT CLI only when launcher unavailable (PERPETUA_TOOLS_PATH or PT_HOME)
 $PtDir = if ($env:PERPETUA_TOOLS_PATH) { $env:PERPETUA_TOOLS_PATH } else { $env:PT_HOME }
-python (Join-Path $PtDir 'scripts\hardware_policy_cli.py') --check-openclaw
-python (Join-Path $PtDir 'scripts\hardware_policy_cli.py') --validate "gemma-4-26B-A4B-it-Q4_K_M" win
+python (Join-Path $PtDir 'scripts\hardware_policy_cli.py') --list
+python (Join-Path $PtDir 'scripts\hardware_policy_cli.py') --validate "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2" win
 ```
 
-After `.\platform\windows\install.ps1` writes `openclaw.json` defaults (`lmstudio-win` → localhost:1234),
-always run `--check-openclaw` before trusting model assignments.
+`--check-openclaw` validates Mac OpenClaw `openclaw.json` when present. On Windows Hermes hosts
+OpenClaw is optional — skip when `~/.openclaw/openclaw.json` is absent; run when installed.
 
 ## Rules for Hermes agents
 
 1. **Never infer** NEVER_MAC / NEVER_WIN from `/v1/models` list membership alone.
 2. **Never duplicate** YAML parsers or affinity logic in Hermes local skills.
 3. **Always delegate** to `utils.hardware_policy` via CLI or Python import from PT.
-4. When editing `openclaw.json` on Windows, assign heavy GGUF models to `lmstudio-win` only.
+4. On Windows, route heavy GGUF models through Hermes + LM Studio (`localhost:1234`) only.
 5. For autoresearcher on Windows: PT `autoresearch_bridge` + hardware policy must pass before GPU dispatch.
 
 ## Related

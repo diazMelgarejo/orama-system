@@ -109,7 +109,20 @@ Use a real API key only for hosted providers. Never commit keys.
 
 ### 3. Install Coding Partner CLIs on Windows
 
-Use the LM Studio Node/npm toolchain already present on this host:
+Permanent **User PATH** entries (idempotent — safe to re-run):
+
+```powershell
+.\platform\windows\ensure-partner-cli-paths.ps1
+```
+
+| CLI | Windows path | Verify |
+|-----|--------------|--------|
+| Codex | `%USERPROFILE%\.lmstudio\bin` or `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` | `codex --version` |
+| AGY | `%LOCALAPPDATA%\agy\bin` | `agy --version` |
+| cursor-agent | `%LOCALAPPDATA%\cursor-agent` | `cursor-agent --version` |
+| Hermes | `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts` | `hermes --version` |
+
+Use the LM Studio Node/npm toolchain for Codex install when needed:
 
 ```powershell
 $env:PATH = "$env:USERPROFILE\.lmstudio\.internal\utils;$env:PATH"
@@ -170,7 +183,7 @@ slow enough for `hermes chat` to appear hung.
 
 ```powershell
 hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
-  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+  --provider nous --model stepfun/step-3.7-flash:free --max-turns 1
 ```
 
 Prompt Hermes with a bounded, evidence-first contract: state the goal, forbid
@@ -189,8 +202,9 @@ judgment.
 Test-Path "$env:HERMES_HOME\hermes-agent\.git"
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
 hermes chat --query 'Reply with exactly: HERMES_READY' --quiet --safe-mode `
-  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+  --provider nous --model stepfun/step-3.7-flash:free --max-turns 1
 codex --version
+cursor-agent --version
 gemini --version
 git -C "$env:HERMES_HOME\hermes-agent" status --short --branch
 ```

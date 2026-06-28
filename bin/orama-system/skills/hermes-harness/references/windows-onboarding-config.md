@@ -75,6 +75,37 @@ Hermes ships its own `uv.exe` at `%HERMES_HOME%\bin\uv.exe`. Do not use system u
 
 ---
 
+## Partner CLI Paths (Windows)
+
+Add these to **User PATH** (idempotent script: `platform/windows/ensure-partner-cli-paths.ps1`):
+
+| CLI | Install location | Verify |
+|-----|------------------|--------|
+| **Hermes** | `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts` | `hermes --version` |
+| **Hermes uv** | `%LOCALAPPDATA%\hermes\bin` | `uv --version` |
+| **Codex** | `%USERPROFILE%\.lmstudio\bin` (npm shim) or `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` | `codex --version` |
+| **AGY** | `%LOCALAPPDATA%\agy\bin` | `agy --version` |
+| **cursor-agent** | `%LOCALAPPDATA%\cursor-agent` | `cursor-agent --version` |
+
+macOS/Linux equivalents:
+
+| CLI | PATH entry |
+|-----|------------|
+| cursor-agent | `~/.local/bin` |
+| codex | npm global or `~/.local/bin` |
+| agy | installer default (see Antigravity docs) |
+| hermes | `$HERMES_HOME/hermes-agent/venv/bin` |
+
+OpenClaw on Windows is **optional** — Hermes is the primary orchestrator. Partner CLIs above are independent of OpenClaw.
+
+Session-only (do **not** add permanently — changes on LM Studio upgrade):
+
+```powershell
+$env:PATH = "$env:USERPROFILE\.lmstudio\.internal\utils;$env:PATH"
+```
+
+---
+
 ## Related
 
 - [`lan-endpoint-contract.md`](lan-endpoint-contract.md) — full IP variable contract

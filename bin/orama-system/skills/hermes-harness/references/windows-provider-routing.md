@@ -26,6 +26,8 @@ Gemini CLI (`gemini -p`) — **retired 2026-06-18** (`IneligibleTierError`). Do 
 3. **Known working model ID (as of 2026-06-24):** `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
    (lowercase, exact; loaded in LM Studio). Hardware: Windows RTX 3080, `gpu_offload=40`, `context 16384`.
 4. **Timeout:** completion expected <180 s at `max_tokens≥2048`. Mark UNAVAILABLE if canary hangs >15 s.
+5. **Single-model invariant:** LM Studio on **any** machine loads **one model at a time**. A second load fails (e.g. `Failed to load model "gemma-4-e4b-it". Error: Operation canceled.`). Run multiple models only across **different machine IPs** (Mac LM Studio + Win LM Studio on LAN).
+6. **Server logs** after failed probes: Windows `%USERPROFILE%\.lmstudio\server-logs`; Mac/Linux `~/.lmstudio/server-logs` (e.g. `2026-06\2026-06-28.1.log`). Tail via `verify_partner_canaries.py --tail-lmstudio-logs`.
 
 ---
 
@@ -38,7 +40,7 @@ $env:NOUS_DEFAULT_MODEL = "qwen/qwen3-coder:free"
 ```
 
 Default coding model: `qwen/qwen3-coder:free`
-Canary model: `nvidia/nemotron-3-ultra:free` (fast, reliable, used for `HERMES_READY` probe)
+Canary model: `stepfun/step-3.7-flash:free` (Nous free tier; used for `HERMES_READY` probe as of 2026-06-28)
 
 ---
 
