@@ -40,12 +40,14 @@ missing=()
 for f in "${prod[@]}"; do
   stem="${f%.*}"          # strip final extension: web/src/foo/Widget.tsx → web/src/foo/Widget
   matched=0
-  for t in "${tests[@]}"; do
-    if [[ "$t" == "${stem}.test.ts" || "$t" == "${stem}.test.tsx" ]]; then
-      matched=1
-      break
-    fi
-  done
+  if ((${#tests[@]} > 0)); then
+    for t in "${tests[@]}"; do
+      if [[ "$t" == "${stem}.test.ts" || "$t" == "${stem}.test.tsx" ]]; then
+        matched=1
+        break
+      fi
+    done
+  fi
   ((matched)) || missing+=("$f")
 done
 
