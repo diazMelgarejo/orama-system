@@ -46,6 +46,26 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-06-28 — LAN P2P bidirectional talk: transport survey + WS/SSE plan | Claude Code
+
+**Docs:** [`docs/guides/lan-peer-bidirectional-talk-2026-06-28.md`](guides/lan-peer-bidirectional-talk-2026-06-28.md) · **Commits:** `ca96862`, `f63ec72` on `main`
+
+**What was learned**
+
+- **Zero-dep winner for LAN P2P (2-host Python/FastAPI stack):** FastAPI WebSocket — bundled in `fastapi[standard]`, zero new packages. Dual-socket pattern: each host runs a WS server endpoint and connects as a WS client to the peer. ~40 LoC for full bidirectional.
+- **HTTP-only fallback (also zero deps):** SSE + POST — `GET /events/peer-stream` (text/event-stream) is the downlink; `POST /api/peer-event` is the uplink. Two connections per side. Correct choice when WebSocket is firewalled or peer doesn't support it.
+- **Transport upgrade ladder (when the above isn't enough):** ZeroMQ PAIR (`pyzmq`, 1 dep) for sub-ms throughput or N>2 hosts; mDNS/zeroconf (`zeroconf`, 1 dep) replaces `$MAC_IP`/`$WIN_IP` env config with `_orama._tcp.local.` auto-discovery.
+- **Shared JSON envelope `{type, source, ts, data}`** makes the channel manager (`lan_peer_channel.py`) the only code aware of which wire is live — callers use `send()` / `on_inbound()` regardless of transport.
+- **State machine:** `WS_CONNECTING (5 s timeout) → WS_CONNECTED | SSE_CONNECTING → SSE_CONNECTED | DISCONNECTED (30 s retry)`; two consecutive WS failures demote to SSE before retrying WS.
+- **gbrain `--dream` call graph:** 837 symbol edges resolved from 4,000 chunks walked (30 min run); `gbrain code-callers` / `code-callees` now operational on this codebase.
+
+**Decisions made**
+
+- WS-primary + SSE/POST-fallback first (5-phase plan); ZeroMQ/mDNS deferred until channel is stable.
+- New file: `src/orama_system/lan_peer_channel.py` (~120 LoC). `probe_lan_peer.py` gains `ws-peer` check in Phase 4.
+
+---
+
 ### 2026-06-28 — LAN peer operator playbook: Mac + Win identical instructions | Cursor
 
 **Canonical:** [`references/lan-peer-self-talk.md` § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) · **Docs entry:** [`docs/guides/lan-peer-mac-win-operator.md`](guides/lan-peer-mac-win-operator.md) · **Commits:** `86bae70`, `9416a50`, `9d769bf`
