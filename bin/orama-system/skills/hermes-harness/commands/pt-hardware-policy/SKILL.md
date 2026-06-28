@@ -4,7 +4,7 @@ description: >-
   Validate model↔hardware affinity using Perpetua-Tools canonical policy before
   Hermes dispatches to LM Studio on Windows. Never infer NEVER_MAC/NEVER_WIN
   rules independently — consume PT policy only.
-version: 1.0.0
+version: 1.1.0.0
 license: Apache 2.0
 compatibility: hermes, windows, openclaw
 parent_skill: hermes-harness

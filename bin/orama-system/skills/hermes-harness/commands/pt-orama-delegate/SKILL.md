@@ -3,7 +3,7 @@ name: pt-orama-delegate
 description: >-
   Act as a bounded Hermes local specialist for PT-orama subtasks without
   committing or leaking private state.
-version: 1.0.0
+version: 1.1.0.0
 license: Apache 2.0
 compatibility: hermes, codex, windows, lm-studio
 parent_skill: hermes-harness

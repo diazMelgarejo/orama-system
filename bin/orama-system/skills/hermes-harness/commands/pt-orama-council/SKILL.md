@@ -3,7 +3,7 @@ name: pt-orama-council
 description: >-
   Coordinate PT-orama council work with Codex, Hermes, AGY, and local model
   partners only after readiness checks.
-version: 1.0.0
+version: 1.1.0.0
 license: Apache 2.0
 compatibility: hermes, codex, windows
 parent_skill: hermes-harness
