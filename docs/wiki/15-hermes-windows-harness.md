@@ -39,11 +39,26 @@ For bounded coding-partner prompts, route explicitly:
 
 ```powershell
 hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
-  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+  --provider nous --model stepfun/step-3.7-flash:free --max-turns 1
 ```
 
 Use the default LM Studio route only after verifying the loaded model answers
 quickly through the OpenAI-compatible local API.
+
+### LM Studio single-model invariant
+
+LM Studio on **any** machine loads **one model at a time**. A second load fails
+(e.g. `Failed to load model "gemma-4-e4b-it". Error: Operation canceled.`).
+Run multiple models only across **different machine IPs** (Mac LM Studio +
+Win LM Studio on LAN).
+
+After a failed LM Studio canary, check server logs at
+`%USERPROFILE%\.lmstudio\server-logs` (Windows) or `~/.lmstudio/server-logs`
+(Mac/Linux) — dated subdirs like `2026-06\2026-06-28.1.log` — or tail quickly:
+
+```powershell
+python bin\orama-system\skills\hermes-harness\scripts\verify_partner_canaries.py --tail-lmstudio-logs
+```
 
 Install AGY/Antigravity on native Windows (save-first — never pipe remote script to `iex`):
 
@@ -78,7 +93,7 @@ contain copied canonical bodies or private Hermes state.
 hermes --version
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
 hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
-  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+  --provider nous --model stepfun/step-3.7-flash:free --max-turns 1
 agy --print "Reply with exactly: AGY_READY"
 ```
 
