@@ -11,6 +11,7 @@ trigger: session-end
 Idempotent session-end skill. Reads what happened, proposes minimal additive updates to the canonical knowledge base, and waits for approval before committing anything.
 
 **Trigger modes (Option C):**
+
 - **Auto**: Claude invokes this at session end without being asked
 - **Manual**: User types `/self-improve` at any checkpoint
 - **Gate**: Nothing is committed until user explicitly approves the diff
@@ -100,7 +101,7 @@ tail -30 docs/LESSONS.md 2>/dev/null || tail -30 .claude/lessons/LESSONS.md 2>/d
 
 Compose the proposed addition. Show it to the user clearly:
 
-```
+```text
 === PROPOSED ADDITION TO docs/LESSONS.md ===
 
 ## [YYYY-MM-DD] <Session Summary>
@@ -117,7 +118,8 @@ Compose the proposed addition. Show it to the user clearly:
 **Do NOT commit or write anything until user explicitly approves.**
 
 Present:
-```
+
+```text
 Self-improve proposal ready.
 
 Options:
@@ -168,6 +170,7 @@ cat .claude/homunculus/instincts/inherited/orama-system-instincts.yaml 2>/dev/nu
 ```
 
 Propose the addition. Present separately for approval (same A/B/C gate). Only update if:
+
 - The pattern is reusable across many future sessions
 - It's not already covered
 - It's concrete and actionable (not vague)
@@ -186,10 +189,12 @@ Propose the addition. Present separately for approval (same A/B/C gate). Only up
 ## Session-End Auto-Trigger
 
 Claude should invoke this skill proactively when:
+
 - The user says "we're done", "wrap up", "that's it for today", "end session"
 - The conversation is naturally concluding after a major task set
 - The user asks to save progress
 
 Claude should NOT invoke without asking if:
+
 - The session was exploratory/experimental and produced no stable facts
 - The user has already run `/self-improve` in this session

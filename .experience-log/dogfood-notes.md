@@ -14,7 +14,7 @@
 - Severity: blocks new worktree creation if `--no-checkout` not used; we got lucky and `worktree add` proceeded anyway
 
 ## Datum 2 — Fresh worktrees do NOT inherit `.gbrain-source`
-- Trigger: new worktree at `~/Documents/oramasys/worktrees/worktree-doctrine` had no `.gbrain-source` file
+- Trigger: new worktree at `~/code/oramasys/worktrees/worktree-doctrine` had no `.gbrain-source` file
 - Root cause: `.gbrain-source` is a tracked file in the parent, but a fresh worktree from `origin/main` only checks out files at that commit. If parent's pin was added locally without committing, it doesn't propagate.
 - Doctrine implication: §Worktree bootstrap must include:
   ```bash
@@ -56,7 +56,7 @@
 ---
 
 ## Open questions for the brainstorm
-1. Naming convention: `~/Documents/oramasys/worktrees/<slug>` (our current pattern) vs `<repo>/.worktrees/<slug>` (in-repo) vs centralized `~/.worktrees/<repo>-<slug>/`?
+1. Naming convention: `~/code/oramasys/worktrees/<slug>` (our current pattern) vs `<repo>/.worktrees/<slug>` (in-repo) vs centralized `~/.worktrees/<repo>-<slug>/`?
 2. Port allocation: static offsets per worktree (collision risk) or dynamic port discovery on bootstrap?
 3. LM Studio GPU contention: serialize via filesystem lock at `~/.openclaw/state/win-gpu.lock` or via PT's existing dispatch queue?
 4. CRG graph.db is per-repo, not per-worktree. Two worktrees + parallel `build_or_update_graph_tool` calls = corruption risk. Lock the build?

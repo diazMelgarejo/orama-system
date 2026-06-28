@@ -164,6 +164,20 @@ else
 fi
 
 echo ""
+echo "LM Studio security:"
+
+_lm_token="${LM_STUDIO_API_TOKEN:-}"
+if [ -z "$(printf '%s' "$_lm_token" | tr -d '[:space:]')" ]; then
+  _status "LM_STUDIO_API_TOKEN" WARN
+  echo "    → Set a non-empty token in .env.local before production use"
+elif [ "$_lm_token" = "lm-studio" ] || [ "$_lm_token" = "lmstudio" ]; then
+  _status "LM_STUDIO_API_TOKEN (default dev value)" WARN
+  echo "    → Rotate LM_STUDIO_API_TOKEN — public default is not safe for production"
+else
+  _status "LM_STUDIO_API_TOKEN (non-default)" OK
+fi
+
+echo ""
 if [ "$_failures" -gt 0 ]; then
   echo "Result: $_failures required item(s) missing — see docs/local-env-catch-up.md"
   exit 1

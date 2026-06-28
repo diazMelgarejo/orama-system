@@ -1,6 +1,6 @@
 ﻿# AFRP — Audience-First Response Protocol
 
-**Version:** 0.9.9.0
+**Version:** 1.1.1.0
 **Status:** Active — mandatory pre-router gate for orama-system
 
 ## Quick Start

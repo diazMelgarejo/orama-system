@@ -23,8 +23,8 @@ Output: the minimal design that still satisfies all requirements.
 
 ## Stage 4 — Masterful Execution
 - **Plan**: write `tasks/todo.md` for any 3+ step task.
-- **Craft**: implement test-first (TDD).
-- **Verify**: programmatically, never visually. Run the tests.
+- **Craft**: implement test-first (TDD). Gate: `docs/TDD.md` + `references/tdd-gate.md`.
+- **Verify**: programmatically, never visually. Run the tests (`pytest`, `web/` → `pnpm test`).
 Output: working, tested code.
 
 ## Stage 5 — Crystallize Vision

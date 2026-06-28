@@ -61,10 +61,18 @@ sleep "${wait_seconds:-5}"
 curl -fsS "${health_url:-http://127.0.0.1:7331/health}" >/dev/null
 log show --style syslog --last 5m --predicate 'eventMessage CONTAINS[c] "telegram" OR eventMessage CONTAINS[c] "slack" OR eventMessage CONTAINS[c] "whatsapp"' | tail -n 100
 ```
-6. Verify launchd state transitioned out of crash-loop mode.
+6. Verify launchd state transitioned out of crash-loop mode — fail if still crashing.
 
 ```bash
-launchctl print "gui/$(id -u)/com.openclaw.gateway" | tail -n 40
+# Explicitly check crash-loop state; exit non-zero if bad
+_state=$(launchctl print "gui/$(id -u)/com.openclaw.gateway" 2>&1)
+echo "$_state" | tail -n 40
+if echo "$_state" | grep -qE 'last exit reason.*crash|restart-limit'; then
+  echo '{"status":"error","reason":"gateway still in crash-loop after restart"}' >&2
+  exit 1
+fi
+# Verify health endpoint is responding
+curl -fsS "${health_url:-http://127.0.0.1:7331/health}" >/dev/null   || { echo '{"status":"error","reason":"health endpoint unreachable"}' >&2; exit 1; }
 ```
 7. Emit summary JSON for callers.
 

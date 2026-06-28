@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # Local API Fallback — Full Reference
 
 > **Rule:** When OmniRoute is disabled OR no external API responds (Anthropic, OpenRouter, etc.),

@@ -80,7 +80,7 @@ From `orama-system` checkout:
 
 ```bash
 # From orama-system checkout (installs .cursor/rules + scripts/git into periscope clone):
-export PERISCOPE_REPO=~/Documents/oramasys/tools/periscope
+export PERISCOPE_REPO=~/code/oramasys/tools/periscope
 bash scripts/periscope/install-cursor-rules.sh
 bash scripts/periscope/recreate-ordered-prs-onto-merged.sh
 ```
