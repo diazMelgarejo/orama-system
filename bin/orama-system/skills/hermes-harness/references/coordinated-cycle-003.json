@@ -1,0 +1,29 @@
+{
+  "fanout_id": "2026-06-28-coord-003",
+  "assignments": [
+    {
+      "assignee": "mac",
+      "topic": "autoresearch/gpu-run",
+      "filename": "mac-researcher-h4-benchmark.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/mac-researcher-h4-benchmark.md"
+    },
+    {
+      "assignee": "mac",
+      "topic": "self-improve/lessons",
+      "filename": "mac-orchestrator-self-improve-003.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/mac-orchestrator-self-improve-003.md"
+    },
+    {
+      "assignee": "win",
+      "topic": "autoresearch/gpu-run",
+      "filename": "win-autoresearcher-h5-gpu.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/win-autoresearcher-h5-gpu.md"
+    },
+    {
+      "assignee": "win",
+      "topic": "code-review/bridge-spike",
+      "filename": "win-coder-bridge-http-spike.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/win-coder-bridge-http-spike.md"
+    }
+  ]
+}
