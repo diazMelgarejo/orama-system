@@ -218,26 +218,15 @@ def _resolve_perpetua_tools_root() -> Path | None:
 
 
 def auth_enforced() -> bool:
-    """
-    Determine whether control-plane bearer authentication is required.
-    
-    Auth is required when a control-plane token is configured or when
-    ORAMA_INSECURE_DEV is explicitly set to a production value (`0`, `false`, `no`).
-    Auth is disabled when ORAMA_INSECURE_DEV is explicitly set to an insecure value
-    (`1`, `true`, `yes`). When neither a token nor an explicit insecure setting
-    is provided, authentication is not enforced to preserve existing local workflows.
-    
-    Returns:
-        `true` if control-plane authentication must be enforced, `false` otherwise.
-    """
-    if _env_control_plane_token_candidates() or pt_lane_token_candidates():
-        return True
+    """Return True when control-plane bearer auth must be checked (PT-aligned default)."""
     insecure = os.getenv(ENV_INSECURE, "").strip().lower()
     if insecure in ("1", "true", "yes"):
         return False
+    if _env_control_plane_token_candidates() or pt_lane_token_candidates():
+        return True
     if insecure in ("0", "false", "no"):
         return True
-    return False
+    return True
 
 
 def _read_pt_persisted_token() -> str:
@@ -275,8 +264,23 @@ def _legacy_resolved_control_plane_token() -> str:
     return _read_pt_persisted_token()
 
 
+def _default_token_path() -> Path:
+    pt_root = _resolve_perpetua_tools_root()
+    if pt_root is not None:
+        return pt_root / ".state" / "control_plane_token"
+    return Path(__file__).resolve().parents[2] / ".state" / "control_plane_token"
+
+
+def persist_control_plane_token(token: str, path: Path | None = None) -> Path:
+    token_path = path or _default_token_path()
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    token_path.write_text(token, encoding="utf-8")
+    token_path.chmod(0o600)
+    return token_path
+
+
 def ensure_control_plane_token() -> str:
-    """Return configured token, generating one when insecure dev is off."""
+    """Return configured token, generating and persisting one when auth is enforced."""
     existing = _legacy_resolved_control_plane_token()
     if existing:
         if not control_plane_token():
@@ -286,7 +290,29 @@ def ensure_control_plane_token() -> str:
         return ""
     generated = secrets.token_urlsafe(32)
     os.environ[ENV_TOKEN] = generated
+    persist_control_plane_token(generated)
     return generated
+
+
+def is_weak_control_plane_token(token: str) -> bool:
+    """True for empty or documented placeholder tokens that must not gate LAN bind."""
+    normalized = (token or "").strip().lower()
+    if not normalized:
+        return True
+    return normalized in {
+        "change-me-before-network-use",
+        "changeme",
+        "change-me",
+        "placeholder",
+        "test",
+        "secret",
+    }
+
+
+def lan_bind_configured() -> bool:
+    """True when any control-plane service is configured for LAN exposure."""
+    flags = ("PT_BIND_LAN", "ORAMA_BIND_LAN", "PORTAL_BIND_LAN")
+    return any(os.getenv(name, "").strip().lower() in ("1", "true", "yes") for name in flags)
 
 
 def request_is_loopback(request: Request) -> bool:

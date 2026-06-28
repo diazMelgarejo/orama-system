@@ -261,10 +261,6 @@ if [ -n "${PT_DIR:-}" ]; then
   export PERPETUA_TOOLS_ROOT="${PT_DIR}"
 fi
 
-if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${PORTAL_BIND_LAN:-0}" = "1" ]; then
-  _warn "svc" "LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network"
-fi
-
 _sync_control_plane_token() {
   if [ -n "${ORAMA_CONTROL_PLANE_TOKEN:-}" ]; then
     return 0
@@ -278,6 +274,34 @@ _sync_control_plane_token() {
     _warn "lan-peer" "No ORAMA_CONTROL_PLANE_TOKEN — portal-status probe will SKIP (set in .env.local)"
   fi
 }
+
+_require_control_plane_token_for_lan() {
+  case "${ORAMA_INSECURE_DEV:-}" in 1|true|yes|TRUE|YES) return 0 ;; esac
+  _sync_control_plane_token
+  local token="${ORAMA_CONTROL_PLANE_TOKEN:-}"
+  if [ -n "$token" ] && [ "$token" != "change-me-before-network-use" ]; then
+    return 0
+  fi
+  if [ -x "${US_PYTHON:-python3}" ] && [ -d "$SCRIPT_DIR/src" ]; then
+    token="$(
+      PYTHONPATH="$SCRIPT_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
+        "${US_PYTHON:-python3}" -c 'from utils.control_plane_auth import ensure_control_plane_token; print(ensure_control_plane_token())' 2>/dev/null \
+        || true
+    )"
+    if [ -n "$token" ]; then
+      export ORAMA_CONTROL_PLANE_TOKEN="$token"
+      _info "lan-peer" "generated control-plane token for LAN bind"
+      return 0
+    fi
+  fi
+  _err "LAN bind requires a strong ORAMA_CONTROL_PLANE_TOKEN (set in .env.local or allow auto-generation via PT/orama startup)"
+  return 1
+}
+
+if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${PORTAL_BIND_LAN:-0}" = "1" ]; then
+  _warn "svc" "LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network"
+  _require_control_plane_token_for_lan || exit 1
+fi
 
 _run_lan_peer_probe() {
   local probe="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py"

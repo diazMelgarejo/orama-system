@@ -169,7 +169,7 @@ def test_auth_enforced_matrix(monkeypatch):
     monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
     monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
     monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
-    assert auth_enforced() is False
+    assert auth_enforced() is True
 
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "secret")
     assert auth_enforced() is True
@@ -256,7 +256,8 @@ def test_portal_loopback_index_injects_cp_fetch_when_enforced(monkeypatch, tmp_p
 
     assert allowed.status_code == 200
     assert "cpFetch" in allowed.text
-    assert "loopback-ui-token" in allowed.text
+    assert "loopback-ui-token" not in allowed.text
+    assert "ORAMA_CP_TOKEN" not in allowed.text
     assert api_denied.status_code == 401
     assert api_allowed.status_code == 200
 
