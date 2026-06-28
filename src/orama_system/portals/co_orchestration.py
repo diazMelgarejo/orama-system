@@ -1,25 +1,26 @@
-"""Co-orchestration portal — platform router (macOS vs Windows skins)."""
+"""Co-orchestration portal — macOS skin router (Win HTML is /peer-inbox)."""
 from __future__ import annotations
 
 from typing import Any
 
 from orama_system.portals import co_orchestration_macos as macos_skin
-from orama_system.portals import co_orchestration_windows as windows_skin
 from orama_system.portals.co_orchestration_shared import (
     build_co_orchestration_summary as _build_summary,
-    render_co_orchestration_html,
 )
 
-_SKINS = {
-    macos_skin.SKIN_ID: macos_skin,
-    windows_skin.SKIN_ID: windows_skin,
-}
+_SKINS = {macos_skin.SKIN_ID: macos_skin}
+WIN_INBOX_SKIN_ID = "peer-inbox"
+_LEGACY_WIN_SKIN_ALIASES = frozenset({"windows", WIN_INBOX_SKIN_ID})
 
 
 def resolve_skin_id(local_role: str, *, explicit: str | None = None) -> str:
-    if explicit and explicit in _SKINS:
-        return explicit
-    return macos_skin.SKIN_ID if local_role == "mac" else windows_skin.SKIN_ID
+    if explicit in _LEGACY_WIN_SKIN_ALIASES:
+        return WIN_INBOX_SKIN_ID
+    if explicit == macos_skin.SKIN_ID:
+        return macos_skin.SKIN_ID
+    if local_role == "win":
+        return WIN_INBOX_SKIN_ID
+    return macos_skin.SKIN_ID
 
 
 def build_co_orchestration_summary(
@@ -50,6 +51,10 @@ def render_co_orchestration_page(
     platform_skin: str | None = None,
 ) -> str:
     skin_id = resolve_skin_id(local_role, explicit=platform_skin)
+    if skin_id == WIN_INBOX_SKIN_ID:
+        raise RuntimeError(
+            "Win inbox HTML is served at /peer-inbox (platform/windows/peer_inbox_portal.py)"
+        )
     module = _SKINS[skin_id]
     return module.render_co_orchestration_page(
         version=version,
