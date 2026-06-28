@@ -7,17 +7,26 @@ version: "1.0"
 layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
 upstream: https://github.com/rahulsub-be/cc-openclaw
 upstream_license: MIT
+extends: ../cc-openclaw/.claude/skills/openclaw-new-agent/SKILL.md
+overlay_role: orama-normalized cross-harness extension
 ---
 
+## Overlay Source
+
+This Orama-normalized skill extends the upstream cc-openclaw skill at [`../cc-openclaw/.claude/skills/openclaw-new-agent/SKILL.md`](../cc-openclaw/.claude/skills/openclaw-new-agent/SKILL.md). Use the upstream file as the behavioral baseline and this file as the cross-harness overlay for Orama, Perpetua-Tools, Codex, Hermes, Gemini, and other agent runners.
+
 ## Purpose
+
 Create a new OpenClaw agent consistently without configuration drift. This skill enforces required files, directories, and `openclaw.json` updates in one pass. It also handles standalone versus sub-agent wiring so parent-child execution is explicit.
 
 ## When to Use
+
 - Creating any new OpenClaw agent profile
 - Splitting responsibilities into specialized sub-agents
 - Standardizing agent scaffolding across contributors
 
 ## Inputs
+
 - Required:
   - `agent_id` (lowercase, hyphens)
   - `display_name` (human-readable)
@@ -28,7 +37,9 @@ Create a new OpenClaw agent consistently without configuration drift. This skill
   - `channel` (`telegram|slack|whatsapp|none`)
 
 ## Procedure
+
 1. Validate inputs and repo context.
+
 ```bash
 set -euo pipefail
 [ -f openclaw.json ] || { echo "openclaw.json not found" >&2; exit 1; }
@@ -37,10 +48,12 @@ printf '%s' "$agent_id" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$'
 if [ "$mode" = "sub-agent" ]; then [ -n "${parent_agent_id:-}" ]; fi
 ```
 2. Create required directory tree.
+
 ```bash
 mkdir -p "agents/$agent_id/memory/archives" "agents/$agent_id/scripts/lib"
 ```
 3. Create six directive files if missing.
+
 ```bash
 for f in SOUL.md IDENTITY.md USER.md AGENTS.md TOOLS.md SECURITY.md; do
   path="agents/$agent_id/$f"
@@ -53,6 +66,7 @@ EOT
 done
 ```
 4. Set identity and default model in `IDENTITY.md`.
+
 ```bash
 cat > "agents/$agent_id/IDENTITY.md" <<EOT
 # IDENTITY
@@ -63,6 +77,7 @@ cat > "agents/$agent_id/IDENTITY.md" <<EOT
 EOT
 ```
 5. Add agent entry in `openclaw.json` under `agents.list`.
+
 ```bash
 jq --arg id "$agent_id" --arg name "$display_name" --arg model "${model_primary:-ollama/qwen3.5:9b-nvfp4}" '
   .agents.list = (.agents.list // []) |
@@ -71,6 +86,7 @@ jq --arg id "$agent_id" --arg name "$display_name" --arg model "${model_primary:
 ' openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
 ```
 6. If `mode=sub-agent`, wire parent allow-list/binding.
+
 ```bash
 if [ "$mode" = "sub-agent" ]; then
   jq --arg parent "$parent_agent_id" --arg child "$agent_id" '
@@ -83,6 +99,7 @@ if [ "$mode" = "sub-agent" ]; then
 fi
 ```
 7. If channel requested, delegate to `openclaw-add-channel` after create.
+
 ```bash
 if [ "${channel:-none}" != "none" ]; then
   echo "Run: openclaw-add-channel for $channel and bind to $agent_id" >&2
@@ -90,6 +107,7 @@ fi
 ```
 
 ## Output Contract
+
 ```json
 {
   "status": "ok|error",
@@ -99,16 +117,19 @@ fi
 ```
 
 ## Naming Enforcement
+
 - `agent_id` must be lowercase and hyphenated: `^[a-z0-9]+(-[a-z0-9]+)*$`
 - Sub-agent IDs must still follow the same format as standalone agents
 - Keep file names exact: `SOUL.md`, `IDENTITY.md`, `USER.md`, `AGENTS.md`, `TOOLS.md`, `SECURITY.md`
 
 ## Gotchas
+
 - Manual agent creation often misses one or more of the six directive files.
 - Sub-agents without parent `allowAgents` wiring will not be callable.
 - If `jq` is missing, JSON edits become unsafe; install `jq` before running.
 
 ## See Also
+
 - `../openclaw-add-channel/SKILL.md`
 - `../openclaw-restart/SKILL.md`
 - `../openclaw-status/SKILL.md`

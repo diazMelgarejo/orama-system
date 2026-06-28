@@ -43,7 +43,7 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 ## Sessions Log
 
 <!-- Append entries below. Format:
-## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude> — <brief topic>
+## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude | Codex> — <brief topic>
 ### What was learned
 ### Decisions made
 ### Open questions
@@ -51,7 +51,7 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
-## 2026-06-18 - Codex - Hermes Windows one-shot routing and Antigravity adapter
+## 2026-06-18 — Codex — Hermes Windows one-shot routing and Antigravity adapter
 
 ### What was learned
 
@@ -1187,7 +1187,7 @@ Before committing any markdown file that references a local filesystem path:
 
 
 <!-- Append entries below. Format:
-## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude> — <brief topic>
+## YYYY-MM-DD — <agent: ECC | AutoResearcher | Claude | Codex> — <brief topic>
 ### What was learned
 ### Decisions made
 ### Open questions
