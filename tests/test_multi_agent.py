@@ -21,6 +21,7 @@ SKILL_NAMES = {
     "verifier":     "agent.md",
     "crystallizer": "agent.md",
 }
+QWEN_PRIORITY_MODEL = "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2"
 
 
 class TestAgentStructure:
@@ -61,8 +62,11 @@ class TestAgentStructure:
 
 
 class TestSharedUtilities:
-    def test_ultrathink_core_exists(self):
-        assert (MULTI / "shared" / "ultrathink_core.py").exists()
+    def test_oramasys_core_exists(self):
+        assert (MULTI / "shared" / "oramasys_core.py").exists()
+
+    def test_legacy_ultrathink_core_wrapper_exists(self):
+        assert (MULTI / "shared" / "ultrathink_core.py").exists()  # back-compat shim retained until v2.0
 
     def test_state_manager_exists(self):
         assert (MULTI / "shared" / "state_manager.py").exists()
@@ -71,12 +75,12 @@ class TestSharedUtilities:
         assert (MULTI / "shared" / "message_bus.py").exists()
 
     def test_core_has_stage_enum(self):
-        content = (MULTI / "shared" / "ultrathink_core.py").read_text(encoding="utf-8")
+        content = (MULTI / "shared" / "oramasys_core.py").read_text(encoding="utf-8")
         assert "class Stage" in content
         assert "context_immersion" in content
 
     def test_core_has_task_state(self):
-        content = (MULTI / "shared" / "ultrathink_core.py").read_text(encoding="utf-8")
+        content = (MULTI / "shared" / "oramasys_core.py").read_text(encoding="utf-8")
         assert "class TaskState" in content
         assert "elegance_score" in content
 
@@ -96,6 +100,15 @@ class TestConfig:
                       "refiner-agent", "executor-agent", "verifier-agent", "crystallizer-agent"]:
             assert agent in ids, f"{agent} missing from registry"
 
+    def test_qwen_priority_subagent_registered(self):
+        data = json.loads((MULTI / "config" / "agent_registry.json").read_text(encoding="utf-8"))
+        openclaw_agents = data["openclaw_agents"]
+
+        assert openclaw_agents["coder"]["model"] == QWEN_PRIORITY_MODEL
+        assert openclaw_agents["priority-subagent"]["model"] == QWEN_PRIORITY_MODEL
+        assert openclaw_agents["priority-subagent"]["provider"] == "lmstudio-win"
+        assert openclaw_agents["priority-subagent"]["soul"] == openclaw_agents["coder"]["soul"]
+
     def test_routing_rules_valid_json(self):
         path = MULTI / "config" / "routing_rules.json"
         assert path.exists()
@@ -104,5 +117,6 @@ class TestConfig:
         assert len(data["rules"]) > 5
 
     def test_mcp_servers_exist(self):
+        assert (MULTI / "mcp_servers" / "oramasys_orchestration_server.py").exists()
         assert (MULTI / "mcp_servers" / "ultrathink_orchestration_server.py").exists()
         assert (MULTI / "mcp_servers" / "agent_communication_server.py").exists()

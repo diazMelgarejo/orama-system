@@ -3,6 +3,9 @@ on:
   push:
     tags: ["v*"]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 # Deny all permissions by default; grant only what each job needs.
 # This prevents "Resource not accessible by integration" surprises and
 # limits blast radius if a step is compromised.
@@ -14,11 +17,11 @@ jobs:
     permissions:
       contents: write   # required: create GitHub release + upload assets
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with: { python-version: "3.11" }
       - run: pip install -e ".[test]" && pytest tests/ -v
-      - run: bash verify-package.sh
+      - run: bash scripts/verify-package.sh
       - name: Create ZIP
         run: |
           cd ..

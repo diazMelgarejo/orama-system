@@ -3,7 +3,7 @@
 agent_communication_server.py
 ==============================
 MCP Server: ultrathink Agent-to-Agent Communication
-Version: 0.9.9.2 | License: Apache 2.0
+Version: 1.1.1.0 | License: Apache 2.0
 
 Provides direct inter-agent messaging tools for sub-agent delegation
 within the ultrathink network.
@@ -19,7 +19,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
-from ultrathink_core import AgentMessage, MessageType
+from oramasys_core import AgentMessage, MessageType
 from state_manager import StateManager
 from message_bus import MessageBus
 

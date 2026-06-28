@@ -1,0 +1,56 @@
+---
+description: How Cursor Cloud VMs work — git hooks, identity, AlphaClaw branches
+alwaysApply: true
+---
+
+# Cursor Cloud environment
+
+## Git identity
+
+- Use **`cyre <diazMelgarejo@gmail.com>`** for commits unless user specifies another approved identity.
+- Do **not** add forbidden or random Gmail `Co-authored-by` trailers.
+- `CURSOR_AGENT=1` is set by the platform; **`CURSOR_AGENT=0` is not supported** and does not disable hooks.
+
+## Co-author injection (cloud)
+
+Cursor redirects `core.hookspath` to `~/.cursor/agent-hooks/<base64-workspace>/` and may run `commit-msg.cursor.co-author`. Mitigations (run every session):
+
+```bash
+bash scripts/cursor/cloud-attribution-bootstrap.sh    # unconditional; rules in ~/.cursor/openclaw only
+bash ~/.cursor/openclaw/install-cursor-cloud-attribution.sh   # re-run anytime
+```
+
+Hook-free commit when needed:
+
+```bash
+bash scripts/git/commit-clean.sh -m "type(scope): summary"
+```
+
+## AlphaClaw fork (three repos)
+
+| Repo branch | Purpose |
+|-------------|---------|
+| `main` | Upstream mirror only |
+| `feature/MacOS-post-install` | Integration — must contain `origin/main` |
+| `cursor/sync-attribution-guards-6421` | Contrib — PR **into integration**, not `main` |
+
+Before AlphaClaw commits:
+
+```bash
+bash scripts/git/alphaclaw-align-all.sh
+```
+
+Verify:
+
+```bash
+bash scripts/cursor/verify-git-guards.sh   # orama
+# AlphaClaw: merge-base with origin/main must be origin/main tip
+```
+
+## Push when user grants access
+
+```bash
+bash scripts/cursor/push-openclaw-stack.sh
+```
+
+See `docs/wiki/13-alphaclaw-fork-contrib-branches.md`.

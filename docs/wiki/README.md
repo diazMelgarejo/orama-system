@@ -18,6 +18,14 @@ This wiki organizes hard-won lessons by topic. Each page contains root cause, ex
 | 05 | [Bulk Sed Safety](05-bulk-sed-safety.md) | `grep -rn` every pattern before running bulk `sed`; scope import renames to `.py` only |
 | 06 | [Multi-Agent Collaboration](06-multi-agent-collab.md) | Version registry, scope claims, orphan branch recovery, no LAN IPs in source defaults |
 | 07 | [Startup & IP Detection](07-startup-ip-detection.md) | stdin deadlock root cause, `load_dotenv()` placement, concurrent asyncio probing |
+| 08 | [Git Hygiene & Branching](08-git-hygiene-and-branching.md) | Clean-lineage commit identity guardrails and branch safety protocol |
+| 09 | [Policy Fail-Closed + Checklist](09-policy-fail-closed-and-checklist.md) | Enforce hardware policy fail-closed behavior and run consolidated verification after each priority block |
+| 12 | [Cursor Cloud Commit Attribution](12-cursor-cloud-commit-attribution.md) | Disable cloud-agent Co-authored-by injection across all OpenClaw repos |
+| 13 | [AlphaClaw Fork Contrib Branches](13-alphaclaw-fork-contrib-branches.md) | `main` = upstream only; all fork work on `feature/*` or `cursor/*` branches |
+| 11 | [Codex GitHub MCP Config](11-codex-github-mcp-config.md) | GitHub MCP is stdio; use command/args plus `[mcp_servers.github.env]`, not `bearer_token_env_var` |
+| 14 | [GBrain Checkpoint rm-rf Bug](14-gbrain-checkpoint-rm-rf-bug.md) | Autopilot SIGTERM poisons `import-checkpoint.json` → next sync `rm -rf`'s repo root. Shell guard + upstream PR #1802 |
+| 15 | [Hermes Windows Harness](15-hermes-windows-harness.md) | Put Hermes venv on PATH, set `HERMES_GIT_BASH_PATH`, and use explicit provider/model routing for one-shot partner prompts |
+| 16 | [Cross-Harness Hardware Policy](../hermes-hardware-policy-cross-harness.md) | One PT policy chain for OpenClaw + Hermes; platform role reversal; gaps #128–#131; path resolution |
 
 ---
 

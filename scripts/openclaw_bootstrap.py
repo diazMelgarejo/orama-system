@@ -1,0 +1,427 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+
+"""
+openclaw_bootstrap.py — orama-system delegation shim
+----------------------------------------------------------
+Bootstrap logic has moved to Perpetua-Tools/alphaclaw_bootstrap.py.
+
+This shim delegates to the canonical PT script via PT_HOME env var,
+falling back to the inline logic below only when PT is not found.
+
+Set PT_HOME to the root of your Perpetua-Tools checkout:
+    export PT_HOME=/path/to/Perpetua-Tools
+
+Usage (unchanged):
+    python openclaw_bootstrap.py --bootstrap
+    python openclaw_bootstrap.py --bootstrap --force
+"""
+import argparse
+import asyncio
+import json
+import os
+import secrets
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+# ── delegation ────────────────────────────────────────────────────────────────
+
+_PT_HOME    = Path(os.getenv("PT_HOME", str(Path.home() / "Perpetua-Tools")))
+_PT_SCRIPT  = _PT_HOME / "alphaclaw_bootstrap.py"
+
+
+async def bootstrap_openclaw(force: bool = False) -> bool:
+    """Delegate to PT's alphaclaw_bootstrap.py, fallback to inline logic."""
+    if _PT_SCRIPT.exists():
+        print(f"[openclaw] → Delegating to PT bootstrap: {_PT_SCRIPT}")
+        extra = ["--force"] if force else []
+        result = subprocess.run(
+            [sys.executable, str(_PT_SCRIPT), "--bootstrap"] + extra,
+            env={**os.environ, "UTS_HOME": str(SCRIPT_DIR)},
+        )
+        return result.returncode == 0
+
+    print("[openclaw] ⚠  PT_HOME not found "
+          f"({_PT_HOME}) — running inline fallback")
+    return await _bootstrap_inline(force=force)
+
+
+# ── inline fallback (kept for UTS standalone use without PT) ──────────────────
+
+def _parse_port_list(raw: str) -> list[int]:
+    """Parse comma-separated port env vars; skip invalid tokens instead of crashing."""
+    ports: list[int] = []
+    for token in raw.split(","):
+        token = token.strip()
+        if not token:
+            continue
+        try:
+            port = int(token)
+        except ValueError:
+            print(f"[openclaw] ⚠  Ignoring invalid port in OPENCLAW_EXTRA_PORTS: {token!r}")
+            continue
+        if 1 <= port <= 65535:
+            ports.append(port)
+        else:
+            print(f"[openclaw] ⚠  Ignoring out-of-range port: {port}")
+    return ports
+
+
+def _parse_single_port(raw: str, *, default: int, env_name: str) -> int:
+    try:
+        port = int(raw)
+    except ValueError:
+        print(f"[openclaw] ⚠  Invalid {env_name}: {raw!r}; using {default}")
+        return default
+    if not 1 <= port <= 65535:
+        print(f"[openclaw] ⚠  Out-of-range {env_name}: {port}; using {default}")
+        return default
+    return port
+
+
+OPENCLAW_GATEWAY_PORT: int = _parse_single_port(
+    os.getenv("OPENCLAW_GATEWAY_PORT", "18789"),
+    default=18789,
+    env_name="OPENCLAW_GATEWAY_PORT",
+)
+_extra_ports = _parse_port_list(os.getenv("OPENCLAW_EXTRA_PORTS", ""))
+OPENCLAW_CANDIDATE_PORTS: list[int] = list(dict.fromkeys(
+    [OPENCLAW_GATEWAY_PORT, 11435, 8080, 3000, 4000, 9000] + _extra_ports
+))
+
+MAC_IP    = os.getenv("MAC_IP", "192.168.254.105")
+WIN_IP    = os.getenv("WIN_IP", "192.168.254.105")
+OLLAMA_MAC = os.getenv("OLLAMA_MAC_ENDPOINT",    f"http://{MAC_IP}:11434")
+OLLAMA_WIN = os.getenv("OLLAMA_WINDOWS_ENDPOINT", f"http://{WIN_IP}:11434")
+LMS_MAC   = os.getenv("LM_STUDIO_MAC_ENDPOINT",   f"http://{MAC_IP}:1234")
+LMS_WIN   = os.getenv("LM_STUDIO_WIN_ENDPOINTS",   f"http://{WIN_IP}:1234")
+LMS_TOKEN = os.getenv("LM_STUDIO_API_TOKEN", "lm-studio")
+MAC_MODEL = os.getenv("MAC_LMS_MODEL", "qwen3:8b-instruct")
+WIN_MODEL = os.getenv("WINDOWS_LMS_MODEL",
+                      "Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2")
+
+# Autoresearch — env-var configurable (mirrors PT's alphaclaw_bootstrap.py)
+AUTORESEARCH_REMOTE = os.getenv(
+    "AUTORESEARCH_REMOTE", "https://github.com/uditgoenka/autoresearch"
+)
+
+
+async def _probe_url(url: str, client) -> bool:
+    for path in ("/health", "/v1/models"):
+        try:
+            r = await client.get(f"{url.rstrip('/')}{path}")
+            if r.status_code < 400:
+                return True
+        except Exception:
+            pass
+    return False
+
+
+async def _find_any_gateway() -> str | None:
+    try:
+        import httpx
+    except ImportError:
+        return None
+    async with httpx.AsyncClient(timeout=1.5) as client:
+        for port in OPENCLAW_CANDIDATE_PORTS:
+            url = f"http://localhost:{port}"
+            if await _probe_url(url, client):
+                return url
+    return None
+
+
+def _load_pt_state() -> dict | None:
+    state_path = os.getenv("PT_AGENTS_STATE")
+    if state_path and Path(state_path).exists():
+        with open(state_path) as f:
+            return json.load(f)
+    return None
+
+
+def _lms_base_url(raw: str) -> str:
+    raw = raw.rstrip("/")
+    return raw if raw.endswith("/v1") else f"{raw}/v1"
+
+
+def _write_openclaw_config(config_dir: Path, config_file: Path) -> None:
+    pt = _load_pt_state()
+    if pt:
+        mac_lms_url   = pt.get("mac_lmstudio_endpoint") or LMS_MAC
+        win_lms_url   = pt.get("lmstudio_endpoint")     or LMS_WIN
+        coder_model   = pt.get("coder_model",   WIN_MODEL)
+        manager_model = pt.get("manager_model", MAC_MODEL)
+        coder_backend = pt.get("coder_backend", "mac-degraded")
+        mac_lms_ok    = bool(pt.get("mac_lmstudio_ok"))
+    else:
+        mac_lms_url = LMS_MAC; win_lms_url = LMS_WIN
+        coder_model = WIN_MODEL; manager_model = MAC_MODEL
+        coder_backend = "unknown"; mac_lms_ok = False
+
+    if coder_backend == "windows-lmstudio":
+        coder_primary = f"lmstudio-win/{coder_model}"
+    elif coder_backend == "windows-ollama":
+        coder_primary = f"ollama-win/{coder_model}"
+    else:
+        coder_primary = f"lmstudio-mac/{manager_model}"
+    manager_primary = (f"lmstudio-mac/{manager_model}" if mac_lms_ok
+                       else f"ollama-mac/{manager_model}")
+
+    agents_root = str(Path.home() / ".openclaw" / "agents")
+    config = {
+        "gateway": {"mode": "local", "port": OPENCLAW_GATEWAY_PORT,
+                    "bind": "loopback", "commandeered": False},
+        "agents": {
+            "defaults": {"model": {"primary": manager_primary},
+                         "workspace": f"{agents_root}/default"},
+            "list": [
+                {"id": "mac-researcher",
+                 "model": {"primary": manager_primary},
+                 "workspace": f"{agents_root}/mac-researcher"},
+                {"id": "win-researcher",
+                 "model": {"primary": coder_primary},
+                 "workspace": f"{agents_root}/win-researcher"},
+                {"id": "orchestrator",
+                 "model": {"primary": manager_primary},
+                 "workspace": f"{agents_root}/orchestrator"},
+                {"id": "coder",
+                 "model": {"primary": coder_primary},
+                 "workspace": f"{agents_root}/coder"},
+                {"id": "autoresearcher",
+                 "model": {"primary": coder_primary},
+                 "workspace": str(Path.home() / "autoresearch")},
+            ],
+        },
+        "models": {
+            "providers": {
+                "lmstudio-mac": {
+                    "baseUrl": _lms_base_url(mac_lms_url), "apiKey": LMS_TOKEN,
+                    "api": "openai-completions",
+                    "models": [{"id": MAC_MODEL, "name": f"Mac LMS — {MAC_MODEL}",
+                                "contextWindow": 32768, "maxTokens": 8192,
+                                "cost": {"input": 0, "output": 0}}],
+                },
+                "lmstudio-win": {
+                    "baseUrl": _lms_base_url(win_lms_url), "apiKey": LMS_TOKEN,
+                    "api": "openai-completions",
+                    "models": [{"id": WIN_MODEL, "name": f"Win LMS — {WIN_MODEL}",
+                                "contextWindow": 32768, "maxTokens": 8192,
+                                "cost": {"input": 0, "output": 0}}],
+                },
+                "ollama-mac": {"apiKey": "ollama-local",
+                               "baseUrl": OLLAMA_MAC, "api": "ollama"},
+                "ollama-win": {"apiKey": "ollama-remote",
+                               "baseUrl": OLLAMA_WIN, "api": "ollama"},
+            },
+        },
+    }
+    xai_api_key = os.getenv("XAI_API_KEY", "").strip()
+    if xai_api_key:
+        config["models"]["providers"]["xai"] = {
+            "baseUrl": "https://api.x.ai/v1",
+            "apiKey": xai_api_key,
+            "api": "openai-completions",
+            "models": [
+                {"id": "grok-4.1-fast", "name": "Grok 4.1 Fast"},
+                {"id": "grok-code-fast", "name": "Grok Code Fast"},
+            ],
+        }
+        print("[openclaw] ✓ xAI provider configured in openclaw.json")
+    else:
+        print("[openclaw] ⚠ XAI_API_KEY not set — xAI Grok fallback provider not configured")
+    config_dir.mkdir(parents=True, exist_ok=True)
+    config_file.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    print(f"[openclaw] ✓ openclaw.json written → {config_file}")
+
+
+def _ensure_agent_workspaces(config_dir: Path) -> None:
+    soul_src   = SCRIPT_DIR / "bin" / "agents"
+    agents_dir = config_dir / "agents"
+    roles = ["mac-researcher", "win-researcher", "orchestrator",
+             "coder", "autoresearcher"]
+    for role in roles:
+        role_dir = agents_dir / role
+        role_dir.mkdir(parents=True, exist_ok=True)
+        soul_file = role_dir / "SOUL.md"
+        if soul_file.exists():
+            continue
+        src = soul_src / role / "SOUL.md"
+        if src.exists():
+            shutil.copy(src, soul_file)
+            print(f"[openclaw] ✓ agent workspace: {role}")
+        else:
+            print(f"[openclaw] ⚠ missing SOUL.md for {role}")
+
+
+def _ensure_autoresearch() -> None:
+    """Idempotent clone + uv sync --dev of ~/autoresearch (uditgoenka/autoresearch)."""
+    repo = Path.home() / "autoresearch"
+    if repo.exists():
+        print("[openclaw] ✓ ~/autoresearch already exists")
+        return
+    print(f"[openclaw] → Cloning {AUTORESEARCH_REMOTE}…")
+    try:
+        subprocess.run(["git", "clone", AUTORESEARCH_REMOTE, str(repo)],
+                       check=True)
+        import datetime
+        branch = f"autoresearch/{datetime.date.today().isoformat()}"
+        subprocess.run(["git", "checkout", "-b", branch], cwd=repo, check=True)
+        result = subprocess.run(["pip", "install", "uv"], check=False, capture_output=False)
+        if result.returncode != 0:
+            logger.error("pip install uv failed with exit code %d", result.returncode)
+        subprocess.run(["uv", "sync", "--dev"], cwd=repo, check=True)
+        print("[openclaw] ✓ autoresearch ready")
+    except subprocess.CalledProcessError as e:
+        print(f"[openclaw] ✗ autoresearch setup failed (non-fatal): {e}")
+
+
+async def _bootstrap_inline(force: bool = False) -> bool:
+    """Inline fallback when PT is unavailable."""
+    try:
+        import httpx  # noqa: F401
+    except ImportError:
+        print("[openclaw] ✗ httpx not installed — run: pip install httpx")
+        return False
+
+    config_dir  = Path.home() / ".openclaw"
+    config_file = config_dir / "openclaw.json"
+
+    print(f"[openclaw] → Probing {len(OPENCLAW_CANDIDATE_PORTS)} candidate ports…")
+    existing_url = await _find_any_gateway()
+    if existing_url:
+        print(f"[openclaw] ✓ Found gateway at {existing_url} — commandeering")
+        os.environ["OPENCLAW_GATEWAY_URL"] = existing_url
+        if not config_file.exists() or force:
+            _write_openclaw_config(config_dir, config_file)
+        _ensure_agent_workspaces(config_dir)
+        _ensure_autoresearch()
+        return True
+
+    if not shutil.which("npm"):
+        print("[openclaw] ✗ npm not found — install Node.js from https://nodejs.org/")
+        return False
+
+    _aclaw_installed = shutil.which("alphaclaw") is not None
+    if not _aclaw_installed:
+        install_dir = Path.home() / ".alphaclaw"
+        install_dir.mkdir(parents=True, exist_ok=True)
+        print("[openclaw] → Installing @chrysb/alphaclaw…")
+        try:
+            subprocess.run(["npm", "install", "@chrysb/alphaclaw"],
+                           check=True, cwd=str(install_dir))
+        except subprocess.CalledProcessError as e:
+            print(f"[openclaw] ✗ install failed: {e}")
+            return False
+
+    if not config_file.exists() or force:
+        _write_openclaw_config(config_dir, config_file)
+    _ensure_agent_workspaces(config_dir)
+
+    print("[openclaw] → Starting AlphaClaw gateway…")
+    try:
+        install_dir = Path.home() / ".alphaclaw"
+        setup_password = os.getenv("SETUP_PASSWORD", "").strip()
+        insecure_dev = os.getenv("ORAMA_INSECURE_DEV", "").strip().lower() in ("1", "true", "yes")
+        if not setup_password:
+            if insecure_dev:
+                setup_password = secrets.token_urlsafe(16)
+                once_path = install_dir / ".setup-password-once"
+                once_path.write_text(f"{setup_password}\n", encoding="utf-8")
+                once_path.chmod(0o600)
+                print(
+                    "[openclaw] ORAMA_INSECURE_DEV=1 — generated one-time SETUP_PASSWORD; "
+                    f"read once from {once_path} (not logged)."
+                )
+            else:
+                print(
+                    "[openclaw] Refusing fallback bootstrap without SETUP_PASSWORD. "
+                    "Set SETUP_PASSWORD or ORAMA_INSECURE_DEV=1 for local-only dev."
+                )
+                return False
+        env = {**os.environ, "SETUP_PASSWORD": setup_password}
+        subprocess.Popen(["npx", "alphaclaw", "start"], cwd=str(install_dir), env=env)
+        gateway_url = f"http://localhost:{OPENCLAW_GATEWAY_PORT}"
+        os.environ["OPENCLAW_GATEWAY_URL"] = gateway_url
+    except Exception as e:
+        print(f"[openclaw] ✗ gateway start failed: {e}")
+        return False
+
+    _ensure_autoresearch()
+    return True
+
+
+# ── PT payload applier ───────────────────────────────────────────────────────
+
+def apply_runtime_payload(payload: dict, force: bool = False) -> dict:
+    """Write the PT-resolved openclaw_config to ~/.openclaw/openclaw.json.
+
+    This is the programmatic entry point when a PT runtime payload dict is
+    already available in memory (e.g. from an orchestrator call or test).
+    The delegation path in bootstrap_openclaw() is for CLI/subprocess use.
+
+    Args:
+        payload: PT runtime payload dict containing gateway.openclaw_config.
+        force: If True, overwrite even if the file already matches.
+
+    Returns:
+        Status dict with gateway_ready, topology, applied, config_path, gateway_url.
+    """
+    openclaw_config = payload.get("gateway", {}).get("openclaw_config")
+    if not openclaw_config:
+        raise ValueError("PT runtime payload does not contain gateway.openclaw_config")
+
+    config_dir = Path.home() / ".openclaw"
+    config_file = config_dir / "openclaw.json"
+    config_dir.mkdir(parents=True, exist_ok=True)
+
+    existing: dict = {}
+    if config_file.exists():
+        try:
+            existing = json.loads(config_file.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
+
+    if force or existing != openclaw_config:
+        config_file.write_text(json.dumps(openclaw_config, indent=2), encoding="utf-8")
+        print(f"[openclaw] applied PT-resolved config -> {config_file}")
+    else:
+        print(f"[openclaw] config already matches PT payload -> {config_file}")
+
+    _ensure_agent_workspaces(config_dir)
+    return {
+        "applied": True,
+        "config_path": str(config_file),
+        "gateway_ready": bool(payload.get("gateway", {}).get("gateway_ready")),
+        "gateway_url": payload.get("gateway", {}).get("gateway_url"),
+        "topology": payload.get("role_routing", {}).get("topology"),
+    }
+
+
+# ── CLI ───────────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="orama-system OpenClaw/AlphaClaw bootstrap shim",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Delegates to Perpetua-Tools/alphaclaw_bootstrap.py when PT_HOME is set.\n"
+            "Falls back to inline logic if PT is unavailable.\n\n"
+            "Set PT_HOME to your Perpetua-Tools checkout root:\n"
+            "  export PT_HOME=/path/to/Perpetua-Tools\n"
+        ),
+    )
+    parser.add_argument("--bootstrap", action="store_true",
+                        help="Idempotent AlphaClaw install + configure + start")
+    parser.add_argument("--force", action="store_true",
+                        help="Force-rewrite openclaw.json")
+    _args = parser.parse_args()
+
+    if _args.bootstrap:
+        ok = asyncio.run(bootstrap_openclaw(force=_args.force))
+        sys.exit(0 if ok else 1)
+    else:
+        parser.print_help()
+        sys.exit(1)

@@ -1,3 +1,5 @@
+> ✅ **RESOLVED 2026-06-14** — orama history recovery completed; git-safety guardrails shipped.
+
 # Git Safety Guardrails
 
 ## Identity

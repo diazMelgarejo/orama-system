@@ -3,7 +3,7 @@
 message_bus.py
 ==============
 Async message bus for inter-agent communication.
-Version: 0.9.9.2 | License: Apache 2.0
+Version: 1.1.1.0 | License: Apache 2.0
 
 Supports:
 - In-memory asyncio queue (development/testing)
@@ -100,7 +100,7 @@ class MessageBus:
         tasks: list of (agent_id, payload) tuples
         Returns: list of results in same order as tasks
         """
-        from ultrathink_core import AgentMessage, MessageType
+        from oramasys_core import AgentMessage, MessageType
 
         futures = []
         trace_ids = []

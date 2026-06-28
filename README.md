@@ -1,14 +1,17 @@
-# The ὅραμα System
+# This is the Legacy ὅραμα System
+moving to 2.0 on another repo soon
 
-(inspired by *ultrathink*)
+---
+
 > *"Technology married with humanities yields solutions that make hearts sing."*
+> * (inspired by *ultrathink*)
 
 **The complete agent methodology for solving impossible problems with elegance.**
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 [![SKILL.md Standard](https://img.shields.io/badge/SKILL.md-Compatible-green)](https://ecc.tools/skills)
 [![ECC Tools](https://img.shields.io/badge/ECC_Tools-Compatible-brightgreen)](https://ecc.tools)
-[![Version](https://img.shields.io/badge/version-0.9.9.7-orange)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.1.1.0-orange)](CHANGELOG.md)
 
 **Compatible with**: Claude Code · Cowork · Clawdbot · MoltBot · OpenClaw · ECC Tools (everything-claude-code)
 
@@ -56,10 +59,10 @@ python bin/orama-system/scripts/verify_before_done.py --task "Build my feature"
 ```ascii
 orama-system/
 │
-├── bin/orama-system/                   ← Install here for Claude Code / Cowork
+├── bin/orama-system/               ← Install here for Claude Code / Cowork
 │   ├── SKILL.md                    ← Main intelligence layer (<500 lines)
 │   ├── references/                 ← Deep-dive documentation
-│   │   ├── ultrathink-5-stages.md
+│   │   ├── oramasys-5-stages.md
 │   │   ├── core-operational-directives.md
 │   │   ├── content-insertion-framework.md
 │   │   └── skill-architecture-guide.md
@@ -85,7 +88,7 @@ orama-system/
 ├── examples/                       ← Real-world usage walkthroughs
 ├── docs/                           ← Installation, guides, FAQ
 ├── portal_server.py                ← LAN dashboard for PT, ultrathink, LM Studio, Ollama
-├── network_autoconfig.py           ← LAN IP / agent auto-discovery helper
+├── scripts/                        ← Helper scripts (setup, network, install)
 ├── tests/                          ← Full test suite (pytest)
 └── .github/                        ← CI/CD workflows
 ```
@@ -110,7 +113,7 @@ orama-system/
 ### Multi-Agent Network (Distributed / Parallel)
 
 ```bash
-./install-multi-agent.sh
+scripts/install-multi-agent.sh
 python bin/mcp_servers/ultrathink_orchestration_server.py
 ```
 
@@ -118,13 +121,13 @@ python bin/mcp_servers/ultrathink_orchestration_server.py
 
 ```bash
 # Probe a LAN-friendly host/IP and optionally scan for agents
-python network_autoconfig.py --scan
+python scripts/network_autoconfig.py --scan
 
 # Launch the slate-grey portal on port 8002
 python portal_server.py
 ```
 
-- `network_autoconfig.py` detects the preferred local IP and can scan for LM Studio, Ollama, PT, ultrathink, and portal services.
+- `scripts/network_autoconfig.py` detects the preferred local IP and can scan for LM Studio, Ollama, PT, ultrathink, and portal services.
 - `portal_server.py` shows a lightweight LAN dashboard for PT, ultrathink, LM Studio, and Ollama endpoints.
 
 ---
