@@ -47,7 +47,19 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
-### 2026-06-28 — Portal restart after pull: stale `portal_server` → `/` 500 | Cursor
+### 2026-06-28 — Cycle 003 + graceful degradation ladders (operator approved) | Cursor
+
+**Approval:** operator `approve lessons` (round 3) · **Fan-out:** `2026-06-28-coord-003`  
+**Reference:** [`graceful-degradation.md`](../bin/orama-system/skills/oramasys-method/references/graceful-degradation.md)  
+**PT memory:** `lesson_c8dc70c59ac9` … `lesson_0ec02977f23a`
+
+**What was learned**
+
+- **Unified fallback ladders** — oramasys search (gbrain→CRG→Grep→web), PT inference (host-local→validated fallback→budget cutoff), LAN (ws-peer→SSE, inbox partial fan-out), autoresearch (`http-local`→SSH).
+- **Win portal lane** — `/peer-inbox` in `platform/windows/`; `/co-orchestration/windows` 307 redirect; Hermes skin removed.
+- **Cycle 003** — subagent branches for mutations; H5 harness + HTTP-local preflight spike; Task quota → parent inline + inbox drops still ship.
+
+---
 
 **Fix:** `435d27a` · **PT memory:** `lesson_64dedfe61cfa` · **Operator approval:** union with `lesson_20833366511b` (round 2)
 
