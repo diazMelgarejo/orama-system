@@ -1,0 +1,138 @@
+{
+  "fanout_id": "2026-06-28-coord-004",
+  "model": "qwen3.5:9b-nvfp4",
+  "base_url": "http://localhost:11434/v1",
+  "max_iterations": 5,
+  "tasks": [
+    {
+      "task_id": "h5-clamp",
+      "title": "Implement clamp(value, lo, hi)",
+      "iterations_to_pass": 1,
+      "total_wall_s": 86.0,
+      "total_tokens": 1073,
+      "passed": true,
+      "iterations": [
+        {
+          "iteration": 1,
+          "wall_s": 86.0,
+          "prompt_tokens": 49,
+          "completion_tokens": 1024,
+          "total_tokens": 1073,
+          "passed": true,
+          "rubric_notes": "clamp passes edge cases",
+          "content_chars": 3744
+        }
+      ]
+    },
+    {
+      "task_id": "h5-pytest",
+      "title": "Minimal pytest for add(a, b)",
+      "iterations_to_pass": 4,
+      "total_wall_s": 142.61,
+      "total_tokens": 9430,
+      "passed": true,
+      "iterations": [
+        {
+          "iteration": 1,
+          "wall_s": 41.54,
+          "prompt_tokens": 47,
+          "completion_tokens": 1024,
+          "total_tokens": 1071,
+          "passed": false,
+          "rubric_notes": "syntax error: unindent does not match any outer indentation level (<unknown>, line 4)",
+          "content_chars": 4064
+        },
+        {
+          "iteration": 2,
+          "wall_s": 47.93,
+          "prompt_tokens": 1126,
+          "completion_tokens": 1024,
+          "total_tokens": 2150,
+          "passed": false,
+          "rubric_notes": "syntax error: unindent does not match any outer indentation level (<unknown>, line 4)",
+          "content_chars": 3837
+        },
+        {
+          "iteration": 3,
+          "wall_s": 37.96,
+          "prompt_tokens": 2206,
+          "completion_tokens": 762,
+          "total_tokens": 2968,
+          "passed": false,
+          "rubric_notes": "syntax error: unindent does not match any outer indentation level (<unknown>, line 4)",
+          "content_chars": 2787
+        },
+        {
+          "iteration": 4,
+          "wall_s": 15.19,
+          "prompt_tokens": 3022,
+          "completion_tokens": 219,
+          "total_tokens": 3241,
+          "passed": true,
+          "rubric_notes": "pytest module parses; has test + assert for add",
+          "content_chars": 844
+        }
+      ]
+    },
+    {
+      "task_id": "h5-refactor",
+      "title": "DRY refactor for area helpers",
+      "iterations_to_pass": 5,
+      "total_wall_s": 261.56,
+      "total_tokens": 15641,
+      "passed": true,
+      "iterations": [
+        {
+          "iteration": 1,
+          "wall_s": 40.3,
+          "prompt_tokens": 103,
+          "completion_tokens": 1024,
+          "total_tokens": 1127,
+          "passed": false,
+          "rubric_notes": "syntax error: unexpected indent (<unknown>, line 3)",
+          "content_chars": 3819
+        },
+        {
+          "iteration": 2,
+          "wall_s": 47.12,
+          "prompt_tokens": 1179,
+          "completion_tokens": 1024,
+          "total_tokens": 2203,
+          "passed": false,
+          "rubric_notes": "syntax error: unexpected indent (<unknown>, line 3)",
+          "content_chars": 4001
+        },
+        {
+          "iteration": 3,
+          "wall_s": 48.55,
+          "prompt_tokens": 2251,
+          "completion_tokens": 1024,
+          "total_tokens": 3275,
+          "passed": false,
+          "rubric_notes": "syntax error: unexpected indent (<unknown>, line 3)",
+          "content_chars": 4034
+        },
+        {
+          "iteration": 4,
+          "wall_s": 49.22,
+          "prompt_tokens": 3321,
+          "completion_tokens": 1024,
+          "total_tokens": 4345,
+          "passed": false,
+          "rubric_notes": "syntax error: unexpected indent (<unknown>, line 3)",
+          "content_chars": 4040
+        },
+        {
+          "iteration": 5,
+          "wall_s": 76.37,
+          "prompt_tokens": 4391,
+          "completion_tokens": 300,
+          "total_tokens": 4691,
+          "passed": true,
+          "rubric_notes": "refactor shows shared pi / DRY structure",
+          "content_chars": 1134
+        }
+      ]
+    }
+  ]
+}
