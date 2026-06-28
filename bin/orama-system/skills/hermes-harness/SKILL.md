@@ -5,7 +5,7 @@ description: >-
   workflows. Use when installing Hermes, importing ECC/orama skills into Hermes,
   configuring Nous Portal or LM Studio providers, adding Hermes beside OpenClaw,
   or dispatching Hermes, Gemini, AGY, and Codex CLI coding partners.
-version: 1.1.0
+version: 1.1.0.0
 license: Apache 2.0
 compatibility: hermes, codex, claude-code, windows, openclaw, ecc, agy
 agent_compatibility:
@@ -117,8 +117,8 @@ Thin local wrappers point at canonical command cards. Never cache full skill bod
 | `pt-orama-council` | `commands/pt-orama-council/SKILL.md` | Hermes / Codex | 5-model council |
 | `pt-orama-review` | `commands/pt-orama-review/SKILL.md` | Hermes / Codex | Findings-first review |
 | `pt-orama-delegate` | `commands/pt-orama-delegate/SKILL.md` | Hermes / AGY | Bounded delegation |
-| `pt-orama-lesson-mining` | `commands/pt-orama-lesson-mining/SKILL.md` | Hermes / Codex | PT `learn.py` graduation |
 | `pt-hardware-policy` | `commands/pt-hardware-policy/SKILL.md` | Hermes | `hardware-affinity-gate` edge |
+| `pt-orama-lesson-mining` | `commands/pt-orama-lesson-mining/SKILL.md` | Hermes / Codex | **Optional** — session insight graduation; not installed by default |
 | `hermes-harness` | `SKILL.md` (this file) | Hermes | Install / provider / import |
 | `local-inference` | `../local-inference/SKILL.md` | Hermes | Redirect stub |
 | `openclaw-status` | `../openclaw-skills/skills/openclaw-status/SKILL.md` | Hermes | Mac fabric primary |
@@ -289,8 +289,9 @@ Create or refresh Hermes local commands from the canonical repo:
 python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install
 ```
 
-The expected slash commands are `/pt-orama-council`, `/pt-orama-review`,
-`/pt-orama-delegate`, and `/pt-orama-lesson-mining`; never paste a full canonical skill body into Hermes.
+The expected slash commands are `/pt-orama-council`, `/pt-orama-review`, and
+`/pt-orama-delegate`. Optional: `/pt-orama-lesson-mining` (pass `--include-optional`
+to the thin-skill installer). Never paste a full canonical skill body into Hermes.
 
 ### 5. Use Hermes as a Coding Partner
 
