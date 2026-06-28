@@ -63,6 +63,7 @@ from utils.control_plane_auth import (
     redact_models_payload,
     redact_portal_status_payload,
     redact_runtime_section,
+    verify_lifecycle_origin,
 )
 
 # Load .env so IPs are correct whether portal is run from start.sh or directly.
@@ -1021,17 +1022,18 @@ def _render_activity_section(events: List[Dict[str, Any]]) -> str:
             return "—"
 
     def _tag(event: str) -> str:
+        safe = _html.escape(str(event))
         if event in ("reply", "reply_received"):
             return '<span class="ev-tag tag-reply">reply</span>'
         if event in ("query_sent", "started"):
-            return '<span class="ev-tag tag-query">{}</span>'.format(event)
+            return '<span class="ev-tag tag-query">{}</span>'.format(safe)
         if event == "error":
             return '<span class="ev-tag tag-error">error</span>'
         if event in ("waiting_for_input",):
             return '<span class="ev-tag tag-waiting">waiting</span>'
         if event in ("user_task_received",):
             return '<span class="ev-tag tag-user">user task</span>'
-        return '<span class="ev-tag tag-other">{}</span>'.format(event)
+        return '<span class="ev-tag tag-other">{}</span>'.format(safe)
 
     if not events:
         return (
@@ -1043,7 +1045,7 @@ def _render_activity_section(events: List[Dict[str, Any]]) -> str:
 
     rows = []
     for ev in events[:15]:
-        msg = ev.get("msg", "")[:120].replace("<", "&lt;").replace(">", "&gt;")
+        msg = _html.escape(str(ev.get("msg", ""))[:120])
         rows.append(
             '<div class="ev">'
             f'<span class="ev-ts">{_html.escape(_fmt_ts(ev.get("ts", 0)))}</span>'
@@ -2797,8 +2799,9 @@ _SERVICE_CMDS = {
 
 
 @app.post("/api/stop")
-async def api_stop():
+async def api_stop(request: Request):
     """Kill all three orama services (PT :8000, orama :8001, portal :8002)."""
+    verify_lifecycle_origin(request)
     killed = []
     for name, port in _SERVICE_PORTS.items():
         pid = _pid_on_port(port)
@@ -2815,11 +2818,12 @@ async def api_stop():
 
 
 @app.post("/api/restart/{service}")
-async def api_restart(service: str):
+async def api_restart(service: str, request: Request):
     """Kill and restart a named service (pt | orama | portal).
     The service is restarted as a detached background process with the same working
     directory and inherited environment variables.
     """
+    verify_lifecycle_origin(request)
     if service not in _SERVICE_PORTS:
         return {"ok": False, "message": f"Unknown service '{service}' — use: pt, orama, portal"}
     port = _SERVICE_PORTS[service]
@@ -2867,8 +2871,9 @@ async def api_restart(service: str):
 
 
 @app.post("/api/rediscover")
-async def api_rediscover():
+async def api_rediscover(request: Request):
     """Re-run LAN discovery (discover.py --force) and return updated Win IP."""
+    verify_lifecycle_origin(request)
     discover_script = Path.home() / ".openclaw" / "scripts" / "discover.py"
     if not discover_script.exists():
         return {"ok": False, "message": f"discover.py not found at {discover_script}"}

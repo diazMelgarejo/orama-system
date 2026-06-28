@@ -128,7 +128,7 @@ shape instead of inventing a parallel remediation.
 - [x] Readonly MCP profile tests validate the final merged `.cursor/mcp.json`
   state, not only dry-run stack contents.
 
-**Remaining toward zero open queue:** P5 server-side swarm approval; P6 discovery operator approval before persistence; optional CSRF/origin guards on lifecycle routes.
+**Remaining toward zero open queue:** P5 server-side swarm approval; P6 discovery operator approval before persistence; mandatory CSRF/origin guards on lifecycle routes (`POST /api/stop`, `/api/restart/*`, `/api/rediscover`); optional operator session-cookie UX via `POST /api/auth/session` (PR5 stack).
 
 ---
 
