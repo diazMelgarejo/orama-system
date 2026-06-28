@@ -58,7 +58,7 @@ def test_generated_artifact_patterns_are_blocked():
         [
             ".DS_Store",
             "bin/shared/__pycache__/state_manager.cpython-312.pyc",
-            "dist/orama_system-0.9.9.9.whl",
+            "dist/orama_system-1.1.0.0.whl",
             "DerivedData/Build/Intermediates.noindex/file",
             "Project.xcodeproj/xcuserdata/user.xcuserdatad/UserInterfaceState.xcuserstate",
             "README.md",
@@ -68,7 +68,7 @@ def test_generated_artifact_patterns_are_blocked():
     assert errors == [
         "generated artifact is tracked: .DS_Store",
         "generated artifact is tracked: bin/shared/__pycache__/state_manager.cpython-312.pyc",
-        "generated artifact is tracked: dist/orama_system-0.9.9.9.whl",
+        "generated artifact is tracked: dist/orama_system-1.1.0.0.whl",
         "generated artifact is tracked: DerivedData/Build/Intermediates.noindex/file",
         "generated artifact is tracked: Project.xcodeproj/xcuserdata/user.xcuserdatad/UserInterfaceState.xcuserstate",
     ]
@@ -399,3 +399,138 @@ def test_identity_enforcement_is_scoped_to_cursor(monkeypatch):
     monkeypatch.delenv("CURSOR_AGENT", raising=False)
     # Cursor-flavored identity is a positive signal even without env vars.
     assert repo_hygiene.is_cursor_environment("Cursor Agent", "cursoragent@cursor.com") is True
+
+
+# ── repo_relative (new helper in repo_hygiene.py) ────────────────────────────
+
+def test_repo_relative_returns_posix_string(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    nested = tmp_path / "some" / "nested" / "file.txt"
+    result = repo_hygiene.repo_relative(nested, tmp_path)
+    assert result == "some/nested/file.txt"
+    assert "\\" not in result
+
+
+def test_repo_relative_direct_child(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    child = tmp_path / "file.txt"
+    assert repo_hygiene.repo_relative(child, tmp_path) == "file.txt"
+
+
+def test_repo_relative_deep_git_path(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    ref = tmp_path / ".git" / "refs" / "heads" / "main 2"
+    result = repo_hygiene.repo_relative(ref, tmp_path)
+    assert result == ".git/refs/heads/main 2"
+    assert "\\" not in result
+
+
+def test_scan_stale_git_locks_paths_use_posix_separators(tmp_path):
+    """Regression: scan_stale_git_locks must emit forward-slash paths on all platforms."""
+    repo_hygiene = load_repo_hygiene()
+    lock_dir = tmp_path / ".git" / "refs" / "heads"
+    lock_dir.mkdir(parents=True)
+    (lock_dir / "feature.lock").write_text("", encoding="utf-8")
+
+    errors = repo_hygiene.scan_stale_git_locks(tmp_path)
+
+    assert len(errors) == 1
+    # Path component separator must be forward slash.
+    assert ".git/refs/heads/feature.lock" in errors[0]
+    assert "\\" not in errors[0]
+
+
+def test_scan_macos_dedup_dirs_paths_use_posix_separators(tmp_path):
+    """Regression: scan_macos_dedup_dirs must emit forward-slash paths for the rel path."""
+    repo_hygiene = load_repo_hygiene()
+    sub = tmp_path / "src"
+    sub.mkdir()
+    (sub / "lib 2").mkdir()
+
+    errors = repo_hygiene.scan_macos_dedup_dirs(tmp_path)
+
+    assert len(errors) == 1
+    # The rel path portion uses forward slashes (the message also contains a
+    # literal '\' in the gitignore pattern hint, which is expected and acceptable).
+    assert "src/lib 2" in errors[0]
+
+
+def test_scan_macos_ghost_git_refs_paths_use_posix_separators(tmp_path):
+    """Regression: scan_macos_ghost_git_refs must emit forward-slash paths."""
+    repo_hygiene = load_repo_hygiene()
+    refs = tmp_path / ".git" / "refs" / "heads"
+    refs.mkdir(parents=True)
+    (refs / "main 2").write_text("abc123\n", encoding="utf-8")
+
+    errors = repo_hygiene.scan_macos_ghost_git_refs(tmp_path)
+
+    assert len(errors) == 1
+    assert ".git/refs/heads/main 2" in errors[0]
+    assert "\\" not in errors[0]
+
+
+def test_check_git_internal_junk_paths_use_posix_separators(tmp_path):
+    """Regression: check_git_internal_junk must emit forward-slash paths."""
+    repo_hygiene = load_repo_hygiene()
+    refs_dir = tmp_path / ".git" / "refs" / "heads"
+    refs_dir.mkdir(parents=True)
+    (refs_dir / ".DS_Store").write_text("", encoding="utf-8")
+
+    errors = repo_hygiene.check_git_internal_junk(tmp_path)
+
+    assert len(errors) == 1
+    assert ".git/refs/heads/.DS_Store" in errors[0]
+    assert "\\" not in errors[0]
+
+
+# ── find_bash (new helper in test_repo_hygiene.py) ───────────────────────────
+
+def test_find_bash_returns_existing_file(tmp_path, monkeypatch):
+    """find_bash() must return a path to an existing file.
+
+    Uses monkeypatching so the outcome is deterministic regardless of what
+    binaries happen to be installed on the executing machine -- avoiding
+    cross-runner flakiness (e.g. Windows runners without Git Bash on PATH).
+    """
+    fake_bash = tmp_path / "bash"
+    fake_bash.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    monkeypatch.setenv("HERMES_GIT_BASH_PATH", str(fake_bash))
+    bash = find_bash()
+    assert Path(bash).is_file(), f"find_bash() returned non-existent path: {bash}"
+
+
+def test_find_bash_prefers_hermes_git_bash_path(tmp_path, monkeypatch):
+    """When HERMES_GIT_BASH_PATH points at a real file, find_bash() returns it."""
+    fake_bash = tmp_path / "bash"
+    fake_bash.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    monkeypatch.setenv("HERMES_GIT_BASH_PATH", str(fake_bash))
+    assert find_bash() == str(fake_bash)
+
+
+def test_find_bash_ignores_nonexistent_hermes_git_bash_path(tmp_path, monkeypatch):
+    """HERMES_GIT_BASH_PATH pointing at a missing file must be skipped.
+
+    Monkeypatches shutil.which so the fallback returns a deterministic
+    result instead of depending on machine-installed binaries.
+    """
+    monkeypatch.setenv("HERMES_GIT_BASH_PATH", "/no/such/bash.exe")
+    # Inject a fake which()-found bash so the result is machine-independent.
+    fake_bash = tmp_path / "bash_from_which"
+    fake_bash.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    monkeypatch.setattr(shutil, "which", lambda name: str(fake_bash) if name == "bash" else None)
+    result = find_bash()
+    assert result == str(fake_bash)
+
+
+def test_find_bash_falls_back_without_env_var(tmp_path, monkeypatch):
+    """Without HERMES_GIT_BASH_PATH, find_bash() falls back to shutil.which.
+
+    Monkeypatches shutil.which to a deterministic fake so the test passes
+    on any runner (including Windows without Git Bash installed).
+    """
+    monkeypatch.delenv("HERMES_GIT_BASH_PATH", raising=False)
+    fake_bash = tmp_path / "bash_fallback"
+    fake_bash.write_text("#!/bin/sh\necho ok\n", encoding="utf-8")
+    monkeypatch.setattr(shutil, "which", lambda name: str(fake_bash) if name == "bash" else None)
+    result = find_bash()
+    assert result == str(fake_bash)

@@ -22,8 +22,7 @@ Antigravity, Codex, or cross-harness work.
 ## Council Protocol
 
 Use [`../../references/hermes-council-review-gates.md`](../../references/hermes-council-review-gates.md)
-for roles, review gates, and review package shape. Treat that file as support
-for this command, not a separate subskill or activation surface.
+for roles, review gates, and review package shape.
 
 ## Canonical Sources
 
@@ -31,6 +30,7 @@ Read relevant excerpts from:
 
 - [`../../SKILL.md`](../../SKILL.md)
 - [`../../references/hermes-council-review-gates.md`](../../references/hermes-council-review-gates.md)
+- [`../../references/hermes-windows-partner-readiness.md`](../../references/hermes-windows-partner-readiness.md)
 - [`../../../../../../docs/wiki/15-hermes-windows-harness.md`](../../../../../../docs/wiki/15-hermes-windows-harness.md)
 - [`../../../../../../ANTIGRAVITY.md`](../../../../../../ANTIGRAVITY.md)
 - [`../../../../../../docs/LESSONS.md`](../../../../../../docs/LESSONS.md)

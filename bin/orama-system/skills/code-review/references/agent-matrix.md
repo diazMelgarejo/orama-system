@@ -23,7 +23,7 @@
 
 ## Embedding env (OpenClaw `.mcp.json`)
 
-```
+```text
 CRG_OPENAI_API_KEY=ollama
 CRG_OPENAI_BASE_URL=http://localhost:11434/v1
 CRG_OPENAI_MODEL=bge-m3

@@ -3,11 +3,44 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
 
-REPO_ROOT = Path(__file__).resolve().parents[5]
+def resolve_repo_root() -> Path:
+    """Return orama-system git toplevel; fall back to parents[5] when not in a worktree."""
+    script = Path(__file__).resolve()
+    try:
+        top = subprocess.check_output(
+            ["git", "-C", str(script.parent), "rev-parse", "--show-toplevel"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        return Path(top)
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return script.parents[5]
+
+
+def install_provenance() -> str:
+    """Branch/commit stamp for thin wrappers — never hardcode stale PR numbers."""
+    try:
+        branch = subprocess.check_output(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "--abbrev-ref", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        sha = subprocess.check_output(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", "--short", "HEAD"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+        return f"Branch at install time: `{branch}` @ `{sha}`"
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+        return "Read canonical SKILL.md from the current orama-system checkout before acting."
+
+
+REPO_ROOT = resolve_repo_root()
 LOCALAPPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", LOCALAPPDATA / "hermes"))
 HERMES_SKILLS = HERMES_HOME / "skills" / "pt-orama"
@@ -23,6 +56,12 @@ class HermesWrapper:
 
 
 WRAPPERS = [
+    HermesWrapper(
+        slug="pt-hardware-policy",
+        description="Thin Hermes command for PT canonical hardware affinity validation.",
+        canonical="bin/orama-system/skills/hermes-harness/commands/pt-hardware-policy/SKILL.md",
+        purpose="Validate model↔hardware affinity via Perpetua-Tools policy before LM Studio dispatch.",
+    ),
     HermesWrapper(
         slug="pt-orama-council",
         description="Thin Hermes command for PT-orama council coordination.",
@@ -45,6 +84,7 @@ WRAPPERS = [
 
 
 def wrapper_text(spec: HermesWrapper) -> str:
+    provenance = install_provenance()
     return f"""---
 name: {spec.slug}
 description: "{spec.description}"
@@ -67,7 +107,7 @@ Purpose: {spec.purpose}
 Canonical source of truth:
 
 - Repo: `diazMelgarejo/orama-system`
-- Branch/PR at install time: `codex/hermes-ecc-harness-skills` / PR #96
+- {provenance}
 - Canonical path: `{spec.canonical}`
 
 ## Before Use
@@ -83,7 +123,7 @@ Canonical source of truth:
 ## Windows Readiness
 
 - Hermes one-shot: `hermes chat --query \"Reply with exactly: HERMES_READY\" --quiet --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1`
-- AGY install: `irm https://antigravity.google/cli/install.ps1 | iex`
+- AGY install (save-first — never pipe remote script to iex): `Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile \"$env:TEMP\\agy-install.ps1\"; Get-Content \"$env:TEMP\\agy-install.ps1\" | Select-Object -First 40; & powershell -NoProfile -ExecutionPolicy Bypass -File \"$env:TEMP\\agy-install.ps1\"`
 - AGY readiness: `agy --print \"Reply with exactly: AGY_READY\"` must print visible stdout.
 - LM Studio readiness: `/v1/models` is not enough; require a fast chat-completions canary.
 
@@ -133,13 +173,17 @@ def install(dry_run: bool = False) -> list[Path]:
         )
     for spec in WRAPPERS:
         target = HERMES_SKILLS / spec.slug.removeprefix("pt-orama-") / "SKILL.md"
-        if target.exists() and not is_managed_wrapper(target):
-            action = "would skip" if dry_run else "skipped"
-            print(f"{action} unmanaged wrapper: {target}")
-            continue
         if dry_run:
-            print(target)
+            if target.is_file() and not is_managed_wrapper(target):
+                print(f"would skip unmanaged wrapper: {target}")
+            else:
+                print(target)
             continue
+
+        if target.is_file() and not is_managed_wrapper(target):
+            print(f"skipped unmanaged wrapper: {target}")
+            continue
+
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(wrapper_text(spec), encoding="utf-8")
         written.append(target)
@@ -163,14 +207,64 @@ def verify() -> list[str]:
     return errors
 
 
+def run_tests() -> int:
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        global HERMES_SKILLS
+        original_skills = HERMES_SKILLS
+        HERMES_SKILLS = tmp_path / "skills"
+
+        try:
+            install()
+            council_path = HERMES_SKILLS / "council" / "SKILL.md"
+            if not council_path.is_file():
+                print("FAIL: council wrapper not created")
+                return 1
+
+            if not is_managed_wrapper(council_path):
+                print("FAIL: managed marker not found in fresh wrapper")
+                return 1
+
+            text = council_path.read_text(encoding="utf-8")
+            if "hermes chat --query" not in text:
+                print("FAIL: hermes chat command missing from wrapper")
+                return 1
+            if "--max-turns 1" not in text:
+                print("FAIL: turn bound missing in wrapper")
+                return 1
+
+            council_path.write_text(text.replace("version: 1.0.0", "version: 1.0.1"), encoding="utf-8")
+            install()
+            if "version: 1.0.0" not in council_path.read_text(encoding="utf-8"):
+                print("FAIL: agent-owned wrapper not updated on re-install")
+                return 1
+
+            user_text = text.replace(f"\n{MANAGED_MARKER}\n", "\ncreated_by: user\n")
+            council_path.write_text(user_text, encoding="utf-8")
+            install()
+            if "created_by: user" not in council_path.read_text(encoding="utf-8"):
+                print("FAIL: user-owned wrapper was clobbered")
+                return 1
+
+            print("non-clobber and syntax tests passed")
+            return 0
+        finally:
+            HERMES_SKILLS = original_skills
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--test", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
-    if not args.install and not args.verify:
-        parser.error("choose --install and/or --verify")
+    if not args.install and not args.verify and not args.test:
+        parser.error("choose --install, --verify, and/or --test")
+    if args.test:
+        return run_tests()
     if args.install:
         written = install(args.dry_run)
         if not args.dry_run:

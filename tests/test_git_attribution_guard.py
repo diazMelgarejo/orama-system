@@ -67,6 +67,23 @@ def test_check_commit_message_rejects_unknown_gmail(tmp_path):
     )
     assert proc.returncode != 0
 
+def test_check_commit_message_rejects_unknown_email_even_with_tool_marker(tmp_path):
+    """Parsed email must not fall through to display-name marker acceptance."""
+    script = ROOT / "scripts/git/check_commit_message.sh"
+    msg = tmp_path / "msg-hermes-marker-bad-email"
+    msg.write_text(
+        "feat: x\n\nCo-authored-by: Hermes Agent <evil@notallowed.example>\n",
+        encoding="utf-8",
+    )
+    proc = subprocess.run(
+        ["bash", str(script), str(msg)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+    )
+    assert proc.returncode != 0
+
+
 def test_check_commit_message_allows_cursoragent_exact_email(tmp_path):
     """cursoragent@cursor.com is on the explicit allowlist (not only cursor.com domain)."""
     script = ROOT / "scripts/git/check_commit_message.sh"

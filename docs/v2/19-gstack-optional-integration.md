@@ -19,6 +19,10 @@ gstack is an optional developer toolkit that ships:
 
 gstack is maintained by garrytan and is independently versioned from orama-system.
 
+**Agentic-stack union-merge (2026-06-26):** PT vendors agentic-stack at
+`vendor/agentic-stack` but owns `.agent/` in-repo. Upgrade workflow, Brain block policy,
+and Gbrain dual-bridge plan: [`41-agentic-stack-gstack-gbrain-memory-blend.md`](41-agentic-stack-gstack-gbrain-memory-blend.md).
+
 In v1, gstack is registered as an optional git submodule (`tools/gstack/`). In v2,
 it remains optional and idempotent — it is NEVER a hard dependency of any oramasys/* package.
 

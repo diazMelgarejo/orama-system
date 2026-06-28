@@ -7,17 +7,26 @@ version: "1.0"
 layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
 upstream: https://github.com/rahulsub-be/cc-openclaw
 upstream_license: MIT
+extends: ../cc-openclaw/.claude/skills/openclaw-add-script/SKILL.md
+overlay_role: orama-normalized cross-harness extension
 ---
 
+## Overlay Source
+
+This Orama-normalized skill extends the upstream cc-openclaw skill at [`../cc-openclaw/.claude/skills/openclaw-add-script/SKILL.md`](../cc-openclaw/.claude/skills/openclaw-add-script/SKILL.md). Use the upstream file as the behavioral baseline and this file as the cross-harness overlay for Orama, Perpetua-Tools, Codex, Hermes, Gemini, and other agent runners.
+
 ## Purpose
+
 Create production-safe shell scripts for deterministic operations. This skill enforces strict shell mode, structured JSON output, and separated logging streams. It also ensures shared response helpers exist so scripts return consistent payloads.
 
 ## When to Use
+
 - Adding automation scripts under an agent’s `scripts/`
 - Replacing ad hoc shell commands with reusable tooling
 - Standardizing machine-readable script outputs
 
 ## Inputs
+
 - Required:
   - `agent_id`
   - `script_name` (hyphenated, without extension)
@@ -25,7 +34,9 @@ Create production-safe shell scripts for deterministic operations. This skill en
   - `summary` (for `TOOLS.md`)
 
 ## Procedure
+
 1. Validate names and create script folders.
+
 ```bash
 set -euo pipefail
 printf '%s' "$script_name" | grep -Eq '^[a-z0-9]+(-[a-z0-9]+)*$'
@@ -34,6 +45,7 @@ lib_dir="$script_dir/lib"
 mkdir -p "$script_dir" "$lib_dir"
 ```
 2. Create shared JSON response helper if missing.
+
 ```bash
 helper="$lib_dir/json-response.sh"
 if [ ! -f "$helper" ]; then
@@ -46,6 +58,7 @@ EOT
 fi
 ```
 3. Scaffold script with strict mode and helper import.
+
 ```bash
 script_path="$script_dir/$script_name.sh"
 cat > "$script_path" <<'EOT'
@@ -62,12 +75,14 @@ EOT
 chmod +x "$script_path"
 ```
 4. Enforce output contract in implementation notes.
+
 ```bash
 # stdout must emit only one JSON object.
 # stderr is reserved for logs.
 # exit code must match status.
 ```
 5. Document script in `TOOLS.md`.
+
 ```bash
 tools_file="agents/$agent_id/TOOLS.md"
 grep -q "$script_name.sh" "$tools_file" || cat >> "$tools_file" <<EOT
@@ -76,12 +91,14 @@ grep -q "$script_name.sh" "$tools_file" || cat >> "$tools_file" <<EOT
 EOT
 ```
 6. Validate executable and parseable output.
+
 ```bash
 bash -n "$script_path"
 "$script_path" | jq . >/dev/null
 ```
 
 ## Output Contract
+
 ```json
 {
   "status": "ok|error",
@@ -91,16 +108,19 @@ bash -n "$script_path"
 ```
 
 ## Naming Enforcement
+
 - Script name must be lowercase-hyphen.
 - Script filename format: `<script_name>.sh`.
 - Shared helper path must remain `scripts/lib/json-response.sh`.
 
 ## Gotchas
+
 - Missing `set -euo pipefail` causes silent failures and undefined variable bugs.
 - Printing logs to stdout breaks JSON consumers.
 - If helper is duplicated per script instead of shared, maintenance drifts quickly.
 
 ## See Also
+
 - `../openclaw-new-agent/SKILL.md`
 - `../openclaw-status/SKILL.md`
 - `../openclaw-stow/SKILL.md`

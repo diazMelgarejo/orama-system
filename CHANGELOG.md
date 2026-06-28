@@ -1,4 +1,17 @@
+<!-- lint-ignore LINT-013 -->
 # Changelog
+
+## [1.1.0.0] - 2026-06-21
+### Changed
+- Version: standardized all canonical surfaces to 1.1.0.0 (pyproject.toml,
+  bin/orama-system/SKILL.md, CLAUDE.md, README.md badge, root SKILL.md
+  version registry, docs/PERPLEXITY_BRIDGE.md, docs/SYNC_ANALYSIS.md,
+  src/orama_system/api_server.py ADR-001 reference)
+- Test: renamed `test_active_version_surfaces_are_09998` →
+  `test_active_version_surfaces_are_v1100`; updated all five version
+  assertions from 0.9.9.9 → 1.1.0.0
+- Historical docs (LESSONS.md, plans/, specs/, fork-patches/) preserve
+  0.9.9.9 references as accurate historical records; not bumped
 
 ## [0.9.9.4] - 2026-04-11
 ### Changed
