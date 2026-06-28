@@ -38,6 +38,13 @@ def test_sync_script_readonly_profile_dry_run() -> None:
     assert "server: ai-cli-mcp" not in proc.stdout
 
 
+def test_tracked_cursor_mcp_json_is_readonly_safe() -> None:
+    data = json.loads((ORAMA_ROOT / ".cursor/mcp.json").read_text(encoding="utf-8"))
+    servers = set(data["mcpServers"].keys())
+    assert "ai-cli-mcp" not in servers
+    assert "code-review-graph" in servers
+
+
 def test_sync_script_elevated_profile_dry_run() -> None:
     proc = subprocess.run(
         ["bash", str(SYNC_SH), "--profile", "elevated", "--dry-run"],
@@ -49,3 +56,19 @@ def test_sync_script_elevated_profile_dry_run() -> None:
     assert proc.returncode == 0, proc.stderr
     assert "Profile: elevated" in proc.stdout
     assert "server: ai-cli-mcp" in proc.stdout
+
+
+def test_ensure_control_plane_token_persists_when_enforced(monkeypatch, tmp_path):
+    from utils.control_plane_auth import ensure_control_plane_token
+
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
+    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
+
+    token = ensure_control_plane_token()
+    assert token
+    token_path = tmp_path / ".state" / "control_plane_token"
+    assert token_path.is_file()
+    assert token_path.read_text(encoding="utf-8").strip() == token
+    assert oct(token_path.stat().st_mode & 0o777) == oct(0o600)

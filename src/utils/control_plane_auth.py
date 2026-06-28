@@ -218,26 +218,15 @@ def _resolve_perpetua_tools_root() -> Path | None:
 
 
 def auth_enforced() -> bool:
-    """
-    Determine whether control-plane bearer authentication is required.
-    
-    Auth is required when a control-plane token is configured or when
-    ORAMA_INSECURE_DEV is explicitly set to a production value (`0`, `false`, `no`).
-    Auth is disabled when ORAMA_INSECURE_DEV is explicitly set to an insecure value
-    (`1`, `true`, `yes`). When neither a token nor an explicit insecure setting
-    is provided, authentication is not enforced to preserve existing local workflows.
-    
-    Returns:
-        `true` if control-plane authentication must be enforced, `false` otherwise.
-    """
-    if _env_control_plane_token_candidates() or pt_lane_token_candidates():
-        return True
+    """Return True when control-plane bearer auth must be checked (PT-aligned default)."""
     insecure = os.getenv(ENV_INSECURE, "").strip().lower()
     if insecure in ("1", "true", "yes"):
         return False
+    if _env_control_plane_token_candidates() or pt_lane_token_candidates():
+        return True
     if insecure in ("0", "false", "no"):
         return True
-    return False
+    return True
 
 
 def _read_pt_persisted_token() -> str:
@@ -275,8 +264,29 @@ def _legacy_resolved_control_plane_token() -> str:
     return _read_pt_persisted_token()
 
 
+def _default_token_path() -> Path:
+    pt_root = _resolve_perpetua_tools_root()
+    if pt_root is not None:
+        return pt_root / ".state" / "control_plane_token"
+    return Path(__file__).resolve().parents[2] / ".state" / "control_plane_token"
+
+
+def _secure_write_token(path: Path, value: str) -> None:
+    """Write token file with 0600 permissions at creation time (umask-safe)."""
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle.write(value)
+
+
+def persist_control_plane_token(token: str, path: Path | None = None) -> Path:
+    token_path = path or _default_token_path()
+    token_path.parent.mkdir(parents=True, exist_ok=True)
+    _secure_write_token(token_path, token)
+    return token_path
+
+
 def ensure_control_plane_token() -> str:
-    """Return configured token, generating one when insecure dev is off."""
+    """Return configured token, generating and persisting one when auth is enforced."""
     existing = _legacy_resolved_control_plane_token()
     if existing:
         if not control_plane_token():
@@ -286,7 +296,29 @@ def ensure_control_plane_token() -> str:
         return ""
     generated = secrets.token_urlsafe(32)
     os.environ[ENV_TOKEN] = generated
+    persist_control_plane_token(generated)
     return generated
+
+
+def is_weak_control_plane_token(token: str) -> bool:
+    """True for empty or documented placeholder tokens that must not gate LAN bind."""
+    normalized = (token or "").strip().lower()
+    if not normalized:
+        return True
+    return normalized in {
+        "change-me-before-network-use",
+        "changeme",
+        "change-me",
+        "placeholder",
+        "test",
+        "secret",
+    }
+
+
+def lan_bind_configured() -> bool:
+    """True when any control-plane service is configured for LAN exposure."""
+    flags = ("PT_BIND_LAN", "ORAMA_BIND_LAN", "PORTAL_BIND_LAN")
+    return any(os.getenv(name, "").strip().lower() in ("1", "true", "yes") for name in flags)
 
 
 def request_is_loopback(request: Request) -> bool:
@@ -296,6 +328,57 @@ def request_is_loopback(request: Request) -> bool:
     host = (request.client.host or "").strip()
     # "testclient" is Starlette's in-process host (pytest / TestClient).
     return host in {"127.0.0.1", "::1", "localhost", "testclient"}
+
+
+_LOOPBACK_ORIGIN_HOSTS = frozenset({"127.0.0.1", "::1", "localhost"})
+
+
+def _normalize_origin_host(host: str) -> str:
+    normalized = (host or "").strip().lower()
+    if normalized.startswith("[") and normalized.endswith("]"):
+        normalized = normalized[1:-1]
+    return normalized
+
+
+def _origin_header_host(value: str) -> str | None:
+    from urllib.parse import urlparse
+
+    value = (value or "").strip()
+    if not value:
+        return None
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.hostname:
+        return None
+    return _normalize_origin_host(parsed.hostname)
+
+
+def lifecycle_origin_allowed(request: Request) -> bool:
+    """True when Origin/Referer is absent, loopback (port ignored), or same hostname.
+
+    Localhost operator policy: compare hostnames only so portal :8002 may accept
+    POSTs from pages served on PT :8000 or orama :8001.
+    """
+    origin = request.headers.get("origin", "").strip()
+    referer = request.headers.get("referer", "").strip()
+    if not origin and not referer:
+        return True
+
+    request_host = _normalize_origin_host(request.url.hostname or "")
+    request_is_local = request_is_loopback(request) or request_host in _LOOPBACK_ORIGIN_HOSTS
+    for header in (origin, referer):
+        header_host = _origin_header_host(header)
+        if header_host is None:
+            continue
+        if header_host in _LOOPBACK_ORIGIN_HOSTS and request_is_local:
+            return True
+        if header_host == request_host:
+            return True
+    return False
+
+
+def verify_lifecycle_origin(request: Request) -> None:
+    if not lifecycle_origin_allowed(request):
+        raise HTTPException(status_code=403, detail="Cross-origin request denied")
 
 
 def bearer_token_from_request(request: Request) -> str:
