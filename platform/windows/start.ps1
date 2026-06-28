@@ -34,18 +34,38 @@
     Both are applied automatically below.
 #>
 
-[CmdletBinding()]
-param(
-    [switch]$NoOpen,
-    [switch]$Stop,
-    [switch]$Status,
-    [switch]$Discover,
-    [switch]$HardwarePolicy,
-    [switch]$LanPeer
-)
+#Requires -Version 5.1
+# All CLI flags parsed from $args for start.sh parity (--no-open, --stop, etc.).
+# PowerShell switch params do not accept --kebab-case; $PID is read-only — avoid $pid.
+param()
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+$NoOpen = $false
+$Stop = $false
+$Status = $false
+$Discover = $false
+$HardwarePolicy = $false
+$LanPeer = $false
+
+foreach ($a in $args) {
+    switch ($a) {
+        '--no-open'          { $NoOpen = $true }
+        '-NoOpen'            { $NoOpen = $true }
+        '--stop'             { $Stop = $true }
+        '-Stop'              { $Stop = $true }
+        '--status'           { $Status = $true }
+        '-Status'            { $Status = $true }
+        '--discover'         { $Discover = $true }
+        '-Discover'          { $Discover = $true }
+        '--hardware-policy'  { $HardwarePolicy = $true }
+        '-HardwarePolicy'    { $HardwarePolicy = $true }
+        '--lan-peer'         { $LanPeer = $true }
+        '-LanPeer'           { $LanPeer = $true }
+        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --discover --hardware-policy --lan-peer" }
+    }
+}
 
 # ── UTF-8 everywhere ──────────────────────────────────────────────────────────
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -151,6 +171,17 @@ if ($Discover -or -not (Test-Path $PathsFile)) {
     if ($Discover) { exit 0 }
 }
 
+function Get-BindHost {
+    param([string]$LanEnv, [string]$HostEnv, [string]$Default = '127.0.0.1')
+    $lan = [Environment]::GetEnvironmentVariable($LanEnv, 'Process')
+    if ($lan -and $lan.Trim().ToLower() -in @('1', 'true', 'yes')) {
+        return '0.0.0.0'
+    }
+    $hostVal = [Environment]::GetEnvironmentVariable($HostEnv, 'Process')
+    if ($hostVal -and $hostVal.Trim()) { return $hostVal.Trim() }
+    return $Default
+}
+
 # ── Port config ───────────────────────────────────────────────────────────────
 $PtPort     = if ($env:PT_PORT)     { [int]$env:PT_PORT }     else { 8000 }
 $UsPort     = if ($env:US_PORT)     { [int]$env:US_PORT }     else { 8001 }
@@ -163,6 +194,10 @@ if ($LanPeer) {
     if (-not $env:PT_BIND_LAN)     { $env:PT_BIND_LAN     = '1' }
     _Info 'lan-peer' 'LAN bind env set (services bind 0.0.0.0 on Windows)'
 }
+
+$PtHost     = Get-BindHost 'PT_BIND_LAN' 'PT_HOST'
+$UsHost     = Get-BindHost 'ORAMA_BIND_LAN' 'ORAMASYS_HOST'
+$PortalHost = Get-BindHost 'PORTAL_BIND_LAN' 'PORTAL_HOST'
 
 function Sync-ControlPlaneToken {
     if ($env:ORAMA_CONTROL_PLANE_TOKEN) { return }
@@ -263,10 +298,10 @@ function Open-Browser {
 if ($Stop) {
     Write-Host 'Stopping orama-system services...'
     foreach ($port in @($PtPort, $UsPort, $PortalPort)) {
-        $pid = Get-PidOnPort $port
-        if ($pid) {
-            Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
-            Write-Host "  killed PID $pid (port $port)"
+        $listenerPid = Get-PidOnPort $port
+        if ($listenerPid) {
+            Stop-Process -Id $listenerPid -Force -ErrorAction SilentlyContinue
+            Write-Host "  killed PID $listenerPid (port $port)"
         } else {
             Write-Host "  nothing on port $port"
         }
@@ -282,9 +317,9 @@ if ($Status) {
         @{Name='orama';  Port=$UsPort},
         @{Name='Portal'; Port=$PortalPort}
     )) {
-        $pid = Get-PidOnPort $entry.Port
-        if ($pid) {
-            Write-Host ("  {0,-8} :{1,-5}  ● UP    (PID {2})" -f $entry.Name, $entry.Port, $pid)
+        $listenerPid = Get-PidOnPort $entry.Port
+        if ($listenerPid) {
+            Write-Host ("  {0,-8} :{1,-5}  ● UP    (PID {2})" -f $entry.Name, $entry.Port, $listenerPid)
         } else {
             Write-Host ("  {0,-8} :{1,-5}  ○ DOWN" -f $entry.Name, $entry.Port)
         }
@@ -403,7 +438,7 @@ function Start-Service {
     }
     # Inherit parent env
     foreach ($kv in [System.Environment]::GetEnvironmentVariables('Process').GetEnumerator()) {
-        if (-not $psi.EnvironmentVariables.Contains($kv.Key)) {
+        if (-not $psi.EnvironmentVariables.ContainsKey($kv.Key)) {
             $psi.EnvironmentVariables[$kv.Key] = $kv.Value
         }
     }
@@ -422,25 +457,26 @@ function Start-Service {
 if ($PtDir -and (Test-Path (Join-Path $PtDir 'orchestrator\fastapi_app.py'))) {
     Start-Service -Name 'PT' -Port $PtPort -WorkDir $PtDir `
         -Cmd @($PtPython, '-m', 'uvicorn', 'orchestrator.fastapi_app:app',
-               '--host', '0.0.0.0', '--port', $PtPort.ToString()) `
-        -EnvExtra @{ PYTHONPATH = $PtDir }
+               '--host', $PtHost, '--port', $PtPort.ToString()) `
+        -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
     $null = Wait-ForPort $PtPort 'PT'
 } else {
     Write-Host "  PT   skipped (not found at: $PtDir)"
 }
 
 # ── 2. orama reasoning engine ─────────────────────────────────────────────────
+$oramaPyPath = "$RepoRoot\src;$RepoRoot"
 Start-Service -Name 'orama' -Port $UsPort -WorkDir $RepoRoot `
-    -Cmd @($UsPython, '-m', 'uvicorn', 'api_server:app',
-           '--host', '0.0.0.0', '--port', $UsPort.ToString()) `
-    -EnvExtra @{ PYTHONPATH = $RepoRoot }
+    -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.api_server:app',
+           '--host', $UsHost, '--port', $UsPort.ToString()) `
+    -EnvExtra @{ PYTHONPATH = $oramaPyPath }
 $null = Wait-ForPort $UsPort 'orama'
 
 # ── 3. Portal ─────────────────────────────────────────────────────────────────
 Start-Service -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
-    -Cmd @($UsPython, '-m', 'uvicorn', 'portal_server:app',
-           '--host', '0.0.0.0', '--port', $PortalPort.ToString()) `
-    -EnvExtra @{ PYTHONPATH = $RepoRoot }
+    -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.portal_server:app',
+           '--host', $PortalHost, '--port', $PortalPort.ToString()) `
+    -EnvExtra @{ PYTHONPATH = $oramaPyPath }
 $null = Wait-ForPort $PortalPort 'Portal'
 
 # ── Ready ─────────────────────────────────────────────────────────────────────
