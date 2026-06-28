@@ -7,17 +7,26 @@ version: "1.0"
 layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
 upstream: https://github.com/rahulsub-be/cc-openclaw
 upstream_license: MIT
+extends: ../cc-openclaw/.claude/skills/openclaw-dream-setup/SKILL.md
+overlay_role: orama-normalized cross-harness extension
 ---
 
+## Overlay Source
+
+This Orama-normalized skill extends the upstream cc-openclaw skill at [`../cc-openclaw/.claude/skills/openclaw-dream-setup/SKILL.md`](../cc-openclaw/.claude/skills/openclaw-dream-setup/SKILL.md). Use the upstream file as the behavioral baseline and this file as the cross-harness overlay for Orama, Perpetua-Tools, Codex, Hermes, Gemini, and other agent runners.
+
 ## Purpose
+
 Install a consistent nightly memory distillation pipeline for one agent. This skill creates the required memory docs and archive structure, schedules execution, and updates startup references. It enforces strict token budgets to preserve operational context for real tasks.
 
 ## When to Use
+
 - Enabling long-term memory hygiene for an agent
 - Rebuilding dream routine after migration
 - Standardizing memory process across agents
 
 ## Inputs
+
 - Required:
   - `agent_id`
   - `run_time` (cron-compatible local time)
@@ -26,7 +35,9 @@ Install a consistent nightly memory distillation pipeline for one agent. This sk
   - `job_id` (defaults to `<agent_id>-dream-nightly`)
 
 ## Procedure
+
 1. Validate agent path and create memory archives directory.
+
 ```bash
 set -euo pipefail
 agent_dir="agents/$agent_id"
@@ -34,6 +45,7 @@ agent_dir="agents/$agent_id"
 mkdir -p "$agent_dir/memory/archives"
 ```
 2. Create `DREAM-ROUTINE.md` with fixed token budgets.
+
 ```bash
 cat > "$agent_dir/DREAM-ROUTINE.md" <<'EOT'
 # DREAM ROUTINE
@@ -44,6 +56,7 @@ cat > "$agent_dir/DREAM-ROUTINE.md" <<'EOT'
 EOT
 ```
 3. Create `MEMORY.md` if missing.
+
 ```bash
 [ -f "$agent_dir/MEMORY.md" ] || cat > "$agent_dir/MEMORY.md" <<'EOT'
 # MEMORY
@@ -52,6 +65,7 @@ Curated long-term facts, preferences, and durable project decisions.
 EOT
 ```
 4. Add cron job in `openclaw.json` for dream routine.
+
 ```bash
 job_id="${job_id:-$agent_id-dream-nightly}"
 jq --arg id "$job_id" --arg aid "$agent_id" --arg rt "$run_time" '
@@ -67,6 +81,7 @@ jq --arg id "$job_id" --arg aid "$agent_id" --arg rt "$run_time" '
 ' openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
 ```
 5. Add QMD index references in `openclaw.json`.
+
 ```bash
 jq --arg aid "$agent_id" '
   (.agents.indexes //= {}) |
@@ -75,6 +90,7 @@ jq --arg aid "$agent_id" '
 ' openclaw.json > openclaw.json.tmp && mv openclaw.json.tmp openclaw.json
 ```
 6. Update `AGENTS.md` startup sequence for memory preloads.
+
 ```bash
 grep -q 'DREAM-ROUTINE.md' "$agent_dir/AGENTS.md" || cat >> "$agent_dir/AGENTS.md" <<'EOT'
 
@@ -85,6 +101,7 @@ grep -q 'DREAM-ROUTINE.md' "$agent_dir/AGENTS.md" || cat >> "$agent_dir/AGENTS.m
 EOT
 ```
 7. Deploy and verify.
+
 ```bash
 rm -f ~/.openclaw/cron/jobs.json
 stow --no-folding -t "$HOME" .
@@ -93,6 +110,7 @@ sleep 5
 ```
 
 ## Output Contract
+
 ```json
 {
   "status": "ok|error",
@@ -102,16 +120,19 @@ sleep 5
 ```
 
 ## Naming Enforcement
+
 - Dream job ID defaults to `<agent_id>-dream-nightly`.
 - Agent ID must remain lowercase-hyphen style.
 - Token budget values are fixed and must remain `2500` and `7500`.
 
 ## Gotchas
+
 - Skipping budget enforcement causes memory retrieval to consume active context.
 - Missing `memory/archives/` blocks rolling digest workflow.
 - Omitting AGENTS startup steps leads to stale memory usage.
 
 ## See Also
+
 - `../openclaw-add-cron/SKILL.md`
 - `../openclaw-status/SKILL.md`
 - `../openclaw-restart/SKILL.md`

@@ -4,7 +4,7 @@ Local Codex skill installs must be wrappers, not forks.
 
 ## Rule
 
-Install only a small wrapper under Codex-discovered skill roots that points to the canonical in-repo skill card. Current Codex docs use `$HOME/.agents/skills/<name>/SKILL.md` for personal skills and `.agents/skills/<name>/SKILL.md` for repo skills. This repository may also write `~/.codex/skills/<name>/SKILL.md` for compatibility with Codex Desktop sessions that still expose that legacy root. Do not copy the canonical skill body, references, scripts, or assets into a Codex skill directory.
+Install only a small wrapper under Codex-discovered skill roots that points to the canonical in-repo skill card. Current Codex docs use `~/.agents/skills/<name>/SKILL.md` for personal skills and `.agents/skills/<name>/SKILL.md` for repo skills. This repository may also write `~/.codex/skills/<name>/SKILL.md` for compatibility with Codex Desktop sessions that still expose that legacy root. Do not copy the canonical skill body, references, scripts, or assets into a Codex skill directory.
 
 ## Why
 
@@ -69,6 +69,39 @@ Run all of these before declaring a local install done:
 - Verify the wrapper contains `git fetch origin --prune` and `git pull --ff-only`.
 - Verify the wrapper directory contains only `SKILL.md`.
 - Scan wrapper roots for mojibake markers such as `Ã`, `Â`, `â`, and `�`.
+- Scan the `description` field for leaked generation artifacts: `[web:N]`-style
+  citation markers, raw code-fence fragments (e.g. a description that is
+  literally ` ```bash `), or a trailing `…` that indicates the source text was
+  copy-pasted from an already-truncated render rather than the full original.
+  Found twice in this repo's history (`orama-repo-rules`, `perpetua-tools`,
+  2026-06-19) -- both were caught by description length/content checks, not by
+  any of the gates above, which all passed cleanly.
+
+## Description Quality (2026-06-19, added after auditing this repo's existing wrappers)
+
+The `description` field is the entire routing signal before the canonical
+card is ever read -- for hosted/managed skill runtimes it is literally all
+the model sees until it chooses to load the full file. Per OpenAI's Agent
+Skills guidance (the same open standard this repo's wrappers target):
+<https://developers.openai.com/blog/skills-shell-tips>,
+<https://developers.openai.com/codex/skills>.
+
+- **Front-load concrete trigger words.** Lead with what the skill does and
+  when, not scene-setting prose. Hosted runtimes truncate the skill list at
+  roughly 2% of context (or ~8,000 chars when unknown) and shorten
+  descriptions first when many skills are installed -- whatever isn't in the
+  first sentence may never be seen.
+- **Include a short negative cue when collision risk exists.** "Don't use
+  for X -- that's `other-skill`'s role" measurably improves routing versus
+  positive-only descriptions; one cited case went from 73% to 85% accuracy
+  with negative examples plus edge-case coverage. Not required for every
+  wrapper, but worth adding whenever two skills in this repo could plausibly
+  both match the same request (e.g. `perpetua-tools` vs. orama-system's
+  reasoning layer).
+- **Never leave generation artifacts in the field** -- no citation markers,
+  no mid-sentence truncation ellipses, no raw markdown fences. A description
+  that doesn't read as a complete, clean sentence is a generation bug, not a
+  style choice, and should fail validation the same as a missing `name` key.
 
 ## Local Model Smoke Test
 
