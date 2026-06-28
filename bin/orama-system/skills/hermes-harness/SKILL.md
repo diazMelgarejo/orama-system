@@ -118,6 +118,7 @@ Thin local wrappers point at canonical command cards. Never cache full skill bod
 | `pt-orama-review` | `commands/pt-orama-review/SKILL.md` | Hermes / Codex | Findings-first review |
 | `pt-orama-delegate` | `commands/pt-orama-delegate/SKILL.md` | Hermes / AGY | Bounded delegation |
 | `pt-hardware-policy` | `commands/pt-hardware-policy/SKILL.md` | Hermes | `hardware-affinity-gate` edge |
+| `lan-peer-self-talk` | `commands/lan-peer-self-talk/SKILL.md` | Hermes | Mac↔Win LAN peer probe |
 | `pt-orama-lesson-mining` | `commands/pt-orama-lesson-mining/SKILL.md` | Hermes / Codex | **Optional** — session insight graduation; not installed by default |
 | `hermes-harness` | `SKILL.md` (this file) | Hermes | Install / provider / import |
 | `local-inference` | `../local-inference/SKILL.md` | Hermes | Redirect stub |
@@ -368,6 +369,7 @@ Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw ow
 
 ## References
 
+- [`references/lan-peer-self-talk.md`](references/lan-peer-self-talk.md) — Mac↔Win parallel install HTTP peer probe
 - [`references/hermes-universal-invocation-protocol.md`](references/hermes-universal-invocation-protocol.md) — envelope, layers, result superset
 - [`references/hermes-skill-absorption-map.md`](references/hermes-skill-absorption-map.md) — Hermes → orama absorption status (redirects + supersets)
 - [`references/hermes-ecc-fork-inventory.md`](references/hermes-ecc-fork-inventory.md)
