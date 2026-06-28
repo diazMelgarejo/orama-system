@@ -38,6 +38,7 @@ from starlette.responses import StreamingResponse
 from orama_system.lan_peer_channel import LanPeerChannel, make_envelope, read_discovery_peer_ip
 
 from utils.control_plane_auth import (
+    accepted_control_plane_tokens,
     auth_enforced,
     auth_headers,
     cors_allow_origins,
@@ -46,6 +47,7 @@ from utils.control_plane_auth import (
     portal_requires_auth,
     request_is_loopback,
     resolved_control_plane_token,
+    token_matches_control_plane,
     redact_activity_payload,
     redact_agents_payload,
     redact_jobs_payload,
@@ -1346,8 +1348,7 @@ def _hardware_policy_status(services: Dict[str, Any]) -> Dict[str, Any]:
 async def _verify_ws_control_plane(ws: WebSocket) -> None:
     if not auth_enforced():
         return
-    expected = resolved_control_plane_token()
-    if not expected:
+    if not accepted_control_plane_tokens():
         await ws.close(code=1013)
         raise WebSocketDisconnect(code=1013)
     provided = (ws.query_params.get("token") or "").strip()
@@ -1355,7 +1356,7 @@ async def _verify_ws_control_plane(ws: WebSocket) -> None:
         auth_header = ws.headers.get("authorization", "")
         if auth_header.startswith("Bearer "):
             provided = auth_header[7:].strip()
-    if not provided or not secrets.compare_digest(provided, expected):
+    if not token_matches_control_plane(provided, scope="orama"):
         await ws.close(code=1008)
         raise WebSocketDisconnect(code=1008)
 

@@ -102,7 +102,13 @@ def test_auth_enforced_matrix(monkeypatch):
     from utils.control_plane_auth import auth_enforced
 
     monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN_LOCAL", raising=False)
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", raising=False)
+    monkeypatch.delenv("PT_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.delenv("PERPETUA_TOOLS_ROOT", raising=False)
+    monkeypatch.delenv("PERPETUA_TOOLS_PATH", raising=False)
     monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
+    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
     assert auth_enforced() is False
 
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "secret")
@@ -218,4 +224,53 @@ def test_pt_auth_module_available_in_sibling_checkout():
     if not auth_module.is_file():
         pytest.skip("Perpetua-Tools sibling checkout not present")
     assert "ORAMA_CONTROL_PLANE_TOKEN" in auth_module.read_text(encoding="utf-8")
+
+
+def test_accept_peer_token_during_handoff(monkeypatch):
+    from utils.control_plane_auth import (
+        control_plane_auth_mode,
+        token_matches_control_plane,
+        verify_control_plane_auth,
+    )
+
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "mac-orama-token")
+    monkeypatch.setenv("PT_CONTROL_PLANE_TOKEN", "win-pt-token")
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN_LOCAL", raising=False)
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", raising=False)
+
+    assert control_plane_auth_mode() == "joint"
+    assert token_matches_control_plane("mac-orama-token", scope="orama")
+    assert token_matches_control_plane("win-pt-token", scope="orama")
+    assert token_matches_control_plane("win-pt-token", scope="pt")
+
+    class _Req:
+        headers = {"authorization": "Bearer win-pt-token"}
+
+    verify_control_plane_auth(_Req())
+
+
+def test_pt_only_rejects_orama_lane_key(monkeypatch, tmp_path):
+    from utils.control_plane_auth import control_plane_auth_mode, token_matches_control_plane
+
+    token_path = tmp_path / ".state" / "control_plane_token"
+    token_path.parent.mkdir(parents=True)
+    token_path.write_text("pt-only-token", encoding="utf-8")
+    monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path))
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.delenv("PT_CONTROL_PLANE_TOKEN", raising=False)
+
+    assert control_plane_auth_mode() == "pt_only"
+    assert token_matches_control_plane("pt-only-token", scope="pt")
+    assert not token_matches_control_plane("orama-other-token", scope="pt")
+
+
+def test_outbound_prefers_peer_token(monkeypatch):
+    from utils.control_plane_auth import outbound_control_plane_tokens, resolved_control_plane_token
+
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "symmetric-token")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", "peer-only-token")
+
+    assert outbound_control_plane_tokens()[0] == "peer-only-token"
+    assert resolved_control_plane_token() == "peer-only-token"
 

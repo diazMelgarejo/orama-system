@@ -4,12 +4,15 @@ from __future__ import annotations
 import os
 import secrets
 from pathlib import Path
-from typing import Any, Mapping, MutableMapping
+from typing import Any, Literal, Mapping, MutableMapping
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 ENV_TOKEN = "ORAMA_CONTROL_PLANE_TOKEN"
+ENV_TOKEN_LOCAL = "ORAMA_CONTROL_PLANE_TOKEN_LOCAL"
+ENV_TOKEN_PEER = "ORAMA_CONTROL_PLANE_TOKEN_PEER"
+ENV_PT_TOKEN = "PT_CONTROL_PLANE_TOKEN"
 ENV_INSECURE = "ORAMA_INSECURE_DEV"
 CONTROL_PLANE_COOKIE = "orama_control_plane_token"
 
@@ -46,7 +49,7 @@ _PUBLIC_PORTAL_PREFIXES = (
 
 def control_plane_token() -> str:
     """
-    Read the control-plane bearer token from the environment.
+    Read the legacy symmetric control-plane bearer token from the environment.
     
     The returned value is trimmed of leading and trailing whitespace and defaults to an empty string when the environment variable is not set.
     
@@ -54,6 +57,138 @@ def control_plane_token() -> str:
         The control-plane bearer token with surrounding whitespace removed, or an empty string if not configured.
     """
     return os.getenv(ENV_TOKEN, "").strip()
+
+
+def _strip_env(name: str) -> str:
+    return os.getenv(name, "").strip()
+
+
+def persisted_control_plane_token() -> str:
+    """Token from PT `.state/control_plane_token` when present."""
+    return _read_pt_persisted_token()
+
+
+def pt_lane_token_candidates() -> list[str]:
+    """PT lane: explicit PT key + `.state/control_plane_token` (checking account)."""
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for raw in (_strip_env(ENV_PT_TOKEN), persisted_control_plane_token()):
+        if raw and raw not in seen:
+            seen.add(raw)
+            ordered.append(raw)
+    return ordered
+
+
+def orama_lane_token_candidates() -> list[str]:
+    """Orama/portal lane: env keys only (deposit account — not PT `.state`)."""
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for raw in (_strip_env(ENV_TOKEN), _strip_env(ENV_TOKEN_LOCAL)):
+        if raw and raw not in seen:
+            seen.add(raw)
+            ordered.append(raw)
+    return ordered
+
+
+def control_plane_auth_mode() -> Literal["unset", "pt_only", "orama_only", "joint"]:
+    """
+    Joint-account mode:
+    - pt_only: only PT lane keys configured
+    - orama_only: only orama lane keys configured
+    - joint: both lanes have keys — either unlocks both services
+    """
+    pt = pt_lane_token_candidates()
+    orama = orama_lane_token_candidates()
+    if pt and orama:
+        return "joint"
+    if pt:
+        return "pt_only"
+    if orama:
+        return "orama_only"
+    return "unset"
+
+
+def _merge_unique(*groups: list[str]) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for raw in group:
+            if raw and raw not in seen:
+                seen.add(raw)
+                ordered.append(raw)
+    return ordered
+
+
+def collect_control_plane_token_candidates() -> list[str]:
+    """All configured tokens (both lanes + PEER for outbound handoff)."""
+    peer = _strip_env(ENV_TOKEN_PEER)
+    extra = [peer] if peer else []
+    mode = control_plane_auth_mode()
+    if mode == "joint":
+        return _merge_unique(pt_lane_token_candidates(), orama_lane_token_candidates(), extra)
+    if mode == "pt_only":
+        return _merge_unique(pt_lane_token_candidates(), extra)
+    if mode == "orama_only":
+        return _merge_unique(orama_lane_token_candidates(), extra)
+    return _merge_unique(extra)
+
+
+def accepted_control_plane_tokens(
+    scope: Literal["pt", "orama"] = "orama",
+) -> frozenset[str]:
+    """
+    Tokens this service accepts on incoming requests.
+
+    - scope=orama (portal/API): orama lane; in joint mode accepts PT lane too
+    - scope=pt: PT lane; in joint mode accepts orama lane too
+    """
+    mode = control_plane_auth_mode()
+    pt = pt_lane_token_candidates()
+    orama = orama_lane_token_candidates()
+    if mode == "joint":
+        return frozenset(_merge_unique(pt, orama))
+    if mode == "pt_only":
+        return frozenset(pt)
+    if mode == "orama_only":
+        return frozenset(orama)
+    # Legacy: persisted file without explicit orama env (orama reads PT .state)
+    if scope == "pt":
+        return frozenset(pt or orama)
+    return frozenset(orama or pt)
+
+
+def outbound_control_plane_tokens() -> list[str]:
+    """Outbound peer probes: PEER first, then lane keys (joint tries both)."""
+    peer = _strip_env(ENV_TOKEN_PEER)
+    ordered: list[str] = []
+    seen: set[str] = set()
+    if peer:
+        ordered.append(peer)
+        seen.add(peer)
+    for raw in _merge_unique(
+        orama_lane_token_candidates(),
+        pt_lane_token_candidates(),
+    ):
+        if raw not in seen:
+            seen.add(raw)
+            ordered.append(raw)
+    return ordered
+
+
+def token_matches_control_plane(
+    provided: str,
+    scope: Literal["pt", "orama"] = "orama",
+) -> bool:
+    if not provided:
+        return False
+    for expected in accepted_control_plane_tokens(scope):
+        if secrets.compare_digest(provided, expected):
+            return True
+    return False
+
+
+def _env_control_plane_token_candidates() -> list[str]:
+    return orama_lane_token_candidates()
 
 
 def _resolve_perpetua_tools_root() -> Path | None:
@@ -95,7 +230,7 @@ def auth_enforced() -> bool:
     Returns:
         `true` if control-plane authentication must be enforced, `false` otherwise.
     """
-    if control_plane_token():
+    if _env_control_plane_token_candidates() or pt_lane_token_candidates():
         return True
     insecure = os.getenv(ENV_INSECURE, "").strip().lower()
     if insecure in ("1", "true", "yes"):
@@ -125,6 +260,14 @@ def _read_pt_persisted_token() -> str:
 
 
 def resolved_control_plane_token() -> str:
+    """Primary outbound token (PEER if set, else legacy resolution)."""
+    outbound = outbound_control_plane_tokens()
+    if outbound:
+        return outbound[0]
+    return ""
+
+
+def _legacy_resolved_control_plane_token() -> str:
     """Env token first, then PT persisted file (shared stack token)."""
     token = control_plane_token()
     if token:
@@ -134,7 +277,7 @@ def resolved_control_plane_token() -> str:
 
 def ensure_control_plane_token() -> str:
     """Return configured token, generating one when insecure dev is off."""
-    existing = resolved_control_plane_token()
+    existing = _legacy_resolved_control_plane_token()
     if existing:
         if not control_plane_token():
             os.environ[ENV_TOKEN] = existing
@@ -167,13 +310,11 @@ def bearer_token_from_request(request: Request) -> str:
 def verify_control_plane_auth(request: Request) -> None:
     if not auth_enforced():
         return
-    expected = resolved_control_plane_token()
-    if not expected:
+    if not accepted_control_plane_tokens("orama"):
         raise HTTPException(status_code=503, detail="Control plane token not configured")
     provided = bearer_token_from_request(request)
-    if provided and secrets.compare_digest(provided, expected):
-        return
-    raise HTTPException(status_code=401, detail="Unauthorized")
+    if not token_matches_control_plane(provided, scope="orama"):
+        raise HTTPException(status_code=401, detail="Unauthorized")
 
 
 def control_plane_auth_failure(request: Request) -> JSONResponse | None:
