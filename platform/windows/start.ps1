@@ -78,6 +78,12 @@ $RepoRoot   = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
 $LogDir     = Join-Path $RepoRoot '.logs'
 $PathsFile  = Join-Path $RepoRoot '.paths.ps1'
 
+# Gitignored env (.env → .env.local) before bind/token reads
+$LoadLocalPs1 = Join-Path $RepoRoot 'scripts\env\load-local.ps1'
+if (Test-Path $LoadLocalPs1) {
+    & $LoadLocalPs1 -RepoRoot $RepoRoot
+}
+
 # ── Logging helpers ───────────────────────────────────────────────────────────
 $LogStart   = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 
@@ -200,15 +206,29 @@ $UsHost     = Get-BindHost 'ORAMA_BIND_LAN' 'ORAMASYS_HOST'
 $PortalHost = Get-BindHost 'PORTAL_BIND_LAN' 'PORTAL_HOST'
 
 function Sync-ControlPlaneToken {
-    if ($env:ORAMA_CONTROL_PLANE_TOKEN) { return }
+    if ($env:ORAMA_CONTROL_PLANE_TOKEN -and $env:ORAMA_CONTROL_PLANE_TOKEN -notmatch '^<') { return }
     if (-not $PtDir) { return }
     $tokenPath = Join-Path $PtDir '.state\control_plane_token'
+    $stateDir = Split-Path $tokenPath -Parent
+    if (-not (Test-Path $stateDir)) { New-Item -ItemType Directory -Force -Path $stateDir | Out-Null }
     if (Test-Path $tokenPath) {
-        $env:ORAMA_CONTROL_PLANE_TOKEN = (Get-Content $tokenPath -Raw).Trim()
-        _Info 'lan-peer' 'ORAMA_CONTROL_PLANE_TOKEN loaded from PT .state'
-    } else {
-        _Warn 'lan-peer' 'No ORAMA_CONTROL_PLANE_TOKEN — portal-status probe will SKIP'
+        $existing = (Get-Content $tokenPath -Raw).Trim()
+        if ($existing) {
+            $env:ORAMA_CONTROL_PLANE_TOKEN = $existing
+            _Info 'lan-peer' 'ORAMA_CONTROL_PLANE_TOKEN loaded from PT .state'
+            return
+        }
     }
+    $bytes = New-Object byte[] 32
+    [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+    $generated = [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
+    Set-Content -Path $tokenPath -Value $generated -NoNewline -Encoding UTF8
+    $env:ORAMA_CONTROL_PLANE_TOKEN = $generated
+    _Info 'lan-peer' "Generated ORAMA_CONTROL_PLANE_TOKEN in PT .state (copy to Mac .env.local)"
+}
+
+if ($LanPeer -or ($env:PORTAL_BIND_LAN -match '^(1|true|yes)$')) {
+    Sync-ControlPlaneToken
 }
 
 function Invoke-LanPeerProbe {
@@ -329,68 +349,116 @@ if ($Status) {
     exit 0
 }
 
-# ── LAN discovery (optional — OpenClaw/Mac only) ────────────────────────────
-# Hermes-only Windows hosts do not install OpenClaw; discover.py is absent by
-# design. IP resolution below uses env vars + gateway heuristic — no hard dep.
-$DiscoverScript = Join-Path $HOME '.openclaw\scripts\discover.py'
-if (Test-Path $DiscoverScript) {
-    _Info 'ip' 'Probing LAN topology (discover.py --force)...'
+# ── LAN discovery (always fresh before IP resolution) ─────────────────────────
+function Invoke-DiscoverEndpoints {
+    $scripts = @(
+        (Join-Path $RepoRoot 'scripts\discover.py'),
+        (Join-Path $HOME '.openclaw\scripts\discover.py')
+    )
+    $discover = $scripts | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $discover) {
+        _Warn 'ip' 'discover.py not found — skipping live LAN probe'
+        return
+    }
+    if ($PtDir) {
+        $env:PERPETUA_TOOLS_ROOT = $PtDir
+        $env:PERPETUA_TOOLS_PATH = $PtDir
+    }
+    _Info 'ip' "Probing LAN topology ($([IO.Path]::GetFileName($discover)) --force)..."
     try {
-        & $UsPython $DiscoverScript --force 2>&1 | ForEach-Object { "  [discover] $_" } | Tee-Object -FilePath (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Append
+        & $UsPython $discover --force 2>&1 | ForEach-Object { "  [discover] $_" } |
+            Tee-Object -FilePath (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Append
         _Info 'ip' 'LAN probe complete'
     } catch {
-        _Warn 'ip' "discover.py failed: $_ — continuing with env/heuristic IPs"
-    }
-} else {
-    _Info 'ip' 'No OpenClaw discover.py (Hermes-only Windows) — skipping LAN probe'
-}
-
-# ── IP resolution (Hermes-only: env vars + gateway heuristic) ─────────────────
-# Priority for Mac LM Studio IP (cross-machine routing hint):
-#   1. LM_STUDIO_MAC_ENDPOINT / OLLAMA_MAC_ENDPOINT env (operator override)
-#   2. ~/.openclaw/openclaw.json lmstudio-mac baseUrl (legacy, if present)
-#   3. Default-gateway subnet .110 heuristic
-#   4. Hardcoded fallback 192.168.254.110
-# Windows LM Studio is always localhost:1234 on this host — no openclaw.json needed.
-$MacIp    = $null
-$IpSource = 'unset'
-
-if ($env:LM_STUDIO_MAC_ENDPOINT) {
-    try { $MacIp = ([uri]$env:LM_STUDIO_MAC_ENDPOINT).Host; $IpSource = 'LM_STUDIO_MAC_ENDPOINT' } catch {}
-}
-if (-not $MacIp -and $env:OLLAMA_MAC_ENDPOINT) {
-    try { $MacIp = ([uri]$env:OLLAMA_MAC_ENDPOINT).Host; $IpSource = 'OLLAMA_MAC_ENDPOINT' } catch {}
-}
-
-$OcJson = Join-Path $HOME '.openclaw\openclaw.json'
-if (-not $MacIp -and (Test-Path $OcJson)) {
-    try {
-        $json = Get-Content $OcJson -Raw | ConvertFrom-Json
-        $url  = $json.models.providers.'lmstudio-mac'.baseUrl
-        if ($url) { $MacIp = ([uri]$url).Host; $IpSource = 'openclaw.json' }
-    } catch {}
-}
-
-if (-not $MacIp) {
-    try {
-        $gw = (Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric | Select-Object -First 1).NextHop
-        $parts = $gw.Split('.')
-        $MacIp = "$($parts[0]).$($parts[1]).$($parts[2]).110"
-        $IpSource = 'gateway-heuristic'
-    } catch {
-        $MacIp = '192.168.254.110'
-        $IpSource = 'fallback-constant'
+        _Warn 'ip' "discover.py failed: $_ — continuing with discovery state / env"
     }
 }
-_Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
+
+function Resolve-MacLanIp {
+    # Priority: operator env → fresh last_discovery.json → openclaw.json (legacy)
+    # Never use gateway .110 heuristic or hardcoded fallbacks.
+    $macIp = $null
+    $source = 'unset'
+
+    foreach ($var in @('MAC_IP', 'LM_STUDIO_MAC_ENDPOINT', 'OLLAMA_MAC_ENDPOINT')) {
+        $raw = [Environment]::GetEnvironmentVariable($var, 'Process')
+        if (-not $raw) { continue }
+        if ($var -eq 'MAC_IP') {
+            $macIp = $raw.Trim()
+        } else {
+            try { $macIp = ([uri]$raw.Trim()).Host } catch { continue }
+        }
+        if ($macIp -and $macIp -notin @('localhost', '127.0.0.1')) {
+            $source = $var
+            break
+        }
+        $macIp = $null
+    }
+
+    if (-not $macIp) {
+        $statePath = Join-Path $HOME '.openclaw\state\last_discovery.json'
+        if (Test-Path $statePath) {
+            try {
+                $state = Get-Content $statePath -Raw | ConvertFrom-Json
+                $candidate = $state.endpoints.mac.ip
+                if ($candidate -and $candidate -notin @('', 'localhost', '127.0.0.1')) {
+                    $macIp = $candidate
+                    $source = 'last_discovery.json'
+                }
+            } catch {}
+        }
+    }
+
+    if (-not $macIp) {
+        $OcJson = Join-Path $HOME '.openclaw\openclaw.json'
+        if (Test-Path $OcJson) {
+            try {
+                $json = Get-Content $OcJson -Raw | ConvertFrom-Json
+                $url  = $json.models.providers.'lmstudio-mac'.baseUrl
+                if ($url) {
+                    $hostFromUrl = ([uri]$url).Host
+                    if ($hostFromUrl -notin @('', 'localhost', '127.0.0.1')) {
+                        $macIp = $hostFromUrl
+                        $source = 'openclaw.json'
+                    }
+                }
+            } catch {}
+        }
+    }
+
+    if (-not $macIp) {
+        _Warn 'ip' 'Mac LAN IP unknown — run discover.py --force or set MAC_IP (no stale .110 fallback)'
+        $macIp = 'unresolved'
+        $source = 'none'
+    }
+
+    return @{ Ip = $macIp; Source = $source }
+}
+
+Invoke-DiscoverEndpoints
+$MacResolved = Resolve-MacLanIp
+$MacIp    = $MacResolved.Ip
+$IpSource = $MacResolved.Source
 
 # ── Export env vars for child processes ───────────────────────────────────────
-$env:OLLAMA_MAC_ENDPOINT       = if ($env:OLLAMA_MAC_ENDPOINT)       { $env:OLLAMA_MAC_ENDPOINT }       else { "http://${MacIp}:11434" }
+if ($MacIp -and $MacIp -notin @('unresolved', 'localhost', '127.0.0.1')) {
+    $env:MAC_IP = $MacIp
+}
+$env:WIN_IP = if ($env:WIN_IP) { $env:WIN_IP } else {
+    try {
+        $s = New-Object System.Net.Sockets.Socket([System.Net.Sockets.AddressFamily]::InterNetwork, [System.Net.Sockets.SocketType]::Dgram, [System.Net.Sockets.ProtocolType]::Udp)
+        $s.Connect('192.168.254.1', 80)
+        ($s.LocalEndPoint).Address.ToString()
+    } catch { 'localhost' }
+}
+$env:OLLAMA_MAC_ENDPOINT       = if ($env:OLLAMA_MAC_ENDPOINT)       { $env:OLLAMA_MAC_ENDPOINT }       elseif ($MacIp -notin @('unresolved','localhost','127.0.0.1')) { "http://${MacIp}:11434" } else { 'http://localhost:11434' }
 $env:OLLAMA_WINDOWS_ENDPOINT   = if ($env:OLLAMA_WINDOWS_ENDPOINT)   { $env:OLLAMA_WINDOWS_ENDPOINT }   else { 'http://localhost:11434' }
-$env:LM_STUDIO_MAC_ENDPOINT    = if ($env:LM_STUDIO_MAC_ENDPOINT)    { $env:LM_STUDIO_MAC_ENDPOINT }    else { "http://${MacIp}:1234" }
-$env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { 'http://localhost:1234' }
+$env:LM_STUDIO_MAC_ENDPOINT    = if ($env:LM_STUDIO_MAC_ENDPOINT)    { $env:LM_STUDIO_MAC_ENDPOINT }    elseif ($MacIp -notin @('unresolved','localhost','127.0.0.1')) { "http://${MacIp}:1234" } else { 'http://localhost:1234' }
+$env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { "http://$($env:WIN_IP):1234" }
 $env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
-$env:WINDOWS_IP                = 'localhost'
+$env:WINDOWS_IP                = $env:WIN_IP
+
+_Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
 
 _Info 'env' 'Endpoints exported'
 
