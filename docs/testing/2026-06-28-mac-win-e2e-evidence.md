@@ -44,6 +44,8 @@ cd ../oramasys/perpetua-core && python3 -m pytest -q
 
 ## Win operator (localhost — run on RTX box)
 
+See full checklist: [`docs/plans/2026-06-28-windows-powershell-todo.md`](../plans/2026-06-28-windows-powershell-todo.md)
+
 ```powershell
 cd $env:ORAMA_SYSTEM_PATH
 python bin\orama-system\skills\hermes-harness\scripts\verify_partner_canaries.py --lm-studio-url http://localhost:1234/v1

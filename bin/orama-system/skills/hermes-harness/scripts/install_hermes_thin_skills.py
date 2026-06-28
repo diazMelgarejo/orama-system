@@ -80,6 +80,12 @@ WRAPPERS = [
         canonical="bin/orama-system/skills/hermes-harness/commands/pt-orama-delegate/SKILL.md",
         purpose="Handle narrow delegated subtasks without committing or leaking private state.",
     ),
+    HermesWrapper(
+        slug="lan-peer-self-talk",
+        description="Thin Hermes command for Mac↔Win LAN peer probe (parallel orama installs).",
+        canonical="bin/orama-system/skills/hermes-harness/commands/lan-peer-self-talk/SKILL.md",
+        purpose="Probe peer portal + LM Studio via discovery JSON; no SSH.",
+    ),
 ]
 
 # Optional — never required for harness bootstrap or default thin-wrapper install.
