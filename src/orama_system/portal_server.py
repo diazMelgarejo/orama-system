@@ -6,6 +6,9 @@ All probes run concurrently via asyncio.gather.
 
 Routes:
   GET  /           HTML dashboard (meta-refresh every 10s)
+  GET  /co-orchestration  HTML bidirectional file inbox queue + markdown preview
+  GET  /api/co-orchestration  JSON local + peer inbox summary
+  GET  /api/co-orchestration/file/{filename}  Markdown body (scope=local|peer)
   GET  /api/status JSON status of all services
   POST /api/user-input  proxy to PT /user-input (portal textbox handler)
 GET  /health     {"status": "ok", "version": "1.1.0.0"}
@@ -398,6 +401,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <nav class="navbar">
   <span class="nav-brand">orama portal</span>
   <div class="nav-links">
+    <a class="nav-link" href="/co-orchestration">Co-orchestration inbox</a>
     <a class="nav-link" href="/dashboard">Routing Dashboard ↗</a>
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()">🌙 Night</button>
   </div>
@@ -1462,6 +1466,93 @@ async def get_peer_inbox_file(filename: str):
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="not found") from None
     return {"filename": filename, "body": body, "meta": meta}
+
+
+async def _fetch_peer_inbox_remote() -> tuple[list[dict[str, Any]], str]:
+    """List inbox files on the LAN peer portal (for co-orchestration view)."""
+    peer_ip = read_discovery_peer_ip()
+    if not peer_ip:
+        return [], "no peer IP in discovery"
+    url = f"http://{peer_ip}:{PORTAL_PORT}/api/peer-inbox"
+    try:
+        async with _portal_http_client(timeout=10.0) as client:
+            response = await client.get(url)
+            if response.status_code != 200:
+                return [], f"HTTP {response.status_code} from peer inbox"
+            payload = response.json()
+            files = payload.get("files", [])
+            return files if isinstance(files, list) else [], ""
+    except Exception as exc:
+        log.warning("peer inbox fetch failed: %s", exc)
+        return [], _client_safe_error(exc, fallback="peer inbox unreachable")
+
+
+@app.get("/api/co-orchestration")
+async def api_co_orchestration():
+    from orama_system.co_orchestration_portal import build_co_orchestration_summary
+    from orama_system.lan_peer_files import list_inbox
+
+    local_role = local_platform()
+    peer_inbox, peer_error = await _fetch_peer_inbox_remote()
+    return build_co_orchestration_summary(
+        local_role=local_role,
+        peer_ip=read_discovery_peer_ip() or "",
+        local_inbox=list_inbox(),
+        peer_inbox=peer_inbox,
+        peer_error=peer_error,
+    )
+
+
+@app.get("/api/co-orchestration/file/{filename}")
+async def api_co_orchestration_file(filename: str, scope: str = "local"):
+    from orama_system.lan_peer_files import read_inbox_file
+
+    if scope not in ("local", "peer"):
+        raise HTTPException(status_code=400, detail="scope must be local or peer")
+    if scope == "local":
+        try:
+            body, meta = read_inbox_file(filename)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except FileNotFoundError:
+            raise HTTPException(status_code=404, detail="not found") from None
+        return {"filename": filename, "body": body, "meta": meta, "scope": scope}
+
+    peer_ip = read_discovery_peer_ip()
+    if not peer_ip:
+        raise HTTPException(status_code=503, detail="no peer IP in discovery")
+    url = f"http://{peer_ip}:{PORTAL_PORT}/api/peer-inbox/{filename}"
+    try:
+        async with _portal_http_client(timeout=15.0) as client:
+            response = await client.get(url)
+            if response.status_code == 404:
+                raise HTTPException(status_code=404, detail="not found on peer")
+            if response.status_code != 200:
+                raise HTTPException(
+                    status_code=502,
+                    detail=f"peer returned HTTP {response.status_code}",
+                )
+            return {**response.json(), "scope": scope}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.warning("peer file fetch failed: %s", exc)
+        raise HTTPException(status_code=502, detail="peer file unreachable") from exc
+
+
+@app.get("/co-orchestration", response_class=None)
+async def co_orchestration_page(request: Request):
+    from fastapi.responses import HTMLResponse
+    from orama_system.co_orchestration_portal import render_co_orchestration_page
+
+    browser_token = ""
+    if auth_enforced() and request_is_loopback(request):
+        browser_token = resolved_control_plane_token()
+    html = render_co_orchestration_page(
+        version=VERSION,
+        cp_fetch_bootstrap=_portal_cp_fetch_bootstrap(browser_token),
+    )
+    return HTMLResponse(content=html)
 
 
 @app.get("/health")
