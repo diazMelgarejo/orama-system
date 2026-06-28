@@ -138,3 +138,12 @@ OUTPUT:
 
 The main orama agent owns final synthesis, CIDF write discipline, and merge
 readiness.
+
+## Mac ↔ Win LAN peer (Hermes)
+
+Identical operator instructions on both hosts:
+
+- [lan-peer-self-talk.md § Operator playbook](lan-peer-self-talk.md#operator-playbook)
+- [docs/guides/lan-peer-mac-win-operator.md](../../../../docs/guides/lan-peer-mac-win-operator.md)
+
+Hermes slash: `/lan-peer-self-talk`. Launcher: `./start.sh --lan-peer` / `start.ps1 --lan-peer`.

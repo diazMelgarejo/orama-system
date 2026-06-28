@@ -17,6 +17,7 @@
 > | gbrain pooler write failures + resync | [gstack/SKILL.md §GBrain Ops](../bin/orama-system/gstack/SKILL.md) | This file §2026-05-30 |
 > | Migration gate ladder (Gate 0→4) | [PT docs/MIGRATION.md](../../perplexity-api/Perpetua-Tools/docs/MIGRATION.md) | This file §2026-05-30 T7 survey |
 > | Hermes integration authority (envelope + thin wrappers) | [hermes-universal-invocation-protocol.md](../bin/orama-system/skills/hermes-harness/references/hermes-universal-invocation-protocol.md) | PT [LESSONS.md §2026-06-28](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) |
+> | LAN peer Mac↔Win (Hermes operator playbook) | [lan-peer-self-talk.md § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) | [docs/guides/lan-peer-mac-win-operator.md](guides/lan-peer-mac-win-operator.md) |
 > | AlphaClaw branch roles + invariants | [AlphaClaw CLAUDE.md](../../AlphaClaw/CLAUDE.md) | AlphaClaw wiki/01 |
 >
 > **Architecture authority**: [2026-05-14--UNIFIED-ABSORPTION-PLAN.md](2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
@@ -42,6 +43,21 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 ---
 
 ## Sessions Log
+
+---
+
+### 2026-06-28 — LAN peer operator playbook: Mac + Win identical instructions | Cursor
+
+**Canonical:** [`references/lan-peer-self-talk.md` § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) · **Docs entry:** [`docs/guides/lan-peer-mac-win-operator.md`](guides/lan-peer-mac-win-operator.md) · **Commits:** `86bae70`, `9416a50`, `9d769bf`
+
+**What was learned**
+
+- **One playbook for both hosts** — setup (`.env.local` bind + token), Hermes slash `/lan-peer-self-talk`, and `probe_lan_peer.py --json` live in the harness reference; Mac/Win plan docs link to it, not duplicate steps.
+- **Launcher shortcut** — `./start.sh --lan-peer` and `start.ps1 --lan-peer` set bind env and run peer probe after start.
+- **Success artifact** — `~/.openclaw/state/last_lan_peer_probe.json` on PASS (local only, never commit).
+- **Limits** — inference Mac↔Win works over HTTP today; remote Hermes/Codex on peer host is not supported (probe only).
+
+**Tell Hermes:** `/lan-peer-self-talk` or playbook §B plain-English prompt.
 
 ---
 

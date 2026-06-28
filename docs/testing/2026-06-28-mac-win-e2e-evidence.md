@@ -1,6 +1,7 @@
 # Mac↔Win E2E evidence — 2026-06-28 (live re-verify)
 
-> Session: both repos on `main`; Win LM Studio online at discovery IP.
+> Session: both repos on `main`; Win LM Studio online at discovery IP.  
+> **Operator playbook (Mac + Win):** [`lan-peer-self-talk.md` § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) · [`docs/guides/lan-peer-mac-win-operator.md`](../guides/lan-peer-mac-win-operator.md)
 
 ## Commands run (Mac)
 
@@ -40,7 +41,16 @@ cd ../oramasys/perpetua-core && python3 -m pytest -q
 | Hermes `HERMES_READY` on Mac | ⏳ | `hermes` not on Mac PATH |
 | Hermes `HERMES_READY` on Win localhost | ⏳ | Run on Win host (SSH :22 closed from Mac) |
 | L1 `ainvoke` round-trip both targets | ⏳ | Next after Win Hermes green |
+| `probe_lan_peer.py` + `--lan-peer` start | ⏳ | Run after playbook §A on both hosts |
 | `v0.2.0-alpha` tag perpetua-core | ⏳ | After L1 gate |
+
+## LAN peer probe (post-playbook)
+
+```bash
+# Mac — after ./start.sh --lan-peer
+python3 bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py --json
+# Success → ~/.openclaw/state/last_lan_peer_probe.json
+```
 
 ## Win operator (localhost — run on RTX box)
 
