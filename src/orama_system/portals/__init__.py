@@ -1,12 +1,12 @@
-"""Backward-compatible re-export — use orama_system.portals.co_orchestration."""
+"""Platform-specific portal views (macOS OpenClaw vs Windows Hermes)."""
+from __future__ import annotations
+
 from orama_system.portals.co_orchestration import (
     build_co_orchestration_summary,
     render_co_orchestration_page,
 )
-from orama_system.portals.co_orchestration_shared import render_co_orchestration_html
 
 __all__ = [
     "build_co_orchestration_summary",
     "render_co_orchestration_page",
-    "render_co_orchestration_html",
 ]
