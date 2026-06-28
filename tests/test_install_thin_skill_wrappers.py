@@ -47,21 +47,21 @@ def test_workspace_candidates_orama_exact(mod):
 def test_workspace_candidates_orama_subpath(mod):
     candidates = mod.workspace_candidates("orama-system/bin/orama-system/SKILL.md")
     # Both aliases should carry the suffix.
-    strs = [str(c) for c in candidates]
+    strs = [c.as_posix() for c in candidates]
     assert any("orama-system/bin/orama-system/SKILL.md" in s for s in strs)
     assert any("ultrathink-system/bin/orama-system/SKILL.md" in s for s in strs)
 
 
 def test_workspace_candidates_perpetua_exact(mod):
     candidates = mod.workspace_candidates("perplexity-api/Perpetua-Tools")
-    strs = [str(c) for c in candidates]
+    strs = [c.as_posix() for c in candidates]
     assert any("perplexity-api/Perpetua-Tools" in s for s in strs)
     assert any("Perplexity-Tools" in s for s in strs)
 
 
 def test_workspace_candidates_perpetua_subpath(mod):
     candidates = mod.workspace_candidates("perplexity-api/Perpetua-Tools/SKILL.md")
-    strs = [str(c) for c in candidates]
+    strs = [c.as_posix() for c in candidates]
     assert any("Perpetua-Tools/SKILL.md" in s for s in strs)
     assert any("Perplexity-Tools/SKILL.md" in s for s in strs)
 

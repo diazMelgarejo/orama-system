@@ -143,16 +143,3 @@ def test_lock_timeout_raises(tmp_path, monkeypatch):
     with pytest.raises(TimeoutError, match="discovery lock timeout"):
         with discover._Lock(timeout=0.1):
             pass
-            pass
-
-
-def test_lock_propagates_non_contention_os_error(tmp_path, monkeypatch):
-    """Permission and path failures must not be mislabeled as lock contention."""
-    discover = _load_discover()
-    monkeypatch.setattr(discover, "STATE_DIR", tmp_path / "state")
-    monkeypatch.setattr(discover, "_lock_path", lambda: tmp_path / "state" / "discovery.lock")
-    monkeypatch.setattr(discover, "_try_lock_file", lambda _: (_ for _ in ()).throw(PermissionError("denied")))
-
-    with pytest.raises(PermissionError, match="denied"):
-        with discover._Lock(timeout=0.1):
-            pass

@@ -65,7 +65,7 @@ The council follows strict review gates: **Plan → Review → Execute → Revie
 - **Encoding**: Ensure UTF-8 without BOM for all generated skill or code artifacts.
 - **Canaries**:
   - AGY: `agy --print "AGY_READY"` must emit visible stdout.
-  - Hermes: `hermes chat --query "Reply with exactly: HERMES_READY" --safe-mode --max-turns 1` one-shot check.
+  - Hermes: `hermes -z "HERMES_READY"` one-shot check.
 
 ## Cross-Harness Adaptation
 
