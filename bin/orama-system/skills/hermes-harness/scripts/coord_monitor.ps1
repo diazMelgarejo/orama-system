@@ -6,7 +6,7 @@ param(
 
 $ErrorActionPreference = "Continue"
 $Repo = $env:ORAMA_SYSTEM_PATH
-if (-not $Repo) { $Repo = "C:\Users\lab\Downloads\SKILLS.md\ultrathink\ultrathink-system" }
+if (-not $Repo) { throw "Set ORAMA_SYSTEM_PATH to the orama-system repo root before running coord_monitor.ps1" }
 $LogDir = Join-Path $env:USERPROFILE ".openclaw\state\lan_peer\monitor"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $Log = Join-Path $LogDir ("monitor-{0:yyyyMMdd-HHmmss}.log" -f (Get-Date))
