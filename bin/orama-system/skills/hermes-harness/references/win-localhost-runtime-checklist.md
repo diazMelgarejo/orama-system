@@ -9,6 +9,15 @@
 2. `$env:PERPETUA_TOOLS_PATH` and `$env:ORAMA_SYSTEM_PATH` resolve to real dirs
 3. LM Studio listening on **`http://localhost:1234`** (own-machine locality rule — not LAN IP when on Win)
 
+## LM Studio operational invariant
+
+- **One model per LM Studio instance** — on any machine (Mac/Linux/Windows), LM Studio can load **only one model at a time**. Loading a second model fails (e.g. log: `Failed to load model "gemma-4-e4b-it". Error: Operation canceled.`).
+- **Multiple models simultaneously** only across **different remote machine IPs** (e.g. Mac LM Studio + Win LM Studio on LAN).
+- **Server logs** (check after failed canary probes):
+  - Windows: `%USERPROFILE%\.lmstudio\server-logs` (dated subdirs, e.g. `2026-06\2026-06-28.1.log`)
+  - Mac/Linux: `~/.lmstudio/server-logs`
+  - Quick tail: `python bin\orama-system\skills\hermes-harness\scripts\verify_partner_canaries.py --tail-lmstudio-logs`
+
 ## Canary table (live)
 
 ```powershell

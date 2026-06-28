@@ -41,8 +41,8 @@ Direct PT CLI (only when launcher is unavailable):
 
 | Platform | Snippet |
 |----------|---------|
-| Bash | `"${PERPETUA_TOOLS_ROOT:-${PERPETUA_TOOLS_PATH:?set PT root}}/scripts/hardware_policy_cli.py" --check-openclaw` |
-| PowerShell | `python (Join-Path $env:PERPETUA_TOOLS_ROOT 'scripts\hardware_policy_cli.py') --check-openclaw` |
+| Bash (Mac OpenClaw) | `"${PERPETUA_TOOLS_ROOT:-${PERPETUA_TOOLS_PATH:?set PT root}}/scripts/hardware_policy_cli.py" --check-openclaw` |
+| PowerShell (Windows Hermes) | `python (Join-Path $env:PERPETUA_TOOLS_ROOT 'scripts\hardware_policy_cli.py') --list` then `--validate <model> win` — **do not** use `--check-openclaw` on Windows |
 
 ## Windows script paths (repo-root relative)
 
@@ -52,8 +52,18 @@ All examples assume **current working directory = orama-system repository root**
 |--------|------|
 | `start.ps1` | `.\platform\windows\start.ps1` |
 | `install.ps1` | `.\platform\windows\install.ps1` |
+| `ensure-partner-cli-paths.ps1` | `.\platform\windows\ensure-partner-cli-paths.ps1` |
 
-There is no `.\windows\` folder at repo root — scripts live under `platform\windows\`.
+## Partner CLI dirs (parametric — never hardcode `%USERPROFILE%\<name>`)
+
+| CLI | Windows (User PATH) | macOS/Linux |
+|-----|---------------------|-------------|
+| Hermes | `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts` | `$HERMES_HOME/hermes-agent/venv/bin` |
+| Codex | `%USERPROFILE%\.lmstudio\bin` or `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` | npm global / `~/.local/bin` |
+| AGY | `%LOCALAPPDATA%\agy\bin` | Antigravity installer default |
+| cursor-agent | `%LOCALAPPDATA%\cursor-agent` | `~/.local/bin` |
+
+Bootstrap: `.\platform\windows\ensure-partner-cli-paths.ps1` (idempotent).
 
 ## Hermes installer (orama repo root)
 

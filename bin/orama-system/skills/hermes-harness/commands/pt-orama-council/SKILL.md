@@ -47,7 +47,7 @@ Read relevant excerpts from:
 
 ## Readiness Rules
 
-- Hermes one-shot: prefer `--safe-mode --provider nous --model nvidia/nemotron-3-ultra:free`.
+- Hermes one-shot: prefer `--safe-mode --provider nous --model stepfun/step-3.7-flash:free`.
 - LM Studio: usable only after a fast `/v1/chat/completions` canary.
 - AGY native Windows install: `irm https://antigravity.google/cli/install.ps1 | iex`.
 - AGY usability: `agy --print "Reply with exactly: AGY_READY"` must print visible stdout.
