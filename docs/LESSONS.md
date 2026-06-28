@@ -47,6 +47,15 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-06-28 — Cycle 005 coder + Ladder F (operator approved ALL) | Cursor
+
+**Approval:** operator `approve lessons` (round 9) · **Fan-out:** `2026-06-28-coord-005`  
+**PT memory:** `lesson_7fc75916a601`, `lesson_81a9b9806526`, `lesson_7588896135cf`, `lesson_b6d64dcb2d7f`
+
+- Bridge PR 38/38; Ladder F model-routing-check; v1 deferred backlog; peer-timeout degrade.
+
+---
+
 ### 2026-06-28 — Self-improve cycle 005 (operator approved ALL) | Cursor
 
 **Approval:** operator `approve lessons` (round 8) · **Fan-out:** `2026-06-28-coord-005`  
