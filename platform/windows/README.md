@@ -10,7 +10,7 @@ Windows counterpart to `start.sh`. All Windows-specific files live here.
 | File | Purpose |
 |------|---------|
 | `start.ps1` | Full Windows equivalent of `../start.sh` — same CLI modes |
-| `install.ps1` | One-time idempotent setup (venv, deps, openclaw.json defaults) |
+| `install.ps1` | One-time idempotent setup (venv, deps; optional legacy `openclaw.json` stub) |
 | `requirements-windows.txt` | Windows-only Python deps (pywin32, colorama, etc.) |
 
 ## First-time setup
@@ -19,8 +19,14 @@ Windows counterpart to `start.sh`. All Windows-specific files live here.
 # Allow local scripts (once)
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
-# Install dependencies + write openclaw.json defaults
+# Install dependencies (OpenClaw optional — Hermes is the local orchestrator)
 powershell -File .\platform\windows\install.ps1
+
+# Ensure partner CLIs on User PATH (Hermes, Codex, AGY, cursor-agent)
+powershell -File .\platform\windows\ensure-partner-cli-paths.ps1
+
+# Optional: write legacy openclaw.json stub (not needed for Hermes-only hosts)
+powershell -File .\platform\windows\install.ps1 -WriteOpenClawConfig
 ```
 
 ## Usage
@@ -38,15 +44,16 @@ powershell -File .\platform\windows\install.ps1
 # Status (port check + policy)
 .\platform\windows\start.ps1 --status
 
-# Re-run LAN discovery
+# Re-run path discovery (.paths.ps1)
 .\platform\windows\start.ps1 --discover
 
 # Validate model↔hardware affinity policy (delegates to Perpetua-Tools CLI)
 .\platform\windows\start.ps1 --hardware-policy
 ```
 
-Same policy as `start.sh --hardware-policy` on Mac/Linux OpenClaw. Hermes agents must
-consume PT `model_hardware_policy.yml` — see `hermes-harness` → `pt-hardware-policy`.
+Validates model↔hardware affinity via Perpetua-Tools CLI (`--list` + Win model `--validate`).
+Hermes is the primary Windows orchestrator; OpenClaw is optional. `--check-openclaw` runs only when
+`~/.openclaw/openclaw.json` exists (legacy/cross-repo installs); Hermes-only hosts skip it gracefully.
 
 ## CLI parity table
 
@@ -66,10 +73,11 @@ consume PT `model_hardware_policy.yml` — see `hermes-harness` → `pt-hardware
 
 ## Architecture notes
 
-- Windows GPU loads **ONE model at a time** — never configure parallel inference
-- LM Studio on Windows listens on `localhost:1234` (not LAN-exposed by default)
-- The Mac machine's LM Studio IP is read from `~/.openclaw/openclaw.json`
+- **LM Studio single-model invariant** — on any machine (Mac/Linux/Windows), LM Studio loads **only one model at a time**. Loading a second model fails (e.g. `Failed to load model "gemma-4-e4b-it". Error: Operation canceled.`). Multiple models simultaneously only across **different remote machine IPs** (e.g. Mac LM Studio + Win LM Studio on LAN).
+- Windows GPU loads **ONE model at a time** — never configure parallel inference on one host
+- LM Studio on Windows listens on `localhost:1234` (locality rule — use `localhost`, not LAN IP)
+- LM Studio server logs: Windows `%USERPROFILE%\.lmstudio\server-logs`; Mac/Linux `~/.lmstudio/server-logs` (e.g. `2026-06\2026-06-28.1.log`). After failed canary probes: `python bin\orama-system\skills\hermes-harness\scripts\verify_partner_canaries.py --tail-lmstudio-logs`
+- Cross-machine Mac LM Studio IP: set `LM_STUDIO_MAC_ENDPOINT` / `OLLAMA_MAC_ENDPOINT`, or gateway `.110` heuristic; Mac OpenClaw hosts run `discover.py` — Windows Hermes does not require OpenClaw or `openclaw.json`
 - Services log to `../.logs/{pt,orama,portal}.log` (same as macOS)
 - `.paths.ps1` caches discovered paths (gitignored, auto-generated)
-- **Hermes on Windows** is the local orchestrator counterpart to Mac OpenClaw; `install.ps1`
-  writes `lmstudio-win` → `localhost:1234` for `windows_only` GGUF models
+- **Hermes on Windows** is the sole local orchestrator — OpenClaw/AlphaClaw are Mac/Linux only
