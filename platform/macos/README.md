@@ -10,15 +10,18 @@ macOS counterpart to `platform/windows/`. Portal co-orchestration skins and `sta
 |------|---------|
 | `../start.sh` | Full macOS stack — PT `:8000`, orama `:8001`, Portal `:8002` |
 | `../src/orama_system/portals/co_orchestration_macos.py` | **OpenClaw** co-orchestration inbox skin |
-| `../src/orama_system/portals/co_orchestration_windows.py` | Hermes skin (Win parallel branch) |
+
+Win lane portal lives in `../platform/windows/peer_inbox_portal.py` (see `../platform/windows/README.md`).
 
 ## Portal — co-orchestration inbox monitor
 
 | URL | Skin |
 |-----|------|
 | `http://localhost:8002/co-orchestration/macos` | **macOS / OpenClaw** (use on Mac) |
-| `http://localhost:8002/co-orchestration/windows` | Windows / Hermes (preview or Win host) |
-| `http://localhost:8002/co-orchestration` | Auto-detect from host platform |
+| `http://localhost:8002/peer-inbox` | **Windows / Hermes** (Win lane; canonical) |
+| `http://localhost:8002/co-orchestration` | Auto-detect from host platform (Mac lane) |
+
+Legacy `/co-orchestration/windows` 307-redirects to `/peer-inbox`.
 
 Shows bidirectional file inbox (local + peer), fan-out filter, click-to-preview markdown.
 
