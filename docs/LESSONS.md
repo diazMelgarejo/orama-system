@@ -16,6 +16,7 @@
 > | Git identity + Cursor commit policy | [docs/wiki/08-git-hygiene-and-branching.md](wiki/08-git-hygiene-and-branching.md) | AlphaClaw `scripts/git/check_identity.sh` |
 > | gbrain pooler write failures + resync | [gstack/SKILL.md §GBrain Ops](../bin/orama-system/gstack/SKILL.md) | This file §2026-05-30 |
 > | Migration gate ladder (Gate 0→4) | [PT docs/MIGRATION.md](../../perplexity-api/Perpetua-Tools/docs/MIGRATION.md) | This file §2026-05-30 T7 survey |
+> | Hermes integration authority (envelope + thin wrappers) | [hermes-universal-invocation-protocol.md](../bin/orama-system/skills/hermes-harness/references/hermes-universal-invocation-protocol.md) | PT [LESSONS.md §2026-06-28](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) |
 > | AlphaClaw branch roles + invariants | [AlphaClaw CLAUDE.md](../../AlphaClaw/CLAUDE.md) | AlphaClaw wiki/01 |
 >
 > **Architecture authority**: [2026-05-14--UNIFIED-ABSORPTION-PLAN.md](2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
@@ -41,6 +42,31 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 ---
 
 ## Sessions Log
+
+---
+
+### 2026-06-28 — Hermes integration authority: envelope protocol + optional lesson-mining | Cursor
+
+**Plan:** [`docs/plans/2026-06-28-hermes-integration-authority.md`](plans/2026-06-28-hermes-integration-authority.md) · **Commits:** `2e284a5`…`9d5f4e6` on `main`
+
+**What was learned**
+
+- **Authority parity:** `hermes-harness` v1.1.0.0 now matches `openclaw-skills` authority — subskill registry, bootstrap JSON health, boundary enforcement, verification envelope. Canonical protocol: `bin/orama-system/skills/hermes-harness/references/hermes-universal-invocation-protocol.md`.
+- **Envelope layers:** L3 intent (`skill_id`, `args`, `agent_id`, `harness`); L2 dispatch adds `orama_system_root`, `executor_id`, optional opaque `transport: { partner, profile }` for audit/replay; L0 result is OpenClaw core (`status`, `files_modified`, `follow_up_actions`) plus optional Hermes extensions (superset/subset).
+- **Identity split:** `agent_id` = audit owner; `executor_id` = runner when delegating — both may appear on L2.
+- **Thin wrappers:** four **required** (`council`, `review`, `delegate`, `hardware-policy`); `lesson-mining` is **optional** only (`OPTIONAL_WRAPPERS`, `--include-optional`). orama-system has **no** Perpetua-Tools dependency for lesson graduation.
+- **Path policy:** committed docs use env placeholders (`$ORAMA_SYSTEM_PATH`, `$HERMES_HOME`); absolute paths only in runtime runners. Path casing mismatch → `warnings[]`, not `blocked`.
+- **Sync habit:** after pull — `python scripts/sync_version.py --check` (package SSOT `1.1.1.0` in `_version.py`; Hermes skill family `1.1.0.0`); `install_hermes_thin_skills.py --install --verify` (4 wrappers unless `--include-optional`).
+
+**Decisions made**
+
+- Logical batches on `main` (not feature branches) for this authority batch.
+- Command cards live under `hermes-harness/commands/<slug>/`; regenerate local `~/.hermes/skills/pt-orama/` via installer — never hand-edit canonical bodies there.
+- Tests: `tests/test_hermes_invoke_envelope.py`, `tests/test_hermes_thin_skills.py` (31 green).
+
+**Deferred**
+
+- Mac cross-harness E2E (`openclaw-status` on fabric host); v2 transport schema in `/docs/v2` for Periscope replay.
 
 ---
 
