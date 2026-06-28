@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     start.ps1 — orama-system Windows counterpart to start.sh  v1.1.0.0
