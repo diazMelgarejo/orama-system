@@ -43,7 +43,8 @@ if str(_SCRIPT_DIR) not in sys.path:
 
 import probe_lan_peer as probe  # noqa: E402
 
-_REPO_ROOT = _SCRIPT_DIR.parents[5]
+# scripts → hermes-harness → skills → bin/orama-system → bin → repo root
+_REPO_ROOT = _SCRIPT_DIR.parents[4]
 _SRC_ROOT = _REPO_ROOT / "src"
 
 
@@ -190,20 +191,35 @@ def cmd_fanout(args: argparse.Namespace) -> int:
             portal_port=args.portal_port,
         )
         print(f"--- drop {filename} assignee={assignee} peer={to_peer}", file=sys.stderr)
-        cmd_drop(ns)
-        results.append({"filename": filename, "assignee": assignee, "to_peer": to_peer})
-    print(json.dumps({"fanout_id": fanout_id, "results": results}, indent=2))
-    return 0
+        entry: dict[str, Any] = {"filename": filename, "assignee": assignee, "to_peer": to_peer}
+        try:
+            cmd_drop(ns)
+            entry["status"] = "ok"
+        except SystemExit as exc:
+            entry["status"] = "error"
+            entry["detail"] = str(exc)
+            print(f"WARN: {exc}", file=sys.stderr)
+        results.append(entry)
+    failed = [r for r in results if r.get("status") == "error"]
+    out = {"fanout_id": fanout_id, "results": results, "status": "partial" if failed else "ok"}
+    print(json.dumps(out, indent=2))
+    return 1 if failed else 0
 
 
 def main(argv: list[str] | None = None) -> int:
+    peer_p = argparse.ArgumentParser(add_help=False)
+    peer_p.add_argument(
+        "--peer", action="store_true", help="Target peer portal (default: local inbox)"
+    )
+    peer_p.add_argument("--peer-ip", help="Override peer IP")
+    peer_p.add_argument(
+        "--portal-port", type=int, default=int(os.environ.get("PORTAL_PORT", "8002"))
+    )
+
     p = argparse.ArgumentParser(description="LAN peer file assignments (markdown handoff)")
-    p.add_argument("--peer", action="store_true", help="Target peer portal (default: local inbox)")
-    p.add_argument("--peer-ip", help="Override peer IP")
-    p.add_argument("--portal-port", type=int, default=int(os.environ.get("PORTAL_PORT", "8002")))
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    drop = sub.add_parser("drop", help="Drop a markdown/text file to peer inbox")
+    drop = sub.add_parser("drop", parents=[peer_p], help="Drop a markdown/text file to peer inbox")
     drop.add_argument("--file", required=True, help="Local file to send")
     drop.add_argument("--filename", help="Remote filename (default: basename of --file)")
     drop.add_argument("--assignee", default="", help="mac | win")
@@ -211,15 +227,15 @@ def main(argv: list[str] | None = None) -> int:
     drop.add_argument("--fanout-id", default="", help="Fan-out batch id")
     drop.set_defaults(func=cmd_drop)
 
-    lst = sub.add_parser("list", help="List inbox files")
+    lst = sub.add_parser("list", parents=[peer_p], help="List inbox files")
     lst.set_defaults(func=cmd_list)
 
-    read = sub.add_parser("read", help="Read one inbox file")
+    read = sub.add_parser("read", parents=[peer_p], help="Read one inbox file")
     read.add_argument("--name", required=True)
     read.add_argument("--json", action="store_true")
     read.set_defaults(func=cmd_read)
 
-    fan = sub.add_parser("fanout", help="Drop many assignments from manifest JSON")
+    fan = sub.add_parser("fanout", parents=[peer_p], help="Drop many assignments from manifest JSON")
     fan.add_argument("--manifest", required=True)
     fan.set_defaults(func=cmd_fanout)
 
