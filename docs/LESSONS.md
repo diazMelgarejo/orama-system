@@ -184,7 +184,7 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
   bundled Git Bash works when resolved from
   `%LOCALAPPDATA%\GitHubDesktop\app-*\resources\app\git\usr\bin\bash.exe`.
 - On this host, `hermes -z` through the default LM Studio model timed out, while
-  `hermes --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free -z`
+  `hermes --safe-mode --provider nous --model stepfun/step-3.7-flash:free -z`
   returned promptly. Use explicit provider/model routing for bounded partner
   review loops unless the local LM Studio model has already been proven fast.
 - Native Windows AGY install is `irm https://antigravity.google/cli/install.ps1 | iex`.
