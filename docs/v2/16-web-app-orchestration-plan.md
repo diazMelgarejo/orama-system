@@ -130,7 +130,7 @@ Turns an operator task into a previewable swarm plan:
 - Objective, task type, optimize-for, preferred device.
 - Role plan preview from orama methodology.
 - WorkerAssignment rows: role, specialization, intent, expected output, verification rubric.
-- Approval state for high-risk launch paths.
+- Approval state for high-risk launch paths — server-side HMAC preview token required on launch (see [SWARM launch security requirements](32-agentic-security-controls.md#portal-swarm-launch-security-requirements-p5) and [PR3 execution plan](../plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md)).
 
 ### 6.3 Run Timeline
 
@@ -254,7 +254,7 @@ Design concept pass before implementation:
 - `POST /api/swarm/preview` returns the five-role stateless swarm preview with
   backend hints from PT `/models/route` when available and deterministic local
   fallback routing otherwise.
-- `POST /api/swarm/launch` requires `approved: true`, regenerates preview server-side,
+- `POST /api/swarm/launch` requires server-side approval via HMAC-bound preview token (PR3 — replaces client `approved: true`; see [execution plan](../plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md)), regenerates preview server-side,
   fails closed on hardware policy violations, and submits PT `/v1/jobs` requests with
   worker fields encoded in `metadata`.
 - `/api/jobs` list/detail/cancel/replay proxy routes keep PT as durable state owner.
@@ -331,8 +331,8 @@ fan-out with a PT-native swarm endpoint, but that is not required for the first 
 
 1. Should the future hardened version replace portal-side fan-out with a PT-native
    swarm endpoint?
-2. What minimum approval gate is required for launch: visual confirmation only, or
-   token-backed HITL?
+2. ~~What minimum approval gate is required for launch: visual confirmation only, or
+   token-backed HITL?~~ **Resolved (2026-06-28):** token-backed HITL via HMAC preview approval — see [PR3 execution plan](../plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md).
 3. Should design review approve static concepts before React implementation?
 
 ---

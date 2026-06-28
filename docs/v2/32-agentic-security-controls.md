@@ -225,3 +225,29 @@ The durable insight from multi-agent risk literature is that individually plausi
 - rollback plan
 
 Fail finalization if the network solves a different goal, relies on uncited evidence, has two or more agents reinforcing the same unverified assumption, touches files outside scope, or exceeds budget.
+
+### Portal swarm launch security requirements (P5)
+
+**Threat trace:** [`PT-07`](31-security-harness-excellence-plan.md#3-threat-model), SECURITY.md P5 (High).
+
+The command-center swarm path (`POST /api/swarm/preview` → `POST /api/swarm/launch`) is the v1/v2 operator entrypoint for five-role PT job dispatch. Bearer auth alone (PR1) is necessary but not sufficient for human approval gates listed above.
+
+| Requirement | Current `main` | Target (PR3) |
+|-------------|----------------|--------------|
+| Preview before dispatch | `POST /api/swarm/preview` returns assignments | unchanged |
+| Server-side launch approval | Client sends `approved: true` (not HITL) | HMAC-bound `preview_id` + `approval_token` from preview response |
+| Auth on mutating routes | Bearer required when auth enforced | unchanged |
+| Fail closed on policy | Hardware policy blocks launch | unchanged |
+| Verification | `tests/test_portal_mutating_route_auth.py` (401 without bearer) | + token required with bearer; tamper/expiry rejection |
+
+**Execution plan (canonical):** [`docs/plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md`](../plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md)
+
+**Stack context:** [`docs/plans/2026-06-28-security-pr3-pr6-zero-queue-plan.md`](../plans/2026-06-28-security-pr3-pr6-zero-queue-plan.md) · **Planner subagent:** `.cursor/agents/pt-orama-security-planner.md`
+
+**Acceptance (PR3):**
+
+- `pytest tests/test_swarm_preview.py tests/test_swarm_launch.py tests/test_portal_mutating_route_auth.py`
+- Launch with bearer but without valid approval token → 422/403
+- React composer cannot launch without prior preview session holding tokens
+
+Cross-ref: web orchestration contract in [`16-web-app-orchestration-plan.md`](16-web-app-orchestration-plan.md) §6.2; HITL rules in [`references/HUMAN-IN-LOOP-ACCOUNTABILITY.md`](references/HUMAN-IN-LOOP-ACCOUNTABILITY.md) §III Rule S-3.
