@@ -54,6 +54,8 @@ python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py fanout
 
 Mac keeps `mac-*` assignments locally; Win-bound files POST to Win peer inbox.
 
+**Portal monitor:** `http://localhost:8002/co-orchestration` on **both** hosts — bidirectional inbox queue, direction badges (inbound/outbound), fan-out filter, click-to-preview markdown. Navbar link: **Co-orchestration inbox**.
+
 ---
 
 ## 2. Mac reads Win replies
