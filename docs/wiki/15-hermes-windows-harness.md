@@ -10,7 +10,7 @@ reviews.
 
 Hermes installed correctly under `%LOCALAPPDATA%\hermes`, but `hermes.exe` was
 not on the active PowerShell `PATH`. The default provider was LM Studio with a
-local model that was reachable but slow enough for `hermes -z` to time out.
+local model that was reachable but slow enough for `hermes chat` to time out.
 Hermes terminal tools also need a real `bash.exe`; relying on a generic `bash`
 lookup can miss GitHub Desktop's bundled Git Bash.
 
@@ -30,6 +30,8 @@ $gitBash = Get-ChildItem `
 
 if ($gitBash) {
   $env:HERMES_GIT_BASH_PATH = $gitBash.FullName
+} else {
+  throw "Could not find GitHub Desktop Git Bash under $env:LOCALAPPDATA\GitHubDesktop; set HERMES_GIT_BASH_PATH manually to any bash.exe (e.g. from Git for Windows or WSL2 via %LOCALAPPDATA%\hermes\git\usr\bin\bash.exe installed by the Hermes installer)."
 }
 ```
 
@@ -43,10 +45,12 @@ hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
 Use the default LM Studio route only after verifying the loaded model answers
 quickly through the OpenAI-compatible local API.
 
-Install AGY/Antigravity on native Windows with the official PowerShell command:
+Install AGY/Antigravity on native Windows (save-first — never pipe remote script to `iex`):
 
 ```powershell
-irm https://antigravity.google/cli/install.ps1 | iex
+Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\agy-install.ps1"
+Get-Content "$env:TEMP\agy-install.ps1" | Select-Object -First 40
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\agy-install.ps1"
 agy --version
 agy --print "Reply with exactly: AGY_READY"
 ```

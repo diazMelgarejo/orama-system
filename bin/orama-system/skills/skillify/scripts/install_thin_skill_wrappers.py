@@ -89,14 +89,10 @@ CANONICAL_SKILLS = [
 
 TARGET_ROOTS = [
     "~/.codex/skills",
-    "~/.claude/skills",
     "~/.agents/skills",
     ".agents/skills",
-    ".claude/skills",
     "orama-system/.agents/skills",
-    "orama-system/.claude/skills",
     "perplexity-api/Perpetua-Tools/.agents/skills",
-    "perplexity-api/Perpetua-Tools/.claude/skills",
 ]
 
 

@@ -39,7 +39,11 @@ IDENTITY_DOC_EXCEPTIONS = {
 # workstation paths in public docs are a dox risk and hurt portability.
 # Pattern intentionally matches the username segment so the check fails even
 # if someone copies a teammate's path. Use ~, $REPO_ROOT, or <workspace> instead.
-PERSONAL_PATH_PATTERN = re.compile(r"(/Users/|/home/)([A-Za-z][A-Za-z0-9._-]+)/")
+PERSONAL_PATH_PATTERN = re.compile(
+    r"(?:/Users/|/home/)([A-Za-z][A-Za-z0-9._-]+)/"
+    r"|C:\\Users\\[^\\\"\s]+\\?",
+    re.IGNORECASE,
+)
 # Username segments that are documentation placeholders, not real leaks.
 # These appear in .paths.example, skill protocol docs, etc., and should be
 # allowed so example commands stay readable. A real workstation username
@@ -295,12 +299,12 @@ def scan_personal_paths(root: Path, files: list[str]) -> list[str]:
             if not m:
                 continue
             # The captured username segment; allow well-known doc placeholders.
-            username = m.group(2)
-            if username in PERSONAL_PATH_PLACEHOLDERS:
+            username = m.group(1) if m.lastindex and m.lastindex >= 1 else None
+            if username and username in PERSONAL_PATH_PLACEHOLDERS:
                 continue
             errors.append(
                 f"personal absolute path in tracked file: {rel}:{line_no}: "
-                f"matched {m.group(0)!r} — use ~, $REPO_ROOT, or <workspace>"
+                f"matched {m.group(0)!r} — use $HOME/, %USERPROFILE%\\, or $REPO_ROOT"
             )
             break
     return errors
@@ -678,6 +682,19 @@ def check_identity(root: Path) -> list[str]:
     return []
 
 
+CC_OPENCLAW_SUBMODULE = "bin/orama-system/skills/openclaw-skills/cc-openclaw"
+
+
+def _gitlink_sha(root: Path, rel_path: str) -> str | None:
+    mode_line = run_git(root, "ls-files", "-s", rel_path).stdout.strip()
+    if not mode_line:
+        return None
+    parts = mode_line.split()
+    if not parts or parts[0] != "160000":
+        return None
+    return parts[1] if len(parts) > 1 else None
+
+
 def check_ecc(root: Path, files: list[str]) -> list[str]:
     if ".ecc" not in files:
         return []
@@ -689,6 +706,33 @@ def check_ecc(root: Path, files: list[str]) -> list[str]:
     if is_gitlink and ecc_path.is_symlink():
         return [".ecc is a gitlink in index but a symlink in the working tree"]
     return []
+
+
+def check_cc_openclaw_gitlink(root: Path) -> list[str]:
+    """F8: cc-openclaw submodule must be a pinned gitlink with .gitmodules entry."""
+    errors: list[str] = []
+    gitmodules = root / ".gitmodules"
+    if not gitmodules.exists():
+        return [f"{CC_OPENCLAW_SUBMODULE} gitlink check skipped: .gitmodules missing"]
+
+    text = gitmodules.read_text(encoding="utf-8")
+    if f'path = {CC_OPENCLAW_SUBMODULE}' not in text:
+        errors.append(f"{CC_OPENCLAW_SUBMODULE} missing from .gitmodules")
+
+    pinned = _gitlink_sha(root, CC_OPENCLAW_SUBMODULE)
+    if pinned is None:
+        errors.append(f"{CC_OPENCLAW_SUBMODULE} is not tracked as a git submodule (mode 160000)")
+        return errors
+
+    submodule_dir = root / CC_OPENCLAW_SUBMODULE
+    if submodule_dir.exists() and (submodule_dir / ".git").exists():
+        head = run_git(submodule_dir, "rev-parse", "HEAD").stdout.strip()
+        if head and head != pinned:
+            errors.append(
+                f"{CC_OPENCLAW_SUBMODULE} working tree ({head[:12]}) "
+                f"does not match pinned gitlink ({pinned[:12]})"
+            )
+    return errors
 
 
 def check_workflow_permissions(root: Path) -> list[str]:
@@ -726,6 +770,142 @@ def check_stale_skill_path_refs(root: Path, files: list[str]) -> list[str]:
 
 def _line_has_secret_placeholder(line: str) -> bool:
     return any(marker in line for marker in SECRET_PLACEHOLDER_MARKERS)
+
+
+def check_skill_quality(root: Path, files: list[str]) -> list[str]:
+    """LINT-010/011/012 — catch three recurring silent failures in SKILL.md files.
+
+    LINT-010: all-``1.`` numbered lists in ``## Procedure`` sections.
+      Agent runtimes (Hermes, Codex, OpenCode) consume SKILL.md as raw text.
+      When every step is ``1.``, step-tracking and procedure parsing break
+      silently — the bug that hit 9 openclaw-skills SKILL.md files.
+
+    LINT-011: ``(deprecated)`` inside ``trigger:`` frontmatter strings.
+      Trigger strings are routing matchers; injecting ``(deprecated)`` means
+      the route only fires when a user literally types that word.
+
+    LINT-012: ``hermes -z`` in any tracked Markdown file.
+      ``hermes -z`` is a retired flag (returns an error in current builds).
+      Current syntax: ``hermes chat --query "..." --safe-mode --max-turns 1``.
+    """
+    import re
+
+    errors: list[str] = []
+    PROCEDURE_FENCE_RE = re.compile(r"```[a-z]*\n.*?```", re.DOTALL)
+    ALL_ONES_RE = re.compile(r"(?m)^1\. .+\n(?:(?!^[^1]).*\n)*?1\. ")
+    DEPRECATED_TRIGGER_RE = re.compile(
+        r'^(\s*trigger:\s*"[^"\n]*)\(deprecated\)', re.MULTILINE
+    )
+
+    for rel in files:
+        if not rel.endswith(".md"):
+            continue
+        path = root / rel
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            continue
+
+        # LINT-011: (deprecated) in trigger strings
+        if DEPRECATED_TRIGGER_RE.search(text):
+            errors.append(
+                f"LINT-011: (deprecated) inside trigger: string — breaks routing: {rel}"
+            )
+
+        # LINT-012: hermes -z
+        # Skip files that self-document LINT-012 (<!-- lint-ignore LINT-012 -->)
+        lint012_exempt = "<!-- lint-ignore LINT-012 -->" in text
+        if not lint012_exempt and "hermes -z" in text:
+            errors.append(
+                f"LINT-012: retired 'hermes -z' flag in markdown — use 'hermes chat --query': {rel}"
+            )
+
+        # LINT-013: raw LAN IP literals in skill, plan, or reference docs.
+        # IPs must come from env vars (WIN_IP, MAC_IP, LM_STUDIO_*_ENDPOINT).
+        # Code-fallback defaults (in .py files) are allowed; docs are not.
+        # Exempt: lan-endpoint-contract.md, file-level <!-- lint-ignore LINT-013 -->,
+        # or line-level <!-- LINT-013-ok --> / # lint-ignore-line LINT-013 on same line.
+        if not rel.endswith(".py") and "<!-- lint-ignore LINT-013 -->" not in text:
+            _LAN_RE = re.compile(
+                r"(?<!\w)(?:192\.168\.|10\.\d+\.|172\.(?:1[6-9]|2[0-9]|3[01])\.)\d+\.\d+(?!\w)"
+            )
+            _LINE_OK_RE = re.compile(
+                r"(?:<!--\s*LINT-013-ok\s*-->|#\s*lint-ignore-line\s+LINT-013)",
+                re.IGNORECASE,
+            )
+            _ip_hits: list[str] = []
+            if "lan-endpoint-contract" not in rel and "windows-provider-routing" not in rel:
+                for line_no, line in enumerate(text.splitlines(), start=1):
+                    if _LINE_OK_RE.search(line):
+                        continue
+                    for match in _LAN_RE.finditer(line):
+                        _ip_hits.append(f"{match.group()}:{line_no}")
+            if _ip_hits:
+                errors.append(
+                    f"LINT-013: raw LAN IP literal(s) {_ip_hits[:3]} in {rel}"
+                    " — use $WIN_IP/$MAC_IP/LM_STUDIO_*_ENDPOINT env vars"
+                    " or line-level <!-- LINT-013-ok -->"
+                )
+
+        # LINT-014: argv-form secret passing in skill/plan/doc files (S1).
+        lint014_exempt = (
+            "<!-- lint-ignore LINT-014 -->" in text
+            or "lint-ignore" in text and "LINT-014" in text
+        )
+        if not lint014_exempt and not rel.endswith(".py"):
+            _ARGV_SECRET_RE = re.compile(
+                r"security\s+add-generic-password\s+.*-w\s+[\"']?\$",
+                re.IGNORECASE,
+            )
+            if _ARGV_SECRET_RE.search(text):
+                errors.append(
+                    f"LINT-014: argv secret passing in {rel}"
+                    " — use store_keychain_secret.sh (stdin pipe)"
+                )
+
+
+
+        # LINT-015: unlabeled fenced code blocks in skill/reference markdown (v2 mandatory).
+        # Every opening ``` fence must carry a language specifier (bash, python, text, yaml,
+        # json, etc.). Unlabeled fences prevent syntax highlighting, confuse renderers, and
+        # signal intent ambiguity. Only skill/reference .md files are scanned (not docs/v2,
+        # CHANGELOG, or historical docs that are too large to fix retroactively).
+        # Exempt: files with <!-- lint-ignore LINT-015 --> pragma.
+        _SKILL_PATHS = ("bin/orama-system/skills/", "bin/orama-system/references/",
+                        ".agents/skills/", ".claude/skills/")
+        _in_skill_tree = any(rel.startswith(p) for p in _SKILL_PATHS)
+        if (rel.endswith(".md") and _in_skill_tree
+                and "<!-- lint-ignore LINT-015 -->" not in text):
+            lines_list = text.splitlines()
+            fence_depth = 0
+            for lno, ln in enumerate(lines_list, 1):
+                if re.match(r"^```\s*$", ln):
+                    if fence_depth % 2 == 0:  # opening fence
+                        errors.append(
+                            f"LINT-015: unlabeled fenced code block at {rel}:{lno} "
+                            "— add a language specifier (bash/python/text/yaml/json/…)"
+                        )
+                    fence_depth += 1
+                elif re.match(r"^```", ln):
+                    fence_depth += 1
+
+        # LINT-010: only scan SKILL.md ## Procedure sections
+        if not path.name == "SKILL.md":
+            continue
+        proc_idx = text.find("## Procedure")
+        if proc_idx == -1:
+            continue
+        proc_text = text[proc_idx:]
+        # Strip code fences — numbered lists inside fences are file content
+        stripped = PROCEDURE_FENCE_RE.sub("", proc_text)
+        if ALL_ONES_RE.search(stripped):
+            errors.append(
+                f"LINT-010: all-'1.' numbered list in ## Procedure (steps not sequential): {rel}"
+            )
+
+    return errors
 
 
 def scan_tracked_secrets(root: Path, files: list[str]) -> list[str]:
@@ -814,6 +994,7 @@ def main() -> int:
     errors.extend(check_markdown_link_hygiene(root, files))
     errors.extend(check_generated_artifact_tracking(files))
     errors.extend(check_ecc(root, files))
+    errors.extend(check_cc_openclaw_gitlink(root))
     errors.extend(check_workflow_permissions(root))
     errors.extend(check_stale_skill_path_refs(root, files))
     errors.extend(check_git_internal_junk(root))

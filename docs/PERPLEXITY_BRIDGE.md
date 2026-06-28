@@ -1,6 +1,7 @@
+<!-- lint-ignore LINT-013 -->
 ﻿# Perplexity-Tools Bridge for The ὅραμα System
 
-## Version 0.9.9.9
+## Version 1.1.1.0
 
 ## Current Contract (v1.0 RC)
 
@@ -155,7 +156,7 @@ implemented backup method rather than a future-only note.
 
 This bridge documentation assumes:
 
-- orama-system >= v0.9.9.7
+- orama-system >= v1.1.0.0
 - Perplexity-Tools >= v0.9.0.0
 - Python >= 3.8
 

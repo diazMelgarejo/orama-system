@@ -1,27 +1,51 @@
 # Hermes Council Review Gates
 
 Use this reference when `/pt-orama-council` needs a multi-agent review loop.
-The command card stays concise; this card holds the reusable protocol.
 
 ## Roles
 
 | Role | Default surface | Responsibility |
 |---|---|---|
 | Host/Executor | Codex or current main orama agent | Plan, edit, verify, commit, and make final decisions |
-| Reviewer/Critic | AGY/Antigravity | Review plans and deliveries after visible-output readiness passes |
-| Local Specialist | Hermes | Handle bounded subtasks after provider canary; private data requires a verified local endpoint |
+| Reviewer/Critic | AGY/Antigravity (Gemini) | Review plans and deliveries after visible-output readiness passes |
+| Local Specialist | Hermes (Qwen) | Handle bounded private or local subtasks after provider canary; private data requires a verified local endpoint |
 
-The main orama agent always keeps judgment. Workers may critique, propose, or
-specialize; they do not commit, delete, deploy, force-push, change accounts, or
-handle secrets directly.
+The main orama agent always keeps judgment. Workers may critique, propose, or specialize; they do not commit, delete, deploy, force-push, change accounts, or handle secrets directly.
 
-## Gate Loop
+## Workflow Diagram
 
-Use the council only for multi-step, high-risk, private, or cross-harness work:
+```mermaid
+flowchart TD
+    A[Start Task] --> B[Create Detailed Plan]
+    B --> C[Send Plan to Antigravity]
+    C --> D{Antigravity Review}
+    D -- NEEDS_REVISION --> B
+    D -- CLEAN --> E[Execute Step]
+    E --> F[Major Delivery?]
+    F -- Yes --> G[Send to Antigravity]
+    G --> H{Review}
+    H -- NEEDS_REVISION --> E
+    H -- CLEAN --> I[Next Step]
+    F -- No --> I
+    I --> J{All Steps Done?}
+    J -- No --> E
+    J -- Yes --> K[Final Review by Antigravity]
+    K --> L[CLEAN?]
+    L -- No --> E
+    L -- Yes --> M[Finalize & Commit]
 
-```text
-Plan -> Review -> Execute -> Review -> Finalize
+    E -.->|Private/Sensitive| N[Delegate to Hermes Qwen]
+    N --> O[Return Result to Host]
+    O --> E
 ```
+
+## Review Gates (Minimal Set)
+
+1. **Initial Plan** (mandatory): Establish direction and capture bad assumptions early.
+2. **Architecture/Design**: For high-risk or complex system changes.
+3. **Core Implementation**: The bulk of the functional code.
+4. **Tests/Verification**: Ensure the delivery is actually verified.
+5. **Final Review**: Pre-commit/PR check.
 
 Proceed past a review gate only when:
 
@@ -55,7 +79,7 @@ Do not turn every checkpoint into a mandatory external call. A lane can be:
 Only `READY` lanes participate. The host records why other lanes were skipped
 or unavailable and continues when it can still verify the result locally.
 
-## Review Package
+## Review Package Shape
 
 When sending work to a reviewer, include:
 

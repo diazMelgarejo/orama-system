@@ -1,0 +1,21 @@
+# Registry descriptor for the gstack postgres probe timeout fork patch.
+# Sourced by apply-fork-patches.sh. Keep keys stable.
+#
+# Problem: PROBE_TIMEOUT_MS was hardcoded to 5s. Supabase postgres connections
+# take 20-25s on cold start, so gstack-gbrain-detect falsely returns
+# gbrain_local_status: "broken-config" before the connection completes.
+# Confirmed false-positive 2026-06-21 (mac/Supabase environment).
+#
+# Fix: make the timeout env-overridable with GSTACK_PROBE_TIMEOUT_MS,
+# defaulting to 30s. No upstream PR yet — submit when #upstream-issue-TBD
+# is filed. Retire this patch when upstream ships a configurable timeout.
+
+TARGET=gstack
+
+# Presence markers — if ANY is found in the target's tracked files, the fix is
+# already applied (or upstream shipped it) → no-op.
+MARKERS="GSTACK_PROBE_TIMEOUT_MS"
+
+# No fast verify target (unit tests mock the timeout; integration needs a real
+# Supabase URL). Manual verify: gstack-gbrain-detect should return ok within 30s.
+VERIFY=""

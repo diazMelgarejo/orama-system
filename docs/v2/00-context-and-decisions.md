@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # 00 — Context and Decisions
 
 This document captures **why v2 exists**, what each of the four source AI-conversations contributed, and the full rationale behind decisions D1–D10.

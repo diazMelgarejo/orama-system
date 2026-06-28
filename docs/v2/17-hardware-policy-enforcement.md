@@ -1,11 +1,21 @@
+<!-- lint-ignore LINT-013 -->
 # 17 — Hardware Policy Enforcement (v1 as-built, 2026-05-17/18)
 
 > Records the full 4-layer hardware enforcement chain enshrined during the
 > RC-1 post-ship policy audit. These patterns are the **required blueprint**
 > for v2 / agate — the policy surface must be at least this complete, and
 > ideally stricter, from day one.
+>
+> **2026-06-24 update:** Cross-harness wiring (OpenClaw + Hermes) and gap closure
+> #128–#131 are documented in
+> [Cross-Harness Hardware Policy Architecture](../hermes-hardware-policy-cross-harness.md).
 
 Status: **canonical reference** — describes v1 (`diazMelgarejo/Perpetua-Tools`) as-built.
+
+> **v2 orbit (2026-06-26):** Hardware policy logic, schema, API, and CLI migrate to
+> [`42-agate-hardware-policy-orbit.md`](42-agate-hardware-policy-orbit.md) —
+> `github.com/oramasys/agate` satellite around `perpetua-core`. `devices.yml` stays
+> topology-adjacent; affinity moves to agate contract.
 
 ---
 
@@ -71,19 +81,21 @@ mac-studio:
 Promoted from "performance routing hints" to **hard enforcement** on 2026-05-17.
 
 ```yaml
-mac_only: []
+mac_only:
+  - qwen3.5:9b-nvfp4                                        # Ollama — Mac orchestration
+  - bge-m3                                                  # Ollama — gbrain + CRG (1024-dim)
 
 # HARD POLICY: models that physically run ONLY on Win RTX 3080.
 # Dispatching to lmstudio-mac = proxy call back to Win = double-barrel risk.
 windows_only:
   - qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2
   - gemma-4-26b-a4b-it
+  - text-embedding-qwen3-embedding-8b-i1-gguf-q6-k          # Win LM Studio (4096-dim)
 
 # These run natively on both machines (or small enough for either):
 shared:
   - qwen3.5-9b-mlx
   - gemma-4-e4b-it
-  - text-embedding-nomic-embed-text-v1.5
 
 windows_only_aliases:
   - Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2

@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # 01 — Kernel Spec (perpetua-core, v2.0 blocking)
 
 > The only **blocking** spec for v2.0. Everything else (modules) ships at its own pace.

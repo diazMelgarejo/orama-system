@@ -47,6 +47,7 @@ Local-first + airgapped capable. Dependency-minimal. MIT-licensed (matches LangC
 | **D14** | Mirror enforcement | `lmstudio-mac` = MIRROR ONLY; `windows_only:` hard enforcement in `model_hardware_policy.yml`; `_MIRROR_BACKENDS` frozenset in `selector.py`; fail-closed under non-TTY (2026-05-17) |
 | **D15** | `backend_resolver` split | `orchestrator/agent_launcher.py` → `orchestrator/backend_resolver.py`; pure function separated from 859-line CLI (2026-05-18) |
 | **D16** | Security-first platform | Secure defaults, server-side authorization, capability-gated execution, safe model egress, append-only audit, and supply-chain provenance are first-class v2 features (2026-05-26) |
+| **D22** | oramaclaw orbit plugin | All OpenClaw + AlphaClaw lifecycle management lives in the `oramaclaw` Python package, which depends **only** on `perpetua-core` primitives. It registers as an orbit plugin (not baked into the kernel). V1 migration is dogfood for the v2 plugin API (2026-06-20 — see `40-oramaclaw-lifecycle-plugin.md`) |
 
 Full rationale and the Perplexity/GPT/Gemini/Grok evidence behind each decision is in [`00-context-and-decisions.md`](./00-context-and-decisions.md).
 
@@ -128,7 +129,7 @@ Explicit list of things deferred to non-kernel modules or later versions. Don't 
 - ❌ Lessons / SKILL.md authoring tooling (deferred — see `02-modules/lessons-and-skill-authoring.md`)
 - ❌ Redis distributed coordination (deferred — see `02-modules/redis-coordination.md`)
 - ❌ MCP-Optional transport (deferred — see `02-modules/mcp-optional-transport.md`)
-- ❌ AlphaClaw MCP smoke-test / OpenClaw session opener (v2.1 — see `02-modules/alphaclaw-mcp-smoke-test.md`)
+- ❌ AlphaClaw MCP smoke-test / OpenClaw session opener — pre-flight contract in `02-modules/alphaclaw-mcp-smoke-test.md`; **implementation delegated to `oramaclaw` orbit plugin at Gate M3** (see `40-oramaclaw-lifecycle-plugin.md`)
 
 ---
 
@@ -144,7 +145,8 @@ Explicit list of things deferred to non-kernel modules or later versions. Don't 
 | RAG / memory | new | v2.0+ | no | stub |
 | Lessons + SKILL.md | v1 carry-over | v2.0+ | no | stub |
 | Plugin API (public) | v2.1 promotion of internal | v2.1 | no | stub |
-| AlphaClaw MCP smoke-test / OpenClaw opener | PT Gate 2 → session pre-flight gate | v2.1 | no | **spec ready** |
+| AlphaClaw MCP smoke-test / OpenClaw opener | PT Gate 2 → session pre-flight gate | v2.1 (Gate M3) | no | **spec ready; impl → oramaclaw** |
+| **oramaclaw lifecycle plugin** | `src/oramaclaw/` — OpenClaw + AlphaClaw lifecycle, control plane, SSA merge | v2.0+ orbit (Gate M1 now) | no | **Gate M1 in progress** (types + schema + fixtures ✅) |
 | Security-first platform | 2026-05-26 review + public baselines | v2.0+ | **YES** | active gate |
 | MAESTRO + SWARM safety | new | v2.5 | no | stub |
 
@@ -179,7 +181,7 @@ orama-system/docs/v2/
 ├── 12-xai-model-migration-2026-05.md   ← xAI retirements 2026-05-15; grok-4.3 + grok-4.20-non-reasoning defaults
 ├── 13-local-model-catalog-strategy.md  ← Codex model_catalog_json pattern; qwen3.5-local→qwen3.5:9b-nvfp4 rename; gen script
 ├── 14-supervisor-and-anthropic-patterns.md
-├── 15-phase1-as-built.md              ← canonical oramasys/* v2.0-alpha.1 (2026-05-01); OQ resolutions
+├── 15-phase1-as-built.md              ← canonical oramasys/* v2.0-alpha.1 (2026-05-01) + RC-1 salvage port (2026-05-17); Phase 2 complete; 56 tests
 ├── 16-web-app-orchestration-plan.md   ← chosen FastAPI + React/Vite web-app path for portal/dashboard + PT swarm primitives
 ├── 17-hardware-policy-enforcement.md  ← 4-layer enforcement chain (devices.yml → model_hardware_policy.yml → selector.py → agent_launcher.py); agate NEVER/PREFER/ALLOW implication; mirror exclusion patterns (D14, D15)
 ├── 18-master-alignment-v2-migration-plan.md  ← CC + OpenClaw skills submodule master-alignment plan (2026-05-20)
@@ -203,10 +205,13 @@ orama-system/docs/v2/
 ├── 36-clawrouter-scoring-pattern.md   ← ClawRouter 5-dim weighted scorer in model_registry.py (D19; PT-only)
 ├── 37-manifest-cost-tiering-pattern.md ← Manifest cost-tiering as CostGuard.gate() in supervisor.py (D20; PT-only)
 ├── 38-helicone-proxy-caching-pattern.md ← Helicone hash-based LRU cache inside MultiLLMRouter (D21; PT-only)
-└── 39-maestro-owasp-genai-reference.md ← MAESTRO/OWASP GenAI deep-dive: T1–T47 namespace, MCP runtime controls, AIVSS scoring (additive to 08 §2.A, 31 §3–4, 32 §6)
+├── 39-maestro-owasp-genai-reference.md ← MAESTRO/OWASP GenAI deep-dive: T1–T47 namespace, MCP runtime controls, AIVSS scoring (additive to 08 §2.A, 31 §3–4, 32 §6)
+└── 40-oramaclaw-lifecycle-plugin.md   ← D22: oramaclaw orbit plugin — OpenClaw + AlphaClaw lifecycle under one perpetua-core-only package; v1 migration as dogfood
+└── 41-agentic-stack-gstack-gbrain-memory-blend.md  ← vendor/agentic-stack union-merge; upgrade --dry-run; Gbrain canonical; Brain blocked; harness matrix
+└── 42-agate-hardware-policy-orbit.md  ← agate repo absorbs model matrix + policy API/CLI; devices.yml adjacent; PT→perpetua-core orbit
 ```
 
-> **Next free slot: `40-`**
+> **Next free slot: `43-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

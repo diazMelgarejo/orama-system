@@ -8,7 +8,7 @@
 #     ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system \
 #     feat/my-feature \
 #     2026-05-24-my-feature \
-#     orama-src
+#     gstack-code-2159b4b9-595bce   # orama's current source (was 'orama-src' pre-2026-06-17; see gstack/SKILL.md table)
 #
 # Idempotent: safe to re-run. If worktree already exists, skips creation.
 # See docs/v2/22-worktree-parallel-agents.md for full doctrine.
@@ -32,7 +32,7 @@ case "$SLUG" in
 esac
 GBRAIN_SOURCE="${4:-}"   # optional; falls back to canonical's .gbrain-source
 
-WORKTREE_HUB="$HOME/Documents/oramasys/worktrees"
+WORKTREE_HUB="$HOME/code/oramasys/worktrees"
 WORKTREE_PATH="$WORKTREE_HUB/$SLUG"
 
 # Resolve repo path (expand ~)

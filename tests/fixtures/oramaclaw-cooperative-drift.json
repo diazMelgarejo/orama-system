@@ -1,0 +1,25 @@
+{
+  "_fixture": "cooperative-drift",
+  "_note": "Normal (non-security) field drift; engine may auto-weave after 90s timeout.",
+  "version": 1,
+  "target": {
+    "workspace_root": "__TMP__/workspace",
+    "config_path": "__TMP__/openclaw.json",
+    "state_dir": "__TMP__"
+  },
+  "resources": [
+    {
+      "kind": "provider",
+      "id": "example-provider",
+      "manager": "example-manager",
+      "policy": "cooperative",
+      "spec": {
+        "api": "openai-responses",
+        "baseUrl": "https://example.invalid/v1",
+        "models": [{ "id": "example-model", "name": "Example model", "contextWindow": 200000 }],
+        "effort": "medium"
+      },
+      "managed_paths": ["/models/providers/example-provider", "/models/providers/example-provider/effort"]
+    }
+  ]
+}

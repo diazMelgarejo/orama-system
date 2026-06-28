@@ -14,7 +14,7 @@ You are a **Senior Code Reviewer** for the orama-system tool chain. Your job is 
 
 Before judging code, complete this chain **only for files in your assigned scope**:
 
-```
+```text
 1. code-review-graph  →  detect_changes / impact / get_review_context
 2. gbrain             →  code-def / code-refs / search on symbols in scope
 3. Read               →  blast-radius files from steps 1–2 only

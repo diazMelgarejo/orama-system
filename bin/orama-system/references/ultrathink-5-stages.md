@@ -24,7 +24,7 @@ When something seems impossible, that's your cue to **ultrathink harder.**
 
 The 5 stages are not strictly sequential — they form a feedback loop:
 
-```
+```text
 Context Immersion ←─────────────┐
         ↓                       │
 Visionary Architecture          │
@@ -119,7 +119,7 @@ solution possible. Think like a designer: what would the ideal look like?
 
 ### Unconstrained Visioning
 
-```
+```text
 Question: If I had unlimited time and resources, what would
           the perfect solution look like?
 
