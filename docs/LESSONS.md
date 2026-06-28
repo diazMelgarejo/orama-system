@@ -47,6 +47,18 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-06-28 — Portal restart after pull: stale `portal_server` → `/` 500 | Cursor
+
+**Fix:** `435d27a` · **PT memory:** `lesson_64dedfe61cfa` · **Operator approval:** union with `lesson_20833366511b` (round 2)
+
+**What was learned**
+
+- After `git pull`, a running portal process may still serve old code — `portal-health` can PASS while `/` returns 500 on the redacted-agents bug.
+- **Win:** `start.ps1 --stop` then `start.ps1 --lan-peer --no-open` after pull to `>= 435d27a`.
+- **Mac:** `./start.sh --stop` then `./start.sh --lan-peer --no-open` after pull.
+
+---
+
 ### 2026-06-28 — Co-orchestrator GO: bidirectional ws-peer + file inbox (operator approved) | Cursor
 
 **Playbook:** [`mac-co-orchestrator-playbook.md`](../bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md) · **PT companion:** [LESSONS.md §2026-06-28](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · **Commits:** `9f89051` (peer-file + `parents[4]`), `58605e1` (websockets), `435d27a` (portal `/` fix)
