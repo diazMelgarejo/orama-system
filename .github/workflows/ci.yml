@@ -6,17 +6,67 @@ on:
   pull_request:
     branches: [main, develop]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+permissions:
+  contents: read
+
 jobs:
+  git-hygiene:
+    name: Git hygiene (mandatory hooks + attribution)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Configure approved git identity
+        run: |
+          git config user.name "cyre"
+          git config user.email "Lawrence@cyre.me"
+
+      - name: Install mandatory repo hooks
+        run: bash scripts/git/install-local-hooks.sh
+
+      - name: Bootstrap private attribution patterns (self-contained)
+        run: bash scripts/cursor/ci-bootstrap-private-attribution.sh
+
+      - name: Sync gitignored .cursor/private
+        run: |
+          bash scripts/cursor/write-openclaw-private-attribution.sh || true
+          bash scripts/cursor/sync-private-attribution-from-home.sh
+
+      - name: Scan tracked files for banned tokens
+        run: bash scripts/git/scan-tracked-banned-tokens.sh
+
+      - name: Verify git guards
+        run: bash scripts/git/verify-git-guards.sh
+
+      - name: Guard-parity completeness (zero fragmentation, docs/v2/27)
+        run: bash scripts/git/verify-guard-parity.sh
+
+      - name: Repo hygiene gate
+        run: python3 scripts/review/repo_hygiene.py .
+
+      - name: Audit branch commit attribution (PR commits)
+        if: github.event_name == 'pull_request'
+        run: |
+          git fetch origin "${{ github.base_ref }}:${{ github.base_ref }}" || true
+          RANGE="origin/${{ github.base_ref }}..HEAD"
+          GIT_AUDIT_RANGE="$RANGE" GIT_AUDIT_STRICT=1 bash scripts/git/audit_attribution.sh
+
   test:
+    needs: [git-hygiene]
     runs-on: ubuntu-latest
     strategy:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
       
@@ -31,19 +81,20 @@ jobs:
       
       - name: Run package install test
         run: |
-          python test-package-install.py
+          python scripts/test-package-install.py
       
       - name: Build package
         run: |
           python -m build
 
   lint:
+    needs: [git-hygiene]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       
@@ -60,18 +111,43 @@ jobs:
       - name: Check imports
         run: |
           pip install -q ".[test]"
-          python -c "from bin.shared.ultrathink_core import Stage, TaskState; print('✓ ultrathink_core imports OK')"
+          python -c "from bin.shared.oramasys_core import Stage, TaskState; print('✓ oramasys_core imports OK')"
           python -c "import bin, pathlib, sys; sys.path.insert(0, str(pathlib.Path(bin.__file__).parent / 'orama-system')); from cidf.core.content_insertion_framework import decide; print('✓ CIDF imports OK')"
 
-  build:
-    needs: [test, lint]
+  web-test:
+    name: Operator console (Vitest)
+    needs: [git-hygiene]
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Enable pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install and test web/
+        working-directory: web
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test
+
+  build:
+    needs: [test, lint, web-test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.13"
       
@@ -97,7 +173,7 @@ jobs:
     name: SKILL.md Version Gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Verify SKILL.md frontmatter version is not 1.x (no premature major bump)
         run: |
@@ -118,10 +194,36 @@ jobs:
           fi
           echo "OK: Quick Start section present"
 
-      - name: Verify mcp-ultrathink-openclaw in allowed-tools
+      - name: Verify mcp-oramasys in allowed-tools
         run: |
-          if ! grep -q "mcp-ultrathink-openclaw" bin/orama-system/SKILL.md; then
-            echo "FAIL: mcp-ultrathink-openclaw missing from allowed-tools in SKILL.md"
+          if ! grep -q "mcp-oramasys" bin/orama-system/SKILL.md; then
+            echo "FAIL: mcp-oramasys missing from allowed-tools in SKILL.md"
             exit 1
           fi
-          echo "OK: mcp-ultrathink-openclaw present in allowed-tools"
+          echo "OK: mcp-oramasys present in allowed-tools"
+
+  docs-pointer-sync:
+    name: docs/v2 → downstream pointer sync gate (zero-fragmentation)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Checkout Perpetua-Tools (sibling for pointer sync check)
+        uses: actions/checkout@v5
+        with:
+          repository: diazMelgarejo/Perpetua-Tools
+          ref: main
+          path: perpetua-tools-sibling
+          fetch-depth: 1
+          persist-credentials: false
+        continue-on-error: true
+
+      - name: Verify docs/v2 pointers in sync with downstream Perpetua-Tools
+        run: |
+          if [ -d perpetua-tools-sibling ]; then
+            PERPETUA_TOOLS_ROOT="$GITHUB_WORKSPACE/perpetua-tools-sibling" \
+              bash scripts/git/sync-docs-v2-pointers.sh --check \
+              "$GITHUB_WORKSPACE/perpetua-tools-sibling"
+          else
+            echo "skip: Perpetua-Tools not available in this CI run"
+          fi

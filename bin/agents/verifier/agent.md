@@ -1,7 +1,7 @@
 ---
 name: verification-agent
 description: Comprehensive programmatic verification suite before any task completion. Blocks until PASS verdict. Activates when orchestrator delegates verification stage.
-version: 0.9.9.7
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: clawdbot, moltbot, openclaw
 allowed-tools: test-runner diff-analyzer scenario-generator quality-gate-enforcer
@@ -33,12 +33,12 @@ Specialized agent for ultrathink Stage 4.5: Verification Before Done.
 
 ## Input / Output
 
-See `../shared/ultrathink_core.py` for full type definitions.
+See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
 
 - Tool implementation: see `verifier_tools.py`
-- Shared types: `../shared/ultrathink_core.py`
+- Shared types: `../shared/oramasys_core.py`
 
 ## CIDF Enforcement (Hard Gate)
 

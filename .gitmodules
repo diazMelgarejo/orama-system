@@ -1,0 +1,3 @@
+[submodule "bin/orama-system/skills/openclaw-skills/cc-openclaw"]
+	path = bin/orama-system/skills/openclaw-skills/cc-openclaw
+	url = https://github.com/rahulsub-be/cc-openclaw.git

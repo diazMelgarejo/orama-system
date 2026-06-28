@@ -7,16 +7,42 @@ description: >-
   complex multi-step tasks, code quality reviews, and self-improvement workflows.
   Triggers on: "ultrathink", "think deeply", "5-stage", "systematic approach",
   "elegant solution", "verify before done", "content insertion", "AFRP", "CIDF".
-version: 0.9.9.7
+  Treat legacy "ultrathink" prompts as oramasys invocations.
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: claude-code, claude-desktop
-allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-ultrathink-lmstudio
+allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
 sub_skills:
   - path: afrp/SKILL.md
     trigger: "Query is non-trivial, audience-dependent, or open-ended (Type B/C/D)"
   - path: cidf/SKILL.md
     trigger: "Any content insertion, file write, paste, upload, or scripted output"
+  - path: gstack/SKILL.md
+    trigger: "/browse, /qa, /ship, /review, /investigate, gbrain, web browsing, QA, deploy, design review, gstack skills, canary, benchmark"
+  - path: skills/skillify/SKILL.md
+    trigger: "create a skill, new skill, /skillify, add sub-skill, build a skill, make a skill"
+  - path: skills/mcp-install/SKILL.md
+    trigger: "install mcp stack, setup gemini mcp, register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
+  - path: skills/mcp-orchestration/SKILL.md
+    trigger: "mcp orchestration, connect mcp tools to openclaw, gemini large context, ai-cli-mcp, background agents, dispatch parallel ai cli, openclaw mcp, SKILL.md claude skills, mcp json tool setup"
+  - path: skills/first-run-setup/SKILL.md
+    trigger: "first-run install, bootstrap orama, setup new machine, first run, §0 checklist, first-run-install.sh"
+  - path: skills/code-review/SKILL.md
+    trigger: "code review, review the code, blast-radius, code-review-graph, detect_changes, get_review_context, semantic_search_nodes, code-reviewer, multi-lens PR review, /review, recursive code review"
+  - path: skills/openclaw-skills/SKILL.md
+    trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
+  - path: skills/openclaw-skills/codex-openclaw-agent/SKILL.md
+    trigger: "codex openclaw agent, codex-agent, GPT-5.5 sub-agent, native Codex provider, create Codex workspace, reconcile Codex agent, openai-codex auth"
+  - path: skills/hermes-harness/SKILL.md
+    trigger: "hermes setup, hermes onboarding, nous portal, hermes openclaw migration, ecc harness, cross-harness, install codex cli on windows, hermes coding partner"
+  - path: skills/shell-hygiene/SKILL.md
+    trigger: "sleep && cmd, sleep chain, wait for background task, poll output file, wait for npm install, wait for claude update, run_in_background polling, until loop, how to wait for a process"
+  - path: skills/git-history-surgery/SKILL.md
+    trigger: "expunge git history, remove secret from history, rewrite author, scrub commits, branches 600 behind, orphaned branch after rewrite, re-anchor branch to main, reconcile branches after force-push, recover deleted branch, byte-identical common ancestor, branches all became the same, git history rewrite recovery, branches lost common ancestor"
+  - path: gstack/SKILL.md
+    trigger: "fix gbrain, resync gbrain, gbrain sync failed, prepared statement does not exist, CONNECTION_CLOSED supabase pooler, No database URL, GBRAIN_DATABASE_URL, gbrain doctor failures, createVersion failed, autopilot wedged, gbrain after history rewrite, gbrain list empty, gbrain prepare false, gbrain source pin"
 ---
+<!-- lint-ignore LINT-013 -->
 
 # The ὅραμα System Skill
 
@@ -31,6 +57,43 @@ orama-system is meant to become:
 - A **disciplined intelligence pipeline** — the 5-stage flow from context to crystallization, so insight becomes action and then reusable knowledge.
 - An **orchestration** layer — a meta-intelligence/delegation runtime above infrastructure and middleware, with clear boundaries/invariants.
 - A “delegate, not decider” runtime — it should orchestrate and execute resolved decisions, not re-derive gateway policy (teleology of humility + clarity in system role).
+
+## Pre-Flight: Spec Contract
+
+Before the AFRP gate. Sets the contract that AFRP then routes.
+Full template and rationale: `docs/v2/references/ORAMASYS-MASTERY-v3.md § M1`
+
+Three questions every task must answer before execution:
+
+**Role** — who are we in this context?
+(Systems Architect / Research Scientist / Engineer / Teacher / Operator)
+
+**Goal** — what outcome actually matters?
+Not the activity. The outcome. What must be true before success is declared?
+
+**Constraints** — reality always wins.
+Time, budget, security, compliance, compatibility. Constraints define the shape of the solution.
+
+```text
+ROLE: <who you are>
+GOAL: <what must be true when done>
+CONSTRAINTS: <assumptions, limits, what to avoid>
+```
+
+## Amplifier Objective Tree
+
+Every task has three layers. Identify all three before starting.
+Full principle: `references/amplifier-principle.md`
+
+| Layer | Question |
+| --- | --- |
+| Explicit objective | What was requested? |
+| Hidden objective | What problem is actually being solved? |
+| System objective | What improves the larger system? |
+
+Most failures optimize only the explicit objective.
+
+---
 
 ## Pre-Router Gate: AFRP (Mandatory)
 
@@ -115,7 +178,7 @@ execute_method() -> visual_ok? --no--> refresh_page()
                                no  -> try_next_rank()
 ```
 
-[Full CIDF details: ](cidf/SKILL.md)`cidf/SKILL.md`
+[Full CIDF details:](cidf/SKILL.md)`cidf/SKILL.md`
 
 ## Markdown Editing Rule
 
@@ -174,7 +237,19 @@ When context > 70% -- offload, one task per subagent:
   subagent("Prototype approach A"); subagent("Prototype approach B")
 ```
 
-## MODE 3: Full Multi-Agent Network (Complex Tasks)
+**Output shape** -- every substantial deliverable contains six sections:
+
+1. ASSUMPTIONS: what you decided, guessed, or ruled out
+2. ARCHITECTURE / PLAN: structure and component relationships
+3. ARTIFACT: the actual deliverable
+4. TEST & VERIFICATION: how correctness is validated
+5. RISKS + MITIGATIONS: failure modes and mitigations
+6. NEXT ACTIONS: numbered, concrete, with clear ownership
+
+## MODE 3: Full Multi-Agent Network
+>
+> **Multi-agent safety:** See `references/collaborative-reasoning-safety.md` — mandatory Builder/Critic/Adversary/Judge roles, anti-groupthink rules, confidence tracking.
+ (Complex Tasks)
 
 ### Agent Network
 
@@ -274,11 +349,11 @@ Follow the 6 directives in every non-trivial task:
 - **AFRP**: Pre-router gate. Classifies and clarifies intent before architecture.
 - **CIDF v1.2**: Content insertion governance. Start at rank 1 (direct_form_input) for every write.
 
-> **Historical Note:** The legacy backup HTTP `/ultrathink` is implemented via `api_server.py` for v1.0 compatibility.
+> **Historical Note:** The canonical HTTP path is `/oramasys`; legacy `/ultrathink` is implemented via `api_server.py` as a deprecated v1.x compatibility shim.
 
 ## OpenClaw Multi-Agent Bridge (Tier 2)
 
-Use the `mcp-ultrathink-openclaw` tool to offload heavy reasoning through the
+Use the `mcp-oramasys` tool to offload heavy reasoning through the
 OpenClaw gateway at `127.0.0.1:18789`. Model selection is automatic — OpenClaw
 reads `~/.openclaw/openclaw.json` and routes each `agent_id` to the correct
 live provider (LM Studio / Ollama, Mac / Windows GPU).
@@ -290,14 +365,47 @@ live provider (LM Studio / Ollama, Mac / Windows GPU).
 - `openclaw_orchestrate`: Dispatch Stage 4 execution tasks via OpenClaw gateway
 - `openclaw_health`: Verify gateway is running at `127.0.0.1:18789`
 
+## Hermes Cross-Harness Bridge (Tier 2 sibling)
+
+Use [`skills/hermes-harness/SKILL.md`](skills/hermes-harness/SKILL.md) when
+Hermes is the operator shell for PT-orama work. Hermes consumes canonical
+skills, MCP conventions, and bounded partner prompts; OpenClaw remains the
+runtime gateway/configuration fabric. Do not import raw `~/.hermes` state,
+secrets, personal memory, or local business artifacts into the repo.
+
+Hermes worker default: bounded coding partner. The main orama agent keeps
+judgment, CIDF write discipline, and final synthesis.
+
+Companion context:
+
+- `skills/hermes-harness/references/ecc-hermes-cross-harness.md` for ECC import
+  decisions and cross-harness boundaries.
+- `../../ANTIGRAVITY.md` and `../../.agent/AGENTS.md` for Antigravity project
+  wiring that points back to canonical orama skills instead of copying them.
+- `../../docs/wiki/15-hermes-windows-harness.md` for the Windows PATH,
+  `HERMES_GIT_BASH_PATH`, and explicit Hermes one-shot provider route.
+
+## First-Run Bootstrap
+
+New machine or fresh checkout:
+
+```bash
+bash bin/orama-system/scripts/first-run-install.sh status    # fast probe
+bash bin/orama-system/scripts/first-run-install.sh install  # idempotent §0 checklist
+bash bin/orama-system/scripts/install-mcp-stack.sh          # MCP workers (separate)
+```
+
+Full steps: [`references/first-run-install.md`](references/first-run-install.md) · Agent workflow: [`skills/first-run-setup/SKILL.md`](skills/first-run-setup/SKILL.md) · **E2E (install → MCP → code review):** [`../../docs/how-to/first-run-and-code-review.md`](../../docs/how-to/first-run-and-code-review.md) · **Host surfaces:** [`../../docs/reference/agent-first-open-visibility.md`](../../docs/reference/agent-first-open-visibility.md)
+
 ## References (Progressive Disclosure)
 
 Load on demand for deeper context:
 
+- `references/first-run-install.md` — §0 install checklist (canonical; CLAUDE-instru.md is navigator-only)
 - `afrp/SKILL.md` — Audience-First Response Protocol (pre-router gate)
 - `cidf/SKILL.md` — Content Insertion Decision Framework v1.2
 - `references/amplifier-principle.md` — foundational essay on intent-driven development
-- `references/ultrathink-5-stages.md` — deep dive on the 5-stage methodology
+- `references/oramasys-5-stages.md` — deep dive on the 5-stage methodology
 - `references/core-operational-directives.md` — the 6 directives in detail
 - `references/content-insertion-framework.md` — CIDF human reference + JSON policy
 - `references/skill-architecture-guide.md` — how to build SKILL.md files
@@ -309,77 +417,106 @@ Load on demand for deeper context:
 
 ## Multi-Agent Collaboration Protocol
 
-> Encode these rules in every agent's SOUL.md and session start. They prevent the most common
-> conflicts when multiple AI agents work on the same codebase simultaneously.
+Rules that prevent conflicts when multiple agents share a codebase: pre-session sync,
+scope claims, IP/endpoint defaults, the version-bump registry, the `.ecc/` gitlink, the
+commit-message contract, and the conflict-recovery playbook. Encode them in every
+agent's SOUL.md and session start.
 
-### Pre-Session Sync Check
+→ Full protocol: `references/multi-agent-collaboration-protocol.md` (load before any multi-agent session).
+
+## Code Exploration Order
+
+Use code-review-graph MCP tools BEFORE Grep/Read for any multi-file question. Chain: code-review-graph (blast-radius) → gbrain code-def (symbols) → gbrain search (decisions) → Read (confirmed files only). Never default to Grep for code questions.
+
+**RAG wiring (CLI + Desktop) — single enforcer:** the semantic lane needs the gbrain + CRG MCP servers registered in both surfaces. Do NOT re-check this per skill — run the canonical `python3 scripts/ensure-rag-mcp.py [--apply]` (also run by `start.sh`). If CRG's MCP is down, its semantic search has no CLI fallback → degrade to `gbrain search`/`code-def` (same bge-m3 vector space). Reconnect recipe: `code-review` skill § "Fix: MCP disconnected".
+
+## Search Policy
+
+**RULE: Never guess when information is scarce.**
+Search in this order — stop at the first satisfying result:
+
+1. `/sync-gbrain` + `gbrain query "<question>"` — local semantic memory, zero cost
+2. `code-review-graph: semantic_search_nodes` — structural code context
+3. Brave Search API — web facts, current state
+4. Perplexity API (inline) — deep web synthesis
+5. Grok API — last resort only
+
+**NEVER:** parallel-fire all search tools. Use the cheapest first.
+**ALWAYS:** `AskUserQuestion` for decisions — never auto-select between ambiguous options.
+
+## Windows Coder Pool
+
+**RULE: Every available Windows coder MUST be given work as soon as it is idle.**
+
+Endpoint pool: `$WIN_CODER_ENDPOINTS` (default: `192.168.254.103:1234`)
+
+Dispatch protocol:
+
+1. Before routing any task to Mac-only paths, check if a Windows coder is free.
+2. If free AND task is compatible (Python, Go, TypeScript, general coding):
+   → dispatch to Windows coder FIRST.
+3. If offline or no model loaded: skip silently, log WARN, do not fail.
+4. As more Windows coders are added to `$WIN_CODER_ENDPOINTS`, they join the pool
+   automatically — same rule applies to all.
+
+**Never leave a Windows coder idle if pending compatible work exists.**
+
+## OmniRoute Lazy-Sidecar (Optional Parallel Dispatch)
+
+> **NEVER install. NEVER require. NEVER fail if absent.**
+> **CURRENTLY DISABLED (2026-06-14).** Skip probe entirely. Use Local API Fallback below.
+> To re-enable: see `skills/omniroute/SKILL.md § Re-enable OmniRoute`.
+
+Optional local HTTP MCP server (port 20128) that fans tasks to free OpenRouter/AgentRouter
+models in parallel. Probe once at session start (token from `$OMNIROUTE_TOKEN`, never
+hardcoded); if `running`/`started`, route fan-out subtasks through it; if `unavailable`,
+continue silently on the standard stack — never warn or suggest installing it.
+
+→ Canonical sidecar (probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook): `skills/omniroute/SKILL.md`.
+
+## Local API Fallback (when no external API is reachable)
+
+**Priority: Ollama (`localhost:11434`, always-on Mac) → LM Studio (`$LM_STUDIO_WIN_ENDPOINTS`) → surface outage.**
+Every tier check: ≤3s timeout. Fail loudly if `$LM_STUDIO_WIN_ENDPOINTS` is set but unreachable.
+
+→ Full procedure + decision table: `references/local-api-fallback.md`
+
+## Shell Portability Invariants (all agents / all scripts)
+
+**1. `codex review` always needs `< /dev/null`.**
+Without it the process blocks on stdin indefinitely — the hang is invisible.
 
 ```bash
-git fetch origin main
-git log --oneline origin/main..HEAD   # your uncommitted commits
-git log --oneline HEAD..origin/main   # other agents' recent pushes
+codex review "<prompt>" -c 'model_reasoning_effort="high"' < /dev/null
 ```
 
-### Scope Claim (first write of every session)
+**2. Never use bare `timeout N <cmd>` on macOS.** GNU `timeout` is absent on stock macOS. Use:
 
-Append to `.claude/lessons/LESSONS.md` before touching any file:
-
-```
-## [IN PROGRESS] YYYY-MM-DD — Claude — <topic>
-Files: <list of files you plan to modify>
+```bash
+_TO=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+if [ -n "$_TO" ]; then "$_TO" N <cmd>; else <cmd>; fi
 ```
 
-Replace with a proper dated header on completion. This is the coordination signal for other agents.
+`gtimeout` = Homebrew coreutils. `timeout` = Linux. Omit the wrapper only when hanging is safe to ignore.
 
-### IP and Endpoint Default Rule
+**3. OpenClaw delegation key is `agents.defaults.subagents.allowAgents`** (or `agents.list[id].subagents.allowAgents`).
+The key `agents.bindings.*.allowAgents` is rejected by the oramaclaw control plane.
 
-- **Source code defaults**: always `127.0.0.1` — never a real LAN IP as a string literal
-- **Real IPs**: live in `.env` (gitignored), injected via `os.getenv(KEY, "http://127.0.0.1:PORT")`
-- **CI tests**: assert against the loopback default — they run on every machine, not just yours
+---
 
-### Version Bump Registry (UTS)
+## Extended References
 
-When bumping version, update ALL of these atomically:
-
-| File                             | Field                               |
-| -------------------------------- | ----------------------------------- |
-| `pyproject.toml`                 | `version`                           |
-| `bin/orama-system/SKILL.md`            | frontmatter `version:`              |
-| `bin/config/agent_registry.json` | `"version"`                         |
-| `portal_server.py`               | `VERSION`                           |
-| `bin/agents/*/agent.md`          | `version:` frontmatter (each agent) |
-| `CLAUDE.md`                      | mother skill version reference      |
-| `docs/PERPLEXITY_BRIDGE.md`      | version header                      |
-
-**Legacy markers** (do not auto-bump — they pin a stable API baseline):
-
-- `api_server.py` / `bin/shared/*.py` / `bin/mcp_servers/*.py` → `0.9.9.2`
-- `bin/orama-system/config/`, templates, `afrp/README.md` → `0.9.9.0`
-
-**Current version: `0.9.9.7`** — do not bump until explicitly instructed.
-
-### Embedded Git Repo: `.ecc/`
-
-`.ecc/` is a gitlink (submodule stub), NOT a regular directory. Git warns about
-"embedded git repository" — this is expected. Contents do not clone automatically.
-To initialize: `git submodule update --init .ecc`. Do NOT delete or gitignore it.
-
-### Commit Message Contract
-
-Every commit body must state:
-
-- Which **constants / env vars / function signatures** changed
-- Which **files other agents must re-read** before making assumptions
-- Whether any **test baselines changed**
-
-This is the primary async channel between agents with no shared session memory.
-
-### Conflict Recovery Playbook
-
-| Symptom                                    | Cause                               | Fix                                                                   |
-| ------------------------------------------ | ----------------------------------- | --------------------------------------------------------------------- |
-| `stash pop` conflicts on your files        | Other agent pushed while you worked | `git checkout --theirs` or `--ours`; patch manually                   |
-| `rebase` add/add on every file             | No common ancestor (orphan branch)  | `git reset --hard origin/main`; re-apply files manually               |
-| File appears doubled/concatenated          | Both conflict sides appended        | Keep only `lines[N:]` (good half); strip duplicate header             |
-| CI fails with real LAN IP assertion        | IP leaked into source default       | Change source to `127.0.0.1`; test validates the env-agnostic default |
-| Module constant contaminated between tests | `importlib.reload()` side effect    | `autouse` fixture that reloads before AND after each test             |
+| Reference | Content |
+| --- | --- |
+| `references/amplifier-principle.md` | Full Amplifier Principle essay |
+| `references/oramasys-5-stages.md` | Deep dive: 5-stage methodology |
+| `references/collaborative-reasoning-safety.md` | Multi-agent safety (M3) |
+| `references/communication-guidelines.md` | Writing guidelines (M6) |
+| `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
+| `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook |
+| `skills/hermes-harness/SKILL.md` | Hermes onboarding, ECC cross-harness import rules, Nous Portal/LM Studio provider setup, and bounded Hermes/Gemini/AGY/Codex partner prompts |
+| `skills/hermes-harness/references/platform-affinity-routing.md` | Platform affinity bias — Mac/Linux → OpenClaw; Windows → Hermes; ECC bridges both (v1 + v2) |
+| `skills/cursor-agent/SKILL.md` | Cursor background agent (`agent` CLI) — install, auth, light-task fanout alongside Sonnet 4.6, worktree isolation, MCP integration |
+| `docs/wiki/15-hermes-windows-harness.md` | Windows Hermes launcher, Git Bash, and one-shot provider routing notes |
+| `references/local-api-fallback.md` | Local API fallback full procedure (Ollama → LM Studio → surface outage) |
+| `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |

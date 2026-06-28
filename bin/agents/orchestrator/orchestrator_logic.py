@@ -16,7 +16,7 @@ _SHARED_DIR = Path(__file__).resolve().parents[2] / "shared"
 if str(_SHARED_DIR) not in sys.path:
     sys.path.insert(0, str(_SHARED_DIR))
 
-from ultrathink_core import OptimizeFor, Stage, TaskState, ValidationResult, Verdict, utc_now_iso
+from oramasys_core import OptimizeFor, Stage, TaskState, ValidationResult, Verdict, utc_now_iso
 
 
 STAGE_SEQUENCE = [

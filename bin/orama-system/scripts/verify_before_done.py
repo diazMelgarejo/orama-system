@@ -49,8 +49,8 @@ def check_tests(project_dir: Path) -> dict:
 
     # Detect test framework
     if (project_dir / "pytest.ini").exists() or (project_dir / "pyproject.toml").exists():
-        cmd = ["python", "-m", "pytest", "--tb=short", "-q"]
-        cov_cmd = ["python", "-m", "pytest", "--tb=short", "-q", "--cov=.", "--cov-report=term-missing"]
+        cmd = [sys.executable, "-m", "pytest", "--tb=short", "-q"]
+        cov_cmd = [sys.executable, "-m", "pytest", "--tb=short", "-q", "--cov=.", "--cov-report=term-missing"]
         runner = "pytest"
     elif (project_dir / "package.json").exists():
         cmd = ["npm", "test", "--", "--watchAll=false"]
@@ -309,6 +309,89 @@ def run_all_checks(project_dir: Path, task_name: str, interactive: bool) -> dict
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
+def run_selected_checks(project_dir: Path, task_name: str, check: str, interactive: bool) -> dict:
+    """Run a subset of checks determined by *check*.
+
+    ``all``   — full suite (original behaviour)
+    ``plan``  — task-plan only (fast, no SE prompt, no test runner; missing plan = informational)
+    ``debug`` — debug-artifacts scan + task-plan (no tests, no linting, no SE)
+    ``tests`` — test suite only
+    ``lint``  — linting only
+    ``se``    — staff-engineer self-review only
+    """
+    report = {
+        "task": task_name,
+        "timestamp": datetime.now().isoformat(),
+        "project_dir": str(project_dir),
+        "checks": {},
+        "verdict": "UNKNOWN",
+    }
+
+    print(f"\n{BOLD}{'='*60}{RESET}")
+    print(f"{BOLD}  ultrathink Verification Protocol (--check {check}){RESET}")
+    print(f"  Task: {task_name}")
+    print(f"  Dir:  {project_dir}")
+    print(f"{BOLD}{'='*60}{RESET}")
+
+    if check == "all":
+        return run_all_checks(project_dir, task_name, interactive)
+
+    if check == "plan":
+        header("4. Task Plan Completion")
+        task_plan = check_task_plan(project_dir)
+        report["checks"]["task_plan"] = task_plan
+        # In non-interactive mode, a missing plan is informational — don't fail.
+        # In interactive mode, require >= 80% completion.
+        plan_ok = (
+            task_plan.get("completion", 0) >= 0.8
+            if interactive and task_plan.get("exists", False)
+            else True
+        )
+        all_ok = plan_ok
+
+    elif check == "debug":
+        header("3. Debug Artifacts Scan")
+        report["checks"]["debug"] = check_no_debug_artifacts(project_dir)
+        header("4. Task Plan Completion")
+        task_plan = check_task_plan(project_dir)
+        report["checks"]["task_plan"] = task_plan
+        plan_ok = task_plan.get("completion", 0) >= 0.8 if task_plan.get("exists") else True
+        debug_ok = report["checks"]["debug"].get("passed", True)
+        all_ok = plan_ok and debug_ok
+
+    elif check == "tests":
+        header("1. Test Suite")
+        report["checks"]["tests"] = check_tests(project_dir)
+        all_ok = report["checks"]["tests"]["failed"] == 0
+
+    elif check == "lint":
+        header("2. Code Quality (Linting)")
+        report["checks"]["linting"] = check_linting(project_dir)
+        all_ok = report["checks"]["linting"]["passed"]
+
+    elif check == "se":
+        header("5. Staff Engineer Check")
+        report["checks"]["staff_engineer"] = check_staff_engineer(interactive)
+        all_ok = report["checks"]["staff_engineer"]["approved"]
+
+    else:
+        warn(f"Unknown --check value '{check}'; falling back to 'all'")
+        return run_all_checks(project_dir, task_name, interactive)
+
+    report["verdict"] = "PASS" if all_ok else "FAIL"
+
+    header("📊 Verification Summary")
+    print(f"  Verdict: {'✓ PASS' if all_ok else '✗ FAIL'}")
+    print()
+
+    report_path = project_dir / "tasks" / "verification-report.json"
+    report_path.parent.mkdir(exist_ok=True)
+    report_path.write_text(json.dumps(report, indent=2))
+    info(f"Report saved: {report_path}")
+
+    return report
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="ultrathink Verification Protocol — run before marking any task done"
@@ -324,9 +407,10 @@ def main():
         print(f"{RED}Error: Directory not found: {project_dir}{RESET}")
         sys.exit(1)
 
-    report = run_all_checks(
+    report = run_selected_checks(
         project_dir=project_dir,
         task_name=args.task,
+        check=args.check,
         interactive=not args.no_interact,
     )
 

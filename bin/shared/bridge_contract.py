@@ -7,7 +7,7 @@ the backup HTTP bridge.
 """
 from __future__ import annotations
 
-from bin.shared.ultrathink_core import OptimizeFor
+from bin.shared.oramasys_core import OptimizeFor
 
 
 DEFAULT_OPTIMIZE_FOR = OptimizeFor.RELIABILITY
@@ -37,7 +37,6 @@ HARDWARE_PROFILE_MAC = "mac-studio"
 # Model-id prefix → hardware profile (used by US to tell PT which GPU it's targeting)
 _MODEL_PROFILE_PREFIXES: list[tuple[str, str]] = [
     ("qwen3.5:35b", HARDWARE_PROFILE_WIN),
-    ("qwen3-coder", HARDWARE_PROFILE_WIN),
     ("qwen3-30b",   HARDWARE_PROFILE_WIN),
     ("qwen3.5-27b", HARDWARE_PROFILE_WIN),
     ("qwen3.5-9b",  HARDWARE_PROFILE_MAC),

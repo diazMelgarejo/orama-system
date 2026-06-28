@@ -1,0 +1,71 @@
+{
+  "install": "bash scripts/cursor/cloud-install.sh && bash scripts/cursor/cloud-attribution-bootstrap.sh",
+  "start": "bash scripts/cursor/cloud-attribution-bootstrap.sh",
+  "environment": {
+    "OPENCLAW_HOME": "$HOME/openclaw-v1",
+    "ORAMA_SYSTEM_PATH": "${workspaceFolder}",
+    "PERPETUA_TOOLS_PATH": "$HOME/openclaw-v1/Perpetua-Tools",
+    "ALPHACLAW_INSTALL_DIR": "$HOME/openclaw-v1/AlphaClaw",
+    "ALPHACLAW_UPSTREAM_BRANCH": "main",
+    "ALPHACLAW_CONTRIB_BRANCHES": "cursor/sync-attribution-guards-6421",
+    "OPENCLAW_GATEWAY_URL": "http://localhost:18789",
+    "LM_STUDIO_URL": "http://localhost:1234",
+    "OLLAMA_MAC_ENDPOINT": "http://localhost:11434",
+    "LM_STUDIO_MAC_ENDPOINT": "http://localhost:1234",
+    "ORCHESTRATOR_ENDPOINT": "http://localhost:8000",
+    "ULTRATHINK_ENDPOINT": "http://localhost:8001",
+    "OPENAI_API_KEY": "sk-local",
+    "PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/scripts:$HOME/openclaw-v1/Perpetua-Tools",
+    "REPO_ROOT": "${workspaceFolder}",
+    "ULTRATHINK_PORT": "8001",
+    "PORTAL_PORT": "8002",
+    "ALPHACLAW_PORT": "3000",
+    "ALPHACLAW_INTEGRATION_BRANCH": "feature/MacOS-post-install"
+  },
+  "terminals": [
+    {
+      "name": "orama tests",
+      "command": "source .venv/bin/activate && python -m pytest tests/ -v"
+    },
+    {
+      "name": "PT tests",
+      "command": "source .venv/bin/activate && cd $OPENCLAW_HOME/Perpetua-Tools && python -m pytest tests/ -v"
+    },
+    {
+      "name": "AlphaClaw tests",
+      "command": "cd $OPENCLAW_HOME/AlphaClaw && npm test"
+    },
+    {
+      "name": "PT portal",
+      "command": "source .venv/bin/activate && cd $OPENCLAW_HOME/Perpetua-Tools && uvicorn orchestrator.api:app --reload --port 8000"
+    },
+    {
+      "name": "openclaw gateway",
+      "command": "openclaw gateway start --port 18789"
+    },
+    {
+      "name": "discover network",
+      "command": "source .venv/bin/activate && python scripts/discover.py --force"
+    },
+    {
+      "name": "hygiene gate (orama)",
+      "command": "source .venv/bin/activate && python scripts/review/repo_hygiene.py ."
+    },
+    {
+      "name": "hygiene gate (PT)",
+      "command": "source .venv/bin/activate && python $OPENCLAW_HOME/Perpetua-Tools/scripts/review/repo_hygiene.py $OPENCLAW_HOME/Perpetua-Tools"
+    },
+    {
+      "name": "orama API server (8001)",
+      "command": "source .venv/bin/activate && PYTHONPATH=src uvicorn orama_system.api_server:app --reload --port 8001"
+    },
+    {
+      "name": "orama portal (8002)",
+      "command": "source .venv/bin/activate && PYTHONPATH=src python -m orama_system.portal_server"
+    },
+    {
+      "name": "AlphaClaw server (3000)",
+      "command": "cd $OPENCLAW_HOME/AlphaClaw && node bin/alphaclaw.js start"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  // OpenRouter model policy for macbook-pro-head.
+  // OpenRouter must precede Gemini in every fallback chain.
+  "agents": {
+    "defaults": {
+      "model": {
+        // Merged into agents.defaults.model.fallbacks in priority order.
+        // OpenRouter free tier is listed before any Gemini entry.
+        "fallbacks_to_merge": [
+          "openrouter/openrouter/free",
+          "google/gemini-2.5-pro",
+          "google/gemini-2.5-flash"
+        ]
+      },
+      // Merged into agents.defaults.models; all keys must be openrouter/* prefixed.
+      "models_to_merge": {
+        "openrouter/openrouter/free": {
+          "id": "openrouter/openrouter/free",
+          "name": "OpenRouter Free Tier",
+          "contextWindow": 131072,
+          "maxTokens": 4096,
+          "cost": {"input": 0, "output": 0}
+        }
+      }
+    }
+  }
+}
