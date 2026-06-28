@@ -148,7 +148,7 @@ def test_skill_md_links_protocol():
     assert "transport" in text
 
 
-def test_lesson_mining_command_exists():
+def test_lesson_mining_command_optional_not_required():
     cmd = (
         ROOT
         / "bin"
@@ -160,4 +160,6 @@ def test_lesson_mining_command_exists():
         / "SKILL.md"
     )
     assert cmd.is_file()
-    assert "learn.py" in cmd.read_text(encoding="utf-8")
+    text = cmd.read_text(encoding="utf-8")
+    assert "optional: true" in text
+    assert "Perpetua-Tools is not a dependency" in text
