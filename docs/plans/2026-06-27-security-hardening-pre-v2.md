@@ -1,7 +1,7 @@
 <!-- lint-ignore LINT-013 LINT-014 -->
 # Security-in-Depth Hardening — Pre-v2 Feature Freeze
 
-> **Status:** 🚧 IN PROGRESS (`cursor/security-hardening-pre-v2-c4ae`)  
+> **Status:** 🚧 IN PROGRESS — Mac E2E ✅ complete; Windows E2E ⏳ pending  
 > **Target:** Last release before snapshot as `v1.x-stable` → migration to `oramasys/*`  
 > **Versions:** orama-system `1.1.1.0` · Perpetua-Tools `1.1.1.0` → freeze tag `v1.1.1`  
 > **Approval gate:** Explicit "approve" from user before any execution tier.
@@ -27,14 +27,14 @@ Steps marked **🐧 Linux** run non-interactively on the cloud VM (Gstack/Gbrain
 | T4-A | Dependency pinning verification | 🐧 Linux | ✅ done |
 | T4-B | LM Studio token default warning | 🐧 Linux (script only) | ✅ done |
 | T4-C | SBOM stub (`cyclonedx-py`) | 🐧 Linux | ✅ done |
-| E2E | `start.sh` full stack | 🍎 macOS + 🪟 Windows 11 | ⏳ tomorrow |
-| E2E | `probe_required_endpoints` Ollama + models | 🍎 macOS | ⏳ tomorrow |
-| E2E | `LM_STUDIO_WIN_ENDPOINTS` LAN probes | 🪟 Windows 11 | ⏳ tomorrow |
-| E2E | `start.sh --hardware-policy` live harness | 🍎 macOS + 🪟 Windows 11 | ⏳ tomorrow |
-| E2E | Claude Desktop MCPB `--open` install | 🍎 macOS | ⏳ tomorrow |
-| E2E | Keychain credential flows (`security` CLI) | 🍎 macOS | ⏳ tomorrow |
-| E2E | Cross-harness hardware affinity verification | 🍎 macOS + 🪟 Windows 11 | ⏳ tomorrow |
-| T5 | Git tags `v1.1.1`, releases, `oramasys/v2-foundation` | After Mac/Win E2E green | ⏳ blocked |
+| E2E | `start.sh` full stack | 🍎 macOS + 🪟 Windows 11 | ✅ Mac clean (b1aaff0 fix); 🪟 ⏳ pending |
+| E2E | `probe_required_endpoints` Ollama + models | 🍎 macOS | ✅ done — qwen3.5:9b-nvfp4 + bge-m3 OK |
+| E2E | `LM_STUDIO_WIN_ENDPOINTS` LAN probes | 🪟 Windows 11 | ⏳ pending |
+| E2E | `start.sh --hardware-policy` live harness | 🍎 macOS + 🪟 Windows 11 | ✅ Mac clean; 🪟 ⏳ pending |
+| E2E | Claude Desktop MCPB `--open` install | 🍎 macOS | ⏳ pending |
+| E2E | Keychain credential flows (`security` CLI) | 🍎 macOS | ⏳ pending |
+| E2E | Cross-harness hardware affinity verification | 🍎 macOS + 🪟 Windows 11 | ⏳ pending Windows |
+| T5 | Git tags `v1.1.1`, releases, `oramasys/v2-foundation` | After Mac/Win E2E green | ⏳ blocked on Win E2E |
 
 **Tomorrow checklist (Mac):** `bash start.sh --status` → green hard-requirements; Ollama `qwen3.5:9b-nvfp4` + `bge-m3`; `bash scripts/check-local-env.sh`; hardware-policy harness.
 
