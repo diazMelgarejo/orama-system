@@ -24,8 +24,8 @@ agy --print "AGY: cross-check hypothesis vs hardware policy"
 ```bash
 git pull --ff-only origin main
 ./start.sh --stop && ./start.sh --lan-peer --no-open
-python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py --peer list
-python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py --peer read --name autoresearch-mac-hypothesis.md
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py list --peer
+python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py read --peer --name mac-hypothesis.md
 ```
 
 ## Reply protocol
