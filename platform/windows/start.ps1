@@ -229,6 +229,11 @@ function Sync-ControlPlaneToken {
 
 if ($LanPeer -or ($env:PORTAL_BIND_LAN -match '^(1|true|yes)$')) {
     Sync-ControlPlaneToken
+    $weak = @('', 'change-me-before-network-use', 'changeme', 'change-me', 'placeholder', 'test', 'secret')
+    if ($weak -contains ($env:ORAMA_CONTROL_PLANE_TOKEN ?? '').Trim().ToLower()) {
+        Write-Error 'LAN bind requires a strong ORAMA_CONTROL_PLANE_TOKEN (set in .env.local or generated in PT/.state/control_plane_token)'
+        exit 1
+    }
 }
 
 function Invoke-LanPeerProbe {

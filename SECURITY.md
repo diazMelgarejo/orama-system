@@ -1,7 +1,7 @@
 # Security Policy - orama-system + Perpetua-Tools
 
 > **Canonical security posture** for the OpenClaw orchestration stack.
-> **Last updated:** 2026-06-18
+> **Last updated:** 2026-06-28
 > **Source review:** `OpenClaw/v1/2026-05-23-security-markdown.md` in the private operator workspace.
 
 ---
@@ -39,6 +39,8 @@ visually collide with OWASP Agentic/MCP `T1`-style identifiers.
 | **4** | MCP file/log read without path boundary | PT: `packages/local-agents/src/path-boundary.cjs` + `alphaclaw-mcp` log redaction; orama: `utils/mcp_path_boundary.py`; env roots `MCP_APPROVED_ROOTS`, `ALPHACLAW_ROOT`, `PERPETUA_TOOLS_ROOT`, `ORAMA_SYSTEM_ROOT` |
 | **5** | Remote LM Studio / Win coder URL policy | `utils/model_endpoint_url.py` (orama + PT); default loopback + RFC1918; `ALLOW_PUBLIC_MODEL_ENDPOINTS=1` opt-in; wired in PT `supervisor.py` + `worker_registry.py`, orama `api_server.py` |
 | **6** | Least-privilege MCP profiles | PT: `alphaclaw-mcp` profile gate + `PT_ALLOW_DANGEROUS_CLI_WORKERS`; orama: `cursor-mcp.stack.readonly.json` + `sync-cursor-mcp.sh --profile` |
+| **7** | Secure-by-default orama auth + LAN bind token gate | `utils/control_plane_auth.py` (`auth_enforced()` PT-aligned default, auto-persist token); `start.sh` / `platform/windows/start.ps1` refuse weak/missing token on LAN bind; `tests/test_portal_mutating_route_auth.py` |
+| **8** | Model probe egress + portal HTML hardening | `portal_server.py` trusted/untrusted HTTP clients; HTML escape in legacy dashboard; job detail redaction; `.env.example` empty control-plane placeholders |
 
 **Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see the private operator-workspace 79-commit audit appendix before assuming PT routes are protected on disk.
 
@@ -86,9 +88,9 @@ shape instead of inventing a parallel remediation.
 
 | Workstream | Existing plan anchor | Covers findings | Next action |
 |------------|----------------------|-----------------|-------------|
-| **A1 — Control-plane auth, loopback, and LAN-bind hardening** | Remediation plan Phase 1 (`start.sh`: LAN bind requires token; portal route auth audit) and Phase 2 (shared bearer auth on PT + orama routes) | Critical/High/Medium portal takeover surfaces: spawn-agent execution, secret overwrite, swarm launch, lifecycle stop/restart, job detail exposure, copied example token, loopback dashboard token bootstrap, Windows all-interface launcher | Re-open Fix 3/3b as incomplete until every mutating/read-sensitive route is covered, no bearer is embedded in HTML, copied templates do not contain usable tokens, and all launchers use loopback-by-default with explicit `*_BIND_LAN=1` plus strong token. |
-| **A2 — Model endpoint discovery and egress policy** | Remediation plan Phase 3 (`Endpoint URL validator`, local-only/default-private endpoint policy) | LAN discovery endpoint hijack and status-probe bearer leakage to model endpoints | Pin/approve discovered model hosts before persistence, strip control-plane `Authorization` from LM Studio/Ollama probes, and keep public/non-approved model endpoints opt-in only. |
-| **A3 — Least-privilege MCP / worker profiles** | Implemented Fix 6 plus operator reference in this policy | Readonly Cursor MCP profile still preserving elevated `ai-cli-mcp` in active project config | Make readonly profile pruning verifiable against the merged on-disk config, not only dry-run stack output; keep dangerous CLI workers behind explicit elevated opt-in. |
+| **A1 — Control-plane auth, loopback, and LAN-bind hardening** | Remediation plan Phase 1 (`start.sh`: LAN bind requires token; portal route auth audit) and Phase 2 (shared bearer auth on PT + orama routes) | Critical/High/Medium portal takeover surfaces: spawn-agent execution, secret overwrite, swarm launch, lifecycle stop/restart, job detail exposure, copied example token, loopback dashboard token bootstrap, Windows all-interface launcher | **2026-06-28:** orama `auth_enforced()` defaults True; LAN bind requires strong token; HTML bearer bootstrap removed; mutating-route regression tests added. **Remaining:** server-side swarm approval (P5), CSRF/origin on lifecycle routes. |
+| **A2 — Model endpoint discovery and egress policy** | Remediation plan Phase 3 (`Endpoint URL validator`, local-only/default-private endpoint policy) | LAN discovery endpoint hijack and status-probe bearer leakage to model endpoints | **2026-06-28:** portal trusted/untrusted HTTP clients; PT `/health` query params validated. **Remaining:** operator approval before discovery persistence (P6). |
+| **A3 — Least-privilege MCP / worker profiles** | Implemented Fix 6 plus operator reference in this policy | Readonly Cursor MCP profile still preserving elevated `ai-cli-mcp` in active project config | **2026-06-28:** tracked `.cursor/mcp.json` readonly-safe; `test_mcp_profiles.py` validates on-disk config. |
 
 ### B. Severity-ranked remediation queue
 
@@ -110,21 +112,23 @@ shape instead of inventing a parallel remediation.
 
 ### C. Immediate acceptance checks for agents
 
-- [ ] Unauthenticated `POST /api/spawn-agent`, `/api/configure-tool`,
+- [x] Unauthenticated `POST /api/spawn-agent`, `/api/configure-tool`,
   `/api/swarm/launch`, `/api/stop`, `/api/restart/*`, and job detail routes
-  return 401 when auth is enforced.
-- [ ] `GET /` with auth enforced never returns the raw control-plane token in
+  return 401 when auth is enforced (`tests/test_portal_mutating_route_auth.py`).
+- [x] `GET /` with auth enforced never returns the raw control-plane token in
   HTML, even when the upstream peer is loopback.
-- [ ] `start.sh` and `platform/windows/start.ps1` both bind to loopback unless
-  the corresponding `*_BIND_LAN=1` flag is set and a strong token is present.
-- [ ] Status/model probes never send the control-plane bearer to LM Studio,
-  Ollama, discovered LAN hosts, or public model endpoints.
-- [ ] Legacy dashboard/status HTML escapes model names, URLs, routing labels,
+- [x] `start.sh` and `platform/windows/start.ps1` refuse LAN bind when only a
+  weak/missing control-plane token is configured (strong token auto-generated when possible).
+- [x] Status/model probes never send the control-plane bearer to LM Studio,
+  Ollama, discovered LAN hosts, or public model endpoints (untrusted HTTP client).
+- [x] Legacy dashboard/status HTML escapes model names, URLs, routing labels,
   activity text, and all other remote probe strings.
-- [ ] `scripts/worktree-bootstrap.sh` rejects slugs outside a safe
+- [x] `scripts/worktree-bootstrap.sh` rejects slugs outside a safe
   alphanumeric/dot/dash/underscore pattern and shell-quotes generated env files.
-- [ ] Readonly MCP profile tests validate the final merged `.cursor/mcp.json`
+- [x] Readonly MCP profile tests validate the final merged `.cursor/mcp.json`
   state, not only dry-run stack contents.
+
+**Remaining toward zero open queue:** P5 server-side swarm approval; P6 discovery operator approval before persistence; optional CSRF/origin guards on lifecycle routes.
 
 ---
 
