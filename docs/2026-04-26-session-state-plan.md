@@ -128,7 +128,7 @@ gh pr merge 21 --merge --repo diazMelgarejo/Perpetua-Tools
 
 # Step 2: Merge orama-system salvage → main
 cd "<workspace>/orama-system"
-# historical session path: /Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system
+# historical session path: $OPENCLAW_ROOT/orama-system
 git checkout main && git pull origin main
 git merge 2026-04-24-001-orama-salvage --no-ff -m "chore(merge): orama-system salvage → main"
 git push origin main
@@ -138,7 +138,7 @@ git push origin main
 
 ```bash
 cd "<workspace>/orama-system"
-# historical session path: /Users/lawrencecyremelgarejo/Documents/Terminal xCode/claude/OpenClaw/orama-system
+# historical session path: $OPENCLAW_ROOT/orama-system
 git mv .claude/skills/ultrathink-system .claude/skills/orama
 git commit -m "feat(rename): ultrathink-system skill dir → orama"
 ```
