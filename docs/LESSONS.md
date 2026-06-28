@@ -47,6 +47,16 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-06-28 — Cycle 005 H5 closed (operator approved) | Cursor
+
+**Approval:** operator `approve lessons` (round 7) · **Fan-out:** `2026-06-28-coord-005`  
+**PT memory:** `lesson_e2f8a41c7d93`
+
+- Mac `mac-h5-comparison.md` merged; `gpu-results-h5-final.md` dropped to Mac peer.
+- Win 3/3 @ 1/1/1 itp vs Mac 3/3 @ 1/4/5; Win faster on wall-clock.
+
+---
+
 ### 2026-06-28 — Queue prune + coord reconcile + monitor (operator approved) | Cursor
 
 **Approval:** operator `approve lessons` (round 6)  
