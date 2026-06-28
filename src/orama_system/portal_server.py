@@ -59,6 +59,7 @@ from utils.control_plane_auth import (
     redact_activity_payload,
     redact_agents_payload,
     redact_jobs_payload,
+    redact_job_record,
     redact_models_payload,
     redact_portal_status_payload,
     redact_runtime_section,
@@ -211,8 +212,18 @@ app.add_middleware(
 )
 
 
-def _portal_http_client(**kwargs: Any) -> httpx.AsyncClient:
+def _portal_trusted_http_client(**kwargs: Any) -> httpx.AsyncClient:
+    """Outbound calls to PT/orama control-plane APIs (may carry bearer)."""
     return httpx.AsyncClient(headers=auth_headers(), **kwargs)
+
+
+def _portal_untrusted_http_client(**kwargs: Any) -> httpx.AsyncClient:
+    """Model/discovery probes — never attach control-plane Authorization."""
+    return httpx.AsyncClient(**kwargs)
+
+
+def _portal_http_client(**kwargs: Any) -> httpx.AsyncClient:
+    return _portal_trusted_http_client(**kwargs)
 
 
 @app.middleware("http")
@@ -262,20 +273,9 @@ def _resolve_web_asset(path: str) -> tuple[bytes, str]:
 
 
 def _portal_cp_fetch_bootstrap(browser_token: str) -> str:
-    """Inject loopback-only bearer helper for legacy dashboard API calls."""
-    if not browser_token:
-        return "function cpFetch(url, opts) { return fetch(url, opts); }\n"
-    token_js = json.dumps(browser_token)
-    return (
-        f"const ORAMA_CP_TOKEN = {token_js};\n"
-        "function cpFetch(url, opts) {\n"
-        "  opts = opts || {};\n"
-        "  const headers = Object.assign({}, opts.headers || {});\n"
-        "  if (ORAMA_CP_TOKEN) headers['Authorization'] = 'Bearer ' + ORAMA_CP_TOKEN;\n"
-        "  opts.headers = headers;\n"
-        "  return fetch(url, opts);\n"
-        "}\n"
-    )
+    """Legacy dashboard fetch helper — never embeds bearer tokens in HTML."""
+    _ = browser_token
+    return "function cpFetch(url, opts) { return fetch(url, opts); }\n"
 
 
 HTML_TEMPLATE = """<!DOCTYPE html>
@@ -701,17 +701,19 @@ def _status_badge(ok: bool) -> str:
 def _render_card(title: str, ok: bool, url: str, role: str = "", models: List[str] = None, extra: str = "") -> str:
     models_html = ""
     if models:
-        items = "".join(f'<div class="model">&rsaquo; {m}</div>' for m in models[:5])
+        items = "".join(
+            f'<div class="model">&rsaquo; {_html.escape(str(m))}</div>' for m in models[:5]
+        )
         if len(models) > 5:
             items += f'<div class="model">...+{len(models)-5} more</div>'
         models_html = f'<div class="models">{items}</div>'
-    role_html = f'<div class="role">{role}</div>' if role else ""
+    role_html = f'<div class="role">{_html.escape(role)}</div>' if role else ""
     return (
         f'<div class="card">'
-        f'<div class="card-title">{title}</div>'
+        f'<div class="card-title">{_html.escape(title)}</div>'
         f'{_status_badge(ok)}'
         f'{role_html}'
-        f'<div class="url">{url}</div>'
+        f'<div class="url">{_html.escape(url)}</div>'
         f'{models_html}'
         f'{extra}'
         f'</div>'
@@ -1044,8 +1046,8 @@ def _render_activity_section(events: List[Dict[str, Any]]) -> str:
         msg = ev.get("msg", "")[:120].replace("<", "&lt;").replace(">", "&gt;")
         rows.append(
             '<div class="ev">'
-            f'<span class="ev-ts">{_fmt_ts(ev.get("ts", 0))}</span>'
-            f'<span class="ev-who">{ev.get("agent","?")}</span>'
+            f'<span class="ev-ts">{_html.escape(_fmt_ts(ev.get("ts", 0)))}</span>'
+            f'<span class="ev-who">{_html.escape(str(ev.get("agent", "?")))}</span>'
             f'{_tag(ev.get("event","?"))}'
             f'<span class="ev-msg">{msg}</span>'
             '</div>'
@@ -1152,8 +1154,8 @@ def _render_supervisor_jobs_section(jobs: List[Dict[str, Any]]) -> str:
 
 
 def _loopback_browser_token(request: Request) -> str:
-    if auth_enforced() and request_is_loopback(request):
-        return resolved_control_plane_token()
+    """Never embed control-plane bearer tokens in HTML responses."""
+    _ = request
     return ""
 
 
@@ -2159,11 +2161,13 @@ async def api_jobs_proxy(status: Optional[str] = None):
 
 @app.get("/api/jobs/{job_id}")
 async def api_job_detail_proxy(job_id: str):
-    async with _portal_http_client(timeout=5.0) as client:
+    async with _portal_trusted_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs/{job_id}")
             r.raise_for_status()
-            return {"available": True, "source": "pt:/v1/jobs/{job_id}", "job": r.json()}
+            raw = r.json()
+            job = redact_job_record(raw) if isinstance(raw, dict) else {}
+            return {"available": True, "source": "pt:/v1/jobs/{job_id}", "job": job}
         except Exception as exc:
             return {
                 "available": False,
@@ -2500,7 +2504,7 @@ async def api_status():
         _dyn_win_lms  = LMS_WIN_ENDPOINTS
         _dyn_ollama_win = OLLAMA_WIN
 
-    async with _portal_http_client() as client:
+    async with _portal_trusted_http_client() as trusted_client, _portal_untrusted_http_client() as probe_client:
         (
             (pt_ok, pt_ver),
             (us_ok, us_ver),
@@ -2514,17 +2518,17 @@ async def api_status():
             supervisor_jobs,
             *lm_win_results,
         ) = await asyncio.gather(
-            _probe_http(client, f"{PT_URL}/health"),
-            _probe_http(client, f"{US_URL}/health"),
-            _probe_lms_models(client, LMS_MAC_ENDPOINT, LMS_API_TOKEN),
-            _probe_ollama_models(client, _dyn_ollama_win),
-            _probe_ollama_models(client, OLLAMA_MAC),
-            _probe_activity(client),
-            _probe_agents(client),
-            _probe_routing(client),
-            _probe_queue_depth(client),
-            _probe_supervisor_jobs(client),
-            *[_probe_lms_models(client, ep, LMS_API_TOKEN) for ep in _dyn_win_lms],
+            _probe_http(trusted_client, f"{PT_URL}/health"),
+            _probe_http(trusted_client, f"{US_URL}/health"),
+            _probe_lms_models(probe_client, LMS_MAC_ENDPOINT, LMS_API_TOKEN),
+            _probe_ollama_models(probe_client, _dyn_ollama_win),
+            _probe_ollama_models(probe_client, OLLAMA_MAC),
+            _probe_activity(trusted_client),
+            _probe_agents(trusted_client),
+            _probe_routing(trusted_client),
+            _probe_queue_depth(trusted_client),
+            _probe_supervisor_jobs(trusted_client),
+            *[_probe_lms_models(probe_client, ep, LMS_API_TOKEN) for ep in _dyn_win_lms],
         )
 
     # ── Gossip: if Win LMS responded at a new IP, write it back to openclaw.json ─
