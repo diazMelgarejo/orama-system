@@ -189,6 +189,14 @@ git config user.email
 
 Never run destructive cleanup until the stash has been verified.
 
+### Cross-host sync reference card (Mac ↔ Win)
+
+For the common case — **dirty worktree + fast-forward `main` + push to peer** — use the full step-by-step card (bash + PowerShell, multi-repo, forbidden commands):
+
+[`bin/orama-system/skills/git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/safe-cross-host-sync-reference-card.md)
+
+Summary: stash → `git pull --ff-only origin main` → `git stash pop` → review → commit intentional files → `git push origin main` → peer runs `git pull --ff-only`. Never `git reset --hard` or force-push `main`.
+
 ---
 
 ## Commit Message Quality

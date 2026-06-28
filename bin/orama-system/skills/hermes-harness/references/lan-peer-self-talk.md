@@ -10,8 +10,10 @@
 
 ## Operator playbook
 
-> **SSOT:** Both machines `git pull --ff-only origin main` and follow **this section**
-> verbatim. Do not maintain forked Mac-only or Win-only copies of these steps.
+> **SSOT:** Both machines sync `main` and follow **this section** verbatim.
+> Clean tree: `git pull --ff-only origin main`.
+> Dirty tree: [`../../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../git-history-surgery/references/safe-cross-host-sync-reference-card.md).
+> Do not maintain forked Mac-only or Win-only copies of these steps.
 
 ### A. One-time setup (run on **each** host)
 

@@ -302,6 +302,7 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 | [`references/agent-matrix.md`](references/agent-matrix.md) | Per-host invocation |
 | [`references/crg-embed-mode.md`](references/crg-embed-mode.md) | Embedding toggle |
 | [`references/pressure-test-notes.md`](references/pressure-test-notes.md) | Expected graph-first behavior |
+| [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md) | Stash-first Mac↔Win `main` sync |
 | [`agents/code-reviewer.md`](agents/code-reviewer.md) | Subagent / worker persona |
 
 ---
