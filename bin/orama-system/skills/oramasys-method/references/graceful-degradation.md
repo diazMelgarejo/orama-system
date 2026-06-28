@@ -116,6 +116,39 @@ Branch policy: `subagent/<role>/<topic>` for mutations; coordination stays on `m
 
 ---
 
+## Ladder F — Dispatch gate (model-routing-check + hardware policy)
+
+Before any agent/model dispatch on either host:
+
+```text
+Endpoint reachability (Mac Ollama / Win LM Studio :1234)
+  → hardware_policy_cli --check-openclaw (affinity fail-closed)
+  → routing.yml task_types vs models.yml roles
+  → degraded: continue with live endpoint only (log warning)
+  → affinity violation: STOP (no silent cross-host model)
+```
+
+| Check | Pass | Degraded | Fail-closed |
+|-------|------|----------|-------------|
+| Mac `:11434/v1/models` | dispatch Mac stack | log; Win-only tasks if Win up | — |
+| Win `:1234/v1/models` | dispatch Win 27B | log; Mac-only latency probes | — |
+| NEVER_MAC models on Mac | block | — | **yes** |
+| MLX on Win | block | — | **yes** |
+| Budget / `ORAMASYS_OFFLINE=1` | tier ≤ 2 only | skip cloud (B2) | — |
+| `probe_lan_peer.py` | fan-out GO | file inbox partial; retry peer | — |
+
+**Coord cycle integration:** Mac orchestrator drops one assignment per role; Win `win_job_queue.py` serializes. On Mac peer timeout (portal-health FAIL), Win continues local queue work and retries peer drop later (Ladder C).
+
+**Autoresearch preflight chain (B4 + F):**
+
+```text
+preflight() → plugin check → http-local sync + GET /v1/models
+  → on missing CLI (ollama): document degraded; unit tests still gate PR
+  → on SSH host: legacy SSH path
+```
+
+---
+
 ## Anti-patterns
 
 | Violation | Why |
