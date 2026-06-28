@@ -481,18 +481,23 @@ stream) and a **client** (dialling the peer's WS and subscribing to the peer's S
 
 ```
 IDLE
- └─► WS_CONNECTING  (attempt ws://{peer}:8002/ws/portal-peer, 5 s timeout)
-       ├─ success ─► WS_CONNECTED  ──► [heartbeat loop]
-       │               └─ drop ─────────────────────────────────┐
-       └─ fail    ─► SSE_CONNECTING (GET /events/peer-stream)   │
-                      ├─ success ─► SSE_CONNECTED               │
-                      │               └─ drop ──────────────────┘
-                      └─ fail    ─► DISCONNECTED  (retry in 30 s)
-                                     └─► WS_CONNECTING (loop)
+ └─► WS_CONNECTING     (ws://{peer}:8002/ws/portal-peer, 5 s open timeout)
+       ├─ success ──► WS_CONNECTED  ──► [heartbeat every 15 s]
+       │                  └─ drop ──► RETRY_WAIT (30 s) ──► WS_CONNECTING
+       └─ fail (×1) ──► WS_CONNECTING  (one immediate retry — fast path)
+       └─ fail (×2) ──► SSE_CONNECTING
+                            (GET /events/peer-stream + POST /api/peer-event uplink)
+                            ├─ success ──► SSE_CONNECTED
+                            │                └─ drop ──► RETRY_WAIT (30 s) ──► WS_CONNECTING
+                            └─ fail ──► RETRY_WAIT (30 s) ──► WS_CONNECTING
 ```
 
-Reconnect: WS drop → immediate retry → WS_CONNECTING; two consecutive WS failures →
-demote to SSE_CONNECTING for one attempt before retrying WS.
+**Rules (channel manager only — callers never branch on transport):**
+
+1. **Fast path:** first successful `WS_CONNECTING` → `WS_CONNECTED`.
+2. **Demotion:** two consecutive WS connection failures → `SSE_CONNECTING` → `SSE_CONNECTED`.
+3. **Reconnect:** any drop from `WS_CONNECTED` or `SSE_CONNECTED` → wait 30 s → `WS_CONNECTING` (always prefer WS on retry).
+4. **Envelope:** identical JSON on WS frames, SSE `data:` lines, and `POST /api/peer-event` body — only `lan_peer_channel.py` knows which wire is active.
 
 ---
 
@@ -636,6 +641,133 @@ This closes the L3 gap in the attempt log above.
 | 2–3 | `probe_lan_peer.py --json` shows `ws-peer: PASS` from both sides |
 | 4 | `probe_lan_peer.py --json` includes `ws-peer` check in output |
 | 5 | Cross-peer `POST /api/user-input` → remote `GET /api/user-input/next` returns message |
+
+---
+
+<!-- /autoplan restore point: ~/.gstack/projects/ultrathink/autoplan-restore-lan-peer-bidirectional-2026-06-28.md -->
+
+## GSTACK REVIEW REPORT — /autoplan (2026-06-28)
+
+**Plan file:** `docs/guides/lan-peer-bidirectional-talk-2026-06-28.md`  
+**Branch:** `main` · **Commit at review:** `f63ec72`  
+**Mode:** SELECTIVE EXPANSION (ship L1–L2 token fix + Phases 1–4 transport; defer L3 dispatch until probe green)
+
+### Plan summary
+
+Consolidates live Mac↔Win LAN evidence, stale-IP fixes (discover subnet scan, `start.ps1` reads `last_discovery.json`), operator token handoff, and a **zero-dep WS-primary / SSE+POST-fallback** channel for L3 bidirectional portal talk. Channel manager owns transport; shared JSON envelope on all wires.
+
+### Premises (confirmed — gate passed)
+
+| # | Premise | Verdict |
+|---|---------|---------|
+| P1 | Mac is `192.168.254.102`, Win is `192.168.254.100` (not `.110`) | ✅ Live probes + discovery |
+| P2 | L1 inference works today over LM Studio HTTP | ✅ Both directions |
+| P3 | L2 blocked on `portal-status` 401 until shared token on Mac | ✅ Reproduced |
+| P4 | Reuse-first: extend `portal_server.py`, no second RPC layer | ✅ Plan complies |
+| P5 | WS fast path, SSE demotion after 2 WS fails, 30 s retry to WS | ✅ State machine updated |
+
+### CEO dual voices — consensus
+
+| Dimension | Consensus |
+|-----------|-----------|
+| Right problem (bidirectional portal, not new discovery) | CONFIRMED |
+| Scope: doc + transport increment before Hermes remote dispatch | CONFIRMED |
+| 6-month regret if we skip token sync doc | High — operators will chase `.110` forever |
+| Competitive risk | Low — internal LAN tooling |
+
+### Eng review
+
+**Architecture (ASCII):**
+
+```
+[start.ps1/sh --lan-peer]
+        │
+        ▼
+discover.py ──► last_discovery.json (mac.ip, win.ip)
+        │
+        ▼
+portal_server.py lifespan ──► LanPeerChannel.connect(peer_ip)
+        │                         │
+        │    ┌────────────────────┼────────────────────┐
+        │    ▼                    ▼                    ▼
+        │  WS server          SSE server           POST /api/peer-event
+        │  /ws/portal-peer    /events/peer-stream
+        │    ▲                    ▲
+        └────┴──── outbound client to peer ─────────┘
+```
+
+**Findings (auto-decided):**
+
+| # | Finding | Decision | Principle |
+|---|---------|----------|-----------|
+| E1 | WS/SSE endpoints must require Bearer token when `auth_enforced()` | Add `verify_control_plane_auth` on upgrade + SSE | P1 completeness |
+| E2 | `probe_lan_peer.py` ws-peer check: use `websockets` sync client or `asyncio.run` | Phase 4 — keep probe script self-contained | P5 explicit |
+| E3 | `lan_peer_channel.py` not in tree yet | Create in Phase 2 — plan is accurate | P6 action |
+| E4 | Mac token still 401 — transport phases do not replace token handoff | Ship `print-lan-peer-token.ps1` step before Phase 5 | P3 pragmatic |
+| E5 | Tests: add `tests/test_lan_peer_channel.py` for state machine transitions | Include in Phase 2 PR | P1 |
+
+**Test diagram:**
+
+| Codepath | Test |
+|----------|------|
+| WS_CONNECTING → WS_CONNECTED | mock websocket accept |
+| 2× WS fail → SSE_CONNECTED | mock connection errors |
+| drop → 30 s → WS_CONNECTING | fake clock / asyncio |
+| send() same envelope on WS vs POST | parametrize transport |
+| probe `ws-peer` check | integration against localhost |
+
+### DX review (developer-facing doc)
+
+| Dimension | Score | Note |
+|-----------|-------|------|
+| Operator checklist | 9/10 | Token handoff script linked |
+| Troubleshooting table | 9/10 | Covers `.110`, 401, bind |
+| Transport plan readability | 8/10 | State machine now matches channel-manager contract |
+| TTHW for bidirectional probe | ~5 min after token sync | Target met |
+
+### NOT in scope (deferred)
+
+- Remote Hermes/Codex on peer host (probe only per playbook)
+- mDNS zeroconf (optional upgrade, separate PR)
+- MQTT / gRPC / ZeroMQ (documented as alternatives, not implementing)
+- Mac token paste (operator action on Mac — cannot automate from Win)
+
+### What already exists
+
+| Asset | Reuse |
+|-------|-------|
+| `probe_lan_peer.py` | Extend with `ws-peer` check |
+| `portal_server.py` | Add routes + lifespan |
+| `control_plane_auth.py` | Bearer on WS/SSE |
+| `last_discovery.json` | Peer IP (no `PEER_IP` env required) |
+| `print-lan-peer-token.ps1` | Mac `.env.local` handoff |
+
+### Cross-phase themes
+
+**Token + transport:** L2 (`portal-status`) and L3 (WS/SSE) both need the same `ORAMA_CONTROL_PLANE_TOKEN` on both hosts. Document prominently; do not ship Phase 5 until `probe_lan_peer.py` shows three PASS checks including `portal-status`.
+
+### Decision audit trail
+
+| # | Phase | Decision | Class | Principle | Rationale |
+|---|-------|----------|-------|-----------|-----------|
+| 1 | CEO | Ship WS-primary plan in doc before code | mechanical | P6 | User requested autoplan on this file |
+| 2 | CEO | Defer L3 user-input forward to Phase 5 | mechanical | P2 | Phases 1–4 must green first |
+| 3 | Eng | Auth on WS upgrade | mechanical | P1 | Matches `/api/status` |
+| 4 | Eng | 30 s retry always returns to WS | mechanical | P5 | User-specified state machine |
+| 5 | Eng | New `test_lan_peer_channel.py` | mechanical | P1 | State machine needs unit tests |
+| 6 | DX | Keep open-source survey in doc | taste | P4 | Reference only, no deps added |
+
+### Implementation tasks (aggregated)
+
+- [ ] **P1 (human: 5 min / CC: 10 min) — operator** — Run `print-lan-peer-token.ps1`; paste token on Mac; re-probe until `portal-status` PASS
+- [ ] **P1 (human: 2 h / CC: 45 min) — portal** — Phase 1: WS + SSE + POST endpoints in `portal_server.py`
+- [ ] **P1 (human: 2 h / CC: 30 min) — portal** — Phase 2: `lan_peer_channel.py` state machine + tests
+- [ ] **P2 (human: 30 min / CC: 15 min) — hermes** — Phase 4: `ws-peer` in `probe_lan_peer.py`
+- [ ] **P2 (human: 1 h / CC: 20 min) — portal** — Phase 5: cross-peer `user-input` via `channel.send`
+
+### Review status
+
+**APPROVED FOR IMPLEMENTATION** (autoplan auto-decide; operator may override via PR review).
 
 ---
 
