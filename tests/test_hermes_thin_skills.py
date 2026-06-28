@@ -31,7 +31,7 @@ def installer(monkeypatch, tmp_path):
 
 
 def _target(installer, slug: str) -> Path:
-    return installer.HERMES_SKILLS / slug / "SKILL.md"
+    return installer.HERMES_SKILLS / installer.hermes_local_dir(slug) / "SKILL.md"
 
 
 def test_install_preserves_unmanaged_wrapper(installer, capsys):
@@ -130,6 +130,7 @@ def test_wrapper_text_all_three_slugs(installer):
         "pt-orama-council",
         "pt-orama-review",
         "pt-orama-delegate",
+        "pt-orama-lesson-mining",
     }
 
 
@@ -139,7 +140,7 @@ def test_install_fresh_creates_all_wrappers(installer):
     written = installer.install()
     assert len(written) == len(installer.WRAPPERS)
     for spec in installer.WRAPPERS:
-        target = _target(installer, spec.slug.removeprefix("pt-orama-"))
+        target = _target(installer, spec.slug)
         assert target.is_file()
 
 
@@ -158,8 +159,8 @@ def test_install_dry_run_prints_targets_without_creating_files(installer, capsys
     assert not installer.HERMES_SKILLS.exists()
     out = capsys.readouterr().out
     for spec in installer.WRAPPERS:
-        slug = spec.slug.removeprefix("pt-orama-")
-        assert slug in out
+        local = installer.hermes_local_dir(spec.slug)
+        assert local in out
 
 
 def test_install_dry_run_skips_no_files_for_fresh_install(installer, capsys):
