@@ -1,0 +1,11 @@
+{
+  "fanout_id": "2026-06-28-coord-005",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "autoresearch/gpu-done",
+      "filename": "win-autoresearcher-h5-finalize.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/win-autoresearcher-h5-finalize.md"
+    }
+  ]
+}
