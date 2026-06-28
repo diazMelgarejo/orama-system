@@ -1,0 +1,23 @@
+{
+  "fanout_id": "2026-06-28-coord-004",
+  "assignments": [
+    {
+      "assignee": "mac",
+      "topic": "autoresearch/gpu-run",
+      "filename": "mac-researcher-h5-parallel.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/mac-researcher-h5-parallel.md"
+    },
+    {
+      "assignee": "win",
+      "topic": "autoresearch/gpu-run",
+      "filename": "win-autoresearcher-h5-cross-frugal.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/win-autoresearcher-h5-cross-frugal.md"
+    },
+    {
+      "assignee": "win",
+      "topic": "code-review/bridge-merge",
+      "filename": "win-coder-frugal-spawn.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/win-coder-frugal-spawn.md"
+    }
+  ]
+}
