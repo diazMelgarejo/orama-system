@@ -42,8 +42,8 @@ def test_build_co_orchestration_summary_directions():
 
 def test_resolve_skin_id_defaults_by_role():
     assert resolve_skin_id("mac") == "macos"
-    assert resolve_skin_id("win") == "windows"
-    assert resolve_skin_id("mac", explicit="windows") == "windows"
+    assert resolve_skin_id("win") == "peer-inbox"
+    assert resolve_skin_id("mac", explicit="windows") == "peer-inbox"
 
 
 def test_api_co_orchestration_local_only(monkeypatch, tmp_path):
@@ -77,15 +77,27 @@ def test_api_co_orchestration_local_only(monkeypatch, tmp_path):
     assert "OpenClaw" in macos.text
 
 
-def test_co_orchestration_windows_skin_page(monkeypatch):
+def test_co_orchestration_windows_redirects_to_peer_inbox(monkeypatch):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "co-orch-token")
 
     with TestClient(portal_server.app, raise_server_exceptions=False) as client:
-        win_page = client.get("/co-orchestration/windows")
+        win_page = client.get("/co-orchestration/windows", follow_redirects=False)
 
-    assert win_page.status_code == 200
-    assert "Hermes" in win_page.text
+    assert win_page.status_code == 307
+    assert win_page.headers["location"] == "/peer-inbox"
+
+
+def test_co_orchestration_win_role_redirects_to_peer_inbox(monkeypatch):
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "co-orch-token")
+    monkeypatch.setattr(portal_server, "local_platform", lambda: "win")
+
+    with TestClient(portal_server.app, raise_server_exceptions=False) as client:
+        resp = client.get("/co-orchestration", follow_redirects=False)
+
+    assert resp.status_code == 307
+    assert resp.headers["location"] == "/peer-inbox"
 
 
 def test_co_orchestration_file_local_roundtrip(monkeypatch, tmp_path):
@@ -109,6 +121,7 @@ def test_co_orchestration_file_local_roundtrip(monkeypatch, tmp_path):
 def test_co_orchestration_loopback_page_no_auth(monkeypatch):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "co-orch-token")
+    monkeypatch.setattr(portal_server, "local_platform", lambda: "mac")
 
     with TestClient(portal_server.app, raise_server_exceptions=False) as client:
         allowed = client.get("/co-orchestration")
