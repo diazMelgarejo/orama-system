@@ -234,6 +234,36 @@ def test_portal_loopback_index_injects_cp_fetch_when_enforced(monkeypatch, tmp_p
     assert api_allowed.status_code == 200
 
 
+def test_portal_index_handles_redacted_agents_payload(monkeypatch, tmp_path):
+    """index() must not 500 when api_status returns redacted agents wrapper dict."""
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
+    monkeypatch.setattr(portal_server, "_WEB_DIST", tmp_path)
+
+    async def _fake_status():
+        from utils.control_plane_auth import redact_portal_status_payload
+
+        return redact_portal_status_payload(
+            {
+                "services": {"ollama_mac": {"ok": True, "busy": False}},
+                "routing": None,
+                "activity": [],
+                "agents": [{"agent_id": "a1", "status": "idle", "role": "test"}],
+                "tools": {},
+                "queue_depth": 0,
+                "hardware_policy": None,
+                "supervisor_jobs": [],
+            }
+        )
+
+    monkeypatch.setattr(portal_server, "api_status", _fake_status)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        resp = client.get("/")
+
+    assert resp.status_code == 200
+    assert "orama" in resp.text.lower() or "portal" in resp.text.lower()
+
+
 def test_portal_index_requires_auth_when_not_loopback(monkeypatch):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "loopback-ui-token")
