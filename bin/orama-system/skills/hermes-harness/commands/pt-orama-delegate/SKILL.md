@@ -31,10 +31,8 @@ local/private specialist.
 1. Restate the subtask and assumptions.
 2. Identify the canonical source docs or skills needed.
 3. If local LM Studio is requested, verify a fast chat-completions canary first.
-4. If AGY is requested, save the installer first (never `irm | iex`):
-   `Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\agy-install.ps1"`;
-   skim first 40 lines; then `& powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\agy-install.ps1"`.
-   Require visible `AGY_READY` output before dispatch.
+4. If AGY is requested, install with `irm https://antigravity.google/cli/install.ps1 | iex`
+   when absent, then require visible `AGY_READY` output first.
 5. Return focused output only for the delegated subtask.
 
 ## Response Shape
