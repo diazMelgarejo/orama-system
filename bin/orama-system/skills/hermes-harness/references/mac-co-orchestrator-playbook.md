@@ -32,6 +32,8 @@ python3 bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py --json
 
 **Pass criteria:** `portal-health`, `portal-status`, `peer-lmstudio` PASS. Mac **must** expose `/api/peer-file` (restart after pull).
 
+**Mac inference (2026-06-28):** Ollama **warm** on `:11434` (primary). LM Studio **passive-only** on `:1234` — use `ollama-mac` for Mac cursor-agent / mac-researcher runs; do not treat `peer-lmstudio` PASS as “Mac coder is LMS.”
+
 ---
 
 ## 1. Mac assigns work (fan-out)
