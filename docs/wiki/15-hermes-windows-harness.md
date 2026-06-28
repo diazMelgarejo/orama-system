@@ -38,17 +38,19 @@ if ($gitBash) {
 For bounded coding-partner prompts, route explicitly:
 
 ```powershell
-hermes chat --query "Reply with exactly: HERMES_READY" `
-  --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
+  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 ```
 
 Use the default LM Studio route only after verifying the loaded model answers
 quickly through the OpenAI-compatible local API.
 
-Install AGY/Antigravity on native Windows with the official PowerShell command:
+Install AGY/Antigravity on native Windows (save-first — never pipe remote script to `iex`):
 
 ```powershell
-irm https://antigravity.google/cli/install.ps1 | iex
+Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\agy-install.ps1"
+Get-Content "$env:TEMP\agy-install.ps1" | Select-Object -First 40
+powershell -NoProfile -ExecutionPolicy Bypass -File "$env:TEMP\agy-install.ps1"
 agy --version
 agy --print "Reply with exactly: AGY_READY"
 ```
@@ -75,8 +77,8 @@ contain copied canonical bodies or private Hermes state.
 ```powershell
 hermes --version
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
-hermes chat --query 'Reply with exactly: HERMES_READY' `
-  --safe-mode --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
+hermes chat --query "Reply with exactly: HERMES_READY" --quiet --safe-mode `
+  --provider nous --model nvidia/nemotron-3-ultra:free --max-turns 1
 agy --print "Reply with exactly: AGY_READY"
 ```
 
