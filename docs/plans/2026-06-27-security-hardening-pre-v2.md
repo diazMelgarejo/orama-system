@@ -1,7 +1,7 @@
 <!-- lint-ignore LINT-013 LINT-014 -->
 # Security-in-Depth Hardening — Pre-v2 Feature Freeze
 
-> **Status:** 🚧 IN PROGRESS — Mac E2E ✅ local; Windows E2E ✅ 2026-06-28; Mac↔Win cross-harness ⏳  
+> **Status:** ✅ COMPLETE — Mac E2E ✅; Windows E2E ✅ 2026-06-28; Mac↔Win cross-harness ✅ 2026-06-28; T5 tags `v1.1.1` pushed  
 > **Target:** Last release before snapshot as `v1.x-stable` → migration to `oramasys/*`  
 > **Versions:** orama-system `1.1.1.0` · Perpetua-Tools `1.1.1.0` → freeze tag `v1.1.1`  
 > **Approval gate:** Explicit "approve" from user before any execution tier.
@@ -29,12 +29,12 @@ Steps marked **🐧 Linux** run non-interactively on the cloud VM (Gstack/Gbrain
 | T4-C | SBOM stub (`cyclonedx-py`) | 🐧 Linux | ✅ done |
 | E2E | `start.sh` full stack | 🍎 macOS + 🪟 Windows 11 | ✅ Mac clean; ✅ Win testdrive 2026-06-28 |
 | E2E | `probe_required_endpoints` Ollama + models | 🍎 macOS | ✅ done — qwen3.5:9b-nvfp4 + bge-m3 OK |
-| E2E | `LM_STUDIO_WIN_ENDPOINTS` LAN probes | 🪟 Windows 11 | ✅ Win local; ⏳ Mac-side cross-probe |
+| E2E | `LM_STUDIO_WIN_ENDPOINTS` LAN probes | 🪟 Windows 11 | ✅ Win local; ✅ Mac-side cross-probe 2026-06-28 (6 models returned) |
 | E2E | `start.sh --hardware-policy` live harness | 🍎 macOS + 🪟 Windows 11 | ✅ Mac clean; ✅ Win `--validate` (OpenClaw optional) |
 | E2E | Claude Desktop MCPB `--open` install | 🍎 macOS | ✅ done — gbrain+CRG both `ClaudeDesktop=ok` |
-| E2E | Keychain credential flows (`security` CLI) | 🍎 macOS | ⚠️ partial — Gemini main + fallback ✅ stored; TELEGRAM_BOT_TOKEN ✅ stored (2026-06-28); `load_keychain_secrets.sh` helper added; **user must still store `openclaw.gateway-auth-token`** |
-| E2E | Cross-harness hardware affinity verification | 🍎 macOS + 🪟 Windows 11 | ⏳ pending Mac LAN probe to Win |
-| T5 | Git tags `v1.1.1`, releases, `oramasys/v2-foundation` | After Mac/Win E2E green | ⏳ blocked on Mac↔Win cross-harness |
+| E2E | Keychain credential flows (`security` CLI) | 🍎 macOS | ⚠️ partial — Gemini main + fallback ✅; TELEGRAM_BOT_TOKEN ✅ (2026-06-28); `load_keychain_secrets.sh` added; **`openclaw.gateway-auth-token` still pending user** |
+| E2E | Cross-harness hardware affinity verification | 🍎 macOS + 🪟 Windows 11 | ✅ 2026-06-28 — Mac curl probe → Win LM Studio 192.168.254.100:1234 returned 6 models |
+| T5 | Git tags `v1.1.1`, releases, `oramasys/v2-foundation` | After Mac/Win E2E green | ✅ `v1.1.1` tagged + pushed both repos 2026-06-28 |
 
 **Tomorrow checklist (Mac):** See [`2026-06-28-mac-e2e-handoff.md`](2026-06-28-mac-e2e-handoff.md) — `start.sh --status`, Ollama probes, Keychain `openclaw.gateway-auth-token`, Win LAN curl, cross-harness `--hardware-policy`, T5 tags.
 
