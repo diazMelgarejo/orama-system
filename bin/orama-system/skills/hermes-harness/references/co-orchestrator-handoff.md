@@ -21,6 +21,8 @@ agy --print "AGY: cross-check hypothesis vs hardware policy"
 
 ## Mac operators (peer)
 
+**Full playbook:** [`mac-co-orchestrator-playbook.md`](mac-co-orchestrator-playbook.md)
+
 ```bash
 git pull --ff-only origin main
 ./start.sh --stop && ./start.sh --lan-peer --no-open
