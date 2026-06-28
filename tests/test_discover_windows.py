@@ -319,6 +319,47 @@ def test_windows_skips_loopback_as_cached_mac_ip():
     )
 
 
+def test_windows_subnet_scan_finds_mac_when_cache_is_loopback():
+    """On Windows, subnet scan must find Mac when cache only has localhost."""
+    D = _load_discover()
+    D.RUNNING_ON_WINDOWS = True
+
+    cached_state = {
+        "endpoints": {"mac": {"ip": "localhost"}, "win": {"ip": "localhost"}},
+        "models": {"mac": [], "win": []},
+    }
+
+    probed_urls = []
+
+    def fake_probe(base_url):
+        probed_urls.append(base_url)
+        if "localhost" in base_url:
+            return ["qwen3.5-27b"]
+        if "192.168.254.102" in base_url:
+            return ["qwen3.5-9b-mlx"]
+        return None
+
+    D.probe_models = fake_probe
+    D._load_json = lambda path: cached_state
+    D._win_lan_ip = lambda: "192.168.254.100"
+
+    async def fake_scan(subnet, port, exclude):
+        assert subnet == "192.168.254"
+        return ["192.168.254.102"]
+
+    D.scan_subnet_async = fake_scan
+
+    import os
+    D.os = MagicMock()
+    D.os.getenv = lambda key, default="": ""
+
+    result = D.discover_endpoints()
+
+    assert result["mac"] is not None
+    assert result["mac"]["ip"] == "192.168.254.102"
+    assert any("192.168.254.102" in url for url in probed_urls)
+
+
 # ── Mac/Linux path unchanged ──────────────────────────────────────────────────
 
 def test_mac_host_localhost_assigned_to_mac():

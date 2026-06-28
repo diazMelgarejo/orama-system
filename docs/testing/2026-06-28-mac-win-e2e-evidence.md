@@ -41,10 +41,12 @@ cd ../oramasys/perpetua-core && python3 -m pytest -q
 | Hermes `HERMES_READY` on Mac | ⏳ | `hermes` not on Mac PATH |
 | Hermes `HERMES_READY` on Win localhost | ⏳ | Run on Win host (SSH :22 closed from Mac) |
 | L1 `ainvoke` round-trip both targets | ⏳ | Next after Win Hermes green |
-| `probe_lan_peer.py` + `--lan-peer` start | ⏳ | Run after playbook §A on both hosts |
+| `probe_lan_peer.py` + `--lan-peer` start | ⚠️ | Win→Mac portal-health PASS; portal-status 401 until token synced — see [bidirectional talk log](../guides/lan-peer-bidirectional-talk-2026-06-28.md) |
 | `v0.2.0-alpha` tag perpetua-core | ⏳ | After L1 gate |
 
 ## LAN peer probe (post-playbook)
+
+**Full attempt log:** [`docs/guides/lan-peer-bidirectional-talk-2026-06-28.md`](../../docs/guides/lan-peer-bidirectional-talk-2026-06-28.md)
 
 ```bash
 # Mac — after ./start.sh --lan-peer

@@ -234,5 +234,6 @@ Command card: [`../commands/lan-peer-self-talk/SKILL.md`](../commands/lan-peer-s
 
 - [`win-localhost-runtime-checklist.md`](win-localhost-runtime-checklist.md)
 - [`docs/guides/lan-peer-mac-win-operator.md`](../../../../docs/guides/lan-peer-mac-win-operator.md) — `docs/` navigation entry (links here)
+- [`docs/guides/lan-peer-bidirectional-talk-2026-06-28.md`](../../../../docs/guides/lan-peer-bidirectional-talk-2026-06-28.md) — live attempts, probe matrix, future plan
 - [`docs/plans/2026-06-28-windows-powershell-todo.md`](../../../../docs/plans/2026-06-28-windows-powershell-todo.md)
 - [`ecc-hermes-cross-harness.md`](ecc-hermes-cross-harness.md)
