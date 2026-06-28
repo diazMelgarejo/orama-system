@@ -1,0 +1,39 @@
+"""Tests for win_job_queue.py role routing."""
+from __future__ import annotations
+
+import importlib.util
+import sys
+from pathlib import Path
+
+_SCRIPTS = Path(__file__).resolve().parents[1] / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts"
+
+
+def _load_queue():
+    path = _SCRIPTS / "win_job_queue.py"
+    spec = importlib.util.spec_from_file_location("win_job_queue", path)
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_classify_autoresearcher():
+    q = _load_queue()
+    assert q.classify_role("win-autoresearcher-h5-gpu.md", "autoresearch/gpu-run") == "autoresearcher"
+    assert q.classify_role("mac-h4-comparison.md", "autoresearch/gpu-done") == "autoresearcher"
+
+
+def test_classify_coder():
+    q = _load_queue()
+    assert q.classify_role("win-coder-frugal-spawn.md", "code-review/bridge-merge") == "coder"
+
+
+def test_skip_ops_noise():
+    q = _load_queue()
+    assert q.classify_role("coord-003-go.md", "ops/co-orchestration-active") is None
+
+
+def test_skip_mac_deliverables():
+    q = _load_queue()
+    assert q.is_actionable_assignment("mac-h4-comparison.md", "autoresearch/gpu-done", "mac") is False
+    assert q.is_actionable_assignment("win-autoresearcher-h5-cross-frugal.md", "autoresearch/gpu-run", "mac") is True
