@@ -224,7 +224,7 @@ function Sync-ControlPlaneToken {
     $generated = [Convert]::ToBase64String($bytes).TrimEnd('=').Replace('+','-').Replace('/','_')
     Set-Content -Path $tokenPath -Value $generated -NoNewline -Encoding UTF8
     $env:ORAMA_CONTROL_PLANE_TOKEN = $generated
-    _Info 'lan-peer' "Generated ORAMA_CONTROL_PLANE_TOKEN in PT .state (copy to Mac .env.local)"
+    _Warn 'lan-peer' 'Generated ORAMA_CONTROL_PLANE_TOKEN — copy PT/.state/control_plane_token to Mac .env.local'
 }
 
 if ($LanPeer -or ($env:PORTAL_BIND_LAN -match '^(1|true|yes)$')) {
@@ -365,12 +365,13 @@ function Invoke-DiscoverEndpoints {
         $env:PERPETUA_TOOLS_PATH = $PtDir
     }
     _Info 'ip' "Probing LAN topology ($([IO.Path]::GetFileName($discover)) --force)..."
-    try {
-        & $UsPython $discover --force 2>&1 | ForEach-Object { "  [discover] $_" } |
-            Tee-Object -FilePath (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Append
+    $discoverOutput = & $UsPython $discover --force 2>&1
+    $discoverOutput | ForEach-Object { "  [discover] $_" } |
+        Tee-Object -FilePath (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Append
+    if ($LASTEXITCODE -ne 0) {
+        _Warn 'ip' "discover.py exited $LASTEXITCODE — continuing with discovery state / env"
+    } else {
         _Info 'ip' 'LAN probe complete'
-    } catch {
-        _Warn 'ip' "discover.py failed: $_ — continuing with discovery state / env"
     }
 }
 

@@ -109,11 +109,12 @@ Win: localhost — 7 models
 }
 ```
 
-**Interpretation:**
+**Interpretation (post-fix, Win `start.ps1 --lan-peer`):**
 
-- Win → Mac **portal reachability** (L2 health) ✅ after Mac ran `--lan-peer`.
-- **Authenticated status** ❌ — tokens differ between hosts until Mac copies Win’s `ORAMA_CONTROL_PLANE_TOKEN` into `.env.local` (or shares `PT/.state/control_plane_token`).
-- **Inference** ✅ both directions.
+- Banner shows **`192.168.254.102`** (source: `last_discovery.json`) — not stale `.110`
+- Win → Mac **portal-health** ✅ · **peer-lmstudio** ✅
+- **portal-status** ❌ `401` until Mac `.env.local` has the **same** token as `PT/.state/control_plane_token`
+- Win Portal **LAN** `192.168.254.100:8002/health` ✅ (Mac can probe back after token sync)
 
 **Success artifact (when all checks PASS):** `~/.openclaw/state/last_lan_peer_probe.json` (local only, never commit).
 
@@ -142,13 +143,21 @@ curl -s http://127.0.0.1:8000/user-input/next
 | Mac URL in `.env.lmstudio` on Win | `scripts/discover.py` | `LM_STUDIO_MAC_ENDPOINT=http://<discovered-mac-ip>:1234` |
 | Always run repo discover | `platform/windows/start.ps1` | `$RepoRoot/scripts/discover.py --force` before IP resolution |
 | Read `last_discovery.json` | `platform/windows/start.ps1` | No gateway `.110` heuristic or hardcoded fallback |
-| Load `.env.local` | `scripts/env/load-local.ps1` | Mirrors `load-local.sh` for Win |
+| `scripts/env/print-lan-peer-token.ps1` | Win → Mac token handoff for `.env.local` |
 | Token bootstrap | `platform/windows/start.ps1` | Generate/load `PT/.state/control_plane_token` when LAN bind on |
 | Remove `.110` defaults | PT `agent_launcher.py`, `alphaclaw_bootstrap.py` | Empty default — discovery / `MAC_IP` env only |
 
 ---
 
 ## Operator checklist — full bidirectional portal (L1 + L2)
+
+**Token handoff (Win → Mac):**
+
+```powershell
+.\scripts\env\print-lan-peer-token.ps1
+```
+
+Paste the printed line into Mac `orama-system/.env.local`, then `./start.sh --lan-peer --no-open` on Mac.
 
 ### Both hosts (one-time)
 
