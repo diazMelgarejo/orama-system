@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # agate — Why It's Bigger Than Documentation
 
 > Status: active | Added 2026-04-30 | Feeds into: v2.1 public Plugin API, v2.5 MAESTRO
@@ -9,6 +10,13 @@
 The original framing: "agate = companion documentation for `model_hardware_policy.yml` published alongside `perpetua-core`."
 
 That is like calling TCP/IP "companion documentation for BSD sockets." **agate is a protocol, not docs.**
+
+> **v2 orbit plan (2026-06-26):** Implementation and documentation for the hardware
+> model matrix, `model_hardware_policy.yml`, canonical API, and CLI consolidate in
+> [`42-agate-hardware-policy-orbit.md`](42-agate-hardware-policy-orbit.md) under
+> [github.com/oramasys/agate](https://github.com/oramasys/agate). See also
+> [`references/agate-mvp-design.md`](references/agate-mvp-design.md) and
+> [`../hermes-hardware-policy-cross-harness.md`](../hermes-hardware-policy-cross-harness.md).
 
 ---
 

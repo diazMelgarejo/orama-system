@@ -1,15 +1,15 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
-    install.ps1 — One-time Windows setup for orama-system  v0.9.9.8
+    install.ps1 — One-time Windows setup for orama-system  v1.1.1.0
 
 .DESCRIPTION
     Idempotent setup script (safe to re-run).  Installs Python dependencies,
     verifies LM Studio port, creates .venv if missing, and writes openclaw.json
     defaults for Windows node.
 
-    Run once after cloning:
-        powershell -ExecutionPolicy Bypass -File .\windows\install.ps1
+    Run once after cloning (from **orama-system repo root**):
+        powershell -ExecutionPolicy Bypass -File .\platform\windows\install.ps1
 
 .NOTES
     Execution policy: run as:
@@ -21,7 +21,7 @@
 $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
-$RepoRoot  = Split-Path -Parent $ScriptDir
+$RepoRoot  = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
 
 function _Step { param([string]$Msg) Write-Host "  [+] $Msg" -ForegroundColor Cyan }
 function _OK   { param([string]$Msg) Write-Host "  ✓  $Msg" -ForegroundColor Green }
@@ -30,7 +30,7 @@ function _Err  { param([string]$Msg) Write-Host "  ✗  $Msg" -ForegroundColor R
 
 Write-Host ''
 Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor DarkCyan
-Write-Host '  orama-system Windows installer  v0.9.9.8' -ForegroundColor Cyan
+Write-Host '  orama-system Windows installer  v1.1.1.0' -ForegroundColor Cyan
 Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor DarkCyan
 Write-Host ''
 
@@ -111,7 +111,7 @@ $template = @{
     }
     distributed = $false
     platform    = 'windows'
-    version     = '0.9.9.8'
+    version     = '1.1.1.0'
 }
 
 if (Test-Path $OcJson) {
@@ -139,6 +139,26 @@ _Step 'Generating .paths.ps1...'
 & $VenvPython (Join-Path $ScriptDir 'start.ps1') --discover
 _OK '.paths.ps1 written'
 
+# ── gstack brain-sync Windows shim (fix #1731) ───────────────────────────────
+# gstack-brain-sync is a bash shebang script. bun/Node.js spawns it via
+# cmd.exe on Windows (NEEDS_SHELL_ON_WINDOWS=true), which can't exec shebangs.
+# The .cmd wrapper calls bash.exe explicitly. Without it, /sync-gbrain's
+# brain-sync stage always fails with "not recognized as an internal command".
+_Step 'Installing gstack-brain-sync.cmd Windows shim...'
+$GstackBin = Join-Path $HOME '.claude\skills\gstack\bin'
+if (Test-Path $GstackBin) {
+    $ShimSrc = Join-Path $ScriptDir 'gstack-brain-sync.cmd'
+    $ShimDst = Join-Path $GstackBin 'gstack-brain-sync.cmd'
+    if (Test-Path $ShimSrc) {
+        Copy-Item -Path $ShimSrc -Destination $ShimDst -Force
+        _OK "gstack-brain-sync.cmd installed to $ShimDst"
+    } else {
+        _Warn "gstack-brain-sync.cmd not found at $ShimSrc — skipping"
+    }
+} else {
+    _Warn "gstack not installed at $GstackBin — run gstack setup first, then re-run this script"
+}
+
 # ── GPU parallel limit (Windows LM Studio rule) ───────────────────────────────
 _Warn 'IMPORTANT: Windows GPU loads ONE model at a time.'
 _Warn '           Never configure parallel inference on Windows.'
@@ -149,7 +169,7 @@ Write-Host ''
 Write-Host '═══════════════════════════════════════════════════════════' -ForegroundColor DarkCyan
 _OK 'Install complete!'
 Write-Host ''
-Write-Host '  Start services:  .\windows\start.ps1'
-Write-Host '  Stop services:   .\windows\start.ps1 --stop'
-Write-Host '  Check status:    .\windows\start.ps1 --status'
+Write-Host '  Start services:  .\platform\windows\start.ps1'
+Write-Host '  Stop services:   .\platform\windows\start.ps1 --stop'
+Write-Host '  Check status:    .\platform\windows\start.ps1 --status'
 Write-Host ''

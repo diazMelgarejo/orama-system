@@ -1,3 +1,4 @@
+<!-- lint-ignore LINT-013 -->
 # openclaw Setup & Troubleshooting
 
 > **Canonical copy lives in Perpetua-Tools**: `../perplexity-api/Perpetua-Tools/docs/openclaw-setup.md`

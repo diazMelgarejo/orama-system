@@ -14,7 +14,7 @@
 # Identity: cyre <diazMelgarejo@gmail.com> or Lawrence@cyre.me — no Co-authored-by trailers.
 set -euo pipefail
 
-REPO="${PERISCOPE_REPO:-$HOME/Documents/oramasys/tools/periscope}"
+REPO="${PERISCOPE_REPO:-$HOME/code/oramasys/tools/periscope}"
 UPSTREAM="${PERISCOPE_UPSTREAM:-https://github.com/latentsignal-org/periscope.git}"
 ORIGIN="${PERISCOPE_ORIGIN:-https://github.com/diazMelgarejo/periscope.git}"
 

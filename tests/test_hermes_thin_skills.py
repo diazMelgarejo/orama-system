@@ -125,7 +125,12 @@ def test_wrapper_text_contains_required_readiness_strings(installer):
 
 def test_wrapper_text_all_three_slugs(installer):
     slugs = {spec.slug for spec in installer.WRAPPERS}
-    assert slugs == {"pt-orama-council", "pt-orama-review", "pt-orama-delegate"}
+    assert slugs == {
+        "pt-hardware-policy",
+        "pt-orama-council",
+        "pt-orama-review",
+        "pt-orama-delegate",
+    }
 
 
 # ── install ───────────────────────────────────────────────────────────────────

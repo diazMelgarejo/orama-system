@@ -20,7 +20,7 @@ $env:GIT_EXEC_PATH = "$gitRoot\mingw64\bin"
 $env:npm_config_prefix = "$env:USERPROFILE\.lmstudio"
 
 # Use this Python explicitly; plain `python` may resolve to the Windows Store alias.
-$py = "C:\Users\lab\Downloads\SKILLS.md\ultrathink\Perplexity-Tools\.venv\Scripts\python.exe"
+$py = "$env:PERPETUA_TOOLS_ROOT\.venv\Scripts\python.exe"
 ```
 
 ## Checks

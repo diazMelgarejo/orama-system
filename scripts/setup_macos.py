@@ -143,6 +143,45 @@ def step_path_entry() -> None:
     _write_text(target, existing + f"\n{COMMENT}\n{ENTRY}\n")
     _applied("PATH entry", "added ~/.local/bin to ~/.zshrc — run: source ~/.zshrc")
 
+# ── step 2b: openclaw CLI self-heal ───────────────────────────────────────────
+
+# The `openclaw` command on PATH is a pnpm cmd-shim reached through the
+# ~/.local/bin/openclaw symlink. The shim derives basedir from $0 (the symlink
+# path), so it resolves ../openclaw/openclaw.mjs to ~/.local/openclaw/openclaw.mjs
+# — which does not exist → "Cannot find module". Meanwhile up to three openclaw
+# installs can coexist (npm-global gateway / AlphaClaw pnpm / stale ~/.alphaclaw).
+# Heal it by making ~/.local/bin/openclaw a thin wrapper around the canonical
+# resolver, which always finds the install that actually runs the gateway and
+# never the stale one. Idempotent; re-applied on every start.sh.
+
+RESOLVER = Path(__file__).resolve().parent / "openclaw" / "resolve-openclaw.sh"
+
+def step_openclaw_cli_wrapper() -> None:
+    target = LOCAL_BIN / "openclaw"
+    if not RESOLVER.exists():
+        _warn("openclaw CLI wrapper", f"resolver missing at {RESOLVER} — leaving existing command untouched")
+        return
+    wrapper = (
+        "#!/bin/sh\n"
+        "# OpenClaw CLI wrapper — routes through the orama-system canonical resolver\n"
+        "# so a broken pnpm cmd-shim / stale install never breaks `openclaw`.\n"
+        "# Managed by setup_macos.py (idempotent). Rationale: resolve-openclaw.sh header.\n"
+        f'exec "{RESOLVER}" "$@"\n'
+    )
+    # Idempotent: skip if our wrapper already points at this resolver.
+    if target.is_file() and not target.is_symlink():
+        try:
+            if str(RESOLVER) in target.read_text(encoding="utf-8"):
+                _skip("openclaw CLI wrapper", "already routed through resolver")
+                return
+        except OSError:
+            pass
+    if not DRY_RUN:
+        target.unlink(missing_ok=True)  # drop the broken symlink/old shim
+        target.write_text(wrapper, encoding="utf-8")
+        target.chmod(0o755)
+    _applied("openclaw CLI wrapper", "~/.local/bin/openclaw → canonical resolver (heals broken cmd-shim)")
+
 # ── step 3: openclaw.json ─────────────────────────────────────────────────────
 
 def step_openclaw_json() -> None:
@@ -210,7 +249,10 @@ def step_mac_agent_thinking() -> None:
 
     def _enforce(agent: dict, label: str) -> None:
         nonlocal changed
-        primary = agent.get("model", {}).get("primary", "")
+        _model = agent.get("model", {})
+        if isinstance(_model, str):
+            return  # string model shorthand — no "primary" key to enforce
+        primary = _model.get("primary", "")
         if not primary.startswith(_MAC_PROVIDER_PREFIX):
             return
 
@@ -710,6 +752,7 @@ def main() -> int:
 
     step_local_bin()
     step_path_entry()
+    step_openclaw_cli_wrapper()
     step_openclaw_json()
     step_mac_agent_thinking()
     step_patch_alphaclaw()

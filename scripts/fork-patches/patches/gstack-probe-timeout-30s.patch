@@ -1,0 +1,13 @@
+diff --git a/lib/gbrain-local-status.ts b/lib/gbrain-local-status.ts
+index f6332cf..c22acee 100644
+--- a/lib/gbrain-local-status.ts
++++ b/lib/gbrain-local-status.ts
+@@ -73,7 +73,7 @@ interface CacheEntry {
+ }
+
+ export const CACHE_TTL_MS = 60_000;
+-export const PROBE_TIMEOUT_MS = 5_000;
++export const PROBE_TIMEOUT_MS = Number(process.env.GSTACK_PROBE_TIMEOUT_MS ?? "30000");
+
+ /** Effective user home — respects HOME env override (used by tests). */
+ function userHome(): string {
