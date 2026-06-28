@@ -63,3 +63,10 @@ def test_parse_list_skip_invalid_handles_malformed_port():
     assert parse_model_endpoint_list(raw, skip_invalid=True) == [
         "http://127.0.0.1:11434",
     ]
+
+
+def test_parse_required_set_in_env_sentinel_skipped():
+    raw = "REQUIRED_SET_IN_ENV, http://127.0.0.1:11434"
+    assert parse_model_endpoint_list(raw, skip_invalid=True) == [
+        "http://127.0.0.1:11434",
+    ]
