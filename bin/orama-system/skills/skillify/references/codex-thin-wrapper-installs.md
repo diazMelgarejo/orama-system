@@ -2,6 +2,10 @@
 
 Local Codex skill installs must be wrappers, not forks.
 
+**CLI dispatch (v0.142.x):** when invoking Codex for bounded tasks, cite
+[`bin/orama-system/references/codex-cli-v142-dispatch.md`](../../../references/codex-cli-v142-dispatch.md)
+— do not fork flag tables into wrappers.
+
 ## Rule
 
 Install only a small wrapper under Codex-discovered skill roots that points to the canonical in-repo skill card. Current Codex docs use `~/.agents/skills/<name>/SKILL.md` for personal skills and `.agents/skills/<name>/SKILL.md` for repo skills. This repository may also write `~/.codex/skills/<name>/SKILL.md` for compatibility with Codex Desktop sessions that still expose that legacy root. Do not copy the canonical skill body, references, scripts, or assets into a Codex skill directory.
