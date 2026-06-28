@@ -271,35 +271,42 @@ def _windows_partner_dirs() -> list[Path]:
     local = os.environ.get("LOCALAPPDATA", "")
     home = Path.home()
     return [
+        # WinGet / native OpenAI Codex before LM Studio npm shim (same binary family; native updates cleanly).
+        Path(local) / "Programs" / "OpenAI" / "Codex" / "bin",
         home / ".lmstudio" / "bin",
         Path(local) / "cursor-agent",
         Path(local) / "agy" / "bin",
         Path(local) / "hermes" / "hermes-agent" / "venv" / "Scripts",
         Path(local) / "hermes" / "bin",
-        Path(local) / "Programs" / "OpenAI" / "Codex" / "bin",
     ]
+
+
+def _partner_cli_in_dir(base: Path, name: str) -> str | None:
+    for ext in (".exe", ".cmd", ".ps1", ".bat"):
+        candidate = base / f"{name}{ext}"
+        if candidate.is_file():
+            return str(candidate)
+    nested = list(base.glob(f"**/versions/*/{name}.cmd"))
+    if nested:
+        return str(nested[0])
+    nested = list(base.glob(f"**/versions/*/{name}.ps1"))
+    if nested:
+        return str(nested[0])
+    return None
 
 
 def _resolve_partner_cli(name: str) -> str | None:
     """Resolve partner CLI on PATH; on Windows also find .cmd/.ps1 shims."""
+    if sys.platform == "win32":
+        for base in _windows_partner_dirs():
+            if not base.is_dir():
+                continue
+            hit = _partner_cli_in_dir(base, name)
+            if hit:
+                return hit
     found = shutil.which(name)
     if found:
         return found
-    if sys.platform != "win32":
-        return None
-    for base in _windows_partner_dirs():
-        if not base.is_dir():
-            continue
-        for ext in (".exe", ".cmd", ".ps1", ".bat"):
-            candidate = base / f"{name}{ext}"
-            if candidate.is_file():
-                return str(candidate)
-        nested = list(base.glob(f"**/versions/*/{name}.cmd"))
-        if nested:
-            return str(nested[0])
-        nested = list(base.glob(f"**/versions/*/{name}.ps1"))
-        if nested:
-            return str(nested[0])
     return None
 
 
