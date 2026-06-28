@@ -5,9 +5,19 @@ description: >-
   workflows. Use when installing Hermes, importing ECC/orama skills into Hermes,
   configuring Nous Portal or LM Studio providers, adding Hermes beside OpenClaw,
   or dispatching Hermes, Gemini, AGY, and Codex CLI coding partners.
-version: 1.0.0
+version: 1.1.0
 license: Apache 2.0
-compatibility: hermes, codex, claude-code, windows, openclaw, ecc
+compatibility: hermes, codex, claude-code, windows, openclaw, ecc, agy
+agent_compatibility:
+  - Hermes
+  - Codex
+  - Claude
+  - OpenClaw
+  - AGY
+  - Cursor
+layer: "1 — Operator shell (pairs with openclaw-skills fabric)"
+upstream: https://github.com/NousResearch/hermes-agent
+upstream_path: $HERMES_HOME/hermes-agent
 parent_skill: orama-system
 origin: ECC Hermes setup, Hermes/OpenClaw migration, and cross-harness docs
 triggers:
@@ -38,6 +48,113 @@ prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the runtime 
 2. **Harness edge:** Hermes and other tools adapt loading/invocation only at the edge.
 3. **No private imports:** never ship raw `~/.hermes`, secrets, personal memory, or account tokens.
 4. **Parallel to OpenClaw:** `openclaw-skills` owns OpenClaw config; this skill owns Hermes onboarding and partner prompts.
+
+## Universal Invocation Protocol
+
+Hermes and OpenClaw are co-equal harness adapters over one canonical skill corpus.
+All dispatch must normalize to the cross-harness contract in
+[`references/hermes-universal-invocation-protocol.md`](references/hermes-universal-invocation-protocol.md)
+(harmonized with `openclaw-skills/references/universal-skill-protocol.md`).
+
+### Core envelope (L3 intent — required)
+
+```json
+{
+  "skill_id": "pt-orama-council",
+  "args": {},
+  "agent_id": "hermes"
+}
+```
+
+### Dispatch envelope (L2 — Hermes + partners)
+
+Committed examples use env placeholders only; runners expand paths at runtime.
+
+```json
+{
+  "skill_id": "pt-orama-council",
+  "args": {"task": "review security checklist"},
+  "agent_id": "hermes",
+  "executor_id": "codex",
+  "harness": "hermes",
+  "orama_system_root": "$ORAMA_SYSTEM_PATH",
+  "canonical_skill_root": "bin/orama-system/skills",
+  "transport": {
+    "partner": "codex",
+    "profile": "fanout"
+  }
+}
+```
+
+| Field | Rule |
+|-------|------|
+| `agent_id` | Audit owner (who initiated) |
+| `executor_id` | Runner (`codex`, `agy`, `hermes`); required when delegating |
+| `transport` | Opaque L2 dispatch intent for OTel/Periscope audit (v2 schema in `/docs/v2`) |
+| `orama_system_root` | Placeholder in docs; absolute only inside runners |
+
+L1 transport (CLI flags) stays internal to `dispatch_codex_partner.py` and AGY scripts.
+
+### Core result (required)
+
+```json
+{
+  "status": "ok",
+  "files_modified": [],
+  "follow_up_actions": []
+}
+```
+
+Hermes may add optional fields: `output`, `warnings`, `errors`, `checks`, echoes.
+`blocked` is a Hermes alias for `needs_input`. Path casing mismatches → `warnings[]`, not `blocked`.
+
+## Subskill Registry (Hermes-facing)
+
+Thin local wrappers point at canonical command cards. Never cache full skill bodies.
+
+| Wrapper slug | Canonical target | Harness | Notes |
+|--------------|------------------|---------|-------|
+| `pt-orama-council` | `commands/pt-orama-council/SKILL.md` | Hermes / Codex | 5-model council |
+| `pt-orama-review` | `commands/pt-orama-review/SKILL.md` | Hermes / Codex | Findings-first review |
+| `pt-orama-delegate` | `commands/pt-orama-delegate/SKILL.md` | Hermes / AGY | Bounded delegation |
+| `pt-orama-lesson-mining` | `commands/pt-orama-lesson-mining/SKILL.md` | Hermes / Codex | PT `learn.py` graduation |
+| `pt-hardware-policy` | `commands/pt-hardware-policy/SKILL.md` | Hermes | `hardware-affinity-gate` edge |
+| `hermes-harness` | `SKILL.md` (this file) | Hermes | Install / provider / import |
+| `local-inference` | `../local-inference/SKILL.md` | Hermes | Redirect stub |
+| `openclaw-status` | `../openclaw-skills/skills/openclaw-status/SKILL.md` | Hermes | Mac fabric primary |
+| `openclaw-restart` | `../openclaw-skills/skills/openclaw-restart/SKILL.md` | Hermes | Mac fabric primary |
+| `openclaw-add-secret` | `../openclaw-skills/skills/openclaw-add-secret/SKILL.md` | Hermes | Mac-only; Win → `blocked` |
+
+Paths are relative to `bin/orama-system/skills/`. Install thin wrappers:
+
+```powershell
+python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install
+```
+
+## Hermes Bootstrap Gate
+
+Idempotent check before non-trivial dispatch on Windows. Return JSON health envelope
+(core result + optional `checks` / `output`):
+
+```powershell
+$env:HERMES_HOME = if ($env:HERMES_HOME) { $env:HERMES_HOME } else { "$env:LOCALAPPDATA\hermes" }
+$installDir = Join-Path $env:HERMES_HOME "hermes-agent"
+if (-not (Test-Path "$installDir\.git")) { throw "HERMES_NOT_INSTALLED" }
+& $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
+```
+
+```json
+{
+  "status": "ok",
+  "files_modified": [],
+  "follow_up_actions": [],
+  "harness": "hermes",
+  "checks": ["hermes-bash-ok", "install_dir_present"],
+  "output": {"bash": "hermes-bash-ok", "install_dir": "$HERMES_HOME/hermes-agent"}
+}
+```
+
+Partner canaries: `python bin\orama-system\skills\hermes-harness\scripts\verify_partner_canaries.py`
 
 ## Windows Bring-Up
 Use PowerShell with explicit UTF-8 when writing files:
@@ -172,8 +289,8 @@ Create or refresh Hermes local commands from the canonical repo:
 python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install
 ```
 
-The expected slash commands are `/pt-orama-council`, `/pt-orama-review`, and
-`/pt-orama-delegate`; never paste a full canonical skill body into Hermes.
+The expected slash commands are `/pt-orama-council`, `/pt-orama-review`,
+`/pt-orama-delegate`, and `/pt-orama-lesson-mining`; never paste a full canonical skill body into Hermes.
 
 ### 5. Use Hermes as a Coding Partner
 
@@ -215,29 +332,42 @@ sanitized, and OpenClaw operations still route through `openclaw-skills`.
 
 ## Boundaries
 
+Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw owns fabric.
+
 ### Always Do
 
-- Keep Hermes imports sanitized and reproducible.
-- Use environment variables for machine-specific paths.
+- Normalize every dispatch to the universal envelope (core + harness extensions).
+- Run bootstrap gate before non-trivial partner dispatch.
+- Keep Hermes imports sanitized and reproducible (thin wrappers ≤ 60 lines).
+- Use environment variables for machine-specific paths (`$ORAMA_SYSTEM_PATH`, `$HERMES_HOME`).
 - Treat Hermes and OpenClaw as harnesses that consume canonical skills.
-- Verify `bash.exe`, Node/npm, Codex, Gemini, and provider reachability before dispatch.
+- `git fetch origin --prune` before reading canonical skill bodies.
+- Route `openclaw-*` skills through `openclaw-skills` protocol, never Hermes inline.
+- Return core result shape (`status`, `files_modified`, `follow_up_actions`) on every dispatch.
+- Verify `bash.exe`, partner CLIs, and provider reachability before dispatch.
 
 ### Ask First
 
 - Writing Hermes config files that include credentials or provider accounts.
 - Starting long-running gateways, cron jobs, or remote dispatch surfaces.
 - Letting Hermes, Gemini, AGY, or Codex modify files directly.
+- Dispatching Mac-only OpenClaw fabric skills on Windows (expect `blocked` envelope).
+- Graduating lessons to PT memory without user-visible summary in the result.
 
 ### Never Do
 
 - Commit API keys, OAuth tokens, raw `~/.hermes` exports, personal memory, or
   local-only business artifacts.
 - Replace OpenClaw procedures with Hermes guesses.
+- Maintain shadow copies of PT-orama/ECC skill bodies in Hermes home.
+- Commit absolute workstation paths in repo content or envelopes.
 - Let worker agents commit, deploy, delete, or change account settings without
   explicit confirmation.
+- Silent fallback when `hardware-affinity-gate` returns `NEVER`.
 
 ## References
 
+- [`references/hermes-universal-invocation-protocol.md`](references/hermes-universal-invocation-protocol.md) — envelope, layers, result superset
 - [`references/hermes-skill-absorption-map.md`](references/hermes-skill-absorption-map.md) — Hermes → orama absorption status (redirects + supersets)
 - [`references/hermes-ecc-fork-inventory.md`](references/hermes-ecc-fork-inventory.md)
 - [`references/ecc-hermes-cross-harness.md`](references/ecc-hermes-cross-harness.md)
