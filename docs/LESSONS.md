@@ -18,6 +18,7 @@
 > | Migration gate ladder (Gate 0→4) | [PT docs/MIGRATION.md](../../perplexity-api/Perpetua-Tools/docs/MIGRATION.md) | This file §2026-05-30 T7 survey |
 > | Hermes integration authority (envelope + thin wrappers) | [hermes-universal-invocation-protocol.md](../bin/orama-system/skills/hermes-harness/references/hermes-universal-invocation-protocol.md) | PT [LESSONS.md §2026-06-28](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) |
 > | LAN peer Mac↔Win (Hermes operator playbook) | [lan-peer-self-talk.md § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) | [docs/guides/lan-peer-mac-win-operator.md](guides/lan-peer-mac-win-operator.md) |
+> | Mac↔Win co-orchestrator (file inbox + ws-peer GO) | [mac-co-orchestrator-playbook.md](../bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md) | PT [LESSONS.md §2026-06-28](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) |
 > | AlphaClaw branch roles + invariants | [AlphaClaw CLAUDE.md](../../AlphaClaw/CLAUDE.md) | AlphaClaw wiki/01 |
 >
 > **Architecture authority**: [2026-05-14--UNIFIED-ABSORPTION-PLAN.md](2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
@@ -43,6 +44,34 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 ---
 
 ## Sessions Log
+
+---
+
+### 2026-06-28 — Co-orchestrator GO: bidirectional ws-peer + file inbox (operator approved) | Cursor
+
+**Playbook:** [`mac-co-orchestrator-playbook.md`](../bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md) · **PT companion:** [LESSONS.md §2026-06-28](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · **Commits:** `9f89051` (peer-file + `parents[4]`), `58605e1` (websockets), `435d27a` (portal `/` fix)
+
+**What was learned**
+
+- **Full mesh green** — `probe_lan_peer.py --json`: `portal-health`, `portal-status` (`joint`), `peer-lmstudio`, and `ws-peer` all PASS bidirectionally.
+- **L3 coordination** — autoresearch fan-out uses markdown file drops (`lan_peer_assign.py`, `POST /api/peer-file`); WS/SSE are heartbeat/probe only, not payload transport.
+- **Platform affinity** — Mac runs OpenClaw + Ollama warm (`:11434`); Win runs Hermes + LM Studio 27B. No remote agent RPC — each host executes locally.
+- **Win inbound** — Mac→Win assignments land in local inbox; Win reads with `list` / `read --name` (no `--peer`).
+- **Win outbound** — `drop --peer` → Mac reads with `read --peer --name`.
+- **Partial fanout** — Mac proceeds when Win peer-file 404 while local assignments succeed (`status: partial`).
+- **Mac inference routing** — Ollama warm primary; LM Studio passive (`peer-lmstudio` catalog probe only).
+
+**Operator approval:** `approve lessons` 2026-06-28 — human index synced to PT + orama `docs/LESSONS.md`.
+
+---
+
+### 2026-06-28 — Portal dashboard: redacted agents payload crash on `/` | Cursor
+
+**Fix:** `435d27a` — `_unwrap_redacted_list()` in `portal_server.py`
+
+**Symptom:** `http://localhost:8002/` returned 500 Internal Server Error after `api_status()` began returning redacted `agents` as `{"agents": [...], "count": N}`; `_render_html()` iterated dict keys as strings → `AttributeError`.
+
+**Test:** `tests/test_control_plane_auth.py::test_portal_index_handles_redacted_agents_payload`
 
 ---
 
