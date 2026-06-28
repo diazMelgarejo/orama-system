@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Shell } from "@/components/Shell";
 import { fetchAppState } from "@/api/appState";
-import type { JobSummary } from "@/api/appState";
 import type { SwarmPreview } from "@/api/swarm";
 import type { Artifact } from "@/api/artifacts";
 import { listJobArtifacts } from "@/api/artifacts";
@@ -13,6 +12,11 @@ import { WorkerAssignments } from "./WorkerAssignments";
 import { RunsTable } from "./RunsTable";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { RoutingView } from "@/features/routing/RoutingView";
+import {
+  resolveDisplayState,
+  resolveJobs,
+  resolveLatestJobId,
+} from "./commandCenterState";
 
 type Page = "command" | "composer" | "runs" | "routing" | "artifacts" | "settings" | "docs";
 
@@ -40,9 +44,9 @@ export function CommandCenter() {
     refetchIntervalInBackground: false,
   });
 
-  const state = appStateQuery.data ?? mockState;
-  const jobs: JobSummary[] = (state?.jobs?.data?.jobs ?? mockState.jobs.data.jobs) as JobSummary[];
-  const latestJobId = jobs[0]?.job_id ?? jobs[0]?.id;
+  const state = resolveDisplayState(appStateQuery.data, mockState);
+  const jobs = resolveJobs(state, mockState.jobs.data.jobs);
+  const latestJobId = resolveLatestJobId(jobs);
 
   const artifactsQuery = useQuery({
     queryKey: ["jobArtifacts", latestJobId],

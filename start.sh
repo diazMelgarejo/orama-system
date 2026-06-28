@@ -1,5 +1,5 @@
 #!/bin/bash
-# start.sh — orama-system thin delegator  v0.9.9.8
+# start.sh — orama-system thin delegator  v1.1.0.0
 #
 # orama-system is Layer 3 — orchestration / meta-intelligence / delegate runtime.
 # All gateway/backend/mode decisions are PT's responsibility (Perpetua-Tools).
@@ -64,7 +64,19 @@ _var()   {
 # ── path resolution: .paths → git siblings → hardcoded sibling default ─────────
 
 _discover_pt_dir() {
-  local candidate
+  local candidate var
+  for var in PERPETUA_TOOLS_PATH PT_HOME PERPETUA_TOOLS_ROOT PERPETUATOOLSROOT; do
+    candidate="${!var:-}"
+    if [ -n "$candidate" ] && [ -f "${candidate}/orchestrator/fastapi_app.py" ]; then
+      echo "$candidate"; return
+    fi
+  done
+  if [ -n "${OPENCLAW_HOME:-}" ]; then
+    candidate="${OPENCLAW_HOME}/Perpetua-Tools"
+    if [ -f "${candidate}/orchestrator/fastapi_app.py" ]; then
+      echo "$candidate"; return
+    fi
+  fi
   candidate="$(cd "$SCRIPT_DIR/../perplexity-api/Perpetua-Tools" 2>/dev/null && pwd || true)"
   if [ -f "${candidate}/orchestrator/fastapi_app.py" ]; then
     echo "$candidate"; return
@@ -177,7 +189,7 @@ if [ -n "${PT_DIR:-}" ]; then
   fi
 
   # lib/shared/agentic_stack — shared library from PT
-  _PT_STACK="${PT_DIR}/packages/agentic-stack"
+  _PT_STACK="${PT_DIR}/vendor/agentic-stack"
   if [ -d "$_PT_STACK" ]; then
     mkdir -p "$SCRIPT_DIR/lib/shared"
     _REL_STACK="$(_PYLINK_SRC="$_PT_STACK" _PYLINK_BASE="$SCRIPT_DIR/lib/shared" \
@@ -317,6 +329,15 @@ fi
 # Keeps ~/.claude/skills current with the repo's canonical skills every start.
 if [ -f "$SCRIPT_DIR/scripts/install-skills.sh" ]; then
   bash "$SCRIPT_DIR/scripts/install-skills.sh" 2>&1 | sed 's/^/  [skills] /' || true
+fi
+
+# ── gbrain self-heal (idempotent; backgrounded so it NEVER blocks startup) ───
+# Acks transient failures, refreshes live sources, reports orphan sources /
+# autopilot misconfig. Replaces the recurring manual gbrain fixes.
+# Details + why: bin/orama-system/gstack/SKILL.md §GBrain Ops §7.
+if [ -f "$SCRIPT_DIR/scripts/gbrain/gbrain-selfheal.sh" ]; then
+  ( nohup bash "$SCRIPT_DIR/scripts/gbrain/gbrain-selfheal.sh" \
+      >>"${LOG_DIR:-/tmp}/gbrain-selfheal.log" 2>&1 & ) || true
 fi
 
 # ── environment bootstrap (idempotent) — reproduce the cross-cutting fixes ───
@@ -906,7 +927,7 @@ _print_banner() {
   printf "║  ██║   ██║██████╔╝███████║██╔████╔██║███████║                    ║\n"
   printf "║  ██║   ██║██╔══██╗██╔══██║██║╚██╔╝██║██╔══██║                    ║\n"
   printf "║  ╚██████╔╝██║  ██║██║  ██║██║ ╚═╝ ██║██║  ██║                    ║\n"
-  printf "║   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝  v0.9.9.8          ║\n"
+  printf "║   ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝  v1.1.0.0          ║\n"
   echo "║                                                                  ║"
   echo "║  ὅραμα — vision/revelation · Layer 3 orchestration/meta-intel    ║"
   echo "╠══════════════════════════════════════════════════════════════════╣"

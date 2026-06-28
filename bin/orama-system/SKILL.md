@@ -8,7 +8,7 @@ description: >-
   Triggers on: "ultrathink", "think deeply", "5-stage", "systematic approach",
   "elegant solution", "verify before done", "content insertion", "AFRP", "CIDF".
   Treat legacy "ultrathink" prompts as oramasys invocations.
-version: 0.9.9.9
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: claude-code, claude-desktop
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
@@ -31,6 +31,8 @@ sub_skills:
     trigger: "code review, review the code, blast-radius, code-review-graph, detect_changes, get_review_context, semantic_search_nodes, code-reviewer, multi-lens PR review, /review, recursive code review"
   - path: skills/openclaw-skills/SKILL.md
     trigger: "openclaw config, /openclaw-new-agent, /openclaw-add-channel, /openclaw-add-cron, /openclaw-dream-setup, /openclaw-add-script, /openclaw-add-secret, /openclaw-status, /openclaw-restart, /openclaw-stow, spawn openclaw, recursive openclaw spawn, openclaw secrets pipeline, new openclaw agent, openclaw orchestration, jobs.json, dream routine, the nine skills"
+  - path: skills/openclaw-skills/codex-openclaw-agent/SKILL.md
+    trigger: "codex openclaw agent, codex-agent, GPT-5.5 sub-agent, native Codex provider, create Codex workspace, reconcile Codex agent, openai-codex auth"
   - path: skills/hermes-harness/SKILL.md
     trigger: "hermes setup, hermes onboarding, nous portal, hermes openclaw migration, ecc harness, cross-harness, install codex cli on windows, hermes coding partner"
   - path: skills/shell-hygiene/SKILL.md
@@ -40,6 +42,7 @@ sub_skills:
   - path: gstack/SKILL.md
     trigger: "fix gbrain, resync gbrain, gbrain sync failed, prepared statement does not exist, CONNECTION_CLOSED supabase pooler, No database URL, GBRAIN_DATABASE_URL, gbrain doctor failures, createVersion failed, autopilot wedged, gbrain after history rewrite, gbrain list empty, gbrain prepare false, gbrain source pin"
 ---
+<!-- lint-ignore LINT-013 -->
 
 # The ὅραμα System Skill
 
@@ -83,7 +86,7 @@ Every task has three layers. Identify all three before starting.
 Full principle: `references/amplifier-principle.md`
 
 | Layer | Question |
-|---|---|
+| --- | --- |
 | Explicit objective | What was requested? |
 | Hidden objective | What problem is actually being solved? |
 | System objective | What improves the larger system? |
@@ -175,7 +178,7 @@ execute_method() -> visual_ok? --no--> refresh_page()
                                no  -> try_next_rank()
 ```
 
-[Full CIDF details: ](cidf/SKILL.md)`cidf/SKILL.md`
+[Full CIDF details:](cidf/SKILL.md)`cidf/SKILL.md`
 
 ## Markdown Editing Rule
 
@@ -234,7 +237,6 @@ When context > 70% -- offload, one task per subagent:
   subagent("Prototype approach A"); subagent("Prototype approach B")
 ```
 
-
 **Output shape** -- every substantial deliverable contains six sections:
 
 1. ASSUMPTIONS: what you decided, guessed, or ruled out
@@ -245,6 +247,7 @@ When context > 70% -- offload, one task per subagent:
 6. NEXT ACTIONS: numbered, concrete, with clear ownership
 
 ## MODE 3: Full Multi-Agent Network
+>
 > **Multi-agent safety:** See `references/collaborative-reasoning-safety.md` — mandatory Builder/Critic/Adversary/Judge roles, anti-groupthink rules, confidence tracking.
  (Complex Tasks)
 
@@ -448,6 +451,7 @@ Search in this order — stop at the first satisfying result:
 Endpoint pool: `$WIN_CODER_ENDPOINTS` (default: `192.168.254.103:1234`)
 
 Dispatch protocol:
+
 1. Before routing any task to Mac-only paths, check if a Windows coder is free.
 2. If free AND task is compatible (Python, Go, TypeScript, general coding):
    → dispatch to Windows coder FIRST.
@@ -477,12 +481,33 @@ Every tier check: ≤3s timeout. Fail loudly if `$LM_STUDIO_WIN_ENDPOINTS` is se
 
 → Full procedure + decision table: `references/local-api-fallback.md`
 
+## Shell Portability Invariants (all agents / all scripts)
+
+**1. `codex review` always needs `< /dev/null`.**
+Without it the process blocks on stdin indefinitely — the hang is invisible.
+
+```bash
+codex review "<prompt>" -c 'model_reasoning_effort="high"' < /dev/null
+```
+
+**2. Never use bare `timeout N <cmd>` on macOS.** GNU `timeout` is absent on stock macOS. Use:
+
+```bash
+_TO=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
+if [ -n "$_TO" ]; then "$_TO" N <cmd>; else <cmd>; fi
+```
+
+`gtimeout` = Homebrew coreutils. `timeout` = Linux. Omit the wrapper only when hanging is safe to ignore.
+
+**3. OpenClaw delegation key is `agents.defaults.subagents.allowAgents`** (or `agents.list[id].subagents.allowAgents`).
+The key `agents.bindings.*.allowAgents` is rejected by the oramaclaw control plane.
+
 ---
 
 ## Extended References
 
 | Reference | Content |
-|---|---|
+| --- | --- |
 | `references/amplifier-principle.md` | Full Amplifier Principle essay |
 | `references/oramasys-5-stages.md` | Deep dive: 5-stage methodology |
 | `references/collaborative-reasoning-safety.md` | Multi-agent safety (M3) |
@@ -490,6 +515,8 @@ Every tier check: ≤3s timeout. Fail loudly if `$LM_STUDIO_WIN_ENDPOINTS` is se
 | `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
 | `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook |
 | `skills/hermes-harness/SKILL.md` | Hermes onboarding, ECC cross-harness import rules, Nous Portal/LM Studio provider setup, and bounded Hermes/Gemini/AGY/Codex partner prompts |
+| `skills/hermes-harness/references/platform-affinity-routing.md` | Platform affinity bias — Mac/Linux → OpenClaw; Windows → Hermes; ECC bridges both (v1 + v2) |
+| `skills/cursor-agent/SKILL.md` | Cursor background agent (`agent` CLI) — install, auth, light-task fanout alongside Sonnet 4.6, worktree isolation, MCP integration |
 | `docs/wiki/15-hermes-windows-harness.md` | Windows Hermes launcher, Git Bash, and one-shot provider routing notes |
 | `references/local-api-fallback.md` | Local API fallback full procedure (Ollama → LM Studio → surface outage) |
 | `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |

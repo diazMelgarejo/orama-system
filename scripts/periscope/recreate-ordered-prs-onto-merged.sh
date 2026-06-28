@@ -11,7 +11,7 @@
 # Identity: cyre <diazMelgarejo@gmail.com> or Lawrence@cyre.me — no Co-authored-by trailers.
 set -euo pipefail
 
-REPO="${PERISCOPE_REPO:-$HOME/Documents/oramasys/tools/periscope}"
+REPO="${PERISCOPE_REPO:-$HOME/code/oramasys/tools/periscope}"
 ORIGIN="${PERISCOPE_ORIGIN:-https://github.com/diazMelgarejo/periscope.git}"
 ORAMA_ROOT="${ORAMA_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 CARGO_SRC_BRANCH="${CARGO_SRC_BRANCH:-deps/3-cargo-tauri-onto-merged}"

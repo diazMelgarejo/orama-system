@@ -21,6 +21,11 @@ Before git pushes, rebases, PR-branch syncs, or local test runs on the Windows
 RTX/LM Studio host, use the shared bootstrap reference:
 [`git-history-surgery/references/windows-powershell-runtime-bootstrap.md`](../git-history-surgery/references/windows-powershell-runtime-bootstrap.md).
 
+**Local git hooks (once per clone):** `bash scripts/git/install-local-hooks.sh` — identity,
+hygiene, Co-authored-by policy, and TDD `commit-msg` gate (`check_tdd_commit.sh`).
+Hook scripts must stay bash 3.2–safe on macOS (no `mapfile`); see
+[`git-history-surgery/references/bash-32-git-script-portability.md`](../git-history-surgery/references/bash-32-git-script-portability.md).
+
 ---
 
 ## Step 0 — Should You Use a Worktree?
@@ -30,7 +35,7 @@ Ask two questions:
 1. **Will this agent write files?**
 2. **Is another agent currently writing to the same repo?**
 
-```
+```text
 Both yes? → Worktree.  Run Step 1.
 Either no? → Use canonical checkout.  Stop here.
 ```
@@ -43,18 +48,19 @@ Either no? → Use canonical checkout.  Stop here.
 # From the canonical repo root
 scripts/worktree-bootstrap.sh <repo-path> <branch> <slug> [gbrain-source-id]
 
-# Example
+# Example (repo-path = canonical checkout root)
 scripts/worktree-bootstrap.sh \
-  ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system \
+  "$(git -C orama-system rev-parse --show-toplevel)" \
   feat/my-feature \
   2026-05-24-my-feature \
   orama-src
 ```
 
 Bootstrap handles automatically (no manual steps needed):
+
 - ✅ Removes stale `.git/*.lock` files
 - ✅ Warns on orphan refs with spaces
-- ✅ Creates `~/Documents/oramasys/worktrees/<slug>/`
+- ✅ Creates `~/code/oramasys/worktrees/<slug>/`
 - ✅ Writes `.gbrain-source`
 - ✅ Appends macOS dedup patterns to `.gitignore`
 - ✅ Assigns `ENV_OFFSET = worktree_index × 100`
@@ -66,7 +72,7 @@ Bootstrap handles automatically (no manual steps needed):
 ## Step 2 — Enter and Configure
 
 ```bash
-cd ~/Documents/oramasys/worktrees/<slug>
+cd ~/code/oramasys/worktrees/<slug>
 source .worktree-env    # loads ENV_OFFSET, port vars
 
 # Verify gbrain pin
@@ -86,12 +92,35 @@ python3 scripts/review/repo_hygiene.py .
 # WARNING = non-blocking; ERROR = fix before committing
 ```
 
+**If this commit includes a version bump**, run the version sync first:
+
+```bash
+# Edit src/orama_system/_version.py only, then:
+python3 scripts/sync_version.py          # propagate to all 25+ surfaces
+python3 -m pytest tests/test_version_docs.py  # verify
+# Then continue with repo_hygiene.py check above
+```
+
+See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
+See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
+
+**If this worktree is being merged into another agent's branch or into main**, invoke
+the nested-branch merge protocol before pushing:
+
+1. **Simulate** — `git merge --no-commit --no-ff <this-branch>` from the target; enumerate conflicts; abort
+2. **Enumerate to human** — show both sides of every conflict; never resolve without explicit direction
+3. **Resolution strategies**: `additive` / `union` / `superset` / `architecturally-correct` / `api-correct`
+4. **Verify**: `pytest -q` + `repo_hygiene.py` + confirm no `<<<<<<<` markers remain
+5. **Buffer**: wait 10 minutes after each GitHub merge; confirm `mergeable_state: clean`
+
+Full detail: [`git-history-surgery/references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](../git-history-surgery/references/multi-agent-collaboration-protocol.md)
+
 **Why this matters especially for worktrees:** docs, plans, and bash snippets
 written from a worktree often embed the machine-local path. Those paths are
 invisible on your machine but leak developer identity and break CI when committed.
 
 | Rule enforced | What it catches | Correct form |
-|---------------|----------------|--------------|
+| --------------- | ---------------- | -------------- |
 | `scan_openclaw_workstation_layout` | hardcoded machine-local OpenClaw tree path | `$OPENCLAW_ROOT` |
 | `scan_personal_paths` | `/Users/<name>/…` absolute paths | `~`, `$REPO_ROOT`, `<workspace>` |
 | `scan_bidi_controls` | Hidden Unicode direction controls | remove |
@@ -104,15 +133,17 @@ invisible on your machine but leak developer identity and break CI when committe
 ## Step 4 — Work Rules While in a Worktree
 
 ### Inference (GPU)
+
 - **Never POST directly to LM Studio or Ollama.** Always via PT.
 - Start PT on your offset port: `PT_PORT=$PT_PORT python -m perpetua_tools.server`
 - Win LM Studio serializes heavy models automatically — no extra lock needed.
 
 ### CRG (graph.db)
+
 ```python
 # ✅ Query canonical graph — always pass repo_root
 mcp__code-review-graph__query_graph_tool(
-    repo_root="/path/to/canonical/orama-system"
+    repo_root="<canonical-orama-system-root>"
 )
 
 # ❌ Never build graph from inside a worktree
@@ -122,7 +153,7 @@ mcp__code-review-graph__query_graph_tool(
 ### Port Map (ENV_OFFSET = N × 100, where N = worktree index)
 
 | Service | Canonical | Worktree-1 | Worktree-2 |
-|---------|-----------|------------|------------|
+| --------- | ----------- | ------------ | ------------ |
 | AlphaClaw | 3000 | 3100 | 3200 |
 | PT | 8000 | 8100 | 8200 |
 | orama-api | 8001 | 8101 | 8201 |
@@ -158,19 +189,21 @@ that line is the coordination signal — resolve it by taking the higher number.
 
 ## Step 5 — Cleanup (ALWAYS use finishing-a-development-branch)
 
-```
+```text
 Invoke: superpowers:finishing-a-development-branch
 ```
 
 The skill will:
+
 1. Verify tests pass
 2. Ask: merge / PR / keep / discard
 3. On merge or discard → run `git worktree remove <path>` automatically
 
 **Manual fallback only if skill unavailable:**
+
 ```bash
 # From canonical checkout:
-git worktree remove ~/Documents/oramasys/worktrees/<slug>
+git worktree remove ~/code/oramasys/worktrees/<slug>
 git worktree list    # verify removed
 git branch -d <branch>
 ```
@@ -203,12 +236,13 @@ cat .worktree-env
 ## Pre-flight Defenses (Dogfood Datums)
 
 | Symptom | Fix |
-|---------|-----|
+| --------- | ----- |
 | `git fetch` fails: `bad object refs/heads/... 2` | `find .git/refs -name "* *"` then `git update-ref -d "refs/heads/<name>"` |
 | `git checkout` / `git stash` blocked | `find .git -name "*.lock" -delete` |
 | `.gbrain-source` missing in new worktree | `echo "<source-id>" > .gbrain-source` |
-| `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/` |
+| `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/`. **Permanent fix — move the tree out of iCloud: see [[icloud-escape-move]].** |
 | Port collision with sibling worktree | Check `.worktree-env`; ENV_OFFSET must differ per worktree |
+| `check_tdd_commit.sh`: `mapfile: command not found` | macOS bash 3.2 — see [`bash-32-git-script-portability.md`](../git-history-surgery/references/bash-32-git-script-portability.md); use `while read` not `mapfile` |
 | `/autoplan` Step 0 fails (base branch) | `cd` to a git repo root before invoking any skill |
 
 ---

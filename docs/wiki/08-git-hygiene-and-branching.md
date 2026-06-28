@@ -147,9 +147,11 @@ GIT_AUDIT_RANGE=origin/main..HEAD GIT_AUDIT_STRICT=1 bash scripts/git/audit_attr
 
 Re-introducing a banned identity after an expunge forces another full `main` + all-branch rewrite.
 
-### Explicit Cursor co-author allowlist
+### Explicit co-author allowlist and domain-gate caveat
 
 `Co-authored-by: Cursor <cursoragent@cursor.com>` is **always allowed** — listed explicitly in `scripts/git/check_commit_message.sh` (`ALLOWED_EXACT_COAUTHOR_EMAILS`), not only via the `cursor.com` domain suffix.
+
+**`ALLOWED_GMAIL_COAUTHORS` only fires for `@gmail.com` / `@googlemail.com` addresses.** Any personal or org domain address (e.g. `user@cyre.me`, `user@bettermind.ph`) placed in `ALLOWED_GMAIL_COAUTHORS` will be silently denied — the `gmail_allowed()` gate is guarded by a `*@gmail.com` domain check and never runs for other domains. Fix: put all non-Gmail personal or org-domain addresses in `ALLOWED_EXACT_COAUTHOR_EMAILS` instead. (Learned 2026-06-22: `lawrence@cyre.me` was in `ALLOWED_GMAIL_COAUTHORS`; commits were rejected until it was moved to `ALLOWED_EXACT_COAUTHOR_EMAILS`.)
 
 ### Why only known @gmail.com in co-author lines?
 
@@ -228,19 +230,30 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `recovery`
 
 `scripts/review/repo_hygiene.py` runs in CI (`tests/test_repo_hygiene.py::test_repo_hygiene_script_runs_clean`) and **fails the build** on any tracked file containing a hardcoded workstation path. This applies to docs, comments, and example commands — not just code. Two patterns are blocked:
 
-- **Personal absolute paths** — `/Users/<name>/…` or `/home/<name>/…` where `<name>` is a real login. Use `~`, `$REPO_ROOT`, or `<workspace>`.
+- **Personal absolute paths** — `/Users/<name>/…` or `/home/<name>/…` where `<name>` is a real login. Use `~`, `$REPO_ROOT`, or a relative path.
 - **Machine-specific OpenClaw layout** — the literal `…/claude/OpenClaw` workstation tree (with or without a `~`/`$HOME` prefix). Use `$OPENCLAW_ROOT`, `detect_openclaw_root()`, or `ORAMA_INSTALL_DIR`.
+
+**`<name>` placeholder is NOT enough.** Swapping the login for `<name>` still exposes the parent directory tree (e.g. `/Users/<name>/Downloads/SKILLS.md/ultrathink/…`), which is also identifying. Same problem on Windows: `%USERPROFILE%\specific-subdir\subtree\`. Use the form that fits the context:
+
+| Situation | Correct form |
+|-----------|-------------|
+| Path to a file inside this repo | Relative from the referencing file — `../filename` or `../../dir/file` |
+| Path to repo root or sibling repos | `$OPENCLAW_ROOT`, `$REPO_ROOT`, `~` |
+| Local-only reference with no repo anchor | Filename only — strip the entire parent path tree |
+| Runnable shell example | Variable substitution (`"$OPENCLAW_ROOT/orama-system"`) |
 
 Rule of thumb when writing a runnable example or recovery command in any `*.md`, script, or comment — substitute the root with a variable:
 
 ```bash
 # WRONG — a literal /Users/<login>/…/claude/OpenClaw/orama-system leaks the
 #         developer name + directory layout and fails CI.
+# ALSO WRONG — <name> still exposes the Downloads/SKILLS.md/ultrathink subtree
 # RIGHT — portable, passes hygiene:
 git clone <url> "$OPENCLAW_ROOT/orama-system"
+../Cross-Repo-Memory-Seed.md          # relative from the referencing file
 ```
 
-Abbreviated placeholders like `/Users/.../foo` are fine (the segment after `/Users/` must start with a letter to match). The script and its own test are the only allowlisted files (they must name the pattern to test it). **Run `python3 scripts/review/repo_hygiene.py .` before committing docs that contain shell commands** — it is the same check CI runs. (Learned 2026-06-02: the #1802 incident write-ups themselves leaked workstation paths and red-CI'd `main`.)
+Abbreviated placeholders like `/Users/.../foo` are fine (the segment after `/Users/` must start with a letter to match). The script and its own test are the only allowlisted files (they must name the pattern to test it). **Run `python3 scripts/review/repo_hygiene.py .` before committing docs that contain shell commands** — it is the same check CI runs. (Learned 2026-06-02: the #1802 incident write-ups themselves leaked workstation paths and red-CI'd `main`. Reinforced 2026-06-22 PR #123: even placeholder forms and Windows env vars expose subdirectory trees.)
 
 **Prevention (catch it before history, not after).** The pre-commit hook (`.githooks/pre-commit`, activated by `bash scripts/git/install-local-hooks.sh`) runs the full `repo_hygiene.py` — the *same* check as CI — so a leaked path or token is blocked at commit time and never enters history. That makes the [`git-history-surgery`](../../bin/orama-system/skills/git-history-surgery/SKILL.md) scrub a last resort (only if something already landed before the hook was installed), not the routine. Install the hooks once per clone; CI is the backstop, the hook is the gate.
 
@@ -254,6 +267,42 @@ Workflow permissions must be minimal and explicit.
 - PR automation needs `pull-requests: write`.
 - Read-only CI should use default read behavior or an explicit read-only block.
 - Avoid broad top-level write permissions.
+
+---
+
+## Windows batch file line endings (CRLF)
+
+Windows `.cmd` and `.bat` files **MUST** use CRLF (`\r\n`) line endings.
+A file with LF-only (`\n`) endings will silently fail or produce garbled output
+because `cmd.exe` tokenises on `\r\n`.
+
+**Git attributes — declare CRLF explicitly** in `.gitattributes`:
+
+```gitattributes
+*.cmd  text  eol=crlf
+*.bat  text  eol=crlf
+```
+
+Without this, `core.autocrlf` may strip `\r` silently on checkout, breaking
+files that work on the author's machine.
+
+**Writing `.cmd` files from Python** — always open in binary mode and join with `\r\n`:
+
+```python
+lines = ["@echo off", "rem my script", "exit /b 0"]
+with open("my.cmd", "wb") as f:
+    f.write("\r\n".join(lines).encode("utf-8"))
+```
+
+**Verification:**
+
+```bash
+xxd my.cmd | grep -c "0d 0a"   # should equal line count
+xxd my.cmd | grep -c "0d$"     # 0 = no stray bare CR
+```
+
+*Root cause discovered in PR #108 (`gstack-brain-sync.cmd` was LF-only, silently
+broke cmd.exe shell dispatch on Windows).*
 
 ---
 

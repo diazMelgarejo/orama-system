@@ -14,7 +14,7 @@ fi
 hooks_dir="$REPO_ROOT/.githooks"
 mkdir -p "$hooks_dir"
 
-for hook in pre-commit commit-msg; do
+for hook in pre-commit commit-msg post-commit; do
   src="$hooks_dir/$hook"
   if [[ ! -f "$src" ]]; then
     echo "ERROR: missing $src (expected tracked hook in .githooks/)" >&2
@@ -25,8 +25,9 @@ done
 
 chmod +x "$REPO_ROOT/scripts/git/check_identity.sh" 2>/dev/null || true
 chmod +x "$REPO_ROOT/scripts/git/check_commit_message.sh" 2>/dev/null || true
+chmod +x "$REPO_ROOT/scripts/git/check_tdd_commit.sh" 2>/dev/null || true
 
 git config --local core.hooksPath .githooks
 echo "OK: core.hooksPath=$(git config --local --get core.hooksPath)"
 echo "Run: git config --local user.name && git config --local user.email"
-echo "Hooks: pre-commit (full repo_hygiene.py — identity + workstation paths + secrets), commit-msg (Co-authored-by policy)"
+echo "Hooks: pre-commit (repo_hygiene.py), commit-msg (Co-authored-by + TDD web/src gate)"
