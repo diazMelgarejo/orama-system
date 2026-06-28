@@ -457,6 +457,188 @@ FastAPI WebSocket  +  (optional) zeroconf mDNS
 
 ---
 
+## Implementation plan — WS primary + SSE/POST fallback (2026-06-28)
+
+> **Decision:** try WebSocket first; fall back to SSE + HTTP POST if WS is unavailable.
+> Zero new dependencies for both paths. FastAPI supports both natively.
+
+---
+
+### Transport stack
+
+```
+Primary:   ws://{PEER_IP}:8002/ws/portal-peer   ← full-duplex, 1 connection
+Fallback:  GET  http://{PEER_IP}:8002/events/peer-stream   ← peer → us (SSE)
+           POST http://{PEER_IP}:8002/api/peer-event        ← us → peer (HTTP)
+```
+
+Each host is simultaneously a **server** (accepting WS connections and serving the SSE
+stream) and a **client** (dialling the peer's WS and subscribing to the peer's SSE).
+
+---
+
+### Connection state machine
+
+```
+IDLE
+ └─► WS_CONNECTING  (attempt ws://{peer}:8002/ws/portal-peer, 5 s timeout)
+       ├─ success ─► WS_CONNECTED  ──► [heartbeat loop]
+       │               └─ drop ─────────────────────────────────┐
+       └─ fail    ─► SSE_CONNECTING (GET /events/peer-stream)   │
+                      ├─ success ─► SSE_CONNECTED               │
+                      │               └─ drop ──────────────────┘
+                      └─ fail    ─► DISCONNECTED  (retry in 30 s)
+                                     └─► WS_CONNECTING (loop)
+```
+
+Reconnect: WS drop → immediate retry → WS_CONNECTING; two consecutive WS failures →
+demote to SSE_CONNECTING for one attempt before retrying WS.
+
+---
+
+### Shared event schema (both transports)
+
+```json
+{
+  "type":   "heartbeat | status | user-input | peer-event | ...",
+  "source": "win | mac",
+  "ts":     1719561600,
+  "data":   {}
+}
+```
+
+Both transports use the same JSON envelope — the channel manager abstracts the wire.
+
+---
+
+### Files to create / modify
+
+| File | Change |
+|------|--------|
+| `src/orama_system/portal_server.py` | Add WS endpoint, SSE endpoint, POST inbound endpoint, lifespan hook |
+| `src/orama_system/lan_peer_channel.py` | **New** — ~120 lines — channel manager (state machine, send, subscribe) |
+| `bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py` | Add `ws-peer` check to existing probe |
+
+No new entries in `requirements.txt`.
+
+---
+
+### Phase breakdown
+
+#### Phase 1 — Server endpoints in `portal_server.py`
+
+```python
+# WS server — peer connects here
+@app.websocket("/ws/portal-peer")
+async def ws_portal_peer(ws: WebSocket):
+    await ws.accept()
+    _channel.register_ws_peer(ws)
+    try:
+        async for msg in ws.iter_json():
+            await _channel.on_inbound(msg)
+    finally:
+        _channel.unregister_ws_peer(ws)
+
+# SSE server — peer subscribes here (fallback downlink)
+@app.get("/events/peer-stream")
+async def sse_peer_stream(request: Request):
+    async def generator():
+        async for event in _channel.outbound_queue():
+            yield f"data: {json.dumps(event)}\n\n"
+    return StreamingResponse(generator(), media_type="text/event-stream")
+
+# POST inbound — peer POSTs here when WS unavailable (fallback uplink)
+@app.post("/api/peer-event")
+async def post_peer_event(event: dict, request: Request):
+    await _channel.on_inbound(event)
+    return {"ok": True}
+```
+
+#### Phase 2 — `lan_peer_channel.py` (new file)
+
+Core responsibilities:
+- Hold `state: Literal["idle","ws_connecting","ws_connected","sse_connecting","sse_connected","disconnected"]`
+- `connect(peer_ip, peer_port)` — entry point, runs the state machine
+- `send(event: dict)` — routes to WS send or `POST /api/peer-event` depending on state
+- `on_inbound(event: dict)` — dispatches to registered handlers
+- `outbound_queue()` — async generator for the SSE server endpoint to drain
+- `_ws_connect_loop()` — tries WS, sets state, starts heartbeat
+- `_sse_connect_loop()` — subscribes to peer SSE stream via `httpx.AsyncClient`
+- `_heartbeat()` — sends `{"type":"heartbeat"}` every 15 s; detects silent drops
+
+```python
+# Minimal shape — not final
+class LanPeerChannel:
+    state: str = "idle"
+    _ws: WebSocket | None = None
+    _out_queue: asyncio.Queue = asyncio.Queue()
+
+    async def connect(self, peer_ip: str, port: int = 8002): ...
+    async def send(self, event: dict): ...
+    async def on_inbound(self, event: dict): ...
+    async def outbound_queue(self) -> AsyncGenerator: ...
+```
+
+#### Phase 3 — Wire into `lifespan` in `portal_server.py`
+
+```python
+from contextlib import asynccontextmanager
+
+_channel = LanPeerChannel()
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    peer_ip = os.getenv("PEER_IP") or _read_last_discovery_peer_ip()
+    if os.getenv("PORTAL_BIND_LAN") and peer_ip:
+        asyncio.create_task(_channel.connect(peer_ip))
+    yield
+    await _channel.close()
+```
+
+`_read_last_discovery_peer_ip()` reads `~/.openclaw/state/last_discovery.json` — same
+source `start.ps1` uses. No new env vars.
+
+#### Phase 4 — Add `ws-peer` check to `probe_lan_peer.py`
+
+```python
+# New check alongside portal-health / portal-status / peer-lmstudio
+async def check_ws_peer(peer_ip: str) -> CheckResult:
+    try:
+        async with websockets.connect(
+            f"ws://{peer_ip}:8002/ws/portal-peer", open_timeout=5
+        ) as ws:
+            await ws.send(json.dumps({"type": "probe", "source": platform()}))
+            pong = await asyncio.wait_for(ws.recv(), timeout=5)
+            return CheckResult("ws-peer", "PASS", detail=pong)
+    except Exception as e:
+        return CheckResult("ws-peer", "FAIL", detail=str(e))
+```
+
+#### Phase 5 — L3 agent dispatch (deferred, after Phase 1–4 green)
+
+When channel is `WS_CONNECTED` or `SSE_CONNECTED`, the portal can forward
+`POST /api/user-input` payloads cross-peer:
+
+```python
+await _channel.send({"type": "user-input", "source": platform(), "data": payload})
+```
+
+Remote host receives via `on_inbound`, enqueues into its local PT `/user-input` queue.
+This closes the L3 gap in the attempt log above.
+
+---
+
+### Pass criteria (per phase)
+
+| Phase | Test |
+|-------|------|
+| 1 | `wscat -c ws://localhost:8002/ws/portal-peer` → accepted; SSE `curl -N .../events/peer-stream` → streams; POST `curl -X POST .../api/peer-event -d '{}'` → `{"ok":true}` |
+| 2–3 | `probe_lan_peer.py --json` shows `ws-peer: PASS` from both sides |
+| 4 | `probe_lan_peer.py --json` includes `ws-peer` check in output |
+| 5 | Cross-peer `POST /api/user-input` → remote `GET /api/user-input/next` returns message |
+
+---
+
 ## Related memory (Perpetua-Tools)
 
 - `.agent/memory/working/START_PS1_LAN_PEER_2026-06-28.md`
