@@ -156,6 +156,8 @@ python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py fanout
 
 HTTP API (Bearer token): `POST /api/peer-file`, `GET /api/peer-inbox`, `GET /api/peer-inbox/{filename}`.
 
+**Co-orchestrator playbook (Mac + Win cursor-agent):** [`mac-co-orchestrator-playbook.md`](mac-co-orchestrator-playbook.md)
+
 WS/SSE remain for **heartbeat + probe** only; assignments travel as files.
 
 ### E. What Hermes cannot do (today)
