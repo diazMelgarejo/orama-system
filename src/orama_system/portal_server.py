@@ -18,19 +18,24 @@ import json
 import logging
 import mimetypes
 import os
+import secrets
 import signal
 import subprocess
 import sys
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from starlette.responses import StreamingResponse
+
+from orama_system.lan_peer_channel import LanPeerChannel, make_envelope, read_discovery_peer_ip
 
 from utils.control_plane_auth import (
     auth_enforced,
@@ -142,7 +147,21 @@ def _read_routing_json() -> dict:
     return {}
 
 
-app = FastAPI(title="orama portal", version=VERSION)
+_lan_peer_channel = LanPeerChannel()
+
+
+@asynccontextmanager
+async def _portal_lifespan(_app: FastAPI):
+    peer_ip = read_discovery_peer_ip()
+    bind_lan = os.getenv("PORTAL_BIND_LAN", "").strip().lower() in ("1", "true", "yes")
+    client_task: asyncio.Task[None] | None = None
+    if bind_lan and peer_ip:
+        await _lan_peer_channel.connect(peer_ip)
+    yield
+    await _lan_peer_channel.close()
+
+
+app = FastAPI(title="orama portal", version=VERSION, lifespan=_portal_lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_allow_origins(),
@@ -1322,6 +1341,61 @@ def _hardware_policy_status(services: Dict[str, Any]) -> Dict[str, Any]:
 
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
+
+
+async def _verify_ws_control_plane(ws: WebSocket) -> None:
+    if not auth_enforced():
+        return
+    expected = resolved_control_plane_token()
+    if not expected:
+        await ws.close(code=1013)
+        raise WebSocketDisconnect(code=1013)
+    provided = (ws.query_params.get("token") or "").strip()
+    if not provided:
+        auth_header = ws.headers.get("authorization", "")
+        if auth_header.startswith("Bearer "):
+            provided = auth_header[7:].strip()
+    if not provided or not secrets.compare_digest(provided, expected):
+        await ws.close(code=1008)
+        raise WebSocketDisconnect(code=1008)
+
+
+@app.websocket("/ws/portal-peer")
+async def ws_portal_peer(ws: WebSocket):
+    await ws.accept()
+    await _verify_ws_control_plane(ws)
+    await _lan_peer_channel.register_ws_peer(ws)
+    try:
+        while True:
+            msg = await ws.receive_json()
+            await _lan_peer_channel.on_inbound(msg)
+    except WebSocketDisconnect:
+        pass
+    finally:
+        await _lan_peer_channel.unregister_ws_peer(ws)
+
+
+@app.get("/events/peer-stream")
+async def sse_peer_stream(request: Request):
+    async def generator():
+        async for event in _lan_peer_channel.outbound_queue():
+            yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(generator(), media_type="text/event-stream")
+
+
+class PeerEventBody(BaseModel):
+    type: str = "peer-event"
+    source: str = ""
+    ts: int = 0
+    data: dict[str, Any] = Field(default_factory=dict)
+
+
+@app.post("/api/peer-event")
+async def post_peer_event(body: PeerEventBody):
+    await _lan_peer_channel.on_inbound(body.model_dump())
+    return {"ok": True}
+
 
 @app.get("/health")
 async def health():
