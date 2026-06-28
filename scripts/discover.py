@@ -322,6 +322,19 @@ def discover_endpoints() -> dict:
                 if mac_models_cached:
                     result["mac"] = {"ip": mac_last_ip, "models": mac_models_cached}
                     print(f"  ℹ️  Mac LM Studio found at cached IP {mac_last_ip} (set $MAC_IP to avoid scan)", file=sys.stderr)
+        if not result["mac"]:
+            # Fresh subnet scan — never guess .110; find any remote LM Studio on the LAN.
+            win_lan = _win_lan_ip() or ""
+            exclude = {"localhost", "127.0.0.1"}
+            if win_lan:
+                exclude.add(win_lan)
+            subnet = win_lan.rsplit(".", 1)[0] if win_lan else SUBNET
+            for ip in asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)):
+                models = probe_models(f"http://{ip}:1234")
+                if models:
+                    result["mac"] = {"ip": ip, "models": models}
+                    print(f"  ℹ️  Mac LM Studio found at {ip} (subnet scan)", file=sys.stderr)
+                    break
         return result
 
     # ── Mac/Linux host: localhost = mac, subnet scan = win ──────────────────
@@ -554,8 +567,12 @@ def write_env_lmstudio(endpoints: dict, repo_paths: dict):
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
     win_ip = (win.get("ip") or "")
-    # lmstudio-mac ALWAYS localhost — LAN IP is informational/docs only, never in Mac endpoint configs.
-    mac_url = "http://localhost:1234"
+    mac_ip = (mac.get("ip") or "")
+    # On Windows host, Mac is remote — persist LAN IP for cross-machine routing.
+    if RUNNING_ON_WINDOWS and mac_ip not in ("", "localhost", "127.0.0.1"):
+        mac_url = f"http://{mac_ip}:1234"
+    else:
+        mac_url = "http://localhost:1234"
     win_url = f"http://{win_ip}:1234" if win_ip else ""
     mac_models = mac.get("models", [])
     win_models = win.get("models", [])
