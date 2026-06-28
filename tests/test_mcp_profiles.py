@@ -71,3 +71,4 @@ def test_ensure_control_plane_token_persists_when_enforced(monkeypatch, tmp_path
     token_path = tmp_path / ".state" / "control_plane_token"
     assert token_path.is_file()
     assert token_path.read_text(encoding="utf-8").strip() == token
+    assert oct(token_path.stat().st_mode & 0o777) == oct(0o600)
