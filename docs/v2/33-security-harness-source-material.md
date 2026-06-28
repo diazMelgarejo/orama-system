@@ -151,6 +151,10 @@ catches.
   goal, not just each agent's local output. A swarm can satisfy every local
   objective while drifting from the system objective (see the Amplifier
   Objective Tree in the mother SKILL.md).
+- **Portal launch HITL (P5):** `POST /api/swarm/launch` must bind to a prior
+  preview via server-issued approval token — not a client boolean. See
+  [`32-agentic-security-controls.md` §10](32-agentic-security-controls.md#portal-swarm-launch-security-requirements-p5)
+  and [`2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md`](../plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md).
 - **Interaction-effect monitoring:** log and analyze cross-agent message chains
   for emergent loops, mutual reinforcement of a wrong assumption, and
   responsibility diffusion ("each agent assumed another would verify").
@@ -431,6 +435,7 @@ keep the M2 for single-stream local inference.
 - [ ] **AC-OTEL** `invoke_agent`/`execute_tool` spans emit with token accounting; SIEM alerts on budget anomaly
 - [ ] **AC-BOM** ML-BOM generated; model hashes verified before load; artifacts cosign-signed
 - [ ] **AC-SWARM** orchestrator runs a system-level objective audit before any Mode-3 finalize
+- [ ] **AC-SWARM-P5** portal `POST /api/swarm/launch` requires HMAC-bound preview approval token ([PR3 plan](../plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md); [`32-agentic-security-controls.md` §10](32-agentic-security-controls.md#portal-swarm-launch-security-requirements-p5))
 - [ ] **AC-OLLAMA** Ollama patched, bound to 127.0.0.1, KV cache quantized, Flash Attention on
 
 ---
