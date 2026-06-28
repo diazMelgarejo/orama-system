@@ -241,6 +241,51 @@ A shared test suite enforcing:
 
 ---
 
+## 8. Upgrade Path Options (v2 Expansion)
+
+### Option 1 — SSRF v2 Specification RFC
+Formalize this document into a **versioned security RFC**:
+- versioned threat model
+- compliance ruleset
+- backward compatibility guarantees
+- reference test vectors
+
+Outcome:
+A publishable security standard for OramaSys ecosystem.
+
+---
+
+### Option 2 — pip-installable Security Package
+Scaffold and publish:
+
+```
+oramasys-endpoint-policy
+```
+
+Includes:
+- `endpoint_policy_core`
+- validation API
+- fuzz harness
+- versioned contract
+
+Outcome:
+Reusable dependency across all Orama/Perpetua systems.
+
+---
+
+### Option 3 — Cross-Repo Contract Test Harness
+Introduce CI-enforced parity suite:
+
+- identical validator behavior across repos
+- shared SSRF regression tests
+- enforced exception taxonomy alignment
+- drift detection between versions
+
+Outcome:
+Prevents divergence across multi-repo agent ecosystem.
+
+---
+
 ## Status
 
 - v1: implemented (current PR work)
