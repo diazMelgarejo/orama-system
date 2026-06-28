@@ -173,13 +173,17 @@ def install(dry_run: bool = False) -> list[Path]:
         )
     for spec in WRAPPERS:
         target = HERMES_SKILLS / spec.slug.removeprefix("pt-orama-") / "SKILL.md"
-        if target.exists() and not is_managed_wrapper(target):
-            action = "would skip" if dry_run else "skipped"
-            print(f"{action} unmanaged wrapper: {target}")
-            continue
         if dry_run:
-            print(target)
+            if target.is_file() and not is_managed_wrapper(target):
+                print(f"would skip unmanaged wrapper: {target}")
+            else:
+                print(target)
             continue
+
+        if target.is_file() and not is_managed_wrapper(target):
+            print(f"skipped unmanaged wrapper: {target}")
+            continue
+
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(wrapper_text(spec), encoding="utf-8")
         written.append(target)
@@ -213,19 +217,16 @@ def run_tests() -> int:
         HERMES_SKILLS = tmp_path / "skills"
 
         try:
-            # 1. Fresh install
             install()
             council_path = HERMES_SKILLS / "council" / "SKILL.md"
             if not council_path.is_file():
                 print("FAIL: council wrapper not created")
                 return 1
 
-            # 2. Verify managed marker is present
             if not is_managed_wrapper(council_path):
                 print("FAIL: managed marker not found in fresh wrapper")
                 return 1
 
-            # 3. Check required content
             text = council_path.read_text(encoding="utf-8")
             if "hermes chat --query" not in text:
                 print("FAIL: hermes chat command missing from wrapper")
@@ -234,14 +235,12 @@ def run_tests() -> int:
                 print("FAIL: turn bound missing in wrapper")
                 return 1
 
-            # 4. Non-clobber: re-install updates agent-owned wrappers
             council_path.write_text(text.replace("version: 1.0.0", "version: 1.0.1"), encoding="utf-8")
             install()
             if "version: 1.0.0" not in council_path.read_text(encoding="utf-8"):
                 print("FAIL: agent-owned wrapper not updated on re-install")
                 return 1
 
-            # 5. Non-clobber: protect user-owned (no managed marker in frontmatter)
             user_text = text.replace(f"\n{MANAGED_MARKER}\n", "\ncreated_by: user\n")
             council_path.write_text(user_text, encoding="utf-8")
             install()
@@ -249,7 +248,7 @@ def run_tests() -> int:
                 print("FAIL: user-owned wrapper was clobbered")
                 return 1
 
-            print("all tests passed")
+            print("non-clobber and syntax tests passed")
             return 0
         finally:
             HERMES_SKILLS = original_skills
