@@ -80,8 +80,20 @@ WRAPPERS = [
         canonical="bin/orama-system/skills/hermes-harness/commands/pt-orama-delegate/SKILL.md",
         purpose="Handle narrow delegated subtasks without committing or leaking private state.",
     ),
+    HermesWrapper(
+        slug="pt-orama-lesson-mining",
+        description="Thin Hermes command for PT lesson graduation via learn.py.",
+        canonical="bin/orama-system/skills/hermes-harness/commands/pt-orama-lesson-mining/SKILL.md",
+        purpose="Graduate durable session insights into Perpetua-Tools semantic memory.",
+    ),
 ]
 
+
+def hermes_local_dir(slug: str) -> str:
+    """Map canonical slug to Hermes local command folder name."""
+    if slug.startswith("pt-orama-"):
+        return slug.removeprefix("pt-orama-")
+    return slug
 
 def wrapper_text(spec: HermesWrapper) -> str:
     provenance = install_provenance()
@@ -172,7 +184,7 @@ def install(dry_run: bool = False) -> list[Path]:
             encoding="utf-8",
         )
     for spec in WRAPPERS:
-        target = HERMES_SKILLS / spec.slug.removeprefix("pt-orama-") / "SKILL.md"
+        target = HERMES_SKILLS / hermes_local_dir(spec.slug) / "SKILL.md"
         if dry_run:
             if target.is_file() and not is_managed_wrapper(target):
                 print(f"would skip unmanaged wrapper: {target}")
@@ -193,7 +205,7 @@ def install(dry_run: bool = False) -> list[Path]:
 def verify() -> list[str]:
     errors: list[str] = []
     for spec in WRAPPERS:
-        target = HERMES_SKILLS / spec.slug.removeprefix("pt-orama-") / "SKILL.md"
+        target = HERMES_SKILLS / hermes_local_dir(spec.slug) / "SKILL.md"
         if not target.is_file():
             errors.append(f"missing wrapper: {target}")
             continue
