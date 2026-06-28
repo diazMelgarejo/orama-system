@@ -6,7 +6,9 @@ All probes run concurrently via asyncio.gather.
 
 Routes:
   GET  /           HTML dashboard (meta-refresh every 10s)
-  GET  /co-orchestration  HTML bidirectional file inbox queue (Mac lane — reconcile later)
+  GET  /co-orchestration  HTML inbox queue (auto macOS or Windows skin)
+  GET  /co-orchestration/macos  HTML inbox queue — OpenClaw skin
+  GET  /co-orchestration/windows  HTML inbox queue — Hermes skin
   GET  /api/co-orchestration  JSON local + peer inbox summary
   GET  /api/co-orchestration/file/{filename}  Markdown body (scope=local|peer)
   GET  /peer-inbox        HTML bidirectional queue + server-side markdown (Win lane — platform/windows/)
@@ -435,7 +437,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   <span class="nav-brand">orama portal</span>
   <div class="nav-links">
     <a class="nav-link" href="/co-orchestration">Co-orchestration inbox</a>
-    <a class="nav-link" href="/peer-inbox">Peer Inbox (Win) ↔</a>
+    <a class="nav-link" href="/peer-inbox">Peer Inbox (Win lane) ↔</a>
     <a class="nav-link" href="/dashboard">Routing Dashboard ↗</a>
     <button class="theme-btn" id="theme-btn" onclick="toggleTheme()">🌙 Night</button>
   </div>
@@ -1615,8 +1617,8 @@ async def _fetch_peer_inbox_remote() -> tuple[list[dict[str, Any]], str]:
 
 
 @app.get("/api/co-orchestration")
-async def api_co_orchestration():
-    from orama_system.co_orchestration_portal import build_co_orchestration_summary
+async def api_co_orchestration(platform: str | None = None):
+    from orama_system.portals.co_orchestration import build_co_orchestration_summary
     from orama_system.lan_peer_files import list_inbox
 
     local_role = local_platform()
@@ -1627,7 +1629,43 @@ async def api_co_orchestration():
         local_inbox=list_inbox(),
         peer_inbox=peer_inbox,
         peer_error=peer_error,
+        platform_skin=platform,
     )
+
+
+def _co_orchestration_html_response(
+    request: Request,
+    *,
+    platform_skin: str | None = None,
+):
+    from fastapi.responses import HTMLResponse
+    from orama_system.portals.co_orchestration import render_co_orchestration_page
+
+    browser_token = ""
+    if auth_enforced() and request_is_loopback(request):
+        browser_token = resolved_control_plane_token()
+    html = render_co_orchestration_page(
+        version=VERSION,
+        cp_fetch_bootstrap=_portal_cp_fetch_bootstrap(browser_token),
+        local_role=local_platform(),
+        platform_skin=platform_skin,
+    )
+    return HTMLResponse(content=html)
+
+
+@app.get("/co-orchestration", response_class=None)
+async def co_orchestration_page(request: Request):
+    return _co_orchestration_html_response(request)
+
+
+@app.get("/co-orchestration/macos", response_class=None)
+async def co_orchestration_macos_page(request: Request):
+    return _co_orchestration_html_response(request, platform_skin="macos")
+
+
+@app.get("/co-orchestration/windows", response_class=None)
+async def co_orchestration_windows_page(request: Request):
+    return _co_orchestration_html_response(request, platform_skin="windows")
 
 
 @app.get("/api/co-orchestration/file/{filename}")
@@ -1665,21 +1703,6 @@ async def api_co_orchestration_file(filename: str, scope: str = "local"):
     except Exception as exc:
         log.warning("peer file fetch failed: %s", exc)
         raise HTTPException(status_code=502, detail="peer file unreachable") from exc
-
-
-@app.get("/co-orchestration", response_class=None)
-async def co_orchestration_page(request: Request):
-    from fastapi.responses import HTMLResponse
-    from orama_system.co_orchestration_portal import render_co_orchestration_page
-
-    browser_token = ""
-    if auth_enforced() and request_is_loopback(request):
-        browser_token = resolved_control_plane_token()
-    html = render_co_orchestration_page(
-        version=VERSION,
-        cp_fetch_bootstrap=_portal_cp_fetch_bootstrap(browser_token),
-    )
-    return HTMLResponse(content=html)
 
 
 @app.get("/health")
