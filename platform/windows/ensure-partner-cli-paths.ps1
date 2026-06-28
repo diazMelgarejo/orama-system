@@ -41,7 +41,8 @@ function Add-UserPathEntry {
         Write-Host "  [whatif] would add to User PATH: $resolved"
         return $true
     }
-    $newPath = ($parts + $resolved) -join ';'
+    # Prepend so partner CLIs shadow stale Machine/npm shims (e.g. native Codex before LM Studio bin).
+    $newPath = ($resolved + ';' + ($parts -join ';')).TrimEnd(';')
     [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
     $env:Path = "$env:Path;$resolved"
     Write-Host "  [+] User PATH: $resolved"
@@ -49,12 +50,12 @@ function Add-UserPathEntry {
 }
 
 $candidates = @(
+    (Join-Path $env:LOCALAPPDATA 'Programs\OpenAI\Codex\bin'),
     (Join-Path $env:LOCALAPPDATA 'cursor-agent'),
     (Join-Path $env:LOCALAPPDATA 'agy\bin'),
     (Join-Path $env:LOCALAPPDATA 'hermes\hermes-agent\venv\Scripts'),
     (Join-Path $env:LOCALAPPDATA 'hermes\bin'),
-    (Join-Path $env:USERPROFILE '.lmstudio\bin'),
-    (Join-Path $env:LOCALAPPDATA 'Programs\OpenAI\Codex\bin')
+    (Join-Path $env:USERPROFILE '.lmstudio\bin')
 )
 
 Write-Host 'Ensuring partner CLI paths (User PATH)...'
