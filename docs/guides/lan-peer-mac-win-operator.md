@@ -27,6 +27,7 @@ git pull --ff-only origin main
 | [Mac E2E handoff](../plans/2026-06-28-mac-e2e-handoff.md) | Mac operator checklist |
 | [Windows PowerShell TODO](../plans/2026-06-28-windows-powershell-todo.md) §5 | Win operator checklist |
 | [E2E evidence](../testing/2026-06-28-mac-win-e2e-evidence.md) | Live re-verify matrix |
+| [Bidirectional talk log (2026-06-28)](lan-peer-bidirectional-talk-2026-06-28.md) | Attempts, probe results, stale-IP fixes, future plan |
 | [Hermes command card](../../bin/orama-system/skills/hermes-harness/commands/lan-peer-self-talk/SKILL.md) | `/lan-peer-self-talk` slash |
 
 ## PT companion
