@@ -9,6 +9,9 @@ uvicorn[standard]>=0.27.0
 # HTTP client (async, used by api_server.py _call_ollama)
 httpx>=0.26.0
 
+# LAN peer WS transport (lan_peer_channel.py, probe_lan_peer ws-peer check)
+websockets>=12.0
+
 # Config
 python-dotenv>=1.2.2
 
