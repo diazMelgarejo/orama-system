@@ -106,11 +106,7 @@ def http_get(url: str, token: str = "", timeout: int = 8) -> tuple[int, str]:
         return -1, str(exc)
 
 
-def resolve_control_plane_token() -> str:
-    """Env token first, then PT persisted .state/control_plane_token."""
-    token = os.environ.get("ORAMA_CONTROL_PLANE_TOKEN", "").strip()
-    if token:
-        return token
+def _pt_persisted_token() -> str:
     for var in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "PT_HOME"):
         root = os.environ.get(var, "").strip()
         if not root:
@@ -121,45 +117,144 @@ def resolve_control_plane_token() -> str:
     return ""
 
 
-def check_ws_peer(peer_ip: str, portal_port: int, token: str) -> Check:
+def pt_lane_token_candidates() -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for raw in (
+        os.environ.get("PT_CONTROL_PLANE_TOKEN", "").strip(),
+        _pt_persisted_token(),
+    ):
+        if raw and raw not in seen:
+            seen.add(raw)
+            ordered.append(raw)
+    return ordered
+
+
+def orama_lane_token_candidates() -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for raw in (
+        os.environ.get("ORAMA_CONTROL_PLANE_TOKEN", "").strip(),
+        os.environ.get("ORAMA_CONTROL_PLANE_TOKEN_LOCAL", "").strip(),
+    ):
+        if raw and raw not in seen:
+            seen.add(raw)
+            ordered.append(raw)
+    return ordered
+
+
+def control_plane_auth_mode() -> str:
+    pt = pt_lane_token_candidates()
+    orama = orama_lane_token_candidates()
+    if pt and orama:
+        return "joint"
+    if pt:
+        return "pt_only"
+    if orama:
+        return "orama_only"
+    return "unset"
+
+
+def _merge_unique(*groups: list[str]) -> list[str]:
+    ordered: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for raw in group:
+            if raw and raw not in seen:
+                seen.add(raw)
+                ordered.append(raw)
+    return ordered
+
+
+def collect_control_plane_token_candidates() -> list[str]:
+    peer = os.environ.get("ORAMA_CONTROL_PLANE_TOKEN_PEER", "").strip()
+    extra = [peer] if peer else []
+    mode = control_plane_auth_mode()
+    if mode == "joint":
+        return _merge_unique(pt_lane_token_candidates(), orama_lane_token_candidates(), extra)
+    if mode == "pt_only":
+        return _merge_unique(pt_lane_token_candidates(), extra)
+    if mode == "orama_only":
+        return _merge_unique(orama_lane_token_candidates(), extra)
+    return _merge_unique(extra)
+
+
+def outbound_control_plane_tokens() -> list[str]:
+    peer = os.environ.get("ORAMA_CONTROL_PLANE_TOKEN_PEER", "").strip()
+    ordered: list[str] = []
+    seen: set[str] = set()
+    if peer:
+        ordered.append(peer)
+        seen.add(peer)
+    for raw in _merge_unique(orama_lane_token_candidates(), pt_lane_token_candidates()):
+        if raw not in seen:
+            seen.add(raw)
+            ordered.append(raw)
+    return ordered
+
+
+def resolve_control_plane_token() -> str:
+    """Primary outbound token (PEER if set, else first lane candidate)."""
+    tokens = outbound_control_plane_tokens()
+    return tokens[0] if tokens else ""
+
+
+def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str]) -> Check:
     if not peer_ip:
         return Check("ws-peer", Status.SKIP, "no peer IP")
-    try:
-        import asyncio
+    if not tokens:
+        return Check("ws-peer", Status.SKIP, "no control-plane token candidates")
+    last_detail = ""
+    for idx, token in enumerate(tokens):
+        try:
+            import asyncio
 
-        async def _probe() -> str:
-            import websockets
+            async def _probe(tok: str) -> str:
+                import websockets
 
-            headers = {"Authorization": f"Bearer {token}"} if token else None
-            qs = f"?token={quote(token, safe='')}" if token else ""
-            url = f"ws://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
-            async with websockets.connect(
-                url,
-                open_timeout=10,
-                additional_headers=headers,
-            ) as ws:
-                await ws.send(json.dumps({"type": "probe", "source": local_role()}))
-                raw = await asyncio.wait_for(ws.recv(), timeout=5)
-                return raw[:200]
+                headers = {"Authorization": f"Bearer {tok}"} if tok else None
+                qs = f"?token={quote(tok, safe='')}" if tok else ""
+                url = f"ws://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
+                async with websockets.connect(
+                    url,
+                    open_timeout=10,
+                    additional_headers=headers,
+                ) as ws:
+                    await ws.send(json.dumps({"type": "probe", "source": local_role()}))
+                    raw = await asyncio.wait_for(ws.recv(), timeout=5)
+                    return raw[:200]
 
-        detail = asyncio.run(_probe())
-        if "probe-ack" in detail or '"ok"' in detail:
-            return Check("ws-peer", Status.PASS, detail[:120])
-        return Check("ws-peer", Status.FAIL, detail[:120])
-    except Exception as exc:
-        msg = str(exc)
-        if "404" in msg or "HTTP 404" in msg:
-            return Check(
-                "ws-peer",
-                Status.SKIP,
-                "peer has no /ws/portal-peer yet — pull orama >= 85ec1df and restart portal",
-            )
-        if "401" in msg:
-            return Check("ws-peer", Status.FAIL, "HTTP 401 — check ORAMA_CONTROL_PLANE_TOKEN on peer")
-        return Check("ws-peer", Status.FAIL, msg[:80])
+            detail = asyncio.run(_probe(token))
+            last_detail = detail
+            if "probe-ack" in detail or '"ok"' in detail:
+                label = (
+                    "peer token"
+                    if idx == 0 and os.environ.get("ORAMA_CONTROL_PLANE_TOKEN_PEER")
+                    else f"candidate {idx + 1}"
+                )
+                return Check("ws-peer", Status.PASS, f"{label}: {detail[:100]}")
+        except Exception as exc:
+            msg = str(exc)
+            last_detail = msg[:80]
+            if "404" in msg or "HTTP 404" in msg:
+                return Check(
+                    "ws-peer",
+                    Status.SKIP,
+                    "peer has no /ws/portal-peer yet — pull orama >= 85ec1df and restart portal",
+                )
+            if "401" in msg:
+                continue
+            continue
+    if "404" in last_detail or "HTTP 404" in last_detail:
+        return Check(
+            "ws-peer",
+            Status.SKIP,
+            "peer has no /ws/portal-peer yet — pull orama >= 85ec1df and restart portal",
+        )
+    return Check("ws-peer", Status.FAIL, f"tried {len(tokens)} token(s) — {last_detail}")
 
 
-def run_checks(peer_ip: str, lms_port: int, portal_port: int, token: str) -> list[Check]:
+def run_checks(peer_ip: str, lms_port: int, portal_port: int, tokens: list[str]) -> list[Check]:
     if not peer_ip:
         return [Check("peer-ip", Status.FAIL, "no peer IP in discovery or env")]
 
@@ -172,17 +267,37 @@ def run_checks(peer_ip: str, lms_port: int, portal_port: int, token: str) -> lis
         hint = "set PORTAL_BIND_LAN=1 on peer and restart portal" if code == -1 else f"http {code}"
         checks.append(Check("portal-health", Status.FAIL, f"{health_url} — {hint}: {body[:80]}"))
 
-    if token:
+    if tokens:
         status_url = f"http://{peer_ip}:{portal_port}/api/status"
-        code, body = http_get(status_url, token=token, timeout=30)
-        if code == 200:
-            checks.append(Check("portal-status", Status.PASS, "authenticated /api/status"))
-        elif code == -1 and "timed out" in body.lower():
-            checks.append(Check("portal-status", Status.FAIL, f"timeout (>30s) — peer portal slow: {body[:60]}"))
-        else:
-            checks.append(Check("portal-status", Status.FAIL, f"http {code} — check ORAMA_CONTROL_PLANE_TOKEN"))
+        status_pass = False
+        last_code = -1
+        last_body = ""
+        for idx, token in enumerate(tokens):
+            last_code, last_body = http_get(status_url, token=token, timeout=30)
+            if last_code == 200:
+                label = (
+                    "peer token"
+                    if idx == 0 and os.environ.get("ORAMA_CONTROL_PLANE_TOKEN_PEER")
+                    else f"candidate {idx + 1}"
+                )
+                checks.append(Check("portal-status", Status.PASS, f"authenticated /api/status ({label})"))
+                status_pass = True
+                break
+        if not status_pass:
+            if last_code == -1 and "timed out" in last_body.lower():
+                checks.append(
+                    Check("portal-status", Status.FAIL, f"timeout (>30s) — peer portal slow: {last_body[:60]}")
+                )
+            else:
+                checks.append(
+                    Check(
+                        "portal-status",
+                        Status.FAIL,
+                        f"http {last_code} — tried {len(tokens)} token(s); set ORAMA_CONTROL_PLANE_TOKEN_PEER",
+                    )
+                )
     else:
-        checks.append(Check("portal-status", Status.SKIP, "no ORAMA_CONTROL_PLANE_TOKEN (env or PT .state)"))
+        checks.append(Check("portal-status", Status.SKIP, "no control-plane token candidates (env or PT .state)"))
 
     models_url = f"http://{peer_ip}:{lms_port}/v1/models"
     code, body = http_get(models_url)
@@ -195,7 +310,7 @@ def run_checks(peer_ip: str, lms_port: int, portal_port: int, token: str) -> lis
     else:
         checks.append(Check("peer-lmstudio", Status.FAIL, f"{models_url} — http {code}"))
 
-    checks.append(check_ws_peer(peer_ip, portal_port, token))
+    checks.append(check_ws_peer(peer_ip, portal_port, tokens))
 
     return checks
 
@@ -216,13 +331,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.lms_port:
         lms_port = args.lms_port
 
-    token = resolve_control_plane_token()
-    checks = run_checks(peer_ip, lms_port, args.portal_port, token)
+    tokens = outbound_control_plane_tokens()
+    checks = run_checks(peer_ip, lms_port, args.portal_port, tokens)
 
     payload = {
         "status": "pending",
         "local_role": role,
         "peer_ip": peer_ip,
+        "auth_mode": control_plane_auth_mode(),
         "discovery_path": str(discovery_path()),
         "checks": [asdict(c) for c in checks],
     }
