@@ -4,7 +4,7 @@ Skills are auto-loaded from `.agents/skills/`.
 
 ## ultrathink System Skill
 - Path: `.agents/skills/orama-system/SKILL.md`
-- Mother skill: `bin/orama-system/SKILL.md` (v0.9.9.0)
+- Mother skill: `bin/orama-system/SKILL.md` (v1.1.0.0)
 - AFRP gate: `bin/orama-system/afrp/SKILL.md`
 - CIDF: `bin/orama-system/cidf/SKILL.md`
 

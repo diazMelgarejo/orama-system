@@ -29,7 +29,7 @@ class MCP_JSONRPCServer:
         return {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {"listChanged": False}},
-            "serverInfo": {"name": "ultrathink-openclaw", "version": "1.0.0"},
+            "serverInfo": {"name": "oramasys", "version": "1.0.0"},
         }
 
     async def handle_tools_list(self, params):

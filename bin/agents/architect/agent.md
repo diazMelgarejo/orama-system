@@ -1,7 +1,7 @@
 ---
 name: visionary-architect-agent
 description: Designs elegant modular solutions with clear boundaries and interfaces. Activates when orchestrator delegates architecture stage.
-version: 0.9.9.7
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: clawdbot, moltbot, openclaw
 allowed-tools: module-decomposer interface-designer diagram-generator edge-case-enumerator
@@ -33,12 +33,12 @@ Specialized agent for ultrathink Stage 2: Visionary Architecture.
 
 ## Input / Output
 
-See `../shared/ultrathink_core.py` for full type definitions.
+See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
 
 - Tool implementation: see `architect_tools.py`
-- Shared types: `../shared/ultrathink_core.py`
+- Shared types: `../shared/oramasys_core.py`
 
 ## CIDF Integration (Stage 2 Decision Point)
 

@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -euo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+
+# Canonical hygiene gate — the SAME check CI runs (scripts/review/repo_hygiene.py):
+# commit identity, forbidden tokens, workstation/personal paths, secrets, bidi
+# controls, markdown-link hygiene, etc. Running it here catches a leak BEFORE it
+# enters history, so the expunge-git scrub is a last resort, not the routine
+# (#1802 follow-up). repo_hygiene.py subsumes check_identity (kept in sync), so
+# this preserves the prior identity gate and adds the rest.
+if [ -f "$ROOT/scripts/review/repo_hygiene.py" ] && command -v python3 >/dev/null 2>&1; then
+  exec python3 "$ROOT/scripts/review/repo_hygiene.py" "$ROOT"
+fi
+
+# Fallback for clones that predate the hygiene script: identity check only.
+exec "$ROOT/scripts/git/check_identity.sh"

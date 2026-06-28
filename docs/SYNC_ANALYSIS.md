@@ -1,21 +1,24 @@
-# Sync Analysis: orama-system ↔ Perplexity-Tools
+﻿# Sync Analysis: orama-system ↔ Perplexity-Tools
 
-**Date:** 2026-04-11 | **Version:** ultrathink v0.9.9.7 · PT v0.9.9.7
+**Date:** 2026-04-11 | **Version:** orama-system v1.1.1.0 · PT v1.1.1.0
 
-> **v1.0 RC transport clarification:** HTTP Bridge (`POST /ultrathink` via `api_server.py`)
+> **v1.0 RC transport clarification:** HTTP Bridge (`POST /oramasys` via `api_server.py`)
 > is the **active primary transport** for v1.0 RC. MCP-Optional transport (stdio JSON-RPC)
 > is planned for v1.1. Any references below to "MCP as primary" or "HTTP as backup" reflect
 > older analysis snapshots and should be read as pre-v0.9.9.0 context.
+>
+> **Operator cross-reference:** For fail-closed policy behavior and mandatory post-priority
+> verification checklist, see [docs/wiki/09-policy-fail-closed-and-checklist.md](wiki/09-policy-fail-closed-and-checklist.md).
 ---
 
 ## TL;DR — Status Summary
 
 | Dimension | Status | Notes |
 |---|---|---|
-| **Version** | ✅ IN SYNC | Both at v0.9.9.7 |
+| **Version** | ✅ IN SYNC | Both at v1.1.1.0 |
 | **Architecture contract** | ✅ IN SYNC | 4-layer hierarchy documented + upheld |
-| **Bridge doc** | ✅ IN SYNC | PERPLEXITY_BRIDGE.md aligned to v0.9.9.7; HAL cross-link complete 
-| **API endpoint spec** | ✅ IN SYNC | HTTP Bridge (`POST /ultrathink`) is v1.0 RC primary transport; MCP-Optional planned for v1.1 |
+| **Bridge doc** | ✅ IN SYNC | PERPLEXITY_BRIDGE.md aligned to v1.1.1.0; HAL cross-link complete |
+| **API endpoint spec** | ✅ IN SYNC | HTTP Bridge (`POST /oramasys`) is v1.0 RC primary transport; `/ultrathink` is a deprecated shim; MCP-Optional planned for v1.1 |
 | **Idempotency contract** | ✅ RESOLVED | PT owns all state via `.state/agents.json`; ultrathink stateless (no Redis). Redis deferred to PT v1.1+ |
 | **Shared `.env` contract** | ✅ IN SYNC | Vars in both `.env.example` files match BRIDGE doc |
 | **SKILL.md cross-ref** | ✅ IN SYNC | PT SKILL.md references ultrathink routing methodology |
@@ -65,7 +68,7 @@ Both agree:
 ### 5. Fallback Chain — Documented and Consistent
 
 ```
-PT receives task → deep reasoning? → call ultrathink:8001
+PT receives task → deep reasoning? → call oramasys:8001
   → timeout? → local Qwen3:30b on Dell
   → realtime/finance? → Perplexity Grok 4.1
   → simple Q&A? → local Qwen3:8b
@@ -94,8 +97,7 @@ PT receives task → deep reasoning? → call ultrathink:8001
 
 Earlier sync snapshots treated `api_server.py` as the primary bridge and
 documented `POST /ultrathink` plus `GET /health`. In the current checkout,
-that server exists as an implemented backup method with request/response tests,
-but it is still not the primary bridge contract.
+`POST /oramasys` is canonical and `/ultrathink` is a deprecated compatibility shim with request/response tests.
 
 ### GAP 2: PT `routing.yml` — ✅ RESOLVED (v0.9.5.0)
 
@@ -173,7 +175,7 @@ All critical integration gaps from the initial analysis have been addressed.
 
 **P0 — RESOLVED:**
 - Historical backup path: older sync snapshots referenced `api_server.py`
-  - `POST /ultrathink` and `GET /health` are implemented backup endpoints in this checkout
+  - `POST /oramasys` and `GET /health` are implemented endpoints in this checkout; `/ultrathink` is a deprecated shim
   - Wire to 5-stage reasoning pipeline complete
   - Runs on port 8001 as specified
   - v0.9.8.0: rate limiting, Pydantic V2 validators, security hardening
@@ -260,7 +262,7 @@ Perplexity-Tools has added hardware-aware orchestration:
 ## Update 2026-03-30: v0.9.9.0 v1.0 RC Refinements [SYNC]
 
 ### Transport Naming Corrected
-- **HTTP Bridge (`POST /ultrathink`)** is now documented as the v1.0 RC primary transport.
+- **HTTP Bridge (`POST /oramasys`)** is now documented as the v1.0 RC primary transport.
 - **MCP-Optional transport** (stdio JSON-RPC) renamed from "MCP-first" — planned for v1.1.
   `ultrathink_orchestration_server.py` MCP `_solve()` remains a stub; no production Ollama call yet.
 - Both repos updated: `api_server.py` docstring, `PERPLEXITY_BRIDGE.md`, both `ROADMAP_v1.1.md` files.
@@ -286,3 +288,4 @@ Perplexity-Tools has added hardware-aware orchestration:
 ---
 
 **Generated:** 2026-03-30 | **Analyst:** Claude Sonnet 4.6
+

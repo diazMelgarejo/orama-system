@@ -1,16 +1,25 @@
 #!/usr/bin/env python3
 """
-~/.openclaw/scripts/discover.py
+scripts/discover.py
 LM Studio Auto-Discovery Hub — Layer A.
-Called by per-repo discover-lm-studio.sh when gossip is stale.
+Always probes by default (no TTL skip). Pass --cached to reuse warm gossip.
 Idempotent: writes nothing if state hash is unchanged.
 """
 
 from __future__ import annotations
-import argparse, asyncio, fcntl, hashlib, json, os, re, shutil, socket, sys, time
+import argparse, asyncio, hashlib, json, logging, os, re, shutil, socket, sys, time
 import urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+
+try:
+    import fcntl  # type: ignore
+except ImportError:
+    fcntl = None  # type: ignore[assignment]
+    import msvcrt  # type: ignore
+else:
+    msvcrt = None  # type: ignore[assignment]
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 OPENCLAW_DIR        = Path.home() / ".openclaw"
@@ -33,7 +42,27 @@ MAX_BACKUPS        = 30
 ARCHIVE_DAYS       = 30
 GOSSIP_TTL_SECONDS = 300
 
+# Platform role: on Windows, localhost IS the Win box and the Mac is remote.
+# On Mac/Linux, localhost IS the Mac box and Windows is on the LAN.
+RUNNING_ON_WINDOWS = sys.platform == "win32"
+
 # ── Repo discovery ────────────────────────────────────────────────────────────
+
+def _resolve_perpetua_root_env() -> Path | None:
+    """Resolve canonical Perpetua root env var with legacy fallback.
+
+    Precedence:
+      1) PERPETUA_TOOLS_ROOT (canonical)
+      2) PERPETUA_TOOLS_PATH (legacy compatibility)
+    """
+    root = (
+        os.environ.get("PERPETUATOOLSROOT", "").strip()
+        or os.environ.get("PERPETUA_TOOLS_ROOT", "").strip()
+    )
+    legacy = os.environ.get("PERPETUA_TOOLS_PATH", "").strip()
+    selected = root or legacy
+    return Path(selected).expanduser() if selected else None
+
 
 def get_repo_paths() -> dict:
     base = Path.home() / "Documents" / "Terminal xCode" / "claude" / "OpenClaw"
@@ -51,11 +80,126 @@ def get_repo_paths() -> dict:
     result = {}
     for name, paths in candidates.items():
         env_key = name.upper() + "_PATH"
-        if env_val := os.environ.get(env_key):
-            result[name] = Path(env_val)
+        if name == "perpetua_tools":
+            result[name] = _resolve_perpetua_root_env() or next((p for p in paths if p.exists()), None)
+        elif env_val := os.environ.get(env_key):
+            result[name] = Path(env_val).expanduser()
         else:
             result[name] = next((p for p in paths if p.exists()), None)
     return result
+
+# ── Hardware affinity policy ──────────────────────────────────────────────────
+
+def _simple_policy_parse(text: str) -> dict[str, list[str]]:
+    parsed: dict[str, list[str]] = {
+        "windows_only": [],
+        "mac_only": [],
+        "shared": [],
+        "windows_only_aliases": [],
+        "mac_only_aliases": [],
+        "shared_aliases": [],
+    }
+    current: str | None = None
+    for raw_line in text.splitlines():
+        line = raw_line.split("#", 1)[0].rstrip()
+        if not line.strip():
+            continue
+        stripped = line.strip()
+        if stripped.endswith(":") and not stripped.startswith("-"):
+            key = stripped[:-1]
+            current = key if key in parsed else None
+            continue
+        if current and stripped.startswith("-"):
+            value = stripped[1:].strip().strip('"').strip("'")
+            if value:
+                parsed[current].append(value)
+    return parsed
+
+
+def _normalize_policy(loaded: dict[str, Any]) -> dict[str, list[str]]:
+    """Merge *_aliases sections so quant-suffixed LM Studio ids enforce NEVER_MAC."""
+    windows_only = list(loaded.get("windows_only", []) or [])
+    windows_only.extend(loaded.get("windows_only_aliases", []) or [])
+    mac_only = list(loaded.get("mac_only", []) or [])
+    mac_only.extend(loaded.get("mac_only_aliases", []) or [])
+    shared = list(loaded.get("shared", []) or [])
+    shared.extend(loaded.get("shared_aliases", []) or [])
+    return {
+        "windows_only": windows_only,
+        "mac_only": mac_only,
+        "shared": shared,
+    }
+
+
+def load_policy(policy_path: Path | None = None) -> dict[str, Any]:
+    """Load Perpetua-Tools' canonical hardware policy (alias-normalized)."""
+    if policy_path is None:
+        pt_root = _resolve_perpetua_root_env() or get_repo_paths().get("perpetua_tools")
+        if not pt_root:
+            return {"windows_only": [], "mac_only": [], "shared": []}
+        policy_path = Path(pt_root) / "config" / "model_hardware_policy.yml"
+    if not policy_path.exists():
+        return {"windows_only": [], "mac_only": [], "shared": []}
+    try:
+        with open(str(policy_path), "r", encoding="utf-8") as _fh:
+            text = _fh.read()
+    except OSError as exc:
+        logging.warning("load_hardware_policy: cannot read %s: %s", policy_path, exc)
+        return {"windows_only": [], "mac_only": [], "shared": []}
+    try:
+        import yaml  # type: ignore
+        loaded = yaml.safe_load(text) or {}
+    except Exception:
+        loaded = _simple_policy_parse(text)
+    return _normalize_policy(loaded)
+
+def _import_pt_hardware_policy():
+    pt_root = _resolve_perpetua_root_env()
+    if not pt_root:
+        raise ImportError("PERPETUATOOLSROOT/PERPETUA_TOOLS_ROOT not set")
+    if str(pt_root) not in sys.path:
+        sys.path.insert(0, str(pt_root))
+    import importlib
+    return importlib.import_module("utils.hardware_policy")
+
+
+def _filter_models_for_platform_local(models: list, platform: str, policy: dict) -> list:
+    normalized = platform.lower().strip()
+    if normalized == "mac":
+        forbidden = {m.lower() for m in policy.get("windows_only", [])}
+    elif normalized == "win":
+        forbidden = {m.lower() for m in policy.get("mac_only", [])}
+    else:
+        forbidden = set()
+    return [m for m in models if str(m).lower() not in forbidden]
+
+
+try:
+    _hw_policy = _import_pt_hardware_policy()
+    filter_models_for_platform = _hw_policy.filter_models_for_platform
+except (ImportError, OSError) as exc:
+    # OSError [Errno 11] "Resource deadlock avoided" can occur in launchd context
+    # on macOS when sys.path contains directories with spaces (known VFS quirk).
+    # Fall back gracefully — discover.py runs fine without the PT policy module.
+    logging.warning(
+        "Cannot import PT hardware_policy (%s: %s). Falling back to local filter.",
+        type(exc).__name__, exc,
+    )
+    filter_models_for_platform = _filter_models_for_platform_local
+
+def filter_endpoints_for_policy(endpoints: dict, policy: dict | None = None) -> dict:
+    """Return a copy of endpoint discovery data with platform-forbidden models removed."""
+    policy = policy if policy is not None else load_policy()
+    filtered: dict[str, dict | None] = {}
+    for platform in ("mac", "win"):
+        endpoint = endpoints.get(platform)
+        if not endpoint:
+            filtered[platform] = endpoint
+            continue
+        copied = dict(endpoint)
+        copied["models"] = filter_models_for_platform(endpoint.get("models", []), platform, policy)
+        filtered[platform] = copied
+    return filtered
 
 # ── Probing ───────────────────────────────────────────────────────────────────
 
@@ -85,27 +229,134 @@ async def scan_subnet_async(subnet: str, port: int, exclude: set):
              if f"{subnet}.{i}" not in exclude]
     return [ip for ip in await asyncio.gather(*tasks) if ip]
 
-def _mac_lan_ip():
+def _lan_ip_on_subnet(subnet_prefix: str = "192.168.254.") -> str | None:
+    """Return this host's LAN IP on the given subnet via UDP route probe."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("192.168.254.1", 80))
-        ip = s.getsockname()[0]; s.close()
-        return ip if ip.startswith("192.168.254.") else None
+        ip = s.getsockname()[0]
+        s.close()
+        return ip if ip.startswith(subnet_prefix) else None
     except Exception:
         return None
 
+
+def _mac_lan_ip():
+    return _lan_ip_on_subnet()
+
+
+def _win_lan_ip():
+    return _lan_ip_on_subnet()
+
+
+def _win_lan_patch_ip(win_ip: str) -> str:
+    """LAN IP for shared PT config files — never loopback on Windows host."""
+    if RUNNING_ON_WINDOWS and win_ip in ("localhost", "127.0.0.1"):
+        return os.getenv("WIN_IP") or _win_lan_ip() or win_ip
+    return win_ip
+
+
+def _endpoints_for_hash(endpoints: dict) -> dict:
+    """Hash/snapshot view: resolve Windows localhost to LAN IP for stable comparisons."""
+    win = endpoints.get("win") or {}
+    if not win:
+        return endpoints
+    patch_ip = _win_lan_patch_ip(win.get("ip", ""))
+    if patch_ip == win.get("ip", ""):
+        return endpoints
+    return {**endpoints, "win": {**win, "ip": patch_ip}}
+
 def discover_endpoints() -> dict:
+    """Probe Mac and Windows LM Studio instances.
+
+    Platform role reversal on Windows:
+      When running ON Windows, localhost IS the Windows box and the Mac is remote.
+      When running ON Mac/Linux, localhost IS the Mac box and Windows is on the LAN.
+
+    Mac identification strategy (Mac/Linux host, in order):
+      1. localhost:1234  — classic single-machine dev setup
+      2. mac_lan_ip:1234 — LM Studio bound to all interfaces (common after
+         power cycle or when LAN access is needed from other machines)
+      3. Seed from last_discovery.json mac.ip — avoids full subnet scan on
+         unchanged topologies
+
+    Windows identification (Mac/Linux host):
+      Any responding LM Studio on the subnet that is NOT the Mac's own IP.
+      Falls back to last-known-good IP, then full subnet scan.
+
+    Windows host (RUNNING_ON_WINDOWS=True):
+      localhost:1234  → win  (the local LM Studio GGUF box)
+      $MAC_IP:1234    → mac  (the remote Mac MLX box, if reachable)
+    """
     result = {"mac": None, "win": None}
+
+    if RUNNING_ON_WINDOWS:
+        # ── Windows host: localhost = win, $MAC_IP = mac ────────────────────
+        win_models = probe_models("http://localhost:1234")
+        if win_models:
+            result["win"] = {"ip": "localhost", "models": win_models}
+        else:
+            print("  ⚠️  Windows LM Studio not reachable at localhost:1234", file=sys.stderr)
+
+        mac_ip = os.getenv("MAC_IP", "").strip()
+        if mac_ip:
+            mac_models = probe_models(f"http://{mac_ip}:1234")
+            if mac_models:
+                result["mac"] = {"ip": mac_ip, "models": mac_models}
+            else:
+                print(f"  ⚠️  Mac LM Studio not reachable at {mac_ip}:1234 ($MAC_IP) — trying cache", file=sys.stderr)
+                # MAC_IP set but unreachable: fall back to last-known-good cache
+                last = _load_json(LAST_DISCOVERY_JSON)
+                mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
+                if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1", mac_ip):
+                    mac_models_cached = probe_models(f"http://{mac_last_ip}:1234")
+                    if mac_models_cached:
+                        result["mac"] = {"ip": mac_last_ip, "models": mac_models_cached}
+                        print(f"  ℹ️  Mac found at cached IP {mac_last_ip} (update $MAC_IP)", file=sys.stderr)
+        else:
+            # MAC_IP not set: fall back to last-known-good mac IP from cache
+            last = _load_json(LAST_DISCOVERY_JSON)
+            mac_last_ip = (last or {}).get("endpoints", {}).get("mac", {}).get("ip", "")
+            if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1"):
+                mac_models_cached = probe_models(f"http://{mac_last_ip}:1234")
+                if mac_models_cached:
+                    result["mac"] = {"ip": mac_last_ip, "models": mac_models_cached}
+                    print(f"  ℹ️  Mac LM Studio found at cached IP {mac_last_ip} (set $MAC_IP to avoid scan)", file=sys.stderr)
+        return result
+
+    # ── Mac/Linux host: localhost = mac, subnet scan = win ──────────────────
+    # Step 1: try localhost first (zero network traffic, instant)
     mac_models = probe_models("http://localhost:1234")
     if mac_models:
         result["mac"] = {"ip": "localhost", "models": mac_models}
 
-    last = _load_json(LAST_DISCOVERY_JSON)
-    win_last_ip = (last or {}).get("endpoints", {}).get("win", {}).get("ip", "")
     mac_lan = _mac_lan_ip()
     exclude = {"localhost", "127.0.0.1"}
     if mac_lan:
         exclude.add(mac_lan)
+
+    # Step 2: if localhost missed, probe the Mac's own LAN IP
+    # (LM Studio often binds to 0.0.0.0 and is reachable via LAN IP)
+    if not result["mac"] and mac_lan:
+        mac_models_lan = probe_models(f"http://{mac_lan}:1234")
+        if mac_models_lan:
+            result["mac"] = {"ip": mac_lan, "models": mac_models_lan}
+            print(f"  ℹ️  Mac LM Studio found at LAN IP {mac_lan} (not localhost)", file=sys.stderr)
+
+    # Step 3: seed from last discovery for Mac (avoids scan when IP unchanged)
+    last = _load_json(LAST_DISCOVERY_JSON)
+    if not result["mac"] and last:
+        mac_last_ip = (last.get("endpoints", {}).get("mac", {}) or {}).get("ip", "")
+        if mac_last_ip and mac_last_ip not in ("", "localhost", "127.0.0.1"):
+            mac_models_seed = probe_models(f"http://{mac_last_ip}:1234")
+            if mac_models_seed:
+                result["mac"] = {"ip": mac_last_ip, "models": mac_models_seed}
+                print(f"  ℹ️  Mac LM Studio rediscovered at {mac_last_ip} (seeded from cache)", file=sys.stderr)
+
+    win_last_ip = (last or {}).get("endpoints", {}).get("win", {}).get("ip", "")
+    # Mac's LAN IP (or discovered IP) must not be treated as Windows
+    if result["mac"] and result["mac"]["ip"] not in ("localhost", "127.0.0.1"):
+        exclude.add(result["mac"]["ip"])
 
     if win_last_ip and win_last_ip not in exclude:
         win_models = probe_models(f"http://{win_last_ip}:1234")
@@ -136,8 +387,11 @@ def compute_hash(endpoints: dict) -> str:
     return hashlib.sha1(key.encode()).hexdigest()
 
 def _load_json(path: Path):
-    try: return json.loads(path.read_text())
-    except Exception: return None
+    try:
+        with open(str(path), "r", encoding="utf-8") as fh:
+            return json.loads(fh.read())
+    except Exception:
+        return None
 
 def _lock_path() -> Path:
     if LOCK_FILE != DEFAULT_LOCK_FILE:
@@ -145,6 +399,7 @@ def _lock_path() -> Path:
     return STATE_DIR / ".discover.lock"
 
 def save_discovery_state(endpoints: dict, tier: int = 1):
+    endpoints = filter_endpoints_for_policy(endpoints)
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
@@ -190,63 +445,117 @@ def _enforce_backup_limits():
 # ── Config patching ───────────────────────────────────────────────────────────
 
 def patch_openclaw_json(endpoints: dict):
+    # PERPETUATOOLSROOT is only needed for PT-specific policy operations.
+    # openclaw.json IP patching works fine without it — just warn if absent.
+    if not _resolve_perpetua_root_env():
+        logging.warning(
+            "PERPETUATOOLSROOT/PERPETUA_TOOLS_ROOT not set — skipping PT-specific policy "
+            "checks, but openclaw.json IP update will still proceed."
+        )
     if not OPENCLAW_JSON.exists(): return
     cfg = _load_json(OPENCLAW_JSON)
     if not cfg: return
+    endpoints = filter_endpoints_for_policy(endpoints)
     providers = cfg.setdefault("models", {}).setdefault("providers", {})
     mac = endpoints.get("mac")
     win = endpoints.get("win")
     if mac:
-        url = "http://localhost:1234/v1" if mac["ip"] == "localhost" else f"http://{mac['ip']}:1234/v1"
-        providers.setdefault("lmstudio-mac", {})["baseUrl"] = url
+        # lmstudio-mac ALWAYS uses localhost — the LAN IP is discovery metadata only.
+        # Native Mac processes must never route to themselves via the LAN interface.
+        providers.setdefault("lmstudio-mac", {})["baseUrl"] = "http://localhost:1234/v1"
         providers["lmstudio-mac"]["models"] = [
             {"id": m, "name": f"Mac LMS — {m}", "contextWindow": 32768,
              "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
             for m in mac["models"] if "embed" not in m.lower()
         ]
     if win:
-        providers.setdefault("lmstudio-win", {})["baseUrl"] = f"http://{win['ip']}:1234/v1"
+        win_ip = win["ip"]
+        if RUNNING_ON_WINDOWS and win_ip in ("localhost", "127.0.0.1"):
+            win_ip = "localhost"
+        providers.setdefault("lmstudio-win", {})["baseUrl"] = f"http://{win_ip}:1234/v1"
         providers["lmstudio-win"]["models"] = [
             {"id": m, "name": f"Win LMS — {m}", "contextWindow": 32768,
              "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
             for m in win["models"] if "embed" not in m.lower()
         ]
     cfg.setdefault("meta", {})["lastTouchedAt"] = datetime.now(timezone.utc).isoformat()
-    OPENCLAW_JSON.write_text(json.dumps(cfg, indent=2))
+    try:
+        tmp = OPENCLAW_JSON.with_suffix(".json.tmp~")
+        tmp.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
+        os.replace(tmp, OPENCLAW_JSON)
+    except OSError as exc:
+        logging.warning("patch_openclaw_json: cannot write %s: %s", OPENCLAW_JSON, exc)
+
+def _read_text_safe(path: Path) -> str | None:
+    """Read text from path using plain open() — avoids pathlib EDEADLK on macOS launchd."""
+    try:
+        with open(str(path), "r", encoding="utf-8") as fh:
+            return fh.read()
+    except OSError as exc:
+        logging.warning("_read_text_safe: cannot read %s: %s", path, exc)
+        return None
+
+def _write_text_safe(path: Path, content: str) -> bool:
+    """Write text to path using plain open() — avoids pathlib EDEADLK on macOS launchd."""
+    try:
+        with open(str(path), "w", encoding="utf-8") as fh:
+            fh.write(content)
+        return True
+    except OSError as exc:
+        logging.warning("_write_text_safe: cannot write %s: %s", path, exc)
+        return False
 
 def patch_devices_yml(mac_ip: str, win_ip: str, pt_repo: Path):
     f = pt_repo / "config" / "devices.yml"
     if not f.exists(): return
-    content = original = f.read_text()
-    content = re.sub(
-        r'(- id: "mac-studio".*?lan_ip:\s*")[^"]+(")',
-        lambda m: m.group(1) + mac_ip + m.group(2),
-        content, flags=re.DOTALL
-    )
-    content = re.sub(
-        r'(- id: "win-rtx3080".*?lan_ip:\s*")[^"]+(")',
-        lambda m: m.group(1) + win_ip + m.group(2),
-        content, flags=re.DOTALL
-    )
+    content = original = _read_text_safe(f)
+    if content is None: return
+    # (?:(?!- id:).)*? is a device-boundary anchor: the match cannot cross into
+    # another device entry.  This prevents the win-rtx3080 regex from drifting
+    # to cloud.lan_ip when win-rtx3080's lan_ip is currently empty.
+    # Skip patching entirely for loopback/empty values — those are runtime
+    # addresses and must never be stored in LAN IP fields.
+    _LOOPBACK = {"", "localhost", "127.0.0.1"}
+    if mac_ip not in _LOOPBACK:
+        content = re.sub(
+            r'(- id: "mac-studio"(?:(?!- id:).)*?lan_ip:\s*")[^"]*(")',
+            lambda m: m.group(1) + mac_ip + m.group(2),
+            content, flags=re.DOTALL
+        )
+    if win_ip not in _LOOPBACK:
+        content = re.sub(
+            r'(- id: "win-rtx3080"(?:(?!- id:).)*?lan_ip:\s*")[^"]*(")',
+            lambda m: m.group(1) + win_ip + m.group(2),
+            content, flags=re.DOTALL
+        )
     if content != original:
-        f.write_text(content)
+        _write_text_safe(f, content)
 
 def patch_models_yml(mac_ip: str, win_ip: str, pt_repo: Path):
     f = pt_repo / "config" / "models.yml"
     if not f.exists(): return
-    content = original = f.read_text()
-    mac_url = "http://localhost:1234" if mac_ip == "localhost" else f"http://{mac_ip}:1234"
-    content = re.sub(r'(\$\{LM_STUDIO_MAC_ENDPOINT:-)[^}]+(\})', rf'\g<1>{mac_url}\2', content)
-    content = re.sub(r'(\$\{LM_STUDIO_WIN_ENDPOINTS:-)[^}:,\n]+', rf'\g<1>http://{win_ip}', content)
+    content = original = _read_text_safe(f)
+    if content is None: return
+    # lmstudio-mac ALWAYS localhost — LAN IP is informational only, never in Mac configs.
+    content = re.sub(r'(\$\{LM_STUDIO_MAC_ENDPOINT:-)[^}]+(\})', r'\g<1>http://localhost:1234\2', content)
+    # Mirror patch_devices_yml: never persist loopback/empty IPs into shared YAML.
+    _LOOPBACK = {"", "localhost", "127.0.0.1"}
+    if win_ip not in _LOOPBACK:
+        content = re.sub(
+            r'(\$\{LM_STUDIO_WIN_ENDPOINTS?:-)[^}]+(\})',
+            rf'\g<1>http://{win_ip}\2',
+            content,
+        )
     if content != original:
-        f.write_text(content)
+        _write_text_safe(f, content)
 
 def write_env_lmstudio(endpoints: dict, repo_paths: dict):
+    endpoints = filter_endpoints_for_policy(endpoints)
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
-    mac_ip = mac.get("ip", "")
-    win_ip = win.get("ip", "")
-    mac_url = "http://localhost:1234" if mac_ip == "localhost" else f"http://{mac_ip}:1234"
+    win_ip = (win.get("ip") or "")
+    # lmstudio-mac ALWAYS localhost — LAN IP is informational/docs only, never in Mac endpoint configs.
+    mac_url = "http://localhost:1234"
     win_url = f"http://{win_ip}:1234" if win_ip else ""
     mac_models = mac.get("models", [])
     win_models = win.get("models", [])
@@ -267,7 +576,12 @@ def write_env_lmstudio(endpoints: dict, repo_paths: dict):
     )
     for repo_path in repo_paths.values():
         if repo_path and Path(repo_path).exists():
-            (Path(repo_path) / ".env.lmstudio").write_text(content)
+            env_path = Path(repo_path) / ".env.lmstudio"
+            try:
+                with open(str(env_path), "w", encoding="utf-8") as fh:
+                    fh.write(content)
+            except OSError as exc:
+                logging.warning("write_env_lmstudio: cannot write %s: %s", env_path, exc)
 
 # ── Recovery tiers ────────────────────────────────────────────────────────────
 
@@ -292,6 +606,25 @@ def _load_tier4(profile="lan-full"):
 
 # ── File lock ─────────────────────────────────────────────────────────────────
 
+def _try_lock_file(handle) -> None:
+    if fcntl is not None:
+        fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return
+    handle.seek(0)
+    handle.write("0")
+    handle.flush()
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+
+
+def _unlock_file(handle) -> None:
+    if fcntl is not None:
+        fcntl.flock(handle, fcntl.LOCK_UN)
+        return
+    handle.seek(0)
+    msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+
+
 class _Lock:
     def __init__(self, timeout=10.0):
         self._timeout = timeout; self._fd = None
@@ -299,25 +632,48 @@ class _Lock:
         STATE_DIR.mkdir(parents=True, exist_ok=True)
         lock_path = _lock_path()
         lock_path.parent.mkdir(parents=True, exist_ok=True)
-        self._fd = open(lock_path, "w")
         deadline = time.time() + self._timeout
         while True:
+            self._fd = open(lock_path, "w")
             try:
-                fcntl.flock(self._fd, fcntl.LOCK_EX | fcntl.LOCK_NB); return self
+                _try_lock_file(self._fd)
+                return self
             except BlockingIOError:
-                if time.time() > deadline: raise TimeoutError("discovery lock timeout")
+                if self._fd:
+                    try:
+                        self._fd.close()
+                    except OSError:
+                        pass
+                    self._fd = None
+                if time.time() > deadline:
+                    raise TimeoutError("discovery lock timeout")
                 time.sleep(0.2)
+            except OSError:
+                if self._fd:
+                    try:
+                        self._fd.close()
+                    except OSError:
+                        pass
+                    self._fd = None
+                raise
     def __exit__(self, *_):
         if self._fd:
-            fcntl.flock(self._fd, fcntl.LOCK_UN); self._fd.close()
+            _unlock_file(self._fd); self._fd.close()
             try: _lock_path().unlink()
             except FileNotFoundError: pass
 
 # ── Main discovery flow ───────────────────────────────────────────────────────
 
-def run_discovery(force: bool = False) -> int:
+def run_discovery(force: bool = True, cached: bool = False) -> int:
+    """Probe endpoints and update configs.
+
+    Default behaviour is always-fresh (force=True).  Pass cached=True (or
+    use the --cached CLI flag) to skip the probe when gossip is still warm
+    (within GOSSIP_TTL_SECONDS).  The legacy --force flag is kept for
+    backwards compatibility but is now a no-op (force is already the default).
+    """
     with _Lock():
-        if not force and DISCOVERY_JSON.exists():
+        if cached and not force and DISCOVERY_JSON.exists():
             state = _load_json(DISCOVERY_JSON)
             if state:
                 age = (datetime.now(timezone.utc) -
@@ -349,7 +705,13 @@ def run_discovery(force: bool = False) -> int:
                                            "models": last["models"][role]}
                         print(f"⚠️  {role} unreachable — preserving last-good", file=sys.stderr)
 
-        new_hash = compute_hash(endpoints)
+        endpoints = filter_endpoints_for_policy(endpoints)
+
+        mac = endpoints.get("mac") or {}
+        win = endpoints.get("win") or {}
+        hash_endpoints = _endpoints_for_hash(endpoints)
+
+        new_hash = compute_hash(hash_endpoints)
         last = _load_json(LAST_DISCOVERY_JSON)
         if last and last.get("hash") == new_hash:
             last["timestamp"] = datetime.now(timezone.utc).isoformat()
@@ -365,18 +727,17 @@ def run_discovery(force: bool = False) -> int:
         backup_current_state()
         repo_paths = get_repo_paths()
         pt_repo = repo_paths.get("perpetua_tools")
-        mac = endpoints.get("mac") or {}
-        win = endpoints.get("win") or {}
 
         patch_openclaw_json(endpoints)
         print("  ✓ openclaw.json", file=sys.stderr)
         if pt_repo:
-            patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-            patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+            win_patch_ip = _win_lan_patch_ip(win.get("ip", ""))
+            patch_devices_yml(mac.get("ip", ""), win_patch_ip, pt_repo)
+            patch_models_yml(mac.get("ip", ""), win_patch_ip, pt_repo)
             print("  ✓ Perpetua-Tools config/", file=sys.stderr)
         write_env_lmstudio(endpoints, repo_paths)
         print("  ✓ .env.lmstudio written", file=sys.stderr)
-        save_discovery_state(endpoints, tier)
+        save_discovery_state(hash_endpoints, tier)
         print(f"  ✓ state saved (tier {tier})", file=sys.stderr)
         if mac.get("ip"): print(f"  Mac: {mac['ip']} — {len(mac.get('models', []))} models", file=sys.stderr)
         if win.get("ip"): print(f"  Win: {win['ip']} — {len(win.get('models', []))} models", file=sys.stderr)
@@ -386,7 +747,7 @@ def run_discovery(force: bool = False) -> int:
 
 def _cmd_status():
     state = _load_json(LAST_DISCOVERY_JSON) or _load_json(DISCOVERY_JSON)
-    if not state: print("No discovery state. Run: discover.py --force"); return
+    if not state: print("No discovery state. Run: discover.py --status (after a probe)"); return
     print(f"Tier:    {state.get('recovery_tier', '?')}")
     print(f"Updated: {state.get('timestamp', '?')}")
     for role, ep in state.get("endpoints", {}).items():
@@ -404,30 +765,149 @@ def _cmd_restore(target: str):
         matches = sorted(BACKUPS_DIR.glob(f"{target}*.json")) if BACKUPS_DIR.exists() else []
         ep = _state_to_ep(_load_json(matches[-1])) if matches else None
     if not ep: print(f"Nothing found for '{target}'."); return
+    ep = filter_endpoints_for_policy(ep)
     backup_current_state()
     repo_paths = get_repo_paths()
     pt_repo = repo_paths.get("perpetua_tools")
     mac = ep.get("mac") or {}; win = ep.get("win") or {}
-    patch_openclaw_json(ep)
-    if pt_repo:
-        patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-        patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-    write_env_lmstudio(ep, repo_paths)
-    save_discovery_state(ep, tier=99)
+    with _Lock():
+        patch_openclaw_json(ep)
+        if pt_repo:
+            patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+            patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+        write_env_lmstudio(ep, repo_paths)
+        save_discovery_state(ep, tier=99)
     RECOVERY_SOURCE_TXT.write_text("manual_restore\n")
     print(f"✅ Restored: Mac={mac.get('ip', '?')} Win={win.get('ip', '?')}")
 
+def _watch_loop(interval: int = 30) -> None:
+    """Poll for network changes and re-run discovery when topology shifts.
+
+    Strategy:
+      - Every `interval` seconds, probe both known IPs for liveness.
+      - If liveness changes (a node appears/disappears) run full discovery.
+      - On macOS, also listens for scutil network-change events via subprocess
+        so recovery happens within seconds of a DHCP renewal after power cycle.
+
+    The watch loop runs until killed (SIGINT/SIGTERM).
+    """
+    import subprocess, signal, threading
+
+    _stop = threading.Event()
+
+    def _sig(*_): _stop.set()
+    signal.signal(signal.SIGINT,  _sig)
+    signal.signal(signal.SIGTERM, _sig)
+
+    def _quick_alive(ip: str) -> bool:
+        """TCP connect probe — faster than full /v1/models round-trip."""
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.settimeout(1.0)
+            host = "127.0.0.1" if ip in ("localhost", "127.0.0.1") else ip
+            s.connect((host, LM_STUDIO_PORT))
+            s.close()
+            return True
+        except Exception:
+            return False
+
+    def _current_liveness() -> dict:
+        state = _load_json(LAST_DISCOVERY_JSON) or {}
+        ep = state.get("endpoints", {})
+        mac_ip = (ep.get("mac") or {}).get("ip", "")
+        win_ip = (ep.get("win") or {}).get("ip", "")
+        return {
+            "mac": _quick_alive(mac_ip) if mac_ip else False,
+            "win": _quick_alive(win_ip) if win_ip else False,
+            "mac_lan": _mac_lan_ip(),
+        }
+
+    def _scutil_listener():
+        """macOS: wait for scutil network-change event, then set stop flag so
+        the main loop immediately re-probes.  Runs in a daemon thread."""
+        try:
+            proc = subprocess.Popen(
+                ["scutil"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                text=True,
+            )
+            assert proc.stdin and proc.stdout
+            proc.stdin.write("n.add com.apple.system.config.network_change\n")
+            proc.stdin.write("n.watch\n")
+            proc.stdin.flush()
+            for line in proc.stdout:
+                if "notification" in line.lower() or "changed" in line.lower():
+                    print("🔔 Network change detected — triggering rediscovery...", file=sys.stderr)
+                    _stop.set()   # wake the main loop immediately
+                    _stop.clear() # re-arm for next event (set() wakes, clear() re-arms)
+                    run_discovery(force=True, cached=False)
+                if _stop.is_set():
+                    break
+            proc.kill()
+        except Exception:
+            pass  # scutil not available or permission denied — polling fallback handles it
+
+    # Start macOS network-change listener in background
+    t = threading.Thread(target=_scutil_listener, daemon=True)
+    t.start()
+
+    last_liveness = _current_liveness()
+    print(f"👁️  Network watcher started (poll every {interval}s). Ctrl-C to stop.", file=sys.stderr)
+
+    while not _stop.wait(timeout=interval):
+        current = _current_liveness()
+        topology_changed = (
+            current["mac"] != last_liveness["mac"] or
+            current["win"] != last_liveness["win"] or
+            current["mac_lan"] != last_liveness["mac_lan"]
+        )
+        if topology_changed:
+            print(
+                f"⚡ Topology change: mac={last_liveness['mac']}→{current['mac']} "
+                f"win={last_liveness['win']}→{current['win']} "
+                f"mac_lan={last_liveness['mac_lan']}→{current['mac_lan']}",
+                file=sys.stderr,
+            )
+            run_discovery(force=True, cached=False)
+            last_liveness = _current_liveness()
+        else:
+            # Refresh timestamp so consumers know watcher is alive
+            state = _load_json(LAST_DISCOVERY_JSON)
+            if state:
+                state["watcher_heartbeat"] = datetime.now(timezone.utc).isoformat()
+                LAST_DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
+
+
 def main():
-    p = argparse.ArgumentParser(description="LM Studio Auto-Discovery")
-    p.add_argument("--force",   action="store_true", help="Re-probe now")
-    p.add_argument("--status",  action="store_true", help="Show current state")
+    p = argparse.ArgumentParser(
+        description="LM Studio Auto-Discovery (always probes by default; use --cached to skip when warm)",
+    )
+    p.add_argument("--cached",  action="store_true",
+                   help="Skip probe if gossip is still fresh (within TTL). Default is always re-probe.")
+    p.add_argument("--force",   action="store_true",
+                   help="[legacy no-op] Re-probe is now the default; kept for backwards compat.")
+    p.add_argument("--status",  action="store_true", help="Show current state (no probe)")
     p.add_argument("--restore", metavar="TARGET",    help="latest | YYYY-MM-DD | profile:name")
     p.add_argument("--prune",   action="store_true", help="Manually prune backups")
+    p.add_argument("--watch",   action="store_true",
+                   help="Run continuously: re-probe on network change (scutil) or topology shift")
+    p.add_argument("--watch-interval", type=int, default=30, metavar="SEC",
+                   help="Polling interval for --watch mode (default: 30s)")
     args = p.parse_args()
     if args.status:  _cmd_status(); sys.exit(0)
     if args.restore: _cmd_restore(args.restore); sys.exit(0)
     if args.prune:   _enforce_backup_limits(); print("✅ Pruned."); sys.exit(0)
-    sys.exit(run_discovery(force=args.force))
+    if args.watch:
+        run_discovery(force=True, cached=False)  # initial probe
+        _watch_loop(interval=args.watch_interval)
+        sys.exit(0)
+    # When --cached is given, respect TTL (skip if warm); otherwise always probe.
+    if args.cached:
+        sys.exit(run_discovery(force=False, cached=True))
+    else:
+        sys.exit(run_discovery(force=True, cached=False))
 
 if __name__ == "__main__":
     main()

@@ -1,7 +1,7 @@
 ---
 name: vision-crystallizer-agent
 description: Generates assumptions ledger, simplification story, and inevitability argument. Updates shared lessons database. Activates when orchestrator delegates crystallization stage.
-version: 0.9.9.7
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: clawdbot, moltbot, openclaw
 allowed-tools: diagram-generator lessons-db documentation-writer
@@ -33,12 +33,12 @@ Specialized agent for ultrathink Stage 5: Crystallize the Vision.
 
 ## Input / Output
 
-See `../shared/ultrathink_core.py` for full type definitions.
+See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
 
 - Tool implementation: see `crystallizer_tools.py`
-- Shared types: `../shared/ultrathink_core.py`
+- Shared types: `../shared/oramasys_core.py`
 
 ## CIDF Documentation Step
 

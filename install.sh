@@ -10,6 +10,7 @@
 #   # or locally:
 #   bash install.sh
 #   bash install.sh --project     # install to ./.claude/skills/ instead of global
+#   bash install.sh --with-test-deps  # also install Python deps for pytest/PoCs
 #   bash install.sh --uninstall   # remove the skill
 
 set -euo pipefail
@@ -28,6 +29,7 @@ SKILL_SOURCE="bin/orama-system"
 # Default: global install
 INSTALL_DIR="$HOME/.claude/skills/$SKILL_NAME"
 MODE="global"
+WITH_TEST_DEPS=0
 
 # ─── Argument parsing ────────────────────────────────────────────────────────
 for arg in "$@"; do
@@ -45,9 +47,13 @@ for arg in "$@"; do
       echo -e "${GREEN}Done.${RESET}"
       exit 0
       ;;
+    --with-test-deps)
+      WITH_TEST_DEPS=1
+      ;;
     --help|-h)
-      echo "Usage: install.sh [--project] [--uninstall]"
+      echo "Usage: install.sh [--project] [--with-test-deps] [--uninstall]"
       echo "  --project   Install to ./.claude/skills/ (project-local)"
+      echo "  --with-test-deps  Install runtime/test deps for pytest and FastAPI PoCs"
       echo "  --uninstall Remove the ultrathink skill"
       exit 0
       ;;
@@ -95,6 +101,16 @@ fi
 # ─── Make scripts executable ─────────────────────────────────────────────────
 chmod +x "$INSTALL_DIR/scripts/"*.py "$INSTALL_DIR/scripts/"*.sh 2>/dev/null || true
 
+# ─── Optional Python test dependency bootstrap ────────────────────────────────
+if [[ "$WITH_TEST_DEPS" == "1" ]]; then
+  if [[ -f "$SCRIPT_DIR/scripts/install-test-deps.sh" ]]; then
+    info "Installing Python runtime/test dependencies for pytest and FastAPI PoCs..."
+    bash "$SCRIPT_DIR/scripts/install-test-deps.sh"
+  else
+    warn "scripts/install-test-deps.sh not found — skip Python dependency install"
+  fi
+fi
+
 # ─── ECC Harness Hook ────────────────────────────────────────────────────────
 for ECC_CANDIDATE in "$SCRIPT_DIR/.ecc" "$HOME/.ecc" ".ecc"; do
   if [ -d "$ECC_CANDIDATE" ]; then
@@ -136,6 +152,24 @@ if [[ -f "$INSTALL_DIR/SKILL.md" ]]; then
   echo -e "  ${BOLD}How to use:${RESET}"
   echo -e "    Claude CLI:     Auto-activates on relevant queries"
   echo -e "    Manual load:    ${BLUE}/skill ultrathink${RESET} in Claude Code"
+  echo ""
+
+  # Layer 2: Claude Desktop MCPB (Perpetua-Tools — optional, no AlphaClaw required)
+  PT_INSTALL=""
+  for PT_CANDIDATE in \
+    "${PERPETUA_TOOLS_PATH:-}" \
+    "${PERPETUA_TOOLS_ROOT:-}" \
+    "${OPENCLAW_HOME:-$HOME/openclaw-v1}/Perpetua-Tools" \
+  ; do
+    if [[ -n "$PT_CANDIDATE" && -f "$PT_CANDIDATE/install.sh" ]]; then
+      PT_INSTALL="$PT_CANDIDATE/install.sh"
+      break
+    fi
+  done
+  if [[ -n "$PT_INSTALL" ]]; then
+    info "Installing Claude Desktop LLM extensions (Perpetua-Tools MCPB)..."
+    bash "$PT_INSTALL" --skip-desktop 2>/dev/null || warn "Perpetua-Tools MCPB install skipped (see Perpetua-Tools/install.sh)"
+  fi
   echo ""
 else
   echo -e "  ${RED}Installation failed — SKILL.md not found${RESET}"
