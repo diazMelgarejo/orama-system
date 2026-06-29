@@ -34,9 +34,17 @@ python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py
 python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py" list 2>/dev/null \
   | python3 -c "import sys,json; json.dump([x['filename'] for x in json.load(sys.stdin).get('files',[])], open('$SEEN','w'), indent=2)" || true
 
+MAC_QUEUE="$ORAMA/bin/orama-system/skills/hermes-harness/scripts/mac_job_queue.py"
+python3 "$MAC_QUEUE" enqueue >>"$LOG" 2>&1 || true
+QUEUE_IDLE=$(python3 "$MAC_QUEUE" status 2>/dev/null | python3 -c "import sys,json; print(json.load(sys.stdin).get('idle',True))" || echo "True")
+
 if [[ "$DRY_RUN" -eq 1 ]]; then
-  log "dry-run: would invoke cursor-agent if actionable job (see coord-pulse-plan.md)"
+  log "dry-run: queue_idle=$QUEUE_IDLE; would invoke cursor-agent if actionable (coord-pulse-plan.md)"
   exit 0
+fi
+
+if [[ "$QUEUE_IDLE" != "True" && "$QUEUE_IDLE" != "true" ]]; then
+  log "skip: mac_job_queue has pending/active work (pulse defers to manual cycle)"
 fi
 
 # Tier 1: one-shot cursor-agent (operator must install cursor-agent)
