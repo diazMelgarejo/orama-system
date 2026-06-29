@@ -45,6 +45,7 @@ fi
 
 if [[ "$QUEUE_IDLE" != "True" && "$QUEUE_IDLE" != "true" ]]; then
   log "skip: mac_job_queue has pending/active work (pulse defers to manual cycle)"
+  exit 0
 fi
 
 # Tier 1: one-shot cursor-agent (operator must install cursor-agent)
