@@ -37,10 +37,27 @@ post_job_learn_push() {
   fi
   for R in "$ORAMA" "$PT"; do
     [[ -d "${R:-}/.git" ]] || continue
+    git -C "$R" fetch origin --prune >>"$LOG" 2>&1 || true
     git -C "$R" pull --rebase origin main >>"$LOG" 2>&1 || true
     git -C "$R" push origin main >>"$LOG" 2>&1 || true
   done
   "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/coord_mark_job_done.sh" >>"$LOG" 2>&1 || true
+}
+
+run_pulse_timed() {
+  local pick=$1
+  local secs=${COORD_PULSE_TIMEOUT_SEC:-7200}
+  python3 - "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/coord_pulse.sh" "$secs" "$LOG" <<'PY' || return 1
+import subprocess, sys
+script, timeout_s, log_path = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+try:
+    with open(log_path, "a", encoding="utf-8") as logf:
+        r = subprocess.run([script], stdout=logf, stderr=subprocess.STDOUT, timeout=timeout_s)
+    sys.exit(r.returncode)
+except subprocess.TimeoutExpired:
+    print("coord_pulse timeout", timeout_s, file=open(log_path, "a"))
+    sys.exit(124)
+PY
 }
 
 log "=== triple rinse start outer=$OUTER max_jobs=$MAX_JOBS tag=$TAG ==="
@@ -58,12 +75,12 @@ for O in $(seq 1 "$OUTER"); do
     fi
     PICK=$(echo "$GATE_JSON" | python3 -c "import sys,json; print((json.load(sys.stdin).get('pick') or {}).get('id',''))" 2>/dev/null || true)
     log "outer $O job $((JOBS + 1)): pulse pick=$PICK"
-    if ! "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/coord_pulse.sh" >>"$LOG" 2>&1; then
-      log "outer $O: coord_pulse failed — stop drain"
-      break
+    if run_pulse_timed "$PICK"; then
+      post_job_learn_push
+      JOBS=$((JOBS + 1))
+    else
+      log "outer $O: coord_pulse failed/timeout pick=$PICK — continue drain"
     fi
-    post_job_learn_push
-    JOBS=$((JOBS + 1))
   done
   log "outer $O: starting 3x15m listen"
   "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/job_cycle_listen.sh" \
