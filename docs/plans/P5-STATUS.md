@@ -38,7 +38,7 @@
 
 | Task | Description | Status | Evidence |
 |------|-------------|--------|----------|
-| **T1** | `sign_operator_payload` / `verify_operator_payload` in `control_plane_auth.py` | ❌ Not started | No symbols on `main` |
+| **T1** | `sign_operator_payload` / `verify_operator_payload` in `control_plane_auth.py` | ✅ Done (branch) | `tests/test_control_plane_auth.py` 5 new cases |
 | **T2** | Preview returns `preview_id`, `approval_token`, `expires_at` | ❌ Not started | `api_swarm_preview` unsigned |
 | **T3** | Launch requires tokens; rejects bare `approved` | ❌ Not started | Still `approved: true` gate only |
 | **T4** | Auth regression tests (bearer + no token → 422) | ❌ Not started | Tests expect `approved` bool |
@@ -46,7 +46,7 @@
 | **T6** | SECURITY.md P5 remediated note | ❌ Not started | Still in "Remaining" queue |
 | **T7** | Full pytest + repo_hygiene | ❌ Not started | — |
 
-**Score: 0 / 7 tasks complete**
+**Score: 1 / 7 tasks complete** (T1 on branch)
 
 ---
 

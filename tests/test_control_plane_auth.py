@@ -365,3 +365,82 @@ def test_outbound_prefers_peer_token(monkeypatch):
     assert outbound_control_plane_tokens()[0] == "peer-only-token"
     assert resolved_control_plane_token() == "peer-only-token"
 
+
+def test_sign_operator_payload_round_trip(monkeypatch):
+    from utils.control_plane_auth import sign_operator_payload, verify_operator_payload
+
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "operator-sign-test-secret")
+    payload = {
+        "preview_id": "11111111-1111-4111-8111-111111111111",
+        "objective": "Ship P5",
+        "assignments_hash": "abc123",
+    }
+    signed = sign_operator_payload(payload, ttl_seconds=900)
+    assert signed["token"]
+    assert signed["expires_at"].endswith("Z")
+    assert verify_operator_payload(payload, signed["token"], signed["expires_at"])
+
+
+def test_sign_operator_payload_golden_vector():
+    from utils.control_plane_auth import _canonical_operator_payload, _compute_operator_token
+
+    payload = {
+        "assignments_hash": "deadbeef",
+        "expires_at": "2026-06-28T12:15:00Z",
+        "objective": "golden",
+        "preview_id": "22222222-2222-4222-8222-222222222222",
+    }
+    assert _canonical_operator_payload(payload) == (
+        '{"assignments_hash":"deadbeef","expires_at":"2026-06-28T12:15:00Z",'
+        '"objective":"golden","preview_id":"22222222-2222-4222-8222-222222222222"}'
+    )
+    token = _compute_operator_token(payload, secret="golden-secret")
+    import base64
+    import hashlib
+    import hmac
+
+    digest = hmac.new(
+        b"golden-secret",
+        _canonical_operator_payload(payload).encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    expected = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    assert token == expected
+
+
+def test_verify_operator_payload_rejects_tamper(monkeypatch):
+    from utils.control_plane_auth import sign_operator_payload, verify_operator_payload
+
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "tamper-test-secret")
+    payload = {"preview_id": "p1", "objective": "original"}
+    signed = sign_operator_payload(payload)
+    assert not verify_operator_payload(
+        {"preview_id": "p1", "objective": "tampered"},
+        signed["token"],
+        signed["expires_at"],
+    )
+
+
+def test_verify_operator_payload_rejects_expired(monkeypatch):
+    from utils.control_plane_auth import verify_operator_payload
+
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "expiry-test-secret")
+    payload = {"preview_id": "p1", "objective": "x"}
+    from utils.control_plane_auth import _compute_operator_token
+
+    expires_at = "2020-01-01T00:00:00Z"
+    signed_payload = {**payload, "expires_at": expires_at}
+    token = _compute_operator_token(signed_payload, secret="expiry-test-secret")
+    assert not verify_operator_payload(payload, token, expires_at)
+
+
+def test_sign_operator_payload_requires_secret(monkeypatch):
+    from utils.control_plane_auth import sign_operator_payload
+
+    monkeypatch.setattr("utils.control_plane_auth.ensure_control_plane_token", lambda: "")
+
+    import pytest
+
+    with pytest.raises(ValueError, match="control plane token required"):
+        sign_operator_payload({"preview_id": "p1"})
+
