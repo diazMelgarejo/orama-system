@@ -58,7 +58,9 @@ try {
     $actionable = @()
     foreach ($role in @("coder", "autoresearcher")) {
         foreach ($id in $status.$role.pending) {
-            if ($BlockedPending -notcontains $id) { $actionable += @{ role = $role; id = $id } }
+            if ($BlockedPending -notcontains $id) {
+                $actionable += @{ role = $role; id = $id }
+            }
         }
     }
 
@@ -67,6 +69,7 @@ try {
         exit 0
     }
 
+    # Prefer first non-blocked pending per role (queue order); skip blocked entries in list
     $pick = $actionable[0]
     $agentCard = if ($pick.role -eq "coder") {
         "$Repo\.cursor\agents\win-coder-queue.md"
