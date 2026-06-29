@@ -73,6 +73,9 @@ if ! command -v cursor-agent >/dev/null 2>&1; then
 fi
 
 AGENT_CARD="$ORAMA/.cursor/agents/mac-orchestrator-queue.md"
+if [[ "$PICK_ROLE" == "researcher" ]]; then
+  AGENT_CARD="$ORAMA/.cursor/agents/win-autoresearcher-queue.md"
+fi
 PROMPT="Follow $AGENT_CARD — execute ONE $PICK_ROLE job ($PICK_ID) from mac_job_queue / inbox. PT learn+dream, push main."
 
 log "cursor-agent start role=$PICK_ROLE job=$PICK_ID"
