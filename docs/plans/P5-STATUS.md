@@ -1,7 +1,7 @@
 # P5 — Server-side swarm approval — status tracker
 
-> **Last updated:** 2026-06-29 (Win coord-017)  
-> **Overall:** Planning **done** · Implementation **not started** · **~15%** of total P5 work (docs only)
+> **Last updated:** 2026-06-29 (coord-023)  
+> **Overall:** Planning **done** · Implementation **in progress on branch** · **~35%** (T1–T2 on branch; main unchanged)
 
 ---
 
@@ -11,13 +11,12 @@
 |---------|---------------|-------------|
 | **This file** | Living checklist T1–T7 + acceptance criteria | `docs/plans/P5-STATUS.md` |
 | **Execution plan** | Full TDD spec, files to touch, test commands | [`2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md`](2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md) |
-| **SECURITY.md** | P5 listed under "Remaining toward zero open queue" until remediated | `SECURITY.md` §B / line ~131 |
-| **Portal code** | Current gap: `approved: true` client bool | `portal_server.py` ~2075–2079 |
-| **React UI** | Hardcoded `approved: true` on launch | `web/src/features/command-center/SwarmComposer.tsx` ~112 |
-| **Win preflight drop** | Mac peer artifact from coord-016 | `bin/.../results/win-p5-preflight-gap.md` |
-| **PT backlog** | L1 blocked on P5 | `Perpetua-Tools/.agent/memory/working/V1_DEFERRED_BACKLOG_2026-06-28.md` |
-| **GitHub** | PR #128 merged = **planning only**; no implementation PR open | `gh pr list --search swarm` |
-| **L1 gate** | `l1_dispatch.py` exits 2 until P5 helpers exist | `bin/.../scripts/l1_dispatch.py` |
+| **Decisions lock** | `/autoplan` amendments A1–A6 | [`P5-DECISIONS-LOCKED.md`](P5-DECISIONS-LOCKED.md) |
+| **SECURITY.md** | P5 listed under "Remaining toward zero open queue" until merge | `SECURITY.md` §B / line ~131 |
+| **Portal code (`main`)** | Still `approved: true` client bool | `portal_server.py` ~2075–2079 |
+| **Branch** | T1–T2 implemented | `cursor/security-pr3-swarm-approval-f559` |
+| **Win drops** | T1/T2 results in inbox | `win-p5-t1-operator-payload.md`, `win-p5-t2-preview-signing.md` |
+| **L1 gate** | `l1_dispatch.py` exits 2 until P5 merges to `main` | `bin/.../scripts/l1_dispatch.py` |
 
 ---
 
@@ -26,9 +25,9 @@
 ```text
 [████████████████████] PR1–PR2 merged (auth hardening baseline)
 [████████████████████] PR3 planning merged (#128, 2026-06-28)
-[░░░░░░░░░░░░░░░░░░░░] P5 implementation (T1–T7) — NOT STARTED
-[░░░░░░░░░░░░░░░░░░░░] PR4 P6 discovery (blocked on P5 merge)
-[░░░░░░░░░░░░░░░░░░░░] L1 /api/l1/* (blocked on P5 merge)
+[███████░░░░░░░░░░░░░] P5 implementation (T1–T2 on branch; T3–T7 pending)
+[░░░░░░░░░░░░░░░░░░░░] PR4 P6 discovery (blocked on P5 merge to main)
+[░░░░░░░░░░░░░░░░░░░░] L1 /api/l1/* (blocked on P5 merge to main)
 ```
 
 ---
@@ -37,15 +36,15 @@
 
 | Task | Description | Status | Evidence |
 |------|-------------|--------|----------|
-| **T1** | `sign_operator_payload` / `verify_operator_payload` in `control_plane_auth.py` | ❌ Not started | No symbols on `main` |
-| **T2** | Preview returns `preview_id`, `approval_token`, `expires_at` | ❌ Not started | `api_swarm_preview` unsigned |
-| **T3** | Launch requires tokens; rejects bare `approved` | ❌ Not started | Still `approved: true` gate only |
-| **T4** | Auth regression tests (bearer + no token → 422) | ❌ Not started | Tests expect `approved` bool |
-| **T5** | React SwarmComposer holds tokens | ❌ Not started | `swarm.ts` still `approved: true` |
-| **T6** | SECURITY.md P5 remediated note | ❌ Not started | Still in "Remaining" queue |
-| **T7** | Full pytest + repo_hygiene | ❌ Not started | — |
+| **T1** | `sign_operator_payload` / `verify_operator_payload` in `control_plane_auth.py` | ✅ On branch | `tests/test_control_plane_auth.py` |
+| **T2** | Preview returns `preview_id`, `approval_token`, `expires_at` | ✅ On branch | `tests/test_swarm_preview.py` 7/7 |
+| **T3** | Launch requires tokens; rejects bare `approved` | ❌ Pending | `main` + branch tip |
+| **T4** | Auth regression tests (bearer + no token → 422) | ❌ Pending | — |
+| **T5** | React SwarmComposer holds tokens | ❌ Pending | `swarm.ts` still `approved: true` on `main` |
+| **T6** | SECURITY.md P5 remediated note | ❌ Pending | After merge |
+| **T7** | Full pytest + repo_hygiene | ❌ Pending | — |
 
-**Score: 0 / 7 tasks complete**
+**Score: 2 / 7 tasks complete (on branch; 0 / 7 on `main`)**
 
 ---
 
@@ -56,11 +55,11 @@
 - [ ] Tampered objective → **403**
 - [ ] Expired token → **403**
 - [ ] Wrong `preview_id` → **403**
-- [ ] Unauthenticated launch → **401** (already PR1)
+- [x] Unauthenticated launch → **401** (PR1 on `main`)
 - [ ] React cannot launch without prior preview
 - [ ] SECURITY.md P5 annotated remediated
 
-**Score: 1 / 8** (401 only)
+**Score: 1 / 8 on `main`** (401 only)
 
 ---
 
@@ -69,7 +68,8 @@
 | Item | State |
 |------|-------|
 | Planning branch | `cursor/security-pr3-planning-f559` → **MERGED** (#128) |
-| Implementation branch | `cursor/security-pr3-swarm-approval-f559` → **does not exist on remote** |
+| Implementation branch | `cursor/security-pr3-swarm-approval-f559` → **on remote** (Win active) |
+| Open PR | none yet — operator merge when T3–T7 green |
 | Target branch | `main` |
 | Blocked downstream | L1 comms, PR4 P6 discovery approval |
 
@@ -77,11 +77,6 @@
 
 ## Next operator action
 
-```bash
-cd orama-system
-git checkout main && git pull
-git checkout -b cursor/security-pr3-swarm-approval-f559
-# Implement T1 → T7 per execution plan
-```
+Win coder: **T3** on `cursor/security-pr3-swarm-approval-f559` — launch requires tokens; hard 422 without `approval_token`.
 
-After merge: re-run `win-p5-preflight-gap` checks; unblock `win-coder-l1-comms-autoplan-backlog`.
+Mac: review branch PR when T3+ tests pass; merge unblocks L1 and P6 stack.
