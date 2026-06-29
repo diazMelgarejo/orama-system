@@ -1,0 +1,19 @@
+---
+description: Anti-doxxing — no workstation paths in tracked files (LINT-006)
+alwaysApply: true
+---
+
+# No workstation path doxxing (always apply)
+
+Before writing or editing **any tracked file** (docs, plans, memory, skills, code comments):
+
+1. Read **Perpetua-Tools** `.agent/protocols/path-hygiene.md` (canonical anti-doxxing contract).
+2. **Never** embed `C:\<user>\...`, `/\<user>/...`, `%USERPROFILE%\Downloads\...`, or your real workspace tree.
+3. Use **repo-relative** paths, `$REPO_ROOT` / `PERPETUA_TOOLS_ROOT`, or generic `~/.gstack/...` — not `$HOME/Downloads/...`.
+4. Autoplan/gstack restore comments: `~/.gstack/projects/<slug>/...` only — no Windows profile paths.
+5. `learn.py` claims and `.agent/memory` rows are tracked — same rules as code; `sanitize_tracked_path_leaks()` maps workspace trees to `<workspace-root>`.
+6. Run `python scripts/review/repo_hygiene.py .` before push when touching docs/plans/memory.
+
+**Antipattern:** Teaching agents to treat `%USERPROFILE%\Downloads\SKILLS.md\ultrathink` as canonical — use repo names + env anchors instead.
+
+Cross-repo: PT `.agent/AGENTS.md` § Path Hygiene; `lesson_da04cbbae68b` in PT `.agent/memory/semantic/LESSONS.md`.
