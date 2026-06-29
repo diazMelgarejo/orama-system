@@ -1,8 +1,13 @@
 """Shared control-plane authentication and operator payload redaction."""
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
 import os
 import secrets
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Literal, Mapping, MutableMapping
 
@@ -298,6 +303,85 @@ def ensure_control_plane_token() -> str:
     os.environ[ENV_TOKEN] = generated
     persist_control_plane_token(generated)
     return generated
+
+
+_DEFAULT_OPERATOR_TTL_SECONDS = 900
+
+
+def _canonical_operator_payload(payload: Mapping[str, Any]) -> str:
+    """Stable JSON for HMAC input (sort_keys, no whitespace)."""
+    return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _operator_signing_secret() -> str:
+    secret = ensure_control_plane_token()
+    if not secret:
+        raise ValueError("control plane token required for operator payload signing")
+    return secret
+
+
+def _format_expires_at(when: datetime) -> str:
+    return when.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _parse_expires_at(value: str) -> datetime:
+    normalized = (value or "").strip()
+    if not normalized:
+        raise ValueError("expires_at is required")
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    parsed = datetime.fromisoformat(normalized)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _compute_operator_token(payload: Mapping[str, Any], *, secret: str) -> str:
+    digest = hmac.new(
+        secret.encode("utf-8"),
+        _canonical_operator_payload(payload).encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    return base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+
+
+def sign_operator_payload(payload: dict, *, ttl_seconds: int = _DEFAULT_OPERATOR_TTL_SECONDS) -> dict:
+    """
+    Sign an operator intent payload with HMAC-SHA256 using the control-plane token.
+
+    ``expires_at`` is embedded in the signed JSON (amendment A1). Returns
+    ``{token, expires_at}`` for portal wrappers to map to ``approval_token``.
+    """
+    if ttl_seconds <= 0:
+        raise ValueError("ttl_seconds must be positive")
+    expires_at = _format_expires_at(
+        datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+    )
+    signed_payload = dict(payload)
+    signed_payload["expires_at"] = expires_at
+    token = _compute_operator_token(signed_payload, secret=_operator_signing_secret())
+    return {"token": token, "expires_at": expires_at}
+
+
+def verify_operator_payload(payload: dict, token: str, expires_at: str) -> bool:
+    """Verify HMAC token and expiry for a signed operator payload."""
+    if not token or not expires_at:
+        return False
+    try:
+        secret = _operator_signing_secret()
+    except ValueError:
+        return False
+    signed_payload = dict(payload)
+    signed_payload["expires_at"] = expires_at
+    expected = _compute_operator_token(signed_payload, secret=secret)
+    if not secrets.compare_digest(token, expected):
+        return False
+    try:
+        if _parse_expires_at(expires_at) <= datetime.now(timezone.utc):
+            return False
+    except (ValueError, TypeError):
+        return False
+    return True
 
 
 def is_weak_control_plane_token(token: str) -> bool:
