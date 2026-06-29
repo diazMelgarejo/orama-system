@@ -10,6 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+SELF = Path(__file__).resolve()
 
 REQUIRED_FILES = [
     ".agent/endpoint-policy-contract.yml",
@@ -38,6 +39,8 @@ REQUIRED_AGENTS_STRINGS = [
     "bin/orama-system/skills/oramasys-method/SKILL.md",
     "docs/SECURITY-POLICY.md",
 ]
+
+DOUBLE_SCHEME_MARKERS = ("http://" + "http", "https://" + "https")
 
 
 def read(path: str) -> str:
@@ -81,9 +84,11 @@ def assert_no_double_scheme_literals() -> None:
         if not root.exists():
             continue
         for path in root.rglob("*"):
+            if path.resolve() == SELF:
+                continue
             if path.is_file() and path.suffix in {".py", ".sh", ".md", ".yml", ".yaml", ".json"}:
                 text = path.read_text(encoding="utf-8", errors="ignore")
-                if "http://http" in text or "https://https" in text:
+                if any(marker in text for marker in DOUBLE_SCHEME_MARKERS):
                     fail(f"double-scheme literal found in {path.relative_to(ROOT)}")
 
 
