@@ -1,7 +1,7 @@
 # P5 — Server-side swarm approval — status tracker
 
-> **Last updated:** 2026-06-29 (Win coord-017)  
-> **Overall:** Planning **done** · Implementation **not started** · **~15%** of total P5 work (docs only)
+> **Last updated:** 2026-06-29 (`/autoplan` on implementation branch)  
+> **Overall:** Planning **done** · `/autoplan` **APPROVED** · Implementation **ready** · **~20%** (plan + review on branch)
 
 ---
 
@@ -26,7 +26,8 @@
 ```text
 [████████████████████] PR1–PR2 merged (auth hardening baseline)
 [████████████████████] PR3 planning merged (#128, 2026-06-28)
-[░░░░░░░░░░░░░░░░░░░░] P5 implementation (T1–T7) — NOT STARTED
+[████░░░░░░░░░░░░░░░░] /autoplan review on impl branch (2026-06-29)
+[░░░░░░░░░░░░░░░░░░░░] P5 implementation (T1–T7) — READY TO START
 [░░░░░░░░░░░░░░░░░░░░] PR4 P6 discovery (blocked on P5 merge)
 [░░░░░░░░░░░░░░░░░░░░] L1 /api/l1/* (blocked on P5 merge)
 ```
@@ -69,7 +70,9 @@
 | Item | State |
 |------|-------|
 | Planning branch | `cursor/security-pr3-planning-f559` → **MERGED** (#128) |
-| Implementation branch | `cursor/security-pr3-swarm-approval-f559` → **does not exist on remote** |
+| Implementation branch | `cursor/security-pr3-swarm-approval-f559` → **on remote** (`/autoplan` review) |
+| `/autoplan` | ✅ APPROVED with amendments A1–A6 |
+| Open PR | **None yet** — create draft or after T1–T7 |
 | Target branch | `main` |
 | Blocked downstream | L1 comms, PR4 P6 discovery approval |
 
@@ -78,10 +81,10 @@
 ## Next operator action
 
 ```bash
-cd orama-system
-git checkout main && git pull
-git checkout -b cursor/security-pr3-swarm-approval-f559
-# Implement T1 → T7 per execution plan
+git fetch origin
+git checkout cursor/security-pr3-swarm-approval-f559
+# Implement T1 → T7 per execution plan (see GSTACK REVIEW REPORT + amendments A1–A6)
+gh pr create --draft --title "fix(security): P5 server-side swarm approval tokens (PR3)"
 ```
 
 After merge: re-run `win-p5-preflight-gap` checks; unblock `win-coder-l1-comms-autoplan-backlog`.
