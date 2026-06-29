@@ -116,13 +116,26 @@ Operator / Portal / Harness
 
 ---
 
-## Open questions (for office-hours / autoplan)
+## Open questions — RESOLVED (2026-06-29)
 
-1. Should **preview** be mandatory for all L1 launches, or only `REQUIRES_HITL` / multi-executor fan-out?  
-2. Is **PT `/v1/jobs`** or **`/user-input`** the canonical queue for PT-owned workers?  
-3. How does **win_job_queue** relate — feeder into L1 launch, or parallel track for Mac orchestrator only?  
-4. **Kill scope:** stop children only, or always `POST /api/stop` full stack?  
-5. **Cursor subagents** (`.cursor/agents/win-*-queue.md`) — register as `executor_id=cursor` profiles in envelope?
+| ID | Decision |
+|----|----------|
+| **D1** | Preview **mandatory** for fan-out (2+), multi-executor, and HITL-class actions. **Fast-path:** single read-only Codex (`transport.profile=read_only`) may use bearer-only like harness `codex exec`. |
+| **D2** | **`POST /v1/jobs`** canonical for PT workers (swarm parity). `/user-input` stays legacy orchestrate poll. |
+| **D3** | **`win_job_queue`** parallel LAN track + post-hoc `complete`; L1 facade does not replace file inbox. |
+| **D4** | **Tiered stop:** `/api/l1/stop` kills registered children only; full **`POST /api/stop`** NUCLEAR only on **Stop All / Emergency**. |
+
+**Execution plan (ingredients phase):** [`2026-06-29-intra-machine-l1-comms-execution-plan.md`](2026-06-29-intra-machine-l1-comms-execution-plan.md)
+
+---
+
+## Open questions (archived — see table above)
+
+1. ~~Should **preview** be mandatory…~~ → D1  
+2. ~~Is **PT `/v1/jobs`** or **`/user-input`**…~~ → D2  
+3. ~~How does **win_job_queue** relate…~~ → D3  
+4. ~~**Kill scope**…~~ → D4  
+5. **Cursor subagents** — register as `executor_id=cursor` profiles in envelope (**yes**, v1)
 
 ---
 
