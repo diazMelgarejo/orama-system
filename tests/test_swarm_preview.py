@@ -54,7 +54,17 @@ def _portal_status():
     }
 
 
+def _preview_auth(monkeypatch):
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "swarm-preview-test-token")
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+
+
+def _auth_headers():
+    return {"Authorization": "Bearer swarm-preview-test-token"}
+
+
 def test_swarm_preview_returns_worker_assignments(monkeypatch):
+    _preview_auth(monkeypatch)
     async def fake_api_status():
         return _portal_status()
 
@@ -63,7 +73,7 @@ def test_swarm_preview_returns_worker_assignments(monkeypatch):
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/swarm/preview", json={"objective": "Ship app state"})
+        response = client.post("/api/swarm/preview", json={"objective": "Ship app state"}, headers=_auth_headers())
 
     assert response.status_code == 200
     body = response.json()
@@ -78,14 +88,16 @@ def test_swarm_preview_returns_worker_assignments(monkeypatch):
     assert all(item["dispatch_allowed"] is False for item in body["assignments"])
 
 
-def test_swarm_preview_rejects_empty_objective():
+def test_swarm_preview_rejects_empty_objective(monkeypatch):
+    _preview_auth(monkeypatch)
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/swarm/preview", json={"objective": "   "})
+        response = client.post("/api/swarm/preview", json={"objective": "   "}, headers=_auth_headers())
 
     assert response.status_code == 422
 
 
 def test_swarm_preview_includes_backend_hints(monkeypatch):
+    _preview_auth(monkeypatch)
     async def fake_api_status():
         return _portal_status()
 
@@ -94,7 +106,7 @@ def test_swarm_preview_includes_backend_hints(monkeypatch):
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/swarm/preview", json={"objective": "Review contracts"})
+        response = client.post("/api/swarm/preview", json={"objective": "Review contracts"}, headers=_auth_headers())
 
     assert response.status_code == 200
     first = response.json()["assignments"][0]
@@ -104,6 +116,7 @@ def test_swarm_preview_includes_backend_hints(monkeypatch):
 
 
 def test_swarm_preview_marks_routing_fallback(monkeypatch):
+    _preview_auth(monkeypatch)
     async def fake_api_status():
         return _portal_status()
 
@@ -112,10 +125,75 @@ def test_swarm_preview_marks_routing_fallback(monkeypatch):
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
-        response = client.post("/api/swarm/preview", json={"objective": "Review contracts"})
+        response = client.post("/api/swarm/preview", json={"objective": "Review contracts"}, headers=_auth_headers())
 
     assert response.status_code == 200
     body = response.json()
     assert body["routing_source"] == "portal:fallback"
     assert {item["routing_source"] for item in body["assignments"]} == {"portal:fallback"}
     assert all(item["backend_hint"] for item in body["assignments"])
+
+
+def test_swarm_preview_returns_approval_tokens(monkeypatch):
+    _preview_auth(monkeypatch)
+
+    async def fake_api_status():
+        return _portal_status()
+
+    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/swarm/preview", json={"objective": "Ship signed preview"}, headers=_auth_headers())
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["preview_id"]
+    assert body["approval_token"]
+    assert body["expires_at"].endswith("Z")
+
+
+def test_swarm_preview_signing_round_trip(monkeypatch):
+    from utils.control_plane_auth import verify_operator_payload
+
+    _preview_auth(monkeypatch)
+
+    async def fake_api_status():
+        return _portal_status()
+
+    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/api/swarm/preview",
+            json={
+                "objective": "Verify token",
+                "task_type": "implementation",
+                "optimize_for": "reliability",
+                "preferred_device": "auto",
+            },
+            headers=_auth_headers(),
+        )
+
+    body = response.json()
+    payload = {
+        "preview_id": body["preview_id"],
+        "objective": body["objective"],
+        "task_type": body["task_type"],
+        "optimize_for": body["optimize_for"],
+        "preferred_device": body["preferred_device"],
+        "assignments_hash": portal_server._swarm_assignments_hash(body["assignments"]),
+    }
+    assert verify_operator_payload(payload, body["approval_token"], body["expires_at"])
+
+
+def test_swarm_assignments_hash_is_stable(monkeypatch):
+    assignments = [
+        {"role": "context-agent", "backend_hint": "pt-context-agent", "dispatch_allowed": False},
+        {"role": "architect-agent", "backend_hint": "pt-architect-agent", "dispatch_allowed": False},
+    ]
+    first = portal_server._swarm_assignments_hash(assignments)
+    second = portal_server._swarm_assignments_hash(assignments)
+    assert first == second
+    assert len(first) == 64
