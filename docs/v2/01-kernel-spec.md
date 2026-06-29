@@ -382,6 +382,8 @@ class GossipBus:
 
 Replaces volatile `.json` blobs from v1 with a durable, queryable audit trail. Shares the same SQLite database file as the checkpointer (`perpetua_core.db` by default).
 
+**Mesh federation (v2.1+, non-kernel):** Local `GossipBus` stays the source of truth per particle. Cooperating orama / PT / perpetua-core instances may exchange **frugal tail deltas** over LAN mesh (and optionally BLE later) without replacing SQLite or adding Redis. See [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md).
+
 ---
 
 ## 6. FastAPI glass-window (lives in `oramasys`, depicted here for completeness)

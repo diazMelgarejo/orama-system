@@ -94,6 +94,8 @@ async def ainvoke(self, state: PerpetuaState, max_steps: int = 50) -> PerpetuaSt
 - Use `asyncio.Queue` for non-blocking `emit()`.
 - A single background task manages the SQLite connection and performs batched commits every 500ms or 50 events. This reduces disk I/O overhead by ~90% in high-frequency graphs.
 
+**v2.1 extension (particle mesh):** Cross-host gossip uses frugal tail sync between cooperating orama / PT particles — not full DB replication, not Redis by default. Optional BLE transport (bitchat-class offline mesh) shares the same event envelope. See [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md) and OQ29–OQ30.
+
 ---
 
 ## 4. Resolving Open Questions (`06-open-questions.md`)
