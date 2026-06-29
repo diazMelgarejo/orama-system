@@ -1,6 +1,9 @@
+<!-- /autoplan restore point: C:\Users\lab\.gstack\projects\orama-system\cursor-security-pr3-swarm-approval-f559-autoplan-restore-20260629-095831.md -->
+
 # PR3 Execution Plan — P5 Server-Side Swarm Approval
 
-> **Status:** 📋 PLANNED — ready for `/autoplan` execution  
+> **Status:** ✅ `/autoplan` APPROVED — ready for T1–T7 implementation  
+> **Review branch:** `cursor/security-pr3-swarm-approval-f559` (2026-06-29)  
 > **Date:** 2026-06-28  
 > **Method:** oramasys-method (AFRP Type C, Mode 2)  
 > **Parent stack:** [`2026-06-28-security-pr3-pr6-zero-queue-plan.md`](2026-06-28-security-pr3-pr6-zero-queue-plan.md)  
@@ -222,4 +225,161 @@ Open draft PR → `main`, title: `fix(security): P5 server-side swarm approval t
 
 ## Crystallize (expected outcome)
 
-P5 closes the last **High-severity mutating shortcut** in the portal job-dispatch path without touching LAN discovery or Windows bind policy. True operator HITL becomes: *preview assignments → server issues bound token → launch must present token* — aligned with RC-4 and the defense-in-depth table’s “runtime guard” row for control plane.
+P5 closes the last **High-severity mutating shortcut** in the portal job-dispatch path without touching LAN discovery or Windows bind policy. **Server-bound launch intent** becomes: *preview assignments → server issues HMAC token → launch must present token* — aligned with RC-4. This is **preview–launch integrity binding**, not cryptographic proof of human review (PR5 CSRF/session + audit follow-on).
+
+---
+
+## GSTACK REVIEW REPORT
+
+> **Generated:** 2026-06-29 · `/autoplan` on `cursor/security-pr3-swarm-approval-f559`  
+> **Verdict:** **APPROVED** with P0 amendments below (incorporated into T1–T5)  
+> **UI scope:** yes (SwarmComposer) · **DX scope:** yes (API contract break)
+
+### Plan amendments (must apply during implementation)
+
+| # | Amendment | Rationale |
+|---|-----------|-----------|
+| **A1** | Include `expires_at` inside HMAC canonical payload (not a separate trusted field) | Prevents expiry extension / replay oracle |
+| **A2** | T3 flow: verify MAC → rebuild preview → recompute hash → constant-time compare → dispatch **rebuilt** assignments only | Closes TOCTOU; never dispatch client assignments |
+| **A3** | T5: store tokens in composer state; clear on any preview-field change; remove `mockSwarmPreview` launch bypass | UI false-HITL today |
+| **A4** | SECURITY.md wording: "HMAC-bound preview required" — not "true HITL" | Honest compliance narrative |
+| **A5** | Add acceptance: launch with valid token but changed `task_type` → **403** | Tamper coverage |
+| **A6** | Golden vector test for `assignments_hash` canonical JSON | Hash stability contract |
+
+### Premises (confirmed at gate)
+
+| # | Premise | Verdict |
+|---|---------|---------|
+| P1 | PR1 closed unauthenticated swarm launch | ✅ Confirmed |
+| P2 | P5 is highest-risk **mutating** portal path remaining | ✅ Accept (P6/L1 follow) |
+| P3 | Threat = authenticated client skipping preview via `approved: true` | ✅ Confirmed in code |
+| P4 | HMAC token proves **server preview participation**, not human eyes | ✅ Accept with honest docs |
+| P5 | Stateless HMAC + 15m TTL is acceptable for v1 | ✅ Accept; document double-launch within TTL |
+| P6 | `orama-only`; no PT code changes | ✅ Confirmed |
+| P7 | Launch rebuild for routing is OK if hash-locked | ✅ Accept with A2 ordering |
+
+### What already exists
+
+| Asset | State |
+|-------|-------|
+| `_build_swarm_preview()` | ✅ Five-role assignments + hardware policy |
+| `api_swarm_launch` | ⚠️ `approved: true` + rebuild preview |
+| `ensure_control_plane_token()` | ✅ Secret source for HMAC (T1) |
+| `tests/test_swarm_*.py` | ⚠️ All `approved`-based — rewrite in T3/T4 |
+| `SwarmComposer.tsx` | ⚠️ Hardcoded `approved: true`; weak `canLaunch` gate |
+| `CommandCenter.tsx` | ⚠️ Seeds `mockSwarmPreview` — enables launch without API preview |
+| `sign_operator_payload` | ❌ Absent — blocks L1 `l1_dispatch.py` |
+
+### NOT in scope (deferred)
+
+- P6 discovery approval (PR4) — reuse same helper with `scope=discovery`
+- CSRF / session cookie (PR5)
+- Audit log / operator identity (post-merge stub)
+- PT `/v1/jobs` attestation
+- Single-use token consume / nonce store (accepted risk F10 for v1)
+- `contextProfile` UI control (cosmetic; not in API)
+
+### Dream state delta
+
+```text
+TODAY          → AFTER PR3 (amended)     → 6-MONTH IDEAL
+approved:true  → HMAC preview token      → CSRF + session + audit + unified scopes
+rebuild launch → hash-locked rebuild     → signed exact payload dispatch
+no sign helper → sign_operator_payload   → swarm + discovery + L1 + lifecycle
+```
+
+### CEO review summary
+
+- **GO** for T1–T7; correct queue-closure and unblocks PR4/L1.
+- Reframe externally: **preview–launch integrity binding**, not "true HITL."
+- Generalize helper for PR4/L1 scopes (`swarm`, `discovery`, `l1`).
+- **P0:** Fix launch-rebuild semantics (A2); fix UI token coupling (A3).
+
+### Design review summary (7 dimensions)
+
+| Dimension | Score | Key finding |
+|-----------|-------|-------------|
+| Information hierarchy | 7/10 | Preview assignments visible; token state invisible to operator |
+| Missing states | 5/10 | No expired-token UI, no "re-preview required" on field edit |
+| User journey | 6/10 | Preview→review→launch flow exists; mock bypass breaks trust |
+| Specificity | 8/10 | Plan names files; T5 needs explicit invalidation rules |
+| Error states | 4/10 | 403 vs 422 not specified in UI copy |
+| Accessibility | N/A | No change scope |
+| Responsive | N/A | No change scope |
+
+**Design litmus:** Ship T5 with token state, disable launch until preview success **and** form matches signed fields, clear tokens on edit.
+
+### Eng review summary
+
+**Architecture (verify → rebuild → hash → dispatch):**
+
+```text
+  SwarmComposer                portal_server                    PT
+  ─────────────                ─────────────                    ──
+  POST /preview  ───────────►  _build_swarm_preview()
+                               + sign_operator_payload()
+                               ◄── preview_id, token, expires_at
+
+  POST /launch   ───────────►  verify_operator_payload()
+                               _build_swarm_preview()  (rebuild)
+                               hash(rebuilt) == signed hash?
+                               dispatch rebuilt assignments ──► POST /v1/jobs ×5
+```
+
+**Test gaps to close in T3–T5:**
+
+- Routing drift preview≠launch → 403
+- Double-launch same token within TTL (document accept)
+- `test_portal_mutating_route_auth` must not mock-only bypass verification
+- SwarmComposer vitest or extracted `canLaunch` unit test
+- Golden vector for `assignments_hash`
+
+**Failure modes (critical):** F4 objective tamper, F5 routing drift, F10 double-launch, F12 mock preview bypass — all addressed by amendments A1–A3.
+
+### DX review summary
+
+| Dimension | Score | Note |
+|-----------|-------|------|
+| TTHW | 6/10 | Operators must preview before launch (intentional break) |
+| API naming | 7/10 | `preview_id` + `approval_token` clear; document 422 migration |
+| Error messages | 5/10 | 422 body must list required fields (not just "approved") |
+| Docs | 6/10 | SECURITY.md update in T6; add API migration note |
+| Upgrade path | 4/10 | Hard break on `approved: true` — acceptable with clear 422 |
+
+### Decision Audit Trail
+
+| # | Phase | Decision | Classification | Principle | Rationale |
+|---|-------|----------|----------------|-----------|-----------|
+| 1 | CEO | Ship PR3 before PR4/P5 CSRF | Mechanical | P3 | Stack plan ordering correct |
+| 2 | CEO | Reframe as integrity binding not HITL | Taste | P1 | Honest threat model |
+| 3 | Eng | Include expires_at in signed payload | Mechanical | P1 | Closes replay oracle |
+| 4 | Eng | Verify→rebuild→hash→dispatch ordering | Mechanical | P5 | Explicit over clever |
+| 5 | Eng | Accept double-launch within TTL for v1 | Taste | P3 | Stateless tradeoff |
+| 6 | Design | Clear tokens on field edit | Mechanical | P1 | Prevents 403 confusion |
+| 7 | Design | Remove mockSwarmPreview launch bypass | Mechanical | P1 | False HITL |
+| 8 | DX | Hard 422 on missing tokens (no approved fallback) | Mechanical | P1 | Closes P5 |
+| 9 | CEO | Generalize helper name for L1/PR4 | Mechanical | P4 | DRY across routes |
+| 10 | Eng | Add routing-drift test | Mechanical | P1 | PT nondeterminism |
+
+### Cross-phase themes
+
+**Theme: "Binding ≠ human review"** — flagged in CEO + Eng + DX. High-confidence: document honestly in SECURITY.md.
+
+**Theme: "Launch rebuild is the sharp edge"** — CEO + Eng. Hash-lock ordering is P0.
+
+### Implementation task list (post-review)
+
+| Priority | Task | Files |
+|----------|------|-------|
+| P0 | T1 sign/verify + golden vector + expiry-in-payload | `control_plane_auth.py`, `test_control_plane_auth.py` |
+| P0 | T2 preview signing | `portal_server.py`, `test_swarm_preview.py` |
+| P0 | T3 launch verify + amended flow | `portal_server.py`, `test_swarm_launch.py` |
+| P0 | T5 React token state + mock fix | `SwarmComposer.tsx`, `swarm.ts`, `CommandCenter.tsx` |
+| P1 | T4 auth regressions | `test_portal_mutating_route_auth.py` |
+| P1 | T6 SECURITY.md | `SECURITY.md` |
+| P1 | T7 pytest + hygiene | CI commands in plan |
+
+### /autoplan approval
+
+**Status:** APPROVED as-is with amendments A1–A6 incorporated into execution.  
+**Next:** Implement T1→T7 on this branch → `gh pr create` → merge unblocks L1 + PR4.
