@@ -26,11 +26,12 @@ _snapshot_seen() {
 
 # Idle gate: flock held by live pulse (includes cursor-agent run)
 if [[ -f "$LOCK" ]]; then
-  if ! flock -n "$LOCK" -c "true" 2>/dev/null; then
+  if flock -n "$LOCK" -c "true" 2>/dev/null; then
+    rm -f "$LOCK"
+  else
     log "skip: pulse lock held ($LOCK)"
-    exit 0
+    exit 2
   fi
-  rm -f "$LOCK"
 fi
 
 log "pulse start dry_run=$DRY_RUN"
