@@ -9,12 +9,14 @@
 
 Land [`docs/plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md`](../../../../../../docs/plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md) on `main` first.
 
-## Task (future)
+## Task (after P5 on main)
 
-1. Read draft: `docs/plans/2026-06-29-intra-machine-l1-comms-draft.md`
-2. Run `/autoplan` on that plan (CEO + Eng; Design if portal UI)
-3. Implement `/api/l1/preview` + `/api/l1/launch` piggybacking P5 HMAC helpers
-4. Add `l1_dispatch.py` CLI + Ladder G in graceful-degradation.md
+1. Read execution plan: `docs/plans/2026-06-29-intra-machine-l1-comms-execution-plan.md` (D1–D4 locked)
+2. Run `/autoplan` on execution plan (CEO + Eng; Design for L1Composer UI)
+3. Implement L1-T1..T9 (portal `/api/l1/*`, `l1_dispatch.py` un-gate, `L1Composer.tsx`)
+4. Ingredients already on branch: schema, `l1_child_registry.py`, CLI stub
+
+**Do not wire portal routes until P5 acceptance criteria green on `main`.**
 
 **Frugal:** no new broker; reuse portal + Hermes envelope + ActionValidator.
 
