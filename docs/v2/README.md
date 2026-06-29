@@ -140,7 +140,8 @@ Explicit list of things deferred to non-kernel modules or later versions. Don't 
 | Kernel | this spec | v2.0 | **YES** | **DONE** v2.0-alpha.1 (36 tests ✅, 2026-05-02) |
 | Multi-agent network | v1 carry-over | v2.0+ (parallel) | no | stub |
 | MCP-Optional transport | ex-v1.1 roadmap | v2.0+ | no | stub |
-| Redis coordination | ex-v1.1 roadmap | v2.0+ | no | stub |
+| Redis coordination | ex-v1.1 roadmap | v2.0+ | no | stub (superseded by GossipMesh — see doc 43) |
+| **GossipBus mesh transport** | particle gossip over LAN; BLE future | v2.1+ | no | **planned** — [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md) |
 | Self-improve evaluator | ex-v1.2 roadmap | considered v2.5 | no | stub |
 | RAG / memory | new | v2.0+ | no | stub |
 | Lessons + SKILL.md | v1 carry-over | v2.0+ | no | stub |
@@ -209,9 +210,10 @@ orama-system/docs/v2/
 └── 40-oramaclaw-lifecycle-plugin.md   ← D22: oramaclaw orbit plugin — OpenClaw + AlphaClaw lifecycle under one perpetua-core-only package; v1 migration as dogfood
 └── 41-agentic-stack-gstack-gbrain-memory-blend.md  ← vendor/agentic-stack union-merge; upgrade --dry-run; Gbrain canonical; Brain blocked; harness matrix
 └── 42-agate-hardware-policy-orbit.md  ← agate repo absorbs model matrix + policy API/CLI; devices.yml adjacent; PT→perpetua-core orbit
+└── 43-gossipbus-mesh-transport.md  ← frugal GossipBus delta sync between orama/PT particles; LAN v2.1; BLE/bitchat-class optional v3
 ```
 
-> **Next free slot: `43-`**
+> **Next free slot: `44-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
