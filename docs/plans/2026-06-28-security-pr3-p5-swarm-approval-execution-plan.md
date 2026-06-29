@@ -1,4 +1,4 @@
-<!-- /autoplan restore point: C:\Users\lab\.gstack\projects\orama-system\cursor-security-pr3-swarm-approval-f559-autoplan-restore-20260629-095831.md -->
+<!-- /autoplan restore point: $HOME/.gstack/projects/orama-system/cursor-security-pr3-swarm-approval-f559-autoplan-restore-20260629-095831.md -->
 
 # PR3 Execution Plan — P5 Server-Side Swarm Approval
 
