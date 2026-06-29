@@ -49,3 +49,15 @@ def test_prune_pending_drops_noise():
     removed = q.prune_pending(state)
     assert "mac-h4-comparison.md" in removed
     assert [j["id"] for j in state["autoresearcher"]["pending"]] == ["win-autoresearcher-h5-gpu.md"]
+
+
+def test_first_actionable_skips_blocked():
+    q = _load_queue()
+    state = q._empty_state()
+    state["coder"]["pending"] = [
+        {"id": "win-coder-l1-comms-autoplan-backlog.md", "filename": "win-coder-l1-comms-autoplan-backlog.md"},
+        {"id": "win-coder-frugal-spawn.md", "filename": "win-coder-frugal-spawn.md"},
+    ]
+    pick = q._first_actionable_pending(state)
+    assert pick is not None
+    assert pick["id"] == "win-coder-frugal-spawn.md"

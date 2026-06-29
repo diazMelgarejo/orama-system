@@ -1,5 +1,5 @@
 # coord_pulse.ps1 — Win one-shot Hermes coord pulse (900s scheduled tick)
-# PLAN: references/coord-pulse-plan.md
+# PLAN: references/coord-pulse-plan.md · unified: references/pulse-unified-comparison.md
 param(
     [switch]$DryRun
 )
@@ -8,20 +8,23 @@ $ErrorActionPreference = "Continue"
 $Repo = $env:ORAMA_SYSTEM_PATH
 if (-not $Repo) { throw "Set ORAMA_SYSTEM_PATH to the orama-system repo root" }
 
+$Pt = $env:PERPETUA_TOOLS_PATH
 $LogDir = Join-Path $env:USERPROFILE ".openclaw\state\lan_peer"
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
 $Log = Join-Path $LogDir "coord-pulse.log"
 $Lock = Join-Path $LogDir "win_pulse.lock"
-
-# Blocked until prerequisite lands (operator steer + assignment card)
-$BlockedPending = @(
-    "win-coder-l1-comms-autoplan-backlog.md"
-)
+$Seen = Join-Path $LogDir "last_pulse_seen.json"
+$WinQueue = Join-Path $Repo "bin\orama-system\skills\hermes-harness\scripts\win_job_queue.py"
 
 function Write-Log([string]$Msg) {
     $line = "{0} {1}" -f (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"), $Msg
     Add-Content -Path $Log -Value $line
     Write-Output $line
+}
+
+function Save-SeenInbox {
+    python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py list 2>$null |
+        python -c "import sys,json; open(r'$Seen','w').write(json.dumps([x['filename'] for x in json.load(sys.stdin).get('files',[])], indent=2))" 2>$null
 }
 
 if (Test-Path $Lock) {
@@ -30,6 +33,7 @@ if (Test-Path $Lock) {
         Write-Log "skip: win_pulse.lock held by pid $pidText"
         exit 0
     }
+    Remove-Item $Lock -Force -ErrorAction SilentlyContinue
 }
 
 Write-Log "pulse start dry_run=$($DryRun.IsPresent)"
@@ -37,40 +41,25 @@ Write-Log "pulse start dry_run=$($DryRun.IsPresent)"
 Push-Location $Repo
 try {
     git fetch origin main --quiet 2>&1 | Out-Null
+    if ($Pt -and (Test-Path (Join-Path $Pt ".git"))) {
+        git -C $Pt fetch origin --prune 2>&1 | Out-Null
+    }
 
     python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json 2>&1 |
         Select-Object -First 12 | ForEach-Object { Write-Log $_ }
 
-    python bin\orama-system\skills\hermes-harness\scripts\win_job_queue.py enqueue 2>&1 |
-        ForEach-Object { Write-Log $_ }
+    $gateJson = python $WinQueue pulse-gate --seen-file $Seen 2>&1 | Out-String
+    Write-Log "gate: $gateJson"
 
-    $statusJson = python bin\orama-system\skills\hermes-harness\scripts\win_job_queue.py status 2>&1 | Out-String
-    Write-Log "queue: $statusJson"
+    $gate = $gateJson | ConvertFrom-Json
+    Save-SeenInbox
 
-    $status = $statusJson | ConvertFrom-Json
-    foreach ($role in @("coder", "autoresearcher")) {
-        if ($status.$role.active) {
-            Write-Log "skip: $role job active"
-            exit 0
-        }
-    }
-
-    $actionable = @()
-    foreach ($role in @("coder", "autoresearcher")) {
-        foreach ($id in $status.$role.pending) {
-            if ($BlockedPending -notcontains $id) {
-                $actionable += @{ role = $role; id = $id }
-            }
-        }
-    }
-
-    if ($actionable.Count -eq 0) {
-        Write-Log "idle: no actionable pending jobs (blocked or empty)"
+    if ($gate.status -ne "actionable") {
+        Write-Log "idle: gate=$($gate.status) reason=$($gate.reason)"
         exit 0
     }
 
-    # Prefer first non-blocked pending per role (queue order); skip blocked entries in list
-    $pick = $actionable[0]
+    $pick = $gate.pick
     $agentCard = if ($pick.role -eq "coder") {
         "$Repo\.cursor\agents\win-coder-queue.md"
     } else {

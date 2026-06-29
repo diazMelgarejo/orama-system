@@ -1,5 +1,7 @@
 # Win vs Mac Hermes coord pulse — implementation comparison
 
+> **Superseded by:** [`pulse-unified-comparison.md`](../pulse-unified-comparison.md) (coord-019 pros/cons + merge matrix)
+
 **Date:** 2026-06-29  
 **Fan-out:** coord-014  
 **Plan:** `references/coord-pulse-plan.md`
