@@ -224,6 +224,80 @@ def _claim_next_pending(state: dict[str, Any], role: str) -> dict[str, Any] | No
     return None
 
 
+def _first_actionable_pending(state: dict[str, Any]) -> dict[str, Any] | None:
+    for role in ROLES:
+        if state[role]["active"]:
+            return None
+    for role in ROLES:
+        for job in state[role]["pending"]:
+            if job["id"] in BLOCKED_PENDING:
+                continue
+            return {**job, "role": role}
+    return None
+
+
+def cmd_pulse_gate(args: argparse.Namespace) -> int:
+    """Tier-0 gate for coord_pulse.ps1: enqueue, diff inbox, pick actionable job."""
+    seen_path = Path(args.seen_file)
+    prev: set[str] = set()
+    if seen_path.is_file():
+        try:
+            prev = set(json.loads(seen_path.read_text(encoding="utf-8")))
+        except (json.JSONDecodeError, TypeError):
+            prev = set()
+
+    curr = [str(m.get("filename") or "") for m in list_inbox()]
+    curr_set = {f for f in curr if f}
+    new_files = sorted(curr_set - prev)
+
+    state = load_queue()
+    enqueue_from_inbox(state)
+    save_queue(state)
+
+    for role in ROLES:
+        if state[role]["active"]:
+            print(
+                json.dumps(
+                    {
+                        "status": "busy",
+                        "reason": f"{role} active",
+                        "active": state[role]["active"],
+                        "new_files": new_files,
+                    },
+                    indent=2,
+                )
+            )
+            return 0
+
+    pick = _first_actionable_pending(state)
+    if not pick:
+        print(
+            json.dumps(
+                {
+                    "status": "idle",
+                    "reason": "no actionable pending",
+                    "new_files": new_files,
+                    "queue": cmd_status_data(state),
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    print(
+        json.dumps(
+            {
+                "status": "actionable",
+                "pick": pick,
+                "new_files": new_files,
+                "queue": cmd_status_data(state),
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
 def cmd_next(args: argparse.Namespace) -> int:
     role = args.role
     if role not in ROLES:
@@ -340,6 +414,10 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("run-once", help="Enqueue + claim one job per idle role").set_defaults(
         func=cmd_run_once
     )
+
+    gate = sub.add_parser("pulse-gate", help="Enqueue + diff inbox + pick actionable job")
+    gate.add_argument("--seen-file", required=True, help="Path to last_pulse_seen.json")
+    gate.set_defaults(func=cmd_pulse_gate)
 
     nxt = sub.add_parser("next", help="Claim next pending job for role")
     nxt.add_argument("role", choices=ROLES)
