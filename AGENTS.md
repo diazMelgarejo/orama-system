@@ -18,7 +18,7 @@ Before updating, relocating, or assuming only one exists, read:
   ```
 - Method + worked examples: [`bin/orama-system/skills/git-history-surgery/SKILL.md`](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md) § B5. Why this keeps recurring and how we make it stick: [`docs/LESSONS.md` § 2026-06-05](https://github.com/diazMelgarejo/orama-system/blob/main/docs/LESSONS.md#2026-06-05) · failure catalog [`bin/orama-system/afrp/failure-modes.md` § Failure Mode 7](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/afrp/failure-modes.md).
 - **Rebasing/force-updating/reviving a remote branch requires explicit current-user authorization** (see § Security PR stacking). Always preserve old tips (vault `refs/pull/*/head` + `backup/*` tags) before any force-push.
-- Companion repo with the same protocol: [Perpetua-Tools `AGENTS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/AGENTS.md). **periscope is excluded** — its `main`/`agentsview` are pure upstream mirrors, never rewritten by us.
+- Companion repo with the same protocol: [Perpetua-Tools `AGENTS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/AGENTS.md). **periscope is excluded** — its `main`/`agentsview` are pure upstream mirrors, never rewritten by us).
 
 ## Attribution guards: single source of truth — ZERO fragmentation
 
@@ -56,6 +56,18 @@ bash scripts/git/commit-clean.sh -m "type(scope): short summary"
 **AlphaClaw fork:** `main` = upstream mirror. `pr-4-macos` = upstream [PR #63](https://github.com/chrysb/alphaclaw/pull/63) — cherry-pick down from `feature/MacOS-post-install`; **never** FF integration onto it. Integration: `feature/MacOS-post-install`. Contrib: `cursor/sync-attribution-guards-6421` → PR into integration. `alphaclaw-align-all.sh` does not touch `pr-4-macos`. See `docs/wiki/13-alphaclaw-fork-contrib-branches.md` and AlphaClaw `docs/wiki/01-branch-roles.md`.
 
 See `docs/wiki/12-cursor-cloud-commit-attribution.md`.
+
+## Endpoint transport policy — Perpetua peer contract
+
+**Applies when touching OpenClaw-generated model endpoints, gateway/proxy endpoint wiring, active_tilting references, SSRF policy, LAN discovery guidance, or cross-repo routing docs.**
+
+- **Canonical implementation:** Perpetua-Tools owns `src/utils/endpoint_policy_core.py` and `.agent/endpoint-policy-contract.yml` on `main`.
+- **Peer contract:** orama-system owns `.agent/endpoint-policy-contract.yml`, `scripts/security/check_endpoint_policy_contract.py`, and `.github/workflows/endpoint-policy-contract.yml` on `main`.
+- **Transport identity:** endpoint identity is `scheme + hostname + backend-specific port`; preserve discovered `http`/`https` scheme first, normalize host second, then route by backend-specific port.
+- **Do not fork implementation:** if orama needs Python endpoint reconstruction logic, sync the contract with Perpetua first instead of inventing a second parser.
+- **Existing skills to load:** use `bin/orama-system/skills/oramasys-method/SKILL.md` for architecture-heavy changes, `bin/orama-system/skills/oramasys-method/references/integrative-merge.md` for cross-branch/repo synthesis, and `bin/orama-system/skills/git-history-surgery/SKILL.md` before judging rewritten branch state.
+- **Security policy:** read `docs/SECURITY-POLICY.md` (redirects to `SECURITY.md`) before endpoint-security remediation PRs.
+- **Validation:** run `python scripts/security/check_endpoint_policy_contract.py` before merging endpoint-policy or routing-guidance changes.
 
 ## Prime directives for agent-maintained records
 
