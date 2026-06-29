@@ -86,7 +86,7 @@ def classify_role(filename: str, topic: str) -> str | None:
 
 
 def _priority(meta: dict[str, Any], body: str) -> int:
-    m = re.search(r"Priority:\s*(\d+)", body)
+    m = re.search(r"\*?\*?Priority\*?\*?:\s*(\d+)", body)
     if m:
         return int(m.group(1))
     return 10
