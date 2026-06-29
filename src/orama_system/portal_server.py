@@ -872,7 +872,7 @@ def _render_agent_dispatch_section(agent_availability: Dict[str, bool]) -> str:
         ("gemini",        "Gemini CLI",          "CLI · local"),
         ("ollama-mac",    "Ollama Mac",          "HTTP · localhost:11434"),
         ("lmstudio-mac",  "LM Studio Mac",       "HTTP · localhost"),
-        ("lmstudio-win",  "LM Studio Win",       f"HTTP · .{_get_win_ip().split('.')[-1]} GPU"),
+        ("lmstudio-win",  "LM Studio Win",       f"HTTP · .{_WIN_IP_LABEL.split('.')[-1]} GPU"),
         ("all",           "All (parallel)",      "Codex + Gemini + Mac; Win serial"),
     ]
     btns = []
