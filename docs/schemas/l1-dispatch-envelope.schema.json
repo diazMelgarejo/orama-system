@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://orama.local/schemas/l1-dispatch-envelope.schema.json",
+  "title": "L1 Local Dispatch Envelope",
+  "description": "Hermes universal envelope + L1 transport extensions. Preview/launch via portal :8002 after P5 HITL lands.",
+  "type": "object",
+  "required": ["skill_id", "executor_id", "objective"],
+  "properties": {
+    "skill_id": { "type": "string", "minLength": 1 },
+    "agent_id": { "type": "string" },
+    "executor_id": {
+      "type": "string",
+      "enum": ["codex", "cursor", "hermes", "pt-worker"]
+    },
+    "objective": { "type": "string", "minLength": 1 },
+    "queue_role": {
+      "type": "string",
+      "description": "Optional win_job_queue role for post-hoc complete",
+      "enum": ["coder", "autoresearcher", ""]
+    },
+    "transport": {
+      "type": "object",
+      "properties": {
+        "partner": { "type": "string" },
+        "profile": {
+          "type": "string",
+          "enum": ["read_only", "interactive", "destructive", "fan_out"],
+          "default": "interactive"
+        },
+        "fanout_count": { "type": "integer", "minimum": 1, "default": 1 }
+      },
+      "additionalProperties": false
+    },
+    "constraints": {
+      "type": "object",
+      "properties": {
+        "task_type": { "type": "string" },
+        "optimize_for": { "type": "string" },
+        "preferred_device": { "type": "string" }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}
