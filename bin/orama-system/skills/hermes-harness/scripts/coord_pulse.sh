@@ -17,6 +17,7 @@ DRY_RUN=0
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" | tee -a "$LOG"; }
 
 mkdir -p "$LOG_DIR"
+export PATH="${HOME}/.local/bin:${PATH:-/usr/bin:/bin}"
 
 _snapshot_seen() {
   python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py" list 2>/dev/null \

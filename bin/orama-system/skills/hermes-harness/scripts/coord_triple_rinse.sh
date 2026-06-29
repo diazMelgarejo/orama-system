@@ -26,6 +26,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 mkdir -p "$LOG_DIR"
+export PATH="${HOME}/.local/bin:${PATH:-/usr/bin:/bin}"
 log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" | tee -a "$LOG"; }
 
 post_job_learn_push() {
