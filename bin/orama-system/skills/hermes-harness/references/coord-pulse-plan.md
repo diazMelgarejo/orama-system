@@ -69,9 +69,41 @@ Win keeps `win_job_queue.py`; Mac does **not** SSH to Win.
 # Log: ~/.openclaw/state/lan_peer/coord-pulse.log
 ```
 
-Win operator: existing `coord_monitor.ps1 -Minutes 15` for manual windows; later `Register-ScheduledTask` with same 900s interval.
+Win operator: `coord_pulse.ps1` one-shot per tick; `install_coord_pulse.ps1` registers Task Scheduler **OramaCoordPulse** every **900s**. Manual window: `coord_monitor.ps1 -Minutes 15` (multi-tick listen, no agent).
 
 ---
+
+## Hermes Gateway pulse (bidirectional — Win + Mac + Linux)
+
+**Name:** Hermes coord pulse (not OpenClaw Gateway `:18789` — that stays model/control plane).
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│  every 900s (launchd Mac | Task Scheduler Win)              │
+│    Tier 0: lock file → skip if job running                  │
+│    Tier 0: probe_lan_peer.py (listen Win/Mac/Linux peer)    │
+│    Tier 0: git fetch + win_job_queue enqueue / inbox list   │
+│    Tier 0: skip if no actionable work OR blocked prereq     │
+│    Tier 1: cursor-agent --print ONE job (queue agent card)  │
+│    Post:   learn.py + auto_dream + push + peer drop         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+| Host | Scheduler | Script | Agent card |
+|------|-----------|--------|------------|
+| Mac/Linux | `com.orama.coord-pulse` | `coord_pulse.sh` | `mac-orchestrator-queue.md` |
+| Windows | `OramaCoordPulse` | `coord_pulse.ps1` | `win-coder-queue.md` / `win-autoresearcher-queue.md` |
+| Manual (any) | operator | `coord_monitor.ps1 -Minutes 15` | listen-only, no spawn |
+
+**Frugal rules:** one job per pulse; no new broker; blocked cards (e.g. L1 until P5) stay in queue but pulse skips them; peer timeout → local backlog only.
+
+**Cycle the operator described:**
+
+1. Finish one queue job → push/sync → learn ALL  
+2. Wait 15 min (scheduler fires OR `coord_monitor.ps1`)  
+3. Probe Mac/Win/Linux peer → enqueue → if idle, cursor-agent claims next job  
+4. Repeat
+
 
 ## cursor-agent invocation (frugal)
 
@@ -106,7 +138,7 @@ cursor-agent --print --model composer-2.5 \
 | **P0** | `coord_pulse.sh` + `mac-orchestrator-queue.md` agent card | Manual `./coord_pulse.sh` runs one cycle |
 | **P1** | `install_coord_pulse.sh` + launchd plist | `launchctl list \| grep coord-pulse` |
 | **P2** | `mac_job_queue.py` + portal `/co-orchestration/macos` pulse status | Unit tests |
-| **P3** | Win scheduled task wrapper for `coord_monitor.ps1` | Win parity |
+| **P3** | Win `coord_pulse.ps1` + `install_coord_pulse.ps1` (Task Scheduler) | `Get-ScheduledTask OramaCoordPulse` |
 
 **Out of scope:** Gateway WebSocket job bus, remote Hermes RPC, new paid APIs.
 
