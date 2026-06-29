@@ -76,15 +76,21 @@ for O in $(seq 1 "$OUTER"); do
     PICK=$(echo "$GATE_JSON" | python3 -c "import sys,json; print((json.load(sys.stdin).get('pick') or {}).get('id',''))" 2>/dev/null || true)
     log "outer $O job $((JOBS + 1)): pulse pick=$PICK"
     if run_pulse_timed "$PICK"; then
-      post_job_learn_push
-      JOBS=$((JOBS + 1))
+      if tail -30 "$LOG_DIR/coord-pulse.log" 2>/dev/null | grep -q "cursor-agent start"; then
+        post_job_learn_push
+        JOBS=$((JOBS + 1))
+      else
+        log "outer $O: pulse skipped/no-agent for pick=$PICK"
+      fi
     else
       log "outer $O: coord_pulse failed/timeout pick=$PICK — continue drain"
     fi
   done
+set +e
   log "outer $O: starting 3x15m listen"
   "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/job_cycle_listen.sh" \
     --rounds 3 --tag "${TAG}-o${O}" >>"$LOG" 2>&1
+  set -e
   log "--- outer rinse $O/$OUTER complete ---"
 done
 
