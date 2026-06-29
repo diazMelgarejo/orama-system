@@ -32,6 +32,13 @@ from orama_system.lan_peer_files import lan_peer_state_dir, list_inbox, read_inb
 ROLES = ("autoresearcher", "coder")
 _QUEUE_PATH = lan_peer_state_dir() / "win_job_queue.json"
 
+# Pending jobs with hard prereqs — pulse and `next` skip until unblocked in coord_pulse.ps1
+BLOCKED_PENDING: frozenset[str] = frozenset(
+    {
+        "win-coder-l1-comms-autoplan-backlog.md",
+    }
+)
+
 # Topic/filename → role (first match wins)
 _ROLE_RULES: list[tuple[str, re.Pattern[str]]] = [
     (
@@ -102,7 +109,7 @@ def classify_role(filename: str, topic: str) -> str | None:
 
 
 def _priority(meta: dict[str, Any], body: str) -> int:
-    m = re.search(r"Priority:\s*(\d+)", body)
+    m = re.search(r"\*?\*?Priority\*?\*?:\s*(\d+)", body)
     if m:
         return int(m.group(1))
     fanout = str(meta.get("fanout_id") or "")
@@ -207,6 +214,16 @@ def cmd_status(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _claim_next_pending(state: dict[str, Any], role: str) -> dict[str, Any] | None:
+    """Pop first actionable pending job (skips BLOCKED_PENDING)."""
+    pending: list[dict[str, Any]] = state[role]["pending"]
+    for idx, job in enumerate(pending):
+        if job["id"] in BLOCKED_PENDING:
+            continue
+        return pending.pop(idx)
+    return None
+
+
 def cmd_next(args: argparse.Namespace) -> int:
     role = args.role
     if role not in ROLES:
@@ -218,7 +235,19 @@ def cmd_next(args: argparse.Namespace) -> int:
     if not state[role]["pending"]:
         print(json.dumps({"status": "idle", "active": None}, indent=2))
         return 0
-    job = state[role]["pending"].pop(0)
+    job = _claim_next_pending(state, role)
+    if not job:
+        print(
+            json.dumps(
+                {
+                    "status": "idle",
+                    "active": None,
+                    "note": "pending jobs blocked or empty",
+                },
+                indent=2,
+            )
+        )
+        return 0
     job["started_at"] = int(time.time())
     state[role]["active"] = job
     save_queue(state)
@@ -286,7 +315,9 @@ def cmd_run_once(_args: argparse.Namespace) -> int:
     for role in ROLES:
         if state[role]["active"] or not state[role]["pending"]:
             continue
-        job = state[role]["pending"].pop(0)
+        job = _claim_next_pending(state, role)
+        if not job:
+            continue
         job["started_at"] = int(time.time())
         state[role]["active"] = job
         claimed[role] = job

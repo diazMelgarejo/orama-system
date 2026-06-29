@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: C:\Users\lab\.gstack\projects\ultrathink-system\main-autoplan-restore-20260629.md -->
 # Coord pulse — 15-minute idle job dispatcher (PLAN)
 
 **AFRP:** Type C | Practitioner | Mode 2  
@@ -158,3 +159,139 @@ tail -f ~/.openclaw/state/lan_peer/coord-pulse.log
 ## Relation to current manual cycle
 
 Manual loop today = pulse + cursor-agent session. This plan **automates the wait/listen/sync** half; operator still approves PR merges (#183, #199).
+
+---
+
+# /autoplan Review (2026-06-29)
+
+**UI scope:** no (ops scripts only; P2 portal status deferred)  
+**DX scope:** yes (CLI, scripts, agent cards, developer queue)  
+**Mode:** CEO SELECTIVE_EXPANSION | Eng FULL | DX POLISH  
+**Voices:** [subagent-only] Codex unavailable on Win host
+
+## Premises (confirm)
+
+| # | Premise | Verdict |
+|---|---------|---------|
+| P1 | LAN peer file inbox is sufficient transport; no new broker | **Accept** — `lan_peer_assign.py` + portal :8002 proven |
+| P2 | 15 min idle cadence balances Mac/Win without burning GPU | **Accept** — matches operator manual cycle |
+| P3 | One cursor-agent job per pulse is enough throughput | **Accept** — frugal; queue serializes anyway |
+| P4 | Blocked prereq cards stay queued but skipped | **Accept** — L1 until P5 on main |
+| P5 | launchd / Task Scheduler reuse network-watch pattern | **Accept** — P1 Mac + P3 Win shipped |
+
+## What already exists
+
+| Sub-problem | Existing code |
+|-------------|---------------|
+| Peer probe | `probe_lan_peer.py` |
+| Inbox I/O | `lan_peer_files.py`, `lan_peer_assign.py` |
+| Win serial queue | `win_job_queue.py` (+ `BLOCKED_PENDING`) |
+| Win pulse | `coord_pulse.ps1`, `install_coord_pulse.ps1` |
+| Mac pulse | `coord_pulse.sh`, `install_coord_pulse.sh` |
+| Listen window | `coord_monitor.ps1` |
+| Learn loop | PT `learn.py`, `auto_dream.py` |
+
+## NOT in scope
+
+- Gateway WebSocket job bus (P5+)
+- Remote Hermes RPC
+- `mac_job_queue.py` portal UI (P2 — defer until pulse stable 1 week)
+- L1 intra-machine comms (blocked on P5 swarm HITL)
+
+## Error & Rescue Registry
+
+| Failure | Detection | Rescue |
+|---------|-----------|--------|
+| Lock held | `win_pulse.lock` + live PID | Skip tick |
+| Peer down | probe FAIL | Local queue only |
+| Blocked job at head | `BLOCKED_PENDING` | Skip to next actionable |
+| cursor-agent missing | exit non-zero | Log; manual operator |
+| git conflict | push fail | Stash; learn lesson; no second agent |
+
+## Failure Modes Registry
+
+| Mode | Severity | Mitigation |
+|------|----------|------------|
+| Double agent spawn | high | Lock file |
+| L1 claimed before block fix | medium | **Fixed** — `win_job_queue._claim_next_pending` |
+| Priority parse misses `**Priority:**` | low | **Fixed** — bold-tolerant regex |
+| Mac drop not auto-queued | medium | Win synthesizes `win-coder-*` from inbox intel |
+
+## CEO Completion Summary
+
+| Area | Score | Notes |
+|------|-------|-------|
+| Problem fit | 9/10 | Right frugal automation for bidirectional LAN ops |
+| Scope | 8/10 | P0-P3 appropriate; P2 portal optional |
+| Risk | 7/10 | Operator merge still manual (#199) |
+| 6-month | 8/10 | Scales to Linux peer with same script pattern |
+
+## Eng Architecture
+
+```text
+[launchd/Task Scheduler 900s]
+        |
+        v
+  coord_pulse.{sh,ps1} -- Tier 0 lock/probe/fetch/enqueue
+        |
+        +--> win_job_queue.py (skip BLOCKED_PENDING)
+        |
+        v
+  cursor-agent --print (ONE job, agent card)
+        |
+        v
+  post: learn.py + git push + lan_peer_assign drop --peer
+```
+
+## Test diagram
+
+| Path | Coverage |
+|------|----------|
+| `win_job_queue` enqueue/skip blocked | manual + cycle-007 |
+| `coord_pulse.ps1` dry-run | shipped |
+| `probe_lan_peer` | existing tests |
+| Integration pulse 3x | **this cycle** |
+
+## DX Scorecard (8 dims)
+
+| Dimension | Score |
+|-----------|-------|
+| Getting started | 7/10 — needs ORAMA_SYSTEM_PATH |
+| CLI naming | 8/10 |
+| Error messages | 7/10 — add blocked-job hint to `next` idle JSON |
+| Docs | 8/10 — this plan + agent cards |
+| Upgrade path | 8/10 |
+| Dev friction | 7/10 |
+| Escape hatches | 9/10 — DryRun, manual monitor |
+| TTHW | ~10 min with env vars set |
+
+**TTHW:** 10 min → target 5 min (document env block in README snippet)
+
+## Decision Audit Trail
+
+| # | Phase | Decision | Class | Principle | Rationale |
+|---|-------|----------|-------|-----------|-----------|
+| 1 | CEO | Reuse launchd pattern | Mechanical | P4 DRY | network-watch exists |
+| 2 | CEO | Skip P2 portal for v1 | Taste | P3 | pulse stable first |
+| 3 | Eng | `BLOCKED_PENDING` in Python queue | Mechanical | P1 | matches coord_pulse.ps1 |
+| 4 | Eng | Bold priority regex | Mechanical | P5 | `**Priority:** 2` parsed |
+| 5 | DX | Document ORAMA_SYSTEM_PATH in plan | Mechanical | P1 | reduces TTHW |
+| 6 | Ops | Synthesize win job from Mac inbox | Mechanical | P6 | coord-012 → pt199 card |
+
+## Cross-Phase Themes
+
+**Blocked prereq handling** — CEO + Eng both require skip-not-delete for L1 until P5.
+
+## GSTACK REVIEW REPORT
+
+| Phase | Status | Unresolved |
+|-------|--------|------------|
+| CEO | clean | 0 |
+| Eng | clean | 0 |
+| Design | skipped | n/a |
+| DX | issues_open | 1 (TTHW doc snippet) |
+
+**Approved for implementation** — P0-P3 shipped; P2 portal status deferred.
+
+**Cycle evidence (2026-06-29):** Mac coord-012 inbox → `win-coder-pt199-frugality-review` → 15/15 tests → `win-pt199-frugality-reconcile.md` dropped to Mac.
+
