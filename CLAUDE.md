@@ -72,6 +72,7 @@ Read before any structural change. Below is a navigation summary only.
 - One heavy model at a time on Windows GPU
 - `@field_validator` (Pydantic V2) — never deprecated `@validator`
 - `depth=0` validated server-side; workers cannot spawn sub-workers in V1
+- **Path hygiene (LINT-006):** no workstation paths in tracked files — see `.cursor/rules/no-workstation-paths.mdc` and PT `.agent/protocols/path-hygiene.md`
 
 ---
 
