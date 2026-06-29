@@ -1,4 +1,4 @@
-<!-- /autoplan restore point: C:\Users\lab\.gstack\projects\ultrathink-system\main-autoplan-restore-20260629.md -->
+<!-- /autoplan restore point: ~/.gstack/projects/diazMelgarejo-orama-system/main-autoplan-restore-20260629.md -->
 # Coord pulse — 15-minute idle job dispatcher (PLAN)
 
 **AFRP:** Type C | Practitioner | Mode 2  
