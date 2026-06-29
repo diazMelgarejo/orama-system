@@ -1,0 +1,11 @@
+{
+  "fanout_id": "2026-06-28-coord-007",
+  "assignments": [
+    {
+      "assignee": "mac",
+      "topic": "ops/frugality-router-spike",
+      "filename": "mac-orchestrator-frugality-router-spike.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/assignments/mac-orchestrator-frugality-router-spike.md"
+    }
+  ]
+}
