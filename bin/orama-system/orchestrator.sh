@@ -12,7 +12,7 @@ set -euo pipefail
 LOG_FILE="/tmp/orchestrator.log"
 FAIL_COUNT_FILE="/tmp/orchestrator_fails"
 MAX_RETRIES=10
-WIN_PEER="${WIN_PEER_ENDPOINT:-192.168.254.100:8002}"
+WIN_PEER="${WIN_PEER_ENDPOINT:-192.168.9.18:1234}"
 WIN_PROBE_TIMEOUT=5
 
 log() {
