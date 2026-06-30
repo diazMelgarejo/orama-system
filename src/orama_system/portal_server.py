@@ -866,13 +866,14 @@ def _lmstudio_mac_busy_flag(agents: List[Dict[str, Any]]) -> bool:
 
 def _render_agent_dispatch_section(agent_availability: Dict[str, bool]) -> str:
     """Render the Agent Dispatch panel with live availability badges."""
+    win_octet = _WIN_IP_LABEL.split(".")[-1] if _WIN_IP_LABEL else "peer"
     AGENTS = [
         ("codex",         "Codex",              "CLI · local"),
         ("gemini-review", "Gemini Review",       "CLI · code review"),
         ("gemini",        "Gemini CLI",          "CLI · local"),
         ("ollama-mac",    "Ollama Mac",          "HTTP · localhost:11434"),
         ("lmstudio-mac",  "LM Studio Mac",       "HTTP · localhost"),
-        ("lmstudio-win",  "LM Studio Win",       f"HTTP · .{_get_win_ip().split('.')[-1]} GPU"),
+        ("lmstudio-win",  "LM Studio Win",       f"HTTP · .{win_octet} GPU"),
         ("all",           "All (parallel)",      "Codex + Gemini + Mac; Win serial"),
     ]
     btns = []

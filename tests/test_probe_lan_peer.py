@@ -62,6 +62,26 @@ def test_resolve_control_plane_token_from_pt_state(peer_mod, monkeypatch, tmp_pa
     assert peer_mod.resolve_control_plane_token() == "pt-secret-token"
 
 
+def test_load_repo_env_uses_env_local_without_overriding_shell(peer_mod, monkeypatch, tmp_path):
+    (tmp_path / ".env").write_text(
+        "ORAMA_CONTROL_PLANE_TOKEN=base-token\n"
+        "ORAMA_CONTROL_PLANE_TOKEN_PEER=base-peer\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".env.local").write_text(
+        "ORAMA_CONTROL_PLANE_TOKEN=local-token\n"
+        "ORAMA_CONTROL_PLANE_TOKEN_PEER=local-peer\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", "shell-peer")
+
+    peer_mod.load_repo_env(tmp_path)
+
+    assert peer_mod.resolve_control_plane_token() == "shell-peer"
+    assert peer_mod.orama_lane_token_candidates() == ["local-token"]
+
+
 def test_outbound_peer_token_tried_first(peer_mod, monkeypatch):
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "local-symmetric")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", "peer-handoff")
