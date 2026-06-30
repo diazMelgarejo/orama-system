@@ -250,7 +250,7 @@ function Invoke-LanPeerProbe {
     $probe = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py'
     if (-not (Test-Path $probe)) {
         _Warn 'lan-peer' "probe script missing: $probe"
-        return
+        return $false
     }
     Sync-ControlPlaneToken
     if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
@@ -261,7 +261,9 @@ function Invoke-LanPeerProbe {
     & $UsPython $probe --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout
     if ($LASTEXITCODE -ne 0) {
         _Warn 'lan-peer' 'peer probe reported failures (Mac peer may need ./start.sh --lan-peer)'
+        return $false
     }
+    return $true
 }
 
 function Invoke-LanPeerOutboxFlush {
@@ -278,6 +280,17 @@ function Invoke-LanPeerOutboxFlush {
     if ($LASTEXITCODE -ne 0) {
         _Warn 'lan-peer' 'queued peer drops remain pending'
     }
+}
+
+function Invoke-LanPeerSession {
+    param([string[]]$Args)
+    $session = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\lan_peer_session.py'
+    if (-not (Test-Path $session)) {
+        _Warn 'lan-peer' "session state script missing: $session"
+        return $true
+    }
+    & $UsPython $session @Args | Out-Null
+    return ($LASTEXITCODE -eq 0)
 }
 
 # ── Hardware policy check ─────────────────────────────────────────────────────
@@ -600,8 +613,16 @@ Write-Host '──────────────────────�
 Write-Host ''
 
 if ($LanPeer) {
-    Invoke-LanPeerProbe
-    Invoke-LanPeerOutboxFlush
+    $retrySeconds = if ($env:LAN_PEER_DEGRADED_RETRY_SECONDS) { $env:LAN_PEER_DEGRADED_RETRY_SECONDS } else { '900' }
+    if (-not (Invoke-LanPeerSession -Args @('should-retry'))) {
+        _Warn 'lan-peer' "macOS-only degraded mode active; next peer retry waits for LAN_PEER_DEGRADED_RETRY_SECONDS=$retrySeconds"
+    } elseif (Invoke-LanPeerProbe) {
+        $null = Invoke-LanPeerSession -Args @('record-success')
+        Invoke-LanPeerOutboxFlush
+    } else {
+        $null = Invoke-LanPeerSession -Args @('record-failure', '--error', 'probe_lan_peer.py failed')
+        _Warn 'lan-peer' 'skipping outbox flush until peer portal probe passes'
+    }
 }
 
 if (-not $NoOpen) {

@@ -15,16 +15,27 @@ $Log = Join-Path $LogDir "coord-pulse.log"
 $Lock = Join-Path $LogDir "win_pulse.lock"
 $Seen = Join-Path $LogDir "last_pulse_seen.json"
 $WinQueue = Join-Path $Repo "bin\orama-system\skills\hermes-harness\scripts\win_job_queue.py"
+$LanSession = Join-Path $Repo "bin\orama-system\skills\hermes-harness\scripts\lan_peer_session.py"
 
 function Write-Log([string]$Msg) {
     $line = "{0} {1}" -f (Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ"), $Msg
     Add-Content -Path $Log -Value $line
-    Write-Output $line
+    Write-Host $line
 }
 
 function Save-SeenInbox {
     python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py list 2>$null |
         python -c "import sys,json; open(r'$Seen','w').write(json.dumps([x['filename'] for x in json.load(sys.stdin).get('files',[])], indent=2))" 2>$null
+}
+
+function Invoke-LanPeerSession {
+    param([string[]]$Args)
+    if (-not (Test-Path $LanSession)) {
+        Write-Log "session state script missing: $LanSession"
+        return $true
+    }
+    python $LanSession @Args 2>&1 | ForEach-Object { Write-Log $_ }
+    return ($LASTEXITCODE -eq 0)
 }
 
 if (Test-Path $Lock) {
@@ -49,10 +60,21 @@ try {
     $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
     $wsTimeout = if ($env:LAN_PEER_WS_TIMEOUT) { $env:LAN_PEER_WS_TIMEOUT } else { '2' }
     $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
-    python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1 |
-        Select-Object -First 12 | ForEach-Object { Write-Log $_ }
-    python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py flush-outbox --peer --timeout $httpTimeout 2>&1 |
-        Select-Object -First 20 | ForEach-Object { Write-Log $_ }
+    $retrySeconds = if ($env:LAN_PEER_DEGRADED_RETRY_SECONDS) { $env:LAN_PEER_DEGRADED_RETRY_SECONDS } else { '900' }
+    if (-not (Invoke-LanPeerSession -Args @('should-retry'))) {
+        Write-Log "macOS-only degraded mode active; next peer retry waits for LAN_PEER_DEGRADED_RETRY_SECONDS=$retrySeconds"
+    } else {
+        $probeOutput = python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1
+        $probeExit = $LASTEXITCODE
+        $probeOutput | Select-Object -First 12 | ForEach-Object { Write-Log $_ }
+        if ($probeExit -eq 0) {
+            $null = Invoke-LanPeerSession -Args @('record-success')
+            $flushOutput = python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py flush-outbox --peer --timeout $httpTimeout 2>&1
+            $flushOutput | Select-Object -First 20 | ForEach-Object { Write-Log $_ }
+        } else {
+            $null = Invoke-LanPeerSession -Args @('record-failure', '--error', 'probe_lan_peer.py failed')
+        }
+    }
 
     $gateJson = python $WinQueue pulse-gate --seen-file $Seen 2>&1 | Out-String
     Write-Log "gate: $gateJson"
