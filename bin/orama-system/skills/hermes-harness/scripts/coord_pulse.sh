@@ -7,6 +7,7 @@ ORAMA="${ORAMA_SYSTEM_PATH:-$(git -C "$(dirname "$0")/../../.." rev-parse --show
 PT="${PERPETUA_TOOLS_PATH:-}"
 LOG_DIR="${HOME}/.openclaw/state/lan_peer"
 LOCK="${LOG_DIR}/mac_pulse.lock"
+LOCK_DIR="${LOG_DIR}/mac_pulse.lockdir"
 SEEN="${LOG_DIR}/last_pulse_seen.json"
 LOG="${LOG_DIR}/coord-pulse.log"
 MAC_QUEUE="$ORAMA/bin/orama-system/skills/hermes-harness/scripts/mac_job_queue.py"
@@ -19,20 +20,51 @@ log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" | tee -a "$LOG"; }
 mkdir -p "$LOG_DIR"
 export PATH="${HOME}/.local/bin:${PATH:-/usr/bin:/bin}"
 
+_release_lock() {
+  rm -rf "$LOCK_DIR"
+}
+
+_acquire_lock() {
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    printf '%s\n' "$$" > "$LOCK_DIR/pid"
+    rm -f "$LOCK"
+    trap _release_lock EXIT INT TERM
+    return 0
+  fi
+
+  local owner=""
+  if [[ -f "$LOCK_DIR/pid" ]]; then
+    owner="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+  fi
+  if [[ -n "$owner" ]] && kill -0 "$owner" 2>/dev/null; then
+    log "skip: pulse lock held by pid=$owner ($LOCK_DIR)"
+    exit 2
+  fi
+
+  log "stale pulse lock cleared ($LOCK_DIR)"
+  rm -rf "$LOCK_DIR"
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    printf '%s\n' "$$" > "$LOCK_DIR/pid"
+    rm -f "$LOCK"
+    trap _release_lock EXIT INT TERM
+    return 0
+  fi
+
+  log "skip: pulse lock acquired by another process ($LOCK_DIR)"
+  exit 2
+}
+
 _snapshot_seen() {
   python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py" list 2>/dev/null \
     | python3 -c "import sys,json; json.dump([x['filename'] for x in json.load(sys.stdin).get('files',[])], open('$SEEN','w'), indent=2)" || true
 }
 
-# Idle gate: flock held by live pulse (includes cursor-agent run)
-if [[ -f "$LOCK" ]]; then
-  if flock -n "$LOCK" -c "true" 2>/dev/null; then
-    rm -f "$LOCK"
-  else
-    log "skip: pulse lock held ($LOCK)"
-    exit 2
-  fi
+# Idle gate: atomic directory lock held for the full pulse, including cursor-agent.
+if [[ -f "$LOCK" && ! -d "$LOCK_DIR" ]]; then
+  log "clearing legacy pulse lock file ($LOCK)"
+  rm -f "$LOCK"
 fi
+_acquire_lock
 
 log "pulse start dry_run=$DRY_RUN"
 
@@ -81,9 +113,6 @@ fi
 PROMPT="Follow $AGENT_CARD — execute ONE $PICK_ROLE job ($PICK_ID) from mac_job_queue / inbox. PT learn+dream, push main."
 
 log "cursor-agent start role=$PICK_ROLE job=$PICK_ID"
-(
-  flock -x 9
-  cursor-agent --print --model composer-2.5 "$PROMPT" >>"$LOG" 2>&1 || log "cursor-agent exit=$?"
-) 9>"$LOCK"
+cursor-agent --print --model composer-2.5 "$PROMPT" >>"$LOG" 2>&1 || log "cursor-agent exit=$?"
 
 log "pulse end"
