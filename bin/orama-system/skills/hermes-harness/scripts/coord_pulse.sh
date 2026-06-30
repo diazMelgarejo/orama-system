@@ -12,6 +12,7 @@ SEEN="${LOG_DIR}/last_pulse_seen.json"
 LOG="${LOG_DIR}/coord-pulse.log"
 MAC_QUEUE="$ORAMA/bin/orama-system/skills/hermes-harness/scripts/mac_job_queue.py"
 LAN_SESSION="$ORAMA/bin/orama-system/skills/hermes-harness/scripts/lan_peer_session.py"
+DUAL_DISPATCH="$ORAMA/bin/orama-system/skills/hermes-harness/scripts/dual_path_dispatch.py"
 DRY_RUN=0
 
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
@@ -116,25 +117,26 @@ if [[ "$GATE_STATUS" != "actionable" ]]; then
   exit 0
 fi
 
-if [[ "$DRY_RUN" -eq 1 ]]; then
-  log "dry-run: would invoke cursor-agent role=$PICK_ROLE job=$PICK_ID"
-  log "pulse end"
-  exit 0
-fi
-
-if ! command -v cursor-agent >/dev/null 2>&1; then
-  log "skip: cursor-agent not on PATH"
-  log "pulse end"
-  exit 0
-fi
-
 AGENT_CARD="$ORAMA/.cursor/agents/mac-orchestrator-queue.md"
 if [[ "$PICK_ROLE" == "researcher" ]]; then
   AGENT_CARD="$ORAMA/.cursor/agents/win-autoresearcher-queue.md"
 fi
-PROMPT="Follow $AGENT_CARD — execute ONE $PICK_ROLE job ($PICK_ID) from mac_job_queue / inbox. PT learn+dream, push main."
 
-log "cursor-agent start role=$PICK_ROLE job=$PICK_ID"
-cursor-agent --print --model composer-2.5 "$PROMPT" >>"$LOG" 2>&1 || log "cursor-agent exit=$?"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  python3 "$DUAL_DISPATCH" --dry-run --role "$PICK_ROLE" --job-id "$PICK_ID" --agent-card "$AGENT_CARD" >>"$LOG" 2>&1 || true
+  log "dry-run: would invoke dual dispatch role=$PICK_ROLE job=$PICK_ID"
+  log "pulse end"
+  exit 0
+fi
+
+if [[ ! -f "$DUAL_DISPATCH" ]]; then
+  log "skip: dual dispatch helper missing: $DUAL_DISPATCH"
+  log "pulse end"
+  exit 0
+fi
+
+log "dual dispatch start role=$PICK_ROLE job=$PICK_ID"
+python3 "$DUAL_DISPATCH" --role "$PICK_ROLE" --job-id "$PICK_ID" --agent-card "$AGENT_CARD" >>"$LOG" 2>&1 \
+  || log "dual dispatch failed role=$PICK_ROLE job=$PICK_ID"
 
 log "pulse end"
