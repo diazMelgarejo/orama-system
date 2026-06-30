@@ -372,7 +372,7 @@
       "lmstudio-win": {
         "api": "openai-completions",
         "apiKey": "lm-studio",
-        "baseUrl": "http://192.168.254.102:1234/v1",
+        "baseUrl": "http://192.168.9.18:1234/v1",
         "models": [
           {
             "id": "gemma-4-26b-a4b-it",
