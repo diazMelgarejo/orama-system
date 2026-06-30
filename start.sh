@@ -18,6 +18,8 @@
 #   ./start.sh --discover  — re-run path discovery, rewrite .paths, exit
 #   ./start.sh --hardware-policy — validate model↔hardware affinity and exit
 #   ./start.sh --lan-peer    — LAN-bind PT/orama/Portal + run peer probe after start
+#   ./start.sh --install-coord-pulse — install the 15-minute Mac coord pulse
+#   ./start.sh --coord-pulse-status  — show Mac coord pulse launchd status
 #
 # Path config: .paths (gitignored, auto-generated, user-editable)
 # Template:    .paths.example
@@ -61,6 +63,66 @@ _var()   {
   local src_tag="${src:+  ← ${src}}"
   _debug "$stage" "${name}=${val}${src_tag}"
 }
+
+# ── argument parsing: match platform/windows/start.ps1 flag parity ────────────
+
+NO_OPEN=0
+STOP_ONLY=0
+STATUS_ONLY=0
+DISCOVER_ONLY=0
+HARDWARE_POLICY_ONLY=0
+INSTALL_NETWORK_WATCHER=0
+INSTALL_COORD_PULSE=0
+COORD_PULSE_STATUS=0
+_LAN_PEER_MODE=0
+
+_usage() {
+  cat <<'USAGE'
+Usage: ./start.sh [options]
+
+Options:
+  --no-open              Start services without opening the Portal browser.
+  --stop                 Stop PT, orama, and Portal services.
+  --status               Show service status and hardware policy.
+  --discover             Re-run path discovery, rewrite .paths, and exit.
+  --hardware-policy      Validate model/hardware affinity and exit.
+  --lan-peer             LAN-bind services, probe the peer, and ensure Mac coord pulse.
+  --profile=NAME         Activate an OpenClaw profile before startup.
+  --with-mcp             Register/start the orama-swarm MCP endpoint.
+  --no-mcp               Disable MCP registration for this run.
+  --no-ollama            Skip Ollama auto-start and warm-up.
+  --install-watcher      Install the macOS network-change watcher.
+  --install-coord-pulse  Install the macOS 15-minute coord pulse and exit.
+  --coord-pulse-status   Show coord pulse scheduler status and exit.
+  --no-coord-pulse       Do not auto-install coord pulse during --lan-peer.
+  --help                 Show this help.
+USAGE
+}
+
+for _arg in "$@"; do
+  case "$_arg" in
+    --no-open)             NO_OPEN=1 ;;
+    --stop)                STOP_ONLY=1 ;;
+    --status)              STATUS_ONLY=1 ;;
+    --discover)            DISCOVER_ONLY=1 ;;
+    --hardware-policy)     HARDWARE_POLICY_ONLY=1 ;;
+    --lan-peer)            _LAN_PEER_MODE=1 ;;
+    --profile=*)           export OPENCLAW_PROFILE="${_arg#--profile=}" ;;
+    --with-mcp)            export WITH_MCP=1 ;;
+    --no-mcp)              export WITH_MCP=0 ;;
+    --no-ollama)           export OLLAMA_AUTO_START=0 ;;
+    --install-watcher)     INSTALL_NETWORK_WATCHER=1 ;;
+    --install-coord-pulse) INSTALL_COORD_PULSE=1 ;;
+    --coord-pulse-status)  COORD_PULSE_STATUS=1 ;;
+    --no-coord-pulse)      export ORAMA_COORD_PULSE=0 ;;
+    --help|-h)             _usage; exit 0 ;;
+    *)
+      _err "args" "unknown argument: $_arg"
+      _usage
+      exit 2
+      ;;
+  esac
+done
 
 # ── path resolution: .paths → git siblings → hardcoded sibling default ─────────
 
@@ -133,6 +195,99 @@ else
   _info "path" "PT_DIR=${PT_DIR}"
 fi
 
+PT_PORT=${PT_PORT:-8000}
+US_PORT=${US_PORT:-8001}
+PORTAL_PORT=${PORTAL_PORT:-8002}
+
+pid_on_port() {
+  # Cross-platform: listeners only (ignore outbound/CLOSE_WAIT clients on the port)
+  if command -v lsof &>/dev/null; then
+    lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1 || true
+  elif command -v ss &>/dev/null; then
+    ss -tlnp "sport = :$1" 2>/dev/null | grep -oP 'pid=\K\d+' | head -1 || true
+  elif command -v fuser &>/dev/null; then
+    fuser "$1/tcp" 2>/dev/null | awk '{print $1}' | head -1 || true
+  fi
+}
+
+run_hardware_policy_check() {
+  local cli="${PT_DIR}/scripts/hardware_policy_cli.py"
+  if [ -n "${PT_DIR:-}" ] && [ -f "$cli" ]; then
+    echo ""
+    echo "=== Hardware model affinity policy ==="
+    PYTHONPATH="${PT_DIR}" "$PT_PYTHON" "$cli" --list || true
+    echo ""
+    PYTHONPATH="${PT_DIR}" "$PT_PYTHON" "$cli" --check-openclaw
+  else
+    _warn "policy" "hardware policy helper not found at ${cli:-unknown}"
+    return 1
+  fi
+}
+
+if [ "$HARDWARE_POLICY_ONLY" = "1" ]; then
+  run_hardware_policy_check
+  exit $?
+fi
+
+if [ "$STOP_ONLY" = "1" ]; then
+  echo "Stopping orama-system services..."
+  for port in $PT_PORT $US_PORT $PORTAL_PORT; do
+    pid=$(pid_on_port "$port")
+    if [ -n "$pid" ]; then
+      kill "$pid" 2>/dev/null && echo "  killed PID $pid (:$port)" || true
+    else
+      echo "  nothing on :$port"
+    fi
+  done
+  exit 0
+fi
+
+if [ "$STATUS_ONLY" = "1" ]; then
+  echo "── service status ───────────────────────────────────────────────────"
+  for entry in "PT:$PT_PORT" "orama:$US_PORT" "Portal:$PORTAL_PORT"; do
+    label="${entry%%:*}"
+    port="${entry#*:}"
+    pid="$(pid_on_port "$port")"
+    if [ -n "$pid" ]; then
+      printf "  %-8s :%-5s  UP    (PID %s)\n" "$label" "$port" "$pid"
+    else
+      printf "  %-8s :%-5s  DOWN\n" "$label" "$port"
+    fi
+  done
+  run_hardware_policy_check || true
+  if [ "$(uname -s 2>/dev/null || echo Unknown)" = "Darwin" ] && [ -f "$SCRIPT_DIR/scripts/install_coord_pulse.sh" ]; then
+    bash "$SCRIPT_DIR/scripts/install_coord_pulse.sh" --status || true
+  fi
+  echo ""
+  exit 0
+fi
+
+if [ "$COORD_PULSE_STATUS" = "1" ]; then
+  if [ -f "$SCRIPT_DIR/scripts/install_coord_pulse.sh" ]; then
+    PERPETUA_TOOLS_ROOT="${PT_DIR:-}" PERPETUA_TOOLS_PATH="${PT_DIR:-}" \
+      bash "$SCRIPT_DIR/scripts/install_coord_pulse.sh" --status
+  else
+    _warn "coord-pulse" "installer missing: $SCRIPT_DIR/scripts/install_coord_pulse.sh"
+    exit 1
+  fi
+  exit $?
+fi
+
+if [ "$INSTALL_COORD_PULSE" = "1" ]; then
+  if [ "$(uname -s 2>/dev/null || echo Unknown)" != "Darwin" ]; then
+    _warn "coord-pulse" "launchd coord pulse is macOS-only; Linux can run coord_pulse.sh from cron"
+    exit 1
+  fi
+  if [ ! -f "$SCRIPT_DIR/scripts/install_coord_pulse.sh" ]; then
+    _warn "coord-pulse" "installer missing: $SCRIPT_DIR/scripts/install_coord_pulse.sh"
+    exit 1
+  fi
+  PERPETUA_TOOLS_ROOT="${PT_DIR:-}" PERPETUA_TOOLS_PATH="${PT_DIR:-}" \
+    COORD_PULSE_INTERVAL_SEC="${COORD_PULSE_INTERVAL_SEC:-900}" \
+    bash "$SCRIPT_DIR/scripts/install_coord_pulse.sh"
+  exit $?
+fi
+
 # ── Symlink Validation (from 1675ab4 — auto-repair PT sibling symlinks) ──────
 # Ensures network_autoconfig.py and lib/shared/agentic_stack are wired to live
 # PT paths. Uses relative path calculation so symlinks survive directory moves.
@@ -202,7 +357,7 @@ if [ -n "${PT_DIR:-}" ]; then
 fi
 
 # Write .paths on first run (or if --discover requested)
-if [ ! -f "$PATHS_FILE" ] || [[ "${1:-}" == "--discover" ]]; then
+if [ ! -f "$PATHS_FILE" ] || [ "$DISCOVER_ONLY" = "1" ]; then
   cat > "$PATHS_FILE" << PATHSEOF
 # .paths — auto-generated by ./start.sh on $(date '+%Y-%m-%d %H:%M:%S')
 # Edit to override. See .paths.example for documentation.
@@ -213,16 +368,10 @@ PT_PYTHON="${PT_PYTHON}"
 US_PYTHON="${US_PYTHON}"
 PATHSEOF
   echo "  Paths written to .paths (gitignored)"
-  [[ "${1:-}" == "--discover" ]] && exit 0
+  [ "$DISCOVER_ONLY" = "1" ] && exit 0
 fi
 
 # ── --lan-peer (enable LAN bind before host resolution) ───────────────────────
-_LAN_PEER_MODE=0
-for _early in "$@"; do
-  case "$_early" in
-    --lan-peer) _LAN_PEER_MODE=1 ;;
-  esac
-done
 if [ "$_LAN_PEER_MODE" = "1" ]; then
   export PT_BIND_LAN="${PT_BIND_LAN:-1}"
   export ORAMA_BIND_LAN="${ORAMA_BIND_LAN:-1}"
@@ -326,29 +475,31 @@ _run_lan_peer_probe() {
   }
 }
 
-LOG_DIR="$SCRIPT_DIR/.logs"
-mkdir -p "$LOG_DIR"
-
-# ── Hardware policy check (existing CLI surface; helper lives in PT) ──────────
-
-run_hardware_policy_check() {
-  local cli="${PT_DIR}/scripts/hardware_policy_cli.py"
-  if [ -n "${PT_DIR:-}" ] && [ -f "$cli" ]; then
-    echo ""
-    echo "=== Hardware model affinity policy ==="
-    PYTHONPATH="${PT_DIR}" "$PT_PYTHON" "$cli" --list || true
-    echo ""
-    PYTHONPATH="${PT_DIR}" "$PT_PYTHON" "$cli" --check-openclaw
-  else
-    _warn "policy" "hardware policy helper not found at ${cli:-unknown}"
-    return 1
+_run_discover_force_with_timeout() {
+  local seconds="$1"
+  if command -v timeout >/dev/null 2>&1; then
+    timeout "$seconds" "$US_PYTHON" "$_DISCOVER_SCRIPT" --force
+    return $?
   fi
+  if command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "$seconds" "$US_PYTHON" "$_DISCOVER_SCRIPT" --force
+    return $?
+  fi
+  python3 - "$seconds" "$US_PYTHON" "$_DISCOVER_SCRIPT" <<'PY'
+import subprocess
+import sys
+
+seconds = float(sys.argv[1])
+cmd = [sys.argv[2], sys.argv[3], "--force"]
+try:
+    raise SystemExit(subprocess.run(cmd, timeout=seconds).returncode)
+except subprocess.TimeoutExpired:
+    raise SystemExit(124)
+PY
 }
 
-if [[ "${1:-}" == "--hardware-policy" ]]; then
-  run_hardware_policy_check
-  exit $?
-fi
+LOG_DIR="$SCRIPT_DIR/.logs"
+mkdir -p "$LOG_DIR"
 
 # ── hard requirements probe (fail closed on Ollama + models) ─────────────────
 # Runs before any service logic. Idempotent — fast when already satisfied.
@@ -438,7 +589,7 @@ fi
 _DISCOVER_SCRIPT="$HOME/.openclaw/scripts/discover.py"
 if [ -f "$_DISCOVER_SCRIPT" ]; then
   _info "ip" "probing LAN topology (discover.py --force)..."
-  if timeout 30 "$US_PYTHON" "$_DISCOVER_SCRIPT" --force \
+  if _run_discover_force_with_timeout 30 \
        2>&1 | tee -a "$LOG_DIR/startup-$(date +%Y%m%d).log" | sed 's/^/  [discover] /'; then
     _info "ip" "LAN probe complete — openclaw.json is up to date"
   else
@@ -913,6 +1064,45 @@ p.write_text(json.dumps(c,indent=2))
   fi
 }
 
+_coord_pulse_script() {
+  printf '%s\n' "$SCRIPT_DIR/scripts/install_coord_pulse.sh"
+}
+
+_coord_pulse_status() {
+  local installer; installer="$(_coord_pulse_script)"
+  if [ ! -f "$installer" ]; then
+    _warn "coord-pulse" "installer missing: $installer"
+    return 1
+  fi
+  if [ "${_OS_NAME:-$(uname -s 2>/dev/null || echo Unknown)}" != "Darwin" ]; then
+    _warn "coord-pulse" "launchd coord pulse is macOS-only; Linux can run coord_pulse.sh from cron"
+    return 1
+  fi
+  PERPETUA_TOOLS_ROOT="${PT_DIR:-}" PERPETUA_TOOLS_PATH="${PT_DIR:-}" \
+    bash "$installer" --status
+}
+
+_ensure_coord_pulse() {
+  local reason="${1:-startup}"
+  local installer; installer="$(_coord_pulse_script)"
+  if [ "${ORAMA_COORD_PULSE:-1}" = "0" ]; then
+    _info "coord-pulse" "auto-install disabled (ORAMA_COORD_PULSE=0)"
+    return 0
+  fi
+  if [ ! -f "$installer" ]; then
+    _warn "coord-pulse" "installer missing: $installer"
+    return 1
+  fi
+  if [ "${_OS_NAME:-$(uname -s 2>/dev/null || echo Unknown)}" != "Darwin" ]; then
+    _info "coord-pulse" "non-macOS host; use cron or the Windows Task Scheduler counterpart"
+    return 0
+  fi
+  _info "coord-pulse" "ensuring 15-minute Mac coord pulse (${reason})"
+  PERPETUA_TOOLS_ROOT="${PT_DIR:-}" PERPETUA_TOOLS_PATH="${PT_DIR:-}" \
+    COORD_PULSE_INTERVAL_SEC="${COORD_PULSE_INTERVAL_SEC:-900}" \
+    bash "$installer" 2>&1 | while IFS= read -r line; do _info "coord-pulse" "$line"; done
+}
+
 # ── graceful shutdown ──────────────────────────────────────────────────────────
 # SIGTERM/SIGINT handler.  Sends USR1 to orama engine to flush gossip/context
 # to SQLite, then stops MCP server and all three services.
@@ -969,7 +1159,16 @@ _print_banner() {
     if command -v nc &>/dev/null; then
       nc -z -w 1 "$host" "$port" >/dev/null 2>&1
     else
-      timeout 1 bash -c "(echo >/dev/tcp/${host}/${port})" 2>/dev/null
+      python3 - "$host" "$port" <<'PY' >/dev/null 2>&1
+import socket
+import sys
+
+try:
+    with socket.create_connection((sys.argv[1], int(sys.argv[2])), timeout=1):
+        pass
+except OSError:
+    raise SystemExit(1)
+PY
     fi
   }
   ( _nc_probe localhost   1234  && echo 1 || echo 0 ) > "$_mac_f" &
@@ -1021,55 +1220,6 @@ _print_banner() {
   echo "╚══════════════════════════════════════════════════════════════════╝"
   echo ""
 }
-
-# ── argument pre-processing ──────────────────────────────────────────────────
-# Scan all positional args for flags that co-exist with --stop/--status/--no-open.
-# Sets OPENCLAW_PROFILE, WITH_MCP, OLLAMA_AUTO_START without consuming $@
-# (the existing ${1:-} checks below still work unchanged).
-
-for _prearg in "$@"; do
-  case "$_prearg" in
-    --profile=*)      export OPENCLAW_PROFILE="${_prearg#--profile=}" ;;
-    --with-mcp)       export WITH_MCP=1 ;;
-    --no-mcp)         export WITH_MCP=0 ;;
-    --no-ollama)      export OLLAMA_AUTO_START=0 ;;
-    --install-watcher) export INSTALL_NETWORK_WATCHER=1 ;;
-    --lan-peer)       export _LAN_PEER_MODE=1 ;;
-  esac
-done
-
-# ── --stop ────────────────────────────────────────────────────────────────────
-
-if [[ "${1:-}" == "--stop" ]]; then
-  echo "Stopping orama-system services..."
-  for port in $PT_PORT $US_PORT $PORTAL_PORT; do
-    pid=$(pid_on_port "$port")
-    if [ -n "$pid" ]; then
-      kill "$pid" 2>/dev/null && echo "  killed PID $pid (:$port)" || true
-    else
-      echo "  nothing on :$port"
-    fi
-  done
-  exit 0
-fi
-
-# ── --status ──────────────────────────────────────────────────────────────────
-
-if [[ "${1:-}" == "--status" ]]; then
-  _print_banner
-  echo "── service status ───────────────────────────────────────────────────"
-  for port in $PT_PORT $US_PORT $PORTAL_PORT; do
-    pid=$(pid_on_port "$port")
-    if [ -n "$pid" ]; then
-      printf "  %-8s :%-5s  ● UP    (PID %s)\n" "" "$port" "$pid"
-    else
-      printf "  %-8s :%-5s  ○ DOWN\n" "" "$port"
-    fi
-  done
-  run_hardware_policy_check || true
-  echo ""
-  exit 0
-fi
 
 # ── start services ────────────────────────────────────────────────────────────
 
@@ -1138,6 +1288,10 @@ echo ""
 _register_mcp_endpoints
 
 if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
+  _ensure_coord_pulse "--lan-peer" || true
+fi
+
+if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
   _run_lan_peer_probe || true
 fi
 
@@ -1152,6 +1306,6 @@ elif ! launchctl list 2>/dev/null | grep -q "com.orama.network-watch"; then
   _warn "watcher" "Without it, IP changes after power cycle require manual ./start.sh --discover"
 fi
 
-if [[ "${1:-}" != "--no-open" ]]; then
+if [ "$NO_OPEN" != "1" ]; then
   open_browser "$PORTAL_URL"
 fi
