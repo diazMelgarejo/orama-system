@@ -16,7 +16,8 @@
         "google/gemini-3.1-flash-lite-preview": {},
         "google/gemini-3.1-flash-lite-preview-FALL": {},
         "google/gemini-3.1-pro-preview": {},
-        "google/gemini-3.1-pro-preview-FALL": {}
+        "google/gemini-3.1-pro-preview-FALL": {},
+        "bigmodel/glm-5.2": {}
       },
       "thinkingDefault": "off",
       "workspace": "${HOME}/.openclaw/agents/default"
@@ -300,6 +301,24 @@
             "id": "google/gemini-2.5-flash-lite",
             "maxTokens": 32768,
             "name": "Gemini 2.5 Flash Lite"
+          }
+        ]
+      },
+      "bigmodel": {
+        "api": "openai-completions",
+        "apiKey": "${env:OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY}",
+        "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+        "models": [
+          {
+            "id": "glm-5.2",
+            "name": "GLM-5.2 (BigModel, thinking)",
+            "contextWindow": 131072,
+            "maxTokens": 65536,
+            "reasoning": true,
+            "cost": {
+              "input": 0,
+              "output": 0
+            }
           }
         ]
       },
