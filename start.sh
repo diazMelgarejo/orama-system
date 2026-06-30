@@ -478,6 +478,15 @@ _run_lan_peer_probe() {
   }
 }
 
+_lan_peer_session() {
+  local session="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/lan_peer_session.py"
+  if [ ! -f "$session" ]; then
+    _warn "lan-peer" "session state script missing: $session"
+    return 0
+  fi
+  "$US_PYTHON" "$session" "$@"
+}
+
 _flush_lan_peer_outbox() {
   local assign="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py"
   if [ ! -f "$assign" ]; then
@@ -1300,8 +1309,15 @@ if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
 fi
 
 if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
-  _run_lan_peer_probe || true
-  _flush_lan_peer_outbox || true
+  if ! _lan_peer_session should-retry >/dev/null; then
+    _warn "lan-peer" "macOS-only degraded mode active; next Windows peer retry waits for LAN_PEER_DEGRADED_RETRY_SECONDS=${LAN_PEER_DEGRADED_RETRY_SECONDS:-900}"
+  elif _run_lan_peer_probe; then
+    _lan_peer_session record-success >/dev/null || true
+    _flush_lan_peer_outbox || true
+  else
+    _lan_peer_session record-failure --error "probe_lan_peer.py failed" >/dev/null || true
+    _warn "lan-peer" "skipping outbox flush until peer portal probe passes"
+  fi
 fi
 
 # ── network watcher install (--install-watcher flag or first-time setup) ──────
