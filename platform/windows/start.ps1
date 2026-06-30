@@ -48,6 +48,11 @@ $Status = $false
 $Discover = $false
 $HardwarePolicy = $false
 $LanPeer = $false
+$WithMcp = $false
+$NoMcp = $false
+$NoOllama = $false
+$InstallWatcher = $false
+$OpenClawProfile = $null
 
 foreach ($a in $args) {
     switch ($a) {
@@ -63,14 +68,27 @@ foreach ($a in $args) {
         '-HardwarePolicy'    { $HardwarePolicy = $true }
         '--lan-peer'         { $LanPeer = $true }
         '-LanPeer'           { $LanPeer = $true }
-        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --discover --hardware-policy --lan-peer" }
+        '--with-mcp'         { $WithMcp = $true; $NoMcp = $false }
+        '--no-mcp'           { $NoMcp = $true; $WithMcp = $false }
+        '--no-ollama'        { $NoOllama = $true }
+        '--install-watcher'  { $InstallWatcher = $true }
+        { $_ -like '--profile=*' } { $OpenClawProfile = $a.Substring('--profile='.Length) }
+        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --discover --hardware-policy --lan-peer --with-mcp --no-mcp --no-ollama --profile=<name> --install-watcher" }
     }
 }
 
 # ── UTF-8 everywhere ──────────────────────────────────────────────────────────
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$env:PYTHONIOENCODING = 'utf-8'
-$env:PYTHONUTF8       = '1'
+$Utf8NoBom = New-Object System.Text.UTF8Encoding $false
+[Console]::InputEncoding  = $Utf8NoBom
+[Console]::OutputEncoding = $Utf8NoBom
+$OutputEncoding           = $Utf8NoBom
+$env:PYTHONIOENCODING     = 'utf-8'
+$env:PYTHONUTF8           = '1'
+
+if ($WithMcp) { $env:WITH_MCP = '1' }
+if ($NoMcp) { $env:WITH_MCP = '0' }
+if ($NoOllama) { $env:OLLAMA_AUTO_START = '0' }
+if ($OpenClawProfile) { $env:OPENCLAW_PROFILE = $OpenClawProfile }
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 $ScriptDir  = Split-Path -Parent $PSCommandPath
@@ -99,6 +117,85 @@ function _Log {
 function _Info  { _Log 'INFO ' $args[0] $args[1] }
 function _Warn  { _Log 'WARN ' $args[0] $args[1] }
 function _Err   { _Log 'ERROR' $args[0] $args[1] }
+
+function Get-GitBash {
+    if ($env:HERMES_GIT_BASH_PATH -and (Test-Path $env:HERMES_GIT_BASH_PATH)) {
+        return $env:HERMES_GIT_BASH_PATH
+    }
+    $candidates = @()
+    if (${env:ProgramFiles}) {
+        $candidates += (Join-Path ${env:ProgramFiles} 'Git\bin\bash.exe')
+        $candidates += (Join-Path ${env:ProgramFiles} 'Git\usr\bin\bash.exe')
+    }
+    if (${env:ProgramFiles(x86)}) {
+        $candidates += (Join-Path ${env:ProgramFiles(x86)} 'Git\bin\bash.exe')
+    }
+    foreach ($candidate in $candidates) {
+        if ($candidate -and (Test-Path $candidate)) { return $candidate }
+    }
+    $cmd = Get-Command bash.exe -ErrorAction SilentlyContinue
+    if ($cmd) { return $cmd.Source }
+    return $null
+}
+
+function Invoke-OptionalNative {
+    param(
+        [string]$Stage,
+        [string]$File,
+        [string[]]$Arguments = @(),
+        [switch]$Fatal
+    )
+    if (-not (Test-Path $File)) { return $false }
+    _Info $Stage "running $([IO.Path]::GetFileName($File)) $($Arguments -join ' ')"
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        if ($File.EndsWith('.ps1', [StringComparison]::OrdinalIgnoreCase)) {
+            & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $File @Arguments 2>&1 |
+                ForEach-Object { _Info $Stage $_ }
+        } else {
+            & $UsPython $File @Arguments 2>&1 | ForEach-Object { _Info $Stage $_ }
+        }
+        if ($LASTEXITCODE -ne 0) {
+            $msg = "$([IO.Path]::GetFileName($File)) exited $LASTEXITCODE"
+            if ($Fatal) { throw $msg }
+            _Warn $Stage $msg
+        }
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    return $true
+}
+
+function Invoke-OptionalBash {
+    param(
+        [string]$Stage,
+        [string]$Script,
+        [string[]]$Arguments = @(),
+        [switch]$Fatal
+    )
+    if (-not (Test-Path $Script)) { return $false }
+    $bash = Get-GitBash
+    if (-not $bash) {
+        _Warn $Stage "Git Bash not found; skipping $([IO.Path]::GetFileName($Script))"
+        return $false
+    }
+    _Info $Stage "running $([IO.Path]::GetFileName($Script)) via Git Bash"
+    $bashArgs = @('--noprofile', '--norc', $Script) + $Arguments
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $bash @bashArgs 2>&1 | ForEach-Object { _Info $Stage $_ }
+        if ($LASTEXITCODE -ne 0) {
+            $msg = "$([IO.Path]::GetFileName($Script)) exited $LASTEXITCODE"
+            if ($Fatal) { throw $msg }
+            _Warn $Stage $msg
+        }
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+    return $true
+}
 
 # ── Python detection ──────────────────────────────────────────────────────────
 function Get-BestPython {
@@ -192,6 +289,7 @@ function Get-BindHost {
 $PtPort     = if ($env:PT_PORT)     { [int]$env:PT_PORT }     else { 8000 }
 $UsPort     = if ($env:US_PORT)     { [int]$env:US_PORT }     else { 8001 }
 $PortalPort = if ($env:PORTAL_PORT) { [int]$env:PORTAL_PORT } else { 8002 }
+$McpPort    = if ($env:OPENCLAW_MCP_PORT) { [int]$env:OPENCLAW_MCP_PORT } else { 18790 }
 $PortalUrl  = "http://localhost:$PortalPort"
 
 if ($LanPeer) {
@@ -332,7 +430,7 @@ function Open-Browser {
 # ── --stop ────────────────────────────────────────────────────────────────────
 if ($Stop) {
     Write-Host 'Stopping orama-system services...'
-    foreach ($port in @($PtPort, $UsPort, $PortalPort)) {
+    foreach ($port in @($PtPort, $UsPort, $PortalPort, $McpPort)) {
         $listenerPid = Get-PidOnPort $port
         if ($listenerPid) {
             Stop-Process -Id $listenerPid -Force -ErrorAction SilentlyContinue
@@ -350,7 +448,8 @@ if ($Status) {
     foreach ($entry in @(
         @{Name='PT';     Port=$PtPort},
         @{Name='orama';  Port=$UsPort},
-        @{Name='Portal'; Port=$PortalPort}
+        @{Name='Portal'; Port=$PortalPort},
+        @{Name='MCP';    Port=$McpPort}
     )) {
         $listenerPid = Get-PidOnPort $entry.Port
         if ($listenerPid) {
@@ -363,6 +462,58 @@ if ($Status) {
     Write-Host ''
     exit 0
 }
+
+function Invoke-StartupPreflight {
+    if ($env:ORAMA_SKIP_ENSURE -ne '1') {
+        $ensurePs1 = Join-Path $RepoRoot 'scripts\ensure_requirements.ps1'
+        if (Test-Path $ensurePs1) {
+            Invoke-OptionalNative -Stage 'ensure' -File $ensurePs1 -Arguments @('-Quiet') -Fatal | Out-Null
+        } else {
+            Invoke-OptionalBash -Stage 'ensure' -Script (Join-Path $RepoRoot 'scripts\ensure_requirements.sh') -Arguments @('--quiet') -Fatal | Out-Null
+        }
+    } else {
+        _Info 'ensure' 'ORAMA_SKIP_ENSURE=1 - skipping hard requirements probe'
+    }
+
+    if ($env:ORAMA_SKIP_BOOTSTRAP -eq '1') {
+        _Info 'bootstrap' 'ORAMA_SKIP_BOOTSTRAP=1 - skipping optional startup bootstrap'
+        return
+    }
+
+    $partnerPaths = Join-Path $RepoRoot 'platform\windows\ensure-partner-cli-paths.ps1'
+    Invoke-OptionalNative -Stage 'partner' -File $partnerPaths | Out-Null
+
+    if ($InstallWatcher) {
+        Invoke-OptionalNative -Stage 'watcher' -File (Join-Path $RepoRoot 'scripts\install_coord_pulse.ps1') | Out-Null
+    }
+
+    $rag = Join-Path $RepoRoot 'scripts\ensure-rag-mcp.py'
+    if (Test-Path $rag) {
+        Invoke-OptionalNative -Stage 'mcp' -File $rag -Arguments @('--apply') | Out-Null
+    }
+
+    Invoke-OptionalBash -Stage 'openclaw' -Script (Join-Path $RepoRoot 'scripts\install-openclaw-skills.sh') | Out-Null
+    Invoke-OptionalBash -Stage 'skills' -Script (Join-Path $RepoRoot 'scripts\install-skills.sh') | Out-Null
+    Invoke-OptionalBash -Stage 'bootstrap' -Script (Join-Path $RepoRoot 'scripts\bootstrap-environment.sh') | Out-Null
+
+    $gbrainSelfHeal = Join-Path $RepoRoot 'scripts\gbrain\gbrain-selfheal.sh'
+    if (Test-Path $gbrainSelfHeal) {
+        $bash = Get-GitBash
+        if ($bash) {
+            _Info 'gbrain' 'starting gbrain-selfheal.sh in background'
+            Start-Process -FilePath $bash `
+                -ArgumentList @('--noprofile', '--norc', $gbrainSelfHeal) `
+                -WorkingDirectory $RepoRoot `
+                -RedirectStandardOutput (Join-Path $LogDir 'gbrain-selfheal.log') `
+                -RedirectStandardError (Join-Path $LogDir 'gbrain-selfheal.err.log') `
+                -WindowStyle Hidden | Out-Null
+        } else {
+            _Warn 'gbrain' 'Git Bash not found; skipping gbrain self-heal'
+        }
+    }
+}
+
+Invoke-StartupPreflight
 
 # ── LAN discovery (always fresh before IP resolution) ─────────────────────────
 function Invoke-DiscoverEndpoints {
@@ -385,10 +536,10 @@ function Invoke-DiscoverEndpoints {
     $discoverOutput = & $UsPython $discover --force 2>&1
     $discoverExit = $LASTEXITCODE
     $ErrorActionPreference = $prevEap
-    $discoverOutput | ForEach-Object { "  [discover] $_" } |
-        Tee-Object -FilePath (Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log") -Append
+    $startupLog = Join-Path $LogDir "startup-$(Get-Date -Format yyyyMMdd).log"
+    $discoverOutput | ForEach-Object { "  [discover] $_" } | Add-Content -Path $startupLog
     if ($discoverExit -ne 0) {
-        _Warn 'ip' "discover.py exited $discoverExit — continuing with discovery state / env"
+        _Warn 'ip' "discover.py exited $discoverExit — continuing with cached discovery state / env"
     } else {
         _Info 'ip' 'LAN probe complete'
     }
@@ -474,7 +625,7 @@ $env:WIN_IP = if ($env:WIN_IP) { $env:WIN_IP } else {
 $env:OLLAMA_MAC_ENDPOINT       = if ($env:OLLAMA_MAC_ENDPOINT)       { $env:OLLAMA_MAC_ENDPOINT }       elseif ($MacIp -notin @('unresolved','localhost','127.0.0.1')) { "http://${MacIp}:11434" } else { 'http://localhost:11434' }
 $env:OLLAMA_WINDOWS_ENDPOINT   = if ($env:OLLAMA_WINDOWS_ENDPOINT)   { $env:OLLAMA_WINDOWS_ENDPOINT }   else { 'http://localhost:11434' }
 $env:LM_STUDIO_MAC_ENDPOINT    = if ($env:LM_STUDIO_MAC_ENDPOINT)    { $env:LM_STUDIO_MAC_ENDPOINT }    elseif ($MacIp -notin @('unresolved','localhost','127.0.0.1')) { "http://${MacIp}:1234" } else { 'http://localhost:1234' }
-$env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { "http://$($env:WIN_IP):1234" }
+$env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { 'http://localhost:1234' }
 $env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
 $env:WINDOWS_IP                = $env:WIN_IP
 
@@ -566,6 +717,32 @@ Start-Service -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
            '--host', $PortalHost, '--port', $PortalPort.ToString()) `
     -EnvExtra @{ PYTHONPATH = $oramaPyPath }
 $null = Wait-ForPort $PortalPort 'Portal'
+
+function Start-McpEndpoints {
+    if ($env:WITH_MCP -ne '1') { return }
+    $openclaw = Get-Command openclaw -ErrorAction SilentlyContinue
+    if (-not $openclaw) {
+        _Warn 'mcp' 'openclaw not on PATH - MCP server not started'
+        return
+    }
+    $stalePid = Get-PidOnPort $McpPort
+    if ($stalePid) {
+        Stop-Process -Id $stalePid -Force -ErrorAction SilentlyContinue
+    }
+    $mcpLog = Join-Path $LogDir 'mcp.log'
+    _Info 'mcp' "starting orama-swarm MCP on port $McpPort"
+    $proc = Start-Process -FilePath $openclaw.Source `
+        -ArgumentList @('mcp', 'serve', '--port', $McpPort.ToString()) `
+        -WorkingDirectory $RepoRoot `
+        -RedirectStandardOutput $mcpLog `
+        -RedirectStandardError (Join-Path $LogDir 'mcp.err.log') `
+        -WindowStyle Hidden `
+        -PassThru
+    Set-Content -Path (Join-Path $LogDir 'mcp.pid') -Value $proc.Id -Encoding ASCII
+    _Info 'mcp' "MCP server PID $($proc.Id) listening on :$McpPort"
+}
+
+Start-McpEndpoints
 
 # ── Ready ─────────────────────────────────────────────────────────────────────
 Write-Host '── services ready ────────────────────────────────────────────────────'

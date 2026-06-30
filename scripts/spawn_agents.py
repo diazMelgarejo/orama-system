@@ -30,6 +30,7 @@ import asyncio
 import json
 import os
 import shutil
+import platform
 import subprocess
 import sys
 import time
@@ -41,19 +42,20 @@ from typing import Any, Dict, List, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
-# Resolve Win IP via shared resolver (openclaw.json → discovery state → PT tilting → env → subnet.103)
-# This avoids stale hardcoded IPs and works correctly whether called from start.sh or standalone.
-try:
-    import sys as _sys
-    _sys.path.insert(0, str(REPO_ROOT))
-    from utils.ip_resolver import get_win_lms_url as _get_win_lms_url
-    _WIN_LMS_DEFAULT = _get_win_lms_url()
-except Exception:
-    _WIN_LMS_DEFAULT = "http://192.168.254.105:1234"  # true last-resort
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
 LMS_MAC_ENDPOINT = os.getenv("LM_STUDIO_MAC_ENDPOINT", "http://localhost:1234")
-LMS_WIN_ENDPOINT = os.getenv("LM_STUDIO_WIN_ENDPOINTS", _WIN_LMS_DEFAULT).split(",")[0].strip()
+LMS_WIN_ENDPOINT = os.getenv("LM_STUDIO_WIN_ENDPOINTS", "http://localhost:1234").split(",")[0].strip()
 LMS_API_KEY = os.getenv("LM_STUDIO_API_TOKEN", "lm-studio")
+LMS_WIN_MODEL = os.getenv(
+    "LM_STUDIO_WIN_MODEL",
+    "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
+)
 
 OLLAMA_MAC_ENDPOINT = os.getenv("OLLAMA_MAC_ENDPOINT", "http://127.0.0.1:11434")
 MANAGER_MODEL = os.getenv("MANAGER_MODEL", "qwen3.5:9b-nvfp4")
@@ -176,6 +178,33 @@ def discover_agents() -> Dict[str, AgentInfo]:
         detail=LMS_WIN_ENDPOINT,
     )
 
+    # ── Cursor Agent ───────────────────────────────────────────────────────────
+    cursor_bin = shutil.which("cursor-agent") or shutil.which("cursor-agent.ps1")
+    if cursor_bin:
+        ok, ver = _probe_cli(["powershell", "-Command", "cursor-agent --version"]) if cursor_bin.endswith(".ps1") else _probe_cli([cursor_bin, "--version"])
+    else:
+        ok, ver = False, ""
+    agents["cursor"] = AgentInfo(
+        name="Cursor Agent",
+        kind="cli",
+        available=ok,
+        version=ver,
+        detail=cursor_bin if ok else "not found",
+    )
+
+    hermes_bin = _find_hermes()
+    if hermes_bin:
+        ok, ver = _probe_cli([hermes_bin, "--version"])
+    else:
+        ok, ver = False, ""
+    agents["hermes-lmstudio-win"] = AgentInfo(
+        name="Hermes LM Studio Win",
+        kind="cli",
+        available=ok,
+        version=ver,
+        detail=hermes_bin if ok else "not found",
+    )
+
     return agents
 
 
@@ -193,8 +222,6 @@ async def _dispatch_codex(task: str, context_file: Optional[Path] = None) -> Dic
 
     This makes Codex fully automatable — no human terminal required.
     """
-    import pty, select, fcntl, termios
-
     codex_bin = shutil.which("codex") or "/opt/homebrew/bin/codex"
     if not os.path.exists(codex_bin):
         return {"ok": False, "output": "Codex not found. Run scripts/setup_codex.sh", "elapsed": 0}
@@ -206,6 +233,31 @@ async def _dispatch_codex(task: str, context_file: Optional[Path] = None) -> Dic
 
     cmd = [codex_bin, "--full-auto", task_with_ctx]
     t0 = time.time()
+
+    if os.name == "nt":
+        def _run_plain() -> tuple[int, str]:
+            proc = subprocess.run(
+                cmd,
+                input="",
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                cwd=str(REPO_ROOT),
+                timeout=300,
+            )
+            return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+        try:
+            loop = asyncio.get_event_loop()
+            rc, output = await loop.run_in_executor(None, _run_plain)
+            return {"ok": rc == 0, "output": output, "elapsed": time.time() - t0}
+        except subprocess.TimeoutExpired:
+            return {"ok": False, "output": "Codex timed out (5min)", "elapsed": time.time() - t0}
+        except Exception as exc:
+            return {"ok": False, "output": str(exc), "elapsed": time.time() - t0}
+
+    import pty, select, fcntl, termios
 
     def _run_with_pty() -> tuple[int, str]:
         """Run codex in a PTY, collect all output, return (returncode, output)."""
@@ -377,6 +429,134 @@ async def _get_lmstudio_model(endpoint: str) -> str:
     return "default"
 
 
+async def _dispatch_cursor(task: str) -> Dict[str, Any]:
+    """Run cursor-agent on a task. Returns {ok, output, elapsed}."""
+    cursor_bin = shutil.which("cursor-agent") or shutil.which("cursor-agent.ps1")
+    if not cursor_bin:
+        return {"ok": False, "output": "Cursor Agent not found.", "elapsed": 0}
+
+    t0 = time.time()
+    try:
+        if cursor_bin.endswith(".ps1"):
+            proc = await asyncio.create_subprocess_exec(
+                "powershell", "-ExecutionPolicy", "Bypass", "-File", cursor_bin, "--task", task,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=str(REPO_ROOT),
+            )
+        else:
+            proc = await asyncio.create_subprocess_exec(
+                cursor_bin, "--task", task,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.STDOUT,
+                cwd=str(REPO_ROOT),
+            )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+        elapsed = time.time() - t0
+        output = stdout.decode("utf-8", errors="replace")
+        return {"ok": proc.returncode == 0, "output": output, "elapsed": elapsed}
+    except asyncio.TimeoutError:
+        return {"ok": False, "output": "Cursor Agent timed out (5min)", "elapsed": time.time() - t0}
+    except Exception as exc:
+        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0}
+
+
+def _find_hermes() -> Optional[str]:
+    hermes_bin = shutil.which("hermes")
+    if hermes_bin:
+        return hermes_bin
+    local_appdata = os.getenv("LOCALAPPDATA")
+    if local_appdata:
+        scripts_dir = Path(local_appdata) / "hermes" / "hermes-agent" / "venv" / "Scripts"
+        for name in ("hermes.exe", "hermes"):
+            candidate = scripts_dir / name
+            if candidate.exists():
+                return str(candidate)
+    hermes_home = os.getenv("HERMES_HOME")
+    if hermes_home:
+        for rel in (
+            Path("hermes-agent") / "venv" / "Scripts" / "hermes.exe",
+            Path("hermes-agent") / "venv" / "bin" / "hermes",
+        ):
+            candidate = Path(hermes_home) / rel
+            if candidate.exists():
+                return str(candidate)
+    return None
+
+
+async def _dispatch_hermes_lmstudio_win(task: str) -> Dict[str, Any]:
+    """Run Hermes against the Windows LM Studio provider."""
+    hermes_bin = _find_hermes()
+    if not hermes_bin:
+        return {"ok": False, "output": "Hermes CLI not found.", "elapsed": 0}
+
+    env = os.environ.copy()
+    env.setdefault("LM_STUDIO_API_TOKEN", LMS_API_KEY)
+    env.setdefault("LM_STUDIO_WIN_ENDPOINTS", LMS_WIN_ENDPOINT)
+    t0 = time.time()
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            hermes_bin,
+            "chat",
+            "-Q",
+            "-q",
+            task,
+            "--model",
+            LMS_WIN_MODEL,
+            "--provider",
+            "lmstudio-win",
+            "--yolo",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.STDOUT,
+            cwd=str(REPO_ROOT),
+            env=env,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+        output = stdout.decode("utf-8", errors="replace")
+        return {"ok": proc.returncode == 0, "output": output, "elapsed": time.time() - t0}
+    except asyncio.TimeoutError:
+        return {"ok": False, "output": "Hermes LM Studio timed out (5min)", "elapsed": time.time() - t0}
+    except Exception as exc:
+        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0}
+
+
+async def _dispatch_race(task: str) -> Dict[str, Any]:
+    """Race cursor-agent and Hermes+LM Studio Win. First successful completion wins."""
+    t0 = time.time()
+
+    racers = {
+        "cursor": asyncio.create_task(_dispatch_cursor(task)),
+        "hermes-lmstudio-win": asyncio.create_task(_dispatch_hermes_lmstudio_win(task)),
+    }
+    pending = set(racers.values())
+    failures: Dict[str, str] = {}
+    while pending:
+        done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+        for completed_task in done:
+            name = next(k for k, v in racers.items() if v is completed_task)
+            res = completed_task.result()
+            if res.get("ok"):
+                for p in pending:
+                    p.cancel()
+                res["elapsed"] = time.time() - t0
+                res["output"] = f"[RACE WINNER: {name}]\n" + res["output"]
+                return res
+            failures[name] = res.get("output", "failed")
+
+    direct = await _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
+    if direct.get("ok"):
+        direct["elapsed"] = time.time() - t0
+        direct["output"] = "[RACE FALLBACK: direct-lmstudio-win]\n" + direct["output"]
+        return direct
+
+    failures["direct-lmstudio-win"] = direct.get("output", "failed")
+    return {
+        "ok": False,
+        "output": "All raced Windows agents failed: " + json.dumps(failures, indent=2),
+        "elapsed": time.time() - t0,
+    }
+
+
 # ── Orchestration ─────────────────────────────────────────────────────────────
 
 async def dispatch(agent_name: str, task: str, model: Optional[str] = None) -> Dict[str, Any]:
@@ -403,6 +583,15 @@ async def dispatch(agent_name: str, task: str, model: Optional[str] = None) -> D
         m = model or await _get_lmstudio_model(LMS_WIN_ENDPOINT)
         return await _dispatch_lmstudio(LMS_WIN_ENDPOINT, m, task, win_gpu=True)
 
+    elif agent_name == "cursor":
+        return await _dispatch_cursor(task)
+
+    elif agent_name == "hermes-lmstudio-win":
+        return await _dispatch_hermes_lmstudio_win(task)
+
+    elif agent_name == "race":
+        return await _dispatch_race(task)
+
     elif agent_name == "all":
         # Parallel: Codex + Gemini + Ollama Mac + LM Studio Mac (non-GPU-bound)
         # Sequential: LM Studio Win (GPU-bound, serialized by lock)
@@ -424,7 +613,7 @@ async def dispatch(agent_name: str, task: str, model: Optional[str] = None) -> D
         return {"ok": all_ok, "results": agents_out}
 
     else:
-        return {"ok": False, "output": f"Unknown agent: '{agent_name}'. Use: codex, gemini, lmstudio-mac, lmstudio-win, all"}
+        return {"ok": False, "output": f"Unknown agent: '{agent_name}'. Use: codex, gemini, ollama-mac, lmstudio-mac, lmstudio-win, hermes-lmstudio-win, cursor, race, all"}
 
 
 # ── Status report ─────────────────────────────────────────────────────────────
@@ -444,6 +633,20 @@ def print_status():
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+def status_payload() -> Dict[str, Any]:
+    agents = discover_agents()
+    return {
+        key: {
+            "name": ag.name,
+            "kind": ag.kind,
+            "available": ag.available,
+            "version": ag.version,
+            "detail": ag.detail,
+        }
+        for key, ag in agents.items()
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Dispatch tasks to AI coding agents (Codex, Gemini, LM Studio).",
@@ -454,7 +657,7 @@ def main():
     parser.add_argument(
         "--agent", "-a",
         default="codex",
-        choices=["codex", "gemini", "ollama-mac", "lmstudio-mac", "lmstudio-win", "all"],
+        choices=["codex", "gemini", "ollama-mac", "lmstudio-mac", "lmstudio-win", "hermes-lmstudio-win", "cursor", "race", "all"],
         help="Agent to dispatch (default: codex)",
     )
     parser.add_argument("--model", "-m", help="Optional model override for LM Studio agents")
@@ -463,7 +666,10 @@ def main():
     args = parser.parse_args()
 
     if args.status:
-        print_status()
+        if args.json_output:
+            print(json.dumps(status_payload(), indent=2))
+        else:
+            print_status()
         return
 
     if not args.task:

@@ -123,6 +123,15 @@ Win also has: `codex`, `agy`, lmstudio-win `:1234` — same read → run locally
 | Code review sections | assign topics | review assigned files |
 | Reply | `drop --peer` → Win | `drop --peer` → Mac |
 
+### `swarm_state.md` ownership (coord-021)
+
+| Host | Owns when | Updates via |
+|------|-----------|-------------|
+| **Mac** orchestrator | Evaluator / swarm runs **Mac-side** (Ollama, Mac researcher) | Direct write on Mac branch |
+| **Win** coder | Win GPU harness, bridge preflight, portal fixes | Inbox handoff → `drop --peer` with summary; Mac merges into shared state |
+
+SSH vs HTTP-local on `autoresearch_bridge` remains a known LAN gap; HTTP fast path tracked in PT post-#183 bridge. See `mac-ack-win-code-review.md`.
+
 ---
 
 ## 6. Self-improve gate
