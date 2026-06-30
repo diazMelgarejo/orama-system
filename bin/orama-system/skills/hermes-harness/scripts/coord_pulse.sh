@@ -77,6 +77,7 @@ if [[ -n "$PT" && -d "$PT/.git" ]]; then
 fi
 
 python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py" --json >>"$LOG" 2>&1 || true
+python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py" flush-outbox --peer >>"$LOG" 2>&1 || true
 
 GATE_JSON=$(python3 "$MAC_QUEUE" pulse-gate --seen-file "$SEEN" 2>>"$LOG" || echo '{"status":"error"}')
 GATE_STATUS=$(echo "$GATE_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','error'))" 2>/dev/null || echo "error")
