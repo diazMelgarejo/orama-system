@@ -25,6 +25,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPT_DIR.parents[4]
+
 
 class Status(str, Enum):
     PASS = "PASS"
@@ -53,6 +56,47 @@ def write_probe_result(payload: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def _parse_env_line(line: str) -> tuple[str, str] | None:
+    raw = line.strip()
+    if not raw or raw.startswith("#"):
+        return None
+    if raw.startswith("export "):
+        raw = raw[len("export ") :].strip()
+    if "=" not in raw:
+        return None
+    key, value = raw.split("=", 1)
+    key = key.strip()
+    if not key:
+        return None
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        value = value[1:-1]
+    return key, value
+
+
+def load_repo_env(root: Path = _REPO_ROOT) -> None:
+    """Load repo .env files for direct CLI use without overriding shell exports."""
+    values: dict[str, str] = {}
+    for name in (".env", ".env.local"):
+        path = root / name
+        if not path.is_file():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            parsed = _parse_env_line(line)
+            if parsed:
+                key, value = parsed
+                values[key] = value
+    for key, value in values.items():
+        os.environ.setdefault(key, value)
+
+
+load_repo_env()
 
 
 def load_discovery() -> dict[str, Any]:
