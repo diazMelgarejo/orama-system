@@ -49,6 +49,35 @@ prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the runtime 
 3. **No private imports:** never ship raw `~/.hermes`, secrets, personal memory, or account tokens.
 4. **Parallel to OpenClaw:** `openclaw-skills` owns OpenClaw config; this skill owns Hermes onboarding and partner prompts.
 
+## Persistent Pulse Cadence
+
+The Mac OpenClaw orchestrator stays persistent and self-resuming across gateway
+restarts via an `openclaw cron` job (`mac-orchestrator-pulse`), not a manual loop.
+
+- **Base heartbeat: every 15 minutes.** Probes the Win Hermes co-orchestrator +
+  Win coder (LM Studio) via `probe_lan_peer.py --json`, checks the LAN-peer job
+  queue (`lan_peer_assign.py list` / `list --peer`), and dispatches if both
+  sides are idle and work is queued.
+- **Fast loop while busy: self-reschedules to +5 minutes.** After a successful
+  dispatch, the pulse schedules a one-shot `openclaw cron add --at +5m` follow-up
+  that repeats the same check. Each successful dispatch re-arms the next +5m
+  follow-up; an idle check (nothing queued) lets the chain end naturally and
+  the base 15m heartbeat takes back over. This gives fast iteration while jobs
+  are flowing without polling every 15m when there is nothing to do.
+- **Failure handling:** retry a failing dispatch up to 10x with exponential
+  backoff (~5min cap), then log a FAILURE summary to
+  `Perpetua-Tools/.agent/memory/working/REVIEW_QUEUE.md` and stop — never
+  schedule a follow-up on failure, never crash the pulse or the gateway.
+- **Resumable by construction:** the job lives in `openclaw.json`'s
+  `.cron.jobs` (persisted config, not ephemeral state), so it survives gateway
+  restarts and resumes on its own — no manual re-arm needed.
+- **Setup/edit:** use `openclaw cron add` / `openclaw cron edit` — never hand-edit
+  `.cron.jobs` via `jq`; the job schema (`schedule.kind`/`everyMs`, `payload.kind`,
+  etc.) differs from what a raw JSON example might suggest and an invalid shape
+  silently breaks the live gateway (see `lesson_67ddcb4837f2` in PT's semantic
+  memory). Full cadence rationale + commands:
+  [`../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md`](../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md) § 11.
+
 ## Universal Invocation Protocol
 
 Hermes and OpenClaw are co-equal harness adapters over one canonical skill corpus.
