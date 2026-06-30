@@ -255,7 +255,65 @@ OpenClaw's cross-harness awareness comes from `openclaw.json` agents config. To 
 
 ---
 
-## 10. Key File Locations
+## 11. Persistent Pulse Cadence (Mac Orchestrator)
+
+The Mac OpenClaw orchestrator runs as a persistent `openclaw cron` job, not a
+manual loop. It survives gateway restarts (the job lives in `openclaw.json`'s
+`.cron.jobs`, which is durable config, not ephemeral state).
+
+**Base heartbeat — every 15 minutes:**
+
+```bash
+openclaw cron add --name "mac-orchestrator-pulse" --agent orchestrator \
+  --every "15m" --session isolated --light-context --timeout-seconds 600 \
+  --message "<pulse logic: probe peer, check queue, dispatch if idle+queued>"
+```
+
+**Fast loop while busy — self-reschedules to +5 minutes:**
+
+After a successful dispatch, the pulse schedules a one-shot follow-up instead
+of waiting for the next 15m tick:
+
+```bash
+openclaw cron add --name "mac-orchestrator-pulse-followup" --agent orchestrator \
+  --at "+5m" --session isolated --light-context --message "<same pulse logic>"
+```
+
+If the follow-up also dispatches, it re-arms its own `+5m` follow-up — the
+chain continues as long as work keeps flowing. The first idle check (nothing
+queued) lets the chain end naturally; the base 15m heartbeat picks the slack
+back up. This gives fast iteration under load without polling every 15m when
+there's nothing to do.
+
+**Editing the job:**
+
+```bash
+openclaw cron list                                    # see current schedule/status
+openclaw cron edit <job-id> --message "<new prompt>"   # patch the pulse logic
+openclaw cron get <job-id> --json                      # inspect full job JSON
+```
+
+**Do not hand-edit `openclaw.json`'s `.cron.jobs` via `jq`.** The real schema
+(`schedule.kind`/`everyMs`, `payload.kind: agentTurn`, etc.) differs from what
+a naive `{id, agentId, schedule:{type,value}, prompt}` shape might suggest —
+an invalid shape passes `jq` cleanly but fails `openclaw config validate` and
+takes the live gateway down silently (launchd shows `running` while the
+process has actually exited). Always use the `openclaw cron` CLI.
+
+**Failure handling:** retry a failing dispatch up to 10x with exponential
+backoff (~5min cap total), then log a FAILURE summary (timestamp, error,
+retry count, log path) to `Perpetua-Tools/.agent/memory/working/REVIEW_QUEUE.md`
+and stop — never schedule a follow-up on failure, never let an error crash
+the pulse job or the gateway itself.
+
+**Verifying it's alive:**
+
+```bash
+openclaw status | grep -i gateway     # confirm gateway reachable + LaunchAgent running
+openclaw cron list                    # confirm job enabled, check "Next" countdown
+```
+
+## 12. Key File Locations
 
 | File | Purpose |
 |------|---------|
