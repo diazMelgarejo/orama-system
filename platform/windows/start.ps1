@@ -255,7 +255,10 @@ function Invoke-LanPeerProbe {
     Sync-ControlPlaneToken
     if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
     _Info 'lan-peer' 'running probe_lan_peer.py --json ...'
-    & $UsPython $probe --json
+    $probeTimeout = if ($env:LAN_PEER_PROBE_TIMEOUT) { $env:LAN_PEER_PROBE_TIMEOUT } else { '2' }
+    $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
+    $wsTimeout = if ($env:LAN_PEER_WS_TIMEOUT) { $env:LAN_PEER_WS_TIMEOUT } else { '2' }
+    & $UsPython $probe --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout
     if ($LASTEXITCODE -ne 0) {
         _Warn 'lan-peer' 'peer probe reported failures (Mac peer may need ./start.sh --lan-peer)'
     }
@@ -270,7 +273,8 @@ function Invoke-LanPeerOutboxFlush {
     Sync-ControlPlaneToken
     if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
     _Info 'lan-peer' 'flushing queued peer drops ...'
-    & $UsPython $assign flush-outbox --peer
+    $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
+    & $UsPython $assign flush-outbox --peer --timeout $httpTimeout
     if ($LASTEXITCODE -ne 0) {
         _Warn 'lan-peer' 'queued peer drops remain pending'
     }

@@ -60,3 +60,51 @@ def test_help_lists_flush_outbox_command():
 
     assert result.returncode == 0
     assert "flush-outbox" in result.stdout
+
+    drop_help = subprocess.run(
+        ["python3", str(SCRIPT), "drop", "--help"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert drop_help.returncode == 0
+    assert "--timeout" in drop_help.stdout
+
+
+def test_timeout_flag_controls_peer_request_duration(tmp_path):
+    home = tmp_path / "home"
+    task = tmp_path / "task.md"
+    task.write_text("# Task\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(SCRIPT),
+            "drop",
+            "--peer",
+            "--peer-ip",
+            "203.0.113.1",
+            "--timeout",
+            "1",
+            "--file",
+            str(task),
+            "--filename",
+            "win-timeout-task.md",
+            "--assignee",
+            "win",
+            "--topic",
+            "smoke",
+        ],
+        cwd=ROOT,
+        env={**__import__("os").environ, "HOME": str(home)},
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=8,
+    )
+
+    assert result.returncode == 2
+    payload = json.loads(result.stdout)
+    assert payload["queued"] is True
+    assert payload["filename"] == "win-timeout-task.md"

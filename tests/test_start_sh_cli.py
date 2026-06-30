@@ -76,6 +76,8 @@ def test_start_sh_flushes_lan_peer_outbox_after_probe():
 
     assert "_flush_lan_peer_outbox()" in text
     assert '"$assign" flush-outbox --peer' in text
+    assert '--timeout "${LAN_PEER_HTTP_TIMEOUT:-2}"' in text
+    assert '--status-timeout "${LAN_PEER_STATUS_TIMEOUT:-3}"' in text
     assert "_run_lan_peer_probe || true\n  _flush_lan_peer_outbox || true" in text
 
 
@@ -91,7 +93,11 @@ def test_coord_pulses_retry_lan_peer_outbox():
     win_text = COORD_PULSE_PS1.read_text(encoding="utf-8-sig")
 
     assert "flush-outbox --peer" in mac_text
+    assert '--timeout "${LAN_PEER_HTTP_TIMEOUT:-2}"' in mac_text
+    assert '--status-timeout "${LAN_PEER_STATUS_TIMEOUT:-3}"' in mac_text
     assert "flush-outbox --peer" in win_text
+    assert "--timeout $httpTimeout" in win_text
+    assert "--status-timeout $statusTimeout" in win_text
 
 
 def test_windows_start_flushes_lan_peer_outbox_after_probe():
@@ -99,6 +105,8 @@ def test_windows_start_flushes_lan_peer_outbox_after_probe():
 
     assert "function Invoke-LanPeerOutboxFlush" in text
     assert "flush-outbox --peer" in text
+    assert "--timeout $httpTimeout" in text
+    assert "--status-timeout $statusTimeout" in text
     assert "Invoke-LanPeerProbe\r\n    Invoke-LanPeerOutboxFlush" in text or (
         "Invoke-LanPeerProbe\n    Invoke-LanPeerOutboxFlush" in text
     )
