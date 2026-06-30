@@ -33,6 +33,13 @@ def test_classify_researcher():
     assert q.classify_role("win-gpu-results-h5-final.md", "autoresearch/gpu-done") == "researcher"
 
 
+def test_actionable_local_autoresearch_during_macos_only_degrade():
+    q = _load_queue()
+    assert q.is_actionable_assignment("mac-autoresearch-h6.md", "autoresearch/gpu-run", "mac")
+    assert q.is_actionable_assignment("mac-hypothesis-h6-real-task.md", "coord/self-improve", "mac")
+    assert q.classify_role("mac-autoresearch-h6.md", "autoresearch/gpu-run") == "researcher"
+
+
 def test_classify_orchestrator():
     q = _load_queue()
     assert q.classify_role("win-pt183-reconcile.md", "code-review/bridge") == "orchestrator"
