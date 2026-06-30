@@ -82,6 +82,8 @@ def is_actionable_assignment(filename: str, topic: str, source: str) -> bool:
         return True
     if name.startswith("mac-orchestrator-") or name.startswith("mac-researcher-"):
         return True
+    if name.startswith("mac-autoresearch-") or name.startswith("mac-hypothesis-"):
+        return True
     return False
 
 
