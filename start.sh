@@ -469,7 +469,10 @@ _run_lan_peer_probe() {
   _info "lan-peer" "running probe_lan_peer.py --json ..."
   _sync_control_plane_token
   PERPETUA_TOOLS_ROOT="${PT_DIR:-}" ORAMA_CONTROL_PLANE_TOKEN="${ORAMA_CONTROL_PLANE_TOKEN:-}" \
-    "$US_PYTHON" "$probe" --json || {
+    "$US_PYTHON" "$probe" --json \
+      --timeout "${LAN_PEER_PROBE_TIMEOUT:-2}" \
+      --status-timeout "${LAN_PEER_STATUS_TIMEOUT:-3}" \
+      --ws-timeout "${LAN_PEER_WS_TIMEOUT:-2}" || {
     _warn "lan-peer" "peer probe reported failures (Win peer may need PORTAL_BIND_LAN=1 + restart)"
     return 1
   }
@@ -484,7 +487,7 @@ _flush_lan_peer_outbox() {
   _info "lan-peer" "flushing queued peer drops..."
   _sync_control_plane_token
   PERPETUA_TOOLS_ROOT="${PT_DIR:-}" ORAMA_CONTROL_PLANE_TOKEN="${ORAMA_CONTROL_PLANE_TOKEN:-}" \
-    "$US_PYTHON" "$assign" flush-outbox --peer || {
+    "$US_PYTHON" "$assign" flush-outbox --peer --timeout "${LAN_PEER_HTTP_TIMEOUT:-2}" || {
     _warn "lan-peer" "queued peer drops remain pending"
     return 1
   }
