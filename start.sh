@@ -710,7 +710,7 @@ if [ -n "${PT_DIR:-}" ] && [ -f "${PT_DIR}/orchestrator/alphaclaw_manager.py" ];
   _info "pt" "resolving runtime — passing MAC_IP=${MAC_IP} WIN_IP=${WIN_IP}"
   _PT_ENV_EXPORTS="$(
     MAC_IP="${MAC_IP}" WIN_IP="${WIN_IP}" \
-    PYTHONPATH="${PT_DIR}" \
+    PYTHONPATH="${PT_DIR}/src:${PT_DIR}" \
     "$PT_PYTHON" -m orchestrator.alphaclaw_manager \
       --resolve --env-only \
       --mac-ip "${MAC_IP}" --win-ip "${WIN_IP}" \
@@ -824,17 +824,6 @@ fi
 
 # ── helpers ───────────────────────────────────────────────────────────────────
 
-pid_on_port() {
-  # Cross-platform: listeners only (ignore outbound/CLOSE_WAIT clients on the port)
-  if command -v lsof &>/dev/null; then
-    lsof -nP -iTCP:"$1" -sTCP:LISTEN -t 2>/dev/null | head -1 || true
-  elif command -v ss &>/dev/null; then
-    ss -tlnp "sport = :$1" 2>/dev/null | grep -oP 'pid=\K\d+' | head -1 || true
-  elif command -v fuser &>/dev/null; then
-    fuser "$1/tcp" 2>/dev/null | awk '{print $1}' | head -1 || true
-  fi
-}
-
 _port_open() {
   # Cross-platform TCP probe: nc → /dev/tcp bash built-in
   local port=$1
@@ -910,8 +899,7 @@ _ollama_ensure_ready() {
   fi
 
   # 2. Model availability check / pull
-  local model_base="${model%%:*}"
-  if ! ollama list 2>/dev/null | grep -qF "${model_base}"; then
+  if ! ollama list 2>/dev/null | awk 'NR > 1 {print $1}' | grep -qxF "${model}"; then
     _info "ollama" "model ${model} not installed — pulling..."
     ollama pull "${model}" >>"${LOG_DIR}/ollama.log" 2>&1 || {
       _warn "ollama" "pull failed — continuing without model warm-up"
@@ -922,11 +910,13 @@ _ollama_ensure_ready() {
   # 3. Warm model into GPU memory with indefinite keep-alive (non-blocking)
   local already_loaded
   already_loaded=$(curl -sf "${endpoint}/api/ps" 2>/dev/null | \
-    python3 -c "
+    MODEL_NAME="$model" python3 -c "
 import sys,json
 ps=json.load(sys.stdin)
 names=[m.get('name','') for m in ps.get('models',[])]
-print('yes' if any('${model_base}' in n for n in names) else 'no')
+model = __import__('os').environ['MODEL_NAME']
+base = model.split(':', 1)[0]
+print('yes' if any(n == model or n.startswith(base + ':') for n in names) else 'no')
 " 2>/dev/null || echo "no")
 
   if [ "$already_loaded" = "yes" ]; then
