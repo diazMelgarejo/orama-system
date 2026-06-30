@@ -45,9 +45,13 @@ try {
         git -C $Pt fetch origin --prune 2>&1 | Out-Null
     }
 
-    python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json 2>&1 |
+    $probeTimeout = if ($env:LAN_PEER_PROBE_TIMEOUT) { $env:LAN_PEER_PROBE_TIMEOUT } else { '2' }
+    $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
+    $wsTimeout = if ($env:LAN_PEER_WS_TIMEOUT) { $env:LAN_PEER_WS_TIMEOUT } else { '2' }
+    $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
+    python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1 |
         Select-Object -First 12 | ForEach-Object { Write-Log $_ }
-    python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py flush-outbox --peer 2>&1 |
+    python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py flush-outbox --peer --timeout $httpTimeout 2>&1 |
         Select-Object -First 20 | ForEach-Object { Write-Log $_ }
 
     $gateJson = python $WinQueue pulse-gate --seen-file $Seen 2>&1 | Out-String

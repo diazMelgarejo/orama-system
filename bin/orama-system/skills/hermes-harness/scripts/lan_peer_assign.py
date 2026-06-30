@@ -108,7 +108,7 @@ def cmd_drop(args: argparse.Namespace) -> int:
         ip, port = _resolve_peer(args)
         url = f"{_peer_base(ip, port)}/api/peer-file"
         try:
-            result = _http_json("POST", url, payload)
+            result = _http_json("POST", url, payload, timeout=args.timeout)
         except SystemExit as exc:
             _ensure_orama_src()
             from orama_system.lan_peer_files import write_outbox_file
@@ -159,7 +159,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     if args.peer:
         ip, port = _resolve_peer(args)
         url = f"{_peer_base(ip, port)}/api/peer-inbox"
-        result = _http_json("GET", url)
+        result = _http_json("GET", url, timeout=args.timeout)
         print(json.dumps(result, indent=2))
         return 0
     _ensure_orama_src()
@@ -175,7 +175,7 @@ def cmd_read(args: argparse.Namespace) -> int:
     if args.peer:
         ip, port = _resolve_peer(args)
         url = f"{_peer_base(ip, port)}/api/peer-inbox/{args.name}"
-        result = _http_json("GET", url)
+        result = _http_json("GET", url, timeout=args.timeout)
         if args.json:
             print(json.dumps(result, indent=2))
         else:
@@ -215,7 +215,7 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
         }
         entry = {"filename": filename, "status": "pending"}
         try:
-            _http_json("POST", url, payload)
+            _http_json("POST", url, payload, timeout=args.timeout)
         except SystemExit as exc:
             entry["status"] = "error"
             entry["detail"] = str(exc)
@@ -264,6 +264,7 @@ def cmd_fanout(args: argparse.Namespace) -> int:
             peer=to_peer,
             peer_ip=args.peer_ip,
             portal_port=args.portal_port,
+            timeout=args.timeout,
         )
         print(f"--- drop {filename} assignee={assignee} peer={to_peer}", file=sys.stderr)
         entry: dict[str, Any] = {"filename": filename, "assignee": assignee, "to_peer": to_peer}
@@ -289,6 +290,12 @@ def main(argv: list[str] | None = None) -> int:
     peer_p.add_argument("--peer-ip", help="Override peer IP")
     peer_p.add_argument(
         "--portal-port", type=int, default=int(os.environ.get("PORTAL_PORT", "8002"))
+    )
+    peer_p.add_argument(
+        "--timeout",
+        type=int,
+        default=int(os.environ.get("LAN_PEER_HTTP_TIMEOUT", "30")),
+        help="HTTP timeout in seconds for peer portal calls",
     )
 
     p = argparse.ArgumentParser(description="LAN peer file assignments (markdown handoff)")
