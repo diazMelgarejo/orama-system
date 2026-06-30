@@ -74,11 +74,16 @@ def test_start_sh_has_single_pid_on_port_definition():
 def test_start_sh_flushes_lan_peer_outbox_after_probe():
     text = START_SH.read_text(encoding="utf-8")
 
+    assert "lan_peer_session.py" in text
+    assert "_lan_peer_session should-retry" in text
+    assert "_lan_peer_session record-success" in text
+    assert '_lan_peer_session record-failure --error "probe_lan_peer.py failed"' in text
     assert "_flush_lan_peer_outbox()" in text
     assert '"$assign" flush-outbox --peer' in text
     assert '--timeout "${LAN_PEER_HTTP_TIMEOUT:-2}"' in text
     assert '--status-timeout "${LAN_PEER_STATUS_TIMEOUT:-3}"' in text
-    assert "_run_lan_peer_probe || true\n  _flush_lan_peer_outbox || true" in text
+    assert "_run_lan_peer_probe; then" in text
+    assert "LAN_PEER_DEGRADED_RETRY_SECONDS=${LAN_PEER_DEGRADED_RETRY_SECONDS:-900}" in text
 
 
 def test_coord_pulse_uses_portable_lock_not_flock():
@@ -92,6 +97,11 @@ def test_coord_pulses_retry_lan_peer_outbox():
     mac_text = COORD_PULSE_SH.read_text(encoding="utf-8")
     win_text = COORD_PULSE_PS1.read_text(encoding="utf-8-sig")
 
+    assert "lan_peer_session.py" in mac_text
+    assert "lan_peer_session should-retry" in mac_text
+    assert "lan_peer_session record-success" in mac_text
+    assert 'lan_peer_session record-failure --error "probe_lan_peer.py failed"' in mac_text
+    assert "LAN_PEER_DEGRADED_RETRY_SECONDS=${LAN_PEER_DEGRADED_RETRY_SECONDS:-900}" in mac_text
     assert "flush-outbox --peer" in mac_text
     assert '--timeout "${LAN_PEER_HTTP_TIMEOUT:-2}"' in mac_text
     assert '--status-timeout "${LAN_PEER_STATUS_TIMEOUT:-3}"' in mac_text
