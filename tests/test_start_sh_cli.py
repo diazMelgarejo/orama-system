@@ -48,6 +48,27 @@ def test_start_sh_uses_non_positional_no_open_and_portable_timeout():
     assert "timeout 1 bash" not in text
 
 
+def test_start_sh_pt_resolve_uses_src_pythonpath():
+    text = START_SH.read_text(encoding="utf-8")
+
+    assert 'PYTHONPATH="${PT_DIR}/src:${PT_DIR}"' in text
+    assert 'PYTHONPATH="${PT_DIR}" \\' not in text
+
+
+def test_start_sh_ollama_model_check_is_exact():
+    text = START_SH.read_text(encoding="utf-8")
+
+    assert "grep -qxF \"${model}\"" in text
+    assert "MODEL_NAME=\"$model\" python3 -c" in text
+    assert "model_base=" not in text
+
+
+def test_start_sh_has_single_pid_on_port_definition():
+    text = START_SH.read_text(encoding="utf-8")
+
+    assert text.count("pid_on_port() {") == 1
+
+
 def test_coord_pulse_uses_portable_lock_not_flock():
     text = COORD_PULSE_SH.read_text(encoding="utf-8")
 
