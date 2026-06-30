@@ -155,3 +155,7 @@ lance_memory.lance/
 
 # Runtime hook logs (never commit)
 .claude/hooks/.logs/
+
+# Generated requirements/build stamp (local-only; never commit)
+.requirements.stamp
+*.stamp
