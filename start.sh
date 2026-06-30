@@ -475,6 +475,21 @@ _run_lan_peer_probe() {
   }
 }
 
+_flush_lan_peer_outbox() {
+  local assign="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py"
+  if [ ! -f "$assign" ]; then
+    _warn "lan-peer" "assignment script missing: $assign"
+    return 1
+  fi
+  _info "lan-peer" "flushing queued peer drops..."
+  _sync_control_plane_token
+  PERPETUA_TOOLS_ROOT="${PT_DIR:-}" ORAMA_CONTROL_PLANE_TOKEN="${ORAMA_CONTROL_PLANE_TOKEN:-}" \
+    "$US_PYTHON" "$assign" flush-outbox --peer || {
+    _warn "lan-peer" "queued peer drops remain pending"
+    return 1
+  }
+}
+
 _run_discover_force_with_timeout() {
   local seconds="$1"
   if command -v timeout >/dev/null 2>&1; then
@@ -1283,6 +1298,7 @@ fi
 
 if [ "${_LAN_PEER_MODE:-0}" = "1" ]; then
   _run_lan_peer_probe || true
+  _flush_lan_peer_outbox || true
 fi
 
 # ── network watcher install (--install-watcher flag or first-time setup) ──────

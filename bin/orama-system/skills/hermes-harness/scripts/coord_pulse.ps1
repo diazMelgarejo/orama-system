@@ -47,6 +47,8 @@ try {
 
     python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json 2>&1 |
         Select-Object -First 12 | ForEach-Object { Write-Log $_ }
+    python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py flush-outbox --peer 2>&1 |
+        Select-Object -First 20 | ForEach-Object { Write-Log $_ }
 
     $gateJson = python $WinQueue pulse-gate --seen-file $Seen 2>&1 | Out-String
     Write-Log "gate: $gateJson"
