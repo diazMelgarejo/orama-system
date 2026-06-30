@@ -261,6 +261,21 @@ function Invoke-LanPeerProbe {
     }
 }
 
+function Invoke-LanPeerOutboxFlush {
+    $assign = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py'
+    if (-not (Test-Path $assign)) {
+        _Warn 'lan-peer' "assignment script missing: $assign"
+        return
+    }
+    Sync-ControlPlaneToken
+    if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
+    _Info 'lan-peer' 'flushing queued peer drops ...'
+    & $UsPython $assign flush-outbox --peer
+    if ($LASTEXITCODE -ne 0) {
+        _Warn 'lan-peer' 'queued peer drops remain pending'
+    }
+}
+
 # ── Hardware policy check ─────────────────────────────────────────────────────
 function Invoke-HardwarePolicyCheck {
     $cli = if ($PtDir) { Join-Path $PtDir 'scripts\hardware_policy_cli.py' } else { $null }
@@ -582,6 +597,7 @@ Write-Host ''
 
 if ($LanPeer) {
     Invoke-LanPeerProbe
+    Invoke-LanPeerOutboxFlush
 }
 
 if (-not $NoOpen) {

@@ -6,7 +6,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 START_SH = ROOT / "start.sh"
+START_PS1 = ROOT / "platform" / "windows" / "start.ps1"
 COORD_PULSE_SH = ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts" / "coord_pulse.sh"
+COORD_PULSE_PS1 = ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts" / "coord_pulse.ps1"
 
 
 def test_start_sh_help_exits_before_startup_and_lists_coord_pulse_flags():
@@ -69,8 +71,34 @@ def test_start_sh_has_single_pid_on_port_definition():
     assert text.count("pid_on_port() {") == 1
 
 
+def test_start_sh_flushes_lan_peer_outbox_after_probe():
+    text = START_SH.read_text(encoding="utf-8")
+
+    assert "_flush_lan_peer_outbox()" in text
+    assert '"$assign" flush-outbox --peer' in text
+    assert "_run_lan_peer_probe || true\n  _flush_lan_peer_outbox || true" in text
+
+
 def test_coord_pulse_uses_portable_lock_not_flock():
     text = COORD_PULSE_SH.read_text(encoding="utf-8")
 
     assert 'mkdir "$LOCK_DIR"' in text
     assert "flock" not in text
+
+
+def test_coord_pulses_retry_lan_peer_outbox():
+    mac_text = COORD_PULSE_SH.read_text(encoding="utf-8")
+    win_text = COORD_PULSE_PS1.read_text(encoding="utf-8-sig")
+
+    assert "flush-outbox --peer" in mac_text
+    assert "flush-outbox --peer" in win_text
+
+
+def test_windows_start_flushes_lan_peer_outbox_after_probe():
+    text = START_PS1.read_text(encoding="utf-8-sig")
+
+    assert "function Invoke-LanPeerOutboxFlush" in text
+    assert "flush-outbox --peer" in text
+    assert "Invoke-LanPeerProbe\r\n    Invoke-LanPeerOutboxFlush" in text or (
+        "Invoke-LanPeerProbe\n    Invoke-LanPeerOutboxFlush" in text
+    )
