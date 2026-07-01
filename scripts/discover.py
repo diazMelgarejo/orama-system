@@ -7,7 +7,7 @@ Idempotent: writes nothing if state hash is unchanged.
 """
 
 from __future__ import annotations
-import argparse, asyncio, hashlib, json, logging, os, re, shutil, socket, sys, time
+import argparse, asyncio, hashlib, json, logging, os, re, shutil, socket, sys, tempfile, time
 import urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +32,7 @@ LAST_DISCOVERY_JSON = STATE_DIR / "last_discovery.json"
 RECOVERY_SOURCE_TXT = STATE_DIR / "recovery_source.txt"
 LOCK_FILE           = STATE_DIR / ".discover.lock"
 DEFAULT_LOCK_FILE   = LOCK_FILE
+FALLBACK_LOCK_FILE   = Path(tempfile.gettempdir()) / "orama-discover.lock"
 OPENCLAW_JSON       = OPENCLAW_DIR / "openclaw.json"
 
 LM_STUDIO_PORT     = 1234
@@ -411,35 +412,45 @@ def _lock_path() -> Path:
         return LOCK_FILE
     return STATE_DIR / ".discover.lock"
 
+
+def _fallback_lock_path() -> Path:
+    return FALLBACK_LOCK_FILE
+
 def save_discovery_state(endpoints: dict, tier: int = 1):
     endpoints = filter_endpoints_for_policy(endpoints)
-    STATE_DIR.mkdir(parents=True, exist_ok=True)
-    mac = endpoints.get("mac") or {}
-    win = endpoints.get("win") or {}
-    state = {
-        "schema": 1,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "hash": compute_hash(endpoints),
-        "recovery_tier": tier,
-        "endpoints": {
-            "mac": {"ip": mac.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(mac)},
-            "win": {"ip": win.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(win)},
-        },
-        "models": {"mac": mac.get("models", []), "win": win.get("models", [])},
-    }
-    DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
-    LAST_DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
-    RECOVERY_SOURCE_TXT.write_text(f"tier{tier}\n")
+    try:
+        STATE_DIR.mkdir(parents=True, exist_ok=True)
+        mac = endpoints.get("mac") or {}
+        win = endpoints.get("win") or {}
+        state = {
+            "schema": 1,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "hash": compute_hash(endpoints),
+            "recovery_tier": tier,
+            "endpoints": {
+                "mac": {"ip": mac.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(mac)},
+                "win": {"ip": win.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(win)},
+            },
+            "models": {"mac": mac.get("models", []), "win": win.get("models", [])},
+        }
+        DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
+        LAST_DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
+        RECOVERY_SOURCE_TXT.write_text(f"tier{tier}\n")
+    except PermissionError as exc:
+        logging.warning("Skipping discovery state write: %s", exc)
 
 # ── Backup / archive ──────────────────────────────────────────────────────────
 
 def backup_current_state():
     if not LAST_DISCOVERY_JSON.exists(): return
-    BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
-    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
-    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    shutil.copy2(LAST_DISCOVERY_JSON, BACKUPS_DIR / f"{ts}.json")
-    _enforce_backup_limits()
+    try:
+        BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+        ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        shutil.copy2(LAST_DISCOVERY_JSON, BACKUPS_DIR / f"{ts}.json")
+        _enforce_backup_limits()
+    except PermissionError as exc:
+        logging.warning("Skipping discovery backup: %s", exc)
 
 def _enforce_backup_limits():
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
@@ -645,13 +656,19 @@ def _unlock_file(handle) -> None:
 class _Lock:
     def __init__(self, timeout=10.0):
         self._timeout = timeout; self._fd = None
+        self._lock_path = _lock_path()
     def __enter__(self):
         STATE_DIR.mkdir(parents=True, exist_ok=True)
-        lock_path = _lock_path()
-        lock_path.parent.mkdir(parents=True, exist_ok=True)
         deadline = time.time() + self._timeout
         while True:
-            self._fd = open(lock_path, "w")
+            try:
+                self._fd = open(self._lock_path, "w")
+            except PermissionError:
+                if self._lock_path == _fallback_lock_path():
+                    raise
+                self._lock_path = _fallback_lock_path()
+                self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+                self._fd = open(self._lock_path, "w")
             try:
                 _try_lock_file(self._fd)
                 return self
@@ -676,7 +693,7 @@ class _Lock:
     def __exit__(self, *_):
         if self._fd:
             _unlock_file(self._fd); self._fd.close()
-            try: _lock_path().unlink()
+            try: self._lock_path.unlink()
             except FileNotFoundError: pass
 
 # ── Main discovery flow ───────────────────────────────────────────────────────
