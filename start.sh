@@ -1422,3 +1422,34 @@ _info "orch-wire" "Orchestrator wired: Mac dispatch running, Win watcher polling
 _info "orch-wire" "Watch log: $_ORCH_LOG"
 printf "  Orch  : tail -f %s\\n" "$_ORCH_LOG"
 echo ""
+
+# ── ClinePass AutoResearcher fallback (MacOS) ─────────────────────────────────
+# When OpenClaw Gateway is paused, not running, or models are rate-limited /
+# quota-reached, the local Cline Bot takes over as AutoResearcher, controlling
+# the Mac coder using ollama (localhost:11434) if it is idle and not in active
+# inference.
+# Resilience: 10x peer unreachable → solo mode; 15-min checkback (lan_peer_session.py).
+_AUTORESEARCHER="$SCRIPT_DIR/scripts/cline_autoresearcher.py"
+if [ -f "$_AUTORESEARCHER" ]; then
+  _info "autoresearcher" "Checking ClinePass AutoResearcher fallback (MacOS)..."
+  _AR_CHECK="$("$US_PYTHON" "$_AUTORESEARCHER" --platform macos --check --json 2>/dev/null || echo '{}')"
+  _AR_SHOULD_FALLBACK="$(echo "$_AR_CHECK" | "$US_PYTHON" -c "import sys,json; print(json.load(sys.stdin).get('should_fallback',False))" 2>/dev/null || echo "False")"
+  if [ "$_AR_SHOULD_FALLBACK" = "True" ]; then
+    _info "autoresearcher" "ClinePass fallback ACTIVE — OpenClaw Gateway down, ollama idle, Cline available"
+    _AR_REASON="$(echo "$_AR_CHECK" | "$US_PYTHON" -c "import sys,json; print(json.load(sys.stdin).get('reason',''))" 2>/dev/null || echo "")"
+    _info "autoresearcher" "  reason: $_AR_REASON"
+    _AR_WATCH="$SCRIPT_DIR/scripts/cline_autoresearcher_watch.sh"
+    if [ -f "$_AR_WATCH" ]; then
+      ( nohup bash "$_AR_WATCH" "$SCRIPT_DIR" "$US_PYTHON" "$LOG_DIR" >>"$LOG_DIR/autoresearcher-watch.log" 2>&1 & ) || true
+      _info "autoresearcher" "AutoResearcher watcher launched — 15-min checkback cycle"
+      _info "autoresearcher" "  Watch log: $LOG_DIR/autoresearcher-watch.log"
+    else
+      _warn "autoresearcher" "watcher script missing: $_AR_WATCH"
+    fi
+  else
+    _AR_REASON="$(echo "$_AR_CHECK" | "$US_PYTHON" -c "import sys,json; print(json.load(sys.stdin).get('reason',''))" 2>/dev/null || echo "")"
+    _info "autoresearcher" "ClinePass fallback inactive — $_AR_REASON"
+  fi
+else
+  _warn "autoresearcher" "cline_autoresearcher.py not found at $_AUTORESEARCHER"
+fi
