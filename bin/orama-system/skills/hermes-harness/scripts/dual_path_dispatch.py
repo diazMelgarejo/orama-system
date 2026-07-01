@@ -55,6 +55,7 @@ def build_candidates(prompt: str, role: str) -> list[Candidate]:
                 [
                     cursor,
                     "--print",
+                    "--trust",          # non-interactive workspace trust gate
                     "--model",
                     os.environ.get("CURSOR_AGENT_MODEL", "composer-2.5"),
                     prompt,
@@ -62,6 +63,8 @@ def build_candidates(prompt: str, role: str) -> list[Candidate]:
             )
         )
 
+    # openclaw uses: openclaw agent --agent <agent-id> -m <prompt>
+    # (not 'openclaw run' which does not exist in OpenClaw 2026.6.x)
     openclaw = shutil.which(os.environ.get("OPENCLAW_BIN", "openclaw"))
     if openclaw:
         candidates.append(
@@ -69,9 +72,10 @@ def build_candidates(prompt: str, role: str) -> list[Candidate]:
                 "openclaw",
                 [
                     openclaw,
-                    "run",
+                    "agent",
+                    "--agent",
                     openclaw_agent_for_role(role),
-                    "--task",
+                    "-m",
                     prompt,
                 ],
             )

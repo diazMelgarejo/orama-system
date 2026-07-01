@@ -37,7 +37,7 @@ agentic execution to the `cline` CLI via exec / ACP / MCP.
   "name": "cline-agent",
   "workspace": "~/.openclaw/agents/cline-agent",
   "agentDir": "~/.openclaw/agents/cline-agent/agent",
-  "model": "openrouter/z-ai/glm-5.2",
+    "model": "openrouter/free",
   "thinkingDefault": "medium",
   "tools": {"profile": "coding"}
 }
@@ -60,20 +60,28 @@ Preserve every other existing allowlisted agent (e.g. `codex-agent`). Do not use
 
 ## Model Choice Rationale
 
-`openrouter/z-ai/glm-5.2` is chosen because:
+The `cline-agent` uses `openrouter/free` (free auto-router) as its lightweight
+agent model — **not** the primary coding path. The **default coding execution**
+is the `cline` CLI via `cline-pass/glm-5.2` (Cline Credits through
+`api.cline.bot`).
 
-1. It is the **same upstream model** (`zai/glm-5.2` = GLM-5.2, 1M context,
-   reasoning-capable) that Cline's `cline-pass/glm-5.2` provider reaches via
-   `api.cline.bot`. Confirmed live on OpenRouter.
-2. OpenClaw already authenticates OpenRouter (`OPENROUTER_API_KEY` env), so no
-   new credential flow is needed.
-3. It avoids the WorkOS token-refresh problem and the Cline Credits billing
-   dependency.
+**ClinePass is the better default for coding** because:
+
+1. **No rate limits** — OpenRouter free is limited to 50 req/day, 20 RPM; ClinePass
+   has no such restriction
+2. **1M context** — full GLM-5.2 capability with reasoning + tool loops
+3. **Dedicated billing** — Cline Credits are separate from OpenRouter credits
+4. **Auto-refreshing auth** — the Cline CLI refreshes its WorkOS token automatically
+
+The OpenRouter free auto-router (`openrouter/free`) is used only for:
+- Lightweight routing/triage (deciding whether to delegate to cline)
+- Quick questions that don't need tool loops
+- Fallback when Cline Credits are exhausted
 
 If the operator specifically wants OpenClaw to route through `api.cline.bot`
-(to spend Cline Credits instead of OpenRouter credits), they must provide
-either a static Cline API key (if Cline issues one) or a local token-refresh
-proxy. That is an opt-in future enhancement, not the default binding.
+directly (without the `cline` CLI), they need a static Cline API key or a local
+token-refresh proxy — the WorkOS token expires in ~12 min and only the Cline CLI
+can refresh it.
 
 ## ACP
 
@@ -115,7 +123,7 @@ is no `cline mcp serve` command. Therefore:
    regions and creates `SECURITY.md` only when absent.
 8. Run `openclaw config validate`; restart the gateway only when agent config
    changed.
-9. Report `ok` when the resolved default is `openrouter/z-ai/glm-5.2` and
+9. Report `ok` when the resolved default is `openrouter/free` and
    `cline-agent` is in the allowlist.
 
 Rerunning with unchanged input must neither modify `openclaw.json` nor rewrite
@@ -130,7 +138,7 @@ workspace files.
 - Do not change the Main Agent, global default routing, `codex-agent`, `coder`,
   channel bindings, or LaunchAgent configuration.
 - The Cline agent's configured state requires
-  `resolvedDefault == "openrouter/z-ai/glm-5.2"`. `openclaw config validate`
+  `resolvedDefault == "openrouter/free"`. `openclaw config validate`
   checks configuration syntax, not this policy; the post-restart
   `openclaw models status --agent cline-agent` identity check is separate.
 - Cline Credits (`https://app.cline.bot/credits`) fund `cline-pass` exec calls;
