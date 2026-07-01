@@ -29,12 +29,20 @@ Use the right tool for the right layer. Use the cheapest agent that can succeed.
 | Layer | Tool | Job |
 | --- | --- | --- |
 | Main reasoning + judgment | Claude Sonnet 4.6 medium + prompt caching | Decide, edit, review, synthesize, content insertion |
-| Default coding/text agent | OpenRouter free-model stack (Nemotron → MiniMax → DeepSeek → …) | Generic worker, long-context, coding, structured output |
+| **Default coding agent** | **`cline` CLI via `cline-pass/glm-5.2` (Cline Credits)** | **Agentic coding, refactoring, tool loops — 1M ctx, no rate limits** |
+| Lightweight routing/triage | OpenRouter free-model stack (`openrouter/free` auto-router) | Quick replies, routing decisions, summarization — free but rate-limited (50 req/day) |
 | Large-context reading, when explicitly requested | `gemini-mcp-tool` | Gemini-Analyzer use-cases only, architecture mapping, visual diff, screenshot comparison, multi-file audit |
 | Parallel workers | `ai-cli-mcp` | Run background CLI agents (Codex, Gemini, ollama) with PID tracking |
 | Local-only workloads | ollama (Mac, `localhost:11434`) | Lint, format, bash scripts, local validation — free + private |
 | Runtime orchestration | OpenClaw | Route tools into agent workflows, gateway, auth |
 | Repeatable procedure | Claude Skill | Encode durable operating knowledge (this file) |
+
+> **ClinePass is the better default for coding.** The `cline` CLI via
+> `cline-pass/glm-5.2` (Cline Credits, `api.cline.bot`) provides 1M context,
+> full reasoning + tool loops, and no rate limits — unlike OpenRouter free
+> (50 req/day, 20 RPM). Use OpenRouter free only for lightweight routing/triage
+> that doesn't need tool loops. See
+> [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
 
 **Two routing rules below override the legacy "Gemini = default reader" pattern.** See §2.
 
@@ -94,9 +102,30 @@ CLI: `claude mcp list`
 
 ## 2. Routing strategy (READ FIRST)
 
-### Rule 1 — Default routing: OpenRouter free-model stack
+### Rule 0 — Default coding: ClinePass (Cline Credits)
 
-When the caller does NOT specify an agent, route to OpenRouter free models in fallback order:
+**For coding tasks (refactoring, file editing, agentic tool loops), use the
+`cline` CLI via `cline-pass/glm-5.2` (Cline Credits) as the default.** This is
+the preferred path over OpenRouter free because:
+
+- **No rate limits** — OpenRouter free is limited to 50 req/day, 20 RPM
+- **1M context** — full GLM-5.2 capability with reasoning + structured output
+- **Dedicated billing** — Cline Credits are separate from OpenRouter credits
+- **Full tool loops** — the `cline` CLI runs agentic coding with auto-approve
+
+```bash
+cline "<task>" --json --auto-approve true -c <dir> \
+  --thinking medium -P cline-pass -m cline-pass/glm-5.2 \
+  --timeout 600 --retries 3
+```
+
+From Claude: use the `cline_exec` MCP tool (defaults to `cline-pass/glm-5.2`).
+See [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
+
+### Rule 1 — Lightweight routing: OpenRouter free-model stack (fallback)
+
+For lightweight routing/triage/quick replies that don't need tool loops, route
+to OpenRouter free models in fallback order:
 
 ```text
 1. openrouter/nvidia/nemotron-3-super-120b-a12b:free   (1M ctx, agent-strong)
