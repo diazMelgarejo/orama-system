@@ -40,7 +40,7 @@ CONFIG_PATH="$OPENCLAW_HOME/.openclaw/openclaw.json"
 WORKSPACE="$OPENCLAW_HOME/.openclaw/agents/cline-agent"
 AGENT_DIR="$WORKSPACE/agent"
 GENERATOR="$SCRIPT_DIR/generate_cline_openclaw_profile.py"
-MODEL="openrouter/z-ai/glm-5.2"
+MODEL="openrouter/free"
 
 log() { printf '[cline-bind] %s\n' "$*" >&2; }
 fail() { log "FAIL: $*"; exit 1; }
