@@ -313,11 +313,38 @@ def _canonical_operator_payload(payload: Mapping[str, Any]) -> str:
     return json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
 
 
+def _default_operator_signing_secret_path() -> Path:
+    pt_root = _resolve_perpetua_tools_root()
+    if pt_root is not None:
+        return pt_root / ".state" / "operator_signing_secret"
+    return Path(__file__).resolve().parents[2] / ".state" / "operator_signing_secret"
+
+
+def _read_persisted_operator_signing_secret(path: Path | None = None) -> str:
+    secret_path = path or _default_operator_signing_secret_path()
+    if secret_path.is_file():
+        return secret_path.read_text(encoding="utf-8").strip()
+    return ""
+
+
 def _operator_signing_secret() -> str:
-    secret = ensure_control_plane_token()
-    if not secret:
-        raise ValueError("control plane token required for operator payload signing")
-    return secret
+    """Server-only HMAC key for operator payload signing.
+
+    MUST NOT be derived from or equal to the control-plane bearer token: that
+    token is sent by every authenticated client in the Authorization header, so
+    reusing it as the signing secret would let any client HMAC-sign arbitrary
+    operator payloads and forge a 'server-minted approval' guarantee. This
+    secret is generated once, persisted to a 0600 file distinct from the
+    control-plane token file, and never returned by any API endpoint.
+    """
+    existing = _read_persisted_operator_signing_secret()
+    if existing:
+        return existing
+    if not auth_enforced():
+        raise ValueError("control plane auth must be enforced before signing operator payloads")
+    generated = secrets.token_urlsafe(32)
+    persist_control_plane_token(generated, path=_default_operator_signing_secret_path())
+    return generated
 
 
 def _format_expires_at(when: datetime) -> str:
@@ -365,6 +392,8 @@ def sign_operator_payload(payload: dict, *, ttl_seconds: int = _DEFAULT_OPERATOR
 
 def verify_operator_payload(payload: dict, token: str, expires_at: str) -> bool:
     """Verify HMAC token and expiry for a signed operator payload."""
+    if not isinstance(token, str) or not isinstance(expires_at, str):
+        return False
     if not token or not expires_at:
         return False
     try:
