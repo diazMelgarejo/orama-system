@@ -818,6 +818,9 @@ export OLLAMA_MAC_ENDPOINT="${OLLAMA_MAC_ENDPOINT:-http://localhost:11434}"
 export OLLAMA_WINDOWS_ENDPOINT="${OLLAMA_WINDOWS_ENDPOINT:-http://${WIN_IP}:11434}"
 export LM_STUDIO_MAC_ENDPOINT="${LM_STUDIO_MAC_ENDPOINT:-http://localhost:1234}"
 export LM_STUDIO_WIN_ENDPOINTS="${LM_STUDIO_WIN_ENDPOINTS:-http://${WIN_IP}:1234}"
+# WIN_PEER_ENDPOINT — consumed by orchestrator.sh (dual-path dispatch Win peer probe).
+# On Mac, the Win peer is remote: ${WIN_IP}:1234 (auto-detected above).
+export WIN_PEER_ENDPOINT="${WIN_PEER_ENDPOINT:-${WIN_IP}:1234}"
 export WINDOWS_IP="${WINDOWS_IP:-${WIN_IP}}"
 export GPU_BOX="${GPU_BOX:-WINUSER@${WIN_IP}}"
 # WIN_LM_STUDIO_HOST — consumed by api_server.py to enable Windows LM Studio provider
@@ -1334,3 +1337,88 @@ fi
 if [ "$NO_OPEN" != "1" ]; then
   open_browser "$PORTAL_URL"
 fi
+
+# ── Dual-path orchestrator wiring ─────────────────────────────────────────────
+# Fires immediately after start.sh services are confirmed up.
+# Mac path: runs coord_pulse.sh once now to dispatch the top researcher job
+#           from the queue (mac-researcher-h4-benchmark, h5-parallel, h6).
+# Win path: background watcher polls ${WIN_IP}:1234 (LM Studio) every 30s and, the
+#           the moment LM Studio is PASS, dispatches the H6 real-task to
+#           the win-autoresearcher via dual_path_dispatch.py.
+# Both paths log to $LOG_DIR/orchestrator-wire.log.
+
+_ORCH_LOG="${LOG_DIR}/orchestrator-wire.log"
+_COORD_PULSE="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/coord_pulse.sh"
+_DUAL_DISPATCH="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts/dual_path_dispatch.py"
+_WIN_WATCH_PEER="${WIN_IP}"
+_WIN_WATCH_PORT="${LM_STUDIO_WIN_LM_PORT:-1234}"
+_WIN_WATCH_LM_PORT=1234
+_WIN_WATCH_MAX=120  # max 120 × 30s = 60 min of waiting
+
+_orch_log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) [orch-wire] $*" | tee -a "$_ORCH_LOG"; }
+
+# 1. Mac path — fire coord_pulse once immediately (non-blocking; Mac-only safe)
+if [ -f "$_COORD_PULSE" ]; then
+  _orch_log "Firing Mac researcher dispatch now (coord_pulse one-shot)..."
+  ORAMA_SYSTEM_PATH="$SCRIPT_DIR" \
+  PERPETUA_TOOLS_PATH="${PT_DIR:-}" \
+    bash "$_COORD_PULSE" >> "$_ORCH_LOG" 2>&1 &
+  _COORD_PULSE_PID=$!
+  _orch_log "coord_pulse PID=$_COORD_PULSE_PID (Mac researcher dispatch in background)"
+else
+  _orch_log "WARN: coord_pulse.sh not found at $_COORD_PULSE — Mac dispatch skipped"
+fi
+
+# 2. Win path — background poller: wait for Windows peer, then dispatch H6
+_win_peer_watch() {
+  local peer="$_WIN_WATCH_PEER" port="$_WIN_WATCH_PORT" lm_port="$_WIN_WATCH_LM_PORT"
+  local tries=0 max="$_WIN_WATCH_MAX"
+  local h6_agent_card="$SCRIPT_DIR/.cursor/agents/win-autoresearcher-queue.md"
+  local h6_job="subagent/win-autoresearcher/researcher-backlog-h6"
+
+  _orch_log "Win peer watcher started — polling ${peer}:${port} (LM Studio :${lm_port}) every 30s, max ${max} tries"
+
+  while [ "$tries" -lt "$max" ]; do
+    local portal_up=0 lm_up=0
+    # Portal probe
+    if curl -sf --max-time 3 "http://${peer}:${port}/health" > /dev/null 2>&1; then
+      portal_up=1
+    fi
+    # LM Studio probe (Win model ready)
+    if curl -sf --max-time 3 "http://${peer}:${lm_port}/v1/models" > /dev/null 2>&1; then
+      lm_up=1
+    fi
+
+    if [ "$lm_up" -eq 1 ]; then
+      _orch_log "PASS: Win peer ${peer} LMStudio UP — dispatching H6 real-task"
+      if [ -f "$_DUAL_DISPATCH" ]; then
+        python3 "$_DUAL_DISPATCH" \
+          --role researcher \
+          --job-id "$h6_job" \
+          --agent-card "$h6_agent_card" \
+          >> "$_ORCH_LOG" 2>&1 \
+          && _orch_log "H6 dispatch succeeded" \
+          || _orch_log "WARN: H6 dispatch failed — check $_ORCH_LOG for details"
+      else
+        _orch_log "WARN: dual_path_dispatch.py not found — cannot dispatch H6"
+      fi
+      return 0
+    fi
+
+    tries=$((tries + 1))
+    _orch_log "Win peer DOWN (try $tries/$max) portal=${portal_up} lm=${lm_up} — retry in 30s"
+    sleep 30
+  done
+
+  _orch_log "Win peer watcher timed out after $((max * 30))s — H6 will be dispatched on next coord pulse when Win comes online"
+}
+
+# Launch Win watcher in background (non-blocking; detached from start.sh lifetime)
+( _win_peer_watch ) >> "$_ORCH_LOG" 2>&1 &
+_WIN_WATCH_PID=$!
+_orch_log "Win peer watcher PID=$_WIN_WATCH_PID (H6 auto-dispatch when ${_WIN_WATCH_PEER}:${_WIN_WATCH_PORT} PASS)"
+
+_info "orch-wire" "Orchestrator wired: Mac dispatch running, Win watcher polling ${_WIN_WATCH_PEER}:${_WIN_WATCH_PORT}"
+_info "orch-wire" "Watch log: $_ORCH_LOG"
+printf "  Orch  : tail -f %s\\n" "$_ORCH_LOG"
+echo ""
