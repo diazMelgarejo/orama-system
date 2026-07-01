@@ -1,10 +1,26 @@
 # OpenRouter Default Model Stack
 
 > **Source of truth:** `v1/OpenRouter.md` in OpenClaw root.
-> **Version:** 0.9.1
-> **Last reviewed:** 2026-05-19
+> **Version:** 0.9.2
+> **Last reviewed:** 2026-07-01
 
-## Canonical fallback chain
+## ClinePass as the preferred coding path
+
+**For coding tasks (refactoring, file editing, agentic tool loops), prefer the
+`cline` CLI via `cline-pass/glm-5.2` (Cline Credits) over the OpenRouter free
+stack.** ClinePass is the better default because:
+
+- **No rate limits** — OpenRouter free is limited to 50 req/day, 20 RPM
+- **1M context** — full GLM-5.2 with reasoning + structured output + tool loops
+- **Dedicated billing** — Cline Credits (`app.cline.bot/credits`) are separate
+- **Auto-refreshing auth** — the Cline CLI handles WorkOS token refresh
+
+Use the OpenRouter free stack below only for **lightweight routing/triage** that
+doesn't need tool loops, or as a fallback when Cline Credits are exhausted.
+
+See [cline-openclaw-agent/SKILL.md](../../cline-openclaw-agent/SKILL.md).
+
+## Canonical fallback chain (lightweight routing / fallback)
 
 When a caller does NOT specify an agent, the openclaw-skills MUST route to OpenRouter free models in this order:
 
