@@ -20,6 +20,7 @@ GET  /health     {"status": "ok", "version": "1.1.0.0"}
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import html as _html
 import json
 import logging
@@ -63,6 +64,7 @@ from utils.control_plane_auth import (
     redact_models_payload,
     redact_portal_status_payload,
     redact_runtime_section,
+    sign_operator_payload,
     verify_lifecycle_origin,
 )
 
@@ -872,7 +874,7 @@ def _render_agent_dispatch_section(agent_availability: Dict[str, bool]) -> str:
         ("gemini",        "Gemini CLI",          "CLI · local"),
         ("ollama-mac",    "Ollama Mac",          "HTTP · localhost:11434"),
         ("lmstudio-mac",  "LM Studio Mac",       "HTTP · localhost"),
-        ("lmstudio-win",  "LM Studio Win",       f"HTTP · .{_get_win_ip().split('.')[-1]} GPU"),
+        ("lmstudio-win",  "LM Studio Win",       f"HTTP · .{_WIN_IP_LABEL.split('.')[-1]} GPU"),
         ("all",           "All (parallel)",      "Codex + Gemini + Mac; Win serial"),
     ]
     btns = []
@@ -1918,6 +1920,37 @@ async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
     }
 
 
+def _swarm_assignments_hash(assignments: List[Dict[str, Any]]) -> str:
+    canonical = json.dumps(assignments, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _sign_swarm_preview(preview: Dict[str, Any]) -> Dict[str, Any]:
+    """Attach preview_id and HMAC approval token to a built swarm preview."""
+    preview_id = str(uuid.uuid4())
+    sign_payload = {
+        "preview_id": preview_id,
+        "objective": preview["objective"],
+        "task_type": preview["task_type"],
+        "optimize_for": preview["optimize_for"],
+        "preferred_device": preview["preferred_device"],
+        "assignments_hash": _swarm_assignments_hash(preview["assignments"]),
+    }
+    try:
+        signed = sign_operator_payload(sign_payload)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="control plane token required for swarm preview signing",
+        ) from exc
+    return {
+        **preview,
+        "preview_id": preview_id,
+        "approval_token": signed["token"],
+        "expires_at": signed["expires_at"],
+    }
+
+
 def _extract_pt_job_id(payload: Any) -> Optional[str]:
     if isinstance(payload, dict):
         for key in ("job_id", "id"):
@@ -2069,7 +2102,8 @@ async def api_app_state():
 @app.post("/api/swarm/preview")
 async def api_swarm_preview(req: SwarmPreviewRequest):
     """Create a stateless five-role swarm preview; this route never dispatches."""
-    return await _build_swarm_preview(req)
+    preview = await _build_swarm_preview(req)
+    return _sign_swarm_preview(preview)
 
 
 @app.post("/api/swarm/launch")
