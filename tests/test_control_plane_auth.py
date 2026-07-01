@@ -2,7 +2,6 @@
 """Regression tests for control-plane authentication and redaction."""
 from __future__ import annotations
 
-import os
 
 from fastapi.testclient import TestClient
 
@@ -366,10 +365,18 @@ def test_outbound_prefers_peer_token(monkeypatch):
     assert resolved_control_plane_token() == "peer-only-token"
 
 
-def test_sign_operator_payload_round_trip(monkeypatch):
+def test_sign_operator_payload_round_trip(monkeypatch, tmp_path):
+    from utils import control_plane_auth
     from utils.control_plane_auth import sign_operator_payload, verify_operator_payload
 
-    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "operator-sign-test-secret")
+    # Operator signing secret is now separate from the bearer control-plane token
+    # (F1 fix) — let auth_enforced() go True and auto-persist a fresh secret to tmp_path.
+    monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
+    monkeypatch.setattr(
+        control_plane_auth,
+        "_default_operator_signing_secret_path",
+        lambda: tmp_path / "operator_signing_secret",
+    )
     payload = {
         "preview_id": "11111111-1111-4111-8111-111111111111",
         "objective": "Ship P5",
@@ -394,7 +401,7 @@ def test_sign_operator_payload_golden_vector():
         '{"assignments_hash":"deadbeef","expires_at":"2026-06-28T12:15:00Z",'
         '"objective":"golden","preview_id":"22222222-2222-4222-8222-222222222222"}'
     )
-    token = _compute_operator_token(payload, secret="golden-secret")
+    token = _compute_operator_token(payload, secret="golden-secret")  # noqa: S106 - deterministic test vector
     import base64
     import hashlib
     import hmac
@@ -408,10 +415,16 @@ def test_sign_operator_payload_golden_vector():
     assert token == expected
 
 
-def test_verify_operator_payload_rejects_tamper(monkeypatch):
+def test_verify_operator_payload_rejects_tamper(monkeypatch, tmp_path):
+    from utils import control_plane_auth
     from utils.control_plane_auth import sign_operator_payload, verify_operator_payload
 
-    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "tamper-test-secret")
+    monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
+    monkeypatch.setattr(
+        control_plane_auth,
+        "_default_operator_signing_secret_path",
+        lambda: tmp_path / "operator_signing_secret",
+    )
     payload = {"preview_id": "p1", "objective": "original"}
     signed = sign_operator_payload(payload)
     assert not verify_operator_payload(
@@ -430,17 +443,71 @@ def test_verify_operator_payload_rejects_expired(monkeypatch):
 
     expires_at = "2020-01-01T00:00:00Z"
     signed_payload = {**payload, "expires_at": expires_at}
-    token = _compute_operator_token(signed_payload, secret="expiry-test-secret")
+    token = _compute_operator_token(signed_payload, secret="expiry-test-secret")  # noqa: S106 - deterministic test vector
     assert not verify_operator_payload(payload, token, expires_at)
 
 
-def test_sign_operator_payload_requires_secret(monkeypatch):
+def test_operator_signing_secret_independent_of_bearer_token(monkeypatch, tmp_path):
+    """Regression for CR F1: a client that only knows the bearer control-plane
+    token must NOT be able to derive or guess the operator signing secret —
+    the two must be different values from different sources.
+    """
+    from utils import control_plane_auth
+
+    monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "bearer-token-clients-can-see")
+    monkeypatch.setattr(
+        control_plane_auth,
+        "_default_operator_signing_secret_path",
+        lambda: tmp_path / "operator_signing_secret",
+    )
+
+    bearer_token = control_plane_auth.ensure_control_plane_token()
+    signing_secret = control_plane_auth._operator_signing_secret()
+
+    assert bearer_token == "bearer-token-clients-can-see"
+    assert signing_secret != bearer_token, (
+        "operator signing secret must never equal the client-visible bearer token"
+    )
+    # Persisted to its own file, distinct from the control-plane token file.
+    assert (tmp_path / "operator_signing_secret").is_file()
+
+
+def test_verify_operator_payload_rejects_non_string_token(monkeypatch, tmp_path):
+    """Regression for CR F2: non-string token must return False, not raise
+    inside secrets.compare_digest.
+    """
+    from utils import control_plane_auth
+    from utils.control_plane_auth import sign_operator_payload, verify_operator_payload
+
+    monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
+    monkeypatch.setattr(
+        control_plane_auth,
+        "_default_operator_signing_secret_path",
+        lambda: tmp_path / "operator_signing_secret",
+    )
+    payload = {"preview_id": "p1"}
+    signed = sign_operator_payload(payload)
+
+    assert verify_operator_payload(payload, 12345, signed["expires_at"]) is False
+    assert verify_operator_payload(payload, ["not", "a", "str"], signed["expires_at"]) is False
+    assert verify_operator_payload(payload, signed["token"], 12345) is False
+
+
+def test_sign_operator_payload_requires_secret(monkeypatch, tmp_path):
+    from utils import control_plane_auth
     from utils.control_plane_auth import sign_operator_payload
 
-    monkeypatch.setattr("utils.control_plane_auth.ensure_control_plane_token", lambda: "")
+    # No persisted operator secret AND auth not enforced (ORAMA_INSECURE_DEV=1, set by the
+    # autouse fixture) — F1: signing must fail closed rather than silently derive a secret.
+    monkeypatch.setattr(
+        control_plane_auth,
+        "_default_operator_signing_secret_path",
+        lambda: tmp_path / "does-not-exist" / "operator_signing_secret",
+    )
 
     import pytest
 
-    with pytest.raises(ValueError, match="control plane token required"):
+    with pytest.raises(ValueError, match="control plane auth must be enforced"):
         sign_operator_payload({"preview_id": "p1"})
 
