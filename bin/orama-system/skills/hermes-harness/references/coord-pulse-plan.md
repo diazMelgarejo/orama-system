@@ -295,3 +295,17 @@ Manual loop today = pulse + cursor-agent session. This plan **automates the wait
 
 **Cycle evidence (2026-06-29):** Mac coord-012 inbox → `win-coder-pt199-frugality-review` → 15/15 tests → `win-pt199-frugality-reconcile.md` dropped to Mac.
 
+
+---
+
+## Race backend upgrade (2026-06-30)
+
+The Win `coord_pulse.ps1` dispatch leg was upgraded from single-leg Hermes to
+**parallel dispatch racing** (`spawn_agents.py --agent race`). Two legs race
+in parallel -- cursor-agent and Hermes+LM Studio Win -- and the first successful
+completion wins. If both fail, a direct LM Studio Win call (GPU-serialized)
+is the final fallback. The 5-min follow-up re-poll scheduling is preserved.
+
+See: `SKILL.md` section 6 Parallel Dispatch Racing
+See: `scripts/spawn_agents.py` (`_dispatch_race`, `dispatch_race`)
+See: `tests/test_dispatch_race.py`
