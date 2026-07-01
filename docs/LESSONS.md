@@ -3870,3 +3870,85 @@ When a local commit contains content already upstream (common with episodic memo
 - Security hardening plan marked COMPLETE.
 - 6 semantic lessons graduated to PT `.agent/memory`.
 - Only remaining: `openclaw.gateway-auth-token` keychain entry (user must provide value).
+
+
+## 2026-06-30 — Parallel Dispatch Racing hardened, wired into coord_pulse
+
+### Context
+
+Win session on branch `2026-06-30-start-windows-implementation`. The Grand
+Orchestration & Benchmark Plan was mostly shipped: `_dispatch_race` existed,
+Hermes config was set, thin wrappers verified, 15m/5m cron running, H6
+benchmark complete, Hermes Gateway running. Remaining work was hardening,
+wiring, testing, and documenting.
+
+### Learnings
+
+**1. `_exc` NameError in fallback path — undefined variable referenced.**
+`_dispatch_hermes_lmstudio_win` had a fallback path that referenced `_exc`
+when the hermes leg timed out and fell back to direct LM Studio. The variable
+was never defined in any code path — the `except` clause caught the exception
+anonymously (`except (asyncio.TimeoutError, Exception):`) without binding it
+to a name. The fallback used `str(_exc if "_exc" in dir() else "leg-failed")`
+which would raise `NameError` before the `dir()` check could even evaluate.
+Fix: replaced the entire expression with a simple `or "leg-failed"` fallback.
+This was a latent production bug — it would fire exactly when the fallback
+path is needed most (hermes timeout).
+
+**2. `winner` field for programmatic consumption.**
+The race function returned `[RACE WINNER: <name>]` as a string prefix on
+`output`, but `coord_pulse.ps1` and tests needed to know which leg won
+without parsing free-text. Added a `winner` field (`"cursor"` |
+`"hermes-lmstudio-win"` | `"direct-lmstudio-win"` | `null`) to the result
+dict. The output prefix is kept for human-readable logs; the field is for
+programmatic consumers.
+
+**3. Public wrapper for test importability.**
+`_dispatch_race` is a private coroutine. Tests need to import and call it
+without triggering CLI subprocesses. Added `dispatch_race` as a thin public
+wrapper (same signature, same return) so tests can `from spawn_agents import
+dispatch_race` and mock the individual legs with `unittest.mock.patch`.
+
+**4. coord_pulse.ps1 race wiring — JSON parsing from Python subprocess.**
+The PowerShell script calls `python spawn_agents.py --agent race --json` and
+captures stdout. The `--json` flag prints a single JSON object, but
+PowerShell's `ForEach-Object` pipeline splits it into lines. The fix: filter
+for lines matching `^\s*\{` and take the last one, then `ConvertFrom-Json`.
+This handles both single-line and multi-line JSON output robustly.
+
+**5. coord-pulse-plan.md has encoding-sensitive characters.**
+The plan file uses Unicode arrows (→) and em-dashes (—) that cause
+`replace_in_file` SEARCH blocks to fail silently on Windows. When editing
+files with non-ASCII content, use Python's `pathlib.Path.read_text` /
+`write_text` with explicit `encoding="utf-8"` instead of the diff-based
+editor.
+
+### Outcome
+
+- `_exc` NameError fixed in `scripts/spawn_agents.py`.
+- `winner` field added to `_dispatch_race` and `dispatch_race` results.
+- `dispatch_race` public wrapper exported for test importability.
+- `coord_pulse.ps1` wired to call `spawn_agents.py --agent race` instead of
+  single-leg Hermes dispatch; 5-min follow-up re-poll preserved.
+- `tests/test_dispatch_race.py` created — 6 tests, all passing.
+- `SKILL.md` §6 Parallel Dispatch Racing subsection added.
+- `coord-pulse-plan.md` race backend upgrade note appended.
+- No regressions in existing tests.
+
+**6. Pause/resume as sticky file state, not a scheduled-task toggle alone.**
+`Disable-ScheduledTask` alone is not enough — a manual/adhoc invocation of
+`coord_pulse.ps1` (outside Task Scheduler) would still run. Added a
+`coord_pulse_pause.json` check at the top of the script (before the lock
+check) so pause applies regardless of invocation path. Default state on
+pause is `paused_until_resume` — no auto-resume timer; only an explicit
+resume command clears it. Documented as a user-local Hermes skill
+(`~/.hermes/skills/orchestration/coord-pulse-control/SKILL.md`) so the
+conversational "pause coord pulse" / "resume coord pulse" commands are
+handled consistently by Hermes itself, not re-derived each session.
+
+**7. `install_coord_pulse.ps1` `[TimeSpan]::MaxValue` is invalid Task
+Scheduler XML.** `Register-ScheduledTask` failed with "task XML contains a
+value which is incorrectly formatted" — `[TimeSpan]::MaxValue` serializes to
+`P99999999DT23H59M59S`, which Task Scheduler's schema rejects. Fixed to
+`New-TimeSpan -Days 3650` (10 years, effectively indefinite for this use
+case).
