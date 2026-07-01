@@ -18,6 +18,9 @@ PR_BODY.md
 .env.*
 !.env.example
 .env.local
+.hermes/
+.requirements.stamp
+NUL
 .paths
 .paths.ps1
 *.pem
