@@ -12,9 +12,8 @@ moving to 2.0 on another repo soon
 [![SKILL.md Standard](https://img.shields.io/badge/SKILL.md-Compatible-green)](https://ecc.tools/skills)
 [![ECC Tools](https://img.shields.io/badge/ECC_Tools-Compatible-brightgreen)](https://ecc.tools)
 [![Version](https://img.shields.io/badge/version-1.1.1.0-orange)](CHANGELOG.md)
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/diazMelgarejo/orama-system?utm_source=oss&utm_medium=github&utm_campaign=diazMelgarejo%2Forama-system&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-**Compatible with**: Claude Code · Cowork · Clawdbot · MoltBot · OpenClaw · ECC Tools (everything-claude-code) · Cursor · Hermes
+**Compatible with**: Claude Code · Cowork · Clawdbot · MoltBot · OpenClaw · ECC Tools (everything-claude-code)
 
 ---
 
