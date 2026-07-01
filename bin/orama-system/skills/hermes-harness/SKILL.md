@@ -315,6 +315,49 @@ canary passes, Gemini CLI only for authenticated Gemini-Analyzer use-cases, and
 Codex CLI for approved mechanical repo edits. The main orama agent keeps
 judgment.
 
+### 6. Parallel Dispatch Racing (cursor-agent vs Hermes+LM Studio)
+
+When a Windows coord pulse needs a coding job dispatched, race two independent
+legs in parallel and take the first successful completion. This eliminates
+single-leg fragility: if cursor-agent hits usage limits or Hermes+LM Studio is
+slow, the other leg can still complete the job.
+
+**Implementation:** `scripts/spawn_agents.py --agent race`
+
+```powershell
+python scripts/spawn_agents.py --agent race --task "Follow .cursor/agents/win-coder-queue.md ..." --json
+```
+
+**Race legs:**
+
+| Leg | Racer | Fallback |
+|-----|-------|----------|
+| 1 | `cursor-agent` (CLI, 20s timeout) | — |
+| 2 | `hermes chat --provider lmstudio-win` (15s timeout) | direct LM Studio Win (GPU-serialized) |
+
+**Result shape:**
+
+```json
+{
+  "ok": true,
+  "output": "[RACE WINNER: cursor]\n...",
+  "elapsed": 3.2,
+  "winner": "cursor"
+}
+```
+
+The `winner` field (`"cursor"` | `"hermes-lmstudio-win"` | `"direct-lmstudio-win"` | `null`)
+lets `coord_pulse.ps1` and tests consume the result programmatically without
+parsing the `[RACE WINNER: ...]` output prefix.
+
+**Wired into:** `coord_pulse.ps1` (15-min Task Scheduler tick + 5-min follow-up
+re-poll). The pulse calls `spawn_agents.py --agent race` instead of a single-leg
+Hermes dispatch, then logs the winner and schedules the follow-up re-poll.
+
+**Tests:** `tests/test_dispatch_race.py` — 6 cases covering cursor wins, hermes
+wins, both-fail→fallback, all-fail, the `_exc` NameError regression, and
+`winner` field presence.
+
 ## Verification
 
 ```powershell

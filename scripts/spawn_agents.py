@@ -393,7 +393,7 @@ async def _dispatch_lmstudio(endpoint: str, model: str, task: str, *, win_gpu: b
                 payload = {
                     "model": model,
                     "messages": [{"role": "user", "content": task}],
-                    "max_tokens": 4096,
+                    "max_tokens": 512,
                     "temperature": 0.2,
                 }
                 headers = {"Authorization": f"Bearer {LMS_API_KEY}"}
@@ -451,7 +451,7 @@ async def _dispatch_cursor(task: str) -> Dict[str, Any]:
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(REPO_ROOT),
             )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=20)
         elapsed = time.time() - t0
         output = stdout.decode("utf-8", errors="replace")
         return {"ok": proc.returncode == 0, "output": output, "elapsed": elapsed}
@@ -511,13 +511,28 @@ async def _dispatch_hermes_lmstudio_win(task: str) -> Dict[str, Any]:
             cwd=str(REPO_ROOT),
             env=env,
         )
-        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
-        output = stdout.decode("utf-8", errors="replace")
-        return {"ok": proc.returncode == 0, "output": output, "elapsed": time.time() - t0}
-    except asyncio.TimeoutError:
-        return {"ok": False, "output": "Hermes LM Studio timed out (5min)", "elapsed": time.time() - t0}
-    except Exception as exc:
-        return {"ok": False, "output": str(exc), "elapsed": time.time() - t0}
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
+        output = stdout.decode("utf-8", errors="replace").strip()
+        if output:
+            return {"ok": True, "output": output, "elapsed": time.time() - t0}
+    except (asyncio.TimeoutError, Exception):
+        try:
+            proc.kill()
+        except Exception:
+            pass
+    fallback = await _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
+    elapsed = time.time() - t0
+    if not fallback.get("ok"):
+        fallback["output"] = (
+            "[RACE LEG: hermes-lmstudio-win → direct-lmstudio-win fallback]\n"
+            + (fallback.get("output", "") or "leg-failed")
+        )
+    else:
+        fallback["output"] = (
+            "[RACE LEG: hermes-lmstudio-win → direct-lmstudio-win fallback]\n"
+            + fallback.get("output", "")
+        )
+    return {"ok": fallback.get("ok", False), "output": fallback.get("output", ""), "elapsed": elapsed}
 
 
 async def _dispatch_race(task: str) -> Dict[str, Any]:
@@ -540,6 +555,7 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
                     p.cancel()
                 res["elapsed"] = time.time() - t0
                 res["output"] = f"[RACE WINNER: {name}]\n" + res["output"]
+                res["winner"] = name
                 return res
             failures[name] = res.get("output", "failed")
 
@@ -547,6 +563,7 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
     if direct.get("ok"):
         direct["elapsed"] = time.time() - t0
         direct["output"] = "[RACE FALLBACK: direct-lmstudio-win]\n" + direct["output"]
+        direct["winner"] = "direct-lmstudio-win"
         return direct
 
     failures["direct-lmstudio-win"] = direct.get("output", "failed")
@@ -554,7 +571,16 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
         "ok": False,
         "output": "All raced Windows agents failed: " + json.dumps(failures, indent=2),
         "elapsed": time.time() - t0,
+        "winner": None,
     }
+
+
+async def dispatch_race(task: str) -> Dict[str, Any]:
+    """Public wrapper around _dispatch_race for test importability.
+
+    Returns the same dict as _dispatch_race: {ok, output, elapsed, winner}.
+    """
+    return await _dispatch_race(task)
 
 
 # ── Orchestration ─────────────────────────────────────────────────────────────
