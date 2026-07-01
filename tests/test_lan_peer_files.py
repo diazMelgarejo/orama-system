@@ -6,9 +6,13 @@ import pytest
 from orama_system.lan_peer_files import (
     inbox_dir,
     list_inbox,
+    list_outbox,
+    read_outbox_file,
+    remove_outbox_file,
     read_inbox_file,
     sanitize_filename,
     write_inbox_file,
+    write_outbox_file,
 )
 
 
@@ -41,3 +45,30 @@ def test_write_list_read_roundtrip(inbox_root):
     assert "Hypothesis" in body
     assert meta["assignee"] == "mac"
     assert (inbox_root / "inbox" / "2026-06-28-mac-hypothesis.md").is_file()
+
+
+def test_write_outbox_records_delivery_failure(inbox_root):
+    record = write_outbox_file(
+        "win-task.md",
+        "# Win task\n",
+        assignee="win",
+        topic="smoke",
+        source="mac",
+        fanout_id="batch-002",
+        peer_ip="10.0.0.50",
+        portal_port=8002,
+        error="HTTP 500",
+    )
+
+    assert record["filename"] == "win-task.md"
+    assert record["peer_ip"] == "10.0.0.50"
+    assert record["portal_port"] == "8002"
+    assert record["last_error"] == "HTTP 500"
+    assert (inbox_root / "outbox" / "win-task.md").is_file()
+    assert (inbox_root / "outbox" / "win-task.md.meta.json").is_file()
+    assert list_outbox()[0]["filename"] == "win-task.md"
+    body, meta = read_outbox_file("win-task.md")
+    assert "Win task" in body
+    assert meta["peer_ip"] == "10.0.0.50"
+    remove_outbox_file("win-task.md")
+    assert list_outbox() == []

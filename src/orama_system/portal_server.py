@@ -868,6 +868,7 @@ def _lmstudio_mac_busy_flag(agents: List[Dict[str, Any]]) -> bool:
 
 def _render_agent_dispatch_section(agent_availability: Dict[str, bool]) -> str:
     """Render the Agent Dispatch panel with live availability badges."""
+    win_octet = _WIN_IP_LABEL.split(".")[-1] if _WIN_IP_LABEL else "peer"
     AGENTS = [
         ("codex",         "Codex",              "CLI · local"),
         ("gemini-review", "Gemini Review",       "CLI · code review"),

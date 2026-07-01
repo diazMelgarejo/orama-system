@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "resources": [
+    {
+      "kind": "agent",
+      "id": "cline-agent",
+      "manager": "oramaclaw",
+      "policy": "cooperative",
+      "spec": {
+        "model": "openrouter/z-ai/glm-5.2",
+        "thinkingDefault": "auto",
+        "clineCli": "command -v cline",
+        "clineProvider": "cline-pass",
+        "clineModel": "cline-pass/glm-5.2",
+        "bridges": ["exec", "acp", "mcp"]
+      },
+      "managed_paths": [
+        "/agents/list/cline-agent/model",
+        "/agents/list/cline-agent/thinkingDefault",
+        "/agents/list/cline-agent/tools/profile",
+        "/agents/list/cline-agent/agentDir",
+        "/agents/defaults/subagents/allowAgents"
+      ]
+    },
+    {
+      "kind": "profile",
+      "id": "cline-workspace-profile",
+      "manager": "oramaclaw",
+      "policy": "strict",
+      "spec": {
+        "generator": "generate_cline_openclaw_profile.py",
+        "workspace": "~/.openclaw/agents/cline-agent",
+        "effort": "medium"
+      },
+      "managed_paths": [
+        "/agents/list/cline-agent/profile"
+      ]
+    }
+  ]
+}
