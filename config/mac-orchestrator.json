@@ -16,7 +16,8 @@
         "google/gemini-3.1-flash-lite-preview": {},
         "google/gemini-3.1-flash-lite-preview-FALL": {},
         "google/gemini-3.1-pro-preview": {},
-        "google/gemini-3.1-pro-preview-FALL": {}
+        "google/gemini-3.1-pro-preview-FALL": {},
+        "bigmodel/glm-5.2": {}
       },
       "thinkingDefault": "off",
       "workspace": "${HOME}/.openclaw/agents/default"
@@ -303,6 +304,24 @@
           }
         ]
       },
+      "bigmodel": {
+        "api": "openai-completions",
+        "apiKey": "${env:OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY}",
+        "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+        "models": [
+          {
+            "id": "glm-5.2",
+            "name": "GLM-5.2 (BigModel, thinking)",
+            "contextWindow": 131072,
+            "maxTokens": 65536,
+            "reasoning": true,
+            "cost": {
+              "input": 0,
+              "output": 0
+            }
+          }
+        ]
+      },
       "lmstudio-mac": {
         "api": "openai-completions",
         "apiKey": "lm-studio",
@@ -353,7 +372,7 @@
       "lmstudio-win": {
         "api": "openai-completions",
         "apiKey": "lm-studio",
-        "baseUrl": "http://192.168.254.102:1234/v1",
+        "baseUrl": "http://192.168.9.18:1234/v1",
         "models": [
           {
             "id": "gemma-4-26b-a4b-it",

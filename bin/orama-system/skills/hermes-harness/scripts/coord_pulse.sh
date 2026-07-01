@@ -7,9 +7,12 @@ ORAMA="${ORAMA_SYSTEM_PATH:-$(git -C "$(dirname "$0")/../../.." rev-parse --show
 PT="${PERPETUA_TOOLS_PATH:-}"
 LOG_DIR="${HOME}/.openclaw/state/lan_peer"
 LOCK="${LOG_DIR}/mac_pulse.lock"
+LOCK_DIR="${LOG_DIR}/mac_pulse.lockdir"
 SEEN="${LOG_DIR}/last_pulse_seen.json"
 LOG="${LOG_DIR}/coord-pulse.log"
 MAC_QUEUE="$ORAMA/bin/orama-system/skills/hermes-harness/scripts/mac_job_queue.py"
+LAN_SESSION="$ORAMA/bin/orama-system/skills/hermes-harness/scripts/lan_peer_session.py"
+DUAL_DISPATCH="$ORAMA/bin/orama-system/skills/hermes-harness/scripts/dual_path_dispatch.py"
 DRY_RUN=0
 
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=1
@@ -19,20 +22,59 @@ log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) $*" | tee -a "$LOG"; }
 mkdir -p "$LOG_DIR"
 export PATH="${HOME}/.local/bin:${PATH:-/usr/bin:/bin}"
 
+lan_peer_session() {
+  if [[ ! -f "$LAN_SESSION" ]]; then
+    log "session state script missing: $LAN_SESSION"
+    return 0
+  fi
+  python3 "$LAN_SESSION" "$@"
+}
+
+_release_lock() {
+  rm -rf "$LOCK_DIR"
+}
+
+_acquire_lock() {
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    printf '%s\n' "$$" > "$LOCK_DIR/pid"
+    rm -f "$LOCK"
+    trap _release_lock EXIT INT TERM
+    return 0
+  fi
+
+  local owner=""
+  if [[ -f "$LOCK_DIR/pid" ]]; then
+    owner="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+  fi
+  if [[ -n "$owner" ]] && kill -0 "$owner" 2>/dev/null; then
+    log "skip: pulse lock held by pid=$owner ($LOCK_DIR)"
+    exit 2
+  fi
+
+  log "stale pulse lock cleared ($LOCK_DIR)"
+  rm -rf "$LOCK_DIR"
+  if mkdir "$LOCK_DIR" 2>/dev/null; then
+    printf '%s\n' "$$" > "$LOCK_DIR/pid"
+    rm -f "$LOCK"
+    trap _release_lock EXIT INT TERM
+    return 0
+  fi
+
+  log "skip: pulse lock acquired by another process ($LOCK_DIR)"
+  exit 2
+}
+
 _snapshot_seen() {
   python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py" list 2>/dev/null \
     | python3 -c "import sys,json; json.dump([x['filename'] for x in json.load(sys.stdin).get('files',[])], open('$SEEN','w'), indent=2)" || true
 }
 
-# Idle gate: flock held by live pulse (includes cursor-agent run)
-if [[ -f "$LOCK" ]]; then
-  if flock -n "$LOCK" -c "true" 2>/dev/null; then
-    rm -f "$LOCK"
-  else
-    log "skip: pulse lock held ($LOCK)"
-    exit 2
-  fi
+# Idle gate: atomic directory lock held for the full pulse, including cursor-agent.
+if [[ -f "$LOCK" && ! -d "$LOCK_DIR" ]]; then
+  log "clearing legacy pulse lock file ($LOCK)"
+  rm -f "$LOCK"
 fi
+_acquire_lock
 
 log "pulse start dry_run=$DRY_RUN"
 
@@ -44,7 +86,20 @@ if [[ -n "$PT" && -d "$PT/.git" ]]; then
   git -C "$PT" fetch origin --prune >>"$LOG" 2>&1 || true
 fi
 
-python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py" --json >>"$LOG" 2>&1 || true
+if ! lan_peer_session should-retry >>"$LOG" 2>&1; then
+  log "macOS-only degraded mode active; next Windows peer retry waits for LAN_PEER_DEGRADED_RETRY_SECONDS=${LAN_PEER_DEGRADED_RETRY_SECONDS:-900}"
+else
+  if python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/probe_lan_peer.py" --json \
+    --timeout "${LAN_PEER_PROBE_TIMEOUT:-2}" \
+    --status-timeout "${LAN_PEER_STATUS_TIMEOUT:-3}" \
+    --ws-timeout "${LAN_PEER_WS_TIMEOUT:-2}" >>"$LOG" 2>&1; then
+    lan_peer_session record-success >>"$LOG" 2>&1 || true
+    python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py" \
+      flush-outbox --peer --timeout "${LAN_PEER_HTTP_TIMEOUT:-2}" >>"$LOG" 2>&1 || true
+  else
+    lan_peer_session record-failure --error "probe_lan_peer.py failed" >>"$LOG" 2>&1 || true
+  fi
+fi
 
 GATE_JSON=$(python3 "$MAC_QUEUE" pulse-gate --seen-file "$SEEN" 2>>"$LOG" || echo '{"status":"error"}')
 GATE_STATUS=$(echo "$GATE_JSON" | python3 -c "import sys,json; print(json.load(sys.stdin).get('status','error'))" 2>/dev/null || echo "error")
@@ -62,28 +117,26 @@ if [[ "$GATE_STATUS" != "actionable" ]]; then
   exit 0
 fi
 
-if [[ "$DRY_RUN" -eq 1 ]]; then
-  log "dry-run: would invoke cursor-agent role=$PICK_ROLE job=$PICK_ID"
-  log "pulse end"
-  exit 0
-fi
-
-if ! command -v cursor-agent >/dev/null 2>&1; then
-  log "skip: cursor-agent not on PATH"
-  log "pulse end"
-  exit 0
-fi
-
 AGENT_CARD="$ORAMA/.cursor/agents/mac-orchestrator-queue.md"
 if [[ "$PICK_ROLE" == "researcher" ]]; then
   AGENT_CARD="$ORAMA/.cursor/agents/win-autoresearcher-queue.md"
 fi
-PROMPT="Follow $AGENT_CARD — execute ONE $PICK_ROLE job ($PICK_ID) from mac_job_queue / inbox. PT learn+dream, push main."
 
-log "cursor-agent start role=$PICK_ROLE job=$PICK_ID"
-(
-  flock -x 9
-  cursor-agent --print --model composer-2.5 "$PROMPT" >>"$LOG" 2>&1 || log "cursor-agent exit=$?"
-) 9>"$LOCK"
+if [[ "$DRY_RUN" -eq 1 ]]; then
+  python3 "$DUAL_DISPATCH" --dry-run --role "$PICK_ROLE" --job-id "$PICK_ID" --agent-card "$AGENT_CARD" >>"$LOG" 2>&1 || true
+  log "dry-run: would invoke dual dispatch role=$PICK_ROLE job=$PICK_ID"
+  log "pulse end"
+  exit 0
+fi
+
+if [[ ! -f "$DUAL_DISPATCH" ]]; then
+  log "skip: dual dispatch helper missing: $DUAL_DISPATCH"
+  log "pulse end"
+  exit 0
+fi
+
+log "dual dispatch start role=$PICK_ROLE job=$PICK_ID"
+python3 "$DUAL_DISPATCH" --role "$PICK_ROLE" --job-id "$PICK_ID" --agent-card "$AGENT_CARD" >>"$LOG" 2>&1 \
+  || log "dual dispatch failed role=$PICK_ROLE job=$PICK_ID"
 
 log "pulse end"

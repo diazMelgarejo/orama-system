@@ -107,7 +107,36 @@ def cmd_drop(args: argparse.Namespace) -> int:
     if args.peer:
         ip, port = _resolve_peer(args)
         url = f"{_peer_base(ip, port)}/api/peer-file"
-        result = _http_json("POST", url, payload)
+        try:
+            result = _http_json("POST", url, payload, timeout=args.timeout)
+        except SystemExit as exc:
+            _ensure_orama_src()
+            from orama_system.lan_peer_files import write_outbox_file
+
+            record = write_outbox_file(
+                filename,
+                body,
+                assignee=args.assignee,
+                topic=args.topic,
+                source=probe.local_role(),
+                fanout_id=args.fanout_id or "",
+                peer_ip=ip,
+                portal_port=port,
+                error=str(exc),
+            )
+            print(
+                json.dumps(
+                    {
+                        "ok": False,
+                        "queued": True,
+                        "scope": "local-outbox",
+                        "detail": str(exc),
+                        **record,
+                    },
+                    indent=2,
+                )
+            )
+            return 2
         print(json.dumps(result, indent=2))
         return 0
     # Local inbox (self-test)
@@ -130,7 +159,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     if args.peer:
         ip, port = _resolve_peer(args)
         url = f"{_peer_base(ip, port)}/api/peer-inbox"
-        result = _http_json("GET", url)
+        result = _http_json("GET", url, timeout=args.timeout)
         print(json.dumps(result, indent=2))
         return 0
     _ensure_orama_src()
@@ -146,7 +175,7 @@ def cmd_read(args: argparse.Namespace) -> int:
     if args.peer:
         ip, port = _resolve_peer(args)
         url = f"{_peer_base(ip, port)}/api/peer-inbox/{args.name}"
-        result = _http_json("GET", url)
+        result = _http_json("GET", url, timeout=args.timeout)
         if args.json:
             print(json.dumps(result, indent=2))
         else:
@@ -161,6 +190,52 @@ def cmd_read(args: argparse.Namespace) -> int:
     else:
         print(body)
     return 0
+
+
+def cmd_flush_outbox(args: argparse.Namespace) -> int:
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import list_outbox, read_outbox_file, remove_outbox_file
+
+    ip, port = _resolve_peer(args)
+    url = f"{_peer_base(ip, port)}/api/peer-file"
+    items = list_outbox()
+    results: list[dict[str, Any]] = []
+    for item in items:
+        filename = str(item.get("filename") or "")
+        if not filename:
+            continue
+        body, meta = read_outbox_file(filename)
+        payload = {
+            "filename": filename,
+            "body": body,
+            "assignee": str(meta.get("assignee") or item.get("assignee") or ""),
+            "topic": str(meta.get("topic") or item.get("topic") or ""),
+            "fanout_id": str(meta.get("fanout_id") or item.get("fanout_id") or ""),
+            "source": str(meta.get("source") or probe.local_role()),
+        }
+        entry = {"filename": filename, "status": "pending"}
+        try:
+            _http_json("POST", url, payload, timeout=args.timeout)
+        except SystemExit as exc:
+            entry["status"] = "error"
+            entry["detail"] = str(exc)
+        else:
+            remove_outbox_file(filename)
+            entry["status"] = "delivered"
+        results.append(entry)
+    failed = [r for r in results if r.get("status") == "error"]
+    print(
+        json.dumps(
+            {
+                "ok": not failed,
+                "peer_ip": ip,
+                "portal_port": port,
+                "results": results,
+            },
+            indent=2,
+        )
+    )
+    return 1 if failed else 0
 
 
 def cmd_fanout(args: argparse.Namespace) -> int:
@@ -189,6 +264,7 @@ def cmd_fanout(args: argparse.Namespace) -> int:
             peer=to_peer,
             peer_ip=args.peer_ip,
             portal_port=args.portal_port,
+            timeout=args.timeout,
         )
         print(f"--- drop {filename} assignee={assignee} peer={to_peer}", file=sys.stderr)
         entry: dict[str, Any] = {"filename": filename, "assignee": assignee, "to_peer": to_peer}
@@ -215,6 +291,12 @@ def main(argv: list[str] | None = None) -> int:
     peer_p.add_argument(
         "--portal-port", type=int, default=int(os.environ.get("PORTAL_PORT", "8002"))
     )
+    peer_p.add_argument(
+        "--timeout",
+        type=int,
+        default=int(os.environ.get("LAN_PEER_HTTP_TIMEOUT", "30")),
+        help="HTTP timeout in seconds for peer portal calls",
+    )
 
     p = argparse.ArgumentParser(description="LAN peer file assignments (markdown handoff)")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -234,6 +316,13 @@ def main(argv: list[str] | None = None) -> int:
     read.add_argument("--name", required=True)
     read.add_argument("--json", action="store_true")
     read.set_defaults(func=cmd_read)
+
+    flush = sub.add_parser(
+        "flush-outbox",
+        parents=[peer_p],
+        help="Retry locally queued peer drops",
+    )
+    flush.set_defaults(func=cmd_flush_outbox)
 
     fan = sub.add_parser("fanout", parents=[peer_p], help="Drop many assignments from manifest JSON")
     fan.add_argument("--manifest", required=True)

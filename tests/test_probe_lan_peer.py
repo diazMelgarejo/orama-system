@@ -62,6 +62,26 @@ def test_resolve_control_plane_token_from_pt_state(peer_mod, monkeypatch, tmp_pa
     assert peer_mod.resolve_control_plane_token() == "pt-secret-token"
 
 
+def test_load_repo_env_uses_env_local_without_overriding_shell(peer_mod, monkeypatch, tmp_path):
+    (tmp_path / ".env").write_text(
+        "ORAMA_CONTROL_PLANE_TOKEN=base-token\n"
+        "ORAMA_CONTROL_PLANE_TOKEN_PEER=base-peer\n",
+        encoding="utf-8",
+    )
+    (tmp_path / ".env.local").write_text(
+        "ORAMA_CONTROL_PLANE_TOKEN=local-token\n"
+        "ORAMA_CONTROL_PLANE_TOKEN_PEER=local-peer\n",
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", "shell-peer")
+
+    peer_mod.load_repo_env(tmp_path)
+
+    assert peer_mod.resolve_control_plane_token() == "shell-peer"
+    assert peer_mod.orama_lane_token_candidates() == ["local-token"]
+
+
 def test_outbound_peer_token_tried_first(peer_mod, monkeypatch):
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "local-symmetric")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN_PEER", "peer-handoff")
@@ -92,12 +112,54 @@ def test_portal_status_tries_second_token(peer_mod, monkeypatch):
     monkeypatch.setattr(
         peer_mod,
         "check_ws_peer",
-        lambda peer_ip, portal_port, tokens: peer_mod.Check("ws-peer", peer_mod.Status.SKIP, ""),
+        lambda peer_ip, portal_port, tokens, **kwargs: peer_mod.Check(
+            "ws-peer", peer_mod.Status.SKIP, ""
+        ),
     )
     checks = peer_mod.run_checks("10.0.0.50", 1234, 8002, ["bad-token", "good-token"])
     by_name = {c.name: c for c in checks}
     assert by_name["portal-status"].status == peer_mod.Status.PASS
     assert calls[:2] == ["bad-token", "good-token"]
+
+
+def test_run_checks_uses_configured_timeouts(peer_mod, monkeypatch):
+    calls: list[tuple[str, int]] = []
+
+    def fake_get(url: str, token: str = "", timeout: int = 8):
+        calls.append((url, timeout))
+        if url.endswith("/health"):
+            return 200, '{"status":"ok"}'
+        if "/api/status" in url:
+            return 200, "{}"
+        if url.endswith("/v1/models"):
+            return 200, json.dumps({"data": []})
+        return 404, "nope"
+
+    monkeypatch.setattr(peer_mod, "http_get", fake_get)
+    monkeypatch.setattr(
+        peer_mod,
+        "check_ws_peer",
+        lambda peer_ip, portal_port, tokens, timeout=10: peer_mod.Check(
+            "ws-peer", peer_mod.Status.PASS, f"timeout={timeout}"
+        ),
+    )
+
+    checks = peer_mod.run_checks(
+        "10.0.0.50",
+        1234,
+        8002,
+        ["good-token"],
+        timeout=3,
+        status_timeout=4,
+        ws_timeout=5,
+    )
+
+    assert calls == [
+        ("http://10.0.0.50:8002/health", 3),
+        ("http://10.0.0.50:8002/api/status", 4),
+        ("http://10.0.0.50:1234/v1/models", 3),
+    ]
+    assert checks[-1].detail == "timeout=5"
 
 
 def test_write_probe_result_on_success(peer_mod, monkeypatch, tmp_path):
@@ -129,7 +191,9 @@ def test_main_json_exit_zero_when_lmstudio_ok(peer_mod, monkeypatch, capsys, tmp
     monkeypatch.setattr(
         peer_mod,
         "check_ws_peer",
-        lambda peer_ip, portal_port, tokens: peer_mod.Check("ws-peer", peer_mod.Status.PASS, "mocked"),
+        lambda peer_ip, portal_port, tokens, **kwargs: peer_mod.Check(
+            "ws-peer", peer_mod.Status.PASS, "mocked"
+        ),
     )
     rc = peer_mod.main(["--json"])
     assert rc == 0

@@ -250,15 +250,47 @@ function Invoke-LanPeerProbe {
     $probe = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py'
     if (-not (Test-Path $probe)) {
         _Warn 'lan-peer' "probe script missing: $probe"
-        return
+        return $false
     }
     Sync-ControlPlaneToken
     if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
     _Info 'lan-peer' 'running probe_lan_peer.py --json ...'
-    & $UsPython $probe --json
+    $probeTimeout = if ($env:LAN_PEER_PROBE_TIMEOUT) { $env:LAN_PEER_PROBE_TIMEOUT } else { '2' }
+    $statusTimeout = if ($env:LAN_PEER_STATUS_TIMEOUT) { $env:LAN_PEER_STATUS_TIMEOUT } else { '3' }
+    $wsTimeout = if ($env:LAN_PEER_WS_TIMEOUT) { $env:LAN_PEER_WS_TIMEOUT } else { '2' }
+    & $UsPython $probe --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout
     if ($LASTEXITCODE -ne 0) {
         _Warn 'lan-peer' 'peer probe reported failures (Mac peer may need ./start.sh --lan-peer)'
+        return $false
     }
+    return $true
+}
+
+function Invoke-LanPeerOutboxFlush {
+    $assign = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py'
+    if (-not (Test-Path $assign)) {
+        _Warn 'lan-peer' "assignment script missing: $assign"
+        return
+    }
+    Sync-ControlPlaneToken
+    if ($PtDir) { $env:PERPETUA_TOOLS_ROOT = $PtDir }
+    _Info 'lan-peer' 'flushing queued peer drops ...'
+    $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
+    & $UsPython $assign flush-outbox --peer --timeout $httpTimeout
+    if ($LASTEXITCODE -ne 0) {
+        _Warn 'lan-peer' 'queued peer drops remain pending'
+    }
+}
+
+function Invoke-LanPeerSession {
+    param([string[]]$Args)
+    $session = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\lan_peer_session.py'
+    if (-not (Test-Path $session)) {
+        _Warn 'lan-peer' "session state script missing: $session"
+        return $true
+    }
+    & $UsPython $session @Args | Out-Null
+    return ($LASTEXITCODE -eq 0)
 }
 
 # ── Hardware policy check ─────────────────────────────────────────────────────
@@ -475,6 +507,9 @@ $env:OLLAMA_MAC_ENDPOINT       = if ($env:OLLAMA_MAC_ENDPOINT)       { $env:OLLA
 $env:OLLAMA_WINDOWS_ENDPOINT   = if ($env:OLLAMA_WINDOWS_ENDPOINT)   { $env:OLLAMA_WINDOWS_ENDPOINT }   else { 'http://localhost:11434' }
 $env:LM_STUDIO_MAC_ENDPOINT    = if ($env:LM_STUDIO_MAC_ENDPOINT)    { $env:LM_STUDIO_MAC_ENDPOINT }    elseif ($MacIp -notin @('unresolved','localhost','127.0.0.1')) { "http://${MacIp}:1234" } else { 'http://localhost:1234' }
 $env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { "http://$($env:WIN_IP):1234" }
+# WIN_PEER_ENDPOINT - consumed by the dual-path orchestrator peer probe.
+# On Windows, the Win peer is this machine (localhost:1234).
+$env:WIN_PEER_ENDPOINT         = if ($env:WIN_PEER_ENDPOINT)         { $env:WIN_PEER_ENDPOINT }         else { 'localhost:1234' }
 $env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
 $env:WINDOWS_IP                = $env:WIN_IP
 
@@ -581,7 +616,16 @@ Write-Host '──────────────────────�
 Write-Host ''
 
 if ($LanPeer) {
-    Invoke-LanPeerProbe
+    $retrySeconds = if ($env:LAN_PEER_DEGRADED_RETRY_SECONDS) { $env:LAN_PEER_DEGRADED_RETRY_SECONDS } else { '900' }
+    if (-not (Invoke-LanPeerSession -Args @('should-retry'))) {
+        _Warn 'lan-peer' "macOS-only degraded mode active; next peer retry waits for LAN_PEER_DEGRADED_RETRY_SECONDS=$retrySeconds"
+    } elseif (Invoke-LanPeerProbe) {
+        $null = Invoke-LanPeerSession -Args @('record-success')
+        Invoke-LanPeerOutboxFlush
+    } else {
+        $null = Invoke-LanPeerSession -Args @('record-failure', '--error', 'probe_lan_peer.py failed')
+        _Warn 'lan-peer' 'skipping outbox flush until peer portal probe passes'
+    }
 }
 
 if (-not $NoOpen) {
