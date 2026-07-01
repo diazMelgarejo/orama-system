@@ -25,6 +25,9 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
+_SCRIPT_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _SCRIPT_DIR.parents[4]
+
 
 class Status(str, Enum):
     PASS = "PASS"
@@ -53,6 +56,47 @@ def write_probe_result(payload: dict[str, Any]) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def _parse_env_line(line: str) -> tuple[str, str] | None:
+    raw = line.strip()
+    if not raw or raw.startswith("#"):
+        return None
+    if raw.startswith("export "):
+        raw = raw[len("export ") :].strip()
+    if "=" not in raw:
+        return None
+    key, value = raw.split("=", 1)
+    key = key.strip()
+    if not key:
+        return None
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+        value = value[1:-1]
+    return key, value
+
+
+def load_repo_env(root: Path = _REPO_ROOT) -> None:
+    """Load repo .env files for direct CLI use without overriding shell exports."""
+    values: dict[str, str] = {}
+    for name in (".env", ".env.local"):
+        path = root / name
+        if not path.is_file():
+            continue
+        try:
+            lines = path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines:
+            parsed = _parse_env_line(line)
+            if parsed:
+                key, value = parsed
+                values[key] = value
+    for key, value in values.items():
+        os.environ.setdefault(key, value)
+
+
+load_repo_env()
 
 
 def load_discovery() -> dict[str, Any]:
@@ -199,7 +243,7 @@ def resolve_control_plane_token() -> str:
     return tokens[0] if tokens else ""
 
 
-def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str]) -> Check:
+def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout: int = 10) -> Check:
     if not peer_ip:
         return Check("ws-peer", Status.SKIP, "no peer IP")
     if not tokens:
@@ -222,11 +266,11 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str]) -> Check:
                 url = f"ws://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
                 async with websockets.connect(
                     url,
-                    open_timeout=10,
+                    open_timeout=timeout,
                     additional_headers=headers,
                 ) as ws:
                     await ws.send(json.dumps({"type": "probe", "source": local_role()}))
-                    raw = await asyncio.wait_for(ws.recv(), timeout=5)
+                    raw = await asyncio.wait_for(ws.recv(), timeout=max(1, min(timeout, 5)))
                     return raw[:200]
 
             detail = asyncio.run(_probe(token))
@@ -259,13 +303,22 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str]) -> Check:
     return Check("ws-peer", Status.FAIL, f"tried {len(tokens)} token(s) — {last_detail}")
 
 
-def run_checks(peer_ip: str, lms_port: int, portal_port: int, tokens: list[str]) -> list[Check]:
+def run_checks(
+    peer_ip: str,
+    lms_port: int,
+    portal_port: int,
+    tokens: list[str],
+    *,
+    timeout: int = 8,
+    status_timeout: int = 30,
+    ws_timeout: int = 10,
+) -> list[Check]:
     if not peer_ip:
         return [Check("peer-ip", Status.FAIL, "no peer IP in discovery or env")]
 
     checks: list[Check] = []
     health_url = f"http://{peer_ip}:{portal_port}/health"
-    code, body = http_get(health_url)
+    code, body = http_get(health_url, timeout=timeout)
     if code == 200 and "ok" in body.lower():
         checks.append(Check("portal-health", Status.PASS, health_url))
     else:
@@ -278,7 +331,7 @@ def run_checks(peer_ip: str, lms_port: int, portal_port: int, tokens: list[str])
         last_code = -1
         last_body = ""
         for idx, token in enumerate(tokens):
-            last_code, last_body = http_get(status_url, token=token, timeout=30)
+            last_code, last_body = http_get(status_url, token=token, timeout=status_timeout)
             if last_code == 200:
                 label = (
                     "peer token"
@@ -291,7 +344,11 @@ def run_checks(peer_ip: str, lms_port: int, portal_port: int, tokens: list[str])
         if not status_pass:
             if last_code == -1 and "timed out" in last_body.lower():
                 checks.append(
-                    Check("portal-status", Status.FAIL, f"timeout (>30s) — peer portal slow: {last_body[:60]}")
+                    Check(
+                        "portal-status",
+                        Status.FAIL,
+                        f"timeout (>{status_timeout}s) — peer portal slow: {last_body[:60]}",
+                    )
                 )
             else:
                 checks.append(
@@ -305,7 +362,7 @@ def run_checks(peer_ip: str, lms_port: int, portal_port: int, tokens: list[str])
         checks.append(Check("portal-status", Status.SKIP, "no control-plane token candidates (env or PT .state)"))
 
     models_url = f"http://{peer_ip}:{lms_port}/v1/models"
-    code, body = http_get(models_url)
+    code, body = http_get(models_url, timeout=timeout)
     if code == 200:
         try:
             count = len(json.loads(body).get("data", []))
@@ -315,7 +372,7 @@ def run_checks(peer_ip: str, lms_port: int, portal_port: int, tokens: list[str])
     else:
         checks.append(Check("peer-lmstudio", Status.FAIL, f"{models_url} — http {code}"))
 
-    checks.append(check_ws_peer(peer_ip, portal_port, tokens))
+    checks.append(check_ws_peer(peer_ip, portal_port, tokens, timeout=ws_timeout))
 
     return checks
 
@@ -325,6 +382,24 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--peer-ip", help="Override peer IP (default: last_discovery.json)")
     p.add_argument("--portal-port", type=int, default=int(os.environ.get("PORTAL_PORT", "8002")))
     p.add_argument("--lms-port", type=int, help="LM Studio port (default: discovery win/mac port)")
+    p.add_argument(
+        "--timeout",
+        type=int,
+        default=int(os.environ.get("LAN_PEER_PROBE_TIMEOUT", "8")),
+        help="HTTP timeout in seconds for health and model probes",
+    )
+    p.add_argument(
+        "--status-timeout",
+        type=int,
+        default=int(os.environ.get("LAN_PEER_STATUS_TIMEOUT", "30")),
+        help="HTTP timeout in seconds for authenticated /api/status",
+    )
+    p.add_argument(
+        "--ws-timeout",
+        type=int,
+        default=int(os.environ.get("LAN_PEER_WS_TIMEOUT", "10")),
+        help="WebSocket open timeout in seconds",
+    )
     p.add_argument("--json", dest="json_out", action="store_true")
     args = p.parse_args(argv)
 
@@ -337,7 +412,15 @@ def main(argv: list[str] | None = None) -> int:
         lms_port = args.lms_port
 
     tokens = outbound_control_plane_tokens()
-    checks = run_checks(peer_ip, lms_port, args.portal_port, tokens)
+    checks = run_checks(
+        peer_ip,
+        lms_port,
+        args.portal_port,
+        tokens,
+        timeout=args.timeout,
+        status_timeout=args.status_timeout,
+        ws_timeout=args.ws_timeout,
+    )
 
     payload = {
         "status": "pending",

@@ -68,8 +68,40 @@ def write_inbox_file(
     return record
 
 
-def list_inbox() -> list[dict[str, Any]]:
-    root = inbox_dir()
+def write_outbox_file(
+    filename: str,
+    body: str,
+    *,
+    assignee: str = "",
+    topic: str = "",
+    source: str = "",
+    fanout_id: str = "",
+    peer_ip: str = "",
+    portal_port: int | str = "",
+    error: str = "",
+) -> dict[str, Any]:
+    """Persist a peer assignment that could not yet be delivered."""
+    safe = sanitize_filename(filename)
+    dest = outbox_dir() / safe
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(body, encoding="utf-8")
+    record = {
+        "filename": safe,
+        "assignee": assignee.strip(),
+        "topic": topic.strip(),
+        "source": source.strip(),
+        "fanout_id": fanout_id.strip(),
+        "peer_ip": str(peer_ip).strip(),
+        "portal_port": str(portal_port).strip(),
+        "last_error": error.strip(),
+        "queued_at": int(time.time()),
+        "bytes": len(body.encode("utf-8")),
+    }
+    _meta_path(dest).write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    return record
+
+
+def _list_files(root: Path) -> list[dict[str, Any]]:
     if not root.is_dir():
         return []
     items: list[dict[str, Any]] = []
@@ -97,9 +129,17 @@ def list_inbox() -> list[dict[str, Any]]:
     return items
 
 
-def read_inbox_file(filename: str) -> tuple[str, dict[str, Any]]:
+def list_inbox() -> list[dict[str, Any]]:
+    return _list_files(inbox_dir())
+
+
+def list_outbox() -> list[dict[str, Any]]:
+    return _list_files(outbox_dir())
+
+
+def _read_file(root: Path, filename: str) -> tuple[str, dict[str, Any]]:
     safe = sanitize_filename(filename)
-    path = inbox_dir() / safe
+    path = root / safe
     if not path.is_file():
         raise FileNotFoundError(safe)
     body = path.read_text(encoding="utf-8")
@@ -111,3 +151,21 @@ def read_inbox_file(filename: str) -> tuple[str, dict[str, Any]]:
         except (OSError, json.JSONDecodeError):
             meta = {}
     return body, meta
+
+
+def read_inbox_file(filename: str) -> tuple[str, dict[str, Any]]:
+    return _read_file(inbox_dir(), filename)
+
+
+def read_outbox_file(filename: str) -> tuple[str, dict[str, Any]]:
+    return _read_file(outbox_dir(), filename)
+
+
+def remove_outbox_file(filename: str) -> None:
+    safe = sanitize_filename(filename)
+    path = outbox_dir() / safe
+    meta_path = _meta_path(path)
+    if path.is_file():
+        path.unlink()
+    if meta_path.is_file():
+        meta_path.unlink()
