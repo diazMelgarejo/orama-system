@@ -21,6 +21,15 @@ Before git pushes, rebases, PR-branch syncs, or local test runs on the Windows
 RTX/LM Studio host, use the shared bootstrap reference:
 [`git-history-surgery/references/windows-powershell-runtime-bootstrap.md`](../git-history-surgery/references/windows-powershell-runtime-bootstrap.md).
 
+**Local git hooks (once per clone):** `bash scripts/git/install-local-hooks.sh` — identity,
+hygiene, Co-authored-by policy, and TDD `commit-msg` gate (`check_tdd_commit.sh`).
+Hook scripts must stay bash 3.2–safe on macOS (no `mapfile`); see
+[`git-history-surgery/references/bash-32-git-script-portability.md`](../git-history-surgery/references/bash-32-git-script-portability.md).
+
+**Dirty worktree + need `main` from peer host (Mac ↔ Win):** use
+[`git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md)
+— stash → `pull --ff-only` → pop → commit → push. Never `git reset --hard` or force-push `main`.
+
 ---
 
 ## Step 0 — Should You Use a Worktree?
@@ -43,9 +52,9 @@ Either no? → Use canonical checkout.  Stop here.
 # From the canonical repo root
 scripts/worktree-bootstrap.sh <repo-path> <branch> <slug> [gbrain-source-id]
 
-# Example
+# Example (repo-path = canonical checkout root)
 scripts/worktree-bootstrap.sh \
-  ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system \
+  "$(git -C orama-system rev-parse --show-toplevel)" \
   feat/my-feature \
   2026-05-24-my-feature \
   orama-src
@@ -138,7 +147,7 @@ invisible on your machine but leak developer identity and break CI when committe
 ```python
 # ✅ Query canonical graph — always pass repo_root
 mcp__code-review-graph__query_graph_tool(
-    repo_root="/path/to/canonical/orama-system"
+    repo_root="<canonical-orama-system-root>"
 )
 
 # ❌ Never build graph from inside a worktree
@@ -237,6 +246,7 @@ cat .worktree-env
 | `.gbrain-source` missing in new worktree | `echo "<source-id>" > .gbrain-source` |
 | `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/`. **Permanent fix — move the tree out of iCloud: see [[icloud-escape-move]].** |
 | Port collision with sibling worktree | Check `.worktree-env`; ENV_OFFSET must differ per worktree |
+| `check_tdd_commit.sh`: `mapfile: command not found` | macOS bash 3.2 — see [`bash-32-git-script-portability.md`](../git-history-surgery/references/bash-32-git-script-portability.md); use `while read` not `mapfile` |
 | `/autoplan` Step 0 fails (base branch) | `cd` to a git repo root before invoking any skill |
 
 ---
