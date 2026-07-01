@@ -805,6 +805,41 @@ if ($LanPeer) {
     }
 }
 
+
+# ── ClinePass AutoResearcher fallback (Windows) ───────────────────────────────
+# When the Hermes Gateway is paused, not running, or rate-limited/quota-reached,
+# the local Cline Bot takes over as AutoResearcher, controlling the Win coder
+# using LM Studio (localhost:1234) if it is idle and not in active inference.
+# Resilience: 10x peer unreachable -> solo mode; 15-min checkback (lan_peer_session.py).
+$AutoResearcher = Join-Path $RepoRoot 'scripts\cline_autoresearcher.py'
+if (Test-Path $AutoResearcher) {
+    _Info 'autoresearcher' 'Checking ClinePass AutoResearcher fallback (Windows)...'
+    $arCheckRaw = & $UsPython $AutoResearcher --platform windows --check --json 2>$null
+    try { $arCheck = $arCheckRaw | ConvertFrom-Json } catch { $arCheck = $null }
+    if ($arCheck -and $arCheck.should_fallback) {
+        _Info 'autoresearcher' "ClinePass fallback ACTIVE - $($arCheck.reason)"
+        $ArWatch = Join-Path $RepoRoot 'scripts\cline_autoresearcher_watch.ps1'
+        if (Test-Path $ArWatch) {
+            $arLog = Join-Path $LogDir 'autoresearcher-watch.log'
+            Start-Process -FilePath 'powershell.exe' `
+                -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $ArWatch, $RepoRoot, $UsPython, $LogDir) `
+                -RedirectStandardOutput $arLog `
+                -RedirectStandardError (Join-Path $LogDir 'autoresearcher-watch.err.log') `
+                -WindowStyle Hidden | Out-Null
+            _Info 'autoresearcher' 'AutoResearcher watcher launched - 15-min checkback cycle'
+            _Info 'autoresearcher' "  Watch log: $arLog"
+        } else {
+            _Warn 'autoresearcher' "watcher script missing: $ArWatch"
+        }
+    } elseif ($arCheck) {
+        _Info 'autoresearcher' "ClinePass fallback inactive - $($arCheck.reason)"
+    } else {
+        _Warn 'autoresearcher' 'cline_autoresearcher.py --check produced no parseable output'
+    }
+} else {
+    _Warn 'autoresearcher' "cline_autoresearcher.py not found at $AutoResearcher"
+}
+
 if (-not $NoOpen) {
     Open-Browser $PortalUrl
 }
