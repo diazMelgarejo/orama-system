@@ -2,6 +2,11 @@
 set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 
+# Guard: scrub macOS .DS_Store from .git/ internals before hygiene runs.
+# .gitignore cannot cover .git/; Finder drops .DS_Store here and it trips
+# repo_hygiene's "metadata inside git refs" gate. Best-effort, non-blocking.
+bash "$ROOT/scripts/git/scrub_dsstore.sh" || true
+
 # Canonical hygiene gate — the SAME check CI runs (scripts/review/repo_hygiene.py):
 # commit identity, forbidden tokens, workstation/personal paths, secrets, bidi
 # controls, markdown-link hygiene, etc. Running it here catches a leak BEFORE it

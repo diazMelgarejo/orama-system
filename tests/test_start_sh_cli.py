@@ -1,0 +1,132 @@
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+START_SH = ROOT / "start.sh"
+START_PS1 = ROOT / "platform" / "windows" / "start.ps1"
+COORD_PULSE_SH = ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts" / "coord_pulse.sh"
+COORD_PULSE_PS1 = ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts" / "coord_pulse.ps1"
+
+
+def test_start_sh_help_exits_before_startup_and_lists_coord_pulse_flags():
+    result = subprocess.run(
+        ["bash", str(START_SH), "--help"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0
+    assert "--install-coord-pulse" in result.stdout
+    assert "--coord-pulse-status" in result.stdout
+    assert "probing hard requirements" not in result.stdout
+
+
+def test_start_sh_rejects_unknown_args_before_startup():
+    result = subprocess.run(
+        ["bash", str(START_SH), "--not-a-real-flag"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 2
+    assert "unknown argument: --not-a-real-flag" in result.stdout
+    assert "probing hard requirements" not in result.stdout
+
+
+def test_start_sh_uses_non_positional_no_open_and_portable_timeout():
+    text = START_SH.read_text(encoding="utf-8")
+
+    assert "--no-open)             NO_OPEN=1" in text
+    assert 'if [ "$NO_OPEN" != "1" ]; then' in text
+    assert "_run_discover_force_with_timeout 30" in text
+    assert 'timeout 30 "$US_PYTHON"' not in text
+    assert "timeout 1 bash" not in text
+
+
+def test_start_sh_pt_resolve_uses_src_pythonpath():
+    text = START_SH.read_text(encoding="utf-8")
+
+    assert 'PYTHONPATH="${PT_DIR}/src:${PT_DIR}"' in text
+    assert 'PYTHONPATH="${PT_DIR}" \\' not in text
+
+
+def test_start_sh_ollama_model_check_is_exact():
+    text = START_SH.read_text(encoding="utf-8")
+
+    assert "grep -qxF \"${model}\"" in text
+    assert "MODEL_NAME=\"$model\" python3 -c" in text
+    assert "model_base=" not in text
+
+
+def test_start_sh_has_single_pid_on_port_definition():
+    text = START_SH.read_text(encoding="utf-8")
+
+    assert text.count("pid_on_port() {") == 1
+
+
+def test_start_sh_flushes_lan_peer_outbox_after_probe():
+    text = START_SH.read_text(encoding="utf-8")
+
+    assert "lan_peer_session.py" in text
+    assert "_lan_peer_session should-retry" in text
+    assert "_lan_peer_session record-success" in text
+    assert '_lan_peer_session record-failure --error "probe_lan_peer.py failed"' in text
+    assert "_flush_lan_peer_outbox()" in text
+    assert '"$assign" flush-outbox --peer' in text
+    assert '--timeout "${LAN_PEER_HTTP_TIMEOUT:-2}"' in text
+    assert '--status-timeout "${LAN_PEER_STATUS_TIMEOUT:-3}"' in text
+    assert "_run_lan_peer_probe; then" in text
+    assert "LAN_PEER_DEGRADED_RETRY_SECONDS=${LAN_PEER_DEGRADED_RETRY_SECONDS:-900}" in text
+
+
+def test_coord_pulse_uses_portable_lock_not_flock():
+    text = COORD_PULSE_SH.read_text(encoding="utf-8")
+
+    assert 'mkdir "$LOCK_DIR"' in text
+    assert "flock" not in text
+
+
+def test_coord_pulses_retry_lan_peer_outbox():
+    mac_text = COORD_PULSE_SH.read_text(encoding="utf-8")
+    win_text = COORD_PULSE_PS1.read_text(encoding="utf-8-sig")
+
+    assert "lan_peer_session.py" in mac_text
+    assert "dual_path_dispatch.py" in mac_text
+    assert "dual dispatch start" in mac_text
+    assert "cursor-agent --print" not in mac_text
+    assert "lan_peer_session should-retry" in mac_text
+    assert "lan_peer_session record-success" in mac_text
+    assert 'lan_peer_session record-failure --error "probe_lan_peer.py failed"' in mac_text
+    assert "LAN_PEER_DEGRADED_RETRY_SECONDS=${LAN_PEER_DEGRADED_RETRY_SECONDS:-900}" in mac_text
+    assert "flush-outbox --peer" in mac_text
+    assert '--timeout "${LAN_PEER_HTTP_TIMEOUT:-2}"' in mac_text
+    assert '--status-timeout "${LAN_PEER_STATUS_TIMEOUT:-3}"' in mac_text
+    assert "flush-outbox --peer" in win_text
+    assert "--timeout $httpTimeout" in win_text
+    assert "--status-timeout $statusTimeout" in win_text
+    assert "lan_peer_session.py" in win_text
+    assert "Invoke-LanPeerSession -Args @('should-retry')" in win_text
+    assert "Invoke-LanPeerSession -Args @('record-success')" in win_text
+    assert "Invoke-LanPeerSession -Args @('record-failure', '--error', 'probe_lan_peer.py failed')" in win_text
+
+
+def test_windows_start_flushes_lan_peer_outbox_after_probe():
+    text = START_PS1.read_text(encoding="utf-8-sig")
+
+    assert "function Invoke-LanPeerSession" in text
+    assert "Invoke-LanPeerSession -Args @('should-retry')" in text
+    assert "Invoke-LanPeerSession -Args @('record-success')" in text
+    assert "Invoke-LanPeerSession -Args @('record-failure', '--error', 'probe_lan_peer.py failed')" in text
+    assert "function Invoke-LanPeerOutboxFlush" in text
+    assert "flush-outbox --peer" in text
+    assert "--timeout $httpTimeout" in text
+    assert "--status-timeout $statusTimeout" in text
+    assert "} elseif (Invoke-LanPeerProbe) {" in text
+    assert "Invoke-LanPeerOutboxFlush" in text

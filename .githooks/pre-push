@@ -5,6 +5,9 @@ set -euo pipefail
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
 
+# Guard: scrub macOS .DS_Store from .git/ internals (see scrub_dsstore.sh).
+bash "$ROOT/scripts/git/scrub_dsstore.sh" || true
+
 "$ROOT/scripts/git/ensure_hooks_installed.sh"
 
 if [[ -x scripts/cursor/sync-private-attribution-from-home.sh ]]; then
