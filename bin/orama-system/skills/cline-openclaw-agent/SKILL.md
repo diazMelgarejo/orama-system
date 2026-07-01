@@ -21,12 +21,18 @@ speaks ACP, not OpenAI completions. The actual upstream API
 fronted by a short-lived WorkOS OAuth token that only the Cline CLI can refresh.
 
 Therefore `cline-agent` is **not** a model-provider binding. It is an OpenClaw
-agent that:
+agent that uses the **ClinePass path as the better default** for coding tasks:
 
-1. Uses an OpenClaw-routable model that **mirrors Cline's GLM-5.2** —
-   `openrouter/z-ai/glm-5.2` (1M context, reasoning-capable; same `zai/glm-5.2`
-   upstream that `cline-pass/glm-5.2` reaches via `api.cline.bot`).
-2. Delegates agentic execution to the `cline` CLI through three bridges:
+1. **Default coding execution: `cline` CLI via `cline-pass/glm-5.2`** (Cline
+   Credits through `api.cline.bot`). This is the preferred path because:
+   - **No rate limits** — OpenRouter free tier is limited to 50 req/day, 20 RPM
+   - **1M context window** — full GLM-5.2 capability with reasoning + tool loops
+   - **Dedicated billing** — Cline Credits are separate from OpenRouter credits
+   - **Auto-refreshing auth** — the Cline CLI refreshes its WorkOS token automatically
+2. **Lightweight agent model: `openrouter/free`** (free auto-router) — used only
+   for routing/triage/quick replies that don't need tool loops. This is the
+   limited/restricted fallback, not the primary coding path.
+3. Delegates agentic execution to the `cline` CLI through three bridges:
    **exec** (one-shot shell-out), **ACP** (`openclaw acp client --server cline
    --server-args --acp`), and **MCP** (`openclaw mcp serve` → `cline mcp
    install`).
@@ -41,13 +47,14 @@ for the full contract and the reasoning behind each decision.
 | Agent id | `cline-agent` |
 | Workspace | `~/.openclaw/agents/cline-agent` |
 | Agent state directory | `~/.openclaw/agents/cline-agent/agent` |
-| Model | `openrouter/z-ai/glm-5.2` (mirrors Cline's `cline-pass/glm-5.2`) |
+| Agent model (lightweight) | `openrouter/free` (free auto-router — routing/triage only) |
+| Default coding execution | `cline` CLI via `cline-pass/glm-5.2` (Cline Credits — **preferred**) |
 | Thinking | `medium` by default; `high`/`xhigh` only when requested |
 | Tool profile | `coding` |
 | Delegation allowlist | `agents.defaults.subagents.allowAgents` contains `cline-agent` |
 | Channel routing | None; invoke explicitly or delegate through the allowlist |
 | Cline CLI | `cline` v3.x on PATH (resolved via `command -v cline`) |
-| Cline provider | `cline-pass` with model `cline-pass/glm-5.2` (or `cline` with `zai/glm-5.2`) |
+| Cline provider | `cline-pass` with model `cline-pass/glm-5.2` (Cline Credits, `api.cline.bot`) |
 
 Use the current OpenClaw shape, not legacy fields:
 
@@ -57,7 +64,7 @@ Use the current OpenClaw shape, not legacy fields:
   "name": "cline-agent",
   "workspace": "~/.openclaw/agents/cline-agent",
   "agentDir": "~/.openclaw/agents/cline-agent/agent",
-  "model": "openrouter/z-ai/glm-5.2",
+    "model": "openrouter/free",
   "thinkingDefault": "medium",
   "tools": {"profile": "coding"}
 }
@@ -173,10 +180,10 @@ openclaw models status --agent cline-agent
 command -v cline && cline version
 ```
 
-The target is configured only when the resolved default is
-`openrouter/z-ai/glm-5.2` and `cline-agent` is in the allowlist. It is
-executable only when the `cline` CLI is on PATH and the OpenRouter provider is
-authenticated (or Cline Credits are funded for `cline-pass` exec calls).
+The target is configured only when the resolved default is `openrouter/free`
+and `cline-agent` is in the allowlist. It is executable only when the `cline`
+CLI is on PATH and Cline Credits are funded (for `cline-pass` exec calls) or
+the OpenRouter provider is authenticated (for the lightweight agent model).
 
 ## Related
 
