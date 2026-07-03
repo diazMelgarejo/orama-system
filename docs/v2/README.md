@@ -59,11 +59,11 @@ Full rationale and the Perplexity/GPT/Gemini/Grok evidence behind each decision 
 NOW (May 2026)        →   next           →   ?              →   ?
 ─────────────────         ──────────         ──────────         ──────────
 v1.0 RC closed ✅         v2.0 parity        v2.1 public        v2.5 safety
-v2.0 kernel done ✅       tests (Phase 4)    Plugin API         (MAESTRO + SWARM
-(perpetua-core +          wire LLMClient     promotion          overlays + non-kernel
-oramasys + agate,         to dispatch_node,  (semver,           self-improve
-36 tests green)           non-kernel mods    OpenAPI)           evaluator)
-                          orbit at own pace
+v2.0 kernel done ✅       tests (Phase 4)    Plugin API         (semver,
+(perpetua-core +          wire LLMClient     promotion          MAESTRO + SWARM
+oramasys + agate,         to dispatch_node,                     overlays + non-kernel
+36 tests green)           non-kernel mods                       self-improve
+                          orbit at own pace                      evaluator)
 ```
 
 Calendar-free. Each phase gates on completion criteria, not dates.
@@ -207,13 +207,14 @@ orama-system/docs/v2/
 ├── 37-manifest-cost-tiering-pattern.md ← Manifest cost-tiering as CostGuard.gate() in supervisor.py (D20; PT-only)
 ├── 38-helicone-proxy-caching-pattern.md ← Helicone hash-based LRU cache inside MultiLLMRouter (D21; PT-only)
 ├── 39-maestro-owasp-genai-reference.md ← MAESTRO/OWASP GenAI deep-dive: T1–T47 namespace, MCP runtime controls, AIVSS scoring (additive to 08 §2.A, 31 §3–4, 32 §6)
-└── 40-oramaclaw-lifecycle-plugin.md   ← D22: oramaclaw orbit plugin — OpenClaw + AlphaClaw lifecycle under one perpetua-core-only package; v1 migration as dogfood
-└── 41-agentic-stack-gstack-gbrain-memory-blend.md  ← vendor/agentic-stack union-merge; upgrade --dry-run; Gbrain canonical; Brain blocked; harness matrix
-└── 42-agate-hardware-policy-orbit.md  ← agate repo absorbs model matrix + policy API/CLI; devices.yml adjacent; PT→perpetua-core orbit
-└── 43-gossipbus-mesh-transport.md  ← frugal GossipBus delta sync between orama/PT particles; LAN v2.1; BLE/bitchat-class optional v3
+├── 40-oramaclaw-lifecycle-plugin.md   ← D22: oramaclaw orbit plugin — OpenClaw + AlphaClaw lifecycle under one perpetua-core-only package; v1 migration as dogfood
+├── 41-agentic-stack-gstack-gbrain-memory-blend.md  ← vendor/agentic-stack union-merge; upgrade --dry-run; Gbrain canonical; Brain blocked; harness matrix
+├── 42-agate-hardware-policy-orbit.md  ← agate repo absorbs model matrix + policy API/CLI; devices.yml adjacent; PT→perpetua-core orbit
+├── 43-gossipbus-mesh-transport.md  ← frugal GossipBus delta sync between orama/PT particles; LAN v2.1; BLE/bitchat-class optional v3
+└── 44-docs-v2-skills.md  ← concise modular v2 skill implementation plan; SKILL.md orchestrator rule; 200-line target and 500-line ceiling
 ```
 
-> **Next free slot: `44-`**
+> **Next free slot: `45-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
