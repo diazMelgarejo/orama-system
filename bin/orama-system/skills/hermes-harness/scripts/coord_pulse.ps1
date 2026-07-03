@@ -29,12 +29,15 @@ function Save-SeenInbox {
 }
 
 function Invoke-LanPeerSession {
-    param([string[]]$Args)
+    # -LanArgs, not -Args: $Args collides with PowerShell's automatic $args
+    # variable (case-insensitive) -- matches the same fix applied to
+    # platform/windows/start.ps1's Invoke-LanPeerSession (2026-07-03).
+    param([string[]]$LanArgs)
     if (-not (Test-Path $LanSession)) {
         Write-Log "session state script missing: $LanSession"
         return $true
     }
-    python $LanSession @Args 2>&1 | ForEach-Object { Write-Log $_ }
+    python $LanSession @LanArgs 2>&1 | ForEach-Object { Write-Log $_ }
     return ($LASTEXITCODE -eq 0)
 }
 
@@ -61,18 +64,18 @@ try {
     $wsTimeout = if ($env:LAN_PEER_WS_TIMEOUT) { $env:LAN_PEER_WS_TIMEOUT } else { '2' }
     $httpTimeout = if ($env:LAN_PEER_HTTP_TIMEOUT) { $env:LAN_PEER_HTTP_TIMEOUT } else { '2' }
     $retrySeconds = if ($env:LAN_PEER_DEGRADED_RETRY_SECONDS) { $env:LAN_PEER_DEGRADED_RETRY_SECONDS } else { '900' }
-    if (-not (Invoke-LanPeerSession -Args @('should-retry'))) {
+    if (-not (Invoke-LanPeerSession -LanArgs @('should-retry'))) {
         Write-Log "macOS-only degraded mode active; next peer retry waits for LAN_PEER_DEGRADED_RETRY_SECONDS=$retrySeconds"
     } else {
         $probeOutput = python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1
         $probeExit = $LASTEXITCODE
         $probeOutput | Select-Object -First 12 | ForEach-Object { Write-Log $_ }
         if ($probeExit -eq 0) {
-            $null = Invoke-LanPeerSession -Args @('record-success')
+            $null = Invoke-LanPeerSession -LanArgs @('record-success')
             $flushOutput = python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py flush-outbox --peer --timeout $httpTimeout 2>&1
             $flushOutput | Select-Object -First 20 | ForEach-Object { Write-Log $_ }
         } else {
-            $null = Invoke-LanPeerSession -Args @('record-failure', '--error', 'probe_lan_peer.py failed')
+            $null = Invoke-LanPeerSession -LanArgs @('record-failure', '--error', 'probe_lan_peer.py failed')
         }
     }
 
