@@ -1,0 +1,5 @@
+# MCP stdout-purity gate allowlist.
+# One repo-relative path per line. Entries here are skipped by
+# scripts/security/check_mcp_stdout_purity.py. Only add a path here after
+# confirming the flagged output is intentional and cannot be routed to
+# stderr/JSON — prefer fixing the source over allowlisting it.

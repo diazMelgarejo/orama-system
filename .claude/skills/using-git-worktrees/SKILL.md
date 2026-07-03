@@ -12,7 +12,7 @@ description: >
 
 # using-git-worktrees (thin wrapper)
 
-Canonical, permanent implementation: `..\..\..\bin\orama-system\skills\using-git-worktrees/`.
+Canonical, permanent implementation: `../../../bin/orama-system/skills/using-git-worktrees/`.
 **Read it before proceeding** — this wrapper only carries discovery metadata.
 
-Pre-wrapper body preserved at `SKILL.md.premerge-20260703.bak`.
+Pre-wrapper body preserved at `SKILL.md.premerge-20260628.bak`.
