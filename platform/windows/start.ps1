@@ -381,13 +381,13 @@ function Invoke-LanPeerOutboxFlush {
 }
 
 function Invoke-LanPeerSession {
-    param([string[]]$Args)
+    param([string[]]$LanArgs)
     $session = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts\lan_peer_session.py'
     if (-not (Test-Path $session)) {
         _Warn 'lan-peer' "session state script missing: $session"
         return $true
     }
-    & $UsPython $session @Args | Out-Null
+    & $UsPython $session @LanArgs | Out-Null
     return ($LASTEXITCODE -eq 0)
 }
 
@@ -794,13 +794,13 @@ Write-Host ''
 
 if ($LanPeer) {
     $retrySeconds = if ($env:LAN_PEER_DEGRADED_RETRY_SECONDS) { $env:LAN_PEER_DEGRADED_RETRY_SECONDS } else { '900' }
-    if (-not (Invoke-LanPeerSession -Args @('should-retry'))) {
+    if (-not (Invoke-LanPeerSession -LanArgs @('should-retry'))) {
         _Warn 'lan-peer' "macOS-only degraded mode active; next peer retry waits for LAN_PEER_DEGRADED_RETRY_SECONDS=$retrySeconds"
     } elseif (Invoke-LanPeerProbe) {
-        $null = Invoke-LanPeerSession -Args @('record-success')
+        $null = Invoke-LanPeerSession -LanArgs @('record-success')
         Invoke-LanPeerOutboxFlush
     } else {
-        $null = Invoke-LanPeerSession -Args @('record-failure', '--error', 'probe_lan_peer.py failed')
+        $null = Invoke-LanPeerSession -LanArgs @('record-failure', '--error', 'probe_lan_peer.py failed')
         _Warn 'lan-peer' 'skipping outbox flush until peer portal probe passes'
     }
 }
