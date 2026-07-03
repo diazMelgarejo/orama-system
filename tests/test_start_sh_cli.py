@@ -112,18 +112,18 @@ def test_coord_pulses_retry_lan_peer_outbox():
     assert "--timeout $httpTimeout" in win_text
     assert "--status-timeout $statusTimeout" in win_text
     assert "lan_peer_session.py" in win_text
-    assert "Invoke-LanPeerSession -Args @('should-retry')" in win_text
-    assert "Invoke-LanPeerSession -Args @('record-success')" in win_text
-    assert "Invoke-LanPeerSession -Args @('record-failure', '--error', 'probe_lan_peer.py failed')" in win_text
+    assert "Invoke-LanPeerSession -LanArgs @('should-retry')" in win_text
+    assert "Invoke-LanPeerSession -LanArgs @('record-success')" in win_text
+    assert "Invoke-LanPeerSession -LanArgs @('record-failure', '--error', 'probe_lan_peer.py failed')" in win_text
 
 
 def test_windows_start_flushes_lan_peer_outbox_after_probe():
     text = START_PS1.read_text(encoding="utf-8-sig")
 
     assert "function Invoke-LanPeerSession" in text
-    assert "Invoke-LanPeerSession -Args @('should-retry')" in text
-    assert "Invoke-LanPeerSession -Args @('record-success')" in text
-    assert "Invoke-LanPeerSession -Args @('record-failure', '--error', 'probe_lan_peer.py failed')" in text
+    assert "Invoke-LanPeerSession -LanArgs @('should-retry')" in text
+    assert "Invoke-LanPeerSession -LanArgs @('record-success')" in text
+    assert "Invoke-LanPeerSession -LanArgs @('record-failure', '--error', 'probe_lan_peer.py failed')" in text
     assert "function Invoke-LanPeerOutboxFlush" in text
     assert "flush-outbox --peer" in text
     assert "--timeout $httpTimeout" in text
