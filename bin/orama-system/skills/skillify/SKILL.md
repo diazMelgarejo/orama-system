@@ -1,16 +1,16 @@
 ---
 name: skillify
 description: >-
-  Interactive skill creator for orama-system, raw Claude Code, and gstack.
-  Creates a new skill folder with SKILL.md, frontmatter, boundaries, examples,
-  and harness registration — by asking you questions, then writing the files.
-  Activates when asked to: create a skill, new skill, add a sub-skill, /skillify,
-  build a new tool as a skill, make a skill, install a skill.
-  Supports targets: raw-claude, orama-system sub-skill, gstack global skill,
-  Codex local thin wrapper, all.
-version: 1.0.0
+  Interactive modular skill creator for orama-system, raw Claude Code, gstack,
+  Codex wrappers, and ECC-style harnesses. Creates concise SKILL.md
+  orchestrators with strong discovery metadata, one-level instructions,
+  examples, references, scripts, templates, eval checklists, boundaries, and
+  harness registration. Activates when asked to create a skill, new skill, add a
+  sub-skill, /skillify, build a new tool as a skill, make a skill, install a
+  skill, modularize a skill, or improve a SKILL.md.
+version: 1.1.0
 license: Apache 2.0
-compatibility: claude-code, gstack
+compatibility: claude-code, gstack, codex, cursor, gemini-cli, ecc
 parent_skill: orama-system
 triggers:
   - create a skill
@@ -20,73 +20,115 @@ triggers:
   - build a skill
   - make a skill
   - install a skill
+  - modularize a skill
+  - improve a SKILL.md
 allowed-tools: bash, file-operations, AskUserQuestion
 ---
 
-# skillify — Interactive Skill Creator
+# skillify - Interactive Modular Skill Creator
 
 > Run from the repo root (`/path/to/orama-system/`) so relative sub-skill paths
 > resolve correctly.
 
-Creates a complete, production-grade skill from scratch — no copy-pasting, no
-guessing the frontmatter format. You answer questions; skillify writes the files
-and wires up registration.
+skillify creates production-grade skill folders. It does not make one giant
+`SKILL.md`. It creates a concise orchestrator and routes deeper rules into
+one-level modular files.
 
-## Relationship to `gstack-skillify` (canonical primary)
+## Core Standard
 
-This skill and gstack's `skillify` share `name: skillify` **by design** — they are
-complementary, not competing:
+Before creating or revising any skill, read:
+
+- [`../../references/skill-architecture-guide.md`](../../references/skill-architecture-guide.md) - orama frontmatter, progressive disclosure, 6Cs, LINT rules, boundaries, and anti-patterns
+- [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md) - Codex wrapper policy
+- [`references/ecc-cross-harness-authoring.md`](references/ecc-cross-harness-authoring.md) - ECC cross-harness authoring
+
+External guidance to align with, without blindly copying:
+
+- Anthropic Agent Skills overview: `https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview`
+- Anthropic Skill authoring best practices: `https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices`
+- Anthropic public skills examples: `https://github.com/anthropics/skills`
+- Community directories and field examples may inform examples, eval rubrics, and naming, but repository policy wins over social-media trends.
+
+## Relationship To `gstack-skillify`
+
+This skill and gstack's `skillify` share `name: skillify` by design. They are
+complementary:
 
 | Skill | Role | When |
-|-------|------|------|
-| **`gstack-skillify`** (gstack, auto-generated) | **PRIMARY** — codifies the most recent `/scrape` flow into a permanent browser-skill | wins the bare `skillify` name; use to turn a scrape into a browser-skill |
-| **this skill** (orama-system) | **EXTENSION** — interactive *authoring* of brand-new skills (orama sub-skill / raw Claude Code / gstack global / Codex wrapper) | use to create a new skill |
+|---|---|---|
+| `gstack-skillify` | Primary scrape-to-browser-skill codifier | Use when turning a scrape into a permanent browser skill |
+| this orama skill | Modular authoring extension | Use when creating or improving a new skill folder across orama/raw Claude/gstack/Codex/ECC targets |
 
-`gstack-skillify` is the canonical **primary**; this orama skill **extends and enhances**
-it by nesting orama-system's skill-authoring (and the orama sub-skill registry) as the
-authoring layer. Defer to `gstack-skillify` to *codify a scrape*; use this to *author a
-new skill*. (gstack-skillify's file is auto-generated from the gstack template, so this
-cross-reference is maintained here, on the orama extension side; to embed it inside
-gstack-skillify itself would require a gstack-template fork-patch.)
+Defer to `gstack-skillify` for scrape codification. Use this skill for fresh
+skill architecture, modularization, harness boundaries, and repo registration.
 
-Spec reference: [`references/skill-architecture-guide.md`](../references/skill-architecture-guide.md)
-Codex wrapper policy: [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md)
-ECC cross-harness authoring: [`references/ecc-cross-harness-authoring.md`](references/ecc-cross-harness-authoring.md)
+## When To Use
 
----
+Use skillify when creating a new:
 
-## When to Use
+- orama-system sub-skill
+- gstack global skill
+- raw Claude Code skill
+- Codex local thin wrapper
+- ECC cross-harness skill
+- modular replacement for an oversized or brittle `SKILL.md`
 
-Use skillify when you need a new:
+Do not use skillify for unrelated edits to existing skills. If improving an
+existing skill, stay inside that skill's own directory unless the user explicitly
+asks for registration or wrapper changes.
 
-- **orama-system sub-skill** — lives in `bin/orama-system/<name>/`, registered in the mother skill
-- **gstack global skill** — lives in `~/.claude/skills/<name>/`, invokable as `/<name>` anywhere
-- **raw Claude Code skill** — a standalone `SKILL.md` that can be loaded with `/skill path/SKILL.md`
-- **Codex local thin wrapper** — lives in `~/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`, points to a canonical in-repo skill, and must not copy canonical bodies/references/scripts. `~/.codex/skills` may be written as a compatibility root for Codex Desktop installs that still expose it.
-- **ECC cross-harness skill** — lives in an ECC-style flat `skills/<name>/SKILL.md` tree and uses harness adapters only at the edge.
+## Modern Skill Shape
 
-Do NOT use skillify to edit existing skills. Use it to create new ones.
+Prefer this folder shape, trimming unused folders only when the task is truly
+small:
 
----
+```text
+your-skill-name/
+├── SKILL.md
+├── instructions/
+│   └── core-workflow.md
+├── examples/
+│   ├── good/
+│   │   └── golden-path.md
+│   └── bad/
+│       └── anti-patterns.md
+├── references/
+│   └── architecture-notes.md
+├── scripts/
+│   └── validate_skill.py
+├── templates/
+│   └── output-template.md
+└── eval/
+    └── checklist.md
+```
+
+Rules:
+
+- `SKILL.md` is the orchestrator, not the encyclopedia.
+- Keep `SKILL.md` under 500 lines and preferably far shorter.
+- Keep references one level deep from `SKILL.md`; avoid reference chains.
+- Put fragile or repetitive logic in `scripts/`.
+- Put output formats in `templates/`.
+- Put reviewer personas and checklists in `eval/`.
+- Put positive and negative examples in `examples/good/` and `examples/bad/`.
+- Every fenced code block in markdown must have a language specifier.
 
 ## Codex Local Install Policy
 
-When asked to install repo skills for Codex, install **thin wrappers only**:
+When asked to install repo skills for Codex, install thin wrappers only:
 
 1. Keep the canonical skill in the repo and update that source first.
-2. Put only a small Codex-valid wrapper in `~/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`. Write `~/.codex/skills/<name>/SKILL.md` only as a compatibility mirror.
-3. Include the canonical repo root and canonical `SKILL.md` path in the wrapper.
-4. Require `git fetch origin --prune` before reading the canonical card.
-5. Run `git pull --ff-only` only when the repo is clean and on a tracking branch. If dirty, use [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md). If dirty, use [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md).
-6. Do not cache upstream `SKILL.md`, references, scripts, or assets in the local Codex skill dir.
-7. Validate the wrapper with Codex `quick_validate.py`, then run a compact local-model smoke test if requested.
-
-For the full checklist, read [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md).
+2. Put only a small Codex-valid wrapper in `~/.agents/skills/<name>/SKILL.md` or repo `.agents/skills/<name>/SKILL.md`.
+3. Write `~/.codex/skills/<name>/SKILL.md` only as a compatibility mirror.
+4. Include the canonical repo root and canonical `SKILL.md` path in the wrapper.
+5. Require `git fetch origin --prune` before reading the canonical card.
+6. Run `git pull --ff-only` only when the repo is clean and on a tracking branch.
+7. If dirty, use [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md).
+8. Do not cache upstream `SKILL.md`, references, scripts, or assets in the local Codex skill dir.
+9. Validate the wrapper with Codex `quick_validate.py`, then run a compact local-model smoke test if requested.
 
 For ECC/PT-orama skills consumed by multiple harnesses, read
 [`references/ecc-cross-harness-authoring.md`](references/ecc-cross-harness-authoring.md).
-
----
 
 ## Step 0: Optional gstack Preamble
 
@@ -106,199 +148,169 @@ else
 fi
 ```
 
-If `GSTACK_AVAILABLE: false`, skip all gstack-specific steps (Step 0, telemetry at end).
-All other steps work identically without gstack.
+If `GSTACK_AVAILABLE: false`, skip all gstack-specific steps. All other steps
+work identically without gstack.
 
----
-
-## Step 1: D1 — Skill Identity
+## Step 1: D1 - Skill Identity
 
 Ask via AskUserQuestion:
 
-> **D1 — What are we building?**
+> D1 - What are we building?
 >
-> ELI10: A skill is a markdown file that turns a general-purpose AI into a specialist.
-> The name becomes the directory and the `/command`. The purpose goes into the `description`
-> field — that's what Claude uses to decide when to activate the skill automatically.
+> ELI10: A skill is a folder that turns a general AI into a specialist. The name
+> becomes the directory and command. The description is the discovery hook that
+> tells the agent when to load it.
 >
-> Stakes if we pick wrong: a vague name or description means the skill never fires on its own,
-> and you'll have to invoke it manually every time.
->
-> Recommendation: Be specific. "gstack-integration" beats "tooling". "Creates SQL migration
-> files from a plain-English schema change description" beats "database helper".
+> Recommendation: use a specific activity name and a third-person description.
+> `generating-migrations` beats `database-helper`.
 
-Questions to ask (two separate AskUserQuestion calls if needed):
+Collect:
 
-1. Skill name (kebab-case, matches directory name): e.g. `sql-migrator`, `pr-triage`
-2. One-sentence purpose (third-person, specific, includes trigger phrases): e.g.
-   "Generates SQL migration files from plain-English schema change descriptions.
-   Activates for: generate migration, schema change, add column, rename table."
+1. Skill name: lowercase kebab-case, 1-64 chars, no reserved words, matches directory name.
+2. One-sentence purpose: third-person, specific, includes activation contexts.
 
-Validate: name is lowercase, kebab-case only, 1-64 chars. If not, re-prompt once.
+If invalid, re-prompt once with a corrected suggestion.
 
----
-
-## Step 2: D2 — Target Context
+## Step 2: D2 - Target Context
 
 Ask via AskUserQuestion:
 
-> **D2 — Where should this skill live?**
+> D2 - Where should this skill live?
 >
-> ELI10: Three possible homes. orama-system sub-skill = lives in this repo, loaded
-> when the mother skill loads. gstack global skill = lives in your home dir, invokable
-> from any project. Raw Claude = a plain SKILL.md file you load manually. You can target
-> all three with one creation run.
->
-> Stakes if we pick wrong: wrong home means the skill is invisible in the context you
-> actually use it in.
+> ELI10: The same skill idea can live in different harnesses. The target decides
+> path, frontmatter, wrapper policy, and registration.
 
 Options:
 
-- A) **orama-system sub-skill** — `bin/orama-system/<name>/SKILL.md`, registered in mother skill
-- B) **gstack global skill** — `~/.claude/skills/<name>/SKILL.md`, invokable as `/<name>` anywhere
-- C) **raw Claude Code** — custom path you specify, loaded manually with `/skill path`
-- D) **all three** — write orama-system + gstack versions simultaneously
+- A) orama-system sub-skill
+- B) gstack global skill
+- C) raw Claude Code skill
+- D) Codex thin wrapper pointing to an in-repo canonical skill
+- E) ECC cross-harness skill
+- F) all applicable targets
 
----
+## Step 3: D3 - Trigger Phrases
 
-## Step 3: D3 — Triggers
+Ask for phrases the user would actually type. Include formal names, casual names,
+file extensions, tool names, and workflow verbs.
 
-Ask via AskUserQuestion (free-text answer):
+Good triggers are specific. Bad triggers are generic.
 
-> **D3 — What phrases should activate this skill?**
->
-> ELI10: Triggers are the phrases Claude pattern-matches against to decide whether to
-> load this skill. Think: what would you actually type when you need this skill? Include
-> both formal names and casual phrases.
->
-> Stakes: too few triggers → skill is invisible. Too vague → skill fires when it shouldn't.
->
-> Example: "generate migration, schema change, add column, rename table, drop column,
-> create index, alter table"
+```text
+Good: generate migration, schema change, add column, rename table, create index
+Bad: database, help, tools, stuff
+```
 
-Collect as comma-separated list. Parse into a YAML `triggers:` list.
+Parse the answer into a YAML `triggers:` list.
 
----
+## Step 4: D4 - Boundaries
 
-## Step 4: D4 — Boundaries
+Ask what the skill should always do, ask before doing, and never do.
 
-Ask via AskUserQuestion:
+Preset options:
 
-> **D4 — What should this skill always do, ask before doing, and never do?**
->
-> ELI10: Boundaries are the guardrails. "Always" = defaults the skill follows every run.
-> "Ask first" = actions that need a human decision (destructive, expensive, irreversible).
-> "Never" = hard prohibitions.
->
-> Stakes: missing boundaries leads to the "it deleted the wrong thing" 2am incident.
+- A) Conservative: ask before any write, delete, external call, install, deploy, or irreversible action.
+- B) Standard: verify before done, ask before destructive/deploy/costly operations, never hardcode secrets or skip checks.
+- C) Permissive: ask only for irreversible actions, still never hardcode secrets or skip verification.
+- D) Custom: user specifies all three tiers.
 
-Present three preset options + custom:
+## Step 5: D5 - Modularity Plan
 
-- A) **Conservative** — Always: verify before done. Ask: any file write, any delete, any external call. Never: modify files outside the skill's target directory.
-- B) **Standard** — Always: verify before done, follow CIDF for content insertion. Ask: destructive operations, deploys. Never: hardcode secrets, skip verification.
-- C) **Permissive** — Always: verify before done. Ask: irreversible operations only. Never: hardcode secrets.
-- D) **Custom** — I'll specify each boundary manually.
+Ask whether the generated skill needs modular folders.
 
----
+Default recommendation: create the modular folder shape unless the skill is tiny.
 
-## Step 5: D5 — Preview and Confirm
+Use this routing rule:
 
-Generate the complete frontmatter based on D1-D4 answers.
+| Content | Destination |
+|---|---|
+| Discovery metadata and 5-10 step workflow | `SKILL.md` |
+| Long rules and procedures | `instructions/*.md` |
+| Golden paths and anti-patterns | `examples/good/*.md`, `examples/bad/*.md` |
+| Architecture notes or external docs | `references/*.md` |
+| Deterministic checks and generators | `scripts/*` |
+| Reusable output formats | `templates/*.md` |
+| Review checklist and personas | `eval/checklist.md` |
 
-**For orama-system target:**
+## Step 6: D6 - Preview And Confirm
+
+Generate and show the full frontmatter before writing.
+
+For orama-system targets:
 
 ```yaml
 ---
 name: <name>
 description: >-
-  <purpose>. Activates for: <triggers as comma list>.
+  <purpose>. Use when the user asks for <trigger summary>.
 version: 1.0.0
 license: Apache 2.0
 compatibility: claude-code
 parent_skill: orama-system
 triggers:
-  <triggers as yaml list>
+  - <trigger>
 allowed-tools: bash, file-operations
 ---
 ```
 
-**For gstack target, add:**
+For gstack targets, add:
 
 ```yaml
 preamble-tier: 1
 ```
 
-Show the full preview. Ask:
+Ask:
 
-> **D5 — Does this look right?**
+> D6 - Does this look right?
 >
-> Options: A) Yes, create it. B) Edit the description. C) Edit the triggers. D) Start over.
+> Options: A) Yes, create it. B) Edit description. C) Edit triggers. D) Edit modularity. E) Start over.
 
----
+## Step 7: Write The Skill Folder
 
-## Step 6: Write the Skill Files
+### Clobber guard
 
-### Clobber guard (always run first)
+Always run first:
 
 ```bash
-TARGET_DIR="bin/orama-system/<name>"   # or ~/.claude/skills/<name> for gstack
+TARGET_DIR="bin/orama-system/skills/<name>"
 if [ -d "$TARGET_DIR" ]; then
   echo "SKILL_EXISTS: $TARGET_DIR already exists"
-  ls "$TARGET_DIR"
+  find "$TARGET_DIR" -maxdepth 2 -type f | sort
 else
   echo "SKILL_EXISTS: false"
 fi
 ```
 
-If `SKILL_EXISTS: true` — ask via AskUserQuestion:
-> "Directory `<name>` already exists. Overwrite, merge (add missing files only), or cancel?"
-> Options: A) Overwrite, B) Merge (skip existing files), C) Cancel
+If `SKILL_EXISTS: true`, ask whether to overwrite, merge missing files only, or
+cancel. If cancelled, stop with `STATUS: BLOCKED - user cancelled, existing skill preserved`.
 
-If cancel: STOP with `STATUS: BLOCKED — user cancelled, existing skill preserved`.
+### SKILL.md body template
 
-### Validator constraints (post-create guard)
-
-After any write, run this check before continuing:
-
-```python
-import yaml, re, pathlib
-path = pathlib.Path("<target_dir>/SKILL.md")
-content = path.read_text(encoding="utf-8")
-assert content.startswith("---")
-m = re.search(r'\n---\s*\n', content[3:])
-fm = yaml.safe_load(content[3:m.start()+3])
-assert "name" in fm and "description" in fm
-assert len(fm["description"]) <= 1024
-assert len(content) <= 100_000
-```
-
-Fix any failure before moving on.
-
-### Write SKILL.md
-
-Use the Write tool to create `<target_dir>/SKILL.md`.
-
-Structure of the body (following `references/skill-architecture-guide.md`):
+Write `SKILL.md` as a concise orchestrator:
 
 ```markdown
-# <Name> — <one-line tagline>
+# <Name> - <one-line tagline>
 
 ## Purpose
-<1-2 sentences: what it does and why>
+<1-2 sentences>
 
-## When to Use
-<Specific trigger phrases and scenarios>
+## When To Use
+- <specific scenario>
+- <specific trigger phrase>
 
-## Instructions
+## Load Order
+1. Read this `SKILL.md`.
+2. Read `instructions/core-workflow.md` for the detailed workflow when needed.
+3. Read `examples/good/` before generating examples.
+4. Read `examples/bad/` when reviewing or refactoring.
+5. Run `eval/checklist.md` before declaring done.
 
-### Step 1: <first major action>
-<details>
-
-### Step 2: <second major action>
-<details>
+## Core Workflow
+1. <step>
+2. <step>
+3. Verify against the eval checklist.
 
 ## Boundaries
-
 ### Always Do
 <from D4>
 
@@ -308,159 +320,191 @@ Structure of the body (following `references/skill-architecture-guide.md`):
 ### Never Do
 <from D4>
 
-## Examples
-
-### Example 1: <golden path label>
-Input: `<example invocation>`
-Output: `<expected result>`
-
 ## References
-- [`skill-architecture-guide.md`](../references/skill-architecture-guide.md) — frontmatter spec, 6Cs, anti-patterns
+- [`instructions/core-workflow.md`](instructions/core-workflow.md)
+- [`examples/good/golden-path.md`](examples/good/golden-path.md)
+- [`examples/bad/anti-patterns.md`](examples/bad/anti-patterns.md)
+- [`eval/checklist.md`](eval/checklist.md)
 ```
 
-For gstack target: also write a `SKILL.md.tmpl` stub:
+### Modular starter files
+
+Create only files that help the skill avoid bloat. For a production skill, prefer:
+
+- `instructions/core-workflow.md`
+- `examples/good/golden-path.md`
+- `examples/bad/anti-patterns.md`
+- `eval/checklist.md`
+
+Use `scripts/` and `templates/` only when there is actual deterministic logic or
+output structure to place there.
+
+### Eval checklist template
+
+`eval/checklist.md` must include the 6Cs and reviewer personas:
 
 ```markdown
-<!-- SKILL.md.tmpl — edit this, then run: bun run gen:skill-docs -->
-<!-- This is the source template. SKILL.md is auto-generated. -->
-<copy of SKILL.md body without the auto-generation comment>
+# Eval Checklist
+
+## 6Cs
+- [ ] Clarity: no ambiguous instructions
+- [ ] Completeness: edge cases and failure modes are covered
+- [ ] Conciseness: no repeated or low-value text
+- [ ] Consistency: terms and paths are stable
+- [ ] Correctness: steps are executable and verified
+- [ ] Context: instructions make sense standalone
+
+## Review Personas
+- Exec: Is the skill purpose clear and bounded?
+- Builder: Can the workflow be executed without guessing?
+- Critic: What could go wrong, overreach, or silently fail?
 ```
 
-### Path discipline (every link and path you write)
+### Path discipline
 
-Use **relative in-repo links + GitHub URLs only — NEVER absolute workstation paths.** A
-literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree doxes the owner and fails CI
-(`scripts/review/repo_hygiene.py`). For cross-repo references use a relative path
-(`../<repo>/…`) or `https://github.com/diazMelgarejo/<repo>/blob/<branch>/…`; for runtime
-paths use `$OPENCLAW_ROOT`/`$REPO_ROOT`/`~`. This is the same rule CIDF enforces as LINT-006
-([`cidf/SKILL.md`](../../cidf/SKILL.md) § Markdown Write Rule) and git-hygiene enforces as
-"no workstation paths." Review the diff for stale anchors and broken relative links before
-the final write.
+Use relative in-repo links and GitHub URLs only. Never write absolute workstation
+paths such as `/Users/<name>/...`. For runtime locations, use `$REPO_ROOT`,
+`$OPENCLAW_ROOT`, `$HOME`, or `~`.
 
----
+## Step 8: Validate The Created Skill
 
-## Step 7: Register in Mother Skill (orama-system targets only)
+After writing, validate before continuing:
 
-Read `bin/orama-system/SKILL.md`. Locate the `sub_skills:` block.
+```python
+import pathlib
+import re
+import yaml
 
-Check if `<name>/SKILL.md` is already listed:
+path = pathlib.Path("<target_dir>/SKILL.md")
+content = path.read_text(encoding="utf-8")
+assert content.startswith("---")
+match = re.search(r"\n---\s*\n", content[3:])
+assert match, "missing closing frontmatter fence"
+frontmatter = yaml.safe_load(content[3:match.start() + 3])
+assert "name" in frontmatter and "description" in frontmatter
+assert re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", frontmatter["name"])
+assert len(frontmatter["description"]) <= 1024
+assert len(content.splitlines()) <= 500
+for fence in re.findall(r"^```(.*)$", content, flags=re.MULTILINE):
+    assert fence.strip(), "all fenced code blocks need language specifiers"
+```
+
+Fix any failure before moving on.
+
+## Step 9: Register In Mother Skill (orama-system targets only)
+
+Read `bin/orama-system/SKILL.md` and locate the `sub_skills:` block.
+
+Check whether `<name>/SKILL.md` is already listed:
 
 ```bash
-grep -n "<name>/SKILL.md" bin/orama-system/SKILL.md
+grep -n "skills/<name>/SKILL.md\|<name>/SKILL.md" bin/orama-system/SKILL.md
 ```
 
-If already present: skip with note "already registered".
+If already present, skip with note `already registered`.
 
-If not present: use the Edit tool to append to the `sub_skills:` block:
+If not present, ask before editing the mother skill. Append the smallest correct
+entry using the repository's existing sub-skill path style.
 
-```yaml
-  - path: <name>/SKILL.md
-    trigger: "<comma-separated triggers from D3>"
-```
+## Step 10: CLAUDE.md Pointer (orama-system targets only)
 
----
-
-## Step 8: Update CLAUDE.md Pointer (orama-system targets only)
-
-First, check if CLAUDE.md already has a pointer to this skill:
+Check whether `CLAUDE.md` already references the skill:
 
 ```bash
 grep -n "<name>" CLAUDE.md
 ```
 
-If found: skip with note "CLAUDE.md already references this skill".
+If found, skip. If not found, ask before writing. Keep the insertion to one line
+and follow CIDF for exact placement.
 
-If not found, apply CIDF decide() — use the simplest method:
+## Step 11: 6Cs And Best-Practice Review
 
-- Locate `## 9. gstack` section
-- Confirm with AskUserQuestion before any write:
-
-  > **CIDF Gate — CLAUDE.md update**
-  >
-  > I'll add one line to CLAUDE.md §9 pointing to `bin/orama-system/<name>/SKILL.md`.
-  > CLAUDE.md is an invariant file — I want to confirm before touching it.
-  >
-  > Preview: `- Create skills: \`/skill bin/orama-system/<name>/SKILL.md\``
-  >
-  > Options: A) Add it. B) Skip — I'll add it manually.
-
-If approved: use the Edit tool to insert the line into §9.
-
----
-
-## Step 9: 6Cs Validation
-
-Read `references/skill-architecture-guide.md`. Check the created SKILL.md against each criterion:
+Read `../../references/skill-architecture-guide.md` again if it was not already
+loaded in this session. Check the created files against:
 
 | C | Check | Pass condition |
-| --- | ------- | ---------------- |
-| Clarity | Instructions are unambiguous | No "it depends" without a decision rule |
-| Completeness | Edge cases and failure modes addressed | Boundaries section has all three tiers |
-| Conciseness | Every sentence earns its tokens | No section repeats another |
-| Consistency | Same term used for same concept | No synonym drift |
-| Correctness | Instructions produce correct output | Step sequence is executable |
-| Context | Instructions make sense standalone | No unexplained jargon |
+|---|---|---|
+| Clarity | Instructions are unambiguous | No `it depends` without a decision rule |
+| Completeness | Edge cases and failure modes addressed | Boundaries include all three tiers |
+| Conciseness | Every sentence earns tokens | No repeated rule phrasing |
+| Consistency | Same term for same concept | No synonym drift |
+| Correctness | Steps are executable | Validation passes |
+| Context | Skill stands alone | No unexplained jargon |
 
-Report any failing Cs. If any fail: offer to fix inline or note for manual follow-up.
+Also check modern skill hygiene:
 
----
+- Strong third-person description with trigger contexts.
+- One purpose per skill.
+- Modular files are one level deep.
+- Heavy logic is in scripts, not prose.
+- Examples include at least one good path and one anti-pattern for non-trivial skills.
+- Eval includes reviewer personas.
+- Cross-tool assumptions are explicit.
+- No secrets, workstation paths, or unlabeled code fences.
 
-## Step 10: Summary
+## Step 12: Summary
 
 Report:
 
 ```text
 STATUS: DONE
 
-Created:
-  <target_dir>/SKILL.md           ← main skill file
-  <target_dir>/SKILL.md.tmpl      ← template stub (gstack targets only)
+Created or updated:
+  <target_dir>/SKILL.md
+  <target_dir>/instructions/core-workflow.md
+  <target_dir>/examples/good/golden-path.md
+  <target_dir>/examples/bad/anti-patterns.md
+  <target_dir>/eval/checklist.md
 
 Registered:
-  bin/orama-system/SKILL.md       ← sub_skills: entry added (orama targets)
-  CLAUDE.md §9                    ← pointer added (orama targets, if confirmed)
+  bin/orama-system/SKILL.md       <added/skipped/not applicable>
+  CLAUDE.md                      <added/skipped/not applicable>
 
-6Cs: <PASS / PASS_WITH_NOTES — list any Cs to revisit>
+Validation:
+  frontmatter: PASS/FAIL
+  modularity: PASS/FAIL
+  6Cs: PASS/PASS_WITH_NOTES/FAIL
+  code fences: PASS/FAIL
 
-To invoke this skill:
-  /skill bin/orama-system/<name>/SKILL.md          (orama-system)
-  /skill ~/.claude/skills/<name>/SKILL.md           (gstack global)
-  /<name>                                           (if registered in gstack)
+To invoke:
+  /skill bin/orama-system/skills/<name>/SKILL.md
 ```
 
----
+## Telemetry (gstack only)
 
-## Telemetry (gstack only — skip if GSTACK_AVAILABLE: false)
+Skip if `GSTACK_AVAILABLE: false`.
 
 ```bash
 if [ -x ~/.claude/skills/gstack/bin/gstack-timeline-log ]; then
-  _TEL_END=$(date +%s)
   ~/.claude/skills/gstack/bin/gstack-timeline-log \
     '{"skill":"skillify","event":"completed","outcome":"success","session":"'"$_SESSION_ID"'"}' \
     2>/dev/null || true
 fi
 ```
 
----
-
 ## Boundaries
 
 ### Always Do
 
-- Run clobber guard before any write
-- Run CIDF confirm gate before writing to CLAUDE.md
-- Validate skill name is kebab-case before creating the directory
-- Report 6Cs result before declaring DONE
+- Read `../../references/skill-architecture-guide.md` before writing or validating a skill.
+- Keep `SKILL.md` as a concise orchestrator.
+- Use modular one-level references for detailed rules.
+- Run the clobber guard before any write.
+- Validate name, frontmatter, description length, line count, and code fences.
+- Report 6Cs result before declaring done.
 
 ### Ask First
 
-- Overwriting an existing skill directory
-- Writing to CLAUDE.md
-- Registering in the mother skill (if the file was already present)
+- Overwriting or deleting an existing skill directory.
+- Writing to `bin/orama-system/SKILL.md`.
+- Writing to `CLAUDE.md`.
+- Installing or publishing a skill outside the repository.
 
 ### Never Do
 
-- Write to any file outside the target skill directory, `bin/orama-system/SKILL.md`, and `CLAUDE.md`
-- Create documentation files (README.md, CHANGELOG.md) unless explicitly requested
-- Source or execute any `.md` file as a shell script
-- Skip the clobber guard
+- Source or execute any `.md` file as a shell script.
+- Create a massive all-in-one `SKILL.md` when modular folders would fit better.
+- Create nested reference chains that require reading references from references.
+- Copy canonical repo skill bodies into Codex wrapper directories.
+- Hardcode secrets, tokens, personal paths, LAN IPs, or workstation-specific paths.
+- Skip verification or mark DONE with failing 6Cs.
