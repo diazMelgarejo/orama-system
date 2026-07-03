@@ -28,7 +28,7 @@ allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasy
 
 # oramasys-method (thin wrapper)
 
-Canonical, permanent implementation: `..\..\..\bin\orama-system\skills\oramasys-method/`.
+Canonical, permanent implementation: `../../../bin/orama-system/skills/oramasys-method/`.
 **Read it before proceeding** — this wrapper only carries discovery metadata.
 
-Pre-wrapper body preserved at `SKILL.md.premerge-20260703.bak`.
+Pre-wrapper body preserved at `SKILL.md.premerge-20260628.bak`.
