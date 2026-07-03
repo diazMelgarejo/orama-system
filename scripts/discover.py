@@ -7,7 +7,7 @@ Idempotent: writes nothing if state hash is unchanged.
 """
 
 from __future__ import annotations
-import argparse, asyncio, hashlib, json, logging, os, re, shutil, socket, sys, tempfile, time
+import argparse, asyncio, hashlib, json, logging, os, re, shutil, socket, sys, time
 import urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,7 +32,6 @@ LAST_DISCOVERY_JSON = STATE_DIR / "last_discovery.json"
 RECOVERY_SOURCE_TXT = STATE_DIR / "recovery_source.txt"
 LOCK_FILE           = STATE_DIR / ".discover.lock"
 DEFAULT_LOCK_FILE   = LOCK_FILE
-FALLBACK_LOCK_FILE   = Path(tempfile.gettempdir()) / "orama-discover.lock"
 OPENCLAW_JSON       = OPENCLAW_DIR / "openclaw.json"
 
 LM_STUDIO_PORT     = 1234
@@ -230,14 +229,44 @@ async def scan_subnet_async(subnet: str, port: int, exclude: set):
              if f"{subnet}.{i}" not in exclude]
     return [ip for ip in await asyncio.gather(*tasks) if ip]
 
-def _lan_ip_on_subnet(subnet_prefix: str = "192.168.254.") -> str | None:
+def get_local_subnets() -> list[str]:
+    subnets = []
+    try:
+        import netifaces
+        for iface in netifaces.interfaces():
+            if iface.startswith(('lo', 'Loopback')):
+                continue
+            addrs = netifaces.ifaddresses(iface)
+            if netifaces.AF_INET in addrs:
+                for addr in addrs[netifaces.AF_INET]:
+                    ip = addr.get('addr')
+                    netmask = addr.get('netmask')
+                    if ip and netmask and not ip.startswith('127.'):
+                        ip_parts = [int(x) for x in ip.split('.')]
+                        mask_parts = [int(x) for x in netmask.split('.')]
+                        net_parts = [ip_parts[i] & mask_parts[i] for i in range(4)]
+                        wildcards = 256 - mask_parts[2] if mask_parts[2] < 255 else 1
+                        base_octet2 = net_parts[2]
+                        for j in range(wildcards):
+                            subnets.append(f"{net_parts[0]}.{net_parts[1]}.{base_octet2 + j}")
+    except Exception:
+        pass
+    return list(set(subnets))
+
+def _lan_ip_on_subnet(subnet_prefix: str | None = None) -> str | None:
     """Return this host's LAN IP on the given subnet via UDP route probe."""
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("192.168.254.1", 80))
-        ip = s.getsockname()[0]
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+        except Exception:
+            s.connect(("192.168.254.1", 80))
+            ip = s.getsockname()[0]
         s.close()
-        return ip if ip.startswith(subnet_prefix) else None
+        if subnet_prefix:
+            return ip if ip.startswith(subnet_prefix) else None
+        return ip
     except Exception:
         return None
 
@@ -329,12 +358,19 @@ def discover_endpoints() -> dict:
             exclude = {"localhost", "127.0.0.1"}
             if win_lan:
                 exclude.add(win_lan)
-            subnet = win_lan.rsplit(".", 1)[0] if win_lan else SUBNET
-            for ip in asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)):
-                models = probe_models(f"http://{ip}:1234")
-                if models:
-                    result["mac"] = {"ip": ip, "models": models}
-                    print(f"  ℹ️  Mac LM Studio found at {ip} (subnet scan)", file=sys.stderr)
+            subnets = get_local_subnets()
+            if not subnets:
+                subnets = [win_lan.rsplit(".", 1)[0] if win_lan else SUBNET]
+            found_mac = False
+            for subnet in subnets:
+                for ip in asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)):
+                    models = probe_models(f"http://{ip}:1234")
+                    if models:
+                        result["mac"] = {"ip": ip, "models": models}
+                        print(f"  ℹ️  Mac LM Studio found at {ip} (subnet scan)", file=sys.stderr)
+                        found_mac = True
+                        break
+                if found_mac:
                     break
         return result
 
@@ -378,11 +414,18 @@ def discover_endpoints() -> dict:
             result["win"] = {"ip": win_last_ip, "models": win_models}
 
     if not result["win"]:
-        subnet = mac_lan.rsplit(".", 1)[0] if mac_lan else SUBNET
-        for ip in asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)):
-            models = probe_models(f"http://{ip}:1234")
-            if models:
-                result["win"] = {"ip": ip, "models": models}
+        subnets = get_local_subnets()
+        if not subnets:
+            subnets = [mac_lan.rsplit(".", 1)[0] if mac_lan else SUBNET]
+        found_win = False
+        for subnet in subnets:
+            for ip in asyncio.run(scan_subnet_async(subnet, LM_STUDIO_PORT, exclude)):
+                models = probe_models(f"http://{ip}:1234")
+                if models:
+                    result["win"] = {"ip": ip, "models": models}
+                    found_win = True
+                    break
+            if found_win:
                 break
 
     return result
@@ -412,45 +455,35 @@ def _lock_path() -> Path:
         return LOCK_FILE
     return STATE_DIR / ".discover.lock"
 
-
-def _fallback_lock_path() -> Path:
-    return FALLBACK_LOCK_FILE
-
 def save_discovery_state(endpoints: dict, tier: int = 1):
     endpoints = filter_endpoints_for_policy(endpoints)
-    try:
-        STATE_DIR.mkdir(parents=True, exist_ok=True)
-        mac = endpoints.get("mac") or {}
-        win = endpoints.get("win") or {}
-        state = {
-            "schema": 1,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "hash": compute_hash(endpoints),
-            "recovery_tier": tier,
-            "endpoints": {
-                "mac": {"ip": mac.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(mac)},
-                "win": {"ip": win.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(win)},
-            },
-            "models": {"mac": mac.get("models", []), "win": win.get("models", [])},
-        }
-        DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
-        LAST_DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
-        RECOVERY_SOURCE_TXT.write_text(f"tier{tier}\n")
-    except PermissionError as exc:
-        logging.warning("Skipping discovery state write: %s", exc)
+    STATE_DIR.mkdir(parents=True, exist_ok=True)
+    mac = endpoints.get("mac") or {}
+    win = endpoints.get("win") or {}
+    state = {
+        "schema": 1,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "hash": compute_hash(endpoints),
+        "recovery_tier": tier,
+        "endpoints": {
+            "mac": {"ip": mac.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(mac)},
+            "win": {"ip": win.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(win)},
+        },
+        "models": {"mac": mac.get("models", []), "win": win.get("models", [])},
+    }
+    DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
+    LAST_DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
+    RECOVERY_SOURCE_TXT.write_text(f"tier{tier}\n")
 
 # ── Backup / archive ──────────────────────────────────────────────────────────
 
 def backup_current_state():
     if not LAST_DISCOVERY_JSON.exists(): return
-    try:
-        BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
-        ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
-        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        shutil.copy2(LAST_DISCOVERY_JSON, BACKUPS_DIR / f"{ts}.json")
-        _enforce_backup_limits()
-    except PermissionError as exc:
-        logging.warning("Skipping discovery backup: %s", exc)
+    BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
+    ARCHIVE_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    shutil.copy2(LAST_DISCOVERY_JSON, BACKUPS_DIR / f"{ts}.json")
+    _enforce_backup_limits()
 
 def _enforce_backup_limits():
     BACKUPS_DIR.mkdir(parents=True, exist_ok=True)
@@ -656,19 +689,13 @@ def _unlock_file(handle) -> None:
 class _Lock:
     def __init__(self, timeout=10.0):
         self._timeout = timeout; self._fd = None
-        self._lock_path = _lock_path()
     def __enter__(self):
         STATE_DIR.mkdir(parents=True, exist_ok=True)
+        lock_path = _lock_path()
+        lock_path.parent.mkdir(parents=True, exist_ok=True)
         deadline = time.time() + self._timeout
         while True:
-            try:
-                self._fd = open(self._lock_path, "w")
-            except PermissionError:
-                if self._lock_path == _fallback_lock_path():
-                    raise
-                self._lock_path = _fallback_lock_path()
-                self._lock_path.parent.mkdir(parents=True, exist_ok=True)
-                self._fd = open(self._lock_path, "w")
+            self._fd = open(lock_path, "w")
             try:
                 _try_lock_file(self._fd)
                 return self
@@ -693,7 +720,7 @@ class _Lock:
     def __exit__(self, *_):
         if self._fd:
             _unlock_file(self._fd); self._fd.close()
-            try: self._lock_path.unlink()
+            try: _lock_path().unlink()
             except FileNotFoundError: pass
 
 # ── Main discovery flow ───────────────────────────────────────────────────────

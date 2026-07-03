@@ -14,7 +14,7 @@ description: >
 
 # git-history-surgery (thin wrapper)
 
-Canonical, permanent implementation: `..\..\..\bin\orama-system\skills\git-history-surgery/`.
+Canonical, permanent implementation: `../../../bin/orama-system/skills/git-history-surgery/`.
 **Read it before proceeding** — this wrapper only carries discovery metadata.
 
-Pre-wrapper body preserved at `SKILL.md.premerge-20260703.bak`.
+Pre-wrapper body preserved at `SKILL.md.premerge-20260628.bak`.
