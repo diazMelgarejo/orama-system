@@ -85,16 +85,23 @@ def save_queue(state: dict[str, Any]) -> None:
 
 
 def is_actionable_assignment(filename: str, topic: str, source: str) -> bool:
-    """Only queue explicit Win subagent task cards from Mac orchestrator."""
+    """Only queue explicit Win subagent task cards from Mac orchestrator,
+    plus a narrow allowlist of genuinely actionable Mac-dropped hypothesis /
+    real-task benchmark cards (e.g. mac-hypothesis-h6-real-task.md) that
+    would otherwise sit unpicked in the inbox forever under the blanket
+    mac-source rule below. Default stays reject (see test_prune_pending_
+    drops_noise, which exercises this with no source field at all)."""
     name = filename.lower()
     if name.startswith("win-autoresearcher-") or name.startswith("win-coder-"):
         return True
     if name.startswith("win-autoresearch-") and "gpu" in topic:
         return True
-    if source == "mac" and name.startswith("mac-"):
-        return False
     if name.startswith("hypothesis-") or name.startswith("code-review-win"):
         return False
+    if source == "mac" and name.startswith("mac-"):
+        # Narrow allowlist: real actionable task/benchmark drops, not
+        # status/ack/lessons/playbook noise (see test_skip_mac_deliverables).
+        return "hypothesis" in name and "real-task" in name
     return False
 
 
