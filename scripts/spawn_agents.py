@@ -439,7 +439,7 @@ async def _dispatch_cursor(task: str) -> Dict[str, Any]:
     try:
         if cursor_bin.endswith(".ps1"):
             proc = await asyncio.create_subprocess_exec(
-                "powershell", "-ExecutionPolicy", "Bypass", "-File", cursor_bin, "--task", task,
+                "powershell", "-ExecutionPolicy", "Bypass", "-File", cursor_bin, "--print", "--model", "claude-4.6-sonnet-medium", task,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(REPO_ROOT),
