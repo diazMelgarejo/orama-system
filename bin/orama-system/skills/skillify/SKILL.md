@@ -37,10 +37,8 @@ in one-level reference files.
 Before writing or revising a skill, read:
 
 - [`../../references/skill-architecture-guide.md`](../../references/skill-architecture-guide.md) - repo standard, frontmatter, progressive disclosure, 6Cs, lint rules
-- [`references/modular-skill-authoring.md`](references/modular-skill-authoring.md) - skillify workflow and validation rules
-- [`references/skill-folder-template.md`](references/skill-folder-template.md) - reusable folder layout, short `SKILL.md` template, examples, eval checklist
 
-Read target-specific references only when needed:
+Read target-specific references **ONLY** when needed:
 
 - [`references/codex-thin-wrapper-installs.md`](references/codex-thin-wrapper-installs.md) - Codex wrapper installs
 - [`references/ecc-cross-harness-authoring.md`](references/ecc-cross-harness-authoring.md) - ECC cross-harness skills
@@ -66,6 +64,8 @@ Read target-specific references only when needed:
 8. Validate frontmatter, line counts, code fences, relative links, and 6Cs.
 9. Report created files, registration status, and validation result.
 
+- [`references/modular-skill-authoring.md`](references/modular-skill-authoring.md) - skillify workflow and validation rules
+
 ## Folder Shape
 
 Prefer this shape for non-trivial skills:
@@ -83,6 +83,8 @@ your-skill-name/
 ```
 
 Trim unused folders for tiny skills. Do not create decorative empty structure.
+
+- [`references/skill-folder-template.md`](references/skill-folder-template.md) - reusable folder layout, short `SKILL.md` template, examples, eval checklist
 
 ## Target Rules
 
