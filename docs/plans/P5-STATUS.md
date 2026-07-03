@@ -1,7 +1,7 @@
 # P5 — Server-side swarm approval — status tracker
 
-> **Last updated:** 2026-06-30 (CR fixes resolved: server-only operator signing secret, type-safe verify_operator_payload, test-vector noqa)  
-> **Overall:** Planning **done** · Implementation **done** · CodeRabbit **3/3 findings resolved** · **100%** (T1 sign/verify_operator_payload landed with 24/24 tests passing, ruff clean)
+> **Last updated:** 2026-06-29 (coord-023)  
+> **Overall:** Planning **done** · Implementation **in progress on branch** · **~35%** (T1–T2 on branch; main unchanged)
 
 ---
 
@@ -25,8 +25,9 @@
 ```text
 [████████████████████] PR1–PR2 merged (auth hardening baseline)
 [████████████████████] PR3 planning merged (#128, 2026-06-28)
-> **Last updated:** 2026-06-30 (CR fixes resolved: server-only operator signing secret, type-safe verify_operator_payload, test-vector noqa)  
-> **Overall:** Planning **done** · Implementation **done** · CodeRabbit **3/3 findings resolved** · **100%** (T1 sign/verify_operator_payload landed with 24/24 tests passing, ruff clean)
+[███████░░░░░░░░░░░░░] P5 implementation (T1–T2 on branch; T3–T7 pending)
+[░░░░░░░░░░░░░░░░░░░░] PR4 P6 discovery (blocked on P5 merge to main)
+[░░░░░░░░░░░░░░░░░░░░] L1 /api/l1/* (blocked on P5 merge to main)
 ```
 
 ---
@@ -35,8 +36,15 @@
 
 | Task | Description | Status | Evidence |
 |------|-------------|--------|----------|
-> **Last updated:** 2026-06-30 (CR fixes resolved: server-only operator signing secret, type-safe verify_operator_payload, test-vector noqa)  
-> **Overall:** Planning **done** · Implementation **done** · CodeRabbit **3/3 findings resolved** · **100%** (T1 sign/verify_operator_payload landed with 24/24 tests passing, ruff clean)
+| **T1** | `sign_operator_payload` / `verify_operator_payload` in `control_plane_auth.py` | ✅ On branch | `tests/test_control_plane_auth.py` |
+| **T2** | Preview returns `preview_id`, `approval_token`, `expires_at` | ✅ On branch | `tests/test_swarm_preview.py` 7/7 |
+| **T3** | Launch requires tokens; rejects bare `approved` | ❌ Pending | `main` + branch tip |
+| **T4** | Auth regression tests (bearer + no token → 422) | ❌ Pending | — |
+| **T5** | React SwarmComposer holds tokens | ❌ Pending | `swarm.ts` still `approved: true` on `main` |
+| **T6** | SECURITY.md P5 remediated note | ❌ Pending | After merge |
+| **T7** | Full pytest + repo_hygiene | ❌ Pending | — |
+
+**Score: 2 / 7 tasks complete (on branch; 0 / 7 on `main`)**
 
 ---
 
@@ -60,8 +68,8 @@
 | Item | State |
 |------|-------|
 | Planning branch | `cursor/security-pr3-planning-f559` → **MERGED** (#128) |
-> **Last updated:** 2026-06-30 (CR fixes resolved: server-only operator signing secret, type-safe verify_operator_payload, test-vector noqa)  
-> **Overall:** Planning **done** · Implementation **done** · CodeRabbit **3/3 findings resolved** · **100%** (T1 sign/verify_operator_payload landed with 24/24 tests passing, ruff clean)
+| Implementation branch | `cursor/security-pr3-swarm-approval-f559` → **on remote** (Win active) |
+| Open PR | none yet — operator merge when T3–T7 green |
 | Target branch | `main` |
 | Blocked downstream | L1 comms, PR4 P6 discovery approval |
 
@@ -69,7 +77,6 @@
 
 ## Next operator action
 
-> **Last updated:** 2026-06-30 (CR fixes resolved: server-only operator signing secret, type-safe verify_operator_payload, test-vector noqa)  
-> **Overall:** Planning **done** · Implementation **done** · CodeRabbit **3/3 findings resolved** · **100%** (T1 sign/verify_operator_payload landed with 24/24 tests passing, ruff clean)
+Win coder: **T3** on `cursor/security-pr3-swarm-approval-f559` — launch requires tokens; hard 422 without `approval_token`.
 
 Mac: review branch PR when T3+ tests pass; merge unblocks L1 and P6 stack.

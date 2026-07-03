@@ -1,4 +1,4 @@
-﻿# scripts/ensure_requirements.ps1 — Windows hard-requirements probe + installer
+# scripts/ensure_requirements.ps1 — Windows hard-requirements probe + installer
 # orama-system v1.1.0.0 — Run on the Windows GPU box
 #
 # HARD requirements:
@@ -20,9 +20,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$LmStudioPort = if ($env:LM_STUDIO_WIN_PORT) { $env:LM_STUDIO_WIN_PORT } else { "1234" }
+$LmStudioPort = $env:LM_STUDIO_WIN_PORT ?? "1234"
 $LmStudioUrl  = "http://localhost:${LmStudioPort}"
-$LogDir       = Join-Path (Join-Path $PSScriptRoot "..") ".logs"
+$LogDir       = Join-Path $PSScriptRoot ".." ".logs"
 $HardFail     = $false
 
 New-Item -ItemType Directory -Force -Path $LogDir | Out-Null
@@ -47,11 +47,9 @@ info "Platform: $WinVer (build $WinBuild)"
 info "Phase 1 — LM Studio binary"
 
 $LmStudioExe = @(
-    "$env:PROGRAMFILES\LM Studio\LM Studio.exe",
-    "$env:LOCALAPPDATA\Programs\LM Studio\LM Studio.exe",
-    "$env:LOCALAPPDATA\LM-Studio\LM Studio.exe",
     "$env:LOCALAPPDATA\Programs\LM-Studio\LM Studio.exe",
-    "$env:PROGRAMFILES\LM-Studio\LM Studio.exe"
+    "$env:PROGRAMFILES\LM-Studio\LM Studio.exe",
+    "$env:LOCALAPPDATA\LM-Studio\LM Studio.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
 if (-not $LmStudioExe) {
@@ -64,9 +62,6 @@ if (-not $LmStudioExe) {
                 --silent 2>&1 | Tee-Object -Append -FilePath (Join-Path $LogDir "lmstudio-install.log")
             # Re-probe after install
             $LmStudioExe = @(
-                "$env:PROGRAMFILES\LM Studio\LM Studio.exe",
-                "$env:LOCALAPPDATA\Programs\LM Studio\LM Studio.exe",
-                "$env:LOCALAPPDATA\LM-Studio\LM Studio.exe",
                 "$env:LOCALAPPDATA\Programs\LM-Studio\LM Studio.exe",
                 "$env:PROGRAMFILES\LM-Studio\LM Studio.exe"
             ) | Where-Object { Test-Path $_ } | Select-Object -First 1

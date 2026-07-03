@@ -59,14 +59,12 @@ Mac keeps `mac-*` assignments locally; Win-bound files POST to Win peer inbox.
 | Host | URL |
 |------|-----|
 | Mac | `http://localhost:8002/co-orchestration/macos` |
-| Win | `http://localhost:8002/peer-inbox` |
-| Either | `http://localhost:8002/co-orchestration` (auto skin; Mac lane) |
+| Win | `http://localhost:8002/co-orchestration/windows` |
+| Either | `http://localhost:8002/co-orchestration` (auto skin) |
 
 Bidirectional inbox queue, direction badges (inbound/outbound), fan-out filter, click-to-preview markdown. Navbar: **Co-orchestration inbox** (Mac links to `/macos`).
 
-Legacy `/co-orchestration/windows` 307-redirects to `/peer-inbox` — use the Win lane URL directly.
-
-**Code:** `src/orama_system/portals/co_orchestration_macos.py` · Win lane: `platform/windows/peer_inbox_portal.py` · `platform/macos/README.md`
+**Code:** `src/orama_system/portals/co_orchestration_macos.py` · Win parallel: `co_orchestration_windows.py` · `platform/macos/README.md`
 
 ---
 
@@ -124,15 +122,6 @@ Win also has: `codex`, `agy`, lmstudio-win `:1234` — same read → run locally
 | GPU benchmarks | read results | execute on 27B |
 | Code review sections | assign topics | review assigned files |
 | Reply | `drop --peer` → Win | `drop --peer` → Mac |
-
-### `swarm_state.md` ownership (coord-021)
-
-| Host | Owns when | Updates via |
-|------|-----------|-------------|
-| **Mac** orchestrator | Evaluator / swarm runs **Mac-side** (Ollama, Mac researcher) | Direct write on Mac branch |
-| **Win** coder | Win GPU harness, bridge preflight, portal fixes | Inbox handoff → `drop --peer` with summary; Mac merges into shared state |
-
-SSH vs HTTP-local on `autoresearch_bridge` remains a known LAN gap; HTTP fast path tracked in PT post-#183 bridge. See `mac-ack-win-code-review.md`.
 
 ---
 
