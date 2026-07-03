@@ -446,7 +446,7 @@ async def _dispatch_cursor(task: str) -> Dict[str, Any]:
             )
         else:
             proc = await asyncio.create_subprocess_exec(
-                cursor_bin, "--task", task,
+                cursor_bin, "--print", "--model", "claude-4.6-sonnet-medium", task,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.STDOUT,
                 cwd=str(REPO_ROOT),
