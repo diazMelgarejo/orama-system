@@ -39,6 +39,18 @@ def test_skip_mac_deliverables():
     assert q.is_actionable_assignment("win-autoresearcher-h5-cross-frugal.md", "autoresearch/gpu-run", "mac") is True
 
 
+def test_mac_hypothesis_real_task_narrowly_allowed():
+    """Mac-dropped hypothesis/real-task benchmark cards must auto-enqueue
+    (this session's mac-hypothesis-h6-real-task.md had to be manually
+    dispatched because the old blanket mac-source rule silently rejected it),
+    while other mac-hypothesis-* docs (summaries, drafts) still get excluded."""
+    q = _load_queue()
+    assert q.is_actionable_assignment("mac-hypothesis-h6-real-task.md", "autoresearch/gpu-run", "mac") is True
+    assert q.classify_role("mac-hypothesis-h6-real-task.md", "autoresearch/gpu-run") == "autoresearcher"
+    assert q.is_actionable_assignment("mac-hypothesis-summary.md", "autoresearch/gpu-done", "mac") is False
+    assert q.is_actionable_assignment("mac-hypothesis-v2.md", "autoresearch/gpu-done", "mac") is False
+
+
 def test_prune_pending_drops_noise():
     q = _load_queue()
     state = q._empty_state()
