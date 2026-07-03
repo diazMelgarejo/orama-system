@@ -105,7 +105,8 @@ your-skill-name/
 Rules:
 
 - `SKILL.md` is the orchestrator, not the encyclopedia.
-- Keep `SKILL.md` under 500 lines and preferably far shorter.
+- Create new skills not longer than 200 lines. The shorter, the better.
+- Maintain `SKILL.md` under 500 lines and preferably far shorter.
 - Keep references one level deep from `SKILL.md`; avoid reference chains.
 - Put fragile or repetitive logic in `scripts/`.
 - Put output formats in `templates/`.
