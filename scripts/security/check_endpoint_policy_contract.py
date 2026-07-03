@@ -11,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SELF = Path(__file__).resolve()
+SCAN_ROOTS = ["bin", "scripts", "src", "platform"]
 
 REQUIRED_FILES = [
     ".agent/endpoint-policy-contract.yml",
@@ -57,6 +58,12 @@ def assert_required_files() -> None:
         fail(f"missing required files: {', '.join(missing)}")
 
 
+def assert_scan_roots_exist() -> None:
+    missing = [folder for folder in SCAN_ROOTS if not (ROOT / folder).is_dir()]
+    if missing:
+        fail(f"scan_roots references missing directories: {', '.join(missing)}")
+
+
 def assert_contract() -> None:
     text = read(".agent/endpoint-policy-contract.yml")
     missing = [needle for needle in REQUIRED_CONTRACT_STRINGS if needle not in text]
@@ -78,11 +85,8 @@ def assert_workflow() -> None:
 
 
 def assert_no_double_scheme_literals() -> None:
-    scan_roots = ["bin", "scripts"]
-    for folder in scan_roots:
+    for folder in SCAN_ROOTS:
         root = ROOT / folder
-        if not root.exists():
-            continue
         for path in root.rglob("*"):
             if path.resolve() == SELF:
                 continue
@@ -94,6 +98,7 @@ def assert_no_double_scheme_literals() -> None:
 
 def main() -> None:
     assert_required_files()
+    assert_scan_roots_exist()
     assert_contract()
     assert_agents_guidance()
     assert_workflow()
