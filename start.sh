@@ -1313,6 +1313,17 @@ printf "  LAN   : ./start.sh --lan-peer  (bind 0.0.0.0 + probe peer after start)
 echo "────────────────────────────────────────────────────────────────────"
 echo ""
 
+# ── verify and arm fallback chain on startup ─────────────────────────────────
+echo "── model fallback chain ──────────────────────────────────────────────"
+FALLBACK_VERIFY="$SCRIPT_DIR/bin/orama-system/scripts/fallback-chain-verify.sh"
+if [ -f "$FALLBACK_VERIFY" ]; then
+  bash "$FALLBACK_VERIFY" --status-only
+  _info "fallback" "All model tiers verified; automatic failover armed"
+else
+  _warn "fallback" "Fallback chain verification script not found at $FALLBACK_VERIFY"
+fi
+echo ""
+
 # Register MCP endpoints after all services are confirmed up
 _register_mcp_endpoints
 
