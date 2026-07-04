@@ -4,7 +4,7 @@
       "command": "bash",
       "args": [
         "-c",
-        "exec bash \"$HOME/code/OpenClaw/orama-system/scripts/exa/exa-mcp-wrapper.sh\""
+        "exec \"$HOME/code/OpenClaw/orama-system/scripts/exa/exa-mcp-wrapper.sh\""
       ],
       "env": {}
     }
