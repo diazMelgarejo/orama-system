@@ -3870,3 +3870,41 @@ When a local commit contains content already upstream (common with episodic memo
 - Security hardening plan marked COMPLETE.
 - 6 semantic lessons graduated to PT `.agent/memory`.
 - Only remaining: `openclaw.gateway-auth-token` keychain entry (user must provide value).
+
+---
+
+## 2026-07-04 — Exa MCP Singleton Daemon + .agent/ Anti-Pattern Autopsy
+
+### Context
+
+Wired Exa.ai into three MCP registration points (Claude Desktop, orama `.mcp.json`, PT `.mcp.json`). User required idempotency: only ONE backend process must run at any time; the other two registrations must be wrappers. Also investigated two stray commits on PT main that violated `.agent/AGENTS.md`.
+
+### Learnings
+
+**1. MCP singleton daemon pattern — Unix socket multiplexer.**
+When N registrations all point to the same MCP server, run ONE backend as a daemon (`exa-mcp-daemon.py`, asyncio) listening on a Unix socket (`~/.openclaw/run/exa-mcp.sock`). Each registration wrapper (`exa-mcp-wrapper.sh`) probes the socket, starts the daemon detached (`nohup`) if dead, waits up to 5s in a 0.1s poll loop, then bridges its own stdio↔socket via Python threading. No `socat` dependency needed.
+
+**2. JSON-RPC multiplexing: ID mangling.**
+To route responses from a single stdio backend to N concurrent clients, mangle request IDs to `"{client_id}:{original_id}"` before forwarding. On response, split by `:` to demux. Cache `initialize` capabilities and `tools/list` results after the first client — subsequent clients served from cache, no extra backend round-trips. Handles both int and string original IDs.
+
+**3. LINT-006 + `.mcp.json` args — `bash -c` indirection for `$HOME`.**
+JSON does not expand shell variables, so `"args": ["$HOME/path/to/script.sh"]` commits the literal string `$HOME` (not a violation), but any tool that expands it before the MCP launcher may surface the real path. Safer pattern, guaranteed to expand at runtime without embedding a literal path:
+```json
+{"command": "bash", "args": ["-c", "exec bash \"$HOME/path/to/script.sh\""]}
+```
+The outer `bash -c` spawns with a real shell that expands `$HOME` before `exec`.
+
+**4. `.agent/` root is NOT a drop zone — two stray commits autopsied.**
+`616b5864`/`e74cce1c`: agent committed `.agent/endpoint-policy-contract.yml` to root without reading `AGENTS.md`. Correct home: `.agent/protocols/` (alongside `permissions.md`, `delegation.md`, `path-hygiene.md`).
+`480d6ebc`: agent committed `.agent/lessons.md` to root, bypassing `learn.py → graduate → render` pipeline entirely. The rendered file lives at `.agent/memory/semantic/LESSONS.md`; hand-editing or creating a parallel file at any other path defeats salience decay, candidate review, and audit trail.
+Root cause in both: AFRP Trigger 3 — writing into an area without reading its `AGENTS.md`. Corrected by git-rename to canonical locations; all lessons staged through `learn.py`.
+
+**5. `.agent/lessons.md` had 6 real lessons — staged them all.**
+Lessons were valid content committed in the wrong way. Recovery: `learn.py` for each → graduated automatically → `memory/semantic/LESSONS.md` re-rendered. The raw file archived at `docs/2026-07-03-agent-lessons-raw.md`; the contract archived at `docs/2026-06-29-endpoint-policy-contract-stray-original.yml`.
+
+### Outcome
+
+- `exa-mcp-daemon.py` + updated `exa-mcp-wrapper.sh` + `setup-exa.sh` shipped to orama-system (`600cda2`) and PT (`0acbeba`).
+- All 3 MCP registrations route through one daemon; singleton is idempotent and race-safe.
+- 12 lessons total graduated to PT `.agent/memory` this session (6 Exa/daemon, 6 from stray `.agent/lessons.md`).
+- Two stray `.agent/` root files corrected via git-rename; anti-pattern captured as `lesson_0c17b0718745` and `lesson_8e7d657cb5bb`.
