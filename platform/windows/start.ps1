@@ -639,14 +639,13 @@ Write-Host ''
 
 # ── Verify and arm all fallback tiers on startup ────────────────────────────────
 Write-Host '── model fallback chain ────────────────────────────────────────────'
-$FallbackVerifyBash = Join-Path $RepoRoot 'bin\orama-system\scripts\fallback-chain-verify.sh'
-if (Test-Path $FallbackVerifyBash) {
-    # Run bash script from PowerShell (bash must be available; gitbash on Windows)
-    $FallbackStatus = & bash $FallbackVerifyBash --status-only 2>&1
-    Write-Host $FallbackStatus
+$FallbackVerifyPs1 = Join-Path $ScriptDir 'fallback-chain-verify.ps1'
+if (Test-Path $FallbackVerifyPs1) {
+    # Run native PowerShell verification script
+    & $FallbackVerifyPs1 -StatusOnly
     Write-Host '✅ All model tiers verified; automatic failover armed'
 } else {
-    Write-Host "⚠️  Fallback chain verification script not found at $FallbackVerifyBash"
+    Write-Host "⚠️  Fallback chain verification script not found at $FallbackVerifyPs1"
 }
 Write-Host ''
 
