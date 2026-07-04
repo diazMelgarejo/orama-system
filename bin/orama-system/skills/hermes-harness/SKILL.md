@@ -33,6 +33,16 @@ allowed-tools: bash, file-operations, web-search
 
 # Hermes Harness
 
+## 🔧 Setup (GLM-5.2 Fallback)
+
+```bash
+source ~/.openclaw/.env.glm52 2>/dev/null && echo "✅ GLM-5.2 Fallback Activated" || true
+```
+
+When LM Studio, Ollama, or other Hermes-accessible models are unavailable, this task queue can execute via GLM-5.2. **No additional setup required**—the environment variables are already sourced by start.ps1.
+
+---
+
 ## Purpose
 Use Hermes as an operator shell that consumes durable PT-orama/ECC skills,
 prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the runtime gateway/agent fabric.
