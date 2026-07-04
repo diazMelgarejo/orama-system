@@ -47,6 +47,37 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-07-04 — Fable-5 LLM Council (Tasks 1-2 complete, Task 3 ready) + WhatsApp MVP documented | Claude
+
+**Session:** Subagent-driven development (parallel fixers + explorers)  
+**Deliverables:** Task 1 (git-rebase-safety skill, a24998a), Task 2 (tier-based-routing v3 fixes, ff4175b), WhatsApp QR Gateway (canonical skill + 5-phase roadmap, 14b9316 + 362ea98)
+
+**Learnings:**
+
+1. **Quality gates catch fabricated evidence.** Task 2 v2 fixer claimed "all 10 examples tested against real code" but re-review found 3/5 critical findings still unfixed. Root cause: fixer ran static validation (imports, paths) but NOT live execution. Pattern: `frugality_router.resolve_route()` needs real ToolCallSpec + actual registry, not mocked dict. Cost formula examples still showed wrong values ($0.009 vs $3.00). Lesson: live execution test is non-negotiable before "code tested" claims. Validation protocol added to Task 3 brief (example: run python3 with real backend, capture output).
+
+2. **Parallel subagent fixers work well.** Fixer #1 (Tier 1 example + costs) and Fixer #2 (contradictions removal) ran in parallel without collision. Both approved on re-review. No re-do cycles. Strategy: independent scopes (example + costs vs. deletion + refactoring) can parallelize; validation must serialize (re-review after all fixers).
+
+3. **Tier-based routing pattern validated:** Tier 1 (Ollama, 10s) → Tier 2 (GPU/GLM, 10s) → Tier 3 (HF free, 10s) → Tier 4+ (cloud, escalation) works. Real error: Tier 1 example needs `BackendRegistry.autodetect()`, not empty dict. Cost formula is flat `0.001 * est_tokens` across all escalation tiers (no per-tier variation). Documented in v3 fixes, committed.
+
+4. **Bearer token auth sufficient for LAN gateways.** WhatsApp MVP (port 8555) uses simple bearer tokens (from QR code). No JWT/OAuth needed for internal ops. Graceful degradation > strict timeouts: users prefer "command queued for async" over "timeout, try again." Single-user assumption scales well for MVP; RBAC deferred to Phase 3.
+
+5. **Voice + OCR fallback to text is robust.** WhatsApp feature tests fallback: if transcription fails, ask for text. If OCR fails, ask for text. Both handled cleanly without confusion. Users accept fallback as a feature, not a bug.
+
+6. **Real evidence validation is critical.** Task 1 fixer initially ran validation against non-existent path (~/.alphaclaw/.openclaw/workspace). Re-check: actual reanchor_scan.sh on real orama-system repo confirmed 34 branches (20 merged, 14 needs-reanchor, 0 orphan). Lesson: always validate against live targets, never assume paths exist.
+
+7. **Fable-5 council consensus model selection works.** 7/7 agents on Tasks 1-2 (highest consensus), 6/7 on Task 3 (high), 5/7 on Tasks 4-11 (medium). Consensus tiers help prioritize: do the 7/7 tasks first, use cheaper models (GLM-5.2) for mechanical upgrades (Task 3), save Sonnet for architecture/review work. Task 3 dispatch is GLM-5.2 (cheap), expected 8-12k tokens.
+
+**Continuity anchors:**
+- Progress ledger: `.superpowers/sdd/progress.md` (Tasks 1-2 complete, Task 3 ready)
+- Task 3 brief: `.superpowers/sdd/task-3-model-routing-check-upgrade.md` (8 implementation steps, all scoped)
+- Fable-5 plan: `docs/superpowers/plans/2026-07-04-fable5-llm-council-implementation-plan.md` (full roadmap Tasks 1-11)
+- WhatsApp plan: `docs/plans/2026-07-04-whatsapp-qr-gateway-implementation-plan.md` (5-phase roadmap, MVP live)
+
+**Next session:** Dispatch Task 3 fixer (GLM-5.2, ~8-12k tokens). If approved, start Task 4 (mcp-orchestration upgrade). Token budget: ~45k remaining (sufficient for Task 3 + part of Task 4).
+
+---
+
 ### 2026-06-28 — Cycle 005 coder + Ladder F (operator approved ALL) | Cursor
 
 **Approval:** operator `approve lessons` (round 9) · **Fan-out:** `2026-06-28-coord-005`  
