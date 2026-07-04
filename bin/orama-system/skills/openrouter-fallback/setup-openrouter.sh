@@ -16,6 +16,8 @@ have() { command -v "$1" >/dev/null 2>&1; }
 SECRETS_DIR="$HOME/.openclaw/secrets"
 ENV_FILE="$HOME/.openclaw/.env.openrouter"
 LOG_DIR="$HOME/.openclaw/logs"
+OPENROUTER_ENDPOINT="https://openrouter.ai/api/v1/chat/completions"
+OPENROUTER_MODEL="${OPENROUTER_MODEL:-openai/gpt-4o}"
 
 # Create directories
 mkdir -p "$SECRETS_DIR" "$LOG_DIR"
