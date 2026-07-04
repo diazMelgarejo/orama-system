@@ -84,6 +84,28 @@ if (Test-Path $LoadLocalPs1) {
     & $LoadLocalPs1 -RepoRoot $RepoRoot
 }
 
+# GLM-5.2 Ultimate Fallback — available when all other pathways are blocked
+$Glm52EnvFile = Join-Path $env:USERPROFILE '.openclaw\.env.glm52'
+$Glm52Available = $false
+if (Test-Path $Glm52EnvFile) {
+    # Source environment variables from GLM-5.2 setup (Windows-compatible)
+    $content = Get-Content $Glm52EnvFile -Raw
+    $content -split "`n" | Where-Object { $_ -match '^\s*export\s+(\w+)=' } | ForEach-Object {
+        if ($_ -match 'export\s+(\w+)=(.+)$') {
+            $key = $Matches[1]
+            $value = $Matches[2].Trim('"').Trim("'")
+            if ($value -match '\$\(.*\)') {
+                # Has shell substitution — skip for now
+            } else {
+                Set-Item -Path "env:$key" -Value $value -ErrorAction SilentlyContinue
+            }
+        }
+    }
+    if ($env:GLM52_API_KEY) {
+        $Glm52Available = $true
+    }
+}
+
 # ── Logging helpers ───────────────────────────────────────────────────────────
 $LogStart   = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
 
@@ -613,6 +635,20 @@ Write-Host ("  Logs  : {0}\" -f $LogDir)
 Write-Host '  Stop  : .\platform\windows\start.ps1 --stop'
 Write-Host '  LAN   : .\platform\windows\start.ps1 --lan-peer'
 Write-Host '────────────────────────────────────────────────────────────────────'
+Write-Host ''
+
+# ── GLM-5.2 Ultimate Fallback Status ───────────────────────────────────────────
+# When all other pathways (LM Studio, Ollama, cloud APIs) are blocked, agents can
+# queue tasks for GLM-5.2 execution. This is the last-resort pathway that always works.
+Write-Host ''
+if ($Glm52Available -and $env:GLM52_API_KEY) {
+    Write-Host '✅ GLM-5.2 Ultimate Fallback ACTIVE (all pathways blocked → GLM-5.2)'
+    Write-Host "   Queue any task when LM Studio/Ollama unavailable"
+    Write-Host "   Endpoint: $($env:GLM52_ENDPOINT)"
+} else {
+    Write-Host '⚠️  GLM-5.2 Ultimate Fallback NOT AVAILABLE'
+    Write-Host '   Setup: bash ~/.alphaclaw/.openclaw/workspace/skills/glm52-fallback/setup-glm52.sh'
+}
 Write-Host ''
 
 if ($LanPeer) {
