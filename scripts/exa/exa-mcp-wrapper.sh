@@ -103,9 +103,13 @@ import socket, sys, threading
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
 sock.connect('${SOCKET_PATH}')
 
+# Use raw (unbuffered) stdin so read() returns immediately on any available
+# bytes instead of blocking until the 4096-byte buffer fills up.
+_raw_stdin = sys.stdin.buffer.raw
+
 def _to_sock():
     try:
-        while chunk := sys.stdin.buffer.read(4096):
+        while chunk := _raw_stdin.read(65536):
             sock.sendall(chunk)
     except Exception:
         pass
