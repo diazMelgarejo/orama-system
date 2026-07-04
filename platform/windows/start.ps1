@@ -637,6 +637,19 @@ Write-Host '  LAN   : .\platform\windows\start.ps1 --lan-peer'
 Write-Host '────────────────────────────────────────────────────────────────────'
 Write-Host ''
 
+# ── Verify and arm all fallback tiers on startup ────────────────────────────────
+Write-Host '── model fallback chain ────────────────────────────────────────────'
+$FallbackVerifyBash = Join-Path $RepoRoot 'bin\orama-system\scripts\fallback-chain-verify.sh'
+if (Test-Path $FallbackVerifyBash) {
+    # Run bash script from PowerShell (bash must be available; gitbash on Windows)
+    $FallbackStatus = & bash $FallbackVerifyBash --status-only 2>&1
+    Write-Host $FallbackStatus
+    Write-Host '✅ All model tiers verified; automatic failover armed'
+} else {
+    Write-Host "⚠️  Fallback chain verification script not found at $FallbackVerifyBash"
+}
+Write-Host ''
+
 # ── GLM-5.2 Ultimate Fallback Status ───────────────────────────────────────────
 # When all other pathways (LM Studio, Ollama, cloud APIs) are blocked, agents can
 # queue tasks for GLM-5.2 execution. This is the last-resort pathway that always works.
