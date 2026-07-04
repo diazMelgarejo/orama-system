@@ -41,10 +41,17 @@ Use this skill to:
 | 0 | in_context | $0.00 | Task spec already in model context | Context-only (task_type="in_context") |
 | 1 | local_oss | $0.00 | Mac Ollama (qwen3.5:9b-nvfp4) | Probe-first; no escalation_tier param |
 | 2 | local_index | $0.00 | gbrain/CRG semantic search | Probe for search/index/gbrain tasks only |
-| 3 | free_remote | ~$0.001/1K | HuggingFace free tier | Escalation only; requires escalation_reason |
-| 4 | free_proprietary | ~$0.001/1K | Free proprietary (e.g., Claude free tier) | Escalation only; cost-gated |
-| 5 | paid | ~$0.003/1K | OpenRouter (paid models) | Escalation only; explicit cost approval |
-| 6 | last_resort | ~$0.01/1K | Grok (extreme fallback) | Last resort; fail-closed after |
+| 3 | free_remote | $0.001/token (flat) | HuggingFace free tier | Escalation only; requires escalation_reason |
+| 4 | free_proprietary | $0.001/token (flat) | Free proprietary (e.g., Claude free tier) | Escalation only; cost-gated |
+| 5 | paid | $0.001/token (flat) | OpenRouter (paid models) | Escalation only; explicit cost approval |
+| 6 | last_resort | $0.001/token (flat) | Grok (extreme fallback) | Last resort; fail-closed after |
+
+**Note on cost rate:** `_escalation_route()` (frugality_router.py line 175) uses
+a single flat formula for every escalation tier — `est_cost_usd = 0.001 * max(est_tokens, 1)`.
+There is **no per-tier rate differentiation** in the current code (tier 5/6 are
+not more expensive per-token than tier 3/4 despite backend naming implying
+otherwise). At $0.001/token this is $1.00 per 1K tokens, not $0.001 per 1K
+tokens — do not confuse the two when estimating cost.
 
 ### Tier 0: In-Context
 
@@ -81,15 +88,39 @@ route = resolve_route(spec)
 logic only. See code line 247–250 in frugality_router.py.
 
 **Correct usage (probe-based):**
+
+`_probe_tier_1()` calls `resolve_backend_for_spec(registry, ...)`, which needs a
+real `BackendRegistry` populated with an **online** backend — passing
+`registry={}` (or omitting `registry` entirely, which defaults to `None`)
+short-circuits `_probe_tier_1` back to `None` (or raises `AttributeError` from
+`registry.online()` if the object isn't a real `BackendRegistry`), so the probe
+never reaches tier 1 and the example raises `FrugalityPolicyError` when it
+falls through to `resolve_route`'s implicit tier-3 escalation with no
+`escalation_reason` set. Populate the registry via `autodetect()` (or hand-roll
+one with a known-online `Backend`) before calling `resolve_route`:
+
 ```python
+import asyncio
+from orchestrator.frugality_router import ToolCallSpec, resolve_route
+from perpetua.discovery.registry import BackendRegistry
+
+async def get_registry() -> BackendRegistry:
+    registry = BackendRegistry()
+    await registry.autodetect()  # probes ollama-local / lmstudio-mac / lmstudio-win
+    return registry
+
+registry = asyncio.run(get_registry())
+
 spec = ToolCallSpec(
     task_type="reasoning",
     model_hint="qwen3.5:9b-nvfp4",
     est_tokens=100,
 )
-route = resolve_route(spec)  # ← no escalation_tier param
-# Returns: ResolvedRoute(tier=1, backend="local_oss", model="qwen3.5", est_cost_usd=0.0)
-# Or if registry doesn't have local backend, falls through to tier 2/3
+route = resolve_route(spec, registry=registry)  # ← registry required; no escalation_tier param
+# Returns: ResolvedRoute(tier=1, backend="ollama-local", model="qwen3.5:9b-nvfp4", est_cost_usd=0.0)
+# Live-tested 2026-07-04: tier=1, backend=ollama-local, model=qwen3.5:9b-nvfp4, cost=$0.0000
+# If registry has no online local backend, PolicyUnavailable is caught internally
+# and the probe falls through to tier 2/3.
 ```
 
 **Do NOT try this (will raise FrugalityPolicyError):**
@@ -128,7 +159,7 @@ route = resolve_route(spec)  # ← probe will match this
 
 **Backend:** huggingface_free
 **Endpoint:** HuggingFace Inference API (free tier)
-**Cost:** ~$0.001 per 1K tokens (estimated)
+**Cost:** $0.001/token, flat (`0.001 * max(est_tokens, 1)`) — $1.00 per 1K tokens
 **Status:** AVAILABLE (requires escalation)
 **Probe trigger:** None (escalation only)
 **Escalation requirement:** `escalation_reason` MUST be set AND policy permits
@@ -154,13 +185,14 @@ spec = ToolCallSpec(
 )
 route = resolve_route(spec, escalation_tier=3)
 # Returns: ResolvedRoute(tier=3, backend="huggingface_free", model="mistral-7b",
-#                        est_cost_usd=0.001, escalation_reason="tier_1_timeout")
+#                        est_cost_usd=1.0, escalation_reason="tier_1_timeout")
+# Cost check: est_tokens (1000) × 0.001 = $1.00
 ```
 
 ### Tier 4: Proprietary Free (Free Proprietary APIs)
 
 **Backend:** free_proprietary
-**Cost:** ~$0.001 per 1K tokens (estimated)
+**Cost:** $0.001/token, flat (`0.001 * max(est_tokens, 1)`) — $1.00 per 1K tokens
 **Status:** AVAILABLE (requires escalation)
 **Example:** Claude free tier, Anthropic free research access
 **Escalation requirement:** `escalation_reason` MUST be set
@@ -177,14 +209,17 @@ spec = ToolCallSpec(
 )
 route = resolve_route(spec, escalation_tier=4)
 # Returns: ResolvedRoute(tier=4, backend="free_proprietary", model="claude-3-haiku",
-#                        est_cost_usd=0.002, escalation_reason="tier_2_unavailable")
+#                        est_cost_usd=2.0, escalation_reason="tier_2_unavailable")
+# Cost check: est_tokens (2000) × 0.001 = $2.00
 ```
 
 ### Tier 5: Paid (OpenRouter & Paid Services)
 
 **Backend:** openrouter
 **Endpoint:** OpenRouter (routing service for paid models)
-**Cost:** ~$0.003 per 1K tokens (varies by model)
+**Cost:** $0.001/token, flat (`0.001 * max(est_tokens, 1)`) — $1.00 per 1K tokens
+(same flat formula as tiers 3–4; the "varies by model" framing does not apply
+to the current `_escalation_route()` implementation)
 **Status:** AVAILABLE (expensive; requires explicit approval)
 **Escalation requirement:** `escalation_reason` + cost gate approval
 
@@ -209,13 +244,16 @@ spec = ToolCallSpec(
 # MUST check CostGuard.can_spend() BEFORE escalation
 route = resolve_route(spec, escalation_tier=5)
 # Returns: ResolvedRoute(tier=5, backend="openrouter", model="gpt-4-turbo",
-#                        est_cost_usd=0.009, escalation_reason="tier_4_rate_limited")
+#                        est_cost_usd=3.0, escalation_reason="tier_4_rate_limited")
+# Cost check: est_tokens (3000) × 0.001 = $3.00
 ```
 
 ### Tier 6: Last Resort (Grok / Emergency)
 
 **Backend:** grok
-**Cost:** ~$0.01 per 1K tokens (most expensive)
+**Cost:** $0.001/token, flat (`0.001 * max(est_tokens, 1)`) — $1.00 per 1K tokens
+(same flat formula as tiers 3–5; the "most expensive" framing does not apply
+to the current `_escalation_route()` implementation)
 **Status:** AVAILABLE (last resort only; fail-closed after)
 **Escalation requirement:** `escalation_reason` + explicit cost approval
 
@@ -233,7 +271,8 @@ spec = ToolCallSpec(
 )
 route = resolve_route(spec, escalation_tier=6)
 # Returns: ResolvedRoute(tier=6, backend="grok", model="grok-3",
-#                        est_cost_usd=0.05, escalation_reason="tier_5_unavailable")
+#                        est_cost_usd=5.0, escalation_reason="tier_5_unavailable")
+# Cost check: est_tokens (5000) × 0.001 = $5.00
 
 # Caller must handle Tier 6 failure explicitly:
 try:
@@ -464,29 +503,6 @@ audit_log = {
 print(f"Escalation audit: {audit_log}")
 ```
 
-## Error Handling: Tier 4 Failure (Fail-Closed)
-
-When Tier 4 (last resort) fails, there is NO further fallback. The system must
-fail explicitly.
-
-```python
-def invoke_tier_4_with_fallback_disabled(spec):
-    """Tier 4 is last resort; failure is NOT a fallback trigger."""
-    try:
-        route = resolve_route(spec, escalation_tier=4)
-        result = call_backend(route.backend, route.model, spec.est_tokens)
-        return result
-    except TimeoutError as e:
-        raise SystemExit(
-            f"CRITICAL: Tier 4 (Sonnet 5) timeout after 10s. "
-            f"No fallback available. Request failed. Escalation: {spec.escalation_reason}"
-        ) from e
-    except Exception as e:
-        raise SystemExit(
-            f"CRITICAL: Tier 4 failed irrecoverably: {e}. No fallback."
-        ) from e
-```
-
 ## Example: Complete Tier Progression with Cost Guard
 
 Scenario: User requests complex reasoning task (3000 tokens), cost-conscious.
@@ -664,35 +680,45 @@ Add to inference pipeline startup checks:
     # Check Tier 1 (Ollama)
     curl -s http://localhost:11434/v1/models | grep -q "qwen3.5" || exit 1
     
-    # Check Tier 3 (GLM-5.2) endpoint reachable
-    curl -s -m 5 https://open.bigmodel.cn/api/paas/v4/chat/completions \
-      -H "Content-Type: application/json" \
-      -d '{"model": "glm-5.2"}' | head -1
+    # Check Tier 3 (huggingface_free) endpoint reachable
+    curl -s -m 5 https://api-inference.huggingface.co/status \
+      -H "Content-Type: application/json" | head -1
 ```
 
 Add frugality router tests:
 
 ```python
-# tests/test_frugality_router.py
-def test_tier_1_local_no_cost():
-    spec = ToolCallSpec(task_type="reasoning", est_tokens=100)
-    route = resolve_route(spec)
-    assert route.tier == 1
-    assert route.est_cost_usd == 0.0
+# tests/test_frugality_router.py (real tests — verified against Perpetua-Tools/tests/test_frugality_router.py)
+class TestPrivacyCritical:
+    def test_privacy_critical_prefers_local_tier_1(self, registry):
+        route = resolve_route(
+            ToolCallSpec(task_type="coding", privacy_critical=True),
+            registry=registry,
+        )
+        assert route.tier == 1
+        assert route.est_cost_usd == 0.0
 
-def test_tier_escalation_on_timeout():
-    spec = ToolCallSpec(task_type="reasoning", est_tokens=2000, 
-                        escalation_reason="tier_1_timeout")
-    route = resolve_route(spec, escalation_tier=3)
-    assert route.tier == 3
-    assert route.est_cost_usd > 0.0
+    def test_privacy_critical_allows_tier_3_escalation(self):
+        spec = ToolCallSpec(
+            task_type="reasoning",
+            privacy_critical=True,
+            escalation_reason="hf free inference required",
+        )
+        route = resolve_route(spec, escalation_tier=3)
+        assert route.tier == 3
+        assert route.backend == "huggingface_free"
 
-def test_tier_4_requires_approval():
-    spec = ToolCallSpec(task_type="reasoning", est_tokens=3000,
-                        escalation_reason="tier_3_rate_limited")
-    route = resolve_route(spec, escalation_tier=4)
-    assert route.tier == 4
-    assert route.escalation_reason == "tier_3_rate_limited"
+    def test_privacy_critical_forbids_tier_4_escalation(self):
+        spec = ToolCallSpec(
+            task_type="reasoning",
+            privacy_critical=True,
+            escalation_reason="needs brave search",
+        )
+        with pytest.raises(
+            FrugalityPolicyError,
+            match="privacy_critical=True forbids tier >= 4",
+        ):
+            resolve_route(spec, escalation_tier=4)
 ```
 
 ## Version & Consensus
