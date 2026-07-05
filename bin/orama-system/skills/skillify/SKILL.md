@@ -9,7 +9,7 @@ description: >-
   skill, install a skill, modularize a skill, improve a SKILL.md, retiring fellow
   skill library, train smaller models with skills, or adapt .claude/skills
   runbooks into orama-system skills.
-version: 1.3.0
+version: 1.4.0
 license: Apache 2.0
 compatibility: claude-code, gstack, codex, cursor, gemini-cli, ecc
 parent_skill: orama-system
@@ -56,6 +56,7 @@ Read target-specific references only when needed:
 - Write canonical orama skills under `bin/orama-system/skills/<name>/`, never `.claude/skills/`.
 - New generated `SKILL.md` files should be under 200 lines. Shorter is better.
 - Existing or exceptional `SKILL.md` files must stay under 500 lines.
+- Reuse or upgrade existing registered skills before creating siblings.
 - Offload examples, full templates, long rules, and checklists to modular files.
 - Keep modular files one level away from `SKILL.md`; avoid reference chains.
 - Every fenced code block must include a language specifier.
@@ -66,13 +67,22 @@ Read target-specific references only when needed:
 1. Ask for skill name, purpose, target harness, trigger phrases, and boundaries.
 2. Choose the smallest folder shape that satisfies the task.
 3. Reuse or upgrade existing skills before creating a sibling.
-4. Preview frontmatter and the concise `SKILL.md` outline before writing.
-5. Run the clobber guard before any write.
-6. Write `SKILL.md` plus only the needed modular files.
-7. Register in `bin/orama-system/SKILL.md` only for orama sub-skills and only after confirmation.
-8. Touch `CLAUDE.md` only after confirmation.
-9. Validate frontmatter, line counts, code fences, relative links, and 6Cs.
-10. Report created files, registration status, and validation result.
+4. If an upstream source is unreachable, continue only from cached/repo-verified material and mark the source `UNVERIFIED - retry required`.
+5. For `mcp-orchestration` or `hermes-harness`, verify high-risk upgrade preconditions before proposing edits.
+6. Preview frontmatter and the concise `SKILL.md` outline before writing.
+7. Run the clobber guard before any write.
+8. Write `SKILL.md` plus only the needed modular files.
+9. Register in `bin/orama-system/SKILL.md` only for orama sub-skills and only after confirmation.
+10. Touch `CLAUDE.md` only after confirmation.
+11. Validate frontmatter, line counts, code fences, relative links, 6Cs, and audit notes.
+12. Report created files, registration status, and validation result.
+
+## High-Risk Upgrade Precondition
+
+Before upgrading `mcp-orchestration` or `hermes-harness`, verify the checklist in
+[`references/retiring-fellow-skill-library.md`](references/retiring-fellow-skill-library.md).
+Do not proceed until Gate 3/HITL, audit-log, and MCP context-firewall checks are
+explicitly satisfied or the operator acknowledges the block.
 
 ## Folder Shape
 
@@ -116,6 +126,7 @@ Trim unused folders for tiny skills. Do not create decorative empty structure.
 - Writing to `bin/orama-system/SKILL.md`.
 - Writing to `CLAUDE.md`.
 - Installing or publishing outside the repository.
+- Proceeding past a high-risk upgrade precondition that is not verified.
 
 ### Never Do
 
