@@ -9,7 +9,7 @@ description: >-
   skill, install a skill, modularize a skill, improve a SKILL.md, retiring fellow
   skill library, train smaller models with skills, or adapt .claude/skills
   runbooks into orama-system skills.
-version: 1.4.0
+version: 1.4.1
 license: Apache 2.0
 compatibility: claude-code, gstack, codex, cursor, gemini-cli, ecc
 parent_skill: orama-system
@@ -57,6 +57,8 @@ Read target-specific references only when needed:
 - New generated `SKILL.md` files should be under 200 lines. Shorter is better.
 - Existing or exceptional `SKILL.md` files must stay under 500 lines.
 - Reuse or upgrade existing registered skills before creating siblings.
+- Treat `mcp-orchestration` and `hermes-harness` as high-risk; verify Gate 3/HITL, audit-log, and MCP context-firewall checks before edits.
+- Use imperative runbook voice; define each jargon term once and reuse it consistently.
 - Offload examples, full templates, long rules, and checklists to modular files.
 - Keep modular files one level away from `SKILL.md`; avoid reference chains.
 - Every fenced code block must include a language specifier.
