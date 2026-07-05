@@ -151,11 +151,11 @@ Trim unused folders. Do not create empty decorative structure.
 Every new skill must include:
 
 - trigger-rich YAML `description`,
-- when to use and when not to use,
-- sibling skill routing,
+- imperative runbook voice with every jargon term defined once,
+- when to use, when not to use, and sibling skill routing,
 - copy-pasteable commands only after verification,
-- acceptance checks,
-- provenance and maintenance notes.
+- acceptance checks with unproven claims labeled open or candidate,
+- provenance and maintenance notes with re-verification commands.
 
 ## Audit Trail Requirement
 
@@ -175,7 +175,7 @@ After all planned skills or upgrades exist, run three reviews:
 |---|---|
 | Factual | Paths, commands, flags, CI, tests, and citations are verified against repo state |
 | Doctrine | No contradiction with parent `orama-system`, CIDF, AFRP, security, dry-run, or change-control rules |
-| Usability | Trigger quality of descriptions, duplication, self-containedness, scannability, and sibling routing |
+| Usability | Trigger quality of descriptions, one home per fact, self-containedness, scannability, and sibling routing |
 
 Then apply blocking and important fixes.
 
