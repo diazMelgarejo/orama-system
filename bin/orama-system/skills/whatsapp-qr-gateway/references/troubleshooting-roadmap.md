@@ -83,11 +83,31 @@ These endpoints are examples until verified in the current runtime:
 | Tier Router | `http://localhost:8000/orchestrate` |
 | Dashboard | `http://localhost:8002` |
 
-Implementation path to verify through the controlling repo if needed:
+## External Implementation Provenance
+
+Operator-provided chain:
+
+```text
+AlphaClaw feature/MacOS-post-install
+  -> imported by Perpetua-Tools main
+  -> consumed/referenced by orama-system skill documentation
+```
+
+External branch to verify:
+
+```text
+https://github.com/diazMelgarejo/AlphaClaw/tree/feature/MacOS-post-install
+```
+
+Implementation path to verify through AlphaClaw and Perpetua-Tools if needed:
 
 ```text
 AlphaClaw/lib/server/whatsapp-gateway.js
 ```
+
+This skill must not edit AlphaClaw directly. Confirm the Perpetua-Tools import or
+vendor path first, then update orama documentation only after the controlling
+source chain is clear.
 
 ## Lessons Learned
 
@@ -120,6 +140,15 @@ curl -s http://localhost:8555/health
 
 # Inspect gateway logs without printing secrets.
 grep "webhook\|health\|error" ~/.openclaw/logs/whatsapp-gateway.log | tail -40
+```
+
+External provenance checks:
+
+```text
+1. Verify AlphaClaw branch: feature/MacOS-post-install.
+2. Verify the gateway implementation path on that branch.
+3. Verify how Perpetua-Tools main imports, vendors, or wraps that implementation.
+4. Only then update orama-system documentation or integration notes.
 ```
 
 ## Agentic Worker Note
