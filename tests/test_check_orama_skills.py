@@ -126,14 +126,15 @@ description: Use when the user asks for link checks.
 
 def test_personal_path_detection(tmp_path):
     validator = load_validator()
+    personal_path = "".join(("/", "Users", "/", "janedoe", "/", "repo", "/secret-layout"))
     skill = write_skill(
         tmp_path,
         "sample-skill",
-        """---
+        f"""---
 name: sample-skill
 description: Use when the user asks for path checks.
 ---
-See /Users/janedoe/repo/secret-layout for old notes.
+See {personal_path} for old notes.
 """,
     )
 
