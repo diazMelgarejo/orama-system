@@ -150,6 +150,7 @@ def test_strict_mode_fails_on_unallowed_warnings_and_passes_allowed_warning(tmp_
         """---
 name: sample-skill
 description: Use when the user asks for sample work.
+when_to_use: Activates for sample checks.
 ---
 # Sample
 """,
