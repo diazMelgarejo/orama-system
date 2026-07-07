@@ -30,14 +30,14 @@ agent that uses the **ClinePass path as the better default** for coding tasks:
    - **Dedicated billing** — Cline Credits are separate from OpenRouter credits
    - **Auto-refreshing auth** — the Cline CLI refreshes its WorkOS token automatically
 2. **GLM-5.2 Ultimate Fallback**: When ClinePass is unavailable, agents fall back to
-   `~/.alphaclaw/.openclaw/workspace/skills/glm52-fallback/` which provides:
+   `~/.alphaclaw/.openclaw/workspace/bin/orama-system/skills/glm52-fallback/` which provides:
    - Direct GLM-5.2 API access via BigModel GLMs
    - Environment vars: `GLM52_API_KEY` and `GLM52_ENDPOINT`
    - See [GLM-5.2 fallback setup](../../glm52-fallback/setup-glm52.sh) in the sibling skill
-2. **Lightweight agent model: `openrouter/free`** (free auto-router) — used only
+3. **Lightweight agent model: `openrouter/free`** (free auto-router) — used only
    for routing/triage/quick replies that don't need tool loops. This is the
    limited/restricted fallback, not the primary coding path.
-3. Delegates agentic execution to the `cline` CLI through three bridges:
+4. Delegates agentic execution to the `cline` CLI through three bridges:
    **exec** (one-shot shell-out), **ACP** (`openclaw acp client --server cline
    --server-args --acp`), and **MCP** (`openclaw mcp serve` → `cline mcp
    install`).
