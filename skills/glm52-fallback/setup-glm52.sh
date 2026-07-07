@@ -1,11 +1,17 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "Configuring GLM-5.2 fallback for OpenClaw agents..."
 
-# 1. Store API key securely
+if [ -z "${GLM52_API_KEY:-}" ]; then
+  echo "ERROR: GLM52_API_KEY must be set in the environment before running this setup script." >&2
+  echo "Example: export GLM52_API_KEY='<BigModel.API.key>'" >&2
+  exit 1
+fi
+
+# 1. Store API key securely from the caller's environment.
 mkdir -p ~/.openclaw/secrets ~/.openclaw/logs
-echo "3cf1825f585f4e81a1c4966b09ae5a4c.NnVx4ipFnXhEKV1n" > ~/.openclaw/secrets/glm52-api-key
+printf '%s\n' "$GLM52_API_KEY" > ~/.openclaw/secrets/glm52-api-key
 chmod 600 ~/.openclaw/secrets/glm52-api-key
 
 # 2. Setup environment
