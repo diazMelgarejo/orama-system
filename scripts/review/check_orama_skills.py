@@ -25,7 +25,17 @@ BACKGROUND_SKILLS = {"afrp", "cidf"}
 FORK_RECOMMENDED_SKILLS = {"code-review", "gstack", "hermes-harness", "mcp-orchestration"}
 EFFORT_RECOMMENDATIONS = {"shell-hygiene": "low", "afrp": "low", "cidf": "low", "gstack": "medium", "openclaw-skills": "medium", "skillify": "high", "code-review": "high", "git-history-surgery": "high", "hermes-harness": "high", "mcp-orchestration": "high"}
 VALID_EFFORTS = {"low", "medium", "high", "xhigh", "max"}
-KNOWN_FIELDS = {"name", "description", "when_to_use", "argument-hint", "arguments", "disable-model-invocation", "user-invocable", "allowed-tools", "disallowed-tools", "model", "effort", "context", "agent", "hooks", "paths", "shell", "version", "license", "compatibility", "parent_skill", "triggers", "canonical_path", "supersedes", "last_updated", "agent_compatibility", "layer", "upstream", "upstream_path", "origin"}
+KNOWN_FIELDS = {
+    "name", "description", "when_to_use", "argument-hint", "arguments",
+    "disable-model-invocation", "user-invocable", "allowed-tools",
+    "disallowed-tools", "model", "effort", "context", "agent", "hooks",
+    "paths", "shell", "version", "license", "compatibility",
+    "parent_skill", "triggers", "canonical_path", "supersedes",
+    "last_updated", "agent_compatibility", "layer", "upstream",
+    "upstream_path", "origin",
+    # gstack-specific fields (legitimate for gstack-originated skills)
+    "gstack_version", "gstack_install",
+}
 
 FRONTMATTER_RE = re.compile(r"\A---\s*\n(?P<body>.*?)\n---\s*\n", re.DOTALL)
 FENCE_LINE_RE = re.compile(r"^```(?P<info>[^`]*)$", re.MULTILINE)
@@ -251,7 +261,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--mode", choices=("baseline", "strict"), default="baseline")
     parser.add_argument("--format", choices=("text", "json"), default="text")
     parser.add_argument("--scan-root", dest="scan_roots", action="append", help="skill scan root relative to repository root; can repeat")
-    parser.add_argument("--allow-warning", dest="allow_warnings", action="append", default=[], help="allow warning by rule or rule:path in strict mode")
+    parser.add_argument("--allow-warning", dest="allow_warnings", action="append", default=[], help="allow warning by rule or path in strict mode")
     parser.add_argument("--warning-allowlist", help="file containing allowed warning rules, one per line")
     args = parser.parse_args(argv)
 
