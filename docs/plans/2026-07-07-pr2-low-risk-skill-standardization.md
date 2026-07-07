@@ -111,6 +111,8 @@ Relevant ADR-045 Phase 2 inputs:
 
 This repo document is the source of truth. A Margin page, if published later, is only a review projection. Fold any Margin comments back into this file or the PR body before approval.
 
+Connector note: this session can update GitHub source files and PR metadata, but it cannot publish or revise Margin directly. The committed repo plan is therefore the authoritative AutoPlan artifact for this pass.
+
 ## Append-only update log
 
 ### 2026-07-07 — ADR-045 added to PR 2 scope
