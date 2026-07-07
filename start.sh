@@ -1273,7 +1273,7 @@ if [ -n "$PT_DIR" ] && [ -f "$PT_DIR/orchestrator/fastapi_app.py" ]; then
     wait_for_port "$PT_PORT" "PT"
   fi
 else
-  echo "  PT   skipped (not found at ${PT_DIR:-unknown})"
+  echo "  PT   skipped (not found at: ${PT_DIR:-unknown})"
 fi
 
 # 2. orama-system reasoning engine
@@ -1368,7 +1368,7 @@ if [ "$GLM52_AVAILABLE" = "true" ] && [ -n "${GLM52_API_KEY:-}" ]; then
   _info "fallback" "   Endpoint: $GLM52_ENDPOINT"
 else
   _warn "fallback" "⚠️  GLM-5.2 Ultimate Fallback NOT AVAILABLE"
-  _warn "fallback" "   Run: bash ~/.alphaclaw/.openclaw/workspace/skills/glm52-fallback/setup-glm52.sh"
+  _warn "fallback" "   Run: bash ~/.alphaclaw/.openclaw/workspace/bin/orama-system/skills/glm52-fallback/setup-glm52.sh"
 fi
 echo ""
 
