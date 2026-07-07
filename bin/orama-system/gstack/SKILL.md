@@ -22,6 +22,14 @@ paths:
   - "bin/orama-system/scripts/**"
 ---
 
+# gstack Integration
+
+gstack v1.58.3.0 is the agent skill framework for web browsing, planning,
+review, QA, and deployment workflows. Installed globally at
+`~/.claude/skills/gstack` (global-git). Invoke the global skill with
+`/skill ~/.claude/skills/gstack/SKILL.md`; subskills remain under the same
+checkout.
+
 ## Rules
 
 - **ALWAYS** use `/browse` for all web browsing — NEVER use `mcp__claude-in-chrome__*` tools directly
@@ -206,7 +214,7 @@ cd ~/gbrain && bun run src/cli.ts init \
 ```json
 {
   "engine": "pglite",
-  "database_path": "C:\\Users\\<user>\\.gbrain\\brain.pglite",
+  "database_path": "<profile-dir>\\.gbrain\\brain.pglite",
   "embedding_model": "llama-server:text-embedding-qwen3-embedding-8b-i1-gguf-q6-k",
   "embedding_dimensions": 4096,
   "schema_pack": "gbrain-base-v2",
