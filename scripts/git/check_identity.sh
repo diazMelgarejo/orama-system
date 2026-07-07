@@ -76,6 +76,11 @@ if [[ "$actual_email_lc" == "lawrence@cyre.me" ]]; then
   exit 0
 fi
 
+if [[ "$actual_email_lc" == "lawrence.melgarejo@gmail.com" ]]; then
+  echo "OK: approved git identity"
+  exit 0
+fi
+
 if [[ "$actual_email_lc" == "lawrence@bettermind.ph" ]]; then
   echo "OK: approved git identity"
   exit 0
@@ -94,6 +99,7 @@ fi
 echo "ERROR: git identity must be one of:" >&2
 echo "  - * <diazMelgarejo@gmail.com>" >&2
 echo "  - * <Lawrence@cyre.me>" >&2
+echo "  - * <Lawrence.Melgarejo@gmail.com>" >&2
 echo "  - Codex <codex@openai.com>" >&2
 echo "  - a well-known AI/vendor domain (OpenAI, Anthropic, Cursor, Google/Gemini, GitHub/Copilot, Microsoft, Perplexity, xAI/Grok)" >&2
 exit 1
