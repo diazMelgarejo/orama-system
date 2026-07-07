@@ -17,6 +17,32 @@ Target skills, in the revised priority order:
 
 This PR should reduce validator warnings for the target skills, improve metadata precision, and preserve or improve existing operational guidance. It should not touch high-risk execution skills, MCP dispatch, OpenClaw/Hermes execution paths, or canonical skill-source roots.
 
+## Oramasys AutoPlan gate
+
+AFRP classification:
+
+```text
+AFRP: Type C | Level Expert | Mode 2
+Scope: PR 2 planning and low-risk skill standardization
+```
+
+AutoPlan decision: proceed as a draft PR, but keep the work planning-first until the three target skills are patched and validated.
+
+Review model applied:
+
+- CEO review: keep the PR small and start with Planning Gstack because it sets the routing surface for later ADR-045 rollout.
+- Engineering review: link to ADR-045 as the source of truth instead of duplicating its framework in every skill.
+- DX review: make the next agent path obvious: gstack for planning, first-run for bootstrap, shell-hygiene for shell discipline.
+- Final gate: repo docs remain source of truth; any Margin page is a review projection only.
+
+Security alignment from `SECURITY.md`:
+
+- keep stacked PR discipline,
+- keep this as one logical workstream,
+- preserve prior security records and plan context additively,
+- maintain safe defaults and explicit boundaries,
+- avoid introducing new sensitive examples or runtime artifacts.
+
 ## ADR-045 alignment
 
 ADR-045 Phase 1 completed the foundation for gstack, gbrain, and CRG error resilience. It defines the shared safe-default framework, implementation guide, diagnostics convention, and Phase 2 rollout target list.
@@ -81,8 +107,16 @@ Relevant ADR-045 Phase 2 inputs:
 - Do not delete or compress existing gstack operational knowledge without an equivalent canonical reference.
 - Do not duplicate ADR-045 inside every skill; link to it as the canonical source.
 
+## Margin projection note
+
+This repo document is the source of truth. A Margin page, if published later, is only a review projection. Fold any Margin comments back into this file or the PR body before approval.
+
 ## Append-only update log
 
 ### 2026-07-07 — ADR-045 added to PR 2 scope
 
 Planning Gstack is now the first PR 2 priority. The pass should align with ADR-045 Phase 1 foundation and Phase 2 rollout by treating gstack as the routing and planning surface for gstack/gbrain/CRG resilience. `first-run-setup` remains in scope because ADR-045 lists it as a priority bootstrap skill; `shell-hygiene` remains in scope as a low-risk shell convention cleanup, but it is no longer the first edit.
+
+### 2026-07-07 — oramasys AutoPlan and SECURITY.md alignment added
+
+Applied the oramasys AutoPlan gate to PR 2. The plan now records AFRP classification, CEO/engineering/DX review, final-gate framing, and `SECURITY.md` alignment. The next edit remains Planning Gstack first, with ADR-045 as the canonical resilience source and Margin treated only as a projection.
