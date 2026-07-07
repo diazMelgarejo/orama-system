@@ -24,7 +24,7 @@ paths:
 
 # gstack Integration
 
-gstack v1.58.3.0 is the global-git agent skill framework installed at `~/.claude/skills/gstack`; invoke with `/skill ~/.claude/skills/gstack/SKILL.md`.
+gstack v1.58.3.0 is the agent skill framework for web browsing, planning, review, QA, and deployment workflows. Installed globally at *~/.claude/skills/gstack* (global-git). Invoke the global skill with */skill ~/ .claude/skills/gstack/SKILL.md*; subskills remain under the same checkout.
 
 ## Rules
 
@@ -460,8 +460,7 @@ SAFE remediations automatic and SURFACES the rest:
 - reports orphan sources whose `local_path` is missing (quarantine candidates) — never auto-deletes.
 
 Wire-in: `start.sh` calls it best-effort/non-fatal each session. Run manually any time:
-`bash scripts/gbrain/gbrain-selfheal.sh`. Update its `PAIRS` map when a repo moves (and archive
-the old source in the same pass).
+`bash scripts/gbrain/gbrain-selfheal.sh`. Update its `PAIRS` map when a repo moves (and archive the old source in the same pass).
 
 Two gotchas it encodes:
 
