@@ -1,6 +1,6 @@
 # Retiring Fellow Skill Library Runbook
 
-Adapted from `tomicz/fable-5-train-opus-skills-after-it-retires` for orama-system.
+Adapted from `tomicz/fable-5-train-opus-skills-after-it-retires` and official Claude Code skills guidance for orama-system.
 
 ## Goal
 
@@ -24,7 +24,9 @@ The purpose is continuity: junior/mid-level engineers and smaller AI models must
 - End each skill or reference with provenance and re-verification commands for facts that may drift.
 - Do not use private/user-specific paths as load-bearing sources.
 - Keep new `SKILL.md` files <= 200 lines; hard ceiling <= 500 lines.
+- Keep `description` + `when_to_use` <= 1,536 characters.
 - Append an audit note for every skill upgraded or intentionally deferred.
+- Run `python3 scripts/review/check_orama_skills.py --mode baseline` before reporting complete.
 
 ## Source Fallback Rule
 
@@ -86,6 +88,23 @@ Existing registered skills already cover major parts of the taxonomy. Use this m
 
 If an existing skill is thin, upgrade it in place with a modular reference file. Do not create a sibling with overlapping ownership.
 
+## Claude Code Metadata Adaptation
+
+When upgrading skills, adapt official Claude Code fields to orama paths and risk tiers:
+
+| Field | orama rule |
+|---|---|
+| `when_to_use` | Put trigger phrases and examples here; keep `description` short |
+| `disable-model-invocation: true` | Required for installs, git history mutation, MCP config, harness dispatch, or delivery side effects |
+| `user-invocable: false` | Use for background doctrine such as `afrp` and `cidf` |
+| `context: fork` + `agent:` | Use for isolated review, QA, research, and harness tasks |
+| `paths:` | Use for monorepo-aware activation, never as the only safety boundary |
+| `argument-hint` + `arguments` | Use for reusable invocations and argument substitution |
+| `${CLAUDE_SKILL_DIR}` | Use for files bundled with a skill |
+| `${CLAUDE_PROJECT_DIR}` | Use for repo-local scripts and validators |
+| `hooks:` | Use only for deterministic audit/policy actions; include session-linked audit output |
+| dynamic context | Treat as pre-execution shell; keep scoped and preferably explicit-invocation |
+
 ## High-Risk Upgrade Precondition
 
 Before upgrading `mcp-orchestration` or `hermes-harness`, stop and verify:
@@ -113,9 +132,9 @@ Run low-risk upgrades first, then medium, then high-risk.
 
 | Order | Skills | Rule |
 |---|---|---|
-| 1 | `shell-hygiene`, `first-run-setup`, `gstack` | Lowest risk; verify path conventions and compatibility only |
-| 2 | `code-review`, `git-history-surgery`, `cidf`, `afrp` | Medium risk; preserve doctrine and avoid duplicate ownership |
-| 3 | `mcp-install`, `openclaw-skills` | Elevated risk; verify least-privilege and secrets handling |
+| 1 | `shell-hygiene`, `first-run-setup`, `gstack` | Lowest risk; add `when_to_use`, effort, paths, and safe context where useful |
+| 2 | `code-review`, `git-history-surgery`, `cidf`, `afrp` | Medium risk; add invocation control, forked review where appropriate, and background doctrine settings |
+| 3 | `mcp-install`, `openclaw-skills` | Elevated risk; add explicit invocation, least-privilege tool scope, and secrets handling |
 | 4 | `hermes-harness`, `mcp-orchestration` | Highest risk; require high-risk precondition checklist first |
 
 ## Phase 3 - Author Missing Skills
@@ -150,7 +169,8 @@ Trim unused folders. Do not create empty decorative structure.
 
 Every new skill must include:
 
-- trigger-rich YAML `description`,
+- trigger-rich YAML `description` plus `when_to_use`,
+- explicit invocation controls for background or side-effect skills,
 - imperative runbook voice with every jargon term defined once,
 - when to use, when not to use, and sibling skill routing,
 - copy-pasteable commands only after verification,
@@ -167,6 +187,8 @@ AUDIT: <date> <skill> <upgrade|defer|create> <reason> <verification source>
 
 If the action changes execution risk, include the human approval or blocker reference.
 
+For side-effect skills that use hooks, include session-linked audit output.
+
 ## Phase 4 - Review And Fix
 
 After all planned skills or upgrades exist, run three reviews:
@@ -175,7 +197,7 @@ After all planned skills or upgrades exist, run three reviews:
 |---|---|
 | Factual | Paths, commands, flags, CI, tests, and citations are verified against repo state |
 | Doctrine | No contradiction with parent `orama-system`, CIDF, AFRP, security, dry-run, or change-control rules |
-| Usability | Trigger quality of descriptions, one home per fact, self-containedness, scannability, and sibling routing |
+| Usability | Trigger quality of descriptions, one home per fact, metadata fit, self-containedness, scannability, and sibling routing |
 
 Then apply blocking and important fixes.
 
@@ -207,10 +229,11 @@ Uncertain:
 
 ## Provenance And Maintenance
 
-Source adapted on 2026-07-06 from:
+Sources adapted on 2026-07-06:
 
 ```text
 https://github.com/tomicz/fable-5-train-opus-skills-after-it-retires/blob/main/README.md
+https://code.claude.com/docs/en/skills
 ```
 
 Re-verify source and target path before rerunning:
@@ -219,6 +242,7 @@ Re-verify source and target path before rerunning:
 git fetch origin --prune
 git status --short --branch
 find bin/orama-system/skills -maxdepth 2 -name SKILL.md | sort
+python3 scripts/review/check_orama_skills.py --mode baseline
 sed -n '1,120p' bin/orama-system/SKILL.md
 sed -n '1,140p' docs/v2/references/HUMAN-IN-LOOP-ACCOUNTABILITY.md
 sed -n '1,120p' docs/v2/32-agentic-security-controls.md
