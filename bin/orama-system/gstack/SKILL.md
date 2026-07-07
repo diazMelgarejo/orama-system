@@ -24,7 +24,7 @@ paths:
 
 # gstack Integration
 
-gstack v1.58.3.0 is the agent skill framework for web browsing, planning, review, QA, and deployment workflows. Installed globally at *~/.claude/skills/gstack* (global-git). Invoke the global skill with */skill ~/ .claude/skills/gstack/SKILL.md*; subskills remain under the same checkout.
+gstack v1.58.3.0 is the agent skill framework for web browsing, planning, review, QA, and deployment workflows. Installed globally at *~/.claude/skills/gstack* (global-git). Invoke the global skill with */skill ~/.claude/skills/gstack/SKILL.md*; subskills remain under the same checkout.
 
 ## Rules
 
