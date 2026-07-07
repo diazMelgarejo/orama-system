@@ -317,7 +317,7 @@ paths:
 
 **Check body for non-portable patterns:**
 - Body uses `Bash(command: "...", run_in_background: true)` — portable, correct.
-- Body uses `~/.orama-system/first-run.done` reference in quick ref table — this is a home-dir path (`~`), not an absolute personal path. The validator's `has_personal_path` checks for `/Users/`, `/home/`, `C:/Users/`, `C:\Users\` patterns. Home-dir references (`~/...`) are NOT flagged.
+- Body uses `~/.orama-system/first-run.done` reference in quick ref table — this is a home-dir path (`~`), not an absolute personal path. The validator's `has_personal_path` checks for common user-profile path patterns on Unix and Windows. Home-dir references (`~/...`) are NOT flagged.
 - No raw LAN IPs detected.
 
 **No body edits needed for this step.**
