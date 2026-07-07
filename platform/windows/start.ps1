@@ -74,7 +74,7 @@ $env:PYTHONUTF8       = '1'
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 $ScriptDir  = Split-Path -Parent $PSCommandPath
-$RepoRoot   = (Resolve-Path (Join-Path $ScriptDir '..…')).Path
+$RepoRoot   = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
 $LogDir     = Join-Path $RepoRoot '.logs'
 $PathsFile  = Join-Path $RepoRoot '.paths.ps1'
 
@@ -152,7 +152,7 @@ function Find-PtDir {
         $ocPt = Join-Path $env:OPENCLAW_HOME 'Perpetua-Tools'
         if (Test-Path (Join-Path $ocPt 'orchestrator\fastapi_app.py')) { return $ocPt }
     }
-    $candidate = Resolve-Path (Join-Path $RepoRoot '..…\perplexity-api\Perpetua-Tools') -ErrorAction SilentlyContinue
+    $candidate = Resolve-Path (Join-Path $RepoRoot '..\perplexity-api\Perpetua-Tools') -ErrorAction SilentlyContinue
     if ($candidate -and (Test-Path (Join-Path $candidate 'orchestrator\fastapi_app.py'))) {
         return $candidate.Path
     }
@@ -677,7 +677,7 @@ if ($Glm52Available -and $env:GLM52_API_KEY) {
     Write-Host "   Endpoint: $($env:GLM52_ENDPOINT)"
 } else {
     Write-Host '⚠️  GLM-5.2 Ultimate Fallback NOT AVAILABLE'
-    if (-not (Test-Path "$HOME\\.alphaclaw")) {
+    if (-not (Test-Path "$HOME\.alphaclaw")) {
         Write-Host '   Setup: see bin/orama-system/skills/glm52-fallback/SKILL.md'
     } else {
         Write-Host '   Setup: bash ~/.alphaclaw/.openclaw/workspace/bin/orama-system/skills/glm52-fallback/setup-glm52.sh'
