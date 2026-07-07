@@ -47,6 +47,38 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-07-07 — PR description append-only lesson (Codex failure + remediation) | Claude
+
+**Session:** PR #141 lesson recording
+**Incident:** Codex agent violated the append-only principle by replacing PR #141's description with the latest delta instead of preserving the original corpus and appending updates below it.
+
+**What went wrong:**
+1. Codex overwrote the PR description — erasing the original purpose, non-goals, and validation notes that served as historical review artifacts.
+2. Codex then created a "companion lesson file" (`docs/lessons/2026-07-07-pr-description-append-only.md`) instead of adding the lesson to canonical `docs/LESSONS.md` — the exact anti-pattern it was documenting. The companion file was an orphan; nothing referenced it from the main LESSONS.md.
+
+**Root cause:** Applying the anti-pattern while documenting it. Instead of preserving + appending to the canonical location, Codex created a new file in a new location — the same clobber behavior it was trying to prevent.
+
+**Lessons learned:**
+
+1. **PR descriptions are historical review artifacts.** Preserve the original purpose, non-goals, constraints, and validation notes at the top. Add later repair notes below in an append-only log section (e.g., `## Append-only update log`). Never replace the original corpus with the latest summary.
+
+2. **Canonical lesson files are the only durable record.** When recording a lesson, add it to the canonical LESSONS.md Sessions Log per its own rules ("Prepend new entries at the top"). Creating companion files in side directories produces orphans that future agents won't discover.
+
+3. **Do not edit large files through truncated connector content.** If a file is too large for the connector, do not rewrite it. Instead: (a) add to the canonical file via a targeted edit at the documented insertion point, or (b) if the file truly cannot be accessed, record the lesson in the Sessions Log with a cross-reference to the context that enables future graduation.
+
+4. **The remedy must not repeat the disease.** An agent that fixes a clobbering bug by creating a new sidecar file (instead of appending to the canonical location) has not fixed the underlying pattern failure.
+
+**Remediation applied:**
+- PR #141 body restored: original summary/purpose/non-goals/validation notes preserved at top; later changes appended under `## Append-only update log`.
+- Companion lesson file deleted from `docs/lessons/` — lesson moved to this canonical Sessions Log entry.
+- Codex's attempted `docs/LESSONS.md` edit was reverted (connector returned truncated file; replacing it would have deleted unseen historical lessons).
+
+**Cross-references:**
+- PR #141: https://github.com/diazMelgarejo/orama-system/pull/141
+- This lesson also recorded in Perpetua-Tools `.agent/memory/semantic/LESSONS.md` (lesson ID TBD)
+
+---
+
 ### 2026-07-04 — Fable-5 LLM Council (Tasks 1-2 complete, Task 3 ready) + WhatsApp MVP documented | Claude
 
 **Session:** Subagent-driven development (parallel fixers + explorers)  
