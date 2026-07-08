@@ -196,8 +196,15 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
     _ensure_orama_src()
     from orama_system.lan_peer_files import list_outbox, read_outbox_file, remove_outbox_file
 
-    ip, port = _resolve_peer(args)
-    url = f"{_peer_base(ip, port)}/api/peer-file"
+    # Each outbox item was queued with its own intended peer_ip/portal_port
+    # (see write_outbox_file) — that stored target ALWAYS wins per item.
+    # --peer-ip/--portal-port on this command are only a fallback default
+    # for legacy items queued before peer_ip was recorded, never an
+    # override — a batch commonly spans multiple peers, and forcing every
+    # item to one IP is exactly the bug this fixes. Previously this
+    # resolved ONE peer for the whole batch and silently sent every item
+    # there, misdelivering anything queued for a different peer.
+    default_peer: tuple[str, int] | None = None
     items = list_outbox()
     results: list[dict[str, Any]] = []
     for item in items:
@@ -205,6 +212,17 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
         if not filename:
             continue
         body, meta = read_outbox_file(filename)
+        stored_ip = str(meta.get("peer_ip") or "").strip()
+        if stored_ip:
+            item_port_raw = str(meta.get("portal_port") or "").strip()
+            item_ip, item_port = stored_ip, (int(item_port_raw) if item_port_raw else int(args.portal_port))
+        else:
+            # Legacy item with no stored peer_ip — resolve once, lazily,
+            # only when actually needed.
+            if default_peer is None:
+                default_peer = _resolve_peer(args)
+            item_ip, item_port = default_peer
+        url = f"{_peer_base(item_ip, item_port)}/api/peer-file"
         payload = {
             "filename": filename,
             "body": body,
@@ -213,7 +231,7 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
             "fanout_id": str(meta.get("fanout_id") or item.get("fanout_id") or ""),
             "source": str(meta.get("source") or probe.local_role()),
         }
-        entry = {"filename": filename, "status": "pending"}
+        entry = {"filename": filename, "status": "pending", "peer_ip": item_ip, "portal_port": item_port}
         try:
             _http_json("POST", url, payload, timeout=args.timeout)
         except SystemExit as exc:
@@ -228,8 +246,6 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
         json.dumps(
             {
                 "ok": not failed,
-                "peer_ip": ip,
-                "portal_port": port,
                 "results": results,
             },
             indent=2,
