@@ -1241,7 +1241,8 @@ PY
   echo "╠══════════════════════════════════════════════════════════════════╣"
   printf "║  Mac %s  %-9s  %-45s║\n" "$mac_mark" "localhost" "qwen3.5-9b-mlx (MLX · ctx 56k)"
   printf "║       %-63s║\n" "agents: $mac_agents"
-  printf "║  Win %s  %-9s  %-45s║\n" "$win_mark" "$win_ip" "qwen3.5-27b (GGUF RTX 3080 · ctx 131k)"
+  printf "║  Win %s  %-9s  %-45s║\n" "$win_mark" "$win_ip" "RTX 3080 · qwen3.5-27b (GGUF · ctx 131k)"
+  printf "║       %-63s║\n" "RTX 5080 · gemma-4-26b (GGUF · ctx 131k)"
   printf "║       %-63s║\n" "agents: $win_agents"
   echo "╠══════════════════════════════════════════════════════════════════╣"
   printf "║  PT   :%-5s   orama :%-5s   Portal :%-5s                         ║\n" \
