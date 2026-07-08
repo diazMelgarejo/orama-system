@@ -49,15 +49,21 @@ function Test-TierAvailable {
         [scriptblock]$CheckCmd
     )
 
+    # $CheckCmd blocks used to end with `exit 0`, and this function checked
+    # $LASTEXITCODE afterward. Two problems: (1) cmdlets never set
+    # $LASTEXITCODE — only native executables do — so the check was
+    # comparing against a stale/unrelated value; (2) `exit` inside a
+    # scriptblock invoked via `& $CheckCmd` from a non-top-level function
+    # terminates the ENTIRE PowerShell process immediately, not just this
+    # check. Confirmed live: whenever a check actually succeeded, the whole
+    # script died right there — silently, with no [AVAILABLE] line, no
+    # remaining tiers checked, no summary printed. `-ErrorAction Stop` is
+    # set globally (Set-StrictMode/$ErrorActionPreference above), so
+    # "no exception thrown" already IS success — that's all this needs.
     try {
-        $result = & $CheckCmd
-        if ($LASTEXITCODE -eq 0) {
-            Write-Host "$Tier. $($Name.PadRight(38)) ${Green}[AVAILABLE]${Reset}"
-            return $true
-        } else {
-            Write-Host "$Tier. $($Name.PadRight(38)) ${Red}[OFFLINE]${Reset}"
-            return $false
-        }
+        $null = & $CheckCmd
+        Write-Host "$Tier. $($Name.PadRight(38)) ${Green}[AVAILABLE]${Reset}"
+        return $true
     } catch {
         Write-Host "$Tier. $($Name.PadRight(38)) ${Red}[OFFLINE]${Reset}"
         return $false
@@ -87,20 +93,35 @@ Log ""
 # Tier 1: ClinePass (local Claude)
 $Tier1 = Test-TierAvailable -Tier 1 -Name "ClinePass (local Claude)" -CheckCmd {
     $null = Get-Command cline -ErrorAction Stop
-    exit 0
 }
 
 # Tier 2: LM Studio (Windows GPU) — on Windows, typically at localhost:1234
 $Tier2 = Test-TierAvailable -Tier 2 -Name "LM Studio (Windows GPU)" -CheckCmd {
-    $LmStudioEndpoint = $env:LM_STUDIO_WIN_ENDPOINTS -or 'http://localhost:1234'
-    $null = Invoke-WebRequest -Uri "$LmStudioEndpoint/v1/models" -TimeoutSec 2 -ErrorAction Stop
-    exit 0
+    # -or is a boolean operator in PowerShell, not null-coalescing: it always
+    # returns $true/$false, never either operand. $env:X -or 'default' used
+    # to resolve to the literal string "True" whenever $env:X was unset,
+    # producing an invalid URL ("True/v1/models") and reporting LM Studio
+    # OFFLINE even when it was actually up and serving models.
+    $LmStudioEndpoint = if ($env:LM_STUDIO_WIN_ENDPOINTS) { $env:LM_STUDIO_WIN_ENDPOINTS } else { 'http://localhost:1234' }
+    # -UseBasicParsing: without it, Invoke-WebRequest routes through the IE
+    # COM parsing engine, which throws "Windows PowerShell is in
+    # NonInteractive mode. Read and Prompt functionality is not available."
+    # under any non-interactive invocation (Task Scheduler, CI, automation
+    # tooling) — reporting this tier OFFLINE even when LM Studio is actually
+    # up and serving models. Invoke-RestMethod elsewhere in this repo isn't
+    # affected (confirmed) since it doesn't go through the HTML parser.
+    # TimeoutSec 5, not 2: curl hits this same endpoint in ~0.2s, but
+    # Invoke-WebRequest's underlying .NET HTTP stack adds proxy
+    # auto-detection overhead even for localhost — confirmed live, 2s
+    # timed out 3/3 tries while 5s succeeded reliably. Matches the 5s
+    # timeout scripts/ensure_requirements.ps1 already uses for this same
+    # check.
+    $null = Invoke-WebRequest -Uri "$LmStudioEndpoint/v1/models" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
 }
 
 # Tier 3: Ollama (Mac local) — on Windows, could be Mac via LAN or localhost if running
 $Tier3 = Test-TierAvailable -Tier 3 -Name "Ollama (Mac local)" -CheckCmd {
-    $null = Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -TimeoutSec 2 -ErrorAction Stop
-    exit 0
+    $null = Invoke-WebRequest -Uri "http://localhost:11434/api/tags" -TimeoutSec 5 -UseBasicParsing -ErrorAction Stop
 }
 
 # Tier 4: GLM-5.2 (BigModel fallback)
