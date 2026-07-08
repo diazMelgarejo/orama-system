@@ -72,6 +72,53 @@ def test_help_lists_flush_outbox_command():
     assert "--timeout" in drop_help.stdout
 
 
+def test_flush_outbox_delivers_each_item_to_its_own_stored_peer(tmp_path):
+    """Regression: flush-outbox used to resolve ONE peer for the whole batch
+    and send every queued item there, silently misdelivering anything queued
+    for a different peer. Each item must be delivered to the peer_ip it was
+    originally queued with."""
+    import os
+
+    home = tmp_path / "home"
+    env = {**os.environ, "HOME": str(home)}
+
+    task_a = tmp_path / "task_a.md"
+    task_a.write_text("# For peer A\n", encoding="utf-8")
+    task_b = tmp_path / "task_b.md"
+    task_b.write_text("# For peer B\n", encoding="utf-8")
+
+    for task, ip, port, name in (
+        (task_a, "203.0.113.10", "1", "win-peer-a.md"),
+        (task_b, "203.0.113.20", "2", "win-peer-b.md"),
+    ):
+        drop = subprocess.run(
+            [
+                "python3", str(SCRIPT), "drop",
+                "--peer", "--peer-ip", ip, "--portal-port", port,
+                "--file", str(task), "--filename", name,
+                "--assignee", "win", "--topic", "smoke",
+            ],
+            cwd=ROOT, env=env, text=True, capture_output=True, check=False,
+        )
+        assert drop.returncode == 2
+        assert json.loads(drop.stdout)["queued"] is True
+
+    flush = subprocess.run(
+        ["python3", str(SCRIPT), "flush-outbox", "--peer", "--peer-ip", "203.0.113.10", "--timeout", "1"],
+        cwd=ROOT, env=env, text=True, capture_output=True, check=False,
+    )
+    payload = json.loads(flush.stdout)
+    results = {r["filename"]: r for r in payload["results"]}
+
+    # win-peer-a.md was queued for .10 AND flush-outbox's own --peer-ip is
+    # .10 here (deliberately, to prove it's not just an accidental match) —
+    # win-peer-b.md must still target its own stored .20, not fall through
+    # to the flush command's --peer-ip.
+    assert results["win-peer-a.md"]["peer_ip"] == "203.0.113.10"
+    assert results["win-peer-b.md"]["peer_ip"] == "203.0.113.20"
+    assert "203.0.113.20" in results["win-peer-b.md"]["detail"]
+
+
 def test_timeout_flag_controls_peer_request_duration(tmp_path):
     home = tmp_path / "home"
     task = tmp_path / "task.md"

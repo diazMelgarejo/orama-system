@@ -115,17 +115,19 @@ def _list_files(root: Path) -> list[dict[str, Any]]:
                 meta = json.loads(meta_path.read_text(encoding="utf-8"))
             except (OSError, json.JSONDecodeError):
                 meta = {}
-        items.append(
-            {
-                "filename": path.name,
-                "bytes": path.stat().st_size,
-                "assignee": meta.get("assignee", ""),
-                "topic": meta.get("topic", ""),
-                "source": meta.get("source", ""),
-                "fanout_id": meta.get("fanout_id", ""),
-                "received_at": meta.get("received_at", int(path.stat().st_mtime)),
-            }
-        )
+        entry = {
+            "filename": path.name,
+            "bytes": path.stat().st_size,
+            "assignee": meta.get("assignee", ""),
+            "topic": meta.get("topic", ""),
+            "source": meta.get("source", ""),
+            "fanout_id": meta.get("fanout_id", ""),
+            "received_at": meta.get("received_at", int(path.stat().st_mtime)),
+        }
+        if "peer_ip" in meta:
+            entry["peer_ip"] = meta.get("peer_ip", "")
+            entry["portal_port"] = meta.get("portal_port", "")
+        items.append(entry)
     return items
 
 
