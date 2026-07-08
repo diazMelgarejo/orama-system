@@ -168,11 +168,19 @@ bash bin/orama-system/scripts/install-mcp-stack.sh
 ```powershell
 cd $env:PERPETUA_TOOLS_PATH
 git pull origin main
-# Perpetua-Tools has no separate Windows installer today — it rides on the
-# Python venv + Node toolchain first-run-install.sh already set up in
-# orama-system. If PT ever grows its own requirements.txt, install it the
-# same way ensure_requirements.ps1 did in step 3.
 ```
+
+PT does have its own `requirements.txt` (uvicorn, fastapi, ...), separate
+from orama-system's toolchain — but no dedicated Windows installer script.
+`start.ps1` (step 7) auto-bootstraps `Perpetua-Tools\.venv` on its own the
+first time it runs, and — as of 2026-07-08 — also auto-heals a *partial*
+venv: it doesn't just check that `.venv\Scripts\python.exe` exists, it
+probes `import uvicorn` and reinstalls `requirements.txt` if that fails.
+This matters because a stale/partial venv (e.g. an interrupted first
+bootstrap) previously failed silently with "No module named uvicorn" every
+time PT tried to start, with no automatic recovery. If you're on a
+checkout from before that fix and hit this, `git pull` first — no manual
+venv surgery needed on a current checkout.
 
 ## 6. Join LAN coordination (Hermes Gateway pulse)
 
