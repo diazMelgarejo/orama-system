@@ -659,7 +659,7 @@ if ($Glm52Available -and $env:GLM52_API_KEY) {
     Write-Host "   Endpoint: $($env:GLM52_ENDPOINT)"
 } else {
     Write-Host '⚠️  GLM-5.2 Ultimate Fallback NOT AVAILABLE'
-    Write-Host '   Setup: bash ~/.alphaclaw/.openclaw/workspace/skills/glm52-fallback/setup-glm52.sh'
+    Write-Host '   Setup: bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh'
 }
 Write-Host ''
 
