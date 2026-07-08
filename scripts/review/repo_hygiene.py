@@ -310,6 +310,59 @@ def scan_personal_paths(root: Path, files: list[str]) -> list[str]:
     return errors
 
 
+# discover.py previously patched live LAN IPs directly into PT's git-tracked
+# config/devices.yml and config/models.yml (patch_devices_yml / patch_models_yml,
+# removed 2026-07-08). Every start.ps1/start.sh run dirtied both repos with
+# ephemeral DHCP topology, and a careless `git add -A` could commit live LAN
+# IPs to the public GitHub repo. Verified before removal: nothing reads the
+# live IP back out of tracked config (grep across Perpetua-Tools' orchestrator/
+# and src/perpetua/ — zero hits); ModelRegistry's `${VAR:-default}` expansion
+# prefers the env var, which lan_discovery.py already syncs from the
+# authoritative, UNTRACKED ~/.openclaw/state/last_discovery.json. Block
+# reintroduction of that write path.
+_DISCOVER_TRACKED_CONFIG_WRITE_PATTERN = re.compile(
+    r'''["']config["']\s*/\s*["'](?:devices|models)\.yml["']'''
+)
+_DISCOVER_REGRESSION_FUNCTION_NAMES = ("patch_devices_yml", "patch_models_yml")
+
+
+def scan_discover_tracked_config_writes(root: Path, files: list[str]) -> list[str]:
+    """Block discover.py from writing live LAN topology into tracked config/*.yml.
+
+    See the note above _DISCOVER_TRACKED_CONFIG_WRITE_PATTERN for the incident
+    this guards against. Live topology belongs only in
+    ~/.openclaw/state/last_discovery.json and the gitignored .env.lmstudio —
+    never in git-tracked Perpetua-Tools config/devices.yml or config/models.yml.
+    """
+    target = "scripts/discover.py"
+    if target not in files:
+        return []
+    path = root / target
+    if not path.is_file() or is_binary(path):
+        return []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return []
+    errors: list[str] = []
+    for line_no, line in enumerate(text.splitlines(), 1):
+        if _DISCOVER_TRACKED_CONFIG_WRITE_PATTERN.search(line):
+            errors.append(
+                f"discover.py regression: {target}:{line_no}: constructs a path into "
+                "PT's tracked config/devices.yml or config/models.yml — live LAN "
+                "topology must only go to ~/.openclaw/state/last_discovery.json "
+                "and .env.lmstudio (gitignored), never tracked YAML"
+            )
+        for fn_name in _DISCOVER_REGRESSION_FUNCTION_NAMES:
+            if f"def {fn_name}(" in line:
+                errors.append(
+                    f"discover.py regression: {target}:{line_no}: reintroduces "
+                    f"{fn_name}() — removed 2026-07-08 as a doxxing/hygiene risk, "
+                    "see the comment above write_env_lmstudio() in this file"
+                )
+    return errors
+
+
 def scan_bidi_controls(root: Path, files: list[str]) -> list[str]:
     """Block Unicode BiDi control characters (Trojan-Source defense).
 
@@ -986,6 +1039,7 @@ def main() -> int:
     errors.extend(check_identity(root))
     errors.extend(scan_forbidden_identity(root, files))
     errors.extend(scan_personal_paths(root, files))
+    errors.extend(scan_discover_tracked_config_writes(root, files))
     errors.extend(scan_openclaw_workstation_layout(root, files))
     errors.extend(scan_bidi_controls(root, files))
     errors.extend(scan_mojibake(root, files))
