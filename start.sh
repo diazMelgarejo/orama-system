@@ -729,6 +729,85 @@ fi
 _var   "ip" "MAC_IP" "$MAC_IP" "$IP_SOURCE"
 _var   "ip" "WIN_IP" "$WIN_IP" "$IP_SOURCE"
 
+# ── Dual Windows node detection (RTX 3080 + RTX 5080) ────────────────────────
+# WIN_IP above is the primary Windows peer (backward-compat, single-node callers).
+# This block detects a SECOND Windows LM Studio node by reading PT's devices.yml
+# and probing candidates on port 1234. Exports WIN_3080_IP, WIN_5080_IP, WIN_NODES.
+#
+# Priority for each node's IP:
+#   1. Explicit env var (WIN_3080_IP / WIN_5080_IP) — user override
+#   2. PT config/devices.yml (win-rtx3080.lan_ip / win-rtx5080.lan_ip)
+#   3. WIN_IP cross-match (if WIN_IP matches one node, the other is secondary)
+# Idempotent: read-only HTTP probes, no state mutation, safe to re-run.
+
+_DUAL_WIN="$("$US_PYTHON" -c "
+import os, urllib.request
+from pathlib import Path
+
+WIN_IP   = '${WIN_IP}'
+WIN_3080 = '${WIN_3080_IP:-}' or os.environ.get('WIN_3080_IP', '')
+WIN_5080 = '${WIN_5080_IP:-}' or os.environ.get('WIN_5080_IP', '')
+
+# ── Read devices.yml from PT_DIR ──────────────────────────────────────────────
+pt_dir = '${PT_DIR}'
+if pt_dir:
+    yml = Path(pt_dir) / 'config' / 'devices.yml'
+    if yml.is_file():
+        try:
+            import yaml
+            doc = yaml.safe_load(yml.read_text())
+            for dev in doc.get('devices', []):
+                did = dev.get('id', '')
+                ip  = dev.get('lan_ip', '') or ''
+                if did == 'win-rtx3080' and not WIN_3080:
+                    WIN_3080 = ip
+                elif did == 'win-rtx5080' and not WIN_5080:
+                    WIN_5080 = ip
+        except Exception:
+            pass
+
+# ── Cross-match WIN_IP to identify primary node ───────────────────────────────
+if WIN_IP and not WIN_5080 and WIN_IP == WIN_3080:
+    pass  # 3080 is primary; 5080 unknown
+elif WIN_IP and not WIN_3080 and WIN_IP == WIN_5080:
+    pass  # 5080 is primary; 3080 unknown
+elif WIN_IP and not WIN_5080:
+    WIN_5080 = WIN_IP  # assume primary = 5080 (current default)
+
+# ── Probe both on port 1234 (read-only, 2s timeout) ──────────────────────────
+def _lm_up(ip):
+    if not ip:
+        return False
+    try:
+        with urllib.request.urlopen(f'http://{ip}:1234/v1/models', timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+n3080_up = 1 if _lm_up(WIN_3080) else 0
+n5080_up = 1 if _lm_up(WIN_5080) else 0
+
+print(f'WIN_3080_IP={WIN_3080}')
+print(f'WIN_5080_IP={WIN_5080}')
+print(f'WIN_3080_UP={n3080_up}')
+print(f'WIN_5080_UP={n5080_up}')
+print(f'WIN_NODES={n3080_up + n5080_up}')
+" 2>/dev/null)"
+
+eval "$_DUAL_WIN"
+WIN_3080_IP="${WIN_3080_IP:-}"
+WIN_5080_IP="${WIN_5080_IP:-}"
+WIN_NODES="${WIN_NODES:-1}"
+
+if [ "${WIN_NODES:-0}" -ge 2 ] 2>/dev/null; then
+  _info  "ip" "Dual Win nodes detected: 3080=${WIN_3080_IP}  5080=${WIN_5080_IP}  (${WIN_NODES} nodes UP)"
+elif [ -n "${WIN_3080_IP}" ] || [ -n "${WIN_5080_IP}" ]; then
+  _info  "ip" "Win nodes: 3080=${WIN_3080_IP:-?}  5080=${WIN_5080_IP:-?}  (${WIN_NODES} UP)"
+fi
+_var   "ip" "WIN_3080_IP" "${WIN_3080_IP:-none}" "dual-detect"
+_var   "ip" "WIN_5080_IP" "${WIN_5080_IP:-none}" "dual-detect"
+_var   "ip" "WIN_NODES"   "${WIN_NODES}"          "dual-detect"
+
 # ── PT resolve — backend probe + AlphaClaw bootstrap ─────────────────────────
 # Delegates ALL gateway decisions to Perpetua-Tools (Layer 2).
 # PT probes backends, determines mode, bootstraps AlphaClaw, and returns
@@ -834,6 +913,13 @@ export WINDOWS_IP="${WINDOWS_IP:-${WIN_IP}}"
 export GPU_BOX="${GPU_BOX:-WINUSER@${WIN_IP}}"
 # WIN_LM_STUDIO_HOST — consumed by api_server.py to enable Windows LM Studio provider
 export WIN_LM_STUDIO_HOST="${WIN_LM_STUDIO_HOST:-${WIN_IP}}"
+
+# Dual Windows node endpoints (RTX 3080 + RTX 5080) — exported for PT/orama
+export WIN_3080_IP="${WIN_3080_IP:-}"
+export WIN_5080_IP="${WIN_5080_IP:-}"
+export WIN_NODES="${WIN_NODES:-1}"
+export LM_STUDIO_WIN_3080_ENDPOINTS="${LM_STUDIO_WIN_3080_ENDPOINTS:-http://${WIN_3080_IP}:1234}"
+export LM_STUDIO_WIN_5080_ENDPOINTS="${LM_STUDIO_WIN_5080_ENDPOINTS:-http://${WIN_5080_IP}:1234}"
 
 _info "env" "endpoints exported to child processes"
 _var  "env" "OLLAMA_MAC_ENDPOINT"    "$OLLAMA_MAC_ENDPOINT"    "derived"
@@ -1171,16 +1257,20 @@ _print_banner() {
   local mode="${PT_MODE:-offline}"
   local mac_ip="${MAC_IP:-localhost}"
   local win_ip="${WIN_IP:-?}"
+  local win_3080_ip="${WIN_3080_IP:-}"
+  local win_5080_ip="${WIN_5080_IP:-}"
   local tier="?"
   local tier_label=""
   # tier_color: reserved for future ANSI colour output
 
   # Determine tier from reachability (-w 1 = 1s timeout per probe, avoids 30s OS hang)
-  # All three probes run in parallel background subshells; total wall time = max(1s) not 3s.
-  local mac_up=0 win_up=0 oc_up=0
-  local _mac_f _win_f _oc_f
+  # All probes run in parallel background subshells; total wall time = max(1s) not sum.
+  local mac_up=0 win_up=0 win3080_up=0 win5080_up=0 oc_up=0
+  local _mac_f _win_f _win3080_f _win5080_f _oc_f
   _mac_f="$(mktemp /tmp/.orama_probe_mac_XXXXXX)"
   _win_f="$(mktemp /tmp/.orama_probe_win_XXXXXX)"
+  _win3080_f="$(mktemp /tmp/.orama_probe_win3080_XXXXXX)"
+  _win5080_f="$(mktemp /tmp/.orama_probe_win5080_XXXXXX)"
   _oc_f="$(mktemp /tmp/.orama_probe_oc_XXXXXX)"
   # _nc_probe: cross-platform 1-second TCP probe (nc -w1 on macOS/Linux, /dev/tcp fallback)
   _nc_probe() {
@@ -1202,17 +1292,29 @@ PY
   }
   ( _nc_probe localhost   1234  && echo 1 || echo 0 ) > "$_mac_f" &
   ( _nc_probe "$win_ip"   1234  && echo 1 || echo 0 ) > "$_win_f" &
+  ( _nc_probe "$win_3080_ip" 1234 2>/dev/null && echo 1 || echo 0 ) > "$_win3080_f" &
+  ( _nc_probe "$win_5080_ip" 1234 2>/dev/null && echo 1 || echo 0 ) > "$_win5080_f" &
   ( _nc_probe localhost   18789 && echo 1 || echo 0 ) > "$_oc_f"  &
   wait
   mac_up="$(cat "$_mac_f" 2>/dev/null || echo 0)"
   win_up="$(cat "$_win_f" 2>/dev/null || echo 0)"
+  win3080_up="$(cat "$_win3080_f" 2>/dev/null || echo 0)"
+  win5080_up="$(cat "$_win5080_f" 2>/dev/null || echo 0)"
   oc_up="$(cat  "$_oc_f"  2>/dev/null || echo 0)"
-  rm -f "$_mac_f" "$_win_f" "$_oc_f"
+  rm -f "$_mac_f" "$_win_f" "$_win3080_f" "$_win5080_f" "$_oc_f"
 
-  if   [ "$mac_up" -eq 1 ] && [ "$win_up" -eq 1 ]; then tier=1; tier_label="FULL  · Mac + Win (both nodes)"
-  elif [ "$mac_up" -eq 1 ];                          then tier=2; tier_label="MAC   · Mac only"
-  elif [ "$win_up" -eq 1 ];                          then tier=4; tier_label="WIN   · Win only"
-  else                                                    tier=3; tier_label="LOCAL DOWN · cloud fallback (check network)"
+  local win_nodes_up=0
+  [ "$win_up" -eq 1 ] && win_nodes_up=$((win_nodes_up + 1))
+  # Count the secondary node only if it's a DIFFERENT IP from the primary
+  if [ "$win3080_up" -eq 1 ] && [ "$win_3080_ip" != "$win_ip" ]; then win_nodes_up=$((win_nodes_up + 1)); fi
+  if [ "$win5080_up" -eq 1 ] && [ "$win_5080_ip" != "$win_ip" ] && [ "$win_5080_ip" != "$win_3080_ip" ]; then win_nodes_up=$((win_nodes_up + 1)); fi
+
+  if   [ "$mac_up" -eq 1 ] && [ "$win_nodes_up" -ge 2 ]; then tier=1; tier_label="FULL  · Mac + Win×2 (3 nodes)"
+  elif [ "$mac_up" -eq 1 ] && [ "$win_up" -eq 1 ];       then tier=1; tier_label="FULL  · Mac + Win (2 nodes)"
+  elif [ "$mac_up" -eq 1 ];                               then tier=2; tier_label="MAC   · Mac only"
+  elif [ "$win_nodes_up" -ge 2 ];                         then tier=4; tier_label="WIN   · Win×2 (both Win nodes)"
+  elif [ "$win_up" -eq 1 ];                               then tier=4; tier_label="WIN   · Win only"
+  else                                                          tier=3; tier_label="LOCAL DOWN · cloud fallback (check network)"
   fi
 
   local oc_status="●"; [ "$oc_up" -eq 0 ] && oc_status="○"
@@ -1222,6 +1324,8 @@ PY
   local win_agents="win-researcher  coder  autoresearcher"
   local mac_mark="✓"; [ "$mac_up" -eq 0 ] && mac_mark="✗"
   local win_mark="✓"; [ "$win_up" -eq 0 ] && win_mark="✗"
+  local win3080_mark="✓"; [ "$win3080_up" -eq 0 ] && win3080_mark="✗"
+  local win5080_mark="✓"; [ "$win5080_up" -eq 0 ] && win5080_mark="✗"
 
   echo ""
   echo "╔══════════════════════════════════════════════════════════════════╗"
@@ -1241,8 +1345,8 @@ PY
   echo "╠══════════════════════════════════════════════════════════════════╣"
   printf "║  Mac %s  %-9s  %-45s║\n" "$mac_mark" "localhost" "qwen3.5-9b-mlx (MLX · ctx 56k)"
   printf "║       %-63s║\n" "agents: $mac_agents"
-  printf "║  Win %s  %-9s  %-45s║\n" "$win_mark" "$win_ip" "RTX 3080 · qwen3.5-27b (GGUF · ctx 131k)"
-  printf "║       %-63s║\n" "RTX 5080 · gemma-4-26b (GGUF · ctx 131k)"
+  printf "║  Win %s  %-9s  %-45s║\n" "$win3080_mark" "${win_3080_ip:-?}" "RTX 3080 · qwen3.5-27b (GGUF · ctx 131k)"
+  printf "║  Win %s  %-9s  %-45s║\n" "$win5080_mark" "${win_5080_ip:-?}" "RTX 5080 · gemma-4-26b (nvfp4 · ctx 131k)"
   printf "║       %-63s║\n" "agents: $win_agents"
   echo "╠══════════════════════════════════════════════════════════════════╣"
   printf "║  PT   :%-5s   orama :%-5s   Portal :%-5s                         ║\n" \
@@ -1389,6 +1493,13 @@ _WIN_WATCH_PEER="${WIN_IP}"
 _WIN_WATCH_PORT="${LM_STUDIO_WIN_LM_PORT:-1234}"
 _WIN_WATCH_LM_PORT=1234
 _WIN_WATCH_MAX=120  # max 120 × 30s = 60 min of waiting
+# Second Windows node (RTX 5080 or 3080 — whichever isn't the primary WIN_IP)
+_WIN_WATCH_PEER_2=""
+if [ -n "${WIN_3080_IP:-}" ] && [ "${WIN_3080_IP}" != "${WIN_IP}" ]; then
+  _WIN_WATCH_PEER_2="${WIN_3080_IP}"
+elif [ -n "${WIN_5080_IP:-}" ] && [ "${WIN_5080_IP}" != "${WIN_IP}" ]; then
+  _WIN_WATCH_PEER_2="${WIN_5080_IP}"
+fi
 
 _orch_log() { echo "$(date -u +%Y-%m-%dT%H:%M:%SZ) [orch-wire] $*" | tee -a "$_ORCH_LOG"; }
 
@@ -1407,25 +1518,34 @@ fi
 # 2. Win path — background poller: wait for Windows peer, then dispatch H6
 _win_peer_watch() {
   local peer="$_WIN_WATCH_PEER" port="$_WIN_WATCH_PORT" lm_port="$_WIN_WATCH_LM_PORT"
+  local peer2="$_WIN_WATCH_PEER_2"
   local tries=0 max="$_WIN_WATCH_MAX"
   local h6_agent_card="$SCRIPT_DIR/.cursor/agents/win-autoresearcher-queue.md"
   local h6_job="subagent/win-autoresearcher/researcher-backlog-h6"
 
-  _orch_log "Win peer watcher started — polling ${peer}:${port} (LM Studio :${lm_port}) every 30s, max ${max} tries"
+  local peers_label="${peer}"
+  [ -n "$peer2" ] && peers_label="${peer} + ${peer2}"
+  _orch_log "Win peer watcher started — polling ${peers_label}:${port} (LM Studio :${lm_port}) every 30s, max ${max} tries"
 
   while [ "$tries" -lt "$max" ]; do
-    local portal_up=0 lm_up=0
+    local portal_up=0 lm_up=0 lm_up_2=0
     # Portal probe
     if curl -sf --max-time 3 "http://${peer}:${port}/health" > /dev/null 2>&1; then
       portal_up=1
     fi
-    # LM Studio probe (Win model ready)
+    # LM Studio probe (primary Win node)
     if curl -sf --max-time 3 "http://${peer}:${lm_port}/v1/models" > /dev/null 2>&1; then
       lm_up=1
     fi
+    # LM Studio probe (secondary Win node — dual-node fleet)
+    if [ -n "$peer2" ] && curl -sf --max-time 3 "http://${peer2}:${lm_port}/v1/models" > /dev/null 2>&1; then
+      lm_up_2=1
+    fi
 
-    if [ "$lm_up" -eq 1 ]; then
-      _orch_log "PASS: Win peer ${peer} LMStudio UP — dispatching H6 real-task"
+    if [ "$lm_up" -eq 1 ] || [ "$lm_up_2" -eq 1 ]; then
+      local up_peer="$peer"
+      [ "$lm_up" -eq 0 ] && [ "$lm_up_2" -eq 1 ] && up_peer="$peer2"
+      _orch_log "PASS: Win peer ${up_peer} LMStudio UP — dispatching H6 real-task"
       if [ -f "$_DUAL_DISPATCH" ]; then
         python3 "$_DUAL_DISPATCH" \
           --role researcher \
@@ -1441,7 +1561,7 @@ _win_peer_watch() {
     fi
 
     tries=$((tries + 1))
-    _orch_log "Win peer DOWN (try $tries/$max) portal=${portal_up} lm=${lm_up} — retry in 30s"
+    _orch_log "Win peer(s) DOWN (try $tries/$max) portal=${portal_up} lm=${lm_up} lm2=${lm_up_2} — retry in 30s"
     sleep 30
   done
 
@@ -1453,7 +1573,9 @@ _win_peer_watch() {
 _WIN_WATCH_PID=$!
 _orch_log "Win peer watcher PID=$_WIN_WATCH_PID (H6 auto-dispatch when ${_WIN_WATCH_PEER}:${_WIN_WATCH_PORT} PASS)"
 
-_info "orch-wire" "Orchestrator wired: Mac dispatch running, Win watcher polling ${_WIN_WATCH_PEER}:${_WIN_WATCH_PORT}"
+_watch_summary="Win watcher polling ${_WIN_WATCH_PEER}:${_WIN_WATCH_PORT}"
+[ -n "$_WIN_WATCH_PEER_2" ] && _watch_summary="${_watch_summary} + ${_WIN_WATCH_PEER_2}:${_WIN_WATCH_PORT} (dual-node)"
+_info "orch-wire" "Orchestrator wired: Mac dispatch running, ${_watch_summary}"
 _info "orch-wire" "Watch log: $_ORCH_LOG"
 printf "  Orch  : tail -f %s\\n" "$_ORCH_LOG"
 echo ""
