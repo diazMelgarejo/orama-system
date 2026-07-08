@@ -610,39 +610,87 @@ $env:WIN_PEER_ENDPOINT         = if ($env:WIN_PEER_ENDPOINT)         { $env:WIN_
 $env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
 $env:WINDOWS_IP                = $env:WIN_IP
 
-# ── Dual Windows GPU detection (RTX 3080 + RTX 5080) ──────────────────────────
-# Read PT's devices.yml to find both GPU endpoints. Priority:
-#   1. Explicit env vars (WIN_3080_IP / WIN_5080_IP)
+# ── Dual Windows node detection (RTX 3080 + RTX 5080) ────────────────────────
+# This machine is ONE Win node; detect the SIBLING Win node on the LAN.
+# Reads PT config/devices.yml for both node IPs, identifies which is local
+# (matches WIN_IP or localhost), probes the sibling on port 1234.
+# Exports WIN_3080_IP, WIN_5080_IP, WIN_NODES, WIN_SIBLING_IP.
+# Coordinated with start.sh dual-node detection (same env vars).
+#
+# Priority for each node IP:
+#   1. Explicit env var (WIN_3080_IP / WIN_5080_IP) — user override
 #   2. PT config/devices.yml (win-rtx3080.lan_ip / win-rtx5080.lan_ip)
-#   3. Localhost fallback for local machine
+#   3. Localhost fallback (this machine is that node)
+# Idempotent: read-only HTTP probes, no state mutation, safe to re-run.
+$Win3080Ip = $env:WIN_3080_IP
+$Win5080Ip = $env:WIN_5080_IP
+
+# Read devices.yml from PtDir
 if ($PtDir) {
     $DevicesYaml = Join-Path $PtDir 'config\devices.yml'
     if (Test-Path $DevicesYaml) {
-        [string]$Win3080Ip = $env:WIN_3080_IP
-        [string]$Win5080Ip = $env:WIN_5080_IP
-
-        # Parse devices.yml for lan_ip entries (simple grep-based, YAML-aware parsing)
-        $content = Get-Content $DevicesYaml -Raw
-        if ($content -match 'id:\s*"win-rtx3080"[\s\S]*?lan_ip:\s*"?([^"\s]+)"?') {
-            if (-not $Win3080Ip) { $Win3080Ip = $Matches[1] }
+        try {
+            $yamlText = Get-Content $DevicesYaml -Raw -Encoding UTF8
+            $currentId = ""
+            foreach ($line in ($yamlText -split "`n")) {
+                if ($line -match '^\s+-\s+id:\s*"?(win-rtx\d+)"?') {
+                    $currentId = $Matches[1]
+                }
+                elseif ($line -match '^\s+lan_ip:\s*"([^"]*)"' -and $currentId) {
+                    $ip = $Matches[1]
+                    if ($currentId -eq 'win-rtx3080' -and -not $Win3080Ip) { $Win3080Ip = $ip }
+                    elseif ($currentId -eq 'win-rtx5080' -and -not $Win5080Ip) { $Win5080Ip = $ip }
+                }
+            }
+        } catch {
+            _Warn 'dual-win' "Failed to parse devices.yml: $($_.Exception.Message)"
         }
-        if ($content -match 'id:\s*"win-rtx5080"[\s\S]*?lan_ip:\s*"?([^"\s]+)"?') {
-            if (-not $Win5080Ip) { $Win5080Ip = $Matches[1] }
-        }
-
-        # Fallback to WIN_IP if not found in config
-        if (-not $Win3080Ip) { $Win3080Ip = 'localhost' }
-        if (-not $Win5080Ip) { $Win5080Ip = 'localhost' }
-
-        # Export for child processes and hardware routing
-        $env:WIN_3080_IP = $Win3080Ip
-        $env:WIN_5080_IP = $Win5080Ip
-        $env:LM_STUDIO_WIN_3080_ENDPOINTS = "http://${Win3080Ip}:1234"
-        $env:LM_STUDIO_WIN_5080_ENDPOINTS = "http://${Win5080Ip}:1234"
-        $env:WIN_NODES = if ($Win3080Ip -eq $Win5080Ip) { '1' } else { '2' }
-
-        _Info 'gpu' "Dual GPU detection: RTX 3080=$Win3080Ip, RTX 5080=$Win5080Ip (nodes=$($env:WIN_NODES))"
     }
+}
+
+# Fallback to localhost if not found
+if (-not $Win3080Ip) { $Win3080Ip = 'localhost' }
+if (-not $Win5080Ip) { $Win5080Ip = 'localhost' }
+
+# Determine which node is local (this machine) vs sibling (remote)
+$LocalIs3080 = $false
+$LocalIs5080 = $false
+if ($env:WIN_IP -and $Win3080Ip -and $env:WIN_IP -eq $Win3080Ip) { $LocalIs3080 = $true }
+elseif ($env:WIN_IP -and $Win5080Ip -and $env:WIN_IP -eq $Win5080Ip) { $LocalIs5080 = $true }
+else { $LocalIs3080 = $true }  # default: assume 3080 if we cannot tell
+
+# Sibling is the OTHER node
+$WinSiblingIp = if ($LocalIs3080) { $Win5080Ip } else { $Win3080Ip }
+
+# Probe both nodes (local = localhost, sibling = remote IP)
+function Test-LmStudioUp([string]$ip) {
+    if (-not $ip) { return $false }
+    $url = if ($ip -in @('localhost', '127.0.0.1')) { 'http://localhost:1234/v1/models' } else { "http://${ip}:1234/v1/models" }
+    try {
+        $resp = Invoke-WebRequest -Uri $url -TimeoutSec 2 -UseBasicParsing -ErrorAction Stop
+        return ($resp.StatusCode -eq 200)
+    } catch { return $false }
+}
+$Win3080Up = if ($LocalIs3080) { Test-LmStudioUp 'localhost' } else { Test-LmStudioUp $Win3080Ip }
+$Win5080Up = if ($LocalIs5080) { Test-LmStudioUp 'localhost' } else { Test-LmStudioUp $Win5080Ip }
+$WinNodes = 0; if ($Win3080Up) { $WinNodes++ }; if ($Win5080Up) { $WinNodes++ }
+
+# Export for child processes and hardware routing
+$env:WIN_3080_IP = $Win3080Ip
+$env:WIN_5080_IP = $Win5080Ip
+$env:WIN_NODES   = "$WinNodes"
+$env:WIN_SIBLING_IP = $WinSiblingIp
+$env:LM_STUDIO_WIN_3080_ENDPOINTS = "http://${Win3080Ip}:1234"
+$env:LM_STUDIO_WIN_5080_ENDPOINTS = "http://${Win5080Ip}:1234"
+# WIN_PEER_ENDPOINT points at the sibling for cross-node dispatch
+if ($WinSiblingIp -and $WinSiblingIp -ne "localhost") {
+    $env:WIN_PEER_ENDPOINT = if ($env:WIN_PEER_ENDPOINT -ne 'localhost:1234') { $env:WIN_PEER_ENDPOINT } else { "${WinSiblingIp}:1234" }
+}
+
+if ($WinNodes -ge 2) {
+    _Info 'gpu' "Dual Win nodes detected: 3080=$Win3080Ip  5080=$Win5080Ip  ($WinNodes UP, sibling=$WinSiblingIp)"
+} elseif ($Win3080Ip -or $Win5080Ip) {
+    _Info 'gpu' "Win nodes: 3080=$Win3080Ip  5080=$Win5080Ip  ($WinNodes UP, sibling=$($WinSiblingIp ?? 'none'))"
 }
 
 _Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
@@ -656,8 +704,12 @@ Write-Host '║  orama-system  v1.1.0.0  (Windows)                              
 Write-Host '║  ὅραμα — vision/revelation · Layer 3 orchestration/meta-intel   ║'
 Write-Host '╠══════════════════════════════════════════════════════════════════╣'
 Write-Host ("║  Mac  {0,-9}  LM Studio expected on port 1234              ║" -f ($MacIp + ':'))
-Write-Host ("║  Win  RTX 3080   {0,-34}║" -f ("LM Studio on $($env:WIN_3080_IP):1234"))
-Write-Host ("║       RTX 5080   {0,-34}║" -f ("LM Studio on $($env:WIN_5080_IP):1234"))
+$Win3080Label = if ($LocalIs3080) { 'localhost' } else { $Win3080Ip }
+$Win5080Label = if ($LocalIs5080) { 'localhost' } else { $Win5080Ip }
+$Win3080Mark  = if ($Win3080Up) { '✓' } else { '✗' }
+$Win5080Mark  = if ($Win5080Up) { '✓' } else { '✗' }
+Write-Host ("║  Win {0}  {1,-9}  RTX 3080 · qwen3.5-27b (this machine)     ║" -f $Win3080Mark, $Win3080Label)
+Write-Host ("║  Win {0}  {1,-9}  RTX 5080 · gemma-4-26b (nvfp4)           ║" -f $Win5080Mark, $Win5080Label)
 Write-Host ('╠══════════════════════════════════════════════════════════════════╣')
 Write-Host ("║  PT   port $PtPort     orama port $UsPort     Portal port $PortalPort                      ║")
 Write-Host '╚══════════════════════════════════════════════════════════════════╝'
