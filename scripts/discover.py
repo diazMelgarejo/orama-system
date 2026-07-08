@@ -7,7 +7,7 @@ Idempotent: writes nothing if state hash is unchanged.
 """
 
 from __future__ import annotations
-import argparse, asyncio, hashlib, json, logging, os, re, shutil, socket, sys, time
+import argparse, asyncio, hashlib, json, logging, os, shutil, socket, sys, time
 import urllib.error, urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -543,68 +543,21 @@ def patch_openclaw_json(endpoints: dict):
     except OSError as exc:
         logging.warning("patch_openclaw_json: cannot write %s: %s", OPENCLAW_JSON, exc)
 
-def _read_text_safe(path: Path) -> str | None:
-    """Read text from path using plain open() — avoids pathlib EDEADLK on macOS launchd."""
-    try:
-        with open(str(path), "r", encoding="utf-8") as fh:
-            return fh.read()
-    except OSError as exc:
-        logging.warning("_read_text_safe: cannot read %s: %s", path, exc)
-        return None
-
-def _write_text_safe(path: Path, content: str) -> bool:
-    """Write text to path using plain open() — avoids pathlib EDEADLK on macOS launchd."""
-    try:
-        with open(str(path), "w", encoding="utf-8") as fh:
-            fh.write(content)
-        return True
-    except OSError as exc:
-        logging.warning("_write_text_safe: cannot write %s: %s", path, exc)
-        return False
-
-def patch_devices_yml(mac_ip: str, win_ip: str, pt_repo: Path):
-    f = pt_repo / "config" / "devices.yml"
-    if not f.exists(): return
-    content = original = _read_text_safe(f)
-    if content is None: return
-    # (?:(?!- id:).)*? is a device-boundary anchor: the match cannot cross into
-    # another device entry.  This prevents the win-rtx3080 regex from drifting
-    # to cloud.lan_ip when win-rtx3080's lan_ip is currently empty.
-    # Skip patching entirely for loopback/empty values — those are runtime
-    # addresses and must never be stored in LAN IP fields.
-    _LOOPBACK = {"", "localhost", "127.0.0.1"}
-    if mac_ip not in _LOOPBACK:
-        content = re.sub(
-            r'(- id: "mac-studio"(?:(?!- id:).)*?lan_ip:\s*")[^"]*(")',
-            lambda m: m.group(1) + mac_ip + m.group(2),
-            content, flags=re.DOTALL
-        )
-    if win_ip not in _LOOPBACK:
-        content = re.sub(
-            r'(- id: "win-rtx3080"(?:(?!- id:).)*?lan_ip:\s*")[^"]*(")',
-            lambda m: m.group(1) + win_ip + m.group(2),
-            content, flags=re.DOTALL
-        )
-    if content != original:
-        _write_text_safe(f, content)
-
-def patch_models_yml(mac_ip: str, win_ip: str, pt_repo: Path):
-    f = pt_repo / "config" / "models.yml"
-    if not f.exists(): return
-    content = original = _read_text_safe(f)
-    if content is None: return
-    # lmstudio-mac ALWAYS localhost — LAN IP is informational only, never in Mac configs.
-    content = re.sub(r'(\$\{LM_STUDIO_MAC_ENDPOINT:-)[^}]+(\})', r'\g<1>http://localhost:1234\2', content)
-    # Mirror patch_devices_yml: never persist loopback/empty IPs into shared YAML.
-    _LOOPBACK = {"", "localhost", "127.0.0.1"}
-    if win_ip not in _LOOPBACK:
-        content = re.sub(
-            r'(\$\{LM_STUDIO_WIN_ENDPOINTS?:-)[^}]+(\})',
-            rf'\g<1>http://{win_ip}\2',
-            content,
-        )
-    if content != original:
-        _write_text_safe(f, content)
+# NOTE: discover.py previously patched live LAN IPs directly into the git-TRACKED
+# config/devices.yml and config/models.yml (functions patch_devices_yml /
+# patch_models_yml, removed 2026-07-08). That was a hygiene/doxxing footgun: every
+# start.ps1 / start.sh run dirtied the repo with ephemeral topology, and a
+# careless `git add -A` could commit live LAN IPs to the public GitHub repo.
+# Verified before removal: `lan_ip` in devices.yml has ZERO Python readers
+# (grep across orchestrator/, src/perpetua/) — it was write-only, dead
+# metadata. models.yml's `${LM_STUDIO_WIN_ENDPOINT:-<default>}` literal is
+# consulted by ModelRegistry._expand_env_default only when the env var itself
+# is unset (os.environ.get(var, default)) — and lan_discovery.detect_active_
+# tilting_ip() / _sync_win_endpoint_env() already set that env var from the
+# same authoritative, UNTRACKED ~/.openclaw/state/last_discovery.json this
+# module writes below via save_discovery_state(). Tracked config now stays a
+# portable placeholder; live topology lives only in last_discovery.json,
+# .env.lmstudio (gitignored), and process env — never in git-tracked YAML.
 
 def write_env_lmstudio(endpoints: dict, repo_paths: dict):
     endpoints = filter_endpoints_for_policy(endpoints)
@@ -787,15 +740,12 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         print("🔄 Changes detected — updating configs...", file=sys.stderr)
         backup_current_state()
         repo_paths = get_repo_paths()
-        pt_repo = repo_paths.get("perpetua_tools")
 
         patch_openclaw_json(endpoints)
         print("  ✓ openclaw.json", file=sys.stderr)
-        if pt_repo:
-            win_patch_ip = _win_lan_patch_ip(win.get("ip", ""))
-            patch_devices_yml(mac.get("ip", ""), win_patch_ip, pt_repo)
-            patch_models_yml(mac.get("ip", ""), win_patch_ip, pt_repo)
-            print("  ✓ Perpetua-Tools config/", file=sys.stderr)
+        # Tracked config/devices.yml + config/models.yml are intentionally NOT
+        # patched here — see the note above write_env_lmstudio(). Live topology
+        # goes only to untracked state (below) + .env.lmstudio (gitignored).
         write_env_lmstudio(endpoints, repo_paths)
         print("  ✓ .env.lmstudio written", file=sys.stderr)
         save_discovery_state(hash_endpoints, tier)
@@ -829,13 +779,11 @@ def _cmd_restore(target: str):
     ep = filter_endpoints_for_policy(ep)
     backup_current_state()
     repo_paths = get_repo_paths()
-    pt_repo = repo_paths.get("perpetua_tools")
     mac = ep.get("mac") or {}; win = ep.get("win") or {}
     with _Lock():
         patch_openclaw_json(ep)
-        if pt_repo:
-            patch_devices_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
-            patch_models_yml(mac.get("ip", ""), win.get("ip", ""), pt_repo)
+        # Tracked config/devices.yml + config/models.yml intentionally not
+        # patched — see note above write_env_lmstudio().
         write_env_lmstudio(ep, repo_paths)
         save_discovery_state(ep, tier=99)
     RECOVERY_SOURCE_TXT.write_text("manual_restore\n")
