@@ -80,8 +80,19 @@ if (Test-Path $rootReqs) {
 _Step 'Installing Windows-specific requirements...'
 $winReqs = Join-Path $ScriptDir 'requirements-windows.txt'
 if (Test-Path $winReqs) {
-    & $VenvPip install -r $winReqs --quiet
-    _OK 'Windows requirements installed'
+    # Non-fatal: these are optional extras (LAN IP detection, colored banners).
+    # A future flaky/unavailable package here should degrade, not block the
+    # whole fresh-install bootstrap chain that start.ps1 now depends on.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    & $VenvPip install -r $winReqs --quiet 2>&1 | Out-Null
+    $winReqsExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+    if ($winReqsExit -eq 0) {
+        _OK 'Windows requirements installed'
+    } else {
+        _Warn "Some Windows-specific requirements failed to install (exit $winReqsExit) — continuing; affected features (e.g. LAN IP autodetect) will use fallback paths"
+    }
 } else {
     _Warn "windows/requirements-windows.txt not found — skipping"
 }
@@ -158,8 +169,13 @@ if (Test-Path $PathScript) {
 }
 
 # ── .paths.ps1 cache ──────────────────────────────────────────────────────────
+# Must run as a separate powershell.exe process (not `& python.exe start.ps1`,
+# which silently no-ops — python can't execute a .ps1 file) AND not in-process
+# via `&`, since start.ps1 --discover calls `exit 0` on completion, which would
+# also kill this install.ps1 process before the steps below (gstack shim,
+# final banner) run.
 _Step 'Generating .paths.ps1...'
-& $VenvPython (Join-Path $ScriptDir 'start.ps1') --discover
+& powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ScriptDir 'start.ps1') --discover
 _OK '.paths.ps1 written'
 
 # ── gstack brain-sync Windows shim (fix #1731) ───────────────────────────────

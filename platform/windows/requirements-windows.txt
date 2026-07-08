@@ -11,8 +11,12 @@
 # Windows-specific async process management
 pywin32>=306        # Win32 API bindings (process, registry, services)
 
-# Windows network utilities (netifaces not always available via pip on Windows)
-netifaces>=0.11.0   # cross-platform network interface listing
+# Windows network utilities. Use netifaces2 (not the original netifaces>=0.11.0):
+# the original has no prebuilt wheel past Python 3.11 and fails to build from
+# source without MSVC build tools. netifaces2 is a maintained fork with
+# prebuilt wheels through current Python, drop-in compatible (still
+# `import netifaces`) with scripts/discover.py and scripts/ip_detection_solution.py.
+netifaces2>=0.0.22   # cross-platform network interface listing
 
 # ANSI color support in Windows terminal (needed for banner colors in cmd.exe)
 colorama>=0.4.6
