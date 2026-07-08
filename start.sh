@@ -1368,7 +1368,7 @@ if [ "$GLM52_AVAILABLE" = "true" ] && [ -n "${GLM52_API_KEY:-}" ]; then
   _info "fallback" "   Endpoint: $GLM52_ENDPOINT"
 else
   _warn "fallback" "⚠️  GLM-5.2 Ultimate Fallback NOT AVAILABLE"
-  _warn "fallback" "   Run: bash ~/.alphaclaw/.openclaw/workspace/skills/glm52-fallback/setup-glm52.sh"
+    _warn "fallback" "   Run: bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh"
 fi
 echo ""
 
