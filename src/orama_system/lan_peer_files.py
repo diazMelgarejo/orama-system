@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 import time
 from pathlib import Path
@@ -10,8 +11,23 @@ from typing import Any
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
+def _home_dir() -> Path:
+    # Path.home() resolves via USERPROFILE on Windows and ignores HOME
+    # entirely, which silently defeats test isolation: tests set
+    # env["HOME"] = tmp_path expecting outbox/inbox state to land there,
+    # but on Windows it landed in the real user profile instead — a test
+    # run could leak fixture files into (or even attempt real delivery
+    # from) actual production LAN peer coordination state. Honor HOME
+    # explicitly first; Path.home() remains the fallback for normal use
+    # where HOME is typically unset on Windows.
+    override = os.environ.get("HOME")
+    if override:
+        return Path(override)
+    return Path.home()
+
+
 def lan_peer_state_dir() -> Path:
-    return Path.home() / ".openclaw" / "state" / "lan_peer"
+    return _home_dir() / ".openclaw" / "state" / "lan_peer"
 
 
 def inbox_dir() -> Path:
