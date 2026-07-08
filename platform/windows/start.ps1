@@ -610,6 +610,41 @@ $env:WIN_PEER_ENDPOINT         = if ($env:WIN_PEER_ENDPOINT)         { $env:WIN_
 $env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
 $env:WINDOWS_IP                = $env:WIN_IP
 
+# ── Dual Windows GPU detection (RTX 3080 + RTX 5080) ──────────────────────────
+# Read PT's devices.yml to find both GPU endpoints. Priority:
+#   1. Explicit env vars (WIN_3080_IP / WIN_5080_IP)
+#   2. PT config/devices.yml (win-rtx3080.lan_ip / win-rtx5080.lan_ip)
+#   3. Localhost fallback for local machine
+if ($PtDir) {
+    $DevicesYaml = Join-Path $PtDir 'config\devices.yml'
+    if (Test-Path $DevicesYaml) {
+        [string]$Win3080Ip = $env:WIN_3080_IP
+        [string]$Win5080Ip = $env:WIN_5080_IP
+
+        # Parse devices.yml for lan_ip entries (simple grep-based, YAML-aware parsing)
+        $content = Get-Content $DevicesYaml -Raw
+        if ($content -match 'id:\s*"win-rtx3080"[\s\S]*?lan_ip:\s*"?([^"\s]+)"?') {
+            if (-not $Win3080Ip) { $Win3080Ip = $Matches[1] }
+        }
+        if ($content -match 'id:\s*"win-rtx5080"[\s\S]*?lan_ip:\s*"?([^"\s]+)"?') {
+            if (-not $Win5080Ip) { $Win5080Ip = $Matches[1] }
+        }
+
+        # Fallback to WIN_IP if not found in config
+        if (-not $Win3080Ip) { $Win3080Ip = 'localhost' }
+        if (-not $Win5080Ip) { $Win5080Ip = 'localhost' }
+
+        # Export for child processes and hardware routing
+        $env:WIN_3080_IP = $Win3080Ip
+        $env:WIN_5080_IP = $Win5080Ip
+        $env:LM_STUDIO_WIN_3080_ENDPOINTS = "http://${Win3080Ip}:1234"
+        $env:LM_STUDIO_WIN_5080_ENDPOINTS = "http://${Win5080Ip}:1234"
+        $env:WIN_NODES = if ($Win3080Ip -eq $Win5080Ip) { '1' } else { '2' }
+
+        _Info 'gpu' "Dual GPU detection: RTX 3080=$Win3080Ip, RTX 5080=$Win5080Ip (nodes=$($env:WIN_NODES))"
+    }
+}
+
 _Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
 
 _Info 'env' 'Endpoints exported'
@@ -621,7 +656,8 @@ Write-Host '║  orama-system  v1.1.0.0  (Windows)                              
 Write-Host '║  ὅραμα — vision/revelation · Layer 3 orchestration/meta-intel   ║'
 Write-Host '╠══════════════════════════════════════════════════════════════════╣'
 Write-Host ("║  Mac  {0,-9}  LM Studio expected on port 1234              ║" -f ($MacIp + ':'))
-Write-Host ("║  Win  localhost   LM Studio on port 1234 (this machine)        ║")
+Write-Host ("║  Win  RTX 3080   {0,-34}║" -f ("LM Studio on $($env:WIN_3080_IP):1234"))
+Write-Host ("║       RTX 5080   {0,-34}║" -f ("LM Studio on $($env:WIN_5080_IP):1234"))
 Write-Host ('╠══════════════════════════════════════════════════════════════════╣')
 Write-Host ("║  PT   port $PtPort     orama port $UsPort     Portal port $PortalPort                      ║")
 Write-Host '╚══════════════════════════════════════════════════════════════════╝'
