@@ -328,6 +328,16 @@ self-hosting the rules.
    `127.0.0.1`. Real LAN IPs belong in `.env` only.
 3. **Skipping live probe.** A cached model inventory is stale the moment a
    model is unloaded. Query `/v1/models` or `/api/tags` at dispatch time.
+   **But note the catalog-vs-residency distinction:** `/v1/models` and
+   `/api/tags` list *installed* models, not what is *loaded in GPU memory
+   right now*. For Ollama, the GPU-residency ground truth is `ollama ps` (CLI)
+   or `GET /api/ps` (HTTP) — filter entries with `size_vram > 0`. LM Studio has
+   no residency equivalent (`:1234/api/ps` errors; `/v1/models` is catalog
+   only). This asymmetry is why Ollama is the precedence backend on Mac and
+   LM Studio Mac is MIRROR ONLY (D14): you can verify Ollama's residency but
+   not LM Studio's, so the device must not run both. The residency check is
+   read-only and idempotent — re-probing changes nothing when residency is
+   unchanged.
 4. **`max_tokens` too low on reasoning models.** Below 4096 the model returns
    empty content with `finish_reason=length`. Always set `>= 4096` for 27B
    reasoning variants.
@@ -362,14 +372,19 @@ Keep changes additive. Do not erase prior entries or rewrite history.
 ### Bootstrap a new Mac host
 
 ```bash
-# 1. Verify LM Studio inventory contains the Mac primary
+# 1. Verify LM Studio inventory contains the Mac primary (catalog — installed)
 curl -sf http://127.0.0.1:1234/v1/models | jq -r '.data[].id' | grep -i "Qwen3.5-9B"
 
-# 2. Run gate check
+# 2. Check GPU residency ground-truth — which model is loaded in memory right now
+ollama ps
+# or: curl -sf http://127.0.0.1:11434/api/ps | jq '.models[] | {name, size_vram}'
+# If non-empty with size_vram > 0 → Ollama owns the GPU; LM Studio Mac is mirror-only (D14)
+
+# 3. Run gate check
 python3 -c "from hardware_affinity_gate import check_affinity; \
 print(check_affinity('Qwen3.5-9B-MLX-4bit', 'mac'))"
 
-# 3. Confirm verdict is PREFER
+# 4. Confirm verdict is PREFER
 ```
 
 ### Bootstrap a new Windows host
