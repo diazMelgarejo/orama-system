@@ -1,6 +1,25 @@
+# Cross-platform line-ending & encoding policy.
+# Doc: docs/wiki/17-line-endings-and-encoding.md (mirror of Perpetua-Tools/wiki/10, canonical)
+#
+# Default: normalize every text file to LF in the repository. This is what
+# ends "file keeps getting modified on checkout" for good — the stored blob
+# is identical no matter who commits it, on any OS.
+* text=auto eol=lf
+
 # Windows batch files must stay CRLF in the working tree — cmd.exe tokenizes on 0d0a (PR #108).
 # Git stores normalized text; eol=crlf checks out CRLF. Mac/Linux agents: do not strip \r.
 # Policy: bin/orama-system/skills/git-history-surgery/references/platform-line-endings-turf.md
 *.cmd  text  eol=crlf
 *.bat  text  eol=crlf
 *.ps1  text  eol=crlf
+
+# Binaries: never diff as text, never convert line endings.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.zip binary
