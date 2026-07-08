@@ -2,13 +2,35 @@
 
 > **Audience:** a brand-new Windows box joining the LAN fleet as an
 > AutoResearcher/coder node (e.g. a 2nd/3rd/Nth Windows RTX GPU machine).
-> Never had these repos, Git, Node, Python, or LM Studio installed before.
+> May already have Git, GitHub Desktop, and/or LM Studio installed —
+> this doc detects and reuses what's present rather than reinstalling.
 > **Owner:** orama-system `bin/orama-system/skills/first-run-setup/`
 > **Canonical install path this doc wraps:** [`../../../references/first-run-install.md`](../../../references/first-run-install.md)
-> **Written from a real 2nd-Windows-node bring-up (RTX 3080), reused for the 3rd node (RTX 5080).**
+> **Written from a real 2nd-Windows-node bring-up (RTX 3080), reused for the
+> 3rd node (RTX 5080, `192.168.8.153`, repo root
+> `%OPENCLAW_ROOT%`) — see § 10 for that node's worked example.**
 
 Give this single file to the new machine. Every command below is idempotent —
 safe to re-run after a partial failure, reboot, or interrupted download.
+
+**Path convention:** this doc uses `C:\code` as the example parent directory
+(§ 2). Any parent directory works — nothing below hardcodes it beyond that
+step. Known real deployments: `C:\code` (RTX 3080 node), `%OPENCLAW_ROOT%`
+(RTX 5080 node, § 10). macOS/Ollama nodes use `/code` as their equivalent
+parent — see the counterpart doc for Mac bring-up; the two are not
+interchangeable (Mac hard-requires Ollama, Windows hard-requires LM Studio,
+per § 0).
+
+**Frugality rule:** before installing anything below, check whether it's
+already present (GitHub Desktop often ships an embedded Git; LM Studio may
+already be running with models loaded). Every install step in this doc is
+`winget install` behind a presence check — skip the check, and you risk a
+redundant reinstall or clobbering an already-configured server. GitHub
+Desktop and LM Studio's own Electron/Node runtimes are **not** reusable as a
+general-purpose Node.js or Python toolchain (they don't expose `node`/`npm`/
+`python` on PATH) — step 4 still needs its own standalone Node + Python
+install, but steps 1 and 3 should detect-and-skip if Git / LM Studio already
+exist.
 
 ---
 
@@ -85,6 +107,35 @@ If step 2 warns that the server isn't reachable: open LM Studio manually →
 `.\scripts\ensure_requirements.ps1 -CheckOnly` to confirm green.
 
 Run with `-CheckOnly` any time to probe without installing/mutating anything.
+
+> **Known gotcha (fixed 2026-07-08):** the winget package `ElementLabs.LMStudio`
+> installs to `%PROGRAMFILES%\LM Studio\` (a **space**), but earlier versions of
+> `ensure_requirements.ps1` only probed `LM-Studio\` (a **hyphen**) — a manual
+> or pre-existing install would pass Phase 2 (server reachable) but fail
+> Phase 1's binary check every time. The script now probes both spellings.
+> If you hit this on an older checkout, `git pull` first.
+
+Bash's PATH (Git Bash, used in step 4) does **not** automatically include a
+`winget`-installed Node/Python — you must add them explicitly, and the repo's
+`first-run-install.sh` has two Windows-specific quirks worth knowing before
+you re-run `status` and see false negatives:
+
+- **Node via NVM for Windows** lives at `%NVM_HOME%`/`%NVM_SYMLINK%`
+  (typically `%LOCALAPPDATA%\nvm` and `C:\nvm4w\nodejs`), not
+  under `~/.nvm/versions/node/...` like Unix nvm — add the symlink dir to
+  Git Bash's `PATH` (`~/.bashrc`) or `node --version` inside Bash reports
+  "not found" even though PowerShell sees it fine.
+- **`first-run-install.sh` probes the literal binary name `python3.13`**
+  (Homebrew's naming convention on Mac). The Windows python.org installer
+  only produces `python.exe`/`py.exe` — there is no `python3.13` on PATH by
+  default. Drop a one-line shebang shim named `python3.13` (no extension,
+  `#!/bin/sh\nexec "<PythonDir>/python.exe" "$@"`) into the Python install
+  dir and add that dir to Git Bash's `PATH`. A `.cmd` shim does **not**
+  satisfy Bash's `command -v` lookup — it must be an extensionless
+  executable Bash can exec directly.
+- `first-run-install.sh status` will **always** show `✗ ollama` on a Windows
+  node — that's expected, not a failure. Per § 0, Ollama is the Mac hard
+  requirement; Windows hard-requires LM Studio instead. Ignore that line here.
 
 ## 4. First-run install (Node, Python deps, CRG, gbrain, embeddings)
 
@@ -179,3 +230,47 @@ timing differences in `ollama pull`-equivalent LM Studio model downloads on
 this hardware, or any step above that turned out to be stale. That's how
 this doc — and `first-run-install.sh` itself — gets better for the next
 Windows node instead of every machine rediscovering the same gaps.
+
+## 10. Worked example — 3rd node (RTX 5080, `192.168.8.153`)
+
+Real bring-up, 2026-07-08. Both repos were already cloned to
+`%OPENCLAW_ROOT%\{orama-system,Perpetua-Tools}` — step 2's
+`C:\code` is illustrative, not a hard requirement.
+
+**What was already present (frugal — reused, not reinstalled):**
+- GitHub Desktop (`%LOCALAPPDATA%\GitHubDesktop`) — has its own embedded Git,
+  but does **not** expose a reusable `node`/`npm`/`python` toolchain. It only
+  informed the "don't touch Git" decision — step 4's Node/Python are separate.
+- LM Studio at `C:\Program Files\LM Studio\` (space, not the hyphenated
+  `LM-Studio` the old script expected — see § 3's gotcha box), server already
+  running on `:1234`, models already downloaded and loaded including
+  `gemma-4-26b-a4b-it-nvfp4`, `gemma-4-26b-a4b-it`,
+  `text-embedding-nomic-embed-text-v1.5`, `text-embedding-qwen3-embedding-8b-i1`.
+  `LM Studio Server tab` confirmed reachable at both `http://localhost:1234`
+  and `http://192.168.8.153:1234` (this machine's own LAN IP).
+
+**What was missing and installed (frugal — only the gap, nothing reinstalled):**
+- Node: none on PATH at all → `winget install CoreyButler.NVMforWindows` →
+  `nvm install lts && nvm use newest` → Node v24.18.0 / npm 11.16.0 at
+  `C:\nvm4w\nodejs`.
+- Python: only the WindowsApps Store-redirect stub (not a real interpreter)
+  → `winget install Python.Python.3.13` → 3.13.14 at
+  `%LOCALAPPDATA%\Programs\Python\Python313`.
+- Git Bash PATH shims for both (see § 3 gotcha box) so
+  `first-run-install.sh status` sees them.
+
+**Fleet registration:** added as `win-rtx5080` in
+`Perpetua-Tools/config/devices.yml`, mirroring the `win-rtx3080` entry's
+shape — `primary_backend: lm-studio`, `lan_ip: 192.168.8.153`, port 1234.
+Set `LM_STUDIO_WIN_ENDPOINTS=http://192.168.8.153:1234` (User env var) as
+the static fallback; per the file's own header comment, always prefer a live
+probe over this hardcoded value since Win LAN IPs are DHCP-dynamic.
+
+**5-minute coordination pulse (not the doc default):** this node's owner
+wanted peer-inbox polling every 5 minutes instead of the default 15:
+```powershell
+.\scripts\install_coord_pulse.ps1 -IntervalSec 300
+```
+Trade-off to log if this becomes the fleet norm: 3x the Task Scheduler wake
+frequency across every node. Fine for one box; reconsider before applying
+fleet-wide.
