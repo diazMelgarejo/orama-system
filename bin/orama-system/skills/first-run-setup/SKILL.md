@@ -17,6 +17,10 @@ description: |
 - New machine or fresh OpenClaw checkout
 - User asks to "run first-run", "bootstrap orama", or "install §0"
 - Before heavy agentic work when `~/.orama-system/first-run.done` is missing
+- **New Windows GPU node joining the fleet** (never had Git/Node/Python/LM
+  Studio before): hand it [`references/windows-node-onboarding.md`](references/windows-node-onboarding.md)
+  as a single downloadable file — it wraps this skill's steps plus the
+  Windows-only hard requirement (LM Studio) and LAN coordination join.
 
 ## Workflow
 
