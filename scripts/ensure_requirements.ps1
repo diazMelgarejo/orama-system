@@ -49,7 +49,9 @@ info "Phase 1 — LM Studio binary"
 $LmStudioExe = @(
     "$env:LOCALAPPDATA\Programs\LM-Studio\LM Studio.exe",
     "$env:PROGRAMFILES\LM-Studio\LM Studio.exe",
-    "$env:LOCALAPPDATA\LM-Studio\LM Studio.exe"
+    "$env:LOCALAPPDATA\LM-Studio\LM Studio.exe",
+    "$env:PROGRAMFILES\LM Studio\LM Studio.exe",
+    "$env:LOCALAPPDATA\Programs\LM Studio\LM Studio.exe"
 ) | Where-Object { Test-Path $_ } | Select-Object -First 1
 
 if (-not $LmStudioExe) {
@@ -63,7 +65,9 @@ if (-not $LmStudioExe) {
             # Re-probe after install
             $LmStudioExe = @(
                 "$env:LOCALAPPDATA\Programs\LM-Studio\LM Studio.exe",
-                "$env:PROGRAMFILES\LM-Studio\LM Studio.exe"
+                "$env:PROGRAMFILES\LM-Studio\LM Studio.exe",
+                "$env:PROGRAMFILES\LM Studio\LM Studio.exe",
+                "$env:LOCALAPPDATA\Programs\LM Studio\LM Studio.exe"
             ) | Where-Object { Test-Path $_ } | Select-Object -First 1
             if ($LmStudioExe) { ok "LM Studio installed: $LmStudioExe" }
             else { err "LM Studio install completed but binary not found. Check logs." }
