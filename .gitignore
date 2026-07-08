@@ -129,6 +129,9 @@ lib/
 !bin/orama-system/scripts/lib/**
 # codex-openclaw-agent probe lib (skill-local scripts/lib — tracked)
 !bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/lib/
+# Shared Windows PowerShell helpers (get-best-python.ps1 — tracked)
+!scripts/lib/
+!scripts/lib/**
 !bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/scripts/lib/**
 
 # Vite operator console (web/ subdirectory)

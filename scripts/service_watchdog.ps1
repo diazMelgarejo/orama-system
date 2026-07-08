@@ -23,6 +23,12 @@ $ErrorActionPreference = "Continue"
 $Repo = $env:ORAMA_SYSTEM_PATH
 if (-not $Repo) { throw "Set ORAMA_SYSTEM_PATH to the orama-system repo root" }
 
+# Resolve the repo's own .venv Python, not bare `python` — see
+# scripts/lib/get-best-python.ps1 for why (a scheduled tick is not
+# guaranteed to see the venv first on PATH).
+. (Join-Path $Repo "scripts\lib\get-best-python.ps1")
+$PythonExe = Get-BestPython $Repo
+
 # State lives OUTSIDE the tracked repo (matches install_coord_pulse.ps1's
 # $env:USERPROFILE\.openclaw\state\lan_peer\ convention) — NOT $Repo\.logs.
 # A generated wrapper/log under a tracked repo path is a doxxing footgun:
@@ -99,7 +105,7 @@ function Send-Alert([string]$Body) {
         Set-Content -Path $tmpAlert -Value $Body -Encoding UTF8
         $dropScript = Join-Path $Repo "bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py"
         if (Test-Path $dropScript) {
-            python $dropScript drop --peer --file $tmpAlert --assignee mac --topic "ops/service-down" 2>&1 |
+            & $PythonExe $dropScript drop --peer --file $tmpAlert --assignee mac --topic "ops/service-down" 2>&1 |
                 ForEach-Object { Write-Log "INFO" "peer-drop: $_" }
         } else {
             Write-Log "WARN" "lan_peer_assign.py not found — could not notify peer devices"

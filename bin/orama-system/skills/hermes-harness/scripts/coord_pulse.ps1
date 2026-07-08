@@ -1,4 +1,4 @@
-# coord_pulse.ps1 — Win one-shot Hermes coord pulse (900s scheduled tick)
+﻿# coord_pulse.ps1 — Win one-shot Hermes coord pulse (900s scheduled tick)
 # PLAN: references/coord-pulse-plan.md · unified: references/pulse-unified-comparison.md
 param(
     [switch]$DryRun
@@ -7,6 +7,15 @@ param(
 $ErrorActionPreference = "Continue"
 $Repo = $env:ORAMA_SYSTEM_PATH
 if (-not $Repo) { throw "Set ORAMA_SYSTEM_PATH to the orama-system repo root" }
+
+# Resolve the repo's own .venv Python, not bare `python` -- a scheduled task
+# tick is not guaranteed to see the venv first on PATH, and this repo's own
+# requirements.txt packages (e.g. websockets) only live in the venv. Verified
+# live: probe_lan_peer.py's ws-peer check falsely reported "missing
+# websockets" because bare `python` resolved a different, package-less
+# system interpreter even though the venv had it installed correctly.
+. (Join-Path $Repo "scripts\lib\get-best-python.ps1")
+$PythonExe = Get-BestPython $Repo
 
 $Pt = $env:PERPETUA_TOOLS_PATH
 $LogDir = Join-Path $env:USERPROFILE ".openclaw\state\lan_peer"
@@ -24,8 +33,8 @@ function Write-Log([string]$Msg) {
 }
 
 function Save-SeenInbox {
-    python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py list 2>$null |
-        python -c "import sys,json; open(r'$Seen','w').write(json.dumps([x['filename'] for x in json.load(sys.stdin).get('files',[])], indent=2))" 2>$null
+    & $PythonExe bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py list 2>$null |
+        & $PythonExe -c "import sys,json; open(r'$Seen','w').write(json.dumps([x['filename'] for x in json.load(sys.stdin).get('files',[])], indent=2))" 2>$null
 }
 
 function Invoke-LanPeerSession {
@@ -37,7 +46,7 @@ function Invoke-LanPeerSession {
         Write-Log "session state script missing: $LanSession"
         return $true
     }
-    python $LanSession @LanArgs 2>&1 | ForEach-Object { Write-Log $_ }
+    & $PythonExe $LanSession @LanArgs 2>&1 | ForEach-Object { Write-Log $_ }
     return ($LASTEXITCODE -eq 0)
 }
 
@@ -67,19 +76,19 @@ try {
     if (-not (Invoke-LanPeerSession -LanArgs @('should-retry'))) {
         Write-Log "macOS-only degraded mode active; next peer retry waits for LAN_PEER_DEGRADED_RETRY_SECONDS=$retrySeconds"
     } else {
-        $probeOutput = python bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1
+        $probeOutput = & $PythonExe bin\orama-system\skills\hermes-harness\scripts\probe_lan_peer.py --json --timeout $probeTimeout --status-timeout $statusTimeout --ws-timeout $wsTimeout 2>&1
         $probeExit = $LASTEXITCODE
         $probeOutput | Select-Object -First 12 | ForEach-Object { Write-Log $_ }
         if ($probeExit -eq 0) {
             $null = Invoke-LanPeerSession -LanArgs @('record-success')
-            $flushOutput = python bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py flush-outbox --peer --timeout $httpTimeout 2>&1
+            $flushOutput = & $PythonExe bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py flush-outbox --peer --timeout $httpTimeout 2>&1
             $flushOutput | Select-Object -First 20 | ForEach-Object { Write-Log $_ }
         } else {
             $null = Invoke-LanPeerSession -LanArgs @('record-failure', '--error', 'probe_lan_peer.py failed')
         }
     }
 
-    $gateJson = python $WinQueue pulse-gate --seen-file $Seen 2>&1 | Out-String
+    $gateJson = & $PythonExe $WinQueue pulse-gate --seen-file $Seen 2>&1 | Out-String
     Write-Log "gate: $gateJson"
 
     $gate = $gateJson | ConvertFrom-Json
