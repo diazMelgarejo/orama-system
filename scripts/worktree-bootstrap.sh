@@ -89,8 +89,19 @@ echo "  ✓ $WORKTREE_HUB"
 echo ""
 echo "── Step 3: Assign port offset"
 
-# Count existing worktrees (excluding main worktree) to determine index
-EXISTING=$(git worktree list --porcelain | grep "^worktree " | grep -v "^worktree $REPO_PATH$" | wc -l | tr -d ' ')
+# Count existing worktrees (excluding main worktree) to determine index.
+# `grep -v` exits 1 when EVERY line matches (i.e. zero worktrees besides the
+# canonical one) — under `set -o pipefail` that aborts the whole script on
+# the very first run in a repo with no other worktrees yet.
+#
+# IMPORTANT: a trailing `|| echo 0` on the whole pipeline does NOT work here
+# — wc -l/tr still run to completion on the (empty) input `grep -v` passed
+# through and already emit a correct "0" before the pipeline's own exit
+# status is evaluated, so `|| echo 0` fires *in addition to* that output
+# rather than replacing it, corrupting EXISTING into "0\n0" (confirmed via
+# a real end-to-end run from a zero-worktree repo). The exit code must be
+# neutralized at grep -v's own point in the pipe instead.
+EXISTING=$(git worktree list --porcelain | grep "^worktree " | { grep -v "^worktree $REPO_PATH$" || true; } | wc -l | tr -d ' ')
 
 # Check if this worktree already exists (idempotent: reuse its existing index)
 EXISTING_ENTRY=$(git worktree list --porcelain | grep -A2 "^worktree $WORKTREE_PATH$" | grep "^branch" | head -1 || true)
