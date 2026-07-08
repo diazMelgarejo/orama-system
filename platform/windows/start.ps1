@@ -209,17 +209,34 @@ if (-not $UsPython) {
 $PathsNeedRewrite = $false
 if ($PtDir) {
     $PtVenvPython = Join-Path $PtDir '.venv\Scripts\python.exe'
-    if (-not (Test-Path $PtVenvPython)) {
+    # Existence of python.exe alone doesn't mean the venv is actually
+    # usable — confirmed live: a venv can exist with 80+ packages and
+    # still be missing uvicorn specifically (partial/stale install, e.g.
+    # an interrupted first bootstrap or a requirements.txt update after
+    # the venv was created), and PT fails at startup with "No module
+    # named uvicorn" every time. Probe the actual import, not just the
+    # file's presence, so a stale venv gets healed instead of silently
+    # reused forever.
+    $PtVenvUsable = $false
+    if (Test-Path $PtVenvPython) {
+        & $PtVenvPython -c "import uvicorn" 2>$null
+        $PtVenvUsable = ($LASTEXITCODE -eq 0)
+    }
+    if (-not $PtVenvUsable) {
         # PT has no Windows installer of its own (unlike orama-system's
         # install.ps1) — Get-BestPython falls back to the bare system Python,
         # which has none of PT's requirements.txt deps (uvicorn, fastapi, ...)
         # installed, so the PT service fails at startup with "No module named
-        # uvicorn". Idempotent: skipped entirely once PtDir\.venv exists.
+        # uvicorn". Idempotent: skipped entirely once PtDir\.venv is usable.
         $PtReqs = Join-Path $PtDir 'requirements.txt'
         if (Test-Path $PtReqs) {
-            _Info 'bootstrap' "PT .venv not found — creating one at $PtDir\.venv ..."
-            $bootstrapPy = Get-BestPython $RepoRoot
-            & $bootstrapPy -m venv (Join-Path $PtDir '.venv')
+            if (Test-Path $PtVenvPython) {
+                _Info 'bootstrap' "PT .venv exists but is missing required deps — reinstalling into $PtDir\.venv ..."
+            } else {
+                _Info 'bootstrap' "PT .venv not found — creating one at $PtDir\.venv ..."
+                $bootstrapPy = Get-BestPython $RepoRoot
+                & $bootstrapPy -m venv (Join-Path $PtDir '.venv')
+            }
             $ptVenvPip = Join-Path $PtDir '.venv\Scripts\pip.exe'
             & $ptVenvPip install -r $PtReqs --quiet
             _Info 'bootstrap' 'PT .venv ready'
