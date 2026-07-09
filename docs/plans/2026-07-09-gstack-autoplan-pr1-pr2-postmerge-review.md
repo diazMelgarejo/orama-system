@@ -51,12 +51,12 @@ The source document lists this as a **Critical** gap: *"The connector returned n
 | `bin/orama-system/cidf/` | **Exists** (SKILL.md 238L, README.md, `__init__.py`, `core/`, `linter/`, `tests/`) | **Canonical target** — user-confirmed |
 | `bin/orama-system/skills/orama-afrp/SKILL.md` | Exists (45L) | **Already a correct thin wrapper** — points at `bin/orama-system/afrp/` at runtime. No action needed. |
 | `bin/orama-system/skills/orama-cidf/SKILL.md` | Exists (45L) | **Already a correct thin wrapper** — points at `bin/orama-system/cidf/` at runtime. No action needed. |
-| `bin/orama-system/references/content-insertion-framework.md` | Exists (316L) | **Genuine duplicate** — a full independent CIDF v1.2 spec, not a pointer. Substantively overlaps `cidf/SKILL.md` (238L, also v1.2). Needs harmonizing into canonical, not deletion. |
-| `bin/orama-system/skills/oramasys-method/references/cidf-and-mcp.md` | Exists (36L) | **Partial duplicate** — restates the CIDF rank table (5 lines) but also holds genuinely unique MCP-routing and legacy-compatibility content (not in canonical `cidf/SKILL.md`). Keep the unique content; replace the restated rank table with a link to canonical. |
+| `bin/orama-system/references/content-insertion-framework.md` | Exists (316L) | **Original source doctrine — not a duplicate.** User-confirmed: this is where CIDF was conceived; `cidf/` (the executable sub-skill package) was derived from it later. Already correctly placed under `references/`. No merge, no pointer-reduction. The only PR3 action is an explicit provenance link: `cidf/SKILL.md` should cite this file as its origin. |
+| `bin/orama-system/skills/oramasys-method/references/cidf-and-mcp.md` | Exists (36L) | **Partial overlap** — restates the CIDF rank table (5 lines) but also holds genuinely unique MCP-routing and legacy-compatibility content (not in canonical `cidf/SKILL.md` or in the original `content-insertion-framework.md`). Keep the unique content; replace the restated rank table with a link to the original source doctrine. |
 
-The mother plan (`2026-07-06-orama-skill-upgrade-roadmap.md`, PR3 section) confirms this reading directly: it names `cidf` and `afrp` as literal PR3 target skills with planned metadata moves (`user-invocable: false`, `when_to_use`, `effort`) — i.e. edits to the **canonical directories**, not to the thin wrappers or the scattered references.
+The mother plan (`2026-07-06-orama-skill-upgrade-roadmap.md`, PR3 section) confirms this reading directly: it names `cidf` and `afrp` as literal PR3 target skills with planned metadata moves (`user-invocable: false`, `when_to_use`, `effort`) — i.e. edits to the **canonical `cidf/` package**, not to the original source doctrine or the thin wrappers.
 
-**Corrected rule, per explicit instruction:** duplicates and adjacent skills are never deleted. They are merged and harmonized back into the existing canonical source, and become (or remain) thin wrappers pointing at canon. `orama-afrp/` and `orama-cidf/` already satisfy this. `content-insertion-framework.md` and `cidf-and-mcp.md` do not yet, and are PR3's real remaining CIDF work.
+**Corrected rule, per explicit instruction:** duplicates and adjacent skills are never deleted. They are merged and harmonized back into the existing canonical source, and become (or remain) thin wrappers pointing at canon. `orama-afrp/` and `orama-cidf/` already satisfy this. `content-insertion-framework.md` is not in this category at all — it is the origin, not an adjacent duplicate — and is left in place with a provenance link added from the derived `cidf/` package back to it. `cidf-and-mcp.md` is the one file needing an actual overlap trim.
 
 ### 3. `gstack/SKILL.md` is 497 lines — a near-miss, not a clean pass
 
@@ -66,9 +66,9 @@ The source document marks the 500-line ceiling as "Met" for PR2. True at present
 
 ### 1. The PR3 acceptance criteria are self-referential
 
-"Metadata aligned with PR1 standards" and "repo hygiene and baseline validator pass" are necessary but not sufficient. Neither criterion checks whether the genuine CIDF duplicate (`content-insertion-framework.md`, 316 lines, a full independent v1.2 spec) actually gets harmonized into `bin/orama-system/cidf/SKILL.md`, or just gets metadata-polished in place while the duplication persists.
+"Metadata aligned with PR1 standards" and "repo hygiene and baseline validator pass" are necessary but not sufficient. Neither criterion checks whether the derived `cidf/SKILL.md` actually cites its own origin (`content-insertion-framework.md`) — without that link, a future reader has no way to discover that the executable sub-skill was derived from the original doctrine, and might mistake the two for independent, competing specs.
 
-**Required refinement:** add an explicit PR3 acceptance criterion: *"`content-insertion-framework.md` is either reduced to a thin pointer at `bin/orama-system/cidf/SKILL.md`, or its unique content (if any, beyond what canonical already covers) is merged into canonical first. `cidf-and-mcp.md` keeps its unique MCP-routing/legacy-compat content and drops its restated CIDF rank table in favor of a link to canonical. `orama-afrp/` and `orama-cidf/` are already correct thin wrappers — verify, do not re-edit."*
+**Required refinement:** add an explicit PR3 acceptance criterion: *"`cidf/SKILL.md` (or its `FRAMEWORK.md`) carries an explicit provenance line citing `bin/orama-system/references/content-insertion-framework.md` as its origin source. `content-insertion-framework.md` itself is untouched beyond that inbound link — it is not merged, trimmed, or pointer-reduced. `cidf-and-mcp.md` drops its restated CIDF rank table in favor of a link to the original source. `orama-afrp/` and `orama-cidf/` are already correct thin wrappers — verify, do not re-edit."*
 
 ### 2. "No runtime dispatch changes" is asserted, not verified
 
@@ -120,17 +120,17 @@ Run the source document's Action 2 command (`git grep` sweep) and record the ope
 
 **Mother plan:** [`docs/plans/2026-07-06-orama-skill-upgrade-roadmap.md`](2026-07-06-orama-skill-upgrade-roadmap.md) — link this in the PR body and in any further derivative planning doc.
 
-**Corrected file inventory** (edit the canonical directories; leave the already-correct thin wrappers alone; harmonize the one genuine duplicate):
+**Corrected file inventory** (edit the canonical directories; leave the already-correct thin wrappers and the original source doctrine alone; trim the one genuine overlap):
 
 - `bin/orama-system/skills/code-review/SKILL.md` — metadata standardization
 - `bin/orama-system/skills/git-history-surgery/SKILL.md` — metadata standardization
 - `bin/orama-system/afrp/SKILL.md` — metadata standardization (`user-invocable: false`, `when_to_use`, `effort: low`, per mother plan)
-- `bin/orama-system/cidf/SKILL.md` — metadata standardization (`user-invocable: false`, `when_to_use`, `effort: low/medium`, per mother plan)
-- `bin/orama-system/references/content-insertion-framework.md` — harmonize into `cidf/SKILL.md` (merge, don't delete; verify no unique content is lost, then reduce to a thin pointer)
-- `bin/orama-system/skills/oramasys-method/references/cidf-and-mcp.md` — drop the restated CIDF rank table in favor of a link to canonical `cidf/SKILL.md`; keep the unique MCP-routing/legacy-compat content unchanged
+- `bin/orama-system/cidf/SKILL.md` (or `FRAMEWORK.md`) — metadata standardization, plus add one explicit provenance line citing `bin/orama-system/references/content-insertion-framework.md` as the original source doctrine this package was derived from
+- `bin/orama-system/skills/oramasys-method/references/cidf-and-mcp.md` — drop the restated CIDF rank table in favor of a link to the original source doctrine; keep the unique MCP-routing/legacy-compat content unchanged
 
 **Explicitly out of scope (already correct, do not touch):**
 
+- `bin/orama-system/references/content-insertion-framework.md` — **the original source doctrine**, not a duplicate. Left as-is; only gains an inbound citation from `cidf/`, no outbound edits.
 - `bin/orama-system/skills/orama-afrp/SKILL.md` — verified as a correct thin wrapper
 - `bin/orama-system/skills/orama-cidf/SKILL.md` — verified as a correct thin wrapper
 
@@ -139,7 +139,7 @@ Run the source document's Action 2 command (`git grep` sweep) and record the ope
 - No `mcp-orchestration` or `hermes-harness` changes.
 - No runtime dispatch changes (now verified via Phase 0 grep, not assumed).
 - No strict-mode global enablement.
-- **No deletions.** Every duplicate or adjacent skill in scope is merged/harmonized back to its canonical source and left as (or converted into) a thin wrapper — never removed outright.
+- **No deletions, no merges of the original source.** `content-insertion-framework.md` is the origin doctrine and is never merged, trimmed, or reduced to a pointer. Duplicates and adjacent skills (`orama-afrp/`, `orama-cidf/`) stay as thin wrappers pointing at canon — never removed outright.
 
 **Acceptance criteria (source document's four, plus one new):**
 
@@ -147,7 +147,7 @@ Run the source document's Action 2 command (`git grep` sweep) and record the ope
 - No `SKILL.md` over 500 lines.
 - Side-effect skills have explicit invocation controls.
 - Repo hygiene and baseline validator pass.
-- **New:** `content-insertion-framework.md` harmonized into canonical `cidf/SKILL.md` (merged, not deleted; reduced to a thin pointer) and `cidf-and-mcp.md`'s restated rank table replaced with a canonical link.
+- **New:** `cidf/SKILL.md` (or `FRAMEWORK.md`) carries an explicit provenance citation to `content-insertion-framework.md` as its origin source; `content-insertion-framework.md` itself is unmodified; `cidf-and-mcp.md`'s restated rank table is replaced with a link to the original source.
 
 ### Phase 3 — Review Loop
 
@@ -161,7 +161,7 @@ Publish this document to Margin for phone review. Fold comments back into this r
 | GLM52 credential sweep | zero runtime values in tracked files | Phase 1 |
 | `code-review`, `git-history-surgery` dispatch grep | zero MCP/OpenClaw/Hermes entrypoint hits | Phase 2 |
 | `orama-afrp/`, `orama-cidf/` thin wrappers | confirmed still-correct pointers, untouched | Phase 2 |
-| CIDF harmonization | `content-insertion-framework.md` merged into canonical, zero content loss, reduced to pointer | Phase 2 |
+| Provenance link | `cidf/` package cites `content-insertion-framework.md` as origin; the origin file itself unmodified | Phase 2 |
 | Baseline validator | no new unexpected errors vs `/tmp/orama-skill-baseline.json` | Phase 2 |
 
 ## Failure Modes Registry
@@ -169,7 +169,7 @@ Publish this document to Margin for phone review. Fold comments back into this r
 | Failure mode | Severity | Mitigation |
 |---|---|---|
 | PR3 opens before credential decision is recorded | High | Phase 1 is a hard gate, not parallel |
-| `content-insertion-framework.md` deleted instead of merged | High | Explicit no-deletion non-goal + merge-first acceptance criterion |
+| `content-insertion-framework.md` mistaken for a duplicate and merged/deleted | High | Explicit out-of-scope listing: it is the original source, never edited except to receive an inbound citation |
 | Already-correct `orama-afrp/`/`orama-cidf/` thin wrappers re-edited unnecessarily | Medium | Explicitly listed as out-of-scope, do-not-touch |
 | `gstack/SKILL.md` re-crosses 500 lines on next edit | Medium | Flag for extraction before next touch, not after |
 | Derivative planning docs omit the mother-plan link | Medium | Required in this document's header; carry forward to every PR3 derivative |
@@ -182,9 +182,10 @@ Publish this document to Margin for phone review. Fold comments back into this r
 | 1 | CEO | Approve overall verdict, correct two factual claims | Auto-decided | Source document's sequencing logic is sound; specific claims were not | Wholesale rejection of the source plan |
 | 2 | Eng | Downgrade "no workflow runs" from Critical to Minor | Auto-decided | Directly contradicted by live Checks API query (14 runs found) | Leaving the claim as Critical |
 | 3 | Eng | Corrected: `bin/orama-system/{afrp,cidf}/` ARE canonical and exist; `orama-afrp/`/`orama-cidf/` are already-correct thin wrappers | Auto-decided | Verified directly against live tree + mother plan's PR3 section, which names `cidf`/`afrp` as literal targets | My own earlier (2026-07-09, same-day) redirection to `orama-cidf`/`orama-afrp` as "the real paths" — that was backwards |
-| 4 | Eng | Add CIDF harmonization (merge `content-insertion-framework.md` into canonical, not delete) as a PR3 acceptance criterion | Auto-decided | 316-line genuine duplicate spec confirmed by direct read; user's explicit no-deletion instruction applies | Deleting the duplicate outright, or leaving it unharmonized |
+| 4 | Eng | *(Superseded by row 7)* Originally: add CIDF harmonization (merge `content-insertion-framework.md` into canonical) as a PR3 acceptance criterion | Auto-decided, later corrected | At the time, 316-line overlap read as a duplicate spec; this was wrong — see row 7 | Deleting the file outright (never proposed, but the merge framing itself was later retracted) |
 | 5 | CEO | Make credential-rotation decision a hard gate on PR3, not parallel | Auto-decided | Matches this repo's own established security-first sequencing precedent | Parallel-track security decision |
 | 6 | CEO | Require the mother-plan link in this document and all its derivatives | Auto-decided | Explicit user instruction; also prevents the path-confusion in row 3 from recurring in future derivative docs that don't trace back to source intent | Omitting the link as implied/optional |
+| 7 | Eng | Corrected (second pass): `content-insertion-framework.md` is the original source doctrine, not a duplicate of `cidf/` — never merge, trim, or pointer-reduce it; add an inbound provenance citation from `cidf/` instead | Auto-decided | Explicit user correction: CIDF's entire concept originated in this file; `cidf/` was derived from it later, not the reverse | My own prior framing (this same document, first revision) — treated the original as if it competed with its own derivative |
 
 ## User Challenges
 
@@ -203,4 +204,4 @@ None requiring user input now. Defaults are conservative: verify paths against t
 
 ## Final Recommendation
 
-Approve the source document's sequencing and intent. The corrected PR3 file inventory in this document (revised 2026-07-09) edits the canonical `bin/orama-system/afrp/` and `bin/orama-system/cidf/` directories directly, leaves the already-correct `orama-afrp/`/`orama-cidf/` thin wrappers untouched, and harmonizes (merges, never deletes) the one genuine remaining duplicate — `content-insertion-framework.md` — into canonical `cidf/SKILL.md`. Treat GLM52 credential rotation as a hard gate, not a parallel action, before PR3 opens. Every derivative of this document must carry forward the link to the mother plan.
+Approve the source document's sequencing and intent. The corrected PR3 file inventory in this document (revised 2026-07-09, twice) edits the canonical `bin/orama-system/afrp/` and `bin/orama-system/cidf/` directories directly, leaves the already-correct `orama-afrp/`/`orama-cidf/` thin wrappers untouched, and — critically — leaves `content-insertion-framework.md` untouched as the **original source doctrine** CIDF was derived from, adding only an inbound provenance citation from `cidf/`. Treat GLM52 credential rotation as a hard gate, not a parallel action, before PR3 opens. Every derivative of this document must carry forward the link to the mother plan.
