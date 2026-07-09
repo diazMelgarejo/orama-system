@@ -1,6 +1,7 @@
 ---
 name: glm52-fallback
-description: GLM-5.2 fallback setup guidance for agents when ClinePass is unavailable.
+description: Sets up BigModel GLM-5.2 as the system-wide fallback when ClinePass (Cline Credits) is unavailable. Uses the BigModel API at open.bigmodel.cn with env-var-only auth. Never hardcodes API keys.
+trigger: "bash setup-glm52.sh"
 when_to_use: Activates for GLM-5.2 fallback setup, provider failover guidance, or verifying BigModel fallback configuration.
 disable-model-invocation: true
 effort: medium
@@ -8,60 +9,142 @@ paths:
   - "bin/orama-system/skills/glm52-fallback/**"
 ---
 
-# GLM-5.2 Fallback
+# GLM-5.2 BigModel Fallback Skill
 
-Use this skill for fallback configuration guidance only. The canonical folder is:
+Create a system-wide fallback for all agents to use GLM-5.2 via BigModel
+(`https://open.bigmodel.cn`) when ClinePass is unavailable or Cline Credits
+are exhausted.
+
+Canonical folder — this is the only tracked copy of this skill:
 
 ```text
 bin/orama-system/skills/glm52-fallback/
 ```
 
-## Credential rule
-
-Tracked files must never contain runtime credential values. Use environment variables or placeholders only.
-
-Required documentation placeholder:
+## Fallback Chain (system-wide)
 
 ```text
-<BigModel.API.key>
+1. ClinePass (cline-pass/glm-5.2 via api.cline.bot)     ← DEFAULT (Cline Credits)
+2. BigModel GLM-5.2 (open.bigmodel.cn)                   ← FALLBACK (this skill)
+3. OpenRouter free (openrouter/free auto-router)          ← LAST RESORT
+4. Ollama local (qwen3.5 on Mac, localhost:11434)         ← OFFLINE
 ```
 
-Runtime input contract:
-
-```text
-GLM52_API_KEY
-```
-
-## Setup
-
-Export the runtime value locally, then run the setup script:
+## Setup (Automated)
 
 ```bash
 export GLM52_API_KEY="<BigModel.API.key>"
 bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
 ```
 
-The setup script reads `GLM52_API_KEY` from the caller environment and writes local-only files under `~/.openclaw/`.
+This script will:
+1. Require `$GLM52_API_KEY` (or `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY`) to already be set in the environment — fails fast with a clear error instead of prompting interactively, so it is safe to run unattended or in CI.
+2. Store it securely at `~/.openclaw/secrets/glm52-api-key` (mode 600)
+3. Create env config at `~/.openclaw/.env.glm52` (mode 600)
+4. Add sourcing to `~/.zshrc` and `~/.bashrc` (only for profiles that already exist)
+5. Test connection to the BigModel endpoint
 
-## Runtime contract
+> **NEVER hardcode the API key in tracked files.** Read from environment
+> variables only. See `SECURITY.md` — "Read keys from environment variables,
+> not source or tracked config." Logs, docs, PR bodies, and tests must not
+> print, quote, or store the credential value.
 
-- `GLM52_API_KEY` is supplied by the operator environment.
-- `GLM52_ENDPOINT` is written to the local env file for the BigModel chat-completions endpoint.
-- Runtime values belong in local-only files under `~/.openclaw/`.
-- Logs, docs, PR text, screenshots, and tests must not print credential values.
+## Setup (Manual)
 
-## Fallback order
+```bash
+# 1. Store API key securely (not in tracked files)
+mkdir -p ~/.openclaw/secrets
+printf '%s' "$GLM52_API_KEY" > ~/.openclaw/secrets/glm52-api-key
+chmod 600 ~/.openclaw/secrets/glm52-api-key
 
-1. Primary configured provider.
-2. GLM-5.2 runtime configuration.
-3. Local model fallback when available.
-4. Ask the operator for explicit direction if all configured providers fail.
+# 2. Configure environment
+cat > ~/.openclaw/.env.glm52 <<'EOF'
+export GLM52_API_KEY=$(cat ~/.openclaw/secrets/glm52-api-key)
+export GLM52_ENDPOINT="https://open.bigmodel.cn/api/paas/v4/chat/completions"
+EOF
+chmod 600 ~/.openclaw/.env.glm52
+
+# 3. Activate + make permanent
+source ~/.openclaw/.env.glm52
+echo "source ~/.openclaw/.env.glm52 2>/dev/null || true" >> ~/.zshrc
+```
+
+## API Configuration
+
+- **Endpoint**: `https://open.bigmodel.cn/api/paas/v4/chat/completions`
+- **API Key**: `$GLM52_API_KEY` environment variable (never hardcode)
+- **Model**: `glm-5.2`
+- **Thinking**: Enabled (reasoning_content in response)
+- **Max tokens**: 65536
+- **Temperature**: 1.0
+
+## Request Template
+
+```bash
+curl -X POST "$GLM52_ENDPOINT" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $GLM52_API_KEY" \
+  --connect-timeout 10 --max-time 120 --retry 3 --retry-delay 2 \
+  -d '{
+    "model": "glm-5.2",
+    "messages": [{"role": "user", "content": "<USER_PROMPT>"}],
+    "thinking": {"type": "enabled"},
+    "max_tokens": 65536,
+    "temperature": 1.0
+  }'
+```
+
+## OpenClaw Provider Config (mac-orchestrator.json pattern)
+
+```jsonc
+{
+  "bigmodel": {
+    "api": "openai-completions",
+    "apiKey": "${env:OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY}",
+    "baseUrl": "https://open.bigmodel.cn/api/paas/v4",
+    "models": [{
+      "id": "glm-5.2",
+      "name": "GLM-5.2 (BigModel, thinking)",
+      "contextWindow": 131072,
+      "maxTokens": 65536,
+      "reasoning": true
+    }]
+  }
+}
+```
+
+## Timeout & Retry Policy
+
+- **Connect timeout**: 10s (fail fast on network issues)
+- **Total timeout**: 120s (allow reasoning time)
+- **Auto-retry**: 3 attempts, 2s backoff
+
+**Exit codes:** `0` = success · `7` = connection failed → next fallback · `28` = timeout → next · `52` = empty reply → next
 
 ## Verification
+
+Before or after running setup, confirm the runtime contract without ever printing the credential value:
 
 ```bash
 test -n "${GLM52_API_KEY:-}" && echo "GLM52_API_KEY is set"
 bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
 ```
 
-Report only setup status. Do not print the credential value.
+Report only setup status (e.g. "✓ GLM-5.2 healthy" / "✗ GLM-5.2 unreachable"). Do not print the credential value.
+
+## Security
+
+- **Never commit the API key.** Read from `$GLM52_API_KEY` or
+  `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY` env var only.
+- The key file at `~/.openclaw/secrets/glm52-api-key` is mode 600 and
+  git-ignored (`secrets/` in `.gitignore`).
+- Runtime values (key, endpoint) live only in local-only files under
+  `~/.openclaw/` — never in tracked files, logs, docs, PR text, screenshots,
+  or tests.
+- See `SECURITY.md` for the full credential hygiene policy.
+
+## Related
+
+- [cline-openclaw-agent](../cline-openclaw-agent/SKILL.md) — ClinePass default
+- [mcp-orchestration](../mcp-orchestration/SKILL.md) — routing strategy
+- [openrouter-defaults](../openclaw-skills/references/openrouter-defaults.md) — free tier fallback
