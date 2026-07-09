@@ -203,3 +203,19 @@ the OpenRouter provider is authenticated (for the lightweight agent model).
 - [GLM-5.2 Ultimate Fallback (sibling skill)](../../glm52-fallback/)
 - [Codex OpenClaw Agent (sibling skill)](../codex-openclaw-agent/SKILL.md)
 - [OpenClaw new-agent skill](../openclaw-new-agent/SKILL.md)
+
+
+## Optional: Interactive Provider Setup
+
+Idempotent, opt-in onboarding for provider selection (Claude, Codex,
+Antigravity/Gemini, Cline, BigModel, Perplexity API) — same pattern vanilla
+OpenClaw/Hermes onboarding uses.
+
+- **Agent-mediated run:** use `AskUserQuestion` to pick a primary provider;
+  already-configured providers are auto-added as fallback.
+- **Human terminal:** `bash bin/orama-system/scripts/interactive-provider-setup.sh`
+  (60s opt-in prompt, `[ -t 0 ]`-gated).
+- **Non-interactive (CI/subagent):** skipped automatically; unset providers
+  get `null` placeholders, never a blocking prompt.
+
+Full doctrine: [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md)
