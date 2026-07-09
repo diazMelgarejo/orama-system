@@ -13,7 +13,9 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     permissions:
-      pull-requests: write
+      contents: read
+      issues: write
+      pull-requests: read
     steps:
       - name: Fetch unresolved review threads
         id: threads
@@ -74,13 +76,17 @@ jobs:
       - name: Comment summary on PR
         if: steps.threads.outputs.unresolved_count != '0' && steps.threads.outputs.unresolved_count != ''
         uses: actions/github-script@v7
+        env:
+          SWEEP_SUMMARY: ${{ steps.threads.outputs.summary }}
+          UNRESOLVED_COUNT: ${{ steps.threads.outputs.unresolved_count }}
         with:
           script: |
-            const summary = `${{ steps.threads.outputs.summary }}`;
+            const summary = process.env.SWEEP_SUMMARY || "";
+            const unresolvedCount = process.env.UNRESOLVED_COUNT || "0";
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo:  context.repo.repo,
               issue_number: ${{ github.event.pull_request.number }},
               body: summary,
             });
-            core.notice(`Posted sweep summary: ${${{ steps.threads.outputs.unresolved_count }}} unresolved comment(s)`);
+            core.notice(`Posted sweep summary: ${unresolvedCount} unresolved comment(s)`);
