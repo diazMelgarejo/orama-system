@@ -163,3 +163,4 @@ lance_memory.lance/
 # Generated requirements/build stamp (local-only; never commit)
 .requirements.stamp
 *.stamp
+.margin.json
