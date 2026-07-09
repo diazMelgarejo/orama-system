@@ -314,3 +314,19 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 - First-run: [`skills/first-run-setup/SKILL.md`](../first-run-setup/SKILL.md) · [`references/first-run-install.md`](../../references/first-run-install.md)
 - MCP stack: [`bin/orama-system/mcp-install/SKILL.md`](../../mcp-install/SKILL.md)
 - Orchestration: [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md)
+
+
+## Optional: Interactive Provider Setup
+
+Idempotent, opt-in onboarding for provider selection (Claude, Codex,
+Antigravity/Gemini, Cline, BigModel, Perplexity API) — same pattern vanilla
+OpenClaw/Hermes onboarding uses.
+
+- **Agent-mediated run:** use `AskUserQuestion` to pick a primary provider;
+  already-configured providers are auto-added as fallback.
+- **Human terminal:** `bash bin/orama-system/scripts/interactive-provider-setup.sh`
+  (60s opt-in prompt, `[ -t 0 ]`-gated).
+- **Non-interactive (CI/subagent):** skipped automatically; unset providers
+  get `null` placeholders, never a blocking prompt.
+
+Full doctrine: [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md)
