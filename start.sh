@@ -1378,7 +1378,7 @@ if [ -n "$PT_DIR" ] && [ -f "$PT_DIR/orchestrator/fastapi_app.py" ]; then
     wait_for_port "$PT_PORT" "PT"
   fi
 else
-  echo "  PT   skipped (not found at ${PT_DIR:-unknown})"
+  echo "  PT   skipped (not found at: ${PT_DIR:-unknown})"
 fi
 
 # 2. orama-system reasoning engine

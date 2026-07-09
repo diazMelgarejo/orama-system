@@ -33,11 +33,11 @@ agent that uses the **ClinePass path as the better default** for coding tasks:
    `bin/orama-system/skills/glm52-fallback/` which provides:
    - Direct GLM-5.2 API access via BigModel GLMs
    - Environment vars: `GLM52_API_KEY` and `GLM52_ENDPOINT`
-   - See [GLM-5.2 fallback setup](../../glm52-fallback/setup-glm52.sh) in the sibling skill
-2. **Lightweight agent model: `openrouter/free`** (free auto-router) — used only
+   - See [GLM-5.2 fallback setup](../../../../skills/glm52-fallback/setup-glm52.sh) in the canonical root skill
+3. **Lightweight agent model: `openrouter/free`** (free auto-router) — used only
    for routing/triage/quick replies that don't need tool loops. This is the
    limited/restricted fallback, not the primary coding path.
-3. Delegates agentic execution to the `cline` CLI through three bridges:
+4. Delegates agentic execution to the `cline` CLI through three bridges:
    **exec** (one-shot shell-out), **ACP** (`openclaw acp client --server cline
    --server-args --acp`), and **MCP** (`openclaw mcp serve` → `cline mcp
    install`).
@@ -200,7 +200,7 @@ the OpenRouter provider is authenticated (for the lightweight agent model).
 - [Exec one-shot](references/exec-one-shot.md)
 - [Hub daemon](references/hub-daemon.md)
 - [Provider auth](references/provider-auth.md)
-- [GLM-5.2 Ultimate Fallback (sibling skill)](../../glm52-fallback/)
+- [GLM-5.2 Ultimate Fallback](../../../../skills/glm52-fallback/)
 - [Codex OpenClaw Agent (sibling skill)](../codex-openclaw-agent/SKILL.md)
 - [OpenClaw new-agent skill](../openclaw-new-agent/SKILL.md)
 
