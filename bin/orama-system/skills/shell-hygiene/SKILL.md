@@ -1,13 +1,18 @@
 ---
 name: shell-hygiene
-description: >
-  Safe shell command execution for agents in this environment. Covers two enforced
-  gotchas: (1) sleep N && <command> chains are blocked — wait on background processes,
-  file growth, or conditions with Monitor until-loops / run_in_background instead;
-  (2) the shell is zsh, which does NOT word-split unquoted $vars or `for x in $var`,
-  so iterate multiline output with `while IFS= read -r` and pass lists as arrays.
-  Invoke when waiting on long-running work (background tasks, npm install, claude
-  update, port/health, PID exit) or when looping over command output / file lists.
+description: >-
+  Safe shell command execution for agents. Covers enforced no-sleep-chain rules and
+  zsh word-splitting behavior. Agents must use Monitor until-loops and
+  run_in_background instead of sleep chains, and iterate command output with
+  `while IFS= read -r` rather than unquoted `for x in $var`.
+when_to_use: >-
+  Activates when waiting on long-running work (background tasks, npm install,
+  claude update, port/health checks, PID exit) or when looping over command output
+  / file lists.
+effort: low
+paths:
+  - "bin/orama-system/scripts/**"
+  - "bin/orama-system/gstack/**"
 ---
 
 # Shell Hygiene — Safe Command Execution for Agents

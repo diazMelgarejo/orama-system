@@ -40,7 +40,7 @@ Use this skill to:
 ## The Tree-Twin Principle
 
 **What happens when main rewrites:**
-```
+```text
 Before rewrite:
   commit abc123: tree=t1, parent=p1, message="Feature X"
   main → abc123
@@ -95,7 +95,7 @@ bash scripts/git/reanchor_scan.sh ~/code/oramasys/worktrees/agent-work origin/ma
 
 The scan categorizes every branch into one of four states:
 
-```
+```text
 MERGED/in-main (tip=tree-twin)
   ✓ Branch is fully included in main
   ✓ All commits are present (possibly reordered or squashed)
@@ -218,75 +218,3 @@ Ran: `bash scripts/git/reanchor_scan.sh "$(git rev-parse --show-toplevel)" origi
 - **MERGED/in-main:** 20 branches (all work already integrated in main, safe to delete)
 - **NEEDS-REANCHOR:** 14 branches (contain unique commits to graft onto tree-twin parents)
 - **ORPHAN:** 0 branches (zero orphaned, all have tree-twins in main history)
-
-This validation demonstrates:
-- Tree-twin scan correctly categorizes 100% of branches without false orphan positives
-- Post-rewrite validation proved accurate across 34 concurrent branches from parallel agents
-- Zero orphaned branches confirms rewrite safety doctrine
-- All NEEDS-REANCHOR branches have identified tree-twins and clear graft paths
-
-## References
-
-- [`scripts/git/reanchor_scan.sh`](../../../../scripts/git/reanchor_scan.sh) — canonical tree-twin detector (byte-identical in all repos)
-- [`git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) — full expunge, rewrite, and recovery procedures
-- [`using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle
-- [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md) — commit identity, attribution guards, portable paths
-- [`docs/LESSONS.md` § 2026-06-05](../../../../docs/LESSONS.md) — tree-twin doctrine discovery (PT re-scan, reanchoring proof)
-- [`docs/v2/22-worktree-parallel-agents.md`](../../../../docs/v2/22-worktree-parallel-agents.md) — worktree safety doctrine
-
-## Common Failure Modes & Fixes
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `fatal: ambiguous argument 'origin/main'` | Remote not fetched | `git fetch origin` first |
-| All branches show ORPHAN | Fetch stale; main not updated | Re-run with fresh `git fetch --prune origin` |
-| Branch shows "600 behind" but tree-twin exists | After rewrite; SHA-based tool | Ignore the count; tree-twin proves merged state |
-| NEEDS-REANCHOR but cherry suggests no unique commits | Branch tip IS tree-twin (merged) | Safe to delete or fast-forward |
-| Scan hangs on `git fetch` | Network timeout | Run with offline flag (scan skips fetch if no timeout binary) |
-
-## Integration with CI/CD
-
-Add to pre-merge checks:
-
-```bash
-# .github/workflows/branch-safety.yml
-- name: Validate branch tree-twin status
-  run: |
-    bash scripts/git/reanchor_scan.sh . origin/main remotes
-    # Fail if any ORPHAN found
-    bash scripts/git/reanchor_scan.sh . origin/main remotes | grep ORPHAN && exit 1 || true
-```
-
-Add to `pre-commit` hooks:
-
-```bash
-# scripts/git/pre-commit (excerpt)
-if git rev-parse origin/main >/dev/null 2>&1; then
-  bash scripts/git/reanchor_scan.sh . origin/main heads || exit 1
-fi
-```
-
-## Version & Consensus
-
-- **Skill version:** 1.0.0
-- **Consensus level:** 7/7 agents (highest agreement in Fable-5 council)
-- **Foundation:** `scripts/git/reanchor_scan.sh` (canonical, byte-identical-synced)
-- **Live evidence:** OpenClaw workspace deployment (zero orphaned branches post-sync)
-- **Related incident:** orama PR#70 (600 behind), PT 2026-06-05 (re-scan)
-
-## FAQ
-
-**Q: Why not just use `git merge-base` and ahead/behind?**
-A: Because after a rewrite, parent SHAs change even when content is identical. A branch can be "500 behind" while its tip matches main exactly. Tree-twins prove this reliably; SHAs lie.
-
-**Q: What if main was NOT rewritten?**
-A: Tree-twin scan still works correctly. If no rewrite happened, tree-twins and SHAs align; scan confirms branches are safe. No harm in always using this method.
-
-**Q: Can I delete a branch showing MERGED/in-main?**
-A: Yes, safely. All its commits are in main (possibly squashed or reordered). Deletion will not lose work.
-
-**Q: What about rebasing a branch after main rewrote?**
-A: Run scan first. If branch has NEEDS-REANCHOR status, rebase onto the tree-twin (the commit shown in the scan output). This avoids replaying identical work.
-
-**Q: How do I recover a branch that looks orphaned?**
-A: Use the `git-history-surgery` skill (reanchor-after-rewrite reference). But first: prove it's truly orphaned by running this scan. Most "orphans" after a rewrite are false positives.
