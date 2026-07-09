@@ -6,6 +6,21 @@ Use this file after `skillify/SKILL.md` activates. The always-loaded skill file 
 
 Create skills that are easy to trigger, easy to audit, and hard to misuse.
 
+## Claude Code Skill Standards To Preserve
+
+Source: `https://code.claude.com/docs/en/skills`
+
+- Keep `SKILL.md` as the discovery and orchestration card.
+- Put detailed rules, examples, templates, and checklists in one-level modular files.
+- Split trigger text between `description` and `when_to_use`; keep their combined listing text <= 1,536 characters.
+- Use `disable-model-invocation: true` for side-effect skills that must be invoked explicitly.
+- Use `user-invocable: false` for background doctrine skills that should not appear as user commands.
+- Use `context: fork` plus `agent:` for isolated review, research, QA, or harness execution.
+- Use `argument-hint`, `arguments`, `$ARGUMENTS`, `$0`, and named arguments for reusable invocations.
+- Prefer `${CLAUDE_SKILL_DIR}` for bundled scripts and `${CLAUDE_PROJECT_DIR}` for project-local scripts.
+- Treat dynamic context injection as pre-execution shell: scope tools narrowly and avoid it in auto-triggered side-effect skills.
+- Treat skills as executable supply-chain material: audit scripts, tool use, network use, hooks, and security-relevant scope.
+
 ## Intake Questions
 
 Ask for:
@@ -16,11 +31,13 @@ Ask for:
 4. Trigger phrases: what the user would actually type.
 5. Boundaries: always do, ask first, never do.
 6. Modularity: tiny skill or production folder.
+7. Invocation mode: user command, model-invoked background skill, forked subagent, or explicit side-effect workflow.
 
 ## Size Rules
 
 - New generated `SKILL.md`: target <= 200 lines.
 - Existing or exceptional `SKILL.md`: hard ceiling <= 500 lines.
+- `description` + `when_to_use`: combined Claude listing cap <= 1,536 characters.
 - If a generated skill wants to exceed 200 lines, move material to `instructions/`, `examples/`, `templates/`, `references/`, or `eval/`.
 - If it still exceeds 500 lines, stop and report `STATUS: BLOCKED - SKILL.md too large`.
 
@@ -35,6 +52,39 @@ Ask for:
 | Deterministic checks and generators | `scripts/*` |
 | Reusable output formats | `templates/*.md` |
 | Review checklist and personas | `eval/checklist.md` |
+
+## Frontmatter Routing
+
+Use these fields where they fit the skill's risk and invocation style:
+
+```yaml
+---
+name: <skill-name>
+description: >-
+  <short core capability and primary use case.>
+when_to_use: >-
+  Activates for: <trigger phrase>, <task shape>, <file or workflow context>.
+argument-hint: "[target]"
+arguments: [target]
+effort: low|medium|high
+context: fork
+agent: Explore|Plan|Execute
+disable-model-invocation: true
+user-invocable: false
+allowed-tools: Read Grep Bash(${CLAUDE_PROJECT_DIR}/scripts/review/check_orama_skills.py *)
+disallowed-tools: AskUserQuestion
+paths:
+  - "bin/orama-system/skills/**"
+---
+```
+
+Rules:
+
+- Do not use all fields by default.
+- Add `disable-model-invocation: true` when the skill installs, deploys, mutates git history, changes MCP config, or dispatches harnesses.
+- Add `user-invocable: false` for pure background doctrine such as AFRP/CIDF-style protocols.
+- Add `context: fork` only when `SKILL.md` contains a task a subagent can execute.
+- Add `hooks:` only when an audit or policy action must be deterministic.
 
 ## Clobber Guard
 
@@ -54,29 +104,48 @@ If the directory exists, ask whether to overwrite, merge missing files only, or 
 
 ## Validation
 
-After writing, validate:
+After writing, validate the edited skill directly and then run the repo skill checker.
+
+Direct file validation:
 
 ```python
 import pathlib
 import re
-import yaml
 
 path = pathlib.Path("<target_dir>/SKILL.md")
 content = path.read_text(encoding="utf-8")
 assert content.startswith("---")
 match = re.search(r"\n---\s*\n", content[3:])
 assert match, "missing closing frontmatter fence"
-frontmatter = yaml.safe_load(content[3:match.start() + 3])
-assert "name" in frontmatter and "description" in frontmatter
-assert re.fullmatch(r"[a-z0-9][a-z0-9-]{0,63}", frontmatter["name"])
-assert len(frontmatter["description"]) <= 1024
 line_count = len(content.splitlines())
 assert line_count <= 500
 if line_count > 200:
     print(f"WARN: generated SKILL.md is {line_count} lines; move more into references")
-for fence in re.findall(r"^```(.*)$", content, flags=re.MULTILINE):
-    assert fence.strip(), "all fenced code blocks need language specifiers"
+
+fence_pattern = re.compile(r"^```(?P<info>[^`]*)$", flags=re.MULTILINE)
+in_fence = False
+for fence in fence_pattern.finditer(content):
+    info = fence.group("info").strip()
+    if not in_fence:
+        assert info, f"opening code fence at line {content[:fence.start()].count(chr(10)) + 1} needs a language specifier"
+        in_fence = True
+    else:
+        in_fence = False
 ```
+
+Repo-level validation:
+
+```bash
+python3 scripts/review/check_orama_skills.py --mode baseline
+```
+
+Use strict mode only after the current legacy skill corpus has been upgraded or warnings have been allowlisted:
+
+```bash
+python3 scripts/review/check_orama_skills.py --mode strict
+```
+
+Baseline mode reports findings without blocking. Strict mode exits non-zero on errors or unallowlisted warnings.
 
 ## Registration
 
@@ -105,6 +174,18 @@ Before reporting done, score:
 | Correctness | Steps are executable and verified |
 | Context | Stands alone without unexplained jargon |
 
+## Distillation Readiness
+
+A skill is smaller-model ready when:
+
+- It uses imperative runbook voice.
+- It defines every jargon term once.
+- It has a clear done condition.
+- Unsafe or costly actions are gated with invocation controls.
+- Commands are verified, copy-pasteable, and dated when volatile.
+- Dynamic context injection is scoped, justified, and portable.
+- Unproven claims are labeled `open` or `candidate`.
+
 ## Report Format
 
 ```text
@@ -116,8 +197,10 @@ Registered:
   bin/orama-system/SKILL.md <added/skipped/not applicable>
   CLAUDE.md <added/skipped/not applicable>
 Validation:
-  frontmatter: PASS/FAIL
+  direct file: PASS/FAIL
+  check_orama_skills baseline: PASS/WARN/FAIL
   line count: <n> lines
+  frontmatter listing length: <n>/1536
   modularity: PASS/FAIL
   6Cs: PASS/PASS_WITH_NOTES/FAIL
 ```

@@ -1,10 +1,19 @@
 ---
 name: first-run-setup
-description: |
+description: >-
   Idempotent first-run bootstrap for the orama-system toolchain: Node, Python 3.13,
   Ollama models, code-review-graph, gbrain, unified embeddings, Claude Code profiles,
-  and PreCompact hook. Use when setting up a new machine, after fresh clone, or when
-  the user asks for first-run install, bootstrap, or §0 checklist.
+  and PreCompact hook.
+when_to_use: >-
+  Activates when setting up a new machine, after fresh clone, or when the user asks
+  for first-run install, bootstrap, or §0 checklist.
+disable-model-invocation: true
+effort: medium
+argument-hint: "[status|install|mcp]"
+arguments: [action]
+paths:
+  - "bin/orama-system/scripts/**"
+  - "scripts/**"
 ---
 
 # First-Run Setup
@@ -50,6 +59,21 @@ description: |
 |------|--------|
 | `--dry-run` | Print actions without executing writes |
 | `--force` | Re-validate every component; repair config only — never reinstall satisfied binaries/models |
+
+## Error Resilience
+
+For gstack/gbrain/CRG error handling during bootstrap, source the shared
+ADR-045 safety framework:
+
+```bash
+source bin/orama-system/scripts/lib/gstack-gbrain-crg-safe.sh
+```
+
+Run `_detect_errors` before first external gbrain or CRG call. Use
+`_retry_with_backoff` for idempotent bootstrap steps. Report failures with
+`_err_actionable` for clear diagnostics.
+
+See: `docs/adr/ADR-045-gstack-gbrain-crg-error-resilience.md`
 
 ## Environment
 

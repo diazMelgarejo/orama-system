@@ -2,30 +2,47 @@
 name: gstack
 description: >-
   gstack v1.58.3.0 integration sub-skill. Full routing table for web browsing,
-  QA, shipping, planning reviews, design, DX audits, retros, and GBrain.
+  QA, shipping, planning reviews, design, DX audits, retros, and GBrain. Covers
+  gstack fork-patch upgrades and gbrain upgrades.
+when_to_use: >-
   Activates for: /browse, /qa, /ship, /review, /investigate, /design-review,
   /canary, /benchmark, /retro, gbrain, gstack skills, web browsing, QA testing,
   deploy, design review, canary monitoring, performance benchmarks.
-  Also covers: gstack fork-patch upgrades, gbrain upgrades.
 version: 1.0.0
 license: Apache 2.0
 compatibility: claude-code
 parent_skill: orama-system
 gstack_version: "1.58.3.0"
 gstack_install: "~/.claude/skills/gstack (global-git, fix/1802-staging-ownership-guard fork)"
+effort: medium
+context: fork
+agent: Explore
+paths:
+  - "bin/orama-system/gstack/**"
+  - "bin/orama-system/scripts/**"
 ---
 
 # gstack Integration
 
-gstack v1.58.3.0 is the agent skill framework for web browsing, planning,
-review, QA, and deployment workflows. Installed globally at
-`~/.claude/skills/gstack` (global-git).
+gstack v1.58.3.0 is the agent skill framework for web browsing, planning, review, QA, and deployment workflows. Installed globally at *~/.claude/skills/gstack* (global-git). Invoke the global skill with */skill ~/.claude/skills/gstack/SKILL.md*; subskills remain under the same checkout.
 
 ## Rules
 
 - **ALWAYS** use `/browse` for all web browsing — NEVER use `mcp__claude-in-chrome__*` tools directly
 - Use `/investigate` for root-cause analysis of adapter or orchestration failures
 - Use `/ship` before any `npm publish`
+
+## Resilience Routing
+
+For gstack/gbrain/CRG error handling, timeouts, retries, and diagnostics, route
+to the shared ADR-045 framework instead of inventing local variants:
+
+- Canonical: `docs/adr/ADR-045-gstack-gbrain-crg-error-resilience.md`
+- Implementation guide: `docs/how-to/hardening-gstack-gbrain-skills.md`
+- Library: `bin/orama-system/scripts/lib/gstack-gbrain-crg-safe.sh`
+
+Skills that call gstack/gbrain/CRG tools should source the safety library and
+run pre-flight checks before first external calls.
 
 ## Install / Update
 
@@ -193,7 +210,7 @@ cd ~/gbrain && bun run src/cli.ts init \
 ```json
 {
   "engine": "pglite",
-  "database_path": "C:\\Users\\<user>\\.gbrain\\brain.pglite",
+  "database_path": "<profile-dir>\\.gbrain\\brain.pglite",
   "embedding_model": "llama-server:text-embedding-qwen3-embedding-8b-i1-gguf-q6-k",
   "embedding_dimensions": 4096,
   "schema_pack": "gbrain-base-v2",
@@ -309,71 +326,13 @@ A false positive is cheaper than a false negative.
 
 ## GBrain Configuration
 
-Engine: **postgres** (Supabase pooler). Config: `~/.gbrain/config.json`.
-DB URL lives in `~/.gbrain/.env` as `GBRAIN_DATABASE_URL` — sourced by `~/.zshrc`
-and the MCP wrapper, NOT by non-interactive Bash shells.
+See [`references/gbrain-configuration.md`](references/gbrain-configuration.md) for
+gbrain engine config, source IDs, page counts, and reindexing commands.
 
-> **Source IDs migrated 2026-06-17 (old → new).** After the 2026-06-14 security re-anchor,
-> gbrain's `deriveCodeSourceId` moved from the legacy scheme (`orama-src`,
-> `gstack-code-ools-…`, `gstack-code-claw-…`) to current per-worktree `gstack-code-<hash>` IDs,
-> and all three repos were reindexed against current HEAD. **`.gbrain-source` pins already point
-> at the CURRENT IDs** — query those. The old sources are stale (@2026-06-05), superseded, and
-> **ARCHIVED 2026-06-22** via `gbrain sources archive` (soft-delete, reversible with
-> `gbrain sources restore <id>`). Defs exported to BOTH
-> `~/repo-backups/gbrain-stale-quarantine-20260618/` and `…-20260622/orphan-sources.json`
-> (and code preserved in git). `periscope-src` was also archived — its path moved to
-> `~/code/oramasys/tools/periscope`; re-add with
-> `gbrain sources add --path ~/code/oramasys/tools/periscope` if periscope work resumes.
->
-> **Lesson (do NOT leave "pending removal"):** these sat un-removed from 2026-06-18→06-22 and
-> kept resurfacing as `sync_freshness`/`multi_source_drift` warnings every session. **Complete
-> the archive in the same pass you decide it** — a deferred removal is a recurring false alarm.
-> Note: archive is reversible but `gbrain doctor` still lists archived sources in freshness
-> (noise, not breakage); `gbrain sources purge <id> --confirm-destructive` removes them fully
-> (recoverable via the exported manifest above). The idempotent guard
-> `scripts/gbrain/gbrain-selfheal.sh` surfaces orphan sources automatically.
+## GBrain on Claude Desktop (MCP)
 
-| Repo | Current source ID (reindexed 2026-06-17) | Pages | Federated | Superseded ID (@06-05, quarantined) |
-| ------ | ------ | ------- | ----------- | ------ |
-| AlphaClaw | `gstack-code-alphaclaw-875d5b82` | ~476 | yes | `gstack-code-claw-4dc4a8f3-aa4479` (489p) |
-| Perpetua-Tools | `gstack-code-078b0b90-f6179f` | ~736 | yes | `gstack-code-ools-27e2b79c-df8a28` (721p) |
-| orama-system | `gstack-code-2159b4b9-595bce` | ~223 | yes (was isolated) | `orama-src` (306p) |
-| periscope | `periscope-src` | ~14 | yes | — current (separate dormant repo, last commit 2026-04-19) |
-
-Re-run setup: `/setup-gbrain`
-
-## GBrain on Claude Desktop (MCP) — ported from the CLI
-
-Claude Desktop uses a **separate** MCP config from the CLI:
-`~/Library/Application Support/Claude/claude_desktop_config.json` (NOT `~/.claude.json`).
-Port the same servers there (`gbrain` + `code-review-graph`) to give Desktop the CLI's tool
-surface. Note: filesystem skills (`~/.agents/skills/`, `~/.claude/skills/`) are CLI-only — they
-do not load in Desktop; the portable knowledge is the **MCP servers**, so register both.
-
-**Gotcha (fixed 2026-06-14):** Desktop launches MCP servers with a **minimal PATH**
-(`/usr/bin:/bin`) and does NOT inherit your shell. The `~/.bun/bin/gbrain` binary needs `bun`
-on PATH, so a plain `gbrain serve` wrapper fails with `env: bun: No such file or directory`
-and the server shows disconnected. The CLI works only because it inherits the terminal PATH.
-
-**Canonical Desktop wrapper** (`.mcpServers.gbrain`) — source `.env` for the DB URL AND
-prepend `~/.bun/bin`:
-
-```json
-{
-  "command": "/bin/sh",
-  "args": ["-c", ". \"$HOME/.gbrain/.env\"; export PATH=\"$HOME/.bun/bin:/opt/homebrew/bin:/usr/local/bin:$PATH\"; exec \"$HOME/.bun/bin/gbrain\" serve"]
-}
-```
-
-Restart Claude Desktop after editing (MCP servers load at app start). Verify in a Desktop-like
-minimal env before restarting:
-
-```bash
-env -i HOME="$HOME" PATH=/usr/bin:/bin /bin/sh -c '. "$HOME/.gbrain/.env"; export PATH="$HOME/.bun/bin:$PATH"; gbrain doctor --json' | head
-```
-
-`code-review-graph` is already PATH-safe (absolute `/opt/homebrew/bin/uvx` command) — no wrapper
-needed. Back up the config (`cp … config.json config.json.bak-<ts>`) before editing.
+See [`references/gbrain-claude-desktop-mcp.md`](references/gbrain-claude-desktop-mcp.md) for
+Claude Desktop MCP config (separate from CLI `~/.claude.json`).
 
 ## GBrain Ops — Failure Modes and Fixes
 
@@ -501,8 +460,7 @@ SAFE remediations automatic and SURFACES the rest:
 - reports orphan sources whose `local_path` is missing (quarantine candidates) — never auto-deletes.
 
 Wire-in: `start.sh` calls it best-effort/non-fatal each session. Run manually any time:
-`bash scripts/gbrain/gbrain-selfheal.sh`. Update its `PAIRS` map when a repo moves (and archive
-the old source in the same pass).
+`bash scripts/gbrain/gbrain-selfheal.sh`. Update its `PAIRS` map when a repo moves (and archive the old source in the same pass).
 
 Two gotchas it encodes:
 

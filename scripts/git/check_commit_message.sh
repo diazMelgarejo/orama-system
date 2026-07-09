@@ -20,6 +20,7 @@ ALLOWED_EXACT_COAUTHOR_EMAILS=(
 # Only these @gmail.com / @googlemail.com addresses may appear in Co-authored-by.
 ALLOWED_GMAIL_COAUTHORS=(
   diazmelgarejo@gmail.com
+  lawrence.melgarejo@gmail.com
 )
 
 # Public agent / vendor domains (match email domain or subdomain).
@@ -155,7 +156,7 @@ while IFS= read -r line || [[ -n "$line" ]]; do
       if ! coauthor_line_ok "$line_lc"; then
         echo "ERROR: Co-authored-by not on approved co-author policy:" >&2
         echo "  $line" >&2
-        echo "Allowed: explicit allowlist (cursoragent@cursor.com), well-known public AI/vendor domains (openai.com, anthropic.com, cursor.com, …), or allowlisted gmail (diazMelgarejo@gmail.com, Lawrence@cyre.me)." >&2
+        echo "Allowed: explicit allowlist (cursoragent@cursor.com), well-known public AI/vendor domains (openai.com, anthropic.com, cursor.com, …), or allowlisted gmail (diazMelgarejo@gmail.com, Lawrence.Melgarejo@gmail.com)." >&2
         exit 1
       fi
       ;;
