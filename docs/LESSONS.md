@@ -297,7 +297,17 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 - PT owns `path_hygiene.py` + `scrub_memory_paths.py`; orama `repo_hygiene.py` Windows pattern kept in sync (LINT-006).
 - Follow-up PR `cursor/critical-bug-investigation-a924-followup` continues branch `a924` for joint sweep.
 
-### 2026-06-26 — PR #135 CodeRabbit closure: tracked-memory path hygiene | Cursor
+### 2026-06-25 — Hermes plan review + discover.py Windows platform fix | Claude
+
+**Key findings:**
+
+1. **discover.py was Mac-centric on Windows** — `discover_endpoints()` always assigned `localhost:1234` to `result["mac"]`, then applied the `windows_only` policy filter to it. Running on Windows (where `localhost` IS the Win LM Studio box), this filtered out ALL `windows_only` models (`qwen3.5-27b`, `gemma-4-26b`), leaving only the embedding model. Fixed with `RUNNING_ON_WINDOWS = sys.platform == "win32"` and a platform-aware role split: when Windows, `localhost → win`, `$MAC_IP → mac`. After fix: `win` field now correctly shows all 3 models including `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`.
+
+2. **`resolve_local_or_remote()` is a fiction** — the Hermes canonical onboarding plan (Phase 1 task 1) told agents to extract this function from `agent_launcher.py`. It does not exist. The real locality primitives are `_loopback_host_from_endpoint()` (L89), `_is_local_endpoint()` (L376), `_get_local_ips()` (L344). Plan corrected in-place.
+
+3. **Perpetua-Tools on-disk clone name** — the L2 repo's canonical name is `Perpetua-Tools` but the on-disk clone on this host is `Perplexity-Tools` (rename in-flight). All tracked files must use `$PERPETUA_TOOLS_PATH` env var, never the literal sibling name.
+
+4. **utils.hardware_policy import path** — `PERPETUA_TOOLS_ROOT` must resolve to the **directory containing the Python package** (i.e., the root of PT where `src/` lives, so `sys.path.insert(0, str(pt_root))` can resolve `utils.hardware_policy`).
 
 5. **Windows LM Studio** at `$LM_STUDIO_WIN_ENDPOINT` — loaded models: `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`, `gemma-4-26b-a4b-it`, `text-embedding-qwen3-embedding-8b-i1-gguf-q6-k` (4096-dim).
 
