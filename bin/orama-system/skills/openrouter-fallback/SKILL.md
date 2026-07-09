@@ -196,3 +196,19 @@ bash $ORAMA_ROOT/bin/orama-system/skills/openrouter-fallback/setup-openrouter.sh
 ## Status: PRODUCTION READY
 
 OpenRouter fallback is wired into the default startup. After `setup-openrouter.sh`, it's transparent to agents: when all local models fail, agents automatically fallback to OpenRouter with zero code changes.
+
+
+## Optional: Interactive Provider Setup
+
+Idempotent, opt-in onboarding for provider selection (Claude, Codex,
+Antigravity/Gemini, Cline, BigModel, Perplexity API) — same pattern vanilla
+OpenClaw/Hermes onboarding uses.
+
+- **Agent-mediated run:** use `AskUserQuestion` to pick a primary provider;
+  already-configured providers are auto-added as fallback.
+- **Human terminal:** `bash bin/orama-system/scripts/interactive-provider-setup.sh`
+  (60s opt-in prompt, `[ -t 0 ]`-gated).
+- **Non-interactive (CI/subagent):** skipped automatically; unset providers
+  get `null` placeholders, never a blocking prompt.
+
+Full doctrine: [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md)

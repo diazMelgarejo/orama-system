@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).parent.parent
 HYGIENE_PATH = ROOT / "scripts" / "review" / "repo_hygiene.py"
@@ -534,3 +536,224 @@ def test_find_bash_falls_back_without_env_var(tmp_path, monkeypatch):
     monkeypatch.setattr(shutil, "which", lambda name: str(fake_bash) if name == "bash" else None)
     result = find_bash()
     assert result == str(fake_bash)
+
+
+# ── check_workflow_permissions ───────────────────────────────────────────────
+# check_workflow_permissions() flags GitHub Actions workflows that use a
+# write-capable action/command (WORKFLOW_WRITE_MARKERS) but do not declare an
+# explicit write permission. The PR added "issues: write" as a third accepted
+# permission alongside the pre-existing "contents: write" and
+# "pull-requests: write".
+
+def _write_workflow(tmp_path: Path, name: str, text: str) -> Path:
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True, exist_ok=True)
+    path = workflow_dir / name
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_workflow_permissions_no_workflow_dir_returns_empty(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    assert repo_hygiene.check_workflow_permissions(tmp_path) == []
+
+
+def test_workflow_permissions_empty_workflow_dir_returns_empty(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    assert repo_hygiene.check_workflow_permissions(tmp_path) == []
+
+
+def test_workflow_permissions_ignores_workflows_without_write_markers(tmp_path):
+    """A workflow that never writes (no marker present) is not flagged even
+    without any declared permissions block."""
+    repo_hygiene = load_repo_hygiene()
+    _write_workflow(
+        tmp_path,
+        "readonly.yml",
+        "name: CI\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - run: pytest\n",
+    )
+    assert repo_hygiene.check_workflow_permissions(tmp_path) == []
+
+
+def test_workflow_permissions_flags_gh_pr_marker_without_permissions(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    _write_workflow(
+        tmp_path,
+        "ci.yml",
+        "name: CI\non: [push]\njobs:\n  release:\n    runs-on: ubuntu-latest\n"
+        "    steps:\n      - run: gh pr create --title x\n",
+    )
+    errors = repo_hygiene.check_workflow_permissions(tmp_path)
+    assert errors == [
+        "workflow may write but lacks explicit write permission: .github/workflows/ci.yml"
+    ]
+
+
+def test_workflow_permissions_accepts_contents_write(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    _write_workflow(
+        tmp_path,
+        "release.yml",
+        "name: Release\npermissions:\n  contents: write\n"
+        "jobs:\n  release:\n    steps:\n      - run: gh release create\n",
+    )
+    assert repo_hygiene.check_workflow_permissions(tmp_path) == []
+
+
+def test_workflow_permissions_accepts_pull_requests_write(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    _write_workflow(
+        tmp_path,
+        "pr.yml",
+        "name: PR bot\npermissions:\n  pull-requests: write\n"
+        "jobs:\n  bot:\n    steps:\n      - uses: peter-evans/create-pull-request@v6\n",
+    )
+    assert repo_hygiene.check_workflow_permissions(tmp_path) == []
+
+
+def test_workflow_permissions_accepts_issues_write(tmp_path):
+    """New in this PR: 'issues: write' alone is now sufficient to satisfy the
+    write-permission requirement (previously only contents/pull-requests were
+    accepted, which would have wrongly flagged issue-commenting workflows)."""
+    repo_hygiene = load_repo_hygiene()
+    _write_workflow(
+        tmp_path,
+        "comment.yml",
+        "name: Comment bot\npermissions:\n  issues: write\n"
+        "jobs:\n  bot:\n    steps:\n      - run: gh pr comment 1 --body hi\n",
+    )
+    assert repo_hygiene.check_workflow_permissions(tmp_path) == []
+
+
+def test_workflow_permissions_flags_when_only_read_permission_present(tmp_path):
+    """A 'contents: read' permission must NOT satisfy the write requirement."""
+    repo_hygiene = load_repo_hygiene()
+    _write_workflow(
+        tmp_path,
+        "push.yml",
+        "name: Push\npermissions:\n  contents: read\n"
+        "jobs:\n  push:\n    steps:\n      - run: git push origin main\n",
+    )
+    errors = repo_hygiene.check_workflow_permissions(tmp_path)
+    assert errors == [
+        "workflow may write but lacks explicit write permission: .github/workflows/push.yml"
+    ]
+
+
+def test_workflow_permissions_flags_when_only_issues_read_present(tmp_path):
+    """'issues: read' must not be mistaken for 'issues: write' via substring
+    matching (regression against a naive 'in' check on a shared prefix)."""
+    repo_hygiene = load_repo_hygiene()
+    _write_workflow(
+        tmp_path,
+        "issues.yml",
+        "name: Issue bot\npermissions:\n  issues: read\n"
+        "jobs:\n  bot:\n    steps:\n      - run: gh release create\n",
+    )
+    errors = repo_hygiene.check_workflow_permissions(tmp_path)
+    assert len(errors) == 1
+    assert "issues.yml" in errors[0]
+
+
+@pytest.mark.parametrize(
+    "marker",
+    [
+        "softprops/action-gh-release",
+        "peter-evans/create-pull-request",
+        "gh pr",
+        "gh release",
+        "git push",
+    ],
+)
+def test_workflow_permissions_each_marker_triggers_needs_write(tmp_path, marker):
+    """Every entry in WORKFLOW_WRITE_MARKERS must independently trigger the
+    write-permission requirement when no permission is declared."""
+    repo_hygiene = load_repo_hygiene()
+    assert marker in repo_hygiene.WORKFLOW_WRITE_MARKERS
+    _write_workflow(
+        tmp_path,
+        "marker.yml",
+        f"name: Marker\njobs:\n  job:\n    steps:\n      - run: {marker}\n",
+    )
+    errors = repo_hygiene.check_workflow_permissions(tmp_path)
+    assert errors == [
+        "workflow may write but lacks explicit write permission: .github/workflows/marker.yml"
+    ]
+
+
+@pytest.mark.parametrize(
+    "permission",
+    ["contents: write", "pull-requests: write", "issues: write"],
+)
+def test_workflow_permissions_any_of_three_permissions_satisfies_every_marker(
+    tmp_path, permission
+):
+    """Each of the three accepted permissions must satisfy every write marker,
+    not just a subset."""
+    repo_hygiene = load_repo_hygiene()
+    for marker in repo_hygiene.WORKFLOW_WRITE_MARKERS:
+        workflow_dir = tmp_path / ".github" / "workflows"
+        if workflow_dir.exists():
+            shutil.rmtree(workflow_dir)
+        _write_workflow(
+            tmp_path,
+            "w.yml",
+            f"name: W\npermissions:\n  {permission}\n"
+            f"jobs:\n  job:\n    steps:\n      - run: {marker}\n",
+        )
+        assert repo_hygiene.check_workflow_permissions(tmp_path) == [], (
+            f"permission {permission!r} should satisfy marker {marker!r}"
+        )
+
+
+def test_workflow_permissions_multiple_files_report_each_violation(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    _write_workflow(
+        tmp_path,
+        "a.yml",
+        "name: A\njobs:\n  job:\n    steps:\n      - run: git push origin main\n",
+    )
+    _write_workflow(
+        tmp_path,
+        "b.yml",
+        "name: B\npermissions:\n  contents: write\n"
+        "jobs:\n  job:\n    steps:\n      - run: gh release create\n",
+    )
+    _write_workflow(
+        tmp_path,
+        "c.yml",
+        "name: C\njobs:\n  job:\n    steps:\n      - run: gh pr create\n",
+    )
+
+    errors = repo_hygiene.check_workflow_permissions(tmp_path)
+
+    # Files are processed in sorted glob order: a.yml, b.yml (clean), c.yml.
+    assert errors == [
+        "workflow may write but lacks explicit write permission: .github/workflows/a.yml",
+        "workflow may write but lacks explicit write permission: .github/workflows/c.yml",
+    ]
+
+
+def test_workflow_permissions_matches_yaml_extension_too(tmp_path):
+    """The glob '*.y*ml' must match both .yml and .yaml workflow files."""
+    repo_hygiene = load_repo_hygiene()
+    _write_workflow(
+        tmp_path,
+        "release.yaml",
+        "name: Release\njobs:\n  job:\n    steps:\n      - run: gh release create\n",
+    )
+    errors = repo_hygiene.check_workflow_permissions(tmp_path)
+    assert errors == [
+        "workflow may write but lacks explicit write permission: .github/workflows/release.yaml"
+    ]
+
+
+def test_workflow_permissions_ignores_non_workflow_files(tmp_path):
+    """Non-YAML files in the workflows directory must be ignored entirely."""
+    repo_hygiene = load_repo_hygiene()
+    workflow_dir = tmp_path / ".github" / "workflows"
+    workflow_dir.mkdir(parents=True)
+    (workflow_dir / "notes.txt").write_text("gh pr create\n", encoding="utf-8")
+    assert repo_hygiene.check_workflow_permissions(tmp_path) == []

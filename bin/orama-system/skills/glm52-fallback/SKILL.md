@@ -2,6 +2,11 @@
 name: glm52-fallback
 description: Sets up BigModel GLM-5.2 as the system-wide fallback when ClinePass (Cline Credits) is unavailable. Uses the BigModel API at open.bigmodel.cn with env-var-only auth. Never hardcodes API keys.
 trigger: "bash setup-glm52.sh"
+when_to_use: Activates for GLM-5.2 fallback setup, provider failover guidance, or verifying BigModel fallback configuration.
+disable-model-invocation: true
+effort: medium
+paths:
+  - "bin/orama-system/skills/glm52-fallback/**"
 ---
 
 # GLM-5.2 BigModel Fallback Skill
@@ -10,9 +15,15 @@ Create a system-wide fallback for all agents to use GLM-5.2 via BigModel
 (`https://open.bigmodel.cn`) when ClinePass is unavailable or Cline Credits
 are exhausted.
 
+Canonical folder — this is the only tracked copy of this skill:
+
+```text
+bin/orama-system/skills/glm52-fallback/
+```
+
 ## Fallback Chain (system-wide)
 
-```
+```text
 1. ClinePass (cline-pass/glm-5.2 via api.cline.bot)     ← DEFAULT (Cline Credits)
 2. BigModel GLM-5.2 (open.bigmodel.cn)                   ← FALLBACK (this skill)
 3. OpenRouter free (openrouter/free auto-router)          ← LAST RESORT
@@ -22,19 +33,21 @@ are exhausted.
 ## Setup (Automated)
 
 ```bash
-bash setup-glm52.sh
+export GLM52_API_KEY="<BigModel.API.key>"
+bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
 ```
 
 This script will:
-1. Read the API key from `$GLM52_API_KEY` or `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY` env var (or prompt if unset)
+1. Require `$GLM52_API_KEY` (or `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY`) to already be set in the environment — fails fast with a clear error instead of prompting interactively, so it is safe to run unattended or in CI.
 2. Store it securely at `~/.openclaw/secrets/glm52-api-key` (mode 600)
 3. Create env config at `~/.openclaw/.env.glm52` (mode 600)
-4. Add sourcing to `~/.zshrc` and `~/.bashrc`
+4. Add sourcing to `~/.zshrc` and `~/.bashrc` (only for profiles that already exist)
 5. Test connection to the BigModel endpoint
 
 > **NEVER hardcode the API key in tracked files.** Read from environment
 > variables only. See `SECURITY.md` — "Read keys from environment variables,
-> not source or tracked config."
+> not source or tracked config." Logs, docs, PR bodies, and tests must not
+> print, quote, or store the credential value.
 
 ## Setup (Manual)
 
@@ -108,13 +121,33 @@ curl -X POST "$GLM52_ENDPOINT" \
 
 **Exit codes:** `0` = success · `7` = connection failed → next fallback · `28` = timeout → next · `52` = empty reply → next
 
+## Verification
+
+Before or after running setup, confirm the runtime contract without ever printing the credential value:
+
+```bash
+if [ -n "${GLM52_API_KEY:-}" ] || [ -n "${OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY:-}" ]; then
+  echo "BigModel API key is set"
+fi
+bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
+```
+
+Report only setup status (e.g. "✓ GLM-5.2 healthy" / "✗ GLM-5.2 unreachable"). Do not print the credential value.
+
 ## Security
 
 - **Never commit the API key.** Read from `$GLM52_API_KEY` or
   `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY` env var only.
 - The key file at `~/.openclaw/secrets/glm52-api-key` is mode 600 and
   git-ignored (`secrets/` in `.gitignore`).
+- Runtime values (key, endpoint) live only in local-only files under
+  `~/.openclaw/` — never in tracked files, logs, docs, PR text, screenshots,
+  or tests.
 - See `SECURITY.md` for the full credential hygiene policy.
+
+## Optional: Interactive Provider Setup
+
+This skill is the reference implementation for [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md) — the shared idempotent onboarding pattern for all LLM providers (Claude, Codex, Antigravity/Gemini, Cline, BigModel, Perplexity API).
 
 ## Related
 
