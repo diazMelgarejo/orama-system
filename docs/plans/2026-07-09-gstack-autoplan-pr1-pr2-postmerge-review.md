@@ -193,13 +193,13 @@ None. This review's corrections are evidence-based, not judgment calls requiring
 
 ## Taste Decisions
 
-None requiring user input now. Defaults are conservative: verify paths against the live tree, gate on the security decision, consolidate rather than re-duplicate CIDF.
+None requiring user input now. Defaults are conservative: verify paths against the live tree, gate on the security decision, add provenance and trim the one CIDF/MCP overlap without merging or editing the original CIDF source doctrine.
 
 ## Implementation Tasks Aggregated Across Phases
 
 - [ ] Phase 0: Run source document's Action 1 commands; additionally confirm corrected PR3 inventory against live tree.
 - [ ] Phase 1: Run GLM52 credential sweep; record operator rotate/no-rotate decision in this file.
-- [ ] Phase 2: Open PR3 using the corrected file inventory above, including CIDF consolidation as an explicit deliverable.
+- [ ] Phase 2: Open PR3 using the corrected file inventory above, including CIDF provenance and overlap-trim work as explicit deliverables.
 - [ ] Phase 3: Publish this document to Margin; fold comments back before final approval.
 
 ## Final Recommendation
