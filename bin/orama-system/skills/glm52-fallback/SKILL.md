@@ -126,7 +126,9 @@ curl -X POST "$GLM52_ENDPOINT" \
 Before or after running setup, confirm the runtime contract without ever printing the credential value:
 
 ```bash
-test -n "${GLM52_API_KEY:-}" && echo "GLM52_API_KEY is set"
+if [ -n "${GLM52_API_KEY:-}" ] || [ -n "${OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY:-}" ]; then
+  echo "BigModel API key is set"
+fi
 bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
 ```
 
@@ -142,6 +144,10 @@ Report only setup status (e.g. "✓ GLM-5.2 healthy" / "✗ GLM-5.2 unreachable"
   `~/.openclaw/` — never in tracked files, logs, docs, PR text, screenshots,
   or tests.
 - See `SECURITY.md` for the full credential hygiene policy.
+
+## Optional: Interactive Provider Setup
+
+This skill is the reference implementation for [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md) — the shared idempotent onboarding pattern for all LLM providers (Claude, Codex, Antigravity/Gemini, Cline, BigModel, Perplexity API).
 
 ## Related
 

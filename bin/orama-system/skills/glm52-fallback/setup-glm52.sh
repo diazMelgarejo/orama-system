@@ -25,17 +25,23 @@ export GLM52_ENDPOINT="https://open.bigmodel.cn/api/paas/v4/chat/completions"
 ENVEOF
 chmod 600 "$HOME/.openclaw/.env.glm52"
 
-# 3. Add to shell profile (sourced at agent startup) — only for profiles
-#    that already exist, and without duplicating the source line.
-for profile in "$HOME/.zshrc" "$HOME/.bashrc"; do
-  if [ -e "$profile" ] && ! grep -q "source ~/.openclaw/.env.glm52" "$profile" 2>/dev/null; then
-    {
-      printf '\n%s\n' "# GLM-5.2 BigModel fallback (added by glm52-fallback skill)"
-      printf '%s\n' "source ~/.openclaw/.env.glm52 2>/dev/null || true"
-    } >> "$profile"
-    printf '%s\n' "Added GLM-5.2 fallback source line to $profile"
-  fi
-done
+# 3. Shell profile persistence is OPT-IN (GLM52_PERSIST_SHELL_PROFILE=1).
+#    start.sh already sources ~/.openclaw/.env.glm52 at runtime, so profile
+#    persistence is not required for the fallback to work — only add it
+#    when the caller explicitly wants GLM-5.2 available outside orama runs.
+if [ "${GLM52_PERSIST_SHELL_PROFILE:-0}" = "1" ]; then
+  for profile in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    if [ -e "$profile" ] && ! grep -q "source ~/.openclaw/.env.glm52" "$profile" 2>/dev/null; then
+      {
+        printf '\n%s\n' "# GLM-5.2 BigModel fallback (added by glm52-fallback skill)"
+        printf '%s\n' "source ~/.openclaw/.env.glm52 2>/dev/null || true"
+      } >> "$profile"
+      printf '%s\n' "Added GLM-5.2 fallback source line to $profile"
+    fi
+  done
+else
+  printf '%s\n' "Skipping shell profile persistence (set GLM52_PERSIST_SHELL_PROFILE=1 to opt in); start.sh sources the fallback at runtime."
+fi
 
 # 4. Test connection
 printf '\n%s\n' "Testing GLM-5.2 connection..."

@@ -266,3 +266,19 @@ cursor-agent about       # show version + system info
 - Platform affinity (when to use cursor-agent vs Hermes vs OpenClaw): [`../hermes-harness/references/platform-affinity-routing.md`](../hermes-harness/references/platform-affinity-routing.md)
 - orama-system Stage 4: [`../../../SKILL.md § MODE 2 Stage 4`](../../../SKILL.md)
 - Win PATH bootstrap: [`../hermes-harness/SKILL.md § Windows Bring-Up`](../hermes-harness/SKILL.md)
+
+
+## Optional: Interactive Provider Setup
+
+Idempotent, opt-in onboarding for provider selection (Claude, Codex,
+Antigravity/Gemini, Cline, BigModel, Perplexity API) — same pattern vanilla
+OpenClaw/Hermes onboarding uses.
+
+- **Agent-mediated run:** use `AskUserQuestion` to pick a primary provider;
+  already-configured providers are auto-added as fallback.
+- **Human terminal:** `bash bin/orama-system/scripts/interactive-provider-setup.sh`
+  (60s opt-in prompt, `[ -t 0 ]`-gated).
+- **Non-interactive (CI/subagent):** skipped automatically; unset providers
+  get `null` placeholders, never a blocking prompt.
+
+Full doctrine: [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md)
