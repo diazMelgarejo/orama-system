@@ -256,13 +256,21 @@ class TestShellProfileHandling:
         assert not (result.home / ".bashrc").exists()
 
     def test_appends_source_line_to_existing_zshrc(self, tmp_path):
-        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True)
+        result = _run_setup(
+            tmp_path,
+            env={"GLM52_API_KEY": "k", "GLM52_PERSIST_SHELL_PROFILE": "1"},
+            make_profiles=True,
+        )
         assert result.returncode == 0, result.stdout + result.stderr
         content = (result.home / ".zshrc").read_text(encoding="utf-8")
         assert "source ~/.openclaw/.env.glm52 2>/dev/null || true" in content
 
     def test_appends_source_line_to_existing_bashrc(self, tmp_path):
-        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True)
+        result = _run_setup(
+            tmp_path,
+            env={"GLM52_API_KEY": "k", "GLM52_PERSIST_SHELL_PROFILE": "1"},
+            make_profiles=True,
+        )
         assert result.returncode == 0, result.stdout + result.stderr
         content = (result.home / ".bashrc").read_text(encoding="utf-8")
         assert "source ~/.openclaw/.env.glm52 2>/dev/null || true" in content
@@ -275,19 +283,35 @@ class TestShellProfileHandling:
 
     def test_does_not_duplicate_source_line_on_rerun(self, tmp_path):
         home = tmp_path / "home"
-        result1 = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True, home=home)
+        env = {"GLM52_API_KEY": "k", "GLM52_PERSIST_SHELL_PROFILE": "1"}
+        result1 = _run_setup(tmp_path, env=env, make_profiles=True, home=home)
         assert result1.returncode == 0, result1.stdout + result1.stderr
-        result2 = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True, home=home)
+        result2 = _run_setup(tmp_path, env=env, make_profiles=True, home=home)
         assert result2.returncode == 0, result2.stdout + result2.stderr
         content = (home / ".zshrc").read_text(encoding="utf-8")
         assert content.count("source ~/.openclaw/.env.glm52 2>/dev/null || true") == 1
 
     def test_added_message_printed_when_profile_exists(self, tmp_path):
-        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True)
+        result = _run_setup(
+            tmp_path,
+            env={"GLM52_API_KEY": "k", "GLM52_PERSIST_SHELL_PROFILE": "1"},
+            make_profiles=True,
+        )
         assert result.returncode == 0, result.stdout + result.stderr
         assert "Added GLM-5.2 fallback source line to" in result.stdout
         assert ".zshrc" in result.stdout
         assert ".bashrc" in result.stdout
+
+    def test_default_skips_persistence_and_prints_opt_in_hint(self, tmp_path):
+        """Regression: shell-profile persistence is opt-in (GLM52_PERSIST_SHELL_PROFILE=1).
+        Without it, the default run must not touch .zshrc/.bashrc at all.
+        """
+        result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+        content = (result.home / ".zshrc").read_text(encoding="utf-8")
+        assert "source ~/.openclaw/.env.glm52" not in content
+        assert "Skipping shell profile persistence" in result.stdout
+        assert "GLM52_PERSIST_SHELL_PROFILE=1" in result.stdout
 
     def test_no_added_message_when_profile_absent(self, tmp_path):
         result = _run_setup(tmp_path, env={"GLM52_API_KEY": "k"}, make_profiles=False)
