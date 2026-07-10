@@ -120,7 +120,7 @@ default.
 | `-p, --prompt <prompt>` | Headless single-turn — prints response to stdout (equivalent to `cursor-agent --print`) |
 | `--output-format <fmt>` | `text` (default) or `stream-json` |
 | `-m, --model <model>` | Override model alias (defaults to `default_model` in `config.toml`) |
-| `-y, --yolo` | Auto-approve all actions (trusted/CI only) |
+| `-y, --yolo` | Auto-approve all actions (trusted/CI only) — **verified INCOMPATIBLE with `-p`/`--prompt`**: `kimi -p "..." --yolo` fails hard with `error: Cannot combine --prompt with --yolo.` `-p` mode is already non-interactive by definition (no approval loop exists to bypass), so it needs no auto-approve flag at all — just drop `--yolo` when using `-p`. |
 | `--auto` | Start in auto permission mode |
 | `--plan` | Read-only planning mode |
 | `-S, --session [id]` | Resume a session (interactive picker without an id) |
