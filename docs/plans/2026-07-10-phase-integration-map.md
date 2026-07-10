@@ -1,5 +1,8 @@
 # Phase Integration Map: 1.0–1.3 (Data Integrity) + 2–6 (Mesh Topology)
 
+**Navigation:**  
+← [Self-Healing Mesh Plan (Phases 2–6)](2026-07-08-self-healing-mesh-degradation-modes.md) · [Cross-Reference (Status Ledger)](2026-07-10-pr2-phase0-review-crossreference.md) · PT Research: [PHASE-1-SCOPE-DRAFT.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-1-SCOPE-DRAFT.md) · [D1 Spec](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/DELIVERABLE-1-PEER-OBSERVATION-MODEL.md) · [Pattern Synthesis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md) · [Security Analysis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md)
+
 **Date:** 2026-07-11  
 **Status:** Living document — unified timeline for Phase 1–6 implementation  
 **Scope:** Perpetua-Tools (PT, Layer 2) + orama-system (Layer 3)
