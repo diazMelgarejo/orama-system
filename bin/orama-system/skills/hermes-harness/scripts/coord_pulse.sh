@@ -96,6 +96,11 @@ else
     lan_peer_session record-success >>"$LOG" 2>&1 || true
     python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py" \
       flush-outbox --peer --timeout "${LAN_PEER_HTTP_TIMEOUT:-2}" >>"$LOG" 2>&1 || true
+
+    # Phase 4: Query fleet topology from peers and re-classify
+    log "Querying fleet topology from peers..."
+    python3 "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/query_peer_topology.py" \
+      --timeout "${LAN_PEER_HTTP_TIMEOUT:-2}" >>"$LOG" 2>&1 || log "topology query failed (non-fatal)"
   else
     lan_peer_session record-failure --error "probe_lan_peer.py failed" >>"$LOG" 2>&1 || true
   fi
