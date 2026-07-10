@@ -111,11 +111,13 @@ by grepping both repos for every named symbol; zero matches for all of them.**
 
 | Phase | Scope | Files | Status | Blocker |
 |-------|-------|-------|--------|---------|
-| Phase 1 | FleetMode enum + topology state (PT) | `startup_intelligence.py`, `fleet_topology.py` (new) | ❌ NOT STARTED | none (PR #142 already merged; no longer blocking) |
-| Phase 2 | Fleet topology endpoint + gossip relay (orama) | `portal_server.py`, `probe_lan_peer.py` | ❌ NOT STARTED | Phase 1 design |
-| Phase 3 | Coord pulse + discover.py extension | `coord_pulse.sh/.ps1`, `discover.py` | ❌ NOT STARTED | Phase 2 API |
-| Phase 4 | Banner + start script integration | `start.sh`, `start.ps1` | ❌ NOT STARTED | Phase 3 pulse |
-| Phase 5 | Self-healing + split-brain | `fleet_topology.py` | ❌ NOT STARTED | Phase 4 banner |
+| Phase 2 | FleetMode enum + topology state (PT) | `startup_intelligence.py`, `fleet_topology.py` (new) | ❌ NOT STARTED | none (PR #142 already merged; no longer blocking) |
+| Phase 3 | Fleet topology endpoint + gossip relay (orama) | `portal_server.py`, `probe_lan_peer.py` | ❌ NOT STARTED | Phase 2 design |
+| Phase 4 | Coord pulse + discover.py extension | `coord_pulse.sh/.ps1`, `discover.py` | ❌ NOT STARTED | Phase 3 API |
+| Phase 5 | Banner + start script integration | `start.sh`, `start.ps1` | ❌ NOT STARTED | Phase 4 pulse |
+| Phase 6 | Self-healing + split-brain | `fleet_topology.py` | ❌ NOT STARTED | Phase 5 banner |
+
+**Renumbered 2026-07-10:** Original plan phases 1–5 are now Phase 2–6 per integrated timeline. See below.
 
 **ALL 10 success criteria unchecked** — see the verified-status block in
 [2026-07-08-self-healing-mesh-degradation-modes.md § 13](2026-07-08-self-healing-mesh-degradation-modes.md#13-success-criteria)
@@ -138,7 +140,7 @@ second source of truth going stale).
 |------|---------------|--------------------|-------|
 | Security research | Not in original plan | 20 P2P security patterns + T1–T7 threat analysis + 16 gap identification | **Far exceeded** |
 | Decision rigor | "Decide M1–M7" | Formal decision matrices with options, recommendations, quick-pick format | **Exceeded** |
-| Phase 1 planning | "Plan Phase 1" | Full PHASE-1-SCOPE-DRAFT.md with 11 tasks, dependencies, 28-day timeline | **Exceeded** |
+| Phase 1.0–1.3 planning | "Plan Phase 1" | Phase 1.0–1.3 implementation plan (PeerObservation research implementation) — Full PHASE-1-SCOPE-DRAFT.md with 11 tasks, dependencies, 28-day timeline | **Exceeded** |
 | Cross-repo hygiene | Not mentioned | REPO-CROSS-REFERENCE.md preventing stale gstack copies | **Exceeded** |
 | TDD | Not mentioned | peer_observation_tdd.md with 10 fixtures, all threats, edge cases | **Exceeded** |
 | P2P architecture research | Not in original plan | Full OASN 5-layer architecture report with protocol comparison | **Far exceeded** |
@@ -157,14 +159,15 @@ second source of truth going stale).
 | Priority | Item | Effort | Dependency |
 |----------|------|--------|------------|
 | ~~P0~~ | ~~Rebase PR #142 on main, merge~~ | ~~30 min~~ | **DONE — merged** |
+| P0 | Phase 1.0–1.3 verification (PeerObservation research) | ✅ COMPLETE | Done (c445f6aa) |
 | P0 | Run validator baseline locally | 15 min | none |
 | P0 | Run unit tests locally | 15 min | none |
-| P1 | Phase 1: FleetMode + fleet_topology (PT) | 5h | none (unblocked) |
-| P1 | Phase 2: Topology endpoint + relay (orama) | 7.5h | Phase 1 design |
-| P2 | Phase 3: Coord pulse + discover extension | 5h | Phase 2 API |
-| P2 | Phase 4: Banner integration | 2h | Phase 3 pulse |
-| P3 | Phase 5: Self-healing + split-brain | 6h | Phase 4 banner |
-| **Total** | | **~26h (~3-4 sessions)** | |
+| P1 | **Phase 2**: FleetMode + fleet_topology (PT) | 5h | none (unblocked) |
+| P1 | **Phase 3**: Topology endpoint + relay (orama) | 7.5h | Phase 2 design |
+| P2 | **Phase 4**: Coord pulse + discover extension | 5h | Phase 3 API |
+| P2 | **Phase 5**: Banner integration | 2h | Phase 4 pulse |
+| P3 | **Phase 6**: Self-healing + split-brain | 6h | Phase 5 banner |
+| **Total** | | **~25h (~3-4 sessions)** for Phases 2–6 | |
 
 ---
 
@@ -193,35 +196,35 @@ The OASN research and the original plan are **deeply aligned** — they describe
 ```
 Track A: Orama (main)           Track B: Perpetua (PT)           Track C: Research
 ─────────────────────           ──────────────────────          ─────────────────
-PR #142 — MERGED      ────────→ Phase 1: FleetMode (P1)  ←──── OASN L2 spec
+PR #142 — MERGED      ────────→ Phase 2: FleetMode (P1)  ←──── OASN L2 spec
   │                                    │                           │
-  │                              Phase 1 tests pass              Security patterns
+  │                              Phase 2 tests pass              Security patterns
   ▼                                    ▼                           │
-Phase 2: API endpoints (P1)  ←─── PT branch merged to main       ▼
+Phase 3: API endpoints (P1)  ←─── PT branch merged to main       ▼
   │                                    │                    v2 architecture
-  ▼                              Phase 3-5 (P2-P3)               (deferred)
-Phase 3-5 (P2-P3)
+  ▼                              Phase 4-6 (P2-P3)               (deferred)
+Phase 4-6 (P2-P3)
   │
   ▼
 Fleet modes operational
 ```
 
-**Track A — Orama (immediate, unblocked):**
+**Track A — Orama (immediate, unblocked; implements Phase 2–6):**
 1. ~~Rebase PR #142 → merge to main~~ — **done**
 2. Create `feature/fleet-modes` branch from main
-3. Implement Phase 2: `/api/fleet-topology` + `/api/peer-relay-probe` endpoints
-4. Implement Phase 3: `coord_pulse.sh/.ps1` extension + `discover.py` merge
-5. Implement Phase 4: Banner SOLO/PAIR/FLEET + `--fleet-status`
-6. Implement Phase 5: Self-healing + split-brain
+3. Implement **Phase 3**: `/api/fleet-topology` + `/api/peer-relay-probe` endpoints
+4. Implement **Phase 4**: `coord_pulse.sh/.ps1` extension + `discover.py` merge
+5. Implement **Phase 5**: Banner SOLO/PAIR/FLEET + `--fleet-status`
+6. Implement **Phase 6**: Self-healing + split-brain
 
-**Track B — Perpetua (parallel to Track A Phases 1-2):**
+**Track B — Perpetua (parallel to Track A Phases 2-3; implements Phase 2):**
 1. Create `feature/fleet-modes` branch from `feature/phase-0-blocker-fixes` (once PR #201 merges)
-2. Implement Phase 1: `FleetMode` enum + `classify_fleet_mode()` + `fleet_topology.py`
+2. Implement **Phase 2**: `FleetMode` enum + `classify_fleet_mode()` + `fleet_topology.py`
 3. Wire into `agent_launcher.py`
-4. Merge to main when Phase 2 orama API is ready (cross-repo dependency)
+4. Merge to main when Phase 3 orama API is ready (cross-repo dependency)
 
-**Track C — Research (background):**
-- OASN v2 architecture (Kademlia DHT, HyParView gossip, PlumTree broadcast) — deferred until Phase 1-5 operational
+**Track C — Research (background; informs Phase 2–6 architecture):**
+- OASN v2 architecture (Kademlia DHT, HyParView gossip, PlumTree broadcast) — deferred until Phase 2-6 operational
 - Security pattern operationalization — map 20 patterns to implementation tickets
 
 ### 3.3 Specific Integration Points
@@ -257,22 +260,23 @@ Fleet modes operational
 ## Part 4: Recommended Next Actions
 
 ### Immediate (this session)
-1. ~~Rebase PR #142 on orama main → merge~~ — **done, verified merged**
-2. **Merge PT PR #201** — CI green, mergeable clean, all CodeRabbit findings resolved via root-cause verification
-3. **Create `feature/fleet-modes` branches** on both repos
+1. **Phase 1.0–1.3 complete:** 69/69 tests passing, merged to PT main (c445f6aa). Ready for Phase 2 dependencies.
+2. ~~Rebase PR #142 on orama main → merge~~ — **done, verified merged**
+3. **Merge PT PR #201** — CI green, mergeable clean, all CodeRabbit findings resolved via root-cause verification
+4. **Create `feature/fleet-modes` branches** on both repos
 
 ### This Week
-4. **Implement Phase 1 (PT):** FleetMode enum + classify_fleet_mode() + fleet_topology.py + tests (~5h)
-5. **Implement Phase 2 (orama):** /api/fleet-topology + /api/peer-relay-probe endpoints (~7.5h)
+5. **Implement Phase 2 (PT):** FleetMode enum + classify_fleet_mode() + fleet_topology.py + tests (~5h)
+6. **Implement Phase 3 (orama):** /api/fleet-topology + /api/peer-relay-probe endpoints (~7.5h)
 
 ### Next Week
-6. **Implement Phase 3:** Coord pulse extension + discover.py merge (~5h)
-7. **Implement Phase 4:** Banner integration + --fleet-status (~2h)
+7. **Implement Phase 4:** Coord pulse extension + discover.py merge (~5h)
+8. **Implement Phase 5:** Banner integration + --fleet-status (~2h)
 
 ### Following
-8. **Implement Phase 5:** Self-healing + split-brain (~6h)
-9. **E2E test:** Kill/restart Win nodes, verify FLEET→PAIR→SOLO transitions
-10. **Document:** Fleet mode operational runbook
+9. **Implement Phase 6:** Self-healing + split-brain (~6h)
+10. **E2E test:** Kill/restart Win nodes, verify FLEET→PAIR→SOLO transitions
+11. **Document:** Fleet mode operational runbook
 
 ---
 
@@ -283,6 +287,7 @@ Fleet modes operational
 | Original plan | orama-system | `docs/plans/2026-07-08-self-healing-mesh-degradation-modes.md` | `73b5ce5c` |
 | This cross-reference | orama-system | `docs/plans/2026-07-10-pr2-phase0-review-crossreference.md` | (this file) |
 | OASN research report | orama-system | `docs/plans/2026-07-10-oasn-p2p-architecture-research.md` | (this session) |
+| Phase 1.0–1.3 reference | PT | `docs/phase-0-specifications/PHASE-1-SCOPE-DRAFT.md` + commits d51d032e..c445f6aa | all tests PASS |
 | PATTERN-SYNTHESIS.md | PT | `docs/phase-0-specifications/PATTERN-SYNTHESIS.md` | `890a805c` |
 | MULTIAGENT-SWARM-SECURITY-ANALYSIS.md | PT | `docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md` | `890a805c` |
 | PR #142 | orama | `skillify-pr2-low-risk-skills` branch | **MERGED** |
