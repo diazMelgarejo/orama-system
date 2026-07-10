@@ -19,6 +19,7 @@ APPROVED_IDENTITIES = {
     ("cyre", "Lawrence@cyre.me"),
     ("cyre", "diazMelgarejo@gmail.com"),
     ("cyre", "Lawrence@bettermind.ph"),
+    ("cyre", "Lawrence.Melgarejo@gmail.com"),
     ("Codex", "codex@openai.com"),
     # Mainstream AI coding agents are allowed authors/committers (the hard ban is
     # the VERBOTEN pattern, not the agent identity). cursoragent@cursor.com stays
