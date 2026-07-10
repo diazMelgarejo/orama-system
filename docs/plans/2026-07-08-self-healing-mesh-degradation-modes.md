@@ -5,6 +5,32 @@
 **Owner:** orama-system (Layer 3) + Perpetua-Tools (Layer 2)
 **Related:** `startup_intelligence.py`, `gossip_bus.py`, `discover.py`, `lan_peer_channel.py`, `coord_pulse.sh/.ps1`
 
+**Navigation:** → security/research inputs (separate repo, PT): [D2 Heartbeat & Failure Detector](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/DELIVERABLE-2-HEARTBEAT-LIVENESS-REGENERATED.md) (feeds § 6.2) · [PATTERN-SYNTHESIS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md) (P2/P5/P9/P19 map to gossip-relay/split-brain design below) · [MULTIAGENT-SWARM-SECURITY-ANALYSIS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md) · status/gap tracking: [2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md) · research: [2026-07-10-oasn-p2p-architecture-research.md](2026-07-10-oasn-p2p-architecture-research.md)
+
+> **VERIFIED STATUS (2026-07-10, live code check — not a status claim, actually run):**
+> Grepped for `FleetMode`, `classify_fleet_mode`, `fleet_topology`, `/api/fleet-topology`,
+> `/api/peer-relay-probe`, `--fleet-status`, `probe_lan_peer.py --relay` across both repos.
+> **Zero matches for all of them, confirmed twice** (once before, once after a concurrent
+> merge landed — see below). None of THIS plan's 5 implementation phases have been started;
+> all 10 Success Criteria in § 13 are unchecked and accurate as unchecked (marked inline
+> below).
+>
+> **IMPORTANT — naming collision with a DIFFERENT "Phase 1":** while this session was
+> reviewing PT PR #201, a separate concurrent agent working in a git worktree
+> (`worktree-phase-1-impl`) merged substantial real implementation directly to PT `main`
+> (`c445f6aa`, 5440 lines: `orchestrator/{membership,peer_record,witness_quorum,
+> monotonic_gate}.py` + ~4000 lines of tests, 69/69 passing). That work is **PT's
+> `PHASE-1-SCOPE-DRAFT.md` "Phase 1.0–1.3.1"** — implementing the D1 PeerObservation
+> model, D4's witness-quorum (T4) and monotonic-apply-gate (T7) threat defenses as real
+> code. **This is NOT this plan's "Phase 1" (FleetMode/fleet_topology.py)** — both docs
+> independently number their next step "Phase 1," describing different scopes. Re-grepped
+> for `FleetMode`/`fleet_topology` after that merge: still zero matches, so this plan's
+> Phase 1 remains genuinely unstarted. But PT's Phase 1.0–1.3.1 substantially advances the
+> *research* this plan's § 6.2/6.3 depend on into *tested code* — closer to ready-to-consume
+> than "prerequisite research" implied below. See
+> [2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md)
+> for the full ledger including this correction.
+
 ---
 
 ## 1. Problem Statement
@@ -462,13 +488,27 @@ observations (< 20 min) are discarded.
 
 ## 13. Success Criteria
 
-- [ ] `classify_fleet_mode()` unit tests pass (3 modes + edge cases)
-- [ ] `GET /api/fleet-topology` returns correct JSON for all 3 modes
-- [ ] `POST /api/peer-relay-probe` returns relayed probe result
-- [ ] Killing a Win node's portal triggers FLEET → PAIR within 1 coord pulse
-- [ ] Restarting the node triggers PAIR → FLEET within 1 coord pulse
-- [ ] Gossip relay succeeds when direct probe fails but a peer can reach the target
-- [ ] `start.sh --fleet-status` shows current mode + topology (read-only, exit)
-- [ ] Banner shows `SOLO` / `PAIR` / `FLEET` with peer count
-- [ ] No breaking changes to existing `StartupScenario`, `WIN_IP`, or `coord_pulse`
-- [ ] All new endpoints auth-gated (401 without token)
+Verified live 2026-07-10 by grepping both repos for every named symbol/endpoint/flag
+below — not a status re-assertion. All still unchecked; none are close (Phase 1
+hasn't started, so criteria depending on later phases are also blocked).
+
+- [ ] `classify_fleet_mode()` unit tests pass (3 modes + edge cases) — **NOT STARTED**, symbol doesn't exist in either repo
+- [ ] `GET /api/fleet-topology` returns correct JSON for all 3 modes — **NOT STARTED**, route doesn't exist in `portal_server.py`
+- [ ] `POST /api/peer-relay-probe` returns relayed probe result — **NOT STARTED**, route doesn't exist
+- [ ] Killing a Win node's portal triggers FLEET → PAIR within 1 coord pulse — **BLOCKED**, depends on unstarted Phase 1–3
+- [ ] Restarting the node triggers PAIR → FLEET within 1 coord pulse — **BLOCKED**, same
+- [ ] Gossip relay succeeds when direct probe fails but a peer can reach the target — **NOT STARTED**, `probe_lan_peer.py --relay` doesn't exist
+- [ ] `start.sh --fleet-status` shows current mode + topology (read-only, exit) — **NOT STARTED**, flag doesn't exist
+- [ ] Banner shows `SOLO` / `PAIR` / `FLEET` with peer count — **NOT STARTED**
+- [ ] No breaking changes to existing `StartupScenario`, `WIN_IP`, or `coord_pulse` — **N/A yet**, nothing has touched them
+- [ ] All new endpoints auth-gated (401 without token) — **N/A yet**, no endpoints exist to gate
+
+**What exceeded original scope (not requested by this plan, landed anyway):**
+PT's `feature/phase-0-blocker-fixes` branch (PR #201) shipped substantially more
+security rigor than this plan called for — a full P2P threat model (T1–T7),
+20 battle-tested pattern catalog, 16 identified gaps with a Phase 1b roadmap,
+and TDD test specs — none of which this plan's Phase 1–5 tasks required, but
+all of which directly harden §§ 4.4/6.2/6.3 (gossip relay, heartbeat liveness,
+split-brain) once Phase 1–5 implementation begins. See
+[2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md)
+for the full ledger.
