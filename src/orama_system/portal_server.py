@@ -3031,6 +3031,166 @@ async def api_status_html():
     }
 
 
+# ── Fleet Topology API (Phase 3) ──────────────────────────────────────────
+# Endpoints for fleet topology inquiry and gossip relay probing.
+
+
+class FleetPeerInfo(BaseModel):
+    """Information about a single peer in the fleet."""
+    id: str = Field(..., description="Peer node ID (e.g., 'win-rtx3080')")
+    ip: str = Field(..., description="Peer IP address")
+    port: int = Field(..., description="Peer portal/API port")
+    reachable: bool = Field(..., description="Whether peer is currently reachable")
+    last_seen: str = Field(..., description="ISO 8601 timestamp of last successful contact")
+    models: List[str] = Field(default_factory=list, description="Models available on peer")
+    can_reach: List[str] = Field(default_factory=list, description="Peer IDs this node can relay to")
+
+
+class FleetTopologyResponse(BaseModel):
+    """Fleet topology discovery response."""
+    local_node: str = Field(..., description="Local node identifier")
+    fleet_mode: str = Field(..., description="Fleet mode: SOLO or FLEET")
+    peers: List[FleetPeerInfo] = Field(default_factory=list, description="Peer nodes in the fleet")
+    cross_reachable: bool = Field(..., description="Whether all peers can reach each other")
+    relay_capable: bool = Field(..., description="Whether relay gossip is functional")
+
+
+class PeerRelayProbeRequest(BaseModel):
+    """Peer relay probe request."""
+    target_ip: str = Field(..., description="Target IP address to probe")
+    target_port: int = Field(default=8002, description="Target port (default: 8002)")
+
+
+class PeerRelayProbeResponse(BaseModel):
+    """Peer relay probe response."""
+    reachable: bool = Field(..., description="Whether target is reachable")
+    ip: str = Field(..., description="Target IP address")
+    models: List[str] = Field(default_factory=list, description="Models on target (if reachable)")
+    relay_path: List[str] = Field(default_factory=list, description="Relay path taken (e.g., ['B→C'])")
+
+
+async def _get_fleet_topology() -> dict[str, Any]:
+    """Gather current fleet topology state.
+
+    Returns local node info, discovered peers, reachability, and relay capability.
+    Defensively coded to work with or without PT Phase 2 spec being available.
+    """
+    local_node_id = local_platform()
+    peer_ip = read_discovery_peer_ip()
+
+    # For now, return minimal topology based on what we can observe
+    peers: List[dict[str, Any]] = []
+
+    # If we have a peer, try to describe it (will be enhanced when PT Phase 2 spec is available)
+    if peer_ip:
+        try:
+            async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as client:
+                # Try to probe the peer's status endpoint
+                r = await client.get(f"http://{peer_ip}:8002/api/status", timeout=PROBE_TIMEOUT)
+                if r.status_code == 200:
+                    peer_status = r.json()
+                    peer_services = peer_status.get("services", {})
+                    peer_models = []
+
+                    # Collect models from peer's services
+                    for svc_key, svc_data in peer_services.items():
+                        if svc_data.get("ok") and svc_data.get("models"):
+                            peer_models.extend(svc_data.get("models", []))
+
+                    peers.append({
+                        "id": "win-peer" if local_node_id == "mac" else "mac-peer",
+                        "ip": peer_ip,
+                        "port": 8002,
+                        "reachable": True,
+                        "last_seen": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                        "models": peer_models[:5],  # Limit to first 5
+                        "can_reach": [],
+                    })
+        except Exception as e:
+            log.debug("Failed to probe peer topology: %s", e)
+
+    return {
+        "local_node": f"{local_node_id}-studio" if local_node_id in ("mac", "win") else local_node_id,
+        "fleet_mode": "FLEET" if peer_ip else "SOLO",
+        "peers": peers,
+        "cross_reachable": bool(peer_ip and peers and peers[0].get("reachable")),
+        "relay_capable": bool(peer_ip),
+    }
+
+
+@app.get("/api/fleet-topology", response_model=FleetTopologyResponse)
+async def get_fleet_topology(request: Request):
+    """Get current fleet topology state.
+
+    Returns information about local node, discovered peers, reachability,
+    and relay capability. Auth-gated: requires valid control-plane token.
+    """
+    # Auth check is handled by middleware
+    topology = await _get_fleet_topology()
+    return FleetTopologyResponse(
+        local_node=topology["local_node"],
+        fleet_mode=topology["fleet_mode"],
+        peers=[FleetPeerInfo(**p) for p in topology["peers"]],
+        cross_reachable=topology["cross_reachable"],
+        relay_capable=topology["relay_capable"],
+    )
+
+
+@app.post("/api/peer-relay-probe", response_model=PeerRelayProbeResponse)
+async def post_peer_relay_probe(request: Request, body: PeerRelayProbeRequest):
+    """Probe a peer via relay gossip.
+
+    Attempts to reach a target IP/port, returning what this node can observe
+    about that target (reachability, models, relay path). Single HTTP round-trip
+    — does NOT establish persistent connections.
+
+    Auth-gated: requires valid control-plane token.
+    """
+    # Auth check is handled by middleware
+    target_ip = body.target_ip.strip()
+    target_port = body.target_port
+
+    # Validate input
+    if not target_ip or target_port < 1 or target_port > 65535:
+        raise HTTPException(status_code=400, detail="Invalid target IP or port")
+
+    # Attempt to probe the target
+    reachable = False
+    models: List[str] = []
+    relay_path: List[str] = []
+
+    try:
+        async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as client:
+            target_url = f"http://{target_ip}:{target_port}/api/status"
+            r = await client.get(target_url, timeout=PROBE_TIMEOUT)
+
+            if r.status_code == 200:
+                reachable = True
+                target_data = r.json()
+                target_services = target_data.get("services", {})
+
+                # Extract models from target
+                for svc_key, svc_data in target_services.items():
+                    if svc_data.get("ok") and svc_data.get("models"):
+                        models.extend(svc_data.get("models", []))
+
+                # Mark successful relay
+                local_id = local_platform()[0].upper()  # M or W
+                relay_path = [f"{local_id}→{target_ip.split('.')[-1]}"]
+            else:
+                relay_path = [f"{local_platform()[0].upper()}→unreachable"]
+    except Exception as e:
+        log.debug("Peer relay probe failed for %s:%d: %s", target_ip, target_port, e)
+        relay_path = [f"{local_platform()[0].upper()}→unreachable"]
+
+    return PeerRelayProbeResponse(
+        reachable=reachable,
+        ip=target_ip,
+        models=models[:5] if models else [],
+        relay_path=relay_path,
+    )
+
+
 @app.get("/assets/{path:path}")
 async def serve_assets(path: str):
     """Serve Vite-built static assets dynamically.
