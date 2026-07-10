@@ -11,14 +11,14 @@
 >
 > | Topic | Canonical doc | Also in |
 > |-------|--------------|---------|
-> | macOS ` 2`/` 3` dupes in `.git/` internals | [AlphaClaw wiki/07](../../AlphaClaw/docs/wiki/07-duplicate-files.md) | This file §2026-05-27 + §2026-05-31 |
+> | macOS ` 2`/` 3` dupes in `.git/` internals | [AlphaClaw wiki/07](https://github.com/diazMelgarejo/AlphaClaw/blob/main/docs/wiki/07-duplicate-files.md) | This file §2026-05-27 + §2026-05-31 |
 > | No sleep chains (`sleep N && cmd`) | [skills/no-sleep-chains/SKILL.md](../bin/orama-system/skills/no-sleep-chains/SKILL.md) | This file §2026-05-16 |
 > | Git identity + Cursor commit policy | [docs/wiki/08-git-hygiene-and-branching.md](wiki/08-git-hygiene-and-branching.md) | AlphaClaw `scripts/git/check_identity.sh` |
 > | gbrain pooler write failures + resync | [gstack/SKILL.md §GBrain Ops](../bin/orama-system/gstack/SKILL.md) | This file §2026-05-30 |
-> | Migration gate ladder (Gate 0→4) | [PT docs/MIGRATION.md](../../perplexity-api/Perpetua-Tools/docs/MIGRATION.md) | This file §2026-05-30 T7 survey |
-> | Hermes integration authority (envelope + thin wrappers) | [hermes-universal-invocation-protocol.md](../bin/orama-system/skills/hermes-harness/references/hermes-universal-invocation-protocol.md) | PT [LESSONS.md §2026-06-28](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) |
+> | Migration gate ladder (Gate 0→4) | [PT docs/MIGRATION.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/MIGRATION.md) | This file §2026-05-30 T7 survey |
+> | Hermes integration authority (envelope + thin wrappers) | [hermes-universal-invocation-protocol.md](../bin/orama-system/skills/hermes-harness/references/hermes-universal-invocation-protocol.md) | PT [LESSONS.md §2026-06-28](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md) |
 > | LAN peer Mac↔Win (Hermes operator playbook) | [lan-peer-self-talk.md § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) | [docs/guides/lan-peer-mac-win-operator.md](guides/lan-peer-mac-win-operator.md) |
-> | Mac↔Win co-orchestrator (file inbox + ws-peer GO) | [mac-co-orchestrator-playbook.md](../bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md) | PT [LESSONS.md §2026-06-28](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) |
+> | Mac↔Win co-orchestrator (file inbox + ws-peer GO) | [mac-co-orchestrator-playbook.md](../bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md) | PT [LESSONS.md §2026-06-28](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md) |
 > | AlphaClaw branch roles + invariants | [AlphaClaw CLAUDE.md](../../AlphaClaw/CLAUDE.md) | AlphaClaw wiki/01 |
 >
 > **Architecture authority**: [2026-05-14--UNIFIED-ABSORPTION-PLAN.md](2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
