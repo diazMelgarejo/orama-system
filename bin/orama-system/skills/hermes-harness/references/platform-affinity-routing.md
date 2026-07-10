@@ -16,6 +16,7 @@ status: active
 | **Linux** | AlphaClaw + OpenClaw | `start.sh` | Same binary as macOS; CUDA/ROCm GPU optional; full hardware matrix from PT `hardware/SKILL.md` |
 | **Windows 11** | Hermes Harness | `start.ps1` | GGUF LM Studio localhost, Git Bash, PowerShell toolchain; Hermes is native Windows operator shell |
 | **All** | cursor-agent (fanout) | `cursor-agent --print` | Light parallel tasks on Mac/Linux (`~/.local/bin`) and Windows (`%LOCALAPPDATA%\cursor-agent`); see `cursor-agent/SKILL.md` |
+| **macOS/Linux** | kimi (fanout) | `kimi -p` | Moonshot Kimi Code CLI, light parallel tasks (`~/.kimi-code/bin`); Windows path unverified; see `kimi-agent/SKILL.md`. Provider not wired by default — see that skill's § Provider Setup before dispatch. |
 
 ## ECC Interoperability Contract
 
