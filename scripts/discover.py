@@ -789,6 +789,33 @@ def _cmd_restore(target: str):
     RECOVERY_SOURCE_TXT.write_text("manual_restore\n")
     print(f"✅ Restored: Mac={mac.get('ip', '?')} Win={win.get('ip', '?')}")
 
+def _query_peer_topology_on_change() -> None:
+    """Phase 4: Query peer fleet topology on LAN topology change.
+
+    Called when _watch_loop detects a network change (interface up/down, DHCP renewal).
+    Spawns query_peer_topology.py subprocess without blocking the watch loop.
+    """
+    try:
+        script_path = Path(__file__).parent.parent / "bin/orama-system/skills/hermes-harness/scripts/query_peer_topology.py"
+        if not script_path.exists():
+            logging.debug("query_peer_topology.py not found, skipping peer topology query")
+            return
+
+        import subprocess
+        import sys
+
+        # Non-blocking subprocess call with short timeout (don't hang watch loop)
+        subprocess.Popen(
+            [sys.executable, str(script_path), "--timeout", "2"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,  # Detach from parent process
+        )
+        logging.info("Spawned peer topology query (non-blocking)")
+    except Exception as exc:
+        logging.debug("Could not spawn peer topology query: %s", exc)
+
+
 def _watch_loop(interval: int = 30) -> None:
     """Poll for network changes and re-run discovery when topology shifts.
 
@@ -797,6 +824,7 @@ def _watch_loop(interval: int = 30) -> None:
       - If liveness changes (a node appears/disappears) run full discovery.
       - On macOS, also listens for scutil network-change events via subprocess
         so recovery happens within seconds of a DHCP renewal after power cycle.
+      - Phase 4: also queries peer fleet topology on topology change.
 
     The watch loop runs until killed (SIGINT/SIGTERM).
     """
@@ -880,6 +908,8 @@ def _watch_loop(interval: int = 30) -> None:
                 file=sys.stderr,
             )
             run_discovery(force=True, cached=False)
+            # Phase 4: query peer topology on LAN interface change
+            _query_peer_topology_on_change()
             last_liveness = _current_liveness()
         else:
             # Refresh timestamp so consumers know watcher is alive
