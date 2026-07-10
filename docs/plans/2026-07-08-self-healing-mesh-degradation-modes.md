@@ -3,6 +3,8 @@
 **Date:** 2026-07-08
 **Status:** Draft — pending review
 **Owner:** orama-system (Layer 3) + Perpetua-Tools (Layer 2)
+
+> **Phase Numbering (2026-07-10 Harmonization):** This plan's 6 phases are numbered Phase 2–6 when integrated with parallel Phase 1.0–1.3 research implementation. See [2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md) for integrated timeline.
 **Related:** `startup_intelligence.py`, `gossip_bus.py`, `discover.py`, `lan_peer_channel.py`, `coord_pulse.sh/.ps1`
 
 **Navigation:** → security/research inputs (separate repo, PT): [D2 Heartbeat & Failure Detector](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/DELIVERABLE-2-HEARTBEAT-LIVENESS-REGENERATED.md) (feeds § 6.2) · [PATTERN-SYNTHESIS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md) (P2/P5/P9/P19 map to gossip-relay/split-brain design below) · [MULTIAGENT-SWARM-SECURITY-ANALYSIS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md) · status/gap tracking: [2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md) · research: [2026-07-10-oasn-p2p-architecture-research.md](2026-07-10-oasn-p2p-architecture-research.md)
@@ -11,7 +13,7 @@
 > Grepped for `FleetMode`, `classify_fleet_mode`, `fleet_topology`, `/api/fleet-topology`,
 > `/api/peer-relay-probe`, `--fleet-status`, `probe_lan_peer.py --relay` across both repos.
 > **Zero matches for all of them, confirmed twice** (once before, once after a concurrent
-> merge landed — see below). None of THIS plan's 5 implementation phases have been started;
+> merge landed — see below). None of THIS plan's 6 implementation phases have been started;
 > all 10 Success Criteria in § 13 are unchecked and accurate as unchecked (marked inline
 > below).
 >
@@ -350,7 +352,7 @@ observations (< 20 min) are discarded.
 
 ## 7. Implementation Tasks
 
-### Phase 1: FleetMode classifier + topology state (PT)
+### Phase 2: FleetMode classifier + topology state (PT)
 
 | Task | File | Effort |
 |---|---|---|
@@ -359,7 +361,7 @@ observations (< 20 min) are discarded.
 | Unit tests: 3 modes + cross-reachable edge cases | `tests/test_fleet_mode.py` (new) | 1h |
 | Wire `classify_fleet_mode()` into `agent_launcher.py` | `src/perpetua_tools/agent_launcher.py` | 1h |
 
-### Phase 2: Fleet topology endpoint + gossip relay (orama)
+### Phase 3: Fleet topology endpoint + gossip relay (orama)
 
 | Task | File | Effort |
 |---|---|---|
@@ -369,7 +371,7 @@ observations (< 20 min) are discarded.
 | Auth-gate both endpoints (existing control_plane_auth) | same | 0.5h |
 | Integration tests: relay round-trip, auth rejection | `tests/test_fleet_topology_api.py` (new) | 2h |
 
-### Phase 3: Coord pulse + discover.py extension
+### Phase 4: Coord pulse + discover.py extension
 
 | Task | File | Effort |
 |---|---|---|
@@ -379,7 +381,7 @@ observations (< 20 min) are discarded.
 | Gossip event emission on mode transition | `orchestrator/gossip_bus.py` (extend emit) | 0.5h |
 | Tests: topology change triggers re-classification | `tests/test_topology_watch.py` | 1h |
 
-### Phase 4: Banner + start script integration
+### Phase 5: Banner + start script integration
 
 | Task | File | Effort |
 |---|---|---|
@@ -388,7 +390,7 @@ observations (< 20 min) are discarded.
 | Mode transition logging | `start.sh` + `start.ps1` | 0.5h |
 | `--fleet-status` CLI flag (show topology + mode, exit) | `start.sh` + `start.ps1` | 1h |
 
-### Phase 5: Self-healing + split-brain
+### Phase 6: Self-healing + split-brain
 
 | Task | File | Effort |
 |---|---|---|
@@ -495,7 +497,7 @@ hasn't started, so criteria depending on later phases are also blocked).
 - [ ] `classify_fleet_mode()` unit tests pass (3 modes + edge cases) — **NOT STARTED**, symbol doesn't exist in either repo
 - [ ] `GET /api/fleet-topology` returns correct JSON for all 3 modes — **NOT STARTED**, route doesn't exist in `portal_server.py`
 - [ ] `POST /api/peer-relay-probe` returns relayed probe result — **NOT STARTED**, route doesn't exist
-- [ ] Killing a Win node's portal triggers FLEET → PAIR within 1 coord pulse — **BLOCKED**, depends on unstarted Phase 1–3
+- [ ] Killing a Win node's portal triggers FLEET → PAIR within 1 coord pulse — **BLOCKED**, depends on unstarted Phase 2–4
 - [ ] Restarting the node triggers PAIR → FLEET within 1 coord pulse — **BLOCKED**, same
 - [ ] Gossip relay succeeds when direct probe fails but a peer can reach the target — **NOT STARTED**, `probe_lan_peer.py --relay` doesn't exist
 - [ ] `start.sh --fleet-status` shows current mode + topology (read-only, exit) — **NOT STARTED**, flag doesn't exist
