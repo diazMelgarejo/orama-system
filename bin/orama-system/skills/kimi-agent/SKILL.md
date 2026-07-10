@@ -142,33 +142,46 @@ same "mechanical fan-out" tier, not the orchestrator tier):**
 | Security & policy review | Test scaffolding |
 | Final crystallisation | Format / lint fixes |
 
-## Monitoring & Observability
+## Local Server (REST + WebSocket + Web UI) — the observability surface
 
-Kimi ships its own local server + visualizer — this IS the "monitor/observe"
-surface, distinct from LAN-peer gossip (that's `scripts/lm_link_watch.py`,
-a different concern: cross-machine inference-link health, not a single CLI
-agent's own liveness).
+Kimi ships its own local daemon — this IS the "monitor/observe" surface for
+a single Kimi CLI instance, distinct from LAN-peer gossip (that's
+`scripts/lm_link_watch.py`, a different concern: cross-machine inference-link
+health, not one CLI agent's own liveness).
 
 ```bash
-# Start the background server (REST + WebSocket + web UI), bearer-token
-# auth printed at startup, binds 127.0.0.1 only unless --host is passed:
-kimi server run
-kimi server run --foreground --log-level info   # attached, for live debugging
+kimi server run                              # background daemon, default port 58627
+kimi server run --foreground --log-level info  # attached, live logs, for debugging
+kimi server run --open                       # also opens the web UI once healthy
+```
 
-# List currently connected clients (machine-readable):
-kimi server ps --json
+**Security posture (verified from `kimi server run --help`, v0.23.4) —
+defaults are safe, every widening flag is explicit and off by default:**
 
-# Stop it:
-kimi server kill
+| Flag | Default behavior | What it changes |
+|------|-------------------|------------------|
+| `--host [host]` | omitted → binds `127.0.0.1` only | pass `--host` (no value) to bind `0.0.0.0`, or `--host <host>` for a specific interface — **widens exposure, only do this deliberately** |
+| `--port <port>` | `58627` | bind port |
+| *(bearer token)* | printed to stdout at startup, required on every REST/WS route | the only auth mechanism unless bypassed below |
+| `--dangerous-bypass-auth` | off | disables bearer-token auth entirely — name is the warning |
+| `--allow-remote-shutdown` | off (route 404s on non-loopback bind) | re-enables `POST /api/v1/shutdown` remotely |
+| `--allow-remote-terminals` | off (404s) | re-enables PTY `/api/v1/terminals/*` — remote shell, high risk |
+| `--allowed-host <host...>` | none | extra Host headers allowed through the DNS-rebinding check (repeatable, leading `.` = domain suffix) |
+| `--insecure-no-tls` | `true` | only matters for non-loopback binds — a TLS-terminating reverse proxy is otherwise expected |
+| `--keep-alive` | off (exits after 60s idle) | implied automatically once you pass `--host`/`--allowed-host`, and always on with `--foreground` |
+| `--debug-endpoints` | off | mounts `/api/v1/debug/*` — leave unset outside test runs |
 
-# Session visualizer in browser (per-session trace):
-kimi vis [sessionId]
+**For this stack's purposes, the default (loopback-only, token-required,
+60s-idle-exit) is correct — do not pass `--host`, `--dangerous-bypass-auth`,
+or the `--allow-remote-*` flags without an explicit reason.**
 
-# Config sanity check (run before any dispatch):
-kimi doctor
-
-# Diagnostic log (not rotated; .1 files are):
-tail -f ~/.kimi-code/logs/kimi-code.log
+```bash
+kimi server ps --json      # list connected clients, machine-readable
+kimi server kill           # graceful stop (API) + forced PID kill fallback
+kimi server rotate-token   # invalidate the current bearer token immediately
+kimi vis [sessionId]       # session visualizer in browser (per-session trace)
+kimi doctor                # config sanity check — run before any dispatch
+tail -f ~/.kimi-code/logs/kimi-code.log   # diagnostic log, not rotated (.1 files are)
 ```
 
 **Health-check one-liner** for a pulse cron / pre-dispatch gate:
@@ -176,6 +189,48 @@ tail -f ~/.kimi-code/logs/kimi-code.log
 ```bash
 command -v kimi >/dev/null 2>&1 && kimi doctor >/dev/null 2>&1 && echo "kimi: OK" || echo "kimi: NOT READY"
 ```
+
+Or use the packaged probe: `bash bin/orama-system/skills/kimi-agent/scripts/kimi_status.sh` —
+JSON output (`kimi_installed`, `version`, `doctor_ok`, `provider_lines`,
+`server_clients`), exit 0 healthy / 1 doctor-failed / 2 not-installed.
+
+## Agent Client Protocol (ACP)
+
+```
+Usage: kimi acp [options]
+Run kimi-code as an Agent Client Protocol (ACP) server over stdio.
+
+Options:
+  --login     Run the device-code login flow then exit (entry point for ACP terminal-auth)
+  -h, --help  Show help.
+```
+
+**What ACP is:** a stdio JSON-RPC protocol (distinct from MCP) for an editor
+or host tool to drive an agentic coding backend — the same category of
+integration point Zed and other ACP-aware editors use. `kimi acp` turns the
+CLI into that backend: the host process spawns `kimi acp` as a child,
+speaks ACP over its stdin/stdout, and gets Kimi's agentic loop (file edits,
+shell, tool calls) without the CLI's own TUI.
+
+```bash
+# Run as an ACP server (host tool spawns this; not meant to be run standalone
+# in a terminal and watched — stdin/stdout carry the protocol):
+kimi acp
+
+# First-time auth from inside an ACP host that can't do an interactive
+# browser flow itself — run once to complete device-code login, then exit:
+kimi acp --login
+```
+
+**Relationship to this stack's MCP registry — NOT the same integration
+point.** MCP (`.mcp.json`, `claude mcp add`, `code-review-graph`, `gbrain`)
+is how *this* Claude Code session reaches tools. ACP is how *an ACP-aware
+host* (e.g. an editor) would drive *Kimi* as its backend — the direction is
+reversed, and Kimi is the backend being driven, not a tool being called.
+**Do not register `kimi acp` as an MCP server** — it speaks a different
+protocol and the roles don't match. If a future need arises to embed Kimi
+inside an ACP-native host in this stack, evaluate it as its own integration,
+not a variant of the existing MCP wiring.
 
 ## Session Export
 
@@ -202,7 +257,7 @@ kimi upgrade   # alias: kimi update
 | `kimi vis [sessionId]` | Session visualizer in browser |
 | `kimi export [sessionId]` | Export a session as a ZIP archive |
 | `kimi migrate` | Migrate data from a legacy `kimi-cli` install |
-| `kimi acp` | Run as an Agent Client Protocol server over stdio (MCP-adjacent — not yet wired into this stack's MCP registry; evaluate separately before use) |
+| `kimi acp [--login]` | Run as an Agent Client Protocol server over stdio (see § Agent Client Protocol — NOT an MCP server, different protocol/direction) |
 | `kimi upgrade` \| `kimi update` | Upgrade to latest version |
 
 ## References
@@ -221,5 +276,6 @@ kimi upgrade   # alias: kimi update
    path is chosen (see § Provider Setup). Ask before picking one.
 2. **Windows install path unverified** — do not claim Hermes/Win parity
    until a `.ps1` installer or Git-Bash fallback is actually tested there.
-3. **`kimi acp` (Agent Client Protocol) not yet evaluated** for MCP-registry
-   integration — flagged for a future session, out of scope for this pass.
+3. **`kimi acp` embedding inside an ACP-native host** (e.g. an editor) is
+   documented above but not yet exercised end-to-end in this stack — the
+   protocol mechanics are verified from `--help`, live usage is not.
