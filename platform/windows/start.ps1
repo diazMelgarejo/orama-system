@@ -45,25 +45,29 @@ $ErrorActionPreference = 'Stop'
 $NoOpen = $false
 $Stop = $false
 $Status = $false
+$FleetStatus = $false
+$FleetStatusFormat = 'text'
 $Discover = $false
 $HardwarePolicy = $false
 $LanPeer = $false
 
 foreach ($a in $args) {
-    switch ($a) {
-        '--no-open'          { $NoOpen = $true }
-        '-NoOpen'            { $NoOpen = $true }
-        '--stop'             { $Stop = $true }
-        '-Stop'              { $Stop = $true }
-        '--status'           { $Status = $true }
-        '-Status'            { $Status = $true }
-        '--discover'         { $Discover = $true }
-        '-Discover'          { $Discover = $true }
-        '--hardware-policy'  { $HardwarePolicy = $true }
-        '-HardwarePolicy'    { $HardwarePolicy = $true }
-        '--lan-peer'         { $LanPeer = $true }
-        '-LanPeer'           { $LanPeer = $true }
-        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --discover --hardware-policy --lan-peer" }
+    switch -Regex ($a) {
+        '^--no-open$|^-NoOpen$'        { $NoOpen = $true }
+        '^--stop$|^-Stop$'             { $Stop = $true }
+        '^--status$|^-Status$'         { $Status = $true }
+        '^--fleet-status(?:=(.*))?$'   {
+            $FleetStatus = $true
+            if ($Matches[1]) {
+                $FleetStatusFormat = $Matches[1]
+            } else {
+                $FleetStatusFormat = 'text'
+            }
+        }
+        '^--discover$|^-Discover$'     { $Discover = $true }
+        '^--hardware-policy$|^-HardwarePolicy$' { $HardwarePolicy = $true }
+        '^--lan-peer$|^-LanPeer$'      { $LanPeer = $true }
+        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --fleet-status --discover --hardware-policy --lan-peer" }
     }
 }
 
@@ -478,6 +482,39 @@ if ($Stop) {
             Write-Host "  nothing on port $port"
         }
     }
+    exit 0
+}
+
+# ── --fleet-status ───────────────────────────────────────────────────────────
+function Show-FleetStatus {
+    param([string]$Format = 'text')
+    try {
+        $py = Get-BestPython $RepoRoot
+        $src = Join-Path $RepoRoot 'src'
+        if (-not (Test-Path $src)) {
+            Write-Host 'Error: orama-system source not found'
+            return $false
+        }
+        $pyCode = @"
+import sys
+from orama_system.display_fleet_status import load_fleet_topology, format_json, format_text
+status = load_fleet_topology()
+if '$Format' == 'json':
+    print(format_json(status))
+else:
+    print(format_text(status))
+"@
+        $env:PYTHONPATH = "$src$([IO.Path]::PathSeparator)$env:PYTHONPATH"
+        & $py -c $pyCode
+        return $true
+    } catch {
+        Write-Host "Error displaying fleet status: $_"
+        return $false
+    }
+}
+
+if ($FleetStatus) {
+    Show-FleetStatus -Format $FleetStatusFormat | Out-Host
     exit 0
 }
 
