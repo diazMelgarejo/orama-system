@@ -84,21 +84,34 @@ command -v kimi >/dev/null 2>&1 || export PATH="$HOME/.kimi-code/bin:$PATH"
 command -v kimi >/dev/null 2>&1 || { echo "kimi not installed — see kimi-agent/SKILL.md § Install"; exit 1; }
 ```
 
-## Provider Setup (REQUIRED before fan-out — ASK FIRST, do not fabricate)
+## Provider Setup
 
-`kimi doctor` reports config as empty by default — **no LLM provider is wired
-until one of these runs**, and this is a live credentials/config decision,
-not something to auto-decide:
+**Status: WIRED (verified 2026-07-10).** The user ran `kimi login`
+(Moonshot cloud device-code OAuth) — `kimi doctor` now reports both config
+files `OK`, and `kimi provider list` shows:
+
+```
+managed:kimi-code  type=kimi  models=2  source=oauth
+Default model: kimi-code/kimi-for-coding
+```
+
+Fan-out dispatch (`kimi -p ...`) is live and smoke-tested (see § Light Task
+Fanout Pattern). No further setup needed for the Moonshot-cloud path.
+
+**If the managed provider is ever removed/expired, or a local-first path is
+wanted instead** (frugality — avoid Moonshot cloud calls for mechanical
+tasks), these remain the options — still a live credentials/config decision,
+ask before picking one:
 
 | Path | Command | Notes |
 |------|---------|-------|
-| Moonshot cloud (Kimi K2 family) | `kimi login` | Interactive device-code OAuth in browser — cannot be completed headlessly by an agent |
+| Moonshot cloud (Kimi K2 family) | `kimi login` | Interactive device-code OAuth in browser — cannot be completed headlessly by an agent. **Already done.** |
 | models.dev catalog import (e.g. local LM Studio) | `kimi provider catalog add lmstudio --api-key <key>` | **Verified blocked without a key** even for a local/no-auth backend — confirm with the user whether to pass a placeholder or use the custom-registry path instead |
-| Custom registry (point directly at a local OpenAI-compatible endpoint, e.g. Win LM Studio `:1234` or Mac Ollama `:11434`) | `kimi provider add <url-to-api.json> [--api-key <key>]` | Needs a hand-authored `api.json` — not yet created; this is the local-first-doctrine-aligned path (see orama-system `SKILL.md § Local API Fallback`) and should be scripted once the user picks a default |
+| Custom registry (point directly at a local OpenAI-compatible endpoint, e.g. Win LM Studio `:1234` or Mac Ollama `:11434`) | `kimi provider add <url-to-api.json> [--api-key <key>]` | Needs a hand-authored `api.json` — not yet created; this is the local-first-doctrine-aligned path (see orama-system `SKILL.md § Local API Fallback`) and should be scripted if a local default is ever wanted |
 
-**Do not run `kimi login` or fabricate an API key on the user's behalf.**
-Surface this table and ask which provider to wire before any dispatch that
-needs a live model.
+**Do not fabricate an API key on the user's behalf** for the fallback paths
+above; the Moonshot-cloud path is already authenticated and is the current
+default.
 
 ## Key Options (from `kimi --help`, v0.23.4 — verified)
 
@@ -130,6 +143,26 @@ kimi -p "Rename all snake_case variables in tests/test_foo.py to camelCase" \
 
 wait   # collect when done
 ```
+
+**Output shape (verified live, `--output-format text`) — NOT clean
+answer-only stdout.** A real smoke test (`kimi -p "Reply with exactly:
+KIMI_READY"`) returned:
+
+```
+• The user wants exactly "KIMI_READY". I should reply with that exact text, no tools.
+
+• KIMI_READY
+
+To resume this session: kimi -r session_abe4f2aa-cdd6-493f-9414-faffb829536d
+```
+
+`text` mode includes a `•`-prefixed reasoning/narration line before the
+actual answer, and always appends a `To resume this session: kimi -r
+<id>` footer. **Any script parsing `kimi -p` output must not assume line 1
+or the full stdout is the answer** — either use `--output-format
+stream-json` and parse structured events, or grep/strip the narration and
+resume-footer lines. Not yet determined which `stream-json` event carries
+the final answer cleanly; verify before building an automated parser.
 
 **Division of labour (matches the cursor-agent table — Kimi slots into the
 same "mechanical fan-out" tier, not the orchestrator tier):**
@@ -193,6 +226,9 @@ command -v kimi >/dev/null 2>&1 && kimi doctor >/dev/null 2>&1 && echo "kimi: OK
 Or use the packaged probe: `bash bin/orama-system/skills/kimi-agent/scripts/kimi_status.sh` —
 JSON output (`kimi_installed`, `version`, `doctor_ok`, `provider_lines`,
 `server_clients`), exit 0 healthy / 1 doctor-failed / 2 not-installed.
+`provider_lines` is a rough presence count (0 = no provider, >0 = at least
+one configured) from `kimi provider list` output — not an exact provider
+count; verified `0 → 3` across the `kimi login` transition.
 
 ## Agent Client Protocol (ACP)
 
@@ -271,11 +307,16 @@ kimi upgrade   # alias: kimi update
 
 ## Open Items (do not silently resolve — surface to user)
 
-1. **Provider not yet wired** — `kimi doctor` passes on empty config, but no
-   model can actually run until `login` or a `provider add`/`catalog add`
-   path is chosen (see § Provider Setup). Ask before picking one.
-2. **Windows install path unverified** — do not claim Hermes/Win parity
+1. ~~Provider not wired~~ — **RESOLVED 2026-07-10**: user ran `kimi login`;
+   managed Moonshot provider is live (2 models, `kimi-code/kimi-for-coding`
+   default). Fallback local-provider paths in § Provider Setup remain
+   undone and are opt-in only if frugality later demands it.
+2. **`kimi -p` text output is not clean answer-only stdout** — includes a
+   `•` narration line and a `To resume this session:` footer (verified
+   live). Any automated parsing of fan-out results needs to account for
+   this; `stream-json` structure not yet mapped.
+3. **Windows install path unverified** — do not claim Hermes/Win parity
    until a `.ps1` installer or Git-Bash fallback is actually tested there.
-3. **`kimi acp` embedding inside an ACP-native host** (e.g. an editor) is
+4. **`kimi acp` embedding inside an ACP-native host** (e.g. an editor) is
    documented above but not yet exercised end-to-end in this stack — the
    protocol mechanics are verified from `--help`, live usage is not.
