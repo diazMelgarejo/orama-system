@@ -83,6 +83,15 @@ try {
             $null = Invoke-LanPeerSession -LanArgs @('record-success')
             $flushOutput = & $PythonExe bin\orama-system\skills\hermes-harness\scripts\lan_peer_assign.py flush-outbox --peer --timeout $httpTimeout 2>&1
             $flushOutput | Select-Object -First 20 | ForEach-Object { Write-Log $_ }
+
+            # Phase 4: Query fleet topology from peers and re-classify
+            Write-Log "Querying fleet topology from peers..."
+            $topologyOutput = & $PythonExe bin\orama-system\skills\hermes-harness\scripts\query_peer_topology.py --timeout $httpTimeout 2>&1
+            $topologyExit = $LASTEXITCODE
+            $topologyOutput | Select-Object -First 10 | ForEach-Object { Write-Log $_ }
+            if ($topologyExit -ne 0) {
+                Write-Log "topology query failed (non-fatal)"
+            }
         } else {
             $null = Invoke-LanPeerSession -LanArgs @('record-failure', '--error', 'probe_lan_peer.py failed')
         }
