@@ -84,6 +84,8 @@ INSTALL_NETWORK_WATCHER=0
 INSTALL_COORD_PULSE=0
 COORD_PULSE_STATUS=0
 _LAN_PEER_MODE=0
+FLEET_STATUS_ONLY=0
+FLEET_STATUS_FORMAT="text"
 
 _usage() {
   cat <<'USAGE'
@@ -93,6 +95,9 @@ Options:
   --no-open              Start services without opening the Portal browser.
   --stop                 Stop PT, orama, and Portal services.
   --status               Show service status and hardware policy.
+  --fleet-status         Show current fleet topology and exit (JSON or text).
+  --fleet-status=json    Show fleet topology in JSON format and exit.
+  --fleet-status=text    Show fleet topology in text format and exit (default).
   --discover             Re-run path discovery, rewrite .paths, and exit.
   --hardware-policy      Validate model/hardware affinity and exit.
   --lan-peer             LAN-bind services, probe the peer, and ensure Mac coord pulse.
@@ -113,6 +118,9 @@ for _arg in "$@"; do
     --no-open)             NO_OPEN=1 ;;
     --stop)                STOP_ONLY=1 ;;
     --status)              STATUS_ONLY=1 ;;
+    --fleet-status)        FLEET_STATUS_ONLY=1; FLEET_STATUS_FORMAT="text" ;;
+    --fleet-status=json)   FLEET_STATUS_ONLY=1; FLEET_STATUS_FORMAT="json" ;;
+    --fleet-status=text)   FLEET_STATUS_ONLY=1; FLEET_STATUS_FORMAT="text" ;;
     --discover)            DISCOVER_ONLY=1 ;;
     --hardware-policy)     HARDWARE_POLICY_ONLY=1 ;;
     --lan-peer)            _LAN_PEER_MODE=1 ;;
@@ -235,6 +243,33 @@ run_hardware_policy_check() {
 
 if [ "$HARDWARE_POLICY_ONLY" = "1" ]; then
   run_hardware_policy_check
+  exit $?
+fi
+
+_show_fleet_status() {
+  local format="${FLEET_STATUS_FORMAT:-text}"
+  local py="${US_PYTHON:-}"
+  if [ -z "$py" ]; then
+    py="$(command -v python3 2>/dev/null || true)"
+  fi
+  if [ -z "$py" ] || [ ! -d "$SCRIPT_DIR/src" ]; then
+    echo "Error: Python or orama-system source not found" >&2
+    return 1
+  fi
+  PYTHONPATH="$SCRIPT_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
+    "$py" -c "
+import sys
+from orama_system.display_fleet_status import load_fleet_topology, format_json, format_text
+status = load_fleet_topology()
+if '$format' == 'json':
+  print(format_json(status))
+else:
+  print(format_text(status))
+" 2>/dev/null
+}
+
+if [ "$FLEET_STATUS_ONLY" = "1" ]; then
+  _show_fleet_status
   exit $?
 fi
 
@@ -1253,6 +1288,26 @@ trap '_graceful_shutdown' SIGTERM SIGINT
 
 # ── ASCII art banner ───────────────────────────────────────────────────────────
 # Displays at every startup (not --stop/--status). Shows live tier + agent grid.
+_print_fleet_status_banner() {
+  # Load fleet topology and print formatted banner
+  # This is called during normal startup to show fleet status
+  local py="${US_PYTHON:-}"
+  if [ -z "$py" ]; then
+    py="$(command -v python3 2>/dev/null || true)"
+  fi
+  if [ -z "$py" ] || [ ! -d "$SCRIPT_DIR/src" ]; then
+    # Python unavailable — skip fleet status banner
+    return 0
+  fi
+  PYTHONPATH="$SCRIPT_DIR/src${PYTHONPATH:+:$PYTHONPATH}" \
+    "$py" -c "
+import sys
+from orama_system.display_fleet_status import load_fleet_topology, format_banner
+status = load_fleet_topology()
+print(format_banner(status))
+" 2>/dev/null || true
+}
+
 _print_banner() {
   local mode="${PT_MODE:-offline}"
   local mac_ip="${MAC_IP:-localhost}"
@@ -1352,6 +1407,9 @@ PY
   printf "║  PT   :%-5s   orama :%-5s   Portal :%-5s                         ║\n" \
     "${PT_PORT:-8000}" "${US_PORT:-8001}" "${PORTAL_PORT:-8002}"
   echo "╚══════════════════════════════════════════════════════════════════╝"
+  echo ""
+  # Print fleet topology status banner
+  _print_fleet_status_banner
   echo ""
 }
 
