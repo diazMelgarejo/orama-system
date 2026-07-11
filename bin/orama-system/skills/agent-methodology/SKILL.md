@@ -31,4 +31,4 @@ stages.
 
 ## Related Skills
 
-- [`skills/agent-coordination-heartbeat/SKILL.md`](skills/agent-coordination-heartbeat/SKILL.md) — Monitor agent liveness, detect dead agents, and auto-release stale claims.
+- [`../agent-coordination-heartbeat/SKILL.md`](../agent-coordination-heartbeat/SKILL.md) — Monitor agent liveness, detect dead agents, and auto-release stale claims.
