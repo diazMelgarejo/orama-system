@@ -337,6 +337,22 @@ gbrain doctor --fast
 | `/gstack-upgrade` | Upgrade gstack to the latest version |
 | `/skillify` | Create a new orama-system or gstack skill interactively |
 
+## Third Review Voice: Kimi (optional, alongside Codex + Claude)
+
+`/plan-ceo-review`, `/plan-eng-review`, and `/autoplan`'s dual-voice pattern
+(one `codex exec` + one Claude subagent per phase) can be extended to a
+**triple voice** by adding `kimi -p` as a third independent, parallel
+review — verified live on Perpetua-Tools PR #205's Eng-review phase
+(2026-07-12): Codex, Kimi, and a Claude Sonnet subagent each reviewed the
+same code independently and converged on overlapping findings plus each
+surfaced unique ones, which is the point of running more than one voice.
+Full setup, invocation, and gotchas: [`../skills/kimi-agent/SKILL.md §
+Extended use: independent review voice`](../skills/kimi-agent/SKILL.md).
+Not wired into gstack's own dual-voice default (that lives in the external
+gstack checkout, not this repo) — treat this as an opt-in third voice the
+orchestrating session adds manually when the user asks for more than two
+perspectives, not an automatic upgrade to every review phase.
+
 ## Skill Routing
 
 When the user's request matches a skill below, invoke it via the Skill tool.
