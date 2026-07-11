@@ -53,7 +53,7 @@ case "$email_lc" in
     ok "user.email=${email_lc}"
     ;;
   *)
-    fail "user.email=${email_lc:-<unset>} — expected cyre gmail/cyre.me, Lawrence Melgarejo gmail, or Codex"
+    fail "user.email=${email_lc:-<unset>} — expected diazmelgarejo@gmail.com, lawrence@cyre.me, lawrence.melgarejo@gmail.com, or codex@openai.com"
     ;;
 esac
 
