@@ -48,6 +48,7 @@ Local-first + airgapped capable. Dependency-minimal. MIT-licensed (matches LangC
 | **D15** | `backend_resolver` split | `orchestrator/agent_launcher.py` → `orchestrator/backend_resolver.py`; pure function separated from 859-line CLI (2026-05-18) |
 | **D16** | Security-first platform | Secure defaults, server-side authorization, capability-gated execution, safe model egress, append-only audit, and supply-chain provenance are first-class v2 features (2026-05-26) |
 | **D22** | oramaclaw orbit plugin | All OpenClaw + AlphaClaw lifecycle management lives in the `oramaclaw` Python package, which depends **only** on `perpetua-core` primitives. It registers as an orbit plugin (not baked into the kernel). V1 migration is dogfood for the v2 plugin API (2026-06-20 — see `40-oramaclaw-lifecycle-plugin.md`) |
+| **D23** | Single-operator-LAN threat-model descope | BFT/Sybil-resistant P2P patterns (witness quorum, reputation-decay, equivocation) must not be wired into production for a topology that is actually a single operator's own LAN, regardless of node count — a Q1-Q3 premise check (real witnesses? real trust boundary? real observed failure mode?) is required before wiring any P2P-derived adversarial pattern (2026-07-12 — see `45-single-operator-lan-threat-model-descope.md`) |
 
 Full rationale and the Perplexity/GPT/Gemini/Grok evidence behind each decision is in [`00-context-and-decisions.md`](./00-context-and-decisions.md).
 
@@ -211,10 +212,11 @@ orama-system/docs/v2/
 ├── 41-agentic-stack-gstack-gbrain-memory-blend.md  ← vendor/agentic-stack union-merge; upgrade --dry-run; Gbrain canonical; Brain blocked; harness matrix
 ├── 42-agate-hardware-policy-orbit.md  ← agate repo absorbs model matrix + policy API/CLI; devices.yml adjacent; PT→perpetua-core orbit
 ├── 43-gossipbus-mesh-transport.md  ← frugal GossipBus delta sync between orama/PT particles; LAN v2.1; BLE/bitchat-class optional v3
-└── 44-docs-v2-skills.md  ← concise modular v2 skill implementation plan; SKILL.md orchestrator rule; 200-line target and 500-line ceiling
+├── 44-docs-v2-skills.md  ← concise modular v2 skill implementation plan; SKILL.md orchestrator rule; 200-line target and 500-line ceiling
+└── 45-single-operator-lan-threat-model-descope.md  ← D23: descope BFT/Sybil-resistant patterns (witness quorum, reputation-decay, equivocation) for topologies that are actually a single operator's own LAN, regardless of node count; Q1-Q3 premise check before wiring any P2P-derived adversarial pattern
 ```
 
-> **Next free slot: `45-`**
+> **Next free slot: `46-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
