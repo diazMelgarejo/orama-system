@@ -188,6 +188,7 @@ Both gbrain and code-review-graph now use **Ollama bge-m3** (1024-dim, local, fr
 
 **Storage roadmap (decided 2026-05-15):**
 - v2.1: LanceDB + bge-m3 for RAG/session memory; v2.5: DuckDB for fleet analytics
+- v2.1 (added 2026-07-12): GossipBus claim-board coordination history (`Perpetua-Tools/scripts/agent_coordination.py` — agent registrations, task claims, decision log) is job/decision-history-shaped and JSON-file-backed today; migrate to the same LanceDB store once it lands, rather than growing a bespoke persistence layer. Live-validated this date across 2 concurrent sessions — see `docs/v2/43-gossipbus-mesh-transport.md` § Real-world validation.
 - gbrain (pgvector) = codebase index; LanceDB = orama job/decision history — coexist
 
 **Full integration plan:** [`docs/plans/2026-05-19-gbrain-crg-embedding-integration.md`](docs/plans/2026-05-19-gbrain-crg-embedding-integration.md)
