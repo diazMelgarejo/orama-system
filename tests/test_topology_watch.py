@@ -15,10 +15,20 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch, AsyncMock
 from datetime import datetime, timezone
 
-# Assume tests run from orama-system root
+# orama-system is stateless (docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md § 1) and does
+# not own orchestrator/ — that package lives in Perpetua-Tools. This suite exercises PT
+# code from a sibling checkout, which exists on a local dev machine (../perplexity-api/
+# Perpetua-Tools next to this repo) but NOT in orama-system's own CI (single-repo
+# checkout, no PT sibling). Skip gracefully rather than hard-failing CI when PT isn't
+# co-located; run for real wherever PT is present as a sibling.
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "perplexity-api" / "Perpetua-Tools"))
+
+pytest.importorskip(
+    "orchestrator.fleet_topology",
+    reason="requires Perpetua-Tools checked out as a sibling of orama-system (not present in orama-system CI)",
+)
 
 from orchestrator.fleet_topology import (
     FleetTopologyState,
