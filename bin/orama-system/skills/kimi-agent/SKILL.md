@@ -175,6 +175,26 @@ same "mechanical fan-out" tier, not the orchestrator tier):**
 | Security & policy review | Test scaffolding |
 | Final crystallisation | Format / lint fixes |
 
+**Extended use: independent review voice (verified 2026-07-12).** Beyond
+mechanical fan-out, `kimi -p` also works as a third independent voice
+alongside `codex exec` (GPT-5.5) and a Claude subagent for parallel
+multi-perspective code review — e.g. an Eng review of a PR run as three
+concurrent background dispatches (Codex, Kimi, Claude), each grounded in
+the same prompt/context, synthesized into a consensus table afterward. Used
+live in Perpetua-Tools PR #205's `/autoplan` Eng-review phase. Two gotchas
+hit in that run:
+- `openclaw agent --model openrouter/moonshotai/kimi-k2.6 ...` (routing
+  through OpenClaw's `main` agent) **fails**: `GatewayClientRequestError:
+  Model override "openrouter/moonshotai/kimi-k2.6" is not allowed for agent
+  "main"` — OpenClaw's agent registry enforces a model allowlist per agent.
+  Use the native `kimi -p` CLI directly instead (this skill), not an
+  OpenClaw agent route.
+- If the fan-out target repo isn't in Kimi's workspace (no `--add-dir`),
+  don't assume file access — embed the relevant source inline in the
+  prompt, or pass `--add-dir <repo>` to grant read access, and say
+  explicitly which one was used so the reviewing agent doesn't fabricate
+  file reads it didn't do.
+
 ## Local Server (REST + WebSocket + Web UI) — the observability surface
 
 Kimi ships its own local daemon — this IS the "monitor/observe" surface for
