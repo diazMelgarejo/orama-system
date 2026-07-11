@@ -21,6 +21,10 @@ sub_skills:
     trigger: "/browse, /qa, /ship, /review, /investigate, gbrain, web browsing, QA, deploy, design review, gstack skills, canary, benchmark"
   - path: skills/skillify/SKILL.md
     trigger: "create a skill, new skill, /skillify, add sub-skill, build a skill, make a skill"
+  - path: skills/agent-coordination-heartbeat/SKILL.md
+    trigger: "heartbeat monitoring, agent liveness, dead agent detection, cleanup stale claims, heartbeat dashboard, agent coordination heartbeat, heartbeat pulse, heartbeat kill"
+  - path: skills/kimi-agent/SKILL.md
+    trigger: "kimi, kimi code, kimi cli, fan out to kimi, moonshot kimi"
   - path: skills/mcp-install/SKILL.md
     trigger: "install mcp stack, setup gemini mcp, register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
   - path: skills/mcp-orchestration/SKILL.md
