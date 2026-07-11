@@ -28,3 +28,7 @@ irreducible, verified core.
 The stages form a feedback loop, not a strict line — loop back whenever a later
 stage reveals the earlier one was wrong. Apply to every non-trivial task; skip no
 stages.
+
+## Related Skills
+
+- [`skills/agent-coordination-heartbeat/SKILL.md`](skills/agent-coordination-heartbeat/SKILL.md) — Monitor agent liveness, detect dead agents, and auto-release stale claims.
