@@ -1,7 +1,7 @@
 ---
 name: gstack
 description: >-
-  gstack v1.58.3.0 integration sub-skill. Full routing table for web browsing,
+  gstack v1.60.1.0 integration sub-skill. Full routing table for web browsing,
   QA, shipping, planning reviews, design, DX audits, retros, and GBrain. Covers
   gstack fork-patch upgrades and gbrain upgrades.
 when_to_use: >-
@@ -12,8 +12,8 @@ version: 1.0.0
 license: Apache 2.0
 compatibility: claude-code
 parent_skill: orama-system
-gstack_version: "1.58.3.0"
-gstack_install: "~/.claude/skills/gstack (global-git, fix/1802-staging-ownership-guard fork)"
+gstack_version: "1.60.1.0"
+gstack_install: "~/.claude/skills/gstack (global-git, fix/1802-staging-ownership-guard branch — both fork patches retired 2026-07-12, upstream-absorbed)"
 effort: medium
 context: fork
 agent: Explore
@@ -24,7 +24,7 @@ paths:
 
 # gstack Integration
 
-gstack v1.58.3.0 is the agent skill framework for web browsing, planning, review, QA, and deployment workflows. Installed globally at *~/.claude/skills/gstack* (global-git). Invoke the global skill with */skill ~/.claude/skills/gstack/SKILL.md*; subskills remain under the same checkout.
+gstack v1.60.1.0 is the agent skill framework for web browsing, planning, review, QA, and deployment workflows. Installed globally at *~/.claude/skills/gstack* (global-git). Invoke the global skill with */skill ~/.claude/skills/gstack/SKILL.md*; subskills remain under the same checkout.
 
 ## Rules
 
@@ -98,14 +98,19 @@ cat VERSION
 the patch file from `scripts/fork-patches/patches/` and remove the branch entry
 from `~/.zshrc`.
 
-**Active fork patches** (idempotent — safe to re-apply any time):
+**Active fork patches** (idempotent — safe to re-apply any time): **none currently** —
+both prior patches retired 2026-07-12 after the v1.60.1.0 upgrade confirmed upstream
+absorption (tests re-run and passing against the upstream versions before retiring):
 
-| Patch | What it fixes | Retire when |
+| Patch (retired) | What it fixed | Retired because |
 | ----- | ------------- | ----------- |
-| `gstack-1802-staging-guard` | Prevents gbrain autopilot SIGTERM from poisoning `import-checkpoint.json` | upstream `garrytan/gstack#1827` merges |
-| `gstack-probe-timeout-30s` | Raises `PROBE_TIMEOUT_MS` from 5 s → 30 s (env-overridable via `GSTACK_PROBE_TIMEOUT_MS`); Supabase postgres cold-connect takes 20-25 s so 5 s causes false `broken-config` verdicts from `gstack-gbrain-detect` | upstream ships configurable probe timeout |
+| `gstack-1802-staging-guard` | Prevented gbrain autopilot SIGTERM from poisoning `import-checkpoint.json` | `garrytan/gstack#1827` merged — `checkOwnedStagingDir`/`.gstack-staging` present in `lib/staging-guard.ts`; `test/regression-1611-gbrain-sync-resume.test.ts` + `test/gstack-memory-ingest.test.ts` pass (64/64) |
+| `gstack-probe-timeout-30s` | Raised the postgres probe timeout past Supabase's 20-25s cold-connect (was 5s, false `broken-config`) | upstream shipped an equivalent-and-better fix: `DEFAULT_PROBE_TIMEOUT_MS = 15_000` + `probeTimeoutMs()` with floor-of-1ms safety the old patch lacked, env var renamed to `GSTACK_GBRAIN_PROBE_TIMEOUT_MS`; `test/gbrain-local-status.test.ts` passes (22/22) |
 
-If `gstack-gbrain-detect` returns `gbrain_local_status: "broken-config"` after a fresh install or upgrade, run `fork-heal` first before diagnosing further — the probe timeout patch may have been reverted.
+If `gstack-gbrain-detect` returns `gbrain_local_status: "broken-config"` after a fresh
+install or upgrade, run `fork-heal` first before diagnosing further — even with no
+patches currently registered, a future upstream regression could reopen either fix
+(re-register via `scripts/fork-patches/README.md` if so).
 
 **zshrc guard (auto-heal on every shell):**
 ```zsh
@@ -113,6 +118,56 @@ _ORAMA_FORK_HEAL="$OPENCLAW_ROOT/orama-system/scripts/fork-patches/apply-fork-pa
 [ -f "$_ORAMA_FORK_HEAL" ] && fork-heal() { bash "$_ORAMA_FORK_HEAL" "$@"; }
 ```
 Run `fork-heal` manually after any upgrade — idempotent and safe to repeat.
+
+### Never lose local uniqueness across an upgrade (gstack-safe-upgrade.sh)
+
+`apply-fork-patches.sh` only recovers **registered** patches (the table above).
+It does NOT cover two other real risk classes, found live 2026-07-12:
+
+1. **Uncommitted working-tree diffs** — e.g. `## Brain Context Load` sections
+   the model-overlay resolver (`scripts/resolvers/model-overlay.ts`) or a prior
+   `./setup` run baked directly into tracked `SKILL.md` files. These are git-
+   tracked files with local modifications that were never committed anywhere
+   — one `git stash drop` (or a naive `git reset --hard origin/main`, which
+   the upstream `gstack-upgrade` skill's default git-install path runs) away
+   from permanent, silent loss.
+2. **Local branch commits that touch files no registered patch covers** — the
+   fork checkout can carry commits (e.g. on `fix/1802-staging-ownership-guard`)
+   that haven't (yet, or ever) been extracted into a `patches/*.patch` entry.
+
+`gstack-safe-upgrade.sh` wraps the manual procedure above into a
+snapshot-then-verify workflow so nothing is lost silently:
+
+```bash
+cd ~/.claude/skills/gstack
+
+# ALWAYS snapshot before touching anything — records the working-tree diff,
+# the branch's commits not in origin/main, and cross-checks which of those
+# touched files are NOT covered by any registered fork patch (unregistered
+# = will not survive a reset/rebase-based upgrade path).
+bash "$OPENCLAW_ROOT/orama-system/scripts/fork-patches/gstack-safe-upgrade.sh" snapshot
+
+# Runs: stash dirt -> fetch -> merge origin/main --no-edit -> ./setup ->
+# re-apply registered fork patches -> restore the stashed working-tree diff.
+# On merge conflict it stops and prints exact manual-resolution + `finish` steps.
+bash "$OPENCLAW_ROOT/orama-system/scripts/fork-patches/gstack-safe-upgrade.sh" upgrade
+
+# Re-run any time to check current risk without upgrading (e.g. after
+# hand-editing a SKILL.md file, to confirm it's registered or still just
+# sitting as unregistered working-tree dirt):
+bash "$OPENCLAW_ROOT/orama-system/scripts/fork-patches/gstack-safe-upgrade.sh" status
+```
+
+`verify` (also run automatically at the end of `upgrade`) diffs the post-
+upgrade state against the snapshot and calls out anything that looks dropped
+rather than assuming silence means success.
+
+**If `status` or `snapshot` reports an orphaned `git stash` entry with unknown
+provenance** (found 2026-07-12: a second, older, ~2000-line stash touching
+`.gitattributes`, CI workflows, and test expectations — unrelated to any
+known fork patch or overlay) — do not auto-merge it. Flag it for human review
+(`git stash show -p stash@{N}`) before dropping or applying; it may be
+in-progress local work from an earlier session, not upgrade-recoverable state.
 
 ### gbrain upgrade
 
