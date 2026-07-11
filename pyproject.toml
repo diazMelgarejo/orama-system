@@ -1,6 +1,6 @@
-
 [tool.hatch.version]
 path = "src/orama_system/_version.py"
+
 [build-system]
 requires = ["hatchling>=1.26.0"]
 build-backend = "hatchling.build"
@@ -27,6 +27,7 @@ oramaclaw = "oramaclaw.cli:main"
 test = [
     "pytest~=9.0.3",
     "pytest-asyncio~=0.23.0",
+    "requests>=2.32.0,<3",
     "hatchling~=1.26.0",
     "build~=1.2.0",
     "tomli~=2.0.1; python_version < \"3.11\"",
