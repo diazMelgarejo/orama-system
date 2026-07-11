@@ -102,6 +102,53 @@ until curl -s http://localhost:18789/health >/dev/null 2>&1; do sleep 2; done
 echo "service ready"
 ```
 
+### 5. Hard ceiling on backgrounded external CLI/agent dispatches (default: 15 minutes)
+
+`run_in_background: true` gives you a completion notification, but that alone
+is not a deadline — a hung `codex exec`, `kimi -p`, or subagent call (stuck on
+a network stall, a dead MCP sidecar, or a wedged sandbox) runs forever with no
+signal, because "still running" and "silently hung" look identical from the
+outside. **Every background dispatch to an external CLI or model needs an
+explicit hard ceiling**, not just the implicit one from waiting for its own
+exit.
+
+Default ceiling: **15 minutes** from the point you notice it's taking
+unusually long (not necessarily from launch — a review/analysis task that's
+still burning CPU at minute 10 is fine; the ceiling is about detecting a
+**stalled**, not merely slow, process). Pair it with a CPU/activity check —
+`ps -o %cpu,stat -p <pid>` sustained near-zero for the whole window is the
+actual hang signal, not elapsed time alone.
+
+```bash
+PID=<pid-of-the-external-process>
+OUTPUT_FILE=/path/to/its/output
+DEADLINE=$(( $(date +%s) + 900 ))   # 15 min
+while true; do
+  if ! kill -0 "$PID" 2>/dev/null; then
+    echo "process $PID exited on its own"
+    [ -s "$OUTPUT_FILE" ] && echo "SUCCESS: output present" || echo "WARNING: exited but output is EMPTY — check stderr"
+    exit 0
+  fi
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    echo "HARD CEILING HIT after 15 min — force-killing $PID"
+    kill -9 "$PID" 2>/dev/null
+    exit 1
+  fi
+  sleep 15
+done
+```
+
+Run this as a `Monitor` (not a foreground `Bash`, and never a `sleep N &&`
+chain) so it reports back on its own — see the Monitor tool's `timeout_ms`
+for the same ceiling at the tool level. Applies to every fan-out voice in a
+multi-agent review (`codex exec`, `kimi -p`, an `Agent`/`SendMessage`
+subagent) — see [`../kimi-agent/SKILL.md § Extended use`](../kimi-agent/SKILL.md)
+and [`../../gstack/SKILL.md § Third Review Voice`](../../gstack/SKILL.md) for
+the pattern this ceiling protects. Origin: a `codex exec` Eng-review dispatch
+ran unbounded past 19 minutes with near-zero CPU before this ceiling was
+added retroactively (2026-07-12) — the fix belongs in the pattern, not
+re-derived per session.
+
 ---
 
 ## Why This Rule Exists
@@ -125,6 +172,7 @@ wasted turns, guaranteed delivery, no timeout tuning required.
 | Need to poll a file for size | `until [ "$(wc -l < file)" -gt N ]; do sleep 3; done` |
 | Need a service to be up | `until curl -s http://host/health >/dev/null; do sleep 2; done` |
 | Need a PID to exit | `until ! kill -0 $PID 2>/dev/null; do sleep 2; done` |
+| Backgrounded external CLI/agent dispatch (`codex exec`, `kimi -p`, review subagent) | 15-min hard ceiling (§ 5 above) — force-kill on timeout, don't let it run unbounded |
 | "I'll just use a shorter sleep" | **No. Use one of the above.** |
 
 ## Shell Portability — zsh Word-Splitting (get it right the first time)
