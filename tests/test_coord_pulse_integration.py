@@ -370,18 +370,32 @@ class TestErrorResilience:
     def test_concurrent_coord_pulse_calls_dont_race(self, mock_fleet_topology_file):
         """Concurrent coord_pulse calls should not race (file lock prevents corruption)."""
         import threading
+        import fcntl
 
         results = []
+        results_lock = threading.Lock()
 
         def run_pulse():
-            # Simulate file-locked read/update
-            with open(mock_fleet_topology_file, "r") as f:
-                state = json.load(f)
-            # Simulate update
-            state["timestamp"] = time.time()
-            with open(mock_fleet_topology_file, "w") as f:
-                json.dump(state, f)
-            results.append(state["timestamp"])
+            # Real file-locked read/update — fcntl.flock is the actual mechanism
+            # a multi-worker coord_pulse server would need (this test previously
+            # only had a comment claiming locking; the read/write were fully
+            # unsynchronized, so 2 of 3 threads would race on a partially-written
+            # file and silently drop out of `results` without a real lock here).
+            with open(mock_fleet_topology_file, "r+") as f:
+                fcntl.flock(f, fcntl.LOCK_EX)
+                try:
+                    f.seek(0)
+                    state = json.load(f)
+                    state["timestamp"] = time.time()
+                    f.seek(0)
+                    f.truncate()
+                    json.dump(state, f)
+                    f.flush()
+                    os.fsync(f.fileno())
+                finally:
+                    fcntl.flock(f, fcntl.LOCK_UN)
+            with results_lock:
+                results.append(state["timestamp"])
 
         threads = [threading.Thread(target=run_pulse) for _ in range(3)]
         for t in threads:
