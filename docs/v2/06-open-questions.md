@@ -46,7 +46,36 @@ Items deliberately deferred. Each has a target checkpoint for resolution.
 | (OQ16) | Engine integration vs. plugins | 65-line pure engine + `graph/plugins/` is canonical; D8 revision implemented | 2026-05-01 |
 | D14 | LM Studio proxy gotcha / mirror enforcement | `_MIRROR_BACKENDS` + `windows_only:` hard enforcement in `model_hardware_policy.yml`; `devices.yml` corrected; `_TIER_HOSTS["mac"]` = ollama-only. See `17-hardware-policy-enforcement.md` for full chain. | 2026-05-17 |
 | D15 | `orchestrator/agent_launcher.py` naming collision | Renamed to `orchestrator/backend_resolver.py` — pure policy function split from 859-line operational CLI. Interface: `resolve_backend_for_spec(registry, spec) -> Backend`. | 2026-05-18 |
+| D16 | **P5 Sybil defense — witness dedup method** | `/24` prefix dedup for now (2-3 operator-controlled nodes; no untrusted peers). Upgrade to MaxMind GeoLite2 ASN lookup when v2.1 adds untrusted peers. See detail below. | 2026-07-13 |
 | OQ12 | **Kernel recursion limit** — Should `MiniGraph.ainvoke` enforce a `max_steps` safety guard? | **Resolved 2026-05-17 (RC-1):** `max_steps` guard implemented in `engine.ainvoke`; raises `RuntimeError` on overflow. `tests/graph/test_engine_max_steps.py` (Task 5). | ✅ Done |
 | OQ17 | **Typed Message wrapper** — Should `perpetua_core/message.py` add a typed wrapper for messages instead of plain `dict`? | **Resolved 2026-05-17 (RC-1):** `Message(BaseModel)` shipped in `perpetua_core/message.py` (43 lines); `tests/test_message.py` (Task 12). | ✅ Done |
 | OQ18 | **agate `NEVER` verdict integration** — The v1 `_MIRROR_BACKENDS` + `windows_only:` pattern implements a `NEVER` verdict (dispatch = hardware damage risk). How does the agate schema expose this? Options: (a) explicit `NEVER`/`PREFER`/`ALLOW` string verdicts in the YAML (cleanest, user-facing); (b) derived from `windows_only:`/`mac_only:`/`shared:` list membership (current v1, implicit); (c) separate `enforcement:` key distinguishing hard vs. soft routing. | v1 uses list-membership inference. agate schema should make this explicit — consumers (LangGraph, CrewAI, custom runtimes) need to distinguish "won't run well here" from "will OOM/crash here." The `NEVER` verdict must be unambiguous. | agate v0.1 schema design |
 | OQ19 | **Selector mirror exclusion in v2 perpetua-core** — `selector.py` in v1 carries `_MIRROR_BACKENDS` and `_TIER_HOSTS` as module-level constants. Should v2 derive these from config? | **Resolved 2026-05-17 (RC-1):** `selector.py` ships with `_MIRROR_BACKENDS` frozenset enforcing D14 mirror-exclusion policy; `_TIER_HOSTS["mac"]` = ollama-only. `test_discovery_selector.py` covers 12 cases (Task 4). | ✅ Done |
+
+---
+
+## D16 detail — ASN Lookup Decision (P5 Sybil Defense)
+
+Per the recommendation: **Use /24 prefix dedup for now.**
+
+Rationale:
+
+- Current deployment: 2-3 operator-controlled nodes (Mac, Windows, maybe cloud)
+- No untrusted peers — Sybil attack is not a realistic threat at this scale
+- Zero additional dependencies — /24 prefix check is 2 lines of Python
+- Upgrade path documented: MaxMind GeoLite2 when scaling to untrusted peers in v2.1
+
+```python
+# /24 prefix dedup (2 lines, zero deps)
+ip_prefix = ipaddress.ip_address(ip).packed[:3]  # first 3 octets
+prefix_id = ip_prefix.hex()  # use as witness dedup key
+```
+
+When v2.1 adds untrusted peers, upgrade to:
+
+```python
+# MaxMind GeoLite2 (requires maxminddb package + DB download)
+import maxminddb
+with maxminddb.open_database('GeoLite2-ASN.mmdb') as reader:
+    asn = reader.get(ip)['autonomous_system_number']
+```
