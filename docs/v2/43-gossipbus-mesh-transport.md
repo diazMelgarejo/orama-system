@@ -144,6 +144,8 @@ next-increment plan:
 
 Full session narrative: `Perpetua-Tools/docs/phase-0-specifications/2026-07-12-stm-next-increment-plan.md` + `.agent/memory/episodic/AGENT_LEARNINGS.jsonl` (2026-07-12 entry).
 
+**Pattern-library cross-reference:** the claim/release mechanic validated above is a live instance of [`references/patterns/multi-agent-orchestration.md`](references/patterns/multi-agent-orchestration.md)'s Swarm handoff pattern (`claim` ≈ transfer object, `release` ≈ returning control), and the `.git/index.lock` contention hit during concurrent commits is the same "Last Write Wins" race class [`references/patterns/state-reducer-patterns.md`](references/patterns/state-reducer-patterns.md) names (resolved here with a commit-retry loop, not a true reducer — a real gap worth closing if this transport ladder grows git-touching mesh events). Full catalogue: [`references/patterns/README.md`](references/patterns/README.md).
+
 ---
 
 ## Open questions
