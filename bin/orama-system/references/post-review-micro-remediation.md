@@ -18,6 +18,17 @@
 
 - Do not continue developing on `main`.
 - Treat the reviewed PR branch as the only write target until review is complete.
+- **Mechanically enforced (added 2026-07-13):** `.githooks/pre-push` blocks
+  direct pushes to `refs/heads/main`/`master` by default (escape hatch:
+  `ALLOW_MAIN_PUSH=1`), synchronized identically across `Perpetua-Tools` and
+  `orama-system`. `.github/workflows/main-push-guard.yml` is the visibility
+  backstop for pushes that bypass the local hook (`--no-verify`) — it flags,
+  it cannot block after the fact. Neither substitutes for GitHub branch
+  protection on `main`, which requires `administration` scope not available
+  to this project's tokens; that must be configured manually in repo
+  Settings for durable, unbypassable enforcement. This closes the loop from
+  the incident that motivated the doctrine: the doctrine's own authoring
+  commit was briefly pushed straight to `main` before this guard existed.
 
 ### Phase 1 — Root-cause clustering
 
