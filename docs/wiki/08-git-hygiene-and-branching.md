@@ -334,3 +334,4 @@ See [12. Cursor Cloud — commit attribution guards](12-cursor-cloud-commit-attr
 - [Git Safety Guardrails](../recovery/2026-04-24-003-git-safety-guardrails.md)
 - [Multi-Agent Collaboration](06-multi-agent-collab.md)
 - [Commit Salvage Matrix](../recovery/2026-04-24-002-commit-salvage-matrix.md)
+- **Concurrent-commit contention (`.git/index.lock`, "nothing to commit" after a stolen `add`):** operational retry-loop guidance lives in [`bin/orama-system/skills/shell-hygiene/SKILL.md`](../../bin/orama-system/skills/shell-hygiene/SKILL.md) § 6 — this doc covers identity/branching conventions, that skill covers execution mechanics.
