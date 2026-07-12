@@ -550,3 +550,13 @@ mechanism — NOT the launchd autopilot, which is left unloaded (§6).
 ## Symbol vs Text Search
 
 For SYMBOL questions (def, refs, callers, callees), use `gbrain code-def / code-refs / code-callers / code-callees` — graph data. For TEXT with exact strings, regex, or file globs, use Grep. Never default to Grep first for code questions.
+
+
+## Post-Review Micro-Remediation
+
+When addressing review findings (CodeRabbit or human) on an open PR: cluster
+findings by root cause, fix once at the abstraction level, keep every commit
+mechanically attributable to its failure class, and never accumulate revert
+chains — reset to a safety-ref-protected ancestor instead when policy allows.
+
+Full doctrine: [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)

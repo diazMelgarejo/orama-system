@@ -854,3 +854,13 @@ OpenClaw/Hermes onboarding uses.
   get `null` placeholders, never a blocking prompt.
 
 Full doctrine: [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md)
+
+
+## Post-Review Micro-Remediation
+
+When addressing review findings (CodeRabbit or human) on an open PR: cluster
+findings by root cause, fix once at the abstraction level, keep every commit
+mechanically attributable to its failure class, and never accumulate revert
+chains — reset to a safety-ref-protected ancestor instead when policy allows.
+
+Full doctrine: [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)

@@ -33,3 +33,13 @@ stages.
 
 - [`../agent-coordination-heartbeat/SKILL.md`](../agent-coordination-heartbeat/SKILL.md) — Monitor agent liveness, detect dead agents, and auto-release stale claims.
 - [`../gossip-bus/SKILL.md`](../gossip-bus/SKILL.md) — Multi-agent event bus: intra-host (SQLite FTS5) and inter-host LAN peer (WS/SSE + file-drop) transports.
+
+
+## Post-Review Micro-Remediation
+
+When addressing review findings (CodeRabbit or human) on an open PR: cluster
+findings by root cause, fix once at the abstraction level, keep every commit
+mechanically attributable to its failure class, and never accumulate revert
+chains — reset to a safety-ref-protected ancestor instead when policy allows.
+
+Full doctrine: [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)
