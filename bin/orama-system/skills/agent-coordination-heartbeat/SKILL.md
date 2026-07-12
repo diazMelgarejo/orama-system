@@ -112,3 +112,5 @@ print("Released:", released)
 - Implementation: `orchestrator/heartbeat_monitor.py`
 - User guide: `docs/heartbeat-monitoring.md`
 - Tests: `tests/test_agent_coordination_heartbeat.py`
+- Related skill: [`../gossip-bus/SKILL.md`](../gossip-bus/SKILL.md) — heartbeat events are emitted onto the intra-host GossipBus; read it before extending liveness detection across hosts (LAN peer transport)
+- Related skill: [`../agent-methodology/SKILL.md`](../agent-methodology/SKILL.md) — Context Immersion (stage 1) should check heartbeat state before assuming an agent is silent because it's dead
