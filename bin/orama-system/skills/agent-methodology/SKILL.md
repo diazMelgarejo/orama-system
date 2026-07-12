@@ -32,3 +32,4 @@ stages.
 ## Related Skills
 
 - [`../agent-coordination-heartbeat/SKILL.md`](../agent-coordination-heartbeat/SKILL.md) — Monitor agent liveness, detect dead agents, and auto-release stale claims.
+- [`../gossip-bus/SKILL.md`](../gossip-bus/SKILL.md) — Multi-agent event bus: intra-host (SQLite FTS5) and inter-host LAN peer (WS/SSE + file-drop) transports.
