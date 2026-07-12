@@ -138,3 +138,13 @@ Trim unused folders for tiny skills. Do not create decorative empty structure.
 - Copy canonical repo skill bodies into Codex wrapper directories.
 - Write canonical orama skills to `.claude/skills/`.
 - Mark done with failing validation.
+
+
+## Post-Review Micro-Remediation
+
+When addressing review findings (CodeRabbit or human) on an open PR: cluster
+findings by root cause, fix once at the abstraction level, keep every commit
+mechanically attributable to its failure class, and never accumulate revert
+chains — reset to a safety-ref-protected ancestor instead when policy allows.
+
+Full doctrine: [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)

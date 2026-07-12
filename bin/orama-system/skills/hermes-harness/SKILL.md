@@ -418,3 +418,13 @@ Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw ow
 - [`../../references/codex-cli-v142-dispatch.md`](../../references/codex-cli-v142-dispatch.md) — Codex CLI v0.142.x profiles (fanout / bounded / interactive)
 - [`../openclaw-skills/SKILL.md`](../openclaw-skills/SKILL.md)
 - [`../mcp-orchestration/SKILL.md`](../mcp-orchestration/SKILL.md)
+
+
+## Post-Review Micro-Remediation
+
+When addressing review findings (CodeRabbit or human) on an open PR: cluster
+findings by root cause, fix once at the abstraction level, keep every commit
+mechanically attributable to its failure class, and never accumulate revert
+chains — reset to a safety-ref-protected ancestor instead when policy allows.
+
+Full doctrine: [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)
