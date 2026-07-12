@@ -147,7 +147,10 @@ and [`../../gstack/SKILL.md § Third Review Voice`](../../gstack/SKILL.md) for
 the pattern this ceiling protects. Origin: a `codex exec` Eng-review dispatch
 ran unbounded past 19 minutes with near-zero CPU before this ceiling was
 added retroactively (2026-07-12) — the fix belongs in the pattern, not
-re-derived per session.
+re-derived per session. This is the same failure class the `max_steps`
+guard in [`docs/v2/references/patterns/multi-agent-orchestration.md`](../../../../docs/v2/references/patterns/multi-agent-orchestration.md)
+(AutoGen nested-chat recursion) exists to prevent — a runaway/hung dispatch
+looks identical to a slow-but-fine one until you cap it.
 
 ---
 
