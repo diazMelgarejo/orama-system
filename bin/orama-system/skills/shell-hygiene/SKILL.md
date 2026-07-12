@@ -152,6 +152,55 @@ guard in [`docs/v2/references/patterns/multi-agent-orchestration.md`](../../../.
 (AutoGen nested-chat recursion) exists to prevent — a runaway/hung dispatch
 looks identical to a slow-but-fine one until you cap it.
 
+### 6. Concurrent `git commit`/`git add` contention (multiple agents, same repo)
+
+When 2+ agent sessions (this session + a parallel Codex/Claude/Kimi session,
+a coordination-board dogfood, a CI job) commit to the **same checkout**
+concurrently, two distinct failures show up — treat them differently:
+
+**A) `fatal: Unable to create '.git/index.lock': File exists`** (or a
+sandbox/hook reporting the same thing, e.g. `BLOCKED: Access to
+'.git/index.lock' denied`) — a live git process holds the lock right now.
+**Never delete `.git/index.lock` yourself** — if a real process holds it,
+removing it corrupts that process's in-flight commit. Retry the commit
+itself in a bounded loop instead; the lock clears on its own once the other
+process finishes:
+
+```bash
+n=0
+until git commit -m "..."; do
+  n=$((n+1))
+  [ "$n" -ge 15 ] && { echo "giving up after 15 attempts"; break; }
+  sleep 2
+done
+```
+
+**B) `git commit` succeeds with "nothing to commit" (or commits an empty
+subset) right after a `git add`.** This is not a lock failure — the other
+session's commit already landed between your `add` and your `commit`,
+clearing the index of what you staged. Re-run `git add` immediately before
+retrying `git commit`, in the same retry loop (don't just retry the bare
+commit — it will keep reporting nothing staged):
+
+```bash
+n=0
+until git add <files> && git commit -m "..."; do
+  n=$((n+1))
+  [ "$n" -ge 15 ] && { echo "giving up after 15 attempts"; break; }
+  sleep 3
+done
+```
+
+Both are the same underlying race — this is the "Last Write Wins" class
+named in [`docs/v2/references/patterns/state-reducer-patterns.md`](../../../../docs/v2/references/patterns/state-reducer-patterns.md)
+and [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md),
+just at the git-porcelain layer instead of application state. A plain
+retry loop is sufficient here (unlike application state, git's own object
+model already prevents silent data loss — worst case is re-staging, not
+corruption), so no custom reducer is needed. Origin: hit twice in one
+session (2026-07-12) coordinating STM-gate doc commits with a concurrent
+Codex session over the same GossipBus claim board.
+
 ---
 
 ## Why This Rule Exists
@@ -176,6 +225,7 @@ wasted turns, guaranteed delivery, no timeout tuning required.
 | Need a service to be up | `until curl -s http://host/health >/dev/null; do sleep 2; done` |
 | Need a PID to exit | `until ! kill -0 $PID 2>/dev/null; do sleep 2; done` |
 | Backgrounded external CLI/agent dispatch (`codex exec`, `kimi -p`, review subagent) | 15-min hard ceiling (§ 5 above) — force-kill on timeout, don't let it run unbounded |
+| `git commit`/`add` racing a concurrent agent session | Retry loop, never delete `.git/index.lock` yourself (§ 6 above) |
 | "I'll just use a shorter sleep" | **No. Use one of the above.** |
 
 ## Shell Portability — zsh Word-Splitting (get it right the first time)
