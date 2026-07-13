@@ -2,10 +2,11 @@
 
 > **For agents:** This file is your behavioral ruleset for this repo. Read it before making any change. Rules here are derived from real bugs — every "never" has a story behind it.
 >
-> Full context for each rule lives in [docs/wiki/](docs/wiki/README.md).
+> Full context for each rule below lives in [docs/wiki/](docs/wiki/README.md).
 > Session log lives in [docs/LESSONS.md](docs/LESSONS.md).
 
 ---
+When you need to use the orama-system, the oramasys-method, or do it the orama way, use this: [`bin/orama-system/SKILL.md`](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/SKILL.md). This is your gateway.
 
 ## Skill 1 — Read LESSONS.md First
 
