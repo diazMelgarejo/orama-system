@@ -1,8 +1,15 @@
 /**
  * Shared fetch helper for all backend API clients.
- * Vite dev server proxies /api/* to portal_server.py (port 8001).
- * In production, same-origin assumed.
+ * Vite dev server proxies /api/* to portal_server.py (port 8002).
+ * In production, same-origin assumed and the HTML shell has the control-plane
+ * token injected server-side for loopback requests. In Vite dev mode that
+ * injection never happens (Vite serves its own index.html, not portal_server's
+ * templated one) -- most /api/* routes are NOT in portal_requires_auth()'s
+ * loopback exemption list, so dev calls need a token from somewhere. Set
+ * VITE_PORTAL_TOKEN in web/.env.local (gitignored) to attach one; matches
+ * whatever ORAMA_CONTROL_PLANE_TOKEN the backend is actually running with.
  */
+const DEV_PORTAL_TOKEN = import.meta.env.VITE_PORTAL_TOKEN as string | undefined;
 
 export class ApiError extends Error {
   constructor(
@@ -25,12 +32,16 @@ interface FetchOptions {
 export async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promise<T> {
   // No base URL prefix: Vite proxy handles /api/* in dev; production assumes same-origin.
   const url = path;
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (DEV_PORTAL_TOKEN) {
+    headers.Authorization = `Bearer ${DEV_PORTAL_TOKEN}`;
+  }
   const init: RequestInit = {
     method: opts.method ?? "GET",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
+    headers,
     signal: opts.signal,
   };
   if (opts.body !== undefined) {
