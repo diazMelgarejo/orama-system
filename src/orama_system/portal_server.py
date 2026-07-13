@@ -2547,7 +2547,13 @@ async def api_status():
             except Exception as _gossip_exc:
                 log.warning("ip gossip write failed: %s", _gossip_exc)
 
-    async with httpx.AsyncClient() as _ps_client:
+    # Bare httpx.AsyncClient() (no timeout) previously left this unbounded,
+    # unlike every other probe above -- on a Windows host reaching OLLAMA_MAC
+    # over the LAN, Mac Ollama being localhost-only by design (see hardware
+    # policy doctrine) meant this could hang well past PROBE_TIMEOUT, dragging
+    # the whole /api/app/state response down with it. Verified live: curl to
+    # this endpoint hung 5s+ with zero bytes back before this fix.
+    async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as _ps_client:
         ol_mac_busy = await _probe_ollama_ps(_ps_client, OLLAMA_MAC)
 
     services: Dict[str, Any] = {

@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     start.ps1 — orama-system Windows counterpart to start.sh  v1.1.0.0
@@ -735,7 +735,11 @@ if ($WinSiblingIp -and $WinSiblingIp -ne "localhost") {
 if ($WinNodes -ge 2) {
     _Info 'gpu' "Dual Win nodes detected: 3080=$Win3080Ip  5080=$Win5080Ip  ($WinNodes UP, sibling=$WinSiblingIp)"
 } elseif ($Win3080Ip -or $Win5080Ip) {
-    _Info 'gpu' "Win nodes: 3080=$Win3080Ip  5080=$Win5080Ip  ($WinNodes UP, sibling=$($WinSiblingIp ?? 'none'))"
+    # $(... ?? ...) is PowerShell 7+ only -- this stack runs under Windows
+    # PowerShell 5.1 (powershell.exe, per every #Requires -Version 5.1 header
+    # in this repo), which does not have the null-coalescing operator.
+    $WinSiblingDisplay = if ($WinSiblingIp) { $WinSiblingIp } else { 'none' }
+    _Info 'gpu' "Win nodes: 3080=$Win3080Ip  5080=$Win5080Ip  ($WinNodes UP, sibling=$WinSiblingDisplay)"
 }
 
 _Info 'ip' "Mac LMS endpoint: ${MacIp}:1234 (source: $IpSource)"
