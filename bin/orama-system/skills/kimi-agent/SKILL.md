@@ -4,12 +4,12 @@ description: >-
   Install, configure, and operate the Kimi Code CLI (`kimi`) for fanning out
   light/parallel tasks alongside the main orchestration session, and for
   monitoring its background server and session logs. Cross-platform installer
-  (Moonshot AI); this skill documents the macOS/Linux path verified live on
-  2026-07-10 (darwin-arm64, v0.23.4). Windows path is unverified — probe with
-  the install script's PowerShell equivalent before relying on it there.
-version: 1.0.0
+  (Moonshot AI); macOS/Linux path verified live 2026-07-10 (darwin-arm64,
+  v0.23.4); Windows path verified live 2026-07-13 (win32-x64, v0.23.6, via the
+  official PowerShell installer).
+version: 1.1.0
 license: Apache 2.0
-compatibility: darwin, linux, orama-system, openclaw, hermes-harness
+compatibility: darwin, linux, win32, orama-system, openclaw, hermes-harness
 parent_skill: orama-system
 triggers:
   - kimi
@@ -55,27 +55,50 @@ kimi --version    # e.g. 0.23.4
 kimi doctor       # validates config.toml / tui.toml — SKIP is fine on first run
 ```
 
-### Windows
+### Windows (verified 2026-07-13, win32-x64, v0.23.6)
 
-**Unverified — no PowerShell installer confirmed live.** Before relying on
-Kimi on Windows/Hermes, check `https://code.kimi.com/kimi-code/` for a
-`.ps1` equivalent, or run the bash installer under Git Bash and manually
-add `%USERPROFILE%\.kimi-code\bin` to PATH. Do not assume parity with
-`cursor-agent`'s Windows path until confirmed.
+An official PowerShell installer exists at the same domain as the macOS/Linux
+one — confirmed live, not just documented:
+
+```powershell
+[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+irm https://code.kimi.com/kimi-code/install.ps1 | iex
+# Installs to %USERPROFILE%\.kimi-code\bin\kimi.exe; adds to User PATH — idempotent
+# (re-running backs up the existing binary to kimi.exe.bak and reinstalls).
+# New shells pick up PATH automatically; in an existing shell:
+$env:Path = "$env:USERPROFILE\.kimi-code\bin;" + $env:Path
+```
+
+Verify:
+
+```powershell
+kimi --version    # e.g. 0.23.6
+kimi doctor       # validates config.toml / tui.toml
+kimi provider list
+```
+
+Provider setup is identical to macOS/Linux (`kimi login`, § Provider Setup
+below) — confirmed working with the same managed Moonshot-cloud provider
+already authenticated on this stack.
+
+The TLS 1.2 line is only needed on hosts where PowerShell 5.1 doesn't
+negotiate it by default (older Windows); the installer script sets this
+itself, but doing it explicitly before `irm` avoids a silent TLS handshake
+failure on some machines.
 
 ## Canonical Install Locations (binary tracking)
 
 **Tracked so any session can call the binary without re-discovering it —
 mirrors the `cursor-agent` canonical-paths table.**
 
-| Item | Path |
-|------|------|
-| Binary | `~/.kimi-code/bin/kimi` |
-| Config | `~/.kimi-code/config.toml` (empty until `login`/`provider add`) |
-| Device ID | `~/.kimi-code/device_id` (mode 600 — do not commit, do not log) |
-| Diagnostic log | `~/.kimi-code/logs/kimi-code.log` (not rotated; `.1` files are) |
-| PATH entry | Appended to `~/.zshrc` by the installer — idempotent, re-running the installer does not duplicate |
-| Session data | Managed internally by `kimi`; export via `kimi export [sessionId]` |
+| Item | macOS/Linux | Windows |
+|------|-------------|---------|
+| Binary | `~/.kimi-code/bin/kimi` | `%USERPROFILE%\.kimi-code\bin\kimi.exe` |
+| Config | `~/.kimi-code/config.toml` (empty until `login`/`provider add`) | `%USERPROFILE%\.kimi-code\config.toml` |
+| Device ID | `~/.kimi-code/device_id` (mode 600 — do not commit, do not log) | `%USERPROFILE%\.kimi-code\device_id` |
+| Diagnostic log | `~/.kimi-code/logs/kimi-code.log` (not rotated; `.1` files are) | `%USERPROFILE%\.kimi-code\logs\kimi-code.log` |
+| PATH entry | Appended to `~/.zshrc` by the installer — idempotent | Added to User PATH registry by the installer — idempotent |
+| Session data | Managed internally by `kimi`; export via `kimi export [sessionId]` | Same |
 
 Quick binary-location check for any agent/script before invoking Kimi:
 
@@ -315,8 +338,16 @@ kimi upgrade   # alias: kimi update
    `•` narration line and a `To resume this session:` footer (verified
    live). Any automated parsing of fan-out results needs to account for
    this; `stream-json` structure not yet mapped.
-3. **Windows install path unverified** — do not claim Hermes/Win parity
-   until a `.ps1` installer or Git-Bash fallback is actually tested there.
+3. ~~Windows install path unverified~~ — **RESOLVED 2026-07-13**: official
+   `.ps1` installer confirmed live at `https://code.kimi.com/kimi-code/install.ps1`,
+   verified end-to-end on win-rtx5080 (v0.23.6, `kimi doctor` OK, provider
+   already wired, smoke-tested with `kimi -p "Reply with exactly: KIMI_READY"`
+   matching the documented output shape exactly). Hermes/Win parity with
+   `cursor-agent` confirmed for the install + dispatch path; `kimi server`
+   and `kimi acp` on Windows remain unexercised (see item 4).
 4. **`kimi acp` embedding inside an ACP-native host** (e.g. an editor) is
    documented above but not yet exercised end-to-end in this stack — the
    protocol mechanics are verified from `--help`, live usage is not.
+5. **`kimi server`/`kimi vis` local daemon not yet tested on Windows** —
+   install + `-p` dispatch are verified there; the REST/WS observability
+   surface (§ Local Server) is unverified on win32 specifically.
