@@ -60,10 +60,35 @@ G7-Async-notifications-mvp
 - [ ] Add an acceptance test proving an emitted event reaches an SSE client within 2 seconds.
 - [ ] Add filter validation tests for valid comma-separated types, invalid types (`400`), empty filters, and disconnect cleanup.
 - [ ] Document the route in the portal API reference, including auth, feature flag, event envelope, `types` filtering, best-effort delivery, and reconnect/no-durability semantics.
+- [ ] Preserve `/docs/v2` alignment: keep the envelope compatible with v2.1 GossipMesh and the route compatible with v2 security gates, but do not implement v2.1 mesh replication or v2.5 safety overlays in this MVP.
+
+## `/docs/v2` compatibility plan
+
+This branch should be reviewed as the first G7 implementation step after the planning PR. It should not fork the v2 roadmap. It should create a seam future v2 work can consume.
+
+### v2.0 kernel compatibility
+
+- Keep G7 local to `orama-system` v1 portal code. Do not import `perpetua-core` or change the v2 kernel boundary.
+- Use stable event names that can later map into `PerpetuaState.metadata` or a local `GossipBus` append-only event without rewriting clients.
+- Preserve small, redacted deltas rather than full dashboard snapshots.
+
+### v2.1 GossipMesh compatibility
+
+- Required envelope fields: `version`, `type`, `event_type`, `ts`, `source`, `data`, `payload`.
+- Required filter semantics: comma-separated `types` maps to future `event_type` interest filters.
+- Explicit deferrals: no `/api/gossip/tail`, no `/api/gossip/ingest`, no cross-particle replication, no Redis/NATS, no durable replay, no peer scoring.
+
+### v2/v2.5 security compatibility
+
+- Treat `/api/notifications/stream` as a control-plane `read` route under `docs/v2/23-security-preconditions.md` and `docs/v2/24-security-first-platform.md`.
+- Default-off is mandatory: disabled means `404` and no monitor emission wiring.
+- Redaction-before-enqueue is mandatory. Do not emit raw agent state, job records, prompts, transcripts, bearer tokens, or model endpoint secrets.
+- v2.5 safety stays future work. G7 may emit audit-friendly events, but must not claim MAESTRO/SWARM enforcement, HITL injection, risk scoring, cryptographic attestation, witness quorum, or equivocation detection.
+- Apply `docs/v2/45-single-operator-lan-threat-model-descope.md`: bounded queues and monotonic event fields are useful under honest flakiness; adversarial P2P controls require a fresh Q1-Q3 threat-model check.
 
 ## Review notes
 
-This PR should be reviewed as a planning-preservation PR, not as an implementation PR. The key question is whether the G7 plan and Antigravity fan-out skill should be preserved on `main` before building the MVP.
+This branch should be reviewed as the G7 MVP implementation branch. The key question is whether the notification scaffold preserves the reviewed G7 plan while staying inside the v1 portal MVP boundary and leaving clean adapter seams for `/docs/v2`.
 
 ## Integrated action plan — oramasys-method + Final-Remedy pattern
 
@@ -105,6 +130,7 @@ Parallel reviewer bots were used as read-only reviewers for PR #150 and the foll
 - Security depends on inheriting portal auth middleware and redacting before enqueue. Add tests proving unauthenticated clients cannot subscribe when auth is enforced.
 - Document operational behavior: default-off flag, how to enable, what happens when disabled, and how clients should handle reconnects or missed events.
 - The `antigravity-agent` skill can be preserved, but keep it as direct CLI fan-out guidance only; do not register fabricated OpenClaw providers or include secrets in fan-out prompts/logs.
+- Align implementation docs with `/docs/v2` by naming the future adapter contract and by warning future agents not to silently expand MVP scope into v2.1 mesh or v2.5 safety enforcement.
 
 ## Follow-up MVP acceptance criteria
 
@@ -114,3 +140,4 @@ Parallel reviewer bots were used as read-only reviewers for PR #150 and the foll
 - `?types=job_completed` receives `job_completed` and filters unrelated events; invalid types return `400`.
 - Disconnecting an SSE client removes its queue/subscription and does not leak tasks or keep growing memory.
 - Event JSON includes `version`, `type`, `event_type`, `ts`, `source`, `data`, and `payload` for GossipBus/GossipMesh adapter compatibility without implementing mesh replication in the MVP.
+- Tests or constants lock the future-spec references so later edits cannot accidentally remove the v2 kernel, v2.1 mesh, or v2.5 safety alignment without review.
