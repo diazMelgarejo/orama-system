@@ -48,8 +48,8 @@ historical, security, or runtime evidence in a small number of hops.
 4. The mother plan, integration map, and OASN research in this directory explain
    the active SOLO / PAIR / FLEET lineage and its technical inputs.
 5. The G7 analysis and next-steps checklist in this directory define the
-   Phase-7-adjacent portal-notification problem. Their branch-local production
-   research and TDD handoff are linked below.
+   Phase-7-adjacent portal-notification problem. Their production research and
+   TDD handoff are linked below.
 6. [`../../archive/fleet-mesh/README.md`](../../archive/fleet-mesh/README.md)
    contains completed Phase 5-6 evidence and the historical cross-reference;
    it supplies provenance, not an implementation starting point.
@@ -62,8 +62,8 @@ historical, security, or runtime evidence in a small number of hops.
 | Integrated timeline | [`2026-07-10 phase integration`](2026-07-10-phase-integration-map.md) | Maps PT Phase 1.0-1.3, FleetMode, Orama Phase 3-6, and the Phase 7-10+ continuation. |
 | Research input | [`2026-07-10 OASN`](2026-07-10-oasn-p2p-architecture-research.md) | P2P/membership/gossip options; research only, never an unreviewed implementation mandate. |
 | G7 product analysis | [`G7 async notifications`](G7-ASYNC-NOTIFICATIONS-ANALYSIS.md) | Portal Notification Hub scope and the initial implementation checklist. |
-| G7 production evidence | [SSE production patterns](https://github.com/diazMelgarejo/orama-system/blob/G7-Async-notifications-mvp/docs/superpowers/references/2026-07-14-g7-sse-production-patterns.md) | Bounded Firecrawl research, browser-auth constraints, overflow, envelope, and replay decisions. |
-| G7 executable handoff | [Authenticated SSE MVP plan](https://github.com/diazMelgarejo/orama-system/blob/G7-Async-notifications-mvp/docs/superpowers/plans/2026-07-14-g7-authenticated-sse-mvp.md) | File-by-file TDD implementation sequence; subordinate to `docs/v2/`. |
+| G7 production evidence | [SSE production patterns](../../superpowers/references/2026-07-14-g7-sse-production-patterns.md) | Bounded Firecrawl research, browser-auth constraints, overflow, envelope, and replay decisions. |
+| G7 executable handoff | [Authenticated SSE MVP plan](../../superpowers/plans/2026-07-14-g7-authenticated-sse-mvp.md) | File-by-file TDD implementation sequence; subordinate to `docs/v2/`. |
 | PT runtime companion | [PT Phase 2 spec](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/PHASE-2-SPEC.md), [fleet topology](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/fleet_topology.py) | Runtime/state ownership for FleetMode and topology, when present in the current PT lineage. |
 | PT security companion | [pattern synthesis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md), [swarm security analysis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md) | Threat-model and pattern evidence for later mesh hardening; leave their claims intact unless separately tasked. |
 | Completed evidence | [`fleet-mesh archive`](../../archive/fleet-mesh/README.md) | Phase 5-6 report and historical review ledger, preserved for provenance. |
