@@ -10,7 +10,14 @@
 
 G7 addresses a **coordination gap**: agents, operators, and integrations need **push notifications** for system state changes without polling. Current portal uses pull-based status polling (10s refresh). This gap blocks multi-agent awareness, operator alerting, and webhook integrations.
 
-**Recommendation:** Implement **Portal Notification Hub** — a minimal MVP extending existing LAN peer channel infrastructure, wired into portal's existing service monitors. Keep it local to the portal for the MVP, but shape the envelope and filters so planned GossipBus/GossipMesh v2.1 can consume or replicate the events later.
+**Recommendation:** Implement **Portal Notification Hub** — a minimal MVP extending existing portal monitor infrastructure, wired into the portal's existing service probes. Keep it local to the portal for the MVP, but shape the envelope and filters so planned GossipBus/GossipMesh v2.1 can consume or replicate the events later.
+
+## Scope and precedence
+
+- `docs/v2/*` is canonical. If any G7 note conflicts with v2, the G7 note is wrong and must be updated.
+- This document is a G7 implementation analysis, not a competing roadmap.
+- The MVP scope is portal-local push notifications with redacted envelopes, default-off behavior, and explicit future seams for v2.1/v2.5.
+- Do not import `perpetua-core`, add mesh replication, or invent new trust boundaries for this branch.
 
 ---
 
@@ -24,15 +31,25 @@ G7 addresses a **coordination gap**: agents, operators, and integrations need **
 | **Event Envelope** | `lan_peer_channel.py` §`make_envelope()` | Shipped v1 | Versioned JSON: `type`, `source`, `ts`, `data` |
 | **Portal SSE** | `portal_server.py` §`/events/peer-stream` | Shipped v1 | Text/event-stream response, async generator |
 | **Service Monitors** | `portal_server.py` §`_probe_*` | Shipped v1 | Agents, routing, hardware, activity feeds already tracked |
-| **GossipBus/GossipMesh v2.1** | `docs/v2/43-gossipbus-mesh-transport.md` | Planned mesh transport | Event-envelope conventions: versioned, redacted, interest-filtered deltas; MVP should stay compatible without implementing mesh replication |
+| **GossipBus/GossipMesh v2.1** | `docs/v2/43-gossipbus-mesh-transport.md` | Planned mesh transport | Event-envelope conventions: versioned, redacted, interest-filtered deltas; MVP should stay compatible without implementing mesh replication or replay |
 
 ### ✗ Gaps (To Implement)
 
-1. **Portal doesn't emit events** — monitors only pull state; no push to subscribers
+1. **Portal notification fan-out is scaffolded but not yet fully hardened** — route and service exist, but monitor wiring, edge-triggering, and lifecycle behavior still need final validation
 2. **No event subscription filter** — SSE broadcasts all peers; no topic/capability scoping  
 3. **No durable event queue** — SSE clients miss events during disconnect (best-effort only)
 4. **No webhook/email integration** — notifications live in WebSocket/SSE only
-5. **No v2.1-compatible portal notification envelope yet** — portal event types and payload shape need a versioned local contract before implementation begins
+5. **Envelope contract still needs a single source of truth** — the scaffold already exposes v2.1-shaped aliases, but docs/tests should remain the authority for the stable local contract
+
+### Current branch reality
+
+This worktree already contains the notification scaffold on the MVP branch:
+
+- `src/orama_system/portal_notifications.py`
+- `/api/notifications/stream` in `src/orama_system/portal_server.py`
+- `tests/test_portal_notifications.py`
+
+So the remaining work is not "start from zero"; it is to harden the existing scaffold against the v2 contracts, edge cases, and security gates above.
 
 ---
 
@@ -258,7 +275,7 @@ if old_violations != policy_status.get("violations"):
 
 ## Alignment with `/docs/v2` Future Specs
 
-G7 is a v1 portal MVP, but it must leave a clean seam for v2.0, v2.1, and v2.5. The rule is **compatible envelope now, no premature mesh or safety overlay now**.
+G7 is a v1 portal MVP, but it must leave a clean seam for v2.0, v2.1, and v2.5. The rule is **compatible envelope now, no premature mesh or safety overlay now**. Treat the table below as a compatibility contract, not as permission to expand scope.
 
 | Future spec | G7 alignment decision | What G7 must not do yet |
 |-------------|-----------------------|--------------------------|
