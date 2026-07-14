@@ -14,9 +14,9 @@ Included commits:
 
 Included files:
 
-- `docs/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` — Portal Notification Hub MVP analysis and implementation sketch.
+- `docs/next/fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` — Portal Notification Hub MVP analysis and implementation sketch.
 - `bin/orama-system/skills/antigravity-agent/SKILL.md` — Antigravity `agy` fan-out skill guidance.
-- `docs/plans/2026-07-14-g7-async-notifications-next-steps.md` — this preservation branch's follow-up checklist.
+- `docs/next/fleet-mesh/2026-07-14-g7-async-notifications-next-steps.md` — this preservation branch's follow-up checklist.
 
 Excluded on purpose:
 
@@ -28,7 +28,7 @@ Excluded on purpose:
 
 - G7 analysis exists and recommends a Portal Notification Hub MVP.
 - Implementation is not included in this PR.
-- The implementation checklist in `docs/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` is still open.
+- The implementation checklist in `docs/next/fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` is still open.
 
 ## Next implementation branch
 
@@ -42,8 +42,8 @@ G7-Async-notifications-mvp
 
 - Orama planning PR: `orama-system` PR #150, `G7-Async-notifications` → `main`, <https://github.com/diazMelgarejo/orama-system/pull/150>.
 - Orama follow-up implementation branch: `G7-Async-notifications-mvp`, created from updated `orama-system/main` after PR #150 lands.
-- Primary G7 analysis artifact: `docs/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` in `orama-system`.
-- Implementation checklist artifact: `docs/plans/2026-07-14-g7-async-notifications-next-steps.md` in `orama-system`.
+- Primary G7 analysis artifact: `docs/next/fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` in `orama-system`.
+- Implementation checklist artifact: `docs/next/fleet-mesh/2026-07-14-g7-async-notifications-next-steps.md` in `orama-system`.
 - Perpetua-Tools memory follow-up: add the cross-repo lesson through PT's canonical `.agent/tools/learn.py` pipeline on `Perpetua-Tools/main`; do not hand-edit generated `LESSONS.md` or `lessons.jsonl`.
 - Remediation source reference: `$HOME/Library/Mobile Documents/iCloud~com~coteditor~CotEditor/Documents/restricted/amnesic-codex/Final-Remedy.md`.
 - Cross-repo invariant: keep `orama-system` implementation code and `Perpetua-Tools` memory updates linked by repo names, PR numbers, and branch names only. Do not write workstation-specific absolute paths into tracked docs or memory.
