@@ -1,12 +1,19 @@
 # G7 Async Notifications — Next Steps
 
-Date: 2026-07-14  
-Branch: `G7-Async-notifications`  
+Date: 2026-07-14
+Branch: `G7-Async-notifications-mvp`
 Source branch: `2026-07-12-001-gstack-safe-upgrade`
+
+## Canonical precedence
+
+- `docs/v2/*` is authoritative over every other plan before or after it.
+- These G7 notes exist to implement the already-reviewed MVP inside the v1 portal boundary.
+- If any G7 sentence conflicts with v2, treat the G7 sentence as stale and rewrite it to match v2.
+- Do not expand this branch into mesh replication, v2.5 safety enforcement, or a new trust boundary.
 
 ## Bucket
 
-This branch preserves the G7-only planning work from the stale `2026-07-12-001-gstack-safe-upgrade` branch.
+This branch preserves the G7-only planning work from the stale `2026-07-12-001-gstack-safe-upgrade` branch and continues it as the MVP implementation branch.
 
 Included commits:
 
@@ -27,12 +34,13 @@ Excluded on purpose:
 ## Current status
 
 - G7 analysis exists and recommends a Portal Notification Hub MVP.
-- Implementation is not included in this PR.
-- The implementation checklist in `docs/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` is still open.
+- The implementation scaffold is already present in this branch.
+- Remaining work is to harden the scaffold against auth, redaction, lifecycle, and compatibility requirements.
+- The checklist in `docs/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` is now the source of remaining work, not a blank-slate spec.
 
 ## Next implementation branch
 
-Create a follow-up implementation branch after this planning PR lands:
+This is the follow-up implementation branch:
 
 ```text
 G7-Async-notifications-mvp
@@ -50,15 +58,15 @@ G7-Async-notifications-mvp
 
 ## Implementation checklist left to do
 
-- [ ] Define `EventType` enum and `Notification` dataclass.
-- [ ] Implement `NotificationHub` with bounded per-session FIFO queues, explicit overflow semantics, subscription cleanup on disconnect, and subscription filtering.
-- [ ] Add `/api/notifications/stream?types=...` SSE route gated by `PORTAL_NOTIFICATIONS=1`; disabled must mean no hub initialization, no monitor emission wiring, and `404` for the route.
+- [ ] Verify the existing `EventType` enum and `Notification` dataclass still match the reviewed contract.
+- [ ] Confirm `NotificationHub` behavior: bounded per-session FIFO queues, overflow semantics, subscription cleanup on disconnect, and subscription filtering.
+- [ ] Keep `/api/notifications/stream?types=...` gated by `PORTAL_NOTIFICATIONS=1`; disabled must mean no hub initialization, no monitor emission wiring, and `404` for the route.
 - [ ] Wire the hub into existing portal monitors for agent state, topology, hardware, jobs, and phase transitions using edge-triggered diffs, not repeated full-snapshot spam.
 - [ ] Reuse existing redaction helpers for any agent, routing, job, activity, or policy payloads before enqueueing events.
 - [ ] Add auth regression coverage for unauthenticated notification clients, including enforced-auth `401` for `/api/notifications/stream`.
-- [ ] Add `PORTAL_NOTIFICATIONS=1` feature flag, default off.
-- [ ] Add an acceptance test proving an emitted event reaches an SSE client within 2 seconds.
-- [ ] Add filter validation tests for valid comma-separated types, invalid types (`400`), empty filters, and disconnect cleanup.
+- [ ] Keep `PORTAL_NOTIFICATIONS=1` as the default-off feature flag.
+- [ ] Keep the acceptance test proving an emitted event reaches an SSE client within 2 seconds.
+- [ ] Keep filter validation tests for valid comma-separated types, invalid types (`400`), empty filters, and disconnect cleanup.
 - [ ] Document the route in the portal API reference, including auth, feature flag, event envelope, `types` filtering, best-effort delivery, and reconnect/no-durability semantics.
 - [ ] Preserve `/docs/v2` alignment: keep the envelope compatible with v2.1 GossipMesh and the route compatible with v2 security gates, but do not implement v2.1 mesh replication or v2.5 safety overlays in this MVP.
 
