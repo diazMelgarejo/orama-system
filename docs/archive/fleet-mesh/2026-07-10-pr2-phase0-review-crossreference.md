@@ -1,4 +1,4 @@
-**Navigation:** ← [integration map (unified 1-6 timeline)](2026-07-10-phase-integration-map.md) · [self-healing mesh plan (phases 2-6)](2026-07-08-self-healing-mesh-degradation-modes.md) · research basis: [2026-07-10-oasn-p2p-architecture-research.md](2026-07-10-oasn-p2p-architecture-research.md) · related (PT): [PATTERN-SYNTHESIS](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md) · [MULTIAGENT-SWARM-SECURITY-ANALYSIS](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md) · [PHASE-1-SCOPE-DRAFT](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-1-SCOPE-DRAFT.md)
+**Navigation:** ← [integration map (unified 1-6 timeline)](../../next/fleet-mesh/2026-07-10-phase-integration-map.md) · [self-healing mesh plan (phases 2-6)](../../next/fleet-mesh/2026-07-08-self-healing-mesh-degradation-modes.md) · research basis: [2026-07-10-oasn-p2p-architecture-research.md](../../next/fleet-mesh/2026-07-10-oasn-p2p-architecture-research.md) · related (PT): [PATTERN-SYNTHESIS](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md) · [MULTIAGENT-SWARM-SECURITY-ANALYSIS](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md) · [PHASE-1-SCOPE-DRAFT](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-1-SCOPE-DRAFT.md)
 
 > **CORRECTION (2026-07-10, appended — original body below is unedited per
 > append-only-record convention):** § 1.2 and § 2.3 below state PR #142 is
@@ -12,7 +12,7 @@
 > deliverables being real and committed) were independently re-verified via
 > live grep against both repos on 2026-07-10 and are accurate — see the
 > verified-status block at the top of
-> [2026-07-08-self-healing-mesh-degradation-modes.md](2026-07-08-self-healing-mesh-degradation-modes.md).
+> [2026-07-08-self-healing-mesh-degradation-modes.md](../../next/fleet-mesh/2026-07-08-self-healing-mesh-degradation-modes.md).
 >
 > **SECOND CORRECTION (2026-07-10, later same session):** While this doc's
 > author was reviewing PT PR #201, a *separate concurrent agent* in a git
@@ -39,7 +39,7 @@
 
 **Date:** 2026-07-10
 **Scope:** Perpetua-Tools (feature/phase-0-blocker-fixes) + orama-system (main / skillify-pr2-low-risk-skills)
-**Reference plan:** `docs/plans/2026-07-08-self-healing-mesh-degradation-modes.md`
+**Reference plan:** `docs/next/fleet-mesh/2026-07-08-self-healing-mesh-degradation-modes.md`
 **Research output:** OASN (Orama Agent Symphony Network) architecture report
 
 ---
@@ -104,7 +104,7 @@
 
 ---
 
-### 1.4 NOT DONE 📋 — Original Plan (`2026-07-08-self-healing-mesh-degradation-modes.md`)
+### 1.4 NOT DONE 📋 — Original Plan (`docs/next/fleet-mesh/2026-07-08-self-healing-mesh-degradation-modes.md`)
 
 **ALL 5 implementation phases remain unimplemented — re-verified live 2026-07-10
 by grepping both repos for every named symbol; zero matches for all of them.**
@@ -120,7 +120,7 @@ by grepping both repos for every named symbol; zero matches for all of them.**
 **Renumbered 2026-07-10:** Original plan phases 1–5 are now Phase 2–6 per integrated timeline. See below.
 
 **ALL 10 success criteria unchecked** — see the verified-status block in
-[2026-07-08-self-healing-mesh-degradation-modes.md § 13](2026-07-08-self-healing-mesh-degradation-modes.md#13-success-criteria)
+[2026-07-08-self-healing-mesh-degradation-modes.md § 13](../../next/fleet-mesh/2026-07-08-self-healing-mesh-degradation-modes.md#13-success-criteria)
 for the per-criterion live verification (not re-duplicated here to avoid a
 second source of truth going stale).
 
@@ -284,9 +284,9 @@ Fleet modes operational
 
 | Document | Repo | Path | SHA |
 |----------|------|------|-----|
-| Original plan | orama-system | `docs/plans/2026-07-08-self-healing-mesh-degradation-modes.md` | `73b5ce5c` |
-| This cross-reference | orama-system | `docs/plans/2026-07-10-pr2-phase0-review-crossreference.md` | (this file) |
-| OASN research report | orama-system | `docs/plans/2026-07-10-oasn-p2p-architecture-research.md` | (this session) |
+| Original plan | orama-system | `docs/next/fleet-mesh/2026-07-08-self-healing-mesh-degradation-modes.md` | `73b5ce5c` |
+| This cross-reference | orama-system | `docs/archive/fleet-mesh/2026-07-10-pr2-phase0-review-crossreference.md` | (this file) |
+| OASN research report | orama-system | `docs/next/fleet-mesh/2026-07-10-oasn-p2p-architecture-research.md` | (this session) |
 | Phase 1.0–1.3 reference | PT | `docs/phase-0-specifications/PHASE-1-SCOPE-DRAFT.md` + commits d51d032e..c445f6aa | all tests PASS |
 | PATTERN-SYNTHESIS.md | PT | `docs/phase-0-specifications/PATTERN-SYNTHESIS.md` | `890a805c` |
 | MULTIAGENT-SWARM-SECURITY-ANALYSIS.md | PT | `docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md` | `890a805c` |

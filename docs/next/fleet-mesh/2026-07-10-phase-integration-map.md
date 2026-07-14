@@ -1,7 +1,7 @@
 # Phase Integration Map: 1.0–1.3 (Data Integrity) + 2–6 (Mesh Topology)
 
 **Navigation:**  
-← [Self-Healing Mesh Plan (Phases 2–6)](2026-07-08-self-healing-mesh-degradation-modes.md) · [Cross-Reference (Status Ledger)](2026-07-10-pr2-phase0-review-crossreference.md) · PT Research: [PHASE-1-SCOPE-DRAFT.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-1-SCOPE-DRAFT.md) · [D1 Spec](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/DELIVERABLE-1-PEER-OBSERVATION-MODEL.md) · [Pattern Synthesis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md) · [Security Analysis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md)
+← [Self-Healing Mesh Plan (Phases 2–6)](2026-07-08-self-healing-mesh-degradation-modes.md) · [Cross-Reference (Status Ledger)](../../archive/fleet-mesh/2026-07-10-pr2-phase0-review-crossreference.md) · PT Research: [PHASE-1-SCOPE-DRAFT.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-1-SCOPE-DRAFT.md) · [D1 Spec](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/DELIVERABLE-1-PEER-OBSERVATION-MODEL.md) · [Pattern Synthesis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md) · [Security Analysis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md)
 
 **Date:** 2026-07-11  
 **Status:** Living document — unified timeline for Phase 1–6 implementation  
@@ -78,9 +78,9 @@ Phase 1.0–1.3 (COMPLETE) ✅
 - **Implementer guide** (TDD specs): Perpetua-Tools/docs/phase-0-specifications/peer_observation_tdd.md
 
 ### Phase 2–6 backed by:
-- **Self-Healing Mesh Plan** (architecture): orama-system/docs/plans/2026-07-08-self-healing-mesh-degradation-modes.md (§ 7–11)
-- **OASN Research** (5-layer P2P stack): orama-system/docs/plans/2026-07-10-oasn-p2p-architecture-research.md
-- **Cross-Reference** (integration strategy): orama-system/docs/plans/2026-07-10-pr2-phase0-review-crossreference.md (§ 3)
+- **Self-Healing Mesh Plan** (architecture): `orama-system/docs/next/fleet-mesh/2026-07-08-self-healing-mesh-degradation-modes.md` (§ 7–11)
+- **OASN Research** (5-layer P2P stack): `orama-system/docs/next/fleet-mesh/2026-07-10-oasn-p2p-architecture-research.md`
+- **Cross-Reference** (integration strategy): `orama-system/docs/archive/fleet-mesh/2026-07-10-pr2-phase0-review-crossreference.md` (§ 3)
 
 ---
 
@@ -136,7 +136,7 @@ Phase 1.0–1.3 (COMPLETE) ✅
 ## Navigation
 
 - **Original self-healing plan:** [2026-07-08-self-healing-mesh-degradation-modes.md](2026-07-08-self-healing-mesh-degradation-modes.md) (now Phases 2–6)
-- **Cross-reference:** [2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md)
+- **Cross-reference:** [2026-07-10-pr2-phase0-review-crossreference.md](../../archive/fleet-mesh/2026-07-10-pr2-phase0-review-crossreference.md)
 - **OASN research:** [2026-07-10-oasn-p2p-architecture-research.md](2026-07-10-oasn-p2p-architecture-research.md)
 - **Phase 1.0–1.3 scope:** [Perpetua-Tools/docs/phase-0-specifications/PHASE-1-SCOPE-DRAFT.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-1-SCOPE-DRAFT.md)
 
