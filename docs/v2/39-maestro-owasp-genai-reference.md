@@ -404,3 +404,5 @@ canonical.
 
 This file reinforces, and does not replace, the MAESTRO/OWASP coverage in
 `08-technical-architecture-review.md` and `31-security-harness-excellence-plan.md`.
+
+**Implementation-level pattern catalog and a live case study** (SWARM's risk-scoring/contradiction-detection concepts mapped to concrete P2P patterns, with the STM pipeline fully implemented and tested while only production wiring was later descoped after a premise check): see `03-safety-v2.5.md` § "Related implementation patterns (Perpetua-Tools)" and [`45-single-operator-lan-threat-model-descope.md`](45-single-operator-lan-threat-model-descope.md) (D23).

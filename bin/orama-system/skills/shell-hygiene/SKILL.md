@@ -102,6 +102,110 @@ until curl -s http://localhost:18789/health >/dev/null 2>&1; do sleep 2; done
 echo "service ready"
 ```
 
+### 5. Hard ceiling on backgrounded external CLI/agent dispatches (default: 15 minutes)
+
+`run_in_background: true` gives you a completion notification, but that alone
+is not a deadline — a hung `codex exec`, `kimi -p`, or subagent call (stuck on
+a network stall, a dead MCP sidecar, or a wedged sandbox) runs forever with no
+signal, because "still running" and "silently hung" look identical from the
+outside. **Every background dispatch to an external CLI or model needs an
+explicit hard ceiling**, not just the implicit one from waiting for its own
+exit.
+
+Default ceiling: **15 minutes** from the point you notice it's taking
+unusually long (not necessarily from launch). This snippet is a simple
+wall-clock guard for an external dispatch that should have a bounded runtime; it
+is intentionally conservative and may stop a healthy-but-slow process. If the
+task is expected to exceed 15 minutes, set an explicit longer deadline up front
+and monitor progress/activity separately (`ps -o %cpu,stat -p <pid>`, output
+file growth, or service logs) before killing it.
+
+```bash
+PID=<pid-of-the-external-process>
+OUTPUT_FILE=/path/to/its/output
+DEADLINE=$(( $(date +%s) + 900 ))   # 15 min
+while true; do
+  if ! kill -0 "$PID" 2>/dev/null; then
+    echo "process $PID exited on its own"
+    [ -s "$OUTPUT_FILE" ] && echo "SUCCESS: output present" || echo "WARNING: exited but output is EMPTY — check stderr"
+    exit 0
+  fi
+  if [ "$(date +%s)" -ge "$DEADLINE" ]; then
+    echo "HARD CEILING HIT after 15 min — stopping $PID"
+    kill "$PID" 2>/dev/null || true
+    sleep 5
+    kill -9 "$PID" 2>/dev/null || true
+    exit 1
+  fi
+  sleep 15
+done
+```
+
+Run this as a `Monitor` (not a foreground `Bash`, and never a `sleep N &&`
+chain) so it reports back on its own — see the Monitor tool's `timeout_ms`
+for the same ceiling at the tool level. Applies to every fan-out voice in a
+multi-agent review (`codex exec`, `kimi -p`, an `Agent`/`SendMessage`
+subagent) — see [`../kimi-agent/SKILL.md § Extended use`](../kimi-agent/SKILL.md)
+and [`../../gstack/SKILL.md § Third Review Voice`](../../gstack/SKILL.md) for
+the pattern this ceiling protects. Origin: a `codex exec` Eng-review dispatch
+ran unbounded past 19 minutes with near-zero CPU before this ceiling was
+added retroactively (2026-07-12) — the fix belongs in the pattern, not
+re-derived per session. This is the same failure class the `max_steps`
+guard in [`docs/v2/references/patterns/multi-agent-orchestration.md`](../../../../docs/v2/references/patterns/multi-agent-orchestration.md)
+(AutoGen nested-chat recursion) exists to prevent — a runaway/hung dispatch
+looks identical to a slow-but-fine one until you cap it.
+
+### 6. Concurrent `git commit`/`git add` contention (multiple agents, same repo)
+
+When 2+ agent sessions (this session + a parallel Codex/Claude/Kimi session,
+a coordination-board dogfood, a CI job) commit to the **same checkout**
+concurrently, two distinct failures show up — treat them differently:
+
+**A) `fatal: Unable to create '.git/index.lock': File exists`** (or a
+sandbox/hook reporting the same thing, e.g. `BLOCKED: Access to
+'.git/index.lock' denied`) — a live git process holds the lock right now.
+**Never delete `.git/index.lock` yourself** — if a real process holds it,
+removing it corrupts that process's in-flight commit. Retry the commit
+itself in a bounded loop instead; the lock clears on its own once the other
+process finishes:
+
+```bash
+n=0
+until git commit -m "..."; do
+  n=$((n+1))
+  [ "$n" -ge 15 ] && { echo "giving up after 15 attempts"; break; }
+  sleep 2
+done
+```
+
+**B) `git commit` succeeds with "nothing to commit" (or commits an empty
+subset) right after a `git add`.** This is not a lock failure — the other
+session's commit already landed between your `add` and your `commit`,
+clearing the index of what you staged. In a shared checkout, do **not** blindly
+re-stage after another agent commits; first verify the worktree/staged diff
+still contains only files you own, or move the retry into an isolated worktree.
+Then verify ownership once before the loop, and re-run `git add` immediately
+before retrying `git commit` (don't just retry the bare commit — it will keep
+reporting nothing staged):
+
+```bash
+git status --short -- <files>   # inspect before retrying; stop if files are not yours
+n=0
+until git add <files> && git commit -m "..."; do
+  n=$((n+1))
+  [ "$n" -ge 15 ] && { echo "giving up after 15 attempts"; break; }
+  sleep 3
+done
+```
+
+Both are serialization hazards at the git-porcelain layer, not true reducer
+lost-update examples: Git's index lock prevents silent concurrent writes, while
+application reducers prevent whole-state overwrite. A bounded retry loop is
+sufficient only after ownership/diff checks confirm you are not committing
+another agent's work. Origin: hit twice in one
+session (2026-07-12) coordinating STM-gate doc commits with a concurrent
+Codex session over the same GossipBus claim board.
+
 ---
 
 ## Why This Rule Exists
@@ -125,6 +229,8 @@ wasted turns, guaranteed delivery, no timeout tuning required.
 | Need to poll a file for size | `until [ "$(wc -l < file)" -gt N ]; do sleep 3; done` |
 | Need a service to be up | `until curl -s http://host/health >/dev/null; do sleep 2; done` |
 | Need a PID to exit | `until ! kill -0 $PID 2>/dev/null; do sleep 2; done` |
+| Backgrounded external CLI/agent dispatch (`codex exec`, `kimi -p`, review subagent) | 15-min hard ceiling (§ 5 above) — force-kill on timeout, don't let it run unbounded |
+| `git commit`/`add` racing a concurrent agent session | Retry loop, never delete `.git/index.lock` yourself (§ 6 above) |
 | "I'll just use a shorter sleep" | **No. Use one of the above.** |
 
 ## Shell Portability — zsh Word-Splitting (get it right the first time)
