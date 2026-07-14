@@ -19,6 +19,78 @@
 - Reconnection is snapshot then live stream. Last-Event-ID does not imply replay.
 - Work only in the G7-Async-notifications-mvp worktree. Preserve the existing Perpetua-Tools vendor/ecc-tools and packages/agentic-stack changes.
 
+## Placement in the Fleet-Mesh System
+
+This plan is a Phase-7-adjacent implementation handoff, not an autonomous
+architecture. Use the graph below to recover the governing constraints and the
+evidence behind each decision. A direct edge exists from this plan to every
+necessary active, canonical, historical, research, and cross-repository node;
+following the directed paths keeps any relevant context within a few hops without
+turning an MVP plan into an all-to-all document dump.
+
+### Authority Order
+
+1. [`docs/v2/`](../../v2/) is canonical and supersedes this plan when they
+   conflict.
+2. [`39-maestro-owasp-genai-reference.md`](../../v2/39-maestro-owasp-genai-reference.md)
+   is the security-verification hub for browser authentication, secrets,
+   control-plane exposure, and related changes.
+3. [`43-gossipbus-mesh-transport.md`](../../v2/43-gossipbus-mesh-transport.md)
+   is the canonical future mesh direction. It constrains compatibility but does
+   not authorize G7 to add replication, durable delivery, or Byzantine logic.
+4. The active [fleet-mesh index](https://github.com/diazMelgarejo/orama-system/blob/main/docs/next/fleet-mesh/README.md)
+   owns the SOLO / PAIR / FLEET lineage and points to the root plans. This link
+   becomes canonical after the documentation-reorganization commit lands on
+   `main`; before then, use the repository's current root and `docs/plans/`
+   locations as the same source material.
+5. This plan, the [G7 analysis](../../G7-ASYNC-NOTIFICATIONS-ANALYSIS.md), and
+   the [SSE production research](../references/2026-07-14-g7-sse-production-patterns.md)
+   turn that authority into a narrow portal-local MVP.
+6. Completed reports and historical ledgers are evidence only. They never
+   override active documentation or live code.
+
+### Node Map and Direct Edges
+
+| Node | Direct links | Role in this implementation |
+|---|---|---|
+| Canonical architecture | [`docs/v2/`](../../v2/), [`43 GossipBus`](../../v2/43-gossipbus-mesh-transport.md) | Defines future event/mesh compatibility boundaries; records what stays deferred. |
+| Canonical security | [`39 MAESTRO/OWASP`](../../v2/39-maestro-owasp-genai-reference.md) | Governs control-plane auth, redaction, browser exposure, and verification sources. |
+| Fleet-mesh root | [active index](https://github.com/diazMelgarejo/orama-system/blob/main/docs/next/fleet-mesh/README.md), [mother plan](https://github.com/diazMelgarejo/orama-system/blob/main/docs/next/fleet-mesh/2026-07-08-self-healing-mesh-degradation-modes.md), [integration map](https://github.com/diazMelgarejo/orama-system/blob/main/docs/next/fleet-mesh/2026-07-10-phase-integration-map.md) | Explains why G7 follows the mesh lineage and how it relates to Phase 1-10+ work. |
+| Mesh research | [OASN research](https://github.com/diazMelgarejo/orama-system/blob/main/docs/next/fleet-mesh/2026-07-10-oasn-p2p-architecture-research.md), [PT Phase 2 spec](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/PHASE-2-SPEC.md) | Supplies topology and membership context. It is not a mandate to implement P2P transport in G7. |
+| G7 product scope | [local G7 analysis](../../G7-ASYNC-NOTIFICATIONS-ANALYSIS.md), [future active location](https://github.com/diazMelgarejo/orama-system/blob/main/docs/next/fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md) | Defines the Portal Notification Hub scope, default-off flag, and initial checklist. |
+| G7 research evidence | [SSE production patterns](../references/2026-07-14-g7-sse-production-patterns.md) | Justifies EventSource auth constraints, bounded queues, event envelopes, overflow behavior, and no-replay semantics. |
+| This handoff | [authenticated SSE MVP plan](2026-07-14-g7-authenticated-sse-mvp.md) | Gives the file-by-file TDD sequence; it must be revised if higher authority changes. |
+| PT security companions | [pattern synthesis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md), [swarm security analysis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md) | Provides later-mesh threat and pattern context. Do not alter threat-model claims while implementing G7 unless separately tasked. |
+| Completed evidence | [fleet-mesh archive](https://github.com/diazMelgarejo/orama-system/blob/main/docs/archive/fleet-mesh/README.md), [Phase 7-10 roadmap](https://github.com/diazMelgarejo/orama-system/blob/main/docs/next/fleet-mesh/phase-7-to-10-roadmap.md) | Explains the Phase 5-6 completion clue and where G7 sits in the continuation. |
+
+### Directed Context Paths
+
+```text
+docs/v2 security and GossipBus authority
+  -> active fleet-mesh index
+  -> mother plan / integration map / OASN research
+  -> G7 async-notification analysis
+  -> SSE production research
+  -> this TDD implementation plan
+  -> portal-local, feature-flagged code and tests
+
+completed Phase 5-6 report + historical review ledger
+  -> fleet-mesh archive
+  -> active index and Phase 7-10 roadmap
+  -> G7 analysis and this plan
+
+PT Phase 2 runtime + PT threat and pattern evidence
+  -> active fleet-mesh index
+  -> docs/v2 authority
+  -> G7 compatibility and security boundaries
+```
+
+The direction matters. Implementation starts here, but decision authority flows
+back through G7 research to the active fleet-mesh index and `docs/v2/`. New
+requirements that would add replay, retention, cross-process fan-out, mesh
+replication, or safety enforcement must branch into their own approved plan
+instead of being smuggled into this MVP.
+
 ---
 
 ## File Structure
