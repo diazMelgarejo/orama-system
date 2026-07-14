@@ -37,6 +37,7 @@ Excluded on purpose:
 - The implementation scaffold is already present in this branch.
 - Remaining work is to harden the scaffold against auth, redaction, lifecycle, and compatibility requirements.
 - The checklist in `docs/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` is now the source of remaining work, not a blank-slate spec.
+- Research-backed implementation decisions are recorded in `docs/superpowers/references/2026-07-14-g7-sse-production-patterns.md`. They are subordinate to `docs/v2/*`.
 
 ## Next implementation branch
 
@@ -64,10 +65,13 @@ G7-Async-notifications-mvp
 - [ ] Wire the hub into existing portal monitors for agent state, topology, hardware, jobs, and phase transitions using edge-triggered diffs, not repeated full-snapshot spam.
 - [ ] Reuse existing redaction helpers for any agent, routing, job, activity, or policy payloads before enqueueing events.
 - [ ] Add auth regression coverage for unauthenticated notification clients, including enforced-auth `401` for `/api/notifications/stream`.
+- [ ] Close the browser-auth gap: native `EventSource` cannot attach `Authorization`; issue the existing control-plane cookie only through a same-origin, bearer-authenticated bootstrap and never accept a bearer query parameter.
 - [ ] Keep `PORTAL_NOTIFICATIONS=1` as the default-off feature flag.
 - [ ] Keep the acceptance test proving an emitted event reaches an SSE client within 2 seconds.
 - [ ] Keep filter validation tests for valid comma-separated types, invalid types (`400`), empty filters, and disconnect cleanup.
 - [ ] Document the route in the portal API reference, including auth, feature flag, event envelope, `types` filtering, best-effort delivery, and reconnect/no-durability semantics.
+- [ ] Emit standard SSE `id` and `event` fields alongside the JSON envelope; add immutable `event_id` to the envelope, but keep `Last-Event-ID` replay explicitly out of G7.
+- [ ] Test overflow as drop-oldest, retain-newest, observable loss; test cookie-authenticated same-origin browser streaming and cross-origin bootstrap rejection.
 - [ ] Preserve `/docs/v2` alignment: keep the envelope compatible with v2.1 GossipMesh and the route compatible with v2 security gates, but do not implement v2.1 mesh replication or v2.5 safety overlays in this MVP.
 
 ## `/docs/v2` compatibility plan
@@ -83,6 +87,7 @@ This branch should be reviewed as the first G7 implementation step after the pla
 ### v2.1 GossipMesh compatibility
 
 - Required envelope fields: `version`, `type`, `event_type`, `ts`, `source`, `data`, `payload`.
+- G7 adds `event_id` as a stable opaque adapter identity. It is not a durable sequence and does not imply replay.
 - Required filter semantics: comma-separated `types` maps to future `event_type` interest filters.
 - Explicit deferrals: no `/api/gossip/tail`, no `/api/gossip/ingest`, no cross-particle replication, no Redis/NATS, no durable replay, no peer scoring.
 
