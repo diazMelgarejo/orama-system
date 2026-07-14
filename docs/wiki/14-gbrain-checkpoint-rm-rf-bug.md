@@ -167,5 +167,5 @@ Untracked files that hadn't been pushed would be permanently lost. Keep importan
 
 - Upstream issue: https://github.com/garrytan/gstack/issues/1802
 - Our comment: https://github.com/garrytan/gstack/issues/1802#issuecomment-4589699900
-- Full fix + test: [`docs/references/gstack-pr-1802-fix.md`](../references/gstack-pr-1802-fix.md)
+- Full fix + test: [`docs/reference/gstack-pr-1802-fix.md`](../reference/gstack-pr-1802-fix.md)
 - fs_usage trace confirming deletion: `~/Documents/2026-06-01-orama-system-Terminal-Output.txt`

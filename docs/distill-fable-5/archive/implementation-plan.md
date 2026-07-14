@@ -2,8 +2,8 @@
 
 This document outlines the action plan and to-do list to implement the enhancement suggestions from the "Repeatable and Sustainable Frontier-Model Integration Plan for Perpetua-Tools and orama-system" document. The goal is to prepare both repositories for the first Claude Fable 5 session.
 
-- [implementation-plan.md](orama-system/docs/distill-fable-5/implementation-plan.md)
-- [TODO.md](orama-system/docs/distill-fable-5/TODO.md)
+- [implementation-plan.md](../implementation-plan.md)
+- [TODO.md](../TODO.md)
 
 ## Further Analysis Needed: Caching & Batching Frontier Models
 

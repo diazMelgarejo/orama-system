@@ -54,7 +54,7 @@ Detection: [`bin/orama-system/scripts/lib/openclaw-env.sh`](../../bin/orama-syst
 
 - Start at **`OpenClaw/CLAUDE.md`** (exploration order + skill routing).
 - Cross-repo detail: **`CLAUDE-instru.md`** (navigator only — install body lives in orama-system).
-- CRG and embeddings: **`OpenClaw/.mcp.json`** + [`setup-embeddings`](../../bin/orama-system/mcp-install/references/setup-embeddings.md).
+- CRG and embeddings: **`OpenClaw/.mcp.json`** + [`setup-embeddings`](../../bin/orama-system/skills/mcp-install/references/setup-embeddings.md).
 - Implementation work lands in **`orama-system/`** skills and scripts; default coding profile **`J-drona23-v5`**.
 
 ---
