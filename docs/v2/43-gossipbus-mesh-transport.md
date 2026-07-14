@@ -112,6 +112,42 @@ Cross-host **mutations** still go through authenticated APIs (P5 tokens, PT `/v1
 
 ---
 
+## Real-world validation (2026-07-12, PT claim-board dogfood)
+
+`Perpetua-Tools/scripts/agent_coordination.py` — a lightweight claim/coordination
+board on top of `orchestrator/gossip_bus.py` (git-common-dir path resolution,
+zero new infra, per this doc's Frugality Rule 5) — was used live this session
+to coordinate 2 independent sessions (this Claude Code session + a parallel
+Codex CLI session) working the same PT branch concurrently on the STM
+next-increment plan:
+
+- Both sessions `register`ed an agent identity and `claim`ed distinct tasks
+  (threat-model recheck, reorder-buffer bound, dedup-key fix) from a shared
+  task list — no task was worked twice.
+- `list`/`agents` correctly surfaced entries from BOTH sessions regardless of
+  which working directory or git worktree each was invoked from — confirms
+  git-common-dir resolution (not per-cwd/per-worktree state) as this doc's
+  architecture requires.
+- Caught one real collision in progress: a `codex-claude-partner` identity had
+  already claimed a task before the second session (this one) got there;
+  released the redundant duplicate claim rather than doing the work twice.
+- One genuine gap found: two near-simultaneous `git commit`s from the two
+  sessions hit `.git/index.lock` contention — expected and handled by retrying
+  the commit (not the board itself), but worth noting as a real multi-agent
+  friction point for this transport ladder's future git-touching mesh events.
+- This is `job/decision history`-shaped coordination — the same category the
+  CLAUDE.md § 8 v2.1 storage roadmap earmarks for LanceDB migration (see that
+  section's "another item beside LanceDB+bge-m3" entry). Currently JSON-file-
+  backed per-repo (`scripts/agent_coordination.py`'s own state file); a natural
+  future migration target once the LanceDB job/decision-history store lands,
+  rather than a bespoke persistence layer of its own.
+
+Full session narrative: `Perpetua-Tools/docs/phase-0-specifications/2026-07-12-stm-next-increment-plan.md` + `.agent/memory/episodic/AGENT_LEARNINGS.jsonl` (2026-07-12 entry).
+
+**Pattern-library cross-reference:** the claim/release mechanic validated above is a live instance of [`references/patterns/multi-agent-orchestration.md`](references/patterns/multi-agent-orchestration.md)'s Swarm handoff pattern (`claim` ≈ transfer object, `release` ≈ returning control). The `.git/index.lock` contention hit during concurrent commits is an analogous concurrency/serialization hazard, not a true reducer-style Last Write Wins race: Git refused the second writer instead of silently overwriting state. Full catalogue: [`references/patterns/README.md`](references/patterns/README.md).
+
+---
+
 ## Open questions
 
 See [`06-open-questions.md`](06-open-questions.md) **OQ29** (BLE scope), **OQ30** (CRDT vs cursor tail).
