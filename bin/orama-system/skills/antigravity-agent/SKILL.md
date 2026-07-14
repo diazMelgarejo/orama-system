@@ -25,18 +25,18 @@ allowed-tools: bash, file-operations
 
 ## Disambiguation
 
-**`agy`** (`~/.local/bin/agy`) is Google's Antigravity CLI — a standalone
-agentic coding tool in the same category as `kimi`, `cursor-agent`, and
-`codex`: a fan-out worker the main session can dispatch light/parallel tasks
-to, NOT an internal oramasys stage worker (does not belong in
-`bin/config/agent_registry.json`, which is reserved for SOUL-file-backed
-OpenClaw/oramasys agents bound to a gateway provider).
+**`agy`** is Google's Antigravity CLI — a standalone agentic coding tool in
+the same category as `kimi`, `cursor-agent`, and `codex`: a fan-out worker the
+main session can dispatch light/parallel tasks to, NOT an internal oramasys
+stage worker (does not belong in `bin/config/agent_registry.json`, which is
+reserved for SOUL-file-backed OpenClaw/oramasys agents bound to a gateway
+provider).
 
-| Command | Binary | What it is |
-|---------|--------|------------|
-| `agy` | `~/.local/bin/agy` | Google Antigravity CLI — use this |
-| `kimi` | `~/.kimi-code/bin/kimi` | Moonshot Kimi Code CLI — see `../kimi-agent/SKILL.md` |
-| `cursor-agent` | `~/.local/bin/cursor-agent` | Cursor's background agent — see `../cursor-agent/SKILL.md` |
+| Command | Runtime discovery | What it is |
+|---------|-------------------|------------|
+| `agy` | `command -v agy` | Google Antigravity CLI — use this |
+| `kimi` | `command -v kimi` | Moonshot Kimi Code CLI — see `../kimi-agent/SKILL.md` |
+| `cursor-agent` | `command -v cursor-agent` | Cursor's background agent — see `../cursor-agent/SKILL.md` |
 
 ## Why direct CLI, not OpenClaw (root-cause history, 2026-07-11)
 
@@ -57,41 +57,38 @@ part of this correction; `gemini-coder` (the OpenClaw agent) now points at
 the real `google` plugin (`google/gemini-3.1-pro-preview`) as a secondary
 path, but is not the primary way to reach Antigravity.
 
-**The actual Antigravity CLI (`agy`) needs none of that.** It is already
-installed, already authenticated (its config symlinks into
-`~/.gemini/config/projects/`), and answers headless prompts with zero
-additional setup — verified live: `agy -p "What is 2+2? Reply with just the
-number." ` returned `4` with no OAuth prompt, no TTY error. Use this skill's
-direct-CLI pattern, mirroring `kimi-agent`, instead of routing through
-OpenClaw's model/provider abstraction.
+**The actual Antigravity CLI (`agy`) needs none of that.** It can be discovered
+from `PATH` and, when the current machine is authenticated, answers headless
+prompts with zero additional setup — verified live: `agy -p "What is 2+2? Reply
+with just the number."` returned `4` with no OAuth prompt, no TTY error. Use
+this skill's direct-CLI pattern, mirroring `kimi-agent`, instead of routing
+through OpenClaw's model/provider abstraction.
 
-## Canonical Install Locations (binary tracking)
+## Runtime Discovery
 
-**Tracked so any session can call the binary without re-discovering it —
-mirrors the `kimi-agent` canonical-paths table.**
-
-| Item | Path |
-|------|------|
-| Binary | `~/.local/bin/agy` |
-| Version | `1.1.1` (verified 2026-07-11, darwin) |
-| Config (symlinked) | `~/.antigravitycli/<project-id>.json` → `~/.gemini/config/projects/<project-id>.json` |
-| Other local state | `~/.antigravity/`, `~/.antigravity-ide/` |
-| Plugins | `agy plugin list` → "No imported plugins." by default |
-
-Quick binary-location check for any agent/script before invoking Antigravity:
+Do not hardcode host-local Antigravity binary or configuration paths in docs,
+scripts, or examples. Discover the executable at runtime and print what the
+current machine resolves:
 
 ```bash
-command -v agy >/dev/null 2>&1 || { echo "agy not installed — see antigravity-agent/SKILL.md"; exit 1; }
+AGY_BIN="$(command -v agy)" || {
+  echo "agy not found on PATH" >&2
+  exit 127
+}
+printf 'agy: %s\n' "$AGY_BIN"
 ```
+
+Configuration and credential locations are host-specific. Inspect them only
+when debugging a live machine, and avoid checking those paths into reusable
+guidance.
 
 ## Provider Setup
 
-**Status: WIRED (verified 2026-07-11).** No login step needed on this
-machine — `agy`'s config already resolves through `~/.gemini/config/`.
-Smoke test: `agy -p "reply with exactly: agy-ok"` → `agy-ok`, no prompts, no
-TTY requirement. If a fresh machine ever shows an auth error instead, that's
-a genuinely different state from what's documented here — do not assume
-parity, verify live before dispatching real work.
+**Status: WIRED when the current machine passes a smoke test.** Auth state is
+host-specific. Before dispatching real work, run `agy -p "reply with exactly:
+agy-ok"`; it should return `agy-ok` with no prompt or TTY requirement. If it
+errors or asks for auth, stop and surface that state instead of assuming another
+machine's configuration.
 
 ## Key Options (from `agy --help`, v1.1.1 — verified)
 
@@ -110,6 +107,16 @@ parity, verify live before dispatching real work.
 | `--new-project` | Create a new project for this session |
 | `--print-timeout <dur>` | Timeout for print mode wait (default `5m0s`) |
 | `--log-file <path>` | Override CLI log file path |
+
+Default to sandboxed execution for unattended file-editing fan-out:
+
+```bash
+agy --sandbox --add-dir "$PWD" --model "Claude Sonnet 4.6 (Thinking)" -p "..."
+```
+
+Use `--add-dir` only for repository-scoped directories required by the task.
+Avoid broad home-directory access. Reserve `--dangerously-skip-permissions` for
+trusted or CI usage where the command, workspace, and prompt are controlled.
 
 ## Models (from `agy models`, verified 2026-07-11)
 
@@ -153,16 +160,42 @@ Same shape as the `kimi-agent`/`cursor-agent` pattern — headless,
 backgrounded, `wait` to collect:
 
 ```bash
-agy --model "Claude Sonnet 4.6 (Thinking)" \
-  -p "Add type annotations to scripts/discover.py; only functions, no variables" \
-  > /tmp/agy-task-a.txt &
+run_agy_task() {
+  local name="$1"
+  local prompt="$2"
+  local out="/tmp/${name}.out"
+  local err="/tmp/${name}.err"
 
-agy --model "Claude Sonnet 4.6 (Thinking)" \
-  -p "Rename all snake_case variables in tests/test_foo.py to camelCase" \
-  > /tmp/agy-task-b.txt &
+  if agy --sandbox --add-dir "$PWD" \
+    --model "Claude Sonnet 4.6 (Thinking)" \
+    -p "$prompt" >"$out" 2>"$err"; then
+    if [ ! -s "$out" ]; then
+      echo "$name: agy exited 0 but produced empty stdout; inspect $err" >&2
+      return 2
+    fi
+    echo "$name: success; output saved to $out"
+  else
+    local status=$?
+    echo "$name: agy failed with exit $status; stderr saved to $err" >&2
+    return "$status"
+  fi
+}
 
-wait   # collect when done
+run_agy_task agy-task-a   "Add type annotations to scripts/discover.py; only functions, no variables" &
+pid_a=$!
+
+run_agy_task agy-task-b   "Rename all snake_case variables in tests/test_foo.py to camelCase" &
+pid_b=$!
+
+fail=0
+wait "$pid_a" || fail=1
+wait "$pid_b" || fail=1
+exit "$fail"
 ```
+
+Preserve every task's stdout/stderr log before parsing. Treat `exit 0` with
+empty stdout as a per-task failure until the log proves the task intentionally
+made only file edits and emitted no summary.
 
 **Division of labour (matches the kimi-agent/cursor-agent table — Antigravity
 slots into the same "mechanical fan-out" tier, not the orchestrator tier):**
@@ -192,9 +225,9 @@ slots into the same "mechanical fan-out" tier, not the orchestrator tier):**
 
 - Sibling fan-out agent (structural precedent for this skill):
   [`../kimi-agent/SKILL.md`](../kimi-agent/SKILL.md)
-- `gemini-coder` OpenClaw agent identity (secondary path, real `google`
-  provider — not the primary Antigravity pathway):
-  `~/.openclaw/agents/gemini-coder/IDENTITY.md`
+- `gemini-coder` OpenClaw agent identity, if configured in the current repo or
+  operator environment (secondary path, real `google` provider — not the
+  primary Antigravity pathway).
 - Local-first fallback doctrine: [`../../SKILL.md § Local API Fallback`](../../SKILL.md)
 - orama-system Stage 4 dispatch pattern: [`../../SKILL.md § MODE 2 Stage 4`](../../SKILL.md)
 
@@ -206,9 +239,13 @@ slots into the same "mechanical fan-out" tier, not the orchestrator tier):**
    Not investigated further; `--model` selection works fine without it.
 2. **Output-shape claim (clean stdout, no narration) only verified on
    trivial no-tool prompts** — re-verify before building a strict parser
-   around real fan-out tasks that use tools/file edits.
-3. **`agy plugin list` shows "No imported plugins."** — no plugins have
+   around real fan-out tasks that use tools/file edits, and treat exit-0 empty
+   stdout as a per-task failure unless the preserved log proves otherwise.
+3. **Per-task failure accounting** — parallel fan-out must collect each task's
+   exit status independently; do not let one successful `wait` mask another
+   task's failure or empty-success case.
+4. **`agy plugin list` shows "No imported plugins."** — no plugins have
    been evaluated for this stack; treat as a fresh surface if a future need
    arises.
-4. **Windows path unverified** — no PowerShell/Windows install path checked
-   for `agy`; do not assume parity with the macOS binary path above.
+5. **Windows path unverified** — no PowerShell/Windows executable discovery
+   checked for `agy`; do not assume parity with macOS `command -v` behavior.
