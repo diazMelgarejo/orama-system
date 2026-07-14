@@ -44,6 +44,11 @@ from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
 from orama_system.lan_peer_channel import LanPeerChannel, local_platform, make_envelope, read_discovery_peer_ip
+from orama_system.portal_notifications import (
+    NotificationHub,
+    notifications_enabled,
+    parse_event_types,
+)
 
 from utils.control_plane_auth import (
     accepted_control_plane_tokens,
@@ -190,6 +195,7 @@ def _read_routing_json() -> dict:
 
 
 _lan_peer_channel = LanPeerChannel()
+_notification_hub = NotificationHub()
 
 
 @asynccontextmanager
@@ -1451,6 +1457,28 @@ async def sse_peer_stream(request: Request):
     async def generator():
         async for event in _lan_peer_channel.outbound_queue():
             yield f"data: {json.dumps(event)}\n\n"
+
+    return StreamingResponse(generator(), media_type="text/event-stream")
+
+
+@app.get("/api/notifications/stream", response_class=StreamingResponse)
+async def api_notifications_stream(request: Request, types: Optional[str] = None):
+    """Default-off portal notification stream for the G7 MVP."""
+    if not notifications_enabled():
+        raise HTTPException(status_code=404, detail="Notifications are disabled")
+    auth_failure = control_plane_auth_failure(request)
+    if auth_failure is not None:
+        return auth_failure
+    try:
+        filters = parse_event_types(types)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    async def generator():
+        async for notification in _notification_hub.subscribe(filters):
+            if await request.is_disconnected():
+                break
+            yield f"data: {json.dumps(notification.to_dict())}\n\n"
 
     return StreamingResponse(generator(), media_type="text/event-stream")
 
