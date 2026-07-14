@@ -8,7 +8,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 import orama_system.portal_server as portal_server
-from orama_system.portal_notifications import EventType, Notification, NotificationHub, parse_event_types
+from orama_system.portal_notifications import (
+    NOTIFICATION_SOURCE,
+    NOTIFICATION_V2_ALIGNMENT,
+    EventType,
+    Notification,
+    NotificationHub,
+    parse_event_types,
+)
 
 
 def test_notifications_stream_is_default_off(monkeypatch):
@@ -74,5 +81,15 @@ async def test_notification_envelope_has_adapter_aliases():
     assert payload["version"] == 1
     assert payload["type"] == "job_completed"
     assert payload["event_type"] == "job_completed"
+    assert payload["source"] == NOTIFICATION_SOURCE
     assert payload["data"] == {"job_id": "redacted-job"}
     assert payload["payload"] == {"job_id": "redacted-job"}
+
+
+def test_notification_scaffold_declares_future_v2_alignment_without_enabling_mesh():
+    """Keep G7 MVP compatible with v2 plans without silently growing scope."""
+    assert NOTIFICATION_V2_ALIGNMENT == {
+        "v2_kernel": "docs/v2/01-kernel-spec.md#perpetuastate-pydantic-v2",
+        "v2_1_mesh": "docs/v2/43-gossipbus-mesh-transport.md",
+        "v2_5_safety": "docs/v2/03-safety-v2.5.md",
+    }

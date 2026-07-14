@@ -1,7 +1,10 @@
 """Default-off portal notification scaffolding for the G7 MVP.
 
 The hub is intentionally local-process only: no durability, no LAN fan-out, no
-webhooks. Producers must redact payloads before calling emit().
+webhooks. Producers must redact payloads before calling emit(). The envelope is
+shaped to be a future adapter source for docs/v2/43 GossipBus mesh transport,
+but this module must not implement mesh replication, durable ingest, or v2.5
+safety enforcement.
 """
 from __future__ import annotations
 
@@ -11,6 +14,15 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+
+NOTIFICATION_ENVELOPE_VERSION = 1
+NOTIFICATION_SOURCE = "orama-portal"
+NOTIFICATION_V2_ALIGNMENT = {
+    "v2_kernel": "docs/v2/01-kernel-spec.md#perpetuastate-pydantic-v2",
+    "v2_1_mesh": "docs/v2/43-gossipbus-mesh-transport.md",
+    "v2_5_safety": "docs/v2/03-safety-v2.5.md",
+}
 
 
 class EventType(str, Enum):
@@ -27,9 +39,9 @@ class Notification:
 
     type: EventType
     data: dict[str, Any]
-    source: str = "orama-portal"
+    source: str = NOTIFICATION_SOURCE
     ts: int = field(default_factory=lambda: int(time.time()))
-    version: int = 1
+    version: int = NOTIFICATION_ENVELOPE_VERSION
 
     def to_dict(self) -> dict[str, Any]:
         payload = dict(self.data)
