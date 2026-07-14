@@ -108,15 +108,37 @@ machine's configuration.
 | `--print-timeout <dur>` | Timeout for print mode wait (default `5m0s`) |
 | `--log-file <path>` | Override CLI log file path |
 
-Default to sandboxed execution for unattended file-editing fan-out:
+Default to a sandboxed **plan/read-only pass** first. Do not let a background
+worker modify files until a human approves the exact task, scope, and target
+repository.
 
 ```bash
-agy --sandbox --add-dir "$PWD" --model "Claude Sonnet 4.6 (Thinking)" -p "..."
+agy --mode plan --sandbox --add-dir "$PWD" \
+  --model "Claude Sonnet 4.6 (Thinking)" \
+  -p "Plan the requested edits. Do not modify files."
+```
+
+Approval gate: in an OpenClaw/Web Portal workflow, use the native
+AskUserQuestion/HITL approval gate before switching to edit mode. In a plain
+shell workflow, stop and ask the operator to approve the plan, diff scope, and
+log directory before running `--mode accept-edits`:
+
+```bash
+printf 'Approve agy edit execution in %s? Type exactly YES: ' "$PWD" >&2
+read -r APPROVED
+[ "$APPROVED" = "YES" ] || { echo "agy edit execution not approved" >&2; exit 1; }
+agy --mode accept-edits --sandbox --add-dir "$PWD" \
+  --model "Claude Sonnet 4.6 (Thinking)" \
+  -p "Execute only the approved edits."
 ```
 
 Use `--add-dir` only for repository-scoped directories required by the task.
 Avoid broad home-directory access. Reserve `--dangerously-skip-permissions` for
-trusted or CI usage where the command, workspace, and prompt are controlled.
+trusted or CI usage where the command, workspace, prompt, and approval record
+are controlled. This matches Gemini CLI's documented safety model: sandboxing
+reduces but does not eliminate risk, untrusted workspaces force tool prompts,
+write/shell tools default to `ask_user`, and non-interactive plan workflows can
+otherwise fall through into YOLO-style execution after approval-mode transitions.
 
 ## Models (from `agy models`, verified 2026-07-11)
 
@@ -160,13 +182,30 @@ Same shape as the `kimi-agent`/`cursor-agent` pattern — headless,
 backgrounded, `wait` to collect:
 
 ```bash
+REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+LOG_PARENT="$REPO_ROOT/.agent/logs/agy"
+
+# Fail closed if any reusable log parent is a symlink. This prevents predictable
+# log paths from being redirected through attacker-created links.
+for path in "$REPO_ROOT/.agent" "$REPO_ROOT/.agent/logs" "$LOG_PARENT"; do
+  [ -L "$path" ] && { echo "refusing symlinked log path: $path" >&2; exit 1; }
+done
+mkdir -p "$LOG_PARENT"
+chmod 700 "$REPO_ROOT/.agent" "$REPO_ROOT/.agent/logs" "$LOG_PARENT" 2>/dev/null || true
+
+printf 'Approve background agy edit fan-out in %s? Type exactly YES: ' "$REPO_ROOT" >&2
+read -r APPROVED
+[ "$APPROVED" = "YES" ] || { echo "background agy fan-out not approved" >&2; exit 1; }
+
 run_agy_task() {
   local name="$1"
   local prompt="$2"
-  local out="/tmp/${name}.out"
-  local err="/tmp/${name}.err"
+  local log_dir out err
+  log_dir="$(mktemp -d "$LOG_PARENT/${name}.XXXXXXXX")" || return 1
+  out="$log_dir/stdout.txt"
+  err="$log_dir/stderr.txt"
 
-  if agy --sandbox --add-dir "$PWD" \
+  if agy --mode accept-edits --sandbox --add-dir "$REPO_ROOT" \
     --model "Claude Sonnet 4.6 (Thinking)" \
     -p "$prompt" >"$out" 2>"$err"; then
     if [ ! -s "$out" ]; then
@@ -181,10 +220,12 @@ run_agy_task() {
   fi
 }
 
-run_agy_task agy-task-a   "Add type annotations to scripts/discover.py; only functions, no variables" &
+run_agy_task agy-task-a \
+  "Add type annotations to scripts/discover.py; only functions, no variables" &
 pid_a=$!
 
-run_agy_task agy-task-b   "Rename all snake_case variables in tests/test_foo.py to camelCase" &
+run_agy_task agy-task-b \
+  "Rename all snake_case variables in tests/test_foo.py to camelCase" &
 pid_b=$!
 
 fail=0
@@ -195,7 +236,10 @@ exit "$fail"
 
 Preserve every task's stdout/stderr log before parsing. Treat `exit 0` with
 empty stdout as a per-task failure until the log proves the task intentionally
-made only file edits and emitted no summary.
+made only file edits and emitted no summary. The log guard above protects
+against local path-hijack/symlink attacks; it is not a network MITM control.
+Network trust still depends on the provider's TLS/auth path, and prompts/logs
+must not include secrets.
 
 **Division of labour (matches the kimi-agent/cursor-agent table — Antigravity
 slots into the same "mechanical fan-out" tier, not the orchestrator tier):**
