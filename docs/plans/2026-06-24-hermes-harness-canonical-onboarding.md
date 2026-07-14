@@ -120,7 +120,7 @@ cargo run -- dashboard
 
 ## Ground-Truth Reframing
 
-Source plans reference five skills as canonical targets: `hermes-agent`, `pt-orama-harness-integration`, `local-inference`, `perpetua-hardware`, and PR #96 context. **On `main` today (2026-06-28), all absorption targets exist** as redirect stubs or canonical supersets — see [`hermes-skill-absorption-map.md`](../bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md).
+Source plans reference five skills as canonical targets: `hermes-agent`, `pt-orama-harness-integration`, `local-inference`, `perpetua-hardware`, and PR #96 context. **On `main` today (2026-06-28), all absorption targets exist** as redirect stubs or canonical supersets — see [`hermes-skill-absorption-map.md`](../../bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md).
 
 ### What exists in orama-system today
 
@@ -193,7 +193,7 @@ From `skill-comparison-2026-06-22.md` and skill-enrichment plan:
 | `plan`, `systematic-debugging`, `requesting-code-review` | software-development | adjacent orama skills | **Keep separate** | — |
 | `claude-code`, `codex` | autonomous-ai-agents | `codex-openclaw-agent` | **Keep separate** | — |
 
-**Full map:** [`bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md`](../bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md)
+**Full map:** [`bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md`](../../bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md)
 
 **Redirect stub pattern** (when target missing):
 

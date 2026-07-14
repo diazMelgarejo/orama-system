@@ -134,7 +134,7 @@ Nothing breaks if work is paused or abandoned between tiers:
 - After both tiers: PT tries MCP first, falls back to HTTP on any subprocess failure. HTTP is never deprecated.
 
 ### Checklist links
-- Tier 1 TODO: [Perplexity-Tools/docs/ROADMAP_v1.1.md](../../perplexity-api/Perplexity-Tools/docs/ROADMAP_v1.1.md)
+- Tier 1 TODO: [Perpetua-Tools/docs/ROADMAP_v1.1.md](../../perplexity-api/Perpetua-Tools/docs/ROADMAP_v1.1.md)
 - Tier 2 TODO: [orama-system/docs/ROADMAP_v1.1.md](ROADMAP_v1.1.md)
 
 ---
@@ -166,4 +166,3 @@ This bridge documentation assumes:
 - orama-system: `README.md`, `docs/api-reference.md`
 - MCP runtime: `bin/mcp_servers/README.md`
 - Operations note: [wiki/09-policy-fail-closed-and-checklist.md](wiki/09-policy-fail-closed-and-checklist.md)
-

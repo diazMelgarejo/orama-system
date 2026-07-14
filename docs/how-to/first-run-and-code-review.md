@@ -90,7 +90,7 @@ bash bin/orama-system/scripts/install-mcp-stack.sh             # install
 
 Restart the IDE, then confirm `/mcp` lists `ai-cli` (and `gemini-cli` only if you passed `--include-gemini`).
 
-**Skill:** [`bin/orama-system/mcp-install/SKILL.md`](../../bin/orama-system/mcp-install/SKILL.md)
+**Skill:** [`bin/orama-system/skills/mcp-install/SKILL.md`](../../bin/orama-system/skills/mcp-install/SKILL.md)
 
 **PR multi-lens fan-out** (later): uses ai-cli / OmniRoute / Task — [`orchestration-dispatch.md`](../../bin/orama-system/skills/code-review/references/orchestration-dispatch.md)
 
@@ -107,7 +107,7 @@ bash bin/orama-system/skills/code-review/scripts/crg-embed-mode status
 
 Restart Claude Code / Cursor after `.mcp.json` changes.
 
-**Reference:** [`bin/orama-system/mcp-install/references/setup-embeddings.md`](../../bin/orama-system/mcp-install/references/setup-embeddings.md)
+**Reference:** [`bin/orama-system/skills/mcp-install/references/setup-embeddings.md`](../../bin/orama-system/skills/mcp-install/references/setup-embeddings.md)
 
 ### Cursor: enable code-review-graph MCP
 
@@ -272,7 +272,7 @@ You have now used the same chain the code-review skill enforces: graph → gbrai
 | [`docs/reference/agent-first-open-visibility.md`](../reference/agent-first-open-visibility.md) | Reference | What each agent host sees on first open |
 | [`bin/orama-system/references/first-run-install.md`](../../bin/orama-system/references/first-run-install.md) | Reference | Per-component §0 matrix |
 | [`bin/orama-system/skills/first-run-setup/SKILL.md`](../../bin/orama-system/skills/first-run-setup/SKILL.md) | How-to | Agent workflow for bootstrap |
-| [`bin/orama-system/mcp-install/SKILL.md`](../../bin/orama-system/mcp-install/SKILL.md) | How-to | MCP stack installer |
+| [`bin/orama-system/skills/mcp-install/SKILL.md`](../../bin/orama-system/skills/mcp-install/SKILL.md) | How-to | MCP stack installer |
 | [`bin/orama-system/skills/code-review/SKILL.md`](../../bin/orama-system/skills/code-review/SKILL.md) | How-to | Review phases + graph repair |
 | [`bin/orama-system/skills/code-review/references/tool-chain.md`](../../bin/orama-system/skills/code-review/references/tool-chain.md) | Reference | CRG → gbrain → Read |
 | [`bin/orama-system/SKILL.md`](../../bin/orama-system/SKILL.md) | Reference | Mother skill, search policy, first-run pointer |

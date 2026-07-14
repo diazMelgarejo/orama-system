@@ -3,7 +3,7 @@
 > **When:** Win RTX box is online; run from an elevated or normal PowerShell after
 > `git pull --ff-only origin main` in the orama-system clone.
 > **Canonical Mac mirror:** [`2026-06-28-mac-e2e-handoff.md`](2026-06-28-mac-e2e-handoff.md)
-> **LAN peer talk:** [`../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md` § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) · [`../docs/guides/lan-peer-mac-win-operator.md`](../docs/guides/lan-peer-mac-win-operator.md)
+> **LAN peer talk:** [`bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md` § Operator playbook](../../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) · [`docs/guides/lan-peer-mac-win-operator.md`](../guides/lan-peer-mac-win-operator.md)
 
 ---
 
@@ -92,7 +92,7 @@ Expected slash commands: `/pt-hardware-policy`, `/pt-orama-council`, `/pt-orama-
 
 **Follow the canonical operator playbook** (identical on Mac and Win):
 
-[`bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md` § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook)
+[`bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md` § Operator playbook](../../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook)
 
 Quick probe after playbook setup:
 

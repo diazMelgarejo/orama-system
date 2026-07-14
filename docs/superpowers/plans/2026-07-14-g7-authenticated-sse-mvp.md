@@ -128,14 +128,15 @@ async def test_notification_envelope_has_opaque_event_id():
 async def test_notification_hub_drops_oldest_and_retains_newest():
     hub = NotificationHub(queue_size=2)
     stream = hub.subscribe()
-    waiter = asyncio.create_task(stream.__anext__())
-    await asyncio.sleep(0)
+
+    await hub.emit(Notification(EventType.JOB_COMPLETED, {"sequence": "setup"}))
+    assert (await stream.__anext__()).data == {"sequence": "setup"}
 
     for sequence in (1, 2, 3):
         await hub.emit(Notification(EventType.JOB_COMPLETED, {"sequence": sequence}))
 
     assert hub.dropped_events == 1
-    assert (await asyncio.wait_for(waiter, timeout=2)).data == {"sequence": 2}
+    assert (await stream.__anext__()).data == {"sequence": 2}
     assert (await stream.__anext__()).data == {"sequence": 3}
     await stream.aclose()
 ~~~
@@ -185,6 +186,10 @@ class NotificationHub:
     @property
     def dropped_events(self) -> int:
         return self._dropped_events
+
+    @property
+    def subscriber_count(self) -> int:
+        return len(self._subscribers)
 
     async def emit(self, notification: Notification) -> None:
         async with self._lock:
@@ -252,11 +257,47 @@ async def test_status_publisher_emits_only_redacted_edge_deltas():
     }
     assert all("path" not in item.data and "prompt" not in item.data for item in emitted)
     assert await publisher.publish(second) == []
+
+
+@pytest.mark.asyncio
+async def test_api_status_publishes_only_the_redacted_payload(monkeypatch):
+    raw_status = {
+        "agents": [{"agent_id": "a1", "state": "done", "path": "/secret"}],
+        "supervisor_jobs": [{"id": "j1", "status": "completed", "prompt": "secret"}],
+    }
+    redacted_status = {
+        "agents": [{"agent_id": "a1", "state": "done"}],
+        "supervisor_jobs": [{"id": "j1", "status": "completed"}],
+    }
+    seen_by_redactor = []
+    seen_by_publisher = []
+
+    class PublisherSpy:
+        async def publish(self, status):
+            seen_by_publisher.append(status)
+            return []
+
+    monkeypatch.setenv("PORTAL_NOTIFICATIONS", "1")
+    monkeypatch.setattr(portal_server, "_build_portal_status_payload", lambda: raw_status)
+    monkeypatch.setattr(
+        portal_server,
+        "redact_portal_status_payload",
+        lambda status: seen_by_redactor.append(status) or redacted_status,
+    )
+    monkeypatch.setattr(portal_server, "_notification_publisher", PublisherSpy())
+
+    result = await portal_server.api_status()
+
+    assert seen_by_redactor == [raw_status]
+    assert seen_by_publisher == [redacted_status]
+    assert result == redacted_status
+    assert "path" not in seen_by_publisher[0]["agents"][0]
+    assert "prompt" not in seen_by_publisher[0]["supervisor_jobs"][0]
 ~~~
 
 - [ ] **Step 2: Run the test and verify it fails**
 
-Run: uv run --extra test pytest tests/test_portal_notifications.py::test_status_publisher_emits_only_redacted_edge_deltas -q
+Run: uv run --extra test pytest tests/test_portal_notifications.py -k 'status_publisher or api_status_publishes' -q
 
 Expected: FAIL because PortalNotificationPublisher is undefined.
 
@@ -302,7 +343,9 @@ class PortalNotificationPublisher:
         return emitted
 ~~~
 
-In api_status, replace the direct return with:
+Extract the current raw-status construction into `_build_portal_status_payload()` so
+the route can be tested without reimplementing its monitor mocks. In `api_status`,
+replace the direct return with:
 
 ~~~python
 redacted_payload = redact_portal_status_payload(payload)
@@ -446,7 +489,8 @@ git commit -m "feat(g7): add same-origin notification session"
 
 **Interfaces:**
 - Consumes: Notification.event_id, Notification.type.value, Notification.to_dict().
-- Produces: format_notification_sse(notification: Notification) -> str and no-cache stream responses.
+- Produces: format_notification_sse(notification: Notification) -> str, periodic SSE
+  keepalive comments, bounded ASGI send time, and no-cache stream responses.
 
 - [ ] **Step 1: Write failing stream-frame tests**
 
@@ -472,13 +516,41 @@ def test_notification_stream_keeps_replay_out_of_scope(monkeypatch):
         ) as response:
             assert response.status_code == 200
             assert response.headers["cache-control"] == "no-cache"
+
+
+@pytest.mark.asyncio
+async def test_notification_sse_generator_keeps_idle_clients_alive_and_cleans_up(monkeypatch):
+    monkeypatch.setattr(portal_server, "NOTIFICATION_SSE_KEEPALIVE_SECONDS", 0)
+    request = AsyncMock()
+    request.is_disconnected.return_value = False
+    hub = NotificationHub()
+    stream = portal_server.iter_notification_sse(request, hub, filters=None)
+
+    assert await anext(stream) == ": keepalive\n\n"
+    await stream.aclose()
+    assert hub.subscriber_count == 0
+
+
+@pytest.mark.asyncio
+async def test_notification_stream_send_timeout_releases_subscription(monkeypatch):
+    monkeypatch.setattr(portal_server, "NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS", 0)
+
+    async def one_event():
+        yield "data: event\n\n"
+
+    async def slow_send(message):
+        if message["type"] == "http.response.body":
+            await asyncio.Event().wait()
+
+    response = portal_server.NotificationStreamingResponse(one_event())
+    await asyncio.wait_for(response.stream_response(slow_send), timeout=1)
 ~~~
 
 - [ ] **Step 2: Run the tests and verify they fail**
 
-Run: uv run --extra test pytest tests/test_portal_notifications.py -k 'format_notification_sse or replay_out_of_scope' -q
+Run: uv run --extra test pytest tests/test_portal_notifications.py -k 'format_notification_sse or replay_out_of_scope or keepalive or send_timeout' -q
 
-Expected: FAIL because the formatter and cache header are absent.
+Expected: FAIL because the formatter, keepalive loop, and bounded send adapter are absent.
 
 - [ ] **Step 3: Implement the formatter and headers**
 
@@ -490,22 +562,57 @@ def format_notification_sse(notification: Notification) -> str:
         f"data: {json.dumps(notification.to_dict(), separators=(',', ':'))}\n\n"
     )
 
+NOTIFICATION_SSE_KEEPALIVE_SECONDS = 15
+NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS = 10
+
+
+class NotificationStreamingResponse(StreamingResponse):
+    """StreamingResponse with a bounded ASGI send for this local SSE route."""
+
+    async def stream_response(self, send):
+        await send({"type": "http.response.start", "status": self.status_code, "headers": self.raw_headers})
+        async for chunk in self.body_iterator:
+            if not isinstance(chunk, bytes):
+                chunk = chunk.encode(self.charset)
+            try:
+                await asyncio.wait_for(
+                    send({"type": "http.response.body", "body": chunk, "more_body": True}),
+                    timeout=NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS,
+                )
+            except asyncio.TimeoutError:
+                break
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+
+async def iter_notification_sse(request: Request, hub: NotificationHub, filters):
+    stream = hub.subscribe(filters)
+    pending = asyncio.create_task(stream.__anext__())
+    try:
+        while not await request.is_disconnected():
+            done, _ = await asyncio.wait({pending}, timeout=NOTIFICATION_SSE_KEEPALIVE_SECONDS)
+            if not done:
+                yield ": keepalive\n\n"
+                continue
+            notification = pending.result()
+            pending = asyncio.create_task(stream.__anext__())
+            yield format_notification_sse(notification)
+    finally:
+        pending.cancel()
+        await asyncio.gather(pending, return_exceptions=True)
+        await stream.aclose()
+
 @app.get("/api/notifications/stream", response_class=StreamingResponse)
 async def api_notifications_stream(request: Request, types: Optional[str] = None):
     # Retain the existing feature flag, auth check, and filter validation.
-    async def generator():
-        async for notification in _notification_hub.subscribe(filters):
-            if await request.is_disconnected():
-                break
-            yield format_notification_sse(notification)
-
-    return StreamingResponse(
-        generator(),
+    return NotificationStreamingResponse(
+        iter_notification_sse(request, _notification_hub, filters),
         media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache"},
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 ~~~
 
+The keepalive is an SSE comment, not an event or replay marker. The bounded send
+adapter is route-local because `StreamingResponse` does not expose a send timeout.
 Do not parse Last-Event-ID, emit retry, or persist events.
 
 - [ ] **Step 4: Run all notification tests**

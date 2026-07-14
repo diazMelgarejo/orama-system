@@ -3,7 +3,7 @@
 # Security Remediation Plan — Post PR Review (2026-05-23)
 
 > **Date:** 2026-05-24 (plan authored)  
-> **Source:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../../OpenClaw/v1/2026-05-23-security-markdown.md)  
+> **Source:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../../v1/2026-05-23-security-markdown.md)
 > **Methodology:** gstack `/autoplan` (CEO → Eng → DX auto-decisions; security findings treated as **non-negotiable** user challenges, not taste calls)  
 > **Status:** Fixes **1–3 implemented** (2026-05-25). Fixes **4–6 queued** — see [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md).
 

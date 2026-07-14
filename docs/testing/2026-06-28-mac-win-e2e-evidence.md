@@ -1,7 +1,7 @@
 # Mac↔Win E2E evidence — 2026-06-28 (live re-verify)
 
 > Session: both repos on `main`; Win LM Studio online at discovery IP.  
-> **Operator playbook (Mac + Win):** [`lan-peer-self-talk.md` § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) · [`docs/guides/lan-peer-mac-win-operator.md`](../guides/lan-peer-mac-win-operator.md)
+> **Operator playbook (Mac + Win):** [`lan-peer-self-talk.md` § Operator playbook](../../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) · [`docs/guides/lan-peer-mac-win-operator.md`](../guides/lan-peer-mac-win-operator.md)
 
 ## Commands run (Mac)
 

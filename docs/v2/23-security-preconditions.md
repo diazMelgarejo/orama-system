@@ -1,7 +1,7 @@
 # 23 — Security Preconditions (v2 gate)
 
 > **Status:** Active gate — v2 scaffold work must not proceed on a shared LAN until rows marked **done** below are true in production configs, and new v2 surfaces must satisfy the security-first platform requirements.  
-> **Review source:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../../OpenClaw/v1/2026-05-23-security-markdown.md)  
+> **Review source:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../../v1/2026-05-23-security-markdown.md)
 > **Canonical policy:** [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md)
 > **Design baseline:** [`24-security-first-platform.md`](24-security-first-platform.md)
 
