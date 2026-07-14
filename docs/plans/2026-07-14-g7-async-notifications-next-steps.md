@@ -14,8 +14,9 @@ Included commits:
 
 Included files:
 
-- `docs/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md`
-- `bin/orama-system/skills/antigravity-agent/SKILL.md`
+- `docs/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` — Portal Notification Hub MVP analysis and implementation sketch.
+- `bin/orama-system/skills/antigravity-agent/SKILL.md` — Antigravity `agy` fan-out skill guidance.
+- `docs/plans/2026-07-14-g7-async-notifications-next-steps.md` — this preservation branch's follow-up checklist.
 
 Excluded on purpose:
 
@@ -40,8 +41,8 @@ G7-Async-notifications-mvp
 ## Implementation checklist left to do
 
 - [ ] Define `EventType` enum and `Notification` dataclass.
-- [ ] Implement `NotificationHub` with FIFO queue and subscription filtering.
-- [ ] Add `/api/notifications/stream?types=...` SSE route.
+- [ ] Implement `NotificationHub` with per-session FIFO queues and subscription filtering.
+- [ ] Add `/api/notifications/stream?types=...` SSE route gated by `PORTAL_NOTIFICATIONS=1`.
 - [ ] Wire the hub into existing portal monitors for agent state, topology, hardware, jobs, and phase transitions.
 - [ ] Reuse existing redaction helpers for any agent, routing, or policy payloads.
 - [ ] Add auth regression coverage for unauthenticated notification clients.
