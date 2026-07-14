@@ -4,10 +4,10 @@
 **Status:** Draft — pending review
 **Owner:** orama-system (Layer 3) + Perpetua-Tools (Layer 2)
 
-> **Phase Numbering (2026-07-10 Harmonization):** This plan's 6 phases are numbered Phase 2–6 when integrated with parallel Phase 1.0–1.3 research implementation. See [2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md) for integrated timeline.
+> **Phase Numbering (2026-07-10 Harmonization):** This plan's 6 phases are numbered Phase 2–6 when integrated with parallel Phase 1.0–1.3 research implementation. See [2026-07-10-pr2-phase0-review-crossreference.md](../../archive/fleet-mesh/2026-07-10-pr2-phase0-review-crossreference.md) for integrated timeline.
 **Related:** `startup_intelligence.py`, `gossip_bus.py`, `discover.py`, `lan_peer_channel.py`, `coord_pulse.sh/.ps1`
 
-**Navigation:** → unified timeline (integrated): [2026-07-10-phase-integration-map.md](2026-07-10-phase-integration-map.md) · status/gap tracking: [2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md) · research inputs (PT): [D2 Heartbeat & Failure Detector](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/DELIVERABLE-2-HEARTBEAT-LIVENESS-REGENERATED.md) (feeds § 6.2) · [PATTERN-SYNTHESIS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md) (P2/P5/P9/P19 map to gossip-relay/split-brain) · [MULTIAGENT-SWARM-SECURITY-ANALYSIS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md) · architecture research: [2026-07-10-oasn-p2p-architecture-research.md](2026-07-10-oasn-p2p-architecture-research.md)
+**Navigation:** → unified timeline (integrated): [2026-07-10-phase-integration-map.md](2026-07-10-phase-integration-map.md) · status/gap tracking: [2026-07-10-pr2-phase0-review-crossreference.md](../../archive/fleet-mesh/2026-07-10-pr2-phase0-review-crossreference.md) · research inputs (PT): [D2 Heartbeat & Failure Detector](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/DELIVERABLE-2-HEARTBEAT-LIVENESS-REGENERATED.md) (feeds § 6.2) · [PATTERN-SYNTHESIS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md) (P2/P5/P9/P19 map to gossip-relay/split-brain) · [MULTIAGENT-SWARM-SECURITY-ANALYSIS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md) · architecture research: [2026-07-10-oasn-p2p-architecture-research.md](2026-07-10-oasn-p2p-architecture-research.md)
 
 > **VERIFIED STATUS (2026-07-10, live code check — not a status claim, actually run):**
 > Grepped for `FleetMode`, `classify_fleet_mode`, `fleet_topology`, `/api/fleet-topology`,
@@ -30,7 +30,7 @@
 > Phase 1 remains genuinely unstarted. But PT's Phase 1.0–1.3.1 substantially advances the
 > *research* this plan's § 6.2/6.3 depend on into *tested code* — closer to ready-to-consume
 > than "prerequisite research" implied below. See
-> [2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md)
+> [2026-07-10-pr2-phase0-review-crossreference.md](../../archive/fleet-mesh/2026-07-10-pr2-phase0-review-crossreference.md)
 > for the full ledger including this correction.
 
 ---
@@ -512,5 +512,5 @@ security rigor than this plan called for — a full P2P threat model (T1–T7),
 and TDD test specs — none of which this plan's Phase 1–5 tasks required, but
 all of which directly harden §§ 4.4/6.2/6.3 (gossip relay, heartbeat liveness,
 split-brain) once Phase 1–5 implementation begins. See
-[2026-07-10-pr2-phase0-review-crossreference.md](2026-07-10-pr2-phase0-review-crossreference.md)
+[2026-07-10-pr2-phase0-review-crossreference.md](../../archive/fleet-mesh/2026-07-10-pr2-phase0-review-crossreference.md)
 for the full ledger.

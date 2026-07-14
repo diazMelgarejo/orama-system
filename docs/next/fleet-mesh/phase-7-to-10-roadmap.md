@@ -1,7 +1,7 @@
 # Fleet Mesh Phase 7–10+ Roadmap
 
 Status: active roadmap extracted from the Phase 6 completed-report clue.  
-Root plan: [`../../plans/2026-07-08-self-healing-mesh-degradation-modes.md`](../../plans/2026-07-08-self-healing-mesh-degradation-modes.md)  
+Root plan: [`2026-07-08-self-healing-mesh-degradation-modes.md`](2026-07-08-self-healing-mesh-degradation-modes.md)
 Index: [`README.md`](README.md)
 
 ## Source clue
@@ -19,8 +19,8 @@ That report is archived as a completed milestone. This roadmap is the active con
 
 Current active documents:
 
-- [`../../G7-ASYNC-NOTIFICATIONS-ANALYSIS.md`](../../G7-ASYNC-NOTIFICATIONS-ANALYSIS.md)
-- [`../../plans/2026-07-14-g7-async-notifications-next-steps.md`](../../plans/2026-07-14-g7-async-notifications-next-steps.md)
+- [`G7-ASYNC-NOTIFICATIONS-ANALYSIS.md`](G7-ASYNC-NOTIFICATIONS-ANALYSIS.md)
+- [`2026-07-14-g7-async-notifications-next-steps.md`](2026-07-14-g7-async-notifications-next-steps.md)
 
 Working hypothesis:
 
