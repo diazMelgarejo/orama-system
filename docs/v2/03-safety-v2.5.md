@@ -101,3 +101,29 @@ These are **v2.0 kernel constraints**, not v2.5 aspirations. They must pass the 
 - Does `perpetua-safety` ship as a separate repo or a subpackage of `perpetua-core`? (Likely separate — keeps kernel pure.)
 - How does the misalignment kill-switch interact with `aresume`? (Probably: only human-supplied `aresume` payloads can clear a SWARM-raised interrupt.)
 - What's the interface for "agent identity attestation" (MAESTRO layer 3)? Cryptographic? Cached per-process? See `06-open-questions.md`.
+
+---
+
+## Related implementation patterns (Perpetua-Tools — read on demand, not restated here)
+
+MAESTRO and SWARM's v2.5 enforcement concepts already have a concrete, independently-developed P2P pattern catalog and one live (partially implemented) case study in Perpetua-Tools. Progressive disclosure: this section is pointers only — read the PT docs directly when actually designing `perpetua-safety`'s enforcement subgraphs, don't rebuild this mapping from memory.
+
+| This doc's concept | PT pattern (P1–P20 catalog) | PT source |
+|---|---|---|
+| MAESTRO Layer 3 — agent identity / cryptographic attestation | **P1** Proof-Anchored Identity | `Perpetua-Tools/docs/phase-0-specifications/PATTERN-SYNTHESIS.md` |
+| MAESTRO Layer 4 — tool authority / capability tokens | **P5** Witness Quorum + Provenance Dedup (access-control-adjacent) | same |
+| SWARM — aggregate risk scoring | **P6** Reputation-Decay Witness Scoring | same |
+| SWARM — cross-agent contradiction detection | **P13** Equivocation Detection | same |
+| SWARM — audit replay | **P19** Immutable Append-Only Audit Log (implemented with an optional durable JSONL sink, 2026-07-12) | `orchestrator/audit_log.py` in PT |
+
+**Full pattern catalog (P1–P20), extraction methodology, and PT status per pattern:** `Perpetua-Tools/docs/phase-0-specifications/PATTERN-SYNTHESIS.md`
+**Concrete discovery + implementation tracks (the G1–G16 gap analysis these patterns close):** `Perpetua-Tools/docs/phase-0-specifications/PATTERN-MULTIAGENT-EXECUTION-PLAN.md`
+**Threat model these patterns were extracted to cover (T1–T7), P2P source citations (Kademlia/SWIM/RAFT/BFT/Bitcoin):** `Perpetua-Tools/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md`
+
+**Read before wiring any of the above into `perpetua-safety` enforcement code:** [`45-single-operator-lan-threat-model-descope.md`](45-single-operator-lan-threat-model-descope.md) (D23). PT independently implemented P5/P6/P13 (the exact patterns SWARM's risk-scoring and contradiction-detection concepts above map to), then discovered via a Q1-Q3 premise check that its actual deployment (single operator, self-owned LAN) has no adversary for those patterns to defend against — see that doc's "Addendum: Single-Operator LAN Premise Check" for the full re-derivation. **Run the same Q1-Q3 check against `perpetua-safety`'s actual v2.5 deployment context before assuming MAESTRO/SWARM's adversarial framing applies as-is** — the same P2P pattern sources (Kademlia/PBFT/Bitcoin-derived) underlie both this doc's SWARM design and PT's now-descoped P5/P6/P13, so the premise mismatch risk is shared, not PT-specific.
+
+### Deferred: StateTransitionManager high-peer-count latency benchmark (2026-07-12)
+
+PT's `StateTransitionManager` (`orchestrator/state_transition_manager.py`, PR #205) implements a refcounted per-peer `asyncio.Lock` serializing `evaluate_observation` — the concrete mechanism underneath the P5/P6/P13 pattern mapping above. Its Phase 2 blockers doc (`Perpetua-Tools/docs/phase-0-specifications/2026-07-11-PHASE-2-BLOCKERS.md` § TODO #2) originally called for "benchmark latency impact (lock contention on high-peer-count deployments)" but that item is **deferred here** rather than done in PR #205 because there is no representative concurrent caller/workload yet. This is separate from the D23 security descope: synthetic concurrent-peer lock-contention benchmarking can be done without a multi-operator or adversarial deployment, but should use an explicit synthetic workload plan rather than treating node-count growth itself as representative. Run the benchmark when SWARM's aggregate-risk-scoring rollout or a dedicated synthetic workload defines expected peer counts, contention shape, and latency budget.
+
+**Also relevant — this repo's own pattern-mining library:** [`references/patterns/foundry-lifecycle-patterns.md`](references/patterns/foundry-lifecycle-patterns.md) independently names "ToolNode Sandboxing" as **MAESTRO Layer 4** (same layer as the PT mapping above) and ties `GossipBus` `session_id`/`agent_id` tagging to the same audit-trail concept P19/`AuditLog` implements. Full catalogue + cross-references: [`references/patterns/README.md`](references/patterns/README.md).

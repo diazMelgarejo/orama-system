@@ -191,6 +191,48 @@ that appear security-relevant and should be considered before opening new work:
 If a GitHub PR creation tool is unavailable, agents must still push the
 prepared branch and report the intended PR base/head chain explicitly.
 
+### Case study: append-only shared-file conflicts across independent PRs (2026-07-12)
+
+Not every multi-PR conflict is a security *finding* — this one is a git-mechanics
+case worth recording here because it's the same "stacking discipline" this
+section already mandates, just discovered from the append-only-memory-log
+angle rather than a severity-ranked security fix.
+
+**What happened:** `Perpetua-Tools` PRs `#205`, `#206`, and `#208` were all open
+simultaneously and each independently appended new entries to
+`.agent/memory/semantic/LESSONS.md` and `lessons.jsonl` (this repo's portable
+lesson log). GitHub's per-PR `mergeable`/`mergeStateStatus` only checks each PR
+against the *current* `main` — it showed all three as `CLEAN` individually, but
+`git merge-tree --write-tree --merge-base=<main> <A> <B>` (a read-only local
+simulation, no side effects) proved `#205`, `#206`, and `#208` all conflict with
+**each other** on those two files. A 4th open PR (`#207`) touched unrelated
+files and was independent of all three.
+
+**Landing order chosen (user decision, not auto-picked):** `#205` → `#206` →
+`#208`, `#207` any time. Rather than rebase each later PR onto the earlier one
+(this section's default stacking mechanic, which is a history rewrite requiring
+the AskUserQuestion gate in rule 6 above), the branches were pre-harmonized with
+plain `git merge` (no rewrite, safe to do without that extra authorization):
+merge `#205` into `#206`, then merge the updated `#206` (now carrying `#205`
+too) into `#208`. Each merge's conflict on the two shared files was resolved by
+**union** — both sides' independently-appended entries kept, none deleted or
+overwritten, consistent with rule 7 ("No security record deletion") applied to
+memory/lesson records generally, not just security findings. Full test suite
+(1302 tests) re-run clean after each merge before pushing. Separately from
+application tests, the resolved append-only artifacts must be validated after
+the union: parse every `lessons.jsonl` line as JSON, check for duplicate lesson
+entries, and confirm the final ordering matches the intended landing order
+before pushing.
+
+**Takeaway for future agents:** an append-only log file shared by 3+ PRs open
+at once is a predictable multi-way conflict, invisible to GitHub's own
+per-PR-vs-main check. Before assuming a set of open PRs are independently
+mergeable, simulate the intended landing order locally with `git merge-tree
+--write-tree --merge-base=<base> <branch1> <branch2>` (see
+`Perpetua-Tools/docs/wiki/08-git-hygiene-and-branching.md` and
+`bin/orama-system/skills/shell-hygiene/SKILL.md` § 6 for the companion
+git-commit-contention guidance from the same session).
+
 ---
 
 ### Fix 6 — operator reference (implemented)
