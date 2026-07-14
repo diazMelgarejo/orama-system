@@ -220,7 +220,7 @@ PY
 
 1. **Host-only workflow (recommended for agents):** Run `gbrain` from your Mac Terminal for sync and heavy queries; in agents use **CRG MCP first** (`detect_changes_tool`, `query_graph_tool`), then **Grep** for exact strings. See [`bin/orama-system/skills/code-review/references/tool-chain.md`](../bin/orama-system/skills/code-review/references/tool-chain.md).
 2. **Re-bootstrap gbrain:** `/setup-gbrain` or `bash bin/orama-system/scripts/first-run-install.sh run` — ensures `~/.gbrain/config.json` mode `0600` and embedding model aligned with CRG (`ollama:bge-m3`).
-3. **Local brain instead of remote:** If Supabase is blocked in sandboxes, prefer **local-stdio / PGLite** per [`bin/orama-system/mcp-install/references/setup-gbrain.md`](../bin/orama-system/mcp-install/references/setup-gbrain.md) so agents hit loopback, not cloud DNS.
+3. **Local brain instead of remote:** If Supabase is blocked in sandboxes, prefer **local-stdio / PGLite** and review [`gbrain-configuration.md`](../bin/orama-system/gstack/references/gbrain-configuration.md) before changing the active setup so agents hit loopback, not cloud DNS.
 4. **Cursor permissions:** When the agent must call cloud gbrain, retry the tool invocation with **full network** (or run the query in a non-sandbox shell) — do not paste `config.json` contents into chat.
 5. **Worktree pin:** Ensure `.gbrain-source` exists in the repo root (gitignored) after `/sync-gbrain`; wrong source name does not cause ENOTFOUND but breaks empty search results.
 
@@ -233,7 +233,7 @@ PY
 ## Open TODOs (environment)
 
 - [x] **gbrain** `getaddrinfo ENOTFOUND` — documented above (host shell PASS 2026-05-25; sandboxes may still fail until local brain or network policy fixed)
-- [x] **CRG MCP in Cursor** — `cursor-mcp.stack.json` + `bash bin/orama-system/scripts/sync-cursor-mcp.sh` → `.cursor/mcp.json` (CRG + ai-cli-mcp); reload MCP after pull. Until reload, use CLI: `uvx code-review-graph status --repo "$ORAMA_REPO_ROOT"` (see [`mcp-tools-crg.md`](../../bin/orama-system/skills/code-review/references/mcp-tools-crg.md) § CLI fallback)
+- [x] **CRG MCP in Cursor** — `cursor-mcp.stack.json` + `bash bin/orama-system/scripts/sync-cursor-mcp.sh` → `.cursor/mcp.json` (CRG + ai-cli-mcp); reload MCP after pull. Until reload, use CLI: `uvx code-review-graph status --repo "$ORAMA_REPO_ROOT"` (see [`mcp-tools-crg.md`](../bin/orama-system/skills/code-review/references/mcp-tools-crg.md) § CLI fallback)
 
 ---
 

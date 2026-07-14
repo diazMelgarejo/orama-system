@@ -2,7 +2,7 @@
 
 **Status:** Active default model policy as of 2026-05-14
 **Source spec:** [`OpenClaw/v1/OpenRouter.md`](../../v1/OpenRouter.md)
-**Canonical MCP routing:** [`bin/orama-system/mcp-orchestration/SKILL.md`](../bin/orama-system/mcp-orchestration/SKILL.md) §2
+**Canonical MCP routing:** [`bin/orama-system/skills/mcp-orchestration/SKILL.md`](../bin/orama-system/skills/mcp-orchestration/SKILL.md) §2
 **Apply with:** `scripts/apply-openrouter-free-defaults.sh`
 **Verify with:** `scripts/verify-openrouter-models.sh`
 

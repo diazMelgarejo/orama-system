@@ -300,7 +300,7 @@ All candidates pass through `policy.validate_or_raise()` — fail closed on affi
 
 ### 5.3 Role-to-backend map (ROLE_BACKEND_MAP in PT)
 
-**Hard requirements (2026-05-15):** Ollama Mac (`qwen3.5:9b-nvfp4` + `bge-m3`) + LM Studio Win (Qwen3.5-27B). System does not start without these. Everything else is optional. Full probe spec: [`CLAUDE-instru.md § 6`](../../../CLAUDE-instru.md).
+**Hard requirements (2026-05-15):** Ollama Mac (`qwen3.5:9b-nvfp4` + `bge-m3`) + LM Studio Win (Qwen3.5-27B). System does not start without these. Everything else is optional. Full probe spec: [`CLAUDE-instru.md § 6`](../../CLAUDE-instru.md).
 Mac roles use `ollama` as primary provider; `lmstudio-mac` is optional secondary only — never auto-routed over Ollama.
 
 | Role | Specialization | Provider (primary) | Model |

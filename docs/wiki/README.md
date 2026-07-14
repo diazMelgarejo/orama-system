@@ -60,7 +60,7 @@ This wiki organizes hard-won lessons by topic. Each page contains root cause, ex
 ```
 
 3. Add a row to the index table above
-4. Add a `→ [wiki/NN-topic.md](wiki/NN-topic.md)` link at the bottom of the LESSONS.md entry
+4. Add a `→ wiki/NN-topic.md` reference at the bottom of the LESSONS.md entry
 
 ---
 
