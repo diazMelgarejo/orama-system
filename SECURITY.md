@@ -218,7 +218,11 @@ too) into `#208`. Each merge's conflict on the two shared files was resolved by
 **union** — both sides' independently-appended entries kept, none deleted or
 overwritten, consistent with rule 7 ("No security record deletion") applied to
 memory/lesson records generally, not just security findings. Full test suite
-(1302 tests) re-run clean after each merge before pushing.
+(1302 tests) re-run clean after each merge before pushing. Separately from
+application tests, the resolved append-only artifacts must be validated after
+the union: parse every `lessons.jsonl` line as JSON, check for duplicate lesson
+entries, and confirm the final ordering matches the intended landing order
+before pushing.
 
 **Takeaway for future agents:** an append-only log file shared by 3+ PRs open
 at once is a predictable multi-way conflict, invisible to GitHub's own
