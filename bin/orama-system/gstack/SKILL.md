@@ -351,7 +351,10 @@ Extended use: independent review voice`](../skills/kimi-agent/SKILL.md).
 Not wired into gstack's own dual-voice default (that lives in the external
 gstack checkout, not this repo) — treat this as an opt-in third voice the
 orchestrating session adds manually when the user asks for more than two
-perspectives, not an automatic upgrade to every review phase.
+perspectives, not an automatic upgrade to every review phase. Keep the third
+voice least-privilege and redacted: remove secrets before sending inline source,
+prefer read-only access, and use `--add-dir` only for the smallest repository or
+subtree context needed for the review.
 
 ## Skill Routing
 
