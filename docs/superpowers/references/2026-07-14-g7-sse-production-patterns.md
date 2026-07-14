@@ -173,6 +173,14 @@ not an implementation claim.
 - v2.1 mesh replication and v2.5 safety enforcement;
 - cross-origin browser EventSource support.
 
+## Captured Evidence Archive
+
+The raw Firecrawl responses used for this time-boxed research are retained in
+[the G7 Firecrawl evidence archive](2026-07-14-g7-firecrawl/README.md). The
+archive is evidence for review and reruns, not an additional source of design
+authority; the decisions above remain bounded by the cited primary sources and
+the canonical `docs/v2/*` plans.
+
 ## Rerun Inputs
 
 ```text
