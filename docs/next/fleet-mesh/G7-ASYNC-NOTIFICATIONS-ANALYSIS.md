@@ -10,7 +10,14 @@
 
 G7 addresses a **coordination gap**: agents, operators, and integrations need **push notifications** for system state changes without polling. Current portal uses pull-based status polling (10s refresh). This gap blocks multi-agent awareness, operator alerting, and webhook integrations.
 
-**Recommendation:** Implement **Portal Notification Hub** — a minimal MVP extending existing LAN peer channel infrastructure, wired into portal's existing service monitors. Keep it local to the portal for the MVP, but shape the envelope and filters so planned GossipBus/GossipMesh v2.1 can consume or replicate the events later.
+**Recommendation:** Implement **Portal Notification Hub** — a minimal MVP extending existing portal monitor infrastructure, wired into the portal's existing service probes. Keep it local to the portal for the MVP, but shape the envelope and filters so planned GossipBus/GossipMesh v2.1 can consume or replicate the events later.
+
+## Scope and precedence
+
+- `docs/v2/*` is canonical. If any G7 note conflicts with v2, the G7 note is wrong and must be updated.
+- This document is a G7 implementation analysis, not a competing roadmap.
+- The MVP scope is portal-local push notifications with redacted envelopes, default-off behavior, and explicit future seams for v2.1/v2.5.
+- Do not import `perpetua-core`, add mesh replication, or invent new trust boundaries for this branch.
 
 ---
 
@@ -24,15 +31,25 @@ G7 addresses a **coordination gap**: agents, operators, and integrations need **
 | **Event Envelope** | `lan_peer_channel.py` §`make_envelope()` | Shipped v1 | Versioned JSON: `type`, `source`, `ts`, `data` |
 | **Portal SSE** | `portal_server.py` §`/events/peer-stream` | Shipped v1 | Text/event-stream response, async generator |
 | **Service Monitors** | `portal_server.py` §`_probe_*` | Shipped v1 | Agents, routing, hardware, activity feeds already tracked |
-| **GossipBus/GossipMesh v2.1** | `docs/v2/43-gossipbus-mesh-transport.md` | Planned mesh transport | Event-envelope conventions: versioned, redacted, interest-filtered deltas; MVP should stay compatible without implementing mesh replication |
+| **GossipBus/GossipMesh v2.1** | `docs/v2/43-gossipbus-mesh-transport.md` | Planned mesh transport | Event-envelope conventions: versioned, redacted, interest-filtered deltas; MVP should stay compatible without implementing mesh replication or replay |
 
 ### ✗ Gaps (To Implement)
 
-1. **Portal doesn't emit events** — monitors only pull state; no push to subscribers
+1. **Portal notification fan-out is scaffolded but not yet fully hardened** — route and service exist, but monitor wiring, edge-triggering, and lifecycle behavior still need final validation
 2. **No event subscription filter** — SSE broadcasts all peers; no topic/capability scoping  
 3. **No durable event queue** — SSE clients miss events during disconnect (best-effort only)
 4. **No webhook/email integration** — notifications live in WebSocket/SSE only
-5. **No v2.1-compatible portal notification envelope yet** — portal event types and payload shape need a versioned local contract before implementation begins
+5. **Envelope contract still needs a single source of truth** — the scaffold already exposes v2.1-shaped aliases, but docs/tests should remain the authority for the stable local contract
+
+### Current branch reality
+
+This worktree already contains the notification scaffold on the MVP branch:
+
+- `src/orama_system/portal_notifications.py`
+- `/api/notifications/stream` in `src/orama_system/portal_server.py`
+- `tests/test_portal_notifications.py`
+
+So the remaining work is not "start from zero"; it is to harden the existing scaffold against the v2 contracts, edge cases, and security gates above.
 
 ---
 
@@ -256,6 +273,29 @@ if old_violations != policy_status.get("violations"):
 
 ---
 
+## Alignment with `/docs/v2` Future Specs
+
+G7 is a v1 portal MVP, but it must leave a clean seam for v2.0, v2.1, and v2.5. The rule is **compatible envelope now, no premature mesh or safety overlay now**. Treat the table below as a compatibility contract, not as permission to expand scope.
+
+| Future spec | G7 alignment decision | What G7 must not do yet |
+|-------------|-----------------------|--------------------------|
+| `docs/v2/01-kernel-spec.md` | Emit small state-change events that can later map to kernel `GossipBus` / `PerpetuaState` metadata. Keep the envelope versioned and source-tagged. | Do not import or depend on `perpetua-core`; v1 portal remains standalone. |
+| `docs/v2/23-security-preconditions.md` + `docs/v2/24-security-first-platform.md` | Treat `/api/notifications/stream` as a control-plane read route: default off, server-side auth, loopback/dev behavior inherited from existing middleware, redaction before enqueue, auth-denial tests. | Do not rely on client-side hiding, query parameters, or UI state for authorization. Do not include raw bearer tokens, prompts, transcripts, or unredacted agent/job records in events. |
+| `docs/v2/43-gossipbus-mesh-transport.md` (v2.1) | Preserve adapter fields: `version`, `type`, `event_type`, `ts`, `source`, `data`, and `payload`. Subscription filters should use `event_type`-compatible names. | Do not add mesh tail/ingest endpoints, Redis/NATS, cross-particle replication, durable replay, or peer-to-peer trust scoring in the MVP. |
+| `docs/v2/03-safety-v2.5.md` | Keep events audit-friendly enough for future MAESTRO/SWARM observers: stable type names, redacted payloads, no destructive side effects from streaming. | Do not claim v2.5 enforcement. No risk scoring, kill switch, cryptographic agent attestation, quorum, or HITL auto-injection belongs in this G7 MVP. |
+| `docs/v2/45-single-operator-lan-threat-model-descope.md` | Keep bounded queues and redaction because they help honest-but-flaky operation. Re-run the Q1-Q3 threat check before adding adversarial P2P controls. | Do not wire Sybil/quorum/reputation/equivocation controls for a single-operator LAN without a changed trust boundary. |
+
+### v2 security design-gate answers for this MVP surface
+
+1. **Attacker:** same-LAN client, malicious web page trying to open an EventSource, local process with no bearer, compromised browser tab, and accidental log/payload leakage.
+2. **Trust boundary:** HTTP request to `/api/notifications/stream`, `types` query parameter, and producer payloads crossing from portal monitors into subscriber-visible JSON.
+3. **Capability:** control-plane `read`. The route is not public. It must use existing portal auth behavior.
+4. **Fail closed:** feature flag unset returns `404`; enforced auth without a valid bearer returns `401`; unknown event type returns `400`; producer failures must not mutate portal state.
+5. **Logged/redacted:** only redacted notification payloads may be emitted. Future audit logs may record event type/source/subscriber count, never secrets, raw prompts, bearer tokens, or full transcripts.
+6. **CI proof:** notification tests must cover default-off `404`, enforced-auth `401`, invalid filter `400`, envelope adapter aliases, bounded queue cleanup, and future v2 alignment constants.
+
+---
+
 ## Risk Assessment
 
 ### Low Risk ✓
@@ -267,6 +307,7 @@ if old_violations != policy_status.get("violations"):
 ### Medium Risk ⚠
 - **Design debt:** MVP event schema must remain adapter-friendly for GossipBus/GossipMesh v2.1; include `version`, `event_type`, and `payload` aliases now so migration is cheap
 - **Storage:** durable event queue (if added) needs SQLite table; runs in portal process (no new infra)
+- **Future-spec drift:** agents may try to overbuild v2.1 mesh or v2.5 safety features inside the G7 branch. Guardrail: keep those as documented seams and tests only.
 
 ### Mitigation
 - Make event schema versioned and redaction-scoped from start
@@ -286,6 +327,7 @@ if old_violations != policy_status.get("violations"):
 - [ ] Feature flag: `PORTAL_NOTIFICATIONS=1` (default: 0)
 - [ ] Acceptance test: emit event, verify receipt within 2s on SSE client
 - [ ] Document in portal `/api` reference (add to `GET /` response in v2 dashboard)
+- [ ] Keep v2.1/v2.5 alignment additive: preserve envelope fields and security invariants, but defer mesh replication, durable replay, and safety overlays to `/docs/v2` milestones.
 
 ---
 
@@ -306,6 +348,9 @@ python3 scripts/agent_coordination.py queue claim "G7-async-notifications" "agy-
 ## Cross-References
 
 - Kernel event design: `docs/v2/01-kernel-spec.md` §5 (GossipBus)
+- v2 security preconditions: `docs/v2/23-security-preconditions.md`, `docs/v2/24-security-first-platform.md`
 - v2.1 mesh transport: `docs/v2/43-gossipbus-mesh-transport.md`
+- v2.5 safety overlays: `docs/v2/03-safety-v2.5.md`
+- single-operator LAN descope: `docs/v2/45-single-operator-lan-threat-model-descope.md`
 - Security contracts: `SECURITY.md` Immediate TODO §C (unauthenticated notification blocking)
 - Portal architecture: `src/orama_system/portal_server.py` §probes
