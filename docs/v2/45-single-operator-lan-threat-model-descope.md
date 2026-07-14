@@ -16,7 +16,7 @@ The pattern set (P5 witness quorum, P6 reputation-decay, P13 equivocation) was e
 
 1. **Real witnesses?** Do ≥2 independent, non-collaborating observers actually exist and report in, or is there only ever one observer?
 2. **Real trust boundary?** How many distinct *administrative identities* actually control the nodes in question — not node count, but who has credentials/access to how many of them? A quorum spanning N machines under 1 operator's control defends against nothing a compromise of that operator's primary machine doesn't already defeat.
-3. **Real observed failure mode?** What does this system's actual incident history show — self-inflicted operational flakiness (crashes, DHCP moves, timeouts) or genuine adversarial behavior (forged identities, contradicting reports)? Zero adversarial incidents across a project's full operational history is decisive evidence, not merely suggestive.
+3. **Real observed failure mode?** What does this system's actual incident history show — self-inflicted operational flakiness (crashes, DHCP moves, timeouts) or genuine adversarial behavior (forged identities, contradicting reports)? Zero recorded adversarial incidents across a project's operational history is supporting evidence, not proof; account for limited exposure and non-detection, then keep monitoring/reassessment criteria in place.
 
 ## Case study (concrete instance this decision generalizes from)
 
@@ -40,7 +40,7 @@ The distinguishing test: **does this pattern's value require an adversary, or do
 
 ## When to revisit
 
-Re-run Q1–Q3 (not just re-check node count) if Fleet Mode, or any future initiative, introduces a **genuine change in trust boundary** — i.e., nodes administered by a different person or organization joining the mesh, not just more self-owned nodes under the same operator. More nodes alone does not retrigger this decision; a new administrative identity does.
+Re-run Q1–Q3 (not just re-check node count) if Fleet Mode, or any future initiative, introduces a **material trust-boundary or threat-model change**: nodes administered by a different person or organization, a compromised self-owned node or credential, external exposure, or a materially changed attack surface. More self-owned nodes alone does not retrigger this decision; new adversarial opportunity does.
 
 ## Application to other repos
 

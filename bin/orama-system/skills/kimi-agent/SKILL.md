@@ -217,6 +217,9 @@ hit in that run:
   prompt, or pass `--add-dir <repo>` to grant read access, and say
   explicitly which one was used so the reviewing agent doesn't fabricate
   file reads it didn't do.
+- Keep Kimi fan-out least-privilege and redacted: remove secrets before sending
+  inline source, prefer read-only access, and use `--add-dir` only for the
+  smallest repository or subtree context needed for the review.
 
 ## Local Server (REST + WebSocket + Web UI) — the observability surface
 

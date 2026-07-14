@@ -113,11 +113,12 @@ explicit hard ceiling**, not just the implicit one from waiting for its own
 exit.
 
 Default ceiling: **15 minutes** from the point you notice it's taking
-unusually long (not necessarily from launch — a review/analysis task that's
-still burning CPU at minute 10 is fine; the ceiling is about detecting a
-**stalled**, not merely slow, process). Pair it with a CPU/activity check —
-`ps -o %cpu,stat -p <pid>` sustained near-zero for the whole window is the
-actual hang signal, not elapsed time alone.
+unusually long (not necessarily from launch). This snippet is a simple
+wall-clock guard for an external dispatch that should have a bounded runtime; it
+is intentionally conservative and may stop a healthy-but-slow process. If the
+task is expected to exceed 15 minutes, set an explicit longer deadline up front
+and monitor progress/activity separately (`ps -o %cpu,stat -p <pid>`, output
+file growth, or service logs) before killing it.
 
 ```bash
 PID=<pid-of-the-external-process>
@@ -130,8 +131,10 @@ while true; do
     exit 0
   fi
   if [ "$(date +%s)" -ge "$DEADLINE" ]; then
-    echo "HARD CEILING HIT after 15 min — force-killing $PID"
-    kill -9 "$PID" 2>/dev/null
+    echo "HARD CEILING HIT after 15 min — stopping $PID"
+    kill "$PID" 2>/dev/null || true
+    sleep 5
+    kill -9 "$PID" 2>/dev/null || true
     exit 1
   fi
   sleep 15
@@ -178,11 +181,15 @@ done
 **B) `git commit` succeeds with "nothing to commit" (or commits an empty
 subset) right after a `git add`.** This is not a lock failure — the other
 session's commit already landed between your `add` and your `commit`,
-clearing the index of what you staged. Re-run `git add` immediately before
-retrying `git commit`, in the same retry loop (don't just retry the bare
-commit — it will keep reporting nothing staged):
+clearing the index of what you staged. In a shared checkout, do **not** blindly
+re-stage after another agent commits; first verify the worktree/staged diff
+still contains only files you own, or move the retry into an isolated worktree.
+Then verify ownership once before the loop, and re-run `git add` immediately
+before retrying `git commit` (don't just retry the bare commit — it will keep
+reporting nothing staged):
 
 ```bash
+git status --short -- <files>   # inspect before retrying; stop if files are not yours
 n=0
 until git add <files> && git commit -m "..."; do
   n=$((n+1))
@@ -191,13 +198,11 @@ until git add <files> && git commit -m "..."; do
 done
 ```
 
-Both are the same underlying race — this is the "Last Write Wins" class
-named in [`docs/v2/references/patterns/state-reducer-patterns.md`](../../../../docs/v2/references/patterns/state-reducer-patterns.md)
-and [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md),
-just at the git-porcelain layer instead of application state. A plain
-retry loop is sufficient here (unlike application state, git's own object
-model already prevents silent data loss — worst case is re-staging, not
-corruption), so no custom reducer is needed. Origin: hit twice in one
+Both are serialization hazards at the git-porcelain layer, not true reducer
+lost-update examples: Git's index lock prevents silent concurrent writes, while
+application reducers prevent whole-state overwrite. A bounded retry loop is
+sufficient only after ownership/diff checks confirm you are not committing
+another agent's work. Origin: hit twice in one
 session (2026-07-12) coordinating STM-gate doc commits with a concurrent
 Codex session over the same GossipBus claim board.
 
