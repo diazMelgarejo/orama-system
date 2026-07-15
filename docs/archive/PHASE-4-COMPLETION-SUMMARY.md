@@ -86,7 +86,7 @@
 | `create_topology_transition_event()` | Gossip event creation |
 | Topology merge test cases | Single/multi/no-peer merges |
 
-### 3. Manual E2E Runbook (`docs/PHASE-4-E2E-RUNBOOK.md`)
+### 3. Manual E2E Runbook (`docs/archive/PHASE-4-E2E-RUNBOOK.md`)
 
 **Complete:** Detailed step-by-step guide for live LAN validation with 6 scenarios.
 
