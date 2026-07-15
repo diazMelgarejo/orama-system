@@ -56,6 +56,11 @@ def test_start_scripts_validate_before_environment_or_startup():
         capture_output=True,
         check=False,
     )
+
+    expected = "Launcher validation passed: arguments parsed"
+    assert shell_result.returncode == 0
+    assert expected in shell_result.stdout
+
     pwsh = shutil.which("pwsh")
     if pwsh is None:
         pytest.skip("PowerShell is not available on this runner")
@@ -68,9 +73,6 @@ def test_start_scripts_validate_before_environment_or_startup():
         check=False,
     )
 
-    expected = "Launcher validation passed: arguments parsed"
-    assert shell_result.returncode == 0
-    assert expected in shell_result.stdout
     assert powershell_result.returncode == 0, powershell_result.stderr
     assert expected in powershell_result.stdout
 
@@ -100,6 +102,7 @@ def test_start_scripts_list_configuration_without_network_or_token_leaks():
     env.update(
         {
             "PT_HOST": "10.20.30.40",
+            "PT_BIND_LAN": "1",
             "ORAMA_CONTROL_PLANE_TOKEN": "must-not-appear-in-list-output",
         }
     )
@@ -116,6 +119,7 @@ def test_start_scripts_list_configuration_without_network_or_token_leaks():
     assert "Launcher configuration (read-only" in shell_result.stdout
     assert "must-not-appear-in-list-output" not in shell_result.stdout
     assert "10.20.30.40" not in shell_result.stdout
+    assert "0.0.0.0" not in shell_result.stdout
     assert "CONTROL_PLANE_TOKEN  configured" in shell_result.stdout
     assert {path: _file_bytes_or_none(path) for path in path_caches} == before
 
@@ -134,12 +138,14 @@ def test_start_scripts_list_configuration_without_network_or_token_leaks():
     assert "Launcher configuration (read-only" in powershell_result.stdout
     assert "must-not-appear-in-list-output" not in powershell_result.stdout
     assert "10.20.30.40" not in powershell_result.stdout
+    assert "0.0.0.0" not in powershell_result.stdout
     assert {path: _file_bytes_or_none(path) for path in path_caches} == before
 
 
 def test_start_scripts_list_network_only_when_explicitly_requested():
     env = os.environ.copy()
     env["PT_HOST"] = "10.20.30.40"
+    env["PT_BIND_LAN"] = "1"
     shell_result = subprocess.run(
         ["bash", str(START_SH), "--list", "--include-network"],
         cwd=ROOT,
@@ -150,7 +156,7 @@ def test_start_scripts_list_network_only_when_explicitly_requested():
     )
 
     assert shell_result.returncode == 0
-    assert "10.20.30.40" in shell_result.stdout
+    assert "0.0.0.0 (all interfaces)" in shell_result.stdout
 
     pwsh = shutil.which("pwsh")
     if pwsh is None:
@@ -164,7 +170,7 @@ def test_start_scripts_list_network_only_when_explicitly_requested():
         check=False,
     )
     assert powershell_result.returncode == 0, powershell_result.stderr
-    assert "10.20.30.40" in powershell_result.stdout
+    assert "0.0.0.0 (all interfaces)" in powershell_result.stdout
 
 
 def test_read_only_launcher_modes_reject_lifecycle_flags_before_startup():
