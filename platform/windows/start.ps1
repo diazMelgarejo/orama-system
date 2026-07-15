@@ -12,6 +12,8 @@
       .\start.ps1 --no-open   — start all, skip browser
       .\start.ps1 --stop      — kill all three services
       .\start.ps1 --status    — show port-listener status
+      .\start.ps1 --list      — show resolved read-only configuration
+      .\start.ps1 --validate  — validate launcher argument handling without setup
       .\start.ps1 --discover  — re-run LAN path discovery, rewrite .paths.ps1, exit
       .\start.ps1 --hardware-policy — validate model↔hardware affinity and exit
       .\start.ps1 --lan-peer    — set LAN bind env + run peer probe after start
@@ -50,25 +52,146 @@ $FleetStatusFormat = 'text'
 $Discover = $false
 $HardwarePolicy = $false
 $LanPeer = $false
+$ValidateOnly = $false
+$ListOnly = $false
+$ListIncludeNetwork = $false
+
+function Show-Usage {
+    @"
+Usage: .\platform\windows\start.ps1 [options]
+
+Options:
+  --no-open              Start services without opening the Portal browser.
+  --stop                 Stop PT, orama, and Portal services.
+  --status               Show service status and hardware policy.
+  --list                 Show resolved configuration without setup or probes.
+  --include-network      Reveal non-loopback hosts in --list output.
+  --fleet-status[=text]  Show current fleet topology and exit.
+  --fleet-status=json    Show current fleet topology as JSON and exit.
+  --discover             Re-run LAN path discovery, rewrite .paths.ps1, and exit.
+  --hardware-policy      Validate model/hardware affinity and exit.
+  --validate             Validate launcher arguments without environment, bootstrap,
+                         discovery, or service startup.
+  --lan-peer             LAN-bind services and probe the peer after startup.
+  --help, -h             Show this help.
+"@ | Write-Host
+}
+
+function Get-ListPathsValue {
+    param([string]$PathsFile, [string]$VariableName)
+    if (-not (Test-Path $PathsFile)) { return $null }
+    $pattern = '^\s*\${0}\s*=\s*[''"](?<value>.*?)[''"]\s*$' -f [regex]::Escape($VariableName)
+    foreach ($line in Get-Content -LiteralPath $PathsFile) {
+        if ($line -match $pattern) { return $Matches['value'] }
+    }
+    return $null
+}
+
+function Get-ListConfigValue {
+    param([string]$PathsFile, [string]$PathsVariable, [string[]]$EnvironmentNames, [string]$DefaultValue)
+    $fromPaths = Get-ListPathsValue -PathsFile $PathsFile -VariableName $PathsVariable
+    if ($fromPaths) { return @{ Value = $fromPaths; Source = '.paths.ps1' } }
+    foreach ($name in $EnvironmentNames) {
+        $value = [Environment]::GetEnvironmentVariable($name, 'Process')
+        if ($value) { return @{ Value = $value; Source = "environment:$name" } }
+    }
+    return @{ Value = $DefaultValue; Source = 'default' }
+}
+
+function Get-ListResolvedHost {
+    param([string]$LanEnvironment, [string[]]$HostEnvironments, [string]$DefaultHost)
+    $lan = [Environment]::GetEnvironmentVariable($LanEnvironment, 'Process')
+    if ($lan -and $lan.Trim().ToLower() -in @('1', 'true', 'yes')) { return '0.0.0.0' }
+    foreach ($name in $HostEnvironments) {
+        $hostValue = [Environment]::GetEnvironmentVariable($name, 'Process')
+        if ($hostValue -and $hostValue.Trim()) { return $hostValue.Trim() }
+    }
+    return $DefaultHost
+}
+
+function Get-ListEnvironmentOrDefault {
+    param([string]$Name, [string]$DefaultValue)
+    $value = [Environment]::GetEnvironmentVariable($Name, 'Process')
+    if ($value) { return $value }
+    return $DefaultValue
+}
+
+function Format-ListHost {
+    param([string]$ResolvedHost, [bool]$IncludeNetwork)
+    if ($ResolvedHost -in @('localhost', '127.0.0.1', '::1')) { return "$ResolvedHost (loopback)" }
+    if ($ResolvedHost -eq '0.0.0.0' -and $IncludeNetwork) { return '0.0.0.0 (all interfaces)' }
+    if ($IncludeNetwork) { return $ResolvedHost }
+    return '<redacted; pass --include-network>'
+}
+
+function Show-ReadOnlyConfiguration {
+    param([bool]$IncludeNetwork)
+    $scriptDir = Split-Path -Parent $PSCommandPath
+    $repoRoot = (Resolve-Path (Join-Path $scriptDir '..\..')).Path
+    $pathsFile = Join-Path $repoRoot '.paths.ps1'
+    $ptDir = Get-ListConfigValue -PathsFile $pathsFile -PathsVariable 'PtDir' -EnvironmentNames @('PERPETUA_TOOLS_PATH', 'PT_HOME', 'PERPETUA_TOOLS_ROOT', 'PERPETUATOOLSROOT') -DefaultValue '<unresolved>'
+    $ptPython = Get-ListConfigValue -PathsFile $pathsFile -PathsVariable 'PtPython' -EnvironmentNames @('PT_PYTHON') -DefaultValue '<unresolved>'
+    $usPython = Get-ListConfigValue -PathsFile $pathsFile -PathsVariable 'UsPython' -EnvironmentNames @('US_PYTHON') -DefaultValue '<unresolved>'
+    $ptPort = Get-ListEnvironmentOrDefault -Name 'PT_PORT' -DefaultValue '8000'
+    $usPort = Get-ListEnvironmentOrDefault -Name 'US_PORT' -DefaultValue '8001'
+    $portalPort = Get-ListEnvironmentOrDefault -Name 'PORTAL_PORT' -DefaultValue '8002'
+    $ptHost = Get-ListResolvedHost -LanEnvironment 'PT_BIND_LAN' -HostEnvironments @('PT_HOST') -DefaultHost '127.0.0.1'
+    $usHost = Get-ListResolvedHost -LanEnvironment 'ORAMA_BIND_LAN' -HostEnvironments @('ORAMASYS_HOST') -DefaultHost '127.0.0.1'
+    $portalHost = Get-ListResolvedHost -LanEnvironment 'PORTAL_BIND_LAN' -HostEnvironments @('PORTAL_HOST') -DefaultHost '127.0.0.1'
+    $token = [Environment]::GetEnvironmentVariable('ORAMA_CONTROL_PLANE_TOKEN', 'Process')
+
+    Write-Host 'Launcher configuration (read-only; no environment loading, bootstrap, discovery, probes, or services)'
+    Write-Host ("  {0,-20} {1}" -f 'SCRIPT_DIR', $scriptDir)
+    Write-Host ("  {0,-20} {1}" -f 'PATHS_FILE', $(if (Test-Path $pathsFile) { 'present' } else { 'absent' }))
+    Write-Host ("  {0,-20} {1} ({2})" -f 'PT_DIR', $ptDir.Value, $ptDir.Source)
+    Write-Host ("  {0,-20} {1} ({2})" -f 'PT_PYTHON', $ptPython.Value, $ptPython.Source)
+    Write-Host ("  {0,-20} {1} ({2})" -f 'US_PYTHON', $usPython.Value, $usPython.Source)
+    Write-Host ("  {0,-20} {1}" -f 'PT_PORT', $ptPort)
+    Write-Host ("  {0,-20} {1}" -f 'US_PORT', $usPort)
+    Write-Host ("  {0,-20} {1}" -f 'PORTAL_PORT', $portalPort)
+    Write-Host ("  {0,-20} {1}" -f 'PT_HOST', (Format-ListHost -ResolvedHost $ptHost -IncludeNetwork $IncludeNetwork))
+    Write-Host ("  {0,-20} {1}" -f 'US_HOST', (Format-ListHost -ResolvedHost $usHost -IncludeNetwork $IncludeNetwork))
+    Write-Host ("  {0,-20} {1}" -f 'PORTAL_HOST', (Format-ListHost -ResolvedHost $portalHost -IncludeNetwork $IncludeNetwork))
+    Write-Host ("  {0,-20} {1}" -f 'CONTROL_PLANE_TOKEN', $(if ($token) { 'configured' } else { 'not configured' }))
+}
 
 foreach ($a in $args) {
     switch -Regex ($a) {
         '^--no-open$|^-NoOpen$'        { $NoOpen = $true }
         '^--stop$|^-Stop$'             { $Stop = $true }
         '^--status$|^-Status$'         { $Status = $true }
-        '^--fleet-status(?:=(.*))?$'   {
-            $FleetStatus = $true
-            if ($Matches[1]) {
-                $FleetStatusFormat = $Matches[1]
-            } else {
-                $FleetStatusFormat = 'text'
-            }
-        }
+        '^--list$|^-List$'             { $ListOnly = $true }
+        '^--include-network$'          { $ListIncludeNetwork = $true }
+        '^--fleet-status$|^-FleetStatus$' { $FleetStatus = $true; $FleetStatusFormat = 'text' }
+        '^--fleet-status=json$|^-FleetStatus=json$' { $FleetStatus = $true; $FleetStatusFormat = 'json' }
+        '^--fleet-status=text$|^-FleetStatus=text$' { $FleetStatus = $true; $FleetStatusFormat = 'text' }
         '^--discover$|^-Discover$'     { $Discover = $true }
         '^--hardware-policy$|^-HardwarePolicy$' { $HardwarePolicy = $true }
+        '^--validate$|^-Validate$'     { $ValidateOnly = $true }
         '^--lan-peer$|^-LanPeer$'      { $LanPeer = $true }
-        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --fleet-status --discover --hardware-policy --lan-peer" }
+        '^--help$|^-h$|^-Help$'        { Show-Usage; exit 0 }
+        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --fleet-status[=text|json] --discover --hardware-policy --validate --lan-peer --help" }
     }
+}
+
+if ($ListIncludeNetwork -and -not $ListOnly) {
+    throw '--include-network is only valid with --list.'
+}
+if ($ListOnly -and ($NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+    throw '--list cannot be combined with lifecycle or probe modes.'
+}
+if ($ValidateOnly -and ($ListOnly -or $ListIncludeNetwork -or $NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+    throw '--validate cannot be combined with another launcher mode.'
+}
+
+if ($ValidateOnly) {
+    Write-Host 'Launcher validation passed: arguments parsed; no environment, bootstrap, discovery, or services started.'
+    exit 0
+}
+
+if ($ListOnly) {
+    Show-ReadOnlyConfiguration -IncludeNetwork $ListIncludeNetwork
+    exit 0
 }
 
 # ── UTF-8 everywhere ──────────────────────────────────────────────────────────
@@ -409,14 +532,13 @@ function Invoke-HardwarePolicyCheck {
         Write-Host "`n=== Hardware model affinity policy ==="
         $env:PYTHONPATH = $PtDir
         & $PtPython $cli --list
-        $OcJson = Join-Path $HOME '.openclaw\openclaw.json'
-        if (Test-Path $OcJson) {
-            _Info 'policy' 'openclaw.json found - running --check-openclaw'
-            & $PtPython $cli --check-openclaw
-        } else {
-            _Info 'policy' 'No openclaw.json (Hermes-only OK) - skipping --check-openclaw'
+        if ($LASTEXITCODE -ne 0) {
+            throw "Hardware policy listing exited $LASTEXITCODE"
         }
         & $PtPython $cli --validate 'qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2' win
+        if ($LASTEXITCODE -ne 0) {
+            throw "Hardware policy validation exited $LASTEXITCODE"
+        }
     } else {
         _Warn 'policy' "hardware_policy_cli.py not found at: $cli"
     }
@@ -486,6 +608,8 @@ if ($Stop) {
 }
 
 # ── --fleet-status ───────────────────────────────────────────────────────────
+$script:FleetStatusExitCode = 1
+
 function Show-FleetStatus {
     param([string]$Format = 'text')
     try {
@@ -493,7 +617,7 @@ function Show-FleetStatus {
         $src = Join-Path $RepoRoot 'src'
         if (-not (Test-Path $src)) {
             Write-Host 'Error: orama-system source not found'
-            return $false
+            return
         }
         $pyCode = @"
 import sys
@@ -506,16 +630,16 @@ else:
 "@
         $env:PYTHONPATH = "$src$([IO.Path]::PathSeparator)$env:PYTHONPATH"
         & $py -c $pyCode
-        return $true
+        $script:FleetStatusExitCode = $LASTEXITCODE
     } catch {
         Write-Host "Error displaying fleet status: $_"
-        return $false
+        $script:FleetStatusExitCode = 1
     }
 }
 
 if ($FleetStatus) {
-    Show-FleetStatus -Format $FleetStatusFormat | Out-Host
-    exit 0
+    Show-FleetStatus -Format $FleetStatusFormat
+    exit $script:FleetStatusExitCode
 }
 
 # ── --status ──────────────────────────────────────────────────────────────────
