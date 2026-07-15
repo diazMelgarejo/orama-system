@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import subprocess
+import shutil
+import os
+
+import pytest
 from pathlib import Path
 
 
@@ -9,6 +13,10 @@ START_SH = ROOT / "start.sh"
 START_PS1 = ROOT / "platform" / "windows" / "start.ps1"
 COORD_PULSE_SH = ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts" / "coord_pulse.sh"
 COORD_PULSE_PS1 = ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts" / "coord_pulse.ps1"
+
+
+def _file_bytes_or_none(path: Path) -> bytes | None:
+    return path.read_bytes() if path.exists() else None
 
 
 def test_start_sh_help_exits_before_startup_and_lists_coord_pulse_flags():
@@ -38,6 +46,169 @@ def test_start_sh_rejects_unknown_args_before_startup():
     assert result.returncode == 2
     assert "unknown argument: --not-a-real-flag" in result.stdout
     assert "probing hard requirements" not in result.stdout
+
+
+def test_start_scripts_validate_before_environment_or_startup():
+    shell_result = subprocess.run(
+        ["bash", str(START_SH), "--validate"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    expected = "Launcher validation passed: arguments parsed"
+    assert shell_result.returncode == 0
+    assert expected in shell_result.stdout
+
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        pytest.skip("PowerShell is not available on this runner")
+
+    powershell_result = subprocess.run(
+        [pwsh, "-NoProfile", "-File", str(START_PS1), "--validate"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert powershell_result.returncode == 0, powershell_result.stderr
+    assert expected in powershell_result.stdout
+
+
+def test_windows_start_rejects_unknown_fleet_status_format_before_startup():
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        pytest.skip("PowerShell is not available on this runner")
+
+    result = subprocess.run(
+        [pwsh, "-NoProfile", "-File", str(START_PS1), "--fleet-status=xml"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Unknown argument: --fleet-status=xml" in result.stderr
+    assert "running install.ps1" not in result.stdout
+
+
+def test_start_scripts_list_configuration_without_network_or_token_leaks():
+    path_caches = (ROOT / ".paths", ROOT / ".paths.ps1")
+    before = {path: _file_bytes_or_none(path) for path in path_caches}
+    env = os.environ.copy()
+    env.update(
+        {
+            "PT_HOST": "10.20.30.40",
+            "PT_BIND_LAN": "1",
+            "ORAMA_CONTROL_PLANE_TOKEN": "must-not-appear-in-list-output",
+        }
+    )
+    shell_result = subprocess.run(
+        ["bash", str(START_SH), "--list"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert shell_result.returncode == 0
+    assert "Launcher configuration (read-only" in shell_result.stdout
+    assert "must-not-appear-in-list-output" not in shell_result.stdout
+    assert "10.20.30.40" not in shell_result.stdout
+    assert "0.0.0.0" not in shell_result.stdout
+    assert "CONTROL_PLANE_TOKEN  configured" in shell_result.stdout
+    assert {path: _file_bytes_or_none(path) for path in path_caches} == before
+
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        return
+    powershell_result = subprocess.run(
+        [pwsh, "-NoProfile", "-File", str(START_PS1), "--list"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert powershell_result.returncode == 0, powershell_result.stderr
+    assert "Launcher configuration (read-only" in powershell_result.stdout
+    assert "must-not-appear-in-list-output" not in powershell_result.stdout
+    assert "10.20.30.40" not in powershell_result.stdout
+    assert "0.0.0.0" not in powershell_result.stdout
+    assert {path: _file_bytes_or_none(path) for path in path_caches} == before
+
+
+def test_start_scripts_list_network_only_when_explicitly_requested():
+    env = os.environ.copy()
+    env["PT_HOST"] = "10.20.30.40"
+    env["PT_BIND_LAN"] = "1"
+    shell_result = subprocess.run(
+        ["bash", str(START_SH), "--list", "--include-network"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+
+    assert shell_result.returncode == 0
+    assert "0.0.0.0 (all interfaces)" in shell_result.stdout
+
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        return
+    powershell_result = subprocess.run(
+        [pwsh, "-NoProfile", "-File", str(START_PS1), "--list", "--include-network"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        env=env,
+        check=False,
+    )
+    assert powershell_result.returncode == 0, powershell_result.stderr
+    assert "0.0.0.0 (all interfaces)" in powershell_result.stdout
+
+
+def test_read_only_launcher_modes_reject_lifecycle_flags_before_startup():
+    shell_result = subprocess.run(
+        ["bash", str(START_SH), "--list", "--status"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert shell_result.returncode == 2
+    assert "--list cannot be combined" in shell_result.stderr
+    assert "probing hard requirements" not in shell_result.stdout
+
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        return
+    powershell_result = subprocess.run(
+        [pwsh, "-NoProfile", "-File", str(START_PS1), "--list", "--status"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert powershell_result.returncode != 0
+    assert "--list cannot be combined" in powershell_result.stderr
+
+
+def test_windows_start_has_strict_shared_cli_contracts():
+    text = START_PS1.read_text(encoding="utf-8-sig")
+
+    assert "'^--fleet-status=json$|^-FleetStatus=json$'" in text
+    assert "'^--fleet-status=text$|^-FleetStatus=text$'" in text
+    assert "'^--validate$|^-Validate$'" in text
+    assert text.index("if ($ValidateOnly)") < text.index("# ── UTF-8 everywhere")
+    assert text.index("if ($ListOnly)") < text.index("# ── UTF-8 everywhere")
+    assert "--check-openclaw" not in text
 
 
 def test_start_sh_uses_non_positional_no_open_and_portable_timeout():
