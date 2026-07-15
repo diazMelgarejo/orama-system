@@ -12,6 +12,7 @@
       .\start.ps1 --no-open   — start all, skip browser
       .\start.ps1 --stop      — kill all three services
       .\start.ps1 --status    — show port-listener status
+      .\start.ps1 --validate  — validate launcher argument handling without setup
       .\start.ps1 --discover  — re-run LAN path discovery, rewrite .paths.ps1, exit
       .\start.ps1 --hardware-policy — validate model↔hardware affinity and exit
       .\start.ps1 --lan-peer    — set LAN bind env + run peer probe after start
@@ -50,25 +51,47 @@ $FleetStatusFormat = 'text'
 $Discover = $false
 $HardwarePolicy = $false
 $LanPeer = $false
+$ValidateOnly = $false
+
+function Show-Usage {
+    @"
+Usage: .\platform\windows\start.ps1 [options]
+
+Options:
+  --no-open              Start services without opening the Portal browser.
+  --stop                 Stop PT, orama, and Portal services.
+  --status               Show service status and hardware policy.
+  --fleet-status[=text]  Show current fleet topology and exit.
+  --fleet-status=json    Show current fleet topology as JSON and exit.
+  --discover             Re-run LAN path discovery, rewrite .paths.ps1, and exit.
+  --hardware-policy      Validate model/hardware affinity and exit.
+  --validate             Validate launcher arguments without environment, bootstrap,
+                         discovery, or service startup.
+  --lan-peer             LAN-bind services and probe the peer after startup.
+  --help, -h             Show this help.
+"@ | Write-Host
+}
 
 foreach ($a in $args) {
     switch -Regex ($a) {
         '^--no-open$|^-NoOpen$'        { $NoOpen = $true }
         '^--stop$|^-Stop$'             { $Stop = $true }
         '^--status$|^-Status$'         { $Status = $true }
-        '^--fleet-status(?:=(.*))?$'   {
-            $FleetStatus = $true
-            if ($Matches[1]) {
-                $FleetStatusFormat = $Matches[1]
-            } else {
-                $FleetStatusFormat = 'text'
-            }
-        }
+        '^--fleet-status$|^-FleetStatus$' { $FleetStatus = $true; $FleetStatusFormat = 'text' }
+        '^--fleet-status=json$|^-FleetStatus=json$' { $FleetStatus = $true; $FleetStatusFormat = 'json' }
+        '^--fleet-status=text$|^-FleetStatus=text$' { $FleetStatus = $true; $FleetStatusFormat = 'text' }
         '^--discover$|^-Discover$'     { $Discover = $true }
         '^--hardware-policy$|^-HardwarePolicy$' { $HardwarePolicy = $true }
+        '^--validate$|^-Validate$'     { $ValidateOnly = $true }
         '^--lan-peer$|^-LanPeer$'      { $LanPeer = $true }
-        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --fleet-status --discover --hardware-policy --lan-peer" }
+        '^--help$|^-h$|^-Help$'        { Show-Usage; exit 0 }
+        default { throw "Unknown argument: $a. Supported: --no-open --stop --status --fleet-status[=text|json] --discover --hardware-policy --validate --lan-peer --help" }
     }
+}
+
+if ($ValidateOnly) {
+    Write-Host 'Launcher validation passed: arguments parsed; no environment, bootstrap, discovery, or services started.'
+    exit 0
 }
 
 # ── UTF-8 everywhere ──────────────────────────────────────────────────────────
@@ -409,13 +432,6 @@ function Invoke-HardwarePolicyCheck {
         Write-Host "`n=== Hardware model affinity policy ==="
         $env:PYTHONPATH = $PtDir
         & $PtPython $cli --list
-        $OcJson = Join-Path $HOME '.openclaw\openclaw.json'
-        if (Test-Path $OcJson) {
-            _Info 'policy' 'openclaw.json found - running --check-openclaw'
-            & $PtPython $cli --check-openclaw
-        } else {
-            _Info 'policy' 'No openclaw.json (Hermes-only OK) - skipping --check-openclaw'
-        }
         & $PtPython $cli --validate 'qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2' win
     } else {
         _Warn 'policy' "hardware_policy_cli.py not found at: $cli"
@@ -486,6 +502,8 @@ if ($Stop) {
 }
 
 # ── --fleet-status ───────────────────────────────────────────────────────────
+$script:FleetStatusExitCode = 1
+
 function Show-FleetStatus {
     param([string]$Format = 'text')
     try {
@@ -493,7 +511,7 @@ function Show-FleetStatus {
         $src = Join-Path $RepoRoot 'src'
         if (-not (Test-Path $src)) {
             Write-Host 'Error: orama-system source not found'
-            return $false
+            return
         }
         $pyCode = @"
 import sys
@@ -506,16 +524,16 @@ else:
 "@
         $env:PYTHONPATH = "$src$([IO.Path]::PathSeparator)$env:PYTHONPATH"
         & $py -c $pyCode
-        return $true
+        $script:FleetStatusExitCode = $LASTEXITCODE
     } catch {
         Write-Host "Error displaying fleet status: $_"
-        return $false
+        $script:FleetStatusExitCode = 1
     }
 }
 
 if ($FleetStatus) {
-    Show-FleetStatus -Format $FleetStatusFormat | Out-Host
-    exit 0
+    Show-FleetStatus -Format $FleetStatusFormat
+    exit $script:FleetStatusExitCode
 }
 
 # ── --status ──────────────────────────────────────────────────────────────────

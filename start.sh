@@ -30,21 +30,6 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PATHS_FILE="$SCRIPT_DIR/.paths"
 REPO_ROOT="$SCRIPT_DIR"
 
-# Gitignored env (.env → .env.local) before gateway/profile reads ${env:...} config
-if [ -f "$SCRIPT_DIR/scripts/env/load-local.sh" ]; then
-  # shellcheck source=scripts/env/load-local.sh
-  source "$SCRIPT_DIR/scripts/env/load-local.sh"
-fi
-
-# GLM-5.2 Ultimate Fallback — available when all other pathways are blocked
-if [ -f "$HOME/.openclaw/.env.glm52" ]; then
-  # shellcheck source=/dev/null
-  source "$HOME/.openclaw/.env.glm52" 2>/dev/null || true
-  GLM52_AVAILABLE="true"
-else
-  GLM52_AVAILABLE="false"
-fi
-
 # ── structured logging ─────────────────────────────────────────────────────────
 # Levels: INFO (normal flow), WARN (non-fatal, needs attention), ERROR (fatal),
 #         DEBUG (variable tracing — set ORAMA_DEBUG=1 to enable)
@@ -86,6 +71,7 @@ COORD_PULSE_STATUS=0
 _LAN_PEER_MODE=0
 FLEET_STATUS_ONLY=0
 FLEET_STATUS_FORMAT="text"
+VALIDATE_ONLY=0
 
 _usage() {
   cat <<'USAGE'
@@ -100,6 +86,7 @@ Options:
   --fleet-status=text    Show fleet topology in text format and exit (default).
   --discover             Re-run path discovery, rewrite .paths, and exit.
   --hardware-policy      Validate model/hardware affinity and exit.
+  --validate             Validate launcher argument handling and exit without setup.
   --lan-peer             LAN-bind services, probe the peer, and ensure Mac coord pulse.
   --profile=NAME         Activate an OpenClaw profile before startup.
   --with-mcp             Register/start the orama-swarm MCP endpoint.
@@ -123,6 +110,7 @@ for _arg in "$@"; do
     --fleet-status=text)   FLEET_STATUS_ONLY=1; FLEET_STATUS_FORMAT="text" ;;
     --discover)            DISCOVER_ONLY=1 ;;
     --hardware-policy)     HARDWARE_POLICY_ONLY=1 ;;
+    --validate)            VALIDATE_ONLY=1 ;;
     --lan-peer)            _LAN_PEER_MODE=1 ;;
     --profile=*)           export OPENCLAW_PROFILE="${_arg#--profile=}" ;;
     --with-mcp)            export WITH_MCP=1 ;;
@@ -140,6 +128,26 @@ for _arg in "$@"; do
       ;;
   esac
 done
+
+if [ "$VALIDATE_ONLY" = "1" ]; then
+  printf 'Launcher validation passed: arguments parsed; no environment, bootstrap, discovery, or services started.\n'
+  exit 0
+fi
+
+# Gitignored env (.env → .env.local) before gateway/profile reads ${env:...} config
+if [ -f "$SCRIPT_DIR/scripts/env/load-local.sh" ]; then
+  # shellcheck source=scripts/env/load-local.sh
+  source "$SCRIPT_DIR/scripts/env/load-local.sh"
+fi
+
+# GLM-5.2 Ultimate Fallback — available when all other pathways are blocked
+if [ -f "$HOME/.openclaw/.env.glm52" ]; then
+  # shellcheck source=/dev/null
+  source "$HOME/.openclaw/.env.glm52" 2>/dev/null || true
+  GLM52_AVAILABLE="true"
+else
+  GLM52_AVAILABLE="false"
+fi
 
 # ── path resolution: .paths → git siblings → hardcoded sibling default ─────────
 
