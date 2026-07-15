@@ -15,6 +15,7 @@
 #   ./start.sh --no-open   — start all, skip browser
 #   ./start.sh --stop      — kill all three services
 #   ./start.sh --status    — show which ports are listening
+#   ./start.sh --list      — show resolved read-only configuration
 #   ./start.sh --discover  — re-run path discovery, rewrite .paths, exit
 #   ./start.sh --hardware-policy — validate model↔hardware affinity and exit
 #   ./start.sh --lan-peer    — LAN-bind PT/orama/Portal + run peer probe after start
@@ -29,21 +30,6 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PATHS_FILE="$SCRIPT_DIR/.paths"
 REPO_ROOT="$SCRIPT_DIR"
-
-# Gitignored env (.env → .env.local) before gateway/profile reads ${env:...} config
-if [ -f "$SCRIPT_DIR/scripts/env/load-local.sh" ]; then
-  # shellcheck source=scripts/env/load-local.sh
-  source "$SCRIPT_DIR/scripts/env/load-local.sh"
-fi
-
-# GLM-5.2 Ultimate Fallback — available when all other pathways are blocked
-if [ -f "$HOME/.openclaw/.env.glm52" ]; then
-  # shellcheck source=/dev/null
-  source "$HOME/.openclaw/.env.glm52" 2>/dev/null || true
-  GLM52_AVAILABLE="true"
-else
-  GLM52_AVAILABLE="false"
-fi
 
 # ── structured logging ─────────────────────────────────────────────────────────
 # Levels: INFO (normal flow), WARN (non-fatal, needs attention), ERROR (fatal),
@@ -86,6 +72,13 @@ COORD_PULSE_STATUS=0
 _LAN_PEER_MODE=0
 FLEET_STATUS_ONLY=0
 FLEET_STATUS_FORMAT="text"
+VALIDATE_ONLY=0
+LIST_ONLY=0
+LIST_INCLUDE_NETWORK=0
+OPENCLAW_PROFILE_REQUESTED=""
+WITH_MCP_REQUESTED=""
+OLLAMA_AUTO_START_REQUESTED=""
+ORAMA_COORD_PULSE_REQUESTED=""
 
 _usage() {
   cat <<'USAGE'
@@ -95,11 +88,14 @@ Options:
   --no-open              Start services without opening the Portal browser.
   --stop                 Stop PT, orama, and Portal services.
   --status               Show service status and hardware policy.
+  --list                 Show resolved configuration without setup or probes.
+  --include-network      Reveal non-loopback hosts in --list output.
   --fleet-status         Show current fleet topology and exit (JSON or text).
   --fleet-status=json    Show fleet topology in JSON format and exit.
   --fleet-status=text    Show fleet topology in text format and exit (default).
   --discover             Re-run path discovery, rewrite .paths, and exit.
   --hardware-policy      Validate model/hardware affinity and exit.
+  --validate             Validate launcher argument handling and exit without setup.
   --lan-peer             LAN-bind services, probe the peer, and ensure Mac coord pulse.
   --profile=NAME         Activate an OpenClaw profile before startup.
   --with-mcp             Register/start the orama-swarm MCP endpoint.
@@ -118,20 +114,23 @@ for _arg in "$@"; do
     --no-open)             NO_OPEN=1 ;;
     --stop)                STOP_ONLY=1 ;;
     --status)              STATUS_ONLY=1 ;;
+    --list)                LIST_ONLY=1 ;;
+    --include-network)     LIST_INCLUDE_NETWORK=1 ;;
     --fleet-status)        FLEET_STATUS_ONLY=1; FLEET_STATUS_FORMAT="text" ;;
     --fleet-status=json)   FLEET_STATUS_ONLY=1; FLEET_STATUS_FORMAT="json" ;;
     --fleet-status=text)   FLEET_STATUS_ONLY=1; FLEET_STATUS_FORMAT="text" ;;
     --discover)            DISCOVER_ONLY=1 ;;
     --hardware-policy)     HARDWARE_POLICY_ONLY=1 ;;
+    --validate)            VALIDATE_ONLY=1 ;;
     --lan-peer)            _LAN_PEER_MODE=1 ;;
-    --profile=*)           export OPENCLAW_PROFILE="${_arg#--profile=}" ;;
-    --with-mcp)            export WITH_MCP=1 ;;
-    --no-mcp)              export WITH_MCP=0 ;;
-    --no-ollama)           export OLLAMA_AUTO_START=0 ;;
+    --profile=*)           OPENCLAW_PROFILE_REQUESTED="${_arg#--profile=}" ;;
+    --with-mcp)            WITH_MCP_REQUESTED=1 ;;
+    --no-mcp)              WITH_MCP_REQUESTED=0 ;;
+    --no-ollama)           OLLAMA_AUTO_START_REQUESTED=0 ;;
     --install-watcher)     INSTALL_NETWORK_WATCHER=1 ;;
     --install-coord-pulse) INSTALL_COORD_PULSE=1 ;;
     --coord-pulse-status)  COORD_PULSE_STATUS=1 ;;
-    --no-coord-pulse)      export ORAMA_COORD_PULSE=0 ;;
+    --no-coord-pulse)      ORAMA_COORD_PULSE_REQUESTED=0 ;;
     --help|-h)             _usage; exit 0 ;;
     *)
       _err "args" "unknown argument: $_arg"
@@ -140,6 +139,152 @@ for _arg in "$@"; do
       ;;
   esac
 done
+
+if [ "$LIST_INCLUDE_NETWORK" = "1" ] && [ "$LIST_ONLY" != "1" ]; then
+  printf '%s\n' '--include-network is only valid with --list.' >&2
+  exit 2
+fi
+
+if [ "$LIST_ONLY" = "1" ] && { [ "$NO_OPEN" = "1" ] || [ "$STOP_ONLY" = "1" ] || [ "$STATUS_ONLY" = "1" ] || [ "$FLEET_STATUS_ONLY" = "1" ] || [ "$DISCOVER_ONLY" = "1" ] || [ "$HARDWARE_POLICY_ONLY" = "1" ] || [ "$INSTALL_NETWORK_WATCHER" = "1" ] || [ "$INSTALL_COORD_PULSE" = "1" ] || [ "$COORD_PULSE_STATUS" = "1" ] || [ "$_LAN_PEER_MODE" = "1" ] || [ -n "$OPENCLAW_PROFILE_REQUESTED" ] || [ -n "$WITH_MCP_REQUESTED" ] || [ -n "$OLLAMA_AUTO_START_REQUESTED" ] || [ -n "$ORAMA_COORD_PULSE_REQUESTED" ]; }; then
+  printf '%s\n' '--list cannot be combined with lifecycle or probe modes.' >&2
+  exit 2
+fi
+
+if [ "$VALIDATE_ONLY" = "1" ] && { [ "$LIST_ONLY" = "1" ] || [ "$LIST_INCLUDE_NETWORK" = "1" ] || [ "$NO_OPEN" = "1" ] || [ "$STOP_ONLY" = "1" ] || [ "$STATUS_ONLY" = "1" ] || [ "$FLEET_STATUS_ONLY" = "1" ] || [ "$DISCOVER_ONLY" = "1" ] || [ "$HARDWARE_POLICY_ONLY" = "1" ] || [ "$INSTALL_NETWORK_WATCHER" = "1" ] || [ "$INSTALL_COORD_PULSE" = "1" ] || [ "$COORD_PULSE_STATUS" = "1" ] || [ "$_LAN_PEER_MODE" = "1" ] || [ -n "$OPENCLAW_PROFILE_REQUESTED" ] || [ -n "$WITH_MCP_REQUESTED" ] || [ -n "$OLLAMA_AUTO_START_REQUESTED" ] || [ -n "$ORAMA_COORD_PULSE_REQUESTED" ]; }; then
+  printf '%s\n' '--validate cannot be combined with another launcher mode.' >&2
+  exit 2
+fi
+
+if [ "$VALIDATE_ONLY" = "1" ]; then
+  printf 'Launcher validation passed: arguments parsed; no environment, bootstrap, discovery, or services started.\n'
+  exit 0
+fi
+
+_list_paths_value() {
+  local key="$1"
+  [ -f "$PATHS_FILE" ] || return 0
+  awk -v key="$key" '
+    $0 ~ "^[[:space:]]*" key "=" {
+      value = $0
+      sub("^[[:space:]]*" key "=", "", value)
+      sub(/[[:space:]]+#.*/, "", value)
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+      if (value ~ /^".*"$/ || value ~ /^\047.*\047$/) {
+        value = substr(value, 2, length(value) - 2)
+      }
+      print value
+      exit
+    }
+  ' "$PATHS_FILE"
+}
+
+_list_config_value() {
+  local label="$1" path_key="$2" default_value="$3"
+  shift 3
+  local value source env_name
+  value="$(_list_paths_value "$path_key")"
+  source=".paths"
+  if [ -z "$value" ]; then
+    for env_name in "$@"; do
+      value="${!env_name:-}"
+      if [ -n "$value" ]; then
+        source="environment:$env_name"
+        break
+      fi
+    done
+  fi
+  if [ -z "$value" ]; then
+    value="$default_value"
+    source="default"
+  fi
+  printf '  %-20s %s (%s)\n' "$label" "$value" "$source"
+}
+
+_list_port() {
+  local env_name="$1" default_value="$2"
+  local value="${!env_name:-$default_value}" source="default"
+  if [ -n "${!env_name:-}" ]; then
+    source="environment:$env_name"
+  fi
+  printf '  %-20s %s (%s)\n' "$env_name" "$value" "$source"
+}
+
+_list_resolve_host() {
+  local lan_name="$1" host_name="$2" fallback_host="$3"
+  local lan_value="${!lan_name:-}" host_value="${!host_name:-$fallback_host}"
+  case "$lan_value" in
+    1|true|yes|TRUE|YES) printf '%s' '0.0.0.0' ;;
+    *) printf '%s' "$host_value" ;;
+  esac
+}
+
+_list_format_host() {
+  local host="$1"
+  case "$host" in
+    localhost|127.0.0.1|::1) printf '%s' "$host (loopback)" ;;
+    0.0.0.0)
+      if [ "$LIST_INCLUDE_NETWORK" = "1" ]; then
+        printf '%s' '0.0.0.0 (all interfaces)'
+      else
+        printf '%s' '<redacted; pass --include-network>'
+      fi
+      ;;
+    *)
+      if [ "$LIST_INCLUDE_NETWORK" = "1" ]; then
+        printf '%s' "$host"
+      else
+        printf '%s' '<redacted; pass --include-network>'
+      fi
+      ;;
+  esac
+}
+
+_show_read_only_config() {
+  local pt_host us_host portal_host us_host_source
+  pt_host="$(_list_resolve_host PT_BIND_LAN PT_HOST localhost)"
+  us_host_source="${ORAMASYS_HOST:-${ULTRATHINK_HOST:-localhost}}"
+  us_host="$(_list_resolve_host ORAMA_BIND_LAN us_host_source localhost)"
+  portal_host="$(_list_resolve_host PORTAL_BIND_LAN PORTAL_HOST localhost)"
+
+  printf '%s\n' 'Launcher configuration (read-only; no environment loading, bootstrap, discovery, probes, or services)'
+  printf '  %-20s %s\n' 'SCRIPT_DIR' "$SCRIPT_DIR"
+  printf '  %-20s %s\n' 'PATHS_FILE' "$( [ -f "$PATHS_FILE" ] && printf 'present' || printf 'absent' )"
+  _list_config_value 'PT_DIR' PT_DIR '<unresolved>' PT_DIR PERPETUA_TOOLS_PATH PERPETUA_TOOLS_ROOT
+  _list_config_value 'PT_PYTHON' PT_PYTHON '<unresolved>' PT_PYTHON
+  _list_config_value 'US_PYTHON' US_PYTHON '<unresolved>' US_PYTHON
+  _list_port PT_PORT 8000
+  _list_port US_PORT 8001
+  _list_port PORTAL_PORT 8002
+  printf '  %-20s %s\n' 'PT_HOST' "$(_list_format_host "$pt_host")"
+  printf '  %-20s %s\n' 'US_HOST' "$(_list_format_host "$us_host")"
+  printf '  %-20s %s\n' 'PORTAL_HOST' "$(_list_format_host "$portal_host")"
+  printf '  %-20s %s\n' 'CONTROL_PLANE_TOKEN' "$( [ -n "${ORAMA_CONTROL_PLANE_TOKEN:-}" ] && printf 'configured' || printf 'not configured' )"
+}
+
+if [ "$LIST_ONLY" = "1" ]; then
+  _show_read_only_config
+  exit 0
+fi
+
+[ -n "$OPENCLAW_PROFILE_REQUESTED" ] && export OPENCLAW_PROFILE="$OPENCLAW_PROFILE_REQUESTED"
+[ -n "$WITH_MCP_REQUESTED" ] && export WITH_MCP="$WITH_MCP_REQUESTED"
+[ -n "$OLLAMA_AUTO_START_REQUESTED" ] && export OLLAMA_AUTO_START="$OLLAMA_AUTO_START_REQUESTED"
+[ -n "$ORAMA_COORD_PULSE_REQUESTED" ] && export ORAMA_COORD_PULSE="$ORAMA_COORD_PULSE_REQUESTED"
+
+# Gitignored env (.env → .env.local) before gateway/profile reads ${env:...} config
+if [ -f "$SCRIPT_DIR/scripts/env/load-local.sh" ]; then
+  # shellcheck source=scripts/env/load-local.sh
+  source "$SCRIPT_DIR/scripts/env/load-local.sh"
+fi
+
+# GLM-5.2 Ultimate Fallback — available when all other pathways are blocked
+if [ -f "$HOME/.openclaw/.env.glm52" ]; then
+  # shellcheck source=/dev/null
+  source "$HOME/.openclaw/.env.glm52" 2>/dev/null || true
+  GLM52_AVAILABLE="true"
+else
+  GLM52_AVAILABLE="false"
+fi
 
 # ── path resolution: .paths → git siblings → hardcoded sibling default ─────────
 
