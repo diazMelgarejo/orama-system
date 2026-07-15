@@ -222,7 +222,13 @@ _list_format_host() {
   local host="$1"
   case "$host" in
     localhost|127.0.0.1|::1) printf '%s' "$host (loopback)" ;;
-    0.0.0.0) printf '%s' '0.0.0.0 (all interfaces)' ;;
+    0.0.0.0)
+      if [ "$LIST_INCLUDE_NETWORK" = "1" ]; then
+        printf '%s' '0.0.0.0 (all interfaces)'
+      else
+        printf '%s' '<redacted; pass --include-network>'
+      fi
+      ;;
     *)
       if [ "$LIST_INCLUDE_NETWORK" = "1" ]; then
         printf '%s' "$host"
