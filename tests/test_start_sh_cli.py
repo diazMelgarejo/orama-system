@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import subprocess
+import shutil
+
+import pytest
 from pathlib import Path
 
 
@@ -38,6 +41,61 @@ def test_start_sh_rejects_unknown_args_before_startup():
     assert result.returncode == 2
     assert "unknown argument: --not-a-real-flag" in result.stdout
     assert "probing hard requirements" not in result.stdout
+
+
+def test_start_scripts_validate_before_environment_or_startup():
+    shell_result = subprocess.run(
+        ["bash", str(START_SH), "--validate"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        pytest.skip("PowerShell is not available on this runner")
+
+    powershell_result = subprocess.run(
+        [pwsh, "-NoProfile", "-File", str(START_PS1), "--validate"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    expected = "Launcher validation passed: arguments parsed"
+    assert shell_result.returncode == 0
+    assert expected in shell_result.stdout
+    assert powershell_result.returncode == 0, powershell_result.stderr
+    assert expected in powershell_result.stdout
+
+
+def test_windows_start_rejects_unknown_fleet_status_format_before_startup():
+    pwsh = shutil.which("pwsh")
+    if pwsh is None:
+        pytest.skip("PowerShell is not available on this runner")
+
+    result = subprocess.run(
+        [pwsh, "-NoProfile", "-File", str(START_PS1), "--fleet-status=xml"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert "Unknown argument: --fleet-status=xml" in result.stderr
+    assert "running install.ps1" not in result.stdout
+
+
+def test_windows_start_has_strict_shared_cli_contracts():
+    text = START_PS1.read_text(encoding="utf-8-sig")
+
+    assert "'^--fleet-status=json$|^-FleetStatus=json$'" in text
+    assert "'^--fleet-status=text$|^-FleetStatus=text$'" in text
+    assert "'^--validate$|^-Validate$'" in text
+    assert text.index("if ($ValidateOnly)") < text.index("# ── UTF-8 everywhere")
+    assert "--check-openclaw" not in text
 
 
 def test_start_sh_uses_non_positional_no_open_and_portable_timeout():
