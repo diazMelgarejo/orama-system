@@ -119,7 +119,7 @@ function Get-ListEnvironmentOrDefault {
 function Format-ListHost {
     param([string]$ResolvedHost, [bool]$IncludeNetwork)
     if ($ResolvedHost -in @('localhost', '127.0.0.1', '::1')) { return "$ResolvedHost (loopback)" }
-    if ($ResolvedHost -eq '0.0.0.0') { return '0.0.0.0 (all interfaces)' }
+    if ($ResolvedHost -eq '0.0.0.0' -and $IncludeNetwork) { return '0.0.0.0 (all interfaces)' }
     if ($IncludeNetwork) { return $ResolvedHost }
     return '<redacted; pass --include-network>'
 }
@@ -532,7 +532,13 @@ function Invoke-HardwarePolicyCheck {
         Write-Host "`n=== Hardware model affinity policy ==="
         $env:PYTHONPATH = $PtDir
         & $PtPython $cli --list
+        if ($LASTEXITCODE -ne 0) {
+            throw "Hardware policy listing exited $LASTEXITCODE"
+        }
         & $PtPython $cli --validate 'qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2' win
+        if ($LASTEXITCODE -ne 0) {
+            throw "Hardware policy validation exited $LASTEXITCODE"
+        }
     } else {
         _Warn 'policy' "hardware_policy_cli.py not found at: $cli"
     }
