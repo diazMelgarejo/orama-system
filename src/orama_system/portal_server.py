@@ -46,6 +46,7 @@ from starlette.responses import StreamingResponse
 from orama_system.lan_peer_channel import LanPeerChannel, local_platform, make_envelope, read_discovery_peer_ip
 from orama_system.portal_notifications import (
     NotificationHub,
+    PortalNotificationPublisher,
     notifications_enabled,
     parse_event_types,
 )
@@ -196,6 +197,7 @@ def _read_routing_json() -> dict:
 
 _lan_peer_channel = LanPeerChannel()
 _notification_hub = NotificationHub()
+_notification_publisher = PortalNotificationPublisher(_notification_hub)
 
 
 @asynccontextmanager
@@ -2522,8 +2524,13 @@ def _probe_cli_available(bin_name: str) -> bool:
         return False
 
 
-@app.get("/api/status")
-async def api_status():
+async def _build_portal_status_payload() -> Dict[str, Any]:
+    """Probe every backend and assemble the raw (unredacted) status payload.
+
+    Extracted from api_status() (Task 2, G7) so the route's redaction +
+    notification-publish wiring can be tested without reimplementing this
+    function's monitor mocks.
+    """
     # ── Dynamic IP resolution — always re-read from openclaw.json on every call ──
     # LAN is treated as always-changing: the Win machine can get a new DHCP lease,
     # reboot, or move subnets at any time.  We re-resolve on every status poll
@@ -2624,7 +2631,17 @@ async def api_status():
         "codex_available": tools.get("codex-cli", {}).get("ok", False),
         "gemini_available": tools.get("gemini-cli", {}).get("ok", False),
     }
-    return redact_portal_status_payload(payload)
+    return payload
+
+
+@app.get("/api/status")
+async def api_status():
+    payload = await _build_portal_status_payload()
+    redacted_payload = redact_portal_status_payload(payload)
+    if notifications_enabled():
+        await _notification_publisher.publish(redacted_payload)
+    redacted_payload["notification_delivery"] = {"dropped_events": _notification_hub.dropped_events}
+    return redacted_payload
 
 
 @app.get("/api/hardware-policy")
