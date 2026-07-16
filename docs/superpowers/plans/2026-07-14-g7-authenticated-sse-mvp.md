@@ -233,20 +233,26 @@ git commit -m "feat(g7): version notification event identities"
 ~~~python
 @pytest.mark.asyncio
 async def test_status_publisher_emits_only_redacted_edge_deltas():
+    # Route through the REAL redact_portal_status_payload(), not a hand-rolled
+    # dict — a synthetic fixture using the wrong field name ("state" instead
+    # of the real "status") or the wrong shape (a bare list instead of
+    # redact_agents_payload()'s {"agents": [...], "count": n} dict wrapper)
+    # would pass this test while the real diff loop silently no-ops in
+    # production. This exact gap is why AGENT_STATE_CHANGED shipped dead.
     hub = NotificationHub()
     publisher = PortalNotificationPublisher(hub)
-    first = {
+    first = redact_portal_status_payload({
         "services": {"perplexity_tools": {"ok": True}},
-        "agents": [{"agent_id": "a1", "state": "running", "path": "/secret"}],
+        "agents": [{"agent_id": "a1", "status": "running", "path": "/secret"}],
         "supervisor_jobs": [],
         "hardware_policy": {"ok": True},
-    }
-    second = {
+    })
+    second = redact_portal_status_payload({
         "services": {"perplexity_tools": {"ok": False}},
-        "agents": [{"agent_id": "a1", "state": "done", "path": "/secret"}],
+        "agents": [{"agent_id": "a1", "status": "done", "path": "/secret"}],
         "supervisor_jobs": [{"id": "j1", "status": "completed", "prompt": "secret"}],
         "hardware_policy": {"ok": False},
-    }
+    })
 
     assert await publisher.publish(first) == []
     emitted = await publisher.publish(second)
@@ -263,13 +269,10 @@ async def test_status_publisher_emits_only_redacted_edge_deltas():
 @pytest.mark.asyncio
 async def test_api_status_publishes_only_the_redacted_payload(monkeypatch):
     raw_status = {
-        "agents": [{"agent_id": "a1", "state": "done", "path": "/secret"}],
+        "agents": [{"agent_id": "a1", "status": "done", "path": "/secret"}],
         "supervisor_jobs": [{"id": "j1", "status": "completed", "prompt": "secret"}],
     }
-    redacted_status = {
-        "agents": [{"agent_id": "a1", "state": "done"}],
-        "supervisor_jobs": [{"id": "j1", "status": "completed"}],
-    }
+    redacted_status = redact_portal_status_payload(raw_status)
     seen_by_redactor = []
     seen_by_publisher = []
 
@@ -307,16 +310,39 @@ Expected: FAIL because PortalNotificationPublisher is undefined.
 ~~~python
 from collections.abc import Mapping
 
+
+def _unwrap_redacted_list(payload: Any, key: str) -> list[Any]:
+    """Unwrap list payloads after redact_portal_status_payload (dict wrapper).
+
+    Mirrors portal_server._unwrap_redacted_list — duplicated here (not
+    imported) to avoid a circular import: portal_server.py imports
+    NotificationHub from this module, so this module cannot import back
+    from portal_server.py.
+    """
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        items = payload.get(key, [])
+        return items if isinstance(items, list) else []
+    return []
+
+
 class PortalNotificationPublisher:
     def __init__(self, hub: NotificationHub) -> None:
         self._hub = hub
         self._previous: dict[str, Any] | None = None
+        self._lock = asyncio.Lock()
 
     async def publish(self, status: Mapping[str, Any]) -> list[Notification]:
+        # redact_agents_payload() returns {"agents": [...], "count": n} (a dict,
+        # not a list) and keys entries by "status", never "state" — read the
+        # real field name through the same unwrap pattern portal_server.py uses
+        # elsewhere, or every agent-state diff silently no-ops against real data.
+        agents = _unwrap_redacted_list(status.get("agents"), "agents")
         current = {
             "agents": {
-                str(item.get("agent_id", item.get("role", ""))): str(item.get("state", ""))
-                for item in status.get("agents", [])
+                str(item.get("agent_id", item.get("role", ""))): str(item.get("status", ""))
+                for item in agents
                 if isinstance(item, Mapping)
             },
             "completed_jobs": {
@@ -326,23 +352,37 @@ class PortalNotificationPublisher:
             },
             "hardware_ok": bool(status.get("hardware_policy", {}).get("ok")),
         }
-        previous = self._previous
-        self._previous = current
+
+        # Guard the read-modify-write: api_status() is called from at least 6
+        # route handlers plus the dashboard's own poll timers, so concurrent
+        # publish() calls can otherwise diff against out-of-order snapshots.
+        async with self._lock:
+            previous = self._previous
+            self._previous = current
         if previous is None:
             return []
 
         emitted: list[Notification] = []
         for agent_id, state in current["agents"].items():
             if previous["agents"].get(agent_id) != state:
-                emitted.append(Notification(EventType.AGENT_STATE_CHANGED, {"agent_id": agent_id, "state": state}))
+                emitted.append(Notification(EventType.AGENT_STATE_CHANGED, {"agent_id": agent_id, "status": state}))
         if previous["hardware_ok"] != current["hardware_ok"]:
             emitted.append(Notification(EventType.HARDWARE_STATUS_CHANGED, {"ok": current["hardware_ok"]}))
         for job_id in current["completed_jobs"] - previous["completed_jobs"]:
             emitted.append(Notification(EventType.JOB_COMPLETED, {"job_id": job_id, "status": "completed"}))
         for notification in emitted:
-            await self._hub.emit(notification)
+            try:
+                await self._hub.emit(notification)
+            except Exception:
+                # /api/status is the primary status endpoint and has zero
+                # current stream consumers — a shape drift in future event
+                # types must not 500 the dashboard's core API over a
+                # best-effort notification side channel.
+                logger.exception("notification publish failed for %s", notification.type)
         return emitted
 ~~~
+
+Also add `import logging` and `logger = logging.getLogger(__name__)` near the top of `portal_notifications.py` if not already present, and update the corresponding test (`test_status_publisher_emits_only_redacted_edge_deltas` in Step 1 above) to build its `first`/`second` fixtures through the real `redact_agents_payload()`/`redact_portal_status_payload()` — not hand-rolled dicts — so the test would have caught this exact bug.
 
 Extract the current raw-status construction into `_build_portal_status_payload()` so
 the route can be tested without reimplementing its monitor mocks. In `api_status`,
@@ -534,17 +574,28 @@ async def test_notification_sse_generator_keeps_idle_clients_alive_and_cleans_up
 
 @pytest.mark.asyncio
 async def test_notification_stream_send_timeout_releases_subscription(monkeypatch):
+    # Uses the REAL iter_notification_sse generator against a REAL hub, not a
+    # bare one_event() stand-in — a fixture with no subscription logic can
+    # never prove a subscription was released, which is the whole point of
+    # this test's name. This is the exact test-fidelity gap that hid the
+    # AGENT_STATE_CHANGED bug: assert against the real thing, not a fixture
+    # shaped like it.
     monkeypatch.setattr(portal_server, "NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS", 0)
 
-    async def one_event():
-        yield "data: event\n\n"
+    hub = NotificationHub()
+    request = AsyncMock()
+    request.is_disconnected.return_value = False
+    generator = portal_server.iter_notification_sse(request, hub, filters=None)
+    await hub.emit(Notification(EventType.JOB_COMPLETED, {"job_id": "redacted-job"}))
 
     async def slow_send(message):
-        if message["type"] == "http.response.body":
+        if message["type"] == "http.response.body" and message.get("more_body"):
             await asyncio.Event().wait()
 
-    response = portal_server.NotificationStreamingResponse(one_event())
+    response = portal_server.NotificationStreamingResponse(generator)
     await asyncio.wait_for(response.stream_response(slow_send), timeout=1)
+
+    assert hub.subscriber_count == 0
 ~~~
 
 - [ ] **Step 2: Run the tests and verify they fail**
@@ -572,16 +623,27 @@ class NotificationStreamingResponse(StreamingResponse):
 
     async def stream_response(self, send):
         await send({"type": "http.response.start", "status": self.status_code, "headers": self.raw_headers})
-        async for chunk in self.body_iterator:
-            if not isinstance(chunk, bytes):
-                chunk = chunk.encode(self.charset)
-            try:
-                await asyncio.wait_for(
-                    send({"type": "http.response.body", "body": chunk, "more_body": True}),
-                    timeout=NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS,
-                )
-            except asyncio.TimeoutError:
-                break
+        try:
+            async for chunk in self.body_iterator:
+                if not isinstance(chunk, bytes):
+                    chunk = chunk.encode(self.charset)
+                try:
+                    await asyncio.wait_for(
+                        send({"type": "http.response.body", "body": chunk, "more_body": True}),
+                        timeout=NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    break
+        finally:
+            # Breaking out of `async for` does NOT close the underlying async
+            # generator — its own finally (hub._subscribers.pop(...)) only
+            # runs on explicit aclose(). Without this, a slow/stalled client
+            # leaks a live subscription on exactly the case this timeout
+            # exists to handle. GC-based cleanup can't reliably await, so this
+            # must be explicit, not implicit.
+            aclose = getattr(self.body_iterator, "aclose", None)
+            if aclose is not None:
+                await aclose()
         await send({"type": "http.response.body", "body": b"", "more_body": False})
 
 
@@ -611,6 +673,20 @@ async def api_notifications_stream(request: Request, types: Optional[str] = None
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 ~~~
+
+**Known, inherited (not new) residual risk — not fixed here:** `cors_allow_origins()`
+defaults to `["localhost:8002", "localhost:3000"]` with `allow_credentials=True`, and
+`lifecycle_origin_allowed()` deliberately treats all loopback ports as mutually
+trusted by design ("portal :8002 may accept POSTs from pages served on PT :8000 or
+orama :8001" — `verify_lifecycle_origin` would NOT reject `localhost:3000`, it's
+allow-listed on purpose). A co-resident local process on an allow-listed port is
+therefore a credentialed reader of this stream once the session cookie is bootstrapped.
+This is the same trust model every other lifecycle route in this codebase already
+accepts (`POST /api/stop`, `/api/restart/*`, etc.) — it is the project's established
+single-operator-LAN posture (`docs/v2/45-single-operator-lan-threat-model-descope.md`
+D23: real trust boundary = administrative identity, not port count), not a gap this
+plan introduces or should special-case-fix. Flagged for awareness; not an accepted
+scope item.
 
 The keepalive is an SSE comment, not an event or replay marker. The bounded send
 adapter is route-local because `StreamingResponse` does not expose a send timeout.
@@ -731,6 +807,9 @@ Notification.event_id, NotificationHub.dropped_events, PortalNotificationPublish
 | 4 | CEO | Rate-limit `POST /api/notifications/session` — deferred to TODOS.md | Mechanical | P3 (pragmatic) | Outside current blast radius (no rate-limit infra exists yet); endpoint already requires a valid bearer, so abuse surface is small | — |
 | 5 | CEO | Corrected fabricated-adjacent citation in G7 analysis (`SECURITY.md §C` does not mandate notification auth) | Mechanical | Prime Directive 2 (every claim verifiable) | Verified via full-repo + all-branch + git-history search: phrase only ever appears as this citation and as the workstream's own open TODO, never as real §C content | — |
 | 6 | CEO | Wire notification stream into React Command Center — deferred to TODOS.md, corrected from initial "reconcile two frontends" mis-scope | Mechanical | P3 (pragmatic) + scope discipline | `docs/v2/16-web-app-orchestration-plan.md` (RESOLVED 2026-06-14) already shipped the React-primary migration; `portal_server.py:3245` serves `web/dist` with legacy HTML as fallback only, not a parallel surface. Real follow-up is S/M (add EventSource client to Command Center), not 1-2 weeks. Still outside G7 MVP's Global Constraints (no UI work in this PR) | — |
+| 7 | Eng | Actually applied the 3 accepted CEO-phase fixes into the plan's own TDD code blocks (Task 2: `status` field + `_unwrap_redacted_list()` + `asyncio.Lock`; Task 4: `aclose()` in `stream_response`'s `finally`) | Mechanical | Prime Directive 1 (zero silent failures) | Eng-phase dual voices found the Decision Audit Trail had logged these as "accepted" but they were never actually edited into the plan's code — an agentic worker executing the plan verbatim would still ship both bugs. Also rewrote the 2 test fixtures that hid the original bug to call the real `redact_portal_status_payload()` instead of hand-rolled dicts, and rewrote the misleadingly-named timeout-leak test to actually assert `subscriber_count == 0` | — |
+| 8 | Eng | Added try/except around `hub.emit()` inside `PortalNotificationPublisher.publish()` | Mechanical | Prime Directive 1 + P5 (explicit) | `/api/status` is the primary status endpoint with zero current stream consumers — a future event-shape drift must not 500 the dashboard's core API over a best-effort notification side channel | — |
+| 9 | Eng | Investigated then REJECTED a proposed origin-check fix for the CORS/session-cookie cross-origin-read finding | Mechanical (self-corrected) | Verify before applying | Initially proposed adding `verify_lifecycle_origin()` to the stream route, but that function deliberately treats all loopback ports as mutually trusted by design (documented: "portal :8002 may accept POSTs from pages served on PT :8000 or orama :8001") — it would NOT have rejected `localhost:3000`, and would have made the fix a no-op while claiming coverage. Reverted the route change and the test that would have asserted a 403 the real code can't produce. Documented as an inherited, accepted single-operator-LAN risk (matches `docs/v2/45` D23 precedent) instead of a fabricated fix | initial fix + its test |
 
 ## CEO Dual Voices — Consensus Table
 
@@ -753,3 +832,25 @@ CEO DUAL VOICES — CONSENSUS TABLE:
 **Codex (gpt-5.6-terra, 36.6K tokens):** The producer is polling-triggered (fires only when `/api/status` is called), not push-triggered from real state-change sources — so the plan cannot actually deliver its own "2-second" latency claim regardless of implementation quality; the acceptance test only proves an in-memory queue can hand itself an object, not source-to-user latency. The browser-auth bootstrap is internally unresolved (if a safe authenticated browser session already exists, use it; if not, this invents a bespoke credential-transfer protocol). "v2-compatible" is asserted, not earned (random UUIDs, no ordering, no producer identity). Process-local fan-out is a hidden single-process commitment. Alternatives list (WebSocket/SSE/poll/Redis) omits ETag-polling, webhooks-to-existing-channels, and a domain-event/outbox boundary.
 
 **Cross-model convergence:** Both independently concluded the plan ships real engineering effort (auth, framing, redaction-wiring) around a feature with no demonstrated consumer or need — this is not two models nitpicking style, it's the same structural critique from different entry points (Claude via "grep found zero callers," Codex via "the event-source design can't deliver its own SLA"). Neither model's finding depends on the other having found it first (dual voices ran independently). **This is the dominant finding for the Final Approval Gate** — flagged there as the plan's central open question, equivalent in weight to a User Challenge even though it targets a pre-existing plan rather than an in-conversation user directive.
+
+## Eng Dual/Triple Voices — Consensus Table
+
+```
+ENG VOICES — CONSENSUS TABLE:
+═══════════════════════════════════════════════════════════════
+  Dimension                           Claude  Secondary  Consensus
+  ──────────────────────────────────── ─────── ────────── ─────────
+  1. Architecture sound?               Yes*    Yes*       CONFIRMED (*conditional on the 3 fixes actually landing)
+  2. Test coverage sufficient?         No      No         CONFIRMED (fixture fidelity gaps found independently)
+  3. Performance risks addressed?      Partial Partial    CONFIRMED (SPOF risk on /api/status found independently)
+  4. Security threats covered?         Yes     No         DISAGREE → investigated, secondary's finding correct but pre-existing/inherited, not new
+  5. Error paths handled?              No      —          Claude only: missing try/except around hub.emit()
+  6. Deployment risk manageable?       Yes     Yes        CONFIRMED
+═══════════════════════════════════════════════════════════════
+```
+
+**Claude subagent (primary, foreground, source-verified):** Confirmed the 4 CEO-accepted fixes need to land — and found the accepted fixes existed only in the Decision Audit Trail's prose, never in the plan's own TDD code blocks. Also found: `/api/status` has no error boundary around the new `publish()` call (SPOF risk for a zero-consumer feature), and the paired regression tests for the leak/lock fixes don't actually assert what their names claim.
+
+**Secondary critic (cline CLI, `glm-5.2` — GPT-5.5 not resolvable under this provider, see note below):** Independently arrived at the same "accepted fixes never landed in the code" finding, plus flagged the CORS/session-cookie cross-origin-read surface (`allow_credentials=True` + `localhost:3000` allow-listed). Investigated and applied Decision #7-#8 fixes; investigated Decision #9's proposed fix and found it wouldn't work against this codebase's actual (deliberately permissive, documented) loopback-trust design — corrected rather than shipped.
+
+**Model note:** the user requested this third voice run GPT-5.5 via the `cline` CLI; `cline-pass/gpt-5.5` and bare `gpt-5.5` both returned "model not found" (no models-listing tool available in this session to find the exact registered ID) — fell back to the tool's actual default (`cline-pass/glm-5.2`), which still surfaced 2 independently-confirmed findings plus 1 the primary voice hadn't named.
