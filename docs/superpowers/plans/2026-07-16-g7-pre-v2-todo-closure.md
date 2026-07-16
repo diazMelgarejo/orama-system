@@ -177,7 +177,7 @@ fake.dispatch("job_completed", JSON.stringify({
   event_id: "event-1",
   type: "job_completed",
   event_type: "job_completed",
-  timestamp: "2026-07-16T00:00:00Z",
+  ts: 1784160000,
   data: { job_id: "redacted-job" },
   payload: { job_id: "redacted-job" },
 }));
@@ -217,7 +217,10 @@ export interface PortalNotification {
   event_id: string;
   type: PortalNotificationType;
   event_type: PortalNotificationType;
-  timestamp: string;
+  // int epoch seconds -- matches Notification.to_dict()'s real "ts" field
+  // exactly (src/orama_system/portal_notifications.py). NOT "timestamp",
+  // and not a string: that field name/type doesn't exist on the wire.
+  ts: number;
   data: Record<string, unknown>;
   payload: Record<string, unknown>;
 }
