@@ -309,6 +309,33 @@ def test_notification_session_rejects_cross_origin_bootstrap(monkeypatch):
     assert response.status_code == 403
 
 
+def test_notification_session_rate_limits_authenticated_client(monkeypatch):
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "test-notification-token")
+    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
+    portal_server._CONFIGURE_RATE.clear()
+    try:
+        with TestClient(portal_server.app) as client:
+            denied = client.post("/api/notifications/session")
+            allowed = [
+                client.post(
+                    "/api/notifications/session",
+                    headers={"Authorization": "Bearer test-notification-token"},
+                )
+                for _ in range(portal_server._CONFIGURE_MAX_CALLS)
+            ]
+            limited = client.post(
+                "/api/notifications/session",
+                headers={"Authorization": "Bearer test-notification-token"},
+            )
+    finally:
+        portal_server._CONFIGURE_RATE.clear()
+
+    assert denied.status_code == 401
+    assert [response.status_code for response in allowed] == [204] * portal_server._CONFIGURE_MAX_CALLS
+    assert limited.status_code == 429
+
+
 @pytest.mark.asyncio
 async def test_cookie_authenticated_notification_stream(monkeypatch):
     monkeypatch.setenv("PORTAL_NOTIFICATIONS", "1")

@@ -17,6 +17,7 @@ import {
   resolveJobs,
   resolveLatestJobId,
 } from "./commandCenterState";
+import { usePortalNotifications } from "./usePortalNotifications";
 
 type Page = "command" | "composer" | "runs" | "routing" | "artifacts" | "settings" | "docs";
 
@@ -36,6 +37,7 @@ type Page = "command" | "composer" | "runs" | "routing" | "artifacts" | "setting
 export function CommandCenter() {
   const [page, setPage] = useState<Page>("command");
   const [preview, setPreview] = useState<SwarmPreview | undefined>(mockSwarmPreview);
+  usePortalNotifications();
 
   const appStateQuery = useQuery({
     queryKey: ["appState"],
