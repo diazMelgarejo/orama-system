@@ -38,7 +38,7 @@ from urllib.parse import quote
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
@@ -52,9 +52,11 @@ from orama_system.portal_notifications import (
 )
 
 from utils.control_plane_auth import (
+    CONTROL_PLANE_COOKIE,
     accepted_control_plane_tokens,
     auth_enforced,
     auth_headers,
+    bearer_token_from_request,
     cors_allow_origins,
     default_bind_host,
     control_plane_auth_failure,
@@ -69,6 +71,7 @@ from utils.control_plane_auth import (
     redact_models_payload,
     redact_portal_status_payload,
     redact_runtime_section,
+    verify_control_plane_auth,
     verify_lifecycle_origin,
 )
 
@@ -1461,6 +1464,33 @@ async def sse_peer_stream(request: Request):
             yield f"data: {json.dumps(event)}\n\n"
 
     return StreamingResponse(generator(), media_type="text/event-stream")
+
+
+NOTIFICATION_SESSION_MAX_AGE_SECONDS = 900
+
+
+@app.post("/api/notifications/session", status_code=204)
+async def create_notification_session(request: Request, response: Response) -> None:
+    """Exchange an existing bearer for a short-lived, path-scoped stream cookie.
+
+    Native EventSource cannot set custom headers, so a bearer credential
+    can't reach /api/notifications/stream directly. This endpoint downscopes
+    an already-held bearer into a narrower, short-TTL, HttpOnly cookie —
+    not a general login route, and never injected into HTML/JS.
+    """
+    verify_lifecycle_origin(request)
+    if not request.headers.get("authorization", "").startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Bearer authentication required")
+    verify_control_plane_auth(request)
+    response.set_cookie(
+        key=CONTROL_PLANE_COOKIE,
+        value=bearer_token_from_request(request),
+        max_age=NOTIFICATION_SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        secure=not request_is_loopback(request),
+        samesite="strict",
+        path="/api/notifications",
+    )
 
 
 @app.get("/api/notifications/stream", response_class=StreamingResponse)
