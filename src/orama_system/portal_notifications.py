@@ -9,11 +9,15 @@ safety enforcement.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
+import uuid
 from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 NOTIFICATION_ENVELOPE_VERSION = 1
@@ -42,12 +46,14 @@ class Notification:
     source: str = NOTIFICATION_SOURCE
     ts: int = field(default_factory=lambda: int(time.time()))
     version: int = NOTIFICATION_ENVELOPE_VERSION
+    event_id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     def to_dict(self) -> dict[str, Any]:
         payload = dict(self.data)
         event_type = self.type.value
         return {
             "version": self.version,
+            "event_id": self.event_id,
             "type": event_type,
             "event_type": event_type,
             "ts": self.ts,
@@ -64,7 +70,12 @@ class NotificationHub:
         self._queue_size = queue_size
         self._subscribers: dict[int, tuple[set[EventType], asyncio.Queue[Notification]]] = {}
         self._next_id = 0
+        self._dropped_events = 0
         self._lock = asyncio.Lock()
+
+    @property
+    def dropped_events(self) -> int:
+        return self._dropped_events
 
     @property
     def subscriber_count(self) -> int:
@@ -80,6 +91,7 @@ class NotificationHub:
             if queue.full():
                 try:
                     queue.get_nowait()
+                    self._dropped_events += 1
                 except asyncio.QueueEmpty:
                     pass
             queue.put_nowait(notification)
