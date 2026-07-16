@@ -112,7 +112,7 @@ instead of being smuggled into this MVP.
 - Consumes: EventType, Notification, NotificationHub.
 - Produces: Notification.event_id: str and NotificationHub.dropped_events: int.
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 ~~~python
 @pytest.mark.asyncio
@@ -142,13 +142,13 @@ async def test_notification_hub_drops_oldest_and_retains_newest():
     await stream.aclose()
 ~~~
 
-- [ ] **Step 2: Run the tests and verify they fail**
+- [x] **Step 2: Run the tests and verify they fail**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py -k 'opaque_event_id or drops_oldest' -q
 
 Expected: FAIL because event_id and dropped_events are absent.
 
-- [ ] **Step 3: Implement the smallest contract change**
+- [x] **Step 3: Implement the smallest contract change**
 
 ~~~python
 import uuid
@@ -204,13 +204,13 @@ class NotificationHub:
             queue.put_nowait(notification)
 ~~~
 
-- [ ] **Step 4: Run the focused tests and verify they pass**
+- [x] **Step 4: Run the focused tests and verify they pass**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py -k 'opaque_event_id or drops_oldest' -q
 
 Expected: 2 passed.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ~~~bash
 git add src/orama_system/portal_notifications.py tests/test_portal_notifications.py
@@ -228,7 +228,7 @@ git commit -m "feat(g7): version notification event identities"
 - Consumes: NotificationHub.emit(notification) and the result of redact_portal_status_payload.
 - Produces: PortalNotificationPublisher.publish(status: Mapping[str, Any]) -> list[Notification].
 
-- [ ] **Step 1: Write the failing publisher test**
+- [x] **Step 1: Write the failing publisher test**
 
 ~~~python
 @pytest.mark.asyncio
@@ -304,13 +304,13 @@ async def test_api_status_publishes_only_the_redacted_payload(monkeypatch):
     assert "prompt" not in seen_by_publisher[0]["supervisor_jobs"][0]
 ~~~
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py -k 'status_publisher or api_status_publishes' -q
 
 Expected: FAIL because PortalNotificationPublisher is undefined.
 
-- [ ] **Step 3: Implement the publisher and call it after redaction**
+- [x] **Step 3: Implement the publisher and call it after redaction**
 
 ~~~python
 from collections.abc import Mapping
@@ -400,13 +400,13 @@ if notifications_enabled():
 return redacted_payload
 ~~~
 
-- [ ] **Step 4: Run publisher and existing notification tests**
+- [x] **Step 4: Run publisher and existing notification tests**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ~~~bash
 git add src/orama_system/portal_notifications.py src/orama_system/portal_server.py tests/test_portal_notifications.py
@@ -423,7 +423,7 @@ git commit -m "feat(g7): emit redacted portal state deltas"
 - Consumes: CONTROL_PLANE_COOKIE, bearer_token_from_request, request_is_loopback, verify_control_plane_auth, and verify_lifecycle_origin.
 - Produces: POST /api/notifications/session, a 15-minute host-only cookie bootstrap for a client that already has a bearer.
 
-- [ ] **Step 1: Write failing session tests**
+- [x] **Step 1: Write failing session tests**
 
 ~~~python
 def test_notification_session_requires_bearer_and_sets_scoped_cookie(monkeypatch):
@@ -460,13 +460,13 @@ def test_notification_session_rejects_cross_origin_bootstrap(monkeypatch):
     assert response.status_code == 403
 ~~~
 
-- [ ] **Step 2: Run the session tests and verify they fail**
+- [x] **Step 2: Run the session tests and verify they fail**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py -k notification_session -q
 
 Expected: FAIL with 404 because the session route does not exist.
 
-- [ ] **Step 3: Implement the path-scoped cookie endpoint**
+- [x] **Step 3: Implement the path-scoped cookie endpoint**
 
 ~~~python
 from fastapi import Response
@@ -499,7 +499,7 @@ async def create_notification_session(request: Request, response: Response) -> N
 
 Do not inject this token into an HTML page or cpFetch. This endpoint is not a general login route.
 
-- [ ] **Step 4: Prove the cookie can authenticate the stream**
+- [x] **Step 4: Prove the cookie can authenticate the stream**
 
 ~~~python
 def test_cookie_authenticated_notification_stream(monkeypatch):
@@ -520,7 +520,7 @@ Run: uv run --extra test pytest tests/test_portal_notifications.py -k 'notificat
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ~~~bash
 git add src/orama_system/portal_server.py tests/test_portal_notifications.py
@@ -538,7 +538,7 @@ git commit -m "feat(g7): add same-origin notification session"
 - Produces: format_notification_sse(notification: Notification) -> str, periodic SSE
   keepalive comments, bounded ASGI send time, and no-cache stream responses.
 
-- [ ] **Step 1: Write failing stream-frame tests**
+- [x] **Step 1: Write failing stream-frame tests**
 
 ~~~python
 def test_format_notification_sse_has_matching_id_event_and_json_payload():
@@ -618,13 +618,13 @@ async def test_notification_stream_send_timeout_releases_subscription(monkeypatc
     assert hub.subscriber_count == 0
 ~~~
 
-- [ ] **Step 2: Run the tests and verify they fail**
+- [x] **Step 2: Run the tests and verify they fail**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py -k 'format_notification_sse or replay_out_of_scope or keepalive or send_timeout' -q
 
 Expected: FAIL because the formatter, keepalive loop, and bounded send adapter are absent.
 
-- [ ] **Step 3: Implement the formatter and headers**
+- [x] **Step 3: Implement the formatter and headers**
 
 ~~~python
 def format_notification_sse(notification: Notification) -> str:
@@ -725,13 +725,13 @@ The keepalive is an SSE comment, not an event or replay marker. The bounded send
 adapter is route-local because `StreamingResponse` does not expose a send timeout.
 Do not parse Last-Event-ID, emit retry, or persist events.
 
-- [ ] **Step 4: Run all notification tests**
+- [x] **Step 4: Run all notification tests**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py -q
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ~~~bash
 git add src/orama_system/portal_server.py tests/test_portal_notifications.py
@@ -749,7 +749,7 @@ git commit -m "feat(g7): frame typed portal SSE events"
 - Consumes: the session route and stream behavior from Tasks 1-4.
 - Produces: one discoverable operator contract and a complete MVP regression command.
 
-- [ ] **Step 1: Write the two-second delivery acceptance test**
+- [x] **Step 1: Write the two-second delivery acceptance test**
 
 ~~~python
 @pytest.mark.asyncio
@@ -770,20 +770,20 @@ async def test_notification_delivery_is_typed_and_arrives_within_two_seconds():
     await stream.aclose()
 ~~~
 
-- [ ] **Step 2: Run the acceptance test**
+- [x] **Step 2: Run the acceptance test**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py::test_notification_delivery_is_typed_and_arrives_within_two_seconds -q
 
 Expected: PASS after Tasks 1-4.
 
-- [ ] **Step 3: Expose the drop counter (Decision Audit Trail #3 — was accepted, never coded until now)**
+- [x] **Step 3: Expose the drop counter (Decision Audit Trail #3 — was accepted, never coded until now)**
 
 ~~~python
 # In api_status(), alongside the existing redacted-payload assembly:
 redacted_payload["notification_delivery"] = {"dropped_events": _notification_hub.dropped_events}
 ~~~
 
-- [ ] **Step 4: Add the API-reference contract, with a real client example**
+- [x] **Step 4: Add the API-reference contract, with a real client example**
 
 ~~~markdown
 ### POST /api/notifications/session
@@ -855,7 +855,7 @@ authenticated portal route. See `docs/v2/45-single-operator-lan-threat-model-des
 
 Update the G7 analysis to remove stale wording that says there is no subscription filter, name event_id, and identify the session cookie as a narrow stream bootstrap rather than a portal login.
 
-- [ ] **Step 5: Run the full targeted validation**
+- [x] **Step 5: Run the full targeted validation**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py tests/test_portal_mutating_route_auth.py tests/test_portal_dashboard.py tests/test_fleet_topology_api.py -q
 
@@ -865,7 +865,7 @@ Run: git diff --check
 
 Expected: no output.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ~~~bash
 git add docs/api-reference.md docs/next/fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md tests/test_portal_notifications.py

@@ -1,5 +1,13 @@
 # G7 Async Notifications — Next Steps
 
+> **RESOLVED 2026-07-16.** Every item in the checklist below is implemented,
+> tested, and merged: [`2026-07-14-g7-authenticated-sse-mvp.md`](../../superpowers/plans/2026-07-14-g7-authenticated-sse-mvp.md)
+> (Tasks 1-5) plus the pre-v2 fast-follow
+> [`2026-07-16-g7-pre-v2-todo-closure.md`](../../superpowers/plans/2026-07-16-g7-pre-v2-todo-closure.md).
+> Verified end to end: 55/55 backend tests, 27/27 frontend tests, `tsc`/`eslint`
+> clean, `repo_hygiene.py` OK. Checklist below left as historical record
+> (pre-implementation planning), not re-checked item-by-item live status.
+
 Date: 2026-07-14
 Branch: `G7-Async-notifications-mvp`
 Source branch: `2026-07-12-001-gstack-safe-upgrade`
