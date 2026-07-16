@@ -26,6 +26,10 @@ describe("apiFetch", () => {
     await expect(
       apiFetch<void>("/api/notifications/session", { method: "POST" }),
     ).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/notifications/session",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("throws ApiError with status and body on HTTP error", async () => {
