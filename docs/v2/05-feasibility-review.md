@@ -1,5 +1,6 @@
 # 05 — Feasibility Review
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > Expanded with `/autoplan` CEO × Eng × DX lens applied to each suggestion from the 4 source files.
 > Methodology: 6 decision principles (completeness, boil-lakes, pragmatic, DRY, explicit-over-clever, bias-toward-action).
 

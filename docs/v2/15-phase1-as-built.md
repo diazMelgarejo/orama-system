@@ -1,6 +1,7 @@
 <!-- lint-ignore LINT-013 -->
 # 15 — v2 Alpha As-Built Notes (2026-05-01)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > Records what the canonical `oramasys/*` repos shipped in their v2.0-alpha.1 build.
 > All three repos were pushed to GitHub on 2026-05-01 and remain 0 ahead/0 behind remote.
 > Status: **reference doc** — no code changes implied here.

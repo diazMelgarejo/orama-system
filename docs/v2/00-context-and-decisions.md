@@ -1,6 +1,7 @@
 <!-- lint-ignore LINT-013 -->
 # 00 — Context and Decisions
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 This document captures **why v2 exists**, what each of the four source AI-conversations contributed, and the full rationale behind decisions D1–D10.
 
 ---

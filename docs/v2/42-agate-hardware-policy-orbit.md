@@ -1,5 +1,6 @@
 # 42 — agate Orbit: Hardware Policy Satellite Around perpetua-core
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Active v2 plan (v1 operational in Perpetua-Tools today)  
 > **Date:** 2026-06-26  
 > **Repo target:** [github.com/oramasys/agate](https://github.com/oramasys/agate)  

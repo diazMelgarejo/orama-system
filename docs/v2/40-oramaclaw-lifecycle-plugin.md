@@ -1,6 +1,7 @@
 <!-- lint-ignore LINT-013 -->
 # 40 - Oramaclaw Lifecycle Plugin (D22)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** D22 locked on 2026-06-20. This is the V2 consolidation target. It does not claim that the complete control engine exists today.
 >
 > **Decision:** V2 makes `oramaclaw` the single OpenClaw and AlphaClaw control boundary. Its operator artifact is the user-level executable `orama-openclaw-control`. The package is an orbit plugin: it imports approved `perpetua-core` primitives one way, and the V2 kernel never imports it.
