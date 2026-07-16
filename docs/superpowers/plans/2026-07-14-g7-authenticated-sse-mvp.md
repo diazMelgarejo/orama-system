@@ -295,7 +295,12 @@ async def test_api_status_publishes_only_the_redacted_payload(monkeypatch):
     assert seen_by_redactor == [raw_status]
     assert seen_by_publisher == [redacted_status]
     assert result == redacted_status
-    assert "path" not in seen_by_publisher[0]["agents"][0]
+    # redact_agents_payload() wraps agents as {"agents": [...], "count": n} —
+    # redact_portal_status_payload keeps that wrapper for "agents" but
+    # unwraps "supervisor_jobs" back to a plain list before assignment
+    # (redact_jobs_payload(...)["jobs"]). Index accordingly, or this
+    # assertion raises KeyError: 0 on the dict.
+    assert "path" not in seen_by_publisher[0]["agents"]["agents"][0]
     assert "prompt" not in seen_by_publisher[0]["supervisor_jobs"][0]
 ~~~
 
@@ -586,14 +591,29 @@ async def test_notification_stream_send_timeout_releases_subscription(monkeypatc
     request = AsyncMock()
     request.is_disconnected.return_value = False
     generator = portal_server.iter_notification_sse(request, hub, filters=None)
-    await hub.emit(Notification(EventType.JOB_COMPLETED, {"job_id": "redacted-job"}))
 
     async def slow_send(message):
         if message["type"] == "http.response.body" and message.get("more_body"):
             await asyncio.Event().wait()
 
     response = portal_server.NotificationStreamingResponse(generator)
-    await asyncio.wait_for(response.stream_response(slow_send), timeout=1)
+    task = asyncio.create_task(response.stream_response(slow_send))
+
+    # async generators are lazy — hub.subscribe() only runs once
+    # stream_response starts iterating self.body_iterator, not at
+    # iter_notification_sse(...) call time. Emitting before the subscriber
+    # is actually registered silently drops the notification (found by an
+    # independent Codex GPT-5.5 pass — the original version of this test
+    # emitted too early and would have hit the 15s keepalive path instead
+    # of exercising the timeout/aclose() path at all).
+    for _ in range(100):
+        if hub.subscriber_count == 1:
+            break
+        await asyncio.sleep(0.01)
+    assert hub.subscriber_count == 1
+
+    await hub.emit(Notification(EventType.JOB_COMPLETED, {"job_id": "redacted-job"}))
+    await asyncio.wait_for(task, timeout=1)
 
     assert hub.subscriber_count == 0
 ~~~
@@ -893,6 +913,10 @@ Notification.event_id, NotificationHub.dropped_events, PortalNotificationPublish
 | 12 | DX | Rewrote Task 5's docs section with a copy-paste JS client example and explicit gotcha documentation (EventSource header limitation, named-event-listener requirement, cookie-expiry-has-no-renewal) | Mechanical | P1 (completeness) + this review's own stated bar ("wouldn't need to read the source") | Original docs draft was server-contract prose only, zero client code — broke `docs/api-reference.md`'s own established curl-example convention and left the two most common real-world SSE integration bugs (missing session bootstrap, listening on default `message` instead of typed `event:` name) completely undocumented | — |
 | 13 | DX | Escape hatches for `queue_size`/keepalive/send-timeout/session-TTL constants — NOT added, left as hardcoded module constants | Mechanical | P3 (pragmatic) + acceptable MVP scope cut | Reasonable for a default-off MVP; noted as a stated exclusion rather than a silent gap so a future operator doesn't discover "no override exists" only by reading source | — |
 | 14 | DX | React SPA wiring (Decision #6) — noted the "S/M effort" estimate is optimistic, no change to scope | Taste (informational) | — | DX review found `AppState`/`Shell.tsx` has no existing seam for push-based updates (poll-based cache shape only) — real effort is closer to a small design decision plus implementation, not just "add an EventSource client." Correctly stays deferred/out of scope; estimate revised at the final gate, not the code | — |
+| 15 | Post-approval | Fixed Task 2's `test_api_status_publishes_only_the_redacted_payload` — `seen_by_publisher[0]["agents"][0]` raises `KeyError: 0` against the real (dict-wrapped) shape after routing through `redact_portal_status_payload()` per Decision #7 | Mechanical | Prime Directive 1 | Independent Codex GPT-5.5 (medium effort) final pass caught this: fixing the fixture's *input* to use the real redaction function (Decision #7) without also fixing the assertion's *indexing* left a broken test. `supervisor_jobs` doesn't need the same fix — `redact_portal_status_payload` explicitly unwraps it back to a plain list before assignment; only `agents` stays wrapped | — |
+| 16 | Post-approval | Fixed Task 4's timeout test — it emitted before the async generator's subscriber had actually registered (lazy generator, `hub.subscribe()` doesn't run until first iteration), so the notification was silently dropped and the test would hit the 15s keepalive path instead of the timeout/`aclose()` path it claims to test | Mechanical | Prime Directive 1 | Same Codex GPT-5.5 pass. Fixed by starting `stream_response()` as a background task, polling `hub.subscriber_count == 1` before emitting, then awaiting the task with a timeout — the generator is now genuinely subscribed before the notification it's supposed to receive is sent | — |
+| 17 | Post-approval | Clarified "5 real code/doc defects fixed" language — landed in the plan's own code blocks, NOT yet in repo source files | Mechanical | Precision | Same Codex pass correctly noted the plan is still a plan — `src/orama_system/portal_notifications.py` doesn't yet have `event_id`/`dropped_events`/`PortalNotificationPublisher` because Tasks 1-5 haven't been executed against real files. Expected and correct for a plan review; language in the Final Approval Gate section updated to say so explicitly | — |
+| 18 | Post-approval | Noted (not fixed): `PortalNotificationPublisher`'s lock only guards the `_previous` swap, not the full diff-and-emit sequence — concurrent `api_status()` callers can still emit in a different order than they occurred | Taste (accepted tradeoff) | Global Constraints (best-effort delivery) | Fair architectural nuance from the same Codex pass. Holding the lock through emit would serialize notification delivery order but adds contention on the hot `/api/status` path for a feature the plan's own Global Constraints already describe as best-effort, not ordering-guaranteed. Left as documented, not fixed — revisit if a future consumer actually needs strict ordering | — |
 
 ## CEO Dual Voices — Consensus Table
 
@@ -958,19 +982,30 @@ Single Claude subagent voice (source-verified against `portal_notifications.py`,
 | Documentation | Server-contract prose only | Contract + full client example + gotchas |
 | Escape hatches | None, undocumented | None, explicitly scoped out (stated exclusion) |
 
-## Final Approval Gate — APPROVED (2026-07-16)
+## Final Approval Gate — APPROVED (2026-07-16, confirmed after independent Codex GPT-5.5 pass)
 
-`/autoplan` review complete: CEO (dual voices) → Eng (triple voices) → DX (single voice).
-14 decisions logged, 5 real code/doc defects fixed (not just discussed), 1 proposed
-fix investigated and correctly rejected before shipping, 3 items deferred to
-`TODOS.md`. The dominant strategic finding — this plan ships real infrastructure
-with no wired consumer yet — was steelmanned and accepted as a defensible
-backend-first sequencing choice, not a blocker. User approved as-is.
+`/autoplan` review complete: CEO (dual voices) → Eng (triple voices) → DX (single voice)
+→ independent Codex GPT-5.5 (medium effort) final pass, which caught 2 more real bugs
+(both in tests this review itself introduced) after the plan was already marked
+approved — fixed as Decisions #15-16. 18 decisions logged total.
+
+**Precision note (Decision #17):** "defects fixed" throughout this review means
+**landed in this plan document's own TDD code blocks**, not yet applied to the
+actual repository source files — `src/orama_system/portal_notifications.py` and
+`src/orama_system/portal_server.py` do not yet contain `event_id`,
+`PortalNotificationPublisher`, the session route, or typed SSE framing, because
+Tasks 1-5 have not been executed against real files. That is expected and correct
+for a plan review, not a discrepancy — flagged explicitly per Decision #17 so
+"fixed" isn't misread as "already shipped."
+
+The dominant strategic finding — this plan ships real infrastructure with no wired
+consumer yet — was steelmanned and accepted as a defensible backend-first
+sequencing choice, not a blocker. User approved as-is.
 
 **Ready for implementation** (`superpowers:subagent-driven-development` or
 `superpowers:executing-plans` per the plan's header). All Decision Audit Trail
 fixes are now present in the plan's own TDD code blocks — an agentic worker
-executing Tasks 1-5 verbatim will ship the corrected version, not the original
-bugs.
+executing Tasks 1-5 verbatim against this plan will ship the corrected version,
+not the original bugs, subject to the one accepted tradeoff in Decision #18.
 
 NO UNRESOLVED DECISIONS
