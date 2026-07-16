@@ -1,4 +1,5 @@
-import { StatusBadge, statusToTone } from "@/components/StatusBadge";
+import { StatusBadge } from "@/components/StatusBadge";
+import { statusToTone } from "@/components/statusTone";
 import type { AppState } from "@/api/appState";
 
 interface ReadinessStripProps {
