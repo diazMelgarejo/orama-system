@@ -1484,6 +1484,9 @@ async def create_notification_session(request: Request, response: Response) -> N
     if not request.headers.get("authorization", "").startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Bearer authentication required")
     verify_control_plane_auth(request)
+    client_host = request.client.host if request.client else "unknown"
+    if not _check_rate_limit(f"notifications-session:{client_host}"):
+        raise HTTPException(status_code=429, detail="Too many notification session requests")
     response.set_cookie(
         key=CONTROL_PLANE_COOKIE,
         value=bearer_token_from_request(request),

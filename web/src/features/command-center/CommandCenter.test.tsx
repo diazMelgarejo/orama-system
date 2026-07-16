@@ -11,6 +11,12 @@ vi.mock("@/api/artifacts", () => ({
   listJobArtifacts: vi.fn(() => Promise.resolve({ artifacts: [] })),
 }));
 
+vi.mock("./usePortalNotifications", () => ({
+  usePortalNotifications: vi.fn(),
+}));
+
+import { usePortalNotifications } from "./usePortalNotifications";
+
 function renderCommandCenter() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -33,6 +39,13 @@ function clickNav(label: string) {
 }
 
 describe("CommandCenter nav smokes", () => {
+  it("enables portal notification-driven appState refreshes", async () => {
+    renderCommandCenter();
+    await waitForConsole();
+
+    expect(usePortalNotifications).toHaveBeenCalledOnce();
+  });
+
   it("composer page renders swarm composer without the command dashboard runs table", async () => {
     renderCommandCenter();
     await waitForConsole();
