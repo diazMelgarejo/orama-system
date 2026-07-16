@@ -12,7 +12,7 @@ import asyncio
 import logging
 import time
 import uuid
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Mapping
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -108,6 +108,79 @@ class NotificationHub:
         finally:
             async with self._lock:
                 self._subscribers.pop(subscriber_id, None)
+
+
+def _unwrap_redacted_list(payload: Any, key: str) -> list[Any]:
+    """Unwrap list payloads after redact_portal_status_payload (dict wrapper).
+
+    Mirrors portal_server._unwrap_redacted_list — duplicated here (not
+    imported) to avoid a circular import: portal_server.py imports
+    NotificationHub/PortalNotificationPublisher from this module, so this
+    module cannot import back from portal_server.py.
+    """
+    if isinstance(payload, list):
+        return payload
+    if isinstance(payload, dict):
+        items = payload.get(key, [])
+        return items if isinstance(items, list) else []
+    return []
+
+
+class PortalNotificationPublisher:
+    """Diffs successive redacted /api/status snapshots into typed Notifications."""
+
+    def __init__(self, hub: NotificationHub) -> None:
+        self._hub = hub
+        self._previous: dict[str, Any] | None = None
+        self._lock = asyncio.Lock()
+
+    async def publish(self, status: Mapping[str, Any]) -> list[Notification]:
+        # redact_agents_payload() returns {"agents": [...], "count": n} (a dict,
+        # not a list) and keys entries by "status", never "state" — read the
+        # real field name through the same unwrap pattern portal_server.py uses
+        # elsewhere, or every agent-state diff silently no-ops against real data.
+        agents = _unwrap_redacted_list(status.get("agents"), "agents")
+        current = {
+            "agents": {
+                str(item.get("agent_id", item.get("role", ""))): str(item.get("status", ""))
+                for item in agents
+                if isinstance(item, Mapping)
+            },
+            "completed_jobs": {
+                str(item.get("id", item.get("job_id", "")))
+                for item in status.get("supervisor_jobs", [])
+                if isinstance(item, Mapping) and str(item.get("status", "")).lower() == "completed"
+            },
+            "hardware_ok": bool(status.get("hardware_policy", {}).get("ok")),
+        }
+
+        # Guard the read-modify-write: api_status() is called from at least 6
+        # route handlers plus the dashboard's own poll timers, so concurrent
+        # publish() calls can otherwise diff against out-of-order snapshots.
+        async with self._lock:
+            previous = self._previous
+            self._previous = current
+        if previous is None:
+            return []
+
+        emitted: list[Notification] = []
+        for agent_id, state in current["agents"].items():
+            if previous["agents"].get(agent_id) != state:
+                emitted.append(Notification(EventType.AGENT_STATE_CHANGED, {"agent_id": agent_id, "status": state}))
+        if previous["hardware_ok"] != current["hardware_ok"]:
+            emitted.append(Notification(EventType.HARDWARE_STATUS_CHANGED, {"ok": current["hardware_ok"]}))
+        for job_id in current["completed_jobs"] - previous["completed_jobs"]:
+            emitted.append(Notification(EventType.JOB_COMPLETED, {"job_id": job_id, "status": "completed"}))
+        for notification in emitted:
+            try:
+                await self._hub.emit(notification)
+            except Exception:
+                # /api/status is the primary status endpoint and has zero
+                # current stream consumers — a shape drift in future event
+                # types must not 500 the dashboard's core API over a
+                # best-effort notification side channel.
+                logger.exception("notification publish failed for %s", notification.type)
+        return emitted
 
 
 def notifications_enabled() -> bool:
