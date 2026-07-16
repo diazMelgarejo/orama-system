@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: ~/.gstack/projects/diazMelgarejo-orama-system/main-autoplan-restore-20260715-185254.md -->
 # G7 Authenticated SSE Notifications Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (- [ ]) syntax for tracking.
@@ -718,3 +719,37 @@ Every task names exact files, interfaces, failing tests, commands, expected resu
 ### Type consistency
 
 Notification.event_id, NotificationHub.dropped_events, PortalNotificationPublisher.publish, and format_notification_sse are each defined before later tasks consume them. Notification.to_dict remains the only JSON-envelope constructor.
+
+<!-- AUTONOMOUS DECISION LOG -->
+## Decision Audit Trail
+
+| # | Phase | Decision | Classification | Principle | Rationale | Rejected |
+|---|-------|----------|-----------------|-----------|-----------|----------|
+| 1 | CEO | Approach A (ship as specified) over B (mesh-ready rewrite) or C (auth-only, no producer) | Mechanical | P1+P2 | B violates the plan's own Global Constraints and fleet-mesh authority order; C ships a stream that's authenticated but permanently silent | B, C |
+| 2 | CEO | Producer-state durability across restarts — NOT in scope | Mechanical | Global Constraints | Persisting `PortalNotificationPublisher._previous` across restarts requires durable storage, explicitly barred by "no Redis, NATS, durable storage" | — |
+| 3 | CEO | Expose `dropped_events` count in `/api/status` payload — ADDED to Task 5 scope | Mechanical | P2 (boil lakes) | In blast radius (same `api_status()` Task 2 already touches), <1 day effort, matches Engineering Preference "observability is not optional" | — |
+| 4 | CEO | Rate-limit `POST /api/notifications/session` — deferred to TODOS.md | Mechanical | P3 (pragmatic) | Outside current blast radius (no rate-limit infra exists yet); endpoint already requires a valid bearer, so abuse surface is small | — |
+| 5 | CEO | Corrected fabricated-adjacent citation in G7 analysis (`SECURITY.md §C` does not mandate notification auth) | Mechanical | Prime Directive 2 (every claim verifiable) | Verified via full-repo + all-branch + git-history search: phrase only ever appears as this citation and as the workstream's own open TODO, never as real §C content | — |
+| 6 | CEO | Reconcile legacy HTML dashboard + React SPA, wire SPA to notification stream — deferred to TODOS.md as its own initiative | Mechanical | P3 (pragmatic) + scope discipline | Outside G7 MVP blast radius (touches most of `web/src/`, ~1-2 weeks); G7's own Global Constraints explicitly bar UI work in this MVP; needs its own `/office-hours` or `/autoplan` pass | — |
+
+## CEO Dual Voices — Consensus Table
+
+```
+CEO DUAL VOICES — CONSENSUS TABLE:
+═══════════════════════════════════════════════════════════════
+  Dimension                           Claude  Codex  Consensus
+  ──────────────────────────────────── ─────── ─────── ─────────
+  1. Premises valid?                   No      No     CONFIRMED (both: no proven need)
+  2. Right problem to solve?           No      No     CONFIRMED (no consumer / wrong event source)
+  3. Scope calibration correct?        Partial No     DISAGREE → TASTE DECISION
+  4. Alternatives sufficiently explored?No     No     CONFIRMED (fetch-SSE, ETag-poll, webhooks, outbox all missed)
+  5. Competitive/market risks covered? Yes     N/A    CONFIRMED (low external risk; real cost is opportunity cost)
+  6. 6-month trajectory sound?         No      No     CONFIRMED (concrete regret scenarios named by both)
+═══════════════════════════════════════════════════════════════
+```
+
+**Claude subagent (168K tokens, 31 tool uses, ground-truthed against source):** No client anywhere in the repo consumes this stream (grepped `web/src` for `EventSource`, zero hits). Two concrete, code-verified production bugs hidden by unfaithful test doubles: (a) `AGENT_STATE_CHANGED` is dead — `PortalNotificationPublisher` reads `item.get("state")` but real redacted data uses `"status"`, and `redact_agents_payload()` returns a dict not a list, so the diff loop silently skips everything; (b) the SSE send-timeout path abandons the generator without `aclose()`, leaking hub subscriptions on exactly the slow-client case it exists to handle. Plus a race in `_previous` (no lock across concurrent `/api/status` callers) and the now-corrected citation issue.
+
+**Codex (gpt-5.6-terra, 36.6K tokens):** The producer is polling-triggered (fires only when `/api/status` is called), not push-triggered from real state-change sources — so the plan cannot actually deliver its own "2-second" latency claim regardless of implementation quality; the acceptance test only proves an in-memory queue can hand itself an object, not source-to-user latency. The browser-auth bootstrap is internally unresolved (if a safe authenticated browser session already exists, use it; if not, this invents a bespoke credential-transfer protocol). "v2-compatible" is asserted, not earned (random UUIDs, no ordering, no producer identity). Process-local fan-out is a hidden single-process commitment. Alternatives list (WebSocket/SSE/poll/Redis) omits ETag-polling, webhooks-to-existing-channels, and a domain-event/outbox boundary.
+
+**Cross-model convergence:** Both independently concluded the plan ships real engineering effort (auth, framing, redaction-wiring) around a feature with no demonstrated consumer or need — this is not two models nitpicking style, it's the same structural critique from different entry points (Claude via "grep found zero callers," Codex via "the event-source design can't deliver its own SLA"). Neither model's finding depends on the other having found it first (dual voices ran independently). **This is the dominant finding for the Final Approval Gate** — flagged there as the plan's central open question, equivalent in weight to a User Challenge even though it targets a pre-existing plan rather than an in-conversation user directive.
