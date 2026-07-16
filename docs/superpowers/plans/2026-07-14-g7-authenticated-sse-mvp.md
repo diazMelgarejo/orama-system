@@ -666,7 +666,20 @@ async def iter_notification_sse(request: Request, hub: NotificationHub, filters)
 
 @app.get("/api/notifications/stream", response_class=StreamingResponse)
 async def api_notifications_stream(request: Request, types: Optional[str] = None):
-    # Retain the existing feature flag, auth check, and filter validation.
+    if not notifications_enabled():
+        raise HTTPException(status_code=404, detail="Notifications are disabled")
+    auth_failure = control_plane_auth_failure(request)
+    if auth_failure is not None:
+        return auth_failure
+    try:
+        filters = parse_event_types(types)
+    except ValueError as exc:
+        valid = ", ".join(sorted(item.value for item in EventType))
+        raise HTTPException(
+            status_code=400,
+            detail=f"{exc} — valid types: {valid}",
+        ) from exc
+
     return NotificationStreamingResponse(
         iter_notification_sse(request, _notification_hub, filters),
         media_type="text/event-stream",
@@ -743,21 +756,86 @@ Run: uv run --extra test pytest tests/test_portal_notifications.py::test_notific
 
 Expected: PASS after Tasks 1-4.
 
-- [ ] **Step 3: Add the API-reference contract**
+- [ ] **Step 3: Expose the drop counter (Decision Audit Trail #3 — was accepted, never coded until now)**
+
+~~~python
+# In api_status(), alongside the existing redacted-payload assembly:
+redacted_payload["notification_delivery"] = {"dropped_events": _notification_hub.dropped_events}
+~~~
+
+- [ ] **Step 4: Add the API-reference contract, with a real client example**
 
 ~~~markdown
 ### POST /api/notifications/session
 
 Creates a 15-minute host-only browser session for the notification stream. Send an existing Authorization bearer credential from the same origin. The response sets an HttpOnly, SameSite=Strict cookie scoped to /api/notifications. A cross-origin request receives 403. Never put the token in a URL.
 
+Why this step exists: native browser `EventSource` cannot set custom headers, so a
+bearer credential can't reach the stream directly. This endpoint exchanges an
+already-held bearer for a narrowly-scoped, short-lived cookie the browser will
+attach automatically.
+
 ### GET /api/notifications/stream?types=job_completed,agent_state_changed
 
-The endpoint is disabled until PORTAL_NOTIFICATIONS=1. It returns 404 while disabled, 401 without valid control-plane authentication, and 400 for an unknown event type. Each event has id, event, and versioned JSON data. Delivery is bounded and best effort; a slow subscriber loses its oldest queued event. On reconnect, fetch /api/status for a new redacted snapshot before resuming the stream. Last-Event-ID is not replayed in this MVP.
+The endpoint is disabled until PORTAL_NOTIFICATIONS=1 (404 while disabled). It
+returns 401 without a valid session cookie or bearer — call `POST
+/api/notifications/session` first — and 400 for an unknown event type (response
+body lists the valid types: `agent_state_changed`, `fleet_topology_changed`,
+`hardware_status_changed`, `job_completed`, `phase_transition`).
+
+Delivery is bounded and best-effort; a slow subscriber loses its oldest queued
+event. The current aggregate drop count is visible at `GET /api/status` under
+`notification_delivery.dropped_events`. On reconnect, fetch `/api/status` for a
+new redacted snapshot before resuming the stream — Last-Event-ID is not replayed
+in this MVP. The session cookie expires after 15 minutes; `EventSource` will
+auto-reconnect on drop but cannot re-authenticate itself, so a client must detect
+a stalled/erroring stream and re-POST `/api/notifications/session` before
+recreating the `EventSource`, not rely on automatic reconnect alone.
+
+**Copy-paste client example** (the two most common SSE integration mistakes —
+missing the session bootstrap, and listening on the default `message` event
+instead of the typed `event:` name — are both handled below):
+
+```javascript
+async function connectNotifications(bearerToken) {
+  await fetch("/api/notifications/session", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${bearerToken}` },
+    credentials: "include",
+  });
+
+  const source = new EventSource("/api/notifications/stream", { withCredentials: true });
+  // Events are framed with `event: <type>`, e.g. `event: job_completed` — the
+  // default 'message' listener never fires. Register one listener per type.
+  for (const type of ["agent_state_changed", "hardware_status_changed", "job_completed"]) {
+    source.addEventListener(type, (event) => {
+      const notification = JSON.parse(event.data);
+      console.log(type, notification);
+    });
+  }
+  source.onerror = () => {
+    // No error code is exposed here; a 401 after cookie expiry looks
+    // identical to a network drop. Re-run the session bootstrap before
+    // assuming this is a transient network issue.
+  };
+  return source;
+}
+```
+
+`type`/`event_type` and `data`/`payload` are duplicate keys by design — stable
+aliases kept for GossipBus v2.1 mesh compatibility (docs/v2/43). Either name is
+safe to read today; they carry identical values.
+
+**Residual risk, disclosed here (not just in the plan file):** the notification
+stream inherits this codebase's existing single-operator-LAN trust posture —
+any local process on an allow-listed CORS origin (localhost:3000, :8002) can
+read this stream once the session cookie is bootstrapped, same as every other
+authenticated portal route. See `docs/v2/45-single-operator-lan-threat-model-descope.md`.
 ~~~
 
 Update the G7 analysis to remove stale wording that says there is no subscription filter, name event_id, and identify the session cookie as a narrow stream bootstrap rather than a portal login.
 
-- [ ] **Step 4: Run the full targeted validation**
+- [ ] **Step 5: Run the full targeted validation**
 
 Run: uv run --extra test pytest tests/test_portal_notifications.py tests/test_portal_mutating_route_auth.py tests/test_portal_dashboard.py tests/test_fleet_topology_api.py -q
 
@@ -767,7 +845,7 @@ Run: git diff --check
 
 Expected: no output.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ~~~bash
 git add docs/api-reference.md docs/next/fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md tests/test_portal_notifications.py
@@ -810,6 +888,11 @@ Notification.event_id, NotificationHub.dropped_events, PortalNotificationPublish
 | 7 | Eng | Actually applied the 3 accepted CEO-phase fixes into the plan's own TDD code blocks (Task 2: `status` field + `_unwrap_redacted_list()` + `asyncio.Lock`; Task 4: `aclose()` in `stream_response`'s `finally`) | Mechanical | Prime Directive 1 (zero silent failures) | Eng-phase dual voices found the Decision Audit Trail had logged these as "accepted" but they were never actually edited into the plan's code — an agentic worker executing the plan verbatim would still ship both bugs. Also rewrote the 2 test fixtures that hid the original bug to call the real `redact_portal_status_payload()` instead of hand-rolled dicts, and rewrote the misleadingly-named timeout-leak test to actually assert `subscriber_count == 0` | — |
 | 8 | Eng | Added try/except around `hub.emit()` inside `PortalNotificationPublisher.publish()` | Mechanical | Prime Directive 1 + P5 (explicit) | `/api/status` is the primary status endpoint with zero current stream consumers — a future event-shape drift must not 500 the dashboard's core API over a best-effort notification side channel | — |
 | 9 | Eng | Investigated then REJECTED a proposed origin-check fix for the CORS/session-cookie cross-origin-read finding | Mechanical (self-corrected) | Verify before applying | Initially proposed adding `verify_lifecycle_origin()` to the stream route, but that function deliberately treats all loopback ports as mutually trusted by design (documented: "portal :8002 may accept POSTs from pages served on PT :8000 or orama :8001") — it would NOT have rejected `localhost:3000`, and would have made the fix a no-op while claiming coverage. Reverted the route change and the test that would have asserted a 403 the real code can't produce. Documented as an inherited, accepted single-operator-LAN risk (matches `docs/v2/45` D23 precedent) instead of a fabricated fix | initial fix + its test |
+| 10 | DX | Fixed Task 4's final route handler — was a comment (`# Retain the existing feature flag...`) referencing an undefined `filters` variable, not code | Mechanical | Prime Directive 1 + recurrence of Decision #7's pattern | Same failure class as the original `AGENT_STATE_CHANGED` bug: a decision/intent stated in prose instead of landed in code. An agentic worker executing the plan verbatim would hit a `NameError` on the first request. Now shows the literal `notifications_enabled()`/`control_plane_auth_failure()`/`parse_event_types()` calls inline | — |
+| 11 | DX | Landed the `dropped_events` exposure (CEO Decision #3, accepted 2026-07-16, never coded until now) into Task 5 as a real code step | Mechanical | Prime Directive 1 + recurrence of Decision #7's pattern | Same recurring gap caught a 3rd time this review: a decision logged as "accepted into scope" in the audit trail is not the same as it landing in the plan's code. Added a real code snippet (`redacted_payload["notification_delivery"] = {"dropped_events": ...}`) instead of leaving it as a table row | — |
+| 12 | DX | Rewrote Task 5's docs section with a copy-paste JS client example and explicit gotcha documentation (EventSource header limitation, named-event-listener requirement, cookie-expiry-has-no-renewal) | Mechanical | P1 (completeness) + this review's own stated bar ("wouldn't need to read the source") | Original docs draft was server-contract prose only, zero client code — broke `docs/api-reference.md`'s own established curl-example convention and left the two most common real-world SSE integration bugs (missing session bootstrap, listening on default `message` instead of typed `event:` name) completely undocumented | — |
+| 13 | DX | Escape hatches for `queue_size`/keepalive/send-timeout/session-TTL constants — NOT added, left as hardcoded module constants | Mechanical | P3 (pragmatic) + acceptable MVP scope cut | Reasonable for a default-off MVP; noted as a stated exclusion rather than a silent gap so a future operator doesn't discover "no override exists" only by reading source | — |
+| 14 | DX | React SPA wiring (Decision #6) — noted the "S/M effort" estimate is optimistic, no change to scope | Taste (informational) | — | DX review found `AppState`/`Shell.tsx` has no existing seam for push-based updates (poll-based cache shape only) — real effort is closer to a small design decision plus implementation, not just "add an EventSource client." Correctly stays deferred/out of scope; estimate revised at the final gate, not the code | — |
 
 ## CEO Dual Voices — Consensus Table
 
@@ -854,3 +937,23 @@ ENG VOICES — CONSENSUS TABLE:
 **Secondary critic (cline CLI, `glm-5.2` — GPT-5.5 not resolvable under this provider, see note below):** Independently arrived at the same "accepted fixes never landed in the code" finding, plus flagged the CORS/session-cookie cross-origin-read surface (`allow_credentials=True` + `localhost:3000` allow-listed). Investigated and applied Decision #7-#8 fixes; investigated Decision #9's proposed fix and found it wouldn't work against this codebase's actual (deliberately permissive, documented) loopback-trust design — corrected rather than shipped.
 
 **Model note:** the user requested this third voice run GPT-5.5 via the `cline` CLI; `cline-pass/gpt-5.5` and bare `gpt-5.5` both returned "model not found" (no models-listing tool available in this session to find the exact registered ID) — fell back to the tool's actual default (`cline-pass/glm-5.2`), which still surfaced 2 independently-confirmed findings plus 1 the primary voice hadn't named.
+
+## DX Review — Findings
+
+Single Claude subagent voice (source-verified against `portal_notifications.py`, `portal_server.py`, `control_plane_auth.py`, `web/src/api/client.ts`, `web/src/api/appState.ts`, `web/src/components/Shell.tsx`; confirmed zero `EventSource` references anywhere in `web/src` — this is from-scratch client integration, not wiring an existing stub).
+
+**Time to hello-world: 7-8 non-trivial steps, 3 undocumented gotchas** — the two-step session-cookie-then-stream flow's rationale was never explained, named-event-listener requirement (`event: job_completed`, not the default `message` listener) was undocumented, and 15-minute cookie expiry has no renewal pattern. All three fixed in Decision #12's rewritten docs section with a full client example.
+
+**Two recurrences of Decision #7's exact failure pattern**, caught independently: Task 4's final route handler was a comment referencing an undefined variable (Decision #10), and the `dropped_events` fix (accepted in CEO Decision #3) was never actually coded anywhere (Decision #11) — both landed as real code fixes, not just audit-trail rows this time.
+
+**Correctly-scoped-out confirmed:** Decision #6 (React SPA wiring) — DX review found no existing seam in `AppState`/`Shell.tsx` for push-based updates (poll-based cache shape only), confirming this belongs in its own follow-up, though the "S/M effort" estimate is now understood to be optimistic (Decision #14).
+
+**DX Scorecard (informal — single voice, no dual-critic split for this phase):**
+
+| Dimension | Before this review | After fixes |
+|---|---|---|
+| Getting started (TTHW) | Undocumented, source-reading required | Documented, copy-paste client example |
+| API/CLI naming | Dual-naming unexplained | One-line rationale added |
+| Error messages | 2 of 4 paths dead-end | All 4 paths actionable |
+| Documentation | Server-contract prose only | Contract + full client example + gotchas |
+| Escape hatches | None, undocumented | None, explicitly scoped out (stated exclusion) |
