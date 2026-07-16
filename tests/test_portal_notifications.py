@@ -3,9 +3,64 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi.testclient import TestClient
+
+
+async def _capture_response_start(app, path: str, headers: dict[str, str] | None = None) -> tuple[int, dict[str, str]]:
+    """Capture only the ASGI http.response.start message for a streaming route.
+
+    _control_plane_auth_middleware is registered via @app.middleware("http")
+    -- Starlette's BaseHTTPMiddleware under the hood -- which wraps every
+    response (including infinite SSE streams) through an internal anyio
+    memory-stream bridge in call_next(). That bridge has a well-documented
+    hang with infinite streaming responses that no client-side httpx/
+    TestClient timeout can interrupt (the hang is server-side, inside the
+    middleware). Reproduces on the pre-existing /events/peer-stream route
+    too -- not specific to G7 code. Bypass TestClient/httpx entirely for
+    tests that only need to confirm status/headers arrived, not consume an
+    infinite body: drive the raw ASGI protocol directly and cancel once the
+    first (and only) response-start message is captured.
+    """
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": path,
+        "query_string": b"",
+        "headers": [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()],
+        "client": ("testclient", 123),
+        "server": ("testserver", 80),
+        "scheme": "http",
+    }
+    result: dict[str, Any] = {}
+    started = asyncio.Event()
+
+    async def receive():
+        await asyncio.Event().wait()  # no request body; never resolves
+
+    async def send(message):
+        if message["type"] == "http.response.start":
+            result["status"] = message["status"]
+            result["headers"] = {
+                k.decode(): v.decode() for k, v in message.get("headers", [])
+            }
+            started.set()
+        # Ignore all subsequent http.response.body messages -- we only
+        # need the start message, not the infinite body.
+
+    task = asyncio.create_task(app(scope, receive, send))
+    try:
+        await asyncio.wait_for(started.wait(), timeout=5)
+    finally:
+        task.cancel()
+        try:
+            await task
+        except (asyncio.CancelledError, Exception):
+            pass
+    return result["status"], result["headers"]
 
 import orama_system.portal_server as portal_server
 from orama_system.portal_notifications import (
@@ -254,15 +309,95 @@ def test_notification_session_rejects_cross_origin_bootstrap(monkeypatch):
     assert response.status_code == 403
 
 
-def test_cookie_authenticated_notification_stream(monkeypatch):
+@pytest.mark.asyncio
+async def test_cookie_authenticated_notification_stream(monkeypatch):
     monkeypatch.setenv("PORTAL_NOTIFICATIONS", "1")
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "test-notification-token")
     monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
     with TestClient(portal_server.app, base_url="http://localhost") as client:
-        client.post(
+        session_response = client.post(
             "/api/notifications/session",
             headers={"Authorization": "Bearer test-notification-token"},
         )
-        with client.stream("GET", "/api/notifications/stream") as response:
-            assert response.status_code == 200
+    cookie = session_response.headers["set-cookie"].split(";")[0]
+
+    status, _headers = await _capture_response_start(
+        portal_server.app, "/api/notifications/stream", {"cookie": cookie}
+    )
+    assert status == 200
+
+
+def test_format_notification_sse_has_matching_id_event_and_json_payload():
+    notification = Notification(EventType.JOB_COMPLETED, {"job_id": "redacted-job"})
+    frame = portal_server.format_notification_sse(notification)
+
+    assert f"id: {notification.event_id}\n" in frame
+    assert "event: job_completed\n" in frame
+    assert f'"event_id":"{notification.event_id}"' in frame
+    assert frame.endswith("\n\n")
+
+
+@pytest.mark.asyncio
+async def test_notification_stream_keeps_replay_out_of_scope(monkeypatch):
+    monkeypatch.setenv("PORTAL_NOTIFICATIONS", "1")
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
+    # _control_plane_auth_middleware runs as Starlette BaseHTTPMiddleware
+    # (@app.middleware("http")), which re-streams every response through an
+    # internal call_next() bridge that hangs indefinitely on infinite SSE
+    # bodies -- reproduces on the pre-existing /events/peer-stream route too,
+    # not specific to this route. No client-side httpx/TestClient timeout can
+    # interrupt it (the hang is server-side). Bypass TestClient/httpx
+    # streaming entirely and capture only the ASGI response-start message.
+    status, headers = await _capture_response_start(
+        portal_server.app,
+        "/api/notifications/stream",
+        {"last-event-id": "old-event"},
+    )
+    assert status == 200
+    assert headers["cache-control"] == "no-cache"
+
+
+@pytest.mark.asyncio
+async def test_notification_sse_generator_keeps_idle_clients_alive_and_cleans_up(monkeypatch):
+    monkeypatch.setattr(portal_server, "NOTIFICATION_SSE_KEEPALIVE_SECONDS", 0)
+    request = AsyncMock()
+    request.is_disconnected.return_value = False
+    hub = NotificationHub()
+    stream = portal_server.iter_notification_sse(request, hub, filters=None)
+
+    assert await anext(stream) == ": keepalive\n\n"
+    await stream.aclose()
+    assert hub.subscriber_count == 0
+
+
+@pytest.mark.asyncio
+async def test_notification_stream_send_timeout_releases_subscription(monkeypatch):
+    monkeypatch.setattr(portal_server, "NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS", 0)
+
+    hub = NotificationHub()
+    request = AsyncMock()
+    request.is_disconnected.return_value = False
+    generator = portal_server.iter_notification_sse(request, hub, filters=None)
+
+    async def slow_send(message):
+        if message["type"] == "http.response.body" and message.get("more_body"):
+            await asyncio.Event().wait()
+
+    response = portal_server.NotificationStreamingResponse(generator)
+    task = asyncio.create_task(response.stream_response(slow_send))
+
+    # async generators are lazy -- hub.subscribe() only runs once
+    # stream_response starts iterating self.body_iterator, not at
+    # iter_notification_sse(...) call time. Emitting before the subscriber
+    # is actually registered silently drops the notification.
+    for _ in range(100):
+        if hub.subscriber_count == 1:
+            break
+        await asyncio.sleep(0.01)
+    assert hub.subscriber_count == 1
+
+    await hub.emit(Notification(EventType.JOB_COMPLETED, {"job_id": "redacted-job"}))
+    await asyncio.wait_for(task, timeout=1)
+
+    assert hub.subscriber_count == 0
