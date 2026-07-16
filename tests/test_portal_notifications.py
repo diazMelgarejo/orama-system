@@ -218,3 +218,51 @@ async def test_api_status_publishes_only_the_redacted_payload(monkeypatch):
     # assertion raises KeyError: 0 on the dict.
     assert "path" not in seen_by_publisher[0]["agents"]["agents"][0]
     assert "prompt" not in seen_by_publisher[0]["supervisor_jobs"][0]
+
+
+def test_notification_session_requires_bearer_and_sets_scoped_cookie(monkeypatch):
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "test-notification-token")
+    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
+    with TestClient(portal_server.app) as client:
+        denied = client.post("/api/notifications/session")
+        granted = client.post(
+            "/api/notifications/session",
+            headers={"Authorization": "Bearer test-notification-token"},
+        )
+
+    assert denied.status_code == 401
+    assert granted.status_code == 204
+    assert "orama_control_plane_token=" in granted.headers["set-cookie"]
+    assert "HttpOnly" in granted.headers["set-cookie"]
+    assert "SameSite=strict" in granted.headers["set-cookie"]
+    assert "Path=/api/notifications" in granted.headers["set-cookie"]
+
+
+def test_notification_session_rejects_cross_origin_bootstrap(monkeypatch):
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "test-notification-token")
+    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
+    with TestClient(portal_server.app) as client:
+        response = client.post(
+            "/api/notifications/session",
+            headers={
+                "Authorization": "Bearer test-notification-token",
+                "Origin": "https://attacker.invalid",
+            },
+        )
+    assert response.status_code == 403
+
+
+def test_cookie_authenticated_notification_stream(monkeypatch):
+    monkeypatch.setenv("PORTAL_NOTIFICATIONS", "1")
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "test-notification-token")
+    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
+    with TestClient(portal_server.app, base_url="http://localhost") as client:
+        client.post(
+            "/api/notifications/session",
+            headers={"Authorization": "Bearer test-notification-token"},
+        )
+        with client.stream("GET", "/api/notifications/stream") as response:
+            assert response.status_code == 200
