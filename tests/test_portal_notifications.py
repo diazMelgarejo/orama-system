@@ -93,3 +93,43 @@ def test_notification_scaffold_declares_future_v2_alignment_without_enabling_mes
         "v2_1_mesh": "docs/v2/43-gossipbus-mesh-transport.md",
         "v2_5_safety": "docs/v2/03-safety-v2.5.md",
     }
+
+
+@pytest.mark.asyncio
+async def test_notification_envelope_has_opaque_event_id():
+    notification = Notification(EventType.JOB_COMPLETED, {"job_id": "redacted-job"})
+    payload = notification.to_dict()
+
+    assert payload["event_id"] == notification.event_id
+    assert payload["type"] == payload["event_type"] == "job_completed"
+    assert payload["data"] == payload["payload"] == {"job_id": "redacted-job"}
+
+
+@pytest.mark.asyncio
+async def test_notification_hub_drops_oldest_and_retains_newest():
+    hub = NotificationHub(queue_size=2)
+    stream = hub.subscribe()
+
+    # subscribe() is an async generator -- the queue/subscriber registration
+    # only runs once it's first iterated, not at hub.subscribe() call time.
+    # Emitting before that point is a silent no-op (no subscriber exists
+    # yet), and the later __anext__() then blocks forever on an empty
+    # queue. Found by actually running this test during implementation --
+    # no prior review phase (CEO/Eng/DX/independent Codex pass) executed
+    # pytest against this file, only read the plan's source. Kick off the
+    # first receive as a background task and yield once so the generator
+    # runs up to `await queue.get()` (which registers the subscriber)
+    # before the first emit.
+    first = asyncio.create_task(stream.__anext__())
+    await asyncio.sleep(0)
+
+    await hub.emit(Notification(EventType.JOB_COMPLETED, {"sequence": "setup"}))
+    assert (await first).data == {"sequence": "setup"}
+
+    for sequence in (1, 2, 3):
+        await hub.emit(Notification(EventType.JOB_COMPLETED, {"sequence": sequence}))
+
+    assert hub.dropped_events == 1
+    assert (await stream.__anext__()).data == {"sequence": 2}
+    assert (await stream.__anext__()).data == {"sequence": 3}
+    await stream.aclose()
