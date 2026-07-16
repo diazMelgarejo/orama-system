@@ -3,7 +3,8 @@
 #
 # Architecture:
 #   ONE exa-mcp-daemon.py owns the real npx exa-mcp-server process.
-#   ALL THREE Claude registrations (Desktop, orama, PT) point here.
+#   Claude Desktop, orama-system, Perpetua-Tools, and Codex registrations
+#   all point here.
 #   This script: ensures daemon is up, then bridges this process's
 #   stdio ↔ the daemon's Unix socket. Only one backend ever runs.
 #
