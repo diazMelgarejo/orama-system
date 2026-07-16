@@ -1,5 +1,6 @@
 # 41 — Agentic-Stack, Gstack, Gbrain, RAG, and Memory (Union-Blend Doctrine)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Active planning doc (v1 operational path in Perpetua-Tools today)  
 > **Date:** 2026-06-26  
 > **Cross-refs:** [`19-gstack-optional-integration.md`](19-gstack-optional-integration.md), [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md), [`11-idempotency-and-guard-patterns.md`](11-idempotency-and-guard-patterns.md), orama `scripts/install-openclaw-skills.sh`, PT `scripts/git/agentic-stack-vendor.md`

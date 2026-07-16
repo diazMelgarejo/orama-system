@@ -1,5 +1,6 @@
 # 28 — agAIntra / againtra-platform v2 Requirements Alignment
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** CANONICAL — establishes that `oramasys/againtra-platform` (the v2 trading
 > platform, formerly "agentra" — renamed to avoid copyright collision) MUST align its
 > toolchain and runtime requirements with `perpetua-core` and the oramasys v2 standard.

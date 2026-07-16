@@ -1,5 +1,6 @@
 # Local Model Runtime Profile
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** operational profile extracted from the former security-harness plan
 > **Security plan:** [`31-security-harness-excellence-plan.md`](31-security-harness-excellence-plan.md)
 > **Prior mixed source:** [`33-security-harness-source-material.md`](33-security-harness-source-material.md)

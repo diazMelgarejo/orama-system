@@ -1,5 +1,6 @@
 # 45 — Single-Operator-LAN Threat-Model Descope (D23)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Decided 2026-07-12 (Perpetua-Tools STM next-increment plan, `/autoplan` CEO+Eng review)
 > **Parent:** [`23-security-preconditions.md`](23-security-preconditions.md), [`24-security-first-platform.md`](24-security-first-platform.md), [`31-security-harness-excellence-plan.md`](31-security-harness-excellence-plan.md)
 > **PT source:** `Perpetua-Tools/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md` § Addendum, `PATTERN-SYNTHESIS.md` § "GATE on P5/P6/P13"
