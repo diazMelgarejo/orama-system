@@ -14,8 +14,10 @@ from orama_system.portal_notifications import (
     EventType,
     Notification,
     NotificationHub,
+    PortalNotificationPublisher,
     parse_event_types,
 )
+from utils.control_plane_auth import redact_portal_status_payload
 
 
 def test_notifications_stream_is_default_off(monkeypatch):
@@ -133,3 +135,86 @@ async def test_notification_hub_drops_oldest_and_retains_newest():
     assert (await stream.__anext__()).data == {"sequence": 2}
     assert (await stream.__anext__()).data == {"sequence": 3}
     await stream.aclose()
+
+
+@pytest.mark.asyncio
+async def test_status_publisher_emits_only_redacted_edge_deltas():
+    # Route through the REAL redact_portal_status_payload(), not a hand-rolled
+    # dict — a synthetic fixture using the wrong field name ("state" instead
+    # of the real "status") or the wrong shape (a bare list instead of
+    # redact_agents_payload()'s {"agents": [...], "count": n} dict wrapper)
+    # would pass this test while the real diff loop silently no-ops in
+    # production.
+    hub = NotificationHub()
+    publisher = PortalNotificationPublisher(hub)
+    first = redact_portal_status_payload({
+        "services": {"perplexity_tools": {"ok": True}},
+        "agents": [{"agent_id": "a1", "status": "running", "path": "/secret"}],
+        "supervisor_jobs": [],
+        "hardware_policy": {"ok": True},
+    })
+    second = redact_portal_status_payload({
+        "services": {"perplexity_tools": {"ok": False}},
+        "agents": [{"agent_id": "a1", "status": "done", "path": "/secret"}],
+        "supervisor_jobs": [{"id": "j1", "status": "completed", "prompt": "secret"}],
+        "hardware_policy": {"ok": False},
+    })
+
+    assert await publisher.publish(first) == []
+    emitted = await publisher.publish(second)
+
+    assert {item.type for item in emitted} == {
+        EventType.AGENT_STATE_CHANGED,
+        EventType.HARDWARE_STATUS_CHANGED,
+        EventType.JOB_COMPLETED,
+    }
+    assert all("path" not in item.data and "prompt" not in item.data for item in emitted)
+    assert await publisher.publish(second) == []
+
+
+@pytest.mark.asyncio
+async def test_api_status_publishes_only_the_redacted_payload(monkeypatch):
+    raw_status = {
+        "agents": [{"agent_id": "a1", "status": "done", "path": "/secret"}],
+        "supervisor_jobs": [{"id": "j1", "status": "completed", "prompt": "secret"}],
+    }
+    redacted_status = redact_portal_status_payload(raw_status)
+    seen_by_redactor = []
+    seen_by_publisher = []
+
+    class PublisherSpy:
+        async def publish(self, status):
+            seen_by_publisher.append(status)
+            return []
+
+    async def _fake_build_payload():
+        # _build_portal_status_payload() is async in the real implementation
+        # (it awaits network probes) -- the replacement must be too, or
+        # `await portal_server._build_portal_status_payload()` inside
+        # api_status() raises TypeError on a plain value.
+        return raw_status
+
+    monkeypatch.setenv("PORTAL_NOTIFICATIONS", "1")
+    monkeypatch.setattr(portal_server, "_build_portal_status_payload", _fake_build_payload)
+    monkeypatch.setattr(
+        portal_server,
+        "redact_portal_status_payload",
+        lambda status: seen_by_redactor.append(status) or redacted_status,
+    )
+    monkeypatch.setattr(portal_server, "_notification_publisher", PublisherSpy())
+
+    result = await portal_server.api_status()
+
+    assert seen_by_redactor == [raw_status]
+    assert seen_by_publisher == [redacted_status]
+    # notification_delivery is added to the returned payload AFTER the
+    # publisher sees it, so the publisher's view stays exactly the redacted
+    # snapshot while the HTTP response carries the drop counter too.
+    assert result == {**redacted_status, "notification_delivery": {"dropped_events": 0}}
+    # redact_agents_payload() wraps agents as {"agents": [...], "count": n} —
+    # redact_portal_status_payload keeps that wrapper for "agents" but
+    # unwraps "supervisor_jobs" back to a plain list before assignment
+    # (redact_jobs_payload(...)["jobs"]). Index accordingly, or this
+    # assertion raises KeyError: 0 on the dict.
+    assert "path" not in seen_by_publisher[0]["agents"]["agents"][0]
+    assert "prompt" not in seen_by_publisher[0]["supervisor_jobs"][0]
