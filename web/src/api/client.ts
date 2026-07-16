@@ -67,6 +67,9 @@ export async function apiFetch<T>(path: string, opts: FetchOptions = {}): Promis
       body,
     );
   }
+  if (res.status === 204) {
+    return undefined as T;
+  }
   return (await res.json()) as T;
 }
 
