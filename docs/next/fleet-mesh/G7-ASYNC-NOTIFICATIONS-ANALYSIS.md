@@ -352,5 +352,5 @@ python3 scripts/agent_coordination.py queue claim "G7-async-notifications" "agy-
 - v2.1 mesh transport: `docs/v2/43-gossipbus-mesh-transport.md`
 - v2.5 safety overlays: `docs/v2/03-safety-v2.5.md`
 - single-operator LAN descope: `docs/v2/45-single-operator-lan-threat-model-descope.md`
-- Security contracts: `SECURITY.md` Immediate TODO §C (unauthenticated notification blocking)
+- Security contracts: `SECURITY.md` Immediate TODO §C — corrected 2026-07-16: §C does not mandate notification auth (its 7 checks cover spawn-agent/token-leakage/LAN-bind, none reference notifications). The "unauthenticated notification blocking" requirement is this G7 workstream's own not-yet-done item (see `docs/next/fleet-mesh/2026-07-14-g7-async-notifications-next-steps.md`), not an external security mandate. The design decision (require auth before streaming) stands on its own merits; this line previously cited it as if §C already required it, which it does not.
 - Portal architecture: `src/orama_system/portal_server.py` §probes
