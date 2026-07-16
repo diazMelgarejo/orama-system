@@ -45,6 +45,8 @@ from starlette.responses import StreamingResponse
 
 from orama_system.lan_peer_channel import LanPeerChannel, local_platform, make_envelope, read_discovery_peer_ip
 from orama_system.portal_notifications import (
+    EventType,
+    Notification,
     NotificationHub,
     PortalNotificationPublisher,
     notifications_enabled,
@@ -1493,6 +1495,65 @@ async def create_notification_session(request: Request, response: Response) -> N
     )
 
 
+def format_notification_sse(notification: Notification) -> str:
+    return (
+        f"id: {notification.event_id}\n"
+        f"event: {notification.type.value}\n"
+        f"data: {json.dumps(notification.to_dict(), separators=(',', ':'))}\n\n"
+    )
+
+
+NOTIFICATION_SSE_KEEPALIVE_SECONDS = 15
+NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS = 10
+
+
+class NotificationStreamingResponse(StreamingResponse):
+    """StreamingResponse with a bounded ASGI send for this local SSE route."""
+
+    async def stream_response(self, send):
+        await send({"type": "http.response.start", "status": self.status_code, "headers": self.raw_headers})
+        try:
+            async for chunk in self.body_iterator:
+                if not isinstance(chunk, bytes):
+                    chunk = chunk.encode(self.charset)
+                try:
+                    await asyncio.wait_for(
+                        send({"type": "http.response.body", "body": chunk, "more_body": True}),
+                        timeout=NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    break
+        finally:
+            # Breaking out of `async for` does NOT close the underlying async
+            # generator -- its own finally (hub._subscribers.pop(...)) only
+            # runs on explicit aclose(). Without this, a slow/stalled client
+            # leaks a live subscription on exactly the case this timeout
+            # exists to handle. GC-based cleanup can't reliably await, so this
+            # must be explicit, not implicit.
+            aclose = getattr(self.body_iterator, "aclose", None)
+            if aclose is not None:
+                await aclose()
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+
+async def iter_notification_sse(request: Request, hub: NotificationHub, filters):
+    stream = hub.subscribe(filters)
+    pending = asyncio.create_task(stream.__anext__())
+    try:
+        while not await request.is_disconnected():
+            done, _ = await asyncio.wait({pending}, timeout=NOTIFICATION_SSE_KEEPALIVE_SECONDS)
+            if not done:
+                yield ": keepalive\n\n"
+                continue
+            notification = pending.result()
+            pending = asyncio.create_task(stream.__anext__())
+            yield format_notification_sse(notification)
+    finally:
+        pending.cancel()
+        await asyncio.gather(pending, return_exceptions=True)
+        await stream.aclose()
+
+
 @app.get("/api/notifications/stream", response_class=StreamingResponse)
 async def api_notifications_stream(request: Request, types: Optional[str] = None):
     """Default-off portal notification stream for the G7 MVP."""
@@ -1504,15 +1565,17 @@ async def api_notifications_stream(request: Request, types: Optional[str] = None
     try:
         filters = parse_event_types(types)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        valid = ", ".join(sorted(item.value for item in EventType))
+        raise HTTPException(
+            status_code=400,
+            detail=f"{exc} — valid types: {valid}",
+        ) from exc
 
-    async def generator():
-        async for notification in _notification_hub.subscribe(filters):
-            if await request.is_disconnected():
-                break
-            yield f"data: {json.dumps(notification.to_dict())}\n\n"
-
-    return StreamingResponse(generator(), media_type="text/event-stream")
+    return NotificationStreamingResponse(
+        iter_notification_sse(request, _notification_hub, filters),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 class PeerEventBody(BaseModel):
