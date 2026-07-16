@@ -1,5 +1,6 @@
 # v2 Skills Implementation Plan
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 Status: planning baseline
 Scope: perpetua-core + oramasys v2 skill architecture
 Source input: attached `05-docs-v2-skills.md`, renumbered into the correct v2 slot after reading `docs/v2/README.md`

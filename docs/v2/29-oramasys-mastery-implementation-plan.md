@@ -1,5 +1,6 @@
 # ORAMASYS-MASTERY v3 — Implementation Plan
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **File:** `docs/v2/29-oramasys-mastery-implementation-plan.md`
 > **Status:** Approved for execution — v2 migration
 > **Human reference:** `docs/v2/references/ORAMASYS-MASTERY-v3.md` (verbatim, review first)

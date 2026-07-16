@@ -1,5 +1,6 @@
 # 43 — GossipBus mesh transport (frugal particle gossip)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Planned — v2.1+ non-kernel module  
 > **Date:** 2026-06-29  
 > **Parent:** [`01-kernel-spec.md`](01-kernel-spec.md) §5 (local `GossipBus`), [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md)  

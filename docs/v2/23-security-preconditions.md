@@ -1,5 +1,6 @@
 # 23 — Security Preconditions (v2 gate)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Active gate — v2 scaffold work must not proceed on a shared LAN until rows marked **done** below are true in production configs, and new v2 surfaces must satisfy the security-first platform requirements.  
 > **Review source:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../../v1/2026-05-23-security-markdown.md)
 > **Canonical policy:** [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md)
