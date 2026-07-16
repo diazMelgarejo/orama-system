@@ -401,3 +401,21 @@ async def test_notification_stream_send_timeout_releases_subscription(monkeypatc
     await asyncio.wait_for(task, timeout=1)
 
     assert hub.subscriber_count == 0
+
+
+@pytest.mark.asyncio
+async def test_notification_delivery_is_typed_and_arrives_within_two_seconds():
+    hub = NotificationHub()
+    stream = hub.subscribe({EventType.JOB_COMPLETED})
+    receive = asyncio.create_task(stream.__anext__())
+    await asyncio.sleep(0)
+
+    notification = Notification(EventType.JOB_COMPLETED, {"job_id": "redacted-job"})
+    await hub.emit(notification)
+    received = await asyncio.wait_for(receive, timeout=2)
+    frame = portal_server.format_notification_sse(received)
+
+    assert "event: job_completed" in frame
+    assert f'"event_id":"{notification.event_id}"' in frame
+    assert '"job_id":"redacted-job"' in frame
+    await stream.aclose()

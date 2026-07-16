@@ -146,3 +146,76 @@ release. New clients should use `/oramasys`.
 ```
 
 **Stateless**: no Redis dependency. Durable state owned by Perpetua-Tools (Repo #1).
+
+## Portal Notification Stream (G7)
+
+Default-off (`PORTAL_NOTIFICATIONS=1`), authenticated, portal-local SSE stream
+of redacted state-change events. See
+[the G7 implementation plan](superpowers/plans/2026-07-14-g7-authenticated-sse-mvp.md)
+for full design rationale.
+
+### POST /api/notifications/session
+
+Creates a 15-minute host-only browser session for the notification stream. Send an existing Authorization bearer credential from the same origin. The response sets an HttpOnly, SameSite=Strict cookie scoped to /api/notifications. A cross-origin request receives 403. Never put the token in a URL.
+
+Why this step exists: native browser `EventSource` cannot set custom headers, so a
+bearer credential can't reach the stream directly. This endpoint exchanges an
+already-held bearer for a narrowly-scoped, short-lived cookie the browser will
+attach automatically.
+
+### GET /api/notifications/stream?types=job_completed,agent_state_changed
+
+The endpoint is disabled until PORTAL_NOTIFICATIONS=1 (404 while disabled). It
+returns 401 without a valid session cookie or bearer — call `POST
+/api/notifications/session` first — and 400 for an unknown event type (response
+body lists the valid types: `agent_state_changed`, `fleet_topology_changed`,
+`hardware_status_changed`, `job_completed`, `phase_transition`).
+
+Delivery is bounded and best-effort; a slow subscriber loses its oldest queued
+event. The current aggregate drop count is visible at `GET /api/status` under
+`notification_delivery.dropped_events`. On reconnect, fetch `/api/status` for a
+new redacted snapshot before resuming the stream — Last-Event-ID is not replayed
+in this MVP. The session cookie expires after 15 minutes; `EventSource` will
+auto-reconnect on drop but cannot re-authenticate itself, so a client must detect
+a stalled/erroring stream and re-POST `/api/notifications/session` before
+recreating the `EventSource`, not rely on automatic reconnect alone.
+
+**Copy-paste client example** (the two most common SSE integration mistakes —
+missing the session bootstrap, and listening on the default `message` event
+instead of the typed `event:` name — are both handled below):
+
+```javascript
+async function connectNotifications(bearerToken) {
+  await fetch("/api/notifications/session", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${bearerToken}` },
+    credentials: "include",
+  });
+
+  const source = new EventSource("/api/notifications/stream", { withCredentials: true });
+  // Events are framed with `event: <type>`, e.g. `event: job_completed` — the
+  // default 'message' listener never fires. Register one listener per type.
+  for (const type of ["agent_state_changed", "hardware_status_changed", "job_completed"]) {
+    source.addEventListener(type, (event) => {
+      const notification = JSON.parse(event.data);
+      console.log(type, notification);
+    });
+  }
+  source.onerror = () => {
+    // No error code is exposed here; a 401 after cookie expiry looks
+    // identical to a network drop. Re-run the session bootstrap before
+    // assuming this is a transient network issue.
+  };
+  return source;
+}
+```
+
+`type`/`event_type` and `data`/`payload` are duplicate keys by design — stable
+aliases kept for GossipBus v2.1 mesh compatibility (docs/v2/43). Either name is
+safe to read today; they carry identical values.
+
+**Residual risk, disclosed here (not just in the plan file):** the notification
+stream inherits this codebase's existing single-operator-LAN trust posture —
+any local process on an allow-listed CORS origin (localhost:3000, :8002) can
+read this stream once the session cookie is bootstrapped, same as every other
+authenticated portal route. See `docs/v2/45-single-operator-lan-threat-model-descope.md`.
