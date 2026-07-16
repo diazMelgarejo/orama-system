@@ -29,6 +29,8 @@ sub_skills:
     trigger: "install mcp stack, setup gemini mcp, register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
   - path: skills/mcp-orchestration/SKILL.md
     trigger: "mcp orchestration, connect mcp tools to openclaw, gemini large context, ai-cli-mcp, background agents, dispatch parallel ai cli, openclaw mcp, SKILL.md claude skills, mcp json tool setup"
+  - path: skills/codex-mcp-debugging/SKILL.md
+    trigger: "codex mcp debugging, codex mcp list failed, invalid transport, bearer_token_env_var, stdio vs http transport, exa mcp wrapper, github mcp codex config"
   - path: skills/first-run-setup/SKILL.md
     trigger: "first-run install, bootstrap orama, setup new machine, first run, §0 checklist, first-run-install.sh"
   - path: skills/code-review/SKILL.md
