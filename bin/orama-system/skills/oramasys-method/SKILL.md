@@ -187,3 +187,4 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - `references/graceful-degradation.md` — unified fallback ladders (oramasys + PT model selection)
 - `references/cidf-and-mcp.md` — CIDF ranks, MCP names, legacy compatibility map
 - `references/tdd-gate.md` — TDD prescriptive gate (links `docs/TDD.md`)
+- `../../references/contribution-standards.md` — CONTRIBUTING.md + PR-template baseline and the method's raised contribution standard (PT PR #247); pairs with `post-review-micro-remediation.md`
