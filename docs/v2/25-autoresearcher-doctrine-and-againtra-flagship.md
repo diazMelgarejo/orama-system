@@ -1,5 +1,6 @@
 # 25 — Autoresearcher Doctrine + agAIntra Flagship Migration Plan
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** PLAN — approved by operator 2026-06-05. Implementation follows supervised
 > iterations → pulsed heartbeat (20:00 + 09:00 daily, installed after Phase 1 clears).
 > Author: Opus 4.8 (PLAN-only). Decisions recorded this session.

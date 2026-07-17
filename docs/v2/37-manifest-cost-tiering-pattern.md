@@ -1,5 +1,6 @@
 # 37 — Manifest Cost-Tiering Pattern: Escalation Rules in `cost_guard.py`
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Canonical home:** `orama-system/docs/v2/37-manifest-cost-tiering-pattern.md`
 > **Status:** Proposed — approve before any implementation
 > **Locks decision:** D20

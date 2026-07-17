@@ -1,6 +1,7 @@
 <!-- lint-ignore LINT-013 -->
 # 01 — Kernel Spec (perpetua-core, v2.0 blocking)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > The only **blocking** spec for v2.0. Everything else (modules) ships at its own pace.
 > **Revised D8 (2026-04-30)**: MiniGraph kernel = ~70 lines (essential services only).
 > Tier-3 features (checkpointer, interrupts, subgraphs, tool, streaming, structured output)

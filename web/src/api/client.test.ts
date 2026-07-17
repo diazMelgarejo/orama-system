@@ -20,6 +20,18 @@ describe("apiFetch", () => {
     });
   });
 
+  it("returns undefined for a successful 204 response", async () => {
+    vi.mocked(fetch).mockResolvedValueOnce(new Response(null, { status: 204 }));
+
+    await expect(
+      apiFetch<void>("/api/notifications/session", { method: "POST" }),
+    ).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledWith(
+      "/api/notifications/session",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
   it("throws ApiError with status and body on HTTP error", async () => {
     vi.mocked(fetch).mockResolvedValueOnce(
       new Response(JSON.stringify({ detail: "not found" }), {

@@ -38,22 +38,27 @@ from urllib.parse import quote
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
 from orama_system.lan_peer_channel import LanPeerChannel, local_platform, make_envelope, read_discovery_peer_ip
 from orama_system.portal_notifications import (
+    EventType,
+    Notification,
     NotificationHub,
+    PortalNotificationPublisher,
     notifications_enabled,
     parse_event_types,
 )
 
 from utils.control_plane_auth import (
+    CONTROL_PLANE_COOKIE,
     accepted_control_plane_tokens,
     auth_enforced,
     auth_headers,
+    bearer_token_from_request,
     cors_allow_origins,
     default_bind_host,
     control_plane_auth_failure,
@@ -68,6 +73,7 @@ from utils.control_plane_auth import (
     redact_models_payload,
     redact_portal_status_payload,
     redact_runtime_section,
+    verify_control_plane_auth,
     verify_lifecycle_origin,
 )
 
@@ -196,6 +202,7 @@ def _read_routing_json() -> dict:
 
 _lan_peer_channel = LanPeerChannel()
 _notification_hub = NotificationHub()
+_notification_publisher = PortalNotificationPublisher(_notification_hub)
 
 
 @asynccontextmanager
@@ -1461,6 +1468,95 @@ async def sse_peer_stream(request: Request):
     return StreamingResponse(generator(), media_type="text/event-stream")
 
 
+NOTIFICATION_SESSION_MAX_AGE_SECONDS = 900
+
+
+@app.post("/api/notifications/session", status_code=204)
+async def create_notification_session(request: Request, response: Response) -> None:
+    """Exchange an existing bearer for a short-lived, path-scoped stream cookie.
+
+    Native EventSource cannot set custom headers, so a bearer credential
+    can't reach /api/notifications/stream directly. This endpoint downscopes
+    an already-held bearer into a narrower, short-TTL, HttpOnly cookie —
+    not a general login route, and never injected into HTML/JS.
+    """
+    verify_lifecycle_origin(request)
+    if not request.headers.get("authorization", "").startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Bearer authentication required")
+    verify_control_plane_auth(request)
+    client_host = request.client.host if request.client else "unknown"
+    if not _check_rate_limit(f"notifications-session:{client_host}"):
+        raise HTTPException(status_code=429, detail="Too many notification session requests")
+    response.set_cookie(
+        key=CONTROL_PLANE_COOKIE,
+        value=bearer_token_from_request(request),
+        max_age=NOTIFICATION_SESSION_MAX_AGE_SECONDS,
+        httponly=True,
+        secure=not request_is_loopback(request),
+        samesite="strict",
+        path="/api/notifications",
+    )
+
+
+def format_notification_sse(notification: Notification) -> str:
+    return (
+        f"id: {notification.event_id}\n"
+        f"event: {notification.type.value}\n"
+        f"data: {json.dumps(notification.to_dict(), separators=(',', ':'))}\n\n"
+    )
+
+
+NOTIFICATION_SSE_KEEPALIVE_SECONDS = 15
+NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS = 10
+
+
+class NotificationStreamingResponse(StreamingResponse):
+    """StreamingResponse with a bounded ASGI send for this local SSE route."""
+
+    async def stream_response(self, send):
+        await send({"type": "http.response.start", "status": self.status_code, "headers": self.raw_headers})
+        try:
+            async for chunk in self.body_iterator:
+                if not isinstance(chunk, bytes):
+                    chunk = chunk.encode(self.charset)
+                try:
+                    await asyncio.wait_for(
+                        send({"type": "http.response.body", "body": chunk, "more_body": True}),
+                        timeout=NOTIFICATION_SSE_SEND_TIMEOUT_SECONDS,
+                    )
+                except asyncio.TimeoutError:
+                    break
+        finally:
+            # Breaking out of `async for` does NOT close the underlying async
+            # generator -- its own finally (hub._subscribers.pop(...)) only
+            # runs on explicit aclose(). Without this, a slow/stalled client
+            # leaks a live subscription on exactly the case this timeout
+            # exists to handle. GC-based cleanup can't reliably await, so this
+            # must be explicit, not implicit.
+            aclose = getattr(self.body_iterator, "aclose", None)
+            if aclose is not None:
+                await aclose()
+        await send({"type": "http.response.body", "body": b"", "more_body": False})
+
+
+async def iter_notification_sse(request: Request, hub: NotificationHub, filters):
+    stream = hub.subscribe(filters)
+    pending = asyncio.create_task(stream.__anext__())
+    try:
+        while not await request.is_disconnected():
+            done, _ = await asyncio.wait({pending}, timeout=NOTIFICATION_SSE_KEEPALIVE_SECONDS)
+            if not done:
+                yield ": keepalive\n\n"
+                continue
+            notification = pending.result()
+            pending = asyncio.create_task(stream.__anext__())
+            yield format_notification_sse(notification)
+    finally:
+        pending.cancel()
+        await asyncio.gather(pending, return_exceptions=True)
+        await stream.aclose()
+
+
 @app.get("/api/notifications/stream", response_class=StreamingResponse)
 async def api_notifications_stream(request: Request, types: Optional[str] = None):
     """Default-off portal notification stream for the G7 MVP."""
@@ -1472,15 +1568,17 @@ async def api_notifications_stream(request: Request, types: Optional[str] = None
     try:
         filters = parse_event_types(types)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        valid = ", ".join(sorted(item.value for item in EventType))
+        raise HTTPException(
+            status_code=400,
+            detail=f"{exc} — valid types: {valid}",
+        ) from exc
 
-    async def generator():
-        async for notification in _notification_hub.subscribe(filters):
-            if await request.is_disconnected():
-                break
-            yield f"data: {json.dumps(notification.to_dict())}\n\n"
-
-    return StreamingResponse(generator(), media_type="text/event-stream")
+    return NotificationStreamingResponse(
+        iter_notification_sse(request, _notification_hub, filters),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 class PeerEventBody(BaseModel):
@@ -2522,8 +2620,13 @@ def _probe_cli_available(bin_name: str) -> bool:
         return False
 
 
-@app.get("/api/status")
-async def api_status():
+async def _build_portal_status_payload() -> Dict[str, Any]:
+    """Probe every backend and assemble the raw (unredacted) status payload.
+
+    Extracted from api_status() (Task 2, G7) so the route's redaction +
+    notification-publish wiring can be tested without reimplementing this
+    function's monitor mocks.
+    """
     # ── Dynamic IP resolution — always re-read from openclaw.json on every call ──
     # LAN is treated as always-changing: the Win machine can get a new DHCP lease,
     # reboot, or move subnets at any time.  We re-resolve on every status poll
@@ -2624,7 +2727,17 @@ async def api_status():
         "codex_available": tools.get("codex-cli", {}).get("ok", False),
         "gemini_available": tools.get("gemini-cli", {}).get("ok", False),
     }
-    return redact_portal_status_payload(payload)
+    return payload
+
+
+@app.get("/api/status")
+async def api_status():
+    payload = await _build_portal_status_payload()
+    redacted_payload = redact_portal_status_payload(payload)
+    if notifications_enabled():
+        await _notification_publisher.publish(redacted_payload)
+    redacted_payload["notification_delivery"] = {"dropped_events": _notification_hub.dropped_events}
+    return redacted_payload
 
 
 @app.get("/api/hardware-policy")

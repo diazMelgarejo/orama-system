@@ -1,4 +1,5 @@
-import { StatusBadge, statusToTone } from "./StatusBadge";
+import { StatusBadge } from "./StatusBadge";
+import { statusToTone } from "./statusTone";
 import type { AppState } from "@/api/appState";
 
 interface EnvBarProps {

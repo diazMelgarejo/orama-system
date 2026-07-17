@@ -1,5 +1,6 @@
 # 38 — Helicone Proxy-Caching Pattern: Hash-Based LRU in `_dispatch`
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Canonical home:** `orama-system/docs/v2/38-helicone-proxy-caching-pattern.md`
 > **Status:** Proposed — approve before any implementation
 > **Locks decision:** D21
