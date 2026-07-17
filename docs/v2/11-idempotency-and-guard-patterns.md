@@ -1,5 +1,6 @@
 # 11 — Idempotency, Guard Patterns, and Single-Source Policy
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status**: Active | Added 2026-05-06
 > **Source**: Promoted from `docs/LESSONS.md` 2026-05-06 entry — three Codex P1/P2
 > findings on PR #32 distilled into reusable design rules.

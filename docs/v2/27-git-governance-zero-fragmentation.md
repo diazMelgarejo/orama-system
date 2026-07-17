@@ -1,5 +1,6 @@
 # 27 — Git Governance: One Source of Truth, Zero Fragmentation (org-wide)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** active doctrine (2026-06-05). Companion: [`11-idempotency-and-guard-patterns.md`](11-idempotency-and-guard-patterns.md),
 > [`23-security-preconditions.md`](23-security-preconditions.md). Skill: [git-history-surgery](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md).
 > Lesson that motivated this: [`docs/LESSONS.md` § 2026-06-05](../LESSONS.md).
