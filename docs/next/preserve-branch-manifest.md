@@ -59,3 +59,30 @@ Preserve PR without merging it.
 
 Do not delete, rebase, replay, or force-update #166 or #169. They are the only
 remaining human-review items after the approved `B` set is processed.
+
+## Local Divergent Counterparts
+
+The remote Preserve heads and local branch refs were audited separately. These
+eight local refs had unmatched patch IDs because they predate the rewrite or
+were independently assembled, but a behavior-level comparison found their
+intent already represented by stronger canonical surfaces on current `main`.
+They are therefore local-only `B` items: tag their exact local heads, then
+delete the refs. No replay is appropriate.
+
+| Local branch | Historical intent | Current canonical evidence | Disposition |
+| --- | --- | --- | --- |
+| `cursor/oramasys-integrative-merge-c4ae` | pre-v2 security, LINT-014, and integrative-merge doctrine | `repo_hygiene.py` enforces LINT-014; the current `oramasys-method` guide retains the six-mode doctrine. | delete-superseded |
+| `cursor/review-vitest-tdd-scratch-c4ae` | Vitest/TDD gate and per-file test proximity | Current `check_tdd_commit.sh`, hook, tests, and frontend gate cover the finalized behavior. | delete-superseded |
+| `feat/agent-coordination-heartbeat-skill` | heartbeat skill, Kimi attribution, and lock-race test | Current heartbeat skill, attribution guards, and coordination integration test retain the behavior. | delete-superseded |
+| `feat/vitest-tdd-gate-scratch` | earlier Vitest/TDD gate stack | It is the pre-fix subset of the reviewed Vitest branch; current main includes the stronger final gate. | delete-superseded |
+| `skillify-pr1-standards-validator-plan` | skill validator, tests, warning and path policy | Current validator, unit tests, and roadmap document the finalized strict gate. | delete-superseded |
+| `skillify-pr2-followup` | Windows launcher hygiene and GLM hint | Current launcher has later safety and diagnostics hardening; replaying the older two-file change would regress it. | delete-superseded |
+| `subagent/win-autoresearcher/h5-gpu-harness` | Win H5 harness and raw benchmark result | Current H5 cross-host and final reports preserve the harness input and canonical conclusion. | delete-superseded |
+| `subagent/win-coder/mac-co-orchestrator-playbook` | Mac/Win playbook and H6 preflight handoff | Current Hermes references retain the playbook and follow-on H5/H6 artifacts. | delete-superseded |
+
+Focused regression evidence for the TDD, validator, and heartbeat surfaces:
+
+```text
+uv run pytest -q tests/test_check_tdd_commit.py tests/test_check_orama_skills.py tests/test_coord_pulse_integration.py
+39 passed
+```
