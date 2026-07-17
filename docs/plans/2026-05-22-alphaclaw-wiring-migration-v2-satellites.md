@@ -315,13 +315,13 @@ Phase 3 (v2.1 planning — perpetua-core + orama-system docs):
 
 ---
 
-## Status Update — 2026-07-20 (live re-verification)
+## Status Update — 2026-07-17 (live re-verification)
 
 Re-verified every Goal 1 and Goal 2 task directly against the current repo
 state (Phase 0 evidence gate — read the actual files, not the plan's
 assumptions). Findings below; original plan text above left untouched.
 
-### Goal 1 — Wiring Correctness: ✅ PASS (4/5 clean, 1 gap found)
+### Goal 1 — Wiring Correctness: ✅ PASS (5/5 clean)
 
 | Task | Result |
 |---|---|
@@ -329,7 +329,7 @@ assumptions). Findings below; original plan text above left untouched.
 | 1.2 bootstrap path is live | ✅ `bootstrap_alphaclaw()` calls `alphaclaw_bootstrap.py` via `_resolve_peer_ips()` + subprocess, not hardcoded IPs |
 | 1.3 orama never calls AlphaClaw directly | ✅ 12 grep hits, all path-discovery strings, install-time patch comments, or delegation-pointer comments — zero runtime orchestration calls |
 | 1.4 Python→JS adapter bridge mechanism | ✅ **Resolved the plan's own open question.** `alphaclaw_manager.py`'s own docstring: "orama-system delegates to this module via a single subprocess call." The Python↔JS boundary is a subprocess CLI call, not an in-process bridge. |
-| 1.5 `.mcp.json` registers PT's alphaclaw-mcp only | ❌ **Gap found:** neither `orama-system/.mcp.json` nor `Perpetua-Tools/.mcp.json` registers `alphaclaw-mcp` at all (both only register `exa`). Not "duplicate MCP servers" as the plan worried about — the opposite: **zero** registration. New Task 1.5b: register `packages/alphaclaw-mcp` in PT's `.mcp.json`. |
+| 1.5 `.mcp.json` registers PT's alphaclaw-mcp only | ✅ **RESOLVED** (was a gap at first pass — neither repo's `.mcp.json` registered `alphaclaw-mcp` at all). Fixed in PT `packages/alphaclaw-mcp` registration, commit [`7b4bd92`](https://github.com/diazMelgarejo/Perpetua-Tools/commit/7b4bd92) — verified live on PT `main` right now: `.mcp.json` registers `alphaclaw` via `packages/alphaclaw-mcp/build/index.js` with `ALPHACLAW_MCP_PROFILE=readonly`. |
 
 ### Goal 2 — Feature Migration: Phase A essentially done, Phase D passes, Phases B/C blocked
 
@@ -358,7 +358,7 @@ undocumented.
 - Task 2A.1 ✅ all 8 tools present
 - Task 2A.2 ✅ (deviated as above — file/process tools bypass the adapter by design, not by accident)
 - Task 2A.3 ✅ version far exceeds the 0.2.0 target (0.9.16.9)
-- Task 2A.4 ❌ **Gap found:** no dedicated test file covers the 8 new tool handlers by name (`readConfig`/`listProviders`/etc.) — existing tests cover MCP entry-loading, path-boundary, and profile config only. New Task 2A.4b: add `packages/alphaclaw-mcp/tests/tool-handlers.test.mjs`.
+- Task 2A.4 ✅ **RESOLVED** (was a gap at first pass — no dedicated test file covered the 8 new tool handlers). Fixed in PT commit [`7b4bd92`](https://github.com/diazMelgarejo/Perpetua-Tools/commit/7b4bd92) (`packages/alphaclaw-mcp/tests/tool-handlers.test.mjs`), strengthened further in [`ddcaa3a`](https://github.com/diazMelgarejo/Perpetua-Tools/commit/ddcaa3a) — both verified present on PT `main`.
 
 **Phase B (lib/agents dedup cleanup) — requires touching AlphaClaw:**
 Not evaluated. `AlphaClaw` is a hard exclusion from all implementation work
@@ -368,21 +368,22 @@ task list. Flagging as a manual/separate task for whoever owns AlphaClaw.
 
 **Phase C (remove AlphaClaw's lib/mcp) — same exclusion, same status: blocked.**
 
-**Phase D (UNIFIED-ABSORPTION-PLAN compliance) — ✅ PASS (4/4, one grep pattern needs tightening):**
+**Phase D (UNIFIED-ABSORPTION-PLAN compliance) — ✅ 3/4 clean automated pass, 1 conditional/manual:**
 
 | Task | Result |
 |---|---|
 | 2D.1 5 shared types in `contracts.py` | ✅ `OrchestrationSession`, `TaskEnvelope`, `WorkerAssignment`, `WorkerResult`, `VerificationResult` all present |
-| 2D.2 vocabulary normalization | ✅ `Coordinator`=0, `deviceaffinity`=0. ⚠️ `qwen3-coder`=12 hits, but every hit is either the intentional `FORBIDDEN` denylist entry for `qwen3-coder-14b`, or unrelated legitimate models (`qwen/qwen3-coder:free`, `qwen3-coder-30b`) that share the substring — **the plan's own grep pattern is too broad**; tighten to `qwen3-coder-14b` specifically in any future re-run. |
+| 2D.2 vocabulary normalization | ⚠️ **Conditional/manual, not a clean automated pass.** `Coordinator`=0, `deviceaffinity`=0 (clean). `qwen3-coder`=12 hits — manually classified, not machine-verified: 1 intentional `FORBIDDEN` denylist entry for `qwen3-coder-14b` (correct), 11 unrelated legitimate models (`qwen/qwen3-coder:free`, `qwen3-coder-30b`) that share the substring. **The plan's own grep pattern is too broad for automated pass/fail** — tighten to `qwen3-coder-14b` specifically before this can be re-run as a clean check. |
 | 2D.3 `hardware_policy.check_affinity()` | ✅ present in `src/utils/hardware_policy.py` |
 | 2D.4 `AlphaClawManager.validate_routing_affinity()` | ✅ present as both a class method and a module-level convenience wrapper that delegates to it |
 
 ### Net result: Goal 3 (v2.1 Satellite Architecture) can begin
 
 Everything Goal 3 depends on from Goal 1+2 that's within this session's
-scope (orama-system + Perpetua-Tools, not AlphaClaw) is now either verified
-complete or has a concrete, scoped follow-up task (1.5b, 2A.4b). Phases B/C
-are the only fully-blocked items, and Goal 3 does not depend on them —
-Goal 3's satellite modules map from AlphaClaw's `lib/server/*` feature
-*shape*, not from the literal file-deletion cleanup in Phases B/C.
+scope (orama-system + Perpetua-Tools, not AlphaClaw) is now verified
+complete — the two gaps found on first pass (1.5, 2A.4) are both resolved
+and confirmed live on PT `main`. Phases B/C are the only fully-blocked
+items, and Goal 3 does not depend on them — Goal 3's satellite modules map
+from AlphaClaw's `lib/server/*` feature *shape*, not from the literal
+file-deletion cleanup in Phases B/C.
 
