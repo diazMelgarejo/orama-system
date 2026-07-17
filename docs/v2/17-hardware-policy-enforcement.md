@@ -1,6 +1,7 @@
 <!-- lint-ignore LINT-013 -->
 # 17 — Hardware Policy Enforcement (v1 as-built, 2026-05-17/18)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > Records the full 4-layer hardware enforcement chain enshrined during the
 > RC-1 post-ship policy audit. These patterns are the **required blueprint**
 > for v2 / agate — the policy surface must be at least this complete, and

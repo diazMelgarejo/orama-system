@@ -1,5 +1,6 @@
 # 09 — Comparative Analysis & Merging Plan
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Active | Added 2026-05-02
 > **Goal:** Align v2 implementation at \`~/code/oramasys/\` with Gemini hardening standards while extracting best practices from the broader agentic ecosystem.
 

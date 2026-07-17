@@ -1,5 +1,6 @@
 # 12 — xAI Model Retirement & Migration (Effective 2026-05-15)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status**: Active | Added 2026-05-06
 > **Scope**: `perpetua-core/config/model_hardware_policy.yml` + `oramasys/` routing +
 > any non-kernel module that dispatches to the xAI (`grok-*`) API endpoint.

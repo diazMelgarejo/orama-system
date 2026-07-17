@@ -1,5 +1,6 @@
 # 22 — Git Worktrees for Parallel Agents
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Quick reference.** Full design rationale in `docs/superpowers/specs/2026-05-24-worktree-parallel-agents-design.md`.
 > Applies to: orama-system, Perpetua-Tools. Excludes: periscope, AlphaClaw.
 

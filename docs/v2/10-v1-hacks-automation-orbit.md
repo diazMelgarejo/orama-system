@@ -1,5 +1,6 @@
 # 10 — V1 Hack Automation & "In Orbit" Management
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Active | Added 2026-05-02
 > **Goal:** Document all historical "v1 hacks" and define the "Orbit" automation strategy to handle them outside the microkernel.
 

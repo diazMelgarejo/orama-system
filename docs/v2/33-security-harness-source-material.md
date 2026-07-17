@@ -1,5 +1,6 @@
 # Security Harness Source Material — Verbatim Prior Plan
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** preserved source material from the former `31-security-harness-excellence-plan.md`.
 > **Do not treat this as the canonical strategy.** It intentionally preserves older wording, mixed evidence levels, and speculative claims so no prior content is lost.
 > **Canonical strategy:** [`31-security-harness-excellence-plan.md`](31-security-harness-excellence-plan.md)
