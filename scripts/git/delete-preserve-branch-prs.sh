@@ -45,8 +45,19 @@ for i in "${!branches[@]}"; do
   pr="${prs[$i]}"
   branch="${branches[$i]}"
   tag="safety/preserve-pr-${pr}-${tag_suffix}"
+
+  # A prior interruption is not a reason to retag or fail the entire batch.
+  # Treat an already-deleted branch as completed; otherwise tag its current
+  # remote head before issuing the deletion request.
+  if ! git ls-remote --exit-code --heads origin "refs/heads/${branch}" >/dev/null 2>&1; then
+    printf '%s\n' "already deleted: #${pr} ${branch}"
+    continue
+  fi
+
   git fetch origin "refs/heads/${branch}:refs/remotes/origin/${branch}"
-  git tag "$tag" "origin/${branch}"
-  git push origin "refs/tags/${tag}"
+  if ! git rev-parse --verify --quiet "refs/tags/${tag}" >/dev/null; then
+    git tag "$tag" "origin/${branch}"
+    git push origin "refs/tags/${tag}"
+  fi
   gh api --method DELETE "repos/${repo}/git/refs/heads/${branch}"
 done
