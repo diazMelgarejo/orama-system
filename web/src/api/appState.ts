@@ -4,7 +4,7 @@ import { apiFetch } from "./client";
 export interface AppStateSection<T = unknown> {
   available: boolean;
   source: string;
-  data: T;
+  data: T | null;
   error?: string | null;
 }
 

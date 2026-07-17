@@ -1,5 +1,6 @@
 # 04 — Build Order (GPT Phase 1–4 + lift-from-v1 mapping)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > Implements D9 plus D16. Sequence: security foundation → primitives → graph
 > engine → HTTP surface → parity/security tests.
 > Lift battle-tested code from today's `orama-system` where it fits.

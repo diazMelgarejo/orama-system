@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AppState, JobSummary } from "@/api/appState";
-import { mockState } from "@/data/mockState";
+import { mockJobs, mockState } from "@/data/mockState";
 import {
   resolveDisplayState,
   resolveJobs,
@@ -37,14 +37,12 @@ describe("resolveDisplayState", () => {
 describe("resolveJobs", () => {
   it("falls back to mock jobs when the jobs section is absent (data: null)", () => {
     const state = stateWithJobsData(null);
-    expect(resolveJobs(state, mockState.jobs.data.jobs)).toEqual(
-      mockState.jobs.data.jobs,
-    );
+    expect(resolveJobs(state, mockJobs)).toEqual(mockJobs);
   });
 
   it("preserves an explicit empty jobs array from the API", () => {
     const state = stateWithJobsData({ jobs: [] });
-    expect(resolveJobs(state, mockState.jobs.data.jobs)).toEqual([]);
+    expect(resolveJobs(state, mockJobs)).toEqual([]);
   });
 });
 

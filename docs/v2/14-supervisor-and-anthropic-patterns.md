@@ -1,5 +1,6 @@
 # V2 Supervisor — Anthropic Patterns + DB Persistence + MAESTRO/SWARM
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Source files synthesized:**
 > - `v1/B2-ai-cli-mcp.md` — token-efficiency and file-system-first payload strategy
 > - `v1/003-Gemini-Hardware.md.md` — hardware probe, AI tier mapping, Ollama tuning

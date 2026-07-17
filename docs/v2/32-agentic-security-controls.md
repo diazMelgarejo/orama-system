@@ -1,5 +1,6 @@
 # Agentic Security Controls
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** implementation guidance extracted from the former security-harness plan
 > **Strategy:** [`31-security-harness-excellence-plan.md`](31-security-harness-excellence-plan.md)
 > **Prior mixed source:** [`33-security-harness-source-material.md`](33-security-harness-source-material.md)

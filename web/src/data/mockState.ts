@@ -13,7 +13,7 @@ import type { Artifact } from "@/api/artifacts";
 const NOW = Date.now();
 const minutesAgo = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 
-const mockJobs: JobSummary[] = [
+export const mockJobs: JobSummary[] = [
   {
     job_id: "run_01JY6Z8K3M7Q",
     intent: "analysis",

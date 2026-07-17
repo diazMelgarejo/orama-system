@@ -1,5 +1,6 @@
 # 06 — Open Questions
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 Items deliberately deferred. Each has a target checkpoint for resolution.
 
 ---

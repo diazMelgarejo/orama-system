@@ -2,9 +2,10 @@
 """
 exa-mcp-daemon.py — singleton Exa MCP multiplexer
 
-One backend (npx exa-mcp-server) handles all three Claude registrations.
-Clients (Claude Desktop, orama, PT) connect via Unix socket; daemon
-routes JSON-RPC through the shared backend with per-client ID remapping.
+One backend (npx exa-mcp-server) handles all local Exa MCP registrations.
+Clients (Claude Desktop, orama-system, Perpetua-Tools, Codex) connect via
+Unix socket; daemon routes JSON-RPC through the shared backend with per-client
+ID remapping.
 
 Socket:  ~/.openclaw/run/exa-mcp.sock
 PID:     ~/.openclaw/run/exa-mcp.pid
