@@ -33,13 +33,18 @@ G7 addresses a **coordination gap**: agents, operators, and integrations need **
 | **Service Monitors** | `portal_server.py` §`_probe_*` | Shipped v1 | Agents, routing, hardware, activity feeds already tracked |
 | **GossipBus/GossipMesh v2.1** | `docs/v2/43-gossipbus-mesh-transport.md` | Planned mesh transport | Event-envelope conventions: versioned, redacted, interest-filtered deltas; MVP should stay compatible without implementing mesh replication or replay |
 
-### ✗ Gaps (To Implement)
+### ✗ Gaps — RESOLVED 2026-07-16 by the authenticated SSE MVP plan (Tasks 1-5)
 
-1. **Portal notification fan-out is scaffolded but not yet fully hardened** — route and service exist, but monitor wiring, edge-triggering, and lifecycle behavior still need final validation
-2. **No event subscription filter** — SSE broadcasts all peers; no topic/capability scoping  
-3. **No durable event queue** — SSE clients miss events during disconnect (best-effort only)
-4. **No webhook/email integration** — notifications live in WebSocket/SSE only
-5. **Envelope contract still needs a single source of truth** — the scaffold already exposes v2.1-shaped aliases, but docs/tests should remain the authority for the stable local contract
+1. ~~Portal notification fan-out is scaffolded but not yet fully hardened~~ — shipped: `PortalNotificationPublisher` wires real redacted-delta emission into `/api/status`, and `GET /api/notifications/stream` uses typed SSE framing (`id`/`event`/`data`) with each `Notification` carrying an opaque `event_id`.
+2. ~~No event subscription filter~~ — was already wrong even before this plan; `GET /api/notifications/stream?types=job_completed,agent_state_changed` has supported filtering since the v1 scaffold. Corrected here.
+3. **No durable event queue** — still true, intentionally: best-effort delivery only, `NotificationHub.dropped_events` exposes the aggregate loss count via `/api/status`. Out of scope per the plan's Global Constraints (no Redis/NATS/durable storage).
+4. **No webhook/email integration** — still true, intentionally out of scope for this MVP.
+5. **Envelope contract** — `docs/api-reference.md` § Portal Notification Stream is now the single source of truth for the shipped local contract; this doc records product intent, not the live wire format.
+
+**Session cookie note:** `POST /api/notifications/session` is a narrow, single-purpose
+credential downscoping endpoint for bootstrapping the SSE stream (bearer → 15-minute,
+path-scoped cookie) — it is not a general portal login route and must never be treated
+as one or reused for other authenticated surfaces.
 
 ### Current branch reality
 
@@ -352,5 +357,5 @@ python3 scripts/agent_coordination.py queue claim "G7-async-notifications" "agy-
 - v2.1 mesh transport: `docs/v2/43-gossipbus-mesh-transport.md`
 - v2.5 safety overlays: `docs/v2/03-safety-v2.5.md`
 - single-operator LAN descope: `docs/v2/45-single-operator-lan-threat-model-descope.md`
-- Security contracts: `SECURITY.md` Immediate TODO §C (unauthenticated notification blocking)
+- Security contracts: `SECURITY.md` Immediate TODO §C — corrected 2026-07-16: §C does not mandate notification auth (its 7 checks cover spawn-agent/token-leakage/LAN-bind, none reference notifications). The "unauthenticated notification blocking" requirement is this G7 workstream's own not-yet-done item (see `docs/next/fleet-mesh/2026-07-14-g7-async-notifications-next-steps.md`), not an external security mandate. The design decision (require auth before streaming) stands on its own merits; this line previously cited it as if §C already required it, which it does not.
 - Portal architecture: `src/orama_system/portal_server.py` §probes

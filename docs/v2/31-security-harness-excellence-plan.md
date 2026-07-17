@@ -1,5 +1,6 @@
 # Security Harness Excellence Plan
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** v2 strategy rewrite — single canonical entrypoint
 > **Scope:** `orama-system` + Perpetua-Tools + AlphaClaw adapter boundary
 > **Source preservation:** prior mixed plan is preserved verbatim at [`33-security-harness-source-material.md`](33-security-harness-source-material.md)

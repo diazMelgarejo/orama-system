@@ -1,5 +1,6 @@
 # 19 — gstack Optional Integration (v2 Forward Plan)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Planning doc — v1 implementation is in `docs/superpowers/plans/2026-05-21-gstack-optional-submodule-plan.md`.
 > This document records the v2 canonical design for `oramasys/*`.
 > **No code changes to `oramasys/*` until this plan is reviewed.**

@@ -1,5 +1,6 @@
 # 13 — Local Model Catalog Strategy (Codex CLI + Ollama)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status**: Active | Added 2026-05-07
 > **Scope**: `~/.codex/` global config + both repos that embed Codex agent configs
 > (`.codex/` in `orama-system` and `Perpetua-Tools`).

@@ -1,0 +1,31 @@
+# G7 Pre-v2 TODO Closure Archive
+
+Date: 2026-07-16
+
+Plan: [`../superpowers/plans/2026-07-16-g7-pre-v2-todo-closure.md`](../superpowers/plans/2026-07-16-g7-pre-v2-todo-closure.md)
+
+Evidence: [`../testing/2026-07-16-g7-pre-v2-todo-closure.tdd.md`](../testing/2026-07-16-g7-pre-v2-todo-closure.tdd.md)
+
+## Original Backlog Text
+
+The following entries were moved from [`../../TODOS.md`](../../TODOS.md) verbatim. They are archived for provenance, not deleted.
+
+### From /autoplan review of `docs/superpowers/plans/2026-07-14-g7-authenticated-sse-mvp.md` (2026-07-15)
+
+- **Rate-limit `POST /api/notifications/session`** — planned as companion Task 1 (CEO Decision #4). Outside the G7 MVP's blast radius. The portal already has a small process-local `_check_rate_limit()` used by `/api/configure-tool`; the low-risk plug is to reuse it after successful authentication with a per-client key, not introduce another dependency or falsely claim there is no rate-limit infrastructure. This remains bounded to one portal process and is not the future distributed policy.
+
+- **Wire the G7 notification stream into the already-built React Command Center** — planned as companion Tasks 2-3 (CEO Decision #6, corrected 2026-07-16). Initially mis-scoped as "reconcile two competing frontends" — that's wrong. `docs/v2/16-web-app-orchestration-plan.md` (2026-05-16, marked RESOLVED 2026-06-14) already planned and shipped this exact migration: React SPA (`web/src/`) is the primary UI, `portal_server.py:3245` serves `web/dist` when built and falls back to the legacy `_render_html` dashboard only when it isn't — not two permanent parallel surfaces. The SPA already polls `/api/app/state` (`web/src/api/appState.ts:33`). The low-risk follow-up keeps that poll and uses named SSE events only to invalidate the React Query cache after a 204-safe session bootstrap. It remains out of scope for the G7 MVP implementation branch and depends on its final session/envelope contract.
+
+- **Security threats — accepted existing debt; no pre-v2 code change (Eng Decision #9, 2026-07-16)** — `cors_allow_origins()` defaults to `["localhost:8002", "localhost:3000"]` with `allow_credentials=True`, and `lifecycle_origin_allowed()` (`src/utils/control_plane_auth.py:355`) deliberately treats **all loopback ports as mutually trusted by design** ("portal :8002 may accept POSTs from pages served on PT :8000 or orama :8001"). This means once G7's session cookie is bootstrapped, any co-resident local process bound to an allow-listed port (3000, 8002) — not just PT/orama's own pages — is a credentialed reader of `/api/notifications/stream`. `verify_lifecycle_origin()` would NOT block this (confirmed by reading the implementation, not assumed). This is the same trust model **every existing lifecycle route already accepts** (`POST /api/stop`, `/api/restart/*`, etc.) — it is the project's established single-operator-LAN posture (`docs/v2/45-single-operator-lan-threat-model-descope.md` D23: real trust boundary = administrative identity, not port count), so the companion plan records the disposition and leaves the canonical threat-model claims unchanged. Any future narrowing requires a separate security plan and review.
+
+## Outcomes
+
+- Rate limit: implemented. Authenticated session bootstrap is capped through the existing process-local `_check_rate_limit` helper after bearer validation.
+- React stream adapter: implemented. The browser opens a same-origin credentialed `EventSource`, listens to named G7 events, and treats malformed JSON or stream errors as disconnects.
+- React Query invalidation: implemented. Notifications invalidate `["appState"]`; the existing 5-second polling fallback remains unchanged.
+- Security threat disposition: archived as accepted pre-v2 debt. No `docs/v2/45-single-operator-lan-threat-model-descope.md` claim was changed.
+
+## Deferrals
+
+- All LAN trust narrowing, bind-policy changes, or cross-loopback authority changes remain deferred to v2.1.
+- All multisite, mesh, durable replay, GossipMesh, or cross-host notification expansion remains deferred to v2.5.
