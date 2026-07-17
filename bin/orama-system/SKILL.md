@@ -415,6 +415,7 @@ Load on demand for deeper context:
 - `references/core-operational-directives.md` — the 6 directives in detail
 - `references/content-insertion-framework.md` — CIDF human reference + JSON policy
 - `references/skill-architecture-guide.md` — how to build SKILL.md files
+- `references/contribution-standards.md` — CONTRIBUTING.md + PR-template baseline; the method's contribution practices (raised standard, PT PR #247)
 - `templates/task-plan.md` — task planning template (Directive #1)
 - `templates/verification-checklist.md` — pre-completion checklist (Directive #4)
 - `templates/lessons-log.md` — self-improvement log (Directive #3)
