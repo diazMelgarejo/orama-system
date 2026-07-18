@@ -36,8 +36,9 @@ The mother plan is active, not archive. Later documents should cite it as the so
 
 | Artifact | Document | Relationship |
 |---|---|---|
-| Closure audit | [`../../../references/coordination-and-plans-completeness-audit-2026-07-18.md`](../../../references/coordination-and-plans-completeness-audit-2026-07-18.md) | Inventory of open/closed/ambiguous docs across PT and orama; use it to justify why a row is still open or has been closed. |
-| Closure plan | [`../../../references/phase0-and-orama-open-work-closure-plan-2026-07-18.md`](../../../references/phase0-and-orama-open-work-closure-plan-2026-07-18.md) | Wave order and disposition plan for the open items; use it as the execution checklist. |
+| Closure audit | [`../../../../references/coordination-and-plans-completeness-audit-2026-07-18.md`](../../../../references/coordination-and-plans-completeness-audit-2026-07-18.md) | Inventory of open/closed/ambiguous docs across PT and orama; use it to justify why a row is still open or has been closed. |
+| Closure plan | [`../../../../references/phase0-and-orama-open-work-closure-plan-2026-07-18.md`](../../../../references/phase0-and-orama-open-work-closure-plan-2026-07-18.md) | Wave order and disposition plan for the open items; use it as the execution checklist. |
+| Ranked handoff | [`../../../../references/phase0-and-orama-closure-rankings-2026-07-18.md`](../../../../references/phase0-and-orama-closure-rankings-2026-07-18.md) | Claim-ready ranking with done / in-progress / deferred-to-v2 / TODO state buckets. |
 | Orama hub | [`README.md`](README.md) | Starting point for the fleet-mesh lineage and the active cross-repo navigation graph. |
 
 ## System Navigation Graph
