@@ -255,3 +255,25 @@ Rules:
 - Iterate command output with `… | while IFS= read -r x`.
 - Pass file/argument lists as explicit args or `"${array[@]}"`.
 - Quote every expansion (`"$var"`). These forms work identically in bash and zsh.
+
+## Shell Quoting - Backticks in Double Quotes
+
+When you are emitting coordination-board posts or other literal shell payloads,
+do **not** wrap backticked code spans inside a double-quoted shell string.
+Backticks still trigger command substitution in zsh and bash, so the enclosed
+text can disappear before the payload reaches the board.
+
+```bash
+# WRONG
+python3 scripts/agent_coordination.py log codex-primary-orchestrator "Use `agent_coordination.py list` here"
+
+# CORRECT
+python3 scripts/agent_coordination.py log codex-primary-orchestrator 'Use `agent_coordination.py list` here'
+```
+
+Rules:
+
+- Use single quotes for literal board text when possible.
+- If you need interpolation, escape backticks or use a here-doc / printf.
+- Treat missing literal code spans in posted text as a sender-side quoting bug
+  before suspecting the bus, storage, or receiver.
