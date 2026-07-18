@@ -32,6 +32,14 @@ The mother plan is active, not archive. Later documents should cite it as the so
 | Perpetua-Tools | `docs/phase-0-specifications/PATTERN-SYNTHESIS.md` | Security and pattern synthesis feeding gossip, split-brain, and witness recovery. |
 | Perpetua-Tools | `docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md` | Threat-model companion for Phase 10+ Byzantine/witness direction. |
 
+## Audit Trail and Closure Checklist
+
+| Artifact | Document | Relationship |
+|---|---|---|
+| Closure audit | [`../../../references/coordination-and-plans-completeness-audit-2026-07-18.md`](../../../references/coordination-and-plans-completeness-audit-2026-07-18.md) | Inventory of open/closed/ambiguous docs across PT and orama; use it to justify why a row is still open or has been closed. |
+| Closure plan | [`../../../references/phase0-and-orama-open-work-closure-plan-2026-07-18.md`](../../../references/phase0-and-orama-open-work-closure-plan-2026-07-18.md) | Wave order and disposition plan for the open items; use it as the execution checklist. |
+| Orama hub | [`README.md`](README.md) | Starting point for the fleet-mesh lineage and the active cross-repo navigation graph. |
+
 ## System Navigation Graph
 
 This is the fleet-mesh navigation hub, not a replacement architecture. Follow
