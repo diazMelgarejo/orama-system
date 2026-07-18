@@ -47,6 +47,35 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-07-18 — ClinePass route auth must be verified before fan-out | Codex
+
+**Scope:** orama-system + Perpetua-Tools cross-repo agent dispatch
+
+**What changed:** Added a parallel `clinepass-deepseek-flash` skill for
+non-interactive Cline fan-out using the ClinePass DeepSeek V4 Flash route at
+high reasoning. The existing GLM ClinePass route remains valid; this is an
+additional low-cost/free-route profile, not a replacement.
+
+**Operational lesson:** Do not treat a ClinePass model slug as sufficient proof
+that Cline is authenticated/configured to ClinePass. A headless smoke run can
+accept the CLI flag shape while still routing through another provider, where
+the ClinePass model slug is invalid. Run a harmless provider-auth smoke test
+before dispatch, and repair Cline auth/config rather than silently switching
+models.
+
+**Cross-references:**
+
+- New skill: `bin/orama-system/skills/clinepass-deepseek-flash/SKILL.md`
+- PT companion lesson: `../../perplexity-api/Perpetua-Tools/.agent/memory/semantic/LESSONS.md`
+- Existing Cline route: `bin/orama-system/skills/cline-openclaw-agent/SKILL.md`
+- Kimi fan-out parallel: `bin/orama-system/skills/kimi-agent/SKILL.md`
+
+**Validation:** EXA found the official Cline CLI/ClinePass docs; Firecrawl
+scraped the Cline CLI overview; local `cline task --help` verified the installed
+CLI flag shape; the new skill validated with `quick_validate.py`.
+
+---
+
 ### 2026-07-18 — Private literals and local topology stay local | Codex
 
 **Scope:** orama-system + Perpetua-Tools cross-repo guard parity
