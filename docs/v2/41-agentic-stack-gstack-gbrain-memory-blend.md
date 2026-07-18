@@ -4,6 +4,7 @@
 > **Status:** Active planning doc (v1 operational path in Perpetua-Tools today)  
 > **Date:** 2026-06-26  
 > **Cross-refs:** [`19-gstack-optional-integration.md`](19-gstack-optional-integration.md), [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md), [`11-idempotency-and-guard-patterns.md`](11-idempotency-and-guard-patterns.md), orama `scripts/install-openclaw-skills.sh`, PT `scripts/git/agentic-stack-vendor.md`
+> **Portable-memory invariant:** [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md)
 
 ---
 
@@ -226,6 +227,11 @@ When `upgrade --dry-run` shows a changed file that also exists in PT `.agent/`:
 
 **Never** `git add` inside `vendor/agentic-stack/`. Local patches to upstream belong in
 PT scripts (like `ecc-local-additions.patch` pattern) only when absolutely necessary.
+
+Before committing any `.agent/` blend, run the portable-memory guard from
+[`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md):
+source rows, archived candidates, episodic logs, and rendered views must be
+clean, and concrete local fragments must come from the local-only registry.
 
 ---
 
