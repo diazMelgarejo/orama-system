@@ -47,6 +47,37 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-07-18 — Clean replacement PR after scrub/reanchor churn | Codex + Claude
+
+**Scope:** orama-system + Perpetua-Tools git-history-surgery doctrine
+
+**What changed:** The git-history-surgery skill now treats metadata scrub,
+current-tree hygiene, PR-unique blob hygiene, and repository-wide all-ref blob
+hygiene as separate proof gates. It also documents the clean replacement PR
+option: when the final PR tree is correct but intervening branch history is
+contaminated or too noisy to review safely, preserve the old ref, replay the
+final tree onto current `origin/main`, prove the saved diff matches, then open a
+replacement PR.
+
+**Operational lesson:** Tree-twin reanchor is the right first diagnostic after a
+rewrite, but blob changes can make an exact twin impossible. In that Case C,
+switch from "preserve this branch ancestry" to "preserve this reviewed content"
+and keep scope language precise. A clean PR-unique scan does not prove inherited
+main history is clean.
+
+**Cross-references:**
+
+- Skill entrypoint: `bin/orama-system/skills/git-history-surgery/SKILL.md`
+- Reanchor doctrine: `bin/orama-system/skills/git-history-surgery/references/reanchor-after-rewrite.md`
+- Expunge + clean replacement checklist: `bin/orama-system/skills/git-history-surgery/references/expunge-contaminated-history.md`
+- PT companion memory: `../../perplexity-api/Perpetua-Tools/.agent/memory/working/PR258_CODE_REVIEW_COORDINATION_SYNTHESIS_2026-07-18.md`
+
+**Validation rule:** Before declaring scrub/surgery complete, name the exact
+scope that passed and cite the evidence for that scope. If repository-wide
+all-ref scanning is deferred or still has inherited hits, say so.
+
+---
+
 ### 2026-07-18 — ClinePass route auth must be verified before fan-out | Codex
 
 **Scope:** orama-system + Perpetua-Tools cross-repo agent dispatch
