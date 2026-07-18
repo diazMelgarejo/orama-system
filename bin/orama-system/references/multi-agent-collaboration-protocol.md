@@ -17,6 +17,25 @@ git log --oneline origin/main..HEAD   # your uncommitted commits
 git log --oneline HEAD..origin/main   # other agents' recent pushes
 ```
 
+## Board Job Source-Branch Invariant
+
+For work claimed from a coordination board, "same board" and "same repo" are
+not enough. Board state is shared, but checked-out branches and file state are
+per-worktree. Every write-capable board job must resolve a canonical source
+line before editing:
+
+1. Record the board row's `source_ref` and `expected_base_sha` (or derive them
+   from the PR head / assignment branch and post them back to the row).
+2. Create a fresh worktree from that exact `source_ref`, not from the agent's
+   primary checkout or a convenient preservation branch.
+3. Verify `git rev-parse HEAD` equals `expected_base_sha`.
+4. If the ref moved, stop, refresh the board row, and re-plan from the new tip.
+5. If another agent has uncommitted work on that source line, wait for a commit
+   or explicit handoff; do not stash, discard, or overwrite their dirty files.
+
+This prevents the failure mode where agents coordinate on the same GossipBus row
+while unknowingly editing incompatible branch lineages.
+
 ## Scope Claim (first write of every session)
 
 Append to `.claude/lessons/LESSONS.md` before touching any file:
@@ -206,6 +225,7 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 | `"merged": true` on GitHub ≠ content on target branch | Always verify: `git diff origin/main...origin/<branch>` |
 | CodeRabbit re-scans on every push | Run post-merge sweep after **every** merge, not once |
 | PR branch base may be stale vs current main | Check `git merge-base` before simulating |
+| Board job has no source ref / base SHA | Add them before editing; then work from a fresh worktree at that exact ref |
 | Draft PRs cannot be merged via API | Run `markPullRequestReadyForReview` GraphQL mutation first |
 | `scan_tracked_secrets` catches token in commit body | Never paste tokens in PR titles, commit messages, or docs |
 
@@ -226,5 +246,6 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 - [`skills/oramasys-method/references/integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md) — **canonical PR merge / harmonization doctrine (orama-way)**
 - [`skills/git-history-surgery/SKILL.md`](../skills/git-history-surgery/SKILL.md) — history rewrite, re-anchor after rewrite, version-bump commit discipline; contains the Multi-Agent Branch Merge quick reference
 - [`skills/using-git-worktrees/SKILL.md`](../skills/using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge-protocol trigger
+- [`docs/v2/22-worktree-parallel-agents.md`](../../docs/v2/22-worktree-parallel-agents.md) — board-job source-ref pinning and worktree bootstrap doctrine
 - [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry, Nested-Branch Merge Protocol table, cross-links to PT AGENTS.md
 - [`PT/.agent/AGENTS.md` § Multi-agent merge conflict protocol](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md) — harness-agnostic portable brain entry point

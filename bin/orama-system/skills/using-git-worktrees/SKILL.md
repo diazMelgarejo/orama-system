@@ -44,6 +44,26 @@ Both yes? → Worktree.  Run Step 1.
 Either no? → Use canonical checkout.  Stop here.
 ```
 
+### Board Jobs Require a Source Ref
+
+If the task came from a coordination board / GossipBus queue / PR handoff, a
+fresh worktree is mandatory before writes unless the board row explicitly says
+the canonical checkout is the source. "Same board" and "same repo" do not imply
+shared checked-out files.
+
+Before editing:
+
+1. Read or derive the row's `source_ref` and `expected_base_sha`.
+2. Create the worktree from that exact `source_ref`.
+3. Verify `git rev-parse HEAD` equals `expected_base_sha`.
+4. If it does not, stop and update the board; do not continue from a stale or
+   convenient local branch.
+5. If another agent has dirty files in the source worktree, wait for their
+   commit or explicit handoff. Never stash or discard another agent's work.
+
+Full doctrine: [`references/multi-agent-collaboration-protocol.md`](../../references/multi-agent-collaboration-protocol.md)
+§ Board Job Source-Branch Invariant.
+
 ---
 
 ## Step 1 — Bootstrap
