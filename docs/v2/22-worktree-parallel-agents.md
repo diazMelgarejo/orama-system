@@ -14,6 +14,10 @@ Will this agent WRITE files AND another agent is also writing?
   No  → use the canonical checkout.  Done.
 ```
 
+**Board jobs:** if work came from a coordination board, first pin
+`source_ref` + `expected_base_sha`, then create the worktree from that exact
+source. Shared board state is not shared file state.
+
 ---
 
 ## 1. When to Create a Worktree
@@ -29,6 +33,11 @@ Will this agent WRITE files AND another agent is also writing?
 1. Agent will write/modify files
 2. Another agent is concurrently writing to the same repo
 3. The work lives on a separate named branch
+
+**Coordination-board trigger — ALWAYS true for write jobs:** the board row or
+handoff must name a `source_ref` and `expected_base_sha` before the agent edits.
+If either is missing, derive it from the PR/assignment branch, post it back to
+the board, and only then bootstrap a fresh worktree from that ref.
 
 **Stay on canonical — ANY of these is enough:**
 - Read-only work (code review, semantic search, test runs against committed code)
@@ -83,6 +92,22 @@ Bootstrap does (in order):
 4. **`.gitignore`**: appends macOS dedup patterns (`*\ 2/`, `*\ 2.*`, `*\ 3/`, `*\ 3.*`)
 5. **Port offset**: assigns `ENV_OFFSET = index × 100`, writes `.worktree-env`
 6. **Prints summary**: worktree path, branch, ENV_OFFSET, gbrain source
+
+### Board-Job Base Verification
+
+For board / GossipBus / PR-handoff jobs, verify the checked-out base before the
+first edit:
+
+```bash
+git fetch origin --prune
+git rev-parse HEAD
+# must equal the board row's expected_base_sha
+```
+
+If `HEAD` differs, stop and refresh the board row. Do not continue from a
+primary checkout, preservation branch, stale scratch branch, or another
+agent's dirty worktree. The common failure is treating "same board / same repo"
+as enough; it is not.
 
 ---
 
@@ -260,6 +285,7 @@ alias hygiene="python3 scripts/review/repo_hygiene.py ."
 | D7 | `.cursor/environment.json` port collisions | bootstrap writes `ENV_OFFSET`; ports offset by N×100 |
 | D8 | Multi-Win pool ignores extra devices | future PT enhancement; current: 1 Win is correct |
 | D9 | Machine-specific paths leak into committed docs | run `python3 scripts/review/repo_hygiene.py .` before every commit |
+| D10 | Board jobs start from different local branches | board row must pin `source_ref` + `expected_base_sha`; bootstrap a fresh worktree from that exact source |
 
 ---
 
@@ -278,6 +304,7 @@ Invoke with `/using-git-worktrees` or via the `Skill` tool.
 ## Related Docs
 
 - Design spec: `docs/superpowers/specs/2026-05-24-worktree-parallel-agents-design.md`
+- Multi-agent protocol: `bin/orama-system/references/multi-agent-collaboration-protocol.md`
 - Dogfood log: `.experience-log/dogfood-notes.md` (in `worktree-doctrine` worktree)
 - Bootstrap script: `scripts/worktree-bootstrap.sh`
 - Build order: `docs/v2/04-build-order.md`
