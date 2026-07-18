@@ -47,6 +47,34 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-07-18 — Private literals and local topology stay local | Codex
+
+**Scope:** orama-system + Perpetua-Tools cross-repo guard parity
+
+**What changed:** The repositories now treat private owner identity literals,
+forbidden attribution literals, live device topology, and workstation-specific
+paths as local-only inputs. Tracked code may define policy, runtime loaders,
+synthetic fixtures, and hygiene checks, but it must not contain the actual
+values or encoded forms.
+
+**Operational lesson:** Do not stop using `.agent/memory/**`; sanitize and
+commit it when it carries durable knowledge. The durable rule is that memory,
+docs, templates, tests, hooks, commit messages, and PR text must describe the
+category without quoting private literals.
+
+**Cross-references:**
+
+- Orama memory note: `.agent/memory/working/PRIVATE_LITERALS_AND_LOCAL_TOPOLOGY_V2_LESSON_2026-07-18.md`
+- PT companion memory note: `../../perplexity-api/Perpetua-Tools/.agent/memory/working/PRIVATE_LITERALS_AND_LOCAL_TOPOLOGY_V2_LESSON_2026-07-18.md`
+- Orama policy discussion: `docs/wiki/08-git-hygiene-and-branching.md`
+- PT rendered lessons: `../../perplexity-api/Perpetua-Tools/docs/LESSONS.md`
+
+**Validation rule:** Before committing related work, run a case-insensitive
+tracked-file scan for private-literal categories and encoded forms, then run
+repo hygiene.
+
+---
+
 ### 2026-07-07 — PR description append-only lesson (Codex failure + remediation) | Claude
 
 **Session:** PR #141 lesson recording

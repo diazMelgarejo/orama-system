@@ -12,18 +12,9 @@ LESSON="${LESSONS_DIR}/perpetua-tools-git-attribution.md"
 mkdir -p "$OPENCLAW_DIR" "$LESSONS_DIR"
 chmod 700 "$OPENCLAW_DIR" "$LESSONS_DIR" 2>/dev/null || true
 
-decode_b64_line() {
-  local raw decoded
-  raw="$(printf '%s' "$1" | base64 -d 2>/dev/null || true)"
-  decoded="$(printf '%s' "$raw" | tr -d '[:space:]')"
-  [[ -n "$decoded" ]] || return 0
-  printf '%s\n' "$decoded"
-}
-
 {
   echo "# Banned attribution tokens (one per line, case-insensitive substring match)"
-  decode_b64_line "ZGFydGguc2VyaW91cw=="
-  decode_b64_line "bmltYm9zYQ=="
+  echo "REDACTED"
 } >"$PATTERNS"
 chmod 600 "$PATTERNS"
 
@@ -34,7 +25,7 @@ Patterns: `~/.cursor/openclaw/banned-attribution-patterns`
 
 Never copy tokens into tracked files, commit messages, or GitHub.
 
-Primary author: cyre + owner emails, or Codex — not Cursor Agent as author.
+Primary author: cyre + configured owner emails, or Codex — not Cursor Agent as author.
 GUIDE_EOF
 chmod 600 "$GUIDE"
 
