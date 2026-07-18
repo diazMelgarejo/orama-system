@@ -329,7 +329,7 @@ Before v2.0 kernel construction begins:
 
 **No absolute personal paths in any tracked file.**
 
-Workstation paths (`/Users/<realname>/`, `/home/<realname>/`) committed to a repo:
+Concrete personal home-directory paths committed to a repo:
 - leak developer identity and directory layout in public diffs
 - break portability (paths are machine-local)
 - violate opsec (directory structure = attack surface for social engineering)
@@ -339,7 +339,7 @@ Workstation paths (`/Users/<realname>/`, `/home/<realname>/`) committed to a rep
 ### Canonical lints (`scripts/review/repo_hygiene.py`)
 
 ```python
-# Blocks /Users/<realname>/ and /home/<realname>/ in all tracked files
+# Blocks concrete personal home-directory paths in all tracked files
 PERSONAL_PATH_PATTERN = re.compile(r"(/Users/|/home/)([A-Za-z][A-Za-z0-9._-]+)/")
 
 # Allowlisted placeholder usernames (doc examples, not real leaks)
@@ -390,7 +390,7 @@ When `perpetua-core` and `oramasys` gain their own CI pipelines in Phase 3–4:
 
 ### Invariants for all code in this system
 
-1. Never commit `/Users/<realname>/` or `/home/<realname>/` in any tracked file.
+1. Never commit concrete personal home-directory paths in any tracked file.
 2. Machine-local config files (e.g., `.claude/settings.local.json`) go in `.gitignore`,
    never in tracking.
 3. Absolute paths in CI scripts use `$GITHUB_WORKSPACE`, `$REPO_ROOT`, or `$(git rev-parse --show-toplevel)`.

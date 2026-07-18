@@ -4,7 +4,7 @@
 > **Date:** 2026-05-24
 > **Status:** Design — pending implementation plan in `docs/plans/2026-05-24-periscope-l4-integration-plan.md`
 > **Repo:** `diazMelgarejo/periscope` (fork of `latentsignal-org/periscope`, upstream tracks `wesm/agentsview`)
-> **Local path:** `~/code/oramasys/tools/periscope` (cloned 2026-05-24, all 3 branches local)
+> **Local path:** `<v2-workspace>/tools/periscope` (cloned 2026-05-24, all 3 branches local)
 
 ### Branch model (canonical)
 

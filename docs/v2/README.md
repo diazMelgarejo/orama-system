@@ -61,6 +61,7 @@ Local-first + airgapped capable. Dependency-minimal. MIT-licensed (matches LangC
 | **D22** | oramaclaw orbit plugin | All OpenClaw + AlphaClaw lifecycle management lives in the `oramaclaw` Python package, which depends **only** on `perpetua-core` primitives. It registers as an orbit plugin (not baked into the kernel). V1 migration is dogfood for the v2 plugin API (2026-06-20 — see `40-oramaclaw-lifecycle-plugin.md`) |
 | **D23** | Single-operator-LAN threat-model descope | BFT/Sybil-resistant P2P patterns (witness quorum, reputation-decay, equivocation) must not be wired into production for a topology that is actually a single operator's own LAN, regardless of node count — a Q1-Q3 premise check (real witnesses? real trust boundary? real observed failure mode?) is required before wiring any P2P-derived adversarial pattern (2026-07-12 — see `45-single-operator-lan-threat-model-descope.md`) |
 | **D24** | Repository standard (cross-cutting, additive) | Repo root stays minimal; everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay in `.gitignore`d folders, never committed alongside API keys, personal paths, doxxing material, or SecOps-sensitive content. Additive — builds on top of every other standard in this tree, never overrides a stricter rule (2026-07-20 — see `46-repository-standard.md`) |
+| **D25** | Portable-memory local-topology invariant | Tracked policy names categories; concrete forbidden identity, attribution, device, path, workspace, and topology fragments live only in an off-repo local-only registry. Portable memory guards must scan source rows, archived candidates, episodic logs, and rendered views without printing matched values (2026-07-18 — see `47-portable-memory-local-topology-invariant.md`) |
 
 Full rationale and the Perplexity/GPT/Gemini/Grok evidence behind each decision is in [`00-context-and-decisions.md`](./00-context-and-decisions.md).
 
@@ -226,10 +227,11 @@ orama-system/docs/v2/
 ├── 43-gossipbus-mesh-transport.md  ← frugal GossipBus delta sync between orama/PT particles; LAN v2.1; BLE/bitchat-class optional v3
 ├── 44-docs-v2-skills.md  ← concise modular v2 skill implementation plan; SKILL.md orchestrator rule; 200-line target and 500-line ceiling
 ├── 45-single-operator-lan-threat-model-descope.md  ← D23: descope BFT/Sybil-resistant patterns (witness quorum, reputation-decay, equivocation) for topologies that are actually a single operator's own LAN, regardless of node count; Q1-Q3 premise check before wiring any P2P-derived adversarial pattern
-└── 46-repository-standard.md  ← cross-cutting, additive repo-layout standard: root stays minimal, everything executable under /src, no root-level scripts/tests/tools/examples, data output + binaries gitignored, never commit secrets/personal paths/doxxing/SecOps material
+├── 46-repository-standard.md  ← cross-cutting, additive repo-layout standard: root stays minimal, everything executable under /src, no root-level scripts/tests/tools/examples, data output + binaries gitignored, never commit secrets/personal paths/doxxing/SecOps material
+└── 47-portable-memory-local-topology-invariant.md  ← cross-cutting portable-memory rule: tracked docs name categories only; concrete forbidden fragments live in local-only registries
 ```
 
-> **Next free slot: `47-`**
+> **Next free slot: `48-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

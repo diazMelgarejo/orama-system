@@ -50,7 +50,7 @@ Will this agent write files?
 ## 2. Canonical Worktree Location
 
 ```
-~/code/oramasys/worktrees/<slug>/
+<v2-workspace>/worktrees/<slug>
 ```
 
 **Slug format:** `yyyy-mm-dd-<brief-purpose>` — e.g. `2026-05-24-worktree-doctrine`
@@ -58,7 +58,7 @@ Will this agent write files?
 Why external to the repo directory:
 - Avoids `.gitignore` conflicts with tracked files
 - Prevents macOS Finder `* 2` dedup contamination
-- Lets multiple orama-family repos share the same hub at `~/code/oramasys/worktrees/`
+- Lets multiple orama-family repos share the same hub under `<v2-workspace>/worktrees/`
 
 ---
 
@@ -70,7 +70,7 @@ scripts/worktree-bootstrap.sh <repo-path> <branch> <slug> [gbrain-source-id]
 
 # Example
 scripts/worktree-bootstrap.sh \
-  ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system \
+  <repo-path> \
   feat/my-feature \
   2026-05-24-my-feature \
   orama-src
@@ -78,7 +78,7 @@ scripts/worktree-bootstrap.sh \
 
 Bootstrap does (in order):
 1. **Pre-flight**: removes stale `.git/*.lock` files; detects orphan refs with spaces
-2. **`git worktree add`** `~/code/oramasys/worktrees/<slug>` `-b <branch>` (or attaches if the worktree already exists)
+2. **`git worktree add`** `<v2-workspace>/worktrees/<slug>` `-b <branch>` (or attaches if the worktree already exists)
 3. **`.gbrain-source`**: writes from argument, or copies from canonical if omitted
 4. **`.gitignore`**: appends macOS dedup patterns (`*\ 2/`, `*\ 2.*`, `*\ 3/`, `*\ 3.*`)
 5. **Port offset**: assigns `ENV_OFFSET = index × 100`, writes `.worktree-env`
@@ -203,7 +203,7 @@ ls | grep " 2$" || true
 Manual cleanup (if skill unavailable):
 ```bash
 # 1. From canonical checkout:
-git worktree remove ~/code/oramasys/worktrees/<slug>
+git worktree remove `<v2-workspace>/worktrees/<slug>`
 
 # 2. Verify
 git worktree list
@@ -231,7 +231,7 @@ Must exit 0 before committing. Catches:
 | Rule | What it blocks | Correct substitute |
 |------|---------------|--------------------|
 | `scan_openclaw_workstation_layout` | hardcoded machine-local OpenClaw tree path | `$OPENCLAW_ROOT` |
-| `scan_personal_paths` | `/Users/<name>/…` absolute paths | `~`, `$REPO_ROOT`, `<workspace>` |
+| `scan_personal_paths` | concrete personal home-directory paths | `~`, `$REPO_ROOT`, `<workspace>` |
 | `scan_bidi_controls` | Hidden Unicode direction controls (Trojan-Source) | remove |
 | `scan_legacy_names` | Banned terminology (coordinator → orchestrator, etc.) | correct term |
 
