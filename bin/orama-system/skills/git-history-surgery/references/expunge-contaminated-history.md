@@ -43,6 +43,10 @@ touched a public remote.
      | xargs -I{} sh -c 'git cat-file -p {} 2>/dev/null | grep -q "<token>" && echo {}'
    ```
 
+   If the real patterns are private identity literals or secrets, do not paste
+   them into shell history. Read them from a local-only ignored pattern file and
+   print only labels/counts in reports.
+
 3. Choose a strategy:
 
    | Scenario | Strategy |
@@ -50,6 +54,7 @@ touched a public remote.
    | Short contiguous range, about 10 commits or fewer | Anchor + cherry-pick |
    | Many commits, scattered, or all-history scrub | `git filter-repo` |
    | Secret in a single blob, message clean | `git filter-repo --replace-text` |
+   | Final PR tree is correct, but intermediate PR commits contain contaminated blobs or conflict noise | Clean replacement PR from current `origin/main` |
 
 4. Ensure no in-flight work and tag the pre-scrub tip:
 
@@ -141,6 +146,104 @@ titles, bodies, commit messages, or shell history.
      | xargs -I{} sh -c 'git cat-file -p {} 2>/dev/null | grep -l "<token>"'
    ```
 
+   Prefer a local-only pattern-file scanner for real incidents. It should:
+
+   - load forbidden literals from ignored local config;
+   - scan reachable blobs from `git rev-list --objects --all`;
+   - report only labels, object ids, paths, and counts;
+   - never print matched literal values or matched lines;
+   - distinguish current-tree clean from all-ref blob clean.
+
+   Don't invent a new pattern-file format per incident. Reuse the abstraction
+   PT already ships for current-tree scanning
+   (`scripts/review/repo_hygiene.py`'s `private_literal_values(root, key)`,
+   backed by a git-ignored `.verboten-literals.local` at the OpenClaw workspace
+   root — `key=value` lines, `#` comments, resolvable via `OPENCLAW_VERBOTEN_LITERALS`
+   env override). The all-ref scanner below is that same loader pointed at
+   every reachable blob instead of the working tree:
+
+   ```python
+   #!/usr/bin/env python3
+   """All-ref blob scan for forbidden literals. Prints labels/counts/paths only
+   -- never a matched literal or matched line. Run from the repo root.
+
+   Scope matters: scan HEAD, origin/main, and the PR-unique range
+   (origin/main..HEAD) separately. Inherited origin/main hits are pre-existing
+   repository-wide debt, not evidence the PR-scoped scrub failed -- but do not
+   round PR-unique hits down to zero without checking them explicitly.
+   """
+   import subprocess
+   import sys
+   from collections import Counter
+   from pathlib import Path
+
+   sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "review"))
+   from repo_hygiene import private_literal_values, openclaw_workspace_root  # noqa: E402
+
+   KEYS = ("owner_gmail", "owner_name", "forbidden_attribution")
+
+
+   def load_tokens(root: Path) -> list[str]:
+       return [
+           tok.casefold()
+           for key in KEYS
+           for tok in private_literal_values(root, key)
+       ]
+
+
+   def scan_refs(root: Path, *revs: str) -> Counter:
+       """revs: any git revision args, e.g. ('HEAD',) or ('origin/main..HEAD',)."""
+       tokens = load_tokens(root)
+       if not tokens:
+           print("no local pattern file found -- nothing to scan", file=sys.stderr)
+           return Counter()
+       objects = subprocess.run(
+           ["git", "-C", str(root), "rev-list", "--objects", *revs],
+           check=True, text=True, capture_output=True,
+       ).stdout.splitlines()
+       hits: Counter = Counter()
+       for line in objects:
+           parts = line.split(maxsplit=1)
+           if not parts:
+               continue
+           oid = parts[0]
+           kind = subprocess.run(
+               ["git", "-C", str(root), "cat-file", "-t", oid],
+               check=False, text=True, capture_output=True,
+           ).stdout.strip()
+           if kind != "blob":
+               continue
+           blob = subprocess.run(
+               ["git", "-C", str(root), "cat-file", "-p", oid],
+               check=False, text=True, capture_output=True, errors="replace",
+           ).stdout
+           blob_lc = blob.casefold()
+           for tok in tokens:
+               if tok in blob_lc:
+                   hits[oid[:12]] += 1
+       return hits
+
+
+   if __name__ == "__main__":
+       root = Path.cwd()
+       for label, revs in (
+           ("HEAD", ("HEAD",)),
+           ("origin/main", ("origin/main",)),
+           ("origin/main..HEAD (PR-unique)", ("origin/main..HEAD",)),
+       ):
+           hits = scan_refs(root, *revs)
+           print(f"{label}: {sum(hits.values())} hits across {len(hits)} blobs")
+   ```
+
+   Output looks like `HEAD: 219 hits across 187 blobs` -- a count and a scope,
+   never a literal or a matched line. Treat a nonzero PR-unique count as a real
+   blocker; treat a nonzero `origin/main`-only count as tracked, separate,
+   repository-wide debt (see "Do not confuse re-anchor with scrub completion" in
+   `reanchor-after-rewrite.md`).
+
+   If this scan times out or returns hits, the operation is not history-wide
+   complete. Record the gap and either continue the scrub or explicitly defer it.
+
 13. Verify reflog is drained:
 
    ```bash
@@ -152,6 +255,85 @@ titles, bodies, commit messages, or shell history.
 
 15. Confirm secret rotation, if applicable.
 
+## Clean Replacement PR
+
+Use this when a PR branch has the right final content but the branch's
+intervening commits are the problem: contaminated historical blobs, repeated
+failed replay commits, synthetic conflict commits, or a review surface so noisy
+that preserving the ancestry increases risk.
+
+This is not a normal squash for convenience. It is a containment maneuver. Keep
+the old branch/PR reachable as evidence until the replacement is verified, but
+do not make reviewers or future agents reason through poisoned intermediate
+history.
+
+Procedure:
+
+1. Fetch and record immutable anchors:
+
+   ```bash
+   git fetch origin --prune
+   git rev-parse origin/main
+   git ls-remote origin refs/heads/<old-pr-branch>
+   git tag safety/<old-pr-branch>-before-clean-replacement-$(date +%Y%m%d) <old-tip>
+   ```
+
+2. Save a pristine content snapshot of the old PR before touching it:
+
+   ```bash
+   git diff --binary origin/main...origin/<old-pr-branch> > /tmp/<old-pr>.patch
+   git diff --stat origin/main...origin/<old-pr-branch> > /tmp/<old-pr>.stat
+   git diff --name-status origin/main...origin/<old-pr-branch> > /tmp/<old-pr>.name-status
+   ```
+
+3. Create a fresh branch from current `origin/main`:
+
+   ```bash
+   git worktree add -b <replacement-branch> /tmp/<replacement-worktree> origin/main
+   cd /tmp/<replacement-worktree>
+   ```
+
+4. Replay the final reviewed tree, not the contaminated commits:
+
+   ```bash
+   git checkout safety/<old-pr-branch>-before-clean-replacement-YYYYMMDD -- .
+   ```
+
+5. Scrub the current tree using local-only pattern files. Report labels/counts,
+   never literal values or matching lines.
+
+6. Commit once, with a sanitized message explaining that this is a clean content
+   replay after branch-scope expungement.
+
+7. Prove equivalence and scope:
+
+   ```bash
+   git diff --quiet safety/<old-pr-branch>-before-clean-replacement-YYYYMMDD HEAD
+   git diff --stat origin/main...HEAD
+   git diff --name-status origin/main...HEAD
+   ```
+
+   The first command must be clean when the goal is to preserve the final tree.
+   Any delta against the saved old PR snapshot must be explained, usually as
+   intentional local memory or documentation added after the old remote snapshot.
+
+8. Run hygiene, targeted tests, and a PR-unique blob scan:
+
+   ```bash
+   python3 scripts/review/repo_hygiene.py .
+   python3 -m pytest -q <targeted-tests>
+   # local-only scanner: compare origin/main, HEAD, and origin/main..HEAD
+   ```
+
+   The required proof is `origin/main..HEAD` has zero hits for the configured
+   forbidden labels. Hits already inherited from `origin/main` are separate
+   repository-wide cleanup, not a blocker for the replacement PR unless the user
+   explicitly expands scope.
+
+9. Push the replacement branch, open a new PR, and close the old PR with a short
+   sanitized audit note that points reviewers to the replacement. Do not force
+   update the old branch unless the user explicitly chooses that path.
+
 ## Common mistakes
 
 | Mistake | Symptom | Fix |
@@ -160,3 +342,4 @@ titles, bodies, commit messages, or shell history.
 | Forgot `git remote prune origin` | `git branch -ra` still lists contaminated refs | Prune remotes, then delete local refs |
 | Used `git pull` after rewrite | Bad objects resurrect locally | Fresh clone |
 | Skipped secret rotation | Secret remains valid outside git | Rotate immediately |
+| Kept the old PR branch after deciding on replacement | Review still sees contaminated or noisy ancestry | Close the old PR and open a clean replacement after saving anchors |

@@ -39,7 +39,19 @@ LM Studio host, run
    Use the re-anchor reference and tree-twin scan. Do not trust ahead/behind counts.
 3. Is this only a normal bad commit?
    Do not perform history surgery. Use a normal PR or revert.
-4. Mac ↔ Win (or any peer) must sync `main` while the worktree is dirty?
+4. Did the scrub only rewrite metadata/messages while file blobs may also be
+   contaminated?
+   Treat metadata scrub, current-tree sanitization, PR-branch replay, and
+   all-ref blob scanning as separate verification gates. Do not call a scrub
+   globally complete until every required gate for the stated scope passes.
+5. Is an open PR's final tree correct, but its intermediate branch history
+   contains contaminated or chaos-generating commits?
+   Use the clean replacement PR option in
+   [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md):
+   preserve the old PR/ref, replay the final tree onto current `origin/main` as
+   a fresh branch, prove tree equivalence, close the old PR, and open a sanitized
+   replacement PR.
+6. Mac ↔ Win (or any peer) must sync `main` while the worktree is dirty?
    Use [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) —
    stash → `pull --ff-only` → pop → commit → push. Never `reset --hard` or force-push `main`.
 
@@ -50,9 +62,18 @@ LM Studio host, run
 - Never force-push without a recorded lease target.
 - Never judge rewritten branches by `merge-base`, `rev-list --count`, or GitHub
   ahead/behind alone.
+- Never interpret a branch suddenly showing hundreds of commits after a scrub as
+  hundreds of semantic changes without first checking tree twins. It is usually
+  rewritten ancestry.
 - Never flatten branches to `origin/main` unless the user explicitly asks to
   destroy their distinct branch identity.
 - Never treat a clean git rewrite as secret remediation. Rotation is separate.
+- Never treat a clean re-anchor as proof that contaminated blobs were removed
+  from all refs. Re-anchor repairs graph ancestry; blob expungement needs its
+  own all-ref scan.
+- Never keep a contaminated PR's intervening commits just to preserve review
+  continuity. When the final tree is the artifact worth keeping, a replacement
+  PR from a clean branch can be the safer, more reviewable result.
 - **Platform line endings:** do not convert Windows-serving files (`platform/windows/**`,
   `*.cmd`, `*.bat`, `*.ps1`) to LF from macOS/Linux. Mac/Linux-owned sources stay LF.
   See [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md).
@@ -71,6 +92,11 @@ bash scripts/git/reanchor_scan.sh <repo> origin/main [heads|remotes|all]
 git log --all --format="%B" | grep -i "<token>"   # must print nothing
 git reflog --all | wc -l                          # should be near-zero after scrub
 ```
+
+If the incident involved forbidden file contents, memory files, local identity
+literals, or secrets, also run an all-ref blob scan with local-only pattern
+input. The scanner must report counts/labels only, not literal values. A clean
+working tree is not enough evidence for an all-history claim.
 
 For PR branch cleanup without contamination, rebase or merge normally; do not use
 this skill unless history was rewritten or contaminated.
