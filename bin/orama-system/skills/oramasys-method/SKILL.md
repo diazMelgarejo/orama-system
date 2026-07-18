@@ -149,6 +149,10 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - Run tests / programmatic check (never visual only)
 - Confirm the artifact actually changed: re-read it, check the signature
 - For multi-agent work: confirm each subagent output before aggregating
+- For memory/security policy edits: apply the portable-memory local-topology
+  invariant in `docs/v2/47-portable-memory-local-topology-invariant.md` —
+  tracked rules name categories only; concrete local fragments stay in
+  local-only registries outside git.
 
 ---
 

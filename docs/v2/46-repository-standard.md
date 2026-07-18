@@ -31,6 +31,13 @@ folders. **Never commit:**
 - doxxing material
 - SecOps-sensitive material
 
+**Tracked policy names categories, not concrete local-only fragments.**
+If a rule forbids a local identity, attribution marker, device, endpoint,
+path, workspace, or topology fragment, the exact fragment belongs in a
+local-only registry outside git. Tracked docs and tests use abstract wording
+or synthetic registry fixtures. See
+[`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md).
+
 ---
 
 ## Why this is additive, not a conflict
@@ -60,4 +67,5 @@ inferred per-plan.
 - [`23-security-preconditions.md`](23-security-preconditions.md) — LAN/auth preconditions, read first alongside this standard
 - [`24-security-first-platform.md`](24-security-first-platform.md) — security as a first-class product feature
 - [`27-git-governance-zero-fragmentation.md`](27-git-governance-zero-fragmentation.md) — companion git-workflow standard
+- [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md) — companion portable-memory and local-topology standard
 - `orama-system` [`references/post-review-micro-remediation.md`](../../bin/orama-system/references/post-review-micro-remediation.md) — companion review-remediation standard
