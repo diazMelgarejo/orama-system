@@ -15,11 +15,40 @@ def repo_relative(path: Path, root: Path) -> str:
     return path.relative_to(root).as_posix()
 
 
+def openclaw_workspace_root(root: Path) -> Path:
+    for candidate in (root, *root.parents):
+        if (candidate / "orama-system").is_dir():
+            return candidate
+    return root
+
+
+def private_literal_values(root: Path, key: str) -> list[str]:
+    configured_path = os.getenv("OPENCLAW_VERBOTEN_LITERALS")
+    path = Path(configured_path) if configured_path else openclaw_workspace_root(root) / ".verboten-literals.local"
+    if not path.is_file():
+        return []
+    values: list[str] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return []
+    for raw in lines:
+        raw = raw.split("#", 1)[0].strip()
+        if not raw or "=" not in raw:
+            continue
+        raw_key, value = raw.split("=", 1)
+        if raw_key.strip() != key:
+            continue
+        value = "".join(value.split())
+        if value:
+            values.append(value)
+    return values
+
+
 APPROVED_IDENTITIES = {
     ("cyre", "Lawrence@cyre.me"),
     ("cyre", "diazMelgarejo@gmail.com"),
     ("cyre", "Lawrence@bettermind.ph"),
-    ("cyre", "Lawrence.Melgarejo@gmail.com"),
     ("Codex", "codex@openai.com"),
     # Mainstream AI coding agents are allowed authors/committers (the hard ban is
     # the VERBOTEN pattern, not the agent identity). cursoragent@cursor.com stays
@@ -249,6 +278,30 @@ def scan_forbidden_identity(root: Path, files: list[str]) -> list[str]:
         for token in FORBIDDEN_TOKENS:
             if token in text:
                 errors.append(f"forbidden identity token in tracked file: {rel}")
+                break
+    return errors
+
+
+def scan_private_verboten_literals(root: Path, files: list[str]) -> list[str]:
+    tokens = [
+        token.casefold()
+        for key in ("owner_gmail", "owner_name", "forbidden_attribution")
+        for token in private_literal_values(root, key)
+    ]
+    if not tokens:
+        return []
+    errors: list[str] = []
+    for rel in files:
+        path = root / rel
+        if not path.is_file() or is_binary(path):
+            continue
+        try:
+            text_lc = path.read_text(encoding="utf-8").casefold()
+        except UnicodeDecodeError:
+            continue
+        for token in tokens:
+            if token in text_lc:
+                errors.append(f"private verboten literal in tracked file: {rel}")
                 break
     return errors
 
@@ -726,8 +779,10 @@ def check_identity(root: Path) -> list[str]:
     # stays global and unconditional.
     if not is_cursor_environment(name, email):
         return []
-    if (name, email) not in APPROVED_IDENTITIES:
-        expected = " or ".join(f"{n} <{e}>" for n, e in sorted(APPROVED_IDENTITIES))
+    identities = set(APPROVED_IDENTITIES)
+    identities.update(("cyre", value) for value in private_literal_values(root, "owner_gmail"))
+    if (name, email) not in identities:
+        expected = " or ".join(f"{n} <{e}>" for n, e in sorted(identities))
         return [
             "git identity mismatch: "
             f"found {name or '<unset>'} <{email or '<unset>'}>; "
@@ -1043,6 +1098,7 @@ def main() -> int:
     errors: list[str] = []
     errors.extend(check_identity(root))
     errors.extend(scan_forbidden_identity(root, files))
+    errors.extend(scan_private_verboten_literals(root, files))
     errors.extend(scan_personal_paths(root, files))
     errors.extend(scan_discover_tracked_config_writes(root, files))
     errors.extend(scan_openclaw_workstation_layout(root, files))
