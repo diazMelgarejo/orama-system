@@ -138,7 +138,7 @@ clean on every single write — not a one-time cleanup.
 
 ## Related skills
 
-- [[git-history-surgery]] — the specialist for anything that already leaked
+- [git-history-surgery](../git-history-surgery) — the specialist for anything that already leaked
   into committed history: expunge, reanchor, tree-twin, clean-replacement-PR.
   This skill is upstream of that one — use `security` to keep a leak from
   happening; use `git-history-surgery` once one already has.
