@@ -229,9 +229,10 @@ orama-system/docs/v2/
 ├── 45-single-operator-lan-threat-model-descope.md  ← D23: descope BFT/Sybil-resistant patterns (witness quorum, reputation-decay, equivocation) for topologies that are actually a single operator's own LAN, regardless of node count; Q1-Q3 premise check before wiring any P2P-derived adversarial pattern
 ├── 46-repository-standard.md  ← cross-cutting, additive repo-layout standard: root stays minimal, everything executable under /src, no root-level scripts/tests/tools/examples, data output + binaries gitignored, never commit secrets/personal paths/doxxing/SecOps material
 └── 47-portable-memory-local-topology-invariant.md  ← cross-cutting portable-memory rule: tracked docs name categories only; concrete forbidden fragments live in local-only registries
+└── 48-board-job-source-line-schema.md  ← provisional/optional job-board schema (source_ref + expected_base_sha) so a claimant can verify the exact source state a job was scoped against; NOT enforced yet, PT-side producer already validates-when-provided; v2 candidate for hard-required once a second producer exists to coordinate with
 ```
 
-> **Next free slot: `48-`**
+> **Next free slot: `49-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
@@ -248,3 +249,4 @@ Tracked in [`06-open-questions.md`](./06-open-questions.md). Highlights:
 - Naming: hardware policy spec → publish as `agate` (Perplexity proposal) when stable
 - OQ18: agate `NEVER` verdict — must be explicit in schema, not inferred from list membership
 - OQ19: `_MIRROR_BACKENDS` / `_TIER_HOSTS` — should v2 derive these from YAML at runtime (config-driven) or remain module-level constants?
+- OQ20: board-job source-line schema (`source_ref`/`expected_base_sha`, [`48-`](48-board-job-source-line-schema.md)) — optional/provisional now; hard-required for v2 is open, pending a second producer to coordinate the rollout with
