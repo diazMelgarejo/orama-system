@@ -199,6 +199,10 @@ def filter_endpoints_for_policy(endpoints: dict, policy: dict | None = None) -> 
         copied = dict(endpoint)
         copied["models"] = filter_models_for_platform(endpoint.get("models", []), platform, policy)
         filtered[platform] = copied
+    filtered["win_peers"] = [
+        {**peer, "models": filter_models_for_platform(peer.get("models", []), "win", policy)}
+        for peer in endpoints.get("win_peers", [])
+    ]
     return filtered
 
 # ── Probing ───────────────────────────────────────────────────────────────────
@@ -428,18 +432,58 @@ def discover_endpoints() -> dict:
             if found_win:
                 break
 
+    # Additional Windows GPU peers beyond the single primary `win` slot
+    # (e.g. a second RTX box on the LAN). MVP, additive-only: never hardcode
+    # — set $WIN_PEER_IPS to a comma-separated list. `win` above stays the
+    # sole source of truth for every existing single-peer consumer
+    # (lm_link_watch.py, lm_link_status.py); win_peers is new and optional.
+    win_exclude = set(exclude)
+    if result.get("win"):
+        win_exclude.add(result["win"]["ip"])
+    result["win_peers"] = probe_extra_win_peers(win_exclude)
+
     return result
+
+
+def probe_extra_win_peers(exclude: set[str]) -> list[dict]:
+    """Probe additional Windows LM Studio peers named in $WIN_PEER_IPS.
+
+    MVP for tracking more than one Windows GPU box (e.g. RTX 3080 + RTX
+    5080) without changing the single-peer `endpoints.win` schema that
+    lm_link_watch.py / lm_link_status.py already depend on. Comma-separated
+    env var only — no subnet scan, no persistence beyond what
+    save_discovery_state() already does for the returned list.
+    """
+    raw = os.getenv("WIN_PEER_IPS", "").strip()
+    if not raw:
+        return []
+    peers: list[dict] = []
+    seen: set[str] = set()
+    for ip in (p.strip() for p in raw.split(",")):
+        if not ip or ip in exclude or ip in seen:
+            continue
+        seen.add(ip)
+        models = probe_models(f"http://{ip}:1234")
+        if models:
+            peers.append({"ip": ip, "models": models})
+        else:
+            print(f"  ⚠️  Windows peer {ip} (from $WIN_PEER_IPS) not reachable", file=sys.stderr)
+    return peers
 
 # ── Hash & state ──────────────────────────────────────────────────────────────
 
 def compute_hash(endpoints: dict) -> str:
     mac = endpoints.get("mac") or {}
     win = endpoints.get("win") or {}
+    win_peers = sorted(
+        (p.get("ip", ""), tuple(sorted(p.get("models", [])))) for p in endpoints.get("win_peers", [])
+    )
     key = json.dumps({
         "mac_ip": mac.get("ip", ""),
         "mac_models": sorted(mac.get("models", [])),
         "win_ip": win.get("ip", ""),
         "win_models": sorted(win.get("models", [])),
+        "win_peers": win_peers,
     }, sort_keys=True)
     return hashlib.sha1(key.encode()).hexdigest()
 
@@ -468,8 +512,20 @@ def save_discovery_state(endpoints: dict, tier: int = 1):
         "endpoints": {
             "mac": {"ip": mac.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(mac)},
             "win": {"ip": win.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": bool(win)},
+            # MVP additive field for a fleet of Windows GPU boxes beyond the
+            # single `win` slot (see probe_extra_win_peers). Empty list when
+            # $WIN_PEER_IPS is unset — existing single-peer readers are
+            # untouched since they only ever read `endpoints.win`.
+            "win_peers": [
+                {"ip": p.get("ip", ""), "port": LM_STUDIO_PORT, "reachable": True}
+                for p in endpoints.get("win_peers", [])
+            ],
         },
-        "models": {"mac": mac.get("models", []), "win": win.get("models", [])},
+        "models": {
+            "mac": mac.get("models", []),
+            "win": win.get("models", []),
+            "win_peers": {p.get("ip", ""): p.get("models", []) for p in endpoints.get("win_peers", [])},
+        },
     }
     DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
     LAST_DISCOVERY_JSON.write_text(json.dumps(state, indent=2))
