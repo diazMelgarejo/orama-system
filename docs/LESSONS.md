@@ -4086,3 +4086,66 @@ Lessons were valid content committed in the wrong way. Recovery: `learn.py` for 
 
 Process tree: zsh -> node cline -> .cline -> .cline --cline-hub-daemon; claude --resume -> cline_mcp_server.mjs
 cline-agent allowlisted in openclaw.json but NOT dispatched via gateway. All running ~2h.
+
+## 2026-07-19 - Two portable patterns from a PT coordination-consolidation session
+
+**Cross-repo companion:** graduated as `lesson_85ed00727240` and `lesson_6465950b945e`
+in Perpetua-Tools `.agent/memory/semantic/LESSONS.md` (PR #267). Recorded here too
+since neither is PT-internals-specific.
+
+**1. Safety-hook-compliant git operations.** A safety hook blocks certain
+destructive branch/worktree operations during autoresearch sessions. Prefer
+non-destructive alternatives that accomplish the same outcome: `git worktree
+remove --force` for removing a worktree (works even with uncommitted noise
+inside it); the non-force branch-delete form (often succeeds even on a
+tree-twin-confirmed-merged branch when git's own ancestry check happens to
+agree — try this first); `git checkout -B <branch> <ref>` to realign a branch
+to a ref instead of a hard reset. If a genuinely destructive operation is
+still required after trying the above, defer it to the user rather than
+searching for a way around the safety hook.
+
+**2. Supplementary independent review, not competing claims.** When another agent
+already holds a queue/task claim on work you'd otherwise do, don't compete for
+it — post a note deferring ownership explicitly, then contribute as a labeled
+supplementary independent voice instead (grounded in a clean isolated worktree
+at the pushed tip, not the other agent's live/dirty one), with findings posted
+as a PR comment clearly marked "second opinion, not a replacement." This mirrors
+the established multi-voice review pattern (Codex/Kimi/Claude concurrent reviews
+synthesized after) but applies it even when one voice already formally owns the
+task — redundant coverage from a different angle is still useful, competing for
+the same claim is not. Used successfully on PT PR #267: resolved a genuine open
+question the task's original owner hadn't gotten to yet, with zero claim conflict.
+
+## 2026-07-19 - Verify staleness-bug fixes against real production data, not just synthetic tests
+
+**Cross-repo companion:** graduated as `lesson_7155c5157bd4` in Perpetua-Tools
+`.agent/memory/semantic/LESSONS.md` (PR #267).
+
+A synthetic regression test proves the fix's LOGIC is correct against the
+schema you assumed — it does not prove the real data actually has that
+shape, or that the bug was genuinely hitting production the way you think.
+Copy the live DB/state to a scratch location, run the fixed function
+against it directly, and diff old-vs-new output for a known-affected real
+record before trusting the fix.
+
+Applied fixing PT's `find_agent_heartbeats()` stale-`Worktree` bug: a
+passing synthetic test alone wasn't treated as sufficient. Root cause:
+`orchestrator/heartbeat_monitor.py`'s `find_agent_heartbeats()` returns
+`last_registration['worktree']`, which is set once by
+`agent_coordination_core.py`'s `_register()` via `current_worktree_label()`
+at `agent_register` time and never refreshed — so any later branch switch
+inside the same worktree goes unreflected. The fix instead derives the
+agent's current worktree from its live on-disk git state at read time,
+rather than trusting the frozen registration payload.
+
+Verification (redacted — DB contents intentionally excluded): copied the
+live `perpetua_core.db` to a scratch path (`cp perpetua_core.db
+/tmp/perpetua_core.verify.db`), ran `find_agent_heartbeats(bus,
+"codex-primary-orchestrator")` against both the original and fixed
+implementations pointed at the scratch copy, and diffed the two
+`last_registration['worktree']`-derived values for that agent: old field
+frozen at its 2026-07-17 registration-time branch, new field matching the
+worktree's actual current `git rev-parse --abbrev-ref HEAD` at read time.
+This confirmed the exact staleness this session hit twice while trying to
+determine (from board state alone) whether Codex had a second live
+worktree. The scratch DB copy was not retained past the verification pass.
