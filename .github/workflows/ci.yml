@@ -53,7 +53,13 @@ jobs:
         if: github.event_name == 'pull_request'
         run: |
           git fetch origin "${{ github.base_ref }}:${{ github.base_ref }}" || true
-          RANGE="origin/${{ github.base_ref }}..HEAD"
+          # actions/checkout leaves HEAD at GitHub's synthetic pull_request/merge
+          # test-merge commit, not the PR branch tip. That commit's author is
+          # synthesized server-side (observed: the PR author's account email,
+          # distinct from any git identity actually used on the branch), so
+          # auditing HEAD here flags a "bad author" that never authored a real
+          # commit. Audit the actual PR head SHA instead.
+          RANGE="origin/${{ github.base_ref }}..${{ github.event.pull_request.head.sha }}"
           GIT_AUDIT_RANGE="$RANGE" GIT_AUDIT_STRICT=1 bash scripts/git/audit_attribution.sh
 
   test:
