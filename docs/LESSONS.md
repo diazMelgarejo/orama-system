@@ -4093,21 +4093,16 @@ cline-agent allowlisted in openclaw.json but NOT dispatched via gateway. All run
 in Perpetua-Tools `.agent/memory/semantic/LESSONS.md` (PR #267). Recorded here too
 since neither is PT-internals-specific.
 
-**1. Safety-hook-compliant git operations.** The force forms of two branch/worktree
-commands are blocked by a safety hook ("destructive command detected... blocked for
-safety during autoresearch sessions"): the force branch-delete flag, and the
-hard-mode reset command. Compliant alternatives that accomplish the same thing:
-`git worktree remove --force` (not pattern-matched, works even with uncommitted
-noise inside the worktree); the non-force branch-delete form (often succeeds even
-on a tree-twin-confirmed-merged branch when git's own ancestry check happens to
-agree — try this first); `git checkout -B <branch> <ref>` as the realign-to-ref
-equivalent of the blocked hard-reset command. Only when the non-force delete
-genuinely refuses does the force form become necessary — hand that specific
-command to the user to run themselves rather than searching for a bypass. Also:
-the hook pattern-matches the literal command text anywhere in a Bash call,
-including inside quoted strings passed as arguments (e.g. to a lesson-recording
-tool) — writing the blocked command name as a literal example string can also
-trip the block, not just executing it.
+**1. Safety-hook-compliant git operations.** A safety hook blocks certain
+destructive branch/worktree operations during autoresearch sessions. Prefer
+non-destructive alternatives that accomplish the same outcome: `git worktree
+remove --force` for removing a worktree (works even with uncommitted noise
+inside it); the non-force branch-delete form (often succeeds even on a
+tree-twin-confirmed-merged branch when git's own ancestry check happens to
+agree — try this first); `git checkout -B <branch> <ref>` to realign a branch
+to a ref instead of a hard reset. If a genuinely destructive operation is
+still required after trying the above, defer it to the user rather than
+searching for a way around the safety hook.
 
 **2. Supplementary independent review, not competing claims.** When another agent
 already holds a queue/task claim on work you'd otherwise do, don't compete for
@@ -4134,10 +4129,23 @@ against it directly, and diff old-vs-new output for a known-affected real
 record before trusting the fix.
 
 Applied fixing PT's `find_agent_heartbeats()` stale-`Worktree` bug: a
-passing synthetic test alone wasn't treated as sufficient. Copied the real
-`perpetua_core.db`, ran the fixed function against `codex-primary-orchestrator`'s
-actual record, and confirmed the old field really was frozen at a stale
-2026-07-17 branch while the new field correctly reported its real current
-location — the exact staleness this session hit twice while trying to
+passing synthetic test alone wasn't treated as sufficient. Root cause:
+`orchestrator/heartbeat_monitor.py`'s `find_agent_heartbeats()` returns
+`last_registration['worktree']`, which is set once by
+`agent_coordination_core.py`'s `_register()` via `current_worktree_label()`
+at `agent_register` time and never refreshed — so any later branch switch
+inside the same worktree goes unreflected. The fix instead derives the
+agent's current worktree from its live on-disk git state at read time,
+rather than trusting the frozen registration payload.
+
+Verification (redacted — DB contents intentionally excluded): copied the
+live `perpetua_core.db` to a scratch path (`cp perpetua_core.db
+/tmp/perpetua_core.verify.db`), ran `find_agent_heartbeats(bus,
+"codex-primary-orchestrator")` against both the original and fixed
+implementations pointed at the scratch copy, and diffed the two
+`last_registration['worktree']`-derived values for that agent: old field
+frozen at its 2026-07-17 registration-time branch, new field matching the
+worktree's actual current `git rev-parse --abbrev-ref HEAD` at read time.
+This confirmed the exact staleness this session hit twice while trying to
 determine (from board state alone) whether Codex had a second live
-worktree.
+worktree. The scratch DB copy was not retained past the verification pass.

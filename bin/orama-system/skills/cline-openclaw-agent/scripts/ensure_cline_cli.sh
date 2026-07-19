@@ -30,7 +30,7 @@ fi
 
 INSTALLED_VERSION=""
 if command -v cline >/dev/null 2>&1; then
-  INSTALLED_VERSION="$(cline --version 2>/dev/null | head -1 | tr -d '[:space:]')"
+  INSTALLED_VERSION="$(cline --version 2>/dev/null | head -1 | tr -d '[:space:]' || true)"
 fi
 
 REGISTRY_VERSION="$(npm view cline version 2>/dev/null || true)"
