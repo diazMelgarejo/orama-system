@@ -65,6 +65,13 @@ Liveness states are defined in `orchestrator/heartbeat_monitor.py`:
    python3 scripts/agent_coordination.py heartbeat dashboard
    ```
 
+   Before posting `log`, `agent_note`, or other board text from a shell,
+   read [`../shell-hygiene/SKILL.md`](../shell-hygiene/SKILL.md). In
+   particular, do not place backticked code spans inside a double-quoted shell
+   payload; zsh and bash treat backticks as command substitution and can delete
+   the intended text before GossipBus receives it. Use single quotes, escaped
+   backticks, or a here-doc for literal coordination messages.
+
 4. **Recover or terminate**
    ```bash
    python3 scripts/agent_coordination.py heartbeat pulse <agent_id>      # mark alive
