@@ -4120,3 +4120,24 @@ synthesized after) but applies it even when one voice already formally owns the
 task — redundant coverage from a different angle is still useful, competing for
 the same claim is not. Used successfully on PT PR #267: resolved a genuine open
 question the task's original owner hadn't gotten to yet, with zero claim conflict.
+
+## 2026-07-19 - Verify staleness-bug fixes against real production data, not just synthetic tests
+
+**Cross-repo companion:** graduated as `lesson_7155c5157bd4` in Perpetua-Tools
+`.agent/memory/semantic/LESSONS.md` (PR #267).
+
+A synthetic regression test proves the fix's LOGIC is correct against the
+schema you assumed — it does not prove the real data actually has that
+shape, or that the bug was genuinely hitting production the way you think.
+Copy the live DB/state to a scratch location, run the fixed function
+against it directly, and diff old-vs-new output for a known-affected real
+record before trusting the fix.
+
+Applied fixing PT's `find_agent_heartbeats()` stale-`Worktree` bug: a
+passing synthetic test alone wasn't treated as sufficient. Copied the real
+`perpetua_core.db`, ran the fixed function against `codex-primary-orchestrator`'s
+actual record, and confirmed the old field really was frozen at a stale
+2026-07-17 branch while the new field correctly reported its real current
+location — the exact staleness this session hit twice while trying to
+determine (from board state alone) whether Codex had a second live
+worktree.
