@@ -55,7 +55,11 @@ if [[ ! -f "$CONFIG_PATH" ]]; then
   fail "OpenClaw configuration is missing: $CONFIG_PATH"
 fi
 
-# Cline CLI check — report needs_cline without modifying config if absent.
+# Cline CLI check — self-heal via the idempotent installer before giving up.
+ENSURE_CLI="$SCRIPT_DIR/ensure_cline_cli.sh"
+if [[ -x "$ENSURE_CLI" ]]; then
+  "$ENSURE_CLI" || true
+fi
 if ! command -v cline >/dev/null 2>&1; then
   printf '%s\n' '{"status":"needs_cline","agent_id":"cline-agent","backend":"openrouter/z-ai/glm-5.2","follow_up":"install cline CLI: npm install -g cline"}'
   exit 0
