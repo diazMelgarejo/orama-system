@@ -214,6 +214,33 @@ needed):** confirms rather than changes the above.
   trusting CRG for anything code-shape-sensitive in the actual
   implementation PR.
 
+**ECC-style model selection as the unclassified-agent fallback (2026-07-22,
+confirmed via `vendor/ecc-tools/commands/model-route.md`):** real, and a
+good fit — but for a *different* layer than `models.yml`/`frugality_tier`.
+ECC's `/model-route` is a stateless heuristic (haiku/sonnet/opus by
+complexity + risk + budget) that ranks *Claude Code subagent* model choice,
+not PT's local Ollama/LM Studio model registry — same shape as this
+session's own Haiku-dispatch/Sonnet-evaluate/Opus-escalation-only policy
+(`bin/orama-system/references/claude-code-workflow-canonical.md`), not a
+competing system. Do not conflate the two "model selection" concepts when
+implementing:
+- `models.yml`'s `frugality_tier` ranks PT's own local/cloud inference
+  models for cost/privacy tier — decided above.
+- ECC's `/model-route` ranks which *Claude* model (Haiku/Sonnet/Opus) a
+  spawned subagent should use — already decided policy, unrelated axis.
+
+**Where ECC's heuristic is genuinely useful here:** as the fallback default
+specifically for an *unclassified Claude subagent spawn* (no explicit tier
+assigned by the calling workflow) — consult it once at agent-registry/spawn
+time, and since it's a pure function of (task-description, budget) with no
+external state, its result is safely cacheable/idempotent per
+task-signature. This is a real frugality win: skip re-deriving the same
+haiku/sonnet/opus recommendation on every repeat of a structurally similar
+subagent spawn. Not yet implemented — flagged here as a legitimate,
+low-risk follow-on optimization for whoever builds out agent-registry
+tooling, not part of this plan's Item 1 scope (which is PT's local model
+registry, not Claude subagent selection).
+
 ### Suggested execution shape (once design is settled)
 
 1. Baseline (per the amended B3.1 from the CEO phase): capture current
