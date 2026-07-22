@@ -78,6 +78,33 @@ review checklist and follow-up items, disposed individually:
 
 ---
 
+## Recent Developments (same session, after the closure ledger above)
+
+Two additional fixes landed after this ledger was first written — recorded
+here rather than left to scatter, same discipline as everything above.
+
+- **Exa MCP path-resolution fix** (both repos): `.codex/config.toml`'s exa
+  entry had drifted from a hardcoded `$OPENCLAW_ROOT`-relative path to an
+  unrelated public-endpoint workaround (`npx mcp-remote`); both `.mcp.json`
+  files hardcoded an even more fragile literal `$HOME` path. Neither
+  assumption holds generally — orama-system can be a direct sibling of a
+  caller repo or one level removed ("aunt," e.g. Perpetua-Tools nested
+  under `perplexity-api/`). Fixed with a portable, cache-first resolver
+  (`orama-system/scripts/exa/resolve-orama-root.sh`) plus inline
+  cache/walk/find bootstraps in each config. orama commit `2cb1f0f0`, PT
+  commit `fe66f46e`. PT `.agent` memory lesson `139389f8f016` graduated.
+- **Dependabot vulnerability fixes** (both repos, all 3 confirmed non-
+  breaking patch bumps, tested before commit):
+  - orama-system `web/`: `brace-expansion` 5.0.6→5.0.7 (HIGH, DoS via
+    exponential-time expansion) — scoped pnpm override
+    (`minimatch@10>brace-expansion`) so only the vulnerable
+    typescript-eslint chain moves; dev-only dependency, zero runtime
+    impact; lint verified clean after. Commit `f225f45a`.
+  - Perpetua-Tools `packages/local-agents` + `packages/alphaclaw-mcp`:
+    `body-parser` →2.3.0 (LOW ×2, same advisory) — both already within
+    each manifest's declared range, lockfile-only bump; 22/22 +
+    build+6/6 tests verified after. Commit `1efe400f`.
+
 ## What This Plan Does Not Cover
 
 - The companion 29-document closure audit referenced by PT's
