@@ -15,6 +15,19 @@ routing as implemented in `Perpetua-Tools/orchestrator/frugality_router.py`.
 Tier identifiers (0–6), backend names, and cost semantics match real code, not
 a 4-tier aspirational model. Test all examples before deployment.
 
+**⚠️ WIRING GAP (found 2026-07-22, see `references/deployment-validation.md`
+bottom):** `resolve_route()` has zero real callers in `orchestrator/` today —
+`ModelRegistry.route_task()` and `src/perpetua_tools/orchestrator.py` both do
+their own separate routing. Documentation of a built-but-unwired system, not
+enforced production behavior, until that gap closes.
+
+## Load First (reference detail — read on demand, not every invocation)
+
+- [`references/deployment-validation.md`](references/deployment-validation.md) — production status, verification, CI/CD, version/consensus
+- [`references/failure-modes.md`](references/failure-modes.md) — symptom → cause → fix
+- [`references/faq.md`](references/faq.md) — escalation, cost gate, timeouts
+- [`examples/good/tier-progression.md`](examples/good/tier-progression.md) — golden-path tier-progression example
+
 Operationalizes tier-based routing for model and backend selection with enforced
 timeouts and cost-guard escalation. This skill implements consensus from the
 Fable-5 LLM Council (7/7 agents, highest agreement level).
@@ -316,33 +329,8 @@ fi
 
 ### Correct Pattern: Python (Monitor until-loop)
 
-```python
-import subprocess
-from threading import Thread
-import time
-
-def tier_call_with_timeout(tier_endpoint, timeout_secs=10):
-    """Call inference endpoint with hard timeout via Monitor pattern."""
-    start = time.time()
-    proc = subprocess.Popen(
-        ["curl", "-X", "POST", tier_endpoint, "--data", "..."],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    
-    # Monitor pattern: poll until timeout or completion
-    while time.time() - start < timeout_secs:
-        retcode = proc.poll()
-        if retcode is not None:
-            stdout, stderr = proc.communicate()
-            return {"result": stdout.decode(), "elapsed": time.time() - start}
-        time.sleep(0.1)
-    
-    # Timeout: kill process and escalate
-    proc.kill()
-    proc.wait(timeout=2)  # grace period
-    raise TimeoutError(f"Tier call exceeded {timeout_secs}s; escalate to next tier")
-```
+Same invariant as the bash pattern above, for callers already in a Python
+process: [`references/python-timeout-pattern.md`](references/python-timeout-pattern.md).
 
 ### WRONG Pattern: Do NOT Use (breaks SIGTERM)
 
@@ -503,293 +491,9 @@ audit_log = {
 print(f"Escalation audit: {audit_log}")
 ```
 
-## Example: Complete Tier Progression with Cost Guard
+---
 
-Scenario: User requests complex reasoning task (3000 tokens), cost-conscious.
+## Further Reading
 
-**How to use the real API:**
-
-```python
-from orchestrator.frugality_router import ToolCallSpec, resolve_route
-from orchestrator.cost_guard import CostGuard
-import time
-
-def route_reasoning_request(tokens=3000, privacy_critical=False):
-    """Route request through tier hierarchy with cost tracking."""
-    
-    guard = CostGuard()
-    spec = ToolCallSpec(
-        task_type="reasoning",
-        est_tokens=tokens,
-        privacy_critical=privacy_critical,
-    )
-    
-    # Try probed tiers first (0-2, always free)
-    try:
-        route = resolve_route(spec)  # No escalation_tier param!
-        print(f"Probed tier {route.tier}: {route.backend} (free)")
-        result = call_backend_with_timeout(route.backend, route.model, timeout_secs=10)
-        print(f"Success on tier {route.tier}")
-        return result
-    except TimeoutError:
-        print(f"Tier {route.tier} timed out; escalating...")
-    except Exception as e:
-        print(f"Tier probe failed: {e}; escalating...")
-    
-    # Probed tiers failed. Try escalation tiers (3+)
-    escalation_tiers = [3, 4, 5, 6]
-    for tier in escalation_tiers:
-        try:
-            reason = f"tier_{tier-1}_unavailable"
-            
-            # Check cost gate BEFORE escalation
-            est_cost = 0.001 * max(tokens, 1)  # ~$0.001/1K
-            if not guard.can_spend(est_cost):
-                print(f"Cost gate denied for tier {tier}: "
-                      f"${est_cost:.3f} exceeds remaining ${guard.snapshot()['remaining']:.3f}")
-                if tier == escalation_tiers[-1]:
-                    raise SystemExit("All tiers exhausted (cost + availability)")
-                continue
-            
-            # Budget approved; escalate
-            spec = ToolCallSpec(
-                task_type="reasoning",
-                est_tokens=tokens,
-                privacy_critical=privacy_critical,
-                escalation_reason=reason,
-            )
-            route = resolve_route(spec, escalation_tier=tier)
-            print(f"Escalated to tier {route.tier} ({route.backend}); est_cost=${route.est_cost_usd:.3f}")
-            
-            # Call backend with 10s timeout
-            result = call_backend_with_timeout(route.backend, route.model, timeout_secs=10)
-            guard.record_spend(route.est_cost_usd)
-            print(f"Success on tier {route.tier}")
-            return result
-            
-        except TimeoutError:
-            print(f"Tier {tier} timed out")
-            if tier == escalation_tiers[-1]:
-                raise SystemExit("CRITICAL: Tier 6 (last resort) timeout. No fallback.")
-        except Exception as e:
-            print(f"Tier {tier} failed: {e}")
-            if tier == escalation_tiers[-1]:
-                raise SystemExit(f"CRITICAL: Tier 6 failed irrecoverably: {e}")
-
-# Call with tracking
-try:
-    result = route_reasoning_request(tokens=3000, privacy_critical=False)
-except SystemExit as e:
-    print(f"Fatal error: {e}")
-```
-
-**Key points in this example:**
-
-1. First call `resolve_route(spec)` with NO escalation_tier — lets probing happen
-2. If probes fail, loop through escalation_tiers = [3, 4, 5, 6]
-3. **Before each escalation**, check `guard.can_spend(est_cost)`
-4. If gate denies AND this is the last tier, FAIL LOUDLY (no more fallbacks)
-5. Record actual spend after successful call: `guard.record_spend(route.est_cost_usd)`
-6. Each escalation requires an escalation_reason (e.g., "tier_2_unavailable")
-
-## Deployment Validation: Production Tier Routing
-
-Tier-based routing is live in production (Perpetua-Tools v0.9.9.9). This skill
-documents the actual implementation, not aspirational design.
-
-**Current deployment status (Fable-5 v1.1):**
-- Tier 0–2: Always available (local, free)
-- Tier 3–6: Available subject to policy + cost gate approval
-- Production uses CostGuard with $25/day budget
-- Fallback tested via integration tests in `tests/test_frugality_router.py`
-
-**To verify your deployment:**
-
-1. Check local tier probing:
-```bash
-# Verify Tier 1 (Ollama) is reachable
-curl -s http://localhost:11434/v1/models | jq . | head
-
-# Verify Tier 2 (gbrain/CRG) is indexed
-gbrain query "frugality" 2>/dev/null || echo "gbrain not ready"
-```
-
-2. Check cost guard state:
-```bash
-# View current budget state
-python3 << 'PYEOF'
-from orchestrator.cost_guard import CostGuard
-guard = CostGuard()
-print("Daily budget state:", guard.snapshot())
-PYEOF
-```
-
-3. Test escalation with real code:
-```bash
-# Run the integration test suite
-pytest tests/test_frugality_router.py -v
-```
-
-**Expected behavior:**
-- Tiers 0–2 probed and available (no cost)
-- Tier 3+ only reachable via escalation_tier param + escalation_reason
-- CostGuard blocks escalation when budget exceeded
-- All timeouts enforced via background job (not `timeout N &&`)
-- Escalation reasons logged for audit trail
-
-## References
-
-**Production Code (Perpetua-Tools):**
-- **`Perpetua-Tools/orchestrator/frugality_router.py`** — canonical tier routing (lines 17–255)
-  - TIERS dict (0–6) and backend_by_tier map (lines 17–25, 176–180)
-  - resolve_route() and _probe_tier_* functions
-  - FrugalityPolicyError exception
-- **`Perpetua-Tools/orchestrator/cost_guard.py`** — CostGuard implementation (lines 16–90)
-  - can_spend(), record_spend(), snapshot() methods
-  - ALERT_RATIO = 0.80, daily_budget = $25.0
-  - Auto-reset every 24h
-- **`Perpetua-Tools/orchestrator/contracts.py`** — ToolCallSpec and ResolvedRoute dataclasses
-
-**Architecture Documentation:**
-- [`orama-system/docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`](../../docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) § 2 — tier routing architecture contract
-- [`orama-system/docs/v2/15-cost-guard-and-policy.md`](../../docs/v2/15-cost-guard-and-policy.md) — cost gate policy (archived)
-
-**Session Logs:**
-- [`orama-system/docs/LESSONS.md`](../../docs/LESSONS.md) — deployment incidents and tier fallback history
-- [`Perpetua-Tools/docs/LESSONS.md`](../../Perpetua-Tools/docs/LESSONS.md) — PT-specific observations
-
-## Common Failure Modes & Fixes
-
-| Error | Cause | Fix |
-|-------|-------|-----|
-| `timeout 10 curl ...` blocks on SIGTERM | Using shell `timeout` instead of killable bg | Use Monitor until-loop or run_in_background=true |
-| All tiers timeout simultaneously | Ollama + LM Studio both down; network issue | Check network; restart services; don't escalate to cloud without approval |
-| Tier 3 silently used (no gate exception) | Cost gate not wired; escalation_reason missing | Verify `_enforce_tier_policy` called; log escalation_reason in spec |
-| "600 behind" after tier fallback | SHA-based metric on rewritten main | Use tree-twin scan (fable5-git-rebase-safety skill) |
-| Tier 4 used for trivial task (cost waste) | Escalation_reason not checked; auto-escalate bug | Audit spec; verify cost gate raises before Tier 4 |
-| LM Studio discovery returns stale IP | DHCP lease expired; launchd watcher missed update | `bash Perpetua-Tools/scripts/discover-lm-studio.sh` manually |
-
-## Integration with CI/CD
-
-Add to inference pipeline startup checks:
-
-```bash
-# .github/workflows/inference-startup.yml
-- name: Verify tier routing
-  run: |
-    # Check Tier 1 (Ollama)
-    curl -s http://localhost:11434/v1/models | grep -q "qwen3.5" || exit 1
-    
-    # Check Tier 3 (huggingface_free) endpoint reachable
-    curl -s -m 5 https://api-inference.huggingface.co/status \
-      -H "Content-Type: application/json" | head -1
-```
-
-Add frugality router tests:
-
-```python
-# tests/test_frugality_router.py (real tests — verified against Perpetua-Tools/tests/test_frugality_router.py)
-class TestPrivacyCritical:
-    def test_privacy_critical_prefers_local_tier_1(self, registry):
-        route = resolve_route(
-            ToolCallSpec(task_type="coding", privacy_critical=True),
-            registry=registry,
-        )
-        assert route.tier == 1
-        assert route.est_cost_usd == 0.0
-
-    def test_privacy_critical_allows_tier_3_escalation(self):
-        spec = ToolCallSpec(
-            task_type="reasoning",
-            privacy_critical=True,
-            escalation_reason="hf free inference required",
-        )
-        route = resolve_route(spec, escalation_tier=3)
-        assert route.tier == 3
-        assert route.backend == "huggingface_free"
-
-    def test_privacy_critical_forbids_tier_4_escalation(self):
-        spec = ToolCallSpec(
-            task_type="reasoning",
-            privacy_critical=True,
-            escalation_reason="needs brave search",
-        )
-        with pytest.raises(
-            FrugalityPolicyError,
-            match="privacy_critical=True forbids tier >= 4",
-        ):
-            resolve_route(spec, escalation_tier=4)
-```
-
-## Version & Consensus
-
-- **Skill version:** 1.1.0 (production-aligned, 2026-07-04)
-- **Consensus level:** 7/7 agents (highest agreement in Fable-5 council)
-- **Foundation:** `Perpetua-Tools/orchestrator/frugality_router.py` (v1.1, production)
-- **Cost guard:** `Perpetua-Tools/orchestrator/cost_guard.py` (v1.1, production)
-- **Tier structure:** 7 tiers (0–6); probe-only (0–2) + escalation (3–6)
-- **Hard requirements:**
-  - Escalation to tier >= 3 requires `escalation_reason` parameter
-  - Tiers 0–2 reached via probing, NOT escalation_tier parameter
-  - Cost gates raise exceptions (never silent reroute)
-  - Daily budget: $25.00 (settable via CostGuard.set_budget())
-  - Daily budget alert at 80% (ALERT_RATIO)
-- **Verified examples:** All production examples tested against real code (2026-07-04)
-
-## FAQ
-
-**Q: Can I force Tier 1 or Tier 2 via escalation_tier parameter?**
-A: No. Tiers 0–2 are PROBE-ONLY (internal logic). Passing `escalation_tier=1` or `escalation_tier=2`
-raises `FrugalityPolicyError: cannot escalate to tier N; tiers 0-2 require probe match`. Only Tiers 3–6
-are reachable via escalation_tier + escalation_reason.
-
-**Q: What if Tier 1 (Ollama) is down?**
-A: Probing returns None, code falls through to Tier 2. If Tier 2 also fails,
-escalate to Tier 3+ with `escalation_reason="tier_2_unavailable"`.
-
-**Q: Do I need escalation_reason for Tiers 0–2?**
-A: No. Escalation_reason is REQUIRED only when escalation_tier >= 3. Omitting it for Tier 3+
-raises `FrugalityPolicyError: escalation_reason is required when tier >= 3`.
-
-**Q: Why raise exceptions instead of auto-escalate on cost gate?**
-A: Silent escalation = silent cost overrun. Explicit exceptions (via `CostGuard.can_spend()`)
-force the caller to acknowledge cost impact and decide: retry with approval, queue for later,
-or fail gracefully.
-
-**Q: What is the daily budget and how do I change it?**
-A: Default: $25.00/day (CostGuard.ALERT_RATIO = 0.80 at 80% spend). Change via:
-```python
-guard = CostGuard()
-guard.set_budget(50.0)  # New daily budget
-```
-Budget auto-resets every 24h based on last_reset timestamp.
-
-**Q: What happens if Tier 6 (last resort) fails?**
-A: No fallback. Tier 6 failure is FATAL. Caller must raise SystemExit or equivalent:
-```python
-except TimeoutError:
-    raise SystemExit("CRITICAL: Tier 6 (last resort) timeout. No fallback.")
-```
-
-**Q: Can I skip the cost guard?**
-A: The cost guard is built into resolve_route() when escalating to Tier 3+.
-You MUST call `guard.can_spend()` before escalation. There is no way to bypass it
-without modifying orchestrator/cost_guard.py.
-
-**Q: Do local tiers (1–2) have timeouts?**
-A: Tier 1–2 are local and typically fast (<3s). Timeouts are enforced by the caller
-via Monitor until-loop or run_in_background pattern (never `timeout N && cmd`).
-Recommended: 10s timeout for all tiers as a consistent safety margin.
-
-**Q: How do I audit cost escalations?**
-A: Always log the escalation event with route.escalation_reason. Example:
-```python
-audit_log = {
-    "timestamp": time.time(),
-    "escalation_reason": route.escalation_reason,
-    "tier": route.tier,
-    "backend": route.backend,
-    "est_cost_usd": route.est_cost_usd,
-}
-```
-
+Golden-path example, deployment validation, CI/CD, failure modes, and FAQ
+moved to `references/`/`examples/` (2026-07-22 trim) — see "Load First" above.
