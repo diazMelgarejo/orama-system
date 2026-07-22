@@ -150,6 +150,87 @@ def http_get(url: str, token: str = "", timeout: int = 8) -> tuple[int, str]:
         return -1, str(exc)
 
 
+def http_post_json(
+    url: str, payload: dict[str, Any], token: str = "", timeout: int = 8
+) -> tuple[int, str]:
+    """POST a JSON body; same (status, body[:2000]) contract as http_get.
+
+    Status -1 means transport failure (connection refused, timeout, DNS),
+    distinct from any HTTP status the peer actually returned.
+    """
+    headers: dict[str, str] = {"Content-Type": "application/json"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    data = json.dumps(payload).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            return resp.status, body[:2000]
+    except urllib.error.HTTPError as exc:
+        try:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+        except Exception:
+            detail = str(exc.reason)
+        return exc.code, detail
+    except Exception as exc:
+        return -1, str(exc)
+
+
+def relay_probe(
+    peer_ip: str,
+    portal_port: int,
+    target: str,
+    default_target_port: int,
+    tokens: list[str],
+    timeout: int = 8,
+) -> tuple[int, dict[str, Any]]:
+    """Gossip relay (mother plan §4.4/§5): ask the reachable peer at peer_ip
+    to probe `target` on our behalf via POST /api/peer-relay-probe.
+
+    `target` is "IP" or "IP:PORT"; without a port, default_target_port is
+    used (matching the endpoint's own default of the portal port). Tries
+    each candidate token until one is accepted (same convention as the
+    authenticated /api/status check). Returns (exit_code, result_payload):
+      0 = relay round-trip succeeded and target reachable
+      1 = relay round-trip succeeded but target NOT reachable
+      2 = relay itself failed (peer unreachable, auth exhausted, bad reply)
+    """
+    target_ip, _, port_str = target.partition(":")
+    target_ip = target_ip.strip()
+    try:
+        target_port = int(port_str) if port_str else default_target_port
+    except ValueError:
+        return 2, {"error": f"invalid --relay port in {target!r}"}
+    if not target_ip:
+        return 2, {"error": "empty --relay target IP"}
+
+    url = f"http://{peer_ip}:{portal_port}/api/peer-relay-probe"
+    body = {"target_ip": target_ip, "target_port": target_port}
+    last: tuple[int, str] = (-1, "no token candidates")
+    for token in tokens or [""]:
+        status, text = http_post_json(url, body, token=token, timeout=timeout)
+        last = (status, text)
+        if status in (401, 403):
+            continue  # try next token candidate
+        break
+
+    status, text = last
+    if status != 200:
+        return 2, {
+            "error": "relay request failed",
+            "http_status": status,
+            "detail": text[:300],
+            "relay_via": f"{peer_ip}:{portal_port}",
+        }
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        return 2, {"error": "relay returned non-JSON", "detail": text[:300]}
+    result["relay_via"] = f"{peer_ip}:{portal_port}"
+    return (0 if result.get("reachable") else 1), result
+
+
 def _pt_persisted_token() -> str:
     for var in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "PT_HOME"):
         root = os.environ.get(var, "").strip()
@@ -401,6 +482,16 @@ def main(argv: list[str] | None = None) -> int:
         help="WebSocket open timeout in seconds",
     )
     p.add_argument("--json", dest="json_out", action="store_true")
+    p.add_argument(
+        "--relay",
+        metavar="TARGET_IP[:PORT]",
+        help=(
+            "Gossip relay: ask the (reachable) peer to probe TARGET on our "
+            "behalf via POST /api/peer-relay-probe, instead of running the "
+            "local check suite. Exit 0 target reachable, 1 not reachable, "
+            "2 relay failed. Port defaults to --portal-port."
+        ),
+    )
     args = p.parse_args(argv)
 
     role = local_role()
@@ -410,6 +501,29 @@ def main(argv: list[str] | None = None) -> int:
         peer_ip = args.peer_ip.strip()
     if args.lms_port:
         lms_port = args.lms_port
+
+    if args.relay:
+        code, result = relay_probe(
+            peer_ip,
+            args.portal_port,
+            args.relay,
+            args.portal_port,
+            outbound_control_plane_tokens(),
+            timeout=args.timeout,
+        )
+        if args.json_out:
+            print(json.dumps(result, indent=2))
+        elif code == 2:
+            print(f"RELAY FAIL via {result.get('relay_via', peer_ip)}: "
+                  f"{result.get('error', '?')} — {result.get('detail', '')}",
+                  file=sys.stderr)
+        else:
+            verdict = "UP" if code == 0 else "DOWN"
+            print(f"relay via {result.get('relay_via')}: target "
+                  f"{result.get('ip')} is {verdict} "
+                  f"(models: {', '.join(result.get('models', [])) or '-'}; "
+                  f"path: {'→'.join(result.get('relay_path', [])) or '-'})")
+        return code
 
     tokens = outbound_control_plane_tokens()
     checks = run_checks(
