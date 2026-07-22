@@ -386,11 +386,12 @@ tier values themselves (the ownership rule is decided, the actual backfill
 data entry is not); the ECC-model-route caching optimization (flagged,
 not built).
 
-**Execution status:** a `Workflow` run (Haiku-survey → Sonnet-implement →
-Sonnet-verify, launched under this session's `ultracode` opt-in) is
-wiring the decided architecture into Perpetua-Tools as of this entry —
-see the plan doc's Execution Log for the actual diff and test results
-once it lands.
+**Execution status: LANDED.** The `Workflow` run (Haiku-survey →
+Sonnet-implement → Sonnet-verify, under this session's `ultracode`
+opt-in) wired the decided architecture into Perpetua-Tools — commit
+`13f09c42`, pushed to `origin/main`. 29 new + 120 pre-existing + 1530
+full-repo tests passing, independently re-verified, zero regressions.
+Full diff summary + test results: plan doc's Execution Log.
 
 ---
 

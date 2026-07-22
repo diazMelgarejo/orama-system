@@ -1,7 +1,8 @@
 # Frugality/Privacy Reconciliation + Navigator Close-Out — Provisional Plan
 
 **Date:** 2026-07-22
-**Status:** DESIGN DECIDED, IMPLEMENTATION IN PROGRESS — captures everything
+**Status:** DESIGN DECIDED, IMPLEMENTATION LANDED (PT commit `13f09c42`,
+pushed to `origin/main`) — captures everything
 /autoplan's review of `docs/plans/2026-07-22-p4-skill-trimming-p3-frugality-
 wiring.md` deferred, plus the remaining open items in
 `references/tiered-model-implementation-navigator.md`, so nothing found
@@ -22,7 +23,29 @@ a `Workflow` run is executing the implementation — see Execution Log.
   v1 wrapper (no signature change), backfill `frugality_tier` in
   `config/models.yml`, add contract tests, then independently re-verify
   the diff and test results before trusting the implementer's own report.
-  Result pending — update this entry once it lands.
+
+- **2026-07-22 — LANDED.** Workflow completed (375k tokens, 94 tool calls,
+  3 agents, ~23 min). PT commit `13f09c42`: new `orchestrator/gate.py`
+  (`consult_gate`/`gate_permits`/`filter_chain_by_gate`/
+  `load_frugality_tier_by_name`); `route_task()` gained keyword-only
+  `privacy_critical`/`override_confirmed`/`override_reason` (defaults
+  `False`/`False`/`None`, old positional call sites unaffected);
+  `orchestrator.py`'s `privacy_critical` branch gated hop-by-hop, fallback
+  chain fully preserved; all 11 `config/models.yml` models classified
+  (local → 1, cloud paid → 5, grok → 6 matching `frugality_router.py`'s own
+  convention, one flagged judgment call on `glm-5.1:cloud` → 4).
+  **Tests:** 29 new + 120 pre-existing directly-relevant + 1530 full-repo
+  suite, all passing, zero regressions — independently re-run and verified
+  by a separate agent pass (not just the implementer's own claim).
+  **Independent verdict:** SAFE to commit, no rollback needed.
+  **Scope note:** 3 unrelated dirty files rode along in the working tree
+  (`.codex/config.toml` — an exa MCP transport swap, unrelated drift, not
+  from this Workflow; `vendor/ecc-tools` submodule bump; an
+  `AGENT_LEARNINGS.jsonl` auto-log line) — held out of the commit per
+  human review except the memory-log line, which was folded in as routine
+  session logging. Pushed to `origin/main` (`16e456ec..13f09c42`) with
+  explicit `ALLOW_MAIN_PUSH=1` override of the Phase 0 PR-only-write gate,
+  user-confirmed.
 
 **What already shipped today (not in this plan's scope — done):**
 - P4: `mcp-orchestration/SKILL.md` (866→496 lines) and
