@@ -35,6 +35,21 @@ Fix: classify the merge mode first via
 [`../integrative-merge.md`](../references/integrative-merge.md); synthesize,
 never amputate.
 
+## Assuming Which Tool a Same-Named Slash Command Means
+
+Problem: seeing `/skillify` (or "make me a skill") invoked and assuming it
+obviously means this repo's own skill builder, when the same name/phrase
+also legitimately routes to gstack's unrelated `/skillify` (codifies a
+browser scrape) or Anthropic's official `skill-creator` plugin
+(general-purpose, outside this repo's conventions). Classifying this as
+Type A/C ("obviously this repo's tool") instead of Type D hides real
+ambiguity behind a confident-looking invocation.
+
+Fix: treat a same-named tool collision as Type D until the target is
+confirmed — `oramasys-skillify`'s Workflow step 0 AskUserQuestion interrupt,
+not a guess from the invocation name alone. See AFRP `failure-modes.md`
+Failure Mode 6 (Premature Confidence).
+
 ## Hardcoding Local Endpoints or Secrets
 
 Problem: pasting a literal LAN IP, workstation path, or credential into a

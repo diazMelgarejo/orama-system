@@ -45,3 +45,28 @@ Scope: production-grade fix for a recurring gbrain sync connection failure
 - Synthesizes both branches' intent — the rewritten auth module keeps its
   shape, the feature flags land on top of it — rather than deleting either
   side's work.
+
+## Third Input (ambiguous slash command)
+
+> "/skillify"
+
+## Expected Behavior
+
+```text
+AFRP: Type D | Level (undetermined) | Mode (clarify first)
+Scope: unclear which of three tools "skillify" refers to
+```
+
+- Does **not** classify this as an obvious Type A/C just because a specific
+  skill was invoked by name — recognizes that at least three tools answer
+  to "skillify" with unrelated jobs (this repo's canonical skill builder,
+  gstack's browser-scrape codifier, Anthropic's general-purpose
+  `skill-creator` plugin) and that picking wrong means doing the wrong
+  *thing entirely*, not just doing the right thing imperfectly.
+- Raises an `AskUserQuestion` interrupt offering all three, per
+  `oramasys-skillify`'s Workflow step 0 — does not guess from the invoked
+  name alone.
+- Only proceeds with the 5-stage process once the target is confirmed
+  orama-system-scoped.
+- See AFRP `failure-modes.md` Failure Mode 6 (Premature Confidence) for
+  the failure this avoids.
