@@ -5,7 +5,7 @@ description: >-
   workflows. Use when installing Hermes, importing ECC/orama skills into Hermes,
   configuring Nous Portal or LM Studio providers, adding Hermes beside OpenClaw,
   or dispatching Hermes, Gemini, AGY, and Codex CLI coding partners.
-version: 1.1.1.0
+version: 1.1.2.0
 license: Apache 2.0
 compatibility: hermes, codex, claude-code, windows, openclaw, ecc, agy
 agent_compatibility:
@@ -28,6 +28,10 @@ triggers:
   - ecc harness
   - cross-harness
   - install codex cli on windows
+  - update all agent comms
+  - update the board
+  - post to the whiteboard
+  - notify all peers
 allowed-tools: bash, file-operations, web-search
 ---
 
@@ -148,6 +152,15 @@ Hermes may add optional fields: `output`, `warnings`, `errors`, `checks`, echoes
 `blocked` is a Hermes alias for `needs_input`. Path casing mismatches → `warnings[]`, not `blocked`.
 
 ## Session Close-Out: Update the Board (mandatory for significant landed work)
+
+**Trigger phrase:** "update all agent comms" (or "update the board" /
+"post to the whiteboard" / "notify all peers") means run **both**
+mechanisms below together, in one pass — not one or the other. This is
+the standing invocation for "tell every other agent/peer what happened,"
+whether said explicitly by the user or inferred from context (e.g. after
+resolving a multi-agent conflict, after verifying another agent's
+concurrent work, after landing anything a peer would otherwise have to
+rediscover).
 
 Not just for `coord-N` fan-outs — **any** session that lands substantive
 work (a real code change, a closed plan, a fix that other agents/peers
