@@ -28,29 +28,44 @@
       "soul": "bin/agents/win-researcher/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
-      "affinity": "win",
+      "affinity": "win-rtx3080",
       "gateway": "http://127.0.0.1:18789"
     },
     "coder": {
       "soul": "bin/agents/coder/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
-      "affinity": "win",
+      "affinity": "win-rtx3080",
       "gateway": "http://127.0.0.1:18789"
     },
     "priority-subagent": {
       "soul": "bin/agents/coder/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
-      "affinity": "win",
+      "affinity": "win-rtx3080",
       "gateway": "http://127.0.0.1:18789"
     },
     "autoresearcher": {
       "soul": "bin/agents/autoresearcher/SOUL.md",
       "provider": "lmstudio-win",
       "model": "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2",
-      "affinity": "win",
+      "affinity": "win-rtx3080",
       "gateway": "http://127.0.0.1:18789"
+    },
+    "win-researcher-5080": {
+      "soul": "bin/agents/win-researcher/SOUL.md",
+      "provider": "lmstudio-win-5080",
+      "model": "gemma-4-26b-a4b-it-nvfp4",
+      "affinity": "win-rtx5080",
+      "gateway": "http://192.168.8.153:1234",
+      "_comment": "3rd fleet node, live-probed 2026-07-22. lan_ip is DHCP-dynamic -- resolve via $LM_STUDIO_WIN_5080_ENDPOINTS or last_discovery.json before dispatch, never hardcode outside this registry default."
+    },
+    "coder-5080": {
+      "soul": "bin/agents/coder/SOUL.md",
+      "provider": "lmstudio-win-5080",
+      "model": "gemma-4-26b-a4b-it-nvfp4",
+      "affinity": "win-rtx5080",
+      "gateway": "http://192.168.8.153:1234"
     }
   },
   "agents": [
