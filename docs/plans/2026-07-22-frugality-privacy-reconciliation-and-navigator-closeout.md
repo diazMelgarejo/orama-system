@@ -122,16 +122,71 @@ to implementation, per this plan's own "Explicit non-goals" discipline.
 
 </details>
 
-**Still genuinely open (the decision above doesn't resolve these):**
-- `route_task(task_type, preferred_device)`'s signature cannot accept
-  `privacy_critical`/`est_tokens`/`escalation_reason` — does the API shape
-  change, or does a thin wrapper both `route_task()` and `/orchestrate` call
-  before dispatch carry the gate call instead? (Wrapper is the lower-risk
-  choice — avoids a breaking signature change to a function with existing
-  callers — but not yet formally decided.)
-- `ModelTarget.frugality_tier` now exists (shipped 2026-07-22) but is
-  unpopulated in `models.yml` — who owns backfilling it per-model, and
-  what's the fallback for models without a tier set?
+### API-shape decision (2026-07-22, human-confirmed)
+
+**DECIDED: wrapper for v1, signature change deferred to v2.** `route_task()`
+keeps its current signature unchanged; a thin wrapper (both it and
+`/orchestrate` call before dispatch) carries the gate call instead. This is
+explicitly a v1/v2 split, not a permanent choice: PT's v1 surface stays
+additive-only and non-breaking, while a `route_task()` signature change
+(accepting `privacy_critical`/`est_tokens`/`escalation_reason` natively) is
+deferred to whatever v2 shape lands per `orama-system/docs/v2/` planning —
+same layering this whole plan already follows (PT = L2 runtime, orama = L3
+methodology/planning). Do not preempt that v2 signature design here; this
+plan only commits to the v1 wrapper. Implementation of the wrapper is in
+progress as of this session (see Execution Log below).
+
+### `models.yml` frugality_tier backfill ownership (2026-07-22, EXA research + decision)
+
+**Research (EXA, LiteLLM docs — the closest prior-art match: a multi-model
+proxy with a per-model cost/tier classification config):**
+
+- LiteLLM's default is a centrally-maintained, auto-fetched cost map (fine
+  for their scale — hundreds of models, many operators). Per-deployment
+  **override** is their recommended path for anything less than
+  fleet-wide: "changes only the deployments you name, survives every
+  upstream map update... reach for a full custom map only when the
+  correction spans so many models that per-deployment config stops being
+  maintainable." A full separate map is explicitly the *heavier*, not
+  default, option.
+- Ownership is tied to **where a model is defined**: "config models are
+  owned by the file" (`config.yaml`) vs. UI/DB-owned models — whoever
+  controls the entry's source of truth backfills its metadata, not a
+  separate centralized process.
+- Documented failure mode to guard against: **silent fallback**. LiteLLM's
+  cost map, on fetch failure, "logs a warning and silently falls back to
+  the bundled backup map" — flagged in their own docs as the exact failure
+  mode to alert on, because it quietly reverts corrections without failing
+  a health check.
+- `model_info` supports arbitrary per-model metadata (owning team,
+  description, version) passed through and readable via API — the general
+  pattern for attaching ownership/classification data at the point a model
+  is registered, not backfilled separately later.
+
+**Applied to PT's scale (a dozen-ish models in one `config/models.yml`,
+not a multi-tenant fleet — LiteLLM's Organization/Team hierarchy doesn't
+apply here):**
+
+**DECIDED:** `frugality_tier` is backfilled **at model-registration time**,
+by whoever adds or edits a `config/models.yml` entry — same PR, no separate
+centralized classification process or dashboard. This mirrors LiteLLM's
+"config models are owned by the file" pattern at PT's actual scale.
+
+**DECIDED (fallback, fail-closed):** a model with no `frugality_tier` set
+must **not** be silently treated as low-tier/unrestricted. Per the existing
+`ModelTarget.frugality_tier: Optional[int] = None` field (shipped
+2026-07-22), an unset tier must resolve as "gate has no opinion, defer to
+existing routing.yml/orchestrator.py fallback chain" (already the
+implementation's stated behavior in the wrapper being built this session)
+— never as "assume tier 1, allow anything." This directly guards against
+LiteLLM's own documented silent-fallback failure mode, adapted to PT's
+context: unclassified must mean "fall through to the pre-gate behavior,"
+not "assume permissive."
+
+**Enforcement:** add a lint/test asserting every `config/models.yml` entry
+either has `frugality_tier` set or is on an explicit allowlist of
+intentionally-unclassified entries — prevents silent drift back to an
+unaudited state as new models get added over time.
 
 ### Suggested execution shape (once design is settled)
 
