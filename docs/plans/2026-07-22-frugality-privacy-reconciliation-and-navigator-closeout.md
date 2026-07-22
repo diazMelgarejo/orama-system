@@ -188,6 +188,32 @@ either has `frugality_tier` set or is on an explicit allowlist of
 intentionally-unclassified entries — prevents silent drift back to an
 unaudited state as new models get added over time.
 
+**Free-tier cross-check (gbrain + CRG + PT `.agent` memory, no paid research
+needed):** confirms rather than changes the above.
+- Hardware affinity (`check_affinity()`, `config/model_hardware_policy.yml`)
+  is already the established *first* gate — confirmed structurally via CRG
+  (`check_affinity` is called from `orchestrator/supervisor.py`'s
+  `submit_job` and `_prepare_spec_for_inference`, i.e. before dispatch).
+  "Hardware first, then tier-based" is already the real architecture, not
+  something this plan needs to build.
+- PT `.agent` memory's existing gateway doctrine — *"Fail-closed at
+  gateways: hardware affinity failures... unresolvable model IDs produce
+  explicit errors — never silent fallback, never fail-open"* — was checked
+  against the fallback decision above and does not conflict: that lesson
+  covers genuine failures (unresolvable IDs, missing config); an unset
+  `frugality_tier` is not a failure, it's "no additional opinion," so
+  deferring to the existing already-fail-closed routing chain is
+  consistent with, not an exception to, that doctrine.
+- Free-alternative-of-last-resort is already documented: `OmniRoute`
+  (local sidecar, port 20128, fans to free OpenRouter/AgentRouter models),
+  explicitly "NEVER install, NEVER require, NEVER fail if absent" — no new
+  mechanism needed here either.
+- CRG's graph index was ~4.4 days stale during this check (`built_at_sha`
+  != `head_sha`) — findings above are corroborated by the gbrain/memory
+  hits independently, but re-run `build_or_update_graph_tool` before
+  trusting CRG for anything code-shape-sensitive in the actual
+  implementation PR.
+
 ### Suggested execution shape (once design is settled)
 
 1. Baseline (per the amended B3.1 from the CEO phase): capture current
