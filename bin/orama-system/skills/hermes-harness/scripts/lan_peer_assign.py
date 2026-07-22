@@ -53,8 +53,7 @@ def _ensure_orama_src() -> None:
         sys.path.insert(0, str(_SRC_ROOT))
 
 
-def _auth_header() -> dict[str, str]:
-    token = probe.resolve_control_plane_token()
+def _auth_header(token: str) -> dict[str, str]:
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -65,20 +64,34 @@ def _peer_base(peer_ip: str, portal_port: int) -> str:
 
 
 def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
-    data = None
-    headers = _auth_header()
-    if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            return json.loads(raw) if raw.strip() else {}
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"HTTP {exc.code} {url}: {body[:300]}") from exc
-    except Exception as exc:
-        raise SystemExit(f"request failed {url}: {exc}") from exc
+    """Request, retrying across every local control-plane token candidate
+    on 401/403 before giving up -- see query_peer_topology.py's _http_get
+    for why (2026-07-19 D9 self-correction: resolve_control_plane_token()'s
+    single "preferred" token is not always the one the peer accepts, even
+    when a working local candidate exists)."""
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    candidates = probe.outbound_control_plane_tokens() or [""]
+    last_error: tuple[int, str] | None = None
+    for token in candidates:
+        req = urllib.request.Request(
+            url, data=data, headers=_auth_header(token), method=method
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+                return json.loads(raw) if raw.strip() else {}
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            if exc.code in (401, 403):
+                last_error = (exc.code, body[:300])
+                continue  # try the next candidate token
+            raise SystemExit(f"HTTP {exc.code} {url}: {body[:300]}") from exc
+        except Exception as exc:
+            raise SystemExit(f"request failed {url}: {exc}") from exc
+    code, body = last_error or (401, "no candidates")
+    raise SystemExit(
+        f"HTTP {code} {url}: {body} (tried {len(candidates)} local token candidate(s))"
+    )
 
 
 def _resolve_peer(args: argparse.Namespace) -> tuple[str, int]:
