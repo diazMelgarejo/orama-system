@@ -2,6 +2,12 @@
 
 > **Source of truth** for Multi-Agent Safety (Meta-Layer M3).
 > Referenced by: `bin/orama-system/SKILL.md` Mode 3 section.
+>
+> **On Claude Code:** the Four Mandatory Roles below map directly onto
+> `Workflow`'s built-in "Adversarial verify" (Adversary/Critic) and
+> "Judge panel" (Judge) quality patterns — use those primitives to
+> implement this doctrine, don't hand-roll a parallel mechanism. See
+> `claude-code-workflow-canonical.md`.
 
 Applies to Mode 2 and Mode 3. Also applies to any significant single-agent decision.
 

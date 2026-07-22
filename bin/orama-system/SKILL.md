@@ -8,7 +8,7 @@ description: >-
   Triggers on: "ultrathink", "think deeply", "5-stage", "systematic approach",
   "elegant solution", "verify before done", "content insertion", "AFRP", "CIDF".
   Treat legacy "ultrathink" prompts as oramasys invocations.
-version: 1.1.1.0
+version: 1.1.1.1
 license: Apache 2.0
 compatibility: claude-code, claude-desktop
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
@@ -255,6 +255,15 @@ When context > 70% -- offload, one task per subagent:
 ## MODE 3: Full Multi-Agent Network
 >
 > **Multi-agent safety:** See `references/collaborative-reasoning-safety.md` — mandatory Builder/Critic/Adversary/Judge roles, anti-groupthink rules, confidence tracking.
+>
+> **On Claude Code: this is a policy layer, not a runtime to build.** The
+> canonical execution mechanism is Claude Code's own `Workflow` tool
+> (`agent()`/`parallel()`/`pipeline()`/`phase()`), gated by the same
+> `ultracode`/explicit-ask opt-in the tool itself requires — never a
+> bespoke dispatch loop. Full role-to-primitive mapping:
+> `references/claude-code-workflow-canonical.md`. This mapping is Claude
+> Code-specific; other harnesses (Codex, gemini-cli, Cursor, ECC) keep the
+> abstract description below as-is.
  (Complex Tasks)
 
 ### Agent Network
