@@ -18,7 +18,7 @@ description: >-
   invocation as an oramasys invocation. **Also use for PR merges, conflict
   resolution, nested-branch integration, and any edit that must harmonize two
   divergent branches additively (never delete-and-replace).**
-version: "1.3.0"
+version: "1.3.1"
 license: Apache 2.0
 compatibility: claude-code, cowork, codex, openclaw
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys

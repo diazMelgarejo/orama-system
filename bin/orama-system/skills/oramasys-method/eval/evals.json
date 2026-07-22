@@ -18,6 +18,12 @@
       "prompt": "think deeply about whether we should move mcp-orchestration to the full 7-agent network or keep it in Mode 2 -- give me a real recommendation, not both-sides-itis.",
       "expected_output": "States the AFRP gate result, evaluates the actual Router Decision Table signals (steps, systems touched, parallel work, context window risk) against mcp-orchestration's real shape, treats it as a high-risk skill per the retiring-fellow-skill-library preconditions before recommending an upgrade path, and lands on one concrete recommendation with stated tradeoffs rather than hedging.",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "/skillify",
+      "expected_output": "Classifies as AFRP Type D (ambiguous), not Type A/C just because a named skill was invoked -- recognizes at least three tools answer to 'skillify' with unrelated jobs (this repo's canonical skill builder, gstack's browser-scrape codifier, Anthropic's skill-creator plugin), and raises an AskUserQuestion interrupt to disambiguate rather than assuming this repo's tool was meant. Matches AFRP failure-modes.md Failure Mode 6 and oramasys-skillify's Workflow step 0.",
+      "files": []
     }
   ]
 }
