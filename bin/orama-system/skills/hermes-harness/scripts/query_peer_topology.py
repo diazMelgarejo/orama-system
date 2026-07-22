@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import socket
 import sys
 import time
 import urllib.error
@@ -107,53 +108,79 @@ PORTAL_PORT = 8002
 DEFAULT_TIMEOUT = 2
 
 
-def _auth_header() -> dict[str, str]:
-    """Build Authorization header from control plane token."""
-    token = probe.resolve_control_plane_token()
+def _this_node_id() -> str:
+    """This machine's own identity for fleet_topology.json's local_node field.
+
+    Must NEVER be derived from a peer's response -- see the 2026-07-19 D10
+    bug this replaces: _merge_peer_topology()'s "no current state yet" seed
+    branch used peer_data.get("local_node", ...) (the PEER's self-reported
+    id, e.g. "win-studio") as THIS node's own identity when running on the
+    Mac, then computed peers_reachable from a peers_list containing only
+    that borrowed id -- local_node ended up equal to its own single peers
+    entry, so peers_reachable came out 0 and fleet_mode classified SOLO
+    despite a real, live, successfully-merged peer response.
+    """
+    return socket.gethostname()
+
+
+def _auth_header(token: str) -> dict[str, str]:
+    """Build an Authorization header for one specific token."""
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
 def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | None:
-    """Single HTTP GET with graceful error handling.
+    """HTTP GET, retrying across every locally-available control-plane
+    token candidate (not just resolve_control_plane_token()'s single
+    "preferred" one) before giving up.
+
+    2026-07-19 correction to the original D7/D8 fix: this was first
+    diagnosed as "the shared token isn't deployed on the peer" (operator
+    action needed). Live testing every local candidate against the peer
+    proved that wrong -- a second local candidate (from
+    outbound_control_plane_tokens(), already used by probe_lan_peer.py's
+    own relay_probe()) IS accepted by the peer; resolve_control_plane_token()
+    just never tried it, because it unconditionally returns candidates[0].
+    The real bug was single-token client code, not an undeployed token.
+    Logged as a self-correction rather than silently replacing D7/D8's text
+    (see docs/next/fleet-mesh/2026-07-19-oob-completion-findings.md D9).
 
     Returns:
-        Parsed JSON dict on success, None if unreachable or malformed.
-        Never raises; logs warnings instead.
+        Parsed JSON dict on success, None if unreachable, malformed, or
+        every candidate token was rejected. Never raises.
     """
-    try:
-        req = urllib.request.Request(
-            url,
-            headers=_auth_header(),
-            method="GET",
-        )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read().decode("utf-8")
-            return json.loads(data) if data.strip() else None
-    except urllib.error.HTTPError as exc:
-        if exc.code in (401, 403):
-            # Auth rejection is an OPERATOR-ACTIONABLE condition, not noise:
-            # cross-node topology merge requires the shared control-plane
-            # token (mother plan §12 open question 4) to be deployed on every
-            # node. Swallowing this at debug level turned a token mismatch
-            # into a silent "No topology data after query" with zero
-            # diagnostic (2026-07-19 OOB findings ledger, D7).
-            logger.warning(
-                "Peer %s rejected our control-plane token (HTTP %d). "
-                "Cross-node fleet-topology requires the SHARED token on all "
-                "nodes — sync ORAMA_CONTROL_PLANE_TOKEN across the fleet.",
-                url, exc.code,
-            )
-        else:
+    candidates = probe.outbound_control_plane_tokens() or [""]
+    last_status: int | None = None
+    for token in candidates:
+        try:
+            req = urllib.request.Request(url, headers=_auth_header(token), method="GET")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = resp.read().decode("utf-8")
+                return json.loads(data) if data.strip() else None
+        except urllib.error.HTTPError as exc:
+            last_status = exc.code
+            if exc.code in (401, 403):
+                continue  # try the next candidate token
             logger.debug("HTTP GET %s failed: %s", url, exc)
-        return None
-    except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
-        logger.debug("HTTP GET %s failed: %s", url, exc)
-        return None
-    except Exception as exc:
-        logger.debug("Unexpected error querying %s: %s", url, exc)
-        return None
+            return None
+        except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+            logger.debug("HTTP GET %s failed: %s", url, exc)
+            return None
+        except Exception as exc:
+            logger.debug("Unexpected error querying %s: %s", url, exc)
+            return None
+
+    if last_status in (401, 403):
+        # Every candidate rejected -- NOW it really is operator-actionable
+        # (genuinely no working shared credential found locally), unlike
+        # the false alarm this same message flagged before the fix above.
+        logger.warning(
+            "Peer %s rejected ALL %d local control-plane token candidate(s) "
+            "(last: HTTP %d). Sync ORAMA_CONTROL_PLANE_TOKEN across the fleet.",
+            url, len(candidates), last_status,
+        )
+    return None
 
 
 def _discover_peers() -> list[tuple[str, int]]:
@@ -256,10 +283,18 @@ def _merge_peer_topology(
 
     try:
         if not current:
-            # First peer response — use it as seed
-            local_node = peer_data.get("local_node", "unknown")
+            # First peer response — seed OUR OWN local_node from this
+            # machine's own identity, never from the peer's payload (D10
+            # fix, see _this_node_id()'s docstring). peers_list starts as
+            # [ourselves, the peer we just heard from] so peers_reachable
+            # correctly counts to >=1 instead of miscounting the peer's own
+            # self-report as "the only entity in my peer list is myself".
+            local_node = _this_node_id()
             fleet_mode_str = peer_data.get("fleet_mode", "SOLO")
-            peers_list = [peer_data.get("local_node", peer_ip)]
+            peer_node_id = peer_data.get("local_node", peer_ip)
+            peers_list = [local_node]
+            if peer_node_id not in peers_list:
+                peers_list.append(peer_node_id)
             cross_reach = peer_data.get("cross_reachable", False)
         else:
             # Merge: extend peer list with any new IPs from peer's report
