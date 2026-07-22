@@ -4149,3 +4149,44 @@ worktree's actual current `git rev-parse --abbrev-ref HEAD` at read time.
 This confirmed the exact staleness this session hit twice while trying to
 determine (from board state alone) whether Codex had a second live
 worktree. The scratch DB copy was not retained past the verification pass.
+
+## 2026-07-22 - GOAL COMPLETE: oramasys rename consistent, all gates green
+
+`GOAL.md`'s own Progress Log (session 2, 2026-06-13) claimed all 10 ACs
+passed over a month ago, but per its own instruction the file stays active
+and `CLAUDE.md` § 0 keeps re-reading it every session until re-verified
+fresh — never trust a stale log. Re-ran every AC command honestly today
+rather than trusting the log:
+
+- AC1/AC3/AC4/AC5/AC7/AC9/AC10: all passed unchanged.
+- AC8 (`scripts/eval/oramasys_trigger_eval.py`): Precision 1.00, Recall 1.00.
+- AC6 (pytest) initially failed hard: 13 test files errored at COLLECTION
+  (not the rename's fault) — a newer FastAPI enforces
+  `is_body_allowed_for_status_code` strictly, and
+  `src/orama_system/portal_server.py`'s `/api/notifications/session` route
+  declared `status_code=204` with a `-> None` return annotation that FastAPI
+  auto-infers into a truthy `response_model`, tripping the assertion.
+  Fixed with one added kwarg: `response_model=None` on that route decorator
+  — the standard FastAPI idiom for "no response model, don't try to infer
+  one." All 13 files import this same module at collection time, so one
+  route fix cleared all 13.
+- After that, AC6 dropped to 3 real failures: two were `test_version_docs.py`
+  surfaces going stale because an earlier session hand-bumped
+  `bin/orama-system/SKILL.md`'s frontmatter `version:` directly instead of
+  running `scripts/sync_version.py` (canonical source is
+  `src/orama_system/_version.py`) — fixed by running the sync script, which
+  correctly reset the file to the canonical `1.1.1.0` rather than trying to
+  retroactively justify the hand-bump. The third
+  (`tests/test_discover_windows.py::test_windows_subnet_scan_finds_mac_when_cache_is_loopback`)
+  was a pre-existing test-isolation gap: the test never mocked
+  `get_local_subnets()`, so on any machine with real LAN interfaces (like
+  this one) the test exercised the host's actual subnet instead of the
+  intended `SUBNET`-constant fallback path. Fixed by mocking it to `[]`.
+- Full suite after fixes: **1338 passed, 6 skipped, 0 failed.**
+
+All 10 ACs genuinely green, verified in-session per `GOAL.md` § 5's Stop
+Condition. Removed `CLAUDE.md` § 0 and deleted `GOAL.md` in the same
+commit, per that section's own closing instruction. The § 4.0 full-zero
+`ultrathink` baseline (deliberate trigger-aliases + cosmetic docstrings)
+remains correctly deferred to the v2.0 cutover per the 2026-06-10 decision
+— not a v1.1 requirement.

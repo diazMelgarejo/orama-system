@@ -1471,7 +1471,7 @@ async def sse_peer_stream(request: Request):
 NOTIFICATION_SESSION_MAX_AGE_SECONDS = 900
 
 
-@app.post("/api/notifications/session", status_code=204)
+@app.post("/api/notifications/session", status_code=204, response_model=None)
 async def create_notification_session(request: Request, response: Response) -> None:
     """Exchange an existing bearer for a short-lived, path-scoped stream cookie.
 
