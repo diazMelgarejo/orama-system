@@ -18,7 +18,7 @@ description: >-
   invocation as an oramasys invocation. **Also use for PR merges, conflict
   resolution, nested-branch integration, and any edit that must harmonize two
   divergent branches additively (never delete-and-replace).**
-version: "1.3.2"
+version: "1.3.3"
 license: Apache 2.0
 compatibility: claude-code, cowork, codex, openclaw
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
@@ -76,8 +76,10 @@ Type → Mode mapping:
 - C (3-7 steps) → **Mode 2** (5-stage, optional subagents)
 - C (8+ steps, parallel) → **Mode 3** (full 7-agent network via MCP; on
   Claude Code, execute via the `Workflow` tool under its own
-  `ultracode`/explicit-ask opt-in gate, never a bespoke dispatch loop —
-  see `../../references/claude-code-workflow-canonical.md`)
+  `ultracode`/explicit-ask opt-in gate, never a bespoke dispatch loop, with
+  mandatory tiered model selection (Haiku dispatch → Sonnet evaluate →
+  Opus/Fable 5 escalation-only) — see
+  `../../references/claude-code-workflow-canonical.md`)
 
 ---
 
