@@ -18,6 +18,18 @@
       "prompt": "We have an onboarding runbook living in the retiring-fellow .claude/skills library that new engineers keep asking for. Adapt it into bin/orama-system/skills/onboarding/ following the retiring-fellow-skill-library.md rules.",
       "expected_output": "Phase 1 discovery before writing (reads README, existing skills, docs/v2 references), Phase 2 reuse-before-create check against the existing skill matrix, correct target path under bin/orama-system/skills/ (never .claude/skills/), an audit note appended, and a STATUS report matching the retiring-fellow-skill-library.md Output Report format.",
       "files": []
+    },
+    {
+      "id": 4,
+      "prompt": "/skillify",
+      "expected_output": "No skill gets written on this bare invocation. An AskUserQuestion interrupt fires (Workflow step 0) offering the three disambiguation options from the 'Related Tools' section -- this skill (orama-system canonical skill), Anthropic's skill-creator plugin (general-purpose, outside this repo), or gstack's /skillify (codify a browser scrape) -- rather than assuming which one the user meant.",
+      "files": []
+    },
+    {
+      "id": 5,
+      "prompt": "package the skillify skill itself as a .skill file I can upload to claude.ai",
+      "expected_output": "Runs scripts/package_skill.py against bin/orama-system/skills/skillify (never edits the canonical files directly), reports which cross-repo references got bundled and which frontmatter keys moved under metadata:, confirms validation passed against Anthropic's packaged-skill schema, and states the output path of the resulting skillify.skill zip.",
+      "files": []
     }
   ]
 }
