@@ -63,6 +63,11 @@ DerivedData/
 *.xcworkspace/xcuserdata/
 *.xcuserdatad/
 .venv*/
+
+# Skillify/eval dogfood-harness scratch output (skill snapshots + eval
+# transcripts per iteration) -- disposable; conclusions get written to
+# the relevant skill's references/dogfood-upgrade-log.md instead.
+bin/orama-system/skills/*-workspace/
 *.whl
 *.tar.gz
 *.egg-info/
