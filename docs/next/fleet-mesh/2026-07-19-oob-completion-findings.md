@@ -20,7 +20,10 @@ is how the next agent re-litigates it.
 | D5 | Task03's "mandatory" 4-tier structure (Ollama→Win LMS→GLM-5.2→Sonnet) **conflicts** with the existing skill's code-grounded routing tiers (Local OSS→gbrain/CRG→HF Free→Proprietary Free) | SKILL.md (499 lines, at the ≤500 ceiling) vs Task03 brief | Reconciled ADDITIVELY: both vocabularies are legitimate (tool-call routing vs inference-backend fallback); new reference file documents the distinction rather than overwriting either. |
 | D6 | `start.sh` resolves PT_DIR through the legacy Documents-tree symlink location rather than the canonical code-tree checkout | `--fleet-status` startup log line | Cosmetic (the symlink resolves to the same repository); noted, not changed in this run — PT_DIR resolution order is start.sh policy, out of scope for the mesh goal. |
 | D7 | Phase 4/6 (`query_peer_topology.py`) was **silently broken in exactly the two ways an operator would hit first**: (a) standalone invocation — how `coord_pulse.sh` calls it — failed Phase 6 imports (`No module named 'orama_system'`: repo root was on sys.path but `src/` was not, so the modules' internal `orama_system.*` imports broke) and degraded self-healing away with only a warning; (b) cross-node 401 auth rejections were swallowed at DEBUG level, so a missing shared token surfaced only as "No topology data after query" | Live standalone run pre-fix; `_http_get`'s old except-path | **FIXED**: both sys.path roots added with explanatory comment; 401/403 now logs an operator-actionable WARNING naming `ORAMA_CONTROL_PLANE_TOKEN` sync. Verified live post-fix (import clean; 401 loud). 53 affected tests green. |
-| D8 | **Shared-token prerequisite (mother plan §12 open question 4) is NOT deployed** — Mac's resolved token gets HTTP 401 from BOTH Win portals' `/api/fleet-topology`; cross-node topology merge cannot work until the operator syncs the token fleet-wide. Additionally the gating is **asymmetric**: the same unsynced token was ACCEPTED live by the Win portal's `POST /api/peer-relay-probe` (true 3-node relay succeeded) while `GET /api/fleet-topology` rejects — the two mesh endpoints enforce different live auth postures (test-suite 401 coverage runs under `ORAMA_INSECURE_DEV=1`, so it cannot see this) | Token test against both peers; live relay exit-0 vs live 401 | OPERATOR ACTION REQUIRED: deploy one shared `ORAMA_CONTROL_PLANE_TOKEN` across all 3 nodes (now loudly self-diagnosing per D7). Asymmetry flagged for security review — either relay-probe should enforce the same gate live, or the difference should be documented as intentional. |
+| D8 | **SELF-CORRECTED, see D9 — do not trust as originally written.** Original claim: "shared-token prerequisite (mother plan §12) is NOT deployed, operator must sync it." This was wrong. Logged here rather than deleted, per this workspace's standing discipline of surfacing corrections instead of quietly overwriting them. | — | Superseded by D9. |
+| D9 | **The real bug behind D8: two client call sites tried only ONE local token candidate instead of all available ones.** Testing every locally-available candidate directly against both Win portals found a SECOND candidate token that IS accepted (`HTTP 200`) — `resolve_control_plane_token()` just always returns `candidates[0]` unconditionally, and `query_peer_topology.py`/`lan_peer_assign.py` both called only that single-token resolver, never the multi-candidate list `probe_lan_peer.py`'s own `relay_probe()` already used. No token needed syncing; the client code needed to retry. | Direct per-candidate token test against `192.168.8.153:8002/api/fleet-topology`: candidate[0] (43 chars) → 401, candidate[1] (13 chars) → 200 | **FIXED**: both call sites now retry across `outbound_control_plane_tokens()` on 401/403, matching `relay_probe()`'s pattern; only warn as operator-actionable if EVERY candidate is rejected. Verified live: topology query now merges successfully; all 4 real pending outbox cards delivered (previously blocked). |
+| D10 | **`_merge_peer_topology()`'s first-ever-merge seed branch used the PEER's self-reported `local_node` as THIS node's own identity** — running on the Mac, it set `local_node = peer_data["local_node"]` (`"win-studio"`), then computed `peers_reachable` from a `peers_list` containing only that borrowed id. Since `local_node` (wrongly = the peer's name) was IN `peers_list` (also just the peer's name), `peers_reachable` came out `len(["win-studio"]) - 1 = 0` — SOLO, despite a live, successfully-merged peer response. Never caught before because the query always 401'd before reaching this code (masked by D9's bug, not exercised until D9 was fixed). | Live: real merge produced `fleet_topology.json` with `"local_node": "win-studio"` while running on the Mac | **FIXED**: new `_this_node_id()` (`socket.gethostname()`) seeds `local_node` correctly; `peers_list` now seeded as `[local_node, peer's_id]`. Verified live: reclassified PAIR (1 peer reachable), correct hostname. 3 regression tests added. |
+| D11 | **`display_fleet_status.load_fleet_topology()` assumed `peers` entries are dicts (`p.get("id", ...)`) — crashed `AttributeError` on the canonical writer's real schema**, which is `list[str]` per `FleetTopologyState`'s own docstring ("list of reachable peer identifiers"), confirmed by reading the PT dataclass directly. The existing 125 fleet tests never caught this because `tests/fixtures/fleet_topology_fixtures.py`'s mocks use the SAME wrong dict-shaped assumption the buggy code expected — synthetic fixtures and the real writer had silently diverged. A second instance of the exact class of gap PT `lesson_7155c5157bd4` ("verify against real production data, not just synthetic tests") already named earlier this session. A related bug in the same function then double-counted the local node as its own peer (e.g. "PAIR (2/2 reachable)" for one real peer) once the crash was naively fixed. | Live crash on first real `--fleet-status` run post-D9-fix; `git show` on PT's `FleetTopologyState` dataclass | **FIXED**: accepts both bare strings (the real/canonical shape) and dicts (mother-plan's original example shape, still used by existing fixtures — full backward compat, all 125 pre-existing tests still pass), and excludes `local_node` from the parsed peer list so it can't double-count itself. Verified live end-to-end: `start.sh --fleet-status` now correctly prints `PAIR (1/1 peers reachable)` listing only the real Win peer. 4 more regression tests added (`tests/test_fleet_topology_real_schema_regression.py`, 7 total). |
 
 ## 2. Peer-review findings (LAN fan-out) — adversarially verified, per claim
 
@@ -64,16 +67,24 @@ live. Both Win peers served real review inference during the run (§2).
 
 ## 5. Residual items (explicitly not silently dropped)
 
-- **Shared-token deployment (D8) is the ONE remaining blocker** for live
-  cross-node topology merge → `fleet_topology.json` → FLEET banner. It is
-  an operator action (sync `ORAMA_CONTROL_PLANE_TOKEN` on all 3 nodes), not
-  code. Everything downstream of it is verified working: portal endpoints
-  live on all 3 nodes, relay round-trips live, Phase 4/6 script now imports
-  and diagnoses cleanly.
+- **RESOLVED, not a blocker after all**: the token/merge/display chain
+  (D9/D10/D11) is now fully live-verified end to end. `start.sh
+  --fleet-status` correctly prints `Fleet Mode: PAIR (1/1 peers reachable,
+  cross-reachable=False)` listing the real Win peer, with all 3 pending
+  reply cards actually delivered to the peer's inbox. This is the mother
+  plan's first confirmed real round-trip since the plan was written.
+- **FLEET (3-node) mode not yet observed live** — `_discover_peers()`
+  (`query_peer_topology.py`) only resolves ONE peer from
+  `last_discovery.json` (matches `probe_lan_peer.py`'s own single-peer
+  discovery design), so this run's classification correctly tops out at
+  PAIR even with both Win nodes actually online. Reaching FLEET needs
+  multi-peer discovery wired into `_discover_peers()` — genuinely separate,
+  larger scope than this run (discovery redesign, not a bug fix); noted for
+  a follow-up, not attempted here.
 - `start.sh` full boot: >9 min and still initializing when the run's ceiling
   hit (it is a heavy multi-phase installer, not a quick launcher). Its
   serving components were verified live independently: portal up +
-  auth-gated, `--fleet-status` correct, discover watcher running.
+  auth-gated, `--fleet-status` correct end-to-end, discover watcher running.
 - 3080 relay-client review: dispatch timed out twice on the 27B model
   (>90s, >240s inference); the 5080 review (collected, verified, 1 finding
   hardened) covers the peer-review requirement. Recorded honestly rather
