@@ -1,0 +1,23 @@
+{
+  "skill_name": "oramasys-method",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "ultrathink this: our nightly gbrain sync keeps failing with CONNECTION_CLOSED from the supabase pooler, and I need a production-ready fix, not a band-aid.",
+      "expected_output": "States an AFRP: Type C | Mode 2 gate before anything else, searches gbrain first per the frugality chain (or states the fallback if gbrain is unavailable in-harness), walks Context Immersion through Crystallize explicitly, verifies programmatically rather than visually, and captures a lesson if the root cause was non-obvious.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "apply the system to: reconcile two divergent branches -- one team rewrote the auth module, another added feature flags on top of the old version. Get this mergeable.",
+      "expected_output": "Loads the integrative-merge doctrine before touching the conflict, classifies the merge mode instead of defaulting to --ours/--theirs, simulates the merge first (--no-commit --no-ff, --diff-filter=U, abort), and synthesizes both branches' intent rather than deleting either side's work.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "think deeply about whether we should move mcp-orchestration to the full 7-agent network or keep it in Mode 2 -- give me a real recommendation, not both-sides-itis.",
+      "expected_output": "States the AFRP gate result, evaluates the actual Router Decision Table signals (steps, systems touched, parallel work, context window risk) against mcp-orchestration's real shape, treats it as a high-risk skill per the retiring-fellow-skill-library preconditions before recommending an upgrade path, and lands on one concrete recommendation with stated tradeoffs rather than hedging.",
+      "files": []
+    }
+  ]
+}

@@ -9,7 +9,7 @@ description: >-
   skill, install a skill, modularize a skill, improve a SKILL.md, retiring fellow
   skill library, train smaller models with skills, or adapt .claude/skills
   runbooks into orama-system skills.
-version: 1.4.1
+version: 1.5.0
 license: Apache 2.0
 compatibility: claude-code, gstack, codex, cursor, gemini-cli, ecc
 parent_skill: orama-system
@@ -139,6 +139,25 @@ Trim unused folders for tiny skills. Do not create decorative empty structure.
 - Write canonical orama skills to `.claude/skills/`.
 - Mark done with failing validation.
 
+
+## Examples
+
+- Golden path (new skill + self-upgrade dogfood run): [`examples/good/golden-path.md`](examples/good/golden-path.md)
+- Anti-patterns to avoid: [`examples/bad/anti-patterns.md`](examples/bad/anti-patterns.md)
+- Eval rubric to run before declaring a skillify-produced skill done: [`eval/checklist.md`](eval/checklist.md)
+- Test prompts for the skill-creator dogfood loop: [`eval/evals.json`](eval/evals.json)
+- Audit trail + repeatable procedure for skillify upgrading itself (and oramasys-method) against both standards: [`references/dogfood-upgrade-log.md`](references/dogfood-upgrade-log.md)
+
+## Standards Conflict Note
+
+Anthropic's skill-creator keeps all "when to use" text in the frontmatter
+`description` only ("All 'when to use' info goes here, not in the body").
+This repo's own [`../../references/skill-architecture-guide.md`](../../references/skill-architecture-guide.md)
+recommends a body-level `## When to Use` section too. Where a skill's
+`description` already carries full trigger coverage (as this file's does),
+prefer Anthropic's leaner rule and skip the redundant body section — but say
+so, don't drop it silently. Re-add a body `## When to Use` if `description`
+alone isn't carrying enough trigger signal for a given skill.
 
 ## Post-Review Micro-Remediation
 
