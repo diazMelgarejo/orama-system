@@ -50,6 +50,61 @@ to remove that ambiguity, added 2026-07-22.
 | Four mandatory roles (Builder/Critic/Adversary/Judge, `collaborative-reasoning-safety.md`) | `Workflow`'s "Adversarial verify" pattern (N independent skeptics via `parallel()`, kill on majority refute) and "Judge panel" pattern (score N independent attempts, synthesize) |
 | "Switching Mode 2 → Mode 3 is an Ask First boundary (resource cost)" | `Workflow`'s own strict opt-in policy: only invoke on explicit "ultracode", explicit user ask, a skill/command that says to, or a named saved workflow — never invoke speculatively |
 
+## Model Tiering (mandatory — never inherit the parent's model/effort)
+
+`Workflow`'s `agent()` call inherits the session's resolved model when
+`opts.model` is omitted. **MODE 3 must never rely on that default.** Every
+`agent()` call in a MODE 3 script sets `model`/`effort` explicitly, per
+this three-tier frugality policy — cheapest tier that can do the job,
+escalate only when the tier below genuinely can't:
+
+**Tier 1 — Dispatch/control: Haiku (`claude-haiku-4-5-20251001`).**
+Job: spawn, direct, and operate every NON-Claude model/CLI this repo
+dispatches to and wants tightly controlled — Codex, Cline, Kimi, Cursor,
+Grok, Perplexity, OpenClaw, Hermes, and any other external agent. Haiku's
+job here is orchestration and control, not deep reasoning — it drives the
+dispatch, it doesn't do the thinking.
+
+**Tier 2 — Evaluate/integrate: Sonnet 5, effort medium.**
+Job: ONLY evaluating and integrating tier 1's work output — grading,
+merging, synthesizing, deciding pass/fail. Never used for dispatch/control
+itself; never skipped when tier-1 output needs judgment before landing.
+
+**Tier 3 — Escalation only: Opus (`claude-opus-4-8`) and/or Fable 5
+(`claude-fable-5`).**
+NEVER automated. Exactly two legitimate triggers:
+1. The user explicitly named Opus or Fable 5 for this task.
+2. A genuine escalation where tier 2 (Sonnet Medium) could not resolve the
+   work — raise an `AskUserQuestion` confirming the escalation **before**
+   spawning any Opus/Fable-5 `agent()` call. Never auto-escalate silently.
+
+Escalation is strictly ordered: tier 1 → tier 2 → tier 3, matched to
+actual task complexity. Never skip a tier "to be safe," and never reach
+for tier 3 because tier 1 was merely inconvenient — only because tier 2
+genuinely couldn't close it.
+
+```js
+// Tier 1 — dispatch/control (cheap, high fan-out)
+const codexResult = await agent('Run codex exec on: ...', {
+  model: 'claude-haiku-4-5-20251001', effort: 'low',
+})
+
+// Tier 2 — evaluate/integrate (judgment on tier-1 output, not dispatch)
+const verdict = await agent(`Evaluate and integrate: ${codexResult}`, {
+  model: 'claude-sonnet-5', effort: 'medium',
+})
+
+// Tier 3 — escalation only, gated behind AskUserQuestion, never automatic
+// (omit unless the user named Opus/Fable 5, or verdict confirms tier 2
+// couldn't resolve it AND the user confirmed escalation)
+```
+
+**Anti-pattern this replaces:** shipping a MODE 3 `Workflow` whose
+`agent()` calls omit `model`/`effort` and silently inherit the parent
+session's tier for every spawned agent — including cheap dispatch/control
+work that never needed it. An unset `model` on a dispatch-tier call in a
+MODE 3 script is a bug, not an acceptable default.
+
 ## What this does NOT mean
 
 - Do not remove or flatten MODE 3's own content (the role table, the
