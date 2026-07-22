@@ -1,0 +1,292 @@
+# Tiered Model Implementation Navigator
+
+**Version:** 2026-07-22  
+**Purpose:** Unified index for tiered model dispatch, frugality routing, skill trimming, and the ultrathink→oramasys migration.  
+**Canonical location:** `references/tiered-model-implementation-navigator.md`  
+**Cross-repo:** Also referenced from `Perpetua-Tools/docs/adr/` (ADR pointers to orama v2 decisions)
+
+---
+
+## Overview
+
+This document maps the complete landscape of tiered model routing, context optimization, and the oramasys successor plan. Every decision, implementation plan, and reference file is linked here for navigation and cross-repo consistency.
+
+**Key concepts:**
+- **Tiers 0–6:** Frugality router dispatch hierarchy (local → cached → cheap external → expensive external)
+- **Skill loading & context trimming:** Reducing bloat via selective reference bundling
+- **Ultrathink → oramasys:** Complete rename + v2 repo migration (github.com/oramasys/oramasys)
+- **Implementation roadmap:** P0–P5 phases, AC gates, dogfood evals
+
+---
+
+## Tier-1 Plans (Highest Relevance — Direct Match)
+
+### 1. **`docs/plans/2026-05-29-03-v1.1-definitive.md`** ⭐ PRIMARY
+**Canonical frugality router implementation plan.**
+
+- **Content:** Complete v1.1 specification for tiers 0–6, tool routing, escalation rules
+- **Sections:**
+  - `§4`: Tier definitions (local/cached/cheap/expensive), escalation gates
+  - `§7 (week 2–3)`: Implementation timeline
+  - `§11`: Test/validation approach
+- **Status:** Spike landed; 15 tests pass; operator PR review pending
+- **Depends on:** Perpetua-Tools `orchestrator/frugality_router.py` implementation
+- **Ref:** `bin/orama-system/skills/hermes-harness/references/assignments/mac-orchestrator-frugality-router-spike.md`
+
+**Action:** Read this first for tier architecture and routing logic.
+
+---
+
+### 2. **`docs/v2/29-oramasys-mastery-implementation-plan.md`** ⭐ PRIMARY
+**Complete successor plan: ultrathink → oramasys + v2 migration.**
+
+- **Content:** Meta-layer integration (M1–M6), v2 repo scaffold, dependency order
+- **Sections:**
+  - `§1`: Current state snapshot (2026-06-13)
+  - `§2`: Diff to add to `bin/orama-system/SKILL.md` (~50 lines, 0 changed)
+  - `§3`: New reference files (collaborative-reasoning-safety.md, communication-guidelines.md)
+  - `§4`: GOAL.md AC1 prerequisite (agent-methodology card fix)
+  - `§5`: v2 repo migration path (flat structure, new skills)
+  - `§6`: Programmatic deduplication checks
+  - `§7`: AC gates (10 ACs, progression P0–P5)
+- **Status:** Approved for execution — v2 migration active
+- **Depends on:** GOAL.md AC1 (agent-methodology divergent 5-stage fix)
+- **Outputs:** v2 repo scaffold, renamed skills, new reference files
+
+**Action:** Read for mastery meta-layers, v2 structure, and AC progression.
+
+---
+
+### 3. **`bin/orama-system/skills/hermes-harness/references/assignments/mac-orchestrator-frugality-router-spike.md`**
+**Spike implementation record: frugality router live code.**
+
+- **Content:** Spike status, what's implemented vs deferred
+- **Sections:**
+  - Tier 0–6 definitions, `ToolCallSpec` / `ResolvedRoute` types
+  - `ORAMASYS_OFFLINE=1`, `privacy_critical` gates
+  - JSONL span tracing with `ot.tool.tier`
+  - Follow-on work (frugality-report dashboard, test_realistic_session.py, full dispatch wiring)
+- **Status:** Landed; unblocks G1 (re-run mac-g1-frugality-baseline.md checklist post-merge)
+- **Depends on:** Perpetua-Tools spike branch merged
+- **Ref:** SKILL.md author = Perpetua-Tools coord-007 (Mac orchestrator)
+
+**Action:** Read for current spike status and what's deferred to P1 follow-on.
+
+---
+
+## Tier-2 Plans (Supporting Context — Related Architecture)
+
+### 4. **`docs/v2/37-manifest-cost-tiering-pattern.md`**
+**Cost-aware tiered dispatch pattern (generalized beyond frugality router).**
+
+- **Content:** How to structure cost metrics, per-tier budgets, backpressure
+- **Relevance:** Orthogonal to frugality tier 0–6 but compatible pattern
+- **Uses:** Manifest-driven config for multi-model cost allocation
+
+---
+
+### 5. **`docs/v2/30-multi-llm-router-caching-batching-decorator.md`**
+**Multi-model routing with caching and request batching.**
+
+- **Content:** How tiers 3+ (expensive external) batch calls and cache responses
+- **Relevance:** Caching strategy for tier 3+ escalations
+
+---
+
+### 6. **`docs/v2/36-clawrouter-scoring-pattern.md`**
+**Router scoring: how to pick the right model per tier.**
+
+- **Content:** Confidence scoring, latency vs quality tradeoffs
+- **Relevance:** Model selection within a tier once tier is chosen
+
+---
+
+### 7. **`docs/plans/2026-05-29-01-cursor-PLAN.md`**
+**Cursor integration plan (related to ultrathink/oramasys adoption in Cursor).**
+
+- **Content:** How Cursor harness routes to oramasys (post-rename)
+- **Status:** Design phase; related to broader CLI wiring
+
+---
+
+### 8. **`docs/plans/2026-06-14-plan-completion-tracker.md`**
+**Master tracker: completion status of all tier/frugality/mastery plans.**
+
+- **Content:** Checkpoints for each plan's AC gates, current status
+- **Relevance:** Overall progress tracking across P0–P5
+
+---
+
+## Supporting References
+
+### Frugality & Search Policy
+
+- **`bin/orama-system/SKILL.md` § Search Policy**
+  - Frugality chain: gbrain → CRG → Brave → Perplexity → Grok
+  - Non-negotiable: stop at first tool that answers
+  - Integrated with AFRP Type routing
+
+- **`bin/orama-system/skills/oramasys-method/references/search-frugality.md`**
+  - Decision tree: semantic intent → gbrain, symbol def → gbrain code-def, etc.
+  - Harness fallback ladders (graceful-degradation.md)
+
+### Skill Architecture & Trimming
+
+- **`references/skill-architecture-guide.md`**
+  - Why skills bundle examples/, eval/, references/
+  - Cross-repo vs single-repo skill constraints
+  - Canonical repo files (1536-char frontmatter, ../../references/) vs packaged .skill files (1024-char, metadata: envelope)
+
+- **`bin/orama-system/skills/skillify/references/skill-folder-template.md`**
+  - Standard folder shape for any new skill
+  - examples/, eval/, references/ structure
+
+- **`bin/orama-system/skills/skillify/references/dogfood-upgrade-log.md`**
+  - Procedure for self-referential skill upgrades (skillify upgrading itself)
+  - Audit notes from 2026-07-22 pass (both skillify and oramasys-method upgraded, .skill packaging validated)
+  - Post-merge incident: ~/.claude/skills name collision (gstack's skillify vs orama-system's skillify) — **resolved 2026-07-22**: recovered gstack's clobbered file, renamed this repo's own colliding `gstack` skill to `gstack-gbrain`, extracted a shared `scripts/check-skill-namespace-collision.sh` guard called at both naming-time (skillify intake) and publish-time (`scripts/install-skills.sh`)
+
+### Claude Code Mode 3 Execution + Model Tiering
+
+- **`bin/orama-system/references/claude-code-workflow-canonical.md`** ⭐ NEW 2026-07-22
+  - Canonical mapping: orama-system MODE 3 roles → Claude Code `Workflow` tool primitives (`agent()`/`parallel()`/`pipeline()`/`phase()`)
+  - **Mandatory model tiering** for every MODE 3 `agent()` call — never inherit the parent session's model/effort:
+    - Tier 1 (dispatch/control of non-Claude models — Codex, Cline, Kimi, Cursor, Grok, Perplexity, OpenClaw, Hermes): Haiku
+    - Tier 2 (evaluate/integrate tier-1 output only): Sonnet 5, effort medium
+    - Tier 3 (Opus / Fable 5): escalation-only — explicit user request, or `AskUserQuestion`-confirmed escalation; never automated
+  - Wired from `bin/orama-system/SKILL.md` MODE 3, `oramasys-method/SKILL.md` Type→Mode mapping, `references/collaborative-reasoning-safety.md`
+  - Distinct from the frugality router's tiers 0–6 above (that's TOOL routing — gbrain/CRG/Brave/Perplexity/Grok, local vs cached vs expensive external); this is MODEL routing for spawned Claude subagents specifically
+
+### Ultrathink → Oramasys Rename
+
+- **`GOAL.md`** (orama-system root)
+  - AC1–AC10 gates for complete rename
+  - Current status: AC1 (agent-methodology card) blocking AC2–AC10
+  - Rename scope: ultrathink → oramasys in all public APIs, schemas, config, headings
+
+- **`docs/LESSONS.md`**
+  - Continuous learning log; lessons from each session
+  - Cross-linked to `.claude/lessons/LESSONS.md` (thin wrapper, canonical is docs/)
+
+### Portable Memory & Topology
+
+- **`docs/v2/47-portable-memory-local-topology-invariant.md`** ⭐ CRITICAL
+  - Banned: hardcoding workstation paths, credentials, device endpoints in tracked files
+  - Allowed: `$WIN_CODER_ENDPOINTS`, `$OMNIROUTE_TOKEN`, portable-memory local-only registry
+  - Supersession ≠ sanitization: delete the source row, regenerate derived views
+
+### Multi-Agent Collaboration & Merging
+
+- **`bin/orama-system/references/integrative-merge.md`**
+  - PR merge doctrine: synthesize, never amputate
+  - Six merge modes: additive → union → superset → synthesize → architecturally-correct → api-correct
+  - Mandatory for nested-branch integration (oramasys Method Step 2)
+
+---
+
+## Cross-Repo Grounding (Required Before Any Decision)
+
+**INVARIANT:** orama-system and Perpetua-Tools are interdependent. Always inspect BOTH repos.
+
+| What | Canonical Location | NOT here |
+|---|---|---|
+| Frugality tier implementation | `Perpetua-Tools/orchestrator/frugality_router.py` + `orama-system/docs/plans/2026-05-29-03-v1.1-definitive.md` § 4,7,11 | — |
+| Mastery meta-layers (M1–M6) | `orama-system/docs/v2/29-oramasys-mastery-implementation-plan.md` § 2–3 | — |
+| Runtime state (L2 dispatch) | `Perpetua-Tools/orchestrator/` | orama-system (L3, stateless) |
+| PT ADR pointers | `Perpetua-Tools/docs/adr/ADR-NNN-*.md` | Generated from orama v2 decisions |
+| v2 repo bootstrap | `orama-system/docs/v2/29-oramasys-mastery-implementation-plan.md` § 5 | github.com/oramasys/oramasys |
+
+---
+
+## Implementation Sequence (P0–P5)
+
+```
+P0: Rename (GOAL.md AC1–AC10)
+    ├─ Fix agent-methodology card (AC1)
+    └─ Rename all public APIs (AC2–AC7)
+       |
+P1: Apply SKILL.md diffs + reference files (§ 2–3)
+    ├─ Add Meta-layers (Spec Contract, Amplifier Tree, Collaborative Safety, Output Discipline)
+    └─ Create reference files (collaborative-reasoning-safety.md, communication-guidelines.md)
+       |
+P2: v2 repo scaffold (flat structure, new skills)
+    ├─ skills/oramasys, skills/oramasys-method
+    └─ skills/prompt-engineering, skills/spec-contract
+       |
+P3: Frugality router integration (PT v1.1)
+    ├─ Wire orchestrator/frugality_router.py into all dispatch paths
+    └─ Implement tier gates (ORAMASYS_OFFLINE, privacy_critical)
+       |
+P4: Skill trimming & loading optimization
+    ├─ Selective reference bundling (examples/, eval/ per tier)
+    └─ Dogfood evals for shrunk skills
+       |
+P5: Tag v1.1.0 lockstep (orama-system + Perpetua-Tools)
+```
+
+---
+
+## GBrain + Code-Review-Graph Alignment
+
+Both use **Ollama bge-m3** (1024-dim, local, free):
+- **gbrain:** 5 sources (AlphaClaw 478pp, PT 725pp, orama-src 192pp, periscope 14pp, default 1599pp)
+- **CRG:** 1,461 nodes, 1,257 bge-m3 embeddings, 12 communities (orama-system graph)
+- **Storage roadmap:** v2.1 LanceDB + bge-m3 for RAG/session memory; v2.5 DuckDB for fleet analytics
+- **GossipBus:** Job/decision-history migration to LanceDB (not bespoke persistence) — validated live 2026-07-12
+
+---
+
+## Key Files Summary Table
+
+| File | Purpose | Tier | Status | Action |
+|------|---------|------|--------|--------|
+| `docs/plans/2026-05-29-03-v1.1-definitive.md` | Frugality tier 0–6 spec | 1 | Spike landed | Read §4,7,11 |
+| `docs/v2/29-oramasys-mastery-implementation-plan.md` | Mastery + v2 migration | 1 | Approved | Read §1–7 for context & ACs |
+| `bin/orama-system/skills/hermes-harness/references/assignments/mac-orchestrator-frugality-router-spike.md` | Spike status | 1 | Live | Read for current state |
+| `docs/v2/37-manifest-cost-tiering-pattern.md` | Cost dispatch pattern | 2 | Design | Skim for orthogonal approach |
+| `docs/v2/30-multi-llm-router-caching-batching-decorator.md` | Caching for tier 3+ | 2 | Design | Reference if escalating to expensive |
+| `docs/v2/36-clawrouter-scoring-pattern.md` | Model selection within tier | 2 | Design | Reference for scoring logic |
+| `bin/orama-system/SKILL.md` | Mother skill | Core | Live | Frugality chain in step 1 |
+| `bin/orama-system/skills/oramasys-method/SKILL.md` | oramasys user skill | Core | Live v1.3.2 | Read for AFRP + 5-stage + frugality |
+| `GOAL.md` | Rename gates AC1–AC10 | Core | In progress | AC1 blocking, track for P0 completion |
+| `docs/v2/47-portable-memory-local-topology-invariant.md` | Security/hygiene | Core | Canonical | Read before any config edits |
+| `bin/orama-system/skills/skillify/references/dogfood-upgrade-log.md` | Self-upgrade audit trail | Reference | Live 2026-07-22 | Read for skill upgrade procedure |
+| `bin/orama-system/references/claude-code-workflow-canonical.md` | Mode 3 → `Workflow` tool mapping + mandatory model tiering | Core | Live 2026-07-22 | Read before authoring any MODE 3 `Workflow` script |
+
+---
+
+## How to Use This Document
+
+1. **Planning a tier/routing change?**
+   → Read `docs/plans/2026-05-29-03-v1.1-definitive.md` § 4 (tier definitions)
+
+2. **Implementing v2 migration?**
+   → Read `docs/v2/29-oramasys-mastery-implementation-plan.md` § 5–7 (scaffold + ACs)
+
+3. **Applying a frugality optimization?**
+   → Follow `bin/orama-system/SKILL.md` Step 1 (search frugality chain)
+
+4. **Upgrading a skill (skillify on itself)?**
+   → Follow `bin/orama-system/skills/skillify/references/dogfood-upgrade-log.md` (procedure)
+
+5. **Cross-repo consistency check?**
+   → Verify both Perpetua-Tools and orama-system before deciding (see "Cross-Repo Grounding" above)
+
+6. **Checking current progress?**
+   → Consult `docs/plans/2026-06-14-plan-completion-tracker.md` (master status)
+
+---
+
+## Related Concepts
+
+- **AFRP gate** (oramasys Method Step 0): Type A/B/C/D, Novice/Practitioner/Expert, Mode 1/2/3
+- **CIDF** (Content Insertion Decision Framework): Rank-1–6 insertion protocol before any content lands
+- **TDD gate** (oramasys Method Step 4): Programmatic verification before "done"
+- **Integrative merge** (oramasys Method Step 2): Additive harmonization, never delete-and-replace
+- **Search frugality** (oramasys Method Step 1): gbrain → CRG → Brave → Perplexity → Grok
+
+---
+
+**Last updated:** 2026-07-22  
+**Maintained by:** orama-system + Perpetua-Tools coordination (two-repo grounding)  
+**Feedback:** Append to `docs/LESSONS.md` with session + discovery
