@@ -54,7 +54,7 @@ at ledger-write time; will be appended to the PR conversation when collected
 | 6. Gossip relay when direct fails | **FIXED THIS RUN** | client `--relay` + **live relay exit-0 to both Win peers through the real authenticated portal** |
 | 7. `start.sh --fleet-status` | BUILT (prior) | runs; correctly reports "no topology yet → run start.sh" before first init |
 | 8. Banner shows SOLO/PAIR/FLEET | BUILT (prior) | start.sh banner hooks at the fleet-status display sites |
-| 9. No breaking changes | HOLDS | full orama suite **1323 passed / 6 skipped** WITH this run's changes |
+| 9. No breaking changes | HOLDS | full orama suite **1330 passed / 6 skipped** with the complete fix chain (D2-D3, D9-D11) applied |
 | 10. Endpoints auth-gated | BUILT (prior) + live-observed | 401 tests green; live portal answered `{"detail":"Unauthorized"}` unauthenticated |
 
 ## 4. Live fleet observed during the run
@@ -81,10 +81,13 @@ live. Both Win peers served real review inference during the run (§2).
   multi-peer discovery wired into `_discover_peers()` — genuinely separate,
   larger scope than this run (discovery redesign, not a bug fix); noted for
   a follow-up, not attempted here.
-- `start.sh` full boot: >9 min and still initializing when the run's ceiling
-  hit (it is a heavy multi-phase installer, not a quick launcher). Its
-  serving components were verified live independently: portal up +
-  auth-gated, `--fleet-status` correct end-to-end, discover watcher running.
+- **`start.sh` full boot: COMPLETE, verified live.** PT/orama/Portal all
+  reported healthy on `/health`; model fallback chain fully verified (5
+  tiers checked, GLM-5.2 armed as ultimate fallback); orchestrator wiring
+  fired (Mac researcher dispatch + Win peer watcher both armed, dual-node
+  192.168.8.153 + 192.168.9.240 polling). This is the mother plan's goal
+  statement ("make this work flawlessly out of the box") demonstrated
+  end-to-end, not just asserted.
 - 3080 relay-client review: dispatch timed out twice on the 27B model
   (>90s, >240s inference); the 5080 review (collected, verified, 1 finding
   hardened) covers the peer-review requirement. Recorded honestly rather
