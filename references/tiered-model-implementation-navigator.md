@@ -307,6 +307,29 @@ Both use **Ollama bge-m3** (1024-dim, local, free):
 
 **Lesson for future navigator upkeep:** a plan's own "Not in spike / follow-on" section is a load-bearing TODO list, not throwaway scoping prose — when auditing "is X actually wired," check the spike doc's own deferred-work section before concluding the gap is undocumented. It usually isn't.
 
+### Cross-Repo Plan Register — unaudited/unfinished plans found while tracing this trail (2026-07-22)
+
+Not absorbed into this navigator's scope or into the frugality/privacy
+reconciliation plan — listed here so they don't scatter across future
+sessions, per the same "name it, don't silently drop it" discipline as the
+reconciliation plan's own "Explicit non-goals" section.
+
+| Plan | Repo | Status (as found 2026-07-22, not re-verified) | Relation to this navigator |
+|---|---|---|---|
+| `docs/plans/2026-06-14-plan-completion-tracker.md` | orama | Says `COMPLETE` (2026-06-14) — **stale**: this session's own P3 trail shows live open work postdating it | Superseded by this navigator + the reconciliation plan for P3; treat the 2026-06-14 "COMPLETE" claim as outdated for frugality |
+| `docs/plans/2026-06-24-optimization-priorities.md` | orama | `🔄 ACTIVE` — L1 skipped, L6 schemas still "📋 planned" | Independent backlog; not frugality-related, but shares the "stale-looking, actually still open" pattern found this session |
+| `docs/plans/2026-07-14-orama-housecleaning-leftovers-next-steps.md` | orama | Next-steps doc, not status-tagged | Unaudited this session — check before assuming closed |
+| `docs/plans/2026-07-06-orama-skill-upgrade-roadmap.md` | orama | "PR 1 planning artifact" | Unaudited whether PR2+ landed; the P4 skill-trimming work done 2026-07-22 (this session) may partially satisfy it — not cross-checked |
+| `Perpetua-Tools/docs/2026-05-31-tri-repo-alignment-completion-plan.md` | PT | Own header: "active resume anchor" | Genuinely still open per its own text; this navigator's Item 2 (closeout plan) already flags it needs re-verification, not yet done |
+| `Perpetua-Tools/docs/references/phase0-and-orama-open-work-closure-plan-2026-07-18.md` | PT | "planning handoff; no implementation or merge authorized by this file" | Recent (2026-07-18), unaudited against current state — check before next Phase 0 work |
+| `Perpetua-Tools/docs/next/2026-07-17-coordination-module-consolidation-plan.md` + its review `docs/references/coordination-consolidation-plan-review-2026-07-18.md` | PT | `/autoplan` CLOSED — Parts 1/1b/1c/1d dispatch-ready; Part 2 drafted not executed; Part 3 deferred | Active, adjacent workstream (coordination/queue module) — unrelated to frugality/privacy but same repo, same era; worth a status re-check in the same pass that revisits tri-repo-alignment |
+
+**Verdict on this register:** none of these are frugality/privacy-topic
+matches — they're independent unfinished threads surfaced as a byproduct of
+walking both repos' `docs/` trees for this trace. Recorded here rather than
+silently ignored; resolving them is out of scope for the P3 reconciliation
+work above.
+
 ---
 
 **Last updated:** 2026-07-22  

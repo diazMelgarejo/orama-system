@@ -122,6 +122,20 @@ multiple follow-up conversations.
 
 ---
 
+## Cross-References
+
+- Full historical trail for the Item 1 framing correction:
+  `references/tiered-model-implementation-navigator.md` § "Close-Out: P3
+  Frugality/Privacy Historical Trail."
+- Unaudited/unfinished plans found (but not resolved) while tracing that
+  trail across both repos' `docs/` trees, including PT's still-open
+  tri-repo-alignment and coordination-consolidation threads:
+  `references/tiered-model-implementation-navigator.md` § "Cross-Repo Plan
+  Register."
+- PT `.agent` memory: lessons from this reconciliation pass are graduated
+  under the `frugality-privacy-reconciliation` topic — see
+  `Perpetua-Tools/.agent/memory/semantic/LESSONS.md` for the rendered index.
+
 ## Explicit non-goals (name them, don't silently absorb)
 
 - This plan does NOT commit to a timeline for Item 1 — the design
