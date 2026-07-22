@@ -287,6 +287,28 @@ Both use **Ollama bge-m3** (1024-dim, local, free):
 
 ---
 
+## Close-Out: P3 Frugality/Privacy Historical Trail (2026-07-22)
+
+**Why this section exists:** the 2026-07-22 `/autoplan` pass on this navigator found `orchestrator/frugality_router.py` has zero real callers, and initially framed this as "three unreconciled privacy/frugality implementations." A gbrain trace back through the hermes-harness assignment/result records and `v1.1-definitive.md`'s own text corrects that framing — the gap is real, but it is not an accidental architectural collision. It is a **named, deferred TODO from the original spike that was simply never picked back up.**
+
+**The trail, most-recent-development back to original motivation:**
+
+1. **2026-05-29** — `docs/plans/2026-05-29-03-v1.1-definitive.md` §4/§6.1 specifies `frugality_router.py` as "a single chokepoint for tool/model calls." This is the origin of the "should be the one gate" intent.
+2. **2026-06-14** — same plan's header gets a `✅ RESOLVED` banner: "v1.1 shipped: oramasys AC rename + frugality + tiered OpenRouter via PR #76 (`89283e8`), #74, #82." **"Shipped" here means the module merged with its own unit tests passing — not that any real dispatch path calls it.** This is a genuine wording risk in the historical record (a stale reader could reasonably take "shipped" as "wired"), but it is not a fabricated claim.
+3. **2026-06-29** — `bin/orama-system/skills/hermes-harness/references/assignments/mac-orchestrator-frugality-router-spike.md` (the actual spike assignment) explicitly lists, under **"Not in spike (follow-on P1)"**: *"Wire into all dispatch paths (supervisor, fastapi_app)."* The wiring gap was named and scoped out on day one — never silently dropped.
+4. **2026-06-29** — `bin/orama-system/skills/hermes-harness/references/assignments/win-coder-pt199-frugality-review.md` + its result `references/results/win-pt199-frugality-reconcile.md`: Win coder reviewed PR #199 (the spike), confirmed 15/15 unit tests pass, found no blocking issues, and recommended merge — **the review's own scope was "does the module work in isolation," not "is it wired in."** Approved on those terms.
+5. **2026-07-22 (this session)** — `docs/v2/30-multi-llm-router-caching-batching-decorator.md` (a *separate*, later ADR, dated 2026-06-15 in its own footer) independently documents `ModelRegistry.route_task` as **"HTTP `/orchestrate` only"** and explicitly forbids the dispatch path (`supervisor.py`'s `_dispatch`) from calling it — i.e., `route_task()`'s scope (general task-type routing) and `_dispatch`'s scope were already deliberately kept separate **by design**, not by accident. This ADR never mentions `frugality_router.py` at all — confirming the two systems evolved on independent tracks with no cross-reference, which is itself the root cause of the fragmentation (not malice or carelessness, just two efforts that never got introduced to each other).
+
+**Revised framing (supersedes "three unreconciled implementations"):**
+
+- `config/routing.yml`'s task_type exclusion + `src/perpetua_tools/orchestrator.py`'s `req.privacy_critical` chain are **two faces of one documented, working mechanism**: general routing policy (routing.yml, always-on) plus an explicit per-request override (orchestrator.py, opt-in via request field). They are not in conflict — they compose today, in production, right now.
+- `orchestrator/frugality_router.py` is the **outlier**, and it is an outlier by omission, not by design collision: its own spike doc named the exact follow-on task ("wire into all dispatch paths") that would have prevented today's finding, and that task simply sat unpicked for ~3 weeks (2026-06-29 → 2026-07-22) while other P1/P2/P4 work took priority.
+- **Practical implication for `docs/plans/2026-07-22-frugality-privacy-reconciliation-and-navigator-closeout.md` Item 1:** this is closer to "finish a known-deferred integration task with a design decision attached" than "resolve a three-way architectural dispute." The design question that still needs a human call is narrower than originally scoped: *does `frugality_router.py` become the thing `routing.yml`/`orchestrator.py` delegate to, or does it stay a parallel, optional tier-tracking layer that only some call sites opt into?* Both are legitimate answers — Codex's "single policy gate" proposal answers "delegate to it"; the additive-only `ModelTarget.frugality_tier` field shipped 2026-07-22 is compatible with either answer, which is why it was safe to land ahead of the decision.
+
+**Lesson for future navigator upkeep:** a plan's own "Not in spike / follow-on" section is a load-bearing TODO list, not throwaway scoping prose — when auditing "is X actually wired," check the spike doc's own deferred-work section before concluding the gap is undocumented. It usually isn't.
+
+---
+
 **Last updated:** 2026-07-22  
 **Maintained by:** orama-system + Perpetua-Tools coordination (two-repo grounding)  
 **Feedback:** Append to `docs/LESSONS.md` with session + discovery
