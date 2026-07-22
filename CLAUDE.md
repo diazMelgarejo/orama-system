@@ -168,7 +168,7 @@ Safety rules:
 
 Load routing table + GBrain config:
 ```
-/skill bin/orama-system/gstack/SKILL.md
+/skill bin/orama-system/gstack-gbrain/SKILL.md
 ```
 
 ---
