@@ -68,10 +68,16 @@ except ImportError as exc:
     logging.error("Cannot import orchestrator modules from %s: %s", _PT_ROOT, exc)
     sys.exit(2)
 
-# Add orama-system to path for Phase 6 self-healing modules
+# Add orama-system to path for Phase 6 self-healing modules.
+# BOTH roots are needed: repo root satisfies the explicit `src.orama_system.*`
+# imports below, while `src/` itself satisfies the `orama_system.*` imports
+# those modules make internally. Without src/ on the path, standalone
+# invocation (exactly how coord_pulse.sh calls this script) failed with
+# "No module named 'orama_system'" and silently degraded Phase 6 away.
 _ORAMA_ROOT = _REPO_ROOT
-if str(_ORAMA_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ORAMA_ROOT))
+for _p in (_ORAMA_ROOT, _ORAMA_ROOT / "src"):
+    if _p.exists() and str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 try:
     from src.orama_system.fleet_health_monitor import (
@@ -125,7 +131,24 @@ def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | No
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             data = resp.read().decode("utf-8")
             return json.loads(data) if data.strip() else None
-    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            # Auth rejection is an OPERATOR-ACTIONABLE condition, not noise:
+            # cross-node topology merge requires the shared control-plane
+            # token (mother plan §12 open question 4) to be deployed on every
+            # node. Swallowing this at debug level turned a token mismatch
+            # into a silent "No topology data after query" with zero
+            # diagnostic (2026-07-19 OOB findings ledger, D7).
+            logger.warning(
+                "Peer %s rejected our control-plane token (HTTP %d). "
+                "Cross-node fleet-topology requires the SHARED token on all "
+                "nodes — sync ORAMA_CONTROL_PLANE_TOKEN across the fleet.",
+                url, exc.code,
+            )
+        else:
+            logger.debug("HTTP GET %s failed: %s", url, exc)
+        return None
+    except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
         logger.debug("HTTP GET %s failed: %s", url, exc)
         return None
     except Exception as exc:

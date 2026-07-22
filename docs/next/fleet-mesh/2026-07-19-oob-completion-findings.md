@@ -19,6 +19,8 @@ is how the next agent re-litigates it.
 | D4 | LLM-Council Task03 brief asserts code facts that **do not exist**: `TIER_PROBE_TIMEOUT_S = 10.0` (nowhere in PT `orchestrator/`) and `cost_guard` integration in `frugality_router.py` (imports `backend_resolver`, not cost_guard) | `grep -rn TIER_PROBE_TIMEOUT orchestrator/` = empty; frugality_router imports checked | Documented as ABSENT in the new `fable5-tier-based-routing/references/operational-fallback-chain.md` instead of fabricating; Task03 report carries NEEDS_CONTEXT for these two checks. |
 | D5 | Task03's "mandatory" 4-tier structure (Ollama→Win LMS→GLM-5.2→Sonnet) **conflicts** with the existing skill's code-grounded routing tiers (Local OSS→gbrain/CRG→HF Free→Proprietary Free) | SKILL.md (499 lines, at the ≤500 ceiling) vs Task03 brief | Reconciled ADDITIVELY: both vocabularies are legitimate (tool-call routing vs inference-backend fallback); new reference file documents the distinction rather than overwriting either. |
 | D6 | `start.sh` resolves PT_DIR through the legacy Documents-tree symlink location rather than the canonical code-tree checkout | `--fleet-status` startup log line | Cosmetic (the symlink resolves to the same repository); noted, not changed in this run — PT_DIR resolution order is start.sh policy, out of scope for the mesh goal. |
+| D7 | Phase 4/6 (`query_peer_topology.py`) was **silently broken in exactly the two ways an operator would hit first**: (a) standalone invocation — how `coord_pulse.sh` calls it — failed Phase 6 imports (`No module named 'orama_system'`: repo root was on sys.path but `src/` was not, so the modules' internal `orama_system.*` imports broke) and degraded self-healing away with only a warning; (b) cross-node 401 auth rejections were swallowed at DEBUG level, so a missing shared token surfaced only as "No topology data after query" | Live standalone run pre-fix; `_http_get`'s old except-path | **FIXED**: both sys.path roots added with explanatory comment; 401/403 now logs an operator-actionable WARNING naming `ORAMA_CONTROL_PLANE_TOKEN` sync. Verified live post-fix (import clean; 401 loud). 53 affected tests green. |
+| D8 | **Shared-token prerequisite (mother plan §12 open question 4) is NOT deployed** — Mac's resolved token gets HTTP 401 from BOTH Win portals' `/api/fleet-topology`; cross-node topology merge cannot work until the operator syncs the token fleet-wide. Additionally the gating is **asymmetric**: the same unsynced token was ACCEPTED live by the Win portal's `POST /api/peer-relay-probe` (true 3-node relay succeeded) while `GET /api/fleet-topology` rejects — the two mesh endpoints enforce different live auth postures (test-suite 401 coverage runs under `ORAMA_INSECURE_DEV=1`, so it cannot see this) | Token test against both peers; live relay exit-0 vs live 401 | OPERATOR ACTION REQUIRED: deploy one shared `ORAMA_CONTROL_PLANE_TOKEN` across all 3 nodes (now loudly self-diagnosing per D7). Asymmetry flagged for security review — either relay-probe should enforce the same gate live, or the difference should be documented as intentional. |
 
 ## 2. Peer-review findings (LAN fan-out) — adversarially verified, per claim
 
@@ -62,11 +64,27 @@ live. Both Win peers served real review inference during the run (§2).
 
 ## 5. Residual items (explicitly not silently dropped)
 
-- `start.sh` full roundtrip: launched; `fleet_topology.json` not yet written
-  at ledger time (services still initializing) — completion + FLEET-mode
-  banner verification recorded in the PR conversation when the run settles.
-- 3080 relay-client review: pending collection (see §2).
+- **Shared-token deployment (D8) is the ONE remaining blocker** for live
+  cross-node topology merge → `fleet_topology.json` → FLEET banner. It is
+  an operator action (sync `ORAMA_CONTROL_PLANE_TOKEN` on all 3 nodes), not
+  code. Everything downstream of it is verified working: portal endpoints
+  live on all 3 nodes, relay round-trips live, Phase 4/6 script now imports
+  and diagnoses cleanly.
+- `start.sh` full boot: >9 min and still initializing when the run's ceiling
+  hit (it is a heavy multi-phase installer, not a quick launcher). Its
+  serving components were verified live independently: portal up +
+  auth-gated, `--fleet-status` correct, discover watcher running.
+- 3080 relay-client review: dispatch timed out twice on the 27B model
+  (>90s, >240s inference); the 5080 review (collected, verified, 1 finding
+  hardened) covers the peer-review requirement. Recorded honestly rather
+  than re-queued a third time — diminishing returns.
 - Win-side E2E kill/restart degradation test: requires a Win-side actor;
-  instruction card already dropped to the lan_peer outbox.
-- PT-side: zero changes needed this run (its mesh pieces were green on
-  current main); PT lessons entry via learn.py accompanies this branch's PR.
+  instruction card + stale-alert reply card both in the lan_peer outbox.
+- Queue-fallback protocol (§5 of the mother plan) exercised WITH REAL
+  TRAFFIC during this run: a Win watchdog alert card (dated 07-13,
+  delivered 07-22 on reconnect) was received, live-verified as resolved
+  (both Win portals healthy), and answered with a reply card including a
+  staleness-guard recommendation for the watchdog's outbox flush.
+- PT-side: zero code changes needed (its mesh pieces green on current
+  main). PT lessons deferred to the next active PT branch per the standing
+  no-main-commits rule; captured here and on the board meanwhile.

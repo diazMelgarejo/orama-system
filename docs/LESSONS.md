@@ -4190,3 +4190,43 @@ commit, per that section's own closing instruction. The § 4.0 full-zero
 `ultrathink` baseline (deliberate trigger-aliases + cosmetic docstrings)
 remains correctly deferred to the v2.0 cutover per the 2026-06-10 decision
 — not a v1.1 requirement.
+
+---
+
+## 2026-07-22 — H6 researcher backlog dispatch (win-autoresearcher-queue)
+
+**Job:** `subagent/win-autoresearcher/researcher-backlog-h6` via `dual_path_dispatch` / `coord_pulse`.
+
+- Win preflight `gpu-results-h6-preflight.md` confirmed H5 closed; B1 frugality blocks speculative GPU without Mac hypothesis.
+- Mac selected **Option A** (`mac-hypothesis-h6-real-task.md`) and queued Win peer drop for H6 real-task autoresearch.
+- Deliverable: `mac-researcher-h6-dispatch-complete.md`.
+- **Pattern:** preflight doc spike → Mac hypothesis fan-out → Win single LM Studio pass → `gpu-results-h6.md` drop.
+- Win peer reachable at discovery `endpoints.win.ip` with `qwen3.5-27b` warm (2026-07-22 probe).
+
+## 2026-07-19 - Fleet-mesh OOB completion run (3 lessons)
+
+**Cross-repo companion:** full evidence ledger at
+`docs/next/fleet-mesh/2026-07-19-oob-completion-findings.md` (same PR).
+
+**1. A patch that "truncates for safety" is a deletion.** `ip_resolver.py`
+was replaced by a 98-line patch fragment with a literal "rest of file
+unchanged (truncated for patch safety)" comment — deleting the P1-P6
+resolver chain while its importers lived on. Recovery = restore last-good
+from git + graft the patch's one legitimate change; prevention = a contract
+test asserting every public name is callable (added). Never accept a file
+write that claims the rest is "unchanged" — verify length + API surface.
+
+**2. Silent auth failures convert config gaps into fake code bugs.** The
+Phase 4 topology query swallowed cross-node 401s at DEBUG level, so a
+missing shared token presented as "No topology data after query." One
+WARNING naming the exact env var to sync (`ORAMA_CONTROL_PLANE_TOKEN`)
+turns a dead-end symptom into a self-diagnosing operator action. Grep any
+"graceful degradation" except-path for auth codes — 401/403 are never
+noise.
+
+**3. Test-suite auth coverage can't see live auth posture.** The 401 tests
+run under `ORAMA_INSECURE_DEV=1`, so they prove gate LOGIC, not deployed
+gating. Live probing found the two mesh endpoints enforcing different
+postures (relay-probe accepted an unsynced token; fleet-topology rejected
+it). For security-relevant endpoints, pair unit 401-tests with one live
+unauthenticated probe against the running service.
