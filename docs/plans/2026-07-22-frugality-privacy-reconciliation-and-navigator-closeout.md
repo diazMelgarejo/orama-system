@@ -27,9 +27,43 @@ plan the user asked for after the Eng-phase scope revision.
 
 ## Item 1 — Frugality/Privacy Reconciliation (the deferred core of P3)
 
-**Why this is its own item, not a quick follow-up:** the Eng phase found
-three unreconciled implementations of "privacy_critical" routing (verified
-by reading the real code, not assumed):
+**UPDATE 2026-07-22 (post-research pass) — framing corrected, scope narrowed.**
+A gbrain trace through `bin/orama-system/skills/hermes-harness/references/`
+(assignment + result records for PT #199) and `docs/plans/2026-05-29-03-v1.1-
+definitive.md`'s own text shows this is **not** three ad-hoc, independently-
+invented implementations. It is:
+
+- **Two faces of one working, documented mechanism** — `config/routing.yml`'s
+  task_type cloud-role exclusion (always-on general policy) and
+  `src/perpetua_tools/orchestrator.py`'s `req.privacy_critical` chain
+  (explicit per-request override). These compose correctly today; they are
+  not in conflict.
+- **One genuine outlier by omission, not design collision** —
+  `orchestrator/frugality_router.py`. Its own spike doc
+  (`bin/orama-system/skills/hermes-harness/references/assignments/mac-
+  orchestrator-frugality-router-spike.md`) named the exact missing step on
+  day one, under "Not in spike (follow-on P1)": *"Wire into all dispatch
+  paths (supervisor, fastapi_app)."* That named TODO sat unpicked for ~3
+  weeks (spike merged 2026-06-29 → this discovery 2026-07-22) while P1/P2/P4
+  work took priority — nobody silently dropped it, it just never got its
+  turn.
+
+Full trail + a corrected reading of the "✅ RESOLVED 2026-06-14 — v1.1
+shipped" banner (means "module merged + unit-tested," not "wired into any
+real dispatch path"): `references/tiered-model-implementation-navigator.md`
+§ "Close-Out: P3 Frugality/Privacy Historical Trail."
+
+**Practical effect on scope below:** this narrows the open design question
+from "reconcile three systems" to one question — does `frugality_router.py`
+become the thing `routing.yml`/`orchestrator.py` delegate to (Codex's
+"single policy gate" proposal), or does it stay a parallel, opt-in
+tier-tracking layer some call sites use and others don't? Both are
+legitimate; the `ModelTarget.frugality_tier` field shipped 2026-07-22 is
+compatible with either answer, which is why it was safe to land ahead of
+this decision.
+
+**Original framing (kept for the record — verified by reading the real code,
+not assumed):**
 1. `orchestrator/frugality_router.py`'s `spec.privacy_critical` + `max_allowed_tier()`
 2. `config/routing.yml`'s task_type-based cloud-role exclusion (no flag)
 3. `src/perpetua_tools/orchestrator.py`'s own `req.privacy_critical` → Oramasys/LMStudio chain
