@@ -101,6 +101,23 @@ This document provides extended examples and recovery procedures for each AFRP f
 
 **Recovery:** Restart at Step 0. Run the full checklist. When in doubt about query type, classify UP (A→B, B→C) rather than down.
 
+**Example (2026-07-22, real — a slash command hiding real ambiguity):**
+- Query: `/skillify` (or "make me a skill"), no further context
+- Looks like: Type A/C, unambiguous — "obviously" run this repo's own
+  `oramasys-skillify` skill, since that's what was invoked
+- Actually Type D: at least three tools answer to "skillify" or "make a
+  skill" with entirely different jobs — this repo's canonical skill
+  builder, gstack's own `/skillify` (codifies a browser scrape, nothing to
+  do with authoring a skill), and Anthropic's official `skill-creator`
+  plugin (general-purpose, outside this repo's conventions). Picking one
+  silently risks doing the wrong thing entirely, not just doing this
+  repo's thing slightly wrong.
+- **Recovery applied:** `oramasys-skillify`'s Workflow now has a mandatory
+  step 0 — AskUserQuestion interrupt whenever the request isn't already
+  clearly orama-system-scoped, offering all three options rather than
+  assuming. See `bin/orama-system/skills/skillify/SKILL.md`'s "Related
+  Tools (disambiguation)" section.
+
 ---
 
 ## Failure Mode 7: Handwaving (Proxy Conclusion)
