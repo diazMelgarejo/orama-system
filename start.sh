@@ -777,7 +777,7 @@ fi
 # ── gbrain self-heal (idempotent; backgrounded so it NEVER blocks startup) ───
 # Acks transient failures, refreshes live sources, reports orphan sources /
 # autopilot misconfig. Replaces the recurring manual gbrain fixes.
-# Details + why: bin/orama-system/gstack/SKILL.md §GBrain Ops §7.
+# Details + why: bin/orama-system/gstack-gbrain/SKILL.md §GBrain Ops §7.
 if [ -f "$SCRIPT_DIR/scripts/gbrain/gbrain-selfheal.sh" ]; then
   ( nohup bash "$SCRIPT_DIR/scripts/gbrain/gbrain-selfheal.sh" \
       >>"${LOG_DIR:-/tmp}/gbrain-selfheal.log" 2>&1 & ) || true

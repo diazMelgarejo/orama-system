@@ -8,7 +8,7 @@ description: "gstack v1.12.2.0 integration sub-skill. Full routing table for web
 This is a thin wrapper. The canonical skill lives in this repo at the path below
 (resolve the repo root at runtime — paths are never hardcoded).
 
-- Canonical skill path (repo-relative): `bin/orama-system/gstack/SKILL.md`
+- Canonical skill path (repo-relative): `bin/orama-system/gstack-gbrain/SKILL.md`
 
 ## Before Use
 
@@ -31,7 +31,7 @@ If the worktree is dirty, use [`git-history-surgery/references/safe-cross-host-s
 
 ## Load Canonical Skill
 
-Open and follow `bin/orama-system/gstack/SKILL.md` (relative to the repo root). Do not copy behavior from this wrapper.
+Open and follow `bin/orama-system/gstack-gbrain/SKILL.md` (relative to the repo root). Do not copy behavior from this wrapper.
 
 ## Windows UTF-8 Note
 

@@ -92,6 +92,35 @@ AUDIT: 2026-07-22 skillify upgrade added examples/, eval/checklist.md, eval/eval
 AUDIT: 2026-07-22 oramasys-method upgrade added examples/, eval/checklist.md, eval/evals.json (with a sandbox-limitation note); version 1.2.0 -> 1.3.0. Verification: 6Cs review, line count 205 (<=500 ceiling), scoped dogfood eval (iteration-1/eval-0, oramasys-method-workspace).
 AUDIT: 2026-07-22 install_thin_skill_wrappers.py extended: added ~/.claude/skills to TARGET_ROOTS (permanent, affects all registered skills on the next full run) and added --only <slugs> for scoped runs. Verification: syntax check, --dry-run, a real --install --only oramasys-method,skillify against a scratch HOME, and --verify --only oramasys-method,skillify — all passed. Real ~/.claude/skills on the operator's machine could not be mounted from this session (protected host location); the tested command was handed off instead of run directly.
 AUDIT: 2026-07-22 packaged skillify.skill and oramasys-method.skill from staged copies with bundled cross-repo references and Anthropic-schema-compliant frontmatter (description <=1024 chars, custom fields moved under metadata:). Verification: scripts.package_skill validation passed for both.
+AUDIT: 2026-07-22 INCIDENT + REMEDIATION — the prior pass's `~/.claude/skills`
+  addition to install_thin_skill_wrappers.py's TARGET_ROOTS was later run for
+  real (outside this session) and silently overwrote gstack's own bundled
+  `skillify` skill at ~/.claude/skills/skillify/SKILL.md (an unrelated skill
+  that happens to share the same name — gstack's codifies browser scrapes;
+  this repo's builds/upgrades skills). Recovered by copying gstack's own
+  source of truth (~/.claude/skills/gstack/skillify/SKILL.md, 1230 lines)
+  back over the clobbered file — confirmed byte-identical after restore.
+  Root cause: the prior pass checked this repo's own manifest for name
+  collisions but never checked external suites that also write to a shared
+  global namespace. Fixed: (1) removed ~/.claude/skills from
+  install_thin_skill_wrappers.py's TARGET_ROOTS entirely — that script isn't
+  the right owner of global Claude Code publishing, scripts/install-skills.sh
+  (repo root) already was; (2) added skillify to install-skills.sh under the
+  disambiguated slug `oramasys-skillify` (not `skillify`); (3) added a
+  generic collision guard to install-skills.sh's sync_one() that refuses any
+  sync whose target name already exists under gstack's own manifest
+  (~/.claude/skills/gstack/<name>), so this class of bug can't recur for any
+  future addition to that list, not just skillify; (4) documented the check
+  in modular-skill-authoring.md's Clobber Guard section and skillify/SKILL.md's
+  Non-Negotiables. Cross-referenced this repo's full ~30-skill
+  install_thin_skill_wrappers.py manifest against gstack's ~30-skill roster:
+  only `skillify` actually collided; `gstack` (this repo's own gstack
+  integration sub-skill) is a second slug that would collide if ever added to
+  a global-publish list — flagged explicitly, not currently in one.
+  Verification: `bash scripts/install-skills.sh` run for real post-fix —
+  synced oramasys-skillify cleanly, no refusal, no gstack files touched;
+  manually confirmed ~/.claude/skills/skillify/SKILL.md still matches
+  gstack's source post-run.
 ```
 
 ## Re-Verification Commands

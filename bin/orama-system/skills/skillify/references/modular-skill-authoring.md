@@ -102,6 +102,42 @@ fi
 
 If the directory exists, ask whether to overwrite, merge missing files only, or cancel.
 
+### External Namespace Collision Check (mandatory before ANY write outside this repo)
+
+The in-repo clobber guard above only checks THIS repo's own manifest. It
+cannot see a same-named skill owned by an unrelated suite that shares a
+write target — the failure mode that actually happened: gstack ships its
+own bundled `skillify` skill directly at `~/.claude/skills/skillify/`, and
+a dogfood pass added `~/.claude/skills` as a write target for orama's
+*different* `skillify` skill, silently overwriting gstack's file (2026-07-22,
+recovered from gstack's own source copy at `~/.claude/skills/gstack/<name>/`
+— see `references/dogfood-upgrade-log.md` for the full incident record).
+
+Before writing to ANY shared global namespace (`~/.claude/skills/`,
+`~/.codex/skills/`, `~/.agents/skills/`, or any future one) — and as part of
+**Intake Question 1, when a NEW skill's name is first chosen**, not only at
+publish time — run the single shared collision check, never a hand-rolled
+inline one:
+
+```bash
+bash "$(git rev-parse --show-toplevel)/scripts/check-skill-namespace-collision.sh" <name>
+```
+
+Exit 0 + `clear: <name>` means safe. Exit 1 + `COLLISION: ...` means pick a
+disambiguated name instead (e.g. `oramasys-<name>`, matching the
+`oramasys-method` / `oramasys-skillify` precedent) before proceeding any
+further — do not continue with the colliding name and "fix it later."
+
+This is the ONE place the check lives — `scripts/install-skills.sh`'s
+`sync_one()` calls the same script before every global-publish sync, so the
+naming-time check (here) and the publish-time check (there) can never drift
+apart the way a doc-embedded snippet and a script's own inline logic did on
+2026-07-22 (full incident: `references/dogfood-upgrade-log.md`). gstack is
+the only known external suite as of this writing (`EXTERNAL_SUITE_DIRS` in
+the script, ~30 skills at `~/.claude/skills/gstack/*/SKILL.md`); if another
+suite is later found to populate a shared namespace, extend that array in
+the script — never add a second implementation of this check anywhere.
+
 ## Validation
 
 After writing, validate the edited skill directly and then run the repo skill checker.

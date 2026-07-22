@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # gbrain-selfheal.sh — idempotent gbrain health guard (orama-owned, durable).
 #
-# WHY THIS EXISTS (read bin/orama-system/gstack/SKILL.md §GBrain Ops):
+# WHY THIS EXISTS (read bin/orama-system/gstack-gbrain/SKILL.md §GBrain Ops):
 # We kept re-fixing the same gbrain sync rot by hand. Root causes that regenerate:
 #   1. Autopilot (`gbrain autopilot --repo .`) jams on unacked parse failures and
 #      silently lets sources go stale; it's launchd KeepAlive, so a kill won't stop
