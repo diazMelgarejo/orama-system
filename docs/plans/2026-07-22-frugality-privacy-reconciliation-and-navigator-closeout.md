@@ -169,6 +169,21 @@ multiple follow-up conversations.
 
 ---
 
+## Epilogue: Branch Hygiene Audit (2026-07-22, same session)
+
+While tracing the P3 historical trail, an adjacent branch-cleanup request
+surfaced the same "trust the record, verify before acting" discipline this
+whole plan is built on: `reanchor_scan.sh`'s `NEEDS-REANCHOR` verdict on 13
+branches across both repos looked like real unmerged work, but
+`git diff main..<branch> --stat` + `git log main --grep` confirmed every
+single one was already squash-merged (PR #146, #142, #183, #203, #211,
+#258-267, #260/#263). Zero contained genuine unmerged content. Cleanup
+script: `../../references/2026-07-22-branch-cleanup-verified-superseded.sh`
+(sibling to this repo, at the OpenClaw workspace root; hand-trimmed by the
+user to exclude a few branches from this pass). Graduated as 2 PT `.agent`
+lessons (squash-merge false-positive detection; the branch-delete-hook-
+blocked hand-off pattern).
+
 ## Cross-References
 
 - Full historical trail for the Item 1 framing correction:
