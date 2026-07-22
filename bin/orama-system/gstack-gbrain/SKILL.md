@@ -1,13 +1,17 @@
 ---
-name: gstack
+name: gstack-gbrain
 description: >-
-  gstack v1.60.1.0 integration sub-skill. Full routing table for web browsing,
-  QA, shipping, planning reviews, design, DX audits, retros, and GBrain. Covers
-  gstack fork-patch upgrades and gbrain upgrades.
+  orama-system's own remediation, conflict-resolution, and fix layer for
+  gstack and gbrain — fork-patch tracking, safe-upgrade workflow, gbrain
+  failure-mode diagnostics, and a routing index into gstack's own skills.
+  Renamed from "gstack" (2026-07-22) to stop colliding with gstack's own
+  bundled skill of that exact name at ~/.claude/skills/skillify-style
+  install targets — see the Scope note below.
 when_to_use: >-
-  Activates for: /browse, /qa, /ship, /review, /investigate, /design-review,
-  /canary, /benchmark, /retro, gbrain, gstack skills, web browsing, QA testing,
-  deploy, design review, canary monitoring, performance benchmarks.
+  Activates for: fixing/diagnosing a broken gstack or gbrain install, fork-
+  patch upgrades, gbrain CONNECTION_CLOSED / stale-source / autopilot-wedge
+  failures, Windows gstack-brain-sync shim issues, or finding which gstack
+  skill (/browse, /qa, /ship, /review, /investigate, etc.) to invoke.
 version: 1.0.0
 license: Apache 2.0
 compatibility: claude-code
@@ -18,11 +22,32 @@ effort: medium
 context: fork
 agent: Explore
 paths:
-  - "bin/orama-system/gstack/**"
+  - "bin/orama-system/gstack-gbrain/**"
   - "bin/orama-system/scripts/**"
 ---
 
-# gstack Integration
+# gstack-gbrain Integration
+
+## Scope — remediation only, never a replacement
+
+This skill is orama-system's own layer for **fixing, diagnosing, and
+upgrading** gstack and gbrain — it is NOT an alternate implementation and
+must NEVER override, shadow, or replace canonical gstack/gbrain guidance.
+For anything other than a fix/upgrade/diagnostic task, defer to the native
+sources first:
+
+- gstack itself: `~/.claude/skills/gstack/SKILL.md` and its own sub-skills.
+- gbrain itself: the `garrytan/gbrain` repo and its own `--help`/`doctor` output.
+
+This card exists because orama-system runs a **forked** gstack checkout
+with local patches and has hit gbrain failure modes gstack/gbrain upstream
+don't document — the content below is that hard-won knowledge, kept here
+so it isn't re-derived every session. It is not, and must not become, a
+parallel gstack/gbrain manual.
+
+Same collision-avoidance pattern as gstack's own `/skillify`: a narrowly-
+scoped utility skill with one job, not a general-purpose reimplementation
+of the thing it touches.
 
 gstack v1.60.1.0 is the agent skill framework for web browsing, planning, review, QA, and deployment workflows. Installed globally at *~/.claude/skills/gstack* (global-git). Invoke the global skill with */skill ~/.claude/skills/gstack/SKILL.md*; subskills remain under the same checkout.
 
@@ -298,6 +323,10 @@ gbrain doctor --fast
 ```
 
 ## Available Skills
+
+Index only — each row invokes gstack's own canonical skill, not a
+reimplementation. When a skill listed here changes upstream, gstack's own
+files are the source of truth; update this table to match, don't fork it.
 
 | Skill | Purpose |
 | ------- | --------- |
