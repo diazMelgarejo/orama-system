@@ -121,6 +121,49 @@ AUDIT: 2026-07-22 INCIDENT + REMEDIATION — the prior pass's `~/.claude/skills`
   synced oramasys-skillify cleanly, no refusal, no gstack files touched;
   manually confirmed ~/.claude/skills/skillify/SKILL.md still matches
   gstack's source post-run.
+AUDIT: 2026-07-22 disambiguation + packaging (version 1.5.0 -> 1.6.0).
+  Added a "Related Tools (disambiguation)" section naming all three tools
+  that can answer "/skillify" / "make me a skill" — this skill, gstack's
+  own `/skillify` (codifies browser scrapes, unrelated function despite the
+  same name), and Anthropic's official `skill-creator` plugin
+  (github.com/anthropics/claude-plugins-official/tree/main/plugins/
+  skill-creator, install via `/plugin install skill-creator@claude-plugins-official`,
+  confirmed via that repo's own README and SKILL.md, fetched 2026-07-22) —
+  plus a mandatory Workflow step 0 AskUserQuestion interrupt when a request
+  doesn't already clearly scope to one of the three.
+  Added `scripts/package_skill.py`: stages a canonical skill (never edits
+  it), bundles cross-repo `../../references/*.md` /
+  `bin/orama-system/references/*.md` citations into the staged copy, trims
+  frontmatter to Anthropic's packaged-skill schema, validates, zips to
+  `<name>.skill` — the claude.ai / Claude Desktop Capabilities install path,
+  complementing install-skills.sh's directory-copy CLI path. Validation and
+  zip rules are a from-scratch reimplementation (not vendored) of
+  scripts/quick_validate.py and scripts/package_skill.py from
+  anthropics/claude-plugins-official's skill-creator plugin (Apache 2.0),
+  fetched and cited 2026-07-22: ALLOWED_PROPERTIES =
+  {name, description, license, allowed-tools, metadata, compatibility},
+  name kebab-case <=64 chars, description <=1024 chars no angle brackets,
+  compatibility <=500 chars.
+  Bug found and fixed during dogfooding, before this was ever run for real:
+  the first cross-repo-reference regex only matched the markdown-link form
+  (`[text](../../references/foo.md)`) and silently missed this repo's
+  equally common plain-backtick-path citation style
+  (`` `../../references/foo.md` `` or `` `bin/orama-system/references/foo.md` ``)
+  — packaging oramasys-method with the narrow regex bundled an unrelated
+  file (a markdown-link citation inside one of its already-local reference
+  files) while leaving its two actual backtick-cited references
+  (contribution-standards.md, skill-architecture-guide.md) as dead paths in
+  the packaged output. Broadened the regex to match the bare
+  `references/<file>.md` path regardless of surrounding markdown syntax;
+  re-verified both skillify and oramasys-method package with all cited refs
+  correctly bundled and zero dangling `../../references/` or
+  `bin/orama-system/references/` paths left inside the unzipped package.
+  Verification: `python3 bin/orama-system/skills/skillify/scripts/package_skill.py
+  bin/orama-system/skills/{skillify,oramasys-method} /tmp/oramasys-dist` —
+  both produced valid, correctly-bundled `.skill` zip files; manually
+  unzipped and grepped for leftover `../../references/` /
+  `bin/orama-system/references/` paths (none, aside from one self-descriptive
+  mention of the directory itself with no filename, which is not a link).
 ```
 
 ## Re-Verification Commands
