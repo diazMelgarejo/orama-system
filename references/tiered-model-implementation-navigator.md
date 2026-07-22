@@ -332,6 +332,60 @@ work above.
 
 ---
 
+## Close-Out: Item 1 Design Decisions — Full Circle (2026-07-22)
+
+All design questions this navigator's P3 trail surfaced are now decided and
+recorded in `docs/plans/2026-07-22-frugality-privacy-reconciliation-and-
+navigator-closeout.md` § "Item 1." Summarized here so this navigator stays
+the single index — full reasoning lives in the plan doc, not duplicated.
+
+1. **Canonical gate:** `frugality_router.py`'s `resolve_route()` becomes the
+   single policy gate `route_task()` and `orchestrator.py`'s `privacy_critical`
+   branch both call — human-confirmed, with a mandatory override contract
+   (`override_confirmed` + `override_reason`, never a silent bypass).
+2. **API shape:** `route_task()` keeps its v1 signature unchanged; a thin
+   wrapper carries the gate call. A signature change is explicitly deferred
+   to whatever v2 shape lands per `docs/v2/` planning — not decided here.
+3. **`frugality_tier` backfill ownership:** at model-registration time, by
+   whoever edits `config/models.yml` — EXA research into LiteLLM's
+   "config models are owned by the file" pattern, applied at PT's actual
+   scale. Unset tier means "gate has no opinion, defer to existing
+   fallback chain" — never "assume permissive." Guards against LiteLLM's
+   own documented silent-fallback failure mode.
+4. **Free-tier cross-check (gbrain + CRG + PT `.agent` memory — no paid
+   research needed, confirmed rather than changed anything):** hardware
+   affinity (`check_affinity()`) is already the real first gate, wired
+   ahead of dispatch (CRG-confirmed caller graph: `supervisor.py`'s
+   `submit_job` / `_prepare_spec_for_inference`); PT's existing "fail-closed
+   at gateways, never silent fallback" doctrine does not conflict with the
+   backfill decision (unset tier isn't a failure, it's an absence of
+   opinion); `OmniRoute` is already the documented free-alternative-of-
+   last-resort, no new mechanism needed.
+5. **ECC-style model selection (`vendor/ecc-tools/commands/model-route.md`,
+   confirmed real):** a distinct, correctly-scoped axis — ranks *Claude
+   subagent* model choice (haiku/sonnet/opus by complexity+risk+budget),
+   not PT's local model registry. Legitimate as the fallback default for
+   an *unclassified Claude subagent spawn*, and safely cacheable/idempotent
+   per task-signature since it's a pure function with no external state.
+   Flagged as a follow-on optimization, not folded into Item 1's PT-local
+   scope — kept the two "model selection" concepts distinct rather than
+   merged, per this session's own established discipline against
+   conflating adjacent-but-different systems.
+
+**Genuinely still open (implementation-time, not design-time):** exact
+override UI copy/flow for CLI/dashboard-modal paths; `models.yml` per-model
+tier values themselves (the ownership rule is decided, the actual backfill
+data entry is not); the ECC-model-route caching optimization (flagged,
+not built).
+
+**Execution status:** a `Workflow` run (Haiku-survey → Sonnet-implement →
+Sonnet-verify, launched under this session's `ultracode` opt-in) is
+wiring the decided architecture into Perpetua-Tools as of this entry —
+see the plan doc's Execution Log for the actual diff and test results
+once it lands.
+
+---
+
 **Last updated:** 2026-07-22  
 **Maintained by:** orama-system + Perpetua-Tools coordination (two-repo grounding)  
 **Feedback:** Append to `docs/LESSONS.md` with session + discovery

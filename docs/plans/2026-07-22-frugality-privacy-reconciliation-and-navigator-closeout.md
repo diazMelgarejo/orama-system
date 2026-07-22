@@ -1,12 +1,28 @@
 # Frugality/Privacy Reconciliation + Navigator Close-Out — Provisional Plan
 
 **Date:** 2026-07-22
-**Status:** PROVISIONAL — captures everything /autoplan's review of
-`docs/plans/2026-07-22-p4-skill-trimming-p3-frugality-wiring.md` deferred,
-plus the remaining open items in
+**Status:** DESIGN DECIDED, IMPLEMENTATION IN PROGRESS — captures everything
+/autoplan's review of `docs/plans/2026-07-22-p4-skill-trimming-p3-frugality-
+wiring.md` deferred, plus the remaining open items in
 `references/tiered-model-implementation-navigator.md`, so nothing found
-today gets lost. Not yet executed — this is the "close all loose ends"
-plan the user asked for after the Eng-phase scope revision.
+today gets lost. All Item 1 design questions are now decided (see below);
+a `Workflow` run is executing the implementation — see Execution Log.
+
+## Execution Log
+
+- **2026-07-22:** `Workflow` (`p3-frugality-gate-execution`, run
+  `wf_8a31b85a-eea`) launched under this session's `ultracode` opt-in, with
+  the mandatory model tiering from
+  `bin/orama-system/references/claude-code-workflow-canonical.md`: Haiku
+  (`claude-haiku-4-5-20251001`) for the cheap survey step, Sonnet 5
+  (effort high) for implementation and independent verification — no
+  Opus/Fable 5 escalation, this task didn't warrant it. Scope: wire
+  `frugality_router.resolve_route()` as the canonical gate behind
+  `route_task()` and `orchestrator.py`'s `privacy_critical` branch via a
+  v1 wrapper (no signature change), backfill `frugality_tier` in
+  `config/models.yml`, add contract tests, then independently re-verify
+  the diff and test results before trusting the implementer's own report.
+  Result pending — update this entry once it lands.
 
 **What already shipped today (not in this plan's scope — done):**
 - P4: `mcp-orchestration/SKILL.md` (866→496 lines) and
