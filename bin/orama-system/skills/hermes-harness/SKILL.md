@@ -5,7 +5,7 @@ description: >-
   workflows. Use when installing Hermes, importing ECC/orama skills into Hermes,
   configuring Nous Portal or LM Studio providers, adding Hermes beside OpenClaw,
   or dispatching Hermes, Gemini, AGY, and Codex CLI coding partners.
-version: 1.1.0.0
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: hermes, codex, claude-code, windows, openclaw, ecc, agy
 agent_compatibility:
@@ -146,6 +146,33 @@ L1 transport (CLI flags) stays internal to `dispatch_codex_partner.py` and AGY s
 
 Hermes may add optional fields: `output`, `warnings`, `errors`, `checks`, echoes.
 `blocked` is a Hermes alias for `needs_input`. Path casing mismatches → `warnings[]`, not `blocked`.
+
+## Session Close-Out: Update the Board (mandatory for significant landed work)
+
+Not just for `coord-N` fan-outs — **any** session that lands substantive
+work (a real code change, a closed plan, a fix that other agents/peers
+would want to know about) updates both mechanisms before ending, so a
+peer checking the board mid-work doesn't rediscover it independently:
+
+1. **GossipBus whiteboard log** (`Perpetua-Tools/scripts/
+   agent_coordination.py log <agent_id> "<message>"`) — one line, states
+   what landed, the commit(s)/PR(s), and anything still open that a peer
+   with different access (push rights, a different host, etc.) could
+   help unblock. Cheap, always do it.
+2. **Peer-inbox drop** (`references/results/<peer>-<date>-<topic>.md`,
+   this directory) — for anything substantial enough to need more than
+   one line: what shipped, what's still open and why, what's explicitly
+   deferred and to where. Follow the existing drop format (see any file
+   in `references/results/` for the shape — status line, what-landed
+   table, open/needs-a-peer section, not-touched-explicitly-deferred
+   section). This is the persistent record; the whiteboard log is the
+   pointer to it.
+
+Established 2026-07-22 during a frugality/privacy-gate + repo-hygiene
+close-out session — see `references/results/mac-2026-07-22-frugality-p3-
+and-repo-closeout-status.md` for a worked example of both mechanisms used
+together. Corollary: check the board while waiting on any background
+process (a push, a test run, another agent's job) — don't idle.
 
 ## Subskill Registry (Hermes-facing)
 
