@@ -277,8 +277,16 @@ def get_win_ip() -> str:
 
 
 def invalidate_win_ip_cache() -> None:
-    """Force the next get_win_ip() call to re-probe all sources."""
-    global _WIN_IP_CACHE_TS
+    """Force the next get_win_ip() call to re-probe all sources.
+
+    Clears the cached VALUE as well as the timestamp: with only the
+    timestamp reset, `now - 0.0 < TTL` could still hold in the first
+    TTL-seconds of the monotonic clock's life, briefly serving a stale
+    value (peer-review finding, 2026-07-19 — gemma-4-26b, verified real
+    though marginal). Clearing both makes invalidation unconditional.
+    """
+    global _WIN_IP_CACHE, _WIN_IP_CACHE_TS
+    _WIN_IP_CACHE = ""
     _WIN_IP_CACHE_TS = 0.0
 
 
