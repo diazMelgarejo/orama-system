@@ -63,10 +63,11 @@ Read target-specific references only when needed:
 - Keep modular files one level away from `SKILL.md`; avoid reference chains.
 - Every fenced code block must include a language specifier.
 - Never hardcode secrets, personal paths, raw LAN IPs, or workstation-specific paths.
+- Before naming a new skill or writing to any SHARED global namespace (`~/.claude/skills/`, `~/.codex/skills/`, `~/.agents/skills/`), run `scripts/check-skill-namespace-collision.sh <name>` (repo root) — the single shared check, same script the intake step below and `scripts/install-skills.sh` both call. See `references/modular-skill-authoring.md`'s "External Namespace Collision Check" for the full rule. gstack alone owns ~30 slugs directly under `~/.claude/skills/<name>/`; publishing this repo's skills there is `scripts/install-skills.sh`'s job (disambiguated slugs only, e.g. `oramasys-skillify`, `oramasys-method`) — never bolt a raw `~/.claude/skills` write target onto another script. This repo also owns a skill named `gstack-gbrain` (`bin/orama-system/gstack-gbrain/SKILL.md`, renamed 2026-07-22 from the collision-prone bare `gstack`); never add the bare `gstack` slug to any global-publish list.
 
 ## Workflow
 
-1. Ask for skill name, purpose, target harness, trigger phrases, and boundaries.
+1. Ask for skill name, purpose, target harness, trigger phrases, and boundaries. Run `scripts/check-skill-namespace-collision.sh <name>` against the proposed name before continuing — a collision means pick a disambiguated name now, not after writing anything.
 2. Choose the smallest folder shape that satisfies the task.
 3. Reuse or upgrade existing skills before creating a sibling.
 4. If an upstream source is unreachable, continue only from cached/repo-verified material and mark the source `UNVERIFIED - retry required`.

@@ -59,7 +59,7 @@ CANONICAL_SKILLS = [
     "orama-system/bin/orama-system/SKILL.md",
     "orama-system/bin/orama-system/afrp/SKILL.md",
     "orama-system/bin/orama-system/cidf/SKILL.md",
-    "orama-system/bin/orama-system/gstack/SKILL.md",
+    "orama-system/bin/orama-system/gstack-gbrain/SKILL.md",
     "orama-system/bin/orama-system/skills/agent-methodology/SKILL.md",
     "orama-system/bin/orama-system/skills/code-review/SKILL.md",
     "orama-system/bin/orama-system/skills/ecc-sync/SKILL.md",
@@ -87,13 +87,23 @@ CANONICAL_SKILLS = [
 ]
 
 
+# NOTE: ~/.claude/skills is deliberately NOT a target here. It is a shared
+# global namespace gstack also populates directly (e.g. its own bundled
+# `skillify` at ~/.claude/skills/skillify/, an unrelated skill with the same
+# name as this repo's). A 2026-07-22 pass added it here and it silently
+# overwrote gstack's file — recovered from gstack's own source copy; see
+# skillify/references/dogfood-upgrade-log.md and
+# skillify/references/modular-skill-authoring.md's "External Namespace
+# Collision Check". Publishing THIS repo's skills to ~/.claude/skills/ is
+# scripts/install-skills.sh's job (repo root) — it publishes under
+# collision-checked, disambiguated slugs (e.g. oramasys-skillify, not
+# skillify). Do not re-add ~/.claude/skills to this list.
 TARGET_ROOTS = [
     "~/.codex/skills",
     "~/.agents/skills",
     ".agents/skills",
     "orama-system/.agents/skills",
     "perplexity-api/Perpetua-Tools/.agents/skills",
-    "~/.claude/skills",
 ]
 
 
@@ -106,7 +116,7 @@ SLUG_OVERRIDES = {
     "orama-system/bin/orama-system/SKILL.md": "orama-system",
     "orama-system/bin/orama-system/afrp/SKILL.md": "orama-afrp",
     "orama-system/bin/orama-system/cidf/SKILL.md": "orama-cidf",
-    "orama-system/bin/orama-system/gstack/SKILL.md": "orama-gstack",
+    "orama-system/bin/orama-system/gstack-gbrain/SKILL.md": "orama-gstack",
 }
 
 
