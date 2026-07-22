@@ -68,7 +68,41 @@ not assumed):**
 2. `config/routing.yml`'s task_type-based cloud-role exclusion (no flag)
 3. `src/perpetua_tools/orchestrator.py`'s own `req.privacy_critical` → Oramasys/LMStudio chain
 
-### Design questions to resolve before any more code lands
+### Design decision (2026-07-22, human-confirmed — supersedes "not yet decided" below)
+
+**DECIDED: single gate.** `frugality_router.py`'s `resolve_route()` becomes
+the one canonical policy gate; `route_task()` and `/orchestrate`'s
+`privacy_critical` branch both call it rather than each enforcing policy
+independently. This resolves the "canonical implementation" and
+"`resolve_route()` retired vs. kept" questions below in favor of Codex's
+"single policy gate" proposal.
+
+**Override path (human-confirmed):** the gate is not absolute — a human
+operator can override its decision. Override precedence, in order:
+1. `AskUserQuestion` (or the active host's equivalent interactive-confirm
+   tool), when available in the calling context — this is the default and
+   preferred path per this session's established AskUserQuestion-first
+   doctrine (see `bin/orama-system/skills/oramasys-method/SKILL.md`'s
+   "AskUserQuestion Format" section for the pattern to reuse here, not a
+   new one).
+2. When no interactive-confirm tool is reachable (headless/CLI/cron
+   context): a CLI confirmation prompt or, for the web/portal surface, a
+   dashboard modal decision pop-up — i.e. the override always requires an
+   explicit human click/keystroke through *some* surface; it is never
+   silently auto-approved by config alone.
+
+This override requirement becomes a hard invariant for whichever PR
+implements the gate: **no silent bypass path.** Every escalation past the
+gate's default policy must resolve through one of the two channels above,
+logged with which channel was used (for audit — extends the existing
+`escalation_reason` tracing already in `resolve_route()`).
+
+Still open (deferred to the PR that implements this): exact override UI
+copy/flow for the CLI and dashboard-modal paths — not specified here, left
+to implementation, per this plan's own "Explicit non-goals" discipline.
+
+<details>
+<summary>Original open-question framing (2026-07-22, pre-decision — kept for the record)</summary>
 
 - Which of the three is canonical? Codex's "single policy gate" proposal
   (classify every call target into a canonical policy record; every
@@ -85,6 +119,19 @@ not assumed):**
 - `ModelTarget.frugality_tier` now exists (shipped today) but is unpopulated
   in `models.yml` — who owns backfilling it per-model, and what's the
   fallback for models without a tier set?
+
+</details>
+
+**Still genuinely open (the decision above doesn't resolve these):**
+- `route_task(task_type, preferred_device)`'s signature cannot accept
+  `privacy_critical`/`est_tokens`/`escalation_reason` — does the API shape
+  change, or does a thin wrapper both `route_task()` and `/orchestrate` call
+  before dispatch carry the gate call instead? (Wrapper is the lower-risk
+  choice — avoids a breaking signature change to a function with existing
+  callers — but not yet formally decided.)
+- `ModelTarget.frugality_tier` now exists (shipped 2026-07-22) but is
+  unpopulated in `models.yml` — who owns backfilling it per-model, and
+  what's the fallback for models without a tier set?
 
 ### Suggested execution shape (once design is settled)
 
