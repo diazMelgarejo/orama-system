@@ -330,6 +330,14 @@ walking both repos' `docs/` trees for this trace. Recorded here rather than
 silently ignored; resolving them is out of scope for the P3 reconciliation
 work above.
 
+**Closed out separately, 2026-07-22:** see
+`docs/plans/2026-07-22-cross-repo-out-of-scope-closure.md` — every item in
+this register now has an explicit disposition (implemented/verified,
+superseded, deferred-to-v2-with-reason, or retired), per the standing
+governing directive: unblocked, concrete items get implemented now;
+genuinely ambiguous or blocked items defer to v2 oramasys post-migration
+rather than sitting as silently-stale "active."
+
 ---
 
 ## Close-Out: Item 1 Design Decisions — Full Circle (2026-07-22)
