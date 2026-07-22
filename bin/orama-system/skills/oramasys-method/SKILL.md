@@ -18,7 +18,7 @@ description: >-
   invocation as an oramasys invocation. **Also use for PR merges, conflict
   resolution, nested-branch integration, and any edit that must harmonize two
   divergent branches additively (never delete-and-replace).**
-version: "1.2.0"
+version: "1.3.0"
 license: Apache 2.0
 compatibility: claude-code, cowork, codex, openclaw
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
@@ -183,6 +183,16 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 
 ---
 
+## Examples
+
+- Golden path (production bug fix + PR merge): [`examples/good/golden-path.md`](examples/good/golden-path.md)
+- Anti-patterns to avoid: [`examples/bad/anti-patterns.md`](examples/bad/anti-patterns.md)
+- Eval rubric, including the sandbox-limitation note for harnesses without
+  live `gbrain`/`mcp-oramasys`/OpenClaw access: [`eval/checklist.md`](eval/checklist.md)
+- Test prompts for the skill-creator dogfood loop: [`eval/evals.json`](eval/evals.json)
+
+---
+
 ## References
 
 - `references/5-stage-methodology.md` — full 5-stage process + 6 directives
@@ -192,3 +202,4 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - `references/cidf-and-mcp.md` — CIDF ranks, MCP names, legacy compatibility map
 - `references/tdd-gate.md` — TDD prescriptive gate (links `docs/TDD.md`)
 - `../../references/contribution-standards.md` — CONTRIBUTING.md + PR-template baseline and the method's raised contribution standard (PT PR #247); pairs with `post-review-micro-remediation.md`
+- `../../references/skill-architecture-guide.md` — the repo's own SKILL.md standard this file is audited against
