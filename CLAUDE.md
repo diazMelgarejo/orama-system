@@ -6,33 +6,6 @@
 
 ---
 
-## § 0 — Active Goal (read this first, every session)
-
-```
-GOAL.md is active. Do not skip it.
-```
-
-1. **Read [`GOAL.md`](GOAL.md)** at the start of every session — before any
-   other work, before reading the mother skill, before any tool call.
-2. **Run the § 4.0 baseline scan** from GOAL.md immediately after reading it:
-   ```bash
-   grep -rn "ultrathink" \
-     --include="*.py" --include="*.json" --include="SKILL.md" \
-     --include="*.sh" --include="*.toml" \
-     bin/ .claude/ .agents/ api_server.py \
-     | grep -vi "legacy\|deprecated\|historical\|shim\|alias\|compat\|successor"
-   ```
-3. **Check which ACs already pass.** Do not redo passing work.
-4. **If GOAL.md does not yet say `GOAL COMPLETE`:** pick the highest-leverage
-   failing AC, fix it, re-run the full gate. Loop until all 10 ACs are green.
-5. **If GOAL.md says `GOAL COMPLETE`:** proceed with the session's primary task.
-
-> This block stays in CLAUDE.md until GOAL.md prints `GOAL COMPLETE — oramasys
-> rename consistent, all gates green.` At that point, remove § 0 and delete
-> GOAL.md in the same commit.
-
----
-
 ## Meta-rule: Progressive Disclosure (Horse Pulls Cart)
 
 **Documents own content. This file navigates.**
