@@ -120,18 +120,57 @@ def load_fleet_topology(path: Optional[Path] = None) -> Optional[FleetStatus]:
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
 
-        # Parse peers with safe defaults
+        # Parse peers with safe defaults.
+        #
+        # 2026-07-19 fix: the canonical writer (PT orchestrator/
+        # fleet_topology.py's FleetTopologyState, and orama's own
+        # query_peer_topology.py which writes against it) persists
+        # `peers` as list[str] -- bare node-id strings, per
+        # FleetTopologyState's own docstring ("list of reachable peer
+        # identifiers"). This function assumed list[dict] (each entry
+        # with id/ip/port/reachable/models/last_seen keys, matching the
+        # mother plan's original design-doc example JSON) and crashed
+        # with AttributeError on every real merge -- this path had never
+        # been exercised against real writer output before. Accept
+        # EITHER shape: a bare string becomes a minimal FleetPeer (id
+        # only; ip/port/models/last_seen have no data in the flat
+        # schema so stay at their safe defaults); a dict still works
+        # for any future/richer writer.
         peers_raw = data.get("peers", [])
+        this_node = data.get("local_node", "unknown")
         peers = []
         for p in peers_raw:
-            peer = FleetPeer(
-                id=p.get("id", "unknown"),
-                ip=p.get("ip", "?"),
-                port=p.get("port", 8002),
-                reachable=p.get("reachable", False),
-                models=p.get("models", []),
-                last_seen=p.get("last_seen", "unknown"),
-            )
+            # The canonical writer includes this node's own id in `peers`
+            # (see FleetTopologyState's merge logic) -- FleetStatus.peers
+            # means "the OTHER nodes I see", not "everyone including me";
+            # local_node already carries this node's identity separately.
+            # Without this exclusion, peers_reachable double-counted this
+            # node as its own peer (e.g. "PAIR (2/2 reachable)" for a
+            # single real peer).
+            entry_id = p if isinstance(p, str) else p.get("id")
+            if entry_id == this_node:
+                continue
+            if isinstance(p, str):
+                peer = FleetPeer(
+                    id=p,
+                    ip="?",
+                    port=8002,
+                    # Present in the merged peers list at all means the
+                    # last merge counted this node as reachable -- the
+                    # flat schema doesn't retain a separate per-peer flag.
+                    reachable=True,
+                    models=[],
+                    last_seen="unknown",
+                )
+            else:
+                peer = FleetPeer(
+                    id=p.get("id", "unknown"),
+                    ip=p.get("ip", "?"),
+                    port=p.get("port", 8002),
+                    reachable=p.get("reachable", False),
+                    models=p.get("models", []),
+                    last_seen=p.get("last_seen", "unknown"),
+                )
             peers.append(peer)
 
         status = FleetStatus(
