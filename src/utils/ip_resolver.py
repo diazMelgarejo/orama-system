@@ -337,7 +337,7 @@ def write_win_ip_to_openclaw_json(win_ip: str) -> bool:
     processes on the next startup pick it up from Priority 2.
     Idempotent: no-op if the IP hasn't changed.
     """
-    if not win_ip or win_ip == "localhost" or win_ip.startswith("127."):
+    if not win_ip:
         return False
     # win_ip can legitimately arrive scheme-bearing (get_win_ip()'s own
     # documented return shape, e.g. "https://10.1.2.3") -- strip any scheme
@@ -347,7 +347,23 @@ def write_win_ip_to_openclaw_json(win_ip: str) -> bool:
     # Same urlparse(...).hostname pattern already used by get_win_lms_url /
     # get_win_ollama_url for scheme-aware handling.
     parsed = urlparse(win_ip)
-    win_host = parsed.hostname if parsed.scheme and parsed.hostname else win_ip
+    if parsed.scheme:
+        # A scheme was given but no hostname could be extracted (malformed
+        # input) -- reject rather than falling back to the raw string,
+        # which could itself still contain the scheme.
+        if not parsed.hostname:
+            return False
+        win_host = parsed.hostname
+    else:
+        win_host = win_ip
+    # Validate the NORMALIZED host, not the raw (possibly scheme-bearing)
+    # input -- a bare loopback check on win_ip alone let "https://127.0.0.1"
+    # and "http://localhost" through, since neither literally starts with
+    # "127." or equals "localhost" before scheme-stripping. Also cover IPv6
+    # loopback ("::1"), which the previous check never handled in any form.
+    host_lc = win_host.lower().strip("[]")
+    if not host_lc or host_lc == "localhost" or host_lc.startswith("127.") or host_lc == "::1":
+        return False
     try:
         cfg = json.loads(OPENCLAW_JSON.read_text())
         providers = cfg.setdefault("models", {}).setdefault("providers", {})
