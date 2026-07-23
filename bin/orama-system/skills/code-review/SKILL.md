@@ -87,7 +87,9 @@ Full tool matrix: [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md).
 
 **MCP names:** `code-review-graph` serve (v2.3.3+) registers tools with a `*_tool` suffix. Prose elsewhere may shorten (e.g. `list_graph_stats_tool` → same handler as `list_graph_stats_tool`).
 
-**Embeddings:** CRG + gbrain share **bge-m3** (1024-dim). Toggle: `scripts/crg-embed-mode` · [`references/crg-embed-mode.md`](references/crg-embed-mode.md).
+**Embeddings:** CRG + gbrain share **bge-m3** (1024-dim). Platform endpoint rule:
+[`references/crg-platform-endpoints.md`](references/crg-platform-endpoints.md) (macOS/Linux → Ollama `:11434`; Windows → LM Studio `:1234`).
+Toggle: `scripts/crg-embed-mode` · [`references/crg-embed-mode.md`](references/crg-embed-mode.md).
 
 Slash commands (Claude Code): `/code-review-graph:review-delta`, `review-pr`, `build-graph`. **Cursor:** use MCP tools directly.
 
@@ -136,8 +138,8 @@ embed_graph_tool(
 )
 ```
 
-**Prerequisite:** Ollama running at `localhost:11434` with `bge-m3` pulled.
-If Ollama is down, omit the call — CRG falls back to FTS-only keyword search.
+**Prerequisite:** Embed backend running with `bge-m3` loaded — **macOS/Linux:** Ollama at `localhost:11434`; **Windows:** LM Studio at `localhost:1234` (see [`crg-platform-endpoints.md`](references/crg-platform-endpoints.md)).
+If the backend is down, omit the call — CRG falls back to FTS-only keyword search.
 
 ### Fix: corrupted graph.db
 
@@ -184,8 +186,11 @@ bit us live (2026-06-13):
    Full CLI refresh after a big change (mirrors the MCP build+embed path):
 
    ```bash
+   # macOS/Linux — Ollama @ :11434
    export CRG_OPENAI_API_KEY=ollama CRG_OPENAI_BASE_URL=http://localhost:11434/v1 \
           CRG_OPENAI_MODEL=bge-m3 CRG_OPENAI_DIMENSION=1024 CRG_ACCEPT_CLOUD_EGRESS=1
+   # Windows — LM Studio @ :1234 (use this instead of :11434)
+   # export CRG_OPENAI_BASE_URL=http://localhost:1234/v1
    uvx code-review-graph update                                  # incremental re-parse
    uvx code-review-graph embed --provider openai --model bge-m3  # NEVER omit --provider
    uvx code-review-graph postprocess                             # flows / communities / FTS
@@ -301,6 +306,7 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 | [`references/orchestration-dispatch.md`](references/orchestration-dispatch.md) | OmniRoute / ai-cli / Task probe |
 | [`references/agent-matrix.md`](references/agent-matrix.md) | Per-host invocation |
 | [`references/crg-embed-mode.md`](references/crg-embed-mode.md) | Embedding toggle |
+| [`references/crg-platform-endpoints.md`](references/crg-platform-endpoints.md) | Windows vs macOS CRG URL SSoT |
 | [`references/pressure-test-notes.md`](references/pressure-test-notes.md) | Expected graph-first behavior |
 | [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md) | Stash-first Mac↔Win `main` sync |
 | [`agents/code-reviewer.md`](agents/code-reviewer.md) | Subagent / worker persona |

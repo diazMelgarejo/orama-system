@@ -105,6 +105,22 @@ patch the ECC clone bootstrap to call `npm.cmd install` (temporary shim, not a p
 
 Details: [`ecc-doctor-and-cursor-smoke-checks.md`](ecc-doctor-and-cursor-smoke-checks.md)
 
+### CRG / Cursor MCP (Windows)
+
+After ECC `--target cursor` or any vendor MCP drop, set CRG to LM Studio — **not** Ollama `:11434`:
+
+```powershell
+# Preferred: platform-aware sync
+cd $env:ORAMA_SYSTEM_PATH
+bash bin/orama-system/scripts/sync-cursor-mcp.sh --profile readonly
+
+# Or manual patch in .cursor/mcp.json → code-review-graph.env:
+# "CRG_OPENAI_BASE_URL": "http://localhost:1234/v1"
+```
+
+Reload MCP in Cursor Settings. Full rule:
+[`../../code-review/references/crg-platform-endpoints.md`](../../code-review/references/crg-platform-endpoints.md).
+
 ### ECC idempotency
 
 - If `ecc-install-state.json` exists and ECC directories are present → **validate, skip full reinstall**.
@@ -136,6 +152,7 @@ cd $env:ORAMA_SYSTEM_PATH
 |-----------|---------|
 | **GossipBus log** | `python $env:PERPETUA_TOOLS_PATH\scripts\agent_coordination.py log <agent_id> "<msg>"` |
 | **Peer-inbox drop** | `lan_peer_assign.py drop --peer --file ... --assignee mac` |
+| **Update all agents** | [`update-all-agents-comms.md`](update-all-agents-comms.md) — fanout + GossipBus recipe |
 | **Flush on LAN start** | `start.ps1 --lan-peer` → `flush-outbox --peer` |
 | **coord_pulse.ps1** | Scheduled Cursor dispatch inside this repo |
 | **Direct cursor-agent** | `cursor-agent --print --model <model> "<prompt>"` |

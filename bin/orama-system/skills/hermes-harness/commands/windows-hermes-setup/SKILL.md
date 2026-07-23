@@ -33,7 +33,8 @@ allowed-tools: bash, file-operations
 3. Run `platform/windows/ensure-partner-cli-paths.ps1` (or confirm `start.ps1` sources it).
 4. If ECC not validated: `install.ps1 --target hermes --profile minimal` then doctor.
 5. Refresh thin wrappers: `install_hermes_thin_skills.py --install --verify`.
-6. Return factual status: wired / not wired / already correct per path.
+6. **CRG / Cursor MCP:** `bash bin/orama-system/scripts/sync-cursor-mcp.sh` (Windows → `:1234`).
+7. Return factual status: wired / not wired / already correct per path.
 
 ## Envelope
 

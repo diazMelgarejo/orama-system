@@ -184,7 +184,9 @@ peer checking the board mid-work doesn't rediscover it independently:
 Established 2026-07-22 during a frugality/privacy-gate + repo-hygiene
 close-out session — see `references/results/mac-2026-07-22-frugality-p3-
 and-repo-closeout-status.md` for a worked example of both mechanisms used
-together. Corollary: check the board while waiting on any background
+together. **Step-by-step Hermes recipe:**
+[`references/update-all-agents-comms.md`](references/update-all-agents-comms.md).
+Corollary: check the board while waiting on any background
 process (a push, a test run, another agent's job) — don't idle.
 
 ## Subskill Registry (Hermes-facing)
@@ -242,6 +244,10 @@ Partner canaries: `python bin\orama-system\skills\hermes-harness\scripts\verify_
 Canonical setup playbook (absorbed from Hermes self-improve `windows-hermes-setup`):
 [`references/windows-hermes-setup.md`](references/windows-hermes-setup.md).
 Install thin wrapper: `python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install`.
+
+**CRG on Windows:** `.cursor/mcp.json` must use `CRG_OPENAI_BASE_URL=http://localhost:1234/v1`
+(LM Studio, not Ollama `:11434`). Run `bash bin/orama-system/scripts/sync-cursor-mcp.sh` or see
+[`../code-review/references/crg-platform-endpoints.md`](../code-review/references/crg-platform-endpoints.md).
 
 Use PowerShell with explicit UTF-8 when writing files:
 
