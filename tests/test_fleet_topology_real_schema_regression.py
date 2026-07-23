@@ -52,16 +52,37 @@ _QPT_PATH = (
     _REPO_ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts"
     / "query_peer_topology.py"
 )
-_spec = importlib.util.spec_from_file_location("query_peer_topology", _QPT_PATH)
-qpt = importlib.util.module_from_spec(_spec)
-sys.modules["query_peer_topology"] = qpt
-_spec.loader.exec_module(qpt)  # type: ignore[union-attr]
+_PT_ROOT = _REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools"
+
+
+@pytest.fixture(scope="module")
+def qpt():
+    """Load query_peer_topology only when Perpetua-Tools is co-located.
+
+    orama-system CI checks out this repo alone (no PT sibling), so tests
+    that exercise _merge_peer_topology skip gracefully instead of crashing
+    pytest collection via query_peer_topology's orchestrator import guard.
+    """
+    if _PT_ROOT.exists() and str(_PT_ROOT) not in sys.path:
+        sys.path.insert(0, str(_PT_ROOT))
+    pytest.importorskip(
+        "orchestrator.fleet_topology",
+        reason=(
+            "requires Perpetua-Tools checked out as a sibling of orama-system "
+            "(not present in orama-system CI)"
+        ),
+    )
+    spec = importlib.util.spec_from_file_location("query_peer_topology", _QPT_PATH)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["query_peer_topology"] = mod
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
 
 
 # ── Bug 1: seed-branch local_node identity ──────────────────────────────
 
 
-def test_merge_seed_uses_own_hostname_not_peers_self_report():
+def test_merge_seed_uses_own_hostname_not_peers_self_report(qpt):
     """First-ever merge (current=None) must seed local_node from THIS
     machine, never from the peer's payload -- and must count the peer as
     reachable, not zero."""
@@ -84,7 +105,7 @@ def test_merge_seed_uses_own_hostname_not_peers_self_report():
     assert peers_reachable == 1  # NOT 0 -- this is the exact SOLO-misclassification bug
 
 
-def test_merge_seed_classifies_pair_not_solo():
+def test_merge_seed_classifies_pair_not_solo(qpt):
     """End-to-end: a single successful peer merge from a clean slate must
     classify PAIR, matching the mother plan's own SOLO/PAIR/FLEET
     definitions -- 1 peer reachable is PAIR, not SOLO."""
@@ -100,7 +121,7 @@ def test_merge_seed_classifies_pair_not_solo():
     assert state.fleet_mode == FleetMode.PAIR
 
 
-def test_merge_second_call_preserves_seeded_local_node():
+def test_merge_second_call_preserves_seeded_local_node(qpt):
     """A subsequent merge (current already set) must keep reusing the
     correctly-seeded local_node, not re-derive or drift it."""
     peer_data = {"local_node": "win-studio", "fleet_mode": "SOLO", "peers": [],

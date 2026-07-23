@@ -67,7 +67,9 @@ try:
     from orchestrator.startup_intelligence import FleetMode, classify_fleet_mode
 except ImportError as exc:
     logging.error("Cannot import orchestrator modules from %s: %s", _PT_ROOT, exc)
-    sys.exit(2)
+    if __name__ == "__main__":
+        sys.exit(2)
+    raise
 
 # Add orama-system to path for Phase 6 self-healing modules.
 # BOTH roots are needed: repo root satisfies the explicit `src.orama_system.*`
