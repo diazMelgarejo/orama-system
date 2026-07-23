@@ -21,6 +21,13 @@
         "bin/mcp_servers/openclaw_mcp_server.py"
       ],
       "id": "mcp/oramasys"
+    },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest"
+      ]
     }
   }
 }

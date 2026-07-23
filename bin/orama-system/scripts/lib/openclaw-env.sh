@@ -194,14 +194,40 @@ _crg_python_bin() {
   fi
 }
 
+# CRG embedding shim — platform-specific OpenAI-compat base URL (see crg-platform-endpoints.md).
+_crg_is_windows() {
+  case "$(uname -s 2>/dev/null)" in
+    MINGW*|MSYS*|CYGWIN*) return 0 ;;
+  esac
+  [ "${OS:-}" = "Windows_NT" ] && return 0
+  return 1
+}
+
+_crg_openai_base_url() {
+  if _crg_is_windows; then
+    printf '%s\n' "http://localhost:1234/v1"
+  else
+    printf '%s\n' "http://localhost:11434/v1"
+  fi
+}
+
+_crg_embed_health_url() {
+  if _crg_is_windows; then
+    printf '%s\n' "http://localhost:1234/v1/models"
+  else
+    printf '%s\n' "http://localhost:11434/api/tags"
+  fi
+}
+
 _write_minimal_mcp_json() {
   local mcp_json="$1"
-  local pybin
+  local pybin crg_base
   pybin="$(_crg_python_bin)" || return 1
+  crg_base="$(_crg_openai_base_url)"
   command -v jq >/dev/null 2>&1 || return 1
   mkdir -p "$(dirname "$mcp_json")"
   if [ -f "$mcp_json" ]; then
-    jq --arg py "$pybin" '
+    jq --arg py "$pybin" --arg base "$crg_base" '
       .mcpServers["code-review-graph"] = {
         "command": "uvx",
         "args": ["code-review-graph", "serve"],
@@ -210,7 +236,7 @@ _write_minimal_mcp_json() {
           + {
             "PYTHON": $py,
             "CRG_OPENAI_API_KEY": "ollama",
-            "CRG_OPENAI_BASE_URL": "http://localhost:11434/v1",
+            "CRG_OPENAI_BASE_URL": $base,
             "CRG_OPENAI_MODEL": "bge-m3",
             "CRG_OPENAI_DIMENSION": "1024",
             "CRG_ACCEPT_CLOUD_EGRESS": "1"
@@ -219,7 +245,7 @@ _write_minimal_mcp_json() {
       }
     ' "$mcp_json" > "${mcp_json}.openclaw.tmp" && mv "${mcp_json}.openclaw.tmp" "$mcp_json"
   else
-    jq -n --arg py "$pybin" '{
+    jq -n --arg py "$pybin" --arg base "$crg_base" '{
       "mcpServers": {
         "code-review-graph": {
           "command": "uvx",
@@ -227,7 +253,7 @@ _write_minimal_mcp_json() {
           "env": {
             "PYTHON": $py,
             "CRG_OPENAI_API_KEY": "ollama",
-            "CRG_OPENAI_BASE_URL": "http://localhost:11434/v1",
+            "CRG_OPENAI_BASE_URL": $base,
             "CRG_OPENAI_MODEL": "bge-m3",
             "CRG_OPENAI_DIMENSION": "1024",
             "CRG_ACCEPT_CLOUD_EGRESS": "1"

@@ -14,8 +14,9 @@
 | `HERMES_GIT_BASH_PATH` | *(must be set)* | Absolute path to `bash.exe` — full Git for Windows preferred |
 | `WIN_IP` | *(fallback in code only — set in `.env`)* | This machine's LAN IP (used by Mac→Win cross-machine calls only) |
 | `MAC_IP` | *(fallback in code only — set in `.env`)* | Mac host LAN IP (used by Win→Mac cross-machine calls only) |
-| `LM_STUDIO_WIN_ENDPOINTS` | `http://localhost:1234` | LM Studio URL — `localhost` when on Windows |
-| `OLLAMA_WINDOWS_ENDPOINT` | `http://localhost:11434` | Ollama URL — `localhost` when on Windows |
+| `LM_STUDIO_WIN_ENDPOINTS` | `http://localhost:1234` | LM Studio URL — `localhost` when on Windows (primary inference + CRG embed) |
+| `CRG_OPENAI_BASE_URL` | `http://localhost:1234/v1` | CRG embedding shim — **Windows only**; macOS uses `:11434` (see [`../../code-review/references/crg-platform-endpoints.md`](../../code-review/references/crg-platform-endpoints.md)) |
+| `OLLAMA_WINDOWS_ENDPOINT` | `http://localhost:11434` | Optional Ollama fallback on Windows — not the primary inference or CRG path |
 | `LM_STUDIO_API_TOKEN` | `lm-studio` | Bearer token for local LM Studio (dev only) |
 | `NOUS_API_KEY` | *(must be set for Nous)* | Nous Portal API key — never tracked |
 
@@ -124,6 +125,7 @@ $env:PATH = "$env:USERPROFILE\.lmstudio\.internal\utils;$env:PATH"
 
 ## Related
 
+- [`windows-hermes-setup.md`](windows-hermes-setup.md) — operator playbook (PATH, ECC, agent comms)
 - [`../../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (before push/pull handoff)
 - [`lan-endpoint-contract.md`](lan-endpoint-contract.md) — full IP variable contract
 - [`windows-provider-routing.md`](windows-provider-routing.md) — provider fallback stack
