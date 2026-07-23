@@ -33,7 +33,9 @@ import socket
 import sys
 import tempfile
 import time
+import urllib.request
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import pytest
@@ -88,7 +90,7 @@ _requires_orchestrator = pytest.mark.skipif(
 def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    def fake_urlopen(req, timeout=2):
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2) -> "_Resp":
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
         if token == "bad":
@@ -98,13 +100,13 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
         body = json.dumps({"ok": True}).encode("utf-8")
 
         class _Resp:
-            def read(self):
+            def read(self) -> bytes:
                 return body
 
-            def __enter__(self):
+            def __enter__(self) -> "_Resp":
                 return self
 
-            def __exit__(self, *args):
+            def __exit__(self, *args: Any) -> bool:
                 return False
 
         return _Resp()
@@ -124,7 +126,7 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
 
 @pytest.mark.unit
 def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
-    def fake_urlopen(req, timeout=2):
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2) -> None:
         raise qpt.urllib.error.HTTPError(req.full_url, 401, "Unauthorized", hdrs=None, fp=None)
 
     monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: ["bad1", "bad2"])
@@ -140,7 +142,7 @@ def test_http_get_refuses_bearer_token_over_unauthenticated_http(monkeypatch: py
     first one. The whole retry loop must never call urlopen() at all."""
     called = {"n": 0}
 
-    def fake_urlopen(req, timeout=2):
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2) -> "_Resp":
         called["n"] += 1
         raise AssertionError("urlopen must never be called over unauthenticated transport")
 
@@ -161,17 +163,20 @@ def test_http_get_allows_no_token_over_http(monkeypatch: pytest.MonkeyPatch) -> 
     body = json.dumps({"ok": True}).encode("utf-8")
 
     class _Resp:
-        def read(self):
+        def read(self) -> bytes:
             return body
 
-        def __enter__(self):
+        def __enter__(self) -> "_Resp":
             return self
 
-        def __exit__(self, *args):
+        def __exit__(self, *args: Any) -> bool:
             return False
 
+    def _fake_urlopen_no_token(req: urllib.request.Request, timeout: float = 2) -> _Resp:
+        return _Resp()
+
     monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: [])
-    monkeypatch.setattr(qpt.urllib.request, "urlopen", lambda req, timeout=2: _Resp())
+    monkeypatch.setattr(qpt.urllib.request, "urlopen", _fake_urlopen_no_token)
 
     result = qpt._http_get("http://10.0.0.50:8002/api/fleet-topology")
 
