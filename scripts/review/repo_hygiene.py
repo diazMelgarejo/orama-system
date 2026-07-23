@@ -970,7 +970,7 @@ def check_skill_quality(root: Path, files: list[str]) -> list[str]:
         )
         if not lint014_exempt and not rel.endswith(".py"):
             _ARGV_SECRET_RE = re.compile(
-                r"security\s+add-generic-password\s+.*-w\s+["']?\$",
+                r"security\s+add-generic-password\s+.*-w\s+[\"']?\$",
                 re.IGNORECASE,
             )
             if _ARGV_SECRET_RE.search(text):
