@@ -160,6 +160,10 @@ lance_memory.lance/
 # Cursor private attribution (synced from ~/.cursor/openclaw — never commit)
 .cursor/private/
 .cursor/state/
+.cursor/ecc-install-state.json
+.cursor/skills/
+.cursor/hooks/
+.cursor/hooks.json
 
 # Hermes runtime state (repo-local mirror — never commit)
 .hermes/
