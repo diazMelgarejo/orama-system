@@ -156,6 +156,9 @@ def test_install_fresh_creates_all_wrappers(installer):
     for spec in installer.WRAPPERS:
         target = _target(installer, spec.slug)
         assert target.is_file()
+    harness = installer.HERMES_HARNESS_ROOT / "SKILL.md"
+    assert harness.is_file()
+    assert harness in written
 
 
 def test_install_creates_description_md(installer):
