@@ -87,25 +87,71 @@ _WIN_IP_TTL: float = 30.0   # seconds
 
 # ── Priority 1: AlphaClaw gateway ──────────────────────────────────────────────
 
-def _from_alphaclaw() -> str:
-    """
-    Query AlphaClaw's own models endpoint.  AlphaClaw knows exactly which
-    providers are registered and alive — it's the most live source available.
+def _ensure_pt_on_path() -> None:
+    """Add Perpetua-Tools to sys.path if available (no-op if already present)."""
+    import sys as _sys
+    _orama_root = Path(__file__).resolve().parents[2]
+    for candidate in [
+        _orama_root.parent / "perplexity-api" / "Perpetua-Tools",
+        Path.home() / "Perpetua-Tools",
+    ]:
+        if candidate.exists():
+            cstr = str(candidate)
+            if cstr not in _sys.path:
+                _sys.path.insert(0, cstr)
+            return
 
-    AlphaClaw gateway (port 18789) returns OpenAI-compat /v1/models listing.
-    We look for model IDs that include 'win' or a known Win-only model name
-    to identify the Win provider URL from openclaw.json's provider table.
+
+def _from_alphaclaw() -> str:
+    """Query AlphaClaw for the Win provider IP.
+
+    SECURITY: Route through PT's alphaclaw_adapter (PT PR #276) first.
+    The adapter handles TLS, SSRF prevention, and request sanitization.
+    Falls back to a hardened direct localhost-only call only when the
+    adapter is unavailable.
     """
-    # Fast path: just read provider URLs from openclaw.json if gateway is alive
-    # (gateway being alive = AlphaClaw is running = its provider config is current)
+    # Attempt 1: PT adapter path (preferred — handles TLS + SSRF prevention)
+    try:
+        _ensure_pt_on_path()
+        from orchestrator.alphaclaw_adapter import get_provider_ips
+        providers = get_provider_ips()
+        win_provider = providers.get("lmstudio-win", {})
+        ip = _extract_ip_from_url(win_provider.get("baseUrl", ""))
+        if ip:
+            log.debug("ip_resolver P1 (PT alphaclaw adapter): %s", ip)
+        return ip
+    except ImportError:
+        log.debug("ip_resolver: PT alphaclaw adapter unavailable, falling back to direct")
+    except Exception:
+        pass
+
+    # Attempt 2: Hardened direct call (localhost-only, short timeout)
+    return _from_alphaclaw_direct()
+
+
+def _from_alphaclaw_direct() -> str:
+    """HARDENED direct AlphaClaw probe — localhost only, short timeout.
+
+    SECURITY CONSTRAINTS:
+    1. Only connects to 127.0.0.1 or localhost (no SSRF per CWE-918).
+    2. Uses a 2s timeout to limit exposure window.
+    3. If AlphaClaw ever supports https://, this MUST be upgraded.
+    4. No bearer token of fleet value is sent — only the AlphaClaw-local
+       default "lm-studio" token.
+    """
+    gateway = ALPHACLAW_GATEWAY  # "http://localhost:18789"
+    parsed = urlparse(gateway)
+    if parsed.hostname not in ("localhost", "127.0.0.1", "::1"):
+        log.warning("ip_resolver: ALPHACLAW_GATEWAY is not localhost — refusing direct call")
+        return ""
+
     try:
         req = urllib.request.Request(
-            f"{ALPHACLAW_GATEWAY}/v1/models",
+            f"{gateway}/v1/models",
             headers={"Authorization": "Bearer " + _alphaclaw_token()},
         )
         with urllib.request.urlopen(req, timeout=2.0) as r:
-            r.read()  # just verify 200; IP comes from openclaw.json below
-        # AlphaClaw is running → openclaw.json is its live config
+            r.read()  # verify 200; IP comes from openclaw.json below
         ip = _from_openclaw_json()
         if ip:
             log.debug("ip_resolver P1 (alphaclaw→openclaw.json): %s", ip)
@@ -332,43 +378,41 @@ def get_win_ollama_url(port: int = OLLAMA_PORT) -> str:
 # ── Gossip writer (called by discover.py / portal after live probes) ───────────
 
 def write_win_ip_to_openclaw_json(win_ip: str) -> bool:
-    """
-    Write a freshly-discovered Win IP back into openclaw.json so all
-    processes on the next startup pick it up from Priority 2.
+    """Write a freshly-discovered Win IP back into openclaw.json.
+
     Idempotent: no-op if the IP hasn't changed.
+
+    SECURITY: Malformed URL input is rejected cleanly (returns False)
+    rather than letting urlparse() raise ValueError outside the handler.
     """
     if not win_ip:
         return False
-    # win_ip can legitimately arrive scheme-bearing (get_win_ip()'s own
-    # documented return shape, e.g. "https://10.1.2.3") -- strip any scheme
-    # before building the URL below, or a scheme-bearing input silently
-    # produces a broken URL with the scheme duplicated ("http" + "://"
-    # + the original "https://10.1.2.3" value, unparsed).
-    # Same urlparse(...).hostname pattern already used by get_win_lms_url /
-    # get_win_ollama_url for scheme-aware handling.
-    parsed = urlparse(win_ip)
-    if parsed.scheme:
-        # A scheme was given but no hostname could be extracted (malformed
-        # input) -- reject rather than falling back to the raw string,
-        # which could itself still contain the scheme.
-        if not parsed.hostname:
-            return False
-        win_host = parsed.hostname
-    else:
-        win_host = win_ip
-    # Validate the NORMALIZED host, not the raw (possibly scheme-bearing)
-    # input -- a bare loopback check on win_ip alone let "https://127.0.0.1"
-    # and "http://localhost" through, since neither literally starts with
-    # "127." or equals "localhost" before scheme-stripping. Also cover IPv6
-    # loopback ("::1"), which the previous check never handled in any form.
-    host_lc = win_host.lower().strip("[]")
-    if not host_lc or host_lc == "localhost" or host_lc.startswith("127.") or host_lc == "::1":
-        return False
+
     try:
+        parsed = urlparse(win_ip)
+        if parsed.scheme:
+            if not parsed.hostname:
+                return False
+            win_host = parsed.hostname
+        else:
+            win_host = win_ip
+
+        # Validate the NORMALIZED host, not the raw (possibly scheme-bearing)
+        # input — a bare loopback check on win_ip alone let "https://127.0.0.1"
+        # and "http://localhost" through, since neither literally starts with
+        # "127." or equals "localhost" before scheme-stripping. Also cover IPv6
+        # loopback ("::1"), which the previous check never handled in any form.
+        host_lc = win_host.lower().strip("[]")
+        if not host_lc or host_lc == "localhost" or host_lc.startswith("127.") or host_lc == "::1":
+            return False
+
+        # IPv6 addresses need brackets in URLs
+        host_for_url = f"[{win_host}]" if ":" in win_host else win_host
+
         cfg = json.loads(OPENCLAW_JSON.read_text())
         providers = cfg.setdefault("models", {}).setdefault("providers", {})
         current_url = providers.get("lmstudio-win", {}).get("baseUrl", "")
-        new_url = f"http://{win_host}:{LMS_PORT}/v1"
+        new_url = f"http://{host_for_url}:{LMS_PORT}/v1"
         if current_url == new_url:
             return False  # already up to date
         providers.setdefault("lmstudio-win", {})["baseUrl"] = new_url
@@ -385,8 +429,7 @@ def write_win_ip_to_openclaw_json(win_ip: str) -> bool:
         invalidate_win_ip_cache()   # flush cache so next get_win_ip() reads new value
         log.info("ip_resolver: wrote Win IP %s → openclaw.json", win_ip)
         return True
-    except Exception as exc:
-        log.warning("ip_resolver: failed to write Win IP to openclaw.json: %s", exc)
+    except Exception:
         return False
 
 
