@@ -56,6 +56,8 @@ allowed-tools: bash, file-operations
 - [`../../references/cursor-agent-steering-handoff.md`](../../references/cursor-agent-steering-handoff.md)
 - [`../../references/ecc-doctor-and-cursor-smoke-checks.md`](../../references/ecc-doctor-and-cursor-smoke-checks.md)
 - [`../../references/hermes-windows-partner-readiness.md`](../../references/hermes-windows-partner-readiness.md)
+- [`../../references/update-all-agents-comms.md`](../../references/update-all-agents-comms.md) — comms recipe + 5-minute recurring comms board
 - [`../../../../../../platform/windows/ensure-partner-cli-paths.ps1`](../../../../../../platform/windows/ensure-partner-cli-paths.ps1)
 - [`../../../../../../platform/windows/start.ps1`](../../../../../../platform/windows/start.ps1)
 - [`../../scripts/install_hermes_thin_skills.py`](../../scripts/install_hermes_thin_skills.py)
+- [`../../scripts/coord_comms_board.ps1`](../../scripts/coord_comms_board.ps1) — 5-minute recurring full-comm tick wrapper
