@@ -339,11 +339,19 @@ def write_win_ip_to_openclaw_json(win_ip: str) -> bool:
     """
     if not win_ip or win_ip == "localhost" or win_ip.startswith("127."):
         return False
+    # win_ip can legitimately arrive scheme-bearing (get_win_ip()'s own
+    # documented return shape, e.g. "https://10.1.2.3") -- strip any scheme
+    # before building the URL below, or a scheme-bearing input silently
+    # produces a broken double-scheme baseUrl ("http://https://10.1.2.3:...").
+    # Same urlparse(...).hostname pattern already used by get_win_lms_url /
+    # get_win_ollama_url for scheme-aware handling.
+    parsed = urlparse(win_ip)
+    win_host = parsed.hostname if parsed.scheme and parsed.hostname else win_ip
     try:
         cfg = json.loads(OPENCLAW_JSON.read_text())
         providers = cfg.setdefault("models", {}).setdefault("providers", {})
         current_url = providers.get("lmstudio-win", {}).get("baseUrl", "")
-        new_url = f"http://{win_ip}:{LMS_PORT}/v1"
+        new_url = f"http://{win_host}:{LMS_PORT}/v1"
         if current_url == new_url:
             return False  # already up to date
         providers.setdefault("lmstudio-win", {})["baseUrl"] = new_url
