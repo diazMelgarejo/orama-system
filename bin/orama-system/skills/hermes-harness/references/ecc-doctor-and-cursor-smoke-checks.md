@@ -32,6 +32,29 @@ Reinstall only missing ECC modules; preserve non-ECC artifacts in `~/.hermes`.
 
 ---
 
+## CRG (`code-review-graph`) — platform endpoint rule
+
+Canonical SSoT: [`../../code-review/references/crg-platform-endpoints.md`](../../code-review/references/crg-platform-endpoints.md).
+
+| Platform | `CRG_OPENAI_BASE_URL` | Backend |
+|----------|----------------------|---------|
+| **macOS** | `http://localhost:11434/v1` | Ollama (`bge-m3` embeddings) |
+| **Windows (all)** | `http://localhost:1234/v1` | LM Studio (`$LM_STUDIO_WIN_ENDPOINTS`) |
+
+ECC vendor defaults in `.cursor/mcp.json` ship the **macOS** template (`:11434`).
+On **every Windows host** (including RTX 5080), override after install — or re-run
+`bash bin/orama-system/scripts/sync-cursor-mcp.sh` (platform-aware):
+
+```powershell
+# .cursor/mcp.json → code-review-graph.env.CRG_OPENAI_BASE_URL
+"CRG_OPENAI_BASE_URL": "http://localhost:1234/v1"
+```
+
+Do **not** point Windows CRG at `:11434` unless Ollama is explicitly running locally
+(optional fallback — not the Windows primary inference path).
+
+---
+
 ## cursor-agent Probe Sequence
 
 1. `cursor-agent --version`
