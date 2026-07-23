@@ -136,6 +136,31 @@ so Hermes/Codex/AGY/cursor-agent resolve in-session without manual PATH edits.
 
 Without this step, partner CLIs may be installed but not callable from the `start.ps1` session.
 
+### `.paths.ps1` rewrite pitfalls
+
+- `.paths.ps1` is gitignored — do not `git add` it.
+- When editing `start.ps1` paths-block, patch heredoc and control flow as one unit; partial
+  edits can duplicate `Write-Host` lines and double-close the block.
+- Preferred regeneration trigger: explicit `--force-paths`, not a hidden side effect in `--discover`.
+- `ORAMA_SYSTEM_PATH` must point to repo root, never nested `bin\orama-system`;
+  `coord_pulse.ps1` treats it as `$Repo`.
+
+### Mac inference + LAN mirror
+
+- Mac peer uses Ollama `localhost:11434` for primary inference — not Win LM Studio `:1234`.
+- Never target peer Win LM Studio URL for Mac-side workloads unless explicitly cross-host.
+- **LAN mirror:** `/v1/models` on Mac/Win may return identical inventories — do not infer GPU
+  identity from model lists; use discovery metadata or `hw_identity`.
+
+### Control-plane token / LAN peer auth
+
+- Shared bearer: `ORAMA_CONTROL_PLANE_TOKEN` / `PT_CONTROL_PLANE_TOKEN` on both hosts.
+- Token files: `.state/control_plane_token` in orama-system and Perpetua-Tools clones.
+- Verify: `start.ps1 --lan-peer --no-open`; probe `/peer-inbox` on `localhost:8002` (non-401).
+- `start.ps1 --status` may hang at PT `.venv` bootstrap — prefer `--lan-peer` for lane checks.
+
+Details: [`lan-peer-coordination.md`](lan-peer-coordination.md).
+
 ```powershell
 cd $env:ORAMA_SYSTEM_PATH
 .\platform\windows\start.ps1 --lan-peer --no-open   # LAN + peer drop flush
