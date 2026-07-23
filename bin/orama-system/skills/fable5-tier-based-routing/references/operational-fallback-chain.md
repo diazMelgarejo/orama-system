@@ -1,7 +1,6 @@
 # Operational Fallback Chain (LLM-Council 4-tier) vs. Code Routing Tiers
 
-Added 2026-07-19 (LLM-Council Task 3). Reconciles two tier vocabularies that
-both legitimately exist in this stack — do not "fix" one to match the other.
+Added 2026-07-19 (LLM-Council Task 3). Reconciles two legitimate tier vocabularies that coexist in this stack — do not "fix" one to match the other.
 
 ## Two different things called "tiers"
 
@@ -12,7 +11,7 @@ both legitimately exist in this stack — do not "fix" one to match the other.
 
 ## The operational chain (mandatory order)
 
-```
+```text
 Tier 1: Local (Ollama qwen3.5:9b-nvfp4, localhost:11434)
         10s timeout, always try first.
 Tier 2: Windows GPU (LM Studio)
@@ -48,7 +47,7 @@ Verified by grep against PT `orchestrator/`:
   imports `backend_resolver`). Cost gating doctrine currently lives at the
   policy layer, not as a frugality_router import.
 
-Re-verify: `grep -rn "TIER_PROBE_TIMEOUT" ../perplexity-api/Perpetua-Tools/orchestrator/`
+Re-verify: `grep -rn "TIER_PROBE_TIMEOUT" "$REPO_ROOT/../Perpetua-Tools/orchestrator/"`
 
 AUDIT: 2026-07-19 fable5-tier-based-routing upgrade (reference add) — LLM-Council
 Task 3; grounded against frugality_router.py; two brief-asserted facts found
