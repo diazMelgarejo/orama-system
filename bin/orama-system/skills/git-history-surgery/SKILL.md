@@ -20,7 +20,7 @@ Use it for two related jobs:
 | Situation | Procedure |
 | --- | --- |
 | A secret, forbidden identity, token, or workstation path landed in history | [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md) |
-| `main` was rewritten and branches look 600 commits behind/orphaned | [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md) |
+| `main` was rewritten and branches now look 600 commits behind/orphaned | [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md) |
 
 Fail closed: preserve refs, prove the operation is necessary, and use
 `--force-with-lease` only after recording the expected remote SHA.
@@ -88,16 +88,16 @@ LM Studio host, run
   happened for real: a PR was reported merged in a planning summary and
   never actually merged, then treated as done for the next several steps.
 - **After `gh pr merge` on ANY branch other than main (a stacked/dependent
-  PR), immediately `git fetch origin <that-branch>` and reconcile the local
-  checkout before doing further local work on it.** `gh pr merge` updates
-  the branch on GitHub; your local checkout of that branch does NOT update
-  itself. If you keep working locally without fetching first, later local
-  merges (e.g. pulling in `main`) can silently carry a stale, pre-merge
-  version of files the remote merge already fixed — this looks like a
-  successful merge and produces no error; it just quietly reverts the fix.
-  Verify with `git merge-base --is-ancestor origin/<branch> <branch>` (or
-  compare `git rev-parse` local vs. `origin/<branch>`) before trusting local
-  HEAD reflects a merge you just performed via `gh pr merge`.
+  PR), immediately `git fetch origin <that-branch>` and verify with
+  `git rev-parse HEAD` == `git rev-parse origin/<that-branch>` before doing
+  further local work.** `gh pr merge` updates the branch on GitHub; your
+  local checkout does NOT update itself. If you keep working locally without
+  fetching first, later local merges can silently carry a stale, pre-merge
+  version of files the remote merge already fixed. `merge-base --is-ancestor`
+  proves ancestry (A is in B's history) but NOT exact identity — two different
+  refs can both be ancestors of each other when one is a merge commit
+  containing the other. Use exact SHA comparison to verify the local tip
+  actually matches the remote post-merge.
 
 ## Verification
 
@@ -153,8 +153,9 @@ content on top — never interleave them**:
 
 1. Fetch and merge every relevant already-merged remote ref into the local
    branch first (`origin/main`, `origin/<this-branch>` if a stacked PR was
-   merged separately, etc.). Verify each with `git merge-base --is-ancestor`
-   before trusting it — don't assume a prior fetch is still current.
+   merged separately, etc.). Verify each with exact SHA equality
+   (`git rev-parse HEAD` == `git rev-parse origin/<branch>`) before trusting
+   it — don't assume a prior fetch is still current.
 2. Only once the local branch is a confirmed, verified superset of every
    relevant remote ref, stash or set aside the new content to adapt
    (`git stash push -u -m "<tag>"` for uncommitted work, or note the
@@ -201,23 +202,6 @@ Run the script (no flags) to fix it, then amend or add a follow-up commit.
 
 See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
 See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
-
-## References
-
-- [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
-- [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
-- [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
-- [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table
-- [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md) — CRLF on Windows turf; LF on Mac/Linux; no cross-platform EOL tug-of-war
-- [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md)
-- [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
-- [`references/windows-powershell-runtime-bootstrap.md`](references/windows-powershell-runtime-bootstrap.md)
-- [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md) — macOS bash 3.2; no `mapfile` in hook scripts; `check_tdd_commit.sh` pattern
-- [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md)
-- [`docs/wiki/13-alphaclaw-fork-contrib-branches.md`](../../../../docs/wiki/13-alphaclaw-fork-contrib-branches.md)
-- [`scripts/git/reanchor_scan.sh`](../../../../scripts/git/reanchor_scan.sh)
-- [`scripts/sync_version.py`](../../../../scripts/sync_version.py) — version propagation
-- [`src/orama_system/_version.py`](../../../../src/orama_system/_version.py) — single source of truth
 
 ## v2 Authoring Standards
 
