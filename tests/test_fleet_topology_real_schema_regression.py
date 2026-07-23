@@ -122,17 +122,23 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert result == {"ok": True}
     assert calls == ["bad", "good"]  # tried the rejected candidate first, then the working one
+    assert len(calls) == 2  # ALL candidates were attempted, not short-circuited
 
 
 @pytest.mark.unit
 def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+
     def fake_urlopen(req: urllib.request.Request, timeout: float = 2) -> None:
+        token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        calls.append(token)
         raise qpt.urllib.error.HTTPError(req.full_url, 401, "Unauthorized", hdrs=None, fp=None)
 
     monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: ["bad1", "bad2"])
     monkeypatch.setattr(qpt.urllib.request, "urlopen", fake_urlopen)
 
     assert qpt._http_get("https://10.0.0.50:8002/api/fleet-topology") is None
+    assert len(calls) == 2  # both candidates exhausted before giving up
 
 
 @pytest.mark.unit
