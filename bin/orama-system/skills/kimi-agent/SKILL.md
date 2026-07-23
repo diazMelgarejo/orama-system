@@ -23,6 +23,47 @@ allowed-tools: bash, file-operations
 
 # Kimi Code Agent Skill
 
+## CRITICAL — File Truncation Warning (READ BEFORE ANY EDIT)
+
+**Kimi agents have a recurring failure mode: TRUNCATING files.**
+
+When `create_or_update_file` is called with partial content (e.g., only the
+first N lines of a file), the API silently replaces the entire file with
+that truncated content. This has happened multiple times with catastrophic
+results:
+
+- `repo_hygiene.py` truncated from 818 lines → 1184 bytes (lost 90% of the file)
+- `LESSONS.md` truncated losing 517 lines of historical lessons
+- File restored only after multiple failed attempts compounding the damage
+
+### Mandatory Verification Protocol
+
+**BEFORE any commit or push, you MUST:**
+
+1. **Re-fetch the file** after writing it:
+   ```bash
+   curl -s https://raw.githubusercontent.com/<org>/<repo>/<branch>/<path> | wc -l
+   ```
+
+2. **Verify line count** matches expectation (within 5% of original):
+   ```bash
+   # Original file had 818 lines; verify new file has ~800+ lines
+   lines=$(curl -s "$url" | wc -l)
+   [ "$lines" -gt 700 ] || echo "WARNING: File may be truncated!"
+   ```
+
+3. **Check for structural integrity** — look for closing blocks, final functions,
+   trailing sections that should exist:
+   ```bash
+   tail -20 /tmp/fetched_file.py   # should show proper end of file
+   ```
+
+4. **If truncated:** DO NOT commit. Re-write the complete file from scratch
+   using `get_file_contents` to read the full original first.
+
+**This check is non-negotiable. The cost of one truncated file in main
+exceeds the cost of 100 verification steps.**
+
 ## Disambiguation
 
 **`kimi`** (`~/.kimi-code/bin/kimi`) is Moonshot AI's Kimi Code CLI — a
@@ -374,3 +415,8 @@ kimi upgrade   # alias: kimi update
 5. **`kimi server`/`kimi vis` local daemon not yet tested on Windows** —
    install + `-p` dispatch are verified there; the REST/WS observability
    surface (§ Local Server) is unverified on win32 specifically.
+6. **File truncation in edits** — Kimi agents have repeatedly truncated
+   files via `create_or_update_file`. The verification protocol in §
+   "CRITICAL — File Truncation Warning" is the mitigation; verify it
+   survives skill-creator audit and propagate to all agent skills if
+   validated.

@@ -184,7 +184,9 @@ peer checking the board mid-work doesn't rediscover it independently:
 Established 2026-07-22 during a frugality/privacy-gate + repo-hygiene
 close-out session — see `references/results/mac-2026-07-22-frugality-p3-
 and-repo-closeout-status.md` for a worked example of both mechanisms used
-together. Corollary: check the board while waiting on any background
+together. **Step-by-step Hermes recipe:**
+[`references/update-all-agents-comms.md`](references/update-all-agents-comms.md).
+Corollary: check the board while waiting on any background
 process (a push, a test run, another agent's job) — don't idle.
 
 ## Subskill Registry (Hermes-facing)
@@ -198,6 +200,7 @@ Thin local wrappers point at canonical command cards. Never cache full skill bod
 | `pt-orama-delegate` | `commands/pt-orama-delegate/SKILL.md` | Hermes / AGY | Bounded delegation |
 | `pt-hardware-policy` | `commands/pt-hardware-policy/SKILL.md` | Hermes | `hardware-affinity-gate` edge |
 | `lan-peer-self-talk` | `commands/lan-peer-self-talk/SKILL.md` | Hermes | Mac↔Win LAN peer — [operator playbook](references/lan-peer-self-talk.md#operator-playbook) |
+| `windows-hermes-setup` | `commands/windows-hermes-setup/SKILL.md` | Hermes | Windows PATH, ECC doctor, partner CLI — [playbook](references/windows-hermes-setup.md) |
 | `pt-orama-lesson-mining` | `commands/pt-orama-lesson-mining/SKILL.md` | Hermes / Codex | **Optional** — session insight graduation; not installed by default |
 | `hermes-harness` | `SKILL.md` (this file) | Hermes | Install / provider / import |
 | `local-inference` | `../local-inference/SKILL.md` | Hermes | Redirect stub |
@@ -237,6 +240,15 @@ if (-not (Test-Path "$installDir\.git")) { throw "HERMES_NOT_INSTALLED" }
 Partner canaries: `python bin\orama-system\skills\hermes-harness\scripts\verify_partner_canaries.py`
 
 ## Windows Bring-Up
+
+Canonical setup playbook (absorbed from Hermes self-improve `windows-hermes-setup`):
+[`references/windows-hermes-setup.md`](references/windows-hermes-setup.md).
+Install thin wrapper: `python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install`.
+
+**CRG on Windows:** `.cursor/mcp.json` must use `CRG_OPENAI_BASE_URL=http://localhost:1234/v1`
+(LM Studio, not Ollama `:11434`). Run `bash bin/orama-system/scripts/sync-cursor-mcp.sh` or see
+[`../code-review/references/crg-platform-endpoints.md`](../code-review/references/crg-platform-endpoints.md).
+
 Use PowerShell with explicit UTF-8 when writing files:
 
 ```powershell
@@ -411,6 +423,15 @@ Pass criteria: Hermes repo exists, Bash prints `hermes-bash-ok`, one-shot
 prints `HERMES_READY`, provider keys stay outside git, imported skills are
 sanitized, and OpenClaw operations still route through `openclaw-skills`.
 
+## Plan integration
+
+When synthesizing multiple plans into one canonical document, follow
+[`references/plan-integration.md`](references/plan-integration.md):
+
+1. Read source plans, then target plan.
+2. Reframe missing absorption targets as no-ops; enrich canonical assets.
+3. Repo-relative paths only; parametrize IPs; preserve provenance.
+
 ## Boundaries
 
 Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw owns fabric.
@@ -426,6 +447,7 @@ Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw ow
 - Route `openclaw-*` skills through `openclaw-skills` protocol, never Hermes inline.
 - Return core result shape (`status`, `files_modified`, `follow_up_actions`) on every dispatch.
 - Verify `bash.exe`, partner CLIs, and provider reachability before dispatch.
+- Integrate multiple plans per [`references/plan-integration.md`](references/plan-integration.md).
 
 ### Ask First
 
@@ -444,10 +466,15 @@ Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw ow
 - Commit absolute workstation paths in repo content or envelopes.
 - Let worker agents commit, deploy, delete, or change account settings without
   explicit confirmation.
+- Hardcode LAN IP literals in skills, plans, or docs; resolve endpoints via env vars only.
+- Hardcode LM Studio model IDs from memory; fetch exact IDs from `/v1/models`.
 - Silent fallback when `hardware-affinity-gate` returns `NEVER`.
 
 ## References
 
+- [`references/update-all-agents-comms.md`](references/update-all-agents-comms.md) — GossipBus + inbox fanout recipe
+- [`references/lan-peer-coordination.md`](references/lan-peer-coordination.md) — queues, pulse-gate, record-success, inbox drops
+- [`references/plan-integration.md`](references/plan-integration.md) — merge multiple plans into one canonical doc
 - [`references/lan-peer-self-talk.md`](references/lan-peer-self-talk.md) — Mac↔Win operator playbook (SSOT) · [`docs/guides/lan-peer-mac-win-operator.md`](../../../../docs/guides/lan-peer-mac-win-operator.md)
 - [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive)
 - [`references/hermes-universal-invocation-protocol.md`](references/hermes-universal-invocation-protocol.md) — envelope, layers, result superset

@@ -934,6 +934,13 @@ function Start-Service {
     )
 }
 
+# Ensure partner CLI paths are present for this session (Hermes, Codex, AGY, cursor-agent).
+# Placed after all read-only/lifecycle handlers so --stop, --status, --list, etc.
+# do not mutate PATH or leak script-scope variables.
+if (Test-Path "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1") {
+    & "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1"
+}
+
 # ── 1. Perpetua-Tools ─────────────────────────────────────────────────────────
 if ($PtDir -and (Test-Path (Join-Path $PtDir 'orchestrator\fastapi_app.py'))) {
     Start-Service -Name 'PT' -Port $PtPort -WorkDir $PtDir `

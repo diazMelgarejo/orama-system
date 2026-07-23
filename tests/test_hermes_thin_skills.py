@@ -131,6 +131,7 @@ def test_wrapper_text_all_core_wrappers(installer):
         "pt-orama-review",
         "pt-orama-delegate",
         "lan-peer-self-talk",
+        "windows-hermes-setup",
     }
     optional = {spec.slug for spec in installer.OPTIONAL_WRAPPERS}
     assert optional == {"pt-orama-lesson-mining"}

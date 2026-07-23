@@ -210,7 +210,12 @@ wait "${_JOBS[@]}"
 ## MCP Integration
 
 Cursor agents inherit the MCP servers configured in the workspace `.cursor/mcp.json`.
-Manage them:
+**CRG (`code-review-graph`) endpoint is platform-specific** — macOS/Linux use Ollama
+`:11434`; Windows uses LM Studio `:1234`. See
+[`../code-review/references/crg-platform-endpoints.md`](../code-review/references/crg-platform-endpoints.md).
+On Windows after ECC install, run `bash bin/orama-system/scripts/sync-cursor-mcp.sh`.
+
+Manage MCP servers:
 
 ```bash
 cursor-agent mcp list
