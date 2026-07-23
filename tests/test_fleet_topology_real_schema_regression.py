@@ -58,9 +58,29 @@ sys.modules["query_peer_topology"] = qpt
 _spec.loader.exec_module(qpt)  # type: ignore[union-attr]
 
 
+def _orchestrator_available() -> bool:
+    """True when Perpetua-Tools is co-located (local dev), not in orama-only CI."""
+    try:
+        qpt._ensure_pt_on_path()
+        qpt._import_orchestrator()
+        return True
+    except ImportError:
+        return False
+
+
+_requires_orchestrator = pytest.mark.skipif(
+    not _orchestrator_available(),
+    reason=(
+        "requires Perpetua-Tools checked out as a sibling of orama-system "
+        "(not present in orama-system CI)"
+    ),
+)
+
+
 # ── Bug 1: seed-branch local_node identity ──────────────────────────────
 
 
+@_requires_orchestrator
 def test_merge_seed_uses_own_hostname_not_peers_self_report():
     """First-ever merge (current=None) must seed local_node from THIS
     machine, never from the peer's payload -- and must count the peer as
@@ -84,6 +104,7 @@ def test_merge_seed_uses_own_hostname_not_peers_self_report():
     assert peers_reachable == 1  # NOT 0 -- this is the exact SOLO-misclassification bug
 
 
+@_requires_orchestrator
 def test_merge_seed_classifies_pair_not_solo():
     """End-to-end: a single successful peer merge from a clean slate must
     classify PAIR, matching the mother plan's own SOLO/PAIR/FLEET
@@ -100,6 +121,7 @@ def test_merge_seed_classifies_pair_not_solo():
     assert state.fleet_mode == FleetMode.PAIR
 
 
+@_requires_orchestrator
 def test_merge_second_call_preserves_seeded_local_node():
     """A subsequent merge (current already set) must keep reusing the
     correctly-seeded local_node, not re-derive or drift it."""
