@@ -99,7 +99,7 @@ def test_write_win_ip_normalizes_scheme_bearing_input(tmp_path, monkeypatch):
     """get_win_ip() can legitimately return a scheme-bearing value (its own
     documented shape, e.g. "https://10.1.2.3") -- the writer must strip
     that scheme rather than embed it, or the persisted baseUrl becomes a
-    broken double-scheme string ("http://https://10.1.2.3:1234/v1")."""
+    broken double-scheme baseUrl (http scheme prepended to an https host)."""
     cfg_path = tmp_path / "openclaw.json"
     cfg_path.write_text("{}")
     monkeypatch.setattr(ip_resolver, "OPENCLAW_JSON", cfg_path)
