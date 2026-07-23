@@ -21,9 +21,43 @@ from datetime import datetime, timezone
 # Perpetua-Tools next to this repo) but NOT in orama-system's own CI (single-repo
 # checkout, no PT sibling). Skip gracefully rather than hard-failing CI when PT isn't
 # co-located; run for real wherever PT is present as a sibling.
+import os
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / "perplexity-api" / "Perpetua-Tools"))
+
+
+def _resolve_perpetua_tools_root() -> Path | None:
+    """Locate a Perpetua-Tools checkout, preferring explicit env vars.
+
+    Mirrors query_peer_topology.py's _resolve_perpetua_tools_root() (the
+    established discovery convention this repo uses elsewhere) -- checks
+    PERPETUA_TOOLS_ROOT / PERPETUATOOLSROOT / PERPETUA_TOOLS_PATH first,
+    only falling back to a hardcoded relative-path guess. The previous
+    version of this file checked ONLY the hardcoded
+    ../perplexity-api/Perpetua-Tools guess, silently skipping this whole
+    suite on any machine where PT is checked out anywhere else (including
+    via the env vars every other script in this repo already respects).
+    """
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        raw = os.environ.get(key, "").strip()
+        if raw:
+            candidate = Path(raw).expanduser()
+            if (candidate / "orchestrator" / "fleet_topology.py").is_file():
+                return candidate
+    here = Path(__file__).parent.parent
+    for candidate in (
+        here.parent / "perplexity-api" / "Perpetua-Tools",
+        here.parent / "Perpetua-Tools",
+        here.parent / "repos" / "Perpetua-Tools",
+    ):
+        if (candidate / "orchestrator" / "fleet_topology.py").is_file():
+            return candidate
+    return None
+
+
+_pt_root = _resolve_perpetua_tools_root()
+if _pt_root is not None:
+    sys.path.insert(0, str(_pt_root))
 
 pytest.importorskip(
     "orchestrator.fleet_topology",

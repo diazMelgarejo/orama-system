@@ -93,3 +93,21 @@ def test_write_win_ip_roundtrip_idempotent(tmp_path, monkeypatch):
     )
     # Second write with the same IP is an explicit no-op
     assert ip_resolver.write_win_ip_to_openclaw_json("10.4.5.6") is False
+
+
+def test_write_win_ip_normalizes_scheme_bearing_input(tmp_path, monkeypatch):
+    """get_win_ip() can legitimately return a scheme-bearing value (its own
+    documented shape, e.g. "https://10.1.2.3") -- the writer must strip
+    that scheme rather than embed it, or the persisted baseUrl becomes a
+    broken double-scheme string ("http://https://10.1.2.3:1234/v1")."""
+    cfg_path = tmp_path / "openclaw.json"
+    cfg_path.write_text("{}")
+    monkeypatch.setattr(ip_resolver, "OPENCLAW_JSON", cfg_path)
+
+    assert ip_resolver.write_win_ip_to_openclaw_json("https://10.1.2.3") is True
+
+    import json
+    written = json.loads(cfg_path.read_text())
+    base_url = written["models"]["providers"]["lmstudio-win"]["baseUrl"]
+    assert base_url == "http://10.1.2.3:1234/v1"
+    assert base_url.count("://") == 1
