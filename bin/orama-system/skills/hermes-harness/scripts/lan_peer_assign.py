@@ -81,7 +81,10 @@ def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, tim
                 raw = resp.read().decode("utf-8", errors="replace")
                 return json.loads(raw) if raw.strip() else {}
         except urllib.error.HTTPError as exc:
-            body = exc.read().decode("utf-8", errors="replace")
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                body = str(exc.reason)
             if exc.code in (401, 403):
                 last_error = (exc.code, body[:300])
                 continue  # try the next candidate token
