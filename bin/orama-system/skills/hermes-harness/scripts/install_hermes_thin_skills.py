@@ -86,6 +86,12 @@ WRAPPERS = [
         canonical="bin/orama-system/skills/hermes-harness/commands/lan-peer-self-talk/SKILL.md",
         purpose="Probe peer portal + LM Studio via discovery JSON; no SSH.",
     ),
+    HermesWrapper(
+        slug="windows-hermes-setup",
+        description="Thin Hermes command for Windows PATH, ECC, and partner CLI bring-up.",
+        canonical="bin/orama-system/skills/hermes-harness/commands/windows-hermes-setup/SKILL.md",
+        purpose="Probe-first Windows Hermes wiring: partner PATH, ECC doctor, start.ps1 comms.",
+    ),
 ]
 
 # Optional — never required for harness bootstrap or default thin-wrapper install.
