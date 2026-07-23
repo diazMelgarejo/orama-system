@@ -342,7 +342,8 @@ def write_win_ip_to_openclaw_json(win_ip: str) -> bool:
     # win_ip can legitimately arrive scheme-bearing (get_win_ip()'s own
     # documented return shape, e.g. "https://10.1.2.3") -- strip any scheme
     # before building the URL below, or a scheme-bearing input silently
-    # produces a broken double-scheme baseUrl ("http://https://10.1.2.3:...").
+    # produces a broken URL with the scheme duplicated ("http" + "://"
+    # + the original "https://10.1.2.3" value, unparsed).
     # Same urlparse(...).hostname pattern already used by get_win_lms_url /
     # get_win_ollama_url for scheme-aware handling.
     parsed = urlparse(win_ip)
