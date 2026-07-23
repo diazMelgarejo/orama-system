@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import socket
 import sys
 import time
@@ -51,23 +52,78 @@ if str(_SCRIPT_DIR) not in sys.path:
 # Import probe helpers (same directory)
 import probe_lan_peer as probe
 
-# Add Perpetua-Tools to path for orchestrator imports
-_REPO_ROOT = _SCRIPT_DIR.parents[4]
-_PT_ROOT = _REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools"
-if _PT_ROOT.exists() and str(_PT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PT_ROOT))
+# Lazy orchestrator imports — populated by _import_orchestrator() on first use.
+# Kept out of module scope so importing this file never crashes pytest
+# collection in environments without the Perpetua-Tools sibling checkout.
+_FleetTopologyState: Any = None
+_read_fleet_topology: Any = None
+_write_fleet_topology: Any = None
+_get_fleet_topology_path: Any = None
+_FleetMode: Any = None
+_classify_fleet_mode: Any = None
 
-try:
-    from orchestrator.fleet_topology import (
-        FleetTopologyState,
-        read_fleet_topology,
-        write_fleet_topology,
-        get_fleet_topology_path,
-    )
-    from orchestrator.startup_intelligence import FleetMode, classify_fleet_mode
-except ImportError as exc:
-    logging.error("Cannot import orchestrator modules from %s: %s", _PT_ROOT, exc)
-    sys.exit(2)
+
+def _resolve_perpetua_tools_root() -> Path | None:
+    """Locate a Perpetua-Tools checkout, preferring explicit env vars.
+
+    Checks PERPETUA_TOOLS_ROOT, PERPETUATOOLSROOT, and PERPETUA_TOOLS_PATH
+    (in that order), then falls back to a few repo-relative candidate
+    directories. Returns the discovered root, or None if not found.
+    """
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        raw = os.environ.get(key, "").strip()
+        if raw:
+            p = Path(raw).expanduser()
+            if p.is_dir():
+                return p
+    repo_root = _SCRIPT_DIR.parents[4]
+    for candidate in (
+        repo_root.parent / "perplexity-api" / "Perpetua-Tools",
+        repo_root.parent / "Perpetua-Tools",
+        repo_root.parent / "repos" / "Perpetua-Tools",
+    ):
+        if (candidate / "orchestrator" / "fastapi_app.py").is_file():
+            return candidate
+    return None
+
+
+def _ensure_pt_on_path() -> None:
+    """Add the discovered Perpetua-Tools root to sys.path if not present."""
+    pt_root = _resolve_perpetua_tools_root()
+    if pt_root and str(pt_root) not in sys.path:
+        sys.path.insert(0, str(pt_root))
+
+
+def _import_orchestrator() -> None:
+    """Lazily import orchestrator modules and cache them in module globals.
+
+    Raises ImportError (does NOT sys.exit) so callers can decide how to
+    handle a missing Perpetua-Tools checkout.
+    """
+    global _FleetTopologyState, _read_fleet_topology, _write_fleet_topology
+    global _get_fleet_topology_path, _FleetMode, _classify_fleet_mode
+    if _FleetTopologyState is not None:
+        return
+    _ensure_pt_on_path()
+    try:
+        from orchestrator.fleet_topology import (
+            FleetTopologyState,
+            read_fleet_topology,
+            write_fleet_topology,
+            get_fleet_topology_path,
+        )
+        from orchestrator.startup_intelligence import FleetMode, classify_fleet_mode
+    except ImportError as exc:
+        raise ImportError(
+            f"Cannot import orchestrator modules from {_resolve_perpetua_tools_root()}: {exc}"
+        ) from exc
+    _FleetTopologyState = FleetTopologyState
+    _read_fleet_topology = read_fleet_topology
+    _write_fleet_topology = write_fleet_topology
+    _get_fleet_topology_path = get_fleet_topology_path
+    _FleetMode = FleetMode
+    _classify_fleet_mode = classify_fleet_mode
+
 
 # Add orama-system to path for Phase 6 self-healing modules.
 # BOTH roots are needed: repo root satisfies the explicit `src.orama_system.*`
@@ -75,7 +131,7 @@ except ImportError as exc:
 # those modules make internally. Without src/ on the path, standalone
 # invocation (exactly how coord_pulse.sh calls this script) failed with
 # "No module named 'orama_system'" and silently degraded Phase 6 away.
-_ORAMA_ROOT = _REPO_ROOT
+_ORAMA_ROOT = _SCRIPT_DIR.parents[4]
 for _p in (_ORAMA_ROOT, _ORAMA_ROOT / "src"):
     if _p.exists() and str(_p) not in sys.path:
         sys.path.insert(0, str(_p))
@@ -279,6 +335,7 @@ def _merge_peer_topology(
         Events are {'type': str, 'payload': dict} dicts for gossip emission.
         Never raises; logs warnings instead.
     """
+    _import_orchestrator()
     events: list[dict] = []
 
     try:
@@ -340,10 +397,10 @@ def _merge_peer_topology(
 
         # Re-classify based on merged state
         peers_reachable = len(peers_list) - 1 if local_node in peers_list else len(peers_list)
-        new_fleet_mode = classify_fleet_mode(peers_reachable, cross_reach)
+        new_fleet_mode = _classify_fleet_mode(peers_reachable, cross_reach)
 
         return (
-            FleetTopologyState(
+            _FleetTopologyState(
                 local_node=local_node,
                 fleet_mode=new_fleet_mode,
                 peers=peers_list,
@@ -371,6 +428,7 @@ def _emit_topology_transition_event(
     if old_mode is None or old_mode != new_mode:
         try:
             # Lazy import to avoid dep on asyncio if not needed
+            _ensure_pt_on_path()
             from orchestrator.gossip_bus import GossipBus, resolve_gossip_db_path
 
             db_path = resolve_gossip_db_path()
@@ -415,6 +473,7 @@ def run_topology_query(timeout: float = DEFAULT_TIMEOUT) -> int:
         1 — No peers to query or topology unchanged (idempotent)
         2 — Query failed on critical error
     """
+    _import_orchestrator()
     peers = _discover_peers()
     if not peers:
         logger.info("No peers to query (SOLO mode)")
@@ -423,7 +482,7 @@ def run_topology_query(timeout: float = DEFAULT_TIMEOUT) -> int:
     logger.info("Querying %d peer(s) for topology...", len(peers))
 
     # Read current topology
-    current_topology = read_fleet_topology()
+    current_topology = _read_fleet_topology()
     old_fleet_mode = current_topology.fleet_mode if current_topology else None
     merged_topology = current_topology
     all_events: list[dict] = []
@@ -445,14 +504,14 @@ def run_topology_query(timeout: float = DEFAULT_TIMEOUT) -> int:
         return 2
 
     # Hash-gated write (skip if content unchanged)
-    written = write_fleet_topology(merged_topology)
+    written = _write_fleet_topology(merged_topology)
     if not written:
         logger.warning("Could not write fleet topology")
         return 2
 
     # Re-classify and check for transition
     peers_reachable = len(merged_topology.peers) - 1 if merged_topology.local_node in merged_topology.peers else len(merged_topology.peers)
-    new_fleet_mode = classify_fleet_mode(peers_reachable, merged_topology.cross_reachable)
+    new_fleet_mode = _classify_fleet_mode(peers_reachable, merged_topology.cross_reachable)
 
     logger.info(
         "Fleet topology: mode=%s peers=%d cross_reach=%s",
