@@ -72,14 +72,24 @@ def test_url_builders_preserve_scheme(monkeypatch):
     assert ip_resolver.get_win_ollama_url(port=9999) == "https://10.1.2.3:9999"
 
 
-def test_write_win_ip_rejects_loopback(tmp_path, monkeypatch):
-    """Loopback/empty IPs must never be persisted as the Win provider URL."""
+@pytest.mark.unit
+def test_write_win_ip_rejects_loopback() -> None:
+    """Loopback/empty IPs must never be persisted as the Win provider URL --
+    including scheme-bearing and IPv6 forms, not just the bare IPv4/hostname
+    cases. A scheme-bearing loopback bypassed the original check entirely
+    (it tested the raw string before scheme-stripping), and IPv6 loopback
+    was never covered in any form."""
     assert ip_resolver.write_win_ip_to_openclaw_json("") is False
     assert ip_resolver.write_win_ip_to_openclaw_json("localhost") is False
     assert ip_resolver.write_win_ip_to_openclaw_json("127.0.0.1") is False
+    assert ip_resolver.write_win_ip_to_openclaw_json("https://127.0.0.1") is False
+    assert ip_resolver.write_win_ip_to_openclaw_json("http://localhost") is False
+    assert ip_resolver.write_win_ip_to_openclaw_json("http://[::1]") is False
+    assert ip_resolver.write_win_ip_to_openclaw_json("::1") is False
 
 
-def test_write_win_ip_roundtrip_idempotent(tmp_path, monkeypatch):
+@pytest.mark.unit
+def test_write_win_ip_roundtrip_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Writer persists a new IP once, then no-ops on the identical value."""
     cfg_path = tmp_path / "openclaw.json"
     cfg_path.write_text("{}")
@@ -95,7 +105,8 @@ def test_write_win_ip_roundtrip_idempotent(tmp_path, monkeypatch):
     assert ip_resolver.write_win_ip_to_openclaw_json("10.4.5.6") is False
 
 
-def test_write_win_ip_normalizes_scheme_bearing_input(tmp_path, monkeypatch):
+@pytest.mark.unit
+def test_write_win_ip_normalizes_scheme_bearing_input(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """get_win_ip() can legitimately return a scheme-bearing value (its own
     documented shape, e.g. "https://10.1.2.3") -- the writer must strip
     that scheme rather than embed it, or the persisted baseUrl becomes a
