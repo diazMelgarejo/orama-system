@@ -198,6 +198,7 @@ Thin local wrappers point at canonical command cards. Never cache full skill bod
 | `pt-orama-delegate` | `commands/pt-orama-delegate/SKILL.md` | Hermes / AGY | Bounded delegation |
 | `pt-hardware-policy` | `commands/pt-hardware-policy/SKILL.md` | Hermes | `hardware-affinity-gate` edge |
 | `lan-peer-self-talk` | `commands/lan-peer-self-talk/SKILL.md` | Hermes | Mac↔Win LAN peer — [operator playbook](references/lan-peer-self-talk.md#operator-playbook) |
+| `windows-hermes-setup` | `commands/windows-hermes-setup/SKILL.md` | Hermes | Windows PATH, ECC doctor, partner CLI — [playbook](references/windows-hermes-setup.md) |
 | `pt-orama-lesson-mining` | `commands/pt-orama-lesson-mining/SKILL.md` | Hermes / Codex | **Optional** — session insight graduation; not installed by default |
 | `hermes-harness` | `SKILL.md` (this file) | Hermes | Install / provider / import |
 | `local-inference` | `../local-inference/SKILL.md` | Hermes | Redirect stub |
@@ -237,6 +238,11 @@ if (-not (Test-Path "$installDir\.git")) { throw "HERMES_NOT_INSTALLED" }
 Partner canaries: `python bin\orama-system\skills\hermes-harness\scripts\verify_partner_canaries.py`
 
 ## Windows Bring-Up
+
+Canonical setup playbook (absorbed from Hermes self-improve `windows-hermes-setup`):
+[`references/windows-hermes-setup.md`](references/windows-hermes-setup.md).
+Install thin wrapper: `python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install`.
+
 Use PowerShell with explicit UTF-8 when writing files:
 
 ```powershell

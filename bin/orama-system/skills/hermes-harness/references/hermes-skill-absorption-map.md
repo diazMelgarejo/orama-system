@@ -14,6 +14,7 @@
 | `pt-orama-harness-integration` | Redirect | `hermes-harness` | same |
 | `perpetua-hardware` | Redirect | `hardware-affinity-gate` | `bin/orama-system/skills/hardware-affinity-gate/SKILL.md` |
 | `local-inference` | Redirect | `hardware-affinity-gate` | same (via `perpetua-hardware` stub chain) |
+| `windows-hermes-setup` | Redirect | `commands/windows-hermes-setup` + `references/windows-hermes-setup.md` | `bin/orama-system/skills/hermes-harness/commands/windows-hermes-setup/SKILL.md` |
 
 ## Superseded archive (do not use)
 
@@ -54,6 +55,7 @@ Archive path: `bin/orama-system/skills/archive/llm-council-orchestration-absorbe
 | `pt-orama-review` | Review command | `commands/pt-orama-review/SKILL.md` |
 | `pt-orama-delegate` | Delegate command | `commands/pt-orama-delegate/SKILL.md` |
 | Windows harness | Install, canaries, PATH, OpenClaw optional | `platform/windows/*`, `references/win-localhost-runtime-checklist.md` |
+| `windows-hermes-setup` (Hermes self-improve) | PATH, ECC doctor, partner CLI, start.ps1 comms | `commands/windows-hermes-setup/SKILL.md`, `references/windows-hermes-setup.md` |
 | Hardware policy (Hermes edge) | PT one-way import, Win role reversal | `commands/pt-hardware-policy/SKILL.md` |
 | Codex dispatch | v0.142 profiles, runtime paths | [`../../../references/codex-cli-v142-dispatch.md`](../../../references/codex-cli-v142-dispatch.md) |
 
@@ -93,6 +95,16 @@ python bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills
 ```
 
 Wrappers must contain `created_by: agent` marker; user wrappers are never clobbered.
+
+**Curator pin (agent-created skills):** After absorbing a Hermes self-improve skill into
+canonical orama, pin the local copy so background self-improve does not re-patch it:
+
+```powershell
+hermes curator pin windows-hermes-setup
+```
+
+Local `~/.hermes/skills/software-development/windows-hermes-setup/` should be a
+`status: absorbed` redirect only — never a second skill body.
 
 ## Codex / `.agents` policy
 
