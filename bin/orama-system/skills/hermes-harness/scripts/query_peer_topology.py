@@ -186,10 +186,35 @@ def _auth_header(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
+def _is_authenticated_transport(url: str) -> bool:
+    """True only for a transport a bearer token may legitimately cross.
+
+    MINIMUM fix landing today (2026-07-24): this repo has no TLS peer
+    infrastructure deployed yet (no peer certificates, no cert validation,
+    no mTLS) -- that is real, larger work, deferred to the plan tracked in
+    docs/v2/ (source: 3 ingested security-hardening plans, see the plan
+    doc's own header for the exact deferral list: certificate provisioning,
+    a pluggable auth-provider architecture, audit logging, etc.). Until
+    that lands, this function can only ever be honest about what "https"
+    actually means here: it accepts the scheme, nothing more -- it does
+    NOT itself perform certificate validation or mTLS. That gap is
+    intentional and tracked, not silently accepted as sufficient.
+    """
+    return url.startswith("https://")
+
+
 def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | None:
     """HTTP GET, retrying across every locally-available control-plane
     token candidate (not just resolve_control_plane_token()'s single
-    "preferred" one) before giving up.
+    "preferred" one) before giving up -- but ONLY over authenticated
+    transport (see _is_authenticated_transport). A bearer token is never
+    attempted, including the first/fallback candidate, over an
+    unauthenticated channel: a passive LAN observer or a host impersonating
+    the discovered peer could otherwise capture every locally-known
+    credential from a single fanned-out query. If transport isn't
+    authenticated, this stops immediately rather than retrying credentials
+    against it -- fixed today per security review; full TLS/mTLS peer
+    infrastructure is deferred (see docs/v2/ plan).
 
     2026-07-19 correction to the original D7/D8 fix: this was first
     diagnosed as "the shared token isn't deployed on the peer" (operator
@@ -203,10 +228,23 @@ def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | No
     (see docs/next/fleet-mesh/2026-07-19-oob-completion-findings.md D9).
 
     Returns:
-        Parsed JSON dict on success, None if unreachable, malformed, or
-        every candidate token was rejected. Never raises.
+        Parsed JSON dict on success, None if unreachable, malformed,
+        transport isn't authenticated, or every candidate token was
+        rejected. Never raises.
     """
     candidates = probe.outbound_control_plane_tokens() or [""]
+    has_real_token = any(candidates)
+    if has_real_token and not _is_authenticated_transport(url):
+        logger.error(
+            "SECURITY_STOP: refusing to send any control-plane token "
+            "candidate to %s over an unauthenticated channel. Peer transport "
+            "must be authenticated (TLS with certificate validation, or "
+            "mTLS) before any credential is attempted -- not retrying. "
+            "TLS peer infrastructure is not yet deployed; tracked in the "
+            "docs/v2/ security-hardening plan.",
+            url,
+        )
+        return None
     last_status: int | None = None
     for token in candidates:
         try:

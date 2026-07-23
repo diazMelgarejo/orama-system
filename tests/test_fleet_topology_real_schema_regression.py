@@ -84,7 +84,8 @@ _requires_orchestrator = pytest.mark.skipif(
 # test locking in the retry-on-401 behavior.
 
 
-def test_http_get_retries_next_token_on_401(monkeypatch):
+@pytest.mark.unit
+def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
     def fake_urlopen(req, timeout=2):
@@ -111,20 +112,70 @@ def test_http_get_retries_next_token_on_401(monkeypatch):
     monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: ["bad", "good"])
     monkeypatch.setattr(qpt.urllib.request, "urlopen", fake_urlopen)
 
-    result = qpt._http_get("http://10.0.0.50:8002/api/fleet-topology")
+    # https:// -- a real token candidate is only ever attempted over
+    # authenticated transport (see _is_authenticated_transport); this test
+    # exercises the retry-across-candidates logic specifically, which is
+    # still valid and still runs once that precondition is satisfied.
+    result = qpt._http_get("https://10.0.0.50:8002/api/fleet-topology")
 
     assert result == {"ok": True}
     assert calls == ["bad", "good"]  # tried the rejected candidate first, then the working one
 
 
-def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch):
+@pytest.mark.unit
+def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_urlopen(req, timeout=2):
         raise qpt.urllib.error.HTTPError(req.full_url, 401, "Unauthorized", hdrs=None, fp=None)
 
     monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: ["bad1", "bad2"])
     monkeypatch.setattr(qpt.urllib.request, "urlopen", fake_urlopen)
 
-    assert qpt._http_get("http://10.0.0.50:8002/api/fleet-topology") is None
+    assert qpt._http_get("https://10.0.0.50:8002/api/fleet-topology") is None
+
+
+@pytest.mark.unit
+def test_http_get_refuses_bearer_token_over_unauthenticated_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression for the security-review fix: a real control-plane token
+    candidate must never be attempted over plain http:// -- not even the
+    first one. The whole retry loop must never call urlopen() at all."""
+    called = {"n": 0}
+
+    def fake_urlopen(req, timeout=2):
+        called["n"] += 1
+        raise AssertionError("urlopen must never be called over unauthenticated transport")
+
+    monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: ["real-token"])
+    monkeypatch.setattr(qpt.urllib.request, "urlopen", fake_urlopen)
+
+    result = qpt._http_get("http://10.0.0.50:8002/api/fleet-topology")
+
+    assert result is None
+    assert called["n"] == 0
+
+
+@pytest.mark.unit
+def test_http_get_allows_no_token_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A request with NO token candidates (nothing to leak) may still
+    proceed over http:// -- the security gate only blocks real credentials,
+    not unauthenticated no-token requests."""
+    body = json.dumps({"ok": True}).encode("utf-8")
+
+    class _Resp:
+        def read(self):
+            return body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: [])
+    monkeypatch.setattr(qpt.urllib.request, "urlopen", lambda req, timeout=2: _Resp())
+
+    result = qpt._http_get("http://10.0.0.50:8002/api/fleet-topology")
+
+    assert result == {"ok": True}
 
 
 # ── Bug 1: seed-branch local_node identity ──────────────────────────────
