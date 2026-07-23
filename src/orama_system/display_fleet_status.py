@@ -147,6 +147,9 @@ def load_fleet_topology(path: Optional[Path] = None) -> Optional[FleetStatus]:
             # Without this exclusion, peers_reachable double-counted this
             # node as its own peer (e.g. "PAIR (2/2 reachable)" for a
             # single real peer).
+            if not isinstance(p, (str, dict)):
+                _logger.debug("Skipping malformed peer entry: %r", p)
+                continue
             entry_id = p if isinstance(p, str) else p.get("id")
             if entry_id == this_node:
                 continue
