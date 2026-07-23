@@ -326,11 +326,6 @@ if (Test-Path $PathsFile) {
     _Info 'path' "Loaded $PathsFile"
 }
 
-# Ensure partner CLI paths are present for this session (Hermes, Codex, AGY, cursor-agent)
-if (Test-Path "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1") {
-    . "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1"
-}
-
 if (-not $PtDir) {
     $PtDir = Find-PtDir
     _Info 'path' "PT_DIR discovered: $PtDir"
@@ -937,6 +932,13 @@ function Start-Service {
     $null = $proc.StandardError.BaseStream.CopyToAsync(
         [System.IO.File]::Open($logFile, [System.IO.FileMode]::Append, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
     )
+}
+
+# Ensure partner CLI paths are present for this session (Hermes, Codex, AGY, cursor-agent).
+# Placed after all read-only/lifecycle handlers so --stop, --status, --list, etc.
+# do not mutate PATH or leak script-scope variables.
+if (Test-Path "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1") {
+    & "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1"
 }
 
 # ── 1. Perpetua-Tools ─────────────────────────────────────────────────────────
