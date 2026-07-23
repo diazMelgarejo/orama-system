@@ -273,6 +273,63 @@ Windows. If reusing GitHub Desktop's bundled Git, a `bash.exe` hardlink beside
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
 ```
 
+### Bare `python` vs venv — a recurring, hard-to-notice class of bug
+
+Any `.ps1` script in this skill (or elsewhere on Windows) that invokes
+`python <script.py>` bare — instead of the repo's `.venv\Scripts\python.exe`
+— is silently at the mercy of whatever `python` resolves to first on PATH
+at that moment. That is **not guaranteed to be the venv with this repo's
+own `requirements.txt` installed**, especially under Task Scheduler, a
+freshly-opened shell, or a script invoked from a different working
+directory than expected.
+
+**Symptom pattern:** a script that works fine when run manually from the
+repo root fails elsewhere with `ModuleNotFoundError` for a package that
+*is* actually installed — just in a different interpreter than the one
+that ran. Confirmed live, repeatedly, this session:
+
+- `coord_pulse.ps1` — false "missing websockets" (it was installed, just
+  not in the interpreter that ran)
+- `service_watchdog.ps1` — same class, `lan_peer_assign.py` peer-drop calls
+- `coord_comms_board.ps1` — `agent_coordination.py heartbeat pulse` failed
+  with `ModuleNotFoundError: No module named 'aiosqlite'` (installed in
+  Perpetua-Tools' venv, not the system Python bare `python` resolved to)
+
+**Fix:** dot-source the shared resolver and use its result instead of bare
+`python`:
+
+```powershell
+. (Join-Path $env:ORAMA_SYSTEM_PATH 'scripts\lib\get-best-python.ps1')
+$PythonExe = Get-BestPython $env:ORAMA_SYSTEM_PATH
+& $PythonExe some_script.py --arg
+```
+
+**Cross-repo scripts need their own resolution per repo** — a script that
+calls into both orama-system and Perpetua-Tools python files (e.g.
+`coord_comms_board.ps1` calling PT's `agent_coordination.py`) needs
+`Get-BestPython $env:ORAMA_SYSTEM_PATH` for one and
+`Get-BestPython $env:PERPETUA_TOOLS_PATH` for the other — they are
+different venvs with different installed packages, not interchangeable.
+
+**Exception — legitimate bare `python` before a venv exists:** bootstrap
+scripts that *create* the venv itself (`ensure_requirements.ps1`,
+`install.ps1`'s `python -m venv ...` calls) correctly use bare `python`,
+since the venv doesn't exist yet at that point in execution. Don't "fix"
+those.
+
+**Related gotcha — cwd-dependent state resolution across repos.** Even
+with the correct venv python, a script in orama-system invoking a
+Perpetua-Tools Python file can still resolve state to the wrong repo:
+`agent_coordination.py`'s `GossipBus` falls back to
+`git rev-parse --git-common-dir` against the *current process cwd* when no
+explicit state dir is set. A PowerShell script running from
+orama-system's directory that calls into PT's `agent_coordination.py`
+silently anchors PT's coordination database inside orama-system's own
+`.git`, not PT's -- confirmed live as `ERROR: failed to initialize the
+coordination database: unable to open database file`. Fix: set
+`$env:PT_STATE_DIR = Join-Path $env:PERPETUA_TOOLS_PATH '.state'`
+explicitly before any such call, bypassing the cwd-dependent fallback.
+
 ## Procedure
 
 ### 1. Clone or Repair Hermes
