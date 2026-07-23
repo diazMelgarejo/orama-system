@@ -197,6 +197,30 @@ class TestLoadFleetTopology:
         finally:
             path.unlink()
 
+    def test_load_string_peer_ids_from_pt_writer(self):
+        """PT fleet_topology.json uses peers: list[str]; display must not crash."""
+        now = datetime.now(timezone.utc).timestamp()
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
+            json.dump(
+                {
+                    "local_node": "mac-studio",
+                    "fleet_mode": "PAIR",
+                    "peers": ["win-rtx3080"],
+                    "cross_reachable": False,
+                    "timestamp": now,
+                },
+                f,
+            )
+            path = Path(f.name)
+
+        try:
+            status = load_fleet_topology(path)
+            assert status is not None
+            assert len(status.peers) == 1
+            assert status.peers[0].id == "win-rtx3080"
+        finally:
+            path.unlink()
+
     def test_load_missing_fields_safe_defaults(self):
         """Should handle missing fields with safe defaults."""
         incomplete_json = {

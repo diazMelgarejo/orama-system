@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import socket
 import sys
 import time
 import urllib.error
@@ -101,36 +102,49 @@ PORTAL_PORT = 8002
 DEFAULT_TIMEOUT = 2
 
 
-def _auth_header() -> dict[str, str]:
-    """Build Authorization header from control plane token."""
-    token = probe.resolve_control_plane_token()
-    if not token:
-        return {}
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-
-
 def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | None:
     """Single HTTP GET with graceful error handling.
+
+    Tries every locally available control-plane token candidate on 401/403
+    before giving up (same retry contract as probe_lan_peer.run_checks).
 
     Returns:
         Parsed JSON dict on success, None if unreachable or malformed.
         Never raises; logs warnings instead.
     """
-    try:
-        req = urllib.request.Request(
+    tokens = probe.collect_control_plane_token_candidates()
+    if not tokens:
+        tokens = [""]
+    last_auth_failure: urllib.error.HTTPError | None = None
+    for token in tokens:
+        headers = {"Content-Type": "application/json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        try:
+            req = urllib.request.Request(url, headers=headers, method="GET")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = resp.read().decode("utf-8")
+                return json.loads(data) if data.strip() else None
+        except urllib.error.HTTPError as exc:
+            if exc.code in (401, 403):
+                last_auth_failure = exc
+                continue
+            logger.debug("HTTP GET %s failed: %s", url, exc)
+            return None
+        except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+            logger.debug("HTTP GET %s failed: %s", url, exc)
+            return None
+        except Exception as exc:
+            logger.debug("Unexpected error querying %s: %s", url, exc)
+            return None
+    if last_auth_failure is not None:
+        logger.debug(
+            "HTTP GET %s failed after %d token(s): %s",
             url,
-            headers=_auth_header(),
-            method="GET",
+            len(tokens),
+            last_auth_failure,
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read().decode("utf-8")
-            return json.loads(data) if data.strip() else None
-    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
-        logger.debug("HTTP GET %s failed: %s", url, exc)
-        return None
-    except Exception as exc:
-        logger.debug("Unexpected error querying %s: %s", url, exc)
-        return None
+    return None
 
 
 def _discover_peers() -> list[tuple[str, int]]:
@@ -233,10 +247,11 @@ def _merge_peer_topology(
 
     try:
         if not current:
-            # First peer response — use it as seed
-            local_node = peer_data.get("local_node", "unknown")
-            fleet_mode_str = peer_data.get("fleet_mode", "SOLO")
-            peers_list = [peer_data.get("local_node", peer_ip)]
+            # Bootstrap: seed local identity from this host, never from the
+            # remote peer payload (peer_data["local_node"] is the peer's name).
+            local_node = socket.gethostname()
+            peer_node_id = peer_data.get("local_node") or peer_ip
+            peers_list = [peer_node_id] if peer_node_id else []
             cross_reach = peer_data.get("cross_reachable", False)
         else:
             # Merge: extend peer list with any new IPs from peer's report

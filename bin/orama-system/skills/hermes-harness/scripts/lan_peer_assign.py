@@ -53,32 +53,41 @@ def _ensure_orama_src() -> None:
         sys.path.insert(0, str(_SRC_ROOT))
 
 
-def _auth_header() -> dict[str, str]:
-    token = probe.resolve_control_plane_token()
-    if not token:
-        return {}
-    return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
+    data = None
+    if payload is not None:
+        data = json.dumps(payload).encode("utf-8")
+    tokens = probe.collect_control_plane_token_candidates()
+    if not tokens:
+        tokens = [""]
+    last_exc: urllib.error.HTTPError | None = None
+    for token in tokens:
+        headers = {"Content-Type": "application/json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+                return json.loads(raw) if raw.strip() else {}
+        except urllib.error.HTTPError as exc:
+            if exc.code in (401, 403):
+                last_exc = exc
+                continue
+            body = exc.read().decode("utf-8", errors="replace")
+            raise SystemExit(f"HTTP {exc.code} {url}: {body[:300]}") from exc
+        except Exception as exc:
+            raise SystemExit(f"request failed {url}: {exc}") from exc
+    if last_exc is not None:
+        body = last_exc.read().decode("utf-8", errors="replace")
+        raise SystemExit(
+            f"HTTP {last_exc.code} {url}: tried {len(tokens)} token(s); {body[:300]}"
+        ) from last_exc
+    raise SystemExit(f"request failed {url}: no token candidates")
 
 
 def _peer_base(peer_ip: str, portal_port: int) -> str:
     return f"http://{peer_ip}:{portal_port}"
-
-
-def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
-    data = None
-    headers = _auth_header()
-    if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            return json.loads(raw) if raw.strip() else {}
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"HTTP {exc.code} {url}: {body[:300]}") from exc
-    except Exception as exc:
-        raise SystemExit(f"request failed {url}: {exc}") from exc
 
 
 def _resolve_peer(args: argparse.Namespace) -> tuple[str, int]:

@@ -124,14 +124,28 @@ def load_fleet_topology(path: Optional[Path] = None) -> Optional[FleetStatus]:
         peers_raw = data.get("peers", [])
         peers = []
         for p in peers_raw:
-            peer = FleetPeer(
-                id=p.get("id", "unknown"),
-                ip=p.get("ip", "?"),
-                port=p.get("port", 8002),
-                reachable=p.get("reachable", False),
-                models=p.get("models", []),
-                last_seen=p.get("last_seen", "unknown"),
-            )
+            # PT FleetTopologyState persists peers as list[str]; enriched
+            # display snapshots may use dict-shaped peer records instead.
+            if isinstance(p, str):
+                peer = FleetPeer(
+                    id=p,
+                    ip="?",
+                    port=8002,
+                    reachable=True,
+                    models=[],
+                    last_seen="unknown",
+                )
+            elif isinstance(p, dict):
+                peer = FleetPeer(
+                    id=p.get("id", "unknown"),
+                    ip=p.get("ip", "?"),
+                    port=p.get("port", 8002),
+                    reachable=p.get("reachable", False),
+                    models=p.get("models", []),
+                    last_seen=p.get("last_seen", "unknown"),
+                )
+            else:
+                continue
             peers.append(peer)
 
         status = FleetStatus(
