@@ -227,6 +227,8 @@ def relay_probe(
         result = json.loads(text)
     except json.JSONDecodeError:
         return 2, {"error": "relay returned non-JSON", "detail": text[:300]}
+    if not isinstance(result, dict):
+        return 2, {"error": "relay returned unexpected JSON shape", "detail": text[:300]}
     result["relay_via"] = f"{peer_ip}:{portal_port}"
     return (0 if result.get("reachable") else 1), result
 
@@ -344,7 +346,11 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout:
 
                 headers = {"Authorization": f"Bearer {tok}"} if tok else None
                 qs = f"?token={quote(tok, safe='')}" if tok else ""
-                url = f"ws://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
+                # SECURITY: Bearer tokens are never sent over unencrypted ws://.
+                # RFC 6750 §5.3 mandates TLS for all bearer token transmissions.
+                # When a token is present, require wss:// (fail-closed).
+                scheme = "wss" if tok else "ws"
+                url = f"{scheme}://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
                 async with websockets.connect(
                     url,
                     open_timeout=timeout,
