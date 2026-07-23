@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import socket
 import sys
 import time
@@ -53,8 +54,28 @@ import probe_lan_peer as probe
 
 # Add Perpetua-Tools to path for orchestrator imports
 _REPO_ROOT = _SCRIPT_DIR.parents[4]
-_PT_ROOT = _REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools"
-if _PT_ROOT.exists() and str(_PT_ROOT) not in sys.path:
+
+
+def _resolve_perpetua_tools_root() -> Path | None:
+    """Locate Perpetua-Tools via env vars or sibling checkout paths."""
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "PT_HOME"):
+        raw = os.environ.get(key, "").strip()
+        if raw:
+            candidate = Path(raw).expanduser()
+            if candidate.is_dir():
+                return candidate
+    for candidate in (
+        _REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools",
+        _REPO_ROOT.parent / "Perpetua-Tools",
+        _REPO_ROOT.parent / "repos" / "Perpetua-Tools",
+    ):
+        if (candidate / "orchestrator" / "fleet_topology.py").is_file():
+            return candidate
+    return None
+
+
+_PT_ROOT = _resolve_perpetua_tools_root()
+if _PT_ROOT and str(_PT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PT_ROOT))
 
 try:
@@ -67,7 +88,9 @@ try:
     from orchestrator.startup_intelligence import FleetMode, classify_fleet_mode
 except ImportError as exc:
     logging.error("Cannot import orchestrator modules from %s: %s", _PT_ROOT, exc)
-    sys.exit(2)
+    if __name__ == "__main__":
+        sys.exit(2)
+    raise
 
 # Add orama-system to path for Phase 6 self-healing modules.
 # BOTH roots are needed: repo root satisfies the explicit `src.orama_system.*`
