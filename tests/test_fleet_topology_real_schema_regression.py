@@ -31,10 +31,8 @@ import importlib.util
 import json
 import socket
 import sys
-import tempfile
 import time
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 
@@ -45,73 +43,7 @@ if str(_SRC) not in sys.path:
 
 from orama_system.display_fleet_status import (  # noqa: E402
     load_fleet_topology,
-    FleetPeer,
 )
-
-_QPT_PATH = (
-    _REPO_ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts"
-    / "query_peer_topology.py"
-)
-_spec = importlib.util.spec_from_file_location("query_peer_topology", _QPT_PATH)
-qpt = importlib.util.module_from_spec(_spec)
-sys.modules["query_peer_topology"] = qpt
-_spec.loader.exec_module(qpt)  # type: ignore[union-attr]
-
-
-# ── Bug 1: seed-branch local_node identity ──────────────────────────────
-
-
-def test_merge_seed_uses_own_hostname_not_peers_self_report():
-    """First-ever merge (current=None) must seed local_node from THIS
-    machine, never from the peer's payload -- and must count the peer as
-    reachable, not zero."""
-    peer_data = {
-        "local_node": "win-studio",  # the PEER's own name -- must NOT leak into ours
-        "fleet_mode": "SOLO",
-        "peers": [],
-        "cross_reachable": False,
-        "queried_at": time.time(),
-    }
-    state, _events = qpt._merge_peer_topology(None, peer_data, "10.0.0.2")
-    assert state is not None
-    assert state.local_node == socket.gethostname()
-    assert state.local_node != "win-studio"
-    assert "win-studio" in state.peers
-    assert state.local_node in state.peers
-    peers_reachable = (
-        len(state.peers) - 1 if state.local_node in state.peers else len(state.peers)
-    )
-    assert peers_reachable == 1  # NOT 0 -- this is the exact SOLO-misclassification bug
-
-
-def test_merge_seed_classifies_pair_not_solo():
-    """End-to-end: a single successful peer merge from a clean slate must
-    classify PAIR, matching the mother plan's own SOLO/PAIR/FLEET
-    definitions -- 1 peer reachable is PAIR, not SOLO."""
-    peer_data = {
-        "local_node": "win-studio",
-        "fleet_mode": "SOLO",
-        "peers": [],
-        "cross_reachable": False,
-        "queried_at": time.time(),
-    }
-    state, _ = qpt._merge_peer_topology(None, peer_data, "10.0.0.2")
-    from orchestrator.startup_intelligence import FleetMode  # noqa: E402
-    assert state.fleet_mode == FleetMode.PAIR
-
-
-def test_merge_second_call_preserves_seeded_local_node():
-    """A subsequent merge (current already set) must keep reusing the
-    correctly-seeded local_node, not re-derive or drift it."""
-    peer_data = {"local_node": "win-studio", "fleet_mode": "SOLO", "peers": [],
-                  "cross_reachable": False, "queried_at": time.time()}
-    first, _ = qpt._merge_peer_topology(None, peer_data, "10.0.0.2")
-    second_peer_data = {"local_node": "win-studio", "fleet_mode": "PAIR",
-                         "peers": ["win-rtx5080"], "cross_reachable": True,
-                         "queried_at": time.time()}
-    second, _ = qpt._merge_peer_topology(first, second_peer_data, "10.0.0.2")
-    assert second.local_node == first.local_node == socket.gethostname()
-    assert "win-rtx5080" in second.peers
 
 
 # ── Bug 2 + 3: display_fleet_status real-schema parsing ─────────────────
@@ -177,3 +109,84 @@ def test_load_fleet_topology_mixed_shapes_do_not_crash(tmp_path):
     status = load_fleet_topology(path)
     assert status is not None
     assert [p.id for p in status.peers] == ["win-rtx5080"]
+
+
+# ── Bug 1: seed-branch local_node identity (requires Perpetua-Tools) ────
+
+@pytest.fixture(scope="module")
+def qpt():
+    """Load query_peer_topology only when Perpetua-Tools is co-located."""
+    for _pt_root in (
+        _REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools",
+        _REPO_ROOT.parent / "repos" / "Perpetua-Tools",
+    ):
+        if _pt_root.exists() and str(_pt_root) not in sys.path:
+            sys.path.insert(0, str(_pt_root))
+
+    pytest.importorskip(
+        "orchestrator.fleet_topology",
+        reason="requires Perpetua-Tools checked out as a sibling of orama-system (not present in orama-system CI)",
+    )
+
+    qpt_path = (
+        _REPO_ROOT / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts"
+        / "query_peer_topology.py"
+    )
+    spec = importlib.util.spec_from_file_location("query_peer_topology", qpt_path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["query_peer_topology"] = mod
+    spec.loader.exec_module(mod)  # type: ignore[union-attr]
+    return mod
+
+
+def test_merge_seed_uses_own_hostname_not_peers_self_report(qpt):
+    """First-ever merge (current=None) must seed local_node from THIS
+    machine, never from the peer's payload -- and must count the peer as
+    reachable, not zero."""
+    peer_data = {
+        "local_node": "win-studio",  # the PEER's own name -- must NOT leak into ours
+        "fleet_mode": "SOLO",
+        "peers": [],
+        "cross_reachable": False,
+        "queried_at": time.time(),
+    }
+    state, _events = qpt._merge_peer_topology(None, peer_data, "10.0.0.2")
+    assert state is not None
+    assert state.local_node == socket.gethostname()
+    assert state.local_node != "win-studio"
+    assert "win-studio" in state.peers
+    assert state.local_node in state.peers
+    peers_reachable = (
+        len(state.peers) - 1 if state.local_node in state.peers else len(state.peers)
+    )
+    assert peers_reachable == 1  # NOT 0 -- this is the exact SOLO-misclassification bug
+
+
+def test_merge_seed_classifies_pair_not_solo(qpt):
+    """End-to-end: a single successful peer merge from a clean slate must
+    classify PAIR, matching the mother plan's own SOLO/PAIR/FLEET
+    definitions -- 1 peer reachable is PAIR, not SOLO."""
+    peer_data = {
+        "local_node": "win-studio",
+        "fleet_mode": "SOLO",
+        "peers": [],
+        "cross_reachable": False,
+        "queried_at": time.time(),
+    }
+    state, _ = qpt._merge_peer_topology(None, peer_data, "10.0.0.2")
+    from orchestrator.startup_intelligence import FleetMode  # noqa: E402
+    assert state.fleet_mode == FleetMode.PAIR
+
+
+def test_merge_second_call_preserves_seeded_local_node(qpt):
+    """A subsequent merge (current already set) must keep reusing the
+    correctly-seeded local_node, not re-derive or drift it."""
+    peer_data = {"local_node": "win-studio", "fleet_mode": "SOLO", "peers": [],
+                  "cross_reachable": False, "queried_at": time.time()}
+    first, _ = qpt._merge_peer_topology(None, peer_data, "10.0.0.2")
+    second_peer_data = {"local_node": "win-studio", "fleet_mode": "PAIR",
+                         "peers": ["win-rtx5080"], "cross_reachable": True,
+                         "queried_at": time.time()}
+    second, _ = qpt._merge_peer_topology(first, second_peer_data, "10.0.0.2")
+    assert second.local_node == first.local_node == socket.gethostname()
+    assert "win-rtx5080" in second.peers
