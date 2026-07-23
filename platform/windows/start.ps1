@@ -326,6 +326,11 @@ if (Test-Path $PathsFile) {
     _Info 'path' "Loaded $PathsFile"
 }
 
+# Ensure partner CLI paths are present for this session (Hermes, Codex, AGY, cursor-agent)
+if (Test-Path "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1") {
+    . "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1"
+}
+
 if (-not $PtDir) {
     $PtDir = Find-PtDir
     _Info 'path' "PT_DIR discovered: $PtDir"
