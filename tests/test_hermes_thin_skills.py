@@ -151,10 +151,14 @@ def test_optional_wrapper_installed_with_flag(installer):
 
 def test_install_fresh_creates_all_wrappers(installer):
     written = installer.install()
-    assert len(written) == len(installer.WRAPPERS)
+    harness_redirect = installer.HERMES_HARNESS_ROOT / "SKILL.md"
+    assert len(written) == len(installer.WRAPPERS) + 1
     for spec in installer.WRAPPERS:
         target = _target(installer, spec.slug)
+        assert target in written
         assert target.is_file()
+    assert harness_redirect in written
+    assert harness_redirect.is_file()
 
 
 def test_install_creates_description_md(installer):
