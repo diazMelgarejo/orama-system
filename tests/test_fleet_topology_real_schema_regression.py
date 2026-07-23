@@ -58,9 +58,79 @@ sys.modules["query_peer_topology"] = qpt
 _spec.loader.exec_module(qpt)  # type: ignore[union-attr]
 
 
+def _orchestrator_available() -> bool:
+    """True when Perpetua-Tools is co-located (local dev), not in orama-only CI."""
+    try:
+        qpt._ensure_pt_on_path()
+        qpt._import_orchestrator()
+        return True
+    except ImportError:
+        return False
+
+
+_requires_orchestrator = pytest.mark.skipif(
+    not _orchestrator_available(),
+    reason=(
+        "requires Perpetua-Tools checked out as a sibling of orama-system "
+        "(not present in orama-system CI)"
+    ),
+)
+
+
+# ── D9: _http_get retries across token candidates on 401 ────────────────
+# Covered end-to-end for probe_lan_peer.py's relay_probe() in
+# test_probe_lan_peer_relay.py, but query_peer_topology.py's own _http_get()
+# (the actual D9 fix site -- see its docstring) never had a dedicated unit
+# test locking in the retry-on-401 behavior.
+
+
+def test_http_get_retries_next_token_on_401(monkeypatch):
+    calls: list[str] = []
+
+    def fake_urlopen(req, timeout=2):
+        token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
+        calls.append(token)
+        if token == "bad":
+            raise qpt.urllib.error.HTTPError(
+                req.full_url, 401, "Unauthorized", hdrs=None, fp=None
+            )
+        body = json.dumps({"ok": True}).encode("utf-8")
+
+        class _Resp:
+            def read(self):
+                return body
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+        return _Resp()
+
+    monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: ["bad", "good"])
+    monkeypatch.setattr(qpt.urllib.request, "urlopen", fake_urlopen)
+
+    result = qpt._http_get("http://10.0.0.50:8002/api/fleet-topology")
+
+    assert result == {"ok": True}
+    assert calls == ["bad", "good"]  # tried the rejected candidate first, then the working one
+
+
+def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch):
+    def fake_urlopen(req, timeout=2):
+        raise qpt.urllib.error.HTTPError(req.full_url, 401, "Unauthorized", hdrs=None, fp=None)
+
+    monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: ["bad1", "bad2"])
+    monkeypatch.setattr(qpt.urllib.request, "urlopen", fake_urlopen)
+
+    assert qpt._http_get("http://10.0.0.50:8002/api/fleet-topology") is None
+
+
 # ── Bug 1: seed-branch local_node identity ──────────────────────────────
 
 
+@_requires_orchestrator
 def test_merge_seed_uses_own_hostname_not_peers_self_report():
     """First-ever merge (current=None) must seed local_node from THIS
     machine, never from the peer's payload -- and must count the peer as
@@ -84,6 +154,7 @@ def test_merge_seed_uses_own_hostname_not_peers_self_report():
     assert peers_reachable == 1  # NOT 0 -- this is the exact SOLO-misclassification bug
 
 
+@_requires_orchestrator
 def test_merge_seed_classifies_pair_not_solo():
     """End-to-end: a single successful peer merge from a clean slate must
     classify PAIR, matching the mother plan's own SOLO/PAIR/FLEET
@@ -100,6 +171,7 @@ def test_merge_seed_classifies_pair_not_solo():
     assert state.fleet_mode == FleetMode.PAIR
 
 
+@_requires_orchestrator
 def test_merge_second_call_preserves_seeded_local_node():
     """A subsequent merge (current already set) must keep reusing the
     correctly-seeded local_node, not re-derive or drift it."""
