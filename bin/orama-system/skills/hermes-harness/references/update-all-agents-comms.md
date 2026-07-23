@@ -178,6 +178,33 @@ powershell -File $env:ORAMA_SYSTEM_PATH\bin\orama-system\skills\hermes-harness\s
 
 Mac: `bash bin/orama-system/skills/hermes-harness/scripts/coord_pulse.sh`
 
+### 6. Optional — 5-minute recurring comms board heartbeat
+
+Do NOT hardwire a loop into `start.ps1`; keep it as a local harness call.
+Use the bundled thin wrapper instead so any fresh clone can run it:
+
+```powershell
+powershell -File $env:ORAMA_SYSTEM_PATH\bin\orama-system\skills\hermes-harness\scripts\coord_comms_board.ps1 -Minutes 5 -Json
+```
+
+What it checks in one tick:
+- peer probe via `probe_lan_peer.py`
+- coordination board timestamp + hearbeat/pulse health
+- `coord_pulse.ps1`/`coord_monitor.ps1` availability
+- peer inbox listing via `lan_peer_assign.py list`
+- `agent_coordination.py heartbeat pulse <lane>`
+- local comms-state dump to stdout or `-Json`
+
+Schedule pattern (Windows Task Scheduler example):
+
+```powershell
+$action    = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument '-NoProfile -ExecutionPolicy Bypass -File {0} -Minutes 5 -Json' -f $env:ORAMA_SYSTEM_PATH
+$trigger   = New-ScheduledTaskTrigger -Once -At (Get-Date) -RepetitionInterval (New-TimeSpan -Minutes 5) -RepetitionDuration ([TimeSpan]::MaxValue)
+Register-ScheduledTask -TaskName 'OramaCoordCommsBoard' -Action $action -Trigger $trigger -Description 'Replay around full enchilada: agent_coordination.py board, whiteboard, peer inbox, GossipBus, pulse' -Force
+```
+
+Mac equivalent: same script cannot run directly; use `launchd` to run `coord_pulse.sh` plus a small shell wrapper that imports `agent_coordination.py` health/stats.
+
 ---
 
 ## Checklist (before you say "done")
