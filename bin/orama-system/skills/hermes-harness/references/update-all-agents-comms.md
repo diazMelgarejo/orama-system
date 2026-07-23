@@ -195,6 +195,14 @@ What it checks in one tick:
 - `agent_coordination.py heartbeat pulse <lane>`
 - local comms-state dump to stdout or `-Json`
 
+**Requires the shared venv-python resolver, not bare `python`.** This
+script calls into both orama-system and Perpetua-Tools Python files
+(`agent_coordination.py` lives in PT) -- each needs its own repo's `.venv`
+resolved via `scripts/lib/get-best-python.ps1`, not a single bare `python`
+call, or you'll hit `ModuleNotFoundError` for packages that are installed,
+just in the wrong interpreter. Full writeup: `../SKILL.md` § Bare `python`
+vs venv.
+
 Schedule pattern (Windows Task Scheduler example):
 
 ```powershell
