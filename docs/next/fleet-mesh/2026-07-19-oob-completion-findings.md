@@ -82,12 +82,14 @@ live. Both Win peers served real review inference during the run (§2).
   larger scope than this run (discovery redesign, not a bug fix); noted for
   a follow-up, not attempted here.
 - **`start.sh` full boot: COMPLETE, verified live.** PT/orama/Portal all
-  reported healthy on `/health`; model fallback chain fully verified (5
-  tiers checked, GLM-5.2 armed as ultimate fallback); orchestrator wiring
-  fired (Mac researcher dispatch + Win peer watcher both armed, dual-node
-  192.168.8.153 + 192.168.9.240 polling). This is the mother plan's goal
-  statement ("make this work flawlessly out of the box") demonstrated
-  end-to-end, not just asserted.
+  reported healthy on `/health`; model fallback chain fully verified
+  (Ollama→Win LMS→GLM-5.2→Sonnet + the /health gate itself = **5 tiers
+  checked**, NOT the 4-tier operational fallback chain which is a separate
+  concept — see `operational-fallback-chain.md`). GLM-5.2 armed as ultimate
+  fallback; orchestrator wiring fired (Mac researcher dispatch + Win peer
+  watcher both armed, dual-node 192.168.8.153 + 192.168.9.240 polling).
+  This is the mother plan's goal statement ("make this work flawlessly out
+  of the box") demonstrated end-to-end, not just asserted.
 - 3080 relay-client review: dispatch timed out twice on the 27B model
   (>90s, >240s inference); the 5080 review (collected, verified, 1 finding
   hardened) covers the peer-review requirement. Recorded honestly rather
