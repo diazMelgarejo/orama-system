@@ -50,8 +50,9 @@ allowed-tools: bash, file-operations
 
 - [`../../../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win sync before operator steps
 - [`../../references/lan-peer-self-talk.md`](../../references/lan-peer-self-talk.md) — architecture + operator playbook
-- [`../../references/lan-endpoint-contract.md`](../../references/lan-endpoint-contract.md) — localhost vs LAN IP
-- [`../../references/win-localhost-runtime-checklist.md`](../../references/win-localhost-runtime-checklist.md)
-- [`../../scripts/probe_lan_peer.py`](../../scripts/probe_lan_peer.py)
-- Mac handoff: [`../../../../../../docs/plans/2026-06-28-mac-e2e-handoff.md`](../../../../../../docs/plans/2026-06-28-mac-e2e-handoff.md)
-- Win checklist: [`../../../../../../docs/plans/2026-06-28-windows-powershell-todo.md`](../../../../../../docs/plans/2026-06-28-windows-powershell-todo.md)
+|- [`../../references/lan-endpoint-contract.md`](../../references/lan-endpoint-contract.md) — localhost vs LAN IP
+|- [`../../references/win-localhost-runtime-checklist.md`](../../references/win-localhost-runtime-checklist.md)
+|- [`../../scripts/probe_lan_peer.py`](../../scripts/probe_lan_peer.py)
+|- [`../../scripts/coord_comms_board.ps1`](../../scripts/coord_comms_board.ps1) — 5-minute recurring full-comm heartbeat
+|- Mac handoff: [`../../../../../../docs/plans/2026-06-28-mac-e2e-handoff.md`](../../../../../../docs/plans/2026-06-28-mac-e2e-handoff.md)
+|- Win checklist: [`../../../../../../docs/plans/2026-06-28-windows-powershell-todo.md`](../../../../../../docs/plans/2026-06-28-windows-powershell-todo.md)
