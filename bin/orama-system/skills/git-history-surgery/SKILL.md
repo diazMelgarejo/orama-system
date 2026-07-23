@@ -81,6 +81,23 @@ LM Studio host, run
   `scripts/git/*.sh` must use `while read` loops (see
   [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md)).
   Install hooks: `bash scripts/git/install-local-hooks.sh` (includes TDD `commit-msg` gate).
+- **Never declare a git action complete without querying the actual result.**
+  Stating "PR #N merged to main" or "pushed" without having just run
+  `gh pr view N --json state,mergedAt` / `git ls-remote` / an equivalent
+  direct check is a false status report, not a completed action. This
+  happened for real: a PR was reported merged in a planning summary and
+  never actually merged, then treated as done for the next several steps.
+- **After `gh pr merge` on ANY branch other than main (a stacked/dependent
+  PR), immediately `git fetch origin <that-branch>` and reconcile the local
+  checkout before doing further local work on it.** `gh pr merge` updates
+  the branch on GitHub; your local checkout of that branch does NOT update
+  itself. If you keep working locally without fetching first, later local
+  merges (e.g. pulling in `main`) can silently carry a stale, pre-merge
+  version of files the remote merge already fixed — this looks like a
+  successful merge and produces no error; it just quietly reverts the fix.
+  Verify with `git merge-base --is-ancestor origin/<branch> <branch>` (or
+  compare `git rev-parse` local vs. `origin/<branch>`) before trusting local
+  HEAD reflects a merge you just performed via `gh pr merge`.
 
 ## Verification
 
@@ -126,6 +143,32 @@ git merge --abort
 **Conflict resolution strategies:** `additive` (empty+content→take content),
 `union` (both partial→concatenate), `superset` (verify inclusion→take larger),
 `architecturally-correct` (bug→take fix), `api-correct` (casing→take lowercase).
+
+### Absorbing external/automated PR content (mandatory ordering)
+
+When adapting content from other agents' or bots' branches (autobot CI-fix
+PRs, a teammate's rebased branch, cherry-picks) into a branch you're actively
+working on, **do all remote-sync merges first, then replay the new/adapted
+content on top — never interleave them**:
+
+1. Fetch and merge every relevant already-merged remote ref into the local
+   branch first (`origin/main`, `origin/<this-branch>` if a stacked PR was
+   merged separately, etc.). Verify each with `git merge-base --is-ancestor`
+   before trusting it — don't assume a prior fetch is still current.
+2. Only once the local branch is a confirmed, verified superset of every
+   relevant remote ref, stash or set aside the new content to adapt
+   (`git stash push -u -m "<tag>"` for uncommitted work, or note the
+   commit/PR SHA for a cherry-pick).
+3. Reapply/cherry-pick the new content on top of that clean base.
+4. Run the full relevant test suite before committing — a clean cherry-pick
+   (no conflict markers) is necessary but not sufficient; it can still land
+   on stale symbols/APIs if step 1 was skipped or incomplete.
+
+Doing this out of order — replaying new content first, syncing remotes
+after — is exactly how a later "sync main" merge can silently re-introduce
+an already-fixed bug: git's 3-way merge has no way to know your replayed
+content already superseded what's arriving from upstream, so a conflicting
+upstream version can win without ever showing a conflict marker.
 
 **Key invariant:** `"merged": true` on GitHub ≠ content on branch.
 Always verify: `git diff origin/main...origin/<branch>` after any merge.
