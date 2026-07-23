@@ -20,7 +20,7 @@ _SCRIPT = (
 _spec = importlib.util.spec_from_file_location("probe_lan_peer", _SCRIPT)
 probe_lan_peer = importlib.util.module_from_spec(_spec)
 sys.modules["probe_lan_peer"] = probe_lan_peer
-_spec.loader.exec_module(_spec and probe_lan_peer and _spec.loader and probe_lan_peer)  # type: ignore[arg-type]
+_spec.loader.exec_module(probe_lan_peer)  # type: ignore[union-attr]
 
 
 def _ok_body(reachable: bool = True) -> str:
