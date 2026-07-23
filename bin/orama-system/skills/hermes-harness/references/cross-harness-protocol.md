@@ -47,8 +47,8 @@ Perpetua-Tools/                         ← middleware, hardware policy, startup
 
 | Platform | Limit | Where documented |
 |---|---|---|
-| Windows | LM Studio = `localhost:1234`; GGUF only; Git Bash required | `references/windows-onboarding-config.md` |
-| macOS | Ollama = `localhost:11434`; MLX models; OpenClaw primary | `../openclaw-skills/SKILL.md` |
+| Windows | LM Studio = `localhost:1234`; CRG embed = `:1234/v1`; GGUF only; Git Bash required | `references/windows-onboarding-config.md` · `../../code-review/references/crg-platform-endpoints.md` |
+| macOS | Ollama = `localhost:11434`; CRG embed = `:11434/v1`; MLX models; OpenClaw primary | `../openclaw-skills/SKILL.md` |
 | Linux | Same binary as macOS; full hardware matrix | `hardware/SKILL.md` in PT |
 | Cross-machine | Win→Mac = `$MAC_IP`; Mac→Win = `$WIN_IP` | `references/lan-endpoint-contract.md` |
 

@@ -14,6 +14,8 @@
 #   elevated: full stack (CRG + ai-cli-mcp)
 #   ORAMA_MCP_ENABLE_AI_CLI=1 forces elevated; ORAMA_MCP_PROFILE overrides default
 #
+# Platform: patches CRG_OPENAI_BASE_URL at sync — macOS/Linux :11434, Windows :1234
+#
 # Usage:
 #   bash bin/orama-system/scripts/sync-cursor-mcp.sh [--profile readonly|elevated] [--also-user] [--include-gemini] [--dry-run]
 set -euo pipefail
@@ -88,9 +90,13 @@ _require_jq() {
 
 _build_stack_json() {
   local tmp="$1"
-  local pybin
+  local pybin crg_base
   pybin="$(_crg_python_bin)" || pybin=""
+  crg_base="$(_crg_openai_base_url)"
   cp "$STACK_JSON" "$tmp"
+  jq --arg base "$crg_base" '
+    .mcpServers["code-review-graph"].env.CRG_OPENAI_BASE_URL = $base
+  ' "$tmp" > "${tmp}.base" && mv "${tmp}.base" "$tmp"
   if [ -n "$pybin" ]; then
     jq --arg py "$pybin" '
       .mcpServers["code-review-graph"].env.PYTHON = $py
@@ -147,6 +153,7 @@ PROJECT_MCP="$ORAMA_ROOT/.cursor/mcp.json"
 
 _log "Profile: $MCP_PROFILE"
 _log "Stack: $STACK_JSON"
+_log "CRG base URL: $(_crg_openai_base_url)"
 _log "Project MCP: $PROJECT_MCP"
 _sync_file "$PROJECT_MCP" "project"
 

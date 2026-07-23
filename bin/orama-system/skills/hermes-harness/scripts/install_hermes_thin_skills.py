@@ -44,6 +44,8 @@ REPO_ROOT = resolve_repo_root()
 LOCALAPPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", LOCALAPPDATA / "hermes"))
 HERMES_SKILLS = HERMES_HOME / "skills" / "pt-orama"
+HERMES_HARNESS_ROOT = HERMES_HOME / "skills" / "hermes-harness"
+CANONICAL_HARNESS = "bin/orama-system/skills/hermes-harness/SKILL.md"
 MANAGED_MARKER = "created_by: agent"
 
 
@@ -86,6 +88,12 @@ WRAPPERS = [
         canonical="bin/orama-system/skills/hermes-harness/commands/lan-peer-self-talk/SKILL.md",
         purpose="Probe peer portal + LM Studio via discovery JSON; no SSH.",
     ),
+    HermesWrapper(
+        slug="windows-hermes-setup",
+        description="Thin Hermes command for Windows PATH, ECC, and partner CLI bring-up.",
+        canonical="bin/orama-system/skills/hermes-harness/commands/windows-hermes-setup/SKILL.md",
+        purpose="Probe-first Windows Hermes wiring: partner PATH, ECC doctor, start.ps1 comms.",
+    ),
 ]
 
 # Optional — never required for harness bootstrap or default thin-wrapper install.
@@ -110,6 +118,106 @@ def hermes_local_dir(slug: str) -> str:
     if slug.startswith("pt-orama-"):
         return slug.removeprefix("pt-orama-")
     return slug
+
+def harness_redirect_text() -> str:
+    provenance = install_provenance()
+    return f"""---
+name: hermes-harness
+description: >-
+  REDIRECT → orama-system canonical hermes-harness. Install, cross-harness,
+  Windows bring-up, and board-update comms live in canonical only.
+version: 1.0.0
+license: Apache 2.0
+parent_skill: orama-system
+status: absorbed
+redirect_to: {CANONICAL_HARNESS}
+created_by: agent
+metadata:
+  hermes:
+    tags: [pt-orama, hermes, thin-wrapper, absorbed]
+    curator: pinned
+---
+
+# hermes-harness (absorbed redirect)
+
+> **Redirected:** Hermes harness behavior is defined in orama-system canonical
+> `hermes-harness`. Do **not** patch this file — self-improve must target
+> canonical under `$ORAMA_SYSTEM_PATH`, then refresh thin wrappers.
+>
+> Curator pin: `hermes curator pin hermes-harness`
+
+## Use instead
+
+| Layer | Path |
+|-------|------|
+| **Canonical skill** | `{CANONICAL_HARNESS}` |
+| **Update-all-agents comms** | `bin/orama-system/skills/hermes-harness/references/update-all-agents-comms.md` |
+| **Windows setup command** | `bin/orama-system/skills/hermes-harness/commands/windows-hermes-setup/SKILL.md` |
+| **Thin pt-orama wrappers** | `%LOCALAPPDATA%\\hermes\\skills\\pt-orama\\<slug>\\SKILL.md` |
+
+{provenance}
+
+Refresh:
+
+```powershell
+cd $env:ORAMA_SYSTEM_PATH
+python bin\\orama-system\\skills\\hermes-harness\\scripts\\install_hermes_thin_skills.py --install --verify
+hermes curator pin hermes-harness
+```
+
+Absorption map: `bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md`
+"""
+
+
+# Orphaned Hermes-local reference files superseded by canonical orama paths.
+HARNESS_ORPHAN_REFERENCES = (
+    "update-all-agents-comms.md",
+    "plan-integration.md",
+    "lan-peer-coordination.md",
+)
+
+
+def install_harness_redirect(dry_run: bool = False) -> Path | None:
+    """Replace forked ~/.hermes/skills/hermes-harness/SKILL.md with redirect stub."""
+    target = HERMES_HARNESS_ROOT / "SKILL.md"
+    refs_dir = HERMES_HARNESS_ROOT / "references"
+    if dry_run:
+        print(f"would write harness redirect: {target}")
+        for name in HARNESS_ORPHAN_REFERENCES:
+            orphan = refs_dir / name
+            if orphan.is_file():
+                print(f"would remove orphaned reference: {orphan}")
+        return target
+    if target.is_file() and not is_managed_wrapper(target):
+        text = target.read_text(encoding="utf-8")
+        if "status: absorbed" not in text and "REDIRECT" not in text:
+            print(f"replacing forked harness skill with redirect: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(harness_redirect_text(), encoding="utf-8")
+    for name in HARNESS_ORPHAN_REFERENCES:
+        orphan = refs_dir / name
+        if orphan.is_file():
+            orphan.unlink()
+            print(f"removed orphaned reference: {orphan}")
+    return target
+
+
+def verify_harness_redirect() -> list[str]:
+    errors: list[str] = []
+    target = HERMES_HARNESS_ROOT / "SKILL.md"
+    if not target.is_file():
+        errors.append(f"missing harness redirect: {target}")
+        return errors
+    text = target.read_text(encoding="utf-8")
+    for required in ("status: absorbed", CANONICAL_HARNESS, "created_by: agent"):
+        if required not in text:
+            errors.append(f"harness redirect missing {required!r}: {target}")
+    for name in HARNESS_ORPHAN_REFERENCES:
+        orphan = HERMES_HARNESS_ROOT / "references" / name
+        if orphan.is_file():
+            errors.append(f"orphaned local reference still present: {orphan}")
+    return errors
+
 
 def wrapper_text(spec: HermesWrapper) -> str:
     provenance = install_provenance()
@@ -200,6 +308,8 @@ def install(dry_run: bool = False, include_optional: bool = False) -> list[Path]
             "Canonical behavior lives in the orama-system repo.\n",
             encoding="utf-8",
         )
+    if dry_run:
+        install_harness_redirect(dry_run=True)
     for spec in specs:
         target = HERMES_SKILLS / hermes_local_dir(spec.slug) / "SKILL.md"
         if dry_run:
@@ -216,11 +326,15 @@ def install(dry_run: bool = False, include_optional: bool = False) -> list[Path]
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(wrapper_text(spec), encoding="utf-8")
         written.append(target)
+    harness = install_harness_redirect(dry_run=dry_run)
+    if harness and not dry_run:
+        written.append(harness)
     return written
 
 
 def verify(include_optional: bool = False) -> list[str]:
     errors: list[str] = []
+    errors.extend(verify_harness_redirect())
     for spec in all_wrappers(include_optional):
         target = HERMES_SKILLS / hermes_local_dir(spec.slug) / "SKILL.md"
         if not target.is_file():

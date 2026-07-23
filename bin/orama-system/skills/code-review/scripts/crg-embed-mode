@@ -28,31 +28,41 @@ _require_jq() {
   fi
 }
 
-_check_ollama_bge_m3() {
-  if ! curl -s http://localhost:11434/api/tags 2>/dev/null | grep -q "bge-m3"; then
-    echo "Warning: bge-m3 not found in Ollama. Pull with: ollama pull bge-m3" >&2
-    echo "Warning: CRG will fall back to FTS-only search until Ollama is running." >&2
+_check_embed_backend_bge_m3() {
+  local health_url
+  health_url="$(_crg_embed_health_url)"
+  if ! curl -s "$health_url" 2>/dev/null | grep -q "bge-m3"; then
+    if _crg_is_windows; then
+      echo "Warning: bge-m3 not found via LM Studio @ localhost:1234. Load bge-m3 in LM Studio." >&2
+    else
+      echo "Warning: bge-m3 not found in Ollama. Pull with: ollama pull bge-m3" >&2
+    fi
+    echo "Warning: CRG will fall back to FTS-only search until the embed backend is up." >&2
   fi
 }
 
 _apply_crg_jq() {
-  local filter="$1"
-  jq "$filter" "$MCP_JSON" > "$MCP_JSON.crg-embed.tmp" && mv "$MCP_JSON.crg-embed.tmp" "$MCP_JSON"
+  jq "$@" "$MCP_JSON" > "$MCP_JSON.crg-embed.tmp" && mv "$MCP_JSON.crg-embed.tmp" "$MCP_JSON"
   sync_orama_cursor_crg_from "$MCP_JSON" || true
 }
 
 case "$MODE" in
   gbrain)
     _require_jq
-    _check_ollama_bge_m3
-    _apply_crg_jq '.mcpServers["code-review-graph"].env |= . + {
+    _check_embed_backend_bge_m3
+    crg_base="$(_crg_openai_base_url)"
+    _apply_crg_jq --arg base "$crg_base" '.mcpServers["code-review-graph"].env |= . + {
       "CRG_OPENAI_API_KEY": "ollama",
-      "CRG_OPENAI_BASE_URL": "http://localhost:11434/v1",
+      "CRG_OPENAI_BASE_URL": $base,
       "CRG_OPENAI_MODEL": "bge-m3",
       "CRG_OPENAI_DIMENSION": "1024",
       "CRG_ACCEPT_CLOUD_EGRESS": "1"
     }'
-    echo "CRG embedding: gbrain mode (Ollama bge-m3 @ localhost:11434, 1024-dim)"
+    if _crg_is_windows; then
+      echo "CRG embedding: gbrain mode (LM Studio bge-m3 @ $crg_base, 1024-dim)"
+    else
+      echo "CRG embedding: gbrain mode (Ollama bge-m3 @ $crg_base, 1024-dim)"
+    fi
     echo "Next: restart Claude Code / Cursor → call embed_graph_tool via MCP to re-embed"
     ;;
 
@@ -78,7 +88,7 @@ case "$MODE" in
 
   *)
     echo "Usage: crg-embed-mode [gbrain|local|status]" >&2
-    echo "  gbrain — Ollama bge-m3 (unified vector space with gbrain)" >&2
+    echo "  gbrain — bge-m3 via platform embed backend (Ollama Mac/Linux, LM Studio Windows)" >&2
     echo "  local  — sentence-transformers all-MiniLM-L6-v2 (offline)" >&2
     echo "  status — show current mode" >&2
     exit 1
