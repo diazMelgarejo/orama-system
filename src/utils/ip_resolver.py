@@ -119,7 +119,8 @@ def _from_alphaclaw() -> str:
         ip = _extract_ip_from_url(win_provider.get("baseUrl", ""))
         if ip:
             log.debug("ip_resolver P1 (PT alphaclaw adapter): %s", ip)
-        return ip
+            return ip
+        log.debug("ip_resolver: PT alphaclaw adapter returned no usable IP, falling back to direct")
     except ImportError:
         log.debug("ip_resolver: PT alphaclaw adapter unavailable, falling back to direct")
     except Exception:
