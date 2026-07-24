@@ -14,7 +14,7 @@ plan + repo_hygiene exemption bug"). Phases 3-4 still pending.
 > shipped config is named `scripts/git/identity-policy.json` (this plan
 > proposed `allowed-identities.json`); `scripts/git/audit_engine.py` exists
 > on main as planned, with `repo_hygiene.py`/`check_identity.sh`/
-> `audit_attribution.sh` now thin wrappers delegating to it.
+`audit_attribution.sh` now thin wrappers delegating to it.
 >
 > **Remaining scope (Phases 3-4, not yet done):**
 > - Phase 3 — Perpetua-Tools sync manifest + parity verification (this
@@ -51,7 +51,7 @@ PR #197 added commits authored by `cyre <owner-gmail-dot-variant>`. The identity
 - Only `repo_hygiene.py` was updated (my fix `5cc958b6`)
 - `audit_attribution.sh` still rejected it -> CI failed at "Audit branch commit attribution"
 - `check_identity.sh` still rejected it -> local hooks failed
-- The Cursor bot responded by creating PRs #209-#214, all attempting `git rebase --exec 'git commit --amend --author=...'`
+- The Cursor bot responded by creating PRs #209-#214, all attempting `git rebase --exec 'git commit --amend --author=...'``
 - All 6 rewrite PRs were redundant because the correct fix was updating 2 more allowlists, not rewriting history
 
 ### 2.3 Historical Evidence of High Churn — NEEDS RE-DERIVATION
@@ -403,6 +403,11 @@ def is_approved_author(name: str, email: str) -> bool:
             return True
 
     # 4. Vendor: domain suffix match
+    # NOTE: domain-level match is a SIGNAL, not standalone proof of vendor
+    # provenance. A forged commit can spoof any email domain. This check is
+    # designed for audit convenience (recognizing known vendor agents quickly),
+    # not security verification. Forged commit metadata should be caught by
+    # commit signing, traceability, or stricter human-identity verification.
     domain = email_lc.split("@")[-1] if "@" in email_lc else ""
     for suffix in cfg["vendor_domains"]:
         if domain == suffix or domain.endswith(f".{suffix}"):
