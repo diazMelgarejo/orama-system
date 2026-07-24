@@ -120,9 +120,20 @@ scraping known URLs, interacting with live pages, crawling docs,
 mapping a site, parsing local documents, searching research papers,
 or monitoring pages for changes.
 
-Via MCP (preferred inside a Claude Code session, once authenticated):
-`mcp__firecrawl__*` tools — search, scrape, interact, parse, monitor,
-research, ask, docs-search.
+Via MCP (preferred inside a Claude Code session, once authenticated),
+the connected server exposes `mcp__firecrawl__firecrawl_<name>` tools —
+verified against a live connection: `firecrawl_search`,
+`firecrawl_scrape`, `firecrawl_interact` / `firecrawl_interact_stop`,
+`firecrawl_parse`, `firecrawl_crawl` / `firecrawl_check_crawl_status`,
+`firecrawl_map`, `firecrawl_extract`,
+`firecrawl_monitor_create` / `_get` / `_list` / `_run` / `_update` / `_delete` / `_check` / `_checks`,
+`firecrawl_research_search_papers` / `_inspect_paper` / `_read_paper` / `_related_papers` / `_search_github`,
+`firecrawl_agent` / `_agent_status`, and `firecrawl_feedback` /
+`firecrawl_search_feedback`. **No `ask` or `docs-search` MCP tool is
+exposed** — those two are CLI/REST-only (`firecrawl ask`,
+`firecrawl-docs-search`, or `POST /support/ask` /
+`/support/docs-search`); use the CLI or raw REST call for those two
+specifically, everything else via MCP.
 
 Via CLI (after install), hand off to the CLI skill:
 
@@ -145,7 +156,7 @@ Default flow for live web work:
 3. Use `interact` only when the page needs clicks, forms, or login
 4. Use `parse` when the source is a local file instead of a URL
 5. Use `monitor` when the request implies recurrence or notifications ("alert me when", "track this page") rather than a one-time read
-6. If any step fails or returns unexpected output, run `firecrawl ask` (CLI) or the `mcp__firecrawl__*` ask tool with the failing `jobId` instead of guessing
+6. If any step fails or returns unexpected output, run `firecrawl ask` (CLI-only, no MCP equivalent) with the failing `jobId` instead of guessing
 
 If the task becomes "wire Firecrawl into product code," switch to Path B.
 
