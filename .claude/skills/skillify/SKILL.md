@@ -63,6 +63,7 @@ Read target-specific references only when needed:
 - Keep modular files one level away from `SKILL.md`; avoid reference chains.
 - Every fenced code block must include a language specifier.
 - Never hardcode secrets, personal paths, raw LAN IPs, or workstation-specific paths.
+- **This skill's own `.claude/skills/skillify/SKILL.md` is permanently exempt from `scripts/consolidate-skills.sh`'s thin-wrapper conversion** (hardcoded `EXEMPT_SKILLS` in that script) — it must stay full standalone content, never a wrapper pointing at the canonical copy. Root cause: this repo's `skillify` shares its name with gstack's own bundled `skillify` (unrelated tool); see the collision incident in `references/dogfood-upgrade-log.md` and `docs/LESSONS.md` § 2026-07-24.
 
 ## Workflow
 

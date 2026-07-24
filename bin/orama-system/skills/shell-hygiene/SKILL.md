@@ -277,3 +277,7 @@ Rules:
 - If you need interpolation, escape backticks or use a here-doc / printf.
 - Treat missing literal code spans in posted text as a sender-side quoting bug
   before suspecting the bus, storage, or receiver.
+
+## Related skills
+
+- [[fable5-git-rebase-safety]] — when a shell audit turns up branches/worktrees that look stale, divergent, or "N behind" — use its tree-twin doctrine and per-file triage (patch-id matching, structural-supersession checks) instead of trusting raw ahead/behind output.

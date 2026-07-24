@@ -240,6 +240,7 @@ Reference: `bin/orama-system/references/skill-architecture-guide.md` § v2 Manda
 
 - [[icloud-escape-move]] — relocate a repo tree out of iCloud to a plain local path (mv → worktree repair → compatibility symlink); a freshly-moved tree can look orphaned until re-anchored with this skill.
 - [[security]] — upstream of this skill: category-only tracked policy, the local-only registry pattern, OpSec vs SecOps vocabulary, and verification-gate discipline for keeping a leak from happening in the first place. Use `security` before a leak lands; use `git-history-surgery` once one already has.
+- [[fable5-git-rebase-safety]] — the tree-twin doctrine this skill's reanchor step relies on, plus a granular per-file/per-commit triage (patch-id matching, scoping against a specific PR's merge commit, detecting structural supersession) for auditing branches/worktrees that look stale or divergent before deciding what to reanchor, discard, or replay.
 
 
 ## Post-Review Micro-Remediation

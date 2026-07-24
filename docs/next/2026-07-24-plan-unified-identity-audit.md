@@ -1,24 +1,28 @@
 # Plan: Unified Identity Audit System — Single Source of Truth
 
 **Date:** 2026-07-24  
-**Status:** SUPERSEDED — background/rationale only; execution via integrated plan (Phase 1–2 landed on branch `2026-07-24-005b-identity-audit-plan`)  
+**Status:** Phases 1-2 DONE (merged 2026-07-24T08:41 UTC via PR #217 "feat(identity):
+unified audit engine — Phases 1–2" + PR #218 "docs+fix: identity-audit background
+plan + repo_hygiene exemption bug"). Phases 3-4 still pending.  
 **Target:** PR #197 branch (`2026-07-19-002-fleet-mesh-oob-fixes`)  
 **Scope:** orama-system (Perpetua-Tools receives changes via existing sync script)
 
-> **Historical context, not a live approval gate:** this doc is the
-> original root-cause analysis and proposed design for a unified identity
-> system. It predates and is superseded by the actual implementation --
-> the config file that shipped is `identity-policy.json`, not the
-> `allowed-identities.json` name this draft proposes throughout (§3.2 and
-> elsewhere below); read those as historical naming, not the current
-> reality. Execution already happened via
-> `docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md`:
-> Phase 1 (`identity-policy.json` + `audit_engine.py`, `b1f70018`) and
-> Phase 2 (consumer wiring: `repo_hygiene.py`, `check_identity.sh`,
-> `audit_attribution.sh`) both landed on `2026-07-24-005b-identity-audit-plan`.
-> This doc remains background/rationale only — do not implement §3.2's
-> `vendor_domains` or bot-wildcard shortcuts; the integrated plan
-> explicitly rejected both.
+> This plan was filed and, in parallel, independently implemented + merged
+> under a different worktree/branch (`2026-07-24-005b-identity-audit-plan`)
+> before this filing's own "awaiting approval" gate was seen — a live
+> concurrent-agent collision, not an approved-then-executed sequence. The
+> shipped config is named `scripts/git/identity-policy.json` (this plan
+> proposed `allowed-identities.json`); `scripts/git/audit_engine.py` exists
+> on main as planned, with `repo_hygiene.py`/`check_identity.sh`/
+`audit_attribution.sh` now thin wrappers delegating to it.
+>
+> **Remaining scope (Phases 3-4, not yet done):**
+> - Phase 3 — Perpetua-Tools sync manifest + parity verification (this
+>   plan's own "Scope" line above says PT "receives changes via existing
+>   sync script" — verify that actually ran/works against the shipped
+>   `identity-policy.json` naming).
+> - Phase 4 — doc cleanup + close the stale autofix PRs #209-214 this
+>   plan's §2.2 identifies as the original symptom.
 
 ---
 
@@ -42,12 +46,12 @@ This plan consolidates everything into **one JSON config file + one Python engin
 
 ### 2.2 The Bug That Caused 6 Redundant PRs
 
-PR #197 added commits authored by `cyre <Lawrence.Melgarejo@gmail.com>`. The identity check failed because this email wasn't in any of the three allowlists. The fix was simple: add the email. But:
+PR #197 added commits authored by `cyre <owner-gmail-dot-variant>`. The identity check failed because this email wasn't in any of the three allowlists. The fix was simple: add the email. But:
 
 - Only `repo_hygiene.py` was updated (my fix `5cc958b6`)
 - `audit_attribution.sh` still rejected it -> CI failed at "Audit branch commit attribution"
 - `check_identity.sh` still rejected it -> local hooks failed
-- The Cursor bot responded by creating PRs #209-#214, all attempting `git rebase --exec 'git commit --amend --author=...'`
+- The Cursor bot responded by creating PRs #209-#214, all attempting `git rebase --exec 'git commit --amend --author=...'``
 - All 6 rewrite PRs were redundant because the correct fix was updating 2 more allowlists, not rewriting history
 
 ### 2.3 Historical Evidence of High Churn — NEEDS RE-DERIVATION
@@ -66,14 +70,14 @@ rather than filed with fabricated evidence.
 files:
 
 - The core structural claim holds: `scripts/review/repo_hygiene.py`'s
-  `APPROVED_IDENTITIES` and `scripts/git/audit_attribution.sh`'s
-  `ALLOWED_HUMAN_AE` are two real, independently-hardcoded allowlists as
-  of this commit — the underlying "3 separate lists" problem this plan
-  addresses is real, not fabricated.
+  `APPROVED_IDENTITIES` (line 48) and `scripts/git/audit_attribution.sh`'s
+  `ALLOWED_HUMAN_AE` (line 15) are two real, independently-hardcoded
+  allowlists as of this commit — the underlying "3 separate lists" problem
+  this plan addresses is real, not fabricated.
 - The single concrete incident this plan's §2.2 is built on (PR #197's
-  `cyre <Lawrence.Melgarejo@gmail.com>` identity rejected by two of the
+  `cyre <owner-gmail-dot-variant>` identity rejected by two of the
   three checkers after only one was updated) is real: commit `5cc958b6`
-  is genuinely `fix: add cyre <Lawrence.Melgarejo@gmail.com> to
+  is genuinely `fix: add cyre <owner-gmail-dot-variant> to
   APPROVED_IDENTITIES whitelist`.
 
 **Before implementing:** re-derive the actual churn history with
@@ -117,8 +121,8 @@ scripts/review/
   "description": "Approved git author/committer identities. All 3 audit entry points read this file. Edit here only -- never hardcode in scripts.",
   "version": 1,
   "human_identities": [
-    {"name": "cyre", "email": "diazmelgarejo@gmail.com", "note": "primary Gmail"},
-    {"name": "cyre", "email": "lawrence.melgarejo@gmail.com", "note": "Gmail dot-variant (same mailbox)"},
+    {"name": "cyre", "email": "<owner-gmail-primary>", "note": "primary Gmail -- see local-only identity registry, not spelled out in tracked docs"},
+    {"name": "cyre", "email": "<owner-gmail-dot-variant>", "note": "Gmail dot-variant (same mailbox) -- see local-only identity registry"},
     {"name": "cyre", "email": "lawrence@cyre.me", "note": "custom domain"},
     {"name": "cyre", "email": "lawrence@bettermind.ph", "note": "PH domain"}
   ],
@@ -129,7 +133,7 @@ scripts/review/
     {"name": "Cloud Kimi Agent", "email": "cloud-kimi-agent@kimi.ai"}
   ],
   "bot_patterns": [
-    "*[bot]@users.noreply.github.com",
+    "*[[]bot]@users.noreply.github.com",
     "cursor[bot]@users.noreply.github.com",
     "dependabot[bot]@users.noreply.github.com",
     "coderabbitai[bot]@users.noreply.github.com"
@@ -154,11 +158,25 @@ Single Python module providing three functions consumed by all entry points:
 
 **Checking logic (one unified flow):**
 
+> **Scope note, added on review:** `is_approved_author()` is a **hygiene/
+> provenance** check — it classifies whether a commit's self-reported
+> author/committer metadata matches a known-good pattern, for CI signal
+> and audit trail. It is **not access control** and must never be treated
+> as proof that a specific human or service actually authored a commit:
+> `name`/`email` are attacker-controlled fields any git client can set to
+> anything (`git commit --author="X <y@z>"`), so a `True` result here
+> means "this metadata looks familiar," not "this identity is verified."
+> Real access control (who can push, who can merge) is enforced
+> elsewhere (branch protection, GitHub auth, required reviews) and this
+> engine must not be substituted for it. Two specific rules below exist
+> because of this distinction, not despite it — see the pseudocode
+> appendix (§9) for the fuller rationale on each.
+
 1. Exact `(name.lower(), email.lower())` match in `human_identities`
 2. Exact email match in `agent_identities` (name flexible for agents)
-3. Email matches a `bot_patterns` glob (e.g., `*[bot]@users.noreply.github.com`)
-4. Email domain matches a `vendor_domains` suffix (e.g., `@openai.com`)
-5. Email matches `ORAMA_APPROVED_EMAILS` env var (for CI injection without file edits)
+3. Email matches a `bot_patterns` glob (e.g., `*[[]bot]@users.noreply.github.com`) — **narrowed scope:** only for GitHub's own platform-issued `@users.noreply.github.com` bot addresses (which GitHub itself assigns per-app, not self-asserted by the committer); never extend this glob family to a service's own claimed domain (e.g. `*@some-vendor-bot.com`), since a committer can set that email to anything and the pattern would then approve a self-asserted, unverified identity.
+4. Email domain matches a `vendor_domains` suffix (e.g., `@openai.com`) — audit-convenience signal only, explicitly not proof of identity (see pseudocode note); **rejected entirely in the actual shipped implementation** (see this doc's own header) precisely because it lets forged commit metadata read as a trusted vendor identity.
+5. Email matches `ORAMA_APPROVED_EMAILS` env var — **restricted to externally-controlled configuration only**: this variable must be set by CI/deployment configuration (a value the commit author cannot influence), never derived from or synchronized with anything in the commit itself; treat it the same as a secret, not a convenience flag.
 
 ### 3.4 The Wrappers
 
@@ -365,7 +383,7 @@ Single commit on PR #197:
 
 1. **Env var override name**: `ORAMA_APPROVED_EMAILS` (comma-separated) is proposed. Should this also support `.verboten-literals.local`-style key-value format for consistency with the existing private attribution system?
 
-2. **Bot pattern granularity**: Currently `*[bot]@users.noreply.github.com` is a broad wildcard that accepts any GitHub bot. Should specific bot identities be listed individually in `agent_identities` for audit trail purposes?
+2. **Bot pattern granularity**: Currently `*[[]bot]@users.noreply.github.com` is a broad wildcard that accepts any GitHub bot. Should specific bot identities be listed individually in `agent_identities` for audit trail purposes?
 
 3. **Vendor domain wildcard safety**: `vendor_domains` suffix matching could accidentally approve a subdomain of a vendor that isn't actually their agent service (e.g., `someapp.openai.com`). Is suffix matching sufficient or should exact domain matching be required?
 
@@ -394,21 +412,46 @@ def is_approved_author(name: str, email: str) -> bool:
             return True
 
     # 3. Bot: glob pattern match
+    # NOTE: like the vendor-domain check below, this is a provenance
+    # signal, not proof -- restrict this glob family to GitHub's own
+    # platform-issued @users.noreply.github.com bot addresses only. Never
+    # extend it to a self-asserted service email (e.g. a vendor's own
+    # domain): the committer sets this field, so a glob matching an
+    # unverified, self-claimed address would approve forged metadata as
+    # if it were a trusted identity.
     for pattern in cfg["bot_patterns"]:
         if fnmatch.fnmatch(email_lc, pattern.lower()):
             return True
 
     # 4. Vendor: domain suffix match
+    # NOTE: domain-level match is a SIGNAL, not standalone proof of vendor
+    # provenance. A forged commit can spoof any email domain. This check is
+    # designed for audit convenience (recognizing known vendor agents quickly),
+    # not security verification. Forged commit metadata should be caught by
+    # commit signing, traceability, or stricter human-identity verification.
+    # (Rejected entirely in the actual shipped engine -- see this doc's own
+    # header -- precisely because "audit convenience" was being read as
+    # "approved identity" by callers that treated this as access control.)
     domain = email_lc.split("@")[-1] if "@" in email_lc else ""
     for suffix in cfg["vendor_domains"]:
         if domain == suffix or domain.endswith(f".{suffix}"):
             return True
 
     # 5. Environment override
+    # NOTE: ORAMA_APPROVED_EMAILS must come from externally-controlled
+    # configuration (CI/deployment env), never from anything derived out
+    # of the commit under check -- treat it as a secret-equivalent input,
+    # not a convenience flag a committer could ever influence.
     if email_lc in _env_approved_emails():
         return True
 
     return False  # FAIL-CLOSED: not in any allowlist
 ```
 
-The engine is **fail-closed by design**: every identity must match at least one rule. No implicit approvals, no wildcard defaults, no "if it doesn't match the deny list, allow it" logic.
+The engine is **fail-closed by design**: every identity must match at
+least one rule. No implicit approvals, no wildcard defaults, no "if it
+doesn't match the deny list, allow it" logic. Fail-closed makes this a
+reliable *hygiene* signal (an unrecognized identity always gets flagged
+for review); it does not by itself make this *access control* (a
+recognized-looking identity is still just self-reported metadata, not a
+verified actor) -- see the scope note in §3.3 above.
