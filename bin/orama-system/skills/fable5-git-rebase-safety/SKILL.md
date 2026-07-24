@@ -221,12 +221,21 @@ rebase/cherry-pick candidate):
 git log origin/main --oneline --all -1 --grep="<distinctive phrase>"
 pid_a=$(git show <branch-sha> | git patch-id --stable | awk '{print $1}')
 pid_b=$(git show <main-sha>   | git patch-id --stable | awk '{print $1}')
-[ "$pid_a" = "$pid_b" ] && echo "IDENTICAL -- same patch, rebased" || echo "DIVERGED -- investigate diff"
+# FAIL-CLOSED: empty patch-id means "can't determine" — never treat as match
+if [ -z "$pid_a" ] || [ -z "$pid_b" ]; then
+    echo "UNKNOWN -- patch-id empty for one or both commits"
+elif [ "$pid_a" = "$pid_b" ]; then
+    echo "IDENTICAL -- same patch, rebased"
+else
+    echo "DIVERGED -- investigate diff"
+fi
 ```
 
 `patch-id` ignores parent/author/date; it fingerprints the diff content
 itself. A match proves the two commits are the same change — there is no
 "more elegant version to pick," they're the same code under a different SHA.
+An empty patch-id (e.g., from an empty commit or a non-diff commit) must be
+treated as "unknown," never as "identical."
 
 ### B. Scope against a specific PR's merge commit, not main's moving tip
 
@@ -235,7 +244,12 @@ branch is missing" with "everything main did unrelated since." Scope to the
 actual PR that superseded the work:
 
 ```bash
+PR_STATE=$(gh pr view <N> --json state --jq .state)
 PR_SHA=$(gh pr view <N> --json mergeCommit --jq .mergeCommit.oid)
+if [ "$PR_STATE" != "MERGED" ] || [ -z "$PR_SHA" ]; then
+    echo "ERROR: PR <N> is not merged or has no merge commit — can't scope delta"
+    exit 1
+fi
 git diff --stat <branch> "$PR_SHA"     # isolates the real remaining delta
 ```
 
@@ -270,13 +284,13 @@ work was silently dropped.
 
 ### Triage classification (apply per file/commit, not just per branch)
 
-| Class | Test | Action |
-|-------|------|--------|
-| DONE (ancestor) | `merge-base --is-ancestor` | Nothing to do |
-| IDENTICAL-REBASED | patch-id match | Nothing to do — same content |
-| OBSOLETE-SUPERSEDED | main's file delegates to a newer module/location | Re-derive substance against new structure; don't replay |
-| NEEDS UNION MERGE | append-only shared file, diverged both ways | Merge unique entries from both sides, never delete |
-| GENUINELY UNIQUE | none of the above | Real gap — surface for a landing decision |
+| Class | Test | Granularity | Action |
+|-------|------|-------------|--------|
+| DONE (ancestor) | `merge-base --is-ancestor <branch-sha> origin/main` | Commit-level | Nothing to do — branch commit is already in main's history |
+| IDENTICAL-REBASED | patch-id match (both non-empty and equal) | Commit-level | Nothing to do — same content, different SHA |
+| OBSOLETE-SUPERSEDED | main's file delegates to a newer module/location | File-level | Re-derive substance against new structure; don't replay old diff |
+| NEEDS UNION MERGE | append-only shared file, diverged both ways | File-level | Merge unique entries from both sides, never delete |
+| GENUINELY UNIQUE | none of the above | File/commit-level | Real gap — surface for a landing decision |
 
 ## Real-World Evidence: orama-system Validation
 
