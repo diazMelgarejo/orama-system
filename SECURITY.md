@@ -233,6 +233,19 @@ mergeable, simulate the intended landing order locally with `git merge-tree
 `bin/orama-system/skills/shell-hygiene/SKILL.md` § 6 for the companion
 git-commit-contention guidance from the same session).
 
+### Lessons and action must land on the same branch (mandatory)
+
+**Never commit `.agent/memory/` lessons about code, a fix, or a decision to a
+different branch than the one the actual change lives on — always, no
+exceptions.** `main`'s tracked memory is read as a description of what `main`
+actually contains; a lesson on `main` that references a file, function, or
+decision only present on an unmerged branch is a false claim about `main`
+itself, and a reader following the lesson's own file references finds
+nothing. Companion rule, PT side: `Perpetua-Tools/SECURITY.md` §
+"Lessons and Action Must Land on the Same Branch" — full incident writeup and
+the correct sequence to follow live there; kept as a pointer here rather than
+duplicated, per this policy's own synchronization requirement above.
+
 ---
 
 ### Fix 6 — operator reference (implemented)
