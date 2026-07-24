@@ -153,3 +153,35 @@ line_matches_private_forbidden_literal() {
   done < <(list_private_literal_values "$root" forbidden_attribution 2>/dev/null || true)
   return 1
 }
+
+# banned_attribution_hit returns 0 when author/committer/body metadata matches a banned pattern.
+banned_attribution_hit() {
+  local ae_lc="$1" an_lc="$2" ce_lc="$3" cn_lc="$4" body_lc="$5"
+  local root="${6:-}"
+  if ! banned_patterns_ready "$root"; then
+    return 1
+  fi
+  line_matches_banned_pattern "$ae_lc" "$root" && return 0
+  line_matches_private_forbidden_literal "$ae_lc" "$root" && return 0
+  line_matches_banned_pattern "$an_lc" "$root" && return 0
+  line_matches_private_forbidden_literal "$an_lc" "$root" && return 0
+  line_matches_banned_pattern "$ce_lc" "$root" && return 0
+  line_matches_private_forbidden_literal "$ce_lc" "$root" && return 0
+  line_matches_banned_pattern "$cn_lc" "$root" && return 0
+  line_matches_private_forbidden_literal "$cn_lc" "$root" && return 0
+  local line line_lc
+  while IFS= read -r line; do
+    line_lc="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
+    case "$line_lc" in
+      co-authored-by:*)
+        if line_matches_banned_pattern "$line_lc" "$root"; then
+          return 0
+        fi
+        if line_matches_private_forbidden_literal "$line_lc" "$root"; then
+          return 0
+        fi
+        ;;
+    esac
+  done <<< "$body_lc"
+  return 1
+}

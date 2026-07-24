@@ -1,9 +1,9 @@
 # Unified Identity Audit System — Integrated Cross-Repo Plan
 
 **Date:** 2026-07-24  
-**Status:** PLAN — review before implementation  
+**Status:** IN PROGRESS — Phase 1–2 complete on `2026-07-24-005b-identity-audit-plan`; Phase 3–4 pending  
 **Primary implementation repo:** `diazMelgarejo/orama-system`  
-**Plan branch:** PR #197 — `2026-07-19-002-fleet-mesh-oob-fixes`  
+**Plan branch:** `2026-07-24-005b-identity-audit-plan` (PR opening for Phases 1–2)  
 **Affected downstream repo:** `diazMelgarejo/Perpetua-Tools`  
 **Related active PT work:** PR #276 — `security/alphaclaw-tls-proxy-scaffold`  
 **Source reviewed:** `plan-unified-identity-audit.md`
@@ -505,19 +505,19 @@ Only after all consumers are green:
 
 The work is complete only when all of the following are true:
 
-- [ ] One tracked public identity policy exists in Orama.
-- [ ] One engine performs all public identity classification.
-- [ ] Private owner identities remain outside tracked public policy.
-- [ ] No broad vendor-domain approval remains.
-- [ ] No universal GitHub-bot wildcard remains.
-- [ ] Existing banned-attribution and co-author protections are preserved.
-- [ ] Existing wrapper commands, environment variables, output expectations, and exit codes remain compatible.
-- [ ] `repo_hygiene.py`, `check_identity.sh`, and `audit_attribution.sh` produce consistent decisions from one policy.
-- [ ] Policy schema and fail-closed behavior are tested.
-- [ ] Orama-to-PT synchronization copies executables and data files with correct modes.
-- [ ] Guard parity includes engine, policy, and schema.
+- [x] One tracked public identity policy exists in Orama.
+- [x] One engine performs all public identity classification.
+- [x] Private owner identities remain outside tracked public policy.
+- [x] No broad vendor-domain approval remains.
+- [x] No universal GitHub-bot wildcard remains.
+- [x] Existing banned-attribution and co-author protections are preserved.
+- [x] Existing wrapper commands, environment variables, output expectations, and exit codes remain compatible (Phase 2).
+- [x] `repo_hygiene.py`, `check_identity.sh`, and `audit_attribution.sh` produce consistent decisions from one policy (Phase 2).
+- [x] Policy schema and fail-closed behavior are tested (loader validation; full JSON Schema CI optional).
+- [ ] Orama-to-PT synchronization copies executables and data files with correct modes (Phase 3).
+- [ ] Guard parity includes engine, policy, and schema (Phase 3).
 - [ ] Orama CI is green.
-- [ ] PT CI is green on a dedicated sync branch.
+- [ ] PT CI is green on a dedicated sync branch (Phase 3).
 - [ ] PT PR #276 remains independently reviewable and contains no unrelated identity-audit refactor.
 
 ---

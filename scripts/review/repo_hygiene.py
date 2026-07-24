@@ -9,6 +9,11 @@ import subprocess
 import sys
 from pathlib import Path
 
+_GIT_SCRIPTS = Path(__file__).resolve().parent.parent / "git"
+if str(_GIT_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_GIT_SCRIPTS))
+import audit_engine  # noqa: E402
+
 
 def repo_relative(path: Path, root: Path) -> str:
     """Return repo-relative paths with POSIX separators for stable messages."""
@@ -45,30 +50,26 @@ def private_literal_values(root: Path, key: str) -> list[str]:
     return values
 
 
-# LEGACY: this frozenset is the old hardcoded allowlist — retained until
-# the unified audit_engine.py refactor (docs/plans/2026-07-24-unified-identity-
-# audit-integrated-plan.md) lands.  When that refactor merges, this constant
-# and the duplicated identity-check logic below are replaced by a single
-# import from audit_engine.py.
-APPROVED_IDENTITIES = {
-    ("cyre", "Lawrence@cyre.me"),
-    ("cyre", "diazMelgarejo@gmail.com"),
-    ("cyre", "Lawrence@bettermind.ph"),
-    ("cyre", "Lawrence.Melgarejo@gmail.com"),
-    ("Codex", "codex@openai.com"),
-    # Mainstream AI coding agents are allowed authors/committers (the hard ban is
-    # the VERBOTEN pattern, not the agent identity). cursoragent@cursor.com stays
-    # approved; CodeRabbit commits as a GitHub bot but is listed for parity.
-    ("Cursor Agent", "cursoragent@cursor.com"),
-    ("CodeRabbit", "noreply@coderabbit.ai"),
-}
-# Keep in sync with scripts/git/check_identity.sh (local hooks + pre-commit).
+# Identity policy: scripts/git/identity-policy.json via audit_engine.py
+# (docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md).
 FORBIDDEN_TOKENS: tuple[()] = ()
 IDENTITY_DOC_EXCEPTIONS = {
     ".mailmap",
     "docs/wiki/08-git-hygiene-and-branching.md",
     # v2 spec doc — quotes forbidden tokens as YAML config examples, not leaks
     "docs/v2/11-idempotency-and-guard-patterns.md",
+    # Identity-allowlist scripts and their own docs/tests: the operator's own
+    # approved (owner_gmail/owner_name) identity is SUPPOSED to appear here --
+    # that is the entire purpose of an allowlist. Without this exemption,
+    # scan_private_verboten_literals() flags every file that correctly lists
+    # the operator's own already-approved identity as if it were a leak.
+    "scripts/git/audit_attribution.sh",
+    "scripts/git/check_identity.sh",
+    "scripts/git/identity-policy.json",
+    "scripts/review/repo_hygiene.py",
+    "tests/test_audit_engine.py",
+    "docs/next/2026-07-24-plan-unified-identity-audit.md",
+    "docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md",
 }
 # Personal-path leak protection (OpSec) — block any tracked file from containing
 # an absolute path under /Users/<anything>/ or /home/<anything>/. Developer
@@ -289,12 +290,23 @@ def scan_forbidden_identity(root: Path, files: list[str]) -> list[str]:
 
 
 def scan_private_verboten_literals(root: Path, files: list[str]) -> list[str]:
-    tokens = [
+    # Two independent token classes: the operator's own approved identity
+    # (owner_gmail/owner_name -- SUPPOSED to appear in allowlist files, so
+    # IDENTITY_DOC_EXCEPTIONS applies) and forbidden_attribution (banned
+    # attribution phrases -- never legitimate anywhere, including in the
+    # allowlist files themselves; those files must not become a place a
+    # banned phrase can hide just because they're exempt from the
+    # identity check). Scanned separately so the exemption can't
+    # accidentally widen to cover the class it was never meant for.
+    identity_tokens = [
         token.casefold()
-        for key in ("owner_gmail", "owner_name", "forbidden_attribution")
+        for key in ("owner_gmail", "owner_name")
         for token in private_literal_values(root, key)
     ]
-    if not tokens:
+    attribution_tokens = [
+        token.casefold() for token in private_literal_values(root, "forbidden_attribution")
+    ]
+    if not identity_tokens and not attribution_tokens:
         return []
     errors: list[str] = []
     for rel in files:
@@ -305,7 +317,19 @@ def scan_private_verboten_literals(root: Path, files: list[str]) -> list[str]:
             text_lc = path.read_text(encoding="utf-8").casefold()
         except UnicodeDecodeError:
             continue
-        for token in tokens:
+        is_exempt = rel in IDENTITY_DOC_EXCEPTIONS
+        identity_hit = False
+        if not is_exempt:
+            for token in identity_tokens:
+                if token in text_lc:
+                    errors.append(f"private verboten literal in tracked file: {rel}")
+                    identity_hit = True
+                    break
+        if identity_hit:
+            continue
+        # forbidden_attribution is checked unconditionally -- never
+        # exempted, not even in IDENTITY_DOC_EXCEPTIONS files.
+        for token in attribution_tokens:
             if token in text_lc:
                 errors.append(f"private verboten literal in tracked file: {rel}")
                 break
@@ -751,16 +775,7 @@ def is_cursor_environment(name: str, email: str) -> bool:
     Returns:
         true if the environment or identity indicates a Cursor agent commit, false otherwise.
     """
-    for var in ("CURSOR_AGENT", "CURSOR_TRACE_ID", "CURSOR_SESSION_ID"):
-        if os.getenv(var):
-            return True
-    name_lc = name.lower()
-    email_lc = email.lower()
-    if "cursor" in name_lc:
-        return True
-    if email_lc.endswith("@cursor.com") or email_lc.endswith("@cursor.sh"):
-        return True
-    return False
+    return audit_engine.is_cursor_agent_context(name, email)
 
 
 def check_identity(root: Path) -> list[str]:
@@ -783,28 +798,26 @@ def check_identity(root: Path) -> list[str]:
     # scripts/git/check_identity.sh). Every OTHER hygiene check in this file
     # (forbidden identity tokens, workstation paths, secrets, bidi, links)
     # stays global and unconditional.
-    if not is_cursor_environment(name, email):
+    if not audit_engine.is_cursor_agent_context(name, email):
         return []
-    # Case-normalize before comparison: git config may return a different case
-    # variant than what's stored in APPROVED_IDENTITIES (e.g. "Lawrence.Melgarejo"
-    # vs "lawrence.melgarejo").  Normalize both sides to lowercase to prevent
-    # false rejections.  This is a hotfix until the unified audit_engine.py
-    # refactor (docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md)
-    # replaces this duplicated logic with a single canonical comparison.
-    name_lc = name.strip().lower()
-    email_lc = email.strip().lower()
-    identities_lc = {(n.lower(), e.lower()) for n, e in APPROVED_IDENTITIES}
-    identities_lc.update(
-        ("cyre", value.lower()) for value in private_literal_values(root, "owner_gmail")
-    )
-    if (name_lc, email_lc) not in identities_lc:
-        expected = " or ".join(f"{n} <{e}>" for n, e in sorted(identities_lc))
-        return [
-            "git identity mismatch: "
-            f"found {name or '<unset>'} <{email or '<unset>'}>; "
-            f"expected {expected}"
-        ]
-    return []
+    try:
+        result = audit_engine.is_approved_identity(
+            name,
+            email,
+            root=root,
+            repo_name=root.name,
+            private_literal_values_fn=private_literal_values,
+            profile="configured",
+        )
+    except audit_engine.IdentityPolicyError as exc:
+        return [f"identity policy error: {exc}"]
+    if result.approved:
+        return []
+    return [
+        "git identity mismatch: "
+        f"found {name or '<unset>'} <{email or '<unset>'}>; "
+        f"{result.reason}"
+    ]
 
 
 CC_OPENCLAW_SUBMODULE = "bin/orama-system/skills/openclaw-skills/cc-openclaw"
