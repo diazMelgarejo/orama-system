@@ -1,0 +1,17 @@
+{
+  "fanout_id": "coord-031",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "autoresearch/gpu-run",
+      "filename": "mac-2026-07-24-h6-dispatch-bookkeeping-landed.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/mac-2026-07-24-h6-dispatch-bookkeeping-landed.md"
+    },
+    {
+      "assignee": "mac",
+      "topic": "autoresearch/gpu-run",
+      "filename": "mac-2026-07-24-h6-dispatch-bookkeeping-landed.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/mac-2026-07-24-h6-dispatch-bookkeeping-landed.md"
+    }
+  ]
+}
