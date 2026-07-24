@@ -169,7 +169,7 @@ banned_attribution_hit() {
   line_matches_private_forbidden_literal "$ce_lc" "$root" && return 0
   line_matches_banned_pattern "$cn_lc" "$root" && return 0
   line_matches_private_forbidden_literal "$cn_lc" "$root" && return 0
-  local line
+  local line line_lc
   while IFS= read -r line; do
     line_lc="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
     case "$line_lc" in
