@@ -465,6 +465,11 @@ Search in this order — stop at the first satisfying result:
 **NEVER:** parallel-fire all search tools. Use the cheapest first.
 **ALWAYS:** `AskUserQuestion` for decisions — never auto-select between ambiguous options.
 
+**Extraction, not discovery:** once this chain finds a URL, use
+[`skills/firecrawl/SKILL.md`](skills/firecrawl/SKILL.md) to scrape,
+interact with, parse, or monitor it — Firecrawl sits downstream of this
+policy, it doesn't replace it.
+
 ## Windows Coder Pool
 
 **RULE: Every available Windows coder MUST be given work as soon as it is idle.**
