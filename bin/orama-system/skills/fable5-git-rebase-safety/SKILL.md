@@ -203,6 +203,81 @@ When two agents independently produce branches for the same feature:
    - Don't force a branch to be "identical to origin/main" unless user explicitly asks
    - Tree-twins prove content match; distinct SHAs are fine (and expected)
 
+## Granular Refinement: Per-File / Per-Commit Triage
+
+`reanchor_scan.sh` classifies a branch by its **tip**. Real audits often need
+finer granularity: the tip isn't a tree-twin (main moved on differently), yet
+specific commits or files inside the branch were still individually
+cherry-picked/rebased into main, or specific pieces are genuinely stale while
+others aren't. Live example (2026-07-24, a three-worktree audit across
+Perpetua-Tools + orama-system) surfaced four techniques worth using together.
+
+### A. Patch-ID — confirm "same work, different SHA" for one commit pair
+
+When a branch and main both have a commit with a matching message (a
+rebase/cherry-pick candidate):
+
+```bash
+git log origin/main --oneline --all -1 --grep="<distinctive phrase>"
+pid_a=$(git show <branch-sha> | git patch-id --stable | awk '{print $1}')
+pid_b=$(git show <main-sha>   | git patch-id --stable | awk '{print $1}')
+[ "$pid_a" = "$pid_b" ] && echo "IDENTICAL -- same patch, rebased" || echo "DIVERGED -- investigate diff"
+```
+
+`patch-id` ignores parent/author/date; it fingerprints the diff content
+itself. A match proves the two commits are the same change — there is no
+"more elegant version to pick," they're the same code under a different SHA.
+
+### B. Scope against a specific PR's merge commit, not main's moving tip
+
+Diffing a stale branch against main's *current* tip conflates "what this
+branch is missing" with "everything main did unrelated since." Scope to the
+actual PR that superseded the work:
+
+```bash
+PR_SHA=$(gh pr view <N> --json mergeCommit --jq .mergeCommit.oid)
+git diff --stat <branch> "$PR_SHA"     # isolates the real remaining delta
+```
+
+In the live example, a branch that looked "52 ahead / 90 behind" origin/main
+shrank to a genuine 19-file / ~1,260-line delta once scoped against the one
+PR that actually superseded most of it.
+
+### C. Structural supersession — a big diff doesn't always mean missing work
+
+Before concluding a large per-file diff represents unlanded work, check
+whether main's file became a thin delegator to a new location:
+
+```bash
+git show origin/main:<path> | wc -l                        # suspiciously small?
+git show origin/main:<path> | grep -n "^from \|^import "   # delegates elsewhere?
+```
+
+Live example: a branch's 1,663-line `agent_coordination_core.py` diff against
+main looked like a huge gap. Main's actual file was 23 lines — a thin wrapper
+delegating to a new `orchestrator/coordination/` module from an unrelated,
+larger refactor PR. The branch's *capability* wasn't missing from main; the
+whole file had been restructured. Replaying the old diff would fight the new
+architecture — any real bug fix inside it needs re-deriving against the new
+module, not a mechanical replay.
+
+### D. GitHub PR titles/bodies as provenance breadcrumbs
+
+`gh pr list --state all --search "<keyword>"` and reading merged-PR bodies
+often reveals that "missing" work landed under a *differently-named*
+branch/PR. Search by keyword or issue/PR number reference before assuming
+work was silently dropped.
+
+### Triage classification (apply per file/commit, not just per branch)
+
+| Class | Test | Action |
+|-------|------|--------|
+| DONE (ancestor) | `merge-base --is-ancestor` | Nothing to do |
+| IDENTICAL-REBASED | patch-id match | Nothing to do — same content |
+| OBSOLETE-SUPERSEDED | main's file delegates to a newer module/location | Re-derive substance against new structure; don't replay |
+| NEEDS UNION MERGE | append-only shared file, diverged both ways | Merge unique entries from both sides, never delete |
+| GENUINELY UNIQUE | none of the above | Real gap — surface for a landing decision |
+
 ## Real-World Evidence: orama-system Validation
 
 **Repository:** orama-system (canonical)
