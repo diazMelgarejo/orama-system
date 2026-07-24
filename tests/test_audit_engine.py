@@ -83,6 +83,17 @@ def test_bot_approved_in_one_repo_rejected_in_another():
     assert not result.approved
 
 
+def test_repo_scoped_bot_approved_with_github_numeric_prefix():
+    """GitHub prefixes bot noreply emails with '<id>+' — normalize before matching policy."""
+    result = audit_engine.is_approved_identity(
+        "cursor[bot]", "206951365+cursor[bot]@users.noreply.github.com",
+        root=Path("."), repo_name="orama-system", policy_path=REAL_POLICY,
+        profile="audit_relaxed",
+    )
+    assert result.approved
+    assert result.matched_kind == "repo_bot"
+
+
 def test_unknown_github_bot_rejected():
     """No universal *[bot]@users.noreply.github.com wildcard."""
     result = audit_engine.is_approved_identity(
