@@ -133,7 +133,7 @@ scripts/review/
     {"name": "Cloud Kimi Agent", "email": "cloud-kimi-agent@kimi.ai"}
   ],
   "bot_patterns": [
-    "*[bot]@users.noreply.github.com",
+    "*[[]bot]@users.noreply.github.com",
     "cursor[bot]@users.noreply.github.com",
     "dependabot[bot]@users.noreply.github.com",
     "coderabbitai[bot]@users.noreply.github.com"
@@ -158,11 +158,25 @@ Single Python module providing three functions consumed by all entry points:
 
 **Checking logic (one unified flow):**
 
+> **Scope note, added on review:** `is_approved_author()` is a **hygiene/
+> provenance** check — it classifies whether a commit's self-reported
+> author/committer metadata matches a known-good pattern, for CI signal
+> and audit trail. It is **not access control** and must never be treated
+> as proof that a specific human or service actually authored a commit:
+> `name`/`email` are attacker-controlled fields any git client can set to
+> anything (`git commit --author="X <y@z>"`), so a `True` result here
+> means "this metadata looks familiar," not "this identity is verified."
+> Real access control (who can push, who can merge) is enforced
+> elsewhere (branch protection, GitHub auth, required reviews) and this
+> engine must not be substituted for it. Two specific rules below exist
+> because of this distinction, not despite it — see the pseudocode
+> appendix (§9) for the fuller rationale on each.
+
 1. Exact `(name.lower(), email.lower())` match in `human_identities`
 2. Exact email match in `agent_identities` (name flexible for agents)
-3. Email matches a `bot_patterns` glob (e.g., `*[bot]@users.noreply.github.com`)
-4. Email domain matches a `vendor_domains` suffix (e.g., `@openai.com`)
-5. Email matches `ORAMA_APPROVED_EMAILS` env var (for CI injection without file edits)
+3. Email matches a `bot_patterns` glob (e.g., `*[[]bot]@users.noreply.github.com`) — **narrowed scope:** only for GitHub's own platform-issued `@users.noreply.github.com` bot addresses (which GitHub itself assigns per-app, not self-asserted by the committer); never extend this glob family to a service's own claimed domain (e.g. `*@some-vendor-bot.com`), since a committer can set that email to anything and the pattern would then approve a self-asserted, unverified identity.
+4. Email domain matches a `vendor_domains` suffix (e.g., `@openai.com`) — audit-convenience signal only, explicitly not proof of identity (see pseudocode note); **rejected entirely in the actual shipped implementation** (see this doc's own header) precisely because it lets forged commit metadata read as a trusted vendor identity.
+5. Email matches `ORAMA_APPROVED_EMAILS` env var — **restricted to externally-controlled configuration only**: this variable must be set by CI/deployment configuration (a value the commit author cannot influence), never derived from or synchronized with anything in the commit itself; treat it the same as a secret, not a convenience flag.
 
 ### 3.4 The Wrappers
 
@@ -369,7 +383,7 @@ Single commit on PR #197:
 
 1. **Env var override name**: `ORAMA_APPROVED_EMAILS` (comma-separated) is proposed. Should this also support `.verboten-literals.local`-style key-value format for consistency with the existing private attribution system?
 
-2. **Bot pattern granularity**: Currently `*[bot]@users.noreply.github.com` is a broad wildcard that accepts any GitHub bot. Should specific bot identities be listed individually in `agent_identities` for audit trail purposes?
+2. **Bot pattern granularity**: Currently `*[[]bot]@users.noreply.github.com` is a broad wildcard that accepts any GitHub bot. Should specific bot identities be listed individually in `agent_identities` for audit trail purposes?
 
 3. **Vendor domain wildcard safety**: `vendor_domains` suffix matching could accidentally approve a subdomain of a vendor that isn't actually their agent service (e.g., `someapp.openai.com`). Is suffix matching sufficient or should exact domain matching be required?
 
@@ -398,6 +412,13 @@ def is_approved_author(name: str, email: str) -> bool:
             return True
 
     # 3. Bot: glob pattern match
+    # NOTE: like the vendor-domain check below, this is a provenance
+    # signal, not proof -- restrict this glob family to GitHub's own
+    # platform-issued @users.noreply.github.com bot addresses only. Never
+    # extend it to a self-asserted service email (e.g. a vendor's own
+    # domain): the committer sets this field, so a glob matching an
+    # unverified, self-claimed address would approve forged metadata as
+    # if it were a trusted identity.
     for pattern in cfg["bot_patterns"]:
         if fnmatch.fnmatch(email_lc, pattern.lower()):
             return True
@@ -408,16 +429,29 @@ def is_approved_author(name: str, email: str) -> bool:
     # designed for audit convenience (recognizing known vendor agents quickly),
     # not security verification. Forged commit metadata should be caught by
     # commit signing, traceability, or stricter human-identity verification.
+    # (Rejected entirely in the actual shipped engine -- see this doc's own
+    # header -- precisely because "audit convenience" was being read as
+    # "approved identity" by callers that treated this as access control.)
     domain = email_lc.split("@")[-1] if "@" in email_lc else ""
     for suffix in cfg["vendor_domains"]:
         if domain == suffix or domain.endswith(f".{suffix}"):
             return True
 
     # 5. Environment override
+    # NOTE: ORAMA_APPROVED_EMAILS must come from externally-controlled
+    # configuration (CI/deployment env), never from anything derived out
+    # of the commit under check -- treat it as a secret-equivalent input,
+    # not a convenience flag a committer could ever influence.
     if email_lc in _env_approved_emails():
         return True
 
     return False  # FAIL-CLOSED: not in any allowlist
 ```
 
-The engine is **fail-closed by design**: every identity must match at least one rule. No implicit approvals, no wildcard defaults, no "if it doesn't match the deny list, allow it" logic.
+The engine is **fail-closed by design**: every identity must match at
+least one rule. No implicit approvals, no wildcard defaults, no "if it
+doesn't match the deny list, allow it" logic. Fail-closed makes this a
+reliable *hygiene* signal (an unrecognized identity always gets flagged
+for review); it does not by itself make this *access control* (a
+recognized-looking identity is still just self-reported metadata, not a
+verified actor) -- see the scope note in §3.3 above.
