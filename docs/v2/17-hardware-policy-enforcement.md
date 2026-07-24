@@ -75,6 +75,18 @@ mac-studio:
 - `mac-studio.secondary_backend` removed (contradicted mirror policy)
 - `shared-ollama.lan_ip` was incorrectly `".103"` → corrected to `""`
 
+**Local runtime overlay (2026-07-25):** `HEAD` in Perpetua-Tools keeps
+`lan_ip` empty or loopback-only. Discovery may write operator DHCP addresses
+into the **working tree** of `config/devices.yml` / `config/models.yml` as a
+last-known cache — agents must not discard that overlay with `git checkout`,
+and pre-commit blocks committing it. Canonical policy:
+`Perpetua-Tools/config/LOCAL-RUNTIME-OVERLAY.md`. Git skill cards:
+[`local-runtime-overlay`](../../bin/orama-system/skills/using-git-worktrees/references/local-runtime-overlay-reference-card.md),
+[`fresh-main integrity diff (CLAYGO)`](../../bin/orama-system/skills/using-git-worktrees/references/fresh-main-integrity-diff-claygo.md).
+Live topology also flows
+through ignored runtime state (`.env.local`,
+`~/.openclaw/state/last_discovery.json`).
+
 ---
 
 ### Layer 2: `config/model_hardware_policy.yml` — hard enforcement
