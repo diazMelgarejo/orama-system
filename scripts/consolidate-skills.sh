@@ -17,12 +17,12 @@
 #   * PERMANENT EXEMPTION (2026-07-24, hardcoded, not a CLI flag):
 #     `skillify` is never converted to a thin wrapper. It shares its directory
 #     name with gstack's own bundled `skillify` skill (an unrelated tool —
-#     gstack's codifies browser scrapes, this repo's builds/upgrades skills).
+#     gstack codifies browser scrapes, this repo's builds/upgrades skills).
 #     A 2026-07-22 incident silently clobbered gstack's copy when a
 #     wrapper-generator script's TARGET_ROOTS briefly included
 #     ~/.claude/skills. `gstack` (the bare name) is exempted for the same
 #     reason should it ever be reintroduced — this repo's own gstack-integration
-#     sub-skill is disambiguated as `orama-gstack` and is NOT exempt (no name
+#     sub-skill is disambiguated as `gstack-gbrain` and is NOT exempt (no name
 #     collision, already safely wrapped). See
 #     bin/orama-system/skills/skillify/references/dogfood-upgrade-log.md and
 #     docs/LESSONS.md § 2026-07-24.
@@ -71,6 +71,9 @@ for d in "$SKILLS_DIR"/*/; do
   done
   if [ "$is_exempt" = 1 ]; then
     say ""; say "── skill: $name  ->  PERMANENTLY EXEMPT (never wrapped — see script header)"
+    # Regression coverage: list the exempt skill name so test assertions can
+    # verify the expected set hasn't silently changed.
+    say "   EXEMPT_SKILLS hit: $name (not processed)"
     continue
   fi
 
