@@ -12,6 +12,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 _SCRIPT = (
     Path(__file__).resolve().parent.parent
     / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts"
@@ -95,14 +97,15 @@ def test_relay_probe_transport_failure_is_exit_2(monkeypatch):
     assert result["error"] == "relay request failed"
 
 
-def test_relay_probe_refuses_real_token_over_http(monkeypatch):
+def test_relay_probe_refuses_real_token_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
     """Regression: a real token candidate must never be attempted over
     plain http:// -- http_post_json must never even be called."""
     monkeypatch.delenv("PEER_PORTAL_TLS_ENABLED", raising=False)
-    called = {"n": 0}
+    call_count = 0
 
-    def fake_post(url, payload, token="", timeout=8):
-        called["n"] += 1
+    def fake_post(url: str, payload: dict, token: str = "", timeout: int = 8) -> tuple[int, str]:
+        nonlocal call_count
+        call_count += 1
         raise AssertionError("http_post_json must never be called over unauthenticated transport")
 
     monkeypatch.setattr(probe_lan_peer, "http_post_json", fake_post)
@@ -111,7 +114,7 @@ def test_relay_probe_refuses_real_token_over_http(monkeypatch):
     )
     assert code == 2
     assert "SECURITY_STOP" in result["error"]
-    assert called["n"] == 0
+    assert call_count == 0
 
 
 def test_relay_probe_default_port_and_bad_input(monkeypatch):

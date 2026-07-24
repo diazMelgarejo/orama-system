@@ -172,9 +172,20 @@ content on top — never interleave them**:
    list` shows the entry), fetch and merge every relevant already-merged
    remote ref into the now-clean local branch (`origin/main`,
    `origin/<this-branch>` if a stacked PR was merged separately, etc.).
-   Verify each with exact SHA equality (`git rev-parse HEAD` ==
-   `git rev-parse origin/<branch>`) before trusting it -- don't assume a
-   prior fetch is still current.
+   **Verify with the check that actually matches what you just did, not
+   exact SHA equality by default:**
+   - If you fast-forwarded the SAME tracking branch to its own remote
+     (no local commits of your own on top), exact equality is correct:
+     `git rev-parse HEAD` == `git rev-parse origin/<branch>`.
+   - If you MERGED `origin/main` (or another ref) into a branch that has
+     its own local commits -- the actual case this section is about --
+     the merge produces a new commit that has the remote ref as an
+     ancestor, never an equal SHA. Use `git merge-base --is-ancestor
+     origin/main HEAD` instead; exact equality will never be true here
+     and checking for it anyway either always fails (false alarm) or
+     gets silently skipped, neither of which verifies anything.
+   Don't assume a prior fetch is still current either way -- fetch fresh
+   before checking.
 3. Reapply/cherry-pick the preserved content (from the temp branch or
    `git stash pop`) on top of that clean, synced base.
 4. Run the full relevant test suite before committing — a clean cherry-pick

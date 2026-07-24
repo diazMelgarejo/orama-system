@@ -83,7 +83,8 @@ def test_bot_approved_in_one_repo_rejected_in_another():
     assert not result.approved
 
 
-def test_repo_scoped_bot_approved_with_github_numeric_prefix():
+@pytest.mark.unit
+def test_repo_scoped_bot_approved_with_github_numeric_prefix() -> None:
     """GitHub prefixes bot noreply emails with '<id>+' — normalize before matching policy."""
     result = audit_engine.is_approved_identity(
         "cursor[bot]", "206951365+cursor[bot]@users.noreply.github.com",
@@ -161,6 +162,18 @@ def test_missing_policy_file_fails_closed(tmp_path):
         audit_engine.load_policy(tmp_path / "does-not-exist.json")
 
 
+def test_bash_attribution_helper_raises_on_execution_failure(tmp_path, monkeypatch):
+    """Regression: a missing/broken banned_attribution_lib.sh must raise
+    AttributionCheckError, not silently return False (which would be
+    indistinguishable from a genuine 'no banned attribution' result --
+    fail-open on exactly the check meant to catch banned attribution)."""
+    monkeypatch.setattr(audit_engine, "_engine_dir", lambda: tmp_path)  # no lib file here
+    with pytest.raises(audit_engine.AttributionCheckError):
+        audit_engine._bash_banned_attribution_hit(
+            tmp_path, "a@b.com", "name", "c@d.com", "cname", "body text",
+        )
+
+
 def test_missing_required_key_fails_closed(tmp_path):
     bad = tmp_path / "bad.json"
     bad.write_text(json.dumps({"version": 1, "human_identities": []}))
@@ -168,7 +181,8 @@ def test_missing_required_key_fails_closed(tmp_path):
         audit_engine.load_policy(bad)
 
 
-def test_wrong_container_type_fails_closed(tmp_path):
+@pytest.mark.unit
+def test_wrong_container_type_fails_closed(tmp_path: Path) -> None:
     """Regression: valid JSON can still have the wrong shape (an int
     where a list is expected, a list where a mapping is expected) --
     must raise IdentityPolicyError, not an uncaught TypeError/
@@ -180,6 +194,45 @@ def test_wrong_container_type_fails_closed(tmp_path):
     ]
     for i, case in enumerate(cases):
         bad = tmp_path / f"bad{i}.json"
+        bad.write_text(json.dumps(case))
+        with pytest.raises(audit_engine.IdentityPolicyError):
+            audit_engine.load_policy(bad)
+
+
+@pytest.mark.unit
+def test_malformed_nested_entries_fail_closed(tmp_path: Path) -> None:
+    """Regression: a syntactically valid list/dict container can still
+    have malformed VALUES inside it -- an entry missing 'email', a
+    non-string alias, a non-list 'aliases' field, a non-string bot name.
+    Each must raise IdentityPolicyError before any string/list operation
+    (`.casefold()`, `"*" in bot`, iterating a non-list) that would
+    otherwise raise a different, uncaught exception type."""
+    cases = [
+        # human_identities entry missing 'email'
+        {"version": 1, "human_identities": [{"name": "x"}], "agent_identities": [], "repo_bot_identities": {}},
+        # human_identities 'aliases' is not a list
+        {
+            "version": 1,
+            "human_identities": [{"name": "x", "email": "x@example.invalid", "aliases": "not-a-list"}],
+            "agent_identities": [],
+            "repo_bot_identities": {},
+        },
+        # human_identities alias is not a string
+        {
+            "version": 1,
+            "human_identities": [{"name": "x", "email": "x@example.invalid", "aliases": [42]}],
+            "agent_identities": [],
+            "repo_bot_identities": {},
+        },
+        # agent_identities entry missing 'email'
+        {"version": 1, "human_identities": [], "agent_identities": [{"allowed_names": []}], "repo_bot_identities": {}},
+        # repo_bot_identities entry is not a string
+        {"version": 1, "human_identities": [], "agent_identities": [], "repo_bot_identities": {"repo": [42]}},
+        # repo_bot_identities entry is an empty string
+        {"version": 1, "human_identities": [], "agent_identities": [], "repo_bot_identities": {"repo": [""]}},
+    ]
+    for i, case in enumerate(cases):
+        bad = tmp_path / f"malformed{i}.json"
         bad.write_text(json.dumps(case))
         with pytest.raises(audit_engine.IdentityPolicyError):
             audit_engine.load_policy(bad)
