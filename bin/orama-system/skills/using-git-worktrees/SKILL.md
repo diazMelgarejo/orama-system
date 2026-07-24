@@ -35,6 +35,9 @@ may write operator LAN IPs into the working tree — **never `git checkout` to d
 Stash those paths before pull/rebase; never commit overlay values. Full card:
 [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md).
 
+**Any `git stash pop` / `git stash apply`:** hooks off first, re-enable after — mandatory:
+[`git-history-surgery/references/stash-hooks-safeguard-reference-card.md`](../git-history-surgery/references/stash-hooks-safeguard-reference-card.md).
+
 **Integrity / true unique branch contribution vs current `main`:** use an ephemeral
 fresh `origin/main` baseline; **CLAYGO** (clean last run before and after). Full card:
 [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md).
@@ -283,7 +286,7 @@ cat .worktree-env
 ## Related skills
 
 - [[fable5-git-rebase-safety]] — before cleaning up or discarding a finished/stale-looking worktree, verify its branch's real relationship to main (tree-twin scan + per-file/per-commit triage) rather than judging by ahead/behind counts alone.
-- **Reference cards:** [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) (PT discovery cache — never discard); [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) (ephemeral fresh-main diff + CLAYGO teardown).
+- **Reference cards:** [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) (PT discovery cache — never discard); [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) (ephemeral fresh-main diff + CLAYGO teardown); [`git-history-surgery/references/stash-hooks-safeguard-reference-card.md`](../git-history-surgery/references/stash-hooks-safeguard-reference-card.md) (hooks off before stash pop/apply).
 
 ---
 

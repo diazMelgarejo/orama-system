@@ -33,9 +33,10 @@ This is **normal sync**, not history surgery. For rewrites/expunges, use
 | `git push --force` / `--force-with-lease` on `main` | Unless user explicitly requests + lease recorded |
 | `git pull` without `--ff-only` on `main` | Avoid surprise merge commits on shared trunk |
 | `git stash drop` before verifying pop | Stash is the safety net |
+| Bare `git stash pop` / `git stash apply` | Use [`stash-hooks-safeguard-reference-card.md`](stash-hooks-safeguard-reference-card.md) — hooks off, then `install-local-hooks.sh` |
 | Commit `.env.local`, tokens, `control_plane_token` | Gitignored secrets — handoff via `print-lan-peer-token` scripts |
 | Commit submodule drift by accident | Review `git status` after pop; restore if unintended |
-| `git config` global/local changes by agents | User-owned identity and hooks |
+| `git config` global/local changes by agents | User-owned identity and hooks — **exception:** per-command `-c core.hooksPath=/dev/null` for stash pop/apply only (see stash-hooks-safeguard card) |
 
 **Windows PowerShell:** run [`windows-powershell-runtime-bootstrap.md`](windows-powershell-runtime-bootstrap.md) first. Use `;` not `&&` in older PS; quote `git rev-parse --abbrev-ref '@{u}'`.
 
@@ -59,8 +60,9 @@ git stash push --include-untracked -m "preserve: cross-host sync $(date +%Y-%m-%
 # 2. Fast-forward only — stops if diverged (safe)
 git pull --ff-only origin main
 
-# 3. Restore local work
-git stash pop
+# 3. Restore local work (hooks safeguard — mandatory)
+git -c core.hooksPath=/dev/null stash pop
+bash scripts/git/install-local-hooks.sh
 # If conflicts: resolve manually, never reset --hard
 
 # 4. Review what will ship
@@ -99,8 +101,9 @@ git stash push -u -m "preserve: cross-host sync $(Get-Date -Format yyyy-MM-dd)"
 # 2. Fast-forward only
 git pull --ff-only origin main
 
-# 3. Restore
-git stash pop
+# 3. Restore (hooks safeguard — mandatory)
+git -c core.hooksPath=/dev/null stash pop
+bash scripts/git/install-local-hooks.sh
 
 # 4. Review
 git status --short
@@ -174,6 +177,7 @@ Hooks (once per clone): `bash scripts/git/install-local-hooks.sh`
 - [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md) — stash-first discipline, identity, hygiene
 - [`windows-powershell-runtime-bootstrap.md`](windows-powershell-runtime-bootstrap.md) — Git/Node PATH on Win
 - [`../SKILL.md`](../SKILL.md) — history surgery (distinct from this card)
+- [`stash-hooks-safeguard-reference-card.md`](stash-hooks-safeguard-reference-card.md) — hooks off before stash pop/apply; re-enable after
 - [`../../using-git-worktrees/SKILL.md`](../../using-git-worktrees/SKILL.md) — parallel worktrees
 - [`../../using-git-worktrees/references/local-runtime-overlay-reference-card.md`](../../using-git-worktrees/references/local-runtime-overlay-reference-card.md) — PT discovery cache overlay
 - [`../../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md`](../../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md) — CLAYGO fresh-main integrity diff
