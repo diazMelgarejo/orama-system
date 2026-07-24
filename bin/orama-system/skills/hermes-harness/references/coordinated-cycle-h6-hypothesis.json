@@ -1,0 +1,17 @@
+{
+  "fanout_id": "2026-06-29-coord-021-h6",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "autoresearch/gpu-run",
+      "filename": "mac-hypothesis-h6-real-task.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/mac-hypothesis-h6-real-task.md"
+    },
+    {
+      "assignee": "win",
+      "topic": "autoresearch/gpu-run",
+      "filename": "mac-researcher-h6-dispatch-complete.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/mac-researcher-h6-dispatch-complete.md"
+    }
+  ]
+}

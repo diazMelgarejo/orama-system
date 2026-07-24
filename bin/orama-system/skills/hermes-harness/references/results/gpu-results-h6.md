@@ -1,6 +1,7 @@
 # H6 Autoresearch Benchmark Results: GPU Run
 
 **Date:** 2026-06-30  
+**Status:** DRAFT — superseded by preflight gate; Win must re-run after `mac-hypothesis-h6-real-task.md` lands on peer inbox.  
 **Model:** Win Hermes LM Studio (qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2) vs Mac Ollama (qwen3.5:9b-nvfp4)  
 
 ## Falsification Results

@@ -78,8 +78,10 @@ Mac researcher should drop **one** of the following before Win schedules another
 
 ## Mac action items
 
-1. Read this preflight; pick H6 option (A recommended).
-2. Fan out one hypothesis card to Win inbox with priority + falsification block.
+1. Read this preflight; pick H6 option (A recommended). **Done 2026-07-22** — Option A selected.
+2. Fan out one hypothesis card to Win inbox with priority + falsification block. **Done** — `mac-hypothesis-h6-real-task.md` queued via `lan_peer_assign.py drop --peer`.
 3. Pull Win coder deliverables when autoresearcher idle (`win-coder-mac-co-orchestrator-*` pending).
+
+**Mac dispatch ack:** `mac-researcher-h6-dispatch-complete.md`.
 
 **Canonical prior results:** `gpu-results-h5-final.md`, `gpu-results-h5-cross.md`.
