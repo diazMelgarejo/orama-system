@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -164,6 +165,28 @@ def _private_identity_ok(
     return any(token in name.casefold() for token in name_tokens)
 
 
+_GITHUB_NUMERIC_BOT_PREFIX = re.compile(r"^\d+\+")
+
+
+def _normalize_github_noreply_email(email: str) -> str:
+    """Strip GitHub's numeric ID prefix from noreply bot addresses.
+
+    Commits may use ``206951365+cursor[bot]@users.noreply.github.com`` while
+    policy lists ``cursor[bot]@users.noreply.github.com``. Only normalizes
+    ``@users.noreply.github.com`` addresses; does not broaden to other domains.
+    """
+    email_lc = email.strip().casefold()
+    local, sep, domain = email_lc.partition("@")
+    if sep != "@" or domain != "users.noreply.github.com":
+        return email_lc
+    return f"{_GITHUB_NUMERIC_BOT_PREFIX.sub('', local)}@{domain}"
+
+
+def _repo_bot_approved(email: str, repo_bots: list[str]) -> bool:
+    normalized = _normalize_github_noreply_email(email)
+    return normalized in {_normalize_github_noreply_email(b) for b in repo_bots}
+
+
 def is_approved_identity(
     name: str,
     email: str,
@@ -216,7 +239,7 @@ def is_approved_identity(
             if entry["email"].casefold() == email_lc:
                 return ClassificationResult(True, "approved agent identity", "agent")
         repo_bots = policy["repo_bot_identities"].get(repo_name, [])
-        if email_lc in {b.casefold() for b in repo_bots}:
+        if _repo_bot_approved(email, repo_bots):
             return ClassificationResult(True, f"approved bot identity for {repo_name}", "repo_bot")
         if _private_identity_ok(name, email, root, literals_fn, email_only=True):
             return ClassificationResult(True, "approved private owner identity", "private")
@@ -241,7 +264,7 @@ def is_approved_identity(
             )
 
     repo_bots = policy["repo_bot_identities"].get(repo_name, [])
-    if email_lc in {b.casefold() for b in repo_bots}:
+    if _repo_bot_approved(email, repo_bots):
         return ClassificationResult(True, f"approved bot identity for {repo_name}", "repo_bot")
 
     if _private_identity_ok(name, email, root, literals_fn, email_only=False):
