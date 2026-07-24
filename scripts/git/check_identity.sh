@@ -57,7 +57,7 @@ author_domain_ok() {
   [[ -z "$domain" || "$domain" == "$email_lc" ]] && return 1
   local suffix
   for suffix in "${WELL_KNOWN_AUTHOR_DOMAIN_SUFFIXES[@]}"; do
-    if [[ "$domain" == "$suffix" || "$domain" == *."$suffix" ]]; then
+    if [[ "$domain" == "$suffix" || "$domain" == *".$suffix" ]]; then
       return 0
     fi
   done
@@ -70,6 +70,11 @@ if [[ -z "$actual_name" || -z "$actual_email" ]]; then
 fi
 
 if [[ "$actual_email_lc" == "diazmelgarejo@gmail.com" ]]; then
+  echo "OK: approved git identity"
+  exit 0
+fi
+
+if [[ "$actual_email_lc" == "lawrence.melgarejo@gmail.com" ]]; then
   echo "OK: approved git identity"
   exit 0
 fi
@@ -101,6 +106,7 @@ fi
 
 echo "ERROR: git identity must be one of:" >&2
 echo "  - * <diazMelgarejo@gmail.com>" >&2
+echo "  - * <Lawrence.Melgarejo@gmail.com>" >&2
 echo "  - * <Lawrence@cyre.me>" >&2
 echo "  - * <configured private owner email>" >&2
 echo "  - Codex <codex@openai.com>" >&2
