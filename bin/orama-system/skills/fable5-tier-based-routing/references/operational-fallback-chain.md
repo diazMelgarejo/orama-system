@@ -47,7 +47,7 @@ Verified by grep against PT `orchestrator/`:
   imports `backend_resolver`). Cost gating doctrine currently lives at the
   policy layer, not as a frugality_router import.
 
-Re-verify: `grep -rn "TIER_PROBE_TIMEOUT" "$REPO_ROOT/../Perpetua-Tools/orchestrator/"`
+Re-verify: `grep -rn "TIER_PROBE_TIMEOUT" "${PERPETUA_TOOLS_ROOT:?}/orchestrator/"`
 
 AUDIT: 2026-07-19 fable5-tier-based-routing upgrade (reference add) — LLM-Council
 Task 3; grounded against frugality_router.py; two brief-asserted facts found

@@ -5,19 +5,20 @@
 **Target:** PR #197 branch (`2026-07-19-002-fleet-mesh-oob-fixes`)  
 **Scope:** orama-system (Perpetua-Tools receives changes via existing sync script)
 
-> Filed as a `docs/next/` plan, not implemented. Root-cause analysis and
-> proposed unification are drafted; execution needs explicit approval per
-> its own status line above before `allowed-identities.json` /
-> `audit_engine.py` are created or `audit_attribution.sh` /
-> `check_identity.sh` are rewritten.
->
-> **Note:** the active execution path is
-> `docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md`.
+> **Historical context, not a live approval gate:** this doc is the
+> original root-cause analysis and proposed design for a unified identity
+> system. It predates and is superseded by the actual implementation --
+> the config file that shipped is `identity-policy.json`, not the
+> `allowed-identities.json` name this draft proposes throughout (§3.2 and
+> elsewhere below); read those as historical naming, not the current
+> reality. Execution already happened via
+> `docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md`:
 > Phase 1 (`identity-policy.json` + `audit_engine.py`, `b1f70018`) and
 > Phase 2 (consumer wiring: `repo_hygiene.py`, `check_identity.sh`,
-> `audit_attribution.sh`) landed on `2026-07-24-005b-identity-audit-plan`.
-> This doc remains background/rationale — do not implement §3.2 vendor_domains
-> or bot wildcards; the integrated plan rejected those shortcuts.
+> `audit_attribution.sh`) both landed on `2026-07-24-005b-identity-audit-plan`.
+> This doc remains background/rationale only — do not implement §3.2's
+> `vendor_domains` or bot-wildcard shortcuts; the integrated plan
+> explicitly rejected both.
 
 ---
 

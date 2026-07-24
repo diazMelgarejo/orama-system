@@ -75,6 +75,20 @@ def private_literal_values(root: Path, key: str) -> list[str]:
 
 
 def _validate_policy_data(data: dict) -> None:
+    # Container-type guards first, before any iteration -- valid JSON can
+    # still have the wrong SHAPE (e.g. human_identities as an int,
+    # repo_bot_identities as a list instead of a mapping). Without these
+    # checks, iterating/`.items()`-ing the wrong type raises a bare
+    # TypeError/AttributeError that escapes load_policy() uncaught,
+    # bypassing the IdentityPolicyError fail-closed contract this module
+    # exists to guarantee.
+    if not isinstance(data["human_identities"], list):
+        raise IdentityPolicyError("human_identities must be a list")
+    if not isinstance(data["agent_identities"], list):
+        raise IdentityPolicyError("agent_identities must be a list")
+    if not isinstance(data["repo_bot_identities"], dict):
+        raise IdentityPolicyError("repo_bot_identities must be an object")
+
     seen_emails: set[str] = set()
 
     def _track(email: str, label: str) -> None:

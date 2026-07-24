@@ -5,14 +5,15 @@ plan across recent sessions. Cross-linked with
 [`Perpetua-Tools/docs/next/2026-07-25-pending-work-tracker.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/next/2026-07-25-pending-work-tracker.md)
 — several items span both repos; check both.
 
-**Last updated:** 2026-07-25, from the branch each item's code actually
+**Last updated:** 2026-07-24, from the branch each item's code actually
 lives on.
 
 ---
 
-## 1. Unified identity audit consolidation — Phase 1 of 4
+## 1. Unified identity audit consolidation — Phase 1-2 of 4 done
 
-**Branch:** `2026-07-19-002-fleet-mesh-oob-fixes` (PR #197)
+**Branch:** `2026-07-24-005b-identity-audit-plan` (PR #217, built on PR #197's
+prior state)
 **Plan doc:** [`docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md`](../plans/2026-07-24-unified-identity-audit-integrated-plan.md)
 
 - [x] **Phase 1 — Policy and engine.** `scripts/git/identity-policy.json`,
@@ -22,25 +23,23 @@ lives on.
       universal bot wildcard, private identities excluded from the tracked
       file (existing `private_literal_values()` mechanism preserved via
       dependency injection).
-- [ ] **Not started — Phase 2, one consumer at a time** (plan section 10):
-  1. Switch `scripts/review/repo_hygiene.py`'s `check_identity()` to call
-     `audit_engine.is_approved_identity()` instead of its own hardcoded
-     `APPROVED_IDENTITIES` set + duplicated case-normalization logic
-     (currently marked with a `# LEGACY` comment pointing at this plan).
-  2. Switch `scripts/git/check_identity.sh` to shell out to (or otherwise
-     consume) the engine.
-  3. Switch `scripts/git/audit_attribution.sh` to the engine, preserving
-     every existing contract listed in plan section 2.2 (banned-attribution
-     scanning, co-author policy, `GIT_AUDIT_RANGE`/`GIT_AUDIT_STRICT`, exit
-     codes) — golden-output tests first (plan Phase 0), each consumer
-     migrated and its own suite re-run green before the next.
-- [ ] **Not started — Phase 3:** cross-repo sync to Perpetua-Tools (a
-      dedicated PT PR, explicitly NOT bundled into PT PR #276 — see PT's
+- [x] **Phase 2 — consumer wiring, verified landed** (plan section 10):
+      `scripts/review/repo_hygiene.py`'s `check_identity()`,
+      `scripts/git/check_identity.sh`, and `scripts/git/audit_attribution.sh`
+      all now reference `audit_engine` directly (confirmed by grep, not
+      assumed from the plan doc's own claim). Full contract preservation
+      (banned-attribution scanning, co-author policy, `GIT_AUDIT_RANGE`/
+      `GIT_AUDIT_STRICT`, exit codes) not independently re-verified in this
+      pass -- re-check against plan section 2.2 before treating Phase 2 as
+      fully closed out.
+- [ ] **Not started -- Phase 3:** cross-repo sync to Perpetua-Tools (a
+      dedicated PT PR, explicitly NOT bundled into PT PR #276 -- see PT's
       own tracker, item 2).
-- [ ] **Not started — Phase 4:** remove the 3 old hardcoded identity lists
+- [ ] **Not started -- Phase 4:** remove the 3 old hardcoded identity lists
       once every consumer is green; retain compatibility comments.
-- **Acceptance criteria:** full checklist in the plan doc's own §11 — none
-  yet checked off beyond the Phase 1 subset above.
+- **Acceptance criteria:** full checklist in the plan doc's own §11 --
+  Phase 1-2 items likely satisfied given the wiring above, but not
+  individually re-checked against that checklist in this pass.
 
 ---
 

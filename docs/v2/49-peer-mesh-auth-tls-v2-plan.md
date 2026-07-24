@@ -22,11 +22,14 @@
 >   pluggable AuthProvider/BUZZ/Twitter/Google architecture, audit logging,
 >   mTLS) remains **not started** — genuinely deferred, not just
 >   scaffolded.
-> **Date:** 2026-07-24, updated 2026-07-25.
-> **Parent:** PR #197 (`2026-07-19-002-fleet-mesh-oob-fixes`), stacked per
-> [`SECURITY.md`](../../SECURITY.md)'s mandatory stacked-PR procedure —
-> this branch (`security/02-peer-mesh-auth-tls-v2-plan`) is `PR(N+1)`,
-> based on PR #197's branch as `PR(N)`.
+> **Date:** 2026-07-24 (both the original write and this status update —
+> confirmed via `date -u` at time of writing; a prior version of this
+> doc mistakenly said "updated 2026-07-25", a future date at the time).
+> **Parent:** PR #197 (`2026-07-19-002-fleet-mesh-oob-fixes`). Originally
+> stacked per [`SECURITY.md`](../../SECURITY.md)'s mandatory stacked-PR
+> procedure as its own branch (`security/02-peer-mesh-auth-tls-v2-plan`,
+> `PR(N+1)`) — that branch was opened as PR #208 and merged into PR #197
+> on 2026-07-24; this doc now lives directly on PR #197's branch.
 > **Sources ingested:** three security-hardening design docs produced for
 > PR #197 review 4763869152/4765007975 — TLS-transport fallback plan,
 > pluggable multi-provider auth plan (BUZZ/Twitter/Google), and a combined
@@ -69,21 +72,21 @@ All v1-column answers below are **not implemented yet** — they are the
 agreed target for when this plan is picked up, recorded now so the
 decision doesn't need to be re-litigated later.
 
-| # | Question | v1 target answer | Actual status (2026-07-25) | v2+ |
+| # | Question | v1 target answer | Actual status (2026-07-24) | v2+ |
 |---|---|---|---|---|
 | 1 | Certificate provisioning | Auto-generated self-signed (2048-bit RSA) + TOFU fingerprint pinning | **Done for AlphaClaw.** `orchestrator/alphaclaw_tls_proxy.py`'s `_generate_cert()`/`verify_or_pin_fingerprint()` (Perpetua-Tools) — not a separate `peer_cert_manager.py` file as originally sketched; lives alongside the proxy it serves. **Not started for peer-mesh** (`query_peer_topology.py`/`probe_lan_peer.py`). | Shared-CA option for hardened deployments |
 | 2 | AlphaClaw HTTPS | New PT package, local-only HTTPS reverse proxy | **Done.** `orchestrator/alphaclaw_tls_proxy.py` — deliberately NOT a standalone `packages/alphaclaw-tls` package; see "Why orchestrator/, not packages/" below. Real TLS termination, cert persistence, TOFU pinning, chunked-body handling, streamed responses. Wired via `_maybe_wrap_gateway_with_tls()` in `alphaclaw_manager.py`. | Native HTTPS if AlphaClaw ever adds it |
 | 3 | Existing deployments | `PEER_TLS_ENABLED` auto-detects fresh vs. existing install | **Simpler than planned, and done for AlphaClaw:** `ALPHACLAW_TLS_ENABLED` env var, off by default, no auto-detection logic — matches `dangerous_workers.py`'s existing truthy-parsing convention rather than inventing new detection. **Not started for peer-mesh.** | v2 removes the flag, enforcement unconditional |
 | 4 | Certificate pinning | TOFU automatic + `PEER_PINNED_FINGERPRINTS` admin pre-seeding | **TOFU done for AlphaClaw** (`verify_or_pin_fingerprint()`, raises `AlphaClawCertFingerprintMismatch` on mismatch — real MITM-detection, not a stub). Admin pre-seeding (`PEER_PINNED_FINGERPRINTS`) **not implemented** for either surface. | Hard reject on pin mismatch (MITM detection) — already true for AlphaClaw |
-| 5 | mTLS | Server-auth TLS only | Full mutual TLS (client certs) |
-| 6 | Token rotation | None — bearer tokens stay long-lived for backward compat | Short-lived (≤1h per RFC 6750 §5.1 guidance) + refresh |
-| 7 | Audit logging | Yes — append-only `.orama/audit.log`, HMAC-chained (each entry signs over the previous entry's signature, tamper-evident) | BUZZ-signed entries when available |
-| 8 | BUZZ/Nostr dependency | Inline minimal NIP-98 sign/verify, zero new deps (reuses `cryptography`, already transitive via endpoint-policy) | Optional full `nostr` library |
-| 9 | OAuth token refresh | On-demand, synchronous, before each request | Background refresh thread |
-| 10 | Per-peer auth policy | Mesh-wide uniform provider priority | Per-peer `PeerAuthPolicy` override map |
-| 11 | `orama auth status` CLI | Yes, add it | — |
-| 12 | Upgrade-prompt UI | Web banner on the existing localhost portal dashboard | tkinter fallback only when portal isn't running |
-| 13 | Cert story for BUZZ mode | Same as #1 | — |
+| 5 | mTLS | Server-auth TLS only | **Not implemented.** | Full mutual TLS (client certs) |
+| 6 | Token rotation | None — bearer tokens stay long-lived for backward compat | **Not implemented** (unchanged from v1 target — long-lived tokens is the current, intended state, not a gap). | Short-lived (≤1h per RFC 6750 §5.1 guidance) + refresh |
+| 7 | Audit logging | Yes — append-only `.orama/audit.log`, HMAC-chained (each entry signs over the previous entry's signature, tamper-evident) | **Not implemented.** | BUZZ-signed entries when available |
+| 8 | BUZZ/Nostr dependency | Inline minimal NIP-98 sign/verify, zero new deps (reuses `cryptography`, already transitive via endpoint-policy) | **Not implemented** (no BUZZ/Nostr provider exists yet). | Optional full `nostr` library |
+| 9 | OAuth token refresh | On-demand, synchronous, before each request | **Not implemented** (no OAuth provider exists yet). | Background refresh thread |
+| 10 | Per-peer auth policy | Mesh-wide uniform provider priority | **Not implemented** (no `AuthManager`/provider architecture exists yet — this is a design decision for that future work, not a current gap). | Per-peer `PeerAuthPolicy` override map |
+| 11 | `orama auth status` CLI | Yes, add it | **Not implemented.** | — |
+| 12 | Upgrade-prompt UI | Web banner on the existing localhost portal dashboard | **Not implemented** (nothing to prompt an upgrade from yet — no legacy-auth-mode marker exists). | tkinter fallback only when portal isn't running |
+| 13 | Cert story for BUZZ mode | Same as #1 | **Not implemented** (depends on #1's peer-mesh half, which is also not started). | — |
 
 ## The pluggable auth model (unchanged from the source plan, summarized)
 
