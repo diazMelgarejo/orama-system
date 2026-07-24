@@ -271,6 +271,12 @@ cat .worktree-env
 
 ---
 
+## Related skills
+
+- [[fable5-git-rebase-safety]] — before cleaning up or discarding a finished/stale-looking worktree, verify its branch's real relationship to main (tree-twin scan + per-file/per-commit triage) rather than judging by ahead/behind counts alone.
+
+---
+
 ## Scope
 
 Applies to: **orama-system**, **Perpetua-Tools**
