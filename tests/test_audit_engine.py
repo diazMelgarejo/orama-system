@@ -1,0 +1,163 @@
+"""Phase 1 tests for scripts/git/audit_engine.py.
+
+Covers a focused subset of docs/plans/2026-07-24-unified-identity-audit-
+integrated-plan.md section 9.1's full test list -- Phase 1 scope is the
+engine itself, not the wrapper integration (Phase 2, not yet done).
+"""
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts" / "git"))
+import audit_engine  # noqa: E402
+
+
+REAL_POLICY = Path(__file__).resolve().parent.parent / "scripts" / "git" / "identity-policy.json"
+
+
+def test_real_policy_file_loads_and_validates():
+    """The actual tracked policy file must load without error."""
+    policy = audit_engine.load_policy(REAL_POLICY)
+    assert policy["version"] == 1
+
+
+def test_exact_human_identity_approved():
+    result = audit_engine.is_approved_identity(
+        "cyre", "lawrence@cyre.me", root=Path("."), policy_path=REAL_POLICY
+    )
+    assert result.approved
+    assert result.matched_kind == "human"
+
+
+def test_explicit_gmail_alias_approved():
+    result = audit_engine.is_approved_identity(
+        "cyre", "lawrence.melgarejo@gmail.com", root=Path("."), policy_path=REAL_POLICY
+    )
+    assert result.approved
+    assert result.matched_kind == "human_alias"
+
+
+def test_wrong_name_with_approved_email_rejected():
+    """Name-bound: the email alone isn't sufficient."""
+    result = audit_engine.is_approved_identity(
+        "someone else", "lawrence@cyre.me", root=Path("."), policy_path=REAL_POLICY
+    )
+    assert not result.approved
+
+
+def test_exact_agent_identity_approved():
+    result = audit_engine.is_approved_identity(
+        "Codex", "codex@openai.com", root=Path("."), policy_path=REAL_POLICY
+    )
+    assert result.approved
+    assert result.matched_kind == "agent"
+
+
+def test_disallowed_agent_name_rejected():
+    result = audit_engine.is_approved_identity(
+        "Not Codex", "codex@openai.com", root=Path("."), policy_path=REAL_POLICY
+    )
+    assert not result.approved
+
+
+def test_repo_scoped_bot_approved_in_correct_repo():
+    result = audit_engine.is_approved_identity(
+        "cursor[bot]", "cursor[bot]@users.noreply.github.com",
+        root=Path("."), repo_name="orama-system", policy_path=REAL_POLICY,
+    )
+    assert result.approved
+    assert result.matched_kind == "repo_bot"
+
+
+def test_bot_approved_in_one_repo_rejected_in_another():
+    """A bot scoped to orama-system must NOT be silently approved for PT."""
+    result = audit_engine.is_approved_identity(
+        "cursor[bot]", "cursor[bot]@users.noreply.github.com",
+        root=Path("."), repo_name="Perpetua-Tools", policy_path=REAL_POLICY,
+    )
+    assert not result.approved
+
+
+def test_unknown_github_bot_rejected():
+    """No universal *[bot]@users.noreply.github.com wildcard."""
+    result = audit_engine.is_approved_identity(
+        "some-random[bot]", "some-random[bot]@users.noreply.github.com",
+        root=Path("."), repo_name="orama-system", policy_path=REAL_POLICY,
+    )
+    assert not result.approved
+
+
+def test_vendor_domain_address_rejected():
+    """No broad vendor-domain approval as a trust mechanism."""
+    result = audit_engine.is_approved_identity(
+        "Random Employee", "random.employee@openai.com",
+        root=Path("."), policy_path=REAL_POLICY,
+    )
+    assert not result.approved
+
+
+def test_private_owner_email_approved_via_injected_resolver(tmp_path):
+    def fake_private_literal_values(root, key):
+        if key == "owner_gmail":
+            return ["synthetic.private.owner@example.invalid"]
+        if key == "owner_name":
+            return ["cyre"]
+        return []
+
+    result = audit_engine.is_approved_identity(
+        "cyre", "synthetic.private.owner@example.invalid",
+        root=tmp_path, policy_path=REAL_POLICY,
+        private_literal_values_fn=fake_private_literal_values,
+    )
+    assert result.approved
+    assert result.matched_kind == "private"
+
+
+def test_private_identities_never_appear_in_tracked_policy():
+    """Regression: the tracked public policy file must never contain a
+    private-owner-identity lookup key -- those stay in the local-only
+    private_literal_values() mechanism, resolved separately by the caller."""
+    policy = audit_engine.load_policy(REAL_POLICY)
+    text = json.dumps(policy)
+    assert "owner_gmail" not in text
+    assert "owner_name" not in text
+
+
+def test_malformed_config_fails_closed(tmp_path):
+    bad = tmp_path / "bad.json"
+    bad.write_text("{not valid json")
+    with pytest.raises(audit_engine.IdentityPolicyError):
+        audit_engine.load_policy(bad)
+
+
+def test_unsupported_version_fails_closed(tmp_path):
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({
+        "version": 999, "human_identities": [], "agent_identities": [],
+        "repo_bot_identities": {},
+    }))
+    with pytest.raises(audit_engine.IdentityPolicyError):
+        audit_engine.load_policy(bad)
+
+
+def test_missing_policy_file_fails_closed(tmp_path):
+    with pytest.raises(audit_engine.IdentityPolicyError):
+        audit_engine.load_policy(tmp_path / "does-not-exist.json")
+
+
+def test_missing_required_key_fails_closed(tmp_path):
+    bad = tmp_path / "bad.json"
+    bad.write_text(json.dumps({"version": 1, "human_identities": []}))
+    with pytest.raises(audit_engine.IdentityPolicyError):
+        audit_engine.load_policy(bad)
+
+
+def test_case_and_whitespace_normalized():
+    result = audit_engine.is_approved_identity(
+        "  CYRE  ", "  LAWRENCE@CYRE.ME  ", root=Path("."), policy_path=REAL_POLICY
+    )
+    assert result.approved
