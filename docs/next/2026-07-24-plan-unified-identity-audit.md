@@ -1,15 +1,28 @@
 # Plan: Unified Identity Audit System — Single Source of Truth
 
 **Date:** 2026-07-24  
-**Status:** PLAN — awaiting approval before implementation  
+**Status:** Phases 1-2 DONE (merged 2026-07-24T08:41 UTC via PR #217 "feat(identity):
+unified audit engine — Phases 1–2" + PR #218 "docs+fix: identity-audit background
+plan + repo_hygiene exemption bug"). Phases 3-4 still pending.  
 **Target:** PR #197 branch (`2026-07-19-002-fleet-mesh-oob-fixes`)  
 **Scope:** orama-system (Perpetua-Tools receives changes via existing sync script)
 
-> Filed as a `docs/next/` plan, not implemented. Root-cause analysis and
-> proposed unification are drafted; execution needs explicit approval per
-> its own status line above before `allowed-identities.json` /
-> `audit_engine.py` are created or `audit_attribution.sh` /
-> `check_identity.sh` are rewritten.
+> This plan was filed and, in parallel, independently implemented + merged
+> under a different worktree/branch (`2026-07-24-005b-identity-audit-plan`)
+> before this filing's own "awaiting approval" gate was seen — a live
+> concurrent-agent collision, not an approved-then-executed sequence. The
+> shipped config is named `scripts/git/identity-policy.json` (this plan
+> proposed `allowed-identities.json`); `scripts/git/audit_engine.py` exists
+> on main as planned, with `repo_hygiene.py`/`check_identity.sh`/
+> `audit_attribution.sh` now thin wrappers delegating to it.
+>
+> **Remaining scope (Phases 3-4, not yet done):**
+> - Phase 3 — Perpetua-Tools sync manifest + parity verification (this
+>   plan's own "Scope" line above says PT "receives changes via existing
+>   sync script" — verify that actually ran/works against the shipped
+>   `identity-policy.json` naming).
+> - Phase 4 — doc cleanup + close the stale autofix PRs #209-214 this
+>   plan's §2.2 identifies as the original symptom.
 
 ---
 
