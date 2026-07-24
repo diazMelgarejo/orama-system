@@ -290,17 +290,26 @@ def scan_forbidden_identity(root: Path, files: list[str]) -> list[str]:
 
 
 def scan_private_verboten_literals(root: Path, files: list[str]) -> list[str]:
-    tokens = [
+    # Two independent token classes: the operator's own approved identity
+    # (owner_gmail/owner_name -- SUPPOSED to appear in allowlist files, so
+    # IDENTITY_DOC_EXCEPTIONS applies) and forbidden_attribution (banned
+    # attribution phrases -- never legitimate anywhere, including in the
+    # allowlist files themselves; those files must not become a place a
+    # banned phrase can hide just because they're exempt from the
+    # identity check). Scanned separately so the exemption can't
+    # accidentally widen to cover the class it was never meant for.
+    identity_tokens = [
         token.casefold()
-        for key in ("owner_gmail", "owner_name", "forbidden_attribution")
+        for key in ("owner_gmail", "owner_name")
         for token in private_literal_values(root, key)
     ]
-    if not tokens:
+    attribution_tokens = [
+        token.casefold() for token in private_literal_values(root, "forbidden_attribution")
+    ]
+    if not identity_tokens and not attribution_tokens:
         return []
     errors: list[str] = []
     for rel in files:
-        if rel in IDENTITY_DOC_EXCEPTIONS:
-            continue
         path = root / rel
         if not path.is_file() or is_binary(path):
             continue
@@ -308,7 +317,19 @@ def scan_private_verboten_literals(root: Path, files: list[str]) -> list[str]:
             text_lc = path.read_text(encoding="utf-8").casefold()
         except UnicodeDecodeError:
             continue
-        for token in tokens:
+        is_exempt = rel in IDENTITY_DOC_EXCEPTIONS
+        identity_hit = False
+        if not is_exempt:
+            for token in identity_tokens:
+                if token in text_lc:
+                    errors.append(f"private verboten literal in tracked file: {rel}")
+                    identity_hit = True
+                    break
+        if identity_hit:
+            continue
+        # forbidden_attribution is checked unconditionally -- never
+        # exempted, not even in IDENTITY_DOC_EXCEPTIONS files.
+        for token in attribution_tokens:
             if token in text_lc:
                 errors.append(f"private verboten literal in tracked file: {rel}")
                 break

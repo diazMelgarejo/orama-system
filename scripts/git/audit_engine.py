@@ -363,13 +363,21 @@ def _bash_banned_attribution_hit(
     body_lc: str,
 ) -> bool:
     lib = _engine_dir() / "banned_attribution_lib.sh"
+    # lib and repo_root passed as positional args ($6/$7), same as the
+    # other 5 values -- never interpolated into the script text itself.
+    # An f-string-interpolated path containing a shell metacharacter
+    # (unlikely in practice, but not something to rely on) would
+    # otherwise be a real injection point.
     script = (
-        f'source "{lib}"\n'
-        f'root="{repo_root}"\n'
+        'source "$6"\n'
+        'root="$7"\n'
         'if banned_attribution_hit "$1" "$2" "$3" "$4" "$5" "$root"; then exit 0; else exit 1; fi'
     )
     proc = subprocess.run(
-        ["bash", "-c", script, "banned_attribution_hit", ae_lc, an_lc, ce_lc, cn_lc, body_lc],
+        [
+            "bash", "-c", script, "banned_attribution_hit",
+            ae_lc, an_lc, ce_lc, cn_lc, body_lc, str(lib), str(repo_root),
+        ],
         cwd=repo_root,
         capture_output=True,
         text=True,
