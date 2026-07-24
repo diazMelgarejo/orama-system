@@ -16,6 +16,8 @@ This is **normal sync**, not history surgery. For rewrites/expunges, use
 | Dirty worktree + need `git pull --ff-only` before merge/push | ✅ |
 | Cross-host handoff (Win pushed → Mac must pull, or reverse) | ✅ |
 | Submodule-only drift (`vendor/ecc-tools` new commits) you do **not** intend to commit | ✅ stash/pop, then leave unstaged |
+| PT `config/devices.yml` / `config/models.yml` LAN overlay (discovery cache) | ✅ stash paths explicitly — see [`local-runtime-overlay-reference-card.md`](../../using-git-worktrees/references/local-runtime-overlay-reference-card.md); **never** `git checkout` to discard |
+| Post-merge integrity / stale branch unique-content triage | ✅ use [`fresh-main-integrity-diff-claygo.md`](../../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md) (CLAYGO) |
 | Secret/token/path in committed history | ❌ use expunge flow |
 | Branch rewrite / force-push recovery | ❌ use re-anchor flow |
 
@@ -50,6 +52,9 @@ git fetch origin --prune
 
 # 1. Stash everything (including untracked)
 git stash push --include-untracked -m "preserve: cross-host sync $(date +%Y-%m-%d)"
+
+# Perpetua-Tools only — preserve discovery overlay if broad stash is risky:
+# git stash push -m "runtime overlay" -- config/devices.yml config/models.yml
 
 # 2. Fast-forward only — stops if diverged (safe)
 git pull --ff-only origin main
@@ -129,6 +134,7 @@ git status clean?
   yes → done (pull-only case) or nothing to push
   no → inspect each path:
     intentional fix/docs → git add + commit + push
+    PT config/devices.yml or config/models.yml (LAN overlay) → never add; see local-runtime-overlay card
     submodule drift only → git restore vendor/<name> OR leave unstaged
     .env.local / .paths / tokens → never add; keep gitignored
     conflict markers → resolve files; re-run hygiene; never reset --hard
@@ -169,4 +175,6 @@ Hooks (once per clone): `bash scripts/git/install-local-hooks.sh`
 - [`windows-powershell-runtime-bootstrap.md`](windows-powershell-runtime-bootstrap.md) — Git/Node PATH on Win
 - [`../SKILL.md`](../SKILL.md) — history surgery (distinct from this card)
 - [`../../using-git-worktrees/SKILL.md`](../../using-git-worktrees/SKILL.md) — parallel worktrees
+- [`../../using-git-worktrees/references/local-runtime-overlay-reference-card.md`](../../using-git-worktrees/references/local-runtime-overlay-reference-card.md) — PT discovery cache overlay
+- [`../../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md`](../../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md) — CLAYGO fresh-main integrity diff
 - [`../../hermes-harness/references/lan-peer-self-talk.md`](../../hermes-harness/references/lan-peer-self-talk.md) — operator playbook (sync before LAN peer)

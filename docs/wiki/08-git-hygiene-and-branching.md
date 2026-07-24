@@ -198,6 +198,25 @@ For the common case — **dirty worktree + fast-forward `main` + push to peer** 
 
 Summary: stash → `git pull --ff-only origin main` → `git stash pop` → review → commit intentional files → `git push origin main` → peer runs `git pull --ff-only`. Never `git reset --hard` or force-push `main`.
 
+### Perpetua-Tools local runtime overlay
+
+Discovery may write operator LAN addresses into **working-tree** `config/devices.yml` and
+`config/models.yml` (last-known DHCP cache). That is intentional — **never** `git checkout`
+those paths to clean up; **never** commit the overlay values. Stash before pull/rebase:
+
+```bash
+git stash push -m "runtime overlay" -- config/devices.yml config/models.yml
+```
+
+Policy: [`Perpetua-Tools/config/LOCAL-RUNTIME-OVERLAY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/LOCAL-RUNTIME-OVERLAY.md) · skill card:
+[`local-runtime-overlay-reference-card.md`](../../bin/orama-system/skills/using-git-worktrees/references/local-runtime-overlay-reference-card.md)
+
+### Fresh-main integrity diff (CLAYGO)
+
+Post-merge regression checks and stale-branch triage: ephemeral `origin/main` baseline,
+diff true unique branch contribution, **clean last run before and after**. Skill card:
+[`fresh-main-integrity-diff-claygo.md`](../../bin/orama-system/skills/using-git-worktrees/references/fresh-main-integrity-diff-claygo.md)
+
 ---
 
 ## Commit Message Quality
