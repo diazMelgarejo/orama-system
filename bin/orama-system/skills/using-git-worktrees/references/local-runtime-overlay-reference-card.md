@@ -30,7 +30,7 @@ Applies to **Perpetua-Tools** only (`config/devices.yml`, `config/models.yml`).
 | Leave overlay values in the working tree | `git checkout` / `git restore` those paths to "clean up" |
 | Stash before pull/rebase if merge would overwrite | Commit RFC1918 / operator LAN values |
 | Compare **committed** trees for integrity (`git archive origin/main`, or overlay checker `--mode tree` on a fresh clone) | Treat overlay drift as merge corruption |
-| Use `git stash pop` after pull, or let discovery refresh | `git add -A` blindly on PT without reviewing overlay files |
+| Use hooks-safe stash pop after pull, or let discovery refresh | `git add -A` blindly on PT without reviewing overlay files |
 
 ---
 
@@ -40,9 +40,12 @@ Applies to **Perpetua-Tools** only (`config/devices.yml`, `config/models.yml`).
 # Perpetua-Tools repo root only
 git stash push -m "runtime overlay" -- config/devices.yml config/models.yml
 git pull --ff-only origin main   # or rebase — your normal sync
-git stash pop
+git -c core.hooksPath=/dev/null stash pop
+bash scripts/git/install-local-hooks.sh
 # If conflicts in overlay files: keep working-tree values or re-run discovery; do not commit LAN IPs
 ```
+
+See [`stash-hooks-safeguard-reference-card.md`](../../git-history-surgery/references/stash-hooks-safeguard-reference-card.md) — **always** hooks-off → pop → hooks-on.
 
 When syncing **both** repos, run the overlay stash in PT **inside** the broader
 [safe-cross-host-sync](safe-cross-host-sync-reference-card.md) stash → pull → pop flow
@@ -76,6 +79,7 @@ When verifying post-merge regression or silent merge failure:
 
 ## Related
 
+- [`stash-hooks-safeguard-reference-card.md`](../../git-history-surgery/references/stash-hooks-safeguard-reference-card.md) — mandatory hooks-off before stash pop/apply
 - [`safe-cross-host-sync-reference-card.md`](../../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — Mac ↔ Win `main` sync
 - [`../SKILL.md`](../SKILL.md) — worktree lifecycle
 - [`fresh-main-integrity-diff-claygo.md`](fresh-main-integrity-diff-claygo.md) — true unique branch contribution vs `origin/main`

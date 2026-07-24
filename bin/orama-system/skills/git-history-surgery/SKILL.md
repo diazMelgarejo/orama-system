@@ -60,6 +60,10 @@ LM Studio host, run
    Use [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md)
    (ephemeral fresh `origin/main` baseline; **CLAYGO** clean before/after each run).
    Canonical protocol: [`../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md`](../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md).
+8. About to `git stash pop` or `git stash apply`?
+   **Mandatory:** [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md)
+   — `git -c core.hooksPath=/dev/null stash pop` then `bash scripts/git/install-local-hooks.sh`.
+   Never bare `git stash pop`.
 
 ## Non-Negotiables
 
@@ -193,7 +197,9 @@ content on top — never interleave them**:
    Don't assume a prior fetch is still current either way -- fetch fresh
    before checking.
 3. Reapply/cherry-pick the preserved content (from the temp branch or
-   `git stash pop`) on top of that clean, synced base.
+   `git -c core.hooksPath=/dev/null stash pop` + `bash scripts/git/install-local-hooks.sh`
+   — see [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md))
+   on top of that clean, synced base.
 4. Run the full relevant test suite before committing — a clean cherry-pick
    (no conflict markers) is necessary but not sufficient; it can still land
    on stale symbols/APIs if step 2 was skipped or incomplete.
@@ -239,6 +245,7 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 ## References
 
 - [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
+- [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md) — hooks off before stash pop/apply; re-enable after (mandatory for agents)
 - [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
 - [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) — ephemeral fresh-main diff; true unique branch contribution; CLAYGO teardown
 - [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)

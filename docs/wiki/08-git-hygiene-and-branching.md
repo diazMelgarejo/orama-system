@@ -211,6 +211,8 @@ git stash push -m "runtime overlay" -- config/devices.yml config/models.yml
 Policy: [`Perpetua-Tools/config/LOCAL-RUNTIME-OVERLAY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/LOCAL-RUNTIME-OVERLAY.md) · skill card:
 [`local-runtime-overlay-reference-card.md`](../../bin/orama-system/skills/using-git-worktrees/references/local-runtime-overlay-reference-card.md)
 
+On pop/apply, use [`stash-hooks-safeguard-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/stash-hooks-safeguard-reference-card.md) (`git -c core.hooksPath=/dev/null stash pop` → `install-local-hooks.sh`).
+
 ### Fresh-main integrity diff (CLAYGO)
 
 Post-merge regression checks and stale-branch triage: ephemeral `origin/main` baseline,
