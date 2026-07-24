@@ -90,7 +90,7 @@ _requires_orchestrator = pytest.mark.skipif(
 def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    def fake_urlopen(req: urllib.request.Request, timeout: float = 2) -> "_Resp":
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2):
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
         if token == "bad":
@@ -103,7 +103,7 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
             def read(self) -> bytes:
                 return body
 
-            def __enter__(self) -> "_Resp":
+            def __enter__(self):
                 return self
 
             def __exit__(self, *args: Any) -> bool:
@@ -129,7 +129,7 @@ def test_http_get_retries_next_token_on_401(monkeypatch: pytest.MonkeyPatch) -> 
 def test_http_get_returns_none_when_all_candidates_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[str] = []
 
-    def fake_urlopen(req: urllib.request.Request, timeout: float = 2) -> None:
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2):
         token = req.headers.get("Authorization", "").removeprefix("Bearer ").strip()
         calls.append(token)
         raise qpt.urllib.error.HTTPError(req.full_url, 401, "Unauthorized", hdrs=None, fp=None)
@@ -148,7 +148,7 @@ def test_http_get_refuses_bearer_token_over_unauthenticated_http(monkeypatch: py
     first one. The whole retry loop must never call urlopen() at all."""
     called = {"n": 0}
 
-    def fake_urlopen(req: urllib.request.Request, timeout: float = 2) -> "_Resp":
+    def fake_urlopen(req: urllib.request.Request, timeout: float = 2):
         called["n"] += 1
         raise AssertionError("urlopen must never be called over unauthenticated transport")
 
@@ -172,13 +172,13 @@ def test_http_get_allows_no_token_over_http(monkeypatch: pytest.MonkeyPatch) -> 
         def read(self) -> bytes:
             return body
 
-        def __enter__(self) -> "_Resp":
+        def __enter__(self):
             return self
 
         def __exit__(self, *args: Any) -> bool:
             return False
 
-    def _fake_urlopen_no_token(req: urllib.request.Request, timeout: float = 2) -> _Resp:
+    def _fake_urlopen_no_token(req: urllib.request.Request, timeout: float = 2):
         return _Resp()
 
     monkeypatch.setattr(qpt.probe, "outbound_control_plane_tokens", lambda: [])
