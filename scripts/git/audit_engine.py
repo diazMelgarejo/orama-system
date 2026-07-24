@@ -26,6 +26,14 @@ class IdentityPolicyError(Exception):
     """Policy file missing, unreadable, malformed, or unsupported version."""
 
 
+class AttributionCheckError(Exception):
+    """The banned-attribution check itself failed to execute -- a missing
+    library, a source failure, or an undefined helper function. Must never
+    be treated as "no banned attribution found": that would make an
+    execution failure fail open, indistinguishable from a genuine clean
+    result."""
+
+
 @dataclass(frozen=True)
 class ClassificationResult:
     approved: bool
@@ -92,6 +100,8 @@ def _validate_policy_data(data: dict) -> None:
     seen_emails: set[str] = set()
 
     def _track(email: str, label: str) -> None:
+        if not isinstance(email, str) or not email:
+            raise IdentityPolicyError(f"{label} must be a non-empty string")
         key = email.casefold()
         if key in seen_emails:
             raise IdentityPolicyError(f"duplicate identity email after normalization: {label}")
@@ -100,19 +110,33 @@ def _validate_policy_data(data: dict) -> None:
     for entry in data["human_identities"]:
         if not isinstance(entry, dict):
             raise IdentityPolicyError("human_identities entries must be objects")
+        if "email" not in entry:
+            raise IdentityPolicyError("human_identities entry missing required 'email' field")
         _track(entry["email"], entry["email"])
-        for alias in entry.get("aliases", []):
-            _track(alias, alias)
+        aliases = entry.get("aliases", [])
+        if not isinstance(aliases, list):
+            raise IdentityPolicyError(
+                f"human_identities entry's 'aliases' must be a list, got {type(aliases).__name__}"
+            )
+        for alias in aliases:
+            _track(alias, alias if isinstance(alias, str) else repr(alias))
 
     for entry in data["agent_identities"]:
         if not isinstance(entry, dict):
             raise IdentityPolicyError("agent_identities entries must be objects")
+        if "email" not in entry:
+            raise IdentityPolicyError("agent_identities entry missing required 'email' field")
         _track(entry["email"], entry["email"])
 
     for repo_name, bots in data["repo_bot_identities"].items():
         if not isinstance(bots, list):
             raise IdentityPolicyError(f"repo_bot_identities[{repo_name!r}] must be a list")
         for bot in bots:
+            if not isinstance(bot, str) or not bot:
+                raise IdentityPolicyError(
+                    f"repo_bot_identities[{repo_name!r}] entries must be non-empty strings, "
+                    f"got {bot!r}"
+                )
             if "*" in bot:
                 raise IdentityPolicyError(
                     f"universal bot wildcard patterns are not allowed: {bot!r} (repo {repo_name})"
@@ -383,7 +407,9 @@ def _bash_banned_attribution_hit(
     # (unlikely in practice, but not something to rely on) would
     # otherwise be a real injection point.
     script = (
-        'source "$6"\n'
+        'set -u\n'
+        'source "$6" || exit 2\n'
+        'declare -f banned_attribution_hit >/dev/null 2>&1 || exit 2\n'
         'root="$7"\n'
         'if banned_attribution_hit "$1" "$2" "$3" "$4" "$5" "$root"; then exit 0; else exit 1; fi'
     )
@@ -397,6 +423,17 @@ def _bash_banned_attribution_hit(
         text=True,
         check=False,
     )
+    # 0 = hit, 1 = no hit -- both legitimate results of the check actually
+    # running. Any other code (2 = source/helper-definition failure
+    # explicitly, anything else = an unexpected internal error) must NOT
+    # be silently treated as "no hit": that would make a missing library
+    # or a broken helper function indistinguishable from a clean pass,
+    # exactly the fail-open behavior audit_engine.py exists to prevent.
+    if proc.returncode not in (0, 1):
+        raise AttributionCheckError(
+            f"banned_attribution_hit execution failed (exit {proc.returncode}): "
+            f"{proc.stderr.strip() or proc.stdout.strip() or 'no output'}"
+        )
     return proc.returncode == 0
 
 
