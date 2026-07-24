@@ -20,6 +20,7 @@
 > | LAN peer Mac↔Win (Hermes operator playbook) | [lan-peer-self-talk.md § Operator playbook](../bin/orama-system/skills/hermes-harness/references/lan-peer-self-talk.md#operator-playbook) | [docs/guides/lan-peer-mac-win-operator.md](guides/lan-peer-mac-win-operator.md) |
 > | Mac↔Win co-orchestrator (file inbox + ws-peer GO) | [mac-co-orchestrator-playbook.md](../bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md) | PT [LESSONS.md §2026-06-28](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md) |
 > | AlphaClaw branch roles + invariants | [AlphaClaw CLAUDE.md](../../AlphaClaw/CLAUDE.md) | AlphaClaw wiki/01 |
+> | skillify/gstack permanent thin-wrapper exemption | [scripts/consolidate-skills.sh](../scripts/consolidate-skills.sh) | This file §2026-07-24 + [skillify SKILL.md](../bin/orama-system/skills/skillify/SKILL.md) § Non-Negotiables |
 >
 > **Architecture authority**: [2026-05-14--UNIFIED-ABSORPTION-PLAN.md](2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
 > **Navigation hub**: [CLAUDE-instru.md](../../../CLAUDE-instru.md)
@@ -44,6 +45,42 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 ---
 
 ## Sessions Log
+
+---
+
+### 2026-07-24 — Formalized skillify/gstack permanent thin-wrapper exemption | Claude
+
+**Scope:** orama-system `.claude/skills/*` -> `bin/orama-system/skills/*` consolidation
+
+**What changed:** `scripts/consolidate-skills.sh` now hardcodes a permanent
+`EXEMPT_SKILLS=("skillify" "gstack")` skip list, checked before any merge or
+wrapper conversion — not a CLI flag, so it cannot be silently overridden by an
+invocation. Both `skillify` copies (`.claude/skills/skillify/SKILL.md` and the
+canonical `bin/orama-system/skills/skillify/SKILL.md`) got a matching
+Non-Negotiables bullet stating the exemption explicitly.
+
+**Operational lesson:** this rule already existed as tribal knowledge scattered
+across two places — the `73f100c5` doctrine-wiring commit's message ("gstack
+has no wrapper mirror") and the 2026-07-22 incident log in
+`skillify/references/dogfood-upgrade-log.md` (gstack's own bundled `skillify`
+skill, an unrelated tool sharing the same name, was silently clobbered when a
+wrapper-generator script's `TARGET_ROOTS` briefly included `~/.claude/skills`)
+— but was never codified as an enforced rule in the consolidation tool itself.
+A user request to "codify and formalize" it surfaced that gap: knowing a rule
+happened once is not the same as the tool refusing to repeat it. The exemption
+is scoped precisely: `skillify` (name collision, proven incident) and the bare
+`gstack` slug (same class of risk, pre-empted after this repo's own
+gstack-integration sub-skill was renamed to the disambiguated `orama-gstack`
+on 2026-07-22) — `orama-gstack` itself is NOT exempt, since it has no
+collision risk and was already safely wrapped before this session.
+
+**Cross-references:**
+
+- Enforcement: `scripts/consolidate-skills.sh` (header comment + `EXEMPT_SKILLS`)
+- Policy statement: `bin/orama-system/skills/skillify/SKILL.md` and
+  `.claude/skills/skillify/SKILL.md` § Non-Negotiables
+- Incident log: `bin/orama-system/skills/skillify/references/dogfood-upgrade-log.md`
+- Doctrine origin: commit `73f100c5` ("Post-Review Micro-Remediation Pattern")
 
 ---
 
