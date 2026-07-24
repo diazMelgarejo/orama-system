@@ -45,6 +45,11 @@ def private_literal_values(root: Path, key: str) -> list[str]:
     return values
 
 
+# LEGACY: this frozenset is the old hardcoded allowlist — retained until
+# the unified audit_engine.py refactor (docs/plans/2026-07-24-unified-identity-
+# audit-integrated-plan.md) lands.  When that refactor merges, this constant
+# and the duplicated identity-check logic below are replaced by a single
+# import from audit_engine.py.
 APPROVED_IDENTITIES = {
     ("cyre", "Lawrence@cyre.me"),
     ("cyre", "diazMelgarejo@gmail.com"),
@@ -780,10 +785,20 @@ def check_identity(root: Path) -> list[str]:
     # stays global and unconditional.
     if not is_cursor_environment(name, email):
         return []
-    identities = set(APPROVED_IDENTITIES)
-    identities.update(("cyre", value) for value in private_literal_values(root, "owner_gmail"))
-    if (name, email) not in identities:
-        expected = " or ".join(f"{n} <{e}>" for n, e in sorted(identities))
+    # Case-normalize before comparison: git config may return a different case
+    # variant than what's stored in APPROVED_IDENTITIES (e.g. "Lawrence.Melgarejo"
+    # vs "lawrence.melgarejo").  Normalize both sides to lowercase to prevent
+    # false rejections.  This is a hotfix until the unified audit_engine.py
+    # refactor (docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md)
+    # replaces this duplicated logic with a single canonical comparison.
+    name_lc = name.strip().lower()
+    email_lc = email.strip().lower()
+    identities_lc = {(n.lower(), e.lower()) for n, e in APPROVED_IDENTITIES}
+    identities_lc.update(
+        ("cyre", value.lower()) for value in private_literal_values(root, "owner_gmail")
+    )
+    if (name_lc, email_lc) not in identities_lc:
+        expected = " or ".join(f"{n} <{e}>" for n, e in sorted(identities_lc))
         return [
             "git identity mismatch: "
             f"found {name or '<unset>'} <{email or '<unset>'}>; "
@@ -970,7 +985,7 @@ def check_skill_quality(root: Path, files: list[str]) -> list[str]:
         )
         if not lint014_exempt and not rel.endswith(".py"):
             _ARGV_SECRET_RE = re.compile(
-                r"security\s+add-generic-password\s+.*-w\s+[\"']?\$",
+                r"security\s+add-generic-password\s+.*-w\s+["']?\$",
                 re.IGNORECASE,
             )
             if _ARGV_SECRET_RE.search(text):
