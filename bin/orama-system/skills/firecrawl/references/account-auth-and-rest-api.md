@@ -63,6 +63,14 @@ Poll every 3 seconds. Responses:
 - `{"status": "pending"}` — keep polling
 - `{"status": "complete", "apiKey": "fc-...", "teamName": "..."}` — done
 
+**Handle the returned `apiKey` value with care:** write it straight to
+the project's local environment file (Step 4 below) and nothing else.
+Never print, log, echo, or paste the real key into chat, a shell command,
+a terminal transcript, or any tracked file — treat every one of those as
+a leak, not a convenience. The example response above shows the field
+*shape* (`"fc-..."`), not something to reproduce with a real value filled
+in.
+
 **Step 4 — Save the key to the project's local environment file only**
 (`.env`, gitignored) **— never to a tracked skill doc, memory file, or
 commit.** See the security note in [`../SKILL.md`](../SKILL.md) §
@@ -81,8 +89,13 @@ works for both use cases:
 You still need an API key (or an authenticated MCP session). Two ways
 to get one:
 
-- **Human pastes it in** — if you already have a key, just set
-  `FIRECRAWL_API_KEY=fc-...` in your environment or pass it directly
+- **Human pastes it in** — if you already have a key, set
+  `FIRECRAWL_API_KEY=fc-...` in the project's environment file (`.env`,
+  gitignored) or the shell's environment for the current session. Never
+  pass an API key as a command-line argument, type it into chat, write it
+  to a log file, or leave it visible in shell history or a process
+  listing (`ps`) — any of those exposes the key outside the process that
+  actually needs it. Read it from the environment at call time instead.
 - **Automated flow** — do Path D to walk the human through browser auth
   and receive the key automatically, or use the MCP authenticate flow
 
@@ -121,7 +134,7 @@ SDK). It is rate-limited, so use it as a fallback rather than the
 default.
 
 - **MCP**: point any MCP-compatible client at `https://mcp.firecrawl.dev/v2/mcp`
-- **CLI**: run `npx -y firecrawl-cli@latest` and use `scrape`, `search`, `interact`, or `parse` with no login
+- **CLI**: run `npx -y firecrawl-cli@1.19.27` and use `scrape`, `search`, `interact`, or `parse` with no login
 - **API**: the research index endpoints (`/search/research/*`) can be called without an `Authorization` header
 
 Search, scrape, interact, parse, and the research index are available
