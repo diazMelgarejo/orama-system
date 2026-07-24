@@ -177,6 +177,27 @@ def http_post_json(
         return -1, str(exc)
 
 
+def _is_authenticated_transport(url: str) -> bool:
+    """True only for transports that cryptographically protect bearer tokens.
+
+    SECURITY INVARIANT (RFC 6750 §5.3): Bearer tokens MUST only be sent
+    over TLS (https://). http:// with a real token is a credential-leak
+    vector -- fail-closed. Same helper as lan_peer_assign.py and
+    query_peer_topology.py's _http_get; duplicated rather than imported
+    to keep each script's fail-closed behavior independent of the others
+    being present/importable.
+    """
+    return url.startswith("https://")
+
+
+def _peer_portal_tls_enabled() -> bool:
+    """Env gate for peer-portal HTTPS -- see lan_peer_assign.py's own
+    _peer_portal_tls_enabled() docstring for the full rationale. Off by
+    default; no TLS listener ships on the peer portal side yet."""
+    v = (os.environ.get("PEER_PORTAL_TLS_ENABLED") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def relay_probe(
     peer_ip: str,
     portal_port: int,
@@ -205,8 +226,19 @@ def relay_probe(
     if not target_ip:
         return 2, {"error": "empty --relay target IP"}
 
-    url = f"http://{peer_ip}:{portal_port}/api/peer-relay-probe"
+    scheme = "https" if _peer_portal_tls_enabled() else "http"
+    url = f"{scheme}://{peer_ip}:{portal_port}/api/peer-relay-probe"
     body = {"target_ip": target_ip, "target_port": target_port}
+    real_tokens = [t for t in (tokens or []) if t]
+    if real_tokens and not _is_authenticated_transport(url):
+        return 2, {
+            "error": "SECURITY_STOP: refusing to send control-plane token "
+            "candidates over an unauthenticated channel. Set "
+            "PEER_PORTAL_TLS_ENABLED=1 once the peer portal has TLS in "
+            "front of it, or clear local tokens for an unauthenticated "
+            "deployment.",
+            "relay_via": f"{peer_ip}:{portal_port}",
+        }
     last: tuple[int, str] = (-1, "no token candidates")
     for token in tokens or [""]:
         status, text = http_post_json(url, body, token=token, timeout=timeout)
