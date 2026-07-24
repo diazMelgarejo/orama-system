@@ -12,7 +12,9 @@ HOOK="$REPO_ROOT/scripts/git/check_commit_message.sh"
 
 # Exact approved human and autonomous-agent author identities.
 # Do not replace these with broad domain or GitHub noreply wildcards.
-ALLOWED_HUMAN_AE="diazmelgarejo@gmail.com lawrence@cyre.me noreply@anthropic.com claude@anthropic.com codex@openai.com kimi-agent@kimi.ai cloud-kimi-agent@kimi.ai"
+# Lawrence.Melgarejo@gmail.com is a Gmail dot-variant of diazmelgarejo@gmail.com
+# (Gmail ignores dots in local-part); same operator, same approval.
+ALLOWED_HUMAN_AE="diazmelgarejo@gmail.com lawrence.melgarejo@gmail.com lawrence@cyre.me noreply@anthropic.com claude@anthropic.com codex@openai.com kimi-agent@kimi.ai cloud-kimi-agent@kimi.ai"
 ALLOWED_BOT_ORAMA="cursor[bot]@users.noreply.github.com"
 ALLOWED_BOT_PT="dependabot[bot]@users.noreply.github.com coderabbitai[bot]@users.noreply.github.com"
 ALLOWED_BOT_EMAILS="$ALLOWED_BOT_ORAMA $ALLOWED_BOT_PT"
