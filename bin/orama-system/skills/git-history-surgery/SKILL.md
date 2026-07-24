@@ -88,16 +88,24 @@ LM Studio host, run
   happened for real: a PR was reported merged in a planning summary and
   never actually merged, then treated as done for the next several steps.
 - **After `gh pr merge` on ANY branch other than main (a stacked/dependent
-  PR), immediately `git fetch origin <that-branch>` and verify with
-  `git rev-parse HEAD` == `git rev-parse origin/<that-branch>` before doing
-  further local work.** `gh pr merge` updates the branch on GitHub; your
-  local checkout does NOT update itself. If you keep working locally without
-  fetching first, later local merges can silently carry a stale, pre-merge
-  version of files the remote merge already fixed. `merge-base --is-ancestor`
-  proves ancestry (A is in B's history) but NOT exact identity — two different
-  refs can both be ancestors of each other when one is a merge commit
-  containing the other. Use exact SHA comparison to verify the local tip
-  actually matches the remote post-merge.
+  PR), capture the PR's own merged-commit SHA and verify against that --
+  not a raw `HEAD == origin/<source-branch>` comparison.** `gh pr merge`
+  updates the branch on GitHub; your local checkout does NOT update
+  itself, AND GitHub commonly deletes the source branch immediately after
+  merge (a default repo setting), so `origin/<source-branch>` may no
+  longer exist to compare against at all. Capture the real result first:
+  `gh pr view N --json mergeCommit,state,mergedAt` (or `git ls-remote
+  origin <target-branch>` if the source branch is expected to be gone),
+  then verify your local tip matches that captured SHA with exact
+  comparison (`git rev-parse HEAD` == the captured SHA) before doing
+  further local work, or `git merge-base --is-ancestor <captured-sha>
+  HEAD` if further local commits are expected on top. If you keep working
+  locally without this, later local merges can silently carry a stale,
+  pre-merge version of files the remote merge already fixed.
+  `merge-base --is-ancestor` alone proves ancestry (A is in B's history)
+  but NOT exact identity -- two different refs can both be ancestors of
+  each other when one is a merge commit containing the other; capture the
+  specific SHA GitHub actually produced, don't infer it from ancestry.
 
 ## Verification
 
@@ -151,19 +159,27 @@ PRs, a teammate's rebased branch, cherry-picks) into a branch you're actively
 working on, **do all remote-sync merges first, then replay the new/adapted
 content on top — never interleave them**:
 
-1. Fetch and merge every relevant already-merged remote ref into the local
-   branch first (`origin/main`, `origin/<this-branch>` if a stacked PR was
-   merged separately, etc.). Verify each with exact SHA equality
-   (`git rev-parse HEAD` == `git rev-parse origin/<branch>`) before trusting
-   it — don't assume a prior fetch is still current.
-2. Only once the local branch is a confirmed, verified superset of every
-   relevant remote ref, stash or set aside the new content to adapt
-   (`git stash push -u -m "<tag>"` for uncommitted work, or note the
-   commit/PR SHA for a cherry-pick).
-3. Reapply/cherry-pick the new content on top of that clean base.
+1. **Preserve the adapted/new content first, before any remote-sync
+   merge** — commit it to a temporary branch (`git checkout -b
+   <tag>-preserve && git add -A && git commit -m "<tag>: preserve before
+   remote sync"`) or `git stash push -u -m "<tag>"` (the `-u` is
+   mandatory: untracked files are otherwise silently left behind and can
+   be lost or clobbered by the merge in step 2). Do this even if the
+   content is still uncommitted/in-progress -- a remote-sync merge
+   operating on a dirty working tree can conflict with or silently
+   overwrite exactly the content you're trying to protect.
+2. Once step 1's preservation is confirmed (branch exists, or `git stash
+   list` shows the entry), fetch and merge every relevant already-merged
+   remote ref into the now-clean local branch (`origin/main`,
+   `origin/<this-branch>` if a stacked PR was merged separately, etc.).
+   Verify each with exact SHA equality (`git rev-parse HEAD` ==
+   `git rev-parse origin/<branch>`) before trusting it -- don't assume a
+   prior fetch is still current.
+3. Reapply/cherry-pick the preserved content (from the temp branch or
+   `git stash pop`) on top of that clean, synced base.
 4. Run the full relevant test suite before committing — a clean cherry-pick
    (no conflict markers) is necessary but not sufficient; it can still land
-   on stale symbols/APIs if step 1 was skipped or incomplete.
+   on stale symbols/APIs if step 2 was skipped or incomplete.
 
 Doing this out of order — replaying new content first, syncing remotes
 after — is exactly how a later "sync main" merge can silently re-introduce

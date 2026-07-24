@@ -168,6 +168,23 @@ def test_missing_required_key_fails_closed(tmp_path):
         audit_engine.load_policy(bad)
 
 
+def test_wrong_container_type_fails_closed(tmp_path):
+    """Regression: valid JSON can still have the wrong shape (an int
+    where a list is expected, a list where a mapping is expected) --
+    must raise IdentityPolicyError, not an uncaught TypeError/
+    AttributeError from iterating/`.items()`-ing the wrong type."""
+    cases = [
+        {"version": 1, "human_identities": 42, "agent_identities": [], "repo_bot_identities": {}},
+        {"version": 1, "human_identities": [], "agent_identities": "not-a-list", "repo_bot_identities": {}},
+        {"version": 1, "human_identities": [], "agent_identities": [], "repo_bot_identities": ["not-a-dict"]},
+    ]
+    for i, case in enumerate(cases):
+        bad = tmp_path / f"bad{i}.json"
+        bad.write_text(json.dumps(case))
+        with pytest.raises(audit_engine.IdentityPolicyError):
+            audit_engine.load_policy(bad)
+
+
 def test_agent_name_casefold_approved():
     result = audit_engine.is_approved_identity(
         "codex", "codex@openai.com", root=Path("."), policy_path=REAL_POLICY
