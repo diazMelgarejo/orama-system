@@ -213,22 +213,11 @@ failure without dumping session state.
 
 ## EXA And Firecrawl Verification
 
-Use EXA first for broad discovery and Firecrawl second for exact extraction.
-
-EXA query shape:
-
-```text
-official Cline CLI documentation non interactive task command model reasoning effort ClinePass DeepSeek V4 Flash
-```
-
-Firecrawl extraction shape:
-
-```bash
-firecrawl scrape "https://docs.cline.bot/usage/cli-overview" \
-  -f markdown \
-  --only-main-content \
-  --redact-pii
-```
+Canonical procedure: [`../firecrawl/SKILL.md` § EXA-first, Firecrawl-second verification pattern](../firecrawl/SKILL.md#exa-first-firecrawl-second-verification-pattern).
+This skill's own EXA query used
+`official Cline CLI documentation non interactive task command model
+reasoning effort ClinePass DeepSeek V4 Flash`, extracted from
+`https://docs.cline.bot/usage/cli-overview`.
 
 Source facts verified this way:
 
