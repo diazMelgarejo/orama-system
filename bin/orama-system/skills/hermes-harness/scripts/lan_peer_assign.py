@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
 import sys
 import urllib.error
@@ -47,38 +48,110 @@ import probe_lan_peer as probe  # noqa: E402
 _REPO_ROOT = _SCRIPT_DIR.parents[4]
 _SRC_ROOT = _REPO_ROOT / "src"
 
+logger = logging.getLogger("lan_peer_assign")
+
 
 def _ensure_orama_src() -> None:
     if _SRC_ROOT.is_dir() and str(_SRC_ROOT) not in sys.path:
         sys.path.insert(0, str(_SRC_ROOT))
 
 
-def _auth_header() -> dict[str, str]:
-    token = probe.resolve_control_plane_token()
+def _auth_header(token: str) -> dict[str, str]:
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
+def _is_authenticated_transport(url: str) -> bool:
+    """True only for transports that cryptographically protect bearer tokens.
+
+    SECURITY INVARIANT (RFC 6750 §5.3): Bearer tokens MUST only be sent
+    over TLS (https://).  http:// with a real token is a credential-leak
+    vector — fail-closed.
+    """
+    return url.startswith("https://")
+
+
+def _peer_portal_tls_enabled() -> bool:
+    """Env gate for peer-portal HTTPS, matching the parsing convention
+    already established by orchestrator/dangerous_workers.py
+    (PT_ALLOW_DANGEROUS_CLI_WORKERS) and alphaclaw_manager.py
+    (ALPHACLAW_TLS_ENABLED). Off by default.
+
+    Without this, _is_authenticated_transport()'s fail-closed check
+    means every peer-file call (drop/list/read/flush) silently and
+    permanently fails whenever a real control-plane token is configured
+    -- there is currently no TLS listener on the peer portal side for
+    this to ever succeed against otherwise. This flag exists so an
+    operator who HAS deployed TLS in front of their own peer portal
+    (out of band, no such mechanism ships in this repo yet -- same
+    "minimum required today" scope as ALPHACLAW_TLS_ENABLED) has an
+    explicit way to use it, rather than the security invariant being an
+    unconditional, unescapable dead end.
+    """
+    v = (os.environ.get("PEER_PORTAL_TLS_ENABLED") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def _peer_base(peer_ip: str, portal_port: int) -> str:
-    return f"http://{peer_ip}:{portal_port}"
+    scheme = "https" if _peer_portal_tls_enabled() else "http"
+    return f"{scheme}://{peer_ip}:{portal_port}"
 
 
 def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
-    data = None
-    headers = _auth_header()
-    if payload is not None:
-        data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(url, data=data, headers=headers, method=method)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read().decode("utf-8", errors="replace")
-            return json.loads(raw) if raw.strip() else {}
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        raise SystemExit(f"HTTP {exc.code} {url}: {body[:300]}") from exc
-    except Exception as exc:
-        raise SystemExit(f"request failed {url}: {exc}") from exc
+    """Request, retrying across every local control-plane token candidate
+    on 401/403 before giving up -- see query_peer_topology.py's _http_get
+    for why (2026-07-19 D9 self-correction: resolve_control_plane_token()'s
+    single "preferred" token is not always the one the peer accepts, even
+    when a working local candidate exists).
+
+    SECURITY: bearer tokens are NEVER attached to unauthenticated http://
+    URLs.  _is_authenticated_transport() is checked before any
+    Authorization header is constructed — matching the sibling topology
+    helper (query_peer_topology._http_get).  For http:// peer URLs the
+    request proceeds unauthenticated (no credential to leak); for https://
+    the normal candidate-retry loop runs.  RFC 6750 §5.3.
+    """
+    data = json.dumps(payload).encode("utf-8") if payload is not None else None
+    candidates = probe.outbound_control_plane_tokens() or [""]
+    has_real_token = any(candidates)
+
+    # FAIL-CLOSED: never send bearer tokens over unauthenticated transport
+    if has_real_token and not _is_authenticated_transport(url):
+        logger.error(
+            "SECURITY_STOP: refusing to send %d token candidate(s) to %s "
+            "over unauthenticated transport (http://). "
+            "Peer portal must use https:// for authenticated endpoints.",
+            len(candidates), url,
+        )
+        # Proceed unauthenticated — the peer may still accept the request
+        # without a token (e.g. for health checks or public endpoints).
+        # We intentionally do NOT raise here; we simply omit the token.
+        candidates = [""]  # unauthenticated path
+
+    last_error: tuple[int, str] | None = None
+    for token in candidates:
+        headers = _auth_header(token) if token else {}
+        req = urllib.request.Request(url, data=data, headers=headers, method=method)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                raw = resp.read().decode("utf-8", errors="replace")
+                return json.loads(raw) if raw.strip() else {}
+        except urllib.error.HTTPError as exc:
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+            except Exception:
+                body = str(exc.reason)
+            if exc.code in (401, 403) and token:
+                last_error = (exc.code, body[:300])
+                continue  # try the next candidate token
+            raise SystemExit(f"HTTP {exc.code} {url}: {body[:300]}") from exc
+        except Exception as exc:
+            raise SystemExit(f"request failed {url}: {exc}") from exc
+    code, body = last_error or (401, "no candidates")
+    raise SystemExit(
+        f"HTTP {code} {url}: {body} (tried {len(candidates)} local token candidate(s))"
+    )
 
 
 def _resolve_peer(args: argparse.Namespace) -> tuple[str, int]:
