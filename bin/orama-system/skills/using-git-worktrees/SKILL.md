@@ -30,6 +30,15 @@ Hook scripts must stay bash 3.2–safe on macOS (no `mapfile`); see
 [`git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md)
 — stash → `pull --ff-only` → pop → commit → push. Never `git reset --hard` or force-push `main`.
 
+**Perpetua-Tools runtime overlay (`config/devices.yml`, `config/models.yml`):** discovery
+may write operator LAN IPs into the working tree — **never `git checkout` to discard**.
+Stash those paths before pull/rebase; never commit overlay values. Full card:
+[`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md).
+
+**Integrity / true unique branch contribution vs current `main`:** use an ephemeral
+fresh `origin/main` baseline; **CLAYGO** (clean last run before and after). Full card:
+[`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md).
+
 ---
 
 ## Step 0 — Should You Use a Worktree?
@@ -274,6 +283,7 @@ cat .worktree-env
 ## Related skills
 
 - [[fable5-git-rebase-safety]] — before cleaning up or discarding a finished/stale-looking worktree, verify its branch's real relationship to main (tree-twin scan + per-file/per-commit triage) rather than judging by ahead/behind counts alone.
+- **Reference cards:** [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) (PT discovery cache — never discard); [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) (ephemeral fresh-main diff + CLAYGO teardown).
 
 ---
 

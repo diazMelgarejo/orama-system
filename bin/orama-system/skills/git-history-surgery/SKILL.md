@@ -54,6 +54,12 @@ LM Studio host, run
 6. Mac ↔ Win (or any peer) must sync `main` while the worktree is dirty?
    Use [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) —
    stash → `pull --ff-only` → pop → commit → push. Never `reset --hard` or force-push `main`.
+   On **Perpetua-Tools**, also read [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md)
+   — stash `config/devices.yml` / `config/models.yml` explicitly when needed; never `git checkout` overlay paths.
+7. Post-merge integrity check or stale branch with merge noise — what is truly unique vs current `main`?
+   Use [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md)
+   (ephemeral fresh `origin/main` baseline; **CLAYGO** clean before/after each run).
+   Canonical protocol: [`../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md`](../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md).
 
 ## Non-Negotiables
 
@@ -229,6 +235,25 @@ Run the script (no flags) to fix it, then amend or add a follow-up commit.
 
 See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
 See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
+
+## References
+
+- [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
+- [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
+- [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) — ephemeral fresh-main diff; true unique branch contribution; CLAYGO teardown
+- [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
+- [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
+- [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table
+- [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md) — CRLF on Windows turf; LF on Mac/Linux; no cross-platform EOL tug-of-war
+- [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md)
+- [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
+- [`references/windows-powershell-runtime-bootstrap.md`](references/windows-powershell-runtime-bootstrap.md)
+- [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md) — macOS bash 3.2; no `mapfile` in hook scripts; `check_tdd_commit.sh` pattern
+- [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md)
+- [`docs/wiki/13-alphaclaw-fork-contrib-branches.md`](../../../../docs/wiki/13-alphaclaw-fork-contrib-branches.md)
+- [`scripts/git/reanchor_scan.sh`](../../../../scripts/git/reanchor_scan.sh)
+- [`scripts/sync_version.py`](../../../../scripts/sync_version.py) — version propagation
+- [`src/orama_system/_version.py`](../../../../src/orama_system/_version.py) — single source of truth
 
 ## v2 Authoring Standards
 
