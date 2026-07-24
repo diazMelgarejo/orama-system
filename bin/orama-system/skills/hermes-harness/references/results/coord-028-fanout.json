@@ -1,0 +1,17 @@
+{
+  "fanout_id": "coord-028",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "operator/monitors-paused",
+      "filename": "win-2026-07-23-monitors-paused.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-23-monitors-paused.md"
+    },
+    {
+      "assignee": "mac",
+      "topic": "operator/monitors-paused",
+      "filename": "win-2026-07-23-monitors-paused.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-23-monitors-paused.md"
+    }
+  ]
+}
