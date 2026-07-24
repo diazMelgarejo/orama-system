@@ -35,6 +35,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
+import socket
 import sys
 import time
 import urllib.error
@@ -50,28 +52,89 @@ if str(_SCRIPT_DIR) not in sys.path:
 # Import probe helpers (same directory)
 import probe_lan_peer as probe
 
-# Add Perpetua-Tools to path for orchestrator imports
-_REPO_ROOT = _SCRIPT_DIR.parents[4]
-_PT_ROOT = _REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools"
-if _PT_ROOT.exists() and str(_PT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PT_ROOT))
+# Lazy orchestrator imports — populated by _import_orchestrator() on first use.
+# Kept out of module scope so importing this file never crashes pytest
+# collection in environments without the Perpetua-Tools sibling checkout.
+_FleetTopologyState: Any = None
+_read_fleet_topology: Any = None
+_write_fleet_topology: Any = None
+_get_fleet_topology_path: Any = None
+_FleetMode: Any = None
+_classify_fleet_mode: Any = None
 
-try:
-    from orchestrator.fleet_topology import (
-        FleetTopologyState,
-        read_fleet_topology,
-        write_fleet_topology,
-        get_fleet_topology_path,
-    )
-    from orchestrator.startup_intelligence import FleetMode, classify_fleet_mode
-except ImportError as exc:
-    logging.error("Cannot import orchestrator modules from %s: %s", _PT_ROOT, exc)
-    sys.exit(2)
 
-# Add orama-system to path for Phase 6 self-healing modules
-_ORAMA_ROOT = _REPO_ROOT
-if str(_ORAMA_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ORAMA_ROOT))
+def _resolve_perpetua_tools_root() -> Path | None:
+    """Locate a Perpetua-Tools checkout, preferring explicit env vars.
+
+    Checks PERPETUA_TOOLS_ROOT, PERPETUATOOLSROOT, and PERPETUA_TOOLS_PATH
+    (in that order), then falls back to a few repo-relative candidate
+    directories. Returns the discovered root, or None if not found.
+    """
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH"):
+        raw = os.environ.get(key, "").strip()
+        if raw:
+            p = Path(raw).expanduser()
+            if p.is_dir():
+                return p
+    repo_root = _SCRIPT_DIR.parents[4]
+    for candidate in (
+        repo_root.parent / "perplexity-api" / "Perpetua-Tools",
+        repo_root.parent / "Perpetua-Tools",
+        repo_root.parent / "repos" / "Perpetua-Tools",
+    ):
+        if (candidate / "orchestrator" / "fastapi_app.py").is_file():
+            return candidate
+    return None
+
+
+def _ensure_pt_on_path() -> None:
+    """Add the discovered Perpetua-Tools root to sys.path if not present."""
+    pt_root = _resolve_perpetua_tools_root()
+    if pt_root and str(pt_root) not in sys.path:
+        sys.path.insert(0, str(pt_root))
+
+
+def _import_orchestrator() -> None:
+    """Lazily import orchestrator modules and cache them in module globals.
+
+    Raises ImportError (does NOT sys.exit) so callers can decide how to
+    handle a missing Perpetua-Tools checkout.
+    """
+    global _FleetTopologyState, _read_fleet_topology, _write_fleet_topology
+    global _get_fleet_topology_path, _FleetMode, _classify_fleet_mode
+    if _FleetTopologyState is not None:
+        return
+    _ensure_pt_on_path()
+    try:
+        from orchestrator.fleet_topology import (
+            FleetTopologyState,
+            read_fleet_topology,
+            write_fleet_topology,
+            get_fleet_topology_path,
+        )
+        from orchestrator.startup_intelligence import FleetMode, classify_fleet_mode
+    except ImportError as exc:
+        raise ImportError(
+            f"Cannot import orchestrator modules from {_resolve_perpetua_tools_root()}: {exc}"
+        ) from exc
+    _FleetTopologyState = FleetTopologyState
+    _read_fleet_topology = read_fleet_topology
+    _write_fleet_topology = write_fleet_topology
+    _get_fleet_topology_path = get_fleet_topology_path
+    _FleetMode = FleetMode
+    _classify_fleet_mode = classify_fleet_mode
+
+
+# Add orama-system to path for Phase 6 self-healing modules.
+# BOTH roots are needed: repo root satisfies the explicit `src.orama_system.*`
+# imports below, while `src/` itself satisfies the `orama_system.*` imports
+# those modules make internally. Without src/ on the path, standalone
+# invocation (exactly how coord_pulse.sh calls this script) failed with
+# "No module named 'orama_system'" and silently degraded Phase 6 away.
+_ORAMA_ROOT = _SCRIPT_DIR.parents[4]
+for _p in (_ORAMA_ROOT, _ORAMA_ROOT / "src"):
+    if _p.exists() and str(_p) not in sys.path:
+        sys.path.insert(0, str(_p))
 
 try:
     from src.orama_system.fleet_health_monitor import (
@@ -101,36 +164,117 @@ PORTAL_PORT = 8002
 DEFAULT_TIMEOUT = 2
 
 
-def _auth_header() -> dict[str, str]:
-    """Build Authorization header from control plane token."""
-    token = probe.resolve_control_plane_token()
+def _this_node_id() -> str:
+    """This machine's own identity for fleet_topology.json's local_node field.
+
+    Must NEVER be derived from a peer's response -- see the 2026-07-19 D10
+    bug this replaces: _merge_peer_topology()'s "no current state yet" seed
+    branch used peer_data.get("local_node", ...) (the PEER's self-reported
+    id, e.g. "win-studio") as THIS node's own identity when running on the
+    Mac, then computed peers_reachable from a peers_list containing only
+    that borrowed id -- local_node ended up equal to its own single peers
+    entry, so peers_reachable came out 0 and fleet_mode classified SOLO
+    despite a real, live, successfully-merged peer response.
+    """
+    return socket.gethostname()
+
+
+def _auth_header(token: str) -> dict[str, str]:
+    """Build an Authorization header for one specific token."""
     if not token:
         return {}
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
 
 
+def _is_authenticated_transport(url: str) -> bool:
+    """True only for a transport a bearer token may legitimately cross.
+
+    MINIMUM fix landing today (2026-07-24): this repo has no TLS peer
+    infrastructure deployed yet (no peer certificates, no cert validation,
+    no mTLS) -- that is real, larger work, deferred to the plan tracked in
+    docs/v2/ (source: 3 ingested security-hardening plans, see the plan
+    doc's own header for the exact deferral list: certificate provisioning,
+    a pluggable auth-provider architecture, audit logging, etc.). Until
+    that lands, this function can only ever be honest about what "https"
+    actually means here: it accepts the scheme, nothing more -- it does
+    NOT itself perform certificate validation or mTLS. That gap is
+    intentional and tracked, not silently accepted as sufficient.
+    """
+    return url.startswith("https://")
+
+
 def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | None:
-    """Single HTTP GET with graceful error handling.
+    """HTTP GET, retrying across every locally-available control-plane
+    token candidate (not just resolve_control_plane_token()'s single
+    "preferred" one) before giving up -- but ONLY over authenticated
+    transport (see _is_authenticated_transport). A bearer token is never
+    attempted, including the first/fallback candidate, over an
+    unauthenticated channel: a passive LAN observer or a host impersonating
+    the discovered peer could otherwise capture every locally-known
+    credential from a single fanned-out query. If transport isn't
+    authenticated, this stops immediately rather than retrying credentials
+    against it -- fixed today per security review; full TLS/mTLS peer
+    infrastructure is deferred (see docs/v2/ plan).
+
+    2026-07-19 correction to the original D7/D8 fix: this was first
+    diagnosed as "the shared token isn't deployed on the peer" (operator
+    action needed). Live testing every local candidate against the peer
+    proved that wrong -- a second local candidate (from
+    outbound_control_plane_tokens(), already used by probe_lan_peer.py's
+    own relay_probe()) IS accepted by the peer; resolve_control_plane_token()
+    just never tried it, because it unconditionally returns candidates[0].
+    The real bug was single-token client code, not an undeployed token.
+    Logged as a self-correction rather than silently replacing D7/D8's text
+    (see docs/next/fleet-mesh/2026-07-19-oob-completion-findings.md D9).
 
     Returns:
-        Parsed JSON dict on success, None if unreachable or malformed.
-        Never raises; logs warnings instead.
+        Parsed JSON dict on success, None if unreachable, malformed,
+        transport isn't authenticated, or every candidate token was
+        rejected. Never raises.
     """
-    try:
-        req = urllib.request.Request(
+    candidates = probe.outbound_control_plane_tokens() or [""]
+    has_real_token = any(candidates)
+    if has_real_token and not _is_authenticated_transport(url):
+        logger.error(
+            "SECURITY_STOP: refusing to send any control-plane token "
+            "candidate to %s over an unauthenticated channel. Peer transport "
+            "must be authenticated (TLS with certificate validation, or "
+            "mTLS) before any credential is attempted -- not retrying. "
+            "TLS peer infrastructure is not yet deployed; tracked in the "
+            "docs/v2/ security-hardening plan.",
             url,
-            headers=_auth_header(),
-            method="GET",
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = resp.read().decode("utf-8")
-            return json.loads(data) if data.strip() else None
-    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
-        logger.debug("HTTP GET %s failed: %s", url, exc)
         return None
-    except Exception as exc:
-        logger.debug("Unexpected error querying %s: %s", url, exc)
-        return None
+    last_status: int | None = None
+    for token in candidates:
+        try:
+            req = urllib.request.Request(url, headers=_auth_header(token), method="GET")
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                data = resp.read().decode("utf-8")
+                return json.loads(data) if data.strip() else None
+        except urllib.error.HTTPError as exc:
+            last_status = exc.code
+            if exc.code in (401, 403):
+                continue  # try the next candidate token
+            logger.debug("HTTP GET %s failed: %s", url, exc)
+            return None
+        except (urllib.error.URLError, json.JSONDecodeError, OSError) as exc:
+            logger.debug("HTTP GET %s failed: %s", url, exc)
+            return None
+        except Exception as exc:
+            logger.debug("Unexpected error querying %s: %s", url, exc)
+            return None
+
+    if last_status in (401, 403):
+        # Every candidate rejected -- NOW it really is operator-actionable
+        # (genuinely no working shared credential found locally), unlike
+        # the false alarm this same message flagged before the fix above.
+        logger.warning(
+            "Peer %s rejected ALL %d local control-plane token candidate(s) "
+            "(last: HTTP %d). Sync ORAMA_CONTROL_PLANE_TOKEN across the fleet.",
+            url, len(candidates), last_status,
+        )
+    return None
 
 
 def _discover_peers() -> list[tuple[str, int]]:
@@ -229,14 +373,23 @@ def _merge_peer_topology(
         Events are {'type': str, 'payload': dict} dicts for gossip emission.
         Never raises; logs warnings instead.
     """
+    _import_orchestrator()
     events: list[dict] = []
 
     try:
         if not current:
-            # First peer response — use it as seed
-            local_node = peer_data.get("local_node", "unknown")
+            # First peer response — seed OUR OWN local_node from this
+            # machine's own identity, never from the peer's payload (D10
+            # fix, see _this_node_id()'s docstring). peers_list starts as
+            # [ourselves, the peer we just heard from] so peers_reachable
+            # correctly counts to >=1 instead of miscounting the peer's own
+            # self-report as "the only entity in my peer list is myself".
+            local_node = _this_node_id()
             fleet_mode_str = peer_data.get("fleet_mode", "SOLO")
-            peers_list = [peer_data.get("local_node", peer_ip)]
+            peer_node_id = peer_data.get("local_node", peer_ip)
+            peers_list = [local_node]
+            if peer_node_id not in peers_list:
+                peers_list.append(peer_node_id)
             cross_reach = peer_data.get("cross_reachable", False)
         else:
             # Merge: extend peer list with any new IPs from peer's report
@@ -282,10 +435,10 @@ def _merge_peer_topology(
 
         # Re-classify based on merged state
         peers_reachable = len(peers_list) - 1 if local_node in peers_list else len(peers_list)
-        new_fleet_mode = classify_fleet_mode(peers_reachable, cross_reach)
+        new_fleet_mode = _classify_fleet_mode(peers_reachable, cross_reach)
 
         return (
-            FleetTopologyState(
+            _FleetTopologyState(
                 local_node=local_node,
                 fleet_mode=new_fleet_mode,
                 peers=peers_list,
@@ -313,6 +466,7 @@ def _emit_topology_transition_event(
     if old_mode is None or old_mode != new_mode:
         try:
             # Lazy import to avoid dep on asyncio if not needed
+            _ensure_pt_on_path()
             from orchestrator.gossip_bus import GossipBus, resolve_gossip_db_path
 
             db_path = resolve_gossip_db_path()
@@ -357,6 +511,7 @@ def run_topology_query(timeout: float = DEFAULT_TIMEOUT) -> int:
         1 — No peers to query or topology unchanged (idempotent)
         2 — Query failed on critical error
     """
+    _import_orchestrator()
     peers = _discover_peers()
     if not peers:
         logger.info("No peers to query (SOLO mode)")
@@ -365,7 +520,7 @@ def run_topology_query(timeout: float = DEFAULT_TIMEOUT) -> int:
     logger.info("Querying %d peer(s) for topology...", len(peers))
 
     # Read current topology
-    current_topology = read_fleet_topology()
+    current_topology = _read_fleet_topology()
     old_fleet_mode = current_topology.fleet_mode if current_topology else None
     merged_topology = current_topology
     all_events: list[dict] = []
@@ -387,14 +542,14 @@ def run_topology_query(timeout: float = DEFAULT_TIMEOUT) -> int:
         return 2
 
     # Hash-gated write (skip if content unchanged)
-    written = write_fleet_topology(merged_topology)
+    written = _write_fleet_topology(merged_topology)
     if not written:
         logger.warning("Could not write fleet topology")
         return 2
 
     # Re-classify and check for transition
     peers_reachable = len(merged_topology.peers) - 1 if merged_topology.local_node in merged_topology.peers else len(merged_topology.peers)
-    new_fleet_mode = classify_fleet_mode(peers_reachable, merged_topology.cross_reachable)
+    new_fleet_mode = _classify_fleet_mode(peers_reachable, merged_topology.cross_reachable)
 
     logger.info(
         "Fleet topology: mode=%s peers=%d cross_reach=%s",
