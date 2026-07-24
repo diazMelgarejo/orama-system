@@ -11,11 +11,12 @@ description: |
 
 # Firecrawl
 
-Firecrawl helps agents search first, scrape clean content, interact
-with live pages when plain extraction is not enough, parse local
-documents into markdown, search scientific papers and GitHub history
-through the research index, monitor pages for changes, and produce
-finished deliverables from web data.
+Firecrawl is a downstream scraping and extraction tool, used once a URL
+is already known -- not a search engine. It scrapes clean content,
+interacts with live pages when plain extraction is not enough, parses
+local documents into markdown, searches scientific papers and GitHub
+history through the research index, monitors pages for changes, and
+produces finished deliverables from web data.
 
 ## Fit in orama-system (read first)
 
@@ -76,8 +77,16 @@ the workflow skills for producing repeatable deliverables. It also opens
 browser auth so the human can sign in or create an account.
 
 ```bash
-npx -y firecrawl-cli@latest init --all --browser
+npx -y firecrawl-cli@1.19.27 init --all --browser
 ```
+
+The CLI version above is pinned to a specific, reviewed release, not
+`@latest` — an unpinned version lets the installed CLI change out from
+under this skill without re-review. Update this pin deliberately when a
+newer CLI version has been checked, not automatically. This pin covers
+the CLI binary only; `init --all` still installs the separate build/
+workflow skill packages, whose own content is accepted on its own terms,
+not implicitly re-reviewed by pinning the CLI version.
 
 This gives you:
 
@@ -144,7 +153,7 @@ Via CLI (after install), hand off to the CLI skill:
 - `firecrawl-crawl` for bulk extraction
 - `firecrawl-map` for URL discovery
 - `firecrawl-parse` when the source is a **local file** (PDF, DOCX, DOC, ODT, RTF, XLSX, XLS, HTML) — `firecrawl parse ./report.pdf -o .firecrawl/report.md` converts it to clean markdown, with `-S` for an AI summary or `-Q` to answer a question from the doc. Public document URLs go through `firecrawl scrape` instead
-- `firecrawl-monitor` when the user wants to be **notified when something changes** — `firecrawl monitor create` sets up recurring checks (cron or natural-language schedules like `"every 30 minutes"`) that diff each page, run an AI judge against a plain-language `--goal` to filter noise, and notify by webhook, email, or Slack. Prefer this over repeated one-off scrapes whenever the same URL needs checking more than once
+- `firecrawl-monitor` when the user wants to be **notified when something changes** — `firecrawl monitor create` sets up recurring checks (cron or natural-language schedules like `"every 30 minutes"`) that diff each page, run an AI judge against a plain-language `--goal` to filter noise, and notify by webhook, email, or Slack. Prefer this over repeated one-off scrapes whenever the same URL needs checking more than once. **Confirm with the user immediately before running `monitor create` or configuring any webhook, email, or Slack notification target** — this creates a recurring job and/or sends data to an external destination on an ongoing basis; do not execute it automatically as part of a broader task.
 - `firecrawl-research-index` for scientific and engineering research — `firecrawl research search-papers`, `inspect-paper`, `read-paper`, `related-papers`, and `search-github` search a purpose-built paper index (metadata, full-text passages, citation expansion) plus GitHub issues, PRs, and READMEs
 - `firecrawl-ask` when a Firecrawl call fails or returns unexpected output — pass the failing `jobId` and the AI support agent diagnoses it from your team's job logs and account state
 - `firecrawl-docs-search` for "how does Firecrawl handle X?" questions — answers grounded in current docs with source citations
