@@ -32,6 +32,15 @@ The mother plan is active, not archive. Later documents should cite it as the so
 | Perpetua-Tools | `docs/phase-0-specifications/PATTERN-SYNTHESIS.md` | Security and pattern synthesis feeding gossip, split-brain, and witness recovery. |
 | Perpetua-Tools | `docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md` | Threat-model companion for Phase 10+ Byzantine/witness direction. |
 
+## Audit Trail and Closure Checklist
+
+| Artifact | Document | Relationship |
+|---|---|---|
+| Closure audit | [`../../../../references/coordination-and-plans-completeness-audit-2026-07-18.md`](../../../../references/coordination-and-plans-completeness-audit-2026-07-18.md) | Inventory of open/closed/ambiguous docs across PT and orama; use it to justify why a row is still open or has been closed. |
+| Closure plan | [`../../../../references/phase0-and-orama-open-work-closure-plan-2026-07-18.md`](../../../../references/phase0-and-orama-open-work-closure-plan-2026-07-18.md) | Wave order and disposition plan for the open items; use it as the execution checklist. |
+| Ranked handoff | [`../../../../references/phase0-and-orama-closure-rankings-2026-07-18.md`](../../../../references/phase0-and-orama-closure-rankings-2026-07-18.md) | Claim-ready ranking with done / in-progress / deferred-to-v2 / TODO state buckets. |
+| Orama hub | [`README.md`](README.md) | Starting point for the fleet-mesh lineage and the active cross-repo navigation graph. |
+
 ## System Navigation Graph
 
 This is the fleet-mesh navigation hub, not a replacement architecture. Follow
@@ -64,7 +73,7 @@ historical, security, or runtime evidence in a small number of hops.
 | G7 product analysis | [`G7 async notifications`](G7-ASYNC-NOTIFICATIONS-ANALYSIS.md) | Portal Notification Hub scope and the initial implementation checklist. |
 | G7 production evidence | [SSE production patterns](../../superpowers/references/2026-07-14-g7-sse-production-patterns.md) | Bounded Firecrawl research, browser-auth constraints, overflow, envelope, and replay decisions. |
 | G7 executable handoff | [Authenticated SSE MVP plan](../../superpowers/plans/2026-07-14-g7-authenticated-sse-mvp.md) | File-by-file TDD implementation sequence; subordinate to `docs/v2/`. |
-| G7 pre-v2 fast-follow | [Backlog closure plan](../../superpowers/plans/2026-07-16-g7-pre-v2-todo-closure.md) | Dependency-gated rate-limit reuse, React Query invalidation client, TDD evidence, and move-not-delete backlog closure after the SSE MVP lands. |
+| G7 pre-v2 fast-follow | [Backlog closure plan](../../superpowers/plans/2026-07-16-g7-pre-v2-todo-closure.md), [archive](../../archive/2026-07-16-g7-pre-v2-todo-closure.md), [TDD evidence](../../testing/2026-07-16-g7-pre-v2-todo-closure.tdd.md) | Completed pre-v2 rate-limit reuse, React Query invalidation client, and move-not-delete backlog closure. LAN trust hardening remains v2.1; multisite/mesh/durable replay remains v2.5. |
 | PT runtime companion | [PT Phase 2 spec](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/PHASE-2-SPEC.md), [fleet topology](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/fleet_topology.py) | Runtime/state ownership for FleetMode and topology, when present in the current PT lineage. |
 | PT security companion | [pattern synthesis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PATTERN-SYNTHESIS.md), [swarm security analysis](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/MULTIAGENT-SWARM-SECURITY-ANALYSIS.md) | Threat-model and pattern evidence for later mesh hardening; leave their claims intact unless separately tasked. |
 | Completed evidence | [`fleet-mesh archive`](../../archive/fleet-mesh/README.md) | Phase 5-6 report and historical review ledger, preserved for provenance. |

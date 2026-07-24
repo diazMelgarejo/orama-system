@@ -1,5 +1,6 @@
 # 23 — Security Preconditions (v2 gate)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md). Portable memory and policy docs must name forbidden categories without hardcoding the concrete local fragments; see [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md).
 > **Status:** Active gate — v2 scaffold work must not proceed on a shared LAN until rows marked **done** below are true in production configs, and new v2 surfaces must satisfy the security-first platform requirements.  
 > **Review source:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../../v1/2026-05-23-security-markdown.md)
 > **Canonical policy:** [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md)
@@ -48,6 +49,9 @@
   fail if elevated managed workers remain enabled
 - [ ] Every new route/tool/worker declares a capability and has auth-denial
   tests unless it is explicitly `public`
+- [ ] Portable memory, skills, coordination logs, and policy docs pass the
+  local-topology invariant: concrete forbidden fragments are loaded from a
+  local-only registry, not spelled in tracked files.
 
 The original fixes remain valuable, but rows **3**, **5**, and **6** are active
 v2 design gates again until the 2026-05-26 immediate queue in

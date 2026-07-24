@@ -12,6 +12,10 @@
 
 ## Sync (idempotent)
 
+`sync-cursor-mcp.sh` patches `CRG_OPENAI_BASE_URL` for the host OS at sync time
+(**macOS/Linux** → `http://localhost:11434/v1`; **Windows** → `http://localhost:1234/v1`).
+See [`../../code-review/references/crg-platform-endpoints.md`](../../code-review/references/crg-platform-endpoints.md).
+
 ```bash
 # Readonly (default): CRG only — no ai-cli-mcp subprocess workers
 bash bin/orama-system/scripts/sync-cursor-mcp.sh --profile readonly

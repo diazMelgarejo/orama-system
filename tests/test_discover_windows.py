@@ -342,6 +342,11 @@ def test_windows_subnet_scan_finds_mac_when_cache_is_loopback():
     D.probe_models = fake_probe
     D._load_json = lambda path: cached_state
     D._win_lan_ip = lambda: "192.168.254.100"
+    # Must be mocked: the real implementation enumerates this host's actual
+    # network interfaces, so on a machine with real LAN subnets this test
+    # would scan the host's live subnet instead of exercising the intended
+    # fallback-to-SUBNET-constant path the assertion below checks.
+    D.get_local_subnets = lambda: []
 
     async def fake_scan(subnet, port, exclude):
         assert subnet == "192.168.254"

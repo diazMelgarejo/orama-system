@@ -18,7 +18,7 @@ description: >-
   invocation as an oramasys invocation. **Also use for PR merges, conflict
   resolution, nested-branch integration, and any edit that must harmonize two
   divergent branches additively (never delete-and-replace).**
-version: "1.2.0"
+version: "1.3.3"
 license: Apache 2.0
 compatibility: claude-code, cowork, codex, openclaw
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
@@ -35,9 +35,9 @@ path — same muscle memory, new engine.
 > **Upstream alignment:** The `orama-system` mother skill already carries the AFRP
 > gate, CIDF, search policy, and MCP routing; the repo's `agent-methodology` card
 > is Claude-only background knowledge (`user-invocable: false`). This skill is the
-> user-invocable front door tying them together and guaranteeing the legacy
-> "ultrathink" alias keeps working. The 5 stages below match the repo's canonical
-> 5-stage methodology exactly.
+> user-invocable front door tying them together and guaranteeing the legacy "ultrathink"
+> alias keeps working. The 5 stages below match the repo's canonical 5-stage
+> methodology exactly.
 
 ## Agent Harness Compatibility
 
@@ -74,7 +74,12 @@ Type → Mode mapping:
 
 - A / small B → **Mode 1** (inline, no subagents)
 - C (3-7 steps) → **Mode 2** (5-stage, optional subagents)
-- C (8+ steps, parallel) → **Mode 3** (full 7-agent network via MCP)
+- C (8+ steps, parallel) → **Mode 3** (full 7-agent network via MCP; on
+  Claude Code, execute via the `Workflow` tool under its own
+  `ultracode`/explicit-ask opt-in gate, never a bespoke dispatch loop, with
+  mandatory tiered model selection (Haiku dispatch → Sonnet evaluate →
+  Opus/Fable 5 escalation-only) — see
+  `../../references/claude-code-workflow-canonical.md`)
 
 ---
 
@@ -149,6 +154,41 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - Run tests / programmatic check (never visual only)
 - Confirm the artifact actually changed: re-read it, check the signature
 - For multi-agent work: confirm each subagent output before aggregating
+- For memory/security policy edits: apply the portable-memory local-topology
+  invariant in `docs/v2/47-portable-memory-local-topology-invariant.md` —
+  tracked rules name categories only; concrete local fragments stay in
+  local-only registries outside git.
+
+### File Truncation Check (MANDATORY for all create_or_update_file calls)
+
+**All agents have a recurring failure mode: TRUNCATING files.**
+When `create_or_update_file` is called with partial content, the API silently
+replaces the entire file with that truncated content. This has caused
+catastrophic data loss multiple times.
+
+**After EVERY file write, before ANY commit:**
+
+1. **Re-fetch the file:**
+   ```bash
+   curl -s https://raw.githubusercontent.com/<org>/<repo>/<branch>/<path> | wc -l
+   ```
+
+2. **Verify line count** is within 5% of expected:
+   ```bash
+   lines=$(curl -s "$url" | wc -l)
+   [ "$lines" -gt $(($expected * 95 / 100)) ] || echo "TRUNCATED!"
+   ```
+
+3. **Check structural integrity** — tail should show proper file end:
+   ```bash
+   curl -s "$url" | tail -5   # should show complete final function/block
+   ```
+
+4. **If truncated:** DO NOT commit. Re-read the original via `get_file_contents`
+   and rewrite the complete file.
+
+**This check is non-negotiable. One truncated file in main costs more than
+100 verification steps.**
 
 ---
 
@@ -161,6 +201,7 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - Apply CIDF `decide()` before any content insertion (start at rank 1)
 - Treat "ultrathink" and "oramasys" as the same trigger
 - **On PR/conflict work:** follow `references/integrative-merge.md` (additive harmonization)
+- **Verify file truncation** after every create_or_update_file call (re-fetch + check line count)
 
 ### Ask First
 
@@ -176,6 +217,17 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - Trust visual confirmation as verification
 - Reintroduce `mcp-ultrathink-*` names in new config or skills
 - **Resolve merge conflicts by wholesale `--ours` / `--theirs` without classifying mode**
+- **Commit a file without verifying it was not truncated** (re-fetch + line count check)
+
+---
+
+## Examples
+
+- Golden path (production bug fix + PR merge): [`examples/good/golden-path.md`](examples/good/golden-path.md)
+- Anti-patterns to avoid: [`examples/bad/anti-patterns.md`](examples/bad/anti-patterns.md)
+- Eval rubric, including the sandbox-limitation note for harnesses without
+  live `gbrain`/`mcp-oramasys`/OpenClaw access: [`eval/checklist.md`](eval/checklist.md)
+- Test prompts for the skill-creator dogfood loop: [`eval/evals.json`](eval/evals.json)
 
 ---
 
@@ -187,3 +239,5 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
 - `references/graceful-degradation.md` — unified fallback ladders (oramasys + PT model selection)
 - `references/cidf-and-mcp.md` — CIDF ranks, MCP names, legacy compatibility map
 - `references/tdd-gate.md` — TDD prescriptive gate (links `docs/TDD.md`)
+- `../../references/contribution-standards.md` — CONTRIBUTING.md + PR-template baseline and the method's raised contribution standard (PT PR #247); pairs with `post-review-micro-remediation.md`
+- `../../references/skill-architecture-guide.md` — the repo's own SKILL.md standard this file is audited against

@@ -12,9 +12,9 @@ status: active
 
 | Platform | Preferred harness | Entry point | Why |
 |----------|------------------|-------------|-----|
-| **macOS** | AlphaClaw + OpenClaw | `start.sh` | MLX inference, bge-m3 embeddings, LM Studio Mac port; OpenClaw is the primary runtime gateway |
-| **Linux** | AlphaClaw + OpenClaw | `start.sh` | Same binary as macOS; CUDA/ROCm GPU optional; full hardware matrix from PT `hardware/SKILL.md` |
-| **Windows 11** | Hermes Harness | `start.ps1` | GGUF LM Studio localhost, Git Bash, PowerShell toolchain; Hermes is native Windows operator shell |
+| **macOS** | AlphaClaw + OpenClaw | `start.sh` | MLX inference, Ollama `:11434` (CRG + chat), optional LM Studio Mac port; OpenClaw is the primary runtime gateway |
+| **Linux** | AlphaClaw + OpenClaw | `start.sh` | Same binary as macOS; CUDA/ROCm GPU optional; Ollama `:11434` for CRG |
+| **Windows 11** | Hermes Harness | `start.ps1` | GGUF LM Studio `localhost:1234` (inference + CRG embed); Git Bash, PowerShell toolchain; Hermes is native Windows operator shell |
 | **All** | cursor-agent (fanout) | `cursor-agent --print` | Light parallel tasks on Mac/Linux (`~/.local/bin`) and Windows (`%LOCALAPPDATA%\cursor-agent`); see `cursor-agent/SKILL.md` |
 | **All** | kimi (fanout) | `kimi -p` | Moonshot Kimi Code CLI, light parallel tasks. macOS/Linux `~/.kimi-code/bin` (verified 2026-07-10); Windows `%USERPROFILE%\.kimi-code\bin` (verified 2026-07-13, win32-x64 v0.23.6, `irm https://code.kimi.com/kimi-code/install.ps1 \| iex`). See `kimi-agent/SKILL.md`. Provider not wired by default — see that skill's § Provider Setup before dispatch. |
 
@@ -40,9 +40,11 @@ Cross-harness protocol: [`cross-harness-protocol.md`](cross-harness-protocol.md)
 2. Windows?
    └─ YES: activate Hermes (start.ps1 → HERMES_HOME)
            use LM Studio at localhost:1234 as inference backend
+           CRG embed: CRG_OPENAI_BASE_URL=http://localhost:1234/v1
            call PT hardware policy via Hermes one-shot provider route
    └─ NO:  activate OpenClaw (start.sh → ~/.openclaw)
            use Ollama localhost:11434 (mandatory) + optional LM Studio Mac port
+           CRG embed: CRG_OPENAI_BASE_URL=http://localhost:11434/v1
            call PT hardware policy via openclaw_chat/openclaw_orchestrate
 3. Skill execution: load from orama-system/bin/ via ECC import rules regardless of harness
 4. Cross-platform tasks: use Win LAN IP from ~/.openclaw/state/last_discovery.json (never hardcode)

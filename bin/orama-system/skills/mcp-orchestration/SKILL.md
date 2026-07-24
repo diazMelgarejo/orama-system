@@ -1,24 +1,36 @@
 ---
 name: mcp-orchestration
 description: Use when setting up Claude Code MCP tools, adding Claude Skills, using Gemini as a large-context reader, dispatching parallel AI CLI agents, connecting MCP tools to OpenClaw, or routing tasks to local/OpenRouter/Codex/Gemini agents. Trigger when the user mentions Gemini MCP, ai-cli-mcp, OpenClaw MCP, SKILL.md, Claude Skills, background agents, /mcp, MCP JSON, prompt caching, OpenRouter routing, agent dispatch, or tool setup failures.
-version: 2.0.0
+version: 2.1.0
 canonical_path: orama-system/bin/orama-system/mcp-orchestration/SKILL.md
 supersedes:
   - OpenClaw/MCP_ORCHESTRATION_SKILL.md
   - OpenClaw/MCP_ORCHESTRATION_SKILL_v2.md
   - ~/.claude/skills/mcp-orchestration/SKILL.md
-last_updated: 2026-05-14
+last_updated: 2026-07-22
 ---
 
 # MCP Orchestration Skill (canonical)
 
-**Version:** 2.0.0
-**Date:** 2026-05-14
+**Version:** 2.1.0
+**Date:** 2026-07-22 (trimmed from 866 to <500 lines — install/setup detail
+moved to `references/`, decision-time content unchanged)
 **Scope:** Claude Code, Claude Desktop, OpenClaw, Gemini MCP Tool, ai-cli-mcp, OpenRouter, local ollama, custom MCP servers
 **Status:** canonical. Supersedes the two root MCP_ORCHESTRATION_SKILL*.md files. Sources merged and drift removed.
 
 > **Canonical location:** `orama-system/bin/orama-system/mcp-orchestration/SKILL.md`
 > All other copies (root markdown, user-level `~/.claude/skills/mcp-orchestration/SKILL.md`) should be redirect stubs pointing here.
+
+---
+
+## Load First (setup/install detail — read on demand, not every invocation)
+
+- [`references/install-baseline.md`](references/install-baseline.md) — Node/Claude/Gemini/Codex/Hermes/ai-cli-mcp/ollama install commands and auth verification
+- [`references/gemini-and-ai-cli-mcp-setup.md`](references/gemini-and-ai-cli-mcp-setup.md) — gemini-mcp-tool and ai-cli-mcp registration, config shapes, model selection
+- [`references/custom-mcp-server-authoring.md`](references/custom-mcp-server-authoring.md) — scaffold a new MCP server when no existing tool covers the need
+- [`references/troubleshooting.md`](references/troubleshooting.md) — symptom → cause → fix table
+- [`references/legacy-file-disposition.md`](references/legacy-file-disposition.md) — historical superseded-file table
+- [`examples/good/parallel-dispatch.md`](examples/good/parallel-dispatch.md) — golden-path ai-cli-mcp parallel worker pattern
 
 ---
 
@@ -57,13 +69,7 @@ OpenClaw operations on `openclaw-skills`.
 
 ## 1. MCP Fundamentals
 
-MCP lets Claude and other agents call external tools through a standard tool protocol.
-
-### Common transport
-
-Most local MCP tools here use `stdio` — the MCP client starts the tool as a local subprocess and talks to it over stdin/stdout.
-
-### Common config shapes
+MCP lets Claude and other agents call external tools through a standard tool protocol. Most local MCP tools here use `stdio` — the MCP client starts the tool as a local subprocess and talks to it over stdin/stdout.
 
 Claude Desktop and many MCP clients:
 
@@ -93,10 +99,7 @@ OpenClaw outbound MCP registry:
 }
 ```
 
-### Claude Code verification
-
-Inside Claude Code: `/mcp`
-CLI: `claude mcp list`
+Claude Code verification: `/mcp` inside Claude Code, or `claude mcp list` from the CLI.
 
 ---
 
@@ -154,8 +157,6 @@ See `docs/OPENROUTER_FREE_MODELS.md` for the full policy and `scripts/apply-open
 
 For ANY OTHER reading task (single file, narrow audit, dependency scan), route to OpenRouter Nemotron 3 Super (1M ctx, free) instead.
 
-**Call signature pattern:**
-
 ```text
 # Default reader call (uses OpenRouter):
 "Read @path/to/file and report X"
@@ -180,7 +181,7 @@ When using Claude Sonnet 4.6 via the Anthropic SDK:
 - `model: claude-sonnet-4-6`
 - `thinking.effort: medium`
 - Set `cache_control` on **stable** system prompts, tool definitions, and context prefixes
-- **Simplest option — automatic placement:** pass a single `cache_control` field at the **top level** of the `messages.create()` request and the SDK auto-places the breakpoint on the last cacheable block. Reach for explicit per-block `cache_control` (shown below) only when you need fine-grained control over multiple breakpoints (max 4).
+- **Simplest option — automatic placement:** pass a single `cache_control` field at the **top level** of the `messages.create()` request and the SDK auto-places the breakpoint on the last cacheable block. Reach for explicit per-block `cache_control` only when you need fine-grained control over multiple breakpoints (max 4).
 - Sonnet 4.6 minimum cacheable prompt: **1,024 tokens** (anything smaller is not cached)
 - TTL: 5 minutes default (90 minutes with `ttl: "extended"`)
 - **NEVER cache** changing suffixes — timestamps, per-run user payloads, request IDs, response IDs
@@ -213,281 +214,11 @@ Source: <https://platform.claude.com/docs/en/build-with-claude/prompt-caching>
 
 ### Rule 4 — Use ai-cli-mcp as the parallel worker pool
 
-Use ai-cli-mcp when:
-
-- Tasks are independent (different files, different concerns)
-- Multiple models should inspect the same repo
-- You need background agents with PID tracking
-- You want session reuse across subtasks
-
-Do not let worker agents commit or deploy without explicit user confirmation.
+Use ai-cli-mcp when tasks are independent (different files, different concerns), multiple models should inspect the same repo, you need background agents with PID tracking, or you want session reuse across subtasks. Do not let worker agents commit or deploy without explicit user confirmation. See `references/gemini-and-ai-cli-mcp-setup.md` for the core tool table and `examples/good/parallel-dispatch.md` for the golden-path pattern.
 
 ### Rule 5 — OpenClaw as the runtime router
 
 OpenClaw routes tools into agent workflows, holds gateway/auth, registers outbound MCP servers, and keeps security/policy around agent execution.
-
----
-
-## 3. Install Baseline
-
-Use Node.js 20+ when using both Gemini MCP Tool and ai-cli-mcp.
-
-```bash
-node -v
-npm -v
-```
-
-### Install Claude Code
-
-```bash
-npm install -g @anthropic-ai/claude-code
-claude doctor
-```
-
-For ai-cli-mcp Claude workers, run once manually:
-
-```bash
-claude --dangerously-skip-permissions
-```
-
-This accepts prompts so background Claude subprocesses do not hang.
-
-### Verify Claude auth (REQUIRED before dispatching Claude workers)
-
-Before routing work to Claude, verify auth through the exact binary the orchestrator will use:
-
-```bash
-which claude
-claude --version
-claude auth status --text
-claude -p --permission-mode dontAsk --max-budget-usd 0.25 "Reply with exactly: claude-ready"
-```
-
-If `claude -p` reports `Not logged in` after a login attempt, assume the auth flow may have been sandbox-blocked until proven otherwise. Claude's OAuth flow needs a local callback server and host credential persistence. Run login outside the sandbox or with explicit escalation:
-
-```bash
-claude auth login --claudeai
-claude auth status --text
-claude -p --permission-mode dontAsk --max-budget-usd 0.25 "Reply with exactly: claude-ready"
-```
-
-If login prints success but `auth status` remains false, inspect a debug log:
-
-```bash
-claude --debug --debug-file /tmp/claude-auth-debug.log auth login --claudeai
-sed -n '1,120p' /tmp/claude-auth-debug.log
-```
-
-`Failed to start OAuth callback server` is a sandbox/auth-environment failure, not a normal stale session. Escalate the auth command instead of looping.
-
-If the machine has both native and npm-global Claude installs, compare `which claude`, `claude --version`, and known full paths. Use one exact binary for login, status, and `-p` probes.
-
-### Install Gemini CLI
-
-```bash
-npm install -g @google/gemini-cli
-gemini auth login
-gemini --version
-```
-
-**Non-interactive subagent dispatch (verified 2026-06-14; updated 2026-06-18):** prefer the
-**Antigravity** CLI (`agy -p "/goal <task>"`) as the successor path for general Gemini-style
-agent dispatch. `gemini -p "/goal <task>"` remains useful when Gemini CLI is explicitly
-authenticated or needed for Gemini-Analyzer use-cases. `agy` is multi-model (Gemini 3.x /
-Claude Sonnet+Opus 4.6 / GPT-OSS 120B; list with `agy models`) and should be bounded like
-any other worker: no commits, deletes, deploys, or account changes without explicit user
-confirmation. On native Windows, save the installer first (never pipe to `iex`):
-`Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile "$env:TEMP\agy-install.ps1"`;
-skim the first 40 lines, then run with `-ExecutionPolicy Bypass`. Treat AGY as ready only after `agy --print "Reply with exactly: AGY_READY"`
-emits visible stdout; exit 0 with empty stdout is not a usable worker. Full command guide:
-`agy-gemini.md` at the workspace root. Dispatch lanes,
-model picks, and bounding (`gtimeout`, never `sleep` chains) are in
-[`code-review/references/orchestration-dispatch.md`](../code-review/references/orchestration-dispatch.md).
-
-If AGY exits 0 with empty stdout, rerun once with `--log-file <path>` before
-debugging PATH or shell quoting. On Windows this can mean silent auth succeeded
-but the hosted model call failed with quota exhaustion; in that case AGY is
-installed but not dispatchable until quota resets or another authenticated
-model/account is selected. Do not loop on `agy -p` without checking the log.
-
-### Install Codex CLI (optional, Codex worker support)
-
-```bash
-npm install -g @openai/codex
-codex login
-```
-
-### Install Hermes Agent (operator shell support)
-
-Use [`../hermes-harness/SKILL.md`](../hermes-harness/SKILL.md) for the
-Windows-aware bring-up. Hermes consumes canonical ECC/orama skills and bounded
-partner prompts; it must not become a source of copied private state. Keep
-OpenClaw operations on `openclaw-skills`.
-
-### Install ai-cli-mcp
-
-```bash
-npm install -g ai-cli-mcp
-ai-cli doctor
-ai-cli models
-```
-
-### Install ollama (for local-priority routing per Rule 1)
-
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
-ollama pull qwen3.5:9b-nvfp4   # Mac default model
-ollama serve                    # listens on localhost:11434
-```
-
----
-
-## 4. gemini-mcp-tool
-
-Repository: `jamubc/gemini-mcp-tool`
-
-### Purpose
-
-Bridges Gemini CLI into Claude Code or other MCP clients. Used **only for Gemini-Analyzer use-cases** per §2 Rule 2.
-
-### Claude Code setup
-
-```bash
-claude mcp add gemini-cli -- npx -y gemini-mcp-tool
-```
-
-Verify: `/mcp` → expect `gemini-cli active`
-
-### Claude Desktop setup
-
-Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "gemini-cli": {
-      "command": "npx",
-      "args": ["-y", "gemini-mcp-tool"]
-    }
-  }
-}
-```
-
-Restart Claude Desktop.
-
-### Reader Protocol (Gemini-Analyzer mode)
-
-1. Mark the call as Gemini-Analyzer (explicit user intent)
-2. Ask Gemini a NARROW reading question with structured output
-3. Ask Claude to verify the evidence
-4. Let Claude decide
-
-Good:
-
-```text
-Ask Gemini to identify stale architecture claims in @README.md and @docs/. Return file, claim, contradiction, confidence.
-```
-
-Bad:
-
-```text
-Ask Gemini to fix the repo.
-```
-
-### Model selection
-
-| Model | Use |
-| --- | --- |
-| Gemini Pro | architecture, whole-repo reading, security review, visual diff |
-| Gemini Flash | quick review, smaller files, routine docs |
-
-### Windows / Parallels note
-
-Use official `gemini-mcp-tool` first. A package like `gemini-mcp-tool-windows-fixed` is a local workaround only.
-
----
-
-## 5. ai-cli-mcp
-
-Repository: `mkXultra/ai-cli-mcp`
-
-### Purpose
-
-Runs AI CLI tools as background worker processes with PID tracking, result retrieval, waiting, killing, cleanup.
-
-### Critical first run
-
-Run once:
-
-```bash
-claude --dangerously-skip-permissions
-codex login
-gemini auth login
-```
-
-### Claude Code setup
-
-```bash
-claude mcp add ai-cli '{"name":"ai-cli","command":"npx","args":["-y","ai-cli-mcp@latest"]}'
-```
-
-### Generic MCP config
-
-```json
-{
-  "mcpServers": {
-    "ai-cli-mcp": {
-      "command": "npx",
-      "args": ["-y", "ai-cli-mcp@latest"],
-      "env": {
-        "MCP_CLAUDE_DEBUG": "false"
-      }
-    }
-  }
-}
-```
-
-### Core tools
-
-| Tool | Purpose |
-| --- | --- |
-| `run` | Launch a background AI CLI process |
-| `wait` | Wait for one or more PIDs |
-| `peek` | Watch short live output from a running worker |
-| `get_result` | Fetch result for one worker |
-| `list_processes` | List tracked workers |
-| `kill_process` | Stop a stuck worker |
-
-### Parallel dispatch pattern
-
-```text
-Use ai-cli-mcp to run three workers in parallel:
-
-1. model=sonnet
-   workFolder=/absolute/path/project
-   prompt="Review src/backend for risky refactors. Return findings only."
-
-2. model=gpt-5.5
-   workFolder=/absolute/path/project
-   prompt="Write test suggestions for src/frontend. Do not edit files."
-
-3. model=openrouter/nvidia/nemotron-3-super-120b-a12b:free
-   workFolder=/absolute/path/project
-   prompt="Read the repo and find stale docs. Return file list."
-
-Then wait for all PIDs.
-Merge outputs.
-Do not modify files until I approve.
-```
-
-### Worker safety
-
-- Use absolute `workFolder`
-- Avoid destructive actions
-- Do not allow background agents to commit
-- Require explicit user confirmation for writes, deletes, deploys, account changes
-- Kill runaway PIDs
-- Archive useful results into `learnings.md` only after review
 
 ---
 
@@ -564,13 +295,11 @@ After workers finish, summarize by PID and cite each worker result.
 
 ## 7. Build a New Claude Skill
 
-### Locations
-
 - Personal: `~/.claude/skills/<skill-name>/SKILL.md`
 - Project: `.claude/skills/<skill-name>/SKILL.md`
 - Repo-canonical (orama-system pattern): `bin/orama-system/<skill-name>/SKILL.md`
 
-### Minimal template
+Minimal template:
 
 ```markdown
 ---
@@ -581,8 +310,6 @@ description: Diagnoses and fixes build failures. Use when the user mentions ENOT
 # Build Optimizer
 
 ## Instructions
-
-When fixing build failures:
 
 1. Identify the package manager.
 2. Capture the exact error.
@@ -597,71 +324,13 @@ Do not delete source files.
 Ask before deleting unknown folders.
 ```
 
-### Skill discovery rule
-
 The `description` is the trigger surface — be specific.
 
 Good: `description: Diagnoses MCP setup issues for Claude Code, Gemini MCP Tool, ai-cli-mcp, and OpenClaw. Use when MCP servers fail, tools do not appear in /mcp, JSON parse errors occur, or background agents hang.`
 
 Bad: `description: Helps with MCP.`
 
----
-
-## 8. Custom MCP Server Skill
-
-Use only when existing tools do not provide the needed action.
-
-### Scaffold
-
-```bash
-mkdir my-mcp-server && cd my-mcp-server
-npm init -y
-npm install @modelcontextprotocol/sdk zod
-mkdir -p src
-```
-
-### Minimal TypeScript server
-
-```typescript
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
-
-const server = new McpServer({ name: "my-skill", version: "1.0.0" });
-
-server.registerTool(
-  "my_tool",
-  {
-    description: "Runs one safe custom action.",
-    inputSchema: {
-      action: z.string().describe("Action to perform"),
-      target: z.string().optional().describe("Target resource"),
-    },
-  },
-  async ({ action, target }) => ({
-    content: [{ type: "text", text: `Executed ${action} on ${target ?? "default"}` }],
-  }),
-);
-
-const transport = new StdioServerTransport();
-await server.connect(transport);
-```
-
-### Register
-
-```bash
-npx tsc
-claude mcp add my-skill -- node dist/index.js
-```
-
-### Security baseline
-
-- Use allowlists
-- Keep tools narrow
-- Avoid broad filesystem access
-- Do not pass secrets in prompts
-- Use environment variables for credentials
-- Require confirmation before destructive actions
+For a custom MCP server when no existing tool covers the need, see `references/custom-mcp-server-authoring.md`.
 
 ---
 
@@ -682,37 +351,11 @@ ENABLE_TOOL_SEARCH=auto:5 claude
 
 ---
 
-## 10. Troubleshooting
+## 11. learnings.md Pattern
 
-| Symptom | Likely cause | Fix |
-| --- | --- | --- |
-| MCP server missing | Not registered or client not restarted | Run `/mcp` and `claude mcp list` |
-| Gemini tool fails | Gemini CLI not authenticated | `gemini auth login` |
-| Wrong Gemini package | Old guide used wrong package | Use `@google/gemini-cli` |
-| ai-cli worker hangs | First-run prompt not accepted | `claude --dangerously-skip-permissions` once |
-| `claude -p` says `Not logged in` after login | OAuth callback or credential persistence failed in sandbox | `claude auth login --claudeai` outside sandbox; verify `auth status` and `claude -p` |
-| Claude login says success but status is false | Login metadata was written without a usable token | Capture `--debug` log; rerun auth outside sandbox |
-| Multiple Claude installs | PATH/native/global mismatch | Compare `which claude`, versions, exact binaries; use one binary everywhere |
-| OpenRouter free-tier rate-limit hit | 50 req/day exceeded | Fall back to local ollama, or wait |
-| OpenRouter model unavailable | Provider rate limit on that specific model | Use the fallback chain in §2 Rule 1 |
-| JSON parse error | Debug logs pollute stdout | Set `MCP_CLAUDE_DEBUG=false` |
-| ESM import error | Old Node version | Use Node.js 20+ |
-| Agent runs forever | Worker stuck | `peek`, then `kill_process` |
-| Too many tools | Tool overload | Enable tool search |
-| OpenClaw cannot see server | Wrong config shape | Use `openclaw mcp set` or `mcp.servers` |
-
-### Windows UTF-8 fix
-
-```powershell
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-$env:PYTHONIOENCODING = "utf-8"
-```
-
----
-
-## 11. LESSONS.md Pattern
-
-Create `learnings.md` next to this SKILL.md. Append:
+Create `learnings.md` next to this SKILL.md (skill-local, distinct from the
+repo-wide `docs/LESSONS.md`) for fixes specific to this skill's domain.
+Append:
 
 ```markdown
 ## YYYY-MM-DD: Short title
@@ -802,7 +445,7 @@ Use this in `CLAUDE.md`, OpenClaw instructions, or project agent docs:
 | Messaging or channel-based routing | OpenClaw |
 | Judgment / content insertion / final synthesis | Claude Sonnet 4.6 + prompt cache |
 | Repeated procedure to encode | Claude Skill |
-| Missing capability | Custom MCP server |
+| Missing capability | Custom MCP server (`references/custom-mcp-server-authoring.md`) |
 
 ---
 
@@ -822,23 +465,11 @@ For judgment, use Claude Sonnet 4.6 medium with prompt caching.
 
 ---
 
-## Appendix: Legacy file disposition
-
-The following files are superseded by THIS canonical SKILL.md:
-
-| Legacy path | New status |
-| ------------- | ------------ |
-| `OpenClaw/MCP_ORCHESTRATION_SKILL.md` | Redirect stub — points here |
-| `OpenClaw/MCP_ORCHESTRATION_SKILL_v2.md` | Redirect stub — points here |
-| `OpenClaw/MCP-INSTALL-PLAN.md` | Reference companion — kept for installation procedure |
-| `~/.claude/skills/mcp-orchestration/SKILL.md` | User-level mirror — keep in sync via `install -m 0644 bin/orama-system/mcp-orchestration/SKILL.md ~/.claude/skills/mcp-orchestration/SKILL.md` (run from repo root after edits). For installing the MCP stack itself, see [`bin/orama-system/mcp-install/SKILL.md`](../mcp-install/SKILL.md). |
-
-Update all references to point at `orama-system/bin/orama-system/mcp-orchestration/SKILL.md`.
+Legacy file disposition (redirect stubs, superseded paths): [`references/legacy-file-disposition.md`](references/legacy-file-disposition.md)
 
 ## D14 Mirror Enforcement
 
 Before dispatching a worker, verify the backend does not route a `windows_only` spec to `lmstudio-mac`. `resolve_backend_for_spec` in `orchestrator/backend_resolver.py` raises `PolicyUnavailable` on this. NEVER catch and silently fall back — fail closed.
-
 
 ## Optional: Interactive Provider Setup
 
@@ -854,7 +485,6 @@ OpenClaw/Hermes onboarding uses.
   get `null` placeholders, never a blocking prompt.
 
 Full doctrine: [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md)
-
 
 ## Post-Review Micro-Remediation
 

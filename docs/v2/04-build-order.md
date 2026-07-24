@@ -1,5 +1,6 @@
 # 04 — Build Order (GPT Phase 1–4 + lift-from-v1 mapping)
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > Implements D9 plus D16. Sequence: security foundation → primitives → graph
 > engine → HTTP surface → parity/security tests.
 > Lift battle-tested code from today's `orama-system` where it fits.
@@ -23,7 +24,7 @@ platform features.
 
 ## Phase 0 — Repository Initialization ✅ DONE (2026-05-02)
 
-The 3 new repositories (\`agate\`, \`oramasys\`, \`perpetua-core\`) have been initialized at \`~/code/oramasys/\`. Initial code for state, LLM client, policy, and the MiniGraph engine has been committed.
+The 3 new repositories (\`agate\`, \`oramasys\`, \`perpetua-core\`) have been initialized under `<v2-workspace>/`. Initial code for state, LLM client, policy, and the MiniGraph engine has been committed.
 
 ---
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { StatusBadge, statusToTone } from "@/components/StatusBadge";
+import { StatusBadge } from "@/components/StatusBadge";
+import { statusToTone } from "@/components/statusTone";
 import type { JobSummary } from "@/api/appState";
 import { cancelJob, replayJob } from "@/api/jobs";
 

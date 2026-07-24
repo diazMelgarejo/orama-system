@@ -29,6 +29,8 @@ sub_skills:
     trigger: "install mcp stack, setup gemini mcp, register ai-cli, mcp orchestration setup, install mcp tools, run install-mcp-stack.sh, mcp install"
   - path: skills/mcp-orchestration/SKILL.md
     trigger: "mcp orchestration, connect mcp tools to openclaw, gemini large context, ai-cli-mcp, background agents, dispatch parallel ai cli, openclaw mcp, SKILL.md claude skills, mcp json tool setup"
+  - path: skills/codex-mcp-debugging/SKILL.md
+    trigger: "codex mcp debugging, codex mcp list failed, invalid transport, bearer_token_env_var, stdio vs http transport, exa mcp wrapper, github mcp codex config"
   - path: skills/first-run-setup/SKILL.md
     trigger: "first-run install, bootstrap orama, setup new machine, first run, §0 checklist, first-run-install.sh"
   - path: skills/code-review/SKILL.md
@@ -253,6 +255,20 @@ When context > 70% -- offload, one task per subagent:
 ## MODE 3: Full Multi-Agent Network
 >
 > **Multi-agent safety:** See `references/collaborative-reasoning-safety.md` — mandatory Builder/Critic/Adversary/Judge roles, anti-groupthink rules, confidence tracking.
+>
+> **On Claude Code: this is a policy layer, not a runtime to build.** The
+> canonical execution mechanism is Claude Code's own `Workflow` tool
+> (`agent()`/`parallel()`/`pipeline()`/`phase()`), gated by the same
+> `ultracode`/explicit-ask opt-in the tool itself requires — never a
+> bespoke dispatch loop. **Model tiering is mandatory, never inherited
+> from the parent:** Haiku for dispatch/control of non-Claude models
+> (Codex, Cline, Kimi, Cursor, Grok, Perplexity, OpenClaw, Hermes, ...),
+> Sonnet 5 Medium only to evaluate/integrate that output, Opus/Fable 5
+> only on explicit user request or an AskUserQuestion-confirmed
+> escalation — never automated. Full role-to-primitive mapping + tiering
+> policy: `references/claude-code-workflow-canonical.md`. This mapping is
+> Claude Code-specific; other harnesses (Codex, gemini-cli, Cursor, ECC)
+> keep the abstract description below as-is.
  (Complex Tasks)
 
 ### Agent Network
@@ -413,6 +429,7 @@ Load on demand for deeper context:
 - `references/core-operational-directives.md` — the 6 directives in detail
 - `references/content-insertion-framework.md` — CIDF human reference + JSON policy
 - `references/skill-architecture-guide.md` — how to build SKILL.md files
+- `references/contribution-standards.md` — CONTRIBUTING.md + PR-template baseline; the method's contribution practices (raised standard, PT PR #247)
 - `templates/task-plan.md` — task planning template (Directive #1)
 - `templates/verification-checklist.md` — pre-completion checklist (Directive #4)
 - `templates/lessons-log.md` — self-improvement log (Directive #3)
@@ -447,6 +464,11 @@ Search in this order — stop at the first satisfying result:
 
 **NEVER:** parallel-fire all search tools. Use the cheapest first.
 **ALWAYS:** `AskUserQuestion` for decisions — never auto-select between ambiguous options.
+
+**Extraction, not discovery:** once this chain finds a URL, use
+[`skills/firecrawl/SKILL.md`](skills/firecrawl/SKILL.md) to scrape,
+interact with, parse, or monitor it — Firecrawl sits downstream of this
+policy, it doesn't replace it.
 
 ## Windows Coder Pool
 

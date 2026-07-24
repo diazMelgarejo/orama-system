@@ -1,9 +1,10 @@
 # 18 — Periscope as L4 Glass
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Date:** 2026-05-24
 > **Status:** Design — pending implementation plan in `docs/plans/2026-05-24-periscope-l4-integration-plan.md`
 > **Repo:** `diazMelgarejo/periscope` (fork of `latentsignal-org/periscope`, upstream tracks `wesm/agentsview`)
-> **Local path:** `~/code/oramasys/tools/periscope` (cloned 2026-05-24, all 3 branches local)
+> **Local path:** `<v2-workspace>/tools/periscope` (cloned 2026-05-24, all 3 branches local)
 
 ### Branch model (canonical)
 

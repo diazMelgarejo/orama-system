@@ -9,7 +9,7 @@ description: >-
   skill, install a skill, modularize a skill, improve a SKILL.md, retiring fellow
   skill library, train smaller models with skills, or adapt .claude/skills
   runbooks into orama-system skills.
-version: 1.4.1
+version: 1.6.0
 license: Apache 2.0
 compatibility: claude-code, gstack, codex, cursor, gemini-cli, ecc
 parent_skill: orama-system
@@ -37,6 +37,25 @@ skillify creates or improves skill folders. `SKILL.md` is the orchestrator, not
 the encyclopedia. Put detailed procedures, examples, templates, and eval rubrics
 in one-level reference files.
 
+## Related Tools (disambiguation)
+
+Three different things can answer "make me a skill" or "/skillify" — pick
+the right one instead of assuming this one, and see Workflow step 0 below
+for when to interrupt and ask rather than guess:
+
+| Tool | What it actually does | When it's the right one |
+| --- | --- | --- |
+| **This skill** (`oramasys-skillify`) | Creates/upgrades canonical `bin/orama-system/skills/<name>/` skills for this repo's own multi-harness stack (Claude Code, gstack, Codex, Cursor, gemini-cli, ECC) — SKILL.md orchestrator + modular references/examples/eval, plus packaging (see below) | Building or upgrading an **orama-system-owned** skill |
+| gstack's own `/skillify` (`~/.claude/skills/gstack/skillify/SKILL.md`) | Codifies the most recent successful `/scrape` browser flow into a permanent, deterministic gstack `browser-skill` on disk | Turning a one-off browser scrape into a reusable script — nothing to do with authoring a general-purpose Claude skill |
+| Anthropic's official `skill-creator` plugin (`anthropics/claude-plugins-official`, install via `/plugin install skill-creator@claude-plugins-official`) | The canonical Claude tool for creating/improving/benchmarking ANY Claude skill against the Agent Skills open standard — draft, eval loop, description-triggering optimizer | Building a **general-purpose, non-orama** skill, or when the user wants Anthropic's own eval-loop/benchmark workflow rather than this repo's conventions |
+
+This skill's own standards are dogfooded against Anthropic's skill-creator
+schema (see "Standards Conflict Note" below and `references/dogfood-upgrade-log.md`),
+and its `Packaging` step (below) reimplements skill-creator's validate+zip
+rules — so a skill built here is still installable the standard way. It
+does not replace or wrap either of the other two tools; use whichever one
+actually matches the task.
+
 ## Load First
 
 Before writing or revising a skill, read:
@@ -63,10 +82,28 @@ Read target-specific references only when needed:
 - Keep modular files one level away from `SKILL.md`; avoid reference chains.
 - Every fenced code block must include a language specifier.
 - Never hardcode secrets, personal paths, raw LAN IPs, or workstation-specific paths.
+- Before naming a new skill or writing to any SHARED global namespace (`~/.claude/skills/`, `~/.codex/skills/`, `~/.agents/skills/`), run `scripts/check-skill-namespace-collision.sh <name>` (repo root) — the single shared check, same script the intake step below and `scripts/install-skills.sh` both call. See `references/modular-skill-authoring.md`'s "External Namespace Collision Check" for the full rule. gstack alone owns ~30 slugs directly under `~/.claude/skills/<name>/`; publishing this repo's skills there is `scripts/install-skills.sh`'s job (disambiguated slugs only, e.g. `oramasys-skillify`, `oramasys-method`) — never bolt a raw `~/.claude/skills` write target onto another script. This repo also owns a skill named `gstack-gbrain` (`bin/orama-system/gstack-gbrain/SKILL.md`, renamed 2026-07-22 from the collision-prone bare `gstack`); never add the bare `gstack` slug to any global-publish list.
 
 ## Workflow
 
-1. Ask for skill name, purpose, target harness, trigger phrases, and boundaries.
+0. **Disambiguate before doing anything** if the request could mean any of
+   the three tools in "Related Tools" above and isn't already clearly
+   scoped to this repo (e.g. bare "/skillify" or "make me a skill" with no
+   orama-system context). Raise an `AskUserQuestion` interrupt — do not
+   guess:
+   - "codify the browser scrape I just ran" / mentions `/scrape` output →
+     gstack's `/skillify`, hand off, stop.
+   - explicitly orama-system-scoped (mentions this repo, `bin/orama-system/skills/`,
+     a harness this repo targets, or an existing orama skill to upgrade) →
+     proceed with this skill, no question needed.
+   - anything else ambiguous → ask, offering: (a) this skill — an
+     orama-system canonical skill, (b) Anthropic's official `skill-creator`
+     plugin — a general-purpose Claude skill outside this repo's
+     conventions, (c) gstack's `/skillify` — codify a browser scrape. If
+     the user wants (b), tell them to install it
+     (`/plugin install skill-creator@claude-plugins-official`) and hand off
+     rather than imitating its workflow by hand.
+1. Ask for skill name, purpose, target harness, trigger phrases, and boundaries. Run `scripts/check-skill-namespace-collision.sh <name>` against the proposed name before continuing — a collision means pick a disambiguated name now, not after writing anything.
 2. Choose the smallest folder shape that satisfies the task.
 3. Reuse or upgrade existing skills before creating a sibling.
 4. If an upstream source is unreachable, continue only from cached/repo-verified material and mark the source `UNVERIFIED - retry required`.
@@ -139,6 +176,48 @@ Trim unused folders for tiny skills. Do not create decorative empty structure.
 - Write canonical orama skills to `.claude/skills/`.
 - Mark done with failing validation.
 
+
+## Packaging
+
+CLI install (Claude Code, Codex, other `.agents/skills`-style harnesses)
+already works via `scripts/install-skills.sh` (repo root) — directory
+copies, no packaging needed. For claude.ai / Claude Desktop's Settings ->
+Capabilities, which install from an uploaded `.skill` file instead of a
+local directory, package a canonical skill with:
+
+```bash
+python3 bin/orama-system/skills/skillify/scripts/package_skill.py \
+  bin/orama-system/skills/<name> [output-dir]
+```
+
+This stages a copy (never edits the canonical files), bundles any
+`../../references/*.md` or `bin/orama-system/references/*.md` cross-repo
+citation — markdown link or plain backtick path, both forms — into the
+staged copy's own `references/`, trims frontmatter to Anthropic's packaged
+schema (moving `version`/`parent_skill`/`triggers`/etc. under `metadata:`,
+truncating `description` to 1024 chars), validates against the same rules
+as Anthropic's `skill-creator` plugin, then zips to `<name>.skill`. See
+`references/dogfood-upgrade-log.md` for the full procedure, provenance,
+and what's deliberately reimplemented rather than vendored.
+
+## Examples
+
+- Golden path (new skill + self-upgrade dogfood run): [`examples/good/golden-path.md`](examples/good/golden-path.md)
+- Anti-patterns to avoid: [`examples/bad/anti-patterns.md`](examples/bad/anti-patterns.md)
+- Eval rubric to run before declaring a skillify-produced skill done: [`eval/checklist.md`](eval/checklist.md)
+- Test prompts for the skill-creator dogfood loop: [`eval/evals.json`](eval/evals.json)
+- Audit trail + repeatable procedure for skillify upgrading itself (and oramasys-method) against both standards: [`references/dogfood-upgrade-log.md`](references/dogfood-upgrade-log.md)
+
+## Standards Conflict Note
+
+Anthropic's skill-creator keeps all "when to use" text in the frontmatter
+`description` only ("All 'when to use' info goes here, not in the body").
+This repo's own [`../../references/skill-architecture-guide.md`](../../references/skill-architecture-guide.md)
+recommends a body-level `## When to Use` section too. Where a skill's
+`description` already carries full trigger coverage (as this file's does),
+prefer Anthropic's leaner rule and skip the redundant body section — but say
+so, don't drop it silently. Re-add a body `## When to Use` if `description`
+alone isn't carrying enough trigger signal for a given skill.
 
 ## Post-Review Micro-Remediation
 

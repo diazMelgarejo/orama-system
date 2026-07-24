@@ -1,8 +1,10 @@
 # Agentic Security Controls
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** implementation guidance extracted from the former security-harness plan
 > **Strategy:** [`31-security-harness-excellence-plan.md`](31-security-harness-excellence-plan.md)
 > **Prior mixed source:** [`33-security-harness-source-material.md`](33-security-harness-source-material.md)
+> **Portable-memory invariant:** [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md)
 
 ---
 
@@ -167,6 +169,17 @@ Memory risk is not only who can read/write. It is also why a fact became retriev
 - allowed task scopes
 - expiry/staleness policy
 - scanner result
+
+### Portable-memory hygiene
+
+Memory writers and renderers must treat the portable-memory surface as stricter
+than ordinary repo docs:
+
+- sanitize at write time before candidate, episodic, or semantic records persist
+- scan source rows, archived candidates, raw episodic logs, and rendered views
+- load concrete forbidden fragments from a local-only registry outside git
+- report only category, file, and line when a guard fails
+- never teach a negative rule by spelling the concrete local fragment it bans
 
 ### Retrieval policy
 

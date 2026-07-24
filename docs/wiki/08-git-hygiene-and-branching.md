@@ -30,10 +30,10 @@ Canonical policy for **primary commit authors** and **`Co-authored-by`** trailer
 
 | Role | Rule |
 | --- | --- |
-| **Approved primary authors** | Any configured `user.name` with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or `Lawrence.Melgarejo@gmail.com`; `Codex <codex@openai.com>` is also allowed |
+| **Approved primary authors** | Any configured `user.name` with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or the configured private owner email from local-only configuration; `Codex <codex@openai.com>` is also allowed |
 | **Co-authored-by — allowed** | Well-known public AI/vendor domains (`openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com`, subdomains) and matching name markers (`codex`, `claude`, `anthropic`, `cursor`, …) |
 | **Co-authored-by — additionally allowed AI/vendor signals** | `google.dev`, `perplexity.ai`, `x.ai`; matching name markers `gemini`, `google`, `copilot`, `perplexity`, `grok` |
-| **Co-authored-by — allowed Gmail** | `diazMelgarejo@gmail.com`, `Lawrence.Melgarejo@gmail.com` only |
+| **Co-authored-by — allowed Gmail** | `diazMelgarejo@gmail.com` plus the configured private owner email from local-only configuration |
 | **Co-authored-by — rejected** | Any other `@gmail.com` / `@googlemail.com` (unattributable personal inboxes) |
 | **Agent sessions (default)** | Do not add `Co-authored-by` to commits you author; use an approved primary identity only |
 
@@ -70,7 +70,7 @@ Approved **primary commit author** identities (any one):
 | --- | --- |
 | diazMelgarejo@gmail.com | `cyre` |
 | Lawrence@cyre.me | `cyre` or a name containing `Lawrence` |
-| Lawrence.Melgarejo@gmail.com | `cyre` or a name containing `Lawrence` |
+| configured private owner email | `cyre` or configured private owner name |
 | codex@openai.com | `Codex` |
 
 After each fresh clone, run once:
@@ -89,7 +89,7 @@ If this fails, do not commit. Correct your Git identity first:
 
 ```bash
 git config user.name "cyre"
-git config user.email "Lawrence@cyre.me"  # or diazMelgarejo@gmail.com / Lawrence.Melgarejo@gmail.com
+git config user.email "Lawrence@cyre.me"  # or diazMelgarejo@gmail.com / configured private owner email
 # or for Codex-authored commits:
 git config user.name "Codex"
 git config user.email "codex@openai.com"
@@ -101,11 +101,11 @@ git config user.email "codex@openai.com"
 
 | Category | Rule |
 | --- | --- |
-| **Primary author** | Any name with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or `Lawrence.Melgarejo@gmail.com`, or `Codex` + `codex@openai.com` (`scripts/git/check_identity.sh`) |
+| **Primary author** | Any name with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or the configured private owner email, or `Codex` + `codex@openai.com` (`scripts/git/check_identity.sh`) |
 | **Allowed co-author domains** | `openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com` (and subdomains) |
 | **Additional allowed AI/vendor domains** | `google.dev`, `perplexity.ai`, `x.ai`, `coderabbit.ai`, `mistral.ai`, `deepseek.com`, `cohere.com`, `meta.com`, `sourcegraph.com`, `devin.ai`, `codeium.com` (and subdomains) |
 | **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `google`, `copilot`, `openai`, `github`, `microsoft`, `perplexity`, `grok`, `coderabbit`, `coderabbitai`, `mistral`, `deepseek`, `cohere`, `llama`, `devin`, `cody`, `codeium`, `windsurf`, `qwen` (in the trailer line) |
-| **Allowed `@gmail.com` co-authors** | `diazMelgarejo@gmail.com`, `Lawrence.Melgarejo@gmail.com` only |
+| **Allowed `@gmail.com` co-authors** | `diazMelgarejo@gmail.com` plus the configured private owner email from local-only configuration |
 | **Rejected** | Any other `Co-authored-by` line with `@gmail.com` (unattributable personal inboxes) |
 
 Corporate and vendor agent domains are identifiable; random Gmail co-authors are not attributable and were used for mistaken or non-policy attribution.
@@ -152,7 +152,7 @@ Re-introducing a banned identity after an expunge forces another full `main` + a
 
 `Co-authored-by: Cursor <cursoragent@cursor.com>` is **always allowed** — listed explicitly in `scripts/git/check_commit_message.sh` (`ALLOWED_EXACT_COAUTHOR_EMAILS`), not only via the `cursor.com` domain suffix.
 
-**`ALLOWED_GMAIL_COAUTHORS` only fires for `@gmail.com` / `@googlemail.com` addresses.** Any personal or org domain address (e.g. `user@cyre.me`, `user@bettermind.ph`) placed in `ALLOWED_GMAIL_COAUTHORS` will be silently denied — the `gmail_allowed()` gate is guarded by a `*@gmail.com` domain check and never runs for other domains. Fix: put all non-Gmail personal or org-domain addresses in `ALLOWED_EXACT_COAUTHOR_EMAILS` instead. (Learned 2026-06-22: `lawrence@cyre.me` was in `ALLOWED_GMAIL_COAUTHORS`; commits were rejected until it was moved to `ALLOWED_EXACT_COAUTHOR_EMAILS`.) `Lawrence.Melgarejo@gmail.com` is a Gmail address, so it belongs in `ALLOWED_GMAIL_COAUTHORS`.
+**`ALLOWED_GMAIL_COAUTHORS` only fires for `@gmail.com` / `@googlemail.com` addresses.** Any personal or org domain address (e.g. `user@cyre.me`, `user@bettermind.ph`) placed in `ALLOWED_GMAIL_COAUTHORS` will be silently denied — the `gmail_allowed()` gate is guarded by a `*@gmail.com` domain check and never runs for other domains. Fix: put all non-Gmail personal or org-domain addresses in `ALLOWED_EXACT_COAUTHOR_EMAILS` instead. (Learned 2026-06-22: `lawrence@cyre.me` was in `ALLOWED_GMAIL_COAUTHORS`; commits were rejected until it was moved to `ALLOWED_EXACT_COAUTHOR_EMAILS`.) Private owner email literals belong in local-only configuration, not tracked allowlists.
 
 ### Why only known @gmail.com in co-author lines?
 

@@ -1,9 +1,13 @@
 # 24 — Security-First Platform Requirements
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Active design gate — security is a platform feature, not a
 > retrofit checklist.  
 > **Canonical policy:** [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md)  
 > **Immediate queue:** [`../SECURITY-POLICY.md#immediate-todo-list--validated-findings-from-scheduled-review-2026-05-26`](../SECURITY-POLICY.md#immediate-todo-list--validated-findings-from-scheduled-review-2026-05-26)
+> **Portable-memory invariant:** tracked rules name categories only; concrete
+> local fragments stay in local-only registries. See
+> [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md).
 
 ---
 
@@ -22,6 +26,9 @@ and glass-window APIs:
   grants, audit events, and tests.
 - **Append-only evidence:** security findings, lessons, and audit trails are
   preserved and annotated, not overwritten.
+- **No self-leaking negative rules:** policy and memory guards describe
+  forbidden categories abstractly and load concrete local fragments from
+  local-only registries outside git.
 
 This aligns the platform with NIST SSDF's guidance to integrate secure
 development practices into the SDLC, reduce released vulnerabilities, mitigate
@@ -86,6 +93,9 @@ implementation starts:
    not needed, raw transcripts, tokens, and chain-of-thought.
 6. **What CI gate proves it?** Each security requirement needs a unit/integration
    test or lint gate, not only documentation.
+7. **Does the rule self-leak?** If the rule forbids a local identity, path,
+   device, endpoint, or workspace shape, the tracked text names only the
+   category; the concrete fragment is local-only.
 
 ---
 

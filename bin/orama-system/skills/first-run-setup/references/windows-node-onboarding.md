@@ -156,6 +156,14 @@ component — it does not restart from zero. Confirm success:
 Test-Path "$HOME\.orama-system\first-run.done"   # should be True
 ```
 
+**Windows CRG:** After first-run, sync Cursor MCP with the Windows embed endpoint (`:1234`):
+
+```powershell
+bash bin/orama-system/scripts/sync-cursor-mcp.sh --profile readonly
+```
+
+See [`../../code-review/references/crg-platform-endpoints.md`](../../code-review/references/crg-platform-endpoints.md).
+
 MCP orchestration workers are a separate, optional step — not part of
 `first-run.done`:
 

@@ -65,6 +65,13 @@ Liveness states are defined in `orchestrator/heartbeat_monitor.py`:
    python3 scripts/agent_coordination.py heartbeat dashboard
    ```
 
+   Before posting `log`, `agent_note`, or other board text from a shell,
+   read [`../shell-hygiene/SKILL.md`](../shell-hygiene/SKILL.md). In
+   particular, do not place backticked code spans inside a double-quoted shell
+   payload; zsh and bash treat backticks as command substitution and can delete
+   the intended text before GossipBus receives it. Use single quotes, escaped
+   backticks, or a here-doc for literal coordination messages.
+
 4. **Recover or terminate**
    ```bash
    python3 scripts/agent_coordination.py heartbeat pulse <agent_id>      # mark alive
@@ -89,6 +96,31 @@ Liveness states are defined in `orchestrator/heartbeat_monitor.py`:
 - Delete heartbeat events from the GossipBus to hide dead agents.
 - Pulse a heartbeat for an agent you do not control.
 - Hardcode agent credentials or secrets in heartbeat payloads.
+
+## Parallel-Reviewer Heartbeat Cadence
+
+When two or more agents are actively implementing adjacent, coordinated work
+(shared plan, agreed file-ownership split, GossipBus coordination — see
+`../agent-methodology/SKILL.md`), the reviewing agent should run a **~5-minute
+check-fix-report loop**, not a single end-of-task review:
+
+1. `git fetch` + `git status` — pull the other agent's latest committed and
+   in-flight (uncommitted, shared-checkout) work.
+2. Run the real test suite (backend + frontend, whatever applies) against the
+   current state — not just a source-level read.
+3. Fix anything found that's in your own owned files; for findings in the
+   other agent's owned files, report a concrete fix via a GossipBus
+   `agent_note`, don't cross-edit.
+4. Emit a short `agent_note` either way — a clean pass ("verified, N/N tests
+   pass, no bugs found") is as valuable as a bug report; it tells the other
+   agent they can keep building on your last commit with confidence.
+
+**Why 5 minutes:** it sits right at the ACTIVE/IDLE boundary above — frequent
+enough to catch a bug before three more commits build on top of it,
+infrequent enough not to spam the board with no-op checks. Tune down for
+fast-moving, high-risk integration points (e.g. a shared contract both
+agents are actively coding against); tune up once both sides have converged
+on a stable interface.
 
 ## Examples
 

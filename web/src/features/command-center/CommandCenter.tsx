@@ -5,7 +5,7 @@ import { fetchAppState } from "@/api/appState";
 import type { SwarmPreview } from "@/api/swarm";
 import type { Artifact } from "@/api/artifacts";
 import { listJobArtifacts } from "@/api/artifacts";
-import { mockArtifactList, mockState, mockSwarmPreview } from "@/data/mockState";
+import { mockArtifactList, mockJobs, mockState, mockSwarmPreview } from "@/data/mockState";
 import { ReadinessStrip } from "./ReadinessStrip";
 import { SwarmComposer } from "./SwarmComposer";
 import { WorkerAssignments } from "./WorkerAssignments";
@@ -17,6 +17,7 @@ import {
   resolveJobs,
   resolveLatestJobId,
 } from "./commandCenterState";
+import { usePortalNotifications } from "./usePortalNotifications";
 
 type Page = "command" | "composer" | "runs" | "routing" | "artifacts" | "settings" | "docs";
 
@@ -36,6 +37,7 @@ type Page = "command" | "composer" | "runs" | "routing" | "artifacts" | "setting
 export function CommandCenter() {
   const [page, setPage] = useState<Page>("command");
   const [preview, setPreview] = useState<SwarmPreview | undefined>(mockSwarmPreview);
+  usePortalNotifications();
 
   const appStateQuery = useQuery({
     queryKey: ["appState"],
@@ -45,7 +47,7 @@ export function CommandCenter() {
   });
 
   const state = resolveDisplayState(appStateQuery.data, mockState);
-  const jobs = resolveJobs(state, mockState.jobs.data.jobs);
+  const jobs = resolveJobs(state, mockJobs);
   const latestJobId = resolveLatestJobId(jobs);
 
   const artifactsQuery = useQuery({

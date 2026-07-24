@@ -19,6 +19,7 @@ PR_BODY.md
 !.env.example
 !.env.local.example
 .env.local
+.verboten-literals.local
 .paths
 .paths.ps1
 *.pem
@@ -62,6 +63,11 @@ DerivedData/
 *.xcworkspace/xcuserdata/
 *.xcuserdatad/
 .venv*/
+
+# Skillify/eval dogfood-harness scratch output (skill snapshots + eval
+# transcripts per iteration) -- disposable; conclusions get written to
+# the relevant skill's references/dogfood-upgrade-log.md instead.
+bin/orama-system/skills/*-workspace/
 *.whl
 *.tar.gz
 *.egg-info/
@@ -153,6 +159,14 @@ lance_memory.lance/
 
 # Cursor private attribution (synced from ~/.cursor/openclaw — never commit)
 .cursor/private/
+.cursor/state/
+.cursor/ecc-install-state.json
+.cursor/skills/
+.cursor/hooks/
+.cursor/hooks.json
+
+# Hermes runtime state (repo-local mirror — never commit)
+.hermes/
 
 # Accidental home-path mirror trees (never commit)
 ~/

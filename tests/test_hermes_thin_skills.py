@@ -27,6 +27,7 @@ def installer(monkeypatch, tmp_path):
     monkeypatch.setitem(sys.modules, spec.name, module)
     spec.loader.exec_module(module)
     monkeypatch.setattr(module, "HERMES_SKILLS", tmp_path / "pt-orama")
+    monkeypatch.setattr(module, "HERMES_HARNESS_ROOT", tmp_path / "hermes-harness")
     return module
 
 
@@ -131,6 +132,7 @@ def test_wrapper_text_all_core_wrappers(installer):
         "pt-orama-review",
         "pt-orama-delegate",
         "lan-peer-self-talk",
+        "windows-hermes-setup",
     }
     optional = {spec.slug for spec in installer.OPTIONAL_WRAPPERS}
     assert optional == {"pt-orama-lesson-mining"}
@@ -150,10 +152,13 @@ def test_optional_wrapper_installed_with_flag(installer):
 
 def test_install_fresh_creates_all_wrappers(installer):
     written = installer.install()
-    assert len(written) == len(installer.WRAPPERS)
+    assert len(written) == len(installer.WRAPPERS) + 1  # +1 for harness redirect (install_harness_redirect)
     for spec in installer.WRAPPERS:
         target = _target(installer, spec.slug)
         assert target.is_file()
+    harness = installer.HERMES_HARNESS_ROOT / "SKILL.md"
+    assert harness.is_file()
+    assert harness in written
 
 
 def test_install_creates_description_md(installer):
@@ -186,9 +191,9 @@ def test_install_dry_run_skips_no_files_for_fresh_install(installer, capsys):
 
 def test_verify_all_missing(installer):
     errors = installer.verify()
-    assert len(errors) == len(installer.WRAPPERS)
-    for error in errors:
-        assert "missing wrapper:" in error
+    assert len(errors) == len(installer.WRAPPERS) + 1  # +1 for harness redirect (install_harness_redirect)
+    assert sum(1 for e in errors if "missing harness redirect:" in e) == 1
+    assert sum(1 for e in errors if "missing wrapper:" in e) == len(installer.WRAPPERS)
 
 
 def test_verify_passes_after_clean_install(installer):

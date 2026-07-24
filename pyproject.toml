@@ -37,6 +37,9 @@ test = [
 testpaths = ["tests"]
 asyncio_mode = "auto"
 pythonpath = ["src", ".", "scripts"]
+markers = [
+    "unit: fast, isolated tests with no network/filesystem/subprocess dependency beyond mocks",
+]
 filterwarnings = [
     "ignore:There is no current event loop:DeprecationWarning",
     "ignore::ResourceWarning",

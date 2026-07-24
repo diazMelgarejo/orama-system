@@ -59,7 +59,7 @@ CANONICAL_SKILLS = [
     "orama-system/bin/orama-system/SKILL.md",
     "orama-system/bin/orama-system/afrp/SKILL.md",
     "orama-system/bin/orama-system/cidf/SKILL.md",
-    "orama-system/bin/orama-system/gstack/SKILL.md",
+    "orama-system/bin/orama-system/gstack-gbrain/SKILL.md",
     "orama-system/bin/orama-system/skills/agent-methodology/SKILL.md",
     "orama-system/bin/orama-system/skills/code-review/SKILL.md",
     "orama-system/bin/orama-system/skills/ecc-sync/SKILL.md",
@@ -87,6 +87,17 @@ CANONICAL_SKILLS = [
 ]
 
 
+# NOTE: ~/.claude/skills is deliberately NOT a target here. It is a shared
+# global namespace gstack also populates directly (e.g. its own bundled
+# `skillify` at ~/.claude/skills/skillify/, an unrelated skill with the same
+# name as this repo's). A 2026-07-22 pass added it here and it silently
+# overwrote gstack's file — recovered from gstack's own source copy; see
+# skillify/references/dogfood-upgrade-log.md and
+# skillify/references/modular-skill-authoring.md's "External Namespace
+# Collision Check". Publishing THIS repo's skills to ~/.claude/skills/ is
+# scripts/install-skills.sh's job (repo root) — it publishes under
+# collision-checked, disambiguated slugs (e.g. oramasys-skillify, not
+# skillify). Do not re-add ~/.claude/skills to this list.
 TARGET_ROOTS = [
     "~/.codex/skills",
     "~/.agents/skills",
@@ -105,7 +116,7 @@ SLUG_OVERRIDES = {
     "orama-system/bin/orama-system/SKILL.md": "orama-system",
     "orama-system/bin/orama-system/afrp/SKILL.md": "orama-afrp",
     "orama-system/bin/orama-system/cidf/SKILL.md": "orama-cidf",
-    "orama-system/bin/orama-system/gstack/SKILL.md": "orama-gstack",
+    "orama-system/bin/orama-system/gstack-gbrain/SKILL.md": "orama-gstack",
 }
 
 
@@ -191,15 +202,24 @@ def compact_description(text: str, fallback: str) -> str:
     return _truncate(fallback)
 
 
-def build_specs() -> list[SkillSpec]:
+def build_specs(only: set[str] | None = None) -> list[SkillSpec]:
+    """Build wrapper specs for CANONICAL_SKILLS.
+
+    `only`, when given, is a set of slugs to include. Filtering happens
+    BEFORE any path is resolved so an unrelated missing sibling repo (e.g.
+    Perpetua-Tools not being checked out locally) never blocks a scoped run
+    for skills that don't need it.
+    """
     specs = []
     slugs = set()
     for canonical in CANONICAL_SKILLS:
+        slug = slug_for(canonical)
+        if only is not None and slug not in only:
+            continue
         path = workspace_path(canonical)
         if not path.is_file():
             raise FileNotFoundError(path)
         text = path.read_text(encoding="utf-8-sig")
-        slug = slug_for(canonical)
         if slug in slugs:
             raise ValueError(f"duplicate skill slug: {slug}")
         slugs.add(slug)
@@ -318,9 +338,9 @@ def _clean_thin_dir(path: Path) -> None:
         path.unlink()
 
 
-def install(dry_run: bool) -> list[Path]:
+def install(dry_run: bool, only: set[str] | None = None) -> list[Path]:
     written = []
-    specs = build_specs()
+    specs = build_specs(only=only)
     by_slug = {s.slug: s for s in specs}
     for spec in specs:
         content = wrapper(spec)
@@ -333,7 +353,11 @@ def install(dry_run: bool) -> list[Path]:
             path.write_text(content, encoding="utf-8")
             written.append(path)
     # Rename redirects: leave a stub at every old slug so references keep resolving.
+    # Skipped under --only unless the new slug is itself in scope, to avoid
+    # touching renamed-skill redirects that a scoped run has no opinion about.
     for old_slug, new_slug in SKILL_RENAMES.items():
+        if only is not None and new_slug not in only:
+            continue
         new_spec = by_slug.get(new_slug)
         if not new_spec:
             continue  # new skill not in this manifest; nothing to redirect to
@@ -347,16 +371,18 @@ def install(dry_run: bool) -> list[Path]:
             path.write_text(stub, encoding="utf-8")
             written.append(path)
     if not dry_run:
-        rewrite_stale_references()
+        rewrite_stale_references(only=only)
     return written
 
 
-def rewrite_stale_references() -> list[Path]:
+def rewrite_stale_references(only: set[str] | None = None) -> list[Path]:
     """On every run, rewrite stale `skills/<old>/` path references in managed
     canonical docs to the renamed slug — so the mother skill and sibling skill
     docs keep pointing at renamed skills without manual edits."""
     changed = []
     for canonical in dict.fromkeys(CANONICAL_SKILLS):
+        if only is not None and slug_for(canonical) not in only:
+            continue
         doc = workspace_path(canonical)
         if not doc.is_file():
             continue
@@ -370,9 +396,9 @@ def rewrite_stale_references() -> list[Path]:
     return changed
 
 
-def verify() -> list[str]:
+def verify(only: set[str] | None = None) -> list[str]:
     errors = []
-    specs = build_specs()
+    specs = build_specs(only=only)
     bad_markers = ("Ã", "Â", "â", "�", "\ufeff")
     for spec in specs:
         if not workspace_path(spec.canonical).is_file():
@@ -399,8 +425,12 @@ def verify() -> list[str]:
                     errors.append(f"absolute path leak {leak!r}: {path}")
     # Rename hygiene: every old slug resolves to a redirect pointing at the new
     # one, and no managed canonical doc keeps a live `skills/<old>/` reference.
+    # Skipped for renames outside an --only scope — a scoped run has no
+    # opinion about redirects for skills it wasn't asked to touch.
     live_slugs = {s.slug for s in specs}
     for old_slug, new_slug in SKILL_RENAMES.items():
+        if only is not None and new_slug not in only:
+            continue
         if new_slug not in live_slugs:
             errors.append(f"rename target missing from manifest: {new_slug}")
         for root in TARGET_ROOTS:
@@ -410,6 +440,8 @@ def verify() -> list[str]:
             elif new_slug not in rp.read_text(encoding="utf-8"):
                 errors.append(f"redirect does not point to {new_slug!r}: {rp}")
     for canonical in dict.fromkeys(CANONICAL_SKILLS):
+        if only is not None and slug_for(canonical) not in only:
+            continue
         doc = workspace_path(canonical)
         if doc.is_file():
             doctext = doc.read_text(encoding="utf-8")
@@ -424,15 +456,27 @@ def main() -> int:
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--only",
+        default=None,
+        help=(
+            "Comma-separated slugs to scope this run to (e.g. "
+            "'oramasys-method,skillify'). Skips path resolution for every "
+            "other manifest entry, so a scoped run never fails on an "
+            "unrelated sibling repo that isn't checked out locally. Omit "
+            "for the full manifest (all registered skills)."
+        ),
+    )
     args = parser.parse_args()
     if not args.install and not args.verify:
         parser.error("choose --install and/or --verify")
+    only = {s.strip() for s in args.only.split(",")} if args.only else None
     if args.install:
-        written = install(args.dry_run)
+        written = install(args.dry_run, only=only)
         if not args.dry_run:
             print(f"wrote {len(written)} wrapper files")
     if args.verify:
-        errors = verify()
+        errors = verify(only=only)
         if errors:
             for error in errors:
                 print(error, file=sys.stderr)

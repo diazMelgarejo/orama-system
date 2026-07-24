@@ -1,5 +1,6 @@
 # 26 — TDD + Outsourced Review Doctrine
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** CANONICAL — enshrines `tdd.md` (OpenClaw root pointer) into the v2 doc tree.
 > This doc is the source of truth; `tdd.md` is a thin pointer to this file + the maintained
 > skill body below. See also: `skills/tdd-workflow/SKILL.md` (via `vendor/ecc-tools`).

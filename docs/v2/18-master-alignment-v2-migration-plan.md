@@ -1,7 +1,8 @@
 # 18 — Master Alignment & v2 Migration Plan
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 **Date:** 2026-05-20
-**Context:** Analysis of `docs/superpowers/specs/2026-05-20-cc-openclaw-master-alignment-design.md` vs. the new v2 microkernel in `~/code/oramasys/` (`oramasys`, `perpetua-core`, `agate`).
+**Context:** Analysis of `docs/superpowers/specs/2026-05-20-cc-openclaw-master-alignment-design.md` vs. the new v2 microkernel in `<v2-workspace>/` (`oramasys`, `perpetua-core`, `agate`).
 
 > **Cross-repo canonical (2026-06-01).** The active tri-repo (AlphaClaw → PT → orama) migration
 > resume anchor is **[`Perpetua-Tools/docs/2026-05-31-tri-repo-alignment-completion-plan.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/2026-05-31-tri-repo-alignment-completion-plan.md)**

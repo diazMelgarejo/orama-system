@@ -4,7 +4,7 @@
       "command": "bash",
       "args": [
         "-c",
-        "exec \"$HOME/code/OpenClaw/orama-system/scripts/exa/exa-mcp-wrapper.sh\""
+        "if [ -f \"$PWD/scripts/exa/exa-mcp-wrapper.sh\" ]; then exec \"$PWD/scripts/exa/exa-mcp-wrapper.sh\"; fi; W=\"$(bash \"$PWD/scripts/exa/resolve-orama-root.sh\" 2>/dev/null)\"; exec \"$W/scripts/exa/exa-mcp-wrapper.sh\""
       ],
       "env": {}
     }

@@ -1,3 +1,4 @@
+<!-- /autoplan restore point: ~/.gstack/projects/diazMelgarejo-orama-system/g7-pre-v2-todo-closure-20260716-autoplan-restore-20260716-101450.md -->
 # G7 Pre-v2 Backlog Closure Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
@@ -13,9 +14,11 @@
 - Complete and merge Tasks 1-5 of `docs/superpowers/plans/2026-07-14-g7-authenticated-sse-mvp.md` before starting Task 1 here.
 - `docs/v2/` remains authoritative. This plan may link to it but must not rewrite its threat-model claims.
 - Keep `PORTAL_NOTIFICATIONS` default-off and add no Redis, NATS, durable replay, mesh transport, or new dependency.
+- Escalation rule: every LAN-related hardening, widening, or trust-model rewrite is deferred to v2.1; every multisite, mesh, cross-host, or durable replay expansion is deferred to v2.5. This branch may add pointers only.
 - Authenticate before consuming rate-limit capacity so unauthenticated requests cannot exhaust the operator's quota.
 - Never put a bearer token in a URL, browser storage, event payload, log, fixture, or tracked file.
 - Keep the existing 5-second `/api/app/state` poll as a fallback; notifications only invalidate the React Query cache.
+- Do not add a second frontend build flag for notifications. The React side must discover capability by attempting same-origin session bootstrap, then fall back quietly on terminal failures.
 - Follow strict RED -> GREEN TDD. Preserve RED/GREEN commands and results in `docs/testing/2026-07-16-g7-pre-v2-todo-closure.tdd.md`.
 - For resolved documentation, move the original backlog text into `docs/archive/`; do not delete historical rationale.
 - Run `python3 scripts/review/repo_hygiene.py .` before every commit.
@@ -112,8 +115,8 @@ Commit body: `_check_rate_limit` and its 5/60 constants are reused unchanged; ag
 ### Task 2: Add a 204-safe Typed EventSource Adapter
 
 **Files:**
-- Modify: `web/src/api/client.ts`
-- Test: `web/src/api/client.test.ts`
+- Modify: `web/src/api/client.ts` (already completed by `30598859`)
+- Test: `web/src/api/client.test.ts` (already completed by `30598859`)
 - Create: `web/src/api/notifications.ts`
 - Test: `web/src/api/notifications.test.ts`
 
@@ -121,7 +124,7 @@ Commit body: `_check_rate_limit` and its 5/60 constants are reused unchanged; ag
 - Consumes: `apiFetch<T>()`, `POST /api/notifications/session` returning 204, and named SSE events from the G7 plan.
 - Produces: `bootstrapNotificationSession(signal?: AbortSignal): Promise<void>` and `openPortalNotificationStream(onNotification, onDisconnect): () => void`.
 
-- [ ] **Step 1: Write the failing 204 test**
+- [x] **Step 1: Write the failing 204 test**
 
 Add to `web/src/api/client.test.ts`:
 
@@ -135,13 +138,13 @@ it("returns undefined for a successful 204 response", async () => {
 });
 ```
 
-- [ ] **Step 2: Run the test and verify RED**
+- [x] **Step 2: Run the test and verify RED**
 
 Run: `cd web && npm test -- src/api/client.test.ts`
 
-Expected: FAIL with an end-of-JSON-input parse error.
+Observed: FAIL with an end-of-JSON-input parse error in `96cbb197`.
 
-- [ ] **Step 3: Make `apiFetch` handle no-content success**
+- [x] **Step 3: Make `apiFetch` handle no-content success**
 
 Insert before the final `res.json()` call in `web/src/api/client.ts`:
 
@@ -153,7 +156,7 @@ Insert before the final `res.json()` call in `web/src/api/client.ts`:
 
 Run: `cd web && npm test -- src/api/client.test.ts`
 
-Expected: PASS.
+Observed: PASS in `30598859`; full Vitest also passed 18/18.
 
 - [ ] **Step 4: Write failing named-event adapter tests**
 
@@ -174,7 +177,7 @@ fake.dispatch("job_completed", JSON.stringify({
   event_id: "event-1",
   type: "job_completed",
   event_type: "job_completed",
-  timestamp: "2026-07-16T00:00:00Z",
+  ts: 1784160000,
   data: { job_id: "redacted-job" },
   payload: { job_id: "redacted-job" },
 }));
@@ -185,6 +188,8 @@ fake.onerror?.(new Event("error"));
 expect(fake.close).toHaveBeenCalledOnce();
 expect(onDisconnect).toHaveBeenCalledOnce();
 ```
+
+Also dispatch malformed JSON for one named event and assert `onNotification` is not called, the stream closes, and `onDisconnect` runs once. A corrupt event must not crash React or leave an open stream.
 
 Run: `cd web && npm test -- src/api/notifications.test.ts`
 
@@ -212,7 +217,10 @@ export interface PortalNotification {
   event_id: string;
   type: PortalNotificationType;
   event_type: PortalNotificationType;
-  timestamp: string;
+  // int epoch seconds -- matches Notification.to_dict()'s real "ts" field
+  // exactly (src/orama_system/portal_notifications.py). NOT "timestamp",
+  // and not a string: that field name/type doesn't exist on the wire.
+  ts: number;
   data: Record<string, unknown>;
   payload: Record<string, unknown>;
 }
@@ -228,7 +236,12 @@ export function openPortalNotificationStream(
   const source = new EventSource("/api/notifications/stream", { withCredentials: true });
   for (const type of portalNotificationTypes) {
     source.addEventListener(type, (event) => {
-      onNotification(JSON.parse((event as MessageEvent<string>).data) as PortalNotification);
+      try {
+        onNotification(JSON.parse((event as MessageEvent<string>).data) as PortalNotification);
+      } catch {
+        source.close();
+        onDisconnect();
+      }
     });
   }
   source.onerror = () => {
@@ -262,7 +275,7 @@ Commit body: `apiFetch<void>` now accepts 204; agents must re-read `notification
 
 **Interfaces:**
 - Consumes: Task 2's bootstrap and stream adapter plus the existing `QueryClient` key `['appState']`.
-- Produces: `usePortalNotifications(enabled: boolean): void`; every notification invalidates `['appState']`, disconnects re-bootstrap after one second, and unmount cancels the stream and timer.
+- Produces: `usePortalNotifications(): void`; every notification invalidates `['appState']`, terminal capability failures disable the stream for the current page lifetime, temporary disconnects re-bootstrap with bounded backoff, and unmount cancels the stream and timer.
 
 - [ ] **Step 1: Write failing hook tests**
 
@@ -274,13 +287,17 @@ expect(openPortalNotificationStream).toHaveBeenCalledOnce();
 onNotification({ type: "job_completed" } as PortalNotification);
 expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["appState"] });
 onDisconnect();
-await vi.advanceTimersByTimeAsync(1_000);
+await vi.advanceTimersByTimeAsync(2_000);
 expect(bootstrapNotificationSession).toHaveBeenCalledTimes(2);
 unmount();
 expect(closeStream).toHaveBeenCalled();
 ```
 
-Also render with `enabled=false` and assert neither API function is called.
+Also assert three capability and lifecycle edges:
+
+- `bootstrapNotificationSession` rejecting with 404, 401, or 403 disables notifications for the current hook lifetime and does not schedule retries.
+- Temporary failures retry with bounded exponential backoff: 1s, 2s, 4s, 8s, then 30s cap.
+- Repeated disconnect callbacks cannot enqueue concurrent reconnect timers.
 
 Run: `cd web && npm test -- src/features/command-center/usePortalNotifications.test.tsx`
 
@@ -298,29 +315,46 @@ import {
   openPortalNotificationStream,
 } from "@/api/notifications";
 
-const RECONNECT_DELAY_MS = 1_000;
+const INITIAL_RECONNECT_DELAY_MS = 1_000;
+const MAX_RECONNECT_DELAY_MS = 30_000;
+const TERMINAL_NOTIFICATION_STATUS = new Set([401, 403, 404]);
 
-export function usePortalNotifications(enabled: boolean): void {
+function statusFromError(error: unknown): number | undefined {
+  return typeof error === "object" && error !== null && "status" in error
+    ? Number((error as { status?: unknown }).status)
+    : undefined;
+}
+
+export function usePortalNotifications(): void {
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!enabled) return;
     let stopped = false;
     let closeStream: (() => void) | undefined;
     let reconnectTimer: number | undefined;
+    let nextReconnectDelay = INITIAL_RECONNECT_DELAY_MS;
+
+    const scheduleReconnect = () => {
+      if (stopped || reconnectTimer !== undefined) return;
+      reconnectTimer = window.setTimeout(() => {
+        reconnectTimer = undefined;
+        void connect();
+      }, nextReconnectDelay);
+      nextReconnectDelay = Math.min(nextReconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+    };
 
     const connect = async () => {
       try {
         await bootstrapNotificationSession();
         if (stopped) return;
+        nextReconnectDelay = INITIAL_RECONNECT_DELAY_MS;
         closeStream = openPortalNotificationStream(
           () => void queryClient.invalidateQueries({ queryKey: ["appState"] }),
-          () => {
-            if (!stopped) reconnectTimer = window.setTimeout(connect, RECONNECT_DELAY_MS);
-          },
+          scheduleReconnect,
         );
-      } catch {
-        if (!stopped) reconnectTimer = window.setTimeout(connect, RECONNECT_DELAY_MS);
+      } catch (error) {
+        if (TERMINAL_NOTIFICATION_STATUS.has(statusFromError(error) ?? 0)) return;
+        scheduleReconnect();
       }
     };
 
@@ -330,7 +364,7 @@ export function usePortalNotifications(enabled: boolean): void {
       closeStream?.();
       if (reconnectTimer !== undefined) window.clearTimeout(reconnectTimer);
     };
-  }, [enabled, queryClient]);
+  }, [queryClient]);
 }
 ```
 
@@ -339,7 +373,7 @@ export function usePortalNotifications(enabled: boolean): void {
 In `CommandCenter.tsx`, import the hook and call it immediately after component state setup:
 
 ```typescript
-  usePortalNotifications(import.meta.env.VITE_PORTAL_NOTIFICATIONS === "1");
+  usePortalNotifications();
 ```
 
 Do not change `refetchInterval: 5_000` or `refetchIntervalInBackground: false`.
@@ -363,7 +397,7 @@ git add web/src/features/command-center/usePortalNotifications.ts web/src/featur
 git commit -m "feat(g7): refresh command center from notifications"
 ```
 
-Commit body: `VITE_PORTAL_NOTIFICATIONS=1` enables cache invalidation; agents must re-read the new hook; the 5-second polling baseline is intentionally unchanged.
+Commit body: capability discovery enables cache invalidation when G7 notification endpoints exist; agents must re-read the new hook; the 5-second polling baseline is intentionally unchanged.
 
 ### Task 4: Preserve Evidence and Move the Resolved Backlog
 
@@ -416,8 +450,96 @@ Commit body: no runtime interface changes; agents must re-read the archive and e
 - The sixth authenticated session bootstrap returns 429; unauthenticated calls still return 401 without consuming the authenticated quota.
 - `apiFetch<void>` resolves on 204.
 - The client listens to named events with credentials and never puts a token in the URL.
+- Malformed SSE JSON closes the stream and triggers the disconnect path without crashing the UI.
 - A notification invalidates `['appState']`; the existing 5-second poll remains.
-- Disconnect re-bootstrap occurs before a new `EventSource` is opened.
+- Capability discovery uses same-origin session bootstrap, not a frontend build flag.
+- Terminal capability failures disable notification streaming for the current page lifetime; temporary disconnects use bounded retry and do not accumulate concurrent timers.
 - The original three backlog entries exist in `docs/archive/` with outcomes and evidence.
 - No `docs/v2/` threat-model claim is changed.
 - Backend, frontend, typecheck, lint, build, and repository hygiene gates pass.
+
+## GSTACK REVIEW REPORT
+
+### /autoplan Verdict
+
+Status: **DONE_WITH_CONCERNS** for the plan artifact. The 204 compatibility slice is implemented and tested on this branch; the remaining backend and frontend notification tasks are intentionally left as coordinated follow-ups after Claude's G7 Tasks 1-5 land on `main`.
+
+Mode: **SELECTIVE EXPANSION**. The plan stays pre-v2 and only adds small blast-radius hardening: malformed JSON handling, terminal capability fallback, bounded reconnect, and explicit 2.1/2.5 deferral labels.
+
+### Phase 1: CEO Review
+
+Premises confirmed by the user on 2026-07-16:
+
+- G7 authenticated SSE remains prerequisite work; this plan is a fast-follow, not a replacement.
+- SSE only invalidates the authoritative polled cache. `/api/app/state` remains the source of truth.
+- The process-local session limiter is explicitly a pre-v2 plug.
+- Trust-model claims in `docs/v2/45-single-operator-lan-threat-model-descope.md` remain unchanged.
+- Capability-aware bounded retry replaces a second frontend build-time flag.
+- Existing typecheck failures are fixed only when directly touched or recorded as baseline debt.
+- Any escalation that changes LAN trust, binding, or cross-host behavior moves to v2.1.
+- Any multisite, mesh, or durable replay expansion moves to v2.5.
+
+Decision: proceed with a bounded fast-follow. Reject Redis/NATS/durable replay, cross-host mesh, browser-visible tokens, and `VITE_PORTAL_NOTIFICATIONS` for this branch.
+
+### Phase 2: Design Review
+
+UI scope is indirect: no new visible screen, but the Command Center interaction model changes from pure polling to polling plus notification-triggered refresh. Design completeness is acceptable if implementation preserves the current visual states: loading, stale data, disconnected stream, and fallback polling remain invisible unless the existing app-state query fails.
+
+No mockups were generated because the plan has no new visual surface. The design requirement is behavioral: no duplicate refresh storms, no user-facing token exposure, no removal of the 5-second fallback poll, and no visible controls for an operator-only capability probe.
+
+### Phase 3: Engineering Review
+
+Architecture:
+
+```text
+G7 backend events
+  -> same-origin cookie session
+  -> EventSource named events
+  -> typed notification adapter
+  -> React Query invalidate(['appState'])
+  -> existing /api/app/state poll/refetch remains authoritative
+```
+
+Required hardening added by review:
+
+- Same-origin session bootstrap must be capability discovery, not a build flag.
+- 401, 403, and 404 are terminal for the current page lifetime.
+- Temporary failures use bounded exponential backoff: 1s, 2s, 4s, 8s, 30s cap.
+- Disconnect handling must guard against concurrent reconnect timers.
+- Malformed event JSON must close and notify disconnect once.
+- Rate-limit tests should avoid a pending `__anext__()` overflow shape and should clean shared limiter state.
+
+Merge note: `origin/main` advanced to `a22257ef feat(g7): add same-origin notification session`; this branch must rebase on that tip before landing.
+
+### Phase 4: DX Review
+
+Developer-facing surface is small: `apiFetch<void>`, `notifications.ts`, and `usePortalNotifications`. The best DX is boring:
+
+- no extra frontend env flag;
+- no new package;
+- one adapter module for event names and envelope typing;
+- test evidence saved under `docs/testing/`;
+- stale baseline typecheck failures recorded separately if still present after rebase.
+
+### Outside Voices
+
+Kimi CLI ran successfully under `/opt/homebrew/bin/timeout 300` and agreed with the core scope. It flagged the missing v2.1/v2.5 labels, the proxy-unsafe but acceptable process-local limiter, shared `_CONFIGURE_RATE` cleanup risk, and the need to rebase on `a22257ef`.
+
+Claude CLI is installed (`2.1.210`) but not authenticated in this shell. The active Claude worker remains represented through the coordination board as `claude-sonnet-g7-impl`, which owns `orama-system-portal-G7-authenticated-sse-mvp-implementation-43576a15`.
+
+Cline CLI is installed, but a headless plan-mode smoke test failed with `model not found` for `cline-pass/gpt-5.5`; no Cline review was used.
+
+### Coordination State
+
+Completed by `codex-g7-fast-follow`:
+
+- `orama-system-portal-G7-pre-v2-TODO-closure-plan-5c52ee68`
+- `orama-system-portal-G7-apiFetch-204-compat-455f46e5`
+
+Still queued or Claude-owned at review time:
+
+- `orama-system-portal-G7-authenticated-sse-mvp-implementation-43576a15` claimed by `claude-sonnet-g7-impl`
+- `orama-system-portal-G7-session-rate-limit-424c3756`
+- `orama-system-portal-G7-react-stream-adapter-61a37472`
+- `orama-system-portal-G7-react-cache-invalidation-a124595d`
+- `orama-system-portal-G7-pre-v2-closure-evidence-d861116d`

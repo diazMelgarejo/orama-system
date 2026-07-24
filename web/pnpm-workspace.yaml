@@ -5,3 +5,15 @@ onlyBuiltDependencies:
   - esbuild
 overrides:
   esbuild: "0.28.1"
+  # GHSA-eating brace-expansion DoS (dependabot #8): scoped to the
+  # minimatch@10 edge only (typescript-eslint's chain) so the unrelated
+  # minimatch@3.1.5 -> brace-expansion@1.x edge (different major API) is
+  # never touched.
+  minimatch@10>brace-expansion: "^5.0.7"
+  # Same advisory family, the other edge (dependabot #9): minimatch@3.1.5
+  # (older eslint-adjacent chain) declares brace-expansion@^1.1.7 --
+  # 1.1.16 is a same-major patch release, safe within that range.
+  minimatch@3>brace-expansion: "^1.1.16"
+  # js-yaml DoS (dependabot #10): pulled in transitively via
+  # @eslint/eslintrc -> eslint (dev-only). 4.3.0 is a same-major patch.
+  js-yaml: "^4.3.0"

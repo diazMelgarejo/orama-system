@@ -1,5 +1,6 @@
 # 22 — Git Worktrees for Parallel Agents
 
+> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Quick reference.** Full design rationale in `docs/superpowers/specs/2026-05-24-worktree-parallel-agents-design.md`.
 > Applies to: orama-system, Perpetua-Tools. Excludes: periscope, AlphaClaw.
 
@@ -12,6 +13,10 @@ Will this agent WRITE files AND another agent is also writing?
   Yes → create a worktree.  Run: scripts/worktree-bootstrap.sh <repo> <branch> <slug>
   No  → use the canonical checkout.  Done.
 ```
+
+**Board jobs:** if work came from a coordination board, first pin
+`source_ref` + `expected_base_sha`, then create the worktree from that exact
+source. Shared board state is not shared file state.
 
 ---
 
@@ -28,6 +33,11 @@ Will this agent WRITE files AND another agent is also writing?
 1. Agent will write/modify files
 2. Another agent is concurrently writing to the same repo
 3. The work lives on a separate named branch
+
+**Coordination-board trigger — ALWAYS true for write jobs:** the board row or
+handoff must name a `source_ref` and `expected_base_sha` before the agent edits.
+If either is missing, derive it from the PR/assignment branch, post it back to
+the board, and only then bootstrap a fresh worktree from that ref.
 
 **Stay on canonical — ANY of these is enough:**
 - Read-only work (code review, semantic search, test runs against committed code)
@@ -49,7 +59,7 @@ Will this agent write files?
 ## 2. Canonical Worktree Location
 
 ```
-~/code/oramasys/worktrees/<slug>/
+<v2-workspace>/worktrees/<slug>
 ```
 
 **Slug format:** `yyyy-mm-dd-<brief-purpose>` — e.g. `2026-05-24-worktree-doctrine`
@@ -57,7 +67,7 @@ Will this agent write files?
 Why external to the repo directory:
 - Avoids `.gitignore` conflicts with tracked files
 - Prevents macOS Finder `* 2` dedup contamination
-- Lets multiple orama-family repos share the same hub at `~/code/oramasys/worktrees/`
+- Lets multiple orama-family repos share the same hub under `<v2-workspace>/worktrees/`
 
 ---
 
@@ -69,7 +79,7 @@ scripts/worktree-bootstrap.sh <repo-path> <branch> <slug> [gbrain-source-id]
 
 # Example
 scripts/worktree-bootstrap.sh \
-  ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system \
+  <repo-path> \
   feat/my-feature \
   2026-05-24-my-feature \
   orama-src
@@ -77,11 +87,27 @@ scripts/worktree-bootstrap.sh \
 
 Bootstrap does (in order):
 1. **Pre-flight**: removes stale `.git/*.lock` files; detects orphan refs with spaces
-2. **`git worktree add`** `~/code/oramasys/worktrees/<slug>` `-b <branch>` (or attaches if the worktree already exists)
+2. **`git worktree add`** `<v2-workspace>/worktrees/<slug>` `-b <branch>` (or attaches if the worktree already exists)
 3. **`.gbrain-source`**: writes from argument, or copies from canonical if omitted
 4. **`.gitignore`**: appends macOS dedup patterns (`*\ 2/`, `*\ 2.*`, `*\ 3/`, `*\ 3.*`)
 5. **Port offset**: assigns `ENV_OFFSET = index × 100`, writes `.worktree-env`
 6. **Prints summary**: worktree path, branch, ENV_OFFSET, gbrain source
+
+### Board-Job Base Verification
+
+For board / GossipBus / PR-handoff jobs, verify the checked-out base before the
+first edit:
+
+```bash
+git fetch origin --prune
+git rev-parse HEAD
+# must equal the board row's expected_base_sha
+```
+
+If `HEAD` differs, stop and refresh the board row. Do not continue from a
+primary checkout, preservation branch, stale scratch branch, or another
+agent's dirty worktree. The common failure is treating "same board / same repo"
+as enough; it is not.
 
 ---
 
@@ -202,7 +228,7 @@ ls | grep " 2$" || true
 Manual cleanup (if skill unavailable):
 ```bash
 # 1. From canonical checkout:
-git worktree remove ~/code/oramasys/worktrees/<slug>
+git worktree remove `<v2-workspace>/worktrees/<slug>`
 
 # 2. Verify
 git worktree list
@@ -230,7 +256,7 @@ Must exit 0 before committing. Catches:
 | Rule | What it blocks | Correct substitute |
 |------|---------------|--------------------|
 | `scan_openclaw_workstation_layout` | hardcoded machine-local OpenClaw tree path | `$OPENCLAW_ROOT` |
-| `scan_personal_paths` | `/Users/<name>/…` absolute paths | `~`, `$REPO_ROOT`, `<workspace>` |
+| `scan_personal_paths` | concrete personal home-directory paths | `~`, `$REPO_ROOT`, `<workspace>` |
 | `scan_bidi_controls` | Hidden Unicode direction controls (Trojan-Source) | remove |
 | `scan_legacy_names` | Banned terminology (coordinator → orchestrator, etc.) | correct term |
 
@@ -259,6 +285,7 @@ alias hygiene="python3 scripts/review/repo_hygiene.py ."
 | D7 | `.cursor/environment.json` port collisions | bootstrap writes `ENV_OFFSET`; ports offset by N×100 |
 | D8 | Multi-Win pool ignores extra devices | future PT enhancement; current: 1 Win is correct |
 | D9 | Machine-specific paths leak into committed docs | run `python3 scripts/review/repo_hygiene.py .` before every commit |
+| D10 | Board jobs start from different local branches | board row must pin `source_ref` + `expected_base_sha`; bootstrap a fresh worktree from that exact source |
 
 ---
 
@@ -277,6 +304,7 @@ Invoke with `/using-git-worktrees` or via the `Skill` tool.
 ## Related Docs
 
 - Design spec: `docs/superpowers/specs/2026-05-24-worktree-parallel-agents-design.md`
+- Multi-agent protocol: `bin/orama-system/references/multi-agent-collaboration-protocol.md`
 - Dogfood log: `.experience-log/dogfood-notes.md` (in `worktree-doctrine` worktree)
 - Bootstrap script: `scripts/worktree-bootstrap.sh`
 - Build order: `docs/v2/04-build-order.md`

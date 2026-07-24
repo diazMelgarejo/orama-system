@@ -1,0 +1,17 @@
+{
+  "fanout_id": "coord-026",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "dev-reference/crg-platform",
+      "filename": "win-2026-07-23-crg-platform-skills-broadcast.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-23-crg-platform-skills-broadcast.md"
+    },
+    {
+      "assignee": "mac",
+      "topic": "dev-reference/crg-platform",
+      "filename": "win-2026-07-23-crg-platform-skills-broadcast.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-23-crg-platform-skills-broadcast.md"
+    }
+  ]
+}

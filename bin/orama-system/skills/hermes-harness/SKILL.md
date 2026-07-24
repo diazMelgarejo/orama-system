@@ -5,7 +5,7 @@ description: >-
   workflows. Use when installing Hermes, importing ECC/orama skills into Hermes,
   configuring Nous Portal or LM Studio providers, adding Hermes beside OpenClaw,
   or dispatching Hermes, Gemini, AGY, and Codex CLI coding partners.
-version: 1.1.0.0
+version: 1.1.2.0
 license: Apache 2.0
 compatibility: hermes, codex, claude-code, windows, openclaw, ecc, agy
 agent_compatibility:
@@ -28,6 +28,10 @@ triggers:
   - ecc harness
   - cross-harness
   - install codex cli on windows
+  - update all agent comms
+  - update the board
+  - post to the whiteboard
+  - notify all peers
 allowed-tools: bash, file-operations, web-search
 ---
 
@@ -147,6 +151,44 @@ L1 transport (CLI flags) stays internal to `dispatch_codex_partner.py` and AGY s
 Hermes may add optional fields: `output`, `warnings`, `errors`, `checks`, echoes.
 `blocked` is a Hermes alias for `needs_input`. Path casing mismatches → `warnings[]`, not `blocked`.
 
+## Session Close-Out: Update the Board (mandatory for significant landed work)
+
+**Trigger phrase:** "update all agent comms" (or "update the board" /
+"post to the whiteboard" / "notify all peers") means run **both**
+mechanisms below together, in one pass — not one or the other. This is
+the standing invocation for "tell every other agent/peer what happened,"
+whether said explicitly by the user or inferred from context (e.g. after
+resolving a multi-agent conflict, after verifying another agent's
+concurrent work, after landing anything a peer would otherwise have to
+rediscover).
+
+Not just for `coord-N` fan-outs — **any** session that lands substantive
+work (a real code change, a closed plan, a fix that other agents/peers
+would want to know about) updates both mechanisms before ending, so a
+peer checking the board mid-work doesn't rediscover it independently:
+
+1. **GossipBus whiteboard log** (`Perpetua-Tools/scripts/
+   agent_coordination.py log <agent_id> "<message>"`) — one line, states
+   what landed, the commit(s)/PR(s), and anything still open that a peer
+   with different access (push rights, a different host, etc.) could
+   help unblock. Cheap, always do it.
+2. **Peer-inbox drop** (`references/results/<peer>-<date>-<topic>.md`,
+   this directory) — for anything substantial enough to need more than
+   one line: what shipped, what's still open and why, what's explicitly
+   deferred and to where. Follow the existing drop format (see any file
+   in `references/results/` for the shape — status line, what-landed
+   table, open/needs-a-peer section, not-touched-explicitly-deferred
+   section). This is the persistent record; the whiteboard log is the
+   pointer to it.
+
+Established 2026-07-22 during a frugality/privacy-gate + repo-hygiene
+close-out session — see `references/results/mac-2026-07-22-frugality-p3-
+and-repo-closeout-status.md` for a worked example of both mechanisms used
+together. **Step-by-step Hermes recipe:**
+[`references/update-all-agents-comms.md`](references/update-all-agents-comms.md).
+Corollary: check the board while waiting on any background
+process (a push, a test run, another agent's job) — don't idle.
+
 ## Subskill Registry (Hermes-facing)
 
 Thin local wrappers point at canonical command cards. Never cache full skill bodies.
@@ -158,6 +200,7 @@ Thin local wrappers point at canonical command cards. Never cache full skill bod
 | `pt-orama-delegate` | `commands/pt-orama-delegate/SKILL.md` | Hermes / AGY | Bounded delegation |
 | `pt-hardware-policy` | `commands/pt-hardware-policy/SKILL.md` | Hermes | `hardware-affinity-gate` edge |
 | `lan-peer-self-talk` | `commands/lan-peer-self-talk/SKILL.md` | Hermes | Mac↔Win LAN peer — [operator playbook](references/lan-peer-self-talk.md#operator-playbook) |
+| `windows-hermes-setup` | `commands/windows-hermes-setup/SKILL.md` | Hermes | Windows PATH, ECC doctor, partner CLI — [playbook](references/windows-hermes-setup.md) |
 | `pt-orama-lesson-mining` | `commands/pt-orama-lesson-mining/SKILL.md` | Hermes / Codex | **Optional** — session insight graduation; not installed by default |
 | `hermes-harness` | `SKILL.md` (this file) | Hermes | Install / provider / import |
 | `local-inference` | `../local-inference/SKILL.md` | Hermes | Redirect stub |
@@ -197,6 +240,15 @@ if (-not (Test-Path "$installDir\.git")) { throw "HERMES_NOT_INSTALLED" }
 Partner canaries: `python bin\orama-system\skills\hermes-harness\scripts\verify_partner_canaries.py`
 
 ## Windows Bring-Up
+
+Canonical setup playbook (absorbed from Hermes self-improve `windows-hermes-setup`):
+[`references/windows-hermes-setup.md`](references/windows-hermes-setup.md).
+Install thin wrapper: `python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install`.
+
+**CRG on Windows:** `.cursor/mcp.json` must use `CRG_OPENAI_BASE_URL=http://localhost:1234/v1`
+(LM Studio, not Ollama `:11434`). Run `bash bin/orama-system/scripts/sync-cursor-mcp.sh` or see
+[`../code-review/references/crg-platform-endpoints.md`](../code-review/references/crg-platform-endpoints.md).
+
 Use PowerShell with explicit UTF-8 when writing files:
 
 ```powershell
@@ -220,6 +272,63 @@ Windows. If reusing GitHub Desktop's bundled Git, a `bash.exe` hardlink beside
 ```powershell
 & $env:HERMES_GIT_BASH_PATH --noprofile --norc -lc 'echo hermes-bash-ok'
 ```
+
+### Bare `python` vs venv — a recurring, hard-to-notice class of bug
+
+Any `.ps1` script in this skill (or elsewhere on Windows) that invokes
+`python <script.py>` bare — instead of the repo's `.venv\Scripts\python.exe`
+— is silently at the mercy of whatever `python` resolves to first on PATH
+at that moment. That is **not guaranteed to be the venv with this repo's
+own `requirements.txt` installed**, especially under Task Scheduler, a
+freshly-opened shell, or a script invoked from a different working
+directory than expected.
+
+**Symptom pattern:** a script that works fine when run manually from the
+repo root fails elsewhere with `ModuleNotFoundError` for a package that
+*is* actually installed — just in a different interpreter than the one
+that ran. Confirmed live, repeatedly, this session:
+
+- `coord_pulse.ps1` — false "missing websockets" (it was installed, just
+  not in the interpreter that ran)
+- `service_watchdog.ps1` — same class, `lan_peer_assign.py` peer-drop calls
+- `coord_comms_board.ps1` — `agent_coordination.py heartbeat pulse` failed
+  with `ModuleNotFoundError: No module named 'aiosqlite'` (installed in
+  Perpetua-Tools' venv, not the system Python bare `python` resolved to)
+
+**Fix:** dot-source the shared resolver and use its result instead of bare
+`python`:
+
+```powershell
+. (Join-Path $env:ORAMA_SYSTEM_PATH 'scripts\lib\get-best-python.ps1')
+$PythonExe = Get-BestPython $env:ORAMA_SYSTEM_PATH
+& $PythonExe some_script.py --arg
+```
+
+**Cross-repo scripts need their own resolution per repo** — a script that
+calls into both orama-system and Perpetua-Tools python files (e.g.
+`coord_comms_board.ps1` calling PT's `agent_coordination.py`) needs
+`Get-BestPython $env:ORAMA_SYSTEM_PATH` for one and
+`Get-BestPython $env:PERPETUA_TOOLS_PATH` for the other — they are
+different venvs with different installed packages, not interchangeable.
+
+**Exception — legitimate bare `python` before a venv exists:** bootstrap
+scripts that *create* the venv itself (`ensure_requirements.ps1`,
+`install.ps1`'s `python -m venv ...` calls) correctly use bare `python`,
+since the venv doesn't exist yet at that point in execution. Don't "fix"
+those.
+
+**Related gotcha — cwd-dependent state resolution across repos.** Even
+with the correct venv python, a script in orama-system invoking a
+Perpetua-Tools Python file can still resolve state to the wrong repo:
+`agent_coordination.py`'s `GossipBus` falls back to
+`git rev-parse --git-common-dir` against the *current process cwd* when no
+explicit state dir is set. A PowerShell script running from
+orama-system's directory that calls into PT's `agent_coordination.py`
+silently anchors PT's coordination database inside orama-system's own
+`.git`, not PT's -- confirmed live as `ERROR: failed to initialize the
+coordination database: unable to open database file`. Fix: set
+`$env:PT_STATE_DIR = Join-Path $env:PERPETUA_TOOLS_PATH '.state'`
+explicitly before any such call, bypassing the cwd-dependent fallback.
 
 ## Procedure
 
@@ -371,6 +480,15 @@ Pass criteria: Hermes repo exists, Bash prints `hermes-bash-ok`, one-shot
 prints `HERMES_READY`, provider keys stay outside git, imported skills are
 sanitized, and OpenClaw operations still route through `openclaw-skills`.
 
+## Plan integration
+
+When synthesizing multiple plans into one canonical document, follow
+[`references/plan-integration.md`](references/plan-integration.md):
+
+1. Read source plans, then target plan.
+2. Reframe missing absorption targets as no-ops; enrich canonical assets.
+3. Repo-relative paths only; parametrize IPs; preserve provenance.
+
 ## Boundaries
 
 Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw owns fabric.
@@ -386,6 +504,7 @@ Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw ow
 - Route `openclaw-*` skills through `openclaw-skills` protocol, never Hermes inline.
 - Return core result shape (`status`, `files_modified`, `follow_up_actions`) on every dispatch.
 - Verify `bash.exe`, partner CLIs, and provider reachability before dispatch.
+- Integrate multiple plans per [`references/plan-integration.md`](references/plan-integration.md).
 
 ### Ask First
 
@@ -404,10 +523,15 @@ Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw ow
 - Commit absolute workstation paths in repo content or envelopes.
 - Let worker agents commit, deploy, delete, or change account settings without
   explicit confirmation.
+- Hardcode LAN IP literals in skills, plans, or docs; resolve endpoints via env vars only.
+- Hardcode LM Studio model IDs from memory; fetch exact IDs from `/v1/models`.
 - Silent fallback when `hardware-affinity-gate` returns `NEVER`.
 
 ## References
 
+- [`references/update-all-agents-comms.md`](references/update-all-agents-comms.md) — GossipBus + inbox fanout recipe
+- [`references/lan-peer-coordination.md`](references/lan-peer-coordination.md) — queues, pulse-gate, record-success, inbox drops
+- [`references/plan-integration.md`](references/plan-integration.md) — merge multiple plans into one canonical doc
 - [`references/lan-peer-self-talk.md`](references/lan-peer-self-talk.md) — Mac↔Win operator playbook (SSOT) · [`docs/guides/lan-peer-mac-win-operator.md`](../../../../docs/guides/lan-peer-mac-win-operator.md)
 - [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive)
 - [`references/hermes-universal-invocation-protocol.md`](references/hermes-universal-invocation-protocol.md) — envelope, layers, result superset
