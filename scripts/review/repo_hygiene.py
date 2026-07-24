@@ -69,6 +69,18 @@ IDENTITY_DOC_EXCEPTIONS = {
     "docs/wiki/08-git-hygiene-and-branching.md",
     # v2 spec doc — quotes forbidden tokens as YAML config examples, not leaks
     "docs/v2/11-idempotency-and-guard-patterns.md",
+    # Identity-allowlist scripts and their own docs/tests: the operator's own
+    # approved (owner_gmail/owner_name) identity is SUPPOSED to appear here --
+    # that is the entire purpose of an allowlist. Without this exemption,
+    # scan_private_verboten_literals() flags every file that correctly lists
+    # the operator's own already-approved identity as if it were a leak.
+    "scripts/git/audit_attribution.sh",
+    "scripts/git/check_identity.sh",
+    "scripts/git/identity-policy.json",
+    "scripts/review/repo_hygiene.py",
+    "tests/test_audit_engine.py",
+    "docs/next/2026-07-24-plan-unified-identity-audit.md",
+    "docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md",
 }
 # Personal-path leak protection (OpSec) — block any tracked file from containing
 # an absolute path under /Users/<anything>/ or /home/<anything>/. Developer
@@ -298,6 +310,8 @@ def scan_private_verboten_literals(root: Path, files: list[str]) -> list[str]:
         return []
     errors: list[str] = []
     for rel in files:
+        if rel in IDENTITY_DOC_EXCEPTIONS:
+            continue
         path = root / rel
         if not path.is_file() or is_binary(path):
             continue
