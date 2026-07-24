@@ -1,15 +1,28 @@
 # 49 — Peer Mesh Authentication & Transport Security (v2 Plan)
 
 > **Repository standard:** additive to [`46-repository-standard.md`](46-repository-standard.md).
-> **Status:** Plan only — deferred to v2, not started. The v1 minimum
-> (never send a bearer token over unauthenticated HTTP; stop rather than
-> retry when authenticated transport is unavailable) landed today in
-> `bin/orama-system/skills/hermes-harness/scripts/query_peer_topology.py`'s
-> `_http_get()`/`_is_authenticated_transport()`, on the branch this plan is
-> stacked on. Everything below this line is the deferred work that makes
-> `_is_authenticated_transport()` actually mean something beyond "the
-> scheme says https".
-> **Date:** 2026-07-24
+> **Status:** Partially implemented, updated 2026-07-25 to match actual
+> code (this doc originally described the design as proposed by 3 ingested
+> docs; the real implementation diverged from that sketch in file layout,
+> naming, and scope — reconciled below). What's real today:
+> - v1 minimum (never send a bearer token over unauthenticated HTTP; stop
+>   rather than retry) — `query_peer_topology.py` and `lan_peer_assign.py`,
+>   both via `_is_authenticated_transport()`. Landed on PR #197.
+> - AlphaClaw HTTPS gap (plan section A.2, formerly "not started") — now
+>   fully implemented and tested: `orchestrator/alphaclaw_tls_proxy.py`
+>   (Perpetua-Tools), real self-signed cert generation with persistence
+>   across restarts, TOFU fingerprint pinning with mismatch detection,
+>   genuine TLS termination + forwarding (chunked bodies, streamed
+>   responses). Wired into `orchestrator/alphaclaw_manager.py`'s own
+>   `bootstrap_alphaclaw()` success path via `_maybe_wrap_gateway_with_tls()`
+>   — opt-in via `ALPHACLAW_TLS_ENABLED` (not `PEER_TLS_ENABLED` as
+>   originally sketched). Landed on Perpetua-Tools PR #276.
+> - Everything else below (peer-mesh cert provisioning for
+>   `query_peer_topology.py`/`probe_lan_peer.py` specifically, the
+>   pluggable AuthProvider/BUZZ/Twitter/Google architecture, audit logging,
+>   mTLS) remains **not started** — genuinely deferred, not just
+>   scaffolded.
+> **Date:** 2026-07-24, updated 2026-07-25.
 > **Parent:** PR #197 (`2026-07-19-002-fleet-mesh-oob-fixes`), stacked per
 > [`SECURITY.md`](../../SECURITY.md)'s mandatory stacked-PR procedure —
 > this branch (`security/02-peer-mesh-auth-tls-v2-plan`) is `PR(N+1)`,
@@ -56,12 +69,12 @@ All v1-column answers below are **not implemented yet** — they are the
 agreed target for when this plan is picked up, recorded now so the
 decision doesn't need to be re-litigated later.
 
-| # | Question | v1 target answer | v2+ |
-|---|---|---|---|
-| 1 | Certificate provisioning | Auto-generated self-signed (2048-bit RSA) + TOFU fingerprint pinning, `peer_cert_manager.py` | Shared-CA option for hardened deployments |
-| 2 | AlphaClaw HTTPS | AlphaClaw has no native HTTPS (Node/Express, HTTP-internal, `trust-proxy` support exists). New `alphaclaw-tls` PT package: local-only HTTPS reverse proxy in front of it | Native HTTPS if AlphaClaw ever adds it |
-| 3 | Existing deployments | `PEER_TLS_ENABLED` auto-detects fresh vs. existing install (token exists, no cert dir ⇒ existing); v1 **warns only**, never enforces | v2 removes the flag, enforcement unconditional |
-| 4 | Certificate pinning | Yes — TOFU (trust-on-first-use) automatic, `PEER_PINNED_FINGERPRINTS` env for admin pre-seeding | Hard reject on pin mismatch (MITM detection) |
+| # | Question | v1 target answer | Actual status (2026-07-25) | v2+ |
+|---|---|---|---|---|
+| 1 | Certificate provisioning | Auto-generated self-signed (2048-bit RSA) + TOFU fingerprint pinning | **Done for AlphaClaw.** `orchestrator/alphaclaw_tls_proxy.py`'s `_generate_cert()`/`verify_or_pin_fingerprint()` (Perpetua-Tools) — not a separate `peer_cert_manager.py` file as originally sketched; lives alongside the proxy it serves. **Not started for peer-mesh** (`query_peer_topology.py`/`probe_lan_peer.py`). | Shared-CA option for hardened deployments |
+| 2 | AlphaClaw HTTPS | New PT package, local-only HTTPS reverse proxy | **Done.** `orchestrator/alphaclaw_tls_proxy.py` — deliberately NOT a standalone `packages/alphaclaw-tls` package; see "Why orchestrator/, not packages/" below. Real TLS termination, cert persistence, TOFU pinning, chunked-body handling, streamed responses. Wired via `_maybe_wrap_gateway_with_tls()` in `alphaclaw_manager.py`. | Native HTTPS if AlphaClaw ever adds it |
+| 3 | Existing deployments | `PEER_TLS_ENABLED` auto-detects fresh vs. existing install | **Simpler than planned, and done for AlphaClaw:** `ALPHACLAW_TLS_ENABLED` env var, off by default, no auto-detection logic — matches `dangerous_workers.py`'s existing truthy-parsing convention rather than inventing new detection. **Not started for peer-mesh.** | v2 removes the flag, enforcement unconditional |
+| 4 | Certificate pinning | TOFU automatic + `PEER_PINNED_FINGERPRINTS` admin pre-seeding | **TOFU done for AlphaClaw** (`verify_or_pin_fingerprint()`, raises `AlphaClawCertFingerprintMismatch` on mismatch — real MITM-detection, not a stub). Admin pre-seeding (`PEER_PINNED_FINGERPRINTS`) **not implemented** for either surface. | Hard reject on pin mismatch (MITM detection) — already true for AlphaClaw |
 | 5 | mTLS | Server-auth TLS only | Full mutual TLS (client certs) |
 | 6 | Token rotation | None — bearer tokens stay long-lived for backward compat | Short-lived (≤1h per RFC 6750 §5.1 guidance) + refresh |
 | 7 | Audit logging | Yes — append-only `.orama/audit.log`, HMAC-chained (each entry signs over the previous entry's signature, tamper-evident) | BUZZ-signed entries when available |
@@ -94,21 +107,42 @@ in the three source docs this entry ingests; re-derive from there when
 implementation starts rather than re-designing from this summary, since
 the source docs are implementation-ready, not just conceptual.
 
-## MVP wiring (what "picking this up" actually touches)
+## What's actually implemented (2026-07-25) vs. the original MVP sketch
 
 ```text
-Perpetua-Tools/packages/
-  alphaclaw-tls/                # NEW package — local HTTPS proxy for AlphaClaw
-  alphaclaw-adapter/             # small change: point at the proxy's URL
+Perpetua-Tools/  (actual, not the originally-sketched packages/alphaclaw-tls)
+  orchestrator/alphaclaw_tls_proxy.py    # DONE — cert gen+persistence, TOFU pinning,
+                                          # TLS termination, chunked/streamed forwarding
+  orchestrator/alphaclaw_manager.py      # DONE — _maybe_wrap_gateway_with_tls(),
+                                          # ALPHACLAW_TLS_ENABLED, the ONLY place
+                                          # gateway_url's scheme is decided
+  tests/test_alphaclaw_tls_proxy.py            # DONE
+  tests/test_alphaclaw_manager_tls_wiring.py   # DONE
+  docs/next/2026-07-24-alphaclaw-tls-proxy-scaffolding.md  # DONE — PT-side working note
 
-orama-system/
-  src/secure_transport.py        # NEW — TLS enforcement layer
-  src/peer_cert_manager.py       # NEW — auto-cert + TOFU pinning
-  src/auth/                      # NEW — AuthProvider protocol + 4 providers + AuthManager + audit_log + upgrade_prompt
-  src/utils/ip_resolver.py       # MODIFY — _from_alphaclaw() through alphaclaw-tls
-  bin/.../query_peer_topology.py # MODIFY — AuthManager + secure_transport integration
-  bin/.../probe_lan_peer.py      # MODIFY — same
+orama-system/  (all still NOT started)
+  src/secure_transport.py        # peer-mesh TLS enforcement layer
+  src/peer_cert_manager.py       # peer-mesh cert provisioning (separate from AlphaClaw's)
+  src/auth/                      # AuthProvider protocol + 4 providers + AuthManager
+  bin/.../query_peer_topology.py # AuthManager integration (currently: bearer-token-
+                                  # over-HTTP guard only, from the v1 minimum)
+  bin/.../probe_lan_peer.py      # same
 ```
+
+### Why `orchestrator/`, not a new `packages/` package
+
+The original 3 ingested plans proposed a standalone
+`Perpetua-Tools/packages/alphaclaw-tls` package. Before implementing that,
+`orchestrator/alphaclaw_manager.py`'s own docstring was read and found an
+explicit, pre-existing architecture invariant: **PT is authoritative for
+gateway discovery, route choice, topology, and readiness; orama-system
+makes zero gateway decisions.** A separately-versioned package would have
+created a second place `gateway_url`'s scheme could be decided, violating
+that invariant. Every feature from the plan was implemented in full —
+just placed inside the module that already owns this decision space, with
+`bootstrap_alphaclaw()`'s own success path made the single, only call
+site where `gateway_url`'s scheme is ever set. Full writeup:
+`Perpetua-Tools/docs/next/2026-07-24-alphaclaw-tls-proxy-scaffolding.md`.
 
 ## What this plan explicitly does NOT decide
 
@@ -133,15 +167,17 @@ Carried over from the source plans' own checklists, still open:
 
 ## Cross-repo coordination
 
-This is an orama-system-led plan with two PT-side dependencies:
-`alphaclaw-tls` (new PT package) and the `cryptography` library already
-being a transitive dependency of PT's `endpoint-policy` package (verify
-this is still true before relying on it as a zero-new-deps claim). Per the
-task that produced this doc, a parallel PT branch/PR tracking the
-`alphaclaw-tls` package specifically should be opened separately, cross-
-referencing this doc by path (`orama-system/docs/v2/49-...`) rather than
-duplicating the design here — PT's own `docs/adr/` or `docs/next/` is the
-right home for that package's own implementation notes when it starts.
+**Done:** Perpetua-Tools PR #276 (`security/alphaclaw-tls-proxy-scaffold`)
+implements the AlphaClaw HTTPS half of this plan, cross-referencing this
+doc directly in its own code and doc comments. Verify the `cryptography`
+library dependency claim below still needs confirming as an explicit PT
+dependency (it's available in the environments tested, but not confirmed
+as a declared dependency anywhere in PT's own manifests).
+
+**Not started:** the peer-mesh half (`src/secure_transport.py`,
+`src/peer_cert_manager.py`, `src/auth/`) is orama-system-only work with no
+PT dependency — `query_peer_topology.py`/`probe_lan_peer.py` currently
+only have the v1 bearer-token-over-HTTP guard, not real TLS.
 
 ## See also
 
