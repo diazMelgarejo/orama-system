@@ -25,6 +25,7 @@ of open work across both repos"):
 | `2026-07-17-preserve-branch-pr-cleanup-plan.md` | Branch preservation before cleanup | Plan only, not executed — review before any deletion |
 | `preserve-branch-manifest.md` | Manifest of 27 branches evaluated for preservation | Phase 1 complete 2026-07-17 |
 | `fleet-mesh/` (5 docs + README) | GossipBus / OASN P2P mesh, G7 async notifications, self-healing degradation modes | See `fleet-mesh/README.md` — not re-audited this pass |
+| `2026-07-24-plan-unified-identity-audit.md` | Background/rationale for consolidating 3 separate git-identity allowlists into one config + engine | Superseded — Phase 1–2 implemented via `docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md` on branch `2026-07-24-005b-identity-audit-plan` |
 
 Everything in this table (and `fleet-mesh/`) is **out of scope** for the
 2026-07-22 frugality/privacy and cross-repo-closure work — none were

@@ -228,8 +228,8 @@ orama-system/docs/v2/
 ├── 44-docs-v2-skills.md  ← concise modular v2 skill implementation plan; SKILL.md orchestrator rule; 200-line target and 500-line ceiling
 ├── 45-single-operator-lan-threat-model-descope.md  ← D23: descope BFT/Sybil-resistant patterns (witness quorum, reputation-decay, equivocation) for topologies that are actually a single operator's own LAN, regardless of node count; Q1-Q3 premise check before wiring any P2P-derived adversarial pattern
 ├── 46-repository-standard.md  ← cross-cutting, additive repo-layout standard: root stays minimal, everything executable under /src, no root-level scripts/tests/tools/examples, data output + binaries gitignored, never commit secrets/personal paths/doxxing/SecOps material
-└── 47-portable-memory-local-topology-invariant.md  ← cross-cutting portable-memory rule: tracked docs name categories only; concrete forbidden fragments live in local-only registries
-└── 48-board-job-source-line-schema.md  ← provisional/optional job-board schema (source_ref + expected_base_sha) so a claimant can verify the exact source state a job was scoped against; NOT enforced yet, PT-side producer already validates-when-provided; v2 candidate for hard-required once a second producer exists to coordinate with
+├── 47-portable-memory-local-topology-invariant.md  ← cross-cutting portable-memory rule: tracked docs name categories only; concrete forbidden fragments live in local-only registries
+├── 48-board-job-source-line-schema.md  ← provisional/optional job-board schema (source_ref + expected_base_sha) so a claimant can verify the exact source state a job was scoped against; NOT enforced yet, PT-side producer already validates-when-provided; v2 candidate for hard-required once a second producer exists to coordinate with
 └── 49-peer-mesh-auth-tls-v2-plan.md  ← peer-mesh TLS + pluggable auth (BUZZ/Twitter/Google, bearer token grandfathered) deferred plan; v1 minimum (never send a bearer token over unauthenticated transport) already landed on PR #197; this is the certificate provisioning + real TLS/mTLS + AlphaClaw HTTPS proxy work, stacked as PR(N+1)
 ```
 

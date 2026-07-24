@@ -26,11 +26,19 @@ grep probe. Run them all, cheaply, first.
 1. **Read the plan fully.** Extract: (a) every named symbol, file, endpoint,
    CLI flag; (b) the success-criteria checklist; (c) which repo owns each
    piece. Do not skim — the criteria list IS your work plan.
-2. **Sync to latest origin/main first** (`git fetch origin && git pull
-   --ff-only origin main` on a clean checkout; stash-with-tag anything
-   dirty that isn't yours and record the stash SHA on the coordination
-   board). Concurrent agents move main *while you work* — a plan audited
-   against a stale main is a stale audit.
+2. **Sync to latest origin/main first, on a dedicated clean checkout —
+   never an unspecified "current" branch.** `git pull --ff-only origin
+   main` fast-forwards whatever branch happens to be checked out right
+   now, not necessarily `main` — running it on the wrong branch silently
+   merges main's history into something else. Either use a separate,
+   dedicated audit worktree/checkout based on `origin/main`
+   (`git worktree add ../audit-checkout origin/main`), or explicitly
+   verify the current branch before pulling: `[ "$(git branch
+   --show-current)" = "main" ] || { echo "not on main, aborting"; exit
+   1; }`. Stash-with-tag anything dirty that isn't yours and record the
+   stash SHA on the coordination board. Concurrent agents move main
+   *while you work* — a plan audited against a stale main is a stale
+   audit.
 3. **Grep-audit every criterion** against the synced tip:
    `git grep -l "SymbolA\|SymbolB\|flag-c" origin/main`.
    Sort criteria into: BUILT (symbol exists), MISSING (no match), UNKNOWN

@@ -12,6 +12,8 @@ import json
 import sys
 from pathlib import Path
 
+import pytest
+
 _SCRIPT = (
     Path(__file__).resolve().parent.parent
     / "bin" / "orama-system" / "skills" / "hermes-harness" / "scripts"
@@ -35,6 +37,7 @@ def _ok_body(reachable: bool = True) -> str:
 
 
 def test_relay_probe_target_up(monkeypatch):
+    monkeypatch.setenv("PEER_PORTAL_TLS_ENABLED", "1")
     calls = []
 
     def fake_post(url, payload, token="", timeout=8):
@@ -48,11 +51,12 @@ def test_relay_probe_target_up(monkeypatch):
     assert code == 0
     assert result["reachable"] is True
     assert result["relay_via"] == "10.0.0.2:8002"
-    assert calls[0][0] == "http://10.0.0.2:8002/api/peer-relay-probe"
+    assert calls[0][0] == "https://10.0.0.2:8002/api/peer-relay-probe"
     assert calls[0][1] == {"target_ip": "192.168.8.153", "target_port": 1234}
 
 
 def test_relay_probe_target_down_is_exit_1(monkeypatch):
+    monkeypatch.setenv("PEER_PORTAL_TLS_ENABLED", "1")
     monkeypatch.setattr(
         probe_lan_peer, "http_post_json", lambda *a, **k: (200, _ok_body(False))
     )
@@ -64,6 +68,7 @@ def test_relay_probe_target_down_is_exit_1(monkeypatch):
 
 
 def test_relay_probe_retries_next_token_on_401(monkeypatch):
+    monkeypatch.setenv("PEER_PORTAL_TLS_ENABLED", "1")
     seen_tokens = []
 
     def fake_post(url, payload, token="", timeout=8):
@@ -81,6 +86,7 @@ def test_relay_probe_retries_next_token_on_401(monkeypatch):
 
 
 def test_relay_probe_transport_failure_is_exit_2(monkeypatch):
+    monkeypatch.setenv("PEER_PORTAL_TLS_ENABLED", "1")
     monkeypatch.setattr(
         probe_lan_peer, "http_post_json", lambda *a, **k: (-1, "connection refused")
     )
@@ -89,6 +95,26 @@ def test_relay_probe_transport_failure_is_exit_2(monkeypatch):
     )
     assert code == 2
     assert result["error"] == "relay request failed"
+
+
+def test_relay_probe_refuses_real_token_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression: a real token candidate must never be attempted over
+    plain http:// -- http_post_json must never even be called."""
+    monkeypatch.delenv("PEER_PORTAL_TLS_ENABLED", raising=False)
+    call_count = 0
+
+    def fake_post(url: str, payload: dict, token: str = "", timeout: int = 8) -> tuple[int, str]:
+        nonlocal call_count
+        call_count += 1
+        raise AssertionError("http_post_json must never be called over unauthenticated transport")
+
+    monkeypatch.setattr(probe_lan_peer, "http_post_json", fake_post)
+    code, result = probe_lan_peer.relay_probe(
+        "10.0.0.2", 8002, "1.2.3.4", 8002, ["real-token"]
+    )
+    assert code == 2
+    assert "SECURITY_STOP" in result["error"]
+    assert call_count == 0
 
 
 def test_relay_probe_default_port_and_bad_input(monkeypatch):

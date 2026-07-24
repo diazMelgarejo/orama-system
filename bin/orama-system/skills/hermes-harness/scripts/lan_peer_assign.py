@@ -72,8 +72,30 @@ def _is_authenticated_transport(url: str) -> bool:
     return url.startswith("https://")
 
 
+def _peer_portal_tls_enabled() -> bool:
+    """Env gate for peer-portal HTTPS, matching the parsing convention
+    already established by orchestrator/dangerous_workers.py
+    (PT_ALLOW_DANGEROUS_CLI_WORKERS) and alphaclaw_manager.py
+    (ALPHACLAW_TLS_ENABLED). Off by default.
+
+    Without this, _is_authenticated_transport()'s fail-closed check
+    means every peer-file call (drop/list/read/flush) silently and
+    permanently fails whenever a real control-plane token is configured
+    -- there is currently no TLS listener on the peer portal side for
+    this to ever succeed against otherwise. This flag exists so an
+    operator who HAS deployed TLS in front of their own peer portal
+    (out of band, no such mechanism ships in this repo yet -- same
+    "minimum required today" scope as ALPHACLAW_TLS_ENABLED) has an
+    explicit way to use it, rather than the security invariant being an
+    unconditional, unescapable dead end.
+    """
+    v = (os.environ.get("PEER_PORTAL_TLS_ENABLED") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 def _peer_base(peer_ip: str, portal_port: int) -> str:
-    return f"http://{peer_ip}:{portal_port}"
+    scheme = "https" if _peer_portal_tls_enabled() else "http"
+    return f"{scheme}://{peer_ip}:{portal_port}"
 
 
 def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
