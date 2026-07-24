@@ -27,6 +27,7 @@ This wiki organizes hard-won lessons by topic. Each page contains root cause, ex
 | 15 | [Hermes Windows Harness](15-hermes-windows-harness.md) | Put Hermes venv on PATH, set `HERMES_GIT_BASH_PATH`, and use explicit provider/model routing for one-shot partner prompts |
 | 16 | [Cross-Harness Hardware Policy](../hermes-hardware-policy-cross-harness.md) | One PT policy chain for OpenClaw + Hermes; platform role reversal; gaps #128–#131; path resolution |
 | 17 | [Line Endings & Encoding](17-line-endings-and-encoding.md) | `.gitattributes` + `.editorconfig` + `git add --renormalize .`; LF in repo, UTF-8 no BOM; kills phantom CRLF checkout diffs (mirror of PT/10) |
+| 18 | [Literal `~/` alphaclaw Install Dir](18-literal-tilde-alphaclaw-install-dir.md) | Tilde in `ALPHACLAW_INSTALL_DIR` + missing `expanduser()` → junk `~/` tree; fixed in PT via `utils/env_paths.py` (mirror of PT/12) |
 
 ---
 
@@ -73,3 +74,4 @@ Some lessons span both repos. The canonical entry lives in the repo where the bu
 | 2026-04-07 | [Idempotent Installs](02-idempotent-installs.md) | [same — shared commits](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/docs/wiki/02-idempotent-installs.md) |
 | 2026-04-13 | [Startup IP Detection](07-startup-ip-detection.md) | [same topic, PT side](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/docs/wiki/06-startup-ip-detection.md) |
 | 2026-07-08 | [Line Endings & Encoding](17-line-endings-and-encoding.md) *(mirror)* | [PT/10 — canonical](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/wiki/10-line-endings-and-encoding.md) |
+| 2026-07-22 | [Literal `~/` alphaclaw Install Dir](18-literal-tilde-alphaclaw-install-dir.md) *(mirror)* | [PT/12 — canonical](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/wiki/12-literal-tilde-alphaclaw-install-dir.md) |
