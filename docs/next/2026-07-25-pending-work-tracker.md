@@ -46,7 +46,10 @@ lives on.
 
 ## 2. Peer-mesh auth + TLS (BUZZ/Twitter/Google) — plan complete, implementation not started
 
-**Branch:** `security/02-peer-mesh-auth-tls-v2-plan` (stacked on PR #197)
+**Branch:** `2026-07-19-002-fleet-mesh-oob-fixes` (PR #197) — was
+`security/02-peer-mesh-auth-tls-v2-plan` (stacked), merged into PR #197
+via PR #208 on 2026-07-24; that branch is now closed, this is the single
+active location.
 **Canonical doc:** [`docs/v2/49-peer-mesh-auth-tls-v2-plan.md`](../v2/49-peer-mesh-auth-tls-v2-plan.md)
 (ingests 3 design docs; updated 2026-07-25 to reflect actual code, not
 just the original sketch)
@@ -59,6 +62,12 @@ just the original sketch)
       (`orchestrator/alphaclaw_tls_proxy.py` + `alphaclaw_manager.py`
       wiring). This repo makes zero gateway decisions by design; nothing
       to implement here for that part.
+- [ ] **Follow-up needed soon (PT-side, cross-referenced here for
+      visibility):** the AlphaClaw TLS proxy's file-permission enforcement
+      is POSIX mode bits only — no Windows ACL enforcement. Raised in
+      [PT PR #276 review 4769699297](https://github.com/diazMelgarejo/Perpetua-Tools/pull/276#pullrequestreview-4769699297).
+      Full item + status: Perpetua-Tools' own
+      `docs/next/2026-07-25-pending-work-tracker.md`, item 1.
 - [ ] **Not started:** `src/secure_transport.py` (peer-mesh TLS enforcement,
       separate from AlphaClaw's — this is for `query_peer_topology.py`/
       `probe_lan_peer.py`'s peer-to-peer connections specifically)
