@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 """Ensure gitignored local mesh secrets exist (never committed).
 
-Writes to .env.local (orama + optional Perpetua) and .local/mesh-secrets.json:
+Writes to .env.local (orama + optional Perpetua sibling) and
+.local/mesh-secrets.json:
   - GOSSIP_SHARED_SECRET — shared across all fleet peers for gossip + discovery handshake
 
 Integrative: harmonizes missing/empty keys only — never replaces operator values
 unless ``--force`` rotation is requested (old values migrate to commented lines).
+
+Pair with Perpetua-Tools scripts/mesh/ensure_local_mesh_secrets.py — either repo can
+bootstrap; sibling .env.local files are harmonized when PERPETUA_TOOLS_PATH is set.
 """
 from __future__ import annotations
 
@@ -32,6 +36,14 @@ ENV_HEADER = (
 log = get_mesh_logger("orama.mesh.secrets", repo_root=ROOT)
 
 
+def _sibling_secret_stores() -> list[Path]:
+    stores = [SECRETS_JSON]
+    pt = os.environ.get("PERPETUA_TOOLS_PATH", "").strip()
+    if pt:
+        stores.append(Path(pt) / ".local" / "mesh-secrets.json")
+    return stores
+
+
 def _repo_env_paths() -> list[Path]:
     paths = [ROOT / ".env.local"]
     pt = os.environ.get("PERPETUA_TOOLS_PATH", "").strip()
@@ -48,10 +60,11 @@ def _load_json(path: Path) -> dict:
 
 
 def _read_existing_secret() -> str:
-    store = _load_json(SECRETS_JSON)
-    secret = (store.get("GOSSIP_SHARED_SECRET") or "").strip()
-    if secret:
-        return secret
+    for store_path in _sibling_secret_stores():
+        store = _load_json(store_path)
+        secret = (store.get("GOSSIP_SHARED_SECRET") or "").strip()
+        if secret:
+            return secret
     for path in _repo_env_paths():
         secret = read_dotenv_key(path, "GOSSIP_SHARED_SECRET")
         if secret:
@@ -71,28 +84,38 @@ def _merge_env(path: Path, values: dict[str, str], *, force: bool = False) -> No
     harden_local_file(path)
 
 
-def ensure_gossip_secret(*, force: bool = False) -> str:
+def _persist_secret_store(secret: str, *, previous: str = "") -> None:
     LOCAL_DIR.mkdir(parents=True, exist_ok=True)
+    payload: dict[str, str] = {
+        "GOSSIP_SHARED_SECRET": secret,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if previous:
+        payload[
+            f"GOSSIP_SHARED_SECRET__PREVIOUS_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+        ] = previous
+    for store_path in _sibling_secret_stores():
+        store_path.parent.mkdir(parents=True, exist_ok=True)
+        merged = _load_json(store_path)
+        merged.update(payload)
+        store_path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+        harden_local_file(store_path)
+
+
+def ensure_gossip_secret(*, force: bool = False) -> str:
     secret = _read_existing_secret()
-    store = _load_json(SECRETS_JSON)
     if not secret or force:
-        previous = secret if force and secret else ""
+        previous = secret
         secret = secrets.token_urlsafe(32)
-        if previous:
-            store[
-                f"GOSSIP_SHARED_SECRET__PREVIOUS_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
-            ] = previous
-        store["GOSSIP_SHARED_SECRET"] = secret
-        store["updated_at"] = datetime.now(timezone.utc).isoformat()
-        SECRETS_JSON.write_text(json.dumps(store, indent=2) + "\n", encoding="utf-8")
-        harden_local_file(SECRETS_JSON)
-    elif not (store.get("GOSSIP_SHARED_SECRET") or "").strip():
-        store["GOSSIP_SHARED_SECRET"] = secret
-        store["updated_at"] = datetime.now(timezone.utc).isoformat()
-        SECRETS_JSON.write_text(json.dumps(store, indent=2) + "\n", encoding="utf-8")
-        harden_local_file(SECRETS_JSON)
+        _persist_secret_store(secret, previous=previous if force and previous else "")
     else:
-        harden_local_file(SECRETS_JSON)
+        store_has_secret = False
+        for store_path in _sibling_secret_stores():
+            if (_load_json(store_path).get("GOSSIP_SHARED_SECRET") or "").strip():
+                store_has_secret = True
+            harden_local_file(store_path)
+        if not store_has_secret:
+            _persist_secret_store(secret)
 
     for path in _repo_env_paths():
         if path.parent.exists() or path == ROOT / ".env.local":
@@ -112,6 +135,7 @@ def main() -> int:
     log.info("OK: GOSSIP_SHARED_SECRET present in .env.local (value not printed)")
     log.info("     archive: %s", SECRETS_JSON.relative_to(ROOT))
     log.info("     distribute this secret to all mesh peers out-of-band — never commit")
+    log.info("     pair: Perpetua-Tools scripts/mesh/ensure_local_mesh_secrets.py")
     return 0
 
 
