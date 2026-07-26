@@ -7,8 +7,14 @@ import hmac
 import json
 import os
 import secrets
+import sys
 import time
 from pathlib import Path
+
+_MESH_DIR = Path(__file__).resolve().parent
+if str(_MESH_DIR) not in sys.path:
+    sys.path.insert(0, str(_MESH_DIR))
+from mesh_logging import get_mesh_logger
 
 ROOT = Path(__file__).resolve().parents[2]
 LOCAL = ROOT / ".local"
@@ -17,6 +23,7 @@ PENDING_HANDSHAKES = LOCAL / "discovery-handshake-pending.json"
 ARCHIVE = LOCAL / "lan-topology-archive.json"
 OPENCLAW_STATE = Path.home() / ".openclaw" / "state" / "last_discovery.json"
 HANDSHAKE_TTL_SEC = 600
+log = get_mesh_logger("orama.mesh.discovery_trust", repo_root=ROOT)
 
 
 def _load_json(path: Path) -> dict:
@@ -145,11 +152,15 @@ def peer_trusted(ip: str) -> bool:
 def _block_untrusted_peer(ip: str, role: str, blocked: list[str]) -> None:
     nonce, sig = initiate_handshake(ip)
     blocked.append(ip)
-    print(
-        f"🤝 New peer {ip} ({role}) — acknowledge before persist:\n"
-        f"   ORAMA_APPROVE_DISCOVERY=1 discover.py   # one-shot approve\n"
-        f"   discover.py --ack-peer {ip} --nonce {nonce} --signature {sig}",
-        flush=True,
+    log.warning(
+        "New peer %s (%s) — acknowledge before persist:\n"
+        "   ORAMA_APPROVE_DISCOVERY=1 discover.py   # one-shot approve\n"
+        "   discover.py --ack-peer %s --nonce %s --signature %s",
+        ip,
+        role,
+        ip,
+        nonce,
+        sig,
     )
 
 
@@ -176,7 +187,6 @@ def filter_endpoints_for_trust(endpoints: dict) -> tuple[dict, list[str]]:
             continue
         ip = str(peer.get("ip") or "").strip()
         if not ip:
-            peers_in.append(peer)
             continue
         if peer_trusted(ip):
             remember_peer(ip)
