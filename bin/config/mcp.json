@@ -1,9 +1,1 @@
-{
-  "mcpServers": {
-    "oramasys": {
-      "command": "python",
-      "args": ["bin/mcp_servers/openclaw_mcp_server.py"],
-      "id": "mcp/oramasys"
-    }
-  }
-}
+../orama-system/config/mcp.json

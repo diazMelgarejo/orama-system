@@ -102,10 +102,17 @@
     "destination": "orchestrator",
     "description": "Unrouted messages return to orchestrator for handling"
   },
+  "single_agent": {
+    "description": "Mode 1 inline \u2014 bypass multi-agent routing; load mother skill + oramasys-method (progressive disclosure, no duplicated stage bodies here).",
+    "canonical_skill": "bin/orama-system/SKILL.md",
+    "method_skill": "bin/orama-system/skills/oramasys-method/SKILL.md",
+    "afrp_reference": "bin/orama-system/skills/oramasys-method/SKILL.md",
+    "note": "Grandfathered from legacy single_agent routing: CIDF and AFRP live under bin/orama-system/ after rename \u2014 not single_agent/."
+  },
   "cidf_policy": {
     "version": "1.2",
-    "policy_file": "single_agent/cidf/core/content_insertion_policy.json",
-    "linter": "single_agent/cidf/linter/policy_linter.py",
+    "policy_file": "bin/orama-system/cidf/core/content_insertion_policy.json",
+    "linter": "bin/orama-system/cidf/linter/policy_linter.py",
     "enforcement": "strict",
     "note": "All content insertion routed through CIDF-aware executors only"
   }

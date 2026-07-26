@@ -61,7 +61,7 @@ When bumping version, update ALL of these atomically:
 | -------------------------------- | ----------------------------------- |
 | `pyproject.toml`                 | `version`                           |
 | `bin/orama-system/SKILL.md`            | frontmatter `version:`              |
-| `bin/config/agent_registry.json` | `"version"`                         |
+| `bin/orama-system/config/agent_registry.json` | `"version"`                         |
 | `portal_server.py`               | `VERSION`                           |
 | `bin/agents/*/agent.md`          | `version:` frontmatter (each agent) |
 | `CLAUDE.md`                      | mother skill version reference      |

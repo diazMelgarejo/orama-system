@@ -12,7 +12,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).parent.parent.parent
-REGISTRY_PATH = REPO_ROOT / "bin" / "config" / "agent_registry.json"
+REGISTRY_PATH = REPO_ROOT / "bin" / "orama-system" / "config" / "agent_registry.json"
 
 
 @pytest.fixture(scope="module")

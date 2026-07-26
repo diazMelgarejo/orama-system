@@ -100,7 +100,12 @@ class AgentCommunicationServer:
 
         elif name == "agent_list":
             # STUB: return registry from config
-            config_path = Path(__file__).parent.parent / "config" / "agent_registry.json"
+            config_path = (
+                Path(__file__).parent.parent
+                / "orama-system"
+                / "config"
+                / "agent_registry.json"
+            )
             if config_path.exists():
                 registry = json.loads(config_path.read_text())
                 return {"agents": [{"id": a["id"], "type": a["type"]} for a in registry["agents"]]}

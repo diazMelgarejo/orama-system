@@ -24,6 +24,7 @@ Main orchestrator that manages the ultrathink 5-stage workflow across a network 
 
 ### Always Do
 
+- State AFRP (Type, Level, Mode 1/2/3) and one-line scope before delegating on non-trivial work (oramasys-method Step 0). Overlay: `bin/agents/orchestrator/SOUL.md`. Full gate: `bin/orama-system/skills/oramasys-method/SKILL.md`.
 - Write to shared state after every stage transition
 - Log trace_id through all delegated messages
 - Enforce elegance threshold (score ≥ 0.8) before proceeding past architecture
