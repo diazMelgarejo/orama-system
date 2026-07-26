@@ -37,8 +37,8 @@ Same idempotent behavior: profiles use `--sync`; thin wrappers verify-first.
 | Target | Source | Overwrite policy |
 |--------|--------|------------------|
 | `profiles/<slug>/SOUL.md` | `bin/agents/<folder>/SOUL.md` | Refresh if managed (`created_by: agent`) |
-| `profiles/<slug>/memories/USER.md` | `bin/agents/templates/profile/USER.md` | Create only unless `--force-memory` |
-| `profiles/<slug>/memories/MEMORY.md` | `bin/agents/templates/profile/MEMORY.md` | Create only unless `--force-memory` |
+| `profiles/<slug>/memories/USER.md` | `bin/agents/templates/profile/USER.md` | Create if missing; `--harmonize-memory` appends template under managed section (backup first) |
+| `profiles/<slug>/memories/MEMORY.md` | `bin/agents/templates/profile/MEMORY.md` | Create if missing; `--harmonize-memory` integrative merge — never blind overwrite |
 
 Skipped roles: `hermes_profile: null` (e.g. Atlas lifecycle hub).
 
