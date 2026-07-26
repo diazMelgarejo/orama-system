@@ -46,6 +46,11 @@ GOSSIP_TTL_SECONDS = 300
 # On Mac/Linux, localhost IS the Mac box and Windows is on the LAN.
 RUNNING_ON_WINDOWS = sys.platform == "win32"
 
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+if str(_SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS_DIR))
+from mesh.discovery_trust import ack_peer, filter_endpoints_for_trust  # noqa: E402
+
 # ── Repo discovery ────────────────────────────────────────────────────────────
 
 def _resolve_perpetua_root_env() -> Path | None:
@@ -776,6 +781,10 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
                         print(f"⚠️  {role} unreachable — preserving last-good", file=sys.stderr)
 
         endpoints = filter_endpoints_for_policy(endpoints)
+        endpoints, blocked_peers = filter_endpoints_for_trust(endpoints)
+        if blocked_peers and not endpoints.get("mac") and not endpoints.get("win"):
+            print("❌ New peer(s) require handshake — see 🤝 lines above.", file=sys.stderr)
+            return 2
 
         mac = endpoints.get("mac") or {}
         win = endpoints.get("win") or {}
@@ -990,7 +999,19 @@ def main():
                    help="Run continuously: re-probe on network change (scutil) or topology shift")
     p.add_argument("--watch-interval", type=int, default=30, metavar="SEC",
                    help="Polling interval for --watch mode (default: 30s)")
+    p.add_argument("--ack-peer", metavar="IP", help="Acknowledge new discovery peer after handshake")
+    p.add_argument("--nonce", help="Handshake nonce from discover output")
+    p.add_argument("--signature", help="Handshake HMAC signature")
     args = p.parse_args()
+    if args.ack_peer:
+        if not args.nonce or not args.signature:
+            print("❌ --ack-peer requires --nonce and --signature", file=sys.stderr)
+            sys.exit(1)
+        if ack_peer(args.ack_peer, args.nonce, args.signature):
+            print(f"✅ Peer {args.ack_peer} acknowledged")
+            sys.exit(0)
+        print("❌ Handshake verification failed", file=sys.stderr)
+        sys.exit(1)
     if args.status:  _cmd_status(); sys.exit(0)
     if args.restore: _cmd_restore(args.restore); sys.exit(0)
     if args.prune:   _enforce_backup_limits(); print("✅ Pruned."); sys.exit(0)

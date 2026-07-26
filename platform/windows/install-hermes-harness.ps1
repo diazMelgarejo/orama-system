@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     install-hermes-harness.ps1 — Idempotent sync: Hermes profiles + thin wrappers from orama canonical.
@@ -128,6 +128,17 @@ if (-not (Test-Path $ProfileInstaller)) {
 if (-not (Test-Path $ThinInstaller)) {
     _Warn "Thin skills installer not found: $ThinInstaller"
     exit 1
+}
+
+$MeshScript = Join-Path $RepoRoot 'scripts\mesh\Invoke-MeshLocalCache.ps1'
+if (Test-Path $MeshScript) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $MeshScript -RepoRoot $RepoRoot -Python $Python -Mode Install
+    if ($LASTEXITCODE -ne 0) {
+        _Warn "Mesh local-cache preparation failed (exit $LASTEXITCODE)"
+        exit $LASTEXITCODE
+    }
+} else {
+    _Warn 'scripts\mesh\Invoke-MeshLocalCache.ps1 missing — skip mesh local cache'
 }
 
 $HermesState = Get-HermesInstallState
