@@ -21,6 +21,7 @@ The mother plan is active, not archive. Later documents should cite it as the so
 | Research input | [`2026-07-10-oasn-p2p-architecture-research.md`](2026-07-10-oasn-p2p-architecture-research.md) | active research | P2P/membership/gossip research input. Treat as research, not implementation spec. |
 | Phase 7 / G7 | [`G7-ASYNC-NOTIFICATIONS-ANALYSIS.md`](G7-ASYNC-NOTIFICATIONS-ANALYSIS.md) | active plan | Portal Notification Hub / async notification MVP analysis. |
 | Phase 7 / G7 next steps | [`2026-07-14-g7-async-notifications-next-steps.md`](2026-07-14-g7-async-notifications-next-steps.md) | active checklist | Open G7 implementation checklist and review notes. |
+| **Mesh security finality** | [`2026-07-26-pr224-mesh-security-finality-report.md`](2026-07-26-pr224-mesh-security-finality-report.md) | **active report** | PR #224 finality: merge order, mesh_gate constellation, P5/P6 flows, CodeRabbit remediation, cross-repo contracts. Merge with PT #287. |
 | Phase 10+ companion | [`43-gossipbus-mesh-transport.md`](../../v2/43-gossipbus-mesh-transport.md) | active future mesh design | Interest-filtered, redacted, append-only GossipBus/GossipMesh deltas. This is the likely Phase 10+ Byzantine/witness/gossip direction. |
 
 ## Cross-repo active companions
