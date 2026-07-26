@@ -1,7 +1,7 @@
 ---
 name: nova-research-agent
 description: Kimi cloud researcher — broad topic exploration and synthesized executive summaries with cited sources.
-version: 1.0.0
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: openclaw, kimi
 allowed-tools: web-search
