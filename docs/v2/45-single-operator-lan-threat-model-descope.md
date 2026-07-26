@@ -43,6 +43,8 @@ The distinguishing test: **does this pattern's value require an adversary, or do
 
 Re-run Q1–Q3 (not just re-check node count) if Fleet Mode, or any future initiative, introduces a **material trust-boundary or threat-model change**: nodes administered by a different person or organization, a compromised self-owned node or credential, external exposure, or a materially changed attack surface. More self-owned nodes alone does not retrigger this decision; new adversarial opportunity does.
 
+**P5/P6 wiring note:** Pre-v2 ships P6 discovery trust and P5 swarm HMAC with grandfathering (Phase C in [`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md)) because the highest-exploitability failure mode is a rogue LAN responder auto-persisted as the fleet's model endpoint — that threat does **not** require a multi-witness quorum. Strict cutover (Phase D) at v2 launch removes legacy bypasses; re-run Q1–Q3 before enabling Phase D if fleet trust boundaries have changed.
+
 ## Application to other repos
 
 This decision should inform review of any orama-system or AlphaClaw subsystem that has adopted P2P-derived adversarial patterns (witness quorum, reputation scoring, equivocation/slashing, Sybil-resistance) without an explicit Q1–Q3 check against the actual current deployment. Check [`31-security-harness-excellence-plan.md`](31-security-harness-excellence-plan.md) and [`32-agentic-security-controls.md`](32-agentic-security-controls.md) for candidates the next time either is revisited.

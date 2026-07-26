@@ -264,3 +264,14 @@ The command-center swarm path (`POST /api/swarm/preview` → `POST /api/swarm/la
 - React composer cannot launch without prior preview session holding tokens
 
 Cross-ref: web orchestration contract in [`16-web-app-orchestration-plan.md`](16-web-app-orchestration-plan.md) §6.2; HITL rules in [`references/HUMAN-IN-LOOP-ACCOUNTABILITY.md`](references/HUMAN-IN-LOOP-ACCOUNTABILITY.md) §III Rule S-3.
+
+### Mesh migration phases (P5/P6 + discovery)
+
+Canonical ladder: [`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md).
+
+| Phase | P5 swarm | P6 discovery | When |
+|-------|----------|--------------|------|
+| C (pre-v2) | HMAC tokens available; `ORAMA_SWARM_LEGACY_APPROVE=1` default | Known peers grandfathered; `ORAMA_APPROVE_DISCOVERY=1` one-shot | #224 + PT #287 |
+| D (v2 launch) | `ORAMA_SWARM_STRICT=1`; legacy `approved: true` rejected | HMAC `--ack-peer` only; no env bypass | Coordinated fleet cutover |
+
+Phase D is **deferred to v2 launch** — pre-v2 merges may ship Phase C grandfathering without blocking release.
