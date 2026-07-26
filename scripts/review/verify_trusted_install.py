@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 LOG_NAME = "verify-trusted-install.log"
+logger = logging.getLogger(__name__)
 
 
 def _git(root: Path, *args: str) -> subprocess.CompletedProcess[str]:
@@ -43,6 +45,40 @@ def log_local(root: Path, ok: bool, reason: str) -> None:
         handle.write(line)
 
 
+def _branch_synced_with_main(root: Path, branch_name: str, head_sha: str) -> tuple[bool, str]:
+    remote = _git(root, "rev-parse", "--verify", "origin/main")
+    if remote.returncode != 0:
+        return False, "origin/main not available"
+    origin_sha = remote.stdout.strip()
+    if branch_name == "main":
+        if head_sha != origin_sha:
+            return False, f"main HEAD {head_sha[:12]} != origin/main {origin_sha[:12]}"
+        return True, "main matches origin/main"
+
+    scan_script = root / "scripts" / "git" / "reanchor_scan.sh"
+    if not scan_script.is_file():
+        return False, "reanchor_scan.sh missing"
+    result = subprocess.run(
+        ["bash", str(scan_script), str(root), "origin/main", "heads"],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    if result.returncode not in (0, 2):
+        return False, "reanchor_scan failed"
+    for line in result.stdout.splitlines():
+        if branch_name not in line:
+            continue
+        if "MERGED/in-main" in line:
+            return True, f"branch {branch_name} tree-twin in main"
+        if "NEEDS-REANCHOR" in line:
+            return False, f"branch {branch_name} needs reanchor onto main"
+        if "NO-TWIN" in line or "ORPHAN" in line:
+            return False, f"branch {branch_name} not synchronized with main"
+    return False, f"branch {branch_name} sync status unknown"
+
+
 def trusted_install_allowed(root: Path) -> tuple[bool, str]:
     if _truthy("ORAMA_SKIP_HERMES_SYNC"):
         return False, "ORAMA_SKIP_HERMES_SYNC is set"
@@ -56,34 +92,39 @@ def trusted_install_allowed(root: Path) -> tuple[bool, str]:
         return False, "cannot resolve HEAD"
     head_sha = head.stdout.strip()
     dirty = _git(root, "status", "--porcelain", "--", "bin/agents", "bin/orama-system/skills/hermes-harness")
+    if dirty.returncode != 0:
+        return False, "git status failed for harness paths"
     if dirty.stdout.strip():
         return False, "uncommitted changes under bin/agents or hermes-harness"
-    remote = _git(root, "rev-parse", "--verify", "origin/main")
-    if remote.returncode == 0:
-        origin_sha = remote.stdout.strip()
-        on_main = branch.stdout.strip() == "main"
-        upstream = _git(root, "merge-base", "--is-ancestor", head_sha, origin_sha)
-        if not on_main and upstream.returncode != 0:
-            return False, f"branch {branch.stdout.strip()} not based on origin/main"
-        behind = _git(root, "rev-list", "--count", f"{head_sha}..{origin_sha}")
-        if behind.returncode == 0 and behind.stdout.strip() not in ("", "0"):
-            return False, f"behind origin/main by {behind.stdout.strip()}"
-        if on_main and head_sha != origin_sha:
-            return False, f"main HEAD {head_sha[:12]} != origin/main {origin_sha[:12]}"
-    return True, f"trusted checkout @ {head_sha[:12]}"
+    synced, sync_reason = _branch_synced_with_main(root, branch.stdout.strip(), head_sha)
+    if not synced:
+        return False, sync_reason
+    return True, f"trusted checkout @ {head_sha[:12]} ({sync_reason})"
+
+
+def _configure_logging(quiet: bool) -> None:
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(logging.WARNING if quiet else logging.INFO)
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify trusted install preconditions.")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
+    _configure_logging(args.quiet)
     root = resolve_repo_root()
     ok, reason = trusted_install_allowed(root)
     log_local(root, ok, reason)
     if not args.quiet:
-        print("trusted install check passed" if ok else "trusted install check failed")
-        if not ok:
-            print("see .local/verify-trusted-install.log — never prints topology to stdout", file=sys.stderr)
+        if ok:
+            logger.info("trusted install check passed")
+        else:
+            logger.error("trusted install check failed")
+            logger.error("see .local/verify-trusted-install.log — never prints topology to stdout")
     return 0 if ok else 1
 
 

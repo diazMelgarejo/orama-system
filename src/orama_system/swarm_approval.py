@@ -10,6 +10,7 @@ import time
 from typing import Any
 
 _PREVIEW_TTL_SEC = 300
+_MAX_CACHE_SIZE = 32
 _cache: dict[str, tuple[str, float, dict[str, Any]]] = {}
 
 
@@ -51,7 +52,18 @@ def _sign(preview_id: str, fingerprint: str) -> str:
     ).hexdigest()
 
 
+def _prune_cache() -> None:
+    now = time.time()
+    for preview_id, (_, ts, _) in list(_cache.items()):
+        if now - ts > _PREVIEW_TTL_SEC:
+            _cache.pop(preview_id, None)
+    while len(_cache) > _MAX_CACHE_SIZE:
+        oldest = min(_cache.items(), key=lambda item: item[1][1])[0]
+        _cache.pop(oldest, None)
+
+
 def issue_approval(preview: dict[str, Any]) -> dict[str, str]:
+    _prune_cache()
     preview_id = secrets.token_hex(16)
     fp = _fingerprint(preview)
     _cache[preview_id] = (fp, time.time(), preview)
@@ -70,15 +82,18 @@ def verify_launch(
         return
     if not preview_id or not approval_token:
         raise ValueError("preview_id and approval_token required (call /api/swarm/preview first)")
+    if not approved:
+        raise ValueError("explicit approval required for swarm launch")
     entry = _cache.get(preview_id)
     if not entry:
         raise ValueError("preview expired or unknown — call /api/swarm/preview again")
-    fp, ts, cached = entry
+    fp, ts, _cached = entry
     if time.time() - ts > _PREVIEW_TTL_SEC:
         _cache.pop(preview_id, None)
         raise ValueError("preview expired")
-    if _fingerprint(preview) != fp and _fingerprint(cached) != fp:
+    if _fingerprint(preview) != fp:
         raise ValueError("preview drift — regenerate preview")
     expected = _sign(preview_id, fp)
     if not hmac.compare_digest(expected, approval_token.strip()):
         raise ValueError("invalid approval_token")
+    _cache.pop(preview_id, None)

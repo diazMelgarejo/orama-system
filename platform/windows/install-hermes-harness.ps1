@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     install-hermes-harness.ps1 — Idempotent sync: Hermes profiles + thin wrappers from orama canonical.
