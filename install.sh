@@ -134,6 +134,10 @@ cp "$LOCAL_SOURCE/templates/"* "$HOME/.ultrathink/tasks/" 2>/dev/null || true
 ok "~/.ultrathink/tasks/                             (plan + lessons templates)"
 
 # ─── Hermes harness (full repo checkout) ─────────────────────────────────────
+LAN_ARCHIVE="$SCRIPT_DIR/scripts/mesh/lan_topology_archive.py"
+if [[ -f "$LAN_ARCHIVE" ]]; then
+  python3 "$LAN_ARCHIVE" --ensure-local-cache || warn "LAN topology archive step failed (mesh may need manual .env.local)"
+fi
 HARNESS_DIR="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts"
 VERIFY_TRUST="$SCRIPT_DIR/scripts/review/verify_trusted_install.py"
 if [[ "${ORAMA_SKIP_HERMES_SYNC:-0}" == "1" ]]; then
