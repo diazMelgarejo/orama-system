@@ -178,6 +178,10 @@ def test_auth_enforced_matrix(monkeypatch):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
     assert auth_enforced() is False
 
+    monkeypatch.setenv("PT_BIND_LAN", "1")
+    assert auth_enforced() is True
+
+    monkeypatch.delenv("PT_BIND_LAN", raising=False)
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     assert auth_enforced() is True
 
