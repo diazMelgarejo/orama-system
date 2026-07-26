@@ -134,6 +134,30 @@ def test_scan_tracked_secrets_blocks_google_and_telegram_tokens(tmp_path):
     assert "google_api_key" in errors[0]
 
 
+def test_scan_tracked_private_network_literals_blocks_config_ips(tmp_path):
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "bin" / "orama-system" / "config"
+    cfg.mkdir(parents=True)
+    bad = cfg / "agent_registry.json"
+    bad.write_text('{"gateway": "http://192.168.8.153:1234"}', encoding="utf-8")
+    good = cfg / "routing.json"
+    good.write_text(
+        '{"affinity": "win-rtx5080", "gateway": "${env:LM_STUDIO_WIN_5080_ENDPOINTS}"}',
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        [
+            "bin/orama-system/config/agent_registry.json",
+            "bin/orama-system/config/routing.json",
+        ],
+    )
+
+    assert len(errors) == 1
+    assert "192.168.8.153" in errors[0]
+
+
 def test_scan_personal_paths_blocks_user_home(tmp_path):
     repo_hygiene = load_repo_hygiene()
     docs = tmp_path / "docs"

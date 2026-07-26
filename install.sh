@@ -135,21 +135,45 @@ ok "~/.ultrathink/tasks/                             (plan + lessons templates)"
 
 # ─── Hermes harness (full repo checkout) ─────────────────────────────────────
 HARNESS_DIR="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts"
-if [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
+VERIFY_TRUST="$SCRIPT_DIR/scripts/review/verify_trusted_install.py"
+if [[ "${ORAMA_SKIP_HERMES_SYNC:-0}" == "1" ]]; then
+  warn "Skipping Hermes harness sync (ORAMA_SKIP_HERMES_SYNC=1)"
+elif [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
   export ORAMA_SYSTEM_PATH="$SCRIPT_DIR"
-  info "Syncing Hermes profiles from bin/agents staging (idempotent)..."
-  if python3 "$HARNESS_DIR/install_hermes_profiles.py" --sync; then
-    ok "Hermes profiles synced (or already matched staging)"
+  if [[ -f "$VERIFY_TRUST" ]] && [[ "${ORAMA_TRUST_HERMES_SYNC:-}" != "1" ]]; then
+    if ! python3 "$VERIFY_TRUST" --quiet; then
+      warn "Hermes sync skipped — untrusted checkout (review bin/agents, git pull --ff-only, then ORAMA_TRUST_HERMES_SYNC=1)"
+    else
+      info "Syncing Hermes profiles from bin/agents staging (idempotent, trusted checkout)..."
+      if python3 "$HARNESS_DIR/install_hermes_profiles.py" --sync; then
+        ok "Hermes profiles synced (or already matched staging)"
+      else
+        warn "Hermes profile sync failed — run manually after git pull"
+      fi
+      info "Syncing Hermes thin skill wrappers..."
+      if python3 "$HARNESS_DIR/install_hermes_thin_skills.py" --verify; then
+        ok "Hermes thin wrappers already synced"
+      elif python3 "$HARNESS_DIR/install_hermes_thin_skills.py" --install --verify; then
+        ok "Hermes thin wrappers installed"
+      else
+        warn "Hermes thin wrapper install failed — run install_hermes_thin_skills.py manually"
+      fi
+    fi
   else
-    warn "Hermes profile sync failed — run manually after git pull"
-  fi
-  info "Syncing Hermes thin skill wrappers..."
-  if python3 "$HARNESS_DIR/install_hermes_thin_skills.py" --verify; then
-    ok "Hermes thin wrappers already synced"
-  elif python3 "$HARNESS_DIR/install_hermes_thin_skills.py" --install --verify; then
-    ok "Hermes thin wrappers installed"
-  else
-    warn "Hermes thin wrapper install failed — run install_hermes_thin_skills.py manually"
+    info "Syncing Hermes profiles from bin/agents staging (operator-trusted)..."
+    if python3 "$HARNESS_DIR/install_hermes_profiles.py" --sync; then
+      ok "Hermes profiles synced (or already matched staging)"
+    else
+      warn "Hermes profile sync failed — run manually after git pull"
+    fi
+    info "Syncing Hermes thin skill wrappers..."
+    if python3 "$HARNESS_DIR/install_hermes_thin_skills.py" --verify; then
+      ok "Hermes thin wrappers already synced"
+    elif python3 "$HARNESS_DIR/install_hermes_thin_skills.py" --install --verify; then
+      ok "Hermes thin wrappers installed"
+    else
+      warn "Hermes thin wrapper install failed — run install_hermes_thin_skills.py manually"
+    fi
   fi
 fi
 
