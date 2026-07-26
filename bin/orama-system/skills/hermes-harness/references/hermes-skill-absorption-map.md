@@ -80,6 +80,18 @@ Archive path: `bin/orama-system/skills/archive/llm-council-orchestration-absorbe
 | Perpetua-Tools runtime SSoT | Policy YAML + Python API | PT `config/model_hardware_policy.yml` (one-way import) |
 | Hermes validator fork | Post-edit size guard | `hardware-affinity-gate/SKILL.md` § Post-Edit Validation |
 
+## bin/agents persona staging (2026-07-26)
+
+| Source | Absorbed content | Canonical location |
+|--------|------------------|-------------------|
+| OpenClaw live SOUL overlays | Oramasys overlay distillates | `bin/agents/*/SOUL.md` |
+| Raft persona YAML (EDITED-03) | Persona catalog | `bin/agents/personas/*.yaml` |
+| Fleet role map | Staging ↔ OpenClaw ↔ Hermes slug | `bin/agents/REGISTRY.yml` |
+| Hermes profile materialization | Profile SOUL + memory stubs | `scripts/install_hermes_profiles.py` |
+| OpenClaw overlay refresh | Integrative merge from staging | `scripts/sync_openclaw_overlay_from_staging.sh` |
+
+Reference cards: `references/hermes-portable-brain-map.md`, `references/openclaw-to-hermes-migration.md`, `references/hermes-profile-install.md`
+
 ## Keep separate (not absorbed)
 
 | Skill | Reason |

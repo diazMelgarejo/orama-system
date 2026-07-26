@@ -1,7 +1,7 @@
 # Plan: Hermes Agent Canonical Staging + Profile Thin-Wrapper Install
 
 **Date:** 2026-07-26  
-**Status:** 🔍 **REVIEW PENDING** — Phase 0–2 staged in git; **Phase 3+ blocked** until [`2026-07-26-hermes-openclaw-staging-review-gate.md`](2026-07-26-hermes-openclaw-staging-review-gate.md) passes  
+**Status:** 🔍 **REVIEW PENDING** for Win `install.ps1` — profile installer **implemented**; OpenClaw flesh-out **complete** (2026-07-26)  
 **Owner:** orama-system (L3 canonical skills + `bin/agents` staging)  
 **Consumers:** Hermes installations (profiles + thin skills), Perpetua-Tools install chain, OpenClaw migration operators  
 

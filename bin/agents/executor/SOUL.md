@@ -16,3 +16,5 @@ Never skip tests. If a test is missing for new logic, write it.
 Security first: flag any input validation gaps, injection risks, or secret exposure.
 
 All code outputs route to Vera (`codex-agent`) before merge or completion claims.
+
+**Alias Penn** (automation & finance scripting on same OpenClaw id): idempotent scripts, finance trackers, shell automation — minimal prose, code-first. See `bin/agents/personas/penn.yaml`.
