@@ -14,6 +14,8 @@ staging_contract:
   hermes_profile_root: ${HERMES_HOME}/profiles/{hermes_profile}/
   thin_skill_installer: bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py
   profile_installer_planned: bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.py
+  openclaw_overlay_sync: scripts/sync_openclaw_overlay_from_staging.sh
+  persona_catalog: bin/agents/personas/
 
 # Pipeline + research + adapters staged for Hermes profile materialization
 roles:
@@ -128,52 +130,86 @@ roles:
     staged_soul: bin/agents/coder/SOUL.md
     notes: Win LM Studio path; shares OpenClaw id with executor row
 
-# OpenClaw-only / persona-hub roles (no bin/agents folder yet — persona_ref on hub)
-openclaw_only:
-  - openclaw_id: main
+  - staging_folder: cole
+    openclaw_id: cole-agent
+    hermes_profile: cole-agent
+    display: Cole
+    soul_id: adapter.claude-code
+    stage: adapter
+    openclaw_workspace: ${HOME}/.openclaw/agents/cole-agent
+    staged_soul: bin/agents/cole/SOUL.md
+    staged_agent_card: bin/agents/cole/agent.md
+    persona_yaml: bin/agents/personas/cole.yaml
+
+  - staging_folder: hermes-monitor
+    openclaw_id: hermes-agent
+    hermes_profile: hermes-monitor
+    display: Hermes
+    soul_id: adapter.hermes
+    stage: adapter
+    openclaw_workspace: ${HOME}/.openclaw/agents/hermes-agent
+    staged_soul: bin/agents/hermes-monitor/SOUL.md
+    staged_agent_card: bin/agents/hermes-monitor/agent.md
+    persona_yaml: bin/agents/personas/hermes.yaml
+    notes: OpenClaw adapter id; distinct from Hermes portable brain install
+
+  - staging_folder: sage
+    openclaw_id: gemini-coder
+    hermes_profile: gemini-coder
+    display: Sage
+    soul_id: perpetua.analyzer
+    stage: adapter
+    openclaw_workspace: ${HOME}/.openclaw/agents/gemini-coder
+    staged_soul: bin/agents/sage/SOUL.md
+    staged_agent_card: bin/agents/sage/agent.md
+    persona_yaml: bin/agents/personas/sage.yaml
+
+  - staging_folder: relay
+    openclaw_id: cline-agent
+    hermes_profile: cline-agent
+    display: Relay
+    soul_id: adapter.external-specialist
+    stage: adapter
+    openclaw_workspace: ${HOME}/.openclaw/agents/cline-agent
+    staged_soul: bin/agents/relay/SOUL.md
+    staged_agent_card: bin/agents/relay/agent.md
+
+  - staging_folder: nova
+    openclaw_id: kimi-agent
+    hermes_profile: kimi-agent
+    display: Nova
+    soul_id: adapter.kimi-research
+    stage: adapter
+    openclaw_workspace: ${HOME}/.openclaw/agents/kimi-agent
+    staged_soul: bin/agents/nova/SOUL.md
+    staged_agent_card: bin/agents/nova/agent.md
+    persona_yaml: bin/agents/personas/nova.yaml
+
+  - staging_folder: rex
+    openclaw_id: grok-agent
+    hermes_profile: grok-agent
+    display: Rex
+    soul_id: adapter.grok-fallback
+    stage: adapter
+    openclaw_workspace: ${HOME}/.openclaw/agents/grok-agent
+    staged_soul: bin/agents/rex/SOUL.md
+    staged_agent_card: bin/agents/rex/agent.md
+    persona_yaml: bin/agents/personas/rex.yaml
+
+# Lifecycle hub — OpenClaw overlay sync only; no Hermes profile
+lifecycle:
+  - staging_folder: lifecycle
+    openclaw_id: main
     display: Atlas
     soul_id: perpetua.lifecycle
     stage: lifecycle
-    workspace: ${HOME}/.alphaclaw/.openclaw/workspace
+    openclaw_workspace: ${HOME}/.alphaclaw/.openclaw/workspace
     hermes_profile: null
-    notes: Lifecycle hub — not a Hermes profile; use workspace AGENTS.md / oramasys hub
+    staged_soul: bin/agents/lifecycle/SOUL.md
+    notes: Cole-facing operator home; hub docs/oramasys — not a Hermes profile
 
-  - openclaw_id: gemini-coder
-    display: Sage
-    soul_id: perpetua.analyzer
-    persona_ref: docs/oramasys/personas/sage.yaml
-    hermes_profile: gemini-coder
-
-  - openclaw_id: cline-agent
-    display: Relay
-    soul_id: adapter.external-specialist
-    persona_ref: null
-    hermes_profile: cline-agent
-
-  - openclaw_id: cole-agent
-    display: Cole
-    soul_id: adapter.claude-code
-    persona_ref: docs/oramasys/personas/cole.yaml
-    hermes_profile: cole-agent
-
-  - openclaw_id: hermes-agent
-    display: Hermes
-    soul_id: adapter.hermes
-    persona_ref: docs/oramasys/personas/hermes.yaml
-    hermes_profile: hermes-monitor
-    notes: OpenClaw adapter id; distinct from Hermes portable brain install
-
-  - openclaw_id: kimi-agent
-    display: Nova
-    soul_id: adapter.kimi-research
-    persona_ref: docs/oramasys/personas/nova.yaml
-    hermes_profile: kimi-agent
-
-  - openclaw_id: grok-agent
-    display: Rex
-    soul_id: adapter.grok-fallback
-    persona_ref: docs/oramasys/personas/rex.yaml
-    hermes_profile: grok-agent
+# Deprecated — all relay-parity adapters now have bin/agents folders (2026-07-26)
+openclaw_only: []
 
 pipeline_order:
   - context-agent
