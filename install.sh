@@ -143,6 +143,7 @@ if [[ -f "$MESH_DIR/ensure_local_mesh_secrets.py" ]]; then
   python3 "$MESH_DIR/ensure_local_mesh_secrets.py" \
     || warn "GOSSIP_SHARED_SECRET not written — run ensure_local_mesh_secrets.py manually"
 fi
+# Win parity: scripts/mesh/Invoke-MeshLocalCache.ps1 (platform/windows/install.ps1 -Mode Install)
 
 # ─── Hermes harness (full repo checkout) ─────────────────────────────────────
 HARNESS_DIR="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts"
