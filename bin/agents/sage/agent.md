@@ -1,7 +1,7 @@
 ---
 name: sage-analyzer-agent
 description: Optional Gemini-family analyzer — architecture and diff review when Glen or operator explicitly dispatches; not the default Vera gate.
-version: 1.0.0
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: openclaw, gemini
 allowed-tools: file-operations, code-analyzer

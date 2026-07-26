@@ -1,7 +1,7 @@
 ---
 name: cole-agent
 description: Relay parity — Claude Code service delivery specialist for structured documents, client work, and high-quality deliverables.
-version: 1.0.0
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: openclaw, claude-code
 allowed-tools: file-operations, documentation-reader

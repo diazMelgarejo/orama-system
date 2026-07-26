@@ -1,7 +1,7 @@
 ---
 name: hermes-monitor-agent
 description: OpenClaw adapter for pipeline monitoring — sweeps sources, tracks replies, alerts on actionable pipeline changes.
-version: 1.0.0
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: openclaw, hermes
 allowed-tools: web-search, file-operations
