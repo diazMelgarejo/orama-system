@@ -133,6 +133,17 @@ mkdir -p "$HOME/.ultrathink/tasks"
 cp "$LOCAL_SOURCE/templates/"* "$HOME/.ultrathink/tasks/" 2>/dev/null || true
 ok "~/.ultrathink/tasks/                             (plan + lessons templates)"
 
+# ─── Local mesh continuity (before IP expunge from tracked config) ───────────
+MESH_DIR="$SCRIPT_DIR/scripts/mesh"
+if [[ -f "$MESH_DIR/lan_topology_archive.py" ]]; then
+  python3 "$MESH_DIR/lan_topology_archive.py" --ensure-local-cache \
+    || warn "LAN topology archive step failed — run: python3 scripts/mesh/lan_topology_archive.py --backup --ref origin/main"
+fi
+if [[ -f "$MESH_DIR/ensure_local_mesh_secrets.py" ]]; then
+  python3 "$MESH_DIR/ensure_local_mesh_secrets.py" \
+    || warn "GOSSIP_SHARED_SECRET not written — run ensure_local_mesh_secrets.py manually"
+fi
+
 # ─── Hermes harness (full repo checkout) ─────────────────────────────────────
 HARNESS_DIR="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts"
 if [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
