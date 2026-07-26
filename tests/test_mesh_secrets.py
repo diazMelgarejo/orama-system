@@ -56,6 +56,43 @@ def secrets_mod(monkeypatch: pytest.MonkeyPatch) -> SecretsModule:
     return _load_module("ensure_local_mesh_secrets", MESH / "ensure_local_mesh_secrets.py")  # type: ignore[return-value]
 
 
+def test_harmonize_dotenv_updates_last_duplicate_declaration(
+    dotenv_mod: DotenvModule, tmp_path: Path
+) -> None:
+    env_file = tmp_path / ".env.local"
+    env_file.write_text(
+        "GOSSIP_SHARED_SECRET=\n"
+        "GOSSIP_SHARED_SECRET=\n",
+        encoding="utf-8",
+    )
+    dotenv_mod.harmonize_dotenv_keys(
+        env_file,
+        {"GOSSIP_SHARED_SECRET": "new-secret"},
+        managed_keys=frozenset({"GOSSIP_SHARED_SECRET"}),
+    )
+    text = env_file.read_text(encoding="utf-8")
+    assert "# duplicate (inactive; effective declaration follows):" in text
+    assert text.strip().endswith("GOSSIP_SHARED_SECRET=new-secret")
+
+
+def test_harmonize_dotenv_rotation_supersedes_without_deleting(
+    dotenv_mod: DotenvModule, tmp_path: Path
+) -> None:
+    env_file = tmp_path / ".env.local"
+    env_file.write_text("GOSSIP_SHARED_SECRET=old-secret\n", encoding="utf-8")
+    dotenv_mod.harmonize_dotenv_keys(
+        env_file,
+        {"GOSSIP_SHARED_SECRET": "new-secret"},
+        managed_keys=frozenset({"GOSSIP_SHARED_SECRET"}),
+        replace_keys=frozenset({"GOSSIP_SHARED_SECRET"}),
+        supersede_timestamp="2026-07-26T19:00:00+00:00",
+    )
+    text = env_file.read_text(encoding="utf-8")
+    assert "# superseded 2026-07-26T19:00:00+00:00: GOSSIP_SHARED_SECRET=old-secret" in text
+    assert "GOSSIP_SHARED_SECRET=new-secret" in text
+    assert "old-secret" in text
+
+
 def test_harmonize_dotenv_keeps_existing_without_appending_duplicate(
     dotenv_mod: DotenvModule, tmp_path: Path
 ) -> None:
@@ -114,3 +151,25 @@ def test_force_rotation_updates_env_and_archive(
     assert store["GOSSIP_SHARED_SECRET"] == new_secret
     assert "peer-old" in env_file.read_text(encoding="utf-8")
     assert any(k.startswith("GOSSIP_SHARED_SECRET__PREVIOUS_") for k in store)
+
+
+def test_adopts_existing_pt_secret_store(
+    secrets_mod: SecretsModule, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_root = tmp_path / "orama"
+    pt_root = tmp_path / "perpetua"
+    repo_root.mkdir(parents=True)
+    (repo_root / ".local").mkdir()
+    pt_root.mkdir(parents=True)
+    (pt_root / ".local").mkdir()
+    monkeypatch.setenv("PERPETUA_TOOLS_PATH", str(pt_root))
+    monkeypatch.setattr(secrets_mod, "ROOT", repo_root)
+    monkeypatch.setattr(secrets_mod, "LOCAL_DIR", repo_root / ".local")
+    monkeypatch.setattr(secrets_mod, "SECRETS_JSON", repo_root / ".local" / "mesh-secrets.json")
+
+    pt_store = pt_root / ".local" / "mesh-secrets.json"
+    pt_store.write_text('{"GOSSIP_SHARED_SECRET": "shared-from-pt"}', encoding="utf-8")
+
+    secret = secrets_mod.ensure_gossip_secret(force=False)
+    assert secret == "shared-from-pt"
+    assert "shared-from-pt" in (repo_root / ".env.local").read_text(encoding="utf-8")
