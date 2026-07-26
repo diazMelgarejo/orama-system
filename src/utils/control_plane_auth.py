@@ -220,6 +220,8 @@ def _resolve_perpetua_tools_root() -> Path | None:
 def auth_enforced() -> bool:
     """Return True when control-plane bearer auth must be checked (PT-aligned default)."""
     insecure = os.getenv(ENV_INSECURE, "").strip().lower()
+    if insecure in ("1", "true", "yes") and lan_bind_configured():
+        return True
     if insecure in ("1", "true", "yes"):
         return False
     if _env_control_plane_token_candidates() or pt_lane_token_candidates():
