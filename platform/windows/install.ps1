@@ -201,6 +201,14 @@ if (Test-Path $GstackBin) {
     _Warn "gstack not installed at $GstackBin — run gstack setup first, then re-run this script"
 }
 
+# ── Local mesh continuity (before IP expunge from tracked config) ─────────────
+$MeshScript = Join-Path $RepoRoot 'scripts\mesh\Invoke-MeshLocalCache.ps1'
+if (Test-Path $MeshScript) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $MeshScript -RepoRoot $RepoRoot -Python $VenvPython -Mode Install
+} else {
+    _Warn 'scripts\mesh\Invoke-MeshLocalCache.ps1 missing — skip mesh local cache'
+}
+
 # ── Hermes harness (profiles + thin wrappers from bin/agents) ─────────────────
 if (-not $SkipHermesHarness) {
     $HarnessScript = Join-Path $ScriptDir 'install-hermes-harness.ps1'
