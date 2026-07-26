@@ -6,6 +6,7 @@ Reads private IPs from a git ref (default origin/main), writes:
   - .env.local in orama (+ Perpetua when PERPETUA_TOOLS_PATH is set)
 
 Idempotent: never overwrites an existing archive unless --force.
+Integrative: dotenv merges fill missing/empty keys only — never replace operator values.
 """
 from __future__ import annotations
 
@@ -17,6 +18,12 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+
+_MESH_DIR = Path(__file__).resolve().parent
+if str(_MESH_DIR) not in sys.path:
+    sys.path.insert(0, str(_MESH_DIR))
+from dotenv_merge import harmonize_dotenv_keys
+from mesh_logging import get_mesh_logger
 
 ROOT = Path(__file__).resolve().parents[2]
 ARCHIVE_PATH = ROOT / ".local" / "lan-topology-archive.json"
@@ -34,6 +41,11 @@ ENV_KEYS = (
     "WINDOWS_IP",
     "LAN_GPU_IP_OVERRIDE",
 )
+ENV_HEADER = (
+    "# LAN topology — harmonized from committed config before IP expunge "
+    "(scripts/mesh/lan_topology_archive.py)"
+)
+log = get_mesh_logger("orama.mesh.lan_topology", repo_root=ROOT)
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -62,23 +74,29 @@ def normalize_url(url: str) -> str:
     return url
 
 
+def _is_5080_context(text: str, start: int, end: int) -> bool:
+    """Classify endpoint from the role/key immediately preceding the matched URL."""
+    if ":5080" in text[start:end]:
+        return True
+    prefix = text[max(0, start - 96) : start]
+    nested = re.search(r'"([^"]+)"\s*:\s*\{\s*"url"\s*:\s*"$', prefix)
+    if nested:
+        return "5080" in nested.group(1).lower()
+    immediate = re.search(r'"([^"]+)"\s*:\s*"$', prefix)
+    if immediate:
+        return "5080" in immediate.group(1).lower()
+    return False
+
+
 def extract_env_map(text: str) -> dict[str, str]:
     env: dict[str, str] = {}
-    if "LM_STUDIO_WIN_5080_ENDPOINTS" not in json.dumps(text):
-        for match in PRIVATE_IP_RE.finditer(text):
-            url = normalize_url(match.group(0))
-            if "5080" in text[max(0, match.start() - 80) : match.start() + 80] or "win-researcher-5080" in text:
-                env.setdefault("LM_STUDIO_WIN_5080_ENDPOINTS", url.replace("/v1", ""))
-            else:
-                env.setdefault("LM_STUDIO_WIN_ENDPOINTS", url.replace("/v1", ""))
-    else:
-        for match in PRIVATE_IP_RE.finditer(text):
-            url = normalize_url(match.group(0))
-            base = url.replace("/v1", "")
-            if "5080" in text[max(0, match.start() - 120) : match.end() + 40]:
-                env["LM_STUDIO_WIN_5080_ENDPOINTS"] = base
-            else:
-                env.setdefault("LM_STUDIO_WIN_ENDPOINTS", base)
+    for match in PRIVATE_IP_RE.finditer(text):
+        url = normalize_url(match.group(0))
+        base = url.replace("/v1", "")
+        if _is_5080_context(text, match.start(), match.end()):
+            env.setdefault("LM_STUDIO_WIN_5080_ENDPOINTS", base)
+        else:
+            env.setdefault("LM_STUDIO_WIN_ENDPOINTS", base)
     return env
 
 
@@ -110,28 +128,12 @@ def write_archive(env: dict[str, str], *, source_ref: str, source_sha: str) -> N
 
 
 def merge_env_file(path: Path, env: dict[str, str]) -> None:
-    existing: dict[str, str] = {}
-    if path.is_file():
-        for line in path.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if not line or line.startswith("#") or "=" not in line:
-                continue
-            key, value = line.split("=", 1)
-            existing[key.strip()] = value.strip()
-    for key, value in env.items():
-        if key not in existing or not existing[key]:
-            existing[key] = value
-    lines = [
-        "# LAN topology — migrated from committed config before IP expunge",
-        f"# Updated: {datetime.now(timezone.utc).isoformat()}",
-    ]
-    for key in ENV_KEYS:
-        if key in existing and existing[key]:
-            lines.append(f"{key}={existing[key]}")
-    for key, value in sorted(existing.items()):
-        if key not in ENV_KEYS:
-            lines.append(f"{key}={value}")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    harmonize_dotenv_keys(
+        path,
+        env,
+        managed_keys=frozenset(ENV_KEYS),
+        header_comment=ENV_HEADER,
+    )
 
 
 def target_env_paths() -> list[Path]:
@@ -146,22 +148,29 @@ def target_env_paths() -> list[Path]:
 
 def backup(ref: str, force: bool) -> int:
     if ARCHIVE_PATH.is_file() and not force:
-        print(f"OK: archive exists at {ARCHIVE_PATH.relative_to(ROOT)} (use --force to refresh)")
+        log.info(
+            "OK: archive exists at %s (use --force to refresh)",
+            ARCHIVE_PATH.relative_to(ROOT),
+        )
         return 0
     env = collect_from_ref(ref)
     if not env:
-        print(f"OK: no private LAN URLs in {ref} tracked configs — nothing to archive")
+        log.info("OK: no private LAN URLs in %s tracked configs — nothing to archive", ref)
         return 0
     sha = _git("rev-parse", ref).stdout.strip() or "unknown"
     write_archive(env, source_ref=ref, source_sha=sha)
-    print(f"OK: archived {len(env)} endpoint(s) to {ARCHIVE_PATH.relative_to(ROOT)}")
+    log.info(
+        "OK: archived %d endpoint(s) to %s",
+        len(env),
+        ARCHIVE_PATH.relative_to(ROOT),
+    )
     return 0
 
 
 def apply() -> int:
     data = load_archive()
     if not data:
-        print("skip: no .local/lan-topology-archive.json")
+        log.info("skip: no .local/lan-topology-archive.json")
         return 0
     env = data.get("endpoints") or {}
     if not env:
@@ -172,7 +181,7 @@ def apply() -> int:
         if path.parent and not path.parent.exists() and path != ROOT / ".env.local":
             continue
         merge_env_file(path, env)
-        print(f"OK: merged LAN endpoints into {path}")
+        log.info("OK: merged LAN endpoints into %s", path)
     return 0
 
 
@@ -185,7 +194,7 @@ def ensure_local_cache() -> int:
         if env:
             sha = _git("rev-parse", ref).stdout.strip() or "unknown"
             write_archive(env, source_ref=ref, source_sha=sha)
-            print(f"OK: auto-archived LAN topology from {ref}")
+            log.info("OK: auto-archived LAN topology from %s", ref)
     return apply()
 
 
