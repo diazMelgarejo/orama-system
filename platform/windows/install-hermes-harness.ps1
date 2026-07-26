@@ -133,6 +133,10 @@ if (-not (Test-Path $ThinInstaller)) {
 $MeshScript = Join-Path $RepoRoot 'scripts\mesh\Invoke-MeshLocalCache.ps1'
 if (Test-Path $MeshScript) {
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $MeshScript -RepoRoot $RepoRoot -Python $Python -Mode Install
+    if ($LASTEXITCODE -ne 0) {
+        _Warn "Mesh local-cache preparation failed (exit $LASTEXITCODE)"
+        exit $LASTEXITCODE
+    }
 } else {
     _Warn 'scripts\mesh\Invoke-MeshLocalCache.ps1 missing — skip mesh local cache'
 }
