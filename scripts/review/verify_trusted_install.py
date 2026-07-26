@@ -102,15 +102,26 @@ def trusted_install_allowed(root: Path) -> tuple[bool, str]:
     return True, f"trusted checkout @ {head_sha[:12]} ({sig_reason})"
 
 
+def public_message(ok: bool) -> str:
+    """CodeQL-safe status line — never embed branch names, SHAs, or topology."""
+    return "trusted install check passed" if ok else "trusted install check failed"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Verify trusted install preconditions.")
     parser.add_argument("--quiet", action="store_true")
     args = parser.parse_args()
 
     root = resolve_repo_root()
-    ok, reason = trusted_install_allowed(root)
+    ok, _reason = trusted_install_allowed(root)
     if not args.quiet:
-        print(reason)
+        print(public_message(ok))
+        if not ok:
+            print(
+                "hint: git fetch origin main && git pull --ff-only; "
+                "review bin/agents; or ORAMA_TRUST_HERMES_SYNC=1 after manual review",
+                file=sys.stderr,
+            )
     return 0 if ok else 1
 
 

@@ -58,7 +58,7 @@
       "model": "gemma-4-26b-a4b-it-nvfp4",
       "affinity": "win-rtx5080",
       "gateway": "${env:LM_STUDIO_WIN_5080_ENDPOINTS}",
-      "_comment": "3rd fleet node — resolve gateway at runtime via LM_STUDIO_WIN_5080_ENDPOINTS or last_discovery.json; never commit LAN IPs."
+      "_comment": "3rd fleet node \u2014 resolve gateway at runtime via LM_STUDIO_WIN_5080_ENDPOINTS or last_discovery.json; never commit LAN IPs."
     },
     "coder-5080": {
       "soul": "bin/agents/coder/SOUL.md",
