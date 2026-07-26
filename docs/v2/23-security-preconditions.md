@@ -53,6 +53,25 @@
   local-topology invariant: concrete forbidden fragments are loaded from a
   local-only registry, not spelled in tracked files.
 
+### Mesh security ladder (Phases A–D)
+
+Pre-v2 mesh hardening follows [`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md). Phase D (strict cutover) is a **v2 launch gate**, not a pre-v2 merge blocker.
+
+**Phase A–C (pre-v2):**
+
+- [ ] Every fleet node ran `lan_topology_archive.py --backup` before IP expunge merge
+- [ ] `GOSSIP_SHARED_SECRET` present in `.env.local` on all LAN-bound nodes
+- [ ] `repo_hygiene` LINT-013 passes (no committed RFC1918 in config)
+- [ ] Discovery does not persist unknown LAN peers without operator ack
+- [ ] Swarm HMAC preview/launch path tested (grandfather mode may remain on)
+
+**Phase D (v2 launch only):**
+
+- [ ] `ORAMA_SWARM_STRICT=1` on all production nodes; `ORAMA_SWARM_LEGACY_APPROVE=0`
+- [ ] `ORAMA_APPROVE_DISCOVERY` bypass removed from operator env
+- [ ] Portal swarm UI requires preview tokens; `approved: true` alone rejected
+- [ ] Phase D operator checklist in doc 50 executed on Mac + each Win node
+
 The original fixes remain valuable, but rows **3**, **5**, and **6** are active
 v2 design gates again until the 2026-05-26 immediate queue in
 [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md#immediate-todo-list--validated-findings-from-scheduled-review-2026-05-26)
