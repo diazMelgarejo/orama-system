@@ -19,7 +19,7 @@ from pathlib import Path
 _MESH_DIR = Path(__file__).resolve().parent
 if str(_MESH_DIR) not in sys.path:
     sys.path.insert(0, str(_MESH_DIR))
-from dotenv_merge import harmonize_dotenv_keys
+from dotenv_merge import harmonize_dotenv_keys, read_dotenv_key
 from mesh_logging import get_mesh_logger, harden_local_file
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -47,6 +47,18 @@ def _load_json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _read_existing_secret() -> str:
+    store = _load_json(SECRETS_JSON)
+    secret = (store.get("GOSSIP_SHARED_SECRET") or "").strip()
+    if secret:
+        return secret
+    for path in _repo_env_paths():
+        secret = read_dotenv_key(path, "GOSSIP_SHARED_SECRET")
+        if secret:
+            return secret
+    return ""
+
+
 def _merge_env(path: Path, values: dict[str, str], *, force: bool = False) -> None:
     harmonize_dotenv_keys(
         path,
@@ -61,12 +73,20 @@ def _merge_env(path: Path, values: dict[str, str], *, force: bool = False) -> No
 
 def ensure_gossip_secret(*, force: bool = False) -> str:
     LOCAL_DIR.mkdir(parents=True, exist_ok=True)
+    secret = _read_existing_secret()
     store = _load_json(SECRETS_JSON)
-    secret = (store.get("GOSSIP_SHARED_SECRET") or "").strip()
     if not secret or force:
-        if secret and force:
-            store[f"GOSSIP_SHARED_SECRET__PREVIOUS_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"] = secret
+        previous = secret if force and secret else ""
         secret = secrets.token_urlsafe(32)
+        if previous:
+            store[
+                f"GOSSIP_SHARED_SECRET__PREVIOUS_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
+            ] = previous
+        store["GOSSIP_SHARED_SECRET"] = secret
+        store["updated_at"] = datetime.now(timezone.utc).isoformat()
+        SECRETS_JSON.write_text(json.dumps(store, indent=2) + "\n", encoding="utf-8")
+        harden_local_file(SECRETS_JSON)
+    elif not (store.get("GOSSIP_SHARED_SECRET") or "").strip():
         store["GOSSIP_SHARED_SECRET"] = secret
         store["updated_at"] = datetime.now(timezone.utc).isoformat()
         SECRETS_JSON.write_text(json.dumps(store, indent=2) + "\n", encoding="utf-8")
