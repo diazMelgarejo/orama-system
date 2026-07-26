@@ -33,9 +33,9 @@ def profiles_installer(monkeypatch, tmp_path):
 
 
 def test_install_writes_managed_profile_soul(profiles_installer):
-    written = profiles_installer.install()
+    stats = profiles_installer.install()
     orchestrator_soul = profiles_installer.HERMES_PROFILES / "orchestrator" / "SOUL.md"
-    assert orchestrator_soul in written
+    assert orchestrator_soul in stats.written
     text = orchestrator_soul.read_text(encoding="utf-8")
     assert "orama.orchestrator" in text
     assert profiles_installer.MANAGED_MARKER in text
@@ -60,3 +60,17 @@ def test_verify_fails_when_profile_missing(profiles_installer):
 def test_verify_passes_after_install(profiles_installer):
     profiles_installer.install()
     assert profiles_installer.verify() == []
+
+
+def test_install_skips_when_already_synced(profiles_installer, capsys):
+    profiles_installer.install()
+    stats = profiles_installer.install()
+    assert stats.written == []
+    assert "orchestrator" in stats.skipped_synced
+    assert "already synced profile SOUL" in capsys.readouterr().out
+
+
+def test_sync_skips_when_already_synced(profiles_installer, capsys):
+    profiles_installer.install()
+    assert profiles_installer.sync() == 0
+    assert "profiles already synced" in capsys.readouterr().out

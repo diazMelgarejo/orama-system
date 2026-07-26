@@ -408,6 +408,11 @@ def main() -> int:
         action="store_true",
         help="Also install optional wrappers (e.g. pt-orama-lesson-mining).",
     )
+    parser.add_argument(
+        "--with-profiles",
+        action="store_true",
+        help="Also run install_hermes_profiles.py --install (after thin wrappers).",
+    )
     args = parser.parse_args()
     if not args.install and not args.verify and not args.test:
         parser.error("choose --install, --verify, and/or --test")
@@ -417,6 +422,22 @@ def main() -> int:
         written = install(args.dry_run, include_optional=args.include_optional)
         if not args.dry_run:
             print(f"wrote {len(written)} Hermes wrapper files")
+        if args.with_profiles:
+            profile_script = REPO_ROOT / "bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.py"
+            if not profile_script.is_file():
+                print(f"missing profile installer: {profile_script}")
+                return 1
+            import subprocess
+            import sys
+
+            profile_args = [sys.executable, str(profile_script), "--install"]
+            if args.verify:
+                profile_args.append("--verify")
+            if args.dry_run:
+                profile_args.append("--dry-run")
+            result = subprocess.run(profile_args, cwd=str(REPO_ROOT))
+            if result.returncode != 0:
+                return result.returncode
     if args.verify:
         errors = verify(include_optional=args.include_optional)
         if errors:

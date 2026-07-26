@@ -10,7 +10,8 @@ Windows counterpart to `start.sh`. All Windows-specific files live here.
 | File | Purpose |
 |------|---------|
 | `start.ps1` | Full Windows equivalent of `../start.sh` — same CLI modes |
-| `install.ps1` | One-time idempotent setup (venv, deps; optional legacy `openclaw.json` stub) |
+| `install.ps1` | One-time idempotent setup (venv, deps, Hermes profiles + thin wrappers; optional legacy `openclaw.json` stub) |
+| `install-hermes-harness.ps1` | Re-sync only: `bin/agents` → `$HERMES_HOME/profiles` + thin wrappers |
 | `requirements-windows.txt` | Windows-only Python deps (pywin32, colorama, etc.) |
 | `peer_inbox_portal.py` | Win lane `/peer-inbox` HTML + remote peer fetch helpers |
 | `markdown_render.py` | Server-side markdown → HTML for inbox previews (no CDN) |
@@ -32,8 +33,14 @@ Win-specific presentation lives here under `platform/windows/`.
 # Allow local scripts (once)
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 
-# Install dependencies (OpenClaw optional — Hermes is the local orchestrator)
+# Install dependencies + Hermes profiles/thin wrappers (OpenClaw optional)
 powershell -File .\platform\windows\install.ps1
+
+# Re-sync personas only after git pull (existing Hermes install)
+powershell -File .\platform\windows\install-hermes-harness.ps1
+
+# Preview Hermes harness changes without writing
+powershell -File .\platform\windows\install-hermes-harness.ps1 -DryRun
 
 # Ensure partner CLIs on User PATH (Hermes, Codex, AGY, cursor-agent)
 powershell -File .\platform\windows\ensure-partner-cli-paths.ps1
