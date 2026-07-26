@@ -70,7 +70,7 @@ exceeds the cost of 100 verification steps.**
 standalone agentic coding tool in the same category as `cursor-agent`,
 `codex`, and `gemini-cli`: a fan-out worker the main session can dispatch
 light/parallel tasks to, NOT an internal oramasys stage worker (does not
-belong in `bin/config/agent_registry.json`, which is reserved for
+belong in `bin/orama-system/config/agent_registry.json`, which is reserved for
 SOUL-file-backed OpenClaw/oramasys agents bound to a gateway provider).
 
 | Command | Binary | What it is |

@@ -88,7 +88,7 @@
       "affinity": "mac",
       "stage": 1,
       "skill_path": "agents/context/context-immersion-agent.md",
-      "logic_path": "agents/context/context_tools.py",
+      "logic_path": "agents/dispatcher.py",
       "max_instances": 3,
       "tools": [
         "git_history",
@@ -103,7 +103,7 @@
       "affinity": "mac",
       "stage": 2,
       "skill_path": "agents/architect/visionary-architect-agent.md",
-      "logic_path": "agents/architect/architecture_tools.py",
+      "logic_path": "agents/dispatcher.py",
       "max_instances": 2,
       "tools": [
         "module_decomposer",
@@ -117,7 +117,7 @@
       "affinity": "mac",
       "stage": 3,
       "skill_path": "agents/refiner/ruthless-refiner-agent.md",
-      "logic_path": "agents/refiner/refinement_tools.py",
+      "logic_path": "agents/dispatcher.py",
       "max_instances": 2,
       "tools": [
         "complexity_analyzer",
@@ -146,7 +146,7 @@
       "affinity": "mac",
       "stage": 4.5,
       "skill_path": "agents/verifier/verification-agent.md",
-      "logic_path": "agents/verifier/verification_tools.py",
+      "logic_path": "agents/dispatcher.py",
       "max_instances": 2,
       "tools": [
         "test_runner",
@@ -160,7 +160,7 @@
       "affinity": "mac",
       "stage": 5,
       "skill_path": "agents/crystallizer/vision-crystallizer-agent.md",
-      "logic_path": "agents/crystallizer/documentation_tools.py",
+      "logic_path": "agents/dispatcher.py",
       "max_instances": 1,
       "tools": [
         "diagram_generator",
