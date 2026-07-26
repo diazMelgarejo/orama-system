@@ -33,6 +33,8 @@ a stricter, more specific rule.
 
 ## Vision
 
+**Canonical org north star:** [`../VISION.md`](../VISION.md) — triage gates, priority stack, anti-goals, and v1→v2 continuity. This section summarizes; the root `VISION.md` governs agents and autotriage.
+
 A **secure, hardware-aware, local-first multi-agent LLM orchestration system** built clean-slate from primitives, with a small ruthless kernel and modules that orbit at their own pace.
 
 Non-negotiable: **hardware affinity is a hard pre-spawn gate**. No framework that cannot enforce "refuse to dispatch if hardware unavailable" qualifies. This disqualifies LangGraph, CrewAI, AutoGen, and LangChain as direct adoptions — but their best ideas are borrowed into a slimmer custom engine.

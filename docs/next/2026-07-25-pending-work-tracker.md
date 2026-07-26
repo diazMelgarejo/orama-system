@@ -5,91 +5,70 @@ plan across recent sessions. Cross-linked with
 [`Perpetua-Tools/docs/next/2026-07-25-pending-work-tracker.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/next/2026-07-25-pending-work-tracker.md)
 — several items span both repos; check both.
 
-**Last updated:** 2026-07-24, from the branch each item's code actually
-lives on.
+**Full scan (integrity + docs backlog):**
+[`2026-07-25-docs-scan-and-integrity-report.md`](2026-07-25-docs-scan-and-integrity-report.md)
+
+**Last updated:** 2026-07-25, re-verified against `origin/main` at
+`5b05f545`.
 
 ---
 
-## 1. Unified identity audit consolidation — Phase 1-2 of 4 done
+## 1. Unified identity audit consolidation — Phases 1–2 done on `main`
 
-**Branch:** `2026-07-24-005b-identity-audit-plan` (PR #217, built on PR #197's
-prior state)
+**Merged:** PR **#220** (`0cce8110` on `main`; branch
+`2026-07-24-005b-identity-audit-plan` deleted)
 **Plan doc:** [`docs/plans/2026-07-24-unified-identity-audit-integrated-plan.md`](../plans/2026-07-24-unified-identity-audit-integrated-plan.md)
 
 - [x] **Phase 1 — Policy and engine.** `scripts/git/identity-policy.json`,
       `scripts/git/identity-policy.schema.json`, `scripts/git/audit_engine.py`.
-      17/17 tests in `tests/test_audit_engine.py`. Fail-closed on missing/
-      malformed/wrong-version policy. No vendor-domain wildcard, no
-      universal bot wildcard, private identities excluded from the tracked
-      file (existing `private_literal_values()` mechanism preserved via
-      dependency injection).
-- [x] **Phase 2 — consumer wiring, verified landed** (plan section 10):
-      `scripts/review/repo_hygiene.py`'s `check_identity()`,
-      `scripts/git/check_identity.sh`, and `scripts/git/audit_attribution.sh`
-      all now reference `audit_engine` directly (confirmed by grep, not
-      assumed from the plan doc's own claim). Full contract preservation
-      (banned-attribution scanning, co-author policy, `GIT_AUDIT_RANGE`/
-      `GIT_AUDIT_STRICT`, exit codes) not independently re-verified in this
-      pass -- re-check against plan section 2.2 before treating Phase 2 as
-      fully closed out.
-- [ ] **Not started -- Phase 3:** cross-repo sync to Perpetua-Tools (a
-      dedicated PT PR, explicitly NOT bundled into PT PR #276 -- see PT's
-      own tracker, item 2).
-- [ ] **Not started -- Phase 4:** remove the 3 old hardcoded identity lists
-      once every consumer is green; retain compatibility comments.
-- **Acceptance criteria:** full checklist in the plan doc's own §11 --
-  Phase 1-2 items likely satisfied given the wiring above, but not
-  individually re-checked against that checklist in this pass.
+      Tests in `tests/test_audit_engine.py`.
+- [x] **Phase 2 — consumer wiring on orama `main`:** `repo_hygiene.py`
+      `check_identity()`, `check_identity.sh`, `audit_attribution.sh` →
+      `audit_engine`.
+- [ ] **Phase 3 — not started:** cross-repo sync to Perpetua-Tools (dedicated
+      PT PR only — see PT tracker item 2).
+- [ ] **Phase 4 — not started:** remove the 3 old hardcoded identity lists once
+      every consumer is green; retain compatibility comments.
 
 ---
 
-## 2. Peer-mesh auth + TLS (BUZZ/Twitter/Google) — plan complete, implementation not started
+## 2. Peer-mesh auth + TLS (BUZZ/Twitter/Google) — plan complete, mostly not started
 
-**Branch:** `2026-07-19-002-fleet-mesh-oob-fixes` (PR #197) — was
-`security/02-peer-mesh-auth-tls-v2-plan` (stacked), merged into PR #197
-via PR #208 on 2026-07-24; that branch is now closed, this is the single
-active location.
 **Canonical doc:** [`docs/v2/49-peer-mesh-auth-tls-v2-plan.md`](../v2/49-peer-mesh-auth-tls-v2-plan.md)
-(ingests 3 design docs; updated 2026-07-25 to reflect actual code, not
-just the original sketch)
 
 - [x] v1 minimum: bearer tokens never sent over unauthenticated HTTP
-      (`query_peer_topology.py`, `lan_peer_assign.py`, both via
-      `_is_authenticated_transport()`)
-- [x] **AlphaClaw HTTPS gap — done, but on the PT side.** See
-      Perpetua-Tools' tracker item 1 for the actual implementation
-      (`orchestrator/alphaclaw_tls_proxy.py` + `alphaclaw_manager.py`
-      wiring). This repo makes zero gateway decisions by design; nothing
-      to implement here for that part.
-- [ ] **Follow-up needed soon (PT-side, cross-referenced here for
-      visibility):** the AlphaClaw TLS proxy's file-permission enforcement
-      is POSIX mode bits only — no Windows ACL enforcement. Raised in
-      [PT PR #276 review 4769699297](https://github.com/diazMelgarejo/Perpetua-Tools/pull/276#pullrequestreview-4769699297).
-      Full item + status: Perpetua-Tools' own
-      `docs/next/2026-07-25-pending-work-tracker.md`, item 1.
-- [ ] **Not started:** `src/secure_transport.py` (peer-mesh TLS enforcement,
-      separate from AlphaClaw's — this is for `query_peer_topology.py`/
-      `probe_lan_peer.py`'s peer-to-peer connections specifically)
-- [ ] **Not started:** `src/peer_cert_manager.py` (peer-mesh cert
-      provisioning — a different surface from AlphaClaw's cert manager,
-      which already exists on the PT side)
-- [ ] **Not started:** `src/auth/` — the full `AuthProvider` protocol,
-      `AuthManager`, and all 4 provider implementations (Bearer/BUZZ/
-      Twitter/Google). Bearer Token must remain the permanent, never-
-      forced-to-migrate fallback per the plan's own explicit requirement.
+      (`query_peer_topology.py`, `lan_peer_assign.py`, `_is_authenticated_transport()`)
+- [x] **AlphaClaw HTTPS — done on PT `main`.** PR **#276** merged (`f120239e`);
+      Windows ACL PR **#278** merged (`e331aaf1`). Opt-in via
+      `ALPHACLAW_TLS_ENABLED`. Details: PT tracker item 1.
+- [ ] **Not started (orama peer-mesh surface):** `src/secure_transport.py`
+- [ ] **Not started:** `src/peer_cert_manager.py` (peer-mesh certs — separate
+      from PT AlphaClaw TLS proxy cert manager)
+- [ ] **Not started:** `src/auth/` — `AuthProvider`, `AuthManager`, Bearer/BUZZ/
+      Twitter/Google providers (Bearer remains permanent fallback)
 - [ ] **Not started:** audit logging (`.orama/audit.log`, HMAC-chained)
-- [ ] **Not started:** `orama auth status` CLI, the upgrade-prompt UI
-- **For an agent picking this up:** the plan doc's own "Decisions" table
-  has pre-answered all 13 open questions — implement against that table,
-  don't re-litigate the questions.
+- [ ] **Not started:** `orama auth status` CLI, upgrade-prompt UI
+
+**For an agent picking this up:** implement against the plan doc "Decisions"
+table — questions are pre-answered.
+
+---
+
+## 3. Fleet mesh / G7 — Phase 7 MVP still open
+
+**Index:** [`docs/next/fleet-mesh/README.md`](fleet-mesh/README.md)
+
+- [x] G7 pre-v2 backlog closure (rate-limit reuse, React Query invalidation)
+- [ ] Portal Notification Hub MVP — [`G7-ASYNC-NOTIFICATIONS-ANALYSIS.md`](fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md) +
+      [`docs/superpowers/plans/2026-07-14-g7-authenticated-sse-mvp.md`](../superpowers/plans/2026-07-14-g7-authenticated-sse-mvp.md)
+- [ ] Phases 8–10+ (recovery, topology learning, Byzantine/GossipMesh) — deferred
+      per fleet-mesh README
 
 ---
 
 ## How to use this file
 
-Before starting work referenced here, verify the branch tip matches what's
-listed above and check for review comments newer than what's summarized.
-Update this file's checkboxes in the same commit as the work that
-completes them, on the same branch — never a separate tracking-only
-commit elsewhere (see `SECURITY.md` § "Lessons and action must land on
-the same branch").
+Before starting work, verify `main` HEAD and check for review comments newer
+than this summary. Update checkboxes in the **same commit** as the completing
+work. For v2 deferrals see
+[`2026-07-25-docs-scan-and-integrity-report.md`](2026-07-25-docs-scan-and-integrity-report.md) §3.
