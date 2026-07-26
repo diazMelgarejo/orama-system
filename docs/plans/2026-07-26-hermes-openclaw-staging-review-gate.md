@@ -73,7 +73,7 @@ Before approving **Phase 3+ execution** (`install_hermes_profiles.py`, install.p
 
 - [x] Relay-parity adapters staged in `bin/agents/` (cole, hermes-monitor, sage, relay, nova, rex)
 - [x] Atlas lifecycle distillate at `bin/agents/lifecycle/` (no Hermes profile)
-- [x] `install_hermes_profiles.py` implemented — Win `install.ps1` hook still pending review
+- [x] Win `install.ps1` + `install-hermes-harness.ps1` wired (2026-07-26)
 - [x] OpenClaw overlay sync script shipped; run on Mac operator host
 - [ ] `bin/agents/REGISTRY.yml` matches live `docs/oramasys/REGISTRY.yml` agent ids and display names
 - [ ] Each pipeline role has `SOUL.md` distillate consistent with live OpenClaw overlay

@@ -1,6 +1,6 @@
 # Hermes + OpenClaw staging — OpenClaw execution log (2026-07-26)
 
-> **Status:** ✅ **OpenClaw flesh-out complete** — Win `install.ps1` hooks **deferred**  
+> **Status:** ✅ OpenClaw flesh-out + Win idempotent harness sync wired (2026-07-26)  
 > **Parent:** [`2026-07-26-hermes-openclaw-staging-review-gate.md`](2026-07-26-hermes-openclaw-staging-review-gate.md)
 
 ## Scope of this execution
@@ -33,6 +33,12 @@ Completed on Mac operator host per user request:
 | `hermes-harness/references/openclaw-to-hermes-migration.md` | NEW |
 | `hermes-harness/references/hermes-profile-install.md` | NEW |
 
+## Idempotent sync (2026-07-26)
+
+- `install_hermes_profiles.py --sync` — verify distillate body first; skip when profiles already match `bin/agents`
+- `install-hermes-harness.ps1` — Hermes detected → wire/sync only; thin wrappers verify-first
+- Re-run on RTX 3080 with existing profiles: expect `already synced` / `profiles already synced with bin/agents staging`
+
 ## Operator verification
 
 ```bash
@@ -51,8 +57,8 @@ python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills
 
 ## Next (Win Hermes phase)
 
-1. Wire `install_hermes_profiles.py` into `platform/windows/install.ps1`
-2. Run on RTX 3080 and 5080 after `git pull`
-3. `hermes claw migrate` dry-run on Win OpenClaw roots
+1. ~~Wire `install_hermes_profiles.py` into `platform/windows/install.ps1`~~ ✅ 2026-07-26
+2. On RTX 3080 + 5080 after `git pull`: `powershell -File .\platform\windows\install.ps1` (or `install-hermes-harness.ps1` for profiles-only)
+3. `hermes claw migrate` dry-run on Win OpenClaw roots (if applicable)
 4. Reconcile gap archive vs `REGISTRY.yml`
 5. PT `.agent` lesson entries (Phase 6)

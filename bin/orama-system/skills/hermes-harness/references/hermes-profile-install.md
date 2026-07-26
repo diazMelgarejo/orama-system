@@ -17,16 +17,20 @@ Materialize `bin/agents/*/SOUL.md` distillates into `$HERMES_HOME/profiles/<slug
 
 ```bash
 cd "$ORAMA_SYSTEM_PATH"
-python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.py --dry-run --install
-python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.py --install --verify
+python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.py --sync
+python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py --verify \
+  || python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py --install --verify
 ```
 
-Windows PowerShell:
+`--sync` verifies first and installs only when profile SOUL bodies drift from `bin/agents/*/SOUL.md`. Re-runs print `already synced` when nothing changed.
+
+Windows:
 
 ```powershell
-cd $env:ORAMA_SYSTEM_PATH
-python bin\orama-system\skills\hermes-harness\scripts\install_hermes_profiles.py --install --verify
+powershell -File .\platform\windows\install-hermes-harness.ps1
 ```
+
+Same idempotent behavior: profiles use `--sync`; thin wrappers verify-first.
 
 ## What gets written
 
@@ -48,9 +52,22 @@ python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skill
 
 Non-secret defaults: `bin/agents/templates/config-delegation-snippet.yaml` — merge manually into Hermes `config.yaml` after profiles exist.
 
-## Win `install.ps1` hook (deferred)
+## Win `install.ps1` hook (wired 2026-07-26)
 
-Windows RTX 3080/5080 fleet install should call profile installer after orama clone — tracked in [`docs/plans/2026-07-26-hermes-agent-canonical-staging-and-profile-install.md`](../../../../docs/plans/2026-07-26-hermes-agent-canonical-staging-and-profile-install.md). **Not wired in this OpenClaw flesh-out commit.**
+`platform/windows/install.ps1` calls `install-hermes-harness.ps1` by default (skip with `-SkipHermesHarness`).
+
+Fresh RTX 5080 or existing RTX 3080 after `git pull`:
+
+```powershell
+cd $env:ORAMA_SYSTEM_PATH
+powershell -ExecutionPolicy Bypass -File .\platform\windows\install.ps1
+```
+
+Profiles-only re-sync:
+
+```powershell
+powershell -File .\platform\windows\install-hermes-harness.ps1
+```
 
 ## Troubleshooting
 

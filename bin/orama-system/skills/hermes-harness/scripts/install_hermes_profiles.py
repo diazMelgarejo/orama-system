@@ -2,7 +2,9 @@
 """Materialize bin/agents SOUL distillates into Hermes profile trees.
 
 Mirrors install_hermes_thin_skills.py: managed marker, non-clobber of operator files,
-provenance stamp, --install --verify --dry-run.
+provenance stamp, --install --verify --sync --dry-run.
+
+Idempotent: skips profile SOUL writes when distillate body already matches staging.
 """
 from __future__ import annotations
 
@@ -52,7 +54,7 @@ HERMES_PROFILES = HERMES_HOME / "profiles"
 REGISTRY_PATH = REPO_ROOT / "bin" / "agents" / "REGISTRY.yml"
 TEMPLATE_PROFILE = REPO_ROOT / "bin" / "agents" / "templates" / "profile"
 MANAGED_MARKER = "created_by: agent"
-OVERLAY_HEADER = "## Oramasys role overlay"
+PROVENANCE_MARKER = "\n\n---\n\n_Canonical staging:"
 
 
 @dataclass(frozen=True)
@@ -64,8 +66,11 @@ class ProfileRole:
     staged_soul: Path
 
 
-def expand_home(path_str: str) -> str:
-    return path_str.replace("${HOME}", str(Path.home()))
+@dataclass
+class InstallStats:
+    written: list[Path]
+    skipped_synced: list[str]
+    skipped_unmanaged: list[str]
 
 
 def load_roles() -> list[ProfileRole]:
@@ -91,6 +96,16 @@ def load_roles() -> list[ProfileRole]:
     return roles
 
 
+def staged_distillate(role: ProfileRole) -> str:
+    return role.staged_soul.read_text(encoding="utf-8").rstrip()
+
+
+def installed_soul_body(text: str) -> str:
+    if PROVENANCE_MARKER in text:
+        return text.split(PROVENANCE_MARKER, 1)[0].rstrip()
+    return text.rstrip()
+
+
 def soul_install_text(distillate: str, role: ProfileRole) -> str:
     provenance = install_provenance()
     return (
@@ -111,8 +126,23 @@ def is_managed_soul(path: Path) -> bool:
     return MANAGED_MARKER in text
 
 
-def install_profile_stubs(role: ProfileRole, dry_run: bool, force_memory: bool) -> list[Path]:
-    written: list[Path] = []
+def soul_needs_update(role: ProfileRole) -> bool:
+    target = HERMES_PROFILES / role.hermes_profile / "SOUL.md"
+    if not target.is_file():
+        return True
+    if not is_managed_soul(target):
+        return False
+    expected = staged_distillate(role)
+    actual = installed_soul_body(target.read_text(encoding="utf-8"))
+    return actual != expected
+
+
+def install_profile_stubs(
+    role: ProfileRole,
+    dry_run: bool,
+    force_memory: bool,
+    stats: InstallStats,
+) -> None:
     profile_dir = HERMES_PROFILES / role.hermes_profile
     memories = profile_dir / "memories"
     user_md = memories / "USER.md"
@@ -120,7 +150,7 @@ def install_profile_stubs(role: ProfileRole, dry_run: bool, force_memory: bool) 
     user_tpl = TEMPLATE_PROFILE / "USER.md"
     memory_tpl = TEMPLATE_PROFILE / "MEMORY.md"
 
-    targets = []
+    targets: list[tuple[Path, Path]] = []
     if user_tpl.is_file() and (not user_md.is_file() or force_memory):
         targets.append((user_md, user_tpl))
     if memory_tpl.is_file() and (not memory_md.is_file() or force_memory):
@@ -132,39 +162,41 @@ def install_profile_stubs(role: ProfileRole, dry_run: bool, force_memory: bool) 
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(source.read_text(encoding="utf-8"), encoding="utf-8")
-        written.append(target)
-    return written
+        stats.written.append(target)
 
 
-def install_soul(role: ProfileRole, dry_run: bool) -> Path | None:
+def install_soul(role: ProfileRole, dry_run: bool, stats: InstallStats) -> None:
     if not role.staged_soul.is_file():
         raise FileNotFoundError(f"missing staged SOUL: {role.staged_soul}")
-    distillate = role.staged_soul.read_text(encoding="utf-8")
     target = HERMES_PROFILES / role.hermes_profile / "SOUL.md"
-    if dry_run:
-        print(f"would write profile SOUL: {target}")
-        return target
     if target.is_file() and not is_managed_soul(target):
         print(f"skipped unmanaged profile SOUL: {target}")
-        return None
+        stats.skipped_unmanaged.append(role.hermes_profile)
+        return
+    if target.is_file() and not soul_needs_update(role):
+        print(f"already synced profile SOUL: {target}")
+        stats.skipped_synced.append(role.hermes_profile)
+        return
+    distillate = staged_distillate(role)
+    if dry_run:
+        print(f"would write profile SOUL: {target}")
+        return
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(soul_install_text(distillate, role), encoding="utf-8")
-    return target
+    stats.written.append(target)
 
 
-def install(dry_run: bool = False, force_memory: bool = False) -> list[Path]:
+def install(dry_run: bool = False, force_memory: bool = False) -> InstallStats:
     roles = load_roles()
     missing = [str(r.staged_soul) for r in roles if not r.staged_soul.is_file()]
     if missing:
         raise FileNotFoundError(f"missing staged SOUL files: {', '.join(missing)}")
-    written: list[Path] = []
+    stats = InstallStats(written=[], skipped_synced=[], skipped_unmanaged=[])
     for role in roles:
-        soul = install_soul(role, dry_run)
-        if soul and not dry_run:
-            written.append(soul)
-        stubs = install_profile_stubs(role, dry_run, force_memory)
-        written.extend(stubs)
-    return written
+        install_soul(role, dry_run, stats)
+        if not dry_run:
+            install_profile_stubs(role, dry_run, force_memory, stats)
+    return stats
 
 
 def verify() -> list[str]:
@@ -179,15 +211,45 @@ def verify() -> list[str]:
             errors.append(f"profile SOUL missing soul_id {role.soul_id!r}: {soul_path}")
         if MANAGED_MARKER not in text:
             errors.append(f"profile SOUL missing managed marker: {soul_path}")
+            continue
+        expected = staged_distillate(role)
+        actual = installed_soul_body(text)
+        if actual != expected:
+            errors.append(f"profile SOUL drift from staging: {soul_path}")
         if not role.staged_soul.is_file():
             errors.append(f"staged SOUL missing in repo: {role.staged_soul}")
     return errors
+
+
+def sync(dry_run: bool = False, force_memory: bool = False) -> int:
+    """Verify first; install only when profiles drift or are missing."""
+    errors = verify()
+    if not errors:
+        print("profiles already synced with bin/agents staging")
+        return 0
+    if dry_run:
+        print("profile sync needed — dry-run install:")
+        install(dry_run=True, force_memory=force_memory)
+        return 0
+    stats = install(dry_run=False, force_memory=force_memory)
+    print(
+        f"profile sync: wrote {len(stats.written)} file(s); "
+        f"skipped synced={len(stats.skipped_synced)} unmanaged={len(stats.skipped_unmanaged)}"
+    )
+    errors = verify()
+    if errors:
+        for err in errors:
+            print(err)
+        return 1
+    print("profile verification passed")
+    return 0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Install Hermes profiles from bin/agents staging.")
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--verify", action="store_true")
+    parser.add_argument("--sync", action="store_true", help="Verify first; install only if drift/missing.")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(
         "--force-memory",
@@ -195,13 +257,22 @@ def main() -> int:
         help="Overwrite profile memories/USER.md and MEMORY.md from templates.",
     )
     args = parser.parse_args()
-    if not args.install and not args.verify:
-        parser.error("choose --install and/or --verify")
+    if not args.install and not args.verify and not args.sync:
+        parser.error("choose --install, --verify, and/or --sync")
+    if args.sync:
+        code = sync(dry_run=args.dry_run, force_memory=args.force_memory)
+        if code != 0:
+            return code
+        if args.verify:
+            return 0
     if args.install:
-        written = install(dry_run=args.dry_run, force_memory=args.force_memory)
+        stats = install(dry_run=args.dry_run, force_memory=args.force_memory)
         if not args.dry_run:
-            print(f"wrote {len(written)} Hermes profile files under {HERMES_PROFILES}")
-    if args.verify:
+            print(
+                f"profiles: wrote {len(stats.written)} file(s); "
+                f"skipped synced={len(stats.skipped_synced)} unmanaged={len(stats.skipped_unmanaged)}"
+            )
+    if args.verify and not args.sync:
         errors = verify()
         if errors:
             for err in errors:

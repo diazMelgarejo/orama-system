@@ -20,7 +20,9 @@
 [CmdletBinding()]
 param(
     # Legacy OpenClaw config stub — not required on Hermes-only Windows hosts.
-    [switch]$WriteOpenClawConfig
+    [switch]$WriteOpenClawConfig,
+    # Skip Hermes profile + thin-wrapper install (edge cases / CI without Hermes home).
+    [switch]$SkipHermesHarness
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -28,6 +30,7 @@ $ErrorActionPreference = 'Stop'
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $RepoRoot  = (Resolve-Path (Join-Path $ScriptDir '..\..')).Path
+$env:ORAMA_SYSTEM_PATH = $RepoRoot
 
 function _Step { param([string]$Msg) Write-Host "  [+] $Msg" -ForegroundColor Cyan }
 function _OK   { param([string]$Msg) Write-Host "  ✓  $Msg" -ForegroundColor Green }
@@ -198,6 +201,25 @@ if (Test-Path $GstackBin) {
     _Warn "gstack not installed at $GstackBin — run gstack setup first, then re-run this script"
 }
 
+# ── Hermes harness (profiles + thin wrappers from bin/agents) ─────────────────
+if (-not $SkipHermesHarness) {
+    $HarnessScript = Join-Path $ScriptDir 'install-hermes-harness.ps1'
+    if (Test-Path $HarnessScript) {
+        _Step 'Installing Hermes profiles and thin wrappers from canonical staging...'
+        & $HarnessScript -RepoRoot $RepoRoot -Python $VenvPython -RunDoctor
+        if ($LASTEXITCODE -ne 0) {
+            _Warn 'Hermes harness install reported errors — profiles may be partial; re-run install-hermes-harness.ps1 after fixing'
+        } else {
+            _OK 'Hermes harness install complete (profiles + thin wrappers)'
+        }
+    } else {
+        _Warn "install-hermes-harness.ps1 not found — skip Hermes profile install"
+    }
+} else {
+    _Step 'Skipping Hermes harness install (-SkipHermesHarness)'
+    _OK 'Hermes profiles/thin wrappers not updated'
+}
+
 # ── LM Studio operational invariant ───────────────────────────────────────────
 _Warn 'IMPORTANT: LM Studio loads ONE model at a time on any machine (Mac/Linux/Windows).'
 _Warn '           Loading a second model fails (e.g. gemma-4-e4b-it: Operation canceled).'
@@ -217,4 +239,5 @@ Write-Host ''
 Write-Host '  Start services:  .\platform\windows\start.ps1'
 Write-Host '  Stop services:   .\platform\windows\start.ps1 --stop'
 Write-Host '  Check status:    .\platform\windows\start.ps1 --status'
+Write-Host '  Re-sync Hermes:  .\platform\windows\install-hermes-harness.ps1'
 Write-Host ''

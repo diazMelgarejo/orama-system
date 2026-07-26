@@ -133,6 +133,26 @@ mkdir -p "$HOME/.ultrathink/tasks"
 cp "$LOCAL_SOURCE/templates/"* "$HOME/.ultrathink/tasks/" 2>/dev/null || true
 ok "~/.ultrathink/tasks/                             (plan + lessons templates)"
 
+# ─── Hermes harness (full repo checkout) ─────────────────────────────────────
+HARNESS_DIR="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts"
+if [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
+  export ORAMA_SYSTEM_PATH="$SCRIPT_DIR"
+  info "Syncing Hermes profiles from bin/agents staging (idempotent)..."
+  if python3 "$HARNESS_DIR/install_hermes_profiles.py" --sync; then
+    ok "Hermes profiles synced (or already matched staging)"
+  else
+    warn "Hermes profile sync failed — run manually after git pull"
+  fi
+  info "Syncing Hermes thin skill wrappers..."
+  if python3 "$HARNESS_DIR/install_hermes_thin_skills.py" --verify; then
+    ok "Hermes thin wrappers already synced"
+  elif python3 "$HARNESS_DIR/install_hermes_thin_skills.py" --install --verify; then
+    ok "Hermes thin wrappers installed"
+  else
+    warn "Hermes thin wrapper install failed — run install_hermes_thin_skills.py manually"
+  fi
+fi
+
 # ─── Verify ──────────────────────────────────────────────────────────────────
 if [[ -f "$INSTALL_DIR/SKILL.md" ]]; then
   FILE_COUNT=$(find "$INSTALL_DIR" -type f | wc -l | tr -d ' ')
