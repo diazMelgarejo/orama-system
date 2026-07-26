@@ -95,10 +95,6 @@ SURFACES: list[tuple[Path, ...]] = [
         _re_replace(r'^(VERSION\s*=\s*)"[\d.]+"', r'\g<1>"{ver}"'),
     ),
     (
-        ROOT / "bin" / "config" / "agent_registry.json",
-        _json_key("version"),
-    ),
-    (
         ROOT / "bin" / "orama-system" / "config" / "agent_registry.json",
         _json_key("version"),
     ),

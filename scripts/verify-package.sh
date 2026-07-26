@@ -38,6 +38,8 @@ done
 chk_f bin/shared/oramasys_core.py
 chk_f bin/shared/state_manager.py
 chk_f bin/shared/message_bus.py
+chk_f bin/orama-system/config/agent_registry.json
+chk_f bin/orama-system/config/routing_rules.json
 chk_f bin/config/agent_registry.json
 chk_f bin/config/routing_rules.json
 chk_f bin/mcp_servers/ultrathink_orchestration_server.py

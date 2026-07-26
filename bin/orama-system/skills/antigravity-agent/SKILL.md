@@ -28,7 +28,7 @@ allowed-tools: bash, file-operations
 **`agy`** is Google's Antigravity CLI — a standalone agentic coding tool in
 the same category as `kimi`, `cursor-agent`, and `codex`: a fan-out worker the
 main session can dispatch light/parallel tasks to, NOT an internal oramasys
-stage worker (does not belong in `bin/config/agent_registry.json`, which is
+stage worker (does not belong in `bin/orama-system/config/agent_registry.json`, which is
 reserved for SOUL-file-backed OpenClaw/oramasys agents bound to a gateway
 provider).
 
