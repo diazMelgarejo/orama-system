@@ -19,13 +19,15 @@ of open work across both repos"):
 
 ## Contents
 
-| Doc | Topic | Status (as of 2026-07-24) |
+| Doc | Topic | Status (as of 2026-07-25) |
 |---|---|---|
+| **`2026-07-25-docs-scan-and-integrity-report.md`** | **Cross-repo integrity + full `docs/` scan (finish now vs v2 deferred)** | **Re-verified** — `main` at `5b05f545`; links both pending trackers |
+| `2026-07-25-pending-work-tracker.md` | Cross-repo pending-work tracker | **Updated** — identity Phases 1–2 merged (#220); PT TLS #276/#278 merged |
 | `2026-07-17-pr166-pr169-git-recovery-analysis.md` | Git recovery analysis for PR #166/#169 | Analysis and next moves only; no branch rewrite or merge performed |
 | `2026-07-17-preserve-branch-pr-cleanup-plan.md` | Branch preservation before cleanup | Plan only, not executed — review before any deletion |
 | `preserve-branch-manifest.md` | Manifest of 27 branches evaluated for preservation | Phase 1 complete 2026-07-17 |
 | `fleet-mesh/` (5 docs + README) | GossipBus / OASN P2P mesh, G7 async notifications, self-healing degradation modes | See `fleet-mesh/README.md` — not re-audited this pass |
-| `2026-07-24-plan-unified-identity-audit.md` | Consolidate 3 separate git-identity allowlists into one JSON config + one engine | **Phases 1-2 SHIPPED** (PR #217 + PR #218 merged 2026-07-24). Phases 3-4 (PT sync parity + stale autofix PR cleanup) still open. |
+| `2026-07-24-plan-unified-identity-audit.md` | Consolidate 3 separate git-identity allowlists into one JSON config + one engine | **Phases 1-2 SHIPPED** (orama PR **#220** merged). Phases 3-4 (PT sync + stale list removal) still open. |
 
 Everything in this table (and `fleet-mesh/`) is **out of scope** for the
 2026-07-22 frugality/privacy and cross-repo-closure work — none were
