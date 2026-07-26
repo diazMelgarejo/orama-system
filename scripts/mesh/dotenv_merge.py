@@ -1,9 +1,10 @@
-"""Integrative dotenv harmonization — fill missing/empty keys only; never delete or replace."""
+"""Integrative dotenv harmonization — fill missing/empty keys only; never delete."""
 
 from __future__ import annotations
 
-import os
 import re
+from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 _KEY_LINE_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$")
@@ -18,23 +19,47 @@ def _is_empty_value(raw: str) -> bool:
     return False
 
 
+def _duplicate_comment(line: str) -> str:
+    return f"# duplicate (inactive; effective declaration follows): {line.strip()}"
+
+
+def _superseded_comment(line: str, *, timestamp: str) -> str:
+    return f"# superseded {timestamp}: {line.strip()}"
+
+
+def _managed_line_indices(lines: list[str], keys: frozenset[str]) -> dict[str, list[int]]:
+    indices: dict[str, list[int]] = defaultdict(list)
+    for index, line in enumerate(lines):
+        match = _KEY_LINE_RE.match(line)
+        if match and match.group(1) in keys:
+            indices[match.group(1)].append(index)
+    return indices
+
+
 def harmonize_dotenv_keys(
     path: Path,
     values: dict[str, str],
     *,
     managed_keys: frozenset[str] | None = None,
     header_comment: str | None = None,
+    replace_keys: frozenset[str] | None = None,
+    supersede_timestamp: str | None = None,
 ) -> list[str]:
     """Merge managed keys into a dotenv file without removing comments or existing values.
 
     - Preserves every existing line (comments, blanks, ordering).
-    - Updates a managed key only when its current value is empty.
+    - Updates only the **last** declaration when duplicates exist; earlier duplicates
+      are commented with a disambiguation note (never deleted).
+    - Updates a managed key only when its effective value is empty, unless the key
+      is listed in ``replace_keys`` (rotation path).
+    - On rotation, migrates the previous active value to a commented superseded line.
     - Appends keys that are absent (additive).
-    - Never overwrites a non-empty operator value.
     """
     keys = managed_keys if managed_keys is not None else frozenset(values)
+    rotate = replace_keys or frozenset()
     pending = {k: v for k, v in values.items() if k in keys and v}
     touched: list[str] = []
+    ts = supersede_timestamp or datetime.now(timezone.utc).isoformat()
 
     if not path.is_file():
         lines: list[str] = []
@@ -51,10 +76,11 @@ def harmonize_dotenv_keys(
 
     original = path.read_text(encoding="utf-8")
     lines = original.splitlines()
+    managed_indices = _managed_line_indices(lines, keys)
     seen: set[str] = set()
     out: list[str] = []
 
-    for line in lines:
+    for index, line in enumerate(lines):
         stripped = line.strip()
         if not stripped or stripped.startswith("#") or "=" not in line:
             out.append(line)
@@ -67,7 +93,26 @@ def harmonize_dotenv_keys(
         if key not in keys:
             out.append(line)
             continue
+
+        key_indices = managed_indices.get(key, [index])
+        is_effective = index == key_indices[-1]
+        if not is_effective:
+            if not stripped.startswith("# duplicate (inactive"):
+                out.append(_duplicate_comment(line))
+            else:
+                out.append(line)
+            seen.add(key)
+            continue
+
         seen.add(key)
+        if key in pending and key in rotate:
+            new_value = pending.pop(key)
+            if not _is_empty_value(raw_value):
+                out.append(_superseded_comment(line, timestamp=ts))
+            out.append(f"{key}={new_value}")
+            touched.append(key)
+            continue
+
         if key in pending and _is_empty_value(raw_value):
             out.append(f"{key}={pending.pop(key)}")
             touched.append(key)

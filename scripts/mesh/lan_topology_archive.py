@@ -23,6 +23,7 @@ _MESH_DIR = Path(__file__).resolve().parent
 if str(_MESH_DIR) not in sys.path:
     sys.path.insert(0, str(_MESH_DIR))
 from dotenv_merge import harmonize_dotenv_keys
+from mesh_logging import get_mesh_logger
 
 ROOT = Path(__file__).resolve().parents[2]
 ARCHIVE_PATH = ROOT / ".local" / "lan-topology-archive.json"
@@ -44,6 +45,7 @@ ENV_HEADER = (
     "# LAN topology — harmonized from committed config before IP expunge "
     "(scripts/mesh/lan_topology_archive.py)"
 )
+log = get_mesh_logger("orama.mesh.lan_topology", repo_root=ROOT)
 
 
 def _git(*args: str) -> subprocess.CompletedProcess[str]:
@@ -146,22 +148,29 @@ def target_env_paths() -> list[Path]:
 
 def backup(ref: str, force: bool) -> int:
     if ARCHIVE_PATH.is_file() and not force:
-        print(f"OK: archive exists at {ARCHIVE_PATH.relative_to(ROOT)} (use --force to refresh)")
+        log.info(
+            "OK: archive exists at %s (use --force to refresh)",
+            ARCHIVE_PATH.relative_to(ROOT),
+        )
         return 0
     env = collect_from_ref(ref)
     if not env:
-        print(f"OK: no private LAN URLs in {ref} tracked configs — nothing to archive")
+        log.info("OK: no private LAN URLs in %s tracked configs — nothing to archive", ref)
         return 0
     sha = _git("rev-parse", ref).stdout.strip() or "unknown"
     write_archive(env, source_ref=ref, source_sha=sha)
-    print(f"OK: archived {len(env)} endpoint(s) to {ARCHIVE_PATH.relative_to(ROOT)}")
+    log.info(
+        "OK: archived %d endpoint(s) to %s",
+        len(env),
+        ARCHIVE_PATH.relative_to(ROOT),
+    )
     return 0
 
 
 def apply() -> int:
     data = load_archive()
     if not data:
-        print("skip: no .local/lan-topology-archive.json")
+        log.info("skip: no .local/lan-topology-archive.json")
         return 0
     env = data.get("endpoints") or {}
     if not env:
@@ -172,7 +181,7 @@ def apply() -> int:
         if path.parent and not path.parent.exists() and path != ROOT / ".env.local":
             continue
         merge_env_file(path, env)
-        print(f"OK: merged LAN endpoints into {path}")
+        log.info("OK: merged LAN endpoints into %s", path)
     return 0
 
 
@@ -185,7 +194,7 @@ def ensure_local_cache() -> int:
         if env:
             sha = _git("rev-parse", ref).stdout.strip() or "unknown"
             write_archive(env, source_ref=ref, source_sha=sha)
-            print(f"OK: auto-archived LAN topology from {ref}")
+            log.info("OK: auto-archived LAN topology from %s", ref)
     return apply()
 
 
