@@ -1,7 +1,7 @@
 ---
 name: relay-cline-agent
 description: External specialist adapter via Cline CLI — invoke only after Glen routes and Warden/human policy allows external fan-out.
-version: 1.0.0
+version: 1.1.1.0
 license: Apache 2.0
 compatibility: openclaw, cline
 allowed-tools: file-operations
