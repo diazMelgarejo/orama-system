@@ -13,7 +13,9 @@ staging_contract:
   subagent_card: bin/agents/{staging_folder}/agent.md
   hermes_profile_root: ${HERMES_HOME}/profiles/{hermes_profile}/
   thin_skill_installer: bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py
-  profile_installer_planned: bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.py
+  profile_installer: bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.py
+  win_install_hook: platform/windows/install.ps1
+  win_hermes_harness_script: platform/windows/install-hermes-harness.ps1
   openclaw_overlay_sync: scripts/sync_openclaw_overlay_from_staging.sh
   persona_catalog: bin/agents/personas/
 

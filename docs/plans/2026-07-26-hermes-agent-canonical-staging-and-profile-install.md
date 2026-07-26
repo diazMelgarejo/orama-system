@@ -1,7 +1,7 @@
 # Plan: Hermes Agent Canonical Staging + Profile Thin-Wrapper Install
 
 **Date:** 2026-07-26  
-**Status:** 🔍 **REVIEW PENDING** for Win `install.ps1` — profile installer **implemented**; OpenClaw flesh-out **complete** (2026-07-26)  
+**Status:** ✅ Win `install.ps1` wired — operator live test on RTX 5080 (fresh) + RTX 3080 (existing)  
 **Owner:** orama-system (L3 canonical skills + `bin/agents` staging)  
 **Consumers:** Hermes installations (profiles + thin skills), Perpetua-Tools install chain, OpenClaw migration operators  
 
