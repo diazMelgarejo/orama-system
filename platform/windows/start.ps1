@@ -468,6 +468,15 @@ function Test-LanBindConfigured {
 }
 
 if ($LanPeer -or (Test-LanBindConfigured)) {
+    _Warn 'svc' 'LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network'
+    $MeshScript = Join-Path $RepoRoot 'scripts\mesh\Invoke-MeshLocalCache.ps1'
+    if (Test-Path $MeshScript) {
+        & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $MeshScript -RepoRoot $RepoRoot -Python $UsPython -Mode LanBind
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    } else {
+        Write-Error 'scripts\mesh\Invoke-MeshLocalCache.ps1 missing — GOSSIP gate cannot run for LAN bind'
+        exit 1
+    }
     Sync-ControlPlaneToken
     $weak = @('', 'change-me-before-network-use', 'changeme', 'change-me', 'placeholder', 'test', 'secret')
     $tokenVal = $env:ORAMA_CONTROL_PLANE_TOKEN
