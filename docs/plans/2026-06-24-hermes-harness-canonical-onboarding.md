@@ -2,7 +2,8 @@
 # Hermes-Harness Canonical Onboarding & Skill Absorption (2026-06-24)
 
 > **Date:** 2026-06-24 (enriched 2026-06-25) · **Owner:** orama-system (L3 canonical skills) · **Consumer:** Hermes local harness (L1)
-> **Status:** 🔄 IN PROGRESS — Phases 1–5+7+8+6+9 ✅ shipped (Win testdrive 2026-06-28); **skill absorption ✅ 2026-06-28**; Mac↔Win cross-harness E2E ⏳; PR #108 ✅ merged; LINT-013 ✅
+> **Status:** 🔄 IN PROGRESS — Phases 1–5+7+8+6+9 ✅ shipped (Win testdrive 2026-06-28); **skill absorption ✅ 2026-06-28**; Mac↔Win cross-harness E2E ⏳; PR #108 ✅ merged; LINT-013 ✅  
+> **2026-07-26 addendum:** Agent persona staging + review gate → [`2026-07-26-hermes-openclaw-staging-review-gate.md`](2026-07-26-hermes-openclaw-staging-review-gate.md) and [`2026-07-26-hermes-agent-canonical-staging-and-profile-install.md`](2026-07-26-hermes-agent-canonical-staging-and-profile-install.md)
 > **Author:** orama-system canonical skill leads + session synthesis
 > **Review trigger:** user review of this artifact before any skill/code execution
 

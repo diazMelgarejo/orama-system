@@ -1,0 +1,189 @@
+# bin/agents staging registry — OpenClaw + Hermes profile mapping
+# Snapshot: 2026-07-26 (live fleet MERGE-10-edited03, 17 OpenClaw agents)
+# Live machine map (do not edit for staging truth): workspace docs/oramasys/REGISTRY.yml
+# Runtime JSON: bin/orama-system/config/agent_registry.json
+
+version: staging-2026-07-26
+network_name: oramasys-agent-network
+live_openclaw_hub: ${HOME}/.alphaclaw/.openclaw/workspace/docs/oramasys/REGISTRY.yml
+orama_agent_registry_json: bin/orama-system/config/agent_registry.json
+
+staging_contract:
+  soul_distillate: bin/agents/{staging_folder}/SOUL.md
+  subagent_card: bin/agents/{staging_folder}/agent.md
+  hermes_profile_root: ${HERMES_HOME}/profiles/{hermes_profile}/
+  thin_skill_installer: bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py
+  profile_installer_planned: bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.py
+
+# Pipeline + research + adapters staged for Hermes profile materialization
+roles:
+  - staging_folder: orchestrator
+    openclaw_id: orchestrator
+    hermes_profile: orchestrator
+    display: Glen
+    soul_id: orama.orchestrator
+    stage: router
+    openclaw_workspace: ${HOME}/.openclaw/agents/orchestrator
+    staged_soul: bin/agents/orchestrator/SOUL.md
+    staged_agent_card: bin/agents/orchestrator/agent.md
+
+  - staging_folder: context
+    openclaw_id: context-agent
+    hermes_profile: context-agent
+    display: Cass
+    soul_id: orama.context
+    stage: 1
+    openclaw_workspace: ${HOME}/.openclaw/agents/context-agent
+    staged_soul: bin/agents/context/SOUL.md
+    staged_agent_card: bin/agents/context/agent.md
+
+  - staging_folder: architect
+    openclaw_id: architect-agent
+    hermes_profile: architect-agent
+    display: Aria
+    soul_id: orama.architect
+    stage: 2
+    openclaw_workspace: ${HOME}/.openclaw/agents/architect-agent
+    staged_soul: bin/agents/architect/SOUL.md
+    staged_agent_card: bin/agents/architect/agent.md
+
+  - staging_folder: refiner
+    openclaw_id: refiner-agent
+    hermes_profile: refiner-agent
+    display: Sena
+    soul_id: orama.refiner
+    stage: 3
+    openclaw_workspace: ${HOME}/.openclaw/agents/refiner-agent
+    staged_soul: bin/agents/refiner/SOUL.md
+    staged_agent_card: bin/agents/refiner/agent.md
+
+  - staging_folder: executor
+    openclaw_id: coder
+    orama_registry_id: executor-agent
+    hermes_profile: coder
+    display: Rourke
+    display_alias: Penn
+    soul_id: orama.executor
+    stage: 4
+    openclaw_workspace: ${HOME}/.openclaw/agents/coder
+    staged_soul: bin/agents/executor/SOUL.md
+    staged_agent_card: bin/agents/executor/agent.md
+    notes: OpenClaw id is `coder`; orama registry id is `executor-agent`; SOUL also at bin/agents/coder/SOUL.md for LM Studio win path
+
+  - staging_folder: verifier
+    openclaw_id: codex-agent
+    orama_registry_id: verifier-agent
+    hermes_profile: codex-agent
+    display: Vera
+    soul_id: orama.verifier
+    stage: 4.5
+    openclaw_workspace: ${HOME}/.openclaw/agents/codex-agent
+    staged_soul: bin/agents/verifier/SOUL.md
+    staged_agent_card: bin/agents/verifier/agent.md
+    reviewer_role: universal_code_gate
+
+  - staging_folder: crystallizer
+    openclaw_id: crystallizer-agent
+    hermes_profile: crystallizer-agent
+    display: Crystal
+    soul_id: orama.crystallizer
+    stage: 5
+    openclaw_workspace: ${HOME}/.openclaw/agents/crystallizer-agent
+    staged_soul: bin/agents/crystallizer/SOUL.md
+    staged_agent_card: bin/agents/crystallizer/agent.md
+
+  - staging_folder: mac-researcher
+    openclaw_id: mac-researcher
+    hermes_profile: mac-researcher
+    display: Arthur
+    soul_id: openclaw.mac-researcher
+    stage: research
+    openclaw_workspace: ${HOME}/.openclaw/agents/mac-researcher
+    staged_soul: bin/agents/mac-researcher/SOUL.md
+
+  - staging_folder: win-researcher
+    openclaw_id: win-researcher
+    hermes_profile: win-researcher
+    display: Win Researcher
+    soul_id: openclaw.win-researcher
+    stage: research
+    openclaw_workspace: ${HOME}/.openclaw/agents/win-researcher
+    staged_soul: bin/agents/win-researcher/SOUL.md
+
+  - staging_folder: autoresearcher
+    openclaw_id: autoresearcher
+    hermes_profile: autoresearcher
+    display: Scout
+    soul_id: perpetua.autoresearch
+    stage: research
+    openclaw_workspace: ${HOME}/autoresearch
+    staged_soul: bin/agents/autoresearcher/SOUL.md
+
+  - staging_folder: coder
+    openclaw_id: coder
+    hermes_profile: coder-win
+    display: Rourke
+    soul_id: orama.executor
+    stage: 4-win-lmstudio
+    staged_soul: bin/agents/coder/SOUL.md
+    notes: Win LM Studio path; shares OpenClaw id with executor row
+
+# OpenClaw-only / persona-hub roles (no bin/agents folder yet — persona_ref on hub)
+openclaw_only:
+  - openclaw_id: main
+    display: Atlas
+    soul_id: perpetua.lifecycle
+    stage: lifecycle
+    workspace: ${HOME}/.alphaclaw/.openclaw/workspace
+    hermes_profile: null
+    notes: Lifecycle hub — not a Hermes profile; use workspace AGENTS.md / oramasys hub
+
+  - openclaw_id: gemini-coder
+    display: Sage
+    soul_id: perpetua.analyzer
+    persona_ref: docs/oramasys/personas/sage.yaml
+    hermes_profile: gemini-coder
+
+  - openclaw_id: cline-agent
+    display: Relay
+    soul_id: adapter.external-specialist
+    persona_ref: null
+    hermes_profile: cline-agent
+
+  - openclaw_id: cole-agent
+    display: Cole
+    soul_id: adapter.claude-code
+    persona_ref: docs/oramasys/personas/cole.yaml
+    hermes_profile: cole-agent
+
+  - openclaw_id: hermes-agent
+    display: Hermes
+    soul_id: adapter.hermes
+    persona_ref: docs/oramasys/personas/hermes.yaml
+    hermes_profile: hermes-monitor
+    notes: OpenClaw adapter id; distinct from Hermes portable brain install
+
+  - openclaw_id: kimi-agent
+    display: Nova
+    soul_id: adapter.kimi-research
+    persona_ref: docs/oramasys/personas/nova.yaml
+    hermes_profile: kimi-agent
+
+  - openclaw_id: grok-agent
+    display: Rex
+    soul_id: adapter.grok-fallback
+    persona_ref: docs/oramasys/personas/rex.yaml
+    hermes_profile: grok-agent
+
+pipeline_order:
+  - context-agent
+  - architect-agent
+  - refiner-agent
+  - coder
+  - codex-agent
+  - crystallizer-agent
+
+review_graph:
+  code_outputs: codex-agent
+  optional_analyzer: gemini-coder
+  cole_penn_rourke: codex-agent
