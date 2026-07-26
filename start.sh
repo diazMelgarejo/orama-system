@@ -656,7 +656,7 @@ if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${POR
   if [[ -f "$SCRIPT_DIR/scripts/mesh/ensure_local_mesh_secrets.py" ]]; then
     python3 "$SCRIPT_DIR/scripts/mesh/ensure_local_mesh_secrets.py" || _warn "svc" "GOSSIP_SHARED_SECRET missing — run ensure_local_mesh_secrets.py"
   fi
-  if [[ -z "${GOSSIP_SHARED_SECRET:-}" ]] && [[ ! -f "$SCRIPT_DIR/.env.local" ]]; then
+  if ! python3 "$SCRIPT_DIR/scripts/mesh/mesh_gate.py" "$SCRIPT_DIR"; then
     _err "svc" "GOSSIP_SHARED_SECRET required for LAN mesh — run: python3 scripts/mesh/ensure_local_mesh_secrets.py"
     exit 1
   fi

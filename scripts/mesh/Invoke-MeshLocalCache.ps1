@@ -75,13 +75,35 @@ if (Test-Path $loadLocal) {
     & $loadLocal -RepoRoot $RepoRoot
 }
 
+function Get-DotenvSecretValue {
+    param([string]$Path, [string]$Key)
+    if (-not (Test-Path $Path)) { return '' }
+    $last = ''
+    foreach ($line in Get-Content -LiteralPath $Path -Encoding UTF8) {
+        if ($line -match ('^' + [regex]::Escape($Key) + '=(.*)$')) {
+            $val = $Matches[1].Trim()
+            if ($val.Length -ge 2) {
+                $q = $val[0]
+                if (($q -eq '"' -or $q -eq "'") -and $val[$val.Length - 1] -eq $q) {
+                    $val = $val.Substring(1, $val.Length - 2).Trim()
+                }
+            }
+            if ($val) { $last = $val }
+        }
+    }
+    return $last
+}
+
 if ($Mode -eq 'LanBind') {
     $secret = ''
     if ($env:GOSSIP_SHARED_SECRET) {
         $secret = $env:GOSSIP_SHARED_SECRET.Trim()
     }
-    $envLocal = Join-Path $RepoRoot '.env.local'
-    if (-not $secret -and -not (Test-Path $envLocal)) {
+    if (-not $secret) {
+        $envLocal = Join-Path $RepoRoot '.env.local'
+        $secret = Get-DotenvSecretValue -Path $envLocal -Key 'GOSSIP_SHARED_SECRET'
+    }
+    if (-not $secret) {
         Write-Error 'GOSSIP_SHARED_SECRET required for LAN mesh — run: python scripts/mesh/ensure_local_mesh_secrets.py'
         exit 1
     }

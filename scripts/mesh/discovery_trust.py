@@ -19,19 +19,6 @@ OPENCLAW_STATE = Path.home() / ".openclaw" / "state" / "last_discovery.json"
 HANDSHAKE_TTL_SEC = 600
 
 
-def _secret() -> str:
-    for key in ("GOSSIP_SHARED_SECRET", "ORAMA_CONTROL_PLANE_TOKEN"):
-        val = os.environ.get(key, "").strip()
-        if val:
-            return val
-    path = ROOT / ".local" / "mesh-secrets.json"
-    if path.is_file():
-        data = json.loads(path.read_text(encoding="utf-8"))
-        if data.get("GOSSIP_SHARED_SECRET"):
-            return str(data["GOSSIP_SHARED_SECRET"])
-    return ""
-
-
 def _load_json(path: Path) -> dict:
     if not path.is_file():
         return {}
@@ -39,6 +26,16 @@ def _load_json(path: Path) -> dict:
         return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return {}
+
+
+def _secret() -> str:
+    for key in ("GOSSIP_SHARED_SECRET", "ORAMA_CONTROL_PLANE_TOKEN"):
+        val = os.environ.get(key, "").strip()
+        if val:
+            return val
+    data = _load_json(ROOT / ".local" / "mesh-secrets.json")
+    secret = (data.get("GOSSIP_SHARED_SECRET") or "").strip()
+    return str(secret) if secret else ""
 
 
 def _save_json(path: Path, data: dict) -> None:
@@ -97,11 +94,32 @@ def handshake_signature(ip: str, nonce: str) -> str:
     ).hexdigest()
 
 
+def _pending_entry(ip: str) -> dict | None:
+    pending = _load_json(PENDING_HANDSHAKES)
+    entry = pending.get(ip)
+    if not isinstance(entry, dict):
+        return None
+    if time.time() - float(entry.get("ts", 0)) > HANDSHAKE_TTL_SEC:
+        pending.pop(ip, None)
+        _save_json(PENDING_HANDSHAKES, pending)
+        return None
+    return entry
+
+
 def verify_handshake(ip: str, nonce: str, signature: str) -> bool:
-    expected = handshake_signature(ip, nonce)
-    if not expected:
+    entry = _pending_entry(ip)
+    if not entry:
         return False
-    return hmac.compare_digest(expected, signature.strip())
+    stored_nonce = str(entry.get("nonce") or "")
+    if not stored_nonce or stored_nonce != nonce.strip():
+        return False
+    expected = handshake_signature(ip, nonce)
+    if not expected or not hmac.compare_digest(expected, signature.strip()):
+        return False
+    pending = _load_json(PENDING_HANDSHAKES)
+    pending.pop(ip, None)
+    _save_json(PENDING_HANDSHAKES, pending)
+    return True
 
 
 def initiate_handshake(ip: str) -> tuple[str, str]:
@@ -121,12 +139,18 @@ def peer_trusted(ip: str) -> bool:
     if os.environ.get("ORAMA_APPROVE_DISCOVERY", "").strip().lower() in ("1", "true", "yes"):
         remember_peer(ip)
         return True
-    pending = _load_json(PENDING_HANDSHAKES)
-    entry = pending.get(ip) or {}
-    nonce = entry.get("nonce", "")
-    if nonce and time.time() - float(entry.get("ts", 0)) < HANDSHAKE_TTL_SEC:
-        return False
     return False
+
+
+def _block_untrusted_peer(ip: str, role: str, blocked: list[str]) -> None:
+    nonce, sig = initiate_handshake(ip)
+    blocked.append(ip)
+    print(
+        f"🤝 New peer {ip} ({role}) — acknowledge before persist:\n"
+        f"   ORAMA_APPROVE_DISCOVERY=1 discover.py   # one-shot approve\n"
+        f"   discover.py --ack-peer {ip} --nonce {nonce} --signature {sig}",
+        flush=True,
+    )
 
 
 def filter_endpoints_for_trust(endpoints: dict) -> tuple[dict, list[str]]:
@@ -143,15 +167,23 @@ def filter_endpoints_for_trust(endpoints: dict) -> tuple[dict, list[str]]:
         if peer_trusted(ip):
             remember_peer(ip)
             continue
-        nonce, sig = initiate_handshake(ip)
-        blocked.append(ip)
-        print(
-            f"🤝 New peer {ip} ({role}) — acknowledge before persist:\n"
-            f"   ORAMA_APPROVE_DISCOVERY=1 discover.py   # one-shot approve\n"
-            f"   discover.py --ack-peer {ip} --nonce {nonce} --signature {sig}",
-            flush=True,
-        )
+        _block_untrusted_peer(ip, role, blocked)
         out[role] = None
+
+    peers_in: list[dict] = []
+    for peer in out.get("win_peers") or []:
+        if not isinstance(peer, dict):
+            continue
+        ip = str(peer.get("ip") or "").strip()
+        if not ip:
+            peers_in.append(peer)
+            continue
+        if peer_trusted(ip):
+            remember_peer(ip)
+            peers_in.append(peer)
+            continue
+        _block_untrusted_peer(ip, "win_peer", blocked)
+    out["win_peers"] = peers_in
     return out, blocked
 
 
@@ -159,7 +191,4 @@ def ack_peer(ip: str, nonce: str, signature: str) -> bool:
     if not verify_handshake(ip, nonce, signature):
         return False
     remember_peer(ip)
-    pending = _load_json(PENDING_HANDSHAKES)
-    pending.pop(ip, None)
-    _save_json(PENDING_HANDSHAKES, pending)
     return True

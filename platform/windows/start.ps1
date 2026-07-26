@@ -473,6 +473,9 @@ if ($LanPeer -or (Test-LanBindConfigured)) {
     if (Test-Path $MeshScript) {
         & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $MeshScript -RepoRoot $RepoRoot -Python $UsPython -Mode LanBind
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    } else {
+        Write-Error 'scripts\mesh\Invoke-MeshLocalCache.ps1 missing — GOSSIP gate cannot run for LAN bind'
+        exit 1
     }
     Sync-ControlPlaneToken
     $weak = @('', 'change-me-before-network-use', 'changeme', 'change-me', 'placeholder', 'test', 'secret')
