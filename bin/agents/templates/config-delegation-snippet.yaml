@@ -1,0 +1,23 @@
+# Delegation snippet — merge into Hermes config.yaml (non-secret defaults)
+
+# Maps Glen routing vocabulary to Hermes profile slugs.
+# Operator copies relevant blocks after profile install — not auto-merged by installer.
+
+delegation:
+  orchestrator: orchestrator
+  context: context-agent
+  architect: architect-agent
+  refiner: refiner-agent
+  executor: coder
+  verifier: codex-agent
+  crystallizer: crystallizer-agent
+  mac_research: mac-researcher
+  win_research: win-researcher
+  cole: cole-agent
+  hermes_monitor: hermes-monitor
+  sage: gemini-coder
+  relay: cline-agent
+  nova: kimi-agent
+  rex: grok-agent
+
+# Registry SSoT: bin/agents/REGISTRY.yml

@@ -1,6 +1,6 @@
 # Hermes + OpenClaw agent staging — review gate (2026-07-26)
 
-> **Status:** 🔍 **REVIEW PENDING** — staged in git for all agents; **no installer execution** until review completes.  
+> **Status:** 🔍 **REVIEW PENDING** for Win install.ps1 hooks — **OpenClaw flesh-out executed** (see execution log)  
 > **Owner:** orama-system `bin/agents` + `docs/plans/`  
 > **Supersedes for execution order:** defers implementation until this gate passes.
 
@@ -55,6 +55,7 @@ Harness ops (LAN, coord pulse, peer inbox) remain in `hermes-harness/` — not d
 | Plan | Role |
 |------|------|
 | **This file** | Review gate + live snapshot |
+| [`2026-07-26-hermes-openclaw-staging-execution.md`](2026-07-26-hermes-openclaw-staging-execution.md) | OpenClaw flesh-out execution log (2026-07-26) |
 | [`2026-07-26-hermes-agent-canonical-staging-and-profile-install.md`](2026-07-26-hermes-agent-canonical-staging-and-profile-install.md) | Implementation: `install_hermes_profiles.py`, install hooks, reference cards |
 | [`2026-06-24-hermes-harness-canonical-onboarding.md`](2026-06-24-hermes-harness-canonical-onboarding.md) | Harness absorption + thin-wrapper doctrine (IN PROGRESS) |
 | [`2026-06-28-hermes-integration-authority.md`](2026-06-28-hermes-integration-authority.md) | Envelope protocol + thin wrapper inventory |
@@ -70,23 +71,31 @@ OpenClaw-side drafts (navigation only, not SSoT):
 
 Before approving **Phase 3+ execution** (`install_hermes_profiles.py`, install.ps1 hooks):
 
+- [x] Relay-parity adapters staged in `bin/agents/` (cole, hermes-monitor, sage, relay, nova, rex)
+- [x] Atlas lifecycle distillate at `bin/agents/lifecycle/` (no Hermes profile)
+- [x] `install_hermes_profiles.py` implemented — Win `install.ps1` hook still pending review
+- [x] OpenClaw overlay sync script shipped; run on Mac operator host
 - [ ] `bin/agents/REGISTRY.yml` matches live `docs/oramasys/REGISTRY.yml` agent ids and display names
 - [ ] Each pipeline role has `SOUL.md` distillate consistent with live OpenClaw overlay
 - [ ] `codex-agent` ↔ `verifier/` staging mapping accepted (Vera universal gate)
 - [ ] `coder` ↔ `executor/` dual-folder mapping accepted (OpenClaw id vs orama registry id)
-- [ ] `openclaw_only` rows (Atlas, relay-parity) — persona_ref paths on hub, not yet in `bin/agents/`
 - [ ] No secrets, workstation paths, or private literals in staged files
 - [ ] Hermes Win operator confirms `%LOCALAPPDATA%\hermes` profile layout matches planned slugs
 - [ ] PT operator confirms lessons recorded after migration (Phase 6 — not this commit)
 
 **Approve execution:** comment `approve staging` on PR or reply to operator with explicit go-ahead.
 
-## Explicit non-actions (this commit)
+## Explicit non-actions (Win phase — still pending)
 
-- No `install_hermes_profiles.py` implementation
-- No `hermes claw migrate` or `hermes claw cleanup` on operator hosts
-- No overwrite of live OpenClaw SOUL files from git (one-way: live → staging distillate)
-- No changes to `orama-system/` or `Perpetua-Tools/` runtime code beyond `bin/agents` staging docs
+- No `install.ps1` profile hook on RTX 3080/5080 until operator approves
+- No `hermes claw migrate` or `hermes claw cleanup` on Win hosts yet
+- No PT lesson ledger Phase 6 entries
+
+## Completed in OpenClaw flesh-out (2026-07-26)
+
+- `install_hermes_profiles.py` — ready; not wired in Win `install.ps1`
+- `sync_openclaw_overlay_from_staging.sh` — integrative merge live → staging overlays applied to operator OpenClaw SOUL files
+- Adapter + lifecycle `bin/agents/` folders and persona YAML catalog
 
 ## Validation commands
 
