@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -67,14 +68,17 @@ def _branch_synced_with_main(root: Path, branch_name: str, head_sha: str) -> tup
     )
     if result.returncode not in (0, 2):
         return False, "reanchor_scan failed"
+    scan_ref_re = re.compile(r"^\s+(\S+)\s+(.+)$")
     for line in result.stdout.splitlines():
-        if branch_name not in line:
+        match = scan_ref_re.match(line)
+        if not match or match.group(1) != branch_name:
             continue
-        if "MERGED/in-main" in line:
+        status = match.group(2)
+        if "MERGED/in-main" in status:
             return True, f"branch {branch_name} tree-twin in main"
-        if "NEEDS-REANCHOR" in line:
+        if "NEEDS-REANCHOR" in status:
             return False, f"branch {branch_name} needs reanchor onto main"
-        if "NO-TWIN" in line or "ORPHAN" in line:
+        if "NO-TWIN" in status or "ORPHAN" in status:
             return False, f"branch {branch_name} not synchronized with main"
     return False, f"branch {branch_name} sync status unknown"
 

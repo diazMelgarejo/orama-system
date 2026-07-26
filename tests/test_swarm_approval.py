@@ -29,12 +29,31 @@ def test_issue_and_verify_token(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {"objective": "ship", "assignments": [{"role": "a"}], "task_type": "implementation"}
     issued = swarm_approval.issue_approval(preview)
+
+    tampered_preview = {**preview, "objective": "tampered"}
+    with pytest.raises(ValueError, match="preview drift"):
+        swarm_approval.verify_launch(
+            approved=True,
+            preview_id=issued["preview_id"],
+            approval_token=issued["approval_token"],
+            preview=tampered_preview,
+        )
+
     swarm_approval.verify_launch(
         approved=True,
         preview_id=issued["preview_id"],
         approval_token=issued["approval_token"],
         preview=preview,
     )
+
+    issued2 = swarm_approval.issue_approval(preview)
+    with pytest.raises(ValueError, match="invalid approval_token"):
+        swarm_approval.verify_launch(
+            approved=True,
+            preview_id=issued2["preview_id"],
+            approval_token="deadbeef" * 8,
+            preview=preview,
+        )
 
 
 def test_token_without_explicit_approval_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
