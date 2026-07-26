@@ -130,6 +130,13 @@ if (-not (Test-Path $ThinInstaller)) {
     exit 1
 }
 
+$MeshScript = Join-Path $RepoRoot 'scripts\mesh\Invoke-MeshLocalCache.ps1'
+if (Test-Path $MeshScript) {
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $MeshScript -RepoRoot $RepoRoot -Python $Python -Mode Install
+} else {
+    _Warn 'scripts\mesh\Invoke-MeshLocalCache.ps1 missing — skip mesh local cache'
+}
+
 $HermesState = Get-HermesInstallState
 if ($HermesState.Present) {
     _OK "Hermes detected (CLI=$($HermesState.CliOnPath), brain=$($HermesState.BrainPresent)) — wire/sync only, no app install"
