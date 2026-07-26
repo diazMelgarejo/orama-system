@@ -232,10 +232,11 @@ orama-system/docs/v2/
 ├── 46-repository-standard.md  ← cross-cutting, additive repo-layout standard: root stays minimal, everything executable under /src, no root-level scripts/tests/tools/examples, data output + binaries gitignored, never commit secrets/personal paths/doxxing/SecOps material
 ├── 47-portable-memory-local-topology-invariant.md  ← cross-cutting portable-memory rule: tracked docs name categories only; concrete forbidden fragments live in local-only registries
 ├── 48-board-job-source-line-schema.md  ← provisional/optional job-board schema (source_ref + expected_base_sha) so a claimant can verify the exact source state a job was scoped against; NOT enforced yet, PT-side producer already validates-when-provided; v2 candidate for hard-required once a second producer exists to coordinate with
-└── 49-peer-mesh-auth-tls-v2-plan.md  ← peer-mesh TLS + pluggable auth (BUZZ/Twitter/Google, bearer token grandfathered) deferred plan; v1 minimum (never send a bearer token over unauthenticated transport) already landed on PR #197; this is the certificate provisioning + real TLS/mTLS + AlphaClaw HTTPS proxy work, stacked as PR(N+1)
+├── 49-peer-mesh-auth-tls-v2-plan.md  ← peer-mesh TLS + pluggable auth (BUZZ/Twitter/Google, bearer token grandfathered) deferred plan; v1 minimum (never send a bearer token over unauthenticated transport) already landed on PR #197; this is the certificate provisioning + real TLS/mTLS + AlphaClaw HTTPS proxy work, stacked as PR(N+1)
+└── 50-mesh-security-migration-ladder.md  ← Phases A–D: mesh prep → IP expunge → P5/P6 runtime gates (grandfathered) → strict cutover at v2 launch; merge-order guidance for #223/#224/#222 + PT #287
 ```
 
-> **Next free slot: `50-`**
+> **Next free slot: `51-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

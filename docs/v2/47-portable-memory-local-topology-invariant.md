@@ -80,6 +80,15 @@ Docs must not include the concrete string form of the prohibited fragment just
 to explain what is prohibited. If an implementation test needs a trigger, use
 a synthetic marker loaded from a temporary local-only registry fixture.
 
+## Mesh topology migration
+
+Committed RFC1918 / link-local endpoint literals violate this invariant. The
+pre-v2 removal path is **Phase B** in
+[`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md):
+endpoints move to `.env.local` / `.local/lan-topology-archive.json` after
+**Phase A** backup on every fleet node. Affinity slugs (`win-rtx3080`,
+`win-rtx5080`) remain in tracked config; only address literals are expunged.
+
 ## Acceptance
 
 - A whole `.agent/` or equivalent portable-memory scan reports zero hits.

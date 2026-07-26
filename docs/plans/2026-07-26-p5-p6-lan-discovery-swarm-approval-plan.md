@@ -1,8 +1,9 @@
 # P5 + P6 — Swarm HITL approval and discovery persistence gates
 
-> **Status:** Planned (post PR #222)  
+> **Status:** Phase C implemented (#224); Phase D deferred to v2 launch  
 > **Parent:** [`SECURITY.md`](../../SECURITY.md) findings #6 (P6), P5 swarm approval  
-> **Threat model:** [`docs/v2/45-single-operator-lan-threat-model-descope.md`](../v2/45-single-operator-lan-threat-model-descope.md)
+> **Threat model:** [`docs/v2/45-single-operator-lan-threat-model-descope.md`](../v2/45-single-operator-lan-threat-model-descope.md)  
+> **Migration ladder:** [`docs/v2/50-mesh-security-migration-ladder.md`](../v2/50-mesh-security-migration-ladder.md) (Phases A–D)
 
 ## P6 — Discovery persistence gate (highest exploitability)
 
@@ -38,9 +39,16 @@
 3. **CSRF/origin on all mutating portal routes** — extend `verify_lifecycle_origin()` pattern.
 4. **Deprecate `src/perpetua_tools/orchestrator.py`** entrypoint or add same auth middleware as `fastapi_app.py`.
 
-## Landing order for mesh continuity (before IP expunge merge)
+## Landing order for mesh continuity
 
-1. Merge `scripts/mesh/lan_topology_archive.py` to `main` (can ship alone).
-2. On each fleet host: `python3 scripts/mesh/lan_topology_archive.py --backup --ref origin/main`
-3. Merge PR #222 (IP expunge).
-4. `install.sh` / `start.sh` run `--ensure-local-cache` (auto-applies archive to `.env.local`).
+See [`docs/v2/50-mesh-security-migration-ladder.md`](../v2/50-mesh-security-migration-ladder.md) for full Phase A–D operator steps.
+
+**Safe pre-v2 merge order:**
+
+1. Merge #223 (Phase A) → operator backup + gossip on **all** nodes.
+2. Merge #224 + PT #287 (Phase C) → distribute `GOSSIP_SHARED_SECRET` OOB.
+3. Verify mesh on all nodes.
+4. Merge #222 (Phase B IP expunge).
+5. **v2 launch:** Phase D strict cutover (`ORAMA_SWARM_STRICT=1`, remove legacy defaults).
+
+Merging #223 + #224 + PT #287 **before** #222 is safe when Phase A is complete on every node.
