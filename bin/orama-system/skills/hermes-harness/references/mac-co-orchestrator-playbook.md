@@ -25,8 +25,11 @@ git fetch origin --prune && git checkout main && git pull --ff-only origin main
 ./start.sh --stop && ./start.sh --lan-peer --no-open
 
 # cursor-agent (if missing)
-curl https://cursor.com/install -fsS -o /tmp/cursor-install.sh
-bash /tmp/cursor-install.sh
+install_script="$(mktemp -t cursor-install.XXXXXX)"
+chmod 700 "$install_script"
+trap 'rm -f "$install_script"' EXIT
+curl https://cursor.com/install -fsS -o "$install_script"
+bash "$install_script"
 cursor-agent --version
 cursor-agent login   # once per machine
 

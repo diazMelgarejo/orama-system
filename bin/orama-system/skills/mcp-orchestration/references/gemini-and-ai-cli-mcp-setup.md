@@ -15,7 +15,7 @@ Bridges Gemini CLI into Claude Code or other MCP clients. Used **only for Gemini
 ### Claude Code setup
 
 Register server `gemini-cli` in Claude Code MCP settings with command `npx` and
-args `-y gemini-mcp-tool`.
+args `-y gemini-mcp-tool@<PINNED_VERSION>` (never bare `@latest` — pin after review).
 
 Verify: `/mcp` → expect `gemini-cli active`
 
@@ -28,7 +28,7 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "gemini-cli": {
       "command": "npx",
-      "args": ["-y", "gemini-mcp-tool"]
+      "args": ["-y", "gemini-mcp-tool@<PINNED_VERSION>"]
     }
   }
 }
@@ -91,7 +91,7 @@ gemini auth login
 Add server `ai-cli` in Claude Code MCP settings using JSON config:
 
 ```json
-{"name":"ai-cli","command":"npx","args":["-y","ai-cli-mcp@latest"]}
+{"name":"ai-cli","command":"npx","args":["-y","ai-cli-mcp@<PINNED_VERSION>"]}
 ```
 
 ### Generic MCP config
@@ -101,7 +101,7 @@ Add server `ai-cli` in Claude Code MCP settings using JSON config:
   "mcpServers": {
     "ai-cli-mcp": {
       "command": "npx",
-      "args": ["-y", "ai-cli-mcp@latest"],
+      "args": ["-y", "ai-cli-mcp@<PINNED_VERSION>"],
       "env": {
         "MCP_CLAUDE_DEBUG": "false"
       }

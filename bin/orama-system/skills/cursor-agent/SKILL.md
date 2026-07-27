@@ -36,8 +36,13 @@ Always invoke Cursor agents as `cursor-agent`, never as bare `agent`.
 ### macOS / Linux
 
 ```bash
-curl https://cursor.com/install -fsS -o /tmp/cursor-install.sh
-bash /tmp/cursor-install.sh
+# Download to a private temp file (not a predictable /tmp name — symlink race).
+install_script="$(mktemp -t cursor-install.XXXXXX)"
+chmod 700 "$install_script"
+trap 'rm -f "$install_script"' EXIT
+curl https://cursor.com/install -fsS -o "$install_script"
+# Review the script on first install; then:
+bash "$install_script"
 # Installs to ~/.local/bin/cursor-agent; adds ~/.local/bin to PATH
 ```
 
@@ -220,7 +225,9 @@ Manage MCP servers:
 
 ```bash
 cursor-agent mcp list
-# Register via MCP UI: name my-server, command npx, args my-mcp-server
+# Register via MCP UI: command npx, args ["-y", "ai-cli-mcp@<PINNED_VERSION>"]
+# Never bare @latest — registry contents can change between installs (rug-pull).
+# Pin after explicit review; bump deliberately (see firecrawl-cli pin pattern).
 ```
 
 Approve all MCPs automatically in headless mode:

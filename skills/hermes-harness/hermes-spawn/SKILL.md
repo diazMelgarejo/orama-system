@@ -12,10 +12,36 @@ disable-model-invocation: true
 set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-HARNESS_ROOT="$(python3 -c "import hermes; print(hermes.__file__)" 2>/dev/null | sed 's|/hermes/__init__.py||' || echo "${HERMES_HOME:-$HOME/.hermes}")"
 PERP_SCRIPT="${REPO_ROOT}/perpetua-tools/src/hermes_harness.py"
-SESSION_ID="${HERMES_SPAWN_SESSION:-default}"
-PID_DIR="${TMPDIR:-/tmp}/hermes-spawn"
+
+sanitize_session_id() {
+  local raw="${HERMES_SPAWN_SESSION:-default}"
+  case "$raw" in
+    *[!a-zA-Z0-9_-]*|*..*|""|"."|"..")
+      echo "ERROR: HERMES_SPAWN_SESSION must match [a-zA-Z0-9_-]+ (got: $raw)" >&2
+      exit 1
+      ;;
+  esac
+  SESSION_ID="$raw"
+}
+
+resolve_harness_root() {
+  local hfile=""
+  if hfile="$(python3 -c "import hermes; print(hermes.__file__)" 2>/dev/null)"; then
+    HARNESS_ROOT="${hfile%/hermes/__init__.py}"
+  elif [ -n "${HERMES_HOME:-}" ] && [ -d "${HERMES_HOME}" ]; then
+    HARNESS_ROOT="${HERMES_HOME}"
+  else
+    HARNESS_ROOT="${HOME}/.hermes"
+  fi
+}
+
+sanitize_session_id
+resolve_harness_root
+
+PID_DIR="${XDG_RUNTIME_DIR:-${HOME}/.cache}/hermes-spawn"
+umask 077
+mkdir -p "$PID_DIR"
 PID_FILE="${PID_DIR}/${SESSION_ID}.pid"
 LOCK_FILE="${PID_DIR}/${SESSION_ID}.lock"
 
@@ -40,7 +66,6 @@ pid_command() {
 }
 
 acquire_lock() {
-  mkdir -p "$PID_DIR"
   if ! mkdir "$LOCK_FILE" 2>/dev/null; then
     echo "ERROR: another hermes-spawn session is active for ${SESSION_ID}" >&2
     exit 1
@@ -79,10 +104,11 @@ case "$ACTION" in
       echo "ERROR: Hermes exited immediately after launch" >&2
       exit 1
     fi
-    echo "$child_pid" >"$PID_FILE"
+    printf '%s\n' "$child_pid" >"$PID_FILE"
     echo "✅ Hermes started (pid $child_pid, session ${SESSION_ID})"
     ;;
   stop)
+    acquire_lock
     if [[ -f "$PID_FILE" ]]; then
       pid="$(cat "$PID_FILE")"
       if kill -0 "$pid" 2>/dev/null && pid_command "$pid" | grep -q 'hermes_harness.py'; then
@@ -99,14 +125,26 @@ case "$ACTION" in
       else
         echo "ℹ️ No active Hermes process for pid $pid"
       fi
-      rm -f "$PID_FILE"
+      if [[ "$(cat "$PID_FILE" 2>/dev/null || true)" == "$pid" ]]; then
+        rm -f "$PID_FILE"
+      fi
     else
       echo "ℹ️ No Hermes pid file at $PID_FILE"
     fi
     ;;
   status)
     validate_paths
-    (cd "$HARNESS_ROOT" && PYTHONDOTENV_SKIP=1 python3 -c "from run_agent import AIAgent; a = AIAgent(quiet_mode=True, skip_memory=True); print(a.chat('Reply with: HERMES_OK'))")
+    if [[ -f "$PID_FILE" ]]; then
+      pid="$(cat "$PID_FILE")"
+      if kill -0 "$pid" 2>/dev/null && pid_command "$pid" | grep -q 'hermes_harness.py'; then
+        echo "✅ Hermes running (pid $pid, session ${SESSION_ID})"
+        exit 0
+      fi
+      echo "⚠️ Stale pid file — recorded pid $pid is not a running hermes_harness.py" >&2
+      exit 1
+    fi
+    echo "ℹ️ No active Hermes session ${SESSION_ID} (no pid file)"
+    exit 1
     ;;
   *)
     echo "Unknown action: $ACTION (expected start|stop|status)" >&2
