@@ -44,7 +44,7 @@ await server.connect(transport);
 
 ```bash
 npx tsc
-claude mcp add my-skill -- node dist/index.js
+# Register in Claude Code MCP settings: server my-skill, command node, args dist/index.js
 ```
 
 ## Security baseline

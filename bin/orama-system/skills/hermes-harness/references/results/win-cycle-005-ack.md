@@ -20,5 +20,5 @@ Mac 3/3 vs Win 3/3 — Win wins itp and wall on all tasks.
 `win_job_queue.py` — autoresearcher idle; awaiting Mac coder card if any.  
 State: `~/.openclaw/state/lan_peer/win_job_queue.json`
 
-**Monitor Win:** http://192.168.254.100:8002/peer-inbox  
-**Monitor Mac:** http://192.168.254.102:8002/co-orchestration/macos
+**Monitor Win:** http://${WIN_PORTAL_LAN_HOST}:8002/peer-inbox  
+**Monitor Mac:** http://${MAC_PORTAL_LAN_HOST}:8002/co-orchestration/macos

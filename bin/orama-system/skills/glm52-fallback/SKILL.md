@@ -41,7 +41,7 @@ This script will:
 1. Require `$GLM52_API_KEY` (or `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY`) to already be set in the environment — fails fast with a clear error instead of prompting interactively, so it is safe to run unattended or in CI.
 2. Store it securely at `~/.openclaw/secrets/glm52-api-key` (mode 600)
 3. Create env config at `~/.openclaw/openclaw-glm52-env` (mode 600)
-4. Add sourcing to `~/.zshrc` and `~/.bashrc` (only for profiles that already exist)
+4. Wires env config into existing zsh/bash login profiles when those files are already present
 5. Test connection to the BigModel endpoint
 
 > **NEVER hardcode the API key in tracked files.** Read from environment

@@ -18,11 +18,11 @@ Win→Mac `lan_peer_assign.py drop --peer` is **blocked**:
 
 | Resource | URL |
 |----------|-----|
-| Health (no auth) | `http://192.168.9.18:8002/health` |
-| Portal UI | `http://192.168.9.18:8002/peer-inbox` |
-| List inbox JSON | `http://192.168.9.18:8002/api/peer-inbox` |
-| Read one file | `http://192.168.9.18:8002/api/peer-inbox/<filename>` |
-| HTML render | `http://192.168.9.18:8002/api/peer-inbox/<filename>/html` |
+| Health (no auth) | `http://${WIN_PORTAL_LAN_HOST}:8002/health` |
+| Portal UI | `http://${WIN_PORTAL_LAN_HOST}:8002/peer-inbox` |
+| List inbox JSON | `http://${WIN_PORTAL_LAN_HOST}:8002/api/peer-inbox` |
+| Read one file | `http://${WIN_PORTAL_LAN_HOST}:8002/api/peer-inbox/<filename>` |
+| HTML render | `http://${WIN_PORTAL_LAN_HOST}:8002/api/peer-inbox/<filename>/html` |
 
 Replace IP if DHCP changed — check Win `ipconfig` / `last_discovery.json`.
 
@@ -32,7 +32,7 @@ Use the **same** `ORAMA_CONTROL_PLANE_TOKEN` as Win `.env.LOCAL` (do not paste t
 
 ```bash
 export ORAMA_CONTROL_PLANE_TOKEN='<match Win workspace .env.LOCAL>'
-export WIN_PORTAL=http://192.168.9.18:8002
+export WIN_PORTAL=http://${WIN_PORTAL_LAN_HOST}:8002
 ```
 
 ## Mac terminal — copy/paste block
@@ -40,7 +40,7 @@ export WIN_PORTAL=http://192.168.9.18:8002
 ```bash
 # 0) Prerequisites
 cd "$ORAMA_SYSTEM_PATH"
-export WIN_PORTAL=http://192.168.9.18:8002
+export WIN_PORTAL=http://${WIN_PORTAL_LAN_HOST}:8002
 # export ORAMA_CONTROL_PLANE_TOKEN from Mac ~/.openclaw or Keychain — MUST match Win
 
 # 1) Health (no token)

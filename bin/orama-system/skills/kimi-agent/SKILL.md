@@ -83,7 +83,8 @@ SOUL-file-backed OpenClaw/oramasys agents bound to a gateway provider).
 ### macOS / Linux (verified 2026-07-10, darwin-arm64, v0.23.4)
 
 ```bash
-curl -fsSL https://code.kimi.com/kimi-code/install.sh | bash
+curl -fsSL https://code.kimi.com/kimi-code/install.sh -o /tmp/kimi-install.sh
+bash /tmp/kimi-install.sh
 # Installs to ~/.kimi-code/bin/kimi; appends PATH entry to ~/.zshrc (or ~/.bashrc)
 # New shells pick it up automatically; in an existing shell:
 export PATH="$HOME/.kimi-code/bin:$PATH"
@@ -138,7 +139,7 @@ mirrors the `cursor-agent` canonical-paths table.**
 | Config | `~/.kimi-code/config.toml` (empty until `login`/`provider add`) | `%USERPROFILE%\.kimi-code\config.toml` |
 | Device ID | `~/.kimi-code/device_id` (mode 600 — do not commit, do not log) | `%USERPROFILE%\.kimi-code\device_id` |
 | Diagnostic log | `~/.kimi-code/logs/kimi-code.log` (not rotated; `.1` files are) | `%USERPROFILE%\.kimi-code\logs\kimi-code.log` |
-| PATH entry | Appended to `~/.zshrc` by the installer — idempotent | Added to User PATH registry by the installer — idempotent |
+| PATH entry | Registered in user PATH by the installer (macOS/Linux login profiles) — idempotent | Added to User PATH registry by the installer — idempotent |
 | Session data | Managed internally by `kimi`; export via `kimi export [sessionId]` | Same |
 
 Quick binary-location check for any agent/script before invoking Kimi:
