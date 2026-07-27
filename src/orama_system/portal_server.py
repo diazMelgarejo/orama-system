@@ -63,6 +63,7 @@ from utils.control_plane_auth import (
     cors_allow_origins,
     default_bind_host,
     control_plane_auth_failure,
+    lifecycle_origin_failure,
     portal_requires_auth,
     request_is_loopback,
     resolved_control_plane_token,
@@ -252,7 +253,9 @@ async def _control_plane_auth_middleware(request: Request, call_next):
         if failure is not None:
             return failure
         if request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
-            verify_lifecycle_origin(request)
+            origin_failure = lifecycle_origin_failure(request)
+            if origin_failure is not None:
+                return origin_failure
     return await call_next(request)
 
 # ── Serve React/Vite build when present (Phase 8) ─────────────────────────────
