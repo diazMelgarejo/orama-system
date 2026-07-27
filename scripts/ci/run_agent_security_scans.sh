@@ -94,8 +94,12 @@ fi
 if command -v ramparts >/dev/null 2>&1; then
   :
 elif command -v cargo >/dev/null 2>&1; then
-  log "Installing ramparts via cargo"
-  cargo install ramparts --locked 2>/dev/null || true
+  RAMPARTS_VERSION="${RAMPARTS_VERSION:-0.8.2}"
+  log "Installing ramparts@${RAMPARTS_VERSION} via cargo (requires Rust >= 1.85)"
+  export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:${PATH}"
+  if ! cargo install "ramparts@${RAMPARTS_VERSION}" --locked; then
+    log "WARN ramparts install failed"
+  fi
 fi
 
 if command -v ramparts >/dev/null 2>&1; then
@@ -109,7 +113,7 @@ if command -v ramparts >/dev/null 2>&1; then
     run "ramparts:$path" ramparts scan "$scan_root"
   done
 elif [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-  log "FAIL ramparts (install via: cargo install ramparts --locked)"
+  log "FAIL ramparts (install via: cargo install ramparts@${RAMPARTS_VERSION:-0.8.2} --locked; needs Rust >= 1.85)"
   FAIL=1
 else
   log "SKIP ramparts (install cargo package ramparts for local runs)"
