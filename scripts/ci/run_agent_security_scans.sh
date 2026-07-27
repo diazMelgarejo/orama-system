@@ -38,7 +38,7 @@ for path in "${SCAN_ROOTS[@]}"; do
     FAIL=1
     continue
   fi
-  run "aguara:$path" aguara scan "$scan_root"
+  run "aguara:$path" aguara scan "$scan_root" --ci
 done
 
 run agent-audit agent-audit scan-project "$ROOT" \
