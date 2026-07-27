@@ -72,7 +72,7 @@ a leak, not a convenience. The example response above shows the field
 in.
 
 **Step 4 — Save the key to the project's local environment file only**
-(`.env`, gitignored) **— never to a tracked skill doc, memory file, or
+(environment file, gitignored) **— never to a tracked skill doc, memory file, or
 commit.** See the security note in [`../SKILL.md`](../SKILL.md) §
 "Authenticating the MCP".
 
@@ -90,7 +90,7 @@ You still need an API key (or an authenticated MCP session). Two ways
 to get one:
 
 - **Human pastes it in** — if you already have a key, set
-  `FIRECRAWL_API_KEY=fc-...` in the project's environment file (`.env`,
+  `FIRECRAWL_API_KEY=fc-...` in the project's environment file (gitignored secrets file,
   gitignored) or the shell's environment for the current session. Never
   pass an API key as a command-line argument, type it into chat, write it
   to a log file, or leave it visible in shell history or a process

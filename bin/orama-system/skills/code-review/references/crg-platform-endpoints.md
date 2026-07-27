@@ -45,7 +45,7 @@ Only `CRG_OPENAI_BASE_URL` changes by platform.
 ECC vendor drops ship the **macOS** template (`:11434`). On Windows, patch after install:
 
 ```powershell
-# .cursor/mcp.json → mcpServers.code-review-graph.env
+# .cursor/mcp.json → mcpServers.code-review-graph environment block
 "CRG_OPENAI_BASE_URL": "http://localhost:1234/v1"
 ```
 

@@ -47,17 +47,14 @@ post_job_learn_push() {
 run_pulse_timed() {
   local pick=$1
   local secs=${COORD_PULSE_TIMEOUT_SEC:-7200}
-  python3 - "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/coord_pulse.sh" "$secs" "$LOG" <<'PY' || return 1
-import subprocess, sys
-script, timeout_s, log_path = sys.argv[1], int(sys.argv[2]), sys.argv[3]
-try:
-    with open(log_path, "a", encoding="utf-8") as logf:
-        r = subprocess.run([script], stdout=logf, stderr=subprocess.STDOUT, timeout=timeout_s)
-    sys.exit(r.returncode)
-except subprocess.TimeoutExpired:
-    print("coord_pulse timeout", timeout_s, file=open(log_path, "a"))
-    sys.exit(124)
-PY
+  if timeout "$secs" "$ORAMA/bin/orama-system/skills/hermes-harness/scripts/coord_pulse.sh" >>"$LOG" 2>&1; then
+    return 0
+  fi
+  local rc=$?
+  if [[ "$rc" -eq 124 ]]; then
+    log "coord_pulse timeout $secs"
+  fi
+  return "$rc"
 }
 
 log "=== triple rinse start outer=$OUTER max_jobs=$MAX_JOBS tag=$TAG ==="

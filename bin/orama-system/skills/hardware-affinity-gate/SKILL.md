@@ -325,7 +325,7 @@ self-hosting the rules.
 1. **Silent fallback on NEVER.** A `HARDWARE_MISMATCH` must raise an explicit
    exception or exit non-zero. Never log a warning and continue.
 2. **Hardcoding IPs in source defaults.** Production code defaults to
-   `127.0.0.1`. Real LAN IPs belong in `.env` only.
+   `127.0.0.1`. Real LAN IPs belong in the gitignored environment file only.
 3. **Skipping live probe.** A cached model inventory is stale the moment a
    model is unloaded. Query `/v1/models` or `/api/tags` at dispatch time.
    **But note the catalog-vs-residency distinction:** `/v1/models` and
