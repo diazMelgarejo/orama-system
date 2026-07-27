@@ -62,6 +62,7 @@ Before writing or revising a skill, read:
 
 - [`../../references/skill-architecture-guide.md`](../../references/skill-architecture-guide.md) - repo standard, frontmatter, progressive disclosure, 6Cs, lint rules
 - [`references/modular-skill-authoring.md`](references/modular-skill-authoring.md) - workflow, validation, clobber guard, and report format
+- [`references/skill-security-wording-reference-card.md`](references/skill-security-wording-reference-card.md) - aguara-safe wording; avoid literal-command prompt injection in skill docs
 - [`references/skill-folder-template.md`](references/skill-folder-template.md) - reusable folder layout, short `SKILL.md` template, examples, eval checklist
 
 Read target-specific references only when needed:

@@ -20,6 +20,7 @@ Source: `https://code.claude.com/docs/en/skills`
 - Prefer `${CLAUDE_SKILL_DIR}` for bundled scripts and `${CLAUDE_PROJECT_DIR}` for project-local scripts.
 - Treat dynamic context injection as pre-execution shell: scope tools narrowly and avoid it in auto-triggered side-effect skills.
 - Treat skills as executable supply-chain material: audit scripts, tool use, network use, hooks, and security-relevant scope.
+- Before merging skill doc changes, read [`skill-security-wording-reference-card.md`](skill-security-wording-reference-card.md) — imperative commands in skills can be misread by naive agents as literal instructions (unintentional prompt injection); word examples so aguara can separate real attacks from benign docs.
 
 ## Intake Questions
 
@@ -174,6 +175,17 @@ Repo-level validation:
 ```bash
 python3 scripts/review/check_orama_skills.py --mode baseline
 ```
+
+Agent-security wording (aguara — run before opening a skill doc PR):
+
+```bash
+aguara scan bin/orama-system/skills \
+  --ci \
+  --baseline config/agent-security/aguara-skills.baseline.json \
+  --disable-rule TOXIC_CROSS_002
+```
+
+See [`skill-security-wording-reference-card.md`](skill-security-wording-reference-card.md).
 
 Use strict mode only after the current legacy skill corpus has been upgraded or warnings have been allowlisted:
 
