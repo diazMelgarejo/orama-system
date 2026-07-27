@@ -160,6 +160,36 @@ def test_scan_tracked_private_network_literals_blocks_config_ips(tmp_path: Path)
 
 
 @pytest.mark.unit
+def test_scan_tracked_private_network_literals_fails_closed_on_index_read_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "bin" / "orama-system" / "config"
+    cfg.mkdir(parents=True)
+    bad = cfg / "agent_registry.json"
+    bad.write_text('{"gateway": "http://192.168.8.153:1234"}', encoding="utf-8")
+
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout=b"",
+            stderr=b"fatal: path not in index",
+        )
+
+    monkeypatch.setattr(repo_hygiene.subprocess, "run", fake_run)
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        ["bin/orama-system/config/agent_registry.json"],
+        use_git_index=True,
+    )
+
+    assert len(errors) == 1
+    assert "cannot read staged blob" in errors[0]
+
+
+@pytest.mark.unit
 def test_scan_tracked_private_network_literals_ignores_marker_inside_json_string(
     tmp_path: Path,
 ) -> None:

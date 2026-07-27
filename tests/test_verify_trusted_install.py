@@ -38,6 +38,7 @@ def test_trusted_install_allows_override(
     trusted_mod: TrustedInstallModule, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("ORAMA_TRUST_HERMES_SYNC", "1")
+    monkeypatch.delenv("ORAMA_SKIP_HERMES_SYNC", raising=False)
     ok, reason = trusted_mod.trusted_install_allowed(trusted_mod.resolve_repo_root())
     assert ok is True
     assert "override" in reason
@@ -47,6 +48,7 @@ def test_trusted_install_blocks_skip(
     trusted_mod: TrustedInstallModule, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("ORAMA_SKIP_HERMES_SYNC", "1")
+    monkeypatch.delenv("ORAMA_TRUST_HERMES_SYNC", raising=False)
     ok, reason = trusted_mod.trusted_install_allowed(trusted_mod.resolve_repo_root())
     assert ok is False
     assert "SKIP" in reason

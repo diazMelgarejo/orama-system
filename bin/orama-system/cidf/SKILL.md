@@ -139,6 +139,9 @@ Agents updating PR bodies via API (`ManagePullRequest`, `gh pr edit`) must pass 
 **full** reconstructed body (original + follow-ups), not only the latest delta —
 the tool replaces the whole field, so the write itself must be integrative.
 
+**Worked examples (good vs bad):**
+[`references/integrative-editing-examples.md`](references/integrative-editing-examples.md)
+
 ---
 
 ## Lint Rules (pre-execution guard)
@@ -244,6 +247,8 @@ machine; the repo's `repo_hygiene.py` is the portable committed backstop.
 bin/orama-system/cidf/
 ├── SKILL.md                          ← this file (sub-skill)
 ├── FRAMEWORK.md                      ← canonical v1.2 spec
+├── references/
+│   └── integrative-editing-examples.md  ← good/bad corpus (PR #222 session)
 ├── core/
 │   ├── content_insertion_framework.py  ← decide(), verify(), execute_with_fallback()
 │   ├── content_insertion_policy.json   ← machine policy + 6 test vectors

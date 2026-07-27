@@ -103,8 +103,8 @@ is no `cline mcp serve` command. Therefore:
 - Do **not** add a `cline` entry to `mcp.servers` in OpenClaw config.
 - The working direction is: `openclaw mcp serve` (exposes OpenClaw channels
   over MCP stdio) → register server `openclaw` in Cline with launch command
-  `npx -y openclaw mcp serve` via the MCP client UI (review package source
-  before enabling).
+  `openclaw mcp serve` via the MCP client UI (resolved local binary; review
+  OpenClaw version before enabling).
 
 ## Idempotent Reconciliation
 

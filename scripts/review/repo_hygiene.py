@@ -243,7 +243,10 @@ def _private_network_line_allowed(line: str, *, is_json: bool) -> bool:
     return bool(PRIVATE_NETWORK_LINE_OK_RE.search(check_line))
 
 
-def _read_tracked_file_text(root: Path, rel: str, *, use_git_index: bool) -> str | None:
+def _read_tracked_file_text(
+    root: Path, rel: str, *, use_git_index: bool
+) -> tuple[str | None, str | None]:
+    """Return (text, error). error is set when the scan must fail closed."""
     if use_git_index:
         proc = subprocess.run(
             ["git", "-C", str(root), "show", f":{rel}"],
@@ -251,18 +254,23 @@ def _read_tracked_file_text(root: Path, rel: str, *, use_git_index: bool) -> str
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        if proc.returncode == 0:
-            try:
-                return proc.stdout.decode("utf-8")
-            except UnicodeDecodeError:
-                return None
+        if proc.returncode != 0:
+            detail = proc.stderr.decode("utf-8", errors="replace").strip()
+            msg = f"LINT-013: cannot read staged blob for {rel}"
+            if detail:
+                msg = f"{msg} ({detail})"
+            return None, msg
+        try:
+            return proc.stdout.decode("utf-8"), None
+        except UnicodeDecodeError:
+            return None, f"LINT-013: cannot decode staged blob for {rel} as UTF-8"
     path = root / rel
     if not path.is_file():
-        return None
+        return None, None
     try:
-        return path.read_text(encoding="utf-8")
+        return path.read_text(encoding="utf-8"), None
     except UnicodeDecodeError:
-        return None
+        return None, f"LINT-013: cannot decode {rel} as UTF-8"
 
 SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
@@ -1134,7 +1142,10 @@ def scan_tracked_private_network_literals(
             continue
         if not rel.endswith((".json", ".yml", ".yaml")):
             continue
-        text = _read_tracked_file_text(root, rel, use_git_index=use_git_index)
+        text, read_err = _read_tracked_file_text(root, rel, use_git_index=use_git_index)
+        if read_err:
+            errors.append(read_err)
+            continue
         if text is None:
             continue
         is_json = rel.endswith(".json")

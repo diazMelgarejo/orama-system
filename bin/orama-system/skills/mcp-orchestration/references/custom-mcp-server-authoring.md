@@ -44,7 +44,9 @@ await server.connect(transport);
 
 ```bash
 npx tsc
-# Register in Claude Code MCP settings: server my-skill, command node, args dist/index.js
+# Register in Claude Code MCP settings (Claude → Settings → MCP):
+# server my-skill, command node, args dist/index.js
+# Use a project-local build — never unpinned npx for production MCP servers.
 ```
 
 ## Security baseline
