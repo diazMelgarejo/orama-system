@@ -134,10 +134,11 @@ def trusted_install_allowed(root: Path) -> tuple[bool, str]:
 
     if branch_name == "main":
         remote = _git(root, "rev-parse", "--verify", "origin/main")
-        if remote.returncode == 0:
-            ok_origin_sig, origin_sig_reason = verify_commit_signature(root, remote.stdout.strip())
-            if not ok_origin_sig:
-                return False, origin_sig_reason
+        if remote.returncode != 0:
+            return False, "origin/main not available for signature verification"
+        ok_origin_sig, origin_sig_reason = verify_commit_signature(root, remote.stdout.strip())
+        if not ok_origin_sig:
+            return False, origin_sig_reason
 
     return True, f"trusted checkout @ {head_sha[:12]} ({sync_reason}; {sig_reason})"
 

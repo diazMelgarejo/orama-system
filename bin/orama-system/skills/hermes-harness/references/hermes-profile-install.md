@@ -73,6 +73,7 @@ powershell -File .\platform\windows\install-hermes-harness.ps1
 
 | Symptom | Action |
 |---------|--------|
+| `checkout not trusted` / sync skipped | Run `python3 scripts/review/verify_trusted_install.py`; on `main` after `git pull --ff-only`, or set `ORAMA_TRUST_HERMES_SYNC=1` after human review; skip sync with `ORAMA_SKIP_HERMES_SYNC=1` |
 | `missing staged SOUL` | Ensure `git pull` and role folder exists in `bin/agents/` |
 | `skipped unmanaged profile SOUL` | Operator edited profile SOUL — reconcile manually or backup then delete marker block |
 | Profile list empty after install | Confirm `HERMES_HOME` and write permissions |

@@ -7,15 +7,18 @@ Endpoint URLs must use ${env:LM_STUDIO_*_ENDPOINTS} — autodetect locally, neve
 from __future__ import annotations
 
 import importlib.util
+import logging
 import subprocess
 import sys
 from pathlib import Path
+from types import ModuleType
 
 ROOT = Path(__file__).resolve().parents[2]
 HYGIENE_PATH = ROOT / "scripts" / "review" / "repo_hygiene.py"
+logger = logging.getLogger(__name__)
 
 
-def load_repo_hygiene():
+def load_repo_hygiene() -> ModuleType:
     spec = importlib.util.spec_from_file_location("repo_hygiene", HYGIENE_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -36,20 +39,29 @@ def tracked_files(root: Path) -> list[str]:
     return [line for line in proc.stdout.splitlines() if line]
 
 
+def _configure_logging() -> None:
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root_logger = logging.getLogger()
+    root_logger.handlers.clear()
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
+
+
 def main() -> int:
+    _configure_logging()
     repo_hygiene = load_repo_hygiene()
     errors = repo_hygiene.scan_tracked_private_network_literals(ROOT, tracked_files(ROOT))
     if errors:
         for err in errors:
-            print(f"ERROR: {err}", file=sys.stderr)
-        print(
+            logger.error("ERROR: %s", err)
+        logger.error(
             "FAIL: committed LAN topology — use ${env:LM_STUDIO_WIN_ENDPOINTS}, "
             "${env:LM_STUDIO_WIN_5080_ENDPOINTS}, or runtime discovery; "
-            "affinity slugs (win-rtx3080/win-rtx5080) are OK",
-            file=sys.stderr,
+            "affinity slugs (win-rtx3080/win-rtx5080) are OK"
         )
         return 1
-    print("OK: no private LAN literals in tracked config")
+    logger.info("OK: no private LAN literals in tracked config")
     return 0
 
 
