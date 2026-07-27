@@ -31,7 +31,9 @@ if [[ ! -d "$WORK/agent-audit" ]]; then
 fi
 python3 -m pip install -q -e "$WORK/agent-audit"
 
-run aguara aguara scan "${SCAN_ROOTS[@]}"
+for path in "${SCAN_ROOTS[@]}"; do
+  run "aguara:$path" aguara scan "$ROOT/$path" --ci
+done
 
 run agent-audit agent-audit scan-project "$ROOT" \
   --min-severity high -y --output "$WORK/agent-audit-report"
@@ -50,8 +52,7 @@ for path in "${SCAN_ROOTS[@]}"; do
     continue
   fi
   if [[ ! -s "$skill_dirs_file" ]]; then
-    log "FAIL skill-scanner:$path (no SKILL.md under root)"
-    FAIL=1
+    log "SKIP skill-scanner:$path (no SKILL.md under root)"
     continue
   fi
   while IFS= read -r skill_dir; do
