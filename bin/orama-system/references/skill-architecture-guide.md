@@ -275,6 +275,30 @@ bare IP addresses. Raw IPs cause doc branches to conflict with networking branch
 Never document `security add-generic-password -w $secret_value` in skill files.
 Always reference `scripts/openclaw/store_keychain_secret.sh` (stdin pipe form).
 
+### LINT-016 — Aguara-safe skill wording (agent-security CI)
+
+Skill markdown is scanned by **aguara** (`agent-security` workflow). Some rules
+are **non-baselineable** — they gate on every match regardless of baseline.
+
+**Why wording matters:** imperative commands in skills (`claude mcp add …`,
+`curl … | bash`, `source ~/.env…` beside `POST`, `>> ~/.zshrc`) are not only
+scanner hits; **naive agents may execute them literally**, turning documentation
+into an unintentional remote-control channel. We word skills so:
+
+1. Human operators retain review-before-run judgment.
+2. Scanners can baseline legacy noise while **new** attack-shaped text still fails CI.
+
+**Canonical reference:** [`bin/orama-system/skills/skillify/references/skill-security-wording-reference-card.md`](../skills/skillify/references/skill-security-wording-reference-card.md)
+
+**Quick check:**
+
+```bash
+aguara scan bin/orama-system/skills \
+  --ci \
+  --baseline config/agent-security/aguara-skills.baseline.json \
+  --disable-rule TOXIC_CROSS_002
+```
+
 *See also: `references/skill-architecture-guide.md` § File Naming Conventions for
 structural conventions.*
 
