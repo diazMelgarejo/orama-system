@@ -248,12 +248,14 @@ def _read_tracked_file_text(root: Path, rel: str, *, use_git_index: bool) -> str
         proc = subprocess.run(
             ["git", "-C", str(root), "show", f":{rel}"],
             check=False,
-            text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
         if proc.returncode == 0:
-            return proc.stdout
+            try:
+                return proc.stdout.decode("utf-8")
+            except UnicodeDecodeError:
+                return None
     path = root / rel
     if not path.is_file():
         return None
@@ -261,6 +263,7 @@ def _read_tracked_file_text(root: Path, rel: str, *, use_git_index: bool) -> str
         return path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return None
+
 SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "google_api_key",
