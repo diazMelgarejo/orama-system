@@ -1,0 +1,17 @@
+{
+  "fanout_id": "coord-034",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "hermes/portable-brain-implemented",
+      "filename": "win-2026-07-27-hermes-portable-brain-implemented.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-27-hermes-portable-brain-implemented.md"
+    },
+    {
+      "assignee": "mac",
+      "topic": "hermes/portable-brain-implemented",
+      "filename": "win-2026-07-27-hermes-portable-brain-implemented.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-27-hermes-portable-brain-implemented.md"
+    }
+  ]
+}
