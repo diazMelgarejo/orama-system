@@ -50,7 +50,7 @@ This ladder defines four phases. **Phases A–C are safe to land before v2.** **
 ### Operator steps (every fleet node)
 
 ```bash
-cd /path/to/orama-system
+cd "${REPO_ROOT:-.}"
 git fetch origin main
 
 # 1. Snapshot committed endpoints → .local/lan-topology-archive.json + .env.local
@@ -101,7 +101,8 @@ git pull --ff-only origin main
 ### Acceptance
 
 - [ ] `python3 scripts/review/repo_hygiene.py` exits 0
-- [ ] `git grep -E '192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[01])\.' -- ':!*.md' ':!.local'` returns no hits in tracked config
+- [ ] `python3 scripts/hooks/no_committed_lan_topology.py` exits 0
+- [ ] No private/link-local literals in tracked `config/` or `bin/*/config/` JSON/YAML (same scan as LINT-013 / pre-commit hook)
 - [ ] `discover.py` / portal still reach Win LM Studio via `.env.local` endpoints
 - [ ] Hermes profile install succeeds on trusted `main` or with explicit `ORAMA_TRUST_HERMES_SYNC=1`
 

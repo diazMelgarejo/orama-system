@@ -43,5 +43,9 @@ jobs:
         with:
           python-version: "3.12"
 
+      - uses: dtolnay/rust-toolchain@1.82.0
+        with:
+          toolchain: stable
+
       - name: Run agent security scan bundle
         run: bash scripts/ci/run_agent_security_scans.sh

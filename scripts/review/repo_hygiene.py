@@ -230,6 +230,37 @@ PRIVATE_NETWORK_LINE_OK_RE = re.compile(
     r"(?:<!--\s*LINT-013-ok\s*-->|#\s*lint-ignore-line\s+LINT-013)",
     re.IGNORECASE,
 )
+_JSON_STRING_LITERAL_RE = re.compile(r'"(?:\\.|[^"\\])*"')
+
+
+def _line_outside_json_strings(line: str) -> str:
+    """Strip JSON string contents so markers embedded in values cannot bypass LINT-013."""
+    return _JSON_STRING_LITERAL_RE.sub('""', line)
+
+
+def _private_network_line_allowed(line: str, *, is_json: bool) -> bool:
+    check_line = _line_outside_json_strings(line) if is_json else line
+    return bool(PRIVATE_NETWORK_LINE_OK_RE.search(check_line))
+
+
+def _read_tracked_file_text(root: Path, rel: str, *, use_git_index: bool) -> str | None:
+    if use_git_index:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "show", f":{rel}"],
+            check=False,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if proc.returncode == 0:
+            return proc.stdout
+    path = root / rel
+    if not path.is_file():
+        return None
+    try:
+        return path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return None
 SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "google_api_key",
@@ -1083,7 +1114,12 @@ def check_skill_quality(root: Path, files: list[str]) -> list[str]:
     return errors
 
 
-def scan_tracked_private_network_literals(root: Path, files: list[str]) -> list[str]:
+def scan_tracked_private_network_literals(
+    root: Path,
+    files: list[str],
+    *,
+    use_git_index: bool = False,
+) -> list[str]:
     """Block committed private/link-local IPs in tracked config/registry files."""
     errors: list[str] = []
     for rel in files:
@@ -1095,16 +1131,13 @@ def scan_tracked_private_network_literals(root: Path, files: list[str]) -> list[
             continue
         if not rel.endswith((".json", ".yml", ".yaml")):
             continue
-        path = root / rel
-        if not path.is_file() or is_binary(path):
+        text = _read_tracked_file_text(root, rel, use_git_index=use_git_index)
+        if text is None:
             continue
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
+        is_json = rel.endswith(".json")
         hits: list[str] = []
         for line_no, line in enumerate(text.splitlines(), start=1):
-            if PRIVATE_NETWORK_LINE_OK_RE.search(line):
+            if _private_network_line_allowed(line, is_json=is_json):
                 continue
             for match in PRIVATE_NETWORK_LITERAL_RE.finditer(line):
                 hits.append(f"{match.group()}:{line_no}")
@@ -1112,7 +1145,7 @@ def scan_tracked_private_network_literals(root: Path, files: list[str]) -> list[
             errors.append(
                 f"LINT-013: private network literal(s) {hits[:3]} in {rel}"
                 " — use ${env:LM_STUDIO_*_ENDPOINTS} or runtime discovery;"
-                " affinity slugs (win-rtx3080/win-rtx5080) stay in config, not IPs"
+                " affinity slugs (hardware tier categories) stay in config, not IPs"
             )
     return errors
 

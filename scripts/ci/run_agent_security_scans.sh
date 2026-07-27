@@ -27,7 +27,9 @@ if ! command -v aguara >/dev/null 2>&1; then
 fi
 
 if [[ ! -d "$WORK/agent-audit" ]]; then
-  git clone --depth 1 https://github.com/scadastrangelove/agent-audit "$WORK/agent-audit"
+  AGENT_AUDIT_REF="${AGENT_AUDIT_REF:-d7b11f8bc02f0f212147a161e5d3bb10dcc117b2}"
+  git clone https://github.com/scadastrangelove/agent-audit "$WORK/agent-audit"
+  git -C "$WORK/agent-audit" checkout --detach "$AGENT_AUDIT_REF"
 fi
 python3 -m pip install -q -e "$WORK/agent-audit"
 
@@ -90,6 +92,13 @@ else
 fi
 
 if command -v ramparts >/dev/null 2>&1; then
+  :
+elif command -v cargo >/dev/null 2>&1; then
+  log "Installing ramparts via cargo"
+  cargo install ramparts --locked 2>/dev/null || true
+fi
+
+if command -v ramparts >/dev/null 2>&1; then
   for path in "${SCAN_ROOTS[@]}"; do
     scan_root="$ROOT/$path"
     if [[ ! -d "$scan_root" || ! -r "$scan_root" ]]; then
@@ -99,6 +108,9 @@ if command -v ramparts >/dev/null 2>&1; then
     fi
     run "ramparts:$path" ramparts scan "$scan_root"
   done
+elif [[ -n "${GITHUB_ACTIONS:-}" ]]; then
+  log "FAIL ramparts (install via: cargo install ramparts --locked)"
+  FAIL=1
 else
   log "SKIP ramparts (install cargo package ramparts for local runs)"
 fi
