@@ -17,7 +17,7 @@ Mac→Win does not fix LAN interception or token reuse.
 
 ## Approved alternatives (pick one before inbox pull)
 
-1. **SSH tunnel** — forward Win portal to `https://127.0.0.1:<local>` and use HTTPS locally.
+1. **SSH tunnel** — forward Win portal to `http://127.0.0.1:<local>/` (HTTP inside the encrypted SSH tunnel; this is **not** TLS on the portal itself — do not use `https://` here or you will see `WRONG_VERSION_NUMBER`).
 2. **mTLS / TLS-terminated reverse proxy** — terminate TLS on Win portal before bearer auth.
 3. **Scoped non-reusable pull token** — short-lived, single-file scope (not the long-lived control-plane token).
 4. **Operator handoff** — copy inbox files out-of-band (USB, encrypted sync) when TLS is unavailable.
@@ -37,20 +37,20 @@ Replace host if DHCP changed — check Win `ipconfig` / `last_discovery.json`.
 
 ## Auth
 
-Use the **same** `ORAMA_CONTROL_PLANE_TOKEN` as Win `.env.LOCAL` only over **TLS or tunneled HTTPS** — do not paste token into tracked files.
+Use the **same** control-plane token as the Win workspace (load from Keychain or operator secret store — **do not commit**) only over **TLS or tunneled HTTP** (`http://127.0.0.1:<forward>/` inside `ssh -L` is acceptable; bare LAN `http://` with bearer is not).
 
 ```bash
-export ORAMA_CONTROL_PLANE_TOKEN='<match Win workspace .env.LOCAL>'
-export WIN_PORTAL=https://127.0.0.1:<LOCAL_FORWARD>/   # after ssh -L tunnel
+# Load ORAMA_CONTROL_PLANE_TOKEN from Mac Keychain or operator store — must match Win workspace.
+export WIN_PORTAL=http://127.0.0.1:<LOCAL_FORWARD>/   # after ssh -L tunnel (HTTP inside SSH, not HTTPS)
 ```
 
 ## Mac terminal — copy/paste block (TLS/tunnel required)
 
 ```bash
-# 0) Prerequisites — establish TLS or SSH tunnel first; do NOT use bare http:// with bearer
+# 0) Prerequisites — establish SSH tunnel first; tunneled HTTP is http://127.0.0.1 (not https://)
 cd "$ORAMA_SYSTEM_PATH"
-export WIN_PORTAL=https://127.0.0.1:<LOCAL_FORWARD>/
-# export ORAMA_CONTROL_PLANE_TOKEN from Mac ~/.openclaw or Keychain — MUST match Win
+export WIN_PORTAL=http://127.0.0.1:<LOCAL_FORWARD>/
+# export ORAMA_CONTROL_PLANE_TOKEN from Mac Keychain — MUST match Win workspace
 
 # 1) Health (no token) — HTTP ok for liveness only when portal is LAN-reachable
 curl -sS "http://${WIN_PORTAL_LAN_HOST}:8002/health" | head

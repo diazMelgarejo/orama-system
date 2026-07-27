@@ -13,6 +13,7 @@ set -euo pipefail
 
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 PERP_SCRIPT="${REPO_ROOT}/perpetua-tools/src/hermes_harness.py"
+PERP_SCRIPT="$(python3 -c "import pathlib,sys; print(pathlib.Path(sys.argv[1]).resolve())" "$PERP_SCRIPT")"
 
 sanitize_session_id() {
   local raw="${HERMES_SPAWN_SESSION:-default}"
@@ -36,14 +37,31 @@ resolve_harness_root() {
   fi
 }
 
+require_safe_dir() {
+  local d="$1"
+  if [ -L "$d" ]; then
+    echo "ERROR: refusing symlinked path: $d" >&2
+    exit 1
+  fi
+  if [ -e "$d" ] && [ ! -d "$d" ]; then
+    echo "ERROR: expected directory, got file: $d" >&2
+    exit 1
+  fi
+}
+
 sanitize_session_id
 resolve_harness_root
 
-PID_DIR="${XDG_RUNTIME_DIR:-${HOME}/.cache}/hermes-spawn"
+RUNTIME_BASE="${XDG_RUNTIME_DIR:-${HOME}/.cache}"
+require_safe_dir "$RUNTIME_BASE"
+PID_DIR="${RUNTIME_BASE}/hermes-spawn-${USER:-$(id -un)}"
+LOCK_DIR="${PID_DIR}/${SESSION_ID}.lock"
+PID_FILE="${PID_DIR}/${SESSION_ID}.pid"
+
 umask 077
 mkdir -p "$PID_DIR"
-PID_FILE="${PID_DIR}/${SESSION_ID}.pid"
-LOCK_FILE="${PID_DIR}/${SESSION_ID}.lock"
+chmod 700 "$PID_DIR" 2>/dev/null || true
+require_safe_dir "$PID_DIR"
 
 ACTION="${1:-status}"
 shift || true
@@ -62,15 +80,60 @@ validate_paths() {
 
 pid_command() {
   local pid="$1"
-  ps -p "$pid" -o args= 2>/dev/null || true
+  ps -p "$pid" -o args= 2>/dev/null | sed 's/^[[:space:]]*//' || true
+}
+
+verify_hermes_pid() {
+  local pid="$1"
+  local args=""
+  [ -n "$pid" ] || return 1
+  kill -0 "$pid" 2>/dev/null || return 1
+  args="$(pid_command "$pid")"
+  [ -n "$args" ] || return 1
+  case "$args" in
+    *python3*"${PERP_SCRIPT}"*) return 0 ;;
+    *python*"${PERP_SCRIPT}"*) return 0 ;;
+  esac
+  return 1
+}
+
+write_pid_file() {
+  local pid="$1"
+  local tmp="${PID_FILE}.tmp.$$"
+  printf '%s\n' "$pid" >"$tmp"
+  mv -f "$tmp" "$PID_FILE"
+}
+
+release_lock() {
+  rm -rf "$LOCK_DIR" 2>/dev/null || true
+}
+
+recover_stale_lock() {
+  if [ ! -d "$LOCK_DIR" ]; then
+    return 0
+  fi
+  if [ -f "${LOCK_DIR}/pid" ]; then
+    local lock_pid=""
+    lock_pid="$(cat "${LOCK_DIR}/pid" 2>/dev/null || true)"
+    if [ -n "$lock_pid" ] && kill -0 "$lock_pid" 2>/dev/null; then
+      echo "ERROR: another hermes-spawn session is active for ${SESSION_ID} (lock pid $lock_pid)" >&2
+      exit 1
+    fi
+  fi
+  rm -rf "$LOCK_DIR"
 }
 
 acquire_lock() {
-  if ! mkdir "$LOCK_FILE" 2>/dev/null; then
-    echo "ERROR: another hermes-spawn session is active for ${SESSION_ID}" >&2
-    exit 1
+  recover_stale_lock
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    recover_stale_lock
+    if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+      echo "ERROR: could not acquire lock for ${SESSION_ID}" >&2
+      exit 1
+    fi
   fi
-  trap 'rmdir "$LOCK_FILE" 2>/dev/null || true' EXIT
+  printf '%s\n' "$$" >"${LOCK_DIR}/pid"
+  trap 'release_lock' EXIT
 }
 
 case "$ACTION" in
@@ -83,7 +146,7 @@ case "$ACTION" in
     acquire_lock
     if [[ -f "$PID_FILE" ]]; then
       existing_pid="$(cat "$PID_FILE")"
-      if kill -0 "$existing_pid" 2>/dev/null && pid_command "$existing_pid" | grep -q 'hermes_harness.py'; then
+      if verify_hermes_pid "$existing_pid"; then
         echo "ERROR: Hermes already running for session ${SESSION_ID} (pid $existing_pid)" >&2
         exit 1
       fi
@@ -92,7 +155,7 @@ case "$ACTION" in
     echo "🚀 Spawning Hermes agent for: $TASK"
     (
       cd "$HARNESS_ROOT"
-      PYTHONDOTENV_SKIP=1 python3 "$PERP_SCRIPT" "$TASK"
+      PYTHONDOTENV_SKIP=1 exec python3 "$PERP_SCRIPT" "$TASK"
     ) &
     child_pid=$!
     if ! kill -0 "$child_pid" 2>/dev/null; then
@@ -100,24 +163,24 @@ case "$ACTION" in
       exit 1
     fi
     sleep 1
-    if ! kill -0 "$child_pid" 2>/dev/null; then
+    if ! verify_hermes_pid "$child_pid"; then
       echo "ERROR: Hermes exited immediately after launch" >&2
       exit 1
     fi
-    printf '%s\n' "$child_pid" >"$PID_FILE"
+    write_pid_file "$child_pid"
     echo "✅ Hermes started (pid $child_pid, session ${SESSION_ID})"
     ;;
   stop)
     acquire_lock
     if [[ -f "$PID_FILE" ]]; then
       pid="$(cat "$PID_FILE")"
-      if kill -0 "$pid" 2>/dev/null && pid_command "$pid" | grep -q 'hermes_harness.py'; then
+      if verify_hermes_pid "$pid"; then
         kill "$pid"
         for _ in $(seq 1 10); do
-          kill -0 "$pid" 2>/dev/null || break
+          verify_hermes_pid "$pid" || break
           sleep 0.2
         done
-        if kill -0 "$pid" 2>/dev/null; then
+        if verify_hermes_pid "$pid"; then
           echo "ERROR: Hermes pid $pid did not stop cleanly" >&2
           exit 1
         fi
@@ -136,11 +199,11 @@ case "$ACTION" in
     validate_paths
     if [[ -f "$PID_FILE" ]]; then
       pid="$(cat "$PID_FILE")"
-      if kill -0 "$pid" 2>/dev/null && pid_command "$pid" | grep -q 'hermes_harness.py'; then
+      if verify_hermes_pid "$pid"; then
         echo "✅ Hermes running (pid $pid, session ${SESSION_ID})"
         exit 0
       fi
-      echo "⚠️ Stale pid file — recorded pid $pid is not a running hermes_harness.py" >&2
+      echo "⚠️ Stale pid file — recorded pid $pid is not the expected hermes_harness.py process" >&2
       exit 1
     fi
     echo "ℹ️ No active Hermes session ${SESSION_ID} (no pid file)"

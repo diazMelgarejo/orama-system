@@ -231,6 +231,8 @@ PRIVATE_NETWORK_LINE_OK_RE = re.compile(
     re.IGNORECASE,
 )
 _JSON_STRING_LITERAL_RE = re.compile(r'"(?:\\.|[^"\\])*"')
+_YAML_SINGLE_QUOTED_SCALAR_RE = re.compile(r"'([^'\\]|\\.)*'")
+_YAML_DOUBLE_QUOTED_SCALAR_RE = re.compile(r'"([^"\\]|\\.)*"')
 
 
 def _line_outside_json_strings(line: str) -> str:
@@ -238,8 +240,21 @@ def _line_outside_json_strings(line: str) -> str:
     return _JSON_STRING_LITERAL_RE.sub('""', line)
 
 
-def _private_network_line_allowed(line: str, *, is_json: bool) -> bool:
-    check_line = _line_outside_json_strings(line) if is_json else line
+def _line_outside_yaml_strings(line: str) -> str:
+    """Strip YAML quoted scalar contents so in-value # cannot bypass LINT-013."""
+    stripped = _YAML_DOUBLE_QUOTED_SCALAR_RE.sub('""', line)
+    return _YAML_SINGLE_QUOTED_SCALAR_RE.sub("''", stripped)
+
+
+def _private_network_line_allowed(
+    line: str, *, is_json: bool, is_yaml: bool = False
+) -> bool:
+    if is_json:
+        check_line = _line_outside_json_strings(line)
+    elif is_yaml:
+        check_line = _line_outside_yaml_strings(line)
+    else:
+        check_line = line
     return bool(PRIVATE_NETWORK_LINE_OK_RE.search(check_line))
 
 
@@ -334,6 +349,14 @@ def tracked_files(root: Path) -> list[str]:
     proc = run_git(root, "ls-files")
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "git ls-files failed")
+    return [line for line in proc.stdout.splitlines() if line]
+
+
+def staged_tracked_files(root: Path) -> list[str]:
+    """Paths with staged index entries (pre-commit / staged-blob scans)."""
+    proc = run_git(root, "diff", "--cached", "--name-only", "--diff-filter=ACMR")
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or "git diff --cached failed")
     return [line for line in proc.stdout.splitlines() if line]
 
 
@@ -1149,9 +1172,10 @@ def scan_tracked_private_network_literals(
         if text is None:
             continue
         is_json = rel.endswith(".json")
+        is_yaml = rel.endswith((".yml", ".yaml"))
         hits: list[str] = []
         for line_no, line in enumerate(text.splitlines(), start=1):
-            if _private_network_line_allowed(line, is_json=is_json):
+            if _private_network_line_allowed(line, is_json=is_json, is_yaml=is_yaml):
                 continue
             for match in PRIVATE_NETWORK_LITERAL_RE.finditer(line):
                 hits.append(f"{match.group()}:{line_no}")
@@ -1248,7 +1272,30 @@ def main() -> int:
     errors.extend(scan_bidi_controls(root, files))
     errors.extend(scan_mojibake(root, files))
     errors.extend(scan_tracked_secrets(root, files))
-    errors.extend(scan_tracked_private_network_literals(root, files))
+    staged = staged_tracked_files(root)
+    staged_set = set(staged)
+    config_scan_files = [
+        rel
+        for rel in files
+        if rel.endswith((".json", ".yml", ".yaml"))
+        and any(rel.startswith(prefix) for prefix in PRIVATE_NETWORK_CONFIG_PREFIXES)
+        and rel not in PRIVATE_NETWORK_SCAN_FILE_EXCEPTIONS
+        and not any(rel.startswith(prefix) for prefix in PRIVATE_NETWORK_SCAN_PREFIX_EXCEPTIONS)
+    ]
+    staged_configs = [rel for rel in config_scan_files if rel in staged_set]
+    other_configs = [rel for rel in config_scan_files if rel not in staged_set]
+    if staged_configs:
+        errors.extend(
+            scan_tracked_private_network_literals(
+                root, staged_configs, use_git_index=True
+            )
+        )
+    if other_configs:
+        errors.extend(
+            scan_tracked_private_network_literals(
+                root, other_configs, use_git_index=False
+            )
+        )
     errors.extend(check_private_generated_tracking(files))
     errors.extend(check_markdown_link_hygiene(root, files))
     errors.extend(check_generated_artifact_tracking(files))
