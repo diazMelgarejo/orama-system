@@ -44,6 +44,27 @@ python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skill
 
 Canonical templates win over imported OpenClaw copies for **managed** profile SOUL files (`created_by: agent` marker).
 
+## Export/restore the actual Hermes portable brain
+
+When the goal is to move the **current Hermes instance itself** to a fresh install, use the Orama Harness portable-brain archive wrapper:
+
+```bash
+cd "$ORAMA_SYSTEM_PATH"
+python3 bin/orama-system/skills/hermes-harness/scripts/hermes_portable_brain.py \
+  export --output "$HOME/hermes-portable-brain.zip" --include-sessions
+python3 bin/orama-system/skills/hermes-harness/scripts/hermes_portable_brain.py \
+  inspect "$HOME/hermes-portable-brain.zip" --summary
+```
+
+Restore on a fresh Hermes install, dry-run first:
+
+```bash
+python3 bin/orama-system/skills/hermes-harness/scripts/hermes_portable_brain.py \
+  restore "$HOME/hermes-portable-brain.zip" --include-sessions --dry-run
+```
+
+Secrets (`.env`, `auth.json`, `auth/`) are excluded unless `--include-secrets` is explicitly used for a trusted private archive. Full reference: [`hermes-portable-brain-archive.md`](hermes-portable-brain-archive.md).
+
 ## Verify before cleanup
 
 ```bash
