@@ -86,8 +86,8 @@ curl -X POST "$OPENROUTER_ENDPOINT" \
 ### Node.js Pattern (from agents)
 
 ```javascript
-const apiKey = process['env'].OPENROUTER_API_KEY;
-const response = await fetch(process['env'].OPENROUTER_ENDPOINT || 
+const apiKey = process.env.OPENROUTER_API_KEY;
+const response = await fetch(process.env.OPENROUTER_ENDPOINT || 
   'https://openrouter.ai/api/v1/chat/completions', {
   method: 'POST',
   headers: {
@@ -95,7 +95,7 @@ const response = await fetch(process['env'].OPENROUTER_ENDPOINT ||
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
-    model: process['env'].OPENROUTER_MODEL || 'openai/gpt-4o',
+    model: process.env.OPENROUTER_MODEL || 'openai/gpt-4o',
     messages: [{role: 'user', content: 'your prompt'}],
   }),
 });

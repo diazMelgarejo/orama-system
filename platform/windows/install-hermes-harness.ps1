@@ -140,13 +140,13 @@ if ($env:ORAMA_SKIP_HERMES_SYNC -eq '1') {
 if ($env:ORAMA_TRUST_HERMES_SYNC -eq '1') {
     # explicit operator override after reviewing bin/agents
 } elseif (-not (Test-Path $VerifyTrust)) {
-    _Warn 'Hermes sync skipped — verify_trusted_install.py missing (git pull --ff-only, or -TrustHermesSync after reviewing bin/agents)'
-    exit 0
+    _Warn 'Hermes sync blocked — verify_trusted_install.py missing (git pull --ff-only, or -TrustHermesSync after reviewing bin/agents)'
+    exit 1
 } else {
     $trustCode = Invoke-PythonScript -ScriptArgs @($VerifyTrust, '--quiet')
     if ($trustCode -ne 0) {
-        _Warn 'Hermes sync skipped — untrusted checkout (git pull --ff-only on main, review bin/agents, then -TrustHermesSync)'
-        exit 0
+        _Warn 'Hermes sync blocked — untrusted checkout (git pull --ff-only on main, review bin/agents, then -TrustHermesSync)'
+        exit 1
     }
 }
 
