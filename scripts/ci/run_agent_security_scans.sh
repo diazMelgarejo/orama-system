@@ -21,7 +21,8 @@ python3 -m pip install -q cisco-ai-skill-scanner cisco-ai-mcp-scanner
 if ! command -v aguara >/dev/null 2>&1; then
   if command -v go >/dev/null 2>&1; then
     go install github.com/garagon/aguara/cmd/aguara@latest
-    export PATH="${PATH}:$(go env GOPATH)/bin"
+    GOPATH="$(go env GOPATH)"
+    export PATH="${PATH}:${GOPATH}/bin"
   fi
 fi
 

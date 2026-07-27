@@ -85,10 +85,12 @@ class InstallStats:
 
 
 def assert_trusted_install() -> None:
-    if not VERIFY_TRUST_SCRIPT.is_file():
-        return
     if os.environ.get("ORAMA_TRUST_HERMES_SYNC", "").strip() in ("1", "true", "yes"):
         return
+    if not VERIFY_TRUST_SCRIPT.is_file():
+        raise RuntimeError(
+            f"Hermes profile install blocked: trusted-install verifier missing ({VERIFY_TRUST_SCRIPT})"
+        )
     result = subprocess.run(
         [sys.executable, str(VERIFY_TRUST_SCRIPT), "--quiet"],
         cwd=str(REPO_ROOT),
@@ -183,8 +185,13 @@ def soul_needs_update(role: ProfileRole) -> bool:
 
 def backup_before_harmonize(target: Path) -> Path:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    backup = target.with_name(f"{target.name}{MEMORY_BACKUP_SUFFIX}-{stamp}")
+    backup_dir = target.parent / ".backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup = backup_dir / f"{target.name}{MEMORY_BACKUP_SUFFIX}-{stamp}"
     shutil.copy2(target, backup)
+    stale = sorted(backup_dir.glob(f"{target.name}{MEMORY_BACKUP_SUFFIX}-*"))[:-10]
+    for old in stale:
+        old.unlink(missing_ok=True)
     return backup
 
 
@@ -269,8 +276,7 @@ def install(dry_run: bool = False, harmonize_memory: bool = False) -> InstallSta
     stats = InstallStats(written=[], skipped_synced=[], skipped_unmanaged=[], harmonized=[])
     for role in roles:
         install_soul(role, dry_run, stats)
-        if not dry_run:
-            install_profile_stubs(role, dry_run, harmonize_memory, stats)
+        install_profile_stubs(role, dry_run, harmonize_memory, stats)
     return stats
 
 

@@ -82,7 +82,10 @@ def test_invalid_profile_slug_rejected(profiles_installer):
         profiles_installer.validate_profile_slug("../evil")
 
 
-def test_harmonize_memory_preserves_operator_content(profiles_installer, tmp_path):
+@pytest.mark.unit
+def test_harmonize_memory_preserves_operator_content(profiles_installer, tmp_path) -> None:
+    memory_tpl = profiles_installer.TEMPLATE_PROFILE / "MEMORY.md"
+    assert memory_tpl.is_file(), "MEMORY.md template required for harmonize test"
     role = profiles_installer.load_roles()[0]
     profile_dir = profiles_installer.profile_paths_for_slug(role.hermes_profile)
     memory = profile_dir / "memories" / "MEMORY.md"

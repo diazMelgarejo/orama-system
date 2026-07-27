@@ -134,7 +134,8 @@ def test_scan_tracked_secrets_blocks_google_and_telegram_tokens(tmp_path):
     assert "google_api_key" in errors[0]
 
 
-def test_scan_tracked_private_network_literals_blocks_config_ips(tmp_path):
+@pytest.mark.unit
+def test_scan_tracked_private_network_literals_blocks_config_ips(tmp_path: Path) -> None:
     repo_hygiene = load_repo_hygiene()
     cfg = tmp_path / "bin" / "orama-system" / "config"
     cfg.mkdir(parents=True)
