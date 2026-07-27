@@ -48,7 +48,11 @@ for path in "${SCAN_ROOTS[@]}"; do
 done
 
 if [[ -f config/mac-orchestrator.json ]]; then
-  run mcp-scanner-config mcp-scanner config --config-path config/mac-orchestrator.json
+  MCP_SCAN_ARGS=(--analyzers yara --log-level error)
+  if [[ -n "${MCP_SCANNER_API_KEY:-}" && -n "${MCP_SCANNER_LLM_API_KEY:-}" ]]; then
+    MCP_SCAN_ARGS=(--analyzers api,yara,llm)
+  fi
+  run mcp-scanner-config mcp-scanner "${MCP_SCAN_ARGS[@]}" config --config-path config/mac-orchestrator.json
 fi
 
 if command -v ramparts >/dev/null 2>&1; then
