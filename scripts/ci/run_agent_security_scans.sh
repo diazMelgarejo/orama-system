@@ -48,7 +48,7 @@ for path in "${SCAN_ROOTS[@]}"; do
 done
 
 if [[ -f config/mac-orchestrator.json ]]; then
-  run mcp-scanner-config mcp-scanner config config/mac-orchestrator.json
+  run mcp-scanner-config mcp-scanner config --config-path config/mac-orchestrator.json
 fi
 
 if command -v ramparts >/dev/null 2>&1; then
