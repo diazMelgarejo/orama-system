@@ -174,14 +174,14 @@ if [[ "${ORAMA_SKIP_HERMES_SYNC:-0}" == "1" ]]; then
   warn "Skipping Hermes harness sync (ORAMA_SKIP_HERMES_SYNC=1)"
 elif [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
   export ORAMA_SYSTEM_PATH="$SCRIPT_DIR"
-  if [[ -f "$VERIFY_TRUST" ]] && [[ "${ORAMA_TRUST_HERMES_SYNC:-}" != "1" ]]; then
-    if ! python3 "$VERIFY_TRUST" --quiet; then
-      warn "Hermes sync skipped — untrusted checkout (review bin/agents, git pull --ff-only, then ORAMA_TRUST_HERMES_SYNC=1)"
-    else
-      hermes_sync "idempotent, trusted checkout"
-    fi
+  if [[ "${ORAMA_TRUST_HERMES_SYNC:-}" == "1" ]]; then
+    hermes_sync "operator-trusted override (ORAMA_TRUST_HERMES_SYNC=1)"
+  elif [[ ! -f "$VERIFY_TRUST" ]]; then
+    warn "Hermes sync skipped — verify_trusted_install.py missing (git pull --ff-only, or ORAMA_TRUST_HERMES_SYNC=1 after reviewing bin/agents)"
+  elif ! python3 "$VERIFY_TRUST" --quiet; then
+    warn "Hermes sync skipped — untrusted checkout (review bin/agents, git pull --ff-only on main, then ORAMA_TRUST_HERMES_SYNC=1)"
   else
-    hermes_sync "operator-trusted"
+    hermes_sync "idempotent, trusted checkout"
   fi
 fi
 

@@ -31,12 +31,14 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   shift
 fi
 
-if [[ -f "$REPO_ROOT/scripts/review/verify_trusted_install.py" ]] \
-  && [[ "${ORAMA_TRUST_HERMES_SYNC:-}" != "1" ]]; then
-  if ! python3 "$REPO_ROOT/scripts/review/verify_trusted_install.py" --quiet; then
-    fail "overlay sync blocked — untrusted checkout (set ORAMA_TRUST_HERMES_SYNC=1 after review)"
-    exit 1
-  fi
+if [[ "${ORAMA_TRUST_HERMES_SYNC:-}" == "1" ]]; then
+  : # explicit operator override after reviewing bin/agents
+elif [[ ! -f "$REPO_ROOT/scripts/review/verify_trusted_install.py" ]]; then
+  fail "overlay sync blocked — verify_trusted_install.py missing (git pull --ff-only or ORAMA_TRUST_HERMES_SYNC=1)"
+  exit 1
+elif ! python3 "$REPO_ROOT/scripts/review/verify_trusted_install.py" --quiet; then
+  fail "overlay sync blocked — untrusted checkout (set ORAMA_TRUST_HERMES_SYNC=1 after review)"
+  exit 1
 fi
 
 updated=0
