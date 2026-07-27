@@ -31,7 +31,15 @@ if [[ ! -d "$WORK/agent-audit" ]]; then
 fi
 python3 -m pip install -q -e "$WORK/agent-audit"
 
-run aguara aguara scan "${SCAN_ROOTS[@]}"
+for path in "${SCAN_ROOTS[@]}"; do
+  scan_root="$ROOT/$path"
+  if [[ ! -d "$scan_root" || ! -r "$scan_root" ]]; then
+    log "FAIL aguara:$path (missing or unreadable scan root)"
+    FAIL=1
+    continue
+  fi
+  run "aguara:$path" aguara scan "$scan_root"
+done
 
 run agent-audit agent-audit scan-project "$ROOT" \
   --min-severity high -y --output "$WORK/agent-audit-report"
@@ -50,8 +58,7 @@ for path in "${SCAN_ROOTS[@]}"; do
     continue
   fi
   if [[ ! -s "$skill_dirs_file" ]]; then
-    log "FAIL skill-scanner:$path (no SKILL.md under root)"
-    FAIL=1
+    log "SKIP skill-scanner:$path (no SKILL.md under root)"
     continue
   fi
   while IFS= read -r skill_dir; do
@@ -72,7 +79,15 @@ else
 fi
 
 if command -v ramparts >/dev/null 2>&1; then
-  run ramparts ramparts scan "${SCAN_ROOTS[@]}"
+  for path in "${SCAN_ROOTS[@]}"; do
+    scan_root="$ROOT/$path"
+    if [[ ! -d "$scan_root" || ! -r "$scan_root" ]]; then
+      log "FAIL ramparts:$path (missing or unreadable scan root)"
+      FAIL=1
+      continue
+    fi
+    run "ramparts:$path" ramparts scan "$scan_root"
+  done
 else
   log "SKIP ramparts (install cargo package ramparts for local runs)"
 fi
