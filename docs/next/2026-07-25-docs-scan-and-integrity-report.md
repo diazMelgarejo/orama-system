@@ -1,5 +1,10 @@
 # Cross-Repo Docs Scan & Integrity Report — 2026-07-25
 
+> **SUPERSEDED 2026-07-27** for disposition and HEAD — use PT
+> [`PHASE-0-MASTER-PLAN-2026-07-27.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-0-MASTER-PLAN-2026-07-27.md)
+> and orama [`2026-07-27-phase-0-master-plan.md`](2026-07-27-phase-0-master-plan.md).
+> Current `main`: PT `4f1a9936`, orama `41b77300` (mesh #224 merged).
+
 **Purpose:** Single re-verified snapshot of both repos on `origin/main`, plus a
 full `docs/` scan separating **finish now on v1** from **deliberately deferred
 to v2 `oramasys/*`**.
