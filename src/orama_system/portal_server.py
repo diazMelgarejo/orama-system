@@ -44,6 +44,7 @@ from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
 from orama_system.lan_peer_channel import LanPeerChannel, local_platform, make_envelope, read_discovery_peer_ip
+from orama_system.swarm_approval import issue_approval, verify_launch
 from orama_system.portal_notifications import (
     EventType,
     Notification,
@@ -250,6 +251,8 @@ async def _control_plane_auth_middleware(request: Request, call_next):
         failure = control_plane_auth_failure(request)
         if failure is not None:
             return failure
+        if request.method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+            verify_lifecycle_origin(request)
     return await call_next(request)
 
 # ── Serve React/Vite build when present (Phase 8) ─────────────────────────────
@@ -1912,6 +1915,8 @@ class SwarmPreviewRequest(BaseModel):
 
 class SwarmLaunchRequest(SwarmPreviewRequest):
     approved: bool = False
+    preview_id: str | None = None
+    approval_token: str | None = None
 
 
 _SWARM_PREVIEW_ROLES = [
@@ -2029,7 +2034,7 @@ async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
             "dispatch_allowed": False,
         })
 
-    return {
+    preview = {
         "objective": objective,
         "task_type": req.task_type,
         "optimize_for": req.optimize_for,
@@ -2043,6 +2048,8 @@ async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
         "hardware_policy": hardware_policy,
         "assignments": assignments,
     }
+    preview.update(issue_approval(preview))
+    return preview
 
 
 def _extract_pt_job_id(payload: Any) -> Optional[str]:
@@ -2202,10 +2209,17 @@ async def api_swarm_preview(req: SwarmPreviewRequest):
 @app.post("/api/swarm/launch")
 async def api_swarm_launch(req: SwarmLaunchRequest):
     """Launch approved preview assignments as PT-owned jobs; orama stores no job state."""
-    if not req.approved:
-        raise HTTPException(status_code=422, detail="approved=true is required")
-
     preview = await _build_swarm_preview(req)
+    try:
+        verify_launch(
+            approved=req.approved,
+            preview_id=req.preview_id,
+            approval_token=req.approval_token,
+            preview=preview,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
     hardware_policy = preview.get("hardware_policy", {})
     if not hardware_policy.get("ok", False):
         raise HTTPException(
