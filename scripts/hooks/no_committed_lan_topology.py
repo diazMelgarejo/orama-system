@@ -51,7 +51,11 @@ def _configure_logging() -> None:
 def main() -> int:
     _configure_logging()
     repo_hygiene = load_repo_hygiene()
-    errors = repo_hygiene.scan_tracked_private_network_literals(ROOT, tracked_files(ROOT))
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        ROOT,
+        tracked_files(ROOT),
+        use_git_index=True,
+    )
     if errors:
         for err in errors:
             logger.error("ERROR: %s", err)

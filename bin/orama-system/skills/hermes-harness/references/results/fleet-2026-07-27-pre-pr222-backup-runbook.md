@@ -10,7 +10,7 @@
 | Lane | Action |
 |------|--------|
 | `mac-orchestrator` | Run Phase A backup + mesh verify on Mac; unify gossip secret; fan out to Win |
-| `win-cursor` | Read runbook; ensure 3080/5080 backed up before #222 |
+| `win-cursor` | Read runbook; ensure both Windows GPU nodes backed up before #222 |
 | `win-coder` / `win-autoresearcher` | No code job — informational |
 | `hermes` | `hermes backup` on Win before #222; `-RunDoctor` smoke |
 
@@ -22,9 +22,11 @@
 ## Action required (all 3 machines from `main`)
 
 1. `git pull --ff-only origin main`
-2. `python3 scripts/mesh/lan_topology_archive.py --backup --ref origin/main`
-3. `python3 scripts/mesh/ensure_local_mesh_secrets.py`
-4. **One shared** `GOSSIP_SHARED_SECRET` on Mac + 3080 + 5080 (OOB copy)
+2. `python3 scripts/mesh/lan_topology_archive.py --backup --ref origin/main`  
+   Windows: `.\.venv\Scripts\python.exe scripts\mesh\lan_topology_archive.py --backup --ref origin/main`
+3. `python3 scripts/mesh/ensure_local_mesh_secrets.py`  
+   Windows: `.\.venv\Scripts\python.exe scripts\mesh\ensure_local_mesh_secrets.py`
+4. **One shared** `GOSSIP_SHARED_SECRET` on Mac + both Windows GPU nodes (OOB copy)
 5. Verify mesh (discover, gossip, LMS probes) **before** merging #222
 6. Win: `hermes backup` → optional `install-hermes-harness.ps1 -RunDoctor`
 

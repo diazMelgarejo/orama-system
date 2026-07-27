@@ -86,8 +86,9 @@ Committed RFC1918 / link-local endpoint literals violate this invariant. The
 pre-v2 removal path is **Phase B** in
 [`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md):
 endpoints move to `.env.local` / `.local/lan-topology-archive.json` after
-**Phase A** backup on every fleet node. Affinity slugs (`win-rtx3080`,
-`win-rtx5080`) remain in tracked config; only address literals are expunged.
+**Phase A** backup on every fleet node. Affinity slugs (hardware tier categories
+such as `win-gpu-secondary` / `win-gpu-primary`) remain in tracked config; only
+address literals are expunged.
 
 ## Acceptance
 

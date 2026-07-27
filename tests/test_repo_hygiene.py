@@ -159,6 +159,28 @@ def test_scan_tracked_private_network_literals_blocks_config_ips(tmp_path: Path)
     assert "192.168.8.153" in errors[0]
 
 
+@pytest.mark.unit
+def test_scan_tracked_private_network_literals_ignores_marker_inside_json_string(
+    tmp_path: Path,
+) -> None:
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    bad = cfg / "agent_registry.json"
+    bad.write_text(
+        '{"note": "<!-- LINT-013-ok -->", "gateway": "http://192.168.8.153:1234"}',
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        ["config/agent_registry.json"],
+    )
+
+    assert len(errors) == 1
+    assert "192.168.8.153" in errors[0]
+
+
 def test_scan_personal_paths_blocks_user_home(tmp_path):
     repo_hygiene = load_repo_hygiene()
     docs = tmp_path / "docs"
