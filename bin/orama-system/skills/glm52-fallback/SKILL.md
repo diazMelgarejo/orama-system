@@ -39,9 +39,9 @@ bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
 
 This script will:
 1. Require `$GLM52_API_KEY` (or `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY`) to already be set in the environment — fails fast with a clear error instead of prompting interactively, so it is safe to run unattended or in CI.
-2. Store it securely at `~/.openclaw/secrets/glm52-api-key` (mode 600)
-3. Create env config at `~/.openclaw/.env.glm52` (mode 600)
-4. **Opt-in only:** wires env config into zsh/bash profiles when `GLM52_PERSIST_SHELL_PROFILE=1` (runtime `start.sh` already sources `.env.glm52`)
+2. Store it securely at the operator openclaw secrets directory (mode 600; path written by `setup-glm52.sh`)
+3. Create the operator-local GLM52 env bundle (mode 600; same script)
+4. **Opt-in only:** wires env config into zsh/bash profiles when `GLM52_PERSIST_SHELL_PROFILE=1` (runtime `start.sh` already sources the GLM52 env bundle)
 5. Test connection to the BigModel endpoint
 
 > **NEVER hardcode the API key in tracked files.** Read from environment
@@ -51,23 +51,15 @@ This script will:
 
 ## Setup (Manual)
 
+Prefer the automated script. If you must run steps by hand:
+
 ```bash
-# 1. Store API key securely (not in tracked files) — current user only, never sudo
-mkdir -p ~/.openclaw/secrets
-printf '%s' "$GLM52_API_KEY" > ~/.openclaw/secrets/glm52-api-key
-chmod 600 ~/.openclaw/secrets/glm52-api-key
-
-# 2. Configure environment
-cat > ~/.openclaw/.env.glm52 <<'EOF'
-export GLM52_API_KEY=$(cat ~/.openclaw/secrets/glm52-api-key)
-export GLM52_ENDPOINT="https://open.bigmodel.cn/api/paas/v4/chat/completions"
-EOF
-chmod 600 ~/.openclaw/.env.glm52
-
-# 3. Activate for this shell (profile persistence is opt-in — see setup-glm52.sh)
-source ~/.openclaw/.env.glm52
-# Optional: GLM52_PERSIST_SHELL_PROFILE=1 bash setup-glm52.sh
+# Fail clearly before creating configuration from an empty value.
+: "${GLM52_API_KEY:?Set GLM52_API_KEY before running these commands}"
+bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
 ```
+
+The script creates the secrets file and operator-local env bundle (mode 600), with optional profile wiring when `GLM52_PERSIST_SHELL_PROFILE=1`.
 
 ## API Configuration
 
