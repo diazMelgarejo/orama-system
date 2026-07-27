@@ -1,5 +1,7 @@
 # Hermes Windows Hardware Policy — Live Walkthrough Plan
 
+> **Reality checkpoint — verified 2026-07-27:** This historical walkthrough must not assume an installed Orama Hermes profile fleet. The live Windows Hermes home is `$HERMES_HOME`, Hermes is **v0.19.0 (2026.7.20)**, and `hermes profile list` shows only `default`; `$HERMES_HOME/profiles/` is not materialized. Preserve the hardware-policy plan as an Orama harness concern, use `$ORAMA_SYSTEM_PATH` for repo-owned assets, and verify current provider/endpoint configuration via `hermes config` and the policy tools rather than treating legacy OpenClaw mappings as live Hermes state. Authoritative Hermes behavior: [configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration) and [CLI reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands).
+
 > **Date:** 2026-06-24 (review pass 2026-06-25) · **Owner:** orama-system (L3) + Perpetua-Tools (L2)
 > **Status:** 📋 PLANNED (live Windows walkthrough only) — execute Phases A–F on a live Windows 11 host (deferred session). **orama #107 ✅ MERGED** (`6e850f8`); **PR #108 ✅ MERGED** (`a81a364`): hash/runtime split in `discover.py` landed (runtime dispatch=localhost, topology hash=LAN IP); 70 targeted tests pass.
 > **Branch:** orama #107 merged → `feat/hermes-harness-onboarding` carries it; PT `cursor/critical-bug-investigation-a924` (#134) in `$PERPETUA_TOOLS_PATH`
@@ -342,7 +344,7 @@ echo "exit=$LASTEXITCODE"
 Direct PT CLI (same enforcement path):
 
 ```powershell
-$PtDir = $env:PERPETUA_TOOLS_PATH   # on this host: ...\ultrathink\Perplexity-Tools
+$PtDir = $env:PERPETUA_TOOLS_PATH
 python "$PtDir\scripts\hardware_policy_cli.py" --list
 python "$PtDir\scripts\hardware_policy_cli.py" --check-openclaw
 python "$PtDir\scripts\hardware_policy_cli.py" --validate "gemma-4-26B-A4B-it-Q4_K_M" win
