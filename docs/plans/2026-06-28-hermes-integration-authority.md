@@ -1,6 +1,8 @@
 <!-- /autoplan restore point: ~/.gstack/projects/orama-system/main-autoplan-restore-2026-06-28-hermes-integration-authority.md -->
 
 # Hermes Integration Authority Spec
+
+> **Reality checkpoint — verified 2026-07-27:** This document is an architectural proposal, not a description of automatically materialized Hermes state. The current host runs Hermes **v0.19.0 (2026.7.20)** at `$HERMES_HOME`, with only the `default` profile active and no `$HERMES_HOME/profiles/` directory. Hermes core owns its runtime/tool contract; local identity is layered through `SOUL.md`, `memories/`, skills, configuration, and project context. Orama owns portable staging and harness procedures; Perpetua-Tools owns tracked project lessons. Full recovery should prefer native `hermes backup` / `hermes import`; custom Orama archive tools are additive and must remain secret-safe. Reference: [Hermes configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration), [CLI reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands), and [`hermes-portable-brain-map.md`](../../bin/orama-system/skills/hermes-harness/references/hermes-portable-brain-map.md).
 **Version:** 1.1.0-harmonized  
 **Status:** Approved — implemented 2026-06-28 (main batch `hermes-integration-authority`)  
 **Date:** 2026-06-28
