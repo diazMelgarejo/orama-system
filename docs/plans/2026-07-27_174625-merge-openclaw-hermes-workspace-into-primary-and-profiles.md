@@ -119,7 +119,10 @@ For a “restore like the current primary agent” result, prefer the native bas
 ```bash
 hermes backup -o "$HOME/hermes-default-private-backup.zip"
 # On a fresh trusted target after Hermes is installed:
+hermes gateway stop
 hermes import "$HOME/hermes-default-private-backup.zip"
+hermes doctor
+hermes gateway start
 ```
 
 Then install/sync tracked Orama assets separately and verify them. The Orama manifest utility enables a more selective, inspectable transfer, but it does not replace native backup/import until export → inspect → restore has been validated against the target Hermes version. Secrets and external-channel credentials remain an explicit operator-review step.
@@ -510,12 +513,12 @@ python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.p
 python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_thin_skills.py --verify
 ```
 
-**Secret/path scan:**
+**Secret/path scan (all tracked files):**
 
 ```bash
-grep -RIn --exclude-dir=.git --exclude='*.zip' \
-  -E 'OPENROUTER_API_KEY|ANTHROPIC_API_KEY|sk-[A-Za-z0-9]|ORAMA_CONTROL_PLANE_TOKEN=.*[A-Za-z0-9_-]{20,}|/Users/[^/]+/Downloads/' \
-  bin/orama-system/skills/hermes-harness bin/agents || true
+git ls-files -z | xargs -0 grep -nE \
+  'OPENROUTER_API_KEY|ANTHROPIC_API_KEY|sk-[A-Za-z0-9]|ORAMA_CONTROL_PLANE_TOKEN=.*[A-Za-z0-9_-]{20,}|/Users/[^/]+/Downloads/' \
+  || true
 ```
 
 Expected: no real secrets; no hybrid absolute/env-var paths.

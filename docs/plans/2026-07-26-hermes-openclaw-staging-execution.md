@@ -1,7 +1,6 @@
 # Hermes + OpenClaw staging — OpenClaw execution log (2026-07-26)
 
 > **Reality checkpoint — verified 2026-07-27:** This is an execution log for staged content, not proof that the described profiles are installed on this Windows Hermes host. The current instance is Hermes **v0.19.0 (2026.7.20)** at `$HERMES_HOME`; `hermes profile list` reports `default` only and `$HERMES_HOME/profiles/` is absent. Subsequent work must verify staging, installation, and local Hermes runtime state separately. Use `$ORAMA_SYSTEM_PATH` in portable commands and refer to [Hermes configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration) for current configuration semantics.
-
 > **Status:** ✅ OpenClaw flesh-out + Win idempotent harness sync wired (2026-07-26)  
 > **Security hardening:** ✅ `cursor/hermes-staging-security-hardening-f559` (2026-07-26)  
 > **Parent:** [`2026-07-26-hermes-openclaw-staging-review-gate.md`](2026-07-26-hermes-openclaw-staging-review-gate.md)
