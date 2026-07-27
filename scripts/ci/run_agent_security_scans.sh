@@ -37,18 +37,33 @@ run agent-audit agent-audit scan-project "$ROOT" \
   --min-severity high -y --output "$WORK/agent-audit-report"
 
 for path in "${SCAN_ROOTS[@]}"; do
-  found=0
-  while IFS= read -r skill_dir; do
-    found=1
-    rel="${skill_dir#$ROOT/}"
-    run "skill-scanner:$rel" skill-scanner scan "$skill_dir"
-  done < <(find "$ROOT/$path" -name SKILL.md -exec dirname {} \; 2>/dev/null | sort -u)
-  if [[ "$found" -eq 0 ]]; then
-    log "SKIP skill-scanner:$path (no SKILL.md under root)"
+  scan_root="$ROOT/$path"
+  if [[ ! -d "$scan_root" || ! -r "$scan_root" ]]; then
+    log "FAIL skill-scanner:$path (missing or unreadable scan root)"
+    FAIL=1
+    continue
   fi
+  skill_dirs_file="$WORK/skill-dirs-${path//\//-}.txt"
+  if ! find "$scan_root" -name SKILL.md -exec dirname {} \; | sort -u >"$skill_dirs_file"; then
+    log "FAIL skill-scanner:$path (find failed)"
+    FAIL=1
+    continue
+  fi
+  if [[ ! -s "$skill_dirs_file" ]]; then
+    log "FAIL skill-scanner:$path (no SKILL.md under root)"
+    FAIL=1
+    continue
+  fi
+  while IFS= read -r skill_dir; do
+    rel="${skill_dir#"$ROOT"/}"
+    run "skill-scanner:$rel" skill-scanner scan "$skill_dir"
+  done <"$skill_dirs_file"
 done
 
-if [[ -f config/mac-orchestrator.json ]]; then
+if [[ ! -f config/mac-orchestrator.json ]]; then
+  log "FAIL mcp-scanner-config (config/mac-orchestrator.json missing)"
+  FAIL=1
+else
   MCP_SCAN_ARGS=(--analyzers yara --log-level error)
   if [[ -n "${MCP_SCANNER_API_KEY:-}" && -n "${MCP_SCANNER_LLM_API_KEY:-}" ]]; then
     MCP_SCAN_ARGS=(--analyzers api,yara,llm)
