@@ -1,5 +1,10 @@
 # Pending & Partially-Implemented Work — orama-system
 
+> **SUPERSEDED 2026-07-27** by
+> [`2026-07-27-phase-0-master-plan.md`](2026-07-27-phase-0-master-plan.md) → PT canonical
+> [`PHASE-0-MASTER-PLAN-2026-07-27.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-0-MASTER-PLAN-2026-07-27.md).
+> Kept for history; HEAD was `5b05f545` — mesh #224 merged at `41b77300`.
+
 **Purpose:** a single place to find every unfinished or partially-landed
 plan across recent sessions. Cross-linked with
 [`Perpetua-Tools/docs/next/2026-07-25-pending-work-tracker.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/next/2026-07-25-pending-work-tracker.md)
