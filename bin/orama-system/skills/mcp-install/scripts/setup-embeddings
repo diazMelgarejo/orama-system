@@ -22,7 +22,7 @@ echo "OpenClaw dir: $OPENCLAW_DIR"
 # --- 1. Verify prerequisites ---
 fail=0
 command -v gbrain &>/dev/null || { echo "ERROR: gbrain not on PATH. Run /setup-gbrain first."; fail=1; }
-command -v uvx &>/dev/null || { echo "ERROR: uvx not on PATH. Install uv: curl -LsSf https://astral.sh/uv/install.sh | sh"; fail=1; }
+command -v uvx &>/dev/null || { echo "ERROR: uvx not on PATH. Install uv: https://docs.astral.sh/uv/getting-started/installation/"; fail=1; }
 command -v jq &>/dev/null || { echo "ERROR: jq not on PATH. Install: brew install jq"; fail=1; }
 [ "$fail" -eq 0 ] || exit 1
 

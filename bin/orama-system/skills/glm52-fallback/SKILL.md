@@ -40,7 +40,7 @@ bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
 This script will:
 1. Require `$GLM52_API_KEY` (or `$OPENCLAW_MODELS_PROVIDERS_BIGMODEL_APIKEY`) to already be set in the environment — fails fast with a clear error instead of prompting interactively, so it is safe to run unattended or in CI.
 2. Store it securely at `~/.openclaw/secrets/glm52-api-key` (mode 600)
-3. Create env config at `~/.openclaw/.env.glm52` (mode 600)
+3. Create env config at `~/.openclaw/openclaw-glm52-env` (mode 600)
 4. Add sourcing to `~/.zshrc` and `~/.bashrc` (only for profiles that already exist)
 5. Test connection to the BigModel endpoint
 
@@ -58,15 +58,15 @@ printf '%s' "$GLM52_API_KEY" > ~/.openclaw/secrets/glm52-api-key
 chmod 600 ~/.openclaw/secrets/glm52-api-key
 
 # 2. Configure environment
-cat > ~/.openclaw/.env.glm52 <<'EOF'
+cat > ~/.openclaw/openclaw-glm52-env <<'EOF'
 export GLM52_API_KEY=$(cat ~/.openclaw/secrets/glm52-api-key)
 export GLM52_ENDPOINT="https://open.bigmodel.cn/api/paas/v4/chat/completions"
 EOF
-chmod 600 ~/.openclaw/.env.glm52
+chmod 600 ~/.openclaw/openclaw-glm52-env
 
 # 3. Activate + make permanent
-source ~/.openclaw/.env.glm52
-echo "source ~/.openclaw/.env.glm52 2>/dev/null || true" >> ~/.zshrc
+source ~/.openclaw/openclaw-glm52-env
+echo "source ~/.openclaw/openclaw-glm52-env 2>/dev/null || true" >> ~/.zshrc
 ```
 
 ## API Configuration
