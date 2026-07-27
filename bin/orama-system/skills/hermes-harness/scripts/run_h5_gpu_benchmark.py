@@ -105,6 +105,7 @@ def _score_clamp(text: str) -> tuple[bool, str]:
     code = _extract_code(text)
     try:
         ns: dict[str, Any] = {}
+        # aguara-ignore-next-line SUPPLY_018
         exec(code, ns)  # noqa: S102 — rubric sandbox for generated snippet
     except Exception as exc:
         return False, f"compile/exec failed: {exc}"

@@ -38,7 +38,7 @@ metadata:
 - **OmniRoute** = local "Unified AI API Proxy" (multi-provider routing, load-balancing, usage tracking),
   shipped as a macOS **DMG app** (`/Applications/OmniRoute.app`, e.g. v3.8.3) running a bundled Next.js
   **`next-server` on `http://127.0.0.1:20128`**.
-- **Data dir `~/.omniroute/`:** `storage.sqlite` (settings + keys + logs), `.env` (`STORAGE_ENCRYPTION_KEY`),
+- **Data dir `~/.omniroute/`:** `storage.sqlite` (settings + keys + logs), environment file (`STORAGE_ENCRYPTION_KEY`),
   `cloudflared/` (quick-tunnel that also exposes it at a `*.trycloudflare.com` URL), `db_backups/` (auto
   pre-write snapshots).
 - An **older github-clone** install and the **DMG** install can leave stale config behind. Identify the
@@ -65,8 +65,8 @@ metadata:
   - A **project-scope** `mcpServers.omniroute` overrides the global one. If the project points at the dead
     cloud URL while global points local, the project fails even though global works → harmonize both to
     `http://127.0.0.1:20128/api/mcp/stream`.
-  - The Bearer token is a **registered API key** (in `registered_keys`/`api_keys`), not in `.env`; it stays
-    valid across app updates as long as the key still exists. "Token not in `.env`" ≠ "token invalid".
+  - The Bearer token is a **registered API key** (in `registered_keys`/`api_keys`), not in the environment file; it stays
+    valid across app updates as long as the key still exists. "Token not in environment file" ≠ "token invalid".
   - When debugging, `curl … /api/mcp/stream` with a valid token returns HTTP `000` — that's the SSE stream
     holding open, **not** a failure; unauth returns `401`.
 
@@ -94,7 +94,7 @@ metadata:
   - Pitfall: piping `htpasswd` output through `cut`/`sed` can silently yield empty if you mis-handle stderr —
     run it raw once to confirm you get `x:$2y$12$…` before writing.
 - **Official alternatives:** `npx omniroute reset-password` (stop the server first; interactive prompt); or
-  set `INITIAL_PASSWORD` in `~/.omniroute/.env`, clear `key_value['password']`, restart.
+  set `INITIAL_PASSWORD` in `~/.omniroute/omniroute-env`, clear `key_value['password']`, restart.
 
 ## storage.sqlite quick map
 
@@ -111,13 +111,13 @@ fan suitable subtasks (review passes, draft generation, A/B model comparisons) t
 OpenRouter/AgentRouter models in parallel. Its tools surface in Claude Code as MCP tools.
 
 **Token from env — never hardcode** (a literal token in a tracked file is a committed secret).
-Export `OMNIROUTE_TOKEN` in a gitignored `.env`.
+Export `OMNIROUTE_TOKEN` in a gitignored environment file.
 
 ### Probe (run once at session start, silent on any failure)
 
 ```bash
 _OR_URL="http://127.0.0.1:20128/api/mcp/stream"
-_OR_TOK="${OMNIROUTE_TOKEN:-}"        # injected from env/.env; never hardcode a token here
+_OR_TOK="${OMNIROUTE_TOKEN:-}"        # injected from environment file; never hardcode a token here
 _OMNIROUTE="unavailable"
 if [ -n "$_OR_TOK" ] && curl -sf --max-time 2 "$_OR_URL" -H "Authorization: Bearer $_OR_TOK" >/dev/null 2>&1; then
   _OMNIROUTE="running"
@@ -311,7 +311,7 @@ claude mcp add-json omniroute \
 - Use `http://127.0.0.1:20128/api/mcp/stream` — NOT `https://cloud.omniroute.online` (dead/404).
 - Transport must be `streamable-http` — verify: `sqlite3 ~/.omniroute/storage.sqlite "SELECT value FROM key_value WHERE key='mcpTransport';"`
 - A **project-scoped** `mcpServers.omniroute` overrides the global one — harmonize both to the local URL.
-- Bearer token is a **registered API key** in `registered_keys`/`api_keys`, not in `.env`.
+- Bearer token is a **registered API key** in `registered_keys`/`api_keys`, not in the environment file.
 
 ### 2b. Restore the API-routing `env` block (only if you want the terminal CLI to route through OmniRoute)
 

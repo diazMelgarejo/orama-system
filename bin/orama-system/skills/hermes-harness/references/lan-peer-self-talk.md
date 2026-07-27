@@ -24,7 +24,7 @@
    git fetch origin --prune && git checkout main && git pull --ff-only origin main
    ```
 
-2. **`.env.local`** in the orama-system clone root (never commit; **same token on both hosts**):
+2. **env-local file** in the orama-system clone root (never commit; **same token on both hosts**):
    ```dotenv
    PORTAL_BIND_LAN=1
    ORAMA_BIND_LAN=1
@@ -202,7 +202,7 @@ and `start.sh --status` / `start.ps1 --status` — not a separate Hermes RPC lay
 
 ## Minimal changes to pipe Mac ↔ Win (reuse-first)
 
-### 1. Enable LAN bind (both hosts, `.env.local`)
+### 1. Enable LAN bind (both hosts, env-local file)
 
 ```dotenv
 PORTAL_BIND_LAN=1
