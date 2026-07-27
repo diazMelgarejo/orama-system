@@ -36,11 +36,19 @@ run agent-audit agent-audit scan-project "$ROOT" \
   --min-severity high -y --output "$WORK/agent-audit-report"
 
 for path in "${SCAN_ROOTS[@]}"; do
-  run "skill-scanner:$path" skill-scanner scan "$ROOT/$path"
+  found=0
+  while IFS= read -r skill_dir; do
+    found=1
+    rel="${skill_dir#$ROOT/}"
+    run "skill-scanner:$rel" skill-scanner scan "$skill_dir"
+  done < <(find "$ROOT/$path" -name SKILL.md -exec dirname {} \; 2>/dev/null | sort -u)
+  if [[ "$found" -eq 0 ]]; then
+    log "SKIP skill-scanner:$path (no SKILL.md under root)"
+  fi
 done
 
 if [[ -f config/mac-orchestrator.json ]]; then
-  run mcp-scanner-config mcp-scanner scan config/mac-orchestrator.json || true
+  run mcp-scanner-config mcp-scanner config config/mac-orchestrator.json
 fi
 
 if command -v ramparts >/dev/null 2>&1; then
