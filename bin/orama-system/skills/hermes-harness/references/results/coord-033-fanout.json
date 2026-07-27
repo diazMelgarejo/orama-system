@@ -1,0 +1,17 @@
+{
+  "fanout_id": "coord-033",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "operator/mac-pull-win-portal",
+      "filename": "win-2026-07-27-mac-pull-from-win-portal.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-27-mac-pull-from-win-portal.md"
+    },
+    {
+      "assignee": "mac",
+      "topic": "operator/mac-pull-win-portal",
+      "filename": "win-2026-07-27-mac-pull-from-win-portal.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-27-mac-pull-from-win-portal.md"
+    }
+  ]
+}
