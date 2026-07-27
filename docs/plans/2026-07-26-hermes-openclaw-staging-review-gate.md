@@ -1,7 +1,6 @@
 # Hermes + OpenClaw agent staging — review gate (2026-07-26)
 
 > **Reality checkpoint — verified 2026-07-27:** On the review host, Hermes **v0.19.0 (2026.7.20)** runs at `$HERMES_HOME`; `default` is the only active profile and `$HERMES_HOME/profiles/` remains absent. Staged `bin/agents/` records are not live profile evidence. Any install/cutover must first run the installer in dry-run/verify mode, then confirm with `hermes profile list`; retain native `hermes backup` / `hermes import` as the recovery baseline. Use `$ORAMA_SYSTEM_PATH` in portable commands. See [official CLI docs](https://hermes-agent.nousresearch.com/docs/reference/cli-commands).
-
 > **Status:** ✅ **SHIPPED** (2026-07-26) with security hardening follow-up (`cursor/hermes-staging-security-hardening-f559`)  
 > **Owner:** orama-system `bin/agents` + `docs/plans/`  
 > **Supersedes for execution order:** install hooks are live; residual checklist items tracked below.

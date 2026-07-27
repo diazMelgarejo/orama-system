@@ -1,14 +1,12 @@
 # Hermes Windows Hardware Policy — Live Walkthrough Plan
 
 > **Reality checkpoint — verified 2026-07-27:** This historical walkthrough must not assume an installed Orama Hermes profile fleet. The live Windows Hermes home is `$HERMES_HOME`, Hermes is **v0.19.0 (2026.7.20)**, and `hermes profile list` shows only `default`; `$HERMES_HOME/profiles/` is not materialized. Preserve the hardware-policy plan as an Orama harness concern, use `$ORAMA_SYSTEM_PATH` for repo-owned assets, and verify current provider/endpoint configuration via `hermes config` and the policy tools rather than treating legacy OpenClaw mappings as live Hermes state. Authoritative Hermes behavior: [configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration) and [CLI reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands).
-
 > **Date:** 2026-06-24 (review pass 2026-06-25) · **Owner:** orama-system (L3) + Perpetua-Tools (L2)
 > **Status:** 📋 PLANNED (live Windows walkthrough only) — execute Phases A–F on a live Windows 11 host (deferred session). **orama #107 ✅ MERGED** (`6e850f8`); **PR #108 ✅ MERGED** (`a81a364`): hash/runtime split in `discover.py` landed (runtime dispatch=localhost, topology hash=LAN IP); 70 targeted tests pass.
 > **Branch:** orama #107 merged → `feat/hermes-harness-onboarding` carries it; PT `cursor/critical-bug-investigation-a924` (#134) in `$PERPETUA_TOOLS_PATH`
 > **Author:** Cursor Cloud Agent + cyre
 > **Review trigger:** Next Windows Hermes bring-up (orama #107 no longer gates this — it is merged)
 > **Canonical architecture:** [Cross-Harness Hardware Policy Architecture](../hermes-hardware-policy-cross-harness.md) — **single source of truth for the harness model below; do not re-edit it in three places.**
->
 > **v2 orbit:** agate repo migration plan → [`docs/v2/42-agate-hardware-policy-orbit.md`](../v2/42-agate-hardware-policy-orbit.md)
 
 > **Cross-repo path contract:** every `$PERPETUA_TOOLS_PATH/…` below is the L2 repo (canonical name **Perpetua-Tools**; on-disk clone name varies by host). Reference it through the env var, never a literal sibling name.
