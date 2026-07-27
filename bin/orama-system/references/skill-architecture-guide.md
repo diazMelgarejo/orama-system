@@ -280,13 +280,11 @@ Always reference `scripts/openclaw/store_keychain_secret.sh` (stdin pipe form).
 Skill markdown is scanned by **aguara** (`agent-security` workflow). Some rules
 are **non-baselineable** — they gate on every match regardless of baseline.
 
-**Why wording matters:** imperative commands in skills (`claude mcp add …`,
-`curl … | bash`, `source ~/.env…` beside `POST`, `>> ~/.zshrc`) are not only
-scanner hits; **naive agents may execute them literally**, turning documentation
-into an unintentional remote-control channel. We word skills so:
-
-1. Human operators retain review-before-run judgment.
-2. Scanners can baseline legacy noise while **new** attack-shaped text still fails CI.
+**Teaching paradox:** you must teach negative patterns, but literal bad examples
+in production `SKILL.md` are both scanner hits and naive-agent execution risks.
+**Resolution:** production skills use safe wording only; literal bad→good pairs
+live in `skillify/examples/bad/security-wording-anti-patterns.md` with
+`<!-- aguara-ignore-next-line -->` quarantine per bad line.
 
 **Canonical reference:** [`bin/orama-system/skills/skillify/references/skill-security-wording-reference-card.md`](../skills/skillify/references/skill-security-wording-reference-card.md)
 

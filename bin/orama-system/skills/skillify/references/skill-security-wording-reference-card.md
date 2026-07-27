@@ -17,13 +17,27 @@ Skill docs are **executable supply-chain material**, not passive documentation.
    judgment the author assumed. That is an unintentional prompt-injection path:
    the skill becomes a remote-control script for whichever model reads it.
 
-We deliberately **word skills so scanners can distinguish real attacks from
-doc examples**, and so models are steered toward **review-before-run** instead
-of copy-paste execution. The aguara baseline then filters legacy noise while
-**new** gating patterns still fail CI.
+We deliberately **word production skills safely** so scanners can baseline
+legacy noise while **new** attack-shaped text still fails CI — and so models
+are steered toward **review-before-run** instead of copy-paste execution.
 
-**Do not** weaken the scanner to pass CI. **Do** fix wording — including in
-this reference card (it is scanned too).
+## The teaching paradox (and how we resolve it)
+
+You **can** teach the negative rule. You **cannot** embed literal attack-shaped
+commands in production skill files without the same risks you are warning about.
+
+| Layer | Location | Content | aguara |
+|-------|----------|---------|--------|
+| **Doctrine** | this reference card | Principles, safe patterns, `aguara explain` pointers | scanned; no literal bad examples |
+| **Curriculum** | [`../examples/bad/security-wording-anti-patterns.md`](../examples/bad/security-wording-anti-patterns.md) | Literal bad → good pairs | bad lines use `<!-- aguara-ignore-next-line -->` |
+| **Production** | `SKILL.md`, operator references | Good patterns only | must pass `--ci` with 0 gating |
+
+**Meta-lesson:** scanners and naive agents share one constraint — *executable
+text is treated as executable*. We do not weaken CI or hide behind euphemism.
+We **quarantine** negative examples in the teaching corpus with explicit inline
+ignore directives, the same way antivirus uses labeled vaccine samples.
+
+**Do not** copy ignored bad lines from the curriculum into `SKILL.md`.
 
 ## Pre-flight (after edits)
 
@@ -33,7 +47,6 @@ aguara scan bin/orama-system/skills \
   --baseline config/agent-security/aguara-skills.baseline.json \
   --disable-rule TOXIC_CROSS_002
 
-# Explain any new gating rule:
 aguara explain <RULE_ID>
 ```
 
@@ -45,7 +58,7 @@ aguara scan bin/orama-system/skills \
   --disable-rule TOXIC_CROSS_002
 ```
 
-## Core doctrine
+## Core doctrine (production skills)
 
 | Principle | Do | Avoid |
 |-----------|----|-------|
@@ -56,74 +69,29 @@ aguara scan bin/orama-system/skills \
 | **No LAN literals in tracked docs** | `$LM_STUDIO_WIN_ENDPOINT`, `<win-host>` | Private LAN octets in markdown |
 | **No remote pipe-to-shell** | Link to vetted installer script path; pin versions | Remote download piped straight into a shell |
 
-When a real command is necessary, gate it explicitly in the skill body:
+When a real command is necessary, gate it explicitly:
 **verify source → pin version → operator approval → then run**.
 
-## Rule-specific wording patterns
+## Rule index (detail via `aguara explain`)
 
-Patterns below come from **orama PR #222 / agent-security CI** (2026-07-27).
-Use `aguara explain <RULE_ID>` for live regex detail.
-
-### EXTDL_006 — MCP server auto-registration (HIGH, non-baselineable)
-
-**Anti-pattern:** fenced blocks that tell the reader to run an MCP client's
-`add`/`install` subcommand with an `npx`/`node` launch line.
-
-**Instead:** prose — “In the MCP client UI, register server *openclaw* with
-launch command `npx -y openclaw mcp serve` (review package source first).”
-
-### CRED_021 — Dotenv file exposure (HIGH, non-baselineable)
-
-**Anti-pattern:** dotenv path literals in the same example block as HTTP POST,
-upload, or forward language; JavaScript examples that use the dotted runtime-env
-property token adjacent to `fetch` POST.
-
-**Instead:** validate exported env var names only before HTTP; in JS examples
-use bracket property access on the runtime env object (avoid the dotted env
-token) and still validate keys before network I/O.
-
-### EXTDL_005 — Shell profile modification (MEDIUM, non-baselineable)
-
-**Anti-pattern:** “add/append/write” language paired with zshrc/bashrc paths.
-
-**Instead:** “Wires env config into existing zsh/bash login profiles when those
-files already exist.” Keep actual profile mutations inside reviewed setup scripts.
-
-### SUPPLY_005 — Conditional CI execution (HIGH, non-baselineable)
-
-**Anti-pattern:** `CI`, `GITHUB_ACTIONS`, or similar tokens in docstrings or
-comments on Python files that import `subprocess`.
-
-**Instead:** describe the flag purpose (“skip auth-required canaries”) without
-naming CI environment variables.
-
-### SUPPLY_003 / EXTDL_013 — remote pipe-to-shell (HIGH)
-
-**Anti-pattern:** documenting remote curl (or wget) output piped into bash/sh.
-
-**Instead:** named repo script, checksum, version pin, operator review.
-
-### SSRF_002 / SSRF_008 — LAN and rebinding literals (HIGH)
-
-Use env vars and redacted placeholders in tracked markdown. Real topology
-belongs in gitignored local caches (local env files, `.local/lan-topology.json`).
+| Rule | Topic | Curriculum section |
+|------|-------|-------------------|
+| EXTDL_006 | MCP auto-registration | [anti-patterns § EXTDL_006](../examples/bad/security-wording-anti-patterns.md#extdl_006--mcp-auto-registration) |
+| CRED_021 | Dotenv + outbound HTTP | [anti-patterns § CRED_021](../examples/bad/security-wording-anti-patterns.md#cred_021--dotenv--outbound-http) |
+| EXTDL_005 | Shell profile modification | [anti-patterns § EXTDL_005](../examples/bad/security-wording-anti-patterns.md#extdl_005--shell-profile-modification) |
+| SUPPLY_005 | CI token + subprocess | [anti-patterns § SUPPLY_005](../examples/bad/security-wording-anti-patterns.md#supply_005--ci-token--subprocess-file) |
+| SUPPLY_003 / EXTDL_013 | curl pipe to shell | [anti-patterns § SUPPLY_003](../examples/bad/security-wording-anti-patterns.md#supply_003--extdl_013--curl-pipe-to-shell) |
+| SSRF_002 | LAN literals | [anti-patterns § SSRF_002](../examples/bad/security-wording-anti-patterns.md#ssrf_002--lan-literals-in-tracked-docs) |
 
 ## Anti-pattern: “literal command hoarding”
 
-Strong imperatives in skills (`Run this now:`, `Always execute:`,
-`You MUST run:`) increase the chance that:
+Strong imperatives (`Run this now:`, `Always execute:`, `You MUST run:`) increase
+the chance that a smaller model executes without context and that scanners flag
+the text as supply-chain instruction.
 
-- A smaller or less-aligned model executes without context.
-- A scanner flags the text as supply-chain instruction.
-- The baseline cannot separate **malicious** from **poorly worded benign** content.
+Prefer capability description, guarded examples, and pointers to reviewed scripts.
 
-Prefer:
-
-- **Capability description** — what the operator achieves.
-- **Guarded example** — preconditions, validation, failure modes.
-- **Pointer to script** — setup script under `$ORAMA_ROOT` with “review first.”
-
-## Worked example (CRED_021-safe curl block)
+## Worked example (production-safe curl block)
 
 ```bash
 if [ -z "${OPENROUTER_API_KEY:-}" ]; then
@@ -140,6 +108,7 @@ curl -sS -X POST "${OPENROUTER_ENDPOINT}" \
 ## Related
 
 - [`modular-skill-authoring.md`](modular-skill-authoring.md) — workflow and validation
+- [`../examples/bad/security-wording-anti-patterns.md`](../examples/bad/security-wording-anti-patterns.md) — literal bad/good curriculum
 - [`../../references/skill-architecture-guide.md`](../../references/skill-architecture-guide.md) — LINT-013/014/015/016
 - `config/agent-security/aguara-skills.baseline.json` — baselined legacy findings
 - `scripts/ci/run_agent_security_scans.sh` — full CI bundle
