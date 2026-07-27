@@ -87,6 +87,8 @@ Completed on Mac operator host per user request:
 
 ## Operator verification
 
+On **trusted `main`** (all three fleet nodes after `git pull --ff-only`):
+
 ```bash
 cd "$ORAMA_SYSTEM_PATH"
 python3 -c "import yaml; yaml.safe_load(open('bin/agents/REGISTRY.yml'))"
@@ -94,15 +96,44 @@ python3 scripts/hooks/no_committed_lan_topology.py
 python3 scripts/review/verify_trusted_install.py
 ./scripts/sync_openclaw_overlay_from_staging.sh --dry-run
 pytest tests/test_hermes_profiles.py tests/test_verify_trusted_install.py -q
+bash install.sh   # Hermes sync runs when verify_trusted_install passes
+```
+
+On a **feature branch** (e.g. PR #222 stack before merge): verifier fails by design — review `bin/agents`, then either skip materialization or override:
+
+```bash
+# skip Hermes profile/thin-wrapper sync (skill install still runs)
+export ORAMA_SKIP_HERMES_SYNC=1
+bash install.sh
+
+# or after human review of bin/agents diff:
+export ORAMA_TRUST_HERMES_SYNC=1
+bash install.sh
 ```
 
 On Win (after `git pull --ff-only` on `main`):
 
 ```powershell
 powershell -File .\platform\windows\install-hermes-harness.ps1 -RunDoctor
-# or explicit trust after reviewing bin/agents on a feature branch:
+# feature branch after reviewing bin/agents:
 powershell -File .\platform\windows\install-hermes-harness.ps1 -TrustHermesSync
 ```
+
+## Pre-merge checklist (single-operator, 3-node LAN)
+
+Run on **Mac orchestrator**, **RTX 3080**, and **RTX 5080** before merging PR #222:
+
+| Step | Mac | Win 3080 / 5080 |
+|------|-----|-----------------|
+| Mesh Phase A backup | `bash scripts/mesh/backup-mesh-local-cache.sh` (or Win mesh script) | same via harness |
+| Pull trusted main | `git pull --ff-only` | `git pull --ff-only` |
+| Trust gate | `python3 scripts/review/verify_trusted_install.py` → pass | same on Win with Python |
+| Hermes smoke | `bash install.sh` or harness PS1 | `install-hermes-harness.ps1 -RunDoctor` |
+| Expect | `profiles already synced` / thin wrappers verified | same |
+| CI parity (optional local) | `bash scripts/ci/run_agent_security_scans.sh` | skip or run in WSL |
+
+GitHub PR #222 must show **agent-security** workflow green on the PR head commit before merge-last.
+
 
 ## Next (Win Hermes phase)
 
