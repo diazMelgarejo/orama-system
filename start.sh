@@ -614,7 +614,14 @@ _sync_control_plane_token() {
 }
 
 _require_control_plane_token_for_lan() {
-  case "${ORAMA_INSECURE_DEV:-}" in 1|true|yes|TRUE|YES) return 0 ;; esac
+  case "${ORAMA_INSECURE_DEV:-}" in 1|true|yes|TRUE|YES)
+    if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${PORTAL_BIND_LAN:-0}" = "1" ]; then
+      _err "ORAMA_INSECURE_DEV is incompatible with LAN bind — auth is mandatory on the network"
+      exit 1
+    fi
+    return 0
+    ;;
+  esac
   _sync_control_plane_token
   local token="${ORAMA_CONTROL_PLANE_TOKEN:-}"
   local py="${US_PYTHON:-}"
@@ -646,6 +653,13 @@ _require_control_plane_token_for_lan() {
 
 if [ "${PT_BIND_LAN:-0}" = "1" ] || [ "${ORAMA_BIND_LAN:-0}" = "1" ] || [ "${PORTAL_BIND_LAN:-0}" = "1" ]; then
   _warn "svc" "LAN bind enabled (PT_BIND_LAN/ORAMA_BIND_LAN/PORTAL_BIND_LAN) — control-plane APIs are reachable on the network"
+  if [[ -f "$SCRIPT_DIR/scripts/mesh/ensure_local_mesh_secrets.py" ]]; then
+    python3 "$SCRIPT_DIR/scripts/mesh/ensure_local_mesh_secrets.py" || _warn "svc" "GOSSIP_SHARED_SECRET missing — run ensure_local_mesh_secrets.py"
+  fi
+  if ! python3 "$SCRIPT_DIR/scripts/mesh/mesh_gate.py" "$SCRIPT_DIR"; then
+    _err "svc" "GOSSIP_SHARED_SECRET required for LAN mesh — run: python3 scripts/mesh/ensure_local_mesh_secrets.py"
+    exit 1
+  fi
   _require_control_plane_token_for_lan || exit 1
 fi
 

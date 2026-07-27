@@ -22,6 +22,17 @@ This file contains local-runtime and model-selection guidance. It is intentional
 - Patch promptly, especially after parser/model-loader security releases.
 - Verify hashes for locally managed model files where feasible.
 
+### macOS mutual-exclusivity contract
+
+On Mac, **Ollama (`localhost:11434`) and LM Studio (`localhost:1234`) must not run at the same time** — only one local Mac runtime may be active. Both may be installed; operators choose per session.
+
+| Runtime | Install required | Must run 24/7 | Models |
+|---------|------------------|---------------|--------|
+| **Ollama** | Yes (`localhost:11434`) | No — start on demand or when mac autoresearch / embedding workloads need it | `qwen3.5:9b-nvfp4` (inference), `bge-m3` (embeddings) |
+| **LM Studio** | Optional alternate | No | MLX / GGUF models per operator catalog |
+
+See `.env.local.example` for `OLLAMA_MAC_ENDPOINT` vs `LM_STUDIO_MAC_ENDPOINT` documentation.
+
 ---
 
 ## 3. Ollama MLX on Apple Silicon
