@@ -23,7 +23,7 @@ Ordered. Lower items wait.
 
 1. **Security and safe defaults** — auth, bind, egress, capability manifests, redacted audit ([`docs/v2/24-security-first-platform.md`](docs/v2/24-security-first-platform.md), [`docs/v2/23-security-preconditions.md`](docs/v2/23-security-preconditions.md)).
 2. **Portable memory invariant (D25)** — tracked policy names categories only; concrete forbidden identity, device, path, and topology fragments live in local-only registries ([`docs/v2/47-portable-memory-local-topology-invariant.md`](docs/v2/47-portable-memory-local-topology-invariant.md)).
-3. **v1 finish-now on `main`** — identity audit Phase 3 (PT sync), Phase 4 (remove legacy lists), TLS test hygiene, tri-repo smoke — per [`docs/next/2026-07-25-pending-work-tracker.md`](docs/next/2026-07-25-pending-work-tracker.md).
+3. **v1 finish-now on `main`** — identity audit Phase 3 (PT sync), Phase 4 (remove legacy lists), mesh operator verify + #222 merge ladder, Hermes Win smoke, TLS test hygiene — per [`docs/next/2026-07-27-phase-0-master-plan.md`](docs/next/2026-07-27-phase-0-master-plan.md).
 4. **Kernel lean + one-way imports** — `perpetua-core` never imports `oramasys` (D4, D8).
 5. **v2 parity tests (Phase 4)** — wire `LLMClient` to dispatch; lift proven v1 pieces ([`docs/v2/04-build-order.md`](docs/v2/04-build-order.md)).
 6. **Orbit plugins** — `oramaclaw`, `agate`, GossipBus mesh, Langfuse traces — **plugins only**, not kernel entanglements (D22, docs 40–43).

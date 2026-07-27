@@ -1,5 +1,9 @@
 # PR #224 mesh security finality report (2026-07-26)
 
+> **Integrated copy:** Perpetua-Tools
+> [`PHASE-0-MASTER-PLAN-2026-07-27.md` §12](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-0-MASTER-PLAN-2026-07-27.md)
+> (post-merge status updated there). This file remains the full-source report with diagrams.
+
 > **Branch:** `cursor/p5-p6-mesh-hardening-f559`  
 > **PR:** [orama-system #224](https://github.com/diazMelgarejo/orama-system/pull/224)  
 > **Head (finality):** `97bb307e` — holistic CodeRabbit review remediation  
