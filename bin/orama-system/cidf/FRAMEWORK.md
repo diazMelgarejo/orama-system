@@ -81,6 +81,7 @@ Visual confirmation is **insufficient**. Pages lag. Caches lie.
 | **Visual assumption** | complete marked without programmatic check | Always call extract_text |
 | **Complexity bias** | higher-complexity tool chosen without exhausting lower ranks | Trust priority order |
 | **Failure escalation** | jumping to scripting after one failure | Exhaust full fallback chain first |
+| **Corpus amputation** | replacing PR/memory/plan summary with latest delta only | Append `## Follow-up:` below original scope (integrative editing; see `cidf/SKILL.md`) |
 
 ---
 
