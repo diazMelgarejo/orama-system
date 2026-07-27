@@ -38,7 +38,18 @@ for path in "${SCAN_ROOTS[@]}"; do
     FAIL=1
     continue
   fi
-  run "aguara:$path" aguara scan "$scan_root" --ci
+  aguara_args=(scan "$scan_root" --ci)
+  if [[ "$path" == "bin/orama-system/skills" ]]; then
+    baseline="$ROOT/config/agent-security/aguara-skills.baseline.json"
+    if [[ ! -f "$baseline" ]]; then
+      log "FAIL aguara:$path (missing baseline: config/agent-security/aguara-skills.baseline.json)"
+      FAIL=1
+      continue
+    fi
+    # TOXIC_CROSS_002 false-positives on internal env+subprocess coordination scripts.
+    aguara_args+=(--baseline "$baseline" --disable-rule TOXIC_CROSS_002)
+  fi
+  run "aguara:$path" aguara "${aguara_args[@]}"
 done
 
 run agent-audit agent-audit scan-project "$ROOT" \

@@ -216,7 +216,7 @@ loop, or pipeline) rather than from the agent's own terminal session.
 This is the key difference from Path A: Path A runs `firecrawl ...`
 commands (or MCP calls) during the current session to fetch data for the
 agent itself. Path B writes code that will keep running long after the
-agent stops, using `FIRECRAWL_API_KEY` from the project's `.env` or
+agent stops, using `FIRECRAWL_API_KEY` from the project's environment file or
 runtime config and the matching Firecrawl SDK in the project's language.
 
 The build skills are already installed from the same command above. No

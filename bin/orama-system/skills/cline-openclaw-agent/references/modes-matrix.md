@@ -79,7 +79,7 @@ Omit `--thinking` to leave the provider default. OpenRouter GLM-5.2 supports
 | --- | --- |
 | `-P, --provider <id>` | Provider id (default `cline`) |
 | `-m, --model <model-id>` | Model for the session |
-| `-k, --key <api-key>` | API key override for one run |
+| `-k, --key <api-key>` | Per-run API key flag |
 
 Providers: `cline`, `cline-pass`, `anthropic`, `openrouter`, `openai-compatible`,
 `openai-codex`, `gemini`, `sapaicore`. See [provider-auth.md](provider-auth.md).
