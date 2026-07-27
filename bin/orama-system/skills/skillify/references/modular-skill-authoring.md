@@ -20,7 +20,7 @@ Source: `https://code.claude.com/docs/en/skills`
 - Prefer `${CLAUDE_SKILL_DIR}` for bundled scripts and `${CLAUDE_PROJECT_DIR}` for project-local scripts.
 - Treat dynamic context injection as pre-execution shell: scope tools narrowly and avoid it in auto-triggered side-effect skills.
 - Treat skills as executable supply-chain material: audit scripts, tool use, network use, hooks, and security-relevant scope.
-- Before merging skill doc changes, read [`skill-security-wording-reference-card.md`](skill-security-wording-reference-card.md) — imperative commands in skills can be misread by naive agents as literal instructions (unintentional prompt injection); word examples so aguara can separate real attacks from benign docs.
+- Before merging skill doc changes, read [`skill-security-wording-reference-card.md`](skill-security-wording-reference-card.md) — production skills use safe wording only; literal bad→good pairs belong in [`../examples/bad/security-wording-anti-patterns.md`](../examples/bad/security-wording-anti-patterns.md) with `aguara-ignore-next-line` quarantine (never copy bad lines into `SKILL.md`).
 
 ## Intake Questions
 
