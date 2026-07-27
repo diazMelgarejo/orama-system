@@ -21,4 +21,4 @@ State: `~/.openclaw/state/lan_peer/win_job_queue.json`
 - `mac-h5-comparison.md` (Ollama 9B H5 leg)
 - PR review: `subagent/win-coder/bridge-http-local` (PT)
 
-**Monitor Win:** http://192.168.254.100:8002/peer-inbox
+**Monitor Win:** http://${WIN_PORTAL_LAN_HOST}:8002/peer-inbox

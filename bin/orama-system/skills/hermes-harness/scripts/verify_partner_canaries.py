@@ -7,7 +7,7 @@ canaries pass.
 
 Usage:
     python verify_partner_canaries.py [--lm-studio-url URL] [--timeout SECS]
-    python verify_partner_canaries.py --skip-hermes --skip-agy  # CI / no-auth
+    python verify_partner_canaries.py --skip-hermes --skip-agy  # skip auth-required canaries
     python verify_partner_canaries.py --tail-lmstudio-logs  # last ~30 lines of newest server log
 
 Required canaries:  LM Studio, Hermes

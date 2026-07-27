@@ -14,9 +14,8 @@ Bridges Gemini CLI into Claude Code or other MCP clients. Used **only for Gemini
 
 ### Claude Code setup
 
-```bash
-claude mcp add gemini-cli -- npx -y gemini-mcp-tool
-```
+Register server `gemini-cli` in Claude Code MCP settings with command `npx` and
+args `-y gemini-mcp-tool`.
 
 Verify: `/mcp` → expect `gemini-cli active`
 
@@ -89,8 +88,10 @@ gemini auth login
 
 ### Claude Code setup
 
-```bash
-claude mcp add ai-cli '{"name":"ai-cli","command":"npx","args":["-y","ai-cli-mcp@latest"]}'
+Add server `ai-cli` in Claude Code MCP settings using JSON config:
+
+```json
+{"name":"ai-cli","command":"npx","args":["-y","ai-cli-mcp@latest"]}
 ```
 
 ### Generic MCP config

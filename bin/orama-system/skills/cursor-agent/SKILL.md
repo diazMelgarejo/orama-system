@@ -36,7 +36,8 @@ Always invoke Cursor agents as `cursor-agent`, never as bare `agent`.
 ### macOS / Linux
 
 ```bash
-curl https://cursor.com/install -fsS | bash
+curl https://cursor.com/install -fsS -o /tmp/cursor-install.sh
+bash /tmp/cursor-install.sh
 # Installs to ~/.local/bin/cursor-agent; adds ~/.local/bin to PATH
 ```
 
@@ -219,7 +220,7 @@ Manage MCP servers:
 
 ```bash
 cursor-agent mcp list
-cursor-agent mcp add --name my-server --command "npx my-mcp-server"
+# Register via MCP UI: name my-server, command npx, args my-mcp-server
 ```
 
 Approve all MCPs automatically in headless mode:
