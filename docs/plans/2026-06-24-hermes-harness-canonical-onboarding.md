@@ -1,6 +1,8 @@
 <!-- lint-ignore LINT-013 -->
 # Hermes-Harness Canonical Onboarding & Skill Absorption (2026-06-24)
 
+> **Reality checkpoint — verified 2026-07-27:** This is a historical implementation plan, not proof that every proposed component is live. The running Hermes installation is **v0.19.0 (2026.7.20)** at `$HERMES_HOME`; it has the `default` profile only and no materialized `$HERMES_HOME/profiles/` directory. Treat the Orama role roster as **staged templates** until `install_hermes_profiles.py --verify` proves a profile install. Use native `hermes backup` / `hermes import` for full-instance recovery, keep secrets private, and use `$ORAMA_SYSTEM_PATH` rather than workstation paths in portable repo instructions. See [Hermes configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration), [CLI reference](https://hermes-agent.nousresearch.com/docs/reference/cli-commands), and [`hermes-portable-brain-map.md`](../../bin/orama-system/skills/hermes-harness/references/hermes-portable-brain-map.md).
+
 > **Date:** 2026-06-24 (enriched 2026-06-25) · **Owner:** orama-system (L3 canonical skills) · **Consumer:** Hermes local harness (L1)
 > **Status:** 🔄 IN PROGRESS — Phases 1–5+7+8+6+9 ✅ shipped (Win testdrive 2026-06-28); **skill absorption ✅ 2026-06-28**; Mac↔Win cross-harness E2E ⏳; PR #108 ✅ merged; LINT-013 ✅  
 > **2026-07-26 addendum:** Agent persona staging + review gate → [`2026-07-26-hermes-openclaw-staging-review-gate.md`](2026-07-26-hermes-openclaw-staging-review-gate.md) and [`2026-07-26-hermes-agent-canonical-staging-and-profile-install.md`](2026-07-26-hermes-agent-canonical-staging-and-profile-install.md)

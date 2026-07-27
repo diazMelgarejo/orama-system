@@ -1,5 +1,7 @@
 # Hermes OpenClaw migration — operator sequence (orama canonical)
 
+> **Reality checkpoint — verified 2026-07-27:** This is a migration runbook, not evidence that a migration has already occurred. On this host, Hermes **v0.19.0 (2026.7.20)** is rooted at `$HERMES_HOME`; only `default` is active and `$HERMES_HOME/profiles/` is absent. Use `hermes claw migrate --dry-run` before any import, preserve a native `hermes backup`, and regard imported OpenClaw content as source material until it is classified into local Hermes state, an Orama staged profile, PT memory, or archive-only provenance. Keep credentials out of tracked files. Official references: [CLI migration commands](https://hermes-agent.nousresearch.com/docs/reference/cli-commands) and [configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration).
+
 > **Date:** 2026-07-26  
 > **Status:** Operator reference — **review with** [`2026-07-26-hermes-openclaw-staging-review-gate.md`](2026-07-26-hermes-openclaw-staging-review-gate.md) before running  
 > **Env contract:** `$ORAMA_SYSTEM_PATH`, `$HERMES_HOME`, `$PERPETUA_TOOLS_PATH`, `${HOME}` only — no workstation literals in tracked docs.

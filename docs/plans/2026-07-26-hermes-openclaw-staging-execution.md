@@ -1,5 +1,7 @@
 # Hermes + OpenClaw staging — OpenClaw execution log (2026-07-26)
 
+> **Reality checkpoint — verified 2026-07-27:** This is an execution log for staged content, not proof that the described profiles are installed on this Windows Hermes host. The current instance is Hermes **v0.19.0 (2026.7.20)** at `$HERMES_HOME`; `hermes profile list` reports `default` only and `$HERMES_HOME/profiles/` is absent. Subsequent work must verify staging, installation, and local Hermes runtime state separately. Use `$ORAMA_SYSTEM_PATH` in portable commands and refer to [Hermes configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration) for current configuration semantics.
+
 > **Status:** ✅ OpenClaw flesh-out + Win idempotent harness sync wired (2026-07-26)  
 > **Security hardening:** ✅ `cursor/hermes-staging-security-hardening-f559` (2026-07-26)  
 > **Parent:** [`2026-07-26-hermes-openclaw-staging-review-gate.md`](2026-07-26-hermes-openclaw-staging-review-gate.md)
@@ -12,7 +14,7 @@ Method: CEO → Engineering → DX → Final gate (per `garrytan/gstack/autoplan
 |-------------|---------|----------|
 | **CEO / premise** | Approve hardening scope; defer `hermes claw migrate` until operator smoke on 3080/5080 | Review gate §Explicit non-actions; no fleet cutover in this PR |
 | **Engineering** | Findings 1–3 closed in code; 4+6 closed via integrative merge + trust gate | `repo_hygiene` LINT-013 config scan; overlay allowlist; slug validation; `harmonize-memory`; `verify_trusted_install.py` |
-| **DX** | Env contract documented; Win PS1 mirrors `install.sh` skip/trust flags | `ORAMA_SKIP_HERMES_SYNC`, `ORAMA_TRUST_HERMES_SYNC`, `ORAMA_VERIFY_COMMIT_SIG` |
+| **DX** | Env contract documented; Win PS1 mirrors `install.sh` skip/trust flags | `ORAMA_SKIP_HERMES_SYNC`, `ORAMA_TRUST_HERMES_SYNC`, `ORAMA_VERIFY_COMMIT_SIG`, `ORAMA_ALLOWED_GPG_FINGERPRINTS` |
 | **Final gate** | **Ship** security PR; operator checklist remains open | RTX 5080 fresh + 3080 re-sync smoke still manual |
 
 ### Security invariants (call-out — both docs must agree)
