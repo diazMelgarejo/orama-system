@@ -36,13 +36,12 @@ Always invoke Cursor agents as `cursor-agent`, never as bare `agent`.
 ### macOS / Linux
 
 ```bash
-# Download to a private temp file (not a predictable /tmp name — symlink race).
-install_script="$(mktemp -t cursor-install.XXXXXX)"
-chmod 700 "$install_script"
-trap 'rm -f "$install_script"' EXIT
-curl https://cursor.com/install -fsS -o "$install_script"
-# Review the script on first install; then:
-bash "$install_script"
+# Private mode-700 temp dir — see shell-hygiene §7 and integrative-editing-examples §3.
+install_dir="$(mktemp -d -t cursor-install.XXXXXX)"
+chmod 700 "$install_dir"
+install_script="${install_dir}/install.sh"
+trap 'rm -rf "$install_dir"' EXIT
+curl https://cursor.com/install -fsS -o "$install_script" && bash "$install_script"
 # Installs to ~/.local/bin/cursor-agent; adds ~/.local/bin to PATH
 ```
 

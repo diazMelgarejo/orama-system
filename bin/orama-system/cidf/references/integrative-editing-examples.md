@@ -34,9 +34,10 @@
 
 | Bad | Good |
 | --- | --- |
-| `curl -o /tmp/cursor-install.sh && bash /tmp/cursor-install.sh` | `mktemp -t cursor-install.XXXXXX` + `chmod 700` + `trap` cleanup + review before `bash` |
+| `curl -o /tmp/cursor-install.sh && bash /tmp/cursor-install.sh` | `install_dir="$(mktemp -d -t cursor-install.XXXXXX)"` + `chmod 700` + download inside + `curl … && bash` + `trap 'rm -rf "$install_dir"' EXIT` (**CLAYGO** — remove temp dir unless operator keeps it) |
+| Predictable filename in shared `TMPDIR` | Private mode-700 directory; chain `curl` success before `bash` |
 
-Shared `/tmp` names are symlink-replaceable between download and execute.
+See [`../../skills/shell-hygiene/SKILL.md` §7](../../skills/shell-hygiene/SKILL.md) (private temp dirs + installer downloads).
 
 ---
 
@@ -44,8 +45,11 @@ Shared `/tmp` names are symlink-replaceable between download and execute.
 
 | Bad | Good |
 | --- | --- |
-| `AIAgent.chat('Reply with: HERMES_OK')` in status | `kill -0` on recorded PID + command-line match on `hermes_harness.py` |
-| Full model request for liveness | Optional **inference smoke test** only when labeled, with explicit timeout |
+| `AIAgent.chat('Reply with: HERMES_OK')` in status | `verify_hermes_pid` — exact `hermes_harness.py` path + `kill -0` |
+| Subshell `python3 … &` without `exec` (tracks wrapper shell) | `(cd …; exec python3 "$PERP_SCRIPT" …) &` — PID is the Python harness |
+| `grep -q hermes_harness.py` on cmdline | Match full resolved script path; reject stale/mismatched PIDs |
+| `mkdir` lock + EXIT trap only | Stale lock recovery when lock pid is dead; atomic PID file via `mv` |
+| `printf >"$PID_FILE"` on shared dir | Mode-700 runtime dir; reject symlinked parents; atomic rename write |
 
 ---
 

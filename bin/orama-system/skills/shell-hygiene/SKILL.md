@@ -206,6 +206,29 @@ another agent's work. Origin: hit twice in one
 session (2026-07-12) coordinating STM-gate doc commits with a concurrent
 Codex session over the same GossipBus claim board.
 
+### 7. Private temp directories and installer downloads
+
+Never download installers to predictable shared paths (`/tmp/cursor-install.sh`).
+Use a **private mode-700 directory**, download inside it, chain `curl` success
+before `bash`, and **CLAYGO** the directory on exit unless the operator explicitly
+keeps artifacts for review.
+
+```bash
+install_dir="$(mktemp -d -t pkg-install.XXXXXX)"
+chmod 700 "$install_dir"
+install_script="${install_dir}/install.sh"
+trap 'rm -rf "$install_dir"' EXIT   # CLAYGO — remove unless maintainer keeps for audit
+curl -fsS "https://example.com/install" -o "$install_script" && bash "$install_script"
+```
+
+Rules:
+
+- `mktemp -d` (directory), not a bare file in shared `TMPDIR`.
+- `chmod 700` on the directory before writing downloads.
+- `curl … && bash` — do not run a partial download when `curl` fails.
+- Reject symlinked runtime parents before `mkdir -p` (see `hermes-spawn` PID dir).
+- Cross-ref: [`integrative-editing-examples.md` §3](../cidf/references/integrative-editing-examples.md), [`fresh-main-integrity-diff-claygo.md`](../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md).
+
 ---
 
 ## Why This Rule Exists
@@ -231,6 +254,7 @@ wasted turns, guaranteed delivery, no timeout tuning required.
 | Need a PID to exit | `until ! kill -0 $PID 2>/dev/null; do sleep 2; done` |
 | Backgrounded external CLI/agent dispatch (`codex exec`, `kimi -p`, review subagent) | 15-min hard ceiling (§ 5 above) — force-kill on timeout, don't let it run unbounded |
 | `git commit`/`add` racing a concurrent agent session | Retry loop, never delete `.git/index.lock` yourself (§ 6 above) |
+| Download + execute installer script | Private `mktemp -d` + `chmod 700` + `curl … && bash` + CLAYGO `trap` (§ 7 above) |
 | "I'll just use a shorter sleep" | **No. Use one of the above.** |
 
 ## Shell Portability — zsh Word-Splitting (get it right the first time)
