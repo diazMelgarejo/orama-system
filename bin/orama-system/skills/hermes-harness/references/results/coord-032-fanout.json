@@ -1,0 +1,17 @@
+{
+  "fanout_id": "coord-032",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "operator/env-local-policy",
+      "filename": "win-2026-07-27-env-local-policy-ask.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-27-env-local-policy-ask.md"
+    },
+    {
+      "assignee": "mac",
+      "topic": "operator/env-local-policy",
+      "filename": "win-2026-07-27-env-local-policy-ask.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/win-2026-07-27-env-local-policy-ask.md"
+    }
+  ]
+}

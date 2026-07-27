@@ -40,6 +40,7 @@ allowed-tools: bash, file-operations
 ## Related reference cards
 
 - [`hermes-portable-brain-map.md`](../../references/hermes-portable-brain-map.md)
+- [`hermes-portable-brain-archive.md`](../../references/hermes-portable-brain-archive.md)
 - [`openclaw-to-hermes-migration.md`](../../references/openclaw-to-hermes-migration.md)
 - [`hermes-profile-install.md`](../../references/hermes-profile-install.md)
 
