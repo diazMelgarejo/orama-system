@@ -17,5 +17,5 @@
 - Win inbox: 18 files from Mac (coord-003 jobs read)
 - Peer probe: PASS (portal-health, ws-peer, peer-lmstudio)
 
-**Monitor Win:** http://192.168.254.100:8002/peer-inbox  
-**Monitor Mac:** http://192.168.254.102:8002/co-orchestration/macos
+**Monitor Win:** http://${WIN_PORTAL_LAN_HOST}:8002/peer-inbox  
+**Monitor Mac:** http://${MAC_PORTAL_LAN_HOST}:8002/co-orchestration/macos

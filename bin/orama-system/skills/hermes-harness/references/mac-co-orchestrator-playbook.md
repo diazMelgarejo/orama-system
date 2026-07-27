@@ -25,7 +25,8 @@ git fetch origin --prune && git checkout main && git pull --ff-only origin main
 ./start.sh --stop && ./start.sh --lan-peer --no-open
 
 # cursor-agent (if missing)
-curl https://cursor.com/install -fsS | bash
+curl https://cursor.com/install -fsS -o /tmp/cursor-install.sh
+bash /tmp/cursor-install.sh
 cursor-agent --version
 cursor-agent login   # once per machine
 

@@ -158,7 +158,7 @@ See [references/acp-bridge.md](references/acp-bridge.md).
 
 ```bash
 openclaw mcp serve        # expose OpenClaw channels over MCP stdio
-cline mcp install openclaw -- npx -y openclaw mcp serve
+# In Cline: register MCP server "openclaw" with command `npx -y openclaw mcp serve`
 ```
 
 See [references/mcp-bridge.md](references/mcp-bridge.md).
