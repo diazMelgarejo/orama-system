@@ -12,7 +12,17 @@ Win→Mac `lan_peer_assign.py drop --peer` is **blocked**:
 - `http://` + bearer token → `SECURITY_STOP` (RFC 6750 fail-closed in `lan_peer_assign.py`)
 - `https://` → Mac portal has **no TLS** on :8002 (`SSL: WRONG_VERSION_NUMBER`)
 
-**Workaround:** Mac **pulls** from Win portal (LAN HTTP). Win portal is bound `0.0.0.0:8002` after `start.ps1 --lan-peer`.
+**Do not send `Authorization: Bearer` over plaintext HTTP in either direction** — reversing
+Mac→Win does not fix LAN interception or token reuse.
+
+## Approved alternatives (pick one before inbox pull)
+
+1. **SSH tunnel** — forward Win portal to `https://127.0.0.1:<local>` and use HTTPS locally.
+2. **mTLS / TLS-terminated reverse proxy** — terminate TLS on Win portal before bearer auth.
+3. **Scoped non-reusable pull token** — short-lived, single-file scope (not the long-lived control-plane token).
+4. **Operator handoff** — copy inbox files out-of-band (USB, encrypted sync) when TLS is unavailable.
+
+Until one of the above is in place, use **health checks only** over HTTP (no bearer).
 
 ## Win portal endpoints (this host)
 
@@ -20,33 +30,32 @@ Win→Mac `lan_peer_assign.py drop --peer` is **blocked**:
 |----------|-----|
 | Health (no auth) | `http://${WIN_PORTAL_LAN_HOST}:8002/health` |
 | Portal UI | `http://${WIN_PORTAL_LAN_HOST}:8002/peer-inbox` |
-| List inbox JSON | `http://${WIN_PORTAL_LAN_HOST}:8002/api/peer-inbox` |
-| Read one file | `http://${WIN_PORTAL_LAN_HOST}:8002/api/peer-inbox/<filename>` |
-| HTML render | `http://${WIN_PORTAL_LAN_HOST}:8002/api/peer-inbox/<filename>/html` |
+| List inbox JSON | `https://<TLS_ENDPOINT>/api/peer-inbox` (after TLS/tunnel) |
+| Read one file | `https://<TLS_ENDPOINT>/api/peer-inbox/<filename>` |
 
-Replace IP if DHCP changed — check Win `ipconfig` / `last_discovery.json`.
+Replace host if DHCP changed — check Win `ipconfig` / `last_discovery.json`.
 
 ## Auth
 
-Use the **same** `ORAMA_CONTROL_PLANE_TOKEN` as Win `.env.LOCAL` (do not paste token into tracked files).
+Use the **same** `ORAMA_CONTROL_PLANE_TOKEN` as Win `.env.LOCAL` only over **TLS or tunneled HTTPS** — do not paste token into tracked files.
 
 ```bash
 export ORAMA_CONTROL_PLANE_TOKEN='<match Win workspace .env.LOCAL>'
-export WIN_PORTAL=http://${WIN_PORTAL_LAN_HOST}:8002
+export WIN_PORTAL=https://127.0.0.1:<LOCAL_FORWARD>/   # after ssh -L tunnel
 ```
 
-## Mac terminal — copy/paste block
+## Mac terminal — copy/paste block (TLS/tunnel required)
 
 ```bash
-# 0) Prerequisites
+# 0) Prerequisites — establish TLS or SSH tunnel first; do NOT use bare http:// with bearer
 cd "$ORAMA_SYSTEM_PATH"
-export WIN_PORTAL=http://${WIN_PORTAL_LAN_HOST}:8002
+export WIN_PORTAL=https://127.0.0.1:<LOCAL_FORWARD>/
 # export ORAMA_CONTROL_PLANE_TOKEN from Mac ~/.openclaw or Keychain — MUST match Win
 
-# 1) Health (no token)
-curl -sS "$WIN_PORTAL/health" | head
+# 1) Health (no token) — HTTP ok for liveness only when portal is LAN-reachable
+curl -sS "http://${WIN_PORTAL_LAN_HOST}:8002/health" | head
 
-# 2) List Win inbox
+# 2) List Win inbox (TLS/tunnel only)
 curl -sS -H "Authorization: Bearer $ORAMA_CONTROL_PLANE_TOKEN" \
   "$WIN_PORTAL/api/peer-inbox" | python3 -m json.tool | head -80
 

@@ -279,9 +279,11 @@ Real bring-up, 2026-07-08. Both repos were already cloned to
 **Fleet registration:** added as `win-rtx5080` in
 `Perpetua-Tools/config/devices.yml`, mirroring the `win-rtx3080` entry's
 shape — `primary_backend: lm-studio`, `lan_ip: ${PRIVATE_LAN_IP}`, port 1234.
-Set `LM_STUDIO_WIN_ENDPOINTS=http://${LM_STUDIO_LAN_HOST}:1234` (User env var) as
-the static fallback; per the file's own header comment, always prefer a live
-probe over this hardcoded value since Win LAN IPs are DHCP-dynamic.
+Set `LM_STUDIO_WIN_ENDPOINTS` to the **resolved** URL
+`http://<LM_STUDIO_LAN_HOST>:1234` (User env var) as the static fallback —
+Windows does not expand `${...}` in User environment values. `install.sh` /
+`ensure_local_mesh_secrets.py` can populate this from `.env.local` after a live
+probe; per this file's header, always prefer discovery over a stale hardcoded IP.
 
 **5-minute coordination pulse (not the doc default):** this node's owner
 wanted peer-inbox polling every 5 minutes instead of the default 15:

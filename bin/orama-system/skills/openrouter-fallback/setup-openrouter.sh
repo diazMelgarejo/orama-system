@@ -119,30 +119,33 @@ chmod 600 "$ENV_FILE.tmp"
 mv "$ENV_FILE.tmp" "$ENV_FILE"
 log "✓ Environment file created"
 
-# Update shell profiles
-log "Updating shell profiles to source OpenRouter env on startup..."
-for profile in ~/.zshrc ~/.bashrc; do
-  if [ -f "$profile" ]; then
-    # Check if already sourced
-    if grep -qE '\.env\.openrouter|openclaw-openrouter-env' "$profile" 2>/dev/null; then
-      if grep -q 'openclaw-openrouter-env' "$profile" 2>/dev/null; then
-        log "  $profile: updating legacy openrouter source path"
-        tmp_profile="$(mktemp)"
-        sed 's|~/.openclaw/openclaw-openrouter-env|~/.openclaw/.env.openrouter|g' "$profile" > "$tmp_profile"
-        mv "$tmp_profile" "$profile"
+# Update shell profiles (opt-in — runtime start.sh sources ~/.openclaw/.env.openrouter)
+if [ "${OPENROUTER_PERSIST_SHELL_PROFILE:-0}" = "1" ]; then
+  log "Updating shell profiles to source OpenRouter env on startup..."
+  for profile in ~/.zshrc ~/.bashrc; do
+    if [ -f "$profile" ]; then
+      if grep -qE '\.env\.openrouter|openclaw-openrouter-env' "$profile" 2>/dev/null; then
+        if grep -q 'openclaw-openrouter-env' "$profile" 2>/dev/null; then
+          log "  $profile: updating legacy openrouter source path"
+          tmp_profile="$(mktemp)"
+          sed 's|~/.openclaw/openclaw-openrouter-env|~/.openclaw/.env.openrouter|g' "$profile" > "$tmp_profile"
+          mv "$tmp_profile" "$profile"
+        else
+          log "  $profile: already configured"
+        fi
       else
-        log "  $profile: already configured"
-      fi
-    else
-      log "  $profile: adding source command"
-      cat >> "$profile" <<'RCEOF'
+        log "  $profile: adding source command"
+        cat >> "$profile" <<'RCEOF'
 
 # OpenRouter fallback (added by setup-openrouter.sh)
 [ -f ~/.openclaw/.env.openrouter ] && source ~/.openclaw/.env.openrouter
 RCEOF
+      fi
     fi
-  fi
-done
+  done
+else
+  log "Skipping shell profile persistence (set OPENROUTER_PERSIST_SHELL_PROFILE=1 to opt in)"
+fi
 
 # Test connectivity
 log ""

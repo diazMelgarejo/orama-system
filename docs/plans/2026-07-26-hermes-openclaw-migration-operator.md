@@ -35,6 +35,12 @@ Set `OPENCLAW_WORKSPACE` explicitly to the OpenClaw workspace root that should r
 ```bash
 : "${OPENCLAW_WORKSPACE:?Set OPENCLAW_WORKSPACE to the OpenClaw workspace root}"
 
+set -euo pipefail
+_gateway_restore() {
+  hermes gateway start || true
+}
+trap '_gateway_restore' EXIT
+
 hermes gateway stop
 
 hermes claw migrate \
@@ -42,6 +48,7 @@ hermes claw migrate \
   --workspace-target "${OPENCLAW_WORKSPACE}"
 
 hermes doctor
+trap - EXIT
 hermes gateway start
 ```
 
@@ -49,6 +56,12 @@ hermes gateway start
 
 ```bash
 : "${OPENCLAW_WORKSPACE:?Set OPENCLAW_WORKSPACE to the OpenClaw workspace root}"
+
+set -euo pipefail
+_gateway_restore() {
+  hermes gateway start || true
+}
+trap '_gateway_restore' EXIT
 
 hermes gateway stop
 
@@ -59,6 +72,7 @@ hermes claw migrate \
   --workspace-target "${OPENCLAW_WORKSPACE}"
 
 hermes doctor
+trap - EXIT
 hermes gateway start
 ```
 
