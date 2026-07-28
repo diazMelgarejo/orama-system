@@ -79,7 +79,7 @@ python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py drop \
 
 | File | Topic |
 |------|-------|
-| `win-2026-07-27-env-local-policy-ask.md` | **Reply required** — SSoT for workspace `.env.LOCAL` |
+| `win-2026-07-27-env-local-policy-ask.md` | **Reply required** — SSoT for workspace local env policy |
 | `mac-2026-07-24-h6-dispatch-bookkeeping-landed.md` | H6 bookkeeping landed (informational) |
 | `win-2026-07-23-monitors-paused.md` | Monitors paused until manual resume |
 
@@ -90,6 +90,6 @@ Create `mac-2026-07-27-env-local-policy-reply.md` with keep/migrate/delete per k
 ## Win state (2026-07-27 ~14:45)
 
 - Stack restarted: PT :8000, orama :8001, Portal :8002 UP
-- `ORAMA_CONTROL_PLANE_TOKEN` synced to Windows **User** env from workspace `.env.LOCAL`
+- `ORAMA_CONTROL_PLANE_TOKEN` synced to Windows **User** env from the operator workspace local policy file
 - `OramaCoordPulse` still **Disabled** (monitors paused)
 - Outbox pending: coord-031 + coord-032 (Mac push failed)
