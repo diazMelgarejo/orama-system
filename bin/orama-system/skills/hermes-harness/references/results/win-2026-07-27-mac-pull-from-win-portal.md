@@ -30,8 +30,8 @@ Until one of the above is in place, use **health checks only** over HTTP (no bea
 |----------|-----|
 | Health (no auth) | `http://${WIN_PORTAL_LAN_HOST}:8002/health` |
 | Portal UI | `http://${WIN_PORTAL_LAN_HOST}:8002/peer-inbox` |
-| List inbox JSON | `https://<TLS_ENDPOINT>/api/peer-inbox` (after TLS/tunnel) |
-| Read one file | `https://<TLS_ENDPOINT>/api/peer-inbox/<filename>` |
+| List inbox JSON | `http://127.0.0.1:<LOCAL_FORWARD>/api/peer-inbox` (SSH tunnel) or `https://<TLS_ENDPOINT>/api/peer-inbox` (mTLS proxy) |
+| Read one file | `http://127.0.0.1:<LOCAL_FORWARD>/api/peer-inbox/<filename>` (SSH tunnel) or `https://<TLS_ENDPOINT>/api/peer-inbox/<filename>` |
 
 Replace host if DHCP changed — check Win `ipconfig` / `last_discovery.json`.
 

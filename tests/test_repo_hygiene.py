@@ -234,6 +234,27 @@ def test_scan_tracked_private_network_literals_ignores_marker_inside_yaml_string
 
 
 @pytest.mark.unit
+def test_scan_tracked_private_network_literals_honors_yaml_comment_suppression(
+    tmp_path: Path,
+) -> None:
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "bin" / "orama-system" / "config"
+    cfg.mkdir(parents=True)
+    ok = cfg / "routing.yml"
+    ok.write_text(
+        "gateway: http://10.0.0.1:1234  # lint-ignore-line LINT-013\n",
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        ["bin/orama-system/config/routing.yml"],
+    )
+
+    assert errors == []
+
+
+@pytest.mark.unit
 def test_scan_tracked_private_network_literals_staged_index_reads_index_blob(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
