@@ -118,6 +118,16 @@ This document provides extended examples and recovery procedures for each AFRP f
   assuming. See `bin/orama-system/skills/skillify/SKILL.md`'s "Related
   Tools (disambiguation)" section.
 
+**Example (2026-07-28, real — CONFLICTING ≠ "pick one PR"):**
+- Surface: periscope PR #12 `mergeable: CONFLICTING` after PR #10 merged overlapping ECC
+- Looks like: Type A — "close #12 or merge #12 over #10"
+- Actually Type C: **synthesize** both ECC runs into a third state, then **path-scoped
+  replay** onto fresh `origin/merged` (3 files, one commit)
+- Wrong path: wholesale merge/rebase, re-add full bundle, or pick PR #12 generator output
+- **Recovery applied:** CIDF integrative-editing-examples §9;
+  `path-scoped-pr-replay-reference-card.md`; AFRP proxy-table rows for CONFLICTING and
+  empty `commit-clean` commits
+
 ---
 
 ## Failure Mode 7: Handwaving (Proxy Conclusion)
@@ -132,6 +142,18 @@ This document provides extended examples and recovery procedures for each AFRP f
 - Proxy: `git merge-base != root` ⇒ agent declares "no orphaned branches, nothing to do."
 - Real question: does the branch's *content* converge with main? The tree-twin search showed every branch HAD a byte-identical twin needing re-anchor.
 - Also: user said "re-anchor"; agent *flattened* branches to HEAD (wrong mechanic) without confirming the meaning.
+
+**Example (2026-07-28, real — CONFLICTING PR):**
+- Proxy: GitHub `mergeable: CONFLICTING` ⇒ "merge or rebase the PR branch to fix it."
+- Real question: how to deliver the **harmonized synthesis** now that the integration base
+  already contains overlapping content (PR #10 ECC on `merged`)?
+- Wrong action: wholesale merge of stale PR #12 (two commits from pre-#10 base) or pick one
+  generator run over the other.
+- Right method: preserve synthesis outside the branch; reset to fresh `origin/merged`;
+  `git checkout` only the 3 proven unique paths; `git add` before `commit-clean.sh`;
+  single commit; `--force-with-lease`. Verify with `gh pr view --json mergeable`.
+- Curriculum: CIDF integrative-editing-examples §9;
+  [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md).
 
 **Recovery:** Stop. Run the **Intent-Verification Gate** (`SKILL.md`): clarify intent via AskUserQuestion FIRST when there's interpretation risk or before any negative conclusion; replace the proxy with the method that truly answers the question; trust the user's domain signal over a first-pass check.
 
