@@ -146,10 +146,15 @@ fi
 # Win parity: scripts/mesh/Invoke-MeshLocalCache.ps1 (platform/windows/install.ps1 -Mode Install)
 
 # ─── Hermes harness (full repo checkout) ─────────────────────────────────────
+LAN_ARCHIVE="$SCRIPT_DIR/scripts/mesh/lan_topology_archive.py"
+if [[ -f "$LAN_ARCHIVE" ]]; then
+  python3 "$LAN_ARCHIVE" --ensure-local-cache || warn "LAN topology archive step failed (mesh may need manual .env.local)"
+fi
 HARNESS_DIR="$SCRIPT_DIR/bin/orama-system/skills/hermes-harness/scripts"
-if [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
-  export ORAMA_SYSTEM_PATH="$SCRIPT_DIR"
-  info "Syncing Hermes profiles from bin/agents staging (idempotent)..."
+VERIFY_TRUST="$SCRIPT_DIR/scripts/review/verify_trusted_install.py"
+
+hermes_sync() {
+  info "Syncing Hermes profiles from bin/agents staging ($1)..."
   if python3 "$HARNESS_DIR/install_hermes_profiles.py" --sync; then
     ok "Hermes profiles synced (or already matched staging)"
   else
@@ -162,6 +167,21 @@ if [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
     ok "Hermes thin wrappers installed"
   else
     warn "Hermes thin wrapper install failed — run install_hermes_thin_skills.py manually"
+  fi
+}
+
+if [[ "${ORAMA_SKIP_HERMES_SYNC:-0}" == "1" ]]; then
+  warn "Skipping Hermes harness sync (ORAMA_SKIP_HERMES_SYNC=1)"
+elif [[ -f "$HARNESS_DIR/install_hermes_profiles.py" ]]; then
+  export ORAMA_SYSTEM_PATH="$SCRIPT_DIR"
+  if [[ "${ORAMA_TRUST_HERMES_SYNC:-}" == "1" ]]; then
+    hermes_sync "operator-trusted override (ORAMA_TRUST_HERMES_SYNC=1)"
+  elif [[ ! -f "$VERIFY_TRUST" ]]; then
+    warn "Hermes sync skipped — verify_trusted_install.py missing (git pull --ff-only, or ORAMA_TRUST_HERMES_SYNC=1 after reviewing bin/agents)"
+  elif ! python3 "$VERIFY_TRUST" --quiet; then
+    warn "Hermes sync skipped — untrusted checkout (review bin/agents, git pull --ff-only on main, then ORAMA_TRUST_HERMES_SYNC=1)"
+  else
+    hermes_sync "idempotent, trusted checkout"
   fi
 fi
 

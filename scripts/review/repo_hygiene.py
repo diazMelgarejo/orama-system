@@ -197,6 +197,96 @@ SECRET_PATTERN_EXCEPTIONS = {
     "scripts/review/repo_hygiene.py",
     "tests/test_repo_hygiene.py",
 }
+
+# Private LAN / link-local literals must not ship in tracked config or docs.
+# Hardware affinity slugs (win-rtx3080, win-rtx5080) are allowed; RFC1918 IPs are not.
+PRIVATE_NETWORK_CONFIG_PREFIXES = (
+    "bin/orama-system/config/",
+    "bin/config/",
+    "config/",
+)
+PRIVATE_NETWORK_SCAN_PREFIX_EXCEPTIONS = (
+    "tests/",
+    "docs/LESSONS.md",
+    "web/package-lock.json",
+    "package-lock.json",
+    "pnpm-lock.yaml",
+)
+PRIVATE_NETWORK_SCAN_FILE_EXCEPTIONS = {
+    "scripts/review/repo_hygiene.py",
+    "tests/test_repo_hygiene.py",
+}
+PRIVATE_NETWORK_LITERAL_RE = re.compile(
+    r"(?<!\w)"
+    r"(?:"
+    r"169\.254\.\d{1,3}\.\d{1,3}|"
+    r"192\.168\.\d{1,3}\.\d{1,3}|"
+    r"10\.\d{1,3}\.\d{1,3}\.\d{1,3}|"
+    r"172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+    r")"
+    r"(?!\w)"
+)
+PRIVATE_NETWORK_LINE_OK_RE = re.compile(
+    r"(?:<!--\s*LINT-013-ok\s*-->|#\s*lint-ignore-line\s+LINT-013)",
+    re.IGNORECASE,
+)
+_JSON_STRING_LITERAL_RE = re.compile(r'"(?:\\.|[^"\\])*"')
+_YAML_SINGLE_QUOTED_SCALAR_RE = re.compile(r"'([^'\\]|\\.)*'")
+_YAML_DOUBLE_QUOTED_SCALAR_RE = re.compile(r'"([^"\\]|\\.)*"')
+
+
+def _line_outside_json_strings(line: str) -> str:
+    """Strip JSON string contents so markers embedded in values cannot bypass LINT-013."""
+    return _JSON_STRING_LITERAL_RE.sub('""', line)
+
+
+def _line_outside_yaml_strings(line: str) -> str:
+    """Strip YAML quoted scalar contents so in-value # cannot bypass LINT-013."""
+    stripped = _YAML_DOUBLE_QUOTED_SCALAR_RE.sub('""', line)
+    return _YAML_SINGLE_QUOTED_SCALAR_RE.sub("''", stripped)
+
+
+def _private_network_line_allowed(
+    line: str, *, is_json: bool, is_yaml: bool = False
+) -> bool:
+    if is_json:
+        check_line = _line_outside_json_strings(line)
+    elif is_yaml:
+        check_line = _line_outside_yaml_strings(line)
+    else:
+        check_line = line
+    return bool(PRIVATE_NETWORK_LINE_OK_RE.search(check_line))
+
+
+def _read_tracked_file_text(
+    root: Path, rel: str, *, use_git_index: bool
+) -> tuple[str | None, str | None]:
+    """Return (text, error). error is set when the scan must fail closed."""
+    if use_git_index:
+        proc = subprocess.run(
+            ["git", "-C", str(root), "show", f":{rel}"],
+            check=False,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        if proc.returncode != 0:
+            detail = proc.stderr.decode("utf-8", errors="replace").strip()
+            msg = f"LINT-013: cannot read staged blob for {rel}"
+            if detail:
+                msg = f"{msg} ({detail})"
+            return None, msg
+        try:
+            return proc.stdout.decode("utf-8"), None
+        except UnicodeDecodeError:
+            return None, f"LINT-013: cannot decode staged blob for {rel} as UTF-8"
+    path = root / rel
+    if not path.is_file():
+        return None, None
+    try:
+        return path.read_text(encoding="utf-8"), None
+    except UnicodeDecodeError:
+        return None, f"LINT-013: cannot decode {rel} as UTF-8"
+
 SECRET_PATTERNS: tuple[tuple[str, re.Pattern[str], str], ...] = (
     (
         "google_api_key",
@@ -259,6 +349,14 @@ def tracked_files(root: Path) -> list[str]:
     proc = run_git(root, "ls-files")
     if proc.returncode != 0:
         raise RuntimeError(proc.stderr.strip() or "git ls-files failed")
+    return [line for line in proc.stdout.splitlines() if line]
+
+
+def staged_tracked_files(root: Path) -> list[str]:
+    """Paths with staged index entries (pre-commit / staged-blob scans)."""
+    proc = run_git(root, "diff", "--cached", "--name-only", "--diff-filter=ACMR")
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or "git diff --cached failed")
     return [line for line in proc.stdout.splitlines() if line]
 
 
@@ -1050,6 +1148,46 @@ def check_skill_quality(root: Path, files: list[str]) -> list[str]:
     return errors
 
 
+def scan_tracked_private_network_literals(
+    root: Path,
+    files: list[str],
+    *,
+    use_git_index: bool = False,
+) -> list[str]:
+    """Block committed private/link-local IPs in tracked config/registry files."""
+    errors: list[str] = []
+    for rel in files:
+        if rel in PRIVATE_NETWORK_SCAN_FILE_EXCEPTIONS:
+            continue
+        if any(rel.startswith(prefix) for prefix in PRIVATE_NETWORK_SCAN_PREFIX_EXCEPTIONS):
+            continue
+        if not any(rel.startswith(prefix) for prefix in PRIVATE_NETWORK_CONFIG_PREFIXES):
+            continue
+        if not rel.endswith((".json", ".yml", ".yaml")):
+            continue
+        text, read_err = _read_tracked_file_text(root, rel, use_git_index=use_git_index)
+        if read_err:
+            errors.append(read_err)
+            continue
+        if text is None:
+            continue
+        is_json = rel.endswith(".json")
+        is_yaml = rel.endswith((".yml", ".yaml"))
+        hits: list[str] = []
+        for line_no, line in enumerate(text.splitlines(), start=1):
+            if _private_network_line_allowed(line, is_json=is_json, is_yaml=is_yaml):
+                continue
+            for match in PRIVATE_NETWORK_LITERAL_RE.finditer(line):
+                hits.append(f"{match.group()}:{line_no}")
+        if hits:
+            errors.append(
+                f"LINT-013: private network literal(s) {hits[:3]} in {rel}"
+                " — use ${env:LM_STUDIO_*_ENDPOINTS} or runtime discovery;"
+                " affinity slugs (hardware tier categories) stay in config, not IPs"
+            )
+    return errors
+
+
 def scan_tracked_secrets(root: Path, files: list[str]) -> list[str]:
     """Block committed API keys, bot tokens, and other high-confidence secrets."""
     errors: list[str] = []
@@ -1134,6 +1272,30 @@ def main() -> int:
     errors.extend(scan_bidi_controls(root, files))
     errors.extend(scan_mojibake(root, files))
     errors.extend(scan_tracked_secrets(root, files))
+    staged = staged_tracked_files(root)
+    staged_set = set(staged)
+    config_scan_files = [
+        rel
+        for rel in files
+        if rel.endswith((".json", ".yml", ".yaml"))
+        and any(rel.startswith(prefix) for prefix in PRIVATE_NETWORK_CONFIG_PREFIXES)
+        and rel not in PRIVATE_NETWORK_SCAN_FILE_EXCEPTIONS
+        and not any(rel.startswith(prefix) for prefix in PRIVATE_NETWORK_SCAN_PREFIX_EXCEPTIONS)
+    ]
+    staged_configs = [rel for rel in config_scan_files if rel in staged_set]
+    other_configs = [rel for rel in config_scan_files if rel not in staged_set]
+    if staged_configs:
+        errors.extend(
+            scan_tracked_private_network_literals(
+                root, staged_configs, use_git_index=True
+            )
+        )
+    if other_configs:
+        errors.extend(
+            scan_tracked_private_network_literals(
+                root, other_configs, use_git_index=False
+            )
+        )
     errors.extend(check_private_generated_tracking(files))
     errors.extend(check_markdown_link_hygiene(root, files))
     errors.extend(check_generated_artifact_tracking(files))

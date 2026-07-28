@@ -114,7 +114,7 @@ After ECC `--target cursor` or any vendor MCP drop, set CRG to LM Studio — **n
 cd $env:ORAMA_SYSTEM_PATH
 bash bin/orama-system/scripts/sync-cursor-mcp.sh --profile readonly
 
-# Or manual patch in .cursor/mcp.json → code-review-graph.env:
+# Or manual patch in .cursor/mcp.json → code-review-graph environment block:
 # "CRG_OPENAI_BASE_URL": "http://localhost:1234/v1"
 ```
 
@@ -212,7 +212,7 @@ MSYS/Git Bash quoting often fails silently. Prefer a script file or a direct com
 | `npx` missing but `npm.cmd` present | Use `npm.cmd` or call Node scripts directly |
 | Symlinks into LM Studio app folders | Anchor in `%USERPROFILE%\.lmstudio\bin` |
 | Assuming all partner CLIs required | `start.ps1` starts local daemons; missing partners reduce capability only |
-| coord scripts missing `.env.local` vars | Persist tokens/MAC_IP as User-level env vars |
+| coord scripts missing env-local vars | Persist tokens/MAC_IP as User-level env vars |
 
 ---
 

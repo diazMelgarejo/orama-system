@@ -1,5 +1,7 @@
 # Plan: Hermes Agent Canonical Staging + Profile Thin-Wrapper Install
 
+> **Reality checkpoint — verified 2026-07-27:** The canonical staging files and installer scripts now exist under `$ORAMA_SYSTEM_PATH`, but the current Hermes host has **not** materialized the staged fleet: Hermes **v0.19.0 (2026.7.20)** runs from `$HERMES_HOME`, `default` is the only listed profile, and `$HERMES_HOME/profiles/` is absent. Therefore, distinguish **tracked profile templates** from **installed isolated profiles** and do not state that a profile exists until `install_hermes_profiles.py --verify` and `hermes profile list` both confirm it. Native `hermes backup` / `hermes import` are the baseline full-home recovery path; the Orama export/restore utility complements them. See [official configuration docs](https://hermes-agent.nousresearch.com/docs/user-guide/configuration) and [official CLI docs](https://hermes-agent.nousresearch.com/docs/reference/cli-commands).
+
 **Date:** 2026-07-26  
 **Status:** ✅ Win `install.ps1` wired — operator live test on RTX 5080 (fresh) + RTX 3080 (existing)  
 **Owner:** orama-system (L3 canonical skills + `bin/agents` staging)  

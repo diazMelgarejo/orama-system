@@ -20,6 +20,12 @@
 .PARAMETER DryRun
     Pass --dry-run to installers (preview only).
 
+.PARAMETER SkipHermesSync
+    Skip profile + thin-wrapper sync (maps to ORAMA_SKIP_HERMES_SYNC=1).
+
+.PARAMETER TrustHermesSync
+    Operator override after manual review (maps to ORAMA_TRUST_HERMES_SYNC=1).
+
 .PARAMETER RunDoctor
     When hermes CLI is on PATH, run hermes doctor + config check after sync.
 
@@ -35,6 +41,8 @@ param(
     [string]$RepoRoot = '',
     [string]$Python = 'python',
     [switch]$DryRun,
+    [switch]$SkipHermesSync,
+    [switch]$TrustHermesSync,
     [switch]$RunDoctor
 )
 
@@ -116,6 +124,31 @@ if (-not $RepoRoot) {
 }
 
 $env:ORAMA_SYSTEM_PATH = $RepoRoot
+
+if ($SkipHermesSync) {
+    $env:ORAMA_SKIP_HERMES_SYNC = '1'
+}
+if ($TrustHermesSync) {
+    $env:ORAMA_TRUST_HERMES_SYNC = '1'
+}
+
+$VerifyTrust = Join-Path $RepoRoot 'scripts\review\verify_trusted_install.py'
+if ($env:ORAMA_SKIP_HERMES_SYNC -eq '1') {
+    _Warn 'Skipping Hermes harness sync (ORAMA_SKIP_HERMES_SYNC=1)'
+    exit 0
+}
+if ($env:ORAMA_TRUST_HERMES_SYNC -eq '1') {
+    # explicit operator override after reviewing bin/agents
+} elseif (-not (Test-Path $VerifyTrust)) {
+    _Warn 'Hermes sync blocked — verify_trusted_install.py missing (git pull --ff-only, or -TrustHermesSync after reviewing bin/agents)'
+    exit 1
+} else {
+    $trustCode = Invoke-PythonScript -ScriptArgs @($VerifyTrust, '--quiet')
+    if ($trustCode -ne 0) {
+        _Warn 'Hermes sync blocked — untrusted checkout (git pull --ff-only on main, review bin/agents, then -TrustHermesSync)'
+        exit 1
+    }
+}
 
 $HarnessScripts = Join-Path $RepoRoot 'bin\orama-system\skills\hermes-harness\scripts'
 $ProfileInstaller = Join-Path $HarnessScripts 'install_hermes_profiles.py'

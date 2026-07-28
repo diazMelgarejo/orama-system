@@ -102,9 +102,9 @@ is no `cline mcp serve` command. Therefore:
 
 - Do **not** add a `cline` entry to `mcp.servers` in OpenClaw config.
 - The working direction is: `openclaw mcp serve` (exposes OpenClaw channels
-  over MCP stdio) → `cline mcp install openclaw -- npx -y openclaw mcp serve`
-  (registers OpenClaw as an MCP server inside Cline so Cline can call OpenClaw
-  tools).
+  over MCP stdio) → register server `openclaw` in Cline with launch command
+  `openclaw mcp serve` via the MCP client UI (resolved local binary; review
+  OpenClaw version before enabling).
 
 ## Idempotent Reconciliation
 

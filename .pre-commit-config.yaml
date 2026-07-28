@@ -45,6 +45,13 @@ repos:
         language: system
         pass_filenames: false
 
+      - id: no-committed-lan-topology
+        name: "Block private LAN IPs in config (3080/5080 use env vars, not committed IPs)"
+        entry: python scripts/hooks/no_committed_lan_topology.py
+        language: system
+        pass_filenames: false
+        files: ^(bin/orama-system/config/|bin/config/|config/).*\.(json|ya?ml)$
+
       - id: ci-deps-guard
         name: "CI dependency guard — block missing .[test] extras and bad install patterns"
         entry: python scripts/check_ci_deps.py

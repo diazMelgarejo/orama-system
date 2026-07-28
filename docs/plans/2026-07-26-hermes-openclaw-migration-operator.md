@@ -1,6 +1,7 @@
 # Hermes OpenClaw migration — operator sequence (orama canonical)
 
-> **Date:** 2026-07-26  
+> **Reality checkpoint — verified 2026-07-27:** This is a migration runbook, not evidence that a migration has already occurred. On this host, Hermes **v0.19.0 (2026.7.20)** is rooted at `$HERMES_HOME`; only `default` is active and `$HERMES_HOME/profiles/` is absent. Use `hermes claw migrate --dry-run` before any import, preserve a native `hermes backup`, and regard imported OpenClaw content as source material until it is classified into local Hermes state, an Orama staged profile, PT memory, or archive-only provenance. Keep credentials out of tracked files. Official references: [CLI migration commands](https://hermes-agent.nousresearch.com/docs/reference/cli-commands) and [configuration](https://hermes-agent.nousresearch.com/docs/user-guide/configuration).
+> **Date:** 2026-07-26
 > **Status:** Operator reference — **review with** [`2026-07-26-hermes-openclaw-staging-review-gate.md`](2026-07-26-hermes-openclaw-staging-review-gate.md) before running  
 > **Env contract:** `$ORAMA_SYSTEM_PATH`, `$HERMES_HOME`, `$PERPETUA_TOOLS_PATH`, `${HOME}` only — no workstation literals in tracked docs.
 
@@ -29,20 +30,50 @@ Windows: pass actual OpenClaw root if not default.
 
 ### 3. Choose workspace target for AGENTS.md
 
+Set `OPENCLAW_WORKSPACE` explicitly to the OpenClaw workspace root that should receive `AGENTS.md` (no sibling-repo fallback):
+
 ```bash
+: "${OPENCLAW_WORKSPACE:?Set OPENCLAW_WORKSPACE to the OpenClaw workspace root}"
+
+set -euo pipefail
+_gateway_restore() {
+  hermes gateway start || true
+}
+trap '_gateway_restore' EXIT
+
+hermes gateway stop
+
 hermes claw migrate \
   --source "${HOME}/.openclaw" \
-  --workspace-target "${OPENCLAW_WORKSPACE:-$ORAMA_SYSTEM_PATH/../OpenClaw}"
+  --workspace-target "${OPENCLAW_WORKSPACE}"
+
+hermes doctor
+trap - EXIT
+hermes gateway start
 ```
 
 ### 4. Full import **without secrets first**
 
 ```bash
+: "${OPENCLAW_WORKSPACE:?Set OPENCLAW_WORKSPACE to the OpenClaw workspace root}"
+
+set -euo pipefail
+_gateway_restore() {
+  hermes gateway start || true
+}
+trap '_gateway_restore' EXIT
+
+hermes gateway stop
+
 hermes claw migrate \
   --source "${HOME}/.openclaw" \
   --preset full \
   --skill-conflict rename \
-  --workspace-target "${OPENCLAW_WORKSPACE:-$ORAMA_SYSTEM_PATH/../OpenClaw}"
+  --workspace-target "${OPENCLAW_WORKSPACE}"
+
+hermes doctor
+trap - EXIT
+hermes gateway start
 ```
 
 Imported skills land under `$HERMES_HOME/skills/openclaw-imports/`.

@@ -12,41 +12,50 @@ Win→Mac `lan_peer_assign.py drop --peer` is **blocked**:
 - `http://` + bearer token → `SECURITY_STOP` (RFC 6750 fail-closed in `lan_peer_assign.py`)
 - `https://` → Mac portal has **no TLS** on :8002 (`SSL: WRONG_VERSION_NUMBER`)
 
-**Workaround:** Mac **pulls** from Win portal (LAN HTTP). Win portal is bound `0.0.0.0:8002` after `start.ps1 --lan-peer`.
+**Do not send `Authorization: Bearer` over plaintext HTTP in either direction** — reversing
+Mac→Win does not fix LAN interception or token reuse.
+
+## Approved alternatives (pick one before inbox pull)
+
+1. **SSH tunnel** — forward Win portal to `http://127.0.0.1:<local>/` (HTTP inside the encrypted SSH tunnel; this is **not** TLS on the portal itself — do not use `https://` here or you will see `WRONG_VERSION_NUMBER`).
+2. **mTLS / TLS-terminated reverse proxy** — terminate TLS on Win portal before bearer auth.
+3. **Scoped non-reusable pull token** — short-lived, single-file scope (not the long-lived control-plane token).
+4. **Operator handoff** — copy inbox files out-of-band (USB, encrypted sync) when TLS is unavailable.
+
+Until one of the above is in place, use **health checks only** over HTTP (no bearer).
 
 ## Win portal endpoints (this host)
 
 | Resource | URL |
 |----------|-----|
-| Health (no auth) | `http://192.168.9.18:8002/health` |
-| Portal UI | `http://192.168.9.18:8002/peer-inbox` |
-| List inbox JSON | `http://192.168.9.18:8002/api/peer-inbox` |
-| Read one file | `http://192.168.9.18:8002/api/peer-inbox/<filename>` |
-| HTML render | `http://192.168.9.18:8002/api/peer-inbox/<filename>/html` |
+| Health (no auth) | `http://${WIN_PORTAL_LAN_HOST}:8002/health` |
+| Portal UI | `http://${WIN_PORTAL_LAN_HOST}:8002/peer-inbox` |
+| List inbox JSON | `http://127.0.0.1:<LOCAL_FORWARD>/api/peer-inbox` (SSH tunnel) or `https://<TLS_ENDPOINT>/api/peer-inbox` (mTLS proxy) |
+| Read one file | `http://127.0.0.1:<LOCAL_FORWARD>/api/peer-inbox/<filename>` (SSH tunnel) or `https://<TLS_ENDPOINT>/api/peer-inbox/<filename>` |
 
-Replace IP if DHCP changed — check Win `ipconfig` / `last_discovery.json`.
+Replace host if DHCP changed — check Win `ipconfig` / `last_discovery.json`.
 
 ## Auth
 
-Use the **same** `ORAMA_CONTROL_PLANE_TOKEN` as Win `.env.LOCAL` (do not paste token into tracked files).
+Use the **same** control-plane token as the Win workspace (load from Keychain or operator secret store — **do not commit**) only over **TLS or tunneled HTTP** (`http://127.0.0.1:<forward>/` inside `ssh -L` is acceptable; bare LAN `http://` with bearer is not).
 
 ```bash
-export ORAMA_CONTROL_PLANE_TOKEN='<match Win workspace .env.LOCAL>'
-export WIN_PORTAL=http://192.168.9.18:8002
+# Load ORAMA_CONTROL_PLANE_TOKEN from Mac Keychain or operator store — must match Win workspace.
+export WIN_PORTAL=http://127.0.0.1:<LOCAL_FORWARD>/   # after ssh -L tunnel (HTTP inside SSH, not HTTPS)
 ```
 
-## Mac terminal — copy/paste block
+## Mac terminal — copy/paste block (TLS/tunnel required)
 
 ```bash
-# 0) Prerequisites
+# 0) Prerequisites — establish SSH tunnel first; tunneled HTTP is http://127.0.0.1 (not https://)
 cd "$ORAMA_SYSTEM_PATH"
-export WIN_PORTAL=http://192.168.9.18:8002
-# export ORAMA_CONTROL_PLANE_TOKEN from Mac ~/.openclaw or Keychain — MUST match Win
+export WIN_PORTAL=http://127.0.0.1:<LOCAL_FORWARD>/
+# export ORAMA_CONTROL_PLANE_TOKEN from Mac Keychain — MUST match Win workspace
 
-# 1) Health (no token)
-curl -sS "$WIN_PORTAL/health" | head
+# 1) Health (no token) — HTTP ok for liveness only when portal is LAN-reachable
+curl -sS "http://${WIN_PORTAL_LAN_HOST}:8002/health" | head
 
-# 2) List Win inbox
+# 2) List Win inbox (TLS/tunnel only)
 curl -sS -H "Authorization: Bearer $ORAMA_CONTROL_PLANE_TOKEN" \
   "$WIN_PORTAL/api/peer-inbox" | python3 -m json.tool | head -80
 
@@ -70,7 +79,7 @@ python3 bin/orama-system/skills/hermes-harness/scripts/lan_peer_assign.py drop \
 
 | File | Topic |
 |------|-------|
-| `win-2026-07-27-env-local-policy-ask.md` | **Reply required** — SSoT for workspace `.env.LOCAL` |
+| `win-2026-07-27-env-local-policy-ask.md` | **Reply required** — SSoT for workspace local env policy |
 | `mac-2026-07-24-h6-dispatch-bookkeeping-landed.md` | H6 bookkeeping landed (informational) |
 | `win-2026-07-23-monitors-paused.md` | Monitors paused until manual resume |
 
@@ -81,6 +90,6 @@ Create `mac-2026-07-27-env-local-policy-reply.md` with keep/migrate/delete per k
 ## Win state (2026-07-27 ~14:45)
 
 - Stack restarted: PT :8000, orama :8001, Portal :8002 UP
-- `ORAMA_CONTROL_PLANE_TOKEN` synced to Windows **User** env from workspace `.env.LOCAL`
+- `ORAMA_CONTROL_PLANE_TOKEN` synced to Windows **User** env from the operator workspace local policy file
 - `OramaCoordPulse` still **Disabled** (monitors paused)
 - Outbox pending: coord-031 + coord-032 (Mac push failed)

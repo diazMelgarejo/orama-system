@@ -383,6 +383,15 @@ def verify_lifecycle_origin(request: Request) -> None:
         raise HTTPException(status_code=403, detail="Cross-origin request denied")
 
 
+def lifecycle_origin_failure(request: Request) -> JSONResponse | None:
+    """Return an error response when lifecycle origin check fails; None when allowed."""
+    try:
+        verify_lifecycle_origin(request)
+    except HTTPException as exc:
+        return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+    return None
+
+
 def bearer_token_from_request(request: Request) -> str:
     """Extract bearer token from Authorization header or control-plane cookie."""
     auth_header = request.headers.get("authorization", "")

@@ -30,7 +30,7 @@ of open work across both repos"):
 
 ## Contents
 
-| Doc | Topic | Status (as of 2026-07-25) |
+| Doc | Topic | Status (as of 2026-07-27) |
 |---|---|---|
 | `2026-07-27-coordination-phase-0f-pointer.md` | PT coordination Phase 0F + autoplan pointer | **New** — links PT `docs/coordination/` and autoplan plan |
 | `2026-07-27-phase-0-master-plan.md` | STM/swarm pre-v2 pointer | Links PT `PHASE-0-MASTER-PLAN-2026-07-27.md` |

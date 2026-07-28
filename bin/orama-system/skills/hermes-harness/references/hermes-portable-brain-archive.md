@@ -14,7 +14,7 @@ Hermes' portable brain is not one file. It is a layered runtime home under `$HER
 - profiles: `profiles/<slug>/...`
 - non-secret config/models/tools: `config.yaml`
 - optional sessions: `state.db` + `sessions/`
-- optional secrets: `.env`, `auth.json`, `auth/`
+- optional secrets: environment-variable files, `auth.json`, `auth/`
 
 `hermes_portable_brain.py` creates a versioned zip archive with a `manifest.json` so the archive can be inspected and restored safely.
 
@@ -29,7 +29,7 @@ Hermes' portable brain is not one file. It is a layered runtime home under `$HER
 | `config.yaml` | yes | normal | non-secret config only |
 | `cron/`, `kanban/`, `scripts/` | yes | normal | automation state |
 | `state.db`, `sessions/` | no | `--include-sessions` | can be large / personal |
-| `.env`, `auth.json`, `auth/` | no | `--include-secrets` | credentials; never commit |
+| environment-variable files, `auth.json`, `auth/` | no | `--include-secrets` | credentials; never commit |
 | `logs/`, `cache/`, `hermes-agent/`, `node_modules/` | no | n/a | regenerated or runtime source |
 
 ## Export from an existing Hermes install

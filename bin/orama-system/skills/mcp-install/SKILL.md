@@ -187,7 +187,7 @@ openclaw mcp unset ai-cli-mcp 2>/dev/null || true
 ### Ask First
 
 - Running with `--force` on a machine that is partially configured
-- Uninstalling/rollback — confirm target machine before running rollback commands
+- Uninstalling/rollback — verify target machine selection prior to rollback invocation
 
 ### Never Do
 

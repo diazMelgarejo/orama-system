@@ -1,8 +1,41 @@
 # Hermes + OpenClaw agent staging — review gate (2026-07-26)
 
-> **Status:** 🔍 **REVIEW PENDING** for Win install.ps1 hooks — **OpenClaw flesh-out executed** (see execution log)  
+> **Reality checkpoint — verified 2026-07-27:** On the review host, Hermes **v0.19.0 (2026.7.20)** runs at `$HERMES_HOME`; `default` is the only active profile and `$HERMES_HOME/profiles/` remains absent. Staged `bin/agents/` records are not live profile evidence. Any install/cutover must first run the installer in dry-run/verify mode, then confirm with `hermes profile list`; retain native `hermes backup` / `hermes import` as the recovery baseline. Use `$ORAMA_SYSTEM_PATH` in portable commands. See [official CLI docs](https://hermes-agent.nousresearch.com/docs/reference/cli-commands).
+> **Status:** ✅ **SHIPPED** (2026-07-26) with security hardening follow-up (`cursor/hermes-staging-security-hardening-f559`)  
 > **Owner:** orama-system `bin/agents` + `docs/plans/`  
-> **Supersedes for execution order:** defers implementation until this gate passes.
+> **Supersedes for execution order:** install hooks are live; residual checklist items tracked below.
+
+## Autoplan security review (Gstack-aligned, 2026-07-26)
+
+**AFRP:** Type C | Practitioner | Mode 2  
+**Scope:** Close Hermes/OpenClaw staging review gate vs shipped install hooks without losing operator content.
+
+| Layer | Prevent | Runtime guard | Verify |
+|-------|---------|---------------|--------|
+| LAN topology | `repo_hygiene` LINT-013 on config + docs | `${env:LM_STUDIO_*}` in `agent_registry.json` | pre-commit `repo_hygiene.py` |
+| Overlay writes | REGISTRY allowlist (`~/.openclaw/agents`, `~/.alphaclaw/.../workspace`) | `sync_openclaw_overlay_from_staging.sh` path check | manual `--dry-run` |
+| Profile install | slug regex + profiles-root containment | `verify_trusted_install.py` before sync | `tests/test_hermes_profiles.py` |
+| Memory stubs | harmonize + `.orama-profile-backup-*` | never blind `--force-memory` overwrite | harmonize test |
+| Install hooks | `ORAMA_SKIP_HERMES_SYNC` / `ORAMA_TRUST_HERMES_SYNC` | `install.sh` trusted-checkout gate | operator Win 3080/5080 smoke |
+
+**Security invariants (non-negotiable):**
+
+1. Private RFC1918 / link-local IPs are **never committed** — affinity slugs (`win-rtx3080`, `win-rtx5080`) only.
+2. Hermes/OpenClaw materialization requires **trusted main** or explicit `ORAMA_TRUST_HERMES_SYNC=1`.
+3. Operator-owned SOUL/memory files are **never replaced** — integrative merge + backup only.
+4. OpenClaw overlay sync writes **only** under allowlisted workspace roots.
+
+**Residual operator actions (3080 / 5080):**
+
+- [ ] RTX 5080 fresh: `git fetch origin main && git pull --ff-only` → `install.ps1` → `hermes doctor`
+- [ ] RTX 3080 existing: `install-hermes-harness.ps1` (expect "already synced"; use `-TrustHermesSync` on feature branches)
+- [ ] `bin/agents/REGISTRY.yml` ↔ live `docs/oramasys/REGISTRY.yml` parity check
+- [ ] Optional: `ORAMA_VERIFY_COMMIT_SIG=1` + `ORAMA_ALLOWED_GPG_FINGERPRINTS` when GPG-signed `origin/main` is policy
+
+**Pre-commit / CI gates (3080 / 5080 / LAN):**
+
+- `scripts/hooks/no_committed_lan_topology.py` — blocks RFC1918 literals in `config/` and `bin/*/config/` JSON/YAML
+- Affinity slugs `win-rtx3080` / `win-rtx5080` remain valid in tracked config; endpoint URLs use `${env:LM_STUDIO_*_ENDPOINTS}`
 
 ## Purpose
 
@@ -87,13 +120,21 @@ Before approving **Phase 3+ execution** (`install_hermes_profiles.py`, install.p
 
 ## Explicit non-actions (Win phase — still pending)
 
-- No `install.ps1` profile hook on RTX 3080/5080 until operator approves
-- No `hermes claw migrate` or `hermes claw cleanup` on Win hosts yet
-- No PT lesson ledger Phase 6 entries
+- No `hermes claw migrate` or `hermes claw cleanup` on Win hosts until operator dry-run + backup
+- No PT lesson ledger Phase 6 entries until Win validation green
+
+## Shipped with security hardening (2026-07-26)
+
+- Win `install.ps1` + `install-hermes-harness.ps1` — wired with trusted-checkout gate (`-SkipHermesSync` / `-TrustHermesSync`)
+- `verify_trusted_install.py` + `ORAMA_SKIP_HERMES_SYNC` / `ORAMA_TRUST_HERMES_SYNC` / optional `ORAMA_VERIFY_COMMIT_SIG`
+- `repo_hygiene` LINT-013 extended to JSON/config (private IPs blocked; affinity slugs OK)
+- `scripts/hooks/no_committed_lan_topology.py` — dedicated pre-commit hook for config LAN topology
+- `config/mac-orchestrator.json` — Win LMS `baseUrl` uses `${env:LM_STUDIO_WIN_ENDPOINTS}/v1` (no committed IP)
+- Overlay + profile installers: path allowlist / slug validation / memory harmonize
 
 ## Completed in OpenClaw flesh-out (2026-07-26)
 
-- `install_hermes_profiles.py` — ready; not wired in Win `install.ps1`
+- `install_hermes_profiles.py` — wired in `install.sh` + Win harness (trusted gate)
 - `sync_openclaw_overlay_from_staging.sh` — integrative merge live → staging overlays applied to operator OpenClaw SOUL files
 - Adapter + lifecycle `bin/agents/` folders and persona YAML catalog
 

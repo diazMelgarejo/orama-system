@@ -15,12 +15,20 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # Directories
 SECRETS_DIR="$HOME/.openclaw/secrets"
 ENV_FILE="$HOME/.openclaw/.env.openrouter"
+LEGACY_ENV_FILE="$HOME/.openclaw/openclaw-openrouter-env"
 LOG_DIR="$HOME/.openclaw/logs"
 OPENROUTER_ENDPOINT="https://openrouter.ai/api/v1/chat/completions"
 OPENROUTER_MODEL="${OPENROUTER_MODEL:-openai/gpt-4o}"
 
 # Create directories
 mkdir -p "$SECRETS_DIR" "$LOG_DIR"
+
+# Migrate legacy env filename (pre-.env.openrouter docs/scripts)
+if [ ! -f "$ENV_FILE" ] && [ -f "$LEGACY_ENV_FILE" ]; then
+  log "Migrating legacy env file $LEGACY_ENV_FILE -> $ENV_FILE"
+  mv "$LEGACY_ENV_FILE" "$ENV_FILE"
+  chmod 600 "$ENV_FILE"
+fi
 
 # Status check
 if [ "${1:-}" = "--status" ]; then
@@ -111,23 +119,33 @@ chmod 600 "$ENV_FILE.tmp"
 mv "$ENV_FILE.tmp" "$ENV_FILE"
 log "✓ Environment file created"
 
-# Update shell profiles
-log "Updating shell profiles to source OpenRouter env on startup..."
-for profile in ~/.zshrc ~/.bashrc; do
-  if [ -f "$profile" ]; then
-    # Check if already sourced
-    if grep -q "openrouter" "$profile" 2>/dev/null; then
-      log "  $profile: already configured"
-    else
-      log "  $profile: adding source command"
-      cat >> "$profile" <<'RCEOF'
+# Update shell profiles (opt-in — runtime start.sh sources ~/.openclaw/.env.openrouter)
+if [ "${OPENROUTER_PERSIST_SHELL_PROFILE:-0}" = "1" ]; then
+  log "Updating shell profiles to source OpenRouter env on startup..."
+  for profile in ~/.zshrc ~/.bashrc; do
+    if [ -f "$profile" ]; then
+      if grep -qE '\.env\.openrouter|openclaw-openrouter-env' "$profile" 2>/dev/null; then
+        if grep -q 'openclaw-openrouter-env' "$profile" 2>/dev/null; then
+          log "  $profile: updating legacy openrouter source path"
+          tmp_profile="$(mktemp)"
+          sed 's|~/.openclaw/openclaw-openrouter-env|~/.openclaw/.env.openrouter|g' "$profile" > "$tmp_profile"
+          mv "$tmp_profile" "$profile"
+        else
+          log "  $profile: already configured"
+        fi
+      else
+        log "  $profile: adding source command"
+        cat >> "$profile" <<'RCEOF'
 
 # OpenRouter fallback (added by setup-openrouter.sh)
 [ -f ~/.openclaw/.env.openrouter ] && source ~/.openclaw/.env.openrouter
 RCEOF
+      fi
     fi
-  fi
-done
+  done
+else
+  log "Skipping shell profile persistence (set OPENROUTER_PERSIST_SHELL_PROFILE=1 to opt in)"
+fi
 
 # Test connectivity
 log ""

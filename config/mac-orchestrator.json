@@ -372,7 +372,8 @@
       "lmstudio-win": {
         "api": "openai-completions",
         "apiKey": "lm-studio",
-        "baseUrl": "http://192.168.9.18:1234/v1",
+        "baseUrl": "${env:LM_STUDIO_WIN_ENDPOINTS}/v1",
+        "_comment": "Resolve Win LM Studio at runtime via LM_STUDIO_WIN_ENDPOINTS or last_discovery.json; never commit LAN IPs.",
         "models": [
           {
             "id": "gemma-4-26b-a4b-it",

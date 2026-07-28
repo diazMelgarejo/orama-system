@@ -7,6 +7,15 @@ ROOT="$(git rev-parse --show-toplevel)"
 # repo_hygiene's "metadata inside git refs" gate. Best-effort, non-blocking.
 bash "$ROOT/scripts/git/scrub_dsstore.sh" || true
 
+# Fast-fail: private LAN IPs in tracked config (3080/5080 endpoints → env vars).
+if [ -f "$ROOT/scripts/hooks/no_committed_lan_topology.py" ]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ERROR: python3 required for LAN topology pre-commit gate" >&2
+    exit 1
+  fi
+  python3 "$ROOT/scripts/hooks/no_committed_lan_topology.py" || exit 1
+fi
+
 # Canonical hygiene gate — the SAME check CI runs (scripts/review/repo_hygiene.py):
 # commit identity, forbidden tokens, workstation/personal paths, secrets, bidi
 # controls, markdown-link hygiene, etc. Running it here catches a leak BEFORE it

@@ -14,6 +14,8 @@ Root security entrypoints:
 
 - orama-system: [`SECURITY.md`](SECURITY.md)
 - Perpetua-Tools: [`SECURITY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SECURITY.md)
+- Perpetua-Tools Phase 0 STM/swarm security graph:
+  [`docs/phase-0-specifications/README.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/README.md)
 
 MAESTRO/OWASP GenAI v2 foundation:
 
