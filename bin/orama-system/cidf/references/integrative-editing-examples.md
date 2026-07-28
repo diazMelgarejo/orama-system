@@ -13,6 +13,9 @@
 | Replace entire PR body with latest CI delta only | Keep original Summary; add `## Follow-up:` sections below |
 | Retitle PR to match aguara side quest | Leave title; label aguara work as ancillary in a follow-up block |
 | `gh pr edit` with only the new paragraph | Pass full body: reconstructed original + all follow-ups |
+| `ManagePullRequest` / `gh pr edit` without reading first | **READ → backup → write:** `gh pr view --json body -q .body > /tmp/pr-N-body-backup.md` then edit backup file, then `gh pr edit N --body-file` |
+
+**Mandatory workflow (PR bodies):** never write directly. Always (1) read current body, (2) save timestamped backup, (3) merge append-only into backup copy, (4) write from file. Empty `body` in API calls wipes the description.
 
 **Recovery (PR #222, 2026-07-27):** read `gh pr view` → search session cache → reconstruct from `docs/v2/50-mesh-security-migration-ladder.md` + review gate → write append-only.
 
