@@ -21,7 +21,8 @@ metadata:
 Run first; if it prints `SKIP`, do nothing else:
 
 ```bash
-bash scripts/periscope/verify-ecc-skill-mirror.sh
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+bash "$REPO_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh"
 ```
 
 Expected when absent:
@@ -60,8 +61,9 @@ The two skill files must remain **byte-identical**:
 Verify after any ECC harmonization or integrative merge:
 
 ```bash
-export PERISCOPE_REPO=/path/to/periscope
-bash scripts/periscope/verify-ecc-skill-mirror.sh
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+export PERISCOPE_REPO="${PERISCOPE_REPO:?set to the periscope checkout}"
+bash "$REPO_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh"
 ```
 
 Exit `0` = in sync or absent (SKIP). Exit `1` = drift detected.
@@ -85,8 +87,16 @@ still carries pre-merge commits, do **not** merge or rebase wholesale. Use path-
 replay:
 
 ```bash
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+REPLAY_WORKTREE="$(mktemp -d "${TMPDIR:-/tmp}/periscope-pr-replay.XXXXXX")"
+cleanup_replay_worktree() {
+  git -C "$REPO_ROOT" worktree remove --force "$REPLAY_WORKTREE" >/dev/null 2>&1 \
+    || rm -rf "$REPLAY_WORKTREE"
+}
+trap cleanup_replay_worktree EXIT
+
 git fetch origin merged
-git worktree add /tmp/periscope-pr-replay origin/merged
+git worktree add --detach "$REPLAY_WORKTREE" origin/merged
 # apply harmonized paths only; git add; commit-clean; force-with-lease
 ```
 
@@ -106,9 +116,10 @@ Unique path set for the 2026-07-28 ECC fusion:
 After an ECC PR merges into periscope `merged`:
 
 ```bash
-cd "$PERISCOPE_REPO"
-bash scripts/periscope/verify-ecc-skill-mirror.sh
-/instinct-import .claude/homunculus/instincts/inherited/periscope-instincts.yaml
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+export PERISCOPE_REPO="${PERISCOPE_REPO:?set to the periscope checkout}"
+bash "$REPO_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh"
+/instinct-import "$PERISCOPE_REPO/.claude/homunculus/instincts/inherited/periscope-instincts.yaml"
 /instinct-status
 ```
 
@@ -117,9 +128,9 @@ merge on orama-side tooling.
 
 ## Related
 
-- `docs/v2/21-periscope-l4-glass.md` — L4 sidecar architecture
-- `docs/reference/periscope-cursor-repo-rules.md` — cursor rules install
-- `scripts/periscope/install-cursor-rules.sh` — attribution guards + rules (separate from ECC)
+- [`docs/v2/21-periscope-l4-glass.md`](../../../../docs/v2/21-periscope-l4-glass.md) — L4 sidecar architecture
+- [`docs/reference/periscope-cursor-repo-rules.md`](../../../../docs/reference/periscope-cursor-repo-rules.md) — cursor rules install
+- [`scripts/periscope/install-cursor-rules.sh`](../../../../scripts/periscope/install-cursor-rules.sh) — attribution guards + rules (separate from ECC)
 - [`skills/ecc-sync/SKILL.md`](../ecc-sync/SKILL.md) — orama-system's own ECC post-merge sync (this repo, not periscope)
-- [`cidf/references/integrative-editing-examples.md`](../cidf/references/integrative-editing-examples.md) §9 — good/bad path-scoped PR replay (AFRP FM6/FM7 curriculum)
-- [`afrp/SKILL.md`](../afrp/SKILL.md) — proxy-table rows for `CONFLICTING` PRs and empty `commit-clean` commits
+- [`cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md) §9 — good/bad path-scoped PR replay (AFRP FM6/FM7 curriculum)
+- [`afrp/SKILL.md`](../../afrp/SKILL.md) — proxy-table rows for `CONFLICTING` PRs and empty `commit-clean` commits

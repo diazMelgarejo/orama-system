@@ -46,55 +46,65 @@ Never replay onto periscope `main` — it is the upstream mirror only.
 | Replay **paths only** — never merge the stale branch wholesale | Whole-branch merge re-imports deleted/guard paths |
 | `git add` staged paths **before** `commit-clean.sh` | `commit-clean.sh` does not stage; empty commits are silent failures |
 | Exclude timestamp-only files unless intentionally harmonized | `ecc-tools.json` / `identity.json` `generatedAt` churn adds review noise |
-| `git push --force-with-lease` only after verifying `git diff --stat <base>..HEAD` | Proves the PR delta is exactly the intended paths |
-| Preserve synthesis content in a **known-good worktree** before resetting branch | Force-push overwrites remote; do not extract fusion blobs from the branch you are about to rewrite |
+| Record `origin/<branch>` SHA immediately after fetch and use it as the explicit lease target | Generic `--force-with-lease` can protect against the wrong expectation after another fetch |
+| Build the replacement commit in a unique disposable worktree from the fresh base | Avoids resetting a dirty/canonical checkout or treating a filesystem path as a Git revision |
+| Preserve the reviewed synthesis source outside both the PR branch and disposable worktree | Cleanup runs on success and failure; the temporary worktree must never be the only copy |
 
 ---
 
 ## Protocol — path-scoped replay
 
-Replace `<BASE>`, `<BRANCH>`, `<PATHS…>`, and `<WORKTREE>` for your repo.
+Replace `<BASE>`, `<BRANCH>`, and `<PATHS…>` for your repo. Set
+`FUSION_SOURCE` to a durable reviewed source outside the branch being rewritten.
 
 ```bash
-REPO=/path/to/repo
+REPO_ROOT="$(git rev-parse --show-toplevel)"
 BASE=merged                    # or main / feature/MacOS-post-install
 BRANCH=ecc-tools/periscope-…   # PR head branch
-WORKTREE="${TMPDIR:-/tmp}/pr-replay-$$"
+FUSION_SOURCE="${FUSION_SOURCE:?set to the durable reviewed fusion source}"
+REPLAY_PARENT="$(mktemp -d "${TMPDIR:-/tmp}/pr-replay.XXXXXX")"
+FUSION_WORKTREE="$REPLAY_PARENT/worktree"
 
-cd "$REPO"
-git fetch origin "$BASE" "$BRANCH"
+cleanup_replay_worktree() {
+  git -C "$REPO_ROOT" worktree remove --force "$FUSION_WORKTREE" \
+    >/dev/null 2>&1 || true
+  rm -rf "$REPLAY_PARENT"
+}
+trap cleanup_replay_worktree EXIT
 
-# 1) Preserve harmonized content OUTSIDE the branch being rewritten
-#    (worktree, stash, or tagged preserve branch)
-mkdir -p "$WORKTREE"
-git worktree add --detach "$WORKTREE" "origin/$BASE"
+# 1) Fetch once and record the exact remote lease before constructing anything
+git -C "$REPO_ROOT" fetch origin "$BASE" "$BRANCH"
+EXPECTED_REMOTE_SHA="$(git -C "$REPO_ROOT" rev-parse "origin/$BRANCH")"
+printf 'recorded lease: %s\n' "$EXPECTED_REMOTE_SHA"
 
-# Copy or author only the proven unique paths into $WORKTREE
+# 2) Construct the replacement commit from the fresh integration base
+git -C "$REPO_ROOT" worktree add --detach "$FUSION_WORKTREE" "origin/$BASE"
+
+# Copy only reviewed, proven-unique paths from the durable source
 # Example (periscope ECC fusion):
-# cp /path/to/fusion/.agents/skills/periscope/SKILL.md \
-#    "$WORKTREE/.agents/skills/periscope/SKILL.md"
+# cp "$FUSION_SOURCE/.agents/skills/periscope/SKILL.md" \
+#    "$FUSION_WORKTREE/.agents/skills/periscope/SKILL.md"
 # … repeat for each path in the unique set …
 
-# 2) Reset PR branch to fresh integration base
-git checkout -B "$BRANCH" "origin/$BASE"
+# 3) Stage and commit inside the disposable worktree
+git -C "$FUSION_WORKTREE" add -- <PATH1> <PATH2> <PATH3>
+git -C "$FUSION_WORKTREE" diff --cached --stat   # MUST show non-empty
 
-# 3) Apply path-scoped delta from preserve worktree
-git checkout "$WORKTREE" -- <PATH1> <PATH2> <PATH3>
-git add <PATH1> <PATH2> <PATH3>
-git diff --cached --stat   # MUST show non-empty
+(cd "$FUSION_WORKTREE" \
+  && bash "$REPO_ROOT/scripts/git/commit-clean.sh" \
+    -m "feat: replay harmonized delta onto fresh $BASE")
 
-# 4) Commit (stage first — commit-clean.sh does not git add)
-bash scripts/git/commit-clean.sh -m "feat: replay harmonized delta onto fresh $BASE"
+# 4) Verify the detached replacement commit's exact scope
+git -C "$FUSION_WORKTREE" diff --stat "origin/$BASE"..HEAD
+git -C "$FUSION_WORKTREE" log --oneline "origin/$BASE"..HEAD
+# Expect exactly one commit and only the approved path set.
 
-# 5) Verify delta scope
-git diff --stat "origin/$BASE"..HEAD
-git log --oneline "origin/$BASE"..HEAD   # expect exactly 1 commit
+# 5) Update the PR branch with the explicitly recorded lease
+git -C "$FUSION_WORKTREE" push \
+  --force-with-lease="refs/heads/$BRANCH:$EXPECTED_REMOTE_SHA" \
+  origin "HEAD:refs/heads/$BRANCH"
 
-# 6) Push
-git push --force-with-lease origin "$BRANCH"
-
-# 7) CLAYGO teardown
-git worktree remove --force "$WORKTREE" 2>/dev/null || rm -rf "$WORKTREE"
+# 6) The EXIT trap removes the worktree and parent on success or failure
 ```
 
 ---
@@ -140,10 +150,11 @@ git worktree remove --force "$WORKTREE" 2>/dev/null || rm -rf "$WORKTREE"
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| Empty commit pushed; PR shows 0 files changed | `commit-clean.sh` without prior `git add` | Re-stage paths; amend with new commit-clean |
-| Fusion content lost after force-push | Extracted blobs from branch being rewritten | Preserve in separate worktree **before** reset |
+| Empty commit pushed; PR shows 0 files changed | `commit-clean.sh` without prior `git add` | Re-stage paths; verify cached stat before commit-clean |
+| Fusion content lost during cleanup | Disposable worktree held the only copy | Keep a durable `FUSION_SOURCE` outside the PR branch and replay worktree |
 | PR still CONFLICTING | Replayed full bundle instead of delta | Diff against base; drop paths already on base |
 | Timestamp-only diff in PR | Included generator metadata files | Omit `ecc-tools.json` / `identity.json` unless intentionally harmonized |
+| Force-push overwrote newer remote work | Generic lease used after another fetch | Record `origin/<branch>` once and pass its SHA in the explicit lease refspec |
 
 ---
 
