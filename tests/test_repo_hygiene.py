@@ -134,6 +134,163 @@ def test_scan_tracked_secrets_blocks_google_and_telegram_tokens(tmp_path):
     assert "google_api_key" in errors[0]
 
 
+@pytest.mark.unit
+def test_scan_tracked_private_network_literals_blocks_config_ips(tmp_path: Path) -> None:
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "bin" / "orama-system" / "config"
+    cfg.mkdir(parents=True)
+    bad = cfg / "agent_registry.json"
+    bad.write_text('{"gateway": "http://192.168.8.153:1234"}', encoding="utf-8")
+    good = cfg / "routing.json"
+    good.write_text(
+        '{"affinity": "win-rtx5080", "gateway": "${env:LM_STUDIO_WIN_5080_ENDPOINTS}"}',
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        [
+            "bin/orama-system/config/agent_registry.json",
+            "bin/orama-system/config/routing.json",
+        ],
+    )
+
+    assert len(errors) == 1
+    assert "192.168.8.153" in errors[0]
+
+
+@pytest.mark.unit
+def test_scan_tracked_private_network_literals_fails_closed_on_index_read_error(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "bin" / "orama-system" / "config"
+    cfg.mkdir(parents=True)
+    bad = cfg / "agent_registry.json"
+    bad.write_text('{"gateway": "http://192.168.8.153:1234"}', encoding="utf-8")
+
+    def fake_run(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        return subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout=b"",
+            stderr=b"fatal: path not in index",
+        )
+
+    monkeypatch.setattr(repo_hygiene.subprocess, "run", fake_run)
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        ["bin/orama-system/config/agent_registry.json"],
+        use_git_index=True,
+    )
+
+    assert len(errors) == 1
+    assert "cannot read staged blob" in errors[0]
+
+
+@pytest.mark.unit
+def test_scan_tracked_private_network_literals_ignores_marker_inside_json_string(
+    tmp_path: Path,
+) -> None:
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "config"
+    cfg.mkdir()
+    bad = cfg / "agent_registry.json"
+    bad.write_text(
+        '{"note": "<!-- LINT-013-ok -->", "gateway": "http://192.168.8.153:1234"}',
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        ["config/agent_registry.json"],
+    )
+
+    assert len(errors) == 1
+    assert "192.168.8.153" in errors[0]
+
+
+@pytest.mark.unit
+def test_scan_tracked_private_network_literals_ignores_marker_inside_yaml_string(
+    tmp_path: Path,
+) -> None:
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "bin" / "orama-system" / "config"
+    cfg.mkdir(parents=True)
+    bad = cfg / "routing.yml"
+    bad.write_text(
+        'endpoint: "http://192.168.1.20 # lint-ignore-line LINT-013"\n',
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        ["bin/orama-system/config/routing.yml"],
+    )
+
+    assert len(errors) == 1
+    assert "192.168.1.20" in errors[0]
+
+
+@pytest.mark.unit
+def test_scan_tracked_private_network_literals_honors_yaml_comment_suppression(
+    tmp_path: Path,
+) -> None:
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "bin" / "orama-system" / "config"
+    cfg.mkdir(parents=True)
+    ok = cfg / "routing.yml"
+    ok.write_text(
+        "gateway: http://10.0.0.1:1234  # lint-ignore-line LINT-013\n",
+        encoding="utf-8",
+    )
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        ["bin/orama-system/config/routing.yml"],
+    )
+
+    assert errors == []
+
+
+@pytest.mark.unit
+def test_scan_tracked_private_network_literals_staged_index_reads_index_blob(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo_hygiene = load_repo_hygiene()
+    cfg = tmp_path / "bin" / "orama-system" / "config"
+    cfg.mkdir(parents=True)
+    worktree = cfg / "agent_registry.json"
+    worktree.write_text('{"gateway": "${env:LM_STUDIO_WIN_ENDPOINTS}"}', encoding="utf-8")
+    staged_bad = '{"gateway": "http://192.168.8.153:1234"}'
+
+    def fake_run(
+        cmd: list[str], *args: object, **kwargs: object
+    ) -> subprocess.CompletedProcess[bytes]:
+        if cmd[-2:] == ["show", ":bin/orama-system/config/agent_registry.json"]:
+            return subprocess.CompletedProcess(
+                args=cmd,
+                returncode=0,
+                stdout=staged_bad.encode("utf-8"),
+                stderr=b"",
+            )
+        return subprocess.CompletedProcess(
+            args=cmd, returncode=0, stdout=b"", stderr=b""
+        )
+
+    monkeypatch.setattr(repo_hygiene.subprocess, "run", fake_run)
+
+    errors = repo_hygiene.scan_tracked_private_network_literals(
+        tmp_path,
+        ["bin/orama-system/config/agent_registry.json"],
+        use_git_index=True,
+    )
+
+    assert len(errors) == 1
+    assert "192.168.8.153" in errors[0]
+
+
 def test_scan_personal_paths_blocks_user_home(tmp_path):
     repo_hygiene = load_repo_hygiene()
     docs = tmp_path / "docs"

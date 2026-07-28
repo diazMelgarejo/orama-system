@@ -2,12 +2,117 @@
 """Regression tests for control-plane authentication and redaction."""
 from __future__ import annotations
 
+import json
 import os
+from unittest.mock import AsyncMock
 
+import pytest
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 import orama_system.api_server as api_server
 import orama_system.portal_server as portal_server
+
+
+def _make_request(
+    path: str = "/api/stop",
+    method: str = "POST",
+    headers: dict[str, str] | None = None,
+    server_host: str = "127.0.0.1",
+    server_port: int = 8002,
+) -> Request:
+    header_items = [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()]
+    scope = {
+        "type": "http",
+        "http_version": "1.1",
+        "method": method,
+        "path": path,
+        "raw_path": path.encode(),
+        "headers": header_items,
+        "query_string": b"",
+        "client": ("127.0.0.1", 12345),
+        "server": (server_host, server_port),
+        "scheme": "http",
+        "root_path": "",
+    }
+    return Request(scope)
+
+
+@pytest.mark.unit
+def test_lifecycle_origin_failure_denied_returns_403_json():
+    from utils.control_plane_auth import lifecycle_origin_failure
+
+    request = _make_request(
+        headers={
+            "origin": "http://evil.example",
+            "host": "127.0.0.1:8002",
+        },
+    )
+    failure = lifecycle_origin_failure(request)
+
+    assert failure is not None
+    assert failure.status_code == 403
+    assert json.loads(failure.body.decode()) == {"detail": "Cross-origin request denied"}
+
+
+@pytest.mark.unit
+def test_lifecycle_origin_failure_allowed_returns_none():
+    from utils.control_plane_auth import lifecycle_origin_failure
+
+    request = _make_request(headers={"origin": "http://localhost:8000"})
+    assert lifecycle_origin_failure(request) is None
+
+    request_no_origin = _make_request()
+    assert lifecycle_origin_failure(request_no_origin) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_control_plane_middleware_short_circuits_on_origin_denial(monkeypatch):
+    from orama_system.portal_server import _control_plane_auth_middleware
+
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "middleware-test-token")
+    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
+
+    call_next = AsyncMock()
+    request = _make_request(
+        headers={
+            "authorization": "Bearer middleware-test-token",
+            "origin": "http://evil.example",
+            "host": "127.0.0.1:8002",
+        },
+    )
+
+    response = await _control_plane_auth_middleware(request, call_next)
+
+    call_next.assert_not_called()
+    assert response.status_code == 403
+    assert json.loads(response.body.decode()) == {"detail": "Cross-origin request denied"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.unit
+async def test_control_plane_middleware_calls_next_when_origin_allowed(monkeypatch):
+    from orama_system.portal_server import _control_plane_auth_middleware
+
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "middleware-test-token")
+    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
+
+    expected = object()
+    call_next = AsyncMock(return_value=expected)
+    request = _make_request(
+        headers={
+            "authorization": "Bearer middleware-test-token",
+            "origin": "http://localhost:8000",
+        },
+    )
+
+    response = await _control_plane_auth_middleware(request, call_next)
+
+    call_next.assert_awaited_once_with(request)
+    assert response is expected
 
 
 def test_portal_operator_routes_require_token_when_enforced(monkeypatch):

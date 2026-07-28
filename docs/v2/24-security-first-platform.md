@@ -120,7 +120,11 @@ These are first-class feature workstreams, not cleanup tickets:
 
 No v2 milestone may be marked complete unless:
 
-- `23-security-preconditions.md` acceptance criteria pass.
+- `23-security-preconditions.md` acceptance criteria pass, including **Phase D**
+  strict mesh cutover from
+  [`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md)
+  (grandfathered P5/P6 defaults from pre-v2 Phases A–C are not sufficient for
+  v2 launch).
 - Every new HTTP/MCP/subprocess/file/network feature has a completed section
   from §4.
 - Security-related tests fail before the control exists and pass after it is

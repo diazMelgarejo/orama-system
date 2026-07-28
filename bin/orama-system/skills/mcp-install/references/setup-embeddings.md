@@ -46,7 +46,7 @@ Result: unified bge-m3 embeddings across gbrain (PostgreSQL+pgvector) and code-r
 
 - Ollama running with `bge-m3` model — script will warn but continue if absent
 - `gbrain` CLI installed and configured (`~/.gbrain/config.json` exists)
-- `uvx` (uv tool launcher) — `curl -LsSf https://astral.sh/uv/install.sh | sh`
+- `uvx` (uv tool launcher) — install uv from https://docs.astral.sh/uv/getting-started/installation/
 - `jq` — `brew install jq`
 
 ## Idempotency guarantees

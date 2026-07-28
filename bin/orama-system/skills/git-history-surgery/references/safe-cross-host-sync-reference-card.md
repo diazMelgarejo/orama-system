@@ -34,7 +34,7 @@ This is **normal sync**, not history surgery. For rewrites/expunges, use
 | `git pull` without `--ff-only` on `main` | Avoid surprise merge commits on shared trunk |
 | `git stash drop` before verifying pop | Stash is the safety net |
 | Bare `git stash pop` / `git stash apply` | Use [`stash-hooks-safeguard-reference-card.md`](stash-hooks-safeguard-reference-card.md) — hooks off, then `install-local-hooks.sh` |
-| Commit `.env.local`, tokens, `control_plane_token` | Gitignored secrets — handoff via `print-lan-peer-token` scripts |
+| Commit env-local files, tokens, `control_plane_token` | Gitignored secrets — handoff via `print-lan-peer-token` scripts |
 | Commit submodule drift by accident | Review `git status` after pop; restore if unintended |
 | `git config` global/local changes by agents | User-owned identity and hooks — **exception:** per-command `-c core.hooksPath=/dev/null` for stash pop/apply only (see stash-hooks-safeguard card) |
 
@@ -139,7 +139,7 @@ git status clean?
     intentional fix/docs → git add + commit + push
     PT config/devices.yml or config/models.yml (LAN overlay) → never add; see local-runtime-overlay card
     submodule drift only → git restore vendor/<name> OR leave unstaged
-    .env.local / .paths / tokens → never add; keep gitignored
+    env-local / .paths / tokens → never add; keep gitignored
     conflict markers → resolve files; re-run hygiene; never reset --hard
 ```
 

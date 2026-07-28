@@ -40,7 +40,7 @@ allowed-tools: bash, file-operations, web-search
 ## 🔧 Setup (GLM-5.2 Fallback)
 
 ```bash
-source ~/.openclaw/.env.glm52 2>/dev/null && echo "✅ GLM-5.2 Fallback Activated" || true
+source ~/.openclaw/openclaw-glm52-env 2>/dev/null && echo "✅ GLM-5.2 Fallback Activated" || true
 ```
 
 When LM Studio, Ollama, or other Hermes-accessible models are unavailable, this task queue can execute via GLM-5.2. **No additional setup required**—the environment variables are already sourced by start.ps1.

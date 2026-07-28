@@ -20,8 +20,9 @@ Cline is an MCP **client**, not an MCP server. `cline mcp --help` shows only
 # 1. OpenClaw exposes its channels/tools over MCP stdio
 openclaw mcp serve
 
-# 2. Register OpenClaw as an MCP server inside Cline
-cline mcp install openclaw -- npx -y openclaw mcp serve
+# 2. Register OpenClaw as an MCP server inside Cline (MCP client UI)
+#    Server name: openclaw — launch command: openclaw mcp serve
+#    (use the resolved local openclaw binary — never unpinned npx)
 ```
 
 After step 2, Cline sessions can call OpenClaw's tools (channel sends, memory,
@@ -55,7 +56,7 @@ cron, exec, etc.) directly from within a Cline task.
       "<name>": {
         "enabled": true,
         "command": "npx",
-        "args": ["-y", "pkg@latest"],
+        "args": ["-y", "pkg@<PINNED_VERSION>"],
         "env": {"KEY": "value"},
         "transport": "stdio",
         "cwd": "/optional/working/dir"

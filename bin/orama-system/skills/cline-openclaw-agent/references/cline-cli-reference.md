@@ -72,8 +72,8 @@ Manage Cline Skills via the open skills CLI (`npx skills`).
 Connect to an external channel (e.g. telegram, discord).
 
 ### `mcp`
-Manage MCP servers. Subcommand: `install|add [options] <name> [targetArgs...]`
-— open the MCP add wizard with server fields prefilled. Cline is an MCP
+Manage MCP servers. Subcommands `install` and `add` accept a server name plus
+target args — use the interactive wizard to prefill fields. Cline is an MCP
 **client**, not a server.
 
 ### `doctor`
