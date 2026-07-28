@@ -147,6 +147,7 @@ merge on orama-side tooling.
 - [`docs/plans/2026-05-24-periscope-l4-integration-plan.md`](../../../../docs/plans/2026-05-24-periscope-l4-integration-plan.md) — L4 sidecar architecture (canonical; design canon + revalidation + epilogue)
 - [`docs/reference/periscope-cursor-repo-rules.md`](../../../../docs/reference/periscope-cursor-repo-rules.md) — cursor rules install
 - [`scripts/periscope/install-cursor-rules.sh`](../../../../scripts/periscope/install-cursor-rules.sh) — attribution guards + rules (separate from ECC)
-- [`skills/ecc-sync/SKILL.md`](../ecc-sync/SKILL.md) — orama-system's own ECC post-merge sync (this repo, not periscope)
-- [`cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md) §9 — good/bad path-scoped PR replay (AFRP FM6/FM7 curriculum)
-- [`afrp/SKILL.md`](../../afrp/SKILL.md) — proxy-table rows for `CONFLICTING` PRs and empty `commit-clean` commits
+- [`git-history-surgery/references/path-scoped-pr-replay-reference-card.md`](../git-history-surgery/references/path-scoped-pr-replay-reference-card.md) — canonical path-scoped PR replay procedure
+- [`cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md) §9 — good/bad path-scoped PR replay curriculum
+- [`afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–7 — CONFLICTING PR and empty-commit failure modes
+- orama-system **ecc-sync** handles this repo's own ECC bundle post-merge (not periscope); use `/ecc-sync` when available

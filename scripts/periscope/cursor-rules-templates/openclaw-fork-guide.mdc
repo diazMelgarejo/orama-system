@@ -5,9 +5,8 @@ alwaysApply: true
 
 # Periscope — Cursor agent rules (OpenClaw fork)
 
-Canonical design: `orama-system` repo → `docs/plans/2026-05-24-periscope-l4-integration-plan.md` and
-`docs/plans/2026-05-24-periscope-l4-integration-plan.md` (read when changing integration
-or parsers).
+Canonical design: `orama-system` repo → `docs/plans/2026-05-24-periscope-l4-integration-plan.md`
+(read when changing integration or parsers).
 
 ## Branch model (non-negotiable)
 
