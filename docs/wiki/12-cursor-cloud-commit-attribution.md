@@ -39,11 +39,17 @@ This:
 ### Hook-free commit (history-sensitive work)
 
 ```bash
-git add …
+# Stage every path that belongs in this commit before running commit-clean.
+git add <paths>   # or git add -A when the whole tree is intentional
 bash scripts/git/commit-clean.sh -m "type(scope): summary"
 # amend tip:
 bash scripts/git/commit-clean.sh -m "type(scope): summary" --amend
 ```
+
+`commit-clean.sh` writes only the **staged** index. It does **not** run
+`git reset --hard` and therefore does not discard unstaged edits. When committing
+logical batches in parallel, stage one batch fully, commit, then stage the next —
+or use separate worktrees so unrelated edits never share a working tree.
 
 ---
 
