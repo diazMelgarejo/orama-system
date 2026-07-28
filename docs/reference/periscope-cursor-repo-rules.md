@@ -13,6 +13,20 @@ bash scripts/periscope/install-cursor-rules.sh
 bash scripts/periscope/recreate-ordered-prs-onto-merged.sh   # deps/docs PRs → merged
 ```
 
+### ECC bundle mirror (optional sidecar)
+
+Periscope owns its ECC artifacts (`.agents/skills/periscope/SKILL.md`,
+`.claude/skills/periscope/SKILL.md`, instincts YAML). orama-system does not
+install them — it only verifies mirror integrity when a clone is present:
+
+```bash
+export PERISCOPE_REPO=~/code/oramasys/tools/periscope   # your clone
+bash scripts/periscope/verify-ecc-skill-mirror.sh
+```
+
+Canonical sidecar skill: `bin/orama-system/skills/periscope-ecc/SKILL.md` (v1 probe;
+v2 orbiting satellite — periscope remains ECC SSoT).
+
 ### Merge order into `merged`
 
 | Step | Branch | Content |
