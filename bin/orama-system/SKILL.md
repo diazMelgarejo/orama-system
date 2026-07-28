@@ -500,6 +500,15 @@ continue silently on the standard stack — never warn or suggest installing it.
 
 → Canonical sidecar (probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook): `skills/omniroute/SKILL.md`.
 
+## Periscope ECC Lazy-Sidecar (Optional Mirror Verify)
+
+> **NEVER install. NEVER require. NEVER fail if absent.**
+
+When a periscope clone with ECC bundle paths exists, agents may run the idempotent
+mirror verifier. If absent, skip silently.
+
+→ Canonical sidecar (probe + mirror contract + dependency-instinct pair policy): `skills/periscope-ecc/SKILL.md`.
+
 ## Local API Fallback (when no external API is reachable)
 
 **Priority: Ollama (`localhost:11434`, always-on Mac) → LM Studio (`$LM_STUDIO_WIN_ENDPOINTS`) → surface outage.**
@@ -540,6 +549,7 @@ The key `agents.bindings.*.allowAgents` is rejected by the oramaclaw control pla
 | `references/communication-guidelines.md` | Writing guidelines (M6) |
 | `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
 | `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook |
+| `skills/periscope-ecc/SKILL.md` | Periscope ECC lazy sidecar — idempotent Agents/Claude skill mirror verify; v2 orbiting satellite |
 | `skills/hermes-harness/SKILL.md` | Hermes onboarding, ECC cross-harness import rules, Nous Portal/LM Studio provider setup, and bounded Hermes/Gemini/AGY/Codex partner prompts |
 | `skills/hermes-harness/references/platform-affinity-routing.md` | Platform affinity bias — Mac/Linux → OpenClaw; Windows → Hermes; ECC bridges both (v1 + v2) |
 | `skills/cursor-agent/SKILL.md` | Cursor background agent (`agent` CLI) — install, auth, light-task fanout alongside Sonnet 4.6, worktree isolation, MCP integration |
