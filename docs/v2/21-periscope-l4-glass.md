@@ -5,6 +5,12 @@
 > **Status:** Design — pending implementation plan in `docs/plans/2026-05-24-periscope-l4-integration-plan.md`
 > **Repo:** `diazMelgarejo/periscope` (fork of `latentsignal-org/periscope`, upstream tracks `wesm/agentsview`)
 > **Local path:** `<v2-workspace>/tools/periscope` (cloned 2026-05-24, all 3 branches local)
+>
+> **2026-07-28 revalidation (DRAFT):** The implementation plan now records the
+> current PT-adapter design. B.1 already exists; B.2 has no durable source contract;
+> B.3 moves to PT-owned normalization; B.5 reuses existing Periscope APIs.
+> Periscope receives no stack-specific orchestration functions. Preserve the
+> registry below as historical context until the revalidated plan is reviewed.
 
 ### Branch model (canonical)
 
