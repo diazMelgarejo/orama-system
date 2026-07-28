@@ -5,8 +5,10 @@
 > Read that file before running the protocol.
 
 **Invoke from this skill when:** stale branch salvage, post-merge integrity audit,
-"what is truly unique on this branch vs current `main`?", or clean replacement PR
-extraction after merge-noise branches.
+"what is truly unique on this branch vs current `main`?", clean replacement PR
+extraction after merge-noise branches, or **path-scoped replay onto a fresh
+integration base** (see
+[`path-scoped-pr-replay-reference-card.md`](path-scoped-pr-replay-reference-card.md)).
 
 **CLAYGO:** clean last run's ephemeral clone/worktree **before** starting and **after**
 finishing every integrity pass.

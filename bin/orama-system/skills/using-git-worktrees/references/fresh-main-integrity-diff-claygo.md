@@ -133,6 +133,10 @@ python3 scripts/review/repo_hygiene.py .    # both repos as applicable
 
 Never merge the stale branch wholesale "to catch up."
 
+For integration-base repos (periscope → `merged`, AlphaClaw →
+`feature/MacOS-post-install`), replace `origin/main` with the correct base and see
+[`../../git-history-surgery/references/path-scoped-pr-replay-reference-card.md`](../../git-history-surgery/references/path-scoped-pr-replay-reference-card.md).
+
 ---
 
 ## Protocol D — ephemeral `git worktree` variant (no clone)
@@ -187,5 +191,6 @@ python3 scripts/git/check_local_runtime_overlay.py . --mode tree
 
 - [`local-runtime-overlay-reference-card.md`](local-runtime-overlay-reference-card.md) — PT discovery cache; never discard
 - [`../../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — stash-first sync
+- [`../../git-history-surgery/references/path-scoped-pr-replay-reference-card.md`](../../git-history-surgery/references/path-scoped-pr-replay-reference-card.md) — replay harmonized path delta onto fresh integration base
 - [`../../fable5-git-rebase-safety/SKILL.md`](../../fable5-git-rebase-safety/SKILL.md) — tree-twin / post-rewrite validation
 - [`../SKILL.md`](../SKILL.md) — parallel worktree bootstrap

@@ -64,6 +64,13 @@ LM Studio host, run
    **Mandatory:** [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md)
    — `git -c core.hooksPath=/dev/null stash pop` then `bash scripts/git/install-local-hooks.sh`.
    Never bare `git stash pop`.
+9. Open PR is `CONFLICTING` because the integration base already landed overlapping
+   content, but a harmonized path-scoped delta still needs to ship?
+   Use [`references/path-scoped-pr-replay-reference-card.md`](references/path-scoped-pr-replay-reference-card.md):
+   fetch fresh integration base (`merged` for periscope, not `main`), preserve synthesis
+   outside the branch, `git checkout` only proven unique paths, `git add` before
+   `commit-clean.sh`, single commit, `--force-with-lease`. Never merge the stale branch
+   wholesale or replay the full bundle when the base already contains it.
 
 ## Non-Negotiables
 
@@ -248,6 +255,7 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 - [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md) — hooks off before stash pop/apply; re-enable after (mandatory for agents)
 - [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
 - [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) — ephemeral fresh-main diff; true unique branch contribution; CLAYGO teardown
+- [`references/path-scoped-pr-replay-reference-card.md`](references/path-scoped-pr-replay-reference-card.md) — replay harmonized path delta onto fresh integration base; periscope PR #12 ECC worked example
 - [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
 - [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
 - [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table
