@@ -2,6 +2,7 @@
 
 > **Doctrine:** [`../SKILL.md` § Integrative Editing Doctrine](../SKILL.md)  
 > **Merge modes:** [`../../skills/oramasys-method/references/integrative-merge.md`](../../skills/oramasys-method/references/integrative-merge.md)  
+> **AFRP curriculum:** [`../../afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–7 (CONFLICTING PR / proxy conclusion)  
 > **Bad lines below** are quarantined teaching samples — do not copy into production `SKILL.md` files.
 
 ---
@@ -91,6 +92,31 @@ See [`../../skills/shell-hygiene/SKILL.md` §7](../../skills/shell-hygiene/SKILL
 | Bad examples inline in reference card | Quarantine in `skillify/examples/bad/` with `<!-- aguara-ignore-next-line -->` per bad line |
 
 See [`../../skills/skillify/references/skill-security-wording-reference-card.md`](../../skills/skillify/references/skill-security-wording-reference-card.md).
+
+---
+
+## 9. Open PR replay when integration base moved (path-scoped)
+
+> **Doctrine:** synthesize harmonized content from both inputs, then replay **only proven
+> unique paths** onto a **fresh integration base** — never merge the stale branch wholesale.
+> Canonical procedure:
+> [`../../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md`](../../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md)
+> **Origin:** periscope PR #12 ECC fusion after PR #10 merge (2026-07-28).
+
+| Bad | Good |
+| --- | --- |
+| Merge or rebase the stale PR branch wholesale to "resolve conflicts" | `git fetch origin <integration-base>`; reset branch to fresh base; replay path list only |
+| Re-add the full 11-file ECC bundle when PR #10 already landed it on `merged` | Single commit with the 3-file harmonized delta (skills mirror + instincts) |
+| Pick PR #12 over PR #10 (or vice versa) when both have valid partial signal | **Synthesize** — union/superset both runs; preserve stable IDs + richer evidence |
+| `bash scripts/git/commit-clean.sh` without prior `git add` | `git add <paths>` first; verify `git diff --cached --stat` is non-empty |
+| Extract harmonized blobs from the PR branch you are about to force-push | Preserve synthesis in a **separate worktree** before resetting the PR branch |
+| Include `ecc-tools.json` / `identity.json` timestamp-only churn | Omit generator metadata unless intentionally harmonized |
+| Replay onto periscope `main` | Replay onto `merged` — `main` is upstream mirror only |
+| Report `MERGEABLE` without verifying GitHub after push | `gh pr view --json mergeable,mergeStateStatus` after force-with-lease |
+
+**Recovery applied (PR #12):** PR #10 merged ECC onto `merged` @ `f4a43cd6`; PR #12 still
+carried two commits from pre-#10 `merged` → `CONFLICTING` / `DIRTY`. Reset to fresh
+`origin/merged`, replayed three paths, one commit @ `9e465d9c` → `CLEAN` / `MERGEABLE`.
 
 ---
 
