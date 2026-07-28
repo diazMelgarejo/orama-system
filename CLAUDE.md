@@ -95,7 +95,7 @@ Before significant changes, load the mother skill:
 
 ## § 4 — Four-Layer Architecture
 
-```
+```text
 AlphaClaw (L1 — infra)
   → Perpetua-Tools (L2 — middleware + adapters)
   → orama-system (L3 — THIS REPO — stateless methodology)

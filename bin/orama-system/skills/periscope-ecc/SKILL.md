@@ -21,8 +21,12 @@ metadata:
 Run first; if it prints `SKIP`, do nothing else:
 
 ```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
-bash "$REPO_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh"
+ORAMA_SYSTEM_ROOT="${ORAMA_SYSTEM_ROOT:-${OPENCLAW_ROOT%/}/orama-system}"
+if [[ ! -f "$ORAMA_SYSTEM_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh" ]]; then
+  echo "periscope ECC: set ORAMA_SYSTEM_ROOT to the orama-system checkout" >&2
+  exit 1
+fi
+bash "$ORAMA_SYSTEM_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh"
 ```
 
 Expected when absent:
@@ -61,9 +65,13 @@ The two skill files must remain **byte-identical**:
 Verify after any ECC harmonization or integrative merge:
 
 ```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+ORAMA_SYSTEM_ROOT="${ORAMA_SYSTEM_ROOT:-${OPENCLAW_ROOT%/}/orama-system}"
+if [[ ! -f "$ORAMA_SYSTEM_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh" ]]; then
+  echo "periscope ECC: set ORAMA_SYSTEM_ROOT to the orama-system checkout" >&2
+  exit 1
+fi
 export PERISCOPE_REPO="${PERISCOPE_REPO:?set to the periscope checkout}"
-bash "$REPO_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh"
+bash "$ORAMA_SYSTEM_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh"
 ```
 
 Exit `0` = in sync or absent (SKIP). Exit `1` = drift detected.
@@ -87,16 +95,20 @@ still carries pre-merge commits, do **not** merge or rebase wholesale. Use path-
 replay:
 
 ```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+ORAMA_SYSTEM_ROOT="${ORAMA_SYSTEM_ROOT:-${OPENCLAW_ROOT%/}/orama-system}"
+if [[ ! -d "$ORAMA_SYSTEM_ROOT/.git" ]]; then
+  echo "periscope ECC: set ORAMA_SYSTEM_ROOT to the orama-system checkout" >&2
+  exit 1
+fi
 REPLAY_WORKTREE="$(mktemp -d "${TMPDIR:-/tmp}/periscope-pr-replay.XXXXXX")"
 cleanup_replay_worktree() {
-  git -C "$REPO_ROOT" worktree remove --force "$REPLAY_WORKTREE" >/dev/null 2>&1 \
+  git -C "$ORAMA_SYSTEM_ROOT" worktree remove --force "$REPLAY_WORKTREE" >/dev/null 2>&1 \
     || rm -rf "$REPLAY_WORKTREE"
 }
 trap cleanup_replay_worktree EXIT
 
-git fetch origin merged
-git worktree add --detach "$REPLAY_WORKTREE" origin/merged
+git -C "$ORAMA_SYSTEM_ROOT" fetch origin merged
+git -C "$ORAMA_SYSTEM_ROOT" worktree add --detach "$REPLAY_WORKTREE" origin/merged
 # apply harmonized paths only; git add; commit-clean; force-with-lease
 ```
 
@@ -116,9 +128,13 @@ Unique path set for the 2026-07-28 ECC fusion:
 After an ECC PR merges into periscope `merged`:
 
 ```bash
-REPO_ROOT="$(git rev-parse --show-toplevel)"
+ORAMA_SYSTEM_ROOT="${ORAMA_SYSTEM_ROOT:-${OPENCLAW_ROOT%/}/orama-system}"
+if [[ ! -f "$ORAMA_SYSTEM_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh" ]]; then
+  echo "periscope ECC: set ORAMA_SYSTEM_ROOT to the orama-system checkout" >&2
+  exit 1
+fi
 export PERISCOPE_REPO="${PERISCOPE_REPO:?set to the periscope checkout}"
-bash "$REPO_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh"
+bash "$ORAMA_SYSTEM_ROOT/scripts/periscope/verify-ecc-skill-mirror.sh"
 /instinct-import "$PERISCOPE_REPO/.claude/homunculus/instincts/inherited/periscope-instincts.yaml"
 /instinct-status
 ```
