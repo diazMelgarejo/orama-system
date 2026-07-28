@@ -78,6 +78,29 @@ Keep **both** instincts; they serve different trigger granularities:
 Each block cross-references its companion in `## Related`. Do not dedupe into one
 instinct during harmonization merges.
 
+## PR branch replay (when base already has overlapping ECC)
+
+When the integration base (`merged`) already contains PR #10's bundle and an open PR
+still carries pre-merge commits, do **not** merge or rebase wholesale. Use path-scoped
+replay:
+
+```bash
+git fetch origin merged
+git worktree add /tmp/periscope-pr-replay origin/merged
+# apply harmonized paths only; git add; commit-clean; force-with-lease
+```
+
+Canonical procedure:
+[`git-history-surgery/references/path-scoped-pr-replay-reference-card.md`](../git-history-surgery/references/path-scoped-pr-replay-reference-card.md).
+
+Unique path set for the 2026-07-28 ECC fusion:
+
+```text
+.agents/skills/periscope/SKILL.md
+.claude/skills/periscope/SKILL.md
+.claude/homunculus/instincts/inherited/periscope-instincts.yaml
+```
+
 ## Post-merge ECC sync (periscope repo only)
 
 After an ECC PR merges into periscope `merged`:
