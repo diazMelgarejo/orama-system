@@ -164,7 +164,7 @@ re-resolve `$PT_STATE_DIR`, whose initialization differs across PT modules.
 | Rename only functional binary contracts | Desktop runtime must request `sidecar("periscope")` because Tauri bundles `binaries/periscope-*` |
 | `.air.toml` | Already uses `tmp/periscope`; no action |
 | `.roborev.toml` | Non-functional review guidance; retain AgentsView wording |
-| Clean “patches atop AgentsView” history | **Optional epic** — see [`docs/plans/2026-07-28-periscope-lineage-modernization-epic.md`](docs/plans/2026-07-28-periscope-lineage-modernization-epic.md). Classify 45 fork patches against 583 upstream commits; expensive and not required for L4 |
+| Clean “patches atop AgentsView” history | **Optional epic** — see [`2026-07-28-periscope-lineage-modernization-epic.md`](2026-07-28-periscope-lineage-modernization-epic.md). Classify 45 fork patches against 583 upstream commits; expensive and not required for L4 |
 
 Track A may close after the desktop sidecar contract fix if “close” means current
 mirror and operational maintenance. Reconstructing `merged` as a clean semantic
@@ -233,6 +233,9 @@ This plan covers Phase A and Phase B. Phase C is its own future plan.
 > revalidation replaces B.2/B.3 with a PT-owned adapter and drops B.5 for v1.
 > Historical task bodies below are preserved as evidence — obey the revalidation
 > banners, not unchecked boxes.
+> The legacy **Risk gates** section inside the red historical appendix is also
+> archival and must not be executed unless rewritten to match the 2026-07-28
+> revalidation.
 
 ---
 
