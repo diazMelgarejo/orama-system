@@ -8,7 +8,7 @@
 From **orama-system** root:
 
 ```bash
-export PERISCOPE_REPO=~/code/oramasys/tools/periscope   # your clone
+export PERISCOPE_REPO="$OPENCLAW_HOME/periscope"   # or another checkout path
 bash scripts/periscope/install-cursor-rules.sh
 bash scripts/periscope/recreate-ordered-prs-onto-merged.sh   # deps/docs PRs → merged
 ```
@@ -20,7 +20,7 @@ Periscope owns its ECC artifacts (`.agents/skills/periscope/SKILL.md`,
 install them — it only verifies mirror integrity when a clone is present:
 
 ```bash
-export PERISCOPE_REPO=~/code/oramasys/tools/periscope   # your clone
+export PERISCOPE_REPO="$OPENCLAW_HOME/periscope"   # or another checkout path
 bash scripts/periscope/verify-ecc-skill-mirror.sh
 ```
 
