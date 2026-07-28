@@ -27,6 +27,13 @@ bash scripts/periscope/verify-ecc-skill-mirror.sh
 Canonical sidecar skill: `bin/orama-system/skills/periscope-ecc/SKILL.md` (v1 probe;
 v2 orbiting satellite — periscope remains ECC SSoT).
 
+### ECC PR replay (path-scoped)
+
+When `merged` already contains an ECC bundle (e.g. PR #10) and an open PR still
+carries pre-merge commits, replay **only the harmonized path delta** onto fresh
+`origin/merged` — never merge the stale branch wholesale. See
+`bin/orama-system/skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md`.
+
 ### Merge order into `merged`
 
 | Step | Branch | Content |
