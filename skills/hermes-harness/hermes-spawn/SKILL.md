@@ -85,22 +85,45 @@ pid_command() {
 
 verify_hermes_pid() {
   local pid="$1"
+  local expected_started="${2:-}"
   local args=""
+  local actual_started=""
   [ -n "$pid" ] || return 1
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
   kill -0 "$pid" 2>/dev/null || return 1
   args="$(pid_command "$pid")"
   [ -n "$args" ] || return 1
   case "$args" in
-    *python3*"${PERP_SCRIPT}"*) return 0 ;;
-    *python*"${PERP_SCRIPT}"*) return 0 ;;
+    *python3*"${PERP_SCRIPT}"*) ;;
+    *python*"${PERP_SCRIPT}"*) ;;
+    *) return 1 ;;
   esac
-  return 1
+  if [ -n "$expected_started" ]; then
+    actual_started="$(ps -p "$pid" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//')"
+    [ "$actual_started" = "$expected_started" ] || return 1
+  fi
+  return 0
+}
+
+read_pid_file() {
+  local line=""
+  SPAWN_PID=""
+  SPAWN_STARTED=""
+  [ -f "$PID_FILE" ] || return 1
+  line="$(tr -d '\r' <"$PID_FILE" | head -1)"
+  SPAWN_PID="${line%% *}"
+  SPAWN_STARTED="${line#"$SPAWN_PID"}"
+  SPAWN_STARTED="${SPAWN_STARTED# }"
+  [[ "$SPAWN_PID" =~ ^[0-9]+$ ]] || return 1
+  return 0
 }
 
 write_pid_file() {
   local pid="$1"
+  local started=""
   local tmp="${PID_FILE}.tmp.$$"
-  printf '%s\n' "$pid" >"$tmp"
+  started="$(ps -p "$pid" -o lstart= 2>/dev/null | sed 's/^[[:space:]]*//')"
+  printf '%s %s\n' "$pid" "$started" >"$tmp"
   mv -f "$tmp" "$PID_FILE"
 }
 
@@ -145,8 +168,14 @@ case "$ACTION" in
     validate_paths
     acquire_lock
     if [[ -f "$PID_FILE" ]]; then
-      existing_pid="$(cat "$PID_FILE")"
-      if verify_hermes_pid "$existing_pid"; then
+      if read_pid_file; then
+        existing_pid="$SPAWN_PID"
+      else
+        echo "⚠️ Ignoring malformed pid file at $PID_FILE" >&2
+        rm -f "$PID_FILE"
+        existing_pid=""
+      fi
+      if [ -n "${existing_pid:-}" ] && verify_hermes_pid "$existing_pid" "${SPAWN_STARTED:-}"; then
         echo "ERROR: Hermes already running for session ${SESSION_ID} (pid $existing_pid)" >&2
         exit 1
       fi
@@ -172,23 +201,26 @@ case "$ACTION" in
     ;;
   stop)
     acquire_lock
+    pid=""
     if [[ -f "$PID_FILE" ]]; then
-      pid="$(cat "$PID_FILE")"
-      if verify_hermes_pid "$pid"; then
+      if ! read_pid_file; then
+        echo "⚠️ Ignoring malformed pid file at $PID_FILE" >&2
+        rm -f "$PID_FILE"
+      elif verify_hermes_pid "$SPAWN_PID" "$SPAWN_STARTED"; then
+        pid="$SPAWN_PID"
         kill "$pid"
         for _ in $(seq 1 10); do
-          verify_hermes_pid "$pid" || break
+          verify_hermes_pid "$pid" "$SPAWN_STARTED" || break
           sleep 0.2
         done
-        if verify_hermes_pid "$pid"; then
+        if verify_hermes_pid "$pid" "$SPAWN_STARTED"; then
           echo "ERROR: Hermes pid $pid did not stop cleanly" >&2
           exit 1
         fi
         echo "✅ Hermes stopped (pid $pid)"
+        rm -f "$PID_FILE"
       else
-        echo "ℹ️ No active Hermes process for pid $pid"
-      fi
-      if [[ "$(cat "$PID_FILE" 2>/dev/null || true)" == "$pid" ]]; then
+        echo "ℹ️ No active Hermes process for pid $SPAWN_PID" >&2
         rm -f "$PID_FILE"
       fi
     else
@@ -198,12 +230,15 @@ case "$ACTION" in
   status)
     validate_paths
     if [[ -f "$PID_FILE" ]]; then
-      pid="$(cat "$PID_FILE")"
-      if verify_hermes_pid "$pid"; then
-        echo "✅ Hermes running (pid $pid, session ${SESSION_ID})"
+      if ! read_pid_file; then
+        echo "⚠️ Ignoring malformed pid file at $PID_FILE" >&2
+        rm -f "$PID_FILE"
+        exit 1
+      elif verify_hermes_pid "$SPAWN_PID" "$SPAWN_STARTED"; then
+        echo "✅ Hermes running (pid $SPAWN_PID, session ${SESSION_ID})"
         exit 0
       fi
-      echo "⚠️ Stale pid file — recorded pid $pid is not the expected hermes_harness.py process" >&2
+      echo "⚠️ Stale pid file — recorded pid $SPAWN_PID is not the expected hermes_harness.py process" >&2
       exit 1
     fi
     echo "ℹ️ No active Hermes session ${SESSION_ID} (no pid file)"
