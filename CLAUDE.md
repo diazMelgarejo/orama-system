@@ -93,10 +93,13 @@ Before significant changes, load the mother skill:
 
 ---
 
-## § 4 — Three-Repo Architecture
+## § 4 — Four-Layer Architecture
 
 ```
-AlphaClaw (L1 — infra) → Perpetua-Tools (L2 — middleware) → orama-system (L3 — THIS REPO — orchestration)
+AlphaClaw (L1 — infra)
+  → Perpetua-Tools (L2 — middleware + adapters)
+  → orama-system (L3 — THIS REPO — stateless methodology)
+  → Periscope (L4 — observation-only session glass)
 ```
 
 Full architecture: [`docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
@@ -107,6 +110,10 @@ Path map (harness/skill locations): see `§ 8` of the archived full CLAUDE.md in
 - `start.sh` delegates gateway decisions to PT's `orchestrator/alphaclaw_manager.py` — never add routing logic to `start.sh`
 - orama API stays stateless (no Redis)
 - orama talks to AlphaClaw through PT's adapter, never directly
+- Periscope observes PT-normalized session artifacts; it never writes to or
+  orchestrates L1–L3
+- PT extends AlphaClaw and Periscope through adapters; do not add stack-specific
+  orchestration functions to Periscope when its existing parsers/API suffice
 
 ---
 
