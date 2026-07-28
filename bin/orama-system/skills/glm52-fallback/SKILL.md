@@ -33,7 +33,8 @@ bin/orama-system/skills/glm52-fallback/
 ## Setup (Automated)
 
 ```bash
-export GLM52_API_KEY="<BigModel.API.key>"
+: "${GLM52_API_KEY:?Set GLM52_API_KEY before running setup-glm52.sh}"
+export GLM52_API_KEY="${GLM52_API_KEY:?}"
 bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh
 ```
 

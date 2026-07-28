@@ -47,7 +47,7 @@ See [`../../skills/shell-hygiene/SKILL.md` §7](../../skills/shell-hygiene/SKILL
 | --- | --- |
 | `AIAgent.chat('Reply with: HERMES_OK')` in status | `verify_hermes_pid` — exact `hermes_harness.py` path + `kill -0` |
 | Subshell `python3 … &` without `exec` (tracks wrapper shell) | `(cd …; exec python3 "$PERP_SCRIPT" …) &` — PID is the Python harness |
-| `grep -q hermes_harness.py` on cmdline | Match full resolved script path; reject stale/mismatched PIDs |
+| `grep -q hermes_harness.py` on cmdline | Match full resolved script path + `ps lstart` identity in pid file |
 | `mkdir` lock + EXIT trap only | Stale lock recovery when lock pid is dead; atomic PID file via `mv` |
 | `printf >"$PID_FILE"` on shared dir | Mode-700 runtime dir; reject symlinked parents; atomic rename write |
 
