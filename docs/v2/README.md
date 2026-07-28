@@ -204,7 +204,7 @@ orama-system/docs/v2/
 ├── 18-master-alignment-v2-migration-plan.md  ← CC + OpenClaw skills submodule master-alignment plan (2026-05-20)
 ├── 19-gstack-optional-integration.md  ← gstack as optional submodule; detect_gstack() pattern; install.sh probing
 ├── 20-rag-and-memory-design.md        ← RAG + memory design; gbrain + LanceDB; gstack integration review
-├── 21-periscope-l4-glass.md           ← periscope L4 glass-window design; ActivityMinimap + ContextPage integration
+├── (21) ../plans/2026-05-24-periscope-l4-integration-plan.md  ← Periscope L4 glass (canonical; supersedes retired 21-periscope-l4-glass.md)
 ├── 22-worktree-parallel-agents.md     ← parallel-agent worktree doctrine; 4-quadrant decision rule; bootstrap + lifecycle
 ├── 23-security-preconditions.md       ← v2 gate: acceptance criteria before LAN/MCP expansion
 ├── 24-security-first-platform.md      ← security as first-class platform feature; OWASP/NIST/CISA/OpenSSF/SLSA citations

@@ -50,7 +50,7 @@ Summarizes established doctrine from:
 
 | Doc | Topic |
 |-----|--------|
-| [`docs/v2/21-periscope-l4-glass.md`](../v2/21-periscope-l4-glass.md) | L4 mission, parsers, hard invariants |
+| [`docs/plans/2026-05-24-periscope-l4-integration-plan.md`](../plans/2026-05-24-periscope-l4-integration-plan.md) | L4 mission, PT-adapter boundary, design canon + epilogue (successor to retired doc 21) |
 | [`docs/plans/2026-05-24-periscope-l4-integration-plan.md`](../plans/2026-05-24-periscope-l4-integration-plan.md) | Phase A/B work, file paths |
 | [`scripts/periscope/rebuild-deps-prs-onto-merged.sh`](../../scripts/periscope/rebuild-deps-prs-onto-merged.sh) | Deps PRs target `merged` |
 
