@@ -141,6 +141,17 @@ the tool replaces the whole field, so the write itself must be integrative.
 
 **Worked examples (good vs bad):**
 [`references/integrative-editing-examples.md`](references/integrative-editing-examples.md)
+(§1 PR bodies append-only; §9 path-scoped PR replay when integration base moved)
+
+### Git branch replay (integrative delta, not wholesale merge)
+
+When an open PR conflicts because the integration base already landed overlapping
+content, CIDF rank-1 applies to the **replay write**: synthesize the harmonized
+artifact first, then apply only the proven unique path set onto a fresh base.
+Do not amputate either input by picking one PR's version wholesale.
+
+See integrative-editing-examples §9 and
+[`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md).
 
 ---
 
@@ -248,7 +259,7 @@ bin/orama-system/cidf/
 ├── SKILL.md                          ← this file (sub-skill)
 ├── FRAMEWORK.md                      ← canonical v1.2 spec
 ├── references/
-│   └── integrative-editing-examples.md  ← good/bad corpus (PR #222 session)
+│   └── integrative-editing-examples.md  ← good/bad corpus (PR #222 PR bodies; PR #12 path-scoped replay §9)
 ├── core/
 │   ├── content_insertion_framework.py  ← decide(), verify(), execute_with_fallback()
 │   ├── content_insertion_policy.json   ← machine policy + 6 test vectors

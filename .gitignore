@@ -125,6 +125,11 @@ trace.zip
 # Different machines register under different source names; never commit this.
 .gbrain-source
 
+# Periscope L4 glass design (2026-05-24) — removed from git after a concrete
+# cursor_secret was committed. Keep local copies only; canonical policy lives in
+# docs/plans/2026-05-24-periscope-l4-integration-plan.md (revalidation section).
+docs/v2/21-periscope-l4-glass.md
+
 # discover.py runtime marker
 config/.policy_cache_refreshed
 

@@ -1,4 +1,7 @@
-> ⏭️ **DEFERRED 2026-06-14** — user-skipped (52 open); revisit when Periscope L4 is prioritized.
+> **Canonical design:** This file is the successor to the retired
+> `docs/v2/21-periscope-l4-glass.md` (removed from git after a leaked credential).
+> Read **Design canon** (intro), **2026-07-28 revalidation** (current policy), and
+> **Epilogue** (OQ register, risks, v2 scope) before executing any task below.
 
 # Periscope L4 Glass — Implementation Plan
 
@@ -7,16 +10,210 @@
 **Goal:** Wire periscope into OpenClaw as the L4 observability layer + close out the pending upstream-maintenance work (rename, branch merges, dep PRs).
 
 **Repos & paths:**
-- Periscope (local): `~/code/oramasys/tools/periscope` — all 3 branches local (`main`, `merged`, `agentsview`)
+- Periscope (local): `$OPENCLAW_HOME/periscope` or `$PERISCOPE_REPO` — branches `main`, `merged`, `agentsview`
 - Periscope (remote): `github.com/diazMelgarejo/periscope` (fork of `latentsignal-org/periscope`)
 - orama-system (this repo): `$OPENCLAW_ROOT/orama-system`
-
-**Design:** See `docs/v2/21-periscope-l4-glass.md` (mission, architecture, OQ register, risks).
+- Perpetua-Tools adapter: `orchestrator/periscope_adapter.py` (disabled unless `PERISCOPE_EMITTER_ENABLED=1`)
 
 **Hard constraints:**
 - Periscope is L4 — observation-only. Never writes to AlphaClaw / PT / orama.
 - All integration code goes to `diazMelgarejo/periscope` (the fork). Parsers we want upstream get a separate PR to `latentsignal-org/periscope` AFTER they ship in our fork.
+- PT owns stack-specific normalization; Periscope consumes OpenClaw-compatible JSONL via existing parsers — no new Periscope orchestration routes for v1.
 - Do **not** touch `oramasys/*` repos. v2-planning rule applies.
+- Never commit real `PERISCOPE_TOKEN` values. API auth uses Periscope `auth_token` (`Authorization: Bearer`), not `cursor_secret` (pagination signing only).
+
+> **2026-07-28 revalidation (published):** Current policy is the
+> [PT-adapter design](#revised-ownership-boundary) below. **B.1** already exists;
+> **B.2** has no durable source contract; **B.3** moves to
+> [PT-owned normalization](#revised-phase-b--minimal-l4-without-periscope-feature-additions);
+> **B.5** reuses existing Periscope APIs. Periscope receives no stack-specific
+> orchestration functions. The May task registry and pending-work tables remain as
+> [historical appendix](#phase-order)
+> only. See also the optional
+> [lineage-modernization epic](2026-07-28-periscope-lineage-modernization-epic.md)
+> and Perpetua-Tools adapter work ([PR #295](https://github.com/diazMelgarejo/Perpetua-Tools/pull/295)).
+
+---
+
+## Design canon (introductory — successor to doc 21)
+
+### Mission
+
+> **Make every decision an OpenClaw agent makes legible to a human in real time.**
+> If a model picked wrong, if routing landed on the wrong backend, if a context page truncated wrong — the operator sees it when it happens, not only in a post-mortem.
+
+Periscope is **L4** in the OpenClaw stack:
+
+```text
+L1 — AlphaClaw          : edge gateway, request/response transport
+L2 — Perpetua-Tools     : middleware, orchestrator contracts, routing state
+L3 — orama-system       : stateless methodology, agent graph, policy
+L4 — Periscope          : observability glass, session corpus, guidance  ← THIS PLAN
+```
+
+Periscope is **not** a replacement for L1–L3. It is the read-side reflection layer: it ingests what L1–L3 emit, indexes it, and turns it into something a human can navigate.
+
+### Branch model (canonical)
+
+| Branch | Role |
+| --- | --- |
+| **`agentsview`** | Upstream mirror — exact `kenn-io/agentsview:main` |
+| **`main`** | Upstream mirror — exact `latentsignal-org/periscope:main`; **not** the fork integration target |
+| **`merged`** | **Build branch** — fork integration line; **all agent PRs base here** |
+
+Cursor agents: install periscope repo rules once per clone —
+`bash scripts/periscope/install-cursor-rules.sh` (from orama-system).
+Reference: [`docs/reference/periscope-cursor-repo-rules.md`](../reference/periscope-cursor-repo-rules.md).
+
+### What Periscope already provides (reuse, do not reimplement)
+
+| Layer | Capability |
+| --- | --- |
+| **Parsers** | Claude Code, Cursor, Codex, Gemini, Zed, Cortex, Piebald, forge, **OpenClaw** (`internal/parser/openclaw.go`) |
+| **HTTP API** | `GET /api/v1/sessions`, context, timeline, messages; SSE `GET /api/v1/sessions/{id}/events` |
+| **CLI** | `periscope`, `periscope sync`, usage subcommands |
+| **Storage** | SQLite + FTS5 at `~/.periscope/db.sqlite`; optional Postgres for cross-machine sync |
+| **UI** | Svelte SPA — dashboard, session viewer, context page, timeline, heatmap |
+| **Desktop** | Tauri wrapper; sidecar binary stem must be `periscope` (not `agentsview`) |
+
+**Auth (local only):** Periscope HTTP middleware checks `auth_token` from
+`~/.periscope/config.toml` when `require_auth = true`. Commit only blank
+`PERISCOPE_TOKEN=` placeholders in templates. `cursor_secret` is a separate
+pagination-signing credential — never treat it as the API bearer token and
+never commit real values to tracked files.
+
+### Sidecar architecture (2026-07-28 — PT-adapter path)
+
+```text
+                       ┌────────────────────────┐
+                       │  Operator browser/IDE  │
+                       └───────────┬────────────┘
+                                   │ http://127.0.0.1:8080
+                                   ▼
+        ┌─────────────────────────────────────────────────┐
+        │  Periscope (L4) — existing parser + API + UI    │
+        │   SQLite/FTS5 ← sync ← openclaw_dirs[]          │
+        └──────────────▲──────────────────────────────────┘
+                       │ OpenClaw-compatible JSONL (read-only)
+        ┌──────────────┴──────────────────────────────────┐
+        │  L2 Perpetua-Tools — periscope_adapter (opt-in)   │
+        │    ~/.openclaw/sessions/…  +  PT state/periscope/ │
+        │    agents/{pt-supervisor,alphaclaw-routing}/…     │
+        └──────────────────────────────────────────────────┘
+```
+
+**Hard invariant:** Periscope never writes back to L1–L3. PT normalizes stack-specific state into session JSONL; Periscope's existing OpenClaw parser ingests it.
+
+Enable emission locally: `export PERISCOPE_EMITTER_ENABLED=1` (Perpetua-Tools `cursor/periscope-l4-adapter-f559`).
+
+---
+
+## 2026-07-28 revalidation — published, supersedes execution details below
+
+> Preserve the May plan below as historical design evidence. Do not execute its
+> branch merges, parser additions, route additions, or token instructions without
+> applying this revalidation first.
+
+### Evidence that changed the plan
+
+| Prior assumption | Current evidence | Revised decision |
+| --- | --- | --- |
+| `merged` should merge into `main` | `main` is the exact `latentsignal-org/periscope` mirror; `merged` is the fork integration line | **Never merge `merged` into `main`** |
+| `agentsview` needs synchronization | `agentsview` is the exact `kenn-io/agentsview` mirror | Mirror synchronization is closed until upstream moves |
+| B.1 OpenClaw parser is unbuilt | `internal/parser/openclaw.go` is registered and tested | B.1 is complete; reuse it |
+| AlphaClaw writes a durable event JSONL | Setup-operation progress is short-lived, in-memory SSE; the planned routing-event shape never existed | No Periscope AlphaClaw parser; candidate boundary is PT routing state/adapter |
+| PT job events need a new Periscope parser | PT owns `.state/jobs.jsonl`; Periscope accepts multiple `openclaw_dirs` | PT emits OpenClaw-compatible session files in PT-owned state; reuse existing parser |
+| New `/api/v1/openclaw/*` routes are required | Existing session list/detail/messages/events routes expose parsed OpenClaw sessions | B.5 is unnecessary for v1; runtime topology belongs to PT/orama |
+| `cursor_secret` is the API token | API middleware uses `auth_token` via `Authorization: Bearer`; enforcement requires `require_auth = true` | Commit only a commented blank `PERISCOPE_TOKEN` template; never commit a real value |
+
+### Revised ownership boundary
+
+```text
+PT supervisor jobs.jsonl ─────────> PT adapter / normalizer
+                                       │
+AlphaClaw operation event ───────> source undefined; PT routing state is candidate
+                                       │
+                                       ▼
+                     <resolved supervisor state dir>/periscope/agents/
+                         └─ pt-supervisor/sessions/*.jsonl
+                                       │
+                                       ▼
+                         Periscope existing OpenClaw parser
+                         existing sync + DB + API + frontend
+```
+
+PT owns stack-specific translation. Periscope remains an observation-only consumer
+and receives no new AlphaClaw/PT orchestration functions.
+
+Configure Periscope's existing array setting with both sources:
+
+```toml
+openclaw_dirs = [
+  "<absolute resolved form of ~/.openclaw/agents>",
+  "<absolute resolved PT supervisor state path>/periscope/agents",
+]
+```
+
+Config-file paths are literal: Periscope does not expand `~` or environment
+variables here. The array replaces defaults, so both sources are mandatory.
+`OPENCLAW_DIR` must be unset because that single-valued environment override wins
+over `openclaw_dirs`. When `OPENCLAW_DIR` is set, Periscope ignores
+`openclaw_dirs` entirely — relocate PT adapter output under
+`<OPENCLAW_DIR>/periscope/agents/` or unset the override so both roots remain
+visible. PT reserves `pt-supervisor` and `alphaclaw-routing`; duplicate
+agent/session IDs across roots collide in `openclaw:<agent>:<session>`.
+
+The adapter receives the supervisor instance's resolved `state_dir`; it must not
+re-resolve `$PT_STATE_DIR`, whose initialization differs across PT modules.
+
+### Revised Phase A — operational maintenance
+
+| Item | Status / decision |
+| --- | --- |
+| Keep `main` and `agentsview` mirrors exact | Complete |
+| Keep all fork PRs on `merged` | Complete policy |
+| Keep `agentsview` identity and `agentsview.io` URLs by default | Active compatibility policy |
+| Rename only functional binary contracts | Desktop runtime must request `sidecar("periscope")` because Tauri bundles `binaries/periscope-*` |
+| `.air.toml` | Already uses `tmp/periscope`; no action |
+| `.roborev.toml` | Non-functional review guidance; retain AgentsView wording |
+| Clean “patches atop AgentsView” history | **Optional epic** — see [`2026-07-28-periscope-lineage-modernization-epic.md`](2026-07-28-periscope-lineage-modernization-epic.md). Classify 45 fork patches against 583 upstream commits; expensive and not required for L4 |
+
+Track A may close after the desktop sidecar contract fix if “close” means current
+mirror and operational maintenance. Reconstructing `merged` as a clean semantic
+patch stack is separate high-risk history work.
+
+### Revised Phase B — minimal L4 without Periscope feature additions
+
+| Old item | Revised action |
+| --- | --- |
+| B.1 OpenClaw parser | Complete; verify existing tests only |
+| B.2 AlphaClaw parser | Not started: no durable operation-event source; use PT routing state only after a concrete observation contract exists |
+| B.3 PT parser | Replace with PT supervisor adapter emission |
+| B.5 Periscope routes | Drop for v1; reuse current APIs; topology stays in PT/orama |
+| B.10 L4 registry | Register four-layer architecture in orama navigation; update external `CLAUDE-instru.md` only when its canonical file is available |
+| B.11 env | Add URL and commented blank token; local value comes from `auth_token`, never `cursor_secret` |
+
+### Token- and tool-efficient execution turns
+
+| Turn | Mutation scope | Verification | Stop condition |
+| --- | --- | --- | --- |
+| 0 — security | Separate security-stacked redaction/rotation for the pre-existing tracked credential | Secret scan + rotation evidence | No feature branch carries remediation |
+| B — serializer contract | New PT serializer + unit tests only | Actual output parsed by existing Periscope OpenClaw parser | One terminal job round-trips; no usage block |
+| A — desktop contract | Two Periscope files | Existing desktop shell tests; Rust tests when Cargo supports edition 2024 | Stem agrees across builder, Tauri config, runtime, ignore, and CI |
+| C — PT runtime hook | Supervisor terminal states behind default-off flag | PT tests + idempotent rewrite | Hook cannot fail job execution |
+| D — integration | Local Periscope config only | Sessions/messages, project analytics, usage summary before/after | Both roots visible; no collisions or PT cost totals |
+| E — docs | Navigation and blank environment template | Hygiene + secret scan | No real token or workstation path |
+
+Efficiency rules:
+
+- Reuse existing parser tests as the format oracle; do not re-read the full codebase.
+- Keep each turn in one repo except the explicit contract test.
+- Run targeted tests first and broad suites once per logical commit batch.
+- Do not add Periscope functions/routes unless end-to-end evidence proves existing
+  behavior insufficient.
+- Define PT-source retention before runtime wiring. Periscope intentionally keeps
+  ingested archives after source deletion.
+- Keep lessons as working-memory drafts until code and architecture review pass.
 
 ---
 
@@ -43,11 +240,83 @@ C. v2 polish              (later — gated on v1 landing)
 
 This plan covers Phase A and Phase B. Phase C is its own future plan.
 
+> **Inline context (from retired doc 21):** The May 2026 phase order assumed three
+> new Periscope parsers plus `/api/v1/openclaw/*` routes. The 2026-07-28
+> revalidation replaces B.2/B.3 with a PT-owned adapter and drops B.5 for v1.
+> Historical task bodies below are preserved as evidence — obey the revalidation
+> banners, not unchecked boxes.
+> The legacy **Risk gates** section inside the red historical appendix is also
+> archival and must not be executed unless rewritten to match the 2026-07-28
+> revalidation.
+
 ---
+
+## Epilogue (from retired doc 21 — sanitized and revalidated)
+
+### Open questions register
+
+| OQ | Question | 2026-07-28 decision |
+| --- | --- | --- |
+| OQ1 | Live IPC vs file-tail for OpenClaw events? | File-tail via `openclaw_dirs` — matches existing parser pattern |
+| OQ2 | Single binary or separate `periscope-openclaw`? | Single binary; PT adapter is external |
+| OQ3 | Autostart from `orama-system/start.sh`? | Optional — `PERISCOPE_AUTOSTART=1`; default off |
+| OQ4 | gbrain source name? | `periscope-src` when bridge is enabled |
+| OQ5 | Upstream parser PRs? | Yes for generic parsers; stack-specific routes stay in fork |
+| OQ6 | Auth for new routes? | **v1:** reuse existing session APIs + `auth_token` bearer; no new `/openclaw/*` routes |
+| OQ7 | Periscope ↔ AlphaClaw direct? | Always via PT adapter; Periscope reads normalized JSONL |
+| OQ8 | JetBrains plugin priority? | Low — scaffold only |
+| OQ9 | Postgres vs LanceDB? | Independent corpora (session sync vs orama job history) |
+| OQ10 | IDE plugin auth / SSO? | Token-only local `auth_token`; no SSO |
+
+### Risk register
+
+| Risk | Mitigation |
+| --- | --- |
+| Upstream divergence | Parsers upstream when generic; fork-only adapter path; periodic mirror checks |
+| SQLite schema drift | Pin Periscope release in install templates; run parser contract tests |
+| Binary bloat from stack parsers | v1 avoids new Periscope parsers — PT adapter only |
+| Desktop sidecar mismatch | `sidecar("periscope")` must match Tauri `externalBin` (merged via periscope PR #14) |
+| `merged` history unreadable | Optional lineage epic — [`2026-07-28-periscope-lineage-modernization-epic.md`](2026-07-28-periscope-lineage-modernization-epic.md) |
+| Credential leakage in docs | Retired doc 21 removed; never commit `auth_token` or `cursor_secret` values |
+
+### v1 vs v2 scope (current recommendation)
+
+**v1 (execute now):**
+
+- PT `periscope_adapter` + `PERISCOPE_EMITTER_ENABLED` opt-in (Perpetua-Tools)
+- Periscope `openclaw_dirs` config with absolute paths to OpenClaw + PT observation roots
+- Desktop sidecar stem fix on `merged`
+- Doc/registry updates (this plan, `CLAUDE.md` §4, blank `.env.example` entries)
+- Mirror maintenance on `main` / `agentsview`; integration on `merged`
+
+**v2 (polish — Phase C in this file):**
+
+- Signals (affinity, mirror, verifier, swarm, context-pressure)
+- `periscope openclaw status` / `watch` CLI
+- Svelte `/openclaw/jobs/*` routes
+- gbrain bridge (`internal/bridge/gbrain.go`, off by default)
+- `PERISCOPE_AUTOSTART` in `start.sh`
+
+### Operational notes
+
+- gbrain source `periscope-src` registered 2026-05-24; refresh via `build_or_update_graph_tool` after meaningful Periscope changes.
+- Keep `agentsview` naming in URLs, fixtures, and non-functional config unless a runtime contract requires `periscope`.
+- Lineage modernization (45 fork patches × 583 upstream commits) is **optional** — see linked epic; do not block L4 on it.
+
+---
+
+<div style="border: 4px solid #c00; background: #fff5f5; padding: 1rem; margin: 1rem 0;">
+
+<p style="color: #c00; font-weight: bold; font-size: 1.15em;">⛔ DO NOT EXECUTE — Historical appendix (May 2026 plan evidence only)</p>
+
+<p style="color: #c00;">Everything from <strong>Phase A</strong> through <strong>Risk gates</strong> below is archival. Superseded by the <strong>2026-07-28 revalidation</strong> and <strong>Epilogue</strong> (above). Do not run branch merges, parser additions, <code>/api/v1/openclaw/*</code> routes, verification curls, or token steps unless a future revalidation explicitly reopens them.</p>
 
 ## Phase A — Upstream maintenance
 
 ### Task A.1 — Merge `merged` branch into `main`
+
+> **SUPERSEDED 2026-07-28 — DO NOT EXECUTE.** `main` is an exact upstream
+> mirror. Keep fork work on `merged`; see the revalidation section.
 
 `merged` is 10 commits ahead of `main` and contains: CI fixes, Rust desktop lib rename, PEP 440 wheel normalization, Docker tag fix, agentsview→periscope build-tool rename completion. None of these touch product behavior — they unblock release tooling.
 
@@ -124,6 +393,9 @@ EOF
 ---
 
 ### Task A.2 — Rename `cmd/agentsview/` → `cmd/periscope/`
+
+> **SUPERSEDED 2026-07-28.** `cmd/periscope/` already exists on `merged`.
+> Preserve remaining AgentsView identity unless a functional contract requires it.
 
 15 Go files plus references in build files. After A.1 lands.
 
@@ -223,6 +495,9 @@ gh pr create --repo diazMelgarejo/periscope --base main \
 
 ### Task A.3 — Triage 3 open dependabot PRs
 
+> **SUPERSEDED 2026-07-28.** Dependency work was replayed onto `merged`; re-audit
+> live Dependabot PRs rather than executing this dated list.
+
 Three PRs are open:
 - #1 — `github.com/jackc/pgx/v5` 5.9.1 → 5.9.2 (Go)
 - #2 — npm batch update (frontend)
@@ -252,6 +527,10 @@ gh pr merge --repo diazMelgarejo/periscope --auto --squash 1  # if green
 ---
 
 ### Task A.4 — Decide on `agentsview` upstream branch sync
+
+> **SUPERSEDED 2026-07-28.** `agentsview` is currently an exact
+> `kenn-io/agentsview:main` mirror. Semantic reconstruction of `merged` is a
+> separate lineage epic.
 
 `agentsview` tracks `latentsignal-org/periscope` (which itself tracks `wesm/agentsview`). 5 commits ahead of our `main`:
 - #478 Piebald support
@@ -294,6 +573,10 @@ Same pattern as A.1/A.2.
 ## Phase B — v1 integration (the actual glass)
 
 ### Task B.1 — OpenClaw envelope parser
+
+> **SUPERSEDED 2026-07-28 — ALREADY IMPLEMENTED.** Reuse the registered and
+> tested `internal/parser/openclaw.go`; do not implement the fictional envelope
+> shape below.
 
 Reads `~/.openclaw/sessions/*.jsonl`. One JSONL record per envelope.
 
@@ -453,6 +736,10 @@ Raw payload retained for downstream signals to inspect."
 
 ### Task B.2 — AlphaClaw event parser
 
+> **SUPERSEDED 2026-07-28 — SOURCE UNDEFINED.** The event shape below never
+> existed. AlphaClaw progress is short-lived in-memory SSE, not routing history.
+> Candidate boundary: PT routing state/adapter.
+
 Reads `~/.openclaw/state/alphaclaw-events.jsonl`. Same shape as B.1 but the records carry routing decisions.
 
 **Files:**
@@ -485,6 +772,9 @@ Mirror B.1 — same shape, only the JSON header struct changes to read `event` i
 
 ### Task B.3 — PT orchestrator event parser
 
+> **SUPERSEDED 2026-07-28.** PT owns normalization. Emit OpenClaw-compatible
+> observations into PT-owned state and reuse Periscope's existing parser.
+
 Reads `Perpetua-Tools/.state/orchestrator-events.jsonl`. Records carry state transitions.
 
 **Files:**
@@ -500,6 +790,9 @@ Reads `Perpetua-Tools/.state/orchestrator-events.jsonl`. Records carry state tra
 ---
 
 ### Task B.5 — Routes: `/api/v1/openclaw/*`
+
+> **SUPERSEDED 2026-07-28.** Reuse existing sessions/messages/events APIs.
+> Runtime topology belongs to PT/orama, not a new Periscope session route.
 
 Adds 4 read-only HTTP routes. Reuses existing periscope IPC token middleware.
 
@@ -640,6 +933,10 @@ git commit -m "feat(server): /api/v1/openclaw/* read-only routes
 
 ### Task B.10 — Add periscope to `CLAUDE-instru.md` as L4
 
+> **REVALIDATED 2026-07-28.** In-repo `CLAUDE.md` records the four-layer
+> architecture. Update external `CLAUDE-instru.md` only when its canonical
+> checkout is available; do not create a duplicate.
+
 orama-system repo. One-line addition to the repo registry table.
 
 **Files:**
@@ -702,14 +999,14 @@ AlphaClaw (L1 — infra) → Perpetua-Tools (L2 — middleware) → orama-system
 
 L4 lives at `~/code/oramasys/tools/periscope` (fork: `github.com/diazMelgarejo/periscope`).
 Periscope reads session/event JSONL from L1–L3; never writes back.
-Full design: [`docs/v2/21-periscope-l4-glass.md`](docs/v2/21-periscope-l4-glass.md)
+Full design: this file — **Design canon**, **2026-07-28 revalidation**, and **Epilogue** sections.
 ```
 
 - [ ] **Step 5: Commit + push**
 
 ```bash
 cd $OPENCLAW_ROOT/orama-system
-git add CLAUDE.md docs/v2/21-periscope-l4-glass.md docs/plans/2026-05-24-periscope-l4-integration-plan.md
+git add CLAUDE.md docs/plans/2026-05-24-periscope-l4-integration-plan.md
 git commit -m "docs(v2): add Periscope as L4 glass layer
 
 Adds doc 18 (destiny + design) and the 2026-05-24 integration plan.
@@ -721,6 +1018,33 @@ git push origin main
 ---
 
 ### Task B.11 — Add `PERISCOPE_URL` / `PERISCOPE_TOKEN` to consolidated `.env` template
+
+> **SUPERSEDED 2026-07-28.** Commit blank examples only. The request credential
+> is `auth_token`, sent as `Authorization: Bearer`; `cursor_secret` is not an API
+> credential. Periscope must have `require_auth = true` for enforcement.
+
+**Runtime enforcement path (operator-local, not in orama-system):**
+
+Periscope auth is enforced in the **Periscope process**, not in this repository.
+Operators must set both fields in `~/.periscope/config.toml` on the machine that
+runs the sidecar:
+
+```toml
+require_auth = true
+auth_token = "<generated locally — never commit>"
+```
+
+Without `require_auth = true`, Periscope's middleware intentionally skips bearer
+checks (fail-open for local dev). orama-system documents the contract only:
+
+| Location | Role |
+| --- | --- |
+| `~/.periscope/config.toml` | **Enforcement** — `require_auth` + `auth_token` |
+| `orama-system/.env.example` | **Template** — commented `PERISCOPE_URL` / `PERISCOPE_TOKEN=` only |
+| Local shell / secrets store | **Runtime** — export `PERISCOPE_TOKEN` from `auth_token` when calling APIs |
+
+There is no orama-side wrapper that can flip Periscope auth; misconfiguration
+surfaces as unauthenticated API access until the operator fixes local config.
 
 The consolidated `.env` template (the one for Cursor cloud agents) needs two new entries.
 
@@ -738,9 +1062,10 @@ If none exists yet, create `orama-system/.env.example` (NOT `.env`, that's gitig
 - [ ] **Step 2: Add periscope section**
 
 ```bash
+# SUPERSEDED 2026-07-28 — historical example only; see revalidation B.11.
 # Periscope (L4 — observability glass, optional sidecar)
 PERISCOPE_URL=http://127.0.0.1:8080
-PERISCOPE_TOKEN=  # paste cursor_secret from ~/.periscope/config.toml
+# PERISCOPE_TOKEN=  # old plan incorrectly named cursor_secret; use auth_token locally
 PERISCOPE_AUTOSTART=0   # set to 1 to launch periscope from start.sh
 ```
 
@@ -759,13 +1084,13 @@ go run ./cmd/periscope sync --source openclaw
 go run ./cmd/periscope                       # opens UI
 # Navigate to http://127.0.0.1:8080/openclaw/jobs — should show recent orama jobs
 
-# 2. API works
-curl -H "X-Periscope-Token: $(grep cursor_secret ~/.periscope/config.toml | cut -d'"' -f2)" \
-     http://127.0.0.1:8080/api/v1/openclaw/jobs | jq .
+# 2. SUPERSEDED: old API/header/token example removed from executable guidance.
+# Use existing session APIs with Authorization: Bearer, sourced locally from
+# auth_token only when require_auth=true. Never interpolate cursor_secret.
 
 # 3. orama-system docs updated
 grep "Four-Repo\|L4" $OPENCLAW_ROOT/orama-system/CLAUDE.md
-ls $OPENCLAW_ROOT/orama-system/docs/v2/21-periscope-l4-glass.md
+ls $OPENCLAW_ROOT/orama-system/docs/plans/2026-05-24-periscope-l4-integration-plan.md
 ls $OPENCLAW_ROOT/orama-system/docs/plans/2026-05-24-periscope-l4-integration-plan.md
 
 # 4. gbrain knows about periscope
@@ -783,7 +1108,7 @@ gbrain search "periscope L4 glass" --source periscope-src
 - gbrain bridge (B.8) — write summaries into gbrain
 - start.sh autostart (B.9) — `PERISCOPE_AUTOSTART=1` env opt-in
 
-Each of those is its own small plan once Phase B is stable on `main` for a week.
+Each of those is its own small plan once Phase B is stable on `merged` for a week.
 
 ---
 
@@ -793,3 +1118,5 @@ Each of those is its own small plan once Phase B is stable on `main` for a week.
 - **After A.2 (cmd rename):** Stop and verify the binary works under both names before A.3.
 - **After B.1 + B.2 + B.3 (parsers):** Stop. Run `periscope sync --source openclaw` against real `~/.openclaw/sessions/*.jsonl`. Confirm session count > 0 in the UI before B.5.
 - **After B.5 (routes):** Stop. Hit each route with `curl`. Confirm token middleware blocks unauthenticated requests.
+
+</div>

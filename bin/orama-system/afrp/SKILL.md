@@ -111,6 +111,8 @@ wastes the user's time and erodes trust.
 | "no commits absent ⇒ no data loss ⇒ nothing to restore" | does the user want the *refs/history* reconciled regardless? | ask; reconcile per their model |
 | "tests pass" | does the feature actually work? | run it / observe behavior |
 | "`.agents/` is tidier than the user's `.agent/`" ⇒ wrote there | which dir does the user/repo actually use? | take the explicit name verbatim; read `.agent/AGENTS.md`; check origin (the canonical dir already existed) |
+| `mergeable: CONFLICTING` ⇒ merge/rebase stale PR wholesale | deliver harmonized delta without re-adding content already on base? | path-scoped replay onto fresh integration base (`merged` for periscope); see [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md) + CIDF integrative-editing-examples §9 |
+| PR pushed with 0 file delta / empty commit | did `commit-clean.sh` run without `git add`? | verify `git diff --cached --stat` non-empty before commit; preserve synthesis outside branch being rewritten |
 
 **Reflect, then route:** TRUE intent (clarify if ambiguous) → correct method (not a proxy)
 → act. Trust the user's domain signal over my first-pass check — their context exceeds mine.
@@ -123,6 +125,12 @@ wastes the user's time and erodes trust.
 > I silently used `.agents/memory` and committed there, on a stale branch, never reading the
 > canonical `.agent/AGENTS.md`. The reference DO-NOT example lives in
 > [`cidf/SKILL.md`](../cidf/SKILL.md) (verify-target) and orama [`docs/LESSONS.md` §2026-06-22](../../../docs/LESSONS.md).
+>
+> Proxy-table rows earned 2026-07-28 (periscope PR #12 ECC): `CONFLICTING` did not mean
+> "merge harder" — it meant the base had moved and the branch re-added an already-landed
+> bundle. Path-scoped replay + integrative synthesis (CIDF §9, git-history-surgery card)
+> replaced two noisy commits with one clean delta. See
+> [`failure-modes.md`](failure-modes.md) §6–7 examples.
 
 ---
 
