@@ -99,6 +99,49 @@ When the content is markdown:
 - Format all markdown tables with spaces inside the pipe characters to comply with MD060 table-column-style (compact). Delimiter rows must use `| ----- | --------- |` instead of `|-------|-----------|` to avoid lint warnings. Remove one ("-") and add one space (" ") on each side of the pipe.
 - Review the diff for stale anchors and broken relative links before the final write.
 
+## Integrative Editing Doctrine (modifying existing corpus)
+
+CIDF rank-1 applies to **edits**, not just inserts: **synthesize; never amputate.**
+
+When updating a document that is a historical record — PR titles/bodies, lessons
+ledgers, operator plans, memory files — treat the existing corpus as canonical
+and **append** new truth below it. This is the same ethic as
+[`integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md)
+(mode 1 additive / mode 2 union).
+
+### Append-only rule (mandatory)
+
+| Do | Don't |
+| --- | --- |
+| Keep the original purpose and scope at the top | Replace the full summary with the latest job delta |
+| Add dated `## Follow-up:` sections below for CodeRabbit, CI, merge notes | Open with a side quest (e.g. aguara-only) as if it were the branch purpose |
+| Label ancillary work explicitly ("side quest", "CI plumbing") | Delete tier tables, merge-order tables, or operator prerequisites |
+| Leave the PR title unchanged unless the user asks | Retitle to match only the most recent commit theme |
+
+**Incident anchor:** orama PR #222 (2026-07-27) — agent twice overwrote the Hermes
+staging hardening summary with aguara CI follow-up only. Recovery = reconstruct
+original scope from branch docs + commits, then append all follow-ups below.
+Perpetua-Tools `lesson_3b13ab0a45d4` states the same rule for PR descriptions.
+
+### Recovery workflow when corpus was clobbered
+
+```text
+1. Read current state     gh pr view <n> --json title,body  (or read the file)
+2. Search prior exports   session/agent-tools cache if available (do not guess)
+3. Reconstruct original   from authoritative sources only:
+                          branch docs, first commits, mesh ladder, review gate
+4. Write append-only      original Summary at top → chronological Follow-up blocks
+5. Verify                 title unchanged; opening states true branch purpose;
+                          side quests are not the headline
+```
+
+Agents updating PR bodies via API (`ManagePullRequest`, `gh pr edit`) must pass the
+**full** reconstructed body (original + follow-ups), not only the latest delta —
+the tool replaces the whole field, so the write itself must be integrative.
+
+**Worked examples (good vs bad):**
+[`references/integrative-editing-examples.md`](references/integrative-editing-examples.md)
+
 ---
 
 ## Lint Rules (pre-execution guard)
@@ -204,6 +247,8 @@ machine; the repo's `repo_hygiene.py` is the portable committed backstop.
 bin/orama-system/cidf/
 ├── SKILL.md                          ← this file (sub-skill)
 ├── FRAMEWORK.md                      ← canonical v1.2 spec
+├── references/
+│   └── integrative-editing-examples.md  ← good/bad corpus (PR #222 session)
 ├── core/
 │   ├── content_insertion_framework.py  ← decide(), verify(), execute_with_fallback()
 │   ├── content_insertion_policy.json   ← machine policy + 6 test vectors

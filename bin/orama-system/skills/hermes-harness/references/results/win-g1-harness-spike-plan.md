@@ -14,7 +14,7 @@ Make G1 tier≤2 ratio **measurable** per v1.1 §11 (≥85% local-first).
 |---|----------|----------|-------|
 | 1 | `frugality-report` | `bin/orama-system/skills/code-review/scripts/frugality-report` | `--dry-run`, `--last 1h`; reads `.state/traces/*.jsonl` |
 | 2 | `test_realistic_session.py` | `tests/v1_1/test_realistic_session.py` | 100-call session sim; asserts tier distribution |
-| 3 | OTel tier spans | PT `frugality_router` integration | `ot.tool.tier` on dispatch |
+| 3 | Trace tier metadata | PT `frugality_router` integration | `tool.tier` attribute on dispatch |
 
 ## v1 scope guard
 

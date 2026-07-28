@@ -47,7 +47,7 @@ bash bin/orama-system/scripts/sync-cursor-mcp.sh --profile readonly
 Reload MCP in Cursor Settings. Verify:
 
 ```powershell
-# Expect localhost:1234 in .cursor/mcp.json → code-review-graph.env
+# Expect localhost:1234 in .cursor/mcp.json → code-review-graph environment block
 Invoke-RestMethod http://localhost:1234/v1/models | ConvertTo-Json -Depth 1
 ```
 

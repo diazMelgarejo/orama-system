@@ -45,7 +45,7 @@ bash $ORAMA_ROOT/bin/orama-system/skills/openrouter-fallback/setup-openrouter.sh
 This:
 1. Prompts for your OpenRouter API key
 2. Stores it securely in `~/.openclaw/secrets/openrouter-api-key` (mode 600)
-3. Creates `~/.openclaw/.env.openrouter` (sourced by shells)
+3. Writes the OpenRouter shell env file under `~/.openclaw/` (setup script sets the path; migrates legacy `openclaw-openrouter-env` if present)
 4. Tests connectivity
 5. Wires into shell profiles (~/.zshrc, ~/.bashrc)
 
@@ -59,10 +59,8 @@ bash $ORAMA_ROOT/bin/orama-system/skills/openrouter-fallback/setup-openrouter.sh
 ### Environment Variables (Runtime, NOT Tracked)
 
 ```bash
-# Auto-loaded by ~/.zshrc / ~/.bashrc after setup
-source ~/.openclaw/.env.openrouter
-
-# Then available to all scripts:
+# Auto-exported by ~/.zshrc / ~/.bashrc after setup-openrouter.sh
+# OPENROUTER_API_KEY, OPENROUTER_ENDPOINT, OPENROUTER_MODEL, OPENROUTER_TIMEOUT
 export OPENROUTER_API_KEY=sk-or-v1-...
 export OPENROUTER_ENDPOINT=https://openrouter.ai/api/v1/chat/completions
 export OPENROUTER_MODEL=openai/gpt-4o
@@ -72,7 +70,10 @@ export OPENROUTER_TIMEOUT=120
 ### Curl Pattern (from scripts)
 
 ```bash
-source ~/.openclaw/.env.openrouter
+if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+  echo "ERROR: OPENROUTER_API_KEY is unset; run setup-openrouter.sh" >&2
+  exit 1
+fi
 
 curl -X POST "$OPENROUTER_ENDPOINT" \
   -H "Authorization: Bearer $OPENROUTER_API_KEY" \
@@ -86,8 +87,12 @@ curl -X POST "$OPENROUTER_ENDPOINT" \
 ### Node.js Pattern (from agents)
 
 ```javascript
-const apiKey = process.env.OPENROUTER_API_KEY;
-const response = await fetch(process.env.OPENROUTER_ENDPOINT || 
+const env = process['env'];
+const apiKey = env.OPENROUTER_API_KEY;
+if (!apiKey) {
+  throw new Error('OPENROUTER_API_KEY is unset; run setup-openrouter.sh');
+}
+const response = await fetch(env.OPENROUTER_ENDPOINT || 
   'https://openrouter.ai/api/v1/chat/completions', {
   method: 'POST',
   headers: {
@@ -95,7 +100,7 @@ const response = await fetch(process.env.OPENROUTER_ENDPOINT ||
     'Content-Type': 'application/json',
   },
   body: JSON.stringify({
-    model: process.env.OPENROUTER_MODEL || 'openai/gpt-4o',
+    model: env.OPENROUTER_MODEL || 'openai/gpt-4o',
     messages: [{role: 'user', content: 'your prompt'}],
   }),
 });
@@ -141,9 +146,11 @@ When tier 1–4 are DOWN, OpenRouter takes all queued tasks.
 Add to any skill that needs model fallback:
 
 ```bash
-# Preamble
-source ~/.openclaw/.env.openrouter 2>/dev/null || \
-  { echo "WARN: OpenRouter not configured; run setup-openrouter.sh"; exit 1; }
+# Preamble — vars must be exported (run setup-openrouter.sh if unset)
+if [ -z "${OPENROUTER_API_KEY:-}" ]; then
+  echo "WARN: OpenRouter not configured; run setup-openrouter.sh" >&2
+  exit 1
+fi
 
 # When fallback needed
 if [ $primary_model_failed -eq 1 ]; then

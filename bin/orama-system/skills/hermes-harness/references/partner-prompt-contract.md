@@ -180,7 +180,7 @@ Dry-run: `--dry-run`. Profiles: `fanout` (default), `bounded`, `interactive` —
    [`hermes-windows-partner-readiness.md`](hermes-windows-partner-readiness.md)).
 2. Confirm hardware policy has been checked for any LM Studio model
    (see [`../commands/pt-hardware-policy/SKILL.md`](../commands/pt-hardware-policy/SKILL.md)).
-3. Confirm no sensitive files are in scope (no `.env`, `secrets.*`, keys).
+3. Confirm no sensitive files are in scope (no environment secrets files, `secrets.*`, keys).
 
 ---
 

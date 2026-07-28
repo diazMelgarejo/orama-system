@@ -29,6 +29,7 @@ def profiles_installer(monkeypatch, tmp_path):
     profiles_root = tmp_path / "profiles"
     monkeypatch.setattr(module, "HERMES_PROFILES", profiles_root)
     monkeypatch.setattr(module, "HERMES_HOME", tmp_path)
+    monkeypatch.setattr(module, "assert_trusted_install", lambda: None)
     return module
 
 
@@ -74,3 +75,29 @@ def test_sync_skips_when_already_synced(profiles_installer, capsys):
     profiles_installer.install()
     assert profiles_installer.sync() == 0
     assert "profiles already synced" in capsys.readouterr().out
+
+
+def test_invalid_profile_slug_rejected(profiles_installer):
+    with pytest.raises(ValueError, match="invalid hermes_profile slug"):
+        profiles_installer.validate_profile_slug("../evil")
+
+
+@pytest.mark.unit
+def test_harmonize_memory_preserves_operator_content(profiles_installer, tmp_path) -> None:
+    memory_tpl = profiles_installer.TEMPLATE_PROFILE / "MEMORY.md"
+    assert memory_tpl.is_file(), "MEMORY.md template required for harmonize test"
+    role = profiles_installer.load_roles()[0]
+    profile_dir = profiles_installer.profile_paths_for_slug(role.hermes_profile)
+    memory = profile_dir / "memories" / "MEMORY.md"
+    memory.parent.mkdir(parents=True)
+    memory.write_text("# operator notes\nkeep me\n", encoding="utf-8")
+
+    stats = profiles_installer.InstallStats(
+        written=[], skipped_synced=[], skipped_unmanaged=[], harmonized=[]
+    )
+    profiles_installer.install_profile_stubs(role, dry_run=False, harmonize_memory=True, stats=stats)
+
+    text = memory.read_text(encoding="utf-8")
+    assert "keep me" in text
+    assert profiles_installer.HARMONIZE_SECTION in text
+    assert memory in stats.harmonized

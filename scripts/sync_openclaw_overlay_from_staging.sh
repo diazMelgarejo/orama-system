@@ -31,6 +31,16 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   shift
 fi
 
+if [[ "${ORAMA_TRUST_HERMES_SYNC:-}" == "1" ]]; then
+  : # explicit operator override after reviewing bin/agents
+elif [[ ! -f "$REPO_ROOT/scripts/review/verify_trusted_install.py" ]]; then
+  fail "overlay sync blocked — verify_trusted_install.py missing (git pull --ff-only or ORAMA_TRUST_HERMES_SYNC=1)"
+  exit 1
+elif ! python3 "$REPO_ROOT/scripts/review/verify_trusted_install.py" --quiet; then
+  fail "overlay sync blocked — untrusted checkout (set ORAMA_TRUST_HERMES_SYNC=1 after review)"
+  exit 1
+fi
+
 updated=0
 skipped=0
 
@@ -56,13 +66,34 @@ ${overlay_body}"
   python3 - "$target_soul" "$OVERLAY_MARKER" "$overlay_section" <<'PY'
 import sys
 from pathlib import Path
+
 target = Path(sys.argv[1])
 marker = sys.argv[2]
 overlay = sys.argv[3]
+home = Path.home()
+allowed_roots = [
+    (home / ".openclaw" / "agents").resolve(),
+    (home / ".alphaclaw" / ".openclaw" / "workspace").resolve(),
+]
+
+def allowed_workspace(path: Path) -> bool:
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    for root in allowed_roots:
+        if resolved == root or root in resolved.parents:
+            return True
+    return False
+
+if not allowed_workspace(target.parent):
+    raise SystemExit(
+        f"refusing overlay write outside OpenClaw workspace allowlist: {target}"
+    )
+
 text = target.read_text(encoding="utf-8")
 if marker in text:
     head, _, _ = text.partition(marker)
-    # keep everything before overlay marker (Core Truths block)
     new_text = head.rstrip() + "\n\n---\n\n" + overlay + "\n"
 else:
     new_text = text.rstrip() + "\n\n---\n\n" + overlay + "\n"
@@ -71,26 +102,53 @@ PY
   ok "$openclaw_id overlay synced from $(basename "$(dirname "$staging_soul")")/SOUL.md"
   ((updated++)) || true
 done < <(REPO_ROOT="$REPO_ROOT" python3 - <<'PY'
-import os, yaml
+import os
+import sys
 from pathlib import Path
+
+import yaml
+
 repo = Path(os.environ["REPO_ROOT"])
-data = yaml.safe_load((repo / "bin/agents/REGISTRY.yml").read_text())
-home = str(Path.home())
-def expand(s):
-    return s.replace("${HOME}", home)
+data = yaml.safe_load((repo / "bin/agents/REGISTRY.yml").read_text(encoding="utf-8"))
+home = Path.home()
+allowed_roots = [
+    (home / ".openclaw" / "agents").resolve(),
+    (home / ".alphaclaw" / ".openclaw" / "workspace").resolve(),
+]
+
+
+def expand(value: str) -> str:
+    return value.replace("${HOME}", str(home))
+
+
+def allowed_workspace(path: Path) -> bool:
+    try:
+        resolved = path.resolve()
+    except OSError:
+        return False
+    for root in allowed_roots:
+        if resolved == root or root in resolved.parents:
+            return True
+    return False
+
+
 for entry in data.get("roles", []):
     ws = entry.get("openclaw_workspace")
     if not ws:
         continue
-    ws = expand(ws)
+    workspace = Path(expand(ws))
+    if not allowed_workspace(workspace):
+        print(f"refusing REGISTRY openclaw_workspace outside allowlist: {workspace}", file=sys.stderr)
+        continue
     folder = entry["staging_folder"]
     soul = repo / "bin/agents" / folder / "SOUL.md"
     if not soul.is_file():
         continue
-    print(f"{entry['openclaw_id']}|{ws}|{soul}")
+    print(f"{entry['openclaw_id']}|{workspace}|{soul}")
+
 life = repo / "bin/agents/lifecycle/SOUL.md"
-main_ws = expand("${HOME}/.alphaclaw/.openclaw/workspace")
-if life.is_file():
+main_ws = Path(expand("${HOME}/.alphaclaw/.openclaw/workspace"))
+if life.is_file() and allowed_workspace(main_ws):
     print(f"main|{main_ws}|{life}")
 PY
 )

@@ -57,15 +57,15 @@
       "provider": "lmstudio-win-5080",
       "model": "gemma-4-26b-a4b-it-nvfp4",
       "affinity": "win-rtx5080",
-      "gateway": "http://192.168.8.153:1234",
-      "_comment": "3rd fleet node, live-probed 2026-07-22. lan_ip is DHCP-dynamic -- resolve via $LM_STUDIO_WIN_5080_ENDPOINTS or last_discovery.json before dispatch, never hardcode outside this registry default."
+      "gateway": "${env:LM_STUDIO_WIN_5080_ENDPOINTS}",
+      "_comment": "3rd fleet node \u2014 resolve gateway at runtime via LM_STUDIO_WIN_5080_ENDPOINTS or last_discovery.json; never commit LAN IPs."
     },
     "coder-5080": {
       "soul": "bin/agents/coder/SOUL.md",
       "provider": "lmstudio-win-5080",
       "model": "gemma-4-26b-a4b-it-nvfp4",
       "affinity": "win-rtx5080",
-      "gateway": "http://192.168.8.153:1234"
+      "gateway": "${env:LM_STUDIO_WIN_5080_ENDPOINTS}"
     }
   },
   "agents": [

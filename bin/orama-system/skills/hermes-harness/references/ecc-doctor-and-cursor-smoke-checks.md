@@ -46,7 +46,7 @@ On **every Windows host** (including RTX 5080), override after install — or re
 `bash bin/orama-system/scripts/sync-cursor-mcp.sh` (platform-aware):
 
 ```powershell
-# .cursor/mcp.json → code-review-graph.env.CRG_OPENAI_BASE_URL
+# .cursor/mcp.json → code-review-graph environment.CRG_OPENAI_BASE_URL
 "CRG_OPENAI_BASE_URL": "http://localhost:1234/v1"
 ```
 

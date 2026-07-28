@@ -431,13 +431,16 @@ class TestSkillMdContent:
         assert "bin/orama-system/skills/glm52-fallback/" in text
 
     def test_setup_automated_exports_key_before_invocation(self):
-        """Regression: docs must show exporting the key BEFORE invoking the
-        script (matches the new fail-fast, non-interactive contract)."""
+        """Regression: docs must validate/export the key BEFORE invoking the
+        script (matches the fail-fast, non-interactive contract)."""
         text = self._text
-        export_idx = text.find('export GLM52_API_KEY="<BigModel.API.key>"')
+        guard_idx = text.find(': "${GLM52_API_KEY:?Set GLM52_API_KEY')
+        export_idx = text.find('export GLM52_API_KEY="${GLM52_API_KEY:?}"')
         run_idx = text.find("bash bin/orama-system/skills/glm52-fallback/setup-glm52.sh")
+        assert guard_idx != -1
         assert export_idx != -1
         assert run_idx != -1
+        assert guard_idx < run_idx
         assert export_idx < run_idx
 
     def test_setup_steps_describe_fail_fast_behavior(self):

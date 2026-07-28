@@ -37,8 +37,8 @@ Same idempotent behavior: profiles use `--sync`; thin wrappers verify-first.
 | Target | Source | Overwrite policy |
 |--------|--------|------------------|
 | `profiles/<slug>/SOUL.md` | `bin/agents/<folder>/SOUL.md` | Refresh if managed (`created_by: agent`) |
-| `profiles/<slug>/memories/USER.md` | `bin/agents/templates/profile/USER.md` | Create only unless `--force-memory` |
-| `profiles/<slug>/memories/MEMORY.md` | `bin/agents/templates/profile/MEMORY.md` | Create only unless `--force-memory` |
+| `profiles/<slug>/memories/USER.md` | `bin/agents/templates/profile/USER.md` | Create if missing; `--harmonize-memory` appends template under managed section (backup first) |
+| `profiles/<slug>/memories/MEMORY.md` | `bin/agents/templates/profile/MEMORY.md` | Create if missing; `--harmonize-memory` integrative merge — never blind overwrite |
 
 Skipped roles: `hermes_profile: null` (e.g. Atlas lifecycle hub).
 
@@ -73,6 +73,7 @@ powershell -File .\platform\windows\install-hermes-harness.ps1
 
 | Symptom | Action |
 |---------|--------|
+| `checkout not trusted` / sync skipped | Run `python3 scripts/review/verify_trusted_install.py`; on `main` after `git pull --ff-only`, or set `ORAMA_TRUST_HERMES_SYNC=1` after human review; skip sync with `ORAMA_SKIP_HERMES_SYNC=1` |
 | `missing staged SOUL` | Ensure `git pull` and role folder exists in `bin/agents/` |
 | `skipped unmanaged profile SOUL` | Operator edited profile SOUL — reconcile manually or backup then delete marker block |
 | Profile list empty after install | Confirm `HERMES_HOME` and write permissions |
