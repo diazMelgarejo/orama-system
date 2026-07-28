@@ -1,5 +1,3 @@
-> ⏭️ **DEFERRED 2026-06-14** — user-skipped (52 open); reactivated 2026-07-28 with PT-adapter revalidation.
->
 > **Canonical design:** This file is the successor to the retired
 > `docs/v2/21-periscope-l4-glass.md` (removed from git after a leaked credential).
 > Read **Design canon** (intro), **2026-07-28 revalidation** (current policy), and
@@ -23,6 +21,17 @@
 - PT owns stack-specific normalization; Periscope consumes OpenClaw-compatible JSONL via existing parsers — no new Periscope orchestration routes for v1.
 - Do **not** touch `oramasys/*` repos. v2-planning rule applies.
 - Never commit real `PERISCOPE_TOKEN` values. API auth uses Periscope `auth_token` (`Authorization: Bearer`), not `cursor_secret` (pagination signing only).
+
+> **2026-07-28 revalidation (published):** Current policy is the
+> [PT-adapter design](#revised-ownership-boundary) below. **B.1** already exists;
+> **B.2** has no durable source contract; **B.3** moves to
+> [PT-owned normalization](#revised-phase-b--minimal-l4-without-periscope-feature-additions);
+> **B.5** reuses existing Periscope APIs. Periscope receives no stack-specific
+> orchestration functions. The May task registry and pending-work tables remain as
+> [historical appendix](#phase-order)
+> only. See also the optional
+> [lineage-modernization epic](2026-07-28-periscope-lineage-modernization-epic.md)
+> and Perpetua-Tools adapter work ([PR #295](https://github.com/diazMelgarejo/Perpetua-Tools/pull/295)).
 
 ---
 
@@ -99,7 +108,7 @@ Enable emission locally: `export PERISCOPE_EMITTER_ENABLED=1` (Perpetua-Tools `c
 
 ---
 
-## 2026-07-28 revalidation — DRAFT, supersedes execution details below
+## 2026-07-28 revalidation — published, supersedes execution details below
 
 > Preserve the May plan below as historical design evidence. Do not execute its
 > branch merges, parser additions, route additions, or token instructions without
@@ -148,7 +157,10 @@ openclaw_dirs = [
 Config-file paths are literal: Periscope does not expand `~` or environment
 variables here. The array replaces defaults, so both sources are mandatory.
 `OPENCLAW_DIR` must be unset because that single-valued environment override wins
-over `openclaw_dirs`. PT reserves `pt-supervisor` and `alphaclaw-routing`; duplicate
+over `openclaw_dirs`. When `OPENCLAW_DIR` is set, Periscope ignores
+`openclaw_dirs` entirely — relocate PT adapter output under
+`<OPENCLAW_DIR>/periscope/agents/` or unset the override so both roots remain
+visible. PT reserves `pt-supervisor` and `alphaclaw-routing`; duplicate
 agent/session IDs across roots collide in `openclaw:<agent>:<session>`.
 
 The adapter receives the supervisor instance's resolved `state_dir`; it must not
