@@ -11,7 +11,7 @@
 - Periscope (remote): `github.com/diazMelgarejo/periscope` (fork of `latentsignal-org/periscope`)
 - orama-system (this repo): `$OPENCLAW_ROOT/orama-system`
 
-**Design:** See `docs/v2/21-periscope-l4-glass.md` (mission, architecture, OQ register, risks).
+**Design:** See `docs/plans/2026-05-24-periscope-l4-integration-plan.md` (2026-07-28 revalidation section). The retired `docs/v2/21-periscope-l4-glass.md` design doc is gitignored — never commit local copies.
 
 **Hard constraints:**
 - Periscope is L4 — observation-only. Never writes to AlphaClaw / PT / orama.
@@ -83,7 +83,7 @@ re-resolve `$PT_STATE_DIR`, whose initialization differs across PT modules.
 | Rename only functional binary contracts | Desktop runtime must request `sidecar("periscope")` because Tauri bundles `binaries/periscope-*` |
 | `.air.toml` | Already uses `tmp/periscope`; no action |
 | `.roborev.toml` | Non-functional review guidance; retain AgentsView wording |
-| Clean “patches atop AgentsView” history | Separate lineage-modernization epic: classify 45 fork patches against 583 upstream commits |
+| Clean “patches atop AgentsView” history | **Optional epic** — see [`docs/plans/2026-07-28-periscope-lineage-modernization-epic.md`](docs/plans/2026-07-28-periscope-lineage-modernization-epic.md). Classify 45 fork patches against 583 upstream commits; expensive and not required for L4 |
 
 Track A may close after the desktop sidecar contract fix if “close” means current
 mirror and operational maintenance. Reconstructing `merged` as a clean semantic
@@ -837,14 +837,14 @@ AlphaClaw (L1 — infra) → Perpetua-Tools (L2 — middleware) → orama-system
 
 L4 lives at `~/code/oramasys/tools/periscope` (fork: `github.com/diazMelgarejo/periscope`).
 Periscope reads session/event JSONL from L1–L3; never writes back.
-Full design: [`docs/v2/21-periscope-l4-glass.md`](docs/v2/21-periscope-l4-glass.md)
+Full design: [`docs/plans/2026-05-24-periscope-l4-integration-plan.md`](docs/plans/2026-05-24-periscope-l4-integration-plan.md) (2026-07-28 revalidation). Retired `docs/v2/21-periscope-l4-glass.md` is gitignored.
 ```
 
 - [ ] **Step 5: Commit + push**
 
 ```bash
 cd $OPENCLAW_ROOT/orama-system
-git add CLAUDE.md docs/v2/21-periscope-l4-glass.md docs/plans/2026-05-24-periscope-l4-integration-plan.md
+git add CLAUDE.md docs/plans/2026-05-24-periscope-l4-integration-plan.md
 git commit -m "docs(v2): add Periscope as L4 glass layer
 
 Adds doc 18 (destiny + design) and the 2026-05-24 integration plan.
@@ -905,7 +905,7 @@ go run ./cmd/periscope                       # opens UI
 
 # 3. orama-system docs updated
 grep "Four-Repo\|L4" $OPENCLAW_ROOT/orama-system/CLAUDE.md
-ls $OPENCLAW_ROOT/orama-system/docs/v2/21-periscope-l4-glass.md
+ls $OPENCLAW_ROOT/orama-system/docs/plans/2026-05-24-periscope-l4-integration-plan.md
 ls $OPENCLAW_ROOT/orama-system/docs/plans/2026-05-24-periscope-l4-integration-plan.md
 
 # 4. gbrain knows about periscope

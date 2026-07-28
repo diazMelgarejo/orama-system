@@ -128,7 +128,7 @@ merge on orama-side tooling.
 
 ## Related
 
-- [`docs/v2/21-periscope-l4-glass.md`](../../../../docs/v2/21-periscope-l4-glass.md) — L4 sidecar architecture
+- [`docs/plans/2026-05-24-periscope-l4-integration-plan.md`](../../../../docs/plans/2026-05-24-periscope-l4-integration-plan.md) — L4 sidecar architecture (2026-07-28 revalidation)
 - [`docs/reference/periscope-cursor-repo-rules.md`](../../../../docs/reference/periscope-cursor-repo-rules.md) — cursor rules install
 - [`scripts/periscope/install-cursor-rules.sh`](../../../../scripts/periscope/install-cursor-rules.sh) — attribution guards + rules (separate from ECC)
 - [`skills/ecc-sync/SKILL.md`](../ecc-sync/SKILL.md) — orama-system's own ECC post-merge sync (this repo, not periscope)
