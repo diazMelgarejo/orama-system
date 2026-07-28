@@ -120,4 +120,6 @@ merge on orama-side tooling.
 - `docs/v2/21-periscope-l4-glass.md` — L4 sidecar architecture
 - `docs/reference/periscope-cursor-repo-rules.md` — cursor rules install
 - `scripts/periscope/install-cursor-rules.sh` — attribution guards + rules (separate from ECC)
-- `skills/ecc-sync/SKILL.md` — orama-system's own ECC post-merge sync (this repo, not periscope)
+- [`skills/ecc-sync/SKILL.md`](../ecc-sync/SKILL.md) — orama-system's own ECC post-merge sync (this repo, not periscope)
+- [`cidf/references/integrative-editing-examples.md`](../cidf/references/integrative-editing-examples.md) §9 — good/bad path-scoped PR replay (AFRP FM6/FM7 curriculum)
+- [`afrp/SKILL.md`](../afrp/SKILL.md) — proxy-table rows for `CONFLICTING` PRs and empty `commit-clean` commits
