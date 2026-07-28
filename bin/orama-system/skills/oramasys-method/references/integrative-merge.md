@@ -52,6 +52,24 @@ the old test name.
 `_validate_endpoint_host()` calls from security-hardening; retain all PR #157
 locality/canonical-loopback tests from the incoming branch.
 
+### Worked example — periscope PR #12 ECC fusion (2026-07-28)
+
+Two ECC generator runs (PR #10 merged, PR #12 open) produced overlapping bundles.
+PR #10 already landed the 11-path ECC layout on `merged`; PR #12 carried two commits
+from pre-#10 `merged`, causing `CONFLICTING` / `DIRTY` merge state.
+
+**Wrong:** merge PR #12 wholesale, pick PR #12 over PR #10, or re-add the full bundle.
+
+**Right (synthesize + path-scoped replay):**
+
+1. Identify unique harmonized paths only (3 files: both `SKILL.md` mirrors + instincts).
+2. Synthesize content from both runs (contribution workflows + dependency evidence;
+   keep dependency instinct pair with cross-references; preserve stable PR #10 IDs).
+3. Reset PR branch to fresh `origin/merged`; replay path-scoped delta as **one commit**.
+4. Exclude timestamp-only metadata (`ecc-tools.json`, `identity.json`) unless intentional.
+
+See [`git-history-surgery/references/path-scoped-pr-replay-reference-card.md`](../../git-history-surgery/references/path-scoped-pr-replay-reference-card.md).
+
 ---
 
 ## PR modification workflow
