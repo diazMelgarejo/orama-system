@@ -236,6 +236,66 @@ This plan covers Phase A and Phase B. Phase C is its own future plan.
 
 ---
 
+## Epilogue (from retired doc 21 — sanitized and revalidated)
+
+### Open questions register
+
+| OQ | Question | 2026-07-28 decision |
+| --- | --- | --- |
+| OQ1 | Live IPC vs file-tail for OpenClaw events? | File-tail via `openclaw_dirs` — matches existing parser pattern |
+| OQ2 | Single binary or separate `periscope-openclaw`? | Single binary; PT adapter is external |
+| OQ3 | Autostart from `orama-system/start.sh`? | Optional — `PERISCOPE_AUTOSTART=1`; default off |
+| OQ4 | gbrain source name? | `periscope-src` when bridge is enabled |
+| OQ5 | Upstream parser PRs? | Yes for generic parsers; stack-specific routes stay in fork |
+| OQ6 | Auth for new routes? | **v1:** reuse existing session APIs + `auth_token` bearer; no new `/openclaw/*` routes |
+| OQ7 | Periscope ↔ AlphaClaw direct? | Always via PT adapter; Periscope reads normalized JSONL |
+| OQ8 | JetBrains plugin priority? | Low — scaffold only |
+| OQ9 | Postgres vs LanceDB? | Independent corpora (session sync vs orama job history) |
+| OQ10 | IDE plugin auth / SSO? | Token-only local `auth_token`; no SSO |
+
+### Risk register
+
+| Risk | Mitigation |
+| --- | --- |
+| Upstream divergence | Parsers upstream when generic; fork-only adapter path; periodic mirror checks |
+| SQLite schema drift | Pin Periscope release in install templates; run parser contract tests |
+| Binary bloat from stack parsers | v1 avoids new Periscope parsers — PT adapter only |
+| Desktop sidecar mismatch | `sidecar("periscope")` must match Tauri `externalBin` (merged via periscope PR #14) |
+| `merged` history unreadable | Optional lineage epic — [`2026-07-28-periscope-lineage-modernization-epic.md`](2026-07-28-periscope-lineage-modernization-epic.md) |
+| Credential leakage in docs | Retired doc 21 removed; never commit `auth_token` or `cursor_secret` values |
+
+### v1 vs v2 scope (current recommendation)
+
+**v1 (execute now):**
+
+- PT `periscope_adapter` + `PERISCOPE_EMITTER_ENABLED` opt-in (Perpetua-Tools)
+- Periscope `openclaw_dirs` config with absolute paths to OpenClaw + PT observation roots
+- Desktop sidecar stem fix on `merged`
+- Doc/registry updates (this plan, `CLAUDE.md` §4, blank `.env.example` entries)
+- Mirror maintenance on `main` / `agentsview`; integration on `merged`
+
+**v2 (polish — Phase C in this file):**
+
+- Signals (affinity, mirror, verifier, swarm, context-pressure)
+- `periscope openclaw status` / `watch` CLI
+- Svelte `/openclaw/jobs/*` routes
+- gbrain bridge (`internal/bridge/gbrain.go`, off by default)
+- `PERISCOPE_AUTOSTART` in `start.sh`
+
+### Operational notes
+
+- gbrain source `periscope-src` registered 2026-05-24; refresh via `build_or_update_graph_tool` after meaningful Periscope changes.
+- Keep `agentsview` naming in URLs, fixtures, and non-functional config unless a runtime contract requires `periscope`.
+- Lineage modernization (45 fork patches × 583 upstream commits) is **optional** — see linked epic; do not block L4 on it.
+
+---
+
+<div style="border: 4px solid #c00; background: #fff5f5; padding: 1rem; margin: 1rem 0;">
+
+<p style="color: #c00; font-weight: bold; font-size: 1.15em;">⛔ DO NOT EXECUTE — Historical appendix (May 2026 plan evidence only)</p>
+
+<p style="color: #c00;">Everything from <strong>Phase A</strong> through <strong>Risk gates</strong> below is archival. Superseded by the <strong>2026-07-28 revalidation</strong> and <strong>Epilogue</strong> (above). Do not run branch merges, parser additions, <code>/api/v1/openclaw/*</code> routes, verification curls, or token steps unless a future revalidation explicitly reopens them.</p>
+
 ## Phase A — Upstream maintenance
 
 ### Task A.1 — Merge `merged` branch into `main`
@@ -948,6 +1008,29 @@ git push origin main
 > is `auth_token`, sent as `Authorization: Bearer`; `cursor_secret` is not an API
 > credential. Periscope must have `require_auth = true` for enforcement.
 
+**Runtime enforcement path (operator-local, not in orama-system):**
+
+Periscope auth is enforced in the **Periscope process**, not in this repository.
+Operators must set both fields in `~/.periscope/config.toml` on the machine that
+runs the sidecar:
+
+```toml
+require_auth = true
+auth_token = "<generated locally — never commit>"
+```
+
+Without `require_auth = true`, Periscope's middleware intentionally skips bearer
+checks (fail-open for local dev). orama-system documents the contract only:
+
+| Location | Role |
+| --- | --- |
+| `~/.periscope/config.toml` | **Enforcement** — `require_auth` + `auth_token` |
+| `orama-system/.env.example` | **Template** — commented `PERISCOPE_URL` / `PERISCOPE_TOKEN=` only |
+| Local shell / secrets store | **Runtime** — export `PERISCOPE_TOKEN` from `auth_token` when calling APIs |
+
+There is no orama-side wrapper that can flip Periscope auth; misconfiguration
+surfaces as unauthenticated API access until the operator fixes local config.
+
 The consolidated `.env` template (the one for Cursor cloud agents) needs two new entries.
 
 **Files:**
@@ -1014,63 +1097,11 @@ Each of those is its own small plan once Phase B is stable on `merged` for a wee
 
 ---
 
-## Epilogue (from retired doc 21 — sanitized and revalidated)
-
-### Open questions register
-
-| OQ | Question | 2026-07-28 decision |
-| --- | --- | --- |
-| OQ1 | Live IPC vs file-tail for OpenClaw events? | File-tail via `openclaw_dirs` — matches existing parser pattern |
-| OQ2 | Single binary or separate `periscope-openclaw`? | Single binary; PT adapter is external |
-| OQ3 | Autostart from `orama-system/start.sh`? | Optional — `PERISCOPE_AUTOSTART=1`; default off |
-| OQ4 | gbrain source name? | `periscope-src` when bridge is enabled |
-| OQ5 | Upstream parser PRs? | Yes for generic parsers; stack-specific routes stay in fork |
-| OQ6 | Auth for new routes? | **v1:** reuse existing session APIs + `auth_token` bearer; no new `/openclaw/*` routes |
-| OQ7 | Periscope ↔ AlphaClaw direct? | Always via PT adapter; Periscope reads normalized JSONL |
-| OQ8 | JetBrains plugin priority? | Low — scaffold only |
-| OQ9 | Postgres vs LanceDB? | Independent corpora (session sync vs orama job history) |
-| OQ10 | IDE plugin auth / SSO? | Token-only local `auth_token`; no SSO |
-
-### Risk register
-
-| Risk | Mitigation |
-| --- | --- |
-| Upstream divergence | Parsers upstream when generic; fork-only adapter path; periodic mirror checks |
-| SQLite schema drift | Pin Periscope release in install templates; run parser contract tests |
-| Binary bloat from stack parsers | v1 avoids new Periscope parsers — PT adapter only |
-| Desktop sidecar mismatch | `sidecar("periscope")` must match Tauri `externalBin` (PR #14) |
-| `merged` history unreadable | Optional lineage epic — [`2026-07-28-periscope-lineage-modernization-epic.md`](2026-07-28-periscope-lineage-modernization-epic.md) |
-| Credential leakage in docs | Retired doc 21 removed; never commit `auth_token` or `cursor_secret` values |
-
-### v1 vs v2 scope (current recommendation)
-
-**v1 (execute now):**
-
-- PT `periscope_adapter` + `PERISCOPE_EMITTER_ENABLED` opt-in (Perpetua-Tools)
-- Periscope `openclaw_dirs` config with absolute paths to OpenClaw + PT observation roots
-- Desktop sidecar stem fix on `merged`
-- Doc/registry updates (this plan, `CLAUDE.md` §4, blank `.env.example` entries)
-- Mirror maintenance on `main` / `agentsview`; integration on `merged`
-
-**v2 (polish — Phase C in this file):**
-
-- Signals (affinity, mirror, verifier, swarm, context-pressure)
-- `periscope openclaw status` / `watch` CLI
-- Svelte `/openclaw/jobs/*` routes
-- gbrain bridge (`internal/bridge/gbrain.go`, off by default)
-- `PERISCOPE_AUTOSTART` in `start.sh`
-
-### Operational notes
-
-- gbrain source `periscope-src` registered 2026-05-24; refresh via `build_or_update_graph_tool` after meaningful Periscope changes.
-- Keep `agentsview` naming in URLs, fixtures, and non-functional config unless a runtime contract requires `periscope`.
-- Lineage modernization (45 fork patches × 583 upstream commits) is **optional** — see linked epic; do not block L4 on it.
-
----
-
 ## Risk gates (operator review points)
 
 - **After A.1 (merge `merged` → `main`):** Stop and verify `go test ./...` passes before A.2.
 - **After A.2 (cmd rename):** Stop and verify the binary works under both names before A.3.
 - **After B.1 + B.2 + B.3 (parsers):** Stop. Run `periscope sync --source openclaw` against real `~/.openclaw/sessions/*.jsonl`. Confirm session count > 0 in the UI before B.5.
 - **After B.5 (routes):** Stop. Hit each route with `curl`. Confirm token middleware blocks unauthenticated requests.
+
+</div>

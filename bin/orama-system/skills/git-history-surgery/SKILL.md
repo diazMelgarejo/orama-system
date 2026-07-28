@@ -258,8 +258,8 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 - [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
 - [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) — ephemeral fresh-main diff; true unique branch contribution; CLAYGO teardown
 - [`references/path-scoped-pr-replay-reference-card.md`](references/path-scoped-pr-replay-reference-card.md) — replay harmonized path delta onto fresh integration base; periscope PR #12 ECC worked example
-- [`../cidf/references/integrative-editing-examples.md`](../cidf/references/integrative-editing-examples.md) §9 — CIDF good/bad curriculum for same technique
-- [`../afrp/failure-modes.md`](../afrp/failure-modes.md) §6–7 — AFRP premature-confidence / handwaving examples
+- [`../../cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md) §9 — CIDF good/bad curriculum for same technique
+- [`../../afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–7 — AFRP premature-confidence / handwaving examples
 - [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
 - [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
 - [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table
