@@ -10,26 +10,39 @@ resolve_periscope_repo() {
     printf '%s' "$PERISCOPE_REPO"
     return 0
   fi
-  local candidate
-  for candidate in \
-    "${OPENCLAW_HOME:-}/periscope" \
-    "/agent/repos/periscope" \
-    "$HOME/code/oramasys/tools/periscope" \
-    "$HOME/Projects/periscope"; do
-    if [[ -f "$candidate/.agents/skills/periscope/SKILL.md" ]]; then
-      printf '%s' "$candidate"
-      return 0
-    fi
-  done
+  if [[ -n "${OPENCLAW_HOME:-}" ]] \
+    && [[ -f "$OPENCLAW_HOME/periscope/.agents/skills/periscope/SKILL.md" ]]; then
+    printf '%s' "$OPENCLAW_HOME/periscope"
+    return 0
+  fi
   return 1
 }
 
+REQUESTED_REPO="${PERISCOPE_REPO:-}"
 PERISCOPE_REPO="$(resolve_periscope_repo || true)"
+
+if [[ -n "$REQUESTED_REPO" ]]; then
+  if [[ ! -d "$PERISCOPE_REPO" ]] || [[ ! -r "$PERISCOPE_REPO" ]]; then
+    log "periscope ECC: configured repository is missing or inaccessible: $REQUESTED_REPO" >&2
+    exit 1
+  fi
+fi
+
+if [[ -z "$PERISCOPE_REPO" ]]; then
+  log "periscope ECC: not present — SKIP sidecar"
+  exit 0
+fi
+
 AGENTS_SKILL="${PERISCOPE_REPO}/.agents/skills/periscope/SKILL.md"
 CLAUDE_SKILL="${PERISCOPE_REPO}/.claude/skills/periscope/SKILL.md"
 INSTINCTS="${PERISCOPE_REPO}/.claude/homunculus/instincts/inherited/periscope-instincts.yaml"
 
-if [[ -z "$PERISCOPE_REPO" ]] || [[ ! -f "$AGENTS_SKILL" ]]; then
+if [[ -n "$REQUESTED_REPO" ]] && [[ ! -f "$AGENTS_SKILL" ]]; then
+  log "periscope ECC: configured repository lacks the Agents skill: $REQUESTED_REPO" >&2
+  exit 1
+fi
+
+if [[ ! -f "$AGENTS_SKILL" ]]; then
   log "periscope ECC: not present — SKIP sidecar"
   exit 0
 fi

@@ -225,7 +225,7 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 | `"merged": true` on GitHub ≠ content on target branch | Always verify: `git diff origin/main...origin/<branch>` |
 | CodeRabbit re-scans on every push | Run post-merge sweep after **every** merge, not once |
 | PR branch base may be stale vs current main | Check `git merge-base` before simulating |
-| Integration PR `CONFLICTING` after sibling merged overlapping content | Branch still carries pre-base commits | Path-scoped replay onto fresh integration base — see [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md) |
+| Integration PR `CONFLICTING` after sibling merged overlapping content | Branch still carries pre-base commits; use path-scoped replay onto a fresh integration base — see [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md) |
 | Board job has no source ref / base SHA | Add them before editing; then work from a fresh worktree at that exact ref |
 | Draft PRs cannot be merged via API | Run `markPullRequestReadyForReview` GraphQL mutation first |
 | `scan_tracked_secrets` catches token in commit body | Never paste tokens in PR titles, commit messages, or docs |
