@@ -159,7 +159,78 @@ This document provides extended examples and recovery procedures for each AFRP f
 
 ---
 
-## Diagnostic Decision Tree
+## Failure Mode 9: Empty `commit-clean` Commit (Unstaged-Edits Trap)
+
+**Trigger:** Running `bash scripts/git/commit-clean.sh` without first running
+`git add` on the paths that belong in the commit.
+
+**Mechanism:** `commit-clean.sh` writes the **staged index** via `git write-tree`.
+It never stages files. The pre-2026-07-29 guard only rejected commits when **both**
+the working tree and index matched HEAD. When unstaged edits existed but the index
+was empty, the script still advanced the branch with a **new message and zero file
+delta** — identical tree to HEAD.
+
+**Symptom:** Push succeeds; PR/commit message describes fixes; `git show --stat`
+is empty; CI still fails on the old code; agents chase per-file symptoms instead of
+missing commits.
+
+**Example (2026-07-29, real — periscope PR #26):**
+- Agent ran `commit-clean.sh` twice with CI-fix messages while edits stayed unstaged.
+- Remote branch stayed on broken `ci-pr.yml` (upstream workflow) and pre-migration
+  kit-ui sources; local working tree had the real fixes.
+- Recovery: `git add <paths>` → `verify-staged-for-commit.sh` → `commit-clean.sh`;
+  confirm with `git show --stat HEAD` before push.
+
+**Recovery / prevention (mandatory sequence):**
+
+```bash
+git add <paths>
+bash scripts/git/verify-staged-for-commit.sh   # fails closed if index empty
+bash scripts/git/commit-clean.sh -m "type(scope): summary"
+git show --stat --oneline HEAD                 # confirm before push
+```
+
+Regression: `bash scripts/git/commit_clean_test.sh` (also run from `verify-git-guards.sh`).
+
+---
+
+## Failure Mode 8: Synthetic SHA Replay (Upstream Re-import Theater)
+
+**Trigger:** Replaying a large upstream lineage under **new commit SHAs** when the
+canonical upstream remote already carries the same patches under original SHAs.
+
+**Mechanism:** An agent "modernizes" by re-cherry-picking or replaying hundreds of
+upstream commits from an ancient merge-base instead of inheriting original upstream
+commits from `kenn-io/agentsview` / `origin/agentsview` and layering only fork-unique
+commits on top. GitHub three-dot PR diffs explode; review cannot see the small fork delta.
+
+**Symptom:** PR shows hundreds of commits and thousands of files changed even when the
+tip tree is correct. `git rev-list --count` looks catastrophic.
+
+**Example (2026-07-29, real — periscope PR #17 vs PR #20):**
+
+| Item | PR #17 (bad — closed) | PR #20 (good) |
+|------|------------------------|---------------|
+| Upstream | ~769 replayed commits (synthetic SHAs) | Inherits `kenn-io` @ `#1283` |
+| Periscope-only | 9 commits buried | **9 on tip** |
+| Three-dot vs `merged` | 2,169 files / 769 commits | **816 files / 9 commits** |
+| Tip tree | reference | **byte-identical** to PR #17 |
+| Branch fate | **Preserved** as bad example | Integration candidate |
+
+`47ca74c` (Wes #352) on `merged` vs replayed `22cf1394` on bad branch — same `%T`,
+wrong SHA, zero semantic gain.
+
+**Policy — never synthesize SHAs except security expunge:** leaked keys, identities,
+workspaces, paths, doxxing. Not for convenience or cosmetic PR graphs.
+
+**Recovery:** `git fetch origin agentsview`; `git cherry -v origin/agentsview <tip>`; base on real
+upstream tip (`kenn-io/agentsview` / `origin/agentsview` on the fork);
+cherry-pick fork-unique commits only; verify `%T`; close bad PR; preserve bad branch
+as anti-pattern. See periscope `docs/2026-07-28-AgentsView+Periscope-Fresh.md` addendum;
+CIDF §10; path-scoped card PR #17 vs #20 example.
+
+---
+
 
 ```
 Response feels wrong but you can't pinpoint why?
@@ -169,5 +240,7 @@ Response feels wrong but you can't pinpoint why?
 ├── Can the audience act on it immediately? → Failure Mode 2 (Abstraction Mismatch)
 ├── Remove citations — does advice change? → Failure Mode 3 (Citation Theater)
 ├── Was the query classified correctly? → Failure Mode 6 (Premature Confidence)
-└── Did I confirm intent + use the real method (not a proxy)? → Failure Mode 7 (Handwaving)
+├── Did I confirm intent + use the real method (not a proxy)? → Failure Mode 7 (Handwaving)
+├── Did I replay upstream under synthetic SHAs when originals exist? → Failure Mode 8 (Synthetic SHA Replay)
+└── Did commit-clean run without git add + verify-staged? → Failure Mode 9 (Empty commit-clean)
 ```
