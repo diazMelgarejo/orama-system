@@ -38,18 +38,44 @@ This:
 
 ### Hook-free commit (history-sensitive work)
 
+**Mandatory three-step sequence** — never skip or reorder:
+
 ```bash
-# Stage every path that belongs in this commit before running commit-clean.
+# 1. Stage (REQUIRED — commit-clean never runs git add)
 git add <paths>   # or git add -A when the whole tree is intentional
+
+# 2. Verify (REQUIRED — blocks empty commits)
+bash scripts/git/verify-staged-for-commit.sh
+
+# 3. Commit (hook-free)
 bash scripts/git/commit-clean.sh -m "type(scope): summary"
-# amend tip:
+```
+
+Amend tip (message-only amend skips step 2 when nothing is staged):
+
+```bash
 bash scripts/git/commit-clean.sh -m "type(scope): summary" --amend
 ```
 
 `commit-clean.sh` writes only the **staged** index. It does **not** run
-`git reset --hard` and therefore does not discard unstaged edits. When committing
-logical batches in parallel, stage one batch fully, commit, then stage the next —
-or use separate worktrees so unrelated edits never share a working tree.
+`git reset --hard` and therefore does not discard unstaged edits.
+
+**Failure mode (2026-07-29):** If step 1 is skipped while unstaged edits exist,
+the old script still created a commit (same tree as HEAD, new message only).
+CI then ran against code that never landed. `verify-staged-for-commit.sh` and
+the hardened `commit-clean.sh` now **fail closed** in that case.
+
+Before pushing, confirm file delta:
+
+```bash
+git show --stat --oneline HEAD
+```
+
+When committing logical batches in parallel, stage one batch fully, verify,
+commit, then stage the next — or use separate worktrees so unrelated edits
+never share a working tree.
+
+Regression test: `bash scripts/git/commit_clean_test.sh`
 
 ---
 
