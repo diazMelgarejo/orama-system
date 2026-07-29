@@ -34,4 +34,25 @@ Before pushing, confirm the commit actually contains your files:
 git show --stat --oneline HEAD
 ```
 
+### PR body updates (append-only — NEVER clobber)
+
+`ManagePullRequest` `update_pr` and `gh pr edit` **replace the entire body**. Agents must not pass only the latest delta.
+
+**Mandatory workflow:**
+
+```bash
+# 1. Backup current body
+gh pr view <N> --repo <owner/repo> --json body --jq .body > .git/pr-body-backups/<repo>-pr<N>-$(date -u +%Y%m%dT%H%M%SZ).md
+
+# 2. Append follow-up (inserts before CURSOR_AGENT_PR_BODY_END or CodeRabbit section)
+bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "Follow-up: …" --file follow-up.md
+
+# 3. Or merge manually: original Summary at top → chronological ## Follow-up blocks → preserve CodeRabbit tail
+gh pr edit <N> --repo <owner/repo> --body-file merged-body.md
+```
+
+**Never:** pass `body=` to `update_pr` with only the new paragraph. **Always:** integrative write (original + all follow-ups + preserved CodeRabbit/metadata below).
+
+See `bin/orama-system/cidf/references/integrative-editing-examples.md` §1 and Perpetua-Tools `lesson_3b13ab0a45d4`.
+
 See orama-system `docs/wiki/12-cursor-cloud-commit-attribution.md` (canonical).
