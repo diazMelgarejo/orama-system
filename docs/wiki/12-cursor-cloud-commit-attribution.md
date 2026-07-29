@@ -79,6 +79,23 @@ Regression test: `bash scripts/git/commit_clean_test.sh`
 
 ---
 
+## PR body updates (append-only)
+
+Cloud agents and `ManagePullRequest update_pr` **replace the entire PR body** when
+`body=` is set. Never pass only the latest follow-up paragraph.
+
+**Mandatory workflow:**
+
+1. `gh pr view <N> --json body` — read current body
+2. Save backup under `.git/pr-body-backups/`
+3. Keep original `## Summary` at top; append `## Follow-up:` blocks chronologically
+4. Preserve CodeRabbit auto-generated sections and Cursor metadata below unchanged
+5. Write full merged body: `bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "…" --file …`
+
+See `scripts/cursor/append-pr-body.sh`, `bin/orama-system/cidf/references/integrative-editing-examples.md` §1, Perpetua-Tools `lesson_3b13ab0a45d4`.
+
+---
+
 ## Cloud VM install
 
 `.cursor/environment.json` `install` runs `scripts/cursor/cloud-install.sh`, which:
