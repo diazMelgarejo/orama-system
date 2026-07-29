@@ -158,6 +158,48 @@ git -C "$FUSION_WORKTREE" push \
 
 ---
 
+## Worked example — periscope PR #17 vs PR #20 upstream purification (2026-07-29)
+
+**Context:** PR #17 (`cursor/agentsview-modernization-3way-f559`) had the correct
+**product tree** but replayed upstream AgentsView under **synthetic SHAs**. PR #20
+purifies ancestry without changing the tree.
+
+| Item | PR #17 (bad — closed) | PR #20 (good — integration) |
+|------|------------------------|------------------------------|
+| Branch | `cursor/agentsview-modernization-3way-f559` | `cursor/agentsview-purified-onto-kenn-f559` |
+| Upstream base | Ancient merge-base `5f9e809f` + 769 replayed commits | `kenn-io/agentsview` @ `6c3317ad` (#1283) original SHAs |
+| Periscope-only work | 9 commits buried in replay | **9 commits on tip** (cherry-picked) |
+| Merge-base with `merged` | `5f9e809f` | `6c3317ad` |
+| Three-dot diff vs `merged` | 2,169 files / 769 commits | **816 files / 9 commits** |
+| Tip tree | reference | **byte-identical** to PR #17 |
+| Branch fate | **Preserved** — bad-example museum | Active PR |
+
+**Bad pattern (PR #17):**
+
+```bash
+# ❌ Replay entire upstream lineage from ancient fork point
+# Result: synthetic SHAs for every upstream commit; PR graph unusable
+git merge-base modernization merged   # → 5f9e809f (ancient)
+git rev-list --count merged..modernization   # → 769
+```
+
+**Good pattern (PR #20):**
+
+```bash
+# ✅ Inherit original upstream; layer only fork-unique commits
+git checkout -b cursor/agentsview-purified-onto-kenn-f559 6c3317ad   # kenn-io #1283
+git cherry-pick 5435f683 4d18263c 24e0e6b4 2e33eac7 7eaff7a3 \
+  00a67739 b4825005 0d93fd17 14dcd10d
+# Align push-safe secret-scan test fixtures if needed
+# Verify: git rev-parse HEAD^{tree} == modernization-tip^{tree}
+```
+
+**Policy:** never synthesize SHAs except security/safety expunge (leaked keys, identities,
+workspaces, paths, doxxing). See AFRP failure-modes §8; periscope
+`docs/2026-07-28-AgentsView+Periscope-Fresh.md` addendum.
+
+---
+
 ## Related
 
 - [`fresh-main-integrity-diff-claygo.md`](../../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md) — Protocol B/C unique-path discovery

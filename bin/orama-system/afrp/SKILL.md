@@ -130,7 +130,7 @@ wastes the user's time and erodes trust.
 > "merge harder" — it meant the base had moved and the branch re-added an already-landed
 > bundle. Path-scoped replay + integrative synthesis (CIDF §9, git-history-surgery card)
 > replaced two noisy commits with one clean delta. See
-> [`failure-modes.md`](failure-modes.md) §6–7 examples.
+> [`failure-modes.md`](failure-modes.md) §6–8 examples.
 
 ---
 
