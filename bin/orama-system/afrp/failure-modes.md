@@ -159,6 +159,41 @@ This document provides extended examples and recovery procedures for each AFRP f
 
 ---
 
+## Failure Mode 9: Empty `commit-clean` Commit (Unstaged-Edits Trap)
+
+**Trigger:** Running `bash scripts/git/commit-clean.sh` without first running
+`git add` on the paths that belong in the commit.
+
+**Mechanism:** `commit-clean.sh` writes the **staged index** via `git write-tree`.
+It never stages files. The pre-2026-07-29 guard only rejected commits when **both**
+the working tree and index matched HEAD. When unstaged edits existed but the index
+was empty, the script still advanced the branch with a **new message and zero file
+delta** — identical tree to HEAD.
+
+**Symptom:** Push succeeds; PR/commit message describes fixes; `git show --stat`
+is empty; CI still fails on the old code; agents chase per-file symptoms instead of
+missing commits.
+
+**Example (2026-07-29, real — periscope PR #26):**
+- Agent ran `commit-clean.sh` twice with CI-fix messages while edits stayed unstaged.
+- Remote branch stayed on broken `ci-pr.yml` (upstream workflow) and pre-migration
+  kit-ui sources; local working tree had the real fixes.
+- Recovery: `git add <paths>` → `verify-staged-for-commit.sh` → `commit-clean.sh`;
+  confirm with `git show --stat HEAD` before push.
+
+**Recovery / prevention (mandatory sequence):**
+
+```bash
+git add <paths>
+bash scripts/git/verify-staged-for-commit.sh   # fails closed if index empty
+bash scripts/git/commit-clean.sh -m "type(scope): summary"
+git show --stat --oneline HEAD                 # confirm before push
+```
+
+Regression: `bash scripts/git/commit_clean_test.sh` (also run from `verify-git-guards.sh`).
+
+---
+
 ## Failure Mode 8: Synthetic SHA Replay (Upstream Re-import Theater)
 
 **Trigger:** Replaying a large upstream lineage under **new commit SHAs** when the
@@ -205,5 +240,6 @@ Response feels wrong but you can't pinpoint why?
 ├── Remove citations — does advice change? → Failure Mode 3 (Citation Theater)
 ├── Was the query classified correctly? → Failure Mode 6 (Premature Confidence)
 ├── Did I confirm intent + use the real method (not a proxy)? → Failure Mode 7 (Handwaving)
-└── Did I replay upstream under synthetic SHAs when originals exist? → Failure Mode 8 (Synthetic SHA Replay)
+├── Did I replay upstream under synthetic SHAs when originals exist? → Failure Mode 8 (Synthetic SHA Replay)
+└── Did commit-clean run without git add + verify-staged? → Failure Mode 9 (Empty commit-clean)
 ```
