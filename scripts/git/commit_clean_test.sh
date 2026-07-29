@@ -35,30 +35,30 @@ for helper in commit-clean.sh verify-staged-for-commit.sh banned_attribution_lib
 done
 printf 'base\n' >"$tmp/README.md"
 git -C "$tmp" add README.md
-git -C "$tmp" commit -q -m "init"
+run_in_repo "$tmp" bash "$tmp/scripts/git/commit-clean.sh" -m "init" >/dev/null
 
 printf 'unstaged only\n' >"$tmp/README.md"
 
-if run_in_repo "$tmp" bash "$SCRIPT_DIR/commit-clean.sh" -m "should fail unstaged" >/dev/null 2>&1; then
+if run_in_repo "$tmp" bash "$tmp/scripts/git/commit-clean.sh" -m "should fail unstaged" >/dev/null 2>&1; then
   fail "commit-clean must reject unstaged-only working tree"
 else
   pass "blocks commit when edits are unstaged"
 fi
 
-if run_in_repo "$tmp" bash "$SCRIPT_DIR/verify-staged-for-commit.sh" >/dev/null 2>&1; then
+if run_in_repo "$tmp" bash "$tmp/scripts/git/verify-staged-for-commit.sh" >/dev/null 2>&1; then
   fail "verify-staged must reject empty index"
 else
   pass "verify-staged rejects empty index"
 fi
 
 git -C "$tmp" add README.md
-if ! run_in_repo "$tmp" bash "$SCRIPT_DIR/verify-staged-for-commit.sh" >/dev/null 2>&1; then
+if ! run_in_repo "$tmp" bash "$tmp/scripts/git/verify-staged-for-commit.sh" >/dev/null 2>&1; then
   fail "verify-staged must accept staged delta"
 else
   pass "verify-staged accepts staged delta"
 fi
 
-sha="$(run_in_repo "$tmp" bash "$SCRIPT_DIR/commit-clean.sh" -m "staged commit")"
+sha="$(run_in_repo "$tmp" bash "$tmp/scripts/git/commit-clean.sh" -m "staged commit")"
 if [[ -z "$sha" ]]; then
   fail "commit-clean must return a sha for staged commit"
 else

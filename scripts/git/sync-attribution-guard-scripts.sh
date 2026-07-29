@@ -6,7 +6,7 @@ target="${1:?target repo path required}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source_root="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
-if ! git -C "$target" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+if [[ "$(git -C "$target" rev-parse --is-inside-work-tree 2>/dev/null)" != "true" ]]; then
   echo "skip: not a git repo: $target" >&2
   exit 0
 fi
