@@ -120,6 +120,29 @@ carried two commits from pre-#10 `merged` → `CONFLICTING` / `DIRTY`. Reset to 
 
 ---
 
+## 10. Upstream modernization — never synthetic SHA replay (periscope PR #17 vs #20)
+
+> **Doctrine:** inherit original upstream SHAs from `kenn-io/agentsview` / `origin/agentsview`;
+> cherry-pick **only fork-unique** commits on top. Never replay hundreds of upstream commits
+> under new SHAs when originals already exist.
+> **Canonical procedure:** purified cherry-pick onto `kenn-io/agentsview` tip; see periscope
+> `docs/2026-07-28-AgentsView+Periscope-Fresh.md` addendum (2026-07-29).
+> **Origin:** periscope PR #17 closed; PR #20 chosen (2026-07-29).
+
+| Bad | Good |
+| --- | --- |
+| Replay ~769 upstream AgentsView commits from ancient merge-base under synthetic SHAs | Base on `kenn-io/agentsview` @ `#1283`; cherry-pick 9 Periscope-unique commits only |
+| Open PR showing 2,169 files / 769 commits when tip tree is already correct | PR #20: **816 files / 9 commits**, byte-identical tree to bad branch tip |
+| Delete bad replay branch after closing PR | **Preserve** `cursor/agentsview-modernization-3way-f559` as permanent anti-pattern reference |
+| Synthesize SHAs for convenience or "fresh import" theater | Synthesize SHAs **only** for security expunge (keys, identities, paths, doxxing) |
+| Assume merge-base `5f9e809f` means 769 commits of new work | Run `git cherry -v upstream-kenn/main <tip>` — only 9 patches were truly unique |
+
+**Recovery applied (PR #20):** PR #17 had correct tip tree but wrong ancestry. Purified
+branch `cursor/agentsview-purified-onto-kenn-f559` = original kenn SHAs + 9 cherry-picks
+→ byte-identical `%T` to PR #17, merge-base with `merged` at `#1283` instead of `5f9e809f`.
+
+---
+
 ## Quarantined bad samples (do not run)
 
 ```markdown

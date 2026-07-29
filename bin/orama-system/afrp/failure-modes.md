@@ -159,7 +159,42 @@ This document provides extended examples and recovery procedures for each AFRP f
 
 ---
 
-## Diagnostic Decision Tree
+## Failure Mode 8: Synthetic SHA Replay (Upstream Re-import Theater)
+
+**Trigger:** Replaying a large upstream lineage under **new commit SHAs** when the
+canonical upstream remote already carries the same patches under original SHAs.
+
+**Mechanism:** An agent "modernizes" by re-cherry-picking or replaying hundreds of
+upstream commits from an ancient merge-base instead of inheriting original upstream
+commits from `kenn-io/agentsview` / `origin/agentsview` and layering only fork-unique
+commits on top. GitHub three-dot PR diffs explode; review cannot see the small fork delta.
+
+**Symptom:** PR shows hundreds of commits and thousands of files changed even when the
+tip tree is correct. `git rev-list --count` looks catastrophic.
+
+**Example (2026-07-29, real — periscope PR #17 vs PR #20):**
+
+| Item | PR #17 (bad — closed) | PR #20 (good) |
+|------|------------------------|---------------|
+| Upstream | ~769 replayed commits (synthetic SHAs) | Inherits `kenn-io` @ `#1283` |
+| Periscope-only | 9 commits buried | **9 on tip** |
+| Three-dot vs `merged` | 2,169 files / 769 commits | **816 files / 9 commits** |
+| Tip tree | reference | **byte-identical** to PR #17 |
+| Branch fate | **Preserved** as bad example | Integration candidate |
+
+`47ca74c` (Wes #352) on `merged` vs replayed `22cf1394` on bad branch — same `%T`,
+wrong SHA, zero semantic gain.
+
+**Policy — never synthesize SHAs except security expunge:** leaked keys, identities,
+workspaces, paths, doxxing. Not for convenience or cosmetic PR graphs.
+
+**Recovery:** `git cherry -v upstream-kenn/main <tip>`; base on real upstream tip;
+cherry-pick fork-unique commits only; verify `%T`; close bad PR; preserve bad branch
+as anti-pattern. See periscope `docs/2026-07-28-AgentsView+Periscope-Fresh.md` addendum;
+CIDF §10; path-scoped card PR #17 vs #20 example.
+
+---
+
 
 ```
 Response feels wrong but you can't pinpoint why?
@@ -169,5 +204,6 @@ Response feels wrong but you can't pinpoint why?
 ├── Can the audience act on it immediately? → Failure Mode 2 (Abstraction Mismatch)
 ├── Remove citations — does advice change? → Failure Mode 3 (Citation Theater)
 ├── Was the query classified correctly? → Failure Mode 6 (Premature Confidence)
-└── Did I confirm intent + use the real method (not a proxy)? → Failure Mode 7 (Handwaving)
+├── Did I confirm intent + use the real method (not a proxy)? → Failure Mode 7 (Handwaving)
+└── Did I replay upstream under synthetic SHAs when originals exist? → Failure Mode 8 (Synthetic SHA Replay)
 ```
