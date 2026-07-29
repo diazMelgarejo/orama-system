@@ -223,7 +223,8 @@ wrong SHA, zero semantic gain.
 **Policy — never synthesize SHAs except security expunge:** leaked keys, identities,
 workspaces, paths, doxxing. Not for convenience or cosmetic PR graphs.
 
-**Recovery:** `git cherry -v upstream-kenn/main <tip>`; base on real upstream tip;
+**Recovery:** `git fetch origin agentsview`; `git cherry -v origin/agentsview <tip>`; base on real
+upstream tip (`kenn-io/agentsview` / `origin/agentsview` on the fork);
 cherry-pick fork-unique commits only; verify `%T`; close bad PR; preserve bad branch
 as anti-pattern. See periscope `docs/2026-07-28-AgentsView+Periscope-Fresh.md` addendum;
 CIDF §10; path-scoped card PR #17 vs #20 example.

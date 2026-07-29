@@ -149,5 +149,5 @@ merge on orama-side tooling.
 - [`scripts/periscope/install-cursor-rules.sh`](../../../../scripts/periscope/install-cursor-rules.sh) — attribution guards + rules (separate from ECC)
 - [`git-history-surgery/references/path-scoped-pr-replay-reference-card.md`](../git-history-surgery/references/path-scoped-pr-replay-reference-card.md) — canonical path-scoped PR replay procedure
 - [`cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md) §9 — good/bad path-scoped PR replay curriculum
-- [`afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–7 — CONFLICTING PR and empty-commit failure modes
+- [`afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–8 — CONFLICTING PR, empty-commit, and synthetic SHA replay failure modes
 - orama-system **ecc-sync** handles this repo's own ECC bundle post-merge (not periscope); use `/ecc-sync` when available

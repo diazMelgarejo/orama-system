@@ -2,7 +2,7 @@
 
 > **Doctrine:** [`../SKILL.md` § Integrative Editing Doctrine](../SKILL.md)  
 > **Merge modes:** [`../../skills/oramasys-method/references/integrative-merge.md`](../../skills/oramasys-method/references/integrative-merge.md)  
-> **AFRP curriculum:** [`../../afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–7 (CONFLICTING PR / proxy conclusion)  
+> **AFRP curriculum:** [`../../afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–8 (CONFLICTING PR / proxy conclusion / synthetic SHA replay)  
 > **Bad lines below** are quarantined teaching samples — do not copy into production `SKILL.md` files.
 
 ---
@@ -135,7 +135,7 @@ carried two commits from pre-#10 `merged` → `CONFLICTING` / `DIRTY`. Reset to 
 | Open PR showing 2,169 files / 769 commits when tip tree is already correct | PR #20: **816 files / 9 commits**, byte-identical tree to bad branch tip |
 | Delete bad replay branch after closing PR | **Preserve** `cursor/agentsview-modernization-3way-f559` as permanent anti-pattern reference |
 | Synthesize SHAs for convenience or "fresh import" theater | Synthesize SHAs **only** for security expunge (keys, identities, paths, doxxing) |
-| Assume merge-base `5f9e809f` means 769 commits of new work | Run `git cherry -v upstream-kenn/main <tip>` — only 9 patches were truly unique |
+| Assume merge-base `5f9e809f` means 769 commits of new work | Run `git cherry -v origin/agentsview <tip>` — only 9 patches were truly unique |
 
 **Recovery applied (PR #20):** PR #17 had correct tip tree but wrong ancestry. Purified
 branch `cursor/agentsview-purified-onto-kenn-f559` = original kenn SHAs + 9 cherry-picks

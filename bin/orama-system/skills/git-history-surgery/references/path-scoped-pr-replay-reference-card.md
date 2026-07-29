@@ -191,7 +191,8 @@ git checkout -b cursor/agentsview-purified-onto-kenn-f559 6c3317ad   # kenn-io #
 git cherry-pick 5435f683 4d18263c 24e0e6b4 2e33eac7 7eaff7a3 \
   00a67739 b4825005 0d93fd17 14dcd10d
 # Align push-safe secret-scan test fixtures if needed
-# Verify: git rev-parse HEAD^{tree} == modernization-tip^{tree}
+# Verify:
+test "$(git rev-parse HEAD^{tree})" = "$(git rev-parse modernization-tip^{tree})"
 ```
 
 **Policy:** never synthesize SHAs except security/safety expunge (leaked keys, identities,
