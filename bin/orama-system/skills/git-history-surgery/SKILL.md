@@ -73,6 +73,15 @@ LM Studio host, run
    `--force-with-lease=refs/heads/<branch>:<recorded-sha>`. Never use a generic lease,
    merge the stale branch wholesale, or replay the full bundle when the base already
    contains it.
+10. Upstream modernization PR shows hundreds of commits / thousands of files but tip
+    tree may be correct?
+    **Never replay upstream under synthetic SHAs** when `kenn-io/agentsview` /
+    `origin/agentsview` already has originals. Cherry-pick **fork-unique commits only**
+    onto the real upstream tip; verify `%T` against desired tree. Close the replay PR;
+    preserve the bad branch as anti-pattern (do not delete). SHA synthesis allowed
+    **only** for security expunge (keys, identities, paths, doxxing). See AFRP
+    failure-modes §8; CIDF integrative-editing-examples §10; path-scoped card PR #17 vs
+    #20 worked example (periscope 2026-07-29).
 
 ## Non-Negotiables
 
@@ -257,9 +266,9 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 - [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md) — hooks off before stash pop/apply; re-enable after (mandatory for agents)
 - [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
 - [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) — ephemeral fresh-main diff; true unique branch contribution; CLAYGO teardown
-- [`references/path-scoped-pr-replay-reference-card.md`](references/path-scoped-pr-replay-reference-card.md) — replay harmonized path delta onto fresh integration base; periscope PR #12 ECC worked example
-- [`../../cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md) §9 — CIDF good/bad curriculum for same technique
-- [`../../afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–7 — AFRP premature-confidence / handwaving examples
+- [`references/path-scoped-pr-replay-reference-card.md`](references/path-scoped-pr-replay-reference-card.md) — replay harmonized path delta onto fresh integration base; periscope PR #12 ECC + PR #17 vs #20 purification worked examples
+- [`../../cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md) §9–10 — CIDF good/bad curriculum for path-scoped replay and upstream purification
+- [`../../afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–8 — AFRP premature-confidence / handwaving / synthetic SHA replay examples
 - [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
 - [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
 - [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table

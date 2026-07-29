@@ -1249,14 +1249,29 @@ Both integration and contrib branches must have **merge-base(branch, origin/main
 1. On every cloud session: `bash scripts/cursor/install-user-git-environment.sh` and `bash scripts/git/alphaclaw-align-all.sh`.
 2. Before AlphaClaw commit: verify `git merge-base HEAD origin/main` equals `git rev-parse origin/main`.
 3. Never open AlphaClaw feature PRs with base `main` when commits belong on integration/contrib lines.
-4. Use `bash scripts/git/commit-clean.sh` if `git commit` still appends co-author trailers.
-
-
----
+4. Mandatory commit sequence: `git add <paths>` → `bash scripts/git/verify-staged-for-commit.sh` → `bash scripts/git/commit-clean.sh -m "..."`; confirm with `git show --stat HEAD` before push.
 
 ---
 
-## 2026-05-27 — RAG items 5–7 + transport matrix + macOS ghost ref scanner (Claude)
+## 2026-07-29 — Empty `commit-clean` commits when edits stay unstaged (Cursor)
+
+**What happened:** periscope PR #26 CI-fix commits (`5a33adba`, `4473f78f`, `4c4430ae`)
+carried messages describing workflow/docs/kit-ui fixes, but `commit-clean.sh` ran
+without `git add`. Unstaged working-tree edits were preserved locally while the
+remote branch got message-only commits (zero file delta). CI kept calling upstream
+`kenn-io/agentsview` workflows until `481ec5fe` staged and landed the real diff.
+
+**Root cause:** Old `commit-clean.sh` only rejected empty commits when *both*
+working tree and index matched HEAD. Unstaged edits bypassed the guard.
+
+**Fix (canonical orama `scripts/git/`):**
+- `verify-staged-for-commit.sh` — mandatory pre-commit gate; fails if index empty
+  or tree matches HEAD.
+- Hardened `commit-clean.sh` — always calls verify; supports `--dry-run`.
+- `commit_clean_test.sh` — regression harness; wired into `verify-git-guards.sh`.
+- Docs: wiki §12, AGENTS snippet, Failure Mode 9, mandatory 3-step sequence.
+
+---
 
 ### What was accomplished
 
