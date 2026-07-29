@@ -4,15 +4,22 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: scripts/git/commit-clean.sh -m "message" [--amend]
+Usage: scripts/git/commit-clean.sh -m "message" [--amend] [--allow-empty] [--dry-run]
 
-Before running, stage every path that belongs in this commit:
-  git add <paths>   # or git add -A when the whole tree is intentional
+MANDATORY sequence (agents — never skip or reorder):
+  1. git add <paths>              # this script NEVER stages for you
+  2. bash scripts/git/verify-staged-for-commit.sh
+  3. bash scripts/git/commit-clean.sh -m "type(scope): summary"
 
-Unstaged edits are preserved, but they are NOT included in the commit.
+Unstaged edits are preserved but are NOT included in the commit.
 Uses git commit-tree so Cursor commit-msg hooks never run.
 
-Environment overrides: GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL
+Options:
+  --amend         Replace HEAD (parent becomes HEAD^)
+  --allow-empty   Allow intentional empty commits (rare)
+  --dry-run       Verify and print summary; do not update the branch
+
+Environment overrides: GIT_AUTHOR_NAME, GIT_AUTHOR_EMAIL, COMMIT_CLEAN_ALLOW_EMPTY=1
 EOF
 }
 
@@ -27,6 +34,8 @@ source "$SCRIPT_DIR/banned_attribution_lib.sh"
 
 message=""
 amend=0
+allow_empty="${COMMIT_CLEAN_ALLOW_EMPTY:-0}"
+dry_run=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -m)
@@ -35,6 +44,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --amend)
       amend=1
+      shift
+      ;;
+    --allow-empty)
+      allow_empty=1
+      shift
+      ;;
+    --dry-run)
+      dry_run=1
       shift
       ;;
     -h|--help)
@@ -84,11 +101,13 @@ case "$author_email_lc" in
     ;;
 esac
 
-if git diff-index --quiet HEAD -- 2>/dev/null && [[ "$amend" -eq 0 ]]; then
-  if git diff-index --quiet --cached HEAD -- 2>/dev/null; then
-    echo "error: nothing staged to commit" >&2
-    exit 1
-  fi
+verify_args=()
+[[ "$allow_empty" -eq 1 ]] && verify_args+=(--allow-empty)
+[[ "$amend" -eq 1 ]] && verify_args+=(--amend)
+if ((${#verify_args[@]} > 0)); then
+  bash "$SCRIPT_DIR/verify-staged-for-commit.sh" "${verify_args[@]}"
+else
+  bash "$SCRIPT_DIR/verify-staged-for-commit.sh"
 fi
 
 tree="$(git write-tree)"
@@ -100,6 +119,15 @@ else
   else
     parent=""
   fi
+fi
+
+if [[ "$dry_run" -eq 1 ]]; then
+  echo "commit-clean: dry-run — would create commit on tree ${tree}" >&2
+  if [[ -n "$parent" ]]; then
+    echo "commit-clean: dry-run — parent ${parent}" >&2
+  fi
+  printf '%s\n' "$message"
+  exit 0
 fi
 
 if [[ -n "$parent" ]]; then

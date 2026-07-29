@@ -43,9 +43,15 @@ bash scripts/git/check_identity.sh
 
 ### When `git commit` still adds trailers
 
+Mandatory sequence (never skip or reorder):
+
 ```bash
+git add <paths>
+bash scripts/git/verify-staged-for-commit.sh
 bash scripts/git/commit-clean.sh -m "type(scope): short summary"
 ```
+
+Confirm before push: `git show --stat --oneline HEAD`
 
 ### Repos covered
 
