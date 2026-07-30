@@ -42,7 +42,7 @@ This ladder defines four phases. **Phases A–C are safe to land before v2.** **
 
 ### Security-first requirements
 
-1. **No new secrets in git** — `.local/`, `.env.local`, and `mesh-secrets.json` stay gitignored ([`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md)).
+1. **No new secrets in git** — `.local/`, repo-local `.env.local`, and `mesh-secrets.json` stay gitignored ([`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md)). Workspace-level files outside any repo are **not** covered by `.gitignore` — use explicit filesystem and credential-store access controls. Treat all fleet-local secret files as sensitive; agents must not echo values in PRs or logs. `ensure_local_mesh_secrets.py` writes without printing secrets.
 2. **Backup from trusted ref** — archive reads committed topology from `origin/main` (or explicit `--ref`), not from unreviewed working trees.
 3. **Idempotent apply** — re-running archive/ensure scripts must not rotate secrets unless `--force`.
 4. **Cross-repo parity** — `PERPETUA_TOOLS_PATH` hosts get the same `.env.local` merge when set.
@@ -90,7 +90,12 @@ Repeat on Windows RTX nodes via the same Python entrypoints (PowerShell `python`
 
 ### Operator steps (after merge, every node)
 
+Clean-tree sync — see [`safe-cross-host-sync-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/safe-cross-host-sync-reference-card.md) § Quick sync.
+
 ```bash
+git fetch origin --prune
+test -z "$(git status --porcelain --untracked-files=all)" || { echo "error: dirty worktree"; exit 1; }
+git switch main
 git pull --ff-only origin main
 ./install.sh --ensure-local-cache    # merges archive → .env.local if missing keys
 
@@ -127,7 +132,8 @@ git pull --ff-only origin main
 ### Operator steps (every fleet node, after #224 + PT #287)
 
 ```bash
-# 1. Same secret on ALL peers (OOB: 1Password, encrypted chat, USB — never git/email/Slack)
+# 1. Same secret on ALL peers (dedicated air-gapped transfer — e.g. TailsOS-hardened USB
+#    or operator-approved secure channel; never git/email/Slack/agent comms)
 #    Copy GOSSIP_SHARED_SECRET from primary Mac to Win nodes' .env.local
 
 # 2. Restart mesh

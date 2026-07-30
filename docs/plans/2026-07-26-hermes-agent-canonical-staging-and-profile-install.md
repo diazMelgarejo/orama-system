@@ -11,9 +11,9 @@
 
 | Document | Role |
 |----------|------|
-| [`OpenClaw/references/Hermes-Harness-Guide-for-Orama+Perpetua.md`](../../../OpenClaw/references/Hermes-Harness-Guide-for-Orama+Perpetua.md) | Three-layer brain/harness/memory model; `hermes claw migrate` sequence |
-| [`OpenClaw/references/2026-07-26_111557-hermes-openclaw-migration-cross-repo-plan.md`](../../../OpenClaw/references/2026-07-26_111557-hermes-openclaw-migration-cross-repo-plan.md) | Cross-repo phases 0–5, PT memory ledger, harness reference cards |
-| [`OpenClaw/references/raft-Hermes-Plan-09c.md`](../../../OpenClaw/references/raft-Hermes-Plan-09c.md) | Stow/skills/delegate_task ideas — **adopt patterns, not paths** |
+| `$OPENCLAW_ROOT/references/Hermes-Harness-Guide-for-Orama+Perpetua.md` | Three-layer brain/harness/memory model; `hermes claw migrate` sequence |
+| `$OPENCLAW_ROOT/references/2026-07-26_111557-hermes-openclaw-migration-cross-repo-plan.md` | Cross-repo phases 0–5, PT memory ledger, harness reference cards |
+| `$OPENCLAW_ROOT/references/raft-Hermes-Plan-09c.md` | Stow/skills/delegate_task ideas — **adopt patterns, not paths** |
 | [`docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md`](2026-06-24-hermes-harness-canonical-onboarding.md) | Existing absorption + thin-wrapper doctrine (extends, does not replace) |
 
 **Complexity:** **Large** (multi-surface install wiring + profile manifest + doc absorption; core Python installer is **Medium**)
@@ -125,7 +125,7 @@ OpenClaw fleet content migrates via Hermes’s supported `hermes claw migrate` f
 | `platform/windows/install.ps1` | **UPDATE** | After ECC/Hermes probe: `install_hermes_profiles.py --install --verify` |
 | `platform/macos/start.sh` (or mac install hook) | **UPDATE** | Same profile install hook when Hermes present |
 | `docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md` | **UPDATE** | Link this plan; mark profile-staging milestone |
-| `OpenClaw/references/*` (optional) | **UPDATE** | Pointers to orama canonical plan (no duplicate bodies) |
+| `$OPENCLAW_ROOT/references/*` (optional) | **UPDATE** | Pointers to orama canonical plan (no duplicate bodies) |
 
 **PT (Phase 6 only):** record lessons via `learn.py` — no new persona files in `.agent/`.
 
