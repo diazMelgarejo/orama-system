@@ -100,8 +100,11 @@ for rel in \
   sync-banned-patterns-to-repo.sh \
   banned_attribution_lib.sh \
   audit_attribution.sh \
+  audit_engine.py \
+  identity-policy.json \
   check_commit_message.sh \
   check_identity.sh \
+  check_no_pending_merge.sh \
   daily-attribution-guard.sh \
   neutralize-cursor-coauthor-hook.sh \
   expunge-all-workspace-repos.sh \

@@ -44,7 +44,9 @@ sub_skills:
   - path: skills/shell-hygiene/SKILL.md
     trigger: "sleep && cmd, sleep chain, wait for background task, poll output file, wait for npm install, wait for claude update, run_in_background polling, until loop, how to wait for a process"
   - path: skills/git-history-surgery/SKILL.md
-    trigger: "expunge git history, remove secret from history, rewrite author, scrub commits, branches 600 behind, orphaned branch after rewrite, re-anchor branch to main, reconcile branches after force-push, recover deleted branch, byte-identical common ancestor, branches all became the same, git history rewrite recovery, branches lost common ancestor"
+    trigger: "expunge git history, remove secret from history, rewrite author, scrub commits, branches 600 behind, orphaned branch after rewrite, re-anchor branch to main, reconcile branches after force-push, recover deleted branch, byte-identical common ancestor, branches all became the same, git history rewrite recovery, branches lost common ancestor, MERGE_HEAD, pre-push blocked, empty PR after merge, no-commit merge"
+  - path: skills/git-pending-push-guard/SKILL.md
+    trigger: "MERGE_HEAD, CHERRY_PICK_HEAD, REVERT_HEAD, pre-push blocked, empty PR after merge, no-commit merge, pending git operation, GIT_PUSH_E_PENDING"
   - path: gstack/SKILL.md
     trigger: "fix gbrain, resync gbrain, gbrain sync failed, prepared statement does not exist, CONNECTION_CLOSED supabase pooler, No database URL, GBRAIN_DATABASE_URL, gbrain doctor failures, createVersion failed, autopilot wedged, gbrain after history rewrite, gbrain list empty, gbrain prepare false, gbrain source pin"
 ---

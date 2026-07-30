@@ -8,6 +8,10 @@ cd "$ROOT"
 # Guard: scrub macOS .DS_Store from .git/ internals (see scrub_dsstore.sh).
 bash "$ROOT/scripts/git/scrub_dsstore.sh" || true
 
+# Guard: never push while a --no-commit merge/cherry-pick/revert is still
+# uncommitted (see check_no_pending_merge.sh for the incident this prevents).
+"$ROOT/scripts/git/check_no_pending_merge.sh" "$ROOT" || exit $?
+
 "$ROOT/scripts/git/ensure_hooks_installed.sh"
 
 if [[ -x scripts/cursor/sync-private-attribution-from-home.sh ]]; then

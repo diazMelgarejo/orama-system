@@ -15,15 +15,15 @@
 | Lane | Action |
 |------|--------|
 | `mac-orchestrator` | **Mac first** — backup + adopt gossip secret + harmonize orama+PT |
-| `win-cursor` | After Mac: paste same secret into 3080/5080 `.env.local` files, restart mesh |
-| `win-coder` / `win-autoresearcher` | Informational — verify gossip after operator paste |
+| `win-cursor` | After Mac: set `GOSSIP_SHARED_SECRET` on 3080/5080 via repo-local gitignored env files, restart mesh |
+| `win-coder` / `win-autoresearcher` | Informational — verify gossip after operator applies the secret |
 | `hermes` | Win: `hermes backup` before #222; no gossip secret in chat/logs |
 
 ---
 
 ## Best first step: Mac orchestrator (do this now)
 
-**Why Mac first:** Mac is the coordination hub; `ensure_local_mesh_secrets.py` harmonizes **orama + Perpetua-Tools** sibling `.env.local` files when `PERPETUA_TOOLS_PATH` is set. Win boxes only receive the **same** value via dedicated air-gapped transfer after Mac is canonical.
+**Why Mac first:** Mac is the coordination hub; `ensure_local_mesh_secrets.py` harmonizes **orama + Perpetua-Tools** sibling repo-local env files when `PERPETUA_TOOLS_PATH` is set. Win boxes only receive the **same** `GOSSIP_SHARED_SECRET` value via dedicated air-gapped transfer after Mac is canonical.
 
 ### 1. Sync `main` (both repos on Mac)
 
@@ -61,25 +61,47 @@ python3 scripts/mesh/ensure_local_mesh_secrets.py
 ```
 
 This fills **missing/empty** `GOSSIP_SHARED_SECRET` in:
-- orama-system `.env.local`
-- Perpetua-Tools `.env.local` (when sibling path set)
+- orama-system repo-local gitignored env file
+- Perpetua-Tools repo-local gitignored env file (when sibling path set)
 - `.local/mesh-secrets.json` on both repos
 
-**Do not** run `--force` unless rotating. **Do not** log or paste the value in GossipBus, PRs, or tracked markdown. `.env.local` is a gitignored fleet-local secret store — treat as sensitive; no paste into tracked docs.
+**Do not** run `--force` unless rotating. **Do not** log the value in GossipBus, PRs, or tracked markdown. Repo-local env files are gitignored fleet-local secret stores — treat as sensitive.
 
 ### 4. Copy secret to Win nodes (operator OOB)
 
-Use dedicated air-gapped transfer (e.g. TailsOS-hardened USB or operator-approved secure channel) — **never** git, email, Slack, or agent comms.
+Transfer the Mac `GOSSIP_SHARED_SECRET` via **air-gapped medium only** (e.g. TailsOS-hardened USB).
+
+**Never** use git, email, Slack, or agent comms for secret transport.
 
 On each Win box (3080, then 5080):
 
+1. **Write the Mac value first** — open the repo-local gitignored env file under `$env:ORAMA_SYSTEM_PATH` in a text editor and set `GOSSIP_SHARED_SECRET` to the transferred value. Prefer offline editor paste; do not type the secret on the command line (shell history).
+2. **Archive/quarantine stale JSON mirrors** — move any existing orama + Perpetua-Tools `.local/mesh-secrets.json` files to `.local/archive/` (timestamped `.bak`) **before** running the helper. The script reads JSON before env; stale JSON can overwrite the transferred value.
+3. **Harmonize JSON mirrors** (no `--force`):
+
 ```powershell
-# Edit .env.local — set GOSSIP_SHARED_SECRET=<same value as Mac>
 cd $env:ORAMA_SYSTEM_PATH
-python scripts\mesh\ensure_local_mesh_secrets.py   # harmonizes JSON mirror; won't rotate if set
+$ErrorActionPreference = "Stop"
+$ts = Get-Date -Format "yyyyMMddTHHmmssZ"
+$archive = Join-Path $env:ORAMA_SYSTEM_PATH ".local\archive"
+New-Item -ItemType Directory -Force -Path $archive | Out-Null
+$archiveIndex = 0
+foreach ($store in @(
+  (Join-Path $env:ORAMA_SYSTEM_PATH ".local\mesh-secrets.json"),
+  $(if ($env:PERPETUA_TOOLS_PATH) { Join-Path $env:PERPETUA_TOOLS_PATH ".local\mesh-secrets.json" })
+)) {
+  if ($store -and (Test-Path $store)) {
+    $archiveIndex++
+    $dest = Join-Path $archive "mesh-secrets.json.$ts.$archiveIndex.bak"
+    Move-Item -Path $store -Destination $dest -ErrorAction Stop
+  }
+}
+python scripts\mesh\ensure_local_mesh_secrets.py
 ```
 
-If PT on Win: same in Perpetua-Tools `.env.local` or set `PERPETUA_TOOLS_PATH` and re-run from orama.
+4. **Parity gate** — `python scripts\mesh\verify_gossip_secret_parity.py --require-stores` (fail closed if env and JSON stores disagree or mirrors are missing). See pre-pr222 backup runbook Step 5d.
+
+If PT on Win: repeat steps 1–4 for the Perpetua-Tools repo-local gitignored env file, or set `PERPETUA_TOOLS_PATH` and re-run from orama.
 
 ### 5. Restart mesh (all nodes)
 
@@ -112,8 +134,8 @@ Win: portal up; `install-hermes-harness.ps1 -RunDoctor` after mesh restart.
 
 1. **Phase A acceptance** on all 3 — archive file exists, `repo_hygiene.py` passes  
 2. **Mesh verify** — discover.py / portal reaches 3080 + 5080 LMS  
-3. **Hermes backup** on Win — `hermes backup` before #222  
-4. **Merge orama #222** only when steps 1–3 green on **every** node  
+3. **Merge gate** — Steps 2–6 green on **every** node; Step 7 (`hermes backup`) green on **each** Windows GPU node (separate blocking gate when fleet includes Windows peers)  
+4. **Merge orama #222** only when both gates pass  
 
 ---
 
