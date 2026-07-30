@@ -1,10 +1,19 @@
 # post-merge-review-sweep.yml
 # After any PR merges to main, fetch all unresolved CodeRabbit/Cursor review
 # threads and post a summary comment on the PR. No more manual API polling.
+#
+# Uses pull_request_target (not pull_request): this workflow never checks
+# out or executes PR code -- it only calls the GitHub API via GH_TOKEN/
+# github-script -- so there's no code-execution risk from switching event
+# types. pull_request runs with a read-only GITHUB_TOKEN for PRs from
+# certain branches/apps regardless of the `permissions:` block below,
+# which is exactly what caused "Resource not accessible by integration"
+# on the "Comment summary on PR" step (2026-07-30). pull_request_target
+# always runs with the base repo's token permissions.
 name: Post-merge review sweep
 
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
     branches: [main]
 
