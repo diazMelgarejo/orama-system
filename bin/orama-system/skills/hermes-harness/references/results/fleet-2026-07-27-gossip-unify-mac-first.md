@@ -76,14 +76,28 @@ Transfer the Mac `GOSSIP_SHARED_SECRET` via **air-gapped medium only** (e.g. Tai
 On each Win box (3080, then 5080):
 
 1. **Write the Mac value first** — open the repo-local gitignored env file under `$env:ORAMA_SYSTEM_PATH` in a text editor and set `GOSSIP_SHARED_SECRET` to the transferred value. Prefer offline editor paste; do not type the secret on the command line (shell history).
-2. **Then harmonize JSON mirrors** (will not rotate an existing value):
+2. **Archive/quarantine stale JSON mirrors** — move any existing orama + Perpetua-Tools `.local/mesh-secrets.json` files to `.local/archive/` (timestamped `.bak`) **before** running the helper. The script reads JSON before env; stale JSON can overwrite the transferred value.
+3. **Harmonize JSON mirrors** (no `--force`):
 
 ```powershell
 cd $env:ORAMA_SYSTEM_PATH
+$ts = Get-Date -Format "yyyyMMddTHHmmssZ"
+$archive = Join-Path $env:ORAMA_SYSTEM_PATH ".local\archive"
+New-Item -ItemType Directory -Force -Path $archive | Out-Null
+foreach ($store in @(
+  (Join-Path $env:ORAMA_SYSTEM_PATH ".local\mesh-secrets.json"),
+  $(if ($env:PERPETUA_TOOLS_PATH) { Join-Path $env:PERPETUA_TOOLS_PATH ".local\mesh-secrets.json" })
+)) {
+  if ($store -and (Test-Path $store)) {
+    Move-Item $store (Join-Path $archive "mesh-secrets.json.$ts.bak")
+  }
+}
 python scripts\mesh\ensure_local_mesh_secrets.py
 ```
 
-If PT on Win: repeat step 1 for the Perpetua-Tools repo-local gitignored env file, or set `PERPETUA_TOOLS_PATH` and re-run the helper from orama.
+4. **Parity gate** — `python scripts\mesh\verify_gossip_secret_parity.py` (fail closed if env and JSON stores disagree). See pre-pr222 backup runbook Step 5d.
+
+If PT on Win: repeat steps 1–4 for the Perpetua-Tools repo-local gitignored env file, or set `PERPETUA_TOOLS_PATH` and re-run from orama.
 
 ### 5. Restart mesh (all nodes)
 
@@ -116,8 +130,8 @@ Win: portal up; `install-hermes-harness.ps1 -RunDoctor` after mesh restart.
 
 1. **Phase A acceptance** on all 3 — archive file exists, `repo_hygiene.py` passes  
 2. **Mesh verify** — discover.py / portal reaches 3080 + 5080 LMS  
-3. **Hermes backup** on Win — `hermes backup` before #222  
-4. **Merge orama #222** only when steps 1–3 green on **every** node  
+3. **Merge gate** — Steps 2–6 green on **every** node; Step 7 (`hermes backup`) green on **each** Windows GPU node (separate blocking gate when fleet includes Windows peers)  
+4. **Merge orama #222** only when both gates pass  
 
 ---
 
