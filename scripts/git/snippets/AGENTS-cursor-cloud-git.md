@@ -42,6 +42,7 @@ git show --stat --oneline HEAD
 
 ```bash
 # 1. Backup current body
+mkdir -p .git/pr-body-backups
 gh pr view <N> --repo <owner/repo> --json body --jq .body > .git/pr-body-backups/<repo>-pr<N>-$(date -u +%Y%m%dT%H%M%SZ).md
 
 # 2. Append follow-up (inserts before CURSOR_AGENT_PR_BODY_END or CodeRabbit section)
