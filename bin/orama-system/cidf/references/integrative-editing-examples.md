@@ -21,6 +21,8 @@
 
 **Recovery (PR #222, 2026-07-27):** read `gh pr view` → search session cache → reconstruct from `docs/v2/50-mesh-security-migration-ladder.md` + review gate → write append-only.
 
+**Post-merge follow-up (Phase 0):** when canonical advances after a downstream PR merges, land focused guard/doc sync on a **dated branch** (`yyyy-mm-dd-NNN-brief-summary`) and open a normal PR — never default to a direct push to `main`. See [`docs/wiki/08-git-hygiene-and-branching.md`](../../../docs/wiki/08-git-hygiene-and-branching.md) § Branch Naming.
+
 ---
 
 ## 2. Unpinned `npx` / `@latest` (supply-chain)

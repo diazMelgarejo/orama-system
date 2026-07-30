@@ -131,7 +131,7 @@ Fail any → `BLOCKED` or `NEEDS_HUMAN`. No Rourke execution without Vera pass.
 
 ## Multi-agent network (Mode 3 today → v2 module tomorrow)
 
-**Today (v1):** Seven-stage registry in [`bin/orama-system/config/agent_registry.json`](bin/orama-system/config/agent_registry.json); Perpetua governance ring (Atlas, Warden, Lumen, Beacon, Scout); external specialists via Relay only after Warden `ALLOW`. Operational blueprint: `OpenClaw/references/raft-Output-grounded-06.md`.
+**Today (v1):** Seven-stage registry in [`bin/orama-system/config/agent_registry.json`](bin/orama-system/config/agent_registry.json); Perpetua governance ring (Atlas, Warden, Lumen, Beacon, Scout); external specialists via Relay only after Warden `ALLOW`. Operational blueprint: `$OPENCLAW_ROOT/references/raft-Output-grounded-06.md`.
 
 **Tomorrow (v2):** Full swarm parallelism ships as **non-kernel module** ([`docs/v2/02-modules/multi-agent-network.md`](docs/v2/02-modules/multi-agent-network.md)), not kernel creep.
 
