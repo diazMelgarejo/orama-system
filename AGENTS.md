@@ -71,7 +71,7 @@ See `docs/wiki/12-cursor-cloud-commit-attribution.md`.
 - **Peer contract:** orama-system owns `.agent/endpoint-policy-contract.yml`, `scripts/security/check_endpoint_policy_contract.py`, and `.github/workflows/endpoint-policy-contract.yml` on `main`.
 - **Transport identity:** endpoint identity is `scheme + hostname + backend-specific port`; preserve discovered `http`/`https` scheme first, normalize host second, then route by backend-specific port.
 - **Do not fork implementation:** if orama needs Python endpoint reconstruction logic, sync the contract with Perpetua first instead of inventing a second parser.
-- **Existing skills to load:** use `bin/orama-system/skills/oramasys-method/SKILL.md` for architecture-heavy changes, `bin/orama-system/skills/oramasys-method/references/integrative-merge.md` for cross-branch/repo synthesis, and `bin/orama-system/skills/git-history-surgery/SKILL.md` before judging rewritten branch state.
+- **Existing skills to load:** use `bin/orama-system/skills/oramasys-method/SKILL.md` for architecture-heavy changes, `bin/orama-system/skills/oramasys-method/references/integrative-merge.md` for cross-branch/repo synthesis, and `bin/orama-system/skills/git-history-surgery/SKILL.md` before judging rewritten branch state. Before push after merge/cherry-pick/revert work, load `bin/orama-system/skills/git-pending-push-guard/SKILL.md` (KB exits 1–4; reference card under `git-history-surgery/references/pending-operation-push-guard-reference-card.md`).
 - **Security policy:** read `docs/SECURITY-POLICY.md` (redirects to `SECURITY.md`) before endpoint-security remediation PRs.
 - **Validation:** run `python scripts/security/check_endpoint_policy_contract.py` before merging endpoint-policy or routing-guidance changes.
 

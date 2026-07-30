@@ -41,7 +41,12 @@ def _usable_secret(value: object) -> str | None:
 def _json_secret(path: Path) -> str | None:
     if not path.is_file():
         return None
-    data = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(data, dict):
+        return None
     return _usable_secret(data.get("GOSSIP_SHARED_SECRET"))
 
 
