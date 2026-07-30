@@ -141,6 +141,21 @@ gh pr create \
   # Add --draft if the --draft flag was parsed from $ARGUMENTS
 ```
 
+### Update an existing PR body (append-only — NEVER clobber)
+
+`ManagePullRequest` `update_pr` and `gh pr edit` **replace the entire body field**. Passing only the latest follow-up deletes the original Summary.
+
+**Mandatory workflow:**
+
+1. **READ** — `gh pr view <N> --json body --jq .body`
+2. **BACKUP** — save to `.git/pr-body-backups/<repo>-pr<N>-<timestamp>.md`
+3. **MERGE** — keep original `## Summary` and scope at top; add new `## Follow-up: …` sections below (chronological); preserve everything from CodeRabbit auto-generated comments downward unchanged
+4. **WRITE** — `gh pr edit <N> --body-file merged-body.md` or `bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "…" --file follow-up.md`
+
+**Never** call `update_pr` with `body=` containing only the delta. The write itself must be integrative.
+
+See `bin/orama-system/cidf/references/integrative-editing-examples.md` §1 and Perpetua-Tools `lesson_3b13ab0a45d4`.
+
 ---
 
 ## Phase 5 — VERIFY
