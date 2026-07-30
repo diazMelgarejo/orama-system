@@ -19,6 +19,9 @@
 ### ~~A. PyPI Trusted Publisher~~ (blocked — name conflict, disabled)
 The `periscope` name on PyPI is taken. Options: (a) leave disabled — binaries ship via GitHub Releases, (b) rename package (e.g., `periscope-viewer`) and re-enable. No action needed now.
 
+Full standard PyPI build/publish methodology (for whenever this is revisited) + this
+same historical record: [`docs/reference/periscope-pypi-packaging.md`](reference/periscope-pypi-packaging.md).
+
 ### B. Tauri Updater Signing (enables auto-update in desktop app)
 Add 3 secrets in GitHub → Settings → Secrets and variables → Actions:
 
