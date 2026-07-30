@@ -87,7 +87,7 @@ Cloud agents and `ManagePullRequest update_pr` **replace the entire PR body** wh
 **Mandatory workflow:**
 
 1. `gh pr view <N> --json body` — read current body
-2. Save backup under `.git/pr-body-backups/`
+2. `mkdir -p .git/pr-body-backups` — then save backup under `.git/pr-body-backups/`
 3. Keep original `## Summary` at top; append `## Follow-up:` blocks chronologically
 4. Preserve CodeRabbit auto-generated sections and Cursor metadata below unchanged
 5. Write full merged body: `bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "…" --file …`
