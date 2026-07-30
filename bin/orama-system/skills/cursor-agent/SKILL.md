@@ -273,6 +273,14 @@ cursor-agent about       # show version + system info
 | `cursor-agent ls` | Resume a chat session |
 | `cursor-agent resume` | Resume latest chat session |
 
+## PR body updates (Cloud agents)
+
+When a Cloud agent updates an **existing** PR after harmonization, review fixes, or CI notes, it must use the **append-only** workflow — never replace the body with delta-only text.
+
+Load: [`bin/orama-system/skills/cursor-pr-body/SKILL.md`](../../bin/orama-system/skills/cursor-pr-body/SKILL.md)  
+Rule: `.cursor/rules/append-only-pr-body.mdc`  
+Script: `scripts/cursor/append-pr-body.sh`
+
 ## References
 
 - Platform affinity (when to use cursor-agent vs Hermes vs OpenClaw): [`../hermes-harness/references/platform-affinity-routing.md`](../hermes-harness/references/platform-affinity-routing.md)
