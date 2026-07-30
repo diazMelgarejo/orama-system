@@ -66,7 +66,7 @@ python scripts\mesh\ensure_local_mesh_secrets.py
 Parity check (value not printed):
 
 ```powershell
-python scripts\mesh\verify_gossip_secret_parity.py || { echo "FAIL: env/JSON parity"; exit 1 }
+python scripts\mesh\verify_gossip_secret_parity.py --require-stores || { echo "FAIL: env/JSON parity"; exit 1 }
 ```
 
 ## Merge gate (#222)
