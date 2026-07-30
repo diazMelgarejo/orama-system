@@ -15,7 +15,7 @@
 | Lane | Action |
 |------|--------|
 | `mac-orchestrator` | **Mac first** — backup + adopt gossip secret + harmonize orama+PT |
-| `win-cursor` | After Mac: paste same secret into 3080/5080 `.env.local`, restart mesh |
+| `win-cursor` | After Mac: paste same secret into 3080/5080 repo-local env policy files, restart mesh |
 | `win-coder` / `win-autoresearcher` | Informational — verify gossip after operator paste |
 | `hermes` | Win: `hermes backup` before #222; no gossip secret in chat/logs |
 
@@ -23,7 +23,7 @@
 
 ## Best first step: Mac orchestrator (do this now)
 
-**Why Mac first:** Mac is the coordination hub; `ensure_local_mesh_secrets.py` harmonizes **orama + Perpetua-Tools** sibling `.env.local` when `PERPETUA_TOOLS_PATH` is set. Win boxes only receive the **same** value OOB after Mac is canonical.
+**Why Mac first:** Mac is the coordination hub; `ensure_local_mesh_secrets.py` harmonizes **orama + Perpetua-Tools** sibling repo-local env policy files when `PERPETUA_TOOLS_PATH` is set. Win boxes only receive the **same** value OOB after Mac is canonical.
 
 ### 1. Sync `main` (both repos on Mac)
 
@@ -49,8 +49,8 @@ python3 scripts/mesh/ensure_local_mesh_secrets.py
 ```
 
 This fills **missing/empty** `GOSSIP_SHARED_SECRET` in:
-- `orama-system/.env.local`
-- `Perpetua-Tools/.env.local` (when sibling path set)
+- orama-system repo-local env policy file
+- Perpetua-Tools repo-local env policy file (when sibling path set)
 - `.local/mesh-secrets.json` on both repos
 
 **Do not** run `--force` unless rotating. **Do not** log or paste the value in GossipBus.
@@ -62,12 +62,12 @@ Use 1Password / encrypted channel / USB — **never** git, email, Slack, or agen
 On each Win box (3080, then 5080):
 
 ```powershell
-# Edit .env.local — set GOSSIP_SHARED_SECRET=<same value as Mac>
+# Edit repo-local env policy file — set GOSSIP_SHARED_SECRET=<same value as Mac>
 cd $env:ORAMA_SYSTEM_PATH
 python scripts\mesh\ensure_local_mesh_secrets.py   # harmonizes JSON mirror; won't rotate if set
 ```
 
-If PT on Win: same in `Perpetua-Tools\.env.local` or set `PERPETUA_TOOLS_PATH` and re-run from orama.
+If PT on Win: same in Perpetua-Tools repo-local env policy file or set `PERPETUA_TOOLS_PATH` and re-run from orama.
 
 ### 5. Restart mesh (all nodes)
 
