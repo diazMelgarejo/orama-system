@@ -35,7 +35,7 @@ git pull --ff-only origin main
    Windows: `.\.venv\Scripts\python.exe scripts\mesh\lan_topology_archive.py --backup --ref origin/main`
 3. `python3 scripts/mesh/ensure_local_mesh_secrets.py`  
    Windows: `.\.venv\Scripts\python.exe scripts\mesh\ensure_local_mesh_secrets.py`
-4. **One shared** `GOSSIP_SHARED_SECRET` on Mac + both Windows GPU nodes — distribute via dedicated air-gapped transfer (e.g. TailsOS-hardened USB or operator-approved secure channel); never git, email, Slack, or agent comms. Repo-local `.env.local` is gitignored; `ensure_local_mesh_secrets.py` writes without printing the value — agents must not echo secrets in PRs or logs
+4. **One shared** `GOSSIP_SHARED_SECRET` on Mac + both Windows GPU nodes — distribute via dedicated air-gapped transfer (e.g. TailsOS-hardened USB or operator-approved secure channel). **Never** use git, email, Slack, or agent comms for secret transport. `ensure_local_mesh_secrets.py` writes repo-local gitignored env files without printing the value — agents must not echo secrets in PRs or logs
 5. Verify mesh (discover, gossip, LMS probes) **before** merging #222
 6. Win: `hermes backup` → optional `install-hermes-harness.ps1 -RunDoctor`
 

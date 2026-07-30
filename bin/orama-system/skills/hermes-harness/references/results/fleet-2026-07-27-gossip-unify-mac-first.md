@@ -15,15 +15,15 @@
 | Lane | Action |
 |------|--------|
 | `mac-orchestrator` | **Mac first** — backup + adopt gossip secret + harmonize orama+PT |
-| `win-cursor` | After Mac: paste same secret into 3080/5080 `.env.local` files, restart mesh |
-| `win-coder` / `win-autoresearcher` | Informational — verify gossip after operator paste |
+| `win-cursor` | After Mac: set `GOSSIP_SHARED_SECRET` on 3080/5080 via repo-local gitignored env files, restart mesh |
+| `win-coder` / `win-autoresearcher` | Informational — verify gossip after operator applies the secret |
 | `hermes` | Win: `hermes backup` before #222; no gossip secret in chat/logs |
 
 ---
 
 ## Best first step: Mac orchestrator (do this now)
 
-**Why Mac first:** Mac is the coordination hub; `ensure_local_mesh_secrets.py` harmonizes **orama + Perpetua-Tools** sibling `.env.local` files when `PERPETUA_TOOLS_PATH` is set. Win boxes only receive the **same** value via dedicated air-gapped transfer after Mac is canonical.
+**Why Mac first:** Mac is the coordination hub; `ensure_local_mesh_secrets.py` harmonizes **orama + Perpetua-Tools** sibling repo-local env files when `PERPETUA_TOOLS_PATH` is set. Win boxes only receive the **same** `GOSSIP_SHARED_SECRET` value via dedicated air-gapped transfer after Mac is canonical.
 
 ### 1. Sync `main` (both repos on Mac)
 
@@ -61,25 +61,27 @@ python3 scripts/mesh/ensure_local_mesh_secrets.py
 ```
 
 This fills **missing/empty** `GOSSIP_SHARED_SECRET` in:
-- orama-system `.env.local`
-- Perpetua-Tools `.env.local` (when sibling path set)
+- orama-system repo-local gitignored env file
+- Perpetua-Tools repo-local gitignored env file (when sibling path set)
 - `.local/mesh-secrets.json` on both repos
 
-**Do not** run `--force` unless rotating. **Do not** log or paste the value in GossipBus, PRs, or tracked markdown. `.env.local` is a gitignored fleet-local secret store — treat as sensitive; no paste into tracked docs.
+**Do not** run `--force` unless rotating. **Do not** log the value in GossipBus, PRs, or tracked markdown. Repo-local env files are gitignored fleet-local secret stores — treat as sensitive.
 
 ### 4. Copy secret to Win nodes (operator OOB)
 
-Use dedicated air-gapped transfer (e.g. TailsOS-hardened USB or operator-approved secure channel) — **never** git, email, Slack, or agent comms.
+Use dedicated air-gapped transfer (e.g. TailsOS-hardened USB or operator-approved secure channel).
+
+**Never** use git, email, Slack, or agent comms for secret transport.
 
 On each Win box (3080, then 5080):
 
 ```powershell
-# Edit .env.local — set GOSSIP_SHARED_SECRET=<same value as Mac>
+# Set GOSSIP_SHARED_SECRET in repo-local gitignored env file (same value as Mac)
 cd $env:ORAMA_SYSTEM_PATH
 python scripts\mesh\ensure_local_mesh_secrets.py   # harmonizes JSON mirror; won't rotate if set
 ```
 
-If PT on Win: same in Perpetua-Tools `.env.local` or set `PERPETUA_TOOLS_PATH` and re-run from orama.
+If PT on Win: set the same env var in Perpetua-Tools repo-local env file, or set `PERPETUA_TOOLS_PATH` and re-run from orama.
 
 ### 5. Restart mesh (all nodes)
 
