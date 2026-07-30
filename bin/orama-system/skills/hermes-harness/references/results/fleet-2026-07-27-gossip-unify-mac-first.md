@@ -69,19 +69,21 @@ This fills **missing/empty** `GOSSIP_SHARED_SECRET` in:
 
 ### 4. Copy secret to Win nodes (operator OOB)
 
-Use dedicated air-gapped transfer (e.g. TailsOS-hardened USB or operator-approved secure channel).
+Transfer the Mac `GOSSIP_SHARED_SECRET` via **air-gapped medium only** (e.g. TailsOS-hardened USB).
 
 **Never** use git, email, Slack, or agent comms for secret transport.
 
 On each Win box (3080, then 5080):
 
+1. **Write the Mac value first** — open the repo-local gitignored env file under `$env:ORAMA_SYSTEM_PATH` in a text editor and set `GOSSIP_SHARED_SECRET` to the transferred value. Prefer offline editor paste; do not type the secret on the command line (shell history).
+2. **Then harmonize JSON mirrors** (will not rotate an existing value):
+
 ```powershell
-# Set GOSSIP_SHARED_SECRET in repo-local gitignored env file (same value as Mac)
 cd $env:ORAMA_SYSTEM_PATH
-python scripts\mesh\ensure_local_mesh_secrets.py   # harmonizes JSON mirror; won't rotate if set
+python scripts\mesh\ensure_local_mesh_secrets.py
 ```
 
-If PT on Win: set the same env var in Perpetua-Tools repo-local env file, or set `PERPETUA_TOOLS_PATH` and re-run from orama.
+If PT on Win: repeat step 1 for the Perpetua-Tools repo-local gitignored env file, or set `PERPETUA_TOOLS_PATH` and re-run the helper from orama.
 
 ### 5. Restart mesh (all nodes)
 
