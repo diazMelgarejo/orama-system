@@ -33,11 +33,13 @@ git pull --ff-only origin main
 1. Run the sync block above (orama-system, then Perpetua-Tools on Mac)
 2. `python3 scripts/mesh/lan_topology_archive.py --backup --ref origin/main`  
    Windows: `.\.venv\Scripts\python.exe scripts\mesh\lan_topology_archive.py --backup --ref origin/main`
-3. `python3 scripts/mesh/ensure_local_mesh_secrets.py`  
-   Windows: `.\.venv\Scripts\python.exe scripts\mesh\ensure_local_mesh_secrets.py`
-4. **One shared** `GOSSIP_SHARED_SECRET` on Mac + both Windows GPU nodes — distribute via dedicated air-gapped transfer (e.g. TailsOS-hardened USB or operator-approved secure channel). **Never** use git, email, Slack, or agent comms for secret transport. `ensure_local_mesh_secrets.py` writes repo-local gitignored env files without printing the value — agents must not echo secrets in PRs or logs
-5. Verify mesh (discover, gossip, LMS probes) **before** merging #222
-6. Win: `hermes backup` → optional `install-hermes-harness.ps1 -RunDoctor`
+3. `python3 scripts/mesh/ensure_local_mesh_secrets.py` (Mac — establishes canonical `GOSSIP_SHARED_SECRET`)  
+   Windows: run only **after** step 5 writes the Mac value into the repo-local gitignored env file  
+   `.\.venv\Scripts\python.exe scripts\mesh\ensure_local_mesh_secrets.py`
+4. Transfer the Mac `GOSSIP_SHARED_SECRET` to each Windows node via **air-gapped medium only** (e.g. TailsOS-hardened USB). **Never** use git, email, Slack, or agent comms for secret transport.
+5. On each Windows node: write `GOSSIP_SHARED_SECRET` into the repo-local gitignored env file via offline editor (avoid command-line entry — shell history). Then run `ensure_local_mesh_secrets.py` to harmonize JSON mirrors without generating a new secret.
+6. Verify mesh (discover, gossip, LMS probes) **before** merging #222
+7. Win: `hermes backup` → optional `install-hermes-harness.ps1 -RunDoctor`
 
 ## Canonical SSoT
 
@@ -46,5 +48,5 @@ git pull --ff-only origin main
 
 ## Open / deferred
 
-- Merge orama #222 only after Steps 2–5 green on **every** node
+- Merge orama #222 only after Steps 2–6 green on **every** node
 - Phase D strict cutover deferred to v2 launch
