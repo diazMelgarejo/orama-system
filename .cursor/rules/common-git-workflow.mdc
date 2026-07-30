@@ -24,5 +24,7 @@ When creating PRs:
 4. Include test plan with TODOs
 5. Push with `-u` flag if new branch
 
+When **updating** existing PR bodies: follow append-only workflow — see `.cursor/rules/append-only-pr-body.mdc` and `bin/orama-system/skills/cursor-pr-body/SKILL.md`. Never pass delta-only `body=` to `ManagePullRequest` or `gh pr edit`.
+
 > For the full development process (planning, TDD, code review) before git operations,
 > see the development workflow rule.
