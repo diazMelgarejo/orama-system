@@ -92,7 +92,7 @@ Cloud agents and `ManagePullRequest update_pr` **replace the entire PR body** wh
 4. Preserve CodeRabbit auto-generated sections and Cursor metadata below unchanged
 5. Write full merged body: `bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "…" --file …`
 
-See `scripts/cursor/append-pr-body.sh`, `bin/orama-system/cidf/references/integrative-editing-examples.md` §1, Perpetua-Tools `lesson_3b13ab0a45d4`.
+See `scripts/cursor/append-pr-body.sh`, `bin/orama-system/skills/cursor-pr-body/SKILL.md`, `.cursor/rules/append-only-pr-body.mdc`, `bin/orama-system/cidf/references/integrative-editing-examples.md` §1, Perpetua-Tools `lesson_3b13ab0a45d4`.
 
 ---
 
