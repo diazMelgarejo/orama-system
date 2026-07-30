@@ -174,6 +174,65 @@ bash scripts/git/install-local-hooks.sh
 
 This sets `git config --local core.hooksPath .githooks` only in this repository.
 
+### Merge → Push → PR discipline (context-check, confirm, verify)
+
+Three checks, run in this order, every time — not just when something already
+feels risky. Incident that motivated this: a fully conflict-resolved
+`git merge --no-commit --no-ff` was never finalized with `git commit`; the
+branch was pushed and a PR opened describing the merge, but the pushed tip
+was still the pre-merge commit (periscope PR #39, 2026-07-30). No git error
+fired at any step — pushing an uncommitted index is not something git can
+warn about, since there's nothing staged to reject.
+
+1. **Context-check first (which tree, which repo) — CIDF discipline applied to git state, not content.**
+   Before any push, confirm you are in the checkout/worktree you think you
+   are — juggling several worktrees for the same repo in one session is
+   exactly how a command lands in the wrong tree:
+   ```bash
+   pwd; git remote get-url origin; git branch --show-current
+   ```
+
+2. **Confirm before pushing — AFRP applied to the push itself, not just the PR body.**
+   Resolve merge/cherry-pick/revert state and re-verify with git's own
+   authoritative markers before the push, not a text-marker grep (`<<<<<<<`
+   misses add/add, rename/delete, and delete/modify conflicts entirely):
+   ```bash
+   git diff --name-only --diff-filter=U   # must be empty
+   for marker in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
+     if git rev-parse -q --verify "$marker" >/dev/null; then
+       echo "STOP: pending $marker"
+       exit 1
+     fi
+   done
+   ```
+   `.githooks/pre-push` now runs this automatically via
+   [`scripts/git/check_no_pending_merge.sh`](../../scripts/git/check_no_pending_merge.sh)
+   (checks `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `REVERT_HEAD`; KB exit codes 1–4) —
+   but treat it as a backstop, not a substitute for checking yourself first.
+
+   **KB exit codes** (script + hook propagate numeric exit):
+
+   | Exit | Symbol | Meaning |
+   |------|--------|---------|
+   | 0 | `GIT_PUSH_OK` | No pending operation |
+   | 1 | `GIT_PUSH_E_PENDING_MERGE_CLEAN` | `MERGE_HEAD`, ready to `git commit` |
+   | 2 | `GIT_PUSH_E_PENDING_MERGE_CONFLICT` | `MERGE_HEAD` + unmerged paths |
+   | 3 | `GIT_PUSH_E_PENDING_CHERRY_PICK` | `CHERRY_PICK_HEAD` |
+   | 4 | `GIT_PUSH_E_PENDING_REVERT` | `REVERT_HEAD` |
+
+   Full invariant, state diagram, and decision log:
+   [`pending-operation-push-guard-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/pending-operation-push-guard-reference-card.md).
+
+3. **Check commits before opening a PR — verify the diff, don't describe it from memory.**
+   Before writing a PR body, re-derive its claims from the actual diff you're
+   about to push, not from notes on what you resolved:
+   ```bash
+   git diff <base>...<head> --stat | tail -1
+   ```
+   A near-empty diff when you're about to describe hundreds of resolved
+   conflicts is the same signal as step 2's `MERGE_HEAD` — believe the git
+   state over your own summary of what you did.
+
 ---
 
 ## Stash-First Discipline
@@ -349,6 +408,8 @@ bash scripts/git/apply-attribution-guard-all-repos.sh
 ```
 
 See [12. Cursor Cloud — commit attribution guards](12-cursor-cloud-commit-attribution.md).
+
+**PR body updates:** append-only workflow — skill [`cursor-pr-body`](../../bin/orama-system/skills/cursor-pr-body/SKILL.md), rule `.cursor/rules/append-only-pr-body.mdc`, script `scripts/cursor/append-pr-body.sh`. See wiki §12 for the full workflow.
 
 ---
 

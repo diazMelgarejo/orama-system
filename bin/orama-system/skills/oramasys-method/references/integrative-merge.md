@@ -90,7 +90,11 @@ Run this **before** editing conflicted files:
 
 5. Commit     Message states what was blended from each side
 
-6. Push → CI → merge → resolve review threads
+6. Finalize   Before push: `scripts/git/check_no_pending_merge.sh` must exit 0
+              (no `MERGE_HEAD` / `CHERRY_PICK_HEAD` / `REVERT_HEAD`). See
+              [`git-history-surgery/references/pending-operation-push-guard-reference-card.md`](../../git-history-surgery/references/pending-operation-push-guard-reference-card.md).
+
+7. Push → CI → merge → resolve review threads
 ```
 
 Nested PR stacks (e.g. `coderabbitai/*` → `cursor/security-*` → `main`):
