@@ -391,6 +391,8 @@ bash scripts/git/apply-attribution-guard-all-repos.sh
 
 See [12. Cursor Cloud — commit attribution guards](12-cursor-cloud-commit-attribution.md).
 
+**PR body updates:** append-only workflow — skill [`cursor-pr-body`](../../bin/orama-system/skills/cursor-pr-body/SKILL.md), rule `.cursor/rules/append-only-pr-body.mdc`, script `scripts/cursor/append-pr-body.sh`. See wiki §12 for the full workflow.
+
 ---
 
 ## Related
