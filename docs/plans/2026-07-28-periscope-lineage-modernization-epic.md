@@ -55,3 +55,7 @@ authorization.
 
 - [`docs/plans/2026-05-24-periscope-l4-integration-plan.md`](2026-05-24-periscope-l4-integration-plan.md) — 2026-07-28 revalidation § Revised Phase A
 - Perpetua-Tools `.agent/memory/working/PERISCOPE_DUAL_PEDIGREE_REANCHOR_2026-07-28.md`
+- [`docs/reference/periscope-pypi-packaging.md`](../reference/periscope-pypi-packaging.md) —
+  unrelated operational item (PyPI publish, disabled on a name collision, not a history
+  problem), linked here only because it's the other open periscope item a reader may
+  already have in mind
