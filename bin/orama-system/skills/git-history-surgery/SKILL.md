@@ -82,6 +82,12 @@ LM Studio host, run
     **only** for security expunge (keys, identities, paths, doxxing). See AFRP
     failure-modes §8; CIDF integrative-editing-examples §10; path-scoped card PR #17 vs
     #20 worked example (periscope 2026-07-29).
+11. About to `git push` after a `--no-commit` merge/cherry-pick/revert?
+    **Mandatory:** [`references/pending-operation-push-guard-reference-card.md`](references/pending-operation-push-guard-reference-card.md)
+    — check `MERGE_HEAD` / `CHERRY_PICK_HEAD` / `REVERT_HEAD`; run
+    `scripts/git/check_no_pending_merge.sh` (pre-push hook enforces). Incident:
+    periscope PR #39 (2026-07-30) — resolved merge never committed; push shipped
+    pre-merge tip; PR described a diff that wasn't on the branch.
 
 ## Non-Negotiables
 

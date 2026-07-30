@@ -4244,3 +4244,39 @@ commit, per that section's own closing instruction. The § 4.0 full-zero
 `ultrathink` baseline (deliberate trigger-aliases + cosmetic docstrings)
 remains correctly deferred to the v2.0 cutover per the 2026-06-10 decision
 — not a v1.1 requirement.
+
+---
+
+## 2026-07-30 — Pending `*_HEAD` push trap (periscope PR #39)
+
+**Incident:** A fully conflict-resolved `git merge --no-commit --no-ff` was never
+finalized with `git commit`. The branch was pushed; the PR described the merge but
+the remote tip was still the pre-merge commit — near-empty diff, no git error at push.
+
+### Root cause
+
+Git push transmits **commits at `HEAD`**, not index state. `MERGE_HEAD` /
+`CHERRY_PICK_HEAD` / `REVERT_HEAD` are local operation markers invisible to the
+remote. Uncommitted staged merges are a silent push trap.
+
+### Remediation (durable invariant)
+
+1. **Detection:** `scripts/git/check_no_pending_merge.sh` + `.githooks/pre-push`
+2. **KB exits:** 0 OK; 1 merge clean; 2 merge conflict; 3 cherry-pick; 4 revert
+3. **Layer B:** `git diff --diff-filter=U` when `MERGE_HEAD` set — don't advise
+   `git commit` while unmerged paths remain
+4. **Tests:** `tests/test_check_no_pending_merge.py` — resolved no-commit merge,
+   conflict, cherry-pick, revert (executable spec)
+5. **Docs:** `pending-operation-push-guard-reference-card.md` + skill wrappers
+
+### Prevention rules
+
+- Before push: confirm `check_no_pending_merge.sh` exits 0
+- Before PR body: `git diff <base>...<head> --stat` — believe git state over memory
+- Match CLI exit codes to symbolic KB names for automation (same pattern as
+  ControlResult.state ↔ exit table, §2026-06-20)
+
+→ Reference card:
+`bin/orama-system/skills/git-history-surgery/references/pending-operation-push-guard-reference-card.md`
+→ Wiki: `docs/wiki/08-git-hygiene-and-branching.md` § Merge → Push → PR discipline
+

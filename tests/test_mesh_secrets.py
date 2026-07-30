@@ -266,3 +266,29 @@ def test_verify_gossip_secret_parity_fails_on_unusable_json_secret(
     (repo_root / ".env.local").write_text("GOSSIP_SHARED_SECRET=shared\n", encoding="utf-8")
     (repo_root / ".local" / "mesh-secrets.json").write_text(json_body, encoding="utf-8")
     assert parity_mod.main(["--require-stores"]) == 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "json_body,expect_ok",
+    [
+        ("not-json", False),
+        ("[]", False),
+        ('{"GOSSIP_SHARED_SECRET": "shared"}', True),
+    ],
+)
+def test_verify_gossip_secret_parity_malformed_json_store(
+    parity_mod: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    json_body: str,
+    expect_ok: bool,
+) -> None:
+    repo_root = tmp_path / "orama"
+    (repo_root / ".local").mkdir(parents=True)
+    monkeypatch.setattr(parity_mod, "ROOT", repo_root)
+    monkeypatch.setattr(parity_mod, "ENV_FILE", repo_root / ".env.local")
+    monkeypatch.setattr(parity_mod, "SECRETS_JSON", repo_root / ".local" / "mesh-secrets.json")
+    (repo_root / ".env.local").write_text("GOSSIP_SHARED_SECRET=shared\n", encoding="utf-8")
+    (repo_root / ".local" / "mesh-secrets.json").write_text(json_body, encoding="utf-8")
+    assert parity_mod.main([]) == (0 if expect_ok else 1)
