@@ -193,7 +193,7 @@ def test_verify_gossip_secret_parity_passes_when_env_matches_json(
     (repo_root / ".local" / "mesh-secrets.json").write_text(
         '{"GOSSIP_SHARED_SECRET": "shared"}', encoding="utf-8"
     )
-    assert parity_mod.main() == 0
+    assert parity_mod.main([]) == 0
 
 
 def test_verify_gossip_secret_parity_fails_on_json_mismatch(
@@ -208,4 +208,31 @@ def test_verify_gossip_secret_parity_fails_on_json_mismatch(
     (repo_root / ".local" / "mesh-secrets.json").write_text(
         '{"GOSSIP_SHARED_SECRET": "stale-json"}', encoding="utf-8"
     )
-    assert parity_mod.main() == 1
+    assert parity_mod.main([]) == 1
+
+
+def test_verify_gossip_secret_parity_require_stores_fails_when_json_missing(
+    parity_mod: types.ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_root = tmp_path / "orama"
+    repo_root.mkdir(parents=True)
+    monkeypatch.setattr(parity_mod, "ROOT", repo_root)
+    monkeypatch.setattr(parity_mod, "ENV_FILE", repo_root / ".env.local")
+    monkeypatch.setattr(parity_mod, "SECRETS_JSON", repo_root / ".local" / "mesh-secrets.json")
+    (repo_root / ".env.local").write_text("GOSSIP_SHARED_SECRET=shared\n", encoding="utf-8")
+    assert parity_mod.main(["--require-stores"]) == 1
+
+
+def test_verify_gossip_secret_parity_require_stores_passes_when_json_present(
+    parity_mod: types.ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo_root = tmp_path / "orama"
+    (repo_root / ".local").mkdir(parents=True)
+    monkeypatch.setattr(parity_mod, "ROOT", repo_root)
+    monkeypatch.setattr(parity_mod, "ENV_FILE", repo_root / ".env.local")
+    monkeypatch.setattr(parity_mod, "SECRETS_JSON", repo_root / ".local" / "mesh-secrets.json")
+    (repo_root / ".env.local").write_text("GOSSIP_SHARED_SECRET=shared\n", encoding="utf-8")
+    (repo_root / ".local" / "mesh-secrets.json").write_text(
+        '{"GOSSIP_SHARED_SECRET": "shared"}', encoding="utf-8"
+    )
+    assert parity_mod.main(["--require-stores"]) == 0

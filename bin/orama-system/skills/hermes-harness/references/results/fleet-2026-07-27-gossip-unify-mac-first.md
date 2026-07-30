@@ -95,7 +95,7 @@ foreach ($store in @(
 python scripts\mesh\ensure_local_mesh_secrets.py
 ```
 
-4. **Parity gate** — `python scripts\mesh\verify_gossip_secret_parity.py` (fail closed if env and JSON stores disagree). See pre-pr222 backup runbook Step 5d.
+4. **Parity gate** — `python scripts\mesh\verify_gossip_secret_parity.py --require-stores` (fail closed if env and JSON stores disagree or mirrors are missing). See pre-pr222 backup runbook Step 5d.
 
 If PT on Win: repeat steps 1–4 for the Perpetua-Tools repo-local gitignored env file, or set `PERPETUA_TOOLS_PATH` and re-run from orama.
 
