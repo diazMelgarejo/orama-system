@@ -207,8 +207,21 @@ warn about, since there's nothing staged to reject.
    ```
    `.githooks/pre-push` now runs this automatically via
    [`scripts/git/check_no_pending_merge.sh`](../../scripts/git/check_no_pending_merge.sh)
-   (checks `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `REVERT_HEAD`) — but treat it as
-   a backstop, not a substitute for checking yourself first.
+   (checks `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `REVERT_HEAD`; KB exit codes 1–4) —
+   but treat it as a backstop, not a substitute for checking yourself first.
+
+   **KB exit codes** (script + hook propagate numeric exit):
+
+   | Exit | Symbol | Meaning |
+   |------|--------|---------|
+   | 0 | `GIT_PUSH_OK` | No pending operation |
+   | 1 | `GIT_PUSH_E_PENDING_MERGE_CLEAN` | `MERGE_HEAD`, ready to `git commit` |
+   | 2 | `GIT_PUSH_E_PENDING_MERGE_CONFLICT` | `MERGE_HEAD` + unmerged paths |
+   | 3 | `GIT_PUSH_E_PENDING_CHERRY_PICK` | `CHERRY_PICK_HEAD` |
+   | 4 | `GIT_PUSH_E_PENDING_REVERT` | `REVERT_HEAD` |
+
+   Full invariant, state diagram, and decision log:
+   [`pending-operation-push-guard-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/pending-operation-push-guard-reference-card.md).
 
 3. **Check commits before opening a PR — verify the diff, don't describe it from memory.**
    Before writing a PR body, re-derive its claims from the actual diff you're
