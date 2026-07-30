@@ -1,0 +1,17 @@
+{
+  "fanout_id": "coord-034",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "mesh-security/gossip-oob-distribute",
+      "filename": "fleet-2026-07-27-gossip-oob-distribute.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/fleet-2026-07-27-gossip-oob-distribute.md"
+    },
+    {
+      "assignee": "mac",
+      "topic": "mesh-security/gossip-oob-distribute",
+      "filename": "fleet-2026-07-27-gossip-oob-distribute.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/fleet-2026-07-27-gossip-oob-distribute.md"
+    }
+  ]
+}
