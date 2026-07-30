@@ -17,6 +17,8 @@
 | `ManagePullRequest` / `gh pr edit` without reading first | **READ → backup → write:** `mkdir -p .git/pr-body-backups` then `gh pr view --json body -q .body > .git/pr-body-backups/<repo>-pr<N>-<ts>.md`; edit backup file; `gh pr edit N --body-file` or `append-pr-body.sh` |
 | `ManagePullRequest update_pr` with `CURSOR_AGENT_PR_BODY_*` markers or Cursor footer HTML | Pass **raw markdown only** — the tool wraps agent zone and rejects delimiters/images; CodeRabbit tail is re-added by bot if needed |
 
+**Canonical skill:** [`../../skills/cursor-pr-body/SKILL.md`](../../skills/cursor-pr-body/SKILL.md) · **Cursor rule:** `.cursor/rules/append-only-pr-body.mdc`
+
 **Mandatory workflow (PR bodies):** never write directly. Always (1) read current body, (2) save timestamped backup, (3) merge append-only into backup copy, (4) write from file. Empty `body` in API calls wipes the description.
 
 **Recovery (PR #222, 2026-07-27):** read `gh pr view` → search session cache → reconstruct from `docs/v2/50-mesh-security-migration-ladder.md` + review gate → write append-only.
