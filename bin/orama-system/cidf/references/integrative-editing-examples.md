@@ -14,7 +14,8 @@
 | Replace entire PR body with latest CI delta only | Keep original Summary; add `## Follow-up:` sections below |
 | Retitle PR to match aguara side quest | Leave title; label aguara work as ancillary in a follow-up block |
 | `gh pr edit` with only the new paragraph | Pass full body: reconstructed original + all follow-ups |
-| `ManagePullRequest` / `gh pr edit` without reading first | **READ → backup → write:** `gh pr view --json body -q .body > /tmp/pr-N-body-backup.md` then edit backup file, then `gh pr edit N --body-file` |
+| `ManagePullRequest` / `gh pr edit` without reading first | **READ → backup → write:** `mkdir -p .git/pr-body-backups` then `gh pr view --json body -q .body > .git/pr-body-backups/<repo>-pr<N>-<ts>.md`; edit backup file; `gh pr edit N --body-file` or `append-pr-body.sh` |
+| `ManagePullRequest update_pr` with `CURSOR_AGENT_PR_BODY_*` markers or Cursor footer HTML | Pass **raw markdown only** — the tool wraps agent zone and rejects delimiters/images; CodeRabbit tail is re-added by bot if needed |
 
 **Mandatory workflow (PR bodies):** never write directly. Always (1) read current body, (2) save timestamped backup, (3) merge append-only into backup copy, (4) write from file. Empty `body` in API calls wipes the description.
 
