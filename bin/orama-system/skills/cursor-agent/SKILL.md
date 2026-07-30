@@ -277,7 +277,7 @@ cursor-agent about       # show version + system info
 
 When a Cloud agent updates an **existing** PR after harmonization, review fixes, or CI notes, it must use the **append-only** workflow — never replace the body with delta-only text.
 
-Load: [`bin/orama-system/skills/cursor-pr-body/SKILL.md`](../../bin/orama-system/skills/cursor-pr-body/SKILL.md)  
+Load: [`../cursor-pr-body/SKILL.md`](../cursor-pr-body/SKILL.md)  
 Rule: `.cursor/rules/append-only-pr-body.mdc`  
 Script: `scripts/cursor/append-pr-body.sh`
 

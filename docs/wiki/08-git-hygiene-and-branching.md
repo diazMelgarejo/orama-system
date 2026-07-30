@@ -198,7 +198,12 @@ warn about, since there's nothing staged to reject.
    misses add/add, rename/delete, and delete/modify conflicts entirely):
    ```bash
    git diff --name-only --diff-filter=U   # must be empty
-   git rev-parse -q --verify MERGE_HEAD && echo "STOP: uncommitted merge"
+   for marker in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
+     if git rev-parse -q --verify "$marker" >/dev/null; then
+       echo "STOP: pending $marker"
+       exit 1
+     fi
+   done
    ```
    `.githooks/pre-push` now runs this automatically via
    [`scripts/git/check_no_pending_merge.sh`](../../scripts/git/check_no_pending_merge.sh)

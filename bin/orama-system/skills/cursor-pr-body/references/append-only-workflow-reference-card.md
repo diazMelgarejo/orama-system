@@ -39,10 +39,10 @@ and hand off to the operator or retry with a token that has `updatePullRequest`.
 **Verified locally:** aguara `--ci` reports `0 gating` on rebased tip.
 ```
 
-**Apply:**
+**Apply** (reviewed helper; operator approval):
 
-```bash
-bash scripts/cursor/append-pr-body.sh diazMelgarejo/orama-system 245 \
+```text
+scripts/cursor/append-pr-body.sh diazMelgarejo/orama-system 245 \
   --title "Follow-up: harmonized onto #244" \
   --file follow-up.md
 ```

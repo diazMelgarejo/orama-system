@@ -81,15 +81,19 @@ On each Win box (3080, then 5080):
 
 ```powershell
 cd $env:ORAMA_SYSTEM_PATH
+$ErrorActionPreference = "Stop"
 $ts = Get-Date -Format "yyyyMMddTHHmmssZ"
 $archive = Join-Path $env:ORAMA_SYSTEM_PATH ".local\archive"
 New-Item -ItemType Directory -Force -Path $archive | Out-Null
+$archiveIndex = 0
 foreach ($store in @(
   (Join-Path $env:ORAMA_SYSTEM_PATH ".local\mesh-secrets.json"),
   $(if ($env:PERPETUA_TOOLS_PATH) { Join-Path $env:PERPETUA_TOOLS_PATH ".local\mesh-secrets.json" })
 )) {
   if ($store -and (Test-Path $store)) {
-    Move-Item $store (Join-Path $archive "mesh-secrets.json.$ts.bak")
+    $archiveIndex++
+    $dest = Join-Path $archive "mesh-secrets.json.$ts.$archiveIndex.bak"
+    Move-Item -Path $store -Destination $dest -ErrorAction Stop
   }
 }
 python scripts\mesh\ensure_local_mesh_secrets.py
