@@ -18,6 +18,8 @@
 
 On the Win ultrathink workspace root we have a file named `.env.LOCAL` (capital LOCAL) sitting **above** both git repos (`orama-system` + `Perpetua-Tools`), not inside either repo.
 
+Repo-local `.env.local` inside each git checkout is gitignored and treated as a fleet-local secret store. The workspace-level `.env.LOCAL` file is **outside Git** — repository `.gitignore` rules do not apply; operators must enforce filesystem and credential-store access controls. Never commit or paste values from either location into tracked markdown. Neither is a safe vault against rogue agents on the same host.
+
 Win `start.ps1` / `scripts/env/load-local.ps1` may load `.env.local` from repo roots, but **coord_pulse**, **coord_monitor**, and **scheduled tasks do not** — only persistent User env vars or explicit exports reach those paths (see PT lesson on `.env.local` vs Task Scheduler).
 
 Peer drops to Mac are currently failing with HTTP 401 + `SECURITY_STOP` (bearer token refused on `http://` LAN portal). This card is the authoritative ask even if GossipBus does not cross hosts.
