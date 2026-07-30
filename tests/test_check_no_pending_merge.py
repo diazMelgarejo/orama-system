@@ -4,8 +4,12 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/git/check_no_pending_merge.sh"
+
+pytestmark = pytest.mark.unit
 
 
 def test_check_no_pending_merge_passes_without_in_progress_ops(tmp_path: Path) -> None:
