@@ -39,16 +39,20 @@ def main() -> int:
         print("FAIL: missing GOSSIP_SHARED_SECRET in repo-local env file", file=sys.stderr)
         return 1
 
-    mismatches: list[str] = []
+    mismatch_count = 0
     for store in _secret_stores():
         if not store.is_file():
             continue
         json_val = _json_secret(store)
         if json_val and json_val != env_val:
-            mismatches.append(str(store))
+            mismatch_count += 1
 
-    if mismatches:
-        print("FAIL: env/JSON parity mismatch in:", ", ".join(mismatches), file=sys.stderr)
+    if mismatch_count:
+        print(
+            "FAIL: GOSSIP_SHARED_SECRET env/JSON parity check failed "
+            f"({mismatch_count} store(s))",
+            file=sys.stderr,
+        )
         return 1
 
     print("OK: GOSSIP_SHARED_SECRET matches all JSON stores")
