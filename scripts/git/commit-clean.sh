@@ -14,6 +14,10 @@ MANDATORY sequence (agents — never skip or reorder):
 Unstaged edits are preserved but are NOT included in the commit.
 Uses git commit-tree so Cursor commit-msg hooks never run.
 
+During an in-progress merge (MERGE_HEAD present), parent lineage is preserved
+automatically: HEAD is the first parent and every SHA listed in MERGE_HEAD is
+added as an additional parent (two-parent merges and N-way octopus merges).
+
 Options:
   --amend         Replace HEAD (parent becomes HEAD^)
   --allow-empty   Allow intentional empty commits (rare)
@@ -104,37 +108,54 @@ esac
 verify_args=()
 [[ "$allow_empty" -eq 1 ]] && verify_args+=(--allow-empty)
 [[ "$amend" -eq 1 ]] && verify_args+=(--amend)
-if ((${#verify_args[@]} > 0)); then
-  bash "$SCRIPT_DIR/verify-staged-for-commit.sh" "${verify_args[@]}"
-else
-  bash "$SCRIPT_DIR/verify-staged-for-commit.sh"
-fi
+bash "$SCRIPT_DIR/verify-staged-for-commit.sh" "${verify_args[@]}"
 
 tree="$(git write-tree)"
+
+merge_head_path="$(git rev-parse --git-path MERGE_HEAD)"
+in_merge=0
+if [[ "$amend" -eq 0 && -f "$merge_head_path" ]]; then
+  in_merge=1
+fi
+
+parents=()
 if [[ "$amend" -eq 1 ]]; then
-  parent="$(git rev-parse HEAD^)"
-else
-  if git rev-parse HEAD >/dev/null 2>&1; then
-    parent="$(git rev-parse HEAD)"
-  else
-    parent=""
-  fi
+  parents+=("$(git rev-parse HEAD^)")
+elif git rev-parse HEAD >/dev/null 2>&1; then
+  parents+=("$(git rev-parse HEAD)")
+fi
+
+if [[ "$in_merge" -eq 1 ]]; then
+  while IFS= read -r merge_parent || [[ -n "$merge_parent" ]]; do
+    merge_parent="${merge_parent%%#*}"
+    merge_parent="${merge_parent//[[:space:]]/}"
+    [[ -n "$merge_parent" ]] || continue
+    parents+=("$merge_parent")
+  done <"$merge_head_path"
 fi
 
 if [[ "$dry_run" -eq 1 ]]; then
   echo "commit-clean: dry-run — would create commit on tree ${tree}" >&2
-  if [[ -n "$parent" ]]; then
-    echo "commit-clean: dry-run — parent ${parent}" >&2
+  if ((${#parents[@]} > 0)); then
+    echo "commit-clean: dry-run — parents ${parents[*]}" >&2
+  fi
+  if [[ "$in_merge" -eq 1 ]]; then
+    echo "commit-clean: dry-run — merge in progress; MERGE_HEAD parents retained" >&2
   fi
   printf '%s\n' "$message"
   exit 0
 fi
 
-if [[ -n "$parent" ]]; then
+commit_tree_args=("$tree")
+for parent_sha in "${parents[@]}"; do
+  commit_tree_args+=(-p "$parent_sha")
+done
+
+if ((${#parents[@]} > 0)); then
   new_sha="$(
     printf '%s\n' "$message" |
       GIT_AUTHOR_NAME="$author_name" GIT_AUTHOR_EMAIL="$author_email" \
-      git commit-tree "$tree" -p "$parent" -F -
+      git commit-tree "${commit_tree_args[@]}" -F -
   )"
 else
   new_sha="$(
@@ -149,6 +170,13 @@ if [[ -n "$branch" ]]; then
   git update-ref "refs/heads/${branch}" "$new_sha"
 else
   git update-ref HEAD "$new_sha"
+fi
+
+if [[ "$in_merge" -eq 1 ]]; then
+  rm -f \
+    "$merge_head_path" \
+    "$(git rev-parse --git-path MERGE_MODE)" \
+    "$(git rev-parse --git-path MERGE_MSG)"
 fi
 
 echo "$new_sha"

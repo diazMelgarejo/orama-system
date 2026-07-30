@@ -51,13 +51,23 @@ for r in "${raw_candidates[@]}"; do
 done
 
 if [[ -x "$SYNC" ]]; then
+  sync_failures=0
   for r in "${unique[@]}"; do
     [[ "$r" == "$PT_ROOT" ]] && continue
-    bash "$SYNC" "$r" 2>/dev/null || true
+    [[ "$(basename "$r")" == "periscope" ]] && continue
+    if ! bash "$SYNC" "$r"; then
+      echo "error: sync failed: $r" >&2
+      sync_failures=$((sync_failures + 1))
+    fi
   done
+  if ((sync_failures > 0)); then
+    echo "error: attribution guard sync failed for $sync_failures repo(s)" >&2
+    exit 1
+  fi
 fi
 
 for r in "${unique[@]}"; do
+  [[ "$(basename "$r")" == "periscope" ]] && continue
   bash "$DISABLE" "$r"
   if [[ -x "$INSTALL" && -x "$r/scripts/git/ensure_hooks_installed.sh" ]]; then
     bash "$INSTALL" "$r" || echo "warn: install-local-hooks failed: $r" >&2

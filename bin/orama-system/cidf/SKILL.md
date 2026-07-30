@@ -139,6 +139,12 @@ Agents updating PR bodies via API (`ManagePullRequest`, `gh pr edit`) must pass 
 **full** reconstructed body (original + follow-ups), not only the latest delta —
 the tool replaces the whole field, so the write itself must be integrative.
 
+**`ManagePullRequest update_pr`:** pass raw markdown only (Summary + Follow-up
+sections). Do **not** include `CURSOR_AGENT_PR_BODY_BEGIN/END` markers or Cursor
+footer HTML — the API rejects them and adds its own wrapper.
+
+Prefer `bash scripts/cursor/append-pr-body.sh` for follow-up appends.
+
 **Worked examples (good vs bad):**
 [`references/integrative-editing-examples.md`](references/integrative-editing-examples.md)
 (§1 PR bodies append-only; §9 path-scoped PR replay when integration base moved)
