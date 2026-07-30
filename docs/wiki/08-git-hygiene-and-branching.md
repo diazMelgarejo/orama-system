@@ -272,6 +272,8 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `recovery`
 | Local-only reference with no repo anchor | Filename only — strip the entire parent path tree |
 | Runnable shell example | Variable substitution (`"$OPENCLAW_ROOT/orama-system"`) |
 
+**Workspace-level operator docs:** `$OPENCLAW_ROOT/references/` holds OpenClaw-side runbooks and migration drafts **outside** any git repo (sibling to `orama-system` under the OpenClaw parent). Use `$OPENCLAW_ROOT/references/<filename>` — never the literal path `OpenClaw/references/`.
+
 Rule of thumb when writing a runnable example or recovery command in any `*.md`, script, or comment — substitute the root with a variable:
 
 ```bash

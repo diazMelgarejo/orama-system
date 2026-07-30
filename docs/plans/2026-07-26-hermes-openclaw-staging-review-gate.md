@@ -96,9 +96,9 @@ Harness ops (LAN, coord pulse, peer inbox) remain in `hermes-harness/` — not d
 
 OpenClaw-side drafts (navigation only, not SSoT):
 
-- `OpenClaw/references/Hermes-Harness-Guide-for-Orama+Perpetua.md`
-- `OpenClaw/references/2026-07-26_111557-hermes-openclaw-migration-cross-repo-plan.md`
-- `OpenClaw/references/raft-Hermes-Plan-09c.md` — adopt thin-wrapper pattern; **defer** PT `hermes_harness.py` until profile install stable
+- `$OPENCLAW_ROOT/references/Hermes-Harness-Guide-for-Orama+Perpetua.md`
+- `$OPENCLAW_ROOT/references/2026-07-26_111557-hermes-openclaw-migration-cross-repo-plan.md`
+- `$OPENCLAW_ROOT/references/raft-Hermes-Plan-09c.md` — adopt thin-wrapper pattern; **defer** PT `hermes_harness.py` until profile install stable
 
 ## Review checklist (all agents / operators)
 
