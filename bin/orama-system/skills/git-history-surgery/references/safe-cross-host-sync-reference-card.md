@@ -25,6 +25,21 @@ This is **normal sync**, not history surgery. For rewrites/expunges, use
 
 ---
 
+## Quick sync (clean worktree only)
+
+For operator runbooks when there are **no local edits to preserve** (fleet mesh prep, post-push peer pull):
+
+```bash
+git fetch origin --prune
+test -z "$(git status --porcelain --untracked-files=all)" || { echo "error: dirty worktree — use stash protocol below"; exit 1; }
+git switch main   # or: git checkout main
+git pull --ff-only origin main
+```
+
+Repeat per repo (`orama-system`, then `Perpetua-Tools`). If the worktree is dirty, use the full stash protocol below instead.
+
+---
+
 ## Non-negotiables (fail closed)
 
 | Forbidden | Why |

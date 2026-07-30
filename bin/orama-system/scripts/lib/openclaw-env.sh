@@ -10,6 +10,7 @@
 #   ORAMA_REPO_ROOT / ORAMA_INSTALL_DIR — orama-system git root (install dir)
 #   OPENCLAW_ROOT / ORAMA_OPENCLAW_ROOT — OpenClaw multi-repo parent
 #   OPENCLAW_MCP_JSON — path to .mcp.json (default: $OPENCLAW_ROOT/.mcp.json)
+#   $OPENCLAW_ROOT/references/ — workspace-level operator docs (outside git repos)
 #   PERPETUA_TOOLS_ROOT — Perpetua-Tools checkout (optional)
 #
 # Sourced by first-run-install.sh, setup-embeddings, crg-embed-mode, and repo scripts.
