@@ -177,6 +177,7 @@ re-resolve `$PT_STATE_DIR`, whose initialization differs across PT modules.
 | `.air.toml` | Already uses `tmp/periscope`; no action |
 | `.roborev.toml` | Non-functional review guidance; retain AgentsView wording |
 | Clean “patches atop AgentsView” history | **Optional epic** — see [`2026-07-28-periscope-lineage-modernization-epic.md`](2026-07-28-periscope-lineage-modernization-epic.md). Classify 45 fork patches against 583 upstream commits; expensive and not required for L4 |
+| PyPI publish (currently disabled, name collision) | Blocked, not required for L4 — see [`docs/reference/periscope-pypi-packaging.md`](../reference/periscope-pypi-packaging.md) for the standard build/publish methodology + the historical name-collision decision |
 
 Track A may close after the desktop sidecar contract fix if “close” means current
 mirror and operational maintenance. Reconstructing `merged` as a clean semantic
