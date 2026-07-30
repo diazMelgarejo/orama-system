@@ -25,10 +25,21 @@ done
 
 if [[ ${#pending[@]} -gt 0 ]]; then
   echo "pre-push: blocked — uncommitted in-progress operation(s): ${pending[*]}" >&2
-  echo "  A --no-commit merge/cherry-pick/revert was never finalized with 'git commit'." >&2
+  for head in "${pending[@]}"; do
+    case "$head" in
+      MERGE_HEAD)
+        echo "  MERGE_HEAD: run 'git commit' to finalize the merge, or 'git merge --abort'." >&2
+        ;;
+      CHERRY_PICK_HEAD)
+        echo "  CHERRY_PICK_HEAD: run 'git cherry-pick --continue' after resolving, or 'git cherry-pick --abort'." >&2
+        ;;
+      REVERT_HEAD)
+        echo "  REVERT_HEAD: run 'git revert --continue' after resolving, or 'git revert --abort'." >&2
+        ;;
+    esac
+  done
   echo "  The branch tip you're about to push is still the PRE-operation commit." >&2
-  echo "  Run 'git commit' to finalize it, or the matching '--abort' to discard it," >&2
-  echo "  then push again." >&2
+  echo "  Finalize or abort the operation above, then push again." >&2
   exit 1
 fi
 

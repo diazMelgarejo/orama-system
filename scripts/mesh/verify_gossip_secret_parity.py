@@ -18,17 +18,31 @@ _MESH_DIR = Path(__file__).resolve().parent
 if str(_MESH_DIR) not in sys.path:
     sys.path.insert(0, str(_MESH_DIR))
 from dotenv_merge import read_dotenv_key
+from mesh_logging import get_mesh_logger
 
 ROOT = Path(__file__).resolve().parents[2]
 ENV_FILE = ROOT / ".env.local"
 SECRETS_JSON = ROOT / ".local" / "mesh-secrets.json"
+log = get_mesh_logger("orama.mesh.parity", repo_root=ROOT)
 
 
-def _json_secret(path: Path) -> str:
+def _usable_secret(value: object) -> str | None:
+    if value is None or not isinstance(value, str):
+        return None
+    stripped = value.strip()
+    if not stripped:
+        return None
+    if len(stripped) >= 2 and stripped[0] == stripped[-1] and stripped[0] in "\"'":
+        inner = stripped[1:-1].strip()
+        return inner or None
+    return stripped
+
+
+def _json_secret(path: Path) -> str | None:
     if not path.is_file():
-        return ""
+        return None
     data = json.loads(path.read_text(encoding="utf-8"))
-    return (data.get("GOSSIP_SHARED_SECRET") or "").strip()
+    return _usable_secret(data.get("GOSSIP_SHARED_SECRET"))
 
 
 def _secret_stores() -> list[Path]:
@@ -53,9 +67,9 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 
 def main(argv: list[str] | None = None) -> int:
     args = _parse_args(argv)
-    env_val = (read_dotenv_key(ENV_FILE, "GOSSIP_SHARED_SECRET") or "").strip()
+    env_val = _usable_secret(read_dotenv_key(ENV_FILE, "GOSSIP_SHARED_SECRET"))
     if not env_val:
-        print("FAIL: missing GOSSIP_SHARED_SECRET in repo-local env file", file=sys.stderr)
+        log.error("FAIL: missing GOSSIP_SHARED_SECRET in repo-local env file")
         return 1
 
     mismatch_count = 0
@@ -66,22 +80,20 @@ def main(argv: list[str] | None = None) -> int:
                 missing_count += 1
             continue
         json_val = _json_secret(store)
-        if json_val and json_val != env_val:
+        if json_val is None or json_val != env_val:
             mismatch_count += 1
 
     if missing_count:
-        print(
-            "FAIL: expected JSON mirror store(s) missing "
-            f"({missing_count} store(s))",
-            file=sys.stderr,
+        log.error(
+            "FAIL: expected JSON mirror store(s) missing (%d store(s))",
+            missing_count,
         )
         return 1
 
     if mismatch_count:
-        print(
-            "FAIL: GOSSIP_SHARED_SECRET env/JSON parity check failed "
-            f"({mismatch_count} store(s))",
-            file=sys.stderr,
+        log.error(
+            "FAIL: GOSSIP_SHARED_SECRET env/JSON parity check failed (%d store(s))",
+            mismatch_count,
         )
         return 1
 

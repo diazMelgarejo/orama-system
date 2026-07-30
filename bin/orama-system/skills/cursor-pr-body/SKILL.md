@@ -19,7 +19,7 @@ triggers:
   - harmonize pr
   - stack integration
   - append-pr-body
-allowed-tools: bash, file-operations
+allowed-tools: Bash(scripts/cursor/append-pr-body.sh *), Bash(gh *), file-operations
 ---
 
 # Cursor PR Body — Append-Only Workflow
@@ -50,8 +50,10 @@ READ  →  BACKUP  →  MERGE (append-only)  →  WRITE (full merged body)
 
 ## Canonical script
 
-```bash
-bash scripts/cursor/append-pr-body.sh <owner/repo> <pr-number> \
+Invoke the reviewed helper at `scripts/cursor/append-pr-body.sh` (operator approval; pin repo checkout):
+
+```text
+scripts/cursor/append-pr-body.sh <owner/repo> <pr-number> \
   --title "Follow-up: harmonized onto #244" \
   --file follow-up.md
 ```
