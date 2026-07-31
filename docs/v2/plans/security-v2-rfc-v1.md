@@ -107,8 +107,9 @@ Any divergence is considered a **system integrity failure**.
 
 This RFC is enforced by:
 
-- `.github/workflows/security-invariant-enforcer.yml`
-- `.github/workflows/invariant-monitor-bot.yml` (see Part 2)
+- Perpetua-Tools `.github/workflows/security-invariants.yml` (consolidated
+  2026-07-31 from the formerly separate `security-invariant-enforcer.yml`
+  and `invariant-monitor-bot.yml`, which no longer exist as separate files)
 
 CI MUST fail if:
 - SSRF bypass detected
