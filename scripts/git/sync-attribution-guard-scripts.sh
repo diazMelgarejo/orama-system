@@ -81,9 +81,26 @@ atomic_append_snippet() {
     return 1
   fi
   tmp="$(mktemp)"
-  if ! { cat "$dest"; echo; cat "$snippet"; } >"$tmp"; then
+  # Explicit per-command checks, not the brace group's own exit status --
+  # `{ cat "$dest"; echo; cat "$snippet"; } >"$tmp"` only reports the exit
+  # code of the LAST command in the group (cat "$snippet"), so a failing
+  # `cat "$dest"` (e.g. dest unreadable, or a permissions issue) would go
+  # undetected as long as the snippet cat still succeeds afterward --
+  # silently producing a truncated $tmp missing dest's original content,
+  # reported as success.
+  if [[ -f "$dest" ]]; then
+    if ! cat "$dest" >"$tmp"; then
+      rm -f "$tmp"
+      echo "error: failed reading $dest" >&2
+      return 1
+    fi
+  else
+    : >"$tmp"
+  fi
+  echo >>"$tmp"
+  if ! cat "$snippet" >>"$tmp"; then
     rm -f "$tmp"
-    echo "error: failed building append for $dest" >&2
+    echo "error: failed reading $snippet" >&2
     return 1
   fi
   stage="$(mktemp "${dest_dir}/.$(basename "$dest").sync.XXXXXX")"
