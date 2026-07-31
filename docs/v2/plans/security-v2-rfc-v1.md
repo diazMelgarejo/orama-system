@@ -1,20 +1,23 @@
 # OramaSys v2 — Formal Security RFC Publication Set (v1)
 
 ## 📌 Status
+
 This document is an **addendum to the OramaSys v2 security roadmap**:
 
 - `docs/v2/plans/security-v2-roadmap.md`
 - `docs/v2/plans/security-v2-roadmap-part2.md`
 
-It formalizes the **security guarantees, invariants, and enforcement architecture** into a versioned RFC specification.
+It formalizes the **security guarantees, invariants, and enforcement architecture**
+into a versioned RFC specification.
 
 ---
 
-# 🧠 RFC-001 — SSRF & Endpoint Security Contract
+## 🧠 RFC-001 — SSRF & Endpoint Security Contract
 
 ## 1. Scope
 
 This RFC applies to:
+
 - all URL parsing
 - all external network requests
 - all agent-to-agent communication
@@ -28,7 +31,7 @@ This RFC applies to:
 
 All external inputs MUST pass through:
 
-```
+```text
 endpoint_policy_core.validate_base_url()
 ```
 
@@ -65,7 +68,7 @@ This RFC explicitly protects against:
 
 > URL scheme is part of the security identity.
 
-### Rules:
+### Rules
 
 - `http` and `https` MUST be preserved end-to-end
 - reconstruction layers MUST NOT hardcode schemes
@@ -96,6 +99,7 @@ Any deviation is a **critical violation**.
 ## 7. Cross-Repo Consistency Rule
 
 This RFC applies equally to:
+
 - Perpetua-Tools
 - Orama-System
 
@@ -112,6 +116,7 @@ This RFC is enforced by:
   and `invariant-monitor-bot.yml`, which no longer exist as separate files)
 
 CI MUST fail if:
+
 - SSRF bypass detected
 - auth leakage detected
 - scheme downgrade detected
@@ -122,15 +127,19 @@ CI MUST fail if:
 ## 9. Formal Invariants
 
 ### Invariant A — SSRF Safety
+
 No unsafe URL may reach execution layer.
 
 ### Invariant B — Auth Safety
+
 No token may leak across system boundaries.
 
 ### Invariant C — Transport Integrity
+
 No scheme mutation without explicit policy decision.
 
 ### Invariant D — Rendering Safety
+
 No raw external input may reach UI layer.
 
 ---
@@ -146,4 +155,5 @@ No raw external input may reach UI layer.
 
 This RFC defines the **authoritative security contract layer** for OramaSys.
 
-It supersedes ad-hoc validation logic and establishes CI-enforced deterministic security behavior across all repositories.
+It supersedes ad-hoc validation logic and establishes CI-enforced deterministic
+security behavior across all repositories.
