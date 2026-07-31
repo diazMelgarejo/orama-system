@@ -49,6 +49,7 @@ jobs:
           files_ignore: |
             CHANGELOG.md
             vendor/**
+            docs/LESSONS.md
           separator: ","
 
       - name: Run markdownlint-cli2 on changed files
