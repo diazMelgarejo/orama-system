@@ -116,7 +116,7 @@ Each consuming skill imports only the phases it needs, per the modular
 Skillify pattern:
 
 | Skill | Phases it needs |
-|---|---|
+| --- | --- |
 | [`agent-methodology`](../skills/agent-methodology/SKILL.md) | All 6 — this is the doctrine's home methodology |
 | [`code-review`](../skills/code-review/SKILL.md) | Phase 1 (root-cause clustering), Phase 4 (verification gates) |
 | [`git-history-surgery`](../skills/git-history-surgery/SKILL.md) | Phase 3 (integration — safety refs, reset-vs-rebase decision) |
@@ -129,6 +129,11 @@ Skillify pattern:
 
 ## Related
 
-- [`multi-agent-collaboration-protocol.md`](multi-agent-collaboration-protocol.md) — the nested-branch merge protocol this pattern complements (that doc covers merging concurrent branches; this one covers remediating a single branch after review)
-- [`oramasys-method/references/integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md) — synthesize, never amputate; six resolution modes referenced by Phase 3's reset-vs-rebase decision
-- PT `.agent/AGENTS.md` § Multi-agent merge conflict protocol — portable-brain summary of the sister pattern for concurrent branches
+- [`multi-agent-collaboration-protocol.md`](multi-agent-collaboration-protocol.md) —
+  the nested-branch merge protocol this pattern complements (that doc covers merging
+  concurrent branches; this one covers remediating a single branch after review)
+- [`integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md) —
+  synthesize, never amputate; six resolution modes referenced by Phase 3's
+  reset-vs-rebase decision
+- PT `.agent/AGENTS.md` § Multi-agent merge conflict protocol — portable-brain
+  summary of the sister pattern for concurrent branches
