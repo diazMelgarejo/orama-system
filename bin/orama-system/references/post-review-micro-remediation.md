@@ -45,25 +45,46 @@
   CI command locally (matching CI's own invocation — same tool, same
   config, same identity/env setup — not an approximation), not by
   assuming they're unrelated.
-  Example (PT PR #306): a `repo_hygiene.py` CI failure blocking a local
-  `/tmp` path leaked into a tracked memory doc, and a CodeRabbit review
-  finding on the same lines asking for local paths to be removed, were
-  the identical bug — fixing the review finding closed the CI failure,
-  verified by re-running `repo_hygiene.py` locally rather than assumed.
+  Example (PT PR #306): a `repo_hygiene.py` CI failure blocking a
+  temporary absolute path leaked into a tracked memory doc, and a
+  CodeRabbit review finding on the same lines asking for local paths to
+  be removed, were the identical bug — fixing the review finding closed
+  the CI failure, verified by re-running `repo_hygiene.py` locally
+  rather than assumed.
 - **When the same claim is duplicated across multiple tracked copies**
   (a source-of-truth file plus its rendered output, a cached/graduated
-  snapshot, and prose elsewhere restating it), fix the canonical wording
-  once at the source and propagate identically to every copy in the same
-  commit — never edit each copy's wording independently, which drifts.
-  If a copy is machine-rendered from the source (e.g. a markdown file
-  generated from a JSONL log), regenerate it from the corrected source
-  rather than hand-patching the rendered file.
-  Example (PT PR #306): the same corrected claim (cherry-pick completion
-  must check the git index, not just grep for conflict markers) lived in
-  a lessons.jsonl entry, its rendered LESSONS.md bullet, a graduated
-  candidate JSON snapshot, and a working-doc's prose restating it — one
-  canonical edit to the JSONL source, then LESSONS.md was regenerated
-  from it (not hand-edited) and the other two copies updated to match.
+  snapshot, and prose elsewhere restating it), the fix differs by
+  document type — check which kind you're touching before editing:
+  - **Append-only historical records** (lessons, audits, vulnerability
+    memory, review ledgers, and anything else whose value depends on
+    an intact chain of what was actually claimed and when) must never
+    be rewritten in place. A direct edit destroys the original entry —
+    there is no queryable trace within the data itself of what it used
+    to say, which is exactly the auditability the record exists to
+    provide. Instead: **append a superseding correction that
+    references the original entry** (e.g. a new record with
+    `supersedes: <original-id>`, or an explicit "superseded by"
+    back-reference on the original), then regenerate derived copies
+    (a rendered markdown file, a cache) from the corrected append-only
+    source rather than hand-patching them.
+  - **Non-historical documents** (working docs, this doctrine file
+    itself, prose that merely restates a claim rather than being the
+    system of record for it) can and should be fixed once at the
+    source and propagated identically to every copy in the same
+    commit — never edited independently per copy, which drifts.
+  Example (PT PR #306): the same corrected claim (cherry-pick
+  completion must check the git index, not just grep for conflict
+  markers) lived in a lessons.jsonl entry, its rendered LESSONS.md
+  bullet, a graduated candidate JSON snapshot, and a working-doc's
+  prose restating it. lessons.jsonl and the graduated candidate are
+  append-only historical records — the actual remediation there should
+  have appended a new, superseding entry referencing the original
+  rather than mutating the original claim field in place, which is
+  what happened; that specific commit is a worked example of the
+  mistake this guidance now exists to prevent, not a model to repeat.
+  LESSONS.md (machine-rendered from lessons.jsonl) and the working
+  doc's restating prose are the two copies that were correctly in
+  scope for direct, in-place correction.
 
 ### Phase 2 — Branch discipline
 
