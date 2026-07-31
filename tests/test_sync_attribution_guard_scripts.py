@@ -95,3 +95,35 @@ def test_append_snippet_fails_closed_on_unreadable_dest(tmp_path: Path) -> None:
     assert "content that must not be lost" in dest.read_text(encoding="utf-8"), (
         "original content must survive a failed append attempt"
     )
+
+
+def test_append_snippet_fails_closed_when_dest_is_a_directory(tmp_path: Path) -> None:
+    """Traced end to end (not assumed) before writing this test: without
+    the type guard, `[[ -f "$dest" ]]` is false for a directory, so the
+    function proceeds as if dest doesn't exist -- but the final
+    `mv -f "$stage" "$dest"` doesn't fail or replace an existing
+    directory, it moves the staged file INTO it (POSIX mv semantics).
+    The un-fixed function returned exit 0, left dest's real content
+    completely untouched, and silently dumped a stray staging-temp-named
+    file inside the directory -- success reported, nothing actually
+    appended, garbage left behind, zero signal anything went wrong.
+    Verified this exact failure mode by hand before the fix existed."""
+    dest = tmp_path / "actually-a-directory"
+    dest.mkdir()
+    real_content = dest / "AGENTS.md"
+    real_content.write_text("real content that must survive untouched\n", encoding="utf-8")
+    snippet = tmp_path / "snippet.txt"
+    snippet.write_text("new content\n", encoding="utf-8")
+
+    before = sorted(p.name for p in dest.iterdir())
+    result = _run_atomic_append_snippet(dest, "0644", snippet)
+    after = sorted(p.name for p in dest.iterdir())
+
+    assert result.returncode != 0, "must fail closed, not silently report success"
+    assert "not a regular file" in result.stderr
+    assert dest.is_dir(), "dest must remain a directory, not be replaced or removed"
+    assert real_content.read_text(encoding="utf-8") == "real content that must survive untouched\n"
+    assert after == before, (
+        "no stray staging file should be left inside the directory -- "
+        f"before={before} after={after}"
+    )
