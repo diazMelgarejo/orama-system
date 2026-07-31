@@ -39,6 +39,31 @@
   `agent_coordination.py`, `agent_coordination_legacy.py`, and
   `agent_coordination_core.py` cluster under "duplicated dispatch logic" —
   the durable fix is a shared facade, not 3 separate patches.
+- **Check CI failures against review findings before treating them as
+  separate tasks.** A CI failure and a review comment that point at the
+  same file are often the same bug. Confirm by running the actual failing
+  CI command locally (matching CI's own invocation — same tool, same
+  config, same identity/env setup — not an approximation), not by
+  assuming they're unrelated.
+  Example (PT PR #306): a `repo_hygiene.py` CI failure blocking a local
+  `/tmp` path leaked into a tracked memory doc, and a CodeRabbit review
+  finding on the same lines asking for local paths to be removed, were
+  the identical bug — fixing the review finding closed the CI failure,
+  verified by re-running `repo_hygiene.py` locally rather than assumed.
+- **When the same claim is duplicated across multiple tracked copies**
+  (a source-of-truth file plus its rendered output, a cached/graduated
+  snapshot, and prose elsewhere restating it), fix the canonical wording
+  once at the source and propagate identically to every copy in the same
+  commit — never edit each copy's wording independently, which drifts.
+  If a copy is machine-rendered from the source (e.g. a markdown file
+  generated from a JSONL log), regenerate it from the corrected source
+  rather than hand-patching the rendered file.
+  Example (PT PR #306): the same corrected claim (cherry-pick completion
+  must check the git index, not just grep for conflict markers) lived in
+  a lessons.jsonl entry, its rendered LESSONS.md bullet, a graduated
+  candidate JSON snapshot, and a working-doc's prose restating it — one
+  canonical edit to the JSONL source, then LESSONS.md was regenerated
+  from it (not hand-edited) and the other two copies updated to match.
 
 ### Phase 2 — Branch discipline
 
