@@ -80,6 +80,31 @@ atomic_append_snippet() {
     echo "error: snippet missing: $snippet" >&2
     return 1
   fi
+  # dest must be either nonexistent or a regular file -- nothing else.
+  # atomic_install_file() above already guards this exact case
+  # (`[[ -d "$dest" ]]`); this function was simply missing the same
+  # safety invariant its sibling in this file already established.
+  # Broader here (-e && !-f, not just -d) to also catch device nodes,
+  # FIFOs, and other non-regular-file types, not directories alone.
+  #
+  # Without this guard, `[[ -f "$dest" ]]` (checked below, decides
+  # whether to preserve existing content) and the unconditional `mv -f
+  # "$stage" "$dest"` at the end of this function (decides whether the
+  # write succeeds) silently check two DIFFERENT things: -f is false
+  # for a directory, so the function proceeds as if dest doesn't exist
+  # yet -- but `mv` onto an *existing directory* doesn't fail or replace
+  # it, it moves the source INTO that directory instead (POSIX mv
+  # semantics, not a bug in mv). The net effect, traced end to end: the
+  # function returns 0 (success), dest's real pre-existing content is
+  # completely untouched, and a stray file with the staging temp-name
+  # (e.g. .AGENTS.md.sync.XXXXXX) is silently dumped inside the
+  # directory -- with nothing in the exit code or output to signal any
+  # of this happened. Verified empirically, not assumed, before writing
+  # this guard.
+  if [[ -e "$dest" && ! -f "$dest" ]]; then
+    echo "error: $dest exists but is not a regular file (refusing to touch it)" >&2
+    return 1
+  fi
   tmp="$(mktemp)"
   # Explicit per-command checks, not the brace group's own exit status --
   # `{ cat "$dest"; echo; cat "$snippet"; } >"$tmp"` only reports the exit
