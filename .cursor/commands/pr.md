@@ -30,7 +30,7 @@ git log origin/<base>..HEAD --oneline
 | Not on base branch | Current branch ≠ base | Stop: "Switch to a feature branch first." |
 | Clean working directory | No uncommitted changes | Warn: "You have uncommitted changes. Commit or stash first." |
 | Has commits ahead | `git log origin/<base>..HEAD` not empty | Stop: "No commits ahead of `<base>`. Nothing to PR." |
-| No existing PR | `gh pr list --head <branch> --json number` is empty | Stop: "PR already exists: `#<number>`. Use `gh pr view <number> --web` to open it." |
+| No existing PR | `gh pr list --head <branch> --json number` is empty | Stop: "PR already exists: `#N`. Use `gh pr view N --web` to open it." |
 
 If all checks pass, proceed.
 
@@ -88,18 +88,19 @@ Reference these in the PR body if they exist.
 ## Phase 3 — PUSH
 
 ```bash
-bash scripts/git/publish-clean-branch.sh "$(git branch --show-current)" main origin
+bash scripts/git/publish-clean-branch.sh "$(git branch --show-current)" <base> origin
 ```
 
 If push fails due to divergence:
 
 ```bash
 git fetch origin
-git rebase origin/main
-bash scripts/git/publish-clean-branch.sh "$(git branch --show-current)" main origin
+git rebase origin/<base>
+bash scripts/git/publish-clean-branch.sh "$(git branch --show-current)" <base> origin
 ```
 
-Use the audited publisher after rebase — never raw `git push --force` or `--force-with-lease`.
+Use the audited publisher for every push path — never raw `git push`, `git push --force`,
+or `--force-with-lease`.
 
 If rebase conflicts occur, stop and inform the user.
 
@@ -109,9 +110,9 @@ If rebase conflicts occur, stop and inform the user.
 
 ### With Template
 
-If a PR template was found in Phase 2, fill in each section using the commit
-and file analysis. Preserve all template sections. Leave sections as "N/A" if
-not applicable rather than removing them.
+If a PR template was found in Phase 2, fill in each section using the commit and file
+analysis. Preserve all template sections — leave sections as "N/A" if not applicable
+rather than removing them.
 
 ### Without Template
 
@@ -151,28 +152,28 @@ gh pr create \
 
 ### Update an existing PR body (append-only — NEVER clobber)
 
-> **Canonical:**
->
-> - `.cursor/rules/append-only-pr-body.mdc`
-> - `bin/orama-system/skills/cursor-pr-body/SKILL.md`
-> - `scripts/cursor/append-pr-body.sh`
+> **Canonical:** `.cursor/rules/append-only-pr-body.mdc` ·
+> `bin/orama-system/skills/cursor-pr-body/SKILL.md` ·
+> `scripts/cursor/append-pr-body.sh`
 
-`ManagePullRequest` `update_pr` and `gh pr edit` **replace the entire body
-field**. Passing only the latest follow-up deletes the original Summary.
+`ManagePullRequest` `update_pr` and `gh pr edit` **replace the entire body field**.
+Passing only the latest follow-up deletes the original Summary.
 
 **Mandatory workflow:**
 
 1. **READ** — `gh pr view <N> --json body --jq .body`
 2. **BACKUP** — save to `.git/pr-body-backups/<repo>-pr<N>-<timestamp>.md`
-3. **MERGE** — keep original `## Summary` and scope at top; add new
-   `## Follow-up: …` sections below (chronological); preserve everything from
-   CodeRabbit auto-generated comments downward unchanged
-4. **WRITE** — `bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "…"
-   --file follow-up.md` or `gh pr edit <N> --body-file merged-body.md`
+3. **MERGE** — keep original `## Summary` and scope at top; add new `## Follow-up: …`
+   sections below (chronological); preserve everything from CodeRabbit auto-generated
+   comments downward unchanged
+4. **WRITE** — `bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "…" --file follow-up.md`
+   or `gh pr edit <N> --body-file merged-body.md`
 
-**Never** call `update_pr` with `body=` containing only the delta. The write itself must be integrative.
+**Never** call `update_pr` with `body=` containing only the delta. The write itself must
+be integrative.
 
-See `bin/orama-system/cidf/references/integrative-editing-examples.md` §1 and Perpetua-Tools `lesson_3b13ab0a45d4`.
+See `bin/orama-system/cidf/references/integrative-editing-examples.md` §1 and
+Perpetua-Tools `lesson_3b13ab0a45d4`.
 
 ---
 
@@ -213,9 +214,10 @@ Next steps:
 - **No `gh` CLI**: Stop with: "GitHub CLI (`gh`) is required. Install: <https://cli.github.com/>"
 - **Not authenticated**: Stop with: "Run `gh auth login` first."
 - **Force push needed**: After rebasing a diverged branch, use
-  `bash scripts/git/publish-clean-branch.sh <branch> main origin` — never raw
+  `bash scripts/git/publish-clean-branch.sh <branch> <base> origin` — never raw
   `git push --force` or `--force-with-lease`. The publisher runs attribution
   guards before publishing.
-- **Multiple PR templates**: If `.github/PULL_REQUEST_TEMPLATE/` has multiple
-  files, list them and ask user to choose.
-- **Large PR (>20 files)**: Warn about PR size. Suggest splitting if changes are logically separable.
+- **Multiple PR templates**: If `.github/PULL_REQUEST_TEMPLATE/` has multiple files,
+  list them and ask user to choose.
+- **Large PR (>20 files)**: Warn about PR size. Suggest splitting if changes are logically
+  separable.
