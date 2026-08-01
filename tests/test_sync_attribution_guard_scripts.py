@@ -141,12 +141,14 @@ def test_append_snippet_rejects_symlink_dest(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "not a regular file" in result.stderr
+    assert dest.is_symlink()
     assert external.read_text(encoding="utf-8") == "external-only\n"
 
 
 def test_append_snippet_rejects_dangling_symlink_dest(tmp_path: Path) -> None:
+    nowhere = tmp_path / "nowhere"
     dest = tmp_path / "dangling"
-    dest.symlink_to(tmp_path / "nowhere")
+    dest.symlink_to(nowhere)
     snippet = tmp_path / "snippet.txt"
     snippet.write_text("snippet\n", encoding="utf-8")
 
@@ -154,3 +156,5 @@ def test_append_snippet_rejects_dangling_symlink_dest(tmp_path: Path) -> None:
 
     assert result.returncode != 0
     assert "not a regular file" in result.stderr
+    assert dest.is_symlink()
+    assert dest.readlink() == nowhere

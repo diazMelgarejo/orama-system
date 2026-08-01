@@ -12,6 +12,16 @@ GIT = ROOT / "scripts" / "git"
 MANIFEST = GIT / "guard-sync-manifest.sh"
 SYNC = GIT / "sync-attribution-guard-scripts.sh"
 VERIFY = GIT / "verify-guard-parity.sh"
+_SYNC_BINDING_PATTERN = r"^[[:space:]]*(source|\.)[[:space:]]+.*guard-sync-manifest\.sh"
+
+
+def _run_sync_binding_check(sync_script: Path) -> subprocess.CompletedProcess[str]:
+    """Same grep as verify-guard-parity.sh SYNC BINDING check."""
+    return subprocess.run(
+        ["grep", "-Eq", _SYNC_BINDING_PATTERN, str(sync_script)],
+        capture_output=True,
+        text=True,
+    )
 
 
 def _bash_array(name: str) -> list[str]:
@@ -66,10 +76,14 @@ def test_verify_rejects_comment_only_manifest_reference(tmp_path: Path) -> None:
         "# source guard-sync-manifest.sh\n",
         encoding="utf-8",
     )
-    verify_body = VERIFY.read_text(encoding="utf-8")
-    pattern = r'^\s*(source|\.)\s+.*guard-sync-manifest\.sh'
-    assert not re.search(pattern, fake_sync.read_text(encoding="utf-8"), re.MULTILINE)
-    assert re.search(pattern, verify_body, re.MULTILINE)
+    fake_result = _run_sync_binding_check(fake_sync)
+    assert fake_result.returncode != 0, (
+        "production binding grep must reject comment-only manifest reference"
+    )
+    real_result = _run_sync_binding_check(SYNC)
+    assert real_result.returncode == 0, (
+        "canonical sync-attribution-guard-scripts.sh must satisfy binding check"
+    )
 
 
 @pytest.mark.unit
