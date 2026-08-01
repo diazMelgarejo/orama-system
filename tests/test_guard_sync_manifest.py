@@ -1,6 +1,7 @@
 """Guard sync manifest — single source of truth for attribution guard distribution."""
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
@@ -49,10 +50,26 @@ def test_parity_required_expands_in_bash() -> None:
 
 @pytest.mark.unit
 def test_sync_and_verify_source_manifest() -> None:
+    pattern = r'^\s*(source|\.)\s+.*guard-sync-manifest\.sh'
     for script in (SYNC, VERIFY):
         body = script.read_text(encoding="utf-8")
-        assert "guard-sync-manifest.sh" in body
-        assert "source" in body
+        assert re.search(pattern, body, re.MULTILINE), (
+            f"{script.name} must source guard-sync-manifest.sh via an uncommented command"
+        )
+
+
+@pytest.mark.unit
+def test_verify_rejects_comment_only_manifest_reference(tmp_path: Path) -> None:
+    """Comment-only 'source guard-sync-manifest.sh' must not satisfy the binding check."""
+    fake_sync = tmp_path / "sync-attribution-guard-scripts.sh"
+    fake_sync.write_text(
+        "# source guard-sync-manifest.sh\n",
+        encoding="utf-8",
+    )
+    verify_body = VERIFY.read_text(encoding="utf-8")
+    pattern = r'^\s*(source|\.)\s+.*guard-sync-manifest\.sh'
+    assert not re.search(pattern, fake_sync.read_text(encoding="utf-8"), re.MULTILINE)
+    assert re.search(pattern, verify_body, re.MULTILINE)
 
 
 @pytest.mark.unit
