@@ -151,3 +151,23 @@ Follow the feature-development workflow:
 - Files: `single_agent/**/*.py`, `bin/**/*.py`, `tests/*.py`
 - Mother skill: `single_agent/SKILL.md` (v0.9.9.2)
 
+---
+id: orama-pr-body-append-only-never-delta
+trigger: "when updating an existing PR description"
+confidence: 0.97
+domain: workflow
+source: session-curation
+imported_from: "guard-sync-pr251-2026-08-01.yaml"
+source_repo: https://github.com/diazMelgarejo/orama-system
+---
+
+# Orama PR Body Append-Only
+
+## Action
+
+READ → BACKUP → MERGE → WRITE via `scripts/cursor/append-pr-body.sh`. Never delta-only `update_pr`. Run `scripts/git/remind-pr-body-append-only.sh` before publish.
+
+## Evidence
+
+- PR #251 stack + PT #314 clobber incidents; lesson_a8f3c2e91d04
+- See `.claude/homunculus/instincts/inherited/guard-sync-pr251-2026-08-01.yaml`
