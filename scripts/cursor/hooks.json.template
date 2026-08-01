@@ -7,6 +7,12 @@
         "timeout": 120
       }
     ],
+    "beforeSubmitPrompt": [
+      {
+        "command": "BEFORE_SUBMIT_PR_BODY_REMINDER_PLACEHOLDER",
+        "timeout": 15
+      }
+    ],
     "beforeMCPExecution": [
       {
         "command": "BEFORE_MCP_PR_BODY_GUARD_PLACEHOLDER",
