@@ -1,6 +1,6 @@
 # Append-Only PR Body — Reference Card
 
-> **Layer 0 first:** `.cursor/rules/pr-body-comment-only.mdc` — agents **comment only** by default.  
+> **Layer 0 first:** `.cursor/rules/pr-body-comment-only.mdc` — agents **comment only** by default.
 > Load this card only when human set `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1`.
 
 ## Layer 0 — comment only (default)
@@ -15,7 +15,7 @@ Hooks: `pr-body-guard-core.py` + `beforeSubmitPrompt` reminder.
 ## Delimiters (do not put in append content)
 
 | Marker | Role |
-|--------|------|
+| ------ | ---- |
 | `<!-- CURSOR_AGENT_PR_BODY_BEGIN -->` | Start of Cursor agent summary zone |
 | `<!-- CURSOR_AGENT_PR_BODY_END -->` | Insertion point for new follow-ups (preferred) |
 | `<!-- This is an auto-generated comment: release notes by coderabbit.ai -->` | Fallback insertion point — preserve block below |
@@ -92,12 +92,12 @@ Pass the **full merged body** as raw markdown:
 <append content>
 ```
 
-3. Write merged file; `gh pr edit <N> --body-file merged.md`
+1. Write merged file; `gh pr edit <N> --body-file merged.md`
 
 ## Failure modes
 
 | Symptom | Cause | Fix |
-|---------|-------|-----|
+| ------- | ----- | --- |
 | Original Summary gone | Delta-only `body=` write | Restore from `.git/pr-body-backups/`; re-append correctly |
 | `not agent-managed` | Human-authored PR body | Use `gh pr edit` or operator paste |
 | `Resource not accessible by integration` | Token lacks GraphQL update | Operator runs `append-pr-body.sh` locally |
