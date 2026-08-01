@@ -105,7 +105,7 @@ READ → BACKUP → MERGE (append-only) → WRITE (full merged body)
 ```
 
 | Step | Action |
-|------|--------|
+| --- | --- |
 | READ | `gh pr view <N> --json body` |
 | BACKUP | `.git/pr-body-backups/<slug>-pr<N>-<ts>.md` |
 | MERGE | Keep `## Summary`; append `## Follow-up:` chronologically |

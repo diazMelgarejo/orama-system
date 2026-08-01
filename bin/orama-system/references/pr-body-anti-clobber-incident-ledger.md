@@ -16,7 +16,7 @@ notes. This is **always wrong** when an open PR already has a Summary.
 ### Documented incidents
 
 | Date | PR(s) | Caught by | Recovery |
-|------|-------|-----------|----------|
+| --- | --- | --- | --- |
 | 2026-06-27 | PT #154 | Human | Integrative restore → `lesson_3b13ab0a45d4` |
 | 2026-07-27 | orama #222 | Human | Restored Summary + Follow-ups → `lesson_6fff093ccb00` |
 | 2026-07-29 | PT #298, orama #239 | Human | `lesson_4a38f0e95fcf` |
@@ -28,7 +28,7 @@ if most turn-end `update_pr` calls go unreviewed.
 ### Why agents keep forgetting
 
 | Factor | Effect |
-|--------|--------|
+| --- | --- |
 | Cloud turn-end rule | "Update PR before summary" → one `update_pr` feels correct |
 | `update_pr` ergonomics | One parameter vs READ → backup → merge → write |
 | Lessons ≠ hooks | Rules in memory don't block the write at push time |
