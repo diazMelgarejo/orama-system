@@ -52,10 +52,12 @@ LM Studio host, run
    a fresh branch, prove tree equivalence, close the old PR, and open a sanitized
    replacement PR.
 6. Mac ↔ Win (or any peer) must sync `main` while the worktree is dirty?
-   Use [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) —
+   Use [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md)
+   —
    stash → `pull --ff-only` → pop → commit → push. Never `reset --hard` or force-push `main`.
    On **Perpetua-Tools**, also read [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md)
-   — stash `config/devices.yml` / `config/models.yml` explicitly when needed; never `git checkout` overlay paths.
+   — stash `config/devices.yml` / `config/models.yml` explicitly when needed;
+   never `git checkout` overlay paths.
 7. Post-merge integrity check or stale branch with merge noise — what is truly unique vs current `main`?
    Use [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md)
    (ephemeral fresh `origin/main` baseline; **CLAYGO** clean before/after each run).
@@ -88,6 +90,16 @@ LM Studio host, run
     `scripts/git/check_no_pending_merge.sh` (pre-push hook enforces). Incident:
     periscope PR #39 (2026-07-30) — resolved merge never committed; push shipped
     pre-merge tip; PR described a diff that wasn't on the branch.
+12. Writing or reviewing a bash helper that stages content to a temp path then
+    `mv`s it into place (`atomic_write_file`, `atomic_install_file`,
+    `atomic_append_snippet`-shaped functions)?
+    **Mandatory:** [`references/atomic-file-write-traps-reference-card.md`](references/atomic-file-write-traps-reference-card.md)
+    — a destination that isn't a regular file (most often an unexpected
+    directory) doesn't make `mv -f "$stage" "$dest"` fail; POSIX `mv` moves the
+    source *into* an existing directory instead. Exit 0, real content untouched,
+    a stray staging-temp-named file left behind, nothing signals it happened.
+    Incident: orama PR #251 review 4830042706 (2026-07-31) — traced end to end
+    with a real reproduction before writing the fix, not assumed.
 
 ## Non-Negotiables
 
@@ -240,8 +252,6 @@ Always verify: `git diff origin/main...origin/<branch>` after any merge.
 See full decision tree and verification commands:
 [`references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](references/multi-agent-collaboration-protocol.md)
 
-
-
 When a commit includes a version bump, always use the centralized sync script —
 **never** `sed -i` or manual multi-file edits:
 
@@ -264,25 +274,39 @@ If `scripts/sync_version.py --check` exits 1 after a commit, a surface is stale.
 Run the script (no flags) to fix it, then amend or add a follow-up commit.
 
 See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
-See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
+See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md)
+(full surface registry)
 
 ## References
 
-- [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
-- [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md) — hooks off before stash pop/apply; re-enable after (mandatory for agents)
-- [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
-- [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) — ephemeral fresh-main diff; true unique branch contribution; CLAYGO teardown
-- [`references/path-scoped-pr-replay-reference-card.md`](references/path-scoped-pr-replay-reference-card.md) — replay harmonized path delta onto fresh integration base; periscope PR #12 ECC + PR #17 vs #20 purification worked examples
-- [`../../cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md) §9–10 — CIDF good/bad curriculum for path-scoped replay and upstream purification
-- [`../../afrp/failure-modes.md`](../../afrp/failure-modes.md) §6–8 — AFRP premature-confidence / handwaving / synthetic SHA replay examples
-- [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
-- [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
-- [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table
-- [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md) — CRLF on Windows turf; LF on Mac/Linux; no cross-platform EOL tug-of-war
+- [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md)
+  — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
+- [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md)
+  — hooks off before stash pop/apply; re-enable after (mandatory for agents)
+- [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md)
+  — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
+- [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md)
+  — ephemeral fresh-main diff; true unique branch contribution; CLAYGO teardown
+- [`references/path-scoped-pr-replay-reference-card.md`](references/path-scoped-pr-replay-reference-card.md)
+  — replay harmonized path delta onto fresh integration base; periscope PR #12 ECC + PR #17 vs
+  #20 purification worked examples
+- [`../../cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md)
+  §9–10 — CIDF good/bad curriculum for path-scoped replay and upstream purification
+- [`../../afrp/failure-modes.md`](../../afrp/failure-modes.md)
+  §6–8 — AFRP premature-confidence / handwaving / synthetic SHA replay examples
+- [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md)
+  — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
+- [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md)
+  — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
+- [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md)
+  — version registry + Nested-Branch Merge Protocol table
+- [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md)
+  — CRLF on Windows turf; LF on Mac/Linux; no cross-platform EOL tug-of-war
 - [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md)
 - [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
 - [`references/windows-powershell-runtime-bootstrap.md`](references/windows-powershell-runtime-bootstrap.md)
-- [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md) — macOS bash 3.2; no `mapfile` in hook scripts; `check_tdd_commit.sh` pattern
+- [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md)
+  — macOS bash 3.2; no `mapfile` in hook scripts; `check_tdd_commit.sh` pattern
 - [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md)
 - [`docs/wiki/13-alphaclaw-fork-contrib-branches.md`](../../../../docs/wiki/13-alphaclaw-fork-contrib-branches.md)
 - [`scripts/git/reanchor_scan.sh`](../../../../scripts/git/reanchor_scan.sh)
@@ -297,10 +321,17 @@ Reference: `bin/orama-system/references/skill-architecture-guide.md` § v2 Manda
 
 ## Related skills
 
-- [[icloud-escape-move]] — relocate a repo tree out of iCloud to a plain local path (mv → worktree repair → compatibility symlink); a freshly-moved tree can look orphaned until re-anchored with this skill.
-- [[security]] — upstream of this skill: category-only tracked policy, the local-only registry pattern, OpSec vs SecOps vocabulary, and verification-gate discipline for keeping a leak from happening in the first place. Use `security` before a leak lands; use `git-history-surgery` once one already has.
-- [[fable5-git-rebase-safety]] — the tree-twin doctrine this skill's reanchor step relies on, plus a granular per-file/per-commit triage (patch-id matching, scoping against a specific PR's merge commit, detecting structural supersession) for auditing branches/worktrees that look stale or divergent before deciding what to reanchor, discard, or replay.
-
+- [[icloud-escape-move]] — relocate a repo tree out of iCloud to a plain local path
+  (mv → worktree repair → compatibility symlink); a freshly-moved tree can look orphaned
+  until re-anchored with this skill.
+- [[security]] — upstream of this skill: category-only tracked policy, the local-only registry
+  pattern, OpSec vs SecOps vocabulary, and verification-gate discipline for keeping a leak from
+  happening in the first place. Use `security` before a leak lands; use `git-history-surgery`
+  once one already has.
+- [[fable5-git-rebase-safety]] — the tree-twin doctrine this skill's reanchor step relies on,
+  plus a granular per-file/per-commit triage (patch-id matching, scoping against a specific
+  PR's merge commit, detecting structural supersession) for auditing branches/worktrees that
+  look stale or divergent before deciding what to reanchor, discard, or replay.
 
 ## Post-Review Micro-Remediation
 
