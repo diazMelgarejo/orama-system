@@ -51,13 +51,15 @@ from pathlib import Path
 dest = Path(sys.argv[1])
 hook_dir = Path(sys.argv[2])
 
-def merge_event(cfg: dict, event: str, command: str, timeout: int) -> None:
+def merge_event(cfg, event, command, timeout, matcher=None):
     hooks = cfg.setdefault("hooks", {})
     entry = {"command": command, "timeout": timeout}
+    if matcher:
+        entry["matcher"] = matcher
     existing = [
         h
         for h in (hooks.get(event) or [])
-        if not (isinstance(h, dict) and h.get("command") == command)
+        if not (isinstance(h, dict) and h.get("command") == command and h.get("matcher") == matcher)
     ]
     existing.append(entry)
     hooks[event] = existing
@@ -70,6 +72,7 @@ else:
 cfg.setdefault("version", 1)
 merge_event(cfg, "sessionStart", str(hook_dir / "session-apply-git-guards.sh"), 120)
 merge_event(cfg, "beforeMCPExecution", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30)
+merge_event(cfg, "preToolUse", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30, "ManagePullRequest")
 merge_event(cfg, "beforeShellExecution", str(hook_dir / "before-shell-pr-body-guard.sh"), 30)
 
 dest.parent.mkdir(parents=True, exist_ok=True)
