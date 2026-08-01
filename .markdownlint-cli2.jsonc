@@ -11,8 +11,15 @@
       "stern": false
     }
   },
-  "ignores": [
-    "**/SKILL.md",
-    "docs/LESSONS.md"
+  "overrides": [
+    {
+      "filter": [
+        "**/skills/**"
+      ],
+      "config": {
+        "MD013": false
+      },
+      "combine": "merge"
+    }
   ]
 }
