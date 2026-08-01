@@ -21,6 +21,7 @@ notes. This is **always wrong** when an open PR already has a Summary.
 | 2026-07-27 | orama #222 | Human | Restored Summary + Follow-ups → `lesson_6fff093ccb00` |
 | 2026-07-29 | PT #298, orama #239 | Human | `lesson_4a38f0e95fcf` |
 | 2026-08-01 | PT #314 | Human (again) | Integrative restore + enforcement rollout |
+| 2026-08-01 | PT #319 | Human | Delta-only `update_pr` clobber; integrative restore + Cursor hooks Layer 7 |
 
 **Documented:** 5 PRs / 4 incidents. User-estimated silent rate ~5× → **~20–25 total**
 if most turn-end `update_pr` calls go unreviewed.
@@ -80,6 +81,19 @@ At end of every turn with code changes on a PR branch:
 
 `scripts/git/verify-pr-body-not-clobbered.sh` — fails if open PR body lacks `## Summary`.
 Workflow: `.github/workflows/pr-body-guard.yml`.
+
+### Layer 7 — Cursor runtime hooks (Cursor agents only)
+
+Installed via `scripts/cursor/install-user-git-environment.sh` into `~/.cursor/hooks.json`:
+
+| Hook event | Script | Behavior |
+| ---------- | ------ | -------- |
+| `beforeMCPExecution` | `before-mcp-pr-body-guard.sh` | **Deny** `ManagePullRequest update_pr` with `body=`; backup on PR read |
+| `beforeShellExecution` | `before-shell-pr-body-guard.sh` | **Deny** `gh pr edit --body` (inline); backup on `gh pr view` body fetch |
+
+Escape hatch (human only): `CURSOR_PR_BODY_FULL_MERGE_ACK=1` when passing a verified full merged body.
+
+Hookify: `.claude/hookify.pr-body-append-only.local.md`
 
 ---
 

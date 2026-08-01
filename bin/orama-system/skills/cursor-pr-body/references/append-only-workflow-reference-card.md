@@ -26,6 +26,19 @@ If `gh pr edit` fails with `Resource not accessible by integration`, save merged
 
 and hand off to the operator or retry with a token that has `updatePullRequest`.
 
+## Layer 7 — Cursor runtime hooks (agents only)
+
+Installed by `bash scripts/cursor/install-user-git-environment.sh` into `~/.cursor/hooks.json`:
+
+| Event | Script | Blocks |
+| ----- | ------ | ------ |
+| `beforeMCPExecution` | `before-mcp-pr-body-guard.sh` | `ManagePullRequest update_pr` with `body=` |
+| `beforeShellExecution` | `before-shell-pr-body-guard.sh` | `gh pr edit --body` (inline; `--body-file` OK) |
+
+Both hooks **backup PR body on read** (`gh pr view` / MCP PR access) to `.git/pr-body-backups/`.
+
+Escape hatch: `CURSOR_PR_BODY_FULL_MERGE_ACK=1` when passing a verified full merged body.
+
 ## Worked example — stack harmonization follow-up
 
 **follow-up.md** (content only — no delimiters):
