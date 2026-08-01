@@ -1,102 +1,74 @@
 ---
 name: cursor-pr-body
 description: >-
-  Append-only GitHub PR body updates for Cursor Cloud agents and any coding agent
-  using ManagePullRequest or gh. Prevents clobbering existing PR summaries when
-  adding harmonization notes, CodeRabbit fix follow-ups, or CI verification blocks.
-  Triggers on: update PR body, append to PR, follow-up section, ManagePullRequest
-  update_pr, gh pr edit, PR harmonization notes, stack integration summary.
-version: 1.0.0
+  Layer 0 comment-only PR updates for Cursor agents — post_comment/gh pr comment
+  only, never auto-change PR descriptions. When human sets
+  CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1, append-only body workflow applies. Triggers
+  on: update PR body, ManagePullRequest update_pr, gh pr edit, append-pr-body,
+  PR summary, post_comment, PR harmonization notes.
+version: 1.1.0
 license: Apache 2.0
 compatibility: cursor, claude-code, codex, openclaw, hermes-harness, orama-system
 parent_skill: orama-system
 triggers:
   - update pr body
   - append pr body
-  - follow-up section
+  - post_comment
+  - pr comment only
   - ManagePullRequest update_pr
   - gh pr edit
   - harmonize pr
-  - stack integration
   - append-pr-body
-allowed-tools: Bash(scripts/cursor/append-pr-body.sh *), Bash(gh *), file-operations
+allowed-tools: Bash(scripts/cursor/append-pr-body.sh *), Bash(gh pr comment *), Bash(gh *)
 ---
 
-# Cursor PR Body — Append-Only Workflow
+# Cursor PR Body — Comment-Only + Append-Only
 
-> **Cursor rule:** `.cursor/rules/append-only-pr-body.mdc` (always applied)  
-> **Script:** `scripts/cursor/append-pr-body.sh`  
-> **Curriculum:** [`../../cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md) §1  
-> **Wiki:** [`docs/wiki/12-cursor-cloud-commit-attribution.md`](../../../../docs/wiki/12-cursor-cloud-commit-attribution.md) § PR body updates
+> **Layer 0 rule:** `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply)  
+> **Layers 1–6:** `.cursor/rules/append-only-pr-body.mdc` (human override only)  
+> **Script:** `scripts/cursor/append-pr-body.sh` (human override only)
 
-## Purpose
+## Layer 0 — Default for Cursor agents
 
-GitHub PR descriptions are **append-only historical records** during multi-turn agent work. Replacing the body with only the latest delta erases the original Summary, misleads reviewers, and breaks CodeRabbit release-note continuity.
+**Do not change PR descriptions automatically.** Use comments only:
 
-This skill governs **updates to existing PRs**. For **creating** new PRs, see `.cursor/commands/pr.md`.
+| Tool | Action |
+| ---- | ------ |
+| `ManagePullRequest` | `post_comment` only — never `update_pr` with `body=` |
+| `gh` | `gh pr comment` only — never `gh pr edit` or `append-pr-body.sh` |
 
-## Mandatory workflow (never skip)
+Hooks enforce this at `preToolUse`, `beforeMCPExecution`, `beforeShellExecution`, and
+`beforeSubmitPrompt`. You cannot bypass by choosing a different tool.
+
+## Human override (explicit authorization required)
+
+```bash
+export CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1
+```
+
+Then follow append-only workflow below. Delta-only writes remain forbidden.
+
+## Append-only workflow (Layers 1–6, override only)
 
 ```text
 READ  →  BACKUP  →  MERGE (append-only)  →  WRITE (full merged body)
 ```
 
-| Step | Command / action |
-| ------ | ------------------ |
-| **READ** | `gh pr view <N> --repo <owner/repo> --json body --jq .body` |
-| **BACKUP** | `.git/pr-body-backups/<repo-slug>-pr<N>-<UTC-ts>.md` |
-| **MERGE** | Add `## Follow-up: <title>` below original summary; preserve CodeRabbit tail |
-| **WRITE** | `append-pr-body.sh` or `gh pr edit --body-file` with **full** merged markdown |
-
-## Canonical script
-
-Invoke the reviewed helper at `scripts/cursor/append-pr-body.sh` (operator approval; pin repo checkout):
-
-```text
-scripts/cursor/append-pr-body.sh <owner/repo> <pr-number> \
-  --title "Follow-up: harmonized onto #244" \
+```bash
+bash scripts/cursor/append-pr-body.sh <owner/repo> <pr-number> \
+  --title "Follow-up: <short title>" \
   --file follow-up.md
 ```
 
-The script:
-
-- Inserts before `<!-- CURSOR_AGENT_PR_BODY_END -->` when present
-- Else inserts before `<!-- This is an auto-generated comment: release notes by coderabbit.ai -->`
-- Else appends at end
-- Aborts if the remote body changed between read and write (race guard)
-- Rejects append content containing reserved delimiters
-
-See [`references/append-only-workflow-reference-card.md`](references/append-only-workflow-reference-card.md) for tool matrix, failure modes, Cursor hook Layer 7, and examples.
-
-## Tool matrix
-
-| Tool | Use when | Constraints |
-| ------ | ---------- | ------------- |
-| `append-pr-body.sh` | **Default** — only approved write path | Full merge logic built in |
-| `gh pr edit --body-file` | Non-agent-managed PRs; human-owned descriptions | Token needs `updatePullRequest`; pass merged file, not delta |
-| `ManagePullRequest update_pr` | **Blocked by Cursor hook** unless `CURSOR_PR_BODY_FULL_MERGE_ACK=1` | Pass **full** integrative merged body only; prefer `append-pr-body.sh` |
-
-## What to put in a Follow-up block
-
-- Stack harmonization: base branch, rebase tip SHA, commits skipped/kept
-- Review fixes: CodeRabbit review id, commit SHA, what changed
-- CI: failing job URL, root cause, local verification command + result
-- Explicit **non-goals** when a side quest was deferred to another PR
-
-## Forbidden
+## Forbidden (always)
 
 | Bad | Why |
-| ----- | ----- |
-| `update_pr` with only CI delta | Wipes original Summary — use `append-pr-body.sh` |
-| Any `update_pr` when append script available | One-call ergonomics caused 4+ documented clobbers |
-| Retitle PR to match side quest | Misrepresents branch purpose |
-| Skip backup on "small" edits | No rollback if merge logic wrong |
-| Reorder or delete prior follow-ups | Breaks audit trail |
+| --- | --- |
+| Turn-end `update_pr` with latest delta | Clobbered 5+ PRs — comment instead |
+| Any automatic body edit without human override | Layer 0 violation |
+| Delta-only body even with override | Layers 1–6 violation |
 
-## Related skills
+## References
 
-- [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) — branch harmonization
-- [`../oramasys-method/references/integrative-merge.md`](../oramasys-method/references/integrative-merge.md) — synthesize, never amputate
-- [`../../references/pr-body-anti-clobber-incident-ledger.md`](../../references/pr-body-anti-clobber-incident-ledger.md) — incident ledger
-- [`../../references/agent-execution-frugality-reference-card.md`](../../references/agent-execution-frugality-reference-card.md) — execution guardrails
-- [`../cursor-agent/SKILL.md`](../cursor-agent/SKILL.md) — Cursor Cloud agent operations
+- [`references/append-only-workflow-reference-card.md`](references/append-only-workflow-reference-card.md)
+- [`../../references/pr-body-anti-clobber-incident-ledger.md`](../../references/pr-body-anti-clobber-incident-ledger.md)

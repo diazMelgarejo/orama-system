@@ -21,23 +21,21 @@ if [[ -z "$pr_number" ]]; then
 fi
 
 cat <<EOF
-PR-BODY-GUARD: open PR #${pr_number} for branch ${branch}
+PR-BODY-GUARD (Layer 0): open PR #${pr_number} for branch ${branch}
   ${pr_title}
   ${pr_url}
 
-NEVER ManagePullRequest update_pr with delta-only body= — it REPLACES the entire field.
+LAYER 0 — COMMENT ONLY. Cursor agents must NOT change the PR description.
 
-Correct path (append-pr-body.sh only):
-  1. READ   gh pr view ${pr_number} --json body
-  2. BACKUP .git/pr-body-backups/<repo>-pr${pr_number}-<timestamp>.md
-  3. MERGE  keep original ## Summary; append ## Follow-up chronologically
-  4. WRITE  bash scripts/cursor/append-pr-body.sh <owner/repo> ${pr_number} --title "..." --file follow-up.md
-     then: PR_BODY_UPDATE_ACK=1 before publish-clean-branch (strict mode)
+  DO:    ManagePullRequest post_comment  OR  gh pr comment
+  NEVER: update_pr with body=, gh pr edit, append-pr-body.sh (hooks block these)
 
-If you must use update_pr (agent-managed PR only): pass the FULL integrative merged body,
-never the latest paragraph alone. Prefer append-pr-body.sh.
+Human override only (then append-only Layers 1–6 apply):
+  CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1
+  bash scripts/cursor/append-pr-body.sh <owner/repo> ${pr_number} --title "..." --file follow-up.md
 
-Lessons: lesson_3b13ab0a45d4 lesson_4a38f0e95fcf lesson_6fff093ccb00 lesson_a8f3c2e91d04
+Rules: .cursor/rules/pr-body-comment-only.mdc
+Skill:  bin/orama-system/skills/cursor-pr-body/SKILL.md
 EOF
 
 if [[ "${PR_BODY_GUARD_STRICT:-0}" == "1" && "${PR_BODY_UPDATE_ACK:-0}" != "1" ]]; then

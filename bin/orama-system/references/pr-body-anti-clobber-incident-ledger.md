@@ -7,6 +7,18 @@
 
 ---
 
+## Layer 0 — Comment only (Cursor agents, top prohibition)
+
+**Default:** agents **never** mutate an existing PR description. Progress updates go to
+**comments** (`ManagePullRequest post_comment`, `gh pr comment`).
+
+Hooks block `update_pr` with `body=`, `gh pr edit`, and `append-pr-body.sh` unless the
+human set `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1` in the current session.
+
+Cursor rule: `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply, listed before append-only).
+
+---
+
 ## The failure mode
 
 **PR body was replaced, not appended.** A delta-only `ManagePullRequest update_pr` or
@@ -88,12 +100,16 @@ Installed via `scripts/cursor/install-user-git-environment.sh` into `~/.cursor/h
 
 | Hook event | Script | Behavior |
 | ---------- | ------ | -------- |
-| `beforeMCPExecution` | `before-mcp-pr-body-guard.sh` | **Deny** `ManagePullRequest update_pr` with `body=`; backup on PR read |
-| `beforeShellExecution` | `before-shell-pr-body-guard.sh` | **Deny** `gh pr edit --body` (inline); backup on `gh pr view` body fetch |
+| `beforeSubmitPrompt` | `before-submit-pr-body-reminder.sh` | Injects Layer 0 reminder when prompt mentions PR bodies |
+| `preToolUse` (`ManagePullRequest`) | `before-mcp-pr-body-guard.sh` | **Deny** `update_pr` with `body=`; allow `post_comment` |
+| `beforeMCPExecution` | same | Backup on PR read |
+| `beforeShellExecution` | `before-shell-pr-body-guard.sh` | **Deny** `gh pr edit`, `append-pr-body.sh`; allow `gh pr comment` |
 
-Escape hatch (human only): `CURSOR_PR_BODY_FULL_MERGE_ACK=1` when passing a verified full merged body.
+Core logic: `scripts/cursor/hooks/pr-body-guard-core.py`
 
-Hookify: `.claude/hookify.pr-body-append-only.local.md`
+Human override only: `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1` — then Layers 1–6 (append-only) apply.
+
+Hookify: `.claude/hookify.pr-body-comment-only.local.md`
 
 ---
 
