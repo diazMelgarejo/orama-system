@@ -1,6 +1,16 @@
 # Append-Only PR Body — Reference Card
 
-> Load when updating an **existing** PR description after harmonization, review fixes, or CI verification.
+> **Layer 0 first:** `.cursor/rules/pr-body-comment-only.mdc` — agents **comment only** by default.  
+> Load this card only when human set `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1`.
+
+## Layer 0 — comment only (default)
+
+| Do | Never (automatic) |
+| -- | ----------------- |
+| `ManagePullRequest post_comment` | `update_pr` with `body=` |
+| `gh pr comment` | `gh pr edit`, `append-pr-body.sh` |
+
+Hooks: `pr-body-guard-core.py` + `beforeSubmitPrompt` reminder.
 
 ## Delimiters (do not put in append content)
 
