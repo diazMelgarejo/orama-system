@@ -219,6 +219,91 @@ def test_check_no_pending_merge_blocks_pending_am_session(tmp_path: Path) -> Non
     subprocess.run(["git", "am", "--abort"], cwd=repo, capture_output=True)
 
 
+def test_check_no_pending_merge_blocks_merge_msg_marker(tmp_path: Path) -> None:
+    """Clean cherry-pick --no-commit leaves MERGE_MSG without CHERRY_PICK_HEAD (git >=2.43)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_git_repo(repo)
+    (repo / "f.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "f.txt"], check=True, cwd=repo)
+    subprocess.run(["git", "commit", "-m", "base"], check=True, cwd=repo)
+    subprocess.run(["git", "branch", "side"], check=True, cwd=repo)
+    (repo / "g.txt").write_text("side-only\n", encoding="utf-8")
+    subprocess.run(["git", "add", "g.txt"], check=True, cwd=repo)
+    subprocess.run(["git", "commit", "-m", "side"], check=True, cwd=repo)
+    subprocess.run(["git", "checkout", "main"], check=True, cwd=repo)
+    cherry = subprocess.run(
+        ["git", "cherry-pick", "--no-commit", "side"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert cherry.returncode == 0
+    merge_msg = repo / ".git" / "MERGE_MSG"
+    if not merge_msg.is_file():
+        pytest.skip("this git version does not leave MERGE_MSG for clean cherry-pick --no-commit")
+
+    result = _run_check(repo)
+    assert result.returncode == EXIT_MERGE_CLEAN
+    assert "MERGE_MSG" in result.stderr
+    assert "prepared message" in result.stderr
+
+
+def test_check_no_pending_merge_blocks_squash_msg_marker(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_git_repo(repo)
+    (repo / "README.md").write_text("init\n", encoding="utf-8")
+    subprocess.run(["git", "add", "README.md"], check=True, cwd=repo)
+    subprocess.run(["git", "commit", "-m", "init"], check=True, cwd=repo)
+
+    squash_rel = subprocess.check_output(
+        ["git", "rev-parse", "--git-path", "SQUASH_MSG"],
+        cwd=repo,
+        text=True,
+    ).strip()
+    squash_msg = (repo / squash_rel).resolve()
+    squash_msg.write_text("Squashed commit of the following:\n", encoding="utf-8")
+
+    result = _run_check(repo)
+    assert result.returncode == EXIT_MERGE_CLEAN
+    assert "SQUASH_MSG" in result.stderr
+    assert "squash merge was prepared" in result.stderr
+
+
+def test_check_no_pending_merge_blocks_rebase_marker(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_git_repo(repo)
+    (repo / "f.txt").write_text("base\n", encoding="utf-8")
+    subprocess.run(["git", "add", "f.txt"], check=True, cwd=repo)
+    subprocess.run(["git", "commit", "-m", "base"], check=True, cwd=repo)
+    subprocess.run(["git", "branch", "side"], check=True, cwd=repo)
+    (repo / "f.txt").write_text("main\n", encoding="utf-8")
+    subprocess.run(["git", "add", "f.txt"], check=True, cwd=repo)
+    subprocess.run(["git", "commit", "-m", "main"], check=True, cwd=repo)
+    subprocess.run(["git", "checkout", "side"], check=True, cwd=repo)
+    (repo / "f.txt").write_text("side\n", encoding="utf-8")
+    subprocess.run(["git", "add", "f.txt"], check=True, cwd=repo)
+    subprocess.run(["git", "commit", "-m", "side"], check=True, cwd=repo)
+    subprocess.run(["git", "checkout", "main"], check=True, cwd=repo)
+    rebase = subprocess.run(
+        ["git", "rebase", "side"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert rebase.returncode != 0
+    assert (repo / ".git" / "rebase-merge").is_dir()
+
+    result = _run_check(repo)
+    assert result.returncode == EXIT_MERGE_CLEAN
+    assert "REBASE" in result.stderr
+    assert "rebase --continue" in result.stderr
+
+    subprocess.run(["git", "rebase", "--abort"], cwd=repo, capture_output=True)
+
+
 def test_check_no_pending_merge_blocks_pending_revert(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     repo.mkdir()

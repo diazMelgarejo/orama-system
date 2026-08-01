@@ -127,3 +127,30 @@ def test_append_snippet_fails_closed_when_dest_is_a_directory(tmp_path: Path) ->
         "no stray staging file should be left inside the directory -- "
         f"before={before} after={after}"
     )
+
+
+def test_append_snippet_rejects_symlink_dest(tmp_path: Path) -> None:
+    external = tmp_path / "external.txt"
+    external.write_text("external-only\n", encoding="utf-8")
+    dest = tmp_path / "symlink-dest"
+    dest.symlink_to(external)
+    snippet = tmp_path / "snippet.txt"
+    snippet.write_text("snippet\n", encoding="utf-8")
+
+    result = _run_atomic_append_snippet(dest, "0644", snippet)
+
+    assert result.returncode != 0
+    assert "not a regular file" in result.stderr
+    assert external.read_text(encoding="utf-8") == "external-only\n"
+
+
+def test_append_snippet_rejects_dangling_symlink_dest(tmp_path: Path) -> None:
+    dest = tmp_path / "dangling"
+    dest.symlink_to(tmp_path / "nowhere")
+    snippet = tmp_path / "snippet.txt"
+    snippet.write_text("snippet\n", encoding="utf-8")
+
+    result = _run_atomic_append_snippet(dest, "0644", snippet)
+
+    assert result.returncode != 0
+    assert "not a regular file" in result.stderr
