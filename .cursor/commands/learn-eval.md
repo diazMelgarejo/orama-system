@@ -51,7 +51,7 @@ origin: auto-extracted
 [Trigger conditions]
 ```
 
-5. **Quality gate — Checklist + Holistic verdict**
+1. **Quality gate — Checklist + Holistic verdict**
 
    ### 5a. Required checklist (verify by actually reading files)
 
@@ -67,7 +67,7 @@ origin: auto-extracted
    Synthesize the checklist results and draft quality, then choose **one** of the following (Step 6 defines the action each verdict triggers):
 
    | Verdict | Meaning |
-   |---------|---------|
+   | --------- | --------- |
    | **Save** | Unique, specific, well-scoped |
    | **Improve then Save** | Valuable but needs refinement |
    | **Absorb into [X]** | Should be appended to an existing skill |
@@ -80,24 +80,27 @@ origin: auto-extracted
 - **Uniqueness**: Provides value not covered by existing skills (informed by checklist results)
 - **Reusability**: Realistic trigger scenarios exist in future sessions
 
-6. **Verdict-specific confirmation flow**
+1. **Verdict-specific confirmation flow**
 
 - **Improve then Save**: Present the required improvements + revised draft + updated checklist/verdict after one re-evaluation; if the revised verdict is **Save**, save after user confirmation, otherwise follow the new verdict
 - **Save**: Present save path + checklist results + 1-line verdict rationale + full draft → save after user confirmation
 - **Absorb into [X]**: Present target path + additions (diff format) + checklist results + verdict rationale → append after user confirmation
 - **Drop**: Show checklist results + reasoning only (no confirmation needed)
 
-7. Save / Absorb to the determined location
+1. Save / Absorb to the determined location
 
-8. **If the pattern is PR-stack or incident scoped**, run the ECC instinct ritual:
-   - See [`bin/orama-system/references/learn-eval-ecc-ritual-reference-card.md`](../../bin/orama-system/references/learn-eval-ecc-ritual-reference-card.md)
-   - Curate 2–4 instincts in `.claude/homunculus/instincts/inherited/<stack>-<date>.yaml`
-   - Supplement `*-instincts.yaml` bundles — never overwrite wholesale (periscope pattern)
-   - Post-merge: `/ecc-sync`
+## ECC instinct ritual (PR-stack scoped)
+
+If the pattern is PR-stack or incident scoped, also run:
+
+- [`learn-eval-ecc-ritual-reference-card.md`](../../bin/orama-system/references/learn-eval-ecc-ritual-reference-card.md)
+- Curate 2–4 instincts in `.claude/homunculus/instincts/inherited/<stack>-<date>.yaml`
+- Supplement `*-instincts.yaml` bundles — never overwrite wholesale (periscope pattern)
+- Post-merge: `/ecc-sync`
 
 ## Output Format for Step 5
 
-```
+```text
 ### Checklist
 - [x] skills/ grep: no overlap (or: overlap found → details)
 - [x] MEMORY.md: no overlap (or: overlap found → details)
