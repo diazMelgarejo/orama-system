@@ -6,6 +6,8 @@ action: block
 pattern: "sync-attribution-guard-scripts\\.sh"
 ---
 
+# Guard sync divergence
+
 Guard sync blocked until sibling divergence check passes.
 
 Run:

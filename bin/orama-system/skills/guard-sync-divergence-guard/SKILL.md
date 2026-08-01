@@ -35,7 +35,7 @@ WORKSPACE_ROOT=/agent/repos bash scripts/git/check-guard-sync-divergence.sh --wo
 ```
 
 | Exit | Meaning |
-|------|---------|
+| ---- | ------- |
 | 0 | Safe to sync |
 | 1 | `GUARD_SYNC_E_DIVERGENCE` — HITL required |
 | 2 | Usage error |
@@ -43,7 +43,7 @@ WORKSPACE_ROOT=/agent/repos bash scripts/git/check-guard-sync-divergence.sh --wo
 ## Safe vs blocked
 
 | Sibling file vs canonical HEAD | Verdict |
-|--------------------------------|---------|
+| ------------------------------ | ------- |
 | Byte-identical | Safe |
 | Differs, sibling blob exists in canonical history | Safe (upgrade lagging copy) |
 | Differs, sibling blob absent from canonical history | **Block** — promote sibling first |
@@ -77,7 +77,8 @@ WORKSPACE_ROOT=/agent/repos bash scripts/git/check-guard-sync-divergence.sh --wo
 
 ## References
 
-- [`references/divergence-check-reference-card.md`](references/divergence-check-reference-card.md) — algorithm, hooks, epic saga context
+- [`references/divergence-check-reference-card.md`](references/divergence-check-reference-card.md)
+  — algorithm, hooks, epic saga context
 - [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) — tree-twin / re-anchor companion
 - `scripts/git/check-guard-sync-divergence.sh` — implementation
 - `scripts/git/guard-sync-manifest.sh` — path manifest
