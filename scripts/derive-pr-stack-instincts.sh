@@ -43,7 +43,8 @@ case "${1:-}" in
     echo "  [ ] Session YAML in .claude/homunculus/instincts/inherited/"
     echo "  [ ] /instinct-import --dry-run reviewed"
     echo "  [ ] remind/hook wired if instinct references mechanical gate"
-    echo "  [ ] PR body updated via append-pr-body.sh (not delta update_pr)"
+    echo "  [ ] verify-pr-body-not-clobbered.sh passes (Layer 6 CI)"
+    echo "  [ ] PR body updated via append-pr-body.sh (NEVER delta update_pr)"
     missing=0
     for f in \
       "$INSTINCT_DIR/guard-sync-pr251-2026-08-01.yaml" \

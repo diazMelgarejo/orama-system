@@ -89,6 +89,12 @@ origin: auto-extracted
 
 7. Save / Absorb to the determined location
 
+8. **If the pattern is PR-stack or incident scoped**, run the ECC instinct ritual:
+   - See [`bin/orama-system/references/learn-eval-ecc-ritual-reference-card.md`](../../bin/orama-system/references/learn-eval-ecc-ritual-reference-card.md)
+   - Curate 2–4 instincts in `.claude/homunculus/instincts/inherited/<stack>-<date>.yaml`
+   - Supplement `*-instincts.yaml` bundles — never overwrite wholesale (periscope pattern)
+   - Post-merge: `/ecc-sync`
+
 ## Output Format for Step 5
 
 ```
