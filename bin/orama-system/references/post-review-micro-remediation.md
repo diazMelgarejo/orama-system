@@ -12,7 +12,7 @@
 
 ---
 
-## The 6 phases
+## The 7 phases
 
 ### Phase 0 — Freeze
 
@@ -123,11 +123,83 @@
   - **intentionally superseded** by a deeper abstraction fix (state which
     fix supersedes it and why the original finding no longer applies), or
   - **documented as not applicable** — with a one-line reason, not silence.
+- **Run the actual authoritative tool, not a description of it.** "This
+  should lint clean" is not verification; running `markdownlint-cli2` (or
+  the equivalent for the finding's domain) and reading its real output is.
+  The same applies to re-running a fixed script directly, not just
+  re-reading the diff.
+
+**Verification gotchas** (each cost real time this doctrine's own
+worked examples were built from — check these explicitly, don't assume
+a status field or a first glance is accurate):
+
+- A PR-list API endpoint's `merged` field is unreliable — it has been
+  observed `null` for PRs that were, in fact, merged. Always confirm via
+  the single-PR endpoint (`GET /pulls/{number}`), which reports `merged`
+  accurately.
+- A squash-merged branch will never show as a git ancestor of the branch
+  it merged into (`git merge-base --is-ancestor` returns false) — that
+  is expected, not a sign the merge failed. Verify squash-merged content
+  by checking that the specific IDs/content actually exist in the target
+  branch, not by ancestry.
+- A diff-scoped CI lint step (one that only lints files a PR *changed*)
+  still lints the **whole file**, not just the changed hunk, once any
+  line in that file is touched. Expect pre-existing violations elsewhere
+  in a touched file to surface for the first time. Fix them properly if
+  the file is genuine hand-authored prose; exclude the file from the
+  lint scope only if it is machine-rendered/append-only data (e.g. a
+  lessons log) where line-length rules don't meaningfully apply.
+- `git stash` used mid-merge, even for an unrelated, seemingly read-only
+  purpose, can silently overwrite files already resolved and re-saved
+  after the stash was created when popped — with no warning and no
+  conflict marker. Avoid stashing during an unresolved merge; if
+  unavoidable, re-verify every file the stash touches against its
+  expected post-resolution state immediately after popping.
+- Before rebasing, resetting, or re-merging a branch already pushed
+  earlier in the same session, fetch the actual remote tip first. A
+  local checkout that's fallen behind a push made moments earlier
+  diverges silently and produces a merge/rebase based on stale state.
 
 ### Phase 5 — Closure
 
 - Leave the branch open for human review if requested.
 - Merge only after review approval.
+
+### Phase 6 — Cross-repo synchronization
+
+Applies whenever the file(s) a review finding touches are shared between
+repos under an established sync policy (e.g. orama-system's canonical
+`scripts/git/*` mirrored into Perpetua-Tools) — not every remediation,
+only ones touching files with a sibling copy elsewhere.
+
+- **A finding on one repo's copy of a shared file is a signal to check
+  the sibling repo's copy, not just fix the one you were told about.**
+  Diff the sibling's current content against the pre-fix content on the
+  side you were reviewing — if it matches, the same bug is almost
+  certainly present there too, whether or not a review caught it on
+  that side.
+- **Verify before assuming identical content means an identical fix
+  applies.** Confirm the sibling's pre-fix state actually matches (or
+  is close enough that the same patch is correct) before copying a fix
+  over — don't assume synchronization from the sync policy's existence
+  alone.
+- **After fixing both sides, verify full parity with a real diff**
+  across every file the shared change touched — not a description of
+  what should now match, an actual `diff`/`diff -q` confirming it does.
+- **Fix both locally, push once per repo, to the existing open PR
+  branch on each side.** Do not close one PR and open a new one to
+  represent the same synchronized edit, and do not push incrementally
+  in several small rounds when the fix is already fully known on both
+  sides. Two PRs that represent one logical, bidirectionally-synchronized
+  change should open, update, and close in tandem — never fragmented
+  into a chain of superseding PRs, which makes the actual change harder
+  to review and the sync history harder to reconstruct later.
+- **Check for gaps running the *other* direction too.** A sync pass
+  triggered by one repo's review can still surface content the *other*
+  repo has that the first one is missing (e.g. a test file covering a
+  script that exists on both sides but was only tested on one) — the
+  direction the fix is flowing in this specific finding doesn't mean
+  every gap between the two repos flows the same way.
 
 ---
 
@@ -138,12 +210,12 @@ Skillify pattern:
 
 | Skill | Phases it needs |
 | --- | --- |
-| [`agent-methodology`](../skills/agent-methodology/SKILL.md) | All 6 — this is the doctrine's home methodology |
+| [`agent-methodology`](../skills/agent-methodology/SKILL.md) | All 7 — this is the doctrine's home methodology |
 | [`code-review`](../skills/code-review/SKILL.md) | Phase 1 (root-cause clustering), Phase 4 (verification gates) |
-| [`git-history-surgery`](../skills/git-history-surgery/SKILL.md) | Phase 3 (integration — safety refs, reset-vs-rebase decision) |
+| [`git-history-surgery`](../skills/git-history-surgery/SKILL.md) | Phase 3 (integration — safety refs, reset-vs-rebase decision), Phase 6 (cross-repo sync — same discipline as this skill's own cross-host sync card, applied to review remediation specifically) |
 | [`gstack`](../gstack/SKILL.md) | Phase 0 (freeze), Phase 5 (closure) — AutoPlan review gating |
 | [`skillify`](../skills/skillify/SKILL.md) | Phase 2 (branch discipline) — matches the modular-skill-authoring pattern this doc itself follows |
-| [`hermes-harness`](../skills/hermes-harness/SKILL.md) | Phase 0 (freeze), Phase 2 (branch discipline) — multi-agent dispatch must not write to `main` mid-review |
+| [`hermes-harness`](../skills/hermes-harness/SKILL.md) | Phase 0 (freeze), Phase 2 (branch discipline), Phase 6 (cross-repo sync — this is where PT ↔ orama harness integration actually lives; `pt-orama-harness-integration` is a redirect stub to this skill) — multi-agent dispatch must not write to `main` mid-review |
 | [`mcp-orchestration`](../skills/mcp-orchestration/SKILL.md) | Phase 1 (root-cause clustering) — routing bugs across providers cluster the same way as coordination-dispatch bugs did |
 
 ---
