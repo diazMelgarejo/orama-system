@@ -2,11 +2,11 @@
 name: cursor-pr-body
 description: >-
   Layer 0 comment-only PR updates for Cursor agents — post_comment/gh pr comment
-  only, never auto-change PR descriptions. When human sets
-  CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1, append-only body workflow applies. Triggers
-  on: update PR body, ManagePullRequest update_pr, gh pr edit, append-pr-body,
+  only, never auto-change PR descriptions. After operator grant via
+  grant-pr-body-human-override.sh, append-pr-body.sh is the only allowed write path.
+  Triggers on: update PR body, ManagePullRequest update_pr, gh pr edit, append-pr-body,
   PR summary, post_comment, PR harmonization notes.
-version: 1.1.0
+version: 1.2.0
 license: Apache 2.0
 compatibility: cursor, claude-code, codex, openclaw, hermes-harness, orama-system
 parent_skill: orama-system
@@ -25,8 +25,9 @@ allowed-tools: Bash(gh pr comment *), Bash(gh pr view *)
 # Cursor PR Body — Comment-Only + Append-Only
 
 > **Layer 0 rule:** `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply)  
-> **Layers 1–6:** `.cursor/rules/append-only-pr-body.mdc` (human override only)  
-> **Script:** `scripts/cursor/append-pr-body.sh` (human override only)
+> **Layers 1–6:** `.cursor/rules/append-only-pr-body.mdc` (operator grant only)  
+> **Grant:** `scripts/cursor/grant-pr-body-human-override.sh` (operator interactive)  
+> **Write:** `scripts/cursor/append-pr-body.sh` (only authorized body-write path)
 
 ## Layer 0 — Default for Cursor agents
 
@@ -35,28 +36,17 @@ allowed-tools: Bash(gh pr comment *), Bash(gh pr view *)
 | Tool | Action |
 | ---- | ------ |
 | `ManagePullRequest` | `post_comment` only — never `update_pr` with `body=` |
-| `gh` | `gh pr comment` only — never `gh pr edit` or `append-pr-body.sh` |
+| `gh` | `gh pr comment` only — never `gh pr edit` or direct body API calls |
 
 Hooks enforce this at `preToolUse`, `beforeMCPExecution`, `beforeShellExecution`, and
 `beforeSubmitPrompt`. You cannot bypass by choosing a different tool.
 
-## Human override (explicit authorization required)
+## Operator grant (explicit authorization)
 
-Operator must create an ack file **and** export the env var in the shell that runs
-the write (hooks verify both; env alone is insufficient):
+The **operator** runs `scripts/cursor/grant-pr-body-human-override.sh` in an
+interactive terminal. Agents must not run the grant script or forge the ack file.
 
-```bash
-touch ~/.cursor/pr-body-human-override-ack
-export CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1
-```
-
-Then follow append-only workflow below. Delta-only writes remain forbidden.
-
-## Append-only workflow (Layers 1–6, override only)
-
-```text
-READ  →  BACKUP  →  MERGE (append-only)  →  WRITE (full merged body)
-```
+After grant, agents may run **only**:
 
 ```bash
 bash scripts/cursor/append-pr-body.sh <owner/repo> <pr-number> \
@@ -64,13 +54,23 @@ bash scripts/cursor/append-pr-body.sh <owner/repo> <pr-number> \
   --file follow-up.md
 ```
 
+Direct `update_pr`, `gh pr edit --body-file`, and `gh api` body mutations remain
+**denied** even with a grant.
+
+## Append-only workflow (Layers 1–6, grant + append-pr-body only)
+
+```text
+READ  →  BACKUP  →  MERGE (append-only)  →  WRITE (full merged body)
+```
+
 ## Forbidden (always)
 
 | Bad | Why |
 | --- | --- |
 | Turn-end `update_pr` with latest delta | Clobbered 5+ PRs — comment instead |
-| Any automatic body edit without human override | Layer 0 violation |
-| Delta-only body even with override | Layers 1–6 violation |
+| Any automatic body edit without operator grant | Layer 0 violation |
+| `gh pr edit` / `gh api` after grant | Grant permits append-pr-body.sh only |
+| Delta-only body even with grant | Layers 1–6 violation |
 
 ## References
 

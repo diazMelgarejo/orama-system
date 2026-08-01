@@ -34,8 +34,12 @@ pr_body_backup_if_needed() {
 
   local backup_dir body ts safe_slug path
   backup_dir="$(pr_body_backup_dir)"
-  mkdir -p "$backup_dir"
-  body="$(gh pr view "$pr_number" --repo "$repo_slug" --json body --jq .body 2>/dev/null || true)"
+  if ! mkdir -p "$backup_dir"; then
+    return 1
+  fi
+  if ! body="$(gh pr view "$pr_number" --repo "$repo_slug" --json body --jq .body 2>/dev/null)"; then
+    return 1
+  fi
   [[ -n "$body" ]] || return 0
 
   ts="$(date -u +%Y%m%dT%H%M%SZ)"
