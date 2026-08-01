@@ -14,9 +14,6 @@
   "overrides": [
     {
       "filter": [
-        "SKILL.md",
-        "**/SKILL.md",
-        "bin/orama-system/SKILL.md",
         "**/skills/**"
       ],
       "config": {
