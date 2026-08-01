@@ -42,7 +42,7 @@ READ  →  BACKUP  →  MERGE (append-only)  →  WRITE (full merged body)
 ```
 
 | Step | Command / action |
-|------|------------------|
+| ------ | ------------------ |
 | **READ** | `gh pr view <N> --repo <owner/repo> --json body --jq .body` |
 | **BACKUP** | `.git/pr-body-backups/<repo-slug>-pr<N>-<UTC-ts>.md` |
 | **MERGE** | Add `## Follow-up: <title>` below original summary; preserve CodeRabbit tail |
@@ -71,7 +71,7 @@ See [`references/append-only-workflow-reference-card.md`](references/append-only
 ## Tool matrix
 
 | Tool | Use when | Constraints |
-|------|----------|-------------|
+| ------ | ---------- | ------------- |
 | `append-pr-body.sh` | **Default** — only approved write path | Full merge logic built in |
 | `gh pr edit --body-file` | Non-agent-managed PRs; human-owned descriptions | Token needs `updatePullRequest`; pass merged file, not delta |
 | `ManagePullRequest update_pr` | **Avoid** — delta-only clobber risk | If unavoidable on agent-managed PRs, pass **full** integrative body only |
@@ -86,7 +86,7 @@ See [`references/append-only-workflow-reference-card.md`](references/append-only
 ## Forbidden
 
 | Bad | Why |
-|-----|-----|
+| ----- | ----- |
 | `update_pr` with only CI delta | Wipes original Summary — use `append-pr-body.sh` |
 | Any `update_pr` when append script available | One-call ergonomics caused 4+ documented clobbers |
 | Retitle PR to match side quest | Misrepresents branch purpose |
@@ -95,8 +95,8 @@ See [`references/append-only-workflow-reference-card.md`](references/append-only
 
 ## Related skills
 
-- [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) — branch harmonization before PR body notes
-- [`../oramasys-method/references/integrative-merge.md`](../oramasys-method/references/integrative-merge.md) — synthesize, never amputate (applies to PR prose too)
-- [`../../references/pr-body-anti-clobber-incident-ledger.md`](../../references/pr-body-anti-clobber-incident-ledger.md) — incident record + enforcement ladder
-- [`../../references/agent-execution-frugality-reference-card.md`](../../references/agent-execution-frugality-reference-card.md) — strategic execution guardrails
+- [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) — branch harmonization
+- [`../oramasys-method/references/integrative-merge.md`](../oramasys-method/references/integrative-merge.md) — synthesize, never amputate
+- [`../../references/pr-body-anti-clobber-incident-ledger.md`](../../references/pr-body-anti-clobber-incident-ledger.md) — incident ledger
+- [`../../references/agent-execution-frugality-reference-card.md`](../../references/agent-execution-frugality-reference-card.md) — execution guardrails
 - [`../cursor-agent/SKILL.md`](../cursor-agent/SKILL.md) — Cursor Cloud agent operations
