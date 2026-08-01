@@ -22,6 +22,8 @@ install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/session-apply-git-guards.sh" 
 install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/pr-body-backup-lib.sh" "${HOOK_DIR}/pr-body-backup-lib.sh"
 install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/before-mcp-pr-body-guard.sh" "${HOOK_DIR}/before-mcp-pr-body-guard.sh"
 install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/before-shell-pr-body-guard.sh" "${HOOK_DIR}/before-shell-pr-body-guard.sh"
+install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/before-submit-pr-body-reminder.sh" "${HOOK_DIR}/before-submit-pr-body-reminder.sh"
+install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/pr-body-guard-core.py" "${HOOK_DIR}/pr-body-guard-core.py"
 
 cat >"${GUARD_DIR}/apply-all-repos.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -71,6 +73,7 @@ else:
 
 cfg.setdefault("version", 1)
 merge_event(cfg, "sessionStart", str(hook_dir / "session-apply-git-guards.sh"), 120)
+merge_event(cfg, "beforeSubmitPrompt", str(hook_dir / "before-submit-pr-body-reminder.sh"), 15)
 merge_event(cfg, "beforeMCPExecution", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30)
 merge_event(cfg, "preToolUse", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30, "ManagePullRequest")
 merge_event(cfg, "beforeShellExecution", str(hook_dir / "before-shell-pr-body-guard.sh"), 30)
