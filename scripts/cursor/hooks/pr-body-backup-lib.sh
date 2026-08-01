@@ -12,7 +12,12 @@ pr_body_backup_dir() {
   if [[ "$git_common_dir" != /* ]]; then
     git_common_dir="$(git rev-parse --show-toplevel 2>/dev/null)/$git_common_dir"
   fi
-  printf '%s/pr-body-backups\n' "$(cd "$git_common_dir" && pwd)"
+  local resolved
+  if ! resolved="$(cd "$git_common_dir" && pwd)"; then
+    printf '%s\n' "${TMPDIR:-/tmp}"
+    return 0
+  fi
+  printf '%s/pr-body-backups\n' "$resolved"
 }
 
 pr_body_backup_if_needed() {
