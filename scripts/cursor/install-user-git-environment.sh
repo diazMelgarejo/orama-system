@@ -23,6 +23,7 @@ install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/pr-body-backup-lib.sh" "${HOO
 install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/before-mcp-pr-body-guard.sh" "${HOOK_DIR}/before-mcp-pr-body-guard.sh"
 install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/before-shell-pr-body-guard.sh" "${HOOK_DIR}/before-shell-pr-body-guard.sh"
 install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/before-submit-pr-body-reminder.sh" "${HOOK_DIR}/before-submit-pr-body-reminder.sh"
+install -m 0755 "${REPO_ROOT}/scripts/cursor/grant-pr-body-human-override.sh" "${HOOK_DIR}/grant-pr-body-human-override.sh"
 install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/pr-body-guard-core.py" "${HOOK_DIR}/pr-body-guard-core.py"
 
 cat >"${GUARD_DIR}/apply-all-repos.sh" <<'EOF'

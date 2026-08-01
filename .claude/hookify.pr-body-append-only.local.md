@@ -10,16 +10,10 @@ pattern: "(ManagePullRequest|gh pr edit).*\\bbody\\b"
 
 `ManagePullRequest update_pr` and `gh pr edit --body` **replace the entire PR body**.
 
-Mandatory workflow before any PR body write (operator-authorized only):
+Operator-authorized workflow (agent may run **only** `append-pr-body.sh` after grant):
 
-```bash
-touch ~/.cursor/pr-body-human-override-ack
-export CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1
-gh pr view <N> --repo <owner/repo> --json body --jq .body   # READ
-# backup → .git/pr-body-backups/<slug>-pr<N>-<ts>.md         # BACKUP
-bash scripts/cursor/append-pr-body.sh <owner/repo> <N> \
-  --title "Follow-up: <title>" --file follow-up.md           # WRITE
-```
+1. Operator runs `scripts/cursor/grant-pr-body-human-override.sh` (interactive TTY).
+2. Agent runs `bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "…" --file follow-up.md`.
 
-Cursor hooks (`beforeMCPExecution`, `beforeShellExecution`, `failClosed`) enforce this.
+Hooks deny direct `update_pr` / `gh pr edit` / `gh api` body writes even with a grant.
 Skill: `bin/orama-system/skills/cursor-pr-body/SKILL.md`.

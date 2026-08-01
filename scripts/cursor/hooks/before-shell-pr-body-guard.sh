@@ -24,7 +24,11 @@ else
         repo="${line#BACKUP|}"
         pr="${repo##*|}"
         repo="${repo%|*}"
-        pr_body_backup_if_needed "$repo" "$pr" "shell-preflight"
+        if ! pr_body_backup_if_needed "$repo" "$pr" "shell-preflight"; then
+          decision="DENY"
+          deny_msg="PR body backup failed (fail-closed)."
+          break
+        fi
         ;;
       DENY\|*)
         decision="DENY"

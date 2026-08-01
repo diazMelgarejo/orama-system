@@ -1,7 +1,7 @@
 # Append-Only PR Body — Reference Card
 
 > **Layer 0 first:** `.cursor/rules/pr-body-comment-only.mdc` — agents **comment only** by default.
-> Load this card only when human set `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1`.
+> Load this card only after the operator ran `scripts/cursor/grant-pr-body-human-override.sh`.
 
 ## Layer 0 — comment only (default)
 
