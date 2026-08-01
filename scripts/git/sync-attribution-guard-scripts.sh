@@ -5,6 +5,8 @@ set -euo pipefail
 target_input="${1:?target repo path required}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source_root="$(cd "$SCRIPT_DIR/../.." && pwd)"
+# shellcheck source=guard-sync-manifest.sh
+source "$SCRIPT_DIR/guard-sync-manifest.sh"
 
 if ! target="$(git -C "$target_input" rev-parse --show-toplevel 2>/dev/null)"; then
   echo "skip: not a git repo: $target_input" >&2
@@ -142,32 +144,12 @@ atomic_append_snippet() {
   fi
 }
 
-for rel in \
-  cursor-hooks-id.sh \
-  hooks/commit-msg.strip-coauthor \
-  disable-cursor-commit-attribution.sh \
-  commit-clean.sh \
-  verify-staged-for-commit.sh \
-  commit_clean_test.sh \
-  apply-attribution-guard-all-repos.sh \
-  sync-attribution-guard-scripts.sh \
-  sync-banned-patterns-to-repo.sh \
-  banned_attribution_lib.sh \
-  audit_attribution.sh \
-  check_commit_message.sh \
-  check_identity.sh \
-  check_no_pending_merge.sh \
-  daily-attribution-guard.sh \
-  neutralize-cursor-coauthor-hook.sh \
-  expunge-all-workspace-repos.sh \
-  verify-git-guards.sh \
-  verify-guard-parity.sh \
-  scan-tracked-banned-tokens.sh; do
+for rel in "${GUARD_SYNC_EXECUTABLES[@]}"; do
   [[ -f "$SCRIPT_DIR/$rel" ]] || continue
   atomic_install_file "$SCRIPT_DIR/$rel" "$target/scripts/git/$rel" 0755
 done
 
-for rel in audit_engine.py identity-policy.json identity-policy.schema.json; do
+for rel in "${GUARD_SYNC_DATA_FILES[@]}"; do
   [[ -f "$SCRIPT_DIR/$rel" ]] || continue
   atomic_install_file "$SCRIPT_DIR/$rel" "$target/scripts/git/$rel" 0644
 done
