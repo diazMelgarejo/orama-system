@@ -31,7 +31,14 @@ mutations.
 ## Quick check
 
 ```bash
-WORKSPACE_ROOT=/agent/repos bash scripts/git/check-guard-sync-divergence.sh --workspace
+bash scripts/git/check-guard-sync-divergence.sh --workspace
+```
+
+Optional explicit workspace (defaults to parent of repo root):
+
+```bash
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-$REPO_ROOT/..}" \
+  bash scripts/git/check-guard-sync-divergence.sh --workspace
 ```
 
 | Exit | Meaning |
