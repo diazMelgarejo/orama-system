@@ -12,7 +12,30 @@ GIT = ROOT / "scripts" / "git"
 MANIFEST = GIT / "guard-sync-manifest.sh"
 SYNC = GIT / "sync-attribution-guard-scripts.sh"
 VERIFY = GIT / "verify-guard-parity.sh"
-_SYNC_BINDING_PATTERN = r"^[[:space:]]*(source|\.)[[:space:]]+.*guard-sync-manifest\.sh"
+
+
+def _extract_sync_binding_pattern() -> str:
+    """Pull the actual grep -Eq pattern out of verify-guard-parity.sh's own
+    SYNC BINDING check, rather than hardcoding a copy of it here. A
+    hardcoded literal doesn't change when the production pattern does --
+    this test would keep passing (or failing) against a stale definition
+    while a real regression in the production check goes undetected.
+    Reading it from the source means drift between the two is impossible
+    by construction: there is only one pattern, extracted at test time."""
+    text = VERIFY.read_text(encoding="utf-8")
+    match = re.search(
+        r"grep -Eq '(\^\[\[:space:\]\].*guard-sync-manifest\\\.sh)'",
+        text,
+    )
+    assert match, (
+        "could not find the SYNC BINDING grep pattern in "
+        f"{VERIFY} -- verify-guard-parity.sh's check may have been "
+        "rewritten in a way this extraction no longer matches"
+    )
+    return match.group(1)
+
+
+_SYNC_BINDING_PATTERN = _extract_sync_binding_pattern()
 
 
 def _run_sync_binding_check(sync_script: Path) -> subprocess.CompletedProcess[str]:
