@@ -13,8 +13,8 @@
 **comments** (`ManagePullRequest post_comment`, `gh pr comment`).
 
 Hooks block `update_pr` with `body=`, `gh pr edit`, and `append-pr-body.sh` unless the
-human created `~/.cursor/pr-body-human-override-ack` (or repo-local ack file) **and**
-set `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1` in the current session.
+operator issued a grant via `scripts/cursor/grant-pr-body-human-override.sh`
+(interactive; not agent-runnable).
 
 Cursor rule: `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply, listed before append-only).
 
@@ -108,7 +108,7 @@ Installed via `scripts/cursor/install-user-git-environment.sh` into `~/.cursor/h
 
 Core logic: `scripts/cursor/hooks/pr-body-guard-core.py`
 
-Human override only: `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1` — then Layers 1–6 (append-only) apply.
+Human override only: operator `grant-pr-body-human-override.sh`, then `append-pr-body.sh` — Layers 1–6 (append-only) apply.
 
 Hookify: `.claude/hookify.pr-body-comment-only.local.md`
 
