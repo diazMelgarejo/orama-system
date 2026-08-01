@@ -66,7 +66,7 @@ The script:
 - Aborts if the remote body changed between read and write (race guard)
 - Rejects append content containing reserved delimiters
 
-See [`references/append-only-workflow-reference-card.md`](references/append-only-workflow-reference-card.md) for tool matrix, failure modes, and examples.
+See [`references/append-only-workflow-reference-card.md`](references/append-only-workflow-reference-card.md) for tool matrix, failure modes, Cursor hook Layer 7, and examples.
 
 ## Tool matrix
 
@@ -74,7 +74,7 @@ See [`references/append-only-workflow-reference-card.md`](references/append-only
 | ------ | ---------- | ------------- |
 | `append-pr-body.sh` | **Default** — only approved write path | Full merge logic built in |
 | `gh pr edit --body-file` | Non-agent-managed PRs; human-owned descriptions | Token needs `updatePullRequest`; pass merged file, not delta |
-| `ManagePullRequest update_pr` | **Avoid** — delta-only clobber risk | If unavoidable on agent-managed PRs, pass **full** integrative body only |
+| `ManagePullRequest update_pr` | **Blocked by Cursor hook** unless `CURSOR_PR_BODY_FULL_MERGE_ACK=1` | Pass **full** integrative merged body only; prefer `append-pr-body.sh` |
 
 ## What to put in a Follow-up block
 

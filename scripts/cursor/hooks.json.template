@@ -3,8 +3,20 @@
   "hooks": {
     "sessionStart": [
       {
-        "command": "HOOK_SCRIPT_PATH_PLACEHOLDER",
+        "command": "SESSION_START_HOOK_PLACEHOLDER",
         "timeout": 120
+      }
+    ],
+    "beforeMCPExecution": [
+      {
+        "command": "BEFORE_MCP_PR_BODY_GUARD_PLACEHOLDER",
+        "timeout": 30
+      }
+    ],
+    "beforeShellExecution": [
+      {
+        "command": "BEFORE_SHELL_PR_BODY_GUARD_PLACEHOLDER",
+        "timeout": 30
       }
     ]
   }
