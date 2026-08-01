@@ -19,7 +19,7 @@ triggers:
   - gh pr edit
   - harmonize pr
   - append-pr-body
-allowed-tools: Bash(scripts/cursor/append-pr-body.sh *), Bash(gh pr comment *), Bash(gh *)
+allowed-tools: Bash(gh pr comment *), Bash(gh pr view *)
 ---
 
 # Cursor PR Body — Comment-Only + Append-Only
@@ -42,7 +42,11 @@ Hooks enforce this at `preToolUse`, `beforeMCPExecution`, `beforeShellExecution`
 
 ## Human override (explicit authorization required)
 
+Operator must create an ack file **and** export the env var in the shell that runs
+the write (hooks verify both; env alone is insufficient):
+
 ```bash
+touch ~/.cursor/pr-body-human-override-ack
 export CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1
 ```
 

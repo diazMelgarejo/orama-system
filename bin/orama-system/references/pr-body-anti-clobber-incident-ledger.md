@@ -13,7 +13,8 @@
 **comments** (`ManagePullRequest post_comment`, `gh pr comment`).
 
 Hooks block `update_pr` with `body=`, `gh pr edit`, and `append-pr-body.sh` unless the
-human set `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1` in the current session.
+human created `~/.cursor/pr-body-human-override-ack` (or repo-local ack file) **and**
+set `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1` in the current session.
 
 Cursor rule: `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply, listed before append-only).
 
@@ -35,7 +36,7 @@ notes. This is **always wrong** when an open PR already has a Summary.
 | 2026-08-01 | PT #314 | Human (again) | Integrative restore + enforcement rollout |
 | 2026-08-01 | PT #319 | Human | Delta-only `update_pr` clobber; integrative restore + Cursor hooks Layer 7 |
 
-**Documented:** 5 PRs / 4 incidents. User-estimated silent rate ~5× → **~20–25 total**
+**Documented:** 6 PRs / 5 incidents. User-estimated silent rate ~5× → **~20–25 total**
 if most turn-end `update_pr` calls go unreviewed.
 
 ### Why agents keep forgetting
