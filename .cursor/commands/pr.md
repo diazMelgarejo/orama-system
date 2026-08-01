@@ -89,11 +89,14 @@ git push -u origin HEAD
 ```
 
 If push fails due to divergence:
+
 ```bash
 git fetch origin
 git rebase origin/<base>
-git push -u origin HEAD
+bash scripts/git/publish-clean-branch.sh "$(git branch --show-current)" <base> origin
 ```
+
+Use the audited publisher after rebase — never raw `git push --force` or `--force-with-lease`.
 
 If rebase conflicts occur, stop and inform the user.
 
@@ -196,6 +199,9 @@ Next steps:
 
 - **No `gh` CLI**: Stop with: "GitHub CLI (`gh`) is required. Install: <https://cli.github.com/>"
 - **Not authenticated**: Stop with: "Run `gh auth login` first."
-- **Force push needed**: If remote has diverged and rebase was done, use `git push --force-with-lease` (never `--force`).
+- **Force push needed**: After rebasing a diverged branch, use
+  `bash scripts/git/publish-clean-branch.sh <branch> <base> origin` — never raw
+  `git push --force` or `--force-with-lease`. The publisher runs attribution
+  guards before publishing.
 - **Multiple PR templates**: If `.github/PULL_REQUEST_TEMPLATE/` has multiple files, list them and ask user to choose.
 - **Large PR (>20 files)**: Warn about PR size. Suggest splitting if changes are logically separable.

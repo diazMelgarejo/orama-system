@@ -94,6 +94,45 @@
 - Preserve the original PR scope and description; append updates rather
   than replacing them.
 
+#### PR body updates (mandatory — never skip)
+
+Open PR descriptions are **append-only historical records** during remediation.
+Delta-only writes clobber the original Summary — documented 5+ times
+(see [`pr-body-anti-clobber-incident-ledger.md`](pr-body-anti-clobber-incident-ledger.md)).
+
+```text
+READ → BACKUP → MERGE (append-only) → WRITE (full merged body)
+```
+
+| Step | Action |
+| --- | --- |
+| READ | `gh pr view <N> --json body` |
+| BACKUP | `.git/pr-body-backups/<slug>-pr<N>-<ts>.md` |
+| MERGE | Keep `## Summary`; append `## Follow-up:` chronologically |
+| WRITE | `scripts/cursor/append-pr-body.sh` — **preferred** |
+
+**Forbidden:**
+
+- `ManagePullRequest update_pr` with `body=` containing only the latest remediation delta
+- Skipping backup on "small" follow-ups
+- Rewriting or deleting the original Summary
+
+**Mechanical gates (use them):**
+
+- After commit, before push: `scripts/git/remind-pr-body-append-only.sh`
+- Audited publish: `publish-clean-branch.sh` (strict mode by default)
+- CI Layer 6: `scripts/git/verify-pr-body-not-clobbered.sh`
+
+**Canonical skill:** [`cursor-pr-body`](../skills/cursor-pr-body/SKILL.md)  
+**Execution frugality:** [`agent-execution-frugality-reference-card.md`](agent-execution-frugality-reference-card.md)
+
+#### Guard script sync (before cross-repo propagation)
+
+Edit orama `scripts/git/` canonical only. Before
+`sync-attribution-guard-scripts.sh`, ensure **neither canonical nor target**
+has uncommitted changes to guard-sync paths — sync aborts otherwise to prevent
+dropping local harmonization work.
+
 ### Phase 3 — Integration
 
 - Merge the reviewed PR.
@@ -142,7 +181,9 @@ Skillify pattern:
 | [`code-review`](../skills/code-review/SKILL.md) | Phase 1 (root-cause clustering), Phase 4 (verification gates) |
 | [`git-history-surgery`](../skills/git-history-surgery/SKILL.md) | Phase 3 (integration — safety refs, reset-vs-rebase decision) |
 | [`gstack`](../gstack/SKILL.md) | Phase 0 (freeze), Phase 5 (closure) — AutoPlan review gating |
-| [`skillify`](../skills/skillify/SKILL.md) | Phase 2 (branch discipline) — matches the modular-skill-authoring pattern this doc itself follows |
+| [`cursor-pr-body`](../skills/cursor-pr-body/SKILL.md) | Phase 2 (PR body append-only workflow) |
+| [`skillify`](../skills/skillify/SKILL.md) | Phase 2 (branch discipline) — modular-skill-authoring pattern |
+| [`ecc-sync`](../skills/ecc-sync/SKILL.md) | Phase 5 (closure) — post-merge instinct import |
 | [`hermes-harness`](../skills/hermes-harness/SKILL.md) | Phase 0 (freeze), Phase 2 (branch discipline) — multi-agent dispatch must not write to `main` mid-review |
 | [`mcp-orchestration`](../skills/mcp-orchestration/SKILL.md) | Phase 1 (root-cause clustering) — routing bugs across providers cluster the same way as coordination-dispatch bugs did |
 
@@ -156,5 +197,11 @@ Skillify pattern:
 - [`integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md) —
   synthesize, never amputate; six resolution modes referenced by Phase 3's
   reset-vs-rebase decision
+- [`pr-body-anti-clobber-incident-ledger.md`](pr-body-anti-clobber-incident-ledger.md) —
+  incident record + enforcement ladder for PR body updates
+- [`learn-eval-ecc-ritual-reference-card.md`](learn-eval-ecc-ritual-reference-card.md) —
+  lesson → instinct → `/ecc-sync` pipeline after remediation closes
+- [`agent-execution-frugality-reference-card.md`](agent-execution-frugality-reference-card.md) —
+  tool use, git discipline, and elegance heuristics for multi-repo sessions
 - PT `.agent/AGENTS.md` § Multi-agent merge conflict protocol — portable-brain
   summary of the sister pattern for concurrent branches
