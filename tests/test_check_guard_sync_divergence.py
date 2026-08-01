@@ -98,14 +98,16 @@ def test_sibling_ahead_of_canonical_fails_closed(tmp_path: Path) -> None:
     canon = workspace / "orama-system"
     sibling = workspace / "Perpetua-Tools"
     rel = "scripts/git/audit_engine.py"
+    shared = "# canonical\n"
 
     _init_repo(canon, "Tester", "tester@example.com")
-    _commit_file(canon, rel, "# canonical\n", "canon")
+    _commit_file(canon, rel, shared, "canon")
 
     _init_repo(sibling, "Tester", "tester@example.com")
+    _commit_file(sibling, rel, shared, "shared base")
     _commit_file(sibling, rel, "# sibling innovation\n", "sibling ahead")
 
     result = _run_checker(workspace, canon)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "GUARD_SYNC_E_DIVERGENCE" in result.stderr
-    assert "forked divergence" in result.stdout or "absent from canonical history" in result.stdout
+    assert "canonical lags sibling" in result.stdout
