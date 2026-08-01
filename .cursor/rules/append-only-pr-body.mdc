@@ -7,7 +7,12 @@ alwaysApply: true
 
 **Layer 0 applies first:** `.cursor/rules/pr-body-comment-only.mdc` — Cursor agents
 **comment only** by default. This file governs body writes **only** when the human
-set `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1` in the current session.
+authorized a body edit **and** an operator-created ack file exists:
+
+```bash
+touch ~/.cursor/pr-body-human-override-ack
+export CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1
+```
 
 `ManagePullRequest update_pr`, `gh pr edit`, and GitHub's API **replace the entire PR body**
 when `body` is set. Passing only the latest follow-up paragraph deletes the original Summary.

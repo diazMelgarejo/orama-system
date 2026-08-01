@@ -31,12 +31,16 @@ cannot be bypassed by habit, turn-end checklists, or "small follow-up" reasoning
 
 ## Human override (rare)
 
-Only when the **human explicitly** authorizes a body edit in the current turn:
+Only when the **human explicitly** authorizes a body edit in the current turn **and**
+an operator-created ack file exists (agents must not satisfy this via env alone):
 
 ```bash
+touch ~/.cursor/pr-body-human-override-ack
+# or: touch .git/pr-body-backups/.human-override-ack
 export CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1
 ```
 
+Hooks verify **both** the ack file and the env var before allowing body writes.
 Then **Layers 1–6 still apply** (append-only, READ→BACKUP→MERGE→WRITE). Delta-only
 writes remain forbidden. See `.cursor/rules/append-only-pr-body.mdc`.
 

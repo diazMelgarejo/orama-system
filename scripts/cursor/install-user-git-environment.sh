@@ -53,11 +53,13 @@ from pathlib import Path
 dest = Path(sys.argv[1])
 hook_dir = Path(sys.argv[2])
 
-def merge_event(cfg, event, command, timeout, matcher=None):
+def merge_event(cfg, event, command, timeout, matcher=None, fail_closed=False):
     hooks = cfg.setdefault("hooks", {})
     entry = {"command": command, "timeout": timeout}
     if matcher:
         entry["matcher"] = matcher
+    if fail_closed:
+        entry["failClosed"] = True
     existing = [
         h
         for h in (hooks.get(event) or [])
@@ -74,9 +76,9 @@ else:
 cfg.setdefault("version", 1)
 merge_event(cfg, "sessionStart", str(hook_dir / "session-apply-git-guards.sh"), 120)
 merge_event(cfg, "beforeSubmitPrompt", str(hook_dir / "before-submit-pr-body-reminder.sh"), 15)
-merge_event(cfg, "beforeMCPExecution", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30)
-merge_event(cfg, "preToolUse", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30, "ManagePullRequest")
-merge_event(cfg, "beforeShellExecution", str(hook_dir / "before-shell-pr-body-guard.sh"), 30)
+merge_event(cfg, "beforeMCPExecution", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30, fail_closed=True)
+merge_event(cfg, "preToolUse", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30, "ManagePullRequest", fail_closed=True)
+merge_event(cfg, "beforeShellExecution", str(hook_dir / "before-shell-pr-body-guard.sh"), 30, fail_closed=True)
 
 dest.parent.mkdir(parents=True, exist_ok=True)
 dest.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")

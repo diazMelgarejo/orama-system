@@ -30,8 +30,9 @@ LAYER 0 — COMMENT ONLY. Cursor agents must NOT change the PR description.
   DO:    ManagePullRequest post_comment  OR  gh pr comment
   NEVER: update_pr with body=, gh pr edit, append-pr-body.sh (hooks block these)
 
-Human override only (then append-only Layers 1–6 apply):
-  CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1
+Human override only (operator ack file + env; then append-only Layers 1–6 apply):
+  touch ~/.cursor/pr-body-human-override-ack
+  export CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK=1
   bash scripts/cursor/append-pr-body.sh <owner/repo> ${pr_number} --title "..." --file follow-up.md
 
 Rules: .cursor/rules/pr-body-comment-only.mdc
