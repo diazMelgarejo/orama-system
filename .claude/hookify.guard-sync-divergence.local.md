@@ -2,18 +2,26 @@
 name: guard-sync-divergence
 enabled: true
 event: bash
-action: block
+action: warn
 pattern: "sync-attribution-guard-scripts\\.sh"
 ---
 
 # Guard sync divergence
 
-Guard sync blocked until sibling divergence check passes.
+Before syncing attribution guards, the divergence checker must pass (built into
+`sync-attribution-guard-scripts.sh` unless `GUARD_SYNC_SKIP_DIVERGENCE_CHECK=1`).
 
-Run:
+Manual preflight:
 
 ```bash
-WORKSPACE_ROOT=/agent/repos bash scripts/git/check-guard-sync-divergence.sh --workspace
+bash scripts/git/check-guard-sync-divergence.sh --workspace
+```
+
+Optional explicit workspace root (defaults to parent of repo root):
+
+```bash
+WORKSPACE_ROOT="${WORKSPACE_ROOT:-$REPO_ROOT/..}" \
+  bash scripts/git/check-guard-sync-divergence.sh --workspace
 ```
 
 If siblings carry guard mutations absent from orama canonical history, **stop** and

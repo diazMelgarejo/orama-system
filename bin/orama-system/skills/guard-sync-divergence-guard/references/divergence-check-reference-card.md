@@ -23,7 +23,7 @@ else: BLOCK (forked / sibling innovations absent from canonical)
 
 | Surface | When |
 | ------- | ---- |
-| `sync-attribution-guard-scripts.sh` | Always calls checker `--workspace` first |
+| `sync-attribution-guard-scripts.sh` | Runs checker `--workspace` before sync (unless `GUARD_SYNC_SKIP_DIVERGENCE_CHECK=1`) |
 | `.githooks/pre-push` | When outgoing commits touch `scripts/git/` manifest paths |
 | Agent manual | Before any harmonization wave |
 
