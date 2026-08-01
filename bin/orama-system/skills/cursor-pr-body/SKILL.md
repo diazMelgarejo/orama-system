@@ -72,9 +72,9 @@ See [`references/append-only-workflow-reference-card.md`](references/append-only
 
 | Tool | Use when | Constraints |
 |------|----------|-------------|
-| `append-pr-body.sh` | Default for any agent with `gh` + repo checkout | Full merge logic built in |
+| `append-pr-body.sh` | **Default** — only approved write path | Full merge logic built in |
 | `gh pr edit --body-file` | Non-agent-managed PRs; human-owned descriptions | Token needs `updatePullRequest`; pass merged file, not delta |
-| `ManagePullRequest update_pr` | Cursor Cloud agent-managed PRs only | Raw markdown only — no `CURSOR_AGENT_PR_BODY_*` markers, no Cursor footer images. Fails on non-agent-managed PRs |
+| `ManagePullRequest update_pr` | **Avoid** — delta-only clobber risk | If unavoidable on agent-managed PRs, pass **full** integrative body only |
 
 ## What to put in a Follow-up block
 
@@ -87,7 +87,8 @@ See [`references/append-only-workflow-reference-card.md`](references/append-only
 
 | Bad | Why |
 |-----|-----|
-| `update_pr` with only CI delta | Wipes original Summary |
+| `update_pr` with only CI delta | Wipes original Summary — use `append-pr-body.sh` |
+| Any `update_pr` when append script available | One-call ergonomics caused 4+ documented clobbers |
 | Retitle PR to match side quest | Misrepresents branch purpose |
 | Skip backup on "small" edits | No rollback if merge logic wrong |
 | Reorder or delete prior follow-ups | Breaks audit trail |
@@ -96,4 +97,6 @@ See [`references/append-only-workflow-reference-card.md`](references/append-only
 
 - [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) — branch harmonization before PR body notes
 - [`../oramasys-method/references/integrative-merge.md`](../oramasys-method/references/integrative-merge.md) — synthesize, never amputate (applies to PR prose too)
+- [`../../references/pr-body-anti-clobber-incident-ledger.md`](../../references/pr-body-anti-clobber-incident-ledger.md) — incident record + enforcement ladder
+- [`../../references/agent-execution-frugality-reference-card.md`](../../references/agent-execution-frugality-reference-card.md) — strategic execution guardrails
 - [`../cursor-agent/SKILL.md`](../cursor-agent/SKILL.md) — Cursor Cloud agent operations
