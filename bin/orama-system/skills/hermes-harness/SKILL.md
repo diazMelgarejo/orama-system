@@ -43,25 +43,32 @@ allowed-tools: bash, file-operations, web-search
 source ~/.openclaw/openclaw-glm52-env 2>/dev/null && echo "✅ GLM-5.2 Fallback Activated" || true
 ```
 
-When LM Studio, Ollama, or other Hermes-accessible models are unavailable, this task queue can execute via GLM-5.2. **No additional setup required**—the environment variables are already sourced by start.ps1.
+When LM Studio, Ollama, or other Hermes-accessible models are unavailable, this
+task queue can execute via GLM-5.2. **No additional setup required**—the
+environment variables are already sourced by start.ps1.
 
 ---
 
 ## Purpose
+
 Use Hermes as an operator shell that consumes durable PT-orama/ECC skills,
-prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the runtime gateway/agent fabric.
+prompts, MCP conventions, and cross-harness rules. Keep OpenClaw as the
+runtime gateway/agent fabric.
 
 ## When to Use
+
 - A Windows or Mac operator needs Hermes installed or repaired.
 - Hermes must consume orama/OpenClaw/ECC skills without copying private state.
 - Nous Portal, LM Studio, OpenRouter, Gemini, AGY, or Codex CLI are being wired as coding partners.
 - A Hermes/OpenClaw artifact must become a reusable skill, command, hook, doc, or issue.
 
 ## Operating Thesis
+
 1. **Durable source:** orama-system and ECC own reusable skills and rules.
 2. **Harness edge:** Hermes and other tools adapt loading/invocation only at the edge.
 3. **No private imports:** never ship raw `~/.hermes`, secrets, personal memory, or account tokens.
-4. **Parallel to OpenClaw:** `openclaw-skills` owns OpenClaw config; this skill owns Hermes onboarding and partner prompts.
+4. **Parallel to OpenClaw:** `openclaw-skills` owns OpenClaw config; this
+   skill owns Hermes onboarding and partner prompts.
 
 ## Persistent Pulse Cadence
 
@@ -90,7 +97,8 @@ restarts via an `openclaw cron` job (`mac-orchestrator-pulse`), not a manual loo
   etc.) differs from what a raw JSON example might suggest and an invalid shape
   silently breaks the live gateway (see `lesson_67ddcb4837f2` in PT's semantic
   memory). Full cadence rationale + commands:
-  [`../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md`](../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md) § 11.
+  [`../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md`](../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md)
+  § 11.
 
 ## Universal Invocation Protocol
 
@@ -130,7 +138,7 @@ Committed examples use env placeholders only; runners expand paths at runtime.
 ```
 
 | Field | Rule |
-|-------|------|
+| ------- | ------ |
 | `agent_id` | Audit owner (who initiated) |
 | `executor_id` | Runner (`codex`, `agy`, `hermes`); required when delegating |
 | `transport` | Opaque L2 dispatch intent for OTel/Periscope audit (v2 schema in `/docs/v2`) |
@@ -194,7 +202,7 @@ process (a push, a test run, another agent's job) — don't idle.
 Thin local wrappers point at canonical command cards. Never cache full skill bodies.
 
 | Wrapper slug | Canonical target | Harness | Notes |
-|--------------|------------------|---------|-------|
+| -------------- | ------------------ | --------- | ------- |
 | `pt-orama-council` | `commands/pt-orama-council/SKILL.md` | Hermes / Codex | 5-model council |
 | `pt-orama-review` | `commands/pt-orama-review/SKILL.md` | Hermes / Codex | Findings-first review |
 | `pt-orama-delegate` | `commands/pt-orama-delegate/SKILL.md` | Hermes / AGY | Bounded delegation |
@@ -243,7 +251,8 @@ Partner canaries: `python bin\orama-system\skills\hermes-harness\scripts\verify_
 
 Canonical setup playbook (absorbed from Hermes self-improve `windows-hermes-setup`):
 [`references/windows-hermes-setup.md`](references/windows-hermes-setup.md).
-Install thin wrapper: `python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install`.
+Install thin wrapper:
+`python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills.py --install`.
 
 **CRG on Windows:** `.cursor/mcp.json` must use `CRG_OPENAI_BASE_URL=http://localhost:1234/v1`
 (LM Studio, not Ollama `:11434`). Run `bash bin/orama-system/scripts/sync-cursor-mcp.sh` or see
@@ -382,7 +391,7 @@ Permanent **User PATH** entries (idempotent — safe to re-run):
 ```
 
 | CLI | Windows path | Verify |
-|-----|--------------|--------|
+| ----- | -------------- | -------- |
 | Codex | `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` (WinGet) **preferred**; fallback `%USERPROFILE%\.lmstudio\bin` | `codex --version` |
 | AGY | `%LOCALAPPDATA%\agy\bin` | `agy --version` |
 | cursor-agent | `%LOCALAPPDATA%\cursor-agent` | `cursor-agent --version` |
@@ -529,20 +538,28 @@ Match `openclaw-skills` operational rigor. Hermes is operator shell; OpenClaw ow
 
 ## References
 
-- [`references/update-all-agents-comms.md`](references/update-all-agents-comms.md) — GossipBus + inbox fanout recipe
-- [`references/lan-peer-coordination.md`](references/lan-peer-coordination.md) — queues, pulse-gate, record-success, inbox drops
-- [`references/plan-integration.md`](references/plan-integration.md) — merge multiple plans into one canonical doc
-- [`references/lan-peer-self-talk.md`](references/lan-peer-self-talk.md) — Mac↔Win operator playbook (SSOT) · [`docs/guides/lan-peer-mac-win-operator.md`](../../../../docs/guides/lan-peer-mac-win-operator.md)
-- [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive)
-- [`references/hermes-universal-invocation-protocol.md`](references/hermes-universal-invocation-protocol.md) — envelope, layers, result superset
-- [`references/hermes-skill-absorption-map.md`](references/hermes-skill-absorption-map.md) — Hermes → orama absorption status (redirects + supersets)
+- [`references/update-all-agents-comms.md`](references/update-all-agents-comms.md)
+  — GossipBus + inbox fanout recipe
+- [`references/lan-peer-coordination.md`](references/lan-peer-coordination.md)
+  — queues, pulse-gate, record-success, inbox drops
+- [`references/plan-integration.md`](references/plan-integration.md)
+  — merge multiple plans into one canonical doc
+- [`references/lan-peer-self-talk.md`](references/lan-peer-self-talk.md)
+  — Mac↔Win operator playbook (SSOT) ·
+  [`docs/guides/lan-peer-mac-win-operator.md`](../../../../docs/guides/lan-peer-mac-win-operator.md)
+- [`../git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md)
+  — stash-first Mac↔Win `main` sync (non-destructive)
+- [`references/hermes-universal-invocation-protocol.md`](references/hermes-universal-invocation-protocol.md)
+  — envelope, layers, result superset
+- [`references/hermes-skill-absorption-map.md`](references/hermes-skill-absorption-map.md)
+  — Hermes → orama absorption status (redirects + supersets)
 - [`references/hermes-ecc-fork-inventory.md`](references/hermes-ecc-fork-inventory.md)
 - [`references/ecc-hermes-cross-harness.md`](references/ecc-hermes-cross-harness.md)
 - [`references/hermes-ecc-fork-inventory.md`](references/hermes-ecc-fork-inventory.md)
-- [`../../references/codex-cli-v142-dispatch.md`](../../references/codex-cli-v142-dispatch.md) — Codex CLI v0.142.x profiles (fanout / bounded / interactive)
+- [`../../references/codex-cli-v142-dispatch.md`](../../references/codex-cli-v142-dispatch.md)
+  — Codex CLI v0.142.x profiles (fanout / bounded / interactive)
 - [`../openclaw-skills/SKILL.md`](../openclaw-skills/SKILL.md)
 - [`../mcp-orchestration/SKILL.md`](../mcp-orchestration/SKILL.md)
-
 
 ## Post-Review Micro-Remediation
 
@@ -550,5 +567,12 @@ When addressing review findings (CodeRabbit or human) on an open PR: cluster
 findings by root cause, fix once at the abstraction level, keep every commit
 mechanically attributable to its failure class, and never accumulate revert
 chains — reset to a safety-ref-protected ancestor instead when policy allows.
+
+When a finding touches a file shared between PT and orama-system: check the
+sibling repo's copy for the same bug before assuming it's isolated (Phase 6 —
+cross-repo synchronization), fix both locally, verify full parity with a real
+diff, and push once per repo to the existing open PR branch on each side —
+never close one PR and open a new one to represent the same synchronized
+edit. `pt-orama-harness-integration` redirects here for exactly this reason.
 
 Full doctrine: [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)
