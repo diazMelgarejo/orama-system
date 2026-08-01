@@ -51,18 +51,21 @@ Microsoft-style: stable **symbol** + numeric **exit** + **hex** for scripting.
 | 2 | `0x00000002` | `GIT_PUSH_E_PENDING_MERGE_CONFLICT` | `MERGE_HEAD` + unmerged paths | Resolve → `git add` → `git commit` or `git merge --abort` |
 | 3 | `0x00000003` | `GIT_PUSH_E_PENDING_CHERRY_PICK` | `CHERRY_PICK_HEAD` | `git cherry-pick --continue` or `--abort` |
 | 4 | `0x00000004` | `GIT_PUSH_E_PENDING_REVERT` | `REVERT_HEAD` | `git revert --continue` or `--abort` |
-| 1 | `0x00000001` | `GIT_PUSH_E_PENDING_MERGE_CLEAN` | `MERGE_MSG` / `SQUASH_MSG` / `REBASE` / `AM` (marker-only, no `*_HEAD`) | See marker-specific guidance in stderr; all exit 1 |
+| 5 | `0x00000005` | `GIT_PUSH_E_PENDING_MERGE_MSG` | `MERGE_MSG` (no `MERGE_HEAD`) | `git commit` or abort the prepared operation |
+| 6 | `0x00000006` | `GIT_PUSH_E_PENDING_SQUASH` | `SQUASH_MSG` | `git commit` to finalize squash or discard |
+| 7 | `0x00000007` | `GIT_PUSH_E_PENDING_REBASE` | `rebase-merge` / `rebase-apply` | `git rebase --continue` or `--abort` |
+| 8 | `0x00000008` | `GIT_PUSH_E_PENDING_AM` | `rebase-apply/applying` (`git am`) | `git am --continue` or `--abort` |
 
-**Marker-only states (v1):** When no `MERGE_HEAD` / `CHERRY_PICK_HEAD` / `REVERT_HEAD` is set
+**Marker-only states:** When no `MERGE_HEAD` / `CHERRY_PICK_HEAD` / `REVERT_HEAD` is set
 but `MERGE_MSG`, `SQUASH_MSG`, an in-progress rebase (`rebase-merge/` or
 `rebase-apply/` without `applying`), or a stuck `git am` (`rebase-apply/applying`)
-is present, the script still blocks push with exit **1** and symbol
-`GIT_PUSH_E_PENDING_MERGE_CLEAN`. Recovery text names the specific marker (`AM` vs
-`REBASE`, etc.) — do not assume a `*_HEAD` ref exists.
+is present, the script blocks push with a **distinct** exit code (5–8) and symbol —
+not `GIT_PUSH_E_PENDING_MERGE_CLEAN`. Recovery text names the specific marker.
 
 **Priority when classifying exit (single primary code):** conflict merge (2) →
-clean merge (1) → cherry-pick (3) → revert (4). Multiple `*_HEAD` refs are
-abnormal; the script lists all markers but emits one primary exit code.
+clean merge (1) → cherry-pick (3) → revert (4) → am (8) → rebase (7) →
+squash (6) → merge_msg (5). Multiple `*_HEAD` refs are abnormal; the script
+lists all markers but emits one primary exit code.
 
 ### Stderr contract (machine + human)
 

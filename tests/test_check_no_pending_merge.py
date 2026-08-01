@@ -17,6 +17,10 @@ EXIT_MERGE_CLEAN = 1
 EXIT_MERGE_CONFLICT = 2
 EXIT_CHERRY_PICK = 3
 EXIT_REVERT = 4
+EXIT_MERGE_MSG = 5
+EXIT_SQUASH = 6
+EXIT_REBASE = 7
+EXIT_AM = 8
 
 
 def _init_git_repo(repo: Path, *, branch: str = "main") -> None:
@@ -210,7 +214,8 @@ def test_check_no_pending_merge_blocks_pending_am_session(tmp_path: Path) -> Non
     assert (repo / ".git" / "rebase-apply" / "applying").is_file()
 
     result = _run_check(repo)
-    assert result.returncode == EXIT_MERGE_CLEAN
+    assert result.returncode == EXIT_AM
+    assert "GIT_PUSH_E_PENDING_AM" in result.stderr
     assert "AM" in result.stderr
     assert "REBASE" not in result.stderr
     assert "am --continue" in result.stderr
@@ -244,7 +249,8 @@ def test_check_no_pending_merge_blocks_merge_msg_marker(tmp_path: Path) -> None:
         pytest.skip("this git version does not leave MERGE_MSG for clean cherry-pick --no-commit")
 
     result = _run_check(repo)
-    assert result.returncode == EXIT_MERGE_CLEAN
+    assert result.returncode == EXIT_MERGE_MSG
+    assert "GIT_PUSH_E_PENDING_MERGE_MSG" in result.stderr
     assert "MERGE_MSG" in result.stderr
     assert "prepared message" in result.stderr
 
@@ -266,7 +272,8 @@ def test_check_no_pending_merge_blocks_squash_msg_marker(tmp_path: Path) -> None
     squash_msg.write_text("Squashed commit of the following:\n", encoding="utf-8")
 
     result = _run_check(repo)
-    assert result.returncode == EXIT_MERGE_CLEAN
+    assert result.returncode == EXIT_SQUASH
+    assert "GIT_PUSH_E_PENDING_SQUASH" in result.stderr
     assert "SQUASH_MSG" in result.stderr
     assert "squash merge was prepared" in result.stderr
 
@@ -297,7 +304,8 @@ def test_check_no_pending_merge_blocks_rebase_marker(tmp_path: Path) -> None:
     assert (repo / ".git" / "rebase-merge").is_dir()
 
     result = _run_check(repo)
-    assert result.returncode == EXIT_MERGE_CLEAN
+    assert result.returncode == EXIT_REBASE
+    assert "GIT_PUSH_E_PENDING_REBASE" in result.stderr
     assert "REBASE" in result.stderr
     assert "rebase --continue" in result.stderr
 
