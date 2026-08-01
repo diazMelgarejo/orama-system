@@ -13,6 +13,13 @@
         "timeout": 30
       }
     ],
+    "preToolUse": [
+      {
+        "command": "BEFORE_MCP_PR_BODY_GUARD_PLACEHOLDER",
+        "matcher": "ManagePullRequest",
+        "timeout": 30
+      }
+    ],
     "beforeShellExecution": [
       {
         "command": "BEFORE_SHELL_PR_BODY_GUARD_PLACEHOLDER",
