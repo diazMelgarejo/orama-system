@@ -253,6 +253,14 @@ only ones touching files with a sibling copy elsewhere.
   script that exists on both sides but was only tested on one) — the
   direction the fix is flowing in this specific finding doesn't mean
   every gap between the two repos flows the same way.
+- **When the synchronized branch itself later needs merging into `main`**
+  and might have real content conflicts: for the ordinary case (one
+  branch, one agent, no concurrent multi-agent editing), use
+  [`worktree-semantic-merge-reference-card.md`](worktree-semantic-merge-reference-card.md)
+  — it's the default, and it's the whole procedure for that case. Escalate
+  to `multi-agent-collaboration-protocol.md`'s Nested-Branch Merge Protocol
+  only if this actually is the harder case that card explicitly excludes
+  (concurrent multi-agent edits, or a long-diverged fork/upstream sync).
 
 ---
 
