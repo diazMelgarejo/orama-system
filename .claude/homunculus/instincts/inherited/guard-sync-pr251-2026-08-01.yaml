@@ -1,0 +1,75 @@
+# Instincts derived from orama-system PR #251 guard-sync stack (2026-08-01)
+# Derivation: lesson_e390f2de6366, guard-sync-manifest, reanchor_scan hardening
+# Import: /instinct-import .claude/homunculus/instincts/inherited/guard-sync-pr251-2026-08-01.yaml
+# Post-merge: /ecc-sync (orama-system-instincts.yaml bundle)
+
+---
+id: orama-guard-sync-canonical-only
+trigger: "when editing scripts/git guard files in orama-system"
+confidence: 0.95
+domain: git
+source: session-curation
+imported_from: "PR #251 guard-sync-parity stack"
+source_repo: https://github.com/diazMelgarejo/orama-system
+related_lessons:
+  - lesson_e390f2de6366
+  - lesson_950d450b3d5b
+title: "Orama scripts/git Is Canonical — Never Duplicate Lists"
+action: >-
+  Edit guard scripts only in orama-system scripts/git/. Downstream repos
+  receive byte-identical copies via sync-attribution-guard-scripts.sh.
+  guard-sync-manifest.sh is the single source for sync and parity file
+  lists — never duplicate GUARD_SYNC_* arrays in PT or AlphaClaw.
+  After canonical edits, run verify-guard-parity.sh against downstream
+  checkouts before declaring parity.
+evidence: >-
+  PR #251: PT had fixes that never propagated back to orama, inverting
+  sync direction. audit_engine.py was installed at wrong mode in canonical
+  loop until manifest split executables vs data files.
+
+---
+id: orama-reanchor-tree-twin-no-merge-base
+trigger: "when classifying branch state after a history rewrite or running reanchor_scan"
+confidence: 0.93
+domain: git
+source: session-curation
+imported_from: "PR #251 reanchor_scan hardening"
+source_repo: https://github.com/diazMelgarejo/orama-system
+related_lessons:
+  - lesson_154b34159790
+title: "Reanchor Uses Tree-Twin Only — Never merge-base"
+action: >-
+  Use scripts/git/reanchor_scan.sh tree-twin (%T) classification only.
+  Do not use git merge-base, ahead/behind, or rev-list counts across
+  rewrite boundaries. When fetch fails, abort the scan (exit nonzero) —
+  do not classify refs from stale MAINREF. NO-TWIN means investigate
+  with git cherry -v, not "likely fine" from merge-base.
+evidence: >-
+  PR #251 review 4833493387: removed merge-base ORPHAN/likely-fine
+  heuristic; fail-closed on git fetch timeout/offline.
+
+---
+id: orama-pr-body-append-only-never-delta
+trigger: "when updating an existing PR description in orama-system"
+confidence: 0.97
+domain: workflow
+source: session-curation
+imported_from: "PR_BODY_ANTI_CLOBBER_ENFORCEMENT_PLAN.md"
+source_repo: https://github.com/diazMelgarejo/orama-system
+related_lessons:
+  - lesson_3b13ab0a45d4
+  - lesson_4a38f0e95fcf
+  - lesson_6fff093ccb00
+  - lesson_a8f3c2e91d04
+title: "PR Body Append-Only — Never Delta update_pr"
+action: >-
+  Before ManagePullRequest update_pr or gh pr edit: READ body, BACKUP to
+  .git/pr-body-backups/, MERGE original ## Summary with chronological
+  ## Follow-up sections, WRITE full merged body via
+  scripts/cursor/append-pr-body.sh. Never pass body= with only the latest
+  remediation paragraph. After commit on a branch with an open PR, run
+  scripts/git/remind-pr-body-append-only.sh before publish-clean-branch.
+evidence: >-
+  Documented clobbers: PT#154, orama#222, PT#298, orama#239, PT#314.
+  PT #314 2026-08-01: agent erased guard-sync Summary with delta-only
+  update_pr despite existing lessons and append-pr-body.sh.
