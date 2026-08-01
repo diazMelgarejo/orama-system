@@ -16,7 +16,7 @@
 ## Pipeline (6 steps)
 
 | Step | Action | Artifact |
-|------|--------|----------|
+| --- | --- | --- |
 | 1 | Close incident → append lesson | `.agent/memory/semantic/lessons.jsonl` + episodic row |
 | 2 | Write working doc with PR refs + evidence | `.agent/memory/working/<TOPIC>.md` |
 | 3 | Curate 2–4 instincts | `.claude/homunculus/instincts/inherited/<stack>-<date>.yaml` |
@@ -36,7 +36,7 @@ bash scripts/derive-pr-stack-instincts.sh --list
 ## Harmonization rules (periscope pattern)
 
 | Rule | Detail |
-|------|--------|
+| --- | --- |
 | **Supplement, don't replace** | Add session YAML under `instincts/inherited/`; append triggers to `*-instincts.yaml` bundle |
 | **Exclude timestamp churn** | Do not commit `ecc-tools.json` / `identity.json` unless intentional |
 | **Cross-repo parity** | orama canonical instincts first; PT mirrors downstream stack lessons |
@@ -48,7 +48,8 @@ bash scripts/derive-pr-stack-instincts.sh --list
 - PT: `.claude/homunculus/instincts/inherited/Perpetua-Tools-instincts.yaml`
 - periscope: `.claude/homunculus/instincts/inherited/periscope-instincts.yaml`
 
-Session files (safe to add): `guard-sync-pr251-2026-08-01.yaml`, `guard-sync-pr314-2026-08-01.yaml`, etc.
+Session files (safe to add): `guard-sync-pr251-2026-08-01.yaml`,
+`guard-sync-pr314-2026-08-01.yaml`, etc.
 
 ---
 

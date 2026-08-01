@@ -8,7 +8,7 @@
 ## Tool use
 
 | Do | Don't |
-|----|-------|
+| --- | --- |
 | Batch parallel reads/searches for independent context | Serial tool calls when inputs don't depend on each other |
 | Grep with `head_limit` + narrow `glob`/`path` | Full-repo scans without scope |
 | Read file sections (`offset`/`limit`) for large files | Re-read entire files after small edits |
@@ -20,7 +20,7 @@
 ## Git discipline
 
 | Do | Don't |
-|----|-------|
+| --- | --- |
 | Edit orama `scripts/git/` canonical first | Hand-edit PT guard copies |
 | Abort sync on dirty worktree (harmonize first) | Blind `sync-attribution-guard-scripts.sh` over local edits |
 | `publish-clean-branch.sh` for audited publish | Raw `git push --force` |
@@ -32,7 +32,7 @@
 ## PR & review workflow
 
 | Do | Don't |
-|----|-------|
+| --- | --- |
 | Root-cause cluster (Phase 1) before patching | One commit per review comment |
 | `append-pr-body.sh` for PR updates | Delta-only `ManagePullRequest update_pr` |
 | Integrative merge (synthesize, never amputate) | Delete prior follow-ups or Summary |
@@ -44,7 +44,7 @@
 ## Memory & documentation
 
 | Do | Don't |
-|----|-------|
+| --- | --- |
 | Append-only for lessons/audits/incident ledgers | Rewrite historical records in place |
 | Link to canonical reference docs | Duplicate doctrine into every skill |
 | 2–4 curated ECC instincts per stack | Bulk auto-generate instinct dumps |
