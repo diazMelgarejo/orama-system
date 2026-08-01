@@ -123,7 +123,17 @@ def _manage_pr_decision(data: dict[str, Any]) -> tuple[str, str | None]:
 
 
 def _shell_segments(command_line: str) -> list[str]:
-    segments = [part.strip() for part in re.split(r"\s*(?:&&|;|\|\|)\s*", command_line) if part.strip()]
+    # Split on newlines as well as &&/;/|| -- a shell interprets a bare
+    # newline as a command separator too, and without this a second
+    # command hidden on the next line (e.g. after a legitimate
+    # append-pr-body.sh invocation grants ALLOW) was never inspected at
+    # all, since the whole multi-line block stayed one "segment" and the
+    # append-pr-body.sh branch below returns immediately on match.
+    segments = [
+        part.strip()
+        for part in re.split(r"\s*(?:&&|;|\|\||\n)\s*", command_line)
+        if part.strip()
+    ]
     return segments or [command_line.strip()]
 
 
