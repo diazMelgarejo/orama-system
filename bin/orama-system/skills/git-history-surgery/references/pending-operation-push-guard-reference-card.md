@@ -93,10 +93,13 @@ Cherry-pick/revert rows do not probe unmerged paths in v1; use `--continue` /
 ### Known limitation (v1)
 
 `git cherry-pick --no-commit` on a **clean** apply does **not** set
-`CHERRY_PICK_HEAD` (Git leaves only staged index changes). This guard detects
-cherry-pick via `CHERRY_PICK_HEAD` when the operation is in progress (typically
-after a conflict). A future v2 may add `git diff --cached` heuristics; the
-periscope PR #39 incident class is merge-specific and fully covered.
+`CHERRY_PICK_HEAD`. **Newer Git** versions also write `MERGE_MSG` without
+`MERGE_HEAD`; this guard blocks that state with exit **5**
+(`GIT_PUSH_E_PENDING_MERGE_MSG`). **Older Git** leaves only staged index changes
+and no pending-operation marker — still undetected in v1. Conflict-path
+cherry-pick remains covered via `CHERRY_PICK_HEAD` (exit 3). A future v2 may
+add `git diff --cached` heuristics; the periscope PR #39 incident class is
+merge-specific and fully covered.
 
 ## Manual pre-push checklist
 
@@ -128,10 +131,10 @@ not from memory of what you resolved.
 | `test_check_no_pending_merge_blocks_conflicted_merge_head` | conflicting merge | 2 |
 | `test_merge_head_with_unmerged_files` | conflict + “resolve and stage” text | 2 |
 | `test_check_no_pending_merge_blocks_pending_cherry_pick` | conflicted cherry-pick (in progress) | 3 |
-| `test_check_no_pending_merge_blocks_pending_am_session` | real stuck `git am` session (not a synthetic marker) | 1, reported as `AM` not `REBASE` |
-| `test_check_no_pending_merge_blocks_merge_msg_marker` | clean `cherry-pick --no-commit` (`MERGE_MSG` only) | 1 |
-| `test_check_no_pending_merge_blocks_squash_msg_marker` | `merge --squash` without commit (`SQUASH_MSG`) | 1 |
-| `test_check_no_pending_merge_blocks_rebase_marker` | in-progress rebase (`rebase-merge/`) | 1, reported as `REBASE` |
+| `test_check_no_pending_merge_blocks_pending_am_session` | real stuck `git am` session (not a synthetic marker) | 8, reported as `AM` not `REBASE` |
+| `test_check_no_pending_merge_blocks_merge_msg_marker` | clean `cherry-pick --no-commit` (`MERGE_MSG` only) | 5 |
+| `test_check_no_pending_merge_blocks_squash_msg_marker` | `merge --squash` without commit (`SQUASH_MSG`) | 6 |
+| `test_check_no_pending_merge_blocks_rebase_marker` | in-progress rebase (`rebase-merge/`) | 7, reported as `REBASE` |
 | `test_check_no_pending_merge_blocks_pending_revert` | `--no-commit` revert | 4 |
 
 ## Decision log (closes the loop)

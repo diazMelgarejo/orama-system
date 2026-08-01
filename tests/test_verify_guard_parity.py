@@ -1,6 +1,7 @@
 """Tests for scripts/git/verify-guard-parity.sh edge cases."""
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -13,8 +14,10 @@ pytestmark = pytest.mark.unit
 
 
 def test_verify_guard_parity_fails_on_inaccessible_target() -> None:
-    result = subprocess.run(
-        ["bash", str(VERIFY), "/path/does/not/exist"],
+    bash = shutil.which("bash")
+    assert bash is not None
+    result = subprocess.run(  # noqa: S603 — test controls all arguments
+        [bash, str(VERIFY), "/path/does/not/exist"],
         cwd=ROOT,
         capture_output=True,
         text=True,
