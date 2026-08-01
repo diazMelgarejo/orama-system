@@ -79,11 +79,15 @@ Add an explicit type guard **before any work begins**, refusing anything
 that is not "doesn't exist yet" or "is a regular file":
 
 ```bash
-if [[ -e "$dest" && ! -f "$dest" ]]; then
+if [[ -L "$dest" || ( -e "$dest" && ! -f "$dest" ) ]]; then
   echo "error: $dest exists but is not a regular file (refusing to touch it)" >&2
   return 1
 fi
 ```
+
+Reject symlinks explicitly (`-L`) before the type guard: `[[ -e && ! -f ]]` follows
+symlinks, so a symlink to an external regular file would pass the guard and copy
+that external content into the staged file before `mv`.
 
 `atomic_install_file()` in the same file already had this exact guard
 (as `[[ -d "$dest" ]]`) — `atomic_append_snippet()` was simply missing
