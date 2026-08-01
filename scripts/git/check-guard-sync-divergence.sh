@@ -117,7 +117,7 @@ _collect_targets() {
   _usage
 }
 
-[[ $# -ge 1 ]] || _usage
+[[ $# -eq 1 ]] || _usage
 _collect_targets "$@"
 
 echo "== GUARD SYNC DIVERGENCE (canonical=$(basename "$CANON_ROOT")) =="
