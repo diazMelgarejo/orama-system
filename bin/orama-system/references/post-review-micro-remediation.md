@@ -159,6 +159,20 @@ a status field or a first glance is accurate):
   earlier in the same session, fetch the actual remote tip first. A
   local checkout that's fallen behind a push made moments earlier
   diverges silently and produces a merge/rebase based on stale state.
+- A test that duplicates production logic as a hardcoded literal (a
+  regex, a constant, a list of values) rather than reading it from the
+  production source will pass or fail against a stale copy forever once
+  the two diverge — the test keeps "passing" while the thing it exists
+  to catch a regression in has already regressed. Extract the actual
+  value from the production source at test time instead. Verify the
+  fix is real, not just plausible: deliberately break the production
+  value, confirm the test now fails loudly (not silently passes), then
+  restore it and confirm the real suite passes normally.
+- A fix applied to a recovery/fallback path doesn't mean the primary
+  ("happy") path got the same fix — they're separate code, reviewed
+  and touched independently, and a finding on one doesn't retroactively
+  audit the other. Check every path a review's finding is adjacent to,
+  not only the one line it cited.
 
 ### Phase 5 — Closure
 
