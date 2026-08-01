@@ -22,7 +22,7 @@ else: BLOCK (forked / sibling innovations absent from canonical)
 ## Execution surfaces
 
 | Surface | When |
-|---------|------|
+| ------- | ---- |
 | `sync-attribution-guard-scripts.sh` | Always calls checker `--workspace` first |
 | `.githooks/pre-push` | When outgoing commits touch `scripts/git/` manifest paths |
 | Agent manual | Before any harmonization wave |
@@ -30,7 +30,7 @@ else: BLOCK (forked / sibling innovations absent from canonical)
 ## One-PR-per-repo consolidation
 
 | Repo | Open PR | Role |
-|------|---------|------|
+| ---- | ------- | ---- |
 | Perpetua-Tools | #319 | Canonical staging until merged |
 | orama-system | #255 | Absorb + doctrine + checker |
 | AlphaClaw | #26 | Downstream mirror |
