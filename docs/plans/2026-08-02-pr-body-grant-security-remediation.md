@@ -166,10 +166,10 @@ bash scripts/git/check-guard-sync-divergence.sh
 
 ### MVP acceptance
 
-- [ ] Plaintext v1 ack **never** activates override
-- [ ] Agent cannot activate override without HMAC secret (Keychain) + matching repo/pr
-- [ ] Docs never claim “not agent-runnable” without listing limits
-- [ ] CodeRabbit 4835288649 items addressed or explicitly deferred to Part 2 with link to [`docs/v2/51-security-sentinel-orbit-passkey-mcp.md`](../v2/51-security-sentinel-orbit-passkey-mcp.md)
+- [x] Plaintext v1 ack **never** activates override (`test_v1_grant_rejected`, guard + append)
+- [x] Agent cannot activate override without HMAC secret + matching repo/pr/digest (`pr-body-grant-lib.py`)
+- [ ] Docs never claim “not agent-runnable” without listing limits (partial — saga + plan; hookify/rules grep still open)
+- [x] CodeRabbit 4835288649 core items addressed; Part 2 linked in [`docs/v2/51-security-sentinel-orbit-passkey-mcp.md`](../v2/51-security-sentinel-orbit-passkey-mcp.md)
 
 ### MVP risks
 
@@ -197,23 +197,26 @@ Summary:
 
 ---
 
-## Implementation order (after confirm)
+## Implementation record (welded commits on `2026-08-02-pr-body-grant-hmac-mvp`)
+
+Post-#255 `main` (`525961d6`). Prior research/plan commits preserved; implementation added without reset.
 
 ```text
-1. MVP-A doctrine + TTY + agent env deny
-2. MVP-B pr-body-grant-lib.py + grant.sh + guard-core.py + append-pr-body.sh
-3. MVP-D tests (red → green)
-4. MVP-C hookify / rules / skill / ledger links
-5. Update WORKSPACE + research doc “implemented” section
-6. Part 2 doc only (no sentinel code in this PR)
+456dfa13  docs(security): research PR-body grant TTY/HITL gap
+2fb3b275  docs: fix relative link to grant security research doc
+6a2fad2d  docs(security): EXA+Firecrawl deep research
+d04dc3f1  docs(plan): two-part remediation plan (+ /autoplan review body in file)
+ff97572b  docs(v2): register 51-security-sentinel-orbit in v2 README
+3b0bda2a  feat(security): HMAC grant v2 implementation + tests + sync script + pre-push
 ```
 
----
+**Implemented in `3b0bda2a`:** MVP-B (grant lib, grant.sh, guard-core, append, hooks, BACKUP),
+MVP-D (tests), can-4 fixes (`range_for_ref`, worktree test, `pr_body_run_guard`).
 
-## WAITING FOR CONFIRMATION
+**Deferred to follow-up:** MVP-A/MVP-C full doctrine sweep (hookify, all rules, ledger links).
+PT memory chronicle: `Perpetua-Tools/.agent/memory/working/PR_BODY_GRANT_HMAC_MVP_SAGA_2026-08-02.md`.
 
-Reply **yes / proceed** to implement Part 1 MVP on PR #255 branch, or **modify:**
-with changes. Part 2 remains documentation-only in this PR unless you expand scope.
+**PT mirror:** `6a5a1db5` sync from orama + `0c3506d7` saga memory (branch retains full PR #320 history).
 
 ---
 
