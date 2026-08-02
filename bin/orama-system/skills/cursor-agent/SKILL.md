@@ -292,7 +292,6 @@ Scripts: `scripts/cursor/grant-pr-body-human-override.sh`, `scripts/cursor/appen
 - orama-system Stage 4: [`../../../SKILL.md § MODE 2 Stage 4`](../../../SKILL.md)
 - Win PATH bootstrap: [`../hermes-harness/SKILL.md § Windows Bring-Up`](../hermes-harness/SKILL.md)
 
-
 ## Optional: Interactive Provider Setup
 
 Idempotent, opt-in onboarding for provider selection (Claude, Codex,

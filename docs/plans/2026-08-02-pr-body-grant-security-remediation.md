@@ -1,11 +1,15 @@
-<!-- /autoplan restore point: ~/.gstack/projects/orama-system/2026-07-31-010-remediation-doctrine-phase6-sync-autoplan-restore-20260802-093947.md -->
+<!-- autoplan restore: ~/.gstack/projects/orama-system/
+2026-07-31-010-remediation-doctrine-phase6-sync-autoplan-restore-20260802-093947.md -->
 # PR-body grant security remediation — two-part plan (MVP + v2.1 sentinel)
 
 > **Date:** 2026-08-02
-> **Branch / PR:** `2026-08-02-pr-body-grant-hmac-mvp` (post-#255 `main`) — pairs with [Perpetua-Tools PR #320](https://github.com/diazMelgarejo/Perpetua-Tools/pull/320)
-> **Trigger:** [CodeRabbit review 4835288649](https://github.com/diazMelgarejo/orama-system/pull/255#pullrequestreview-4835288649) + `/autoplan` DONE_WITH_CONCERNS (2026-08-02)
+> **Branch / PR:** `2026-08-02-pr-body-grant-hmac-mvp` (post-#255 `main`) — pairs with
+> [Perpetua-Tools PR #320](https://github.com/diazMelgarejo/Perpetua-Tools/pull/320)
+> **Trigger:** [CodeRabbit review 4835288649](https://github.com/diazMelgarejo/orama-system/pull/255#pullrequestreview-4835288649)
+> and `/autoplan` DONE_WITH_CONCERNS (2026-08-02)
 > **Research:** [`bin/orama-system/references/pr-body-human-grant-security-gap-research.md`](../../bin/orama-system/references/pr-body-human-grant-security-gap-research.md)
-> **Method:** oramasys-method (AFRP Type C, Practitioner) — Ruthless MVP, defer crypto-heavy orbit to v2.1
+> **Method:** oramasys-method (AFRP Type C, Practitioner) — Ruthless MVP,
+> defer crypto-heavy orbit to v2.1
 > **Status:** **Implemented** on branch `2026-08-02-pr-body-grant-hmac-mvp` (2026-08-02)
 
 ---
@@ -118,7 +122,8 @@ fi
 
 **New:** `scripts/cursor/pr-body-grant-lib.py`
 
-- `resolve_hmac_secret()` — macOS Keychain `openclaw.pr_body_grant.hmac` (generate on first grant if missing; never log)
+- `resolve_hmac_secret()` — Keychain `openclaw.pr_body_grant.hmac`; generate on first grant;
+  never log
 - `mint_grant(repo, pr_number, nonce) → dict` — fields + `token=hmac_sha256(secret, canonical_payload)`
 - `verify_grant(ack_text, repo, pr_number) → bool` — TTL + marker + HMAC + binding match
 
@@ -146,7 +151,8 @@ Reject `operator-grant-v1` plaintext acks (fail-closed migration).
 ### MVP-C — Hookify / rules (CodeRabbit)
 
 - Remove instructions telling agents to run `grant-pr-body-human-override.sh`
-- Document: **operator** runs grant in **separate terminal** (or iTerm pane without agent), then tells agent to run **only** `append-pr-body.sh` with matching repo/PR
+- Document: **operator** runs grant in a **separate terminal** (no agent PTY), then tells
+  agent to run **only** `append-pr-body.sh` with matching repo/PR
 
 ### MVP-D — Tests
 
@@ -167,8 +173,10 @@ bash scripts/git/check-guard-sync-divergence.sh
 
 - [x] Plaintext v1 ack **never** activates override (`test_v1_grant_rejected`, guard + append)
 - [x] Agent cannot activate override without HMAC secret + matching repo/pr/digest (`pr-body-grant-lib.py`)
-- [ ] Docs never claim “not agent-runnable” without listing limits (partial — saga + plan; hookify/rules grep still open)
-- [x] CodeRabbit 4835288649 core items addressed; Part 2 linked in [`docs/v2/51-security-sentinel-orbit-passkey-mcp.md`](../v2/51-security-sentinel-orbit-passkey-mcp.md)
+- [ ] Docs never claim “not agent-runnable” without listing limits
+  (partial — saga + plan; hookify/rules grep still open)
+- [x] CodeRabbit 4835288649 core items addressed; Part 2 in
+  [`docs/v2/51-security-sentinel-orbit-passkey-mcp.md`](../v2/51-security-sentinel-orbit-passkey-mcp.md)
 
 ### MVP risks
 
@@ -234,7 +242,7 @@ PT memory chronicle: `Perpetua-Tools/.agent/memory/working/PR_BODY_GRANT_HMAC_MV
 **Base:** `origin/2026-07-31-010-remediation-doctrine-phase6-sync`
 **Review mode:** SELECTIVE EXPANSION
 **UI scope:** skipped, this plan has no product UI surface
-**DX scope:** included, the primary users are operators and coding agents invoking shell, hooks, and repository skills
+**DX scope:** operators and coding agents using shell, hooks, and repository skills
 **Mutation rule:** local-only review artifacts; no commit, push, merge, or PR update was performed.
 
 ### Review readiness

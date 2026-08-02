@@ -540,7 +540,8 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
     t0 = time.time()
 
     racers = {
-        "direct-lmstudio-win": asyncio.create_task(_dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)),
+        "cursor": asyncio.create_task(_dispatch_cursor(task)),
+        "hermes-lmstudio-win": asyncio.create_task(_dispatch_hermes_lmstudio_win(task)),
     }
     pending = set(racers.values())
     failures: Dict[str, str] = {}
