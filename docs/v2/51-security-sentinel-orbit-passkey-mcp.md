@@ -66,7 +66,7 @@ github.com/oramasys/security-sentinel/
 **Integration surfaces:**
 
 1. **MCP tool** `sentinel.verify` — agent calls with `summary`, `action_hash`, `audience`, `risk`
-2. **Hook client** — orama `pr-body-guard-core.py` verifies proof instead of HMAC file (v3)
+2. **Hook client** — orama `pr-body-guard-core.py` verifies sentinel proof instead of HMAC file (v2.1 alpha)
 3. **perpetua-core plugin** — graph nodes call sentinel before irreversible transitions
 
 ---

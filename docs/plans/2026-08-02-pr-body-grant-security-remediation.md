@@ -1,11 +1,17 @@
-<!-- /autoplan restore point: ~/.gstack/projects/orama-system/2026-07-31-010-remediation-doctrine-phase6-sync-autoplan-restore-20260802-093947.md -->
+<!-- /autoplan restore point:
+  ~/.gstack/projects/orama-system/
+  2026-07-31-010-remediation-doctrine-phase6-sync-autoplan-restore-20260802-093947.md -->
 # PR-body grant security remediation — two-part plan (MVP + v2.1 sentinel)
 
 > **Date:** 2026-08-02
-> **Branch / PR:** `2026-08-02-pr-body-grant-hmac-mvp` (post-#255 `main`) — pairs with [Perpetua-Tools PR #320](https://github.com/diazMelgarejo/Perpetua-Tools/pull/320)
-> **Trigger:** [CodeRabbit review 4835288649](https://github.com/diazMelgarejo/orama-system/pull/255#pullrequestreview-4835288649) + `/autoplan` DONE_WITH_CONCERNS (2026-08-02)
-> **Research:** [`bin/orama-system/references/pr-body-human-grant-security-gap-research.md`](../../bin/orama-system/references/pr-body-human-grant-security-gap-research.md)
-> **Method:** oramasys-method (AFRP Type C, Practitioner) — Ruthless MVP, defer crypto-heavy orbit to v2.1
+> **Branch / PR:** `2026-08-02-pr-body-grant-hmac-mvp` (post-#255 `main`) —
+> pairs with [Perpetua-Tools PR #320](https://github.com/diazMelgarejo/Perpetua-Tools/pull/320)
+> **Trigger:** CodeRabbit review 4835288649 on PR #255 + `/autoplan` DONE_WITH_CONCERNS
+> (2026-08-02)
+> **Research:** [security gap research](../../bin/orama-system/references/
+> pr-body-human-grant-security-gap-research.md)
+> **Method:** oramasys-method (AFRP Type C, Practitioner) — Ruthless MVP,
+> defer crypto-heavy orbit to v2.1
 > **Status:** **Implemented** on branch `2026-08-02-pr-body-grant-hmac-mvp` (2026-08-02)
 
 ---
@@ -118,9 +124,12 @@ fi
 
 **New:** `scripts/cursor/pr-body-grant-lib.py`
 
-- `resolve_hmac_secret()` — macOS Keychain `openclaw.pr_body_grant.hmac` (generate on first grant if missing; never log)
-- `mint_grant(repo, pr_number, nonce) → dict` — fields + `token=hmac_sha256(secret, canonical_payload)`
-- `verify_grant(ack_text, repo, pr_number) → bool` — TTL + marker + HMAC + binding match
+- `resolve_hmac_secret()` — macOS Keychain `openclaw.pr_body_grant.hmac`
+  (generate on first grant if missing; never log)
+- `mint_grant(repo, pr_number, file_path, message, cwd=None) → Path` — writes grant file with
+  `token=hmac_sha256(secret, canonical_payload)`
+- `verify_grant_for_append(repo, pr_number, file_path, message, consume) → (bool, str)` —
+  TTL + marker + HMAC + repo/PR/action/content-digest binding + nonce replay check
 
 **Ack file format v2** (`operator-grant-v2`):
 
@@ -129,6 +138,8 @@ operator-grant-v2
 issued-at=2026-08-02T01:30:00Z
 repo=diazMelgarejo/orama-system
 pr-number=255
+action=append_integrative
+content-digest=sha256:<hex>
 grant-nonce=<random>
 token=<hex hmac>
 ```
@@ -146,7 +157,8 @@ Reject `operator-grant-v1` plaintext acks (fail-closed migration).
 ### MVP-C — Hookify / rules (CodeRabbit)
 
 - Remove instructions telling agents to run `grant-pr-body-human-override.sh`
-- Document: **operator** runs grant in **separate terminal** (or iTerm pane without agent), then tells agent to run **only** `append-pr-body.sh` with matching repo/PR
+- Document: **operator** runs grant in a separate operator terminal, then runs **only**
+  `append-pr-body.sh` with matching repo/PR and the same `--file` or `--message`
 
 ### MVP-D — Tests
 
@@ -166,9 +178,11 @@ bash scripts/git/check-guard-sync-divergence.sh
 ### MVP acceptance
 
 - [x] Plaintext v1 ack **never** activates override (`test_v1_grant_rejected`, guard + append)
-- [x] Agent cannot activate override without HMAC secret + matching repo/pr/digest (`pr-body-grant-lib.py`)
+- [x] Agent cannot activate override without HMAC secret + matching repo/pr/digest
+  (`pr-body-grant-lib.py`)
 - [ ] Docs never claim “not agent-runnable” without listing limits (partial — saga + plan; hookify/rules grep still open)
-- [x] CodeRabbit 4835288649 core items addressed; Part 2 linked in [`docs/v2/51-security-sentinel-orbit-passkey-mcp.md`](../v2/51-security-sentinel-orbit-passkey-mcp.md)
+- [x] CodeRabbit 4835288649 core items addressed; Part 2 linked in
+  [`docs/v2/51-security-sentinel-orbit-passkey-mcp.md`](../v2/51-security-sentinel-orbit-passkey-mcp.md)
 
 ### MVP risks
 
@@ -212,7 +226,12 @@ ff97572b  docs(v2): register 51-security-sentinel-orbit in v2 README
 **Implemented in `3b0bda2a`:** MVP-B (grant lib, grant.sh, guard-core, append, hooks, BACKUP),
 MVP-D (tests), can-4 fixes (`range_for_ref`, worktree test, `pr_body_run_guard`).
 
-**Deferred to follow-up:** MVP-A/MVP-C full doctrine sweep (hookify, all rules, ledger links).
+**Remediation follow-up (F1–F7, can-6):** replay state machine, reconcile CLI, canonical golden
+vector, `GH_BIN` hermetic append test, consume-failure operator guidance, secure grant-file write.
+
+**Deferred to follow-up:** MVP-A/MVP-C full doctrine sweep (hookify, all rules, ledger links);
+ENG-6 per-PR file lock (TOCTOU re-read + reconcile cover residual race); ENG-4 non-macOS
+fallback secret file (intentional for CI/tests — macOS uses Keychain).
 PT memory chronicle: `Perpetua-Tools/.agent/memory/working/PR_BODY_GRANT_HMAC_MVP_SAGA_2026-08-02.md`.
 
 **PT mirror:** `6a5a1db5` sync from orama + `0c3506d7` saga memory (branch retains full PR #320 history).
@@ -234,7 +253,8 @@ PT memory chronicle: `Perpetua-Tools/.agent/memory/working/PR_BODY_GRANT_HMAC_MV
 **Base:** `origin/2026-07-31-010-remediation-doctrine-phase6-sync`
 **Review mode:** SELECTIVE EXPANSION
 **UI scope:** skipped, this plan has no product UI surface
-**DX scope:** included, the primary users are operators and coding agents invoking shell, hooks, and repository skills
+**DX scope:** included, the primary users are operators and coding agents invoking
+shell, hooks, and repository skills
 **Mutation rule:** local-only review artifacts; no commit, push, merge, or PR update was performed.
 
 ### Review readiness

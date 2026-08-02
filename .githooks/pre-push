@@ -27,8 +27,9 @@ range_for_ref() {
   local local_oid="$1"
   local remote_oid="$2"
   if [[ "$remote_oid" == "$zero" ]]; then
-    if git rev-parse --verify "$upstream_ref" >/dev/null 2>&1; then
-      echo "$(git rev-parse "$upstream_ref")..${local_oid}"
+    local upstream_oid
+    if upstream_oid="$(git rev-parse --verify "$upstream_ref" 2>/dev/null)"; then
+      printf '%s..%s\n' "$upstream_oid" "$local_oid"
     else
       echo "${local_oid}"
     fi
