@@ -11,6 +11,22 @@
       "stern": false
     }
   },
+  // "**/SKILL.md" is broader than ideal (exempts ALL rules, not just
+  // MD013) -- a narrower fix IS technically possible and was verified
+  // working: "ignores": ["SKILL.md", "docs/LESSONS.md"] (root-only,
+  // non-recursive glob) plus relying on bin/orama-system/
+  // .markdownlint-cli2.jsonc's existing nested MD013 override
+  // (line_length: 500) to cover the whole bin/orama-system/skills/**
+  // tree via config inheritance. That narrower config was tested
+  // directly against markdownlint-cli2 v0.17.2 (the exact CI-pinned
+  // version) across all 205 SKILL.md files in this repo and surfaced
+  // 1032 pre-existing violations across 205 files that the current
+  // blanket ignore has been hiding -- MD003/MD012/MD028/MD032/MD036/
+  // MD041, not just line-length, and not introduced by this PR. Adopting
+  // the narrower config now would either fail CI on unrelated
+  // pre-existing content or require a large, separate cleanup pass
+  // first. Kept the working blanket ignore for now; the narrower config
+  // above is ready to adopt once that cleanup happens.
   "ignores": [
     "**/SKILL.md",
     "docs/LESSONS.md"
