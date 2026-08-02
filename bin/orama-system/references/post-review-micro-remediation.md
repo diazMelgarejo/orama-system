@@ -100,6 +100,11 @@ Open PR descriptions are **append-only historical records** during remediation.
 Delta-only writes clobber the original Summary — documented 5+ times
 (see [`pr-body-anti-clobber-incident-ledger.md`](pr-body-anti-clobber-incident-ledger.md)).
 
+**Layer 0 (agents):** comment only (`post_comment`, `gh pr comment`).  
+**Body append:** operator mints `operator-grant-v2` (HMAC + content digest) in a TTY terminal;
+agents run only `append-pr-body.sh` with matching `--file`/`--message`. v1 ack and env override
+exports are fail-closed. See [`cursor-pr-body`](../skills/cursor-pr-body/SKILL.md).
+
 ```text
 READ → BACKUP → MERGE (append-only) → WRITE (full merged body)
 ```

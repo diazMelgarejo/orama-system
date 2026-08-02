@@ -138,6 +138,8 @@ clean on every single write — not a one-time cleanup.
 
 ## Related skills
 
+- [cursor-pr-body](../cursor-pr-body) — Layer 0 comment-only + operator-grant-v2 append path;
+  same-user Keychain boundary and replay state machine (`reserve` → `mark-applied` → `consume`)
 - [git-history-surgery](../git-history-surgery) — the specialist for anything that already leaked
   into committed history: expunge, reanchor, tree-twin, clean-replacement-PR.
   This skill is upstream of that one — use `security` to keep a leak from
@@ -146,6 +148,9 @@ clean on every single write — not a one-time cleanup.
 ## References
 
 - [`docs/v2/47-portable-memory-local-topology-invariant.md`](../../../../docs/v2/47-portable-memory-local-topology-invariant.md) — the prime invariant, full guard shape, and acceptance criteria
+- [`docs/plans/2026-08-02-pr-body-grant-security-remediation.md`](../../../../docs/plans/2026-08-02-pr-body-grant-security-remediation.md) — PR-body operator grant v2 (HMAC capability, not human identity)
+- [`references/pr-body-human-grant-security-gap-research.md`](../../references/pr-body-human-grant-security-gap-research.md) — TTY/HITL gap research
+- [`../cursor-pr-body/SKILL.md`](../cursor-pr-body/SKILL.md) — operator + agent append workflow
 - [`docs/v2/23-security-preconditions.md`](../../../../docs/v2/23-security-preconditions.md) — v2 security gate preconditions
 - [`docs/v2/24-security-first-platform.md`](../../../../docs/v2/24-security-first-platform.md) — security-first platform design baseline
 - [`docs/v2/32-agentic-security-controls.md`](../../../../docs/v2/32-agentic-security-controls.md) — authentication, LAN-bind hardening, and agentic security controls
