@@ -164,6 +164,10 @@ AUDIT: 2026-07-22 disambiguation + packaging (version 1.5.0 -> 1.6.0).
   unzipped and grepped for leftover `../../references/` /
   `bin/orama-system/references/` paths (none, aside from one self-descriptive
   mention of the directory itself with no filename, which is not a link).
+AUDIT: 2026-08-02 renamed eval/checklist.md → eval/skillify-checklist.md and
+  eval/oramasys-checklist.md (oramasys-method) to clear skill-scanner
+  SkillNameCollision under the repo-root skills/ alias. Pattern:
+  eval/{skill-prefix}-checklist.md (same family as oramasys-golden-path.md).
 ```
 
 ## Re-Verification Commands

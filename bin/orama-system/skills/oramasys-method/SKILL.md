@@ -226,7 +226,7 @@ catastrophic data loss multiple times.
 - Golden path (production bug fix + PR merge): [`examples/good/oramasys-golden-path.md`](examples/good/oramasys-golden-path.md)
 - Anti-patterns to avoid: [`examples/bad/anti-patterns.md`](examples/bad/anti-patterns.md)
 - Eval rubric, including the sandbox-limitation note for harnesses without
-  live `gbrain`/`mcp-oramasys`/OpenClaw access: [`eval/checklist.md`](eval/checklist.md)
+  live `gbrain`/`mcp-oramasys`/OpenClaw access: [`eval/oramasys-checklist.md`](eval/oramasys-checklist.md)
 - Test prompts for the skill-creator dogfood loop: [`eval/evals.json`](eval/evals.json)
 
 ---
