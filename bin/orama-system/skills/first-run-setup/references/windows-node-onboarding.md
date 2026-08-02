@@ -277,7 +277,7 @@ Real bring-up, 2026-07-08. Both repos were already cloned to
   `first-run-install.sh status` sees them.
 
 **Fleet registration:** added as `win-rtx5080` in
-`Perpetua-Tools/config/devices.yml`, mirroring the `win-rtx3080` entry's
+[`config/devices.yml`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/devices.yml), mirroring the `win-rtx3080` entry's
 shape — `primary_backend: lm-studio`, `lan_ip: ${PRIVATE_LAN_IP}`, port 1234.
 Set `LM_STUDIO_WIN_ENDPOINTS` to the **resolved** URL
 `http://<LM_STUDIO_LAN_HOST>:1234` (User env var) as the static fallback —

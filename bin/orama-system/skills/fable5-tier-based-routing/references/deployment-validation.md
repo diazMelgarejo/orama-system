@@ -51,15 +51,15 @@ pytest tests/test_frugality_router.py -v
 ## References
 
 **Production Code (Perpetua-Tools):**
-- **`Perpetua-Tools/orchestrator/frugality_router.py`** — canonical tier routing (lines 17–255)
+- **[`orchestrator/frugality_router.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/frugality_router.py)** — canonical tier routing (lines 17–255)
   - TIERS dict (0–6) and backend_by_tier map (lines 17–25, 176–180)
   - resolve_route() and _probe_tier_* functions
   - FrugalityPolicyError exception
-- **`Perpetua-Tools/orchestrator/cost_guard.py`** — CostGuard implementation (lines 16–90)
+- **[`orchestrator/cost_guard.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/cost_guard.py)** — CostGuard implementation (lines 16–90)
   - can_spend(), record_spend(), snapshot() methods
   - ALERT_RATIO = 0.80, daily_budget = $25.0
   - Auto-reset every 24h
-- **`Perpetua-Tools/orchestrator/contracts.py`** — ToolCallSpec and ResolvedRoute dataclasses
+- **[`orchestrator/contracts.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/contracts.py)** — ToolCallSpec and ResolvedRoute dataclasses
 
 **Architecture Documentation:**
 - [`orama-system/docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`](../../../../docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) § 2 — tier routing architecture contract
@@ -67,7 +67,7 @@ pytest tests/test_frugality_router.py -v
 
 **Session Logs:**
 - [`orama-system/docs/LESSONS.md`](../../../../docs/LESSONS.md) — deployment incidents and tier fallback history
-- [`Perpetua-Tools/docs/LESSONS.md`](../../../../Perpetua-Tools/docs/LESSONS.md) — PT-specific observations
+- [`docs/LESSONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md) — PT-specific observations
 
 ## Integration with CI/CD
 
@@ -125,8 +125,8 @@ class TestPrivacyCritical:
 
 - **Skill version:** 1.1.0 (production-aligned, 2026-07-04)
 - **Consensus level:** 7/7 agents (highest agreement in Fable-5 council)
-- **Foundation:** `Perpetua-Tools/orchestrator/frugality_router.py` (v1.1, production)
-- **Cost guard:** `Perpetua-Tools/orchestrator/cost_guard.py` (v1.1, production)
+- **Foundation:** [`orchestrator/frugality_router.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/frugality_router.py) (v1.1, production)
+- **Cost guard:** [`orchestrator/cost_guard.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/cost_guard.py) (v1.1, production)
 - **Tier structure:** 7 tiers (0–6); probe-only (0–2) + escalation (3–6)
 - **Hard requirements:**
   - Escalation to tier >= 3 requires `escalation_reason` parameter

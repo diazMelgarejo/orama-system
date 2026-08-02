@@ -4,7 +4,7 @@
 **Author:** mac-orchestrator (OpenClaw)  
 **Topic:** self-improve/lessons
 
-See PT landmark: `Perpetua-Tools/.agent/memory/working/MAC_SELF_IMPROVE_CYCLE_005_2026-06-28.md`
+See PT landmark: [`.agent/memory/working/MAC_SELF_IMPROVE_CYCLE_005_2026-06-28.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/MAC_SELF_IMPROVE_CYCLE_005_2026-06-28.md)
 
 ## Highlights
 
