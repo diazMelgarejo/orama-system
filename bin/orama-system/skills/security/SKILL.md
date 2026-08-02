@@ -20,7 +20,7 @@ guards) free of concrete private/local values, while still fully documenting
 *how* to detect and forbid them. Consolidates patterns that were scattered
 across PT's `repo_hygiene.py`, PT's `.agent/memory/semantic/DOMAIN_KNOWLEDGE.md`,
 and orama's `git-history-surgery` skill after the 2026-07-18 PT PR
-#256/#258/#260 arc — where the first attempted fix for a leaked private
+`#256`/`#258`/`#260` arc — where the first attempted fix for a leaked private
 identity literal was itself wrong: it kept spelling the literal in the ban
 rule, allowlist, tests, and docs while trying to forbid it.
 

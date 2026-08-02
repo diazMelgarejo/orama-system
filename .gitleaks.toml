@@ -1,0 +1,7 @@
+title = "orama-system gitleaks config"
+
+[allowlist]
+description = "HMAC golden-vector self-checks in grant-lib unit tests (not real secrets)"
+paths = [
+  '''tests/test_pr_body_grant_lib\.py''',
+]

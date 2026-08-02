@@ -204,16 +204,20 @@ repo root). Two arrays control approval:
 2. Add the email domain to `WELL_KNOWN_COAUTHOR_DOMAIN_SUFFIXES` AND the agent
    name substring to `WELL_KNOWN_COAUTHOR_NAME_MARKERS` (belt + suspenders).
 3. Smoke-test:
+
    ```bash
    tmp=$(mktemp)
    printf 'test\n\nCo-authored-by: Agent Name <agent@vendor.example>\n' > "$tmp"
    bash scripts/git/check_commit_message.sh "$tmp" && echo PASS
    rm "$tmp"
    ```
+
 4. Sync to downstream repos:
+
    ```bash
    bash scripts/git/sync-attribution-guard-scripts.sh "$PT_PATH"
    ```
+
 5. Commit message convention:
    `chore(attribution): add <AgentName> (vendor.example) to co-author allowlist`
 
