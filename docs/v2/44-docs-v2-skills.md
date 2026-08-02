@@ -1,6 +1,9 @@
 # v2 Skills Implementation Plan
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
+> `.gitignore`d, never committed with secrets, personal paths, or SecOps material.
+> Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 Status: planning baseline
 Scope: perpetua-core + oramasys v2 skill architecture
 Source input: attached `05-docs-v2-skills.md`, renumbered into the correct v2 slot after reading `docs/v2/README.md`
@@ -15,7 +18,8 @@ v2 skills must use concise `SKILL.md` orchestrators plus modular one-level suppo
 
 - New generated `SKILL.md` files should be <= 200 lines. Shorter is better.
 - Existing or exceptional `SKILL.md` files must remain <= 500 lines.
-- If a skill wants to exceed 200 lines, move material into `instructions/`, `examples/`, `references/`, `templates/`, `scripts/`, or `eval/`.
+- If a skill wants to exceed 200 lines, move material into `instructions/`,
+  `examples/`, `references/`, `templates/`, `scripts/`, or `eval/`.
 - Full body templates and long examples belong in references, not in the always-loaded skill card.
 
 ## Standard Folder Shape
@@ -38,7 +42,7 @@ Trim unused folders for tiny skills. Do not create empty decorative structure.
 
 | Skill | Role | Required shape |
 |---|---|---|
-| hardware-router | Enforce hardware affinity and model routing | Short orchestrator + `instructions/affinity-rules.md` + `eval/checklist.md` |
+| hardware-router | Enforce hardware affinity and model routing | Short orchestrator + `instructions/affinity-rules.md` + `eval/{skill-prefix}-checklist.md` |
 | autoresearcher | Govern autonomous research loops | Short orchestrator + loop details in `instructions/core-loop.md` + dry-run checklist |
 | orchestrator | Route high-level tasks across skills | Short orchestrator + references to sub-skill contracts |
 | multi-llm-router | Choose model/provider path | Short orchestrator + routing matrix in `references/routing-matrix.md` |
@@ -69,7 +73,8 @@ Move model lists and detailed affinity rules to `instructions/affinity-rules.md`
 - stop conditions,
 - references to loop details and eval.
 
-Long descriptions of uditgoenka/karpathy patterns, experiment formats, and result logs belong in `references/` or `instructions/`, not in `SKILL.md`.
+Long descriptions of uditgoenka/karpathy patterns, experiment formats, and result
+logs belong in `references/` or `instructions/`, not in `SKILL.md`.
 
 ## Dry-Run Rule
 
@@ -105,7 +110,9 @@ Dry-run should:
 2. Move full templates/examples into `skillify/references/`.
 3. For each v2 skill, create `SKILL.md` first and keep it <= 200 lines.
 4. Add only the modular files required by that skill's actual complexity.
-5. Add `eval/checklist.md` with 6Cs and reviewer personas for each non-trivial skill.
+5. Add `eval/{skill-prefix}-checklist.md` with 6Cs and reviewer personas for each
+   non-trivial skill (avoid generic `eval/checklist.md` — skill-scanner
+   SkillNameCollision).
 6. Verify all markdown fences have language specifiers.
 7. Verify no raw workstation paths, LAN IPs, secrets, or hidden side effects.
 
