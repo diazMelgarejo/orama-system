@@ -1,6 +1,8 @@
 """Tests for scripts/cursor/pr-body-grant-lib.py"""
 from __future__ import annotations
 
+import hashlib
+import hmac
 import importlib.util
 import os
 from pathlib import Path
@@ -42,8 +44,8 @@ def test_canonical_golden_vector(grant_lib):
         b"grant-v2|owner/repo|42|nonce-abc|2026-08-02T00:00:00Z|"
         b"append_integrative|sha256:deadbeef"
     )
-    token = grant_lib._sign(b"unit-test-secret", payload)
-    assert token == grant_lib._sign(b"unit-test-secret", payload)
+    expected = hmac.new(b"unit-test-secret", payload, hashlib.sha256).hexdigest()
+    assert grant_lib._sign(b"unit-test-secret", payload) == expected
 
 
 def test_mint_and_verify_happy_path(grant_lib, tmp_path):
