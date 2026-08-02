@@ -11,7 +11,7 @@ your-skill-name/
 │   └── core-workflow.md
 ├── examples/
 │   ├── good/
-│   │   └── <skill-name>-golden-path.md
+│   │   └── {skill-name}-golden-path.md
 │   └── bad/
 │       └── anti-patterns.md
 ├── references/
@@ -103,7 +103,7 @@ allowed-tools: bash, file-operations
 - If validation fails, fix once; if still failing, report the blocker.
 ```
 
-## examples/good/<skill-name>-golden-path.md Template
+## examples/good/{skill-name}-golden-path.md Template
 
 ```markdown
 # Golden Path Example
