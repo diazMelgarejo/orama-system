@@ -1,1 +1,1 @@
-cursor standalone race leg validation is deferred until: 2026-08-16
+cursor standalone race leg validation is deferred until: 2027-01-02
