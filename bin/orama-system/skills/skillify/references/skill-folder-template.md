@@ -19,7 +19,7 @@ your-skill-name/
 ├── scripts/
 ├── templates/
 └── eval/
-    └── checklist.md
+    └── {skill-prefix}-checklist.md
 ```
 
 Trim unused folders for tiny skills. Do not create decorative empty folders.
@@ -55,7 +55,7 @@ allowed-tools: bash, file-operations
 1. Read this `SKILL.md`.
 2. Read `instructions/core-workflow.md` when the workflow needs detail.
 3. Read examples only when generating or reviewing examples.
-4. Run `eval/checklist.md` before declaring done.
+4. Run `eval/{skill-prefix}-checklist.md` before declaring done.
 
 ## Workflow
 
@@ -80,7 +80,7 @@ allowed-tools: bash, file-operations
 ## References
 
 - [`instructions/core-workflow.md`](instructions/core-workflow.md)
-- [`eval/checklist.md`](eval/checklist.md)
+- [`eval/{skill-prefix}-checklist.md`](eval/{skill-prefix}-checklist.md)
 ```
 
 ## instructions/core-workflow.md Template
@@ -144,7 +144,7 @@ Problem: installs, deletes, deploys, or publishes without asking.
 Fix: put one-way actions under Ask First.
 ```
 
-## eval/checklist.md Template
+## eval/{skill-prefix}-checklist.md Template
 
 ```markdown
 # Eval Checklist

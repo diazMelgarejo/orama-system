@@ -38,7 +38,7 @@ Trim unused folders for tiny skills. Do not create empty decorative structure.
 
 | Skill | Role | Required shape |
 |---|---|---|
-| hardware-router | Enforce hardware affinity and model routing | Short orchestrator + `instructions/affinity-rules.md` + `eval/checklist.md` |
+| hardware-router | Enforce hardware affinity and model routing | Short orchestrator + `instructions/affinity-rules.md` + `eval/{skill-prefix}-checklist.md` |
 | autoresearcher | Govern autonomous research loops | Short orchestrator + loop details in `instructions/core-loop.md` + dry-run checklist |
 | orchestrator | Route high-level tasks across skills | Short orchestrator + references to sub-skill contracts |
 | multi-llm-router | Choose model/provider path | Short orchestrator + routing matrix in `references/routing-matrix.md` |
@@ -105,7 +105,7 @@ Dry-run should:
 2. Move full templates/examples into `skillify/references/`.
 3. For each v2 skill, create `SKILL.md` first and keep it <= 200 lines.
 4. Add only the modular files required by that skill's actual complexity.
-5. Add `eval/checklist.md` with 6Cs and reviewer personas for each non-trivial skill.
+5. Add `eval/{skill-prefix}-checklist.md` with 6Cs and reviewer personas for each non-trivial skill (avoid generic `eval/checklist.md` — skill-scanner SkillNameCollision).
 6. Verify all markdown fences have language specifiers.
 7. Verify no raw workstation paths, LAN IPs, secrets, or hidden side effects.
 
