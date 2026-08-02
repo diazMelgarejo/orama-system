@@ -29,25 +29,33 @@ Branch: `2026-07-31-010-remediation-doctrine-phase6-sync` (PR #255)
 Research: `bin/orama-system/references/pr-body-human-grant-security-gap-research.md`
 (EXA 6 queries + Firecrawl 15 scrapes; thorough depth)
 Files in scope (next implementation PR):
+
 - `scripts/cursor/grant-pr-body-human-override.sh`
 - `scripts/cursor/hooks/pr-body-guard-core.py`
 - `.claude/hookify.pr-body-append-only.local.md`
 - `.cursor/rules/pr-body-comment-only.mdc`
+
 Tests run: none (research-only commits)
+
 Open risks:
+
 - TTY gate `! -t 0 && ! -t 1` — agent PTY passes; omamori #319 class bypass without `-t`
 - Forgeable `~/.cursor/pr-body-human-override-ack` (Vallum PR #32 / hashgate precedent)
 - LITL UI deception (OWASP + Checkmarx) separate from forged state
+
 Next (ordered):
+
 1. Phase A — honest docs; strip agent-copyable override from rules (CodeRabbit)
-2. Phase B — strict TTY `||` gate + repo/pr/nonce on ack (defense-in-depth only)
+2. Phase B — strict TTY `||` gate + repo/pr/nonce on ack
+   (defense-in-depth only)
 3. Phase C — pick pattern from EXA catalog:
    - **Vallum** HMAC per-command (hook-minted, machine secret outside agent env)
    - **hashgate** hash-bound integrative body preview
    - **GoodRoom** passkey + Ed25519 JWKS on action hash (rare operator edits)
    - **Invariant** MCP proxy deny on `update_pr` body
    - **HumanLayer** external approval API
-   - Cursor/Claude framework approval when [#38299](https://github.com/anthropics/claude-code/issues/38299) lands
+   - Cursor/Claude framework approval when
+     [#38299](https://github.com/anthropics/claude-code/issues/38299) lands
 4. OWASP cheat sheet §4 HITL + tool authorization middleware alignment
 5. Phase D tests — prove forge works today; fails after Phase C
 Refs: arXiv 2606.02668 consent integrity; AgentPatterns provenance markers;
