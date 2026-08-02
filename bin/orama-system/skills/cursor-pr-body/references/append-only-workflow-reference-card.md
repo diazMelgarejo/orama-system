@@ -1,16 +1,45 @@
 # Append-Only PR Body — Reference Card
 
 > **Layer 0 first:** `.cursor/rules/pr-body-comment-only.mdc` — agents **comment only** by default.
-> Load this card only after the operator ran `scripts/cursor/grant-pr-body-human-override.sh`.
+> Load this card after the operator minted **operator-grant-v2** via `grant-pr-body-human-override.sh`.
 
 ## Layer 0 — comment only (default)
 
 | Do | Never (automatic) |
 | -- | ----------------- |
 | `ManagePullRequest post_comment` | `update_pr` with `body=` |
-| `gh pr comment` | `gh pr edit`, `append-pr-body.sh` |
+| `gh pr comment` | `gh pr edit`, `append-pr-body.sh` without grant v2 |
 
 Hooks: `pr-body-guard-core.py` + `beforeSubmitPrompt` reminder.
+
+## Operator grant v2 (before append)
+
+| Step | Command / artifact |
+| ---- | ------------------ |
+| Mint (operator TTY) | `bash scripts/cursor/grant-pr-body-human-override.sh owner/repo N --file follow.md` |
+| Ack file | `~/.cursor/pr-body-human-override-ack` — `operator-grant-v2` + HMAC `token` |
+| Digest bind | Same `--file` or `--message` for mint and append |
+| Reject | `operator-grant-v1`, `CURSOR_PR_BODY_HUMAN_OVERRIDE_ACK` env |
+
+**Not human identity:** same-user Keychain HMAC is escalation control; agents with PTY can
+still read secrets. v2.1: security-sentinel passkey orbit.
+
+### Append replay state machine
+
+```text
+append-pr-body.sh:
+  verify → reconcile? → reserve → READ BACKUP MERGE → gh pr edit → mark-applied → consume
+```
+
+Grant lib CLI: `mint | verify | reserve | mark-applied | consume | reconcile | release`
+
+Canonical payload bytes:
+
+```text
+grant-v2|repo|pr|nonce|issued_at|action|content_digest
+```
+
+Tests: `GH_BIN` points to fake `gh` in `tests/test_append_pr_body_grant_flow.py`.
 
 ## Delimiters (do not put in append content)
 
@@ -45,9 +74,7 @@ Installed by `bash scripts/cursor/install-user-git-environment.sh` into `~/.curs
 | `beforeMCPExecution` | `before-mcp-pr-body-guard.sh` | `ManagePullRequest update_pr` with `body=` |
 | `beforeShellExecution` | `before-shell-pr-body-guard.sh` | `gh pr edit --body` (inline; `--body-file` OK) |
 
-Both hooks **backup PR body on read** (`gh pr view` / MCP PR access) to `.git/pr-body-backups/`.
-
-Escape hatch: `CURSOR_PR_BODY_FULL_MERGE_ACK=1` when passing a verified full merged body.
+Both hooks use `pr_body_run_guard()` → verify grant + emit `BACKUP|repo|pr` on valid append segment.
 
 ## Worked example — stack harmonization follow-up
 
@@ -62,10 +89,12 @@ Escape hatch: `CURSOR_PR_BODY_FULL_MERGE_ACK=1` when passing a verified full mer
 **Verified locally:** aguara `--ci` reports `0 gating` on rebased tip.
 ```
 
-**Apply** (reviewed helper; operator approval):
+**Operator mint** then **append** (matching `--file`):
 
-```text
-scripts/cursor/append-pr-body.sh diazMelgarejo/orama-system 245 \
+```bash
+bash scripts/cursor/grant-pr-body-human-override.sh diazMelgarejo/orama-system 245 \
+  --file follow-up.md
+bash scripts/cursor/append-pr-body.sh diazMelgarejo/orama-system 245 \
   --title "Follow-up: harmonized onto #244" \
   --file follow-up.md
 ```
@@ -92,22 +121,27 @@ Pass the **full merged body** as raw markdown:
 <append content>
 ```
 
-1. Write merged file; `gh pr edit <N> --body-file merged.md`
+1. Operator mints grant; operator or agent runs `append-pr-body.sh` (not raw `gh pr edit` from agents)
 
 ## Failure modes
 
 | Symptom | Cause | Fix |
 | ------- | ----- | --- |
 | Original Summary gone | Delta-only `body=` write | Restore from `.git/pr-body-backups/`; re-append correctly |
-| `not agent-managed` | Human-authored PR body | Use `gh pr edit` or operator paste |
+| `operator-grant-v1` rejected | Stale ack | Re-mint v2 with same append bytes |
+| `content-digest mismatch` | Changed follow-up after mint | Re-grant with current file/message |
+| `grant consume blocked` | Consume before remote success | Re-run append; reconcile if body already updated |
+| `not agent-managed` | Human-authored PR body | Operator runs `append-pr-body.sh` locally |
 | `Resource not accessible by integration` | Token lacks GraphQL update | Operator runs `append-pr-body.sh` locally |
 | `body changed since initial read` | Concurrent edit | Re-fetch, re-merge, retry |
 | CodeRabbit section duplicated | Inserted below CodeRabbit marker | Move follow-up above marker; restore bot section once |
 
 ## Cross-references
 
+- `scripts/cursor/pr-body-grant-lib.py` — HMAC mint/verify/replay ledger
 - `scripts/cursor/append-pr-body.sh` — implementation
 - `.cursor/rules/append-only-pr-body.mdc` — always-on Cursor rule
 - `.cursor/commands/pr.md` § Phase 4 — create vs update
 - `bin/orama-system/cidf/references/integrative-editing-examples.md` §1 — good/bad table
 - `docs/wiki/12-cursor-cloud-commit-attribution.md` § PR body updates
+- `docs/plans/2026-08-02-pr-body-grant-security-remediation.md` — remediation record

@@ -34,7 +34,7 @@
 | Do | Don't |
 | --- | --- |
 | Root-cause cluster (Phase 1) before patching | One commit per review comment |
-| `append-pr-body.sh` for PR updates | Delta-only `ManagePullRequest update_pr` |
+| Operator grant + `append-pr-body.sh` for PR body follow-ups | Delta-only `ManagePullRequest update_pr` |
 | Integrative merge (synthesize, never amputate) | Delete prior follow-ups or Summary |
 | Run actual failing CI command locally | Assume CI failure ≠ review finding |
 | Close remediation on verification evidence | Report done without regression proof |

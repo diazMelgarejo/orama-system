@@ -65,6 +65,10 @@ WORKSPACE_ROOT="${WORKSPACE_ROOT:-$REPO_ROOT/..}" \
 
 ## Boundaries
 
+Manifest includes the full `scripts/cursor/` grant stack (`pr-body-grant-lib.py`,
+`append-pr-body.sh`, guard hooks, `pr-body-guard-core.py`) — sync after every orama
+canonical grant remediation commit.
+
 ### Always Do
 
 - Run divergence check before sync and after harmonizing guard edits.
