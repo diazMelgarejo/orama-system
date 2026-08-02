@@ -7,6 +7,19 @@
 
 ---
 
+## Layer 0 — Comment only (Cursor agents, top prohibition)
+
+**Default:** agents **never** mutate an existing PR description. Progress updates go to
+**comments** (`ManagePullRequest post_comment`, `gh pr comment`).
+
+Hooks block `update_pr` with `body=`, `gh pr edit`, and `append-pr-body.sh` unless the
+operator issued a grant via `scripts/cursor/grant-pr-body-human-override.sh`
+(interactive; not agent-runnable).
+
+Cursor rule: `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply, listed before append-only).
+
+---
+
 ## The failure mode
 
 **PR body was replaced, not appended.** A delta-only `ManagePullRequest update_pr` or
@@ -21,8 +34,9 @@ notes. This is **always wrong** when an open PR already has a Summary.
 | 2026-07-27 | orama #222 | Human | Restored Summary + Follow-ups → `lesson_6fff093ccb00` |
 | 2026-07-29 | PT #298, orama #239 | Human | `lesson_4a38f0e95fcf` |
 | 2026-08-01 | PT #314 | Human (again) | Integrative restore + enforcement rollout |
+| 2026-08-01 | PT #319 | Human | Delta-only `update_pr` clobber; integrative restore + Cursor hooks Layer 7 |
 
-**Documented:** 5 PRs / 4 incidents. User-estimated silent rate ~5× → **~20–25 total**
+**Documented:** 6 PRs / 5 incidents. User-estimated silent rate ~5× → **~20–25 total**
 if most turn-end `update_pr` calls go unreviewed.
 
 ### Why agents keep forgetting
@@ -80,6 +94,23 @@ At end of every turn with code changes on a PR branch:
 
 `scripts/git/verify-pr-body-not-clobbered.sh` — fails if open PR body lacks `## Summary`.
 Workflow: `.github/workflows/pr-body-guard.yml`.
+
+### Layer 7 — Cursor runtime hooks (Cursor agents only)
+
+Installed via `scripts/cursor/install-user-git-environment.sh` into `~/.cursor/hooks.json`:
+
+| Hook event | Script | Behavior |
+| ---------- | ------ | -------- |
+| `beforeSubmitPrompt` | `before-submit-pr-body-reminder.sh` | Injects Layer 0 reminder when prompt mentions PR bodies |
+| `preToolUse` (`ManagePullRequest`) | `before-mcp-pr-body-guard.sh` | **Deny** `update_pr` with `body=`; allow `post_comment` |
+| `beforeMCPExecution` | same | Backup on PR read |
+| `beforeShellExecution` | `before-shell-pr-body-guard.sh` | **Deny** `gh pr edit`, `append-pr-body.sh`; allow `gh pr comment` |
+
+Core logic: `scripts/cursor/hooks/pr-body-guard-core.py`
+
+Human override only: operator `grant-pr-body-human-override.sh`, then `append-pr-body.sh` — Layers 1–6 (append-only) apply.
+
+Hookify: `.claude/hookify.pr-body-comment-only.local.md`
 
 ---
 

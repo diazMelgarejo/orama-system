@@ -1,0 +1,37 @@
+# Auto-restore ## Summary when an agent clobbers a PR body to a bare one-liner delta.
+# Complements verify-summary-present (read-only guard) with a one-shot repair path.
+name: PR body Summary restore
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  restore-summary-header:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepend ## Summary when missing
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const body = pr.body || "";
+            if (/^##[ \t]+Summary/m.test(body) || /^#[ \t]+Summary/m.test(body)) {
+              core.info("## Summary already present — no restore needed");
+              return;
+            }
+            if (!body.trim()) {
+              core.warning("PR body empty — manual restore required");
+              return;
+            }
+            const restored = `## Summary\n\n${body.trim()}\n`;
+            await github.rest.pulls.update({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr.number,
+              body: restored,
+            });
+            core.info(`Restored ## Summary on PR #${pr.number}`);
