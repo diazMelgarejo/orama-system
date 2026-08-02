@@ -40,7 +40,7 @@
   branches independently verified fully superseded (33 total across both
   repos). Script ready and dry-run-tested:
   `$OPENCLAW_ROOT/references/2026-07-22-branch-cleanup-verified-superseded.sh`.
-  One worktree ([`.claude/worktrees/pt-pr258-fixes-20260718`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.claude/worktrees/pt-pr258-fixes-20260718),
+  One worktree (`$PERPETUA_TOOLS_PATH/.claude/worktrees/pt-pr258-fixes-20260718`,
   on the confirmed-superseded `pr260-work` branch) is locked and also
   needs a human `git worktree remove --force` after unlocking.
 

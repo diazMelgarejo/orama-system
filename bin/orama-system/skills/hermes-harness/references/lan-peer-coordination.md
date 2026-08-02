@@ -108,7 +108,7 @@ Full plan: [`coord-pulse-plan.md`](coord-pulse-plan.md).
 
 ## Control-plane authentication
 
-- Token files: `orama-system/.state/control_plane_token` and [`.state/control_plane_token`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.state/control_plane_token)
+- Token files: `$ORAMA_SYSTEM_PATH/.state/control_plane_token` and `$PERPETUA_TOOLS_PATH/.state/control_plane_token` (local runtime only — never GitHub links)
 - Env: `ORAMA_CONTROL_PLANE_TOKEN`, `PT_CONTROL_PLANE_TOKEN` (same secret on both hosts)
 - Start: `start.ps1 --lan-peer --no-open` (Win) / `start.sh --lan-peer` (Mac)
 - Local probe: bearer `GET /peer-inbox` on `localhost:8002` — expect non-401

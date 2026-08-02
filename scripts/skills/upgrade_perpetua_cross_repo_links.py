@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Upgrade Perpetua-Tools path references in skill markdown to GitHub main links.
 
-Shell fence rewrites use ``$PT_ROOT`` (set via PT_ROOT_BASH) to match
+Shell fence rewrites use ``$PT_ROOT`` (set via sync-local-pt-checkout.md) to match
 ``scripts/discover.py::_resolve_perpetua_root_env``.
 """
 
@@ -16,11 +16,7 @@ PT_BASE = "https://github.com/diazMelgarejo/Perpetua-Tools/blob/main"
 PT_PATH_RE = re.compile(
     r"(?:perplexity-api/)?Perpetua-Tools/([^\s`)\]|]+)"
 )
-# Matches scripts/discover.py::_resolve_perpetua_root_env (bash form).
-PT_ROOT_BASH = (
-    'PT_ROOT="${PERPETUATOOLSROOT:-${PERPETUA_TOOLS_ROOT:-'
-    '${PERPETUA_TOOLS_PATH:-${OPENCLAW_HOME:-$HOME}/Perpetua-Tools}}}"'
-)
+MARKDOWN_LINK_RE = re.compile(r"\[[^\]]*\]\([^)]+\)")
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +39,10 @@ def in_code_fence(lines: list[str], index: int) -> bool:
 
 
 def already_linked(text: str, start: int) -> bool:
-    before = text[:start]
-    return before.rfind("](") > before.rfind("[")
+    return any(
+        match.start() <= start < match.end()
+        for match in MARKDOWN_LINK_RE.finditer(text)
+    )
 
 
 def link_for(rel_path: str) -> str:
@@ -54,7 +52,6 @@ def link_for(rel_path: str) -> str:
 
 def upgrade_line(line: str, in_fence: bool) -> str:
     if in_fence:
-        # Runtime shell: canonical PT root chain (discover.py contract), not sibling paths.
         line = line.replace('"$ROOT/Perpetua-Tools"', '"$PT_ROOT"')
         line = line.replace("$ROOT/Perpetua-Tools", "$PT_ROOT")
         line = line.replace('cd "$ROOT/Perpetua-Tools"', 'cd "$PT_ROOT"')
@@ -65,17 +62,17 @@ def upgrade_line(line: str, in_fence: bool) -> str:
         return line
 
     def repl_backtick(m: re.Match[str]) -> str:
+        if already_linked(line, m.start()):
+            return m.group(0)
         rel = m.group(1).rstrip(".,;:")
         return link_for(rel)
 
-    # Backtick-wrapped paths first
     line = re.sub(
         r"`(?:perplexity-api/)?Perpetua-Tools/([^`]+)`",
         repl_backtick,
         line,
     )
 
-    # Bare paths (not already inside markdown links)
     offset = 0
     out = line
     for m in PT_PATH_RE.finditer(line):

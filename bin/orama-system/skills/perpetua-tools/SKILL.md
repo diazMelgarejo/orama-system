@@ -12,35 +12,30 @@ This is a thin cross-repo redirect stub. The canonical skill lives in
 - **Canonical (GitHub):** [`SKILL.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SKILL.md)
 - **Local checkout:** resolve the same relative path inside your
   `Perpetua-Tools` clone (`$PERPETUATOOLSROOT`, `$PERPETUA_TOOLS_ROOT`,
-  `$PERPETUA_TOOLS_PATH`, or wherever you cloned the repo).
+  `$PERPETUA_TOOLS_PATH`, `$PT_HOME`, or `.paths` / sibling discovery — see
+  [`../oramasys-method/references/sync-local-pt-checkout.md`](../oramasys-method/references/sync-local-pt-checkout.md)).
 
 Cross-repo link policy: [`../oramasys-method/references/cross-repo-links.md`](../oramasys-method/references/cross-repo-links.md)
 
 ## Before Use
 
-Sync your local clone when one exists:
+Run the fail-closed sync in
+[`../oramasys-method/references/sync-local-pt-checkout.md`](../oramasys-method/references/sync-local-pt-checkout.md)
+with:
 
 ```bash
-PT_ROOT="${PERPETUATOOLSROOT:-${PERPETUA_TOOLS_ROOT:-${PERPETUA_TOOLS_PATH:-${OPENCLAW_HOME:-$HOME}/Perpetua-Tools}}}"
-if [[ -d "$PT_ROOT/.git" ]]; then
-  cd "$PT_ROOT"
-  git fetch origin --prune
-  git status --short --branch
-  if git status --porcelain | grep -q .; then
-    echo "dirty worktree — see safe-cross-host-sync before pull"
-  else
-    git pull --ff-only
-  fi
-else
-  echo "No local clone at PT_ROOT=$PT_ROOT — use GitHub canonical or: git clone https://github.com/diazMelgarejo/Perpetua-Tools.git"
-fi
+export CANONICAL_PT_URL="https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SKILL.md"
+# paste/run the _resolve_pt_root + validation block from sync-local-pt-checkout.md
 ```
 
-If the worktree is dirty, use [`git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md) (stash → `pull --ff-only` → pop → commit → push). If the branch is not tracking origin or fast-forward is impossible, report drift — never `git reset --hard` or force-push `main`.
+On any resolver, branch, cleanliness, fetch, or `pull --ff-only origin main`
+failure — **stop** and use the [canonical GitHub SKILL.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SKILL.md). Never `git reset --hard` or force-push `main`.
+
+If the worktree is dirty, use [`git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../git-history-surgery/references/safe-cross-host-sync-reference-card.md) only with **explicit operator approval** before any commit or push.
 
 ## Load Canonical Skill
 
-Open and follow the [canonical Perpetua-Tools SKILL.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SKILL.md). When working locally, read the same path in your checkout. Do not copy behavior from this wrapper.
+Open and follow the [canonical Perpetua-Tools SKILL.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SKILL.md). Use a local checkout only when the sync procedure above succeeds. Do not copy behavior from this wrapper.
 
 ## Windows UTF-8 Note
 

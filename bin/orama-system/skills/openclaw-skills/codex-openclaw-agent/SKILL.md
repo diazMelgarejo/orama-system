@@ -30,9 +30,10 @@ git pull --ff-only
 
 If the worktree is dirty, use
 [`git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../git-history-surgery/references/safe-cross-host-sync-reference-card.md)
-(stash → `pull --ff-only` → pop → commit → push). If the branch is not
-tracking origin or fast-forward is impossible, report drift — never
-`git reset --hard` or force-push `main`.
+(stash → `pull --ff-only` → pop → **report conflicts**; require explicit operator
+approval before any commit or push). If the branch is not tracking origin or
+fast-forward is impossible, report drift — never `git reset --hard` or
+force-push `main`.
 
 ## Quick Start
 

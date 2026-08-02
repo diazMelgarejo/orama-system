@@ -5,7 +5,7 @@
 
 ## Rule
 
-**Canonical cross-repo references are GitHub `main` markdown links — never
+**Canonical cross-repo references are GitHub `main` Markdown links — never
 sibling-folder paths** like `Perpetua-Tools/config/SKILL.md` or
 `../Perpetua-Tools/...`.
 
@@ -37,6 +37,9 @@ Clone when missing:
 git clone https://github.com/diazMelgarejo/Perpetua-Tools.git
 export PERPETUATOOLSROOT="$(git -C Perpetua-Tools rev-parse --show-toplevel)"
 ```
+
+Fail-closed sync before loading a local canonical skill:
+[`sync-local-pt-checkout.md`](sync-local-pt-checkout.md).
 
 ## orama-system (PT → orama)
 
