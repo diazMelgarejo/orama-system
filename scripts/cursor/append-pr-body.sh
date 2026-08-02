@@ -127,23 +127,15 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GRANT_LIB="$SCRIPT_DIR/pr-body-grant-lib.py"
 
-grant_append_args=(--repo "$repo_slug" --pr "$pr_number")
+verify_cmd=(python3 "$GRANT_LIB" verify --repo "$repo_slug" --pr "$pr_number")
 if [[ -n "$append_file" ]]; then
-  grant_append_args+=(--file "$append_file")
+  verify_cmd+=(--file "$append_file")
 else
-  grant_append_args+=(--message "$append_message")
+  verify_cmd+=(--message "$append_message")
 fi
-
-verify_cmd=(python3 "$GRANT_LIB" verify "${grant_append_args[@]}")
 if ! "${verify_cmd[@]}"; then
   echo "hint: operator runs grant-pr-body-human-override.sh with the same --file|--message" >&2
   exit 1
-fi
-
-if [[ -z "$title" ]]; then
-  title="$(normalize_follow_up_title "Follow-up ($(date -u +%Y-%m-%d))")"
-else
-  title="$(normalize_follow_up_title "$title")"
 fi
 
 if [[ -n "$append_file" ]]; then
@@ -247,19 +239,15 @@ if ! "$GH_BIN" pr edit "$pr_number" --repo "$repo_slug" --body-file "$out"; then
   exit 1
 fi
 
-mark_cmd=(python3 "$GRANT_LIB" mark-applied "${grant_append_args[@]}")
-if ! "${mark_cmd[@]}"; then
-  echo "error: grant mark-applied failed after PR body update — treat as security incident" >&2
-  exit 1
+consume_cmd=(python3 "$GRANT_LIB" consume --repo "$repo_slug" --pr "$pr_number")
+if [[ -n "$append_file" ]]; then
+  consume_cmd+=(--file "$append_file")
+else
+  consume_cmd+=(--message "$append_message")
 fi
-
-consume_cmd=(python3 "$GRANT_LIB" consume "${grant_append_args[@]}")
 if ! "${consume_cmd[@]}"; then
-  echo "error: grant consume failed AFTER the PR body update. The remote write already landed." >&2
-  echo "  cause: the nonce ledger could not be updated, so the grant may still be replayable." >&2
-  echo "  fix: delete ~/.cursor/pr-body-human-override-ack now, then review .git/pr-body-backups." >&2
+  echo "error: grant consume failed after PR body update — treat as security incident" >&2
   exit 1
 fi
 
-grant_finalized=1
 echo "updated: https://github.com/${repo_slug}/pull/${pr_number}"
