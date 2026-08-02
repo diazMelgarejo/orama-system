@@ -34,19 +34,35 @@ not invent a private operator identity.
 - Model: `deepseek-ai/DeepSeek-V4-Flash`
 - Provider: wanDB.ai inference (`https://api.inference.wandb.ai/v1`),
   OpenAI-compatible
-- Team/Project: `diazmelgarejo-org/deepseek_v4_flash_wandb_agent`
-- Reasoning: high
+- Team/Project: `$DEEPSEEK_V4_FLASH_WANDB_PROJECT` (set in `.env.local`;
+  never hardcode a private entity/project literal in tracked files)
+- Reasoning: high — requires `extra_body.chat_template_kwargs.enable_thinking:
+  true` on direct API calls; verify the Cline route preserves equivalent
+  behavior or downgrade the reasoning claim
 - Access policy: wanDB-only for this route. Do not silently fall back
   to ClinePass, GLM, Pro, Kimi, OpenRouter, or any other provider key
   path.
 - Auth: `DEEPSEEK_V4_FLASH_WANDB` environment variable. Do not request
-  or print the key's value.
+  or print the key's value. Never pass the key on command arguments.
 - Privacy: do not pass secrets, private identity literals, LAN
   topology, device names, or workstation-specific paths into prompts
   or outputs.
-- Workspace: default to `/private/tmp` for read-only or sensitive
-  fan-out. Add repository access only when the task needs file reads
-  or edits.
+- Workspace: default to `$HOME/.gstack/cline-wandb` for read-only or
+  sensitive fan-out. Use `$REPO_ROOT` (from `git rev-parse
+  --show-toplevel`) only when the task needs repository reads or edits.
+
+## Security gate (mandatory before cloud or repo work)
+
+Before any cloud-bound request or repository-bound execution:
+
+1. Run `security-reviewer` on the sanitized task scope and workspace
+   choice. **Stop** if approval is missing or rejected.
+2. Confirm prompts use only a sanitized summary or an explicitly
+   allowlisted workspace — never raw secrets, `.env.local`, or
+   unredacted repo paths.
+3. Block external API calls, authentication changes, and filesystem
+   mutations until approval and workspace validation succeed. Privacy
+   bullets alone are not enforcement.
 
 ## ⚠️ Needs local verification before first real use
 
@@ -61,36 +77,56 @@ this route for anything beyond a dry read of its instructions:
 
 ```bash
 cline --version
+cline --help
 cline auth --help
-cline task --help
 ```
 
 Confirm whether `cline auth` supports a custom base URL + bearer key
-directly, or whether wanDB.ai needs to be added as a named provider
-first. The dispatch patterns below use a plausible, ClinePass-pattern-
-consistent flag shape as a starting point — verify and correct against
-real `--help` output the same way the ClinePass skill's own "Verify
-Current CLI Shape" section does, and update this section once
-confirmed.
+via environment/config (not argv), or whether wanDB.ai needs to be
+added as a named provider first. The dispatch patterns below use a
+plausible starting point — verify and correct against real `--help`
+output the same way the ClinePass skill's own "Verify Current CLI
+Shape" section does, and update this section once confirmed.
 
 ## Quick Start (flags to verify, see above)
 
+Initialize once per session with curl and Python smoke tests (see wanDB
+spec in the operator brief), then configure Cline without exposing the
+key on argv:
+
 ```bash
+export REPO_ROOT="$(git rev-parse --show-toplevel)"
+export CLINE_WANDB_WORKSPACE="${HOME}/.gstack/cline-wandb"
+mkdir -p "$CLINE_WANDB_WORKSPACE"
+
+# Key must already be in the environment from .env.local — never on argv
+: "${DEEPSEEK_V4_FLASH_WANDB:?set in .env.local}"
+: "${DEEPSEEK_V4_FLASH_WANDB_PROJECT:?set in .env.local}"
+
 cline auth --provider openai-compatible \
   --baseurl https://api.inference.wandb.ai/v1 \
-  --apikey "$DEEPSEEK_V4_FLASH_WANDB" \
   --modelid deepseek-ai/DeepSeek-V4-Flash
 ```
 
 ```bash
-cline task \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
-  -m deepseek-ai/DeepSeek-V4-Flash \
-  -c /private/tmp \
+cline --json --reasoning-effort high \
+  -c "$CLINE_WANDB_WORKSPACE" \
   -t 180 \
   "Reply with exactly: CLINE_WANDB_READY"
+```
+
+Direct API smoke (optional, verifies `enable_thinking`):
+
+```bash
+curl https://api.inference.wandb.ai/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DEEPSEEK_V4_FLASH_WANDB" \
+  -H "OpenAI-Project: $DEEPSEEK_V4_FLASH_WANDB_PROJECT" \
+  -d '{
+    "model": "deepseek-ai/DeepSeek-V4-Flash",
+    "messages": [{"role": "user", "content": "ping"}],
+    "extra_body": {"chat_template_kwargs": {"enable_thinking": true}}
+  }'
 ```
 
 ## Provider Auth Gate
@@ -106,47 +142,59 @@ prompts, tracked files, shared command history, or logs.
 
 ## Dispatch Patterns
 
-Read-only review:
+Set a conservative command allowlist for review/planning. Do **not**
+use `--auto-approve-all` until explicit human confirmation for
+implementation.
 
 ```bash
-cline task \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
-  -m deepseek-ai/DeepSeek-V4-Flash \
-  -c /private/tmp \
+export CLINE_COMMAND_PERMISSIONS='read,search,web_fetch'
+```
+
+Read-only review (non-mutating):
+
+```bash
+cline --json --reasoning-effort high \
+  -c "$CLINE_WANDB_WORKSPACE" \
   -t 300 \
   "Review this sanitized summary. Do not access files. Return risks and tests."
 ```
 
-Plan-first review:
+Plan-first review (non-mutating):
 
 ```bash
-cline task \
-  -p \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
-  -m deepseek-ai/DeepSeek-V4-Flash \
-  -c /private/tmp \
+cline -p --json --reasoning-effort high \
+  -c "$CLINE_WANDB_WORKSPACE" \
   -t 300 \
   "Create a concise implementation plan from this sanitized summary."
 ```
 
-Repo-bound implementation, only on a clean branch:
+## Implementation preflight (mandatory)
+
+Repo-bound work requires **all** gates before dispatch:
+
+1. `git status --short --branch` — clean or explicitly scoped dirty
+   files only
+2. `planner` — approved plan artifact
+3. `tdd-guide` — test-first contract for the change
+4. `code-reviewer` — delta review on the plan
+5. `security-reviewer` — approval for cloud/repo-bound execution
+
+Do not start implementation dispatch until applicable gates complete.
+
+Repo-bound implementation, only after preflight and **explicit human
+confirmation** to enable tool approval:
 
 ```bash
-git status --short --branch
-cline task \
-  -a \
-  --json \
-  --auto-approve-all \
-  --reasoning-effort high \
+export CLINE_COMMAND_PERMISSIONS='read,write,search,execute'
+cline -a --json --reasoning-effort high \
   -m deepseek-ai/DeepSeek-V4-Flash \
-  -c "$PWD" \
+  -c "$REPO_ROOT" \
   -t 900 \
   "Implement the requested scoped change. Preserve unrelated local changes."
 ```
+
+When the task is sensitive, prefer `$CLINE_WANDB_WORKSPACE` plus a
+sanitized prompt over granting repository access.
 
 ## Mandatory: TDD for every spawned agent
 
@@ -207,6 +255,12 @@ tooling:
    this internal structure is skipping the same discipline the main
    session is held to.
 
+**Crystallize gate:** do not enter the final Crystallize stage without
+an **approved verifier result**. If verification is missing, failed,
+or blocked, stop and record the blocker — do not crystallize output.
+Workers must record verifier approval (PASS + evidence pointer) before
+reporting Crystallize complete.
+
 This applies regardless of task type — a plan draft, a review, a
 mechanical implementation pass, or "other agentic tasks" more broadly.
 The tools differ from `code-review`'s (no graph MCP, no gbrain); the
@@ -223,10 +277,15 @@ prompts that may contain sensitive summaries.
 
 ## Monitoring
 
+Check liveness without dumping prompts, credentials, or full argv:
+
 ```bash
-pgrep -af 'cline|deepseek-v4-flash|wandb'
-ps -p <pid> -o pid,ppid,stat,lstart,etime,command
+pgrep -f 'hermes_harness.py|cline-wandb' || true
+ps -p <pid> -o pid,ppid,stat,lstart,etime
 ```
+
+Do not use `pgrep -af` or `ps ... command` when the listing may expose
+task prompts or secrets.
 
 ## Boundaries
 
