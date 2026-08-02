@@ -18,7 +18,7 @@ operator issued a grant via `scripts/cursor/grant-pr-body-human-override.sh`
 
 **Security gap (2026-08-02):** TTY gating + plaintext ack file are **not** human
 authorization. Research + remediation plan:
-[`pr-body-human-grant-security-gap-research.md`](../../references/pr-body-human-grant-security-gap-research.md)
+[`pr-body-human-grant-security-gap-research.md`](pr-body-human-grant-security-gap-research.md)
 (CodeRabbit PR #255 review 4835288649).
 
 Cursor rule: `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply, listed before append-only).
