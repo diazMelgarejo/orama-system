@@ -15,7 +15,7 @@
   `$OPENCLAW_ROOT`/`$HOME`-relative paths (which had silently drifted to
   an unrelated `npx mcp-remote` workaround in PT's `.codex/config.toml`)
   with a portable resolver: `orama-system/scripts/exa/resolve-orama-root.sh`
-  + inline cache/walk/find bootstraps. orama `2cb1f0f0`, PT `fe66f46e`.
+  and inline cache/walk/find bootstraps. orama `2cb1f0f0`, PT `fe66f46e`.
 - **Dependabot fixes, all verified non-breaking:** orama `web/`
   brace-expansion 5.0.6→5.0.7 (HIGH, scoped pnpm override, lint verified
   clean) `f225f45a`; PT `local-agents`+`alphaclaw-mcp` body-parser→2.3.0

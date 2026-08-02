@@ -6,7 +6,7 @@
 > **PT subagents:** [`.agent/memory/working/MAC_SUBAGENTS_WHERE_TO_LOOK_2026-06-28.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/MAC_SUBAGENTS_WHERE_TO_LOOK_2026-06-28.md)  
 > **Shared landmark:** [`.agent/memory/working/CO_ORCHESTRATOR_LAN_PEER_2026-06-28.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/CO_ORCHESTRATOR_LAN_PEER_2026-06-28.md)  
 > **Rendered lessons:** [`.agent/memory/semantic/LESSONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/semantic/LESSONS.md)  
-> **GitHub:** https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md
+> **GitHub:** [mac-co-orchestrator-playbook.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md)
 
 **Mode:** file inbox handoff — each host runs **local** `cursor-agent`, Codex, AGY, and coder. No remote agent RPC.
 

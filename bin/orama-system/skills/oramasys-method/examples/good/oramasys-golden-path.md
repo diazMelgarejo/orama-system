@@ -1,12 +1,12 @@
 # Golden Path Example
 
-## Input
+## Input — production bug fix
 
 > "ultrathink this: our nightly gbrain sync keeps failing with
 > CONNECTION_CLOSED from the supabase pooler, and I need a
 > production-ready fix, not a band-aid."
 
-## Expected Behavior
+## Expected Behavior — production bug fix
 
 ```text
 AFRP: Type C | Level Practitioner | Mode 2
@@ -27,13 +27,13 @@ Scope: production-grade fix for a recurring gbrain sync connection failure
 6. **Crystallize** — capture a lesson if the root cause was non-obvious;
    note the assumptions ledger.
 
-## Second Input (PR merge)
+## Input — PR merge
 
 > "apply the system to: reconcile two divergent branches — one team
 > rewrote the auth module, another added feature flags on top of the old
 > version. Get this mergeable."
 
-## Expected Behavior
+## Expected Behavior — PR merge
 
 - Loads `references/integrative-merge.md` before touching the conflict
   (mandatory for any PR/conflict work).
@@ -46,11 +46,11 @@ Scope: production-grade fix for a recurring gbrain sync connection failure
   shape, the feature flags land on top of it — rather than deleting either
   side's work.
 
-## Third Input (ambiguous slash command)
+## Input — ambiguous slash command
 
 > "/skillify"
 
-## Expected Behavior
+## Expected Behavior — ambiguous slash command
 
 ```text
 AFRP: Type D | Level (undetermined) | Mode (clarify first)

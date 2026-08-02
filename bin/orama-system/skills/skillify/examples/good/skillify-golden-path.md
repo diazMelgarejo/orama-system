@@ -1,11 +1,11 @@
 # Golden Path Example
 
-## Input
+## Input — new skill intake
 
 > "/skillify — I need a skill that rotates API keys in our secrets manager.
 > Target claude-code. Ask first before touching anything in prod."
 
-## Expected Behavior
+## Expected Behavior — new skill intake
 
 1. Ask the intake questions (name, purpose, target harness, trigger phrases,
    boundaries) only for facts not already given — here, trigger phrases and
@@ -28,12 +28,12 @@
    the `STATUS: DONE` report format from
    [`../../references/modular-skill-authoring.md`](../../references/modular-skill-authoring.md).
 
-## Second Input (upgrade path)
+## Input — self-upgrade dogfood
 
 > "skillify feels stale — go check yourself against your own standards
 > and Anthropic's skill-creator standards, and fix what's actually wrong."
 
-## Expected Behavior
+## Expected Behavior — self-upgrade dogfood
 
 - Read `../../references/skill-architecture-guide.md`,
   `../modular-skill-authoring.md`, and `../skill-folder-template.md` before

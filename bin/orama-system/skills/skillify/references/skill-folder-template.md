@@ -112,7 +112,7 @@ allowed-tools: bash, file-operations
 
 `<realistic user request>`
 
-## Expected Behavior
+## Expected Behavior — example scenario
 
 - Activates the skill.
 - Loads only necessary references.
