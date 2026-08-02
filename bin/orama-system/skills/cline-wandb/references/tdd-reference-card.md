@@ -137,7 +137,9 @@ Full source:
   existing tests cover the surface and stay green.
 - **Exploratory spike**: allowed on a `spike/*` branch; never merges
   as-is, gets rewritten with tests on a `feat/*` branch.
-- **Doc-only / config-only**: no test required.
+- **Doc-only / config-only**: no test required only for genuinely idle
+  reference text with zero behavioral or safety impact. Skill instructions,
+  dispatch paths, and safety-behavior changes require behavioral tests.
 
 Anything else: write the test. If you're thinking "skip TDD just this
 once" — that's the rationalization talking, not a real exception. Full
