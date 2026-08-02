@@ -279,3 +279,5 @@ trigger: CodeRabbit 4835288649
 - Grant script: `scripts/cursor/grant-pr-body-human-override.sh`
 - Security harness: `docs/v2/33-security-harness-source-material.md`
 - Working next steps: `.agent/memory/working/WORKSPACE.md`
+- **Remediation plan (MVP):** `docs/plans/2026-08-02-pr-body-grant-security-remediation.md`
+- **v2.1 sentinel orbit:** `docs/v2/51-security-sentinel-orbit-passkey-mcp.md`
