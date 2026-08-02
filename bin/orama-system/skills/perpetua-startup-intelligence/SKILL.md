@@ -11,8 +11,8 @@ This is a thin cross-repo redirect stub. The canonical skill lives in
 
 - **Canonical (GitHub):** [`hardware/startup-intelligence/SKILL.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/hardware/startup-intelligence/SKILL.md)
 - **Local checkout:** resolve the same relative path inside your
-  `Perpetua-Tools` clone (`$PERPETUA_TOOLS_PATH`, `$OPENCLAW_HOME/Perpetua-Tools`,
-  or wherever you cloned the repo).
+  `Perpetua-Tools` clone (`$PERPETUATOOLSROOT`, `$PERPETUA_TOOLS_ROOT`,
+  `$PERPETUA_TOOLS_PATH`, or wherever you cloned the repo).
 
 Cross-repo link policy: [`../oramasys-method/references/cross-repo-links.md`](../oramasys-method/references/cross-repo-links.md)
 
@@ -21,7 +21,7 @@ Cross-repo link policy: [`../oramasys-method/references/cross-repo-links.md`](..
 Sync your local clone when one exists:
 
 ```bash
-PT_ROOT="${PERPETUA_TOOLS_PATH:-${OPENCLAW_HOME:-$HOME}/Perpetua-Tools}"
+PT_ROOT="${PERPETUATOOLSROOT:-${PERPETUA_TOOLS_ROOT:-${PERPETUA_TOOLS_PATH:-${OPENCLAW_HOME:-$HOME}/Perpetua-Tools}}}"
 if [[ -d "$PT_ROOT/.git" ]]; then
   cd "$PT_ROOT"
   git fetch origin --prune

@@ -1,8 +1,13 @@
 #!/usr/bin/env python3
-"""Upgrade Perpetua-Tools path references in skill markdown to GitHub main links."""
+"""Upgrade Perpetua-Tools path references in skill markdown to GitHub main links.
+
+Shell fence rewrites use ``$PT_ROOT`` (set via PT_ROOT_BASH) to match
+``scripts/discover.py::_resolve_perpetua_root_env``.
+"""
 
 from __future__ import annotations
 
+import logging
 import re
 import sys
 from pathlib import Path
@@ -11,7 +16,22 @@ PT_BASE = "https://github.com/diazMelgarejo/Perpetua-Tools/blob/main"
 PT_PATH_RE = re.compile(
     r"(?:perplexity-api/)?Perpetua-Tools/([^\s`)\]|]+)"
 )
-SKIP_SUFFIXES = {".py", ".sh"}
+# Matches scripts/discover.py::_resolve_perpetua_root_env (bash form).
+PT_ROOT_BASH = (
+    'PT_ROOT="${PERPETUATOOLSROOT:-${PERPETUA_TOOLS_ROOT:-'
+    '${PERPETUA_TOOLS_PATH:-${OPENCLAW_HOME:-$HOME}/Perpetua-Tools}}}"'
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _configure_logging() -> None:
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    root = logging.getLogger()
+    root.handlers.clear()
+    root.addHandler(handler)
+    root.setLevel(logging.INFO)
 
 
 def in_code_fence(lines: list[str], index: int) -> bool:
@@ -34,10 +54,14 @@ def link_for(rel_path: str) -> str:
 
 def upgrade_line(line: str, in_fence: bool) -> str:
     if in_fence:
-        # Runtime shell: prefer env var over sibling path
-        line = line.replace('"$ROOT/Perpetua-Tools"', '"$PERPETUA_TOOLS_PATH"')
-        line = line.replace("$ROOT/Perpetua-Tools", "$PERPETUA_TOOLS_PATH")
-        line = line.replace('cd "$ROOT/Perpetua-Tools"', 'cd "$PERPETUA_TOOLS_PATH"')
+        # Runtime shell: canonical PT root chain (discover.py contract), not sibling paths.
+        line = line.replace('"$ROOT/Perpetua-Tools"', '"$PT_ROOT"')
+        line = line.replace("$ROOT/Perpetua-Tools", "$PT_ROOT")
+        line = line.replace('cd "$ROOT/Perpetua-Tools"', 'cd "$PT_ROOT"')
+        line = line.replace('"$PERPETUA_TOOLS_PATH"', '"$PT_ROOT"')
+        line = line.replace("$PERPETUA_TOOLS_PATH/", "$PT_ROOT/")
+        line = line.replace("$PERPETUA_TOOLS_PATH", "$PT_ROOT")
+        line = line.replace('cd "$PERPETUA_TOOLS_PATH"', 'cd "$PT_ROOT"')
         return line
 
     def repl_backtick(m: re.Match[str]) -> str:
@@ -83,6 +107,7 @@ def upgrade_file(path: Path) -> bool:
 
 
 def main() -> int:
+    _configure_logging()
     root = Path(__file__).resolve().parents[2] / "bin" / "orama-system" / "skills"
     updated: list[str] = []
     for path in sorted(root.rglob("*")):
@@ -90,9 +115,9 @@ def main() -> int:
             continue
         if upgrade_file(path):
             updated.append(str(path.relative_to(root.parents[1])))
-    print(f"Updated {len(updated)} files")
-    for p in updated:
-        print(f"  {p}")
+    logger.info("Updated %d files", len(updated))
+    for rel_path in updated:
+        logger.info("  %s", rel_path)
     return 0
 
 

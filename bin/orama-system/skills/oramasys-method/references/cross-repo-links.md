@@ -18,8 +18,8 @@ stable; local agents resolve them to a checkout.
 | Layer | Form |
 | ----- | ---- |
 | **Canonical (skills + docs)** | `[relative/path.md](https://github.com/diazMelgarejo/<repo>/blob/main/relative/path.md)` |
-| **Local resolution** | Same relative path inside your clone — discover via `$PERPETUA_TOOLS_PATH`, `$ALPHACLAW_INSTALL_DIR`, `git -C <path> rev-parse --show-toplevel`, or clone from the repo URL |
-| **Runtime shell** | Env vars (`$PERPETUA_TOOLS_PATH`, `$ORAMA_SYSTEM_PATH`) — not hardcoded `../Perpetua-Tools` |
+| **Local resolution** | Same relative path inside your clone — resolve root via `$PERPETUATOOLSROOT`, `$PERPETUA_TOOLS_ROOT`, `$PERPETUA_TOOLS_PATH` (see `scripts/discover.py`), or clone from the repo URL |
+| **Runtime shell** | `PT_ROOT="${PERPETUATOOLSROOT:-${PERPETUA_TOOLS_ROOT:-${PERPETUA_TOOLS_PATH:-...}}}"` — not hardcoded `../Perpetua-Tools` |
 
 ## Perpetua-Tools (orama → PT)
 
@@ -35,7 +35,7 @@ Clone when missing:
 
 ```bash
 git clone https://github.com/diazMelgarejo/Perpetua-Tools.git
-export PERPETUA_TOOLS_PATH="$(git -C Perpetua-Tools rev-parse --show-toplevel)"
+export PERPETUATOOLSROOT="$(git -C Perpetua-Tools rev-parse --show-toplevel)"
 ```
 
 ## orama-system (PT → orama)
