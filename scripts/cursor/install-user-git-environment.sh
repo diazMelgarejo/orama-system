@@ -19,6 +19,12 @@ install -m 0755 "${REPO_ROOT}/scripts/git/cursor-hooks-id.sh" "${GUARD_DIR}/curs
 install -m 0755 "${REPO_ROOT}/scripts/git/disable-cursor-commit-attribution.sh" "${GUARD_DIR}/disable-cursor-commit-attribution.sh"
 install -m 0755 "${REPO_ROOT}/scripts/git/hooks/commit-msg.strip-coauthor" "${GUARD_DIR}/commit-msg.strip-coauthor"
 install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/session-apply-git-guards.sh" "${HOOK_DIR}/session-apply-git-guards.sh"
+install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/pr-body-backup-lib.sh" "${HOOK_DIR}/pr-body-backup-lib.sh"
+install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/before-mcp-pr-body-guard.sh" "${HOOK_DIR}/before-mcp-pr-body-guard.sh"
+install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/before-shell-pr-body-guard.sh" "${HOOK_DIR}/before-shell-pr-body-guard.sh"
+install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/before-submit-pr-body-reminder.sh" "${HOOK_DIR}/before-submit-pr-body-reminder.sh"
+install -m 0755 "${REPO_ROOT}/scripts/cursor/grant-pr-body-human-override.sh" "${HOOK_DIR}/grant-pr-body-human-override.sh"
+install -m 0755 "${REPO_ROOT}/scripts/cursor/hooks/pr-body-guard-core.py" "${HOOK_DIR}/pr-body-guard-core.py"
 
 cat >"${GUARD_DIR}/apply-all-repos.sh" <<'EOF'
 #!/usr/bin/env bash
@@ -39,15 +45,29 @@ exit 1
 EOF
 chmod +x "${GUARD_DIR}/apply-all-repos.sh"
 
-# Merge sessionStart into ~/.cursor/hooks.json (do not clobber unrelated hooks).
-python3 - "$CURSOR_HOOKS_JSON" "$HOOK_DIR/session-apply-git-guards.sh" <<'PY'
+# Merge Cursor hooks into ~/.cursor/hooks.json (do not clobber unrelated hooks).
+python3 - "$CURSOR_HOOKS_JSON" "$HOOK_DIR" <<'PY'
 import json
 import sys
 from pathlib import Path
 
 dest = Path(sys.argv[1])
-hook_script = sys.argv[2]
-entry = {"command": hook_script, "timeout": 120}
+hook_dir = Path(sys.argv[2])
+
+def merge_event(cfg, event, command, timeout, matcher=None, fail_closed=False):
+    hooks = cfg.setdefault("hooks", {})
+    entry = {"command": command, "timeout": timeout}
+    if matcher:
+        entry["matcher"] = matcher
+    if fail_closed:
+        entry["failClosed"] = True
+    existing = [
+        h
+        for h in (hooks.get(event) or [])
+        if not (isinstance(h, dict) and h.get("command") == command and h.get("matcher") == matcher)
+    ]
+    existing.append(entry)
+    hooks[event] = existing
 
 if dest.is_file():
     cfg = json.loads(dest.read_text(encoding="utf-8"))
@@ -55,17 +75,11 @@ else:
     cfg = {"version": 1, "hooks": {}}
 
 cfg.setdefault("version", 1)
-hooks = cfg.setdefault("hooks", {})
-existing = [
-    h
-    for h in (hooks.get("sessionStart") or [])
-    if not (
-        isinstance(h, dict)
-        and h.get("command") in {"HOOK_SCRIPT_PATH_PLACEHOLDER", hook_script}
-    )
-]
-existing.append(entry)
-hooks["sessionStart"] = existing
+merge_event(cfg, "sessionStart", str(hook_dir / "session-apply-git-guards.sh"), 120)
+merge_event(cfg, "beforeSubmitPrompt", str(hook_dir / "before-submit-pr-body-reminder.sh"), 15)
+merge_event(cfg, "beforeMCPExecution", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30, fail_closed=True)
+merge_event(cfg, "preToolUse", str(hook_dir / "before-mcp-pr-body-guard.sh"), 30, "ManagePullRequest", fail_closed=True)
+merge_event(cfg, "beforeShellExecution", str(hook_dir / "before-shell-pr-body-guard.sh"), 30, fail_closed=True)
 
 dest.parent.mkdir(parents=True, exist_ok=True)
 dest.write_text(json.dumps(cfg, indent=2) + "\n", encoding="utf-8")

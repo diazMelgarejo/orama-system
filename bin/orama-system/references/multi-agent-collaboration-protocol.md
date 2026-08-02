@@ -6,8 +6,11 @@
 > Offloaded from `bin/orama-system/SKILL.md` for progressive disclosure — load before any
 > multi-agent session. Content is canonical here; SKILL.md carries only the navigational stub.
 >
-> **PR merge doctrine (user-facing):** [`skills/oramasys-method/references/integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md) —
-> additive harmonization, six resolution modes, synthesize-never-amputate. Load via **oramasys-method** when modifying PRs.
+> **PR merge doctrine (user-facing):**
+> [`skills/oramasys-method/references/integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md)
+> —
+> additive harmonization, six resolution modes, synthesize-never-amputate.
+> Load via **oramasys-method** when modifying PRs.
 
 ## Pre-Session Sync Check
 
@@ -57,15 +60,15 @@ Replace with a proper dated header on completion. This is the coordination signa
 
 When bumping version, update ALL of these atomically:
 
-| File                             | Field                               |
-| -------------------------------- | ----------------------------------- |
-| `pyproject.toml`                 | `version`                           |
-| `bin/orama-system/SKILL.md`            | frontmatter `version:`              |
-| `bin/orama-system/config/agent_registry.json` | `"version"`                         |
-| `portal_server.py`               | `VERSION`                           |
-| `bin/agents/*/agent.md`          | `version:` frontmatter (each agent) |
-| `CLAUDE.md`                      | mother skill version reference      |
-| `docs/PERPLEXITY_BRIDGE.md`      | version header                      |
+| File | Field |
+| --- | --- |
+| `pyproject.toml` | `version` |
+| `bin/orama-system/SKILL.md` | frontmatter `version:` |
+| `bin/orama-system/config/agent_registry.json` | `"version"` |
+| `portal_server.py` | `VERSION` |
+| `bin/agents/*/agent.md` | `version:` frontmatter (each agent) |
+| `CLAUDE.md` | mother skill version reference |
+| `docs/PERPLEXITY_BRIDGE.md` | version header |
 
 **Legacy markers** (do not auto-bump — they pin a stable API baseline):
 
@@ -91,6 +94,7 @@ When creating or editing any file under `bin/orama-system/skills/` or
 3. **LINT-014**: no argv secret exposure — reference `store_keychain_secret.sh`.
 
 Quick-verify before committing:
+
 ```bash
 python3 scripts/review/repo_hygiene.py .
 ```
@@ -114,9 +118,20 @@ This is the primary async channel between agents with no shared session memory.
 When two or more agents produce branches concurrently against a moving `main`, follow
 this sequence exactly. Guessing conflict resolution corrupts the codebase silently.
 
+> **Not your situation?** If it's one branch, one agent, merging into `main`
+> with nobody else concurrently editing the same repo — which covers most
+> everyday merges — use
+> [`worktree-semantic-merge-reference-card.md`](worktree-semantic-merge-reference-card.md)
+> instead. It's the same underlying discipline (simulate first, classify
+> before resolving, never guess on real ambiguity) at the size the ordinary
+> case actually needs, without this protocol's topological multi-branch
+> ordering and merge-buffer timing, which exist to solve a harder problem
+> than a routine merge has.
+
 ### Merge order
 
 Always establish a topological ordering before starting:
+
 - Identify the parent-child relationship between branches (which was created first / is based on which)
 - Merge leaf → parent first, then parent → main
 - Wait 10 minutes and confirm `mergeable_state: clean` via GitHub API before the next merge
@@ -150,7 +165,7 @@ One question per file. Never proceed without explicit human direction.
 ### Step 3 — Resolution strategies (human-directed)
 
 | Strategy | When | Action |
-|---|---|---|
+| --- | --- | --- |
 | `additive` | One side empty, other has content | Take the content side |
 | `union` | Both sides partial/complementary | Concatenate — ours first, theirs appended |
 | `superset` | One side structurally contains all rows of the other | Verify inclusion, take the superset |
@@ -177,7 +192,9 @@ def resolve_union(path):
 ```
 
 Special cases for memory files:
-- `AGENT_LEARNINGS.jsonl` / `lessons.jsonl` → union then dedup by `run_id` / `id` (keep **first** occurrence per key)
+
+- `AGENT_LEARNINGS.jsonl` / `lessons.jsonl` → union then dedup by `run_id` /
+  `id` (keep **first** occurrence per key)
 - `LESSONS.md` → rendered from `lessons.jsonl`; never hand-merge — run `graduate.py`
 
 ### Step 5 — Verify before committing
@@ -221,7 +238,7 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 ### Key invariants
 
 | Invariant | What to do |
-|---|---|
+| --- | --- |
 | `"merged": true` on GitHub ≠ content on target branch | Always verify: `git diff origin/main...origin/<branch>` |
 | CodeRabbit re-scans on every push | Run post-merge sweep after **every** merge, not once |
 | PR branch base may be stale vs current main | Check `git merge-base` before simulating |
@@ -229,8 +246,6 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 | Board job has no source ref / base SHA | Add them before editing; then work from a fresh worktree at that exact ref |
 | Draft PRs cannot be merged via API | Run `markPullRequestReadyForReview` GraphQL mutation first |
 | `scan_tracked_secrets` catches token in commit body | Never paste tokens in PR titles, commit messages, or docs |
-
-
 
 | Symptom                                    | Cause                               | Fix                                                                   |
 | ------------------------------------------ | ----------------------------------- | --------------------------------------------------------------------- |
@@ -244,10 +259,23 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 
 ## See also
 
-- [`skills/oramasys-method/references/integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md) — **canonical PR merge / harmonization doctrine (orama-way)**
-- [`skills/git-history-surgery/SKILL.md`](../skills/git-history-surgery/SKILL.md) — history rewrite, re-anchor after rewrite, version-bump commit discipline; contains the Multi-Agent Branch Merge quick reference
-- [`skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md) — replay harmonized path delta when integration base already landed overlapping content (periscope PR #12 ECC)
-- [`skills/using-git-worktrees/SKILL.md`](../skills/using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge-protocol trigger
-- [`docs/v2/22-worktree-parallel-agents.md`](../../docs/v2/22-worktree-parallel-agents.md) — board-job source-ref pinning and worktree bootstrap doctrine
-- [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry, Nested-Branch Merge Protocol table, cross-links to PT AGENTS.md
-- [`PT/.agent/AGENTS.md` § Multi-agent merge conflict protocol](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md) — harness-agnostic portable brain entry point
+- [`skills/oramasys-method/references/integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md)
+  — **canonical PR merge / harmonization doctrine (orama-way)**
+- [`skills/git-history-surgery/SKILL.md`](../skills/git-history-surgery/SKILL.md)
+  — history rewrite, re-anchor after rewrite, version-bump commit discipline;
+  contains the Multi-Agent Branch Merge quick reference
+- [`skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md)
+  — replay harmonized path delta when integration base already landed
+  overlapping content (periscope PR #12 ECC)
+- [`skills/using-git-worktrees/SKILL.md`](../skills/using-git-worktrees/SKILL.md)
+  — parallel agent worktree lifecycle; Step 3 embeds the merge-protocol trigger
+- [`worktree-semantic-merge-reference-card.md`](worktree-semantic-merge-reference-card.md)
+  — the default, everyday-use sibling to this protocol; use it instead of
+  this doc for an ordinary single-branch, single-agent merge (see the
+  scoping note atop the Nested-Branch Merge Protocol section above)
+- [`docs/v2/22-worktree-parallel-agents.md`](../../docs/v2/22-worktree-parallel-agents.md)
+  — board-job source-ref pinning and worktree bootstrap doctrine
+- [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md)
+  — version registry, Nested-Branch Merge Protocol table, cross-links to PT AGENTS.md
+- [`PT/.agent/AGENTS.md` § Multi-agent merge conflict protocol](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md)
+  — harness-agnostic portable brain entry point

@@ -138,18 +138,27 @@ python3 -m pytest tests/test_version_docs.py  # verify
 ```
 
 See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
-See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
+See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md)
+(full surface registry)
 
-**If this worktree is being merged into another agent's branch or into main**, invoke
-the nested-branch merge protocol before pushing:
+**Merging this worktree into `main`?** For the ordinary case — one branch,
+one agent, nobody else concurrently editing the same repo, which covers
+most everyday merges — use
+[`../../references/worktree-semantic-merge-reference-card.md`](../../references/worktree-semantic-merge-reference-card.md)
+as the whole procedure.
 
-1. **Simulate** — `git merge --no-commit --no-ff <this-branch>` from the target; enumerate conflicts; abort
+**If another agent is actively editing the same repo concurrently**, or
+this is reconciling a long-diverged fork/upstream source, invoke the
+heavier nested-branch merge protocol instead before pushing:
+
+1. **Simulate** — `git merge --no-commit --no-ff <this-branch>` from the
+   target; enumerate conflicts; abort
 2. **Enumerate to human** — show both sides of every conflict; never resolve without explicit direction
 3. **Resolution strategies**: `additive` / `union` / `superset` / `architecturally-correct` / `api-correct`
 4. **Verify**: `pytest -q` + `repo_hygiene.py` + confirm no `<<<<<<<` markers remain
 5. **Buffer**: wait 10 minutes after each GitHub merge; confirm `mergeable_state: clean`
 
-Full detail: [`git-history-surgery/references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](../git-history-surgery/references/multi-agent-collaboration-protocol.md)
+Full detail: [`references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](../../references/multi-agent-collaboration-protocol.md)
 
 **Why this matters especially for worktrees:** docs, plans, and bash snippets
 written from a worktree often embed the machine-local path. Those paths are
@@ -285,8 +294,26 @@ cat .worktree-env
 
 ## Related skills
 
-- [[fable5-git-rebase-safety]] — before cleaning up or discarding a finished/stale-looking worktree, verify its branch's real relationship to main (tree-twin scan + per-file/per-commit triage) rather than judging by ahead/behind counts alone.
-- **Reference cards:** [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md) (PT discovery cache — never discard); [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md) (ephemeral fresh-main diff + CLAYGO teardown); [`git-history-surgery/references/stash-hooks-safeguard-reference-card.md`](../git-history-surgery/references/stash-hooks-safeguard-reference-card.md) (hooks off before stash pop/apply).
+- [[fable5-git-rebase-safety]] — before cleaning up or discarding a
+  finished/stale-looking worktree, verify its branch's real relationship to
+  main (tree-twin scan + per-file/per-commit triage) rather than judging by
+  ahead/behind counts alone.
+- **Merging a worktree branch into `main` with real content conflicts?**
+  For the ordinary case (one branch, one agent, nobody else concurrently
+  editing the same repo) use
+  [`worktree-semantic-merge-reference-card.md`](../../references/worktree-semantic-merge-reference-card.md)
+  — it's the default and the whole procedure for that case. This file's
+  own "nested-branch merge protocol" summary above
+  ([`references/multi-agent-collaboration-protocol.md`](../../references/multi-agent-collaboration-protocol.md)
+  § Nested-Branch Merge Protocol) is for the harder case only: concurrent
+  multi-agent edits, or a long-diverged fork/upstream sync.
+- **Reference cards:**
+  [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md)
+  (PT discovery cache — never discard);
+  [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md)
+  (ephemeral fresh-main diff + CLAYGO teardown);
+  [`git-history-surgery/references/stash-hooks-safeguard-reference-card.md`](../git-history-surgery/references/stash-hooks-safeguard-reference-card.md)
+  (hooks off before stash pop/apply).
 
 ---
 
