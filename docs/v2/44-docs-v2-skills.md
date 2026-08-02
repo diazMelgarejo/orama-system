@@ -110,7 +110,9 @@ Dry-run should:
 2. Move full templates/examples into `skillify/references/`.
 3. For each v2 skill, create `SKILL.md` first and keep it <= 200 lines.
 4. Add only the modular files required by that skill's actual complexity.
-5. Add `eval/{skill-prefix}-checklist.md` with 6Cs and reviewer personas for each non-trivial skill (avoid generic `eval/checklist.md` — skill-scanner SkillNameCollision).
+5. Add `eval/{skill-prefix}-checklist.md` with 6Cs and reviewer personas for each
+   non-trivial skill (avoid generic `eval/checklist.md` — skill-scanner
+   SkillNameCollision).
 6. Verify all markdown fences have language specifiers.
 7. Verify no raw workstation paths, LAN IPs, secrets, or hidden side effects.
 
