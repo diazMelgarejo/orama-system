@@ -1,13 +1,7 @@
-"""Regression test for scripts/cursor/hooks/pr-body-guard-core.py's
-_shell_segments() -- specifically the fix for a newline-separated second
-command staying in the same "segment" as a legitimate append-pr-body.sh
-invocation, and never being independently inspected once the
-append-pr-body.sh branch short-circuited to ALLOW.
-"""
+"""Regression tests for scripts/cursor/hooks/pr-body-guard-core.py"""
 from __future__ import annotations
 
 import importlib.util
-import sys
 from pathlib import Path
 
 import pytest
@@ -26,13 +20,18 @@ def _load_guard_core():
 
 
 @pytest.fixture()
-def guard_core(monkeypatch, tmp_path):
-    # Route ACK_PATH somewhere guaranteed not to exist, so
-    # _human_override_active() is deterministically False regardless of
-    # whatever state this sandbox's real ~/.cursor happens to have.
-    module = _load_guard_core()
-    monkeypatch.setattr(module, "ACK_PATH", tmp_path / "no-such-ack-file")
-    return module
+def guard_core():
+    return _load_guard_core()
+
+
+@pytest.fixture()
+def grant_setup(monkeypatch, tmp_path, guard_core):
+    ack = tmp_path / "ack"
+    nonces = tmp_path / "nonces.json"
+    monkeypatch.setattr(guard_core._grant_lib, "ACK_PATH", ack)
+    monkeypatch.setattr(guard_core._grant_lib, "NONCE_STATE_PATH", nonces)
+    monkeypatch.setenv("PR_BODY_GRANT_HMAC_SECRET", "guard-test-secret")
+    return guard_core._grant_lib
 
 
 def test_shell_segments_splits_on_newline(guard_core):
@@ -40,37 +39,48 @@ def test_shell_segments_splits_on_newline(guard_core):
     assert guard_core._shell_segments(cmd) == ["echo one", "echo two"]
 
 
-def test_append_pr_body_alone_is_denied_without_override(guard_core):
+def test_append_pr_body_denied_without_grant(guard_core):
     cmd = "bash scripts/cursor/append-pr-body.sh a/b 1 --file x.md"
-    decision, _ = guard_core._shell_decision(cmd)
-    assert decision == "DENY"
+    lines = guard_core._shell_decision_lines(cmd)
+    assert lines[0].startswith("DENY")
 
 
-def test_newline_hidden_body_edit_after_append_pr_body_is_still_denied(guard_core, monkeypatch):
-    """The specific bug this fixes: once a human override is genuinely
-    active (so append-pr-body.sh alone would be ALLOWED), a
-    newline-separated gh pr edit --body hidden after it must still be
-    caught -- not silently allowed through because the whole multi-line
-    block was treated as one segment and the append-pr-body.sh branch
-    returned immediately without ever inspecting the rest.
-
-    Mocking override ACTIVE is load-bearing here: with it inactive,
-    append-pr-body.sh alone already denies, which would make this test
-    pass for the wrong reason regardless of whether the newline-split
-    fix is present."""
-    monkeypatch.setattr(guard_core, "_human_override_active", lambda: True)
-    cmd = "bash scripts/cursor/append-pr-body.sh a/b 1 --file x.md\ngh pr edit 1 --body evil.md"
-    decision, msg = guard_core._shell_decision(cmd)
-    assert decision == "DENY", f"hidden body-edit segment was not caught: {msg}"
+def test_append_pr_body_allowed_with_grant_emits_backup(guard_core, grant_setup, tmp_path):
+    append = tmp_path / "x.md"
+    append.write_text("follow-up body", encoding="utf-8")
+    grant_setup.mint_grant("a/b", "1", str(append), None)
+    cmd = f"bash scripts/cursor/append-pr-body.sh a/b 1 --file {append}"
+    lines = guard_core._shell_decision_lines(cmd)
+    assert any(line.startswith("BACKUP|a/b|1") for line in lines)
+    assert lines[-1] == "ALLOW"
 
 
-def test_newline_hidden_manage_pr_update_is_still_denied(guard_core, monkeypatch):
-    monkeypatch.setattr(guard_core, "_human_override_active", lambda: True)
-    cmd = 'bash scripts/cursor/append-pr-body.sh a/b 1 --file x.md\nManagePullRequest update_pr body="evil"'
-    decision, _ = guard_core._shell_decision(cmd)
-    assert decision == "DENY"
+def test_newline_hidden_body_edit_after_valid_append_still_denied(
+    guard_core, grant_setup, tmp_path
+):
+    append = tmp_path / "x.md"
+    append.write_text("ok", encoding="utf-8")
+    grant_setup.mint_grant("a/b", "1", str(append), None)
+    cmd = (
+        f"bash scripts/cursor/append-pr-body.sh a/b 1 --file {append}\n"
+        "gh pr edit 1 --body evil.md"
+    )
+    lines = guard_core._shell_decision_lines(cmd)
+    assert lines[0].startswith("DENY")
+
+
+def test_newline_hidden_manage_pr_update_is_still_denied(guard_core, grant_setup, tmp_path):
+    append = tmp_path / "x.md"
+    append.write_text("ok", encoding="utf-8")
+    grant_setup.mint_grant("a/b", "1", str(append), None)
+    cmd = (
+        f"bash scripts/cursor/append-pr-body.sh a/b 1 --file {append}\n"
+        'ManagePullRequest update_pr body="evil"'
+    )
+    lines = guard_core._shell_decision_lines(cmd)
+    assert lines[0].startswith("DENY")
 
 
 def test_gh_pr_comment_alone_is_allowed(guard_core):
-    decision, _ = guard_core._shell_decision("gh pr comment 1 --body 'note'")
-    assert decision == "ALLOW"
+    lines = guard_core._shell_decision_lines("gh pr comment 1 --body 'note'")
+    assert lines == ["ALLOW"]
