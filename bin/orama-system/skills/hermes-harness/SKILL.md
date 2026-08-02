@@ -37,6 +37,26 @@ allowed-tools: bash, file-operations, web-search
 
 # Hermes Harness
 
+## Legacy slug symlinks (whole-folder redirects)
+
+These slugs are directory symlinks into this skill — edit here, not at the
+legacy path:
+
+| Legacy slug | Symlink target |
+| --- | --- |
+| `hermes-agent` | `hermes-harness` |
+| `pt-orama-harness-integration` | `hermes-harness` |
+
+Slash-command discovery aliases (same content as `commands/<name>/`):
+
+| Discovery path | Canonical command |
+| --- | --- |
+| `hermes-harness/hermes-delegate` | `commands/hermes-delegate` |
+| `hermes-harness/hermes-orama` | `commands/hermes-orama` |
+| `hermes-harness/hermes-spawn` | `commands/hermes-spawn` |
+
+Absorption map: [`references/hermes-skill-absorption-map.md`](references/hermes-skill-absorption-map.md).
+
 ## 🔧 Setup (GLM-5.2 Fallback)
 
 ```bash

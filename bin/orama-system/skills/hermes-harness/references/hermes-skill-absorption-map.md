@@ -10,10 +10,14 @@
 
 | Hermes / legacy slug | State | Canonical target | Act by loading |
 |----------------------|-------|------------------|----------------|
-| `hermes-agent` | Redirect | `hermes-harness` | `bin/orama-system/skills/hermes-harness/SKILL.md` |
-| `pt-orama-harness-integration` | Redirect | `hermes-harness` | same |
-| `perpetua-hardware` | Redirect | `hardware-affinity-gate` | `bin/orama-system/skills/hardware-affinity-gate/SKILL.md` |
-| `local-inference` | Redirect | `hardware-affinity-gate` | same (via `perpetua-hardware` stub chain) |
+| `hermes-agent` | Symlink | `hermes-harness` | `bin/orama-system/skills/hermes-harness/SKILL.md` |
+| `pt-orama-harness-integration` | Symlink | `hermes-harness` | same |
+| `perpetua-hardware` | Symlink | `hardware-affinity-gate` | `bin/orama-system/skills/hardware-affinity-gate/SKILL.md` |
+| `local-inference` | Symlink | `hardware-affinity-gate` | same (via `perpetua-hardware` chain) |
+| `no-sleep-chains` | Symlink | `shell-hygiene` | `bin/orama-system/skills/shell-hygiene/SKILL.md` |
+| `perpetua-tools` | Symlink (sibling repo) | `Perpetua-Tools/` | `Perpetua-Tools/SKILL.md` |
+| `perpetua-config` | Symlink (sibling repo) | `Perpetua-Tools/config/` | `Perpetua-Tools/config/SKILL.md` |
+| `perpetua-startup-intelligence` | Symlink (sibling repo) | `Perpetua-Tools/hardware/startup-intelligence/` | same tree |
 | `windows-hermes-setup` | Redirect | `commands/windows-hermes-setup` + `references/windows-hermes-setup.md` | `bin/orama-system/skills/hermes-harness/commands/windows-hermes-setup/SKILL.md` |
 | `hermes-harness` (Hermes-local fork) | Redirect | `hermes-harness/SKILL.md` + references below | `install_hermes_thin_skills.py` replaces `~/.hermes/skills/hermes-harness/` with redirect stub |
 | `hermes-harness` (Hermes-local fork) | Redirect | `hermes-harness/SKILL.md` | `bin/orama-system/skills/hermes-harness/SKILL.md` — `install_hermes_thin_skills.py` replaces forked `~/.hermes/skills/hermes-harness/` |

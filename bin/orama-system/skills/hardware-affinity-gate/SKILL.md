@@ -292,8 +292,8 @@ enforcement logic; orama-system references it for methodology.
 
 Absorption map: [`../hermes-harness/references/hermes-skill-absorption-map.md`](../hermes-harness/references/hermes-skill-absorption-map.md).
 
-Redirect stubs `perpetua-hardware` and `local-inference` point here — do not
-add procedure to those stubs.
+Redirect stubs `perpetua-hardware` and `local-inference` are directory
+symlinks to this skill — do not add procedure to those paths.
 
 ### What This Skill Gets from Perpetua-Tools
 
