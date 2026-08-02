@@ -7,6 +7,56 @@ description: Create or reconcile the dedicated OpenClaw Codex sub-agent at `~/.o
 
 Maintain one explicit coding sub-agent. It is never the default route.
 
+Canonical skill directory (repo-relative):
+`bin/orama-system/skills/openclaw-skills/codex-openclaw-agent/`
+(also reachable as `bin/orama-system/skills/codex-openclaw-agent/` via symlink).
+
+## Before Use
+
+Before running the binder, confirm the repository can sync safely:
+
+```bash
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+cd "$ROOT"
+git fetch origin --prune
+git status --short --branch
+```
+
+If the repo is on a tracking branch and the worktree is clean:
+
+```bash
+git pull --ff-only
+```
+
+If the worktree is dirty, use
+[`git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../git-history-surgery/references/safe-cross-host-sync-reference-card.md)
+(stash → `pull --ff-only` → pop → **report conflicts**; require explicit operator
+approval before any commit or push). If the branch is not tracking origin or
+fast-forward is impossible, report drift — never `git reset --hard` or
+force-push `main`.
+
+## Quick Start
+
+```bash
+# Bind codex-agent (idempotent)
+bash bin/orama-system/skills/codex-openclaw-agent/scripts/bind_codex_backend.sh
+
+# Preview without writing
+bash bin/orama-system/skills/codex-openclaw-agent/scripts/bind_codex_backend.sh --dry-run
+
+# Invoke the agent
+openclaw run codex-agent --task "your task here"
+```
+
+## Windows UTF-8 Note
+
+On Windows PowerShell, set UTF-8 explicitly before reading or writing skill files:
+
+```powershell
+$env:PYTHONUTF8 = "1"
+[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new()
+```
+
 ## Canonical State
 
 | Field | Required value |

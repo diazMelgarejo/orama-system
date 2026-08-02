@@ -223,7 +223,7 @@ catastrophic data loss multiple times.
 
 ## Examples
 
-- Golden path (production bug fix + PR merge): [`examples/good/golden-path.md`](examples/good/golden-path.md)
+- Golden path (production bug fix + PR merge): [`examples/good/oramasys-golden-path.md`](examples/good/oramasys-golden-path.md)
 - Anti-patterns to avoid: [`examples/bad/anti-patterns.md`](examples/bad/anti-patterns.md)
 - Eval rubric, including the sandbox-limitation note for harnesses without
   live `gbrain`/`mcp-oramasys`/OpenClaw access: [`eval/checklist.md`](eval/checklist.md)
