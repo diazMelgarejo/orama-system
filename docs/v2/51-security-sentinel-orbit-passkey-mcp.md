@@ -3,13 +3,9 @@
 > **Status:** v2.1 plan (deferred from orama-system PR #255 MVP)  
 > **Date:** 2026-08-02  
 > **Repo target:** `github.com/oramasys/security-sentinel` (name TBD — **sentinel** in prose)  
-> **MVP harness patch:**
-> [`plans/2026-08-02-pr-body-grant-security-remediation.md`](../plans/2026-08-02-pr-body-grant-security-remediation.md)  
-> **Research:**
-> [`../../bin/orama-system/references/pr-body-human-grant-security-gap-research.md`](../../bin/orama-system/references/pr-body-human-grant-security-gap-research.md)  
-> **Cross-refs:** [`42-agate-hardware-policy-orbit.md`](42-agate-hardware-policy-orbit.md),
-> [`33-security-harness-source-material.md`](33-security-harness-source-material.md),
-> [`31-security-harness-excellence-plan.md`](31-security-harness-excellence-plan.md)
+> **MVP harness patch:** [`plans/2026-08-02-pr-body-grant-security-remediation.md`](../plans/2026-08-02-pr-body-grant-security-remediation.md)  
+> **Research:** [`../../bin/orama-system/references/pr-body-human-grant-security-gap-research.md`](../../bin/orama-system/references/pr-body-human-grant-security-gap-research.md)  
+> **Cross-refs:** [`42-agate-hardware-policy-orbit.md`](42-agate-hardware-policy-orbit.md), [`33-security-harness-source-material.md`](33-security-harness-source-material.md), [`31-security-harness-excellence-plan.md`](31-security-harness-excellence-plan.md)
 
 ---
 
@@ -70,8 +66,7 @@ github.com/oramasys/security-sentinel/
 **Integration surfaces:**
 
 1. **MCP tool** `sentinel.verify` — agent calls with `summary`, `action_hash`, `audience`, `risk`
-2. **Hook client** — orama `pr-body-guard-core.py` verifies sentinel
-   proof instead of HMAC file (v2.1 alpha)
+2. **Hook client** — orama `pr-body-guard-core.py` verifies proof instead of HMAC file (v3)
 3. **perpetua-core plugin** — graph nodes call sentinel before irreversible transitions
 
 ---

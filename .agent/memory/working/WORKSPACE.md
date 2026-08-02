@@ -52,4 +52,6 @@ Next (ordered):
 5. Phase D tests — prove forge works today; fails after Phase C
 Refs: arXiv 2606.02668 consent integrity; AgentPatterns provenance markers;
 OWASP AI Agent Security Cheat Sheet; GoodRoom MCP passkey post.
+Implementation plan: `docs/plans/2026-08-02-pr-body-grant-security-remediation.md`
+(v2.1 sentinel: `docs/v2/51-security-sentinel-orbit-passkey-mcp.md`).
 Do not push until operator reviews PR #255 stack.
