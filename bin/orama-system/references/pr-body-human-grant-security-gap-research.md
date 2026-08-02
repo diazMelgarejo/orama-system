@@ -1,68 +1,45 @@
-# PR-body human grant — security gap research (TTY / HITL)
+# PR-body human grant — security gap research (TTY / HITL / consent integrity)
 
-> **Status:** research complete (2026-08-02); remediation **not** implemented here.
+> **Status:** deep research complete (2026-08-02, EXA + Firecrawl); remediation **not** implemented here.
 > **Trigger:** CodeRabbit review on orama-system PR #255
 > ([review 4835288649](https://github.com/diazMelgarejo/orama-system/pull/255#pullrequestreview-4835288649))
 > — replace `_human_override_active()` file-marker checks with a non-forgeable,
 > host- or framework-provided capability.
-> **Research method:** Firecrawl search + scrape (primary); StackExchange / X via
-> Firecrawl site search; EXA API unavailable (`EXA_API_KEY` not set on host).
+> **Research method:** EXA neural search (6 queries, ~54 sources) → Firecrawl scrape
+> of primary docs (15 URLs). Depth: **thorough** (~10–15 min collection pass).
 
 ---
 
-## Executive verdict
+## Executive summary
 
-The current operator grant path is **not** a reliable human-authorization signal.
+`grant-pr-body-human-override.sh` is **not** non-agent-executable. It is a normal
+bash script whose TTY check blocks only the case where **both** stdin and stdout
+are non-TTY. Cursor / Claude Code agent shells run with a real PTY, so the script
+succeeds. Worse: `_human_override_active()` trusts a **plaintext marker file** the
+agent can write without running the script at all.
+
+TTY (`isatty`, `-t`) measures **terminal attachment**, not **human identity** —
+a distinction the security community repeatedly documents ([StackOverflow on docker
+`-t`](https://stackoverflow.com/questions/43099116/error-the-input-device-is-not-a-tty),
+[omamori break-glass TTY bypass](https://github.com/yottayoshida/omamori/issues/319)).
+Industry direction explicitly gives agents TTYs ([coder/agent-tty](https://github.com/coder/agent-tty)).
+
+Community consensus (OWASP, Checkmarx, arXiv consent-integrity work, OSS guard
+projects) treats repo-local grants, boolean flags, and agent-narrated approval
+dialogs as **policy hints**, not authorization. Real controls bind approval to
+**cryptographic proofs** (HMAC, Ed25519 JWKS, hash-bound gates) or **host-framework
+signals** the agent cannot mint, with enforcement at the **tool boundary**.
+
+---
+
+## Verdict table (orama PR #255 grant path)
 
 | Component | Claimed property | Actual property |
 | --- | --- | --- |
-| `grant-pr-body-human-override.sh` | Operator-only, interactive TTY | **Regular shell script**; agent `Shell` in Cursor / Claude Code runs with a real TTY |
-| TTY gate (`-t 0` / `-t 1`) | Blocks non-human execution | **Fails only when both stdin and stdout are non-TTY** — agent terminals pass |
-| `~/.cursor/pr-body-human-override-ack` | Proof of operator intent | **Plaintext marker + timestamp** — agent can write directly, no script needed |
-| `_human_override_active()` | Validates human grant | **File presence + TTL** — no signature, no PR binding, no session binding |
-
-Treat the grant as **workflow friction and defense-in-depth**, not cryptographic
-authorization. CodeRabbit’s recommendation aligns with community practice: bind
-escalation to an **out-of-agent-band** approval channel or a **signed capability**
-the agent cannot mint.
-
----
-
-## Current implementation (gap analysis)
-
-### Grant script
-
-`scripts/cursor/grant-pr-body-human-override.sh`:
-
-```bash
-if [[ ! -t 0 && ! -t 1 ]]; then
-  echo "error: grant-pr-body-human-override requires an interactive operator terminal" >&2
-  exit 1
-fi
-```
-
-Logic table:
-
-| stdin TTY? | stdout TTY? | Script runs? |
-| --- | --- | --- |
-| yes (agent shell) | yes | **yes** |
-| yes | no | **yes** |
-| no | yes | **yes** |
-| no | no | **no** |
-
-So the script blocks only fully piped/non-interactive invocations. It does **not**
-require both streams to be TTY (`[[ ! -t 0 || ! -t 1 ]]` would be the usual
-“interactive session” pattern). Even a corrected gate would still only detect
-**session type**, not **human identity**.
-
-### Hook verifier
-
-`scripts/cursor/hooks/pr-body-guard-core.py` — `_human_override_active()`:
-
-- Reads `~/.cursor/pr-body-human-override-ack`
-- Accepts if `operator-grant-v1` and `issued-at=` within 8h TTL
-- No HMAC, no Ed25519, no binding to `owner/repo`, PR number, hook session id,
-  or operator credential
+| `grant-pr-body-human-override.sh` | Operator-only, interactive TTY | **Regular shell script**; agent `Shell` has TTY |
+| TTY gate (`! -t 0 && ! -t 1`) | Blocks agents | Blocks only **fully piped** invocations |
+| `~/.cursor/pr-body-human-override-ack` | Proof of operator intent | **Forgeable** marker + timestamp |
+| `_human_override_active()` | Validates human grant | File + TTL only; no signature, no PR binding |
 
 **Trivial agent bypass (no grant script):**
 
@@ -72,147 +49,233 @@ printf 'operator-grant-v1\nissued-at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
   > ~/.cursor/pr-body-human-override-ack
 ```
 
-### Why agent-attached terminals defeat TTY gating
+---
 
-Cursor and Claude Code expose shell tools against the user’s integrated terminal
-or a PTY-backed subprocess. In that context `test -t 1` / `sys.stdin.isatty()`
-return true for the **agent’s** session — the same property documented for
-Codex non-TTY failures when spawned from Python, and inverted here: **TTY present
-does not imply human**.
+## Deep research: TTY gating vs human authorization
 
-StackOverflow documents `isatty` as “is this fd connected to a terminal device?”
-—not “is a human at the keyboard?” ([SO 43099116](https://stackoverflow.com/questions/43099116/error-the-input-device-is-not-a-tty),
-[SO 7114990](https://stackoverflow.com/questions/7114990/pseudo-terminal-will-not-be-allocated-because-stdin-is-not-a-terminal)).
+### Finding 1 — TTY is session topology, not auth
 
-Security StackExchange discussions on `ssh -T` and TTY allocation similarly treat
-TTY as a **wire protocol / session capability** feature, not an authentication
-mechanism ([SE 107933](https://security.stackexchange.com/questions/107933/what-exactly-does-ssh-t-userdomain-verify-do)).
+POSIX `isatty()` / bash `-t` answer whether a file descriptor is connected to a
+terminal device. StackOverflow and container docs use this for **attach mode**
+(docker `-t`, ssh TTY allocation), not to prove a human is at the keyboard
+([SO 43099116](https://stackoverflow.com/questions/43099116/error-the-input-device-is-not-a-tty),
+[SO 7114990](https://stackoverflow.com/questions/7114990/pseudo-terminal-will-not-be-allocated-because-stdin-is-not-a-terminal),
+[SE 107933](https://security.stackexchange.com/questions/107933/what-exactly-does-ssh-t-userdomain-verify-do)).
+
+**EXA surfaced parallel hardening work:** [omamori #319](https://github.com/yottayoshida/omamori/issues/319)
+(filed because `printf 'y\n' | omamori break-glass` bypasses a confirmation that
+**did not require TTY**). [quality-playbook A-22 TTY hardening](https://github.com/andrewstellman/quality-playbook/commit/eaed1e2dac0f423d9e14b6a5ba13e7975a4e8120)
+documents explicit TTY requirements for operator-only paths. These treat TTY as a
+**weak adjunct**, and still note piping bypasses when `-t` is omitted.
+
+### Finding 2 — Agents are meant to have terminals
+
+[coder/agent-tty](https://github.com/coder/agent-tty) and [opencode #18659](https://github.com/anomalyco/opencode/issues/18659)
+(host-shell / stdin passthrough for agent CLIs) reflect product intent: agents
+drive interactive TUIs. Any gate that equates “has TTY” with “is human” fails in
+the primary agent runtime.
+
+### Finding 3 — Our grant script logic is weaker than “require TTY”
+
+```bash
+if [[ ! -t 0 && ! -t 1 ]]; then exit 1; fi   # current
+# Should be (still insufficient for identity):
+if [[ ! -t 0 || ! -t 1 ]]; then exit 1; fi
+```
+
+| stdin TTY | stdout TTY | Current script | Strict both-TTY |
+| --- | --- | --- | --- |
+| yes (agent) | yes | **runs** | runs |
+| yes | no | **runs** | **deny** |
+| no | yes | **runs** | **deny** |
+| no | no | deny | deny |
 
 ---
 
-## Community research — human-in-the-loop bypass class
+## Deep research: HITL bypass classes (UI deception + forged state)
 
-### Lies-in-the-loop (LITL) — Checkmarx Zero (2025-09)
+### Lies-in-the-loop (LITL) — agent-narrated approval
 
-Checkmarx documents **lies-in-the-loop**: attackers manipulate the **context shown
-in the human approval UI** so dangerous actions look safe. Applicable to any HITL
-agent, not only Claude Code.
+Checkmarx Zero ([2025-09](https://checkmarx.com/zero-post/bypassing-ai-agent-defenses-with-lies-in-the-loop/),
+[OWASP community entry](https://owasp.org/www-community/attacks/Lies_in_the_Loop),
+[CSO Online](https://www.csoonline.com/article/4108592/human-in-the-loop-isnt-enough-new-attack-turns-ai-safeguards-into-exploits.html))
+documents **HITL dialog forging**: the human approves a **summary the agent writes**,
+which can misrepresent the real command. Anthropic treated explicit confirmation
+prompts as sufficient in a related report; Checkmarx argues that is insufficient
+when dialog content is attacker-influenced.
 
-- Research post: [Bypassing AI Agent Defenses With Lies-In-The-Loop](https://checkmarx.com/zero-post/bypassing-ai-agent-defenses-with-lies-in-the-loop/)
-- Blog summary: [When AI Lies: HITL security](https://checkmarx.com/blog/when-the-ai-lies-a-new-threat-emerges-for-human-in-the-loop-security/)
-- Press: [Infosecurity Magazine — Lies-in-the-Loop](https://www.infosecurity-magazine.com/news/lies-loop-attack-ai-safety-dialogs/)
+**Relation to orama grant:** LITL attacks **misleading UI**; our gap is **forgeable
+approval state** without UI. Both are “human-in-the-loop” failures; fixes differ.
 
-Key quote (HITL limitation): humans “can only respond to what the agent prompts
-them with,” and that prompt is **agent-controlled context**. Anthropic’s public
-response to a related finding treated explicit confirmation prompts as sufficient
-([HackerOne thread cited in Checkmarx post](https://checkmarx.com/zero-post/bypassing-ai-agent-defenses-with-lies-in-the-loop/#step-by-step-identifying-and-exploiting-lies-in-the-loop)).
+### Consent integrity (academic framing)
 
-**Relation to our grant:** LITL targets **misleading approval UI**; our gap is
-**forgeable approval state** (file marker). Both undermine HITL; fixes differ.
+[What You Approve Is What Executes](https://arxiv.org/html/2606.02668v1) (Weng, 2026)
+formalizes **consent integrity** for black-box agents: the approved summary must
+bind to what executes. LITL breaks that binding. A plaintext ack file breaks it
+more directly — there is no binding at all.
 
-### OWASP Gen AI — Agentic Threats Navigator
+[Governing Dynamic Capabilities](https://arxiv.org/html/2603.14332v2) (Zhou, 2026)
+argues for **cryptographic binding** of tool capability and execution replay —
+aligned with CodeRabbit’s “non-forgeable capability” requirement.
 
-OWASP’s Agentic Threats Navigator maps **human oversight** as an explicit attack
-surface in agentic systems (reasoning, memory, tools, identity, oversight,
-multi-agent).
+### Fabricated approvals in transcripts
 
-- Resource: [OWASP Agentic Threats Navigator](https://genai.owasp.org/resource/owasp-gen-ai-security-project-agentic-threats-navigator/)
+[AgentPatterns — Non-Human Event Provenance Markers](https://agentpatterns.ai/security/non-human-event-provenance-markers/)
+addresses agents treating fabricated “user approved” lines in transcripts as
+authoritative. Plaintext ack files are the same class: **agent-writable state**
+masquerading as human intent.
+
+---
+
+## Deep research: open-source & community mitigation patterns (EXA-derived)
+
+Prioritize **enforcement at tool boundary** + **non-forgeable proof**. Advisory
+UI or repo scripts alone are explicitly insufficient ([GoodRoom passkey MCP post](https://dev.to/goodroom/adding-passkey-backed-human-approval-to-high-risk-mcp-actions-38h):
+“Without that enforcement point, an approval UI is only advisory.”).
+
+| Project / reference | Mechanism | Citation | Relevance to PR-body grant |
+| --- | --- | --- | --- |
+| **Vallum** `HMAC approval token` | Hook mints `HMAC-SHA256(machine_secret, command)`; replaces forgeable `--policy-approved` boolean | [PR #32](https://github.com/kahramanemir/Vallum/pull/32) (merged 2026-07) | Direct precedent: **boolean/file marker → per-action HMAC** |
+| **hashgate** | Hash-bound approval; operator accepts canonical hash; execution re-derives and compares | [Seppelllo/hashgate](https://github.com/Seppelllo/hashgate) | **Fail-closed** gate for exact action state; Claude hooks included |
+| **GoodRoom.verify** | Passkey WebAuthn + Ed25519 JWKS proof bound to SHA-256 action hash | [DEV post](https://dev.to/goodroom/adding-passkey-backed-human-approval-to-high-risk-mcp-actions-38h) | Out-of-band human verification; MCP sidecar |
+| **HumanLayer** | Human-in-the-loop API / supervisor for tool calls | [humanlayer/humanlayer](https://github.com/humanlayer/humanlayer), [ACP](https://github.com/humanlayer/agentcontrolplane) | External approval channel |
+| **Invariant Guardrails** | MCP/LLM proxy; rule-based tool interception | [invariantlabs-ai/invariant](https://github.com/invariantlabs-ai/invariant), [blog](https://invariantlabs.ai/blog/guardrails) | Mediate `ManagePullRequest` / `gh` paths |
+| **forge-tool-guardrails** | Tool guardrails OSS | [577Industries/forge-tool-guardrails](https://github.com/577Industries/forge-tool-guardrails) | Policy layer on tool dispatch |
+| **LlamaFirewall** | Meta open guardrail stack for agents | [Meta research](https://ai.meta.com/research/publications/llamafirewall-an-open-source-guardrail-system-for-building-secure-ai-agents/) | Ecosystem guardrails (not HITL crypto) |
+| **Agent Manifest ADR-0006** | HITL approval mechanism design | [agentrust ADR](https://manifest.agentrust-io.com/adr/0006-hitl-approval-mechanism/) | Reference architecture |
+| **AgentAuth / agentmint / agentpassport** | Agent identity & authorization experiments | [AgentAuth](https://github.com/maxmalkin/AgentAuth), [agentmint](https://github.com/aniketh-maddipati/agentmint), [agentpassport](https://github.com/cognis-digital/agentpassport) | Scoped agent identity (complements human proof) |
+| **ASAP self-authorization prevention** | Doc pattern blocking agents self-asserting auth | [adriannoes/asap-protocol](https://github.com/adriannoes/asap-protocol/blob/main/docs/security/self-authorization-prevention.md) | Same class as forgeable grant file |
+| **Microsoft agents-humanoversight** | Enterprise HITL patterns | [microsoft/agents-humanoversight](https://github.com/microsoft/agents-humanoversight) | Process reference |
+| **opena2a agent-identity-management** | IAM for agents | [opena2a-org](https://github.com/opena2a-org/agent-identity-management) | Least-privilege agent identity |
+| **Claude Code hooks** | Framework `before` hook deny JSON | [Hooks docs](https://code.claude.com/docs/en/hooks), [Permissions](https://code.claude.com/docs/en/permissions) | Host chokepoint; [#19298](https://github.com/anthropics/claude-code/issues/19298) limitations |
+| **Claude Code #38299** | Feature: remote/programmatic approval API | [anthropics/claude-code#38299](https://github.com/anthropics/claude-code/issues/38299) | Framework-native approval signal (desired direction) |
+
+### OWASP practitioner guidance
+
+[AI Agent Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html)
+— §4 Human-in-the-Loop Controls, tool authorization middleware, action classification.
+Warns of **decision and approval manipulation** and **excessive autonomy**.
+
+[Agentic Threats Navigator](https://genai.owasp.org/resource/owasp-gen-ai-security-project-agentic-threats-navigator/)
+— human oversight as explicit attack surface.
+
+[AISVS C09 High-Impact Action Approval](https://github.com/OWASP/AISVS/blob/main/research/chapters/C09-Orchestration-and-Agents/C09-02-High-Impact-Action-Approval.md)
+— orchestration-layer approval research chapter.
 
 orama `docs/v2/33-security-harness-source-material.md` already cites tool-executor
-mediation and “mirror Anthropic’s grant-verification pattern” — this research
-confirms **local file grants are weaker** than framework-native grant verification.
-
-### Anthropic Claude Code — hooks (framework layer)
-
-Claude Code hooks can **deny** tool use at the host boundary ([Hooks reference](https://code.claude.com/docs/en/hooks),
-[Permissions](https://code.claude.com/docs/en/permissions)). That is closer to a
-**non-forgeable framework signal** than a repo script, but:
-
-- Hooks still run in the agent toolchain context
-- [Issue #19298](https://github.com/anthropics/claude-code/issues/19298): PermissionRequest
-  hook limitations reported
-- Community hook patterns (e.g. Reddit [smart bash permission hook](https://www.reddit.com/r/ClaudeAI/comments/1rvg3ah/smart_bash_permission_hook_for_claude_code/))
-  remain policy, not identity
-
-**CodeRabbit PR #255 review** explicitly asks to validate a **host- or tool-framework-
-provided capability** for override — not a repo-local ack file.
+mediation and “mirror Anthropic’s grant-verification pattern” — **local file grants
+are weaker** than framework grant verification.
 
 ---
 
-## Open-source / community mitigation patterns (cited)
+## Contrarian views and risks
 
-| Project / pattern | What it does | Relevance to PR-body grant |
+| View | Source | Implication |
 | --- | --- | --- |
-| [humanlayer/humanlayer](https://github.com/humanlayer/humanlayer) | Human approval API / “human layer” for agent tool calls | **Out-of-band human approval** as a service; [ACP](https://github.com/humanlayer/agentcontrolplane) for agent control plane |
-| [humanlayer/humanlayer#968](https://github.com/humanlayer/humanlayer/issues/968) | Feature: block `--no-verify` for agents | Same class: prevent agents from bypassing git hooks |
-| [invariantlabs-ai/invariant](https://github.com/invariantlabs-ai/invariant) | Guardrails proxy on MCP/LLM tool flows | **Policy mediation** between app and tools ([docs](https://invariantlabs-ai.github.io/docs/mcp-scan/guardrails-reference/)) |
-| [microsoft/agents-humanoversight](https://github.com/microsoft/agents-humanoversight) | Human oversight patterns for agents | Enterprise HITL reference architecture |
-| [opena2a-org/agent-identity-management](https://github.com/opena2a-org/agent-identity-management) | IAM layer for agents | Scoped **non-human identity** + least privilege |
-| [coder/agent-tty](https://github.com/coder/agent-tty) | Terminal sessions **for** agents | Confirms industry direction: agents **intentionally** get real TTYs |
-| Claude Code hooks | `before` tool hooks with deny JSON | Framework chokepoint; prefer over shell scripts |
-| Signed short-lived JWT / macOS privileged helper | OS or IdP-bound capability | True separation: agent process cannot sign |
+| “Human saw a confirmation prompt — not our bug” | Anthropic response cited in [Checkmarx LITL](https://checkmarx.com/zero-post/bypassing-ai-agent-defenses-with-lies-in-the-loop/) | **Insufficient** when dialog or state is agent-controlled |
+| “TTY + prompt is two gates” | [omamori #319](https://github.com/yottayoshida/omamori/issues/319) | Without `-t`, second gate is **cosmetic** (pipe `y`) |
+| “Hooks are enough” | Claude Code ecosystem | Hooks run in agent toolchain; deny JSON helps but [#19298](https://github.com/anthropics/claude-code/issues/19298) reports gaps |
+| “MCP approval sidecar” | [GoodRoom post](https://dev.to/goodroom/adding-passkey-backed-human-approval-to-high-risk-mcp-actions-38h) | Bypassable if another path reaches the tool — **must verify at final boundary** |
+| Signed tokens in agent env | Vallum HMAC model | Machine secret must live **outside** agent-readable stores |
 
-**Invariant / HumanLayer pattern (recommended direction):** move high-risk writes
-to a **mediator** (hook gateway, MCP proxy, or external approval API) that emits a
-**signed, scoped, short-lived token** bound to `(repo, pr_number, action, nonce)`.
-Hooks verify signature with a **public key or host-held secret outside agent env**.
+**Residual risk after Phase C:** LITL still fools humans who read misleading summaries;
+crypto binding fixes **forgeable state**, not **misleading UI**. Combine honest
+docs, hash-bound summaries, and out-of-band approval for high-impact writes.
 
 ---
 
-## Social / secondary sources (X, StackExchange)
+## Open questions
 
-| Source | Topic |
-| --- | --- |
-| [Mitchell Hashimoto on X](https://x.com/mitchellh/status/2060088112257372610) | AI agent authorization discourse (surfaced via Firecrawl LITL search) |
-| [Trevin Chow on X](https://x.com/trevin/status/2051316002730991795) | Agent harness / approval patterns |
-| [Longxu Dou — Reptile terminal agent](https://x.com/LongxuDou/status/2001281126489620603) | Terminal agents explicitly drive TTY apps |
-| StackOverflow `isatty` / docker `-t` threads | TTY = container attach mode, not auth |
-
-Twitter/X results for “agent TTY human approval” were **noisy**; LITL-specific
-search surfaced Checkmarx + Infosecurity coverage more reliably than generic X posts.
+1. Does Cursor expose a **host-only** approval flag for `ManagePullRequest` (analogous to Claude [#38299](https://github.com/anthropics/claude-code/issues/38299))?
+2. **Vallum-style HMAC** vs **hashgate-style state hash** vs **WebAuthn proof** — which fits PR-body append (integrative merge) workflow?
+3. Should PR-body escalation use **Invariant proxy** on MCP `ManagePullRequest` instead of shell `gh`?
+4. Where to store machine signing secret — macOS Keychain service separate from agent env?
 
 ---
 
-## Recommended remediation phases (for implementation PR)
+## Recommended remediation phases (implementation PR)
 
 ### Phase A — Honest documentation (immediate)
 
 - Stop claiming grant script is “not agent-runnable”
-- Document grant as **operator workflow aid** + TTL throttle, not authorization
+- Document grant as **workflow aid + TTL throttle**, not authorization
 - Remove agent-copyable override setup from hookify / cursor rules (CodeRabbit)
 
-### Phase B — Tighten script (still insufficient alone)
+### Phase B — Tighten script (defense-in-depth only)
 
-- Fix TTY check to `[[ -t 0 && -t 1 ]]` or `[[ ! -t 0 || ! -t 1 ]]` exit
-- Bind grant file to `repo`, `pr_number`, optional `session_id` fields
-- Rotate random `grant-nonce=` in file; hook requires matching env from **hook only**
-  (still forgeable if agent can write file — marginal)
+- Fix TTY: `[[ ! -t 0 || ! -t 1 ]]` exit
+- Bind ack to `repo`, `pr_number`, `grant-nonce` (still forgeable if agent writes file)
 
 ### Phase C — Real authorization (target)
 
-Pick one or combine:
+Evaluate (from EXA/Firecrawl catalog above):
 
-1. **Cursor / Claude host hook only** — override when framework sets
-   `CURSOR_HUMAN_APPROVED_PR_BODY=1` from UI action (if/when exposed); never from shell
-2. **Signed capability** — operator runs `grant-…` on **separate terminal** or phone
-   approver; outputs Ed25519-signed blob; hook verifies with public key in repo
-3. **HumanLayer / custom approval webhook** — agent requests token; human approves in
-   browser; hook checks token server-side
-4. **Invariant-style proxy** — route `ManagePullRequest` / `gh` through guardrailed MCP
-   that denies `update_pr body` regardless of local grants
+1. **Vallum pattern** — hook mints HMAC tied to `append-pr-body.sh` invocation + PR id
+2. **hashgate pattern** — hash-bound integrative body preview vs write
+3. **GoodRoom / passkey** — out-of-band WebAuthn for rare operator body edits
+4. **HumanLayer** — approval API webhook before hook allows append
+5. **Invariant proxy** — deny `update_pr` body at MCP layer regardless of local grant
+6. **Framework signal** — Cursor/Claude host capability when available
 
 ### Phase D — Tests
 
-- Prove agent shell **can** run grant script (TTY mocked)
-- Prove direct ack file write activates override (regression guard for Phase C)
-- After Phase C: prove forged file **cannot** activate override
+- Agent shell can run grant script today (TTY present)
+- Direct ack write activates override today
+- After Phase C: forged file / piped grant **cannot** activate override
 
 ---
 
-## Links
+## Sources (collection pass 2026-08-02)
+
+### Primary / official
+
+- [CodeRabbit PR #255 review 4835288649](https://github.com/diazMelgarejo/orama-system/pull/255#pullrequestreview-4835288649)
+- [Claude Code Hooks](https://code.claude.com/docs/en/hooks)
+- [Claude Code Permissions](https://code.claude.com/docs/en/permissions)
+- [OWASP Lies in the Loop](https://owasp.org/www-community/attacks/Lies_in_the_Loop)
+- [OWASP AI Agent Security Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/AI_Agent_Security_Cheat_Sheet.html)
+- [OWASP Agentic Threats Navigator](https://genai.owasp.org/resource/owasp-gen-ai-security-project-agentic-threats-navigator/)
+
+### Research & industry
+
+- [Checkmarx LITL](https://checkmarx.com/zero-post/bypassing-ai-agent-defenses-with-lies-in-the-loop/)
+- [Consent integrity arXiv 2606.02668](https://arxiv.org/html/2606.02668v1)
+- [Cryptographic binding arXiv 2603.14332](https://arxiv.org/html/2603.14332v2)
+- [AgentPatterns provenance markers](https://agentpatterns.ai/security/non-human-event-provenance-markers/)
+- [GoodRoom passkey MCP approval](https://dev.to/goodroom/adding-passkey-backed-human-approval-to-high-risk-mcp-actions-38h)
+
+### Open source
+
+- [Vallum HMAC PR #32](https://github.com/kahramanemir/Vallum/pull/32)
+- [hashgate](https://github.com/Seppelllo/hashgate)
+- [humanlayer](https://github.com/humanlayer/humanlayer)
+- [invariant](https://github.com/invariantlabs-ai/invariant)
+- [omamori TTY issue #319](https://github.com/yottayoshida/omamori/issues/319)
+- [coder/agent-tty](https://github.com/coder/agent-tty)
+
+### TTY / session (not auth)
+
+- [SO: input device is not a TTY](https://stackoverflow.com/questions/43099116/error-the-input-device-is-not-a-tty)
+- [SO: pseudo-terminal allocation](https://stackoverflow.com/questions/7114990/pseudo-terminal-will-not-be-allocated-because-stdin-is-not-a-terminal)
+
+---
+
+## Rerun inputs
+
+```text
+workflow: firecrawl-deep-research (+ EXA wide net first)
+topic: PR-body grant TTY/HITL security gap (orama PR #255)
+depth: thorough
+output: markdown reference + WORKSPACE next steps
+trigger: CodeRabbit 4835288649
+```
+
+---
+
+## Repo links
 
 - Incident ladder: `bin/orama-system/references/pr-body-anti-clobber-incident-ledger.md`
 - Guard core: `scripts/cursor/hooks/pr-body-guard-core.py`
 - Grant script: `scripts/cursor/grant-pr-body-human-override.sh`
-- Security harness plan: `docs/v2/33-security-harness-source-material.md` (§5.2 grant-verification)
-- Working next steps: `.agent/memory/working/WORKSPACE.md` (2026-08-02 entry)
+- Security harness: `docs/v2/33-security-harness-source-material.md`
+- Working next steps: `.agent/memory/working/WORKSPACE.md`
