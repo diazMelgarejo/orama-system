@@ -14,7 +14,12 @@
 
 Hooks block `update_pr` with `body=`, `gh pr edit`, and `append-pr-body.sh` unless the
 operator issued a grant via `scripts/cursor/grant-pr-body-human-override.sh`
-(interactive; not agent-runnable).
+(interactive; **not reliably non-agent-executable** — see security research below).
+
+**Security gap (2026-08-02):** TTY gating + plaintext ack file are **not** human
+authorization. Research + remediation plan:
+[`pr-body-human-grant-security-gap-research.md`](../../references/pr-body-human-grant-security-gap-research.md)
+(CodeRabbit PR #255 review 4835288649).
 
 Cursor rule: `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply, listed before append-only).
 
