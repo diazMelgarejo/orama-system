@@ -159,8 +159,7 @@ Reject `operator-grant-v1` plaintext acks (fail-closed migration).
 **Validate:**
 
 ```bash
-cd orama-system
-python3 -m pytest tests/test_pr_body_guard_core.py tests/test_pr_body_grant_lib.py -q
+python3 -m pytest tests/test_pr_body_guard_core.py tests/test_pr_body_grant_lib.py tests/test_append_pr_body_grant_flow.py -q
 bash scripts/git/check-guard-sync-divergence.sh
 ```
 
@@ -175,7 +174,7 @@ bash scripts/git/check-guard-sync-divergence.sh
 
 | Risk | Likelihood | Mitigation |
 | --- | --- | --- |
-| Agent reads Keychain HMAC secret | Medium | MVP raises bar; Part 2 moves signing to sentinel + passkey |
+| Agent reads Keychain HMAC secret (same-user residual risk) | Medium | MVP raises bar; does **not** prove human presence; Part 2 moves signing to sentinel + passkey |
 | Operator forgets grant step | Medium | `append-pr-body.sh` clear error with grant command |
 | Breaking v1 ack files | Low | One-time operator re-grant; document in PR #255 |
 | Cursor env vars incomplete | Medium | Combine TTY + Keychain + repo bind |
@@ -361,7 +360,7 @@ grant-pr-body-human-override.sh
         v
 pr-body-grant-lib.py  <---- secret provider / test provider
         |
-        +--> signed capability file
+        +--> HMAC-authenticated capability file
         |
         +--> guard-core.verify_grant(capability, repo, pr, action, digest)
                               ^                  ^
@@ -528,12 +527,34 @@ why it failed, and what safe action fixes it.
 
 ## Completion summary
 
-The plan is **directionally approved but not ready for implementation without
-revision**. The MVP should proceed after adding exact action/content binding,
-one-time nonce consumption, shared verifier ownership, provider failure behavior,
-filesystem safety, remote-race handling, and complete operator error text. The
-v2.1 split remains the correct scope boundary, provided the MVP does not claim to
-authenticate a human.
+MVP **implemented** on `2026-08-02-pr-body-grant-hmac-mvp` (orama #260, PT #320).
+Remediation review findings F1–F7 addressed: canonical payload bytes + golden vector,
+reserve → remote_applied → consume replay state machine, GH_BIN hermetic append test,
+plan terminology and validation commands, same-user residual risk documented.
+v2.1 split remains the correct scope boundary; MVP does not claim to authenticate a human.
+
+## Approval gate — operator premises (accepted for MVP ship)
+
+The premises requiring confirmation are:
+
+1. MVP HMAC is accepted only as a scoped capability proof under a documented
+   secret boundary, not as proof that a human is present.
+2. The MVP may add exact action/content binding, one-time consumption, and direct
+   append verification even though these expand the original two-to-four-hour
+   estimate.
+3. WebAuthn/MCP/sentinel implementation remains deferred to v2.1.
+
+## GSTACK REVIEW REPORT
+
+| Review | Status | Findings | Critical gaps | Notes |
+| --- | --- | ---: | ---: | --- |
+| CEO | addressed_in_mvp | 0 open | 0 | HMAC scoped; same-user boundary documented |
+| Design | skipped | 0 | 0 | No product UI scope detected |
+| Eng | addressed_in_mvp | 0 open | 0 | Binding, replay state machine, verifier ownership |
+| DX | partial | 2 | 0 | Operator docs harmonized in plan; hookify sweep deferred |
+| External voice | degraded | N/A | N/A | Authenticated Codex CLI was attempted; local cache and malformed skill metadata prevented a clean bounded result |
+
+**Overall:** MVP shipped on paired branches; v2.1 sentinel orbit documented separately.
 
 ## Decision audit trail
 
@@ -548,30 +569,3 @@ authenticate a human.
 | 7 | Eng | Fail closed for unsupported providers | Mechanical | Security first | A fallback secret store would recreate the plaintext problem | Environment fallback |
 | 8 | DX | Harmonize all operator docs in one batch | Mechanical | DRY | Old examples would keep teaching the invalid flow | Partial doc update |
 | 9 | DX | Add stable actionable error classes | Mechanical | Completeness | Operators and agents need a safe recovery path | Generic “grant required” |
-
-## Approval gate — pending operator decision
-
-The premises requiring confirmation are:
-
-1. MVP HMAC is accepted only as a scoped capability proof under a documented
-   secret boundary, not as proof that a human is present.
-2. The MVP may add exact action/content binding, one-time consumption, and direct
-   append verification even though these expand the original two-to-four-hour
-   estimate.
-3. WebAuthn/MCP/sentinel implementation remains deferred to v2.1.
-
-No source code has been changed by this review. The plan file and the external
-test-plan artifact are local-only and uncommitted.
-
-## GSTACK REVIEW REPORT
-
-| Review | Status | Findings | Critical gaps | Notes |
-| --- | --- | ---: | ---: | --- |
-| CEO | issues_open | 4 | 0 | HMAC claim, grant breadth, same-user boundary, v2.1 exit gates |
-| Design | skipped | 0 | 0 | No product UI scope detected |
-| Eng | issues_open | 8 | 1 | Action binding, replay, verifier ownership, provider/filesystem/race coverage |
-| DX | issues_open | 5 | 0 | Scoped command flow, actionable errors, cross-platform setup, recovery |
-| External voice | degraded | N/A | N/A | Authenticated Codex CLI was attempted; local cache and malformed skill metadata prevented a clean bounded result |
-
-**Overall:** NOT READY FOR IMPLEMENTATION until the approval-gate premises are
-confirmed and the critical/high findings are incorporated into the plan.
