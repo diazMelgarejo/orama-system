@@ -60,7 +60,7 @@ After `/learn-eval` verdict **Save** or **Absorb**:
 1. If lesson is PR-stack scoped → also run instinct derivation (step 3 above).
 2. Link `related_lessons` in instinct YAML to lesson IDs.
 3. Wire mechanical hooks when instinct references a script (e.g. `remind-pr-body-append-only.sh`).
-4. Update PR body via `append-pr-body.sh` — **never** delta `update_pr`.
+4. PR body follow-up: operator mints `operator-grant-v2`, then `append-pr-body.sh` — **never** delta `update_pr`.
 
 ---
 

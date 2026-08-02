@@ -1,0 +1,14 @@
+title = "orama-system gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known false positive: a specific test-fixture HMAC-SHA256 hexdigest that resembles a secret to gitleaks' generic entropy detector, matched precisely (not by commit) and restricted to test file paths only -- never allowlists an actual credential or an entire commit's other findings"
+matchCondition = "and"
+regexes = [
+  '''0852c9f3059f882ffdfc0fd4bcad37b5e8f76f1bc2e7f97df851f30e68b3a834''',
+]
+paths = [
+  '''^tests/.*\.py$''',
+]

@@ -5,7 +5,9 @@ ROOT="$(git rev-parse --show-toplevel)"
 # Guard: scrub macOS .DS_Store from .git/ internals before hygiene runs.
 # .gitignore cannot cover .git/; Finder drops .DS_Store here and it trips
 # repo_hygiene's "metadata inside git refs" gate. Best-effort, non-blocking.
-bash "$ROOT/scripts/git/scrub_dsstore.sh" || true
+if [[ -x "$ROOT/scripts/git/scrub_dsstore.sh" ]]; then
+  bash "$ROOT/scripts/git/scrub_dsstore.sh" || true
+fi
 
 # Fast-fail: private LAN IPs in tracked config (3080/5080 endpoints → env vars).
 if [ -f "$ROOT/scripts/hooks/no_committed_lan_topology.py" ]; then

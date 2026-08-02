@@ -2,7 +2,8 @@
 
 **Date opened:** 2026-04-30
 **Status:** Tentative — spec tree under brainstorming review
-**Source of truth (raw):** `OpenClaw/v2/{1-Perplexity-Lang-Lang.md, 2-GPT-5.5-Thinking.md, 3-Gemini-3.1-PRO.md, 4-Grok.md}`
+**Source of truth (raw):**
+`OpenClaw/v2/{1-Perplexity-Lang-Lang.md, 2-GPT-5.5-Thinking.md, 3-Gemini-3.1-PRO.md, 4-Grok.md}`
 
 ---
 
@@ -33,13 +34,21 @@ a stricter, more specific rule.
 
 ## Vision
 
-**Canonical org north star:** [`../VISION.md`](../VISION.md) — triage gates, priority stack, anti-goals, and v1→v2 continuity. This section summarizes; the root `VISION.md` governs agents and autotriage.
+**Canonical org north star:** [`../VISION.md`](../VISION.md) — triage gates,
+priority stack, anti-goals, and v1→v2 continuity. This section summarizes;
+the root `VISION.md` governs agents and autotriage.
 
-A **secure, hardware-aware, local-first multi-agent LLM orchestration system** built clean-slate from primitives, with a small ruthless kernel and modules that orbit at their own pace.
+A **secure, hardware-aware, local-first multi-agent LLM orchestration
+system** built clean-slate from primitives, with a small ruthless kernel
+and modules that orbit at their own pace.
 
-Non-negotiable: **hardware affinity is a hard pre-spawn gate**. No framework that cannot enforce "refuse to dispatch if hardware unavailable" qualifies. This disqualifies LangGraph, CrewAI, AutoGen, and LangChain as direct adoptions — but their best ideas are borrowed into a slimmer custom engine.
+Non-negotiable: **hardware affinity is a hard pre-spawn gate**. No framework
+that cannot enforce "refuse to dispatch if hardware unavailable" qualifies.
+This disqualifies LangGraph, CrewAI, AutoGen, and LangChain as direct
+adoptions — but their best ideas are borrowed into a slimmer custom engine.
 
-Local-first + airgapped capable. Dependency-minimal. MIT-licensed (matches LangChain/LangGraph existing ecosystem).
+Local-first + airgapped capable. Dependency-minimal. MIT-licensed (matches
+LangChain/LangGraph existing ecosystem).
 
 ---
 
@@ -71,7 +80,7 @@ Full rationale and the Perplexity/GPT/Gemini/Grok evidence behind each decision 
 
 ## Sequencing
 
-```
+```text
 NOW (May 2026)        →   next           →   ?              →   ?
 ─────────────────         ──────────         ──────────         ──────────
 v1.0 RC closed ✅         v2.0 parity        v2.1 public        v2.5 safety
@@ -88,7 +97,7 @@ Calendar-free. Each phase gates on completion criteria, not dates.
 
 ## Architecture model — microkernel
 
-```
+```text
                  ┌─────────────────────────────────────┐
                  │      oramasys (orchestration)       │
                  │   • graph DSL composition           │
@@ -126,26 +135,33 @@ Calendar-free. Each phase gates on completion criteria, not dates.
 |------|---------|---------|
 | `perpetua-core/` | Data + state + LLM + hardware policy + gossip + graph engine | (no internal upward deps) |
 | `oramasys/` | Graph DSL composition + FastAPI surface + app nodes | imports `perpetua_core` only |
-| `oramasys/agate/` | Hardware policy specification + future gateway/bridge layer | imports `perpetua_core` (side-car) |
+| `oramasys/agate/` | Hardware policy spec + future gateway/bridge layer | imports `perpetua_core` (side-car) |
 
-**Rule**: any time you find yourself wanting `perpetua-core` to import `oramasys`, you have a layering bug.
+**Rule**: any time you find yourself wanting `perpetua-core` to import
+`oramasys`, you have a layering bug.
 
 ---
 
 ## What v2.0 is **NOT** (anti-scope)
 
-Explicit list of things deferred to non-kernel modules or later versions. Don't sneak these into the kernel.
+Explicit list of things deferred to non-kernel modules or later versions.
+Don't sneak these into the kernel.
 
 - ❌ RAG / vector DB / semantic memory (deferred — see `02-modules/rag-and-memory.md`)
 - ❌ Multi-agent swarm parallelism (deferred — see `02-modules/multi-agent-network.md`)
-- ❌ Self-improving evaluator / proposal / mutation engines (deferred to v2.5 consideration — see `02-modules/self-improve-evaluator.md`)
-- ❌ MAESTRO 7-layer enforcement (kernel-aware, but enforcement layer is v2.5 — see `03-safety-v2.5.md`)
+- ❌ Self-improving evaluator / proposal / mutation engines (deferred to
+  v2.5 consideration — see `02-modules/self-improve-evaluator.md`)
+- ❌ MAESTRO 7-layer enforcement (kernel-aware, but enforcement layer is
+  v2.5 — see `03-safety-v2.5.md`)
 - ❌ SWARM misalignment guardrails (v2.5 — see `03-safety-v2.5.md`)
 - ❌ Public versioned Plugin API (v2.1 — see `02-modules/plugin-api-public.md`)
 - ❌ Lessons / SKILL.md authoring tooling (deferred — see `02-modules/lessons-and-skill-authoring.md`)
 - ❌ Redis distributed coordination (deferred — see `02-modules/redis-coordination.md`)
 - ❌ MCP-Optional transport (deferred — see `02-modules/mcp-optional-transport.md`)
-- ❌ AlphaClaw MCP smoke-test / OpenClaw session opener — pre-flight contract in `02-modules/alphaclaw-mcp-smoke-test.md`; **implementation delegated to `oramaclaw` orbit plugin at Gate M3** (see `40-oramaclaw-lifecycle-plugin.md`)
+- ❌ AlphaClaw MCP smoke-test / OpenClaw session opener — pre-flight
+  contract in `02-modules/alphaclaw-mcp-smoke-test.md`;
+  **implementation delegated to `oramaclaw` orbit plugin at Gate M3**
+  (see `40-oramaclaw-lifecycle-plugin.md`)
 
 ---
 
@@ -171,7 +187,7 @@ Explicit list of things deferred to non-kernel modules or later versions. Don't 
 
 ## Spec tree
 
-```
+```text
 orama-system/docs/v2/
 ├── README.md                          ← you are here
 ├── 00-context-and-decisions.md
@@ -233,10 +249,11 @@ orama-system/docs/v2/
 ├── 47-portable-memory-local-topology-invariant.md  ← cross-cutting portable-memory rule: tracked docs name categories only; concrete forbidden fragments live in local-only registries
 ├── 48-board-job-source-line-schema.md  ← provisional/optional job-board schema (source_ref + expected_base_sha) so a claimant can verify the exact source state a job was scoped against; NOT enforced yet, PT-side producer already validates-when-provided; v2 candidate for hard-required once a second producer exists to coordinate with
 ├── 49-peer-mesh-auth-tls-v2-plan.md  ← peer-mesh TLS + pluggable auth (BUZZ/Twitter/Google, bearer token grandfathered) deferred plan; v1 minimum (never send a bearer token over unauthenticated transport) already landed on PR #197; this is the certificate provisioning + real TLS/mTLS + AlphaClaw HTTPS proxy work, stacked as PR(N+1)
-└── 50-mesh-security-migration-ladder.md  ← Phases A–D: mesh prep → IP expunge → P5/P6 runtime gates (grandfathered) → strict cutover at v2 launch; merge-order guidance for #223/#224/#222 + PT #287
+├── 50-mesh-security-migration-ladder.md  ← Phases A–D: mesh prep → IP expunge → P5/P6 runtime gates (grandfathered) → strict cutover at v2 launch; merge-order guidance for #223/#224/#222 + PT #287
+└── 51-security-sentinel-orbit-passkey-mcp.md  ← v2.1 security-sentinel satellite: passkey + MCP human authorization; orbits perpetua-core; MVP HMAC bridge in docs/plans/2026-08-02-pr-body-grant-security-remediation.md
 ```
 
-> **Next free slot: `51-`**
+> **Next free slot: `52-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
@@ -248,9 +265,14 @@ orama-system/docs/v2/
 Tracked in [`06-open-questions.md`](./06-open-questions.md). Highlights:
 
 - Pydantic AI evaluation (as a framework competitor) at v2.1+ checkpoint
-- LM Studio LAN endpoint canonicalization (Mac `.110:1234`, Windows `.108:1234` per user memory; `routing.json` already verified `distributed=true`)
+- LM Studio LAN endpoint canonicalization (Mac `.110:1234`, Windows
+  `.108:1234` per user memory; `routing.json` already verified `distributed=true`)
 - GGUF spec extension RFC (community-pending since Oct 2024) for `system_requirements` metadata
 - Naming: hardware policy spec → publish as `agate` (Perplexity proposal) when stable
 - OQ18: agate `NEVER` verdict — must be explicit in schema, not inferred from list membership
-- OQ19: `_MIRROR_BACKENDS` / `_TIER_HOSTS` — should v2 derive these from YAML at runtime (config-driven) or remain module-level constants?
-- OQ20: board-job source-line schema (`source_ref`/`expected_base_sha`, [`48-`](48-board-job-source-line-schema.md)) — optional/provisional now; hard-required for v2 is open, pending a second producer to coordinate the rollout with
+- OQ19: `_MIRROR_BACKENDS` / `_TIER_HOSTS` — should v2 derive these from
+  YAML at runtime (config-driven) or remain module-level constants?
+- OQ20: board-job source-line schema (`source_ref`/`expected_base_sha`,
+  [`48-`](48-board-job-source-line-schema.md)) — optional/provisional now;
+  hard-required for v2 is open, pending a second producer to coordinate
+  the rollout with

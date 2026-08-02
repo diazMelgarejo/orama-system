@@ -143,7 +143,8 @@ the tool replaces the whole field, so the write itself must be integrative.
 sections). Do **not** include `CURSOR_AGENT_PR_BODY_BEGIN/END` markers or Cursor
 footer HTML — the API rejects them and adds its own wrapper.
 
-Prefer `bash scripts/cursor/append-pr-body.sh` for follow-up appends.
+Prefer `bash scripts/cursor/append-pr-body.sh` for follow-up appends after the
+operator minted `operator-grant-v2` (see [`../skills/cursor-pr-body/SKILL.md`](../skills/cursor-pr-body/SKILL.md)).
 
 **Worked examples (good vs bad):**
 [`references/integrative-editing-examples.md`](references/integrative-editing-examples.md)
