@@ -205,7 +205,7 @@ and what's deliberately reimplemented rather than vendored.
 
 ## Examples
 
-- Golden path (new skill + self-upgrade dogfood run): [`examples/good/golden-path.md`](examples/good/golden-path.md)
+- Golden path (new skill + self-upgrade dogfood run): [`examples/good/skillify-golden-path.md`](examples/good/skillify-golden-path.md)
 - Anti-patterns to avoid: [`examples/bad/anti-patterns.md`](examples/bad/anti-patterns.md)
 - Eval rubric to run before declaring a skillify-produced skill done: [`eval/checklist.md`](eval/checklist.md)
 - Test prompts for the skill-creator dogfood loop: [`eval/evals.json`](eval/evals.json)

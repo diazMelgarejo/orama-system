@@ -75,4 +75,4 @@ OpenClaw is optional — skip when `~/.openclaw/openclaw.json` is absent; run wh
 - [`../../references/workspace-path-resolution.md`](../../references/workspace-path-resolution.md)
 - [`../../SKILL.md`](../../SKILL.md) § Platform Harness Model
 - [`../../../../../../docs/wiki/15-hermes-windows-harness.md`](../../../../../../docs/wiki/15-hermes-windows-harness.md)
-- PT [`hardware-policy`](../../../../../../../Perpetua-Tools/.claude/skills/hardware-policy/SKILL.md) skill (sibling repo)
+- PT [`hardware-policy`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.claude/skills/hardware-policy/SKILL.md) skill (GitHub `main`; resolve locally via `$PERPETUA_TOOLS_PATH`)

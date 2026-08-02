@@ -6,7 +6,7 @@ Added 2026-07-19 (LLM-Council Task 3). Reconciles two legitimate tier vocabulari
 
 | Vocabulary | Where it lives | What it orders |
 |---|---|---|
-| **Routing tiers** (SKILL.md Tiers 1-4) | `Perpetua-Tools/orchestrator/frugality_router.py` (code-grounded) | Cost/privacy escalation for TOOL-CALL routing: Local OSS → Local Index (gbrain/CRG) → Remote Free (HF) → Proprietary Free |
+| **Routing tiers** (SKILL.md Tiers 1-4) | [`orchestrator/frugality_router.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/frugality_router.py) (code-grounded) | Cost/privacy escalation for TOOL-CALL routing: Local OSS → Local Index (gbrain/CRG) → Remote Free (HF) → Proprietary Free |
 | **Operational fallback chain** (this file) | LLM-Council consensus (7/7 agents, 2026-07-04, PT `lesson_6741dab9176f`) | Which INFERENCE BACKEND an orchestration session tries next when one is down/exhausted |
 
 ## The operational chain (mandatory order)
