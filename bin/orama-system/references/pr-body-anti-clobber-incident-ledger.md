@@ -13,12 +13,18 @@
 **comments** (`ManagePullRequest post_comment`, `gh pr comment`).
 
 Hooks block `update_pr` with `body=`, `gh pr edit`, and `append-pr-body.sh` unless the
-operator issued a grant via `scripts/cursor/grant-pr-body-human-override.sh`
-(interactive; **not reliably non-agent-executable** — see security research below).
+operator minted **operator-grant-v2** via `scripts/cursor/grant-pr-body-human-override.sh`
+(HMAC-authenticated capability in `~/.cursor/pr-body-human-override-ack`; **not** human
+identity proof).
 
-**Security gap (2026-08-02):** TTY gating + plaintext ack file are **not** human
-authorization. Research + remediation plan:
-[`pr-body-human-grant-security-gap-research.md`](pr-body-human-grant-security-gap-research.md)
+**MVP (2026-08-02):** HMAC binds repo, PR, action, content digest, nonce, issued-at; replay
+state machine `reserve` → `mark-applied` → `consume`; `pr-body-grant-lib.py` is single verifier.
+**Residual risk:** same-user Keychain/ack readable by agent PTY shells — escalation control only.
+**v2.1:** security-sentinel passkey orbit ([`docs/v2/51-security-sentinel-orbit-passkey-mcp.md`](../../docs/v2/51-security-sentinel-orbit-passkey-mcp.md)).
+
+Research + remediation:
+[`pr-body-human-grant-security-gap-research.md`](pr-body-human-grant-security-gap-research.md),
+[`docs/plans/2026-08-02-pr-body-grant-security-remediation.md`](../../docs/plans/2026-08-02-pr-body-grant-security-remediation.md)
 (CodeRabbit PR #255 review 4835288649).
 
 Cursor rule: `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply, listed before append-only).
@@ -111,9 +117,11 @@ Installed via `scripts/cursor/install-user-git-environment.sh` into `~/.cursor/h
 | `beforeMCPExecution` | same | Backup on PR read |
 | `beforeShellExecution` | `before-shell-pr-body-guard.sh` | **Deny** `gh pr edit`, `append-pr-body.sh`; allow `gh pr comment` |
 
-Core logic: `scripts/cursor/hooks/pr-body-guard-core.py`
+Core logic: `scripts/cursor/hooks/pr-body-guard-core.py` (grant verify + `BACKUP|repo|pr`)
 
-Human override only: operator `grant-pr-body-human-override.sh`, then `append-pr-body.sh` — Layers 1–6 (append-only) apply.
+Human override: operator mints grant v2, then `append-pr-body.sh` — Layers 1–6 (append-only).
+Replay: reserve before remote edit; consume only after `mark-applied`. Agents must not run
+grant script or forge ack. `pr_body_run_guard()` dedupes shell/MCP hook paths.
 
 Hookify: `.claude/hookify.pr-body-comment-only.local.md`
 
@@ -122,6 +130,9 @@ Hookify: `.claude/hookify.pr-body-comment-only.local.md`
 ## Correct write path
 
 ```bash
+# Operator terminal
+bash scripts/cursor/grant-pr-body-human-override.sh <owner/repo> <N> --file follow-up.md
+# Then (operator or agent with valid grant)
 bash scripts/cursor/append-pr-body.sh <owner/repo> <N> \
   --title "Follow-up: <short title>" \
   --file follow-up.md

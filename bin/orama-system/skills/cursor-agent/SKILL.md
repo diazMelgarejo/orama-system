@@ -275,11 +275,16 @@ cursor-agent about       # show version + system info
 
 ## PR body updates (Cloud agents)
 
-When a Cloud agent updates an **existing** PR after harmonization, review fixes, or CI notes, it must use the **append-only** workflow — never replace the body with delta-only text.
+When a Cloud agent updates an **existing** PR after harmonization, review fixes, or CI notes:
+
+1. **Default:** `post_comment` / `gh pr comment` only (Layer 0).
+2. **Body append:** only after the **operator** minted `operator-grant-v2` (HMAC + digest bind)
+   via `grant-pr-body-human-override.sh` in an operator terminal.
+3. Run **only** `append-pr-body.sh` with the same `--file` or `--message` as the grant.
 
 Load: [`../cursor-pr-body/SKILL.md`](../cursor-pr-body/SKILL.md)  
-Rule: `.cursor/rules/append-only-pr-body.mdc`  
-Script: `scripts/cursor/append-pr-body.sh`
+Rules: `.cursor/rules/pr-body-comment-only.mdc`, `.cursor/rules/append-only-pr-body.mdc`  
+Scripts: `scripts/cursor/grant-pr-body-human-override.sh`, `scripts/cursor/append-pr-body.sh`
 
 ## References
 
