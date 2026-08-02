@@ -1,11 +1,21 @@
 # Append-Only PR Body — Reference Card
 
-> Load when updating an **existing** PR description after harmonization, review fixes, or CI verification.
+> **Layer 0 first:** `.cursor/rules/pr-body-comment-only.mdc` — agents **comment only** by default.
+> Load this card only after the operator ran `scripts/cursor/grant-pr-body-human-override.sh`.
+
+## Layer 0 — comment only (default)
+
+| Do | Never (automatic) |
+| -- | ----------------- |
+| `ManagePullRequest post_comment` | `update_pr` with `body=` |
+| `gh pr comment` | `gh pr edit`, `append-pr-body.sh` |
+
+Hooks: `pr-body-guard-core.py` + `beforeSubmitPrompt` reminder.
 
 ## Delimiters (do not put in append content)
 
 | Marker | Role |
-|--------|------|
+| ------ | ---- |
 | `<!-- CURSOR_AGENT_PR_BODY_BEGIN -->` | Start of Cursor agent summary zone |
 | `<!-- CURSOR_AGENT_PR_BODY_END -->` | Insertion point for new follow-ups (preferred) |
 | `<!-- This is an auto-generated comment: release notes by coderabbit.ai -->` | Fallback insertion point — preserve block below |
@@ -25,6 +35,19 @@ If `gh pr edit` fails with `Resource not accessible by integration`, save merged
 ```
 
 and hand off to the operator or retry with a token that has `updatePullRequest`.
+
+## Layer 7 — Cursor runtime hooks (agents only)
+
+Installed by `bash scripts/cursor/install-user-git-environment.sh` into `~/.cursor/hooks.json`:
+
+| Event | Script | Blocks |
+| ----- | ------ | ------ |
+| `beforeMCPExecution` | `before-mcp-pr-body-guard.sh` | `ManagePullRequest update_pr` with `body=` |
+| `beforeShellExecution` | `before-shell-pr-body-guard.sh` | `gh pr edit --body` (inline; `--body-file` OK) |
+
+Both hooks **backup PR body on read** (`gh pr view` / MCP PR access) to `.git/pr-body-backups/`.
+
+Escape hatch: `CURSOR_PR_BODY_FULL_MERGE_ACK=1` when passing a verified full merged body.
 
 ## Worked example — stack harmonization follow-up
 
@@ -69,12 +92,12 @@ Pass the **full merged body** as raw markdown:
 <append content>
 ```
 
-3. Write merged file; `gh pr edit <N> --body-file merged.md`
+1. Write merged file; `gh pr edit <N> --body-file merged.md`
 
 ## Failure modes
 
 | Symptom | Cause | Fix |
-|---------|-------|-----|
+| ------- | ----- | --- |
 | Original Summary gone | Delta-only `body=` write | Restore from `.git/pr-body-backups/`; re-append correctly |
 | `not agent-managed` | Human-authored PR body | Use `gh pr edit` or operator paste |
 | `Resource not accessible by integration` | Token lacks GraphQL update | Operator runs `append-pr-body.sh` locally |
