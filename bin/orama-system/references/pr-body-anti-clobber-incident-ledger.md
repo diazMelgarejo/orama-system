@@ -13,18 +13,12 @@
 **comments** (`ManagePullRequest post_comment`, `gh pr comment`).
 
 Hooks block `update_pr` with `body=`, `gh pr edit`, and `append-pr-body.sh` unless the
-operator minted **operator-grant-v2** via `scripts/cursor/grant-pr-body-human-override.sh`
-(HMAC-authenticated capability in `~/.cursor/pr-body-human-override-ack`; **not** human
-identity proof).
+operator issued a grant via `scripts/cursor/grant-pr-body-human-override.sh`
+(interactive; **not reliably non-agent-executable** — see security research below).
 
-**MVP (2026-08-02):** HMAC binds repo, PR, action, content digest, nonce, issued-at; replay
-state machine `reserve` → `mark-applied` → `consume`; `pr-body-grant-lib.py` is single verifier.
-**Residual risk:** same-user Keychain/ack readable by agent PTY shells — escalation control only.
-**v2.1:** security-sentinel passkey orbit ([`docs/v2/51-security-sentinel-orbit-passkey-mcp.md`](../../docs/v2/51-security-sentinel-orbit-passkey-mcp.md)).
-
-Research + remediation:
-[`pr-body-human-grant-security-gap-research.md`](pr-body-human-grant-security-gap-research.md),
-[`docs/plans/2026-08-02-pr-body-grant-security-remediation.md`](../../docs/plans/2026-08-02-pr-body-grant-security-remediation.md)
+**Security gap (2026-08-02):** TTY gating + plaintext ack file are **not** human
+authorization. Research + remediation plan:
+[`pr-body-human-grant-security-gap-research.md`](../../references/pr-body-human-grant-security-gap-research.md)
 (CodeRabbit PR #255 review 4835288649).
 
 Cursor rule: `.cursor/rules/pr-body-comment-only.mdc` (alwaysApply, listed before append-only).
