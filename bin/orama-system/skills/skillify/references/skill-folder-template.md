@@ -11,7 +11,7 @@ your-skill-name/
 │   └── core-workflow.md
 ├── examples/
 │   ├── good/
-│   │   └── golden-path.md
+│   │   └── skillify-golden-path.md
 │   └── bad/
 │       └── anti-patterns.md
 ├── references/
@@ -103,7 +103,7 @@ allowed-tools: bash, file-operations
 - If validation fails, fix once; if still failing, report the blocker.
 ```
 
-## examples/good/golden-path.md Template
+## examples/good/skillify-golden-path.md Template
 
 ```markdown
 # Golden Path Example
