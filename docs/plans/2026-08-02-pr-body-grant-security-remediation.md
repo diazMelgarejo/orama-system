@@ -180,7 +180,8 @@ bash scripts/git/check-guard-sync-divergence.sh
 - [x] Plaintext v1 ack **never** activates override (`test_v1_grant_rejected`, guard + append)
 - [x] Agent cannot activate override without HMAC secret + matching repo/pr/digest
   (`pr-body-grant-lib.py`)
-- [ ] Docs never claim “not agent-runnable” without listing limits (partial — saga + plan; hookify/rules grep still open)
+- [ ] Docs never claim "not agent-runnable" without listing limits
+  (partial — saga + plan; hookify/rules grep still open)
 - [x] CodeRabbit 4835288649 core items addressed; Part 2 linked in
   [`docs/v2/51-security-sentinel-orbit-passkey-mcp.md`](../v2/51-security-sentinel-orbit-passkey-mcp.md)
 
