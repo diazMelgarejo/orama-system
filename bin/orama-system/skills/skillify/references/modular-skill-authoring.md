@@ -52,7 +52,7 @@ Ask for:
 | Architecture notes or external docs | `references/*.md` |
 | Deterministic checks and generators | `scripts/*` |
 | Reusable output formats | `templates/*.md` |
-| Review checklist and personas | `eval/checklist.md` |
+| Review checklist and personas | `eval/{skill-prefix}-checklist.md` |
 
 ## Frontmatter Routing
 

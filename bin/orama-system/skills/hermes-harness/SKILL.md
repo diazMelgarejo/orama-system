@@ -37,6 +37,26 @@ allowed-tools: bash, file-operations, web-search
 
 # Hermes Harness
 
+## Legacy slug symlinks (whole-folder redirects)
+
+These slugs are directory symlinks into this skill — edit here, not at the
+legacy path:
+
+| Legacy slug | Symlink target |
+| --- | --- |
+| `hermes-agent` | `hermes-harness` |
+| `pt-orama-harness-integration` | `hermes-harness` |
+
+Slash-command discovery aliases (same content as `commands/<name>/`):
+
+| Discovery path | Canonical command |
+| --- | --- |
+| `hermes-harness/hermes-delegate` | `commands/hermes-delegate` |
+| `hermes-harness/hermes-orama` | `commands/hermes-orama` |
+| `hermes-harness/hermes-spawn` | `commands/hermes-spawn` |
+
+Absorption map: [`references/hermes-skill-absorption-map.md`](references/hermes-skill-absorption-map.md).
+
 ## 🔧 Setup (GLM-5.2 Fallback)
 
 ```bash
@@ -87,7 +107,7 @@ restarts via an `openclaw cron` job (`mac-orchestrator-pulse`), not a manual loo
   are flowing without polling every 15m when there is nothing to do.
 - **Failure handling:** retry a failing dispatch up to 10x with exponential
   backoff (~5min cap), then log a FAILURE summary to
-  `Perpetua-Tools/.agent/memory/working/REVIEW_QUEUE.md` and stop — never
+  [`.agent/memory/working/REVIEW_QUEUE.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/REVIEW_QUEUE.md) and stop — never
   schedule a follow-up on failure, never crash the pulse or the gateway.
 - **Resumable by construction:** the job lives in `openclaw.json`'s
   `.cron.jobs` (persisted config, not ephemeral state), so it survives gateway
@@ -175,8 +195,8 @@ work (a real code change, a closed plan, a fix that other agents/peers
 would want to know about) updates both mechanisms before ending, so a
 peer checking the board mid-work doesn't rediscover it independently:
 
-1. **GossipBus whiteboard log** (`Perpetua-Tools/scripts/
-   agent_coordination.py log <agent_id> "<message>"`) — one line, states
+1. **GossipBus whiteboard log** ([`scripts/agent_coordination.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/scripts/agent_coordination.py)
+   `log <agent_id> "<message>"`) — one line, states
    what landed, the commit(s)/PR(s), and anything still open that a peer
    with different access (push rights, a different host, etc.) could
    help unblock. Cheap, always do it.

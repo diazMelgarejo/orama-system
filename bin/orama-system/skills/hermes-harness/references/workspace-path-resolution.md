@@ -84,6 +84,6 @@ python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills
 
 ## Canonical policy (always cite, never copy lists)
 
-- PT `config/model_hardware_policy.yml`
-- PT `src/utils/hardware_policy.py`
-- PT `.claude/skills/hardware-policy/SKILL.md`
+- [`config/model_hardware_policy.yml`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/model_hardware_policy.yml)
+- [`src/utils/hardware_policy.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/src/utils/hardware_policy.py)
+- [`.claude/skills/hardware-policy/SKILL.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.claude/skills/hardware-policy/SKILL.md)
