@@ -5,8 +5,8 @@
 > `git checkout` those paths to "clean up".
 > **Goal:** Treat discovery-written LAN state as **intentional local cache**, not dirty
 > noise — preserve it in the working tree, never commit it.
-> **Canonical policy:** `Perpetua-Tools/config/LOCAL-RUNTIME-OVERLAY.md`
-> **Enforcement:** `Perpetua-Tools/scripts/git/check_local_runtime_overlay.py`
+> **Canonical policy:** [`config/LOCAL-RUNTIME-OVERLAY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/LOCAL-RUNTIME-OVERLAY.md)
+> **Enforcement:** [`scripts/git/check_local_runtime_overlay.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/scripts/git/check_local_runtime_overlay.py)
 
 Applies to **Perpetua-Tools** only (`config/devices.yml`, `config/models.yml`).
 
@@ -83,4 +83,4 @@ When verifying post-merge regression or silent merge failure:
 - [`safe-cross-host-sync-reference-card.md`](../../git-history-surgery/references/safe-cross-host-sync-reference-card.md) — Mac ↔ Win `main` sync
 - [`../SKILL.md`](../SKILL.md) — worktree lifecycle
 - [`fresh-main-integrity-diff-claygo.md`](fresh-main-integrity-diff-claygo.md) — true unique branch contribution vs `origin/main`
-- `Perpetua-Tools/config/LOCAL-RUNTIME-OVERLAY.md` — package policy source
+- [`config/LOCAL-RUNTIME-OVERLAY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/LOCAL-RUNTIME-OVERLAY.md) — package policy source

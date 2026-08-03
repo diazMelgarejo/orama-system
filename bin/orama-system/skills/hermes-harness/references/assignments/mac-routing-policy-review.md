@@ -12,7 +12,7 @@
 
 ## Task
 
-1. Cross-check `Perpetua-Tools/config/routing.yml` autoresearch routes vs H3/H4 findings
+1. Cross-check [`config/routing.yml`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/routing.yml) autoresearch routes vs H3/H4 findings
 2. Draft `mac-routing-review.md` with proposed affinity notes (no code change without approval)
 3. Drop to Win peer for cross-review OR keep local for operator
 
