@@ -16,8 +16,8 @@
 
 | Topic | Location |
 |-------|----------|
-| Shared types | `Perpetua-Tools/orchestrator/contracts.py` |
-| Hardware policy | `Perpetua-Tools/config/model_hardware_policy.yml` |
+| Shared types | [`orchestrator/contracts.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/contracts.py) |
+| Hardware policy | [`config/model_hardware_policy.yml`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/model_hardware_policy.yml) |
 | Mirror exclusion | `_MIRROR_BACKENDS` in `selector.py` |
 | Unified embeddings plan | `orama-system/docs/plans/2026-05-19-gbrain-crg-embedding-integration.md` |
 

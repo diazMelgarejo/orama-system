@@ -40,6 +40,7 @@ asyncio_mode = "auto"
 pythonpath = ["src", ".", "scripts"]
 markers = [
     "unit: fast, isolated tests with no network/filesystem/subprocess dependency beyond mocks",
+    "integration: tests that exercise subprocess, filesystem, or multi-component behavior",
 ]
 filterwarnings = [
     "ignore:There is no current event loop:DeprecationWarning",

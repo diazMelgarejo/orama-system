@@ -22,3 +22,4 @@ python lan_peer_assign.py drop --peer --file bin\...\win-bridge-pr-ready.md --as
 
 - **Ladder F** added to `graceful-degradation.md` (model-routing-check dispatch gate)
 - **V1 backlog:** `Perpetua-Tools/.agent/memory/working/V1_DEFERRED_BACKLOG_2026-06-28.md`
+- *(2026-08-02 canonical-link hygiene)* Public index: [`docs/LESSONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)
