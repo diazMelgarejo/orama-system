@@ -9,6 +9,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 ROOT = Path(__file__).resolve().parents[1]
 SPAWN_SH = ROOT / "bin/orama-system/skills/hermes-harness/scripts/hermes_spawn.sh"
 RESOLVE_SH = ROOT / "bin/orama-system/skills/hermes-harness/scripts/resolve_perp_harness.sh"
@@ -34,7 +36,7 @@ def _run_spawn(
 
 
 @pytest.fixture
-def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     cache = tmp_path / "cache"
@@ -63,7 +65,7 @@ def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return tmp_path
 
 
-def test_resolve_perp_harness_fails_without_pt_root():
+def test_resolve_perp_harness_fails_without_pt_root() -> None:
     proc = subprocess.run(
         ["bash", "-c", f'source "{RESOLVE_SH}"; resolve_perp_harness_script'],
         cwd=ROOT,
@@ -76,7 +78,7 @@ def test_resolve_perp_harness_fails_without_pt_root():
     assert "not resolved" in proc.stderr.lower() or "not found" in proc.stderr.lower()
 
 
-def test_invalid_session_id_rejected(isolated_runtime: Path):
+def test_invalid_session_id_rejected(isolated_runtime: Path) -> None:
     proc = _run_spawn(
         "status",
         env={
@@ -91,7 +93,7 @@ def test_invalid_session_id_rejected(isolated_runtime: Path):
     assert "HERMES_SPAWN_SESSION" in proc.stderr
 
 
-def test_status_exits_when_no_pid_file(isolated_runtime: Path):
+def test_status_exits_when_no_pid_file(isolated_runtime: Path) -> None:
     proc = _run_spawn(
         "status",
         env={
@@ -105,7 +107,7 @@ def test_status_exits_when_no_pid_file(isolated_runtime: Path):
     assert "No active Hermes session" in proc.stdout
 
 
-def test_pid_dir_uses_numeric_uid(isolated_runtime: Path, monkeypatch: pytest.MonkeyPatch):
+def test_pid_dir_uses_numeric_uid(isolated_runtime: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("USER", "../../traversal")
     proc = _run_spawn(
         "status",
@@ -122,7 +124,7 @@ def test_pid_dir_uses_numeric_uid(isolated_runtime: Path, monkeypatch: pytest.Mo
     assert proc.returncode == 1
 
 
-def test_lock_without_metadata_is_busy(isolated_runtime: Path):
+def test_lock_without_metadata_is_busy(isolated_runtime: Path) -> None:
     uid = os.getuid()
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     pid_dir.mkdir(parents=True)
@@ -142,7 +144,7 @@ def test_lock_without_metadata_is_busy(isolated_runtime: Path):
     assert "without owner metadata" in proc.stderr
 
 
-def test_start_writes_pid_and_status_ok(isolated_runtime: Path):
+def test_start_writes_pid_and_status_ok(isolated_runtime: Path) -> None:
     env = {
         "PERPETUA_TOOLS_ROOT": str(isolated_runtime / "pt"),
         "HOME": str(isolated_runtime),
@@ -159,7 +161,7 @@ def test_start_writes_pid_and_status_ok(isolated_runtime: Path):
     assert stop.returncode == 0
 
 
-def test_stop_cleans_stale_pid_file(isolated_runtime: Path):
+def test_stop_cleans_stale_pid_file(isolated_runtime: Path) -> None:
     uid = os.getuid()
     pid_dir = isolated_runtime / "runtime" / f"hermes-spawn-{uid}"
     pid_dir.mkdir(parents=True)

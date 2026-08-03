@@ -31,7 +31,10 @@
 - [ ] `SKILL.md` is <= 200 lines, or the overage has a written reason.
 - [ ] `description` stays a single, complete, pushy sentence set — no
       truncation artifacts, no citation markers.
-- [ ] Modular files stay one level from `SKILL.md` (no reference chains).
+- [ ] Modular files stay at most one subdirectory level below `SKILL.md`
+      (`instructions/`, `references/`, `examples/good/`, etc.) — any number of
+      files per prescribed folder is fine; no reference chains through multiple
+      nested hops (e.g. `references/foo/bar.md`).
 
 ## Anthropic skill-creator Alignment
 

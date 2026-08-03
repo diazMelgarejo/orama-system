@@ -160,9 +160,24 @@ source:
 Full table plus "Red Flags — STOP and Start Over":
 [superpowers § Common Rationalizations](https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md#common-rationalizations).
 
+## Coverage Gate (Python — before Evidence Report)
+
+After GREEN, validate coverage before reporting done or writing the evidence
+report:
+
+```bash
+pytest --cov=src --cov-report=term-missing
+```
+
+- **Stop condition:** total coverage below **80%** — not GREEN; add tests and
+  re-run until the minimum is met.
+- **Target:** **90–100%** for new or touched Python surfaces.
+- Record the actual `term-missing` output in the evidence report — never claim
+  PASS after a passing suite that skipped coverage or fell below 80%.
+
 ## Evidence Report (from ECC — for non-trivial work)
 
-After GREEN and coverage are validated, write a short report (e.g.
+After GREEN and the coverage gate above pass, write a short report (e.g.
 `docs/testing/<task-name>.tdd.md`): source plan (if any), user
 journeys, a task-by-task table of what's guaranteed with the actual
 test file/command and PASS/FAIL result. Quote real commands and real
