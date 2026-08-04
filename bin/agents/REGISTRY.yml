@@ -18,10 +18,17 @@ staging_contract:
   win_hermes_harness_script: platform/windows/install-hermes-harness.ps1
   openclaw_overlay_sync: scripts/sync_openclaw_overlay_from_staging.sh
   persona_catalog: bin/agents/personas/
+  dispatch_lane_key:
+    L-H1: native Hermes delegate_task (interactive session only)
+    L-PT: PT hermes_harness.py direct AIAgent scripts (NOT delegate_task)
+    L-Fleet: coord_pulse / cursor-agent / git inbox coordination
+  path_doctrine: bin/orama-system/skills/hermes-harness/references/openclaw-workspace-path-doctrine.md
 
 # Pipeline + research + adapters staged for Hermes profile materialization
 roles:
   - staging_folder: orchestrator
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: orchestrator
     hermes_profile: orchestrator
     display: Glen
@@ -32,6 +39,8 @@ roles:
     staged_agent_card: bin/agents/orchestrator/agent.md
 
   - staging_folder: context
+    dispatch_lane: L-PT
+    native_hermes_delegate: false
     openclaw_id: context-agent
     hermes_profile: context-agent
     display: Cass
@@ -42,6 +51,8 @@ roles:
     staged_agent_card: bin/agents/context/agent.md
 
   - staging_folder: architect
+    dispatch_lane: L-PT
+    native_hermes_delegate: false
     openclaw_id: architect-agent
     hermes_profile: architect-agent
     display: Aria
@@ -52,6 +63,8 @@ roles:
     staged_agent_card: bin/agents/architect/agent.md
 
   - staging_folder: refiner
+    dispatch_lane: L-PT
+    native_hermes_delegate: false
     openclaw_id: refiner-agent
     hermes_profile: refiner-agent
     display: Sena
@@ -62,6 +75,8 @@ roles:
     staged_agent_card: bin/agents/refiner/agent.md
 
   - staging_folder: executor
+    dispatch_lane: L-PT
+    native_hermes_delegate: false
     openclaw_id: coder
     orama_registry_id: executor-agent
     hermes_profile: coder
@@ -75,6 +90,8 @@ roles:
     notes: OpenClaw id is `coder`; orama registry id is `executor-agent`; SOUL also at bin/agents/coder/SOUL.md for LM Studio win path
 
   - staging_folder: verifier
+    dispatch_lane: L-PT
+    native_hermes_delegate: false
     openclaw_id: codex-agent
     orama_registry_id: verifier-agent
     hermes_profile: codex-agent
@@ -87,6 +104,8 @@ roles:
     reviewer_role: universal_code_gate
 
   - staging_folder: crystallizer
+    dispatch_lane: L-PT
+    native_hermes_delegate: false
     openclaw_id: crystallizer-agent
     hermes_profile: crystallizer-agent
     display: Crystal
@@ -97,6 +116,8 @@ roles:
     staged_agent_card: bin/agents/crystallizer/agent.md
 
   - staging_folder: mac-researcher
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: mac-researcher
     hermes_profile: mac-researcher
     display: Arthur
@@ -106,6 +127,8 @@ roles:
     staged_soul: bin/agents/mac-researcher/SOUL.md
 
   - staging_folder: win-researcher
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: win-researcher
     hermes_profile: win-researcher
     display: Win Researcher
@@ -115,6 +138,8 @@ roles:
     staged_soul: bin/agents/win-researcher/SOUL.md
 
   - staging_folder: autoresearcher
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: autoresearcher
     hermes_profile: autoresearcher
     display: Scout
@@ -124,6 +149,8 @@ roles:
     staged_soul: bin/agents/autoresearcher/SOUL.md
 
   - staging_folder: coder
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: coder
     hermes_profile: coder-win
     display: Rourke
@@ -133,6 +160,8 @@ roles:
     notes: Win LM Studio path; shares OpenClaw id with executor row
 
   - staging_folder: cole
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: cole-agent
     hermes_profile: cole-agent
     display: Cole
@@ -144,6 +173,8 @@ roles:
     persona_yaml: bin/agents/personas/cole.yaml
 
   - staging_folder: hermes-monitor
+    dispatch_lane: L-H1
+    native_hermes_delegate: true
     openclaw_id: hermes-agent
     hermes_profile: hermes-monitor
     display: Hermes
@@ -156,6 +187,8 @@ roles:
     notes: OpenClaw adapter id; distinct from Hermes portable brain install
 
   - staging_folder: sage
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: gemini-coder
     hermes_profile: gemini-coder
     display: Sage
@@ -167,6 +200,8 @@ roles:
     persona_yaml: bin/agents/personas/sage.yaml
 
   - staging_folder: relay
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: cline-agent
     hermes_profile: cline-agent
     display: Relay
@@ -177,6 +212,8 @@ roles:
     staged_agent_card: bin/agents/relay/agent.md
 
   - staging_folder: nova
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: kimi-agent
     hermes_profile: kimi-agent
     display: Nova
@@ -188,6 +225,8 @@ roles:
     persona_yaml: bin/agents/personas/nova.yaml
 
   - staging_folder: rex
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
     openclaw_id: grok-agent
     hermes_profile: grok-agent
     display: Rex
@@ -201,6 +240,8 @@ roles:
 # Lifecycle hub — OpenClaw overlay sync only; no Hermes profile
 lifecycle:
   - staging_folder: lifecycle
+    dispatch_lane: L-PT
+    native_hermes_delegate: false
     openclaw_id: main
     display: Atlas
     soul_id: perpetua.lifecycle
