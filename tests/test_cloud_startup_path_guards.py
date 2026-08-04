@@ -187,7 +187,20 @@ def test_normalize_rederives_junk_sibling_paths(tmp_path: Path) -> None:
     assert lines[3] == str(home / "openclaw-v1" / "AlphaClaw")
 
 
-def test_guard_sync_on_dirty_skip_exits_zero(tmp_path: Path) -> None:
+def _seed_guard_sync_scripts(canon: Path, *extra: str) -> Path:
+    names = (
+        "guard-sync-manifest.sh",
+        "check-guard-sync-divergence.sh",
+        "sync-attribution-guard-scripts.sh",
+        *extra,
+    )
+    for name in names:
+        src = ROOT / "scripts/git" / name
+        _commit_file(canon, f"scripts/git/{name}", src.read_bytes(), f"add {name}")
+    return canon / "scripts/git/sync-attribution-guard-scripts.sh"
+
+
+def test_guard_sync_on_dirty_skip_exits_dirty_status(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     canon = workspace / "orama"
     sibling = workspace / "ac"
@@ -196,13 +209,16 @@ def test_guard_sync_on_dirty_skip_exits_zero(tmp_path: Path) -> None:
 
     for repo in (canon, sibling):
         _init_repo(repo)
-        for name in (
-            "guard-sync-manifest.sh",
-            "check-guard-sync-divergence.sh",
-            "sync-attribution-guard-scripts.sh",
-        ):
-            src = ROOT / "scripts/git" / name
-            _commit_file(repo, f"scripts/git/{name}", src.read_bytes(), f"add {name}")
+        if repo == canon:
+            sync_script = _seed_guard_sync_scripts(canon)
+        else:
+            for name in (
+                "guard-sync-manifest.sh",
+                "check-guard-sync-divergence.sh",
+                "sync-attribution-guard-scripts.sh",
+            ):
+                src = ROOT / "scripts/git" / name
+                _commit_file(repo, f"scripts/git/{name}", src.read_bytes(), f"add {name}")
         _commit_file(repo, rel, body, "init audit")
 
     (sibling / rel).write_text("# dirty local\n", encoding="utf-8")
@@ -212,16 +228,45 @@ def test_guard_sync_on_dirty_skip_exits_zero(tmp_path: Path) -> None:
     env["GUARD_SYNC_SKIP_DIVERGENCE_CHECK"] = "1"
     env["WORKSPACE_ROOT"] = str(workspace)
     result = subprocess.run(
-        ["bash", str(SYNC), str(sibling)],
+        ["bash", str(sync_script), str(sibling)],
         cwd=canon,
         capture_output=True,
         text=True,
         encoding="utf-8",
         env=env,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.returncode == 2, result.stdout + result.stderr
     assert "GUARD_SYNC_ON_DIRTY=skip" in result.stderr
     assert (sibling / rel).read_text(encoding="utf-8") == "# dirty local\n"
+
+
+def test_sync_real_failure_is_not_treated_as_dirty_skip(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    canon = workspace / "orama"
+    sibling = workspace / "ac"
+    _init_repo(canon)
+    _init_repo(sibling)
+    sync_script = _seed_guard_sync_scripts(canon, "cursor-hooks-id.sh")
+    _commit_file(sibling, "README.md", "sibling\n")
+
+    blocked = sibling / "scripts/git/cursor-hooks-id.sh"
+    blocked.parent.mkdir(parents=True, exist_ok=True)
+    blocked.mkdir()
+
+    env = os.environ.copy()
+    env["GUARD_SYNC_ON_DIRTY"] = "skip"
+    env["GUARD_SYNC_SKIP_DIVERGENCE_CHECK"] = "1"
+    env["WORKSPACE_ROOT"] = str(workspace)
+    result = subprocess.run(
+        ["bash", str(sync_script), str(sibling)],
+        cwd=canon,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "not a safe regular-file destination" in result.stderr
 
 
 def test_apply_skips_nested_checkout(tmp_path: Path) -> None:
