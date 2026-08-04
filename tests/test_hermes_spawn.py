@@ -47,9 +47,15 @@ def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setenv("HERMES_HOME", str(harness_home))
     monkeypatch.setenv("PERPETUA_TOOLS_ROOT", str(tmp_path / "pt"))
-    pt_src = tmp_path / "pt" / "src"
+    pt_root = tmp_path / "pt"
+    pt_src = pt_root / "src"
     pt_src.mkdir(parents=True)
-    (tmp_path / "pt" / ".git").mkdir()
+    (pt_root / ".git").mkdir()
+    (pt_root / "orchestrator").mkdir()
+    (pt_root / "orchestrator" / "fastapi_app.py").write_text(
+        "# PT root marker for resolve_perp_harness.sh\n",
+        encoding="utf-8",
+    )
     (pt_src / "hermes_harness.py").write_text(
         textwrap.dedent(
             """\
