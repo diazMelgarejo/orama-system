@@ -1,6 +1,8 @@
 # 12. Cursor Cloud — commit attribution guards
 
-**TL;DR:** Cloud agents can inject `Co-authored-by` trailers via managed git hooks. Run `scripts/git/apply-attribution-guard-all-repos.sh` on VM boot; use `commit-clean.sh` when hooks cannot be avoided.
+**TL;DR:** Cloud agents can inject `Co-authored-by` trailers via managed git
+hooks. Run `scripts/git/apply-attribution-guard-all-repos.sh` on VM boot; use
+`commit-clean.sh` when hooks cannot be avoided.
 
 ---
 
@@ -12,7 +14,8 @@
 | `core.hookspath` → `~/.cursor/agent-hooks/<b64-path>/` | Cursor runs `commit-msg.cursor.co-author` |
 | Desktop **Agents → Attribution** | IDE/CLI `Made-with:` trailer; **does not** reliably disable cloud co-author hooks |
 
-There is **no** supported `CURSOR_AGENT=0` or cloud dashboard switch to disable co-author injection today.
+There is **no** supported `CURSOR_AGENT=0` or cloud dashboard switch to disable
+co-author injection today.
 
 ---
 
@@ -90,28 +93,52 @@ Cloud agents and `ManagePullRequest update_pr` **replace the entire PR body** wh
 2. `mkdir -p .git/pr-body-backups` — then save backup under `.git/pr-body-backups/`
 3. Keep original `## Summary` at top; append `## Follow-up:` blocks chronologically
 4. Preserve CodeRabbit auto-generated sections and Cursor metadata below unchanged
-5. Write full merged body: `bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "…" --file …`
+5. Write full merged body:
+   `bash scripts/cursor/append-pr-body.sh <owner/repo> <N> --title "…" --file …`
 
-See `scripts/cursor/append-pr-body.sh`, `bin/orama-system/skills/cursor-pr-body/SKILL.md`, `.cursor/rules/append-only-pr-body.mdc`, `bin/orama-system/cidf/references/integrative-editing-examples.md` §1, Perpetua-Tools `lesson_3b13ab0a45d4`.
+See `scripts/cursor/append-pr-body.sh`,
+`bin/orama-system/skills/cursor-pr-body/SKILL.md`,
+`.cursor/rules/append-only-pr-body.mdc`,
+`bin/orama-system/cidf/references/integrative-editing-examples.md` §1,
+Perpetua-Tools `lesson_3b13ab0a45d4`.
 
 ---
 
 ## Cloud VM install
 
-`.cursor/environment.json` `install` runs `scripts/cursor/cloud-install.sh`, which:
+`.cursor/environment.json` `install` runs
+`scripts/cursor/cloud-install.sh`, which:
 
-- Installs `python3.12-venv` when `ensurepip` is missing (Debian cloud images often lack it)
+- Installs `python3.12-venv` when `ensurepip` is missing (Debian cloud
+  images often lack it)
 - Recreates a broken `.venv` (partial venvs lack `bin/activate`)
-- Clones Perpetua-Tools and AlphaClaw under `$HOME/openclaw-v1` (guards against empty `OPENCLAW_HOME` cloning to `/Perpetua-Tools`)
-- Runs `apply-attribution-guard-all-repos.sh` after sibling repos are present
+- Clones Perpetua-Tools and AlphaClaw under `$HOME/openclaw-v1`
+  (guards against empty `OPENCLAW_HOME` cloning to `/Perpetua-Tools`)
+- Normalizes literal `~/…` and `$HOME/…` env values via
+  `scripts/cursor/lib-normalize-cloud-paths.sh`. Cursor may inject an
+  unexpanded tilde; quoted `"$OPENCLAW_HOME"` does not expand `~`, which
+  previously created nested `<repo>/~/openclaw-v1` clones and failed
+  install
+- Sets `GUARD_SYNC_ON_DIRTY=skip` so mid-PR dirty guard-sync paths warn
+  and skip overwrite instead of failing VM start/install
+- Runs `apply-attribution-guard-all-repos.sh` after sibling repos are
+  present (skips nested checkouts; soft-continues on sync failure in
+  cloud mode)
+
+`start` runs `scripts/cursor/cloud-attribution-bootstrap.sh` with the
+same soft-dirty + path-normalization guarantees (always exits 0).
 
 ---
 
 ## Multi-repo sync
 
-Sibling repos receive the same `scripts/git/*` files via `sync-attribution-guard-scripts.sh` (called from `apply-attribution-guard-all-repos.sh`).
+Sibling repos receive the same `scripts/git/*` files via
+`sync-attribution-guard-scripts.sh` (called from
+`apply-attribution-guard-all-repos.sh`).
 
-**AlphaClaw:** commit and PR on a contrib branch (`cursor/sync-attribution-guards-6421`), not on upstream-tracking `main` — see [13. AlphaClaw fork — contribution branches](13-alphaclaw-fork-contrib-branches.md).
+**AlphaClaw:** commit and PR on a contrib branch
+(`cursor/sync-attribution-guards-6421`), not on upstream-tracking `main` —
+see [13. AlphaClaw fork — contribution branches](13-alphaclaw-fork-contrib-branches.md).
 
 ---
 
