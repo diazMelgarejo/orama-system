@@ -99,8 +99,8 @@ if [[ -x "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh" ]]; the
     source "${REPO_ROOT}/scripts/cursor/lib-normalize-cloud-paths.sh"
     normalize_cloud_openclaw_paths
   fi
-  # Cloud / Cursor agent: never hard-fail VM boot on dirty mid-PR worktrees.
-  if [[ "${CURSOR_AGENT:-}" == "1" || -d /agent/repos ]]; then
+  # Cloud agent only: never hard-fail VM boot on dirty mid-PR worktrees.
+  if [[ "${CURSOR_AGENT:-}" == "1" ]]; then
     export GUARD_SYNC_ON_DIRTY="${GUARD_SYNC_ON_DIRTY:-skip}"
   fi
   bash "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh" || {

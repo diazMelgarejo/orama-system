@@ -143,6 +143,50 @@ def test_normalize_rejects_openclaw_home_inside_repo(tmp_path: Path) -> None:
     assert out.read_text(encoding="utf-8").strip() == str(home / "openclaw-v1")
 
 
+def test_normalize_rederives_junk_sibling_paths(tmp_path: Path) -> None:
+    home = tmp_path / "home"
+    home.mkdir()
+    repo = tmp_path / "orama-system"
+    repo.mkdir()
+    junk_orama = repo / "~" / "openclaw-v1" / "orama-system"
+    junk_pt = repo / "~" / "openclaw-v1" / "Perpetua-Tools"
+    out = tmp_path / "out.txt"
+    home_q = shlex.quote(str(home))
+    junk_orama_q = shlex.quote(str(junk_orama))
+    junk_pt_q = shlex.quote(str(junk_pt))
+    nested_oc_q = shlex.quote(str(repo / "~" / "openclaw-v1"))
+    repo_q = shlex.quote(str(repo))
+    normalize_q = shlex.quote(str(NORMALIZE))
+    out_q = shlex.quote(str(out))
+    script = textwrap.dedent(
+        f"""
+        set -euo pipefail
+        export HOME={home_q}
+        export OPENCLAW_HOME={nested_oc_q}
+        export ORAMA_SYSTEM_PATH={junk_orama_q}
+        export PERPETUA_TOOLS_PATH={junk_pt_q}
+        export ALPHACLAW_INSTALL_DIR='~/openclaw-v1/AlphaClaw'
+        export REPO_ROOT={repo_q}
+        # shellcheck source=/dev/null
+        source {normalize_q}
+        normalize_cloud_openclaw_paths
+        {{
+          printf '%s\\n' "$OPENCLAW_HOME"
+          printf '%s\\n' "$ORAMA_SYSTEM_PATH"
+          printf '%s\\n' "$PERPETUA_TOOLS_PATH"
+          printf '%s\\n' "$ALPHACLAW_INSTALL_DIR"
+        }} > {out_q}
+        """
+    )
+    result = _run_bash(script)
+    assert result.returncode == 0, result.stderr
+    lines = out.read_text(encoding="utf-8").splitlines()
+    assert lines[0] == str(home / "openclaw-v1")
+    assert lines[1] == str(repo)
+    assert lines[2] == str(home / "openclaw-v1" / "Perpetua-Tools")
+    assert lines[3] == str(home / "openclaw-v1" / "AlphaClaw")
+
+
 def test_guard_sync_on_dirty_skip_exits_zero(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     canon = workspace / "orama"
