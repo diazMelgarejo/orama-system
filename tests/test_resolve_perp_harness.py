@@ -183,7 +183,11 @@ def test_resolve_perp_harness_rejects_incomplete_marker(tmp_path: Path) -> None:
 def test_resolve_perp_harness_rejects_symlink_root(tmp_path: Path) -> None:
     isolated_home = tmp_path / "home"
     isolated_home.mkdir()
-    real = _make_pt_root(isolated_home, "real-pt")
+    orama = isolated_home / "orama-system"
+    orama.mkdir()
+    (orama / ".git").mkdir()
+    # Real PT checkout lives outside HOME so crawl cannot bypass the symlink env var.
+    real = _make_pt_root(tmp_path, "real-pt")
     link = isolated_home / "pt-link"
     link.symlink_to(real)
 
@@ -191,8 +195,10 @@ def test_resolve_perp_harness_rejects_symlink_root(tmp_path: Path) -> None:
         func="resolve_perp_harness_script",
         env={
             "HOME": str(isolated_home),
+            "ORAMA_SYSTEM_PATH": str(orama),
             "PERPETUA_TOOLS_PATH": str(link),
         },
+        cwd=orama,
     )
     assert result.returncode != 0
     assert "not resolved" in result.stderr.lower()
