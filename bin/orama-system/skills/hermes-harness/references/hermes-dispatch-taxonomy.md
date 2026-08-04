@@ -63,7 +63,7 @@
 | `cursor-agent --print --model composer-2.5` | L-Fleet | coord_pulse enqueue pick |
 
 **Env:** `ORAMA_SYSTEM_PATH`, `PERPETUA_TOOLS_PATH` must reach coord_pulse via
-**User-level env** or explicit export — scheduled tasks do not load `.env.local`.
+**User-level env** or explicit export — scheduled tasks do not load repo-local gitignored env files.
 
 ## Skill doc requirements
 
