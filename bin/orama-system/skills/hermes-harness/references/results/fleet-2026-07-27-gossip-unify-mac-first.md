@@ -7,7 +7,7 @@
 
 ## SSoT (full runbook)
 
-workspace-mother `references/2026-07-27-pre-pr222-operator-backup-runbook.md`  
+[`fleet-2026-07-27-pre-pr222-backup-runbook.md`](fleet-2026-07-27-pre-pr222-backup-runbook.md)  
 (inbox summary below; agents read inbox + SSoT for detail)
 
 ## Audience

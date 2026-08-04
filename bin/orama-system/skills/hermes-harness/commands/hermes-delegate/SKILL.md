@@ -40,15 +40,23 @@ import sys
 
 WORKER_TIMEOUT_SEC = int(os.environ.get("HERMES_DELEGATE_TIMEOUT_SEC", "1800"))
 
+def is_pt_root(path: str) -> bool:
+    return (
+        os.path.isdir(path)
+        and not os.path.islink(path)
+        and os.path.exists(os.path.join(path, ".git"))
+        and os.path.isfile(os.path.join(path, "orchestrator", "fastapi_app.py"))
+    )
+
 def resolve_pt_root():
     for var in (
-        "PERPETUATOOLSROOT",
-        "PERPETUA_TOOLS_ROOT",
         "PERPETUA_TOOLS_PATH",
         "PT_HOME",
+        "PERPETUA_TOOLS_ROOT",
+        "PERPETUATOOLSROOT",
     ):
         v = os.environ.get(var, "")
-        if v and os.path.exists(os.path.join(v, ".git")):
+        if v and is_pt_root(v):
             return v
     orama_root = os.environ.get(
         "ORAMA_SYSTEM_PATH",
@@ -60,16 +68,10 @@ def resolve_pt_root():
             for line in fh:
                 if line.startswith("PT_DIR="):
                     pt_dir = line.split("=", 1)[1].strip().strip('"')
-                    if pt_dir and os.path.exists(os.path.join(pt_dir, ".git")):
+                    if pt_dir and is_pt_root(pt_dir):
                         return pt_dir
     if orama_root:
         mother = os.path.dirname(os.path.abspath(orama_root))
-
-        def is_pt_root(path: str) -> bool:
-            return (
-                os.path.exists(os.path.join(path, ".git"))
-                and os.path.isfile(os.path.join(path, "orchestrator", "fastapi_app.py"))
-            )
 
         def crawl_pt(base: str, depth: int) -> str | None:
             if is_pt_root(base):
