@@ -103,7 +103,11 @@ See `scripts/cursor/append-pr-body.sh`, `bin/orama-system/skills/cursor-pr-body/
 - Installs `python3.12-venv` when `ensurepip` is missing (Debian cloud images often lack it)
 - Recreates a broken `.venv` (partial venvs lack `bin/activate`)
 - Clones Perpetua-Tools and AlphaClaw under `$HOME/openclaw-v1` (guards against empty `OPENCLAW_HOME` cloning to `/Perpetua-Tools`)
-- Runs `apply-attribution-guard-all-repos.sh` after sibling repos are present
+- Normalizes literal `~/…` and `$HOME/…` env values via `scripts/cursor/lib-normalize-cloud-paths.sh` (Cursor may inject unexpanded tilde; quoted `"$OPENCLAW_HOME"` does not expand `~`, which previously created nested `<repo>/~/openclaw-v1` clones and failed install)
+- Sets `GUARD_SYNC_ON_DIRTY=skip` so mid-PR dirty guard-sync paths warn and skip overwrite instead of failing VM start/install
+- Runs `apply-attribution-guard-all-repos.sh` after sibling repos are present (skips nested checkouts; soft-continues on sync failure in cloud mode)
+
+`start` runs `scripts/cursor/cloud-attribution-bootstrap.sh` with the same soft-dirty + path-normalization guarantees (always exits 0).
 
 ---
 

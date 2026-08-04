@@ -94,7 +94,18 @@ if [[ -x "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh" ]]; the
   export OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
   export PERPETUA_TOOLS_PATH="${PERPETUA_TOOLS_PATH:-$OPENCLAW_HOME/Perpetua-Tools}"
   export ALPHACLAW_INSTALL_DIR="${ALPHACLAW_INSTALL_DIR:-$OPENCLAW_HOME/AlphaClaw}"
-  bash "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh"
+  if [[ -f "${REPO_ROOT}/scripts/cursor/lib-normalize-cloud-paths.sh" ]]; then
+    # shellcheck source=lib-normalize-cloud-paths.sh
+    source "${REPO_ROOT}/scripts/cursor/lib-normalize-cloud-paths.sh"
+    normalize_cloud_openclaw_paths
+  fi
+  # Cloud / Cursor agent: never hard-fail VM boot on dirty mid-PR worktrees.
+  if [[ "${CURSOR_AGENT:-}" == "1" || -d /agent/repos ]]; then
+    export GUARD_SYNC_ON_DIRTY="${GUARD_SYNC_ON_DIRTY:-skip}"
+  fi
+  bash "${REPO_ROOT}/scripts/git/apply-attribution-guard-all-repos.sh" || {
+    echo "warn: apply-attribution-guard-all-repos failed (continuing)" >&2
+  }
 fi
 
 log "complete"
