@@ -15,9 +15,9 @@ Update `WIN_3080_IP` + `LM_STUDIO_WIN_ENDPOINTS` in the repo-local env policy fi
 
 ## On 3080 — run PowerShell script
 
-Copy from Mac USB or pull from OpenClaw references:
+Copy from Mac USB or pull from the operator references tree under `$OPENCLAW_ROOT/references/`:
 
-`OpenClaw/references/2026-07-27-rtx3080-hermes-brain-merge-runbook.ps1`
+`2026-07-27-rtx3080-hermes-brain-merge-runbook.ps1` (workspace-level operator doc; not tracked in this repo)
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\2026-07-27-rtx3080-hermes-brain-merge-runbook.ps1
@@ -30,4 +30,4 @@ powershell -ExecutionPolicy Bypass -File .\2026-07-27-rtx3080-hermes-brain-merge
 3. `install-hermes-harness.ps1 -RunDoctor` (profiles --sync + thin wrappers)
 4. Optional: import `hermes-agent-openclaw-workspace-2026-07-27.zip` → `hermes-monitor` profile
 
-SSoT catalogue: `OpenClaw/references/2026-07-27-comprehensive-catalogue-hermes-profiles.md`
+SSoT catalogue: `2026-07-27-comprehensive-catalogue-hermes-profiles.md` under `$OPENCLAW_ROOT/references/` (workspace-level operator doc; not tracked in this repo)
