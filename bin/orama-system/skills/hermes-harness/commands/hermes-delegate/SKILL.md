@@ -1,9 +1,9 @@
 ---
 name: hermes-delegate
 description: >
-  Spawn 2-5 parallel Hermes AIAgent workers for independent subtasks.
-  Use when a task has genuinely parallel workstreams (e.g. research + coding
-  + review simultaneously). Each worker gets its own isolated context.
+  (L-PT) Run 2-5 parallel PT pipeline workers via spawn_hermes_agent — NOT native
+  Hermes delegate_task. Use for independent subtasks (research + coding + review).
+  Each worker is a separate AIAgent.chat thread from Perpetua-Tools/hermes_harness.py.
 argument-hint: "<task1> | <task2> | <task3>"
 disable-model-invocation: true
 ---
@@ -30,7 +30,7 @@ if (( TASK_COUNT < 2 || TASK_COUNT > 5 )); then
   echo "ERROR: expected 2-5 tasks, got ${TASK_COUNT}" >&2
   exit 1
 fi
-echo "⚡ Spawning ${TASK_COUNT} parallel Hermes workers..."
+echo "⚡ Spawning ${TASK_COUNT} parallel L-PT workers (PT hermes_harness, not delegate_task)..."
 export TASKS_RAW
 python3 <<'PYEOF'
 import concurrent.futures
@@ -62,12 +62,41 @@ def resolve_pt_root():
                     pt_dir = line.split("=", 1)[1].strip().strip('"')
                     if pt_dir and os.path.exists(os.path.join(pt_dir, ".git")):
                         return pt_dir
-    fallback = os.path.join(
-        os.environ.get("OPENCLAW_HOME", os.path.expanduser("~")),
-        "Perpetua-Tools",
-    )
-    if os.path.exists(os.path.join(fallback, ".git")):
-        return fallback
+    if orama_root:
+        mother = os.path.dirname(os.path.abspath(orama_root))
+
+        def is_pt_root(path: str) -> bool:
+            return (
+                os.path.exists(os.path.join(path, ".git"))
+                and os.path.isfile(os.path.join(path, "orchestrator", "fastapi_app.py"))
+            )
+
+        def crawl_pt(base: str, depth: int) -> str | None:
+            if is_pt_root(base):
+                return base
+            if depth <= 0 or not os.path.isdir(base):
+                return None
+            try:
+                for name in os.listdir(base):
+                    candidate = os.path.join(base, name)
+                    if not os.path.isdir(candidate):
+                        continue
+                    if is_pt_root(candidate):
+                        return candidate
+                    found = crawl_pt(candidate, depth - 1)
+                    if found:
+                        return found
+            except OSError:
+                return None
+            return None
+
+        found = crawl_pt(mother, 2)
+        if found:
+            return found
+    home = os.path.expanduser("~")
+    found = crawl_pt(home, 3)
+    if found:
+        return found
     return None
 
 pt_root = resolve_pt_root()
@@ -113,3 +142,6 @@ results.sort(key=lambda row: tasks.index(row["task"]))
 print(json.dumps(results, indent=2))
 PYEOF
 ```
+
+**Dispatch lane:** L-PT — see [`references/hermes-dispatch-taxonomy.md`](../../references/hermes-dispatch-taxonomy.md).
+Native Hermes `delegate_task` subagents (L-H1) are a different runtime; do not conflate.

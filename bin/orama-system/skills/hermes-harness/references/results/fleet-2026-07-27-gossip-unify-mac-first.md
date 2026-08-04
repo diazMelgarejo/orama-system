@@ -7,7 +7,7 @@
 
 ## SSoT (full runbook)
 
-`$OPENCLAW_ROOT/references/2026-07-27-pre-pr222-operator-backup-runbook.md`  
+workspace-mother `references/2026-07-27-pre-pr222-operator-backup-runbook.md`  
 (inbox summary below; agents read inbox + SSoT for detail)
 
 ## Audience
