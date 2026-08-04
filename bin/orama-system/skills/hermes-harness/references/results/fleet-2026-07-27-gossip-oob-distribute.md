@@ -31,8 +31,8 @@
 
 ## SSoT
 
-- `OpenClaw/references/2026-07-27-pre-pr222-operator-backup-runbook.md`
-- Inbox: `fleet-2026-07-27-gossip-unify-mac-first.md` (coord-033)
+- [fleet-2026-07-27-pre-pr222-backup-runbook.md](fleet-2026-07-27-pre-pr222-backup-runbook.md)
+- Inbox: [fleet-2026-07-27-gossip-unify-mac-first.md](fleet-2026-07-27-gossip-unify-mac-first.md) (coord-033)
 
 ## Agent lanes note
 

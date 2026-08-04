@@ -65,7 +65,7 @@ OpenClaw's `status→verify→act` discipline inside `hermes-spawn` /
 | Category | Source | Pattern |
 | -------- | ------ | ------- |
 | **Naming** | `openclaw-skills/skills/openclaw-status/SKILL.md` | `{domain}-{verb}` skill IDs; overlay `extends:` upstream |
-| **Invocation** | `openclaw-skills/references/universal-skill-protocol.md` | `{skill_id, args, agent_id, openclaw_home}` + `{status, files_modified, follow_up_actions}` |
+| **Invocation** | `openclaw-skills/references/universal-skill-protocol.md` | `{skill_id, args, agent_id, home}` — Hermes maps legacy `openclaw_home` → `home` when ingesting OpenClaw envelopes |
 | **Shell I/O** | `openclaw-skills/scripts/json-response.sh` | `set -euo pipefail`; stdout=JSON only; stderr=logs |
 | **Lifecycle** | `openclaw-status` → `openclaw-restart` → `openclaw-stow` | Always audit before mutate; canonical restart sequence |
 | **Secrets** | `openclaw-add-secret` | Never in envelope; Keychain + 3-file propagation |
@@ -331,7 +331,7 @@ Before any merge to `main`, the audit worktree should produce:
 1. **`docs/plans/…-graft-audit.md`** — full Graft Matrix
 2. **`.claude/plans/hermes-openclaw-graft.plan.md`** — executable task breakdown
    (if using PRD flow later)
-3. **Gap scorecard** — % of Nine Skills patterns with Hermes ADOPT/ADAPT coverage
+3. **Gap scorecard** — % of Nine Skills + `codex-openclaw-agent` patterns with Hermes ADOPT/ADAPT coverage
 4. **No code on `main`** until Wave 1 is approved
 
 ---

@@ -17,7 +17,7 @@
 ## What landed
 
 - Combined operator runbook (PT mesh memory + ladder SSoT + conflict resolutions)
-- Saved: workspace-mother `references/2026-07-27-pre-pr222-operator-backup-runbook.md`
+- Saved: [`fleet-2026-07-27-pre-pr222-backup-runbook.md`](fleet-2026-07-27-pre-pr222-backup-runbook.md) (this tree)
 
 ## Action required (all 3 machines from `main`)
 
@@ -85,7 +85,7 @@ Merge orama #222 only when **both** gates pass.
 ## Canonical SSoT
 
 - Ladder: `orama-system/docs/v2/50-mesh-security-migration-ladder.md` (Phase A–D)
-- OpenClaw workspace-mother: `references/2026-07-27-pre-pr222-operator-backup-runbook.md`
+- OpenClaw tracked runbook: [`fleet-2026-07-27-pre-pr222-backup-runbook.md`](fleet-2026-07-27-pre-pr222-backup-runbook.md)
 
 ## Open / deferred
 

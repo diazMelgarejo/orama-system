@@ -23,6 +23,13 @@ def _run_spawn(
     timeout: int = 30,
 ) -> subprocess.CompletedProcess[str]:
     merged = os.environ.copy()
+    for key in (
+        "PERPETUA_TOOLS_PATH",
+        "PT_HOME",
+        "PERPETUA_TOOLS_ROOT",
+        "PERPETUATOOLSROOT",
+    ):
+        merged.pop(key, None)
     merged.update(env or {})
     return subprocess.run(
         ["bash", str(SPAWN_SH), *args],
