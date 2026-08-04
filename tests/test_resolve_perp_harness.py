@@ -204,6 +204,44 @@ def test_resolve_perp_harness_rejects_symlink_root(tmp_path: Path) -> None:
     assert "not resolved" in result.stderr.lower()
 
 
+def test_resolve_perp_harness_rejects_symlink_even_when_real_target_is_crawlable(
+    tmp_path: Path,
+) -> None:
+    """The scenario the isolated symlink test above deliberately excludes
+    (placing real-pt outside HOME so crawl can't reach it at all, which
+    fixed CI flakiness but also stopped exercising this case): an explicit
+    PERPETUA_TOOLS_PATH pointing at a symlink must fail closed even when
+    the *same real target* is also legitimately reachable via the normal
+    crawl fallback (e.g. a user symlinks ~/pt -> ~/repos/Perpetua-Tools
+    while ~/repos is itself a real crawl root). Without the fail-closed
+    fix in resolve_pt_root, an explicit-but-rejected override used to
+    silently fall through to crawl discovery and resolve anyway --
+    defeating the point of rejecting the symlink in the first place.
+    """
+    isolated_home = tmp_path / "home"
+    isolated_home.mkdir()
+    orama = isolated_home / "orama-system"
+    orama.mkdir()
+    (orama / ".git").mkdir()
+    # Real PT checkout lives inside HOME this time -- deliberately
+    # crawl-reachable, unlike the test above.
+    real = _make_pt_root(isolated_home, "real-pt")
+    link = isolated_home / "pt-link"
+    link.symlink_to(real)
+
+    result = _run_resolver(
+        func="resolve_perp_harness_script",
+        env={
+            "HOME": str(isolated_home),
+            "ORAMA_SYSTEM_PATH": str(orama),
+            "PERPETUA_TOOLS_PATH": str(link),
+        },
+        cwd=orama,
+    )
+    assert result.returncode != 0
+    assert "not resolved" in result.stderr.lower()
+
+
 def test_resolve_perp_harness_fails_on_ambiguous_crawl(tmp_path: Path) -> None:
     orama = tmp_path / "orama-system"
     orama.mkdir()
