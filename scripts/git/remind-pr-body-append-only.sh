@@ -25,7 +25,7 @@ PR-BODY-GUARD: open PR #${pr_number} for branch ${branch}
   ${pr_title}
   ${pr_url}
 
-NEVER ManagePullRequest update_pr with delta-only body= — it REPLACES the entire field.
+NEVER call ManagePullRequest update_pr directly for PR-body writes. Use append-pr-body.sh.
 
 LAYER 0 — default for Cursor agents: ManagePullRequest post_comment OR gh pr comment only.
 
@@ -38,8 +38,8 @@ Correct path (append-pr-body.sh):
   4. WRITE  bash scripts/cursor/append-pr-body.sh <owner/repo> ${pr_number} --title "..." --file follow-up.md
      then: PR_BODY_UPDATE_ACK=1 before publish-clean-branch (strict mode)
 
-If you must use update_pr (agent-managed PR only): pass the FULL integrative merged body,
-never the latest paragraph alone. Prefer append-pr-body.sh.
+Do not use ManagePullRequest update_pr as a fallback, even with a full body.
+Use append-pr-body.sh for PR-body updates.
 
 Lessons: lesson_3b13ab0a45d4 lesson_4a38f0e95fcf lesson_6fff093ccb00 lesson_a8f3c2e91d04
 Rules: .cursor/rules/append-only-pr-body.mdc

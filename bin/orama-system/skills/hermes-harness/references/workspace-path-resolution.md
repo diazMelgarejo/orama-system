@@ -42,7 +42,7 @@ marker-valid checkout; discovery succeeds only when exactly one candidate exists
 Multiple matches or unreadable paths → error (never return the first arbitrary
 match).
 
-Implemented in [`../../scripts/resolve_perp_harness.sh`](../../scripts/resolve_perp_harness.sh) — no layout path literals in
+Implemented in [`../scripts/resolve_perp_harness.sh`](../scripts/resolve_perp_harness.sh) — no layout path literals in
 committed resolver code.
 
 ## orama-system repo root
