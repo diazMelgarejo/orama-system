@@ -53,13 +53,26 @@ _finalize_pt_root() {
 
 resolve_pt_root() {
   local var v orama_root pt_dir mother pt_root
+  local any_explicit_var_set=""
   for var in PERPETUA_TOOLS_PATH PT_HOME PERPETUA_TOOLS_ROOT PERPETUATOOLSROOT; do
     v="${!var:-}"
-    if [[ -n "$v" ]] && _is_pt_git_root "$v"; then
-      echo "$v"
-      return 0
+    if [[ -n "$v" ]]; then
+      any_explicit_var_set=1
+      if _is_pt_git_root "$v"; then
+        echo "$v"
+        return 0
+      fi
     fi
   done
+  if [[ -n "$any_explicit_var_set" ]]; then
+    # An explicit override was configured (PERPETUA_TOOLS_PATH / PT_HOME /
+    # PERPETUA_TOOLS_ROOT / PERPETUATOOLSROOT) but none resolved to a valid,
+    # non-symlinked PT git root. Fail closed here rather than falling
+    # through to .paths/crawl discovery -- silently ignoring an explicit,
+    # broken override to go find *some other* PT checkout elsewhere on the
+    # machine is surprising and can silently resolve to the wrong repo.
+    return 1
+  fi
   orama_root="${ORAMA_SYSTEM_PATH:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
   if [[ -n "$orama_root" && -f "$orama_root/.paths" ]]; then
     pt_dir="$(grep '^PT_DIR=' "$orama_root/.paths" | cut -d= -f2- | tr -d '"')"
