@@ -9,29 +9,42 @@ Resolver order mirrors `scripts/discover.py`, `scripts/env/print-lan-peer-token.
 and [`hermes-harness/references/workspace-path-resolution.md`](../../hermes-harness/references/workspace-path-resolution.md).
 
 ```bash
+_is_pt_git_root() {
+  local d="${1%/}"
+  [[ -e "${d}/.git" && -f "${d}/orchestrator/fastapi_app.py" ]]
+}
+
+_crawl_pt_git_roots() {
+  local base="${1%/}" depth="${2:-2}"
+  local d
+  if [[ ! -d "$base" ]]; then return 1; fi
+  if _is_pt_git_root "$base"; then cd "$base" && pwd; return 0; fi
+  if (( depth <= 0 )); then return 1; fi
+  for d in "$base"/*/; do
+    [[ -d "$d" ]] || continue
+    if _is_pt_git_root "$d"; then cd "$d" && pwd; return 0; fi
+    if _crawl_pt_git_roots "$d" $((depth - 1)); then return 0; fi
+  done
+  return 1
+}
+
 _resolve_pt_root() {
   for var in PERPETUATOOLSROOT PERPETUA_TOOLS_ROOT PERPETUA_TOOLS_PATH PT_HOME; do
     local v="${!var:-}"
-    if [[ -n "$v" && -e "$v/.git" ]]; then
-      echo "$v"
-      return 0
-    fi
+    if [[ -n "$v" && _is_pt_git_root "$v" ]]; then echo "$v"; return 0; fi
   done
   local orama_root="${ORAMA_SYSTEM_PATH:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
   if [[ -n "$orama_root" && -f "$orama_root/.paths" ]]; then
     local pt_dir
     pt_dir="$(grep '^PT_DIR=' "$orama_root/.paths" | cut -d= -f2- | tr -d '"')"
-    if [[ -n "$pt_dir" && -e "$pt_dir/.git" ]]; then
-      echo "$pt_dir"
-      return 0
-    fi
+    if [[ -n "$pt_dir" && _is_pt_git_root "$pt_dir" ]]; then echo "$pt_dir"; return 0; fi
   fi
-  local fallback="${OPENCLAW_HOME:-$HOME}/Perpetua-Tools"
-  if [[ -e "$fallback/.git" ]]; then
-    echo "$fallback"
-    return 0
+  if [[ -n "$orama_root" ]]; then
+    local mother
+    mother="$(cd "$orama_root/.." && pwd)"
+    if _crawl_pt_git_roots "$mother" 2; then return 0; fi
   fi
-  return 1
+  _crawl_pt_git_roots "$HOME" 3
 }
 
 PT_ROOT="$(_resolve_pt_root || true)"

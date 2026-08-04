@@ -91,7 +91,7 @@ Archive path: `bin/orama-system/skills/archive/llm-council-orchestration-absorbe
 |--------|------------------|-------------------|
 | OpenClaw live SOUL overlays | Oramasys overlay distillates | `bin/agents/*/SOUL.md` |
 | Raft persona YAML (EDITED-03) | Persona catalog | `bin/agents/personas/*.yaml` |
-| Fleet role map | Staging ↔ OpenClaw ↔ Hermes slug | `bin/agents/REGISTRY.yml` |
+| OpenClaw graft audit (2026-08-04) | Dispatch taxonomy + lane tags + path doctrine | `references/hermes-dispatch-taxonomy.md`, `references/openclaw-workspace-path-doctrine.md`, `references/openclaw-pattern-graft-registry.md`, `bin/agents/REGISTRY.yml` `dispatch_lane` |
 | Hermes profile materialization | Profile SOUL + memory stubs | `scripts/install_hermes_profiles.py` |
 | OpenClaw overlay refresh | Integrative merge from staging | `scripts/sync_openclaw_overlay_from_staging.sh` |
 
