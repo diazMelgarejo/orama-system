@@ -64,5 +64,5 @@ Summary: **mother-of-orama + `$HOME`, not `$OPENCLAW_HOME`**.
 
 ## Fleet notes (Windows)
 
-- Scheduled tasks (`coord_pulse`) do **not** load `.env.local`
+- Scheduled tasks (`coord_pulse`) do **not** load repo-local gitignored env files
 - Set `ORAMA_SYSTEM_PATH` and `PERPETUA_TOOLS_PATH` at **User** scope for Task Scheduler
