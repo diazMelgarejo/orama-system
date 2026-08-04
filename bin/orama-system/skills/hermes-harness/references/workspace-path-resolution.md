@@ -37,7 +37,12 @@ mother="$(dirname "$orama_root")"
 Mirror from PT → orama: crawl ORAMA mother (or `$HOME`) for a git root containing
 `start.sh` or `platform/windows/start.ps1`.
 
-Implemented in `scripts/resolve_perp_harness.sh` — no layout path literals in
+**Fail closed:** symlinked directories are rejected. When crawling, collect every
+marker-valid checkout; discovery succeeds only when exactly one candidate exists.
+Multiple matches or unreadable paths → error (never return the first arbitrary
+match).
+
+Implemented in [`../../scripts/resolve_perp_harness.sh`](../../scripts/resolve_perp_harness.sh) — no layout path literals in
 committed resolver code.
 
 ## orama-system repo root
@@ -63,7 +68,7 @@ Direct PT CLI (only when launcher is unavailable):
 
 | Platform | Snippet |
 | -------- | ------- |
-| Bash (Mac OpenClaw) | `"${PERPETUA_TOOLS_ROOT:-${PERPETUA_TOOLS_PATH:?set PT root}}/scripts/hardware_policy_cli.py" --check-openclaw` |
+| Bash (Mac OpenClaw) | `"${PERPETUA_TOOLS_PATH:-${PT_HOME:-${PERPETUA_TOOLS_ROOT:?set PT root}}}/scripts/hardware_policy_cli.py" --check-openclaw` |
 | PowerShell (Windows Hermes) | `python (Join-Path $env:PERPETUA_TOOLS_ROOT 'scripts\hardware_policy_cli.py') --list` then `--validate <model> win` — **do not** use `--check-openclaw` on Windows |
 
 ## Windows script paths (repo-root relative)
