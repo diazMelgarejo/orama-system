@@ -71,11 +71,24 @@ def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     return tmp_path
 
 
-def test_resolve_perp_harness_fails_without_pt_root() -> None:
+def test_resolve_perp_harness_fails_without_pt_root(tmp_path: Path) -> None:
+    """Fail closed when no valid PT root exists (no env leak from host checkout)."""
+    isolated_home = tmp_path / "home"
+    isolated_home.mkdir()
+    fake_orama = tmp_path / "orama"
+    fake_orama.mkdir()
     proc = subprocess.run(
         ["bash", "-c", f'source "{RESOLVE_SH}"; resolve_perp_harness_script'],
-        cwd=ROOT,
-        env={k: v for k, v in os.environ.items() if not k.startswith("PERPETUA")},
+        cwd=fake_orama,
+        env={
+            k: v
+            for k, v in os.environ.items()
+            if not k.startswith("PERPETUA") and k not in ("OPENCLAW_HOME", "PT_HOME", "PERPETUATOOLSROOT")
+        }
+        | {
+            "HOME": str(isolated_home),
+            "ORAMA_SYSTEM_PATH": str(fake_orama),
+        },
         capture_output=True,
         text=True,
         check=False,
