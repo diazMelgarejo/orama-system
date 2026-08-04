@@ -13,8 +13,8 @@
   },
   // "**/SKILL.md" is broader than ideal (exempts ALL rules, not just
   // MD013) -- a narrower fix IS technically possible and was verified
-  // working: "ignores": ["SKILL.md", "docs/LESSONS.md"] (root-only,
-  // non-recursive glob) plus relying on bin/orama-system/
+  // working: "ignores": ["SKILL.md", "**/LESSONS.md"] (root-only,
+  // non-recursive glob for SKILL.md) plus relying on bin/orama-system/
   // .markdownlint-cli2.jsonc's existing nested MD013 override
   // (line_length: 500) to cover the whole bin/orama-system/skills/**
   // tree via config inheritance. That narrower config was tested
@@ -26,9 +26,20 @@
   // the narrower config now would either fail CI on unrelated
   // pre-existing content or require a large, separate cleanup pass
   // first. Kept the working blanket ignore for now; the narrower config
-  // above is ready to adopt once that cleanup happens.
+  // above is ready to adopt once that cleanup happens. Same
+  // investigation, same finding shape, as Perpetua-Tools's own
+  // .markdownlint-cli2.jsonc -- see that file for the sibling repo's
+  // numbers (418 violations / 87 files).
+  //
+  // "**/LESSONS.md" (not the earlier literal "docs/LESSONS.md") --
+  // this repo has 6 LESSONS.md files (.agent/memory/semantic/,
+  // docs/, 3x docs/distill-fable-5/*/, .claude/lessons/), all the same
+  // machine-rendered/append-only category; the literal path only
+  // covered one of them. All 6 currently pass MD013 anyway (checked
+  // directly, not assumed), but the glob is the more defensive choice
+  // as entries keep growing. Matches Perpetua-Tools's own glob pattern.
   "ignores": [
     "**/SKILL.md",
-    "docs/LESSONS.md"
+    "**/LESSONS.md"
   ]
 }
