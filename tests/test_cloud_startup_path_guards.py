@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shlex
 import stat
 import subprocess
 import textwrap
@@ -80,24 +81,28 @@ def test_normalize_expands_literal_tilde(tmp_path: Path) -> None:
     home = tmp_path / "home"
     home.mkdir()
     out = tmp_path / "out.txt"
+    home_q = shlex.quote(str(home))
+    repo_root_q = shlex.quote(str(tmp_path / "orama"))
+    normalize_q = shlex.quote(str(NORMALIZE))
+    out_q = shlex.quote(str(out))
     script = textwrap.dedent(
         f"""
         set -euo pipefail
-        export HOME={home}
+        export HOME={home_q}
         export OPENCLAW_HOME='~/oc-home'
         export PERPETUA_TOOLS_PATH='~/oc-home/pt-tools'
         export ALPHACLAW_INSTALL_DIR='~/oc-home/ac-tools'
         export ORAMA_SYSTEM_PATH='~/oc-home/orama'
-        export REPO_ROOT={tmp_path / "orama"}
+        export REPO_ROOT={repo_root_q}
         # shellcheck source=/dev/null
-        source "{NORMALIZE}"
+        source {normalize_q}
         normalize_cloud_openclaw_paths
         {{
           printf '%s\\n' "$OPENCLAW_HOME"
           printf '%s\\n' "$PERPETUA_TOOLS_PATH"
           printf '%s\\n' "$ALPHACLAW_INSTALL_DIR"
           printf '%s\\n' "$ORAMA_SYSTEM_PATH"
-        }} > "{out}"
+        }} > {out_q}
         """
     )
     result = _run_bash(script)
@@ -116,16 +121,21 @@ def test_normalize_rejects_openclaw_home_inside_repo(tmp_path: Path) -> None:
     repo.mkdir()
     nested = repo / "~" / "oc-home"
     out = tmp_path / "out.txt"
+    home_q = shlex.quote(str(home))
+    nested_q = shlex.quote(str(nested))
+    repo_q = shlex.quote(str(repo))
+    normalize_q = shlex.quote(str(NORMALIZE))
+    out_q = shlex.quote(str(out))
     script = textwrap.dedent(
         f"""
         set -euo pipefail
-        export HOME={home}
-        export OPENCLAW_HOME={nested}
-        export REPO_ROOT={repo}
+        export HOME={home_q}
+        export OPENCLAW_HOME={nested_q}
+        export REPO_ROOT={repo_q}
         # shellcheck source=/dev/null
-        source "{NORMALIZE}"
+        source {normalize_q}
         normalize_cloud_openclaw_paths
-        printf '%s\\n' "$OPENCLAW_HOME" > "{out}"
+        printf '%s\\n' "$OPENCLAW_HOME" > {out_q}
         """
     )
     result = _run_bash(script)
