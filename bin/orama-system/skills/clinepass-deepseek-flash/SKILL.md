@@ -69,7 +69,9 @@ cline --help
 cline auth --help
 ```
 
-Known local shape verified on Cline CLI `2.14.0`:
+**Historical** — shape verified on Cline CLI `2.14.0`, an older version
+than the one currently installed (see the v3.0.49 findings below). Kept
+for reference only; do not use this shape against a current install:
 
 ```bash
 cline \
@@ -82,8 +84,9 @@ cline \
   "Reply with exactly: CLINE_DEEPSEEK_FLASH_READY"
 ```
 
-If `cline --help` does not list `--auto-approve-all`, use the current
-documented equivalent:
+If `cline --help` does not list `--auto-approve-all` (true for v3.0.49
+and, presumably, anything newer than `2.14.0`), use the current
+documented equivalent instead:
 
 ```bash
 cline \
