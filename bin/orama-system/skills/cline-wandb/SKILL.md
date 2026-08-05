@@ -35,10 +35,15 @@ not invent a private operator identity.
 - Provider: wanDB.ai inference (`https://api.inference.wandb.ai/v1`),
   OpenAI-compatible
 - Team/Project: `$DEEPSEEK_V4_FLASH_WANDB_PROJECT` (set in `.env.local`;
-  never hardcode a private entity/project literal in tracked files)
-- Reasoning: high — requires `extra_body.chat_template_kwargs.enable_thinking:
-  true` on direct API calls; verify the Cline route preserves equivalent
-  behavior or downgrade the reasoning claim
+  never hardcode a private entity/project literal in tracked files).
+  **Do not send this as an `OpenAI-Project` header or SDK `project=`
+  kwarg** — confirmed 2026-08-05 that doing so causes a `401
+  invalid_api_key` on an otherwise-valid key. Kept only for the Python/
+  `weave.init()` tracing path.
+- Reasoning: high, set via `--thinking high` on the `cline` invocation
+  (persisted as `reasoning.effort` in `providers.json`, not an
+  `extra_body` field — `extra_body` is an OpenAI Python SDK-only
+  construct, not a literal raw-HTTP JSON key)
 - Access policy: wanDB-only for this route. Do not silently fall back
   to ClinePass, GLM, Pro, Kimi, OpenRouter, or any other provider key
   path.
@@ -89,17 +94,59 @@ fixed below:
   where `reasoning` is `{"effort": "...", "budgetTokens": ...}`, not
   `{"enabled": bool}`).
 
-Still unverified: actual live connectivity to wanDB.ai's endpoint. No
-wanDB.ai API key exists on this machine yet (checked `.env.local`,
-`.env.glm52`, `.env.openrouter`, `openclaw.json`, and macOS Keychain —
-none). The flag shapes below are now confirmed against the real CLI;
-the route itself still needs a real key before it can be used.
+## Live connectivity verified (2026-08-05)
 
-## Quick Start (flags verified against v3.0.49)
+A real wanDB.ai key and team/project string turned up in
+`orama-system/.env.local` (not found by the earlier machine-wide
+secret sweep, which only checked `~/.openclaw/`'s own env files —
+extracted into the canonical `~/.openclaw/secrets/` + `.env.wandb-deepseek`
+pattern used everywhere else). Three findings from actually exercising
+it, confirmed identically across raw `curl`, the official Python
+`openai` SDK, and the Cline CLI itself:
 
-Initialize once per session with curl and Python smoke tests (see wanDB
-spec in the operator brief), then configure Cline without ever putting
-the key on argv:
+1. **The `OpenAI-Project` header (curl) / `project=` kwarg (Python SDK)
+   breaks auth outright** — `401 invalid_api_key` — on an otherwise
+   valid key. Confirmed by omitting it entirely: `/v1/chat/completions`
+   then returns a real completion. `/v1/models` (no project header at
+   all) also succeeds with the same key, independently confirming this
+   isn't a bad key, just a bad header. The `wandb-deepseek-v4-flash.json.tmpl`
+   profile no longer sends this header; `DEEPSEEK_V4_FLASH_WANDB_PROJECT`
+   is kept in `.env.wandb-deepseek` only for the Python/`weave.init()`
+   tracing path (unrelated to Cline's own request path), not required
+   by `switch-cline-provider.sh`.
+
+2. **Activating a profile in `providers.json` does not make Cline use
+   it.** `lastUsedProvider` is bookkeeping, not a runtime default — the
+   top-level `-P, --provider <id>` flag defaults to `cline` (its own
+   hosted routing) regardless of what's configured under
+   `openai-compatible`. Confirmed by running a bare `cline` invocation
+   right after activating the wandb profile: it silently routed through
+   `openrouter`/`z-ai/glm-5.2` instead. This is the exact "CLI accepts
+   the shape but routes through the wrong provider" failure mode the
+   sibling ClinePass skill already documented — now confirmed to apply
+   here too. `-P openai-compatible` alone isn't enough either: it also
+   picked up a stale cached model from whichever profile was active
+   *before* (`google/gemini-3.1-pro-preview`, from a leftover session
+   default), still pointed at the current baseUrl. Both `-P` and `-m`
+   must be passed explicitly on every invocation.
+
+3. **Still unresolved:** with provider and model both forced correctly
+   (confirmed via `-v`'s `run_start` line reporting the right
+   `providerId`/`modelId`), Cline's own full agentic dispatch fails
+   with a bare `"Bad Request"` from wanDB.ai — no further detail
+   surfaced by any CLI flag checked (`-v`, `--json`), and the session
+   log only records the same generic error, not the wire-level
+   response body. The raw API (curl and the Python SDK, both without
+   the project header) return real completions for the identical
+   model/key, so the credentials and endpoint are confirmed good — the
+   failure is specific to something in Cline's own outgoing request
+   shape (most likely its tool-calling schema, sent on every dispatch
+   regardless of task content) that this wanDB.ai endpoint rejects.
+   Needs either wanDB.ai-side error detail (their dashboard/support) or
+   HTTP-level request tracing (a local proxy) to pin down further —
+   out of scope for this pass.
+
+## Quick Start (flags verified against v3.0.49; step 3 currently fails, see above)
 
 ```bash
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
@@ -108,8 +155,7 @@ mkdir -p "$CLINE_WANDB_WORKSPACE"
 
 # Populate once (see ~/.openclaw/.env.wandb-deepseek for exact steps):
 #   ~/.openclaw/secrets/wandb-deepseek-v4-flash-api-key   (chmod 600)
-#   ~/.openclaw/secrets/wandb-deepseek-v4-flash-project   (chmod 600)
-# then uncomment the two export lines in that file and:
+# then source it:
 source ~/.openclaw/.env.wandb-deepseek
 
 # Writes straight into providers.json — key never touches argv or a
@@ -118,23 +164,26 @@ source ~/.openclaw/.env.wandb-deepseek
 ```
 
 ```bash
+# -P and -m are both required explicitly — see finding 2 above.
 cline --json --thinking high \
+  -P openai-compatible -m deepseek-ai/DeepSeek-V4-Flash \
   -c "$CLINE_WANDB_WORKSPACE" \
   -t 180 \
   "Reply with exactly: CLINE_WANDB_READY"
 ```
 
-Direct API smoke (optional, verifies `enable_thinking`):
+Direct API smoke (confirmed working 2026-08-05 — no `OpenAI-Project`
+header, see finding 1 above; `extra_body` is an OpenAI Python SDK-only
+construct that merges into the top-level body, not a literal JSON key
+to send over raw HTTP, so it's omitted here rather than sent wrong):
 
 ```bash
 curl https://api.inference.wandb.ai/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $DEEPSEEK_V4_FLASH_WANDB" \
-  -H "OpenAI-Project: $DEEPSEEK_V4_FLASH_WANDB_PROJECT" \
   -d '{
     "model": "deepseek-ai/DeepSeek-V4-Flash",
-    "messages": [{"role": "user", "content": "ping"}],
-    "extra_body": {"chat_template_kwargs": {"enable_thinking": true}}
+    "messages": [{"role": "user", "content": "ping"}]
   }'
 ```
 

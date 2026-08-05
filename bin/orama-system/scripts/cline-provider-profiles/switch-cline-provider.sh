@@ -70,7 +70,13 @@ case "$PROFILE" in
     ;;
   wandb-deepseek-v4-flash)
     ENV_FILES=("$HOME/.openclaw/.env.wandb-deepseek")
-    REQUIRED_VARS=("DEEPSEEK_V4_FLASH_WANDB" "DEEPSEEK_V4_FLASH_WANDB_PROJECT")
+    # DEEPSEEK_V4_FLASH_WANDB_PROJECT is NOT required here -- verified
+    # 2026-08-05 that sending it as an OpenAI-Project header on
+    # /v1/chat/completions causes a 401 invalid_api_key on an otherwise
+    # valid key (confirmed via /v1/models succeeding with the same key,
+    # no project header). Kept in .env.wandb-deepseek for the Python/
+    # weave.init() tracing path, which is unrelated to this Cline route.
+    REQUIRED_VARS=("DEEPSEEK_V4_FLASH_WANDB")
     ;;
   bigmodel-glm52)
     ENV_FILES=("$HOME/.openclaw/.env.glm52")
