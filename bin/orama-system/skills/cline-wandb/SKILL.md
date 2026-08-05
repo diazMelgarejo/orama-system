@@ -96,13 +96,12 @@ fixed below:
 
 ## Live connectivity verified (2026-08-05)
 
-A real wanDB.ai key and team/project string turned up in
-`orama-system/.env.local` (not found by the earlier machine-wide
-secret sweep, which only checked `~/.openclaw/`'s own env files —
-extracted into the canonical `~/.openclaw/secrets/` + `.env.wandb-deepseek`
-pattern used everywhere else). Three findings from actually exercising
-it, confirmed identically across raw `curl`, the official Python
-`openai` SDK, and the Cline CLI itself:
+A real wanDB.ai key and team/project string were found in
+`orama-system/.env.local` and extracted into the canonical
+`~/.openclaw/secrets/` + `.env.wandb-deepseek` pattern used by every
+other provider in this ecosystem. Three findings from actually
+exercising it, confirmed identically across raw `curl`, the official
+Python `openai` SDK, and the Cline CLI itself:
 
 1. **The `OpenAI-Project` header (curl) / `project=` kwarg (Python SDK)
    breaks auth outright** — `401 invalid_api_key` — on an otherwise
@@ -159,8 +158,9 @@ mkdir -p "$CLINE_WANDB_WORKSPACE"
 source ~/.openclaw/.env.wandb-deepseek
 
 # Writes straight into providers.json — key never touches argv or a
-# shell history file, unlike `cline auth --apikey`.
-../../scripts/cline-provider-profiles/switch-cline-provider.sh wandb-deepseek-v4-flash
+# shell history file, unlike `cline auth --apikey`. $REPO_ROOT-based so
+# this works regardless of the current working directory.
+"$REPO_ROOT/bin/orama-system/scripts/cline-provider-profiles/switch-cline-provider.sh" wandb-deepseek-v4-flash
 ```
 
 ```bash
