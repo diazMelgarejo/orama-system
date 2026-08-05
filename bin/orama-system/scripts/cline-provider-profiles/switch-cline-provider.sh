@@ -29,15 +29,33 @@
 # tracked form — they resolve from ~/.openclaw/.env.<profile-loader> at
 # swap time, which itself reads from ~/.openclaw/secrets/<name> (0600).
 #
+# Session-backup history (2026-08-05): before overwriting the live
+# "openai-compatible" slot, the previous state is snapshotted to
+# ~/.cline/data/settings/openai-compatible-history/ (outside this repo —
+# a snapshot holds a real resolved secret, never checked in). Idempotent:
+# skipped if the outgoing config is functionally identical to the most
+# recent snapshot (no manual-override drift to capture). Rotates to a
+# maximum of 10 snapshots, oldest evicted first. This exists so a
+# manual override that turns out to work has a "last known good" trail
+# future sessions can inspect or graduate into a new checked-in
+# .json.tmpl profile — not just the 3 profiles this script ships with.
+# The whole read-decide-write sequence (including the backup decision)
+# runs under an flock'd lock file so two concurrent invocations serialize
+# instead of racing, and every write (backup or live config) goes through
+# a same-directory temp file + atomic os.replace — never a direct "w"
+# open of a file another process might be mid-read on.
+#
 # Usage:
 #   switch-cline-provider.sh <profile-name>
 #   switch-cline-provider.sh --list
+#   switch-cline-provider.sh --list-backups
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROVIDERS_JSON="$HOME/.cline/data/settings/providers.json"
-BACKUP_DIR="$HOME/.claude-config-backups"
+BACKUP_HISTORY_DIR="$HOME/.cline/data/settings/openai-compatible-history"
+LOCK_FILE="$HOME/.cline/data/settings/.switch-cline-provider.lock"
 
 usage() {
   echo "Usage: $0 <profile-name>" >&2
@@ -47,6 +65,12 @@ usage() {
     basename "$f" .json.tmpl
   done | sed 's/^/  /' >&2
 }
+
+if [ "${1:-}" = "--list-backups" ]; then
+  mkdir -p "$BACKUP_HISTORY_DIR"
+  ls -1t "$BACKUP_HISTORY_DIR" 2>/dev/null | sed 's/^/  /'
+  exit 0
+fi
 
 if [ "${1:-}" = "--list" ] || [ -z "${1:-}" ]; then
   usage
@@ -106,43 +130,15 @@ if [ "${#MISSING[@]}" -gt 0 ]; then
   exit 1
 fi
 
-TS=$(date +%Y%m%d-%H%M%S)
-mkdir -p "$BACKUP_DIR"
-cp "$PROVIDERS_JSON" "$BACKUP_DIR/cline-providers.json.pre-switch-to-${PROFILE}-${TS}"
-
 # Resolve ${VAR} placeholders and splice into providers.json's
-# "openai-compatible" slot via python — never prints resolved values.
-python3 - "$PROVIDERS_JSON" "$TMPL" "$PROFILE" <<'PYEOF'
-import json, os, re, sys
-from datetime import datetime, timezone
+# "openai-compatible" slot — never prints resolved values. Whole critical
+# section runs under a fcntl.flock'd lock file (a real POSIX syscall via
+# Python's stdlib -- the GNU coreutils `flock` *command* is util-linux-only
+# and not present on macOS/BSD by default, confirmed missing on this
+# machine, so locking happens in Python, not bash). Every write is
+# temp-file-then-atomic-rename; no dict is ever mutated in place. Logic
+# lives in switch_cline_provider.py (extracted for pytest coverage --
+# see tests/test_switch_cline_provider.py).
+mkdir -p "$BACKUP_HISTORY_DIR"
 
-providers_path, tmpl_path, profile = sys.argv[1], sys.argv[2], sys.argv[3]
-
-with open(tmpl_path) as f:
-    raw = f.read()
-
-def resolve(m):
-    name = m.group(1)
-    val = os.environ.get(name)
-    if val is None:
-        raise SystemExit(f"ERROR: template references unset env var {name}")
-    return val
-
-resolved = re.sub(r"\$\{([A-Z0-9_]+)\}", resolve, raw)
-new_block = json.loads(resolved)
-
-with open(providers_path) as f:
-    cfg = json.load(f)
-
-new_block["updatedAt"] = datetime.now(timezone.utc).isoformat()
-new_block["tokenSource"] = f"switch-cline-provider.sh:{profile}"
-
-cfg["providers"]["openai-compatible"] = new_block
-cfg["lastUsedProvider"] = "openai-compatible"
-
-with open(providers_path, "w") as f:
-    json.dump(cfg, f, indent=2)
-    f.write("\n")
-
-print(f"Activated profile: {profile}")
-PYEOF
+python3 "$SCRIPT_DIR/switch_cline_provider.py" "$PROVIDERS_JSON" "$TMPL" "$PROFILE" "$BACKUP_HISTORY_DIR" "$LOCK_FILE"
