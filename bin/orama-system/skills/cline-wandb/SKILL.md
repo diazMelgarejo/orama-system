@@ -178,12 +178,16 @@ cline --json --thinking high \
 Direct API smoke (confirmed working 2026-08-05 — no `OpenAI-Project`
 header, see finding 1 above; `extra_body` is an OpenAI Python SDK-only
 construct that merges into the top-level body, not a literal JSON key
-to send over raw HTTP, so it's omitted here rather than sent wrong):
+to send over raw HTTP, so it's omitted here rather than sent wrong).
+The bearer token is passed via `-K <(...)` (a curl config file through
+process substitution), not `-H`, so it never appears in `ps`/argv or
+shell history — verified directly: `ps aux` during an in-flight request
+shows only the `/dev/fd/N` path, never the token value:
 
 ```bash
 curl https://api.inference.wandb.ai/v1/chat/completions \
+  -K <(printf 'header = "Authorization: Bearer %s"\n' "$DEEPSEEK_V4_FLASH_WANDB") \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $DEEPSEEK_V4_FLASH_WANDB" \
   -d '{
     "model": "deepseek-ai/DeepSeek-V4-Flash",
     "messages": [{"role": "user", "content": "ping"}]

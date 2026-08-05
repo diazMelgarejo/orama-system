@@ -84,9 +84,10 @@ cline \
   "Reply with exactly: CLINE_DEEPSEEK_FLASH_READY"
 ```
 
-If `cline --help` does not list `--auto-approve-all` (true for v3.0.49
-and, presumably, anything newer than `2.14.0`), use the current
-documented equivalent instead:
+If `cline --help` does not list `--auto-approve-all` (confirmed absent
+in v3.0.49 — not verified against any other version; check `cline
+--version` and `cline --help` directly before assuming this applies),
+use the current documented equivalent instead:
 
 ```bash
 cline \

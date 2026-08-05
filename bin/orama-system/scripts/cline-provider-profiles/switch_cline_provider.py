@@ -19,10 +19,17 @@ from datetime import datetime, timezone
 from typing import Any, Mapping, Sequence
 
 MAX_BACKUPS = 10
-# Fields that make two snapshots "the same config" for idempotency
-# purposes -- updatedAt/tokenSource are metadata that always differ and
-# would defeat the no-op-if-unchanged check if included.
-COMPARE_KEYS = ("provider", "apiKey", "model", "baseUrl", "headers", "timeout", "reasoning")
+# Metadata fields that live alongside a provider's "settings" dict (set by
+# this script itself when activating a profile, see switch_provider below)
+# and would always differ between snapshots even for an otherwise-identical
+# config. Excluded defensively so a caller that happens to pass a block
+# containing them still compares correctly -- in the current wiring these
+# never actually appear inside the settings sub-dict itself (they're
+# siblings of "settings", not inside it), so this denylist is a no-op today,
+# but comparing the full mapping (denylist, not an allowlist) means a new
+# settings key added to a future profile template is compared by default
+# instead of silently ignored the way COMPARE_KEYS previously was.
+_METADATA_KEYS = ("updatedAt", "tokenSource")
 
 
 def atomic_write_json(path: str, data: Mapping[str, Any]) -> None:
@@ -52,7 +59,7 @@ def latest_backup(backup_dir: str) -> str | None:
 
 
 def comparable(block: Mapping[str, Any]) -> dict[str, Any]:
-    return {k: block.get(k) for k in COMPARE_KEYS}
+    return {k: v for k, v in block.items() if k not in _METADATA_KEYS}
 
 
 def resolve_template(tmpl_path: str, env: Mapping[str, str] | None = None) -> dict[str, Any]:
