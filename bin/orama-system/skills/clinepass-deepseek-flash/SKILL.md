@@ -65,14 +65,16 @@ Start with local help because Cline CLI flags drift faster than docs:
 
 ```bash
 cline --version
-cline task --help
+cline --help
 cline auth --help
 ```
 
-Known local shape verified on Cline CLI `2.14.0`:
+**Historical** — shape verified on Cline CLI `2.14.0`, an older version
+than the one currently installed (see the v3.0.49 findings below). Kept
+for reference only; do not use this shape against a current install:
 
 ```bash
-cline task \
+cline \
   --json \
   --auto-approve-all \
   --reasoning-effort high \
@@ -82,11 +84,13 @@ cline task \
   "Reply with exactly: CLINE_DEEPSEEK_FLASH_READY"
 ```
 
-If `cline task --help` does not list `--auto-approve-all`, use the current
-documented equivalent:
+If `cline --help` does not list `--auto-approve-all` (confirmed absent
+in v3.0.49 — not verified against any other version; check `cline
+--version` and `cline --help` directly before assuming this applies),
+use the current documented equivalent instead:
 
 ```bash
-cline task \
+cline \
   --json \
   --auto-approve true \
   --thinking high \
@@ -97,6 +101,33 @@ cline task \
 ```
 
 Do not use both variants in the same command.
+
+**Verified 2026-08-05 against installed CLI v3.0.49.** The "current
+documented equivalent" block above is the correct one on this version
+— confirmed live, along with two things worth knowing:
+
+- There is no `task` subcommand. Earlier drafts of this skill and its
+  bundled wrapper script invoked `cline task ...`; that fails with
+  `error: Unknown command or unquoted prompt`. The prompt is a bare
+  positional argument to `cline` itself — fixed in both this file and
+  `scripts/run_clinepass_deepseek_flash.sh`.
+- A single bare word as the entire prompt (e.g. `cline "PING"`) is
+  rejected the same way — Cline treats an unrecognized single token as
+  a possible mistyped subcommand, not a prompt. Multi-word prompts
+  (e.g. `"Reply with exactly: PING_TEST"`) work fine; every smoke
+  prompt in this skill already uses multiple words, so this doesn't
+  affect the examples above, but matters if you improvise a shorter
+  test prompt by hand.
+
+With the CLI-shape bugs fixed, the wrapper script now reaches real
+model dispatch. In the tested configuration (Cline CLI v3.0.49), this
+currently fails with
+`cline-pass/deepseek-v4-flash is not a valid model ID`
+(`provider: openrouter`) — exactly the pre-existing "Observed failure
+mode" documented below: ClinePass isn't authenticated as the active
+route yet, so Cline falls back to another provider that doesn't
+recognize the ClinePass model slug. That's the known auth/config gap,
+not a new bug.
 
 ## Provider Auth Gate
 
@@ -157,7 +188,7 @@ or resolve policy disputes.
 Read-only review:
 
 ```bash
-cline task \
+cline \
   --json \
   --auto-approve-all \
   --reasoning-effort high \
@@ -170,7 +201,7 @@ cline task \
 Plan-first review:
 
 ```bash
-cline task \
+cline \
   -p \
   --json \
   --auto-approve-all \
@@ -185,7 +216,7 @@ Repo-bound implementation, only on a clean branch:
 
 ```bash
 git status --short --branch
-cline task \
+cline \
   -a \
   --json \
   --auto-approve-all \
