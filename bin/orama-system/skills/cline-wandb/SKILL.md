@@ -34,11 +34,17 @@ not invent a private operator identity.
 - Model: `deepseek-ai/DeepSeek-V4-Flash`
 - Provider: wanDB.ai inference (`https://api.inference.wandb.ai/v1`),
   OpenAI-compatible
-- Team/Project: `$DEEPSEEK_V4_FLASH_WANDB_PROJECT` (set in `.env.local`;
-  never hardcode a private entity/project literal in tracked files)
-- Reasoning: high — requires `extra_body.chat_template_kwargs.enable_thinking:
-  true` on direct API calls; verify the Cline route preserves equivalent
-  behavior or downgrade the reasoning claim
+- Team/Project: `$DEEPSEEK_V4_FLASH_WANDB_PROJECT` (export via the canonical
+  OpenClaw secrets layout; never hardcode a private entity/project literal
+  in tracked files).
+  **Do not send this as an `OpenAI-Project` header or SDK `project=`
+  kwarg** — confirmed 2026-08-05 that doing so causes a `401
+  invalid_api_key` on an otherwise-valid key. Kept only for the Python/
+  `weave.init()` tracing path.
+- Reasoning: high, set via `--thinking high` on the `cline` invocation
+  (persisted as `reasoning.effort` in `providers.json`, not an
+  `extra_body` field — `extra_body` is an OpenAI Python SDK-only
+  construct, not a literal raw-HTTP JSON key)
 - Access policy: wanDB-only for this route. Do not silently fall back
   to ClinePass, GLM, Pro, Kimi, OpenRouter, or any other provider key
   path.
@@ -58,74 +64,138 @@ Before any cloud-bound request or repository-bound execution:
 1. Run `security-reviewer` on the sanitized task scope and workspace
    choice. **Stop** if approval is missing or rejected.
 2. Confirm prompts use only a sanitized summary or an explicitly
-   allowlisted workspace — never raw secrets, `.env.local`, or
+   allowlisted workspace — never raw secrets, untracked dotenv files, or
    unredacted repo paths.
 3. Block external API calls, authentication changes, and filesystem
    mutations until approval and workspace validation succeed. Privacy
    bullets alone are not enforcement.
 
-## ⚠️ Needs local verification before first real use
+## Verified against installed CLI (2026-08-05)
 
-Cline CLI's exact flag shape for a custom OpenAI-compatible provider
-(base URL + API key, as opposed to a named provider like `clinepass`)
-was **not verified against a live `cline` CLI in this drafting pass** —
-unlike ClinePass, where the sibling skill's flags were confirmed
-against an actual installed CLI version. This entire skill's real-world
-review and results verification is deferred until a macOS and/or
-Windows machine with `cline` installed is available. Before relying on
-this route for anything beyond a dry read of its instructions:
+Confirmed live against Cline CLI v3.0.49 (`cline --version`, `cline
+--help`, `cline auth --help`). Three real flag-shape bugs found and
+fixed below:
 
-```bash
-cline --version
-cline --help
-cline auth --help
-```
+- `--reasoning-effort <level>` does not exist. The real flag is
+  `--thinking <level>` (`none|low|medium|high|xhigh`).
+- `-a` is not a valid shorthand for auto-approval. The real flag is
+  `--auto-approve <boolean>`, which requires an explicit `true`/`false`.
+- `cline auth --provider openai-compatible --baseurl ... --modelid ...`
+  (no `--apikey`) only sets the base URL and model — it does **not**
+  persist an API key. `cline auth` does support `-k/--apikey <key>` for
+  that, but supplying it means the literal secret sits in `argv` (briefly
+  visible via `ps`/shell history) — the exact thing this skill's own
+  contract says never to do. Use
+  [`../../scripts/cline-provider-profiles/switch-cline-provider.sh`](../../scripts/cline-provider-profiles/switch-cline-provider.sh)
+  instead: it writes the resolved key straight into
+  `~/.cline/data/settings/providers.json`, never through a command-line
+  argument. Confirmed empirically: `cline auth --apikey <key>` and this
+  script both write to the identical schema Cline's provider store
+  expects (`settings.provider/apiKey/model/baseUrl/headers/timeout/reasoning`,
+  where `reasoning` is `{"effort": "...", "budgetTokens": ...}`, not
+  `{"enabled": bool}`).
 
-Confirm whether `cline auth` supports a custom base URL + bearer key
-via environment/config (not argv), or whether wanDB.ai needs to be
-added as a named provider first. The dispatch patterns below use a
-plausible starting point — verify and correct against real `--help`
-output the same way the ClinePass skill's own "Verify Current CLI
-Shape" section does, and update this section once confirmed.
+## Live connectivity verified (2026-08-05)
 
-## Quick Start (flags to verify, see above)
+Credentials were loaded through the canonical OpenClaw secrets layout
+(`~/.openclaw/secrets/` plus exported `$DEEPSEEK_V4_FLASH_WANDB` /
+`$DEEPSEEK_V4_FLASH_WANDB_PROJECT` env vars) used by every other
+provider in this ecosystem. Three findings from actually exercising it,
+confirmed identically across raw HTTP smoke tests, the official Python
+`openai` SDK, and the Cline CLI itself:
 
-Initialize once per session with curl and Python smoke tests (see wanDB
-spec in the operator brief), then configure Cline without exposing the
-key on argv:
+1. **The `OpenAI-Project` header (curl) / `project=` kwarg (Python SDK)
+   breaks auth outright** — `401 invalid_api_key` — on an otherwise
+   valid key. Confirmed by omitting it entirely: `/v1/chat/completions`
+   then returns a real completion. `/v1/models` (no project header at
+   all) also succeeds with the same key, independently confirming this
+   isn't a bad key, just a bad header. The `wandb-deepseek-v4-flash.json.tmpl`
+   profile no longer sends this header; `DEEPSEEK_V4_FLASH_WANDB_PROJECT`
+   is kept in `$DEEPSEEK_V4_FLASH_WANDB_PROJECT` only for the Python/
+   `weave.init()` tracing path (unrelated to Cline's own request path),
+   not required by `switch-cline-provider.sh`.
+
+2. **Activating a profile in `providers.json` does not make Cline use
+   it.** `lastUsedProvider` is bookkeeping, not a runtime default — the
+   top-level `-P, --provider <id>` flag defaults to `cline` (its own
+   hosted routing) regardless of what's configured under
+   `openai-compatible`. Confirmed by running a bare `cline` invocation
+   right after activating the wandb profile: it silently routed through
+   `openrouter`/`z-ai/glm-5.2` instead. This is the exact "CLI accepts
+   the shape but routes through the wrong provider" failure mode the
+   sibling ClinePass skill already documented — now confirmed to apply
+   here too. `-P openai-compatible` alone isn't enough either: it also
+   picked up a stale cached model from whichever profile was active
+   *before* (`google/gemini-3.1-pro-preview`, from a leftover session
+   default), still pointed at the current baseUrl. Both `-P` and `-m`
+   must be passed explicitly on every invocation.
+
+3. **Still unresolved:** with provider and model both forced correctly
+   (confirmed via `-v`'s `run_start` line reporting the right
+   `providerId`/`modelId`), Cline's own full agentic dispatch fails
+   with a bare `"Bad Request"` from wanDB.ai — no further detail
+   surfaced by any CLI flag checked (`-v`, `--json`), and the session
+   log only records the same generic error, not the wire-level
+   response body. The raw API (curl and the Python SDK, both without
+   the project header) return real completions for the identical
+   model/key, so the credentials and endpoint are confirmed good — the
+   failure is specific to something in Cline's own outgoing request
+   shape (most likely its tool-calling schema, sent on every dispatch
+   regardless of task content) that this wanDB.ai endpoint rejects.
+   Needs either wanDB.ai-side error detail (their dashboard/support) or
+   HTTP-level request tracing (a local proxy) to pin down further —
+   out of scope for this pass.
+
+## Quick Start (flags verified against v3.0.49; step 3 currently fails, see above)
 
 ```bash
 export REPO_ROOT="$(git rev-parse --show-toplevel)"
 export CLINE_WANDB_WORKSPACE="${HOME}/.gstack/cline-wandb"
 mkdir -p "$CLINE_WANDB_WORKSPACE"
 
-# Key must already be in the environment from .env.local — never on argv
-: "${DEEPSEEK_V4_FLASH_WANDB:?set in .env.local}"
-: "${DEEPSEEK_V4_FLASH_WANDB_PROJECT:?set in .env.local}"
+# Populate once via canonical secrets layout (see switch-cline-provider.sh):
+#   ~/.openclaw/secrets/wandb-deepseek-v4-flash-api-key   (chmod 600)
+# Only DEEPSEEK_V4_FLASH_WANDB is required here -- matches
+# switch-cline-provider.sh's own REQUIRED_VARS, which deliberately
+# doesn't include DEEPSEEK_V4_FLASH_WANDB_PROJECT (that var is only
+# consumed by the separate Python/weave.init() tracing path documented
+# in the Contract section above, not this provider-switch path).
+if [ -z "${DEEPSEEK_V4_FLASH_WANDB:-}" ]; then
+  echo "ERROR: DEEPSEEK_V4_FLASH_WANDB unset" >&2
+  exit 1
+fi
 
-cline auth --provider openai-compatible \
-  --baseurl https://api.inference.wandb.ai/v1 \
-  --modelid deepseek-ai/DeepSeek-V4-Flash
+# Writes straight into providers.json — key never touches argv or a
+# shell history file, unlike `cline auth --apikey`. $REPO_ROOT-based so
+# this works regardless of the current working directory.
+"$REPO_ROOT/bin/orama-system/scripts/cline-provider-profiles/switch-cline-provider.sh" wandb-deepseek-v4-flash
 ```
 
 ```bash
-cline --json --reasoning-effort high \
+# -P and -m are both required explicitly — see finding 2 above.
+cline --json --thinking high \
+  -P openai-compatible -m deepseek-ai/DeepSeek-V4-Flash \
   -c "$CLINE_WANDB_WORKSPACE" \
   -t 180 \
   "Reply with exactly: CLINE_WANDB_READY"
 ```
 
-Direct API smoke (optional, verifies `enable_thinking`):
+Direct API smoke (confirmed working 2026-08-05 — no `OpenAI-Project`
+header, see finding 1 above; `extra_body` is an OpenAI Python SDK-only
+construct that merges into the top-level body, not a literal JSON key
+to send over raw HTTP, so it's omitted here rather than sent wrong).
+The bearer token is passed via `-K <(...)` (a curl config file through
+process substitution), not `-H`, so it never appears in `ps`/argv or
+shell history — verified directly: `ps aux` during an in-flight request
+shows only the `/dev/fd/N` path, never the token value:
 
 ```bash
 curl https://api.inference.wandb.ai/v1/chat/completions \
+  -K <(printf 'header = "Authorization: Bearer %s"\n' "$DEEPSEEK_V4_FLASH_WANDB") \
   -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $DEEPSEEK_V4_FLASH_WANDB" \
-  -H "OpenAI-Project: $DEEPSEEK_V4_FLASH_WANDB_PROJECT" \
   -d '{
     "model": "deepseek-ai/DeepSeek-V4-Flash",
-    "messages": [{"role": "user", "content": "ping"}],
-    "extra_body": {"chat_template_kwargs": {"enable_thinking": true}}
+    "messages": [{"role": "user", "content": "ping"}]
   }'
 ```
 
@@ -143,7 +213,7 @@ prompts, tracked files, shared command history, or logs.
 ## Dispatch Patterns
 
 Set a conservative command allowlist for review/planning. Do **not**
-use `--auto-approve-all` until explicit human confirmation for
+pass `--auto-approve true` until explicit human confirmation for
 implementation.
 
 ```bash
@@ -153,7 +223,7 @@ export CLINE_COMMAND_PERMISSIONS='read,search,web_fetch'
 Read-only review (non-mutating):
 
 ```bash
-cline --json --reasoning-effort high \
+cline --json --thinking high \
   -c "$CLINE_WANDB_WORKSPACE" \
   -t 300 \
   "Review this sanitized summary. Do not access files. Return risks and tests."
@@ -162,7 +232,7 @@ cline --json --reasoning-effort high \
 Plan-first review (non-mutating):
 
 ```bash
-cline -p --json --reasoning-effort high \
+cline -p --json --thinking high \
   -c "$CLINE_WANDB_WORKSPACE" \
   -t 300 \
   "Create a concise implementation plan from this sanitized summary."
@@ -186,7 +256,7 @@ confirmation** to enable tool approval:
 
 ```bash
 export CLINE_COMMAND_PERMISSIONS='read,write,search,execute'
-cline -a --json --reasoning-effort high \
+cline --auto-approve true --json --thinking high \
   -m deepseek-ai/DeepSeek-V4-Flash \
   -c "$REPO_ROOT" \
   -t 900 \
