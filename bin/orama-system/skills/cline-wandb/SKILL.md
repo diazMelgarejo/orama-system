@@ -34,8 +34,9 @@ not invent a private operator identity.
 - Model: `deepseek-ai/DeepSeek-V4-Flash`
 - Provider: wanDB.ai inference (`https://api.inference.wandb.ai/v1`),
   OpenAI-compatible
-- Team/Project: `$DEEPSEEK_V4_FLASH_WANDB_PROJECT` (set in `.env.local`;
-  never hardcode a private entity/project literal in tracked files).
+- Team/Project: `$DEEPSEEK_V4_FLASH_WANDB_PROJECT` (export via the canonical
+  OpenClaw secrets layout; never hardcode a private entity/project literal
+  in tracked files).
   **Do not send this as an `OpenAI-Project` header or SDK `project=`
   kwarg** — confirmed 2026-08-05 that doing so causes a `401
   invalid_api_key` on an otherwise-valid key. Kept only for the Python/
@@ -63,7 +64,7 @@ Before any cloud-bound request or repository-bound execution:
 1. Run `security-reviewer` on the sanitized task scope and workspace
    choice. **Stop** if approval is missing or rejected.
 2. Confirm prompts use only a sanitized summary or an explicitly
-   allowlisted workspace — never raw secrets, `.env.local`, or
+   allowlisted workspace — never raw secrets, untracked dotenv files, or
    unredacted repo paths.
 3. Block external API calls, authentication changes, and filesystem
    mutations until approval and workspace validation succeed. Privacy
@@ -96,12 +97,12 @@ fixed below:
 
 ## Live connectivity verified (2026-08-05)
 
-A real wanDB.ai key and team/project string were found in
-`orama-system/.env.local` and extracted into the canonical
-`~/.openclaw/secrets/` + `.env.wandb-deepseek` pattern used by every
-other provider in this ecosystem. Three findings from actually
-exercising it, confirmed identically across raw `curl`, the official
-Python `openai` SDK, and the Cline CLI itself:
+Credentials were loaded through the canonical OpenClaw secrets layout
+(`~/.openclaw/secrets/` plus exported `$DEEPSEEK_V4_FLASH_WANDB` /
+`$DEEPSEEK_V4_FLASH_WANDB_PROJECT` env vars) used by every other
+provider in this ecosystem. Three findings from actually exercising it,
+confirmed identically across raw HTTP smoke tests, the official Python
+`openai` SDK, and the Cline CLI itself:
 
 1. **The `OpenAI-Project` header (curl) / `project=` kwarg (Python SDK)
    breaks auth outright** — `401 invalid_api_key` — on an otherwise
@@ -110,9 +111,9 @@ Python `openai` SDK, and the Cline CLI itself:
    all) also succeeds with the same key, independently confirming this
    isn't a bad key, just a bad header. The `wandb-deepseek-v4-flash.json.tmpl`
    profile no longer sends this header; `DEEPSEEK_V4_FLASH_WANDB_PROJECT`
-   is kept in `.env.wandb-deepseek` only for the Python/`weave.init()`
-   tracing path (unrelated to Cline's own request path), not required
-   by `switch-cline-provider.sh`.
+   is kept in `$DEEPSEEK_V4_FLASH_WANDB_PROJECT` only for the Python/
+   `weave.init()` tracing path (unrelated to Cline's own request path),
+   not required by `switch-cline-provider.sh`.
 
 2. **Activating a profile in `providers.json` does not make Cline use
    it.** `lastUsedProvider` is bookkeeping, not a runtime default — the
@@ -152,10 +153,12 @@ export REPO_ROOT="$(git rev-parse --show-toplevel)"
 export CLINE_WANDB_WORKSPACE="${HOME}/.gstack/cline-wandb"
 mkdir -p "$CLINE_WANDB_WORKSPACE"
 
-# Populate once (see ~/.openclaw/.env.wandb-deepseek for exact steps):
+# Populate once via canonical secrets layout (see switch-cline-provider.sh):
 #   ~/.openclaw/secrets/wandb-deepseek-v4-flash-api-key   (chmod 600)
-# then source it:
-source ~/.openclaw/.env.wandb-deepseek
+if [ -z "${DEEPSEEK_V4_FLASH_WANDB:-}" ] || [ -z "${DEEPSEEK_V4_FLASH_WANDB_PROJECT:-}" ]; then
+  echo "ERROR: DEEPSEEK_V4_FLASH_WANDB / DEEPSEEK_V4_FLASH_WANDB_PROJECT unset" >&2
+  exit 1
+fi
 
 # Writes straight into providers.json — key never touches argv or a
 # shell history file, unlike `cline auth --apikey`. $REPO_ROOT-based so
