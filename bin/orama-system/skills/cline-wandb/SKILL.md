@@ -155,8 +155,13 @@ mkdir -p "$CLINE_WANDB_WORKSPACE"
 
 # Populate once via canonical secrets layout (see switch-cline-provider.sh):
 #   ~/.openclaw/secrets/wandb-deepseek-v4-flash-api-key   (chmod 600)
-if [ -z "${DEEPSEEK_V4_FLASH_WANDB:-}" ] || [ -z "${DEEPSEEK_V4_FLASH_WANDB_PROJECT:-}" ]; then
-  echo "ERROR: DEEPSEEK_V4_FLASH_WANDB / DEEPSEEK_V4_FLASH_WANDB_PROJECT unset" >&2
+# Only DEEPSEEK_V4_FLASH_WANDB is required here -- matches
+# switch-cline-provider.sh's own REQUIRED_VARS, which deliberately
+# doesn't include DEEPSEEK_V4_FLASH_WANDB_PROJECT (that var is only
+# consumed by the separate Python/weave.init() tracing path documented
+# in the Contract section above, not this provider-switch path).
+if [ -z "${DEEPSEEK_V4_FLASH_WANDB:-}" ]; then
+  echo "ERROR: DEEPSEEK_V4_FLASH_WANDB unset" >&2
   exit 1
 fi
 

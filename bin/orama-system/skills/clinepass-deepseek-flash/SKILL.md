@@ -120,7 +120,8 @@ documented equivalent" block above is the correct one on this version
   test prompt by hand.
 
 With the CLI-shape bugs fixed, the wrapper script now reaches real
-model dispatch. On this machine it currently fails with
+model dispatch. In the tested configuration (Cline CLI v3.0.49), this
+currently fails with
 `cline-pass/deepseek-v4-flash is not a valid model ID`
 (`provider: openrouter`) — exactly the pre-existing "Observed failure
 mode" documented below: ClinePass isn't authenticated as the active

@@ -39,7 +39,7 @@ def _read_json(path: Path) -> Any:
 
 def _write_json(path: Path, data: Mapping[str, Any]) -> None:
     with path.open("w") as f:
-        json.dump(data, f)
+        json.dump(data, f, indent=2)
 
 
 def _providers_cfg(
