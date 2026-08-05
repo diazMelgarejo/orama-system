@@ -12,6 +12,11 @@ Dispatch Cline non-interactively with:
 
 The script adapts to Cline CLI flag drift between --auto-approve-all and
 --auto-approve true, and between --reasoning-effort high and --thinking high.
+
+Fixed 2026-08-05: earlier versions of this script invoked `cline task ...`.
+There is no `task` subcommand on the real CLI (verified against v3.0.49) --
+the prompt is a bare positional argument to `cline` itself. Every prior
+invocation of this script failed with "Unknown command or unquoted prompt".
 USAGE
 }
 
@@ -36,7 +41,8 @@ while [[ $# -gt 0 ]]; do
       shift
       ;;
     --act|-a)
-      mode="--act"
+      # act is the CLI's default when --plan is absent; no flag to pass.
+      mode=""
       shift
       ;;
     --help|-h)
@@ -65,7 +71,7 @@ if ! command -v cline >/dev/null 2>&1; then
   exit 127
 fi
 
-help_text="$(cline task --help 2>&1 || true)"
+help_text="$(cline --help 2>&1 || true)"
 
 auto_args=()
 if grep -q -- '--auto-approve-all' <<<"$help_text"; then
@@ -81,7 +87,7 @@ elif grep -q -- '--thinking' <<<"$help_text"; then
   reasoning_args=(--thinking high)
 fi
 
-cmd=(cline task --json)
+cmd=(cline --json)
 [[ -z "$mode" ]] || cmd+=("$mode")
 cmd+=("${auto_args[@]}")
 cmd+=("${reasoning_args[@]}")
