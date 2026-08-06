@@ -182,6 +182,8 @@ function normalize_result(raw, command, action):
   raw.files_modified = raw.files_modified ?? []
   raw.follow_up_actions = raw.follow_up_actions ?? []
   raw.warnings = raw.warnings ?? []
+  if raw.status in ["partial", "needs_input", "blocked", "error"] and raw.follow_up_actions is empty:
+    raw.follow_up_actions = ["inspect " + command + " result for required follow-up"]
   if raw.status == "ok" and raw.error is missing:
     raw.error = null
   raw.command = raw.command ?? command

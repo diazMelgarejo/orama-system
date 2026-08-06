@@ -87,6 +87,7 @@ def test_check_pt_root_uses_adjacent_resolver_not_repo_root(
     monkeypatch.setenv("HOME", str(tmp_path / "home"))
     for key in (
         "PERPETUA_TOOLS_PATH",
+        "PT_DIR",
         "PT_HOME",
         "PERPETUA_TOOLS_ROOT",
         "PERPETUATOOLSROOT",

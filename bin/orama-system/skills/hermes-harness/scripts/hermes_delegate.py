@@ -6,8 +6,10 @@ import argparse
 import concurrent.futures
 import json
 import os
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 from typing import Any
 
@@ -36,39 +38,89 @@ def _canonical_result(
     }
 
 
-def _worker_subprocess_code(pt_root: str, task: str) -> str:
-    return (
-        "import json, os, sys\n"
-        f"sys.path.insert(0, {os.path.join(pt_root, 'src')!r})\n"
-        "from hermes_harness import spawn_hermes_agent\n"
-        f"payload = spawn_hermes_agent('executor', {task!r})\n"
-        "print(json.dumps(payload, default=str))\n"
-    )
+# Worker inputs travel as argv, not interpolated into generated source.
+# repr() already escapes safely and this runs via an argv list (no shell,
+# no injection) -- the point of argv over interpolation is maintainability:
+# no escaping behavior for the worker body to stay coupled to.
+_WORKER_SOURCE = (
+    "import json, sys\n"
+    "sys.path.insert(0, sys.argv[1])\n"
+    "from hermes_harness import spawn_hermes_agent\n"
+    "payload = spawn_hermes_agent('executor', sys.argv[2])\n"
+    "print(json.dumps(payload, default=str))\n"
+)
 
 
-def _launch_worker_subprocess(pt_root: str, task: str) -> subprocess.Popen[str]:
-    return subprocess.Popen(
-        [sys.executable, "-c", _worker_subprocess_code(pt_root, task)],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+class _Worker:
+    """A launched worker: its process plus CLAYGO temp files for its output.
+
+    stdout/stderr are redirected to temp files rather than subprocess.PIPE.
+    A chatty worker writing more than the OS pipe buffer (~64KB) would
+    otherwise deadlock: the child blocks writing to a full pipe nobody is
+    draining while the parent's poll loop only reads pipes after a worker
+    exits. Files never fill up under the writer.
+    """
+
+    def __init__(self, task: str, pt_root: str) -> None:
+        self.task = task
+        self._stdout_fh = tempfile.NamedTemporaryFile(
+            mode="w+", prefix="hermes-delegate-out-", delete=False
+        )
+        self._stderr_fh = tempfile.NamedTemporaryFile(
+            mode="w+", prefix="hermes-delegate-err-", delete=False
+        )
+        self.proc = subprocess.Popen(
+            [sys.executable, "-c", _WORKER_SOURCE, os.path.join(pt_root, "src"), task],
+            stdout=self._stdout_fh,
+            stderr=self._stderr_fh,
+            text=True,
+            start_new_session=True,  # own process group -> killable as a unit
+        )
+
+    def cleanup(self) -> None:
+        self._stdout_fh.close()
+        self._stderr_fh.close()
+        for path in (self._stdout_fh.name, self._stderr_fh.name):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+
+    def read_output(self) -> tuple[str, str]:
+        self._stdout_fh.flush()
+        self._stderr_fh.flush()
+        with open(self._stdout_fh.name, encoding="utf-8") as f:
+            stdout = f.read()
+        with open(self._stderr_fh.name, encoding="utf-8") as f:
+            stderr = f.read()
+        return stdout, stderr
 
 
-def _terminate_worker(proc: subprocess.Popen[str]) -> None:
+def _terminate_worker(worker: _Worker) -> None:
+    proc = worker.proc
     if proc.poll() is not None:
-        proc.communicate()
+        proc.wait()
         return
-    proc.kill()
     try:
-        proc.communicate(timeout=5)
+        os.killpg(proc.pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        proc.terminate()
+    try:
+        proc.wait(timeout=5)
     except subprocess.TimeoutExpired:
-        pass
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
 
 
-def _parse_worker_output(proc: subprocess.Popen[str]) -> dict[str, Any]:
-    stdout, stderr = proc.communicate()
-    if proc.returncode != 0:
+def _parse_worker_output(worker: _Worker) -> dict[str, Any]:
+    stdout, stderr = worker.read_output()
+    if worker.proc.returncode != 0:
         detail = (stderr or stdout or "worker failed").strip()
         raise RuntimeError(detail)
     out = (stdout or "").strip()
@@ -95,53 +147,54 @@ def _run_subprocess_workers(
     """
     rows: list[dict[str, Any]] = []
     follow_up: list[str] = []
-    launched: list[tuple[str, subprocess.Popen[str]]] = []
+    launched: list[_Worker] = []
 
     try:
         queue = list(tasks)
-        pending: dict[subprocess.Popen[str], str] = {}
+        pending: list[_Worker] = []
         deadline = time.monotonic() + worker_timeout_sec
 
         while queue or pending:
             while queue and len(pending) < max_concurrent:
                 task = queue.pop(0)
-                proc = _launch_worker_subprocess(pt_root, task)
-                launched.append((task, proc))
-                pending[proc] = task
+                worker = _Worker(task, pt_root)
+                launched.append(worker)
+                pending.append(worker)
 
             if time.monotonic() >= deadline:
                 break
 
-            still_pending: dict[subprocess.Popen[str], str] = {}
-            for proc, task in pending.items():
-                if proc.poll() is None:
-                    still_pending[proc] = task
+            still_pending: list[_Worker] = []
+            for worker in pending:
+                if worker.proc.poll() is None:
+                    still_pending.append(worker)
                     continue
                 try:
-                    payload = _parse_worker_output(proc)
-                    rows.append({"task": task, "status": "ok", "result": payload})
+                    payload = _parse_worker_output(worker)
+                    rows.append({"task": worker.task, "status": "ok", "result": payload})
                 except Exception as exc:  # noqa: BLE001
-                    rows.append({"task": task, "status": "error", "error": str(exc)})
-                    follow_up.append(f"inspect/retry task: {task[:80]}")
+                    rows.append({"task": worker.task, "status": "error", "error": str(exc)})
+                    follow_up.append(f"inspect/retry task: {worker.task[:80]}")
 
             pending = still_pending
             if pending or queue:
                 time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
 
-        for proc, task in pending.items():
-            _terminate_worker(proc)
+        for worker in pending:
+            _terminate_worker(worker)
             msg = f"worker did not complete within {worker_timeout_sec}s"
-            rows.append({"task": task, "status": "error", "error": msg})
-            follow_up.append(f"retry task: {task[:80]}")
+            rows.append({"task": worker.task, "status": "error", "error": msg})
+            follow_up.append(f"retry task: {worker.task[:80]}")
 
         for task in queue:
             msg = f"worker did not start within {worker_timeout_sec}s (concurrency cap)"
             rows.append({"task": task, "status": "error", "error": msg})
             follow_up.append(f"retry task: {task[:80]}")
     finally:
-        for _task, proc in launched:
-            if proc.poll() is None:
-                _terminate_worker(proc)
+        for worker in launched:
+            if worker.proc.poll() is None:
+                _terminate_worker(worker)
+            worker.cleanup()
 
     return rows, follow_up
 
