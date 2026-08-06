@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,7 @@ INSTALLER = (
 
 
 @pytest.fixture
-def installer(monkeypatch, tmp_path):
+def installer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> types.ModuleType:
     spec = importlib.util.spec_from_file_location("hermes_thin_installer", INSTALLER)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -222,7 +223,9 @@ def test_verify_unmanaged_wrapper_reported_as_preserved(installer, tmp_path):
     assert any("unmanaged wrapper preserved" in e for e in errors)
 
 
-def test_verify_no_openclaw_root_flags_violating_results(installer, tmp_path, monkeypatch):
+def test_verify_no_openclaw_root_flags_violating_results(
+    installer: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
     results_dir.mkdir(parents=True)
     violating = results_dir / "some-fleet-report.md"
@@ -233,7 +236,9 @@ def test_verify_no_openclaw_root_flags_violating_results(installer, tmp_path, mo
     assert any("$OPENCLAW_ROOT" in e for e in errors)
 
 
-def test_verify_no_openclaw_root_allows_clean_results(installer, tmp_path, monkeypatch):
+def test_verify_no_openclaw_root_allows_clean_results(
+    installer: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
     results_dir.mkdir(parents=True)
     clean = results_dir / "some-fleet-report.md"
