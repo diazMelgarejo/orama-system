@@ -235,7 +235,8 @@ rules, ledger links); ENG-6 per-PR file lock (TOCTOU re-read — reconcile cover
 path in MVP); ENG-4 non-macOS provider fail-closed (fallback file is MVP CI convenience —
 production hardening in v2.1); DX-5 extended crash recovery beyond reconcile CLI; WebAuthn/MCP
 approval sidecar (security-sentinel v2.1 per `docs/v2/51-security-sentinel-orbit-passkey-mcp.md`).
-PT memory: `Perpetua-Tools/.agent/memory/working/PR_BODY_GRANT_CAN6_SCRUB_FOLLOWUP_2026-08-03.md`.
+PT memory: `$PERPETUA_TOOLS_ROOT/.agent/memory/working/PR_BODY_GRANT_CAN6_SCRUB_FOLLOWUP_2026-08-03.md`
+(resolved via `resolve_perp_harness.sh`'s own PT-root discovery, not a hardcoded sibling path).
 
 **PT mirror:** `6a5a1db5` sync from orama + `0c3506d7` saga memory (branch retains full PR #320 history).
 
