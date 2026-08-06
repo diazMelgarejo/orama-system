@@ -346,11 +346,18 @@ def install(dry_run: bool = False, include_optional: bool = False) -> list[Path]
 
 
 def verify_no_openclaw_root_in_results() -> list[str]:
-    """
-    Check committed harness result files for prohibited ``$OPENCLAW_ROOT`` references.
-    
+    """$OPENCLAW_ROOT in committed prose is banned by
+    openclaw-workspace-path-doctrine.md, but nothing greps for it -- a
+    2026-08-04 "fix" commit regressed one results file back to using it
+    while correctly fixing four siblings in the same commit, and it went
+    unnoticed until an independent review caught it. Scan the results/
+    dir specifically (not the whole hermes-harness tree) since the
+    doctrine docs themselves legitimately discuss the banned string as
+    prose, not a violation.
+
     Returns:
-        list[str]: Error messages for result files containing the prohibited reference.
+        list[str]: Error messages for result files containing the
+        prohibited reference.
     """
     errors: list[str] = []
     results_dir = REPO_ROOT / "bin/orama-system/skills/hermes-harness/references/results"
