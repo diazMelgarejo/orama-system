@@ -242,6 +242,7 @@ def test_resolve_perp_harness_rejects_symlink_even_when_real_target_is_crawlable
     assert "not resolved" in result.stderr.lower()
 
 
+@pytest.mark.integration
 def test_resolve_pt_root_cached_within_session(tmp_path: Path) -> None:
     pt = _make_pt_root(tmp_path)
     run_env = os.environ.copy()

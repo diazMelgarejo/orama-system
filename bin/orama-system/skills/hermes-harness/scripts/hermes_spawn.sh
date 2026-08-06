@@ -297,6 +297,12 @@ main() {
       if (( JSON_OUT )); then
         local log_escaped
         log_escaped="$(json_escape "$log_file")"
+        # hermes_result_ok (called by emit_json_data) exits internally,
+        # so the unconditional human-readable echo below is unreachable
+        # once we take this branch -- print it here, to stderr so it
+        # doesn't interfere with JSON stdout parsing, for operator
+        # visibility even in JSON/automation mode.
+        echo "✅ Hermes started (pid $started_pid, session ${SESSION_ID})" >&2
         emit_json_data "{\"pid\":${started_pid},\"session\":\"${SESSION_ID}\",\"log_file\":\"${log_escaped}\"}"
       fi
       echo "✅ Hermes started (pid $started_pid, session ${SESSION_ID})"

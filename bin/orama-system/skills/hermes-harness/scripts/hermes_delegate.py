@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tempfile
 import time
-from typing import Any
+from typing import Any, Protocol
 
 
 def _canonical_result(
@@ -76,6 +76,15 @@ def _worker_popen_kwargs() -> dict[str, Any]:
     if _IS_WINDOWS:
         return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
     return {"start_new_session": True}  # own process group -> killable as a unit
+
+
+class SpawnFunction(Protocol):
+    """Structural contract for the injectable spawn_fn used by the
+    ThreadPoolExecutor test path -- distinct from the real subprocess
+    worker path, which always spawns via _WORKER_SOURCE regardless.
+    """
+
+    def __call__(self, role: str, task: str) -> dict[str, Any]: ...
 
 
 class _Worker:
@@ -282,7 +291,7 @@ def run_delegate(
     *,
     pt_root: str,
     worker_timeout_sec: int,
-    spawn_fn: Any | None = None,
+    spawn_fn: SpawnFunction | None = None,
 ) -> dict[str, Any]:
     rows: list[dict[str, Any]] = []
     warnings: list[str] = []
