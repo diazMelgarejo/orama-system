@@ -332,9 +332,33 @@ def install(dry_run: bool = False, include_optional: bool = False) -> list[Path]
     return written
 
 
+def verify_no_openclaw_root_in_results() -> list[str]:
+    """$OPENCLAW_ROOT in committed prose is banned by
+    openclaw-workspace-path-doctrine.md, but nothing greps for it -- a
+    2026-08-04 "fix" commit regressed one results file back to using it
+    while correctly fixing four siblings in the same commit, and it went
+    unnoticed until an independent review caught it. Scan the results/
+    dir specifically (not the whole hermes-harness tree) since the
+    doctrine docs themselves legitimately discuss the banned string as
+    prose, not a violation.
+    """
+    errors: list[str] = []
+    results_dir = REPO_ROOT / "bin/orama-system/skills/hermes-harness/references/results"
+    if not results_dir.is_dir():
+        return errors
+    for path in sorted(results_dir.glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if "$OPENCLAW_ROOT" in text:
+            errors.append(
+                f"$OPENCLAW_ROOT found in committed prose (banned): {path}"
+            )
+    return errors
+
+
 def verify(include_optional: bool = False) -> list[str]:
     errors: list[str] = []
     errors.extend(verify_harness_redirect())
+    errors.extend(verify_no_openclaw_root_in_results())
     for spec in all_wrappers(include_optional):
         target = HERMES_SKILLS / hermes_local_dir(spec.slug) / "SKILL.md"
         if not target.is_file():
@@ -392,9 +416,45 @@ def run_tests() -> int:
                 return 1
 
             print("non-clobber and syntax tests passed")
-            return 0
         finally:
             HERMES_SKILLS = original_skills
+
+    global REPO_ROOT
+    original_repo_root = REPO_ROOT
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        tmp_path = Path(tmp_dir)
+        REPO_ROOT = tmp_path
+        results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
+        results_dir.mkdir(parents=True)
+        violating = results_dir / "some-fleet-report.md"
+        try:
+            # RED: a results file using the banned $OPENCLAW_ROOT path must
+            # be caught. (Regression test for the exact class of bug that
+            # slipped through commit f8ea7c55: a "fix" commit correctly
+            # scrubbed four sibling results files but reintroduced
+            # $OPENCLAW_ROOT in a fifth, and nothing caught it.)
+            violating.write_text(
+                "pull from `$OPENCLAW_ROOT/references/`\n", encoding="utf-8"
+            )
+            errors = verify_no_openclaw_root_in_results()
+            if not errors:
+                print("FAIL: violating results file was not flagged")
+                return 1
+
+            # GREEN: a clean results file must not be flagged.
+            violating.write_text(
+                "pull from the workspace-level operator references tree\n",
+                encoding="utf-8",
+            )
+            errors = verify_no_openclaw_root_in_results()
+            if errors:
+                print(f"FAIL: clean results file was flagged: {errors}")
+                return 1
+
+            print("openclaw-root regression-guard tests passed")
+            return 0
+        finally:
+            REPO_ROOT = original_repo_root
 
 
 def main() -> int:

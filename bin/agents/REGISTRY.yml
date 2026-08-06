@@ -199,6 +199,26 @@ roles:
     staged_agent_card: bin/agents/sage/agent.md
     persona_yaml: bin/agents/personas/sage.yaml
 
+  - staging_folder: relay-cursor
+    dispatch_lane: L-Fleet
+    native_hermes_delegate: false
+    openclaw_id: relay-cursor
+    hermes_profile: null
+    harness: cursor
+    display: Relay Cursor Agent
+    soul_id: adapter.cursor-coordinator
+    stage: coordinator
+    staged_soul: bin/agents/relay-cursor/SOUL.md
+    staged_agent_card: bin/agents/relay-cursor/agent.md
+    persona_yaml: bin/agents/personas/relay-cursor.yaml
+    capabilities:
+      - coordination
+      - planning
+      - async-subagent-delegation
+      - cross-repo-orchestration
+      - git-hygiene
+    notes: Cursor coordinator identity; distinct from the Relay Cline external-specialist adapter
+
   - staging_folder: relay
     dispatch_lane: L-Fleet
     native_hermes_delegate: false

@@ -180,6 +180,12 @@ def test_start_writes_pid_and_status_ok(isolated_runtime: Path) -> None:
     start = _run_spawn("start", "smoke task", env=env, timeout=60)
     assert start.returncode == 0, start.stderr
     assert "Hermes started" in start.stdout
+    # F7 regression: success message must include a non-empty numeric PID
+    import re
+
+    match = re.search(r"Hermes started \(pid (\d+)", start.stdout)
+    assert match, f"expected non-empty pid in stdout: {start.stdout!r}"
+    assert int(match.group(1)) > 0
     status = _run_spawn("status", env=env)
     assert status.returncode == 0
     assert "Hermes running" in status.stdout

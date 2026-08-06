@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Resolve Perpetua-Tools hermes_harness.py with fail-closed PT root discovery.
 # Git repo-relative crawl only — no hardcoded workstation layout paths.
-# See workspace-path-resolution.md and sync-local-pt-checkout.md.
+# See ../references/workspace-path-resolution.md and
+# ../../oramasys-method/references/sync-local-pt-checkout.md.
 set -euo pipefail
 
 _is_pt_git_root() {
@@ -17,9 +18,15 @@ _pt_add_candidate() {
   local d existing
   d="$(cd "${1%/}" 2>/dev/null && pwd)" || return 0
   _is_pt_git_root "$d" || return 0
-  for existing in "${_pt_candidates[@]}"; do
-    [[ "$existing" == "$d" ]] && return 0
-  done
+  # bash 3.2 (macOS default) throws "unbound variable" on a bare
+  # "${arr[@]}" expansion of a truly-empty array under set -u, even
+  # though "${#arr[@]}" (count) is safe -- guard with the count check
+  # before iterating. Confirmed empirically on bash 3.2.57.
+  if ((${#_pt_candidates[@]} > 0)); then
+    for existing in "${_pt_candidates[@]}"; do
+      [[ "$existing" == "$d" ]] && return 0
+    done
+  fi
   _pt_candidates+=("$d")
 }
 
@@ -51,7 +58,13 @@ _finalize_pt_root() {
   printf '%s\n' "${_pt_candidates[0]}"
 }
 
+_RESOLVED_PT_ROOT_CACHE=""
+
 resolve_pt_root() {
+  if [[ -n "${_RESOLVED_PT_ROOT_CACHE:-}" ]]; then
+    echo "$_RESOLVED_PT_ROOT_CACHE"
+    return 0
+  fi
   local var v orama_root pt_dir mother pt_root
   local any_explicit_var_set=""
   for var in PERPETUA_TOOLS_PATH PT_HOME PERPETUA_TOOLS_ROOT PERPETUATOOLSROOT; do
@@ -59,7 +72,8 @@ resolve_pt_root() {
     if [[ -n "$v" ]]; then
       any_explicit_var_set=1
       if _is_pt_git_root "$v"; then
-        echo "$v"
+        _RESOLVED_PT_ROOT_CACHE="$(cd "$v" && pwd)"
+        echo "$_RESOLVED_PT_ROOT_CACHE"
         return 0
       fi
     fi
@@ -77,7 +91,8 @@ resolve_pt_root() {
   if [[ -n "$orama_root" && -f "$orama_root/.paths" ]]; then
     pt_dir="$(grep '^PT_DIR=' "$orama_root/.paths" | cut -d= -f2- | tr -d '"')"
     if [[ -n "$pt_dir" ]] && _is_pt_git_root "$pt_dir"; then
-      echo "$pt_dir"
+      _RESOLVED_PT_ROOT_CACHE="$(cd "$pt_dir" && pwd)"
+      echo "$_RESOLVED_PT_ROOT_CACHE"
       return 0
     fi
   fi
@@ -89,7 +104,8 @@ resolve_pt_root() {
   _crawl_pt_git_roots_collect "$HOME" 3
   pt_root="$(_finalize_pt_root || true)"
   if [[ -n "$pt_root" ]]; then
-    echo "$pt_root"
+    _RESOLVED_PT_ROOT_CACHE="$pt_root"
+    echo "$_RESOLVED_PT_ROOT_CACHE"
     return 0
   fi
   return 1
@@ -99,7 +115,7 @@ resolve_perp_harness_script() {
   local pt_root script
   pt_root="$(resolve_pt_root || true)"
   if [[ -z "$pt_root" ]]; then
-    echo "ERROR: Perpetua-Tools root not resolved. Clone PT and set PERPETUA_TOOLS_ROOT, or see sync-local-pt-checkout.md." >&2
+    echo "ERROR: Perpetua-Tools root not resolved. Clone PT and set PERPETUA_TOOLS_ROOT, or see ../../oramasys-method/references/sync-local-pt-checkout.md." >&2
     return 1
   fi
   script="${pt_root}/src/hermes_harness.py"

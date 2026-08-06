@@ -4,7 +4,7 @@
 > are thin adapters; durable behavior lives in orama-system canonical cards below.
 >
 > Inventory audit: [`hermes-ecc-fork-inventory.md`](hermes-ecc-fork-inventory.md)  
-> Onboarding plan: [`docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md`](../../../../docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md) § Skill Absorption
+> Onboarding plan: [`docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md`](../../../../../docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md) § Skill Absorption
 
 ## Redirect stubs → canonical supersets
 

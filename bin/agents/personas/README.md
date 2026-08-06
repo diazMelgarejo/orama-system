@@ -14,6 +14,7 @@ Tracked copy of EDITED-03 → MERGE-10 persona YAML. Live hub mirror:
 | `arthur.yaml` | `mac-researcher` | Arthur | `mac-researcher/` |
 | `nova.yaml` | `kimi-agent` | Nova | `nova/` |
 | `rex.yaml` | `grok-agent` | Rex | `rex/` |
+| `relay-cursor.yaml` | `relay-cursor` | Relay Cursor Agent | `relay-cursor/` |
 
 Pipeline agents (Cass, Aria, Sena, Rourke, Vera, Crystal, Glen) use `bin/agents/*/SOUL.md` + hub `REGISTRY.yml`.
 

@@ -1,0 +1,17 @@
+{
+  "fanout_id": "coord-036",
+  "assignments": [
+    {
+      "assignee": "win",
+      "topic": "hermes/envelope-reconciliation",
+      "filename": "mac-2026-08-06-hermes-envelope-reconciliation.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/mac-2026-08-06-hermes-envelope-reconciliation.md"
+    },
+    {
+      "assignee": "mac",
+      "topic": "hermes/envelope-reconciliation",
+      "filename": "mac-2026-08-06-hermes-envelope-reconciliation.md",
+      "path": "bin/orama-system/skills/hermes-harness/references/results/mac-2026-08-06-hermes-envelope-reconciliation.md"
+    }
+  ]
+}
