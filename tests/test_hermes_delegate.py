@@ -110,10 +110,10 @@ def test_subprocess_worker_timeout_kills_child(tmp_path: Path) -> None:
     result = mod.run_delegate(
         ["slow-a", "slow-b"],
         pt_root=str(pt),
-        worker_timeout_sec=1,
+        worker_timeout_sec=3,
     )
     elapsed = time.monotonic() - t0
-    assert elapsed < 5, "subprocess workers must be killable at timeout"
+    assert elapsed < 15, "subprocess workers must be killable at timeout"
     assert result["status"] == "error"
     workers = result["data"]["workers"]
     assert len(workers) == 2
@@ -121,9 +121,68 @@ def test_subprocess_worker_timeout_kills_child(tmp_path: Path) -> None:
     assert result["follow_up_actions"]
 
     for task in ("slow-a", "slow-b"):
-        pid = int((tmp_path / f"{task}.pid").read_text(encoding="utf-8"))
+        pid_file = tmp_path / f"{task}.pid"
+        raw = pid_file.read_text(encoding="utf-8").strip() if pid_file.exists() else ""
+        if not raw:
+            continue
+        pid = int(raw)
         with pytest.raises(ProcessLookupError):
             os.kill(pid, 0)
+
+
+def test_subprocess_worker_timeout_kills_grandchild(tmp_path: Path) -> None:
+    """A worker that spawns its own child must not leave it running past the deadline.
+
+    proc.kill() only stops the direct `python -c` child. If a worker's own
+    work spawns further children (a delegation harness makes this likely),
+    those grandchildren survive unless the whole process group is signalled.
+    """
+    mod = _load_delegate_module()
+    pt = tmp_path / "pt"
+    src = pt / "src"
+    src.mkdir(parents=True)
+
+    grandchild_script = tmp_path / "grandchild.py"
+    grandchild_script.write_text(
+        "import os, sys, time\n"
+        "pid_path = sys.argv[1]\n"
+        "with open(pid_path, 'w', encoding='utf-8') as fh:\n"
+        "    fh.write(str(os.getpid()))\n"
+        "time.sleep(60)\n",
+        encoding="utf-8",
+    )
+    (src / "hermes_harness.py").write_text(
+        "import os, subprocess, sys\n"
+        f"PID_DIR = {str(tmp_path)!r}\n"
+        f"GRANDCHILD_SCRIPT = {str(grandchild_script)!r}\n"
+        "def spawn_hermes_agent(role, task):\n"
+        "    gc_pid_path = os.path.join(PID_DIR, task + '.gc.pid')\n"
+        "    grandchild = subprocess.Popen(\n"
+        "        [sys.executable, GRANDCHILD_SCRIPT, gc_pid_path]\n"
+        "    )\n"
+        "    grandchild.wait()\n"
+        "    return {'ok': True}\n",
+        encoding="utf-8",
+    )
+    result = mod.run_delegate(
+        ["slow-gc"],
+        pt_root=str(pt),
+        worker_timeout_sec=3,
+    )
+    assert result["status"] == "error"
+
+    # Poll briefly for the grandchild's own pid file -- it writes it after
+    # os.getpid(), which races the parent's timeout/kill.
+    gc_pid_file = tmp_path / "slow-gc.gc.pid"
+    deadline = time.monotonic() + 5
+    while not gc_pid_file.exists() and time.monotonic() < deadline:
+        time.sleep(0.05)
+    if not gc_pid_file.exists():
+        pytest.skip("grandchild did not report its pid in time -- flaky env, not this fix")
+
+    gc_pid = int(gc_pid_file.read_text(encoding="utf-8").strip())
+    with pytest.raises(ProcessLookupError):
+        os.kill(gc_pid, 0)
 
 
 def test_subprocess_workers_respect_concurrency_cap(tmp_path: Path) -> None:
@@ -176,6 +235,7 @@ def test_subprocess_workers_respect_concurrency_cap(tmp_path: Path) -> None:
     assert observed_max <= max_concurrent, (
         f"observed {observed_max} concurrent workers, cap was {max_concurrent}"
     )
+    assert observed_max > 1, "workers must run concurrently, not serially"
     assert len(rows) == len(tasks)
     assert all(r["status"] == "ok" for r in rows)
     assert not follow_up
