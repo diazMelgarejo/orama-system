@@ -198,6 +198,58 @@ def test_hermes_timeout_fails_cleanly_without_internal_fallback():
     mock_direct.assert_not_awaited()
 
 
+def test_hermes_nonzero_exit_with_output_is_failure():
+    """Non-zero Hermes exit must not count as success even with stdout text."""
+    with patch.object(spawn_agents, "_find_hermes", return_value="/fake/hermes"), \
+         patch.object(spawn_agents, "_dispatch_lmstudio", new_callable=AsyncMock) as mock_direct:
+
+        class _FakeProc:
+            returncode = 1
+
+            async def communicate(self):
+                return (b"stderr-ish output", b"")
+
+            async def kill(self):
+                self.returncode = -9
+
+            async def wait(self):
+                return self.returncode
+
+        async def _fake_subprocess_exec(*args, **kwargs):
+            return _FakeProc()
+
+        with patch.object(spawn_agents.asyncio, "create_subprocess_exec", side_effect=_fake_subprocess_exec):
+            result = _run(spawn_agents._dispatch_hermes_lmstudio_win("test task"))
+
+    assert result["ok"] is False
+    mock_direct.assert_not_awaited()
+
+
+def test_hermes_uses_win_coder_endpoint_pool(monkeypatch):
+    """Hermes subprocess env must route through $WIN_CODER_ENDPOINTS."""
+    monkeypatch.setattr(spawn_agents, "WIN_CODER_ENDPOINT", "http://win-coder.example:1234")
+
+    captured: dict = {}
+
+    with patch.object(spawn_agents, "_find_hermes", return_value="/fake/hermes"):
+
+        class _FakeProc:
+            returncode = 0
+
+            async def communicate(self):
+                return (b"HERMES_OK", b"")
+
+        async def _fake_subprocess_exec(*args, **kwargs):
+            captured["env"] = kwargs.get("env", {})
+            return _FakeProc()
+
+        with patch.object(spawn_agents.asyncio, "create_subprocess_exec", side_effect=_fake_subprocess_exec):
+            result = _run(spawn_agents._dispatch_hermes_lmstudio_win("test task"))
+
+    assert result["ok"] is True
+    assert captured["env"]["LM_STUDIO_WIN_ENDPOINTS"] == "http://win-coder.example:1234"
+
+
 # ── Test 6: winner field always present ───────────────────────────────────────
 
 @pytest.mark.skipif(bool(_CURSOR_RACE_SKIP), reason=str(_CURSOR_RACE_SKIP))

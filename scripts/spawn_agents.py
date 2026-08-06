@@ -53,6 +53,7 @@ for _stream in (sys.stdout, sys.stderr):
 
 LMS_MAC_ENDPOINT = os.getenv("LM_STUDIO_MAC_ENDPOINT", "http://localhost:1234")
 LMS_WIN_ENDPOINT = os.getenv("LM_STUDIO_WIN_ENDPOINTS", "http://localhost:1234").split(",")[0].strip()
+WIN_CODER_ENDPOINT = os.getenv("WIN_CODER_ENDPOINTS", "").split(",")[0].strip() or LMS_WIN_ENDPOINT
 LMS_API_KEY = os.getenv("LM_STUDIO_API_TOKEN", "lm-studio")
 LMS_WIN_MODEL = os.getenv(
     "LM_STUDIO_WIN_MODEL",
@@ -487,15 +488,16 @@ def _find_hermes() -> Optional[str]:
 
 
 async def _dispatch_hermes_lmstudio_win(task: str) -> Dict[str, Any]:
-    """Run Hermes against the Windows LM Studio provider.
+    """Run Hermes against the Windows coder LM Studio provider.
 
-    No internal fallback to direct-lmstudio-win here -- fallback handling
-    lives in a single layer, _dispatch_race(), which already races this
-    leg alongside a direct-lmstudio-win racer. This leg previously also
-    fell back to _dispatch_lmstudio() itself on failure, which meant a
-    failed Hermes attempt could trigger two separate direct-lmstudio-win
-    calls racing each other (one from this fallback, one from
-    _dispatch_race()'s own racer) -- duplicate work, not defense in depth.
+    Hermes reads the Windows endpoint from ``LM_STUDIO_WIN_ENDPOINTS`` on the
+    subprocess env, sourced from ``$WIN_CODER_ENDPOINTS`` (first pool member)
+    rather than the generic ``LM_STUDIO_WIN_ENDPOINTS`` default.
+
+    No internal fallback to direct-lmstudio-win here — when cursor/hermes race
+    legs are active, ``_dispatch_race()`` races ``cursor`` and
+    ``hermes-lmstudio-win`` first, then falls back to direct-lmstudio-win only
+    if both legs fail.
     """
     hermes_bin = _find_hermes()
     if not hermes_bin:
@@ -503,7 +505,7 @@ async def _dispatch_hermes_lmstudio_win(task: str) -> Dict[str, Any]:
 
     env = os.environ.copy()
     env.setdefault("LM_STUDIO_API_TOKEN", LMS_API_KEY)
-    env.setdefault("LM_STUDIO_WIN_ENDPOINTS", LMS_WIN_ENDPOINT)
+    env.setdefault("LM_STUDIO_WIN_ENDPOINTS", WIN_CODER_ENDPOINT)
     t0 = time.time()
     proc: asyncio.subprocess.Process | None = None
     try:
@@ -535,7 +537,7 @@ async def _dispatch_hermes_lmstudio_win(task: str) -> Dict[str, Any]:
                 await proc.wait()
             raise
         output = stdout.decode("utf-8", errors="replace").strip()
-        if output:
+        if proc.returncode == 0 and output:
             return {"ok": True, "output": output, "elapsed": time.time() - t0}
     except asyncio.TimeoutError:
         if proc is not None and proc.returncode is None:
@@ -568,7 +570,16 @@ def _cursor_race_leg_deferred() -> bool:
 
 
 async def _dispatch_race(task: str) -> Dict[str, Any]:
-    """Race cursor-agent and Hermes+LM Studio Win. First successful completion wins."""
+    """Race Windows dispatch legs; first successful completion wins.
+
+    While ``.logs/cursor_standalone_retry_due.txt`` defers validation, only
+    ``direct-lmstudio-win`` runs. After deferral, racers are ``cursor`` (read-only
+    ``--print``) and ``hermes-lmstudio-win``, with ``direct-lmstudio-win`` as the
+    last-resort fallback when both race legs fail.
+
+    Note: full worktree isolation for concurrent Hermes ``--yolo`` writes is
+    still required before re-enabling the cursor/hermes race in production.
+    """
     t0 = time.time()
 
     if _cursor_race_leg_deferred():
