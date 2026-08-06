@@ -70,11 +70,27 @@ _IS_WINDOWS = sys.platform == "win32"
 
 
 def _worker_popen_kwargs() -> dict[str, Any]:
-    """Configure platform-specific process-group settings for worker termination.
-    
+    """Platform-specific Popen kwargs for spawning a worker in its own,
+    independently-killable process group.
+
+    POSIX: start_new_session=True, paired with os.killpg in
+    _terminate_worker -- this path is exercised by this repo's real test
+    suite (test_subprocess_worker_timeout_kills_grandchild etc.) and has
+    been the production behavior all along.
+
+    Windows: CREATE_NEW_PROCESS_GROUP, paired with taskkill /T in
+    _terminate_worker for recursive tree termination (Windows has no
+    process-group-signal equivalent to killpg). NOT independently verified
+    in this environment -- there is no Windows runner available here to
+    exercise it against. Written from documented subprocess/taskkill
+    behavior, not tested. Treat as unverified until run on a real Windows
+    host; the review that requested this explicitly asked for a Windows
+    regression test "before enabling the Windows path" -- that
+    verification has not happened yet.
+
     Returns:
-        dict[str, Any]: Keyword arguments for creating a worker in an independently
-        terminable process group.
+        dict[str, Any]: Keyword arguments for creating a worker in an
+        independently terminable process group.
     """
     if _IS_WINDOWS:
         return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -87,17 +103,17 @@ class SpawnFunction(Protocol):
     worker path, which always spawns via _WORKER_SOURCE regardless.
     """
 
-    def __call__(self, role: str, task: str) -> dict[str, Any]: """
-Execute a task for the specified worker role.
+    def __call__(self, role: str, task: str) -> dict[str, Any]:
+        """Execute a task for the specified worker role.
 
-Parameters:
-	role (str): Worker role used to execute the task.
-	task (str): Task description to execute.
+        Parameters:
+            role (str): Worker role used to execute the task.
+            task (str): Task description to execute.
 
-Returns:
-	dict[str, Any]: Structured result produced by the worker.
-"""
-...
+        Returns:
+            dict[str, Any]: Structured result produced by the worker.
+        """
+        ...
 
 
 class _Worker:
@@ -253,15 +269,19 @@ def _run_subprocess_workers(
     worker_timeout_sec: int,
     max_concurrent: int = 5,
 ) -> tuple[list[dict[str, Any]], list[str]]:
-    """
-    Execute tasks in child processes with bounded concurrency and a shared timeout.
-    
+    """Run tasks in child processes, at most `max_concurrent` at a time.
+
+    Matches the prior ThreadPoolExecutor's max_workers=min(len(tasks), 5) cap
+    -- an uncapped launch loop can fork one subprocess per task with no
+    ceiling (e.g. 50 tasks -> 50 concurrent processes).
+
     Parameters:
         worker_timeout_sec (int): Maximum time allowed for the worker batch.
         max_concurrent (int): Maximum number of workers running simultaneously.
-    
+
     Returns:
-        tuple[list[dict[str, Any]], list[str]]: Worker result records and recommended follow-up actions.
+        tuple[list[dict[str, Any]], list[str]]: Worker result records and
+        recommended follow-up actions.
     """
     rows: list[dict[str, Any]] = []
     follow_up: list[str] = []

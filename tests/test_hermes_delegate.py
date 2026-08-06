@@ -167,7 +167,12 @@ def test_subprocess_worker_timeout_kills_child(tmp_path: Path) -> None:
 
 
 def test_subprocess_worker_timeout_kills_grandchild(tmp_path: Path) -> None:
-    """Verify that timing out a subprocess worker also terminates its child process."""
+    """A worker that spawns its own child must not leave it running past the deadline.
+
+    proc.kill() only stops the direct `python -c` child. If a worker's own
+    work spawns further children (a delegation harness makes this likely),
+    those grandchildren survive unless the whole process group is signalled.
+    """
     mod = _load_delegate_module()
     pt = tmp_path / "pt"
     src = pt / "src"
