@@ -3,7 +3,8 @@
 Tracked copy of EDITED-03 → MERGE-10 persona YAML. Live hub mirror:
 `${HOME}/.alphaclaw/.openclaw/workspace/docs/oramasys/personas/`
 
-**SSoT for git/install:** this directory. Hub copies are operator-runtime mirrors — refresh from here after `git pull`.
+**SSoT for git/install:** this directory. Hub copies are operator-runtime mirrors — refresh from here
+after `git pull`.
 
 | Persona file | openclaw_id | Display | Staging folder |
 |--------------|-------------|---------|----------------|
@@ -16,6 +17,7 @@ Tracked copy of EDITED-03 → MERGE-10 persona YAML. Live hub mirror:
 | `rex.yaml` | `grok-agent` | Rex | `rex/` |
 | `relay-cursor.yaml` | `relay-cursor` | Relay Cursor Agent | `relay-cursor/` |
 
-Pipeline agents (Cass, Aria, Sena, Rourke, Vera, Crystal, Glen) use `bin/agents/*/SOUL.md` + hub `REGISTRY.yml`.
+Pipeline agents (Cass, Aria, Sena, Rourke, Vera, Crystal, Glen) use
+`bin/agents/*/SOUL.md` + hub `REGISTRY.yml`.
 
 Binding table: [`../REGISTRY.yml`](../REGISTRY.yml)
