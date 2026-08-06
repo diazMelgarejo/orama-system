@@ -51,6 +51,33 @@ _WORKER_SOURCE = (
 )
 
 
+_IS_WINDOWS = sys.platform == "win32"
+
+
+def _worker_popen_kwargs() -> dict[str, Any]:
+    """Platform-specific Popen kwargs for spawning a worker in its own,
+    independently-killable process group.
+
+    POSIX: start_new_session=True, paired with os.killpg in
+    _terminate_worker -- this path is exercised by this repo's real test
+    suite (test_subprocess_worker_timeout_kills_grandchild etc.) and has
+    been the production behavior all along.
+
+    Windows: CREATE_NEW_PROCESS_GROUP, paired with taskkill /T in
+    _terminate_worker for recursive tree termination (Windows has no
+    process-group-signal equivalent to killpg). NOT independently verified
+    in this environment -- there is no Windows runner available here to
+    exercise it against. Written from documented subprocess/taskkill
+    behavior, not tested. Treat as unverified until run on a real Windows
+    host; the review that requested this explicitly asked for a Windows
+    regression test "before enabling the Windows path" -- that
+    verification has not happened yet.
+    """
+    if _IS_WINDOWS:
+        return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
+    return {"start_new_session": True}  # own process group -> killable as a unit
+
+
 class _Worker:
     """A launched worker: its process plus CLAYGO temp files for its output.
 
@@ -69,13 +96,27 @@ class _Worker:
         self._stderr_fh = tempfile.NamedTemporaryFile(
             mode="w+", prefix="hermes-delegate-err-", delete=False
         )
-        self.proc = subprocess.Popen(
-            [sys.executable, "-c", _WORKER_SOURCE, os.path.join(pt_root, "src"), task],
-            stdout=self._stdout_fh,
-            stderr=self._stderr_fh,
-            text=True,
-            start_new_session=True,  # own process group -> killable as a unit
-        )
+        try:
+            self.proc = subprocess.Popen(
+                [sys.executable, "-c", _WORKER_SOURCE, os.path.join(pt_root, "src"), task],
+                stdout=self._stdout_fh,
+                stderr=self._stderr_fh,
+                text=True,
+                **_worker_popen_kwargs(),
+            )
+        except Exception:
+            # Popen failed (e.g. resource exhaustion, bad interpreter path)
+            # -- self.proc never got set, so nothing else will ever clean
+            # these up. Close and remove both temp files ourselves before
+            # re-raising, or they leak on every failed launch.
+            self._stdout_fh.close()
+            self._stderr_fh.close()
+            for path in (self._stdout_fh.name, self._stderr_fh.name):
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+            raise
 
     def cleanup(self) -> None:
         self._stdout_fh.close()
@@ -100,6 +141,27 @@ def _terminate_worker(worker: _Worker) -> None:
     proc = worker.proc
     if proc.poll() is not None:
         proc.wait()
+        return
+    if _IS_WINDOWS:
+        # /T = kill the whole process tree, /F = force. Windows has no
+        # process-group signal equivalent to killpg; taskkill's recursive
+        # tree-kill is the documented substitute for reaching grandchildren.
+        # Unverified in this environment -- see _worker_popen_kwargs' note.
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True,
+                timeout=10,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            try:
+                proc.kill()
+            except OSError:
+                pass
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            pass
         return
     try:
         os.killpg(proc.pid, signal.SIGTERM)
@@ -156,8 +218,24 @@ def _run_subprocess_workers(
 
         while queue or pending:
             while queue and len(pending) < max_concurrent:
+                if time.monotonic() >= deadline:
+                    # Deadline reached mid-launch -- stop starting new
+                    # workers and leave the rest in queue. The queue-drain
+                    # loop below reports them as "did not start" rather
+                    # than silently launching more work past the deadline.
+                    break
                 task = queue.pop(0)
-                worker = _Worker(task, pt_root)
+                try:
+                    worker = _Worker(task, pt_root)
+                except Exception as exc:  # noqa: BLE001
+                    # Construction itself failed (e.g. Popen raised on
+                    # resource exhaustion) -- record it as this task's
+                    # error and keep going, rather than letting the
+                    # exception propagate and abort every other task
+                    # still queued or in flight.
+                    rows.append({"task": task, "status": "error", "error": str(exc)})
+                    follow_up.append(f"retry task: {task[:80]}")
+                    continue
                 launched.append(worker)
                 pending.append(worker)
 
