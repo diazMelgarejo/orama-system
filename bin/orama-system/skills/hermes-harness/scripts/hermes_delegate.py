@@ -36,37 +36,114 @@ def _canonical_result(
     }
 
 
-def _subprocess_spawn(pt_root: str, task: str, timeout_sec: int) -> dict[str, Any]:
-    """Run spawn_hermes_agent in a child process so timeouts can kill it."""
-    code = (
+def _worker_subprocess_code(pt_root: str, task: str) -> str:
+    return (
         "import json, os, sys\n"
         f"sys.path.insert(0, {os.path.join(pt_root, 'src')!r})\n"
         "from hermes_harness import spawn_hermes_agent\n"
         f"payload = spawn_hermes_agent('executor', {task!r})\n"
         "print(json.dumps(payload, default=str))\n"
     )
+
+
+def _launch_worker_subprocess(pt_root: str, task: str) -> subprocess.Popen[str]:
+    return subprocess.Popen(
+        [sys.executable, "-c", _worker_subprocess_code(pt_root, task)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+
+
+def _terminate_worker(proc: subprocess.Popen[str]) -> None:
+    if proc.poll() is not None:
+        proc.communicate()
+        return
+    proc.kill()
     try:
-        proc = subprocess.run(
-            [sys.executable, "-c", code],
-            capture_output=True,
-            text=True,
-            timeout=timeout_sec,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise TimeoutError(
-            f"worker did not complete within {timeout_sec}s"
-        ) from exc
+        proc.communicate(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _parse_worker_output(proc: subprocess.Popen[str]) -> dict[str, Any]:
+    stdout, stderr = proc.communicate()
     if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "worker failed").strip()
+        detail = (stderr or stdout or "worker failed").strip()
         raise RuntimeError(detail)
-    out = (proc.stdout or "").strip()
+    out = (stdout or "").strip()
     if not out:
         return {"ok": True}
     try:
         return json.loads(out)
     except json.JSONDecodeError:
         return {"raw": out}
+
+
+def _run_subprocess_workers(
+    tasks: list[str],
+    *,
+    pt_root: str,
+    worker_timeout_sec: int,
+    max_concurrent: int = 5,
+) -> tuple[list[dict[str, Any]], list[str]]:
+    """Run tasks in child processes, at most `max_concurrent` at a time.
+
+    Matches the prior ThreadPoolExecutor's max_workers=min(len(tasks), 5) cap
+    -- an uncapped launch loop can fork one subprocess per task with no
+    ceiling (e.g. 50 tasks -> 50 concurrent processes).
+    """
+    rows: list[dict[str, Any]] = []
+    follow_up: list[str] = []
+    launched: list[tuple[str, subprocess.Popen[str]]] = []
+
+    try:
+        queue = list(tasks)
+        pending: dict[subprocess.Popen[str], str] = {}
+        deadline = time.monotonic() + worker_timeout_sec
+
+        while queue or pending:
+            while queue and len(pending) < max_concurrent:
+                task = queue.pop(0)
+                proc = _launch_worker_subprocess(pt_root, task)
+                launched.append((task, proc))
+                pending[proc] = task
+
+            if time.monotonic() >= deadline:
+                break
+
+            still_pending: dict[subprocess.Popen[str], str] = {}
+            for proc, task in pending.items():
+                if proc.poll() is None:
+                    still_pending[proc] = task
+                    continue
+                try:
+                    payload = _parse_worker_output(proc)
+                    rows.append({"task": task, "status": "ok", "result": payload})
+                except Exception as exc:  # noqa: BLE001
+                    rows.append({"task": task, "status": "error", "error": str(exc)})
+                    follow_up.append(f"inspect/retry task: {task[:80]}")
+
+            pending = still_pending
+            if pending or queue:
+                time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+
+        for proc, task in pending.items():
+            _terminate_worker(proc)
+            msg = f"worker did not complete within {worker_timeout_sec}s"
+            rows.append({"task": task, "status": "error", "error": msg})
+            follow_up.append(f"retry task: {task[:80]}")
+
+        for task in queue:
+            msg = f"worker did not start within {worker_timeout_sec}s (concurrency cap)"
+            rows.append({"task": task, "status": "error", "error": msg})
+            follow_up.append(f"retry task: {task[:80]}")
+    finally:
+        for _task, proc in launched:
+            if proc.poll() is None:
+                _terminate_worker(proc)
+
+    return rows, follow_up
 
 
 def run_delegate(
@@ -81,42 +158,11 @@ def run_delegate(
     follow_up: list[str] = []
 
     if spawn_fn is None:
-        # Production path: subprocess workers with hard wall-clock kill.
-        ex = concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tasks), 5))
-        try:
-            future_by_task = {
-                ex.submit(_subprocess_spawn, pt_root, task, worker_timeout_sec): task
-                for task in tasks
-            }
-            pending = set(future_by_task.keys())
-            deadline = time.monotonic() + worker_timeout_sec + 1
-
-            while pending:
-                remaining = max(0.0, deadline - time.monotonic())
-                if remaining == 0:
-                    break
-                done, pending = concurrent.futures.wait(
-                    pending,
-                    timeout=remaining,
-                    return_when=concurrent.futures.FIRST_COMPLETED,
-                )
-                for fut in done:
-                    task = future_by_task[fut]
-                    try:
-                        payload = fut.result()
-                        rows.append({"task": task, "status": "ok", "result": payload})
-                    except Exception as exc:  # noqa: BLE001
-                        rows.append({"task": task, "status": "error", "error": str(exc)})
-                        follow_up.append(f"inspect/retry task: {task[:80]}")
-
-            for fut in pending:
-                task = future_by_task[fut]
-                fut.cancel()
-                msg = f"worker did not complete within {worker_timeout_sec}s"
-                rows.append({"task": task, "status": "error", "error": msg})
-                follow_up.append(f"retry task: {task[:80]}")
-        finally:
-            ex.shutdown(wait=False, cancel_futures=True)
+        rows, follow_up = _run_subprocess_workers(
+            tasks,
+            pt_root=pt_root,
+            worker_timeout_sec=worker_timeout_sec,
+        )
     else:
         # Injectable path (unit tests): thread pool with cooperative release.
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tasks), 5))

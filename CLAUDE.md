@@ -21,11 +21,11 @@
 
 ## § 0 — Architectural Contracts
 
-**Source of truth:** [`docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) §§ 0–2.
-Read before any structural change. Below is a navigation summary only.
+**Source of truth:** [`docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
+§§ 0–2. Read before any structural change. Below is a navigation summary only.
 
 | Topic | Where |
-|-------|-------|
+| --- | --- |
 | Banned terminology (coordinator → orchestrator, etc.) | [§ 1 / Terminology](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable) |
 | 8 governing principles | [§ 1](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable) |
 | **Hard requirements** (Mac: Ollama + qwen3.5:9b-nvfp4 + bge-m3; Win: LM Studio) | [§ 2 / Hardware](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) · [`../CLAUDE-instru.md § 6`](../CLAUDE-instru.md) |
@@ -37,9 +37,14 @@ Read before any structural change. Below is a navigation summary only.
 | Win coder pool (`$WIN_CODER_ENDPOINTS`, always-utilized) | [`bin/orama-system/SKILL.md § Windows Coder Pool`](bin/orama-system/SKILL.md) |
 
 **Quick invariants (full detail in doc above):**
-- `orchestrator` only — never `coordinator` in public APIs, schemas, config, or headings
+
+- `orchestrator` only — never `coordinator` as its synonym/replacement in public APIs,
+  schemas, config, or headings (control-plane scope). A distinct, documented agent persona
+  named "Coordinator" — e.g. `relay-cursor` — is not banned; see
+  [Unified Plan § 1.1 scope note](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable)
 - PT is runtime/state authority; orama is **stateless** methodology
-- **Mac hard requirements:** Ollama running (`localhost:11434`) with `qwen3.5:9b-nvfp4` (inference) + `bge-m3` (embeddings) — system does not start without these
+- **Mac hard requirements:** Ollama running (`localhost:11434`) with `qwen3.5:9b-nvfp4`
+  (inference) + `bge-m3` (embeddings) — system does not start without these
 - **Win hard requirement:** LM Studio at `$LM_STUDIO_WIN_ENDPOINTS` — no fallback; fail loudly if unavailable
 - **Everything else optional:** LM Studio Mac, cloud APIs, other local models
 - One heavy model at a time on Windows GPU
@@ -50,7 +55,9 @@ Read before any structural change. Below is a navigation summary only.
 
 ## § 1 — Continuous Learning
 
-Every session: read [`docs/LESSONS.md`](docs/LESSONS.md) (human-browsable) and [`.claude/lessons/LESSONS.md`](.claude/lessons/LESSONS.md) (ECC canonical) at start; append discoveries before exit.
+Every session: read [`docs/LESSONS.md`](docs/LESSONS.md) (human-browsable) and
+[`.claude/lessons/LESSONS.md`](.claude/lessons/LESSONS.md) (ECC canonical) at start;
+append discoveries before exit.
 Instinct path: `.claude/homunculus/instincts/inherited/orama-system-instincts.yaml`
 Full spec: [continuous-learning-v2](https://github.com/affaan-m/everything-claude-code/tree/main/skills/continuous-learning-v2)
 
@@ -81,7 +88,7 @@ Before significant changes, load the mother skill:
 ```
 
 | Resource | Purpose |
-|----------|---------|
+| --- | --- |
 | [`SKILL.md`](SKILL.md) | Agent behavioral rules — every "never" with commands |
 | [`bin/orama-system/SKILL.md`](bin/orama-system/SKILL.md) | Mother skill: AFRP gate, CIDF, gstack routing |
 | [`docs/how-to/first-run-and-code-review.md`](docs/how-to/first-run-and-code-review.md) | E2E: fresh machine → MCP → graph → code-review skill |
@@ -107,7 +114,9 @@ Current as-built: [`docs/v2/`](docs/v2/)
 Path map (harness/skill locations): see `§ 8` of the archived full CLAUDE.md in [`docs/archive/`](docs/archive/)
 
 **Critical invariants:**
-- `start.sh` delegates gateway decisions to PT's `orchestrator/alphaclaw_manager.py` — never add routing logic to `start.sh`
+
+- `start.sh` delegates gateway decisions to PT's `orchestrator/alphaclaw_manager.py` —
+  never add routing logic to `start.sh`
 - orama API stays stateless (no Redis)
 - orama talks to AlphaClaw through PT's adapter, never directly
 - Periscope observes PT-normalized session artifacts; it never writes to or
@@ -127,13 +136,30 @@ Full setup: [`docs/wiki/06-multi-agent-collab.md`](docs/wiki/06-multi-agent-coll
 
 ## § 6 — Repository Identity & Git Hygiene
 
-- Commit identity: `cyre <Lawrence@cyre.me>`, `cyre <diazMelgarejo@gmail.com>`, or `Codex <codex@openai.com>` — verify with `bash scripts/git/check_identity.sh`
-- Official policy (authors + `Co-authored-by` allowlist): [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25) — install hooks with `bash scripts/git/install-local-hooks.sh`
+- Commit identity: `cyre <Lawrence@cyre.me>`, `cyre <diazMelgarejo@gmail.com>`, or
+  `Codex <codex@openai.com>` — verify with `bash scripts/git/check_identity.sh`
+- Official policy (authors + `Co-authored-by` allowlist):
+  [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25)
+  — install hooks with `bash scripts/git/install-local-hooks.sh`
 - Dated branches: `yyyy-mm-dd-NNN-brief-summary`
 - Never commit `.env`, `.env.local`, generated `.paths`
-- **No workstation paths in tracked files** (docs included): use `$OPENCLAW_ROOT`/`~`/`$REPO_ROOT`, never literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree. CI enforces via `scripts/review/repo_hygiene.py` — run it before committing docs with shell commands. See [wiki/08 § Portable paths](docs/wiki/08-git-hygiene-and-branching.md).
-- **History was rewritten — judging branches:** NEVER use ahead/behind, `rev-list --count`, or `merge-base` to decide if a branch is orphaned/divergent (meaningless across a rewrite). Run the tree-twin scan `scripts/git/reanchor_scan.sh <repo> origin/main [scope]`. Protocol: [`AGENTS.md` § History-rewrite](AGENTS.md) · method [git-history-surgery SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md) · why [LESSONS § 2026-06-05](docs/LESSONS.md).
-- **Attribution guards: single source of truth (ZERO fragmentation).** orama `scripts/git/` is canonical for `audit_attribution.sh`, `banned_attribution_lib.sh`, `check_commit_message.sh`, `check_identity.sh`, `daily-attribution-guard.sh` (+ deps). They are **byte-identical in every repo**. NEVER hand-edit a guard in a downstream repo (causes silent drift — e.g. a stale strict-mode allowlist blocking valid pushes). Edit orama's copy, then `bash scripts/git/sync-attribution-guard-scripts.sh <target>`. `daily-attribution-guard.sh` is self-contained (derives `REPO_ROOT`) — never a thin wrapper. Org-wide plan: [`docs/v2/`](docs/v2/).
+- **No workstation paths in tracked files** (docs included): use `$OPENCLAW_ROOT`/`~`/`$REPO_ROOT`,
+  never literal `/Users/<name>/…` or the `…/claude/OpenClaw` tree. CI enforces via
+  `scripts/review/repo_hygiene.py` — run it before committing docs with shell commands.
+  See [wiki/08 § Portable paths](docs/wiki/08-git-hygiene-and-branching.md).
+- **History was rewritten — judging branches:** NEVER use ahead/behind, `rev-list --count`, or
+  `merge-base` to decide if a branch is orphaned/divergent (meaningless across a rewrite). Run the
+  tree-twin scan `scripts/git/reanchor_scan.sh <repo> origin/main [scope]`. Protocol:
+  [`AGENTS.md` § History-rewrite](AGENTS.md) · method
+  [git-history-surgery SKILL.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md)
+  · why [LESSONS § 2026-06-05](docs/LESSONS.md).
+- **Attribution guards: single source of truth (ZERO fragmentation).** orama `scripts/git/` is
+  canonical for `audit_attribution.sh`, `banned_attribution_lib.sh`, `check_commit_message.sh`,
+  `check_identity.sh`, `daily-attribution-guard.sh` (+ deps). They are **byte-identical in every
+  repo**. NEVER hand-edit a guard in a downstream repo (causes silent drift — e.g. a stale
+  strict-mode allowlist blocking valid pushes). Edit orama's copy, then
+  `bash scripts/git/sync-attribution-guard-scripts.sh <target>`. `daily-attribution-guard.sh` is
+  self-contained (derives `REPO_ROOT`) — never a thin wrapper. Org-wide plan: [`docs/v2/`](docs/v2/).
 - Full rules: [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md)
 
 ---
@@ -143,11 +169,13 @@ Full setup: [`docs/wiki/06-multi-agent-collab.md`](docs/wiki/06-multi-agent-coll
 gstack v1.37.0.0 at `~/.claude/skills/gstack` (global-git).
 
 Safety rules:
+
 - ALWAYS use `/browse` for web — NEVER `mcp__claude-in-chrome__*` directly
 - `/investigate` for root-cause; `/ship` before any publish
 
 Load routing table + GBrain config:
-```
+
+```text
 /skill bin/orama-system/gstack-gbrain/SKILL.md
 ```
 
@@ -159,16 +187,27 @@ Both gbrain and code-review-graph now use **Ollama bge-m3** (1024-dim, local, fr
 `semantic_search_nodes` and `gbrain search` operate in the same vector space.
 
 **Current state (2026-05-24):**
-- gbrain: `ollama:bge-m3` (1024-dim) — `~/.gbrain/config.json`, Supabase pgvector — 5 sources (AlphaClaw 478pp, PT 725pp, orama-src 192pp, periscope 14pp, default 1599pp)
-- CRG: `openai` provider → Ollama `localhost:11434/v1` — wired via `.mcp.json` — **1 461 nodes, 1 257 bge-m3 embeddings, 12 communities** (orama-system graph)
+
+- gbrain: `ollama:bge-m3` (1024-dim) — `~/.gbrain/config.json`, Supabase pgvector — 5 sources
+  (AlphaClaw 478pp, PT 725pp, orama-src 192pp, periscope 14pp, default 1599pp)
+- CRG: `openai` provider → Ollama `localhost:11434/v1` — wired via `.mcp.json` — **1 461 nodes,
+  1 257 bge-m3 embeddings, 12 communities** (orama-system graph)
 - Idempotent env setup: `bash bin/orama-system/skills/mcp-install/scripts/setup-embeddings`
 - Toggle: `bash bin/orama-system/skills/code-review/scripts/crg-embed-mode [gbrain|local|status]`
-- **CRG graph build (MCP-only, not in install chain):** On fresh clone call `build_or_update_graph_tool` then `embed_graph_tool(provider="openai", model="bge-m3")` inside Claude Code
-- Reference docs: `bin/orama-system/skills/mcp-install/references/setup-embeddings.md` + `bin/orama-system/skills/code-review/references/crg-embed-mode.md`
+- **CRG graph build (MCP-only, not in install chain):** On fresh clone call
+  `build_or_update_graph_tool` then `embed_graph_tool(provider="openai", model="bge-m3")` inside
+  Claude Code
+- Reference docs: `bin/orama-system/skills/mcp-install/references/setup-embeddings.md` +
+  `bin/orama-system/skills/code-review/references/crg-embed-mode.md`
 
 **Storage roadmap (decided 2026-05-15):**
+
 - v2.1: LanceDB + bge-m3 for RAG/session memory; v2.5: DuckDB for fleet analytics
-- v2.1 (added 2026-07-12): GossipBus claim-board coordination history (`Perpetua-Tools/scripts/agent_coordination.py` — agent registrations, task claims, decision log) is job/decision-history-shaped and JSON-file-backed today; migrate to the same LanceDB store once it lands, rather than growing a bespoke persistence layer. Live-validated this date across 2 concurrent sessions — see `docs/v2/43-gossipbus-mesh-transport.md` § Real-world validation.
+- v2.1 (added 2026-07-12): GossipBus claim-board coordination history
+  (`Perpetua-Tools/scripts/agent_coordination.py` — agent registrations, task claims, decision log)
+  is job/decision-history-shaped and JSON-file-backed today; migrate to the same LanceDB store once
+  it lands, rather than growing a bespoke persistence layer. Live-validated this date across 2
+  concurrent sessions — see `docs/v2/43-gossipbus-mesh-transport.md` § Real-world validation.
 - gbrain (pgvector) = codebase index; LanceDB = orama job/decision history — coexist
 
 **Full integration plan:** [`docs/plans/2026-05-19-gbrain-crg-embedding-integration.md`](docs/plans/2026-05-19-gbrain-crg-embedding-integration.md)
@@ -199,11 +238,13 @@ symbols; on a non-code-aware pack `--dream` completes but the graph stays empty
 and reports a WARN. `code-def`/`code-refs` need the same extraction.
 
 Two indexed corpora available via the `gbrain` CLI:
+
 - This worktree's code (auto-pinned via `.gbrain-source`).
 - `~/.gstack/` curated memory (registered as `gstack-brain-lawrencecyremelgarejo` source via
   the existing federation pipeline).
 
 Prefer gbrain when:
+
 - "Where is X handled?" / semantic intent, no exact string yet:
     `gbrain search "<terms>"` or `gbrain query "<question>"`
 - "Where is symbol Y defined?" / symbol-based code questions:
@@ -234,7 +275,7 @@ sync code walk for them requires an explicit `--allow-reclone` opt-in.
 **When to stay on canonical:** read-only, sequential, or single-agent work.
 
 | Need | Action |
-|------|--------|
+| --- | --- |
 | 2+ agents writing simultaneously | `scripts/worktree-bootstrap.sh <repo> <branch> <slug> [gbrain-source]` |
 | Done with worktree | invoke `finishing-a-development-branch` skill |
 | Query CRG from worktree | pass `repo_root=<canonical-path>` — never rebuild from worktree |

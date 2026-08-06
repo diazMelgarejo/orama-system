@@ -3,7 +3,9 @@
 > **Canonical document:** Perpetua-Tools  
 > [`docs/phase-0-specifications/PHASE-0-MASTER-PLAN-2026-07-27.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-0-MASTER-PLAN-2026-07-27.md)
 
-The STM/swarm security knowledge graph lives in PT `docs/phase-0-specifications/` with LLM-wiki under `wiki/`. This file records **orama-specific disposition** and links so both-repo agents land in one checklist.
+The STM/swarm security knowledge graph lives in PT `docs/phase-0-specifications/`
+with LLM-wiki under `wiki/`. This file records **orama-specific disposition** and links
+so both-repo agents land in one checklist.
 
 **Verified `main`:** orama `41b77300` · PT `4f1a9936` · 2026-07-27.
 
@@ -32,8 +34,10 @@ The STM/swarm security knowledge graph lives in PT `docs/phase-0-specifications/
 
 ## Superseded trackers
 
-- [`2026-07-25-pending-work-tracker.md`](2026-07-25-pending-work-tracker.md) → use canonical master plan §4
-- [`2026-07-25-docs-scan-and-integrity-report.md`](2026-07-25-docs-scan-and-integrity-report.md) → HEAD was `5b05f545`; refreshed in master plan
+- [`2026-07-25-pending-work-tracker.md`](
+  2026-07-25-pending-work-tracker.md) → use canonical master plan §4
+- [`2026-07-25-docs-scan-and-integrity-report.md`](
+  2026-07-25-docs-scan-and-integrity-report.md) → HEAD was `5b05f545`; refreshed in master plan
 
 ---
 
