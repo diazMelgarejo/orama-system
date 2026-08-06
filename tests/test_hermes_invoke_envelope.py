@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import pytest
@@ -42,18 +41,75 @@ EXAMPLES = {
     },
     "result_ok": {
         "status": "ok",
+        "skill_id": "hermes-spawn",
+        "agent_id": "hermes",
+        "executor_id": "hermes",
+        "command": "hermes-spawn",
+        "action": "status",
+        "data": {},
         "files_modified": [],
         "follow_up_actions": [],
+        "warnings": [],
+        "error": None,
     },
     "result_blocked": {
         "status": "blocked",
+        "skill_id": "hermes-spawn",
+        "agent_id": "hermes",
+        "executor_id": "hermes",
+        "command": "hermes-spawn",
+        "action": "start",
+        "data": {},
         "files_modified": [],
         "follow_up_actions": ["set HERMES_GIT_BASH_PATH"],
         "warnings": ["path casing mismatch: uLtrathink vs ultrathink"],
+        "error": {
+            "code": "hermes_spawn_blocked",
+            "message": "precondition failed; set HERMES_GIT_BASH_PATH",
+        },
+    },
+    "result_health": {
+        "status": "partial",
+        "skill_id": "hermes-status",
+        "agent_id": "hermes",
+        "executor_id": "hermes",
+        "command": "hermes-status",
+        "action": "rollup",
+        "data": {
+            "subsystems": {
+                "pt_root": "ok",
+                "spawn_session": "ok",
+                "partner_canaries": "degraded",
+                "profiles": "ok",
+                "task_api": "not_yet_implemented",
+            },
+            "canaries": [
+                {
+                    "name": "LM Studio",
+                    "status": "PASS",
+                    "detail": "loaded model ok",
+                    "required": True,
+                }
+            ],
+        },
+        "files_modified": [],
+        "follow_up_actions": ["run verify_partner_canaries.py --skip-agy"],
+        "warnings": ["optional canary AGY UNAVAILABLE"],
+        "error": None,
     },
 }
 
 CORE_ENVELOPE_KEYS = frozenset({"skill_id", "args", "agent_id"})
+CANONICAL_RESULT_KEYS = frozenset(
+    {
+        "status",
+        "data",
+        "files_modified",
+        "follow_up_actions",
+        "warnings",
+        "error",
+    }
+)
 VALID_STATUS = frozenset({"ok", "needs_input", "partial", "error", "blocked"})
 PLACEHOLDER_PREFIXES = ("$", "%")
 
@@ -81,18 +137,30 @@ def validate_core_envelope(envelope: dict) -> list[str]:
 
 def validate_core_result(result: dict) -> list[str]:
     errors: list[str] = []
-    for key in ("status", "files_modified", "follow_up_actions"):
-        if key not in result:
-            errors.append(f"missing result key: {key}")
+    missing = CANONICAL_RESULT_KEYS - result.keys()
+    if missing:
+        errors.append(f"missing result keys: {sorted(missing)}")
     status = result.get("status")
     if status not in VALID_STATUS:
         errors.append(f"invalid status: {status}")
+    if not isinstance(result.get("data"), dict):
+        errors.append("data must be an object")
     if not isinstance(result.get("files_modified"), list):
         errors.append("files_modified must be an array")
     if not isinstance(result.get("follow_up_actions"), list):
         errors.append("follow_up_actions must be an array")
+    if not isinstance(result.get("warnings"), list):
+        errors.append("warnings must be an array")
+    err = result.get("error")
+    if err is not None and not isinstance(err, dict):
+        errors.append("error must be null or an object")
+    if err is not None:
+        if "message" not in err:
+            errors.append("error.message required when error is set")
     if status in ("needs_input", "blocked", "error") and not result.get("follow_up_actions"):
         errors.append("follow_up_actions required when status is blocked/needs_input/error")
+    if status == "ok" and err is not None:
+        errors.append("error must be null when status is ok")
     return errors
 
 
@@ -126,6 +194,17 @@ def test_result_ok_valid():
 
 def test_result_blocked_requires_follow_up():
     assert validate_core_result(EXAMPLES["result_blocked"]) == []
+
+
+def test_result_health_valid():
+    assert validate_core_result(EXAMPLES["result_health"]) == []
+
+
+def test_canonical_result_has_command_metadata():
+    result = EXAMPLES["result_ok"]
+    assert result["command"] == "hermes-spawn"
+    assert result["skill_id"] == "hermes-spawn"
+    assert result["action"] == "status"
 
 
 def test_missing_core_keys_rejected():

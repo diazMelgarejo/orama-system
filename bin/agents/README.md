@@ -18,7 +18,7 @@
 **Pipeline:** orchestrator, context, architect, refiner, executor, verifier, crystallizer  
 **Research:** mac-researcher, win-researcher, autoresearcher  
 **Win LM path:** coder (`coder-win` profile)  
-**Adapters:** cole, hermes-monitor, sage, relay, nova, rex  
+**Adapters:** cole, hermes-monitor, sage, relay-cursor, relay, nova, rex
 **Lifecycle:** lifecycle (Atlas / `main` — no Hermes profile)
 
 ## Live sources (read-only, not git)
@@ -60,7 +60,7 @@ python3 bin/orama-system/skills/hermes-harness/scripts/install_hermes_profiles.p
 cd "$ORAMA_SYSTEM_PATH"
 python3 -c "import yaml; yaml.safe_load(open('bin/agents/REGISTRY.yml'))"
 for d in orchestrator context architect refiner executor verifier crystallizer coder \
-  mac-researcher win-researcher autoresearcher cole hermes-monitor sage relay nova rex lifecycle; do
+  mac-researcher win-researcher autoresearcher cole hermes-monitor sage relay-cursor relay nova rex lifecycle; do
   test -f "bin/agents/$d/SOUL.md" || echo "MISSING SOUL: $d"
 done
 ```
