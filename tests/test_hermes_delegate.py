@@ -107,13 +107,18 @@ def test_subprocess_worker_timeout_kills_child(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     t0 = time.monotonic()
+    worker_timeout_sec = 3
     result = mod.run_delegate(
         ["slow-a", "slow-b"],
         pt_root=str(pt),
-        worker_timeout_sec=3,
+        worker_timeout_sec=worker_timeout_sec,
     )
     elapsed = time.monotonic() - t0
-    assert elapsed < 15, "subprocess workers must be killable at timeout"
+    # A small, explicit margin over worker_timeout_sec, not a fixed bound
+    # that stops meaning anything if worker_timeout_sec changes -- default
+    # SIGTERM kills an unhandled time.sleep() near-instantly, so 2 sequential
+    # terminations plus polling overhead comfortably fit in +5s.
+    assert elapsed < worker_timeout_sec + 5, "subprocess workers must be killable at timeout"
     assert result["status"] == "error"
     workers = result["data"]["workers"]
     assert len(workers) == 2
@@ -122,9 +127,9 @@ def test_subprocess_worker_timeout_kills_child(tmp_path: Path) -> None:
 
     for task in ("slow-a", "slow-b"):
         pid_file = tmp_path / f"{task}.pid"
-        raw = pid_file.read_text(encoding="utf-8").strip() if pid_file.exists() else ""
-        if not raw:
-            continue
+        assert pid_file.exists(), f"{task} must have written its PID before being killed"
+        raw = pid_file.read_text(encoding="utf-8").strip()
+        assert raw, f"{task}'s PID file must not be empty"
         pid = int(raw)
         with pytest.raises(ProcessLookupError):
             os.kill(pid, 0)
@@ -177,12 +182,26 @@ def test_subprocess_worker_timeout_kills_grandchild(tmp_path: Path) -> None:
     deadline = time.monotonic() + 5
     while not gc_pid_file.exists() and time.monotonic() < deadline:
         time.sleep(0.05)
-    if not gc_pid_file.exists():
-        pytest.skip("grandchild did not report its pid in time -- flaky env, not this fix")
+    assert gc_pid_file.exists(), "grandchild must have reported its PID before being killed"
 
     gc_pid = int(gc_pid_file.read_text(encoding="utf-8").strip())
-    with pytest.raises(ProcessLookupError):
-        os.kill(gc_pid, 0)
+    # Poll for the actual kill, not a single immediate check -- diagnosed
+    # directly against this environment: killpg's signal delivery and the
+    # kernel fully reaping a killed grandchild are not synchronous with
+    # _terminate_worker returning, even though the worker's own blocking
+    # wait() on the grandchild is causally gated on its death. A single
+    # check right after run_delegate returns can catch the grandchild in
+    # that reap window and see it as still "alive" for a few hundred ms.
+    kill_deadline = time.monotonic() + 5
+    grandchild_dead = False
+    while time.monotonic() < kill_deadline:
+        try:
+            os.kill(gc_pid, 0)
+        except ProcessLookupError:
+            grandchild_dead = True
+            break
+        time.sleep(0.1)
+    assert grandchild_dead, "grandchild must be killed, not just the direct child"
 
 
 def test_subprocess_workers_respect_concurrency_cap(tmp_path: Path) -> None:
@@ -239,3 +258,96 @@ def test_subprocess_workers_respect_concurrency_cap(tmp_path: Path) -> None:
     assert len(rows) == len(tasks)
     assert all(r["status"] == "ok" for r in rows)
     assert not follow_up
+
+
+def test_worker_construction_failure_does_not_abort_the_batch(tmp_path: Path) -> None:
+    """Regression for PR #280 review 4875271204: if _Worker.__init__ raises
+    for one task (e.g. Popen fails), the other tasks in the batch must
+    still run to completion -- not have the exception propagate and abort
+    everything else in flight or still queued.
+    """
+    mod = _load_delegate_module()
+    pt = tmp_path / "pt"
+    src = pt / "src"
+    src.mkdir(parents=True)
+    (src / "hermes_harness.py").write_text(
+        "import json, sys\n"
+        "def spawn_hermes_agent(role, task):\n"
+        "    return {'ok': True, 'task': task}\n",
+        encoding="utf-8",
+    )
+
+    real_worker_cls = mod._Worker
+    call_count = {"n": 0}
+
+    class _FlakyWorker(real_worker_cls):
+        def __init__(self, task: str, pt_root: str) -> None:
+            call_count["n"] += 1
+            if call_count["n"] == 2:
+                raise OSError("simulated Popen failure for this task only")
+            super().__init__(task, pt_root)
+
+    import unittest.mock
+
+    with unittest.mock.patch.object(mod, "_Worker", _FlakyWorker):
+        rows, follow_up = mod._run_subprocess_workers(
+            ["task-a", "task-b", "task-c"],
+            pt_root=str(pt),
+            worker_timeout_sec=10,
+            max_concurrent=5,
+        )
+
+    assert len(rows) == 3, "all 3 tasks must have a row, including the one that failed to launch"
+    by_task = {r["task"]: r for r in rows}
+    assert by_task["task-a"]["status"] == "ok"
+    assert by_task["task-c"]["status"] == "ok"
+    assert by_task["task-b"]["status"] == "error"
+    assert "simulated Popen failure" in by_task["task-b"]["error"]
+    assert any("task-b" in f for f in follow_up)
+
+
+def test_deadline_stops_new_launches_leaving_queued_tasks_unlaunched(tmp_path: Path) -> None:
+    """Regression for PR #280 review 4875271204: the launch loop must check
+    the deadline before each new worker, not just after finishing a full
+    batch of launches. With max_concurrent=1 (strictly sequential) and a
+    deadline sized for ~2 completions, later tasks should be correctly
+    reported as never started, not silently launched past the deadline.
+
+    Per-task timing (0.2s sleep, ~0.22s wall time including interpreter
+    startup) and the 0.6s deadline were verified empirically before
+    writing this test -- 2 sequential tasks reliably complete by ~0.45s,
+    a 3rd would finish around ~0.67s, past the 0.6s deadline -- giving
+    real margin on both sides rather than a razor-thin boundary.
+    """
+    mod = _load_delegate_module()
+    pt = tmp_path / "pt"
+    src = pt / "src"
+    src.mkdir(parents=True)
+    (src / "hermes_harness.py").write_text(
+        "import json, sys, time\n"
+        "def spawn_hermes_agent(role, task):\n"
+        "    time.sleep(0.2)\n"
+        "    return {'ok': True, 'task': task}\n",
+        encoding="utf-8",
+    )
+
+    rows, follow_up = mod._run_subprocess_workers(
+        ["task-a", "task-b", "task-c", "task-d", "task-e"],
+        pt_root=str(pt),
+        worker_timeout_sec=0.6,
+        max_concurrent=1,
+    )
+
+    assert len(rows) == 5
+    by_task = {r["task"]: r for r in rows}
+    completed = [t for t in by_task if by_task[t]["status"] == "ok"]
+    unlaunched = [t for t in by_task if by_task[t]["status"] == "error"]
+
+    assert len(completed) >= 1, "at least the first, already-launched worker must complete"
+    assert len(unlaunched) >= 1, "at least one later task must never have launched"
+    assert len(completed) + len(unlaunched) == 5
+    for t in unlaunched:
+        assert "did not start" in by_task[t]["error"], (
+            f"{t} must be reported as never started, not launched past the deadline"
+        )
+        assert any(t in f for f in follow_up)

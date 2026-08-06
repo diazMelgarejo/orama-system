@@ -147,12 +147,39 @@ the documented relay-cursor persona exemption surfaces; any remaining output is
 a failure and must be fixed or explicitly justified under the § 1 scope note.
 
 ```bash
-if git ls-files -z -- '*.py' '*.json' '*.yml' '*.yaml' \
-  ':!bin/agents/REGISTRY.yml' \
-  ':!bin/agents/personas/relay-cursor.yaml' \
-  ':!bin/agents/relay-cursor/SOUL.md' \
-  ':!bin/agents/relay-cursor/agent.md' |
+# One explicit allowlist for every permitted registry/persona surface --
+# was scattered as repeated :! pathspec exclusions inline in the grep
+# invocation below. Public control-plane files are deliberately NOT in
+# this list; only the documented persona/registry exemption surfaces are.
+COORDINATOR_ALLOWLIST=(
+  'bin/agents/REGISTRY.yml'
+  'bin/agents/personas/relay-cursor.yaml'
+  'bin/agents/relay-cursor/SOUL.md'
+  'bin/agents/relay-cursor/agent.md'
+)
+COORDINATOR_PATHSPEC=()
+for path in "${COORDINATOR_ALLOWLIST[@]}"; do
+  COORDINATOR_PATHSPEC+=(":!$path")
+done
+
+# *.md is now included -- the prior check covered .py/.json/.yml/.yaml
+# only, so a prohibited "Coordinator" heading in tracked Markdown would
+# have passed silently.
+if git ls-files -z -- '*.py' '*.json' '*.yml' '*.yaml' '*.md' \
+  "${COORDINATOR_PATHSPEC[@]}" |
   xargs -0 grep -nE 'Coordinator|coordinator'; then false; fi
+
+# Positive check: "orchestrator" terminology must actually be present as
+# the replacement, not just "Coordinator" absent -- an accidental
+# wholesale deletion of the term would pass the negative check above
+# while leaving nothing documenting the actual role.
+if ! git ls-files -z -- '*.py' '*.json' '*.yml' '*.yaml' '*.md' \
+  "${COORDINATOR_PATHSPEC[@]}" |
+  xargs -0 grep -qiE 'orchestrator'; then
+  echo "FAIL: no 'orchestrator' terminology found in the scanned surface" >&2
+  false
+fi
+
 if grep -rIn "deviceaffinity" . --include="*.py" --include="*.json" \
   --exclude-dir=.venv --exclude-dir=node_modules --exclude-dir=vendor; then false; fi
 if grep -rIn "qwen3-coder" . --include="*.py" \
@@ -160,6 +187,26 @@ if grep -rIn "qwen3-coder" . --include="*.py" \
 ```
 
 Note: `Perplexity-Tools` in CHANGELOG.md entries is **historical record** — acceptable.
+
+**Verified, not assumed:** extracted and ran the block above directly
+against this repo's actual current state. It correctly executes and
+correctly fails closed on real content — but that's the finding worth
+recording here: including `*.md` (previously missing entirely) surfaces
+dozens of genuine pre-existing "coordinator"/"Coordinator" hits across
+tracked Markdown that the old, code-only check never saw. Spot-checked
+a sample: most are legitimate and not the banned orchestrator-synonym
+usage this check exists to catch — `CLAUDE.md`'s own text describing
+the rule necessarily contains the word it bans; several fleet-mesh docs
+use "coordinator" to mean "which machine is designated as coordinator"
+under hardware policy, an unrelated sense; `docs/NEXT_STEPS.md` and
+several archived plan docs predate the terminology decision entirely.
+None of that makes the check wrong to include `*.md` — it means
+adopting it as a hard CI gate needs a real classification pass first
+(same shape as the SKILL.md markdownlint investigation elsewhere in
+this repo's history: a stricter check revealing real pre-existing debt
+is not itself a reason to skip fixing the check). Not attempted here —
+out of scope for a config/check fix, and each hit needs individual
+judgment about which sense of "coordinator" it is, not a bulk pass.
 Active code paths (`.py`, active `.md` docs, config `.json`) must use `Perpetua-Tools`.
 
 | Banned term (public scope) | Correct term | Where |
