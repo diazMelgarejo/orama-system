@@ -214,7 +214,7 @@ def test_start_json_includes_pid(isolated_runtime: Path) -> None:
         assert isinstance(pid, int) and pid > 0
         assert "log_file" in payload["data"]
         # Human-readable path still present on stderr
-        assert re.search(r"Hermes started \(pid \d+", start.stderr) or True
+        assert re.search(r"Hermes started \(pid \d+", start.stderr)
     finally:
         _run_spawn("stop", env=env)
 
