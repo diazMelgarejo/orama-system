@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import datetime
 import json
 import os
 import shutil
@@ -41,6 +42,7 @@ from typing import Any, Dict, List, Optional
 # ── Config ────────────────────────────────────────────────────────────────────
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+_CURSOR_RACE_RETRY_DUE_FILE = REPO_ROOT / ".logs" / "cursor_standalone_retry_due.txt"
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -553,14 +555,33 @@ async def _dispatch_hermes_lmstudio_win(task: str) -> Dict[str, Any]:
     }
 
 
+def _cursor_race_leg_deferred() -> bool:
+    """Return True while cursor/hermes race legs are deferred (see .logs marker)."""
+    if not _CURSOR_RACE_RETRY_DUE_FILE.exists():
+        return False
+    text = _CURSOR_RACE_RETRY_DUE_FILE.read_text(encoding="utf-8").strip()
+    try:
+        due = datetime.date.fromisoformat(text.rsplit(":", 1)[-1].strip())
+    except ValueError:
+        return True
+    return datetime.date.today() < due
+
+
 async def _dispatch_race(task: str) -> Dict[str, Any]:
     """Race cursor-agent and Hermes+LM Studio Win. First successful completion wins."""
     t0 = time.time()
 
-    racers = {
-        "cursor": asyncio.create_task(_dispatch_cursor(task)),
-        "hermes-lmstudio-win": asyncio.create_task(_dispatch_hermes_lmstudio_win(task)),
-    }
+    if _cursor_race_leg_deferred():
+        racers = {
+            "direct-lmstudio-win": asyncio.create_task(
+                _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
+            ),
+        }
+    else:
+        racers = {
+            "cursor": asyncio.create_task(_dispatch_cursor(task)),
+            "hermes-lmstudio-win": asyncio.create_task(_dispatch_hermes_lmstudio_win(task)),
+        }
     pending = set(racers.values())
     failures: Dict[str, str] = {}
     winner: tuple[str, Dict[str, Any]] | None = None
