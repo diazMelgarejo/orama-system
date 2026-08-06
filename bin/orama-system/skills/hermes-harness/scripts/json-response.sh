@@ -22,10 +22,10 @@ _emit_result() {
   local skill_id="${2:-}"
   local command="${3:-}"
   local action="${4:-}"
-  local data="${5:-{}}"
-  local files_modified="${6:-[]}"
-  local follow_up_actions="${7:-[]}"
-  local warnings="${8:-[]}"
+  local data="${5:-"{}"}"
+  local files_modified="${6:-"[]"}"
+  local follow_up_actions="${7:-"[]"}"
+  local warnings="${8:-"[]"}"
   local error_json="${9:-null}"
   local agent_id="${10:-hermes}"
   local executor_id="${11:-hermes}"
@@ -54,9 +54,27 @@ def load_obj(raw, default):
     if not raw:
         return default
     try:
-        return json.loads(raw)
+        value = json.loads(raw)
     except json.JSONDecodeError:
         return default
+    if isinstance(default, dict):
+        return value if isinstance(value, dict) else default
+    if isinstance(default, list):
+        return value if isinstance(value, list) else default
+    return value
+
+def load_error(raw):
+    if raw in ("", "null"):
+        return None
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError:
+        return {"code": "invalid_error", "message": raw}
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        return value
+    return {"code": "invalid_error", "message": str(value)}
 
 payload = {
     "status": status,
@@ -69,7 +87,7 @@ payload = {
     "files_modified": load_obj(files_raw, []),
     "follow_up_actions": load_obj(follow_raw, []),
     "warnings": load_obj(warnings_raw, []),
-    "error": load_obj(error_raw, None) if error_raw not in ("", "null") else None,
+    "error": load_error(error_raw),
 }
 print(json.dumps(payload, separators=(",", ":")))
 PY
@@ -79,7 +97,7 @@ hermes_result_ok() {
   local skill_id="${1:-}"
   local command="${2:-}"
   local action="${3:-}"
-  local data="${4:-{}}"
+  local data="${4:-"{}"}"
   _emit_result "ok" "$skill_id" "$command" "$action" "$data" "[]" "[]" "[]" "null"
   exit 0
 }
@@ -117,9 +135,15 @@ hermes_result_partial() {
   local skill_id="${1:-}"
   local command="${2:-}"
   local action="${3:-}"
-  local data="${4:-{}}"
-  local warnings="${5:-[]}"
-  local follow_up="${6:-[]}"
+  local data="${4:-"{}"}"
+  local warnings="${5:-"[]"}"
+  local follow_up="${6:-"[]"}"
+  # partial means follow-up is required — reject empty follow-up lists
+  if [[ -z "$follow_up" || "$follow_up" == "[]" ]]; then
+    hermes_result_error "$skill_id" "$command" "$action" "partial_missing_follow_up" \
+      "partial results require non-empty follow_up_actions" \
+      '["provide follow_up_actions or emit ok when no follow-up is needed"]'
+  fi
   _emit_result "partial" "$skill_id" "$command" "$action" "$data" "[]" "$follow_up" "$warnings" "null"
   exit 0
 }

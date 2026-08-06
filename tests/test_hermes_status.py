@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import types
 from pathlib import Path
 
 import pytest
+
+pytestmark = pytest.mark.unit
 
 ROOT = Path(__file__).resolve().parents[1]
 STATUS_PY = ROOT / "bin/orama-system/skills/hermes-harness/scripts/hermes_status.py"
 
 
-def _load_status_module():
+def _load_status_module() -> types.ModuleType:
     spec = importlib.util.spec_from_file_location("hermes_status", STATUS_PY)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
@@ -22,7 +25,8 @@ def _load_status_module():
 
 def test_build_status_includes_appendix_c_stubs(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     mod = _load_status_module()
-    monkeypatch.setattr(mod, "check_pt_root", lambda _r: ("ok", {"path": "/tmp/pt"}))
+    pt_path = str(tmp_path / "pt")
+    monkeypatch.setattr(mod, "check_pt_root", lambda _r: ("ok", {"path": pt_path}))
     monkeypatch.setattr(mod, "check_spawn_session", lambda _r: ("ok", {"running": False}))
     monkeypatch.setattr(
         mod,
@@ -39,7 +43,8 @@ def test_build_status_includes_appendix_c_stubs(monkeypatch: pytest.MonkeyPatch,
 
 def test_build_status_partial_when_canaries_degraded(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     mod = _load_status_module()
-    monkeypatch.setattr(mod, "check_pt_root", lambda _r: ("ok", {"path": "/tmp/pt"}))
+    pt_path = str(tmp_path / "pt")
+    monkeypatch.setattr(mod, "check_pt_root", lambda _r: ("ok", {"path": pt_path}))
     monkeypatch.setattr(mod, "check_spawn_session", lambda _r: ("ok", {"running": False}))
     monkeypatch.setattr(
         mod,
@@ -50,7 +55,7 @@ def test_build_status_partial_when_canaries_degraded(monkeypatch: pytest.MonkeyP
             ["required canary failed"],
         ),
     )
-    monkeypatch.setattr(mod, "check_profiles", lambda: ("degraded", {"detail": "none"}, []))
+    monkeypatch.setattr(mod, "check_profiles", lambda: ("ok", {"count": 1}, []))
 
     result = mod.build_status(tmp_path, skip_canaries=False)
     assert result["status"] == "partial"

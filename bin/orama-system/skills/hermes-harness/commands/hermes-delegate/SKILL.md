@@ -23,6 +23,7 @@ for arg in "$@"; do
 done
 
 TASKS_RAW="${TASKS_PART[*]:-}"
+export TASKS_RAW
 if [[ -z "$TASKS_RAW" ]]; then
   echo "Usage: task1 | task2 | task3 [--json]" >&2
   exit 1
@@ -43,7 +44,6 @@ tasks = [t.strip() for t in os.environ["TASKS_RAW"].split("|") if t.strip()]
 print(len(tasks))
 PY
 )"
-export TASKS_RAW
 if (( TASK_COUNT < 2 || TASK_COUNT > 5 )); then
   echo "ERROR: expected 2-5 tasks, got ${TASK_COUNT}" >&2
   exit 1

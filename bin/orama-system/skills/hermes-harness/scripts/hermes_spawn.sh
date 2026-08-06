@@ -200,9 +200,23 @@ main() {
     esac
   done
 
+  ACTION="${args[0]:-status}"
+  local TASK=""
+  if ((${#args[@]} > 1)); then
+    TASK="${args[*]:1}"
+  fi
+
   sanitize_session_id
   resolve_harness_root
-  PERP_SCRIPT="$(resolve_perp_harness_script)"
+  if ! PERP_SCRIPT="$(resolve_perp_harness_script)"; then
+    if (( JSON_OUT )); then
+      hermes_result_error "$SKILL_ID" "$COMMAND_NAME" "$ACTION" "pt_root_unresolved" \
+        "Perpetua-Tools root not resolved" \
+        '["set PERPETUA_TOOLS_ROOT or clone Perpetua-Tools"]'
+    fi
+    echo "ERROR: Perpetua-Tools root not resolved" >&2
+    exit 1
+  fi
 
   RUNTIME_BASE="${XDG_RUNTIME_DIR:-${HOME}/.cache}"
   require_safe_dir "$RUNTIME_BASE"
@@ -215,12 +229,6 @@ main() {
   mkdir -p "$PID_DIR"
   chmod 700 "$PID_DIR"
   require_safe_dir "$PID_DIR"
-
-  ACTION="${args[0]:-status}"
-  local TASK=""
-  if ((${#args[@]} > 1)); then
-    TASK="${args[*]:1}"
-  fi
 
   case "$ACTION" in
     start)
@@ -287,7 +295,9 @@ main() {
       child_pid=""
       trap 'release_lock' EXIT
       if (( JSON_OUT )); then
-        emit_json_data "{\"pid\":${started_pid},\"session\":\"${SESSION_ID}\",\"log_file\":\"${log_file}\"}"
+        local log_escaped
+        log_escaped="$(json_escape "$log_file")"
+        emit_json_data "{\"pid\":${started_pid},\"session\":\"${SESSION_ID}\",\"log_file\":\"${log_escaped}\"}"
       fi
       echo "✅ Hermes started (pid $started_pid, session ${SESSION_ID})"
       ;;

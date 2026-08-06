@@ -157,8 +157,8 @@ def validate_core_result(result: dict) -> list[str]:
     if err is not None:
         if "message" not in err:
             errors.append("error.message required when error is set")
-    if status in ("needs_input", "blocked", "error") and not result.get("follow_up_actions"):
-        errors.append("follow_up_actions required when status is blocked/needs_input/error")
+    if status in ("partial", "needs_input", "blocked", "error") and not result.get("follow_up_actions"):
+        errors.append("follow_up_actions required when status is partial/blocked/needs_input/error")
     if status == "ok" and err is not None:
         errors.append("error must be null when status is ok")
     return errors
@@ -196,15 +196,36 @@ def test_result_blocked_requires_follow_up():
     assert validate_core_result(EXAMPLES["result_blocked"]) == []
 
 
+@pytest.mark.unit
 def test_result_health_valid():
     assert validate_core_result(EXAMPLES["result_health"]) == []
 
 
+@pytest.mark.unit
 def test_canonical_result_has_command_metadata():
     result = EXAMPLES["result_ok"]
     assert result["command"] == "hermes-spawn"
     assert result["skill_id"] == "hermes-spawn"
     assert result["action"] == "status"
+
+
+@pytest.mark.unit
+def test_partial_requires_follow_up_actions():
+    bad = {
+        "status": "partial",
+        "skill_id": "hermes-status",
+        "agent_id": "hermes",
+        "executor_id": "hermes",
+        "command": "hermes-status",
+        "action": "rollup",
+        "data": {"subsystems": {"partner_canaries": "degraded"}},
+        "files_modified": [],
+        "follow_up_actions": [],
+        "warnings": ["canary degraded"],
+        "error": None,
+    }
+    errors = validate_core_result(bad)
+    assert any("follow_up_actions required" in e for e in errors)
 
 
 def test_missing_core_keys_rejected():

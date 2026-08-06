@@ -244,12 +244,37 @@ def test_resolve_perp_harness_rejects_symlink_even_when_real_target_is_crawlable
 
 def test_resolve_pt_root_cached_within_session(tmp_path: Path) -> None:
     pt = _make_pt_root(tmp_path)
-    env = {"PERPETUA_TOOLS_PATH": str(pt)}
-    first = _run_resolver(env=env)
-    second = _run_resolver(env=env)
-    assert first.returncode == 0
-    assert second.returncode == 0
-    assert first.stdout.strip() == second.stdout.strip() == str(pt.resolve())
+    run_env = os.environ.copy()
+    for key in (
+        "PERPETUA_TOOLS_PATH",
+        "PT_HOME",
+        "PERPETUA_TOOLS_ROOT",
+        "PERPETUATOOLSROOT",
+        "ORAMA_SYSTEM_PATH",
+        "HOME",
+    ):
+        run_env.pop(key, None)
+    run_env["PERPETUA_TOOLS_PATH"] = str(pt)
+    run_env["HOME"] = "/tmp"
+    # Two resolve_pt_root calls in one shell must share the session-local cache.
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{RESOLVE_SCRIPT}"; '
+            'a="$(resolve_pt_root)"; b="$(resolve_pt_root)"; '
+            'printf "%s\\n%s\\n" "$a" "$b"',
+        ],
+        cwd=str(REPO_ROOT),
+        env=run_env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    assert len(lines) == 2
+    assert lines[0] == lines[1] == str(pt.resolve())
 
 
 def test_resolve_perp_harness_fails_on_ambiguous_crawl(tmp_path: Path) -> None:
