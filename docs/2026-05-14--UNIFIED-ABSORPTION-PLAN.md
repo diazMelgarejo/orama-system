@@ -141,13 +141,22 @@ even if technically clever.
 
 ## § 2 — Vocabulary Normalization (Immediate, Both Repos)
 
-Grep acceptance criteria — all must return zero results after cleanup:
+Grep acceptance criteria — all must return zero unauthorized results after cleanup.
+The coordinator check is scoped to tracked code/config files and prunes only
+the documented relay-cursor persona exemption surfaces; any remaining output is
+a failure and must be fixed or explicitly justified under the § 1 scope note.
 
 ```bash
-grep -r "Coordinator" . --include="*.py" --include="*.json" --include="*.yml"  # → 0 (except internal prose comments AND the relay-cursor agent-persona exemption below)
-grep -r "coordinator" . --include="*.py" --include="*.json"                     # → 0 (same)
-grep -r "deviceaffinity" . --include="*.py" --include="*.json"                  # → 0
-grep -r "qwen3-coder" . --include="*.py"                                         # → 0
+if git ls-files -z -- '*.py' '*.json' '*.yml' '*.yaml' \
+  ':!bin/agents/REGISTRY.yml' \
+  ':!bin/agents/personas/relay-cursor.yaml' \
+  ':!bin/agents/relay-cursor/SOUL.md' \
+  ':!bin/agents/relay-cursor/agent.md' |
+  xargs -0 grep -nE 'Coordinator|coordinator'; then false; fi
+if grep -rIn "deviceaffinity" . --include="*.py" --include="*.json" \
+  --exclude-dir=.venv --exclude-dir=node_modules --exclude-dir=vendor; then false; fi
+if grep -rIn "qwen3-coder" . --include="*.py" \
+  --exclude-dir=.venv --exclude-dir=node_modules --exclude-dir=vendor; then false; fi
 ```
 
 Note: `Perplexity-Tools` in CHANGELOG.md entries is **historical record** — acceptable.
