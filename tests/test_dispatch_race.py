@@ -198,7 +198,8 @@ def test_hermes_timeout_fails_cleanly_without_internal_fallback():
     mock_direct.assert_not_awaited()
 
 
-def test_hermes_nonzero_exit_with_output_is_failure():
+@pytest.mark.unit
+def test_hermes_nonzero_exit_with_output_is_failure() -> None:
     """Non-zero Hermes exit must not count as success even with stdout text."""
     with patch.object(spawn_agents, "_find_hermes", return_value="/fake/hermes"), \
          patch.object(spawn_agents, "_dispatch_lmstudio", new_callable=AsyncMock) as mock_direct:
@@ -225,7 +226,8 @@ def test_hermes_nonzero_exit_with_output_is_failure():
     mock_direct.assert_not_awaited()
 
 
-def test_hermes_uses_win_coder_endpoint_pool(monkeypatch):
+@pytest.mark.unit
+def test_hermes_uses_win_coder_endpoint_pool(monkeypatch: pytest.MonkeyPatch) -> None:
     """Hermes subprocess env must route through $WIN_CODER_ENDPOINTS."""
     monkeypatch.setattr(spawn_agents, "WIN_CODER_ENDPOINT", "http://win-coder.example:1234")
 
