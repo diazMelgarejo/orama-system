@@ -16,6 +16,12 @@ STATUS_PY = ROOT / "bin/orama-system/skills/hermes-harness/scripts/hermes_status
 
 
 def _load_status_module() -> types.ModuleType:
+    """
+    Load the Hermes status module from its repository path.
+    
+    Returns:
+    	types.ModuleType: The dynamically loaded Hermes status module.
+    """
     spec = importlib.util.spec_from_file_location("hermes_status", STATUS_PY)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)

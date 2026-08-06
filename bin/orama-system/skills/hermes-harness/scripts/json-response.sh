@@ -3,6 +3,7 @@
 # See ../references/hermes-universal-invocation-protocol.md
 set -euo pipefail
 
+# json_escape escapes backslashes, double quotes, and control characters in a string for JSON output.
 json_escape() {
   local s="${1:-}"
   s=${s//\\/\\\\}
@@ -13,10 +14,12 @@ json_escape() {
   printf '%s' "$s"
 }
 
+# log writes a prefixed message to standard error.
 log() {
   printf '[json-response] %s\n' "${1:-}" >&2
 }
 
+# _emit_result emits a JSON result envelope to stdout, applying defaults and structured handling for malformed fields.
 _emit_result() {
   local status="${1:-error}"
   local skill_id="${2:-}"
@@ -93,6 +96,7 @@ print(json.dumps(payload, separators=(",", ":")))
 PY
 }
 
+# hermes_result_ok emits a successful result envelope with the supplied skill, command, action, and data, then exits with status 0.
 hermes_result_ok() {
   local skill_id="${1:-}"
   local command="${2:-}"
@@ -102,6 +106,13 @@ hermes_result_ok() {
   exit 0
 }
 
+# hermes_result_error emits an error result with the supplied error details and exits with status 1.
+# @param skill_id The identifier of the skill associated with the result.
+# @param command The command associated with the result.
+# @param action The action associated with the result.
+# @param code The error code, defaulting to `command_error`.
+# @param message The error message, defaulting to `Unknown error`.
+# @param follow_up JSON-encoded follow-up actions for the result, defaulting to `[]`.
 hermes_result_error() {
   local skill_id="${1:-}"
   local command="${2:-}"
@@ -117,6 +128,7 @@ hermes_result_error() {
   exit 1
 }
 
+# hermes_result_blocked emits a blocked result with a command-specific error and exits with status 1.
 hermes_result_blocked() {
   local skill_id="${1:-}"
   local command="${2:-}"
@@ -131,6 +143,7 @@ hermes_result_blocked() {
   exit 1
 }
 
+# hermes_result_partial emits a partial Hermes result with required follow-up actions.
 hermes_result_partial() {
   local skill_id="${1:-}"
   local command="${2:-}"
