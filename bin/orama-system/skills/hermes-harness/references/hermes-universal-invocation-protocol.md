@@ -11,7 +11,7 @@ at runtime before file I/O. Never commit workstation absolute paths.
 ## Layer model (OSI-style)
 
 | Layer | Name | Audience | Carries |
-|-------|------|----------|---------|
+| ------- | ------ | ---------- | --------- |
 | L3 | Intent | Human / orchestrator | Core trio + `harness` |
 | L2 | Dispatch | Hermes harness | L3 + path placeholders + `executor_id` + optional `transport` |
 | L1 | Transport | Partner CLI (internal) | Codex/AGY flags — not in committed skill docs |
@@ -32,7 +32,7 @@ Periscope. v2 may expand schema in `/docs/v2`.
 These types serve different layers and must not be merged into one schema:
 
 | Name | Layer | Owner | Purpose |
-|------|-------|-------|---------|
+| ------ | ------- | ------- | --------- |
 | **Hermes result** (this doc) | L0 | orama-system | Command/skill stdout contract: `status`, `data`, `error`, … |
 | **JobSpec** / **JobStatus** | Control plane | Perpetua-Tools `/v1/jobs` | Durable job submission and lifecycle — not skill stdout |
 | **TaskEnvelope** | Worker wire | Perpetua-Tools `contracts.py` | PT-owned worker dispatch contract — hot path uses JobSpec only |
@@ -51,7 +51,7 @@ See also: [`docs/update-docs/2026-08-06-job-task-envelope-evolution.md`](../../.
 ```
 
 | Field | Required | Rule |
-|-------|----------|------|
+| ------- | ---------- | ------ |
 | `skill_id` | yes | Registry slug; resolve via §Subskill Registry in `SKILL.md` |
 | `args` | yes | Flat JSON object; `{}` when none |
 | `agent_id` | yes | Audit owner: `hermes`, `claude`, `codex`, `openclaw`, `agy`, `orchestrator`, `relay-cursor` |
@@ -60,7 +60,7 @@ See also: [`docs/update-docs/2026-08-06-job-task-envelope-evolution.md`](../../.
 ## Harness extensions (optional)
 
 | Field | When | Committed placeholder | Runtime expansion |
-|-------|------|----------------------|-------------------|
+| ------- | ------ | ---------------------- | ------------------- |
 | `harness` | Hermes dispatch | `"hermes"` | Echo only |
 | `orama_system_root` | Operator skills | `"$ORAMA_SYSTEM_PATH"` | `git rev-parse --show-toplevel` or env |
 | `openclaw_home` | Fabric skills | `"$OPENCLAW_HOME"` | User default `~/.openclaw` |
@@ -91,7 +91,7 @@ legacy inbound shapes to this envelope before consumers read them.
 ```
 
 | Field | Required | Rule |
-|-------|----------|------|
+| ------- | ---------- | ------ |
 | `status` | yes | `ok`, `needs_input`, `partial`, `error`, or `blocked` |
 | `skill_id` | when known | Registry slug for the emitting command |
 | `agent_id` | when known | Audit owner |
@@ -105,7 +105,7 @@ legacy inbound shapes to this envelope before consumers read them.
 | `error` | yes | `null` on success, or `{ "code": "...", "message": "..." }` |
 
 | `status` | Meaning |
-|----------|---------|
+| ---------- | --------- |
 | `ok` | Completed |
 | `needs_input` | Missing required input; no unsafe change |
 | `partial` | Some work done; follow-up required |
@@ -141,7 +141,7 @@ Emitters always produce the canonical shape. Inbound legacy payloads normalize
 before consumption.
 
 | Direction | Source field | Canonical field | Rule |
-|-----------|--------------|-----------------|------|
+| ----------- | -------------- | ----------------- | ------ |
 | → canonical | `ok: true` | `status: "ok"` | Boolean success |
 | → canonical | `ok: false` | `status: "error"` | Boolean failure |
 | → canonical | `message` | `error.message` or `data`/`warnings` | Map to `error` only on non-success; preserve successful messages |
@@ -159,7 +159,7 @@ before consumption.
 
 ### Adapter pseudocode (normalize inbound)
 
-```
+```text
 function normalize_result(raw, command, action):
   if raw has "ok" and not raw has "status":
     raw.status = raw.ok ? "ok" : "error"
@@ -175,7 +175,9 @@ function normalize_result(raw, command, action):
         raw.warnings.append(raw.message)
   if raw has "canaries":
     raw.data = raw.data ?? {}
-    raw.data.canaries = raw.data.canaries ?? raw.canaries
+    existing = raw.data.canaries ?? []
+    top_level = raw.canaries ?? []
+    raw.data.canaries = existing.concat(top_level)
     delete raw.canaries
   raw.files_modified = raw.files_modified ?? []
   raw.follow_up_actions = raw.follow_up_actions ?? []

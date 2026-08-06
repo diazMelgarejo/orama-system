@@ -3,10 +3,11 @@
 Tracked copy of EDITED-03 → MERGE-10 persona YAML. Live hub mirror:
 `${HOME}/.alphaclaw/.openclaw/workspace/docs/oramasys/personas/`
 
-**SSoT for git/install:** this directory. Hub copies are operator-runtime mirrors — refresh from here after `git pull`.
+**SSoT for git/install:** this directory. Hub copies are operator-runtime mirrors —
+refresh from here after `git pull`.
 
 | Persona file | openclaw_id | Display | Staging folder |
-|--------------|-------------|---------|----------------|
+| -------------- | ------------- | --------- | ---------------- |
 | `cole.yaml` | `cole-agent` | Cole | `cole/` |
 | `hermes.yaml` | `hermes-agent` | Hermes | `hermes-monitor/` |
 | `sage.yaml` | `gemini-coder` | Sage | `sage/` |

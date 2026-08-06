@@ -19,9 +19,10 @@ PT runtime boundary, and thin-wrapper install path.
 
 <!-- AUTO-GENERATED cross-repo links -->
 
-### Related research
+## Related research
 
-- Job/task envelope evolution (MVP JobSpec / TaskEnvelope history): [`../update-docs/2026-08-06-job-task-envelope-evolution.md`](../update-docs/2026-08-06-job-task-envelope-evolution.md)
+- Job/task envelope evolution (MVP JobSpec / TaskEnvelope history):
+  [update doc](../update-docs/2026-08-06-job-task-envelope-evolution.md)
 
 ### orama-system (GitHub `main`)
 
@@ -92,10 +93,13 @@ PT runtime boundary, and thin-wrapper install path.
 
 ### Unresolved / corrected PT paths from plan prose
 
-- `hermes_harness.py (plan assumed path)` — Actual tracked file: `src/hermes_harness.py` — see PT link below. Plan prose already notes no tracked file at the originally assumed path.
+- `hermes_harness.py (plan assumed path)` — Actual tracked file:
+  `src/hermes_harness.py` — see PT link below. Plan prose already notes no
+  tracked file at the originally assumed path.
 - `SPECS.md / docs/SPECS.md` — (unresolved: path not found)
 - `orchestrator/hermes_harness.py` — (unresolved: path not found; use src/hermes_harness.py)
-- Canonical PT Hermes runtime entrypoint: [`src/hermes_harness.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/src/hermes_harness.py)
+- Canonical PT Hermes runtime entrypoint:
+  `src/hermes_harness.py` (linked in the Perpetua-Tools table above)
 
 <!-- /AUTO-GENERATED -->
 ---
@@ -103,9 +107,10 @@ PT runtime boundary, and thin-wrapper install path.
 ## Progress (2026-08-06) — Wave 1–2 committed locally (no push)
 
 **Branch:** `2026-08-05-002-hermes-graft-plan-reference-fix`  
-**Tracking plan:** `OpenClaw/v1/2026-08-06-envelope-reconciliation-plan.md` (outside git, sibling to orama checkout)
+**Tracking plan:** `OpenClaw/v1/2026-08-06-envelope-reconciliation-plan.md`
+(outside git, sibling to orama checkout)
 
-```
+```text
 Envelope reconciliation (Phases 0–5 local)  [████████████████████] 100%
   Phase 0  v1 plan artifact                 [████████████████████] 100%  done
   Phase 1  T-ENG-1 protocol + fixtures      [████████████████████] 100%  done
@@ -132,7 +137,9 @@ Envelope reconciliation (Phases 0–5 local)  [███████████
 | 4 | T-ENG-3 cache `resolve_pt_root` | **Done** | `resolve_perp_harness.sh` — `_RESOLVED_PT_ROOT_CACHE` |
 | 5 | Commit + push | **Commit done** / push deferred | four logical local commits; push per user gate |
 
-**Test snapshot (2026-08-06):** 38/38 pass — `test_hermes_invoke_envelope`, `test_hermes_status`, `test_hermes_delegate`, `test_hermes_spawn`, `test_resolve_perp_harness`.
+**Test snapshot (2026-08-06):** 38/38 pass — `test_hermes_invoke_envelope`,
+`test_hermes_status`, `test_hermes_delegate`, `test_hermes_spawn`,
+`test_resolve_perp_harness`.
 
 ### Appendix C stub map (v2.1++ deferred)
 
@@ -148,7 +155,9 @@ Plot each Appendix C platform gap to **reuse / stub / defer** — full build sta
 | Recursive workers | Explicitly out — `depth=0` lesson | absorption §4.1 | v2.1++ |
 | HITL approval | Mesh HITL / control-plane auth where present | fleet-mesh PR #224 lineage | v2.1++ productization |
 
-`hermes-status --json` exposes implemented subsystems (`pt_root`, `spawn_session`, `partner_canaries`, `profiles`) plus the Appendix C rows above as `not_yet_implemented` under `data.subsystems`.
+`hermes-status --json` exposes implemented subsystems (`pt_root`, `spawn_session`,
+`partner_canaries`, `profiles`) plus the Appendix C rows above as
+`not_yet_implemented` under `data.subsystems`.
 
 ---
 
@@ -580,7 +589,8 @@ Before any merge to `main`, the audit worktree should produce:
 1. **`docs/plans/…-graft-audit.md`** — full Graft Matrix
 2. **`.claude/plans/hermes-openclaw-graft.plan.md`** — executable task breakdown
    (if using PRD flow later)
-3. **Gap scorecard** — % of Nine Skills + `codex-openclaw-agent` patterns with Hermes ADOPT/ADAPT coverage
+3. **Gap scorecard** — % of Nine Skills + `codex-openclaw-agent` patterns with
+   Hermes ADOPT/ADAPT coverage
 4. **No code on `main`** until Wave 1 is approved
 
 ---
@@ -730,7 +740,7 @@ orama-system (L3) → Perpetua-Tools dispatcher (L2) → openclaw-skills/{skill_
 | Phase 1 Graft Matrix | **Pending** — read-only audit |
 | Wave 0 | **Done** — dispatch taxonomy, path doctrine, lane tags (see Wave 0 table above) |
 | Plan-only Wave 1-2 reconciliation | **Done** — ownership, canonical envelope, compatibility mappings, and execution gates recorded above; no code executed |
-| T-ENG-1 (protocol SoT + fixtures) | **Done** — saved uncommitted on branch; see [Progress (2026-08-06)](#progress-2026-08-06--save-only-commit-deferred) |
+| T-ENG-1 (protocol SoT + fixtures) | **Done** — saved uncommitted on branch; see [Progress (2026-08-06)](#progress-2026-08-06--wave-12-committed-locally-no-push) |
 | Wave 1-2 implementation | **Done** — four logical local commits (T-ENG-1, plan docs, Wave 1, Wave 2); 38/38 tests pass; **push deferred** |
 | Wave 4 (partial) | **Done** — PT-root-resolver dedup (`resolve_perp_harness.sh` canonicalization) landed 2026-08-05, pulled forward ahead of Wave 1-2 as a correctness fix, not a sequencing violation |
 | Waves 3, 5 | **Deferred** — reassess scope/priority after Wave 1-2 ships (see design doc Next Steps) |
@@ -739,21 +749,49 @@ orama-system (L3) → Perpetua-Tools dispatcher (L2) → openclaw-skills/{skill_
 
 ## /autoplan Phase 1: CEO Review (2026-08-06)
 
-Mode: **SELECTIVE EXPANSION** (autoplan default for feature-enhancement-on-existing-system plans). Premise gate (D1) confirmed by user: accept premises as stated, with explicit refinement to prioritize Wave 1-2 ahead of Waves 3-5 (captured in the design doc referenced in Status above).
+Mode: **SELECTIVE EXPANSION** (autoplan default for feature-enhancement-on-existing-system
+plans). Premise gate (D1) confirmed by user: accept premises as stated, with explicit
+refinement to prioritize Wave 1-2 ahead of Waves 3-5 (captured in the design doc
+referenced in Status above).
 
 ### CEO Dual Voices
 
 **CODEX SAYS (CEO — strategy challenge):**
 
-The plan assumes the problem is "Hermes needs OpenClaw's operational rigor" instead of proving the higher-order problem: "Hermes needs to become a reliable orchestration product." Appendix C admits the actual missing platform primitives are a task API, fleet manager, scheduler, observability transport, verifier gate, recursive workers, and HITL flows — none of which this plan attacks. JSON envelope harmonization (Wave 1) is called "low risk, high leverage" but standardized stdout is infrastructure hygiene, not leverage, unless there's a consumer (scheduler, dashboard, verifier, retry engine) that doesn't exist yet. The plan optimizes internal taxonomy (Wave 0) before external utility, defers native delegation while polishing shell wrappers, and its Risk table + Acceptance Criteria are entirely inward-facing (repo shape, not user/adoption impact). Reframe: stop asking "which OpenClaw patterns should Hermes absorb" and ask "what is the smallest Hermes control plane that makes multi-agent work trustworthy" — OpenClaw grafting becomes a compatibility layer, not the roadmap.
+The plan assumes the problem is "Hermes needs OpenClaw's operational rigor" instead of
+proving the higher-order problem: "Hermes needs to become a reliable orchestration product."
+Appendix C admits the actual missing platform primitives are a task API, fleet manager,
+scheduler, observability transport, verifier gate, recursive workers, and HITL flows —
+none of which this plan attacks. JSON envelope harmonization (Wave 1) is called "low risk,
+high leverage" but standardized stdout is infrastructure hygiene, not leverage, unless
+there's a consumer (scheduler, dashboard, verifier, retry engine) that doesn't exist yet.
+The plan optimizes internal taxonomy (Wave 0) before external utility, defers native
+delegation while polishing shell wrappers, and its Risk table + Acceptance Criteria are
+entirely inward-facing (repo shape, not user/adoption impact). Reframe: stop asking
+"which OpenClaw patterns should Hermes absorb" and ask "what is the smallest Hermes control
+plane that makes multi-agent work trustworthy" — OpenClaw grafting becomes a compatibility
+layer, not the roadmap.
 
 **CLAUDE SUBAGENT (CEO — strategic independence):**
 
-Grounded in the actual worktree/git state (not just the doc): confirmed a separate, stale comparison worktree for this branch, frozen at the original 2026-08-03 commit (`8909b691`) — PR #271 already merged this branch's work into `main`, so the stale worktree is orphaned, not evidence of unmerged work (now noted in Status above). Confirmed the plan's own Status table was self-contradictory — said "Wave 1+ Pending" while the plan body documented Wave 4 work as already done — surviving a dedicated 2026-08-05 inconsistency-fix commit (now fixed above). Echoes Codex's strategic point independently: Appendix C's real gaps (task API, fleet manager, verifier gate) are parked in an appendix with no wave/owner while a "Large" complexity effort goes into pattern harmonization instead. Flags a real architectural risk this org has been burned by before (dual Win-PS1/Mac-bash implementations drifting — same class of bug as the attribution-guard fragmentation this repo's own CLAUDE.md calls out as an invariant to avoid) with only a one-line mitigation. Flags the deferred `resolve_perp_harness.sh` remote-URL trust gap (Risks table) as plausibly a half-day additive-test fix, not the multi-week retrofit its current framing implies.
+Grounded in the actual worktree/git state (not just the doc): confirmed a separate, stale
+comparison worktree for this branch, frozen at the original 2026-08-03 commit (`8909b691`)
+— PR #271 already merged this branch's work into `main`, so the stale worktree is orphaned,
+not evidence of unmerged work (now noted in Status above). Confirmed the plan's own Status
+table was self-contradictory — said "Wave 1+ Pending" while the plan body documented Wave 4
+work as already done — surviving a dedicated 2026-08-05 inconsistency-fix commit (now fixed
+above). Echoes Codex's strategic point independently: Appendix C's real gaps (task API,
+fleet manager, verifier gate) are parked in an appendix with no wave/owner while a "Large"
+complexity effort goes into pattern harmonization instead. Flags a real architectural risk
+this org has been burned by before (dual Win-PS1/Mac-bash implementations drifting — same
+class of bug as the attribution-guard fragmentation this repo's own CLAUDE.md calls out as
+an invariant to avoid) with only a one-line mitigation. Flags the deferred
+`resolve_perp_harness.sh` remote-URL trust gap (Risks table) as plausibly a half-day
+additive-test fix, not the multi-week retrofit its current framing implies.
 
 **CEO DUAL VOICES — CONSENSUS TABLE:**
 
-```
+```text
 ═══════════════════════════════════════════════════════════════════════
   Dimension                              Claude    Codex     Consensus
   ─────────────────────────────────────  ────────  ────────  ─────────
@@ -795,7 +833,8 @@ Change" table) — within the 8-file smell threshold but close. No new classes/s
 all changes are to existing thin-wrapper commands, scripts, and reference docs.
 
 **Section 1 (Architecture):** Examined the command→script→PT-pipeline dependency chain.
-```
+
+```text
   openclaw-skills/scripts/json-response.sh (pattern source)
          │ (adapt, not copy — per Constraints)
          ▼
@@ -805,6 +844,7 @@ all changes are to existing thin-wrapper commands, scripts, and reference docs.
          ├──▶ hermes-delegate/SKILL.md ──▶ [PT] hermes_harness.py (stdout: plain → JSON)
          └──▶ hermes-orama/SKILL.md ──▶ [PT] 5-stage pipeline (stdout: plain → JSON)
 ```
+
 Coupling: new coupling is `hermes-status`/`hermes-doctor` (Wave 2) to four existing
 subsystems (PT root resolution, spawn PID state, partner canaries, profile list) —
 justified (that's the point of a health-check surface), but per Codex/Claude findings
@@ -870,14 +910,17 @@ this Eng phase (see below) rather than guessed. No over-engineering: the four-su
 health rollup is the minimum needed for the stated Wave 2 goal, not gold-plating.
 
 **Section 6 (Test Review):**
-```
+
+```text
   NEW CODEPATHS: JSON envelope emission (3 commands) x 2 (success/error) = 6 paths
   NEW COMMAND: hermes-status/doctor health rollup, 4 subsystems x 3 states (ok/degraded/
                not_yet_implemented) = up to 12 reportable combinations
   NEW ERROR/RESCUE PATHS: CANARY_TIMEOUT, PROFILE_READ_ERROR (Section 2 GAPs, now closed
                by the not_yet_implemented/degraded design)
 ```
+
 Test coverage plan (auto-decided, P1 completeness — full coverage, not a sampling):
+
 - Unit: envelope shape validation (schema assertion) for each of the 6 paths above.
 - Integration: `hermes-status` against a live-but-degraded PT root (existing
   `tests/test_resolve_perp_harness.py` fixture pattern extends naturally here).
@@ -921,6 +964,7 @@ Section 11 (Design & UX): **SKIPPED — no UI scope detected** (Phase 0 grep: 2 
 "layout" matches, not real UI terms; confirmed with user before this review began).
 
 ### NOT in scope (this Wave 1-2 pass)
+
 - Secret hygiene graft (Wave 3) — explicitly deferred, not dropped (design doc).
 - `hermes-delegate`/`delegate_task` rename — explicitly SKIPPED by the plan's own Wave 0
   decision; Claude subagent's Finding 7 (do the rename now, before more wave work references
@@ -932,6 +976,7 @@ Section 11 (Design & UX): **SKIPPED — no UI scope detected** (Phase 0 grep: 2 
   silently deferred, explicitly surfaced for the user's decision.
 
 ### What already exists
+
 - `install_hermes_thin_skills.py` thin-wrapper install/verify pipeline — reused as-is,
   not rebuilt.
 - `resolve_perp_harness.sh` fail-closed PT-root resolution — reused; its known gap
@@ -957,22 +1002,24 @@ CEO consensus above questions whether it's the highest-leverage next step vs. at
 Appendix C's gaps more directly. Surfaced at Final Gate.
 
 ### Error & Rescue Registry
+
 See Section 2 table above — 2 GAPs identified, both closed by the design doc's
 degraded/not_yet_implemented rollup design (confirmed requirement, not open gap).
 
 ### Failure Modes Registry
 
-| CODEPATH                  | FAILURE MODE          | RESCUED? | TEST? | USER SEES?      | LOGGED? |
+| CODEPATH | FAILURE MODE | RESCUED? | TEST? | USER SEES? | LOGGED? |
 | ------------------------- | --------------------- | -------- | ----- | --------------- | ------- |
-| hermes-status subsystem   | Canary timeout         | Y (design)| Y (planned)| degraded state | Y |
-| hermes-status subsystem   | Not-yet-shipped (Wave 2 partial) | Y (design)| Y (planned) | not_yet_implemented | Y |
-| resolve_perp_harness.sh   | Ambiguous crawl match  | Y (existing)| Y (existing, 13/13)| ERROR + candidate list | Y |
-| resolve_perp_harness.sh   | Untrusted remote (no URL check) | N ← GAP | N | silently trusts | Partial (deferred TODO) |
+| hermes-status subsystem | Canary timeout | Y (design) | Y (planned) | degraded state | Y |
+| hermes-status subsystem | Not-yet-shipped (Wave 2 partial) | Y (design) | Y (planned) | not_yet_implemented | Y |
+| resolve_perp_harness.sh | Ambiguous crawl match | Y (existing) | Y (existing, 13/13) | ERROR + candidate list | Y |
+| resolve_perp_harness.sh | Untrusted remote (no URL check) | N ← GAP | N | silently trusts | Partial (deferred TODO) |
 
 No CRITICAL GAPs (RESCUED=N AND TEST=N AND USER SEES=Silent) — the one open GAP
 (remote-URL trust) does log its failure mode, just doesn't verify the remote.
 
 ### TODOS.md — proposed (auto-decided per P2/P3, logged individually)
+
 1. **T-CEO-1 (P2, human ~half-day / CC ~20min)** — Add a remote-URL check to
    `resolve_perp_harness.sh` as an ADDITIVE new test fixture (real git remote), not a
    retrofit of the existing 9 fixture-based tests. Why: closes the marker-file trust gap
@@ -986,7 +1033,7 @@ No CRITICAL GAPs (RESCUED=N AND TEST=N AND USER SEES=Silent) — the one open GA
 ### Decision Audit Trail
 
 | # | Phase | Decision | Classification | Principle | Rationale | Rejected |
-|---| ----- | -------- | -------------- | --------- | --------- | -------- |
+| --- | ----- | -------- | -------------- | --------- | --------- | -------- |
 | 1 | CEO | Fixed stale Status table (Wave 1+ marked Pending despite Wave 4 partial landing) | Mechanical | P5 explicit | Verified factually stale via direct file read | — |
 | 2 | CEO | Adopt `--json` opt-in flag before flipping default JSON output | Mechanical | P1 completeness | Avoids undiscovered-caller breaking change | Hard cutover without flag |
 | 3 | CEO | `hermes-status` health rollup needs per-subsystem degraded/not_yet_implemented states | Mechanical | P1 completeness | Section 2 GAPs; incremental Wave 2 rollout must not read as broken | Binary ok/broken rollup |
@@ -996,7 +1043,8 @@ No CRITICAL GAPs (RESCUED=N AND TEST=N AND USER SEES=Silent) — the one open GA
 | 7 | CEO | Pattern-graft vs. attack Appendix C platform gaps directly | **USER CHALLENGE** | — | Both Codex + Claude subagent independently recommend reframing | — surfaced at gate |
 
 ### CEO Phase Completion Summary
-```
+
+```text
 +====================================================================+
 |            MEGA PLAN REVIEW — COMPLETION SUMMARY (CEO)             |
 +====================================================================+
@@ -1095,7 +1143,7 @@ session" (real problem) — any caller branching on exit code alone conflates th
 
 **ENG DUAL VOICES — CONSENSUS TABLE:**
 
-```
+```text
 ═══════════════════════════════════════════════════════════════════════
   Dimension                              Claude    Codex     Consensus
   ─────────────────────────────────────  ────────  ────────  ─────────
@@ -1126,7 +1174,7 @@ strongest possible cross-model verification signal (same bug, zero shared contex
 Confirmed via direct code inspection (not just plan prose) — the JSON-envelope work
 depends on reconciling FOUR existing incompatible shapes, not porting one script:
 
-```
+```text
   hermes-universal-invocation-protocol.md   {status: ok|needs_input|partial|error|blocked,
                                               files_modified: [], follow_up_actions: []}
   openclaw-skills/scripts/json-response.sh  {status: ok, data: ...} / {status: error, message}
@@ -1135,6 +1183,7 @@ depends on reconciling FOUR existing incompatible shapes, not porting one script
   verify_partner_canaries.py --json         {canaries: [{name, status: PASS|FAIL|UNAVAILABLE|
                                               SKIPPED, detail, required}]}
 ```
+
 Auto-decided (P5 explicit over clever, P1 completeness): pick ONE canonical shape and
 make `hermes-universal-invocation-protocol.md` the single source of truth for it —
 explicitly map the canary `PASS/FAIL/UNAVAILABLE/SKIPPED` vocabulary and the old `status`
@@ -1157,7 +1206,7 @@ P5: fix now, note the pattern for future review).
 
 ### Section 3: Test Review
 
-```
+```text
 NEW CODEPATHS (Wave 1-2):                              COVERAGE
   JSON envelope emission (spawn/delegate/orama)          [GAP] existing test hard-codes
                                                           OLD schema (tests/test_hermes_
@@ -1173,7 +1222,9 @@ NEW CODEPATHS (Wave 1-2):                              COVERAGE
                                                           external-CLI-output test for profile list
 COVERAGE: 0/4 new-surface items have a proposed test in the plan as written.
 ```
+
 Auto-decided (P1 completeness — full test plan, not partial):
+
 - Add `tests/test_hermes_invoke_envelope.py` to Wave 1's file list explicitly; update in
   lockstep with whatever schema T-ENG-1 settles on.
 - Add a regression test for F6: a worker that sleeps forever; assert the overall command
@@ -1205,7 +1256,8 @@ session duration instead of re-crawling on every health check. Logged as T-ENG-3
 ### Required Outputs
 
 **Architecture diagram (Wave 1-2 dependency graph, corrected post-review):**
-```
+
+```text
   json-response.sh pattern ──▶ [RECONCILE 4 SCHEMAS FIRST — T-ENG-1] ──▶ ONE canonical envelope
                                                                               │
        ┌──────────────────────────────────┬───────────────────────────────┼─────────────────┐
@@ -1221,12 +1273,14 @@ session duration instead of re-crawling on every health check. Logged as T-ENG-3
                                                           being fixed/decided first, plus
                                                           resolve_pt_root caching — T-ENG-3)
 ```
+
 This corrects the CEO-phase architecture diagram's implicit ordering (which showed
 `hermes-status` as roughly parallel work) — Eng review shows it's actually LAST in the
 dependency chain: every subsystem it aggregates needs its own fix first.
 
 **Failure Modes Registry (updated):**
-```
+
+```text
   CODEPATH                    | FAILURE MODE                  | RESCUED? | TEST? | USER SEES?        | LOGGED?
   ------------------------------|--------------------------------|----------|-------|--------------------|--------
   hermes-delegate (F6)          | Worker hangs forever           | N ← CRITICAL GAP | N | Nothing — silent hang | N
@@ -1235,12 +1289,14 @@ dependency chain: every subsystem it aggregates needs its own fix first.
   verify_partner_canaries.py(F4)| Sequential checks, ~9min worst | Y (works, just slow) | N | Long hang, no progress | N
   resolve_pt_root (F5)          | Uncached $HOME crawl on hot path | Y (works, just slow) | N | Latency, not correctness | N
 ```
+
 **1 CRITICAL GAP** (F6: RESCUED=N, TEST=N, USER SEES=Silent) — the plan's Wave 1-2 as
 originally scoped would ship a JSON-envelope wrapper AROUND a command that can still hang
 forever with zero output, defeating the entire point of the envelope work for that
 codepath.
 
 ### NOT in scope (Eng phase additions)
+
 - PT-side (`hermes_harness.py`) contract changes for `hermes-orama` streaming — cross-repo,
   out of this repo's Wave 1-2 scope; the TASTE DECISION above determines whether Wave 1
   descopes `hermes-orama` entirely instead.
@@ -1249,39 +1305,41 @@ codepath.
   `not_yet_implemented`.
 
 ### What already exists (Eng phase additions)
+
 - `verify_partner_canaries.py --json` — already has a structured (if incompatible) output
   mode; reuse the mapping, don't rebuild canary-checking logic.
 - `tests/test_hermes_invoke_envelope.py` — already tests envelope validation against the
   OLD schema; extend it, don't write a parallel test file.
 
 ### TODOS.md — proposed (Eng phase, auto-decided per P1/P5, logged individually)
-4. **T-ENG-1 (P1, human ~4h / CC ~30min, BLOCKS Wave 1)** — Reconcile the 4 incompatible
+
+1. **T-ENG-1 (P1, human ~4h / CC ~30min, BLOCKS Wave 1)** — Reconcile the 4 incompatible
    envelope schemas into one canonical shape in `hermes-universal-invocation-protocol.md`
    before any Wave 1 code change. Why: F1 — without this, "port json-response.sh" and "the
    design doc's draft schema" are two different, contradictory targets.
-5. **T-ENG-2 (P1, human ~2h / CC ~15min, BLOCKS the `hermes-spawn start` gate design)** —
+2. **T-ENG-2 (P1, human ~2h / CC ~15min, BLOCKS the `hermes-spawn start` gate design)** —
    Parallelize `verify_partner_canaries.py`'s sequential checks. Why: F4 — a synchronous
    9-minute-worst-case health check cannot gate spawn starts without regressing operator
    experience.
-6. **T-ENG-3 (P2, human ~1h / CC ~10min)** — Cache `resolve_pt_root()`'s result for session
+3. **T-ENG-3 (P2, human ~1h / CC ~10min)** — Cache `resolve_pt_root()`'s result for session
    duration instead of re-crawling `$HOME` on every `hermes-status` poll. Why: F5.
-7. **T-ENG-4 (P0/CRITICAL, human ~2h / CC ~15min, BLOCKS Wave 1 — fix before wrapping in
+4. **T-ENG-4 (P0/CRITICAL, human ~2h / CC ~15min, BLOCKS Wave 1 — fix before wrapping in
    JSON)** — Fix `hermes-delegate`'s `as_completed()` call to pass an overall `timeout=`
    and catch `TimeoutError` around the whole iteration, not per-`.result()` call. Why: F6 —
    verified, reproducible, silent-hang-forever bug; both Codex and Claude subagent
    independently confirmed by reading the code.
-8. **T-ENG-5 (P1, human ~15min / CC ~5min, BLOCKS Wave 1 — trivial, do it now)** — Fix
+5. **T-ENG-5 (P1, human ~15min / CC ~5min, BLOCKS Wave 1 — trivial, do it now)** — Fix
    `hermes_spawn.sh`'s cleared-before-echo `child_pid` bug. Why: F7 — verified by both
    Codex and Claude subagent independently; a one-line fix (capture PID before clearing).
-9. **T-ENG-6 (P2, human ~1h / CC ~10min)** — Give `hermes-spawn status` a distinct signal
+6. **T-ENG-6 (P2, human ~1h / CC ~10min)** — Give `hermes-spawn status` a distinct signal
    (exit code or JSON `state` field) for "no session" vs "stale/broken session." Why: F8.
-10. **T-ENG-7 (P3)** — LM Studio log-tail exclusion from `hermes-doctor`'s default JSON
+7. **T-ENG-7 (P3)** — LM Studio log-tail exclusion from `hermes-doctor`'s default JSON
    payload (opt-in flag only). Why: F13, info-disclosure via aggregated/shared reports.
 
 ### Decision Audit Trail (Eng phase additions)
 
 | # | Phase | Decision | Classification | Principle | Rationale | Rejected |
-|---|-------|----------|-----------------|-----------|-----------|----------|
+| --- | ------- | ---------- | ----------------- | ----------- | ----------- | ---------- |
 | 8 | Eng | Reconcile 4 envelope schemas before any Wave 1 code (T-ENG-1) | Mechanical | P1/P5 | Verified 4-way conflict via direct code read, not assumed | Porting json-response.sh as-is |
 | 9 | Eng | `hermes-orama` stream-vs-buffer JSON decision | **TASTE** | — | Real product tradeoff, both models flagged, neither prescribed | — surfaced at gate |
 | 10 | Eng | Parallelize canary checks before gating spawn on health (T-ENG-2), supersedes CEO Section 7's "assume parallel" decision | Mechanical | P1 | CEO-phase assumption falsified by direct code read | Trusting the CEO-phase assumption |
@@ -1290,7 +1348,8 @@ codepath.
 | 13 | Eng | Codex's "would not approve Wave 1-2 as written" bottom line | **reinforces USER CHALLENGE #7** | — | Independent second model reaches the same "wrong layer" conclusion from a different angle (code-level, not strategy-level) | — surfaced at gate |
 
 ### Eng Phase Completion Summary
-```
+
+```text
 +====================================================================+
 |            MEGA PLAN REVIEW — COMPLETION SUMMARY (ENG)             |
 +====================================================================+
@@ -1353,7 +1412,7 @@ on top of the 3 that already exist across the commands' input argument shapes (D
 ### DX Scorecard
 
 | Dimension | Score | Note |
-|---|---|---|
+| --- | --- | --- |
 | Getting started (TTHW) | 2/10 | No onboarding doc; env vars for credentials undocumented in-repo (D1, D2) |
 | API/CLI naming | 3/10 | `hermes-delegate` name collision is CRITICAL (D4); 3 incompatible arg grammars (D5) |
 | Error messages | 4/10 | 1 genuinely good error (PT-root resolution) not applied elsewhere (D8) |
@@ -1365,7 +1424,7 @@ on top of the 3 that already exist across the commands' input argument shapes (D
 
 ### Developer Journey Map (9-stage)
 
-```
+```text
 1. Discover           → hermes-harness/SKILL.md (600+ lines, mixed concerns)     [FRICTION]
 2. Understand scope   → no task-oriented index, only implementation taxonomy    [FRICTION: D12]
 3. Find credentials   → not named in this repo; must open PT's hermes_harness.py [FRICTION: D2]
@@ -1376,6 +1435,7 @@ on top of the 3 that already exist across the commands' input argument shapes (D
 8. Something hangs     → silent forever, zero signal (worker deadlock)          [FRICTION: CRITICAL D9/F6]
 9. Give up or escalate → no smoke test scoped to exactly these 3 commands       [FRICTION: D13]
 ```
+
 Every one of the 9 stages has at least one friction point — this is the "before" state
 Wave 1-2 is being layered onto, not a hypothetical.
 
@@ -1402,6 +1462,7 @@ target — these are both cheap relative to Wave 1's existing scope and directly
 the FIRST thing an operator sees.
 
 ### DX Implementation Checklist
+
 - [ ] `hermes-harness/references/quickstart.md` — clone PT, set 1 env var, first
       `hermes-spawn status`, first `hermes-spawn start`, expected output (T-DX-1)
 - [ ] Apply `openclaw-status`'s section template (Purpose/When to Use/Inputs/Procedure/
@@ -1417,27 +1478,29 @@ the FIRST thing an operator sees.
       `--json` opt-in decision)
 
 ### TODOS.md — proposed (DX phase, auto-decided per P1/P5 except where noted)
-11. **T-DX-1 (P1, human ~2h / CC ~15min)** — Write `hermes-harness/references/
+
+ 1. **T-DX-1 (P1, human ~2h / CC ~15min)** — Write `hermes-harness/references/
     quickstart.md`. Why: D1, TTHW currently unbounded.
-12. **T-DX-2 (P2, human ~3h / CC ~20min)** — Apply `openclaw-status`'s section template
+ 2. **T-DX-2 (P2, human ~3h / CC ~20min)** — Apply `openclaw-status`'s section template
     to all 3 command cards. Why: D3, D11 — the plan already names this template as the
     pattern to mirror but hasn't applied it to the commands it's grafting onto.
-13. **T-DX-3 (P1, folds into T-ENG-1)** — Retrofit error messages to the house style.
+ 3. **T-DX-3 (P1, folds into T-ENG-1)** — Retrofit error messages to the house style.
     Why: D8.
-14. **T-DX-4 (P2, human ~1h / CC ~10min)** — Add copy-paste example blocks. Why: D11.
-15. **T-DX-5 (P1, folds into T-ENG-1/Wave 1)** — Adopt one `--json` convention across all
+ 4. **T-DX-4 (P2, human ~1h / CC ~10min)** — Add copy-paste example blocks. Why: D11.
+ 5. **T-DX-5 (P1, folds into T-ENG-1/Wave 1)** — Adopt one `--json` convention across all
     3 commands simultaneously. Why: D14.
 
 ### Decision Audit Trail (DX phase additions)
 
 | # | Phase | Decision | Classification | Principle | Rationale | Rejected |
-|---|-------|----------|-----------------|-----------|-----------|----------|
+| --- | ------- | ---------- | ----------------- | ----------- | ----------- | ---------- |
 | 14 | DX | `hermes-delegate` rename urgency — DX voice reclassifies T-CEO-3 from taste to defect | **TASTE (elevated)** | — | 3rd independent voice (CEO Claude subagent, DX Claude subagent) now calls this a naming defect, not a preference; still surfaced at gate since it's a rename with real migration cost, not auto-fixable | — |
 | 15 | DX | Bundle error-message retrofit + `--json` convention into Wave 1's T-ENG-1, not separate follow-up work | Mechanical | P4 DRY | Same files, same PR, avoids two touch-passes on identical lines | Separate DX-only PR after Wave 1 ships |
 | 16 | DX | Codex DX voice unavailable this phase (MCP transport error, not timeout/auth) | Mechanical | — | Degradation matrix: proceed subagent-only, tag `[codex-unavailable]` | Retrying indefinitely |
 
 ### DX Phase Completion Summary
-```
+
+```text
 +====================================================================+
 |            MEGA PLAN REVIEW — COMPLETION SUMMARY (DX)              |
 +====================================================================+
@@ -1475,13 +1538,15 @@ commits appeared between this review's Eng phase and this gate (`ec8678b3` throu
 commit messages, and ran the actual test suite rather than trusting the commit message's
 claimed count.
 
-```
+```bash
 $ python3 -m pytest tests/test_hermes_delegate.py tests/test_hermes_spawn.py \
     tests/test_hermes_status.py tests/test_resolve_perp_harness.py \
     tests/test_hermes_invoke_envelope.py -q
 38 passed in 3.30s
 ```
+
 Confirmed genuine, correct fixes by reading the code directly:
+
 - **T-ENG-4 (F6 deadlock):** FIXED — `hermes_delegate.py` now uses
   `concurrent.futures.wait(pending, timeout=remaining, return_when=FIRST_COMPLETED)`
   against a real `deadline`, cancels stragglers, reports them as `error` rows. Correct.
@@ -1550,18 +1615,18 @@ elevated by DX to a defect, not a preference) and `hermes-orama` stream-vs-buffe
   for `resolve_perp_harness.sh`. **STILL PENDING** — confirmed no `remote`/`origin`
   check exists in the script as of this gate.
   - Surfaced by: CEO Section 3, reinforced by Codex Eng review
-- [ ] **T-CEO-2 (P3, human ~2h / CC ~10min)** — Prune the stale
-  grant-mvp worktree (ephemeral `/tmp` checkout) once confirmed fully captured in `main`.
+- [ ] **T-CEO-2 (P3, human ~2h / CC ~10min)** — Prune the stale comparison
+  worktree for this branch once confirmed fully captured in `main`.
 - [ ] **T-CEO-3 (P3, taste — rename timing not resolved by this gate)** —
   `hermes-delegate`/`delegate_task` naming-collision fix, elevated from taste to a
   DX-flagged defect (3 independent voices), timing still the user's call.
 
-_15 tasks total: **6 DONE/verified this gate** (2 CRITICAL/P0-P1 bug fixes + 4 P1-P2
+*15 tasks total: **6 DONE/verified this gate** (2 CRITICAL/P0-P1 bug fixes + 4 P1-P2
 correctness/perf fixes, all independently verified by reading code and running tests,
 not by trusting a commit message), 6 P2 items still pending (docs/DX polish + 1 security
 hardening item), 1 P3 cleanup, 1 P3 taste decision, plus the User Challenge kept
 explicitly open. None dropped silently — every finding from all 3 phases maps to exactly
-one task above or to the logged User Challenge._
+one task above or to the logged User Challenge.*
 
 ### Cross-Phase Themes
 
@@ -1584,6 +1649,7 @@ independent instances of the same underlying objection, from 2 models across 2 p
 the strongest cross-phase signal in this review, now logged as the open User Challenge.
 
 ### Review Scores
+
 - CEO: SELECTIVE EXPANSION mode; 4/6 dual-voice dimensions confirmed; 1 User Challenge, 1
   taste decision surfaced
 - CEO Voices: Codex (8 strategic concerns), Claude subagent (13 findings, 5 crit/high),
@@ -1597,6 +1663,7 @@ the strongest cross-phase signal in this review, now logged as the open User Cha
   CRITICAL/4 HIGH), Consensus N/A (single voice)
 
 ### Deferred to TODOS.md
+
 - Appendix C platform primitives (task API, fleet manager, scheduler, verifier gate,
   recursive workers, HITL flows) — the User Challenge itself; explicitly named, not
   silently dropped, revisit after Wave 1-2 ships.
@@ -1606,7 +1673,7 @@ the strongest cross-phase signal in this review, now logged as the open User Cha
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
-|--------|---------|-----|------|--------|----------|
+| -------- | --------- | ----- | ------ | -------- | ---------- |
 | CEO Review | `/plan-ceo-review` (via /autoplan) | Scope & strategy | 1 | issues_open | 1 User Challenge, 1 taste decision, 6 auto-decided |
 | Codex Review | `/codex review` (via /autoplan dual voices) | Independent 2nd opinion | 3 (CEO+Eng+DX) | issues_open | 8+6 findings across CEO/Eng; DX unavailable |
 | Eng Review | `/plan-eng-review` (via /autoplan) | Architecture & tests (required) | 1 | issues_open | 1 CRITICAL gap, 16 findings (Claude), 6 findings (Codex) |
@@ -1630,6 +1697,7 @@ the strongest cross-phase signal in this review, now logged as the open User Cha
   hardening) do not block, tracked as TODOs.
 
 **UNRESOLVED DECISIONS:**
+
 - User Challenge: pattern-graft (Wave 1-2 as scoped) vs. Appendix C platform primitives
   (task API, fleet manager, scheduler, verifier gate) — user decision: proceed with Wave
   1-2 (now shipped locally, unpushed), revisit Appendix C reframe as a live question —
@@ -1637,4 +1705,4 @@ the strongest cross-phase signal in this review, now logged as the open User Cha
   keep this visible in the running system rather than resolving it either way.
 - Taste: `hermes-orama` JSON stream-vs-buffer (explicitly scoped out this pass, not
   decided).
-+ `hermes-delegate` rename timing (taste, elevated priority per DX review, not resolved).
+- `hermes-delegate` rename timing (taste, elevated priority per DX review, not resolved).
