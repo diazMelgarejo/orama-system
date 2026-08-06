@@ -242,6 +242,16 @@ def test_resolve_perp_harness_rejects_symlink_even_when_real_target_is_crawlable
     assert "not resolved" in result.stderr.lower()
 
 
+def test_resolve_pt_root_cached_within_session(tmp_path: Path) -> None:
+    pt = _make_pt_root(tmp_path)
+    env = {"PERPETUA_TOOLS_PATH": str(pt)}
+    first = _run_resolver(env=env)
+    second = _run_resolver(env=env)
+    assert first.returncode == 0
+    assert second.returncode == 0
+    assert first.stdout.strip() == second.stdout.strip() == str(pt.resolve())
+
+
 def test_resolve_perp_harness_fails_on_ambiguous_crawl(tmp_path: Path) -> None:
     orama = tmp_path / "orama-system"
     orama.mkdir()
