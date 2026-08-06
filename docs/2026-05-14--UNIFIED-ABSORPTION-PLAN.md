@@ -1,14 +1,15 @@
-<!-- lint-ignore LINT-013 -->
-> 🔄 **CANONICAL 2026-06-14** — living architecture source-of-truth (PT/orama §0 lockstep); not a finishable plan.
-
 # `docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`
+
+> 🔄 **CANONICAL 2026-06-14** — living architecture source-of-truth (PT/orama §0
+> lockstep); not a finishable plan.
 
 *Canonical spec for orama-system + Perpetua-Tools v1. Supersedes all prior PLAN / PLAN2 docs.*
 *Source: `OpenClaw/v1/07-steps+combined.md` — synthesized from 4 prior design conversations.*
 
 **Cross-repo navigation:**
+
 | Repo | Role | Key files |
-|------|------|-----------|
+| --- | --- | --- |
 | orama-system (L3) | Stateless orchestration/planning — **THIS REPO** | `CLAUDE.md`, `SKILL.md`, `bin/orama-system/SKILL.md` |
 | Perpetua-Tools (L2) | Runtime/state authority, shared types | `CLAUDE.md`, `orchestrator/contracts.py`, `docs/adapter-interface-contract.md` |
 | AlphaClaw (L1) | Infrastructure — referenced only, never imported | `CLAUDE.md` (do not modify) |
@@ -43,6 +44,7 @@ Pydantic v2 unless `from pydantic.v1 import ...` — which would pull in the com
 
 **Correction:** All validators in `contracts.py` use `@field_validator` with
 `mode='before'`. The `depth_must_be_zero` check becomes:
+
 ```python
 @field_validator("depth", mode="before")
 @classmethod
@@ -70,9 +72,12 @@ that fails loudly, satisfying fail-closed.
 - **lmstudio-mac = always localhost** — already fixed in discover.py (commit `a82ab51`).
 - **PT is runtime/state authority, orama is stateless** — matches existing architecture.
 - **Verifier gates crystallization in code, not convention** — the right invariant level.
-- **depth=0 validated, not trusted** — prevents worker recursion without relying on caller discipline.
-- **XML/tags are prompt-rendering only** — prevents protocol confusion between wire format and LLM prompt format.
-- **Fail-closed at gateways** — correctly scoped to `api_server.py`, not to topology tools like `discover.py` (discovery must degrade gracefully or the launchd watcher crashes every 60s).
+- **depth=0 validated, not trusted** — prevents worker recursion without relying on caller
+  discipline.
+- **XML/tags are prompt-rendering only** — prevents protocol confusion between wire format and
+  LLM prompt format.
+- **Fail-closed at gateways** — correctly scoped to `api_server.py`, not to topology tools like
+  `discover.py` (discovery must degrade gracefully or the launchd watcher crashes every 60s).
 - **Lockstep commits for shared contracts** — essential for a two-repo architecture.
 - **GPU lock via `asyncio.Lock`** — right mechanism for single-GPU contention.
 
@@ -85,8 +90,23 @@ even if technically clever.
 
 1. **"Orchestrator" is the only public control-plane term.** "Coordinator" may
    appear in internal prose comments to explain orchestrator *behavior*, but never
-   in any public API, schema field, config key, route name, or doc heading.
-   Applied to both repos immediately.
+   as a synonym, alias, or replacement for the orchestrator role in any public
+   API, schema field, config key, route name, or doc heading. Applied to both
+   repos immediately.
+
+   **Scope note (2026-08-06):** this bans "coordinator" *usurping* orchestrator
+   — the original violation was a hallucinated parallel "coordinator" role that
+   tried to rename/replace the real orchestrator across both repos, created by
+   an agent that mis-read prior research. It does **not** ban a genuinely
+   distinct, narrower-scoped "Coordinator" as its own agent persona/identity —
+   e.g. `relay-cursor` (`bin/agents/REGISTRY.yml`, `soul_id:
+   adapter.cursor-coordinator`) is a cross-repo relay/routing identity, not a
+   stand-in for the job/dispatch control-plane orchestrator owns. Before adding
+   a new "Coordinator"-named role, confirm it: (a) does not own job queue,
+   dispatch, or worker lifecycle (that stays orchestrator's), and (b) is
+   documented as distinct from orchestrator wherever it's introduced (persona
+   YAML, SOUL.md, registry notes). If either is unclear, treat it as the
+   banned pattern and ask before proceeding.
 
 2. **Workers are one generic primitive.** Existing specialized roles (executor,
    verifier, crystallizer, autoresearch-coder, critic, refiner) are specializations
@@ -124,7 +144,7 @@ even if technically clever.
 Grep acceptance criteria — all must return zero results after cleanup:
 
 ```bash
-grep -r "Coordinator" . --include="*.py" --include="*.json" --include="*.yml"  # → 0 (except internal prose comments)
+grep -r "Coordinator" . --include="*.py" --include="*.json" --include="*.yml"  # → 0 (except internal prose comments AND the relay-cursor agent-persona exemption below)
 grep -r "coordinator" . --include="*.py" --include="*.json"                     # → 0 (same)
 grep -r "deviceaffinity" . --include="*.py" --include="*.json"                  # → 0
 grep -r "qwen3-coder" . --include="*.py"                                         # → 0
@@ -134,12 +154,19 @@ Note: `Perplexity-Tools` in CHANGELOG.md entries is **historical record** — ac
 Active code paths (`.py`, active `.md` docs, config `.json`) must use `Perpetua-Tools`.
 
 | Banned term (public scope) | Correct term | Where |
-|---|---|---|
-| coordinator / Coordinator (role name) | orchestrator | All schemas, routes, config keys, doc headings |
+| --- | --- | --- |
+| coordinator / Coordinator used as orchestrator's synonym or replacement | orchestrator | All schemas, routes, config keys, doc headings — job/dispatch/worker-lifecycle control-plane only |
 | Perplexity-Tools (in active paths) | Perpetua-Tools | Active .py, config, docs |
 | `deviceaffinity` | `affinity` | All JSON/YAML config, all Python readers |
 | `qwen3-coder:14b` | `Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2` | Env defaults, any hardcoded model string |
 | `WIN_LM_STUDIO_HOST` / `WIN_LM_STUDIO_PORT` | `LM_STUDIO_WIN_ENDPOINTS` | Env vars, backend config |
+
+**Exemption:** a distinct, narrower-scoped agent persona legitimately named
+"Coordinator" (not a control-plane synonym — see § 1.1 scope note) is allowed
+in agent-registry/persona files (`bin/agents/REGISTRY.yml`, `bin/agents/
+personas/*.yaml`, that agent's `SOUL.md`/`agent.md`), provided those files
+explicitly document how it differs from orchestrator. `relay-cursor` is the
+current example.
 
 ---
 
@@ -149,6 +176,7 @@ Active code paths (`.py`, active `.md` docs, config `.json`) must use `Perpetua-
 All use Pydantic V2 field validators.
 
 ### 3.1 `OrchestrationSession` (PT-owned, durable)
+
 ```python
 class OrchestrationSession(BaseModel):
     session_id: str           # uuid4, immutable
@@ -163,7 +191,9 @@ class OrchestrationSession(BaseModel):
 ```
 
 ### 3.2 `TaskEnvelope` (generic worker input — all roles receive this)
+
 Overlay fields go in `metadata`.
+
 ```python
 class TaskEnvelope(BaseModel):
     job_id: str                        # uuid4, set by PT
@@ -188,6 +218,7 @@ class TaskEnvelope(BaseModel):
 ```
 
 ### 3.3 `WorkerAssignment` (orama plan → bridge input)
+
 ```python
 class WorkerAssignment(BaseModel):
     role: str
@@ -200,7 +231,9 @@ class WorkerAssignment(BaseModel):
 ```
 
 ### 3.4 `WorkerResult` (compact — no raw transcripts)
+
 Written to `.state/jobs/<id>/result.json` **before** success event is emitted.
+
 ```python
 class WorkerResult(BaseModel):
     job_id: str
@@ -214,6 +247,7 @@ class WorkerResult(BaseModel):
 ```
 
 ### 3.5 `VerificationResult` (gate before crystallization)
+
 ```python
 class VerificationResult(BaseModel):
     job_id: str
@@ -233,6 +267,7 @@ class VerificationResult(BaseModel):
 Extend existing agent registry. All specialist roles inherit `worker_template`.
 
 ### 4.1 Worker template (add to agent_registry.json)
+
 ```json
 "worker_template": {
   "type": "worker",
@@ -250,7 +285,7 @@ Extend existing agent registry. All specialist roles inherit `worker_template`.
 ### 4.2 Role table
 
 | Orama Role | Stage | Worker? | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `orchestrator` | All | **No** | Plans, emits `WorkerAssignment[]`. Never sends `TaskEnvelope`. |
 | `context-agent` | context | Yes | Returns structured context summary |
 | `architect-agent` | architecture | Yes | Returns design decisions + tradeoffs |
@@ -267,6 +302,7 @@ PT specializations that map to the same contract:
 ## § 5 — Perpetua Runtime Layer
 
 ### 5.1 `JobSpec` extension (backward-compatible additions only)
+
 ```python
 class JobSpec(BaseModel):
     # Existing fields — unchanged
@@ -291,6 +327,7 @@ class JobSpec(BaseModel):
 ```
 
 ### 5.2 Role-aware backend resolution (priority order)
+
 1. `role` + `specialization` → `ROLE_BACKEND_MAP` lookup
 2. `intent` → existing intent-based routing (unchanged)
 3. `backend_hint` → explicit override
@@ -300,11 +337,14 @@ All candidates pass through `policy.validate_or_raise()` — fail closed on affi
 
 ### 5.3 Role-to-backend map (ROLE_BACKEND_MAP in PT)
 
-**Hard requirements (2026-05-15):** Ollama Mac (`qwen3.5:9b-nvfp4` + `bge-m3`) + LM Studio Win (Qwen3.5-27B). System does not start without these. Everything else is optional. Full probe spec: [`CLAUDE-instru.md § 6`](../../CLAUDE-instru.md).
-Mac roles use `ollama` as primary provider; `lmstudio-mac` is optional secondary only — never auto-routed over Ollama.
+**Hard requirements (2026-05-15):** Ollama Mac (`qwen3.5:9b-nvfp4` + `bge-m3`) + LM Studio Win
+(Qwen3.5-27B). System does not start without these. Everything else is optional. Full probe spec:
+[`CLAUDE-instru.md § 6`](../../CLAUDE-instru.md).
+Mac roles use `ollama` as primary provider; `lmstudio-mac` is optional secondary only — never
+auto-routed over Ollama.
 
 | Role | Specialization | Provider (primary) | Model |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `executor-agent` | python-coding, test-writing, default | `lmstudio-win` | Qwen3.5-27B-Claude-4.6-Opus |
 | `context-agent` | market-research, m&a-research, default | **`ollama`** | `qwen3.5:9b-nvfp4` |
 | `verifier-agent` | default | `lmstudio-win` | Qwen3.5-27B-Claude-4.6-Opus |
@@ -312,8 +352,10 @@ Mac roles use `ollama` as primary provider; `lmstudio-mac` is optional secondary
 | `architect-agent` | default | `lmstudio-win` | Qwen3.5-27B-Claude-4.6-Opus |
 | `refiner-agent` | default | **`ollama`** | `qwen3.5:9b-nvfp4` |
 
-Mac: Ollama is **required**. `lmstudio-mac` is optional secondary — not a fallback in the automatic routing sense; only used when Ollama is explicitly stopped by the user.
-**lmstudio-mac** baseUrl is always `http://localhost:1234/v1`. LAN IP is docs/discovery metadata only. (commit `a82ab51`)
+Mac: Ollama is **required**. `lmstudio-mac` is optional secondary — not a fallback in the
+automatic routing sense; only used when Ollama is explicitly stopped by the user.
+**lmstudio-mac** baseUrl is always `http://localhost:1234/v1`. LAN IP is docs/discovery metadata
+only. (commit `a82ab51`)
 
 ### 5.4 `LMStudioWinBackend` (PT — first-class, not hinted)
 
@@ -347,6 +389,7 @@ File: `orama/agents/dispatcher.py` (`OramaToPTBridge`).
 Converts orama execution plan → PT `JobSpec`s. Returns compact `WorkerResult`s to orama.
 
 Key invariant — **enforced in code, not convention:**
+
 ```python
 def dispatch_crystallization(self, plan, verification_result: VerificationResult):
     if verification_result.verdict != "approved":
@@ -367,7 +410,7 @@ context (sidechain isolation).
 *Do not implement in v1. Doc-only reference.*
 
 | Gate Class | Trigger | Required |
-|---|---|---|
+| --- | --- | --- |
 | 0 | Read-only context | None |
 | 1 | Single-worker, reversible | None |
 | 2 | Multi-worker parallel | Operator plan review |
@@ -381,7 +424,7 @@ context (sidechain isolation).
 
 *Do not implement in v1. Doc-only reference.*
 
-```
+```http
 POST /session/start           → OrchestrationSession (session_id)
 POST /session/{id}/plan       → orama execution plan
 GET  /session/{id}/status     → current stage, running jobs
@@ -395,14 +438,16 @@ POST /session/{id}/cancel     → graceful cancel + checkpoint
 ## § 9 — Fix Queue (All Open Items from Source Review)
 
 ### Priority 0 — Already resolved (verified 2026-05-14)
+
 | ID | What | Status |
-|---|---|---|
+| --- | --- | --- |
 | R5 | PT `test_orama_bridge.py` import | ✅ 32/32 tests pass |
 | R2 | `qwen3-coder:14b` in agent_launcher + api_server | ✅ not in active code path |
 
 ### Priority 1 — Safety hardening
+
 | ID | File | Fix |
-|---|---|---|
+| --- | --- | --- |
 | R7 | `orama/api_server.py:202` | Conditional import shim for `HardwareAffinityError` from PT |
 | R3 | `PT/agent_launcher.py` | Re-raise `HardwareAffinityError`; remove silent fallback lane |
 | R9 | `orama/api_server.py` | Fail closed (`POLICY_UNAVAILABLE`) when `PERPETUATOOLSROOT` absent + explicit provider |
@@ -410,8 +455,9 @@ POST /session/{id}/cancel     → graceful cancel + checkpoint
 | R15 | `orama/alphaclawmanager.py` | Confirm `validate_routing_affinity` in real spawn path |
 
 ### Priority 2 — Test coverage
+
 | ID | File | Fix |
-|---|---|---|
+| --- | --- | --- |
 | R10 | `orama/tests/test_api_server.py` | `HARDWARE_MISMATCH`: mac+win-only-model and win+mac-only-model |
 | R11 | Same | `POLICY_UNAVAILABLE`: missing `PERPETUATOOLSROOT` + explicit provider |
 | New | `PT/tests/test_contracts.py` | All 5 shared types; depth validator; Pydantic v2 compat |
@@ -421,8 +467,9 @@ POST /session/{id}/cancel     → graceful cancel + checkpoint
 | New | `PT/tests/test_lmstudio_win.py` | OpenAI-compat endpoint shape; GPU lock behavior |
 
 ### Priority 3 — Schema/docs hygiene
+
 | ID | Fix |
-|---|---|
+| --- | --- |
 | R1 | `s/Perplexity-Tools/Perpetua-Tools/g` in active PT files (SOUL.md, afrp/, active config) |
 | R6 | `deviceaffinity` → `affinity`; normalize device IDs: `win-rtx3080`, add `win-rtx5080` |
 | R4/R13 | Add `PERPETUATOOLSROOT` + `LM_STUDIO_WIN_ENDPOINTS` to both `.env.example` files |
@@ -432,8 +479,9 @@ POST /session/{id}/cancel     → graceful cancel + checkpoint
 | Now | Fix `agent.md` line 14: "Main coordinator" → "Main orchestrator" |
 
 ### Priority 4 — New architecture files
+
 | File | Repo | Notes |
-|---|---|---|
+| --- | --- | --- |
 | `orchestrator/contracts.py` | **PT** (not orama) | All 5 shared types; Pydantic v2 |
 | `orchestrator/supervisor.py` | PT | |
 | `orchestrator/worker_registry.py` | PT | `ROLE_BACKEND_MAP` |
@@ -442,6 +490,7 @@ POST /session/{id}/cancel     → graceful cancel + checkpoint
 | `agents/dispatcher.py` | orama | `OramaToPTBridge` |
 
 ### Priority 5 — Blocked (both machines online)
+
 R14 (populate `shared:` in policy YAML), Windows config repair,
 Grok/xAI fallback, HF Model EXIF registry, MCP v1.2 gate.
 

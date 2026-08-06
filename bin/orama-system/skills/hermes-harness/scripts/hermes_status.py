@@ -62,7 +62,7 @@ def _run(cmd: list[str], *, timeout: int = 120, cwd: Path | None = None) -> tupl
 
 
 def check_pt_root(repo_root: Path) -> tuple[str, dict[str, Any]]:
-    resolve_sh = Path(__file__).with_name("resolve_perp_harness.sh")
+    resolve_sh = Path(__file__).resolve().parent / "resolve_perp_harness.sh"
     rc, out, err = _run(
         ["bash", "-c", 'source "$1"; resolve_pt_root', "bash", str(resolve_sh)],
         timeout=30,
