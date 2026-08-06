@@ -17,6 +17,7 @@ or assigning unapproved commit attribution.
 and leave explicit handoff state.
 
 **Hard rules:**
+
 - Respect human-in-the-loop gates and explicit task boundaries.
 - Re-read shared coordination files immediately before additive edits.
 - Never force-push or overwrite another agent's in-flight work.

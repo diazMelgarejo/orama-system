@@ -220,3 +220,24 @@ def test_verify_unmanaged_wrapper_reported_as_preserved(installer, tmp_path):
     delegate_target.write_text("---\nname: user-delegate\n---\n# user content\n", encoding="utf-8")
     errors = installer.verify()
     assert any("unmanaged wrapper preserved" in e for e in errors)
+
+
+def test_verify_no_openclaw_root_flags_violating_results(installer, tmp_path, monkeypatch):
+    results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
+    results_dir.mkdir(parents=True)
+    violating = results_dir / "some-fleet-report.md"
+    violating.write_text("pull from `$OPENCLAW_ROOT/references/`\n", encoding="utf-8")
+    monkeypatch.setattr(installer, "REPO_ROOT", tmp_path)
+    errors = installer.verify_no_openclaw_root_in_results()
+    assert errors
+    assert any("$OPENCLAW_ROOT" in e for e in errors)
+
+
+def test_verify_no_openclaw_root_allows_clean_results(installer, tmp_path, monkeypatch):
+    results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
+    results_dir.mkdir(parents=True)
+    clean = results_dir / "some-fleet-report.md"
+    clean.write_text("pull from the workspace-level operator references tree\n", encoding="utf-8")
+    monkeypatch.setattr(installer, "REPO_ROOT", tmp_path)
+    assert installer.verify_no_openclaw_root_in_results() == []
+

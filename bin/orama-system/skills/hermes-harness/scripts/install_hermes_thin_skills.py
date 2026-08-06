@@ -416,45 +416,9 @@ def run_tests() -> int:
                 return 1
 
             print("non-clobber and syntax tests passed")
-        finally:
-            HERMES_SKILLS = original_skills
-
-    global REPO_ROOT
-    original_repo_root = REPO_ROOT
-    with tempfile.TemporaryDirectory() as tmp_dir:
-        tmp_path = Path(tmp_dir)
-        REPO_ROOT = tmp_path
-        results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
-        results_dir.mkdir(parents=True)
-        violating = results_dir / "some-fleet-report.md"
-        try:
-            # RED: a results file using the banned $OPENCLAW_ROOT path must
-            # be caught. (Regression test for the exact class of bug that
-            # slipped through commit f8ea7c55: a "fix" commit correctly
-            # scrubbed four sibling results files but reintroduced
-            # $OPENCLAW_ROOT in a fifth, and nothing caught it.)
-            violating.write_text(
-                "pull from `$OPENCLAW_ROOT/references/`\n", encoding="utf-8"
-            )
-            errors = verify_no_openclaw_root_in_results()
-            if not errors:
-                print("FAIL: violating results file was not flagged")
-                return 1
-
-            # GREEN: a clean results file must not be flagged.
-            violating.write_text(
-                "pull from the workspace-level operator references tree\n",
-                encoding="utf-8",
-            )
-            errors = verify_no_openclaw_root_in_results()
-            if errors:
-                print(f"FAIL: clean results file was flagged: {errors}")
-                return 1
-
-            print("openclaw-root regression-guard tests passed")
             return 0
         finally:
-            REPO_ROOT = original_repo_root
+            HERMES_SKILLS = original_skills
 
 
 def main() -> int:
