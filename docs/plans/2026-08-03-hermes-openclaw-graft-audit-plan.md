@@ -1551,7 +1551,7 @@ elevated by DX to a defect, not a preference) and `hermes-orama` stream-vs-buffe
   check exists in the script as of this gate.
   - Surfaced by: CEO Section 3, reinforced by Codex Eng review
 - [ ] **T-CEO-2 (P3, human ~2h / CC ~10min)** — Prune the stale
-  `/private/tmp/orama-grant-mvp` worktree once confirmed fully captured in `main`.
+  grant-mvp worktree (ephemeral `/tmp` checkout) once confirmed fully captured in `main`.
 - [ ] **T-CEO-3 (P3, taste — rename timing not resolved by this gate)** —
   `hermes-delegate`/`delegate_task` naming-collision fix, elevated from taste to a
   DX-flagged defect (3 independent voices), timing still the user's call.

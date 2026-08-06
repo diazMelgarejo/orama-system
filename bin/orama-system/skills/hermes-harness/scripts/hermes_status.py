@@ -62,8 +62,12 @@ def _run(cmd: list[str], *, timeout: int = 120, cwd: Path | None = None) -> tupl
 
 
 def check_pt_root(repo_root: Path) -> tuple[str, dict[str, Any]]:
-    resolve_sh = repo_root / "bin/orama-system/skills/hermes-harness/scripts/resolve_perp_harness.sh"
-    rc, out, err = _run(["bash", "-c", f'source "{resolve_sh}"; resolve_pt_root'], timeout=30)
+    resolve_sh = Path(__file__).with_name("resolve_perp_harness.sh")
+    rc, out, err = _run(
+        ["bash", "-c", 'source "$1"; resolve_pt_root', "bash", str(resolve_sh)],
+        timeout=30,
+        cwd=repo_root,
+    )
     if rc == 0 and out:
         return "ok", {"path": out.splitlines()[-1]}
     return "error", {"detail": err or out or "PT root not resolved"}

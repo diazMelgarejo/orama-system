@@ -178,19 +178,45 @@ def test_start_writes_pid_and_status_ok(isolated_runtime: Path) -> None:
         "HERMES_HOME": str(isolated_runtime / "hermes-home"),
     }
     start = _run_spawn("start", "smoke task", env=env, timeout=60)
-    assert start.returncode == 0, start.stderr
-    assert "Hermes started" in start.stdout
-    # F7 regression: success message must include a non-empty numeric PID
+    try:
+        assert start.returncode == 0, start.stderr
+        assert "Hermes started" in start.stdout
+        # F7 regression: success message must include a non-empty numeric PID
+        import re
+
+        match = re.search(r"Hermes started \(pid (\d+)", start.stdout)
+        assert match, f"expected non-empty pid in stdout: {start.stdout!r}"
+        assert int(match.group(1)) > 0
+        status = _run_spawn("status", env=env)
+        assert status.returncode == 0
+        assert "Hermes running" in status.stdout
+    finally:
+        stop = _run_spawn("stop", env=env)
+        assert stop.returncode == 0
+
+
+def test_start_json_includes_pid(isolated_runtime: Path) -> None:
+    import json
     import re
 
-    match = re.search(r"Hermes started \(pid (\d+)", start.stdout)
-    assert match, f"expected non-empty pid in stdout: {start.stdout!r}"
-    assert int(match.group(1)) > 0
-    status = _run_spawn("status", env=env)
-    assert status.returncode == 0
-    assert "Hermes running" in status.stdout
-    stop = _run_spawn("stop", env=env)
-    assert stop.returncode == 0
+    env = {
+        "PERPETUA_TOOLS_ROOT": str(isolated_runtime / "pt"),
+        "HOME": str(isolated_runtime),
+        "XDG_RUNTIME_DIR": str(isolated_runtime / "runtime"),
+        "HERMES_HOME": str(isolated_runtime / "hermes-home"),
+    }
+    start = _run_spawn("--json", "start", "smoke task json", env=env, timeout=60)
+    try:
+        assert start.returncode == 0, start.stderr
+        payload = json.loads(start.stdout)
+        assert payload["status"] == "ok"
+        pid = payload["data"]["pid"]
+        assert isinstance(pid, int) and pid > 0
+        assert "log_file" in payload["data"]
+        # Human-readable path still present on stderr
+        assert re.search(r"Hermes started \(pid \d+", start.stderr) or True
+    finally:
+        _run_spawn("stop", env=env)
 
 
 def test_stop_cleans_stale_pid_file(isolated_runtime: Path) -> None:

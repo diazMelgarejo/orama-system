@@ -38,7 +38,7 @@ These types serve different layers and must not be merged into one schema:
 | **TaskEnvelope** | Worker wire | Perpetua-Tools `contracts.py` | PT-owned worker dispatch contract — hot path uses JobSpec only |
 | **SkillEnvelope** | L3 intent | Skill registry | Invocation intent (`skill_id`, `args`, `agent_id`) — not a result |
 
-See also: [`docs/update-docs/2026-08-06-job-task-envelope-evolution.md`](../../../../docs/update-docs/2026-08-06-job-task-envelope-evolution.md).
+See also: [`docs/update-docs/2026-08-06-job-task-envelope-evolution.md`](../../../../../docs/update-docs/2026-08-06-job-task-envelope-evolution.md).
 
 ## Core envelope (required)
 
@@ -100,7 +100,7 @@ legacy inbound shapes to this envelope before consumers read them.
 | `action` | when known | Sub-action (e.g. `start`, `stop`, `status`) |
 | `data` | yes | Command-specific payload; `{}` when none |
 | `files_modified` | yes | Always an array; empty for read-only checks |
-| `follow_up_actions` | yes | Always an array; required when `status` is `needs_input`, `blocked`, or `error` |
+| `follow_up_actions` | yes | Always an array; required (non-empty) when `status` is `partial`, `needs_input`, `blocked`, or `error` |
 | `warnings` | yes | Always an array; non-fatal information |
 | `error` | yes | `null` on success, or `{ "code": "...", "message": "..." }` |
 
@@ -144,7 +144,7 @@ before consumption.
 |-----------|--------------|-----------------|------|
 | → canonical | `ok: true` | `status: "ok"` | Boolean success |
 | → canonical | `ok: false` | `status: "error"` | Boolean failure |
-| → canonical | `message` | `error.message` | OpenClaw error text |
+| → canonical | `message` | `error.message` or `data`/`warnings` | Map to `error` only on non-success; preserve successful messages |
 | → canonical | `data` (OpenClaw) | `data` | Passthrough object |
 | → canonical | `canaries[]` | `data.canaries[]` | Nested; derive top-level `status` per canary rules |
 | → canonical | (missing) | `files_modified: []` | Default empty array |
@@ -164,9 +164,19 @@ function normalize_result(raw, command, action):
   if raw has "ok" and not raw has "status":
     raw.status = raw.ok ? "ok" : "error"
   if raw has "message" and not raw.error:
-    raw.error = {code: command + "_error", message: raw.message}
-  if raw has "canaries" and not raw.data:
-    raw.data = {canaries: raw.canaries}
+    if raw.status is non-success (not "ok"):
+      raw.error = {code: command + "_error", message: raw.message}
+    else:
+      # Preserve successful legacy messages outside error
+      raw.data = raw.data ?? {}
+      raw.data.message = raw.data.message ?? raw.message
+      raw.warnings = raw.warnings ?? []
+      if raw.message not in raw.warnings:
+        raw.warnings.append(raw.message)
+  if raw has "canaries":
+    raw.data = raw.data ?? {}
+    raw.data.canaries = raw.data.canaries ?? raw.canaries
+    delete raw.canaries
   raw.files_modified = raw.files_modified ?? []
   raw.follow_up_actions = raw.follow_up_actions ?? []
   raw.warnings = raw.warnings ?? []
