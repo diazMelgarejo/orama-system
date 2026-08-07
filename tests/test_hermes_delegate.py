@@ -18,6 +18,12 @@ DELEGATE_PY = ROOT / "bin/orama-system/skills/hermes-harness/scripts/hermes_dele
 
 
 def _load_delegate_module() -> types.ModuleType:
+    """
+    Load and return the Hermes delegate module from its script path.
+    
+    Returns:
+    	types.ModuleType: The loaded Hermes delegate module.
+    """
     spec = importlib.util.spec_from_file_location("hermes_delegate", DELEGATE_PY)
     assert spec and spec.loader
     mod = importlib.util.module_from_spec(spec)
@@ -31,6 +37,12 @@ def test_hanging_worker_times_out_within_deadline() -> None:
 
     def hang(_role: str, _task: str) -> dict[str, Any]:
         # Wait until the parent releases after timeout handling completes.
+        """
+        Wait for the parent process to release the worker, then report success.
+        
+        Returns:
+        	dict[str, Any]: A result containing ``{"ok": True}``.
+        """
         release.wait(timeout=30)
         return {"ok": True}
 
@@ -59,6 +71,14 @@ def test_fast_workers_complete_ok() -> None:
     mod = _load_delegate_module()
 
     def fast(_role: str, task: str) -> dict[str, str]:
+        """Marks a task as completed.
+        
+        Parameters:
+        	task (str): The task to mark as completed.
+        
+        Returns:
+        	dict[str, str]: A mapping containing the task and a completion indicator.
+        """
         return {"task": task, "done": "true"}
 
     result = mod.run_delegate(
@@ -75,6 +95,17 @@ def test_partial_status_when_some_workers_fail() -> None:
     mod = _load_delegate_module()
 
     def mixed(_role: str, task: str) -> dict[str, str]:
+        """Process a task and report its completion status.
+        
+        Parameters:
+        	task (str): The task to process.
+        
+        Returns:
+        	dict[str, str]: A mapping containing the task and a completion value of `"true"`.
+        
+        Raises:
+        	RuntimeError: If task is `"bad"`.
+        """
         if task == "bad":
             raise RuntimeError("boom")
         return {"task": task, "done": "true"}
@@ -282,6 +313,12 @@ def test_worker_construction_failure_does_not_abort_the_batch(tmp_path: Path) ->
 
     class _FlakyWorker(real_worker_cls):
         def __init__(self, task: str, pt_root: str) -> None:
+            """
+            Simulate a worker construction failure for the second instance.
+            
+            Raises:
+            	OSError: If this is the second worker instance being constructed.
+            """
             call_count["n"] += 1
             if call_count["n"] == 2:
                 raise OSError("simulated Popen failure for this task only")

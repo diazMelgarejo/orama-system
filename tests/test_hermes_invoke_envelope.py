@@ -136,6 +136,15 @@ def validate_core_envelope(envelope: dict) -> list[str]:
 
 
 def validate_core_result(result: dict) -> list[str]:
+    """
+    Validate a canonical Hermes result envelope.
+    
+    Parameters:
+    	result (dict): Result envelope to validate.
+    
+    Returns:
+    	list[str]: Validation error messages, or an empty list when the envelope is valid.
+    """
     errors: list[str] = []
     missing = CANONICAL_RESULT_KEYS - result.keys()
     if missing:
