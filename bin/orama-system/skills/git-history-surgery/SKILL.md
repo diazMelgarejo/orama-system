@@ -111,7 +111,10 @@ LM Studio host, run
     -- patch contents already upstream`. That message means **one** commit
     matched by patch ID — it is not proof the whole branch recovered.
     After the rebase: inspect remaining commits (`git log` /
-    `git cherry -v`), resolve any conflicts, and re-run the relevant
+    `git cherry -v <upstream-base> HEAD` — pass the recorded ref
+    explicitly; the bare form falls back to HEAD's tracked upstream,
+    which is not necessarily `<upstream-base>`), resolve any conflicts,
+    and re-run the relevant
     tests before replacing a manual replay or re-anchor. This is the
     lighter-weight companion to the tree-twin doctrine above
     (§ Decision 2 / `reanchor-after-rewrite.md`): tree-twin re-anchoring is

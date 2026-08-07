@@ -150,14 +150,17 @@ alongside the main orchestration session. Use `auto` as fallback when `composer-
 is unavailable.
 
 ```bash
-# Parallel single-turn jobs (background)
+# Parallel single-turn jobs (background) -- write to a repo-relative
+# artifact dir, not /tmp: Fan-out Safety § 2 below only permits verifying
+# repository-relative paths.
+mkdir -p .cursor-agent-artifacts
 cursor-agent --print --model composer-2.5 \
   "Add type annotations to scripts/discover.py; only functions, no variables" \
-  --output-format json > /tmp/task-a.json &
+  --output-format json > .cursor-agent-artifacts/task-a.json &
 
 cursor-agent --print --model gpt-5.3-codex-low \
   "Rename all snake_case variables in tests/test_foo.py to camelCase" \
-  --output-format json > /tmp/task-b.json &
+  --output-format json > .cursor-agent-artifacts/task-b.json &
 
 wait   # collect when done
 ```
@@ -193,8 +196,12 @@ concurrent cursor-agent/codex/Cline dispatches — apply all three whenever
    `--output-format json` summary ("done", "3 tests added", "fixed") is a
    claim, not a result. After `wait`, re-check the actual artifact directly
    — but only from **repository-owned, repository-relative** paths. Reject
-   absolute paths and any path containing `..`. Validate each claimed path
-   with `git ls-files --error-unmatch -- <path>` (or confine reads to an
+   absolute paths and any path containing `..`. `git ls-files
+   --error-unmatch` alone is not sufficient — it accepts tracked symlinks
+   that resolve outside the repo. Canonicalize each claimed path
+   (`realpath`) and require the resolved path to remain under
+   `$REPO_ROOT` before treating it as verified, in addition to checking it
+   with `git ls-files --error-unmatch -- <path>` (or confining reads to an
    explicitly approved output directory under the repo) before `cat`,
    `git diff`, or re-running tests on it. This mirrors the session-wide
    discipline of verifying claims over labels (`lesson_70713965dc1b` in
@@ -237,17 +244,18 @@ In Stage 4 (Masterful Execution), dispatch mechanical subtasks as cursor-agent
 headless jobs while the main session handles judgment work:
 
 ```bash
-# Example Stage 4 parallel dispatch
+# Example Stage 4 parallel dispatch -- repo-relative artifact dir, see § Fan-out Safety
+mkdir -p .cursor-agent-artifacts
 _JOBS=()
 
 cursor-agent --print --model composer-2.5 \
   "Scan bin/ for TODO comments; output as JSON list" \
-  --output-format json > /tmp/todos.json &
+  --output-format json > .cursor-agent-artifacts/todos.json &
 _JOBS+=($!)
 
 cursor-agent --print --model gpt-5.3-codex-low \
   "Generate pytest stubs for every function in scripts/new_module.py" \
-  --trust > /tmp/test-stubs.py &
+  --trust > .cursor-agent-artifacts/test-stubs.py &
 _JOBS+=($!)
 
 # Main session does judgment work here ...
@@ -335,8 +343,8 @@ Scripts: `scripts/cursor/grant-pr-body-human-override.sh`, `scripts/cursor/appen
 - orama-system Stage 4: [`../../../SKILL.md § MODE 2 Stage 4`](../../../SKILL.md)
 - Win PATH bootstrap: [`../hermes-harness/SKILL.md § Windows Bring-Up`](../hermes-harness/SKILL.md)
 - [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) § Multi-Agent Branch Merge —
-  reconciliation protocol once fanned-out branches need merging; § Decision 13 —
-  patch-equivalence rebase recovery for a stacked fan-out family
+  reconciliation protocol once fanned-out branches need merging; § Decision Flow,
+  item 13 — patch-equivalence rebase recovery for a stacked fan-out family
 
 
 ## Optional: Interactive Provider Setup

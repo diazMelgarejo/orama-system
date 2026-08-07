@@ -46,7 +46,7 @@ Never skip step 1 on multi-file tasks. Never whole-repo `Read` before graph.
 > 
 > READ THIS FULL CONTEXT **only** when CRG is **not** working.
 
-Server: `OpenClaw/.mcp.json` — `uvx code-review-graph==2.3.7 serve`. Full tool
+Server: `$OPENCLAW_ROOT/.mcp.json` — `uvx code-review-graph==2.3.7 serve`. Full tool
 matrix: [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md).
 Fresh-clone / 0-node / disk-error setup and repair, MCP-disconnected
 fallback to gbrain: [`references/graph-init-and-repair.md`](references/graph-init-and-repair.md).
@@ -79,6 +79,12 @@ merge/dedupe/filter ≥ 80. Workers use the same persona + lens prompt and
 never commit; they must not execute `gstack` `SKILL.md` files as procedures.
 
 ## Phase E — Report
+
+Confidence ≥ 80 filters which findings are *candidates* for the report — it
+is not verifier approval. Before crystallizing a verdict, an explicit
+verifier pass (a second reviewer/agent, or the lead agent in Delta mode)
+must approve each Critical/Important finding; a verdict issued without that
+approval is provisional, not final.
 
 Template and rubric: [`references/output-format.md`](references/output-format.md).
 Minimum fields: scope, strengths (short), Critical / Important lists with `file:line`, verdict.
@@ -131,8 +137,8 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 ## Related skills
 
 - Mother: [`bin/orama-system/SKILL.md`](../../SKILL.md) (OmniRoute probe, search policy)
-- E2E bootstrap: [`docs/how-to/first-run-and-code-review.md`](../../../docs/how-to/first-run-and-code-review.md)
+- E2E bootstrap: [`docs/how-to/first-run-and-code-review.md`](../../../../docs/how-to/first-run-and-code-review.md)
 - First-run: [`skills/first-run-setup/SKILL.md`](../first-run-setup/SKILL.md) · [`references/first-run-install.md`](../../references/first-run-install.md)
 - MCP stack: [`bin/orama-system/mcp-install/SKILL.md`](../../mcp-install/SKILL.md)
-- Orchestration: [`~/.claude/skills/mcp-orchestration/SKILL.md`](~/.claude/skills/mcp-orchestration/SKILL.md)
+- Orchestration: [`bin/orama-system/skills/mcp-orchestration/SKILL.md`](../mcp-orchestration/SKILL.md)
 - Git-touching skills this composes with: [`references/git-touching-skills.md`](references/git-touching-skills.md)
