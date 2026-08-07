@@ -98,9 +98,18 @@ def _worker_popen_kwargs() -> dict[str, Any]:
 
 
 class SpawnFunction(Protocol):
-    """Structural contract for the injectable spawn_fn used by the
+    """Structural contract for the injectable _spawn_fn used by the
     ThreadPoolExecutor test path -- distinct from the real subprocess
     worker path, which always spawns via _WORKER_SOURCE regardless.
+
+    Test-only, not a production timeout guarantee: `Future.cancel()` cannot
+    stop a callable that has already started running in its thread, and
+    `ThreadPoolExecutor.shutdown(wait=False)` does not terminate it either.
+    A caller can receive a "did not complete within Ns" error row while the
+    thread keeps running in the background. Any implementation of this
+    protocol must itself return promptly or cooperate with cancellation
+    (e.g. via its own polled Event) -- `worker_timeout_sec` on this path is
+    advisory, not a hard deadline for arbitrary blocking callables.
     """
 
     def __call__(self, role: str, task: str) -> dict[str, Any]:
@@ -358,36 +367,47 @@ def run_delegate(
     *,
     pt_root: str,
     worker_timeout_sec: int,
-    spawn_fn: SpawnFunction | None = None,
+    _spawn_fn: SpawnFunction | None = None,
 ) -> dict[str, Any]:
-    """
-    Execute tasks concurrently through Hermes workers and assemble a canonical delegation result.
-    
+    """Execute tasks concurrently through Hermes workers and assemble a
+    canonical delegation result.
+
+    `_spawn_fn` is test-only (leading underscore: not part of the public
+    contract) -- see `SpawnFunction`'s docstring for why its timeout is
+    cooperative-only, not a hard deadline. Production callers never pass
+    it; they get the real subprocess path below, which does enforce a
+    hard deadline via process-group termination.
+
     Parameters:
-    	tasks (list[str]): Tasks to execute.
-    	pt_root (str): Project root used by worker processes.
-    	worker_timeout_sec (int): Shared timeout for worker execution.
-    	spawn_fn (SpawnFunction | None): Optional worker callable used for injectable execution.
-    
+        tasks (list[str]): Tasks to execute.
+        pt_root (str): Project root used by worker processes.
+        worker_timeout_sec (int): Shared timeout for worker execution.
+        _spawn_fn (SpawnFunction | None): Test-only injectable worker
+            callable; leave unset in production.
+
     Returns:
-    	dict[str, Any]: Canonical result containing worker outcomes, status, warnings, and follow-up actions.
+        dict[str, Any]: Canonical result containing worker outcomes,
+        status, warnings, and follow-up actions.
     """
     rows: list[dict[str, Any]] = []
     warnings: list[str] = []
     follow_up: list[str] = []
 
-    if spawn_fn is None:
+    if _spawn_fn is None:
         rows, follow_up = _run_subprocess_workers(
             tasks,
             pt_root=pt_root,
             worker_timeout_sec=worker_timeout_sec,
         )
     else:
-        # Injectable path (unit tests): thread pool with cooperative release.
+        # Injectable path (unit tests only): thread pool with cooperative
+        # release. See SpawnFunction / this function's docstring -- the
+        # timeout here relies on the injected callable itself returning
+        # promptly; it cannot forcibly stop a callable that ignores it.
         ex = concurrent.futures.ThreadPoolExecutor(max_workers=min(len(tasks), 5))
         try:
             future_by_task = {
-                ex.submit(spawn_fn, "executor", task): task for task in tasks
+                ex.submit(_spawn_fn, "executor", task): task for task in tasks
             }
             pending = set(future_by_task.keys())
             deadline = time.monotonic() + worker_timeout_sec
