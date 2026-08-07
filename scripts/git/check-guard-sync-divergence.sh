@@ -96,13 +96,25 @@ _scan_sibling() {
 _collect_targets() {
   TARGETS=()
   if [[ "${1:-}" == "--workspace" ]]; then
-    local d
-    for d in "$WORKSPACE_ROOT"/*; do
-      [[ -d "$d" ]] || continue
-      local top
-      top="$(git -C "$d" rev-parse --show-toplevel 2>/dev/null)" || continue
-      TARGETS+=("$top")
-    done
+    # Depth-2 crawl, not a flat one-level glob: a sibling repo nested one
+    # level deeper than expected (e.g. Perpetua-Tools under
+    # perplexity-api/Perpetua-Tools) is otherwise silently skipped, giving
+    # false confidence that guard scripts are in sync everywhere when a
+    # whole repo was never checked. Explicit-path mode (below) is
+    # unaffected and remains the reliable fallback for any layout.
+    # shellcheck source=resolve_sibling_git_repo.sh
+    source "$SCRIPT_DIR/resolve_sibling_git_repo.sh"
+    sibling_repo_reset_candidates
+    sibling_repo_crawl_collect "$WORKSPACE_ROOT" "" 2
+    if ((${#_sibling_repo_candidates[@]} > 0)); then
+      local cand
+      for cand in "${_sibling_repo_candidates[@]}"; do
+        # Match the old behavior: children of WORKSPACE_ROOT, never the
+        # workspace root itself even if it happens to be a git repo.
+        [[ "$cand" == "$WORKSPACE_ROOT" ]] && continue
+        TARGETS+=("$cand")
+      done
+    fi
     return 0
   fi
   if [[ -n "${1:-}" ]]; then

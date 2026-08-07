@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# guard-sync-manifest.sh — single source of truth for attribution-guard distribution.
+# guard-sync-manifest.sh — single source of truth for canonical scripts/git/
+# tooling distribution (attribution guards, plus shared cross-repo git
+# utilities like resolve_sibling_git_repo.sh that have no reason to fork).
 #
 # orama-system scripts/git/ is CANONICAL. Perpetua-Tools (and AlphaClaw) carry
 # byte-identical downstream mirrors via sync-attribution-guard-scripts.sh.
