@@ -141,10 +141,19 @@ even if technically clever.
 
 ## § 2 — Vocabulary Normalization (Immediate, Both Repos)
 
-Grep acceptance criteria — all must return zero unauthorized results after cleanup.
-The coordinator check is scoped to tracked code/config files and prunes only
-the documented relay-cursor persona exemption surfaces; any remaining output is
-a failure and must be fixed or explicitly justified under the § 1 scope note.
+Detection sweep, **not yet a passing acceptance criterion** on the canonical
+repository state — see the "Verified, not assumed" note below the block:
+including `*.md` surfaces dozens of pre-existing, legitimate uses of
+"coordinator" (explanatory text, hardware-affinity's unrelated sense,
+pre-decision archives) that a bare negative grep cannot distinguish from
+the banned orchestrator-synonym usage. Do not gate CI on this command, and
+do not treat "it currently fails" as itself a regression, until the
+classification pass described below narrows it to public control-plane
+surfaces specifically. The coordinator check is scoped to tracked
+code/config files and prunes only the documented relay-cursor persona
+exemption surfaces; a result on an in-scope, non-exempted file is a real
+finding needing individual judgment (fix, or justify under the § 1 scope
+note) — a result on legitimate explanatory/archival text is not.
 
 ```bash
 # One explicit allowlist for every permitted registry/persona surface --

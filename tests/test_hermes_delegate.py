@@ -53,7 +53,7 @@ def test_hanging_worker_times_out_within_deadline() -> None:
             ["task-a", "task-b"],
             pt_root=str(ROOT),
             worker_timeout_sec=timeout_sec,
-            spawn_fn=hang,
+            _spawn_fn=hang,
         )
     finally:
         release.set()
@@ -85,7 +85,7 @@ def test_fast_workers_complete_ok() -> None:
         ["alpha", "beta"],
         pt_root=str(ROOT),
         worker_timeout_sec=5,
-        spawn_fn=fast,
+        _spawn_fn=fast,
     )
     assert result["status"] == "ok"
     assert len(result["data"]["workers"]) == 2
@@ -114,7 +114,7 @@ def test_partial_status_when_some_workers_fail() -> None:
         ["good", "bad"],
         pt_root=str(ROOT),
         worker_timeout_sec=5,
-        spawn_fn=mixed,
+        _spawn_fn=mixed,
     )
     assert result["status"] == "partial"
     assert result["follow_up_actions"]
