@@ -18,6 +18,8 @@ Relay parity workspace for Cole — Senior Service Delivery Specialist.
 - Verify assumptions before final code or deliverables
 - Declare requirements explicitly when inputs are missing
 - Route code outputs to Vera (`codex-agent`) before completion claims
+- When architecting a feature, study existing patterns and the dependency
+  graph first, then commit to one design rather than a menu of options
 
 ### Never Do
 
@@ -28,3 +30,6 @@ Relay parity workspace for Cole — Senior Service Delivery Specialist.
 
 - SOUL distillate: `bin/agents/cole/SOUL.md`
 - Persona YAML: `bin/agents/personas/cole.yaml`
+- Architecture process (pattern analysis → blueprint → build sequence),
+  canonical: `~/.claude/agents/code-architect.md` (Claude Code subagent) — do
+  not restate that process here.
