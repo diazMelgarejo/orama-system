@@ -5,7 +5,7 @@ description: >-
   fanning out light tasks in parallel alongside the main Sonnet 4.6 session.
   Cross-platform: macOS/Linux via bash installer, Windows via PowerShell.
   DO NOT confuse with `agent` (Grok Build TUI at ~/.grok/bin/agent) — different tool.
-version: 1.1.0
+version: 1.2.0
 license: Apache 2.0
 compatibility: darwin, linux, windows, orama-system, openclaw, hermes-harness
 parent_skill: orama-system
@@ -176,6 +176,43 @@ wait   # collect when done
 **Budget note:** `cursor-agent` consumes Cursor credits (not Anthropic API tokens).
 Light tasks = `--model composer-2.5` (default) or `--model auto` (fallback) or `gpt-5.3-codex-low`.
 
+## Fan-out Safety
+
+Three practices proven across a multi-day cross-repo session running many
+concurrent cursor-agent/codex/Cline dispatches — apply all three whenever
+`wait`-collecting parallel jobs, not just when something visibly goes wrong:
+
+1. **File-disjoint clustering.** Before fanning out, partition tasks so no
+   two concurrent jobs write the same file or overlapping region of the
+   same file. Two agents editing the same file concurrently is not a "merge
+   it later" problem — it silently produces whichever write lands last, with
+   no conflict marker and no error, and the loser's fix simply disappears.
+   If two tasks genuinely must touch the same file, run them sequentially
+   (pipeline, not parallel) instead of trusting a post-hoc merge.
+2. **Verify self-reports, don't trust them.** A cursor-agent job's own
+   `--output-format json` summary ("done", "3 tests added", "fixed") is a
+   claim, not a result. After `wait`, re-check the actual artifact directly
+   — `git diff --stat` on the files it claimed to touch, re-run the test it
+   claimed passed, `cat` the file it claimed to create. This mirrors the
+   session-wide discipline of verifying claims over labels
+   (`lesson_70713965dc1b` in Perpetua-Tools `.agent/memory` — originally
+   about a merge tool's "clean" label, the same principle applies to any
+   subagent's own completion report).
+3. **Concurrent-job-race awareness.** Two cursor-agent (or cursor-agent +
+   Cline/codex) jobs dispatched in the same fan-out round can both open a
+   PR, both edit the same lesson/config file, or both act on the same
+   GitHub issue within the same minute — seen repeatedly this session as
+   PR sprawl (a stacked PR merged by one run while another run opened a
+   duplicate against `main` for the identical fix). Before merging or
+   closing anything a fan-out job produced, `git fetch` / `gh pr list`
+   fresh and re-check for a sibling job's overlapping output — don't assume
+   the dispatch list from when you kicked off the round is still accurate.
+
+See [`../git-history-surgery/SKILL.md` § Multi-Agent Branch Merge](../git-history-surgery/SKILL.md)
+for the full simulate-before-touching protocol once two fanned-out branches
+need reconciling, and Perpetua-Tools `perpetua-memory` skill § Concurrent-agent
+collisions for the memory-file-specific version of practice 3.
+
 ## Worktree Isolation
 
 For tasks that write files and must not collide with the main session:
@@ -291,6 +328,9 @@ Scripts: `scripts/cursor/grant-pr-body-human-override.sh`, `scripts/cursor/appen
 - Platform affinity (when to use cursor-agent vs Hermes vs OpenClaw): [`../hermes-harness/references/platform-affinity-routing.md`](../hermes-harness/references/platform-affinity-routing.md)
 - orama-system Stage 4: [`../../../SKILL.md § MODE 2 Stage 4`](../../../SKILL.md)
 - Win PATH bootstrap: [`../hermes-harness/SKILL.md § Windows Bring-Up`](../hermes-harness/SKILL.md)
+- [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) § Multi-Agent Branch Merge —
+  reconciliation protocol once fanned-out branches need merging; § Decision 13 —
+  patch-equivalence rebase recovery for a stacked fan-out family
 
 
 ## Optional: Interactive Provider Setup
