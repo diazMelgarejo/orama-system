@@ -295,6 +295,19 @@ def is_managed_wrapper(path: Path) -> bool:
 
 
 def install(dry_run: bool = False, include_optional: bool = False) -> list[Path]:
+    """
+    Install local Hermes skill wrappers and the harness redirect.
+    
+    Parameters:
+    	dry_run (bool): Report planned changes without writing files.
+    	include_optional (bool): Include optional wrappers in the installation.
+    
+    Returns:
+    	list[Path]: Paths of files written during the installation.
+    
+    Raises:
+    	FileNotFoundError: If a selected canonical command card is missing.
+    """
     written: list[Path] = []
     specs = all_wrappers(include_optional)
     missing = [spec.canonical for spec in specs if not (REPO_ROOT / spec.canonical).is_file()]
@@ -332,9 +345,46 @@ def install(dry_run: bool = False, include_optional: bool = False) -> list[Path]
     return written
 
 
+def verify_no_openclaw_root_in_results() -> list[str]:
+    """$OPENCLAW_ROOT in committed prose is banned by
+    openclaw-workspace-path-doctrine.md, but nothing greps for it -- a
+    2026-08-04 "fix" commit regressed one results file back to using it
+    while correctly fixing four siblings in the same commit, and it went
+    unnoticed until an independent review caught it. Scan the results/
+    dir specifically (not the whole hermes-harness tree) since the
+    doctrine docs themselves legitimately discuss the banned string as
+    prose, not a violation.
+
+    Returns:
+        list[str]: Error messages for result files containing the
+        prohibited reference.
+    """
+    errors: list[str] = []
+    results_dir = REPO_ROOT / "bin/orama-system/skills/hermes-harness/references/results"
+    if not results_dir.is_dir():
+        return errors
+    for path in sorted(results_dir.glob("*.md")):
+        text = path.read_text(encoding="utf-8")
+        if "$OPENCLAW_ROOT" in text:
+            errors.append(
+                f"$OPENCLAW_ROOT found in committed prose (banned): {path}"
+            )
+    return errors
+
+
 def verify(include_optional: bool = False) -> list[str]:
+    """
+    Verify that all required Hermes redirects and wrappers meet installation requirements.
+    
+    Parameters:
+    	include_optional (bool): Whether to include optional wrappers in the verification.
+    
+    Returns:
+    	list[str]: Verification error messages; an empty list indicates that all checks passed.
+    """
     errors: list[str] = []
     errors.extend(verify_harness_redirect())
+    errors.extend(verify_no_openclaw_root_in_results())
     for spec in all_wrappers(include_optional):
         target = HERMES_SKILLS / hermes_local_dir(spec.slug) / "SKILL.md"
         if not target.is_file():

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -20,7 +21,17 @@ INSTALLER = (
 
 
 @pytest.fixture
-def installer(monkeypatch, tmp_path):
+def installer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> types.ModuleType:
+    """
+    Load the installer module with its skill and harness paths redirected to temporary directories.
+    
+    Parameters:
+    	monkeypatch (pytest.MonkeyPatch): Fixture used to isolate module state and paths.
+    	tmp_path (Path): Temporary directory for the installer’s skill and harness files.
+    
+    Returns:
+    	types.ModuleType: The dynamically loaded installer module.
+    """
     spec = importlib.util.spec_from_file_location("hermes_thin_installer", INSTALLER)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -220,3 +231,28 @@ def test_verify_unmanaged_wrapper_reported_as_preserved(installer, tmp_path):
     delegate_target.write_text("---\nname: user-delegate\n---\n# user content\n", encoding="utf-8")
     errors = installer.verify()
     assert any("unmanaged wrapper preserved" in e for e in errors)
+
+
+def test_verify_no_openclaw_root_flags_violating_results(
+    installer: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
+    results_dir.mkdir(parents=True)
+    violating = results_dir / "some-fleet-report.md"
+    violating.write_text("pull from `$OPENCLAW_ROOT/references/`\n", encoding="utf-8")
+    monkeypatch.setattr(installer, "REPO_ROOT", tmp_path)
+    errors = installer.verify_no_openclaw_root_in_results()
+    assert errors
+    assert any("$OPENCLAW_ROOT" in e for e in errors)
+
+
+def test_verify_no_openclaw_root_allows_clean_results(
+    installer: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    results_dir = tmp_path / "bin/orama-system/skills/hermes-harness/references/results"
+    results_dir.mkdir(parents=True)
+    clean = results_dir / "some-fleet-report.md"
+    clean.write_text("pull from the workspace-level operator references tree\n", encoding="utf-8")
+    monkeypatch.setattr(installer, "REPO_ROOT", tmp_path)
+    assert installer.verify_no_openclaw_root_in_results() == []
+
