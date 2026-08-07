@@ -295,6 +295,19 @@ def is_managed_wrapper(path: Path) -> bool:
 
 
 def install(dry_run: bool = False, include_optional: bool = False) -> list[Path]:
+    """
+    Install local Hermes skill wrappers and the harness redirect.
+    
+    Parameters:
+    	dry_run (bool): Report planned changes without writing files.
+    	include_optional (bool): Include optional wrappers in the installation.
+    
+    Returns:
+    	list[Path]: Paths of files written during the installation.
+    
+    Raises:
+    	FileNotFoundError: If a selected canonical command card is missing.
+    """
     written: list[Path] = []
     specs = all_wrappers(include_optional)
     missing = [spec.canonical for spec in specs if not (REPO_ROOT / spec.canonical).is_file()]
@@ -341,6 +354,10 @@ def verify_no_openclaw_root_in_results() -> list[str]:
     dir specifically (not the whole hermes-harness tree) since the
     doctrine docs themselves legitimately discuss the banned string as
     prose, not a violation.
+
+    Returns:
+        list[str]: Error messages for result files containing the
+        prohibited reference.
     """
     errors: list[str] = []
     results_dir = REPO_ROOT / "bin/orama-system/skills/hermes-harness/references/results"
@@ -356,6 +373,15 @@ def verify_no_openclaw_root_in_results() -> list[str]:
 
 
 def verify(include_optional: bool = False) -> list[str]:
+    """
+    Verify that all required Hermes redirects and wrappers meet installation requirements.
+    
+    Parameters:
+    	include_optional (bool): Whether to include optional wrappers in the verification.
+    
+    Returns:
+    	list[str]: Verification error messages; an empty list indicates that all checks passed.
+    """
     errors: list[str] = []
     errors.extend(verify_harness_redirect())
     errors.extend(verify_no_openclaw_root_in_results())

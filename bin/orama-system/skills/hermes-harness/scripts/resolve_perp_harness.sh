@@ -5,6 +5,7 @@
 # ../../oramasys-method/references/sync-local-pt-checkout.md.
 set -euo pipefail
 
+# _is_pt_git_root verifies that a directory is a non-symlink Perpetua-Tools checkout containing the required Git metadata and application file.
 _is_pt_git_root() {
   local d="${1%/}"
   [[ -n "$d" && -d "$d" ]] || return 1
@@ -14,6 +15,7 @@ _is_pt_git_root() {
 
 _pt_candidates=()
 
+# _pt_add_candidate adds a valid, canonical Perpetua-Tools root to the candidate list when it is not already present.
 _pt_add_candidate() {
   local d existing
   d="$(cd "${1%/}" 2>/dev/null && pwd)" || return 0
@@ -46,6 +48,7 @@ _crawl_pt_git_roots_collect() {
   done
 }
 
+# _finalize_pt_root selects the sole valid Perpetua-Tools root and prints its path, failing when none or multiple roots are available.
 _finalize_pt_root() {
   if ((${#_pt_candidates[@]} == 0)); then
     return 1
@@ -60,6 +63,7 @@ _finalize_pt_root() {
 
 _RESOLVED_PT_ROOT_CACHE=""
 
+# resolve_pt_root resolves and prints the Perpetua-Tools repository root, using configured paths or filesystem discovery.
 resolve_pt_root() {
   if [[ -n "${_RESOLVED_PT_ROOT_CACHE:-}" ]]; then
     echo "$_RESOLVED_PT_ROOT_CACHE"
@@ -111,6 +115,7 @@ resolve_pt_root() {
   return 1
 }
 
+# resolve_perp_harness_script resolves and prints the canonical path to the Perpetua-Tools Hermes harness script, or reports an error when the root or script cannot be found.
 resolve_perp_harness_script() {
   local pt_root script
   pt_root="$(resolve_pt_root || true)"

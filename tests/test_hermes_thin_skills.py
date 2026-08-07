@@ -22,6 +22,16 @@ INSTALLER = (
 
 @pytest.fixture
 def installer(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> types.ModuleType:
+    """
+    Load the installer module with its skill and harness paths redirected to temporary directories.
+    
+    Parameters:
+    	monkeypatch (pytest.MonkeyPatch): Fixture used to isolate module state and paths.
+    	tmp_path (Path): Temporary directory for the installer’s skill and harness files.
+    
+    Returns:
+    	types.ModuleType: The dynamically loaded installer module.
+    """
     spec = importlib.util.spec_from_file_location("hermes_thin_installer", INSTALLER)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)

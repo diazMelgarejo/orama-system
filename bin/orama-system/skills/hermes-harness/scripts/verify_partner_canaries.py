@@ -321,6 +321,12 @@ def _ensure_windows_partner_path() -> None:
 
 
 def main() -> int:
+    """
+    Run configured partner canary probes and report their results.
+    
+    Returns:
+    	int: `0` when all required canaries pass or are skipped, otherwise `1`.
+    """
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--lm-studio-url", default="http://localhost:1234/v1")
     p.add_argument("--timeout", type=int, default=90, help="Per-canary timeout in seconds (Hermes/AGY/Codex)")
