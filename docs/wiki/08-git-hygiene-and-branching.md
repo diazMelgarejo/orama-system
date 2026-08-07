@@ -1,6 +1,8 @@
 # 08. Git Hygiene and Branching — Orama Recovery Guardrails
 
-**TL;DR:** Prevent future identity drift, broken config commits, and orphan branches by following dated branch names, stash-first discipline, explicit credential confirmation, and minimal workflow permissions.
+**TL;DR:** Prevent future identity drift, broken config commits, and orphan
+branches by following dated branch names, stash-first discipline, explicit
+credential confirmation, and minimal workflow permissions.
 
 ---
 
@@ -13,10 +15,12 @@ yyyy-mm-dd-NNN-brief-summary
 ```
 
 Examples:
+
 - `2026-04-24-001-orama-salvage`
 - `2026-04-25-001-fix-gateway-discovery`
 
 Rules:
+
 - Use the date the branch was created, not the anticipated merge date.
 - Start at `001` and increment for same-day branches.
 - Keep the summary lowercase and hyphenated.
@@ -26,7 +30,9 @@ Rules:
 
 ## Official commit identity policy (2026-05-25)
 
-Canonical policy for **primary commit authors** and **`Co-authored-by`** trailers in this repo (and the OpenClaw stack). Enforcement is local via repo hooks — not honor system.
+Canonical policy for **primary commit authors** and **`Co-authored-by`**
+trailers in this repo (and the OpenClaw stack). Enforcement is local via
+repo hooks — not honor system.
 
 | Role | Rule |
 | --- | --- |
@@ -68,10 +74,10 @@ Approved **primary commit author** identities (any one):
 
 | Email | Typical `user.name` |
 | --- | --- |
-| diazMelgarejo@gmail.com | `cyre` |
-| Lawrence@cyre.me | `cyre` or a name containing `Lawrence` |
+| <diazMelgarejo@gmail.com> | `cyre` |
+| <Lawrence@cyre.me> | `cyre` or a name containing `Lawrence` |
 | configured private owner email | `cyre` or configured private owner name |
-| codex@openai.com | `Codex` |
+| <codex@openai.com> | `Codex` |
 
 After each fresh clone, run once:
 
@@ -79,7 +85,11 @@ After each fresh clone, run once:
 bash scripts/git/install-local-hooks.sh
 ```
 
-Local hooks enforce identity on `pre-commit` and validate **`Co-authored-by`** trailers on `commit-msg`: well-known public AI/vendor co-authors are allowed; unknown `@gmail.com` co-authors are rejected (see table below). Using **Codex** as the primary author is allowed. Verify config before committing:
+Local hooks enforce identity on `pre-commit` and validate
+**`Co-authored-by`** trailers on `commit-msg`: well-known public AI/vendor
+co-authors are allowed; unknown `@gmail.com` co-authors are rejected (see
+table below). Using **Codex** as the primary author is allowed. Verify
+config before committing:
 
 ```bash
 bash scripts/git/check_identity.sh
@@ -95,8 +105,6 @@ git config user.name "Codex"
 git config user.email "codex@openai.com"
 ```
 
-
-
 ### Co-authored-by policy (commit-msg hook)
 
 | Category | Rule |
@@ -108,7 +116,9 @@ git config user.email "codex@openai.com"
 | **Allowed `@gmail.com` co-authors** | `diazMelgarejo@gmail.com` plus the configured private owner email from local-only configuration |
 | **Rejected** | Any other `Co-authored-by` line with `@gmail.com` (unattributable personal inboxes) |
 
-Corporate and vendor agent domains are identifiable; random Gmail co-authors are not attributable and were used for mistaken or non-policy attribution.
+Corporate and vendor agent domains are identifiable; random Gmail
+co-authors are not attributable and were used for mistaken or non-policy
+attribution.
 
 **Policy (2026-06-03): mainstream AI models and autonomous coding agents are allowed**
 as authors, committers, and `Co-authored-by` — including `Cursor Agent <cursoragent@cursor.com>`
@@ -120,17 +130,24 @@ pattern lib, stripped by `commit-msg.strip-coauthor` and caught by `audit_attrib
 is where the VERBOTEN gets injected. Extend the allowlists above as new mainstream agents
 appear; keep `check_commit_message.sh`, `check_identity.sh`, and `repo_hygiene.py` in sync.
 
-
 ### Allowed bot committers (history scans only)
 
-Automated commits from GitHub bots are **not** policy violations in `scripts/git/audit_attribution.sh` history scans (`bad_author` is not incremented for these emails):
+Automated commits from GitHub bots are **not** policy violations in
+`scripts/git/audit_attribution.sh` history scans (`bad_author` is not
+incremented for these emails):
 
 | Repo | Bot author email |
 | --- | --- |
-| **orama-system** | `cursor[bot]@users.noreply.github.com` |
-| **Perpetua-Tools** | `dependabot[bot]@users.noreply.github.com` |
+| **orama-system** | `cursor[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com` |
+| **Perpetua-Tools** | `dependabot[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com` |
 
-The audit script accepts the union of both bot addresses on any repo it runs against. `scripts/git/check_identity.sh` still applies only to **your next commit** (human/cyre/Codex identity) — it does not rewrite historical bot authors.
+The audit script (`scripts/git/audit_engine.py`) scopes this lookup **per repo**
+by name (`repo_bot_identities[repo_root.name]`) — it does not union bot
+addresses across repos, so a bot approved for one repo is not automatically
+approved for another; add it explicitly to each repo's list in
+`scripts/git/identity-policy.json`. `scripts/git/check_identity.sh` still
+applies only to **your next commit** (human/cyre/Codex identity) — it does
+not rewrite historical bot authors.
 
 ### Banned identities (private list — never in tracked docs)
 
@@ -150,13 +167,33 @@ Re-introducing a banned identity after an expunge forces another full `main` + a
 
 ### Explicit co-author allowlist and domain-gate caveat
 
-`Co-authored-by: Cursor <cursoragent@cursor.com>` is **always allowed** — listed explicitly in `scripts/git/check_commit_message.sh` (`ALLOWED_EXACT_COAUTHOR_EMAILS`), not only via the `cursor.com` domain suffix.
+`Co-authored-by: Cursor <cursoragent@cursor.com>` is **always allowed** —
+listed explicitly in `scripts/git/check_commit_message.sh`
+(`ALLOWED_EXACT_COAUTHOR_EMAILS`), not only via the `cursor.com` domain
+suffix.
 
-**`ALLOWED_GMAIL_COAUTHORS` only fires for `@gmail.com` / `@googlemail.com` addresses.** Any personal or org domain address (e.g. `user@cyre.me`, `user@bettermind.ph`) placed in `ALLOWED_GMAIL_COAUTHORS` will be silently denied — the `gmail_allowed()` gate is guarded by a `*@gmail.com` domain check and never runs for other domains. Fix: put all non-Gmail personal or org-domain addresses in `ALLOWED_EXACT_COAUTHOR_EMAILS` instead. (Learned 2026-06-22: `lawrence@cyre.me` was in `ALLOWED_GMAIL_COAUTHORS`; commits were rejected until it was moved to `ALLOWED_EXACT_COAUTHOR_EMAILS`.) Private owner email literals belong in local-only configuration, not tracked allowlists.
+**`ALLOWED_GMAIL_COAUTHORS` only fires for `@gmail.com` / `@googlemail.com`
+addresses.** Any personal or org domain address (e.g. `user@cyre.me`,
+`user@bettermind.ph`) placed in `ALLOWED_GMAIL_COAUTHORS` will be silently
+denied — the `gmail_allowed()` gate is guarded by a `*@gmail.com` domain
+check and never runs for other domains. Fix: put all non-Gmail personal or
+org-domain addresses in `ALLOWED_EXACT_COAUTHOR_EMAILS` instead. (Learned
+2026-06-22: `lawrence@cyre.me` was in `ALLOWED_GMAIL_COAUTHORS`; commits
+were rejected until it was moved to `ALLOWED_EXACT_COAUTHOR_EMAILS`.)
+Private owner email literals belong in local-only configuration, not
+tracked allowlists.
 
 ### Why only known @gmail.com in co-author lines?
 
-Public AI helpers use stable, identifiable domains (`@openai.com`, `@anthropic.com`, `cursor.com`, and similar), so `Co-authored-by` trailers are auditable and match how those tools sign commits. A random `@gmail.com` in `Co-authored-by:` is usually a person or an unreviewed address — easy to add by mistake and hard to tie to our approved author policy. Letting every Gmail address through would weaken the hook; allowing only known Gmail addresses plus well-known agent domains keeps attribution clear without blocking Codex-, Cursor-, and Claude-style co-authors we want.
+Public AI helpers use stable, identifiable domains (`@openai.com`,
+`@anthropic.com`, `cursor.com`, and similar), so `Co-authored-by` trailers
+are auditable and match how those tools sign commits. A random
+`@gmail.com` in `Co-authored-by:` is usually a person or an unreviewed
+address — easy to add by mistake and hard to tie to our approved author
+policy. Letting every Gmail address through would weaken the hook;
+allowing only known Gmail addresses plus well-known agent domains keeps
+attribution clear without blocking Codex-, Cursor-, and Claude-style
+co-authors we want.
 
 Manual check:
 
@@ -188,6 +225,7 @@ warn about, since there's nothing staged to reject.
    Before any push, confirm you are in the checkout/worktree you think you
    are — juggling several worktrees for the same repo in one session is
    exactly how a command lands in the wrong tree:
+
    ```bash
    pwd; git remote get-url origin; git branch --show-current
    ```
@@ -196,6 +234,7 @@ warn about, since there's nothing staged to reject.
    Resolve merge/cherry-pick/revert state and re-verify with git's own
    authoritative markers before the push, not a text-marker grep (`<<<<<<<`
    misses add/add, rename/delete, and delete/modify conflicts entirely):
+
    ```bash
    git diff --name-only --diff-filter=U   # must be empty
    for marker in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
@@ -205,6 +244,7 @@ warn about, since there's nothing staged to reject.
      fi
    done
    ```
+
    `.githooks/pre-push` now runs this automatically via
    [`scripts/git/check_no_pending_merge.sh`](../../scripts/git/check_no_pending_merge.sh)
    (checks `MERGE_HEAD`, `CHERRY_PICK_HEAD`, `REVERT_HEAD`; KB exit codes 1–4) —
@@ -213,7 +253,7 @@ warn about, since there's nothing staged to reject.
    **KB exit codes** (script + hook propagate numeric exit):
 
    | Exit | Symbol | Meaning |
-   |------|--------|---------|
+   | ------ | -------- | --------- |
    | 0 | `GIT_PUSH_OK` | No pending operation |
    | 1 | `GIT_PUSH_E_PENDING_MERGE_CLEAN` | `MERGE_HEAD`, ready to `git commit` |
    | 2 | `GIT_PUSH_E_PENDING_MERGE_CONFLICT` | `MERGE_HEAD` + unmerged paths |
@@ -226,9 +266,11 @@ warn about, since there's nothing staged to reject.
 3. **Check commits before opening a PR — verify the diff, don't describe it from memory.**
    Before writing a PR body, re-derive its claims from the actual diff you're
    about to push, not from notes on what you resolved:
+
    ```bash
    git diff <base>...<head> --stat | tail -1
    ```
+
    A near-empty diff when you're about to describe hundreds of resolved
    conflicts is the same signal as step 2's `MERGE_HEAD` — believe the git
    state over your own summary of what you did.
@@ -237,7 +279,8 @@ warn about, since there's nothing staged to reject.
 
 ## Stash-First Discipline
 
-Before any risky Git operation (rebase, history inspection, branch surgery, cross-repo sync), capture state including untracked files:
+Before any risky Git operation (rebase, history inspection, branch surgery,
+cross-repo sync), capture state including untracked files:
 
 ```bash
 git status --short --branch
@@ -251,11 +294,15 @@ Never run destructive cleanup until the stash has been verified.
 
 ### Cross-host sync reference card (Mac ↔ Win)
 
-For the common case — **dirty worktree + fast-forward `main` + push to peer** — use the full step-by-step card (bash + PowerShell, multi-repo, forbidden commands):
+For the common case — **dirty worktree + fast-forward `main` + push to
+peer** — use the full step-by-step card (bash + PowerShell, multi-repo,
+forbidden commands):
 
 [`bin/orama-system/skills/git-history-surgery/references/safe-cross-host-sync-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/safe-cross-host-sync-reference-card.md)
 
-Summary: stash → `git pull --ff-only origin main` → `git stash pop` → review → commit intentional files → `git push origin main` → peer runs `git pull --ff-only`. Never `git reset --hard` or force-push `main`.
+Summary: stash → `git pull --ff-only origin main` → `git stash pop` →
+review → commit intentional files → `git push origin main` → peer runs
+`git pull --ff-only`. Never `git reset --hard` or force-push `main`.
 
 ### Perpetua-Tools local runtime overlay
 
@@ -267,10 +314,14 @@ those paths to clean up; **never** commit the overlay values. Stash before pull/
 git stash push -m "runtime overlay" -- config/devices.yml config/models.yml
 ```
 
-Policy: [`Perpetua-Tools/config/LOCAL-RUNTIME-OVERLAY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/LOCAL-RUNTIME-OVERLAY.md) · skill card:
+Policy:
+[`Perpetua-Tools/config/LOCAL-RUNTIME-OVERLAY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/LOCAL-RUNTIME-OVERLAY.md)
+· skill card:
 [`local-runtime-overlay-reference-card.md`](../../bin/orama-system/skills/using-git-worktrees/references/local-runtime-overlay-reference-card.md)
 
-On pop/apply, use [`stash-hooks-safeguard-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/stash-hooks-safeguard-reference-card.md) (`git -c core.hooksPath=/dev/null stash pop` → `install-local-hooks.sh`).
+On pop/apply, use
+[`stash-hooks-safeguard-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/stash-hooks-safeguard-reference-card.md)
+(`git -c core.hooksPath=/dev/null stash pop` → `install-local-hooks.sh`).
 
 ### Fresh-main integrity diff (CLAYGO)
 
@@ -317,23 +368,39 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `recovery`
 
 ## Portable paths in tracked files (no workstation leaks)
 
-`scripts/review/repo_hygiene.py` runs in CI (`tests/test_repo_hygiene.py::test_repo_hygiene_script_runs_clean`) and **fails the build** on any tracked file containing a hardcoded workstation path. This applies to docs, comments, and example commands — not just code. Two patterns are blocked:
+`scripts/review/repo_hygiene.py` runs in CI
+(`tests/test_repo_hygiene.py::test_repo_hygiene_script_runs_clean`) and
+**fails the build** on any tracked file containing a hardcoded workstation
+path. This applies to docs, comments, and example commands — not just
+code. Two patterns are blocked:
 
-- **Personal absolute paths** — `/Users/<name>/…` or `/home/<name>/…` where `<name>` is a real login. Use `~`, `$REPO_ROOT`, or a relative path.
-- **Machine-specific OpenClaw layout** — the literal `…/claude/OpenClaw` workstation tree (with or without a `~`/`$HOME` prefix). Use `$OPENCLAW_ROOT`, `detect_openclaw_root()`, or `ORAMA_INSTALL_DIR`.
+- **Personal absolute paths** — `/Users/<name>/…` or `/home/<name>/…`
+  where `<name>` is a real login. Use `~`, `$REPO_ROOT`, or a relative path.
+- **Machine-specific OpenClaw layout** — the literal `…/claude/OpenClaw`
+  workstation tree (with or without a `~`/`$HOME` prefix). Use
+  `$OPENCLAW_ROOT`, `detect_openclaw_root()`, or `ORAMA_INSTALL_DIR`.
 
-**`<name>` placeholder is NOT enough.** Swapping the login for `<name>` still exposes the parent directory tree (e.g. `/Users/<name>/Downloads/SKILLS.md/ultrathink/…`), which is also identifying. Same problem on Windows: `%USERPROFILE%\specific-subdir\subtree\`. Use the form that fits the context:
+**`<name>` placeholder is NOT enough.** Swapping the login for `<name>`
+still exposes the parent directory tree (e.g.
+`/Users/<name>/Downloads/SKILLS.md/ultrathink/…`), which is also
+identifying. Same problem on Windows: `%USERPROFILE%\specific-subdir\subtree\`.
+Use the form that fits the context:
 
 | Situation | Correct form |
-|-----------|-------------|
+| ----------- | ------------- |
 | Path to a file inside this repo | Relative from the referencing file — `../filename` or `../../dir/file` |
 | Path to repo root or sibling repos | `$OPENCLAW_ROOT`, `$REPO_ROOT`, `~` |
 | Local-only reference with no repo anchor | Filename only — strip the entire parent path tree |
 | Runnable shell example | Variable substitution (`"$OPENCLAW_ROOT/orama-system"`) |
 
-**Workspace-level operator docs:** `$OPENCLAW_ROOT/references/` holds OpenClaw-side runbooks and migration drafts **outside** any git repo (sibling to `orama-system` under the OpenClaw parent). Use `$OPENCLAW_ROOT/references/<filename>` — never the literal path `OpenClaw/references/`.
+**Workspace-level operator docs:** `$OPENCLAW_ROOT/references/` holds
+OpenClaw-side runbooks and migration drafts **outside** any git repo
+(sibling to `orama-system` under the OpenClaw parent). Use
+`$OPENCLAW_ROOT/references/<filename>` — never the literal path
+`OpenClaw/references/`.
 
-Rule of thumb when writing a runnable example or recovery command in any `*.md`, script, or comment — substitute the root with a variable:
+Rule of thumb when writing a runnable example or recovery command in any
+`*.md`, script, or comment — substitute the root with a variable:
 
 ```bash
 # WRONG — a literal /Users/<login>/…/claude/OpenClaw/orama-system leaks the
@@ -344,9 +411,24 @@ git clone <url> "$OPENCLAW_ROOT/orama-system"
 ../Cross-Repo-Memory-Seed.md          # relative from the referencing file
 ```
 
-Abbreviated placeholders like `/Users/.../foo` are fine (the segment after `/Users/` must start with a letter to match). The script and its own test are the only allowlisted files (they must name the pattern to test it). **Run `python3 scripts/review/repo_hygiene.py .` before committing docs that contain shell commands** — it is the same check CI runs. (Learned 2026-06-02: the #1802 incident write-ups themselves leaked workstation paths and red-CI'd `main`. Reinforced 2026-06-22 PR #123: even placeholder forms and Windows env vars expose subdirectory trees.)
+Abbreviated placeholders like `/Users/.../foo` are fine (the segment after
+`/Users/` must start with a letter to match). The script and its own test
+are the only allowlisted files (they must name the pattern to test it).
+**Run `python3 scripts/review/repo_hygiene.py .` before committing docs
+that contain shell commands** — it is the same check CI runs. (Learned
+2026-06-02: the #1802 incident write-ups themselves leaked workstation
+paths and red-CI'd `main`. Reinforced 2026-06-22 PR #123: even placeholder
+forms and Windows env vars expose subdirectory trees.)
 
-**Prevention (catch it before history, not after).** The pre-commit hook (`.githooks/pre-commit`, activated by `bash scripts/git/install-local-hooks.sh`) runs the full `repo_hygiene.py` — the *same* check as CI — so a leaked path or token is blocked at commit time and never enters history. That makes the [`git-history-surgery`](../../bin/orama-system/skills/git-history-surgery/SKILL.md) scrub a last resort (only if something already landed before the hook was installed), not the routine. Install the hooks once per clone; CI is the backstop, the hook is the gate.
+**Prevention (catch it before history, not after).** The pre-commit hook
+(`.githooks/pre-commit`, activated by `bash scripts/git/install-local-hooks.sh`)
+runs the full `repo_hygiene.py` — the *same* check as CI — so a leaked
+path or token is blocked at commit time and never enters history. That
+makes the
+[`git-history-surgery`](../../bin/orama-system/skills/git-history-surgery/SKILL.md)
+scrub a last resort (only if something already landed before the hook was
+installed), not the routine. Install the hooks once per clone; CI is the
+backstop, the hook is the gate.
 
 ---
 
@@ -409,7 +491,10 @@ bash scripts/git/apply-attribution-guard-all-repos.sh
 
 See [12. Cursor Cloud — commit attribution guards](12-cursor-cloud-commit-attribution.md).
 
-**PR body updates:** append-only workflow — skill [`cursor-pr-body`](../../bin/orama-system/skills/cursor-pr-body/SKILL.md), rule `.cursor/rules/append-only-pr-body.mdc`, script `scripts/cursor/append-pr-body.sh`. See wiki §12 for the full workflow.
+**PR body updates:** append-only workflow — skill
+[`cursor-pr-body`](../../bin/orama-system/skills/cursor-pr-body/SKILL.md),
+rule `.cursor/rules/append-only-pr-body.mdc`, script
+`scripts/cursor/append-pr-body.sh`. See wiki §12 for the full workflow.
 
 ---
 
@@ -418,5 +503,16 @@ See [12. Cursor Cloud — commit attribution guards](12-cursor-cloud-commit-attr
 - [Git Safety Guardrails](../recovery/2026-04-24-003-git-safety-guardrails.md)
 - [Multi-Agent Collaboration](06-multi-agent-collab.md)
 - [Commit Salvage Matrix](../recovery/2026-04-24-002-commit-salvage-matrix.md)
-- **Concurrent-commit contention (`.git/index.lock`, "nothing to commit" after a stolen `add`):** operational retry-loop guidance lives in [`bin/orama-system/skills/shell-hygiene/SKILL.md`](../../bin/orama-system/skills/shell-hygiene/SKILL.md) § 6 — this doc covers identity/branching conventions, that skill covers execution mechanics.
-- **Multiple open PRs conflicting with each other (not just with `main`):** GitHub only checks each PR against current `main`, never against a sibling PR that might land first — see [`../../SECURITY.md`](../../SECURITY.md) § "Case study: append-only shared-file conflicts across independent PRs (2026-07-12)" for the `git merge-tree --write-tree --merge-base=<base>` simulation technique and the union-merge resolution used for `Perpetua-Tools` PRs #205/#206/#208.
+- **Concurrent-commit contention (`.git/index.lock`, "nothing to commit"
+  after a stolen `add`):** operational retry-loop guidance lives in
+  [`bin/orama-system/skills/shell-hygiene/SKILL.md`](../../bin/orama-system/skills/shell-hygiene/SKILL.md)
+  § 6 — this doc covers identity/branching conventions, that skill covers
+  execution mechanics.
+- **Multiple open PRs conflicting with each other (not just with
+  `main`):** GitHub only checks each PR against current `main`, never
+  against a sibling PR that might land first — see
+  [`../../SECURITY.md`](../../SECURITY.md) § "Case study: append-only
+  shared-file conflicts across independent PRs (2026-07-12)" for the
+  `git merge-tree --write-tree --merge-base=<base>` simulation technique
+  and the union-merge resolution used for `Perpetua-Tools` PRs
+  #205/#206/#208.
