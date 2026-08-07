@@ -34,10 +34,16 @@ across a real multi-PR contribution arc (agentic-stack PRs #60–#65) — turn
    redo it in a fresh worktree rather than accumulating stash-based fixups.
    See [`../../using-git-worktrees/SKILL.md`](../../using-git-worktrees/SKILL.md).
 4. **Ground the PR body in the project's own design docs, not just "this
-   looks wrong."** Quote the upstream repo's own spec/README/docstring
-   language that the bug violates — a security- or design-intent framing
-   grounded in the maintainer's own stated goals is far more persuasive
-   and reviewable than an unsupported claim of severity.
+   looks wrong."** When **authoring a new** upstream PR, quote the
+   upstream repo's own spec/README/docstring language that the bug
+   violates — a security- or design-intent framing grounded in the
+   maintainer's own stated goals is far more persuasive and reviewable
+   than an unsupported claim of severity. When updating an **existing**
+   PR on this stack, Cursor agents stay **comment-only by default** —
+   do not auto-mutate the body; body edits require explicit operator
+   authorization, a full-body backup, and append-only merge via
+   `scripts/cursor/append-pr-body.sh` (see
+   [`../../cursor-pr-body/SKILL.md`](../../cursor-pr-body/SKILL.md)).
 5. **Cross-reference sibling PRs with one trailing comment each**, not a
    body edit — check first that no prior mention exists, then link every
    PR in the same contribution batch to every other one, mentioning the

@@ -78,17 +78,17 @@ MCP shows **disconnected**, drive the `uvx` CLI directly — but mind two traps 
 bit us live (2026-06-13):
 
 1. **Cold-start timeout = the usual disconnect cause.** The first
-   `uvx code-review-graph serve` of a session downloads tree-sitter-language-pack
+   `uvx code-review-graph==2.3.7 serve` of a session downloads tree-sitter-language-pack
    (~74 packages, ~31 MiB) and can blow past the MCP handshake window, so the harness
    marks it disconnected. Pre-warm the cache once, then reconnect:
 
    ```bash
-   uvx code-review-graph --help    # one-time download; warms the uvx cache
+   uvx code-review-graph==2.3.7 --help    # one-time download; warms the uvx cache
    # then in Claude Code:  /mcp  → reconnect code-review-graph  (warm = connects fast)
    ```
 
 2. **CLI `embed` defaults to `local` (NOT the unified provider).**
-   `uvx code-review-graph embed` defaults to `--provider local` (sentence-transformers,
+   `uvx code-review-graph==2.3.7 embed` defaults to `--provider local` (sentence-transformers,
    not installed → hard error). You MUST pass the provider for the bge-m3 vector space.
    Full CLI refresh after a big change (mirrors the MCP build+embed path):
 
@@ -98,10 +98,10 @@ bit us live (2026-06-13):
           CRG_OPENAI_MODEL=bge-m3 CRG_OPENAI_DIMENSION=1024 CRG_ACCEPT_CLOUD_EGRESS=1
    # Windows — LM Studio, resolved from $LM_STUDIO_WIN_ENDPOINTS (default localhost:1234, use this instead of :11434)
    # export CRG_OPENAI_BASE_URL="http://${LM_STUDIO_WIN_ENDPOINTS:-localhost:1234}/v1"
-   uvx code-review-graph update                                  # incremental re-parse
-   uvx code-review-graph embed --provider openai --model bge-m3  # NEVER omit --provider
-   uvx code-review-graph postprocess                             # flows / communities / FTS
-   uvx code-review-graph status                                  # confirm nodes + embeddings
+   uvx code-review-graph==2.3.7 update                                  # incremental re-parse
+   uvx code-review-graph==2.3.7 embed --provider openai --model bge-m3  # NEVER omit --provider
+   uvx code-review-graph==2.3.7 postprocess                             # flows / communities / FTS
+   uvx code-review-graph==2.3.7 status                                  # confirm nodes + embeddings
    ```
 
    `embed_graph_tool(provider="openai")` already does this over MCP — the `--provider`

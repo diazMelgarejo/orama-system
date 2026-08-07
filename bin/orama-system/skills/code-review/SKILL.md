@@ -46,7 +46,7 @@ Never skip step 1 on multi-file tasks. Never whole-repo `Read` before graph.
 > 
 > READ THIS FULL CONTEXT **only** when CRG is **not** working.
 
-Server: `OpenClaw/.mcp.json` — `uvx code-review-graph serve`. Full tool
+Server: `OpenClaw/.mcp.json` — `uvx code-review-graph==2.3.7 serve`. Full tool
 matrix: [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md).
 Fresh-clone / 0-node / disk-error setup and repair, MCP-disconnected
 fallback to gbrain: [`references/graph-init-and-repair.md`](references/graph-init-and-repair.md).

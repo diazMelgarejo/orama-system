@@ -192,21 +192,27 @@ concurrent cursor-agent/codex/Cline dispatches — apply all three whenever
 2. **Verify self-reports, don't trust them.** A cursor-agent job's own
    `--output-format json` summary ("done", "3 tests added", "fixed") is a
    claim, not a result. After `wait`, re-check the actual artifact directly
-   — `git diff --stat` on the files it claimed to touch, re-run the test it
-   claimed passed, `cat` the file it claimed to create. This mirrors the
-   session-wide discipline of verifying claims over labels
-   (`lesson_70713965dc1b` in Perpetua-Tools `.agent/memory` — originally
-   about a merge tool's "clean" label, the same principle applies to any
-   subagent's own completion report).
+   — but only from **repository-owned, repository-relative** paths. Reject
+   absolute paths and any path containing `..`. Validate each claimed path
+   with `git ls-files --error-unmatch -- <path>` (or confine reads to an
+   explicitly approved output directory under the repo) before `cat`,
+   `git diff`, or re-running tests on it. This mirrors the session-wide
+   discipline of verifying claims over labels (`lesson_70713965dc1b` in
+   Perpetua-Tools `.agent/memory` — originally about a merge tool's
+   "clean" label, the same principle applies to any subagent's own
+   completion report).
 3. **Concurrent-job-race awareness.** Two cursor-agent (or cursor-agent +
    Cline/codex) jobs dispatched in the same fan-out round can both open a
    PR, both edit the same lesson/config file, or both act on the same
    GitHub issue within the same minute — seen repeatedly this session as
    PR sprawl (a stacked PR merged by one run while another run opened a
    duplicate against `main` for the identical fix). Before merging or
-   closing anything a fan-out job produced, `git fetch` / `gh pr list`
-   fresh and re-check for a sibling job's overlapping output — don't assume
-   the dispatch list from when you kicked off the round is still accurate.
+   closing anything a fan-out job produced: `git fetch --prune`, then
+   `gh pr list --state all` (open alone misses siblings that already
+   merged or closed), and compare changed files + commits against every
+   sibling. Overlap is **blocking** — stop the merge/close and reconcile
+   through the merge protocol below; don't assume the dispatch list from
+   when you kicked off the round is still accurate.
 
 See [`../git-history-surgery/SKILL.md` § Multi-Agent Branch Merge](../git-history-surgery/SKILL.md)
 for the full simulate-before-touching protocol once two fanned-out branches

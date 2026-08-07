@@ -102,14 +102,18 @@ LM Studio host, run
     with a real reproduction before writing the fix, not assumed.
 13. Recovering a stacked-PR-family branch after a sibling branch already
     merged (e.g. via squash) into the shared upstream base?
-    Try `git rebase <upstream-base>` **before** reaching for manual
+    Record an explicit upstream ref and a preserved safety ref first
+    (`git branch backup/<branch>-pre-rebase HEAD`), then try
+    `git rebase <upstream-base>` **before** reaching for manual
     cherry-pick surgery or tree-twin re-anchoring. Git's patch-equivalence
     detection recognizes when a commit's content already landed upstream
     under a different SHA and auto-drops it, printing `dropping <sha> ...
-    -- patch contents already upstream`. Treat that message as confirmation
-    the recovery worked, not an error to investigate — the rebase has
-    already done the reconciliation a manual replay would otherwise need.
-    This is the lighter-weight companion to the tree-twin doctrine above
+    -- patch contents already upstream`. That message means **one** commit
+    matched by patch ID — it is not proof the whole branch recovered.
+    After the rebase: inspect remaining commits (`git log` /
+    `git cherry -v`), resolve any conflicts, and re-run the relevant
+    tests before replacing a manual replay or re-anchor. This is the
+    lighter-weight companion to the tree-twin doctrine above
     (§ Decision 2 / `reanchor-after-rewrite.md`): tree-twin re-anchoring is
     for a branch whose *ancestor* was rewritten; patch-equivalence rebase is
     for a branch whose *sibling* was independently merged while both were
