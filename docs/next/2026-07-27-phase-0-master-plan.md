@@ -3,7 +3,9 @@
 > **Canonical document:** Perpetua-Tools  
 > [`docs/phase-0-specifications/PHASE-0-MASTER-PLAN-2026-07-27.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/PHASE-0-MASTER-PLAN-2026-07-27.md)
 
-The STM/swarm security knowledge graph lives in PT `docs/phase-0-specifications/` with LLM-wiki under `wiki/`. This file records **orama-specific disposition** and links so both-repo agents land in one checklist.
+The STM/swarm security knowledge graph lives in PT `docs/phase-0-specifications/`
+with LLM-wiki under `wiki/`. This file records **orama-specific disposition** and links
+so both-repo agents land in one checklist.
 
 **Verified `main`:** orama `41b77300` · PT `4f1a9936` · 2026-07-27.
 
@@ -21,6 +23,8 @@ The STM/swarm security knowledge graph lives in PT `docs/phase-0-specifications/
 | Identity Phases 3–4 | **NOW** | PT sync PR + remove legacy lists |
 | Hermes Mac staging | **DONE** | [`docs/plans/2026-07-26-hermes-openclaw-staging-execution.md`](../plans/2026-07-26-hermes-openclaw-staging-execution.md) |
 | Hermes Win operator smoke | **NOW** | [`docs/plans/2026-07-26-hermes-openclaw-migration-operator.md`](../plans/2026-07-26-hermes-openclaw-migration-operator.md) |
+| Hermes envelope reconciliation (T-ENG-1 + Wave 1–2) | **DONE — local, push deferred** | Branch `2026-08-05-002-hermes-graft-plan-reference-fix` (`e90cb16d`…`e17aad66`); 38/38 tests; SoT `hermes-universal-invocation-protocol.md`; coord-036 inbox `mac-2026-08-06-hermes-envelope-reconciliation.md`; [`docs/plans/2026-08-03-hermes-openclaw-graft-audit-plan.md`](../plans/2026-08-03-hermes-openclaw-graft-audit-plan.md) |
+| Hermes Appendix C (task API, fleet mgr, verifier, scheduler, recursive, HITL) | **DEFERRED v2.1++** | Stubbed as `not_yet_implemented` in `hermes-status --json`; plotted in graft plan Appendix C stub map |
 | Peer-mesh TLS/auth (49) | **MINIMUM DONE** | Bearer-not-on-plain-HTTP; rest **DEFERRED v2** |
 | G7 portal hub MVP | **NOW** (optional) | [`fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md`](fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md) |
 | Fleet Phases 8–10+ | **DEFERRED v2** | [`fleet-mesh/README.md`](fleet-mesh/README.md) |
@@ -30,8 +34,10 @@ The STM/swarm security knowledge graph lives in PT `docs/phase-0-specifications/
 
 ## Superseded trackers
 
-- [`2026-07-25-pending-work-tracker.md`](2026-07-25-pending-work-tracker.md) → use canonical master plan §4
-- [`2026-07-25-docs-scan-and-integrity-report.md`](2026-07-25-docs-scan-and-integrity-report.md) → HEAD was `5b05f545`; refreshed in master plan
+- [`2026-07-25-pending-work-tracker.md`](
+  2026-07-25-pending-work-tracker.md) → use canonical master plan §4
+- [`2026-07-25-docs-scan-and-integrity-report.md`](
+  2026-07-25-docs-scan-and-integrity-report.md) → HEAD was `5b05f545`; refreshed in master plan
 
 ---
 
