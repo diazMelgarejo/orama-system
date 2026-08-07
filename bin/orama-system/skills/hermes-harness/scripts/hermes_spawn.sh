@@ -12,6 +12,7 @@ JSON_OUT=0
 SKILL_ID="hermes-spawn"
 COMMAND_NAME="hermes-spawn"
 
+# sanitize_session_id validates HERMES_SPAWN_SESSION and stores the resulting safe session identifier in SESSION_ID.
 sanitize_session_id() {
   local raw="${HERMES_SPAWN_SESSION:-default}"
   case "$raw" in
@@ -59,6 +60,9 @@ pid_command() {
   ps -p "$pid" -o args= 2>/dev/null | sed 's/^[[:space:]]*//' || true
 }
 
+# verify_hermes_pid confirms that a process ID belongs to the resolved Perpetua Tools script and, when provided, matches the expected start time.
+# @param pid The process ID to verify.
+# @param expected_started The expected process start timestamp, if available.
 verify_hermes_pid() {
   local pid="$1"
   local expected_started="${2:-}"
@@ -105,6 +109,7 @@ release_lock() {
   rm -rf "$LOCK_DIR" 2>/dev/null || true
 }
 
+# recover_stale_lock removes an unused session lock or exits when the lock has an active or missing owner.
 recover_stale_lock() {
   local lock_pid=""
   if [[ ! -d "$LOCK_DIR" ]]; then
@@ -131,6 +136,7 @@ recover_stale_lock() {
   rm -rf "$LOCK_DIR"
 }
 
+# acquire_lock obtains the per-session lock, records the current process ID as its owner, and registers cleanup on exit.
 acquire_lock() {
   recover_stale_lock
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -159,6 +165,7 @@ cleanup_spawn() {
   release_lock
 }
 
+# validate_paths verifies that the Hermes harness root and Perpetua Tools script exist, reporting an error and exiting if either path is unavailable.
 validate_paths() {
   if [[ ! -d "$HARNESS_ROOT" ]]; then
     if (( JSON_OUT )); then
@@ -180,11 +187,13 @@ validate_paths() {
   fi
 }
 
+# emit_json_data emits a successful JSON response containing the provided data.
 emit_json_data() {
   local data="$1"
   hermes_result_ok "$SKILL_ID" "$COMMAND_NAME" "$ACTION" "$data"
 }
 
+# main manages the Hermes agent lifecycle for a session, supporting start, stop, and status actions with optional JSON output.
 main() {
   local args=()
   while [[ $# -gt 0 ]]; do

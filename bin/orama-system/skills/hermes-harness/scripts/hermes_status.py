@@ -29,6 +29,19 @@ def _canonical_result(
     warnings: list[str] | None = None,
     error: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    """
+    Build the canonical result structure for a Hermes status rollup.
+    
+    Parameters:
+        status (str): Overall status of the rollup.
+        data (dict[str, Any]): Subsystem status and result details.
+        follow_up_actions (list[str] | None): Actions recommended after the rollup.
+        warnings (list[str] | None): Warnings associated with the rollup.
+        error (dict[str, str] | None): Error details, if the rollup encountered an error.
+    
+    Returns:
+        dict[str, Any]: Canonical Hermes status result.
+    """
     return {
         "status": status,
         "skill_id": "hermes-status",
@@ -45,6 +58,17 @@ def _canonical_result(
 
 
 def _run(cmd: list[str], *, timeout: int = 120, cwd: Path | None = None) -> tuple[int, str, str]:
+    """
+    Execute a command and capture its output.
+    
+    Parameters:
+    	cmd (list[str]): Command and arguments to execute.
+    	timeout (int): Maximum execution time in seconds.
+    	cwd (Path | None): Working directory for the command.
+    
+    Returns:
+    	tuple[int, str, str]: Return code, standard output, and standard error. A return code of -1 indicates a timeout, and -2 indicates an operating-system error.
+    """
     try:
         proc = subprocess.run(
             cmd,
@@ -62,6 +86,15 @@ def _run(cmd: list[str], *, timeout: int = 120, cwd: Path | None = None) -> tupl
 
 
 def check_pt_root(repo_root: Path) -> tuple[str, dict[str, Any]]:
+    """
+    Resolve the Perpetual Trading harness root for the repository.
+    
+    Parameters:
+    	repo_root (Path): Repository directory used as the subprocess working directory.
+    
+    Returns:
+    	tuple[str, dict[str, Any]]: The check status and either the resolved root path or error details.
+    """
     resolve_sh = Path(__file__).resolve().parent / "resolve_perp_harness.sh"
     rc, out, err = _run(
         ["bash", "-c", 'source "$1"; resolve_pt_root', "bash", str(resolve_sh)],
@@ -74,6 +107,15 @@ def check_pt_root(repo_root: Path) -> tuple[str, dict[str, Any]]:
 
 
 def check_spawn_session(repo_root: Path) -> tuple[str, dict[str, Any]]:
+    """
+    Check the Hermes spawn session status.
+    
+    Parameters:
+    	repo_root (Path): Repository root containing the Hermes spawn script.
+    
+    Returns:
+    	tuple[str, dict[str, Any]]: The session status and associated status details.
+    """
     spawn_sh = repo_root / "bin/orama-system/skills/hermes-harness/scripts/hermes_spawn.sh"
     rc, out, err = _run(["bash", str(spawn_sh), "--json", "status"], timeout=60)
     if not out:
@@ -96,6 +138,17 @@ def check_partner_canaries(
     skip_live: bool,
     canary_timeout: int,
 ) -> tuple[str, dict[str, Any], list[str]]:
+    """
+    Verify partner canary checks and report their aggregate health status.
+    
+    Parameters:
+        repo_root (Path): Repository root containing the partner-canary verification script.
+        skip_live (bool): Whether to skip live partner probes.
+        canary_timeout (int): Timeout, in seconds, for each canary check.
+    
+    Returns:
+        tuple[str, dict[str, Any], list[str]]: Aggregate status, canary details, and warnings.
+    """
     warnings: list[str] = []
     if skip_live:
         warnings.append("partner canaries skipped (--skip-canaries)")
@@ -134,6 +187,12 @@ def check_partner_canaries(
 
 
 def check_profiles() -> tuple[str, dict[str, Any], list[str]]:
+    """
+    Check whether Hermes profiles are available.
+    
+    Returns:
+    	tuple[str, dict[str, Any], list[str]]: The profile status, details about the discovered profiles or failure, and warnings.
+    """
     warnings: list[str] = []
     hermes_home = Path(os.environ.get("HERMES_HOME", Path.home() / ".hermes"))
     profiles_dir = hermes_home / "profiles"
@@ -152,6 +211,17 @@ def build_status(
     skip_canaries: bool = False,
     canary_timeout: int = 30,
 ) -> dict[str, Any]:
+    """
+    Aggregate subsystem checks into a canonical Hermes health status.
+    
+    Parameters:
+    	repo_root (Path): Repository root used to locate and run health checks.
+    	skip_canaries (bool): Whether to skip live partner-canary checks.
+    	canary_timeout (int): Maximum duration, in seconds, for partner-canary checks.
+    
+    Returns:
+    	dict[str, Any]: Canonical health result containing subsystem states, details, warnings, follow-up actions, and any overall error.
+    """
     subsystems: dict[str, str] = {}
     details: dict[str, Any] = {}
     warnings: list[str] = []
@@ -208,6 +278,15 @@ def build_status(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """
+    Run the Hermes status checks and print their results.
+    
+    Parameters:
+    	argv (list[str] | None): Optional command-line arguments to parse instead of the process arguments.
+    
+    Returns:
+    	int: `0` if all implemented checks pass, `1` otherwise.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--json", dest="json_out", action="store_true")
     parser.add_argument("--skip-canaries", action="store_true", help="Skip live canary probes")

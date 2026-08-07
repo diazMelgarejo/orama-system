@@ -23,6 +23,21 @@ def _canonical_result(
     warnings: list[str] | None = None,
     error: dict[str, str] | None = None,
 ) -> dict[str, Any]:
+    """
+    Builds the standard Hermes delegate response structure.
+    
+    Parameters:
+        status (str): Overall outcome status.
+        action (str): Action represented by the response.
+        data (dict[str, Any]): Response payload.
+        follow_up_actions (list[str] | None): Additional actions suggested by the result.
+        warnings (list[str] | None): Warnings associated with the result.
+        error (dict[str, str] | None): Structured error details, when applicable.
+    
+    Returns:
+        dict[str, Any]: Canonical response containing agent metadata, action data,
+        follow-up actions, warnings, and optional error details.
+    """
     return {
         "status": status,
         "skill_id": "hermes-delegate",
@@ -72,6 +87,10 @@ def _worker_popen_kwargs() -> dict[str, Any]:
     host; the review that requested this explicitly asked for a Windows
     regression test "before enabling the Windows path" -- that
     verification has not happened yet.
+
+    Returns:
+        dict[str, Any]: Keyword arguments for creating a worker in an
+        independently terminable process group.
     """
     if _IS_WINDOWS:
         return {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP}
@@ -84,7 +103,17 @@ class SpawnFunction(Protocol):
     worker path, which always spawns via _WORKER_SOURCE regardless.
     """
 
-    def __call__(self, role: str, task: str) -> dict[str, Any]: ...
+    def __call__(self, role: str, task: str) -> dict[str, Any]:
+        """Execute a task for the specified worker role.
+
+        Parameters:
+            role (str): Worker role used to execute the task.
+            task (str): Task description to execute.
+
+        Returns:
+            dict[str, Any]: Structured result produced by the worker.
+        """
+        ...
 
 
 class _Worker:
@@ -98,6 +127,12 @@ class _Worker:
     """
 
     def __init__(self, task: str, pt_root: str) -> None:
+        """Initialize a worker for the specified task and launch its subprocess.
+        
+        Parameters:
+            task (str): Task to execute.
+            pt_root (str): Project root containing the worker source directory.
+        """
         self.task = task
         self._stdout_fh = tempfile.NamedTemporaryFile(
             mode="w+", prefix="hermes-delegate-out-", delete=False
@@ -128,6 +163,7 @@ class _Worker:
             raise
 
     def cleanup(self) -> None:
+        """Closes the worker's output files and removes their temporary paths."""
         self._stdout_fh.close()
         self._stderr_fh.close()
         for path in (self._stdout_fh.name, self._stderr_fh.name):
@@ -137,6 +173,11 @@ class _Worker:
                 pass
 
     def read_output(self) -> tuple[str, str]:
+        """Read and return the worker's captured standard output and standard error.
+        
+        Returns:
+        	stdout, stderr (tuple[str, str]): The captured standard output and standard error.
+        """
         self._stdout_fh.flush()
         self._stderr_fh.flush()
         with open(self._stdout_fh.name, encoding="utf-8") as f:
@@ -147,6 +188,12 @@ class _Worker:
 
 
 def _terminate_worker(worker: _Worker) -> None:
+    """
+    Terminate the worker process and its descendants, escalating to forced termination if necessary.
+    
+    Parameters:
+    	worker (_Worker): Worker whose process should be terminated.
+    """
     proc = worker.proc
     if proc.poll() is not None:
         proc.wait()
@@ -190,6 +237,18 @@ def _terminate_worker(worker: _Worker) -> None:
 
 
 def _parse_worker_output(worker: _Worker) -> dict[str, Any]:
+    """
+    Parse a worker's captured output into a structured result.
+    
+    Parameters:
+        worker (_Worker): Worker whose process output should be read.
+    
+    Returns:
+        dict[str, Any]: Parsed JSON output, a raw-text result when the output is not valid JSON, or `{"ok": True}` when no output is produced.
+    
+    Raises:
+        RuntimeError: If the worker exits with a nonzero status.
+    """
     stdout, stderr = worker.read_output()
     if worker.proc.returncode != 0:
         detail = (stderr or stdout or "worker failed").strip()
@@ -215,6 +274,14 @@ def _run_subprocess_workers(
     Matches the prior ThreadPoolExecutor's max_workers=min(len(tasks), 5) cap
     -- an uncapped launch loop can fork one subprocess per task with no
     ceiling (e.g. 50 tasks -> 50 concurrent processes).
+
+    Parameters:
+        worker_timeout_sec (int): Maximum time allowed for the worker batch.
+        max_concurrent (int): Maximum number of workers running simultaneously.
+
+    Returns:
+        tuple[list[dict[str, Any]], list[str]]: Worker result records and
+        recommended follow-up actions.
     """
     rows: list[dict[str, Any]] = []
     follow_up: list[str] = []
@@ -293,6 +360,18 @@ def run_delegate(
     worker_timeout_sec: int,
     spawn_fn: SpawnFunction | None = None,
 ) -> dict[str, Any]:
+    """
+    Execute tasks concurrently through Hermes workers and assemble a canonical delegation result.
+    
+    Parameters:
+    	tasks (list[str]): Tasks to execute.
+    	pt_root (str): Project root used by worker processes.
+    	worker_timeout_sec (int): Shared timeout for worker execution.
+    	spawn_fn (SpawnFunction | None): Optional worker callable used for injectable execution.
+    
+    Returns:
+    	dict[str, Any]: Canonical result containing worker outcomes, status, warnings, and follow-up actions.
+    """
     rows: list[dict[str, Any]] = []
     warnings: list[str] = []
     follow_up: list[str] = []
@@ -370,6 +449,15 @@ def run_delegate(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """
+    Parse command-line arguments, delegate the requested tasks, and print the results.
+    
+    Parameters:
+    	argv (list[str] | None): Optional command-line arguments; uses the process arguments when omitted.
+    
+    Returns:
+    	int: 0 when all workers succeed, or 1 when validation fails or delegation is incomplete.
+    """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("tasks", nargs="+", help="Tasks separated by | on the shell wrapper")
     parser.add_argument("--json", dest="json_out", action="store_true")
