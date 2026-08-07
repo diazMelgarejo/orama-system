@@ -45,8 +45,8 @@ embed_graph_tool(
 )
 ```
 
-**Prerequisite:** Embed backend running with `bge-m3` loaded — **macOS/Linux:** Ollama at `localhost:11434`; **Windows:** LM Studio at `localhost:1234` (see [`crg-platform-endpoints.md`](crg-platform-endpoints.md)).
-If the backend is down, omit the call — CRG falls back to FTS-only keyword search.
+**Prerequisite:** Embed backend running with `bge-m3` loaded — **macOS/Linux:** Ollama at `localhost:11434`; **Windows:** LM Studio at `$LM_STUDIO_WIN_ENDPOINTS` (sane default `localhost:1234` if unset — see [`crg-platform-endpoints.md`](crg-platform-endpoints.md)).
+This is a deliberate resiliency fallback, not a missing check: if the resolved endpoint is unreachable, omit the call — CRG degrades to FTS-only keyword search rather than blocking the workflow.
 
 ## Fix: corrupted graph.db
 
@@ -96,8 +96,8 @@ bit us live (2026-06-13):
    # macOS/Linux — Ollama @ :11434
    export CRG_OPENAI_API_KEY=ollama CRG_OPENAI_BASE_URL=http://localhost:11434/v1 \
           CRG_OPENAI_MODEL=bge-m3 CRG_OPENAI_DIMENSION=1024 CRG_ACCEPT_CLOUD_EGRESS=1
-   # Windows — LM Studio @ :1234 (use this instead of :11434)
-   # export CRG_OPENAI_BASE_URL=http://localhost:1234/v1
+   # Windows — LM Studio, resolved from $LM_STUDIO_WIN_ENDPOINTS (default localhost:1234, use this instead of :11434)
+   # export CRG_OPENAI_BASE_URL="http://${LM_STUDIO_WIN_ENDPOINTS:-localhost:1234}/v1"
    uvx code-review-graph update                                  # incremental re-parse
    uvx code-review-graph embed --provider openai --model bge-m3  # NEVER omit --provider
    uvx code-review-graph postprocess                             # flows / communities / FTS
