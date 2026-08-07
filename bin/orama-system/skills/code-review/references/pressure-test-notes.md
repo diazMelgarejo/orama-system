@@ -94,7 +94,7 @@ Per Phase A→E and [`mcp-tools-crg.md`](mcp-tools-crg.md) delta sequence:
 | 5 | `Read` | `OpenClaw/.mcp.json` — CRG configured at parent, not in this Cursor project |
 | 6 | `Shell` + sqlite3 | Proxy `list_graph_stats_tool`: nodes=1417, embeddings=1257 (sandbox blocked sqlite until `all`) |
 | 7 | `gbrain search` | **Failed** — `getaddrinfo ENOTFOUND` (DB URL in `~/.gbrain/config.json` unreachable from agent env) |
-| 8 | `uvx code-review-graph --help` | Hung &gt;85s; **no MCP `detect_changes_tool` call** |
+| 8 | `uvx code-review-graph==2.3.7 --help` | Hung &gt;85s; **no MCP `detect_changes_tool` call** |
 
 **Verdict on compliance:** Partial dry-run. Graph index exists on disk; CRG MCP tools were **not invocable** in this Cursor workspace. Investigator used Read/Grep/git before graph MCP — acceptable for "run Test B and document" meta-task, but would be a **skill violation** if framed as reviewing the delta under loaded code-review skill.
 
@@ -122,7 +122,7 @@ Expected without skill: `git diff` → bulk `Read` of `docs/how-to/...` + skill 
 
 - [x] Register `code-review-graph` in **Cursor** project MCP — stack [`cursor-mcp.stack.json`](../../../../bin/orama-system/config/cursor-mcp.stack.json) + `sync-cursor-mcp.sh` → [`.cursor/mcp.json`](../../../../.cursor/mcp.json); user must **reload MCP** in Cursor after pull
 - [x] Document or fix **gbrain** unreachable from some agent envs (`getaddrinfo ENOTFOUND` on DB URL in Test B) — see [`docs/local-env-catch-up.md`](../../../../docs/local-env-catch-up.md) § gbrain ENOTFOUND
-- [x] **`uvx code-review-graph --help` hang** — `first-run-install.sh` probes `--version` only (not `--help`); cold `uvx` may still take ~60s on first install — document in runbooks, not a `status` blocker
+- [x] **`uvx code-review-graph==2.3.7 --help` hang** — `first-run-install.sh` probes `--version` only (not `--help`); cold `uvx` may still take ~60s on first install — document in runbooks, not a `status` blocker
 - [x] **OpenClaw `CLAUDE.md` tool table** vs MCP `*_tool` invoke names — canonical `*_tool` rows added in OpenClaw navigator (outside git)
 
 ### Documentation / Diataxis

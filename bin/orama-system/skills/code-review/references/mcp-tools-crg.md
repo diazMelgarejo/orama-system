@@ -30,9 +30,8 @@ When `code-review-graph` is not registered in the IDE MCP list (common in Cursor
 
 ```bash
 REPO="$(git -C orama-system rev-parse --show-toplevel 2>/dev/null || pwd)"
-BASE_SHA="$(git -C "$REPO" merge-base HEAD origin/main)"
 uvx code-review-graph==2.3.7 status --repo "$REPO"
-uvx code-review-graph==2.3.7 detect-changes --repo "$REPO" --base "$BASE_SHA"
+uvx code-review-graph==2.3.7 detect-changes --repo "$REPO" --base <git-sha>
 uvx code-review-graph==2.3.7 build --repo "$REPO"    # if status shows nodes: 0
 ```
 
