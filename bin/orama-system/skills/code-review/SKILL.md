@@ -13,7 +13,8 @@ description: |
 
 > **Canonical:** [`references/tool-chain.md`](references/tool-chain.md) (graph → gbrain → Read)
 > **Persona:** [`agents/code-reviewer.md`](agents/code-reviewer.md)
-> **Motivation:** Reading files inline costs 8–49× more tokens than blast-radius mapping. This skill enforces graph-first review for every host.
+> **Motivation:** Reading files inline costs 8–49× more tokens than blast-radius
+> mapping. This skill enforces graph-first review for every host.
 
 **Purpose:** token-efficient, high-signal review — map impact with
 **code-review-graph**, resolve symbols with **gbrain**, read only confirmed
@@ -32,7 +33,7 @@ Never skip step 1 on multi-file tasks. Never whole-repo `Read` before graph.
 ## Mode router
 
 | Choose | When |
-|--------|------|
+| ------ | ---- |
 | **Delta** | Uncommitted changes, small diff, pre-commit, &lt; ~10 files, no PR context |
 | **PR** | `gh pr`, branch vs main, explicit PR review, large diff, or thorough/multi-lens ask |
 
@@ -41,11 +42,16 @@ Never skip step 1 on multi-file tasks. Never whole-repo `Read` before graph.
 
 ## Phase A — Graph (code-review-graph MCP)
 
+> SKIP this if CRG works normally.
+> 
+> READ THIS FULL CONTEXT **only** when CRG is **not** working.
+
 Server: `OpenClaw/.mcp.json` — `uvx code-review-graph serve`. Full tool
 matrix: [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md).
 Fresh-clone / 0-node / disk-error setup and repair, MCP-disconnected
 fallback to gbrain: [`references/graph-init-and-repair.md`](references/graph-init-and-repair.md).
-Embed platform endpoint rule: [`references/crg-platform-endpoints.md`](references/crg-platform-endpoints.md) ·
+Embed platform endpoint rule:
+[`references/crg-platform-endpoints.md`](references/crg-platform-endpoints.md) ·
 toggle: [`references/crg-embed-mode.md`](references/crg-embed-mode.md).
 
 ## Phase B — Gbrain
@@ -62,9 +68,15 @@ then `Read` only those files.
 
 ## Phase D — Review
 
-**Delta:** load [`agents/code-reviewer.md`](agents/code-reviewer.md) + [`profiles/CLAUDE.coding.md`](profiles/CLAUDE.coding.md), score against `git diff`/`detect_changes_tool`, drop &lt; 80.
+**Delta:** load [`agents/code-reviewer.md`](agents/code-reviewer.md) +
+[`profiles/CLAUDE.coding.md`](profiles/CLAUDE.coding.md), score against
+`git diff`/`detect_changes_tool`, drop &lt; 80.
 
-**PR:** complete A–C, build the file list, probe orchestration ([`orchestration-dispatch.md`](references/orchestration-dispatch.md)), run the five lenses ([`review-lenses-pr.md`](references/review-lenses-pr.md)), merge/dedupe/filter ≥ 80. Workers use the same persona + lens prompt and never commit; they must not execute `gstack` `SKILL.md` files as procedures.
+**PR:** complete A–C, build the file list, probe orchestration
+([`orchestration-dispatch.md`](references/orchestration-dispatch.md)), run
+the five lenses ([`review-lenses-pr.md`](references/review-lenses-pr.md)),
+merge/dedupe/filter ≥ 80. Workers use the same persona + lens prompt and
+never commit; they must not execute `gstack` `SKILL.md` files as procedures.
 
 ## Phase E — Report
 
@@ -84,21 +96,25 @@ Minimum fields: scope, strengths (short), Critical / Important lists with `file:
 ## Profiles
 
 | Profile | Use |
-|---------|-----|
+| ------- | --- |
 | [`profiles/CLAUDE.coding.md`](profiles/CLAUDE.coding.md) | Review, debug, refactor tone |
 | [`profiles/CLAUDE.agents.md`](profiles/CLAUDE.agents.md) | Multi-agent pipelines |
 | [`profiles/J-drona23-v5/`](profiles/J-drona23-v5/) | Default agentic coding |
 
 ## Post-review
 
-- Micro-remediation (cluster findings by root cause, one commit per failure class, no revert chains): [`../../references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)
-- Upstream contribution discipline (porting a fix to a vendored repo): [`references/upstream-contribution-discipline.md`](references/upstream-contribution-discipline.md)
-- Optional provider onboarding (Claude/Codex/Antigravity/Cline/BigModel/Perplexity): [`../../references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md)
+- Micro-remediation (cluster findings by root cause,
+  one commit per failure class, no revert chains):
+  [`../../references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)
+- Upstream contribution discipline (porting a fix to a vendored repo):
+  [`references/upstream-contribution-discipline.md`](references/upstream-contribution-discipline.md)
+- Optional provider onboarding (Claude/Codex/Antigravity/Cline/BigModel/Perplexity):
+  [`../../references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md)
 
 ## References
 
 | Doc | Content |
-|-----|---------|
+| --- | ------- |
 | [`references/mcp-tools-crg.md`](references/mcp-tools-crg.md) | Full CRG MCP matrix + sequences |
 | [`references/graph-init-and-repair.md`](references/graph-init-and-repair.md) | Fresh-clone setup, repair, MCP-disconnected fallback |
 | [`references/output-format.md`](references/output-format.md) | Confidence rubric + report template |
