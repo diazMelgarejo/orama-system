@@ -46,7 +46,7 @@ Agents without the code-review skill loaded will **Read/Grep first** on multi-fi
 ## Rationalizations to watch
 
 | Rationalization | Correct response |
-|-----------------|------------------|
+| ----------------- | ------------------ |
 | "I already know this repo" | Still run `detect_changes_tool` |
 | "Diff is small" | Delta mode OK; still graph-first if multi-file |
 | "Grep is faster" | Grep only for exact strings after graph |
@@ -86,7 +86,7 @@ Per Phase A→E and [`mcp-tools-crg.md`](mcp-tools-crg.md) delta sequence:
 ### Observed tool order (this run)
 
 | Step | Tool | Notes |
-|------|------|--------|
+| ------ | ------ | -------- |
 | 1 | `Read` | `pressure-test-notes.md`, `SKILL.md`, `tool-chain.md`, `mcp-tools-crg.md` — meta/setup, not delta review |
 | 2 | `Shell` | `git log`, `git diff HEAD~5 --stat`, `--name-only`, skill subpaths |
 | 3 | `Glob` | Cursor `mcps/**/tools` — **no `code-review-graph` server folder** |
@@ -101,7 +101,7 @@ Per Phase A→E and [`mcp-tools-crg.md`](mcp-tools-crg.md) delta sequence:
 ### Gaps / bugs discovered
 
 | Gap | Severity |
-|-----|----------|
+| ----- | ---------- |
 | `code-review-graph` absent from Cursor workspace `mcps/` (only in `OpenClaw/.mcp.json`) | **High** — Test B cannot be fully empirical in Cursor without registering MCP |
 | `SKILL.md` Graph Init uses `list_graph_stats_tool` / `build_or_update_graph_tool`; matrix uses `list_graph_stats_tool` / no `_tool` suffix | **Medium** — copy-paste risk for agents |
 | Test B prompt assumes **uncommitted** delta; committed `HEAD~5` is valid but should be explicit in test script | **Low** |

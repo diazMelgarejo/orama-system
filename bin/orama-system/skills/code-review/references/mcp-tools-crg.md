@@ -11,7 +11,7 @@ Use MCP tools **before** `Grep`, `Glob`, or bulk `Read` on multi-file tasks.
 ## Tool matrix
 
 | Tool | When to use |
-|------|-------------|
+| ------ | ------------- |
 | `list_graph_stats_tool` | Graph empty, stale, or first run of session; confirm index health |
 | `detect_changes_tool` | **Start** any diff review; risk-scored changed nodes and files |
 | `semantic_search_nodes_tool` | Unknown symbol, entry point, or keyword; no exact string yet |
@@ -75,7 +75,7 @@ get_architecture_overview_tool
 Both use **Ollama bge-m3** (1024-dim) when [`crg-embed-mode`](crg-embed-mode.md) is in `gbrain` mode. Semantic rankings from CRG and gbrain are comparable.
 
 | Need | Tool |
-|------|------|
+| ------ | ------ |
 | Structure, callers, tests in graph | CRG `query_graph_tool` |
 | Symbol definition / refs | `gbrain code-def` / `code-refs` |
 | Past decisions, LESSONS | `gbrain search` |

@@ -33,7 +33,7 @@ Before judging code, complete this chain **only for files in your assigned scope
 Rate every issue **0–100**. **Only report issues with confidence ≥ 80.**
 
 | Score | Meaning |
-|-------|---------|
+| ------- | --------- |
 | 0 | False positive or pre-existing |
 | 25 | Might be real; not verified |
 | 50 | Real but low impact / nitpick |

@@ -16,7 +16,7 @@ Never skip step 1 on multi-file tasks. Never whole-repo `Read` before the graph.
 ## code-review-graph (MCP)
 
 | Tool | When |
-|------|------|
+| ------ | ------ |
 | `detect_changes_tool` | Start of any diff review |
 | `get_review_context_tool` | Snippets before full file read |
 | `get_impact_radius_tool` | Refactor / merge risk |
@@ -30,7 +30,7 @@ Full matrix: [`mcp-tools-crg.md`](mcp-tools-crg.md)
 ## gbrain (CLI)
 
 | Command | When |
-|---------|------|
+| --------- | ------ |
 | `gbrain search "<terms>"` | Semantic question, no exact string |
 | `gbrain query "<question>"` | Natural language codebase question |
 | `gbrain code-def <symbol>` | Symbol definition |

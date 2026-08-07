@@ -1,5 +1,9 @@
 # Upstream Contribution Discipline
 
+> **Owner:** code-review skill, Post-review.
+> **Companion:** [`git-touching-skills.md`](git-touching-skills.md)
+> **Last updated:** 2026-08-07
+
 When a fix found during review or a blend pass is portable to a vendored
 upstream repo (not just the fork/downstream copy), these practices — proven
 across a real multi-PR contribution arc (agentic-stack PRs #60–#65) — turn

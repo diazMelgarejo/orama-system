@@ -9,7 +9,7 @@
 Toggle the code-review-graph (CRG) MCP server's embedding provider between two modes:
 
 | Mode | Backend | Model | Dimensions | When to use |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `gbrain` | OpenAI-compat shim @ platform URL (see below) | `bge-m3` | 1024 | Default — unified vector space with gbrain. Required for semantic_search_nodes to share embeddings with gbrain search. |
 | `local` | sentence-transformers (in-process) | `all-MiniLM-L6-v2` | 384 | Offline-safe fallback. No local inference dependency. |
 | `status` | — | — | — | Print current mode (default if no arg). |
@@ -17,7 +17,7 @@ Toggle the code-review-graph (CRG) MCP server's embedding provider between two m
 ### Platform URLs (`gbrain` mode)
 
 | Platform | `CRG_OPENAI_BASE_URL` | Inference |
-|----------|----------------------|-----------|
+| ---------- | ---------------------- | ----------- |
 | **macOS / Linux** | `http://localhost:11434/v1` | Ollama |
 | **Windows** | `http://localhost:1234/v1` | LM Studio |
 
