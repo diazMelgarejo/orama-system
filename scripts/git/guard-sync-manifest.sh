@@ -15,6 +15,8 @@
 # Executable guard tooling (mode 0755 when synced).
 GUARD_SYNC_EXECUTABLES=(
   resolve_sibling_git_repo.sh
+  check_commit_message_claims.sh
+  check_commit_message_claims.py
   cursor-hooks-id.sh
   hooks/commit-msg.strip-coauthor
   disable-cursor-commit-attribution.sh
