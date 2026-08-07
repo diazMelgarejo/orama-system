@@ -118,7 +118,10 @@ def test_main_exits_zero_when_claim_is_backed_by_staged_diff(tmp_path: Path) -> 
 
 def _init_test_repo(repo: Path) -> None:
     repo.mkdir()
-    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    # Pin the initial branch name explicitly -- relying on the ambient
+    # init.defaultBranch config broke CI, whose runner doesn't default to
+    # "main" the way this machine's global git config happens to.
+    subprocess.run(["git", "init", "-q", "-b", "main"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=repo, check=True)
     subprocess.run(["git", "config", "user.name", "T"], cwd=repo, check=True)
     (repo / "f.txt").write_text("hello\n", encoding="utf-8")
