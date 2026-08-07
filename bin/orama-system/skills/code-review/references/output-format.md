@@ -7,7 +7,7 @@
 Give this scale to confidence-filter passes (adapted from Claude official code-review plugin):
 
 | Score | Meaning |
-|-------|---------|
+| ------- | --------- |
 | **0** | Not confident. False positive or pre-existing; fails light scrutiny. |
 | **25** | Somewhat confident. Might be real; not verified. Stylistic issues not explicit in CLAUDE.md/AGENTS.md. |
 | **50** | Moderately confident. Real but nitpick or rare in practice; low relative importance. |

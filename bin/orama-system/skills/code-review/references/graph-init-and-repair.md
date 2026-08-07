@@ -1,5 +1,9 @@
 # Graph Initialization & Repair (fresh clone / 0-node / disk error)
 
+> **Owner:** code-review skill, Phase A.
+> **Companion:** [`mcp-tools-crg.md`](mcp-tools-crg.md) (tool matrix) · [`crg-platform-endpoints.md`](crg-platform-endpoints.md) (embed backend URLs).
+> **Last updated:** 2026-08-07
+
 `setup-embeddings` wires the env config but **cannot** call MCP tools — the graph must be seeded interactively inside Claude Code.
 
 ## Check first

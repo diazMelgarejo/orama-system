@@ -4,7 +4,7 @@
 > Chain: **code-review-graph → gbrain → Read** (see [`SKILL.md`](../SKILL.md)).
 
 | Agent | Step 1 (graph) | Step 2 (gbrain) | PR fan-out |
-|-------|----------------|-----------------|------------|
+| ------- | ---------------- | ----------------- | ------------ |
 | **Claude Code** | MCP `detect_changes`, `get_review_context`; or `/code-review-graph:review-delta` | `gbrain code-def <symbol>` | Plugin-style lenses or Task |
 | **Cursor** | MCP tools (preferred) | `gbrain` CLI / MCP | `Task` + [`agents/code-reviewer.md`](../agents/code-reviewer.md) |
 | **Codex** | `codex mcp call code-review-graph …` | `gbrain code-def` | ai-cli workers; **do not** run gstack SKILL.md as procedure |
@@ -15,7 +15,7 @@
 ## Contract references (orama stack)
 
 | Topic | Location |
-|-------|----------|
+| ------- | ---------- |
 | Shared types | [`orchestrator/contracts.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/contracts.py) |
 | Hardware policy | [`config/model_hardware_policy.yml`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/model_hardware_policy.yml) |
 | Mirror exclusion | `_MIRROR_BACKENDS` in `selector.py` |
@@ -39,7 +39,7 @@ Toggle: `bash bin/orama-system/skills/code-review/scripts/crg-embed-mode [gbrain
 Cursor and Claude Code register **code-review-graph** handlers with a `*_tool` suffix. Prose in this skill may shorten names; they map 1:1:
 
 | Short name in docs | MCP tool name |
-|--------------------|---------------|
+| -------------------- | --------------- |
 | `detect_changes` | `detect_changes_tool` |
 | `get_review_context` | `get_review_context_tool` |
 | `get_impact_radius` | `get_impact_radius_tool` |

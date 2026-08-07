@@ -1,5 +1,8 @@
 # Git-touching skills this one composes with
 
+> **Owner:** code-review skill
+> **Last updated:** 2026-08-07
+
 Fixes found during review often need one of these to land safely.
 
 - [`../../git-history-surgery/SKILL.md`](../../git-history-surgery/SKILL.md) — dangerous git ops:
