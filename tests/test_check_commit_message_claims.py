@@ -114,3 +114,133 @@ def test_main_exits_zero_when_claim_is_backed_by_staged_diff(tmp_path: Path) -> 
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def _init_test_repo(repo: Path) -> None:
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "t@example.com"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "T"], cwd=repo, check=True)
+    (repo / "f.txt").write_text("hello\n", encoding="utf-8")
+    subprocess.run(["git", "add", "f.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "-m", "init"], cwd=repo, check=True)
+
+
+def test_find_git_state_claims_detects_pushed_merged_and_branch() -> None:
+    body = (
+        "pushed to origin/main after review\n"
+        "merged into `main`\n"
+        "on branch feature/foo\n"
+    )
+    claims = ccmc.find_git_state_claims(body)
+    assert ("pushed", "origin/main") in claims
+    assert ("merged", "main") in claims
+    assert ("branch", "feature/foo") in claims
+
+
+def test_git_state_pushed_to_origin_main_true(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    tip = subprocess.run(
+        ["git", "rev-parse", "HEAD"],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/main", tip],
+        cwd=repo,
+        check=True,
+    )
+    msg = repo / "msg.txt"
+    msg.write_text("chore: pushed to origin/main\n", encoding="utf-8")
+    result = subprocess.run(
+        ["python3", str(SCRIPT), str(msg)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_git_state_pushed_to_missing_ref_false(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    msg = repo / "msg.txt"
+    msg.write_text("chore: pushed to origin/no-such-branch\n", encoding="utf-8")
+    result = subprocess.run(
+        ["python3", str(SCRIPT), str(msg)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "git-state-claim check" in result.stderr
+    assert "origin/no-such-branch" in result.stderr
+
+
+def test_git_state_merged_into_main_true(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    msg = repo / "msg.txt"
+    msg.write_text("feat: merged into main\n", encoding="utf-8")
+    result = subprocess.run(
+        ["python3", str(SCRIPT), str(msg)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_git_state_merged_into_main_false(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    subprocess.run(["git", "checkout", "-q", "-b", "feature"], cwd=repo, check=True)
+    subprocess.run(["git", "checkout", "-q", "main"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-q", "--allow-empty", "-m", "main moved ahead"], cwd=repo, check=True)
+    subprocess.run(["git", "checkout", "-q", "feature"], cwd=repo, check=True)
+    msg = repo / "msg.txt"
+    msg.write_text("feat: merged into main\n", encoding="utf-8")
+    result = subprocess.run(
+        ["python3", str(SCRIPT), str(msg)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "git-state-claim check" in result.stderr
+    assert "main" in result.stderr
+
+
+def test_git_state_on_branch_true(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    subprocess.run(["git", "checkout", "-q", "-b", "my-feature"], cwd=repo, check=True)
+    msg = repo / "msg.txt"
+    msg.write_text("feat: work done on branch my-feature\n", encoding="utf-8")
+    result = subprocess.run(
+        ["python3", str(SCRIPT), str(msg)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_git_state_on_branch_false(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    subprocess.run(["git", "checkout", "-q", "-b", "actual-branch"], cwd=repo, check=True)
+    msg = repo / "msg.txt"
+    msg.write_text("feat: work done on branch wrong-name\n", encoding="utf-8")
+    result = subprocess.run(
+        ["python3", str(SCRIPT), str(msg)],
+        cwd=repo,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "git-state-claim check" in result.stderr
+    assert "wrong-name" in result.stderr

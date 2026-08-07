@@ -33,10 +33,10 @@ _file_hash() {
   git hash-object "$1"
 }
 
-# Return 0 when $want_hash appears as scripts/git/$rel at any commit in $repo.
+# Return 0 when $want_hash appears as <prefix>/$rel at any commit in $repo.
 _blob_in_repo_history() {
-  local repo="$1" rel="$2" want="$3"
-  local gitrel="scripts/git/$rel" sha got
+  local repo="$1" rel="$2" want="$3" prefix="${4:-scripts/git}"
+  local gitrel="$prefix/$rel" sha got
 
   [[ -n "$want" ]] || return 1
   while IFS= read -r sha; do
@@ -48,31 +48,31 @@ _blob_in_repo_history() {
 }
 
 _check_pair() {
-  local sibling_root="$1" rel="$2"
-  local canon_f="$CANON_ROOT/scripts/git/$rel"
-  local sib_f="$sibling_root/scripts/git/$rel"
+  local sibling_root="$1" rel="$2" prefix="${3:-scripts/git}"
+  local canon_f="$CANON_ROOT/$prefix/$rel"
+  local sib_f="$sibling_root/$prefix/$rel"
   local canon_hash sib_hash
 
   [[ -f "$canon_f" ]] || return 0
   [[ -f "$sib_f" ]] || return 0
 
   if cmp -s "$canon_f" "$sib_f"; then
-    echo "  OK   $(basename "$sibling_root")/$rel (byte-identical)"
+    echo "  OK   $(basename "$sibling_root")/$prefix/$rel (byte-identical)"
     return 0
   fi
 
   canon_hash="$(_file_hash "$canon_f")"
   sib_hash="$(_file_hash "$sib_f")"
 
-  if _blob_in_repo_history "$CANON_ROOT" "$rel" "$sib_hash"; then
-    echo "  OK   $(basename "$sibling_root")/$rel (lags canonical history — safe to upgrade)"
+  if _blob_in_repo_history "$CANON_ROOT" "$rel" "$sib_hash" "$prefix"; then
+    echo "  OK   $(basename "$sibling_root")/$prefix/$rel (lags canonical history — safe to upgrade)"
     return 0
   fi
 
-  if _blob_in_repo_history "$sibling_root" "$rel" "$canon_hash"; then
-    echo "  FAIL $(basename "$sibling_root")/$rel — canonical lags sibling (promote sibling → orama first)"
+  if _blob_in_repo_history "$sibling_root" "$rel" "$canon_hash" "$prefix"; then
+    echo "  FAIL $(basename "$sibling_root")/$prefix/$rel — canonical lags sibling (promote sibling → orama first)"
   else
-    echo "  FAIL $(basename "$sibling_root")/$rel — sibling mutations absent from canonical history"
+    echo "  FAIL $(basename "$sibling_root")/$prefix/$rel — sibling mutations absent from canonical history"
   fi
   return 1
 }
@@ -90,6 +90,11 @@ _scan_sibling() {
   for rel in "${GUARD_PARITY_REQUIRED[@]}"; do
     _check_pair "$sibling_root" "$rel" || pair_rc=1
   done
+  if [[ -d "$sibling_root/.githooks" ]]; then
+    for rel in "${GUARD_SYNC_GITHOOKS[@]}"; do
+      _check_pair "$sibling_root" "$rel" ".githooks" || pair_rc=1
+    done
+  fi
   return "$pair_rc"
 }
 
