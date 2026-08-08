@@ -103,6 +103,11 @@ CORE_ENVELOPE_KEYS = frozenset({"skill_id", "args", "agent_id"})
 CANONICAL_RESULT_KEYS = frozenset(
     {
         "status",
+        "skill_id",
+        "agent_id",
+        "executor_id",
+        "command",
+        "action",
         "data",
         "files_modified",
         "follow_up_actions",
@@ -274,3 +279,17 @@ def test_lesson_mining_command_optional_not_required():
     text = cmd.read_text(encoding="utf-8")
     assert "optional: true" in text
     assert "Perpetua-Tools is not a dependency" in text
+
+def test_missing_metadata_and_error_code_rejected():
+    bad = {
+        "status": "error",
+        # Missing skill_id, agent_id, executor_id, command, action
+        "data": {},
+        "files_modified": [],
+        "follow_up_actions": ["fix it"],
+        "warnings": [],
+        "error": {"message": "missing code"}
+    }
+    errors = validate_core_result(bad)
+    assert any("missing result keys" in e and "command" in e for e in errors)
+    assert any("error.code required" in e for e in errors)
