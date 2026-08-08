@@ -313,7 +313,31 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+def _configure_stdout_logging() -> None:
+    """Route INFO (completion status) to stdout and WARNING+ (errors) to
+    stderr, bare-message-formatted -- preserves this script's pre-existing
+    stdout contract for standalone callers. Without an explicit handler,
+    logging's handler-of-last-resort only surfaces WARNING+ to stderr, so
+    logger.info() calls would silently produce no output at all when this
+    script is run standalone (not just "wrong stream" -- nothing)."""
+    logger.setLevel(logging.INFO)
+    if logger.handlers:
+        return
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.INFO)
+    stdout_handler.addFilter(lambda record: record.levelno < logging.WARNING)
+    stdout_handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(stdout_handler)
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.WARNING)
+    stderr_handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(stderr_handler)
+    logger.propagate = False
+
+
 def main() -> int:
+    _configure_stdout_logging()
     args = parser().parse_args()
     return args.func(args)
 
