@@ -212,3 +212,21 @@ Use precise status language:
 
 If the all-ref scan timed out, was skipped, or found hits, keep the gap explicit.
 Never summarize that state as history-wide removal.
+
+## Post-rewrite automation (canonical scripts)
+
+After a coordinated expunge or `filter-repo` scrub, use the automation card —
+do not hand-roll per-branch pushes:
+
+[`post-rewrite-automation-reference-card.md`](post-rewrite-automation-reference-card.md)
+
+Quick entry:
+
+```bash
+ALLOW_MAIN_PUSH=1 bash scripts/git/post-rewrite-finish.sh .
+```
+
+This runs hooks-off publish, `reanchor_scan` → delete `MERGED/in-main` remotes,
+cherry-reanchor open branches, and `origin/main` verification. Prefer
+`cherry-reanchor-branches.sh` over `rebase --onto` when the scrub rewrote every
+commit SHA (full blob/metadata expunge).
