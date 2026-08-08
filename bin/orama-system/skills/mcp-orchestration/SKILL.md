@@ -6,7 +6,7 @@ description: >-
   OpenClaw, or routing tasks to local/OpenRouter/Codex/Gemini agents. Activates when
   the user mentions MCP JSON, SKILL.md, ai-cli-mcp, OpenClaw MCP, or tool setup failures.
 version: 2.1.0
-canonical_path: orama-system/bin/orama-system/mcp-orchestration/SKILL.md
+canonical_path: bin/orama-system/skills/mcp-orchestration/SKILL.md
 compatibility: claude-code, cursor, codex, gemini, openclaw, hermes
 allowed-tools: bash, file-operations, web-search
 triggers:
@@ -36,7 +36,7 @@ Route MCP tools, Claude Skills, and parallel CLI agents to the cheapest layer th
 - Choosing between Gemini large-context reads, ai-cli-mcp workers, or local ollama
 - Encoding repeatable orchestration procedures as durable skills
 
-> **Canonical location:** `orama-system/bin/orama-system/mcp-orchestration/SKILL.md` — other copies are redirect stubs.
+> **Canonical location:** `bin/orama-system/skills/mcp-orchestration/SKILL.md` — other copies are redirect stubs.
 
 ## Load First
 
