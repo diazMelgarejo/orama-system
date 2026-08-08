@@ -1,6 +1,9 @@
 """Tests for lan_peer_files.py."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 
 from orama_system.lan_peer_files import (
@@ -29,16 +32,18 @@ def test_sanitize_rejects_path_traversal():
         sanitize_filename("../evil.md")
 
 
-def test_resolve_within_rejects_traversal_independent_of_sanitize_filename(tmp_path):
+@pytest.mark.unit
+def test_resolve_within_rejects_traversal_independent_of_sanitize_filename(
+    tmp_path: Path,
+) -> None:
     root = tmp_path / "root"
     root.mkdir()
     with pytest.raises(ValueError):
         _resolve_within(root, "../escape.md")
 
 
-def test_resolve_within_keeps_valid_name_inside_root(tmp_path):
-    import os
-
+@pytest.mark.unit
+def test_resolve_within_keeps_valid_name_inside_root(tmp_path: Path) -> None:
     root = tmp_path / "root"
     root.mkdir()
     resolved = _resolve_within(root, "note.md")
