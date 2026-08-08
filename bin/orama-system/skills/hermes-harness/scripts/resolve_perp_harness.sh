@@ -28,8 +28,15 @@ _RESOLVED_PT_ROOT_CACHE=""
 # don't re-crawl.
 resolve_pt_root() {
   if [[ -n "${_RESOLVED_PT_ROOT_CACHE:-}" ]]; then
-    echo "$_RESOLVED_PT_ROOT_CACHE"
-    return 0
+    if sibling_repo_is_git_root "$_RESOLVED_PT_ROOT_CACHE" "$_PT_MARKER"; then
+      echo "$_RESOLVED_PT_ROOT_CACHE"
+      return 0
+    fi
+    # Cached path no longer resolves (moved, removed, or an override was
+    # reconfigured after the first call in this shell) -- invalidate rather
+    # than trust a stale value silently. Mirror of the same fix in PT's
+    # scripts/resolve_orama_root.sh::resolve_orama_root.
+    _RESOLVED_PT_ROOT_CACHE=""
   fi
   local override_rc=0 pt_dir orama_root mother pt_root path
   path="$(sibling_repo_check_env_override "$_PT_MARKER" \
@@ -44,7 +51,9 @@ resolve_pt_root() {
     # non-symlinked PT git root. Fail closed here rather than falling
     # through to .paths/crawl discovery -- silently ignoring an explicit,
     # broken override to go find *some other* PT checkout elsewhere on the
-    # machine is surprising and can silently resolve to the wrong repo.
+    # machine is surprising and can silently resolve to the wrong repo. Trace
+    # exactly what each candidate var held so this is debuggable.
+    echo "resolve_pt_root: PERPETUA_TOOLS_PATH/PT_HOME/PERPETUA_TOOLS_ROOT/PERPETUATOOLSROOT is set but did not resolve to a valid Perpetua-Tools checkout (missing ${_PT_MARKER} or not a git root) -- PERPETUA_TOOLS_PATH=${PERPETUA_TOOLS_PATH:-<unset>} PT_HOME=${PT_HOME:-<unset>} PERPETUA_TOOLS_ROOT=${PERPETUA_TOOLS_ROOT:-<unset>} PERPETUATOOLSROOT=${PERPETUATOOLSROOT:-<unset>}" >&2
     return 1
   fi
   orama_root="${ORAMA_SYSTEM_PATH:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
