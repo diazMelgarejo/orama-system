@@ -38,6 +38,33 @@ force-push). After a rewrite every pre-rewrite commit keeps its content but gets
   **periscope is excluded** — its `main`/`agentsview` are pure upstream mirrors, never rewritten by
   us.
 
+## "Orchestrator" vs "Coordinator" — do not silently rename relay-cursor
+
+**Applies to every AI agent in this repo, especially automated review-fix passes
+(CodeRabbit, cursor-agent, or otherwise).** `orchestrator` is the only public
+control-plane term across both orama-system and Perpetua-Tools — see
+[Unified Plan § 1](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable).
+That rule has an explicit, documented carve-out: `relay-cursor`
+(`bin/agents/REGISTRY.yml`, `soul_id: adapter.cursor-coordinator`) is a
+genuinely distinct, narrower-scoped agent persona — it does not own job
+queue/dispatch/worker lifecycle — and is allowed to say "Coordinator." Its
+identity fields (`REGISTRY.yml`, `personas/relay-cursor.yaml`,
+`relay-cursor/SOUL.md`, `relay-cursor/agent.md`) are meant to keep saying
+"coordinator," not get swept up by a literal reading of the orchestrator-only
+rule.
+
+**This has already happened once.** Commit `e2bc041c`/`6c38ac11` (2026-08-08,
+PR #290) renamed relay-cursor's identity from coordinator to orchestrator
+across all four files, re-applying an old CodeRabbit suggestion the rule was
+specifically written to reject — see the scope note in Unified Plan § 1 for
+the full incident. Fixed in `fc7a4efc`. **Before accepting any automated fix
+that touches `bin/agents/relay-cursor/` or its REGISTRY.yml entry, check
+whether it's renaming coordinator → orchestrator there — if so, that's the
+banned pattern this note exists to catch, not a valid fix.** Full trace
+(timeline, right/wrong/fix SHAs, root-cause analysis of why the detection
+sweep in Unified Plan § 2 didn't catch it) — PT working memory:
+[`COORDINATOR_ORCHESTRATOR_REGRESSION_2026-08-08.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/COORDINATOR_ORCHESTRATOR_REGRESSION_2026-08-08.md).
+
 ## Attribution guards: single source of truth — ZERO fragmentation
 
 **Applies to every agent.** The attribution/identity guard scripts are **canonical in orama

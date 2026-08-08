@@ -108,6 +108,22 @@ even if technically clever.
    YAML, SOUL.md, registry notes). If either is unclear, treat it as the
    banned pattern and ask before proceeding.
 
+   **This exemption has already been silently reverted once.** Commit
+   `e2bc041c`/`6c38ac11` (orama-system, 2026-08-08, PR #290) renamed
+   relay-cursor's `adapter.cursor-coordinator` → `adapter.cursor-orchestrator`
+   and "Coordinator & Cross-Repo Relay" → "Orchestrator & Cross-Repo Relay"
+   across all four identity files (`REGISTRY.yml`, `personas/relay-cursor.yaml`,
+   `relay-cursor/SOUL.md`, `relay-cursor/agent.md`) — an automated
+   CodeRabbit-fix pass re-applying review 4873990444's original suggestion
+   with no memory of this scope note. It went unnoticed for the rest of that
+   session until a human caught it directly. Fixed back in `fc7a4efc`. Before
+   accepting *any* automated fix (CodeRabbit, cursor-agent, or otherwise)
+   that touches `bin/agents/`, diff the relay-cursor identity fields
+   specifically against this scope note — don't trust that "looks like it
+   satisfies rule #1" is the same as "is actually correct here." Full trace
+   and root-cause analysis: PT working memory
+   [`COORDINATOR_ORCHESTRATOR_REGRESSION_2026-08-08.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/COORDINATOR_ORCHESTRATOR_REGRESSION_2026-08-08.md).
+
 2. **Workers are one generic primitive.** Existing specialized roles (executor,
    verifier, crystallizer, autoresearch-coder, critic, refiner) are specializations
    of the generic worker contract — not a separate taxonomy. One template, many overlays.
@@ -188,6 +204,25 @@ if ! git ls-files -z -- '*.py' '*.json' '*.yml' '*.yaml' '*.md' \
   echo "FAIL: no 'orchestrator' terminology found in the scanned surface" >&2
   false
 fi
+
+# Exemption-integrity check: the negative check above only proves
+# "coordinator" doesn't appear OUTSIDE the allowlist. It says nothing
+# about whether the allowlisted files still correctly say "coordinator"
+# themselves -- an agent that silently reverts the exemption (renaming
+# relay-cursor's own identity from coordinator to orchestrator, exactly
+# because it looks like compliance with rule #1's negative check) would
+# pass both checks above with zero signal. This is exactly what happened
+# on orama-system PR #290 (commit e2bc041c/6c38ac11, 2026-08-08): an
+# automated CodeRabbit-fix pass re-applied review 4873990444's original
+# suggestion with no memory of this scope note, and nothing caught it
+# until a human noticed days of drift. Verify each exempted file still
+# actually uses the exemption it was granted for.
+for path in "${COORDINATOR_ALLOWLIST[@]}"; do
+  if [ -f "$path" ] && ! grep -qiE 'coordinator' "$path"; then
+    echo "FAIL: $path is on the coordinator-persona allowlist but no longer says 'coordinator' -- exemption may have been silently reverted" >&2
+    false
+  fi
+done
 
 if grep -rIn "deviceaffinity" . --include="*.py" --include="*.json" \
   --exclude-dir=.venv --exclude-dir=node_modules --exclude-dir=vendor; then false; fi
