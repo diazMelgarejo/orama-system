@@ -7,14 +7,12 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 HOME="${HOME:-/home/ubuntu}"
-export HOME
-export REPO_ROOT
-# shellcheck source=lib-normalize-cloud-paths.sh
-source "$(dirname "${BASH_SOURCE[0]}")/lib-normalize-cloud-paths.sh"
-normalize_cloud_openclaw_paths
+case "${OPENCLAW_HOME:-}" in
+  "" | "/" | '/openclaw-v1' | '$HOME/openclaw-v1')
+    export OPENCLAW_HOME="$HOME/openclaw-v1"
+    ;;
+esac
 export OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
-# Cloud boot must not fail when agent worktrees have dirty guard-sync paths.
-export GUARD_SYNC_ON_DIRTY="${GUARD_SYNC_ON_DIRTY:-skip}"
 
 log() { printf '>>> [cloud-install] %s\n' "$*"; }
 warn() { printf '>>> [cloud-install] WARN: %s\n' "$*" >&2; }

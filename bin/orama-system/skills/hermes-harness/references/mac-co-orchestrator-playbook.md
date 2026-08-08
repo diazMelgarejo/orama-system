@@ -2,9 +2,11 @@
 
 > **SSOT:** This file. **Operator index:** [`lan-peer-self-talk.md`](lan-peer-self-talk.md) §F.  
 > **Win mirror:** [`co-orchestrator-handoff.md`](co-orchestrator-handoff.md)  
-> **PT co-orchestrator (public):** [`docs/LESSONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)  
-> **Local workspace memory (operator checkout only, not published):** `$PERPETUA_TOOLS_PATH/.agent/memory/working/` and `$PERPETUA_TOOLS_PATH/.agent/memory/semantic/`  
-> **GitHub:** [mac-co-orchestrator-playbook.md](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md)
+> **PT memory (Mac + subagents):** `Perpetua-Tools/.agent/memory/working/MAC_CO_ORCHESTRATOR_WHERE_TO_LOOK_2026-06-28.md`  
+> **PT subagents:** `Perpetua-Tools/.agent/memory/working/MAC_SUBAGENTS_WHERE_TO_LOOK_2026-06-28.md`  
+> **Shared landmark:** `Perpetua-Tools/.agent/memory/working/CO_ORCHESTRATOR_LAN_PEER_2026-06-28.md`  
+> **Rendered lessons:** `Perpetua-Tools/.agent/memory/semantic/LESSONS.md`  
+> **GitHub:** https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/hermes-harness/references/mac-co-orchestrator-playbook.md
 
 **Mode:** file inbox handoff — each host runs **local** `cursor-agent`, Codex, AGY, and coder. No remote agent RPC.
 
@@ -144,9 +146,9 @@ Per `/self-improve` rules: **nothing** commits to `docs/LESSONS.md` until operat
 | [`cursor-agent/SKILL.md`](../../cursor-agent/SKILL.md) | Install, models, fanout patterns |
 | [`autoresearch-fanout-example.json`](autoresearch-fanout-example.json) | Sample fan-out manifest |
 | [`docs/guides/lan-peer-bidirectional-talk-2026-06-28.md`](../../../../docs/guides/lan-peer-bidirectional-talk-2026-06-28.md) | Attempt log and layer model |
-| **PT** [`docs/LESSONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md) | Human-readable co-orchestrator section |
-| **PT (local only)** `$PERPETUA_TOOLS_PATH/.agent/memory/working/CO_ORCHESTRATOR_LAN_PEER_2026-06-28.md` | Lesson landmark + subagent routing (workspace checkout) |
-| **PT (local only)** `$PERPETUA_TOOLS_PATH/.agent/memory/semantic/DOMAIN_KNOWLEDGE.md` | Co-orchestrator gold nuggets (workspace checkout) |
+| **PT** `Perpetua-Tools/.agent/memory/working/CO_ORCHESTRATOR_LAN_PEER_2026-06-28.md` | Lesson landmark + subagent routing |
+| **PT** `Perpetua-Tools/.agent/memory/semantic/DOMAIN_KNOWLEDGE.md` | Co-orchestrator gold nuggets |
+| **PT** `Perpetua-Tools/docs/LESSONS.md` | Human-readable co-orchestrator section |
 
 ---
 

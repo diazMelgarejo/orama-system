@@ -6,8 +6,6 @@
 
 See PT landmark: `Perpetua-Tools/.agent/memory/working/MAC_SELF_IMPROVE_CYCLE_005_2026-06-28.md`
 
-*(2026-08-02 canonical-link hygiene)* Public index: [`docs/LESSONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)
-
 ## Highlights
 
 - Sequential Win jobs: autoresearcher → coder (one at a time)

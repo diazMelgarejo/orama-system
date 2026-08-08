@@ -38,5 +38,4 @@
 ## Files changed (Mac orchestrator branch)
 
 - `Perpetua-Tools/.agent/memory/working/COORDINATED_CYCLE_003_2026-06-28.md`
-- *(2026-08-02 canonical-link hygiene)* Public index: [`docs/LESSONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)
 - Optional: `.agent/memory/` learn.py lesson for subagent branch policy

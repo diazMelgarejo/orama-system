@@ -27,7 +27,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import datetime
 import json
 import os
 import shutil
@@ -42,7 +41,6 @@ from typing import Any, Dict, List, Optional
 # ── Config ────────────────────────────────────────────────────────────────────
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-_CURSOR_RACE_RETRY_DUE_FILE = REPO_ROOT / ".logs" / "cursor_standalone_retry_due.txt"
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -53,7 +51,6 @@ for _stream in (sys.stdout, sys.stderr):
 
 LMS_MAC_ENDPOINT = os.getenv("LM_STUDIO_MAC_ENDPOINT", "http://localhost:1234")
 LMS_WIN_ENDPOINT = os.getenv("LM_STUDIO_WIN_ENDPOINTS", "http://localhost:1234").split(",")[0].strip()
-WIN_CODER_ENDPOINT = os.getenv("WIN_CODER_ENDPOINTS", "").split(",")[0].strip() or LMS_WIN_ENDPOINT
 LMS_API_KEY = os.getenv("LM_STUDIO_API_TOKEN", "lm-studio")
 LMS_WIN_MODEL = os.getenv(
     "LM_STUDIO_WIN_MODEL",
@@ -488,26 +485,15 @@ def _find_hermes() -> Optional[str]:
 
 
 async def _dispatch_hermes_lmstudio_win(task: str) -> Dict[str, Any]:
-    """Run Hermes against the Windows coder LM Studio provider.
-
-    Hermes reads the Windows endpoint from ``LM_STUDIO_WIN_ENDPOINTS`` on the
-    subprocess env, sourced from ``$WIN_CODER_ENDPOINTS`` (first pool member)
-    rather than the generic ``LM_STUDIO_WIN_ENDPOINTS`` default.
-
-    No internal fallback to direct-lmstudio-win here — when cursor/hermes race
-    legs are active, ``_dispatch_race()`` races ``cursor`` and
-    ``hermes-lmstudio-win`` first, then falls back to direct-lmstudio-win only
-    if both legs fail.
-    """
+    """Run Hermes against the Windows LM Studio provider."""
     hermes_bin = _find_hermes()
     if not hermes_bin:
         return {"ok": False, "output": "Hermes CLI not found.", "elapsed": 0}
 
     env = os.environ.copy()
     env.setdefault("LM_STUDIO_API_TOKEN", LMS_API_KEY)
-    env.setdefault("LM_STUDIO_WIN_ENDPOINTS", WIN_CODER_ENDPOINT)
+    env.setdefault("LM_STUDIO_WIN_ENDPOINTS", LMS_WIN_ENDPOINT)
     t0 = time.time()
-    proc: asyncio.subprocess.Process | None = None
     try:
         proc = await asyncio.create_subprocess_exec(
             hermes_bin,
@@ -525,61 +511,32 @@ async def _dispatch_hermes_lmstudio_win(task: str) -> Dict[str, Any]:
             cwd=str(REPO_ROOT),
             env=env,
         )
-        try:
-            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
-        except asyncio.CancelledError:
-            # A sibling racer already won; _dispatch_race() is cancelling
-            # us. Kill and reap the subprocess before re-raising so it
-            # doesn't leak as an orphaned/zombie process once this task
-            # is torn down.
-            if proc.returncode is None:
-                proc.kill()
-                await proc.wait()
-            raise
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=15)
         output = stdout.decode("utf-8", errors="replace").strip()
-        if proc.returncode == 0 and output:
+        if output:
             return {"ok": True, "output": output, "elapsed": time.time() - t0}
-    except asyncio.TimeoutError:
-        if proc is not None and proc.returncode is None:
+    except (asyncio.TimeoutError, Exception):
+        try:
             proc.kill()
-            await proc.wait()
-    except Exception:
-        if proc is not None and proc.returncode is None:
-            try:
-                proc.kill()
-                await proc.wait()
-            except Exception:
-                pass
-    return {
-        "ok": False,
-        "output": "[RACE LEG: hermes-lmstudio-win failed, no output]",
-        "elapsed": time.time() - t0,
-    }
-
-
-def _cursor_race_leg_deferred() -> bool:
-    """Return True while cursor/hermes race legs are deferred (see .logs marker)."""
-    if not _CURSOR_RACE_RETRY_DUE_FILE.exists():
-        return False
-    text = _CURSOR_RACE_RETRY_DUE_FILE.read_text(encoding="utf-8").strip()
-    try:
-        due = datetime.date.fromisoformat(text.rsplit(":", 1)[-1].strip())
-    except ValueError:
-        return True
-    return datetime.date.today() < due
+        except Exception:
+            pass
+    fallback = await _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
+    elapsed = time.time() - t0
+    if not fallback.get("ok"):
+        fallback["output"] = (
+            "[RACE LEG: hermes-lmstudio-win → direct-lmstudio-win fallback]\n"
+            + (fallback.get("output", "") or "leg-failed")
+        )
+    else:
+        fallback["output"] = (
+            "[RACE LEG: hermes-lmstudio-win → direct-lmstudio-win fallback]\n"
+            + fallback.get("output", "")
+        )
+    return {"ok": fallback.get("ok", False), "output": fallback.get("output", ""), "elapsed": elapsed}
 
 
 async def _dispatch_race(task: str) -> Dict[str, Any]:
-    """Race Windows dispatch legs; first successful completion wins.
-
-    While ``.logs/cursor_standalone_retry_due.txt`` defers validation, only
-    ``direct-lmstudio-win`` runs. After deferral, racers are ``cursor`` (read-only
-    ``--print``) and ``hermes-lmstudio-win``, with ``direct-lmstudio-win`` as the
-    last-resort fallback when both race legs fail.
-
-    Note: full worktree isolation for concurrent Hermes ``--yolo`` writes is
-    still required before re-enabling the cursor/hermes race in production.
-    """
+    """Race cursor-agent and Hermes+LM Studio Win. First successful completion wins."""
     t0 = time.time()
 
     racers = {
@@ -588,55 +545,28 @@ async def _dispatch_race(task: str) -> Dict[str, Any]:
     }
     pending = set(racers.values())
     failures: Dict[str, str] = {}
-    winner: tuple[str, Dict[str, Any]] | None = None
-    try:
-        while pending:
-            done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
-            for completed_task in done:
-                name = next(k for k, v in racers.items() if v is completed_task)
-                res = completed_task.result()
-                if res.get("ok"):
-                    winner = (name, res)
-                    break
-                failures[name] = res.get("output", "failed")
-            if winner is not None:
-                break
-    finally:
-        # Cancel any racers still in flight (a winner was found, or the
-        # loop is exiting for any other reason) and actually wait for the
-        # cancellation to land -- firing .cancel() without awaiting it
-        # leaves the underlying subprocess-managing task (and its
-        # subprocess) to be torn down whenever the event loop happens to
-        # get around to it, not deterministically before this function
-        # returns.
-        if pending:
-            for p in pending:
-                p.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
+    while pending:
+        done, pending = await asyncio.wait(pending, return_when=asyncio.FIRST_COMPLETED)
+        for completed_task in done:
+            name = next(k for k, v in racers.items() if v is completed_task)
+            res = completed_task.result()
+            if res.get("ok"):
+                for p in pending:
+                    p.cancel()
+                res["elapsed"] = time.time() - t0
+                res["output"] = f"[RACE WINNER: {name}]\n" + res["output"]
+                res["winner"] = name
+                return res
+            failures[name] = res.get("output", "failed")
 
-    if winner is not None:
-        name, res = winner
-        res["elapsed"] = time.time() - t0
-        res["output"] = f"[RACE WINNER: {name}]\n" + res["output"]
-        res["winner"] = name
-        return res
+    direct = await _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
+    if direct.get("ok"):
+        direct["elapsed"] = time.time() - t0
+        direct["output"] = "[RACE FALLBACK: direct-lmstudio-win]\n" + direct["output"]
+        direct["winner"] = "direct-lmstudio-win"
+        return direct
 
-    # Every racer failed. Try direct-lmstudio-win as a last resort --
-    # unless it was already one of the racers that just failed (the
-    # deferred, single-racer state): retrying the exact same call a
-    # second time would be pure duplication, not a genuine fallback.
-    # In the non-deferred state, racers are {cursor, hermes-lmstudio-win}
-    # and direct-lmstudio-win is never itself a racer key, so this
-    # condition only skips the redundant case, not the intended one.
-    if "direct-lmstudio-win" not in failures:
-        direct = await _dispatch_lmstudio(LMS_WIN_ENDPOINT, LMS_WIN_MODEL, task, win_gpu=True)
-        if direct.get("ok"):
-            direct["elapsed"] = time.time() - t0
-            direct["output"] = "[RACE FALLBACK: direct-lmstudio-win]\n" + direct["output"]
-            direct["winner"] = "direct-lmstudio-win"
-            return direct
-        failures["direct-lmstudio-win"] = direct.get("output", "failed")
-
+    failures["direct-lmstudio-win"] = direct.get("output", "failed")
     return {
         "ok": False,
         "output": "All raced Windows agents failed: " + json.dumps(failures, indent=2),

@@ -63,4 +63,4 @@ This completes the single-shot latency leg of H4. Iteration comparison remains b
 
 - [ ] Run Ollama 9B H4 parallel benchmark → drop `mac-h4-comparison.md` to Win
 - [ ] Draft H5 harness prompt set (3 rubric-scored tasks)
-- [ ] Optional: `mac-routing-review.md` cross-check vs [`config/routing.yml`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/routing.yml) (assignment pending)
+- [ ] Optional: `mac-routing-review.md` cross-check vs `Perpetua-Tools/config/routing.yml` (assignment pending)

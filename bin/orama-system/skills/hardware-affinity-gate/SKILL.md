@@ -20,11 +20,8 @@ metadata:
 
 > **Hermes / orama agents:** Do not execute affinity logic from this skill's embedded
 > reference Python. Consume Perpetua-Tools canonical policy only:
-> [`config/model_hardware_policy.yml`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/model_hardware_policy.yml) →
-> [`src/utils/hardware_policy.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/src/utils/hardware_policy.py) →
-> [`scripts/hardware_policy_cli.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/scripts/hardware_policy_cli.py).
-> Cross-repo link policy: [`../oramasys-method/references/cross-repo-links.md`](../oramasys-method/references/cross-repo-links.md).
-> On Windows Hermes, use
+> `config/model_hardware_policy.yml` → `src/utils/hardware_policy.py` →
+> `scripts/hardware_policy_cli.py`. On Windows Hermes, use
 > `hermes-harness` → `commands/pt-hardware-policy/SKILL.md` or
 > `.\platform\windows\start.ps1 --hardware-policy`.
 
@@ -295,8 +292,8 @@ enforcement logic; orama-system references it for methodology.
 
 Absorption map: [`../hermes-harness/references/hermes-skill-absorption-map.md`](../hermes-harness/references/hermes-skill-absorption-map.md).
 
-Redirect stubs `perpetua-hardware` and `local-inference` are directory
-symlinks to this skill — do not add procedure to those paths.
+Redirect stubs `perpetua-hardware` and `local-inference` point here — do not
+add procedure to those stubs.
 
 ### What This Skill Gets from Perpetua-Tools
 
