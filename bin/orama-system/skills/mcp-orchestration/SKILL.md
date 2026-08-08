@@ -1,8 +1,22 @@
 ---
 name: mcp-orchestration
-description: Use when setting up Claude Code MCP tools, adding Claude Skills, using Gemini as a large-context reader, dispatching parallel AI CLI agents, connecting MCP tools to OpenClaw, or routing tasks to local/OpenRouter/Codex/Gemini agents. Trigger when the user mentions Gemini MCP, ai-cli-mcp, OpenClaw MCP, SKILL.md, Claude Skills, background agents, /mcp, MCP JSON, prompt caching, OpenRouter routing, agent dispatch, or tool setup failures.
+description: >-
+  Use when setting up Claude Code MCP tools, adding Claude Skills, using Gemini as a
+  large-context reader, dispatching parallel AI CLI agents, connecting MCP tools to
+  OpenClaw, or routing tasks to local/OpenRouter/Codex/Gemini agents. Activates when
+  the user mentions MCP JSON, SKILL.md, ai-cli-mcp, OpenClaw MCP, or tool setup failures.
 version: 2.1.0
 canonical_path: orama-system/bin/orama-system/mcp-orchestration/SKILL.md
+compatibility: claude-code, cursor, codex, gemini, openclaw, hermes
+allowed-tools: bash, file-operations, web-search
+triggers:
+  - mcp orchestration
+  - claude mcp setup
+  - ai-cli-mcp
+  - gemini mcp tool
+  - openclaw mcp
+  - skill.md claude skills
+  - parallel agent dispatch
 supersedes:
   - OpenClaw/MCP_ORCHESTRATION_SKILL.md
   - OpenClaw/MCP_ORCHESTRATION_SKILL_v2.md
@@ -12,27 +26,21 @@ last_updated: 2026-07-22
 
 # MCP Orchestration Skill (canonical)
 
-**Version:** 2.1.0
-**Date:** 2026-07-22 (trimmed from 866 to <500 lines — install/setup detail
-moved to `references/`, decision-time content unchanged)
-**Scope:** Claude Code, Claude Desktop, OpenClaw, Gemini MCP Tool, ai-cli-mcp, OpenRouter, local ollama, custom MCP servers
-**Status:** canonical. Supersedes the two root MCP_ORCHESTRATION_SKILL*.md files. Sources merged and drift removed.
+## Purpose
 
-> **Canonical location:** `orama-system/bin/orama-system/mcp-orchestration/SKILL.md`
-> All other copies (root markdown, user-level `~/.claude/skills/mcp-orchestration/SKILL.md`) should be redirect stubs pointing here.
+Route MCP tools, Claude Skills, and parallel CLI agents to the cheapest layer that can succeed.
 
----
+## When to Use
 
-## Load First (setup/install detail — read on demand, not every invocation)
+- Registering or debugging MCP servers in Claude Code, Codex, Gemini, or OpenClaw
+- Choosing between Gemini large-context reads, ai-cli-mcp workers, or local ollama
+- Encoding repeatable orchestration procedures as durable skills
 
-- [`references/install-baseline.md`](references/install-baseline.md) — Node/Claude/Gemini/Codex/Hermes/ai-cli-mcp/ollama install commands and auth verification
-- [`references/gemini-and-ai-cli-mcp-setup.md`](references/gemini-and-ai-cli-mcp-setup.md) — gemini-mcp-tool and ai-cli-mcp registration, config shapes, model selection
-- [`references/custom-mcp-server-authoring.md`](references/custom-mcp-server-authoring.md) — scaffold a new MCP server when no existing tool covers the need
-- [`references/troubleshooting.md`](references/troubleshooting.md) — symptom → cause → fix table
-- [`references/legacy-file-disposition.md`](references/legacy-file-disposition.md) — historical superseded-file table
-- [`examples/good/parallel-dispatch.md`](examples/good/parallel-dispatch.md) — golden-path ai-cli-mcp parallel worker pattern
+> **Canonical location:** `orama-system/bin/orama-system/mcp-orchestration/SKILL.md` — other copies are redirect stubs.
 
----
+## Load First
+
+Install/setup detail (read on demand): [`references/install-baseline.md`](references/install-baseline.md), [`references/gemini-and-ai-cli-mcp-setup.md`](references/gemini-and-ai-cli-mcp-setup.md), [`references/custom-mcp-server-authoring.md`](references/custom-mcp-server-authoring.md), [`references/troubleshooting.md`](references/troubleshooting.md), [`references/legacy-file-disposition.md`](references/legacy-file-disposition.md), [`examples/good/parallel-dispatch.md`](examples/good/parallel-dispatch.md).
 
 ## Executive Rule
 
@@ -49,12 +57,7 @@ Use the right tool for the right layer. Use the cheapest agent that can succeed.
 | Runtime orchestration | OpenClaw | Route tools into agent workflows, gateway, auth |
 | Repeatable procedure | Claude Skill | Encode durable operating knowledge (this file) |
 
-> **ClinePass is the better default for coding.** The `cline` CLI via
-> `cline-pass/glm-5.2` (Cline Credits, `api.cline.bot`) provides 1M context,
-> full reasoning + tool loops, and no rate limits — unlike OpenRouter free
-> (50 req/day, 20 RPM). Use OpenRouter free only for lightweight routing/triage
-> that doesn't need tool loops. See
-> [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
+> **ClinePass default for coding:** `cline-pass/glm-5.2` (1M ctx, tool loops). OpenRouter free only for lightweight triage. See [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
 
 **Two routing rules below override the legacy "Gemini = default reader" pattern.** See §2.
 
@@ -471,26 +474,23 @@ Legacy file disposition (redirect stubs, superseded paths): [`references/legacy-
 
 Before dispatching a worker, verify the backend does not route a `windows_only` spec to `lmstudio-mac`. `resolve_backend_for_spec` in `orchestrator/backend_resolver.py` raises `PolicyUnavailable` on this. NEVER catch and silently fall back — fail closed.
 
-## Optional: Interactive Provider Setup
+Extended setup and review doctrine: [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md), [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md).
 
-Idempotent, opt-in onboarding for provider selection (Claude, Codex,
-Antigravity/Gemini, Cline, BigModel, Perplexity API) — same pattern vanilla
-OpenClaw/Hermes onboarding uses.
+## Boundaries
 
-- **Agent-mediated run:** use `AskUserQuestion` to pick a primary provider;
-  already-configured providers are auto-added as fallback.
-- **Human terminal:** `bash bin/orama-system/scripts/interactive-provider-setup.sh`
-  (60s opt-in prompt, `[ -t 0 ]`-gated).
-- **Non-interactive (CI/subagent):** skipped automatically; unset providers
-  get `null` placeholders, never a blocking prompt.
+### Always Do
 
-Full doctrine: [`references/interactive-provider-setup.md`](../../references/interactive-provider-setup.md)
+- Use the cheapest agent that can succeed; escalate layer only when needed.
+- Keep durable behavior in skills; use MCP for external capabilities.
+- Verify D14 mirror routing before dispatching tier-specific workers.
 
-## Post-Review Micro-Remediation
+### Ask First
 
-When addressing review findings (CodeRabbit or human) on an open PR: cluster
-findings by root cause, fix once at the abstraction level, keep every commit
-mechanically attributable to its failure class, and never accumulate revert
-chains — reset to a safety-ref-protected ancestor instead when policy allows.
+- Adding a new default coding agent or changing OpenRouter/Cline routing policy.
+- Authoring a custom MCP server when an existing tool already covers the need.
 
-Full doctrine: [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)
+### Never Do
+
+- Turn every one-time task into a new MCP server or skill.
+- Use Gemini as the default reader when OpenRouter free or local ollama suffices.
+- Silently catch `PolicyUnavailable` or cross-tier mirror routing failures.

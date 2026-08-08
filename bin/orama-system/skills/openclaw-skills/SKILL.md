@@ -17,9 +17,29 @@ layer: "1 — Operations (builds on Layer 0: v1/OpenRouter.md)"
 upstream: https://github.com/rahulsub-be/cc-openclaw
 upstream_license: MIT
 upstream_path: bin/orama-system/skills/openclaw-skills/cc-openclaw
+compatibility: claude-code, cursor, codex, hermes, openclaw, gemini-cli
+allowed-tools: bash, file-operations
+triggers:
+  - openclaw skills
+  - openclaw-add-channel
+  - openclaw-add-cron
+  - openclaw-new-agent
+  - openclaw-stow
+  - openclaw restart
+  - openclaw status
 ---
 
 # OpenClaw Skills
+
+## Purpose
+
+Canonical master skill for The Nine Skills that configure OpenClaw instances deterministically across supported harnesses.
+
+## When to Use
+
+- Adding channels, cron jobs, agents, secrets, or scripts to OpenClaw
+- Running `openclaw-stow`, `openclaw-restart`, or `openclaw-status`
+- Any agent must execute OpenClaw fabric operations instead of improvising from memory
 
 This folder is the canonical home for The Nine Skills used to operate OpenClaw configuration. These skills are executable standards, not passive docs: every supported agent must use the relevant skill instead of reconstructing OpenClaw procedures from memory.
 
@@ -294,3 +314,23 @@ Dispatch protocol:
    automatically — same rule applies to all.
 
 **Never leave a Windows coder idle if pending compatible work exists.**
+
+## Boundaries
+
+### Always Do
+
+- Route all nine OpenClaw fabric skills through this protocol and overlay cards.
+- Initialize `cc-openclaw` submodule before discovery.
+- Use env placeholders for `openclaw_home`; never hardcode workstation paths.
+- Follow search frugality order (gbrain → code-review-graph → web).
+
+### Ask First
+
+- Adding a tenth skill ID or changing the universal invocation envelope.
+- Modifying upstream cc-openclaw submodule pins without merge review.
+
+### Never Do
+
+- Put secrets in invocation envelopes or skill examples.
+- Bypass overlay cards and edit upstream cc-openclaw skills as canonical truth.
+- Parallel-fire all search tools when the cheapest single source suffices.
