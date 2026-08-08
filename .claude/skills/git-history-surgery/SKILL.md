@@ -17,6 +17,9 @@ description: >
 Canonical, permanent implementation: `../../../bin/orama-system/skills/git-history-surgery/`.
 **Read it before proceeding** — this wrapper only carries discovery metadata.
 
+Post-rewrite automation:
+[`../../../bin/orama-system/skills/git-history-surgery/references/post-rewrite-automation-reference-card.md`](../../../bin/orama-system/skills/git-history-surgery/references/post-rewrite-automation-reference-card.md).
+
 Hooks during rewrite/expunge:
 [`../../../bin/orama-system/skills/git-history-surgery/references/history-surgery-hooks-safeguard-reference-card.md`](../../../bin/orama-system/skills/git-history-surgery/references/history-surgery-hooks-safeguard-reference-card.md).
 

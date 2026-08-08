@@ -43,7 +43,7 @@ Never skip step 1 on multi-file tasks. Never whole-repo `Read` before graph.
 ## Phase A — Graph (code-review-graph MCP)
 
 > SKIP this if CRG works normally.
-> 
+>
 > READ THIS FULL CONTEXT **only** when CRG is **not** working.
 
 Server: `$OPENCLAW_ROOT/.mcp.json` — `uvx code-review-graph==2.3.7 serve`. Full tool

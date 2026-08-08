@@ -26,7 +26,7 @@ Use it for two related jobs:
 | Situation | Procedure |
 | --- | --- |
 | A secret, forbidden identity, token, or workstation path landed in history | [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md) |
-| `main` was rewritten and branches now look 600 commits behind/orphaned | [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md) |
+| `main` was rewritten and branches now look 600 commits behind/orphaned | [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md) + [`references/post-rewrite-automation-reference-card.md`](references/post-rewrite-automation-reference-card.md) |
 
 Fail closed: preserve refs, prove the operation is necessary, and use
 `--force-with-lease` only after recording the expected remote SHA.
@@ -166,7 +166,7 @@ LM Studio host, run
     a stray staging-temp-named file left behind, nothing signals it happened.
     Incident: orama PR #251 review 4830042706 (2026-07-31) — traced end to end
     with a real reproduction before writing the fix, not assumed.
-13. Recovering a stacked-PR-family branch after a sibling branch already
+14. Recovering a stacked-PR-family branch after a sibling branch already
     merged (e.g. via squash) into the shared upstream base?
     Record an explicit upstream ref and a preserved safety ref first
     (`git branch backup/<branch>-pre-rebase HEAD`), then try
@@ -190,6 +190,14 @@ LM Studio host, run
     bump (2026-08-07) — recovering 3 stacked upstream PR branches after
     sibling PR #60 (`fix/recall-supersession-filter`) had already merged;
     `lesson_15aa463fd07c` in PT `.agent/memory`.
+15. Local expunge / `filter-repo` finished and GitHub still shows stale `main`
+    or hundreds of "behind" branches?
+    **Mandatory:** [`references/post-rewrite-automation-reference-card.md`](references/post-rewrite-automation-reference-card.md)
+    — `post-rewrite-finish.sh` (hooks off → publish → `reanchor_scan` → delete
+    merged remotes → `cherry-reanchor-branches` → verify). Never per-branch push
+    with default hooks. Incident: 2026-08-08 VERBOTEN expunge — 40-branch push
+    looked hung; `main` blocked until protection lifted; cherry-reanchor replaced
+    conflict-prone `rebase --onto` after full scrub.
 
 ## Non-Negotiables
 
@@ -380,6 +388,8 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
   — hooks off before stash pop/apply; re-enable after (mandatory for agents)
 - [`references/history-surgery-hooks-safeguard-reference-card.md`](references/history-surgery-hooks-safeguard-reference-card.md)
   — hooks off during rewrite/expunge/force-publish; re-enable after (mandatory for agents)
+- [`references/post-rewrite-automation-reference-card.md`](references/post-rewrite-automation-reference-card.md)
+  — publish + delete merged + cherry-reanchor + verify (`post-rewrite-finish.sh`)
 - [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md)
   — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
 - [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md)
