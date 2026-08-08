@@ -39,10 +39,14 @@ done
 cd "$REPO"
 git fetch origin --prune
 
-PUSH=(bash "$SCRIPT_DIR/history-surgery-push.sh")
-if [[ ! -x "$SCRIPT_DIR/history-surgery-push.sh" ]]; then
-  PUSH=(git -c core.hooksPath=/dev/null push)
-fi
+# Re-check at call time: checkout origin/main removes scripts that are not on main yet.
+push_git() {
+  if [[ -x "$SCRIPT_DIR/history-surgery-push.sh" ]]; then
+    bash "$SCRIPT_DIR/history-surgery-push.sh" "$@"
+  else
+    git -c core.hooksPath=/dev/null push "$@"
+  fi
+}
 
 if [[ "$ALL_NEEDS" == "1" && -n "$FROM_JSON" ]]; then
   mapfile -t branches < <(
@@ -130,7 +134,7 @@ for branch in "${branches[@]}"; do
     git branch -D "$work" 2>/dev/null || true
     if [[ "$DELETE_ON_CONFLICT" == "1" ]] \
       && git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-      if "${PUSH[@]}" origin --delete "$branch" 2>/dev/null; then
+      if push_git origin --delete "$branch" 2>/dev/null; then
         echo "  deleted $branch (conflict; DELETE_ON_CHERRY_CONFLICT=1)" >&2
         deleted=$((deleted + 1))
       else
@@ -151,11 +155,11 @@ for branch in "${branches[@]}"; do
     continue
   fi
   if [[ -n "$old_sha" ]]; then
-    "${PUSH[@]}" --force-with-lease="refs/heads/${branch}:${old_sha}" \
+    push_git --force-with-lease="refs/heads/${branch}:${old_sha}" \
       origin "${work}:refs/heads/${branch}" \
-      || "${PUSH[@]}" --force origin "${work}:refs/heads/${branch}"
+      || push_git --force origin "${work}:refs/heads/${branch}"
   else
-    "${PUSH[@]}" -u origin "${work}:refs/heads/${branch}"
+    push_git -u origin "${work}:refs/heads/${branch}"
   fi
   git checkout main 2>/dev/null || true
   git branch -D "$work" 2>/dev/null || true
