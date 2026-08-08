@@ -8,9 +8,15 @@ description: >
   "orphaned branch after rewrite", "re-anchor branch to main", "branches lost
   common ancestor", "recover deleted branch", "git history rewrite recovery",
   "byte-identical common ancestor", or "branches all became the same".
+  Activates when any of the above invoke-when phrases appear.
+version: 1.0.0
+compatibility: claude-code, cursor, codex, gemini, openclaw, hermes
+allowed-tools: bash, file-operations
 ---
 
 # Git History Surgery
+
+## Purpose
 
 One source of truth for dangerous git history operations. This skill replaces the
 former split between separate rewrite-scrub and branch-recovery skills.
@@ -24,6 +30,34 @@ Use it for two related jobs:
 
 Fail closed: preserve refs, prove the operation is necessary, and use
 `--force-with-lease` only after recording the expected remote SHA.
+
+## Boundaries
+
+### Always Do
+
+- Preserve refs (tags, backup branches, the PR vault) before any rewrite, and
+  record the expected remote SHA before any `--force-with-lease` push.
+- Classify SAFE-BEHIND vs NEEDS-REANCHOR with a tree-twin scan and a
+  landed-tree diff against `mergeCommit.oid` — see Decision Flow item 2 —
+  before syncing `main`.
+- Verify with `gh pr view N --json mergeCommit,state,mergedAt` (or
+  `git ls-remote`) before declaring any git action ("merged", "pushed")
+  complete — see Non-Negotiables below.
+
+### Ask First
+
+- Before flattening a branch to `origin/main` and destroying its distinct
+  branch identity — only proceed if the user explicitly asks for that outcome.
+- Before any history rewrite (scrub, `filter-repo`, force-push) on a shared
+  branch other than a disposable local one.
+
+### Never Do
+
+See the full [Non-Negotiables](#non-negotiables) list below — summarized:
+never paste a forbidden token anywhere, never force-push without a recorded
+lease target, never judge rewritten branches by ahead/behind or `merge-base`
+alone, and never declare a git action complete without querying the actual
+result.
 
 ## Windows PowerShell Bootstrap
 
@@ -39,8 +73,10 @@ LM Studio host, run
    Use the re-anchor reference and tree-twin scan. Do not trust ahead/behind counts.
    This includes your own local `main` before any fast-forward, merge, or reset —
    see [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
-   § "ALWAYS check your own main before syncing it." Classify SAFE-BEHIND (twin or
-   message match found in `origin/main`) vs NEEDS-REANCHOR (genuinely unique,
+   § "ALWAYS check your own main before syncing it." Classify SAFE-BEHIND (a
+   confirmed tree twin, or a landed-tree diff against `mergeCommit.oid` that
+   actually matches — a commit-message match alone is candidate evidence
+   only and never sufficient by itself) vs NEEDS-REANCHOR (genuinely unique,
    found nowhere) before syncing `main` at all.
 3. Is this only a normal bad commit?
    Do not perform history surgery. Use a normal PR or revert.
