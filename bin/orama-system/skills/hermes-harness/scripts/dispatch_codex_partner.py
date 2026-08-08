@@ -48,7 +48,15 @@ def resolve_orama_repo_root() -> Path:
 
 def build_pytest_prompt(test_paths: list[str]) -> str:
     rel = " ".join(Path(p).as_posix() for p in test_paths)
-    return f"Run only: python -m pytest {rel} -q. Report pass count only."
+    # `uv run --no-sync python3 -m pytest`, not bare `python`/`pytest` -- a
+    # stray PATH-resolved interpreter (e.g. an old CLT/user-site Python ahead
+    # of the project's own .venv) silently runs against the wrong dependency
+    # set instead of this repo's pinned uv.lock versions. See
+    # codex-cli-v142-dispatch.md's path contract table.
+    return (
+        f"Run only: uv run --no-sync python3 -m pytest {rel} -q. "
+        "Report pass count only."
+    )
 
 
 def build_codex_command(
@@ -133,6 +141,15 @@ def main(argv: list[str] | None = None) -> int:
             cmd,
             cwd=repo_root,
             timeout=args.timeout or None,
+            # Non-interactive dispatch must never inherit an open, unfed
+            # parent stdin -- a backgrounded/detached caller can leave stdin
+            # connected but never send EOF, and Codex CLI will print
+            # "Reading additional input from stdin..." and hang indefinitely
+            # even though the prompt was already passed as a positional
+            # argument. Confirmed live 2026-08-08/09 (orama PR #289 dispatch
+            # hang, root-caused via ps aux showing the full prompt correctly
+            # in argv while the process sat blocked on stdin).
+            stdin=subprocess.DEVNULL,
         )
         return int(completed.returncode)
     except subprocess.TimeoutExpired:
