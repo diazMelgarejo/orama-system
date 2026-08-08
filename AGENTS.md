@@ -21,7 +21,12 @@ force-push). After a rewrite every pre-rewrite commit keeps its content but gets
 
   ```bash
   scripts/git/reanchor_scan.sh <repo_path> origin/main [remotes|heads|all]
-  git cherry -v origin/main <branch_tip> <branch_base>   # + = missing from main, - = already in main
+  # <branch_tip> is git-cherry's <head>. The third argument is <limit>, NOT a
+  # second branch to compare against -- it bounds how far back into
+  # <branch_tip>'s own history to enumerate (e.g. a known twin/merge-base you
+  # don't need to re-walk past), it does not diff two branches against each
+  # other. Omit it to walk <branch_tip>'s full history back to root.
+  git cherry -v origin/main <branch_tip> [<limit>]   # + = missing from main, - = already in main
   ```
 
 - Method + worked examples:
