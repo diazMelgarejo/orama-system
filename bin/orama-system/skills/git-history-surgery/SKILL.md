@@ -37,6 +37,11 @@ LM Studio host, run
    Use the expunge reference, rotate any secret, and require fresh clones.
 2. Did a rewrite already happen and branches now look impossible to reason about?
    Use the re-anchor reference and tree-twin scan. Do not trust ahead/behind counts.
+   This includes your own local `main` before any fast-forward, merge, or reset —
+   see [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
+   § "ALWAYS check your own main before syncing it." Classify SAFE-BEHIND (twin or
+   message match found in `origin/main`) vs NEEDS-REANCHOR (genuinely unique,
+   found nowhere) before syncing `main` at all.
 3. Is this only a normal bad commit?
    Do not perform history surgery. Use a normal PR or revert.
 4. Did the scrub only rewrite metadata/messages while file blobs may also be
