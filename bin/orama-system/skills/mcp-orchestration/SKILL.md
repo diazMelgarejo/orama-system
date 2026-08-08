@@ -59,9 +59,9 @@ Use the right tool for the right layer. Use the cheapest agent that can succeed.
 
 Here, **Default coding agent** applies only to Cline-bot-driven execution paths.
 On Claude Code or other Anthropic platforms, follow the platform's model policy;
-do not switch execution to Cline without an explicit user request or override instruction.
+do not switch execution to Cline without an explicit user request, override instruction, or a direct user-approved Haiku-driven dispatch workflow.
 
-> **ClinePass default for coding:** `cline-pass/glm-5.2` (1M ctx, tool loops). OpenRouter free only for lightweight triage. See [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
+> **ClinePass default for coding:** `cline-pass/glm-5.2` (1M ctx, tool loops). OpenRouter free only for lightweight triage (max=50). See [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
 
 **Two routing rules below override the legacy "Gemini = default reader" pattern.** See §2.
 
@@ -114,9 +114,9 @@ Claude Code verification: `/mcp` inside Claude Code, or `claude mcp list` from t
 
 ### Rule 0 — Default coding: ClinePass (Cline Credits)
 
-**For coding tasks (refactoring, file editing, agentic tool loops), use the
-`cline` CLI via `cline-pass/glm-5.2` (Cline Credits) as the default.** This is
-the preferred path over OpenRouter free because:
+For coding tasks (refactoring, file editing, agentic tool loops) via `cline`
+CLI, use the `cline-pass/glm-5.2` (Cline Credits) as the default frugality path
+for cline-bot selected execution. This is the preferred path over OpenRouter free because:
 
 - **No rate limits** — OpenRouter free is limited to 50 req/day, 20 RPM
 - **1M context** — full GLM-5.2 capability with reasoning + structured output
@@ -129,7 +129,8 @@ cline "<task>" --json --auto-approve true -c <dir> \
   --timeout 600 --retries 3
 ```
 
-From Claude: use the `cline_exec` MCP tool (defaults to `cline-pass/glm-5.2`).
+From Claude: use the `cline_exec` MCP tool (defaults to `cline-pass/glm-5.2`) after
+an explicit user request, frugality override, or Haiku-driven dispatch workflow.
 See [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
 
 ### Rule 1 — Lightweight routing: OpenRouter free-model stack (fallback)
@@ -422,7 +423,7 @@ Use this in `CLAUDE.md`, OpenClaw instructions, or project agent docs:
 # MCP Orchestration Policy
 
 1. Default to OpenRouter free-model stack (Nemotron → MiniMax → DeepSeek → …) for generic worker calls.
-2. Use ollama (local Mac) FIRST when no network/API is required (lint, format, bash scripts).
+2. Use `ollama run qwen3.5:9b-nvfp4` (local Mac) FIRST when no network/API is required (lint, format, bash scripts).
 3. Use Gemini ONLY for Gemini-Analyzer use-cases: visual diff, whole-repo architecture, multi-file stale-doc detection, large-diff code review.
 4. Use Claude Sonnet 4.6 medium + prompt caching for judgment, final synthesis, taste calls, content insertion.
 5. Use ai-cli-mcp only for isolated parallel work with PID tracking.
@@ -469,8 +470,6 @@ For everything else, use OpenRouter free models or local ollama.
 For judgment, use Claude Sonnet 4.6 medium with prompt caching.
 
 **Applied pattern — multi-channel steelman:** for a small but high-stakes change, fan the design out to a heterogeneous model panel (verify reachability first) for adversarial review. Recipe: [`docs/reference/multi-channel-steelman.md`](../../../../docs/reference/multi-channel-steelman.md).
-
----
 
 Legacy file disposition (redirect stubs, superseded paths): [`references/legacy-file-disposition.md`](references/legacy-file-disposition.md)
 
