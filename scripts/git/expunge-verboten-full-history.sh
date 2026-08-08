@@ -126,34 +126,53 @@ git filter-repo --force \
   --replace-message "$REPLACE_MSG" \
   --replace-text "$REPLACE_TEXT"
 
-MSG_FILTER="$SCRIPT_DIR/filter-msg-strip-banned.sh"
-ENV_FILTER="$SCRIPT_DIR/filter-env-scrub-banned.sh"
-chmod +x "$MSG_FILTER" "$ENV_FILTER"
-export FILTER_BRANCH_SQUELCH_WARNING=1
-echo ">>> filter-branch (author/committer + co-author remnants)"
-git filter-branch -f \
-  --env-filter "REPO_ROOT='$REPO_ROOT' bash '$ENV_FILTER'" \
-  --msg-filter "REPO_ROOT='$REPO_ROOT' bash '$MSG_FILTER'" \
-  --tag-name-filter cat -- --all
+# filter-repo already remaps author/committer (mailmap) and scrubs messages/blobs.
+# Optional second pass only when explicitly requested (very slow on large repos).
+if [[ "${EXPUNGE_FILTER_BRANCH_PASS:-}" == "1" ]]; then
+  MSG_FILTER="$SCRIPT_DIR/filter-msg-strip-banned.sh"
+  ENV_FILTER="$SCRIPT_DIR/filter-env-scrub-banned.sh"
+  chmod +x "$MSG_FILTER" "$ENV_FILTER"
+  export FILTER_BRANCH_SQUELCH_WARNING=1
+  echo ">>> filter-branch (author/committer + co-author remnants)"
+  git filter-branch -f \
+    --env-filter "REPO_ROOT='$REPO_ROOT' bash '$ENV_FILTER'" \
+    --msg-filter "REPO_ROOT='$REPO_ROOT' bash '$MSG_FILTER'" \
+    --tag-name-filter cat -- --all
 
-git for-each-ref --format='%(refname)' refs/original/ 2>/dev/null | while read -r ref; do
-  git update-ref -d "$ref" 2>/dev/null || true
-done
+  git for-each-ref --format='%(refname)' refs/original/ 2>/dev/null | while read -r ref; do
+    git update-ref -d "$ref" 2>/dev/null || true
+  done
+fi
 
 git reflog expire --expire=now --all
 git gc --prune=now --aggressive
 
-while IFS= read -r h; do
-  ae_lc="$(git log -1 --format=%ae "$h" | tr '[:upper:]' '[:lower:]')"
-  an_lc="$(git log -1 --format=%an "$h" | tr '[:upper:]' '[:lower:]')"
-  ce_lc="$(git log -1 --format=%ce "$h" | tr '[:upper:]' '[:lower:]')"
-  cn_lc="$(git log -1 --format=%cn "$h" | tr '[:upper:]' '[:lower:]')"
-  body_lc="$(git log -1 --format=%B "$h" | tr '[:upper:]' '[:lower:]')"
-  if metadata_contains_scrub_target "$ae_lc" "$an_lc" "$ce_lc" "$cn_lc" "$body_lc" "$REPO_ROOT"; then
-    echo "FAIL: banned attribution metadata still on $h" >&2
-    exit 1
-  fi
-done < <(git rev-list --all)
+echo ">>> verify (fast python scan)"
+python3 - "$REPO_ROOT" <<'PY'
+import subprocess
+import sys
+from pathlib import Path
+
+repo = Path(sys.argv[1])
+patterns = Path.home() / ".cursor/openclaw/banned-attribution-patterns"
+tokens = [l.split("#", 1)[0].strip().casefold() for l in patterns.read_text().splitlines() if l.split("#", 1)[0].strip()]
+meta = blob = 0
+for line in subprocess.run(["git", "-C", str(repo), "rev-list", "--objects", "--all"], capture_output=True, text=True, check=True).stdout.splitlines():
+    oid = line.split()[0]
+    kind = subprocess.run(["git", "-C", str(repo), "cat-file", "-t", oid], capture_output=True, text=True).stdout.strip()
+    if kind == "blob":
+        body = subprocess.run(["git", "-C", str(repo), "cat-file", "-p", oid], capture_output=True, text=True, errors="replace").stdout.casefold()
+        if any(t in body for t in tokens):
+            blob += 1
+    elif kind == "commit":
+        show = subprocess.run(["git", "-C", str(repo), "log", "-1", "--format=%an%n%ae%n%cn%n%ce%n%B", oid], capture_output=True, text=True).stdout.casefold()
+        if any(t in show for t in tokens):
+            meta += 1
+if meta or blob:
+    print(f"FAIL: meta_hits={meta} blob_hits={blob}", file=sys.stderr)
+    raise SystemExit(1)
+print("OK: verify clean")
+PY
 
 if [[ -n "$REMOTE_URL" ]]; then
   git remote add origin "$REMOTE_URL" 2>/dev/null || git remote set-url origin "$REMOTE_URL"
