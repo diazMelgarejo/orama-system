@@ -253,8 +253,20 @@ def test_skill_md_links_protocol():
     )
     text = skill.read_text(encoding="utf-8")
     assert "hermes-universal-invocation-protocol.md" in text
-    assert "executor_id" in text
-    assert "transport" in text
+    assert "ossf-operating-procedures.md" in text
+
+    procedures = (
+        ROOT
+        / "bin"
+        / "orama-system"
+        / "skills"
+        / "hermes-harness"
+        / "references"
+        / "ossf-operating-procedures.md"
+    )
+    body = procedures.read_text(encoding="utf-8")
+    assert "executor_id" in body
+    assert "transport" in body
 
 
 def test_lesson_mining_command_optional_not_required():
