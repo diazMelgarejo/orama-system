@@ -145,7 +145,7 @@ def build_manifest(root: Path, entries: list[ArchiveEntry], args: argparse.Names
 def cmd_export(args: argparse.Namespace) -> int:
     root = Path(args.hermes_home).expanduser().resolve()
     if not root.exists():
-        print(f"missing HERMES_HOME: {root}", file=sys.stderr)
+        logger.error(f"missing HERMES_HOME: {root}")
         return 2
     rels = list(DEFAULT_INCLUDE)
     if args.include_secrets:
@@ -244,7 +244,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
     target = Path(args.hermes_home).expanduser().resolve()
     manifest = load_manifest(archive)
     if manifest.get("schema") != SCHEMA_VERSION:
-        print(f"unexpected schema: {manifest.get('schema')}", file=sys.stderr)
+        logger.error(f"unexpected schema: {manifest.get('schema')}")
         return 2
     target.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive, "r") as zf:
@@ -275,9 +275,9 @@ def cmd_restore(args: argparse.Namespace) -> int:
             out.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(name) as src, out.open("wb") as dst:
                 shutil.copyfileobj(src, dst)
-    print(f"restored={len(selected)} skipped={len(skipped)} target={target}")
+    logger.info(f"restored={len(selected)} skipped={len(skipped)} target={target}")
     if backup:
-        print(f"backup={backup}")
+        logger.info(f"backup={backup}")
     return 0
 
 
