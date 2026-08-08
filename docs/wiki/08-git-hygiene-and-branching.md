@@ -415,7 +415,7 @@ git clone <url> "$OPENCLAW_ROOT/orama-system"
 Abbreviated placeholders like `/Users/.../foo` are fine (the segment after
 `/Users/` must start with a letter to match). The script and its own test
 are the only allowlisted files (they must name the pattern to test it).
-**Run `python scripts/review/repo_hygiene.py .` before committing docs
+**Run `python3 scripts/review/repo_hygiene.py .` before committing docs
 that contain shell commands** — it is the same check CI runs. (Learned
 2026-06-02: the #1802 incident write-ups themselves leaked workstation
 paths and red-CI'd `main`. Reinforced 2026-06-22 PR #123: even placeholder

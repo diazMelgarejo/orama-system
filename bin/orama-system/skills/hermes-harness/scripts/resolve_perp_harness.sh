@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Resolve Perpetua-Tools hermes_harness.py with fail-closed PT root discovery.
 # Git repo-relative crawl only — no hardcoded workstation layout paths.
-# See workspace-path-resolution.md and sync-local-pt-checkout.md.
+# See ../references/workspace-path-resolution.md and
+# ../../oramasys-method/references/sync-local-pt-checkout.md.
 #
 # Thin wrapper over scripts/git/resolve_sibling_git_repo.sh's generic
 # marker-based crawler (see that file for why: a fixed relative-depth
@@ -19,13 +20,23 @@ else
 fi
 
 _PT_MARKER="orchestrator/fastapi_app.py"
+_RESOLVED_PT_ROOT_CACHE=""
 
+# resolve_pt_root resolves and prints the Perpetua-Tools repository root,
+# using configured paths, the orama .paths cache, or filesystem discovery.
+# Memoizes into _RESOLVED_PT_ROOT_CACHE so repeated calls in the same shell
+# don't re-crawl.
 resolve_pt_root() {
+  if [[ -n "${_RESOLVED_PT_ROOT_CACHE:-}" ]]; then
+    echo "$_RESOLVED_PT_ROOT_CACHE"
+    return 0
+  fi
   local override_rc=0 pt_dir orama_root mother pt_root path
   path="$(sibling_repo_check_env_override "$_PT_MARKER" \
     PERPETUA_TOOLS_PATH PT_HOME PERPETUA_TOOLS_ROOT PERPETUATOOLSROOT)" || override_rc=$?
   if ((override_rc == 0)); then
-    echo "$path"
+    _RESOLVED_PT_ROOT_CACHE="$(cd "$path" && pwd)"
+    echo "$_RESOLVED_PT_ROOT_CACHE"
     return 0
   elif ((override_rc == 2)); then
     # An explicit override was configured (PERPETUA_TOOLS_PATH / PT_HOME /
@@ -40,7 +51,8 @@ resolve_pt_root() {
   if [[ -n "$orama_root" && -f "$orama_root/.paths" ]]; then
     pt_dir="$(grep '^PT_DIR=' "$orama_root/.paths" | cut -d= -f2- | tr -d '"')"
     if [[ -n "$pt_dir" ]] && sibling_repo_is_git_root "$pt_dir" "$_PT_MARKER"; then
-      echo "$pt_dir"
+      _RESOLVED_PT_ROOT_CACHE="$(cd "$pt_dir" && pwd)"
+      echo "$_RESOLVED_PT_ROOT_CACHE"
       return 0
     fi
   fi
@@ -52,17 +64,21 @@ resolve_pt_root() {
   sibling_repo_crawl_collect "$HOME" "$_PT_MARKER" 3
   pt_root="$(sibling_repo_finalize "Perpetua-Tools" || true)"
   if [[ -n "$pt_root" ]]; then
-    echo "$pt_root"
+    _RESOLVED_PT_ROOT_CACHE="$pt_root"
+    echo "$_RESOLVED_PT_ROOT_CACHE"
     return 0
   fi
   return 1
 }
 
+# resolve_perp_harness_script resolves and prints the canonical path to the
+# Perpetua-Tools Hermes harness script, or reports an error when the root or
+# script cannot be found.
 resolve_perp_harness_script() {
   local pt_root script
   pt_root="$(resolve_pt_root || true)"
   if [[ -z "$pt_root" ]]; then
-    echo "ERROR: Perpetua-Tools root not resolved. Clone PT and set PERPETUA_TOOLS_ROOT, or see sync-local-pt-checkout.md." >&2
+    echo "ERROR: Perpetua-Tools root not resolved. Clone PT and set PERPETUA_TOOLS_ROOT, or see ../../oramasys-method/references/sync-local-pt-checkout.md." >&2
     return 1
   fi
   script="${pt_root}/src/hermes_harness.py"
