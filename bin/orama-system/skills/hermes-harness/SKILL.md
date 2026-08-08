@@ -133,7 +133,7 @@ restarts via an `openclaw cron` job (`mac-orchestrator-pulse`), not a manual loo
   etc.) differs from what a raw JSON example might suggest and an invalid shape
   silently breaks the live gateway (see `lesson_67ddcb4837f2` in PT's semantic
   memory). Full cadence rationale + commands:
-  [`../../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md`](../../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md)
+  [`../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md`](../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md)
   § 11.
 
 ## Universal Invocation Protocol
