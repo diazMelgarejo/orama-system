@@ -10,8 +10,9 @@
 #   cherry-reanchor-branches.sh [repo_path] --from-json actions.json [--all-needs]
 #
 # Env:
-#   DELETE_ON_CHERRY_CONFLICT=1  delete branch when cherry-pick cannot complete
+#   DELETE_ON_CHERRY_CONFLICT=0  never delete on failure unless --delete-on-conflict
 #   SKIP_EMPTY_CHERRY=1          default on — skip empty picks and continue
+#   ALLOW_LOCAL_SOURCE=1         fall back to refs/heads/<branch> when remote missing
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -20,6 +21,7 @@ shift || true
 
 DELETE_ON_CONFLICT="${DELETE_ON_CHERRY_CONFLICT:-0}"
 SKIP_EMPTY="${SKIP_EMPTY_CHERRY:-1}"
+ALLOW_LOCAL="${ALLOW_LOCAL_SOURCE:-1}"
 FROM_JSON=""
 ALL_NEEDS=0
 branches=()
@@ -29,6 +31,7 @@ while [[ $# -gt 0 ]]; do
     --from-json) FROM_JSON="${2:?}"; shift 2 ;;
     --all-needs) ALL_NEEDS=1; shift ;;
     --delete-on-conflict) DELETE_ON_CONFLICT=1; shift ;;
+    --no-local-source) ALLOW_LOCAL=0; shift ;;
     *) branches+=("$1"); shift ;;
   esac
 done
@@ -54,22 +57,45 @@ fi
 ok=0
 deleted=0
 failed=0
+skipped=0
+
+resolve_source_ref() {
+  local branch="$1"
+  if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+    echo "origin/$branch"
+    return 0
+  fi
+  if [[ "$ALLOW_LOCAL" == "1" ]] \
+    && git show-ref --verify --quiet "refs/heads/$branch"; then
+    echo "$branch"
+    return 0
+  fi
+  return 1
+}
+
+is_empty_cherry_pick() {
+  # Mid cherry-pick with no index/worktree delta (empty patch or already in tree).
+  [[ -f .git/CHERRY_PICK_HEAD ]] || return 1
+  if git diff-index --quiet HEAD -- 2>/dev/null; then
+    return 0
+  fi
+  git diff --cached --quiet && git diff --quiet
+}
 
 cherry_pick_commits() {
-  local work="$1"
-  shift
   local commits=("$@")
   local c
   for c in "${commits[@]}"; do
     if git cherry-pick "$c"; then
+      echo "  OK $c"
       continue
     fi
-    if [[ "$SKIP_EMPTY" == "1" ]] \
-      && git diff --cached --quiet \
-      && git diff --quiet; then
+    if [[ "$SKIP_EMPTY" == "1" ]] && is_empty_cherry_pick; then
+      echo "  SKIP empty $c"
       git cherry-pick --skip
       continue
     fi
+    echo "  FAIL at $c" >&2
     return 1
   done
   return 0
@@ -77,33 +103,35 @@ cherry_pick_commits() {
 
 for branch in "${branches[@]}"; do
   [[ -n "$branch" ]] || continue
-  if ! git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-    echo "skip: no remote $branch" >&2
+  source_ref=""
+  if ! source_ref="$(resolve_source_ref "$branch")"; then
+    echo "skip: no source ref for $branch (remote or local)" >&2
+    skipped=$((skipped + 1))
     continue
   fi
-  echo ">>> CHERRY-REANCHOR $branch"
-  old_sha="$(git rev-parse "origin/$branch")"
-  mapfile -t commits < <(git cherry origin/main "origin/$branch" | awk '/^\+/{print $2}')
+  echo ">>> CHERRY-REANCHOR $branch (source=$source_ref)"
+  old_sha=""
+  if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+    old_sha="$(git rev-parse "origin/$branch")"
+  fi
+  mapfile -t commits < <(git cherry origin/main "$source_ref" | awk '/^\+/{print $2}')
   if [[ "${#commits[@]}" -eq 0 ]]; then
-    echo "  no unique commits — delete stale"
-    if "${PUSH[@]}" origin --delete "$branch"; then
-      deleted=$((deleted + 1))
-    else
-      failed=$((failed + 1))
-    fi
+    echo "  no unique commits vs origin/main — skip (not deleting)"
+    skipped=$((skipped + 1))
     continue
   fi
   work="__cherry_${branch//\//_}"
   git checkout -B "$work" origin/main
   git clean -fdq
-  if ! cherry_pick_commits "$work" "${commits[@]}"; then
+  if ! cherry_pick_commits "${commits[@]}"; then
     echo "  FAIL cherry-pick $branch" >&2
     git cherry-pick --abort 2>/dev/null || true
     git checkout main 2>/dev/null || git checkout -
     git branch -D "$work" 2>/dev/null || true
-    if [[ "$DELETE_ON_CONFLICT" == "1" ]]; then
+    if [[ "$DELETE_ON_CONFLICT" == "1" ]] \
+      && git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
       if "${PUSH[@]}" origin --delete "$branch" 2>/dev/null; then
-        echo "  deleted $branch (conflict)"
+        echo "  deleted $branch (conflict; DELETE_ON_CHERRY_CONFLICT=1)" >&2
         deleted=$((deleted + 1))
       else
         failed=$((failed + 1))
@@ -122,13 +150,17 @@ for branch in "${branches[@]}"; do
     failed=$((failed + 1))
     continue
   fi
-  "${PUSH[@]}" --force-with-lease="refs/heads/${branch}:${old_sha}" \
-    origin "${work}:refs/heads/${branch}" \
-    || "${PUSH[@]}" --force origin "${work}:refs/heads/${branch}"
+  if [[ -n "$old_sha" ]]; then
+    "${PUSH[@]}" --force-with-lease="refs/heads/${branch}:${old_sha}" \
+      origin "${work}:refs/heads/${branch}" \
+      || "${PUSH[@]}" --force origin "${work}:refs/heads/${branch}"
+  else
+    "${PUSH[@]}" -u origin "${work}:refs/heads/${branch}"
+  fi
   git checkout main 2>/dev/null || true
   git branch -D "$work" 2>/dev/null || true
   ok=$((ok + 1))
 done
 
-echo "OK: cherry-reanchor ok=$ok deleted=$deleted failed=$failed"
+echo "OK: cherry-reanchor ok=$ok deleted=$deleted failed=$failed skipped=$skipped"
 exit $(( failed > 0 ? 1 : 0 ))
