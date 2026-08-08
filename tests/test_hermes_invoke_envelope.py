@@ -166,6 +166,8 @@ def validate_core_result(result: dict) -> list[str]:
     if err is not None:
         if "message" not in err:
             errors.append("error.message required when error is set")
+        if "code" not in err:
+            errors.append("error.code required when error is set")
     if status in ("partial", "needs_input", "blocked", "error") and not result.get("follow_up_actions"):
         errors.append("follow_up_actions required when status is partial/blocked/needs_input/error")
     if status == "ok" and err is not None:

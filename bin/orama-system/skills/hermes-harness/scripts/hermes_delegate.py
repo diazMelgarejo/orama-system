@@ -463,7 +463,8 @@ def run_delegate(
         status=status,
         action="delegate",
         data={"workers": rows},
-        follow_up_actions=follow_up,
+        follow_up_actions=follow_up
+        or (["inspect worker errors in data.workers"] if status == "partial" else []),
         warnings=warnings,
     )
 
@@ -513,7 +514,24 @@ def main(argv: list[str] | None = None) -> int:
 
     pt_root = args.pt_root
     if not pt_root:
-        print("ERROR: PT_ROOT not set", file=sys.stderr)
+        msg = "PT_ROOT not set"
+        if args.json_out:
+            print(
+                json.dumps(
+                    _canonical_result(
+                        status="error",
+                        action="delegate",
+                        data={},
+                        follow_up_actions=[
+                            "set PERPETUA_TOOLS_ROOT or export PT_ROOT before delegating"
+                        ],
+                        error={"code": "hermes_delegate_pt_root_missing", "message": msg},
+                    ),
+                    indent=2,
+                )
+            )
+        else:
+            print(f"ERROR: {msg}", file=sys.stderr)
         return 1
 
     result = run_delegate(tasks, pt_root=pt_root, worker_timeout_sec=args.timeout)

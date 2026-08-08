@@ -1,6 +1,6 @@
 ---
 name: relay-cursor-agent
-description: Cursor coordinator and cross-repo relay for planning, asynchronous delegation, result reconciliation, and HITL-respecting handoffs.
+description: Cursor orchestrator and cross-repo relay for planning, asynchronous delegation, result reconciliation, and HITL-respecting handoffs.
 version: 1.1.1.0
 license: Apache 2.0
 compatibility: cursor
@@ -9,7 +9,7 @@ allowed-tools: file-operations, git
 
 # Relay Cursor Agent
 
-Cursor coordinator and routing identity for multi-repository work.
+Cursor orchestrator and routing identity for multi-repository work.
 
 ## Boundaries
 

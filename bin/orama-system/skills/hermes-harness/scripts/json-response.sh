@@ -58,8 +58,9 @@ def load_obj(raw, default):
         return default
     try:
         value = json.loads(raw)
-    except json.JSONDecodeError:
-        return default
+    except json.JSONDecodeError as exc:
+        print(f"invalid JSON payload for envelope field: {exc}", file=sys.stderr)
+        sys.exit(1)
     if isinstance(default, dict):
         return value if isinstance(value, dict) else default
     if isinstance(default, list):
