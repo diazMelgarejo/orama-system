@@ -283,6 +283,14 @@ titles, bodies, commit messages, or shell history.
    git config --local --get core.hooksPath   # must print: .githooks
    ```
 
+17. **Publish and reanchor on GitHub** (mandatory when scrub touched all refs):
+
+   ```bash
+   ALLOW_MAIN_PUSH=1 bash scripts/git/post-rewrite-finish.sh .
+   ```
+
+   See [`post-rewrite-automation-reference-card.md`](post-rewrite-automation-reference-card.md).
+
 ## Clean Replacement PR
 
 Use this when a PR branch has the right final content but the branch's
