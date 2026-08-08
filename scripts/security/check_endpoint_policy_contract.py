@@ -14,7 +14,7 @@ SELF = Path(__file__).resolve()
 SCAN_ROOTS = ["bin", "scripts", "src", "platform"]
 
 REQUIRED_FILES = [
-    ".agent/endpoint-policy-contract.yml",
+    "config/endpoint-policy-contract.yml",
     "scripts/security/check_endpoint_policy_contract.py",
     ".github/workflows/endpoint-policy-contract.yml",
     "AGENTS.md",
@@ -65,7 +65,7 @@ def assert_scan_roots_exist() -> None:
 
 
 def assert_contract() -> None:
-    text = read(".agent/endpoint-policy-contract.yml")
+    text = read("config/endpoint-policy-contract.yml")
     missing = [needle for needle in REQUIRED_CONTRACT_STRINGS if needle not in text]
     if missing:
         fail(f"contract missing required entries: {', '.join(missing)}")
