@@ -5,7 +5,7 @@
 #   post-rewrite-reanchor.sh [repo_path]
 #
 # Env:
-#   DELETE_ON_CHERRY_CONFLICT=1  delete conflicted branches (default 1 for automation)
+#   DELETE_ON_CHERRY_CONFLICT=0  delete conflicted branches only when explicitly 1
 #   DRY_RUN=1                    scan + print actions only
 set -euo pipefail
 
@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${1:-.}"
 cd "$REPO"
 
-DELETE_ON_CHERRY_CONFLICT="${DELETE_ON_CHERRY_CONFLICT:-1}"
+DELETE_ON_CHERRY_CONFLICT="${DELETE_ON_CHERRY_CONFLICT:-0}"
 DRY_RUN="${DRY_RUN:-0}"
 
 scan="$(mktemp)"
