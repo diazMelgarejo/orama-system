@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import shutil
 import sys
@@ -22,6 +23,8 @@ import zipfile
 from dataclasses import dataclass, asdict
 from pathlib import Path, PurePosixPath
 from typing import Iterable
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "hermes-portable-brain/v1"
 SECRET_ROOTS = {".env", "auth.json", "auth"}
@@ -176,7 +179,7 @@ def cmd_export(args: argparse.Namespace) -> int:
     # flowing into a print/log call regardless of its actual type.
     included_secrets = bool(args.include_secrets)
     included_sessions = bool(args.include_sessions)
-    print(
+    logger.info(
         f"wrote {output} ({len(entries)} files, "
         f"include_secrets={included_secrets}, include_sessions={included_sessions})"
     )
