@@ -109,7 +109,7 @@ tree. Diff the local tip against the actual landed tree
 verdict — see `docs/LESSONS.md` § 2026-08-08 for a case where this exact gap
 silently dropped ~660 lines (a pre-commit gate script, its wiring, a
 439-line reference card, and three skills' pilot content) that a `cherry -v`
-+ message-match pass alone had already marked resolved.
+and message-match pass alone had already marked resolved.
 
 ## Pre-flight
 
