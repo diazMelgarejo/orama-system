@@ -168,7 +168,7 @@ def _init_test_repo_with_skill(boundaries_and_after: str, tmp_dir: Path | None =
     skill_path = repo / _skill_rel_path()
     skill_path.parent.mkdir(parents=True)
     skill_path.write_text(_skill_text(boundaries_and_after), encoding="utf-8")
-    subprocess.run(["git", "add", str(skill_path)], cwd=repo, check=True)
+    subprocess.run(["git", "add", _skill_rel_path().as_posix()], cwd=repo, check=True)
     return repo
 
 
@@ -237,7 +237,7 @@ def test_main_exits_zero_for_valid_staged_skill(tmp_path: Path) -> None:
         tmp_dir=tmp_path,
     )
     result = subprocess.run(
-        ["python3", str(REPO_ROOT / "scripts/hooks/check_ossf1_skill_md.py")],
+        [sys.executable, str(REPO_ROOT / "scripts/hooks/check_ossf1_skill_md.py")],
         cwd=repo,
         capture_output=True,
         text=True,
@@ -272,10 +272,10 @@ def test_main_exits_nonzero_for_scalar_triggers(tmp_path: Path) -> None:
     skill_path = repo / _skill_rel_path()
     skill_path.parent.mkdir(parents=True)
     skill_path.write_text(text, encoding="utf-8")
-    subprocess.run(["git", "add", str(skill_path)], cwd=repo, check=True)
+    subprocess.run(["git", "add", _skill_rel_path().as_posix()], cwd=repo, check=True)
 
     result = subprocess.run(
-        ["python3", str(REPO_ROOT / "scripts/hooks/check_ossf1_skill_md.py")],
+        [sys.executable, str(REPO_ROOT / "scripts/hooks/check_ossf1_skill_md.py")],
         cwd=repo,
         capture_output=True,
         text=True,
