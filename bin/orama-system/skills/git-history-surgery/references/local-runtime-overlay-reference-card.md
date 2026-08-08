@@ -8,4 +8,4 @@
 `config/devices.yml` and `config/models.yml` before pull/rebase when needed; optional
 `git update-index --skip-worktree` per clone.
 
-**Package policy:** [`config/LOCAL-RUNTIME-OVERLAY.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/LOCAL-RUNTIME-OVERLAY.md)
+**Package policy:** `Perpetua-Tools/config/LOCAL-RUNTIME-OVERLAY.md`

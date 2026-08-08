@@ -38,7 +38,7 @@ exist.
 
 Three repos, one LAN fleet:
 
-```text
+```
 AlphaClaw (L1 — infra) → Perpetua-Tools (L2 — middleware) → orama-system (L3 — orchestration)
 ```
 
@@ -95,7 +95,6 @@ cd $env:ORAMA_SYSTEM_PATH
 ```
 
 This is idempotent and does three things, in order:
-
 1. Installs LM Studio via `winget` if the binary isn't found under
    `%LOCALAPPDATA%\Programs\LM-Studio` / `%PROGRAMFILES%\LM-Studio`.
 2. Probes `http://localhost:1234/v1/models` (override port via
@@ -255,7 +254,6 @@ Real bring-up, 2026-07-08. Both repos were already cloned to
 `C:\code` is illustrative, not a hard requirement.
 
 **What was already present (frugal — reused, not reinstalled):**
-
 - GitHub Desktop (`%LOCALAPPDATA%\GitHubDesktop`) — has its own embedded Git,
   but does **not** expose a reusable `node`/`npm`/`python` toolchain. It only
   informed the "don't touch Git" decision — step 4's Node/Python are separate.
@@ -269,7 +267,6 @@ Real bring-up, 2026-07-08. Both repos were already cloned to
   `.local/lan-topology.json`, never commit literals).
 
 **What was missing and installed (frugal — only the gap, nothing reinstalled):**
-
 - Node: none on PATH at all → `winget install CoreyButler.NVMforWindows` →
   `nvm install lts && nvm use newest` → Node v24.18.0 / npm 11.16.0 at
   `C:\nvm4w\nodejs`.
@@ -280,7 +277,7 @@ Real bring-up, 2026-07-08. Both repos were already cloned to
   `first-run-install.sh status` sees them.
 
 **Fleet registration:** added as `win-rtx5080` in
-[`config/devices.yml`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/devices.yml), mirroring the `win-rtx3080` entry's
+`Perpetua-Tools/config/devices.yml`, mirroring the `win-rtx3080` entry's
 shape — `primary_backend: lm-studio`, `lan_ip: ${PRIVATE_LAN_IP}`, port 1234.
 Set `LM_STUDIO_WIN_ENDPOINTS` to the **resolved** URL
 `http://<LM_STUDIO_LAN_HOST>:1234` (User env var) as the static fallback —
@@ -290,11 +287,9 @@ probe; per this file's header, always prefer discovery over a stale hardcoded IP
 
 **5-minute coordination pulse (not the doc default):** this node's owner
 wanted peer-inbox polling every 5 minutes instead of the default 15:
-
 ```powershell
 .\scripts\install_coord_pulse.ps1 -IntervalSec 300
 ```
-
 Trade-off to log if this becomes the fleet norm: 3x the Task Scheduler wake
 frequency across every node. Fine for one box; reconsider before applying
 fleet-wide.

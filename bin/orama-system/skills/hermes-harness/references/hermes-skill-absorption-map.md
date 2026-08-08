@@ -4,20 +4,16 @@
 > are thin adapters; durable behavior lives in orama-system canonical cards below.
 >
 > Inventory audit: [`hermes-ecc-fork-inventory.md`](hermes-ecc-fork-inventory.md)  
-> Onboarding plan: [`docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md`](../../../../../docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md) § Skill Absorption
+> Onboarding plan: [`docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md`](../../../../docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md) § Skill Absorption
 
 ## Redirect stubs → canonical supersets
 
 | Hermes / legacy slug | State | Canonical target | Act by loading |
 |----------------------|-------|------------------|----------------|
-| `hermes-agent` | Symlink | `hermes-harness` | `bin/orama-system/skills/hermes-harness/SKILL.md` |
-| `pt-orama-harness-integration` | Symlink | `hermes-harness` | same |
-| `perpetua-hardware` | Symlink | `hardware-affinity-gate` | `bin/orama-system/skills/hardware-affinity-gate/SKILL.md` |
-| `local-inference` | Symlink | `hardware-affinity-gate` | same (via `perpetua-hardware` chain) |
-| `no-sleep-chains` | Symlink | `shell-hygiene` | `bin/orama-system/skills/shell-hygiene/SKILL.md` |
-| `perpetua-tools` | Redirect stub (cross-repo) | [`SKILL.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SKILL.md) | GitHub `main`; local agents resolve to checkout |
-| `perpetua-config` | Redirect stub (cross-repo) | [`config/SKILL.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/SKILL.md) | GitHub `main`; local agents resolve to checkout |
-| `perpetua-startup-intelligence` | Redirect stub (cross-repo) | [`hardware/startup-intelligence/SKILL.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/hardware/startup-intelligence/SKILL.md) | GitHub `main`; local agents resolve to checkout |
+| `hermes-agent` | Redirect | `hermes-harness` | `bin/orama-system/skills/hermes-harness/SKILL.md` |
+| `pt-orama-harness-integration` | Redirect | `hermes-harness` | same |
+| `perpetua-hardware` | Redirect | `hardware-affinity-gate` | `bin/orama-system/skills/hardware-affinity-gate/SKILL.md` |
+| `local-inference` | Redirect | `hardware-affinity-gate` | same (via `perpetua-hardware` stub chain) |
 | `windows-hermes-setup` | Redirect | `commands/windows-hermes-setup` + `references/windows-hermes-setup.md` | `bin/orama-system/skills/hermes-harness/commands/windows-hermes-setup/SKILL.md` |
 | `hermes-harness` (Hermes-local fork) | Redirect | `hermes-harness/SKILL.md` + references below | `install_hermes_thin_skills.py` replaces `~/.hermes/skills/hermes-harness/` with redirect stub |
 | `hermes-harness` (Hermes-local fork) | Redirect | `hermes-harness/SKILL.md` | `bin/orama-system/skills/hermes-harness/SKILL.md` — `install_hermes_thin_skills.py` replaces forked `~/.hermes/skills/hermes-harness/` |
@@ -48,8 +44,7 @@ Archive path: `bin/orama-system/skills/archive/llm-council-orchestration-absorbe
 | PT runtime SSoT | `$PERPETUA_TOOLS_PATH` policy YAML + `hardware_policy_cli.py` | Enforcement at dispatch |
 | Hermes edge | `commands/pt-hardware-policy` | Windows Hermes → PT CLI |
 
-`.agents/perpetua-hardware` points at **hardware-affinity-gate**, not the PT
-[`hardware/`](https://github.com/diazMelgarejo/Perpetua-Tools/tree/main/hardware) skill tree.
+`.agents/perpetua-hardware` points at **hardware-affinity-gate**, not `Perpetua-Tools/hardware/`.
 
 ## Absorbed into `hermes-harness` (superset)
 
@@ -82,7 +77,7 @@ Archive path: `bin/orama-system/skills/archive/llm-council-orchestration-absorbe
 |--------|------------------|-------------------|
 | `local-inference` | LM Studio/Ollama affinity, canary thresholds | `hardware-affinity-gate/SKILL.md` |
 | `perpetua-hardware` (orama redirect) | PREFER/ALLOW/NEVER semantics | same |
-| Perpetua-Tools runtime SSoT | Policy YAML + Python API | [`config/model_hardware_policy.yml`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/config/model_hardware_policy.yml) (one-way import) |
+| Perpetua-Tools runtime SSoT | Policy YAML + Python API | PT `config/model_hardware_policy.yml` (one-way import) |
 | Hermes validator fork | Post-edit size guard | `hardware-affinity-gate/SKILL.md` § Post-Edit Validation |
 
 ## bin/agents persona staging (2026-07-26)
@@ -91,7 +86,7 @@ Archive path: `bin/orama-system/skills/archive/llm-council-orchestration-absorbe
 |--------|------------------|-------------------|
 | OpenClaw live SOUL overlays | Oramasys overlay distillates | `bin/agents/*/SOUL.md` |
 | Raft persona YAML (EDITED-03) | Persona catalog | `bin/agents/personas/*.yaml` |
-| OpenClaw graft audit (2026-08-04) | Dispatch taxonomy + lane tags + path doctrine | `references/hermes-dispatch-taxonomy.md`, `references/openclaw-workspace-path-doctrine.md`, `references/openclaw-pattern-graft-registry.md`, `bin/agents/REGISTRY.yml` `dispatch_lane` |
+| Fleet role map | Staging ↔ OpenClaw ↔ Hermes slug | `bin/agents/REGISTRY.yml` |
 | Hermes profile materialization | Profile SOUL + memory stubs | `scripts/install_hermes_profiles.py` |
 | OpenClaw overlay refresh | Integrative merge from staging | `scripts/sync_openclaw_overlay_from_staging.sh` |
 

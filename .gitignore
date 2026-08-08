@@ -188,6 +188,3 @@ lance_memory.lance/
 # Firecrawl command output is transient. Promote evidence explicitly under
 # docs/superpowers/references/ rather than leaving it in a worktree cache.
 .firecrawl/
-
-# coverage.py data file
-.coverage

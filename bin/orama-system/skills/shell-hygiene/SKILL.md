@@ -18,8 +18,7 @@ paths:
 # Shell Hygiene — Safe Command Execution for Agents
 
 > Renamed from `no-sleep-chains` (2026-06-13) — broadened to cover all agent shell
-> execution gotchas in this environment, not just sleep chains. The legacy slug
-> `no-sleep-chains` is a directory symlink to this skill.
+> execution gotchas in this environment, not just sleep chains.
 
 > **This rule is enforced at the shell level.** A leading `sleep` followed by
 > any command is detected and rejected before execution. There is no workaround

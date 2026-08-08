@@ -11,7 +11,7 @@ description: >
 # Fable-5 Tier-Based Routing: Frugal Model Selection with Hard Timeouts
 
 **⚠️ PRODUCTION v1.1 — Real Tier Structure:** This skill documents production
-routing as implemented in [`orchestrator/frugality_router.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/frugality_router.py).
+routing as implemented in `Perpetua-Tools/orchestrator/frugality_router.py`.
 Tier identifiers (0–6), backend names, and cost semantics match real code, not
 a 4-tier aspirational model. Test all examples before deployment.
 
@@ -40,14 +40,14 @@ background job or Monitor until-loop instead.
 Use this skill to:
 - Route inference requests through the tier hierarchy, lowest-cost-first
 - Handle endpoint timeouts with deterministic fallback
-- Enforce cost budgets via CostGuard ([`orchestrator/cost_guard.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/cost_guard.py))
+- Enforce cost budgets via CostGuard (Perpetua-Tools/orchestrator/cost_guard.py)
 - Enforce tier eligibility policies (offline mode, privacy-critical flags)
 - Implement fail-closed semantics when all tiers exhausted
 - Audit escalation reasons for policy compliance
 
 ## The 7-Tier Hierarchy (v1.1 Production)
 
-**Foundation:** [`orchestrator/frugality_router.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/frugality_router.py) (lines 17–25, 176–180)
+**Foundation:** `Perpetua-Tools/orchestrator/frugality_router.py` (lines 17–25, 176–180)
 
 | Tier | Backend | Cost | Use Case | Policy |
 |------|---------|------|----------|--------|
@@ -349,7 +349,7 @@ sleep 10 && kill -9 $PID &
 **Non-negotiable:** Cost gates NEVER silently reroute. When budget is insufficient,
 raise an exception and let the caller decide whether to proceed.
 
-**Foundation:** [`orchestrator/cost_guard.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/cost_guard.py) (CostGuard class, lines 16–90)
+**Foundation:** `Perpetua-Tools/orchestrator/cost_guard.py` (CostGuard class, lines 16–90)
 
 ### Real CostGuard API
 

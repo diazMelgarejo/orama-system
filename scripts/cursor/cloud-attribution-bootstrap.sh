@@ -1,17 +1,10 @@
 #!/usr/bin/env bash
 # Cursor Cloud Agent — unconditional attribution guards (canonical: ~/.cursor/openclaw).
-# Must exit 0 on cloud start/install even when sibling worktrees are dirty mid-PR.
 set -euo pipefail
 
 HOME="${HOME:-/home/ubuntu}"
 export HOME
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-export REPO_ROOT
-# shellcheck source=lib-normalize-cloud-paths.sh
-source "$(dirname "${BASH_SOURCE[0]}")/lib-normalize-cloud-paths.sh"
-normalize_cloud_openclaw_paths
-export GUARD_SYNC_ON_DIRTY="${GUARD_SYNC_ON_DIRTY:-skip}"
-
 INSTALLER="${CURSOR_CLOUD_ATTRIBUTION_INSTALLER:-$HOME/.cursor/openclaw/install-cursor-cloud-attribution.sh}"
 PT="${PERPETUA_TOOLS_PATH:-$HOME/openclaw-v1/Perpetua-Tools}"
 [[ -d /agent/repos/Perpetua-Tools ]] && PT="/agent/repos/Perpetua-Tools"
@@ -26,20 +19,17 @@ seed_from_pt() {
   done
   [[ -x "$PT/scripts/cursor/install-user-git-environment.sh" ]] && \
     PERPETUA_TOOLS_PATH="$PT" ORAMA_SYSTEM_PATH="$REPO_ROOT" \
-      GUARD_SYNC_ON_DIRTY=skip \
       bash "$PT/scripts/cursor/install-user-git-environment.sh" || true
 }
 
 if [[ -x "$INSTALLER" ]]; then
-  GUARD_SYNC_ON_DIRTY=skip bash "$INSTALLER" || true
-  exit 0
+  exec bash "$INSTALLER"
 fi
 
 # First boot on a fresh VM: seed openclaw from Perpetua-Tools checkout, then install.
 seed_from_pt
 if [[ -x "$INSTALLER" ]]; then
-  GUARD_SYNC_ON_DIRTY=skip bash "$INSTALLER" || true
-  exit 0
+  exec bash "$INSTALLER"
 fi
 
 if [[ -x "$PT/scripts/git/daily-attribution-guard.sh" ]]; then

@@ -7,7 +7,7 @@
 
 ## SSoT (full runbook)
 
-[`fleet-2026-07-27-pre-pr222-backup-runbook.md`](fleet-2026-07-27-pre-pr222-backup-runbook.md)  
+`$OPENCLAW_ROOT/references/2026-07-27-pre-pr222-operator-backup-runbook.md`  
 (inbox summary below; agents read inbox + SSoT for detail)
 
 ## Audience
@@ -61,7 +61,6 @@ python3 scripts/mesh/ensure_local_mesh_secrets.py
 ```
 
 This fills **missing/empty** `GOSSIP_SHARED_SECRET` in:
-
 - orama-system repo-local gitignored env file
 - Perpetua-Tools repo-local gitignored env file (when sibling path set)
 - `.local/mesh-secrets.json` on both repos
@@ -100,7 +99,7 @@ foreach ($store in @(
 python scripts\mesh\ensure_local_mesh_secrets.py
 ```
 
-1. **Parity gate** — `python scripts\mesh\verify_gossip_secret_parity.py --require-stores` (fail closed if env and JSON stores disagree or mirrors are missing). See pre-pr222 backup runbook Step 5d.
+4. **Parity gate** — `python scripts\mesh\verify_gossip_secret_parity.py --require-stores` (fail closed if env and JSON stores disagree or mirrors are missing). See pre-pr222 backup runbook Step 5d.
 
 If PT on Win: repeat steps 1–4 for the Perpetua-Tools repo-local gitignored env file, or set `PERPETUA_TOOLS_PATH` and re-run from orama.
 

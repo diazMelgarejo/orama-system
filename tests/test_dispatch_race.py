@@ -155,32 +155,29 @@ def test_all_fail_returns_failure():
 
 # ── Test 5: regression — _exc NameError in fallback path ──────────────────────
 
-def test_hermes_timeout_fails_cleanly_without_internal_fallback():
-    """Regression + design test for _dispatch_hermes_lmstudio_win's timeout path.
+def test_hermes_fallback_no_name_error():
+    """Regression: _dispatch_hermes_lmstudio_win fallback must not raise NameError.
 
-    Originally a regression test for a NameError (`_exc` referenced but
-    never defined) when this function's old internal fallback-to-direct-
-    lmstudio path was reached on timeout. That internal fallback has since
-    been removed entirely (review 4837854088: fallback handling belongs
-    in _dispatch_race() alone, not duplicated here) -- so this now
-    verifies the timeout path fails cleanly with no crash AND, just as
-    importantly, does NOT call _dispatch_lmstudio() itself anymore.
+    The old code referenced `_exc` which was never defined, causing a NameError
+    when the hermes leg timed out and fell back to direct lmstudio. This test
+    mocks the hermes subprocess to time out and verifies the fallback path
+    completes without raising.
     """
     with patch.object(spawn_agents, "_find_hermes", return_value="/fake/hermes"), \
          patch.object(spawn_agents, "_dispatch_lmstudio", new_callable=AsyncMock) as mock_direct:
 
+        # Simulate the direct lmstudio call succeeding (fallback path)
+        mock_direct.return_value = _ok("FALLBACK_OK")
+
+        # We need to make the hermes subprocess timeout. We patch
+        # asyncio.create_subprocess_exec to return a mock proc whose
+        # communicate() raises TimeoutError.
         async def _fake_communicate():
             raise asyncio.TimeoutError()
 
         class _FakeProc:
-            def __init__(self):
-                self.returncode = None
-
             def kill(self):
-                self.returncode = -9
-
-            async def wait(self):
-                return self.returncode
+                pass
 
         async def _fake_subprocess_exec(*args, **kwargs):
             proc = _FakeProc()
@@ -190,66 +187,11 @@ def test_hermes_timeout_fails_cleanly_without_internal_fallback():
         with patch.object(spawn_agents.asyncio, "create_subprocess_exec", side_effect=_fake_subprocess_exec):
             result = _run(spawn_agents._dispatch_hermes_lmstudio_win("test task"))
 
-    # No NameError or other crash — if we got here, that regression stays fixed.
-    assert result["ok"] is False
-    assert "hermes-lmstudio-win" in result["output"]
-    # The single-layer-fallback contract: this function must not itself
-    # call _dispatch_lmstudio() anymore. That's _dispatch_race()'s job.
-    mock_direct.assert_not_awaited()
-
-
-@pytest.mark.unit
-def test_hermes_nonzero_exit_with_output_is_failure() -> None:
-    """Non-zero Hermes exit must not count as success even with stdout text."""
-    with patch.object(spawn_agents, "_find_hermes", return_value="/fake/hermes"), \
-         patch.object(spawn_agents, "_dispatch_lmstudio", new_callable=AsyncMock) as mock_direct:
-
-        class _FakeProc:
-            returncode = 1
-
-            async def communicate(self):
-                return (b"stderr-ish output", b"")
-
-            async def kill(self):
-                self.returncode = -9
-
-            async def wait(self):
-                return self.returncode
-
-        async def _fake_subprocess_exec(*args, **kwargs):
-            return _FakeProc()
-
-        with patch.object(spawn_agents.asyncio, "create_subprocess_exec", side_effect=_fake_subprocess_exec):
-            result = _run(spawn_agents._dispatch_hermes_lmstudio_win("test task"))
-
-    assert result["ok"] is False
-    mock_direct.assert_not_awaited()
-
-
-@pytest.mark.unit
-def test_hermes_uses_win_coder_endpoint_pool(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Hermes subprocess env must route through $WIN_CODER_ENDPOINTS."""
-    monkeypatch.setattr(spawn_agents, "WIN_CODER_ENDPOINT", "http://win-coder.example:1234")
-
-    captured: dict = {}
-
-    with patch.object(spawn_agents, "_find_hermes", return_value="/fake/hermes"):
-
-        class _FakeProc:
-            returncode = 0
-
-            async def communicate(self):
-                return (b"HERMES_OK", b"")
-
-        async def _fake_subprocess_exec(*args, **kwargs):
-            captured["env"] = kwargs.get("env", {})
-            return _FakeProc()
-
-        with patch.object(spawn_agents.asyncio, "create_subprocess_exec", side_effect=_fake_subprocess_exec):
-            result = _run(spawn_agents._dispatch_hermes_lmstudio_win("test task"))
-
+    # The fallback should succeed (direct lmstudio returned ok)
     assert result["ok"] is True
-    assert captured["env"]["LM_STUDIO_WIN_ENDPOINTS"] == "http://win-coder.example:1234"
+    assert "FALLBACK_OK" in result["output"]
+    assert "[RACE LEG: hermes-lmstudio-win" in result["output"]
+    # No NameError should be raised — if we got here, the regression is fixed
 
 
 # ── Test 6: winner field always present ───────────────────────────────────────

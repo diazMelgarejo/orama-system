@@ -23,7 +23,6 @@ import subprocess
 import sys
 import urllib.request
 import urllib.error
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import Enum
 
@@ -321,12 +320,6 @@ def _ensure_windows_partner_path() -> None:
 
 
 def main() -> int:
-    """
-    Run configured partner canary probes and report their results.
-    
-    Returns:
-    	int: `0` when all required canaries pass or are skipped, otherwise `1`.
-    """
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--lm-studio-url", default="http://localhost:1234/v1")
     p.add_argument("--timeout", type=int, default=90, help="Per-canary timeout in seconds (Hermes/AGY/Codex)")
@@ -383,34 +376,24 @@ def main() -> int:
                 print(f"  {i}. {line}")
         return 0
 
-    check_specs: list[tuple[str, callable]] = [
-        ("lm", lambda: check_lm_studio(args.lm_studio_url, args.timeout)),
-    ]
-    if not args.skip_hermes:
-        check_specs.append(("hermes", lambda: check_hermes(args.timeout)))
-    else:
-        check_specs.append(("hermes_skip", lambda: Result("Hermes", Status.SKIPPED, "--skip-hermes")))
-    if not args.skip_agy:
-        check_specs.append(("agy", lambda: check_agy(args.timeout)))
-    else:
-        check_specs.append(("agy_skip", lambda: Result("AGY", Status.SKIPPED, "--skip-agy", required=False)))
-    if not args.skip_codex:
-        check_specs.append(("codex", lambda: check_codex(args.timeout)))
-    else:
-        check_specs.append(("codex_skip", lambda: Result("Codex", Status.SKIPPED, "--skip-codex", required=False)))
-    if not args.skip_cursor_agent:
-        check_specs.append(("cursor", lambda: check_cursor_agent(args.timeout)))
-    else:
-        check_specs.append(
-            ("cursor_skip", lambda: Result("cursor-agent", Status.SKIPPED, "--skip-cursor-agent", required=False))
-        )
-
     results: list[Result] = []
-    # T-ENG-2: run independent canary probes in parallel (bounded by probe count).
-    with ThreadPoolExecutor(max_workers=min(len(check_specs), 4)) as pool:
-        future_order = [(key, pool.submit(fn)) for key, fn in check_specs]
-        for _key, fut in future_order:
-            results.append(fut.result())
+    results.append(check_lm_studio(args.lm_studio_url, args.timeout))
+    if not args.skip_hermes:
+        results.append(check_hermes(args.timeout))
+    else:
+        results.append(Result("Hermes", Status.SKIPPED, "--skip-hermes"))
+    if not args.skip_agy:
+        results.append(check_agy(args.timeout))
+    else:
+        results.append(Result("AGY", Status.SKIPPED, "--skip-agy", required=False))
+    if not args.skip_codex:
+        results.append(check_codex(args.timeout))
+    else:
+        results.append(Result("Codex", Status.SKIPPED, "--skip-codex", required=False))
+    if not args.skip_cursor_agent:
+        results.append(check_cursor_agent(args.timeout))
+    else:
+        results.append(Result("cursor-agent", Status.SKIPPED, "--skip-cursor-agent", required=False))
 
     if args.json_out:
         summary = [{"name": r.name, "status": r.status.value, "detail": r.detail, "required": r.required} for r in results]
