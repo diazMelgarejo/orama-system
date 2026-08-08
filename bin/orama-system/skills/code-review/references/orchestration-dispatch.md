@@ -9,7 +9,7 @@
 Do **not** warn the user if backends are missing. Degrade silently.
 
 | Priority | Backend | When |
-|----------|---------|------|
+| ---------- | --------- | ------ |
 | 1 | **OmniRoute** | `OMNIROUTE: running`/`started` — fan via OmniRoute MCP. ⚠ **Quarantined/disabled 2026-06-14** (config backed up to `~/claude-config-backups/`; see the `omniroute` sidecar skill) — skip to lower lanes until re-enabled. |
 | 2 | **ai-cli-mcp** | `run` per lens + `wait` / `get_result` |
 | 3 | **agy** | Non-interactive subagent dispatch — `agy -p "/goal …"` (multi-model). **Verified 2026-06-14. ⚠ gemini CLI DEAD 2026-06-19** (`IneligibleTierError` — Google deprecated Code Assist for individuals; use `agy` only). See § below. |
@@ -46,7 +46,7 @@ Then wait for all PIDs → get_result → merge
 **Model routing hints** (use what is installed; never block review):
 
 | Lens | Suggested backend |
-|------|-------------------|
+| ------ | ------------------- |
 | 1 Guidelines | `sonnet` / Claude |
 | 2 Shallow bugs | `gpt-*-codex` / Codex |
 | 3 Git history | Codex |
@@ -108,7 +108,7 @@ Run lenses 1→5 in one session with the code-reviewer persona. Slower but compl
 ## Anti-patterns
 
 | Anti-pattern | Why |
-|--------------|-----|
+| -------------- | ----- |
 | Parallel-fire gbrain + Grep + Read on whole repo | Token leak; violates chain |
 | Workers without `workFolder` | Wrong cwd / missed files |
 | Letting workers commit | Safety / review integrity |

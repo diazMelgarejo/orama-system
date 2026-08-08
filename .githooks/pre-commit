@@ -18,6 +18,15 @@ if [ -f "$ROOT/scripts/hooks/no_committed_lan_topology.py" ]; then
   python3 "$ROOT/scripts/hooks/no_committed_lan_topology.py" || exit 1
 fi
 
+# OSSF-1: canonical orama SKILL.md (bin/orama-system/ only) when staged.
+if [ -f "$ROOT/scripts/hooks/check_ossf1_skill_md.py" ]; then
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "ERROR: python3 required for OSSF-1 skill pre-commit gate" >&2
+    exit 1
+  fi
+  python3 "$ROOT/scripts/hooks/check_ossf1_skill_md.py" || exit 1
+fi
+
 # Canonical hygiene gate — the SAME check CI runs (scripts/review/repo_hygiene.py):
 # commit identity, forbidden tokens, workstation/personal paths, secrets, bidi
 # controls, markdown-link hygiene, etc. Running it here catches a leak BEFORE it

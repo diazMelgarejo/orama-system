@@ -106,6 +106,13 @@ def verify_commit_signature(root: Path, ref: str) -> tuple[bool, str]:
 
 
 def log_local(root: Path, ok: bool, reason: str) -> None:
+    # `reason` is always a short human-readable status string built from
+    # truncated commit SHAs (head_sha[:12]) and GPG *fingerprints* -- a
+    # fingerprint is the public identifier used to verify a signature, not
+    # a secret; no private key material or token ever flows through this
+    # function. Kept in .local/ (gitignored) rather than stdout/CI logs
+    # purely to keep routine CI output terse, not because the content is
+    # sensitive.
     path = root / ".local" / LOG_NAME
     path.parent.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(timezone.utc).isoformat()

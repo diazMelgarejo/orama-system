@@ -268,7 +268,8 @@ warn about, since there's nothing staged to reject.
    about to push, not from notes on what you resolved:
 
    ```bash
-   git diff <base>...<head> --stat | tail -1
+   base=origin/main head=HEAD
+   git diff "${base}...${head}" --stat | tail -1
    ```
 
    A near-empty diff when you're about to describe hundreds of resolved
@@ -513,6 +514,6 @@ rule `.cursor/rules/append-only-pr-body.mdc`, script
   against a sibling PR that might land first — see
   [`../../SECURITY.md`](../../SECURITY.md) § "Case study: append-only
   shared-file conflicts across independent PRs (2026-07-12)" for the
-  `git merge-tree --write-tree --merge-base=<base>` simulation technique
-  and the union-merge resolution used for `Perpetua-Tools` PRs
-  #205/#206/#208.
+  `git merge-tree --write-tree --merge-base="$BASE"` simulation technique
+  (set `BASE` to the shared merge-base SHA first) and the union-merge
+  resolution used for `Perpetua-Tools` PRs #205/#206/#208.

@@ -8,9 +8,15 @@ description: >
   "orphaned branch after rewrite", "re-anchor branch to main", "branches lost
   common ancestor", "recover deleted branch", "git history rewrite recovery",
   "byte-identical common ancestor", or "branches all became the same".
+  Activates when any of the above invoke-when phrases appear.
+version: 1.0.0
+compatibility: claude-code, cursor, codex, gemini, openclaw, hermes
+allowed-tools: bash, file-operations
 ---
 
 # Git History Surgery
+
+## Purpose
 
 One source of truth for dangerous git history operations. This skill replaces the
 former split between separate rewrite-scrub and branch-recovery skills.
@@ -25,6 +31,34 @@ Use it for two related jobs:
 Fail closed: preserve refs, prove the operation is necessary, and use
 `--force-with-lease` only after recording the expected remote SHA.
 
+## Boundaries
+
+### Always Do
+
+- Preserve refs (tags, backup branches, the PR vault) before any rewrite, and
+  record the expected remote SHA before any `--force-with-lease` push.
+- Classify SAFE-BEHIND vs NEEDS-REANCHOR with a tree-twin scan and a
+  landed-tree diff against `mergeCommit.oid` — see Decision Flow item 2 —
+  before syncing `main`.
+- Verify with `gh pr view N --json mergeCommit,state,mergedAt` (or
+  `git ls-remote`) before declaring any git action ("merged", "pushed")
+  complete — see Non-Negotiables below.
+
+### Ask First
+
+- Before flattening a branch to `origin/main` and destroying its distinct
+  branch identity — only proceed if the user explicitly asks for that outcome.
+- Before any history rewrite (scrub, `filter-repo`, force-push) on a shared
+  branch other than a disposable local one.
+
+### Never Do
+
+See the full [Non-Negotiables](#non-negotiables) list below — summarized:
+never paste a forbidden token anywhere, never force-push without a recorded
+lease target, never judge rewritten branches by ahead/behind or `merge-base`
+alone, and never declare a git action complete without querying the actual
+result.
+
 ## Windows PowerShell Bootstrap
 
 Before any `fetch`, `rebase`, `push`, scrub, or local verification on the Windows
@@ -37,8 +71,31 @@ LM Studio host, run
    Use the expunge reference, rotate any secret, and require fresh clones.
 2. Did a rewrite already happen and branches now look impossible to reason about?
    Use the re-anchor reference and tree-twin scan. Do not trust ahead/behind counts.
-3. Is this only a normal bad commit?
-   Do not perform history surgery. Use a normal PR or revert.
+   This includes your own local `main` before any fast-forward, merge, or reset —
+   see [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
+   § "ALWAYS check your own main before syncing it." Classify SAFE-BEHIND (a
+   confirmed tree twin, or a landed-tree diff against `mergeCommit.oid` that
+   actually matches — a commit-message match alone is candidate evidence
+   only and never sufficient by itself) vs NEEDS-REANCHOR (genuinely unique,
+   found nowhere) before syncing `main` at all.
+3. Is this only a normal bad commit? Or is a branch merely behind `main`
+   because `main` advanced normally (merged PRs, new commits) since the
+   branch was cut?
+   Do not perform history surgery. `merge-base --is-ancestor origin/main
+   HEAD` returning false is **not** automatic proof of a rewrite -- check
+   whether `origin/main` was actually rewritten (force-pushed, old SHAs
+   gone) or just fast-forwarded with new, ordinary merge commits
+   (`git log --oneline <old-merge-base>..origin/main` shows real, readable
+   commits, not a wholesale SHA replacement). If it's the latter, an open
+   PR branch showing large "behind" counts is normal and needs no
+   reanchor: `git fetch`, confirm `git log --oneline
+   HEAD..origin/<branch>` is empty (no concurrent push to *this* branch
+   specifically -- a separate check from `main` drift), then push the
+   branch's own new commit directly. Worked example: orama PR #290
+   (2026-08-08) showed 20 commits behind a since-advanced `origin/main`
+   (including a just-landed PR #291 merge); confirmed via `git log` this
+   was ordinary fast-forward growth, not a rewrite, and pushed without
+   reanchoring. Use a normal PR or revert for genuine bad commits.
 4. Did the scrub only rewrite metadata/messages while file blobs may also be
    contaminated?
    Treat metadata scrub, current-tree sanitization, PR-branch replay, and
@@ -109,6 +166,30 @@ LM Studio host, run
     a stray staging-temp-named file left behind, nothing signals it happened.
     Incident: orama PR #251 review 4830042706 (2026-07-31) — traced end to end
     with a real reproduction before writing the fix, not assumed.
+13. Recovering a stacked-PR-family branch after a sibling branch already
+    merged (e.g. via squash) into the shared upstream base?
+    Record an explicit upstream ref and a preserved safety ref first
+    (`git branch backup/<branch>-pre-rebase HEAD`), then try
+    `git rebase <upstream-base>` **before** reaching for manual
+    cherry-pick surgery or tree-twin re-anchoring. Git's patch-equivalence
+    detection recognizes when a commit's content already landed upstream
+    under a different SHA and auto-drops it, printing `dropping <sha> ...
+    -- patch contents already upstream`. That message means **one** commit
+    matched by patch ID — it is not proof the whole branch recovered.
+    After the rebase: inspect remaining commits (`git log` /
+    `git cherry -v <upstream-base> HEAD` — pass the recorded ref
+    explicitly; the bare form falls back to HEAD's tracked upstream,
+    which is not necessarily `<upstream-base>`), resolve any conflicts,
+    and re-run the relevant
+    tests before replacing a manual replay or re-anchor. This is the
+    lighter-weight companion to the tree-twin doctrine above
+    (§ Decision 2 / `reanchor-after-rewrite.md`): tree-twin re-anchoring is
+    for a branch whose *ancestor* was rewritten; patch-equivalence rebase is
+    for a branch whose *sibling* was independently merged while both were
+    still built on the same live base. Incident: PT vendor/agentic-stack
+    bump (2026-08-07) — recovering 3 stacked upstream PR branches after
+    sibling PR #60 (`fix/recall-supersession-filter`) had already merged;
+    `lesson_15aa463fd07c` in PT `.agent/memory`.
 
 ## Non-Negotiables
 
@@ -348,6 +429,11 @@ Reference: `bin/orama-system/references/skill-architecture-guide.md` § v2 Manda
   plus a granular per-file/per-commit triage (patch-id matching, scoping against a specific
   PR's merge commit, detecting structural supersession) for auditing branches/worktrees that
   look stale or divergent before deciding what to reanchor, discard, or replay.
+- Perpetua-Tools `perpetua-memory` skill § Resolving a live merge conflict — the sibling
+  discipline for `.agent/memory/**` conflicts specifically: no blanket ours/theirs judgment
+  (`lesson_005f2a16600d`), merge-tool duplicate-insertion artifacts (`lesson_05c055046864`),
+  and verifying a "clean" merge label the same way § Decision 13 above verifies a rebase's
+  "already upstream" drop.
 
 ## Post-Review Micro-Remediation
 

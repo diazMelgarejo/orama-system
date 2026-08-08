@@ -191,3 +191,6 @@ lance_memory.lance/
 
 # coverage.py data file
 .coverage
+
+# cursor-agent fan-out job artifacts (bin/orama-system/skills/cursor-agent/SKILL.md)
+.cursor-agent-artifacts/

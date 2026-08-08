@@ -5,7 +5,7 @@ description: >-
   fanning out light tasks in parallel alongside the main Sonnet 4.6 session.
   Cross-platform: macOS/Linux via bash installer, Windows via PowerShell.
   DO NOT confuse with `agent` (Grok Build TUI at ~/.grok/bin/agent) — different tool.
-version: 1.1.0
+version: 1.2.0
 license: Apache 2.0
 compatibility: darwin, linux, windows, orama-system, openclaw, hermes-harness
 parent_skill: orama-system
@@ -150,14 +150,17 @@ alongside the main orchestration session. Use `auto` as fallback when `composer-
 is unavailable.
 
 ```bash
-# Parallel single-turn jobs (background)
+# Parallel single-turn jobs (background) -- write to a repo-relative
+# artifact dir, not /tmp: Fan-out Safety § 2 below only permits verifying
+# repository-relative paths.
+mkdir -p .cursor-agent-artifacts
 cursor-agent --print --model composer-2.5 \
   "Add type annotations to scripts/discover.py; only functions, no variables" \
-  --output-format json > /tmp/task-a.json &
+  --output-format json > .cursor-agent-artifacts/task-a.json &
 
 cursor-agent --print --model gpt-5.3-codex-low \
   "Rename all snake_case variables in tests/test_foo.py to camelCase" \
-  --output-format json > /tmp/task-b.json &
+  --output-format json > .cursor-agent-artifacts/task-b.json &
 
 wait   # collect when done
 ```
@@ -175,6 +178,53 @@ wait   # collect when done
 
 **Budget note:** `cursor-agent` consumes Cursor credits (not Anthropic API tokens).
 Light tasks = `--model composer-2.5` (default) or `--model auto` (fallback) or `gpt-5.3-codex-low`.
+
+## Fan-out Safety
+
+Three practices proven across a multi-day cross-repo session running many
+concurrent cursor-agent/codex/Cline dispatches — apply all three whenever
+`wait`-collecting parallel jobs, not just when something visibly goes wrong:
+
+1. **File-disjoint clustering.** Before fanning out, partition tasks so no
+   two concurrent jobs write the same file or overlapping region of the
+   same file. Two agents editing the same file concurrently is not a "merge
+   it later" problem — it silently produces whichever write lands last, with
+   no conflict marker and no error, and the loser's fix simply disappears.
+   If two tasks genuinely must touch the same file, run them sequentially
+   (pipeline, not parallel) instead of trusting a post-hoc merge.
+2. **Verify self-reports, don't trust them.** A cursor-agent job's own
+   `--output-format json` summary ("done", "3 tests added", "fixed") is a
+   claim, not a result. After `wait`, re-check the actual artifact directly
+   — but only from **repository-owned, repository-relative** paths. Reject
+   absolute paths and any path containing `..`. `git ls-files
+   --error-unmatch` alone is not sufficient — it accepts tracked symlinks
+   that resolve outside the repo. Canonicalize each claimed path
+   (`realpath`) and require the resolved path to remain under
+   `$REPO_ROOT` before treating it as verified, in addition to checking it
+   with `git ls-files --error-unmatch -- <path>` (or confining reads to an
+   explicitly approved output directory under the repo) before `cat`,
+   `git diff`, or re-running tests on it. This mirrors the session-wide
+   discipline of verifying claims over labels (`lesson_70713965dc1b` in
+   Perpetua-Tools `.agent/memory` — originally about a merge tool's
+   "clean" label, the same principle applies to any subagent's own
+   completion report).
+3. **Concurrent-job-race awareness.** Two cursor-agent (or cursor-agent +
+   Cline/codex) jobs dispatched in the same fan-out round can both open a
+   PR, both edit the same lesson/config file, or both act on the same
+   GitHub issue within the same minute — seen repeatedly this session as
+   PR sprawl (a stacked PR merged by one run while another run opened a
+   duplicate against `main` for the identical fix). Before merging or
+   closing anything a fan-out job produced: `git fetch --prune`, then
+   `gh pr list --state all` (open alone misses siblings that already
+   merged or closed), and compare changed files + commits against every
+   sibling. Overlap is **blocking** — stop the merge/close and reconcile
+   through the merge protocol below; don't assume the dispatch list from
+   when you kicked off the round is still accurate.
+
+See [`../git-history-surgery/SKILL.md` § Multi-Agent Branch Merge](../git-history-surgery/SKILL.md)
+for the full simulate-before-touching protocol once two fanned-out branches
+need reconciling, and Perpetua-Tools `perpetua-memory` skill § Concurrent-agent
+collisions for the memory-file-specific version of practice 3.
 
 ## Worktree Isolation
 
@@ -194,17 +244,18 @@ In Stage 4 (Masterful Execution), dispatch mechanical subtasks as cursor-agent
 headless jobs while the main session handles judgment work:
 
 ```bash
-# Example Stage 4 parallel dispatch
+# Example Stage 4 parallel dispatch -- repo-relative artifact dir, see § Fan-out Safety
+mkdir -p .cursor-agent-artifacts
 _JOBS=()
 
 cursor-agent --print --model composer-2.5 \
   "Scan bin/ for TODO comments; output as JSON list" \
-  --output-format json > /tmp/todos.json &
+  --output-format json > .cursor-agent-artifacts/todos.json &
 _JOBS+=($!)
 
 cursor-agent --print --model gpt-5.3-codex-low \
   "Generate pytest stubs for every function in scripts/new_module.py" \
-  --trust > /tmp/test-stubs.py &
+  --trust > .cursor-agent-artifacts/test-stubs.py &
 _JOBS+=($!)
 
 # Main session does judgment work here ...
@@ -291,6 +342,9 @@ Scripts: `scripts/cursor/grant-pr-body-human-override.sh`, `scripts/cursor/appen
 - Platform affinity (when to use cursor-agent vs Hermes vs OpenClaw): [`../hermes-harness/references/platform-affinity-routing.md`](../hermes-harness/references/platform-affinity-routing.md)
 - orama-system Stage 4: [`../../../SKILL.md § MODE 2 Stage 4`](../../../SKILL.md)
 - Win PATH bootstrap: [`../hermes-harness/SKILL.md § Windows Bring-Up`](../hermes-harness/SKILL.md)
+- [`../git-history-surgery/SKILL.md`](../git-history-surgery/SKILL.md) § Multi-Agent Branch Merge —
+  reconciliation protocol once fanned-out branches need merging; § Decision Flow,
+  item 13 — patch-equivalence rebase recovery for a stacked fan-out family
 
 
 ## Optional: Interactive Provider Setup

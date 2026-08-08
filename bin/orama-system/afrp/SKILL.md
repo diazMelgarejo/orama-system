@@ -1,17 +1,29 @@
-﻿---
+---
 name: afrp
 description: Audience-First Response Protocol — mandatory pre-router gate. Classifies query type (A/B/C/D), declares scope, and calibrates abstraction level before any oramasys stage begins. Activates before generating any non-trivial output.
 version: 1.0.1
 license: Apache 2.0
 compatibility: claude-code, cowork, open, codex
 allowed-tools: bash, file-operations
+triggers:
+  - afrp
+  - audience first response
+  - query type classification
+  - mode router gate
+  - intent verification
 ---
 
 # Audience-First Response Protocol (AFRP)
 
 **Mandatory pre-router gate.** Run before any non-trivial output. Never skip.
 
----
+## Purpose
+
+Classify incoming queries on type and audience level before oramasys routing or execution.
+
+## When to Use
+
+Before generating Type B (analytical), C (implementation), or D (ambiguous) responses in orama-system workflows.
 
 ## The Gate
 

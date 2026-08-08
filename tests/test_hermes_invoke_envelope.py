@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -103,6 +104,11 @@ CORE_ENVELOPE_KEYS = frozenset({"skill_id", "args", "agent_id"})
 CANONICAL_RESULT_KEYS = frozenset(
     {
         "status",
+        "skill_id",
+        "agent_id",
+        "executor_id",
+        "command",
+        "action",
         "data",
         "files_modified",
         "follow_up_actions",
@@ -166,6 +172,8 @@ def validate_core_result(result: dict) -> list[str]:
     if err is not None:
         if "message" not in err:
             errors.append("error.message required when error is set")
+        if "code" not in err:
+            errors.append("error.code required when error is set")
     if status in ("partial", "needs_input", "blocked", "error") and not result.get("follow_up_actions"):
         errors.append("follow_up_actions required when status is partial/blocked/needs_input/error")
     if status == "ok" and err is not None:
@@ -252,9 +260,35 @@ def test_skill_md_links_protocol():
         / "SKILL.md"
     )
     text = skill.read_text(encoding="utf-8")
-    assert "hermes-universal-invocation-protocol.md" in text
-    assert "executor_id" in text
-    assert "transport" in text
+    links = re.findall(r"\[[^]]+\]\(([^)]+\.md)\)", text)
+    assert any(
+        target.endswith("hermes-universal-invocation-protocol.md")
+        for target in links
+    )
+
+    procedures_target = next(
+        target for target in links if target.endswith("ossf-operating-procedures.md")
+    )
+    procedures = (skill.parent / procedures_target).resolve()
+    assert procedures.is_file(), f"broken protocol link: {procedures_target}"
+
+    body = procedures.read_text(encoding="utf-8")
+    dispatch_match = re.search(
+        r"^### Dispatch envelope\b[^\n]*\n(?P<section>.*?)(?=^###\s|\Z)",
+        body,
+        re.M | re.S,
+    )
+    assert dispatch_match is not None, "missing Dispatch envelope subsection"
+
+    example_match = re.search(
+        r"```json\s*(?P<example>.*?)```",
+        dispatch_match.group("section"),
+        re.S,
+    )
+    assert example_match is not None, "missing Dispatch envelope JSON example"
+    example = example_match.group("example")
+    assert '"executor_id"' in example
+    assert '"transport"' in example
 
 
 def test_lesson_mining_command_optional_not_required():
@@ -272,3 +306,17 @@ def test_lesson_mining_command_optional_not_required():
     text = cmd.read_text(encoding="utf-8")
     assert "optional: true" in text
     assert "Perpetua-Tools is not a dependency" in text
+
+def test_missing_metadata_and_error_code_rejected():
+    bad = {
+        "status": "error",
+        # Missing skill_id, agent_id, executor_id, command, action
+        "data": {},
+        "files_modified": [],
+        "follow_up_actions": ["fix it"],
+        "warnings": [],
+        "error": {"message": "missing code"}
+    }
+    errors = validate_core_result(bad)
+    assert any("missing result keys" in e and "command" in e for e in errors)
+    assert any("error.code required" in e for e in errors)
