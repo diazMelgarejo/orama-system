@@ -312,7 +312,7 @@ main() {
         # doesn't interfere with JSON stdout parsing, for operator
         # visibility even in JSON/automation mode.
         echo "✅ Hermes started (pid $started_pid, session ${SESSION_ID})" >&2
-        emit_json_data "{\"pid\":${started_pid},\"session\":\"${SESSION_ID}\",\"log_file\":\"${log_escaped}\"}"
+        emit_json_data "{\"pid\":${started_pid},\"session\":\"${SESSION_ID}\",\"log_file\":${log_escaped}}"
       fi
       echo "✅ Hermes started (pid $started_pid, session ${SESSION_ID})"
       ;;
