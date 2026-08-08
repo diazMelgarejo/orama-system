@@ -17,4 +17,7 @@ description: >
 Canonical, permanent implementation: `../../../bin/orama-system/skills/git-history-surgery/`.
 **Read it before proceeding** — this wrapper only carries discovery metadata.
 
+Hooks during rewrite/expunge:
+[`../../../bin/orama-system/skills/git-history-surgery/references/history-surgery-hooks-safeguard-reference-card.md`](../../../bin/orama-system/skills/git-history-surgery/references/history-surgery-hooks-safeguard-reference-card.md).
+
 Pre-wrapper body preserved at `SKILL.md.premerge-20260722.bak`.

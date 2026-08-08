@@ -11,3 +11,6 @@ Canonical, permanent implementation: [`../../../bin/orama-system/skills/git-pend
 **Read it before proceeding** — this wrapper only carries discovery metadata.
 
 Reference card (full invariant): [`../../../bin/orama-system/skills/git-history-surgery/references/pending-operation-push-guard-reference-card.md`](../../../bin/orama-system/skills/git-history-surgery/references/pending-operation-push-guard-reference-card.md).
+
+**History surgery exception:** hooks off during rewrite/expunge — see
+[`history-surgery-hooks-safeguard-reference-card.md`](../../../bin/orama-system/skills/git-history-surgery/references/history-surgery-hooks-safeguard-reference-card.md).

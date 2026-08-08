@@ -25,7 +25,27 @@ touched a public remote.
 0. On Windows, run the runtime bootstrap in
    `../using-git-worktrees/SKILL.md#windows-powershell-runtime-bootstrap`.
 
-1. Disable live Cursor co-author injection before writing new commits:
+1. **Disable hooks for the surgery window** (mandatory — restore after publish):
+
+   ```bash
+   export HISTORY_SURGERY_ACTIVE=1
+   # All rewrite/push git commands in this session use hooks off, e.g.:
+   git -c core.hooksPath=/dev/null ...
+   # or: bash scripts/git/history-surgery-git.sh ...
+   ```
+
+   Hooks prevent bad *new* commits; during an active rewrite they false-block,
+   stall multi-branch force-push, and make expunge look hung. Re-enable immediately
+   after the last force-push + verification:
+
+   ```bash
+   unset HISTORY_SURGERY_ACTIVE
+   bash scripts/git/install-local-hooks.sh
+   ```
+
+   See [`history-surgery-hooks-safeguard-reference-card.md`](history-surgery-hooks-safeguard-reference-card.md).
+
+2. Disable live Cursor co-author injection before writing new commits:
 
    ```bash
    bash scripts/git/apply-attribution-guard-all-repos.sh
@@ -33,7 +53,7 @@ touched a public remote.
    bash scripts/git/commit-clean.sh -m "type(scope): summary"
    ```
 
-2. Identify every contaminated commit and SHA:
+3. Identify every contaminated commit and SHA:
 
    ```bash
    git log --all --format="%H %s%n%b" | grep -i "<token>"
@@ -47,7 +67,7 @@ touched a public remote.
    them into shell history. Read them from a local-only ignored pattern file and
    print only labels/counts in reports.
 
-3. Choose a strategy:
+4. Choose a strategy:
 
    | Scenario | Strategy |
    |---|---|
@@ -56,7 +76,7 @@ touched a public remote.
    | Secret in a single blob, message clean | `git filter-repo --replace-text` |
    | Final PR tree is correct, but intermediate PR commits contain contaminated blobs or conflict noise | Clean replacement PR from current `origin/main` |
 
-4. Ensure no in-flight work and tag the pre-scrub tip:
+5. Ensure no in-flight work and tag the pre-scrub tip:
 
    ```bash
    git fetch --all --prune
@@ -83,10 +103,10 @@ titles, bodies, commit messages, or shell history.
    # git filter-repo --message-callback 'return message.replace(b"<token>", b"")'
    ```
 
-3. Push with a lease:
+3. Push with a lease (hooks still off for the surgery window):
 
    ```bash
-   git push --force-with-lease origin <clean-branch>
+   git -c core.hooksPath=/dev/null push --force-with-lease origin <clean-branch>
    ```
 
 4. Open the PR with sanitized language only.
@@ -96,7 +116,7 @@ titles, bodies, commit messages, or shell history.
    ```bash
    git checkout main
    git reset --hard <merged-clean-tip-sha>
-   git push --force-with-lease origin main
+   git -c core.hooksPath=/dev/null push --force-with-lease origin main
    ```
 
 6. Delete contaminated remote branches:
@@ -255,6 +275,14 @@ titles, bodies, commit messages, or shell history.
 
 15. Confirm secret rotation, if applicable.
 
+16. **Re-enable hooks** (if not already done):
+
+   ```bash
+   unset HISTORY_SURGERY_ACTIVE
+   bash scripts/git/install-local-hooks.sh
+   git config --local --get core.hooksPath   # must print: .githooks
+   ```
+
 ## Clean Replacement PR
 
 Use this when a PR branch has the right final content but the branch's
@@ -338,6 +366,7 @@ Procedure:
 
 | Mistake | Symptom | Fix |
 |---|---|---|
+| Forgot to disable hooks during rewrite | Pre-push stalls or blocks every branch; `main` rejected under Phase 0 | `git -c core.hooksPath=/dev/null` for surgery window; restore hooks after |
 | Forgot `git reflog expire --expire=now --all` | Reachable commits are clean but `git log -g` still shows bad SHAs | Expire reflogs, then prune |
 | Forgot `git remote prune origin` | `git branch -ra` still lists contaminated refs | Prune remotes, then delete local refs |
 | Used `git pull` after rewrite | Bad objects resurrect locally | Fresh clone |
