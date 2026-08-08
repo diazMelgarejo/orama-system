@@ -91,6 +91,7 @@ is a full tree/stat diff against the actual `headRefOid`, not the assumed one.
   § "ALWAYS check your own main before syncing it — safe-behind vs needs-reanchor"
 - Decision Flow pointer: [`git-history-surgery/SKILL.md`](../bin/orama-system/skills/git-history-surgery/SKILL.md) item 2
 - Content believed lost: `scripts/hooks/check_ossf1_skill_md.py`,
+  `.githooks/pre-commit` (its wiring),
   `bin/orama-system/skills/hermes-harness/references/ossf-operating-procedures.md`,
   `.agents/skills/pt-orama-security-planner/SKILL.md`,
   `bin/orama-system/skills/hardware-affinity-gate/SKILL.md`,
@@ -98,6 +99,10 @@ is a full tree/stat diff against the actual `headRefOid`, not the assumed one.
   flagged for follow-up, no fix applied in this entry.**
 - PR: [#283](https://github.com/diazMelgarejo/orama-system/pull/283), merged
   `2026-08-08T02:52:18Z`, real head `73ba185c`.
+- **Update — 2026-08-08:** all six paths above restored by
+  [PR #291](https://github.com/diazMelgarejo/orama-system/pull/291). The
+  "not yet restored" note above is the original incident-time record and is
+  preserved as-is for history; this line records current status only.
 
 ---
 
