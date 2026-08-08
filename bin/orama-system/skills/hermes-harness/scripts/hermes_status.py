@@ -253,6 +253,9 @@ def build_status(
     if any(v == "error" for v in implemented.values()):
         top_status = "error"
         error = {"code": "hermes_status_subsystem_error", "message": "required subsystem check failed"}
+    elif subsystems.get("pt_root") == "degraded":
+        top_status = "error"
+        error = {"code": "hermes_status_pt_root_missing", "message": "PT root missing or failed to resolve"}
     elif any(v == "degraded" for v in implemented.values()):
         top_status = "partial"
         error = None
