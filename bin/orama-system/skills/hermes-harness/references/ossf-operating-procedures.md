@@ -300,6 +300,7 @@ Then let the installer validate the checkout:
 ```powershell
 $installer = Join-Path $env:TEMP "hermes-install.ps1"
 Invoke-WebRequest -Uri https://hermes-agent.nousresearch.com/install.ps1 -OutFile $installer
+Get-Content $installer | Select-Object -First 40   # eyeball it before running -- no published hash/signature to verify against instead
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer `
   -Stage repository -NonInteractive -Json -HermesHome $env:HERMES_HOME -InstallDir $target
 ```
@@ -307,8 +308,10 @@ Invoke-WebRequest -Uri https://hermes-agent.nousresearch.com/install.ps1 -OutFil
 This avoids piping into `Invoke-Expression` when the installer needs parameters.
 NousResearch does not publish a hash or Authenticode signature for this
 installer (confirmed against their docs and FAQ as of 2026-06-19) -- saving
-the script to a file first is the most practical integrity step actually
-available here, not a placeholder for a stronger check we skipped.
+the script to a file and inspecting it before running is the most practical
+integrity step actually available here, not a placeholder for a stronger
+check we skipped. If NousResearch later publishes a checksum or signature,
+verify against that instead of relying on inspection alone.
 
 ### 2. Configure Provider Defaults
 
