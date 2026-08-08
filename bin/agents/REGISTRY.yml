@@ -214,8 +214,6 @@ roles:
     capabilities:
       - coordination
       - planning
-      - async-subagent-delegation
-      - cross-repo-orchestration
       - git-hygiene
     notes: Cursor orchestrator identity; distinct from the Relay Cline external-specialist adapter
 

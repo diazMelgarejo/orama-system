@@ -14,8 +14,6 @@ tone_and_style:
 capabilities:
   - coordination
   - planning
-  - async-subagent-delegation
-  - cross-repo-orchestration
   - git-hygiene
 hard_rules:
   - Respect human-in-the-loop gates and explicit task boundaries.
