@@ -50,6 +50,19 @@ def sanitize_filename(name: str) -> str:
     return candidate
 
 
+def _resolve_within(root: Path, name: str) -> Path:
+    """Resolve `name` under `root`, verifying containment by resolved-path
+    prefix — defense in depth beyond sanitize_filename's character-class
+    check, and the pattern static analysis (CodeQL) recognizes as a real
+    path-traversal guard rather than relying solely on input validation."""
+    safe = sanitize_filename(name)
+    root_resolved = root.resolve()
+    candidate = (root_resolved / safe).resolve()
+    if not candidate.is_relative_to(root_resolved):
+        raise ValueError(f"unsafe path escapes root: {name!r}")
+    return candidate
+
+
 def _meta_path(path: Path) -> Path:
     return path.with_suffix(path.suffix + ".meta.json")
 
@@ -65,8 +78,8 @@ def write_inbox_file(
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Persist a peer assignment file + sidecar metadata."""
-    safe = sanitize_filename(filename)
-    dest = inbox_dir() / safe
+    dest = _resolve_within(inbox_dir(), filename)
+    safe = dest.name
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(body, encoding="utf-8")
     record = {
@@ -97,8 +110,8 @@ def write_outbox_file(
     error: str = "",
 ) -> dict[str, Any]:
     """Persist a peer assignment that could not yet be delivered."""
-    safe = sanitize_filename(filename)
-    dest = outbox_dir() / safe
+    dest = _resolve_within(outbox_dir(), filename)
+    safe = dest.name
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(body, encoding="utf-8")
     record = {
@@ -156,8 +169,8 @@ def list_outbox() -> list[dict[str, Any]]:
 
 
 def _read_file(root: Path, filename: str) -> tuple[str, dict[str, Any]]:
-    safe = sanitize_filename(filename)
-    path = root / safe
+    path = _resolve_within(root, filename)
+    safe = path.name
     if not path.is_file():
         raise FileNotFoundError(safe)
     body = path.read_text(encoding="utf-8")
@@ -180,8 +193,7 @@ def read_outbox_file(filename: str) -> tuple[str, dict[str, Any]]:
 
 
 def remove_outbox_file(filename: str) -> None:
-    safe = sanitize_filename(filename)
-    path = outbox_dir() / safe
+    path = _resolve_within(outbox_dir(), filename)
     meta_path = _meta_path(path)
     if path.is_file():
         path.unlink()
