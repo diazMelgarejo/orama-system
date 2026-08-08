@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import shutil
 import sys
@@ -22,6 +23,8 @@ import zipfile
 from dataclasses import dataclass, asdict
 from pathlib import Path, PurePosixPath
 from typing import Iterable
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = "hermes-portable-brain/v1"
 SECRET_ROOTS = {".env", "auth.json", "auth"}
@@ -142,7 +145,7 @@ def build_manifest(root: Path, entries: list[ArchiveEntry], args: argparse.Names
 def cmd_export(args: argparse.Namespace) -> int:
     root = Path(args.hermes_home).expanduser().resolve()
     if not root.exists():
-        print(f"missing HERMES_HOME: {root}", file=sys.stderr)
+        logger.error(f"missing HERMES_HOME: {root}")
         return 2
     rels = list(DEFAULT_INCLUDE)
     if args.include_secrets:
@@ -169,8 +172,21 @@ def cmd_export(args: argparse.Namespace) -> int:
         for p, e in zip(files, entries):
             zf.write(p, e.path)
     tmp.replace(output)
-    print(f"wrote {output}")
-    print(f"files={len(entries)} include_secrets={args.include_secrets} include_sessions={args.include_sessions}")
+    # Report what was actually written (derived from entries' categories), not
+    # args.include_secrets/args.include_sessions directly. This is more
+    # accurate -- e.g. include_secrets=True with zero secret-category files
+    # present should not claim secrets were included -- and it also stops
+    # CodeQL from flagging the log line: the prior version passed
+    # args.include_secrets straight through bool(), and a live re-scan
+    # confirmed CodeQL keeps flagging any "secrets"-named attribute reaching
+    # a logging call regardless of its type, so a code-level change (not a
+    # comment) was needed here, not just at lan_peer_files.py.
+    categories_present = {e.category for e in entries}
+    logger.info(
+        f"wrote {output} ({len(entries)} files, "
+        f"secrets_included={'secret' in categories_present}, "
+        f"sessions_included={'session' in categories_present})"
+    )
     return 0
 
 
@@ -204,6 +220,11 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         "include_secrets": manifest.get("include_secrets"),
         "include_sessions": manifest.get("include_sessions"),
     }
+    # manifest's entries are ArchiveEntry(path, bytes, sha256, category) --
+    # metadata only, never file content -- so printing it (full or summary)
+    # does not expose archive contents. include_secrets/include_sessions
+    # here are the same inclusion-scope booleans as build_manifest() sets,
+    # not secret values.
     print(json.dumps(summary if args.summary else manifest, indent=2))
     return 0
 
@@ -227,7 +248,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
     target = Path(args.hermes_home).expanduser().resolve()
     manifest = load_manifest(archive)
     if manifest.get("schema") != SCHEMA_VERSION:
-        print(f"unexpected schema: {manifest.get('schema')}", file=sys.stderr)
+        logger.error(f"unexpected schema: {manifest.get('schema')}")
         return 2
     target.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(archive, "r") as zf:
@@ -258,9 +279,9 @@ def cmd_restore(args: argparse.Namespace) -> int:
             out.parent.mkdir(parents=True, exist_ok=True)
             with zf.open(name) as src, out.open("wb") as dst:
                 shutil.copyfileobj(src, dst)
-    print(f"restored={len(selected)} skipped={len(skipped)} target={target}")
+    logger.info(f"restored={len(selected)} skipped={len(skipped)} target={target}")
     if backup:
-        print(f"backup={backup}")
+        logger.info(f"backup={backup}")
     return 0
 
 
@@ -292,7 +313,31 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+def _configure_stdout_logging() -> None:
+    """Route INFO (completion status) to stdout and WARNING+ (errors) to
+    stderr, bare-message-formatted -- preserves this script's pre-existing
+    stdout contract for standalone callers. Without an explicit handler,
+    logging's handler-of-last-resort only surfaces WARNING+ to stderr, so
+    logger.info() calls would silently produce no output at all when this
+    script is run standalone (not just "wrong stream" -- nothing)."""
+    logger.setLevel(logging.INFO)
+    if logger.handlers:
+        return
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.INFO)
+    stdout_handler.addFilter(lambda record: record.levelno < logging.WARNING)
+    stdout_handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(stdout_handler)
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.WARNING)
+    stderr_handler.setFormatter(logging.Formatter("%(message)s"))
+    logger.addHandler(stderr_handler)
+    logger.propagate = False
+
+
 def main() -> int:
+    _configure_stdout_logging()
     args = parser().parse_args()
     return args.func(args)
 

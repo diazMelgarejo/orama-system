@@ -1,9 +1,13 @@
 """Tests for lan_peer_files.py."""
 from __future__ import annotations
 
+import os
+from pathlib import Path
+
 import pytest
 
 from orama_system.lan_peer_files import (
+    _resolve_within,
     inbox_dir,
     list_inbox,
     list_outbox,
@@ -26,6 +30,25 @@ def inbox_root(monkeypatch, tmp_path):
 def test_sanitize_rejects_path_traversal():
     with pytest.raises(ValueError):
         sanitize_filename("../evil.md")
+
+
+@pytest.mark.unit
+def test_resolve_within_rejects_traversal_independent_of_sanitize_filename(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    with pytest.raises(ValueError):
+        _resolve_within(root, "../escape.md")
+
+
+@pytest.mark.unit
+def test_resolve_within_keeps_valid_name_inside_root(tmp_path: Path) -> None:
+    root = tmp_path / "root"
+    root.mkdir()
+    resolved = _resolve_within(root, "note.md")
+    assert str(resolved.parent) == os.path.normpath(str(root))
+    assert resolved.name == "note.md"
 
 
 def test_write_list_read_roundtrip(inbox_root):

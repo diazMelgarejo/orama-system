@@ -8,31 +8,96 @@ Before updating, relocating, or assuming only one exists, read:
 
 ## History-rewrite & branch re-anchor — MANDATORY before judging any branch
 
-**Applies to every AI agent in this repo — Claude, Codex, Cursor, CodeRabbit, Greptile, and any future agent.** This repo's `main` has been **rewritten** (squash-rebundle / expunge / force-push). After a rewrite every pre-rewrite commit keeps its content but gets a **new SHA**.
+**Applies to every AI agent in this repo — Claude, Codex, Cursor, CodeRabbit, Greptile, and any
+future agent.** This repo's `main` has been **rewritten** (squash-rebundle / expunge /
+force-push). After a rewrite every pre-rewrite commit keeps its content but gets a **new SHA**.
 
-- **NEVER** judge whether a branch is orphaned, behind, or divergent using `git rev-list --count`, ahead/behind, or `git merge-base`. Across a rewrite boundary these are SHA-graph proxies and are **provably meaningless** — a branch can read "N behind" while its tip is byte-identical to a commit already in `main`. If you ever see "N behind + identical content," **HALT** — that contradiction means a rewrite, not a healthy branch.
+- **NEVER** judge whether a branch is orphaned, behind, or divergent using `git rev-list --count`,
+  ahead/behind, or `git merge-base`. Across a rewrite boundary these are SHA-graph proxies and are
+  **provably meaningless** — a branch can read "N behind" while its tip is byte-identical to a
+  commit already in `main`. If you ever see "N behind + identical content," **HALT** — that
+  contradiction means a rewrite, not a healthy branch.
 - **ALWAYS** use the **tree-twin** test (`%T` match) via the canonical tool:
+
   ```bash
   scripts/git/reanchor_scan.sh <repo_path> origin/main [remotes|heads|all]
-  git cherry -v origin/main <branch_tip> <branch_base>   # + = missing from main, - = already in main
+  # <branch_tip> is git-cherry's <head>. The third argument is <limit>, NOT a
+  # second branch to compare against -- it bounds how far back into
+  # <branch_tip>'s own history to enumerate (e.g. a known twin/merge-base you
+  # don't need to re-walk past), it does not diff two branches against each
+  # other. Omit it to walk <branch_tip>'s full history back to root.
+  git cherry -v origin/main <branch_tip> [<limit>]   # + = missing from main, - = already in main
   ```
-- Method + worked examples: [`bin/orama-system/skills/git-history-surgery/SKILL.md`](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md) § B5. Why this keeps recurring and how we make it stick: [`docs/LESSONS.md` § 2026-06-05](https://github.com/diazMelgarejo/orama-system/blob/main/docs/LESSONS.md#2026-06-05) · failure catalog [`bin/orama-system/afrp/failure-modes.md` § Failure Mode 7](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/afrp/failure-modes.md).
-- **Rebasing/force-updating/reviving a remote branch requires explicit current-user authorization** (see § Security PR stacking). Always preserve old tips (vault `refs/pull/*/head` + `backup/*` tags) before any force-push.
-- Companion repo with the same protocol: [Perpetua-Tools `AGENTS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/AGENTS.md). **periscope is excluded** — its `main`/`agentsview` are pure upstream mirrors, never rewritten by us.
+
+- Method + worked examples:
+  [`bin/orama-system/skills/git-history-surgery/SKILL.md`](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md)
+  § B5. Why this keeps recurring and how we make it stick:
+  [`docs/LESSONS.md` § 2026-06-05](https://github.com/diazMelgarejo/orama-system/blob/main/docs/LESSONS.md#2026-06-05)
+  · failure catalog
+  [`bin/orama-system/afrp/failure-modes.md` § Failure Mode 7](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/afrp/failure-modes.md).
+- **Rebasing/force-updating/reviving a remote branch requires explicit current-user
+  authorization** (see § Security PR stacking). Always preserve old tips (vault
+  `refs/pull/*/head` + `backup/*` tags) before any force-push.
+- Companion repo with the same protocol:
+  [Perpetua-Tools `AGENTS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/AGENTS.md).
+  **periscope is excluded** — its `main`/`agentsview` are pure upstream mirrors, never rewritten by
+  us.
+
+## "Orchestrator" vs "Coordinator" — do not silently rename relay-cursor
+
+**Applies to every AI agent in this repo, especially automated review-fix passes
+(CodeRabbit, cursor-agent, or otherwise).** `orchestrator` is the only public
+control-plane term across both orama-system and Perpetua-Tools — see
+[Unified Plan § 1](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable).
+That rule has an explicit, documented carve-out: `relay-cursor`
+(`bin/agents/REGISTRY.yml`, `soul_id: adapter.cursor-coordinator`) is a
+genuinely distinct, narrower-scoped agent persona — it does not own job
+queue/dispatch/worker lifecycle — and is allowed to say "Coordinator." Its
+identity fields (`REGISTRY.yml`, `personas/relay-cursor.yaml`,
+`relay-cursor/SOUL.md`, `relay-cursor/agent.md`) are meant to keep saying
+"coordinator," not get swept up by a literal reading of the orchestrator-only
+rule.
+
+**This has already happened once.** Commit `e2bc041c`/`6c38ac11` (2026-08-08,
+PR #290) renamed relay-cursor's identity from coordinator to orchestrator
+across all four files, re-applying an old CodeRabbit suggestion the rule was
+specifically written to reject — see the scope note in Unified Plan § 1 for
+the full incident. Fixed in `fc7a4efc`. **Before accepting any automated fix
+that touches `bin/agents/relay-cursor/` or its REGISTRY.yml entry, check
+whether it's renaming coordinator → orchestrator there — if so, that's the
+banned pattern this note exists to catch, not a valid fix.** Full trace
+(timeline, right/wrong/fix SHAs, root-cause analysis of why the detection
+sweep in Unified Plan § 2 didn't catch it) — PT working memory:
+[`COORDINATOR_ORCHESTRATOR_REGRESSION_2026-08-08.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/COORDINATOR_ORCHESTRATOR_REGRESSION_2026-08-08.md).
 
 ## Attribution guards: single source of truth — ZERO fragmentation
 
-**Applies to every agent.** The attribution/identity guard scripts are **canonical in orama `scripts/git/`** and **byte-identical in every repo**: `audit_attribution.sh`, `banned_attribution_lib.sh`, `check_commit_message.sh`, `check_identity.sh`, `daily-attribution-guard.sh` (+ `neutralize-cursor-coauthor-hook.sh`, `expunge-all-workspace-repos.sh`, `verify-git-guards.sh`).
+**Applies to every agent.** The attribution/identity guard scripts are **canonical in orama
+`scripts/git/`** and **byte-identical in every repo**: `audit_attribution.sh`,
+`banned_attribution_lib.sh`, `check_commit_message.sh`, `check_identity.sh`,
+`daily-attribution-guard.sh` (+ `neutralize-cursor-coauthor-hook.sh`,
+`expunge-all-workspace-repos.sh`, `verify-git-guards.sh`).
 
-- **NEVER hand-edit a guard script in a downstream repo.** Forks drift silently — a stale copy once made PT's strict `pre-push` reject the mainstream-AI co-authors (`coderabbitai`, `dependabot`, `anthropic.com`) that orama's allowlist already permits, blocking valid pushes.
-- To change policy: edit orama's canonical copy, then redistribute — `bash scripts/git/sync-attribution-guard-scripts.sh <target-repo>`. The sync copies all guards; `check_commit_message.sh` + `check_identity.sh` are now in that list (they were the silent gap).
-- `daily-attribution-guard.sh` is **self-contained** (derives its own `REPO_ROOT`, scans the whole workspace) — never a thin wrapper to another repo (a wrapper hardcodes a path and execs itself ⇒ infinite recursion).
-- **Mainstream AI models / autonomous agents are allowed** as author and `Co-authored-by` (Codex, Cursor, CodeRabbit, Claude, Mistral, DeepSeek, …). The only hard ban is the VERBOTEN pattern in the gitignored private lib.
-- Org-wide governance so future `oramasys/*` repos inherit identical hooks with zero drift: [`docs/v2/`](https://github.com/diazMelgarejo/orama-system/tree/main/docs/v2).
+- **NEVER hand-edit a guard script in a downstream repo.** Forks drift silently — a stale copy
+  once made PT's strict `pre-push` reject the mainstream-AI co-authors (`coderabbitai`,
+  `dependabot`, `anthropic.com`) that orama's allowlist already permits, blocking valid pushes.
+- To change policy: edit orama's canonical copy, then redistribute —
+  `bash scripts/git/sync-attribution-guard-scripts.sh <target-repo>`. The sync copies all guards;
+  `check_commit_message.sh` + `check_identity.sh` are now in that list (they were the silent gap).
+- `daily-attribution-guard.sh` is **self-contained** (derives its own `REPO_ROOT`, scans the whole
+  workspace) — never a thin wrapper to another repo (a wrapper hardcodes a path and execs itself ⇒
+  infinite recursion).
+- **Mainstream AI models / autonomous agents are allowed** as author and `Co-authored-by` (Codex,
+  Cursor, CodeRabbit, Claude, Mistral, DeepSeek, …). The only hard ban is the VERBOTEN pattern in
+  the gitignored private lib.
+- Org-wide governance so future `oramasys/*` repos inherit identical hooks with zero drift:
+  [`docs/v2/`](https://github.com/diazMelgarejo/orama-system/tree/main/docs/v2).
 
 ## Cursor Cloud: git commits
 
-Cloud agents set `CURSOR_AGENT=1` and redirect `core.hookspath` to `~/.cursor/agent-hooks/…`, which can append unwanted `Co-authored-by` trailers. **`CURSOR_AGENT=0` is not supported** and does not disable this.
+Cloud agents set `CURSOR_AGENT=1` and redirect `core.hookspath` to `~/.cursor/agent-hooks/…`,
+which can append unwanted `Co-authored-by` trailers. **`CURSOR_AGENT=0` is not supported** and
+does not disable this.
 
 ### On every cloud session (all OpenClaw repos)
 
@@ -59,21 +124,40 @@ Confirm before push: `git show --stat --oneline HEAD`
 - `Perpetua-Tools` (`$PERPETUA_TOOLS_PATH` or `$OPENCLAW_HOME/Perpetua-Tools`)
 - `AlphaClaw` (`$ALPHACLAW_INSTALL_DIR` or `$OPENCLAW_HOME/AlphaClaw`)
 
-**AlphaClaw fork:** `main` = upstream mirror. `pr-4-macos` = upstream [PR #63](https://github.com/chrysb/alphaclaw/pull/63) — cherry-pick down from `feature/MacOS-post-install`; **never** FF integration onto it. Integration: `feature/MacOS-post-install`. Contrib: `cursor/sync-attribution-guards-6421` → PR into integration. `alphaclaw-align-all.sh` does not touch `pr-4-macos`. See `docs/wiki/13-alphaclaw-fork-contrib-branches.md` and AlphaClaw `docs/wiki/01-branch-roles.md`.
+**AlphaClaw fork:** `main` = upstream mirror. `pr-4-macos` = upstream
+[PR #63](https://github.com/chrysb/alphaclaw/pull/63) — cherry-pick down from
+`feature/MacOS-post-install`; **never** FF integration onto it. Integration:
+`feature/MacOS-post-install`. Contrib: `cursor/sync-attribution-guards-6421` → PR into
+integration. `alphaclaw-align-all.sh` does not touch `pr-4-macos`. See
+`docs/wiki/13-alphaclaw-fork-contrib-branches.md` and AlphaClaw `docs/wiki/01-branch-roles.md`.
 
 See `docs/wiki/12-cursor-cloud-commit-attribution.md`.
 
 ## Endpoint transport policy — Perpetua peer contract
 
-**Applies when touching OpenClaw-generated model endpoints, gateway/proxy endpoint wiring, active_tilting references, SSRF policy, LAN discovery guidance, or cross-repo routing docs.**
+**Applies when touching OpenClaw-generated model endpoints, gateway/proxy endpoint wiring,
+active_tilting references, SSRF policy, LAN discovery guidance, or cross-repo routing docs.**
 
-- **Canonical implementation:** Perpetua-Tools owns `src/utils/endpoint_policy_core.py` and `.agent/endpoint-policy-contract.yml` on `main`.
-- **Peer contract:** orama-system owns `.agent/endpoint-policy-contract.yml`, `scripts/security/check_endpoint_policy_contract.py`, and `.github/workflows/endpoint-policy-contract.yml` on `main`.
-- **Transport identity:** endpoint identity is `scheme + hostname + backend-specific port`; preserve discovered `http`/`https` scheme first, normalize host second, then route by backend-specific port.
-- **Do not fork implementation:** if orama needs Python endpoint reconstruction logic, sync the contract with Perpetua first instead of inventing a second parser.
-- **Existing skills to load:** use `bin/orama-system/skills/oramasys-method/SKILL.md` for architecture-heavy changes, `bin/orama-system/skills/oramasys-method/references/integrative-merge.md` for cross-branch/repo synthesis, and `bin/orama-system/skills/git-history-surgery/SKILL.md` before judging rewritten branch state. Before push after merge/cherry-pick/revert work, load `bin/orama-system/skills/git-pending-push-guard/SKILL.md` (KB exits 1–4; reference card under `git-history-surgery/references/pending-operation-push-guard-reference-card.md`).
-- **Security policy:** read `docs/SECURITY-POLICY.md` (redirects to `SECURITY.md`) before endpoint-security remediation PRs.
-- **Validation:** run `python scripts/security/check_endpoint_policy_contract.py` before merging endpoint-policy or routing-guidance changes.
+- **Canonical implementation:** Perpetua-Tools owns `src/utils/endpoint_policy_core.py` and
+  `config/endpoint-policy-contract.yml` on `main`.
+- **Peer contract:** orama-system owns `config/endpoint-policy-contract.yml`,
+  `scripts/security/check_endpoint_policy_contract.py`, and
+  `.github/workflows/endpoint-policy-contract.yml` on `main`.
+- **Transport identity:** endpoint identity is `scheme + hostname + backend-specific port`;
+  preserve discovered `http`/`https` scheme first, normalize host second, then route by
+  backend-specific port.
+- **Do not fork implementation:** if orama needs Python endpoint reconstruction logic, sync the
+  contract with Perpetua first instead of inventing a second parser.
+- **Existing skills to load:** use `bin/orama-system/skills/oramasys-method/SKILL.md` for
+  architecture-heavy changes, `bin/orama-system/skills/oramasys-method/references/integrative-merge.md`
+  for cross-branch/repo synthesis, and `bin/orama-system/skills/git-history-surgery/SKILL.md`
+  before judging rewritten branch state. Before push after merge/cherry-pick/revert work, load
+  `bin/orama-system/skills/git-pending-push-guard/SKILL.md` (KB exits 1–4; reference card under
+  `git-history-surgery/references/pending-operation-push-guard-reference-card.md`).
+- **Security policy:** read `docs/SECURITY-POLICY.md` (redirects to `SECURITY.md`) before
+  endpoint-security remediation PRs.
+- **Validation:** run `python scripts/security/check_endpoint_policy_contract.py` before merging
+  endpoint-policy or routing-guidance changes.
 
 ## Prime directives for agent-maintained records
 

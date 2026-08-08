@@ -103,7 +103,7 @@ def check_pt_root(repo_root: Path) -> tuple[str, dict[str, Any]]:
     )
     if rc == 0 and out:
         return "ok", {"path": out.splitlines()[-1]}
-    return "error", {"detail": err or out or "PT root not resolved"}
+    return "degraded", {"detail": err or out or "PT root not resolved"}
 
 
 def check_spawn_session(repo_root: Path) -> tuple[str, dict[str, Any]]:
@@ -159,10 +159,6 @@ def check_partner_canaries(
         sys.executable,
         str(script),
         "--json",
-        "--skip-hermes",
-        "--skip-agy",
-        "--skip-codex",
-        "--skip-cursor-agent",
         "--timeout",
         str(canary_timeout),
     ]
@@ -257,6 +253,9 @@ def build_status(
     if any(v == "error" for v in implemented.values()):
         top_status = "error"
         error = {"code": "hermes_status_subsystem_error", "message": "required subsystem check failed"}
+    elif subsystems.get("pt_root") == "degraded":
+        top_status = "error"
+        error = {"code": "hermes_status_pt_root_missing", "message": "PT root missing or failed to resolve"}
     elif any(v == "degraded" for v in implemented.values()):
         top_status = "partial"
         error = None

@@ -6,12 +6,7 @@ set -euo pipefail
 # json_escape escapes backslashes, double quotes, and control characters in a string for JSON output.
 json_escape() {
   local s="${1:-}"
-  s=${s//\\/\\\\}
-  s=${s//\"/\\\"}
-  s=${s//$'\n'/\\n}
-  s=${s//$'\r'/\\r}
-  s=${s//$'\t'/\\t}
-  printf '%s' "$s"
+  jq -Rn --arg s "$s" '$s'
 }
 
 # log writes a prefixed message to standard error.
@@ -58,12 +53,15 @@ def load_obj(raw, default):
         return default
     try:
         value = json.loads(raw)
-    except json.JSONDecodeError:
-        return default
-    if isinstance(default, dict):
-        return value if isinstance(value, dict) else default
-    if isinstance(default, list):
-        return value if isinstance(value, list) else default
+    except json.JSONDecodeError as exc:
+        print(f"invalid JSON payload for envelope field: {exc}", file=sys.stderr)
+        sys.exit(1)
+    if isinstance(default, dict) and not isinstance(value, dict):
+        print(f"invalid JSON payload for envelope field: expected dict, got {type(value).__name__}", file=sys.stderr)
+        sys.exit(1)
+    if isinstance(default, list) and not isinstance(value, list):
+        print(f"invalid JSON payload for envelope field: expected list, got {type(value).__name__}", file=sys.stderr)
+        sys.exit(1)
     return value
 
 def load_error(raw):
@@ -123,7 +121,7 @@ hermes_result_error() {
   local msg_escaped
   msg_escaped="$(json_escape "$message")"
   local err_obj
-  err_obj="$(printf '{"code":"%s","message":"%s"}' "$(json_escape "$code")" "$msg_escaped")"
+  err_obj="$(printf '{"code":%s,"message":%s}' "$(json_escape "$code")" "$msg_escaped")"
   _emit_result "error" "$skill_id" "$command" "$action" "{}" "[]" "$follow_up" "[]" "$err_obj"
   exit 1
 }
@@ -138,7 +136,7 @@ hermes_result_blocked() {
   local msg_escaped
   msg_escaped="$(json_escape "$message")"
   local err_obj
-  err_obj="$(printf '{"code":"%s","message":"%s"}' "$(json_escape "${command}_blocked")" "$msg_escaped")"
+  err_obj="$(printf '{"code":%s,"message":%s}' "$(json_escape "${command}_blocked")" "$msg_escaped")"
   _emit_result "blocked" "$skill_id" "$command" "$action" "{}" "[]" "$follow_up" "[]" "$err_obj"
   exit 1
 }

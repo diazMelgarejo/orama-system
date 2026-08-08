@@ -32,6 +32,13 @@
 
 ### Phase 1 — Root-cause clustering
 
+- **Read every finding and open every file it touches before editing
+  anything.** Build an explicit file → fix mapping (a table is fine) from
+  the full set of findings first. Editing as you read produces partial,
+  un-cross-referenced fixes and risks touching the same file twice across
+  separate passes. Edit each file exactly once with everything it needs,
+  not incrementally. Only after every fix is known and every file has been
+  edited once do you move to Phase 2's commit-in-batches step.
 - Group review comments by underlying invariant (encoding, persistence,
   concurrency, lifecycle, security, etc.) — not by file or by comment order.
 - Fix the abstraction once instead of applying isolated per-comment patches.
@@ -217,6 +224,16 @@ a status field or a first glance is accurate):
   and touched independently, and a finding on one doesn't retroactively
   audit the other. Check every path a review's finding is adjacent to,
   not only the one line it cited.
+- A stale or invalid `GITHUB_TOKEN` environment variable silently shadows
+  a valid `gh`-stored (keyring) credential for both `gh` CLI calls and
+  git's own HTTPS credential helper — `git push` (and `gh pr view`, etc.)
+  fails with "Invalid username or token" even though a keyring account is
+  healthy, because the env var wins. Run `gh auth status` first; if it
+  reports the env-var token invalid while a keyring account shows as
+  logged in, prefix the specific command with `env -u GITHUB_TOKEN`
+  rather than unsetting the var globally (it may be intentionally set for
+  another tool in the same shell). Hit twice in one session (2026-08-08)
+  before this was written down.
 
 ### Phase 5 — Closure
 
@@ -236,6 +253,20 @@ only ones touching files with a sibling copy elsewhere.
   side you were reviewing — if it matches, the same bug is almost
   certainly present there too, whether or not a review caught it on
   that side.
+- **"Sibling copy" also includes documented mirror-image implementations,
+  not only byte-identical shared files.** Some cross-repo pairs implement
+  the *same contract* independently on each side rather than sharing a
+  literal file (e.g. orama's `resolve_perp_harness.sh::resolve_pt_root`
+  and Perpetua-Tools' `resolve_orama_root.sh::resolve_orama_root` —
+  explicitly documented as mirror images of each other: different
+  variable names, same cache-then-override-then-crawl structure). A plain
+  `diff` shows no match here. Read the mirror's logic structurally (same
+  cache-hit-returns-early shape, same fail-closed override branch)
+  instead of relying on textual similarity to decide whether the same bug
+  is present. Worked example: PT PR #340's `resolve_orama_root`
+  stale-cache-return bug → confirmed the identical structural flaw in
+  orama PR #290's `resolve_pt_root`; fixed as a companion commit on each
+  repo's own open PR, 2026-08-08.
 - **Verify before assuming identical content means an identical fix
   applies.** Confirm the sibling's pre-fix state actually matches (or
   is close enough that the same patch is correct) before copying a fix

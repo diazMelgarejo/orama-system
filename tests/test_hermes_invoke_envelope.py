@@ -104,6 +104,11 @@ CORE_ENVELOPE_KEYS = frozenset({"skill_id", "args", "agent_id"})
 CANONICAL_RESULT_KEYS = frozenset(
     {
         "status",
+        "skill_id",
+        "agent_id",
+        "executor_id",
+        "command",
+        "action",
         "data",
         "files_modified",
         "follow_up_actions",
@@ -167,6 +172,8 @@ def validate_core_result(result: dict) -> list[str]:
     if err is not None:
         if "message" not in err:
             errors.append("error.message required when error is set")
+        if "code" not in err:
+            errors.append("error.code required when error is set")
     if status in ("partial", "needs_input", "blocked", "error") and not result.get("follow_up_actions"):
         errors.append("follow_up_actions required when status is partial/blocked/needs_input/error")
     if status == "ok" and err is not None:
@@ -299,3 +306,17 @@ def test_lesson_mining_command_optional_not_required():
     text = cmd.read_text(encoding="utf-8")
     assert "optional: true" in text
     assert "Perpetua-Tools is not a dependency" in text
+
+def test_missing_metadata_and_error_code_rejected():
+    bad = {
+        "status": "error",
+        # Missing skill_id, agent_id, executor_id, command, action
+        "data": {},
+        "files_modified": [],
+        "follow_up_actions": ["fix it"],
+        "warnings": [],
+        "error": {"message": "missing code"}
+    }
+    errors = validate_core_result(bad)
+    assert any("missing result keys" in e and "command" in e for e in errors)
+    assert any("error.code required" in e for e in errors)
