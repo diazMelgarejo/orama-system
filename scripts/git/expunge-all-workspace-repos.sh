@@ -26,16 +26,15 @@ scan_repo_hits() {
   local repo="$1"
   # shellcheck source=banned_attribution_lib.sh
   source "$PT_ROOT/scripts/git/banned_attribution_lib.sh"
-  local hits=0 h line line_lc
+  local hits=0 h ae_lc an_lc ce_lc cn_lc body_lc
   while IFS= read -r h; do
-    while IFS= read -r line; do
-      line_lc="$(printf '%s' "$line" | tr '[:upper:]' '[:lower:]')"
-      case "$line_lc" in
-        co-authored-by:*)
-          line_matches_banned_pattern "$line_lc" "$repo" && hits=$((hits + 1))
-          ;;
-      esac
-    done < <(git -C "$repo" log -1 --format=%B "$h")
+    ae_lc="$(git -C "$repo" log -1 --format=%ae "$h" | tr '[:upper:]' '[:lower:]')"
+    an_lc="$(git -C "$repo" log -1 --format=%an "$h" | tr '[:upper:]' '[:lower:]')"
+    ce_lc="$(git -C "$repo" log -1 --format=%ce "$h" | tr '[:upper:]' '[:lower:]')"
+    cn_lc="$(git -C "$repo" log -1 --format=%cn "$h" | tr '[:upper:]' '[:lower:]')"
+    body_lc="$(git -C "$repo" log -1 --format=%B "$h" | tr '[:upper:]' '[:lower:]')"
+    metadata_contains_scrub_target "$ae_lc" "$an_lc" "$ce_lc" "$cn_lc" "$body_lc" "$repo" \
+      && hits=$((hits + 1))
   done < <(git -C "$repo" rev-list --all 2>/dev/null)
   printf '%s' "$hits"
 }
@@ -65,7 +64,7 @@ expunge_repo() {
 
   local before after
   before="$(scan_repo_hits "$repo")"
-  echo ">>> [$name] banned co-author hits before expunge: $before"
+  echo ">>> [$name] banned metadata hits before expunge: $before"
   if [[ "$before" -eq 0 ]]; then
     echo ">>> [$name] clean — skip history rewrite and force-push"
     return 0
@@ -85,9 +84,9 @@ expunge_repo() {
   fi
 
   after="$(scan_repo_hits "$repo")"
-  echo ">>> [$name] banned co-author hits after expunge: $after"
+  echo ">>> [$name] banned metadata hits after expunge: $after"
   if [[ "$after" -ne 0 ]]; then
-    echo "ERROR: [$name] still has banned trailers after expunge" >&2
+    echo "ERROR: [$name] still has banned attribution metadata after expunge" >&2
     return 1
   fi
 
