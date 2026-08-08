@@ -38,6 +38,11 @@ def test_has_list_key_rejects_quoted_scalar_triggers_value() -> None:
 
 
 @pytest.mark.unit
+def test_has_list_key_rejects_dash_prefixed_scalar_triggers_value() -> None:
+    assert cosm.has_list_key({"triggers": "-foo"}, "triggers") is False
+
+
+@pytest.mark.unit
 def test_has_list_key_accepts_real_yaml_list() -> None:
     fm = {"triggers": "- mcp orchestration\n  - claude mcp setup"}
     assert cosm.has_list_key(fm, "triggers") is True
@@ -121,6 +126,21 @@ def test_validate_flags_missing_boundary_subsection_defined_elsewhere() -> None:
             "### Never Do\n\n- Never do Y.\n\n"
             "## Unrelated Section\n\n"
             "### Always Do\n\n- Not actually under Boundaries.\n"
+        )
+    )
+    errors = _validate_in_repo(repo)
+    assert any("### Always Do" in e for e in errors)
+
+
+@pytest.mark.integration
+def test_validate_rejects_boundary_subsection_mentioned_only_in_prose() -> None:
+    """A heading-looking token embedded in prose is not a subsection heading."""
+    repo = _init_test_repo_with_skill(
+        boundaries_and_after=(
+            "## Boundaries\n\n"
+            "The text `### Always Do` appears in an inline code example.\n\n"
+            "### Ask First\n\n- Ask first about X.\n\n"
+            "### Never Do\n\n- Never do Y.\n"
         )
     )
     errors = _validate_in_repo(repo)

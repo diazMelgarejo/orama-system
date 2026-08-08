@@ -85,17 +85,17 @@ def has_list_key(fm: dict[str, str], key: str) -> bool:
 
     This hand-rolled frontmatter parser stores a block-style YAML list
     (`key:\\n  - item`) as its joined item lines, which always begins with a
-    "-" sequence marker once the leading indentation of the first line is
-    stripped. A scalar value (e.g. `triggers: foo` or `triggers: "foo"`) has
-    no such marker and must be rejected -- it is not a list, regardless of
-    whether it happens to be non-empty.
+    "- " sequence marker once the leading indentation of the first line is
+    stripped. A scalar value (e.g. `triggers: foo`, `triggers: "foo"`, or
+    `triggers: -foo`) has no such marker and must be rejected -- it is not a
+    list, regardless of whether it happens to be non-empty.
     """
     if key not in fm:
         return False
     val = fm[key].strip()
     if not val or val in ("[]", "{}"):
         return False
-    return val.startswith("-")
+    return val.startswith("- ")
 
 
 def validate(rel: Path) -> list[str]:
@@ -136,8 +136,10 @@ def validate(rel: Path) -> list[str]:
         errors.append(f"{rel}: missing ## Boundaries section")
     else:
         section = boundaries_match.group(0)
-        for sub in ("### Always Do", "### Ask First", "### Never Do"):
-            if sub not in section:
+        for subsection in ("Always Do", "Ask First", "Never Do"):
+            sub = f"### {subsection}"
+            heading_re = rf"^###[ \t]+{re.escape(subsection)}[ \t]*$"
+            if not re.search(heading_re, section, re.M):
                 errors.append(f"{rel}: missing {sub} under Boundaries")
 
     if not re.search(r"^##\s+(Purpose|When to Use)\b", body, re.M):
