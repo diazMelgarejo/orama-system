@@ -295,23 +295,33 @@ if (Test-Path "$target\.git") {
 }
 ```
 
-Then let the installer validate the checkout:
+Then let the installer validate the checkout — only after a pinned digest
+check. Do **not** execute a floating remote installer on visual inspection
+alone:
 
 ```powershell
 $installer = Join-Path $env:TEMP "hermes-install.ps1"
+$expected = $env:HERMES_INSTALL_PS1_SHA256
+if (-not $expected) {
+  throw "Refusing mutable remote installer: set HERMES_INSTALL_PS1_SHA256 to a vendor-published or operator-pinned SHA-256 digest first."
+}
 Invoke-WebRequest -Uri https://hermes-agent.nousresearch.com/install.ps1 -OutFile $installer
-Get-Content $installer | Select-Object -First 40   # eyeball it before running -- no published hash/signature to verify against instead
+$actual = (Get-FileHash -Algorithm SHA256 -Path $installer).Hash.ToLowerInvariant()
+if ($actual -ne $expected.ToLowerInvariant()) {
+  throw "Hermes installer digest mismatch: expected $expected, got $actual"
+}
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer `
   -Stage repository -NonInteractive -Json -HermesHome $env:HERMES_HOME -InstallDir $target
 ```
 
 This avoids piping into `Invoke-Expression` when the installer needs parameters.
-NousResearch does not publish a hash or Authenticode signature for this
-installer (confirmed against their docs and FAQ as of 2026-06-19) -- saving
-the script to a file and inspecting it before running is the most practical
-integrity step actually available here, not a placeholder for a stronger
-check we skipped. If NousResearch later publishes a checksum or signature,
-verify against that instead of relying on inspection alone.
+Prefer a **vendor-published** digest or Authenticode signature when one
+exists. As of 2026-06-19 NousResearch does not publish either for
+`install.ps1` — until they do, operators must pin a SHA-256 from a
+first-party trusted acquisition (record it in `HERMES_INSTALL_PS1_SHA256`)
+or skip the remote installer and stay on the git-clone path above. Saving
+the script and skimming it is optional operator hygiene; it is **not** a
+substitute for the digest gate.
 
 ### 2. Configure Provider Defaults
 
@@ -353,24 +363,31 @@ without pinning to a version number that will immediately go stale in this
 doc. If `npm audit` reports a moderate-or-higher finding, stop and review
 before continuing.
 
-Install Antigravity CLI by saving the installer first rather than piping
-directly into `Invoke-Expression` -- consistent with the Hermes installer
-pattern above:
+Install Antigravity CLI with the same fail-closed digest gate — save the
+bootstrap script, verify a pinned SHA-256, then execute (never pipe into
+`Invoke-Expression`):
 
 ```powershell
 $agyInstaller = Join-Path $env:TEMP "antigravity-install.ps1"
+$expected = $env:ANTIGRAVITY_INSTALL_PS1_SHA256
+if (-not $expected) {
+  throw "Refusing mutable remote installer: set ANTIGRAVITY_INSTALL_PS1_SHA256 to a vendor-published or operator-pinned SHA-256 digest first."
+}
 Invoke-WebRequest -Uri https://antigravity.google/cli/install.ps1 -OutFile $agyInstaller
-Get-Content $agyInstaller | Select-Object -First 40   # eyeball it before running
+$actual = (Get-FileHash -Algorithm SHA256 -Path $agyInstaller).Hash.ToLowerInvariant()
+if ($actual -ne $expected.ToLowerInvariant()) {
+  throw "Antigravity installer digest mismatch: expected $expected, got $actual"
+}
 & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $agyInstaller
 codex --version; gemini --version; agy --version
 ```
 
 The Antigravity installer itself downloads the `agy` binary and verifies a
-SHA-512 checksum against its release manifest before extracting it -- the
-binary is checksummed, but the bootstrap script that does that checking is
-not independently signed, which is the same residual trust step as any
-`curl|bash`-style installer. Saving and skimming the script first closes
-that one remaining gap cheaply.
+SHA-512 checksum against its release manifest before extracting it — that
+covers the payload binary, not the bootstrap `install.ps1`. Prefer a
+vendor-published digest/signature for the bootstrap script when available;
+otherwise pin `ANTIGRAVITY_INSTALL_PS1_SHA256` from a trusted acquisition
+before any run. Visual inspection alone is not an integrity check.
 
 If `agy` is absent, or if `agy --print "Reply with exactly: AGY_READY"`
 exits with empty stdout, skip it and continue with Hermes/Gemini/Codex. To
