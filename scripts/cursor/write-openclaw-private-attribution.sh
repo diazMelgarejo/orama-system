@@ -8,15 +8,16 @@ LESSONS_DIR="${OPENCLAW_DIR}/private-lessons"
 PATTERNS="${OPENCLAW_DIR}/banned-attribution-patterns"
 GUIDE="${OPENCLAW_DIR}/banned-attribution-local.md"
 LESSON="${LESSONS_DIR}/perpetua-tools-git-attribution.md"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "$OPENCLAW_DIR" "$LESSONS_DIR"
 chmod 700 "$OPENCLAW_DIR" "$LESSONS_DIR" 2>/dev/null || true
 
-{
-  echo "# Banned attribution tokens (one per line, case-insensitive substring match)"
-  echo "REDACTED"
-} >"$PATTERNS"
-chmod 600 "$PATTERNS"
+if [[ ! -s "$PATTERNS" ]]; then
+  bash "$SCRIPT_DIR/seed-banned-attribution-patterns.sh" "$PATTERNS"
+else
+  printf 'OK: preserve existing %s\n' "$PATTERNS"
+fi
 
 cat >"$GUIDE" <<'GUIDE_EOF'
 # Banned git attribution (user-level private — not in git)
