@@ -1,16 +1,37 @@
 ---
 name: codex-mcp-debugging
-description: Use when debugging Codex CLI MCP config.toml errors, especially invalid transport, GitHub MCP, bearer_token_env_var confusion, stdio vs HTTP transport, Exa wrapper setup, or codex mcp list failures.
+description: >-
+  Use when debugging Codex CLI MCP config.toml errors — invalid transport, GitHub MCP,
+  bearer_token_env_var confusion, stdio vs HTTP transport, Exa wrapper setup, or
+  codex mcp list failures. Activates when MCP transport shape or auth field family is wrong.
 version: "1.0"
 layer: "agent-local"
+compatibility: claude-code, codex, gemini, hermes
 agent_compatibility:
   - Claude
   - Codex
   - Gemini
   - Hermes
+allowed-tools: bash, file-operations
+triggers:
+  - codex mcp
+  - invalid transport
+  - config.toml mcp
+  - github mcp codex
+  - exa mcp wrapper
 ---
 
 # Codex MCP Debugging
+
+## Purpose
+
+Diagnose Codex CLI MCP `config.toml` transport and auth field mismatches before editing servers.
+
+## When to Use
+
+- `codex mcp list` fails with `invalid transport` or schema errors
+- GitHub MCP shows bearer-token fields on a stdio subprocess
+- Exa or custom wrappers need stdio verification on OpenClaw machines
 
 Use this before editing `~/.codex/config.toml` MCP blocks.
 
@@ -133,3 +154,22 @@ Good response pattern:
 - [`../openclaw-skills/references/openrouter-defaults.md`](../openclaw-skills/references/openrouter-defaults.md) - model routing source of truth
 - [`../openclaw-skills/references/universal-skill-protocol.md`](../openclaw-skills/references/universal-skill-protocol.md) - invocation envelope standard
 - [`../openclaw-skills/references/pt-orama-weave.md`](../openclaw-skills/references/pt-orama-weave.md) - how PT + orama-system cooperate
+
+## Boundaries
+
+### Always Do
+
+- Classify transport (stdio vs HTTP) before touching auth fields.
+- Validate with `codex mcp list` and `codex mcp get <name>` after edits.
+- Preserve secrets; reference env var names only, never token values.
+
+### Ask First
+
+- Switching GitHub MCP from stdio npm server to remote HTTP Copilot endpoint.
+- Adding new MCP servers that duplicate existing OpenClaw wrapper coverage.
+
+### Never Do
+
+- Apply `bearer_token_env_var` to stdio subprocess servers.
+- Paste PATs, API keys, or bearer tokens into skills, logs, or commit messages.
+- Declare success without re-running the Codex MCP parser.

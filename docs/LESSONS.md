@@ -48,6 +48,73 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-08-08 — ALWAYS verify, NEVER trust: PR #283's merged tree silently dropped OSSF-1 content | Claude
+
+**Scope:** orama-system git-history-surgery doctrine + PR #283 (`2026-08-07-001-harden-skills-vendor-blend-lessons`)
+
+**What happened:** Asked to add "always check whether local `main`'s content
+exists in origin's rewritten history" to the git-history-surgery skill, this
+session's own local branch for that PR was checked against `origin/main` as a
+live test case. `git cherry -v origin/main <branch>` reported 17 `+`
+candidates out of 1293 commits; message cross-check resolved all but 2 as
+SAFE-BEHIND (already upstream under different SHAs). The remaining 2 were the
+branch's own OSSF-1 pilot work. Fetching the PR's *source* head via
+`gh pr view 283 --json headRefOid` returned `73ba185c...` — **not** the local
+branch tip (`e5e2cc51...`) — because an earlier "cherry-reanchor conflict
+resolution" pass in this same session had produced a different final commit.
+(`headRefOid` / `head.sha` is the PR source-branch tip; treat it as a source
+SHA unless separately verified as the landed tree — for merge-commit merges
+it often matches, but squash/rebase can diverge.) A direct tree diff between
+the local tip and that source head showed the merge had dropped, relative to
+the branch's real work: the OSSF-1 pre-commit
+gate script (`scripts/hooks/check_ossf1_skill_md.py`, 143 lines), its
+`.githooks/pre-commit` wiring (9 lines), the progressive-disclosure reference
+card `bin/orama-system/skills/hermes-harness/references/ossf-operating-procedures.md`
+(439 lines), and three other skills' OSSF-1-pilot SKILL.md content
+(`pt-orama-security-planner`, `hardware-affinity-gate`, `openclaw-skills`) —
+while `hermes-harness/SKILL.md` reverted from its intended thin-pointer form
+back to the pre-split 439-line monolith. None of this had been noticed until
+this explicit re-verification.
+
+**Operational lesson:** a conflict-resolution/reanchor pass that reports
+"CONFIRMED-SAFE" or "aligned" is a claim, not a fact — the only proof is a
+direct tree/content diff between what was *intended* (the branch's real tip)
+and what actually *landed* (the merge commit on `origin/main`), never the
+agent's own summary of its own resolution. This is the same failure shape as
+[[feedback_verify_before_replaying_past_agent_work]] one layer up: it applies
+even to your own prior-session git-surgery output, not just a different
+agent's. Ahead/behind counts and even `git cherry -v`'s `+`/`-` split are
+necessary but not sufficient — a `-` (patch-ID match) can still hide a
+partial merge that dropped some hunks while keeping others, so the real gate
+is a full tree/stat diff against the landed merge commit
+(`mergeCommit.oid` / `merge_commit_sha`), not an assumed local tip and not
+`headRefOid` alone (use the source head only when the merge strategy is a
+plain merge commit and you have confirmed the trees match).
+
+**Cross-references:**
+
+- Doctrine added this session: [`git-history-surgery/references/reanchor-after-rewrite.md`](../bin/orama-system/skills/git-history-surgery/references/reanchor-after-rewrite.md)
+  § "ALWAYS check your own main before syncing it — safe-behind vs needs-reanchor"
+- Decision Flow pointer: [`git-history-surgery/SKILL.md`](../bin/orama-system/skills/git-history-surgery/SKILL.md) item 2
+- Content believed lost: `scripts/hooks/check_ossf1_skill_md.py`,
+  `.githooks/pre-commit` (its wiring),
+  `bin/orama-system/skills/hermes-harness/references/ossf-operating-procedures.md`,
+  `.agents/skills/pt-orama-security-planner/SKILL.md`,
+  `bin/orama-system/skills/hardware-affinity-gate/SKILL.md`,
+  `bin/orama-system/skills/openclaw-skills/SKILL.md` — **not yet restored;
+  flagged for follow-up, no fix applied in this entry.**
+- PR: [#283](https://github.com/diazMelgarejo/orama-system/pull/283), merged
+  `2026-08-08T02:52:18Z`, source head (`headRefOid`) `73ba185c`, landed
+  merge commit (`merge_commit_sha`) `b0e09b10` (same tree as the source head
+  for this merge-commit merge; record both so squash/rebase cases stay
+  unambiguous).
+- **Update — 2026-08-08:** all six paths above restored by
+  [PR #291](https://github.com/diazMelgarejo/orama-system/pull/291). The
+  "not yet restored" note above is the original incident-time record and is
+  preserved as-is for history; this line records current status only.
+
+---
+
 ### 2026-07-24 — Formalized skillify/gstack permanent thin-wrapper exemption | Claude
 
 **Scope:** orama-system `.claude/skills/*` -> `bin/orama-system/skills/*` consolidation
