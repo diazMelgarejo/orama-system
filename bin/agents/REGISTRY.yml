@@ -206,8 +206,8 @@ roles:
     hermes_profile: null
     harness: cursor
     display: Relay Cursor Agent
-    soul_id: adapter.cursor-coordinator
-    stage: coordinator
+    soul_id: adapter.cursor-orchestrator
+    stage: orchestrator
     staged_soul: bin/agents/relay-cursor/SOUL.md
     staged_agent_card: bin/agents/relay-cursor/agent.md
     persona_yaml: bin/agents/personas/relay-cursor.yaml
@@ -217,7 +217,7 @@ roles:
       - async-subagent-delegation
       - cross-repo-orchestration
       - git-hygiene
-    notes: Cursor coordinator identity; distinct from the Relay Cline external-specialist adapter
+    notes: Cursor orchestrator identity; distinct from the Relay Cline external-specialist adapter
 
   - staging_folder: relay
     dispatch_lane: L-Fleet
