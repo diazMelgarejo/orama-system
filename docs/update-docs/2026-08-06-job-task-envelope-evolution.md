@@ -30,8 +30,8 @@ Hermes OpenClaw graft audit plan (cross-linked): [`docs/plans/2026-08-03-hermes-
 | `Perpetua-Tools/orchestrator/openclaw_skill_resolver.py` | [blob](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/openclaw_skill_resolver.py) |
 | `Perpetua-Tools/.agent/memory/semantic/LESSONS.md` | [blob](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/semantic/LESSONS.md) |
 | `Perpetua-Tools/.agent/memory/semantic/lessons.jsonl` | [blob](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/semantic/lessons.jsonl) |
-| `../../../v1/07-steps+combined.md` | (sibling of orama-system repo root; local only — not in orama-system or Perpetua-Tools GitHub — no blob URL rule) |
-| `../../../v1/06-steps.md` | (sibling of orama-system repo root; local only — not in orama-system or Perpetua-Tools GitHub — no blob URL rule) |
+| OpenClaw v1 combined design source | untracked, local-only — no blob URL rule applies |
+| OpenClaw v1 steps design source | untracked, local-only — no blob URL rule applies |
 
 <!-- /AUTO-GENERATED -->
 
@@ -39,7 +39,7 @@ Hermes OpenClaw graft audit plan (cross-linked): [`docs/plans/2026-08-03-hermes-
 
 **Yes — an absorption plan explicitly drove the MVP envelope/schema.** The canonical source is
 [`orama-system/docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
-(synthesized from [`../../../v1/07-steps+combined.md`](../../../v1/07-steps+combined.md) — sibling of
+(synthesized from the OpenClaw v1 combined design source — sibling of
 orama-system repo root; local only; not in orama/PT GitHub).
 
 The MVP is **two related envelope layers**, not one:
@@ -63,7 +63,7 @@ SkillEnvelope/Hermes envelopes (separate concerns).**
 | Doc | Path | Date | What the envelope looked like |
 | ----- | ------ | ------ | ------------------------------- |
 | V1 supervisor brainstorm | [`orama-system/docs/2026-05-08-v1-supervisor-brainstorm.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/2026-05-08-v1-supervisor-brainstorm.md) | 2026-05-08 | Structured handoff envelope = `JobState` enum (`queued -> running -> waiting_input -> succeeded -> failed -> cancelled`) + `JobSpec` dataclass (`job_id`, `intent`, `backend_hint`, `prompt`, `constraints`, `metadata`, `created_at`). Pattern #2: workers return `status + summary + artifact_pointer`. |
-| OpenClaw v1 combined source | `../../../v1/07-steps+combined.md` (sibling of orama-system repo root; local only; not in orama/PT GitHub) | pre-2026-05-14 | Early unified schema: `OrchestrationSession`, `TaskEnvelope` (role, specialization, intent, prompt, depth=0), `WorkerAssignment`, `WorkerResult`, `VerificationResult`. Originally placed contracts in orama. |
+| OpenClaw v1 combined source | the OpenClaw v1 combined design source (untracked, local-only) | pre-2026-05-14 | Early unified schema: `OrchestrationSession`, `TaskEnvelope` (role, specialization, intent, prompt, depth=0), `WorkerAssignment`, `WorkerResult`, `VerificationResult`. Originally placed contracts in orama. |
 | Unified Absorption Plan (canonical) | [`orama-system/docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) | 2026-05-14 (marked canonical 2026-06-14) | §3 five shared types (PT-owned). §5.1 extends `JobSpec` with `role`, `specialization`, `session_id`, `parent_orchestrator_id`, `artifact_policy`, `depth`. Corrects ownership: contracts live in PT, orama imports. |
 | V1 shipped record | [`Perpetua-Tools/docs/LESSONS.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md) §2026-05-08 | 2026-05-08 | Documents shipped `OrchestrationSupervisor` + `JobSpec` + `JobStatus`, jsonl persistence, `/v1/jobs` API. |
 | Adapter contract pointer | [`Perpetua-Tools/docs/adapter-interface-contract.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/adapter-interface-contract.md) | cites absorption plan | Points architecture authority to absorption plan; lists five shared types in `contracts.py`. |
@@ -87,11 +87,9 @@ Absorption plan quote (worker contract):
 
 ## Evolution timeline (with evidence)
 
-- Pre-May 2026 — OpenClaw v1 design drafts. `../../../v1/06-steps.md` and
-  `../../../v1/07-steps+combined.md` (sibling of orama-system repo root; local only; not in
-  orama/PT GitHub) describe `JobState`
-  (SQLite-oriented) and the five-type schema including `TaskEnvelope`. Combined doc originally
-  said contracts live in orama (`models/contracts.py`).
+- Pre-May 2026 — OpenClaw v1 design drafts. The OpenClaw v1 steps and combined design sources
+  (untracked, local-only) describe `JobState` (SQLite-oriented) and the five-type schema including
+  `TaskEnvelope`. Combined doc originally said contracts live in orama (`models/contracts.py`).
 - 2026-05-08 — Supervisor brainstorm (reference, not execution plan).
   [`orama-system/docs/2026-05-08-v1-supervisor-brainstorm.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/2026-05-08-v1-supervisor-brainstorm.md)
   names the gap as missing `submit_job -> get_status -> cancel/replay` and proposes `JobState` +
@@ -104,7 +102,7 @@ Absorption plan quote (worker contract):
   §2026-05-08. Code cites brainstorm §4.
 - 2026-05-14 — Unified Absorption Plan canonicalized.
   [`orama-system/docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md)
-  supersedes prior PLAN/PLAN2 docs; source = `../../../v1/07-steps+combined.md` (sibling of
+  supersedes prior PLAN/PLAN2 docs; source = the OpenClaw v1 combined design source (untracked, local-only,
   orama-system repo root; local only). Key corrections
   applied before adoption: contracts PT-owned
   ([`orchestrator/contracts.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/contracts.py)),

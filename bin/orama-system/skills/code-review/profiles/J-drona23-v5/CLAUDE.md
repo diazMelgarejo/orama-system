@@ -12,7 +12,7 @@ Full instructions if folder is not inside a repo → [`../../../references/first
 ## Profile structure
 
 | File | Purpose |
-|------|---------|
+| ------ | --------- |
 | [`rules/workflow.md`](rules/workflow.md) | MUST / NEVER rules — before/while/after coding |
 | [`agents/builder.md`](agents/builder.md) | Builder agent contract (50-call budget, chain order) |
 | [`reference/patterns.md`](reference/patterns.md) | Good vs anti-patterns, multi-repo conventions |

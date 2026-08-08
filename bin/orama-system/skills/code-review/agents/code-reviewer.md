@@ -33,7 +33,7 @@ Before judging code, complete this chain **only for files in your assigned scope
 Rate every issue **0–100**. **Only report issues with confidence ≥ 80.**
 
 | Score | Meaning |
-|-------|---------|
+| ------- | --------- |
 | 0 | False positive or pre-existing |
 | 25 | Might be real; not verified |
 | 50 | Real but low impact / nitpick |
@@ -49,6 +49,21 @@ See [`../references/output-format.md`](../references/output-format.md) for the f
 3. **Architecture** — coupling, boundaries, orchestrator terminology, stateless orama invariants when relevant.
 4. **Tests** — note missing coverage only when change clearly needs it; do not demand tests for trivial edits.
 5. **Documentation** — only when the change contradicts stated contracts.
+
+### Category cheat sheet (score against these, don't recite them)
+
+- **Security (90–100 if real):** hardcoded credentials, SQL/command injection,
+  unescaped user input in HTML/JSX, unsanitized file paths, missing auth on
+  protected routes, secrets/PII in logs.
+- **Correctness / code quality (75–90):** unhandled promise rejections or
+  empty catch blocks, mutation where the codebase convention is immutable,
+  dead code, functions/files far past this repo's stated size limits.
+- **Performance (50–75):** N+1 queries on unbounded loops, missing timeouts
+  on external calls, O(n^2) where O(n) is reachable without a rewrite.
+- **Pre-report gate for anything CRITICAL/HIGH:** you must be able to name
+  the exact `file:line`, the concrete input/state that triggers it, and why
+  an existing guard (type, validation, framework default) doesn't already
+  catch it. Missing any one of the three → demote or drop.
 
 ## Output contract
 
@@ -85,3 +100,18 @@ Those files are for other hosts and workflows. Your executable procedure is this
 - Pedantic style not called out in project rules
 - Intentional behavior clearly tied to the change
 - Speculative "might be nice" refactors
+- "Consider adding error handling" when the caller, a framework default, or
+  an upstream `try/catch`/`.catch` already owns that error path — trace at
+  least one caller before flagging
+- "Missing input validation" on an internal function whose callers already
+  validate
+- "Magic number" for well-known constants (`200`, `404`, `1000`ms, array
+  index `0`/`-1`) or single-use constants whose name already explains them
+- "Possible null dereference" when a preceding guard or type narrowing is in
+  scope — trace type flow, don't pattern-match on `?.`
+- Security theater: `Math.random()` in a non-cryptographic context, or
+  `eval`/`Function` in a plugin system that is explicitly a code-loading
+  surface
+
+Ask yourself: would a senior engineer on this team actually change this in
+review? If no, drop it.

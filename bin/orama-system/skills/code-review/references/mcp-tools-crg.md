@@ -1,6 +1,6 @@
 # code-review-graph MCP tools
 
-> **Server:** `code-review-graph` in `OpenClaw/.mcp.json` (`uvx code-review-graph serve`)
+> **Server:** `code-review-graph` in `OpenClaw/.mcp.json` (`uvx code-review-graph==2.3.7 serve`)
 > **Canonical chain:** [`tool-chain.md`](tool-chain.md)
 > **Embeddings:** [`crg-embed-mode.md`](crg-embed-mode.md) — unified bge-m3 with gbrain
 
@@ -11,7 +11,7 @@ Use MCP tools **before** `Grep`, `Glob`, or bulk `Read` on multi-file tasks.
 ## Tool matrix
 
 | Tool | When to use |
-|------|-------------|
+| ------ | ------------- |
 | `list_graph_stats_tool` | Graph empty, stale, or first run of session; confirm index health |
 | `detect_changes_tool` | **Start** any diff review; risk-scored changed nodes and files |
 | `semantic_search_nodes_tool` | Unknown symbol, entry point, or keyword; no exact string yet |
@@ -30,9 +30,10 @@ When `code-review-graph` is not registered in the IDE MCP list (common in Cursor
 
 ```bash
 REPO="$(git -C orama-system rev-parse --show-toplevel 2>/dev/null || pwd)"
-uvx code-review-graph status --repo "$REPO"
-uvx code-review-graph detect-changes --repo "$REPO" --base <git-sha>
-uvx code-review-graph build --repo "$REPO"    # if status shows nodes: 0
+BASE_SHA="$(git -C "$REPO" merge-base HEAD origin/main)"
+uvx code-review-graph==2.3.7 status --repo "$REPO"
+uvx code-review-graph==2.3.7 detect-changes --repo "$REPO" --base "$BASE_SHA"
+uvx code-review-graph==2.3.7 build --repo "$REPO"    # if status shows nodes: 0
 ```
 
 **CLI vs MCP naming:** subcommands are kebab-case (`detect-changes`, `status`); flags use `--repo` (not `--repo-root`). MCP tools use `*_tool` suffix and JSON field `repo_root`. First cold `uvx` install can take ~60s; `first-run-install.sh` probes `--version` only (not `--help`).
@@ -75,7 +76,7 @@ get_architecture_overview_tool
 Both use **Ollama bge-m3** (1024-dim) when [`crg-embed-mode`](crg-embed-mode.md) is in `gbrain` mode. Semantic rankings from CRG and gbrain are comparable.
 
 | Need | Tool |
-|------|------|
+| ------ | ------ |
 | Structure, callers, tests in graph | CRG `query_graph_tool` |
 | Symbol definition / refs | `gbrain code-def` / `code-refs` |
 | Past decisions, LESSONS | `gbrain search` |

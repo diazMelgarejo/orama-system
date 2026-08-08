@@ -4,7 +4,7 @@ repo: diazMelgarejo/orama-system
 role: peer-consumer
 canonical_repo: diazMelgarejo/Perpetua-Tools
 canonical_module: src/utils/endpoint_policy_core.py
-canonical_contract: .agent/endpoint-policy-contract.yml
+canonical_contract: config/endpoint-policy-contract.yml
 
 invariants:
   - id: transport-identity
@@ -41,7 +41,7 @@ existing_skill_references:
     reason: Cross-agent endpoint transport policy instructions.
 
 required_local_files:
-  - .agent/endpoint-policy-contract.yml
+  - config/endpoint-policy-contract.yml
   - scripts/security/check_endpoint_policy_contract.py
   - .github/workflows/endpoint-policy-contract.yml
   - AGENTS.md

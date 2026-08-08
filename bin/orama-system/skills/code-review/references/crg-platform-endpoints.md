@@ -10,7 +10,7 @@ CRG and gbrain share **bge-m3** (1024-dim) via an OpenAI-compatible embeddings s
 The **host and port** depend on platform — not the model name.
 
 | Platform | `CRG_OPENAI_BASE_URL` | Inference backend | Notes |
-|----------|----------------------|-------------------|-------|
+| ---------- | ---------------------- | ------------------- | ------- |
 | **macOS** | `http://localhost:11434/v1` | Ollama (`ollama pull bge-m3`) | Default in committed stack templates |
 | **Linux** | `http://localhost:11434/v1` | Ollama (same as macOS) | Same stack as macOS unless overridden |
 | **Windows (all)** | `http://localhost:1234/v1` | LM Studio (`$LM_STUDIO_WIN_ENDPOINTS`) | Primary Windows path — **not** `:11434` |
@@ -22,7 +22,7 @@ running as a deliberate fallback.
 ## Where it is configured
 
 | Surface | File / command | Platform detection |
-|---------|----------------|-------------------|
+| --------- | ---------------- | ------------------- |
 | Cursor project MCP | `orama-system/.cursor/mcp.json` | `sync-cursor-mcp.sh` patches URL at sync time |
 | OpenClaw / Claude Code | `OpenClaw/.mcp.json` | `crg-embed-mode gbrain` + `openclaw-env.sh` helpers |
 | CLI one-shot embed | shell `export CRG_OPENAI_BASE_URL=…` | Set manually per table above |

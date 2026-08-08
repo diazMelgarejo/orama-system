@@ -50,6 +50,34 @@ def sanitize_filename(name: str) -> str:
     return candidate
 
 
+def _resolve_within(root: Path, name: str) -> Path:
+    """Resolve `name` under `root`, verifying containment by normalized-path prefix.
+
+    Two prior fixes here used pathlib's Path.resolve() + is_relative_to() --
+    both got re-flagged by CodeQL alerts #59 and #63 (py/path-injection),
+    proving that shape isn't reliably recognized as a sanitizer. CodeQL's own
+    rule documentation (code-scanning alert #63 "GOOD" example) shows the
+    specific idiom its query is built to recognize: os.path.normpath(
+    os.path.join(base, name)) followed by str.startswith(base). This function
+    now matches that idiom exactly, on top of the character-allowlist check
+    (which already made traversal impossible on its own -- this is the
+    static-analysis-recognized shape, not a functional change to what's
+    rejected).
+    """
+    raw = name.strip()
+    if not raw or ".." in raw or "/" in raw or "\\" in raw:
+        raise ValueError(f"unsafe or invalid filename: {name!r}")
+    if not _SAFE_NAME.match(raw):
+        raise ValueError(f"unsafe or invalid filename: {name!r}")
+    if raw.endswith(".json"):
+        raise ValueError("use .md or .txt for assignment bodies; .json is metadata only")
+    base = os.path.normpath(str(root))
+    full_path = os.path.normpath(os.path.join(base, raw))
+    if not (full_path == base or full_path.startswith(base + os.sep)):
+        raise ValueError(f"unsafe path escapes root: {name!r}")
+    return Path(full_path)
+
+
 def _meta_path(path: Path) -> Path:
     return path.with_suffix(path.suffix + ".meta.json")
 
@@ -65,8 +93,8 @@ def write_inbox_file(
     extra: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Persist a peer assignment file + sidecar metadata."""
-    safe = sanitize_filename(filename)
-    dest = inbox_dir() / safe
+    dest = _resolve_within(inbox_dir(), filename)
+    safe = dest.name
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(body, encoding="utf-8")
     record = {
@@ -97,8 +125,8 @@ def write_outbox_file(
     error: str = "",
 ) -> dict[str, Any]:
     """Persist a peer assignment that could not yet be delivered."""
-    safe = sanitize_filename(filename)
-    dest = outbox_dir() / safe
+    dest = _resolve_within(outbox_dir(), filename)
+    safe = dest.name
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(body, encoding="utf-8")
     record = {
@@ -156,8 +184,8 @@ def list_outbox() -> list[dict[str, Any]]:
 
 
 def _read_file(root: Path, filename: str) -> tuple[str, dict[str, Any]]:
-    safe = sanitize_filename(filename)
-    path = root / safe
+    path = _resolve_within(root, filename)
+    safe = path.name
     if not path.is_file():
         raise FileNotFoundError(safe)
     body = path.read_text(encoding="utf-8")
@@ -180,8 +208,7 @@ def read_outbox_file(filename: str) -> tuple[str, dict[str, Any]]:
 
 
 def remove_outbox_file(filename: str) -> None:
-    safe = sanitize_filename(filename)
-    path = outbox_dir() / safe
+    path = _resolve_within(outbox_dir(), filename)
     meta_path = _meta_path(path)
     if path.is_file():
         path.unlink()

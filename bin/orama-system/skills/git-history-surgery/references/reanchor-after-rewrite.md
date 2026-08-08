@@ -28,6 +28,89 @@ semantic content.
 Invariant: `merge-base(branch, origin/main)` must be a real recent commit in
 `origin/main`, ideally the branch's twin.
 
+## ALWAYS check your own main before syncing it — safe-behind vs needs-reanchor
+
+This applies to `main` itself, not just feature branches — including your own
+local `main`, a peer's `main` in a mirrored repo, or any "default branch" you
+are about to fast-forward, merge, or reset after a rewrite happened upstream.
+Never sync blindly just because `main` shows large ahead/behind numbers or
+"N commits behind." Classify first:
+
+- **SAFE-BEHIND** — every commit unique to local `main` already exists
+  somewhere in `origin/main`'s rewritten history, either as an exact tree
+  twin or under a different SHA carrying the same content. Fast-forward or
+  reset is safe: nothing local is lost.
+- **NEEDS-REANCHOR** — at least one commit's content does not appear
+  anywhere in `origin/main`, by tree twin or by content cross-check. Treat
+  it like any other stale branch in this document: find the twin ancestor,
+  replay only the genuinely unique commits above it. Do not fast-forward or
+  reset past it — that would silently discard real local work.
+
+`git cherry -v origin/main main` alone is not proof of either outcome. Its
+`-`/`+` split is patch-ID based:
+
+```bash
+git fetch origin
+git cherry -v origin/main main > /tmp/cherry.txt
+awk '/^\+/{print $2}' /tmp/cherry.txt   # candidates that still need verification
+```
+
+A `+` result is **not** proof of unique work — only proof that patch-ID
+comparison didn't find an exact match. A rewrite (squash, `filter-repo`,
+metadata scrub) changes exact diff bytes without changing the underlying
+change, so a commit that already landed upstream under a different SHA still
+shows as `+`. Before concluding a `+` candidate is genuinely unique, cross-check
+by commit message against the rewritten history:
+
+```bash
+git log -1 --format=%s <candidate-sha>
+git log origin/main --grep="<that message>" --format='%H %s'
+```
+
+A message match under a different SHA is **candidate evidence only** — it
+means a same-titled commit exists somewhere upstream, not that its *content*
+is what actually landed. It never by itself promotes a commit to SAFE-BEHIND.
+This is the same rewrite-artifact SHA mismatch described in "Detection: use
+tree twins, not graph merge-base" below, reached by message search instead of
+tree-hash search — useful for narrowing which commit to verify next when a
+rewrite also touched blobs, so no exact tree twin exists even though the
+change may be present.
+
+Only commits with a confirmed tree twin, or a message-match candidate that the
+landed-tree diff below has actually verified, are SAFE-BEHIND. Commits with
+neither — no tree twin and no verified message match — are genuinely unique
+local work and justify the re-anchor procedure in this document. A large
+ahead/behind count or a bare `+` count is never sufficient grounds by itself
+to run `git merge origin/main` or `git reset --hard origin/main` on `main`.
+
+**The real gate is a landed-tree diff, not a message match — and the SHA you
+diff against depends on the merge strategy.** A message match proves a
+same-titled commit exists somewhere upstream; it does not prove that commit's
+content is what actually landed. GitHub exposes two different SHAs for a
+merged PR and they are not interchangeable:
+
+- `headRefOid` (GraphQL) / `head.sha` (REST) — the tip of the PR's *source*
+  branch. This equals the landed content **only** when the merge strategy was
+  a plain merge commit (`git merge --no-ff`). For a squash or rebase merge,
+  `headRefOid` can diverge from what actually landed on the base branch —
+  squash rewrites the commits into one, rebase replays them onto a new base,
+  and either can produce different bytes than the source branch tip.
+- `mergeCommit.oid` (GraphQL) / `merge_commit_sha` (REST) — the commit that
+  actually landed on the base branch, correct for **any** merge strategy
+  (merge, squash, or rebase). This is the one to diff against.
+
+Get it with `gh pr view <N> --json mergeCommit` (or `merge_commit_sha` via the
+REST API), not the local branch tip you happen to have checked out, and not
+`headRefOid` unless you have separately confirmed the merge strategy was a
+plain merge commit. A prior conflict-resolution or reanchor pass reporting
+"safe" or "aligned" is a claim about intent, not proof about the resulting
+tree. Diff the local tip against the actual landed tree
+(`git diff --stat <local-tip> <mergeCommit.oid>`) before trusting either
+verdict — see `docs/LESSONS.md` § 2026-08-08 for a case where this exact gap
+silently dropped ~660 lines (a pre-commit gate script, its wiring, a
+439-line reference card, and three skills' pilot content) that a `cherry -v`
+and message-match pass alone had already marked resolved.
+
 ## Pre-flight
 
 ```bash
