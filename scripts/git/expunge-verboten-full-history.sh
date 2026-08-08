@@ -108,7 +108,7 @@ for tok in tokens:
     esc = re.escape(tok)
     replace_msg.append(f"regex:(?i){esc}==>")
     replace_msg.append(f"regex:(?i)^Co-authored-by:.*{esc}.*\\n==>")
-    replace_text.append(f"literal:{tok}==>REDACTED")
+    replace_text.append(f"regex:(?i){esc}==>REDACTED")
 Path(replace_msg_path).write_text("\n".join(replace_msg) + "\n", encoding="utf-8")
 Path(replace_text_path).write_text("\n".join(replace_text) + "\n", encoding="utf-8")
 print(f"tokens={len(tokens)}")
