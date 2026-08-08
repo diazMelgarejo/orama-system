@@ -51,13 +51,25 @@ def sanitize_filename(name: str) -> str:
 
 
 def _resolve_within(root: Path, name: str) -> Path:
-    """Resolve `name` under `root`, verifying containment by resolved-path
-    prefix — defense in depth beyond sanitize_filename's character-class
-    check, and the pattern static analysis (CodeQL) recognizes as a real
-    path-traversal guard rather than relying solely on input validation."""
-    safe = sanitize_filename(name)
+    """Resolve `name` under `root`, verifying containment by resolved-path prefix.
+
+    Confirmed via a live CodeQL re-scan (alert #59) that calling
+    sanitize_filename() here is NOT enough -- CodeQL's taint tracking does not
+    trace sanitization through the function-call boundary, so it re-flags
+    every path built from `name` even though sanitize_filename() already
+    rejects traversal. Validation is inlined so the checks are visible in the
+    same function as the path join; sanitize_filename() stays as the public,
+    directly-tested entry point and both share the _SAFE_NAME pattern.
+    """
+    raw = name.strip()
+    if not raw or ".." in raw or "/" in raw or "\\" in raw:
+        raise ValueError(f"unsafe or invalid filename: {name!r}")
+    if not _SAFE_NAME.match(raw):
+        raise ValueError(f"unsafe or invalid filename: {name!r}")
+    if raw.endswith(".json"):
+        raise ValueError("use .md or .txt for assignment bodies; .json is metadata only")
     root_resolved = root.resolve()
-    candidate = (root_resolved / safe).resolve()
+    candidate = root_resolved.joinpath(raw).resolve()
     if not candidate.is_relative_to(root_resolved):
         raise ValueError(f"unsafe path escapes root: {name!r}")
     return candidate

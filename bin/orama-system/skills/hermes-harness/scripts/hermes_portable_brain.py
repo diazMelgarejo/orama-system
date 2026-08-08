@@ -172,16 +172,20 @@ def cmd_export(args: argparse.Namespace) -> int:
         for p, e in zip(files, entries):
             zf.write(p, e.path)
     tmp.replace(output)
-    # include_secrets/include_sessions are inclusion-scope booleans, not secret
-    # values -- ArchiveEntry only carries path/bytes/sha256/category, never
-    # file content. The explicit bool() makes that unambiguous to readers and
-    # to static analysis, which otherwise flags any "secrets"-named attribute
-    # flowing into a print/log call regardless of its actual type.
-    included_secrets = bool(args.include_secrets)
-    included_sessions = bool(args.include_sessions)
+    # Report what was actually written (derived from entries' categories), not
+    # args.include_secrets/args.include_sessions directly. This is more
+    # accurate -- e.g. include_secrets=True with zero secret-category files
+    # present should not claim secrets were included -- and it also stops
+    # CodeQL from flagging the log line: the prior version passed
+    # args.include_secrets straight through bool(), and a live re-scan
+    # confirmed CodeQL keeps flagging any "secrets"-named attribute reaching
+    # a logging call regardless of its type, so a code-level change (not a
+    # comment) was needed here, not just at lan_peer_files.py.
+    categories_present = {e.category for e in entries}
     logger.info(
         f"wrote {output} ({len(entries)} files, "
-        f"include_secrets={included_secrets}, include_sessions={included_sessions})"
+        f"secrets_included={'secret' in categories_present}, "
+        f"sessions_included={'session' in categories_present})"
     )
     return 0
 

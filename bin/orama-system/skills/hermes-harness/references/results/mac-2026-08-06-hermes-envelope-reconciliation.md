@@ -37,7 +37,7 @@ Branch `2026-08-05-002-hermes-graft-plan-reference-fix` (orama-system) — **4 l
 - Envelope SoT: `bin/orama-system/skills/hermes-harness/references/hermes-universal-invocation-protocol.md`
 - Canonical graft plan: `docs/plans/2026-08-03-hermes-openclaw-graft-audit-plan.md` (progress bar + Appendix C stub map updated)
 - Envelope evolution report: `docs/update-docs/2026-08-06-job-task-envelope-evolution.md`
-- Approved reconciliation plan (outside git): `OpenClaw/v1/2026-08-06-envelope-reconciliation-plan.md`
+- Approved reconciliation plan: the 2026-08-06 envelope reconciliation plan (untracked, local-only)
 
 ## Action required
 
