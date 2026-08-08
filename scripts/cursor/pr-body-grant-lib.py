@@ -30,7 +30,6 @@ import json
 import os
 import re
 import secrets
-import shlex
 import subprocess
 import sys
 from contextlib import contextmanager
@@ -728,13 +727,7 @@ def parse_append_segment(segment: str) -> tuple[str, str, str | None, str | None
     rest = (match.group(3) or "").strip()
     file_path: str | None = None
     message: str | None = None
-    try:
-        tokens = shlex.split(rest)
-    except ValueError:
-        # Malformed shell quoting (e.g. an unclosed quote) -- fail closed,
-        # same as any other unparseable segment, rather than falling back
-        # to a naive .split() that would silently truncate the value.
-        return None
+    tokens = rest.split()
     idx = 0
     while idx < len(tokens):
         token = tokens[idx]

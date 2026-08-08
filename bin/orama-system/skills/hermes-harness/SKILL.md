@@ -57,22 +57,6 @@ Slash-command discovery aliases (same content as `commands/<name>/`):
 
 Absorption map: [`references/hermes-skill-absorption-map.md`](references/hermes-skill-absorption-map.md).
 
-## Dispatch lanes (do not conflate)
-
-| Lane | What runs | orama commands |
-| ---- | --------- | -------------- |
-| **L-H1** | Native Hermes `delegate_task` children | Interactive Hermes session only (not PT scripts) |
-| **L-PT** | PT `spawn_hermes_agent()` / `hermes_harness.py` | `hermes-orama`, `hermes-delegate`, `hermes-spawn` |
-| **L-Fleet** | `coord_pulse` → `cursor-agent` | Win/Mac fleet queues; not these slash commands |
-
-`hermes-delegate` is **L-PT** — parallel PT workers, **not** `delegate_task`.
-`subagent/win-*` git branches are **L-Fleet** coordination fiction.
-
-Canonical: [`references/hermes-dispatch-taxonomy.md`](references/hermes-dispatch-taxonomy.md)
-Graft registry: [`references/openclaw-pattern-graft-registry.md`](references/openclaw-pattern-graft-registry.md)
-Paths: [`references/openclaw-workspace-path-doctrine.md`](references/openclaw-workspace-path-doctrine.md)
-— never `$OPENCLAW_ROOT` in committed prose.
-
 ## 🔧 Setup (GLM-5.2 Fallback)
 
 ```bash
@@ -133,7 +117,7 @@ restarts via an `openclaw cron` job (`mac-orchestrator-pulse`), not a manual loo
   etc.) differs from what a raw JSON example might suggest and an invalid shape
   silently breaks the live gateway (see `lesson_67ddcb4837f2` in PT's semantic
   memory). Full cadence rationale + commands:
-  [`../../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md`](../../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md)
+  [`../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md`](../../../docs/how-to/openclaw-hermes-cross-harness-wiring.md)
   § 11.
 
 ## Universal Invocation Protocol

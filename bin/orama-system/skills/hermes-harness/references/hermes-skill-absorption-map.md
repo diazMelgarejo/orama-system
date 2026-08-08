@@ -4,7 +4,7 @@
 > are thin adapters; durable behavior lives in orama-system canonical cards below.
 >
 > Inventory audit: [`hermes-ecc-fork-inventory.md`](hermes-ecc-fork-inventory.md)  
-> Onboarding plan: [`docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md`](../../../../../docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md) § Skill Absorption
+> Onboarding plan: [`docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md`](../../../../docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md) § Skill Absorption
 
 ## Redirect stubs → canonical supersets
 
@@ -91,7 +91,7 @@ Archive path: `bin/orama-system/skills/archive/llm-council-orchestration-absorbe
 |--------|------------------|-------------------|
 | OpenClaw live SOUL overlays | Oramasys overlay distillates | `bin/agents/*/SOUL.md` |
 | Raft persona YAML (EDITED-03) | Persona catalog | `bin/agents/personas/*.yaml` |
-| OpenClaw graft audit (2026-08-04) | Dispatch taxonomy + lane tags + path doctrine | `references/hermes-dispatch-taxonomy.md`, `references/openclaw-workspace-path-doctrine.md`, `references/openclaw-pattern-graft-registry.md`, `bin/agents/REGISTRY.yml` `dispatch_lane` |
+| Fleet role map | Staging ↔ OpenClaw ↔ Hermes slug | `bin/agents/REGISTRY.yml` |
 | Hermes profile materialization | Profile SOUL + memory stubs | `scripts/install_hermes_profiles.py` |
 | OpenClaw overlay refresh | Integrative merge from staging | `scripts/sync_openclaw_overlay_from_staging.sh` |
 

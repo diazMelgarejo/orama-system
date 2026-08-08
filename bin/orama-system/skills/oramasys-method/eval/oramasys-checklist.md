@@ -49,7 +49,4 @@ tools were live versus simulated.
 ## Size Gate
 
 - [ ] `SKILL.md` is <= 200 lines, or the overage has a written reason.
-- [ ] Modular files stay at most one subdirectory level below `SKILL.md`
-      (`instructions/`, `references/`, `examples/good/`, etc.) — any number of
-      files per prescribed folder is fine; no reference chains through multiple
-      nested hops (e.g. `references/foo/bar.md`).
+- [ ] Modular files stay one level from `SKILL.md`.

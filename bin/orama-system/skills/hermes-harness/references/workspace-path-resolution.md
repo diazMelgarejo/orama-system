@@ -1,54 +1,27 @@
 # Workspace-agnostic path resolution (skills + harnesses)
 
 Skills and thin wrappers must **never** hardcode sibling checkout paths such as
-`../Perpetua-Tools`, `perplexity-api/Perpetua-Tools`, or workstation absolute
-paths. Use env vars, **git repo-relative crawl**, or launcher discovery — same
-spirit as `start.sh` / `platform/windows/start.ps1`.
+`../Perpetua-Tools` or `..\Perpetua-Tools`. Use env vars, launcher discovery, or
+git toplevel — same order as `start.sh` / `platform/windows/start.ps1`.
 
 ## Resolution order (Perpetua-Tools root)
 
 | Priority | Source | When |
-| -------- | ------ | ---- |
+|----------|--------|------|
 | 1 | `$PERPETUA_TOOLS_PATH` / `%PERPETUA_TOOLS_PATH%` | Explicit operator override |
 | 2 | `$PT_HOME` / `%PT_HOME%` | Legacy alias (same semantics) |
 | 3 | `$PERPETUA_TOOLS_ROOT` / `%PERPETUA_TOOLS_ROOT%` | orama canonical (also `PERPETUATOOLSROOT`) |
 | 4 | `.paths` / `.paths.ps1` → `PT_DIR` | Written by `start.sh` / `start.ps1 --discover` |
-| 5 | Git crawl from ORAMA mother | `git rev-parse` orama root → parent → shallow subdir crawl |
-| 6 | Git crawl from `$HOME` | Shallow crawl; marker `.git` + `orchestrator/fastapi_app.py` |
+| 5 | `$OPENCLAW_HOME/Perpetua-Tools` | Cloud / stack layout |
+| 6 | Sibling discovery | Walk parent of orama repo root for `orchestrator/fastapi_app.py` |
+| 7 | Legacy default | `../perplexity-api/Perpetua-Tools` (may be absent) |
 
 **Validate:** `orchestrator/fastapi_app.py` exists under the resolved root.
-
-**Do not use `$OPENCLAW_ROOT` in committed docs** — see
-[`openclaw-workspace-path-doctrine.md`](openclaw-workspace-path-doctrine.md).
-
-**Do not use `$OPENCLAW_HOME`** for discovery defaults — use mother-of-orama +
-`$HOME` crawl, not `$OPENCLAW_HOME`.
-
-## Git crawl algorithm (orama → PT)
-
-```bash
-orama_root="$(git rev-parse --show-toplevel)"
-mother="$(dirname "$orama_root")"
-# Crawl mother (and shallow children) for a directory with:
-#   - .git
-#   - orchestrator/fastapi_app.py
-```
-
-Mirror from PT → orama: crawl ORAMA mother (or `$HOME`) for a git root containing
-`start.sh` or `platform/windows/start.ps1`.
-
-**Fail closed:** symlinked directories are rejected. When crawling, collect every
-marker-valid checkout; discovery succeeds only when exactly one candidate exists.
-Multiple matches or unreadable paths → error (never return the first arbitrary
-match).
-
-Implemented in [`../scripts/resolve_perp_harness.sh`](../scripts/resolve_perp_harness.sh) — no layout path literals in
-committed resolver code.
 
 ## orama-system repo root
 
 | Platform | Command (run from any checkout) |
-| -------- | --------------------------------- |
+|----------|----------------------------------|
 | Bash | `git -C "$PWD" rev-parse --show-toplevel` |
 | PowerShell | `git -C $PWD rev-parse --show-toplevel` |
 
@@ -60,15 +33,15 @@ Fallback when not in a git worktree: use the directory that contains `start.sh`
 Always prefer **launcher gates** (they resolve PT and invoke the canonical CLI):
 
 | Host | Command (from **orama-system repo root**) |
-| ---- | ----------------------------------------- |
+|------|-------------------------------------------|
 | macOS / Linux | `./start.sh --hardware-policy` |
 | Windows | `.\platform\windows\start.ps1 --hardware-policy` |
 
 Direct PT CLI (only when launcher is unavailable):
 
 | Platform | Snippet |
-| -------- | ------- |
-| Bash (Mac OpenClaw) | `"${PERPETUA_TOOLS_PATH:-${PT_HOME:-${PERPETUA_TOOLS_ROOT:?set PT root}}}/scripts/hardware_policy_cli.py" --check-openclaw` |
+|----------|---------|
+| Bash (Mac OpenClaw) | `"${PERPETUA_TOOLS_ROOT:-${PERPETUA_TOOLS_PATH:?set PT root}}/scripts/hardware_policy_cli.py" --check-openclaw` |
 | PowerShell (Windows Hermes) | `python (Join-Path $env:PERPETUA_TOOLS_ROOT 'scripts\hardware_policy_cli.py') --list` then `--validate <model> win` — **do not** use `--check-openclaw` on Windows |
 
 ## Windows script paths (repo-root relative)
@@ -76,7 +49,7 @@ Direct PT CLI (only when launcher is unavailable):
 All examples assume **current working directory = orama-system repository root**:
 
 | Script | Path |
-| ------ | ---- |
+|--------|------|
 | `start.ps1` | `.\platform\windows\start.ps1` |
 | `install.ps1` | `.\platform\windows\install.ps1` |
 | `ensure-partner-cli-paths.ps1` | `.\platform\windows\ensure-partner-cli-paths.ps1` |
@@ -84,7 +57,7 @@ All examples assume **current working directory = orama-system repository root**
 ## Partner CLI dirs (parametric — never hardcode `%USERPROFILE%\<name>`)
 
 | CLI | Windows (User PATH) | macOS/Linux |
-| --- | ------------------- | ----------- |
+|-----|---------------------|-------------|
 | Hermes | `%LOCALAPPDATA%\hermes\hermes-agent\venv\Scripts` | `$HERMES_HOME/hermes-agent/venv/bin` |
 | Codex | `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` (WinGet) **preferred**; fallback `%USERPROFILE%\.lmstudio\bin` | npm global / `~/.local/bin` |
 | AGY | `%LOCALAPPDATA%\agy\bin` | Antigravity installer default |
@@ -106,7 +79,6 @@ python bin\orama-system\skills\hermes-harness\scripts\install_hermes_thin_skills
 
 - `../Perpetua-Tools/scripts/...` — breaks multi-repo worktrees and cloud layouts
 - `../../../../../../../Perpetua-Tools/...` — fragile relative depth in command cards
-- Layout literals (`perplexity-api/Perpetua-Tools`) in committed resolver code
 - Inferring NEVER_MAC from `/v1/models` list membership
 - Duplicating `model_hardware_policy.yml` lists in markdown
 

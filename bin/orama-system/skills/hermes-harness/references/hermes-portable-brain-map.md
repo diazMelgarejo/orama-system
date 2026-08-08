@@ -91,5 +91,4 @@ Use this when you want a fresh Hermes install to come back like the existing Her
 - [`hermes-profile-install.md`](hermes-profile-install.md) — profile installer operator steps
 - [`hermes-skill-absorption-map.md`](hermes-skill-absorption-map.md) — thin wrapper inventory
 
-Source distillate: [`docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md`](../../../../../docs/plans/2026-06-24-hermes-harness-canonical-onboarding.md)
-(see [`openclaw-workspace-path-doctrine.md`](openclaw-workspace-path-doctrine.md) — not `$OPENCLAW_ROOT`).
+Source distillate: `$OPENCLAW_ROOT/references/Hermes-Harness-Guide-for-Orama+Perpetua.md` (workstation paths stripped).

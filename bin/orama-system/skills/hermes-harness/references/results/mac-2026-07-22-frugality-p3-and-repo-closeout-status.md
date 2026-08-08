@@ -12,7 +12,7 @@
   `privacy_critical` branch. 29 new + 120 pre-existing + 1530 full-repo
   tests, independently re-verified. PT `13f09c42`.
 - **Exa MCP path-resolution fix** (both repos) — replaced hardcoded
-  `$HOME`-relative / workspace-mother-relative paths (which had silently drifted to
+  `$OPENCLAW_ROOT`/`$HOME`-relative paths (which had silently drifted to
   an unrelated `npx mcp-remote` workaround in PT's `.codex/config.toml`)
   with a portable resolver: `orama-system/scripts/exa/resolve-orama-root.sh`
   and inline cache/walk/find bootstraps. orama `2cb1f0f0`, PT `fe66f46e`.
@@ -39,7 +39,7 @@
   is blocked by this session's `dangerous-cmd-block` hook even for
   branches independently verified fully superseded (33 total across both
   repos). Script ready and dry-run-tested:
-  [`docs/reference/2026-07-22-branch-cleanup-verified-superseded.sh`](../../../../../../docs/reference/2026-07-22-branch-cleanup-verified-superseded.sh).
+  `$OPENCLAW_ROOT/references/2026-07-22-branch-cleanup-verified-superseded.sh`.
   One worktree (`$PERPETUA_TOOLS_PATH/.claude/worktrees/pt-pr258-fixes-20260718`,
   on the confirmed-superseded `pr260-work` branch) is locked and also
   needs a human `git worktree remove --force` after unlocking.

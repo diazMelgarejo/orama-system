@@ -230,13 +230,10 @@ MVP-D (tests), can-4 fixes (`range_for_ref`, worktree test, `pr_body_run_guard`)
 **Remediation follow-up (F1–F7, can-6):** replay state machine, reconcile CLI, canonical golden
 vector, `GH_BIN` hermetic append test, consume-failure operator guidance, secure grant-file write.
 
-**Deferred to v2.1+ or later (not MVP gaps):** MVP-A/MVP-C full doctrine sweep (hookify, all
-rules, ledger links); ENG-6 per-PR file lock (TOCTOU re-read — reconcile covers common crash
-path in MVP); ENG-4 non-macOS provider fail-closed (fallback file is MVP CI convenience —
-production hardening in v2.1); DX-5 extended crash recovery beyond reconcile CLI; WebAuthn/MCP
-approval sidecar (security-sentinel v2.1 per `docs/v2/51-security-sentinel-orbit-passkey-mcp.md`).
-PT memory: `$PERPETUA_TOOLS_ROOT/.agent/memory/working/PR_BODY_GRANT_CAN6_SCRUB_FOLLOWUP_2026-08-03.md`
-(resolved via `resolve_perp_harness.sh`'s own PT-root discovery, not a hardcoded sibling path).
+**Deferred to follow-up:** MVP-A/MVP-C full doctrine sweep (hookify, all rules, ledger links);
+ENG-6 per-PR file lock (TOCTOU re-read + reconcile cover residual race); ENG-4 non-macOS
+fallback secret file (intentional for CI/tests — macOS uses Keychain).
+PT memory chronicle: `Perpetua-Tools/.agent/memory/working/PR_BODY_GRANT_HMAC_MVP_SAGA_2026-08-02.md`.
 
 **PT mirror:** `6a5a1db5` sync from orama + `0c3506d7` saga memory (branch retains full PR #320 history).
 

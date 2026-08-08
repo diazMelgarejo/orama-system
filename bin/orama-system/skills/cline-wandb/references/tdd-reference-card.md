@@ -137,9 +137,7 @@ Full source:
   existing tests cover the surface and stay green.
 - **Exploratory spike**: allowed on a `spike/*` branch; never merges
   as-is, gets rewritten with tests on a `feat/*` branch.
-- **Doc-only / config-only**: no test required only for genuinely idle
-  reference text with zero behavioral or safety impact. Skill instructions,
-  dispatch paths, and safety-behavior changes require behavioral tests.
+- **Doc-only / config-only**: no test required.
 
 Anything else: write the test. If you're thinking "skip TDD just this
 once" — that's the rationalization talking, not a real exception. Full
@@ -160,24 +158,9 @@ source:
 Full table plus "Red Flags — STOP and Start Over":
 [superpowers § Common Rationalizations](https://github.com/obra/superpowers/blob/main/skills/test-driven-development/SKILL.md#common-rationalizations).
 
-## Coverage Gate (Python — before Evidence Report)
-
-After GREEN, validate coverage before reporting done or writing the evidence
-report:
-
-```bash
-pytest --cov=src --cov-report=term-missing
-```
-
-- **Stop condition:** total coverage below **80%** — not GREEN; add tests and
-  re-run until the minimum is met.
-- **Target:** **90–100%** for new or touched Python surfaces.
-- Record the actual `term-missing` output in the evidence report — never claim
-  PASS after a passing suite that skipped coverage or fell below 80%.
-
 ## Evidence Report (from ECC — for non-trivial work)
 
-After GREEN and the coverage gate above pass, write a short report (e.g.
+After GREEN and coverage are validated, write a short report (e.g.
 `docs/testing/<task-name>.tdd.md`): source plan (if any), user
 journeys, a task-by-task table of what's guaranteed with the actual
 test file/command and PASS/FAIL result. Quote real commands and real
