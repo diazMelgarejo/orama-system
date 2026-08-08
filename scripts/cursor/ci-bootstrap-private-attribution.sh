@@ -6,6 +6,7 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HOME="${HOME:-/home/ubuntu}"
 OPENCLAW="${HOME}/.cursor/openclaw"
 PRIVATE="${REPO_ROOT}/.cursor/private"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "$OPENCLAW/private-lessons" "$PRIVATE"
 chmod 700 "$OPENCLAW" "$PRIVATE" 2>/dev/null || true
@@ -16,11 +17,7 @@ if [[ -s "$PATTERNS_OPENCLAW" && -s "${PRIVATE}/banned-attribution-patterns" ]];
   exit 0
 fi
 
-{
-  echo "# Banned attribution tokens (one per line, case-insensitive substring match)"
-  echo "REDACTED"
-} >"$PATTERNS_OPENCLAW"
-chmod 600 "$PATTERNS_OPENCLAW"
+bash "$SCRIPT_DIR/seed-banned-attribution-patterns.sh" "$PATTERNS_OPENCLAW"
 install -m 0600 "$PATTERNS_OPENCLAW" "${PRIVATE}/banned-attribution-patterns"
 
 printf 'OK: CI bootstrap → %s and %s\n' "$PATTERNS_OPENCLAW" "${PRIVATE}/banned-attribution-patterns"
