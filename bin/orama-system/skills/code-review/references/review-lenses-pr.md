@@ -14,7 +14,7 @@
 ## Lens overview
 
 | # | Lens | Focus | Typical model hint |
-|---|------|--------|-------------------|
+| --- | ------ | -------- | ------------------- |
 | 1 | Guidelines | CLAUDE.md / AGENTS.md compliance | Sonnet / Claude |
 | 2 | Shallow bugs | Large bugs in diff hunks only | Codex / Sonnet |
 | 3 | Git history | blame / history context for touched lines | Codex |

@@ -100,6 +100,30 @@ LM Studio host, run
     a stray staging-temp-named file left behind, nothing signals it happened.
     Incident: orama PR #251 review 4830042706 (2026-07-31) — traced end to end
     with a real reproduction before writing the fix, not assumed.
+13. Recovering a stacked-PR-family branch after a sibling branch already
+    merged (e.g. via squash) into the shared upstream base?
+    Record an explicit upstream ref and a preserved safety ref first
+    (`git branch backup/<branch>-pre-rebase HEAD`), then try
+    `git rebase <upstream-base>` **before** reaching for manual
+    cherry-pick surgery or tree-twin re-anchoring. Git's patch-equivalence
+    detection recognizes when a commit's content already landed upstream
+    under a different SHA and auto-drops it, printing `dropping <sha> ...
+    -- patch contents already upstream`. That message means **one** commit
+    matched by patch ID — it is not proof the whole branch recovered.
+    After the rebase: inspect remaining commits (`git log` /
+    `git cherry -v <upstream-base> HEAD` — pass the recorded ref
+    explicitly; the bare form falls back to HEAD's tracked upstream,
+    which is not necessarily `<upstream-base>`), resolve any conflicts,
+    and re-run the relevant
+    tests before replacing a manual replay or re-anchor. This is the
+    lighter-weight companion to the tree-twin doctrine above
+    (§ Decision 2 / `reanchor-after-rewrite.md`): tree-twin re-anchoring is
+    for a branch whose *ancestor* was rewritten; patch-equivalence rebase is
+    for a branch whose *sibling* was independently merged while both were
+    still built on the same live base. Incident: PT vendor/agentic-stack
+    bump (2026-08-07) — recovering 3 stacked upstream PR branches after
+    sibling PR #60 (`fix/recall-supersession-filter`) had already merged;
+    `lesson_15aa463fd07c` in PT `.agent/memory`.
 
 ## Non-Negotiables
 
@@ -332,6 +356,11 @@ Reference: `bin/orama-system/references/skill-architecture-guide.md` § v2 Manda
   plus a granular per-file/per-commit triage (patch-id matching, scoping against a specific
   PR's merge commit, detecting structural supersession) for auditing branches/worktrees that
   look stale or divergent before deciding what to reanchor, discard, or replay.
+- Perpetua-Tools `perpetua-memory` skill § Resolving a live merge conflict — the sibling
+  discipline for `.agent/memory/**` conflicts specifically: no blanket ours/theirs judgment
+  (`lesson_005f2a16600d`), merge-tool duplicate-insertion artifacts (`lesson_05c055046864`),
+  and verifying a "clean" merge label the same way § Decision 13 above verifies a rebase's
+  "already upstream" drop.
 
 ## Post-Review Micro-Remediation
 
