@@ -14,9 +14,21 @@ metadata:
   hermes:
     tags: [hardware, affinity, routing, lm-studio, mac, windows, dispatch]
     related_skills: [oramasys-method, hermes-harness]
+compatibility: claude-code, codex, hermes, cursor
+allowed-tools: bash, file-operations
+triggers:
+  - hardware affinity
+  - model routing gate
+  - lm studio dispatch
+  - mlx vs gguf
+  - pre-dispatch validation
 ---
 
 # Hardware Affinity Gate
+
+## Purpose
+
+Enforce hardware-model affinity before dispatch on Mac or Windows LM Studio and Ollama backends.
 
 > **Hermes / orama agents:** Do not execute affinity logic from this skill's embedded
 > reference Python. Consume Perpetua-Tools canonical policy only:
@@ -411,3 +423,22 @@ except HardwareAffinityError as e: print('NEVER caught:', e)"
 # 2. Re-run resolve_model() — it returns an ALLOW fallback automatically
 # 3. Do NOT bypass the gate under pressure; the fallback is explicit
 ```
+
+## Boundaries
+
+### Always Do
+
+- Import routing rules from Perpetua-Tools canonical policy; never re-declare them here.
+- Query live `/v1/models` or `/api/tags` at runtime instead of hardcoding model IDs.
+- Fail closed on `NEVER` verdicts with explicit errors.
+
+### Ask First
+
+- Adding a new hardware tier or changing canonical model IDs in PT policy.
+- Bypassing the gate for production dispatch when primary tier is overloaded.
+
+### Never Do
+
+- Hardcode LAN IPs or workstation-specific paths in affinity scripts.
+- Silently fall back when `NEVER` rules fire or D14 mirror routing would cross tiers.
+- Treat cloud-only API tasks as requiring local affinity checks.

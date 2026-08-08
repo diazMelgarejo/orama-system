@@ -2,13 +2,35 @@
 ---
 name: self-discovery
 version: 1.1.1.0
-description: Query live state across all 3 repos — versions, branch status, LM Studio endpoints, file manifests. Run whenever you need a situational snapshot of the stack.
+description: >-
+  Query live state across the three-repo stack — versions, branch status, LM Studio
+  endpoints, and file manifests. Activates when you need a situational snapshot of
+  AlphaClaw, Perpetua-Tools, orama-system, or OpenClaw hub health.
+license: Apache 2.0
+compatibility: claude-code, cursor, codex, hermes, gstack
+allowed-tools: bash, file-operations, web-search
+triggers:
+  - self discovery
+  - situational snapshot
+  - stack version check
+  - LM Studio endpoint status
+  - three repo status
 user-invocable: true
 ---
 
-# Self-Discovery  (v0.9.9.7)
+# Self-Discovery
 
-> **Idempotency:** This file carries a `version` in its frontmatter. Any script or agent updating this skill must compare versions (semver) and skip the write if the installed version is ≥ `0.9.9.7`.
+> **Idempotency:** Compare frontmatter `version` (semver) before overwriting; skip if installed ≥ bundled.
+
+## Purpose
+
+Query live state across AlphaClaw, Perpetua-Tools, orama-system, and the OpenClaw hub.
+
+## When to Use
+
+- Before multi-repo work when versions, branches, or endpoints may have drifted.
+- After network or LM Studio topology changes.
+- When validating automation file manifests across the stack.
 
 Query live state across the three-repo stack (AlphaClaw, Perpetua-Tools, orama-system) and the OpenClaw hub.
 
@@ -188,3 +210,22 @@ else:
     # write new version
     ...
 ```
+
+## Boundaries
+
+### Always Do
+
+- Read `~/.openclaw/state/last_discovery.json` for LM Studio endpoints; never hardcode LAN IPs.
+- Run discovery scripts from documented paths before reporting stack health.
+- Compare semver in frontmatter before overwriting this skill from automation.
+
+### Ask First
+
+- Changing default discovery profiles (`lan-full`, `mac-only`) for the whole stack.
+- Publishing stack snapshots that include credentials or token values.
+
+### Never Do
+
+- Curl-sweep or guess Windows LM Studio IPs instead of using PT discovery.
+- Report "healthy" from a single-repo check when the task spans all three repos.
+- Commit discovery output containing secrets or full env dumps.
