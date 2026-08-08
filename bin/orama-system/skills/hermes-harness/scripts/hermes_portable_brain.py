@@ -170,7 +170,14 @@ def cmd_export(args: argparse.Namespace) -> int:
             zf.write(p, e.path)
     tmp.replace(output)
     print(f"wrote {output}")
-    print(f"files={len(entries)} include_secrets={args.include_secrets} include_sessions={args.include_sessions}")
+    # include_secrets/include_sessions are inclusion-scope booleans, not secret
+    # values -- ArchiveEntry only carries path/bytes/sha256/category, never
+    # file content. The explicit bool() makes that unambiguous to readers and
+    # to static analysis, which otherwise flags any "secrets"-named attribute
+    # flowing into a print/log call regardless of its actual type.
+    included_secrets = bool(args.include_secrets)
+    included_sessions = bool(args.include_sessions)
+    print(f"files={len(entries)} include_secrets={included_secrets} include_sessions={included_sessions}")
     return 0
 
 
@@ -204,6 +211,11 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         "include_secrets": manifest.get("include_secrets"),
         "include_sessions": manifest.get("include_sessions"),
     }
+    # manifest's entries are ArchiveEntry(path, bytes, sha256, category) --
+    # metadata only, never file content -- so printing it (full or summary)
+    # does not expose archive contents. include_secrets/include_sessions
+    # here are the same inclusion-scope booleans as build_manifest() sets,
+    # not secret values.
     print(json.dumps(summary if args.summary else manifest, indent=2))
     return 0
 
