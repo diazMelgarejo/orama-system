@@ -93,8 +93,16 @@ bash scripts/git/delete-merged-remote-branches.sh . --from-json /tmp/actions.jso
 Preferred after full blob/metadata scrub (`rebase --onto` often conflicts).
 
 ```bash
-DELETE_ON_CHERRY_CONFLICT=1 \
-  bash scripts/git/cherry-reanchor-branches.sh . --from-json /tmp/actions.json --all-needs
+# Default: never delete remotes on cherry-pick failure (DELETE_ON_CHERRY_CONFLICT=0).
+bash scripts/git/cherry-reanchor-branches.sh . --from-json /tmp/actions.json --all-needs
+```
+
+If automation previously deleted open PR branches, recover from local tips:
+
+```bash
+bash scripts/git/restore-deleted-branches.sh . <branch> [<branch>...]
+# hard conflicts / submodule repos:
+bash scripts/git/restore-branch-theirs.sh . <branch>
 ```
 
 Success criterion for each surviving branch:
@@ -124,6 +132,8 @@ bash scripts/git/scan-tracked-banned-tokens.sh   # current tree
 | `parse-reanchor-scan.py` | scan → JSON actions |
 | `delete-merged-remote-branches.sh` | remove `MERGED/in-main` remotes |
 | `cherry-reanchor-branches.sh` | replay `git cherry` `+` commits on `main` |
+| `restore-deleted-branches.sh` | safe reanchor; local source; never deletes on failure |
+| `restore-branch-theirs.sh` | conflict/submodule recovery with tree align |
 | `post-rewrite-publish.sh` | force-push phase |
 | `post-rewrite-reanchor.sh` | scan + delete + cherry orchestrator |
 | `post-rewrite-finish.sh` | publish + reanchor + verify |
@@ -138,6 +148,7 @@ bash scripts/git/scan-tracked-banned-tokens.sh   # current tree
 | `rebase --onto` as first choice after full scrub | Rewritten ancestry → conflict storms |
 | Trust `NEEDS-REANCHOR` as "broken" when `merge-base == origin/main` | Open PR branches *should* be N commits ahead |
 | Delete branches before `parse-reanchor-scan` / user ack | May destroy unique PR work |
+| `DELETE_ON_CHERRY_CONFLICT=1` without explicit operator ack | Accidentally deleted open PR #283 and siblings |
 
 ---
 
