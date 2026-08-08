@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -252,21 +253,35 @@ def test_skill_md_links_protocol():
         / "SKILL.md"
     )
     text = skill.read_text(encoding="utf-8")
-    assert "hermes-universal-invocation-protocol.md" in text
-    assert "ossf-operating-procedures.md" in text
-
-    procedures = (
-        ROOT
-        / "bin"
-        / "orama-system"
-        / "skills"
-        / "hermes-harness"
-        / "references"
-        / "ossf-operating-procedures.md"
+    links = re.findall(r"\[[^]]+\]\(([^)]+\.md)\)", text)
+    assert any(
+        target.endswith("hermes-universal-invocation-protocol.md")
+        for target in links
     )
+
+    procedures_target = next(
+        target for target in links if target.endswith("ossf-operating-procedures.md")
+    )
+    procedures = (skill.parent / procedures_target).resolve()
+    assert procedures.is_file(), f"broken protocol link: {procedures_target}"
+
     body = procedures.read_text(encoding="utf-8")
-    assert "executor_id" in body
-    assert "transport" in body
+    dispatch_match = re.search(
+        r"^### Dispatch envelope\b[^\n]*\n(?P<section>.*?)(?=^###\s|\Z)",
+        body,
+        re.M | re.S,
+    )
+    assert dispatch_match is not None, "missing Dispatch envelope subsection"
+
+    example_match = re.search(
+        r"```json\s*(?P<example>.*?)```",
+        dispatch_match.group("section"),
+        re.S,
+    )
+    assert example_match is not None, "missing Dispatch envelope JSON example"
+    example = example_match.group("example")
+    assert '"executor_id"' in example
+    assert '"transport"' in example
 
 
 def test_lesson_mining_command_optional_not_required():
