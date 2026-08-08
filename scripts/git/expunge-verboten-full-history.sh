@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Full history expunge: metadata remap + message/blob literal scrub via git-filter-repo,
-# then filter-branch env/msg pass for broken Co-authored-by remnants.
+# then optional filter-branch env/msg pass for broken Co-authored-by remnants.
+# During this script (and any post-rewrite force-push), hooks must stay off — see
+# bin/orama-system/skills/git-history-surgery/references/history-surgery-hooks-safeguard-reference-card.md
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

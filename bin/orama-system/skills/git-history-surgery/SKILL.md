@@ -90,7 +90,16 @@ LM Studio host, run
     `scripts/git/check_no_pending_merge.sh` (pre-push hook enforces). Incident:
     periscope PR #39 (2026-07-30) — resolved merge never committed; push shipped
     pre-merge tip; PR described a diff that wasn't on the branch.
-12. Writing or reviewing a bash helper that stages content to a temp path then
+12. Starting or continuing an active history rewrite, expunge, `filter-repo`,
+    `filter-branch`, or post-rewrite force-push?
+    **Mandatory:** [`references/history-surgery-hooks-safeguard-reference-card.md`](references/history-surgery-hooks-safeguard-reference-card.md)
+    — hooks **off** for the entire surgery window (rewrite + force-publish +
+    explicit verification scans); `bash scripts/git/install-local-hooks.sh`
+    immediately after. Hooks prevent bad *new* commits; they are not diagnostic
+    during resolution and will false-block or stall multi-branch expunge. Incident:
+    2026-08-08 attribution expunge — pre-push ran guard-sync per branch and
+    blocked `main` under Phase 0 while local rewrite had already finished.
+13. Writing or reviewing a bash helper that stages content to a temp path then
     `mv`s it into place (`atomic_write_file`, `atomic_install_file`,
     `atomic_append_snippet`-shaped functions)?
     **Mandatory:** [`references/atomic-file-write-traps-reference-card.md`](references/atomic-file-write-traps-reference-card.md)
@@ -127,6 +136,11 @@ LM Studio host, run
   `scripts/git/*.sh` must use `while read` loops (see
   [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md)).
   Install hooks: `bash scripts/git/install-local-hooks.sh` (includes TDD `commit-msg` gate).
+- **Never run `filter-repo`, `filter-branch`, or post-rewrite force-push with default
+  hooks.** Use `git -c core.hooksPath=/dev/null` or
+  `bash scripts/git/history-surgery-git.sh` for the surgery window; restore with
+  `bash scripts/git/install-local-hooks.sh` before the next ordinary commit. See
+  [`references/history-surgery-hooks-safeguard-reference-card.md`](references/history-surgery-hooks-safeguard-reference-card.md).
 - **Never declare a git action complete without querying the actual result.**
   Stating "PR #N merged to main" or "pushed" without having just run
   `gh pr view N --json state,mergedAt` / `git ls-remote` / an equivalent
@@ -283,6 +297,8 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
   — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
 - [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md)
   — hooks off before stash pop/apply; re-enable after (mandatory for agents)
+- [`references/history-surgery-hooks-safeguard-reference-card.md`](references/history-surgery-hooks-safeguard-reference-card.md)
+  — hooks off during rewrite/expunge/force-publish; re-enable after (mandatory for agents)
 - [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md)
   — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
 - [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md)

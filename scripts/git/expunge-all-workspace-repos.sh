@@ -42,11 +42,15 @@ scan_repo_hits() {
 force_push_repo() {
   local repo="$1"
   git -C "$repo" remote get-url origin >/dev/null 2>&1 || return 0
+  local hs_git=(git -C "$repo" -c core.hooksPath=/dev/null)
+  if [[ -x "$SCRIPT_DIR/history-surgery-git.sh" ]]; then
+    hs_git=("$SCRIPT_DIR/history-surgery-git.sh" -C "$repo")
+  fi
   local branch
   while IFS= read -r branch; do
     [[ -n "$branch" ]] || continue
-    git -C "$repo" push --force-with-lease origin "${branch}:${branch}" 2>/dev/null \
-      || git -C "$repo" push --force origin "${branch}:${branch}" 2>/dev/null \
+    "${hs_git[@]}" push --force-with-lease origin "${branch}:${branch}" 2>/dev/null \
+      || "${hs_git[@]}" push --force origin "${branch}:${branch}" 2>/dev/null \
       || echo "warn: push failed ${branch} in $(basename "$repo")" >&2
   done < <(git -C "$repo" for-each-ref refs/heads --format='%(refname:short)')
 }
@@ -80,7 +84,10 @@ expunge_repo() {
   fi
   bash "$EXPUNGE" "$repo"
   if [[ "${stashed:-0}" == "1" ]]; then
-    git -C "$repo" stash pop >/dev/null 2>&1 || true
+    git -C "$repo" -c core.hooksPath=/dev/null stash pop >/dev/null 2>&1 || true
+    if [[ -x "$repo/scripts/git/install-local-hooks.sh" ]]; then
+      bash "$repo/scripts/git/install-local-hooks.sh" >/dev/null 2>&1 || true
+    fi
   fi
 
   after="$(scan_repo_hits "$repo")"
@@ -91,8 +98,13 @@ expunge_repo() {
   fi
 
   if [[ "$PUSH_ALL" == "1" ]]; then
-    echo ">>> [$name] force-push all local branches"
+    echo ">>> [$name] force-push all local branches (hooks off — history surgery)"
+    export HISTORY_SURGERY_ACTIVE=1
     force_push_repo "$repo"
+    unset HISTORY_SURGERY_ACTIVE
+    if [[ -x "$repo/scripts/git/install-local-hooks.sh" ]]; then
+      bash "$repo/scripts/git/install-local-hooks.sh" >/dev/null 2>&1 || true
+    fi
   fi
   echo ">>> [$name] OK"
 }

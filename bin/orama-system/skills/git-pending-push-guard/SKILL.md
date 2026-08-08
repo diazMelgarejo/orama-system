@@ -42,6 +42,24 @@ scripts/git/check_no_pending_merge.sh
 
 Pre-push hook runs this automatically (`.githooks/pre-push`).
 
+## Exception: active history surgery
+
+While a rewrite/expunge is **in progress** (`filter-repo`, `filter-branch`,
+`expunge-*.sh`, post-rewrite force-push), **disable hooks** for that window —
+do not rely on pre-push to block or validate. Hooks are preventive for normal
+commits; during surgery they false-block and stall multi-branch publishes.
+
+```bash
+git -c core.hooksPath=/dev/null push --force-with-lease origin <branch>
+bash scripts/git/install-local-hooks.sh   # before the next ordinary commit
+```
+
+Full protocol:
+[`../git-history-surgery/references/history-surgery-hooks-safeguard-reference-card.md`](../git-history-surgery/references/history-surgery-hooks-safeguard-reference-card.md).
+
+After surgery completes, this skill's pending-operation checks apply again to
+every normal push.
+
 ## KB exits (summary)
 
 | Exit | Symbol |
