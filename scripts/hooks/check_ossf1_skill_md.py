@@ -11,15 +11,20 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip())
 CANONICAL_PREFIX = "bin/orama-system/"
 MAX_LINES = 500
 MIN_DESC = 20
 
 FM_RE = re.compile(r"^(?:<!--.*?-->\s*)?---\r?\n(.*?)\r?\n---", re.S | re.M)
+BOUNDARIES_RE = re.compile(r"^##\s+Boundaries\b.*?(?=^##\s|\Z)", re.M | re.S)
 
 
 def staged_skill_paths() -> list[Path]:
+    """Repo-relative paths of staged canonical SKILL.md files.
+
+    Returned as relative paths (not joined with ROOT) because validation reads
+    content from the git index, not the working tree -- see read_staged_text.
+    """
     out = subprocess.check_output(
         ["git", "diff", "--cached", "--name-only", "--diff-filter=ACMR"],
         text=True,
@@ -31,8 +36,19 @@ def staged_skill_paths() -> list[Path]:
             continue
         if not line.startswith(CANONICAL_PREFIX):
             continue
-        paths.append(ROOT / line)
+        paths.append(Path(line))
     return paths
+
+
+def read_staged_text(rel: Path) -> str:
+    """Read rel's content from the git INDEX (what will actually be committed).
+
+    A pre-commit hook must validate staged content, not the working tree --
+    an unstaged edit could make an invalid staged file look valid (or vice
+    versa), and a staged-but-deleted-on-disk file must still be validated.
+    """
+    raw = subprocess.check_output(["git", "show", f":{rel.as_posix()}"])
+    return raw.decode("utf-8", errors="replace")
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, str], str] | tuple[None, str]:
@@ -65,16 +81,30 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str] | tuple[None, str
 
 
 def has_list_key(fm: dict[str, str], key: str) -> bool:
+    """True only if key's raw YAML value is list-shaped, not a scalar.
+
+    This hand-rolled frontmatter parser stores a block-style YAML list
+    (`key:\\n  - item`) as its joined item lines, which always begins with a
+    "-" sequence marker once the leading indentation of the first line is
+    stripped. A scalar value (e.g. `triggers: foo` or `triggers: "foo"`) has
+    no such marker and must be rejected -- it is not a list, regardless of
+    whether it happens to be non-empty.
+    """
     if key not in fm:
         return False
     val = fm[key].strip()
-    return bool(val) and val not in ("[]", "{}")
+    if not val or val in ("[]", "{}"):
+        return False
+    return val.startswith("-")
 
 
-def validate(path: Path) -> list[str]:
+def validate(rel: Path) -> list[str]:
     errors: list[str] = []
-    rel = path.relative_to(ROOT)
-    text = path.read_text(encoding="utf-8", errors="replace")
+    try:
+        text = read_staged_text(rel)
+    except subprocess.CalledProcessError as exc:
+        return [f"{rel}: could not read staged content from the git index ({exc})"]
+
     lines = text.count("\n") + 1
     if lines > MAX_LINES:
         errors.append(f"{rel}: body {lines} lines exceeds OSSF-1 hard ceiling {MAX_LINES}")
@@ -101,11 +131,13 @@ def validate(path: Path) -> list[str]:
     if not fm.get("allowed-tools", "").strip() and not fm.get("allowed_tools", "").strip():
         errors.append(f"{rel}: missing allowed-tools")
 
-    if not re.search(r"^##\s+Boundaries\b", body, re.M):
+    boundaries_match = BOUNDARIES_RE.search(body)
+    if not boundaries_match:
         errors.append(f"{rel}: missing ## Boundaries section")
     else:
+        section = boundaries_match.group(0)
         for sub in ("### Always Do", "### Ask First", "### Never Do"):
-            if sub not in body:
+            if sub not in section:
                 errors.append(f"{rel}: missing {sub} under Boundaries")
 
     if not re.search(r"^##\s+(Purpose|When to Use)\b", body, re.M):
@@ -120,10 +152,8 @@ def main() -> int:
         return 0
 
     all_errors: list[str] = []
-    for path in sorted(paths):
-        if not path.is_file():
-            continue
-        all_errors.extend(validate(path))
+    for rel in sorted(paths):
+        all_errors.extend(validate(rel))
 
     if all_errors:
         print("OSSF-1 pre-commit: canonical SKILL.md validation failed:", file=sys.stderr)
