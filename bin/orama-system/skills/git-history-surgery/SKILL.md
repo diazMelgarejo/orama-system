@@ -37,8 +37,24 @@ LM Studio host, run
    Use the expunge reference, rotate any secret, and require fresh clones.
 2. Did a rewrite already happen and branches now look impossible to reason about?
    Use the re-anchor reference and tree-twin scan. Do not trust ahead/behind counts.
-3. Is this only a normal bad commit?
-   Do not perform history surgery. Use a normal PR or revert.
+3. Is this only a normal bad commit? Or is a branch merely behind `main`
+   because `main` advanced normally (merged PRs, new commits) since the
+   branch was cut?
+   Do not perform history surgery. `merge-base --is-ancestor origin/main
+   HEAD` returning false is **not** automatic proof of a rewrite -- check
+   whether `origin/main` was actually rewritten (force-pushed, old SHAs
+   gone) or just fast-forwarded with new, ordinary merge commits
+   (`git log --oneline <old-merge-base>..origin/main` shows real, readable
+   commits, not a wholesale SHA replacement). If it's the latter, an open
+   PR branch showing large "behind" counts is normal and needs no
+   reanchor: `git fetch`, confirm `git log --oneline
+   HEAD..origin/<branch>` is empty (no concurrent push to *this* branch
+   specifically -- a separate check from `main` drift), then push the
+   branch's own new commit directly. Worked example: orama PR #290
+   (2026-08-08) showed 20 commits behind a since-advanced `origin/main`
+   (including a just-landed PR #291 merge); confirmed via `git log` this
+   was ordinary fast-forward growth, not a rewrite, and pushed without
+   reanchoring. Use a normal PR or revert for genuine bad commits.
 4. Did the scrub only rewrite metadata/messages while file blobs may also be
    contaminated?
    Treat metadata scrub, current-tree sanitization, PR-branch replay, and
