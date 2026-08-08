@@ -57,6 +57,10 @@ Use the right tool for the right layer. Use the cheapest agent that can succeed.
 | Runtime orchestration | OpenClaw | Route tools into agent workflows, gateway, auth |
 | Repeatable procedure | Claude Skill | Encode durable operating knowledge (this file) |
 
+Here, **Default coding agent** applies only to Cline-bot-driven execution paths.
+On Claude Code or other Anthropic platforms, follow the platform's model policy;
+do not switch execution to Cline without an explicit user request or override instruction.
+
 > **ClinePass default for coding:** `cline-pass/glm-5.2` (1M ctx, tool loops). OpenRouter free only for lightweight triage. See [cline-openclaw-agent/SKILL.md](../cline-openclaw-agent/SKILL.md).
 
 **Two routing rules below override the legacy "Gemini = default reader" pattern.** See §2.

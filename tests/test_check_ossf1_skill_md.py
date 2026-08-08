@@ -19,30 +19,37 @@ import sys
 import tempfile
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "scripts/hooks"))
 
 import check_ossf1_skill_md as cosm  # noqa: E402
 
 
+@pytest.mark.unit
 def test_has_list_key_rejects_scalar_triggers_value() -> None:
     assert cosm.has_list_key({"triggers": "foo"}, "triggers") is False
 
 
+@pytest.mark.unit
 def test_has_list_key_rejects_quoted_scalar_triggers_value() -> None:
     assert cosm.has_list_key({"triggers": '"foo"'}, "triggers") is False
 
 
+@pytest.mark.unit
 def test_has_list_key_accepts_real_yaml_list() -> None:
     fm = {"triggers": "- mcp orchestration\n  - claude mcp setup"}
     assert cosm.has_list_key(fm, "triggers") is True
 
 
+@pytest.mark.unit
 def test_has_list_key_rejects_empty_list_markers() -> None:
     assert cosm.has_list_key({"triggers": "[]"}, "triggers") is False
     assert cosm.has_list_key({"triggers": "{}"}, "triggers") is False
 
 
+@pytest.mark.unit
 def test_has_list_key_missing_key_is_false() -> None:
     assert cosm.has_list_key({}, "triggers") is False
 
@@ -65,6 +72,7 @@ def _skill_text(boundaries_and_after: str) -> str:
     )
 
 
+@pytest.mark.unit
 def test_boundary_subsections_matched_only_within_boundaries_section() -> None:
     """A '### Always Do' heading in a later, unrelated section must not
     satisfy the Boundaries check -- only content inside ## Boundaries,
@@ -85,6 +93,7 @@ def test_boundary_subsections_matched_only_within_boundaries_section() -> None:
     assert "### Never Do" in section
 
 
+@pytest.mark.unit
 def test_boundary_subsections_all_present_within_section_passes() -> None:
     text = _skill_text(
         "## Boundaries\n\n"
@@ -100,6 +109,7 @@ def test_boundary_subsections_all_present_within_section_passes() -> None:
         assert sub in section
 
 
+@pytest.mark.integration
 def test_validate_flags_missing_boundary_subsection_defined_elsewhere() -> None:
     """End-to-end: validate() on a real staged file must still flag the
     missing '### Always Do' even though that heading text exists elsewhere
@@ -151,6 +161,7 @@ def _validate_in_repo(repo: Path) -> list[str]:
         os.chdir(cwd)
 
 
+@pytest.mark.integration
 def test_validate_reads_staged_content_not_working_tree(tmp_path: Path) -> None:
     """The hook must validate what's staged in the index, not whatever the
     working-tree file currently contains -- an unstaged edit made *after*
@@ -174,6 +185,7 @@ def test_validate_reads_staged_content_not_working_tree(tmp_path: Path) -> None:
     assert errors == [], errors
 
 
+@pytest.mark.integration
 def test_validate_does_not_require_working_tree_file_to_exist(tmp_path: Path) -> None:
     """A staged-but-deleted-on-disk file must still be validated from the
     index, not skipped because the working-tree path no longer exists."""
@@ -193,6 +205,7 @@ def test_validate_does_not_require_working_tree_file_to_exist(tmp_path: Path) ->
     assert errors == [], errors
 
 
+@pytest.mark.integration
 def test_main_exits_zero_for_valid_staged_skill(tmp_path: Path) -> None:
     repo = _init_test_repo_with_skill(
         boundaries_and_after=(
@@ -212,6 +225,7 @@ def test_main_exits_zero_for_valid_staged_skill(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.integration
 def test_main_exits_nonzero_for_scalar_triggers(tmp_path: Path) -> None:
     """End-to-end regression pin: a skill with a scalar `triggers:` value
     and no 'Activates for/when' phrase in its description must fail, not
