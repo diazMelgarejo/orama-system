@@ -169,7 +169,6 @@ def cmd_export(args: argparse.Namespace) -> int:
         for p, e in zip(files, entries):
             zf.write(p, e.path)
     tmp.replace(output)
-    print(f"wrote {output}")
     # include_secrets/include_sessions are inclusion-scope booleans, not secret
     # values -- ArchiveEntry only carries path/bytes/sha256/category, never
     # file content. The explicit bool() makes that unambiguous to readers and
@@ -177,7 +176,10 @@ def cmd_export(args: argparse.Namespace) -> int:
     # flowing into a print/log call regardless of its actual type.
     included_secrets = bool(args.include_secrets)
     included_sessions = bool(args.include_sessions)
-    print(f"files={len(entries)} include_secrets={included_secrets} include_sessions={included_sessions}")
+    print(
+        f"wrote {output} ({len(entries)} files, "
+        f"include_secrets={included_secrets}, include_sessions={included_sessions})"
+    )
     return 0
 
 
