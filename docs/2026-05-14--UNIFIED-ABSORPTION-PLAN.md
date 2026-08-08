@@ -215,11 +215,40 @@ fi
 # on orama-system PR #290 (commit e2bc041c/6c38ac11, 2026-08-08): an
 # automated CodeRabbit-fix pass re-applied review 4873990444's original
 # suggestion with no memory of this scope note, and nothing caught it
-# until a human noticed days of drift. Verify each exempted file still
-# actually uses the exemption it was granted for.
-for path in "${COORDINATOR_ALLOWLIST[@]}"; do
-  if [ -f "$path" ] && ! grep -qiE 'coordinator' "$path"; then
-    echo "FAIL: $path is on the coordinator-persona allowlist but no longer says 'coordinator' -- exemption may have been silently reverted" >&2
+# until a human noticed days of drift.
+#
+# A bare `grep -qiE 'coordinator' "$path"` is not enough either: it can
+# pass after soul_id/stage/role are changed to orchestrator, as long as
+# some unrelated comment or note elsewhere in the same file still happens
+# to say "coordinator" -- the guard would then miss the exact regression
+# it exists to detect. Assert the specific identity fields per file
+# instead of a whole-file substring match.
+COORDINATOR_IDENTITY_FILES=(
+  'bin/agents/REGISTRY.yml'
+  'bin/agents/REGISTRY.yml'
+  'bin/agents/personas/relay-cursor.yaml'
+  'bin/agents/personas/relay-cursor.yaml'
+  'bin/agents/relay-cursor/SOUL.md'
+  'bin/agents/relay-cursor/SOUL.md'
+  'bin/agents/relay-cursor/agent.md'
+  'bin/agents/relay-cursor/agent.md'
+)
+COORDINATOR_IDENTITY_FIELDS=(
+  'soul_id: adapter.cursor-coordinator'
+  'stage: coordinator'
+  'soul_id: adapter.cursor-coordinator'
+  'role: Coordinator & Cross-Repo Relay'
+  '`adapter.cursor-coordinator`'
+  'Coordinator and cross-repo relay'
+  'Cursor coordinator and cross-repo relay'
+  'Cursor coordinator and routing identity'
+)
+for i in "${!COORDINATOR_IDENTITY_FILES[@]}"; do
+  path="${COORDINATOR_IDENTITY_FILES[$i]}"
+  field="${COORDINATOR_IDENTITY_FIELDS[$i]}"
+  [ -f "$path" ] || continue
+  if ! grep -qF "$field" "$path"; then
+    echo "FAIL: $path is missing expected identity field '$field' -- exemption may have been silently reverted" >&2
     false
   fi
 done
