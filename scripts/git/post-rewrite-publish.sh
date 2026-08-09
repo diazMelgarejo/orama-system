@@ -24,29 +24,46 @@ if [[ ! -x "$SCRIPT_DIR/history-surgery-push.sh" ]]; then
   PUSH=(git -c core.hooksPath=/dev/null push)
 fi
 
+cleanup_publish() {
+  local cleanup_failed=0
+  unset HISTORY_SURGERY_ACTIVE
+  if [[ -x scripts/git/install-local-hooks.sh ]]; then
+    bash scripts/git/install-local-hooks.sh || cleanup_failed=1
+  fi
+  return "$cleanup_failed"
+}
+trap 'status=$?; trap - EXIT; cleanup_status=0; cleanup_publish || cleanup_status=$?; if [[ $status -ne 0 ]]; then exit $status; fi; exit $cleanup_status' EXIT
+
 git fetch origin --prune 2>/dev/null || true
 
 if [[ "$PUSH_MAIN" == "1" ]]; then
   echo ">>> force-push main (hooks off)"
-  "${PUSH[@]}" --force origin main:main \
-    || "${PUSH[@]}" --force-with-lease origin main:main
+  main_old_sha="$(git rev-parse origin/main)"
+  "${PUSH[@]}" --force-with-lease="refs/heads/main:${main_old_sha}" origin main:main
 fi
 
 if [[ "$PUSH_ALL_BRANCHES" == "1" ]]; then
   echo ">>> force-push all local branches (hooks off)"
-  while read -r branch; do
+  failed_branches=()
+  while IFS= read -r branch; do
     [[ -n "$branch" ]] || continue
     [[ "$branch" == "main" ]] && continue
     echo "  $branch"
-    "${PUSH[@]}" --force-with-lease origin "${branch}:${branch}" 2>/dev/null \
-      || "${PUSH[@]}" --force origin "${branch}:${branch}" 2>/dev/null \
-      || echo "warn: push failed $branch" >&2
+    old_sha=""
+    if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+      old_sha="$(git rev-parse "origin/$branch")"
+    fi
+    if [[ -n "$old_sha" ]]; then
+      "${PUSH[@]}" --force-with-lease="refs/heads/${branch}:${old_sha}" \
+        origin "${branch}:${branch}" 2>/dev/null || failed_branches+=("$branch")
+    else
+      "${PUSH[@]}" -u origin "${branch}:${branch}" 2>/dev/null || failed_branches+=("$branch")
+    fi
   done < <(git for-each-ref refs/heads --format='%(refname:short)')
-fi
-
-unset HISTORY_SURGERY_ACTIVE
-if [[ -x scripts/git/install-local-hooks.sh ]]; then
-  bash scripts/git/install-local-hooks.sh
+  if [[ "${#failed_branches[@]}" -gt 0 ]]; then
+    printf 'ERROR: failed to publish rewritten branch(es): %s\n' "${failed_branches[*]}" >&2
+    exit 1
+  fi
 fi
 
 echo "OK: post-rewrite-publish complete for $(basename "$PWD")"

@@ -68,7 +68,8 @@ while read -r local_ref local_oid remote_ref remote_oid; do
 
   guard_range="$(range_for_ref "$local_oid" "$remote_oid")"
 
-  if ! git rev-list "$guard_range" >/dev/null 2>&1; then
+  guard_commits="$(git rev-list "$guard_range" 2>/dev/null)" || continue
+  if [[ -z "$guard_commits" ]]; then
     continue
   fi
 
@@ -78,7 +79,7 @@ while read -r local_ref local_oid remote_ref remote_oid; do
       guard_touch=1
       break 2
     fi
-  done < <(git rev-list "$guard_range")
+  done <<<"$guard_commits"
 done <"$push_refs"
 
 if [[ "$guard_touch" == "1" ]] && [[ "${GUARD_SYNC_SKIP_DIVERGENCE_CHECK:-0}" != "1" ]]; then
@@ -123,12 +124,14 @@ while read -r local_ref local_oid remote_ref remote_oid; do
 
   range="$(range_for_ref "$local_oid" "$remote_oid")"
 
-  if ! git rev-list "$range" >/dev/null 2>&1; then
+  range_commits="$(git rev-list "$range" 2>/dev/null)" || continue
+  if [[ -z "$range_commits" ]]; then
     continue
   fi
 
   audit_range="$(audit_range_for_ref "$local_oid" "$remote_oid")" || exit $?
-  if ! git rev-list "$audit_range" >/dev/null 2>&1; then
+  audit_commits="$(git rev-list "$audit_range" 2>/dev/null)" || continue
+  if [[ -z "$audit_commits" ]]; then
     continue
   fi
 
