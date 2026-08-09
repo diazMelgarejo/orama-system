@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import importlib.util
+import subprocess
 import sys
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -57,3 +59,26 @@ def test_run_candidates_waits_for_second_when_first_fails(tmp_path):
     assert result["status"] == "ok"
     assert result["winner"]["name"] == "succeeding"
     assert any(item["name"] == "failing" and item["returncode"] == 7 for item in result["attempts"])
+
+
+def test_run_candidates_closes_stdin_for_every_candidate(tmp_path):
+    """Regression guard for the closed-stdin contract: candidates run
+    detached/non-interactive in parallel, so an inherited-but-unfed stdin
+    can leave a dispatched CLI (e.g. Codex) blocked on "Reading additional
+    input..." forever. See dispatch_codex_partner.py's own stdin-hygiene
+    fix and codex-cli-v142-dispatch.md's Stdin hygiene section."""
+    dispatch = _load_dispatch()
+    candidates = [
+        dispatch.Candidate("a", [sys.executable, "-c", "raise SystemExit(0)"]),
+        dispatch.Candidate("b", [sys.executable, "-c", "raise SystemExit(1)"]),
+    ]
+
+    fake_proc = MagicMock()
+    fake_proc.poll.return_value = 0
+
+    with patch.object(dispatch.subprocess, "Popen", return_value=fake_proc) as mock_popen:
+        dispatch.run_candidates(candidates, tmp_path, timeout=10)
+
+    assert mock_popen.call_count == len(candidates)
+    for call in mock_popen.call_args_list:
+        assert call.kwargs.get("stdin") == subprocess.DEVNULL
