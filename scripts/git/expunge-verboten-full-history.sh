@@ -159,16 +159,42 @@ repo = Path(sys.argv[1])
 patterns = Path.home() / ".cursor/openclaw/banned-attribution-patterns"
 tokens = [l.split("#", 1)[0].strip().casefold() for l in patterns.read_text().splitlines() if l.split("#", 1)[0].strip()]
 meta = blob = 0
-for line in subprocess.run(["git", "-C", str(repo), "rev-list", "--objects", "--all"], capture_output=True, text=True, check=True).stdout.splitlines():
-    oid = line.split()[0]
-    kind = subprocess.run(["git", "-C", str(repo), "cat-file", "-t", oid], capture_output=True, text=True).stdout.strip()
+objects = subprocess.run(
+    ["git", "-C", str(repo), "rev-list", "--objects", "--all"],
+    capture_output=True,
+    text=True,
+    check=True,
+).stdout.splitlines()
+oid_input = "".join(line.split()[0] + "\n" for line in objects if line.split())
+proc = subprocess.Popen(
+    ["git", "-C", str(repo), "cat-file", "--batch"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+)
+stdout, _ = proc.communicate(oid_input.encode())
+if proc.returncode:
+    raise SystemExit(proc.returncode)
+pos = 0
+while pos < len(stdout):
+    header_end = stdout.find(b"\n", pos)
+    if header_end == -1:
+        break
+    header = stdout[pos:header_end].decode("ascii", errors="replace")
+    pos = header_end + 1
+    parts = header.split()
+    if len(parts) < 3:
+        break
+    kind = parts[1]
+    size = int(parts[2])
+    body_bytes = stdout[pos:pos + size]
+    pos += size + 1
     if kind == "blob":
-        body = subprocess.run(["git", "-C", str(repo), "cat-file", "-p", oid], capture_output=True, text=True, errors="replace").stdout.casefold()
+        body = body_bytes.decode("utf-8", errors="replace").casefold()
         if any(t in body for t in tokens):
             blob += 1
     elif kind == "commit":
-        show = subprocess.run(["git", "-C", str(repo), "log", "-1", "--format=%an%n%ae%n%cn%n%ce%n%B", oid], capture_output=True, text=True).stdout.casefold()
-        if any(t in show for t in tokens):
+        body = body_bytes.decode("utf-8", errors="replace").casefold()
+        if any(t in body for t in tokens):
             meta += 1
 if meta or blob:
     print(f"FAIL: meta_hits={meta} blob_hits={blob}", file=sys.stderr)

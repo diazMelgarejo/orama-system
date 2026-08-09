@@ -36,22 +36,36 @@ patterns = [
     if p.strip() and not p.strip().startswith("#")
 ]
 meta = blob = 0
-for line in subprocess.check_output(["git", "rev-list", "--objects", "origin/main"], text=True).splitlines():
-    oid = line.split()[0]
-    kind = subprocess.run(["git", "cat-file", "-t", oid], capture_output=True, text=True).stdout.strip()
+objects = subprocess.check_output(["git", "rev-list", "--objects", "origin/main"], text=True).splitlines()
+oid_input = "".join(line.split()[0] + "\n" for line in objects if line.split())
+proc = subprocess.Popen(
+    ["git", "cat-file", "--batch"],
+    stdin=subprocess.PIPE,
+    stdout=subprocess.PIPE,
+)
+stdout, _ = proc.communicate(oid_input.encode())
+if proc.returncode:
+    sys.exit(proc.returncode)
+pos = 0
+while pos < len(stdout):
+    header_end = stdout.find(b"\n", pos)
+    if header_end == -1:
+        break
+    header = stdout[pos:header_end].decode("ascii", errors="replace")
+    pos = header_end + 1
+    parts = header.split()
+    if len(parts) < 3:
+        break
+    kind = parts[1]
+    size = int(parts[2])
+    body_bytes = stdout[pos:pos + size]
+    pos += size + 1
+    body = body_bytes.decode("utf-8", errors="replace").casefold()
     if kind == "blob":
-        body = subprocess.run(
-            ["git", "cat-file", "-p", oid], capture_output=True, text=True, errors="replace"
-        ).stdout.casefold()
         if any(p in body for p in patterns):
             blob += 1
     elif kind == "commit":
-        show = subprocess.run(
-            ["git", "log", "-1", "--format=%B %an %ae %cn %ce", oid],
-            capture_output=True,
-            text=True,
-        ).stdout.casefold()
-        if any(p in show for p in patterns):
+        if any(p in body for p in patterns):
             meta += 1
 if meta or blob:
     print(f"FAIL: origin/main meta_hits={meta} blob_hits={blob}", file=sys.stderr)
