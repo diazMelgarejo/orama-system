@@ -101,6 +101,21 @@ cherry-pick remains covered via `CHERRY_PICK_HEAD` (exit 3). A future v2 may
 add `git diff --cached` heuristics; the periscope PR #39 incident class is
 merge-specific and fully covered.
 
+## Exception: active history surgery (hooks off)
+
+This guard runs inside **pre-push**. During an active rewrite/expunge
+(`filter-repo`, `filter-branch`, `expunge-*.sh`, post-rewrite force-publish),
+**do not use default hooks** — they are preventive for normal work, not
+diagnostic during resolution. Use per-command disable for the surgery window:
+
+```bash
+git -c core.hooksPath=/dev/null push --force-with-lease origin <branch>
+bash scripts/git/install-local-hooks.sh
+```
+
+See [`history-surgery-hooks-safeguard-reference-card.md`](history-surgery-hooks-safeguard-reference-card.md).
+After surgery and hook restore, resume the manual checklist below for ordinary pushes.
+
 ## Manual pre-push checklist
 
 Run in order **every** push (hook is backstop only):
@@ -148,6 +163,7 @@ not from memory of what you resolved.
 | 2026-07-30 | Reference card + thin skill wrappers | Progressive disclosure; token-frugal discovery triggers |
 | 2026-07-30 | Extend `git-history-surgery` item 11 | Avoid skill sprawl; same doctrine family as stash safeguard |
 | 2026-07-31 | Distinguish `AM` from `REBASE` via `rebase-apply/applying` | `git am` and a real rebase both use `.git/rebase-apply/` — reporting an am session as `REBASE` sent operators toward `git rebase --continue`/`--abort`, neither of which resolves an am session. Root cause: `rebase-apply/` is shared plumbing between two distinct git *operations*; the marker file (`applying` vs `rebasing`) is the only reliable discriminator. Caught by CodeRabbit review 4830042706 on orama PR #251. |
+| 2026-08-08 | Hooks off during rewrite/expunge; this guard resumes after | Pre-push + guard-sync per branch made expunge appear hung; `main` blocked under Phase 0 while local rewrite was done. Pending-op guard is unrelated to post-expunge force-push — disable hooks for surgery window instead. |
 
 ## Related
 

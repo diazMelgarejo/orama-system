@@ -26,7 +26,7 @@ Use it for two related jobs:
 | Situation | Procedure |
 | --- | --- |
 | A secret, forbidden identity, token, or workstation path landed in history | [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md) |
-| `main` was rewritten and branches now look 600 commits behind/orphaned | [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md) |
+| `main` was rewritten and branches now look 600 commits behind/orphaned | [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md) + [`references/post-rewrite-automation-reference-card.md`](references/post-rewrite-automation-reference-card.md) |
 
 Fail closed: preserve refs, prove the operation is necessary, and use
 `--force-with-lease` only after recording the expected remote SHA.
@@ -147,7 +147,16 @@ LM Studio host, run
     `scripts/git/check_no_pending_merge.sh` (pre-push hook enforces). Incident:
     periscope PR #39 (2026-07-30) — resolved merge never committed; push shipped
     pre-merge tip; PR described a diff that wasn't on the branch.
-12. Writing or reviewing a bash helper that stages content to a temp path then
+12. Starting or continuing an active history rewrite, expunge, `filter-repo`,
+    `filter-branch`, or post-rewrite force-push?
+    **Mandatory:** [`references/history-surgery-hooks-safeguard-reference-card.md`](references/history-surgery-hooks-safeguard-reference-card.md)
+    — hooks **off** for the entire surgery window (rewrite + force-publish +
+    explicit verification scans); `bash scripts/git/install-local-hooks.sh`
+    immediately after. Hooks prevent bad *new* commits; they are not diagnostic
+    during resolution and will false-block or stall multi-branch expunge. Incident:
+    2026-08-08 attribution expunge — pre-push ran guard-sync per branch and
+    blocked `main` under Phase 0 while local rewrite had already finished.
+13. Writing or reviewing a bash helper that stages content to a temp path then
     `mv`s it into place (`atomic_write_file`, `atomic_install_file`,
     `atomic_append_snippet`-shaped functions)?
     **Mandatory:** [`references/atomic-file-write-traps-reference-card.md`](references/atomic-file-write-traps-reference-card.md)
@@ -157,7 +166,7 @@ LM Studio host, run
     a stray staging-temp-named file left behind, nothing signals it happened.
     Incident: orama PR #251 review 4830042706 (2026-07-31) — traced end to end
     with a real reproduction before writing the fix, not assumed.
-13. Recovering a stacked-PR-family branch after a sibling branch already
+14. Recovering a stacked-PR-family branch after a sibling branch already
     merged (e.g. via squash) into the shared upstream base?
     Record an explicit upstream ref and a preserved safety ref first
     (`git branch backup/<branch>-pre-rebase HEAD`), then try
@@ -181,6 +190,14 @@ LM Studio host, run
     bump (2026-08-07) — recovering 3 stacked upstream PR branches after
     sibling PR #60 (`fix/recall-supersession-filter`) had already merged;
     `lesson_15aa463fd07c` in PT `.agent/memory`.
+15. Local expunge / `filter-repo` finished and GitHub still shows stale `main`
+    or hundreds of "behind" branches?
+    **Mandatory:** [`references/post-rewrite-automation-reference-card.md`](references/post-rewrite-automation-reference-card.md)
+    — `post-rewrite-finish.sh` (hooks off → publish → `reanchor_scan` → delete
+    merged remotes → `cherry-reanchor-branches` → verify). Never per-branch push
+    with default hooks. Incident: 2026-08-08 VERBOTEN expunge — 40-branch push
+    looked hung; `main` blocked until protection lifted; cherry-reanchor replaced
+    conflict-prone `rebase --onto` after full scrub.
 
 ## Non-Negotiables
 
@@ -208,6 +225,11 @@ LM Studio host, run
   `scripts/git/*.sh` must use `while read` loops (see
   [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md)).
   Install hooks: `bash scripts/git/install-local-hooks.sh` (includes TDD `commit-msg` gate).
+- **Never run `filter-repo`, `filter-branch`, or post-rewrite force-push with default
+  hooks.** Use `git -c core.hooksPath=/dev/null` or
+  `bash scripts/git/history-surgery-git.sh` for the surgery window; restore with
+  `bash scripts/git/install-local-hooks.sh` before the next ordinary commit. See
+  [`references/history-surgery-hooks-safeguard-reference-card.md`](references/history-surgery-hooks-safeguard-reference-card.md).
 - **Never declare a git action complete without querying the actual result.**
   Stating "PR #N merged to main" or "pushed" without having just run
   `gh pr view N --json state,mergedAt` / `git ls-remote` / an equivalent
@@ -364,6 +386,10 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
   — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
 - [`references/stash-hooks-safeguard-reference-card.md`](references/stash-hooks-safeguard-reference-card.md)
   — hooks off before stash pop/apply; re-enable after (mandatory for agents)
+- [`references/history-surgery-hooks-safeguard-reference-card.md`](references/history-surgery-hooks-safeguard-reference-card.md)
+  — hooks off during rewrite/expunge/force-publish; re-enable after (mandatory for agents)
+- [`references/post-rewrite-automation-reference-card.md`](references/post-rewrite-automation-reference-card.md)
+  — publish + delete merged + cherry-reanchor + verify (`post-rewrite-finish.sh`)
 - [`references/local-runtime-overlay-reference-card.md`](references/local-runtime-overlay-reference-card.md)
   — PT `config/devices.yml` / `config/models.yml` discovery cache (never discard; never commit)
 - [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md)

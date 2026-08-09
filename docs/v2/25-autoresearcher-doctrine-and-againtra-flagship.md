@@ -1,6 +1,9 @@
 # 25 — Autoresearcher Doctrine + agAIntra Flagship Migration Plan
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d,
+> never committed with secrets, personal paths, or SecOps material. Additive — see
+> [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** PLAN — approved by operator 2026-06-05. Implementation follows supervised
 > iterations → pulsed heartbeat (20:00 + 09:00 daily, installed after Phase 1 clears).
 > Author: Opus 4.8 (PLAN-only). Decisions recorded this session.
@@ -16,6 +19,7 @@ orama stack into an *intentional community of interdependent, reliable/secure/sa
 name-corrected to `oramasys/againtra-platform` at cutover) is the chosen proof-by-dogfood.
 
 **Honest framing (invariants, not hedges):**
+
 - *"Build until we burn the oceans"* = the **boil-the-lake** principle (do the complete thing
   when AI's marginal cost ≈ 0) — **not** unsupervised limitless action. Irreversible / public
   / financial actions stay behind explicit HITL approval. That discipline is what keeps the
@@ -25,6 +29,7 @@ name-corrected to `oramasys/againtra-platform` at cutover) is the chosen proof-b
   literal mind. The compounding is real; the honesty keeps us out of cargo-cult territory.
 
 **Cadence (operator-approved):**
+
 1. **PLAN-first** (this doc + doc 26 TDD enshrinement).
 2. **Supervised iterations**: one phase / PR at a time, operator reviews between.
 3. **Pulsed autonomous heartbeat**: 20:00 + 09:00 daily — resumes the agAIntra iteration
@@ -40,7 +45,7 @@ name-corrected to `oramasys/againtra-platform` at cutover) is the chosen proof-b
 | G1 | **oramasys/* REFERENCE-ONLY** | Never push to `oramasys/*`. Playground = `diazMelgarejo/agentra-dingbot` (v1-legacy). `oramasys/againtra-platform` exists only as a planning scaffold; cutover is a deliberate future gate. |
 | G2 | **Trading-safety** | Role = software/platform migration + code review + paper/backtest tests ONLY. Never run live trading, execute trades/transfers, tune for profit, or give financial/investment advice. All agAIntra work runs `--paper` / `dry_run` / backtest. |
 | G3 | **HITL gates** | Repo creation, public branch pushes, destructive ops, standing-config (heartbeat install), architectural overrides → explicit operator approval required. |
-| G4 | **Git identity** | Allowlist: `cyre <Lawrence@cyre.me>`, `cyre <diazMelgarejo@gmail.com>`, `Codex <codex@openai.com>`, `cyre <Lawrence@bettermind.ph>`, `cursoragent@cursor.com`, plus configured private owner identity from local-only configuration. Co-author: `Claude Sonnet 4.6 <noreply@anthropic.com>`. Forbidden private attribution literals live only in the local-only verboten file; public docs may name generic policy labels such as `REDACTED`, but not private identity literals. |
+| G4 | **Git identity** | Allowlist: `cyre <Lawrence@cyre.me>`, `cyre <diazMelgarejo@gmail.com>`, `Codex <codex@openai.com>`, `cyre <Lawrence@bettermind.ph>`, `cursoragent@cursor.com`, plus configured private owner identity from local-only configuration. Co-author: `Claude Sonnet 4.6 <noreply@anthropic.com>`. Forbidden private attribution literals live only in the gitignored local registry (`.verboten-literals.local` / `~/.cursor/openclaw/banned-attribution-patterns`); never repeat them in tracked docs, commit messages, or PR bodies. |
 | G5 | **orama-way content** | Additive/CIDF: merge & harmonize, never wholesale-replace. `orchestrator` not `coordinator`. `@field_validator` not `@validator`. |
 | G6 | **Hygiene** | No literal workstation paths in tracked files. Run `repo_hygiene.py` before committing docs. Never commit `.env`. |
 | G7 | **Frugal verification** | Outsource: code plans → GPT-5.5; code reviews → Gemini 3.1 Thinking; merge with Opus 4.8 PLAN-mode. Win RTX3080 LM Studio = heavy chokepoint; Mac Ollama for multi-light. |
@@ -55,6 +60,7 @@ name-corrected to `oramasys/againtra-platform` at cutover) is the chosen proof-b
 last-completed, HITL-blocked items, self-review backlog. Each pulse is idempotent/resumable.
 
 **Pulse routine (each fire):**
+
 1. Read heartbeat queue + recent LESSONS + gbrain salience.
 2. Pick next TDD build iteration OR adversarial self-review of prior work.
 3. RED → GREEN → REFACTOR in the agAIntra playground; commit on green.

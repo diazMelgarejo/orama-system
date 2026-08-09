@@ -8,15 +8,25 @@ LESSONS_DIR="${OPENCLAW_DIR}/private-lessons"
 PATTERNS="${OPENCLAW_DIR}/banned-attribution-patterns"
 GUIDE="${OPENCLAW_DIR}/banned-attribution-local.md"
 LESSON="${LESSONS_DIR}/perpetua-tools-git-attribution.md"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 mkdir -p "$OPENCLAW_DIR" "$LESSONS_DIR"
 chmod 700 "$OPENCLAW_DIR" "$LESSONS_DIR" 2>/dev/null || true
 
-{
-  echo "# Banned attribution tokens (one per line, case-insensitive substring match)"
-  echo "REDACTED"
-} >"$PATTERNS"
-chmod 600 "$PATTERNS"
+if [[ ! -s "$PATTERNS" ]]; then
+  if ! bash "$SCRIPT_DIR/seed-banned-attribution-patterns.sh" "$PATTERNS" 2>/dev/null; then
+    # No local-only registry available yet on this machine. Fall back to a
+    # placeholder rather than hard-failing; re-run this script (or the seed
+    # script directly) once a real registry exists to replace it.
+    {
+      echo "# Banned attribution tokens (one per line, case-insensitive substring match)"
+      echo "REDACTED"
+    } >"$PATTERNS"
+    chmod 600 "$PATTERNS"
+  fi
+else
+  printf 'OK: preserve existing %s\n' "$PATTERNS"
+fi
 
 cat >"$GUIDE" <<'GUIDE_EOF'
 # Banned git attribution (user-level private — not in git)
