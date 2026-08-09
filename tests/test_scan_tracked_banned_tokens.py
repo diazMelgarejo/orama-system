@@ -127,29 +127,37 @@ def test_fails_loudly_when_ripgrep_is_missing(tmp_path: Path) -> None:
     # anything. This silently passed on GitHub Actions runners lacking
     # ripgrep, on both this test suite and the production git-hygiene CI gate.
     # A missing dependency must fail loudly, never masquerade as "clean".
+    git_bin = shutil.which("git")
+    bash_bin = shutil.which("bash")
+    tr_bin = shutil.which("tr")
+    if git_bin is None or bash_bin is None or tr_bin is None:
+        pytest.skip("git, bash, or tr is not installed on this machine")
+    if shutil.which("rg") is None:
+        pytest.skip("ripgrep is not installed on this machine; nothing to omit from PATH")
+
     repo, patterns, home = _init_fixture_repo(tmp_path)
     patterns.write_text("real-banned-value\n", encoding="utf-8")
     target = repo / "scripts/cursor/seed-banned-attribution-patterns.sh"
     target.parent.mkdir(parents=True)
     target.write_text("echo real-banned-value\n", encoding="utf-8")
     subprocess.run(
-        ["git", "add", "scripts/cursor/seed-banned-attribution-patterns.sh"],
+        [git_bin, "add", "scripts/cursor/seed-banned-attribution-patterns.sh"],
         cwd=repo,
         check=True,
     )
 
-    # A PATH with the directory containing `rg` removed, but still real enough
-    # to find bash/git/coreutils.
-    rg_path = shutil.which("rg")
-    if rg_path is None:
-        pytest.skip("ripgrep is not installed on this machine; nothing to strip from PATH")
-    rg_dir = str(Path(rg_path).parent)
-    all_dirs = [d for d in os.environ.get("PATH", "/usr/bin:/bin").split(os.pathsep) if d]
-    stripped_path = [d for d in all_dirs if d != rg_dir]
-    if shutil.which("rg", path=os.pathsep.join(stripped_path)):
-        pytest.skip("rg is also reachable from another PATH entry on this machine")
+    # An isolated tool directory containing symlinks to only the resolved
+    # bash/git/tr executables the scanner genuinely needs, with `rg`
+    # deliberately absent -- rather than removing rg's PATH directory
+    # wholesale, which could also remove bash/git/tr if they happen to share
+    # it and make the scan fail to even start, never reaching the
+    # missing-rg diagnostic this test exists to check for.
+    tool_dir = tmp_path / "tools"
+    tool_dir.mkdir()
+    for name, resolved in (("bash", bash_bin), ("git", git_bin), ("tr", tr_bin)):
+        (tool_dir / name).symlink_to(resolved)
 
-    result = _run_scan(repo, patterns, home, path_dirs=stripped_path)
+    result = _run_scan(repo, patterns, home, path_dirs=[str(tool_dir)])
 
     assert result.returncode != 0, (
         f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}"

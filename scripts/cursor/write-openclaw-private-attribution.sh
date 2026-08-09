@@ -18,11 +18,12 @@ if [[ ! -s "$PATTERNS" ]]; then
     # No local-only registry available yet on this machine. Fall back to a
     # placeholder rather than hard-failing; re-run this script (or the seed
     # script directly) once a real registry exists to replace it. Not the
-    # real word "REDACTED" -- that appears in genuine security docs/log
-    # messages and would false-positive scan-tracked-banned-tokens.sh once
-    # ripgrep is actually present to search for it. Assembled at runtime
-    # via concatenation, not written as one literal, so this script's own
-    # source never contains the substring the scanner would then flag.
+    # former placeholder value -- that was a real word that appears in
+    # genuine security docs/log messages and would false-positive
+    # scan-tracked-banned-tokens.sh once ripgrep is actually present to
+    # search for it. Assembled at runtime via concatenation, not written
+    # as one literal, so this script's own source never contains the
+    # substring the scanner would then flag.
     _placeholder_token="ci-placeholder-pattern"
     _placeholder_token+="-never-matches-real-content-7f3ae9c1"
     {

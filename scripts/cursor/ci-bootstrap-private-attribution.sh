@@ -33,10 +33,10 @@ if ! bash "$SCRIPT_DIR/seed-banned-attribution-patterns.sh" "$PATTERNS_OPENCLAW"
   # -- the real registry is intentionally never present there by design, so
   # failing closed would only hard-block every PR's CI without closing a
   # real gap, reintroducing the exact incident this fallback fixed.
-  # Not a real word ("REDACTED" previously used here is common in real
-  # security docs/log messages and started matching genuine tracked
+  # Not the former placeholder value -- that was a real word common in
+  # real security docs/log messages and started matching genuine tracked
   # content once scan-tracked-banned-tokens.sh could actually find ripgrep
-  # to run against it). Long, synthetic, and structurally unlike anything
+  # to run against it. Long, synthetic, and structurally unlike anything
   # a real token or real prose would ever contain, so it can never
   # collide with tracked content while still keeping the file non-empty
   # (banned_patterns_ready() requires that). Assembled at runtime via
