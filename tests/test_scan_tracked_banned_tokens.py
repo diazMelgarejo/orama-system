@@ -108,7 +108,8 @@ def test_key_name_collision_rejects_non_key_name_occurrence(tmp_path: Path) -> N
     result = _run_scan(repo, patterns, home)
 
     assert result.returncode == 1, (
-        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}"
+        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}\n"
+        f"trace={getattr(result, 'trace', '<not captured>')}"
     )
     assert "scripts/cursor/seed-banned-attribution-patterns.sh" in result.stderr
 
@@ -128,6 +129,7 @@ def test_internal_bootstrap_files_still_fail_on_other_banned_values(tmp_path: Pa
     result = _run_scan(repo, patterns, home)
 
     assert result.returncode == 1, (
-        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}"
+        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}\n"
+        f"trace={getattr(result, 'trace', '<not captured>')}"
     )
     assert "scripts/cursor/seed-banned-attribution-patterns.sh" in result.stderr
