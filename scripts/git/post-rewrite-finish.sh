@@ -30,6 +30,7 @@ if [[ -f "$HOME/.cursor/openclaw/banned-attribution-patterns" ]]; then
   python3 - <<'PY'
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 patterns = [
@@ -38,37 +39,63 @@ patterns = [
     if p.strip() and not p.strip().startswith("#")
 ]
 meta = blob = 0
-objects = subprocess.check_output(["git", "rev-list", "--objects", "origin/main"], text=True).splitlines()
-oid_input = "".join(line.split()[0] + "\n" for line in objects if line.split())
-proc = subprocess.Popen(
-    ["git", "cat-file", "--batch"],
-    stdin=subprocess.PIPE,
-    stdout=subprocess.PIPE,
-)
-stdout, _ = proc.communicate(oid_input.encode())
-if proc.returncode:
-    sys.exit(proc.returncode)
-pos = 0
-while pos < len(stdout):
-    header_end = stdout.find(b"\n", pos)
-    if header_end == -1:
-        break
-    header = stdout[pos:header_end].decode("ascii", errors="replace")
-    pos = header_end + 1
-    parts = header.split()
-    if len(parts) < 3:
-        break
-    kind = parts[1]
-    size = int(parts[2])
-    body_bytes = stdout[pos:pos + size]
-    pos += size + 1
-    body = body_bytes.decode("utf-8", errors="replace").casefold()
-    if kind == "blob":
-        if any(p in body for p in patterns):
-            blob += 1
-    elif kind == "commit":
-        if any(p in body for p in patterns):
-            meta += 1
+
+with tempfile.NamedTemporaryFile("wb+", suffix=".oids") as oid_file:
+    rev_list = subprocess.run(
+        ["git", "rev-list", "--objects", "origin/main"],
+        stdout=subprocess.PIPE,
+        check=True,
+    )
+    for line in rev_list.stdout.splitlines():
+        oid = line.split()[:1]
+        if oid:
+            oid_file.write(oid[0] + b"\n")
+    oid_file.flush()
+    oid_file.seek(0)
+
+    proc = subprocess.Popen(
+        ["git", "cat-file", "--batch"],
+        stdin=oid_file,
+        stdout=subprocess.PIPE,
+    )
+    while True:
+        header_line = proc.stdout.readline()
+        if not header_line:
+            break
+        header = header_line.decode("ascii", errors="replace").rstrip("\n")
+        parts = header.split()
+        if len(parts) < 3:
+            print(f"FAIL: malformed cat-file header: {header!r}", file=sys.stderr)
+            proc.kill()
+            sys.exit(1)
+        oid, kind, size_s = parts[0], parts[1], parts[2]
+        try:
+            size = int(size_s)
+        except ValueError:
+            print(f"FAIL: malformed cat-file size in header: {header!r}", file=sys.stderr)
+            proc.kill()
+            sys.exit(1)
+        body_bytes = proc.stdout.read(size + 1)
+        if len(body_bytes) != size + 1:
+            print(
+                f"FAIL: truncated cat-file payload for {oid} "
+                f"(expected {size} bytes, got {len(body_bytes) - 1})",
+                file=sys.stderr,
+            )
+            proc.kill()
+            sys.exit(1)
+        body = body_bytes[:-1].decode("utf-8", errors="replace").casefold()
+        if kind == "blob":
+            if any(p in body for p in patterns):
+                blob += 1
+        elif kind == "commit":
+            if any(p in body for p in patterns):
+                meta += 1
+    rc = proc.wait()
+    if rc:
+        print(f"FAIL: git cat-file exited {rc}", file=sys.stderr)
+        sys.exit(rc)
+
 if meta or blob:
     print(f"FAIL: origin/main meta_hits={meta} blob_hits={blob}", file=sys.stderr)
     sys.exit(1)
