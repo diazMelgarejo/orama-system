@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -12,6 +13,14 @@ import pytest
 def _orama_insecure_dev_for_tests(monkeypatch):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
     monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+
+
+@pytest.fixture(scope="session")
+def git_bin() -> str:
+    git = shutil.which("git")
+    if git is None:
+        pytest.fail("git executable not found")
+    return git
 
 
 # ── oramaclaw engine test helpers ────────────────────────────────────────────

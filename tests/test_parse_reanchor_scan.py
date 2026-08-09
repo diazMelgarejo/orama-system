@@ -4,6 +4,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 PARSER = ROOT / "scripts" / "git" / "parse-reanchor-scan.py"
 
@@ -16,7 +18,8 @@ SAMPLE = """
 """
 
 
-def test_parse_reanchor_scan_categories(tmp_path: Path):
+@pytest.mark.unit
+def test_parse_reanchor_scan_categories(tmp_path: Path) -> None:
     sample_path = tmp_path / "scan.txt"
     sample_path.write_text(SAMPLE, encoding="utf-8")
     proc = subprocess.run(

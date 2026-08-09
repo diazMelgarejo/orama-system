@@ -34,7 +34,7 @@ def _run(script_body: str, *, env: dict[str, str] | None = None) -> subprocess.C
 
 def _make_repo(root: Path, marker: str = "") -> Path:
     root.mkdir(parents=True, exist_ok=True)
-    (root / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     if marker:
         marker_path = root / marker
         marker_path.parent.mkdir(parents=True, exist_ok=True)
@@ -66,6 +66,27 @@ def test_is_git_root_rejects_symlink(tmp_path: Path) -> None:
     link = tmp_path / "link"
     link.symlink_to(real)
     result = _run(f'sibling_repo_is_git_root "{link}" "" && echo YES || echo NO')
+    assert result.stdout.strip() == "NO"
+
+
+def test_is_git_root_rejects_symlinked_git_entry(tmp_path: Path) -> None:
+    repo = _make_repo(tmp_path / "repo")
+    real_git = repo / ".git-real"
+    (repo / ".git").rename(real_git)
+    (repo / ".git").symlink_to(real_git)
+
+    result = _run(f'sibling_repo_is_git_root "{repo}" "" && echo YES || echo NO')
+
+    assert result.stdout.strip() == "NO"
+
+
+def test_is_git_root_rejects_nested_directory_inside_repo(tmp_path: Path) -> None:
+    repo = _make_repo(tmp_path / "repo")
+    nested = repo / "nested"
+    nested.mkdir()
+
+    result = _run(f'sibling_repo_is_git_root "{nested}" "" && echo YES || echo NO')
+
     assert result.stdout.strip() == "NO"
 
 

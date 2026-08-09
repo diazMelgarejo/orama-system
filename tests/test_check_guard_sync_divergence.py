@@ -110,6 +110,44 @@ def test_sibling_ahead_of_canonical_fails_closed(tmp_path: Path) -> None:
     result = _run_checker(workspace, canon)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "GUARD_SYNC_E_DIVERGENCE" in result.stderr
+
+
+def test_githooks_directory_without_effective_hookspath_is_not_scanned(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    canon = workspace / "orama-system"
+    sibling = workspace / "Perpetua-Tools"
+    rel = ".githooks/pre-push"
+
+    _init_repo(canon, "Tester", "tester@example.com")
+    _commit_file(canon, rel, "# canonical hook\n", "canon hook")
+
+    _init_repo(sibling, "Tester", "tester@example.com")
+    _commit_file(sibling, rel, "# divergent but inactive hook\n", "inactive divergent hook")
+
+    result = _run_checker(workspace, canon)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert ".githooks/pre-push" not in result.stdout
+
+
+def test_githooks_with_effective_hookspath_is_scanned(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    canon = workspace / "orama-system"
+    sibling = workspace / "Perpetua-Tools"
+    rel = ".githooks/pre-push"
+
+    _init_repo(canon, "Tester", "tester@example.com")
+    _commit_file(canon, rel, "# canonical hook\n", "canon hook")
+
+    _init_repo(sibling, "Tester", "tester@example.com")
+    subprocess.run(["git", "config", "core.hooksPath", ".githooks"], cwd=sibling, check=True)
+    _commit_file(sibling, rel, "# divergent active hook\n", "active divergent hook")
+
+    result = _run_checker(workspace, canon)
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert ".githooks/pre-push" in result.stdout
+    assert "GUARD_SYNC_E_DIVERGENCE" in result.stderr
 def test_rejects_surplus_arguments(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     canon = workspace / "orama-system"

@@ -83,6 +83,7 @@ def test_branch_ahead_of_upstream_is_flagged_with_commit_count(tmp_path: Path) -
     assert result.returncode == 0, result.stderr
     assert "branch: ahead" in result.stdout
     assert "issue: unpushed-1-commits" in result.stdout
+    assert "raw upstream ahead count" in result.stdout
     assert "unpushed local work" in result.stdout
 
 

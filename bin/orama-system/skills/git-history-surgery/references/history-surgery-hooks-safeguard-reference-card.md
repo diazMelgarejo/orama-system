@@ -31,7 +31,7 @@ blocks, multi-minute stalls, and the illusion that expunge "never started."
 | -------------------- | ----------------------- |
 | `git filter-repo` / `filter-branch` | Normal `git commit` on a feature branch |
 | `bash scripts/git/expunge-*.sh` | `commit-clean.sh` after staging |
-| Post-expunge `git push --force` (all branches) | Routine `publish-clean-branch.sh` on unaudited tip |
+| Post-expunge `git push --force-with-lease` (all branches) | Routine `publish-clean-branch.sh` on unaudited tip |
 | `git reflog expire` / `gc` / `repack` during scrub | `git stash pop` (see stash card — separate one-shot disable) |
 | Recording lease SHAs + `--force-with-lease` pushes | Opening/reviewing PRs after surgery is complete |
 
@@ -47,7 +47,7 @@ export HISTORY_SURGERY_ACTIVE=1
 
 # 2. Rewrite / expunge (hooks OFF for every git invocation in this block)
 git -c core.hooksPath=/dev/null filter-repo --force ...
-# or: bash scripts/git/history-surgery-git.sh push --force origin main:main
+# or: bash scripts/git/history-surgery-git.sh push --force-with-lease="refs/heads/main:${OLD_SHA}" origin main:main
 
 # 3. Post-rewrite verification (hooks still OFF — scans are explicit, not hook-driven)
 python3 scripts/review/repo_hygiene.py .   # when applicable
@@ -74,7 +74,8 @@ For `main` on repos with Phase 0 direct-push guard, also set `ALLOW_MAIN_PUSH=1`
 **single** intentional post-expunge push — still with hooks off:
 
 ```bash
-ALLOW_MAIN_PUSH=1 git -c core.hooksPath=/dev/null push --force origin main:main
+OLD_SHA="$(git rev-parse origin/main)"
+ALLOW_MAIN_PUSH=1 git -c core.hooksPath=/dev/null push --force-with-lease="refs/heads/main:${OLD_SHA}" origin main:main
 ```
 
 GitHub **branch protection** is separate: temporarily disable or use admin bypass; hooks
@@ -127,6 +128,6 @@ hooks are off so pre-push cannot block; after surgery, never push with `MERGE_HE
 - [`stash-hooks-safeguard-reference-card.md`](stash-hooks-safeguard-reference-card.md) — hooks off for stash pop only
 - [`expunge-contaminated-history.md`](expunge-contaminated-history.md) — full scrub sequence
 - [`pending-operation-push-guard-reference-card.md`](pending-operation-push-guard-reference-card.md) — post-surgery normal pushes
-- [`../SKILL.md`](../SKILL.md) — decision item 13
+- [`../SKILL.md`](../SKILL.md) — decision item 12
 - `scripts/git/history-surgery-git.sh` — wrapper
 - `scripts/git/expunge-all-workspace-repos.sh` — workspace expunge (uses hooks-off push)

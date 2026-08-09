@@ -39,8 +39,13 @@ while IFS= read -r token; do
   _add_token "$token"
 done < <(list_private_literal_values "$ORAMA_ROOT" forbidden_attribution 2>/dev/null || true)
 
-HOME_PATTERNS="${HOME:-/home/ubuntu}/.cursor/openclaw/banned-attribution-patterns"
-if [[ -f "$HOME_PATTERNS" ]]; then
+# Resolve via the shared registry lookup (honors OPENCLAW_ATTRIBUTION_PATTERNS
+# when set) instead of hardcoding the default ~/.cursor/openclaw path -- a
+# configured override pointing elsewhere was previously silently ignored by
+# this guard even though list_banned_pattern_tokens itself already resolves
+# it correctly.
+CONFIGURED_PATTERNS="$(banned_patterns_file "$ORAMA_ROOT")"
+if [[ -f "$CONFIGURED_PATTERNS" ]]; then
   while IFS= read -r token; do
     _add_token "$token"
   done < <(list_banned_pattern_tokens "$ORAMA_ROOT" 2>/dev/null || true)

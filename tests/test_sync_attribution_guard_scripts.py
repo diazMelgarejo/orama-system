@@ -45,6 +45,53 @@ def _run_atomic_append_snippet(dest: Path, mode: str, snippet: Path) -> subproce
     return subprocess.run(["bash", "-c", wrapper], capture_output=True, text=True)
 
 
+def _run_repo_uses_githooks(repo: Path) -> subprocess.CompletedProcess[str]:
+    func_src = _extract_function("_repo_uses_githooks")
+    wrapper = f'set -euo pipefail\n{func_src}\n_repo_uses_githooks "{repo}" && echo YES || echo NO\n'
+    return subprocess.run(["bash", "-c", wrapper], cwd=repo, capture_output=True, text=True)
+
+
+def _init_git_repo(repo: Path) -> None:
+    repo.mkdir(parents=True, exist_ok=True)
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+
+
+def test_repo_uses_githooks_rejects_directory_without_effective_hookspath(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_git_repo(repo)
+    (repo / ".githooks").mkdir()
+
+    result = _run_repo_uses_githooks(repo)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "NO"
+
+
+def test_repo_uses_githooks_accepts_effective_hookspath(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_git_repo(repo)
+    (repo / ".githooks").mkdir()
+    subprocess.run(["git", "config", "core.hooksPath", ".githooks"], cwd=repo, check=True)
+
+    result = _run_repo_uses_githooks(repo)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "YES"
+
+
+def test_repo_uses_githooks_accepts_explicit_marker(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_git_repo(repo)
+    hooks = repo / ".githooks"
+    hooks.mkdir()
+    (hooks / ".guard-sync-opt-in").write_text("intentional\n", encoding="utf-8")
+
+    result = _run_repo_uses_githooks(repo)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "YES"
+
+
 def test_append_snippet_creates_new_dest_when_missing(tmp_path: Path) -> None:
     dest = tmp_path / "new-file.txt"
     snippet = tmp_path / "snippet.txt"
