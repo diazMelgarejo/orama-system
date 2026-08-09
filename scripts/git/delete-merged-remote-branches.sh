@@ -50,23 +50,25 @@ fi
 
 deleted=0
 skipped=0
-for branch in "${branches[@]}"; do
-  [[ -n "$branch" ]] || continue
-  [[ "$branch" == "main" ]] && continue
-  if ! git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-    skipped=$((skipped + 1))
-    continue
-  fi
-  echo ">>> DELETE merged remote $branch"
-  if [[ "$DRY_RUN" == "1" ]]; then
-    deleted=$((deleted + 1))
-    continue
-  fi
-  if "${PUSH[@]}" origin --delete "$branch"; then
-    deleted=$((deleted + 1))
-  else
-    echo "warn: delete failed $branch" >&2
-  fi
-done
+if [[ "${#branches[@]}" -gt 0 ]]; then
+  for branch in "${branches[@]}"; do
+    [[ -n "$branch" ]] || continue
+    [[ "$branch" == "main" ]] && continue
+    if ! git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+      skipped=$((skipped + 1))
+      continue
+    fi
+    echo ">>> DELETE merged remote $branch"
+    if [[ "$DRY_RUN" == "1" ]]; then
+      deleted=$((deleted + 1))
+      continue
+    fi
+    if "${PUSH[@]}" origin --delete "$branch"; then
+      deleted=$((deleted + 1))
+    else
+      echo "warn: delete failed $branch" >&2
+    fi
+  done
+fi
 
 echo "OK: delete-merged-remote-branches deleted=$deleted skipped=$skipped dry_run=$DRY_RUN"

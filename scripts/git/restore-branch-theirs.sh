@@ -97,7 +97,7 @@ if ! (
   exit 1
 fi
 
-final_tree="$(git -C "$work_dir" rev-parse HEAD^{tree})"
+final_tree="$(git -C "$work_dir" rev-parse 'HEAD^{tree}')"
 if [[ "$final_tree" != "$target_tree" ]]; then
   echo "WARN: tree mismatch for $BRANCH — aligning from source tip"
   git -C "$work_dir" checkout "$source_ref" -- .
