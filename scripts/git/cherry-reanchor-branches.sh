@@ -68,9 +68,12 @@ skipped=0
 work=""
 work_dir=""
 cleanup_cherry_worktree() {
-  if [[ -n "${work_dir:-}" && -d "$work_dir" ]]; then
-    git -C "$work_dir" cherry-pick --abort 2>/dev/null || true
-    git worktree remove --force "$work_dir" 2>/dev/null || rm -rf "$work_dir"
+  if [[ -n "${work_dir:-}" ]]; then
+    if [[ -d "$work_dir" ]]; then
+      git -C "$work_dir" cherry-pick --abort 2>/dev/null || true
+      git worktree remove --force "$work_dir" 2>/dev/null || rm -rf -- "$work_dir"
+    fi
+    git worktree prune --expire now 2>/dev/null || true
     work_dir=""
   fi
   [[ -n "${work:-}" ]] && git branch -D "$work" 2>/dev/null || true
@@ -141,9 +144,14 @@ for branch in "${branches[@]}"; do
     continue
   fi
   commits=()
-  while IFS= read -r commit; do
-    [[ -n "$commit" ]] && commits+=("$commit")
-  done < <(awk '/^\+/{print $2}' "$cherry_output")
+  while IFS= read -r cherry_line; do
+    case "$cherry_line" in
+      '+ '*)
+        rest="${cherry_line#+ }"
+        commits+=("${rest%% *}")
+        ;;
+    esac
+  done < "$cherry_output"
   rm -f "$cherry_output"
   if [[ "${#commits[@]}" -eq 0 ]]; then
     echo "  no unique commits vs origin/main — skip (not deleting)"
@@ -160,11 +168,7 @@ for branch in "${branches[@]}"; do
   fi
   if ! (cd "$work_dir" && cherry_pick_commits "${commits[@]}"); then
     echo "  FAIL cherry-pick $branch" >&2
-    git -C "$work_dir" cherry-pick --abort 2>/dev/null || true
-    git worktree remove --force "$work_dir" 2>/dev/null || rm -rf "$work_dir"
-    git branch -D "$work" 2>/dev/null || true
-    work_dir=""
-    work=""
+    cleanup_cherry_worktree
     if [[ "$DELETE_ON_CONFLICT" == "1" ]] \
       && git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
       if push_git origin --delete "$branch" 2>/dev/null; then
@@ -182,10 +186,7 @@ for branch in "${branches[@]}"; do
   main_tip="$(git rev-parse origin/main)"
   if [[ "$mb" != "$main_tip" ]]; then
     echo "  FAIL: merge-base != origin/main after cherry-pick" >&2
-    git worktree remove --force "$work_dir" 2>/dev/null || rm -rf "$work_dir"
-    git branch -D "$work" 2>/dev/null || true
-    work_dir=""
-    work=""
+    cleanup_cherry_worktree
     failed=$((failed + 1))
     continue
   fi
@@ -202,10 +203,7 @@ for branch in "${branches[@]}"; do
       push_ok=1
     fi
   fi
-  git worktree remove --force "$work_dir" 2>/dev/null || rm -rf "$work_dir"
-  git branch -D "$work" 2>/dev/null || true
-  work_dir=""
-  work=""
+  cleanup_cherry_worktree
   if [[ "$push_ok" == "1" ]]; then
     ok=$((ok + 1))
   else
