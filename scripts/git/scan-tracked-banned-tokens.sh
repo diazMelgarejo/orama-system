@@ -14,6 +14,19 @@ if ! banned_patterns_ready "$REPO_ROOT"; then
 fi
 
 # Local-only seed/bootstrap scripts may reference runtime registries; never scan them.
+#
+# Kept narrow deliberately (considered removing per CodeRabbit review
+# 4890233271, 2026-08-08): exactly these 3 internal git-tooling scripts,
+# none user-facing. They reference the *key name* `forbidden_attribution`
+# (a .verboten-literals.local field name) in their own source, which the
+# scanner would otherwise treat as tracked-file content to check -- but
+# list_banned_pattern_tokens below only ever yields *values*, never key
+# names, so this allowlist protects against a narrower structural
+# collision, not an actual bypass: a real banned token value slipping into
+# one of these 3 files would still need to independently match some
+# token's literal value to be caught here (as it would in any tracked
+# file this scanner reaches at all) -- the allowlist doesn't create a
+# blind spot for banned VALUES, only for the key-name string itself.
 SCAN_TRACKED_ALLOWLIST=(
   scripts/cursor/write-openclaw-private-attribution.sh
   scripts/cursor/ci-bootstrap-private-attribution.sh
