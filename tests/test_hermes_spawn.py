@@ -43,7 +43,7 @@ def _run_spawn(
 
 
 @pytest.fixture
-def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
+def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, git_bin: str) -> Path:
     runtime = tmp_path / "runtime"
     runtime.mkdir()
     cache = tmp_path / "cache"
@@ -57,7 +57,7 @@ def isolated_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     pt_root = tmp_path / "pt"
     pt_src = pt_root / "src"
     pt_src.mkdir(parents=True)
-    (pt_root / ".git").mkdir()
+    subprocess.run([git_bin, "init", "-q"], cwd=pt_root, check=True)
     (pt_root / "orchestrator").mkdir()
     (pt_root / "orchestrator" / "fastapi_app.py").write_text(
         "# PT root marker for resolve_perp_harness.sh\n",

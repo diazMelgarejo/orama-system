@@ -59,7 +59,11 @@ identical clustering problem one level up:
   every file touched by that theme — codex, dispatched against 5 branches
   sharing an identical 5-commit conflict cluster, resolved the shared
   portion consistently across all 5 rather than re-deriving the answer per
-  branch, then handled each branch's additional unique commits on top.
+  branch, then handled each branch's additional unique commits on top. This
+  only holds after verifying each branch has the same base, conflict blobs,
+  surrounding context, and gitlink direction; if any of those checks differ,
+  resolve that branch independently instead of assuming the cluster match is
+  sufficient.
 
 ## Gold-nugget cross-references (quote these, don't re-derive them)
 
