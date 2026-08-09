@@ -17,12 +17,20 @@ if [[ ! -s "$PATTERNS" ]]; then
   if ! bash "$SCRIPT_DIR/seed-banned-attribution-patterns.sh" "$PATTERNS" 2>/dev/null; then
     # No local-only registry available yet on this machine. Fall back to a
     # placeholder rather than hard-failing; re-run this script (or the seed
-    # script directly) once a real registry exists to replace it.
+    # script directly) once a real registry exists to replace it. Not the
+    # real word "REDACTED" -- that appears in genuine security docs/log
+    # messages and would false-positive scan-tracked-banned-tokens.sh once
+    # ripgrep is actually present to search for it. Assembled at runtime
+    # via concatenation, not written as one literal, so this script's own
+    # source never contains the substring the scanner would then flag.
+    _placeholder_token="ci-placeholder-pattern"
+    _placeholder_token+="-never-matches-real-content-7f3ae9c1"
     {
       echo "# Banned attribution tokens (one per line, case-insensitive substring match)"
-      echo "REDACTED"
+      echo "$_placeholder_token"
     } >"$PATTERNS"
     chmod 600 "$PATTERNS"
+    unset _placeholder_token
   fi
 else
   printf 'OK: preserve existing %s\n' "$PATTERNS"

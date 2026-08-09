@@ -2,6 +2,12 @@
 # Fail if any gitignored banned token appears in tracked files (GitHub hygiene).
 set -euo pipefail
 
+if ! command -v rg >/dev/null 2>&1; then
+  echo "ERROR: ripgrep ('rg') is required by this scanner but was not found in PATH." >&2
+  echo "This scan cannot be trusted to report 'no banned tokens' without it -- install ripgrep and re-run." >&2
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=banned_attribution_lib.sh

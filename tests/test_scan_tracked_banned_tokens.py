@@ -33,11 +33,7 @@ def _init_fixture_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
 
 
 def _run_scan(
-    repo: Path,
-    patterns: Path,
-    isolated_home: Path,
-    diag_token: str = "",
-    diag_rel: str = "scripts/cursor/seed-banned-attribution-patterns.sh",
+    repo: Path, patterns: Path, isolated_home: Path, path_dirs: list[str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     # Build a minimal, explicit environment rather than os.environ.copy() +
     # one override. banned_patterns_file() falls back through
@@ -48,66 +44,19 @@ def _run_scan(
     # whatever happens to exist on the machine running it, not just on the
     # fixture it explicitly sets up. Pin PATH and HOME to known values and
     # set only the one variable the test cares about.
+    path = os.pathsep.join(path_dirs) if path_dirs is not None else os.environ.get("PATH", "/usr/bin:/bin")
     env = {
-        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "PATH": path,
         "HOME": str(isolated_home),
         "OPENCLAW_ATTRIBUTION_PATTERNS": str(patterns),
     }
-    result = subprocess.run(
+    return subprocess.run(
         ["bash", "scripts/git/scan-tracked-banned-tokens.sh"],
         cwd=repo,
         capture_output=True,
         text=True,
         env=env,
     )
-    if result.returncode == 0 and diag_token:
-        # Diagnostic-only: this scanner unexpectedly reported clean in some
-        # environments (passes locally, in a fresh clone, and in a sandboxed
-        # agent run, but has failed intermittently in CI) with no other
-        # signal to explain why. Re-run with `bash -x` and stash the full
-        # execution trace on the result object so a failing assertion can
-        # surface exactly which branch was taken and what each resolved
-        # value was, without needing another round-trip to reproduce it.
-        trace = subprocess.run(
-            ["bash", "-x", "scripts/git/scan-tracked-banned-tokens.sh"],
-            cwd=repo,
-            capture_output=True,
-            text=True,
-            env=env,
-        )
-        result.trace = trace.stderr  # type: ignore[attr-defined]
-
-        # The trace shows `rg -F -i -n -- "$token" "$rel"` running and
-        # returning no match even though "$rel" demonstrably contains
-        # "$token" -- with the scanner's own `2>/dev/null` hiding whatever
-        # rg has to say about it. ripgrep silently skips files matched by
-        # ignore rules even when the file is passed explicitly on the
-        # command line (a well-documented ripgrep behavior, not a bug) --
-        # run the same search directly, uncensored, with --debug and
-        # --no-ignore variants to tell "genuinely no match" apart from
-        # "ripgrep decided to skip this file".
-        rg_direct = subprocess.run(
-            ["rg", "-F", "-i", "-n", "--", diag_token, diag_rel],
-            cwd=repo, capture_output=True, text=True, env=env,
-        )
-        rg_debug = subprocess.run(
-            ["rg", "--debug", "-F", "-i", "-n", "--", diag_token, diag_rel],
-            cwd=repo, capture_output=True, text=True, env=env,
-        )
-        rg_noignore = subprocess.run(
-            ["rg", "--no-ignore", "-F", "-i", "-n", "--", diag_token, diag_rel],
-            cwd=repo, capture_output=True, text=True, env=env,
-        )
-        rg_version = subprocess.run(["rg", "--version"], capture_output=True, text=True, env=env)
-        file_bytes = (repo / diag_rel).read_bytes()
-        result.rg_diag = (  # type: ignore[attr-defined]
-            f"rg_version={rg_version.stdout!r}\n"
-            f"rg_direct: rc={rg_direct.returncode} stdout={rg_direct.stdout!r} stderr={rg_direct.stderr!r}\n"
-            f"rg_debug: rc={rg_debug.returncode} stdout={rg_debug.stdout!r} stderr={rg_debug.stderr!r}\n"
-            f"rg_noignore: rc={rg_noignore.returncode} stdout={rg_noignore.stdout!r} stderr={rg_noignore.stderr!r}\n"
-            f"file_bytes={file_bytes!r}"
-        )
-    return result
 
 
 def test_key_name_collision_is_line_scoped_for_internal_bootstrap_files(tmp_path: Path) -> None:
@@ -142,12 +91,10 @@ def test_key_name_collision_rejects_non_key_name_occurrence(tmp_path: Path) -> N
         check=True,
     )
 
-    result = _run_scan(repo, patterns, home, diag_token="forbidden_attribution")
+    result = _run_scan(repo, patterns, home)
 
     assert result.returncode == 1, (
-        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}\n"
-        f"trace={getattr(result, 'trace', '<not captured>')}\n"
-        f"rg_diag={getattr(result, 'rg_diag', '<not captured>')}"
+        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}"
     )
     assert "scripts/cursor/seed-banned-attribution-patterns.sh" in result.stderr
 
@@ -164,11 +111,48 @@ def test_internal_bootstrap_files_still_fail_on_other_banned_values(tmp_path: Pa
         check=True,
     )
 
-    result = _run_scan(repo, patterns, home, diag_token="real-banned-value")
+    result = _run_scan(repo, patterns, home)
 
     assert result.returncode == 1, (
-        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}\n"
-        f"trace={getattr(result, 'trace', '<not captured>')}\n"
-        f"rg_diag={getattr(result, 'rg_diag', '<not captured>')}"
+        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}"
     )
     assert "scripts/cursor/seed-banned-attribution-patterns.sh" in result.stderr
+
+
+def test_fails_loudly_when_ripgrep_is_missing(tmp_path: Path) -> None:
+    # Regression test for the actual bug this file's diagnostic instrumentation
+    # uncovered: `rg ... 2>/dev/null || true` inside the scan loop means a
+    # missing `rg` binary produces zero hits, not an error -- the scanner then
+    # reports "OK: no banned tokens" even though it never actually scanned
+    # anything. This silently passed on GitHub Actions runners lacking
+    # ripgrep, on both this test suite and the production git-hygiene CI gate.
+    # A missing dependency must fail loudly, never masquerade as "clean".
+    repo, patterns, home = _init_fixture_repo(tmp_path)
+    patterns.write_text("real-banned-value\n", encoding="utf-8")
+    target = repo / "scripts/cursor/seed-banned-attribution-patterns.sh"
+    target.parent.mkdir(parents=True)
+    target.write_text("echo real-banned-value\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "scripts/cursor/seed-banned-attribution-patterns.sh"],
+        cwd=repo,
+        check=True,
+    )
+
+    # A PATH with the directory containing `rg` removed, but still real enough
+    # to find bash/git/coreutils.
+    rg_path = shutil.which("rg")
+    if rg_path is None:
+        pytest.skip("ripgrep is not installed on this machine; nothing to strip from PATH")
+    rg_dir = str(Path(rg_path).parent)
+    all_dirs = [d for d in os.environ.get("PATH", "/usr/bin:/bin").split(os.pathsep) if d]
+    stripped_path = [d for d in all_dirs if d != rg_dir]
+    if shutil.which("rg", path=os.pathsep.join(stripped_path)):
+        pytest.skip("rg is also reachable from another PATH entry on this machine")
+
+    result = _run_scan(repo, patterns, home, path_dirs=stripped_path)
+
+    assert result.returncode != 0, (
+        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
+    assert "ripgrep" in result.stderr.lower()
+    assert "OK: no banned tokens" not in result.stdout
