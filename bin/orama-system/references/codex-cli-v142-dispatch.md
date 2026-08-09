@@ -13,7 +13,7 @@ Cite this card; do not fork flag tables into skill bodies.
 | Codex binary | Native `%LOCALAPPDATA%\Programs\OpenAI\Codex\bin` **before** `%USERPROFILE%\.lmstudio\bin`; see `platform/windows/ensure-partner-cli-paths.ps1` |
 | Repo root (`-C`) | `$ORAMA_SYSTEM_PATH` / `$ORAMA_SYSTEM_ROOT` / `$ORAMA_REPO_ROOT`, else `git rev-parse --show-toplevel` |
 | Test/script paths in prompt | **Repo-relative** (`tests/foo.py`) — never `C:\<user>\…` or `/<user>/…` absolute host paths in committed examples |
-| Python for pytest | `uv run --no-sync python3 -m pytest`, **never** bare `python`/`pytest` on PATH — see "Python interpreter resolution" below |
+| Python for pytest | `uv run --no-sync -m pytest`, **never** bare `python`/`pytest` on PATH — see "Python interpreter resolution" below |
 | Codex process stdin (non-interactive dispatch) | Always closed/`DEVNULL` — see "Stdin hygiene" below |
 
 Preferred launcher (resolves Codex + repo root):
@@ -67,9 +67,12 @@ pre-verified by the main agent — never for open-ended exploration.
 detached/backgrounded/non-interactive (fanout, CI, a subprocess launched by
 another script). `dispatch_codex_partner.py` and `dual_path_dispatch.py` both
 do this internally (`stdin=subprocess.DEVNULL`) — prefer those launchers over
-a raw manual `codex exec` invocation so this is handled for you. If you must
-invoke `codex exec` directly in a script or one-off command, close stdin
-yourself:
+a raw manual `codex exec` invocation so this is handled for you. This does
+**not** apply to the top-level interactive `codex` profile (a human present
+at a TTY) — `dispatch_codex_partner.py --profile interactive` keeps real
+stdin (`stdin=None`) since Codex needs to read actual keystrokes there. If
+you must invoke `codex exec` directly in a script or one-off command, close
+stdin yourself:
 
 ```bash
 codex exec -C "$ROOT" -s workspace-write \
@@ -84,7 +87,7 @@ cmd /c "codex exec -C `"$root`" -s workspace-write --dangerously-bypass-approval
 **Why:** an inherited-but-unfed stdin (common when a caller backgrounds/detaches
 the process) leaves Codex CLI printing `Reading additional input from
 stdin...` and hanging indefinitely — even when the prompt was already passed
-correctly as a positional argument. Confirmed live 2026-08-08/09 dispatching
+correctly as a positional argument. Confirmed live 2026-08-08 dispatching
 orama PR #289's fix: `ps aux` showed the full prompt text present in the
 process's own argv, proving the hang was purely stdin-related, not a failed
 argument pass. Killing the process and re-running with `< /dev/null` fixed it
@@ -93,7 +96,7 @@ always close stdin on any dispatch you don't intend to feed interactively.
 
 ## Python interpreter resolution
 
-**Always `uv run --no-sync python3 -m pytest`, never bare `python`/`pytest`
+**Always `uv run --no-sync -m pytest`, never bare `python`/`pytest`
 on PATH**, in prompts, scripts, and manual commands alike. A bare `python`/
 `pytest` resolves via `$PATH` search order, which can silently land on a
 stray interpreter with the wrong (or entirely absent) dependency set instead
@@ -106,12 +109,12 @@ FastAPI/Starlette pairing) rather than an obvious "wrong interpreter" message.
 
 ```bash
 uv sync --frozen --extra test   # once per fresh worktree/checkout
-uv run --no-sync python3 -m pytest tests/ -q
+uv run --no-sync -m pytest tests/ -q
 ```
 
 ```powershell
 uv sync --frozen --extra test
-uv run --no-sync python3 -m pytest tests\ -q
+uv run --no-sync -m pytest tests\ -q
 ```
 
 If a `.venv` doesn't exist yet, `uv sync --frozen --extra test` builds it from
@@ -128,7 +131,7 @@ Bash — repo root from git:
 ROOT="$(git rev-parse --show-toplevel)"
 codex exec -C "$ROOT" -s workspace-write \
   --dangerously-bypass-approvals-and-sandbox \
-  "Run only: uv run --no-sync python3 -m pytest tests/test_verify_partner_canaries.py -q. Report pass count only." \
+  "Run only: uv run --no-sync -m pytest tests/test_verify_partner_canaries.py -q. Report pass count only." \
   < /dev/null
 ```
 
@@ -138,7 +141,7 @@ PowerShell — repo root from env or git:
 $root = if ($env:ORAMA_SYSTEM_PATH) { $env:ORAMA_SYSTEM_PATH } else {
   git -C $PWD rev-parse --show-toplevel
 }
-cmd /c "codex exec -C `"$root`" -s workspace-write --dangerously-bypass-approvals-and-sandbox `"Run only: uv run --no-sync python3 -m pytest tests\test_verify_partner_canaries.py -q. Report pass count only.`" < NUL"
+cmd /c "codex exec -C `"$root`" -s workspace-write --dangerously-bypass-approvals-and-sandbox `"Run only: uv run --no-sync -m pytest tests\test_verify_partner_canaries.py -q. Report pass count only.`" < NUL"
 ```
 
 Interactive TTY:
@@ -171,4 +174,4 @@ codex --version
 - `codex exec` without `-C <repo-root>` when the task references repo-relative paths
 - Assuming npm global and WinGet native are different major versions — check `codex --version` on PATH after `ensure-partner-cli-paths.ps1`
 - **`codex exec` dispatched detached/backgrounded/non-interactively without closing stdin** (`< /dev/null` / `< NUL`) — hangs on "Reading additional input from stdin..." even with a correctly-passed prompt argument. Use `dispatch_codex_partner.py`/`dual_path_dispatch.py`, both of which set `stdin=subprocess.DEVNULL` internally.
-- **Bare `python`/`pytest` on PATH** in a prompt, script, or manual command instead of `uv run --no-sync python3 -m pytest` — silently resolves to whatever interpreter happens to be first on `$PATH`, not this repo's `uv.lock`-pinned dependency set. Produces misleading collection-time errors, not an obvious "wrong interpreter" message.
+- **Bare `python`/`pytest` on PATH** in a prompt, script, or manual command instead of `uv run --no-sync -m pytest` — silently resolves to whatever interpreter happens to be first on `$PATH`, not this repo's `uv.lock`-pinned dependency set. Produces misleading collection-time errors, not an obvious "wrong interpreter" message.
