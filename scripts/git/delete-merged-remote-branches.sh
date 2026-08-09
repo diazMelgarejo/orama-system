@@ -30,14 +30,18 @@ fi
 
 branches=()
 if [[ -n "$FROM_JSON" ]]; then
-  mapfile -t branches < <(
+  while IFS= read -r branch; do
+    [[ -n "$branch" ]] && branches+=("$branch")
+  done < <(
     python3 -c "import json,sys; print('\n'.join(json.load(open(sys.argv[1]))['merged']))" \
       "$FROM_JSON"
   )
 else
   scan="$(mktemp)"
   bash "$SCRIPT_DIR/reanchor_scan.sh" "$REPO" origin/main remotes >"$scan"
-  mapfile -t branches < <(
+  while IFS= read -r branch; do
+    [[ -n "$branch" ]] && branches+=("$branch")
+  done < <(
     python3 "$SCRIPT_DIR/parse-reanchor-scan.py" "$scan" \
       | python3 -c "import json,sys; print('\n'.join(json.load(sys.stdin)['merged']))"
   )

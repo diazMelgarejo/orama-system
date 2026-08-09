@@ -49,7 +49,9 @@ push_git() {
 }
 
 if [[ "$ALL_NEEDS" == "1" && -n "$FROM_JSON" ]]; then
-  mapfile -t branches < <(
+  while IFS= read -r branch; do
+    [[ -n "$branch" ]] && branches+=("$branch")
+  done < <(
     python3 -c "import json,sys; print('\n'.join(x['branch'] for x in json.load(open(sys.argv[1]))['needs']))" \
       "$FROM_JSON"
   )
@@ -79,7 +81,7 @@ resolve_source_ref() {
 
 is_empty_cherry_pick() {
   # Mid cherry-pick with no index/worktree delta (empty patch or already in tree).
-  [[ -f .git/CHERRY_PICK_HEAD ]] || return 1
+  git rev-parse --verify CHERRY_PICK_HEAD >/dev/null 2>&1 || return 1
   if git diff-index --quiet HEAD -- 2>/dev/null; then
     return 0
   fi
@@ -118,19 +120,27 @@ for branch in "${branches[@]}"; do
   if git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
     old_sha="$(git rev-parse "origin/$branch")"
   fi
-  mapfile -t commits < <(git cherry origin/main "$source_ref" | awk '/^\+/{print $2}')
+  commits=()
+  while IFS= read -r commit; do
+    [[ -n "$commit" ]] && commits+=("$commit")
+  done < <(git cherry origin/main "$source_ref" | awk '/^\+/{print $2}')
   if [[ "${#commits[@]}" -eq 0 ]]; then
     echo "  no unique commits vs origin/main — skip (not deleting)"
     skipped=$((skipped + 1))
     continue
   fi
   work="__cherry_${branch//\//_}"
-  git checkout -B "$work" origin/main
-  git clean -fdq
-  if ! cherry_pick_commits "${commits[@]}"; then
+  work_dir="$(mktemp -d)"
+  if ! git worktree add -B "$work" "$work_dir" origin/main >/dev/null; then
+    echo "  FAIL: could not create disposable worktree for $branch" >&2
+    rm -rf "$work_dir"
+    failed=$((failed + 1))
+    continue
+  fi
+  if ! (cd "$work_dir" && cherry_pick_commits "${commits[@]}"); then
     echo "  FAIL cherry-pick $branch" >&2
-    git cherry-pick --abort 2>/dev/null || true
-    git checkout main 2>/dev/null || git checkout -
+    git -C "$work_dir" cherry-pick --abort 2>/dev/null || true
+    git worktree remove --force "$work_dir" 2>/dev/null || rm -rf "$work_dir"
     git branch -D "$work" 2>/dev/null || true
     if [[ "$DELETE_ON_CONFLICT" == "1" ]] \
       && git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
@@ -145,25 +155,35 @@ for branch in "${branches[@]}"; do
     fi
     continue
   fi
-  mb="$(git merge-base HEAD origin/main)"
+  mb="$(git -C "$work_dir" merge-base HEAD origin/main)"
   main_tip="$(git rev-parse origin/main)"
   if [[ "$mb" != "$main_tip" ]]; then
     echo "  FAIL: merge-base != origin/main after cherry-pick" >&2
-    git checkout main 2>/dev/null || true
+    git worktree remove --force "$work_dir" 2>/dev/null || rm -rf "$work_dir"
     git branch -D "$work" 2>/dev/null || true
     failed=$((failed + 1))
     continue
   fi
+  push_ok=0
   if [[ -n "$old_sha" ]]; then
-    push_git --force-with-lease="refs/heads/${branch}:${old_sha}" \
-      origin "${work}:refs/heads/${branch}" \
-      || push_git --force origin "${work}:refs/heads/${branch}"
+    if push_git --force-with-lease="refs/heads/${branch}:${old_sha}" \
+      origin "${work}:refs/heads/${branch}"; then
+      push_ok=1
+    else
+      echo "  FAIL: lease rejected for $branch; fetch/review and retry with a fresh recorded lease" >&2
+    fi
   else
-    push_git -u origin "${work}:refs/heads/${branch}"
+    if push_git -u origin "${work}:refs/heads/${branch}"; then
+      push_ok=1
+    fi
   fi
-  git checkout main 2>/dev/null || true
+  git worktree remove --force "$work_dir" 2>/dev/null || rm -rf "$work_dir"
   git branch -D "$work" 2>/dev/null || true
-  ok=$((ok + 1))
+  if [[ "$push_ok" == "1" ]]; then
+    ok=$((ok + 1))
+  else
+    failed=$((failed + 1))
+  fi
 done
 
 echo "OK: cherry-reanchor ok=$ok deleted=$deleted failed=$failed skipped=$skipped"
