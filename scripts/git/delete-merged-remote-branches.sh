@@ -30,22 +30,32 @@ fi
 
 branches=()
 if [[ -n "$FROM_JSON" ]]; then
+  branch_list="$(mktemp)"
+  if ! python3 -c "import json,sys; print('\n'.join(json.load(open(sys.argv[1]))['merged']))" \
+      "$FROM_JSON" >"$branch_list"; then
+    echo "ERROR: failed to parse merged branches from $FROM_JSON" >&2
+    rm -f "$branch_list"
+    exit 1
+  fi
   while IFS= read -r branch; do
     [[ -n "$branch" ]] && branches+=("$branch")
-  done < <(
-    python3 -c "import json,sys; print('\n'.join(json.load(open(sys.argv[1]))['merged']))" \
-      "$FROM_JSON"
-  )
+  done < "$branch_list"
+  rm -f "$branch_list"
 else
   scan="$(mktemp)"
   bash "$SCRIPT_DIR/reanchor_scan.sh" "$REPO" origin/main remotes >"$scan"
+  branch_list="$(mktemp)"
+  if ! python3 "$SCRIPT_DIR/parse-reanchor-scan.py" "$scan" \
+      | python3 -c "import json,sys; print('\n'.join(json.load(sys.stdin)['merged']))" \
+      >"$branch_list"; then
+    echo "ERROR: failed to parse reanchor scan output" >&2
+    rm -f "$scan" "$branch_list"
+    exit 1
+  fi
   while IFS= read -r branch; do
     [[ -n "$branch" ]] && branches+=("$branch")
-  done < <(
-    python3 "$SCRIPT_DIR/parse-reanchor-scan.py" "$scan" \
-      | python3 -c "import json,sys; print('\n'.join(json.load(sys.stdin)['merged']))"
-  )
-  rm -f "$scan"
+  done < "$branch_list"
+  rm -f "$scan" "$branch_list"
 fi
 
 deleted=0
