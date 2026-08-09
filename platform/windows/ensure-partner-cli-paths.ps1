@@ -1,11 +1,14 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Idempotently add Hermes partner CLI directories to the current user's PATH.
+    Idempotently prepare Windows partner CLIs for the current session.
 
 .DESCRIPTION
-    Windows partner lanes (Hermes, Codex, AGY, cursor-agent) must resolve from any
-    new PowerShell session without manual PATH edits. Safe to re-run.
+    Windows partner lanes (Hermes, Codex, AGY, cursor-agent, ai-cli-mcp) must
+    resolve from a normal start.ps1 session without manual PATH or package
+    repair. Safe to re-run. ai-cli-mcp package/runtime readiness delegates to
+    the cross-platform scripts/ensure_ai_cli_mcp.py source of truth; provider
+    login and terms acceptance remain explicit operator actions.
 
     Canonical install locations (repo-relative docs in windows-onboarding-config.md):
       cursor-agent  %LOCALAPPDATA%\cursor-agent
@@ -69,12 +72,41 @@ if ($added -eq 0) {
     Write-Host "  OK - added $added path(s). Open a new terminal for full effect."
 }
 
+# ai-cli-mcp is a partner execution lane, so start.ps1 reaches the same shared
+# core-readiness contract as ensure_requirements.ps1 without embedding npm/MCP
+# mechanics in the launcher. WhatIf remains side-effect free.
+if (-not $WhatIf) {
+    $RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+    $McpHelper = Join-Path $RepoRoot 'scripts\ensure_ai_cli_mcp.py'
+    $SkipMcp = $env:ORAMA_SKIP_MCP_ENSURE -and $env:ORAMA_SKIP_MCP_ENSURE.Trim().ToLower() -in @('1', 'true', 'yes')
+    if ($SkipMcp) {
+        Write-Host "  verify ai-cli-mcp     SKIPPED (ORAMA_SKIP_MCP_ENSURE=$($env:ORAMA_SKIP_MCP_ENSURE))" -ForegroundColor Yellow
+    } elseif (-not (Test-Path $McpHelper)) {
+        throw "ai-cli-mcp readiness helper missing: $McpHelper"
+    } else {
+        $RepoPython = Join-Path $RepoRoot '.venv\Scripts\python.exe'
+        if (-not (Test-Path $RepoPython)) {
+            $PythonCommand = Get-Command python -ErrorAction SilentlyContinue
+            $RepoPython = if ($PythonCommand) { $PythonCommand.Source } else { $null }
+        }
+        if (-not $RepoPython) {
+            throw 'Python is unavailable for ai-cli-mcp readiness helper'
+        }
+        & $RepoPython $McpHelper --quiet
+        if ($LASTEXITCODE -ne 0) {
+            throw 'ai-cli-mcp core readiness failed; see remediation above'
+        }
+        Write-Host '  verify ai-cli-mcp     READY'
+    }
+}
+
 # Quick verify (current session after prepend above)
 $checks = @(
-    @{ Name = 'hermes';        Cmd = 'hermes' },
-    @{ Name = 'codex';         Cmd = 'codex' },
-    @{ Name = 'agy';           Cmd = 'agy' },
-    @{ Name = 'cursor-agent';  Cmd = 'cursor-agent' }
+    @{ Name = 'ai-cli';       Cmd = 'ai-cli' },
+    @{ Name = 'hermes';       Cmd = 'hermes' },
+    @{ Name = 'codex';        Cmd = 'codex' },
+    @{ Name = 'agy';          Cmd = 'agy' },
+    @{ Name = 'cursor-agent'; Cmd = 'cursor-agent' }
 )
 foreach ($ch in $checks) {
     $bin = Get-Command $ch.Cmd -ErrorAction SilentlyContinue
