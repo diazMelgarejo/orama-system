@@ -77,6 +77,22 @@ _check_pair() {
   return 1
 }
 
+_repo_uses_githooks() {
+  local root="$1" hooks_path hooks_abs expected_abs
+  if [[ -f "$root/.githooks/.guard-sync-opt-in" ]]; then
+    return 0
+  fi
+  hooks_path="$(git -C "$root" config --path --get core.hooksPath 2>/dev/null || true)"
+  [[ -n "$hooks_path" ]] || return 1
+  if [[ "$hooks_path" == /* ]]; then
+    hooks_abs="$(cd "$hooks_path" 2>/dev/null && pwd -P)" || return 1
+  else
+    hooks_abs="$(cd "$root/$hooks_path" 2>/dev/null && pwd -P)" || return 1
+  fi
+  expected_abs="$(cd "$root/.githooks" 2>/dev/null && pwd -P)" || return 1
+  [[ "$hooks_abs" == "$expected_abs" ]]
+}
+
 _scan_sibling() {
   local sibling_root="$1"
   local rel pair_rc=0
@@ -90,7 +106,7 @@ _scan_sibling() {
   for rel in "${GUARD_PARITY_REQUIRED[@]}"; do
     _check_pair "$sibling_root" "$rel" || pair_rc=1
   done
-  if [[ -d "$sibling_root/.githooks" ]]; then
+  if _repo_uses_githooks "$sibling_root"; then
     for rel in "${GUARD_SYNC_GITHOOKS[@]}"; do
       _check_pair "$sibling_root" "$rel" ".githooks" || pair_rc=1
     done
