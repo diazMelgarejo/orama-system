@@ -107,7 +107,10 @@ When updating a document that is a historical record — PR titles/bodies, lesso
 ledgers, operator plans, memory files — treat the existing corpus as canonical
 and **append** new truth below it. This is the same ethic as
 [`integrative-merge.md`](../skills/oramasys-method/references/integrative-merge.md)
-(mode 1 additive / mode 2 union).
+(mode 1 additive / mode 2 union). The branch-scale form of this same
+discipline — reconciling git conflicts by verified content instead of by
+which side looks more current — lives in
+[`git-history-surgery/references/clustering-discipline-file-and-branch-scale.md`](../skills/git-history-surgery/references/clustering-discipline-file-and-branch-scale.md).
 
 ### Append-only rule (mandatory)
 

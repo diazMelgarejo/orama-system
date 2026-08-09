@@ -218,6 +218,15 @@ LM Studio host, run
 - Never keep a contaminated PR's intervening commits just to preserve review
   continuity. When the final tree is the artifact worth keeping, a replacement
   PR from a clean branch can be the safer, more reviewable result.
+- **Never resolve a reanchor conflict, or judge whether a sibling repo has
+  diverged, by which side looks more current.** Verify against actual
+  content (patch-id comparison, reading origin/main's current full file,
+  checking gitlink direction) before committing to a resolution — the
+  heuristic and the verified answer usually agree, which is exactly why
+  skipping verification feels safe, and the cases where they disagree are
+  silent regressions with no error anywhere to catch them later. This is
+  the branch-scale form of CIDF's file-scale `decide()` discipline. See
+  [`references/clustering-discipline-file-and-branch-scale.md`](references/clustering-discipline-file-and-branch-scale.md).
 - **Platform line endings:** do not convert Windows-serving files (`platform/windows/**`,
   `*.cmd`, `*.bat`, `*.ps1`) to LF from macOS/Linux. Mac/Linux-owned sources stay LF.
   See [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md).
@@ -411,6 +420,8 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
   — CRLF on Windows turf; LF on Mac/Linux; no cross-platform EOL tug-of-war
 - [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md)
 - [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
+- [`references/clustering-discipline-file-and-branch-scale.md`](references/clustering-discipline-file-and-branch-scale.md)
+  — the same clustering discipline (CIDF file-scale ↔ reanchor branch-scale); verify-before-reconcile gold nuggets
 - [`references/windows-powershell-runtime-bootstrap.md`](references/windows-powershell-runtime-bootstrap.md)
 - [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md)
   — macOS bash 3.2; no `mapfile` in hook scripts; `check_tdd_commit.sh` pattern
