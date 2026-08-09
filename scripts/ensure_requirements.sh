@@ -6,6 +6,7 @@
 #   Ollama binary + server at localhost:11434  (auto-installed on Linux/macOS/Docker)
 #   qwen3.5:9b-nvfp4  (Mac inference — pulled if missing)
 #   bge-m3             (embeddings for gbrain — pulled if missing)
+#   ai-cli-mcp core    (pinned package + runnable CLI; provider auth is separate)
 #
 # SOFT requirements (auto-install, non-fatal if fail):
 #   Python venv + pip deps (sha256-stamped, skips if unchanged)
@@ -24,6 +25,7 @@
 #
 # Env overrides:
 #   ORAMA_SKIP_ENSURE=1        — bypass this script entirely (CI/pre-built images)
+#   ORAMA_SKIP_MCP_ENSURE=1    — skip ai-cli-mcp readiness only (CI/pre-provisioned)
 #   OLLAMA_MAC_ENDPOINT        — override default http://localhost:11434
 #   OLLAMA_WARM_MODEL          — override default inference model
 #   OLLAMA_INSTALL_METHOD      — force "brew" or "curl" (auto-detected otherwise)
@@ -100,8 +102,6 @@ _install_ollama() {
 
   case "$_OS" in
     Darwin)
-      # Prefer Homebrew cask (manages updates, launchd service, PATH).
-      # Fall back to official curl installer if brew unavailable.
       if [ "$method" = "curl" ]; then
         _info "Installing Ollama via official curl installer (forced)..."
         curl -fsSL https://ollama.com/install.sh | sh >>"${LOG_DIR}/ollama-install.log" 2>&1 \
@@ -138,7 +138,6 @@ _install_ollama() {
       ;;
   esac
 
-  # Reload PATH so the newly installed binary is visible
   hash -r 2>/dev/null || true
 }
 
@@ -147,7 +146,6 @@ if ! command -v ollama >/dev/null 2>&1; then
   _install_ollama
 fi
 
-# Verify binary is now reachable
 if ! command -v ollama >/dev/null 2>&1; then
   _hard_fail "Ollama binary still not found after install attempt. PATH=${PATH}"
 else
@@ -186,7 +184,6 @@ else
   _warn "Phase 2 skipped — Ollama binary unavailable"
 fi
 
-# Cache ollama list output once (used in phases 3 + 4)
 _OLLAMA_LIST=""
 if [ "$HARD_FAIL" -eq 0 ]; then
   _OLLAMA_LIST="$(ollama list 2>/dev/null || true)"
@@ -312,6 +309,29 @@ if [ -d "${SCRIPT_DIR}/.venv" ]; then
     fi
   else
     _ok "Python deps up-to-date (stamp matches)"
+  fi
+fi
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PHASE 7 — HARD: ai-cli-mcp core package/runtime readiness
+# ──────────────────────────────────────────────────────────────────────────────
+_info "Phase 7 — ai-cli-mcp core readiness"
+if [ "${ORAMA_SKIP_MCP_ENSURE:-0}" = "1" ]; then
+  _warn "ai-cli-mcp readiness bypassed by ORAMA_SKIP_MCP_ENSURE=1"
+else
+  MCP_HELPER="${SCRIPT_DIR}/scripts/ensure_ai_cli_mcp.py"
+  if [ ! -f "$MCP_HELPER" ]; then
+    _hard_fail "MCP readiness helper missing: $MCP_HELPER"
+  else
+    MCP_ARGS=()
+    [ "$MODE_CHECK" -eq 1 ] && MCP_ARGS+=(--check)
+    [ "$MODE_FORCE" -eq 1 ] && MCP_ARGS+=(--force)
+    [ "$MODE_QUIET" -eq 1 ] && MCP_ARGS+=(--quiet)
+    if python3 "$MCP_HELPER" "${MCP_ARGS[@]}"; then
+      _ok "ai-cli-mcp core ready (provider authorization remains independent)"
+    else
+      _hard_fail "ai-cli-mcp core readiness failed — see remediation above"
+    fi
   fi
 fi
 

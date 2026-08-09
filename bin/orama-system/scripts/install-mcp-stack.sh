@@ -5,7 +5,13 @@
 # installed when explicitly requested via --include-gemini. Prefer AGY.
 # Safe to run multiple times. Skips any step that is already complete.
 # Platform bootstrap (Node, Ollama, CRG, gbrain): scripts/first-run-install.sh
-# Usage: bash install-mcp-stack.sh [--dry-run] [--force] [--include-gemini] [--mirror-skills]
+#
+# Core ai-cli-mcp readiness is shared with scripts/ensure_requirements.{sh,ps1}
+# through scripts/ensure_ai_cli_mcp.py. Provider login/terms are never automated.
+#
+# Usage: bash install-mcp-stack.sh [--dry-run] [--force] [--include-gemini]
+#                                  [--mirror-skills] [--core-only]
+#                                  [--verify] [--non-interactive]
 #
 # --mirror-skills: copy SKILL.md files from bin/orama-system/*/SKILL.md to
 #   ~/.claude/skills/<name>/SKILL.md, ~/.codex/skills/<name>/SKILL.md,
@@ -18,32 +24,47 @@ DRY_RUN=false
 FORCE=false
 INCLUDE_GEMINI=false
 MIRROR_SKILLS=false
+CORE_ONLY=false
+VERIFY_ONLY=false
+NON_INTERACTIVE=false
+
+_usage() {
+  cat <<'USAGE'
+Usage: bash install-mcp-stack.sh [options]
+
+Options:
+  --dry-run          Preview optional integration commands without executing them.
+  --force            Reinstall pinned core package and refresh registrations.
+  --include-gemini   Include the optional/deprecated Gemini analyzer lane.
+  --mirror-skills    Mirror canonical skills to installed harness directories.
+  --core-only        Stop after ai-cli-mcp core readiness.
+  --verify           Probe only; do not repair package/client registrations.
+  --non-interactive  Compatibility flag; provider authorization is never automated.
+  --help             Show this help.
+USAGE
+}
+
 for arg in "$@"; do
-  [ "$arg" = "--dry-run" ] && DRY_RUN=true
-  [ "$arg" = "--force" ] && FORCE=true
-  [ "$arg" = "--include-gemini" ] && INCLUDE_GEMINI=true
-  [ "$arg" = "--mirror-skills" ] && MIRROR_SKILLS=true
+  case "$arg" in
+    --dry-run) DRY_RUN=true ;;
+    --force) FORCE=true ;;
+    --include-gemini) INCLUDE_GEMINI=true ;;
+    --mirror-skills) MIRROR_SKILLS=true ;;
+    --core-only) CORE_ONLY=true ;;
+    --verify) VERIFY_ONLY=true ;;
+    --non-interactive) NON_INTERACTIVE=true ;;
+    --help|-h) _usage; exit 0 ;;
+    *) echo "[mcp-install] unknown option: $arg" >&2; _usage >&2; exit 2 ;;
+  esac
 done
 
 _log()  { echo "[mcp-install] $*"; }
-# _ok echoes a success message prefixed with "[mcp-install] ✓" followed by its arguments.
 _ok()   { echo "[mcp-install] ✓ $*"; }
-# _skip echoes a standardized skip message with the provided reason to stdout.
 _skip() { echo "[mcp-install] → skip: $*"; }
-# _fail writes a fatal error message prefixed with "[mcp-install] ✗ FATAL:" to stderr and exits the script with status 1.
+_warn() { echo "[mcp-install] ! $*" >&2; }
 _fail() { echo "[mcp-install] ✗ FATAL: $*" >&2; exit 1; }
-# Security: validate any path interpolated into _run before calling.
-# eval "$*" word-splits and glob-expands; we still need it for compound
-# commands ("cmd1 && cmd2"), but every dynamic variable that flows into _run
-# _run executes the given command string with eval, or if DRY_RUN is true echoes the command prefixed with "[dry-run]".
-# Arguments passed to _run must be validated (for example via _safe_path) before interpolation to avoid shell metacharacter injection.
 _run()  { $DRY_RUN && echo "[dry-run] $*" || eval "$*"; }
 
-# _safe_path: reject any path containing shell metacharacters before
-# interpolating into _run. Refuses paths with: spaces (handled by quoting at
-# call site), tabs, newlines, $, `, ;, &, |, <, >, (, ), {, }, *, ?, [, ],
-# backslash, single-quote, double-quote, or leading dash.
-# _safe_path validates that a path does not start with a dash or contain shell metacharacters and prints an error and returns non-zero if the path is unsafe.
 _safe_path() {
   local p="$1"
   case "$p" in
@@ -53,132 +74,111 @@ _safe_path() {
   esac
 }
 
-_log "MCP orchestration stack installer — 2026-04-25"
-_log "Dry-run: $DRY_RUN | Force: $FORCE"
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_REPO_ROOT="$(cd "$_SCRIPT_DIR/../../.." && pwd)"
+_READINESS="$_REPO_ROOT/scripts/ensure_ai_cli_mcp.py"
+[ -f "$_READINESS" ] || _fail "shared MCP readiness helper missing: $_READINESS"
+AI_CLI_MCP_VERSION="$(python3 -c 'import runpy,sys; print(runpy.run_path(sys.argv[1])["AI_CLI_MCP_VERSION"])' "$_READINESS")"
+
+_log "MCP orchestration stack installer"
+_log "Dry-run: $DRY_RUN | Force: $FORCE | Verify: $VERIFY_ONLY"
 echo ""
 
-# ── Step 1: Node.js ≥20 hard gate ────────────────────────────────────────────
-_log "Step 1: Node.js preflight"
-if ! command -v node >/dev/null 2>&1; then
-  _fail "Node.js not found. Install from https://nodejs.org (v20 or newer required)."
-fi
-NODE_MAJOR=$(node -e "process.stdout.write(String(process.version.match(/^v(\d+)/)[1]))")
-if [ "$NODE_MAJOR" -lt 20 ]; then
-  _fail "Node.js v${NODE_MAJOR} detected. v20 or newer required. Install from https://nodejs.org."
-fi
-_ok "Node.js v$(node -v) — ok"
-
-# ── Step 2: Gemini CLI ────────────────────────────────────────────────────────
-# ── Step 2: ai-cli-mcp ────────────────────────────────────────────────────────
-_log "Step 2: ai-cli-mcp"
-_AICLI_VER=$(ai-cli --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo '')
-if command -v ai-cli >/dev/null 2>&1 && ! $FORCE; then
-  _skip "ai-cli already installed (${_AICLI_VER:-via npx})"
+# ── Steps 1–3: shared ai-cli-mcp core readiness ───────────────────────────────
+# This replaces the old duplicated Node/package/Claude registration logic and
+# the unsafe synthetic ~/.claude/.dangerously-skip-accepted marker. Upstream
+# `ai-cli doctor` explicitly checks binary/path availability only, so login and
+# terms acceptance remain operator-controlled and are never inferred here.
+_log "Steps 1–3: ai-cli-mcp core readiness"
+_CORE_ARGS=()
+$VERIFY_ONLY && _CORE_ARGS+=(--check)
+$FORCE && _CORE_ARGS+=(--force)
+if $DRY_RUN; then
+  printf '[dry-run] python3 %q' "$_READINESS"
+  printf ' %q' "${_CORE_ARGS[@]}"
+  printf '\n'
 else
-  _log "Installing ai-cli-mcp globally..."
-  _run "npm install -g ai-cli-mcp"
+  python3 "$_READINESS" "${_CORE_ARGS[@]}" \
+    || _fail "ai-cli-mcp core readiness failed — follow remediation above"
 fi
+$NON_INTERACTIVE && _log "Provider authorization remains operator-controlled"
 
-_log "Step 2b: Register ai-cli-mcp in Claude Code"
-if claude mcp list 2>/dev/null | grep -q "ai-cli" && ! $FORCE; then
-  _skip "ai-cli already registered in Claude Code"
-else
-  _run "claude mcp add -s user ai-cli -- npx -y ai-cli-mcp@latest"
-  _ok "ai-cli registered in Claude Code"
-fi
-
-# ── Step 3: Claude first-run acceptance ───────────────────────────────────────
-_log "Step 3: ai-cli-mcp first-run acceptance"
-CLAUDE_ACCEPTED_MARKER="$HOME/.claude/.dangerously-skip-accepted"
-if [ -f "$CLAUDE_ACCEPTED_MARKER" ] && ! $FORCE; then
-  _skip "claude first-run prompt already accepted"
-else
-  _log "Accepting Claude first-run prompts (required for ai-cli background workers)..."
-  _log "Note: --dangerously-skip-permissions applies to this one-time acceptance only."
-  if ! $DRY_RUN; then
-    _TIMEOUT_BIN=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
-    if [ -n "$_TIMEOUT_BIN" ]; then
-      echo "" | "$_TIMEOUT_BIN" 5 claude --dangerously-skip-permissions 2>/dev/null || true
-    else
-      echo "" | claude --dangerously-skip-permissions 2>/dev/null || true
-    fi
-    touch "$CLAUDE_ACCEPTED_MARKER"
-  fi
-  _ok "Claude first-run prompt accepted"
+if $CORE_ONLY; then
+  _ok "Core ai-cli-mcp readiness complete"
+  exit 0
 fi
 
 # ── Step 4: Optional Gemini analyzer lane (DEPRECATED) ────────────────────────
-# Gemini CLI is deprecated for unpaid tiers. Prefer Antigravity (AGY).
-# This section only runs if --include-gemini is passed.
 _log "Step 4: Gemini analyzer lane"
 if ! $INCLUDE_GEMINI; then
   _skip "Gemini not requested; analyzer lane remains opt-in"
 else
   if command -v gemini >/dev/null 2>&1 && ! $FORCE; then
     _skip "gemini already installed ($(gemini --version 2>/dev/null | head -1 || echo 'version unknown'))"
+  elif $VERIFY_ONLY; then
+    _warn "gemini requested but CLI is missing"
   else
     _log "Installing @google/gemini-cli..."
     _run "npm install -g @google/gemini-cli"
   fi
 
   _log "Step 4b: Gemini auth check"
-  if gemini auth check >/dev/null 2>&1 && ! $FORCE; then
-    _skip "gemini already authenticated"
-  else
-    _log "Launching gemini auth login (interactive — follow the browser prompt)..."
-    if ! $DRY_RUN; then
-      gemini auth login || _fail "Gemini auth failed. Run 'gemini auth login' manually and retry."
-      gemini auth check >/dev/null 2>&1 || _fail "Gemini auth check failed after login."
+  if command -v gemini >/dev/null 2>&1; then
+    if gemini auth check >/dev/null 2>&1; then
+      _ok "gemini authenticated"
+    else
+      _warn "Gemini auth is not ready; run 'gemini auth login' interactively if this optional lane is required"
     fi
-    _ok "gemini authenticated"
   fi
 
   _log "Step 4c: Register gemini-mcp-tool in Claude Code"
-  if claude mcp list 2>/dev/null | grep -q "gemini-cli" && ! $FORCE; then
+  if ! command -v claude >/dev/null 2>&1; then
+    _skip "Claude Code not installed; gemini-cli client registration skipped"
+  elif claude mcp list 2>/dev/null | grep -q "gemini-cli" && ! $FORCE; then
     _skip "gemini-cli already registered in Claude Code"
+  elif $VERIFY_ONLY; then
+    _warn "gemini-cli is not registered in Claude Code"
   else
     _run "claude mcp add -s user gemini-cli -- npx -y gemini-mcp-tool@latest"
     _ok "gemini-cli registered. Restart Claude Code, then verify with /mcp"
   fi
 fi
 
-# ── Step 5: OpenClaw MCP registry ────────────────────────────────────────────
+# ── Step 5: OpenClaw MCP registry ─────────────────────────────────────────────
 _log "Step 5: OpenClaw MCP registry"
 if command -v openclaw >/dev/null 2>&1; then
   if openclaw mcp list 2>/dev/null | grep -q "ai-cli-mcp" && ! $FORCE; then
     _skip "ai-cli-mcp already in OpenClaw registry"
+  elif $VERIFY_ONLY; then
+    _warn "ai-cli-mcp is not registered in OpenClaw"
   else
-    _run "openclaw mcp set ai-cli-mcp '{\"command\":\"npx\",\"args\":[\"-y\",\"ai-cli-mcp@latest\"],\"env\":{\"MCP_CLAUDE_DEBUG\":\"false\"}}'"
+    _run "openclaw mcp set ai-cli-mcp '{\"command\":\"npx\",\"args\":[\"-y\",\"ai-cli-mcp@${AI_CLI_MCP_VERSION}\"],\"env\":{\"MCP_CLAUDE_DEBUG\":\"false\"}}'"
     _ok "ai-cli-mcp registered in OpenClaw"
   fi
+
   if $INCLUDE_GEMINI; then
     if openclaw mcp list 2>/dev/null | grep -q "gemini-cli" && ! $FORCE; then
       _skip "gemini-cli already in OpenClaw registry"
+    elif $VERIFY_ONLY; then
+      _warn "gemini-cli is not registered in OpenClaw"
     else
       _run "openclaw mcp set gemini-cli '{\"command\":\"npx\",\"args\":[\"-y\",\"gemini-mcp-tool@latest\"]}'"
       _ok "gemini-cli registered in OpenClaw"
     fi
   fi
 else
-  _log "openclaw not found — skipping OpenClaw registry step"
-  _log "To register manually: openclaw mcp set ai-cli-mcp '{...}'"
+  _skip "OpenClaw registry (openclaw CLI not installed)"
 fi
 
-# ── Step 6: Final verification ───────────────────────────────────────────────
-echo ""
 # ── Step 5b: Mirror orama SKILL.md to platform skill directories ─────────────
 if $MIRROR_SKILLS; then
   _log "Step 5b: Mirroring orama SKILL.md files to platform skill dirs"
-  # Resolve the bin/orama-system root relative to this script.
-  _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   _SKILLS_ROOT="$(cd "$_SCRIPT_DIR/.." && pwd)"
-  # Target platform skill dirs — silently skipped if absent (and tool absent).
   _PLATFORMS=(
     "$HOME/.claude/skills:claude"
     "$HOME/.codex/skills:codex"
     "$HOME/.gemini/skills:gemini (DEPRECATED)"
   )
-  # Each subdir of $_SKILLS_ROOT that has a SKILL.md is a mirrorable skill.
   for _src_skill in "$_SKILLS_ROOT"/*/SKILL.md "$_SKILLS_ROOT/SKILL.md"; do
     [ -f "$_src_skill" ] || continue
     if [ "$_src_skill" = "$_SKILLS_ROOT/SKILL.md" ]; then
@@ -191,12 +191,10 @@ if $MIRROR_SKILLS; then
       _tool="${_plat##*:}"
       _dst_dir="$_dst_root/$_skill_name"
       _dst="$_dst_dir/SKILL.md"
-      # Only mirror if root exists OR force is set
       if [ ! -d "$_dst_root" ] && ! $FORCE; then
         _skip "$_tool (no $_dst_root)"
         continue
       fi
-      # Sha-compare for idempotency
       if [ -f "$_dst" ] && command -v shasum >/dev/null 2>&1; then
         _src_hash=$(shasum -a 256 "$_src_skill" | awk '{print $1}')
         _dst_hash=$(shasum -a 256 "$_dst" | awk '{print $1}')
@@ -205,24 +203,30 @@ if $MIRROR_SKILLS; then
           continue
         fi
       fi
-      # Security: validate paths before interpolating into eval-based _run.
       _safe_path "$_dst_dir"
       _safe_path "$_src_skill"
       _safe_path "$_dst"
-      _run "mkdir -p \"$_dst_dir\" && install -m 0644 \"$_src_skill\" \"$_dst\""
-      _ok "mirror $_skill_name → $_tool"
+      if $VERIFY_ONLY; then
+        _warn "$_tool/$_skill_name differs from canonical skill"
+      else
+        _run "mkdir -p \"$_dst_dir\" && install -m 0644 \"$_src_skill\" \"$_dst\""
+        _ok "mirror $_skill_name → $_tool"
+      fi
     done
   done
-  # OpenClaw skill registry (if openclaw CLI present)
+
   if command -v openclaw >/dev/null 2>&1; then
     for _src_skill in "$_SKILLS_ROOT"/*/SKILL.md; do
       [ -f "$_src_skill" ] || continue
       _skill_name="$(basename "$(dirname "$_src_skill")")"
-      # Security: validate before eval-interpolation in _run.
       _safe_path "$_skill_name"
       _safe_path "$_src_skill"
-      _run "openclaw skill set \"$_skill_name\" \"$_src_skill\""
-      _ok "openclaw skill set $_skill_name"
+      if $VERIFY_ONLY; then
+        _skip "openclaw skill registry verification is not mutating"
+      else
+        _run "openclaw skill set \"$_skill_name\" \"$_src_skill\""
+        _ok "openclaw skill set $_skill_name"
+      fi
     done
   else
     _skip "openclaw skill registry (openclaw CLI not installed)"
@@ -230,38 +234,40 @@ if $MIRROR_SKILLS; then
   echo ""
 fi
 
-# ── Step 5b: Cursor project MCP stack ─────────────────────────────────────────
-_log "Step 5b: Cursor MCP stack (orama-system/.cursor/mcp.json)"
-_SYNC_CURSOR="$(cd "$(dirname "$0")" && pwd)/sync-cursor-mcp.sh"
+# ── Step 5c: Cursor project MCP stack ─────────────────────────────────────────
+_log "Step 5c: Cursor MCP stack (orama-system/.cursor/mcp.json)"
+_SYNC_CURSOR="$_SCRIPT_DIR/sync-cursor-mcp.sh"
 if [ -f "$_SYNC_CURSOR" ]; then
-  _run "bash \"$_SYNC_CURSOR\""
-  _ok "Cursor project MCP: code-review-graph + ai-cli-mcp (see bin/orama-system/config/cursor-mcp.stack.json)"
+  if $VERIFY_ONLY; then
+    _skip "Cursor sync mutation skipped in --verify mode"
+  else
+    _run "bash \"$_SYNC_CURSOR\""
+    _ok "Cursor project MCP: code-review-graph + ai-cli-mcp"
+  fi
 else
   _skip "sync-cursor-mcp.sh not found"
 fi
-echo ""
 
-_log "Step 6: Verification summary"
 echo ""
-echo "  node:    $(node -v 2>/dev/null || echo 'missing')"
-echo "  ai-cli:  $(ai-cli --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || echo 'via npx (ok)')"
-echo "  claude mcp list:"
-claude mcp list 2>/dev/null | grep -E "gemini-cli|ai-cli" | sed 's/^/    /' || echo "    (run 'claude mcp list' manually)"
+_log "Step 6: Verification summary"
+echo "  ai-cli-mcp: ${AI_CLI_MCP_VERSION} (pinned core contract)"
+echo "  provider auth: operator-controlled; not inferred by installer"
+if command -v claude >/dev/null 2>&1; then
+  echo "  claude mcp list:"
+  claude mcp list 2>/dev/null | grep -E "gemini-cli|ai-cli" | sed 's/^/    /' || echo "    (no matching registration visible)"
+fi
 if command -v openclaw >/dev/null 2>&1; then
   echo "  openclaw mcp list:"
   openclaw mcp list 2>/dev/null | grep -E "gemini-cli|ai-cli" | sed 's/^/    /' || echo "    (empty)"
 fi
-echo ""
-_log "Installation complete."
-if $INCLUDE_GEMINI; then
-  _log "NOTE: Gemini is deprecated for unpaid tiers (cutoff 2026-06-18). Migrate reviewer work to AGY."
-  _log "Restart Claude Code, then run /mcp to confirm gemini-cli and ai-cli-mcp are active."
-else
-  _log "Restart Claude Code, then run /mcp to confirm ai-cli-mcp is active."
-fi
-_log "Platform checklist (if not done): bash $(dirname "$0")/first-run-install.sh status"
 
-# ── Rollback instructions ────────────────────────────────────────────────────
+echo ""
+_log "Installation/readiness pass complete."
+if $INCLUDE_GEMINI; then
+  _log "NOTE: Gemini is deprecated for unpaid tiers (cutoff 2026-06-18). Prefer AGY for reviewer lanes."
+fi
+_log "Platform checklist (if not done): bash $_SCRIPT_DIR/first-run-install.sh status"
+
 cat << 'ROLLBACK'
 
 ── ROLLBACK (if something went wrong) ──────────────────────────────────────────
@@ -270,7 +276,6 @@ cat << 'ROLLBACK'
   claude mcp remove -s user ai-cli 2>/dev/null || claude mcp remove ai-cli 2>/dev/null || true
   openclaw mcp unset gemini-cli 2>/dev/null || true
   openclaw mcp unset ai-cli-mcp 2>/dev/null || true
-  NOTE: gemini-cli cleanup is retained for backward compatibility, but Gemini is
-  deprecated for unpaid tiers as of 2026-06-18. Prefer AGY for reviewer lanes.
+  NOTE: provider login/terms state is not written by this installer.
 ────────────────────────────────────────────────────────────────────────────────
 ROLLBACK

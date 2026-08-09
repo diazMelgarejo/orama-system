@@ -4,6 +4,7 @@
 # HARD requirements:
 #   LM Studio — auto-installed via winget if missing
 #   Model loaded: Qwen3.5-27B (checked via LM Studio API)
+#   ai-cli-mcp core — pinned package + runnable CLI; provider auth is separate
 #
 # Usage (run in PowerShell as Administrator or regular user with winget):
 #   .\scripts\ensure_requirements.ps1            # check + install
@@ -12,6 +13,7 @@
 #
 # Env overrides:
 #   LM_STUDIO_WIN_PORT — override default 1234
+#   ORAMA_SKIP_MCP_ENSURE=1 — skip ai-cli-mcp readiness only
 
 param(
     [switch]$CheckOnly,
@@ -20,7 +22,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$LmStudioPort = $env:LM_STUDIO_WIN_PORT ?? "1234"
+$LmStudioPort = if ($env:LM_STUDIO_WIN_PORT) { $env:LM_STUDIO_WIN_PORT } else { "1234" }
 $LmStudioUrl  = "http://localhost:${LmStudioPort}"
 $LogDir       = Join-Path $PSScriptRoot ".." ".logs"
 $HardFail     = $false
@@ -62,7 +64,6 @@ if (-not $LmStudioExe) {
         try {
             winget install --id "ElementLabs.LMStudio" --accept-source-agreements --accept-package-agreements `
                 --silent 2>&1 | Tee-Object -Append -FilePath (Join-Path $LogDir "lmstudio-install.log")
-            # Re-probe after install
             $LmStudioExe = @(
                 "$env:LOCALAPPDATA\Programs\LM-Studio\LM Studio.exe",
                 "$env:PROGRAMFILES\LM-Studio\LM Studio.exe",
@@ -99,7 +100,7 @@ if (-not $HardFail) {
 # ── PHASE 3: Python venv + deps ───────────────────────────────────────────────
 info "Phase 3 — Python venv + dependencies"
 
-$RepoRoot  = Resolve-Path (Join-Path $PSScriptRoot "..")
+$RepoRoot  = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $VenvDir   = Join-Path $RepoRoot ".venv"
 $ReqFile   = Join-Path $RepoRoot "requirements.txt"
 $StampFile = Join-Path $RepoRoot ".requirements.stamp"
@@ -117,7 +118,7 @@ if (Test-Path $VenvDir) {
     $PipExe = Join-Path $VenvDir "Scripts\pip.exe"
     if (Test-Path $ReqFile) {
         $ReqHash = (Get-FileHash $ReqFile -Algorithm SHA256).Hash
-        $StampHash = if (Test-Path $StampFile) { (Get-Content $StampFile | Where-Object { $_ -match "^python_req=" }) -replace "python_req=",""  } else { "" }
+        $StampHash = if (Test-Path $StampFile) { (Get-Content $StampFile | Where-Object { $_ -match "^python_req=" }) -replace "python_req=","" } else { "" }
         if ($Force -or $StampHash -ne $ReqHash) {
             if (-not $CheckOnly) {
                 info "Installing Python deps..."
@@ -129,6 +130,38 @@ if (Test-Path $VenvDir) {
             }
         } else {
             ok "Python deps up-to-date (stamp matches)"
+        }
+    }
+}
+
+# ── PHASE 4: ai-cli-mcp core package/runtime readiness ────────────────────────
+info "Phase 4 — ai-cli-mcp core readiness"
+$SkipMcp = $env:ORAMA_SKIP_MCP_ENSURE -and $env:ORAMA_SKIP_MCP_ENSURE.Trim().ToLower() -in @('1', 'true', 'yes')
+if ($SkipMcp) {
+    warn "ai-cli-mcp readiness bypassed by ORAMA_SKIP_MCP_ENSURE=$($env:ORAMA_SKIP_MCP_ENSURE)"
+} else {
+    $McpHelper = Join-Path $RepoRoot 'scripts\ensure_ai_cli_mcp.py'
+    if (-not (Test-Path $McpHelper)) {
+        err "MCP readiness helper missing: $McpHelper"
+    } else {
+        $PythonExe = Join-Path $VenvDir 'Scripts\python.exe'
+        if (-not (Test-Path $PythonExe)) {
+            $PythonCommand = Get-Command python -ErrorAction SilentlyContinue
+            $PythonExe = if ($PythonCommand) { $PythonCommand.Source } else { $null }
+        }
+        if (-not $PythonExe) {
+            err "Python is unavailable for MCP readiness helper"
+        } else {
+            $McpArgs = @($McpHelper)
+            if ($CheckOnly) { $McpArgs += '--check' }
+            if ($Force) { $McpArgs += '--force' }
+            if ($Quiet) { $McpArgs += '--quiet' }
+            & $PythonExe @McpArgs
+            if ($LASTEXITCODE -ne 0) {
+                err "ai-cli-mcp core readiness failed — see remediation above"
+            } else {
+                ok "ai-cli-mcp core ready (provider authorization remains independent)"
+            }
         }
     }
 }
