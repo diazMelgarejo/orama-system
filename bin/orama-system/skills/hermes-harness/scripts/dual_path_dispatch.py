@@ -108,10 +108,15 @@ def run_candidates(candidates: list[Candidate], log_dir: Path, timeout: int) -> 
         handle = log_path.open("w", encoding="utf-8")
         handle.write(f"$ {' '.join(candidate.command[:-1])} <prompt>\n")
         handle.flush()
+        # stdin=DEVNULL: candidates run detached/non-interactive in parallel;
+        # an inherited-but-unfed stdin can leave a CLI (e.g. Codex) blocked
+        # on "Reading additional input..." forever instead of using the
+        # prompt already in candidate.command. See dispatch_codex_partner.py.
         proc = subprocess.Popen(
             candidate.command,
             stdout=handle,
             stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
             text=True,
         )
         running[candidate.name] = (candidate, proc, handle, log_path)
