@@ -199,7 +199,11 @@ titles, bodies, commit messages, or shell history.
     from collections import Counter
     from pathlib import Path
 
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts" / "review"))
+    # Path.cwd(), not __file__ -- this snippet is meant to be saved and run
+    # standalone from the repo root (see the __main__ block below, which
+    # already assumes root = Path.cwd()); __file__-relative pathing breaks
+    # once it's copied out of this exact reference card's own location.
+    sys.path.insert(0, str(Path.cwd() / "scripts" / "review"))
     from repo_hygiene import private_literal_values, openclaw_workspace_root  # noqa: E402
 
     KEYS = ("owner_gmail", "owner_name", "forbidden_attribution")
