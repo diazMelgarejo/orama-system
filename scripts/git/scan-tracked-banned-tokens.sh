@@ -36,7 +36,9 @@ _is_allowed_key_name_collision() {
   token_lc="$(printf '%s' "$token" | tr '[:upper:]' '[:lower:]')"
   [[ "$token_lc" == "forbidden_attribution" ]] || return 1
   _is_key_name_file "$rel" || return 1
-  [[ "$line" == *"forbidden_attribution"* ]]
+  [[ "$line" =~ list_private_literal_values[[:space:]].*[[:space:]]forbidden_attribution([[:space:]]|$) ]] && return 0
+  [[ "$line" =~ (^|[^[:alnum:]_])forbidden_attribution= ]] && return 0
+  return 1
 }
 
 errors=0

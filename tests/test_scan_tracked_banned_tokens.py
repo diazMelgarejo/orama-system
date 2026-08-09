@@ -62,6 +62,24 @@ def test_key_name_collision_is_line_scoped_for_internal_bootstrap_files(tmp_path
     assert result.returncode == 0, result.stderr
 
 
+def test_key_name_collision_rejects_non_key_name_occurrence(tmp_path: Path) -> None:
+    repo, patterns = _init_fixture_repo(tmp_path)
+    patterns.write_text("forbidden_attribution\n", encoding="utf-8")
+    target = repo / "scripts/cursor/seed-banned-attribution-patterns.sh"
+    target.parent.mkdir(parents=True)
+    target.write_text("echo forbidden_attribution\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "scripts/cursor/seed-banned-attribution-patterns.sh"],
+        cwd=repo,
+        check=True,
+    )
+
+    result = _run_scan(repo, patterns)
+
+    assert result.returncode == 1
+    assert "scripts/cursor/seed-banned-attribution-patterns.sh" in result.stderr
+
+
 def test_internal_bootstrap_files_still_fail_on_other_banned_values(tmp_path: Path) -> None:
     repo, patterns = _init_fixture_repo(tmp_path)
     patterns.write_text("real-banned-value\n", encoding="utf-8")

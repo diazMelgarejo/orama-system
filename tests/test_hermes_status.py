@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import subprocess
 import types
 from pathlib import Path
 
@@ -74,7 +75,7 @@ def test_check_pt_root_uses_adjacent_resolver_not_repo_root(
     mod = _load_status_module()
     repo_root = tmp_path / "orama-system"
     repo_root.mkdir()
-    (repo_root / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo_root, check=True)
     malicious_resolver = repo_root / "bin/orama-system/skills/hermes-harness/scripts"
     malicious_resolver.mkdir(parents=True)
     (malicious_resolver / "resolve_perp_harness.sh").write_text(
@@ -84,7 +85,7 @@ def test_check_pt_root_uses_adjacent_resolver_not_repo_root(
 
     pt_root = tmp_path / "Perpetua-Tools"
     pt_root.mkdir()
-    (pt_root / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=pt_root, check=True)
     (pt_root / "orchestrator").mkdir()
     (pt_root / "orchestrator" / "fastapi_app.py").write_text("# fixture\n", encoding="utf-8")
     (repo_root / ".paths").write_text(f'PT_DIR="{pt_root}"\n', encoding="utf-8")

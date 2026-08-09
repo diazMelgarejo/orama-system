@@ -46,7 +46,7 @@ def _run_resolver(
 def _make_pt_root(tmp_path: Path, name: str = "Perpetua-Tools") -> Path:
     root = tmp_path / name
     root.mkdir(parents=True)
-    (root / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     (root / "orchestrator").mkdir()
     (root / "orchestrator" / "fastapi_app.py").write_text("# fixture\n", encoding="utf-8")
     (root / "src").mkdir()
@@ -60,7 +60,7 @@ def test_resolve_perp_harness_fails_without_pt_root(tmp_path: Path) -> None:
     isolated_home.mkdir()
     orama = tmp_path / "orama-system"
     orama.mkdir()
-    (orama / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=orama, check=True)
 
     result = _run_resolver(
         func="resolve_perp_harness_script",
@@ -107,7 +107,7 @@ def test_resolve_perp_harness_paths_file_pt_dir(tmp_path: Path) -> None:
     pt = _make_pt_root(tmp_path)
     orama = tmp_path / "orama-system"
     orama.mkdir()
-    (orama / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=orama, check=True)
     (orama / ".paths").write_text(f'PT_DIR="{pt}"\n', encoding="utf-8")
 
     result = _run_resolver(
@@ -124,7 +124,7 @@ def test_resolve_perp_harness_mother_repo_crawl(tmp_path: Path) -> None:
     pt = _make_pt_root(isolated_home)
     orama = isolated_home / "orama-system"
     orama.mkdir()
-    (orama / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=orama, check=True)
 
     result = _run_resolver(
         env={
@@ -143,7 +143,7 @@ def test_resolve_perp_harness_home_crawl(tmp_path: Path) -> None:
     pt = _make_pt_root(isolated_home)
     orama = isolated_home / "orama-system"
     orama.mkdir()
-    (orama / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=orama, check=True)
 
     result = _run_resolver(
         env={
@@ -161,10 +161,10 @@ def test_resolve_perp_harness_rejects_incomplete_marker(tmp_path: Path) -> None:
     isolated_home.mkdir()
     orama = isolated_home / "orama-system"
     orama.mkdir()
-    (orama / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=orama, check=True)
     incomplete = isolated_home / "incomplete-pt"
     incomplete.mkdir()
-    (incomplete / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=incomplete, check=True)
     (incomplete / "orchestrator").mkdir()
 
     result = _run_resolver(
@@ -185,7 +185,7 @@ def test_resolve_perp_harness_rejects_symlink_root(tmp_path: Path) -> None:
     isolated_home.mkdir()
     orama = isolated_home / "orama-system"
     orama.mkdir()
-    (orama / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=orama, check=True)
     # Real PT checkout lives outside HOME so crawl cannot bypass the symlink env var.
     real = _make_pt_root(tmp_path, "real-pt")
     link = isolated_home / "pt-link"
@@ -222,7 +222,7 @@ def test_resolve_perp_harness_rejects_symlink_even_when_real_target_is_crawlable
     isolated_home.mkdir()
     orama = isolated_home / "orama-system"
     orama.mkdir()
-    (orama / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=orama, check=True)
     # Real PT checkout lives inside HOME this time -- deliberately
     # crawl-reachable, unlike the test above.
     real = _make_pt_root(isolated_home, "real-pt")
@@ -281,7 +281,7 @@ def test_resolve_pt_root_cached_within_session(tmp_path: Path) -> None:
 def test_resolve_perp_harness_fails_on_ambiguous_crawl(tmp_path: Path) -> None:
     orama = tmp_path / "orama-system"
     orama.mkdir()
-    (orama / ".git").mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=orama, check=True)
     _make_pt_root(orama.parent, "Perpetua-Tools-a")
     _make_pt_root(orama.parent, "Perpetua-Tools-b")
 
