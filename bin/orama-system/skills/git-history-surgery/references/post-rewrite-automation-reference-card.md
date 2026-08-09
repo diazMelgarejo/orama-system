@@ -106,10 +106,13 @@ bash scripts/git/restore-deleted-branches.sh . <branch> [<branch>...]
 bash scripts/git/restore-branch-theirs.sh . <branch>
 ```
 
-Success criterion for each surviving branch:
+Success criterion for each surviving branch — use `reanchor_scan.sh`'s tree-twin
+classification, not a standalone `git merge-base` comparison (raw ahead/behind is
+meaningless after a rewrite; see [reanchor-after-rewrite.md](reanchor-after-rewrite.md)):
 
 ```bash
-[ "$(git merge-base origin/main "origin/<branch>")" = "$(git rev-parse origin/main)" ]
+bash scripts/git/reanchor_scan.sh . origin/main remotes | grep "origin/<branch>"
+# healthy: "MERGED/in-main", or "NEEDS-REANCHOR" where the printed twin equals origin/main's tip
 ```
 
 Empty cherry-picks are skipped by default (`SKIP_EMPTY_CHERRY=1`).
