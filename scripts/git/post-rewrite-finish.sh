@@ -4,9 +4,11 @@
 # Usage:
 #   post-rewrite-finish.sh <repo_path>
 #
-# Typical workspace run after expunge-all-workspace-repos:
-#   for repo in orama-system Perpetua-Tools AlphaClaw; do
-#     bash orama-system/scripts/git/post-rewrite-finish.sh "/agent/repos/$repo"
+# Typical workspace run after expunge-all-workspace-repos (REPO_ROOT is each
+# repo's own real path -- resolve at call time, never hardcode a workstation
+# layout here):
+#   for repo_root in "$ORAMA_SYSTEM_PATH" "$PERPETUA_TOOLS_PATH"; do
+#     bash "$ORAMA_SYSTEM_PATH/scripts/git/post-rewrite-finish.sh" "$repo_root"
 #   done
 #
 # Env: see post-rewrite-publish.sh and post-rewrite-reanchor.sh

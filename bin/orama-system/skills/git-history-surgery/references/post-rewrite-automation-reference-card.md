@@ -30,14 +30,15 @@ See also: [`history-surgery-hooks-safeguard-reference-card.md`](history-surgery-
 From the rewritten repo (or pass any workspace repo path):
 
 ```bash
-# orama-system canonical scripts — run against any repo path
-ORAMA=/agent/repos/orama-system
-
+# orama-system canonical scripts — run against any repo path.
+# $ORAMA_SYSTEM_PATH / $PERPETUA_TOOLS_PATH are this workspace's documented
+# sibling-repo variables (see scripts/resolve_orama_root.sh /
+# resolve_perp_harness.sh) — never hardcode a workstation path here.
 ALLOW_MAIN_PUSH=1 PUSH_MAIN=1 PUSH_ALL_BRANCHES=1 \
-  bash "$ORAMA/scripts/git/post-rewrite-finish.sh" /agent/repos/orama-system
+  bash "$ORAMA_SYSTEM_PATH/scripts/git/post-rewrite-finish.sh" "$ORAMA_SYSTEM_PATH"
 
 ALLOW_MAIN_PUSH=1 PUSH_MAIN=1 PUSH_ALL_BRANCHES=0 \
-  bash "$ORAMA/scripts/git/post-rewrite-finish.sh" /agent/repos/Perpetua-Tools
+  bash "$ORAMA_SYSTEM_PATH/scripts/git/post-rewrite-finish.sh" "$PERPETUA_TOOLS_PATH"
 ```
 
 `post-rewrite-finish.sh` runs, in order:
@@ -108,7 +109,7 @@ bash scripts/git/restore-branch-theirs.sh . <branch>
 Success criterion for each surviving branch:
 
 ```bash
-git merge-base origin/main origin/<branch> == $(git rev-parse origin/main)
+[ "$(git merge-base origin/main "origin/<branch>")" = "$(git rev-parse origin/main)" ]
 ```
 
 Empty cherry-picks are skipped by default (`SKIP_EMPTY_CHERRY=1`).
