@@ -183,7 +183,7 @@ def test_git_state_pushed_to_missing_ref_false(tmp_path: Path) -> None:
     assert "origin/no-such-branch" in result.stderr
 
 
-def test_git_state_merged_into_main_true(tmp_path: Path) -> None:
+def test_git_state_merged_into_main_is_not_precommit_validated(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_test_repo(repo)
     msg = repo / "msg.txt"
@@ -197,7 +197,7 @@ def test_git_state_merged_into_main_true(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
-def test_git_state_merged_into_main_false(tmp_path: Path) -> None:
+def test_git_state_merged_into_main_future_claim_is_left_to_post_push_validation(tmp_path: Path) -> None:
     repo = tmp_path / "repo"
     _init_test_repo(repo)
     subprocess.run(["git", "checkout", "-q", "-b", "feature"], cwd=repo, check=True)
@@ -212,9 +212,7 @@ def test_git_state_merged_into_main_false(tmp_path: Path) -> None:
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 1
-    assert "git-state-claim check" in result.stderr
-    assert "main" in result.stderr
+    assert result.returncode == 0, result.stderr
 
 
 def test_git_state_on_branch_true(tmp_path: Path) -> None:
