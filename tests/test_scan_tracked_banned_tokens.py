@@ -47,13 +47,30 @@ def _run_scan(repo: Path, patterns: Path, isolated_home: Path) -> subprocess.Com
         "HOME": str(isolated_home),
         "OPENCLAW_ATTRIBUTION_PATTERNS": str(patterns),
     }
-    return subprocess.run(
+    result = subprocess.run(
         ["bash", "scripts/git/scan-tracked-banned-tokens.sh"],
         cwd=repo,
         capture_output=True,
         text=True,
         env=env,
     )
+    if result.returncode == 0:
+        # Diagnostic-only: this scanner unexpectedly reported clean in some
+        # environments (passes locally, in a fresh clone, and in a sandboxed
+        # agent run, but has failed intermittently in CI) with no other
+        # signal to explain why. Re-run with `bash -x` and stash the full
+        # execution trace on the result object so a failing assertion can
+        # surface exactly which branch was taken and what each resolved
+        # value was, without needing another round-trip to reproduce it.
+        trace = subprocess.run(
+            ["bash", "-x", "scripts/git/scan-tracked-banned-tokens.sh"],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            env=env,
+        )
+        result.trace = trace.stderr  # type: ignore[attr-defined]
+    return result
 
 
 def test_key_name_collision_is_line_scoped_for_internal_bootstrap_files(tmp_path: Path) -> None:
