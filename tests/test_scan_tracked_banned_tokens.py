@@ -16,7 +16,7 @@ LIB = ROOT / "scripts/git/banned_attribution_lib.sh"
 pytestmark = pytest.mark.unit
 
 
-def _init_fixture_repo(tmp_path: Path) -> tuple[Path, Path]:
+def _init_fixture_repo(tmp_path: Path) -> tuple[Path, Path, Path]:
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
@@ -27,12 +27,26 @@ def _init_fixture_repo(tmp_path: Path) -> tuple[Path, Path]:
     shutil.copy2(SCRIPT, scripts_git / SCRIPT.name)
     shutil.copy2(LIB, scripts_git / LIB.name)
     patterns = tmp_path / "patterns"
-    return repo, patterns
+    isolated_home = tmp_path / "home"
+    isolated_home.mkdir()
+    return repo, patterns, isolated_home
 
 
-def _run_scan(repo: Path, patterns: Path) -> subprocess.CompletedProcess[str]:
-    env = os.environ.copy()
-    env["OPENCLAW_ATTRIBUTION_PATTERNS"] = str(patterns)
+def _run_scan(repo: Path, patterns: Path, isolated_home: Path) -> subprocess.CompletedProcess[str]:
+    # Build a minimal, explicit environment rather than os.environ.copy() +
+    # one override. banned_patterns_file() falls back through
+    # $OPENCLAW_ATTRIBUTION_PATTERNS to $HOME/.cursor/openclaw/... to
+    # $REPO_ROOT/.cursor/private/... -- inheriting the real ambient
+    # environment (a developer's or CI runner's actual $HOME, PATH additions
+    # from other tools, etc.) means this test's result can depend on
+    # whatever happens to exist on the machine running it, not just on the
+    # fixture it explicitly sets up. Pin PATH and HOME to known values and
+    # set only the one variable the test cares about.
+    env = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+        "HOME": str(isolated_home),
+        "OPENCLAW_ATTRIBUTION_PATTERNS": str(patterns),
+    }
     return subprocess.run(
         ["bash", "scripts/git/scan-tracked-banned-tokens.sh"],
         cwd=repo,
@@ -43,7 +57,7 @@ def _run_scan(repo: Path, patterns: Path) -> subprocess.CompletedProcess[str]:
 
 
 def test_key_name_collision_is_line_scoped_for_internal_bootstrap_files(tmp_path: Path) -> None:
-    repo, patterns = _init_fixture_repo(tmp_path)
+    repo, patterns, home = _init_fixture_repo(tmp_path)
     patterns.write_text("forbidden_attribution\n", encoding="utf-8")
     target = repo / "scripts/cursor/seed-banned-attribution-patterns.sh"
     target.parent.mkdir(parents=True)
@@ -57,13 +71,13 @@ def test_key_name_collision_is_line_scoped_for_internal_bootstrap_files(tmp_path
         check=True,
     )
 
-    result = _run_scan(repo, patterns)
+    result = _run_scan(repo, patterns, home)
 
     assert result.returncode == 0, result.stderr
 
 
 def test_key_name_collision_rejects_non_key_name_occurrence(tmp_path: Path) -> None:
-    repo, patterns = _init_fixture_repo(tmp_path)
+    repo, patterns, home = _init_fixture_repo(tmp_path)
     patterns.write_text("forbidden_attribution\n", encoding="utf-8")
     target = repo / "scripts/cursor/seed-banned-attribution-patterns.sh"
     target.parent.mkdir(parents=True)
@@ -74,14 +88,16 @@ def test_key_name_collision_rejects_non_key_name_occurrence(tmp_path: Path) -> N
         check=True,
     )
 
-    result = _run_scan(repo, patterns)
+    result = _run_scan(repo, patterns, home)
 
-    assert result.returncode == 1
+    assert result.returncode == 1, (
+        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
     assert "scripts/cursor/seed-banned-attribution-patterns.sh" in result.stderr
 
 
 def test_internal_bootstrap_files_still_fail_on_other_banned_values(tmp_path: Path) -> None:
-    repo, patterns = _init_fixture_repo(tmp_path)
+    repo, patterns, home = _init_fixture_repo(tmp_path)
     patterns.write_text("real-banned-value\n", encoding="utf-8")
     target = repo / "scripts/cursor/seed-banned-attribution-patterns.sh"
     target.parent.mkdir(parents=True)
@@ -92,7 +108,9 @@ def test_internal_bootstrap_files_still_fail_on_other_banned_values(tmp_path: Pa
         check=True,
     )
 
-    result = _run_scan(repo, patterns)
+    result = _run_scan(repo, patterns, home)
 
-    assert result.returncode == 1
+    assert result.returncode == 1, (
+        f"rc={result.returncode} stdout={result.stdout!r} stderr={result.stderr!r}"
+    )
     assert "scripts/cursor/seed-banned-attribution-patterns.sh" in result.stderr
