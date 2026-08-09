@@ -55,12 +55,12 @@ force_push_repo() {
     fi
     if [[ -n "$old_sha" ]]; then
       "${hs_git[@]}" push --force-with-lease="refs/heads/${branch}:${old_sha}" \
-        origin "${branch}:${branch}" 2>/dev/null || {
+        origin "${branch}:${branch}" || {
         echo "warn: lease push failed ${branch} in $(basename "$repo"); fetch/review and retry" >&2
         failed=$((failed + 1))
       }
     else
-      "${hs_git[@]}" push -u origin "${branch}:${branch}" 2>/dev/null || {
+      "${hs_git[@]}" push -u origin "${branch}:${branch}" || {
         echo "warn: push failed new branch ${branch} in $(basename "$repo")" >&2
         failed=$((failed + 1))
       }
@@ -127,8 +127,13 @@ expunge_repo() {
     echo ">>> [$name] force-push all local branches (hooks off — history surgery)"
     export HISTORY_SURGERY_ACTIVE=1
     cleanup_hooks=1
-    force_push_repo "$repo"
+    local push_status=0
+    force_push_repo "$repo" || push_status=$?
     cleanup_expunge_repo
+    if [[ "$push_status" -ne 0 ]]; then
+      echo "ERROR: [$name] force-push had failures" >&2
+      return 1
+    fi
   fi
   echo ">>> [$name] OK"
 }
