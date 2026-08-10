@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).parents[1]
 
 
@@ -46,3 +48,15 @@ def test_installer_never_synthesizes_provider_consent() -> None:
     assert "claude --dangerously-skip-permissions" not in executable
     assert "ai-cli-mcp@latest" not in executable
     assert "scripts/ensure_ai_cli_mcp.py" in installer
+
+
+@pytest.mark.unit
+def test_unix_mcp_optional_argument_arrays_are_bash32_nounset_safe() -> None:
+    ensure = _executable_shell(_text("scripts/ensure_requirements.sh"))
+    installer = _executable_shell(_text("bin/orama-system/scripts/install-mcp-stack.sh"))
+
+    assert '${MCP_ARGS[@]+"${MCP_ARGS[@]}"}' in ensure
+    assert '${_CORE_ARGS[@]+"${_CORE_ARGS[@]}"}' in installer
+    assert 'python3 "$MCP_HELPER" "${MCP_ARGS[@]}"' not in ensure
+    assert 'python3 "$_READINESS" "${_CORE_ARGS[@]}"' not in installer
+    assert "printf ' %q' \"${_CORE_ARGS[@]}\"" not in installer

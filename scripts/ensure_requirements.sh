@@ -327,7 +327,7 @@ else
     [ "$MODE_CHECK" -eq 1 ] && MCP_ARGS+=(--check)
     [ "$MODE_FORCE" -eq 1 ] && MCP_ARGS+=(--force)
     [ "$MODE_QUIET" -eq 1 ] && MCP_ARGS+=(--quiet)
-    if python3 "$MCP_HELPER" "${MCP_ARGS[@]}"; then
+    if python3 "$MCP_HELPER" ${MCP_ARGS[@]+"${MCP_ARGS[@]}"}; then
       _ok "ai-cli-mcp core ready (provider authorization remains independent)"
     else
       _hard_fail "ai-cli-mcp core readiness failed — see remediation above"
