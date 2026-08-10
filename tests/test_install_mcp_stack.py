@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).parents[1] / "bin/orama-system/scripts/install-mcp-stack.sh"
 
 
@@ -64,6 +66,7 @@ def test_core_readiness_does_not_require_claude_client(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.integration
 def test_core_only_default_arguments_are_bash32_nounset_safe(tmp_path: Path) -> None:
     result = subprocess.run(
         ["/bin/bash", "-u", str(SCRIPT), "--core-only"],
