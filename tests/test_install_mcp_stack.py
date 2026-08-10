@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
 
 SCRIPT = Path(__file__).parents[1] / "bin/orama-system/scripts/install-mcp-stack.sh"
@@ -30,7 +31,11 @@ def _env(tmp_path: Path) -> dict[str, str]:
     _cmd(bindir, "ai-cli-mcp", "exit 0")
 
     env = os.environ.copy()
-    env["PATH"] = f"{bindir}:{env['PATH']}"
+    # Keep tests hermetic: the readiness helper must not call a workstation's
+    # real Claude client while exercising the fake command environment.
+    env["PATH"] = os.pathsep.join(
+        (str(bindir), str(Path(sys.executable).parent), "/usr/bin", "/bin")
+    )
     env["HOME"] = str(tmp_path)
     return env
 
@@ -57,6 +62,18 @@ def test_core_readiness_does_not_require_claude_client(tmp_path: Path) -> None:
         timeout=30,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_core_only_default_arguments_are_bash32_nounset_safe(tmp_path: Path) -> None:
+    result = subprocess.run(
+        ["/bin/bash", "-u", str(SCRIPT), "--core-only"],
+        env=_env(tmp_path),
+        text=True,
+        capture_output=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "Core ai-cli-mcp readiness complete" in result.stdout
 
 
 def test_unknown_flag_rejected_before_any_install(tmp_path: Path) -> None:

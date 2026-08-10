@@ -95,10 +95,10 @@ $VERIFY_ONLY && _CORE_ARGS+=(--check)
 $FORCE && _CORE_ARGS+=(--force)
 if $DRY_RUN; then
   printf '[dry-run] python3 %q' "$_READINESS"
-  printf ' %q' "${_CORE_ARGS[@]}"
+  printf ' %q' ${_CORE_ARGS[@]+"${_CORE_ARGS[@]}"}
   printf '\n'
 else
-  python3 "$_READINESS" "${_CORE_ARGS[@]}" \
+  python3 "$_READINESS" ${_CORE_ARGS[@]+"${_CORE_ARGS[@]}"} \
     || _fail "ai-cli-mcp core readiness failed — follow remediation above"
 fi
 $NON_INTERACTIVE && _log "Provider authorization remains operator-controlled"
