@@ -7,6 +7,14 @@ def _text(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8-sig")
 
 
+def _executable_shell(text: str) -> str:
+    """Return non-comment shell lines for behavioral source assertions."""
+    return "\n".join(
+        line for line in text.splitlines()
+        if line.strip() and not line.lstrip().startswith("#")
+    )
+
+
 def test_unix_launcher_delegates_to_requirement_gate() -> None:
     start = _text("start.sh")
     ensure = _text("scripts/ensure_requirements.sh")
@@ -30,7 +38,11 @@ def test_windows_requirement_gate_remains_powershell_51_compatible() -> None:
 
 def test_installer_never_synthesizes_provider_consent() -> None:
     installer = _text("bin/orama-system/scripts/install-mcp-stack.sh")
-    assert ".dangerously-skip-accepted" not in installer
-    assert "claude --dangerously-skip-permissions" not in installer
-    assert "ai-cli-mcp@latest" not in installer
+    executable = _executable_shell(installer)
+    # Documentation may name the retired marker while explaining why it is
+    # unsafe. The invariant is that executable installer code never creates or
+    # relies on that marker and never invokes Claude's permission bypass.
+    assert ".dangerously-skip-accepted" not in executable
+    assert "claude --dangerously-skip-permissions" not in executable
+    assert "ai-cli-mcp@latest" not in executable
     assert "scripts/ensure_ai_cli_mcp.py" in installer
