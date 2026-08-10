@@ -5,7 +5,7 @@
 >
 > **On Claude Code:** the Four Mandatory Roles below map directly onto
 > `Workflow`'s built-in "Adversarial verify" (Adversary/Critic) and
-> "Judge panel" (Judge) quality patterns — use those primitives to
+> "Judge panel" (Judge) quality patterns - use those primitives to
 > implement this doctrine, don't hand-roll a parallel mechanism. See
 > `claude-code-workflow-canonical.md`.
 
@@ -21,7 +21,7 @@ Consensus is not evidence. Agreement is not proof.
 Every significant decision includes all four:
 
 | Role | Responsibility |
-|---|---|
+| --- | --- |
 | Builder | Produces the solution |
 | Critic | Finds gaps and weaknesses |
 | Adversary | Constructs the strongest argument against the conclusion |
@@ -35,7 +35,7 @@ Every conclusion must answer: **what is the strongest argument against this conc
 
 ---
 
-## Confidence Tracking (keep these separate — do not conflate)
+## Confidence Tracking (keep these separate - do not conflate)
 
 - **Confidence:** how sure are we?
 - **Uncertainty:** what do we not know?
@@ -61,17 +61,59 @@ Evidence wins. Popularity does not.
 
 ---
 
+## Human Authority Boundary
+
+The four roles are **epistemic roles, not authorization principals**. They can
+research, propose, compare, criticize, and judge evidence. They cannot turn
+consensus, confidence, or repeated agreement into permission for a consequential
+action.
+
+Human authority remains governed by the canonical
+[`HUMAN-IN-LOOP-ACCOUNTABILITY.md`](../../../docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md)
+contract:
+
+- explicit user initiation or approval is the authority source, never agent consensus;
+- chain research, persistent or always-on agents, swarms, paid execution, credential
+  use, commits/deploys, external communications, and other consequential state changes
+  proceed only when the current authorization contract covers that purpose and scope;
+- when the accountability protocol requires a fresh scoped gate, pause and obtain it;
+- a prior approval for analysis or another action is not automatically reusable for a
+  later privileged action;
+- an offline/local-only policy cannot be relaxed by collaborative agreement.
+
+The Judge decides what the evidence supports. The Judge does not manufacture
+permission to act on that conclusion.
+
+---
+
+## Advisory vs. Execution Boundary
+
+| Class | Default authority |
+| --- | --- |
+| Research, analysis, critique, planning, local simulation | Proceed within the explicitly authorized task scope |
+| Consequential external, financial, identity, credential, persistent-agent, commit/deploy, or communication action | Follow the current human-accountability gate before execution |
+
+This boundary prevents a reasoning success from silently becoming an authority
+escalation.
+
+---
+
 ## Agent Governance
 
 **Must do:**
+
 - Challenge assumptions
 - Surface uncertainty
 - Preserve evidence
 - Expose disagreement
 - Document reasoning paths
+- Preserve the human authority boundary when reasoning turns into action
 
 **Must not:**
+
 - Manufacture confidence
 - Hide uncertainty
 - Optimize for consensus alone
 - Suppress dissenting evidence
+- Treat consensus as authorization
+- Self-authorize a privileged or consequential next step
