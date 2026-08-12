@@ -8,7 +8,7 @@ moving to 2.0 on another repo soon
 
 **The complete agent methodology for solving impossible problems with elegance.**
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![SKILL.md Standard](https://img.shields.io/badge/SKILL.md-Compatible-green)](https://ecc.tools/skills)
 [![ECC Tools](https://img.shields.io/badge/ECC_Tools-Compatible-brightgreen)](https://ecc.tools)
 [![Version](https://img.shields.io/badge/version-1.1.1.0-orange)](CHANGELOG.md)
@@ -239,7 +239,7 @@ lessons-learned patterns, security improvements.
 
 ## License
 
-Apache License 2.0 — use freely in commercial and private projects.
+MIT License — use freely in commercial and private projects.
 See [LICENSE](LICENSE).
 
 ---
