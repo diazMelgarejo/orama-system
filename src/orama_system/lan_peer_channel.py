@@ -17,6 +17,8 @@ from typing import Any
 import httpx
 from fastapi import WebSocket
 
+from utils.endpoint_policy_core import parse_transport_identity
+
 log = logging.getLogger("ultrathink.lan_peer")
 
 HEARTBEAT_INTERVAL_S = 15
@@ -35,7 +37,14 @@ def local_platform() -> str:
 
 
 def read_discovery_peer_ip() -> str:
-    """Peer IP from ~/.openclaw/state/last_discovery.json (never hardcode DHCP)."""
+    """Peer IP from ~/.openclaw/state/last_discovery.json (never hardcode DHCP).
+
+    The "ip" field is written by a separate process (scripts/discover.py);
+    the read side previously trusted it verbatim before every f-string URL
+    construction downstream. Route it through parse_transport_identity so a
+    scheme-contaminated value is normalized to a bare hostname here, once,
+    instead of every caller separately risking a double-scheme construction.
+    """
     path = Path.home() / ".openclaw" / "state" / "last_discovery.json"
     role = local_platform()
     if not path.is_file():
@@ -46,10 +55,14 @@ def read_discovery_peer_ip() -> str:
         return ""
     endpoints = data.get("endpoints") or {}
     peer = endpoints.get("mac" if role == "win" else "win") or {}
-    ip = str(peer.get("ip") or "").strip()
-    if ip in ("", "localhost", "127.0.0.1"):
+    raw_ip = str(peer.get("ip") or "").strip()
+    if raw_ip in ("", "localhost", "127.0.0.1"):
         return ""
-    return ip
+    identity = parse_transport_identity(raw_ip)
+    if identity is None:
+        log.warning("lan_peer discovery: rejecting malformed peer ip %r", raw_ip)
+        return ""
+    return identity.hostname
 
 
 def make_envelope(msg_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:

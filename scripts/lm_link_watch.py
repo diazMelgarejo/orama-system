@@ -40,6 +40,12 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
+_SCRIPTS_DIR = Path(__file__).resolve().parent
+_SRC_DIR = _SCRIPTS_DIR.parent / "src"
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
+from utils.endpoint_policy_core import build_transport_url  # noqa: E402
+
 STATE_DIR = Path.home() / ".openclaw" / "state"
 STATE_FILE = STATE_DIR / "lm_link.json"
 DISCOVERY_FILE = STATE_DIR / "last_discovery.json"
@@ -91,9 +97,13 @@ def peer_url(plat: str) -> str | None:
             ip = eps.get("mac", {}).get("ip", "")
             if not ip or ip == "localhost":
                 return None  # Mac IP unknown from Win side; ps1 handles better
-            return f"http://{ip}:11434/api/tags"
+            base = build_transport_url(ip, 11434)
+            return f"{base}/api/tags" if base else None
         ip = eps.get("win", {}).get("ip", "")
-        return f"http://{ip}:1234/v1/models" if ip else None
+        if not ip:
+            return None
+        base = build_transport_url(ip, 1234)
+        return f"{base}/v1/models" if base else None
     except Exception:
         return None
 

@@ -54,6 +54,8 @@ from orama_system.portal_notifications import (
     parse_event_types,
 )
 
+from utils.model_endpoint_url import ModelEndpointPolicyError, validate_model_endpoint_url
+
 from utils.control_plane_auth import (
     CONTROL_PLANE_COOKIE,
     accepted_control_plane_tokens,
@@ -3318,6 +3320,17 @@ async def post_peer_relay_probe(request: Request, body: PeerRelayProbeRequest):
     if not target_ip or target_port < 1 or target_port > 65535:
         raise HTTPException(status_code=400, detail="Invalid target IP or port")
 
+    # SSRF gate: target_ip/target_port are authenticated-peer-supplied, not
+    # this node's own config -- run them through the same host-classification
+    # every other outbound probe uses before constructing a URL, so an
+    # authenticated peer cannot use this endpoint to pivot a probe at
+    # link-local metadata services or other blocked ranges.
+    try:
+        target_url = validate_model_endpoint_url(f"http://{target_ip}:{target_port}")
+        target_url = f"{target_url}/api/status"
+    except ModelEndpointPolicyError as exc:
+        raise HTTPException(status_code=400, detail=f"target rejected by endpoint policy: {exc}") from exc
+
     # Attempt to probe the target
     reachable = False
     models: List[str] = []
@@ -3325,7 +3338,6 @@ async def post_peer_relay_probe(request: Request, body: PeerRelayProbeRequest):
 
     try:
         async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as client:
-            target_url = f"http://{target_ip}:{target_port}/api/status"
             r = await client.get(target_url, timeout=PROBE_TIMEOUT)
 
             if r.status_code == 200:

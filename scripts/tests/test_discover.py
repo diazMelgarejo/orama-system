@@ -366,3 +366,44 @@ def test_discover_endpoints_windows_localhost_is_win(monkeypatch):
     assert endpoints["win"] == {"ip": "localhost", "models": ["qwen3.5-27b-distilled"]}
     assert endpoints["mac"] is None
 
+
+
+def test_probe_models_rejects_link_local_metadata_target():
+    """Regression: probe_models previously constructed and probed
+    f"http://{ip}:1234" with zero SSRF validation, for every caller --
+    including MAC_IP (an env var, no validation) and cached/scanned IPs.
+    A single validation choke point inside probe_models must protect
+    every caller; must reject cloud instance-metadata BEFORE any network
+    call -- checked by asserting urlopen is never invoked, not just that
+    the result is None (which a normal connection failure would also
+    produce)."""
+    import unittest.mock
+
+    with unittest.mock.patch("urllib.request.urlopen") as mock_urlopen:
+        result = D.probe_models("http://169.254.169.254:1234")
+    assert result is None
+    mock_urlopen.assert_not_called()
+
+
+def test_probe_models_rejects_public_target_by_default():
+    import unittest.mock
+
+    with unittest.mock.patch("urllib.request.urlopen") as mock_urlopen:
+        result = D.probe_models("http://8.8.8.8:1234")
+    assert result is None
+    mock_urlopen.assert_not_called()
+
+
+def test_probe_models_does_not_reject_localhost():
+    """Confirm the fix isn't over-broad -- localhost must still pass
+    validation and reach the network call (it may still fail to connect
+    if nothing is listening, which is a different, expected failure mode)."""
+    import unittest.mock
+
+    with unittest.mock.patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = (
+            b'{"data": [{"id": "test-model"}]}'
+        )
+        result = D.probe_models("http://localhost:1234")
+    mock_urlopen.assert_called_once()
+    assert result == ["test-model"]
