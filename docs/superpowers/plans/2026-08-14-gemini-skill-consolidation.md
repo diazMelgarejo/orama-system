@@ -15,7 +15,7 @@
 - Keep ownership singular: Orama owns methodology, Perpetua owns runtime/configuration cards, and gstack retains its independently installed cards.
 - No tracked file may contain local paths, identities, credentials, archives, or global-root contents.
 - Archive a pre-existing Gemini regular directory before replacement and record source/archive SHA-256 digests with logical root labels only.
-- Preserve Gemini frontmatter only after validating it against current official Gemini CLI documentation; unknown keys block reconciliation.
+- Preserve Gemini frontmatter only after validating it against current official Gemini CLI documentation; unknown keys block reconciliation. (See Task 2, Step 3's `gemini-frontmatter-contract.md` — P2-1, 2026-08-14 gate correction — for the local, versioned validation contract that makes this reproducible across runs.)
 - Every write requires `--reconcile-gemini`, `--only`, and `--archive-root`. Existing `--install` must not mutate the Gemini root.
 - Never replace gstack `skillify` or `gstack-upgrade`. Orama's creator remains `oramasys-skillify`.
 - Antigravity must resolve to the shared agent root; audit it rather than writing to it.
@@ -35,6 +35,44 @@
 | `gstack-upgrade`, `skillify` | gstack | preserve-external | Record ownership and protect against overwrite. |
 
 Review-only candidates: `autoplan`, `autoresearch`, `codex`, `deep-research`, `diagram`, `kimi-webbridge`, `oramasys-skillify`, `setup-gbrain`, and `sync-gbrain`.
+
+---
+
+## Gate Status — Review Synthesis Corrections (2026-08-14)
+
+Three independent reviews evaluated this plan:
+- `gemini-skill-consolidation-review-synthesis-codex-reviewer-2026-08-14.md` (synthesis, authoritative)
+- `gemini-skill-consolidation-plan-review-codex-reviewer-2026-08-14.md` (codex-reviewer)
+- `review-gemini-skill-consolidation-2026-08-14-antigravity-gemini.md` (AntiGravity-Gemini)
+
+The synthesis set an **Implementation Gate**: implementation may not proceed past
+Task 1 until (1) all six P1 corrections below are applied, (2) the duplicate lock
+priority is removed, (3) the plan is committed from a clean worktree, and (4) both
+review checklists are re-run against that committed SHA.
+
+**This revision applies all six P1 corrections and both P2 corrections.** They are
+folded directly into the affected task bodies below (Task 0, Task 1, Task 2, Task
+5, Task 7, and Implementation Tasks) rather than listed only here, so an
+implementer inherits the corrected requirement without cross-referencing this
+table. This table exists so the gate's status is auditable in one place.
+
+| # | Correction | Applied in | Required test(s) |
+| --- | --- | --- | --- |
+| P1-1 | `--verify` must inspect the Gemini INBOUND root, not only outbound `TARGET_ROOTS`; failure exits nonzero | Task 0, Fix 1 | unreconciled-root verify FAILs |
+| P1-2 | Verification must prove recoverability (archive receipt), not just final symlink shape | Task 0, Fix 1; Task 2, Step 4 | missing receipt; mismatched receipt |
+| P1-3 | Resolve Task 5 / Task 7 deadlock — `missing`/`divergent` are audited outcomes, not failures; shared-root creation deferred to a separate human-approved task | Task 5, Step 2; Task 7, Step 1; new Task 5a (deferred) | `verify_antigravity_root` states `missing`/`divergent` each produce a `RootFinding` with an operator next action; Task 7 asserts no Antigravity root mutation |
+| P1-4 | Archive-first must preserve a usable live skill if activation fails after archive succeeds | Task 2, Step 4 | forced post-archive replacement failure leaves original live directory usable |
+| P1-5 | Lock needs atomic acquisition (O_EXCL) + bounded, guarded recovery contract; unify duplicate P1/P2 lock task | Task 0, Fix 3 (sole P1 lock task); Implementation Tasks T8 marked superseded-by | contention; terminated-owner recovery; sequential idempotence |
+| P1-6 | Execution must start from a reviewed branch state | Task 1, Preconditions | manual: `git show --stat HEAD`, `git status --short --branch` output recorded; abort on unexpected staged/unstaged edits |
+| P2-1 | Accepted Gemini frontmatter needs a local, versioned validation contract | Task 2, Step 3 (metadata_policy); new `gemini-frontmatter-contract.md` reference | every preserved key tested against the local contract; unknown key errors report the exact offending key |
+| P2-2 | T3/T4/T5 in Implementation Tasks are already incorporated into the plan body — move to completed history, don't leave as open work | Implementation Tasks → Completed Review History table | manual read |
+
+**Task 1 status: COMPLETE.** Commit `da32cccb` — "feat(skills): read-only Gemini
+inventory audit (Task 1)" — 29 tests green, `docs/reference/gemini-skill-consolidation-inventory.md`
+generated. The gate's remaining scope is Task 0's three fixes (this revision
+strengthens Fix 1 and Fix 3 per P1-1/P1-2/P1-5 above) plus Tasks 2 through 7.
+
+---
 
 ### Task 0: P1 Review Fixes (prerequisite)
 
@@ -73,6 +111,62 @@ archive receipt, no symlink) must have `verify_gemini` return a non-empty
 `list[RootFinding]` reporting failure — the CLI must exit non-zero, not print
 "verification passed".
 
+**Fix 1 — strengthened per synthesis P1-1 and P1-2 (2026-08-14 gate correction).**
+The `verify_gemini` signature above is superseded by the signature below — kept
+above for its rationale, but the implementer must build the corrected interface,
+not the one shown above:
+
+~~~python
+def verify_gemini(
+    root: Path,
+    archive_root: Path,
+    only: set[str] | None = None,
+) -> list[RootFinding]:
+    ...
+~~~
+
+Two requirements, both from the review synthesis:
+
+1. **P1-1 — inbound root, nonzero exit.** `verify_gemini` inspects the Gemini
+   **inbound** root (`~/.gemini/skills`, the foreign root this plan writes
+   *into*) — never the existing outbound `TARGET_ROOTS` list `verify()`
+   already covers. When `verify_gemini` returns any non-empty
+   `list[RootFinding]`, the CLI's `--verify` exit code MUST be non-zero. A
+   Gemini-only verify run that silently falls through to `verify()`'s
+   `TARGET_ROOTS` scope and reports `"verification passed"` is exactly the
+   false-pass this fix exists to close.
+
+2. **P1-2 — prove recoverability, not just final shape.** The original
+   signature (`root`, `only` — no archive root, no receipt location) cannot
+   identify which archive to validate, so it can accept a correct-looking
+   symlink even when the matching archive is missing, corrupt, or belongs to
+   a different slug. `verify_gemini` MUST take an `archive_root` argument
+   that resolves to the archive tree used at reconciliation time. Because
+   this plan's tasks batch reconciliation in multiple timestamped runs
+   (Task 3's 7 slugs and Task 4's 4 slugs each get their own
+   `$(date -u +%Y%m%dT%H%M%SZ)` subdirectory — see Task 2 Step 4's receipt
+   contract), `archive_root` for `--verify` is the **parent** archive
+   directory (e.g. `$HOME/.gemini/skills-archive/`), not one specific batch
+   timestamp. `reconcile_gemini` maintains a persistent per-slug index file
+   at `<archive_root_parent>/index.json` (mapping `slug -> most recent batch
+   subdirectory`), so `verify_gemini` can resolve, for any requested slug,
+   which batch's receipt to validate without the operator tracking
+   timestamps by hand. For every slug under verification, confirm a receipt
+   exists under the resolved batch directory containing: `slug`, `source
+   digest` (sha256), `archive digest` (sha256), `final target kind`
+   (`symlink` | `generated-wrapper`), and `canonical target`. A finding with
+   `status="failed"` and a `detail` naming the slug is required when the
+   receipt is absent or when any receipt field does not match the live
+   filesystem state (e.g. the live symlink's resolved target no longer
+   equals the receipt's `canonical target`).
+
+Required tests (write first, in addition to the unreconciled-root test above):
+- **missing receipt** — a slug whose live state is a correct symlink but whose
+  archive root has no receipt file must fail verification.
+- **mismatched receipt** — a slug whose receipt exists but whose recorded
+  `canonical target` (or digest) does not match the live filesystem state must
+  fail verification, with the slug named in the finding's `detail`.
+
 **Fix 2 — narrow the OSError catch-all (Implementation Task T2, CRITICAL GAP).**
 The symlink-fallback path in Task 2 Step 4 (exercised by Step 5's
 `test_reconcile_falls_back_to_wrapper_when_symlink_fails`) must NOT catch
@@ -102,8 +196,68 @@ row over the same slug and asserts the second call is a no-op — it must not
 raise, must not create a second archive copy, and must not leave a stale lock
 artifact.
 
-- [ ] **Step 1: Write the three failing tests above** — Gemini-verify-reports-
-  failure-when-not-reconciled, OSError-with-unrelated-errno-propagates,
+**Fix 3 — strengthened per synthesis P1-5 (2026-08-14 gate correction): atomic
+acquisition + bounded, guarded recovery.** The lightweight sentinel lock
+described above is superseded by the contract below — a check-then-create
+sentinel still races (two processes can both observe "no lock" before either
+creates one), and a bare `finally`-release does not run when the owning
+process is killed (`kill -9`, OOM, host reboot), so the next fresh-agent task
+in this plan's own "fresh agent per task" model can block permanently on a
+lock nobody will ever release.
+
+Required lock contract:
+- **Atomic acquisition** — create the lock file with `os.open(path,
+  O_CREAT | O_EXCL | O_WRONLY)` (or equivalent exclusive-create primitive),
+  never check-then-create. `O_EXCL` fails atomically if the file already
+  exists; treat that as "lock held," not a race to resolve with a retry loop
+  that itself re-introduces the race.
+- **Ownership payload** — on successful acquisition, write a minimal JSON
+  payload into the lock file: owning PID, start timestamp (UTC), and the
+  source directory's SHA-256 digest at acquisition time. This is what makes
+  recovery *bounded* rather than guesswork.
+- **Guarded stale-lock recovery, not automatic deletion.** A lock is only a
+  *candidate* for stale-lock recovery when the recorded PID is no longer a
+  live process on this host. Recovery must not delete-and-retry silently: it
+  must be an explicit, logged, separately invoked operator action (e.g. a
+  `--reconcile-gemini --force-unlock <slug>` flag or equivalent) that reports
+  the stale payload (PID, start time, source SHA) before removing the lock.
+  Automatic silent deletion of any lock file — live-owner or not — is exactly
+  the failure mode this fix exists to close.
+- **Release on the normal path** — release (delete) the lock file when
+  `reconcile_gemini` completes successfully or raises a handled exception; a
+  `finally` block covers in-process exceptions but, per the point above, is
+  not relied on for the killed-process case.
+
+Required tests (write first, in addition to the idempotence test above):
+- **contention** — two sequential (or, if the test harness supports it,
+  concurrent) `reconcile_gemini` invocations attempting to acquire the same
+  slug's lock: the second acquisition attempt must fail cleanly (raise a
+  named exception, not hang or corrupt state) while the first holds the lock.
+- **terminated-owner recovery** — a lock file written with a PID that is not
+  a live process on the host must be identified as stale by the guarded
+  recovery path (not silently deleted by normal `reconcile_gemini` calls) and
+  must require the explicit operator recovery action above to clear.
+- **sequential idempotence** — retained from the original Fix 3: invoking
+  `reconcile_gemini` twice in a row over the same slug is a no-op on the
+  second call, does not create a second archive copy, and does not leave a
+  stale lock artifact.
+
+**Duplicate priority resolved:** this is the single P1 lock task for the
+plan. Implementation Tasks T8 (below, in the appended `/autoplan` review)
+originally carried a P2 label for the same requirement — it is retained
+verbatim there for its rationale and evidence trail, but is now marked
+**superseded-by Task 0 Fix 3** rather than treated as separate remaining
+work. See Completed Review History for the cross-reference.
+
+- [ ] **Step 1: Write the failing tests above** — expanded per the 2026-08-14
+  gate corrections (P1-1, P1-2, P1-5) to seven tests; the original three names
+  are retained below, plus four added by the strengthened Fix 1 and Fix 3:
+  Gemini-verify-reports-failure-when-not-reconciled,
+  Gemini-verify-fails-on-missing-receipt (P1-2, new),
+  Gemini-verify-fails-on-mismatched-receipt (P1-2, new),
+  OSError-with-unrelated-errno-propagates,
+  lock-contention-fails-cleanly (P1-5, new),
+  lock-terminated-owner-requires-guarded-recovery (P1-5, new),
   second-run-over-same-slug-is-a-no-op
 
 - [ ] **Step 2: Run the tests to confirm failure**
@@ -112,13 +266,15 @@ Run: `pytest tests/test_install_thin_skill_wrappers.py -q`
 Expected: FAIL — `verify_gemini` does not exist yet, the narrow errno check
 does not exist yet, and there is no lock.
 
-- [ ] **Step 3: Implement `verify_gemini`, the narrow errno check, and the
-  sentinel lock** exactly as specified above. These three interfaces are
-  prerequisites for Task 2 (Step 4's symlink-fallback logic must use the
-  narrow errno check and the lock from the start, not a bare `except OSError`)
-  and for Task 7 (the `--verify` call must route Gemini slugs to
-  `verify_gemini`). Later tasks build directly on these corrected interfaces
-  rather than re-deriving equivalent logic.
+- [ ] **Step 3: Implement `verify_gemini` (strengthened signature — archive_root
+  and receipt contract, per P1-1/P1-2), the narrow errno check, and the
+  atomically-acquired, guarded-recovery sentinel lock (per P1-5)** exactly as
+  specified above. These three interfaces are prerequisites for Task 2 (Step
+  4's symlink-fallback and archive-stage-commit logic must use the narrow
+  errno check and the lock from the start, not a bare `except OSError`) and
+  for Task 7 (the `--verify` call must route Gemini slugs to `verify_gemini`).
+  Later tasks build directly on these corrected interfaces rather than
+  re-deriving equivalent logic.
 
 - [ ] **Step 4: Verify and commit**
 
@@ -140,6 +296,26 @@ git commit -m "fix(skills): add Gemini-aware verify, narrow OSError catch, recon
 - `inventory_root(root_id: str, root: Path) -> list[SkillInventory]`
 - `inventory_all_roots() -> list[SkillInventory]`
 - `render_inventory(rows: list[SkillInventory], home: Path) -> str`
+
+**Preconditions (P1-6, synthesis correction from the AntiGravity-Gemini
+review — "Commit-Stat Review Before Replay"):** before Step 1 begins, the
+implementer records:
+
+~~~bash
+git show --stat HEAD
+git status --short --branch
+~~~
+
+and captures the resulting source SHA in the task's commit message or PR
+evidence. Abort and escalate to the human operator instead of proceeding if
+either command shows unexpected staged or unstaged edits (i.e. any change not
+attributable to this plan's own prior committed tasks). This precondition
+guards against replaying or building on top of an unreviewed, partially-dirty
+branch state.
+
+**Satisfied for the actual Task 1 run:** commit `da32cccb` — "feat(skills):
+read-only Gemini inventory audit (Task 1)" — landed from a clean worktree on
+top of base `c25b3dee`; 29 tests green. See Gate Status above.
 
 - [ ] **Step 1: Write the failing inventory test**
 
@@ -269,6 +445,55 @@ absolute paths.
 - [ ] **Step 4: Implement safe reconciliation**
 
 For each requested slug: reject unknown, unapproved, and external records; copy the complete existing directory into `archive_root/<slug>`; compare source/archive digest; create a relative link for `link`; generate a minimal adapter for `adapter`; return changed paths. If symlink creation fails, write a generated thin wrapper and report the fallback.
+
+**Strengthened per synthesis P1-4 (2026-08-14 gate correction) — archive-first
+must not leave the live skill missing or partial.** The sequence above, read
+literally ("copy... compare... create a relative link... generate a minimal
+adapter"), archives the source and then removes/replaces the foreign-root
+directory in place. If both link creation and generated-wrapper creation fail
+*after* the source directory has already been cleared, the archive exists but
+`~/.gemini/skills/<slug>` is left missing or partial — a regression versus the
+Gemini-owned skill's state before this plan ran. Narrowing the `OSError` catch
+(Fix 2 above) does not by itself restore a source that was already removed.
+
+Corrected sequence (stage-validate-commit, not archive-then-mutate-in-place):
+
+1. Archive the complete existing directory into `archive_root/<slug>` and
+   verify the archive digest matches the source digest (as today).
+2. **Stage** the replacement (symlink or generated adapter/wrapper) at a
+   temporary path alongside the live directory — do not touch
+   `~/.gemini/skills/<slug>` yet.
+3. **Validate** the staged replacement (symlink resolves, or generated
+   adapter file is well-formed and non-empty).
+4. **Commit atomically** — where the filesystem supports it, `os.rename()`
+   the validated staged replacement over the live path (POSIX rename is
+   atomic within the same filesystem). Only after the commit succeeds is the
+   original live directory considered replaced.
+5. **On any staging or validation failure**, the live directory must still be
+   the original, untouched source — nothing has been removed yet, because
+   step 2 staged beside it rather than clearing it first. If a filesystem
+   constraint ever forces clearing the source before staging (e.g. a
+   filesystem that cannot hold both paths at once), the implementer MUST
+   restore the archived copy back to the live path before raising, so the
+   failure surfaces with the Gemini skill still usable, never missing.
+
+**Receipt contract (P1-2).** On a successful commit, write a receipt file
+under `archive_root/<slug>/` (e.g. `archive_root/<slug>/.receipt.json`)
+containing: `slug`, `source_digest` (sha256, pre-archive), `archive_digest`
+(sha256, post-copy), `final_target_kind` (`"symlink"` or
+`"generated-wrapper"`), and `canonical_target` (the resolved path or adapter
+target). `reconcile_gemini` also creates or updates a persistent index file
+one level above the per-batch timestamped directory
+(`<archive_root>/../index.json`), mapping `slug -> this batch's archive_root`
+and overwriting only that slug's entry so other slugs' historical batch
+entries are preserved. `verify_gemini` (Task 0, Fix 1, strengthened) reads
+this index and receipt to prove recoverability, not just inspect the final
+symlink shape.
+
+Required test (P1-4, write first): force replacement creation (both symlink
+and generated-wrapper paths) to fail after a successful archive; assert the
+original live directory at `~/.gemini/skills/<slug>` still exists and is
+usable (not partially removed, not empty) after `reconcile_gemini` raises.
 
 - [ ] **Step 5: Add collision and metadata regression tests**
 
