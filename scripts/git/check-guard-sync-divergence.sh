@@ -19,8 +19,50 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=guard-sync-manifest.sh
 source "$SCRIPT_DIR/guard-sync-manifest.sh"
+# shellcheck source=resolve_sibling_git_repo.sh
+source "$SCRIPT_DIR/resolve_sibling_git_repo.sh"
 
-CANON_ROOT="${GUARD_SYNC_CANON_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+# Canonical-root resolution: never self-nominate as canonical just because
+# this script happens to be invoked from a given checkout (see ECC push-gate
+# analysis 2026-08-14 § Canonical-Root Mismatch — a downstream checkout
+# self-labeled canonical while also telling the operator to promote its own
+# changes to the real canonical, an internally inconsistent result).
+#
+#   1. GUARD_SYNC_CANON_ROOT explicitly set  -> honor it (existing contract).
+#   2. This checkout carries the orama-system marker itself -> it genuinely
+#      IS canonical; self-as-canonical is correct here, not a self-nomination.
+#   3. Otherwise (a downstream checkout, e.g. Perpetua-Tools or AlphaClaw)
+#      -> auto-resolve the real orama-system sibling via the same generic
+#      marker-based crawl this repo family already uses elsewhere (parent
+#      dir, then mother dir, depth 2 each — covers a repo nested one level
+#      deeper than expected, e.g. Perpetua-Tools under perplexity-api/).
+#      Self-contained here (no dependency on a downstream-repo-specific
+#      resolver script) so this file behaves correctly in every repo it
+#      gets synced into, not just Perpetua-Tools. If no unambiguous sibling
+#      is found, fail with an actionable configuration error — never fall
+#      back to self.
+_SELF_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+_ORAMA_MARKER="bin/orama-system/SKILL.md"
+
+if [[ -n "${GUARD_SYNC_CANON_ROOT:-}" ]]; then
+  CANON_ROOT="$GUARD_SYNC_CANON_ROOT"
+elif sibling_repo_is_git_root "$_SELF_ROOT" "$_ORAMA_MARKER"; then
+  CANON_ROOT="$_SELF_ROOT"
+else
+  _parent_dir="$(cd "$_SELF_ROOT/.." && pwd)"
+  _mother_dir="$(cd "$_SELF_ROOT/../.." && pwd)"
+  sibling_repo_reset_candidates
+  sibling_repo_crawl_collect "$_parent_dir" "$_ORAMA_MARKER" 2
+  if [[ "$_mother_dir" != "$_parent_dir" ]]; then
+    sibling_repo_crawl_collect "$_mother_dir" "$_ORAMA_MARKER" 2
+  fi
+  if ! CANON_ROOT="$(sibling_repo_finalize "orama-system")"; then
+    echo "check-guard-sync-divergence: this checkout ($_SELF_ROOT) is not the orama-system canonical repo, and no unambiguous orama-system sibling was found nearby." >&2
+    echo "  Set GUARD_SYNC_CANON_ROOT=<path-to-orama-system> explicitly and retry." >&2
+    exit 2
+  fi
+fi
+
 WORKSPACE_ROOT="${WORKSPACE_ROOT:-$(cd "$CANON_ROOT/.." && pwd)}"
 RC=0
 
