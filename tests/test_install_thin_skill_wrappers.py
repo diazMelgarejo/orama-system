@@ -5,7 +5,9 @@ functions added/modified in
 bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py.
 """
 
+import errno
 import importlib.util
+import json
 import sys
 from pathlib import Path, PurePosixPath
 
@@ -324,3 +326,128 @@ def test_audit_gemini_cli_flag_prints_render_inventory(mod, tmp_path, monkeypatc
     assert exit_code == 0
     assert "gemini" in captured.out
     assert str(tmp_path) not in captured.out
+
+
+# ── Task 0: Gemini verification and reconciliation P1 review fixes ──────────
+
+
+def _canonical_code_review() -> Path:
+    return ROOT / "bin" / "orama-system" / "skills" / "code-review"
+
+
+def test_gemini_verify_reports_failure_when_not_reconciled(mod, tmp_path: Path, monkeypatch, capsys) -> None:
+    root = tmp_path / ".gemini" / "skills"
+    (root / "code-review").mkdir(parents=True)
+    (root / "code-review" / "SKILL.md").write_text("old Gemini card\n", encoding="utf-8")
+
+    findings = mod.verify_gemini(root, tmp_path / ".gemini" / "skills-archive", {"code-review"})
+
+    assert findings
+    assert findings[0].status == "failed"
+    assert findings[0].slug == "code-review"
+    monkeypatch.setattr(mod, "HOME", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["prog", "--verify", "--only", "code-review"])
+    assert mod.main() == 1
+    captured = capsys.readouterr()
+    assert "verification passed" not in captured.out
+    assert "code-review" in captured.err
+
+
+def test_gemini_verify_fails_on_missing_receipt(mod, tmp_path: Path) -> None:
+    root = tmp_path / "gemini" / "skills"
+    root.mkdir(parents=True)
+    (root / "code-review").symlink_to(_canonical_code_review(), target_is_directory=True)
+
+    findings = mod.verify_gemini(root, tmp_path / "archive", {"code-review"})
+
+    assert findings
+    assert findings[0].status == "failed"
+    assert "code-review" in findings[0].detail
+
+
+def test_gemini_verify_fails_on_mismatched_receipt(mod, tmp_path: Path) -> None:
+    root, archive_parent = tmp_path / "gemini" / "skills", tmp_path / "archive"
+    root.mkdir(parents=True)
+    (root / "code-review").symlink_to(_canonical_code_review(), target_is_directory=True)
+    receipt_dir = archive_parent / "batch-1" / "code-review"
+    receipt_dir.mkdir(parents=True)
+    (receipt_dir / "SKILL.md").write_text("archived source\n", encoding="utf-8")
+    (archive_parent / "index.json").write_text(
+        json.dumps({"code-review": "batch-1"}), encoding="utf-8"
+    )
+    (receipt_dir / ".receipt.json").write_text(
+        json.dumps(
+            {
+                "slug": "code-review",
+                "source_digest": "a" * 64,
+                "archive_digest": "a" * 64,
+                "final_target_kind": "symlink",
+                "canonical_target": str(tmp_path / "wrong-target"),
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    findings = mod.verify_gemini(root, archive_parent, {"code-review"})
+
+    assert findings
+    assert findings[0].status == "failed"
+    assert "code-review" in findings[0].detail
+
+
+def test_oserror_with_unrelated_errno_propagates(mod, tmp_path: Path, monkeypatch) -> None:
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+
+    def disk_full(_target: Path, _source: Path) -> None:
+        raise OSError(errno.ENOSPC, "disk full")
+
+    monkeypatch.setattr(mod, "create_relative_link", disk_full)
+
+    with pytest.raises(OSError) as raised:
+        mod.reconcile_gemini(root, archive, {"code-review"})
+
+    assert raised.value.errno == errno.ENOSPC
+    assert not (root / "code-review" / "SKILL.md").exists()
+
+
+def test_lock_contention_fails_cleanly(mod, tmp_path: Path) -> None:
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    lock = mod.acquire_reconcile_lock(archive, root, {"code-review"})
+    try:
+        with pytest.raises(mod.ReconcileLockHeldError):
+            mod.reconcile_gemini(root, archive, {"code-review"})
+    finally:
+        mod.release_reconcile_lock(lock)
+
+
+def test_lock_terminated_owner_requires_guarded_recovery(mod, tmp_path: Path) -> None:
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    archive.mkdir(parents=True)
+    lock_path = archive / ".reconcile.lock"
+    stale_payload = {"pid": 99999999, "started_at": "2026-08-14T00:00:00Z", "source_digest": "a" * 64}
+    lock_path.write_text(json.dumps(stale_payload), encoding="utf-8")
+
+    with pytest.raises(mod.ReconcileLockHeldError):
+        mod.reconcile_gemini(root, archive, {"code-review"})
+    assert lock_path.exists()
+
+    recovered = mod.force_unlock_gemini(archive, "code-review")
+
+    assert recovered == stale_payload
+    assert not lock_path.exists()
+
+
+def test_second_run_over_same_slug_is_a_no_op(mod, tmp_path: Path) -> None:
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    old_skill = root / "code-review" / "SKILL.md"
+    old_skill.parent.mkdir(parents=True)
+    old_skill.write_text("old Gemini card\n", encoding="utf-8")
+
+    first = mod.reconcile_gemini(root, archive, {"code-review"})
+    archived_before_second_run = sorted(archive.rglob("*"))
+    second = mod.reconcile_gemini(root, archive, {"code-review"})
+
+    assert first == [root / "code-review"]
+    assert second == []
+    assert sorted(archive.rglob("*")) == archived_before_second_run
+    assert not (archive / ".reconcile.lock").exists()
