@@ -401,10 +401,10 @@ def test_oserror_with_unrelated_errno_propagates(mod, tmp_path: Path, monkeypatc
     def disk_full(_target: Path, _source: Path) -> None:
         raise OSError(errno.ENOSPC, "disk full")
 
-    monkeypatch.setattr(mod, "create_relative_link", disk_full)
+    monkeypatch.setattr("gemini_reconciliation.create_relative_link", disk_full)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"})
+        mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
 
     assert raised.value.errno == errno.ENOSPC
     assert not (root / "code-review" / "SKILL.md").exists()
@@ -415,7 +415,7 @@ def test_lock_contention_fails_cleanly(mod, tmp_path: Path) -> None:
     lock = mod.acquire_reconcile_lock(archive, root, {"code-review"})
     try:
         with pytest.raises(mod.ReconcileLockHeldError):
-            mod.reconcile_gemini(root, archive, {"code-review"})
+            mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
     finally:
         mod.release_reconcile_lock(lock)
 
@@ -428,7 +428,7 @@ def test_lock_terminated_owner_requires_guarded_recovery(mod, tmp_path: Path) ->
     lock_path.write_text(json.dumps(stale_payload), encoding="utf-8")
 
     with pytest.raises(mod.ReconcileLockHeldError):
-        mod.reconcile_gemini(root, archive, {"code-review"})
+        mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
     assert lock_path.exists()
 
     recovered = mod.force_unlock_gemini(archive, "code-review")
@@ -443,9 +443,9 @@ def test_second_run_over_same_slug_is_a_no_op(mod, tmp_path: Path) -> None:
     old_skill.parent.mkdir(parents=True)
     old_skill.write_text("old Gemini card\n", encoding="utf-8")
 
-    first = mod.reconcile_gemini(root, archive, {"code-review"})
+    first = mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
     archived_before_second_run = sorted(archive.rglob("*"))
-    second = mod.reconcile_gemini(root, archive, {"code-review"})
+    second = mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
 
     assert first == [root / "code-review"]
     assert second == []
@@ -483,11 +483,11 @@ def test_live_skill_survives_when_every_activation_path_fails(
     def refuse_wrapper(_target: Path, _source: Path) -> None:
         raise OSError(errno.EROFS, "read-only file system")
 
-    monkeypatch.setattr(mod, "create_relative_link", refuse_symlink)
-    monkeypatch.setattr(mod, "write_generated_wrapper", refuse_wrapper)
+    monkeypatch.setattr("gemini_reconciliation.create_relative_link", refuse_symlink)
+    monkeypatch.setattr("gemini_reconciliation.write_generated_wrapper", refuse_wrapper)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"})
+        mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
 
     # Positive outcome, not just "no crash": we got PAST the archive step, so
     # this genuinely exercises post-archive failure rather than an early abort.
@@ -527,7 +527,7 @@ def test_live_skill_is_restored_when_the_swap_fails_after_archive(
     monkeypatch.setattr(mod.os, "replace", fail_installing_stage)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"})
+        mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
 
     assert raised.value.errno == errno.EIO
     assert (archive / "code-review" / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
@@ -538,3 +538,25 @@ def test_live_skill_is_restored_when_the_swap_fails_after_archive(
     assert (live / "references" / "notes.md").read_text(encoding="utf-8") == "reference body\n"
     assert not list(root.glob(".*reconcile-rollback"))
     assert not (archive / ".reconcile.lock").exists()
+
+
+def test_audit_reports_antigravity_shared_root(mod, tmp_path) -> None:
+    agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
+    agents.mkdir()
+    antigravity.symlink_to(agents, target_is_directory=True)
+    assert mod.verify_antigravity_root(agents, antigravity).status == "shared-root"
+
+
+def test_audit_reports_missing_antigravity_root_with_operator_action(mod, tmp_path) -> None:
+    finding = mod.verify_antigravity_root(tmp_path / "agents", tmp_path / "antigravity")
+    assert finding.status == "missing"
+    assert finding.operator_next_action == "Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
+
+
+def test_audit_reports_divergent_antigravity_root_with_operator_action(mod, tmp_path) -> None:
+    agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
+    agents.mkdir()
+    antigravity.mkdir()
+    finding = mod.verify_antigravity_root(agents, antigravity)
+    assert finding.status == "divergent"
+    assert finding.operator_next_action == "Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology."
