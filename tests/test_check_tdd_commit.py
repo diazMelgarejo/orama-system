@@ -33,6 +33,13 @@ def test_check_tdd_commit_bash_syntax():
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True, cwd=ROOT)
 
 
+def test_check_tdd_commit_allows_empty_index_under_bash32_nounset(tmp_path: Path):
+    """A docs-only commit with no staged paths must not expand an empty array."""
+    _init_repo(tmp_path)
+    result = _run_hook(tmp_path, "docs: empty index\n")
+    assert result.returncode == 0, result.stderr
+
+
 def test_check_tdd_commit_allows_tdd_skip(tmp_path: Path):
     _init_repo(tmp_path)
     src = tmp_path / "web" / "src"
@@ -122,4 +129,3 @@ def test_check_tdd_commit_partial_coverage_blocks_unpaired_file(tmp_path: Path):
     assert result.returncode == 1
     assert "B.tsx" in result.stderr
     assert "A.tsx" not in result.stderr  # A is paired — should not appear in error
-

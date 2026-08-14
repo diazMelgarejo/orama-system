@@ -1,56 +1,41 @@
 ---
 name: oramasys-method
 description: >-
-  Successor and drop-in replacement for the legacy ultrathink-system method.
-  Applies the orama-system 5-stage methodology (Context Immersion → Visionary
-  Architecture → Ruthless Refinement → Masterful Execution → Crystallize) with
-  the AFRP pre-router gate and CIDF content-insertion guard. Prefer local
-  memory/search tools before paid or external tools, and route heavy reasoning
-  through the orama MCP server when the current agent harness exposes it. ALWAYS
-  use this skill when the user says
-  "ultrathink", "ultrathink this", "think deeply", "5-stage", "systematic
-  approach", "oramasys", "apply oramasys", or asks for deep multi-step problem
-  solving, architecture or re-architecture work, a rigorous or multi-step plan,
-  a complex refactor, a system overhaul, or careful task planning — even when
-  the exact word "ultrathink" or "oramasys" is absent, and even if they use the
-  old "ultrathink" name. If a request is non-trivial, multi-step, or design-heavy,
-  prefer this skill. It replaces ultrathink-system; treat any ultrathink
-  invocation as an oramasys invocation. **Also use for PR merges, conflict
-  resolution, nested-branch integration, and any edit that must harmonize two
-  divergent branches additively (never delete-and-replace).**
-version: "1.3.3"
+  Use when the user asks for ultrathink, oramasys, deep multi-step reasoning,
+  architecture, a complex refactor, careful planning, or an additive PR merge.
+  The successor to ultrathink-system applies the orama-system five-stage method,
+  AFRP gate, and CIDF guard.
+version: "1.3.4"
 license: Apache 2.0
 compatibility: claude-code, cowork, codex, openclaw
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
+triggers:
+  - ultrathink
+  - oramasys
+  - system overhaul
+  - architecture work
+  - rigorous multi-step plan
+when_to_use: Use for non-trivial, design-heavy, or cross-branch work; use a direct answer for a small factual lookup.
 ---
 
 # oramasys-method
+
+## Purpose
 
 The orama-system methodology (orama = *vision / revelation*), packaged as a
 user-invocable skill for Claude, Codex, OpenClaw, and other agent harnesses.
 **This is the successor to the legacy `ultrathink-system`.**
 Any "ultrathink" trigger activates this skill and is handled by the orama-system
-path — same muscle memory, new engine.
+path. Harness-specific routing is in `references/harness-compatibility.md`.
 
-> **Upstream alignment:** The `orama-system` mother skill already carries the AFRP
-> gate, CIDF, search policy, and MCP routing; the repo's `agent-methodology` card
-> is Claude-only background knowledge (`user-invocable: false`). This skill is the
-> user-invocable front door tying them together and guaranteeing the legacy "ultrathink"
-> alias keeps working. The 5 stages below match the repo's canonical 5-stage
-> methodology exactly.
+## When To Use
 
-## Agent Harness Compatibility
+Use this method for non-trivial implementation, architecture, planning, or
+additive branch-integration work. Use a direct answer for a small factual lookup.
 
-This skill is intentionally agent-neutral:
+## When Not To Use
 
-- Use native planning, shell, file, browser, and MCP tools from the current harness.
-- Treat named integrations such as `gbrain`, `gstack`, CRG, and `mcp-oramasys` as
-  preferred local tiers when available, not as permission to invent unavailable tools.
-- If a tier is unavailable, state the fallback briefly and use the cheapest
-  available equivalent before escalating to network or paid tools.
-- Preserve the method and verification standard even when the exact tool names differ.
-
----
+Do not use the full method for a self-contained, low-risk formatting change.
 
 ## Step 0 — AFRP Gate (mandatory, runs before anything else)
 
@@ -77,11 +62,7 @@ Type → Mode mapping:
 - C (8+ steps, parallel) → **Mode 3** (full 7-agent network via MCP; on
   Claude Code, execute via the `Workflow` tool under its own
   `ultracode`/explicit-ask opt-in gate, never a bespoke dispatch loop, with
-  mandatory tiered model selection (Haiku dispatch → Sonnet evaluate →
-  Opus/Fable 5 escalation-only) — see
-  `../../references/claude-code-workflow-canonical.md`)
-
----
+  mandatory tiered model selection; see the workflow reference.)
 
 ## Step 1 — Search FIRST (frugality, non-negotiable)
 
@@ -105,8 +86,6 @@ Quick rules when the tool exists:
 - Known exact string → Grep is correct
 - Web → prefer the harness-approved browser/search path; in Claude/gstack
   environments, use `/browse` rather than raw browser MCP calls.
-
----
 
 ## Step 2 — The 5 Stages
 
@@ -136,15 +115,18 @@ Before Done, Demand Elegance, Autonomous Bug Fixing.
 This is the same protocol as `bin/orama-system/references/multi-agent-collaboration-protocol.md`
 § Nested-Branch Merge, packaged for PR work and agent harnesses.
 
----
+### Contract migrations (mandatory at cross-module boundaries)
 
-## Step 3 — Route heavy reasoning through the MCP server
+When a change alters persisted state, a return shape, an event envelope, a
+transport payload, or lifecycle behavior, load
+`references/contract-migration.md`. Build and verify the complete vertical
+slice: persistence → contract → callers → transport → lifecycle → tests.
+Do not accept a leaf-only repair that leaves another consumer on the old
+contract.
 
-For Mode 2/3, offload deep reasoning to the orama MCP server when available.
+## Step 3 — Route Heavy Reasoning
 
-- MCP tool: **`mcp-oramasys`** (canonical, when exposed by the harness)
-- Legacy `mcp-ultrathink-*` names are deprecated aliases pointing to the same server
-- HTTP backup: `POST /oramasys` port 8001
+For Mode 2 or 3, follow `references/harness-compatibility.md`.
 
 ---
 
@@ -159,36 +141,9 @@ For Mode 2/3, offload deep reasoning to the orama MCP server when available.
   tracked rules name categories only; concrete local fragments stay in
   local-only registries outside git.
 
-### File Truncation Check (MANDATORY for all create_or_update_file calls)
+### File Truncation Check
 
-**All agents have a recurring failure mode: TRUNCATING files.**
-When `create_or_update_file` is called with partial content, the API silently
-replaces the entire file with that truncated content. This has caused
-catastrophic data loss multiple times.
-
-**After EVERY file write, before ANY commit:**
-
-1. **Re-fetch the file:**
-   ```bash
-   curl -s https://raw.githubusercontent.com/<org>/<repo>/<branch>/<path> | wc -l
-   ```
-
-2. **Verify line count** is within 5% of expected:
-   ```bash
-   lines=$(curl -s "$url" | wc -l)
-   [ "$lines" -gt $(($expected * 95 / 100)) ] || echo "TRUNCATED!"
-   ```
-
-3. **Check structural integrity** — tail should show proper file end:
-   ```bash
-   curl -s "$url" | tail -5   # should show complete final function/block
-   ```
-
-4. **If truncated:** DO NOT commit. Re-read the original via `get_file_contents`
-   and rewrite the complete file.
-
-**This check is non-negotiable. One truncated file in main costs more than
-100 verification steps.**
+Apply `references/file-truncation-check.md` after every whole-file write.
 
 ---
 
@@ -201,7 +156,7 @@ catastrophic data loss multiple times.
 - Apply CIDF `decide()` before any content insertion (start at rank 1)
 - Treat "ultrathink" and "oramasys" as the same trigger
 - **On PR/conflict work:** follow `references/integrative-merge.md` (additive harmonization)
-- **Verify file truncation** after every create_or_update_file call (re-fetch + check line count)
+- **Verify file truncation** after every whole-file write
 
 ### Ask First
 
@@ -217,17 +172,15 @@ catastrophic data loss multiple times.
 - Trust visual confirmation as verification
 - Reintroduce `mcp-ultrathink-*` names in new config or skills
 - **Resolve merge conflicts by wholesale `--ours` / `--theirs` without classifying mode**
-- **Commit a file without verifying it was not truncated** (re-fetch + line count check)
+- **Commit a file without a truncation check**
 
 ---
 
-## Examples
+## Runbook And Glossary
 
-- Golden path (production bug fix + PR merge): [`examples/good/oramasys-golden-path.md`](examples/good/oramasys-golden-path.md)
-- Anti-patterns to avoid: [`examples/bad/anti-patterns.md`](examples/bad/anti-patterns.md)
-- Eval rubric, including the sandbox-limitation note for harnesses without
-  live `gbrain`/`mcp-oramasys`/OpenClaw access: [`eval/oramasys-checklist.md`](eval/oramasys-checklist.md)
-- Test prompts for the skill-creator dogfood loop: [`eval/evals.json`](eval/evals.json)
+Runbook: classify, search locally, design the smallest coherent change, verify,
+then record only the result needed for the next agent. AFRP is the query/audience
+router; CIDF is the content-insertion guard; CRG is code-review-graph.
 
 ---
 
@@ -239,5 +192,8 @@ catastrophic data loss multiple times.
 - `references/graceful-degradation.md` — unified fallback ladders (oramasys + PT model selection)
 - `references/cidf-and-mcp.md` — CIDF ranks, MCP names, legacy compatibility map
 - `references/tdd-gate.md` — TDD prescriptive gate (links `docs/TDD.md`)
+- `references/contract-migration.md` — vertical-slice contract migration and regression method
+- `references/harness-compatibility.md` — tool and MCP routing by host
+- `references/file-truncation-check.md` — mandatory complete-write verification
 - `../../references/contribution-standards.md` — CONTRIBUTING.md + PR-template baseline and the method's raised contribution standard (PT PR #247); pairs with `post-review-micro-remediation.md`
 - `../../references/skill-architecture-guide.md` — the repo's own SKILL.md standard this file is audited against
