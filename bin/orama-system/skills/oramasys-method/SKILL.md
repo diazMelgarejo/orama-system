@@ -26,7 +26,8 @@ The orama-system methodology (orama = *vision / revelation*), packaged as a
 user-invocable skill for Claude, Codex, OpenClaw, and other agent harnesses.
 **This is the successor to the legacy `ultrathink-system`.**
 Any "ultrathink" trigger activates this skill and is handled by the orama-system
-path. Harness-specific routing is in `references/harness-compatibility.md`.
+path. It is the user-facing companion to the orama-system mother skill;
+harness-specific routing is in `references/harness-compatibility.md`.
 
 ## When To Use
 
