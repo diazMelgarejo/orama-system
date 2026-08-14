@@ -551,10 +551,10 @@ def verify_antigravity_root(shared_agents_root: Path, antigravity_root: Path) ->
     except OSError:
         pass
     return RootFinding(
-        slug="",
+        slug=antigravity_root.name,
         status="divergent",
-        detail=f"Roots are divergent. shared: {shared_agents_root.resolve() if shared_agents_root.exists() else 'missing'}, antigravity: {antigravity_root.resolve() if antigravity_root.exists() else 'missing'}",
-        operator_next_action="Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology."
+        detail=f"Both the shared-agent root ({shared_agents_root}) and the Antigravity root ({antigravity_root}) exist, but they are not the same directory. Antigravity must share the agent ecosystem root to avoid branching context isolation.",
+        operator_next_action="Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology.",
     )
 
 
