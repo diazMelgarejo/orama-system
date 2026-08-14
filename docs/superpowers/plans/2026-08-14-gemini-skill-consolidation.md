@@ -671,7 +671,12 @@ def test_manifest_rejects_skillify_collision(mod) -> None:
 
 - [ ] **Step 2: Implement checks and update operator guidance**
 
-The root check returns `shared-root`, `missing`, or `divergent`; only `shared-root` passes. Document: run manifest audit first, retain gstack `skillify`, invoke Orama creator as `oramasys-skillify`, and never bulk-install the Orama manifest into a gstack-populated root.
+The root check returns `shared-root`, `missing`, or `divergent`; all three are audited outcomes (not failures) that produce a `RootFinding` with an operator next action. Document: run manifest audit first, retain gstack `skillify`, invoke Orama creator as `oramasys-skillify`, and never bulk-install the Orama manifest into a gstack-populated root.
+
+### Task 5a: Create Antigravity Shared Root (Deferred)
+
+This task is deferred to a separate human-approved plan to avoid mutating the Antigravity root during this consolidation.
+
 
 - [ ] **Step 3: Verify and commit**
 
@@ -766,7 +771,7 @@ git diff --check
 git status --short
 ~~~
 
-Expected: all tests pass; Antigravity is `shared-root`; `skillify` and `gstack-upgrade` remain `preserve-external`; candidates are `not changed by this plan`.
+Expected: all tests pass; Antigravity root state is audited (`shared-root`, `missing`, or `divergent`) but not mutated; `skillify` and `gstack-upgrade` remain `preserve-external`; candidates are `not changed by this plan`.
 
 - [ ] **Step 2: Record final evidence**
 
