@@ -10,6 +10,7 @@ import importlib.util
 import json
 import sys
 from pathlib import Path, PurePosixPath
+from types import ModuleType
 
 import pytest
 
@@ -540,20 +541,24 @@ def test_live_skill_is_restored_when_the_swap_fails_after_archive(
     assert not (archive / ".reconcile.lock").exists()
 
 
-def test_audit_reports_antigravity_shared_root(mod, tmp_path) -> None:
+def test_audit_reports_antigravity_shared_root(mod: ModuleType, tmp_path: Path) -> None:
     agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
     agents.mkdir()
     antigravity.symlink_to(agents, target_is_directory=True)
     assert mod.verify_antigravity_root(agents, antigravity).status == "shared-root"
 
 
-def test_audit_reports_missing_antigravity_root_with_operator_action(mod, tmp_path) -> None:
+def test_audit_reports_missing_antigravity_root_with_operator_action(
+    mod: ModuleType, tmp_path: Path
+) -> None:
     finding = mod.verify_antigravity_root(tmp_path / "agents", tmp_path / "antigravity")
     assert finding.status == "missing"
     assert finding.operator_next_action == "Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
 
 
-def test_audit_reports_divergent_antigravity_root_with_operator_action(mod, tmp_path) -> None:
+def test_audit_reports_divergent_antigravity_root_with_operator_action(
+    mod: ModuleType, tmp_path: Path
+) -> None:
     agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
     agents.mkdir()
     antigravity.mkdir()
@@ -561,9 +566,38 @@ def test_audit_reports_divergent_antigravity_root_with_operator_action(mod, tmp_
     assert finding.status == "divergent"
     assert finding.operator_next_action == "Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology."
 
+
+def test_audit_antigravity_root_reports_missing_when_no_root_is_configured(
+    mod: ModuleType, tmp_path: Path
+) -> None:
+    finding = mod.audit_antigravity_root(tmp_path / "agents", None)
+
+    assert finding.status == "missing"
+    assert "No Antigravity skills root" in finding.detail
+
+
+def test_audit_antigravity_cli_is_read_only_and_reports_missing(
+    mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(mod, "HOME", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["prog", "--audit-antigravity"])
+
+    exit_code = mod.main()
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "missing:" in captured.out
+    assert "No Antigravity skills root" in captured.out
+    assert not list(tmp_path.iterdir())
+
 def test_reconcile_never_replaces_gstack_upgrade(mod, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="preserve-external"):
         mod.reconcile_gemini(tmp_path / "gemini", tmp_path / "archive", {"gstack-upgrade"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('gstack', 'preserve-external', 'gstack-upgrade', '', 'external'))
+
+
+def test_reconcile_never_replaces_skillify(mod, tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="preserve-external"):
+        mod.reconcile_gemini(tmp_path / "gemini", tmp_path / "archive", {"skillify"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('gstack', 'preserve-external', 'skillify', '', 'external'))
 
 def test_reconcile_rejects_unknown_frontmatter_key_for_adapter(mod, tmp_path: Path) -> None:
     root = tmp_path / "gemini"
@@ -578,7 +612,7 @@ def test_reconcile_reports_the_exact_unknown_frontmatter_key(mod, tmp_path: Path
     skill = root / "orama-system" / "SKILL.md"
     skill.parent.mkdir(parents=True)
     skill.write_text("---\nname: orama-system\nunsupported: true\n---\n", encoding="utf-8")
-    with pytest.raises(ValueError, match=r"unsupported frontmatter key: name"):
+    with pytest.raises(ValueError, match=r"unsupported frontmatter key: unsupported"):
         mod.reconcile_gemini(root, tmp_path / "archive", {"orama-system"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'adapter', 'orama-system', '/path/SKILL.md', 'validated'))
 
 def test_reconcile_falls_back_to_wrapper_when_symlink_fails(mod, tmp_path: Path, monkeypatch) -> None:
@@ -620,3 +654,26 @@ def test_perpetua_wrapper_explains_missing_root(mod) -> None:
     import gemini_reconciliation
     ownership = gemini_reconciliation.GeminiOwnership("perpetua", "adapter", "perpetua-tools", "$PERPETUA_TOOLS_PATH/SKILL.md", "validated")
     assert "PERPETUA_TOOLS_PATH is not set" in gemini_reconciliation.cross_repo_wrapper(ownership)
+
+def test_audit_reports_antigravity_shared_root(mod, tmp_path: Path) -> None:
+    agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
+    agents.mkdir()
+    antigravity.symlink_to(agents, target_is_directory=True)
+    finding = mod.verify_antigravity_root(agents, antigravity)
+    assert finding.status == "shared-root"
+    assert finding.operator_next_action == "Record the finding; no setup action is needed."
+
+def test_audit_reports_missing_antigravity_root_with_operator_action(mod, tmp_path: Path) -> None:
+    agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
+    agents.mkdir()
+    finding = mod.verify_antigravity_root(agents, antigravity)
+    assert finding.status == "missing"
+    assert finding.operator_next_action == "Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
+
+def test_audit_reports_divergent_antigravity_root_with_operator_action(mod, tmp_path: Path) -> None:
+    agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
+    agents.mkdir()
+    antigravity.mkdir()
+    finding = mod.verify_antigravity_root(agents, antigravity)
+    assert finding.status == "divergent"
+    assert finding.operator_next_action == "Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology."

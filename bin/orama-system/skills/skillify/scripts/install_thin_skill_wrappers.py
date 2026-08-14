@@ -533,26 +533,48 @@ def verify(only: set[str] | None = None) -> list[str]:
 
 
 def verify_antigravity_root(shared_agents_root: Path, antigravity_root: Path) -> RootFinding:
-    if not shared_agents_root.exists() or not antigravity_root.exists():
+    if not antigravity_root.exists() and not antigravity_root.is_symlink():
         return RootFinding(
             slug="",
             status="missing",
             detail=f"missing expected root(s). shared: {shared_agents_root.exists()}, antigravity: {antigravity_root.exists()}",
             operator_next_action="Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
         )
-    if antigravity_root.is_symlink() and antigravity_root.resolve() == shared_agents_root.resolve():
-        return RootFinding(
-            slug="",
-            status="shared-root",
-            detail=f"Resolved roots: {shared_agents_root.resolve()}",
-            operator_next_action="Record the finding; no setup action is needed."
-        )
+    try:
+        if antigravity_root.is_symlink() and antigravity_root.resolve() == shared_agents_root.resolve():
+            return RootFinding(
+                slug="",
+                status="shared-root",
+                detail=f"Resolved roots: {shared_agents_root.resolve()}",
+                operator_next_action="Record the finding; no setup action is needed."
+            )
+    except OSError:
+        pass
     return RootFinding(
         slug="",
         status="divergent",
-        detail=f"Roots are divergent. shared: {shared_agents_root.resolve()}, antigravity: {antigravity_root.resolve()}",
+        detail=f"Roots are divergent. shared: {shared_agents_root.resolve() if shared_agents_root.exists() else 'missing'}, antigravity: {antigravity_root.resolve() if antigravity_root.exists() else 'missing'}",
         operator_next_action="Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology."
     )
+
+
+def audit_antigravity_root(
+    shared_agents_root: Path, antigravity_root: Path | None
+) -> RootFinding:
+    """Return a read-only topology finding for an explicitly supplied root.
+
+    Antigravity does not have a portable, repository-owned configuration path.
+    An omitted root is therefore an auditable ``missing`` outcome, not evidence
+    that the shared-agent root is already configured for Antigravity.
+    """
+    if antigravity_root is None:
+        return RootFinding(
+            slug="",
+            status="missing",
+            detail="No Antigravity skills root was supplied for this read-only audit.",
+            operator_next_action="Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan.",
+        )
+    return verify_antigravity_root(shared_agents_root, antigravity_root)
 
 
 # Logical roots audited by --audit-gemini. "agents" and "antigravity" resolve
@@ -667,6 +689,15 @@ def main() -> int:
         ),
     )
     parser.add_argument(
+        "--audit-antigravity",
+        action="store_true",
+        help="Read-only Antigravity/shared-agent topology audit. Never mutates either root.",
+    )
+    parser.add_argument(
+        "--antigravity-root",
+        help="Explicit Antigravity skills root for --audit-antigravity; omit to record missing.",
+    )
+    parser.add_argument(
         "--json",
         action="store_true",
         help="Output audit result as JSON rather than Markdown table.",
@@ -691,8 +722,21 @@ def main() -> int:
         else:
             print(render_inventory(inventory, home=HOME))
         return 0
+    if args.audit_antigravity:
+        finding = audit_antigravity_root(
+            HOME / ".agents" / "skills",
+            Path(args.antigravity_root) if args.antigravity_root else None,
+        )
+        if args.json:
+            import dataclasses
+
+            print(json.dumps(dataclasses.asdict(finding), indent=2))
+        else:
+            print(f"{finding.status}: {finding.detail}")
+            print(f"next: {finding.operator_next_action}")
+        return 0
     if not args.install and not args.verify and not args.reconcile_gemini:
-        parser.error("choose --install, --verify, --reconcile-gemini, and/or --audit-gemini")
+        parser.error("choose --install, --verify, --reconcile-gemini, --audit-gemini, and/or --audit-antigravity")
     only = {s.strip() for s in args.only.split(",")} if args.only else None
     gemini_root = Path(args.gemini_root).resolve() if args.gemini_root else HOME / ".gemini" / "skills"
     if args.reconcile_gemini:
