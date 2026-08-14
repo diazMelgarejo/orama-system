@@ -330,18 +330,23 @@ def reconcile_gemini(
                     )
                 canonical_target = (canonical_root / canonical_target).resolve()
 
+            source_digest = _tree_sha256(live)
+            source_text = ""
+            if live.exists():
+                skill_md = live / "SKILL.md"
+                if skill_md.is_file() and not live.is_symlink():
+                    source_text = skill_md.read_text(encoding="utf-8")
+
             if ownership.action == "link":
                 if live.is_symlink() and live.resolve() == canonical_target.resolve():
                     continue
                 if live.is_symlink():
                     raise ValueError(f"{slug}: existing Gemini symlink targets a different canonical card")
-
-            source_digest = _tree_sha256(live)
-            source_text = ""
-            if live.exists():
-                skill_md = live / "SKILL.md"
-                if skill_md.is_file():
-                    source_text = skill_md.read_text(encoding="utf-8")
+            elif ownership.action == "adapter":
+                if live.is_dir() and not live.is_symlink() and (live / "SKILL.md").is_file():
+                    expected_text = cross_repo_wrapper(ownership, source_text) if ownership.owner == "perpetua" else gemini_adapter(ownership, source_text)
+                    if source_text == expected_text:
+                        continue
 
             archive_skill = archive_root / slug
             if live.exists():
