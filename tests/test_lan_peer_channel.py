@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
@@ -43,7 +44,9 @@ def test_make_envelope_shape() -> None:
     assert isinstance(env["ts"], int)
 
 
-def test_read_discovery_peer_ip_missing_file(monkeypatch, tmp_path) -> None:
+def test_read_discovery_peer_ip_missing_file(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr(
         "orama_system.lan_peer_channel.Path.home",
         lambda: tmp_path,
@@ -51,7 +54,7 @@ def test_read_discovery_peer_ip_missing_file(monkeypatch, tmp_path) -> None:
     assert read_discovery_peer_ip() == ""
 
 
-def _write_discovery_file(tmp_path, role_key: str, ip_value: str) -> None:
+def _write_discovery_file(tmp_path: Path, role_key: str, ip_value: str) -> None:
     state_dir = tmp_path / ".openclaw" / "state"
     state_dir.mkdir(parents=True)
     (state_dir / "last_discovery.json").write_text(
@@ -60,7 +63,9 @@ def _write_discovery_file(tmp_path, role_key: str, ip_value: str) -> None:
     )
 
 
-def test_read_discovery_peer_ip_normalizes_scheme_contaminated_value(monkeypatch, tmp_path) -> None:
+def test_read_discovery_peer_ip_normalizes_scheme_contaminated_value(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Regression: the "ip" field is written by a separate process
     (scripts/discover.py); the read side previously trusted it verbatim.
     If that field is ever accidentally scheme-prefixed (e.g.
@@ -77,7 +82,9 @@ def test_read_discovery_peer_ip_normalizes_scheme_contaminated_value(monkeypatch
     assert "http://" not in result
 
 
-def test_read_discovery_peer_ip_rejects_malformed_value(monkeypatch, tmp_path) -> None:
+def test_read_discovery_peer_ip_rejects_malformed_value(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """A value parse_transport_identity cannot make sense of (credentials
     embedded, unparseable) must be rejected outright, not passed through."""
     monkeypatch.setattr("orama_system.lan_peer_channel.Path.home", lambda: tmp_path)
@@ -87,7 +94,9 @@ def test_read_discovery_peer_ip_rejects_malformed_value(monkeypatch, tmp_path) -
     assert read_discovery_peer_ip() == ""
 
 
-def test_read_discovery_peer_ip_passes_through_bare_ip_unchanged(monkeypatch, tmp_path) -> None:
+def test_read_discovery_peer_ip_passes_through_bare_ip_unchanged(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """The common, expected case -- a plain IP -- must still work exactly
     as before; the fix must not be over-broad."""
     monkeypatch.setattr("orama_system.lan_peer_channel.Path.home", lambda: tmp_path)
@@ -97,7 +106,9 @@ def test_read_discovery_peer_ip_passes_through_bare_ip_unchanged(monkeypatch, tm
     assert read_discovery_peer_ip() == "192.168.254.107"
 
 
-def test_read_discovery_peer_identity_preserves_https(monkeypatch, tmp_path) -> None:
+def test_read_discovery_peer_identity_preserves_https(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     monkeypatch.setattr("orama_system.lan_peer_channel.Path.home", lambda: tmp_path)
     monkeypatch.setattr("orama_system.lan_peer_channel.local_platform", lambda: "win")
     _write_discovery_file(tmp_path, "mac", "https://192.168.254.107:9443")
@@ -125,3 +136,27 @@ def test_build_peer_transport_url_rejects_public_target() -> None:
 
     with pytest.raises(ModelEndpointPolicyError):
         build_peer_transport_url(identity, 8002, "/ws/portal-peer", websocket=True)
+
+
+@pytest.mark.asyncio
+async def test_client_loop_stops_on_endpoint_policy_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    channel = LanPeerChannel()
+    identity = TransportIdentity(scheme="https", hostname="192.168.254.107", port=9443)
+    sse_called = False
+
+    async def reject_ws(_: TransportIdentity, __: int) -> None:
+        raise ModelEndpointPolicyError("disallowed peer endpoint")
+
+    async def capture_sse(_: TransportIdentity, __: int) -> None:
+        nonlocal sse_called
+        sse_called = True
+
+    monkeypatch.setattr(channel, "_ws_client_session", reject_ws)
+    monkeypatch.setattr(channel, "_sse_client_session", capture_sse)
+
+    await channel._client_loop(identity, 8002)
+
+    assert channel.state == "disconnected"
+    assert sse_called is False

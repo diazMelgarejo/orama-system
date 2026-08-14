@@ -19,7 +19,7 @@ import httpx
 from fastapi import WebSocket
 
 from utils.endpoint_policy_core import TransportIdentity, parse_transport_identity
-from utils.model_endpoint_url import validate_model_endpoint_url
+from utils.model_endpoint_url import ModelEndpointPolicyError, validate_model_endpoint_url
 
 log = logging.getLogger("ultrathink.lan_peer")
 
@@ -171,6 +171,10 @@ class LanPeerChannel:
             try:
                 await self._ws_client_session(identity, port)
                 ws_fails = 0
+            except ModelEndpointPolicyError:
+                self.state = "disconnected"
+                log.warning("lan_peer rejected peer endpoint by policy")
+                return
             except Exception:
                 ws_fails += 1
                 log.warning("lan_peer ws client failed (%s)", ws_fails)

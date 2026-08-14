@@ -18,7 +18,9 @@ _SPEC.loader.exec_module(lm_link_watch)
 pytestmark = pytest.mark.unit
 
 
-def test_peer_url_rejects_public_discovery_endpoint(tmp_path, monkeypatch) -> None:
+def test_peer_url_rejects_public_discovery_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     discovery = tmp_path / "last_discovery.json"
     discovery.write_text('{"endpoints": {"win": {"ip": "1.1.1.1"}}}', encoding="utf-8")
     monkeypatch.setattr(lm_link_watch, "DISCOVERY_FILE", discovery)
@@ -26,7 +28,9 @@ def test_peer_url_rejects_public_discovery_endpoint(tmp_path, monkeypatch) -> No
     assert lm_link_watch.peer_url("macos") is None
 
 
-def test_peer_url_preserves_approved_secure_scheme(tmp_path, monkeypatch) -> None:
+def test_peer_url_preserves_approved_secure_scheme(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     discovery = tmp_path / "last_discovery.json"
     discovery.write_text(
         '{"endpoints": {"win": {"ip": "https://192.168.254.107:9443"}}}',
@@ -35,3 +39,26 @@ def test_peer_url_preserves_approved_secure_scheme(tmp_path, monkeypatch) -> Non
     monkeypatch.setattr(lm_link_watch, "DISCOVERY_FILE", discovery)
 
     assert lm_link_watch.peer_url("macos") == "https://192.168.254.107:1234/v1/models"
+
+
+def test_peer_url_windows_uses_mac_discovery_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    discovery = tmp_path / "last_discovery.json"
+    discovery.write_text(
+        '{"endpoints": {"mac": {"ip": "https://192.168.254.108:9443"}}}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(lm_link_watch, "DISCOVERY_FILE", discovery)
+
+    assert lm_link_watch.peer_url("windows") == "https://192.168.254.108:11434/api/tags"
+
+
+def test_peer_url_windows_rejects_public_discovery_endpoint(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    discovery = tmp_path / "last_discovery.json"
+    discovery.write_text('{"endpoints": {"mac": {"ip": "1.1.1.1"}}}', encoding="utf-8")
+    monkeypatch.setattr(lm_link_watch, "DISCOVERY_FILE", discovery)
+
+    assert lm_link_watch.peer_url("windows") is None

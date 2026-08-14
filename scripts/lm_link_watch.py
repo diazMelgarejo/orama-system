@@ -105,7 +105,7 @@ def peer_url(plat: str) -> str | None:
             return None
         base = build_transport_url(ip, 1234)
         return _approved_peer_url(base, "/v1/models")
-    except Exception:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, AttributeError, TypeError):
         return None
 
 
