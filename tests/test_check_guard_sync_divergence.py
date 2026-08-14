@@ -192,6 +192,27 @@ def test_linked_worktree_sibling_discovered(tmp_path: Path) -> None:
     assert "byte-identical" in result.stdout
 
 
+def test_canonical_linked_worktree_is_not_a_downstream_sync_target(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    canon = workspace / "orama-system"
+    linked_worktree = workspace / "orama-linked"
+    rel = "scripts/git/audit_engine.py"
+
+    _init_repo(canon, "Tester", "tester@example.com")
+    _commit_file(canon, rel, "# canonical v1\n", "init")
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "linked-branch", str(linked_worktree)],
+        cwd=canon,
+        check=True,
+        capture_output=True,
+    )
+
+    result = _run_checker(workspace, canon)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "shares canonical git history; skipped" in result.stdout
+
+
 def _plant_checker_copy(repo: Path, *, is_canonical: bool) -> Path:
     """Copy check-guard-sync-divergence.sh + its sourced dependencies into
     repo/scripts/git/ and return the copy's path. The canonical-root
