@@ -43,7 +43,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
-from orama_system.lan_peer_channel import LanPeerChannel, local_platform, make_envelope, read_discovery_peer_ip
+from orama_system.lan_peer_channel import (
+    LanPeerChannel,
+    local_platform,
+    make_envelope,
+    read_discovery_peer_identity,
+    read_discovery_peer_ip,
+)
 from orama_system.swarm_approval import issue_approval, verify_launch
 from orama_system.portal_notifications import (
     EventType,
@@ -211,11 +217,11 @@ _notification_publisher = PortalNotificationPublisher(_notification_hub)
 
 @asynccontextmanager
 async def _portal_lifespan(_app: FastAPI):
-    peer_ip = read_discovery_peer_ip()
+    peer_identity = read_discovery_peer_identity()
     bind_lan = os.getenv("PORTAL_BIND_LAN", "").strip().lower() in ("1", "true", "yes")
     client_task: asyncio.Task[None] | None = None
-    if bind_lan and peer_ip:
-        await _lan_peer_channel.connect(peer_ip)
+    if bind_lan and peer_identity is not None:
+        await _lan_peer_channel.connect(peer_identity)
     yield
     await _lan_peer_channel.close()
 

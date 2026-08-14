@@ -221,7 +221,7 @@ def probe_models(base_url: str, timeout: float = MODEL_API_TIMEOUT):
     try:
         safe_url = validate_model_endpoint_url(base_url)
     except ModelEndpointPolicyError as exc:
-        print(f"  ⚠️  refusing to probe {base_url!r}: {exc}", file=sys.stderr)
+        logging.warning("refusing to probe endpoint rejected by policy: %s", exc)
         return None
     try:
         req = urllib.request.Request(

@@ -36,8 +36,10 @@ than assuming it falls out of the supporting work, actually requires.
 All SHAs below are on branch `2026-08-12-endpoint-policy-standardization`, pushed to
 both `diazMelgarejo/orama-system` and `diazMelgarejo/Perpetua-Tools` (same branch name,
 deliberately reused across repos so the paired cross-repo work stays connected — see
-PT `lesson_df682761347f`). Neither branch has a PR open yet; opening one requires a
-token with PR-creation scope, which this session's git-push-only token doesn't have.
+PT `lesson_df682761347f`). The statement below reflects the original pre-PR snapshot.
+As of 2026-08-14, the paired branches are under review as Orama PR #310 and
+Perpetua-Tools PR #352. This reconciliation remains draft evidence until those PRs
+receive the required review and merge decision.
 
 - orama-system range: `fde9d460..ae1e454a` (4 commits), plus this doc and its updates
 - Perpetua-Tools range: `2cd0d894..ea104aee` (10 commits: the security work, the memory
@@ -83,6 +85,20 @@ PR review/merge task, unrelated to this plan) → (sandbox reset, full redo) →
 (redo) → this Crystallization document. The oramasys 5-stage method's own ordering
 wasn't followed for this task; noting that as a real process finding, not just a content
 gap.
+
+### Verifier evidence and approval state
+
+On 2026-08-14, the cross-repo verifier was run against the current paired PR heads:
+
+```bash
+PERPETUA_TOOLS_ROOT=/path/to/paired/Perpetua-Tools \
+  uv run python scripts/review/verify_model_endpoint_policy_parity.py
+```
+
+Result: `PASS` for both `model_endpoint_url.py` and `endpoint_policy_core.py`.
+This verifies the mirrored policy functions, not a merge approval. The approval reference
+is the open Orama PR #310 review; this document must not be treated as final until that
+review is resolved.
 
 ### Divergence matrix (reconstructed from actual audit findings, not the original's `⟨FILL⟩` placeholders)
 
@@ -216,9 +232,9 @@ would:
    (config dir, log level, telemetry opt-in, endpoint policy, discovery ordering) and
    its rationale, so I2 becomes a checkable property instead of an assumption.
 3. **A CI check that fails on default drift**, mirroring the parity-checker pattern
-   already built and proven for the endpoint-policy modules (Part 3.5) — extend the
-   same AST-comparison approach, or a simpler config-schema diff, to whatever the
-   `DEFAULTS.md` inventory identifies as actually shared.
+   already built and proven in the divergence matrix's *Parity/drift detection* row —
+   extend the same AST-comparison approach, or a simpler config-schema diff, to whatever
+   the `DEFAULTS.md` inventory identifies as actually shared.
 4. **Re-run the divergence matrix** (Part 2) once 1–3 exist, this time actually filling
    the I1/I2 rows with verified findings instead of "never evaluated."
 

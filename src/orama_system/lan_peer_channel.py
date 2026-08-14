@@ -13,11 +13,13 @@ import time
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 import httpx
 from fastapi import WebSocket
 
-from utils.endpoint_policy_core import parse_transport_identity
+from utils.endpoint_policy_core import TransportIdentity, parse_transport_identity
+from utils.model_endpoint_url import validate_model_endpoint_url
 
 log = logging.getLogger("ultrathink.lan_peer")
 
@@ -36,33 +38,53 @@ def local_platform() -> str:
     return "win" if platform.system().lower() == "windows" else "mac"
 
 
-def read_discovery_peer_ip() -> str:
-    """Peer IP from ~/.openclaw/state/last_discovery.json (never hardcode DHCP).
+def read_discovery_peer_identity() -> TransportIdentity | None:
+    """Return the validated transport identity for the discovered peer.
 
     The "ip" field is written by a separate process (scripts/discover.py);
-    the read side previously trusted it verbatim before every f-string URL
-    construction downstream. Route it through parse_transport_identity so a
-    scheme-contaminated value is normalized to a bare hostname here, once,
-    instead of every caller separately risking a double-scheme construction.
+    preserve its scheme, host, and optional port so the outbound client can
+    authorize the backend target before selecting WS or SSE.
     """
     path = Path.home() / ".openclaw" / "state" / "last_discovery.json"
     role = local_platform()
     if not path.is_file():
-        return ""
+        return None
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return ""
+        return None
     endpoints = data.get("endpoints") or {}
     peer = endpoints.get("mac" if role == "win" else "win") or {}
     raw_ip = str(peer.get("ip") or "").strip()
     if raw_ip in ("", "localhost", "127.0.0.1"):
-        return ""
+        return None
     identity = parse_transport_identity(raw_ip)
     if identity is None:
-        log.warning("lan_peer discovery: rejecting malformed peer ip %r", raw_ip)
-        return ""
-    return identity.hostname
+        log.warning("lan_peer discovery: rejecting malformed peer endpoint")
+    return identity
+
+
+def read_discovery_peer_ip() -> str:
+    """Return the legacy hostname projection used by portal/UI callers."""
+    identity = read_discovery_peer_identity()
+    return identity.hostname if identity is not None else ""
+
+
+def build_peer_transport_url(
+    identity: TransportIdentity,
+    port: int,
+    path: str,
+    *,
+    websocket: bool,
+) -> str:
+    """Authorize a backend target and select its HTTP or WS transport scheme."""
+    if not path.startswith("/"):
+        raise ValueError("peer transport path must start with '/'")
+    base_url = validate_model_endpoint_url(identity.with_port(port))
+    scheme, netloc = base_url.split("://", 1)
+    if websocket:
+        scheme = "wss" if scheme == "https" else "ws"
+    return f"{scheme}://{netloc}{path}"
 
 
 def make_envelope(msg_type: str, data: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -125,10 +147,13 @@ class LanPeerChannel:
         for ws in dead:
             self._ws_peers.discard(ws)
 
-    async def connect(self, peer_ip: str, port: int = 8002) -> None:
+    async def connect(self, peer: str | TransportIdentity, port: int = 8002) -> None:
         if self._client_task and not self._client_task.done():
             return
-        self._client_task = asyncio.create_task(self._client_loop(peer_ip, port))
+        identity = peer if isinstance(peer, TransportIdentity) else parse_transport_identity(peer)
+        if identity is None:
+            raise ValueError("peer transport identity is invalid")
+        self._client_task = asyncio.create_task(self._client_loop(identity, port))
 
     async def close(self) -> None:
         self._closed = True
@@ -139,26 +164,26 @@ class LanPeerChannel:
             except asyncio.CancelledError:
                 pass
 
-    async def _client_loop(self, peer_ip: str, port: int) -> None:
+    async def _client_loop(self, identity: TransportIdentity, port: int) -> None:
         ws_fails = 0
         while not self._closed:
             self.state = "ws_connecting"
             try:
-                await self._ws_client_session(peer_ip, port)
+                await self._ws_client_session(identity, port)
                 ws_fails = 0
-            except Exception as exc:
+            except Exception:
                 ws_fails += 1
-                log.warning("lan_peer ws client failed (%s): %s", ws_fails, exc)
+                log.warning("lan_peer ws client failed (%s)", ws_fails)
                 if ws_fails >= WS_FAIL_BEFORE_SSE:
                     try:
-                        await self._sse_client_session(peer_ip, port)
+                        await self._sse_client_session(identity, port)
                         ws_fails = 0
-                    except Exception as sse_exc:
-                        log.warning("lan_peer sse fallback failed: %s", sse_exc)
+                    except Exception:
+                        log.warning("lan_peer sse fallback failed")
             self.state = "disconnected"
             await asyncio.sleep(RETRY_WAIT_S)
 
-    async def _ws_client_session(self, peer_ip: str, port: int) -> None:
+    async def _ws_client_session(self, identity: TransportIdentity, port: int) -> None:
         from utils.control_plane_auth import outbound_control_plane_tokens
 
         tokens = outbound_control_plane_tokens()
@@ -167,9 +192,16 @@ class LanPeerChannel:
         last_exc: Exception | None = None
         import websockets
 
+        endpoint = build_peer_transport_url(
+            identity,
+            port,
+            "/ws/portal-peer",
+            websocket=True,
+        )
+
         for token in tokens:
-            qs = f"?token={token}" if token else ""
-            url = f"ws://{peer_ip}:{port}/ws/portal-peer{qs}"
+            qs = f"?{urlencode({'token': token})}" if token else ""
+            url = f"{endpoint}{qs}"
             try:
                 async with websockets.connect(url, open_timeout=WS_OPEN_TIMEOUT_S) as ws:
                     self.state = "ws_connected"
@@ -197,10 +229,15 @@ class LanPeerChannel:
             await asyncio.sleep(HEARTBEAT_INTERVAL_S)
             await ws.send(json.dumps(make_envelope("heartbeat")))
 
-    async def _sse_client_session(self, peer_ip: str, port: int) -> None:
+    async def _sse_client_session(self, identity: TransportIdentity, port: int) -> None:
         from utils.control_plane_auth import auth_headers
 
-        url = f"http://{peer_ip}:{port}/events/peer-stream"
+        url = build_peer_transport_url(
+            identity,
+            port,
+            "/events/peer-stream",
+            websocket=False,
+        )
         self.state = "sse_connected"
         async with httpx.AsyncClient(timeout=None, headers=auth_headers()) as client:
             async with client.stream("GET", url) as resp:
