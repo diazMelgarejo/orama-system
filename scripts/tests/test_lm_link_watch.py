@@ -43,7 +43,7 @@ def test_peer_url_windows_normalizes_scheme_contaminated_value(monkeypatch, tmp_
     _write_discovery(monkeypatch, tmp_path, "mac", "http://192.168.254.107")
     result = lm_link_watch.peer_url("windows")
     assert result == "http://192.168.254.107:11434/api/tags"
-    assert "http://http://" not in (result or "")
+    assert (result or "").count("://") == 1
 
 
 def test_peer_url_rejects_malformed_value(monkeypatch, tmp_path):
