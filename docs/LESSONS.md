@@ -4347,3 +4347,117 @@ remote. Uncommitted staged merges are a silent push trap.
 `bin/orama-system/skills/git-history-surgery/references/pending-operation-push-guard-reference-card.md`
 → Wiki: `docs/wiki/08-git-hygiene-and-branching.md` § Merge → Push → PR discipline
 
+---
+
+## 2026-08-14 — Review diversity, fix-review, and liveness (Gemini skill consolidation gate)
+
+Crystallized while closing the implementation gate on
+`docs/superpowers/plans/2026-08-14-gemini-skill-consolidation.md`.
+Full audit trail: `docs/superpowers/plans/2026-08-14-gemini-consolidation-gate-record.md`.
+
+### Review depth is not review diversity
+
+The plan had already been through an `/autoplan` pass that ran a **CEO voice and
+an Eng voice** over it. Both were thorough. Both were *inside the same harness,
+on the same context, with the same priors* — and between them they missed three
+findings that a **cold, independent** reviewer caught on first read.
+
+Two voices in one head is one reviewer with two hats. The thing that finds the
+missed class of defect is a reviewer that did not watch the plan being written.
+Budget for **independence**, not for more passes.
+
+### A fix needs its own review
+
+The first correction pass strengthened `verify()`. It was a real improvement and
+it was still **incomplete** — the corrected signature could prove the *final
+symlink shape* was right, but could not prove the operation was **recoverable**.
+A verify that cannot answer "and can I get the original back?" is not a verify.
+
+Generalization: **a correction is new code and inherits no trust from the review
+that requested it.** Re-run the gate against the corrected artifact, not against
+the finding that prompted it. Here that meant P1-2 (archive-receipt contract)
+existing as a *separate* item from P1-1, rather than being folded in as "already
+handled by the verify fix."
+
+### Posting to the board is not evidence of liveness
+
+An agent can be loudly visible on the coordination board — recent notes,
+substantive content, obviously working — and be **counted dead at the same time**,
+because the liveness column reads heartbeats and `log` does not pulse one.
+Visibility and liveness are separate signals stored in separate places.
+
+Operational consequence, immediately: **always post a note *and* a pulse.**
+A note alone leaves you looking active and reading as stale.
+
+```bash
+python3 scripts/agent_coordination.py log       <agent> '<msg>'
+python3 scripts/agent_coordination.py heartbeat pulse <agent>
+```
+
+### The obvious fix to that bug was a security hole
+
+The one-line fix is irresistible: make `log` pulse a heartbeat. It is also
+**wrong**, and not for a performance reason — `log` accepts an **arbitrary agent
+identity** as an argument. Auto-pulsing on log means any caller can keep any
+*other* agent looking alive by writing a note in its name. That is an
+impersonation hole in the liveness signal, introduced while fixing liveness.
+
+The correct fix is **read-side only**: compute the liveness column from
+heartbeats and render it honestly. Do not widen a write path to repair a display.
+Nothing is pruned; history is untouched.
+
+**Durable rule: before wiring signal A to auto-produce signal B, ask who can
+forge A.** A convenience write-path is an authentication surface.
+
+### Capabilities fail independently — a tool can be unfit and useful at once
+
+AntiGravity was, in the same session, **unsuitable for unattended tool use** and
+**valuable as a review voice**. Headless mode auto-denies the `command`
+permission it cannot prompt for, so plan-mode file reads die silently. Yet its
+cold read of this plan produced findings the in-harness reviewers missed.
+
+Do not collapse a tool to a single verdict. Score it **per capability**:
+*reasoning-over-supplied-text* and *autonomous-tool-execution* are different
+axes, and a hard failure on the second says nothing about the first. Route by
+capability, not by reputation.
+
+Corollary, dearly bought: **`status=SUCCESS` with an empty response is a silent
+failure.** Anything scripting an agent CLI must assert on **non-empty output**,
+never on exit status alone.
+
+### A usage-limit kill leaves real work uncommitted — look before you retry
+
+A workflow agent terminated by a **session usage limit** does not roll back. It
+leaves a live worktree with genuine, reviewed-quality partial work sitting
+**uncommitted**. The reflex on retry is to start from a clean tree; that reflex
+**silently discards** the dead run's output, and nothing warns you, because an
+uncommitted file is indistinguishable from a file that was never written.
+
+**Check `git status` and `git diff` *before* relaunching a killed workflow, and
+commit what you find — clearly labelled partial — before adding to it.** Two
+separate rescues on this branch: ~235 lines of correction text (`aef9899b`,
+subject literally marked "(partial)"), and 145 lines of TDD RED-phase
+scaffolding + executable spec that were still sitting in the working tree a full
+retry later.
+
+Related: a **RED test suite can itself be the artifact worth saving.** Seven
+failing tests that name functions nobody has written yet are the acceptance
+criterion for the next task. Committing a red suite is correct when the red *is*
+the spec — record the expected counts so the next reader does not "fix" it by
+deleting the specification.
+
+### Route implementation to codex when the session budget is the binding constraint
+
+When the Claude session budget — not the problem — is what is about to stop the
+work, hand the bulk drafting to **codex with workspace-write scoped to the
+worktree**, and spend the remaining Claude budget on **judgment**: reading the
+diff, checking that every deletion is a superseding annotation, deciding what is
+worth remembering.
+
+The sandbox scope does double duty. It is the mechanism that lets codex write
+without supervision, *and* it is the safety guardrail — worktree-scoped
+workspace-write cannot reach `~/.gemini`, `~/.claude/skills`, or any live global
+root, so the delegation boundary and the blast-radius boundary are the same line.
+Choose the scope so that the worst case of "the agent did something unintended"
+is confined to a throwaway worktree.
+
