@@ -53,19 +53,32 @@ class RootFinding:
     operator_next_action: str = ""
 
 
+import yaml
+
 def _validate_frontmatter(source_text: str) -> str:
     frontmatter = ""
     if source_text.startswith("---"):
         match = re.search(r"^---\n(.*?)\n---", source_text, re.DOTALL)
         if match:
-            for line in match.group(1).splitlines():
-                if not line.strip():
-                    continue
-                if line.startswith("user-invocable: false"):
-                    frontmatter = "---\nuser-invocable: false\n---\n"
-                else:
-                    key = line.split(":")[0].strip()
-                    raise ValueError(f"unsupported frontmatter key: {key}")
+            try:
+                parsed = yaml.safe_load(match.group(1))
+            except Exception:
+                parsed = {}
+            if isinstance(parsed, dict):
+                allowed = {"name", "description", "user-invocable", "when_to_use", "effort"}
+                drop = {"version", "license", "compatibility", "allowed-tools", "sub_skills", "dependencies", "triggers"}
+                
+                for key in parsed:
+                    if key not in allowed and key not in drop:
+                        raise ValueError(f"unsupported frontmatter key: {key}")
+                
+                new_fm = {}
+                # Maintain some logical order
+                for key in ["name", "description", "when_to_use", "effort", "user-invocable"]:
+                    if key in parsed:
+                        new_fm[key] = parsed[key]
+                if new_fm:
+                    frontmatter = "---\n" + yaml.safe_dump(new_fm, default_flow_style=False, sort_keys=False) + "---\n"
     return frontmatter
 
 
@@ -227,23 +240,23 @@ def _write_receipt(
     final_target_kind: str,
     canonical_target: Path,
 ) -> None:
-    receipt_dir = archive_root / slug
-    receipt_dir.mkdir(parents=True, exist_ok=True)
-    (receipt_dir / ".receipt.json").write_text(
-        json.dumps(
-            {
-                "slug": slug,
-                "source_digest": source_digest,
-                "archive_digest": archive_digest,
-                "final_target_kind": final_target_kind,
-                "canonical_target": str(canonical_target.resolve()),
-            },
-            indent=2,
-            sort_keys=True,
-        )
-        + "\n",
-        encoding="utf-8",
-    )
+    receipt_path = archive_root / slug / ".receipt.json"
+    
+    if final_target_kind == "symlink":
+        target_str = str(canonical_target.resolve())
+    else:
+        # Keep the raw path for adapters (e.g., $PERPETUA_TOOLS_PATH or relative)
+        target_str = str(canonical_target)
+
+    receipt = {
+        "slug": slug,
+        "source_digest": source_digest,
+        "archive_digest": archive_digest,
+        "final_target_kind": final_target_kind,
+        "canonical_target": target_str,
+    }
+    receipt_path.parent.mkdir(parents=True, exist_ok=True)
+    receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     index_path = archive_root.parent / "index.json"
     try:
         index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}
@@ -399,15 +412,26 @@ def verify_gemini(root: Path, archive_parent: Path, only: set[str] | None = None
             findings.append(RootFinding(slug, "failed", f"{slug}: archive receipt digest or slug does not match archive"))
             continue
         final_target_kind = receipt["final_target_kind"]
-        if final_target_kind not in {"symlink", "generated-wrapper"}:
+        if final_target_kind not in {"symlink", "generated-wrapper", "adapter", "cross-repo-adapter"}:
             findings.append(RootFinding(slug, "failed", f"{slug}: unsupported final target kind in receipt"))
             continue
-        expected_target = str(Path(str(receipt["canonical_target"])).resolve())
+        
+        canonical_target_raw = str(receipt["canonical_target"])
         if final_target_kind == "symlink":
+            expected_target = str(Path(canonical_target_raw).resolve())
             if not live.is_symlink() or str(live.resolve()) != expected_target:
                 findings.append(RootFinding(slug, "failed", f"{slug}: canonical target does not match receipt"))
         else:
             wrapper = live / "SKILL.md"
-            if live.is_symlink() or not wrapper.is_file() or expected_target not in wrapper.read_text(encoding="utf-8"):
+            if live.is_symlink() or not wrapper.is_file():
                 findings.append(RootFinding(slug, "failed", f"{slug}: generated wrapper does not match receipt"))
+            else:
+                text = wrapper.read_text(encoding="utf-8")
+                if final_target_kind == "generated-wrapper":
+                    expected_target = str(Path(canonical_target_raw).resolve())
+                    if expected_target not in text:
+                        findings.append(RootFinding(slug, "failed", f"{slug}: generated wrapper does not match receipt"))
+                else:
+                    if canonical_target_raw not in text:
+                        findings.append(RootFinding(slug, "failed", f"{slug}: generated adapter does not match receipt"))
     return findings
