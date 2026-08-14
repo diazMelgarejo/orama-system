@@ -187,3 +187,140 @@ def test_wrapper_embeds_repo_relative_not_absolute(mod):
 
 def test_hermes_harness_in_canonical_skills(mod):
     assert "orama-system/bin/orama-system/skills/hermes-harness/SKILL.md" in mod.CANONICAL_SKILLS
+
+
+# ── SkillInventory / inventory_root / inventory_all_roots / render_inventory ──
+# Task 1: read-only cross-root inventory. These functions must never call an
+# install, archive, or symlink function — they only observe.
+
+def test_render_inventory_is_sorted_and_portable(mod, tmp_path: Path) -> None:
+    rows = [
+        mod.SkillInventory("zeta", "gemini", "regular", "a" * 64, ("name",)),
+        mod.SkillInventory("alpha", "agents", "symlink", "b" * 64, ("description", "name")),
+    ]
+    rendered = mod.render_inventory(rows, home=tmp_path)
+    assert rendered.index("alpha") < rendered.index("zeta")
+    assert str(tmp_path) not in rendered
+    assert "agents" in rendered
+
+
+def test_render_inventory_strips_home_if_it_leaks_into_a_row(mod, tmp_path: Path) -> None:
+    """home= is not decorative: even if a row's slug somehow carried the raw
+    home path, render_inventory must still not leak it into the output."""
+    leaky_slug = f"weird-{tmp_path}"
+    rows = [mod.SkillInventory(leaky_slug, "gemini", "regular", "c" * 64, ())]
+    rendered = mod.render_inventory(rows, home=tmp_path)
+    assert str(tmp_path) not in rendered
+    assert "<home>" in rendered
+
+
+def test_inventory_root_absent_when_root_missing(mod, tmp_path: Path) -> None:
+    missing = tmp_path / "does-not-exist"
+    rows = mod.inventory_root("gemini", missing)
+    assert len(rows) == 1
+    assert rows[0].entry_kind == "absent"
+    assert rows[0].root_id == "gemini"
+    assert rows[0].sha256 == ""
+
+
+def test_inventory_root_detects_regular_directory(mod, tmp_path: Path) -> None:
+    root = tmp_path / "skills"
+    skill_dir = root / "some-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: some-skill\ndescription: test\n---\n# Some Skill\n",
+        encoding="utf-8",
+    )
+
+    rows = mod.inventory_root("gemini", root)
+
+    assert len(rows) == 1
+    row = rows[0]
+    assert row.slug == "some-skill"
+    assert row.entry_kind == "regular"
+    assert row.frontmatter_keys == ("name", "description")
+    assert len(row.sha256) == 64
+
+
+def test_inventory_root_detects_symlink(mod, tmp_path: Path) -> None:
+    root = tmp_path / "skills"
+    canonical = tmp_path / "canonical-skill"
+    canonical.mkdir(parents=True)
+    (canonical / "SKILL.md").write_text("---\nname: c\n---\n# C\n", encoding="utf-8")
+    root.mkdir()
+    (root / "linked-skill").symlink_to(canonical, target_is_directory=True)
+
+    rows = mod.inventory_root("gemini", root)
+
+    assert len(rows) == 1
+    assert rows[0].entry_kind == "symlink"
+    assert rows[0].slug == "linked-skill"
+
+
+def test_inventory_root_skips_dotfiles_and_stray_files(mod, tmp_path: Path) -> None:
+    root = tmp_path / "skills"
+    root.mkdir()
+    (root / ".DS_Store").write_bytes(b"\x00")
+    (root / "stray.txt").write_text("not a skill\n", encoding="utf-8")
+    skill_dir = root / "real-skill"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text("---\nname: real-skill\n---\n# Real\n", encoding="utf-8")
+
+    rows = mod.inventory_root("gemini", root)
+
+    assert [row.slug for row in rows] == ["real-skill"]
+
+
+def test_inventory_root_missing_skill_md_has_no_digest_or_keys(mod, tmp_path: Path) -> None:
+    root = tmp_path / "skills"
+    (root / "empty-dir").mkdir(parents=True)
+
+    rows = mod.inventory_root("gemini", root)
+
+    assert len(rows) == 1
+    assert rows[0].entry_kind == "regular"
+    assert rows[0].sha256 == ""
+    assert rows[0].frontmatter_keys == ()
+
+
+def test_inventory_all_roots_covers_five_logical_roots(mod, tmp_path, monkeypatch) -> None:
+    monkeypatch.setattr(mod, "HOME", tmp_path)
+    rows = mod.inventory_all_roots()
+    root_ids = {row.root_id for row in rows}
+    assert root_ids == {"gemini", "claude", "codex", "agents", "antigravity"}
+    # A fresh tmp_path has none of the five roots, so every row is a single
+    # "absent" sentinel per root_id — and none of them may leak tmp_path.
+    for row in rows:
+        assert row.entry_kind == "absent"
+        assert str(tmp_path) not in row.slug
+        assert str(tmp_path) not in row.sha256
+
+
+def test_inventory_all_roots_agents_and_antigravity_share_one_physical_root(
+    mod, tmp_path, monkeypatch
+) -> None:
+    """Antigravity resolves to the shared agent root (Global Constraints);
+    populating ~/.agents/skills must show up under BOTH root_ids."""
+    monkeypatch.setattr(mod, "HOME", tmp_path)
+    agents_skills = tmp_path / ".agents" / "skills" / "shared-skill"
+    agents_skills.mkdir(parents=True)
+    (agents_skills / "SKILL.md").write_text("---\nname: shared-skill\n---\n# Shared\n", encoding="utf-8")
+
+    rows = mod.inventory_all_roots()
+
+    agents_slugs = {row.slug for row in rows if row.root_id == "agents"}
+    antigravity_slugs = {row.slug for row in rows if row.root_id == "antigravity"}
+    assert agents_slugs == {"shared-skill"}
+    assert antigravity_slugs == {"shared-skill"}
+
+
+def test_audit_gemini_cli_flag_prints_render_inventory(mod, tmp_path, monkeypatch, capsys) -> None:
+    monkeypatch.setattr(mod, "HOME", tmp_path)
+    monkeypatch.setattr(sys, "argv", ["prog", "--audit-gemini"])
+
+    exit_code = mod.main()
+
+    captured = capsys.readouterr()
+    assert exit_code == 0
+    assert "gemini" in captured.out
+    assert str(tmp_path) not in captured.out

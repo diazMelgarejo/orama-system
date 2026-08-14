@@ -4,6 +4,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 import argparse
+import hashlib
 import re
 import shutil
 import sys
@@ -15,6 +16,21 @@ class SkillSpec:
     canonical: str
     name: str
     description: str
+
+
+@dataclass(frozen=True)
+class SkillInventory:
+    """One read-only observation of a single directory entry under a logical
+    skill root (Gemini, Claude, Codex, shared-agent, or Antigravity). Used by
+    the `--audit-gemini` inventory pass — see `inventory_root`,
+    `inventory_all_roots`, and `render_inventory` below. Never written to
+    disk; this is analysis-only data, not a mutation record."""
+
+    slug: str
+    root_id: str
+    entry_kind: str  # "symlink" | "regular" | "absent"
+    sha256: str
+    frontmatter_keys: tuple[str, ...]
 
 
 ROOT = Path(__file__).resolve().parents[6]
@@ -179,6 +195,29 @@ def frontmatter_value(text: str, key: str) -> str | None:
         folded = " ".join(collected).strip()
         return folded or None
     return value.strip('"').strip("'") or None
+
+
+_FRONTMATTER_KEY = re.compile(r"^([A-Za-z_][\w-]*):", re.MULTILINE)
+
+
+def _frontmatter_keys(text: str) -> tuple[str, ...]:
+    """Return every top-level YAML frontmatter key, in document order, with
+    duplicates dropped. Only unindented `key:` lines within the leading
+    `---`...`---` block count — nested keys inside a list/mapping value
+    (e.g. `sub_skills[].path`) are indented and therefore excluded, matching
+    how the Gemini frontmatter inventory in the plan counts keys."""
+    if not text.startswith("---"):
+        return ()
+    end = text.find("\n---", 3)
+    if end == -1:
+        return ()
+    body = text[3:end]
+    keys: list[str] = []
+    for match in _FRONTMATTER_KEY.finditer(body):
+        key = match.group(1)
+        if key not in keys:
+            keys.append(key)
+    return tuple(keys)
 
 
 def first_heading(text: str) -> str:
@@ -451,11 +490,99 @@ def verify(only: set[str] | None = None) -> list[str]:
     return errors
 
 
+# Logical roots audited by --audit-gemini. "agents" and "antigravity" resolve
+# to the SAME physical directory (~/.agents/skills) — per Global Constraints,
+# "Antigravity must resolve to the shared agent root; audit it rather than
+# writing to it." Recording both root_ids lets the inventory show that the
+# two harnesses currently share one root without implying a separate,
+# writable Antigravity skills tree exists.
+def _inventory_roots(home: Path) -> list[tuple[str, Path]]:
+    agents_root = home / ".agents" / "skills"
+    return [
+        ("gemini", home / ".gemini" / "skills"),
+        ("claude", home / ".claude" / "skills"),
+        ("codex", home / ".codex" / "skills"),
+        ("agents", agents_root),
+        ("antigravity", agents_root),
+    ]
+
+
+def inventory_root(root_id: str, root: Path) -> list[SkillInventory]:
+    """Read-only scan of one logical skill root. Never creates, archives, or
+    symlinks anything — see Task 2's `reconcile_gemini` for mutation.
+
+    Returns one row per immediate directory entry (dotfiles like `.DS_Store`
+    skipped). If the root itself does not exist, returns a single sentinel
+    row with entry_kind="absent" so cross-root comparisons can distinguish
+    "root not present on this machine" from "root present but empty"."""
+    if not root.is_dir():
+        return [SkillInventory("", root_id, "absent", "", ())]
+
+    rows: list[SkillInventory] = []
+    for entry in sorted(root.iterdir(), key=lambda p: p.name):
+        if entry.name.startswith("."):
+            continue
+        if entry.is_symlink():
+            entry_kind = "symlink"
+        elif entry.is_dir():
+            entry_kind = "regular"
+        else:
+            continue  # stray file at root level; not a skill directory
+
+        skill_md = entry / "SKILL.md"
+        sha256 = ""
+        frontmatter_keys: tuple[str, ...] = ()
+        if skill_md.is_file():
+            data = skill_md.read_bytes()
+            sha256 = hashlib.sha256(data).hexdigest()
+            frontmatter_keys = _frontmatter_keys(data.decode("utf-8", errors="replace"))
+        rows.append(SkillInventory(entry.name, root_id, entry_kind, sha256, frontmatter_keys))
+    return rows
+
+
+def inventory_all_roots() -> list[SkillInventory]:
+    """Audit Gemini, Claude, Codex, shared-agent, and Antigravity roots.
+    Read-only: calls no install, archive, or symlink function."""
+    rows: list[SkillInventory] = []
+    for root_id, root in _inventory_roots(HOME):
+        rows.extend(inventory_root(root_id, root))
+    return rows
+
+
+def render_inventory(rows: list[SkillInventory], home: Path) -> str:
+    """Render inventory rows as a portable Markdown table, sorted by slug
+    then root. `home` is stripped from the rendered text defensively — rows
+    should never carry an absolute path in the first place, since
+    SkillInventory only stores slugs/root labels/digests/key names, but this
+    guards against a future field carrying one in by accident."""
+    header = ["| slug | root | kind | sha256 | frontmatter keys |", "| --- | --- | --- | --- | --- |"]
+    body = []
+    for row in sorted(rows, key=lambda r: (r.slug, r.root_id)):
+        slug = row.slug or "—"
+        sha = row.sha256 or "—"
+        keys = ", ".join(row.frontmatter_keys) if row.frontmatter_keys else "—"
+        body.append(f"| {slug} | {row.root_id} | {row.entry_kind} | {sha} | {keys} |")
+    rendered = "\n".join(header + body)
+    home_str = str(home)
+    if home_str:
+        rendered = rendered.replace(home_str, "<home>")
+    return rendered
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--audit-gemini",
+        action="store_true",
+        help=(
+            "Read-only cross-root inventory (Gemini, Claude, Codex, "
+            "shared-agent, Antigravity). Prints render_inventory() and "
+            "exits — never installs, archives, or symlinks anything."
+        ),
+    )
     parser.add_argument(
         "--only",
         default=None,
@@ -468,8 +595,11 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+    if args.audit_gemini:
+        print(render_inventory(inventory_all_roots(), home=HOME))
+        return 0
     if not args.install and not args.verify:
-        parser.error("choose --install and/or --verify")
+        parser.error("choose --install, --verify, and/or --audit-gemini")
     only = {s.strip() for s in args.only.split(",")} if args.only else None
     if args.install:
         written = install(args.dry_run, only=only)
