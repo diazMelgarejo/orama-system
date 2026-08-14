@@ -18,7 +18,7 @@
 - Preserve Gemini frontmatter only after validating it against current official Gemini CLI documentation; unknown keys block reconciliation. (See Task 2, Step 3's `gemini-frontmatter-contract.md` — P2-1, 2026-08-14 gate correction — for the local, versioned validation contract that makes this reproducible across runs.)
 - Every write requires `--reconcile-gemini`, `--only`, and `--archive-root`. Existing `--install` must not mutate the Gemini root.
 - Never replace gstack `skillify` or `gstack-upgrade`. Orama's creator remains `oramasys-skillify`.
-- Antigravity must resolve to the shared agent root; audit it rather than writing to it.
+- Antigravity must resolve to the shared agent root; audit it rather than writing to it. **Superseded as this plan's final-pass condition by P1-3:** Task 5 records `shared-root`, `missing`, and `divergent` as read-only audited outcomes; only the deferred, human-approved Task 5a may create or repair a shared root.
 - The nine Gemini-only candidates are analysis-only until a later approved implementation plan selects their disposition.
 
 ---
@@ -66,6 +66,9 @@ table. This table exists so the gate's status is auditable in one place.
 | P1-6 | Execution must start from a reviewed branch state | Task 1, Preconditions | manual: `git show --stat HEAD`, `git status --short --branch` output recorded; abort on unexpected staged/unstaged edits |
 | P2-1 | Accepted Gemini frontmatter needs a local, versioned validation contract | Task 2, Step 3 (metadata_policy); new `gemini-frontmatter-contract.md` reference | every preserved key tested against the local contract; unknown key errors report the exact offending key |
 | P2-2 | T3/T4/T5 in Implementation Tasks are already incorporated into the plan body — move to completed history, don't leave as open work | Implementation Tasks → Completed Review History table | manual read |
+
+**Landing evidence:** P1-1, P1-2, and P1-5 landed in `aef9899b`; Task 1
+landed in `da32cccb`.
 
 **Task 1 status: COMPLETE.** Commit `da32cccb` — "feat(skills): read-only Gemini
 inventory audit (Task 1)" — 29 tests green, `docs/reference/gemini-skill-consolidation-inventory.md`
@@ -135,6 +138,14 @@ Two requirements, both from the review synthesis:
    Gemini-only verify run that silently falls through to `verify()`'s
    `TARGET_ROOTS` scope and reports `"verification passed"` is exactly the
    false-pass this fix exists to close.
+
+   **P1-3 qualification (supersedes the unqualified non-empty-list rule above
+   for Antigravity):** a `missing` or `divergent` Antigravity `RootFinding` is
+   an audited outcome, not a Gemini verification failure. The CLI exits
+   nonzero only for failed Gemini reconciliation/receipt findings; it records
+   the Antigravity finding and its next action without requiring
+   `shared-root`. Task 7's Antigravity assertion is solely no mutation by this
+   plan, as specified in Task 5 Step 2 and Task 7 Step 1.
 
 2. **P1-2 — prove recoverability, not just final shape.** The original
    signature (`root`, `only` — no archive root, no receipt location) cannot
@@ -304,6 +315,7 @@ implementer records:
 ~~~bash
 git show --stat HEAD
 git status --short --branch
+git rev-parse HEAD  # record this source SHA in the task's commit message or PR evidence
 ~~~
 
 and captures the resulting source SHA in the task's commit message or PR
@@ -364,6 +376,7 @@ git commit -m "feat(skills): add read-only Gemini inventory audit"
 
 **Files:**
 - Create: `bin/orama-system/skills/skillify/references/gemini-skill-ownership.json`
+- Create: `bin/orama-system/skills/skillify/references/gemini-frontmatter-contract.md`
 - Modify: `bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py`
 - Modify: `tests/test_install_thin_skill_wrappers.py`
 
@@ -402,11 +415,15 @@ Expected: FAIL because reconciliation interfaces do not exist.
 
 - [ ] **Step 3: Create the ownership manifest**
 
-Every record contains `owner`, `action`, `canonical_slug`, `canonical_path`, and `metadata_policy`. Only `link`, `adapter`, and `preserve-external` are allowed actions.
+Every record contains `owner`, `action`, `canonical_slug`, `canonical_path`, and `metadata_policy`. Only `link`, `adapter`, and `preserve-external` are allowed actions. The manifest also names the versioned `gemini-frontmatter-contract.md` it uses; a `validated` record may preserve only a key/value pair accepted by that exact contract version.
 
 ~~~json
 {
   "schema_version": 1,
+  "frontmatter_contract": {
+    "path": "bin/orama-system/skills/skillify/references/gemini-frontmatter-contract.md",
+    "schema_version": 1
+  },
   "skills": {
     "code-review": {
       "owner": "orama",
@@ -433,7 +450,7 @@ three values; no other value is permitted:
 | Value | Meaning | Applies to (action) | Example |
 | --- | --- | --- | --- |
 | `none` | No Gemini frontmatter is preserved — the slug becomes a plain symlink to the canonical `SKILL.md`, so there is nothing Gemini-specific left to validate. | `link` | `code-review`, `git-history-surgery`, `orama-afrp` |
-| `validated` | The adapter keeps only frontmatter keys that were checked against current official Gemini CLI documentation at implementation time; any other key found in the source card is an `unsupported frontmatter` error (Task 2 Step 5) and blocks reconciliation for that slug. | `adapter` | `agent-methodology` retains `user-invocable: false` only after that key is confirmed current; `orama-gstack`, `orama-system`, `oramasys-method`, and the Perpetua cross-repo adapters (Task 4) all use `validated` |
+| `validated` | The adapter keeps only frontmatter keys that are accepted by the versioned `gemini-frontmatter-contract.md`; any other key found in the source card is an `unsupported frontmatter` error (Task 2 Step 5) that names the exact key and blocks reconciliation for that slug. | `adapter` | `agent-methodology` retains `user-invocable: false` only after that key is confirmed current; `orama-gstack`, `orama-system`, `oramasys-method`, and the Perpetua cross-repo adapters (Task 4) all use `validated` |
 | `external` | Orama does not read, validate, or manage the slug's frontmatter at all — ownership and metadata both belong to the external project. | `preserve-external` | `skillify`, `gstack-upgrade` |
 
 Populate the remaining records from the Disposition Matrix, giving every
@@ -441,6 +458,25 @@ Populate the remaining records from the Disposition Matrix, giving every
 Perpetua cross-repo adapters in Task 4) `metadata_policy: "validated"`, and
 every `preserve-external` row `metadata_policy: "external"`. Do not include
 absolute paths.
+
+**Versioned frontmatter contract (P2-1; required before any adapter is
+generated).** Create `gemini-frontmatter-contract.md` as a tracked, versioned
+reference rather than treating a live documentation lookup as the validation
+rule. Version 1 must contain all of the following, with no implicit accepted
+keys:
+
+| Contract field | Version 1 requirement |
+| --- | --- |
+| `schema_version` | Exactly `1`; a contract revision increments this value and updates the manifest reference before use. |
+| Official-source evidence | The exact official Gemini CLI documentation URL, its retrieval date in `YYYY-MM-DD`, and the retrieved documentation version, revision, or content digest. Evidence for the reconciliation run repeats that URL and date. |
+| Accepted preserved keys | Exactly `user-invocable`, constrained to the boolean value `false`. A future key or value requires an explicit contract-version change with new official-source evidence; it is not accepted merely because it appears in a source card. |
+| Rejection rule | An unknown field raises `ValueError("unsupported frontmatter key: <exact-key>")`; a known key with an unaccepted value identifies both the exact key and value in its error. |
+
+This contract is the reproducible validation authority. The official-document
+retrieval is evidence used to create or revise the contract, not an unversioned
+runtime dependency. Add tests for the accepted `user-invocable: false` case,
+the rejected value case, and every preserved key against the referenced contract
+version.
 
 - [ ] **Step 4: Implement safe reconciliation**
 
@@ -477,6 +513,18 @@ Corrected sequence (stage-validate-commit, not archive-then-mutate-in-place):
    restore the archived copy back to the live path before raising, so the
    failure surfaces with the Gemini skill still usable, never missing.
 
+**P1-4 switch clarification — the preceding `os.rename()` sentence is
+superseded where a non-empty live directory prevents a one-step replacement.**
+Stage and validate the archive and replacement as separate complete trees before
+switching. Use an atomic exchange/rename only where the filesystem expressly
+supports replacing the live directory without first deleting it. Otherwise,
+move the live directory to a rollback sibling, move the validated replacement
+into the live name, and validate the result. If either move or validation fails,
+restore the archived source to the live name before raising (prefer restoring
+the untouched rollback sibling when available, then verify it against the
+archive digest). The error path must never leave a removed, empty, or partial
+live Gemini skill merely because the archive succeeded.
+
 **Receipt contract (P1-2).** On a successful commit, write a receipt file
 under `archive_root/<slug>/` (e.g. `archive_root/<slug>/.receipt.json`)
 containing: `slug`, `source_digest` (sha256, pre-archive), `archive_digest`
@@ -495,6 +543,23 @@ and generated-wrapper paths) to fail after a successful archive; assert the
 original live directory at `~/.gemini/skills/<slug>` still exists and is
 usable (not partially removed, not empty) after `reconcile_gemini` raises.
 
+~~~python
+def test_reconcile_restores_live_skill_when_replacement_fails_after_archive(mod, tmp_path: Path, monkeypatch) -> None:
+    root, archive = tmp_path / "gemini", tmp_path / "archive"
+    old = root / "code-review" / "SKILL.md"
+    old.parent.mkdir(parents=True)
+    old.write_text("original usable Gemini skill\n", encoding="utf-8")
+
+    monkeypatch.setattr(mod, "create_relative_link", raises_recognized_symlink_unsupported)
+    monkeypatch.setattr(mod, "write_generated_wrapper", raises_replacement_creation_failure)
+
+    with pytest.raises(OSError):
+        mod.reconcile_gemini(root, archive, {"code-review"})
+
+    assert (archive / "code-review" / "SKILL.md").is_file()  # archive succeeded
+    assert old.read_text(encoding="utf-8") == "original usable Gemini skill\n"
+~~~
+
 - [ ] **Step 5: Add collision and metadata regression tests**
 
 ~~~python
@@ -508,6 +573,14 @@ def test_reconcile_rejects_unknown_frontmatter_key_for_adapter(mod, tmp_path: Pa
     skill.parent.mkdir(parents=True)
     skill.write_text("---\\nname: orama-system\\nunsupported: true\\n---\\n", encoding="utf-8")
     with pytest.raises(ValueError, match="unsupported frontmatter"):
+        mod.reconcile_gemini(root, tmp_path / "archive", {"orama-system"})
+
+def test_reconcile_reports_the_exact_unknown_frontmatter_key(mod, tmp_path: Path) -> None:
+    root = tmp_path / "gemini"
+    skill = root / "orama-system" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\\nname: orama-system\\nunsupported: true\\n---\\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"unsupported frontmatter key: unsupported"):
         mod.reconcile_gemini(root, tmp_path / "archive", {"orama-system"})
 
 def test_reconcile_falls_back_to_wrapper_when_symlink_fails(mod, tmp_path: Path, monkeypatch) -> None:
@@ -652,7 +725,7 @@ git commit -m "fix(skills): make global Perpetua wrappers portable"
 - Modify: `bin/orama-system/skills/skillify/references/codex-thin-wrapper-installs.md`
 
 **Interfaces:**
-- `RootFinding(status: str, detail: str)`
+- `RootFinding(status: str, detail: str, operator_next_action: str)`
 - `verify_antigravity_root(shared_agents_root: Path, antigravity_root: Path) -> RootFinding`
 
 - [ ] **Step 1: Write failing protection tests**
@@ -664,6 +737,19 @@ def test_audit_reports_antigravity_shared_root(mod, tmp_path: Path) -> None:
     antigravity.symlink_to(agents, target_is_directory=True)
     assert mod.verify_antigravity_root(agents, antigravity).status == "shared-root"
 
+def test_audit_reports_missing_antigravity_root_with_operator_action(mod, tmp_path: Path) -> None:
+    finding = mod.verify_antigravity_root(tmp_path / "agents", tmp_path / "antigravity")
+    assert finding.status == "missing"
+    assert finding.operator_next_action == "Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
+
+def test_audit_reports_divergent_antigravity_root_with_operator_action(mod, tmp_path: Path) -> None:
+    agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
+    agents.mkdir()
+    antigravity.mkdir()
+    finding = mod.verify_antigravity_root(agents, antigravity)
+    assert finding.status == "divergent"
+    assert finding.operator_next_action == "Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology."
+
 def test_manifest_rejects_skillify_collision(mod) -> None:
     with pytest.raises(ValueError, match="external owner"):
         mod.validate_reconciliation_request({"skillify"})
@@ -671,12 +757,21 @@ def test_manifest_rejects_skillify_collision(mod) -> None:
 
 - [ ] **Step 2: Implement checks and update operator guidance**
 
-The root check returns `shared-root`, `missing`, or `divergent`; all three are audited outcomes (not failures) that produce a `RootFinding` with an operator next action. Document: run manifest audit first, retain gstack `skillify`, invoke Orama creator as `oramasys-skillify`, and never bulk-install the Orama manifest into a gstack-populated root.
+The root check returns `shared-root`, `missing`, or `divergent`; all three are
+**AUDITED OUTCOMES**, not failures, and produce a `RootFinding` with an exact
+operator next action. Task 5 is read-only: it must not create, remove, link,
+relink, or otherwise mutate an Antigravity root.
 
-### Task 5a: Create Antigravity Shared Root (Deferred)
+| Audited outcome | Required recorded detail | Precise operator next action |
+| --- | --- | --- |
+| `shared-root` | Resolved roots and read-only evidence of equality | Record the finding; no setup action is needed. |
+| `missing` | Which expected root(s) are absent | Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan. |
+| `divergent` | Both resolved roots and their ownership/topology evidence | Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology. |
 
-This task is deferred to a separate human-approved plan to avoid mutating the Antigravity root during this consolidation.
-
+Document: run manifest audit first, retain gstack `skillify`, invoke Orama
+creator as `oramasys-skillify`, and never bulk-install the Orama manifest into
+a gstack-populated root. Tests must cover all three audited outcomes and their
+exact `operator_next_action` text.
 
 - [ ] **Step 3: Verify and commit**
 
@@ -687,6 +782,54 @@ python3 scripts/review/check_orama_skills.py --mode strict .
 git add bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py tests/test_install_thin_skill_wrappers.py bin/orama-system/skills/skillify/references/codex-thin-wrapper-installs.md
 git commit -m "test(skills): guard Gemini gstack namespace collisions"
 ~~~
+
+### Task 5a: DEFERRED — Human-Approved Antigravity Shared-Root Setup
+
+**Status:** Not part of this plan's implementation or final gate. This task is
+the relocated shared-root **creation/repair** requirement from the former Task
+5/Task 7 final-pass condition. It may begin only after a human operator gives
+explicit, current approval for the specific machine and intended topology.
+
+**Relocation note:** This task was moved after Task 5 Step 3 solely to preserve
+task ordering; no setup requirement, rationale, or cross-reference was omitted.
+**Superseded short form, retained here:** “This task is deferred to a separate
+human-approved plan to avoid mutating the Antigravity root during this
+consolidation.” The detailed steps below replace only that abbreviated form;
+they preserve its reason and add the required rollback and platform validation.
+
+**Files:** Determined only after approval and a fresh, read-only topology audit.
+No generic repository change is authorized by this deferred task description.
+
+**Preconditions:** Record the Task 5 `RootFinding`, the current owners and
+resolved paths of both roots, the intended platform(s), and written operator
+approval. Abort if the evidence is stale, ambiguous, or describes a root owned
+by another installer.
+
+- [ ] **Step 1: Stage and validate a proposed setup without switching**
+
+Create the proposed shared-root mapping in a same-filesystem staging location.
+Validate the staged mapping on every approved platform (at minimum path
+resolution, skill discovery, and a read-only inventory); do not alter either
+live root during this step.
+
+- [ ] **Step 2: Switch only with an explicit rollback receipt**
+
+Before the switch, preserve a complete, timestamped rollback copy of every
+live root that will change and verify its digest. Use an atomic exchange/rename
+where the platform/filesystem supports it. Otherwise, move the affected live
+root to a rollback sibling, activate the validated staged mapping, and verify
+discovery immediately. If activation or validation fails, restore the original
+live root from the rollback sibling; if that is unavailable, restore the
+verified rollback archive before raising. Record the rollback location and
+digests in the operator evidence.
+
+- [ ] **Step 3: Platform validation and handoff**
+
+On each approved platform, prove the chosen roots resolve as intended, the
+expected skills are discoverable, gstack-owned cards remain untouched, and the
+rollback receipt is usable. A failed platform validation restores that
+platform's original root and leaves this deferred task incomplete; it does not
+retroactively fail Task 5's read-only audit.
 
 ### Task 6: Review Gemini-Only Candidates Without Mutating Them
 
@@ -771,7 +914,29 @@ git diff --check
 git status --short
 ~~~
 
-Expected: all tests pass; Antigravity root state is audited (`shared-root`, `missing`, or `divergent`) but not mutated; `skillify` and `gstack-upgrade` remain `preserve-external`; candidates are `not changed by this plan`.
+Before the gate, capture a read-only Task 5 snapshot using logical root labels
+only: `RootFinding.status`, entry kind, resolved-target identity when present,
+and a digest or equivalent stable identity of each existing root. Capture the
+same snapshot after the gate. Assert equality for existing roots and continued
+absence for a `missing` root; any difference is a failure because it proves an
+Antigravity root was mutated by this plan. This assertion does not classify
+`missing` or `divergent` as an audit failure and does not authorize setup.
+
+Expected: all tests pass; `skillify` and `gstack-upgrade` remain
+`preserve-external`; candidates are `not changed by this plan`; and the final
+evidence records whichever Task 5 audited outcome (`shared-root`, `missing`,
+or `divergent`) was observed together with its operator next action. **Task 7
+asserts only that this plan did not mutate any Antigravity root**: compare the
+Task 5 read-only snapshot with the post-gate snapshot, including the
+still-absent state for `missing`. It does not require, create, or repair a
+shared root; that work is deferred to human-approved Task 5a.
+
+**Superseded P1-3 expectation, retained in place:** “Expected: all tests pass;
+Antigravity root state is audited (`shared-root`, `missing`, or `divergent`) but
+not mutated; `skillify` and `gstack-upgrade` remain `preserve-external`;
+candidates are `not changed by this plan`.” The preceding snapshot assertion
+replaces this abbreviated form with the precise no-mutation proof while
+preserving its audited-outcome requirement.
 
 - [ ] **Step 2: Record final evidence**
 
@@ -1171,6 +1336,19 @@ Synthesized from this review's findings. Each task derives from a specific
 finding above. P1 blocks ship (fold into Tasks 2/5/7 before implementation
 starts); P2 should land same branch; P3 is a follow-up TODO.
 
+### Completed Review History — Incorporated Plan Edits
+
+T3, T4, and T5 are no longer open implementation work. Their original review
+text and cross-references are preserved verbatim here because the corresponding
+edits are already incorporated in the normative task bodies. The supersession
+annotations at their former list positions below point back to this table.
+
+| Original review task (preserved verbatim) | Incorporated and completed location |
+| --- | --- |
+| `- [ ] **T3 (P1, human: ~15min / CC: ~5min)** — fix-timestamp-placeholder — Replace the literal <timestamp> in Tasks 3, 4, 5's --archive-root example commands with a concrete, safe expression`<br>`- Surfaced by: Codex Pass 3 (DX), "copy-paste bait"`<br>`- Files: this plan file (docs/superpowers/plans/2026-08-14-gemini-skill-consolidation.md)`<br>`- Verify: manual read — --archive-root "$HOME/.gemini/skills-archive/$(date -u +%Y%m%dT%H%M%SZ)"` | Task 3 Step 3 and Task 4 Step 2 contain the safe timestamp expression. Task 5 has no `--archive-root` command to alter; its read-only scope is explicit in Task 5 Step 2. |
+| `- [ ] **T4 (P1, human: ~30min / CC: ~10min)** — name-metadata-policy-values — Enumerate every metadata_policy value (not just "none"/"external") in Task 2's manifest schema, with one example input/output pair per value`<br>`- Surfaced by: Decision Audit Trail D8, both voices independently`<br>`- Files: this plan file, bin/orama-system/skills/skillify/references/gemini-skill-ownership.json`<br>`- Verify: manual read — every value referenced by the Disposition Matrix's "adapter" rows has a named metadata_policy` | Task 2 Step 3's complete `metadata_policy` enum and the P2-1 versioned frontmatter-contract table define every allowed value and its constrained behavior. |
+| `- [ ] **T5 (P1, human: ~30min / CC: ~10min)** — wire-inventory-regeneration — Add an explicit sub-step to Tasks 3, 4, 6 that redirects fresh --audit-gemini output into docs/reference/gemini-skill-consolidation-inventory.md after each reconciliation batch`<br>`- Surfaced by: Decision Audit Trail D11, Codex Pass 3`<br>`- Files: this plan file`<br>`- Verify: manual read — each task's "Verify and commit" block includes the redirect, not just a bare --audit-gemini invocation` | Task 3 Step 4, Task 4 Step 3, and Task 6 Step 4 require a fresh audit snapshot in `docs/reference/gemini-skill-consolidation-inventory.md`, while retaining its Disposition Matrix and narrative context. |
+
 - [ ] **T1 (P1, human: ~3h / CC: ~30min)** — reconciliation-verify — Add a
   Gemini-aware verification path distinct from the existing `verify()`
   - Surfaced by: Error & Rescue Registry — `verify()` CRITICAL GAP; cross-model
@@ -1192,13 +1370,29 @@ starts); P2 should land same branch; P3 is a follow-up TODO.
   - Verify: a new test asserting a permission-denied `OSError` propagates instead
     of silently falling back to a generated wrapper
 
+- [x] **T3 (P1) — fix-timestamp-placeholder.** **Superseded as open work and
+  incorporated:** its original text and Codex Pass 3 cross-reference are
+  preserved in Completed Review History above; see Task 3 Step 3 and Task 4
+  Step 2.
+
+  **Retained original review text (verbatim; superseded):**
+
+  ~~~text
 - [ ] **T3 (P1, human: ~15min / CC: ~5min)** — fix-timestamp-placeholder — Replace
   the literal `<timestamp>` in Tasks 3, 4, 5's `--archive-root` example commands
   with a concrete, safe expression
   - Surfaced by: Codex Pass 3 (DX), "copy-paste bait"
   - Files: this plan file (`docs/superpowers/plans/2026-08-14-gemini-skill-consolidation.md`)
   - Verify: manual read — `--archive-root "$HOME/.gemini/skills-archive/$(date -u +%Y%m%dT%H%M%SZ)"`
+  ~~~
 
+- [x] **T4 (P1) — name-metadata-policy-values.** **Superseded as open work and
+  incorporated:** its original text and Decision Audit Trail D8 cross-reference
+  are preserved in Completed Review History above; see Task 2 Step 3.
+
+  **Retained original review text (verbatim; superseded):**
+
+  ~~~text
 - [ ] **T4 (P1, human: ~30min / CC: ~10min)** — name-metadata-policy-values —
   Enumerate every `metadata_policy` value (not just "none"/"external") in Task
   2's manifest schema, with one example input/output pair per value
@@ -1206,7 +1400,15 @@ starts); P2 should land same branch; P3 is a follow-up TODO.
   - Files: this plan file, `bin/orama-system/skills/skillify/references/gemini-skill-ownership.json`
   - Verify: manual read — every value referenced by the Disposition Matrix's
     "adapter" rows has a named `metadata_policy`
+  ~~~
 
+- [x] **T5 (P1) — wire-inventory-regeneration.** **Superseded as open work and
+  incorporated:** its original text and Decision Audit Trail D11 cross-reference
+  are preserved in Completed Review History above; see Tasks 3, 4, and 6.
+
+  **Retained original review text (verbatim; superseded):**
+
+  ~~~text
 - [ ] **T5 (P1, human: ~30min / CC: ~10min)** — wire-inventory-regeneration —
   Add an explicit sub-step to Tasks 3, 4, 6 that redirects fresh `--audit-gemini`
   output into `docs/reference/gemini-skill-consolidation-inventory.md` after
@@ -1215,6 +1417,7 @@ starts); P2 should land same branch; P3 is a follow-up TODO.
   - Files: this plan file
   - Verify: manual read — each task's "Verify and commit" block includes the
     redirect, not just a bare `--audit-gemini` invocation
+  ~~~
 
 - [ ] **T6 (P2, human: ~2h / CC: ~20min)** — split-gemini-module — Extract the
   Gemini reconciliation surface (Task 1-5 interfaces) into a new sibling module
@@ -1245,6 +1448,8 @@ starts); P2 should land same branch; P3 is a follow-up TODO.
   - Files: install script/new module, `tests/test_install_thin_skill_wrappers.py`
   - Verify: new test simulates two sequential `reconcile_gemini` calls on the
     same slug and asserts the second is a no-op, not an error or a duplicate archive
+  - **Superseded-by Task 0 Fix 3:** retained here for its original rationale and
+    evidence trail; do not treat it as separate remaining work.
 
 - [ ] **T9 (P3, human: ~2h / CC: ~20min)** — richer-audit-output — Add
   root-availability, resolved-root status, drift-state, and next-action columns
