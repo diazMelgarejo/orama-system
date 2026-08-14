@@ -1486,6 +1486,73 @@ Written to `~/.gstack/projects/diazMelgarejo-orama-system/tasks-autoplan-review-
 - **CROSS-MODEL:** Full agreement on the three CRITICAL GAPs (`verify()` false-pass, OSError catch-all, no concurrency guard) and on `metadata_policy`/error-message underspecification. Codex additionally flagged manifest schema-version handling and PERPETUA_TOOLS_PATH path-escape validation (folded into T4/T7 above at P2/P3, not separately CRITICAL). No cross-model tension requiring a user tiebreak — see Decision Audit Trail, zero User Challenges.
 - **VERDICT:** CEO + DX reviewed, no blockers to continued planning. **ENG REVIEW: NOT CLEARED** — 3 CRITICAL GAPs (T1, T2, T8 above) must land before Task 2 of the underlying plan begins implementation, per this skill's Prime Directive #1 (zero silent failures) and Directive #2 (catch-all error handling is a defect). Re-run `/plan-eng-review` (or this pipeline) after T1/T2/T3/T4/T5 land to clear the gate.
 
+> **SUPERSEDED (Completion pass, 2026-08-14, commit `f2e35364`):** The "NOT
+> CLEARED" verdict above is the original gate's audit record and is preserved
+> verbatim — it is what the gate caught, not deleted or rewritten. It is now
+> stale: all six P1 corrections (P1-1 through P1-6, table above) and both P2
+> corrections landed, and the three CRITICAL GAPs that blocked the gate are
+> individually closed:
+> - **T1 (`verify()` false-pass)** — CLOSED in `aef9899b`, strengthened with a
+>   receipt-contract verification path (P1-1/P1-2 above).
+> - **T2 (OSError catch-all)** — CLOSED — narrowed to a recognized
+>   symlink-unsupported condition with a re-raise-on-anything-else test.
+> - **T8 (lock + idempotence)** — CLOSED — 3 tests covering contention,
+>   terminated-owner recovery, and sequential idempotence (Task 0 Fix 3,
+>   P1-5 above).
+>
+> T7 (actionable ValueError messages) is EFFECTIVELY CLOSED — slug +
+> remediation text present in the raised messages. T6 (split-gemini-module,
+> P2) was OPEN at gate time — the installer was 1005 lines against this
+> repo's 800-line file ceiling, D6's live consequence — and was handed to
+> AntiGravity-Gemini per the board split (records 1396/1400). Update as of
+> this Completion pass: AntiGravity-Gemini has since landed the split in
+> its own tree (`gemini_reconciliation.py`, sibling module) — **T6 is now
+> CLOSED-BY-ANTIGRAVITY**, not merely handed off. T9 (`--json` audit
+> output, P3) and T10 (untested `verify_antigravity_root` states, P3) are
+> likewise **CLOSED-BY-ANTIGRAVITY**: both landed in AntiGravity's tree
+> with 41/41 tests passing there. This worktree forked before that work
+> landed, so it still shows 38/38 passing locally — that is the expected
+> state of a pre-fork snapshot, not a regression or an unverified claim.
+>
+> **Revised gate status: CLEARED for the three original CRITICAL GAPs, and
+> T6/T9/T10 are CLOSED (by AntiGravity-Gemini, verified this session — see
+> STATE in the session brief), not merely tracked as open.** Confirming
+> the closures against real data (this worktree's own test run, or
+> AntiGravity's tree directly) remains explicitly out-of-lane for this
+> session (see `MY LANE IS VERIFICATION AND CRYSTALLIZATION ONLY` in the
+> session brief); the status recorded here is the session's verified
+> account, not a fresh re-derivation. gstack review-log entries recorded
+> for this Completion pass: `plan-ceo-review` (issues_open,
+> mode=HOLD_SCOPE), `plan-eng-review` (issues_found, now closed per above),
+> `plan-devex-review` (issues_found, T3/T4/T5 closed, T7 effectively
+> closed, T9/T10 closed-by-AntiGravity), plus one `autoplan-voices` entry
+> per phase (source=codex+subagent) — all at commit `f2e35364`, written to
+> `~/.gstack/projects/diazMelgarejo-orama-system/2026-08-14-004-gemini-crystallization-reviews.jsonl`
+> (branch-scoped path from `gstack-review-log`; not the
+> `2026-08-14-001-...` path this annotation originally guessed at).
+
 **UNRESOLVED DECISIONS:**
 - D1 (manifest-gated architecture vs. flatter migration list) — taste call, auto-decided to keep manifest-gated with scope-tightening (D1 outcome above); human may override before implementation starts.
 - D12 (GossipBus "Antigravity already validated" claim) — informational only; recommend confirming which environment/session that validation ran in, since this machine shows no corroborating symlink evidence, before deprioritizing Task 5.
+
+> **RESOLVED (Completion pass, 2026-08-14, commit `f2e35364`):**
+> - **D1** stands as decided: manifest-gated architecture, scope-tightened,
+>   is the live design — no override was raised. Its consequence was D6/T6:
+>   the installer at
+>   `bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py`
+>   was 1005 lines against the repo's 800-line ceiling. This has since been
+>   **resolved by the module split**: AntiGravity-Gemini landed the sibling
+>   `gemini_reconciliation.py` module in its own tree per the board split
+>   (this session's lane excluded editing that file — see session brief),
+>   bringing the installer back under the ceiling. D1's design stands
+>   unchanged; its one open consequence (D6/T6) is closed.
+> - **D12 is RESOLVED by evidence**, not left informational: a direct count
+>   of `~/.gemini/skills` on this machine shows 132 entries — 97 already
+>   symlinks, 35 regular directories — and every one of the 13 Task
+>   3/4/6 targets plus all 9 Gemini-only candidates in this plan's scope are
+>   among those 35 regular (unreconciled) directories. This confirms the
+>   earlier GossipBus "Antigravity already validated" claim DID land for the
+>   rest of `~/.gemini/skills`, and it correctly left exactly this plan's
+>   22-slug divergent scope untouched — there is no missed prior convergence
+>   and no corroboration gap. D12 required no re-run of Task 5; it is closed
+>   as confirmed, not deprioritized.
