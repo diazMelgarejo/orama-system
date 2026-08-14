@@ -93,6 +93,35 @@ def test_sibling_lagging_canonical_history_passes(tmp_path: Path) -> None:
     assert "lags canonical history" in result.stdout
 
 
+def test_hook_git_environment_does_not_rebind_independent_siblings(tmp_path: Path) -> None:
+    workspace = tmp_path / "ws"
+    canon = workspace / "orama-system"
+    sibling = workspace / "Perpetua-Tools"
+    rel = "scripts/git/audit_engine.py"
+    body = "# canonical v1\n"
+
+    for repo in (canon, sibling):
+        _init_repo(repo, "Tester", "tester@example.com")
+        _commit_file(repo, rel, body, "init")
+
+    env = os.environ.copy()
+    env["WORKSPACE_ROOT"] = str(workspace)
+    env["GUARD_SYNC_CANON_ROOT"] = str(canon)
+    env["GIT_DIR"] = str(canon / ".git")
+    result = subprocess.run(
+        ["bash", str(CHECKER), "--workspace"],
+        cwd=canon,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "byte-identical" in result.stdout
+    assert "shares canonical git history" not in result.stdout
+
+
 def test_sibling_ahead_of_canonical_fails_closed(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     canon = workspace / "orama-system"
