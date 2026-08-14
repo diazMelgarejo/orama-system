@@ -451,3 +451,90 @@ def test_second_run_over_same_slug_is_a_no_op(mod, tmp_path: Path) -> None:
     assert second == []
     assert sorted(archive.rglob("*")) == archived_before_second_run
     assert not (archive / ".reconcile.lock").exists()
+
+
+# ── P1-4: activation-rollback. The data-loss path the whole plan exists to
+# prevent — archive succeeds, then every path that could install the
+# replacement fails. The backup existing is not enough; the LIVE skill must
+# still be usable, because Gemini reads the live root at runtime and a
+# recoverable-but-absent skill is still a broken skill. Required by the
+# codex-reviewer review synthesis (2026-08-14) as a P1 gate condition.
+
+
+def _seed_live_skill(root: Path, slug: str = "code-review", body: str = "old Gemini card\n") -> Path:
+    skill = root / slug
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text(body, encoding="utf-8")
+    (skill / "references" / "notes.md").parent.mkdir(parents=True)
+    (skill / "references" / "notes.md").write_text("reference body\n", encoding="utf-8")
+    return skill
+
+
+def test_live_skill_survives_when_every_activation_path_fails(
+    mod, tmp_path: Path, monkeypatch
+) -> None:
+    """Symlink AND generated-wrapper both fail after a successful archive."""
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    _seed_live_skill(root)
+
+    def refuse_symlink(_target: Path, _source: Path) -> None:
+        raise OSError(errno.EPERM, "symlinks not permitted")
+
+    def refuse_wrapper(_target: Path, _source: Path) -> None:
+        raise OSError(errno.EROFS, "read-only file system")
+
+    monkeypatch.setattr(mod, "create_relative_link", refuse_symlink)
+    monkeypatch.setattr(mod, "write_generated_wrapper", refuse_wrapper)
+
+    with pytest.raises(OSError) as raised:
+        mod.reconcile_gemini(root, archive, {"code-review"})
+
+    # Positive outcome, not just "no crash": we got PAST the archive step, so
+    # this genuinely exercises post-archive failure rather than an early abort.
+    assert raised.value.errno == errno.EROFS
+    assert (archive / "code-review" / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
+
+    # The live skill is intact, still a real directory, with both files.
+    live = root / "code-review"
+    assert live.is_dir() and not live.is_symlink()
+    assert (live / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
+    assert (live / "references" / "notes.md").read_text(encoding="utf-8") == "reference body\n"
+
+    # No staging or rollback debris left behind in the user's skill root.
+    assert not list(root.glob(".*reconcile-staging"))
+    assert not list(root.glob(".*reconcile-rollback"))
+    assert not (archive / ".reconcile.lock").exists()
+
+
+def test_live_skill_is_restored_when_the_swap_fails_after_archive(
+    mod, tmp_path: Path, monkeypatch
+) -> None:
+    """The narrowest window: staging built, live moved aside, then the final
+    rename fails. Without the rollback restore the live skill is simply gone."""
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    _seed_live_skill(root)
+
+    real_replace = mod.os.replace
+
+    def fail_installing_stage(src, dst, *args, **kwargs):
+        # Fail only the staging -> live install; let the rollback restore work,
+        # otherwise we would be testing that os.replace is broken, not that
+        # reconcile_gemini recovers.
+        if ".reconcile-staging" in str(src):
+            raise OSError(errno.EIO, "input/output error installing staged replacement")
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(mod.os, "replace", fail_installing_stage)
+
+    with pytest.raises(OSError) as raised:
+        mod.reconcile_gemini(root, archive, {"code-review"})
+
+    assert raised.value.errno == errno.EIO
+    assert (archive / "code-review" / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
+
+    live = root / "code-review"
+    assert live.is_dir() and not live.is_symlink()
+    assert (live / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
+    assert (live / "references" / "notes.md").read_text(encoding="utf-8") == "reference body\n"
+    assert not list(root.glob(".*reconcile-rollback"))
+    assert not (archive / ".reconcile.lock").exists()
