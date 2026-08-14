@@ -404,7 +404,7 @@ def test_oserror_with_unrelated_errno_propagates(mod, tmp_path: Path, monkeypatc
     monkeypatch.setattr("gemini_reconciliation.create_relative_link", disk_full)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
+        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
 
     assert raised.value.errno == errno.ENOSPC
     assert not (root / "code-review" / "SKILL.md").exists()
@@ -415,7 +415,7 @@ def test_lock_contention_fails_cleanly(mod, tmp_path: Path) -> None:
     lock = mod.acquire_reconcile_lock(archive, root, {"code-review"})
     try:
         with pytest.raises(mod.ReconcileLockHeldError):
-            mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
+            mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
     finally:
         mod.release_reconcile_lock(lock)
 
@@ -428,7 +428,7 @@ def test_lock_terminated_owner_requires_guarded_recovery(mod, tmp_path: Path) ->
     lock_path.write_text(json.dumps(stale_payload), encoding="utf-8")
 
     with pytest.raises(mod.ReconcileLockHeldError):
-        mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
+        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
     assert lock_path.exists()
 
     recovered = mod.force_unlock_gemini(archive, "code-review")
@@ -443,9 +443,9 @@ def test_second_run_over_same_slug_is_a_no_op(mod, tmp_path: Path) -> None:
     old_skill.parent.mkdir(parents=True)
     old_skill.write_text("old Gemini card\n", encoding="utf-8")
 
-    first = mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
+    first = mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
     archived_before_second_run = sorted(archive.rglob("*"))
-    second = mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
+    second = mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
 
     assert first == [root / "code-review"]
     assert second == []
@@ -487,7 +487,7 @@ def test_live_skill_survives_when_every_activation_path_fails(
     monkeypatch.setattr("gemini_reconciliation.write_generated_wrapper", refuse_wrapper)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
+        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
 
     # Positive outcome, not just "no crash": we got PAST the archive step, so
     # this genuinely exercises post-archive failure rather than an early abort.
@@ -527,7 +527,7 @@ def test_live_skill_is_restored_when_the_swap_fails_after_archive(
     monkeypatch.setattr(mod.os, "replace", fail_installing_stage)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"}, mod._canonical_target_for_slug)
+        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
 
     assert raised.value.errno == errno.EIO
     assert (archive / "code-review" / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
@@ -560,3 +560,63 @@ def test_audit_reports_divergent_antigravity_root_with_operator_action(mod, tmp_
     finding = mod.verify_antigravity_root(agents, antigravity)
     assert finding.status == "divergent"
     assert finding.operator_next_action == "Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology."
+
+def test_reconcile_never_replaces_gstack_upgrade(mod, tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="preserve-external"):
+        mod.reconcile_gemini(tmp_path / "gemini", tmp_path / "archive", {"gstack-upgrade"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('gstack', 'preserve-external', 'gstack-upgrade', '', 'external'))
+
+def test_reconcile_rejects_unknown_frontmatter_key_for_adapter(mod, tmp_path: Path) -> None:
+    root = tmp_path / "gemini"
+    skill = root / "orama-system" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: orama-system\nunsupported: true\n---\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="unsupported frontmatter"):
+        mod.reconcile_gemini(root, tmp_path / "archive", {"orama-system"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'adapter', 'orama-system', '/path/SKILL.md', 'validated'))
+
+def test_reconcile_reports_the_exact_unknown_frontmatter_key(mod, tmp_path: Path) -> None:
+    root = tmp_path / "gemini"
+    skill = root / "orama-system" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("---\nname: orama-system\nunsupported: true\n---\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"unsupported frontmatter key: name"):
+        mod.reconcile_gemini(root, tmp_path / "archive", {"orama-system"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'adapter', 'orama-system', '/path/SKILL.md', 'validated'))
+
+def test_reconcile_falls_back_to_wrapper_when_symlink_fails(mod, tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setattr("gemini_reconciliation.create_relative_link", lambda target, source: (_ for _ in ()).throw(OSError(errno.EPERM, "links disabled")))
+    root = tmp_path / "gemini"
+    skill = root / "code-review" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("old", encoding="utf-8")
+    changed = mod.reconcile_gemini(root, tmp_path / "archive", {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', 'code-review', f'/fake/code-review/SKILL.md', 'none'))
+    assert changed == [root / "code-review"]
+    assert (root / "code-review" / "SKILL.md").is_file()
+
+def test_orama_gstack_adapter_targets_gstack_gbrain(mod) -> None:
+    import gemini_reconciliation
+    ownership = gemini_reconciliation.GeminiOwnership("orama", "adapter", "orama-gstack", "bin/orama-system/gstack-gbrain/SKILL.md", "validated")
+    text = gemini_reconciliation.gemini_adapter(ownership)
+    assert "bin/orama-system/gstack-gbrain/SKILL.md" in text
+    assert "bin/orama-system/gstack/SKILL.md" not in text
+
+def test_code_review_reconciliation_drops_glm_fallback(mod, tmp_path: Path) -> None:
+    root = tmp_path / "gemini"
+    skill = root / "code-review" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("GLM-5.2 Fallback content", encoding="utf-8")
+    canonical = tmp_path / "canonical" / "SKILL.md"
+    canonical.parent.mkdir(parents=True)
+    canonical.write_text("Canonical content", encoding="utf-8")
+    changed = mod.reconcile_gemini(root, tmp_path / "archive", {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', 'code-review', str(canonical), 'none'))
+    assert all("GLM-5.2 Fallback" not in p.read_text(encoding="utf-8") for p in changed if p.is_file())
+
+def test_perpetua_wrapper_uses_environment_root_not_caller_repo(mod) -> None:
+    import gemini_reconciliation
+    ownership = gemini_reconciliation.GeminiOwnership("perpetua", "adapter", "perpetua-config", "$PERPETUA_TOOLS_PATH/config/SKILL.md", "validated")
+    text = gemini_reconciliation.cross_repo_wrapper(ownership)
+    assert '"$PERPETUA_TOOLS_PATH/config/SKILL.md"' in text
+    assert "git rev-parse --show-toplevel" not in text
+
+def test_perpetua_wrapper_explains_missing_root(mod) -> None:
+    import gemini_reconciliation
+    ownership = gemini_reconciliation.GeminiOwnership("perpetua", "adapter", "perpetua-tools", "$PERPETUA_TOOLS_PATH/SKILL.md", "validated")
+    assert "PERPETUA_TOOLS_PATH is not set" in gemini_reconciliation.cross_repo_wrapper(ownership)

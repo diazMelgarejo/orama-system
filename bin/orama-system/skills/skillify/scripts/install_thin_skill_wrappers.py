@@ -47,6 +47,7 @@ from gemini_reconciliation import (
     create_relative_link,
     acquire_reconcile_lock,
     release_reconcile_lock,
+    load_gemini_ownership,
 )
 
 ROOT = Path(__file__).resolve().parents[6]
@@ -529,13 +530,6 @@ def verify(only: set[str] | None = None) -> list[str]:
 
 
 
-def _canonical_target_for_slug(slug: str) -> Path:
-    for canonical in CANONICAL_SKILLS:
-        if slug_for(canonical) == slug:
-            target = workspace_path(canonical).parent
-            if target.is_dir():
-                return target.resolve()
-    raise ValueError(f"{slug}: not approved for Gemini reconciliation; add an ownership record first")
 
 
 def verify_antigravity_root(shared_agents_root: Path, antigravity_root: Path) -> RootFinding:
@@ -712,7 +706,9 @@ def main() -> int:
                 parser.error("--force-unlock slug must be included in --only")
             force_unlock_gemini(archive_root, args.force_unlock)
         else:
-            written = reconcile_gemini(gemini_root, archive_root, only, _canonical_target_for_slug)
+            manifest_path = Path(__file__).resolve().parent.parent / "references" / "gemini-skill-ownership.json"
+            ownership_dict = load_gemini_ownership(manifest_path)
+            written = reconcile_gemini(gemini_root, archive_root, only, lambda s: ownership_dict[s])
             print(f"reconciled {len(written)} Gemini skill directories")
     if args.install:
         written = install(args.dry_run, only=only)

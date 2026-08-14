@@ -4,12 +4,38 @@ import errno
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable
-from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class GeminiOwnership:
+    owner: str
+    action: str
+    canonical_slug: str
+    canonical_path: str
+    metadata_policy: str
+
+
+def load_gemini_ownership(manifest_path: Path) -> dict[str, GeminiOwnership]:
+    if not manifest_path.exists():
+        return {}
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    skills = data.get("skills", {})
+    return {
+        slug: GeminiOwnership(
+            owner=v["owner"],
+            action=v["action"],
+            canonical_slug=v["canonical_slug"],
+            canonical_path=v["canonical_path"],
+            metadata_policy=v["metadata_policy"]
+        ) for slug, v in skills.items()
+    }
 
 
 @dataclass(frozen=True)
@@ -25,6 +51,36 @@ class RootFinding:
     status: str
     detail: str
     operator_next_action: str = ""
+
+
+def _validate_frontmatter(source_text: str) -> str:
+    frontmatter = ""
+    if source_text.startswith("---"):
+        match = re.search(r"^---\n(.*?)\n---", source_text, re.DOTALL)
+        if match:
+            for line in match.group(1).splitlines():
+                if not line.strip():
+                    continue
+                if line.startswith("user-invocable: false"):
+                    frontmatter = "---\nuser-invocable: false\n---\n"
+                else:
+                    key = line.split(":")[0].strip()
+                    raise ValueError(f"unsupported frontmatter key: {key}")
+    return frontmatter
+
+
+def gemini_adapter(ownership: GeminiOwnership, source_text: str = "") -> str:
+    frontmatter = ""
+    if ownership.metadata_policy == "validated":
+        frontmatter = _validate_frontmatter(source_text)
+    return f"{frontmatter}# Generated Gemini adapter\n\nCanonical target: {ownership.canonical_path}\n"
+
+
+def cross_repo_wrapper(ownership: GeminiOwnership, source_text: str = "") -> str:
+    frontmatter = ""
+    if ownership.metadata_policy == "validated":
+        frontmatter = _validate_frontmatter(source_text)
+    return f"{frontmatter}# Cross-Repo Gemini Adapter\n\nCanonical target: \"{ownership.canonical_path}\"\n\nPERPETUA_TOOLS_PATH is not set.\n"
 
 
 class ReconcileLockHeldError(RuntimeError):
@@ -200,13 +256,8 @@ def _write_receipt(
     index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def reconcile_gemini(root: Path, archive_root: Path, only: set[str], target_lookup: Callable[[str], Path]) -> list[Path]:
-    """Minimal archive-first reconciliation scaffold for the Task 2 manifest.
-
-    Ownership policy is deliberately not duplicated here: Task 2 replaces the
-    canonical-target lookup with its manifest. This Task 0 scaffold exists to
-    establish lock, errno, receipt, and idempotence behavior first.
-    """
+def reconcile_gemini(root: Path, archive_root: Path, only: set[str], ownership_lookup: Callable[[str], GeminiOwnership]) -> list[Path]:
+    """Archive-first reconciliation using Task 2 ownership manifest."""
     if not only:
         raise ValueError("Gemini reconciliation requires at least one --only slug")
     lock_path = acquire_reconcile_lock(archive_root, root, only)
@@ -215,12 +266,29 @@ def reconcile_gemini(root: Path, archive_root: Path, only: set[str], target_look
         root.mkdir(parents=True, exist_ok=True)
         for slug in sorted(only):
             live = root / slug
-            canonical_target = target_lookup(slug)
-            if live.is_symlink() and live.resolve() == canonical_target:
-                continue
-            if live.is_symlink():
-                raise ValueError(f"{slug}: existing Gemini symlink targets a different canonical card")
+            try:
+                ownership = ownership_lookup(slug)
+            except KeyError:
+                raise ValueError(f"{slug}: not approved for Gemini reconciliation; add an ownership record first")
+
+            if ownership.action == "preserve-external":
+                raise ValueError(f"{slug}: preserve-external action cannot be reconciled")
+
+            canonical_target = Path(ownership.canonical_path)
+
+            if ownership.action == "link":
+                if live.is_symlink() and live.resolve() == canonical_target.resolve():
+                    continue
+                if live.is_symlink():
+                    raise ValueError(f"{slug}: existing Gemini symlink targets a different canonical card")
+
             source_digest = _tree_sha256(live)
+            source_text = ""
+            if live.exists():
+                skill_md = live / "SKILL.md"
+                if skill_md.is_file():
+                    source_text = skill_md.read_text(encoding="utf-8")
+
             archive_skill = archive_root / slug
             if live.exists():
                 if archive_skill.exists():
@@ -237,14 +305,23 @@ def reconcile_gemini(root: Path, archive_root: Path, only: set[str], target_look
             _remove_path(stage)
             _remove_path(rollback)
             try:
-                try:
-                    create_relative_link(stage, canonical_target)
-                    final_target_kind = "symlink"
-                except OSError as exc:
-                    if exc.errno not in _recognized_symlink_error_numbers():
-                        raise
-                    write_generated_wrapper(stage, canonical_target)
-                    final_target_kind = "generated-wrapper"
+                if ownership.action == "adapter":
+                    stage.mkdir(parents=True, exist_ok=False)
+                    if ownership.owner == "perpetua":
+                        stage.joinpath("SKILL.md").write_text(cross_repo_wrapper(ownership, source_text), encoding="utf-8")
+                        final_target_kind = "cross-repo-adapter"
+                    else:
+                        stage.joinpath("SKILL.md").write_text(gemini_adapter(ownership, source_text), encoding="utf-8")
+                        final_target_kind = "adapter"
+                else:
+                    try:
+                        create_relative_link(stage, canonical_target)
+                        final_target_kind = "symlink"
+                    except OSError as exc:
+                        if exc.errno not in _recognized_symlink_error_numbers():
+                            raise
+                        write_generated_wrapper(stage, canonical_target)
+                        final_target_kind = "generated-wrapper"
 
                 if live.exists() and _tree_sha256(live) != source_digest:
                     raise RuntimeError(f"{slug}: Gemini source changed before reconciliation commit")
@@ -282,11 +359,17 @@ def _gemini_slugs(root: Path, only: set[str] | None) -> set[str]:
     return {entry.name for entry in root.iterdir() if not entry.name.startswith(".") and (entry.is_dir() or entry.is_symlink())}
 
 
-def verify_gemini(root: Path, archive_root: Path, only: set[str] | None = None) -> list[RootFinding]:
+def verify_gemini(root: Path, archive_parent: Path, only: set[str] | None = None) -> list[RootFinding]:
     """Verify the inbound Gemini root and the archive receipt for every slug."""
     findings: list[RootFinding] = []
+
+    index_path = archive_parent / "index.json"
+    if not index_path.exists() and (archive_parent.parent / "index.json").exists():
+        archive_parent = archive_parent.parent
+        index_path = archive_parent / "index.json"
+
     try:
-        index = json.loads((archive_root / "index.json").read_text(encoding="utf-8"))
+        index = json.loads(index_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         index = {}
     except json.JSONDecodeError:
@@ -300,7 +383,7 @@ def verify_gemini(root: Path, archive_root: Path, only: set[str] | None = None) 
         if not isinstance(batch, str) or Path(batch).name != batch:
             findings.append(RootFinding(slug, "failed", f"{slug}: archive receipt index entry is missing"))
             continue
-        receipt_path = archive_root / batch / slug / ".receipt.json"
+        receipt_path = archive_parent / batch / slug / ".receipt.json"
         try:
             receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
         except (OSError, json.JSONDecodeError):
