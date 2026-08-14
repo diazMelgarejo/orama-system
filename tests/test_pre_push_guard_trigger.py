@@ -24,14 +24,19 @@ pytestmark = pytest.mark.unit
 def _init_repo(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True)
+    # An approved human identity (see tests/test_audit_engine.py), not an
+    # arbitrary "Tester" — audit_attribution.sh runs for real against these
+    # fixture commits once pre-push reaches its attribution-audit stage,
+    # and a non-allowlisted author blocks the push for a reason unrelated
+    # to what these tests actually check (found via review, PR 311).
     subprocess.run(
-        ["git", "config", "user.email", "tester@example.com"],
+        ["git", "config", "user.email", "lawrence@cyre.me"],
         cwd=path,
         check=True,
         capture_output=True,
     )
     subprocess.run(
-        ["git", "config", "user.name", "Tester"], cwd=path, check=True, capture_output=True
+        ["git", "config", "user.name", "cyre"], cwd=path, check=True, capture_output=True
     )
 
 
@@ -161,6 +166,11 @@ def test_helper_only_change_does_not_trigger_divergence_scan(tmp_path: Path) -> 
 
     result = _run_pre_push(repo, workspace, repo)
     combined = result.stdout + result.stderr
+    # returncode == 0, not just "divergence text absent" — the weaker form
+    # could pass vacuously if the hook crashed early for an unrelated
+    # reason (caught once already in this file's own history: see the
+    # fixture-setup commits above). Reviewed in PR 311.
+    assert result.returncode == 0, combined
     assert "guard-sync divergence" not in combined, combined
     assert "GUARD_SYNC_E_DIVERGENCE" not in combined, combined
 
@@ -194,3 +204,57 @@ def test_guard_managed_change_triggers_divergence_scan_and_fails_closed(
     assert result.returncode == 1, combined
     assert "guard-sync divergence" in combined, combined
     assert "GUARD_SYNC_E_DIVERGENCE" in combined, combined
+
+
+def test_githooks_change_triggers_scan_even_when_manifest_unavailable(
+    tmp_path: Path,
+) -> None:
+    """Reviewed in PR 311 (record 1343): the degraded fallback (manifest
+    file missing/unloadable) originally only recognized scripts/git/ paths
+    as guard-managed, even though the manifest also governs .githooks/
+    (GUARD_SYNC_GITHOOKS). A changed .githooks/commit-msg could therefore
+    skip divergence validation silently — fail-open in exactly the case
+    meant to be the safety net. With guard-sync-manifest.sh genuinely
+    absent, a .githooks/commit-msg change must still be treated as
+    guard-managed and attempt the divergence path (never a silent,
+    unblocked exit 0)."""
+    workspace = tmp_path / "ws"
+    repo = _setup_repo_with_origin(workspace)
+    # Remove the manifest from THIS fixture only, after setup, so the
+    # baseline commit history still has it (matching how a real repo would
+    # look right up until the moment of a corrupted/incomplete checkout) —
+    # what matters is that it's absent at push time, when pre-push sources it.
+    manifest = repo / "scripts" / "git" / "guard-sync-manifest.sh"
+    manifest.unlink()
+    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "commit", "--no-verify", "-m", "simulate missing guard-sync-manifest.sh"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+    _commit_file(
+        repo,
+        ".githooks/commit-msg",
+        "#!/usr/bin/env bash\necho changed\n",
+        "modify manifest-managed githook",
+    )
+
+    sibling = workspace / "Perpetua-Tools"
+    _init_repo(sibling)
+    _commit_file(
+        sibling,
+        "scripts/git/audit_engine.py",
+        "# sibling mutation absent from canonical\n",
+        "sibling mutation",
+    )
+
+    result = _run_pre_push(repo, workspace, repo)
+    combined = result.stdout + result.stderr
+    # Before the fix: guard_touch never set, hook exits 0 silently, the
+    # .githooks/commit-msg change ships unvalidated. After the fix: the
+    # fallback recognizes .githooks/ too, the divergence path is attempted
+    # (and fails here, since check-guard-sync-divergence.sh also needs the
+    # now-missing manifest) — never a silent, unblocked pass-through.
+    assert result.returncode == 1, combined
+    assert "guard-sync divergence" in combined, combined

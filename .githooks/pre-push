@@ -38,7 +38,13 @@ _is_guard_managed_path() {
   fi
   # Manifest unavailable — fail closed to the old, broader directory-wide
   # trigger rather than silently skipping the divergence check entirely.
-  [[ "$path" =~ ^scripts/git/ ]]
+  # Must cover .githooks/ too, not just scripts/git/: the manifest governs
+  # both (GUARD_SYNC_GITHOOKS), so a degraded fallback that only matched
+  # scripts/git/ would let a manifest-managed githook change (e.g.
+  # .githooks/commit-msg) skip divergence validation exactly when the
+  # manifest is unavailable — fail-open in precisely the case meant to be
+  # the safety net (caught in review, PR 311).
+  [[ "$path" =~ ^(scripts/git/|\.githooks/) ]]
 }
 
 # Guard: scrub macOS .DS_Store from .git/ internals (see scrub_dsstore.sh).
