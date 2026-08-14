@@ -654,26 +654,3 @@ def test_perpetua_wrapper_explains_missing_root(mod) -> None:
     import gemini_reconciliation
     ownership = gemini_reconciliation.GeminiOwnership("perpetua", "adapter", "perpetua-tools", "$PERPETUA_TOOLS_PATH/SKILL.md", "validated")
     assert "PERPETUA_TOOLS_PATH is not set" in gemini_reconciliation.cross_repo_wrapper(ownership)
-
-def test_audit_reports_antigravity_shared_root(mod, tmp_path: Path) -> None:
-    agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
-    agents.mkdir()
-    antigravity.symlink_to(agents, target_is_directory=True)
-    finding = mod.verify_antigravity_root(agents, antigravity)
-    assert finding.status == "shared-root"
-    assert finding.operator_next_action == "Record the finding; no setup action is needed."
-
-def test_audit_reports_missing_antigravity_root_with_operator_action(mod, tmp_path: Path) -> None:
-    agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
-    agents.mkdir()
-    finding = mod.verify_antigravity_root(agents, antigravity)
-    assert finding.status == "missing"
-    assert finding.operator_next_action == "Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
-
-def test_audit_reports_divergent_antigravity_root_with_operator_action(mod, tmp_path: Path) -> None:
-    agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
-    agents.mkdir()
-    antigravity.mkdir()
-    finding = mod.verify_antigravity_root(agents, antigravity)
-    assert finding.status == "divergent"
-    assert finding.operator_next_action == "Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology."

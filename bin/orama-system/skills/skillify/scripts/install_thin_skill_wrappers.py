@@ -533,7 +533,7 @@ def verify(only: set[str] | None = None) -> list[str]:
 
 
 def verify_antigravity_root(shared_agents_root: Path, antigravity_root: Path) -> RootFinding:
-    if not antigravity_root.exists() and not antigravity_root.is_symlink():
+    if not shared_agents_root.exists() or not antigravity_root.exists():
         return RootFinding(
             slug="",
             status="missing",
