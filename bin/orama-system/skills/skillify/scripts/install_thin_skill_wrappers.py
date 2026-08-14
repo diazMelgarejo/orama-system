@@ -748,11 +748,11 @@ def main() -> int:
         if args.force_unlock:
             if args.force_unlock not in only:
                 parser.error("--force-unlock slug must be included in --only")
-            force_unlock_gemini(archive_root, args.force_unlock)
+            force_unlock_gemini(gemini_root, args.force_unlock)
         else:
             manifest_path = Path(__file__).resolve().parent.parent / "references" / "gemini-skill-ownership.json"
             ownership_dict = load_gemini_ownership(manifest_path)
-            written = reconcile_gemini(gemini_root, archive_root, only, lambda s: ownership_dict[s])
+            written = reconcile_gemini(gemini_root, archive_root, only, lambda s: ownership_dict[s], canonical_root=ROOT)
             print(f"reconciled {len(written)} Gemini skill directories")
     if args.install:
         written = install(args.dry_run, only=only)

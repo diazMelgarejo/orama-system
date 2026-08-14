@@ -112,10 +112,18 @@ def _tree_sha256(path: Path) -> str:
 
     Reconciliation receipts live inside the archive directory, so they are
     deliberately excluded from the content digest they attest to.
+
+    A nonexistent path and an existing-but-empty directory both mean "no
+    content" and must hash identically -- a fresh install writes this digest
+    for a slug that has no live directory yet, and verify later recomputes it
+    against the archive directory _write_receipt itself creates (which then
+    exists, containing only the excluded .receipt.json). Returning a bare ""
+    for "doesn't exist" but a real sha256-of-empty-input for "exists but
+    empty" made every fresh install fail verify against its own receipt.
     """
-    if not path.is_dir():
-        return ""
     digest = hashlib.sha256()
+    if not path.is_dir():
+        return digest.hexdigest()
     for child in sorted(path.rglob("*"), key=lambda candidate: candidate.relative_to(path).as_posix()):
         relative = child.relative_to(path).as_posix()
         if relative == ".receipt.json":
@@ -157,8 +165,15 @@ def write_generated_wrapper(target: Path, source: Path) -> None:
     )
 
 
-def _lock_path(archive_root: Path) -> Path:
-    return archive_root / ".reconcile.lock"
+def _lock_path(root: Path) -> Path:
+    """The lock lives beside the LIVE root being mutated, not the archive
+    root. The real CLI timestamps a fresh --archive-root per invocation
+    (see Task 3/4's own example commands), so two invocations against the
+    same live root but different archive roots would each acquire their own
+    lock file and never contend -- the thing that actually needs
+    serialization is the live directory, so that is what the lock is keyed
+    on."""
+    return root / ".reconcile.lock"
 
 
 def _pid_is_live(pid: object) -> bool:
@@ -186,7 +201,8 @@ def _read_lock_payload(lock_path: Path) -> dict[str, object]:
 def acquire_reconcile_lock(archive_root: Path, source_root: Path, only: set[str]) -> Path:
     """Atomically acquire a reconciliation lock; never reclaim it implicitly."""
     archive_root.mkdir(parents=True, exist_ok=True)
-    lock_path = _lock_path(archive_root)
+    source_root.mkdir(parents=True, exist_ok=True)
+    lock_path = _lock_path(source_root)
     payload = {
         "pid": os.getpid(),
         "started_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
@@ -215,9 +231,9 @@ def release_reconcile_lock(lock_path: Path) -> None:
     lock_path.unlink(missing_ok=True)
 
 
-def force_unlock_gemini(archive_root: Path, slug: str) -> dict[str, object]:
+def force_unlock_gemini(root: Path, slug: str) -> dict[str, object]:
     """Explicit, logged recovery for a lock whose owner process is gone."""
-    lock_path = _lock_path(archive_root)
+    lock_path = _lock_path(root)
     if not lock_path.exists():
         raise FileNotFoundError(f"{slug}: no reconciliation lock at {lock_path}")
     payload = _read_lock_payload(lock_path)
@@ -269,8 +285,26 @@ def _write_receipt(
     index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
-def reconcile_gemini(root: Path, archive_root: Path, only: set[str], ownership_lookup: Callable[[str], GeminiOwnership]) -> list[Path]:
-    """Archive-first reconciliation using Task 2 ownership manifest."""
+def reconcile_gemini(
+    root: Path,
+    archive_root: Path,
+    only: set[str],
+    ownership_lookup: Callable[[str], GeminiOwnership],
+    canonical_root: Path | None = None,
+) -> list[Path]:
+    """Archive-first reconciliation using Task 2 ownership manifest.
+
+    canonical_root anchors a repo-relative canonical_path (the normal manifest
+    shape, e.g. "bin/orama-system/skills/code-review/SKILL.md") for the
+    filesystem symlink Task 2's "link" action creates. Without it, a relative
+    canonical_path would resolve against the calling process's CWD, so the
+    same on-disk symlink and the receipt describing it would only happen to
+    agree with each other -- both computed from whatever directory the CLI
+    happened to be invoked from -- without ever being checked against the
+    real canonical location. A caller-supplied absolute canonical_path is
+    used as-is regardless of canonical_root (adapter/cross-repo-adapter
+    actions embed canonical_path as descriptive text, not a filesystem
+    target, and are unaffected by this)."""
     if not only:
         raise ValueError("Gemini reconciliation requires at least one --only slug")
     lock_path = acquire_reconcile_lock(archive_root, root, only)
@@ -288,6 +322,13 @@ def reconcile_gemini(root: Path, archive_root: Path, only: set[str], ownership_l
                 raise ValueError(f"{slug}: preserve-external action cannot be reconciled")
 
             canonical_target = Path(ownership.canonical_path)
+            if ownership.action == "link" and not canonical_target.is_absolute():
+                if canonical_root is None:
+                    raise ValueError(
+                        f"{slug}: canonical_path '{ownership.canonical_path}' is repo-relative "
+                        "but reconcile_gemini was not given canonical_root to anchor it against"
+                    )
+                canonical_target = (canonical_root / canonical_target).resolve()
 
             if ownership.action == "link":
                 if live.is_symlink() and live.resolve() == canonical_target.resolve():
@@ -311,7 +352,11 @@ def reconcile_gemini(root: Path, archive_root: Path, only: set[str], ownership_l
                 if source_digest != archive_digest:
                     raise RuntimeError(f"{slug}: archive digest does not match source")
             else:
-                archive_digest = ""
+                # archive_skill does not exist yet (nothing to copy for a
+                # fresh install). _tree_sha256 of a nonexistent path now
+                # returns the same "no content" digest verify will later
+                # recompute against the archive dir _write_receipt creates.
+                archive_digest = _tree_sha256(archive_skill)
 
             stage = root / f".{slug}.reconcile-staging"
             rollback = root / f".{slug}.reconcile-rollback"
@@ -336,23 +381,37 @@ def reconcile_gemini(root: Path, archive_root: Path, only: set[str], ownership_l
                         write_generated_wrapper(stage, canonical_target)
                         final_target_kind = "generated-wrapper"
 
-                if live.exists() and _tree_sha256(live) != source_digest:
+                had_live = live.exists()
+                if had_live and _tree_sha256(live) != source_digest:
                     raise RuntimeError(f"{slug}: Gemini source changed before reconciliation commit")
-                if live.exists():
-                    os.replace(live, rollback)
-                    try:
-                        os.replace(stage, live)
-                    except BaseException:
-                        # Defense in depth: finally block restores rollback, but this inner rescue
-                        # restores it immediately before propagating the staging failure.
-                        os.replace(rollback, live)
-                        raise
-                    _remove_path(rollback)
-                else:
+
+                # The receipt is the ONLY proof a reconciliation happened and
+                # the ONLY thing verify_gemini can check for recoverability
+                # (P1-2). A swap that lands but whose receipt fails to write
+                # (e.g. a corrupt archive index.json) is exactly the
+                # unrecoverable state this plan exists to prevent, so receipt
+                # failure is treated identically to swap failure: restore the
+                # previously-live content, or -- for a slug with no prior
+                # content -- remove the fresh install entirely, so the net
+                # effect of a failed reconciliation is always "as if it never
+                # ran."
+                try:
+                    if had_live:
+                        os.replace(live, rollback)
                     os.replace(stage, live)
-                _write_receipt(
-                    archive_root, slug, source_digest, archive_digest, final_target_kind, canonical_target
-                )
+                    _write_receipt(
+                        archive_root, slug, source_digest, archive_digest, final_target_kind, canonical_target
+                    )
+                except BaseException:
+                    # Safe no-op if live was never successfully replaced (the
+                    # stage->live swap itself is what failed); clears the new
+                    # content if the swap succeeded but the receipt did not.
+                    _remove_path(live)
+                    if had_live:
+                        os.replace(rollback, live)
+                    raise
+                if had_live:
+                    _remove_path(rollback)
                 changed.append(live)
             finally:
                 _remove_path(stage)

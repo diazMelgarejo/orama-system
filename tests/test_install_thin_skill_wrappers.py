@@ -422,9 +422,12 @@ def test_lock_contention_fails_cleanly(mod, tmp_path: Path) -> None:
 
 
 def test_lock_terminated_owner_requires_guarded_recovery(mod, tmp_path: Path) -> None:
+    # Lock lives beside the live root (not the archive root) since the
+    # timestamped archive root changes per invocation and the live root is
+    # the thing that actually needs serializing.
     root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
-    archive.mkdir(parents=True)
-    lock_path = archive / ".reconcile.lock"
+    root.mkdir(parents=True)
+    lock_path = root / ".reconcile.lock"
     stale_payload = {"pid": 99999999, "started_at": "2026-08-14T00:00:00Z", "source_digest": "a" * 64}
     lock_path.write_text(json.dumps(stale_payload), encoding="utf-8")
 
@@ -432,7 +435,7 @@ def test_lock_terminated_owner_requires_guarded_recovery(mod, tmp_path: Path) ->
         mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
     assert lock_path.exists()
 
-    recovered = mod.force_unlock_gemini(archive, "code-review")
+    recovered = mod.force_unlock_gemini(root, "code-review")
 
     assert recovered == stale_payload
     assert not lock_path.exists()
@@ -451,7 +454,7 @@ def test_second_run_over_same_slug_is_a_no_op(mod, tmp_path: Path) -> None:
     assert first == [root / "code-review"]
     assert second == []
     assert sorted(archive.rglob("*")) == archived_before_second_run
-    assert not (archive / ".reconcile.lock").exists()
+    assert not (root / ".reconcile.lock").exists()
 
 
 # ── P1-4: activation-rollback. The data-loss path the whole plan exists to
@@ -504,7 +507,7 @@ def test_live_skill_survives_when_every_activation_path_fails(
     # No staging or rollback debris left behind in the user's skill root.
     assert not list(root.glob(".*reconcile-staging"))
     assert not list(root.glob(".*reconcile-rollback"))
-    assert not (archive / ".reconcile.lock").exists()
+    assert not (root / ".reconcile.lock").exists()
 
 
 def test_live_skill_is_restored_when_the_swap_fails_after_archive(
@@ -538,7 +541,7 @@ def test_live_skill_is_restored_when_the_swap_fails_after_archive(
     assert (live / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
     assert (live / "references" / "notes.md").read_text(encoding="utf-8") == "reference body\n"
     assert not list(root.glob(".*reconcile-rollback"))
-    assert not (archive / ".reconcile.lock").exists()
+    assert not (root / ".reconcile.lock").exists()
 
 
 def test_audit_reports_antigravity_shared_root(mod: ModuleType, tmp_path: Path) -> None:
@@ -654,3 +657,131 @@ def test_perpetua_wrapper_explains_missing_root(mod) -> None:
     import gemini_reconciliation
     ownership = gemini_reconciliation.GeminiOwnership("perpetua", "adapter", "perpetua-tools", "$PERPETUA_TOOLS_PATH/SKILL.md", "validated")
     assert "PERPETUA_TOOLS_PATH is not set" in gemini_reconciliation.cross_repo_wrapper(ownership)
+
+
+# ── Post-consolidation findings (codex-reviewer, fc384e6b review + independent
+# confirmation, board records 1432/1440): four issues that survive the
+# consolidated tip (824bb503). Bug 4 (adapter/cross-repo-adapter verify) and
+# the duplicate-shadowing tests were already closed upstream by agy/codex;
+# these four were not.
+
+
+def test_fresh_install_digest_is_self_consistent(mod, tmp_path: Path) -> None:
+    """Bug 5: _tree_sha256 must not return a different sentinel for 'path does
+    not exist' than it returns for 'path exists but is empty' — reconcile
+    writes the former as the receipt digest, verify recomputes the latter
+    against the archive dir _write_receipt itself creates, and the two must
+    describe the same 'no content' state or every fresh install fails verify."""
+    import gemini_reconciliation as gr
+    missing = tmp_path / "does-not-exist"
+    empty = tmp_path / "empty-dir"
+    empty.mkdir()
+    assert gr._tree_sha256(missing) == gr._tree_sha256(empty)
+
+
+def test_fresh_install_passes_verify_both_directions(mod, tmp_path: Path) -> None:
+    """The end-to-end version of the digest bug: a slug that never existed in
+    the Gemini root before reconciliation must still pass verify_gemini once
+    reconciled, and an unreconciled fresh root must still fail it."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini", tmp_path / "archive" / "batch-1"
+    ownership = gr.GeminiOwnership("orama", "link", "orama-afrp", str(tmp_path / "canonical" / "SKILL.md"), "none")
+    canonical = tmp_path / "canonical" / "SKILL.md"
+    canonical.parent.mkdir(parents=True)
+    canonical.write_text("canonical\n", encoding="utf-8")
+
+    findings_before = mod.verify_gemini(root, archive, {"orama-afrp"})
+    assert findings_before and findings_before[0].status == "failed"
+
+    mod.reconcile_gemini(root, archive, {"orama-afrp"}, lambda s: ownership)
+    findings_after = mod.verify_gemini(root, archive, {"orama-afrp"})
+    assert findings_after == []
+
+
+def test_lock_scoped_to_live_root_not_timestamped_archive(mod, tmp_path: Path) -> None:
+    """Bug 1: two invocations with DIFFERENT --archive-root values (the real
+    CLI timestamps a fresh one per run) against the SAME live root must
+    contend on the same lock, not acquire two independent ones."""
+    root = tmp_path / "gemini" / "skills"
+    archive_a = tmp_path / "archive" / "batch-a"
+    archive_b = tmp_path / "archive" / "batch-b"
+    lock = mod.acquire_reconcile_lock(archive_a, root, {"code-review"})
+    try:
+        with pytest.raises(mod.ReconcileLockHeldError):
+            mod.acquire_reconcile_lock(archive_b, root, {"code-review"})
+    finally:
+        mod.release_reconcile_lock(lock)
+
+
+def test_link_target_anchored_to_repo_root_not_caller_cwd(mod, tmp_path: Path, monkeypatch) -> None:
+    """Bug 2: a manifest canonical_path is repo-relative (e.g.
+    'bin/orama-system/skills/code-review/SKILL.md'). The real symlink must
+    resolve against the repo root regardless of the process's CWD at
+    invocation time -- not accidentally agree with itself only because
+    creation and verification happened to run from the same directory."""
+    import gemini_reconciliation as gr
+
+    repo_root = tmp_path / "repo"
+    canonical_dir = repo_root / "bin" / "orama-system" / "skills" / "code-review"
+    canonical_dir.mkdir(parents=True)
+    (canonical_dir / "SKILL.md").write_text("canonical\n", encoding="utf-8")
+
+    other_cwd = tmp_path / "somewhere-else-entirely"
+    other_cwd.mkdir()
+    monkeypatch.chdir(other_cwd)
+
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    ownership = gr.GeminiOwnership(
+        "orama", "link", "code-review", "bin/orama-system/skills/code-review/SKILL.md", "none"
+    )
+    mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership, canonical_root=repo_root)
+
+    live = root / "code-review"
+    assert live.is_symlink()
+    assert live.resolve() == canonical_dir / "SKILL.md"
+
+
+def test_receipt_write_failure_restores_previously_live_skill(mod, tmp_path: Path, monkeypatch) -> None:
+    """Bug 3: if _write_receipt raises AFTER the stage->live swap succeeds
+    (e.g. a corrupt index.json), the live directory must be restored to its
+    PRE-reconciliation state, not left as an unreceipted, unverifiable
+    mutation. A receipt is the only proof reconciliation happened; a swap
+    without one is exactly the unrecoverable state this plan exists to
+    prevent."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    old = root / "code-review"
+    old.mkdir(parents=True)
+    (old / "SKILL.md").write_text("old Gemini card\n", encoding="utf-8")
+
+    archive.mkdir(parents=True)
+    (archive.parent / "index.json").write_text("not valid json{{{", encoding="utf-8")
+
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    with pytest.raises(ValueError, match="archive index is invalid JSON"):
+        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
+
+    live = root / "code-review"
+    assert live.is_dir() and not live.is_symlink()
+    assert (live / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
+
+
+def test_receipt_write_failure_removes_fresh_install(mod, tmp_path: Path) -> None:
+    """Symmetric case: nothing existed at this slug before, the swap
+    succeeds, then the receipt write fails. The correct end state is 'as if
+    reconciliation never ran' -- no half-installed, unreceipted skill."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    archive.mkdir(parents=True)
+    (archive.parent / "index.json").write_text("not valid json{{{", encoding="utf-8")
+
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    with pytest.raises(ValueError, match="archive index is invalid JSON"):
+        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
+
+    live = root / "code-review"
+    # .exists() alone follows a dangling symlink and reports False even when
+    # the symlink entry is still on disk -- check both, or this assertion
+    # passes for the wrong reason (a link_target that happens not to exist
+    # rather than a genuinely absent slug).
+    assert not live.is_symlink() and not live.exists()
