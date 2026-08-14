@@ -13,7 +13,7 @@ audit, unless marked "re-verified."
 Supersedes `2026-07-25-pending-work-tracker.md` and stale docs-scan HEAD.
 
 **Current PT operational disposition (2026-08-14):**
-[`2026-08-14-operational-work-disposition.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/feat/tier5-asgi-harmonized-20260811/docs/next/2026-08-14-operational-work-disposition.md)
+[`2026-08-14-operational-work-disposition.md`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/bce4970cad5278446d56d4bd3e727e16215bae6a/docs/next/2026-08-14-operational-work-disposition.md)
 records verified closures, audit gates, deferred v2 work, and the current
 Tier-5 release block. The companion contract-migration method is
 [`bin/orama-system/skills/oramasys-method/references/contract-migration.md`](../../bin/orama-system/skills/oramasys-method/references/contract-migration.md).

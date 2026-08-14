@@ -226,13 +226,6 @@ def test_githooks_change_triggers_scan_even_when_manifest_unavailable(
     # what matters is that it's absent at push time, when pre-push sources it.
     manifest = repo / "scripts" / "git" / "guard-sync-manifest.sh"
     manifest.unlink()
-    subprocess.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
-    subprocess.run(
-        ["git", "commit", "--no-verify", "-m", "simulate missing guard-sync-manifest.sh"],
-        cwd=repo,
-        check=True,
-        capture_output=True,
-    )
     _commit_file(
         repo,
         ".githooks/commit-msg",

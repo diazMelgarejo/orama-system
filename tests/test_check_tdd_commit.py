@@ -4,8 +4,12 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/git/check_tdd_commit.sh"
+
+pytestmark = pytest.mark.unit
 
 
 def _git(tmp_path: Path, *args: str) -> None:
@@ -29,11 +33,11 @@ def _run_hook(tmp_path: Path, message: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_check_tdd_commit_bash_syntax():
+def test_check_tdd_commit_bash_syntax() -> None:
     subprocess.run(["bash", "-n", str(SCRIPT)], check=True, cwd=ROOT)
 
 
-def test_check_tdd_commit_allows_empty_index_under_bash32_nounset(tmp_path: Path):
+def test_check_tdd_commit_allows_empty_index_under_bash32_nounset(tmp_path: Path) -> None:
     """A docs-only commit with no staged paths must not expand an empty array."""
     _init_repo(tmp_path)
     result = _run_hook(tmp_path, "docs: empty index\n")

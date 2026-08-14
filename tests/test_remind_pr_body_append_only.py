@@ -5,9 +5,13 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts/git/remind-pr-body-append-only.sh"
+
+pytestmark = pytest.mark.unit
 
 
 def test_reminder_defaults_cursor_agents_to_comments_and_names_grant_exception(
