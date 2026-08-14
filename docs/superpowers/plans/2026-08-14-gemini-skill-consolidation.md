@@ -36,6 +36,98 @@
 
 Review-only candidates: `autoplan`, `autoresearch`, `codex`, `deep-research`, `diagram`, `kimi-webbridge`, `oramasys-skillify`, `setup-gbrain`, and `sync-gbrain`.
 
+### Task 0: P1 Review Fixes (prerequisite)
+
+**Status:** Required before Task 1 begins. This task folds the appended
+/autoplan Eng review's CRITICAL GAPs — Implementation Tasks T1, T2, and T8
+below — into concrete interface requirements so every downstream task builds
+on the corrected contract from the start, instead of patching it in later.
+
+**Files:**
+- Modify: `bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py`
+  (or the split module introduced later by Implementation Task T6, if that
+  refactor lands first)
+- Modify: `tests/test_install_thin_skill_wrappers.py`
+
+**Fix 1 — Gemini-aware verification path (Implementation Task T1, CRITICAL GAP).**
+The existing `verify(only: set[str] | None = None) -> list[str]` (line
+399-451) iterates `TARGET_ROOTS` only — Codex/Agents roots — and has no
+parameter or hook for a Gemini root, so a `--verify` call after Task 7 prints
+`"verification passed"` regardless of whether Gemini reconciliation ran,
+partially ran, or did nothing. Add a distinct, explicitly named function:
+
+~~~python
+def verify_gemini(root: Path, only: set[str] | None = None) -> list[RootFinding]:
+    ...
+~~~
+
+Task 7's `--verify --only <gemini slugs>` invocation MUST route every Gemini
+slug to `verify_gemini`, never to the existing `TARGET_ROOTS`-scoped
+`verify()`. The two verification paths may share helpers but must stay
+structurally separate so a Gemini-only verify run cannot silently fall
+through to the wrong root list and pass by accident.
+
+Required failing test (write first): a verify run against a Gemini root where
+reconciliation did **not** happen (regular directory still present, no
+archive receipt, no symlink) must have `verify_gemini` return a non-empty
+`list[RootFinding]` reporting failure — the CLI must exit non-zero, not print
+"verification passed".
+
+**Fix 2 — narrow the OSError catch-all (Implementation Task T2, CRITICAL GAP).**
+The symlink-fallback path in Task 2 Step 4 (exercised by Step 5's
+`test_reconcile_falls_back_to_wrapper_when_symlink_fails`) must NOT catch
+`OSError` generically. Catch only the specific errno values that indicate
+"this platform/filesystem does not support symlinks" —
+`errno.EPERM`, `errno.ENOSYS`, and `errno.EOPNOTSUPP` (check availability per
+platform; not all three are defined everywhere) — and re-raise every other
+`OSError` unchanged.
+
+Required test: an `OSError` raised with an unrelated errno (e.g.
+`errno.ENOSPC`, disk full) from `create_relative_link` must propagate out of
+`reconcile_gemini` unmodified — it must NOT be caught and must NOT produce a
+generated wrapper.
+
+**Fix 3 — concurrency guard on `reconcile_gemini` (Implementation Task T8;
+Eng verdict treats this as P-critical for this plan despite its P2 label in
+the Implementation Tasks list below, because this plan's own execution model
+— "fresh agent per task," see Execution Handoff — makes racing invocations of
+`reconcile_gemini` over the same slug reachable, not theoretical).**
+Add a lightweight sentinel lock (e.g. an `<archive_root>/.reconcile.lock`
+file, held for the duration of one `reconcile_gemini` call and released on
+exit including on error) plus a source-revalidation check immediately before
+the archive-then-symlink commit.
+
+Required test: an idempotence test that invokes `reconcile_gemini` twice in a
+row over the same slug and asserts the second call is a no-op — it must not
+raise, must not create a second archive copy, and must not leave a stale lock
+artifact.
+
+- [ ] **Step 1: Write the three failing tests above** — Gemini-verify-reports-
+  failure-when-not-reconciled, OSError-with-unrelated-errno-propagates,
+  second-run-over-same-slug-is-a-no-op
+
+- [ ] **Step 2: Run the tests to confirm failure**
+
+Run: `pytest tests/test_install_thin_skill_wrappers.py -q`
+Expected: FAIL — `verify_gemini` does not exist yet, the narrow errno check
+does not exist yet, and there is no lock.
+
+- [ ] **Step 3: Implement `verify_gemini`, the narrow errno check, and the
+  sentinel lock** exactly as specified above. These three interfaces are
+  prerequisites for Task 2 (Step 4's symlink-fallback logic must use the
+  narrow errno check and the lock from the start, not a bare `except OSError`)
+  and for Task 7 (the `--verify` call must route Gemini slugs to
+  `verify_gemini`). Later tasks build directly on these corrected interfaces
+  rather than re-deriving equivalent logic.
+
+- [ ] **Step 4: Verify and commit**
+
+~~~bash
+pytest tests/test_install_thin_skill_wrappers.py -q
+git add bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py tests/test_install_thin_skill_wrappers.py
+git commit -m "fix(skills): add Gemini-aware verify, narrow OSError catch, reconcile lock (P1 review fixes)"
+~~~
+
 ### Task 1: Add A Read-Only Cross-Root Inventory
 
 **Files:**
@@ -158,7 +250,21 @@ Every record contains `owner`, `action`, `canonical_slug`, `canonical_path`, and
 }
 ~~~
 
-Populate the remaining records from the Disposition Matrix. Do not include absolute paths.
+**`metadata_policy` enum (complete set — Implementation Task T4).** Every
+`GeminiOwnership` record's `metadata_policy` must be one of exactly these
+three values; no other value is permitted:
+
+| Value | Meaning | Applies to (action) | Example |
+| --- | --- | --- | --- |
+| `none` | No Gemini frontmatter is preserved — the slug becomes a plain symlink to the canonical `SKILL.md`, so there is nothing Gemini-specific left to validate. | `link` | `code-review`, `git-history-surgery`, `orama-afrp` |
+| `validated` | The adapter keeps only frontmatter keys that were checked against current official Gemini CLI documentation at implementation time; any other key found in the source card is an `unsupported frontmatter` error (Task 2 Step 5) and blocks reconciliation for that slug. | `adapter` | `agent-methodology` retains `user-invocable: false` only after that key is confirmed current; `orama-gstack`, `orama-system`, `oramasys-method`, and the Perpetua cross-repo adapters (Task 4) all use `validated` |
+| `external` | Orama does not read, validate, or manage the slug's frontmatter at all — ownership and metadata both belong to the external project. | `preserve-external` | `skillify`, `gstack-upgrade` |
+
+Populate the remaining records from the Disposition Matrix, giving every
+`link` row `metadata_policy: "none"`, every `adapter` row (including the four
+Perpetua cross-repo adapters in Task 4) `metadata_policy: "validated"`, and
+every `preserve-external` row `metadata_policy: "external"`. Do not include
+absolute paths.
 
 - [ ] **Step 4: Implement safe reconciliation**
 
@@ -239,10 +345,19 @@ Verify current official Gemini frontmatter before retaining `user-invocable: fal
 python3 bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py \
   --reconcile-gemini \
   --only agent-methodology,code-review,git-history-surgery,orama-afrp,orama-gstack,orama-system,oramasys-method \
-  --archive-root "$HOME/.gemini/skills-archive/<timestamp>"
+  --archive-root "$HOME/.gemini/skills-archive/$(date -u +%Y%m%dT%H%M%SZ)"
 ~~~
 
-- [ ] **Step 4: Verify and commit**
+- [ ] **Step 4: Regenerate the inventory doc (Implementation Task T5)**
+
+Re-run the audit and update `docs/reference/gemini-skill-consolidation-inventory.md`'s
+"Latest audit snapshot" section with the fresh `--audit-gemini` output —
+replace the previous snapshot but keep the Disposition Matrix and narrative
+context above it (Task 1 Step 4) intact. Do not skip this step; it is what
+keeps the inventory doc from silently going stale after each reconciliation
+batch.
+
+- [ ] **Step 5: Verify and commit**
 
 ~~~bash
 pytest tests/test_install_thin_skill_wrappers.py -q
@@ -283,10 +398,16 @@ The adapter validates `PERPETUA_TOOLS_PATH` and the expected repository-relative
 python3 bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py \
   --reconcile-gemini \
   --only perpetua-tools,perpetua-config,perpetua-hardware,perpetua-startup-intelligence \
-  --archive-root "$HOME/.gemini/skills-archive/<timestamp>"
+  --archive-root "$HOME/.gemini/skills-archive/$(date -u +%Y%m%dT%H%M%SZ)"
 ~~~
 
-- [ ] **Step 3: Verify and commit**
+- [ ] **Step 3: Regenerate the inventory doc (Implementation Task T5)**
+
+Re-run the audit and update `docs/reference/gemini-skill-consolidation-inventory.md`'s
+"Latest audit snapshot" section with the fresh `--audit-gemini` output,
+keeping the Disposition Matrix and narrative context above it intact.
+
+- [ ] **Step 4: Verify and commit**
 
 ~~~bash
 pytest tests/test_install_thin_skill_wrappers.py -q
@@ -384,10 +505,17 @@ def test_gemini_only_candidates_are_not_reconcilable_without_approval(mod) -> No
             mod.validate_reconciliation_request({slug})
 ~~~
 
-- [ ] **Step 4: Verify and commit the analysis-only batch**
+- [ ] **Step 4: Regenerate the inventory doc (Implementation Task T5)**
+
+Re-run `--audit-gemini` and update `docs/reference/gemini-skill-consolidation-inventory.md`'s
+"Latest audit snapshot" section with the fresh output, keeping the
+Disposition Matrix and narrative context above it intact.
+
+- [ ] **Step 5: Verify and commit the analysis-only batch**
 
 ~~~bash
 pytest tests/test_install_thin_skill_wrappers.py -q
+python3 bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py --audit-gemini
 python3 scripts/review/check_orama_skills.py --mode strict .
 python3 scripts/review/repo_hygiene.py .
 git diff --check
@@ -434,6 +562,7 @@ git commit -m "docs(skills): record Gemini consolidation verification"
 
 | Requirement | Plan coverage |
 | --- | --- |
+| Gemini-aware verify, narrow OSError catch, reconcile lock (P1 review CRITICAL GAPs T1/T2/T8) | Task 0 |
 | Reconcile thirteen divergent cards without destructive overwrite | Tasks 2 through 5 |
 | Promote behavior only into its true owner | Disposition Matrix, Tasks 3 and 4 |
 | Preserve gstack collision boundary | Task 5 |
