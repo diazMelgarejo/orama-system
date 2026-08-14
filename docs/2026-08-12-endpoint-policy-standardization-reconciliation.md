@@ -9,6 +9,28 @@
 
 ---
 
+## The actual goal, stated explicitly
+
+Everything documented below — the SSRF/transport-identity gap closure, the stale-test
+cleanup, the parity checker, the NPM translation of PT's AlphaClaw controller — is a
+means, not the end. The original plan's own I1/I2 name the real target directly:
+
+> **I1 — Zero-config default:** every package runs with no required flags; all config
+> has a sensible default. Config is *optional* refinement, never a precondition.
+> **I2 — Consistent defaults across repos:** shared concepts (endpoint policy, config
+> dir, log level, telemetry opt-in) resolve to identical defaults everywhere.
+
+This reconciliation initially listed I1/I2 as "not addressed" alongside I3/I4/I5 as if
+they were peer checklist items. They aren't peers — I1/I2 are the outcome the other
+three exist to serve. A validator that's correct but not consistently packaged (I3), a
+discovery mechanism that's sound but not zero-config by default (I4), errors that fail
+closed but aren't uniformly typed (I5) — none of that adds up to "install and run great
+together with sensible defaults" on its own. That composition work hasn't happened yet.
+See **Next Steps** at the end of this document for what executing I1/I2 directly, rather
+than assuming it falls out of the supporting work, actually requires.
+
+---
+
 ## Scope note on evidence
 
 All SHAs below are on branch `2026-08-12-endpoint-policy-standardization`, pushed to
@@ -17,8 +39,9 @@ deliberately reused across repos so the paired cross-repo work stays connected �
 PT `lesson_df682761347f`). Neither branch has a PR open yet; opening one requires a
 token with PR-creation scope, which this session's git-push-only token doesn't have.
 
-- orama-system range: `fde9d460..ae1e454a` (4 commits)
-- Perpetua-Tools range: `2cd0d894..74779e00` (7 commits, including the memory lesson)
+- orama-system range: `fde9d460..ae1e454a` (4 commits), plus this doc and its updates
+- Perpetua-Tools range: `2cd0d894..ea104aee` (10 commits: the security work, the memory
+  lessons, and the AlphaClaw-controller NPM translation)
 
 ---
 
@@ -43,8 +66,8 @@ token with PR-creation scope, which this session's git-push-only token doesn't h
 
 | Invariant | Plan | Reality | Status |
 | --- | --- | --- | --- |
-| I1 — Zero-config default | Every package runs with no required flags | Not evaluated this session — no packaging/CLI-defaults audit was performed on either repo's actual entrypoints. | ❌ Not addressed |
-| I2 — Consistent defaults across repos | Shared concepts resolve identically everywhere | Not evaluated beyond the endpoint-policy validator itself (which does now agree between repos, see I3). Broader config-dir/log-level/telemetry defaults were never inventoried. | ❌ Not addressed |
+| I1 — Zero-config default | Every package runs with no required flags | **This is the actual target, not a peer checklist item** — see "The actual goal" section above. Not evaluated this session as its own audit; no packaging/CLI-defaults inventory was performed on either repo's actual entrypoints. | 🎯 Target — execution plan in Next Steps |
+| I2 — Consistent defaults across repos | Shared concepts resolve identically everywhere | Same reframing as I1. Narrow progress exists (the endpoint-policy validator now agrees between repos via I3), but broader config-dir/log-level/telemetry defaults were never inventoried, so "consistent" isn't yet a verified property of the whole system. | 🎯 Target — execution plan in Next Steps |
 | I3 — Single source of truth for shared logic | Endpoint/URL policy lives in ONE package | See Part 1 — real progress, deliberately incomplete pending v2. | ⚠️ Partial, deferred |
 | I4 — Predictable discovery (env → config → default, never hardcoded) | — | Directly relevant to the actual bugs found this session: `MAC_IP`/`WIN_IP`/`LLAMA_SERVER_BASE_URL`/discovery-file-sourced hosts *were* already following an env→file→default resolution order in both repos. The gap wasn't discovery mechanism, it was that the *resolved* value skipped SSRF validation before use. Fixed at 5 call sites (Part 3). | ✅ Mechanism was already sound; validation gap fixed |
 | I5 — Fail closed, explain clearly | One typed, actionable error, never a raw trace or 500 | This is exactly what the call-site fixes in Part 3 deliver: each rejected endpoint now fails via `ModelEndpointPolicyError` with an explanation, caught and handled locally (warn-and-fallback for internal resolvers, HTTP 400 for the one FastAPI endpoint) rather than crashing or silently misrouting. | ✅ Done, this session |
@@ -121,13 +144,46 @@ against the actual built artifact). Nothing technical blocks publishing today �
 now purely a decision (do you want it public, versioning/release-process ownership),
 not an unresolved technical readiness question.
 
-**npm.** Confirmed **no JavaScript/TypeScript port of this logic exists anywhere in
-either repo** — the validator has only ever been implemented in Python. `perpetua-endpoint-policy`
-is also available as an npm package name (registry.npmjs.org returns 404), but there is
-nothing to publish yet. AlphaClaw is the only JS-side codebase in this three-repo
-ecosystem and is under this session's hard exclusion, so this isn't really an npm
-*publishing* question yet — it's a prerequisite AlphaClaw/port-the-validator question
-that depends on the AlphaClaw follow-up.
+**npm — endpoint-policy validator specifically.** Confirmed **no JavaScript/TypeScript
+port of the SSRF validator exists anywhere in either repo** — it has only ever been
+implemented in Python. `perpetua-endpoint-policy` is also available as an npm package
+name (registry.npmjs.org returns 404), but there is nothing to publish yet. AlphaClaw
+is the only JS-side codebase in this three-repo ecosystem and is under this session's
+hard exclusion, so publishing *this specific validator* to npm remains blocked on the
+AlphaClaw follow-up.
+
+**npm — the AlphaClaw controller, a different and separate npm question.** Not blocked
+the same way. Perpetua-Tools already contains its own TS/JS controller
+(`packages/alphaclaw-adapter/`, `packages/alphaclaw-mcp/`) that steers a running
+AlphaClaw process via `child_process.spawn` + HTTP — never a git/repo-level operation
+against AlphaClaw's own repository (verified directly, recorded as PT
+`lesson_a5b40efe18d5`, before doing any further work on it). This is PT's own code and
+was in scope. Given `// @ts-ignore` was required to even import
+`@diazmelgarejo/alphaclaw-adapter` from the TypeScript controller (no `.d.ts` existed),
+added real TypeScript type declarations (hand-written, diffed function-by-function
+against the actual `module.exports` keys to confirm an exact match) plus a dual
+CJS/ESM entry point, RED-first: wrote a type-contract fixture before the `.d.ts`
+existed, confirmed genuine RED via `tsc --noEmit` (`TS2307: cannot find module`, and
+the deliberately-invalid test calls reported as "unused `@ts-expect-error`" because
+untyped code resolves everything to `any`), then implemented. Verified the fix against
+the real consumer, not a synthetic stand-in: removed the actual `// @ts-ignore` from
+`packages/alphaclaw-mcp/src/index.ts` and ran that package's own real `tsc` build
+clean, plus both packages' full existing test suites (40/40, 6/6) with zero regressions
+(PT `ea104aee`).
+
+Version note, also recorded to memory: the adapter package's version (`0.9.9.9`) was
+never valid semver — 4 components, `npm publish` would reject it outright — but the fix
+isn't an arbitrary clean bump. It now tracks the real relationship this PT-side
+controller has to the upstream `chrysb/alphaclaw` release line the AlphaClaw soft-fork's
+`feature/*` branch bumps against (operator-stated baseline ~0.9.34), landing on
+`0.9.39`. This corrects an earlier uncommitted step in this same session that bumped to
+`0.10.0` — semver-valid but disconnected from the soft-fork's actual lineage — and
+explicitly supersedes the AlphaClaw-adapter-specific portion of a previously *locked*
+versioning decision (PT `lesson_292b1558dde2`, "do not re-debate without human
+override"), by direct human override, not a unilateral change (PT `lesson_9bcca08eefa4`).
+This version bump is for the PT-side package only; it does not touch or imply a bump to
+AlphaClaw's own `feature/*` branch, which remains under the standing exclusion and can
+catch up to this numbering separately, later.
 
 ---
 
@@ -136,10 +192,35 @@ that depends on the AlphaClaw follow-up.
 1. **AlphaClaw.** PT/orama-system work is now done; this is the point you said to ask again.
 2. **PyPI publish decision.** Technically ready; needs an actual yes/no and, if yes,
    a release-process owner.
-3. **npm.** Blocked on AlphaClaw (whether to port the validator to JS at all, and
-   where it would live).
+3. **npm — the endpoint-policy validator.** Still blocked on AlphaClaw (whether to
+   port the validator to JS at all, and where it would live). The AlphaClaw
+   *controller* (a separate npm question) is no longer blocked — see Part 4.
 4. **Structured error taxonomy** (`ERR_INVALID_URL` etc.) — flagged in the original
    security note as a follow-up, never attempted.
-5. **I1/I2** (zero-config defaults, consistent cross-repo defaults) — never audited
-   this session; the original plan's divergence-matrix inventory work for these two
-   invariants specifically wasn't done.
+
+---
+
+## Next Steps — executing I1/I2 directly
+
+Per "The actual goal" section above: I1 and I2 are the target, not a checklist item to
+mark done alongside the others. None of the work above directly executes them. What
+would:
+
+1. **Entrypoint inventory (Context Immersion the original plan asked for, still not
+   done).** For each of the three repos: every console_script / CLI entrypoint / MCP
+   server start command, and for each one, does it run with zero required flags and
+   zero required env vars on a clean checkout? Where it doesn't, what's the minimum
+   viable default?
+2. **A single `DEFAULTS.md` or equivalent**, per the original plan's own
+   Crystallization stage — one place enumerating every cross-repo shared default
+   (config dir, log level, telemetry opt-in, endpoint policy, discovery ordering) and
+   its rationale, so I2 becomes a checkable property instead of an assumption.
+3. **A CI check that fails on default drift**, mirroring the parity-checker pattern
+   already built and proven for the endpoint-policy modules (Part 3.5) — extend the
+   same AST-comparison approach, or a simpler config-schema diff, to whatever the
+   `DEFAULTS.md` inventory identifies as actually shared.
+4. **Re-run the divergence matrix** (Part 2) once 1–3 exist, this time actually filling
+   the I1/I2 rows with verified findings instead of "never evaluated."
+
+None of this is started. Named here so the next pass has a concrete starting point
+instead of re-deriving the target from scratch.
