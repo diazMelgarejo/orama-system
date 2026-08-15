@@ -282,7 +282,20 @@ def _write_receipt(
         raise ValueError(f"{slug}: archive index must be an object")
     index[slug] = archive_root.name
     index_path.parent.mkdir(parents=True, exist_ok=True)
-    index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    # Atomic swap: write to a temp file in the same directory, then
+    # os.replace it over the real index. A process killed mid-write leaves
+    # the temp file corrupted, never the index every other reconciliation
+    # (and verify_gemini) reads from -- streaming JSON straight into
+    # index.json left a kill-mid-write window where the shared index itself
+    # could be truncated and unparseable, corrupting every slug's lookup,
+    # not just the one being written.
+    tmp_index_path = index_path.with_name(".index.json.tmp")
+    try:
+        tmp_index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        os.replace(tmp_index_path, index_path)
+    except BaseException:
+        _remove_path(tmp_index_path)
+        raise
 
 
 def reconcile_gemini(
@@ -342,13 +355,25 @@ def reconcile_gemini(
                     continue
                 if live.is_symlink():
                     raise ValueError(f"{slug}: existing Gemini symlink targets a different canonical card")
-            elif ownership.action == "adapter":
-                if live.is_dir() and not live.is_symlink() and (live / "SKILL.md").is_file():
-                    expected_text = cross_repo_wrapper(ownership, source_text) if ownership.owner == "perpetua" else gemini_adapter(ownership, source_text)
-                    if source_text == expected_text:
-                        continue
 
             archive_skill = archive_root / slug
+            # General idempotence, for every action kind: a receipt at this
+            # exact archive_root proves this slug's reconciliation into this
+            # exact batch already completed successfully -- receipt-write is
+            # now the LAST step of a fully successful run (see the
+            # swap/receipt atomicity fix above), so archive_skill existing
+            # WITHOUT a receipt means an earlier attempt got as far as
+            # archiving and then failed before finishing, which correctly
+            # falls through to the FileExistsError below rather than being
+            # treated as done. This subsumes the "link" check above for
+            # actions it doesn't cover (adapter, cross-repo-adapter) instead
+            # of re-deriving expected output from whatever is currently live
+            # -- which, on a second run, is already the GENERATED output, not
+            # the original source, and comparing generated-against-generated
+            # is not a comparison against the plan's actual archived source
+            # of truth.
+            if archive_skill.exists() and (archive_skill / ".receipt.json").exists():
+                continue
             if live.exists():
                 if archive_skill.exists():
                     raise FileExistsError(f"{slug}: archive already exists at {archive_skill}")

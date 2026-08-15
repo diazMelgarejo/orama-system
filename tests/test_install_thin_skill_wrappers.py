@@ -785,3 +785,101 @@ def test_receipt_write_failure_removes_fresh_install(mod, tmp_path: Path) -> Non
     # passes for the wrong reason (a link_target that happens not to exist
     # rather than a genuinely absent slug).
     assert not live.is_symlink() and not live.exists()
+
+
+def test_second_run_over_same_slug_is_a_no_op_for_adapter_action(mod, tmp_path: Path) -> None:
+    """The 'link' action has an early-exit for 'already correctly pointed at
+    the canonical target'; adapter/cross-repo-adapter actions have no
+    filesystem-target equivalent to compare against (their live entry is
+    generated content, not a symlink), so idempotence for them must come
+    from the archive receipt instead -- a receipt at this exact archive_root
+    is proof this slug's reconciliation into this batch already completed."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    ownership = gr.GeminiOwnership("orama", "adapter", "orama-system", "bin/orama-system/SKILL.md", "none")
+
+    first = mod.reconcile_gemini(root, archive, {"orama-system"}, lambda s: ownership)
+    archived_before_second_run = sorted(archive.rglob("*"))
+    second = mod.reconcile_gemini(root, archive, {"orama-system"}, lambda s: ownership)
+
+    assert first == [root / "orama-system"]
+    assert second == []
+    assert sorted(archive.rglob("*")) == archived_before_second_run
+    assert not (root / ".reconcile.lock").exists()
+
+
+def test_adapter_idempotence_does_not_compare_against_its_own_generated_output(
+    mod, tmp_path: Path
+) -> None:
+    """The receipt-based check must not regenerate 'expected' output from
+    whatever text is currently live and then compare it against itself --
+    on a second run the live SKILL.md IS the generated adapter body, not
+    the original Gemini source, so that comparison is tautological. Forcing
+    the receipt to look wrong (a different archive_root, so no receipt
+    exists there) must still trigger a full re-run rather than a false
+    idempotent skip, proving the check depends on the receipt, not on
+    re-deriving text from the live file."""
+    import gemini_reconciliation as gr
+    root = tmp_path / "gemini" / "skills"
+    archive_a = tmp_path / "archive" / "batch-a"
+    archive_b = tmp_path / "archive" / "batch-b"
+    ownership = gr.GeminiOwnership("orama", "adapter", "orama-system", "bin/orama-system/SKILL.md", "none")
+
+    mod.reconcile_gemini(root, archive_a, {"orama-system"}, lambda s: ownership)
+    second = mod.reconcile_gemini(root, archive_b, {"orama-system"}, lambda s: ownership)
+
+    # Different archive_root, no receipt there yet -- must actually re-run
+    # (and re-archive), not silently skip because the live content already
+    # "looks like" a correctly generated adapter.
+    assert second == [root / "orama-system"]
+    assert (archive_b / "orama-system" / ".receipt.json").is_file()
+
+
+def test_index_json_write_is_atomic_against_a_mid_write_crash(mod, tmp_path: Path, monkeypatch) -> None:
+    """_write_receipt's index.json update must not stream JSON directly into
+    the real file: a process killed mid-write leaves index.json truncated
+    and unparseable, which is exactly the kind of corruption archive-first
+    was designed to prevent, just one file over. The index must be built in
+    a temp file and atomically swapped in with os.replace, so a crash during
+    the write leaves the ORIGINAL index.json (or none, on the first-ever
+    write) completely untouched -- never a half-written file."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    old = root / "code-review"
+    old.mkdir(parents=True)
+    (old / "SKILL.md").write_text("v1\n", encoding="utf-8")
+
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
+
+    index_path = archive.parent / "index.json"
+    original_index_bytes = index_path.read_bytes()
+
+    real_write_text = Path.write_text
+
+    def crash_on_index_write(self, data, *args, **kwargs):
+        if self.name in ("index.json", ".index.json.tmp"):
+            # A real kill-mid-write leaves PARTIAL bytes on disk, not zero --
+            # a mock that raises before touching the file at all would pass
+            # trivially whether or not the write is atomic. Write half the
+            # intended content directly to whatever path is targeted, then
+            # crash: this hits index.json for the OLD non-atomic
+            # implementation (corrupting the real file) and hits the temp
+            # file for the FIXED implementation (real index.json untouched,
+            # since os.replace of the temp file never runs).
+            with open(self, "w", encoding="utf-8") as fh:
+                fh.write(data[: len(data) // 2])
+            raise OSError("simulated crash mid-write")
+        return real_write_text(self, data, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", crash_on_index_write)
+
+    old2 = root / "orama-afrp"
+    old2.mkdir(parents=True)
+    (old2 / "SKILL.md").write_text("v1\n", encoding="utf-8")
+    ownership2 = gr.GeminiOwnership("orama", "link", "orama-afrp", "/fake/orama-afrp/SKILL.md", "none")
+    with pytest.raises(OSError, match="simulated crash mid-write"):
+        mod.reconcile_gemini(root, archive, {"orama-afrp"}, lambda s: ownership2)
+
+    assert index_path.read_bytes() == original_index_bytes
+    assert not list(archive.parent.glob(".index.json.tmp*"))
