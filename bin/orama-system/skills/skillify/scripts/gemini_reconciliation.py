@@ -7,10 +7,13 @@ import os
 import re
 import shutil
 import sys
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+import yaml
 
 
 @dataclass(frozen=True)
@@ -40,11 +43,17 @@ def load_gemini_ownership(manifest_path: Path) -> dict[str, GeminiOwnership]:
 
 @dataclass(frozen=True)
 class RootFinding:
-    """One Gemini-root verification result.
+    """A single root-verification result, shared by two call sites:
 
-    Gemini findings are intentionally distinct from the legacy string errors
-    returned by ``verify()``: the latter audits wrapper roots, while these
-    establish that the foreign Gemini root can be recovered from its archive.
+    1. Gemini archive verification (this module's ``verify_gemini``) --
+       intentionally distinct from the legacy string errors returned by
+       ``verify()``: the latter audits wrapper roots, while these establish
+       that the foreign Gemini root can be recovered from its archive.
+    2. The Antigravity/shared-agent topology audit
+       (``install_thin_skill_wrappers.verify_antigravity_root`` /
+       ``audit_antigravity_root``), whose status vocabulary ("missing",
+       "shared-root", "divergent", "unreadable") describes root topology,
+       not archive recoverability.
     """
 
     slug: str
@@ -53,25 +62,41 @@ class RootFinding:
     operator_next_action: str = ""
 
 
-import yaml
-
 def _validate_frontmatter(source_text: str) -> str:
     frontmatter = ""
     if source_text.startswith("---"):
-        match = re.search(r"^---\n(.*?)\n---", source_text, re.DOTALL)
+        # Normalize CRLF before the fence match: a file authored/edited on
+        # Windows (e.g. `---\r\n...\r\n---\r\n`) otherwise fails the \n---
+        # regex entirely and is silently treated as "no frontmatter",
+        # indistinguishable from a genuinely frontmatter-less file.
+        normalized = source_text.replace("\r\n", "\n")
+        match = re.search(r"^---\n(.*?)\n---", normalized, re.DOTALL)
         if match:
             try:
                 parsed = yaml.safe_load(match.group(1))
-            except Exception:
-                parsed = {}
+            except yaml.YAMLError as exc:
+                # Malformed YAML is a real defect in the source, not the
+                # same thing as "no frontmatter" -- silently downgrading it
+                # to empty (as a bare `except Exception` used to) hides a
+                # broken skill card behind output indistinguishable from one
+                # that legitimately had no frontmatter at all.
+                raise ValueError(f"malformed YAML frontmatter: {exc}") from exc
             if isinstance(parsed, dict):
+                # `allowed` keys are carried through into the generated
+                # adapter's frontmatter as-is. `drop` keys are recognized,
+                # intentionally-unsupported Gemini/Claude metadata (e.g.
+                # `dependencies`, `allowed-tools`) that the thin adapter
+                # format has no representation for, so they are silently
+                # omitted rather than rejected outright. Anything in
+                # neither set is unrecognized and raises below, so a typo
+                # or genuinely new key can't be dropped by accident.
                 allowed = {"name", "description", "user-invocable", "when_to_use", "effort"}
                 drop = {"version", "license", "compatibility", "allowed-tools", "sub_skills", "dependencies", "triggers"}
-                
+
                 for key in parsed:
                     if key not in allowed and key not in drop:
                         raise ValueError(f"unsupported frontmatter key: {key}")
-                
+
                 new_fm = {}
                 # Maintain some logical order
                 for key in ["name", "description", "when_to_use", "effort", "user-invocable"]:
@@ -97,7 +122,9 @@ def cross_repo_wrapper(ownership: GeminiOwnership, source_text: str = "") -> str
 
 
 class ReconcileLockHeldError(RuntimeError):
-    """Raised when another reconciliation owns the archive-root lock."""
+    """Raised when another reconciliation owns the live-root reconciliation
+    lock (see ``_lock_path`` for why the lock is keyed on the live root and
+    not the archive root)."""
 
 
 def _remove_path(path: Path) -> None:
@@ -236,7 +263,24 @@ def force_unlock_gemini(root: Path, slug: str) -> dict[str, object]:
     lock_path = _lock_path(root)
     if not lock_path.exists():
         raise FileNotFoundError(f"{slug}: no reconciliation lock at {lock_path}")
-    payload = _read_lock_payload(lock_path)
+    try:
+        payload = _read_lock_payload(lock_path)
+    except ReconcileLockHeldError:
+        # An unreadable/corrupt payload can never belong to a live, well-
+        # behaved writer -- a normal exit always leaves well-formed JSON, so
+        # corruption here means the writer was killed between O_CREAT|O_EXCL
+        # succeeding and the payload write completing. That crash is itself
+        # sufficient evidence the writer is gone: refusing to force-unlock
+        # in this state (identically to "someone else holds a valid lock")
+        # would leave no recovery path at all except an unsafe manual `rm`
+        # outside every safety check this function exists to provide.
+        print(
+            f"force-unlock {slug}: stale lock at {lock_path} has an unreadable/corrupt "
+            "payload (writer likely crashed mid-write); clearing it",
+            file=sys.stderr,
+        )
+        lock_path.unlink()
+        return {}
     if _pid_is_live(payload.get("pid")):
         raise ReconcileLockHeldError(f"{slug}: lock owner PID {payload.get('pid')} is still live")
     print(
@@ -248,6 +292,45 @@ def force_unlock_gemini(root: Path, slug: str) -> dict[str, object]:
     return payload
 
 
+def _index_lock_path(index_path: Path) -> Path:
+    return index_path.with_name(".index.json.lock")
+
+
+def _acquire_index_lock(index_path: Path, attempts: int = 50, delay: float = 0.02) -> Path:
+    """Short-lived exclusive lock guarding the shared index.json
+    read-modify-write in ``_write_receipt`` below.
+
+    The main reconciliation lock (``_lock_path``) is deliberately keyed on
+    the LIVE root, not the archive root, because two runs against the same
+    live root but different (timestamped) archive roots are the documented
+    normal case. But that also means two concurrent reconciliations against
+    *different* live roots can share the same archive-parent index.json with
+    no lock in common between them -- a plain read-modify-write there would
+    let the loser of that race silently drop its own index entry. This lock
+    closes that specific gap. It only ever guards a few milliseconds of I/O,
+    so a bounded spin-wait is the right trade-off over failing outright:
+    legitimate concurrent runs against different live roots must not
+    spuriously fail just because they momentarily collide here.
+    """
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = _index_lock_path(index_path)
+    for _ in range(attempts):
+        try:
+            descriptor = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        except FileExistsError:
+            time.sleep(delay)
+            continue
+        os.close(descriptor)
+        return lock_path
+    raise ReconcileLockHeldError(
+        f"archive index lock held at {lock_path}; giving up after {attempts} attempts"
+    )
+
+
+def _release_index_lock(lock_path: Path) -> None:
+    lock_path.unlink(missing_ok=True)
+
+
 def _write_receipt(
     archive_root: Path,
     slug: str,
@@ -257,7 +340,7 @@ def _write_receipt(
     canonical_target: Path,
 ) -> None:
     receipt_path = archive_root / slug / ".receipt.json"
-    
+
     if final_target_kind == "symlink":
         target_str = str(canonical_target.resolve())
     else:
@@ -271,31 +354,44 @@ def _write_receipt(
         "final_target_kind": final_target_kind,
         "canonical_target": target_str,
     }
+
+    index_path = archive_root.parent / "index.json"
+    index_lock = _acquire_index_lock(index_path)
+    try:
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"{slug}: archive index is invalid JSON") from exc
+        if not isinstance(index, dict):
+            raise ValueError(f"{slug}: archive index must be an object")
+        index[slug] = archive_root.name
+        # Atomic swap: write to a temp file in the same directory, then
+        # os.replace it over the real index. A process killed mid-write leaves
+        # the temp file corrupted, never the index every other reconciliation
+        # (and verify_gemini) reads from -- streaming JSON straight into
+        # index.json left a kill-mid-write window where the shared index itself
+        # could be truncated and unparseable, corrupting every slug's lookup,
+        # not just the one being written.
+        tmp_index_path = index_path.with_name(".index.json.tmp")
+        try:
+            tmp_index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            os.replace(tmp_index_path, index_path)
+        except BaseException:
+            _remove_path(tmp_index_path)
+            raise
+    finally:
+        _release_index_lock(index_lock)
+
+    # Only write the receipt file itself once the shared index has been
+    # durably updated to point at it. The original order wrote the receipt
+    # FIRST: on an index failure (e.g. corrupt index.json) that left an
+    # orphaned, valid-looking .receipt.json behind, and a LATER run against
+    # the same archive_root would then treat this slug as fully reconciled
+    # -- the idempotence check below only required the receipt to exist --
+    # even though the index never recorded it and live had already been
+    # rolled back to its unreconciled state by the caller.
     receipt_path.parent.mkdir(parents=True, exist_ok=True)
     receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    index_path = archive_root.parent / "index.json"
-    try:
-        index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {}
-    except json.JSONDecodeError as exc:
-        raise ValueError(f"{slug}: archive index is invalid JSON") from exc
-    if not isinstance(index, dict):
-        raise ValueError(f"{slug}: archive index must be an object")
-    index[slug] = archive_root.name
-    index_path.parent.mkdir(parents=True, exist_ok=True)
-    # Atomic swap: write to a temp file in the same directory, then
-    # os.replace it over the real index. A process killed mid-write leaves
-    # the temp file corrupted, never the index every other reconciliation
-    # (and verify_gemini) reads from -- streaming JSON straight into
-    # index.json left a kill-mid-write window where the shared index itself
-    # could be truncated and unparseable, corrupting every slug's lookup,
-    # not just the one being written.
-    tmp_index_path = index_path.with_name(".index.json.tmp")
-    try:
-        tmp_index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-        os.replace(tmp_index_path, index_path)
-    except BaseException:
-        _remove_path(tmp_index_path)
-        raise
 
 
 def reconcile_gemini(
@@ -327,6 +423,13 @@ def reconcile_gemini(
         for slug in sorted(only):
             live = root / slug
             try:
+                # Contract: a KeyError from ownership_lookup means "this
+                # slug has no ownership record", nothing else. The concrete
+                # CLI lookup (`lambda s: ownership_dict[s]`) only ever
+                # raises KeyError for that reason; a different
+                # ownership_lookup implementation must preserve that
+                # contract rather than raising KeyError for an unrelated
+                # internal error.
                 ownership = ownership_lookup(slug)
             except KeyError:
                 raise ValueError(f"{slug}: not approved for Gemini reconciliation; add an ownership record first")
@@ -351,6 +454,14 @@ def reconcile_gemini(
                     source_text = skill_md.read_text(encoding="utf-8")
 
             if ownership.action == "link":
+                # Fast path only: if live is ALREADY a correctly-pointed
+                # symlink, there is nothing to reconcile. Deliberately
+                # produces no receipt (this slug may never have been
+                # archived through this engine at all -- it may simply have
+                # been hand-linked correctly already) -- the general,
+                # receipt-based idempotence check below is what governs
+                # every OTHER "already done" case, including a link that
+                # WAS reconciled through this engine on a prior run.
                 if live.is_symlink() and live.resolve() == canonical_target.resolve():
                     continue
                 if live.is_symlink():
@@ -372,8 +483,26 @@ def reconcile_gemini(
             # the original source, and comparing generated-against-generated
             # is not a comparison against the plan's actual archived source
             # of truth.
-            if archive_skill.exists() and (archive_skill / ".receipt.json").exists():
-                continue
+            #
+            # Existence of ``.receipt.json`` alone is not trusted -- a
+            # receipt can only mean "done" if it is actually parseable and
+            # actually describes the archive directory it sits in. A
+            # corrupt or truncated receipt (hand-edited, or left behind by
+            # a version of this tool predating the index-before-receipt
+            # ordering above) falls through to the FileExistsError below
+            # instead of being silently treated as proof of completion.
+            existing_receipt_path = archive_skill / ".receipt.json"
+            if archive_skill.exists() and existing_receipt_path.exists():
+                try:
+                    existing_receipt = json.loads(existing_receipt_path.read_text(encoding="utf-8"))
+                except (OSError, json.JSONDecodeError):
+                    existing_receipt = None
+                if (
+                    isinstance(existing_receipt, dict)
+                    and existing_receipt.get("slug") == slug
+                    and existing_receipt.get("archive_digest") == _tree_sha256(archive_skill)
+                ):
+                    continue
             if live.exists():
                 if archive_skill.exists():
                     raise FileExistsError(f"{slug}: archive already exists at {archive_skill}")
@@ -425,20 +554,38 @@ def reconcile_gemini(
                 # content -- remove the fresh install entirely, so the net
                 # effect of a failed reconciliation is always "as if it never
                 # ran."
+                live_moved_aside = False
                 try:
                     if had_live:
                         os.replace(live, rollback)
+                        live_moved_aside = True
                     os.replace(stage, live)
                     _write_receipt(
                         archive_root, slug, source_digest, archive_digest, final_target_kind, canonical_target
                     )
                 except BaseException:
-                    # Safe no-op if live was never successfully replaced (the
-                    # stage->live swap itself is what failed); clears the new
-                    # content if the swap succeeded but the receipt did not.
-                    _remove_path(live)
-                    if had_live:
-                        os.replace(rollback, live)
+                    # `live` is only safe to touch here if whatever
+                    # currently sits at that path is NOT the still-intact,
+                    # untouched original -- which is true when there never
+                    # was a live original to protect (not had_live), or when
+                    # the live->rollback move already completed
+                    # (live_moved_aside). If had_live is True and that first
+                    # move is what failed, `live` still holds the pristine
+                    # original and `rollback` was never created:
+                    # unconditionally deleting `live` here (the old
+                    # behavior) would destroy the original outright, and the
+                    # follow-up os.replace(rollback, live) would then raise
+                    # a masking FileNotFoundError instead of letting the
+                    # real error propagate.
+                    safe_to_touch_live = not had_live or live_moved_aside
+                    if safe_to_touch_live:
+                        # Clears the new content if the stage->live swap
+                        # succeeded but the receipt did not (safe no-op if
+                        # the swap itself is what failed), then restores the
+                        # previous content from rollback when there was one.
+                        _remove_path(live)
+                        if had_live:
+                            os.replace(rollback, live)
                     raise
                 if had_live:
                     _remove_path(rollback)
@@ -504,12 +651,20 @@ def verify_gemini(root: Path, archive_parent: Path, only: set[str] | None = None
         if final_target_kind not in {"symlink", "generated-wrapper", "adapter", "cross-repo-adapter"}:
             findings.append(RootFinding(slug, "failed", f"{slug}: unsupported final target kind in receipt"))
             continue
-        
+
         canonical_target_raw = str(receipt["canonical_target"])
         if final_target_kind == "symlink":
             expected_target = str(Path(canonical_target_raw).resolve())
             if not live.is_symlink() or str(live.resolve()) != expected_target:
                 findings.append(RootFinding(slug, "failed", f"{slug}: canonical target does not match receipt"))
+            elif not Path(expected_target).exists():
+                # Path.resolve() is non-strict: it happily returns a
+                # syntactically resolved path even when the final component
+                # doesn't exist. A symlink whose canonical target was since
+                # deleted (repo reorganized) still matches the string
+                # comparison above, so this needs an explicit existence
+                # check or a dangling link silently "passes" verification.
+                findings.append(RootFinding(slug, "failed", f"{slug}: canonical target no longer exists: {expected_target}"))
         else:
             wrapper = live / "SKILL.md"
             if live.is_symlink() or not wrapper.is_file():

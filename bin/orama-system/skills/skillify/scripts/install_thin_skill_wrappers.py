@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 import argparse
-import errno
 import hashlib
 import json
 import os
 import re
 import shutil
 import sys
-from datetime import datetime, timezone
 
 
 @dataclass(frozen=True)
@@ -44,7 +42,6 @@ from gemini_reconciliation import (
     reconcile_gemini,
     verify_gemini,
     force_unlock_gemini,
-    create_relative_link,
     acquire_reconcile_lock,
     release_reconcile_lock,
     load_gemini_ownership,
@@ -541,15 +538,30 @@ def verify_antigravity_root(shared_agents_root: Path, antigravity_root: Path) ->
             operator_next_action="Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
         )
     try:
-        if antigravity_root.is_symlink() and antigravity_root.resolve() == shared_agents_root.resolve():
-            return RootFinding(
-                slug="",
-                status="shared-root",
-                detail=f"Resolved roots: {shared_agents_root.resolve()}",
-                operator_next_action="Record the finding; no setup action is needed."
-            )
-    except OSError:
-        pass
+        is_shared_root = antigravity_root.is_symlink() and antigravity_root.resolve() == shared_agents_root.resolve()
+    except OSError as exc:
+        # A permission error, ELOOP from a symlink cycle, or a transient
+        # filesystem error here means the topology genuinely could not be
+        # determined -- folding that into "divergent" (the fallback below)
+        # would mislabel an unreadable/indeterminate root as a real,
+        # intentional topology mismatch.
+        return RootFinding(
+            slug=antigravity_root.name,
+            status="unreadable",
+            detail=f"could not resolve Antigravity root ({antigravity_root}): {exc}",
+            operator_next_action=(
+                "Ask a human operator to investigate why the Antigravity root cannot be "
+                "resolved (permissions, a broken symlink chain, or a transient filesystem "
+                "error) before approving or declining deferred Task 5a."
+            ),
+        )
+    if is_shared_root:
+        return RootFinding(
+            slug="",
+            status="shared-root",
+            detail=f"Resolved roots: {shared_agents_root.resolve()}",
+            operator_next_action="Record the finding; no setup action is needed."
+        )
     return RootFinding(
         slug=antigravity_root.name,
         status="divergent",
@@ -717,8 +729,7 @@ def main() -> int:
     if args.audit_gemini:
         inventory = inventory_all_roots()
         if args.json:
-            import dataclasses
-            print(json.dumps([dataclasses.asdict(row) for row in inventory], indent=2))
+            print(json.dumps([asdict(row) for row in inventory], indent=2))
         else:
             print(render_inventory(inventory, home=HOME))
         return 0
@@ -728,9 +739,7 @@ def main() -> int:
             Path(args.antigravity_root) if args.antigravity_root else None,
         )
         if args.json:
-            import dataclasses
-
-            print(json.dumps(dataclasses.asdict(finding), indent=2))
+            print(json.dumps(asdict(finding), indent=2))
         else:
             print(f"{finding.status}: {finding.detail}")
             print(f"next: {finding.operator_next_action}")
@@ -752,7 +761,13 @@ def main() -> int:
         else:
             manifest_path = Path(__file__).resolve().parent.parent / "references" / "gemini-skill-ownership.json"
             ownership_dict = load_gemini_ownership(manifest_path)
-            written = reconcile_gemini(gemini_root, archive_root, only, lambda s: ownership_dict[s], canonical_root=ROOT)
+            try:
+                written = reconcile_gemini(
+                    gemini_root, archive_root, only, lambda s: ownership_dict[s], canonical_root=ROOT
+                )
+            except ReconcileLockHeldError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
             print(f"reconciled {len(written)} Gemini skill directories")
     if args.install:
         written = install(args.dry_run, only=only)

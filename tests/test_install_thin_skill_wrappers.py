@@ -182,6 +182,8 @@ def test_wrapper_embeds_repo_relative_not_absolute(mod):
         description="Test.",
     )
     text = mod.wrapper(spec)
+    rel = mod.repo_relative(spec.canonical)
+    assert rel and rel in text
     assert str(ROOT) not in text
     assert str(Path.home()) not in text
 
@@ -408,7 +410,11 @@ def test_oserror_with_unrelated_errno_propagates(mod, tmp_path: Path, monkeypatc
         mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
 
     assert raised.value.errno == errno.ENOSPC
-    assert not (root / "code-review" / "SKILL.md").exists()
+    # create_relative_link is mocked to raise before touching disk at all, so
+    # "SKILL.md never got created" is vacuous by construction. The lock IS
+    # real (not mocked): confirm the failure path still releases it rather
+    # than leaving it held.
+    assert not (root / ".reconcile.lock").exists()
 
 
 def test_lock_contention_fails_cleanly(mod, tmp_path: Path) -> None:
@@ -544,6 +550,149 @@ def test_live_skill_is_restored_when_the_swap_fails_after_archive(
     assert not (root / ".reconcile.lock").exists()
 
 
+def test_live_skill_untouched_when_the_initial_rollback_move_fails(
+    mod, tmp_path: Path, monkeypatch
+) -> None:
+    """The narrowest window on the OTHER side of P1-4: staging is built, but
+    the very FIRST protective move (live -> .reconcile-rollback) itself
+    fails. Before the fix, the except handler assumed that move had already
+    succeeded and unconditionally deleted the still-intact live directory,
+    then masked the real error by trying to replace a rollback that was
+    never created (raising a confusing FileNotFoundError instead of the
+    actual underlying OSError)."""
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    _seed_live_skill(root)
+
+    real_replace = mod.os.replace
+
+    def fail_moving_live_aside(src, dst, *args, **kwargs):
+        if ".reconcile-rollback" in str(dst):
+            raise OSError(errno.EPERM, "operation not permitted moving live aside")
+        return real_replace(src, dst, *args, **kwargs)
+
+    monkeypatch.setattr(mod.os, "replace", fail_moving_live_aside)
+
+    with pytest.raises(OSError) as raised:
+        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
+
+    # The REAL error must surface -- not a masking FileNotFoundError from
+    # trying to restore a rollback directory that was never created.
+    assert raised.value.errno == errno.EPERM
+
+    live = root / "code-review"
+    assert live.is_dir() and not live.is_symlink()
+    assert (live / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
+    assert (live / "references" / "notes.md").read_text(encoding="utf-8") == "reference body\n"
+    assert not list(root.glob(".*reconcile-rollback"))
+    assert not (root / ".reconcile.lock").exists()
+
+
+def test_reconcile_does_not_silently_skip_a_corrupt_receipt(mod, tmp_path: Path) -> None:
+    """A truncated or otherwise invalid .receipt.json must not be trusted as
+    proof reconciliation completed -- existence alone is not enough. Before
+    the fix, existence-only checking silently returned [] even though the
+    live directory was still the plain, unreconciled original and the
+    archive/receipt pairing was never actually validated."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    _seed_live_skill(root)
+
+    archive_skill = archive / "code-review"
+    archive_skill.mkdir(parents=True)
+    (archive_skill / ".receipt.json").write_text("not valid json{{{", encoding="utf-8")
+
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+
+    # Must NOT silently return [] -- an unparseable receipt cannot be
+    # trusted, so this must surface loudly (an existing archive with no
+    # trustworthy receipt is a genuine conflict) rather than pretend the
+    # slug is already done.
+    with pytest.raises(FileExistsError):
+        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
+
+
+def test_force_unlock_recovers_from_corrupt_lock_payload(mod, tmp_path: Path, capsys) -> None:
+    """A lock file can be left as truncated/corrupt JSON if the writer was
+    killed between O_CREAT|O_EXCL succeeding and the payload write
+    completing. force_unlock_gemini must still be able to clear it: a
+    corrupt payload can never belong to a currently-running, well-behaved
+    writer (a normal exit always leaves well-formed JSON), so corruption is
+    itself sufficient evidence the writer crashed."""
+    root = tmp_path / "gemini" / "skills"
+    root.mkdir(parents=True)
+    lock_path = root / ".reconcile.lock"
+    lock_path.write_text("{not valid json", encoding="utf-8")
+
+    result = mod.force_unlock_gemini(root, "code-review")
+
+    assert result == {}
+    assert not lock_path.exists()
+    assert "corrupt" in capsys.readouterr().err
+
+
+def test_adapter_reconciliation_passes_verify_both_directions(mod, tmp_path: Path) -> None:
+    """The 'link' action already has end-to-end verify coverage
+    (test_fresh_install_passes_verify_both_directions); the adapter/
+    cross-repo-adapter branch of verify_gemini's receipt-matching logic had
+    none, in either the pass or the fail direction."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    ownership = gr.GeminiOwnership("orama", "adapter", "orama-system", "bin/orama-system/SKILL.md", "none")
+
+    findings_before = mod.verify_gemini(root, archive, {"orama-system"})
+    assert findings_before and findings_before[0].status == "failed"
+
+    mod.reconcile_gemini(root, archive, {"orama-system"}, lambda s: ownership)
+    findings_after = mod.verify_gemini(root, archive, {"orama-system"})
+    assert findings_after == []
+
+
+def test_validate_frontmatter_raises_on_malformed_yaml(mod) -> None:
+    """A bare `except Exception: parsed = {}` used to silently turn genuinely
+    malformed YAML into 'no frontmatter', indistinguishable from a skill
+    card that legitimately had none. Malformed frontmatter must be reported,
+    not silently downgraded."""
+    import gemini_reconciliation as gr
+    source = "---\nname: [unterminated\n---\n# Broken\n"
+    with pytest.raises(ValueError, match="malformed YAML frontmatter"):
+        gr._validate_frontmatter(source)
+
+
+def test_validate_frontmatter_tolerates_crlf_line_endings(mod) -> None:
+    """A CRLF-terminated file (e.g. authored on Windows) with otherwise
+    valid frontmatter must still be recognized -- the \\n--- fence regex
+    used to require a literal LF and silently treated CRLF frontmatter as
+    absent."""
+    import gemini_reconciliation as gr
+    source = "---\r\nname: crlf-skill\r\ndescription: test\r\n---\r\n# CRLF\r\n"
+    frontmatter = gr._validate_frontmatter(source)
+    assert "name: crlf-skill" in frontmatter
+    assert "description: test" in frontmatter
+
+
+def test_verify_gemini_fails_when_symlink_target_no_longer_exists(mod, tmp_path: Path) -> None:
+    """Path.resolve() is non-strict: a symlink whose canonical target has
+    since been deleted still resolves (syntactically) to the same string,
+    so a plain string comparison alone would report a dangling link as
+    passing verification."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    canonical = tmp_path / "canonical" / "SKILL.md"
+    canonical.parent.mkdir(parents=True)
+    canonical.write_text("canonical\n", encoding="utf-8")
+    ownership = gr.GeminiOwnership("orama", "link", "orama-afrp", str(canonical), "none")
+
+    mod.reconcile_gemini(root, archive, {"orama-afrp"}, lambda s: ownership)
+    assert mod.verify_gemini(root, archive, {"orama-afrp"}) == []
+
+    canonical.unlink()
+    findings = mod.verify_gemini(root, archive, {"orama-afrp"})
+
+    assert findings
+    assert findings[0].status == "failed"
+    assert "no longer exists" in findings[0].detail
+
+
 def test_audit_reports_antigravity_shared_root(mod: ModuleType, tmp_path: Path) -> None:
     agents, antigravity = tmp_path / "agents", tmp_path / "antigravity"
     agents.mkdir()
@@ -557,6 +706,33 @@ def test_audit_reports_missing_antigravity_root_with_operator_action(
     finding = mod.verify_antigravity_root(tmp_path / "agents", tmp_path / "antigravity")
     assert finding.status == "missing"
     assert finding.operator_next_action == "Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
+
+
+def test_verify_antigravity_root_reports_unreadable_on_oserror(
+    mod: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A permission error or broken symlink chain while resolving
+    antigravity_root must not be silently folded into 'divergent' (a real
+    topology mismatch) -- that mislabels an unreadable/indeterminate path as
+    something it is not."""
+    shared = tmp_path / "agents"
+    antigravity = tmp_path / "antigravity"
+    shared.mkdir()
+    antigravity.symlink_to(shared, target_is_directory=True)
+
+    real_resolve = Path.resolve
+
+    def raise_on_antigravity(self, *args, **kwargs):
+        if self == antigravity:
+            raise OSError(errno.ELOOP, "too many levels of symbolic links")
+        return real_resolve(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", raise_on_antigravity)
+
+    finding = mod.verify_antigravity_root(shared, antigravity)
+
+    assert finding.status == "unreadable"
+    assert "too many levels of symbolic links" in finding.detail
 
 
 def test_audit_reports_divergent_antigravity_root_with_operator_action(
@@ -645,6 +821,11 @@ def test_code_review_reconciliation_drops_glm_fallback(mod, tmp_path: Path) -> N
     canonical.write_text("Canonical content", encoding="utf-8")
     changed = mod.reconcile_gemini(root, tmp_path / "archive", {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', 'code-review', str(canonical), 'none'))
     assert all("GLM-5.2 Fallback" not in p.read_text(encoding="utf-8") for p in changed if p.is_file())
+    # Positive assertion, not just absence: the symlinked entry must
+    # actually resolve to and read as the canonical file's real content.
+    live = root / "code-review"
+    assert live.is_symlink() and live.resolve() == canonical.resolve()
+    assert live.read_text(encoding="utf-8") == "Canonical content"
 
 def test_perpetua_wrapper_uses_environment_root_not_caller_repo(mod) -> None:
     import gemini_reconciliation
