@@ -1155,3 +1155,32 @@ def test_cli_anchors_gemini_link_targets_to_repo_root_not_workspace_root(
     # Anchoring against the wrong (workspace) root would resolve outside it
     # entirely -- exactly the failure the real sandbox proof caught.
     assert repo_root in live.resolve().parents
+
+
+def test_repo_root_is_computed_five_parents_up_not_monkeypatched(mod) -> None:
+    """The test above monkeypatches mod.REPO_ROOT directly, which proves the
+    CLI USES REPO_ROOT correctly but not that REPO_ROOT is COMPUTED
+    correctly -- a regression from parents[5] back to parents[6] (the exact
+    bug this branch fixed) would silently survive that test, because the
+    monkeypatch bypasses the real arithmetic entirely. Adversarial review
+    (Agnes, 2026-08-15) found this gap via mutation testing: M4 (revert to
+    parents[6]) survived against the monkeypatched test. This test checks
+    the literal computation with no monkeypatching, so the same mutation
+    kills it directly."""
+    script = (
+        Path(__file__).resolve().parents[1]
+        / "bin"
+        / "orama-system"
+        / "skills"
+        / "skillify"
+        / "scripts"
+        / "install_thin_skill_wrappers.py"
+    )
+    assert mod.REPO_ROOT == script.resolve().parents[5]
+    # REPO_ROOT is one level BELOW ROOT: ROOT is the workspace parent
+    # (containing this repo and Perpetua-Tools as siblings, parents[6]);
+    # REPO_ROOT is this repo's own root, one level inside it (parents[5]).
+    # If this relationship ever breaks, the workspace-layout assumption
+    # both constants depend on has changed and needs re-deriving together,
+    # not silently.
+    assert mod.REPO_ROOT.parent == mod.ROOT
