@@ -1556,3 +1556,80 @@ Written to `~/.gstack/projects/diazMelgarejo-orama-system/tasks-autoplan-review-
 >   22-slug divergent scope untouched — there is no missed prior convergence
 >   and no corroboration gap. D12 required no re-run of Task 5; it is closed
 >   as confirmed, not deprioritized.
+
+> **SECOND SUPERSEDING UPDATE (Post-merge pass, 2026-08-15, tip `4dc549bf`,
+> pushed to [orama-system PR #314](https://github.com/diazMelgarejo/orama-system/pull/314)):**
+> The Completion pass above (commit `f2e35364`) is preserved verbatim — it is
+> the record of what the gate looked like at that point, not deleted or
+> rewritten. Substantial work landed after it that the review-report and
+> T1-T10 status did not yet reflect:
+>
+> - **A new CRITICAL bug, found by the real-data sandbox proof itself, not by
+>   any review pass.** The `f2e35364`-era fix anchored Gemini "link" targets
+>   against `ROOT` (this file's workspace-parent constant, correct for
+>   workspace-relative `CANONICAL_SKILLS` paths). The manifest's
+>   `canonical_path` values are repo-relative instead — confirmed against the
+>   real manifest file, no leading `orama-system/`. Anchoring against `ROOT`
+>   silently resolved one directory too high whenever this script runs
+>   without workspace-wrapper nesting, which is **every isolated git
+>   worktree** — the exact safety practice this whole plan's development used
+>   throughout, specifically to avoid touching the live root by accident.
+>   Reproduced against a real copy of `~/.gemini/skills`: reconcile wrote
+>   symlinks resolving outside the actual repo entirely. The old
+>   `verify_gemini` could not catch it — receipt and live symlink were
+>   computed from the same wrong anchor in the same process, so they always
+>   silently agreed. Only a later hardening pass's dangling-target existence
+>   check (verifying against the real filesystem, not just internal
+>   self-consistency) exposed it. **Fixed** in `07e63b9b`: introduced
+>   `REPO_ROOT` (this repo's own root, independent of workspace nesting) and
+>   repointed the CLI call site at it, leaving `ROOT` and every other caller
+>   untouched. Mutation-verified (reverting reproduces the exact wrong path)
+>   and re-confirmed end-to-end against real data afterward.
+> - **AntiGravity-Gemini hardened the atomic `index.json` write** (`82b68191`,
+>   its own worktree, codex-reviewed first): the deterministic
+>   `.index.json.tmp` path this plan's own atomicity fix used was itself a
+>   race — two invocations, or a stale file from a killed process, could
+>   collide on it. Replaced with `tempfile.mkstemp`, `fsync` before
+>   `os.replace`, and a parent-directory `fsync` for crash durability, plus
+>   real-filesystem crash-injection tests (not mocks) proving the previous
+>   index survives byte-for-byte.
+> - **Agnes (agy client, Claude Sonnet 4.6) ran an independent adversarial
+>   integration review** of the full branch: confirmed all 5,455 insertions
+>   traceable to in-place supersessions (nothing silently discarded),
+>   confirmed the test-count history never had a real regression (a
+>   transient drop at `824bb503` was fully recovered), and independently
+>   re-ran 4 mutation tests — 3 killed cleanly, 1 (**M4**, reverting
+>   `REPO_ROOT`'s `parents[5]` back to `parents[6]`) **survived** against the
+>   test that monkeypatched `REPO_ROOT` directly rather than exercising its
+>   real computation. **Fixed** in `29c81e7e`: added a test checking the
+>   literal `parents[5]` arithmetic with no monkeypatching; confirmed it
+>   kills M4.
+> - AntiGravity's hardening branch and this branch had genuinely diverged
+>   (forked from a shared point before either's new work); merged in
+>   `4dc549bf` with one real content conflict in the shared test file,
+>   resolved by reading AntiGravity's actual `tempfile.mkstemp(prefix=
+>   ".index.json.tmp.")` call rather than guessing which glob pattern was
+>   correct.
+>
+> **Revised gate status: still CLEARED, now on top of a fix for a bug the
+> original gate's own scope did not anticipate** (the P1-2 receipt contract
+> and the P1-5 atomic lock were reviewed and closed; the workspace-vs-repo
+> anchoring distinction was not surfaced by any review pass — it was found
+> by running the real command against real data). 73 tests passing (was 38
+> at the first Completion pass, then 41/41 in AntiGravity's then-separate
+> tree). Re-ran the full bidirectional sandbox proof after every fix in this
+> update, individually and again after the final merge: `verify_gemini`
+> passes on a reconciled copy and fails on an untouched control every time,
+> a second reconcile is a true no-op, and the real `~/.gemini/skills` root
+> is confirmed byte-identical before and after each run — 132 entries, 97
+> symlinks, fingerprint unchanged throughout.
+>
+> **Still explicitly not done, by design:** the live reconcile of the 11
+> approved slugs against the real `~/.gemini/skills` has never been run —
+> only against rsync copies. That is a separate, human-approved step, not a
+> gap in this review.
+>
+> Pushed to `orama-system` as PR #314 (branch
+> `2026-08-14-005-gemini-bugfixes`, currently **draft**) after this update.
+> No merge performed — that decision is the human's, same as it has been
+> throughout this plan's development.
