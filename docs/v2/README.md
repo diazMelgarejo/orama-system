@@ -250,10 +250,11 @@ orama-system/docs/v2/
 ├── 48-board-job-source-line-schema.md  ← provisional/optional job-board schema (source_ref + expected_base_sha) so a claimant can verify the exact source state a job was scoped against; NOT enforced yet, PT-side producer already validates-when-provided; v2 candidate for hard-required once a second producer exists to coordinate with
 ├── 49-peer-mesh-auth-tls-v2-plan.md  ← peer-mesh TLS + pluggable auth (BUZZ/Twitter/Google, bearer token grandfathered) deferred plan; v1 minimum (never send a bearer token over unauthenticated transport) already landed on PR #197; this is the certificate provisioning + real TLS/mTLS + AlphaClaw HTTPS proxy work, stacked as PR(N+1)
 ├── 50-mesh-security-migration-ladder.md  ← Phases A–D: mesh prep → IP expunge → P5/P6 runtime gates (grandfathered) → strict cutover at v2 launch; merge-order guidance for #223/#224/#222 + PT #287
-└── 51-security-sentinel-orbit-passkey-mcp.md  ← v2.1 security-sentinel satellite: passkey + MCP human authorization; orbits perpetua-core; MVP HMAC bridge in docs/plans/2026-08-02-pr-body-grant-security-remediation.md
+├── 51-security-sentinel-orbit-passkey-mcp.md  ← v2.1 security-sentinel satellite: passkey + MCP human authorization; orbits perpetua-core; MVP HMAC bridge in docs/plans/2026-08-02-pr-body-grant-security-remediation.md
+└── 52-tier5-frugality-storage-consumer-mapping.md  ← maps PT's Tier-5/frugality budget ledger onto the already-canonical SQLite-write-authority / DuckDB-read-only-analytics / LanceDB-optional-redacted-recall split from doc 20; docs-only, no new architecture decision, no code
 ```
 
-> **Next free slot: `52-`**
+> **Next free slot: `53-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
