@@ -1064,3 +1064,94 @@ def test_index_json_write_is_atomic_against_a_mid_write_crash(mod, tmp_path: Pat
 
     assert index_path.read_bytes() == original_index_bytes
     assert not list(archive.parent.glob(".index.json.tmp*"))
+
+
+def test_cli_anchors_gemini_link_targets_to_repo_root_not_workspace_root(
+    mod, tmp_path: Path, monkeypatch
+) -> None:
+    """ROOT is the WORKSPACE parent (one level above this repo, used for
+    workspace-relative CANONICAL_SKILLS entries like
+    'orama-system/bin/orama-system/...'). The Gemini ownership manifest's
+    canonical_path values are REPO-relative instead
+    ('bin/orama-system/skills/code-review/SKILL.md', no leading
+    'orama-system/'), so the CLI's reconcile call site must anchor them
+    against REPO_ROOT, not ROOT -- anchoring against ROOT resolves one
+    directory too high whenever this script runs without the workspace
+    wrapper nesting, which is every isolated worktree, found via a real
+    sandbox proof against actual data (verify_gemini's dangling-symlink
+    check caught reconcile silently writing symlinks one level too high;
+    the old self-consistency-only verify check could not, since write and
+    read both used the same wrong anchor and agreed with each other).
+
+    Simulate the exact broken topology: a repo root with NO workspace
+    wrapper above it (ROOT and REPO_ROOT necessarily differ), then prove the
+    live symlink actually resolves under REPO_ROOT.
+    """
+    repo_root = tmp_path / "repo-with-no-workspace-wrapper"
+    canonical_dir = repo_root / "bin" / "orama-system" / "skills" / "code-review"
+    canonical_dir.mkdir(parents=True)
+    (canonical_dir / "SKILL.md").write_text("canonical\n", encoding="utf-8")
+
+    gemini_root = tmp_path / "gemini" / "skills"
+    archive_root = tmp_path / "archive" / "batch-1"
+    manifest_path = tmp_path / "gemini-skill-ownership.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "skills": {
+                    "code-review": {
+                        "owner": "orama",
+                        "action": "link",
+                        "canonical_slug": "code-review",
+                        "canonical_path": "bin/orama-system/skills/code-review/SKILL.md",
+                        "metadata_policy": "none",
+                    }
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(mod, "HOME", tmp_path)
+    # ROOT stays whatever this test process's real workspace happens to be;
+    # REPO_ROOT is set to the topology-mismatched repo above, with nothing
+    # one level up from it. If the CLI call site ever regresses to using
+    # ROOT again, the symlink will resolve outside repo_root entirely and
+    # the assertion below catches it.
+    monkeypatch.setattr(mod, "REPO_ROOT", repo_root)
+    import gemini_reconciliation as gr
+
+    monkeypatch.setattr(
+        mod,
+        "load_gemini_ownership",
+        lambda _path: {
+            "code-review": gr.GeminiOwnership(
+                "orama", "link", "code-review", "bin/orama-system/skills/code-review/SKILL.md", "none"
+            )
+        },
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "prog",
+            "--reconcile-gemini",
+            "--gemini-root",
+            str(gemini_root),
+            "--archive-root",
+            str(archive_root),
+            "--only",
+            "code-review",
+        ],
+    )
+
+    assert mod.main() == 0
+
+    live = gemini_root / "code-review"
+    assert live.is_symlink()
+    assert live.resolve() == canonical_dir / "SKILL.md"
+    # The decisive check: the resolved target must live UNDER repo_root.
+    # Anchoring against the wrong (workspace) root would resolve outside it
+    # entirely -- exactly the failure the real sandbox proof caught.
+    assert repo_root in live.resolve().parents

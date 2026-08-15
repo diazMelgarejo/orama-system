@@ -48,6 +48,28 @@ from gemini_reconciliation import (
 )
 
 ROOT = Path(__file__).resolve().parents[6]
+# ROOT is the WORKSPACE parent (one level above this repo, containing
+# orama-system/ and perplexity-api/Perpetua-Tools/ as siblings) -- correct
+# for CANONICAL_SKILLS entries, which are workspace-relative
+# ("orama-system/bin/orama-system/...").
+#
+# The Gemini ownership manifest's canonical_path values are REPO-relative
+# instead ("bin/orama-system/skills/code-review/SKILL.md", no leading
+# "orama-system/"), so anchoring them against ROOT silently resolves one
+# directory too high whenever this script runs from anywhere that lacks the
+# workspace-wrapper nesting -- which is every isolated git worktree used for
+# safety throughout this plan's own development (parents[6] from a worktree
+# checked out directly, e.g. /tmp/some-worktree, lands on /tmp itself, not
+# the worktree root). Confirmed by verify_gemini's dangling-symlink check
+# firing against a real sandbox proof: reconcile silently wrote symlinks
+# pointing one level above the actual repo, in a form that passed the OLD
+# self-consistency-only verify check because write and read both used the
+# same wrong anchor and agreed with each other.
+#
+# REPO_ROOT is this repository's own root, independent of whether it is
+# nested under a workspace wrapper or checked out directly (the normal case
+# for a worktree) -- the correct anchor for repo-relative manifest paths.
+REPO_ROOT = Path(__file__).resolve().parents[5]
 HOME = Path.home()
 
 
@@ -763,7 +785,7 @@ def main() -> int:
             ownership_dict = load_gemini_ownership(manifest_path)
             try:
                 written = reconcile_gemini(
-                    gemini_root, archive_root, only, lambda s: ownership_dict[s], canonical_root=ROOT
+                    gemini_root, archive_root, only, lambda s: ownership_dict[s], canonical_root=REPO_ROOT
                 )
             except ReconcileLockHeldError as exc:
                 print(f"error: {exc}", file=sys.stderr)
