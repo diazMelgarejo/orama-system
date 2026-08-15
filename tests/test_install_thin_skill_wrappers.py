@@ -8,7 +8,9 @@ bin/orama-system/skills/skillify/scripts/install_thin_skill_wrappers.py.
 import errno
 import importlib.util
 import json
+import os
 import sys
+import tempfile
 from pathlib import Path, PurePosixPath
 from types import ModuleType
 
@@ -1019,11 +1021,10 @@ def test_adapter_idempotence_does_not_compare_against_its_own_generated_output(
 def test_index_json_write_is_atomic_against_a_mid_write_crash(mod, tmp_path: Path, monkeypatch) -> None:
     """_write_receipt's index.json update must not stream JSON directly into
     the real file: a process killed mid-write leaves index.json truncated
-    and unparseable, which is exactly the kind of corruption archive-first
-    was designed to prevent, just one file over. The index must be built in
-    a temp file and atomically swapped in with os.replace, so a crash during
-    the write leaves the ORIGINAL index.json (or none, on the first-ever
-    write) completely untouched -- never a half-written file."""
+    and unparseable. The index must be built in a unique tempfile and
+    atomically swapped in with os.replace with fsync, so a crash during
+    the write leaves the ORIGINAL index.json completely untouched -- never a
+    half-written or corrupt file, and no orphaned caller temp files."""
     import gemini_reconciliation as gr
     root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
     old = root / "code-review"
@@ -1036,31 +1037,81 @@ def test_index_json_write_is_atomic_against_a_mid_write_crash(mod, tmp_path: Pat
     index_path = archive.parent / "index.json"
     original_index_bytes = index_path.read_bytes()
 
-    real_write_text = Path.write_text
+    # Place a pre-existing unrelated temp file to prove we only remove caller-owned temp files
+    foreign_tmp = archive.parent / ".index.json.tmp.foreign_stale"
+    foreign_tmp.write_text("unrelated temp file", encoding="utf-8")
 
-    def crash_on_index_write(self, data, *args, **kwargs):
-        if self.name in ("index.json", ".index.json.tmp"):
-            # A real kill-mid-write leaves PARTIAL bytes on disk, not zero --
-            # a mock that raises before touching the file at all would pass
-            # trivially whether or not the write is atomic. Write half the
-            # intended content directly to whatever path is targeted, then
-            # crash: this hits index.json for the OLD non-atomic
-            # implementation (corrupting the real file) and hits the temp
-            # file for the FIXED implementation (real index.json untouched,
-            # since os.replace of the temp file never runs).
-            with open(self, "w", encoding="utf-8") as fh:
-                fh.write(data[: len(data) // 2])
-            raise OSError("simulated crash mid-write")
-        return real_write_text(self, data, *args, **kwargs)
+    real_fsync = os.fsync
 
-    monkeypatch.setattr(Path, "write_text", crash_on_index_write)
+    def crash_on_fsync(fd):
+        # Trigger simulated crash right after partial stream write, before os.replace
+        raise OSError("simulated crash mid-stream-write")
+
+    monkeypatch.setattr(os, "fsync", crash_on_fsync)
 
     old2 = root / "orama-afrp"
     old2.mkdir(parents=True)
     (old2 / "SKILL.md").write_text("v1\n", encoding="utf-8")
     ownership2 = gr.GeminiOwnership("orama", "link", "orama-afrp", "/fake/orama-afrp/SKILL.md", "none")
-    with pytest.raises(OSError, match="simulated crash mid-write"):
+    with pytest.raises(OSError, match="simulated crash mid-stream-write"):
+        mod.reconcile_gemini(root, archive, {"orama-afrp"}, lambda s: ownership2)
+
+    # Real index.json remains byte-for-byte identical to the pre-crash state
+    assert index_path.read_bytes() == original_index_bytes
+    # Stale foreign temp file was untouched
+    assert foreign_tmp.is_file()
+    # No new temp files leaked
+    remaining_tmps = [p for p in archive.parent.glob(".index.json.tmp.*") if p != foreign_tmp]
+    assert not remaining_tmps
+
+
+def test_index_json_write_failure_during_os_replace_preserves_original(mod, tmp_path: Path, monkeypatch) -> None:
+    """If os.replace fails (e.g. permission or I/O error), original index.json must survive byte-for-byte."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    old = root / "code-review"
+    old.mkdir(parents=True)
+    (old / "SKILL.md").write_text("v1\n", encoding="utf-8")
+
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
+
+    index_path = archive.parent / "index.json"
+    original_index_bytes = index_path.read_bytes()
+
+    def crash_on_replace(src, dst):
+        raise OSError("simulated replace failure")
+
+    monkeypatch.setattr(os, "replace", crash_on_replace)
+
+    old2 = root / "orama-afrp"
+    old2.mkdir(parents=True)
+    (old2 / "SKILL.md").write_text("v1\n", encoding="utf-8")
+    ownership2 = gr.GeminiOwnership("orama", "link", "orama-afrp", "/fake/orama-afrp/SKILL.md", "none")
+    with pytest.raises(OSError, match="simulated replace failure"):
         mod.reconcile_gemini(root, archive, {"orama-afrp"}, lambda s: ownership2)
 
     assert index_path.read_bytes() == original_index_bytes
-    assert not list(archive.parent.glob(".index.json.tmp*"))
+    assert not list(archive.parent.glob(".index.json.tmp.*"))
+
+
+def test_index_json_first_write_crash_leaves_no_corrupt_index(mod, tmp_path: Path, monkeypatch) -> None:
+    """If crash happens on the very first index.json creation, index.json must not exist as corrupted."""
+    import gemini_reconciliation as gr
+    root, archive = tmp_path / "gemini" / "skills", tmp_path / "archive" / "batch-1"
+    old = root / "code-review"
+    old.mkdir(parents=True)
+    (old / "SKILL.md").write_text("v1\n", encoding="utf-8")
+
+    def crash_on_fsync(fd):
+        raise OSError("simulated first-write crash")
+
+    monkeypatch.setattr(os, "fsync", crash_on_fsync)
+
+    ownership = gr.GeminiOwnership("orama", "link", "code-review", "/fake/code-review/SKILL.md", "none")
+    with pytest.raises(OSError, match="simulated first-write crash"):
+        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: ownership)
+
+    index_path = archive.parent / "index.json"
+    assert not index_path.exists()
+    assert not list(archive.parent.glob(".index.json.tmp.*"))

@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import sys
+import tempfile
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -365,17 +366,34 @@ def _write_receipt(
         if not isinstance(index, dict):
             raise ValueError(f"{slug}: archive index must be an object")
         index[slug] = archive_root.name
-        # Atomic swap: write to a temp file in the same directory, then
-        # os.replace it over the real index. A process killed mid-write leaves
-        # the temp file corrupted, never the index every other reconciliation
-        # (and verify_gemini) reads from -- streaming JSON straight into
-        # index.json left a kill-mid-write window where the shared index itself
-        # could be truncated and unparseable, corrupting every slug's lookup,
-        # not just the one being written.
-        tmp_index_path = index_path.with_name(".index.json.tmp")
+        # Atomic swap: allocate a unique temporary file in the destination
+        # directory using tempfile.mkstemp, write and flush payload, os.fsync
+        # the file descriptor to guarantee on-disk durability, then os.replace
+        # over the real index.json. A deterministic .tmp name was prone to race
+        # conditions and stale file pickup.
+        index_dir = index_path.parent
+        index_dir.mkdir(parents=True, exist_ok=True)
+        fd, tmp_index_str = tempfile.mkstemp(
+            prefix=".index.json.tmp.",
+            dir=index_dir,
+            text=True,
+        )
+        tmp_index_path = Path(tmp_index_str)
         try:
-            tmp_index_path.write_text(json.dumps(index, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+            with os.fdopen(fd, "w", encoding="utf-8") as stream:
+                stream.write(json.dumps(index, indent=2, sort_keys=True) + "\n")
+                stream.flush()
+                os.fsync(stream.fileno())
             os.replace(tmp_index_path, index_path)
+            # Fsync parent directory for full crash-durability where supported
+            try:
+                dir_fd = os.open(str(index_dir), os.O_RDONLY)
+                try:
+                    os.fsync(dir_fd)
+                finally:
+                    os.close(dir_fd)
+            except OSError:
+                pass
         except BaseException:
             _remove_path(tmp_index_path)
             raise
