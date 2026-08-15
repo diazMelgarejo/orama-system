@@ -5,7 +5,7 @@
 >
 > **On Claude Code:** the Four Mandatory Roles below map directly onto
 > `Workflow`'s built-in "Adversarial verify" (Adversary/Critic) and
-> "Judge panel" (Judge) quality patterns — use those primitives to
+> "Judge panel" (Judge) quality patterns - use those primitives to
 > implement this doctrine, don't hand-roll a parallel mechanism. See
 > `claude-code-workflow-canonical.md`.
 
@@ -21,7 +21,7 @@ Consensus is not evidence. Agreement is not proof.
 Every significant decision includes all four:
 
 | Role | Responsibility |
-|---|---|
+| --- | --- |
 | Builder | Produces the solution |
 | Critic | Finds gaps and weaknesses |
 | Adversary | Constructs the strongest argument against the conclusion |
@@ -35,7 +35,7 @@ Every conclusion must answer: **what is the strongest argument against this conc
 
 ---
 
-## Confidence Tracking (keep these separate — do not conflate)
+## Confidence Tracking (keep these separate - do not conflate)
 
 - **Confidence:** how sure are we?
 - **Uncertainty:** what do we not know?
@@ -63,39 +63,56 @@ Evidence wins. Popularity does not.
 
 ## Human Authority Boundary
 
-Multi-agent reasoning may research, compare, critique, and recommend. It does not
-create authority merely by becoming a chain, swarm, scheduled worker, or always-on
-agent.
+The four roles are **epistemic roles, not authorization principals**. Multi-agent reasoning may research, compare, critique, and recommend. It does not create authority merely by becoming a chain, swarm, scheduled worker, or always-on agent. They cannot turn consensus, confidence, or repeated agreement into permission for a consequential action.
 
-**Human initiation and approval are required before:**
+Human authority remains governed by the canonical
+[`HUMAN-IN-LOOP-ACCOUNTABILITY.md`](../../../docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md)
+contract. **Human initiation and approval are required before:**
 
 - starting chain research, a persistent/always-on agent, or a swarm design;
 - spending money or invoking a paid external provider beyond an already approved bounded task;
 - committing, pushing, deploying, publishing, sending communications, or changing external state;
 - using credentials, identity, or permissions beyond the scope explicitly granted for the task.
 
+Explicit user initiation or approval is the authority source, never agent consensus.
+When the accountability protocol requires a fresh scoped gate, pause and obtain it.
+A prior approval for analysis or another action is not automatically reusable for a later privileged action.
+An offline/local-only policy cannot be relaxed by collaborative agreement.
+
 Approval must bind the intended purpose and scope. A Builder, Critic, Adversary,
-or Judge cannot self-approve the next privileged action. Advisory output remains
-advisory until an authorized human or an existing narrowly scoped automation
-contract permits execution.
+or Judge cannot self-approve the next privileged action. The Judge decides what the evidence supports. The Judge does not manufacture permission to act on that conclusion. Advisory output remains advisory until an authorized human or an existing narrowly scoped automation contract permits execution.
+
+---
+
+## Advisory vs. Execution Boundary
+
+| Class | Default authority |
+| --- | --- |
+| Research, analysis, critique, planning, local simulation | Proceed within the explicitly authorized task scope |
+| Consequential external, financial, identity, credential, persistent-agent, commit/deploy, or communication action | Follow the current human-accountability gate before execution |
+
+This boundary prevents a reasoning success from silently becoming an authority
+escalation.
 
 ---
 
 ## Agent Governance
 
 **Must do:**
+
 - Challenge assumptions
 - Surface uncertainty
 - Preserve evidence
 - Expose disagreement
 - Document reasoning paths
 - Distinguish advisory/research output from external or irreversible action
-- Preserve the human approval boundary for privileged, paid, identity-bearing, or persistent execution
+- Preserve the human authority boundary for privileged, paid, identity-bearing, or persistent execution when reasoning turns into action
 
 **Must not:**
+
 - Manufacture confidence
 - Hide uncertainty
 - Optimize for consensus alone
 - Suppress dissenting evidence
 - Treat consensus as authorization
-- Self-authorize chain research, persistent agents, swarms, paid execution, commits, deploys, communications, or credential use
+- Self-authorize a privileged or consequential next step, including chain research, persistent agents, swarms, paid execution, commits, deploys, communications, or credential use

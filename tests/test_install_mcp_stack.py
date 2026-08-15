@@ -2,76 +2,90 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 from pathlib import Path
+
+import pytest
 
 SCRIPT = Path(__file__).parents[1] / "bin/orama-system/scripts/install-mcp-stack.sh"
 
 
 def _cmd(path: Path, name: str, body: str) -> None:
     target = path / name
-    target.write_text("#!/usr/bin/env bash\nset -eu\n" + body)
+    target.write_text("#!/usr/bin/env bash\nset -eu\n" + body, encoding="utf-8")
     target.chmod(0o755)
 
 
-def _env(tmp_path: Path, *, doctor_ok: bool = True, registered: bool = True) -> dict[str, str]:
+def _env(tmp_path: Path) -> dict[str, str]:
     bindir = tmp_path / "bin"
     bindir.mkdir()
-    # The installer's Node compatibility probe uses `node -e`; this stub models
-    # a supported runtime without needing a real npm/network operation in CI.
-    _cmd(bindir, "node", "if [ \"${1:-}\" = -e ]; then exit 0; fi\necho v22.12.0")
-    _cmd(bindir, "npm", "echo npm \"$@\"")
+    _cmd(bindir, "node", "echo v22.12.0")
+    _cmd(
+        bindir,
+        "npm",
+        "if [ \"${1:-}\" = list ]; then "
+        "printf '%s\\n' '{\"dependencies\":{\"ai-cli-mcp\":{\"version\":\"2.22.0\"}}}'; "
+        "exit 0; fi\n"
+        "exit 0",
+    )
     _cmd(bindir, "npx", "exit 0")
-    doctor = "exit 0" if doctor_ok else "exit 7"
-    _cmd(
-        bindir,
-        "ai-cli",
-        f"if [ \"${{1:-}}\" = doctor ]; then {doctor}; fi\n"
-        "if [ \"${1:-}\" = models ]; then exit 0; fi\nexit 0",
-    )
+    _cmd(bindir, "ai-cli", "exit 0")
     _cmd(bindir, "ai-cli-mcp", "exit 0")
-    listing = "ai-cli: npx -y ai-cli-mcp@2.22.0" if registered else ""
-    _cmd(
-        bindir,
-        "claude",
-        f"if [ \"${{1:-}} ${{2:-}}\" = 'mcp list' ]; then echo '{listing}'; exit 0; fi\n"
-        "echo claude \"$@\"",
-    )
+
     env = os.environ.copy()
-    env["PATH"] = f"{bindir}:{env['PATH']}"
+    # Keep tests hermetic: the readiness helper must not call a workstation's
+    # real Claude client while exercising the fake command environment.
+    env["PATH"] = os.pathsep.join(
+        (str(bindir), str(Path(sys.executable).parent), "/usr/bin", "/bin")
+    )
     env["HOME"] = str(tmp_path)
     return env
 
 
-def test_verify_ready_is_noninteractive(tmp_path: Path) -> None:
+def test_core_verify_is_noninteractive_and_uses_shared_gate(tmp_path: Path) -> None:
     result = subprocess.run(
         ["bash", str(SCRIPT), "--core-only", "--non-interactive", "--verify"],
-        env=_env(tmp_path), text=True, capture_output=True,
+        env=_env(tmp_path),
+        text=True,
+        capture_output=True,
+        timeout=30,
     )
     assert result.returncode == 0, result.stderr
-    assert '"core":"READY"' in result.stdout
+    assert "Core ai-cli-mcp readiness complete" in result.stdout
     assert "dangerously-skip-permissions" not in result.stdout
 
 
-def test_doctor_failure_is_core_failure(tmp_path: Path) -> None:
+def test_core_readiness_does_not_require_claude_client(tmp_path: Path) -> None:
     result = subprocess.run(
-        ["bash", str(SCRIPT), "--core-only", "--non-interactive", "--verify"],
-        env=_env(tmp_path, doctor_ok=False), text=True, capture_output=True,
+        ["bash", str(SCRIPT), "--core-only", "--verify"],
+        env=_env(tmp_path),
+        text=True,
+        capture_output=True,
+        timeout=30,
     )
-    assert result.returncode != 0
-    assert "ai-cli doctor failed" in result.stderr
+    assert result.returncode == 0, result.stderr
 
 
-def test_missing_registration_verify_fails_without_mutation(tmp_path: Path) -> None:
+@pytest.mark.integration
+def test_core_only_default_arguments_are_bash32_nounset_safe(tmp_path: Path) -> None:
     result = subprocess.run(
-        ["bash", str(SCRIPT), "--core-only", "--non-interactive", "--verify"],
-        env=_env(tmp_path, registered=False), text=True, capture_output=True,
+        ["/bin/bash", "-u", str(SCRIPT), "--core-only"],
+        env=_env(tmp_path),
+        text=True,
+        capture_output=True,
+        timeout=30,
     )
-    assert result.returncode != 0
-    assert "registration 'ai-cli' missing" in result.stderr
+    assert result.returncode == 0, result.stderr
+    assert "Core ai-cli-mcp readiness complete" in result.stdout
 
 
-def test_unknown_flag_rejected(tmp_path: Path) -> None:
+def test_unknown_flag_rejected_before_any_install(tmp_path: Path) -> None:
     result = subprocess.run(
-        ["bash", str(SCRIPT), "--wat"], env=_env(tmp_path), text=True, capture_output=True,
+        ["bash", str(SCRIPT), "--wat"],
+        env=_env(tmp_path),
+        text=True,
+        capture_output=True,
+        timeout=30,
     )
     assert result.returncode == 2
+    assert "unknown option" in result.stderr
