@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD013 MD060 -->
 # This is the Legacy ὅραμα System
 
 moving to 2.0 on another repo soon
