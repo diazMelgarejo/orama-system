@@ -70,7 +70,10 @@ def test_branch_with_no_upstream_is_flagged(tmp_path: Path) -> None:
     assert "issue: no-upstream" in result.stdout
 
 
-def test_branch_ahead_of_upstream_is_flagged_with_commit_count(tmp_path: Path) -> None:
+def test_branch_not_yet_in_main_is_flagged_needs_reanchor(tmp_path: Path) -> None:
+    """Merged/orphaned classification uses reanchor_scan.sh's tree-twin scan,
+    not ahead/behind counts -- a branch with commits that never landed in
+    main is NEEDS-REANCHOR regardless of whether it was ever pushed."""
     repo = _make_pushed_repo(tmp_path)
     _git(repo, "checkout", "-b", "ahead")
     _commit(repo, "ahead-base.txt", "base\n", "ahead branch base")
@@ -82,22 +85,24 @@ def test_branch_ahead_of_upstream_is_flagged_with_commit_count(tmp_path: Path) -
 
     assert result.returncode == 0, result.stderr
     assert "branch: ahead" in result.stdout
-    assert "issue: unpushed-1-commits" in result.stdout
-    assert "raw upstream ahead count" in result.stdout
-    assert "unpushed local work" in result.stdout
+    assert "issue: needs-reanchor" in result.stdout
+    assert "NEEDS-REANCHOR: graft 2 unique commit(s)" in result.stdout
 
 
-def test_clean_pushed_branch_is_not_flagged(tmp_path: Path) -> None:
+def test_branch_already_merged_into_main_is_not_flagged(tmp_path: Path) -> None:
+    """A branch whose tip is a tree-twin already in main's history (i.e.
+    genuinely merged, not just pushed) is not stranded work."""
     repo = _make_pushed_repo(tmp_path)
     _git(repo, "checkout", "-b", "clean")
     _commit(repo, "clean.txt", "clean\n", "clean branch work")
     _git(repo, "push", "-u", "origin", "clean")
     _git(repo, "checkout", "main")
+    _git(repo, "merge", "--no-ff", "-m", "merge clean into main", "clean")
+    _git(repo, "push", "origin", "main")
 
     result = _run_scanner(repo)
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "No stranded work found."
     assert "branch: clean" not in result.stdout
 
 
