@@ -15,7 +15,7 @@
 
 **Root cause:** Autopilot jobs were repeatedly SIGTERM'd on 600s timeout (confirmed in logs: `Job 693/724/726 hit per-job timeout`). One interrupted run wrote `~/.gbrain/import-checkpoint.json` with `dir` = the repo root (CWD at SIGTERM time). The next sync's `decideResume()` function found the directory exists and is a directory, returned `{ kind: "resume" }` with no ownership validation, and the `finally` block did `rmSync(repoRoot, { recursive: true, force: true })`.
 
-**The fix** is a 10-line TypeScript change in two files — `decideResume()` in `gstack-gbrain-sync.ts` + `cleanupStagingDir()` in `gstack-memory-ingest.ts`. See [`docs/reference/gstack-pr-1802-fix.md`](reference/gstack-pr-1802-fix.md) and wiki [`14-gbrain-checkpoint-rm-rf-bug.md`](wiki/14-gbrain-checkpoint-rm-rf-bug.md).
+**The fix** is a 10-line TypeScript change in two files — `decideResume()` in `gstack-gbrain-sync.ts` + `cleanupStagingDir()` in `gstack-memory-ingest.ts`. See [`docs/reference/gstack-pr-1802-fix.md`](../reference/gstack-pr-1802-fix.md) and wiki [`14-gbrain-checkpoint-rm-rf-bug.md`](../wiki/14-gbrain-checkpoint-rm-rf-bug.md).
 
 ### What was done
 
@@ -34,7 +34,7 @@
 3. **Watch for `Job NNN hit per-job timeout` in `~/.gbrain/autopilot.err`** — two or more in a row = checkpoint is likely poison, delete it.
 4. **Never run `/sync-gbrain` twice without checking the checkpoint** — a stale checkpoint from a previous interrupted run survives until the next clean run or manual deletion.
 
-→ [wiki/14-gbrain-checkpoint-rm-rf-bug.md](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
+→ [wiki/14-gbrain-checkpoint-rm-rf-bug.md](../wiki/14-gbrain-checkpoint-rm-rf-bug.md)
 
 **Cross-repo:** [PT LESSONS](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) · [AlphaClaw Lessons](../../AlphaClaw/docs/Lessons.MD)
 
@@ -50,15 +50,15 @@
 - Panel split 3-1 on the `.gstack-staging` marker; adopted on the **fail-safe asymmetry** argument (missing marker → extra re-stage, never a wrong delete). All 4 converged: inevitable fix is upstream in gbrain (companion issue drafted).
 
 ### Dogfood (eat-your-own)
-- Codified the method into [`reference/multi-channel-steelman.md`](reference/multi-channel-steelman.md) and the **Fail-Closed Trust Boundary** principle (prove ownership before any recurse-delete; design the false-negative/false-positive cost asymmetry in on purpose).
-- Submission package: [`reference/gstack-1802-submission-package.md`](reference/gstack-1802-submission-package.md).
+- Codified the method into [`reference/multi-channel-steelman.md`](../reference/multi-channel-steelman.md) and the **Fail-Closed Trust Boundary** principle (prove ownership before any recurse-delete; design the false-negative/false-positive cost asymmetry in on purpose).
+- Submission package: [`reference/gstack-1802-submission-package.md`](../reference/gstack-1802-submission-package.md).
 
 ### Decisions
 - Ship the minimal inevitable core (guard+marker+tripwire); defer the capability-object refactor to a separate PR (ruthless refinement).
 - Version train unified at **0.9.9.9** (operator instruction); `api_server.py` already there; legacy API-baseline pins NOT auto-bumped without instruction.
 - gstack fork/push/PR is GATED on operator confirmation (outward-facing, public, attributable).
 
-→ [wiki/14-gbrain-checkpoint-rm-rf-bug.md](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
+→ [wiki/14-gbrain-checkpoint-rm-rf-bug.md](../wiki/14-gbrain-checkpoint-rm-rf-bug.md)
 
 ---
 
@@ -84,7 +84,7 @@
 - Trigger = shell-start hook (most robust; catches any update path) over wrapping `gstack upgrade` (misses other paths).
 - Retire each patch by deleting its `.patch`+`.meta` once the upstream PR merges (MARKERS grep already neutralizes it first).
 
-→ Driver: [`../scripts/fork-patches/README.md`](../scripts/fork-patches/README.md) · Method: [`reference/multi-channel-steelman.md`](reference/multi-channel-steelman.md) · Incident: [`wiki/14-gbrain-checkpoint-rm-rf-bug.md`](wiki/14-gbrain-checkpoint-rm-rf-bug.md)
+→ Driver: [`../scripts/fork-patches/README.md`](../scripts/fork-patches/README.md) · Method: [`reference/multi-channel-steelman.md`](../reference/multi-channel-steelman.md) · Incident: [`wiki/14-gbrain-checkpoint-rm-rf-bug.md`](../wiki/14-gbrain-checkpoint-rm-rf-bug.md)
 
 ---
 
@@ -107,7 +107,7 @@
 - Re-anchor moves the *ref* for a clean graph; it does NOT merge branch content into main (that would regress the canonical tree). Merge only genuinely-unique forward work via a reviewed PR.
 - Always wrap network git ops in a `timeout` (a `git fetch upstream` once hung ~14h).
 
-**Canonical skill:** [`../bin/orama-system/skills/git-history-surgery/SKILL.md`](../bin/orama-system/skills/git-history-surgery/SKILL.md) · Fork variant: [`wiki/13-alphaclaw-fork-contrib-branches.md`](wiki/13-alphaclaw-fork-contrib-branches.md)
+**Canonical skill:** [`../bin/orama-system/skills/git-history-surgery/SKILL.md`](../bin/orama-system/skills/git-history-surgery/SKILL.md) · Fork variant: [`wiki/13-alphaclaw-fork-contrib-branches.md`](../wiki/13-alphaclaw-fork-contrib-branches.md)
 
 ---
 
@@ -209,7 +209,7 @@ Discoveries + fixes (canonical guard scripts live in orama, synced outward):
 - **Rule:** never hand-edit a guard script in a downstream repo. Edit orama's canonical copy,
   then `sync-attribution-guard-scripts.sh <target>`. Org-wide governance plan so future
   `oramasys/*` repos inherit identical hooks with zero drift:
-  [`docs/v2/`](v2/) (attribution-guard single-source-of-truth).
+  [`docs/v2/`](../v2/) (attribution-guard single-source-of-truth).
 
 **Cross-repo:** mirrored in PT [`docs/LESSONS.md` § 2026-06-05](../../perplexity-api/Perpetua-Tools/docs/LESSONS.md) ·
 [GitHub](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md).
@@ -233,7 +233,7 @@ on a credential prompt.)
   will hang on the unreachable engine. Repair via `/setup-gbrain` first.
 
 This is a public, cross-agent record of a private operating lesson (memory
-`feedback_hard_deadlines_no_hang`); see also [`docs/v2/27`](v2/27-git-governance-zero-fragmentation.md)
+`feedback_hard_deadlines_no_hang`); see also [`docs/v2/27`](../v2/27-git-governance-zero-fragmentation.md)
 and the AlphaClaw/periscope network-git safety notes. Sleep chains were already banned.
 
 ---
@@ -317,7 +317,7 @@ mainstream-AI co-authors) is now *enforced*, not just documented:
 two checks: (a) **completeness** (every canonical guard is in the sync copy list — catches the
 exact omission that let `check_commit_message.sh`/`check_identity.sh` drift); (b) **parity**
 (downstream copies byte-identical to orama canonical via `cmp -s`). Verified PASS on orama +
-PT (9/9). Added to the sync copy list so it self-propagates. Doctrine: [`docs/v2/27`](v2/27-git-governance-zero-fragmentation.md).
+PT (9/9). Added to the sync copy list so it self-propagates. Doctrine: [`docs/v2/27`](../v2/27-git-governance-zero-fragmentation.md).
 
 **2. Concurrent-agent collision during the opus-4-8 migration — caught a 404 regression.**
 While doing the `/claude-api migrate` task, a parallel agent (same approved identity
@@ -637,7 +637,7 @@ node <repo>/AlphaClaw/node_modules/openclaw/openclaw.mjs gateway --port 18789 --
   `openclaw-skills`.
 - Kept `.agents` and `.claude` Hermes installs as thin wrappers.
 - Documented the Windows Hermes launcher, Git Bash, and explicit one-shot route
-  in [wiki/15-hermes-windows-harness.md](wiki/15-hermes-windows-harness.md).
+  in [wiki/15-hermes-windows-harness.md](../wiki/15-hermes-windows-harness.md).
 
 ### Open questions
 

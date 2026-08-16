@@ -41,7 +41,7 @@ Replacing `pip install pkg1 pkg2 pkg3` with `pip install ".[extras]"` without fi
 - `9653cfc` — added ci-deps-guard pre-commit hook
 - `710fc47` — added hatchling+build to [test] extras (final fix)
 
-→ [wiki/01-ci-deps.md](wiki/01-ci-deps.md)
+→ [wiki/01-ci-deps.md](../wiki/01-ci-deps.md)
 
 ---
 
@@ -67,7 +67,7 @@ Replacing `pip install pkg1 pkg2 pkg3` with `pip install ".[extras]"` without fi
 - `3c9a4a8` (UTS) — fix(bootstrap): handle PermissionError + auto chmod +x after npm install
 - `23bd01d` (UTS) — fix(bootstrap): remove capture_output=True
 
-→ [wiki/02-idempotent-installs.md](wiki/02-idempotent-installs.md)
+→ [wiki/02-idempotent-installs.md](../wiki/02-idempotent-installs.md)
 
 ---
 
@@ -95,7 +95,7 @@ Replacing `pip install pkg1 pkg2 pkg3` with `pip install ".[extras]"` without fi
 
 - `8af62f5` (PT) — feat(routing): one-role-per-device guard + GPU crash recovery cooldown
 
-→ [wiki/03-device-identity.md](wiki/03-device-identity.md)
+→ [wiki/03-device-identity.md](../wiki/03-device-identity.md)
 
 ---
 
@@ -121,7 +121,7 @@ Replacing `pip install pkg1 pkg2 pkg3` with `pip install ".[extras]"` without fi
 
 - `6bc40d0` (UTS) — feat(bootstrap): probe all candidate ports and commandeer any running gateway
 
-→ [wiki/04-gateway-discovery.md](wiki/04-gateway-discovery.md)
+→ [wiki/04-gateway-discovery.md](../wiki/04-gateway-discovery.md)
 
 ---
 
@@ -145,7 +145,7 @@ A batch `sed -i` to replace `multi_agent\.` with `bin.` matched filename strings
 
 - `0364098` (UTS) — fix(tests): restore test filenames broken by over-eager multi_agent sed
 
-→ [wiki/05-bulk-sed-safety.md](wiki/05-bulk-sed-safety.md)
+→ [wiki/05-bulk-sed-safety.md](../wiki/05-bulk-sed-safety.md)
 
 ---
 
@@ -211,7 +211,7 @@ Other cloners need `git submodule update --init .ecc` to get the contents.
 - Creating feature branches without `origin/main` as base — causes orphan branch with no common ancestor; `git rebase origin/main` produces add/add conflicts on EVERY file
 - Hardcoded LAN IPs in source code defaults — breaks CI on all other machines; real IPs live in `.env` only
 
-→ [wiki/06-multi-agent-collab.md](wiki/06-multi-agent-collab.md)
+→ [wiki/06-multi-agent-collab.md](../wiki/06-multi-agent-collab.md)
 
 ---
 
@@ -313,7 +313,7 @@ fi
 - `LM_STUDIO_MAC_ENDPOINT` parsed in `agent_launcher.py` to derive `MAC_LMS_HOST`/`MAC_LMS_PORT`
 - `.env.local` corrected: `WINDOWS_IP=192.168.254.108`, `WINDOWS_PORT=11434`
 
-→ [wiki/07-startup-ip-detection.md](wiki/07-startup-ip-detection.md)
+→ [wiki/07-startup-ip-detection.md](../wiki/07-startup-ip-detection.md)
 
 ---
 
@@ -425,9 +425,9 @@ both repos, and manual-port only reviewed intent.
 - `.ecc` must not be both a gitlink expectation and a symlink in the working tree.
 - `repo_hygiene.py` and `check_identity.sh` are the pre-commit guardrails for this recovery path.
 
-→ [docs/recovery/2026-04-24-001-orama-history-recovery.md](recovery/2026-04-24-001-orama-history-recovery.md)
-→ [docs/recovery/2026-04-24-002-commit-salvage-matrix.md](recovery/2026-04-24-002-commit-salvage-matrix.md)
-→ [docs/recovery/2026-04-24-003-git-safety-guardrails.md](recovery/2026-04-24-003-git-safety-guardrails.md)
+→ [docs/recovery/2026-04-24-001-orama-history-recovery.md](../recovery/2026-04-24-001-orama-history-recovery.md)
+→ [docs/recovery/2026-04-24-002-commit-salvage-matrix.md](../recovery/2026-04-24-002-commit-salvage-matrix.md)
+→ [docs/recovery/2026-04-24-003-git-safety-guardrails.md](../recovery/2026-04-24-003-git-safety-guardrails.md)
 
 ---
 
@@ -449,7 +449,7 @@ both repos, and manual-port only reviewed intent.
 
 - `orama-system` is the authoritative name and directory.
 - `scripts/review/repo_hygiene.py` is the primary guardrail for identity and naming consistency.
-- [docs/wiki/08-git-hygiene-and-branching.md](wiki/08-git-hygiene-and-branching.md) tracks the active Git hygiene and branching guardrails.
+- [docs/wiki/08-git-hygiene-and-branching.md](../wiki/08-git-hygiene-and-branching.md) tracks the active Git hygiene and branching guardrails.
 
 ### Prevention Rules
 
@@ -463,7 +463,7 @@ both repos, and manual-port only reviewed intent.
 - `dc45482` — chore(rename): systematic migration to orama-system
 - `f43a9b2` — fix(setup): fix _skip call signature in setup_macos.py
 
-→ [docs/wiki/08-git-hygiene-and-branching.md](wiki/08-git-hygiene-and-branching.md)
+→ [docs/wiki/08-git-hygiene-and-branching.md](../wiki/08-git-hygiene-and-branching.md)
 → [scripts/review/repo_hygiene.py](../scripts/review/repo_hygiene.py)
 
 ---
@@ -484,7 +484,7 @@ both repos, and manual-port only reviewed intent.
 - Treat `git fsck --no-reflogs --full --unreachable --no-progress` as the fast signal for malformed refs after macOS/Xcode metadata incidents.
 - Check `.git/refs` directly with `find .git/refs -name '.DS_Store' -print` when Xcode Beta or Finder has touched the checkout.
 - Keep contribution guidance relative-link-only so GitHub renders it and agents do not depend on sibling local checkouts or absolute machine paths.
-- Add new operational learnings here before ending a session; link deeper guidance through [CONTRIBUTING.md](../CONTRIBUTING.md), [docs/wiki/README.md](wiki/README.md), and [tests/README.md](../tests/README.md).
+- Add new operational learnings here before ending a session; link deeper guidance through [CONTRIBUTING.md](../CONTRIBUTING.md), [docs/wiki/README.md](../wiki/README.md), and [tests/README.md](../tests/README.md).
 
 ### Prevention rules
 

@@ -88,7 +88,7 @@ The `gitStatus` block injected at session start is captured once at launch. By t
 
 - Historical docs still contain many `Perplexity-Tools` references; active-path docs are cleaned first, historical artifacts are tracked as non-blocking warnings.
 
-→ [wiki/09-policy-fail-closed-and-checklist.md](wiki/09-policy-fail-closed-and-checklist.md)
+→ [wiki/09-policy-fail-closed-and-checklist.md](../wiki/09-policy-fail-closed-and-checklist.md)
 
 ---
 
@@ -676,7 +676,7 @@ Do not trust sandboxed login loops when the debug log reports an OAuth callback 
 
 - Codex should improve its own warning so GitHub stdio setup does not suggest an HTTP-only auth field.
 
-→ [wiki/11-codex-github-mcp-config.md](wiki/11-codex-github-mcp-config.md)
+→ [wiki/11-codex-github-mcp-config.md](../wiki/11-codex-github-mcp-config.md)
 
 ---
 
@@ -1277,9 +1277,9 @@ Tracked as checklists elsewhere (read the owner doc, not this log):
 | Topic | Owner doc |
 |-------|-----------|
 | Fortify / Test B / MCP / policy gaps | [`bin/orama-system/skills/code-review/references/pressure-test-notes.md`](../bin/orama-system/skills/code-review/references/pressure-test-notes.md) § Fortify pass |
-| CLAUDE-instru weaning + CI grep | [`docs/plans/2026-05-23-claude-instru-weaning-autoplan.md`](plans/2026-05-23-claude-instru-weaning-autoplan.md) § Open TODOs |
-| Agent first-open surfaces (Cursor / Claude / OpenClaw) | [`docs/reference/agent-first-open-visibility.md`](reference/agent-first-open-visibility.md) |
-| E2E bootstrap known gaps | [`docs/how-to/first-run-and-code-review.md`](how-to/first-run-and-code-review.md) § Known gaps |
+| CLAUDE-instru weaning + CI grep | [`docs/plans/2026-05-23-claude-instru-weaning-autoplan.md`](../plans/2026-05-23-claude-instru-weaning-autoplan.md) § Open TODOs |
+| Agent first-open surfaces (Cursor / Claude / OpenClaw) | [`docs/reference/agent-first-open-visibility.md`](../reference/agent-first-open-visibility.md) |
+| E2E bootstrap known gaps | [`docs/how-to/first-run-and-code-review.md`](../how-to/first-run-and-code-review.md) § Known gaps |
 
 ---
 
@@ -1287,7 +1287,7 @@ Tracked as checklists elsewhere (read the owner doc, not this log):
 
 ### What was learned
 
-- **Canonical policy** lives in [`docs/wiki/08-git-hygiene-and-branching.md`](wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25): four approved primary authors (`cyre`a-circumflex+euro+quote (cp1252-misread em-dash)`Lawrence@cyre.me`, `Codex <codex@openai.com>`); `Co-authored-by` allows well-known public AI/vendor domains and only two Gmail addresses.
+- **Canonical policy** lives in [`docs/wiki/08-git-hygiene-and-branching.md`](../wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25): four approved primary authors (`cyre`a-circumflex+euro+quote (cp1252-misread em-dash)`Lawrence@cyre.me`, `Codex <codex@openai.com>`); `Co-authored-by` allows well-known public AI/vendor domains and only two Gmail addresses.
 - **Enforcement:** `bash scripts/git/install-local-hooks.sh` → `check_identity.sh` (pre-commit) + `check_commit_message.sh` (commit-msg). Replaced the old “forbid all agent co-author substrings” hook with an allowlist model aligned with `repo_hygiene.py`.
 - **Agent default:** sessions should not add `Co-authored-by` to their own commits even when hooks allow public AI attribution for human-authored merges.
 
@@ -1302,12 +1302,12 @@ Tracked as checklists elsewhere (read the owner doc, not this log):
 ### What was learned
 
 - Fixes **1–3** from [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../OpenClaw/v1/2026-05-23-security-markdown.md) are implemented: env-based Gemini key, `scan_tracked_secrets` in hygiene, bearer auth on portal/API/PT jobs, memory redaction before GossipBus persist.
-- Fixes **4–6** (MCP path allowlist, remote endpoint URL policy, least-privilege MCP) stay **queued** — documented in [`docs/SECURITY-POLICY.md`](SECURITY-POLICY.md) and [`docs/v2/23-security-preconditions.md`](v2/23-security-preconditions.md).
+- Fixes **4–6** (MCP path allowlist, remote endpoint URL policy, least-privilege MCP) stay **queued** — documented in [`docs/SECURITY-POLICY.md`](../SECURITY-POLICY.md) and [`docs/v2/23-security-preconditions.md`](../v2/23-security-preconditions.md).
 - `ORAMA_CONTROL_PLANE_TOKEN` + `ORAMA_INSECURE_DEV=0` is the production posture; dev stacks can set `ORAMA_INSECURE_DEV=1` without a token.
 
 ### Decisions made
 
-- Canonical policy: [`docs/SECURITY-POLICY.md`](SECURITY-POLICY.md); v1 index: [`OpenClaw/v1/README.md`](../../OpenClaw/v1/README.md).
+- Canonical policy: [`docs/SECURITY-POLICY.md`](../SECURITY-POLICY.md); v1 index: [`OpenClaw/v1/README.md`](../../OpenClaw/v1/README.md).
 - Perpetua-Tools mirrors orama git hooks via `scripts/git/check_identity.sh`.
 
 ---
