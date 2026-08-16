@@ -3267,8 +3267,8 @@ async def _get_fleet_topology() -> dict[str, Any]:
     Defensively coded to work with or without PT Phase 2 spec being available.
     """
     local_node_id = local_platform()
+    peer_ip = read_discovery_peer_ip()
     peer_identity = read_discovery_peer_identity()
-    peer_ip = peer_identity.hostname if peer_identity else ""
 
     # For now, return minimal topology based on what we can observe
     peers: List[dict[str, Any]] = []
