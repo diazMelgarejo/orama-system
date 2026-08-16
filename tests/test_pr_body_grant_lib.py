@@ -138,7 +138,6 @@ def test_verify_grant_fields_rejects_invalid_inputs_directly(grant_lib: Any) -> 
     Tests that carriage returns and blank values are rejected
     without going through the full mint_grant pipeline.
     """
-
     # Mock fields dict that would pass all other checks
     fields = {
         "marker": "operator-grant-v2",
