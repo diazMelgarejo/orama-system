@@ -160,3 +160,79 @@ async def test_client_loop_stops_on_endpoint_policy_rejection(
 
     assert channel.state == "disconnected"
     assert sse_called is False
+
+
+@pytest.mark.asyncio
+async def test_fetch_remote_peer_api_preserves_https_and_builds_transport_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "peer_inbox_portal",
+        Path(__file__).resolve().parents[1] / "platform" / "windows" / "peer_inbox_portal.py",
+    )
+    assert spec and spec.loader
+    peer_inbox_portal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(peer_inbox_portal)
+
+    identity = TransportIdentity(scheme="https", hostname="192.168.1.50", port=9443)
+    requested_url = ""
+
+    class DummyResponse:
+        status_code = 200
+
+        def json(self) -> dict[str, Any]:
+            return {"files": ["remote_doc.md"]}
+
+    class DummyClient:
+        async def __aenter__(self) -> DummyClient:
+            return self
+
+        async def __aexit__(self, *args: Any) -> None:
+            pass
+
+        async def get(self, url: str, headers: dict[str, str] | None = None) -> DummyResponse:
+            nonlocal requested_url
+            requested_url = url
+            return DummyResponse()
+
+    monkeypatch.setattr(peer_inbox_portal.httpx, "AsyncClient", lambda **kwargs: DummyClient())
+
+    result = await peer_inbox_portal.fetch_remote_peer_api(
+        "/api/peer-inbox",
+        peer_identity=identity,
+        portal_port=8443,
+        auth_headers={"Authorization": "Bearer secret-token"},
+    )
+
+    assert result["ok"] is True
+    assert result["peer_ip"] == "192.168.1.50"
+    assert requested_url == "https://192.168.1.50:8443/api/peer-inbox"
+
+
+@pytest.mark.asyncio
+async def test_fetch_remote_peer_api_rejects_disallowed_public_peer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        "peer_inbox_portal",
+        Path(__file__).resolve().parents[1] / "platform" / "windows" / "peer_inbox_portal.py",
+    )
+    assert spec and spec.loader
+    peer_inbox_portal = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(peer_inbox_portal)
+
+    identity = TransportIdentity(scheme="https", hostname="8.8.8.8", port=9443)
+
+    result = await peer_inbox_portal.fetch_remote_peer_api(
+        "/api/peer-inbox",
+        peer_identity=identity,
+        portal_port=8002,
+        auth_headers={},
+    )
+
+    assert result["ok"] is False
+    assert result["peer_ip"] == "8.8.8.8"
+    assert "RFC1918" in result["error"] or "public" in result["error"] or "disallowed" in result["error"]
+
