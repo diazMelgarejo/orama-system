@@ -107,12 +107,38 @@ def test_invalid_grant_inputs_fail_before_reading_append_content(
     assert "must not contain pipe or newline characters" in err
 
 
-def test_verify_grant_fields_rejects_invalid_inputs_directly(grant_lib):
+@pytest.mark.parametrize(
+    ("repo", "pr_number"),
+    [
+        ("owner\nrepo", "42"),
+        ("owner/repo", "42\n"),
+        ("owner\rrepo", "42"),
+        ("owner/repo", "42\r"),
+        ("", "42"),
+        ("owner/repo", ""),
+        ("   ", "42"),
+        ("owner/repo", "   "),
+    ],
+)
+def test_mint_grant_rejects_invalid_inputs(
+    grant_lib: Any, monkeypatch: pytest.MonkeyPatch, repo: str, pr_number: str
+) -> None:
+    def digest_must_not_run(*_args: Any, **_kwargs: Any) -> NoReturn:
+        raise AssertionError("append content must not be read for invalid grant inputs")
+
+    monkeypatch.setattr(grant_lib, "content_digest_for_append", digest_must_not_run)
+
+    with pytest.raises(grant_lib.GrantError, match="must not contain pipe or newline characters"):
+        grant_lib.mint_grant(repo, pr_number, "untrusted-followup.md", None)
+
+
+def test_verify_grant_fields_rejects_invalid_inputs_directly(grant_lib: Any) -> None:
     """Direct unit test for verify_grant_fields() validation logic.
 
     Tests that carriage returns and blank values are rejected
     without going through the full mint_grant pipeline.
     """
+
     # Mock fields dict that would pass all other checks
     fields = {
         "marker": "operator-grant-v2",
