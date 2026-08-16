@@ -40,7 +40,7 @@ Route MCP tools, Claude Skills, and parallel CLI agents to the cheapest layer th
 
 ## Load First
 
-Install/setup detail (read on demand): [`references/install-baseline.md`](references/install-baseline.md), [`references/gemini-and-ai-cli-mcp-setup.md`](references/gemini-and-ai-cli-mcp-setup.md), [`references/custom-mcp-server-authoring.md`](references/custom-mcp-server-authoring.md), [`references/troubleshooting.md`](references/troubleshooting.md), [`references/legacy-file-disposition.md`](references/legacy-file-disposition.md), [`examples/good/parallel-dispatch.md`](examples/good/parallel-dispatch.md).
+Install/setup detail (read on demand): [`references/install-baseline.md`](references/install-baseline.md), [`references/gemini-and-ai-cli-mcp-setup.md`](references/gemini-and-ai-cli-mcp-setup.md), [`references/antigravity-claude-client-reference-card.md`](references/antigravity-claude-client-reference-card.md), [`references/custom-mcp-server-authoring.md`](references/custom-mcp-server-authoring.md), [`references/troubleshooting.md`](references/troubleshooting.md), [`references/legacy-file-disposition.md`](references/legacy-file-disposition.md), [`examples/good/parallel-dispatch.md`](examples/good/parallel-dispatch.md).
 
 ## Executive Rule
 

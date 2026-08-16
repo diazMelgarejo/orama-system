@@ -38,8 +38,32 @@
   // covered one of them. All 6 currently pass MD013 anyway (checked
   // directly, not assumed), but the glob is the more defensive choice
   // as entries keep growing. Matches Perpetua-Tools's own glob pattern.
+  //
+  // "docs/superpowers/plans/**" -- same category and same evidence shape as
+  // the two globs above, measured the same way rather than assumed. These are
+  // generated/appended planning artifacts, not authored prose: the superpowers
+  // plan template emits "~~~" fences (which is the entire MD048 count), and
+  // /autoplan appends machine-generated review sections, decision audit tables,
+  // and voice transcripts to a plan after a human stops editing it.
+  //
+  // Measured against markdownlint-cli2 v0.17.2 (the CI-pinned version) across
+  // every pre-existing plan in this repo, EXCLUDING the two added by the PR
+  // that prompted this entry: 585 violations across 15 of 17 files, spread
+  // MD013 335 / MD032 109 / MD031 52 / MD022 22 / MD048 18 / MD024 13, plus a
+  // long tail. That is a pre-existing, category-wide condition -- these files
+  // pass CI today only because the workflow lints CHANGED files, so the debt
+  // is invisible until someone touches one. Enforcing the rules now would
+  // either fail CI on 15 unrelated historical plans or require a large,
+  // separate cleanup pass first -- exactly the tradeoff already documented
+  // above for **/SKILL.md.
+  //
+  // Deliberately NOT exempted: bin/orama-system/skills/**/references/*.md.
+  // Those are hand-authored reference docs that a human reads directly, they
+  // are cheap to keep compliant, and the PR that added this entry fixed its
+  // own new reference doc rather than exempting it.
   "ignores": [
     "**/SKILL.md",
-    "**/LESSONS.md"
+    "**/LESSONS.md",
+    "docs/superpowers/plans/**"
   ]
 }
