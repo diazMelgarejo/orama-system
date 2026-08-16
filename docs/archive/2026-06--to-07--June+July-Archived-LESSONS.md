@@ -137,7 +137,9 @@ narrow check — name what was actually verified.
 
 ---
 
-## 2026-06-05 — I repeated FM7 one hour after shipping the fix (the durable lesson)
+## 2026-06-05
+
+### I repeated FM7 one hour after shipping the fix, the durable lesson
 
 **What happened.** Right after merging PR #73 (which *added* Failure Mode 7 and the
 tree-twin §B5 to git-history-surgery), and after **moving `reanchor_scan.sh` into the workspace**,
@@ -148,7 +150,7 @@ a branch read `479 behind` while its tip was byte-identical to a main commit. Th
 **impossible unless `main` was rewritten** — which it had been. PT's branches were
 pre-rewrite SHA lines needing tree-twin re-anchor, not healthy branches.
 
-**Root cause — not knowledge, point-of-use.** The method existed in three files I'd
+**Root cause: not knowledge, point-of-use.** The method existed in three files I'd
 authored. Knowing a skill ≠ invoking it. Under a "just check the branches" prompt I grabbed
 the fast familiar command instead of running the canonical tool. This is the
 using-superpowers "I remember this skill" red flag, made concrete.
