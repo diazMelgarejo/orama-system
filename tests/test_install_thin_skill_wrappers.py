@@ -39,6 +39,14 @@ def mod():
     return module
 
 
+def _link_ownership(slug: str, canonical_path: str | None = None):
+    import gemini_reconciliation as gr
+
+    return lambda _slug: gr.GeminiOwnership(
+        "orama", "link", slug, canonical_path or f"/fake/{slug}/SKILL.md", "none"
+    )
+
+
 # ── workspace_candidates ──────────────────────────────────────────────────────
 
 def test_workspace_candidates_orama_exact(mod):
@@ -409,7 +417,7 @@ def test_oserror_with_unrelated_errno_propagates(mod, tmp_path: Path, monkeypatc
     monkeypatch.setattr("gemini_reconciliation.create_relative_link", disk_full)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
+        mod.reconcile_gemini(root, archive, {"code-review"}, _link_ownership("code-review"))
 
     assert raised.value.errno == errno.ENOSPC
     # create_relative_link is mocked to raise before touching disk at all, so
@@ -424,7 +432,7 @@ def test_lock_contention_fails_cleanly(mod, tmp_path: Path) -> None:
     lock = mod.acquire_reconcile_lock(archive, root, {"code-review"})
     try:
         with pytest.raises(mod.ReconcileLockHeldError):
-            mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
+            mod.reconcile_gemini(root, archive, {"code-review"}, _link_ownership("code-review"))
     finally:
         mod.release_reconcile_lock(lock)
 
@@ -440,7 +448,7 @@ def test_lock_terminated_owner_requires_guarded_recovery(mod, tmp_path: Path) ->
     lock_path.write_text(json.dumps(stale_payload), encoding="utf-8")
 
     with pytest.raises(mod.ReconcileLockHeldError):
-        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
+        mod.reconcile_gemini(root, archive, {"code-review"}, _link_ownership("code-review"))
     assert lock_path.exists()
 
     recovered = mod.force_unlock_gemini(root, "code-review")
@@ -455,9 +463,9 @@ def test_second_run_over_same_slug_is_a_no_op(mod, tmp_path: Path) -> None:
     old_skill.parent.mkdir(parents=True)
     old_skill.write_text("old Gemini card\n", encoding="utf-8")
 
-    first = mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
+    first = mod.reconcile_gemini(root, archive, {"code-review"}, _link_ownership("code-review"))
     archived_before_second_run = sorted(archive.rglob("*"))
-    second = mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
+    second = mod.reconcile_gemini(root, archive, {"code-review"}, _link_ownership("code-review"))
 
     assert first == [root / "code-review"]
     assert second == []
@@ -499,7 +507,7 @@ def test_live_skill_survives_when_every_activation_path_fails(
     monkeypatch.setattr("gemini_reconciliation.write_generated_wrapper", refuse_wrapper)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
+        mod.reconcile_gemini(root, archive, {"code-review"}, _link_ownership("code-review"))
 
     # Positive outcome, not just "no crash": we got PAST the archive step, so
     # this genuinely exercises post-archive failure rather than an early abort.
@@ -539,7 +547,7 @@ def test_live_skill_is_restored_when_the_swap_fails_after_archive(
     monkeypatch.setattr(mod.os, "replace", fail_installing_stage)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
+        mod.reconcile_gemini(root, archive, {"code-review"}, _link_ownership("code-review"))
 
     assert raised.value.errno == errno.EIO
     assert (archive / "code-review" / "SKILL.md").read_text(encoding="utf-8") == "old Gemini card\n"
@@ -575,7 +583,7 @@ def test_live_skill_untouched_when_the_initial_rollback_move_fails(
     monkeypatch.setattr(mod.os, "replace", fail_moving_live_aside)
 
     with pytest.raises(OSError) as raised:
-        mod.reconcile_gemini(root, archive, {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', s, f'/fake/{s}/SKILL.md', 'none'))
+        mod.reconcile_gemini(root, archive, {"code-review"}, _link_ownership("code-review"))
 
     # The REAL error must surface -- not a masking FileNotFoundError from
     # trying to restore a rollback directory that was never created.
@@ -802,7 +810,7 @@ def test_reconcile_falls_back_to_wrapper_when_symlink_fails(mod, tmp_path: Path,
     skill = root / "code-review" / "SKILL.md"
     skill.parent.mkdir(parents=True)
     skill.write_text("old", encoding="utf-8")
-    changed = mod.reconcile_gemini(root, tmp_path / "archive", {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', 'code-review', f'/fake/code-review/SKILL.md', 'none'))
+    changed = mod.reconcile_gemini(root, tmp_path / "archive", {"code-review"}, _link_ownership("code-review"))
     assert changed == [root / "code-review"]
     assert (root / "code-review" / "SKILL.md").is_file()
 
@@ -821,7 +829,7 @@ def test_code_review_reconciliation_drops_glm_fallback(mod, tmp_path: Path) -> N
     canonical = tmp_path / "canonical" / "SKILL.md"
     canonical.parent.mkdir(parents=True)
     canonical.write_text("Canonical content", encoding="utf-8")
-    changed = mod.reconcile_gemini(root, tmp_path / "archive", {"code-review"}, lambda s: __import__('gemini_reconciliation').GeminiOwnership('orama', 'link', 'code-review', str(canonical), 'none'))
+    changed = mod.reconcile_gemini(root, tmp_path / "archive", {"code-review"}, _link_ownership("code-review", str(canonical)))
     assert all("GLM-5.2 Fallback" not in p.read_text(encoding="utf-8") for p in changed if p.is_file())
     # Positive assertion, not just absence: the symlinked entry must
     # actually resolve to and read as the canonical file's real content.
@@ -1079,8 +1087,12 @@ def test_index_json_write_failure_during_os_replace_preserves_original(mod, tmp_
     index_path = archive.parent / "index.json"
     original_index_bytes = index_path.read_bytes()
 
+    real_replace = os.replace
+
     def crash_on_replace(src, dst):
-        raise OSError("simulated replace failure")
+        if Path(dst) == index_path:
+            raise OSError("simulated replace failure")
+        return real_replace(src, dst)
 
     monkeypatch.setattr(os, "replace", crash_on_replace)
 
@@ -1092,6 +1104,9 @@ def test_index_json_write_failure_during_os_replace_preserves_original(mod, tmp_
         mod.reconcile_gemini(root, archive, {"orama-afrp"}, lambda s: ownership2)
 
     assert index_path.read_bytes() == original_index_bytes
+    # The live swap completed; the injected failure is specifically the index
+    # replacement, not an earlier live/rollback transition.
+    assert (root / "orama-afrp").is_dir()
     # Glob pattern matches tempfile.mkstemp's actual prefix
     # (".index.json.tmp.", antigravity's hardening, gemini_reconciliation.py)
     # -- the deterministic ".index.json.tmp" this test originally checked no
