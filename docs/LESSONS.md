@@ -4347,3 +4347,53 @@ remote. Uncommitted staged merges are a silent push trap.
 `bin/orama-system/skills/git-history-surgery/references/pending-operation-push-guard-reference-card.md`
 → Wiki: `docs/wiki/08-git-hygiene-and-branching.md` § Merge → Push → PR discipline
 
+## 2026-08-16 — Check for a successful competing integration before assuming an apprentice-pattern branch cluster needs synthesis
+
+### Context
+
+Two "apprentice" branch clusters existed this session, both the same
+underlying pattern: independent parallel attempts at one deliverable,
+created close together, without cross-session awareness. The Tier-5
+pipeline cluster (Perpetua-Tools PRs #347/#348/#349/#350) genuinely needed
+synthesis — no single attempt subsumed the others, so the strongest pieces
+of each were ported into one branch (PT PR #356). Applying that same
+"synthesize a confluence PR" instinct to a second cluster here — orama PRs
+#299 + #300 (one attempt) and #301 + #302 (a second attempt, ~12 minutes
+later) at `ai-cli-mcp` first-run readiness + ORAMASYS mastery P0-P2
+convergence — would have been wrong and wasted work.
+
+### What was actually true
+
+A **third, different** attempt at the same deliverable — PR #303
+(`feat/v1-mcp-first-run-readiness`) stacked with PR #305
+(`feat/v1-mastery-p0-p2-convergence`) — had already merged, 2026-08-10, six
+days before this session's review. Verified directly against current
+`main`, not assumed from PR titles: the tests and scripts #303/#305
+introduced are present, current, and pass (23/23) in a clean clone. Diffing
+each of #299/#300/#301/#302 against current `main` directly showed zero
+genuine gaps — files unique to those branches were either pre-rename
+predecessors of what's now on `main` (main's versions are strict
+supersets), or, in one case, a test asserting the same safety guarantee
+with different wording than what actually landed
+(`"cannot self-approve"` vs main's `"Self-authorize a privileged... step"`
+— same rule, independently-phrased).
+
+### Prevention rule
+
+Before treating an apprentice-pattern branch cluster as needing synthesis:
+check whether a **different** branch/PR pair from the same rough time
+window already completed the integration successfully. `gh pr list --head
+<branch>` and `git diff --stat origin/<branch> origin/main` (or the
+equivalent tree-twin scan) answer this cheaply — grep-ing PR titles for the
+deliverable's name is not enough, since a successful integration attempt
+may use different branch/file names entirely (as it did here: `#303`/`#305`
+share no naming pattern with `#299`-`#302`). Getting this backwards costs a
+full redundant synthesis pass; getting it right is one `git diff --stat`
+and a test run.
+
+### Outcome
+
+Closed #299, #300, #301, #302 with evidence-based comments (specific file
+correspondences and test results, not just "superseded") pointing to
+#303 → #305. No new PR created — nothing was left to integrate.
+
