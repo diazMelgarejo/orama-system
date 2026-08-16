@@ -27,6 +27,19 @@ Each wrapper must include:
 - A safe origin-sync rule.
 - A Windows UTF-8 note.
 
+## Shared Namespace And Antigravity Audit
+
+- Run manifest audit first.
+- Retain gstack `skillify` and `gstack-upgrade`. They are preserved external ownership, not wrapper targets.
+- Invoke Orama creator as `oramasys-skillify`.
+- Never bulk-install the Orama manifest into a gstack-populated root.
+- Before any future Antigravity setup, record a read-only topology finding with
+  `install_thin_skill_wrappers.py --audit-antigravity`. Supply
+  `--antigravity-root` only when the operator has identified the actual root;
+  omitting it records `missing` without creating a directory or symlink.
+- `shared-root`, `missing`, and `divergent` are audit outcomes. Only the
+  separately approved Task 5a may create or repair an Antigravity root.
+
 ## Required Origin Sync Before Use
 
 Before relying on the canonical card:

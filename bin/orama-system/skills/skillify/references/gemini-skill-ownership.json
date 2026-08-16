@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "frontmatter_contract": {
+    "path": "bin/orama-system/skills/skillify/references/gemini-frontmatter-contract.md",
+    "schema_version": 1
+  },
+  "skills": {
+    "agent-methodology": {
+      "owner": "orama",
+      "action": "adapter",
+      "canonical_slug": "agent-methodology",
+      "canonical_path": "bin/orama-system/skills/agent-methodology/SKILL.md",
+      "metadata_policy": "validated"
+    },
+    "code-review": {
+      "owner": "orama",
+      "action": "link",
+      "canonical_slug": "code-review",
+      "canonical_path": "bin/orama-system/skills/code-review/SKILL.md",
+      "metadata_policy": "none"
+    },
+    "git-history-surgery": {
+      "owner": "orama",
+      "action": "link",
+      "canonical_slug": "git-history-surgery",
+      "canonical_path": "bin/orama-system/skills/git-history-surgery/SKILL.md",
+      "metadata_policy": "none"
+    },
+    "orama-afrp": {
+      "owner": "orama",
+      "action": "link",
+      "canonical_slug": "orama-afrp",
+      "canonical_path": "bin/orama-system/skills/orama-afrp/SKILL.md",
+      "metadata_policy": "none"
+    },
+    "orama-gstack": {
+      "owner": "orama",
+      "action": "adapter",
+      "canonical_slug": "orama-gstack",
+      "canonical_path": "bin/orama-system/gstack-gbrain/SKILL.md",
+      "metadata_policy": "validated"
+    },
+    "orama-system": {
+      "owner": "orama",
+      "action": "adapter",
+      "canonical_slug": "orama-system",
+      "canonical_path": "bin/orama-system/skills/orama-system/SKILL.md",
+      "metadata_policy": "validated"
+    },
+    "oramasys-method": {
+      "owner": "orama",
+      "action": "adapter",
+      "canonical_slug": "oramasys-method",
+      "canonical_path": "bin/orama-system/skills/oramasys-method/SKILL.md",
+      "metadata_policy": "validated"
+    },
+    "perpetua-tools": {
+      "owner": "perpetua",
+      "action": "adapter",
+      "canonical_slug": "perpetua-tools",
+      "canonical_path": "$PERPETUA_TOOLS_PATH/SKILL.md",
+      "metadata_policy": "validated"
+    },
+    "perpetua-config": {
+      "owner": "perpetua",
+      "action": "adapter",
+      "canonical_slug": "perpetua-config",
+      "canonical_path": "$PERPETUA_TOOLS_PATH/config/SKILL.md",
+      "metadata_policy": "validated"
+    },
+    "perpetua-hardware": {
+      "owner": "perpetua",
+      "action": "adapter",
+      "canonical_slug": "perpetua-hardware",
+      "canonical_path": "$PERPETUA_TOOLS_PATH/config/hardware/SKILL.md",
+      "metadata_policy": "validated"
+    },
+    "perpetua-startup-intelligence": {
+      "owner": "perpetua",
+      "action": "adapter",
+      "canonical_slug": "perpetua-startup-intelligence",
+      "canonical_path": "$PERPETUA_TOOLS_PATH/startup/SKILL.md",
+      "metadata_policy": "validated"
+    },
+    "gstack-upgrade": {
+      "owner": "gstack",
+      "action": "preserve-external",
+      "canonical_slug": "gstack-upgrade",
+      "canonical_path": "",
+      "metadata_policy": "external"
+    },
+    "skillify": {
+      "owner": "gstack",
+      "action": "preserve-external",
+      "canonical_slug": "skillify",
+      "canonical_path": "",
+      "metadata_policy": "external"
+    }
+  }
+}

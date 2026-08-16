@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from pathlib import Path, PurePosixPath
 import argparse
+import hashlib
+import json
+import os
 import re
 import shutil
 import sys
@@ -17,7 +20,56 @@ class SkillSpec:
     description: str
 
 
+@dataclass(frozen=True)
+class SkillInventory:
+    """One read-only observation of a single directory entry under a logical
+    skill root (Gemini, Claude, Codex, shared-agent, or Antigravity). Used by
+    the `--audit-gemini` inventory pass — see `inventory_root`,
+    `inventory_all_roots`, and `render_inventory` below. Never written to
+    disk; this is analysis-only data, not a mutation record."""
+
+    slug: str
+    root_id: str
+    entry_kind: str  # "symlink" | "regular" | "absent"
+    sha256: str
+    frontmatter_keys: tuple[str, ...]
+
+
+sys.path.insert(0, str(Path(__file__).parent.resolve()))
+from gemini_reconciliation import (
+    RootFinding,
+    ReconcileLockHeldError,
+    reconcile_gemini,
+    verify_gemini,
+    force_unlock_gemini,
+    acquire_reconcile_lock,
+    release_reconcile_lock,
+    load_gemini_ownership,
+)
+
 ROOT = Path(__file__).resolve().parents[6]
+# ROOT is the WORKSPACE parent (one level above this repo, containing
+# orama-system/ and perplexity-api/Perpetua-Tools/ as siblings) -- correct
+# for CANONICAL_SKILLS entries, which are workspace-relative
+# ("orama-system/bin/orama-system/...").
+#
+# The Gemini ownership manifest's canonical_path values are REPO-relative
+# instead ("bin/orama-system/skills/code-review/SKILL.md", no leading
+# "orama-system/"), so anchoring them against ROOT silently resolves one
+# directory too high whenever this script runs from anywhere that lacks the
+# workspace-wrapper nesting -- which is every isolated git worktree used for
+# safety throughout this plan's own development (parents[6] from a worktree
+# checked out directly, e.g. /tmp/some-worktree, lands on /tmp itself, not
+# the worktree root). Confirmed by verify_gemini's dangling-symlink check
+# firing against a real sandbox proof: reconcile silently wrote symlinks
+# pointing one level above the actual repo, in a form that passed the OLD
+# self-consistency-only verify check because write and read both used the
+# same wrong anchor and agreed with each other.
+#
+# REPO_ROOT is this repository's own root, independent of whether it is
+# nested under a workspace wrapper or checked out directly (the normal case
+# for a worktree) -- the correct anchor for repo-relative manifest paths.
+REPO_ROOT = Path(__file__).resolve().parents[5]
 HOME = Path.home()
 
 
@@ -107,6 +159,26 @@ TARGET_ROOTS = [
 ]
 
 
+# This is routing metadata, not the Task 2 ownership manifest. It names only
+# the slugs Task 7 verifies in the Gemini inbound root, so ``--verify --only``
+# cannot silently validate the unrelated wrapper roots instead.
+GEMINI_VERIFICATION_SLUGS = frozenset(
+    {
+        "agent-methodology",
+        "code-review",
+        "git-history-surgery",
+        "orama-afrp",
+        "orama-gstack",
+        "orama-system",
+        "oramasys-method",
+        "perpetua-tools",
+        "perpetua-config",
+        "perpetua-hardware",
+        "perpetua-startup-intelligence",
+    }
+)
+
+
 SLUG_OVERRIDES = {
     "perplexity-api/Perpetua-Tools/SKILL.md": "perpetua-tools",
     "perplexity-api/Perpetua-Tools/config/SKILL.md": "perpetua-config",
@@ -179,6 +251,29 @@ def frontmatter_value(text: str, key: str) -> str | None:
         folded = " ".join(collected).strip()
         return folded or None
     return value.strip('"').strip("'") or None
+
+
+_FRONTMATTER_KEY = re.compile(r"^([A-Za-z_][\w-]*):", re.MULTILINE)
+
+
+def _frontmatter_keys(text: str) -> tuple[str, ...]:
+    """Return every top-level YAML frontmatter key, in document order, with
+    duplicates dropped. Only unindented `key:` lines within the leading
+    `---`...`---` block count — nested keys inside a list/mapping value
+    (e.g. `sub_skills[].path`) are indented and therefore excluded, matching
+    how the Gemini frontmatter inventory in the plan counts keys."""
+    if not text.startswith("---"):
+        return ()
+    end = text.find("\n---", 3)
+    if end == -1:
+        return ()
+    body = text[3:end]
+    keys: list[str] = []
+    for match in _FRONTMATTER_KEY.finditer(body):
+        key = match.group(1)
+        if key not in keys:
+            keys.append(key)
+    return tuple(keys)
 
 
 def first_heading(text: str) -> str:
@@ -451,11 +546,196 @@ def verify(only: set[str] | None = None) -> list[str]:
     return errors
 
 
+
+
+
+
+
+def verify_antigravity_root(shared_agents_root: Path, antigravity_root: Path) -> RootFinding:
+    if not shared_agents_root.exists() or not antigravity_root.exists():
+        return RootFinding(
+            slug="",
+            status="missing",
+            detail=f"missing expected root(s). shared: {shared_agents_root.exists()}, antigravity: {antigravity_root.exists()}",
+            operator_next_action="Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan."
+        )
+    try:
+        is_shared_root = antigravity_root.is_symlink() and antigravity_root.resolve() == shared_agents_root.resolve()
+    except OSError as exc:
+        # A permission error, ELOOP from a symlink cycle, or a transient
+        # filesystem error here means the topology genuinely could not be
+        # determined -- folding that into "divergent" (the fallback below)
+        # would mislabel an unreadable/indeterminate root as a real,
+        # intentional topology mismatch.
+        return RootFinding(
+            slug=antigravity_root.name,
+            status="unreadable",
+            detail=f"could not resolve Antigravity root ({antigravity_root}): {exc}",
+            operator_next_action=(
+                "Ask a human operator to investigate why the Antigravity root cannot be "
+                "resolved (permissions, a broken symlink chain, or a transient filesystem "
+                "error) before approving or declining deferred Task 5a."
+            ),
+        )
+    if is_shared_root:
+        return RootFinding(
+            slug="",
+            status="shared-root",
+            detail=f"Resolved roots: {shared_agents_root.resolve()}",
+            operator_next_action="Record the finding; no setup action is needed."
+        )
+    return RootFinding(
+        slug=antigravity_root.name,
+        status="divergent",
+        detail=f"Both the shared-agent root ({shared_agents_root}) and the Antigravity root ({antigravity_root}) exist, but they are not the same directory. Antigravity must share the agent ecosystem root to avoid branching context isolation.",
+        operator_next_action="Ask a human operator to inspect both root owners and approve deferred Task 5a only after resolving the intended topology.",
+    )
+
+
+def audit_antigravity_root(
+    shared_agents_root: Path, antigravity_root: Path | None
+) -> RootFinding:
+    """Return a read-only topology finding for an explicitly supplied root.
+
+    Antigravity does not have a portable, repository-owned configuration path.
+    An omitted root is therefore an auditable ``missing`` outcome, not evidence
+    that the shared-agent root is already configured for Antigravity.
+    """
+    if antigravity_root is None:
+        return RootFinding(
+            slug="",
+            status="missing",
+            detail="No Antigravity skills root was supplied for this read-only audit.",
+            operator_next_action="Ask a human operator to approve or decline deferred Task 5a; do not create an Antigravity root in this plan.",
+        )
+    return verify_antigravity_root(shared_agents_root, antigravity_root)
+
+
+# Logical roots audited by --audit-gemini. "agents" and "antigravity" resolve
+# to the SAME physical directory (~/.agents/skills) — per Global Constraints,
+# "Antigravity must resolve to the shared agent root; audit it rather than
+# writing to it." Recording both root_ids lets the inventory show that the
+# two harnesses currently share one root without implying a separate,
+# writable Antigravity skills tree exists.
+def _inventory_roots(home: Path) -> list[tuple[str, Path]]:
+    agents_root = home / ".agents" / "skills"
+    return [
+        ("gemini", home / ".gemini" / "skills"),
+        ("claude", home / ".claude" / "skills"),
+        ("codex", home / ".codex" / "skills"),
+        ("agents", agents_root),
+        ("antigravity", agents_root),
+    ]
+
+
+def inventory_root(root_id: str, root: Path) -> list[SkillInventory]:
+    """Read-only scan of one logical skill root. Never creates, archives, or
+    symlinks anything — see Task 2's `reconcile_gemini` for mutation.
+
+    Returns one row per immediate directory entry (dotfiles like `.DS_Store`
+    skipped). If the root itself does not exist, returns a single sentinel
+    row with entry_kind="absent" so cross-root comparisons can distinguish
+    "root not present on this machine" from "root present but empty"."""
+    if not root.is_dir():
+        return [SkillInventory("", root_id, "absent", "", ())]
+
+    rows: list[SkillInventory] = []
+    for entry in sorted(root.iterdir(), key=lambda p: p.name):
+        if entry.name.startswith("."):
+            continue
+        if entry.is_symlink():
+            entry_kind = "symlink"
+        elif entry.is_dir():
+            entry_kind = "regular"
+        else:
+            continue  # stray file at root level; not a skill directory
+
+        skill_md = entry / "SKILL.md"
+        sha256 = ""
+        frontmatter_keys: tuple[str, ...] = ()
+        if skill_md.is_file():
+            data = skill_md.read_bytes()
+            sha256 = hashlib.sha256(data).hexdigest()
+            frontmatter_keys = _frontmatter_keys(data.decode("utf-8", errors="replace"))
+        rows.append(SkillInventory(entry.name, root_id, entry_kind, sha256, frontmatter_keys))
+    return rows
+
+
+def inventory_all_roots() -> list[SkillInventory]:
+    """Audit Gemini, Claude, Codex, shared-agent, and Antigravity roots.
+    Read-only: calls no install, archive, or symlink function."""
+    rows: list[SkillInventory] = []
+    for root_id, root in _inventory_roots(HOME):
+        rows.extend(inventory_root(root_id, root))
+    return rows
+
+
+def render_inventory(rows: list[SkillInventory], home: Path) -> str:
+    """Render inventory rows as a portable Markdown table, sorted by slug
+    then root. `home` is stripped from the rendered text defensively — rows
+    should never carry an absolute path in the first place, since
+    SkillInventory only stores slugs/root labels/digests/key names, but this
+    guards against a future field carrying one in by accident."""
+    header = ["| slug | root | kind | sha256 | frontmatter keys |", "| --- | --- | --- | --- | --- |"]
+    body = []
+    for row in sorted(rows, key=lambda r: (r.slug, r.root_id)):
+        slug = row.slug or "—"
+        sha = row.sha256 or "—"
+        keys = ", ".join(row.frontmatter_keys) if row.frontmatter_keys else "—"
+        body.append(f"| {slug} | {row.root_id} | {row.entry_kind} | {sha} | {keys} |")
+    rendered = "\n".join(header + body)
+    home_str = str(home)
+    if home_str:
+        rendered = rendered.replace(home_str, "<home>")
+    return rendered
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--install", action="store_true")
     parser.add_argument("--verify", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--reconcile-gemini",
+        action="store_true",
+        help="Reconcile approved Gemini skills. Requires --only and --archive-root.",
+    )
+    parser.add_argument(
+        "--gemini-root",
+        help="Override the live Gemini skills root (default: ~/.gemini/skills).",
+    )
+    parser.add_argument(
+        "--archive-root",
+        help="Archive batch directory for Gemini reconciliation, or archive parent for explicit verification.",
+    )
+    parser.add_argument(
+        "--force-unlock",
+        metavar="SLUG",
+        help="Explicitly clear a stale Gemini reconciliation lock for this slug.",
+    )
+    parser.add_argument(
+        "--audit-gemini",
+        action="store_true",
+        help=(
+            "Read-only cross-root inventory (Gemini, Claude, Codex, "
+            "shared-agent, Antigravity). Prints render_inventory() and "
+            "exits — never installs, archives, or symlinks anything."
+        ),
+    )
+    parser.add_argument(
+        "--audit-antigravity",
+        action="store_true",
+        help="Read-only Antigravity/shared-agent topology audit. Never mutates either root.",
+    )
+    parser.add_argument(
+        "--antigravity-root",
+        help="Explicit Antigravity skills root for --audit-antigravity; omit to record missing.",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output audit result as JSON rather than Markdown table.",
+    )
     parser.add_argument(
         "--only",
         default=None,
@@ -468,20 +748,71 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
-    if not args.install and not args.verify:
-        parser.error("choose --install and/or --verify")
+    if args.audit_gemini:
+        inventory = inventory_all_roots()
+        if args.json:
+            print(json.dumps([asdict(row) for row in inventory], indent=2))
+        else:
+            print(render_inventory(inventory, home=HOME))
+        return 0
+    if args.audit_antigravity:
+        finding = audit_antigravity_root(
+            HOME / ".agents" / "skills",
+            Path(args.antigravity_root) if args.antigravity_root else None,
+        )
+        if args.json:
+            print(json.dumps(asdict(finding), indent=2))
+        else:
+            print(f"{finding.status}: {finding.detail}")
+            print(f"next: {finding.operator_next_action}")
+        return 0
+    if not args.install and not args.verify and not args.reconcile_gemini:
+        parser.error("choose --install, --verify, --reconcile-gemini, --audit-gemini, and/or --audit-antigravity")
     only = {s.strip() for s in args.only.split(",")} if args.only else None
+    gemini_root = Path(args.gemini_root).resolve() if args.gemini_root else HOME / ".gemini" / "skills"
+    if args.reconcile_gemini:
+        if only is None:
+            parser.error("--reconcile-gemini requires --only")
+        if not args.archive_root:
+            parser.error("--reconcile-gemini requires --archive-root")
+        archive_root = Path(args.archive_root)
+        if args.force_unlock:
+            if args.force_unlock not in only:
+                parser.error("--force-unlock slug must be included in --only")
+            force_unlock_gemini(gemini_root, args.force_unlock)
+        else:
+            manifest_path = Path(__file__).resolve().parent.parent / "references" / "gemini-skill-ownership.json"
+            ownership_dict = load_gemini_ownership(manifest_path)
+            try:
+                written = reconcile_gemini(
+                    gemini_root, archive_root, only, lambda s: ownership_dict[s], canonical_root=REPO_ROOT
+                )
+            except ReconcileLockHeldError as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 1
+            print(f"reconciled {len(written)} Gemini skill directories")
     if args.install:
         written = install(args.dry_run, only=only)
         if not args.dry_run:
             print(f"wrote {len(written)} wrapper files")
     if args.verify:
-        errors = verify(only=only)
-        if errors:
-            for error in errors:
-                print(error, file=sys.stderr)
-            return 1
-        print("verification passed")
+        if only and only & GEMINI_VERIFICATION_SLUGS:
+            if not only <= GEMINI_VERIFICATION_SLUGS:
+                parser.error("cannot mix Gemini reconciliation slugs with legacy wrapper slugs in one --verify")
+            archive_parent = Path(args.archive_root) if args.archive_root else HOME / ".gemini" / "skills-archive"
+            findings = verify_gemini(gemini_root, archive_parent, only)
+            if findings:
+                for finding in findings:
+                    print(finding.detail, file=sys.stderr)
+                return 1
+        else:
+            errors = verify(only=only)
+            if errors:
+                for error in errors:
+                    print(error, file=sys.stderr)
+                return 1
+        if not args.reconcile_gemini:
+            print("verification passed")
     return 0
 
 

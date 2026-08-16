@@ -51,6 +51,11 @@ if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))
 from mesh.discovery_trust import ack_peer, filter_endpoints_for_trust  # noqa: E402
 
+_SRC_DIR = _SCRIPTS_DIR.parent / "src"
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
+from utils.model_endpoint_url import ModelEndpointPolicyError, validate_model_endpoint_url  # noqa: E402
+
 # ── Repo discovery ────────────────────────────────────────────────────────────
 
 def _resolve_perpetua_root_env() -> Path | None:
@@ -214,8 +219,13 @@ def filter_endpoints_for_policy(endpoints: dict, policy: dict | None = None) -> 
 
 def probe_models(base_url: str, timeout: float = MODEL_API_TIMEOUT):
     try:
+        safe_url = validate_model_endpoint_url(base_url)
+    except ModelEndpointPolicyError as exc:
+        logging.warning("refusing to probe endpoint rejected by policy: %s", exc)
+        return None
+    try:
         req = urllib.request.Request(
-            f"{base_url}/v1/models",
+            f"{safe_url}/v1/models",
             headers={"Authorization": "Bearer lm-studio"},
         )
         with urllib.request.urlopen(req, timeout=timeout) as r:

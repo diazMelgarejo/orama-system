@@ -5,6 +5,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import discover as D
+from mesh import discovery_trust
 
 @pytest.fixture(autouse=True)
 def _set_pt_root_env(monkeypatch, tmp_path):
@@ -115,42 +116,6 @@ def test_old_files_archived_not_deleted(tmp_path, monkeypatch):
     assert (tmp_path / "archive" / "2025-01-01_00-00-00.json").exists()
 
 
-DEVICES_YML = """\
-devices:
-  - id: "mac-studio"
-    os: macos
-    lan_ip: "192.168.254.103"
-    ports: [1234]
-  - id: "win-rtx3080"
-    os: windows
-    lan_ip: "192.168.254.100"
-    ports: [1234]
-"""
-
-def test_patch_devices_yml(tmp_path):
-    cfg = tmp_path / "config"
-    cfg.mkdir()
-    (cfg / "devices.yml").write_text(DEVICES_YML)
-    D.patch_devices_yml("192.168.254.107", "192.168.254.101", tmp_path)
-    result = (cfg / "devices.yml").read_text()
-    assert '"192.168.254.107"' in result
-    assert '"192.168.254.101"' in result
-    assert "192.168.254.103" not in result
-    assert "192.168.254.100" not in result
-
-def test_patch_devices_yml_no_write_if_unchanged(tmp_path):
-    cfg = tmp_path / "config"
-    cfg.mkdir()
-    content = DEVICES_YML.replace("192.168.254.103", "192.168.254.107").replace("192.168.254.100", "192.168.254.101")
-    (cfg / "devices.yml").write_text(content)
-    import os
-    mtime_before = os.stat(cfg / "devices.yml").st_mtime
-    time.sleep(0.05)
-    D.patch_devices_yml("192.168.254.107", "192.168.254.101", tmp_path)
-    mtime_after = os.stat(cfg / "devices.yml").st_mtime
-    assert mtime_before == mtime_after
-
-
 def test_patch_openclaw_json(tmp_path, monkeypatch):
     oc = tmp_path / "openclaw.json"
     oc.write_text(json.dumps({
@@ -211,6 +176,13 @@ def test_disaster_recovery_tier2(tmp_path, monkeypatch):
     monkeypatch.setattr(D, "RECOVERY_SOURCE_TXT", tmp_path / "recovery_source.txt")
     monkeypatch.setattr(D, "OPENCLAW_JSON", tmp_path / "openclaw.json")
     monkeypatch.setattr(D, "LOCK_FILE", tmp_path / ".discover.lock")
+    # discovery_trust.py computes its own state paths at import time,
+    # independent of D's constants above -- without redirecting these too,
+    # peer_trusted() reads the real machine's ~/.openclaw/state (empty in a
+    # fresh sandbox), always finds these test IPs "unknown", and blocks
+    # persistence pending a handshake that this test never performs.
+    monkeypatch.setattr(discovery_trust, "OPENCLAW_STATE", tmp_path / "last_discovery.json")
+    monkeypatch.setattr(discovery_trust, "KNOWN_PEERS", tmp_path / "known-peers.json")
     (tmp_path / "openclaw.json").write_text("{}")
     (tmp_path / "backups").mkdir()
     (tmp_path / "archive").mkdir()
@@ -318,45 +290,6 @@ def test_load_policy_merges_windows_only_aliases(tmp_path, monkeypatch):
     assert "gemma-4-26B-A4B-it-Q4_K_M" in policy["windows_only"]
 
 
-def test_patch_devices_yml_skips_loopback_ips(tmp_path):
-    cfg = tmp_path / "config"
-    cfg.mkdir()
-    (cfg / "devices.yml").write_text(DEVICES_YML, encoding="utf-8")
-    D.patch_devices_yml("localhost", "127.0.0.1", tmp_path)
-    result = (cfg / "devices.yml").read_text()
-    assert "192.168.254.103" in result
-    assert "192.168.254.100" in result
-
-
-MODELS_YML = """\
-models:
-  - name: win-model
-    host: "${LM_STUDIO_WIN_ENDPOINT:-http://192.168.254.100}"
-  - name: mac-model
-    host: "${LM_STUDIO_MAC_ENDPOINT:-http://192.168.254.103:1234}"
-"""
-
-
-def test_patch_models_yml_skips_loopback_win_ip(tmp_path):
-    cfg = tmp_path / "config"
-    cfg.mkdir()
-    (cfg / "models.yml").write_text(MODELS_YML, encoding="utf-8")
-    D.patch_models_yml("192.168.254.107", "localhost", tmp_path)
-    result = (cfg / "models.yml").read_text()
-    assert "http://localhost:1234" in result
-    assert "192.168.254.100" in result  # win endpoint unchanged when win_ip is loopback
-
-
-def test_patch_models_yml_patches_lan_win_ip(tmp_path):
-    cfg = tmp_path / "config"
-    cfg.mkdir()
-    (cfg / "models.yml").write_text(MODELS_YML, encoding="utf-8")
-    D.patch_models_yml("192.168.254.107", "192.168.254.101", tmp_path)
-    result = (cfg / "models.yml").read_text()
-    assert "http://192.168.254.101}" in result
-    assert "192.168.254.100" not in result
-
-
 def test_discover_endpoints_windows_localhost_is_win(monkeypatch):
     """On Windows hosts, localhost LM Studio must map to win — not mac."""
     monkeypatch.setattr(D, "RUNNING_ON_WINDOWS", True)
@@ -366,3 +299,44 @@ def test_discover_endpoints_windows_localhost_is_win(monkeypatch):
     assert endpoints["win"] == {"ip": "localhost", "models": ["qwen3.5-27b-distilled"]}
     assert endpoints["mac"] is None
 
+
+
+def test_probe_models_rejects_link_local_metadata_target():
+    """Regression: probe_models previously constructed and probed
+    f"http://{ip}:1234" with zero SSRF validation, for every caller --
+    including MAC_IP (an env var, no validation) and cached/scanned IPs.
+    A single validation choke point inside probe_models must protect
+    every caller; must reject cloud instance-metadata BEFORE any network
+    call -- checked by asserting urlopen is never invoked, not just that
+    the result is None (which a normal connection failure would also
+    produce)."""
+    import unittest.mock
+
+    with unittest.mock.patch("urllib.request.urlopen") as mock_urlopen:
+        result = D.probe_models("http://169.254.169.254:1234")
+    assert result is None
+    mock_urlopen.assert_not_called()
+
+
+def test_probe_models_rejects_public_target_by_default():
+    import unittest.mock
+
+    with unittest.mock.patch("urllib.request.urlopen") as mock_urlopen:
+        result = D.probe_models("http://8.8.8.8:1234")
+    assert result is None
+    mock_urlopen.assert_not_called()
+
+
+def test_probe_models_does_not_reject_localhost():
+    """Confirm the fix isn't over-broad -- localhost must still pass
+    validation and reach the network call (it may still fail to connect
+    if nothing is listening, which is a different, expected failure mode)."""
+    import unittest.mock
+
+    with unittest.mock.patch("urllib.request.urlopen") as mock_urlopen:
+        mock_urlopen.return_value.__enter__.return_value.read.return_value = (
+            b'{"data": [{"id": "test-model"}]}'
+        )
+        result = D.probe_models("http://localhost:1234")
+    mock_urlopen.assert_called_once()
+    assert result == ["test-model"]

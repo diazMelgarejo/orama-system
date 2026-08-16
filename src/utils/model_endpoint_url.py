@@ -1,6 +1,15 @@
-"""Central policy for local/LAN model server base URLs (LM Studio, Win coder pool).
+"""Central policy for local/LAN model server base URLs (LM Studio, Ollama, Win coder pool).
 
-Shared with Perpetua-Tools ``utils/model_endpoint_url.py`` — keep in sync on policy changes.
+Default allow: loopback and RFC1918 private addresses only.
+Set ``ALLOW_PUBLIC_MODEL_ENDPOINTS=1`` (or ``true``/``yes``/``on``) to permit public IPs
+and non-localhost DNS names.
+
+Canonical copy lives in Perpetua-Tools (``src/utils/model_endpoint_url.py``);
+Perpetua-Tools also owns the standalone, separately-licensed
+``packages/endpoint-policy/`` package this logic will eventually migrate to
+as an actual dependency once the v2 oramasys/* repo split lands. Until then,
+this is a manually-synced mirror -- keep it byte-identical to the
+Perpetua-Tools copy on policy changes, not independently edited.
 """
 from __future__ import annotations
 
@@ -17,10 +26,12 @@ class ModelEndpointPolicyError(ValueError):
 
 
 def allow_public_model_endpoints() -> bool:
+    """Return True when public model endpoints are explicitly allowed."""
     return os.getenv("ALLOW_PUBLIC_MODEL_ENDPOINTS", "").strip().lower() in _TRUTHY
 
 
 def redact_endpoint_for_log(url: str) -> str:
+    """Return a log-safe endpoint string (host topology partially hidden)."""
     try:
         parsed = urlparse(url.strip())
         host = (parsed.hostname or "?").lower()
@@ -76,6 +87,10 @@ def validate_model_endpoint_url(
     *,
     allow_public: bool | None = None,
 ) -> str:
+    """Validate and normalize a model server base URL (no path).
+
+    Returns scheme://host[:port] without a trailing slash.
+    """
     if allow_public is None:
         allow_public = allow_public_model_endpoints()
 
@@ -117,6 +132,7 @@ def validate_model_endpoint_url(
     if port is None:
         port = 443 if scheme == "https" else 80
 
+    # Bracket IPv6 literals for urlparse-compatible reconstruction.
     if ":" in host and not host.startswith("["):
         netloc = f"[{host}]:{port}"
     else:
@@ -131,6 +147,7 @@ def parse_model_endpoint_list(
     allow_public: bool | None = None,
     skip_invalid: bool = False,
 ) -> list[str]:
+    """Parse a comma-separated endpoint list and validate each base URL."""
     if not raw or not raw.strip():
         return []
 

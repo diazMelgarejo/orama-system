@@ -9,6 +9,7 @@ build-backend = "hatchling.build"
 name = "orama-system"
 dynamic = ["version"]
 description = "Orama multi-agent reasoning and orchestration system"
+license = "MIT"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.109.0",
