@@ -6,6 +6,7 @@ import hmac
 import importlib.util
 import os
 from pathlib import Path
+from typing import Any, NoReturn
 
 import pytest
 
@@ -75,6 +76,96 @@ def test_wrong_repo_fails(grant_lib, tmp_path):
     )
     assert not ok
     assert "repo mismatch" in err
+
+
+@pytest.mark.parametrize(
+    ("repo", "pr_number"),
+    [
+        ("owner\nrepo", "42"),
+        ("owner/repo", "42\n"),
+        ("owner\rrepo", "42"),
+        ("owner/repo", "42\r"),
+        ("", "42"),
+        ("owner/repo", ""),
+        ("   ", "42"),
+        ("owner/repo", "   "),
+    ],
+)
+def test_invalid_grant_inputs_fail_before_reading_append_content(
+    grant_lib: Any, monkeypatch: pytest.MonkeyPatch, repo: str, pr_number: str
+) -> None:
+    def digest_must_not_run(*_args: Any, **_kwargs: Any) -> NoReturn:
+        raise AssertionError("append content must not be read for invalid grant inputs")
+
+    monkeypatch.setattr(grant_lib, "content_digest_for_append", digest_must_not_run)
+
+    ok, err = grant_lib.verify_grant_for_append(
+        repo, pr_number, "untrusted-followup.md", None, consume=False
+    )
+
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+
+def test_verify_grant_fields_rejects_invalid_inputs_directly(grant_lib):
+    """Direct unit test for verify_grant_fields() validation logic.
+
+    Tests that carriage returns and blank values are rejected
+    without going through the full mint_grant pipeline.
+    """
+    # Mock fields dict that would pass all other checks
+    fields = {
+        "marker": "operator-grant-v2",
+        "issued-at": grant_lib._now_utc().isoformat().replace("+00:00", "Z"),
+        "repo": "owner/repo",
+        "pr-number": "42",
+        "action": "append_integrative",
+        "content-digest": "sha256:deadbeef",
+        "grant-nonce": "test-nonce",
+        "token": "test-token",
+    }
+
+    # Test carriage return in repo
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "owner\rrepo", "42", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test carriage return in pr_number
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "owner/repo", "42\r", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test empty repo
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "", "42", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test blank repo (whitespace only)
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "   ", "42", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test empty pr_number
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "owner/repo", "", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test blank pr_number (whitespace only)
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "owner/repo", "   ", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
 
 
 def test_wrong_digest_fails(grant_lib, tmp_path):
@@ -282,4 +373,3 @@ def test_parse_append_segment_malformed_quote_fails_closed(grant_lib):
         'bash scripts/cursor/append-pr-body.sh diaz/repo 9 --message "unclosed'
     )
     assert parsed is None
-
