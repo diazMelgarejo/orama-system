@@ -168,42 +168,60 @@ setInterval(refresh, 15000);
 </html>"""
 
 
+from utils.endpoint_policy_core import TransportIdentity, parse_transport_identity
+from orama_system.lan_peer_channel import build_peer_transport_url
+
+
 async def fetch_remote_peer_api(
     path: str,
     *,
-    peer_ip: str,
+    peer_identity: TransportIdentity | None = None,
+    peer_ip: str | None = None,
     portal_port: int,
     auth_headers: Mapping[str, str] | Callable[[], Mapping[str, str]],
 ) -> dict[str, Any]:
     """HTTP GET to peer portal for inbox mirror (Win lane API)."""
-    if not peer_ip:
+    identity = peer_identity
+    if identity is None and peer_ip:
+        identity = parse_transport_identity(peer_ip)
+
+    if identity is None:
         return {
             "ok": False,
             "peer_ip": None,
-            "error": "no peer IP in last_discovery.json",
+            "error": "no valid peer in last_discovery.json",
             "files": [],
         }
     headers = auth_headers() if callable(auth_headers) else dict(auth_headers)
-    url = f"http://{peer_ip}:{portal_port}{path}"
+    try:
+        url = build_peer_transport_url(identity, portal_port, path, websocket=False)
+    except Exception as exc:
+        return {
+            "ok": False,
+            "peer_ip": identity.hostname,
+            "error": str(exc),
+            "files": [],
+        }
+
     try:
         async with httpx.AsyncClient(timeout=12.0) as client:
             response = await client.get(url, headers=headers)
         if response.status_code != 200:
             return {
                 "ok": False,
-                "peer_ip": peer_ip,
+                "peer_ip": identity.hostname,
                 "error": f"HTTP {response.status_code}",
                 "files": [],
             }
         data = response.json()
         data["ok"] = True
-        data["peer_ip"] = peer_ip
+        data["peer_ip"] = identity.hostname
         data["scope"] = "remote"
         return data
     except httpx.HTTPError as exc:
         return {
             "ok": False,
-            "peer_ip": peer_ip,
+            "peer_ip": identity.hostname,
             "error": str(exc),
             "files": [],
         }

@@ -1,20 +1,23 @@
+<!-- markdownlint-disable MD013 MD060 -->
 # This is the Legacy ὅραμα System
+
 moving to 2.0 on another repo soon
 
 ---
 
 > *"Technology married with humanities yields solutions that make hearts sing."*
-> * (inspired by *ultrathink*)
+> *(Inspired by ultrathink.)*
 
 **The complete agent methodology for solving impossible problems with elegance.**
 
-[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![SKILL.md Standard](https://img.shields.io/badge/SKILL.md-Compatible-green)](https://ecc.tools/skills)
 [![ECC Tools](https://img.shields.io/badge/ECC_Tools-Compatible-brightgreen)](https://ecc.tools)
 [![Version](https://img.shields.io/badge/version-1.1.1.0-orange)](CHANGELOG.md)
 ![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/diazMelgarejo/orama-system?utm_source=oss&utm_medium=github&utm_campaign=diazMelgarejo%2Forama-system&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
 
-**Compatible with**: Claude Code · Cowork · Clawdbot · MoltBot · OpenClaw · ECC Tools (everything-claude-code) · Cursor · Hermes · Codex · Cline · Kimi · Gemini · Antigravity
+**Compatible with**: Claude Code · Cowork · Clawdbot · MoltBot · OpenClaw · ECC Tools
+(everything-claude-code) · Cursor · Hermes · Codex · Cline · Kimi · Gemini · Antigravity
 
 ---
 
@@ -32,7 +35,8 @@ A production-ready, self-improving agent skill package that synthesizes:
 
 ### The Amplifier Principle
 
-AI doesn't replace judgment, it amplifies intent: ultrathink gives that intent structure. Clear methodology → clear output. Vague intent → scaled ambiguity.
+AI doesn't replace judgment, it amplifies intent: ultrathink gives that intent structure.
+Clear methodology → clear output. Vague intent → scaled ambiguity.
 
 ---
 
@@ -128,14 +132,16 @@ python scripts/network_autoconfig.py --scan
 python portal_server.py
 ```
 
-- `scripts/network_autoconfig.py` detects the preferred local IP and can scan for LM Studio, Ollama, PT, ultrathink, and portal services.
-- `portal_server.py` shows a lightweight LAN dashboard for PT, ultrathink, LM Studio, and Ollama endpoints.
+* `scripts/network_autoconfig.py` detects the preferred local IP and can scan for LM Studio,
+  Ollama, PT, ultrathink, and portal services.
+* `portal_server.py` shows a lightweight LAN dashboard for PT, ultrathink, LM Studio, and
+  Ollama endpoints.
 
 ---
 
 ## The 5-Stage Process
 
-```
+```text
 1. Context Immersion    — Scan git, docs, patterns, constraints. Understand before acting.
 2. Visionary Architecture — Design the most elegant solution. Decompose modularly.
 3. Ruthless Refinement — Eliminate everything non-essential. Elegance = nothing left to remove.
@@ -239,7 +245,7 @@ lessons-learned patterns, security improvements.
 
 ## License
 
-Apache License 2.0 — use freely in commercial and private projects.
+MIT License — use freely in commercial and private projects.
 See [LICENSE](LICENSE).
 
 ---

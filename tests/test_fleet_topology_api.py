@@ -190,6 +190,26 @@ class TestPeerRelayProbeEndpoint:
         response = client.post("/api/peer-relay-probe", json=body, headers=auth_header)
         assert response.status_code == 400
 
+    def test_peer_relay_probe_rejects_link_local_metadata_target(self, client, auth_header):
+        """target_ip is only checked for non-empty + port range, with no
+        SSRF host-classification at all -- an authenticated peer could
+        point this node at cloud instance-metadata (169.254.169.254) or
+        any other blocked range and this node would probe it on their
+        behalf. Must be rejected with 400 before any outbound request.
+        """
+        body = {"target_ip": "169.254.169.254", "target_port": 80}
+        response = client.post("/api/peer-relay-probe", json=body, headers=auth_header)
+        assert response.status_code == 400
+        assert "endpoint policy" in response.json()["detail"].lower()
+
+    def test_peer_relay_probe_rejects_public_target_by_default(self, client, auth_header):
+        """A public, non-RFC1918 target_ip must also be rejected by
+        default (same policy every other outbound probe in this codebase
+        follows), not just link-local metadata specifically."""
+        body = {"target_ip": "8.8.8.8", "target_port": 80}
+        response = client.post("/api/peer-relay-probe", json=body, headers=auth_header)
+        assert response.status_code == 400
+
     def test_peer_relay_probe_unreachable(self, client, auth_header):
         """Unreachable target should return reachable=false."""
         body = {"target_ip": "127.0.0.1", "target_port": 65433}  # Likely unreachable

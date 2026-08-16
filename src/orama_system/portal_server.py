@@ -43,7 +43,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from starlette.responses import StreamingResponse
 
-from orama_system.lan_peer_channel import LanPeerChannel, local_platform, make_envelope, read_discovery_peer_ip
+from orama_system.lan_peer_channel import (
+    LanPeerChannel,
+    build_peer_transport_url,
+    local_platform,
+    make_envelope,
+    read_discovery_peer_identity,
+    read_discovery_peer_ip,
+)
 from orama_system.swarm_approval import issue_approval, verify_launch
 from orama_system.portal_notifications import (
     EventType,
@@ -53,6 +60,8 @@ from orama_system.portal_notifications import (
     notifications_enabled,
     parse_event_types,
 )
+
+from utils.model_endpoint_url import ModelEndpointPolicyError, validate_model_endpoint_url
 
 from utils.control_plane_auth import (
     CONTROL_PLANE_COOKIE,
@@ -209,11 +218,11 @@ _notification_publisher = PortalNotificationPublisher(_notification_hub)
 
 @asynccontextmanager
 async def _portal_lifespan(_app: FastAPI):
-    peer_ip = read_discovery_peer_ip()
+    peer_identity = read_discovery_peer_identity()
     bind_lan = os.getenv("PORTAL_BIND_LAN", "").strip().lower() in ("1", "true", "yes")
     client_task: asyncio.Task[None] | None = None
-    if bind_lan and peer_ip:
-        await _lan_peer_channel.connect(peer_ip)
+    if bind_lan and peer_identity is not None:
+        await _lan_peer_channel.connect(peer_identity)
     yield
     await _lan_peer_channel.close()
 
@@ -1640,7 +1649,7 @@ async def _fetch_remote_peer_api(path: str) -> dict[str, Any]:
     port = int(os.environ.get("PORTAL_PORT", "8002"))
     return await peer_inbox.fetch_remote_peer_api(
         path,
-        peer_ip=read_discovery_peer_ip(),
+        peer_identity=read_discovery_peer_identity(),
         portal_port=port,
         auth_headers=auth_headers,
     )
@@ -1736,10 +1745,19 @@ async def get_peer_inbox_file(filename: str):
 
 async def _fetch_peer_inbox_remote() -> tuple[list[dict[str, Any]], str]:
     """List inbox files on the LAN peer portal (for co-orchestration view)."""
-    peer_ip = read_discovery_peer_ip()
-    if not peer_ip:
+    peer_identity = read_discovery_peer_identity()
+    if not peer_identity:
         return [], "no peer IP in discovery"
-    url = f"http://{peer_ip}:{PORTAL_PORT}/api/peer-inbox"
+    try:
+        url = build_peer_transport_url(
+            peer_identity,
+            PORTAL_PORT,
+            "/api/peer-inbox",
+            websocket=False,
+        )
+    except Exception as exc:
+        return [], str(exc)
+
     try:
         async with _portal_http_client(timeout=10.0) as client:
             response = await client.get(url)
@@ -1831,10 +1849,19 @@ async def api_co_orchestration_file(filename: str, scope: str = "local"):
             raise HTTPException(status_code=404, detail="not found") from None
         return {"filename": filename, "body": body, "meta": meta, "scope": scope}
 
-    peer_ip = read_discovery_peer_ip()
-    if not peer_ip:
+    peer_identity = read_discovery_peer_identity()
+    if not peer_identity:
         raise HTTPException(status_code=503, detail="no peer IP in discovery")
-    url = f"http://{peer_ip}:{PORTAL_PORT}/api/peer-inbox/{filename}"
+    try:
+        url = build_peer_transport_url(
+            peer_identity,
+            PORTAL_PORT,
+            f"/api/peer-inbox/{quote(filename)}",
+            websocket=False,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     try:
         async with _portal_http_client(timeout=15.0) as client:
             response = await client.get(url)
@@ -3241,16 +3268,18 @@ async def _get_fleet_topology() -> dict[str, Any]:
     """
     local_node_id = local_platform()
     peer_ip = read_discovery_peer_ip()
+    peer_identity = read_discovery_peer_identity()
 
     # For now, return minimal topology based on what we can observe
     peers: List[dict[str, Any]] = []
 
     # If we have a peer, try to describe it (will be enhanced when PT Phase 2 spec is available)
-    if peer_ip:
+    if peer_identity:
         try:
+            url = build_peer_transport_url(peer_identity, 8002, "/api/status", websocket=False)
             async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as client:
                 # Try to probe the peer's status endpoint
-                r = await client.get(f"http://{peer_ip}:8002/api/status", timeout=PROBE_TIMEOUT)
+                r = await client.get(url, timeout=PROBE_TIMEOUT)
                 if r.status_code == 200:
                     peer_status = r.json()
                     peer_services = peer_status.get("services", {})
@@ -3318,6 +3347,17 @@ async def post_peer_relay_probe(request: Request, body: PeerRelayProbeRequest):
     if not target_ip or target_port < 1 or target_port > 65535:
         raise HTTPException(status_code=400, detail="Invalid target IP or port")
 
+    # SSRF gate: target_ip/target_port are authenticated-peer-supplied, not
+    # this node's own config -- run them through the same host-classification
+    # every other outbound probe uses before constructing a URL, so an
+    # authenticated peer cannot use this endpoint to pivot a probe at
+    # link-local metadata services or other blocked ranges.
+    try:
+        target_url = validate_model_endpoint_url(f"http://{target_ip}:{target_port}")
+        target_url = f"{target_url}/api/status"
+    except ModelEndpointPolicyError as exc:
+        raise HTTPException(status_code=400, detail=f"target rejected by endpoint policy: {exc}") from exc
+
     # Attempt to probe the target
     reachable = False
     models: List[str] = []
@@ -3325,7 +3365,6 @@ async def post_peer_relay_probe(request: Request, body: PeerRelayProbeRequest):
 
     try:
         async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as client:
-            target_url = f"http://{target_ip}:{target_port}/api/status"
             r = await client.get(target_url, timeout=PROBE_TIMEOUT)
 
             if r.status_code == 200:
