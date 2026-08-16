@@ -6,6 +6,7 @@ import hmac
 import importlib.util
 import os
 from pathlib import Path
+from typing import Any, NoReturn
 
 import pytest
 
@@ -91,9 +92,9 @@ def test_wrong_repo_fails(grant_lib, tmp_path):
     ],
 )
 def test_invalid_grant_inputs_fail_before_reading_append_content(
-    grant_lib, monkeypatch, repo, pr_number
-):
-    def digest_must_not_run(*_args, **_kwargs):
+    grant_lib: Any, monkeypatch: pytest.MonkeyPatch, repo: str, pr_number: str
+) -> None:
+    def digest_must_not_run(*_args: Any, **_kwargs: Any) -> NoReturn:
         raise AssertionError("append content must not be read for invalid grant inputs")
 
     monkeypatch.setattr(grant_lib, "content_digest_for_append", digest_must_not_run)
