@@ -162,6 +162,7 @@ async def test_client_loop_stops_on_endpoint_policy_rejection(
     assert sse_called is False
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_fetch_remote_peer_api_preserves_https_and_builds_transport_url(
     monkeypatch: pytest.MonkeyPatch,
@@ -210,6 +211,7 @@ async def test_fetch_remote_peer_api_preserves_https_and_builds_transport_url(
     assert requested_url == "https://192.168.1.50:8443/api/peer-inbox"
 
 
+@pytest.mark.unit
 @pytest.mark.asyncio
 async def test_fetch_remote_peer_api_rejects_disallowed_public_peer(
     monkeypatch: pytest.MonkeyPatch,
