@@ -38,8 +38,23 @@
   // covered one of them. All 6 currently pass MD013 anyway (checked
   // directly, not assumed), but the glob is the more defensive choice
   // as entries keep growing. Matches Perpetua-Tools's own glob pattern.
+  //
+  // "docs/archive/*-Archived-LESSONS.md" -- added 2026-08-16 when
+  // docs/LESSONS.md (4,349 lines) was split into monthly archives
+  // (April / May / June+July). The archived entries are moved
+  // verbatim (unchanged heading text and body, only reordered
+  // oldest-first within each file) from a file this glob already
+  // exempted, so the same content-category rationale applies: pasted
+  // JSON/long URLs/duplicate section headers repeated per entry
+  // (e.g. "### Context", "### Decisions made") are inherent to the
+  // log format, not something the split introduced. Verified against
+  // markdownlint-cli2 v0.17.2 (CI-pinned): without this entry the 3
+  // new archive files surface MD013/MD024/MD031/MD032/MD012/MD042
+  // violations that are 100% pre-existing content carried over from
+  // docs/LESSONS.md, none newly introduced by the archival split.
   "ignores": [
     "**/SKILL.md",
-    "**/LESSONS.md"
+    "**/LESSONS.md",
+    "docs/archive/*-Archived-LESSONS.md"
   ]
 }

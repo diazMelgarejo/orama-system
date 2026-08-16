@@ -32,7 +32,7 @@ force-push). After a rewrite every pre-rewrite commit keeps its content but gets
 - Method + worked examples:
   [`bin/orama-system/skills/git-history-surgery/SKILL.md`](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/skills/git-history-surgery/SKILL.md)
   § B5. Why this keeps recurring and how we make it stick:
-  [`docs/LESSONS.md` § 2026-06-05](https://github.com/diazMelgarejo/orama-system/blob/main/docs/LESSONS.md#2026-06-05)
+  [`docs/archive/2026-06--to-07--June+July-Archived-LESSONS.md` § 2026-06-05](https://github.com/diazMelgarejo/orama-system/blob/main/docs/archive/2026-06--to-07--June+July-Archived-LESSONS.md#2026-06-05)
   · failure catalog
   [`bin/orama-system/afrp/failure-modes.md` § Failure Mode 7](https://github.com/diazMelgarejo/orama-system/blob/main/bin/orama-system/afrp/failure-modes.md).
 - **Rebasing/force-updating/reviving a remote branch requires explicit current-user
