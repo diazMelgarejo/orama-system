@@ -512,6 +512,15 @@ def verify_grant_for_append(
     consume: bool = False,
     cwd: Path | None = None,
 ) -> tuple[bool, str]:
+    # Reject malformed grant identity before touching an operator-supplied path.
+    # verify_grant_fields repeats these checks as defense in depth for callers
+    # that already have a digest.
+    try:
+        _validate_repo_slug(repo)
+        _validate_pr_number(pr_number)
+    except GrantError as exc:
+        return False, str(exc)
+
     try:
         digest = content_digest_for_append(file_path, message, cwd=cwd)
     except GrantError as exc:

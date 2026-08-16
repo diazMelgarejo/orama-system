@@ -77,6 +77,26 @@ def test_wrong_repo_fails(grant_lib, tmp_path):
     assert "repo mismatch" in err
 
 
+@pytest.mark.parametrize(
+    ("repo", "pr_number"),
+    [("owner\nrepo", "42"), ("owner/repo", "42\n")],
+)
+def test_invalid_grant_inputs_fail_before_reading_append_content(
+    grant_lib, monkeypatch, repo, pr_number
+):
+    def digest_must_not_run(*_args, **_kwargs):
+        raise AssertionError("append content must not be read for invalid grant inputs")
+
+    monkeypatch.setattr(grant_lib, "content_digest_for_append", digest_must_not_run)
+
+    ok, err = grant_lib.verify_grant_for_append(
+        repo, pr_number, "untrusted-followup.md", None, consume=False
+    )
+
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+
 def test_wrong_digest_fails(grant_lib, tmp_path):
     append = tmp_path / "follow.md"
     append.write_text("x", encoding="utf-8")
@@ -282,4 +302,3 @@ def test_parse_append_segment_malformed_quote_fails_closed(grant_lib):
         'bash scripts/cursor/append-pr-body.sh diaz/repo 9 --message "unclosed'
     )
     assert parsed is None
-
