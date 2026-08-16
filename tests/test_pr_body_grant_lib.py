@@ -79,7 +79,16 @@ def test_wrong_repo_fails(grant_lib, tmp_path):
 
 @pytest.mark.parametrize(
     ("repo", "pr_number"),
-    [("owner\nrepo", "42"), ("owner/repo", "42\n")],
+    [
+        ("owner\nrepo", "42"),
+        ("owner/repo", "42\n"),
+        ("owner\rrepo", "42"),
+        ("owner/repo", "42\r"),
+        ("", "42"),
+        ("owner/repo", ""),
+        ("   ", "42"),
+        ("owner/repo", "   "),
+    ],
 )
 def test_invalid_grant_inputs_fail_before_reading_append_content(
     grant_lib, monkeypatch, repo, pr_number
@@ -93,6 +102,67 @@ def test_invalid_grant_inputs_fail_before_reading_append_content(
         repo, pr_number, "untrusted-followup.md", None, consume=False
     )
 
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+
+def test_verify_grant_fields_rejects_invalid_inputs_directly(grant_lib):
+    """Direct unit test for verify_grant_fields() validation logic.
+
+    Tests that carriage returns and blank values are rejected
+    without going through the full mint_grant pipeline.
+    """
+    # Mock fields dict that would pass all other checks
+    fields = {
+        "marker": "operator-grant-v2",
+        "issued-at": grant_lib._now_utc().isoformat().replace("+00:00", "Z"),
+        "repo": "owner/repo",
+        "pr-number": "42",
+        "action": "append_integrative",
+        "content-digest": "sha256:deadbeef",
+        "grant-nonce": "test-nonce",
+        "token": "test-token",
+    }
+
+    # Test carriage return in repo
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "owner\rrepo", "42", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test carriage return in pr_number
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "owner/repo", "42\r", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test empty repo
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "", "42", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test blank repo (whitespace only)
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "   ", "42", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test empty pr_number
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "owner/repo", "", "sha256:deadbeef"
+    )
+    assert not ok
+    assert "must not contain pipe or newline characters" in err
+
+    # Test blank pr_number (whitespace only)
+    ok, err = grant_lib.verify_grant_fields(
+        fields, "owner/repo", "   ", "sha256:deadbeef"
+    )
     assert not ok
     assert "must not contain pipe or newline characters" in err
 
