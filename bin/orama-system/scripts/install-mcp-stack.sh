@@ -177,7 +177,8 @@ if $MIRROR_SKILLS; then
   _PLATFORMS=(
     "$HOME/.claude/skills:claude"
     "$HOME/.codex/skills:codex"
-    "$HOME/.gemini/skills:gemini (DEPRECATED)"
+    "$HOME/.gemini/skills:gemini"
+    "$HOME/.antigravity/skills:antigravity"
   )
   for _src_skill in "$_SKILLS_ROOT"/*/SKILL.md "$_SKILLS_ROOT/SKILL.md"; do
     [ -f "$_src_skill" ] || continue
