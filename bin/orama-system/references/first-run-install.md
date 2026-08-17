@@ -204,13 +204,14 @@ grep -A5 '"PreCompact"' "$OPENCLAW_ROOT/.claude/settings.local.json"
 First-run does **not** install ai-cli-mcp or Gemini. After first-run completes:
 
 ```bash
-bash "${ORAMA_REPO_ROOT}/bin/orama-system/scripts/install-mcp-stack.sh"
+bash "${ORAMA_REPO_ROOT}/bin/orama-system/scripts/install-mcp-stack.sh" --mirror-skills
 # Optional analyzer lane:
-# Gemini is deprecated for unpaid tiers (cutoff 2026-06-18).
 # bash "${ORAMA_REPO_ROOT}/bin/orama-system/scripts/install-mcp-stack.sh" --include-gemini
 ```
 
-See [`../mcp-install/SKILL.md`](../mcp-install/SKILL.md).
+When AntiGravity (`~/.antigravity`) or Gemini (`~/.gemini`) are detected, the installer harmonizes the ECC runtime overlay (`~/.antigravity/ANTIGRAVITY.md`) and registers cross-stack MCP endpoints without overwriting native configs.
+
+See [`../mcp-install/SKILL.md`](../mcp-install/SKILL.md) and [`../skills/mcp-orchestration/references/antigravity-claude-client-reference-card.md`](../skills/mcp-orchestration/references/antigravity-claude-client-reference-card.md).
 
 ---
 
