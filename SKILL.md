@@ -196,8 +196,8 @@ Session logs:
 
 Companion repo:
 
-- [Perplexity-Tools/SKILL.md](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/SKILL.md)
-- [Perplexity-Tools/docs/LESSONS.md](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/docs/LESSONS.md)
+- [Perpetua-Tools/SKILL.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SKILL.md)
+- [Perpetua-Tools/docs/LESSONS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)
 
 ### Critical cautionary reference: Wrong Repo Build (2026-05-14)
 
