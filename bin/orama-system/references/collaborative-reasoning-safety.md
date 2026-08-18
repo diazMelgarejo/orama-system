@@ -117,3 +117,64 @@ escalation.
 - Suppress dissenting evidence
 - Treat consensus as authorization
 - Self-authorize a privileged or consequential next step
+
+---
+
+## Human Initiation & Non-Self-Authorization
+
+> **Anchored in:** [HUMAN-IN-LOOP-ACCOUNTABILITY.md](../../../docs/v2/references/HUMAN-IN-LOOP-ACCOUNTABILITY.md)
+> **Amplifier Principle:** *"Accountability should not be lost in agentic work. It amplifies
+> human intent, and should never replace or displace our human values and morality."*
+
+Applies to **all modes** — not optional, not overridable by any agent or orchestrator.
+
+### The Three Non-Self-Authorizable Action Classes
+
+Before any of the following may begin, a **human operator must explicitly initiate and approve**:
+
+| Class | Description | Minimum Verification |
+| --- | --- | --- |
+| **Chain-Research** | Any multi-step autonomous research sequence | GPG-signed token or OIDC assertion |
+| **Always-On Agent** | Any persistent / background agent activation | OIDC (real-world certified identity) + 24-hr renewal |
+| **Swarm Launch** | Any multi-agent coordinated execution | OIDC + HMAC `approval_token` per-swarm, logged pre-execution |
+
+**Agents cannot self-authorize any of these three classes.** Specifically:
+
+- No agent may call `spawn_agents()`, activate a swarm, or start a long-running
+  research chain on its own initiative.
+- The `approval_token` must be present, issued out-of-band by a human operator,
+  and HMAC-verified before execution begins — see `swarm_approval.py`.
+- If no valid `approval_token` is present → raise `ValueError`, log the attempt,
+  do not proceed.
+- A prior approval for one class does not carry over to another class.
+  Each class requires its own fresh authorization.
+
+### Cryptographic Verification Tiers
+
+| Tier | Action Class | Required Credential |
+| --- | --- | --- |
+| T1 — Initiation | Start chain-research or background agent | GPG or HMAC token |
+| T2 — Consequential Output | Output leaving the system toward a financial/legal decision | OIDC (real-world certified identity) |
+| T3 — Irreversible Action | Permanent deletion, funds movement, legal filing, system-wide config | One-time HMAC token + OIDC, logged pre-action |
+
+T2 and T3 require **real-world certified identity** — GPG alone is insufficient.
+OIDC (GitHub, Google Workspace, or equivalent certified IdP) binds the approval
+to a verified human being, not just a cryptographic key.
+
+### 24-Hour Always-On Renewal
+
+Always-on agents must request human renewal every 24 hours. Renewal cannot be
+auto-acknowledged by another agent — a human must confirm. This prevents silent
+scope creep, the most common failure mode in production always-on systems.
+
+### Relation to MAESTRO Gates
+
+This section defines *who may authorize* actions. MAESTRO gate classes (G0–G4
+plus Emergency Stop) define *how* authorization is enforced at the orchestration
+level. Both apply simultaneously — this section is not a substitute for gates,
+and gates are not a substitute for this section.
+
+- G3 (Consequential) = T2/T3 credential required
+- G4 (Emergency Stop) = unconditional, bypasses agent entirely, never bypassable
+
+Full gate architecture: [04-HUMAN-ACCOUNTABILITY-FORWARD-PLAN.md](./04-HUMAN-ACCOUNTABILITY-FORWARD-PLAN.md)

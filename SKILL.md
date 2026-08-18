@@ -196,8 +196,8 @@ Session logs:
 
 Companion repo:
 
-- [Perplexity-Tools/SKILL.md](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/SKILL.md)
-- [Perplexity-Tools/docs/LESSONS.md](https://github.com/diazMelgarejo/Perplexity-Tools/blob/main/docs/LESSONS.md)
+- [Perpetua-Tools/SKILL.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/SKILL.md)
+- [Perpetua-Tools/docs/LESSONS.md](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/LESSONS.md)
 
 ### Critical cautionary reference: Wrong Repo Build (2026-05-14)
 
@@ -353,19 +353,6 @@ bearer_token_env_var = "CODEX_GITHUB_PERSONAL_ACCESS_TOKEN"
 ```
 
 That field belongs to HTTP MCP config. For stdio servers, pass credentials through
-`[mcp_servers.<name>.env]`.
+`[mcp_servers.<name>.env]` instead.
 
-Verify every MCP config fix with:
-
-```bash
-codex mcp list
-```
-
-`Auth: Unsupported` is expected for stdio and is not the failure.
-
-**Why this rule exists:** Codex previously failed by treating the GitHub warning as a missing-token
-problem. Claude fixed it by running `codex mcp list`, recognizing `invalid transport` as a schema
-failure, and switching to transport-specific config. Preserve the nuance: `bearer_token_env_var` is
-valid for GitHub's remote HTTP MCP endpoint, but wrong for the local npm stdio server.
-
-→ [docs/wiki/11-codex-github-mcp-config.md](docs/wiki/11-codex-github-mcp-config.md)
+→ [docs/wiki/11-codex-mcp-config-postmortem.md](docs/wiki/11-codex-mcp-config-postmortem.md)

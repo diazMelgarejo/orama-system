@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+# OS-D3: Wrong-Repo-Build pre-commit guard
+# Prevents repeat of 2026-05-14 incident
+# See: docs/wiki/10-wrong-repo-build-what-not-to-do.md
+#
+# Install: bash scripts/install-hooks.sh
+# Manual:  cp scripts/pre-commit-wrong-repo-build .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+set -euo pipefail
+
+RED='\033[0;31m'
+YELLOW='\033[1;33m'
+GREEN='\033[0;32m'
+NC='\033[0m'
+
+FAILED=0
+
+echo "🔍 orama-system pre-commit: Wrong-Repo-Build checks (2026-05-14 doctrine)..."
+
+# Check 1 — remote must match diazMelgarejo/orama-system
+REMOTE=$(git remote get-url origin 2>/dev/null || echo "")
+if echo "$REMOTE" | grep -qiE "diazMelgarejo/orama-system"; then
+  echo -e "  ${GREEN}✅ Check 1 PASS${NC}: remote = $REMOTE"
+else
+  echo -e "  ${RED}❌ Check 1 FAIL${NC}: remote '$REMOTE' does not match diazMelgarejo/orama-system"
+  echo -e "  ${YELLOW}   Fix: git remote set-url origin git@github.com:diazMelgarejo/orama-system.git${NC}"
+  FAILED=1
+fi
+
+# Check 2 — staged docs/v2/ or oramasys/* in wrong org remote
+STAGED_V2=$(git diff --cached --name-only 2>/dev/null | grep -E "^(docs/v2/|oramasys/)" || true)
+if [ -n "$STAGED_V2" ]; then
+  if echo "$REMOTE" | grep -qiE "oramasys/"; then
+    echo -e "  ${RED}❌ Check 2 FAIL${NC}: docs/v2/ changes staged but remote is oramasys/* — wrong repo"
+    echo -e "  ${YELLOW}   v1 docs belong in diazMelgarejo/orama-system${NC}"
+    FAILED=1
+  else
+    echo -e "  ${GREEN}✅ Check 2 PASS${NC}: docs/v2/ changes in correct repo"
+  fi
+else
+  echo -e "  ${GREEN}✅ Check 2 PASS${NC}: no docs/v2/ or oramasys/* changes staged"
+fi
+
+# Check 3 — warn if branch looks agent-created (non-blocking)
+BRANCH=$(git branch --show-current 2>/dev/null || echo "")
+if echo "$BRANCH" | grep -qE "^(agent-|ai-|auto-|bot-|codex-|gemini-|cursor/)"; then
+  echo -e "  ${YELLOW}⚠️  Check 3 WARN${NC}: branch '$BRANCH' looks agent-created"
+  echo -e "  ${YELLOW}   Rule (Skill 7): always branch from origin/main, never from agent-created branches${NC}"
+else
+  echo -e "  ${GREEN}✅ Check 3 PASS${NC}: branch = $BRANCH"
+fi
+
+# Check 4 — warn if plan .md files are staged (non-blocking)
+STAGED_PLAN=$(git diff --cached --name-only 2>/dev/null | grep -iE "(plan|roadmap).*\.md$" || true)
+if [ -n "$STAGED_PLAN" ]; then
+  echo -e "  ${YELLOW}⚠️  Check 4 WARN${NC}: plan file(s) staged — confirm repo is correct before pushing:"
+  echo "      $STAGED_PLAN"
+else
+  echo -e "  ${GREEN}✅ Check 4 PASS${NC}: no plan files staged"
+fi
+
+if [ $FAILED -eq 1 ]; then
+  echo ""
+  echo -e "${RED}🚫 Pre-commit BLOCKED: Wrong-Repo-Build guard failed.${NC}"
+  echo -e "   See: docs/wiki/10-wrong-repo-build-what-not-to-do.md"
+  echo ""
+  exit 1
+fi
+
+echo -e "${GREEN}✅ All Wrong-Repo-Build checks passed.${NC}"
+exit 0
