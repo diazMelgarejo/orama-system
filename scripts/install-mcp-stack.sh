@@ -1,0 +1,1 @@
+../bin/orama-system/scripts/install-mcp-stack.sh
