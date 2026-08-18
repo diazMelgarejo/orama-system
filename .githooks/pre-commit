@@ -18,6 +18,11 @@ if [ -f "$ROOT/scripts/hooks/no_committed_lan_topology.py" ]; then
   python3 "$ROOT/scripts/hooks/no_committed_lan_topology.py" || exit 1
 fi
 
+# Wrong-repo-build gate (2026-05-14 incident prevention)
+if [ -x "$ROOT/scripts/hooks/pre-commit-wrong-repo-build.sh" ]; then
+  bash "$ROOT/scripts/hooks/pre-commit-wrong-repo-build.sh" || exit 1
+fi
+
 # OSSF-1: canonical orama SKILL.md (bin/orama-system/ only) when staged.
 if [ -f "$ROOT/scripts/hooks/check_ossf1_skill_md.py" ]; then
   if ! command -v python3 >/dev/null 2>&1; then
