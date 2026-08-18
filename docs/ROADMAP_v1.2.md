@@ -12,7 +12,21 @@ System must improve slowly, safely, and permanently.
 
 ---
 
-# 0. System Architecture (v1.2 Target State)
+## ⚠️ UPDATE!!! ⚠️
+
+### Realtalk: Policy Drift
+
+implementation has been deferred to v2.x on org oramasys/* repos
+
+until multiple agents discovered and converged on an existing opensource solution that already implements 90% of this work
+
+but it was vendored inside Perpetua-Tools as Agentic-Stack, instead of orama, so in v2 we will fork PT as an oramasys/vendor repo pruned of all code except git submodules it autonomously adopted 
+
+ALL other features here that is not yet found there will be minimalistically implemented as curated overlays on top of upstream Agentic-Stack
+
+---
+
+## 0. System Architecture (v1.2 Target State)
 
 PT (Execution Layer)
 - Task intake (API / agents)
@@ -32,7 +46,7 @@ PT executes → UTS evaluates → UTS mutates → PT improves
 
 ---
 
-# 1. Non-Negotiable Rules
+## 1. Non-Negotiable Rules
 
 - No uncontrolled self-modification
 - All rule changes must be logged
@@ -43,17 +57,17 @@ PT executes → UTS evaluates → UTS mutates → PT improves
 
 ---
 
-# 2. Tier Structure (Reordered for v1.2)
+## 2. Tier Structure (Reordered for v1.2)
 
-## Tier 2 FIRST — orama-system (Cognitive Core)
+### Tier 2 FIRST — orama-system (Cognitive Core)
 
 PT depends on this. Do not proceed to PT upgrades until stable.
 
 ---
 
-# 3. orama-system v1.2 (Cognitive Engine)
+## 3. orama-system v1.2 (Cognitive Engine)
 
-## 3.1 Memory System
+### 3.1 Memory System
 
 Create:
 
@@ -76,7 +90,7 @@ Rules:
 
 ---
 
-## 3.2 Evaluator Engine
+### 3.2 Evaluator Engine
 
 Implement:
 
@@ -92,7 +106,7 @@ Trigger learning only if below threshold.
 
 ---
 
-## 3.3 Proposal Engine
+### 3.3 Proposal Engine
 
 Standard format:
 
@@ -108,7 +122,7 @@ reversible: yes | no
 
 ---
 
-## 3.4 Hybrid Mutation System
+### 3.4 Hybrid Mutation System
 
 Decision logic:
 
@@ -124,7 +138,7 @@ ELSE
 
 ---
 
-## 3.5 Constraint System
+### 3.5 Constraint System
 
 Hard limits:
 
@@ -138,7 +152,7 @@ Reject:
 
 ---
 
-## 3.6 Pruning System
+### 3.6 Pruning System
 
 Each rule tracks:
 
@@ -153,7 +167,7 @@ Prune if:
 
 ---
 
-## 3.7 Lessons System (Compounding Core)
+### 3.7 Lessons System (Compounding Core)
 
 Format:
 
@@ -165,7 +179,7 @@ Mandatory:
 
 ---
 
-## 3.8 Dual-Agent Model
+### 3.8 Dual-Agent Model
 
 Builder:
 - executes tasks
@@ -178,9 +192,9 @@ Critic:
 
 ---
 
-# 4. Perplexity-Tools v1.2 (Execution Layer)
+## 4. Perplexity-Tools v1.2 (Execution Layer)
 
-## 4.1 Transport Layer (unchanged principle)
+### 4.1 Transport Layer (unchanged principle)
 
 Maintain:
 
@@ -192,7 +206,7 @@ System must never fail if MCP breaks.
 
 ---
 
-## 4.2 MCP Client
+### 4.2 MCP Client
 
 orchestrator/ultrathink_mcp_client.py
 
@@ -209,7 +223,7 @@ Failure triggers:
 
 ---
 
-## 4.3 Bridge Logic
+### 4.3 Bridge Logic
 
 call_ultrathink_mcp_or_bridge():
 
@@ -223,7 +237,7 @@ Add:
 
 ---
 
-## 4.4 FastAPI Integration
+### 4.4 FastAPI Integration
 
 - replace direct calls with unified bridge
 - no logic duplication
@@ -231,14 +245,14 @@ Add:
 
 ---
 
-## 4.5 Async Upgrade
+### 4.5 Async Upgrade
 
 - migrate httpx → AsyncClient
 - ensure non-blocking execution
 
 ---
 
-# 5. PT ↔ UTS Integration (New in v1.2)
+## 5. PT ↔ UTS Integration (New in v1.2)
 
 ## 5.1 Post-Task Hook
 
@@ -255,7 +269,7 @@ UTS returns:
 
 ---
 
-## 5.2 Learning Flow
+### 5.2 Learning Flow
 
 PT does NOT mutate rules directly.
 
@@ -266,7 +280,7 @@ UTS owns:
 
 ---
 
-## 5.3 Enforcement Injection
+### 5.3 Enforcement Injection
 
 All agents must:
 
@@ -277,9 +291,9 @@ All agents must:
 
 ---
 
-# 6. Redis Coordination (Deferred but aligned)
+## 6. Redis Coordination (Deferred but aligned)
 
-## Optional (v1.2+)
+### Optional (v1.2+)
 
 - shared memory state
 - multi-instance coordination
@@ -289,7 +303,7 @@ Not required for core loop.
 
 ---
 
-# 7. Governance Layer
+## 7. Governance Layer
 
 Create:
 
@@ -303,7 +317,7 @@ Rules:
 
 ---
 
-# 8. Implementation Order (Strict)
+## 8. Implementation Order (Strict)
 
 1. UTS memory system
 2. Evaluator
@@ -317,7 +331,7 @@ Rules:
 
 ---
 
-# 9. Success Criteria (v1.2)
+## 9. Success Criteria (v1.2)
 
 System is working if:
 
@@ -329,7 +343,7 @@ System is working if:
 
 ---
 
-# 10. Failure Modes (Watch Closely)
+## 10. Failure Modes (Watch Closely)
 
 - rule explosion → prune harder
 - noisy proposals → tighten threshold
@@ -338,7 +352,7 @@ System is working if:
 
 ---
 
-# 11. Future (v1.3+ direction)
+## 11. Future (v1.3+ direction)
 
 - automated proposal ranking
 - cross-repo shared learning
@@ -347,7 +361,7 @@ System is working if:
 
 ---
 
-# Final Principle
+## Final Principle
 
 This is not a feature.
 
