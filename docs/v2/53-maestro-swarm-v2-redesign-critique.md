@@ -45,7 +45,11 @@ Add a **Workflow Qualification Filter** before proceeding:
 | Output verifiability | Machine-checkable | Requires expert judgment | Scored (1 pt) |
 | Frequency | High volume, repeating | Low volume, one-off | Scored (1 pt) |
 
-A workflow must achieve Green on both **Regulatory liability** and **Error consequence** as non-negotiable veto gates. Workflows failing either veto gate must remain human-led. Among the remaining three scored criteria, at least two must be Green to qualify for automation. KYC screening should be classified as assisted automation (human-in-loop mandatory), not fully autonomous.[^4][^2]
+A workflow must achieve Green on both **Regulatory liability** and **Error consequence** as
+non-negotiable veto gates. Workflows failing either veto gate must remain human-led. Among the
+remaining three scored criteria, at least two must be Green to qualify for automation. KYC
+screening should be classified as assisted automation (human-in-loop mandatory), not fully
+autonomous.[^4][^2]
 
 ***
 
@@ -161,9 +165,10 @@ on state persistence, failure recovery, or checkpointing.[^4]
 
 ### Steelman
 
-LangGraph's stateful design supports step-by-step progress persistence when the graph is compiled with
-a configured checkpointer (e.g., `SqliteSaver`, `PostgresSaver`, or `AsyncSqliteSaver`) and invoked with
-an explicit `thread_id` in its runtime configuration. Its support for hierarchical and sequential
+LangGraph's stateful design supports step-by-step progress persistence when the graph is compiled
+with a configured checkpointer (e.g., `SqliteSaver`, `PostgresSaver`, or `AsyncSqliteSaver`) and
+invoked with an explicit `thread_id` in its runtime configuration. Its support for hierarchical and
+sequential
 multi-agent patterns — scatter-gather, pipeline parallelism — maps naturally onto financial
 workflows where comparables can be gathered in parallel while narrative is being drafted.[^3][^17]
 
