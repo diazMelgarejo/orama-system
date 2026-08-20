@@ -37,16 +37,15 @@ production.[^2][^3]
 
 Add a **Workflow Qualification Filter** before proceeding:
 
-| Criterion | Green (Automate) | Red (Human-Led) |
-| --- | --- | --- |
-| Input variability | Low — structured feeds | High — unstructured, ambiguous |
-| Output verifiability | Machine-checkable | Requires expert judgment |
-| Regulatory liability | Indirect (drafting) | Direct (decision authority) |
-| Error consequence | Recoverable | Irreversible or legally binding |
-| Frequency | High volume, repeating | Low volume, one-off |
+| Criterion | Green (Automate) | Red (Human-Led) | Veto Status |
+| --- | --- | --- | --- |
+| Regulatory liability | Indirect (drafting) | Direct (decision authority) | **Mandatory Veto Gate** |
+| Error consequence | Recoverable | Irreversible or legally binding | **Mandatory Veto Gate** |
+| Input variability | Low — structured feeds | High — unstructured, ambiguous | Scored (1 pt) |
+| Output verifiability | Machine-checkable | Requires expert judgment | Scored (1 pt) |
+| Frequency | High volume, repeating | Low volume, one-off | Scored (1 pt) |
 
-Only workflows that pass four of five green criteria should be automated. KYC screening should be
-classified as assisted automation (human-in-loop mandatory), not fully autonomous.[^4][^2]
+A workflow must achieve Green on both **Regulatory liability** and **Error consequence** as non-negotiable veto gates. Workflows failing either veto gate must remain human-led. Among the remaining three scored criteria, at least two must be Green to qualify for automation. KYC screening should be classified as assisted automation (human-in-loop mandatory), not fully autonomous.[^4][^2]
 
 ***
 
@@ -56,10 +55,12 @@ classified as assisted automation (human-in-loop mandatory), not fully autonomou
 
 The three-layer architecture (Skills / Connectors / Sub-agents) is confirmed accurate by Anthropic's
 actual product. However, the framework presents this as a static design pattern without addressing
-the **compounding reliability problem**. If each sub-agent is 95% reliable, chaining three together
-produces only ~86% overall success — a well-documented production reality. For financial
-applications where one erroneous number cascades into an incorrect pitch or a mismarked credit file,
-this is not a theoretical concern but an operational liability.[^5][^6][^1]
+the **compounding reliability problem**. If each sub-agent is 95% reliable, chaining three steps
+together produces only ~86% overall success ($0.95^3 \approx 0.857$), assuming statistically
+independent execution across stages — a well-documented production reality. (Similarly, with 97%
+per-step reliability, a 5-step chain yields $0.97^5 \approx 0.859$). For financial applications
+where one erroneous number cascades into an incorrect pitch or a mismarked credit file, this is not
+a theoretical concern but an operational liability.[^5][^6][^1]
 
 The framework also glosses over connector security. The May 2026 Anthropic rollout added D&B,
 Experian, GLG, Guidepoint, IBISWorld, and Moody's (600 million companies) — but the framework offers
@@ -95,12 +96,14 @@ Add explicit **Connector Governance Standards**:
 
 ### Critique
 
-Citing Claude Opus 4.7 as the base model is accurate — Anthropic confirmed it now leads the Vals AI
-Finance Agent Benchmark with a score of 64.4%. But a 64.4% benchmark score means the model fails on
-35.6% of tested financial tasks in benchmark conditions. In a live deployment with real-world data
-complexity, performance is typically *worse* than benchmark. Yet the framework presents model
-selection as a solved problem, with fine-tuning as a bolt-on enhancement. This underestimates the
-hallucination exposure.[^1]
+Citing Claude Opus 4.7 as the base model is accurate — Anthropic reported it led the Vals AI
+Finance Agent v1.1 benchmark with a score of 64.37%, while Meta's Muse Spark 1.2 achieved 60.599% on
+the Vals Finance Agent v2 benchmark. A benchmark score of ~60–64% indicates that the model succeeds
+on a majority of evaluated financial analyst questions under controlled benchmark conditions.
+However, benchmark performance evaluates isolated task accuracy; in a live deployment with real-world
+data ambiguity, domain-specific edge cases, and end-to-end multi-step dependencies, unassisted
+execution carries substantial operational risk. Presenting model selection as a solved problem, with
+fine-tuning as a bolt-on enhancement, underestimates the hallucination exposure.[^1]
 
 RAG, which the framework correctly recommends, does not eliminate hallucinations. The CFA
 Institute's own RAG for Finance study found a **55% quantitative accuracy rate** on financial
@@ -158,21 +161,24 @@ on state persistence, failure recovery, or checkpointing.[^4]
 
 ### Steelman
 
-LangGraph's stateful design, which automatically saves progress after each step, is precisely what
-makes it suitable for long-running financial tasks. Its support for hierarchical and sequential
+LangGraph's stateful design supports step-by-step progress persistence when the graph is compiled with
+a configured checkpointer (e.g., `SqliteSaver`, `PostgresSaver`, or `AsyncSqliteSaver`) and invoked with
+an explicit `thread_id` in its runtime configuration. Its support for hierarchical and sequential
 multi-agent patterns — scatter-gather, pipeline parallelism — maps naturally onto financial
 workflows where comparables can be gathered in parallel while narrative is being drafted.[^3][^17]
 
 ### Iterated Version
 
-- Mandate **checkpointing at every sub-agent boundary**: if any node fails, the orchestrator resumes
+- Mandate **checkpointing at every sub-agent boundary**: compile graphs with a durable checkpointer
+  (`SqliteSaver`/`PostgresSaver`) and unique `thread_id`; if any node fails, the orchestrator resumes
   from the last checkpoint rather than restarting the entire workflow.[^3][^6]
 - Add a **complexity ceiling rule**: if a workflow exceeds 7 LangGraph nodes, decompose it into two
   separately orchestrated workflows with a human handoff between them. This prevents debugging
   complexity from becoming unmanageable in production.[^17]
-- Implement **immutable audit logs** at every node transition: log inputs, outputs, tool calls, and
-  timestamps. This is required for EU AI Act Article 12 compliance and for internal
-  post-mortems.[^16][^15]
+- Implement **immutable audit logs** at every node transition, governed by strict data protection
+  controls: raw inputs and outputs must undergo automated PII/MNPI redaction before persistence,
+  field-level encryption at rest (AES-256), strict least-privilege access controls, and retention
+  lifecycle rules (GDPR Art. 5(1)(e) / EU AI Act Art. 12).[^16][^15]
 - For the parallel branch pattern (comparables + narrative), add a **merge validation node** that
   checks the two outputs for numerical consistency before assembling the final deck. Inconsistency
   flags trigger a human review step.[^10][^6]
@@ -233,16 +239,17 @@ improvements were compounded through iteration.[^1]
 
 Define explicit **Quality Gates** before moving from sandbox to production:
 
-| Metric | Minimum Threshold | Target |
-| --- | --- | --- |
-| Numerical accuracy (RAG extraction) | >90% on quantitative queries | >95% |
-| Hallucination rate (source-grounded outputs) | <5% of claims unsourced | <1% |
-| Workflow completion rate | >95% without human intervention for Tier 1 tasks | >99% |
-| Audit trail coverage | 100% of agent actions logged | 100% |
-| Human review gate compliance | 100% — no client deliverable without sign-off | 100% |
+| Metric | Unit & Denominator | Adjudication Method | Minimum Threshold | Target |
+| --- | --- | --- | --- | --- |
+| Numerical extraction accuracy | % of extracted numerical values (denominator: total benchmark values) | Deterministic cell-by-cell comparison against source filing | >90% | >95% |
+| Source-trace coverage | % of rendered numerical/factual claims (denominator: total claims) | AST / citation validator checking source cell or API pointer | 100% | 100% |
+| Factual error rate | % of verified factual assertions (denominator: total audited assertions) | Dual-model adversarial check + sample expert human audit | <5% | <1% |
+| Workflow completion rate | % of runs reaching terminal state (denominator: total initiated runs) | Orchestrator telemetry without unhandled crash/hang | >95% | >99% |
+| Audit trail coverage | % of node transitions (denominator: total state transitions) | Telemetry verification of redacted, encrypted records | 100% | 100% |
+| Human review gate compliance | % of client deliverables (denominator: total client exports) | Non-bypassable orchestration barrier with signed approval | 100% | 100% |
 
-Any metric below minimum threshold blocks promotion to production. Numerical accuracy and
-hallucination rate are mandatory first gates.[^5][^11][^10]
+Any metric below minimum threshold blocks promotion to production. Numerical accuracy,
+source-trace coverage, and factual error rate are mandatory first gates.[^5][^11][^10]
 
 ***
 
@@ -251,17 +258,23 @@ hallucination rate are mandatory first gates.[^5][^11][^10]
 ### Critique
 
 This is the weakest section of the framework. It references the EU AI Act and US banking regulations
-generically but misses the most operationally urgent fact: **Articles 6 through 49 of the EU AI Act
-become enforceable on August 2, 2026** — less than three months from now. Any AI agent that makes
-autonomous decisions affecting creditworthiness, investment recommendations, fraud detection, or KYC
-must demonstrate full compliance with risk management (Article 9), audit logging (Article 12), and
-human oversight (Article 14) — or face fines of up to €35 million or 7% of global revenue.[^19][^16]
+generically but misses the structured regulatory timeline established by **Regulation (EU) 2024/1689**
+as amended by the **Digital Omnibus Regulation (EU) 2026/1744**:
+- **August 2, 2026**: Article 50 transparency and disclosure requirements become applicable (mandatory
+  labeling of AI interactions, AI-generated outputs, and synthetic content watermarking).
+- **December 2, 2027**: Standalone high-risk AI obligations under **Article 6(2) and Annex III**
+  (including creditworthiness assessment, risk scoring, and access to financial services) become
+  enforceable, requiring risk management (Article 9), technical documentation (Article 11), audit
+  logging (Article 12), and human oversight (Article 14).
+- **August 2, 2028**: Embedded high-risk systems under **Article 6(1) and Annex I** (systems integrated
+  into products under EU safety harmonization laws) become enforceable.[^19][^16]
 
-FINRA's 2026 Annual Regulatory Oversight Report, released December 2025, issued the first major
-regulatory guidance specifically addressing AI agents in financial services, identifying autonomy,
-scope creep, auditability, and data sensitivity as key risks. The framework cites none of this. A
-firm that deploys these agents in production today without completing conformity assessments and
-registering in the EU AI database faces active regulatory exposure starting August 2.[^20][^21][^19]
+In the US, FINRA's 2026 Annual Regulatory Oversight Report (released December 9, 2025) added a dedicated
+GenAI section emphasizing that broker-dealers deploying AI agents must maintain supervision under
+FINRA Rule 3110, govern customer communications under Rule 2210, prevent autonomy drift and scope creep,
+and safeguard non-public financial data. While FINRA did not create new standalone statutes, it
+signaled intensified examination scrutiny on agent governance. The framework cites none of this,
+treating compliance as an afterthought rather than a structural architectural constraint.[^20][^21][^19]
 
 ### Steelman
 
@@ -277,15 +290,21 @@ Replace the generic compliance section with a **Compliance Implementation Checkl
 **Immediate (Before Any Production Deployment):**
 
 - [ ] Classify every agent against EU AI Act Annex III high-risk categories. Most financial services
-  AI agents (credit, KYC, underwriting, investment recommendations) will qualify.[^21][^15]
+  AI agents (credit scoring, KYC/AML screening, underwriting, investment recommendations) qualify.[^21][^15]
 - [ ] Assign a responsible compliance owner to each high-risk system.[^21]
-- [ ] Implement immutable audit logging at every agent decision point (Article 12).[^16]
+- [ ] Implement encrypted, redacted immutable audit logging at every agent decision point (Article 12).[^16]
 - [ ] Hardcode human oversight gates into the orchestration graph — not as a UI option but as a
   non-bypassable workflow node (Article 14).[^15][^16]
+- [ ] Align supervision and recordkeeping with FINRA Rule 3110 and Rule 2210 expectations.[^20]
 
-**Before August 2, 2026:**
+**Before August 2, 2026 (Transparency & Disclosure Phase):**
 
-- [ ] Complete conformity assessments for all high-risk systems (Article 43).[^19][^15]
+- [ ] Implement Article 50 transparency notices informing users of AI interactions and synthetic content labeling.[^19]
+- [ ] Begin preparation for Annex IV technical documentation and conformity assessment workflows.[^21]
+
+**Before December 2, 2027 (High-Risk Enforcement Phase):**
+
+- [ ] Complete conformity assessments for all Article 6(2) / Annex III high-risk systems (Article 43).[^19][^15]
 - [ ] Finalize technical documentation per Annex IV.[^21]
 - [ ] Register all high-risk AI systems in the EU AI database (Article 49).[^15][^21]
 - [ ] Issue Declaration of Conformity with CE marking (Articles 47-48).[^21]
@@ -295,7 +314,7 @@ Replace the generic compliance section with a **Compliance Implementation Checkl
 - [ ] Conduct continuous risk management reviews (Article 9 is not a one-time assessment).[^21]
 - [ ] Monitor for autonomy drift — agents that begin making decisions beyond their defined scope
   trigger automatic escalation.[^20][^4]
-- [ ] Maintain dual compliance for EU AI Act and FCA/US banking regulations simultaneously.[^19]
+- [ ] Maintain dual compliance for EU AI Act and FCA/US banking/FINRA regulations simultaneously.[^19]
 
 ***
 
@@ -306,13 +325,13 @@ design dimensions.
 
 | Dimension | Original Framework | Hardened Iteration |
 | --- | --- | --- |
-| Workflow qualification | Vague — "similar characteristics" | Explicit 5-criterion filter with green/red classification |
+| Workflow qualification | Vague — "similar characteristics" | Explicit 5-criterion filter with mandatory veto gates on Regulatory liability and Error consequence |
 | Hallucination mitigation | RAG + code execution (mentioned) | Mandatory 5-layer stack: task routing, Bayesian RAG, dual-model verification, grounding checks, analyst gate |
 | Connector security | Role-based access controls (mentioned) | Least privilege, short-lived tokens, policy enforcement gateway, cross-app context firewall |
-| Orchestration reliability | LangGraph recommended | LangGraph + checkpointing, complexity ceiling (7 nodes max), merge validation node |
-| Quality gates | "Compare to human output" | 5 defined metrics with minimum thresholds; numerical accuracy and hallucination rate gate production |
-| Compliance | EU AI Act + US banking (generic) | August 2, 2026 deadline acknowledged; full 3-phase checklist; FINRA 2026 guidance integrated |
-| MCP security | Not addressed | Prompt injection sanitization, token scoping, context firewall, audit log of all cross-app transfers |
+| Orchestration reliability | LangGraph recommended | LangGraph with durable checkpointer (`SqliteSaver`/`PostgresSaver`) + `thread_id`, 7-node ceiling, merge validation |
+| Quality gates | "Compare to human output" | 6 defined metrics with units, denominators, and thresholds; numerical accuracy, trace coverage, and error rate gate production |
+| Compliance | EU AI Act + US banking (generic) | Structured EU AI Act roadmap (Aug 2026 Art. 50, Dec 2027 Art. 6(2) high-risk), FINRA 2026 GenAI guidance integrated |
+| MCP security | Not addressed | Untrusted input sanitization, token scoping, context firewall, audit log of all cross-app transfers |
 
 ***
 
@@ -322,10 +341,10 @@ The original framework is a credible starting point and accurately reflects Anth
 financial services product architecture. Its fatal weaknesses are operational, not conceptual: it
 treats hallucination as manageable via RAG alone (RAG achieves only 55% quantitative accuracy on
 financial documents), understates the compounding reliability problem in multi-agent chains, ignores
-MCP security risks that are now documented by FINRA and security researchers, and misses the August
-2, 2026 EU AI Act enforcement deadline by treating compliance as a post-deployment concern. The
-hardened iteration addresses each of these gaps while preserving the framework's valid structural
-foundation.[^11][^6][^20][^16][^19][^7][^1]
+MCP security risks that are now documented by FINRA and security researchers, and fails to operationalize
+the structured EU AI Act compliance timeline (Article 50 transparency in August 2026, Article 6(2)
+high-risk enforcement in December 2027). The hardened iteration addresses each of these gaps while
+preserving the framework's valid structural foundation.[^11][^6][^20][^16][^19][^7][^1]
 
 ***
 
