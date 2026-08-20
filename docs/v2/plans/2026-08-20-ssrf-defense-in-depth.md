@@ -62,8 +62,12 @@ Owned by infra/platform, not application code. Nothing here is enforced by Pytho
    `iptables -A OUTPUT -d 169.254.169.254 -j DROP`, `169.254.170.2` (ECS) the same way, and
    `fd00:ec2::254` (AWS IMDS IPv6) via the IPv6 equivalent
    (`ip6tables -A OUTPUT -d fd00:ec2::254 -j DROP`) if IPv6 IMDS is enabled — an IPv4-only rule
-   leaves the IPv6 endpoint open. Apply at the route table / security group layer too, on any host
-   that doesn't need IMDS.
+   leaves the IPv6 endpoint open. On a host running containers, also add the equivalent `FORWARD`
+   chain rules (`iptables -A FORWARD -d 169.254.169.254 -j DROP`, and the IPv6/ECS equivalents) or
+   the CNI's own network-policy mechanism (Calico `GlobalNetworkPolicy`, Cilium
+   `CiliumNetworkPolicy`, etc.) — a container's traffic to the metadata IP traverses the host's
+   `FORWARD` chain and the pod network namespace, not `OUTPUT`, so an `OUTPUT`-only rule doesn't see
+   it. Do not rely on route tables or security groups for this block; see point 4 for why.
 3. **Prefer IRSA / Workload Identity** over instance-wide IMDS-issued credentials. IMDS-issued
    credentials are already temporary and auto-rotating, not long-lived — the benefit of
    IRSA/Workload Identity is narrower, workload-specific role scope instead of the whole instance

@@ -11,7 +11,13 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 SCAN_ROOTS=(bin/agents bin/orama-system/skills)
+# WORK is per-invocation scratch (skill-dir lists, scan reports) -- fine to
+# be PID-unique. CACHE_DIR is for content actions/cache is expected to
+# restore between runs (the agent-audit clone, keyed on its pinned ref in
+# the workflow) -- it must NOT include $$, or every run gets a fresh path
+# the cache step's `path:` can never match, silently defeating the cache.
 WORK="${RUNNER_TEMP:-/tmp}/agent-sec-$$"
+CACHE_DIR="${RUNNER_TEMP:-/tmp}"
 mkdir -p "$WORK"
 FAIL=0
 
@@ -20,15 +26,6 @@ run() {
   local name="$1"; shift
   log "RUN $name"
   if "$@"; then log "OK $name"; else log "FAIL $name"; FAIL=1; fi
-}
-warn_run() {
-  local name="$1"; shift
-  log "RUN $name"
-  if "$@"; then
-    log "OK $name"
-  else
-    log "WARN $name (non-fatal — scan logged above; CI continues)"
-  fi
 }
 
 scan_aguara() {
@@ -72,12 +69,15 @@ scan_aguara() {
 
 scan_agent_audit() {
   python3 -m pip install -q --upgrade pip
-  if [[ ! -d "$WORK/agent-audit" ]]; then
+  # CACHE_DIR/agent-audit, not WORK/agent-audit -- must match the path
+  # cached by actions/cache in agent-security.yml exactly, so the clone
+  # is actually restored between runs instead of re-cloned every time.
+  if [[ ! -d "$CACHE_DIR/agent-audit" ]]; then
     AGENT_AUDIT_REF="${AGENT_AUDIT_REF:-d7b11f8bc02f0f212147a161e5d3bb10dcc117b2}"
-    git clone https://github.com/scadastrangelove/agent-audit "$WORK/agent-audit"
-    git -C "$WORK/agent-audit" checkout --detach "$AGENT_AUDIT_REF"
+    git clone https://github.com/scadastrangelove/agent-audit "$CACHE_DIR/agent-audit"
+    git -C "$CACHE_DIR/agent-audit" checkout --detach "$AGENT_AUDIT_REF"
   fi
-  python3 -m pip install -q -e "$WORK/agent-audit"
+  python3 -m pip install -q -e "$CACHE_DIR/agent-audit"
 
   run agent-audit agent-audit scan-project "$ROOT" \
     --min-severity high -y --output "$WORK/agent-audit-report"
@@ -147,14 +147,17 @@ scan_ramparts() {
         continue
       fi
       # Skill trees are filesystem bundles, not live MCP HTTP endpoints.
+      # Blocking (run, not warn_run): a Ramparts finding is a real scan
+      # result like any other tool's, not an install/availability warning.
       if ramparts skills scan --help >/dev/null 2>&1; then
-        warn_run "ramparts-skills:$path" ramparts skills scan "$scan_root"
+        run "ramparts-skills:$path" ramparts skills scan "$scan_root"
       else
-        warn_run "ramparts:$path" ramparts scan "$scan_root"
+        run "ramparts:$path" ramparts scan "$scan_root"
       fi
     done
   elif [[ -n "${GITHUB_ACTIONS:-}" ]]; then
-    log "WARN ramparts (not installed — skipped; install: cargo install ramparts@${RAMPARTS_VERSION:-0.8.2} --locked)"
+    log "FAIL ramparts (not installed — install: cargo install ramparts@${RAMPARTS_VERSION:-0.8.2} --locked)"
+    FAIL=1
   else
     log "SKIP ramparts (install cargo package ramparts for local runs)"
   fi
