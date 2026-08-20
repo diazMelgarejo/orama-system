@@ -72,8 +72,19 @@ scan_agent_audit() {
   # CACHE_DIR/agent-audit, not WORK/agent-audit -- must match the path
   # cached by actions/cache in agent-security.yml exactly, so the clone
   # is actually restored between runs instead of re-cloned every time.
+  AGENT_AUDIT_REF="${AGENT_AUDIT_REF:-d7b11f8bc02f0f212147a161e5d3bb10dcc117b2}"
+  # Don't trust a restored/pre-existing checkout blindly -- verify its HEAD
+  # actually matches AGENT_AUDIT_REF before scanning with it. A stale cache
+  # entry, a corrupted restore, or a ref bump in this script without cache
+  # invalidation would otherwise silently scan with the wrong tool version.
+  if [[ -d "$CACHE_DIR/agent-audit" ]]; then
+    current_head="$(git -C "$CACHE_DIR/agent-audit" rev-parse HEAD 2>/dev/null || echo "")"
+    if [[ "$current_head" != "$AGENT_AUDIT_REF" ]]; then
+      log "agent-audit cache HEAD ($current_head) != AGENT_AUDIT_REF ($AGENT_AUDIT_REF) -- reclone"
+      rm -rf "$CACHE_DIR/agent-audit"
+    fi
+  fi
   if [[ ! -d "$CACHE_DIR/agent-audit" ]]; then
-    AGENT_AUDIT_REF="${AGENT_AUDIT_REF:-d7b11f8bc02f0f212147a161e5d3bb10dcc117b2}"
     git clone https://github.com/scadastrangelove/agent-audit "$CACHE_DIR/agent-audit"
     git -C "$CACHE_DIR/agent-audit" checkout --detach "$AGENT_AUDIT_REF"
   fi

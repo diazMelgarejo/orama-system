@@ -260,21 +260,25 @@ source-trace coverage, and factual error rate are mandatory first gates.[^5][^11
 This is the weakest section of the framework. It references the EU AI Act and US banking regulations
 generically but misses the structured regulatory timeline established by **Regulation (EU) 2024/1689**
 as amended by the **Digital Omnibus Regulation (EU) 2026/1744**:
+
 - **August 2, 2026**: Article 50 transparency and disclosure requirements become applicable (mandatory
-  labeling of AI interactions, AI-generated outputs, and synthetic content watermarking).
+  labeling of AI interactions, AI-generated outputs, and synthetic content watermarking) — this is a
+  transparency-obligation date, distinct from the high-risk applicability dates below.[^19][^16][^22][^23]
 - **December 2, 2027**: Standalone high-risk AI obligations under **Article 6(2) and Annex III**
   (including creditworthiness assessment, risk scoring, and access to financial services) become
   enforceable, requiring risk management (Article 9), technical documentation (Article 11), audit
-  logging (Article 12), and human oversight (Article 14).
+  logging (Article 12), and human oversight (Article 14).[^22]
 - **August 2, 2028**: Embedded high-risk systems under **Article 6(1) and Annex I** (systems integrated
-  into products under EU safety harmonization laws) become enforceable.[^19][^16]
+  into products under EU safety harmonization laws) become enforceable.[^19][^16][^22]
 
 In the US, FINRA's 2026 Annual Regulatory Oversight Report (released December 9, 2025) added a dedicated
 GenAI section emphasizing that broker-dealers deploying AI agents must maintain supervision under
 FINRA Rule 3110, govern customer communications under Rule 2210, prevent autonomy drift and scope creep,
 and safeguard non-public financial data. While FINRA did not create new standalone statutes, it
-signaled intensified examination scrutiny on agent governance. The framework cites none of this,
-treating compliance as an afterthought rather than a structural architectural constraint.[^20][^21][^19]
+signaled intensified examination scrutiny on agent governance. The framework cites none of this
+regulatory guidance,[^24] nor the adjacent MCP technical-security taxonomy documenting the same
+agent-autonomy risk class from the protocol side,[^20] treating compliance as an afterthought
+rather than a structural architectural constraint.[^21][^19]
 
 ### Steelman
 
@@ -295,16 +299,18 @@ Replace the generic compliance section with a **Compliance Implementation Checkl
 - [ ] Implement encrypted, redacted immutable audit logging at every agent decision point (Article 12).[^16]
 - [ ] Hardcode human oversight gates into the orchestration graph — not as a UI option but as a
   non-bypassable workflow node (Article 14).[^15][^16]
-- [ ] Align supervision and recordkeeping with FINRA Rule 3110 and Rule 2210 expectations.[^20]
+- [ ] Align supervision and recordkeeping with FINRA Rule 3110 and Rule 2210 expectations.[^20][^24]
 
-**Before August 2, 2026 (Transparency & Disclosure Phase):**
+**Before August 2, 2026 (Transparency & Disclosure Phase -- Article 50, distinct from high-risk
+applicability below):**
 
-- [ ] Implement Article 50 transparency notices informing users of AI interactions and synthetic content labeling.[^19]
+- [ ] Implement Article 50 transparency notices informing users of AI interactions and synthetic
+  content labeling.[^19][^23]
 - [ ] Begin preparation for Annex IV technical documentation and conformity assessment workflows.[^21]
 
-**Before December 2, 2027 (High-Risk Enforcement Phase):**
+**Before December 2, 2027 (High-Risk Enforcement Phase -- Article 6(2)/Annex III):**
 
-- [ ] Complete conformity assessments for all Article 6(2) / Annex III high-risk systems (Article 43).[^19][^15]
+- [ ] Complete conformity assessments for all Article 6(2) / Annex III high-risk systems (Article 43).[^19][^15][^22]
 - [ ] Finalize technical documentation per Annex IV.[^21]
 - [ ] Register all high-risk AI systems in the EU AI database (Article 49).[^15][^21]
 - [ ] Issue Declaration of Conformity with CE marking (Articles 47-48).[^21]
@@ -314,7 +320,7 @@ Replace the generic compliance section with a **Compliance Implementation Checkl
 - [ ] Conduct continuous risk management reviews (Article 9 is not a one-time assessment).[^21]
 - [ ] Monitor for autonomy drift — agents that begin making decisions beyond their defined scope
   trigger automatic escalation.[^20][^4]
-- [ ] Maintain dual compliance for EU AI Act and FCA/US banking/FINRA regulations simultaneously.[^19]
+- [ ] Maintain dual compliance for EU AI Act and FCA/US banking/FINRA regulations simultaneously.[^19][^24]
 
 ***
 
@@ -341,9 +347,10 @@ The original framework is a credible starting point and accurately reflects Anth
 financial services product architecture. Its fatal weaknesses are operational, not conceptual: it
 treats hallucination as manageable via RAG alone (RAG achieves only 55% quantitative accuracy on
 financial documents), understates the compounding reliability problem in multi-agent chains, ignores
-MCP security risks that are now documented by FINRA and security researchers, and fails to operationalize
-the structured EU AI Act compliance timeline (Article 50 transparency in August 2026, Article 6(2)
-high-risk enforcement in December 2027). The hardened iteration addresses each of these gaps while
+MCP security risks now documented by security researchers,[^20] alongside broker-dealer AI-agent
+governance risks separately flagged by FINRA,[^24] and fails to operationalize the structured EU AI
+Act compliance timeline (Article 50 transparency in August 2026, distinct from Article 6(2) high-risk
+enforcement in December 2027).[^22][^23] The hardened iteration addresses each of these gaps while
 preserving the framework's valid structural foundation.[^11][^6][^20][^16][^19][^7][^1]
 
 ***
@@ -371,7 +378,10 @@ preserving the framework's valid structural foundation.[^11][^6][^20][^16][^19][
 [^17]: [LangGraph multi-agent orchestration — Latenode](https://latenode.com/blog/ai-frameworks-technical-infrastructure/langgraph-multi-agent-orchestration/langgraph-multi-agent-orchestration-complete-framework-guide-architecture-analysis-2025)
 [^18]: [AI hallucinations in financial services — Aveni](https://aveni.ai/blog/ai-hallucinations-in-financial-services/)
 [^19]: [EU AI Act compliance deadline — CompleteFlow](https://completeflow.ai/blog/eu-ai-act-compliance-deadline-august-2026/)
-[^20]: [Security Threats in MCP — IJSR PDF](https://www.ijsr.net/archive/v15i3/SR26316110418.pdf)
+[^20]: Bora, S.R. & Anapu, S.K., ["Security Threats in the Model Context Protocol: A Comprehensive Survey and Trust Boundary Mitigation Framework for Agentic AI Systems"](https://www.ijsr.net/archive/v15i3/SR26316110418.pdf), IJSR Vol. 15 Issue 3, March 2026, pp. 990-998, DOI: [10.21275/SR26316110418](https://dx.doi.org/10.21275/SR26316110418). A ten-class MCP threat taxonomy (tool poisoning, indirect prompt injection, cross-server data exfiltration, tool shadowing, supply-chain attacks, rug-pull exploits, credential theft, sampling abuse, terminal deception, inter-agent trust exploitation) with a proposed Trust Boundary Mitigation Framework -- covers MCP technical security, not FINRA or US financial regulation; cited here for the MCP/agent-security portion of adjacent claims, not the regulatory portion (see [^24] for FINRA's own report).
 [^21]: [EU AI Act summary for financial services — EY React](https://eyreact.com/eu-ai-act-summary-financial-services/)
+[^22]: [Regulation (EU) 2024/1689 (the EU AI Act), consolidated with the Digital Omnibus amendments — EUR-Lex](https://eur-lex.europa.eu/eli/reg/2024/1689/oj?locale=en). Primary source for Article 6(1)/6(2)/Annex I/III high-risk applicability dates (2 August 2028 / 2 December 2027) and the general 2 August 2026 date of application; see also Regulation (EU) 2026/1744 (Digital Omnibus on AI), Recital 40.
+[^23]: [Transparency obligations under Article 50 AI Act — European Commission FAQ](https://digital-strategy.ec.europa.eu/en/faqs/transparency-obligations-under-article-50-ai-act). Primary source distinguishing Article 50's transparency/disclosure obligations (2 August 2026) from the separate high-risk classification and applicability rules in [^22] -- these are two different obligation types with two different legal bases, not one deadline.
+[^24]: [2026 FINRA Annual Regulatory Oversight Report — Generative AI section](https://www.finra.org/rules-guidance/guidance/reports/2026-finra-annual-regulatory-oversight-report/gen-ai). FINRA's own official report (not a secondary summary), covering broker-dealer supervision (Rule 3110), customer communications (Rule 2210), and AI-agent governance expectations -- distinct from and not a source for MCP protocol-level security findings (see [^20] for that).
 
 <!-- markdownlint-enable MD013 MD032 -->
