@@ -25,8 +25,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  agent-surface:
-    name: aguara / agent-audit / skill-scanner / mcp-scanner / Ramparts
+  aguara:
+    name: aguara (agent-surface)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,16 +34,87 @@ jobs:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
         with:
           persist-credentials: false
-
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: "1.22"
+          cache: true
+      - name: Cache aguara binary
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/go/bin/aguara
+          key: aguara-${{ runner.os }}-e9f9f6e9bc0acc3237830765a870308c2f37e812
+      - run: bash scripts/ci/run_agent_security_scans.sh aguara
 
+  agent-audit:
+    name: agent-audit
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
+          cache: pip
+      - name: Cache agent-audit clone
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: /tmp/agent-sec-cache/agent-audit
+          key: agent-audit-${{ runner.os }}-d7b11f8bc02f0f212147a161e5d3bb10dcc117b2
+      - run: bash scripts/ci/run_agent_security_scans.sh agent-audit
+        env:
+          RUNNER_TEMP: /tmp/agent-sec-cache
 
+  skill-scanner:
+    name: skill-scanner
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: bash scripts/ci/run_agent_security_scans.sh skill-scanner
+
+  mcp-scanner:
+    name: mcp-scanner
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: bash scripts/ci/run_agent_security_scans.sh mcp-scanner
+        env:
+          MCP_SCANNER_API_KEY: ${{ secrets.MCP_SCANNER_API_KEY }}
+          MCP_SCANNER_LLM_API_KEY: ${{ secrets.MCP_SCANNER_LLM_API_KEY }}
+
+  ramparts:
+    name: Ramparts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@1.91.0
-
-      - name: Run agent security scan bundle
-        run: bash scripts/ci/run_agent_security_scans.sh
+      - name: Cache cargo (ramparts)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            ~/.cargo/bin
+            ~/.cargo/registry
+          key: ramparts-${{ runner.os }}-0.8.2
+      - run: bash scripts/ci/run_agent_security_scans.sh ramparts
