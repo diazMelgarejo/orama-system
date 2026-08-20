@@ -140,4 +140,3 @@ Applies to **all modes** — not optional, not overridable by any agent or orche
 
 **This is the operational enforcement of the Amplifier Principle:**
 > "Accountability should not be lost in agentic work. It amplifies human intent, and should never replace or displace our human values and morality."
-
