@@ -32,10 +32,14 @@ warn_run() {
 }
 
 scan_aguara() {
-  # v1 tag, pinned by commit SHA rather than "@latest" — this tool audits
-  # supply-chain/agent-surface risk, so it must not itself be a floating
-  # dependency. Bump AGUARA_REF deliberately (reviewed diff), never silently.
-  AGUARA_REF="${AGUARA_REF:-e9f9f6e9bc0acc3237830765a870308c2f37e812}"
+  # v0.27.0 tag, pinned by commit SHA rather than "@latest" — this tool
+  # audits supply-chain/agent-surface risk, so it must not itself be a
+  # floating dependency. Bump AGUARA_REF deliberately (reviewed diff), never
+  # silently. Do NOT pin to the "v1" tag: it resolves to aguara v0.6.0 (an
+  # old Go major-version-branch tag), which predates --baseline and breaks
+  # the skills scan below -- caught by running this script end-to-end
+  # before shipping the pin, not by trusting the tag name.
+  AGUARA_REF="${AGUARA_REF:-2ad546a95a03eb81f5255471c500ca326ee5220b}"
   if ! command -v aguara >/dev/null 2>&1; then
     if command -v go >/dev/null 2>&1; then
       go install "github.com/garagon/aguara/cmd/aguara@${AGUARA_REF}"

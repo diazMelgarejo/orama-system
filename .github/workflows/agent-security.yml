@@ -42,7 +42,7 @@ jobs:
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: ~/go/bin/aguara
-          key: aguara-${{ runner.os }}-e9f9f6e9bc0acc3237830765a870308c2f37e812
+          key: aguara-${{ runner.os }}-2ad546a95a03eb81f5255471c500ca326ee5220b
       - run: bash scripts/ci/run_agent_security_scans.sh aguara
 
   agent-audit:
