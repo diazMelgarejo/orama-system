@@ -41,13 +41,28 @@ RFC1918, link-local (`169.254.0.0/16`, `fe80::/10`, `fd00:ec2::254`, ECS `169.25
 this list into a second module or repo — extend the one file.
 
 Fetchers that must route through Layer 2 (not raw `httpx`/`requests`):
-`connectivity.py`, `orama_bridge.py`, `perplexity_client.py`. Fixed
-vendor hosts (`api.perplexity.ai`, `api.x.ai`) stay on the Layer-1 hostname allowlist and skip
-DNS/pinning — but skipping Layer 2 is only safe if the HTTP client used for these hosts
-independently enforces TLS certificate validation, does not follow redirects without revalidating
-each hop's target, and connects only to the IP it validated (not a re-resolved one). If the client
-used for these calls doesn't guarantee that, route them through Layer 2 too rather than trusting the
-vendor-host exemption alone.
+`connectivity.py`, `orama_bridge.py`, `perplexity_client.py`. **The Layer-1 vendor-host allowlist
+exemption (below) does not override this list.** It is a Layer-1-only exemption — `api.perplexity.ai`
+and `api.x.ai` skip Layer 1's pre-flight hostname denial because they're fixed, hardcoded,
+code-reviewed hosts, not because their calls are exempt from Layer 2 pinning. A fetcher in the list
+above must route through Layer 2 even when it happens to call one of these allowlisted vendor hosts;
+the allowlist only ever waives Layer 1, never Layer 2, for a listed fetcher.
+
+The vendor-host exemption only ever applies to a caller that is **not** one of the fetchers listed
+above (e.g. a future one-off fixed-host caller outside this list) — and even then, skipping Layer 2 is
+only safe if that caller's own HTTP client independently enforces TLS certificate validation, does not
+follow redirects without revalidating each hop's target, and connects only to the IP it validated (not
+a re-resolved one). If the client used for such a call doesn't guarantee that, route it through Layer 2
+too rather than trusting the vendor-host exemption alone.
+
+**Known gap (2026-08-21):** `perplexity_client.py` is listed above but is **not actually wired to
+Layer 2 yet** — it calls `api.perplexity.ai` via the `openai` SDK's own `OpenAI`/`AsyncOpenAI` clients
+(an unpinned `httpx` transport under the hood), not `ssrf_pinned_adapter`/`ssrf_request`. A bare
+`httpx.Client` does not connect to a pre-validated IP, so it fails the vendor-host exemption's third
+condition above regardless. `connectivity.py` and `orama_bridge.py` are genuinely wired to Layer 2 as
+of the PT PR #359 remediation (`_probe`/`_probe_local` split; `ssrf_request` via `asyncio.to_thread`);
+`perplexity_client.py` needs the same treatment before PR-P3 can be called fully shipped — see the PR
+sequence table below.
 
 ## Operator runbook — Layer 3 (network / IMDS)
 
