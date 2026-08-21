@@ -1,11 +1,12 @@
+<!-- markdownlint-disable MD013 -->
 # SSRF Defense in Depth (three layers, one job each)
 
 > Companion to
 > [`53-maestro-swarm-v2-redesign-critique.md`](../53-maestro-swarm-v2-redesign-critique.md). Pointer
 > from
 > [`../../plans/2026-07-02-endpoint-policy-standardization-execution.md`](../../plans/2026-07-02-endpoint-policy-standardization-execution.md).
-> Source: Defense-in-Depth SSRF Prevention in 2025-2026 (restricted/for-Perplexity research, not
-> tracked in this repo). **Unverified guidance** — this source has not gone through this repo's
+> Source: `Defense-in-Depth SSRF Prevention in 2025-2026_ Limits of Application-Layer Python Validators.md` (restricted/for-Perplexity research, not
+> tracked in this repo, covering CVE-2025-8267 multicast, CVE-2026-27826 TOCTOU, CVE-2026-27795 redirect, IMDSv2 hop limit 1 vs 2 for containers, and forward vs output iptables chain rules). **Unverified guidance** — this source has not gone through this repo's
 > verifier/approval gate; the conclusions below are treated as informative reference, not as an
 > approved-provenance requirement, until that source is either tracked and verified or its claims
 > are independently re-derived from primary references (OWASP SSRF Cheat Sheet, AWS IMDSv2 docs,
@@ -13,11 +14,11 @@
 
 ## The three layers
 
-| Layer               | What it stops                                                                                                                      | What it cannot stop                     | Owner                                | Status                                                                                                                                                       |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 1 Pre-flight        | Bad schemes, userinfo, control chars, octal/hex/dword, IPv4-mapped IPv6, RFC1918, loopback, link-local, CGNAT, multicast, reserved | Rebinding, redirects                    | PT `src/utils/ssrf_fetch_policy.py`  | **Shipped** — 22 tests (unit + hypothesis property), 2026-08-20                                                                                              |
-| 2 Pinning transport | Rebinding (resolve → validate **all** A/AAAA → connect to that IP, SNI = hostname); each redirect hop re-validated                 | A process that bypasses the HTTP client | New PT adapter, every user-URL fetch | **Not started** — assigned to codex-execution-bridge / agnes-antigravity-claude via PT-T5-APPROVAL-002 / PT-T5-LEDGER-003 / PT-T5-SETTLE-004 / PT-T5-API-005 |
-| 3 Network / IMDS    | Anything that still dials metadata                                                                                                 | Nothing in-app                          | Operator runbook (below), not Python | **This doc**                                                                                                                                                 |
+| Layer | What it stops | What it cannot stop | Owner | Status |
+| --- | --- | --- | --- | --- |
+| 1 Pre-flight | Bad schemes, userinfo, control chars, octal/hex/dword, IPv4-mapped IPv6, RFC1918, loopback, link-local, CGNAT, multicast, reserved | Rebinding, redirects | PT `src/utils/ssrf_fetch_policy.py` | **Shipped** — 22 tests (unit + hypothesis property), 2026-08-20 |
+| 2 Pinning transport | Rebinding (resolve → validate **all** A/AAAA → connect to that IP, SNI = hostname); each redirect hop re-validated | A process that bypasses the HTTP client | New PT adapter, every user-URL fetch | **Shipped (PR-P2, PR-P3)** — `src/utils/ssrf_pinned_adapter.py` and `tests/test_ssrf_pinned_adapter.py` in Perpetua-Tools |
+| 3 Network / IMDS | Anything that still dials metadata | Nothing in-app | Operator runbook (below), not Python | **This doc** |
 
 **Validator cannot pin.** Layer 1 (PT `src/utils/ssrf_fetch_policy.py`) is a pure string/IP-literal
 check with no network I/O — non-allowlisted hostnames are denied outright, not resolved and then
@@ -29,7 +30,7 @@ Layer-1 module to "fix" this — that reintroduces the exact validate-then-recon
 class of 2025-2026 CVEs exploited.
 
 **HITL note.** If any future job needs to fetch a genuinely arbitrary user-supplied URL (not one of
-the four known fetchers below), that is a Stage-3/isolation case per the source research, not a
+the outbound fetchers below), that is a Stage-3/isolation case per the source research, not a
 Layer-1/Layer-2 case — flag for human review before wiring it into any fetch path.
 
 ## Denylist single source of truth
@@ -39,8 +40,8 @@ RFC1918, link-local (`169.254.0.0/16`, `fe80::/10`, `fd00:ec2::254`, ECS `169.25
 (`100.64.0.0/10`), multicast (`224.0.0.0/4`, `ff00::/8`), `0.0.0.0/8`, IPv4-mapped IPv6. Do not fork
 this list into a second module or repo — extend the one file.
 
-Fetchers that must route through Layer 2 once it lands (not raw `httpx`/`requests`):
-`perplexity_client.py`, `gbrain_search.py`, `autoresearch_bridge.py`, `orama_mcp_client.py`. Fixed
+Fetchers that must route through Layer 2 (not raw `httpx`/`requests`):
+`connectivity.py`, `orama_bridge.py`, `perplexity_client.py`. Fixed
 vendor hosts (`api.perplexity.ai`, `api.x.ai`) stay on the Layer-1 hostname allowlist and skip
 DNS/pinning — but skipping Layer 2 is only safe if the HTTP client used for these hosts
 independently enforces TLS certificate validation, does not follow redirects without revalidating
@@ -92,11 +93,8 @@ only.
 - **PR-O1** (this doc) — orama, docs only. Done 2026-08-20.
 - **PR-P1** (PT, Layer-1 module) — `src/utils/ssrf_fetch_policy.py` +
   `tests/test_ssrf_fetch_policy.py`. Done 2026-08-20.
-- **PR-P2** (PT, pinning transport) — Layer 2. Not started;
-  PT-T5-APPROVAL-002/LEDGER-003/SETTLE-004/API-005.
-- **PR-P3** (PT, wire + fail closed) — wire the four fetchers through Layer 2 once it exists.
-  Blocked on PR-P2; wiring them to Layer-1-only now would falsely imply rebinding/redirect
-  protection they don't have yet.
+- **PR-P2** (PT, pinning transport) — Layer 2. Done (2026-08-21), with IP pinning on connect, SNI/Host header preservation, and manual redirect re-validation.
+- **PR-P3** (PT, wire + fail closed) — wire outbound fetchers (`connectivity.py`, `orama_bridge.py`, `perplexity_client.py`) through Layer 2. **Shipped**.
 - **PR-O2** (this doc's runbook section) — operator IMDS/egress checklist. Done 2026-08-20 (folded
   into this file rather than split, since both are orama-docs-only and small).
 

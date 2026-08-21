@@ -168,9 +168,9 @@ on state persistence, failure recovery, or checkpointing.[^4]
 LangGraph's stateful design supports step-by-step progress persistence when the graph is compiled
 with a configured checkpointer (e.g., `SqliteSaver`, `PostgresSaver`, or `AsyncSqliteSaver`) and
 invoked with an explicit `thread_id` in its runtime configuration. Its support for hierarchical and
-sequential
-multi-agent patterns — scatter-gather, pipeline parallelism — maps naturally onto financial
-workflows where comparables can be gathered in parallel while narrative is being drafted.[^3][^17]
+sequential multi-agent patterns — scatter-gather, pipeline parallelism — maps naturally onto
+financial workflows where comparables can be gathered in parallel while narrative is being
+drafted.[^3][^17]
 
 ### Iterated Version
 
