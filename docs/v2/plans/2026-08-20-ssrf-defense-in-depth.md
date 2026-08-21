@@ -17,7 +17,7 @@
 | Layer | What it stops | What it cannot stop | Owner | Status |
 | --- | --- | --- | --- | --- |
 | 1 Pre-flight | Bad schemes, userinfo, control chars, octal/hex/dword, IPv4-mapped IPv6, RFC1918, loopback, link-local, CGNAT, multicast, reserved | Rebinding, redirects | PT `src/utils/ssrf_fetch_policy.py` | **Shipped** — 22 tests (unit + hypothesis property), 2026-08-20 |
-| 2 Pinning transport | Rebinding (resolve → validate **all** A/AAAA → connect to that IP, SNI = hostname); each redirect hop re-validated | A process that bypasses the HTTP client | New PT adapter, every user-URL fetch | **Shipped (PR-P2, PR-P3)** — `src/utils/ssrf_pinned_adapter.py` and `tests/test_ssrf_pinned_adapter.py` in Perpetua-Tools |
+| 2 Pinning transport | Rebinding (resolve → validate **all** A/AAAA → connect to that IP, SNI = hostname); each redirect hop re-validated | A process that bypasses the HTTP client | New PT adapter, every user-URL fetch | **PR-P2 shipped, PR-P3 partial** — `src/utils/ssrf_pinned_adapter.py` and `tests/test_ssrf_pinned_adapter.py` in Perpetua-Tools; `perplexity_client.py` not yet wired, see the known gap below |
 | 3 Network / IMDS | Anything that still dials metadata | Nothing in-app | Operator runbook (below), not Python | **This doc** |
 
 **Validator cannot pin.** Layer 1 (PT `src/utils/ssrf_fetch_policy.py`) is a pure string/IP-literal
@@ -109,7 +109,7 @@ only.
 - **PR-P1** (PT, Layer-1 module) — `src/utils/ssrf_fetch_policy.py` +
   `tests/test_ssrf_fetch_policy.py`. Done 2026-08-20.
 - **PR-P2** (PT, pinning transport) — Layer 2. Done (2026-08-21), with IP pinning on connect, SNI/Host header preservation, and manual redirect re-validation.
-- **PR-P3** (PT, wire + fail closed) — wire outbound fetchers (`connectivity.py`, `orama_bridge.py`, `perplexity_client.py`) through Layer 2. **Shipped**.
+- **PR-P3** (PT, wire + fail closed) — wire outbound fetchers (`connectivity.py`, `orama_bridge.py`, `perplexity_client.py`) through Layer 2. **Partial (2026-08-21)** — `connectivity.py` and `orama_bridge.py` shipped and tested (PT PR #359); `perplexity_client.py` still calls `api.perplexity.ai` via the `openai` SDK's own unpinned `httpx` transport, not `ssrf_pinned_adapter`. Do not mark PR-P3 shipped until `perplexity_client.py` routes through the pinning transport and has passing tests, with an approved verifier result — not just a self-reported claim here.
 - **PR-O2** (this doc's runbook section) — operator IMDS/egress checklist. Done 2026-08-20 (folded
   into this file rather than split, since both are orama-docs-only and small).
 
