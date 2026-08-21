@@ -103,8 +103,12 @@ Add explicit **Connector Governance Standards**:
 
 Citing Claude Opus 4.7 as the base model is accurate — Anthropic reported it led the Vals AI
 Finance Agent v1.1 benchmark with a score of 64.37%, while Meta's Muse Spark 1.2 achieved 60.599% on
-the Vals Finance Agent v2 benchmark. A benchmark score of ~60–64% indicates that the model succeeds
-on a majority of evaluated financial analyst questions under controlled benchmark conditions.
+the Vals Finance Agent v2 benchmark. These are not simple question-level pass rates: Vals' Finance
+Agent Benchmark scores via a rubric-based, dealbreaker-gated Partial Credit metric (partial credit
+for individual correct sub-claims within an answer), which Vals reports separately from its stricter
+All-Pass metric (every rubric check must pass) — for FABv2, the same model line scores 60.60%
+Partial Credit vs. only 50.88% All-Pass. A ~60–64% score under Partial Credit does not mean the
+model fully and correctly answered that share of questions.
 However, benchmark performance evaluates isolated task accuracy; in a live deployment with real-world
 data ambiguity, domain-specific edge cases, and end-to-end multi-step dependencies, unassisted
 execution carries substantial operational risk. Presenting model selection as a solved problem, with
@@ -170,16 +174,23 @@ on state persistence, failure recovery, or checkpointing.[^4]
 
 LangGraph's stateful design supports step-by-step progress persistence when the graph is compiled
 with a configured checkpointer (e.g., `SqliteSaver`, `PostgresSaver`, or `AsyncSqliteSaver`) and
-invoked with an explicit `thread_id` in its runtime configuration. Its support for hierarchical and
-sequential multi-agent patterns — scatter-gather, pipeline parallelism — maps naturally onto
-financial workflows where comparables can be gathered in parallel while narrative is being
-drafted.[^3][^17]
+invoked with an explicit `thread_id` in its runtime configuration. A checkpoint is written at each
+completed super-step (one full "tick" of the graph, which can run several nodes), not at every
+individual node in isolation — a failure partway through a super-step resumes from the last
+completed super-step, not from inside the failed one, so nodes must be idempotent or the workflow
+must be structured so each boundary that needs its own resume point is its own super-step. Its
+support for hierarchical and sequential multi-agent patterns — scatter-gather, pipeline
+parallelism — maps naturally onto financial workflows where comparables can be gathered in parallel
+while narrative is being drafted.[^3][^17]
 
 ### Iterated Version
 
-- Mandate **checkpointing at every sub-agent boundary**: compile graphs with a durable checkpointer
-  (`SqliteSaver`/`PostgresSaver`) and unique `thread_id`; if any node fails, the orchestrator resumes
-  from the last checkpoint rather than restarting the entire workflow.[^3][^6]
+- Mandate **checkpointing at every sub-agent boundary**: structure the graph so each sub-agent
+  boundary is its own super-step (LangGraph's actual checkpoint unit), compile with a durable
+  checkpointer (`SqliteSaver`/`PostgresSaver`) and unique `thread_id`; if any node fails, the
+  orchestrator resumes from the last completed super-step rather than restarting the entire
+  workflow. Nodes must be idempotent or side-effect-guarded, since a resume can re-run any node that
+  was mid-super-step at failure time.[^3][^6]
 - Add a **complexity ceiling rule**: if a workflow exceeds 7 LangGraph nodes, decompose it into two
   separately orchestrated workflows with a human handoff between them. This prevents debugging
   complexity from becoming unmanageable in production.[^17]
@@ -366,7 +377,7 @@ design dimensions.
 | Connector security | Role-based access controls (mentioned) | Least privilege, short-lived tokens, policy enforcement gateway, cross-app context firewall |
 | Orchestration reliability | LangGraph recommended | LangGraph with durable checkpointer (`SqliteSaver`/`PostgresSaver`) + `thread_id`, 7-node ceiling, merge validation |
 | Quality gates | "Compare to human output" | 6 defined metrics with units, denominators, and thresholds; numerical accuracy, trace coverage, and error rate gate production |
-| Compliance | EU AI Act + US banking (generic) | Structured EU AI Act roadmap (Aug 2026 Art. 50, Dec 2027 Art. 6(2) high-risk), FINRA 2026 GenAI guidance integrated |
+| Compliance | EU AI Act + US banking (generic) | Structured EU AI Act roadmap (Aug 2026 Art. 50, Dec 2027 Art. 6(2) high-risk); 2026 FINRA Annual Regulatory Oversight Report's GenAI section integrated (existing Rule 3110/2210 supervision expectations, not new binding requirements) |
 | MCP security | Not addressed | Untrusted input sanitization, token scoping, context firewall, audit log of all cross-app transfers |
 
 ***
