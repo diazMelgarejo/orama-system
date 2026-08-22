@@ -1,6 +1,9 @@
 # Agentic Security Controls
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
+> `.gitignore`d, never committed with secrets, personal paths, or SecOps material.
+> Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** implementation guidance extracted from the former security-harness plan
 > **Strategy:** [`31-security-harness-excellence-plan.md`](31-security-harness-excellence-plan.md)
 > **Prior mixed source:** [`33-security-harness-source-material.md`](33-security-harness-source-material.md)
@@ -14,19 +17,24 @@
 
 ### Problem
 
-A local developer default can become a LAN exposure when the service binds beyond loopback. The safest default is fail-closed control-plane auth, with explicit and narrow insecure-dev affordances.
+A local developer default can become a LAN exposure when the service binds beyond
+loopback. The safest default is fail-closed control-plane auth, with explicit and
+narrow insecure-dev affordances.
 
 ### Recommendation
 
 - Enforce auth by default when no token is configured.
-- Permit unauthenticated dev only when an explicit insecure-dev flag is set and the actual bind address is loopback.
+- Permit unauthenticated dev only when an explicit insecure-dev flag is set and the
+  actual bind address is loopback.
 - Refuse startup for insecure LAN bind unless a second, noisy override exists.
 - Emit startup state: auth mode, bind host, token source, and insecure override state.
 - Add route-level tests for every mutating or sensitive endpoint.
 
 ### Acceptance
 
-`pytest tests/test_control_plane_auth.py` is the current runnable auth-test entrypoint. Extend that file, or intentionally create `tests/security/test_control_plane_auth.py`, before marking no-token/LAN-bind denial complete.
+`pytest tests/test_control_plane_auth.py` is the current runnable auth-test entrypoint.
+Extend that file, or intentionally create `tests/security/test_control_plane_auth.py`,
+before marking no-token/LAN-bind denial complete.
 
 ---
 
@@ -36,13 +44,16 @@ A local developer default can become a LAN exposure when the service binds beyon
 
 ### Problem
 
-Bearer-in-cookie support is convenient for a browser portal but widens CSRF/session-confusion risk if cookie issuance is scattered or attributes are not tested.
+Bearer-in-cookie support is convenient for a browser portal but widens
+CSRF/session-confusion risk if cookie issuance is scattered or attributes are not
+tested.
 
 ### Recommendation
 
 - Centralize cookie issuance in one helper.
 - Prefer Authorization headers for API clients.
-- If cookies remain, test `HttpOnly`, `SameSite=Strict`, path scoping, expiry, and `Secure` behavior by environment.
+- If cookies remain, test `HttpOnly`, `SameSite=Strict`, path scoping, expiry, and
+  `Secure` behavior by environment.
 - Add CSRF/origin checks for cookie-authenticated state-changing requests.
 
 ---
@@ -53,7 +64,9 @@ Bearer-in-cookie support is convenient for a browser portal but widens CSRF/sess
 
 ### Problem
 
-IP-only rate limits are insufficient for localhost/LAN agent systems. A single authenticated principal can still exhaust local model capacity with long prompts, tool loops, or parallel workers.
+IP-only rate limits are insufficient for localhost/LAN agent systems. A single
+authenticated principal can still exhaust local model capacity with long prompts,
+tool loops, or parallel workers.
 
 ### Recommendation
 
@@ -77,7 +90,8 @@ Return structured 429/budget errors with the exhausted dimension.
 
 ### Problem
 
-Tool-call syntax, model refusals, and prompt rules are not security boundaries. The boundary must sit between the model and filesystem/network/process capabilities.
+Tool-call syntax, model refusals, and prompt rules are not security boundaries. The
+boundary must sit between the model and filesystem/network/process capabilities.
 
 ### Recommendation
 
@@ -110,7 +124,9 @@ Do not block early security wins on a microVM migration. Implement an isolation 
 | L4 | container with restricted mounts and no default network | transitional isolation |
 | L5 | Firecracker/Kata microVM | production/autonomous high-risk isolation |
 
-Docker alone is not a complete isolation story because it shares the host kernel. MITRE ATT&CK documents container escape as a technique class under T1611: https://attack.mitre.org/techniques/T1611/.
+Docker alone is not a complete isolation story because it shares the host kernel.
+MITRE ATT&CK documents container escape as a technique class under
+[T1611](https://attack.mitre.org/techniques/T1611/).
 
 ### Outbound HTTP transport hardening: redirect-following is a separate control from URL/DNS validation
 
@@ -170,26 +186,52 @@ transparently unless redirect-following is explicitly disabled or intercepted.
 
 ### Outbound HTTP transport hardening: split-identity socket pinning and connection-pool isolation
 
-**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model) (SSRF / DNS Rebinding / Pool Cross-Contamination).  
-**Worked example:** Perpetua-Tools `src/utils/ssrf_pinned_adapter.py` (Layer 2 pinned transport, commits `351bad1e`, `5a6a4ae7`).
+**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model)
+(SSRF / DNS Rebinding / Pool Cross-Contamination).  
+**Worked example:** Perpetua-Tools `src/utils/ssrf_pinned_adapter.py` (Layer 2 pinned
+transport, commits `351bad1e`, `5a6a4ae7`).
 
 #### Problem
 
-Application-layer IP pinning adapters frequently suffer from two severe concurrency and connection-pooling vulnerabilities:
-1. **Shared-State Mutation Race:** Mutating adapter-wide connection parameters (e.g. `self.poolmanager.connection_pool_kw.update(...)` inside `send()`) introduces race conditions where concurrent requests overwrite or pop each other's pinned destinations between DNS validation and socket creation.
-2. **Pool Cross-Contamination:** If connection pools are keyed solely on `(scheme, hostname, port)`, a connection established to IP $A$ remains in the pool and is reused for a subsequent request to the same hostname even after DNS re-resolves to a different IP $B$, completely bypassing the new pin.
+Application-layer IP pinning adapters frequently suffer from two severe concurrency and
+connection-pooling vulnerabilities:
+
+1. **Shared-State Mutation Race:** Mutating adapter-wide connection parameters
+   (e.g. `self.poolmanager.connection_pool_kw.update(...)` inside `send()`) introduces
+   race conditions where concurrent requests overwrite or pop each other's pinned
+   destinations between DNS validation and socket creation.
+2. **Pool Cross-Contamination:** If connection pools are keyed solely on
+   `(scheme, hostname, port)`, a connection established to IP $A$ remains in the pool
+   and is reused for a subsequent request to the same hostname even after DNS
+   re-resolves to a different IP $B$, completely bypassing the new pin.
 
 #### Recommendation
 
 Adopt the **Split-Identity Rule** across all connection-pinning transports:
-- **Place (Target & Pool Key):** Set the connection pool host (`host_params["host"] = pinned_ip`). This routes the TCP connection to the validated IP literal and causes urllib3's native `PoolKey` (`scheme, host, port`) to naturally partition pools by IP address without custom pool keys or normalizer hacks.
-- **Name (Identity & Credentials):** Pass the original DNS hostname via `pool_kwargs["server_hostname"] = hostname`, `pool_kwargs["assert_hostname"] = hostname`, and `request.headers["Host"] = host_header`. This ensures TLS SNI, certificate validation, and HTTP virtual hosting remain correct.
-- **Per-Call Immutability:** Override `build_connection_pool_key_attributes()` to return freshly computed per-request parameters into urllib3's `connection_from_host(pool_kwargs=...)`, completely avoiding mutation of `self.poolmanager.connection_pool_kw`.
+
+- **Place (Target & Pool Key):** Set the connection pool host
+  (`host_params["host"] = pinned_ip`). This routes the TCP connection to the validated
+  IP literal and causes urllib3's native `PoolKey` (`scheme, host, port`) to naturally
+  partition pools by IP address without custom pool keys or normalizer hacks.
+- **Name (Identity & Credentials):** Pass the original DNS hostname via
+  `pool_kwargs["server_hostname"] = hostname`, `pool_kwargs["assert_hostname"] = hostname`,
+  and `request.headers["Host"] = host_header`. This ensures TLS SNI, certificate
+  validation, and HTTP virtual hosting remain correct.
+- **Per-Call Immutability:** Override `build_connection_pool_key_attributes()` to return
+  freshly computed per-request parameters into urllib3's
+  `connection_from_host(pool_kwargs=...)`, completely avoiding mutation of
+  `self.poolmanager.connection_pool_kw`.
 
 #### Acceptance
 
-- **Concurrency & Reuse Tests:** Include regression suites asserting that (1) concurrent requests to the same hostname with different IPs get distinct connection pools, (2) sequential DNS changes from IP $A$ to IP $B$ create fresh pools rather than reusing $A$, and (3) `adapter.poolmanager.connection_pool_kw` is never mutated during requests.
-- **Verification Matrix:** Maintain a minimum 6-test regression matrix verifying IP target binding, TLS SNI preservation, redirect target rejection, and multi-threaded session sharing.
+- **Concurrency & Reuse Tests:** Include regression suites asserting that (1) concurrent
+  requests to the same hostname with different IPs get distinct connection pools,
+  (2) sequential DNS changes from IP $A$ to IP $B$ create fresh pools rather than
+  reusing $A$, and (3) `adapter.poolmanager.connection_pool_kw` is never mutated during
+  requests.
+- **Verification Matrix:** Maintain a minimum 6-test regression matrix verifying IP target
+  binding, TLS SNI preservation, redirect target rejection, and multi-threaded session
+  sharing.
 
 ---
 
@@ -199,7 +241,12 @@ Adopt the **Split-Identity Rule** across all connection-pinning transports:
 
 ### References
 
-gstack is a useful pattern source for layered defenses: local classifier, transcript check, canary leak detection, and combiner logic are described in its repo/design docs: https://github.com/garrytan/gstack and https://github.com/garrytan/gstack/blob/main/docs/designs/ML_PROMPT_INJECTION_KILLER.md. TestSavantAI describes prompt-injection classifier models on Hugging Face: https://huggingface.co/testsavantai/prompt-injection-defender-large-v0.
+gstack is a useful pattern source for layered defenses: local classifier, transcript check,
+canary leak detection, and combiner logic are described in its repo/design docs:
+[gstack](https://github.com/garrytan/gstack) and
+[ML_PROMPT_INJECTION_KILLER](https://github.com/garrytan/gstack/blob/main/docs/designs/ML_PROMPT_INJECTION_KILLER.md).
+TestSavantAI describes prompt-injection classifier models on Hugging Face:
+[prompt-injection-defender-large-v0](https://huggingface.co/testsavantai/prompt-injection-defender-large-v0).
 
 ### Recommendation
 
@@ -234,7 +281,16 @@ gstack is a useful pattern source for layered defenses: local classifier, transc
 
 ### Problem
 
-Memory risk is not only who can read/write. It is also why a fact became retrievable, what evidence supports it, and under what task scope it may influence an agent. OWASP Agentic Applications identifies memory and context poisoning as a top agentic risk: https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/. OWASP LLM 2025 includes vector and embedding weaknesses as LLM08: https://genai.owasp.org/llm-top-10/. See also [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md) §3 for the specific OWASP T1 (Memory Poisoning) and T18 (RAG Input Manipulation) threat IDs, and `20-rag-and-memory-design.md` for this repo's current (partial) implementation status against the fields below.
+Memory risk is not only who can read/write. It is also why a fact became retrievable,
+what evidence supports it, and under what task scope it may influence an agent.
+OWASP Agentic Applications identifies memory and context poisoning as a top agentic risk:
+[OWASP Top 10 for Agentic Applications](https://genai.owasp.org/resource/owasp-top-10-for-agentic-applications-for-2026/).
+OWASP LLM 2025 includes vector and embedding weaknesses as LLM08:
+[OWASP LLM Top 10](https://genai.owasp.org/llm-top-10/).
+See also [`39-maestro-owasp-genai-reference.md`](39-maestro-owasp-genai-reference.md) §3
+for the specific OWASP T1 (Memory Poisoning) and T18 (RAG Input Manipulation) threat IDs,
+and `20-rag-and-memory-design.md` for this repo's current (partial) implementation status
+against the fields below.
 
 ### Required memory fields
 
@@ -279,7 +335,8 @@ than ordinary repo docs:
 - Install from lockfiles in CI.
 - Run dependency audit tooling against the lockfile.
 - Verify model-file hashes before load where model files are managed locally.
-- Generate SBOM/ML-BOM artifacts where practical. CycloneDX supports ML-BOM workstreams: https://cyclonedx.org/capabilities/mlbom/.
+- Generate SBOM/ML-BOM artifacts where practical. CycloneDX supports ML-BOM workstreams:
+  [CycloneDX ML-BOM](https://cyclonedx.org/capabilities/mlbom/).
 - Use SLSA/in-toto/cosign for release artifacts when there is a release pipeline to protect.
 
 Do not make signing theater. Signing is useful only if verification is enforced before use.
@@ -297,7 +354,8 @@ Do not make signing theater. Signing is useful only if verification is enforced 
 - Store replayable traces for high-risk or multi-agent tasks.
 - Alert on runaway token usage, egress anomalies, repeated tool denial, and cascade failures.
 
-OpenTelemetry maintains GenAI semantic conventions for AI spans/attributes: https://opentelemetry.io/docs/specs/semconv/gen-ai/.
+OpenTelemetry maintains GenAI semantic conventions for AI spans/attributes:
+[GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/).
 
 ---
 
@@ -305,7 +363,9 @@ OpenTelemetry maintains GenAI semantic conventions for AI spans/attributes: http
 
 **Threat trace:** [`PT-07`](31-security-harness-excellence-plan.md#3-threat-model).
 
-The durable insight from multi-agent risk literature is that individually plausible agents can still produce system-level drift. The local implementation should use an objective contract:
+The durable insight from multi-agent risk literature is that individually plausible agents
+can still produce system-level drift. The local implementation should use an objective
+contract:
 
 - original user goal
 - non-goals
@@ -316,13 +376,17 @@ The durable insight from multi-agent risk literature is that individually plausi
 - max tool calls/subagents
 - rollback plan
 
-Fail finalization if the network solves a different goal, relies on uncited evidence, has two or more agents reinforcing the same unverified assumption, touches files outside scope, or exceeds budget.
+Fail finalization if the network solves a different goal, relies on uncited evidence, has
+two or more agents reinforcing the same unverified assumption, touches files outside
+scope, or exceeds budget.
 
 ### Portal swarm launch security requirements (P5)
 
 **Threat trace:** [`PT-07`](31-security-harness-excellence-plan.md#3-threat-model), SECURITY.md P5 (High).
 
-The command-center swarm path (`POST /api/swarm/preview` → `POST /api/swarm/launch`) is the v1/v2 operator entrypoint for five-role PT job dispatch. Bearer auth alone (PR1) is necessary but not sufficient for human approval gates listed above.
+The command-center swarm path (`POST /api/swarm/preview` → `POST /api/swarm/launch`) is the
+v1/v2 operator entrypoint for five-role PT job dispatch. Bearer auth alone (PR1) is
+necessary but not sufficient for human approval gates listed above.
 
 | Requirement | Current `main` | Target (PR3) |
 |-------------|----------------|--------------|
@@ -334,7 +398,9 @@ The command-center swarm path (`POST /api/swarm/preview` → `POST /api/swarm/la
 
 **Execution plan (canonical):** [`docs/plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md`](../plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md)
 
-**Stack context:** [`docs/plans/2026-06-28-security-pr3-pr6-zero-queue-plan.md`](../plans/2026-06-28-security-pr3-pr6-zero-queue-plan.md) · **Planner subagent:** `.cursor/agents/pt-orama-security-planner.md`
+**Stack context:**
+[`docs/plans/2026-06-28-security-pr3-pr6-zero-queue-plan.md`](../plans/2026-06-28-security-pr3-pr6-zero-queue-plan.md)
+· **Planner subagent:** `.cursor/agents/pt-orama-security-planner.md`
 
 **Acceptance (PR3):**
 
@@ -342,7 +408,10 @@ The command-center swarm path (`POST /api/swarm/preview` → `POST /api/swarm/la
 - Launch with bearer but without valid approval token → 422/403
 - React composer cannot launch without prior preview session holding tokens
 
-Cross-ref: web orchestration contract in [`16-web-app-orchestration-plan.md`](16-web-app-orchestration-plan.md) §6.2; HITL rules in [`references/HUMAN-IN-LOOP-ACCOUNTABILITY.md`](references/HUMAN-IN-LOOP-ACCOUNTABILITY.md) §III Rule S-3.
+Cross-ref: web orchestration contract in
+[`16-web-app-orchestration-plan.md`](16-web-app-orchestration-plan.md) §6.2; HITL rules in
+[`references/HUMAN-IN-LOOP-ACCOUNTABILITY.md`](references/HUMAN-IN-LOOP-ACCOUNTABILITY.md)
+§III Rule S-3.
 
 ### Mesh migration phases (P5/P6 + discovery)
 
@@ -353,4 +422,5 @@ Canonical ladder: [`50-mesh-security-migration-ladder.md`](50-mesh-security-migr
 | C (pre-v2) | HMAC tokens available; `ORAMA_SWARM_LEGACY_APPROVE=1` default | Known peers grandfathered; `ORAMA_APPROVE_DISCOVERY=1` one-shot | #224 + PT #287 |
 | D (v2 launch) | `ORAMA_SWARM_STRICT=1`; legacy `approved: true` rejected | HMAC `--ack-peer` only; no env bypass | Coordinated fleet cutover |
 
-Phase D is **deferred to v2 launch** — pre-v2 merges may ship Phase C grandfathering without blocking release.
+Phase D is **deferred to v2 launch** — pre-v2 merges may ship Phase C grandfathering without
+blocking release.
