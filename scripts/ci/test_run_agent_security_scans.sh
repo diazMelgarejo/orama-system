@@ -39,4 +39,12 @@ chmod +x "$FAKE_BIN/aguara"
 assert_exit "a failing scanner propagates to the script's final exit code" 1 \
   env PATH="$FAKE_BIN:$PATH" bash "$SCRIPT" aguara
 
+# scan_ramparts() sets FAIL=1 (not exit 1 directly) when GITHUB_ACTIONS is
+# set and neither `ramparts` nor `cargo` is on PATH -- this only exercises
+# the aguara branch above, so a regression that dropped the ramparts FAIL=1
+# assignment could still pass without this. Use /usr/bin:/bin (real core
+# utils bash/env/etc. still resolve) rather than an empty PATH.
+assert_exit "missing ramparts fails in CI" 1 \
+  env GITHUB_ACTIONS=1 PATH="/usr/bin:/bin" bash "$SCRIPT" ramparts
+
 exit "$fail"

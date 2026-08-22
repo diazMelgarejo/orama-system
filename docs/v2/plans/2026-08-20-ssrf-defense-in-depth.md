@@ -32,12 +32,28 @@ class of 2025-2026 CVEs exploited.
 the four known fetchers below), that is a Stage-3/isolation case per the source research, not a
 Layer-1/Layer-2 case — flag for human review before wiring it into any fetch path.
 
+**Open gap — `scripts/discover.py` mesh probes.** `discover_endpoints()` calls `probe_models()`
+against `$MAC_IP`, `$WIN_PEER_IPS`, cached last-known-good addresses, and fresh subnet-scan
+results, using `validate_model_endpoint_url()` (the RFC1918-permitting, LAN-trusting validator
+noted above — correct for its intended purpose, discovering LM Studio on the local network).
+`filter_endpoints_for_trust()` (`mesh/discovery_trust.py`) only runs afterward, on the already-
+probed results — so an untrusted or spoofed peer on the subnet still receives a real HTTP request
+before mesh trust/ACK verification happens, and `validate_model_endpoint_url()` provides no
+connection-time pinning against DNS-rebinding on whatever it does accept. This should route
+through the Stage-3 PT adapter or an equivalent pinned transport ahead of `filter_endpoints_for_trust()`
+rather than relying on `validate_model_endpoint_url()` alone — **not implemented in this pass**,
+tracked as follow-up work; understanding `discovery_trust.py`'s ack/trust semantics fully before
+changing the probe flow is a separate design task, not a same-PR doc-text fix.
+
 ## Denylist single source of truth
 
 `src/utils/ssrf_fetch_policy.py` (Perpetua-Tools) is the SSOT for the Layer-1 denylist: loopback,
-RFC1918, link-local (`169.254.0.0/16`, `fe80::/10`, `fd00:ec2::254`, ECS `169.254.170.2`), CGNAT
-(`100.64.0.0/10`), multicast (`224.0.0.0/4`, `ff00::/8`), `0.0.0.0/8`, IPv4-mapped IPv6. Do not fork
-this list into a second module or repo — extend the one file.
+IPv4 private ranges (RFC1918, `10.0.0.0/8`/`172.16.0.0/12`/`192.168.0.0/16`), IPv4 link-local
+(`169.254.0.0/16`), IPv6 link-local (`fe80::/10`, RFC4291), IPv6 unique local addresses
+(`fc00::/7`, RFC4193 — `fd00:ec2::254`, the AWS IMDS IPv6 address, lives in this ULA space, not
+IPv6 link-local), ECS metadata (`169.254.170.2`), CGNAT (`100.64.0.0/10`), multicast
+(`224.0.0.0/4`, `ff00::/8`), `0.0.0.0/8`, IPv4-mapped IPv6. Do not fork this list into a second
+module or repo — extend the one file.
 
 Fetchers that must route through Layer 2 once it lands (not raw `httpx`/`requests`):
 `perplexity_client.py`, `gbrain_search.py`, `autoresearch_bridge.py`, `orama_mcp_client.py`. Fixed
@@ -52,28 +68,40 @@ vendor-host exemption alone.
 
 Owned by infra/platform, not application code. Nothing here is enforced by Python.
 
-1. **IMDSv2 required, hop limit 1** on every AWS instance (`HttpTokens=required`,
-   `HttpPutResponseHopLimit=1`). Hop limit 1 applies only when no container needs IMDS; a container
-   adds its own network-namespace hop, consuming one hop of TTL independent of any proxy, so any
-   host running a container that must read IMDS (e.g. EKS pods, AL2023's own default) needs hop
-   limit 2 — treat 1 as the default and 2 as an explicit, reviewed exception, not the other way
-   around.
-2. **Block metadata IPs at egress**: `169.254.169.254` (IPv4) via
-   `iptables -A OUTPUT -d 169.254.169.254 -j DROP`, `169.254.170.2` (ECS) the same way, and
-   `fd00:ec2::254` (AWS IMDS IPv6) via the IPv6 equivalent
-   (`ip6tables -A OUTPUT -d fd00:ec2::254 -j DROP`) if IPv6 IMDS is enabled — an IPv4-only rule
-   leaves the IPv6 endpoint open. On a host running containers, also add the equivalent `FORWARD`
-   chain rules (`iptables -A FORWARD -d 169.254.169.254 -j DROP`, and the IPv6/ECS equivalents) or
-   the CNI's own network-policy mechanism (Calico `GlobalNetworkPolicy`, Cilium
-   `CiliumNetworkPolicy`, etc.) — a container's traffic to the metadata IP traverses the host's
-   `FORWARD` chain and the pod network namespace, not `OUTPUT`, so an `OUTPUT`-only rule doesn't see
-   it. Do not rely on route tables or security groups for this block; see point 4 for why.
+1. **IMDSv2 required, hop limit 1 as the isolation baseline** on every AWS instance
+   (`HttpTokens=required`, `HttpPutResponseHopLimit=1`). Hop limit 1 is correct when no container
+   on the host needs IMDS; a container adds its own network-namespace hop, consuming one hop of TTL
+   independent of any proxy, so a container that genuinely needs IMDS reads needs hop limit 2 — but
+   this is deployment-specific, not a blanket container rule. **EKS Auto Mode enforces hop limit 1**
+   and requires a pod to set `hostNetwork: true` to reach IMDS at all (it shares the host's network
+   namespace, so it never takes the extra hop). Standalone hosts (self-managed EKS nodes, plain
+   EC2 running containers) default according to the AMI's `ImdsSupport` setting — AL2023's default
+   can be 2 — and are not overridden by any Auto-Mode enforcement. Treat hop limit 1 as the default
+   for every deployment, and hop limit 2 as an explicit, reviewed exception scoped to the specific
+   non-host-network workload that needs it — never a host-wide default "because containers."
+2. **Block metadata IPs at egress, precedence-safe**: `-A` (append) is not enough by itself — it
+   adds the DROP rule after whatever is already in the chain, so a pre-existing broad `ACCEPT` rule
+   earlier in the chain still matches first and the metadata traffic never reaches the DROP.
+   Manage these rules in a dedicated chain jumped to early (or use `-I` to insert at the top of
+   `OUTPUT`/`FORWARD`), and persist the rule set across reboots with the distro's standard
+   mechanism (`iptables-persistent`, `netfilter-persistent`, or the cloud image's boot-time rule
+   loader) rather than a one-shot `-A` that vanishes on restart. Block `169.254.169.254` (IPv4),
+   `169.254.170.2` (ECS), and `fd00:ec2::254` (AWS IMDS IPv6, in ULA space) — an IPv4-only rule set
+   leaves the IPv6 endpoint open. On a host running containers, a **hostNetwork pod's** traffic to
+   the metadata IP uses the host's `OUTPUT` chain (it shares the host's network namespace, per
+   point 1's EKS Auto Mode note), while **ordinary pod traffic** traverses the host's `FORWARD`
+   chain and the pod network namespace — cover both, either with matching precedence-safe `OUTPUT`
+   and `FORWARD` rules or the CNI's own network-policy mechanism (Calico `GlobalNetworkPolicy`,
+   Cilium `CiliumNetworkPolicy`, etc.), and validate both paths are actually blocked, not just one.
+   Do not rely on route tables or security groups for this block; see point 4 for why.
 3. **Prefer IRSA / Workload Identity** over instance-wide IMDS-issued credentials. IMDS-issued
    credentials are already temporary and auto-rotating, not long-lived — the benefit of
    IRSA/Workload Identity is narrower, workload-specific role scope instead of the whole instance
    sharing one role, not credential lifetime.
-4. **Deny-by-default egress control** blocking RFC1918 + link-local + metadata ranges (IPv4 and
-   IPv6) for any service reachable from outside the trust boundary. AWS security groups are
+4. **Deny-by-default egress control** blocking IPv4 RFC1918 private ranges, IPv4 link-local
+   (`169.254.0.0/16`), IPv6 link-local (`fe80::/10`), IPv6 ULA (`fc00::/7` — where AWS's IPv6 IMDS
+   address lives), and metadata ranges, for any service reachable from outside the trust boundary.
+   AWS security groups are
    allow-only and cannot layer a metadata-specific deny on top of a broader outbound allow — if a
    workload needs general egress, enforce the deny with a network ACL, AWS Network Firewall,
    host-level firewall, or K8s NetworkPolicy instead, and confirm each covers both IPv4 and IPv6

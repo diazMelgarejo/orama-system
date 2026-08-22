@@ -101,9 +101,11 @@ Add explicit **Connector Governance Standards**:
 ### Critique
 
 Citing Claude Opus 4.7 as the base model is accurate — Anthropic reported it led the Vals AI
-Finance Agent v1.1 benchmark with a score of 64.37%, while Meta's Muse Spark 1.2 achieved 60.599% on
-the Vals Finance Agent v2 benchmark. A benchmark score of ~60–64% indicates that the model succeeds
-on a majority of evaluated financial analyst questions under controlled benchmark conditions.
+Finance Agent v1.1 benchmark with a score of 64.37%, while Meta's Muse Spark 1.2 achieved 60.60%
+Partial Credit on the Vals Finance Agent v2 benchmark, alongside a lower 50.88% All-Pass score.
+Partial Credit is a dealbreaker-gated weighted metric, not a per-question pass rate, and All-Pass
+requires every check on a question to succeed — neither figure means the model succeeds on a
+majority of evaluated financial analyst questions in the sense of a simple pass rate.
 However, benchmark performance evaluates isolated task accuracy; in a live deployment with real-world
 data ambiguity, domain-specific edge cases, and end-to-end multi-step dependencies, unassisted
 execution carries substantial operational risk. Presenting model selection as a solved problem, with
@@ -139,8 +141,11 @@ model pass specifically instructed to find errors in the first pass.[^6]
 specific data source cell or API response. If a figure lacks a source trace, the agent must flag it
 rather than render it.[^14][^10]
 5. **Analyst review gate**: No generated document reaches a client workflow without a human sign-off
-step hardcoded into the orchestration graph. This is not optional — it is required by EU AI Act
-Article 14 for high-risk AI systems.[^15][^16]
+step hardcoded into the orchestration graph. This is not optional in this framework. Article 14
+itself requires effective human oversight proportionate to a system's risk, autonomy, and context —
+it does not universally mandate a hardcoded per-document approval node — so treat the analyst gate
+below as this framework's own stricter control, which satisfies Article 14's oversight requirement
+without being dictated by it in this specific form.[^15][^16]
 
 ***
 
@@ -174,16 +179,22 @@ workflows where comparables can be gathered in parallel while narrative is being
 
 ### Iterated Version
 
-- Mandate **checkpointing at every sub-agent boundary**: compile graphs with a durable checkpointer
-  (`SqliteSaver`/`PostgresSaver`) and unique `thread_id`; if any node fails, the orchestrator resumes
-  from the last checkpoint rather than restarting the entire workflow.[^3][^6]
+- Mandate **checkpointing at every LangGraph super-step boundary**: compile graphs with a durable
+  checkpointer (`SqliteSaver`/`PostgresSaver`) and unique `thread_id`; LangGraph persists state after
+  each completed super-step, not at every sub-agent call inside one — a sub-agent boundary only
+  creates a resumable checkpoint if it is itself a super-step boundary. For a failure mid-super-step,
+  the orchestrator resumes from the last completed super-step and re-executes the nodes within it, so
+  those nodes must be idempotent or safe to replay; where that isn't achievable, restructure the
+  workflow so each boundary that must be independently resumable is its own super-step rather than a
+  step nested inside a larger one.[^3][^6]
 - Add a **complexity ceiling rule**: if a workflow exceeds 7 LangGraph nodes, decompose it into two
   separately orchestrated workflows with a human handoff between them. This prevents debugging
   complexity from becoming unmanageable in production.[^17]
-- Implement **immutable audit logs** at every node transition, governed by strict data protection
-  controls: raw inputs and outputs must undergo automated PII/MNPI redaction before persistence,
-  field-level encryption at rest (AES-256), strict least-privilege access controls, and retention
-  lifecycle rules (GDPR Art. 5(1)(e) / EU AI Act Art. 12).[^16][^15]
+- Implement **immutable audit logs** at every node transition. Article 12 itself requires
+  appropriate automatic event logging for high-risk systems; the immutability, PII/MNPI redaction,
+  field-level encryption at rest (AES-256), least-privilege access controls, and retention lifecycle
+  rules below are this framework's own stricter internal controls layered on top of that Article 12
+  baseline, governed by GDPR Art. 5(1)(e) for the data-protection side.[^16][^15]
 - For the parallel branch pattern (comparables + narrative), add a **merge validation node** that
   checks the two outputs for numerical consistency before assembling the final deck. Inconsistency
   flags trigger a human review step.[^10][^6]
@@ -267,8 +278,11 @@ generically but misses the structured regulatory timeline established by **Regul
 as amended by the **Digital Omnibus Regulation (EU) 2026/1744**:
 
 - **August 2, 2026**: Article 50 transparency and disclosure requirements become applicable (mandatory
-  labeling of AI interactions, AI-generated outputs, and synthetic content watermarking) — this is a
-  transparency-obligation date, distinct from the high-risk applicability dates below.[^19][^16][^22][^23]
+  labeling of AI interactions, AI-generated outputs, and synthetic content watermarking). These duties
+  fall differently on providers versus deployers, are subject to Article 50's own exceptions (e.g.
+  authorized law-enforcement use, artistic/satirical content), and are phased in under the Regulation's
+  transition rules rather than applying uniformly on day one — this is a transparency-obligation date,
+  distinct from the high-risk applicability dates below.[^19][^16][^22][^23]
 - **December 2, 2027**: Standalone high-risk AI obligations under **Article 6(2) and Annex III**
   (including creditworthiness assessment, risk scoring, and access to financial services) become
   enforceable, requiring risk management (Article 9), technical documentation (Article 11), audit
@@ -289,8 +303,8 @@ rather than a structural architectural constraint.[^21][^19]
 
 The framework's emphasis on human approval chains and audit trails is genuinely aligned with
 regulatory requirements. The insistence that analysts "review, iterate on, and approve Claude's work
-before it goes to a client" is not just good practice — it satisfies Article 14's human oversight
-mandate for high-risk systems.[^15][^1]
+before it goes to a client" is not just good practice — it is one valid way to satisfy Article 14's
+human oversight mandate for high-risk systems, not the mandate's only permissible form.[^15][^1]
 
 ### Iterated Version
 
@@ -298,10 +312,13 @@ Replace the generic compliance section with a **Compliance Implementation Checkl
 
 **Immediate (Before Any Production Deployment):**
 
-- [ ] Classify every agent against EU AI Act Annex III high-risk categories. Most financial services
-  AI agents (credit scoring, KYC/AML screening, underwriting, investment recommendations) qualify.[^21][^15]
+- [ ] Classify every agent against EU AI Act Annex III high-risk categories, with a per-use-case
+  Article 6(3) analysis rather than a blanket assumption. Most financial services AI agents
+  (credit scoring, KYC/AML screening, underwriting, investment recommendations) qualify.[^21][^15]
 - [ ] Assign a responsible compliance owner to each high-risk system.[^21]
-- [ ] Implement encrypted, redacted immutable audit logging at every agent decision point (Article 12).[^16]
+- [ ] Implement encrypted, redacted immutable audit logging at every agent decision point. Article 12
+  requires event logging; treat immutability, encryption, and redaction as this framework's own
+  stricter controls beyond that baseline.[^16]
 - [ ] Hardcode human oversight gates into the orchestration graph — not as a UI option but as a
   non-bypassable workflow node (Article 14).[^15][^16]
 - [ ] Align supervision and recordkeeping with FINRA Rule 3110 and Rule 2210 expectations.[^20][^24]
@@ -315,7 +332,10 @@ applicability below):**
 
 **Before December 2, 2027 (High-Risk Enforcement Phase -- Article 6(2)/Annex III):**
 
-- [ ] Complete conformity assessments for all Article 6(2) / Annex III high-risk systems (Article 43).[^19][^15][^22]
+- [ ] Complete conformity assessments for all Article 6(2) / Annex III high-risk systems (Article 43).
+  Conformity assessment, declaration, CE-marking, and registration are provider duties under the
+  Regulation — assign each to whichever party in the deployment (this framework's operator, or the
+  underlying model vendor) actually holds the provider role for that system.[^19][^15][^22]
 - [ ] Finalize technical documentation per Annex IV.[^21]
 - [ ] Register all high-risk AI systems in the EU AI database (Article 49).[^15][^21]
 - [ ] Issue Declaration of Conformity with CE marking (Articles 47-48).[^21]

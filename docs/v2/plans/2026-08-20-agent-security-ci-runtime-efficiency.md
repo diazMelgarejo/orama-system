@@ -10,9 +10,11 @@
 The runtime-shape fix described below has landed. `.github/workflows/agent-security.yml` now runs
 `gitleaks`, `aguara`, `agent-audit`, `skill-scanner`, `mcp-scanner`, and `ramparts` as 6 separate
 parallel jobs (plus a fast smoke-test job for the dispatcher script's own exit-code propagation),
-each with the caching described in the Recommendation section. `aguara` is pinned to a commit SHA
-(not `@latest`); `agent-audit`'s clone is cached at a stable path matching what `actions/cache`
-restores, keyed on its pinned ref.
+with the caching described in the Recommendation section applied to each job where applicable —
+`gitleaks` uses `gitleaks/gitleaks-action` directly and has no cache step of its own; the other
+jobs cache their respective toolchains/clones. `aguara` is pinned to a commit SHA (not `@latest`);
+`agent-audit`'s clone is cached at a stable path matching what `actions/cache` restores, keyed on
+its pinned ref.
 
 ## Baseline (before this PR)
 
