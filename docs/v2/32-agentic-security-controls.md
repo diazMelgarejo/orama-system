@@ -112,6 +112,62 @@ Do not block early security wins on a microVM migration. Implement an isolation 
 
 Docker alone is not a complete isolation story because it shares the host kernel. MITRE ATT&CK documents container escape as a technique class under T1611: https://attack.mitre.org/techniques/T1611/.
 
+### Outbound HTTP transport hardening: redirect-following is a separate control from URL/DNS validation
+
+**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model) (SSRF).
+**Worked example:** Perpetua-Tools `src/utils/ssrf_pinned_adapter.py` (Layer 2 pinned transport),
+`orchestrator/perplexity_client.py`, `orchestrator/autoresearch_bridge.py` — three independent
+instances of the same gap, found in one 2026-08-22 hardening pass.
+
+#### Problem
+
+Validating a request's *initial* URL or resolving/checking its *initial* DNS answer does not
+protect against a redirect from that same, validated target. Every HTTP library or SDK
+encountered in the PT hardening pass followed redirects **silently by default**, with zero
+re-validation of the redirect destination:
+
+- `urllib.request` installs `HTTPRedirectHandler` in its default opener — auto-follows
+  301/302/303/307/308 unless a custom opener overrides `redirect_request()`.
+- The `openai` Python SDK's own httpx client construction sets `follow_redirects=True` —
+  **not** `httpx.Client`'s own `False` default. Vendor SDKs commonly override the underlying
+  HTTP library's safe default for convenience; never assume the SDK matches the library docs.
+
+A validated, trusted, fixed vendor host (e.g. a hardcoded API base URL) is not exempt: if
+compromised or MITM'd, it can redirect the *same already-open, already-trusted* request
+connection anywhere, including cloud metadata endpoints, and the transport follows it
+transparently unless redirect-following is explicitly disabled or intercepted.
+
+#### Recommendation
+
+- For any new outbound HTTP client (new library, new SDK, new vendor integration), explicitly
+  verify and set its redirect-following behavior — do not assume URL/DNS validation covers it,
+  and do not assume the library's documented default matches what the SDK actually constructs
+  (verify empirically: instantiate the client and inspect the live setting).
+  Confirmed in this repo:
+  `OpenAI(api_key=...)._client.follow_redirects` is `True` with no override.
+- Prefer refusing redirects outright for fixed-purpose calls (health-check probes, single-vendor
+  API calls) — they rarely have a legitimate reason to hop.
+- Where redirects must be followed (general-purpose fetchers), re-validate every hop's target
+  against the same policy the initial URL passed, and cap the hop count independently of
+  whatever the underlying library's own redirect ceiling does (see the acceptance test note
+  below — a library-level ceiling and an application-level revalidation loop are not the same
+  control, and one can silently short-circuit the other; PT's own `ssrf_request()` hit this when
+  its session's own `max_redirects=0` made `requests.Session.send()`'s internal redirect
+  precomputation raise before the application's own per-hop loop ever ran).
+
+#### Acceptance
+
+- A redirect-denial test must prove the redirect target itself was rejected — not merely that
+  *some* exception fired via a different mechanism (e.g. a hop-count/redirect-limit exhaustion
+  after N identical redirects, which proves nothing about whether the target address itself was
+  ever checked). Mock at the transport layer that actually performs the connection (the real
+  connection pool / socket layer), not a fake session object that bypasses the client's real
+  send() path entirely.
+- New outbound HTTP call sites landing under this control must include an explicit assertion on
+  the constructed client's redirect-following setting (e.g.
+  `assert client._client.follow_redirects is False`), not just a "it worked in manual testing"
+  claim.
+
 ---
 
 ## 6. Prompt-injection scanner

@@ -17,7 +17,7 @@
 | Layer | What it stops | What it cannot stop | Owner | Status |
 | --- | --- | --- | --- | --- |
 | 1 Pre-flight | Bad schemes, userinfo, control chars, octal/hex/dword, IPv4-mapped IPv6, RFC1918, loopback, link-local, CGNAT, multicast, reserved | Rebinding, redirects | PT `src/utils/ssrf_fetch_policy.py` | **Shipped** — 22 tests (unit + hypothesis property), 2026-08-20 |
-| 2 Pinning transport | Rebinding (resolve → validate **all** A/AAAA → connect to that IP, SNI = hostname); each redirect hop re-validated | A process that bypasses the HTTP client | New PT adapter, every user-URL fetch | **PR-P2 shipped, PR-P3 partial** — `src/utils/ssrf_pinned_adapter.py` and `tests/test_ssrf_pinned_adapter.py` in Perpetua-Tools; `perplexity_client.py` not yet wired, see the known gap below |
+| 2 Pinning transport | Rebinding (resolve → validate **all** A/AAAA → connect to that IP, SNI = hostname); each redirect hop re-validated | A process that bypasses the HTTP client | New PT adapter, every user-URL fetch | **PR-P2 shipped, PR-P3 shipped (2026-08-22)** — `src/utils/ssrf_pinned_adapter.py` and `tests/test_ssrf_pinned_adapter.py` in Perpetua-Tools; all listed fetchers wired, see below |
 | 3 Network / IMDS | Anything that still dials metadata | Nothing in-app | Operator runbook (below), not Python | **This doc** |
 
 **Validator cannot pin.** Layer 1 (PT `src/utils/ssrf_fetch_policy.py`) is a pure string/IP-literal
@@ -28,6 +28,18 @@ different threat model — do not conflate the two). Closing DNS-rebinding TOCTO
 SSRF requires Layer 2 (a connection-time-pinning transport); do not add DNS resolution to the
 Layer-1 module to "fix" this — that reintroduces the exact validate-then-reconnect gap the whole
 class of 2025-2026 CVEs exploited.
+
+Opposite-polarity (LAN-trusting) callers still need redirect hardening even though they don't
+route through the deny-by-default Layer 2 transport: `connectivity.py`'s `_probe_local` and
+`orchestrator/autoresearch_bridge.py`'s `probe_lm_studio_http()` both validate the target via
+`model_endpoint_url.py` before fetching, but validating the _initial_ URL doesn't protect against
+a redirect from that already-validated target (see "Outbound HTTP transport hardening" in
+[`32-agentic-security-controls.md`](../32-agentic-security-controls.md) for the general pattern).
+`_probe_local` accepted this as a documented, low-risk tradeoff (fixed, code-reviewed local
+endpoints); `probe_lm_studio_http()` was hardened on 2026-08-22 to refuse redirects outright via a
+custom `urllib.request.HTTPRedirectHandler` (a health-check probe has no legitimate reason to
+follow one), since `urllib.request`'s default opener auto-follows redirects with zero
+revalidation.
 
 **HITL note.** If any future job needs to fetch a genuinely arbitrary user-supplied URL (not one of
 the outbound fetchers below), that is a Stage-3/isolation case per the source research, not a
@@ -71,14 +83,28 @@ follow redirects without revalidating each hop's target, and connects only to th
 a re-resolved one). If the client used for such a call doesn't guarantee that, route it through Layer 2
 too rather than trusting the vendor-host exemption alone.
 
-**Known gap (2026-08-21):** `perplexity_client.py` is listed above but is **not actually wired to
-Layer 2 yet** — it calls `api.perplexity.ai` via the `openai` SDK's own `OpenAI`/`AsyncOpenAI` clients
-(an unpinned `httpx` transport under the hood), not `ssrf_pinned_adapter`/`ssrf_request`. A bare
-`httpx.Client` does not connect to a pre-validated IP, so it fails the vendor-host exemption's third
-condition above regardless. `connectivity.py` and `orama_bridge.py` are genuinely wired to Layer 2 as
-of the PT PR #359 remediation (`_probe`/`_probe_local` split; `ssrf_request` via `asyncio.to_thread`);
-`perplexity_client.py` needs the same treatment before PR-P3 can be called fully shipped — see the PR
-sequence table below.
+**Resolved (2026-08-22):** `perplexity_client.py` is hardened, but via a different mechanism than
+`connectivity.py`/`orama_bridge.py` — it's on the `openai` SDK, which is built on `httpx`, not
+`requests`/`urllib3`, so `ssrf_pinned_adapter`'s connect-time IP pinning (which subclasses urllib3's
+connection/pool classes) cannot be reused directly. `src/utils/ssrf_pinned_adapter.py` now also
+exposes `build_pinned_httpx_client()`, passed as `http_client=` to both `OpenAI()` and
+`AsyncOpenAI()`: it forces `follow_redirects=False` (the `openai` SDK's own default httpx client
+construction sets `follow_redirects=True` — confirmed directly, **not** `httpx.Client`'s own `False`
+default, and a real gap on its own) and adds a "request" event hook that validates every resolved
+A/AAAA for the request's host via `address_checker` immediately before httpx's connection attempt.
+This is **not** true IP pinning (that needs a custom `httpcore` network backend — out of scope,
+tracked as a follow-up if httpx-based clients proliferate) but it does satisfy the vendor-host
+exemption's three conditions above for this fixed, hardcoded host: TLS verification stays on
+(httpx's own default), redirects are never auto-followed, and the pre-flight hook closes the
+"this fixed hostname now resolves somewhere it shouldn't" TOCTOU gap the exemption's third
+condition is really about. `orchestrator/autoresearch_bridge.py`'s `probe_lm_studio_http()` had
+the same class of gap on a third transport (`urllib.request`'s default opener auto-follows
+redirects) — fixed by refusing redirects outright via a custom `HTTPRedirectHandler` (a
+fixed-purpose health-check probe has no legitimate reason to follow one). `connectivity.py` and
+`orama_bridge.py` remain the only two with true connect-time pinning (PT PR #359 remediation,
+`_probe`/`_probe_local` split; `ssrf_request` via `asyncio.to_thread`). `gbrain_search.py` and
+`orama_mcp_client.py` were checked and found **not applicable** — both are pure local-subprocess
+callers (CLI binary / stdio JSON-RPC), neither makes an outbound HTTP request at all.
 
 ## Operator runbook — Layer 3 (network / IMDS)
 
@@ -137,7 +163,7 @@ only.
 - **PR-P1** (PT, Layer-1 module) — `src/utils/ssrf_fetch_policy.py` +
   `tests/test_ssrf_fetch_policy.py`. Done 2026-08-20.
 - **PR-P2** (PT, pinning transport) — Layer 2. Done (2026-08-21), with IP pinning on connect, SNI/Host header preservation, and manual redirect re-validation.
-- **PR-P3** (PT, wire + fail closed) — wire outbound fetchers (`connectivity.py`, `orama_bridge.py`, `perplexity_client.py`) through Layer 2. **Partial (2026-08-21)** — `connectivity.py` and `orama_bridge.py` shipped and tested (PT PR #359); `perplexity_client.py` still calls `api.perplexity.ai` via the `openai` SDK's own unpinned `httpx` transport, not `ssrf_pinned_adapter`. Do not mark PR-P3 shipped until `perplexity_client.py` routes through the pinning transport and has passing tests, with an approved verifier result — not just a self-reported claim here.
+- **PR-P3** (PT, wire + fail closed) — wire outbound fetchers (`connectivity.py`, `orama_bridge.py`, `perplexity_client.py`) through Layer 2. **Shipped (2026-08-22)** — `connectivity.py` and `orama_bridge.py` have true connect-time pinning (PT PR #359); `perplexity_client.py` is hardened via `build_pinned_httpx_client()` (redirect-disabled + pre-flight address validation, not true pinning — httpx's transport layer doesn't support connect-time IP pinning the way `ssrf_pinned_adapter` does for `requests`/`urllib3`; documented as a deliberate scope boundary above, not an oversight). `autoresearch_bridge.py`'s LM Studio probe (a `model_endpoint_url`-validated LAN target, opposite polarity — not a Layer 2 candidate) was separately hardened to refuse redirects. `gbrain_search.py` and `orama_mcp_client.py` checked and found not applicable (pure local-subprocess callers, no outbound HTTP). All changes have passing tests with a RED-GREEN verification pass, not just a self-reported claim.
 - **PR-O2** (this doc's runbook section) — operator IMDS/egress checklist. Done 2026-08-20 (folded
   into this file rather than split, since both are orama-docs-only and small).
 
