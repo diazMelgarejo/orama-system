@@ -28,7 +28,7 @@ errors. Treating it as a simple templating exercise misframes the governance bur
 The workflow-first approach is correct because it forces scope discipline before architecture
 decisions. The CFA Institute's agentic AI guide for finance explicitly validates this:
 "workflow-style automations, which offer more control and predictability, are more likely to be
-adopted in practice than highly autonomous, low predictability agents". Decomposing a complex job
+adopted in practice than highly autonomous, low-predictability agents". Decomposing a complex job
 into sub-tasks (data gathering → analysis → document generation) is textbook multi-agent design and
 is exactly how LangGraph's scatter-gather and pipeline parallelism patterns are implemented in
 production.[^2][^3]
@@ -74,8 +74,9 @@ one of the fastest paths to data leakage in MCP-based agent deployments.[^7][^8]
 ### Steelman
 
 The delivery dichotomy — desktop plug-in vs. managed/hosted agent — is genuinely useful and matches
-how Anthropic actually ships these agents: as Office add-ins (Excel, PowerPoint, Word, Outlook are
-now GA) and as Claude Managed Agents with per-tool permissions and credential vaults. This framing
+how Anthropic actually ships these agents: as Office add-ins (Excel, PowerPoint, and Word are
+generally available; the Outlook add-in is coming soon, per Anthropic's own financial-services
+announcement) and as Claude Managed Agents with per-tool permissions and credential vaults. This framing
 correctly identifies the human-in-loop requirement: analysts review and approve all output before
 client delivery.[^1]
 
@@ -103,9 +104,13 @@ Add explicit **Connector Governance Standards**:
 Citing Claude Opus 4.7 as the base model is accurate — Anthropic reported it led the Vals AI
 Finance Agent v1.1 benchmark with a score of 64.37%, while Meta's Muse Spark 1.2 achieved 60.60%
 Partial Credit on the Vals Finance Agent v2 benchmark, alongside a lower 50.88% All-Pass score.
-Partial Credit is a dealbreaker-gated weighted metric, not a per-question pass rate, and All-Pass
-requires every check on a question to succeed — neither figure means the model succeeds on a
-majority of evaluated financial analyst questions in the sense of a simple pass rate.
+These are not simple question-level pass rates: Vals' Finance Agent Benchmark scores via a
+rubric-based, dealbreaker-gated Partial Credit metric (partial credit for individual correct
+sub-claims within an answer), which Vals reports separately from its stricter All-Pass metric
+(every rubric check on a question must pass). Neither figure means the model succeeds on a
+majority of evaluated financial analyst questions in the sense of a simple pass rate — a ~60–64%
+score under Partial Credit does not mean the model fully and correctly answered that share of
+questions.
 However, benchmark performance evaluates isolated task accuracy; in a live deployment with real-world
 data ambiguity, domain-specific edge cases, and end-to-end multi-step dependencies, unassisted
 execution carries substantial operational risk. Presenting model selection as a solved problem, with
@@ -141,11 +146,12 @@ model pass specifically instructed to find errors in the first pass.[^6]
 specific data source cell or API response. If a figure lacks a source trace, the agent must flag it
 rather than render it.[^14][^10]
 5. **Analyst review gate**: No generated document reaches a client workflow without a human sign-off
-step hardcoded into the orchestration graph. This is not optional in this framework. Article 14
-itself requires effective human oversight proportionate to a system's risk, autonomy, and context —
-it does not universally mandate a hardcoded per-document approval node — so treat the analyst gate
-below as this framework's own stricter control, which satisfies Article 14's oversight requirement
-without being dictated by it in this specific form.[^15][^16]
+step hardcoded into the orchestration graph. This is not optional in this framework — it is this
+framework's own, deliberately stricter control. EU AI Act Article 14 itself requires effective
+human oversight proportionate to a system's risk, autonomy, and context for high-risk systems; it
+does not universally mandate a hardcoded per-document approval node, so treat the gate below as
+satisfying Article 14's oversight requirement without being dictated by it in this specific
+form.[^15][^16][^22]
 
 ***
 
@@ -172,29 +178,36 @@ on state persistence, failure recovery, or checkpointing.[^4]
 
 LangGraph's stateful design supports step-by-step progress persistence when the graph is compiled
 with a configured checkpointer (e.g., `SqliteSaver`, `PostgresSaver`, or `AsyncSqliteSaver`) and
-invoked with an explicit `thread_id` in its runtime configuration. Its support for hierarchical and
-sequential
-multi-agent patterns — scatter-gather, pipeline parallelism — maps naturally onto financial
-workflows where comparables can be gathered in parallel while narrative is being drafted.[^3][^17]
+invoked with an explicit `thread_id` in its runtime configuration. A checkpoint is written at each
+completed super-step (one full "tick" of the graph, which can run several nodes), not at every
+individual node in isolation — a failure partway through a super-step resumes from the last
+completed super-step, not from inside the failed one, so nodes must be idempotent or the workflow
+must be structured so each boundary that needs its own resume point is its own super-step. Its
+support for hierarchical and sequential multi-agent patterns — scatter-gather, pipeline
+parallelism — maps naturally onto financial workflows where comparables can be gathered in parallel
+while narrative is being drafted.[^3][^17]
 
 ### Iterated Version
 
-- Mandate **checkpointing at every LangGraph super-step boundary**: compile graphs with a durable
-  checkpointer (`SqliteSaver`/`PostgresSaver`) and unique `thread_id`; LangGraph persists state after
-  each completed super-step, not at every sub-agent call inside one — a sub-agent boundary only
-  creates a resumable checkpoint if it is itself a super-step boundary. For a failure mid-super-step,
-  the orchestrator resumes from the last completed super-step and re-executes the nodes within it, so
-  those nodes must be idempotent or safe to replay; where that isn't achievable, restructure the
-  workflow so each boundary that must be independently resumable is its own super-step rather than a
-  step nested inside a larger one.[^3][^6]
+- Mandate **checkpointing at every LangGraph super-step boundary**: structure the graph so each
+  sub-agent boundary that needs its own resume point is its own super-step (LangGraph's actual
+  checkpoint unit — it persists state after each completed super-step, not at every sub-agent call
+  inside one), and compile with a durable checkpointer (`SqliteSaver`/`PostgresSaver`) and unique
+  `thread_id`. For a failure mid-super-step, the orchestrator resumes from the last completed
+  super-step and re-executes the nodes within it, so those nodes must be idempotent or
+  side-effect-guarded against being re-run; where that isn't achievable, restructure the workflow so
+  each boundary that must be independently resumable is its own super-step rather than a step nested
+  inside a larger one.[^3][^6]
 - Add a **complexity ceiling rule**: if a workflow exceeds 7 LangGraph nodes, decompose it into two
   separately orchestrated workflows with a human handoff between them. This prevents debugging
   complexity from becoming unmanageable in production.[^17]
-- Implement **immutable audit logs** at every node transition. Article 12 itself requires
-  appropriate automatic event logging for high-risk systems; the immutability, PII/MNPI redaction,
-  field-level encryption at rest (AES-256), least-privilege access controls, and retention lifecycle
-  rules below are this framework's own stricter internal controls layered on top of that Article 12
-  baseline, governed by GDPR Art. 5(1)(e) for the data-protection side.[^16][^15]
+- Implement **immutable audit logs** at every node transition, governed by strict data protection
+  controls: raw inputs and outputs must undergo automated PII/MNPI redaction before persistence,
+  field-level encryption at rest (AES-256), strict least-privilege access controls, and retention
+  lifecycle rules. Per-node immutability and full input/output capture are this framework's own,
+  deliberately stricter internal controls; EU AI Act Article 12 itself requires automatic event
+  logging and traceability appropriate to the system's intended purpose, not immutability or raw
+  payload capture at every transition specifically (GDPR Art. 5(1)(e) / EU AI Act Art. 12).[^16][^15][^22]
 - For the parallel branch pattern (comparables + narrative), add a **merge validation node** that
   checks the two outputs for numerical consistency before assembling the final deck. Inconsistency
   flags trigger a human review step.[^10][^6]
@@ -205,9 +218,10 @@ workflows where comparables can be gathered in parallel while narrative is being
 
 ### Critique
 
-The Microsoft 365 integration is now confirmed and generally available. But the framework ignores
-the security architecture implications of an agent that carries context across Excel, PowerPoint,
-Word, and Outlook *simultaneously*. This cross-application context creates an attack surface for
+The Microsoft 365 integration is now confirmed, with Excel, PowerPoint, and Word generally available
+and the Outlook add-in coming soon. But the framework ignores the security architecture implications
+of an agent that is designed to carry context across Excel, PowerPoint, Word, and Outlook
+*simultaneously* once all four ship. This cross-application context creates an attack surface for
 **prompt injection via document content** — a malicious instruction embedded in an incoming email or
 a client-supplied spreadsheet could manipulate the agent's behavior across all connected
 applications. This is not hypothetical: MCP servers that store authentication tokens for multiple
@@ -267,6 +281,14 @@ Define explicit **Quality Gates** before moving from sandbox to production:
 Any metric below minimum threshold blocks promotion to production. Numerical accuracy,
 source-trace coverage, and factual error rate are mandatory first gates.[^5][^11][^10]
 
+The Adjudication Method column above fixes the measurement approach per metric but not the full
+evaluation protocol; before these gates are load-bearing for a real release decision, a companion
+evaluation-protocol document must additionally fix the benchmark/holdout dataset composition and
+size, the sampling method (full population vs. stratified sample, and sample size per metric),
+confidence intervals or statistical power for the "factual error rate" human-audit sample, the
+adjudication/dispute process when the dual-model check and the human auditor disagree, and how
+metrics are weighted or combined when several sit near their threshold simultaneously.
+
 ***
 
 ## Step 7: Compliance and Transparency
@@ -303,8 +325,10 @@ rather than a structural architectural constraint.[^21][^19]
 
 The framework's emphasis on human approval chains and audit trails is genuinely aligned with
 regulatory requirements. The insistence that analysts "review, iterate on, and approve Claude's work
-before it goes to a client" is not just good practice — it is one valid way to satisfy Article 14's
-human oversight mandate for high-risk systems, not the mandate's only permissible form.[^15][^1]
+before it goes to a client" is not just good practice — for a system classified as high-risk under
+EU AI Act Annex III, it is one valid, concrete control that can satisfy Article 14's proportionate
+human-oversight mandate, though Article 14 itself does not prescribe this exact mechanism as the
+only compliant one.[^15][^1][^22]
 
 ### Iterated Version
 
@@ -312,15 +336,20 @@ Replace the generic compliance section with a **Compliance Implementation Checkl
 
 **Immediate (Before Any Production Deployment):**
 
-- [ ] Classify every agent against EU AI Act Annex III high-risk categories, with a per-use-case
-  Article 6(3) analysis rather than a blanket assumption. Most financial services AI agents
-  (credit scoring, KYC/AML screening, underwriting, investment recommendations) qualify.[^21][^15]
+- [ ] Classify each agent against the specific Annex III entries it may fall under (e.g. Annex III
+  ¶5(b) creditworthiness assessment/credit scoring) via the Article 6(3) case-by-case assessment, by
+  the applicable provider or deployer role — not a blanket "most financial services agents qualify"
+  assumption. KYC/AML screening, underwriting, and investment recommendations are not automatically
+  high-risk solely because they are financial; each needs its own Annex III mapping.[^21][^15][^22]
 - [ ] Assign a responsible compliance owner to each high-risk system.[^21]
-- [ ] Implement encrypted, redacted immutable audit logging at every agent decision point. Article 12
-  requires event logging; treat immutability, encryption, and redaction as this framework's own
-  stricter controls beyond that baseline.[^16]
+- [ ] Implement encrypted, redacted audit logging with automatic event capture and traceability at
+  every agent decision point, sized to the system's actual risk (Article 12 requires this baseline;
+  immutability and raw-payload retention beyond it are this framework's own stricter choice, not an
+  Article 12 mandate).[^16][^22]
 - [ ] Hardcode human oversight gates into the orchestration graph — not as a UI option but as a
-  non-bypassable workflow node (Article 14).[^15][^16]
+  non-bypassable workflow node. This is this framework's own stricter control; Article 14 itself
+  requires oversight proportionate to risk, autonomy, and context, not universally this exact
+  mechanism.[^15][^16][^22]
 - [ ] Align supervision and recordkeeping with FINRA Rule 3110 and Rule 2210 expectations.[^20][^24]
 
 **Before August 2, 2026 (Transparency & Disclosure Phase -- Article 50, distinct from high-risk
@@ -361,7 +390,7 @@ design dimensions.
 | Connector security | Role-based access controls (mentioned) | Least privilege, short-lived tokens, policy enforcement gateway, cross-app context firewall |
 | Orchestration reliability | LangGraph recommended | LangGraph with durable checkpointer (`SqliteSaver`/`PostgresSaver`) + `thread_id`, 7-node ceiling, merge validation |
 | Quality gates | "Compare to human output" | 6 defined metrics with units, denominators, and thresholds; numerical accuracy, trace coverage, and error rate gate production |
-| Compliance | EU AI Act + US banking (generic) | Structured EU AI Act roadmap (Aug 2026 Art. 50, Dec 2027 Art. 6(2) high-risk), FINRA 2026 GenAI guidance integrated |
+| Compliance | EU AI Act + US banking (generic) | Structured EU AI Act roadmap (Aug 2026 Art. 50, Dec 2027 Art. 6(2) high-risk); 2026 FINRA Annual Regulatory Oversight Report's GenAI section integrated (existing Rule 3110/2210 supervision expectations, not new binding requirements) |
 | MCP security | Not addressed | Untrusted input sanitization, token scoping, context firewall, audit log of all cross-app transfers |
 
 ***
