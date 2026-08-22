@@ -168,6 +168,29 @@ transparently unless redirect-following is explicitly disabled or intercepted.
   `assert client._client.follow_redirects is False`), not just a "it worked in manual testing"
   claim.
 
+### Outbound HTTP transport hardening: split-identity socket pinning and connection-pool isolation
+
+**Threat trace:** [`PT-02`](31-security-harness-excellence-plan.md#3-threat-model) (SSRF / DNS Rebinding / Pool Cross-Contamination).  
+**Worked example:** Perpetua-Tools `src/utils/ssrf_pinned_adapter.py` (Layer 2 pinned transport, commits `351bad1e`, `5a6a4ae7`).
+
+#### Problem
+
+Application-layer IP pinning adapters frequently suffer from two severe concurrency and connection-pooling vulnerabilities:
+1. **Shared-State Mutation Race:** Mutating adapter-wide connection parameters (e.g. `self.poolmanager.connection_pool_kw.update(...)` inside `send()`) introduces race conditions where concurrent requests overwrite or pop each other's pinned destinations between DNS validation and socket creation.
+2. **Pool Cross-Contamination:** If connection pools are keyed solely on `(scheme, hostname, port)`, a connection established to IP $A$ remains in the pool and is reused for a subsequent request to the same hostname even after DNS re-resolves to a different IP $B$, completely bypassing the new pin.
+
+#### Recommendation
+
+Adopt the **Split-Identity Rule** across all connection-pinning transports:
+- **Place (Target & Pool Key):** Set the connection pool host (`host_params["host"] = pinned_ip`). This routes the TCP connection to the validated IP literal and causes urllib3's native `PoolKey` (`scheme, host, port`) to naturally partition pools by IP address without custom pool keys or normalizer hacks.
+- **Name (Identity & Credentials):** Pass the original DNS hostname via `pool_kwargs["server_hostname"] = hostname`, `pool_kwargs["assert_hostname"] = hostname`, and `request.headers["Host"] = host_header`. This ensures TLS SNI, certificate validation, and HTTP virtual hosting remain correct.
+- **Per-Call Immutability:** Override `build_connection_pool_key_attributes()` to return freshly computed per-request parameters into urllib3's `connection_from_host(pool_kwargs=...)`, completely avoiding mutation of `self.poolmanager.connection_pool_kw`.
+
+#### Acceptance
+
+- **Concurrency & Reuse Tests:** Include regression suites asserting that (1) concurrent requests to the same hostname with different IPs get distinct connection pools, (2) sequential DNS changes from IP $A$ to IP $B$ create fresh pools rather than reusing $A$, and (3) `adapter.poolmanager.connection_pool_kw` is never mutated during requests.
+- **Verification Matrix:** Maintain a minimum 6-test regression matrix verifying IP target binding, TLS SNI preservation, redirect target rejection, and multi-threaded session sharing.
+
 ---
 
 ## 6. Prompt-injection scanner
