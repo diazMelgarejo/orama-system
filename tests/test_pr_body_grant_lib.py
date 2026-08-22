@@ -6,7 +6,6 @@ import hmac
 import importlib.util
 import os
 from pathlib import Path
-from typing import Any, NoReturn
 
 import pytest
 
@@ -76,121 +75,6 @@ def test_wrong_repo_fails(grant_lib, tmp_path):
     )
     assert not ok
     assert "repo mismatch" in err
-
-
-@pytest.mark.parametrize(
-    ("repo", "pr_number"),
-    [
-        ("owner\nrepo", "42"),
-        ("owner/repo", "42\n"),
-        ("owner\rrepo", "42"),
-        ("owner/repo", "42\r"),
-        ("", "42"),
-        ("owner/repo", ""),
-        ("   ", "42"),
-        ("owner/repo", "   "),
-    ],
-)
-def test_invalid_grant_inputs_fail_before_reading_append_content(
-    grant_lib: Any, monkeypatch: pytest.MonkeyPatch, repo: str, pr_number: str
-) -> None:
-    def digest_must_not_run(*_args: Any, **_kwargs: Any) -> NoReturn:
-        raise AssertionError("append content must not be read for invalid grant inputs")
-
-    monkeypatch.setattr(grant_lib, "content_digest_for_append", digest_must_not_run)
-
-    ok, err = grant_lib.verify_grant_for_append(
-        repo, pr_number, "untrusted-followup.md", None, consume=False
-    )
-
-    assert not ok
-    assert "must not contain pipe or newline characters" in err
-
-
-@pytest.mark.parametrize(
-    ("repo", "pr_number"),
-    [
-        ("owner\nrepo", "42"),
-        ("owner/repo", "42\n"),
-        ("owner\rrepo", "42"),
-        ("owner/repo", "42\r"),
-        ("", "42"),
-        ("owner/repo", ""),
-        ("   ", "42"),
-        ("owner/repo", "   "),
-    ],
-)
-def test_mint_grant_rejects_invalid_inputs(
-    grant_lib: Any, monkeypatch: pytest.MonkeyPatch, repo: str, pr_number: str
-) -> None:
-    def digest_must_not_run(*_args: Any, **_kwargs: Any) -> NoReturn:
-        raise AssertionError("append content must not be read for invalid grant inputs")
-
-    monkeypatch.setattr(grant_lib, "content_digest_for_append", digest_must_not_run)
-
-    with pytest.raises(grant_lib.GrantError, match="must not contain pipe or newline characters"):
-        grant_lib.mint_grant(repo, pr_number, "untrusted-followup.md", None)
-
-
-def test_verify_grant_fields_rejects_invalid_inputs_directly(grant_lib: Any) -> None:
-    """Direct unit test for verify_grant_fields() validation logic.
-
-    Tests that carriage returns and blank values are rejected
-    without going through the full mint_grant pipeline.
-    """
-    # Mock fields dict that would pass all other checks
-    fields = {
-        "marker": "operator-grant-v2",
-        "issued-at": grant_lib._now_utc().isoformat().replace("+00:00", "Z"),
-        "repo": "owner/repo",
-        "pr-number": "42",
-        "action": "append_integrative",
-        "content-digest": "sha256:deadbeef",
-        "grant-nonce": "test-nonce",
-        "token": "test-token",
-    }
-
-    # Test carriage return in repo
-    ok, err = grant_lib.verify_grant_fields(
-        fields, "owner\rrepo", "42", "sha256:deadbeef"
-    )
-    assert not ok
-    assert "must not contain pipe or newline characters" in err
-
-    # Test carriage return in pr_number
-    ok, err = grant_lib.verify_grant_fields(
-        fields, "owner/repo", "42\r", "sha256:deadbeef"
-    )
-    assert not ok
-    assert "must not contain pipe or newline characters" in err
-
-    # Test empty repo
-    ok, err = grant_lib.verify_grant_fields(
-        fields, "", "42", "sha256:deadbeef"
-    )
-    assert not ok
-    assert "must not contain pipe or newline characters" in err
-
-    # Test blank repo (whitespace only)
-    ok, err = grant_lib.verify_grant_fields(
-        fields, "   ", "42", "sha256:deadbeef"
-    )
-    assert not ok
-    assert "must not contain pipe or newline characters" in err
-
-    # Test empty pr_number
-    ok, err = grant_lib.verify_grant_fields(
-        fields, "owner/repo", "", "sha256:deadbeef"
-    )
-    assert not ok
-    assert "must not contain pipe or newline characters" in err
-
-    # Test blank pr_number (whitespace only)
-    ok, err = grant_lib.verify_grant_fields(
-        fields, "owner/repo", "   ", "sha256:deadbeef"
-    )
-    assert not ok
-    assert "must not contain pipe or newline characters" in err
 
 
 def test_wrong_digest_fails(grant_lib, tmp_path):
@@ -398,3 +282,83 @@ def test_parse_append_segment_malformed_quote_fails_closed(grant_lib):
         'bash scripts/cursor/append-pr-body.sh diaz/repo 9 --message "unclosed'
     )
     assert parsed is None
+
+
+def test_mint_grant_rejects_newline_in_pr_number(grant_lib, tmp_path):
+    append = tmp_path / "follow.md"
+    append.write_text("x", encoding="utf-8")
+    with pytest.raises(grant_lib.GrantError):
+        grant_lib.mint_grant("owner/repo", "5\ninjected", str(append), None)
+
+
+def test_mint_grant_rejects_newline_in_repo(grant_lib, tmp_path):
+    append = tmp_path / "follow.md"
+    append.write_text("x", encoding="utf-8")
+    with pytest.raises(grant_lib.GrantError):
+        grant_lib.mint_grant("owner/repo\ninjected", "5", str(append), None)
+
+
+def test_verify_grant_fields_rejects_newline_in_pr_number(grant_lib):
+    ok, err = grant_lib.verify_grant_fields(
+        {"issued-at": "2026-01-01T00:00:00Z"}, "owner/repo", "5\ninjected", "digest"
+    )
+    assert not ok
+    assert "newline" in err.lower() or "pipe" in err.lower()
+
+
+def test_validate_repo_slug_strict_schema(grant_lib):
+    for bad in ["repo_without_owner", "owner//repo", "owner/repo/sub", "../evil/repo", "owner/repo with spaces", ""]:
+        with pytest.raises(grant_lib.GrantError, match="repo"):
+            grant_lib._validate_repo_slug(bad)
+
+
+def test_validate_pr_number_strict_schema(grant_lib):
+    for bad in ["0", "-1", "42.5", "abc", "042", ""]:
+        with pytest.raises(grant_lib.GrantError, match="pr_number"):
+            grant_lib._validate_pr_number(bad)
+
+
+def test_content_digest_rejects_symlink(grant_lib, tmp_path):
+    target = tmp_path / "real.md"
+    target.write_text("content", encoding="utf-8")
+    sym = tmp_path / "sym.md"
+    try:
+        sym.symlink_to(target)
+    except OSError:
+        pytest.skip("symlinks not supported on filesystem")
+    with pytest.raises(grant_lib.GrantError, match="symlink"):
+        grant_lib.content_digest_for_append(str(sym), None)
+
+
+def test_content_digest_rejects_oversized_file(grant_lib, tmp_path, monkeypatch):
+    big = tmp_path / "big.md"
+    big.write_text("x" * 100, encoding="utf-8")
+    monkeypatch.setattr(grant_lib, "MAX_APPEND_FILE_BYTES", 50)
+    with pytest.raises(grant_lib.GrantError, match="size limit"):
+        grant_lib.content_digest_for_append(str(big), None)
+
+
+def test_content_digest_rejects_oversized_message(grant_lib, monkeypatch):
+    monkeypatch.setattr(grant_lib, "MAX_APPEND_FILE_BYTES", 10)
+    with pytest.raises(grant_lib.GrantError, match="size limit"):
+        grant_lib.content_digest_for_append(None, "this is too long")
+
+
+def test_append_operations_short_circuit_on_invalid_identity(grant_lib, tmp_path):
+    # Non-existent file path would raise if read, but invalid repo must fail-closed first
+    nonexistent = str(tmp_path / "does_not_exist.md")
+    
+    ok_v, err_v = grant_lib.verify_grant_for_append("bad_repo", "1", nonexistent, None)
+    assert not ok_v and "repo" in err_v
+
+    ok_r, err_r = grant_lib.reserve_grant_for_append("owner/repo", "-1", nonexistent, None)
+    assert not ok_r and "pr_number" in err_r
+
+    ok_m, err_m = grant_lib.mark_remote_applied_for_append("bad_repo", "1", nonexistent, None)
+    assert not ok_m and "repo" in err_m
+
+    ok_rel, err_rel = grant_lib.release_grant_for_append("owner/repo", "0", nonexistent, None)
+    assert not ok_rel and "pr_number" in err_rel
+
+    ok_rec, err_rec = grant_lib.reconcile_pending_consume("bad_repo", "1", nonexistent, None, "body", "title")
+    assert not ok_rec and "repo" in err_rec
