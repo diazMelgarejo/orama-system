@@ -117,3 +117,26 @@ escalation.
 - Suppress dissenting evidence
 - Treat consensus as authorization
 - Self-authorize a privileged or consequential next step
+
+---
+
+## Human Initiation & Non-Self-Authorization
+
+> Anchored in: [`HUMAN-IN-LOOP-ACCOUNTABILITY.md`](../../../docs/v2/references/HUMAN-IN-LOOP-ACCOUNTABILITY.md)
+
+Applies to **all modes** — not optional, not overridable by any agent or orchestrator.
+
+**Before any of the following may begin, a human operator must explicitly initiate and approve:**
+
+- Chain-research runs (multi-step autonomous research sequences)
+- Always-on / persistent agent activation
+- Swarm launches (any multi-agent coordinated execution)
+
+**Agents cannot self-authorize these actions.** Specifically:
+
+- No agent may call `spawn_agents()`, activate a swarm, or start a long-running research chain on its own initiative.
+- The `approval_token` must be present, issued out-of-band by a human operator, and HMAC-verified before execution begins (see `swarm_approval.py`).
+- If no valid `approval_token` is present → reject with `ValueError`, log the attempt, do not proceed.
+
+**This is the operational enforcement of the Amplifier Principle:**
+> "Accountability should not be lost in agentic work. It amplifies human intent, and should never replace or displace our human values and morality."
