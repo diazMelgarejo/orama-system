@@ -762,6 +762,23 @@ elif [ "$_OS_NAME" != "Darwin" ]; then
   _info "svc" "Non-macOS host (${_OS_NAME}) — skipping scripts/setup_macos.py"
 fi
 
+# ── Layer-3 macOS pf egress floor verification (non-blocking) ────────────────
+if [ "$_OS_NAME" = "Darwin" ]; then
+  _PF_VERIFY_SCRIPT=""
+  if [ -n "${PT_DIR:-}" ] && [ -f "${PT_DIR}/scripts/security/verify-egress-pf-rules.sh" ]; then
+    _PF_VERIFY_SCRIPT="${PT_DIR}/scripts/security/verify-egress-pf-rules.sh"
+  elif [ -f "$SCRIPT_DIR/../perplexity-api/Perpetua-Tools/scripts/security/verify-egress-pf-rules.sh" ]; then
+    _PF_VERIFY_SCRIPT="$SCRIPT_DIR/../perplexity-api/Perpetua-Tools/scripts/security/verify-egress-pf-rules.sh"
+  fi
+  if [ -n "$_PF_VERIFY_SCRIPT" ]; then
+    if ! bash "$_PF_VERIFY_SCRIPT" >/dev/null 2>&1; then
+      _warn "sec" "Layer-3 macOS pf egress rules not active (run sudo bash scripts/security/install-egress-pf-rules.sh)"
+    else
+      _info "sec" "Layer-3 macOS pf egress rules verified"
+    fi
+  fi
+fi
+
 # ── Codex PATH fix (idempotent) ───────────────────────────────────────────────
 # Ensures ~/.local/bin/codex → /opt/homebrew/bin/codex so Codex is always
 # callable regardless of which nvm version is active in this shell session.
