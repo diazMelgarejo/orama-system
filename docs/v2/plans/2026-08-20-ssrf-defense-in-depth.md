@@ -145,9 +145,15 @@ Owned by infra/platform, not application code. Nothing here is enforced by Pytho
    address lives), and metadata ranges, for any service reachable from outside the trust boundary.
    AWS security groups are
    allow-only and cannot layer a metadata-specific deny on top of a broader outbound allow — if a
-   workload needs general egress, enforce the deny with a network ACL, AWS Network Firewall,
-   host-level firewall, or K8s NetworkPolicy instead, and confirm each covers both IPv4 and IPv6
-   metadata/link-local ranges.
+   workload needs general egress, enforce the deny with a network ACL, AWS Network Firewall, or a
+   host-level firewall instead, and confirm each covers both IPv4 and IPv6 metadata/link-local
+   ranges. **K8s `NetworkPolicy` only qualifies if it is a genuine default-deny egress policy with
+   explicit allows** — `NetworkPolicy` objects are additive, so an existing allow-all (or any
+   broader) egress policy selecting the same pods still permits everything; a second, narrower
+   policy cannot subtract permissions another policy already grants. Where a cluster-wide
+   default-deny baseline isn't already in place, use a CNI-specific deny control (Calico
+   `GlobalNetworkPolicy`, Cilium `CiliumNetworkPolicy`) or a network firewall instead of relying on
+   `NetworkPolicy` alone.
 5. **Optional, not required for first PRs**: Stripe Smokescreen (or equivalent CONNECT proxy) as a
    network-layer backstop that re-validates the resolved IP at connect time, narrowing the same
    rebinding window Layer 2 closes at the app level.
