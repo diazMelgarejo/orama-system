@@ -103,13 +103,20 @@ block drop out quick to fd00:ec2::254
 block drop out quick to fe80::/10
 ```
 
-**Attach the anchor from `/etc/pf.conf` before loading rules into it.** A `pfctl -a <name> -f <file>`
-call alone does not make `pf` evaluate those rules — the anchor must first be declared as an
-attachment point in the main ruleset, or the loaded rules sit inert. Add to `/etc/pf.conf`:
+**Attach the anchor from `/etc/pf.conf` before loading rules into it, and place the anchor
+declaration before any broad `pass ... quick` rule.** A `pfctl -a <name> -f <file>` call alone
+does not make `pf` evaluate those rules — the anchor must first be declared as an attachment
+point in the main ruleset, or the loaded rules sit inert. Just as important: `pf` evaluates
+`/etc/pf.conf` top to bottom, and any earlier rule marked `quick` (for example a catch-all
+`pass out quick all` some setups add for general connectivity) terminates evaluation the moment
+it matches — the anchor is never reached, regardless of what rules are loaded into it. The anchor
+declaration must come *before* any such rule, not just exist somewhere in the file. Add to
+`/etc/pf.conf`, near the top of the outbound rule section:
 
 ```pf
 anchor "com.perpetua-tools.egress-deny"
 load anchor "com.perpetua-tools.egress-deny" from "/etc/pf.anchors/com.perpetua-tools.egress-deny"
+# Any broader pass/quick rules for general connectivity belong AFTER this line, never before it.
 ```
 
 Then reload the main ruleset once (`sudo pfctl -f /etc/pf.conf`) so the attachment point exists.
@@ -125,11 +132,17 @@ Note the anchor name is used identically in all three places above (the file pat
 `com.perpetua-tools` while `/etc/pf.conf` attaches `com.perpetua-tools.egress-deny`) means the
 rules land in an anchor `pf` never evaluates, with no error raised anywhere in the chain.
 
-Verify the anchor is actually attached and populated, not just that the installer ran:
+Verify the anchor is actually attached, correctly positioned, and populated — not just that the
+installer ran:
 
 ```bash
 sudo pfctl -s Anchors                              # confirm com.perpetua-tools.egress-deny is listed
 sudo pfctl -a com.perpetua-tools.egress-deny -sr    # confirm the 4 deny rules are the ones loaded
+sudo pfctl -sr                                      # confirm the anchor line appears BEFORE any
+                                                     # broad pass/quick rule in the root ruleset --
+                                                     # existence and content alone don't prove the
+                                                     # anchor is ever reached; a preceding quick match
+                                                     # terminates evaluation first
 ```
 
 Ship as (Perpetua-Tools, PR 1 — see § 7):
@@ -137,10 +150,13 @@ Ship as (Perpetua-Tools, PR 1 — see § 7):
 - `scripts/security/install-egress-pf-rules.sh` — installer, **idempotent**, checks for the
   existing anchor before writing (never duplicate rule lines across re-runs). Must not scope
   rules to a specific interface (see the `pf` anchor design above).
-- `scripts/security/verify-egress-pf-rules.sh` — asserts the anchor is loaded and the rule set
-  matches an expected hash (drift detection). Must verify against `pfctl -a <name> -sr`'s actual
-  output, not by grepping the anchor file for interface literals — the latter reports success even
-  when the loaded rules don't match what's actually being evaluated on the real outbound path.
+- `scripts/security/verify-egress-pf-rules.sh` — asserts the anchor is loaded, correctly
+  positioned (before any broad `pass ... quick` rule in the root ruleset, not merely present
+  somewhere in it), and the rule set matches an expected hash (drift detection). Must verify
+  against `pfctl -sr`'s actual root-ruleset output for position and `pfctl -a <name> -sr`'s
+  output for content, not by grepping the anchor file for interface literals — the latter
+  reports success even when the loaded rules don't match what's actually being evaluated, or
+  are evaluated too late to matter, on the real outbound path.
 - Wire `verify-egress-pf-rules.sh` into `start.sh` as a **non-blocking warning** — local dev
   startup should not hard-fail because `pf` wasn't configured, but the gap must be surfaced, not
   silent.
