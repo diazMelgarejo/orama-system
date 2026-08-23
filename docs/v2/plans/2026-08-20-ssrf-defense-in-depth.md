@@ -148,10 +148,16 @@ Owned by infra/platform, not application code. Nothing here is enforced by Pytho
    workload needs general egress, enforce the deny with a network ACL, AWS Network Firewall, or a
    host-level firewall instead, and confirm each covers both IPv4 and IPv6 metadata/link-local
    ranges. **K8s `NetworkPolicy` only qualifies if it is a genuine default-deny egress policy with
-   explicit allows** — `NetworkPolicy` objects are additive, so an existing allow-all (or any
-   broader) egress policy selecting the same pods still permits everything; a second, narrower
-   policy cannot subtract permissions another policy already grants. Where a cluster-wide
-   default-deny baseline isn't already in place, use a CNI-specific deny control (Calico
+   explicit allows** — `NetworkPolicy` objects are additive: the allowed traffic for a pod is the
+   _union_ of every policy selecting it, so a second, narrower policy can only ADD permitted
+   connections, never subtract ones another policy already grants. An existing **allow-all**
+   egress policy on the same pods permits everything outright, defeating the new policy entirely.
+   A merely **broader** (but not allow-all) policy is less absolute — it doesn't grant blanket
+   permission — but its own explicitly allowed connections still union in alongside the new
+   policy's, so the metadata/link-local ranges this checklist denies can still leak through
+   whatever THAT policy already permits. Either way, the fix is the same: confirm a genuine
+   cluster-wide default-deny egress baseline is in place before layering a narrower deny policy on
+   top of it. Where that baseline isn't already in place, use a CNI-specific deny control (Calico
    `GlobalNetworkPolicy`, Cilium `CiliumNetworkPolicy`) or a network firewall instead of relying on
    `NetworkPolicy` alone.
 5. **Optional, not required for first PRs**: Stripe Smokescreen (or equivalent CONNECT proxy) as a
