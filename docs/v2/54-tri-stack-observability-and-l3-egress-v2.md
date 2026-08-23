@@ -227,7 +227,7 @@ processors:
 
 Verified directly (a local draft copy was already unzipped, not a binary artifact):
 
-```
+```text
 alphaclaw-observability/
 ├── docker-compose.yaml             # Tempo, Loki, Prometheus, Grafana -- DEFERRED (§0)
 ├── otel-collector.yaml             # OTLP pipeline -- DEFERRED, reference config for §3's redaction section
