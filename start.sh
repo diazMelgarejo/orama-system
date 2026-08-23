@@ -776,7 +776,7 @@ if [ "$_OS_NAME" = "Darwin" ]; then
   if [ -n "$_PF_VERIFY_SCRIPT" ]; then
     if ! bash "$_PF_VERIFY_SCRIPT" >/dev/null 2>&1; then
       if [ -f "$_PF_INSTALL_SCRIPT" ]; then
-        _warn "sec" "Layer-3 macOS pf egress rules not active (run sudo bash ${_PF_INSTALL_SCRIPT})"
+        _warn "sec" "Layer-3 macOS pf egress rules not active (run sudo bash \"${_PF_INSTALL_SCRIPT}\")"
       else
         _warn "sec" "Layer-3 macOS pf egress rules not active; installer not found at ${_PF_INSTALL_SCRIPT}"
       fi
