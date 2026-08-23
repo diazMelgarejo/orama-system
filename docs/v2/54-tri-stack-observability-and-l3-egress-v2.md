@@ -85,28 +85,62 @@ graph TD
 `/etc/pf.anchors/com.perpetua-tools.egress-deny`:
 
 ```pf
-# Deny outbound to cloud metadata + link-local, regardless of source app.
+# Deny outbound to cloud metadata + link-local, regardless of source app or
+# egress interface (Wi-Fi, Thunderbolt/USB-C Ethernet, VPN utun*, USB tethering).
+# `on en0` alone scopes a rule to that interface only -- any route via another
+# interface silently bypasses it, and the failure is invisible unless the
+# verifier checks the actual outbound path rather than grepping for interface
+# literals. Omit an interface qualifier entirely so `quick` matches on the
+# first hit across every interface, matching this doc's own "regardless of
+# source app" claim.
+#
 # This is the enforcement floor beneath Layer 1 (endpoint_policy_core.py)
 # and Layer 2 (ssrf_pinned_adapter.py) -- if a future bug skips app-level
 # validation entirely, the OS still refuses the packet.
-block drop out quick on en0 to 169.254.0.0/16
-block drop out quick on en0 to 169.254.169.254
-block drop out quick on en0 to fd00:ec2::254
-block drop out quick on en0 to fe80::/10
+block drop out quick to 169.254.0.0/16
+block drop out quick to 169.254.169.254
+block drop out quick to fd00:ec2::254
+block drop out quick to fe80::/10
 ```
 
-Loaded via:
+**Attach the anchor from `/etc/pf.conf` before loading rules into it.** A `pfctl -a <name> -f <file>`
+call alone does not make `pf` evaluate those rules — the anchor must first be declared as an
+attachment point in the main ruleset, or the loaded rules sit inert. Add to `/etc/pf.conf`:
+
+```pf
+anchor "com.perpetua-tools.egress-deny"
+load anchor "com.perpetua-tools.egress-deny" from "/etc/pf.anchors/com.perpetua-tools.egress-deny"
+```
+
+Then reload the main ruleset once (`sudo pfctl -f /etc/pf.conf`) so the attachment point exists.
+After that, the installer can update the anchor's rules at any time without touching `/etc/pf.conf`
+again:
 
 ```bash
-sudo pfctl -a com.perpetua-tools -f /etc/pf.anchors/com.perpetua-tools.egress-deny -e
+sudo pfctl -a com.perpetua-tools.egress-deny -f /etc/pf.anchors/com.perpetua-tools.egress-deny
+```
+
+Note the anchor name is used identically in all three places above (the file path's basename, the
+`/etc/pf.conf` declaration, and the `-a` flag) — a mismatch between them (e.g. loading into
+`com.perpetua-tools` while `/etc/pf.conf` attaches `com.perpetua-tools.egress-deny`) means the
+rules land in an anchor `pf` never evaluates, with no error raised anywhere in the chain.
+
+Verify the anchor is actually attached and populated, not just that the installer ran:
+
+```bash
+sudo pfctl -s Anchors                              # confirm com.perpetua-tools.egress-deny is listed
+sudo pfctl -a com.perpetua-tools.egress-deny -sr    # confirm the 4 deny rules are the ones loaded
 ```
 
 Ship as (Perpetua-Tools, PR 1 — see § 7):
 
 - `scripts/security/install-egress-pf-rules.sh` — installer, **idempotent**, checks for the
-  existing anchor before writing (never duplicate rule lines across re-runs).
+  existing anchor before writing (never duplicate rule lines across re-runs). Must not scope
+  rules to a specific interface (see the `pf` anchor design above).
 - `scripts/security/verify-egress-pf-rules.sh` — asserts the anchor is loaded and the rule set
-  matches an expected hash (drift detection).
+  matches an expected hash (drift detection). Must verify against `pfctl -a <name> -sr`'s actual
+  output, not by grepping the anchor file for interface literals — the latter reports success even
+  when the loaded rules don't match what's actually being evaluated on the real outbound path.
 - Wire `verify-egress-pf-rules.sh` into `start.sh` as a **non-blocking warning** — local dev
   startup should not hard-fail because `pf` wasn't configured, but the gap must be surfaced, not
   silent.
@@ -353,9 +387,9 @@ and can merge independently, in order.
 
 ```text
 main
- └── PR1: 2026-08-23-l3-egress-pf-floor           (pf installer/verify + this runbook)
-      └── PR2: 2026-08-23-egress-redacted-telemetry (egress_telemetry.py, 2 call sites)
-           └── PR3: 2026-08-23-coordination-bias-detector (bias_detector.py port)
+ └── PR1: 2026-08-23-001-l3-egress-pf-floor           (pf installer/verify + this runbook)
+      └── PR2: 2026-08-23-002-egress-redacted-telemetry (egress_telemetry.py, 2 call sites)
+           └── PR3: 2026-08-23-003-coordination-bias-detector (bias_detector.py port)
 ```
 
 ### Division of labor (GossipBus + distributed job queue, redacted)

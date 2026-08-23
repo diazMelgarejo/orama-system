@@ -765,17 +765,22 @@ fi
 # ── Layer-3 macOS pf egress floor verification (non-blocking) ────────────────
 if [ "$_OS_NAME" = "Darwin" ]; then
   _PF_VERIFY_SCRIPT=""
+  _PF_INSTALL_SCRIPT=""
   if [ -n "${PT_DIR:-}" ] && [ -f "${PT_DIR}/scripts/security/verify-egress-pf-rules.sh" ]; then
     _PF_VERIFY_SCRIPT="${PT_DIR}/scripts/security/verify-egress-pf-rules.sh"
+    _PF_INSTALL_SCRIPT="${PT_DIR}/scripts/security/install-egress-pf-rules.sh"
   elif [ -f "$SCRIPT_DIR/../perplexity-api/Perpetua-Tools/scripts/security/verify-egress-pf-rules.sh" ]; then
     _PF_VERIFY_SCRIPT="$SCRIPT_DIR/../perplexity-api/Perpetua-Tools/scripts/security/verify-egress-pf-rules.sh"
+    _PF_INSTALL_SCRIPT="$SCRIPT_DIR/../perplexity-api/Perpetua-Tools/scripts/security/install-egress-pf-rules.sh"
   fi
   if [ -n "$_PF_VERIFY_SCRIPT" ]; then
     if ! bash "$_PF_VERIFY_SCRIPT" >/dev/null 2>&1; then
-      _warn "sec" "Layer-3 macOS pf egress rules not active (run sudo bash scripts/security/install-egress-pf-rules.sh)"
+      _warn "sec" "Layer-3 macOS pf egress rules not active (run sudo bash ${_PF_INSTALL_SCRIPT})"
     else
       _info "sec" "Layer-3 macOS pf egress rules verified"
     fi
+  else
+    _warn "sec" "Layer-3 macOS pf egress verifier not found (checked \$PT_DIR and sibling fallback) — cannot confirm the egress floor is active"
   fi
 fi
 
