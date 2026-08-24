@@ -2,8 +2,12 @@
 
 > **Status:** Accepted (Implemented in Perpetua-Tools 2026-08-24)  
 > **Date:** 2026-08-24  
-> **Parent Documents:** [`54-tri-stack-observability-and-l3-egress-v2.md`](54-tri-stack-observability-and-l3-egress-v2.md), [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md), [`32-agentic-security-controls.md`](32-agentic-security-controls.md)  
+> **Parent Documents:**
+> [`54-tri-stack-observability-and-l3-egress-v2.md`](54-tri-stack-observability-and-l3-egress-v2.md),
+> [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md),
+> [`32-agentic-security-controls.md`](32-agentic-security-controls.md)  
 > **Implementation Artifacts:**
+>
 > - PT-P1: Layer-3 pf ordering & telemetry cardinality (`38ad1051`)
 > - PT-P2: OTel-native domain observations & OTLP exporter (`354fdbb5`)
 > - PT-P3: Multi-agent bias sentinel & dual-write sunset (`1c56e347`)
@@ -13,15 +17,24 @@
 
 ## 1. Context & Architectural Decision
 
-Multi-agent coordination across `orama-system` and `Perpetua-Tools` requires rigorous observability without compromising on security, operational simplicity, or data privacy.
+Multi-agent coordination across `orama-system` and `Perpetua-Tools` requires rigorous
+observability without compromising on security, operational simplicity, or data privacy.
 
 ### The Governing Decision: "Core + Planes + Adapters"
-Rather than inventing an ad-hoc protocol or forcing internal runtime code to imitate external formats (OpenClaw, Periscope, OpenTelemetry), the architecture establishes:
-1. **Normative Governance (`orama-system`):** Owns this ADR, the vocabulary definitions, signal mappings, and privacy governance rules.
-2. **Domain Observation Engine (`Perpetua-Tools`):** Owns the compact, Pydantic v2 discriminated union domain models (`DomainObservation`) and runtime emitters.
+
+Rather than inventing an ad-hoc protocol or forcing internal runtime code to imitate external
+formats (OpenClaw, Periscope, OpenTelemetry), the architecture establishes:
+
+1. **Normative Governance (`orama-system`):** Owns this ADR, the vocabulary definitions,
+   signal mappings, and privacy governance rules.
+2. **Domain Observation Engine (`Perpetua-Tools`):** Owns the compact, Pydantic v2
+   discriminated union domain models (`DomainObservation`) and runtime emitters.
 3. **External Projections & Adapters:**
-   - **Local Trajectory Sink (`periscope_adapter.py`):** Projects to OpenClaw v3 JSONL for local [LatentSignal Periscope](https://github.com/latentsignal-org/periscope) visualization.
-   - **Remote Telemetry Sink (`otel_exporter.py`):** Projects to real OpenTelemetry traces, spans, and log-based EventRecords via official `opentelemetry-*` SDK packages.
+   - **Local Trajectory Sink (`periscope_adapter.py`):** Projects to OpenClaw v3 JSONL for
+     local [LatentSignal Periscope](https://github.com/latentsignal-org/periscope)
+     visualization.
+   - **Remote Telemetry Sink (`otel_exporter.py`):** Projects to real OpenTelemetry traces,
+     spans, and log-based EventRecords via official `opentelemetry-*` SDK packages.
 
 ```text
                      orama-system
@@ -44,7 +57,8 @@ Local OpenClaw JSONL                  OTLP/HTTP Protobuf
 
 ## 2. Signal Mapping: Operations vs Point-in-Time Events
 
-We adhere strictly to OpenTelemetry's canonical distinction between duration-bearing operations and point occurrences:
+We adhere strictly to OpenTelemetry's canonical distinction between duration-bearing
+operations and point occurrences:
 
 | oramasys Runtime Occurrence | OpenTelemetry Representation | Description |
 | :--- | :--- | :--- |
@@ -63,55 +77,82 @@ We adhere strictly to OpenTelemetry's canonical distinction between duration-bea
 ## 3. Identifiers & Privacy Contracts
 
 ### 3.1 Identifier Standards
-- `event_id`: Standard library `uuid.uuid4()` string (explicitly rejecting custom/hand-rolled ULID complexity).
+
+- `event_id`: Standard library `uuid.uuid4()` string (explicitly rejecting custom/hand-rolled
+  ULID complexity).
 - `trace_id`: 32-hex character W3C Trace ID managed by OpenTelemetry SDK.
 - `span_id` / `parent_span_id`: 16-hex character W3C Span ID managed by OpenTelemetry SDK.
 - `run_id`: Top-level workflow execution run ID.
 - `task_id`: Coordination board queue task identifier (`phase-name-uuid`).
 - `agent.id`: Stable logical identity (e.g. `pt-supervisor`, `alphaclaw-routing`).
-- `agent.instance_id`: Ephemeral random UUID generated at process startup (absolute ban on embedding raw hostnames).
+- `agent.instance_id`: Ephemeral random UUID generated at process startup (absolute ban on
+  embedding raw hostnames).
 
 ### 3.2 Two-Tier Privacy Trust Model
+
 1. **`internal_only` Tier:**
-   - Applicable strictly to local file exports consumed by local user tooling (e.g. `periscope_adapter.py` writing session JSONL).
+   - Applicable strictly to local file exports consumed by local user tooling (e.g.
+     `periscope_adapter.py` writing session JSONL).
    - May carry controlled rich text: `user_text`, `assistant_text`, `cwd`, `model`.
-   - **Absolute Prohibition:** An `internal_only` record can never be exported over the network by the OTLP exporter.
+   - **Absolute Prohibition:** An `internal_only` record can never be exported over the network
+     by the OTLP exporter.
 2. **`redacted` Tier:**
    - Applicable to all remote OTLP network exports.
-   - **Absolute Invariants:** Zero prompts, zero raw hostnames, zero raw IP addresses, zero credentials/tokens, and zero absolute filesystem paths.
-   - Destination hostnames and IP addresses are masked via session-salted HMAC-SHA256 correlation hashes.
+   - **Absolute Invariants:** Zero prompts, zero raw hostnames, zero raw IP addresses, zero
+     credentials/tokens, and zero absolute filesystem paths.
+   - Destination hostnames and IP addresses are masked via session-salted HMAC-SHA256
+     correlation hashes.
 
 ### 3.3 Custom Attribute Namespace
+
 All domain-specific attributes are projected strictly under the `oramasys.*` namespace:
+
 - `oramasys.destination.hash` (HMAC-SHA256 salted hash)
 - `oramasys.egress.endpoint_class` (`local` | `remote`)
 - `oramasys.egress.deny_reason` (typed `EgressDenyReason` enum)
 - `oramasys.task.phase` / `oramasys.task.priority`
 
-Standard OTel attribute `server.address` is **omitted entirely** on redacted exports to prevent emitting semantically false hash strings under standard domain fields.
+Standard OTel attribute `server.address` is **omitted entirely** on redacted exports to
+prevent emitting semantically false hash strings under standard domain fields.
 
 ---
 
 ## 4. Provenance & Audit Standards
 
-- **Observability Provenance:** Every `SourceProvenance` record requires a full 40-character Git commit SHA (`min_length=40, max_length=40`). Short 7-character SHAs are prohibited for audit provenance.
-- **Queue Source-Line Independence:** This 40-character rule applies strictly to observability provenance and does not alter the provisional 7–40 character hex definition of `expected_base_sha` in [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md).
+- **Observability Provenance:** Every `SourceProvenance` record requires a full 40-character
+  Git commit SHA (`min_length=40, max_length=40`). Short 7-character SHAs are prohibited for
+  audit provenance.
+- **Queue Source-Line Independence:** This 40-character rule applies strictly to observability
+  provenance and does not alter the provisional 7–40 character hex definition of
+  `expected_base_sha` in
+  [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md).
 
 ---
 
 ## 5. Coordination Bias Sentinel & Amplifier Principle
 
-- **Multi-Agent Evidence Invariant:** The `CoordinationBiasDetector` sliding window tracks `agent_id` alongside confidence and lexical cues.
-- **Groupthink Threshold:** Requires **at least 3 distinct logical `agent_id` instances** in the evidence window before evaluating `agreement_collapse`. Repetitive outputs from a single agent are classified as `echo_loop_detected`, never groupthink.
+- **Multi-Agent Evidence Invariant:** The `CoordinationBiasDetector` sliding window tracks
+  `agent_id` alongside confidence and lexical cues.
+- **Groupthink Threshold:** Requires **at least 3 distinct logical `agent_id` instances** in
+  the evidence window before evaluating `agreement_collapse`. Repetitive outputs from a single
+  agent are classified as `echo_loop_detected`, never groupthink.
 - **Initial Empirical Calibration:**
   - `confidence_stdev < 0.08` (high consensus).
   - `confidence_mean > 0.85` (high agreement).
-  - *Disclaimer:* Numerical thresholds are initial empirical calibration baselines subject to ongoing operational review.
-- **The Amplifier Principle:** The sentinel produces purely advisory signals (`coordination_risk: low | medium | high | insufficient_evidence`). It is strictly prohibited from gating task claims, canceling approvals, mutating agent state, or acting as an autonomous authorization authority.
+  - *Disclaimer:* Numerical thresholds are initial empirical calibration baselines subject to
+    ongoing operational review.
+- **The Amplifier Principle:** The sentinel produces purely advisory signals
+  (`coordination_risk: low | medium | high | insufficient_evidence`). It is strictly prohibited
+  from gating task claims, canceling approvals, mutating agent state, or acting as an autonomous
+  authorization authority.
 
 ---
 
 ## 6. Dual-Write Sunset Policy
 
-- **Current State:** During the rollout of Canonical Event Core v1, emitters in `Perpetua-Tools` maintain backward compatibility by writing both canonical events and legacy `heartbeat` payloads to `perpetua_core.db`.
-- **Sunset Policy:** Legacy `heartbeat` payload writes are deprecated and will be permanently retired upon **Phase 4 docs-crystallization + one release cycle**, once `periscope_adapter.py` and `CoordinationBiasDetector` consume exclusively canonical domain events.
+- **Current State:** During the rollout of Canonical Event Core v1, emitters in
+  `Perpetua-Tools` maintain backward compatibility by writing both canonical events and legacy
+  `heartbeat` payloads to `perpetua_core.db`.
+- **Sunset Policy:** Legacy `heartbeat` payload writes are deprecated and will be permanently
+  retired upon **Phase 4 docs-crystallization + one release cycle**, once `periscope_adapter.py`
+  and `CoordinationBiasDetector` consume exclusively canonical domain events.
