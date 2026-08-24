@@ -15,7 +15,7 @@
 > - PT-P2: OTel-native domain observations & OTLP exporter (`354fdbb5`)
 > - PT-P3: Multi-agent bias sentinel & dual-write sunset (`1c56e347`)
 > - PT-P4: OTLP transport boundary (`fddcd903`, `f11df573`, `a77e6de2`) and
->   race-safe local sink (`7baf5022`)
+>   POSIX descriptor-confined local sink (`7baf5022`)
 >
 > **Cross-Repo Partner:** [`Perpetua-Tools`](https://github.com/diazMelgarejo/Perpetua-Tools)  
 
@@ -132,7 +132,7 @@ The PT-owned OTLP/HTTP exporter therefore enforces all of the following:
 - `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is the complete trace URL;
   `OTEL_EXPORTER_OTLP_ENDPOINT` is a base URL and receives `/v1/traces` exactly
   once.
-- Production collection requires HTTPS. Userinfo, URL query strings,
+- Every configured OTLP endpoint requires HTTPS. Userinfo, URL query strings,
   fragments, malformed ports, localhost names, and non-global address literals
   are rejected before exporter construction.
 - Each connection resolves and validates every A/AAAA result, connects to a
@@ -153,7 +153,8 @@ The Periscope trajectory adapter is an adapter-owned `internal_only` boundary:
   directory operations and `O_NOFOLLOW`, create a `0600` temporary file, and
   atomically replace the final JSONL within the already-open session directory.
 - Platforms without POSIX directory-descriptor semantics retain same-directory
-  atomic replacement and reject observed symlink components before writing.
+  atomic replacement and reject observed symlink components before writing;
+  this is a best-effort pre-write guard, not a late-symlink race-safety claim.
 
 These controls establish confidentiality by transport separation. They do not
 claim encryption at rest; workstation storage protection and retention remain
@@ -167,7 +168,7 @@ operator responsibilities.
 | A configured collector uses pinned, proxy-free transport | PT pinned-session assertion |
 | Existing global providers are reused rather than replaced | PT provider lifecycle tests |
 | `internal_only` observations produce zero remote spans | PT in-memory exporter test |
-| A late Periscope directory symlink cannot redirect a write | PT descriptor-relative race regression |
+| On POSIX, a late Periscope directory symlink cannot redirect a write (the write fails closed if the pinned directory is removed) | PT POSIX descriptor-relative race regression |
 | Rich trajectory text remains only in local JSONL | PT local-versus-redacted projection test |
 
 ---
