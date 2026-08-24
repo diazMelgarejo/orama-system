@@ -1,8 +1,12 @@
 # 55 — oramasys Agent Observability Contract & Telemetry Governance (ADR)
 
-> **Status:** Proposed v0.1 Standard  
+> **Status:** Accepted (Implemented in Perpetua-Tools 2026-08-24)  
 > **Date:** 2026-08-24  
 > **Parent Documents:** [`54-tri-stack-observability-and-l3-egress-v2.md`](54-tri-stack-observability-and-l3-egress-v2.md), [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md), [`32-agentic-security-controls.md`](32-agentic-security-controls.md)  
+> **Implementation Artifacts:**
+> - PT-P1: Layer-3 pf ordering & telemetry cardinality (`38ad1051`)
+> - PT-P2: OTel-native domain observations & OTLP exporter (`354fdbb5`)
+> - PT-P3: Multi-agent bias sentinel & dual-write sunset (`1c56e347`)
 > **Cross-Repo Partner:** [`Perpetua-Tools`](https://github.com/diazMelgarejo/Perpetua-Tools)  
 
 ---
