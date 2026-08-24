@@ -26,6 +26,14 @@ if [ ! -x "$ROOT/scripts/hooks/pre-commit-wrong-repo-build.sh" ]; then
 fi
 bash "$ROOT/scripts/hooks/pre-commit-wrong-repo-build.sh" || exit 1
 
+# Block accidental whole-file removals before they enter history. A deliberate
+# removal needs the explicit, justified override documented by the guard.
+if [ ! -x "$ROOT/scripts/git/check_file_deletion_guard.sh" ]; then
+  echo "ERROR: file-deletion guard missing or not executable: scripts/git/check_file_deletion_guard.sh" >&2
+  exit 1
+fi
+bash "$ROOT/scripts/git/check_file_deletion_guard.sh" --staged || exit $?
+
 # OSSF-1: canonical orama SKILL.md (bin/orama-system/ only) when staged.
 if [ -f "$ROOT/scripts/hooks/check_ossf1_skill_md.py" ]; then
   if ! command -v python3 >/dev/null 2>&1; then
