@@ -4,14 +4,16 @@
 > **Date:** 2026-08-24  
 >
 > **Parent Documents:**  
-> - [`54-tri-stack-observability-and-l3-egress-v2.md`](54-tri-stack-observability-and-l3-egress-v2.md)  
-> - [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md)  
-> - [`32-agentic-security-controls.md`](32-agentic-security-controls.md)  
+>
+> - [`54-tri-stack-observability-and-l3-egress-v2.md`](54-tri-stack-observability-and-l3-egress-v2.md)
+> - [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md)
+> - [`32-agentic-security-controls.md`](32-agentic-security-controls.md)
 >
 > **Implementation Artifacts:**  
-> - PT-P1: Layer-3 pf ordering & telemetry cardinality (`38ad1051`)  
-> - PT-P2: OTel-native domain observations & OTLP exporter (`354fdbb5`)  
-> - PT-P3: Multi-agent bias sentinel & dual-write sunset (`1c56e347`)  
+>
+> - PT-P1: Layer-3 pf ordering & telemetry cardinality (`38ad1051`)
+> - PT-P2: OTel-native domain observations & OTLP exporter (`354fdbb5`)
+> - PT-P3: Multi-agent bias sentinel & dual-write sunset (`1c56e347`)
 >
 > **Cross-Repo Partner:** [`Perpetua-Tools`](https://github.com/diazMelgarejo/Perpetua-Tools)  
 
@@ -146,25 +148,14 @@ emitting semantically false hash strings under standard domain fields.
   low | medium | high | insufficient_evidence`). It is strictly prohibited from gating task
   claims, canceling approvals, mutating agent state, or acting as an autonomous authorization
   authority.
->>>>>>> 8358b8d6 (docs(observability): wrap ADR lines, add 40-hex commit SHA pattern, and pin stable agent.id cardinality)
 
 ---
 
 ## 6. Dual-Write Sunset Policy
 
-<<<<<<< HEAD
-- **Current State:** During the rollout of Canonical Event Core v1, emitters in
-  `Perpetua-Tools` maintain backward compatibility by writing both canonical events and legacy
-  `heartbeat` payloads to `perpetua_core.db`.
-- **Sunset Policy:** Legacy `heartbeat` payload writes are deprecated and will be permanently
-  retired upon **Phase 4 docs-crystallization + one release cycle**, once `periscope_adapter.py`
-  and `CoordinationBiasDetector` consume exclusively canonical domain events.
-=======
 - **Current State:** During the rollout of Canonical Event Core v1, emitters in `Perpetua-Tools`
   maintain backward compatibility by writing both canonical events and legacy `heartbeat` payloads
   to `perpetua_core.db`.
 - **Sunset Policy:** Legacy `heartbeat` payload writes are deprecated and will be permanently
   retired upon **Phase 4 docs-crystallization + one release cycle**, once `periscope_adapter.py` and
   `CoordinationBiasDetector` consume exclusively canonical domain events.
-
->>>>>>> 8358b8d6 (docs(observability): wrap ADR lines, add 40-hex commit SHA pattern, and pin stable agent.id cardinality)
