@@ -168,6 +168,9 @@ not from memory of what you resolved.
 ## Related
 
 - `scripts/git/check_no_pending_merge.sh` — implementation
+- [`file-deletion-preflight-reference-card.md`](file-deletion-preflight-reference-card.md)
+  — complementary two-boundary guard for whole-file removals; pending-operation
+  state and deletion scope are independent checks, so neither replaces the other
 - `docs/wiki/08-git-hygiene-and-branching.md` § Merge → Push → PR discipline
 - `bin/orama-system/skills/git-pending-push-guard/SKILL.md` — discovery triggers
 - [`bin/orama-system/skills/oramasys-method/references/integrative-merge.md`](../../oramasys-method/references/integrative-merge.md)

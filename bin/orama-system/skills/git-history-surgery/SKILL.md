@@ -198,12 +198,21 @@ LM Studio host, run
     with default hooks. Incident: 2026-08-08 VERBOTEN expunge — 40-branch push
     looked hung; `main` blocked until protection lifted; cherry-reanchor replaced
     conflict-prone `rebase --onto` after full scrub.
+16. About to commit or push a branch that may contain a removed tracked file,
+    or publish a tree through a Git data API?
+    **Mandatory:** [`references/file-deletion-preflight-reference-card.md`](references/file-deletion-preflight-reference-card.md)
+    — run `scripts/git/check_file_deletion_guard.sh --staged` before commit and
+    `--range <base>..HEAD` before push. For Git API tree writes, require the
+    returned tree SHA to equal local `HEAD^{tree}` before updating a ref. A
+    whole-file removal needs an explicit, justified exception; line removals do not.
 
 ## Non-Negotiables
 
 - Never paste the real forbidden token into PR titles, commit messages, issue
   comments, shell history, or docs. Use placeholders.
 - Never force-push without a recorded lease target.
+- Never commit or publish an unreviewed whole-file deletion; run the deletion
+  preflight and record an explicit justification for any deliberate removal.
 - Never judge rewritten branches by `merge-base`, `rev-list --count`, or GitHub
   ahead/behind alone.
 - Never interpret a branch suddenly showing hundreds of commits after a scrub as
