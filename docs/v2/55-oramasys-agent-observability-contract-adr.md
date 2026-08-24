@@ -15,7 +15,7 @@
 > - PT-P2: OTel-native domain observations & OTLP exporter (`354fdbb5`)
 > - PT-P3: Multi-agent bias sentinel & dual-write sunset (`1c56e347`)
 > - PT-P4: OTLP transport boundary (`fddcd903`, `f11df573`, `a77e6de2`,
->   `446268c4`) and POSIX descriptor-confined local sink (`7baf5022`)
+>   `446268c4`, `211c1b37`) and POSIX descriptor-confined local sink (`7baf5022`)
 >
 > **Cross-Repo Partner:** [`Perpetua-Tools`](https://github.com/diazMelgarejo/Perpetua-Tools)  
 
