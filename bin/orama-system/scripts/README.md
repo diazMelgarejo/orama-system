@@ -20,6 +20,7 @@ python verify_before_done.py --task "API update" --dir ../my-project
 ```
 
 **What it checks:**
+
 1. Test suite (pytest / npm test)
 2. Code linting (flake8, pylint, ESLint)
 3. Debug artifact scan (print statements, hardcoded secrets, HACK comments)
@@ -51,6 +52,7 @@ PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python capture_lesson.py --stats
 ```
 
 **Lesson format captures:**
+
 - What went wrong
 - Root cause
 - Prevention rule

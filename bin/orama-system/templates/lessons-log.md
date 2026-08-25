@@ -1,4 +1,5 @@
 # Lessons Learned — Self-Improvement Log
+
 **The ὅραμα System — Directive #3: Self-Improvement Loop**
 **Project**: [Project Name]
 **Started**: YYYY-MM-DD
@@ -14,21 +15,25 @@
 ## Usage
 
 ### Adding a Lesson (Interactive)
+
 ```bash
 PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py
 ```
 
 ### Adding a Lesson (Quick)
+
 ```bash
 PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --quick --pattern "Premature Optimization"
 ```
 
 ### Reviewing All Lessons
+
 ```bash
 PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --review
 ```
 
 ### Viewing Statistics
+
 ```bash
 PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --stats
 ```
@@ -84,6 +89,7 @@ Each entry follows this structure:
 ## Session Review Checklist
 
 Before starting work each session, scan for:
+
 - [ ] Any patterns relevant to today's task
 - [ ] Mistakes I've made before in this domain
 - [ ] Rules that apply to the current task type

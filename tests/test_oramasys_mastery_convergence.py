@@ -65,8 +65,9 @@ def test_m3_has_one_canonical_reference_and_human_authority_boundary() -> None:
 def test_m5_points_to_canonical_lessons_architecture() -> None:
     mother = _read(MOTHER)
     assert LESSONS.exists()
-    assert "docs/LESSONS.md" in mother
     assert "scripts/capture_lesson.py" in mother
+    assert "PERPETUA_TOOLS_ROOT" in mother
+    assert "templates/lessons-log.md" in mother
 
 
 def test_m6_has_one_canonical_runtime_reference_and_pointer() -> None:
