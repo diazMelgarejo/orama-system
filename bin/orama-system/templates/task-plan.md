@@ -81,7 +81,7 @@ Mark items above `[x]` as you complete them.
 
 **Progress log** (append entries as you work):
 
-```
+```text
 YYYY-MM-DD HH:MM — [What was completed / decision made]
 ```
 
@@ -97,9 +97,9 @@ YYYY-MM-DD HH:MM — [What was completed / decision made]
 
 ### Key Decisions
 
-| Decision | Chosen | Alternatives Considered | Reason |
-|----------|--------|------------------------|--------|
-| [e.g., DB] | PostgreSQL | MongoDB, SQLite | ACID guarantees needed |
+| Decision           | Chosen     | Alternatives Considered | Reason                  |
+| ------------------ | ---------- | ----------------------- | ----------------------- |
+| [e.g., DB]         | PostgreSQL | MongoDB, SQLite         | ACID guarantees needed  |
 
 ### Test Results
 
@@ -129,10 +129,12 @@ Lessons captured this task:
 
 ## Risks & Mitigations
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|-----------|
-| [Risk 1] | Low/Med/High | Low/Med/High | [Mitigation strategy] |
+| Risk     | Likelihood   | Impact       | Mitigation              |
+| -------- | ------------ | ------------ | ----------------------- |
+| [Risk 1] | Low/Med/High | Low/Med/High | [Mitigation strategy]   |
 
 ---
 
-*Template: orama-system v1.1.0.0 | Directive #1: Plan Node Default*
+## Template footer
+
+Template: orama-system v1.1.0.0 | Directive #1: Plan Node Default
