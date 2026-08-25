@@ -34,7 +34,7 @@ cp -R bin/orama-system ~/.claude/skills/orama-system
 
 ## What Gets Installed
 
-```
+```text
 ~/.claude/skills/orama-system/
 ├── SKILL.md                              <- Master skill (5-stage + router + 6 directives)
 ├── afrp/
