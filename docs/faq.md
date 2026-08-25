@@ -32,7 +32,7 @@ A: No. The default in-memory backend works for development and single-machine se
 A: Single-agent for most tasks — it's faster and simpler. Multi-agent for large parallel tasks (refactoring many files, researching multiple approaches simultaneously, or when context window is a bottleneck).
 
 **Q: How do I add my own lessons?**
-A: `python scripts/capture_lesson.py` — follow the prompts. Or open `tasks/lessons.md` directly and add an entry following the template in `templates/lessons-log.md`.
+A: Run `capture_lesson.py` with `PERPETUA_TOOLS_ROOT` configured; v1 delegates to PT's tracked `.agent` memory. `--backend legacy` is an explicit standalone path that uses `~/lessons.md` and migrates a pre-existing `tasks/lessons.md` there.
 
 **Q: Can I customize the skill for my project?**
 A: Yes! Add a `## Project-Specific Rules` section to `bin/orama-system/SKILL.md`. Specify your stack, patterns, and constraints. The skill architecture standard supports this in its "Degrees of Freedom" section.
@@ -45,4 +45,4 @@ A: Yes! Add a `## Project-Specific Rules` section to `bin/orama-system/SKILL.md`
 A: Yes. The methodology draws from the "Amplifier Principle" (AI amplifies intent, not replaces judgment), DORA research on delivery performance, and the architectural optimization standard for SKILL.md files. See `docs/api-reference.md` for citations.
 
 **Q: What does "self-improving" actually mean?**
-A: After each mistake or correction, you run `capture_lesson.py`. Over time, `tasks/lessons.md` becomes a repository of prevention rules. At session start, reviewing it primes the agent (and you) to avoid known failure patterns. The mistake rate measurably declines.
+A: After each mistake or correction, capture a structured lesson through the configured backend. In v1, PT `.agent` preserves and renders development lessons; its recall and graduation workflow turns verified patterns into reusable prevention rules.

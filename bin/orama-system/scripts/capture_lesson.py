@@ -28,6 +28,9 @@ from collections import Counter
 from typing import Optional
 
 from lesson_controller import (
+    DeferredAnamnesisBackend,
+    LegacyMarkdownBackend,
+    LessonBackend,
     LessonBackendUnavailable,
     LessonPayload,
     PTAgentBackend,
@@ -63,17 +66,28 @@ CATEGORIES = [
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def find_lessons_file(start_dir: Path) -> Path:
-    """Walk up the directory tree to find tasks/lessons.md."""
+def find_lessons_file(start_dir: Path, *, home_dir: Path | None = None) -> Path:
+    """Migrate a legacy task log to the explicit home-level legacy location.
+
+    The absence of an old task log is not a request to create one.  The caller
+    invokes this only for the explicit legacy backend, so normal PT and runtime
+    selection remains read-only with respect to historical task directories.
+    """
+    destination = (home_dir or Path.home()) / "lessons.md"
     current = start_dir
     for _ in range(5):
         candidate = current / "tasks" / "lessons.md"
         if candidate.exists():
-            return candidate
+            if destination.exists():
+                raise LessonBackendUnavailable(
+                    "ORAMASYS_LESSON_E_LEGACY_MIGRATION_CONFLICT",
+                    "Cannot migrate legacy tasks/lessons.md because the home-level "
+                    f"destination already exists: {destination}",
+                )
+            candidate.replace(destination)
+            return destination
         current = current.parent
-    # Do not create a legacy file merely by selecting the default PT backend.
-    # LegacyMarkdownBackend creates this path only after an explicit capture.
-    return start_dir / "tasks" / "lessons.md"
+    return destination
 
 
 def prompt(label: str, hint: str = "", required: bool = True) -> str:
@@ -129,7 +143,9 @@ def get_lesson_stats(lessons_path: Path) -> dict:
 
 # ─── Main logic ──────────────────────────────────────────────────────────────
 
-def capture_interactive(pattern: Optional[str], backend, quick: bool = False) -> None:
+def capture_interactive(
+    pattern: Optional[str], backend: LessonBackend, quick: bool = False
+) -> None:
     """Walk the user through creating a lesson entry interactively."""
     print(f"\n{BOLD}{'='*60}{RESET}")
     print(f"{BOLD}  OramaSys Self-Improvement Loop — Capture Lesson{RESET}")
@@ -265,7 +281,7 @@ def show_pt_stats(pt_root: Path) -> None:
 
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
         description="OramaSys lesson capture — stable frontend, configurable backend"
     )
@@ -283,26 +299,33 @@ def main():
     args = parser.parse_args()
 
     project_dir  = Path(args.dir).resolve()
-    lessons_path = find_lessons_file(project_dir)
     pt_root = Path(args.pt_root).resolve() if args.pt_root else None
     try:
         backend = resolve_backend(
             mode=args.mode,
             backend_name=args.backend,
             pt_root=pt_root,
-            legacy_path=lessons_path,
+            legacy_path=Path.home() / "lessons.md",
         )
+        lessons_path = Path.home() / "lessons.md"
+        if isinstance(backend, LegacyMarkdownBackend):
+            lessons_path = find_lessons_file(project_dir)
+            backend = LegacyMarkdownBackend(lessons_path)
         if args.review:
             if isinstance(backend, PTAgentBackend):
                 review_pt_memory(backend.root)
-            else:
+            elif isinstance(backend, LegacyMarkdownBackend):
                 review_lessons(lessons_path)
+            else:
+                raise DeferredAnamnesisBackend.unavailable()
             return
         if args.stats:
             if isinstance(backend, PTAgentBackend):
                 show_pt_stats(backend.root)
-            else:
+            elif isinstance(backend, LegacyMarkdownBackend):
                 show_stats(lessons_path)
+            else:
+                raise DeferredAnamnesisBackend.unavailable()
             return
         capture_interactive(pattern=args.pattern, backend=backend, quick=args.quick)
     except LessonBackendUnavailable as exc:

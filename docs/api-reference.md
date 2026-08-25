@@ -37,7 +37,7 @@ Options:
   --dir PATH        Project directory (default: ".")
   --interactive     Guided prompt mode
 
-Creates: tasks/todo.md, tasks/lessons.md (if not exists)
+Creates: tasks/todo.md. It does not create a legacy lesson log.
 ```
 
 ## MCP Tools (Multi-Agent)

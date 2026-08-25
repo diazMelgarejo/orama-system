@@ -7,6 +7,8 @@ from pathlib import Path
 
 import pytest
 
+pytestmark = pytest.mark.integration
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "bin" / "orama-system" / "scripts"
 if str(SCRIPTS) not in sys.path:
@@ -77,6 +79,54 @@ def test_legacy_backend_remains_an_explicit_compatibility_escape_hatch(tmp_path:
     assert "Verification Skipped" in content
 
 
+def test_legacy_task_log_migrates_to_home_without_creating_new_task_log(
+    tmp_path: Path,
+) -> None:
+    import capture_lesson
+
+    project = tmp_path / "project"
+    source = project / "tasks" / "lessons.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("legacy lesson\n", encoding="utf-8")
+    home = tmp_path / "home"
+    home.mkdir()
+
+    destination = capture_lesson.find_lessons_file(project, home_dir=home)
+
+    assert destination == home / "lessons.md"
+    assert destination.read_text(encoding="utf-8") == "legacy lesson\n"
+    assert not source.exists()
+
+
+def test_legacy_default_is_home_level_and_does_not_create_missing_task_log(
+    tmp_path: Path,
+) -> None:
+    import capture_lesson
+
+    home = tmp_path / "home"
+    home.mkdir()
+
+    destination = capture_lesson.find_lessons_file(tmp_path / "project", home_dir=home)
+
+    assert destination == home / "lessons.md"
+    assert not destination.exists()
+
+
+def test_task_plan_does_not_create_a_legacy_lesson_log(tmp_path: Path) -> None:
+    project = tmp_path / "project"
+    task_plan = ROOT / "bin" / "orama-system" / "scripts" / "create_task_plan.sh"
+
+    subprocess.run(
+        ["bash", str(task_plan), "Controller migration", "--dir", str(project)],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert (project / "tasks" / "todo.md").exists()
+    assert not (project / "tasks" / "lessons.md").exists()
+
+
 def test_auto_development_requires_pt_instead_of_silently_fragmenting_memory() -> None:
     import lesson_controller as controller
 
@@ -106,3 +156,15 @@ def test_quick_capture_collects_only_a_rule_and_delegates(monkeypatch) -> None:
     assert len(captured) == 1
     assert isinstance(captured[0], controller.LessonPayload)
     assert captured[0].prevention_rule.startswith("Always inspect")
+
+
+@pytest.mark.parametrize("action", ["--review", "--stats"])
+def test_runtime_review_and_stats_fail_closed(action: str, monkeypatch) -> None:
+    import capture_lesson
+
+    monkeypatch.setattr(capture_lesson.sys, "argv", ["capture_lesson.py", "--mode", "runtime", action])
+
+    with pytest.raises(SystemExit) as excinfo:
+        capture_lesson.main()
+
+    assert excinfo.value.code == 3

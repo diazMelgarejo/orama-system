@@ -138,12 +138,16 @@ class LegacyMarkdownBackend:
 class DeferredAnamnesisBackend:
     """Explicit v2 boundary: no runtime store exists until provisioned."""
 
-    def capture(self, _payload: LessonPayload) -> None:
-        raise LessonBackendUnavailable(
+    @staticmethod
+    def unavailable() -> LessonBackendUnavailable:
+        return LessonBackendUnavailable(
             "ORAMASYS_LESSON_E_ANAMNESIS_UNAVAILABLE",
             "Runtime lesson storage requires provisioned oramasys/anamnesis; "
             "configure it during v2 provisioning before capture.",
         )
+
+    def capture(self, _payload: LessonPayload) -> None:
+        raise self.unavailable()
 
 
 def resolve_backend(
@@ -167,7 +171,7 @@ def resolve_backend(
             )
         return PTAgentBackend(pt_root)
     if backend_name == "legacy":
-        return LegacyMarkdownBackend(legacy_path or Path("tasks") / "lessons.md")
+        return LegacyMarkdownBackend(legacy_path or Path.home() / "lessons.md")
     raise LessonBackendUnavailable(
         "ORAMASYS_LESSON_E_BACKEND_INVALID", f"Unknown lesson backend: {backend_name}"
     )
