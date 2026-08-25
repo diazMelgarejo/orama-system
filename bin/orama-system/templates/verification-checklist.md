@@ -1,5 +1,6 @@
 # Pre-Completion Verification Checklist
-**The ὅραμα System — Directive #4: Verification Before Done**
+
+## The ὅραμα System — Directive #4: Verification Before Done
 
 > Run this checklist before marking ANY task complete.
 > Or use: `python scripts/verify_before_done.py --task "Task Name"`
@@ -7,6 +8,7 @@
 ---
 
 ## Task: ___________________________
+
 **Date**: ___________  **Branch**: ___________
 
 ---

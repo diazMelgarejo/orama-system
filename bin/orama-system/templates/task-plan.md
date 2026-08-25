@@ -81,7 +81,7 @@ Mark items above `[x]` as you complete them.
 
 **Progress log** (append entries as you work):
 
-```
+```text
 YYYY-MM-DD HH:MM — [What was completed / decision made]
 ```
 
@@ -103,7 +103,7 @@ YYYY-MM-DD HH:MM — [What was completed / decision made]
 
 ### Test Results
 
-```
+```text
 Unit tests:        ___ passing, ___ failing
 Integration tests: ___ passing, ___ failing
 Coverage:          ___%
@@ -135,4 +135,4 @@ Lessons captured this task:
 
 ---
 
-*Template: orama-system v1.1.0.0 | Directive #1: Plan Node Default*
+Template: orama-system v1.1.0.0 | Directive #1: Plan Node Default
