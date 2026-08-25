@@ -1,9 +1,15 @@
 # 41 — Agentic-Stack, Gstack, Gbrain, RAG, and Memory (Union-Blend Doctrine)
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
+> `.gitignore`d, never committed with secrets, personal paths, or SecOps material.
+> Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Active planning doc (v1 operational path in Perpetua-Tools today)  
 > **Date:** 2026-06-26  
-> **Cross-refs:** [`19-gstack-optional-integration.md`](19-gstack-optional-integration.md), [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md), [`11-idempotency-and-guard-patterns.md`](11-idempotency-and-guard-patterns.md), orama `scripts/install-openclaw-skills.sh`, PT `scripts/git/agentic-stack-vendor.md`
+> **Cross-refs:** [`19-gstack-optional-integration.md`](19-gstack-optional-integration.md),
+> [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md),
+> [`11-idempotency-and-guard-patterns.md`](11-idempotency-and-guard-patterns.md), orama
+> `scripts/install-openclaw-skills.sh`, PT `scripts/git/agentic-stack-vendor.md`
 > **Portable-memory invariant:** [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md)
 
 ---
@@ -28,7 +34,7 @@ project-owned.
 
 ## 2. Reference pattern — openclaw-skills (orama)
 
-```
+```text
 bin/orama-system/skills/openclaw-skills/
 ├── cc-openclaw/          ← git submodule (upstream Nine Skills)
 ├── skills/               ← our extensions (versioned in orama-system)
@@ -45,7 +51,7 @@ bin/orama-system/skills/openclaw-skills/
 Agentic-stack follows the same split:
 
 | Layer | Path | Git treatment |
-|-------|------|---------------|
+| ------- | ------ | --------------- |
 | Upstream skeleton + adapters | `vendor/agentic-stack/` | Submodule gitlink only |
 | Live operational brain | `Perpetua-Tools/.agent/` | Tracked in PT; union-merge at upgrade time |
 | Harness thin wrappers | `.claude/skills/`, `.cursor/`, Hermes commands, etc. | Pointer-only; canonical bodies in `.agent/` or orama |
@@ -76,10 +82,10 @@ export AGENTIC_STACK_ROOT="$PT_ROOT/vendor/agentic-stack"
 python3 -m harness_manager.cli upgrade --dry-run "$PT_ROOT"
 ```
 
-**Operator checklist from dry-run output:**
+### Operator checklist from dry-run output
 
 | Category | Action |
-|----------|--------|
+| ---------- | -------- |
 | New skeleton tools under `.agent/tools/` | Union-merge: keep PT files; manually port useful upstream fixes |
 | Changed harness hooks | Diff per adapter; prefer PT hooks if gstack/gbrain wired |
 | New skills in upstream template | Add to `.agent/skills/` only if triggers don't collide |
@@ -93,8 +99,10 @@ python3 -m harness_manager.cli upgrade --yes "$PT_ROOT"   # when ready
 # Then manually reconcile any flagged paths — never blind --yes
 ```
 
-Bump `vendor/agentic-stack` gitlink separately via `scripts/git/agentic-stack-submodule-sync.sh upgrade`
-after reading [CHANGELOG.md](https://github.com/codejunkie99/agentic-stack/blob/master/CHANGELOG.md).
+Bump `vendor/agentic-stack` gitlink separately via `scripts/git/agentic-stack-submodule-sync.sh
+upgrade`
+after reading
+[CHANGELOG.md](https://github.com/codejunkie99/agentic-stack/blob/master/CHANGELOG.md).
 
 ---
 
@@ -105,7 +113,7 @@ Adapters ship inside `vendor/agentic-stack/adapters/`. PT installs thin surfaces
 ### Windows
 
 | Host | agentic-stack adapter | PT / orama loading surface |
-|------|----------------------|----------------------------|
+| ------ | ---------------------- | ---------------------------- |
 | Antigravity CLI | `antigravity` | `ANTIGRAVITY.md` → `.agent/AGENTS.md` |
 | Antigravity IDE | `antigravity` | same brain mount |
 | Hermes | `hermes` | thin `/pt-orama-*` wrappers → canonical orama skills |
@@ -116,7 +124,7 @@ Adapters ship inside `vendor/agentic-stack/adapters/`. PT installs thin surfaces
 ### Linux + macOS
 
 | Host | agentic-stack adapter | PT / orama loading surface |
-|------|----------------------|----------------------------|
+| ------ | ---------------------- | ---------------------------- |
 | OpenClaw | `openclaw` | orama `openclaw-skills` + AlphaClaw lifecycle |
 | Claude CLI (`claude`) | `claude-code` | `.claude/skills/` thin wrappers |
 | Claude Desktop | `claude-code` | same hook wiring |
@@ -124,7 +132,8 @@ Adapters ship inside `vendor/agentic-stack/adapters/`. PT installs thin surfaces
 
 **Invariant:** every harness reads the **same** `.agent/memory/` and `.agent/skills/`.
 Adapter-specific files are pointers and hook registration only — zero fragmentation of
-lesson bodies (see [`27-git-governance-zero-fragmentation.md`](27-git-governance-zero-fragmentation.md)).
+lesson bodies (see
+[`27-git-governance-zero-fragmentation.md`](27-git-governance-zero-fragmentation.md)).
 
 ---
 
@@ -134,15 +143,15 @@ agentic-stack v0.18+ adds optional integration with
 [codejunkie99/brain](https://github.com/codejunkie99/brain) via `.agent/tools/brain_bridge.py`
 and `agentic-stack brain *` CLI verbs.
 
-**PT policy: block Brain adoption until dual-backend bridge ships.**
+### PT policy: block Brain adoption until dual-backend bridge ships
 
 | Memory layer | Canonical PT/orama implementation | Upstream Brain |
-|--------------|-----------------------------------|----------------|
+| -------------- | ----------------------------------- | ---------------- |
 | Project episodic + semantic | `.agent/memory/` (learn.py, recall.py, auto_dream) | Do not enable |
 | Long-horizon semantic RAG | **Gbrain** (gstack) via orama `gstack` skill | Deferred |
 | Graph audit / routing memory | `GossipBus` + future LanceDB (see doc 20) | N/A |
 
-**Upgrade blocklist (review on every dry-run):**
+### Upgrade blocklist (review on every dry-run)
 
 - Do **not** add `.agent/tools/brain_bridge.py` from upstream without PT fork review
 - Do **not** wire `agentic-stack brain install` in CI or `start.sh`
@@ -152,7 +161,7 @@ and `agentic-stack brain *` CLI verbs.
 
 Extend PT-owned `.agent/tools/brain_bridge.py` (not vendored copy) to multiplex:
 
-```
+```text
 .agent/tools/brain_bridge.py
 ├── backend=gbrain   → gstack gbrain CLI / MCP (canonical today)
 └── backend=brain    → codejunkie99/brain CLI (optional, air-gapped installs)
@@ -174,7 +183,12 @@ Implementation lives in a PT wrapper script or harness_manager plugin patch appl
 
 ## 6. Gstack + Gbrain + RAG + `.agent/` memory — how they fit
 
-```
+> **v1/v2 migration addendum (2026-08-25):** PT `.agent` remains the canonical
+> development-memory authority in v1. Orama's `capture_lesson.py` is now a stable
+> controller to PT `learn.py`; private runtime persistence is deliberately deferred to
+> tentative Anamnesis. See [`56-anamnesis-runtime-memory-migration.md`](56-anamnesis-runtime-memory-migration.md).
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │  Harness (Cursor, Hermes, OpenClaw, Codex, Claude, Antigravity)  │
 └────────────────────────────┬────────────────────────────────────┘
@@ -200,7 +214,7 @@ Implementation lives in a PT wrapper script or harness_manager plugin patch appl
 ```
 
 | Concern | Owner | Retrieval trigger |
-|---------|-------|-------------------|
+| --------- | ------- | ------------------- |
 | "What did we decide last session?" | `.agent/memory/` | `recall.py` at task start |
 | "What does the indexed codebase know?" | Gbrain | gstack skills, supervisor resolver |
 | "What happened in this job's audit trail?" | GossipBus / future RAG | graph MemoryNode (v2) |
@@ -216,7 +230,7 @@ gbrain → CRG → Brave → Perplexity → Grok. `.agent/recall.py` runs before
 When `upgrade --dry-run` shows a changed file that also exists in PT `.agent/`:
 
 | File class | Merge strategy |
-|------------|----------------|
+| ------------ | ---------------- |
 | `memory/episodic/*`, `semantic/lessons.jsonl` | **Keep PT** — append-only union; never replace |
 | `memory/semantic/LESSONS.md` | **Regenerate** from `lessons.jsonl` via `render_lessons.py` |
 | `tools/*.py` | **Keep PT** if customized; port upstream bugfixes manually |
@@ -260,7 +274,7 @@ submodule detection (mirror openclaw-skills block).
 ## 10. Open questions
 
 | # | Question | Default bias |
-|---|----------|--------------|
+| --- | ---------- | -------------- |
 | OQ41.1 | Bump gitlink to v0.18+ for `upgrade` verb now or after gbrain shim? | Bump for `upgrade --dry-run`; keep Brain blocked |
 | OQ41.2 | Should `start.sh` call `install-agentic-stack.sh` automatically? | Yes, after PT_DIR resolved (idempotent) |
 | OQ41.3 | Single `agentic-stack gbrain` entry point vs separate `gbrain` CLI? | Mirror `brain *` surface for adapter parity |

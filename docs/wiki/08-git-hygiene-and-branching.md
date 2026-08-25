@@ -276,6 +276,24 @@ warn about, since there's nothing staged to reject.
    conflicts is the same signal as step 2's `MERGE_HEAD` — believe the git
    state over your own summary of what you did.
 
+4. **Prove file-removal scope at both boundaries.** A `D`-status path deserves
+   an explicit review even when the rest of the diff is expected. Before
+   commit, inspect the index; before push, inspect the actual outgoing range:
+
+   ```bash
+   git diff --cached --name-status
+   bash scripts/git/check_file_deletion_guard.sh --staged
+   git diff --name-status origin/main..HEAD
+   bash scripts/git/check_file_deletion_guard.sh --range origin/main..HEAD
+   ```
+
+   The hooks run these checks automatically, but they are a backstop. If a
+   removal is intentional, use the documented two-variable justification for
+   that command—never a routine `--no-verify` bypass. For Git data/tree API
+   publication, require the remote constructed tree SHA to match local
+   `HEAD^{tree}` before updating a branch ref. Full protocol:
+   [`file-deletion-preflight-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/file-deletion-preflight-reference-card.md).
+
 ---
 
 ## Stash-First Discipline

@@ -14,6 +14,8 @@
 > - PT-P1: Layer-3 pf ordering & telemetry cardinality (`38ad1051`)
 > - PT-P2: OTel-native domain observations & OTLP exporter (`354fdbb5`)
 > - PT-P3: Multi-agent bias sentinel & dual-write sunset (`1c56e347`)
+> - PT-P4: OTLP transport boundary (`fddcd903`, `f11df573`, `a77e6de2`,
+>   `446268c4`, `211c1b37`) and POSIX descriptor-confined local sink (`7baf5022`)
 >
 > **Cross-Repo Partner:** [`Perpetua-Tools`](https://github.com/diazMelgarejo/Perpetua-Tools)  
 
@@ -116,6 +118,58 @@ All domain-specific attributes are projected strictly under the `oramasys.*` nam
 
 Standard OTel attribute `server.address` is **omitted entirely** on redacted exports to prevent
 emitting semantically false hash strings under standard domain fields.
+
+### 3.4 Transport Enforcement and Provider Lifecycle
+
+Privacy classification and destination authorization are separate gates. A
+`redacted` observation is eligible for remote projection, but it is not itself
+permission to contact an arbitrary collector.
+
+The PT-owned OTLP/HTTP exporter therefore enforces all of the following:
+
+- No configured endpoint means no network exporter and no implicit localhost
+  fallback.
+- `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` is the complete trace URL;
+  `OTEL_EXPORTER_OTLP_ENDPOINT` is a base URL and receives `/v1/traces` exactly
+  once.
+- Every configured OTLP endpoint requires HTTPS. Userinfo, URL query strings,
+  fragments, malformed ports, localhost names, and non-global address literals
+  are rejected before exporter construction.
+- Each connection resolves and validates every A/AAAA result, connects to a
+  validated pinned address, preserves the original hostname for TLS SNI and
+  certificate verification, refuses redirects, and does not inherit process
+  proxy settings.
+- PT installs or reuses one process-global `TracerProvider`. It never mutates
+  OpenTelemetry private globals and never attempts to replace a provider that
+  another runtime has already installed. Tests use explicit provider and span
+  processor injection instead.
+
+The Periscope trajectory adapter is an adapter-owned `internal_only` boundary:
+
+- It has no OTel/OTLP import or network-forwarding path.
+- Agent and session components use a narrow allowlist; URL and UNC roots are
+  rejected.
+- POSIX writes traverse the configured state root with descriptor-relative
+  directory operations and `O_NOFOLLOW`, create a `0600` temporary file, and
+  atomically replace the final JSONL within the already-open session directory.
+- Platforms without POSIX directory-descriptor semantics retain same-directory
+  atomic replacement and reject observed symlink components before writing;
+  this is a best-effort pre-write guard, not a late-symlink race-safety claim.
+
+These controls establish confidentiality by transport separation. They do not
+claim encryption at rest; workstation storage protection and retention remain
+operator responsibilities.
+
+### 3.5 Closure Acceptance Matrix
+
+| Guarantee | Executable evidence |
+| :--- | :--- |
+| Unsafe or metadata OTLP destinations create no exporter | PT `tests/test_otel_exporter.py` endpoint-policy cases |
+| A configured collector uses pinned, proxy-free transport | PT pinned-session assertion |
+| Existing global providers are reused rather than replaced | PT provider lifecycle tests |
+| `internal_only` observations produce zero remote spans | PT in-memory exporter test |
+| On POSIX, a late Periscope directory symlink cannot redirect a write (the write fails closed if the pinned directory is removed) | PT POSIX descriptor-relative race regression |
+| Rich trajectory text remains only in local JSONL | PT local-versus-redacted projection test |
 
 ---
 

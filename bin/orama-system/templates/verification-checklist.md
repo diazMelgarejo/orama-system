@@ -1,5 +1,6 @@
 # Pre-Completion Verification Checklist
-**The ὅραμα System — Directive #4: Verification Before Done**
+
+## The ὅραμα System — Directive #4: Verification Before Done
 
 > Run this checklist before marking ANY task complete.
 > Or use: `python scripts/verify_before_done.py --task "Task Name"`
@@ -7,6 +8,7 @@
 ---
 
 ## Task: ___________________________
+
 **Date**: ___________  **Branch**: ___________
 
 ---
@@ -109,10 +111,10 @@ Answer honestly. If "no" or "unsure" — keep refining.
 - [ ] `python scripts/verify_before_done.py --task "[Task Name]"` ran and PASSED
 - [ ] All checkboxes above checked
 - [ ] Task marked complete in `tasks/todo.md`
-- [ ] Lessons captured in `tasks/lessons.md` (if corrections were needed)
+- [ ] Lessons captured through PT `.agent` (if corrections were needed)
 
 **Verified by**: ___________  **Date**: ___________
 
 ---
 
-*Template: orama-system v1.1.0.0 | Never trust visual alone. Always verify programmatically.*
+Template: orama-system v1.1.0.0 | Never trust visual alone. Always verify programmatically.

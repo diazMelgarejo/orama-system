@@ -34,7 +34,7 @@ cp -R bin/orama-system ~/.claude/skills/orama-system
 
 ## What Gets Installed
 
-```
+```text
 ~/.claude/skills/orama-system/
 ├── SKILL.md                              <- Master skill (5-stage + router + 6 directives)
 ├── afrp/
@@ -82,7 +82,7 @@ from `references/`, `afrp/`, and `cidf/` — keeping your context window clean.
 ### The 3 Execution Modes
 
 | Mode | When | What Happens |
-|------|------|-------------|
+| ------ | ------ | ------------- |
 | **Mode 1** Inline | 1-2 steps, single file | Direct execution, no subagents |
 | **Mode 2** + Subagents | 3-7 steps, 1-2 systems | Full 5-stage process with delegation |
 | **Mode 3** Network | 8+ steps, 3+ systems | 7-agent parallel execution network |
@@ -113,8 +113,8 @@ bash ~/.claude/skills/orama-system/scripts/create_task_plan.sh "Build auth syste
 # Verify before marking done (Directive #4)
 python3 ~/.claude/skills/orama-system/scripts/verify_before_done.py --task "Auth system" --dir .
 
-# Capture a lesson (Directive #3)
-python3 ~/.claude/skills/orama-system/scripts/capture_lesson.py
+# Capture a development lesson (Directive #3). PT `.agent` is the v1 authority.
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python3 ~/.claude/skills/orama-system/scripts/capture_lesson.py --quick
 ```
 
 ## Uninstall

@@ -1,4 +1,5 @@
 # Lessons Learned — Self-Improvement Log
+
 **The ὅραμα System — Directive #3: Self-Improvement Loop**
 **Project**: [Project Name]
 **Started**: YYYY-MM-DD
@@ -6,30 +7,35 @@
 > This file is the institutional memory of this project.
 > Every lesson written here prevents the same mistake from recurring.
 > **Review this file at the start of each session.**
-> Add entries with: `python scripts/capture_lesson.py`
+> In v1, capture through PT `.agent`: `PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py`.
+> This template is retained only for explicit `--backend legacy` installations.
 
 ---
 
 ## Usage
 
 ### Adding a Lesson (Interactive)
+
 ```bash
-python scripts/capture_lesson.py
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py
 ```
 
 ### Adding a Lesson (Quick)
+
 ```bash
-python scripts/capture_lesson.py --pattern "Premature Optimization"
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --quick --pattern "Premature Optimization"
 ```
 
 ### Reviewing All Lessons
+
 ```bash
-python scripts/capture_lesson.py --review
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --review
 ```
 
 ### Viewing Statistics
+
 ```bash
-python scripts/capture_lesson.py --stats
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --stats
 ```
 
 ---
@@ -66,7 +72,7 @@ Each entry follows this structure:
 ## Common Categories
 
 | Category | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | Premature Optimization | Added complexity without measuring first |
 | Insufficient Error Handling | Didn't handle all failure modes |
 | Visual Verification | Trusted appearance over programmatic check |
@@ -83,6 +89,7 @@ Each entry follows this structure:
 ## Session Review Checklist
 
 Before starting work each session, scan for:
+
 - [ ] Any patterns relevant to today's task
 - [ ] Mistakes I've made before in this domain
 - [ ] Rules that apply to the current task type
@@ -93,4 +100,3 @@ Before starting work each session, scan for:
 
 <!-- Entries are appended below by capture_lesson.py -->
 <!-- Format: ## YYYY-MM-DD — [Pattern Name] -->
-

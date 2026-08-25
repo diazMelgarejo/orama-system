@@ -1,12 +1,19 @@
 # 18 — RAG + Memory Design (v2 Forward Plan)
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
+> `.gitignore`d, never committed with secrets, personal paths, or SecOps material.
+> Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Planning doc — v1 implementation is in `docs/superpowers/plans/2026-05-21-rag-memory-v1-plan.md`.
 > This document records the v2 canonical design for `oramasys/perpetua-core` and `oramasys/oramasys`.
 > **No code changes to `oramasys/*` until this plan is reviewed and the v2 brainstorm session begins.**
 >
 > **Agentic-stack + Gbrain blend (2026-06-26):** project `.agent/` memory vs Gbrain RAG vs
 > blocked upstream Brain — see [`41-agentic-stack-gstack-gbrain-memory-blend.md`](41-agentic-stack-gstack-gbrain-memory-blend.md).
+> **Persistence migration (2026-08-25):** PT `.agent` remains canonical for v1
+> development memory. The stable lesson-capture frontend and deferred private runtime
+> Anamnesis backend are specified in
+> [`56-anamnesis-runtime-memory-migration.md`](56-anamnesis-runtime-memory-migration.md).
 
 ---
 
@@ -22,12 +29,14 @@
 > classification/redaction step below is a partial control; provenance
 > tracking and retrieval-time ACLs are the gap §7 calls out.
 
-Before any event enters SQLite FTS or LanceDB, `orchestrator/memory_governance.classify_and_redact()` applies:
+Before any event enters SQLite FTS or LanceDB,
+`orchestrator/memory_governance.classify_and_redact()` applies:
 
 - Classification: `operational` | `prompt` | `error` | `routing` | `heartbeat`
 - Redaction via shared `orchestrator/redaction.py` (API keys, tokens, emails, sensitive keys)
 
-GossipBus `emit()` persists only the redacted payload. This satisfies the v2 precondition for RAG until retention/erase semantics land in v2.5.
+GossipBus `emit()` persists only the redacted payload. This satisfies the v2 precondition for RAG
+until retention/erase semantics land in v2.5.
 
 ---
 
@@ -40,7 +49,7 @@ GossipBus `emit()` persists only the redacted payload. This satisfies the v2 pre
 ### v1 retrieval layer (`diazMelgarejo/orama-system` branch `feat/rag-gstack-optional-v1`)
 
 | Module | File | Status |
-|--------|------|--------|
+| -------- | ------ | -------- |
 | FTS5 on GossipBus | `perpetua_core/gossip.py` | Planned (v1) |
 | LanceDB EmbeddingStore | `perpetua_core/memory/store.py` | Planned (v1) |
 | Ollama bge-m3 embed | `perpetua_core/memory/embed.py` | Planned (v1) |
@@ -72,7 +81,7 @@ any kernel operation.
 
 ## v2 Architecture
 
-```
+```text
 perpetua-core v2.1+
 ──────────────────────────────────────────────────────────────
 gossip.py
@@ -218,6 +227,7 @@ Planned endpoint: `GET /api/analytics/sessions?since=7d&group_by=event_type`
 ### Fleet-distributed Lance dataset
 
 LanceDB supports Arrow IPC serialization. The v2.5 plan:
+
 - Each node writes local `lance_memory.lance`
 - A fleet aggregator merges tables via Arrow Flight
 - No schema changes — the v1 LanceDB schema already supports this
@@ -227,7 +237,7 @@ LanceDB supports Arrow IPC serialization. The v2.5 plan:
 ## OQ Resolutions
 
 | OQ | Topic | Resolution |
-|----|-------|------------|
+| ---- | ------- | ------------ |
 | (new) OQ18 | MemoryNode in kernel vs. plugin | Plugin in `memory/` sub-package — consistent with D4. Kernel unchanged. |
 | (new) OQ19 | Embedding model for MemoryNode | Ollama bge-m3 (1024-dim) — unified with gbrain + CRG vector space |
 | (new) OQ20 | LanceDB vs. Chroma vs. Qdrant | LanceDB: no server, 1 dep, Arrow-backed, pulled forward to v1 |
@@ -255,13 +265,15 @@ Do not start v2.1 until all five are green.
 ## Migration from v1 to v2.1
 
 v1 (FTS5 + LanceDB, fire-and-forget):
-```
+
+```text
 MemoryNode → FTS5 + LanceDB + RRF → scratchpad["context"]
 emit() → FTS5 trigger sync + async embed task
 ```
 
 v2.1 (adds circuit breaker):
-```
+
+```text
 MemoryNode → FTS5 + (LanceDB if breaker closed) + RRF → scratchpad["context"]
 ```
 

@@ -55,7 +55,7 @@ LangChain/LangGraph existing ecosystem).
 ## Locked decisions (D1–D10)
 
 | # | Area | Decision |
-|---|------|----------|
+| --- | ------ | ---------- |
 | **D1** | Relationship to v1 | Clean-slate rewrite alongside today's `orama-system` + `Perpetua-Tools`; v1 stays at v1.x and gets superseded only once v2 stable |
 | **D2** | v2 repo names | `perpetua-core` + `oramasys` (lowercase, one-word; avoids public Orama Search collision) |
 | **D3** | Sequencing | v1.0 RC ships first (close 2026-04-28 revamp); v2 starts after; v1.1/v1.2 roadmap re-evaluated post-v2.0 |
@@ -73,6 +73,7 @@ LangChain/LangGraph existing ecosystem).
 | **D23** | Single-operator-LAN threat-model descope | BFT/Sybil-resistant P2P patterns (witness quorum, reputation-decay, equivocation) must not be wired into production for a topology that is actually a single operator's own LAN, regardless of node count — a Q1-Q3 premise check (real witnesses? real trust boundary? real observed failure mode?) is required before wiring any P2P-derived adversarial pattern (2026-07-12 — see `45-single-operator-lan-threat-model-descope.md`) |
 | **D24** | Repository standard (cross-cutting, additive) | Repo root stays minimal; everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay in `.gitignore`d folders, never committed alongside API keys, personal paths, doxxing material, or SecOps-sensitive content. Additive — builds on top of every other standard in this tree, never overrides a stricter rule (2026-07-20 — see `46-repository-standard.md`) |
 | **D25** | Portable-memory local-topology invariant | Tracked policy names categories; concrete forbidden identity, attribution, device, path, workspace, and topology fragments live only in an off-repo local-only registry. Portable memory guards must scan source rows, archived candidates, episodic logs, and rendered views without printing matched values (2026-07-18 — see `47-portable-memory-local-topology-invariant.md`) |
+| **D26** | Provisional Anamnesis migration | PT `.agent` remains the v1 development-memory authority. The stable capture frontend delegates there now; a private, configurable runtime backend is deferred to tentative `oramasys/anamnesis`, with automatic push disabled by default (2026-08-25 — see `56-anamnesis-runtime-memory-migration.md`) |
 
 Full rationale and the Perplexity/GPT/Gemini/Grok evidence behind each decision is in [`00-context-and-decisions.md`](./00-context-and-decisions.md).
 
@@ -132,7 +133,7 @@ Calendar-free. Each phase gates on completion criteria, not dates.
 ## Repo topology
 
 | Repo | Purpose | Imports |
-|------|---------|---------|
+| ------ | --------- | --------- |
 | `perpetua-core/` | Data + state + LLM + hardware policy + gossip + graph engine | (no internal upward deps) |
 | `oramasys/` | Graph DSL composition + FastAPI surface + app nodes | imports `perpetua_core` only |
 | `oramasys/agate/` | Hardware policy spec + future gateway/bridge layer | imports `perpetua_core` (side-car) |
@@ -168,7 +169,7 @@ Don't sneak these into the kernel.
 ## Module roadmap
 
 | Module | Source | Target version | Blocking? | Status |
-|--------|--------|----------------|-----------|--------|
+| -------- | -------- | ---------------- | ----------- | -------- |
 | Kernel | this spec | v2.0 | **YES** | **DONE** v2.0-alpha.1 (36 tests ✅, 2026-05-02) |
 | Multi-agent network | v1 carry-over | v2.0+ (parallel) | no | stub |
 | MCP-Optional transport | ex-v1.1 roadmap | v2.0+ | no | stub |
@@ -251,10 +252,11 @@ orama-system/docs/v2/
 ├── 49-peer-mesh-auth-tls-v2-plan.md  ← peer-mesh TLS + pluggable auth (BUZZ/Twitter/Google, bearer token grandfathered) deferred plan; v1 minimum (never send a bearer token over unauthenticated transport) already landed on PR #197; this is the certificate provisioning + real TLS/mTLS + AlphaClaw HTTPS proxy work, stacked as PR(N+1)
 ├── 50-mesh-security-migration-ladder.md  ← Phases A–D: mesh prep → IP expunge → P5/P6 runtime gates (grandfathered) → strict cutover at v2 launch; merge-order guidance for #223/#224/#222 + PT #287
 ├── 51-security-sentinel-orbit-passkey-mcp.md  ← v2.1 security-sentinel satellite: passkey + MCP human authorization; orbits perpetua-core; MVP HMAC bridge in docs/plans/2026-08-02-pr-body-grant-security-remediation.md
-└── 52-tier5-frugality-storage-consumer-mapping.md  ← maps PT's Tier-5/frugality budget ledger onto the already-canonical SQLite-write-authority / DuckDB-read-only-analytics / LanceDB-optional-redacted-recall split from doc 20; docs-only, no new architecture decision, no code
+├── 52-tier5-frugality-storage-consumer-mapping.md  ← maps PT's Tier-5/frugality budget ledger onto the already-canonical SQLite-write-authority / DuckDB-read-only-analytics / LanceDB-optional-redacted-recall split from doc 20; docs-only, no new architecture decision, no code
+└── 56-anamnesis-runtime-memory-migration.md  ← D26: v1 PT-agent controller contract; deferred private v2 runtime-memory backend and weekly HITL promotion policy
 ```
 
-> **Next free slot: `53-`**
+> **Next free slot: `57-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

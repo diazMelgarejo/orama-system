@@ -30,14 +30,14 @@ Auto-triggers on: "complex task", "architect", "production-ready", "elegant solu
 ## Files
 
 | File | Purpose |
-|------|---------|
+| ------ | --------- |
 | `SKILL.md` | Main intelligence layer — loaded by agent |
 | `references/oramasys-5-stages.md` | Deep dive: 5-stage methodology |
 | `references/core-operational-directives.md` | Deep dive: 6 directives |
 | `references/content-insertion-framework.md` | Simplicity-first insertion |
 | `references/skill-architecture-guide.md` | How to create new skills |
 | `scripts/verify_before_done.py` | Pre-completion verification |
-| `scripts/capture_lesson.py` | Self-improvement loop |
+| `scripts/capture_lesson.py` | Stable lesson frontend; delegates v1 development capture to PT Agentic-Stack |
 | `scripts/create_task_plan.sh` | Task plan generator |
 | `templates/task-plan.md` | Planning template |
 | `templates/lessons-log.md` | Lessons tracking |
@@ -52,14 +52,14 @@ Auto-triggers on: "complex task", "architect", "production-ready", "elegant solu
 # Verify before marking done
 python scripts/verify_before_done.py --task "Build auth system"
 
-# Capture a lesson after a correction
-python scripts/capture_lesson.py
+# Capture a development lesson after a correction
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --quick
 ```
 
 ## Compatibility
 
 | Platform | Status |
-|---------|--------|
+| --------- | -------- |
 | Claude Code | ✅ Native |
 | Cowork | ✅ Native |
 | Open / claude.ai | ✅ Manual activation |

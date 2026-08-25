@@ -20,6 +20,7 @@ python verify_before_done.py --task "API update" --dir ../my-project
 ```
 
 **What it checks:**
+
 1. Test suite (pytest / npm test)
 2. Code linting (flake8, pylint, ESLint)
 3. Debug artifact scan (print statements, hardcoded secrets, HACK comments)
@@ -32,23 +33,30 @@ python verify_before_done.py --task "API update" --dir ../my-project
 
 ## `capture_lesson.py` (Directive #3)
 
-Appends a structured lesson to `tasks/lessons.md` after any mistake or user correction.
+Stable lesson-capture frontend. In v1 it delegates development lessons to PT's
+tracked Agentic-Stack; use `--backend legacy` only for an intentional standalone
+compatibility installation. Legacy mode uses an already initialized
+`~/tasks/lessons.md` (or an existing `--legacy-path`) and can migrate an old
+clone/install `tasks/lessons.md` there; it never creates a new v1 log. Runtime
+capture is reserved for provisioned v2 Anamnesis. Runtime `--review` and
+`--stats` retain read-only compatibility only for those existing logs.
 
 ```bash
 # Interactive (guided prompts)
-python capture_lesson.py
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python capture_lesson.py
 
 # With known pattern
-python capture_lesson.py --pattern "Premature Optimization"
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python capture_lesson.py --quick --pattern "Premature Optimization"
 
 # Review all lessons
-python capture_lesson.py --review
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python capture_lesson.py --review
 
 # Show stats
-python capture_lesson.py --stats
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python capture_lesson.py --stats
 ```
 
 **Lesson format captures:**
+
 - What went wrong
 - Root cause
 - Prevention rule

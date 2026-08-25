@@ -2,21 +2,21 @@
 """
 capture_lesson.py
 =================
-The ὅραμα System — Directive #3: Self-Improvement Loop
+The OramaSys lesson-capture frontend.
 
-Appends a structured lesson entry to tasks/lessons.md.
-Run this after ANY correction from the user or discovery of a recurring mistake.
+V1 delegates development lessons to Perpetua-Tools' tracked Agentic-Stack
+memory.  The CLI surface is intentionally stable while v2 runtime persistence
+is deferred to the future Anamnesis backend.
 
 Usage:
     python capture_lesson.py
     python capture_lesson.py --pattern "Premature Optimization" --quick
-    python capture_lesson.py --review          # Review existing lessons
-    python capture_lesson.py --stats           # Show mistake category stats
+    python capture_lesson.py --quick --pattern "Verification Skipped"
+    python capture_lesson.py --review --pt-root /path/to/Perpetua-Tools
+    python capture_lesson.py --backend legacy  # Explicit standalone compatibility
 
-Philosophy:
-    Mistakes aren't failures—they're learning opportunities.
-    But only if you actually learn from them.
-    Write rules that prevent the same mistake. Iterate until rate drops.
+See docs/v2/56-anamnesis-runtime-memory-migration.md for the controller
+contract, backend resolution, and v2 migration boundaries.
 """
 
 import os
@@ -24,9 +24,18 @@ import sys
 import argparse
 import re
 from pathlib import Path
-from datetime import datetime
 from collections import Counter
 from typing import Optional
+
+from lesson_controller import (
+    DeferredAnamnesisBackend,
+    LegacyMarkdownBackend,
+    LessonBackend,
+    LessonBackendUnavailable,
+    LessonPayload,
+    PTAgentBackend,
+    resolve_backend,
+)
 
 # ─── Colour output ────────────────────────────────────────────────────────────
 GREEN  = "\033[92m"
@@ -55,60 +64,48 @@ CATEGORIES = [
     "Custom",
 ]
 
-LESSON_TEMPLATE = """
-## {date} — {pattern}
-
-### What Went Wrong
-{what_went_wrong}
-
-### Root Cause
-{root_cause}
-
-### Prevention Rule
-{prevention_rule}
-
-### Verification Trigger
-{verification_trigger}
-
-### Applied To
-{applied_to}
-
-### Examples
-✅ **Good**: {good_example}
-❌ **Bad**: {bad_example}
-
----
-"""
-
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def find_lessons_file(start_dir: Path) -> Path:
-    """Walk up the directory tree to find tasks/lessons.md."""
+def find_lessons_file(
+    start_dir: Path,
+    *,
+    configured_path: Path | None = None,
+    home_dir: Path | None = None,
+) -> Path | None:
+    """Return an initialized legacy log, migrating an old task log if necessary.
+
+    The absence of an old task log is not a request to create one.  The caller
+    invokes this only for the explicit legacy backend, so normal PT and runtime
+    selection remains read-only with respect to historical task directories.
+    """
+    if configured_path is not None:
+        if configured_path.is_file():
+            return configured_path
+        raise LessonBackendUnavailable(
+            "ORAMASYS_LESSON_E_LEGACY_PATH_UNAVAILABLE",
+            f"Configured legacy lesson log does not exist: {configured_path}",
+        )
+
+    destination = (home_dir or Path.home()) / "tasks" / "lessons.md"
+    if destination.is_file():
+        return destination
     current = start_dir
-    for _ in range(5):
+    while True:
         candidate = current / "tasks" / "lessons.md"
-        if candidate.exists():
-            return candidate
+        if candidate.is_file():
+            if destination.exists():
+                raise LessonBackendUnavailable(
+                    "ORAMASYS_LESSON_E_LEGACY_MIGRATION_CONFLICT",
+                    "Cannot migrate legacy tasks/lessons.md because the home-level "
+                    f"destination already exists: {destination}",
+                )
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            candidate.replace(destination)
+            return destination
+        if current.parent == current:
+            break
         current = current.parent
-    # Default: create in cwd
-    target = start_dir / "tasks" / "lessons.md"
-    target.parent.mkdir(parents=True, exist_ok=True)
-    if not target.exists():
-        target.write_text(_lessons_header())
-    return target
-
-
-def _lessons_header() -> str:
-    return """# Lessons Learned — Self-Improvement Log
-**The ὅραμα System — Directive #3**
-
-This file is the institutional memory of this project.
-Every lesson written here prevents the same mistake from recurring.
-Review at the start of each session.
-
----
-
-"""
+    return None
 
 
 def prompt(label: str, hint: str = "", required: bool = True) -> str:
@@ -164,11 +161,13 @@ def get_lesson_stats(lessons_path: Path) -> dict:
 
 # ─── Main logic ──────────────────────────────────────────────────────────────
 
-def capture_interactive(pattern: Optional[str], lessons_path: Path) -> None:
+def capture_interactive(
+    pattern: Optional[str], backend: LessonBackend, quick: bool = False
+) -> None:
     """Walk the user through creating a lesson entry interactively."""
     print(f"\n{BOLD}{'='*60}{RESET}")
-    print(f"{BOLD}  ultrathink Self-Improvement Loop — Capture Lesson{RESET}")
-    print(f"  File: {lessons_path}")
+    print(f"{BOLD}  OramaSys Self-Improvement Loop — Capture Lesson{RESET}")
+    print("  Backend: forward-compatible lesson controller")
     print(f"{BOLD}{'='*60}{RESET}\n")
 
     # Pattern / category
@@ -177,7 +176,25 @@ def capture_interactive(pattern: Optional[str], lessons_path: Path) -> None:
     else:
         pattern = select_category()
 
-    # Gather fields
+    if quick:
+        rule = prompt(
+            "Prevention rule",
+            hint="Actionable rule that would prevent the recurrence.",
+        )
+        backend.capture(LessonPayload(
+            pattern=pattern,
+            what_went_wrong="Quick capture; expand during weekly crystallization.",
+            root_cause="Quick capture; root cause pending evidence review.",
+            prevention_rule=rule,
+            verification_trigger="Review the weekly candidate before promotion.",
+            applied_to="All similar tasks",
+            good_example="Apply the prevention rule before the next similar task.",
+            bad_example="Repeat the pattern without recording a prevention rule.",
+        ))
+        print(f"\n  {GREEN}✓ Lesson captured:{RESET} {pattern}")
+        return
+
+    # Gather the full structured frontend payload.
     print()
     what = prompt(
         "What went wrong",
@@ -211,9 +228,7 @@ def capture_interactive(pattern: Optional[str], lessons_path: Path) -> None:
         required=False
     ) or "(add example later)"
 
-    # Render lesson
-    lesson = LESSON_TEMPLATE.format(
-        date=datetime.now().strftime("%Y-%m-%d"),
+    backend.capture(LessonPayload(
         pattern=pattern,
         what_went_wrong=what,
         root_cause=cause,
@@ -222,15 +237,10 @@ def capture_interactive(pattern: Optional[str], lessons_path: Path) -> None:
         applied_to=scope,
         good_example=good,
         bad_example=bad,
-    )
-
-    # Append to lessons file
-    with lessons_path.open("a", encoding="utf-8") as f:
-        f.write(lesson)
+    ))
 
     print(f"\n  {GREEN}✓ Lesson captured:{RESET} {pattern}")
-    print(f"  {GREEN}✓ Saved to:{RESET}        {lessons_path}")
-    print(f"\n  {CYAN}Tip{RESET}: Review `tasks/lessons.md` at the start of your next session.")
+    print(f"  {GREEN}✓ Stored through:{RESET}  {backend.__class__.__name__}")
 
 
 def review_lessons(lessons_path: Path) -> None:
@@ -263,31 +273,100 @@ def show_stats(lessons_path: Path) -> None:
     print()
 
 
+def pt_memory_path(pt_root: Path) -> Path:
+    return pt_root / ".agent" / "memory" / "semantic" / "LESSONS.md"
+
+
+def review_pt_memory(pt_root: Path) -> None:
+    path = pt_memory_path(pt_root)
+    if not path.exists():
+        print(f"  {YELLOW}No PT semantic lesson view found at {path}{RESET}")
+        return
+    print(f"\n{BOLD}📚 PT Agentic-Stack development memory — {path}{RESET}\n")
+    print(path.read_text(encoding="utf-8"))
+
+
+def show_pt_stats(pt_root: Path) -> None:
+    path = pt_memory_path(pt_root)
+    if not path.exists():
+        print(f"  {YELLOW}No PT semantic lesson view found at {path}{RESET}")
+        return
+    content = path.read_text(encoding="utf-8")
+    print(f"\n{BOLD}📊 PT Agentic-Stack development memory{RESET}")
+    print(f"   Accepted lessons: {content.count('status=accepted')}")
+    print(f"   Provisional lessons: {content.count('status=provisional')}\n")
+
+
 # ─── CLI ──────────────────────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(
-        description="ultrathink Self-Improvement Loop — capture a lesson after a mistake"
+        description="OramaSys lesson capture — stable frontend, configurable backend"
     )
     parser.add_argument("--pattern", help="Mistake pattern name (skips category selection)")
     parser.add_argument("--quick",   action="store_true", help="Minimal prompts (pattern + rule only)")
     parser.add_argument("--review",  action="store_true", help="Review existing lessons")
     parser.add_argument("--stats",   action="store_true", help="Show lesson statistics")
     parser.add_argument("--dir",     default=".",         help="Project directory")
+    parser.add_argument("--mode", choices=("development", "runtime"), default="development",
+                        help="Runtime requires provisioned Anamnesis.")
+    parser.add_argument("--backend", choices=("auto", "pt-agent", "legacy", "anamnesis"),
+                        default="auto", help="Backend controller selection.")
+    parser.add_argument("--pt-root", default=os.environ.get("PERPETUA_TOOLS_ROOT"),
+                        help="Perpetua-Tools root for tracked development memory.")
+    parser.add_argument(
+        "--legacy-path",
+        default=os.environ.get("ORAMASYS_LEGACY_LESSONS_PATH"),
+        help="Existing explicit legacy lesson log; it is never created by v1.",
+    )
     args = parser.parse_args()
 
     project_dir  = Path(args.dir).resolve()
-    lessons_path = find_lessons_file(project_dir)
-
-    if args.review:
-        review_lessons(lessons_path)
-        return
-
-    if args.stats:
-        show_stats(lessons_path)
-        return
-
-    capture_interactive(pattern=args.pattern, lessons_path=lessons_path)
+    pt_root = Path(args.pt_root).resolve() if args.pt_root else None
+    configured_legacy_path = (
+        Path(args.legacy_path).expanduser().resolve() if args.legacy_path else None
+    )
+    try:
+        needs_legacy_compatibility = args.backend == "legacy" or (
+            args.mode == "runtime" and args.backend == "auto" and (args.review or args.stats)
+        )
+        legacy_path = (
+            find_lessons_file(
+                project_dir, configured_path=configured_legacy_path
+            )
+            if needs_legacy_compatibility
+            else None
+        )
+        if legacy_path is not None and args.mode == "runtime" and args.backend == "auto":
+            backend = LegacyMarkdownBackend(legacy_path)
+        else:
+            backend = resolve_backend(
+                mode=args.mode,
+                backend_name=args.backend,
+                pt_root=pt_root,
+                legacy_path=legacy_path,
+            )
+        lessons_path = legacy_path
+        if args.review:
+            if isinstance(backend, PTAgentBackend):
+                review_pt_memory(backend.root)
+            elif isinstance(backend, LegacyMarkdownBackend):
+                review_lessons(lessons_path or backend.path)
+            else:
+                raise DeferredAnamnesisBackend.unavailable()
+            return
+        if args.stats:
+            if isinstance(backend, PTAgentBackend):
+                show_pt_stats(backend.root)
+            elif isinstance(backend, LegacyMarkdownBackend):
+                show_stats(lessons_path or backend.path)
+            else:
+                raise DeferredAnamnesisBackend.unavailable()
+            return
+        capture_interactive(pattern=args.pattern, backend=backend, quick=args.quick)
+    except LessonBackendUnavailable as exc:
+        print(f"ERROR [{exc.code}]: {exc}", file=sys.stderr)
+        raise SystemExit(3)
 
 
 if __name__ == "__main__":

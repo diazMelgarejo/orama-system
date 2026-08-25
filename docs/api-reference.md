@@ -3,7 +3,8 @@
 ## Scripts
 
 ### verify_before_done.py
-```
+
+```text
 python verify_before_done.py [OPTIONS]
 
 Options:
@@ -17,7 +18,8 @@ Output: tasks/verification-report.json
 ```
 
 ### capture_lesson.py
-```
+
+```text
 python capture_lesson.py [OPTIONS]
 
 Options:
@@ -26,10 +28,26 @@ Options:
   --review          Show all existing lessons
   --stats           Show mistake category statistics
   --dir PATH        Project directory (default: ".")
+  --mode MODE       development|runtime (default: development)
+  --backend NAME    auto|pt-agent|legacy|anamnesis (default: auto)
+  --pt-root PATH    Perpetua-Tools root for development memory
+  --legacy-path PATH
+                  Existing legacy Markdown log; also configurable through
+                  ORAMASYS_LEGACY_LESSONS_PATH. V1 never creates this file.
 ```
 
+In v1, development mode delegates capture to PT `.agent`. Runtime capture fails
+closed until Anamnesis is provisioned. Runtime `--review` and `--stats` read
+only an already initialized legacy compatibility log: `~/tasks/lessons.md`, or
+an existing explicit `--legacy-path`. When the old `tasks/lessons.md` exists in
+a clone or installation directory, legacy compatibility migrates it to
+`~/tasks/lessons.md`; missing logs are not created. After successful v2
+provisioning, that legacy log migrates automatically to the private runtime
+store.
+
 ### create_task_plan.sh
-```
+
+```bash
 ./create_task_plan.sh [TASK_NAME] [OPTIONS]
 
 Options:
@@ -37,12 +55,13 @@ Options:
   --dir PATH        Project directory (default: ".")
   --interactive     Guided prompt mode
 
-Creates: tasks/todo.md, tasks/lessons.md (if not exists)
+Creates: tasks/todo.md. It does not create a legacy lesson log.
 ```
 
 ## MCP Tools (Multi-Agent)
 
 ### oramasys_solve
+
 ```json
 {
   "task": "string (required)",
@@ -53,6 +72,7 @@ Creates: tasks/todo.md, tasks/lessons.md (if not exists)
 ```
 
 ### oramasys_delegate
+
 ```json
 {
   "stage": "context|architecture|refinement|execution|verification|crystallization",
@@ -63,12 +83,14 @@ Creates: tasks/todo.md, tasks/lessons.md (if not exists)
 ```
 
 ### oramasys_status
+
 ```json
 { "task_id": "uuid" }
 → TaskState object
 ```
 
 ### oramasys_lessons
+
 ```json
 { "domain": "optional filter", "limit": 10 }
 → { "lessons": [...], "total": N }
@@ -77,6 +99,7 @@ Creates: tasks/todo.md, tasks/lessons.md (if not exists)
 ## Data Types
 
 ### TaskState
+
 ```typescript
 {
   task_id: string
@@ -91,6 +114,7 @@ Creates: tasks/todo.md, tasks/lessons.md (if not exists)
 ```
 
 ### ValidationReport
+
 ```typescript
 {
   symbol: string
@@ -123,6 +147,7 @@ curl http://localhost:8001/health
 release. New clients should use `/oramasys`.
 
 ### Request Body
+
 ```json
 {
   "task_description": "string (required, max 10000 chars)",
@@ -134,6 +159,7 @@ release. New clients should use `/oramasys`.
 ```
 
 ### Response
+
 ```json
 {
   "request_id": "uuid",
@@ -156,7 +182,10 @@ for full design rationale.
 
 ### POST /api/notifications/session
 
-Creates a 15-minute host-only browser session for the notification stream. Send an existing Authorization bearer credential from the same origin. The response sets an HttpOnly, SameSite=Strict cookie scoped to /api/notifications. A cross-origin request receives 403. Never put the token in a URL.
+Creates a 15-minute host-only browser session for the notification stream. Send an
+existing Authorization bearer credential from the same origin. The response sets an
+HttpOnly, SameSite=Strict cookie scoped to /api/notifications. A cross-origin request
+receives 403. Never put the token in a URL.
 
 Why this step exists: native browser `EventSource` cannot set custom headers, so a
 bearer credential can't reach the stream directly. This endpoint exchanges an
