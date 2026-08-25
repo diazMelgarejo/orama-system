@@ -30,7 +30,7 @@ Auto-triggers on: "complex task", "architect", "production-ready", "elegant solu
 ## Files
 
 | File | Purpose |
-|------|---------|
+| ------ | --------- |
 | `SKILL.md` | Main intelligence layer — loaded by agent |
 | `references/oramasys-5-stages.md` | Deep dive: 5-stage methodology |
 | `references/core-operational-directives.md` | Deep dive: 6 directives |
@@ -59,7 +59,7 @@ PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --q
 ## Compatibility
 
 | Platform | Status |
-|---------|--------|
+| --------- | -------- |
 | Claude Code | ✅ Native |
 | Cowork | ✅ Native |
 | Open / claude.ai | ✅ Manual activation |

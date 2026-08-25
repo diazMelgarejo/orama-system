@@ -24,7 +24,7 @@ customization workflow stays stable. No deprecation is announced.
 ## Current controller contract
 
 | Context | Default backend | Result today |
-|---|---|---|
+| --- | --- | --- |
 | `--mode development --backend auto` | `pt-agent` | Requires `PERPETUA_TOOLS_ROOT` (or `--pt-root`) and delegates to `.agent/tools/learn.py` |
 | `--mode runtime --backend auto` | `anamnesis` | Fails closed until Anamnesis is provisioned |
 | `--backend legacy` | legacy Markdown | Explicit standalone compatibility escape hatch only |

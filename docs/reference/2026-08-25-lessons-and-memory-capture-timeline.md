@@ -23,7 +23,7 @@ Anamnesis v2 design begins. Read the sources in this order:
 ## Authority map
 
 | Concern | v1 authority | v2 direction | Non-negotiable boundary |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Development/system lessons | PT tracked `.agent/` Agentic-Stack | Continues as repository-development memory | Orama must not silently create a competing canonical log |
 | Capture frontend | `bin/orama-system/scripts/capture_lesson.py` | Same user-facing workflow/controller | Backends are explicit and fail closed when unavailable |
 | User/runtime evidence | Not implemented in v1 | Tentative `oramasys/anamnesis` | Private by default; never substituted by a tracked fallback |
@@ -38,7 +38,7 @@ sanitized technical pattern qualifies for promotion.
 ## Timeline
 
 | Date / phase | Event | Lesson or decision | Durable evidence |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 2026-03-22 | Orama's original `capture_lesson.py` entered the repository as a standalone Markdown lesson system. | Direct append was the original compatibility behavior, not the future memory authority. | [`capture_lesson.py`](../../bin/orama-system/scripts/capture_lesson.py) history |
 | 2026-06-18 | PT's Agentic-Stack `.agent` portable brain was installed locally. | The durable, harness-neutral memory path began in PT, before the current controller work. | [PT `.agent` rules](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md) |
 | 2026-06-19 | PT commit [`82bcbfae`](https://github.com/diazMelgarejo/Perpetua-Tools/commit/82bcbfae) first tracked the complete `.agent` system. | Episodic evidence, semantic lessons, candidates, graduation, recall, review queue, and harness-neutral tooling entered one portable brain. | [PT commit `82bcbfae`](https://github.com/diazMelgarejo/Perpetua-Tools/commit/82bcbfae) |
@@ -94,7 +94,7 @@ create a new log before any lesson had been captured.
 The controller preserves the CLI workflow while changing backend ownership:
 
 | Invocation | Behavior |
-|---|---|
+| --- | --- |
 | `--mode development --backend auto` | Requires `PERPETUA_TOOLS_ROOT` / `--pt-root`; delegates to PT `.agent/tools/learn.py` |
 | `--quick` | Collects one prevention rule and produces a complete structured payload |
 | `--review` / `--stats` with PT | Reads PT's rendered semantic lesson view; does not mutate memory |
@@ -115,7 +115,7 @@ security requirements; the remaining runtime-specific checks are acceptance
 requirements for Anamnesis:
 
 | Requirement | v1 status | v2 runtime completion requirement |
-|---|---|---|
+| --- | --- | --- |
 | Interactive prompts, `--pattern`, `--quick`, `--review`, `--stats`, and `--dir` | Preserved | Preserve unchanged |
 | `--quick` minimal capture | Implemented | Preserve unchanged |
 | Backend selection by context/configuration | Implemented for PT, legacy, and deferred Anamnesis | Add provisioned runtime resolver and explicit enable/disable configuration |
@@ -217,7 +217,7 @@ separate permanent store.
 ## Cross-repository outcomes and remaining boundary
 
 | Repository | Completed in this session | Publication state |
-|---|---|---|
+| --- | --- | --- |
 | `orama-system` | Deletion guard doctrine; v1 capture controller; compatibility tests; D26 migration contract; active docs and templates reconciled. | Published to [PR #328](https://github.com/diazMelgarejo/orama-system/pull/328) after tree-SHA verification. |
 | `Perpetua-Tools` | Recorded the publication-integrity lesson and v1/v2 ownership lesson through `.agent/tools/learn.py`. | Local commits were created on the existing branch. Publication remained intentionally blocked when an exact remote tree could not be reconstructed from the available transport; no PT ref was moved. |
 

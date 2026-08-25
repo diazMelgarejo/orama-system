@@ -6,7 +6,8 @@
 
 ## What it does
 
-Ports the existing lessons capture system (`docs/LESSONS.md`, `/self-improve` skill, `scripts/capture_lesson.py`) and SKILL.md authoring toolchain from v1 into the v2 module ecosystem.
+Ports the existing lessons capture system (`docs/LESSONS.md`, `/self-improve` skill,
+`scripts/capture_lesson.py`) and SKILL.md authoring toolchain from v1 into the v2 module ecosystem.
 
 ## Current state in v1.0 RC
 
@@ -24,4 +25,5 @@ Ports the existing lessons capture system (`docs/LESSONS.md`, `/self-improve` sk
 
 ## TDD note
 
-The lessons system IS part of the TDD policy (per `tdd.md`): every completed graph run should capture one lesson. This module makes that automatic.
+The lessons system IS part of the TDD policy (per `tdd.md`): every completed graph run should
+capture one lesson. This module makes that automatic.
