@@ -3,7 +3,8 @@
 ## Scripts
 
 ### verify_before_done.py
-```
+
+```text
 python verify_before_done.py [OPTIONS]
 
 Options:
@@ -17,7 +18,8 @@ Output: tasks/verification-report.json
 ```
 
 ### capture_lesson.py
-```
+
+```text
 python capture_lesson.py [OPTIONS]
 
 Options:
@@ -44,7 +46,8 @@ provisioning, that legacy log migrates automatically to the private runtime
 store.
 
 ### create_task_plan.sh
-```
+
+```bash
 ./create_task_plan.sh [TASK_NAME] [OPTIONS]
 
 Options:
@@ -58,6 +61,7 @@ Creates: tasks/todo.md. It does not create a legacy lesson log.
 ## MCP Tools (Multi-Agent)
 
 ### oramasys_solve
+
 ```json
 {
   "task": "string (required)",
@@ -68,6 +72,7 @@ Creates: tasks/todo.md. It does not create a legacy lesson log.
 ```
 
 ### oramasys_delegate
+
 ```json
 {
   "stage": "context|architecture|refinement|execution|verification|crystallization",
@@ -78,12 +83,14 @@ Creates: tasks/todo.md. It does not create a legacy lesson log.
 ```
 
 ### oramasys_status
+
 ```json
 { "task_id": "uuid" }
 → TaskState object
 ```
 
 ### oramasys_lessons
+
 ```json
 { "domain": "optional filter", "limit": 10 }
 → { "lessons": [...], "total": N }
@@ -92,6 +99,7 @@ Creates: tasks/todo.md. It does not create a legacy lesson log.
 ## Data Types
 
 ### TaskState
+
 ```typescript
 {
   task_id: string
@@ -106,6 +114,7 @@ Creates: tasks/todo.md. It does not create a legacy lesson log.
 ```
 
 ### ValidationReport
+
 ```typescript
 {
   symbol: string
@@ -138,6 +147,7 @@ curl http://localhost:8001/health
 release. New clients should use `/oramasys`.
 
 ### Request Body
+
 ```json
 {
   "task_description": "string (required, max 10000 chars)",
@@ -149,6 +159,7 @@ release. New clients should use `/oramasys`.
 ```
 
 ### Response
+
 ```json
 {
   "request_id": "uuid",

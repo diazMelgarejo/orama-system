@@ -160,6 +160,50 @@ def test_quick_capture_collects_only_a_rule_and_delegates(monkeypatch) -> None:
     assert captured[0].prevention_rule.startswith("Always inspect")
 
 
+def test_development_legacy_review_without_initialized_log(monkeypatch, capsys) -> None:
+    import capture_lesson
+
+    monkeypatch.setattr(
+        capture_lesson.sys,
+        "argv",
+        [
+            "capture_lesson.py",
+            "--backend",
+            "legacy",
+            "--review",
+            "--dir",
+            "/definitely-empty",
+        ],
+    )
+
+    capture_lesson.main()
+
+    output = capsys.readouterr().out
+    assert "No lessons file found" in output
+
+
+def test_development_legacy_stats_without_initialized_log(monkeypatch, capsys) -> None:
+    import capture_lesson
+
+    monkeypatch.setattr(
+        capture_lesson.sys,
+        "argv",
+        [
+            "capture_lesson.py",
+            "--backend",
+            "legacy",
+            "--stats",
+            "--dir",
+            "/definitely-empty",
+        ],
+    )
+
+    capture_lesson.main()
+
+    output = capsys.readouterr().out
+    assert "Total lessons: 0" in output
+
+
 @pytest.mark.parametrize("action", ["--review", "--stats"])
 def test_runtime_review_and_stats_fail_closed(action: str, monkeypatch) -> None:
     import capture_lesson
