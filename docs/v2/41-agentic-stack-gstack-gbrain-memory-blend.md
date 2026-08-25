@@ -190,7 +190,7 @@ Implementation lives in a PT wrapper script or harness_manager plugin patch appl
 
 ```text
 ┌─────────────────────────────────────────────────────────────────┐
-│  Harness (Cursor, Hermes, OpenClaw, Codex, Claude, Antigravity)  │
+│  Harness (Cursor, Hermes, OpenClaw, Codex, Claude, Antigravity) │
 └────────────────────────────┬────────────────────────────────────┘
                              │ hooks + recall.py / learn.py
                              ▼
@@ -199,7 +199,7 @@ Implementation lives in a PT wrapper script or harness_manager plugin patch appl
 │  episodic → semantic lessons → DECISIONS / WORKSPACE            │
 └────────────┬───────────────────────────────┬────────────────────┘
              │                               │
-             │ project-scoped recall          │ explicit @tool / skill
+             │ project-scoped recall         │ explicit @tool / skill
              ▼                               ▼
 ┌────────────────────────┐    ┌──────────────────────────────────┐
 │  orama gstack skill    │    │  Gbrain (pgvector + FTS)         │
