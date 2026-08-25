@@ -55,7 +55,7 @@ LangChain/LangGraph existing ecosystem).
 ## Locked decisions (D1–D10)
 
 | # | Area | Decision |
-|---|------|----------|
+| --- | ------ | ---------- |
 | **D1** | Relationship to v1 | Clean-slate rewrite alongside today's `orama-system` + `Perpetua-Tools`; v1 stays at v1.x and gets superseded only once v2 stable |
 | **D2** | v2 repo names | `perpetua-core` + `oramasys` (lowercase, one-word; avoids public Orama Search collision) |
 | **D3** | Sequencing | v1.0 RC ships first (close 2026-04-28 revamp); v2 starts after; v1.1/v1.2 roadmap re-evaluated post-v2.0 |
@@ -133,7 +133,7 @@ Calendar-free. Each phase gates on completion criteria, not dates.
 ## Repo topology
 
 | Repo | Purpose | Imports |
-|------|---------|---------|
+| ------ | --------- | --------- |
 | `perpetua-core/` | Data + state + LLM + hardware policy + gossip + graph engine | (no internal upward deps) |
 | `oramasys/` | Graph DSL composition + FastAPI surface + app nodes | imports `perpetua_core` only |
 | `oramasys/agate/` | Hardware policy spec + future gateway/bridge layer | imports `perpetua_core` (side-car) |
@@ -169,7 +169,7 @@ Don't sneak these into the kernel.
 ## Module roadmap
 
 | Module | Source | Target version | Blocking? | Status |
-|--------|--------|----------------|-----------|--------|
+| -------- | -------- | ---------------- | ----------- | -------- |
 | Kernel | this spec | v2.0 | **YES** | **DONE** v2.0-alpha.1 (36 tests ✅, 2026-05-02) |
 | Multi-agent network | v1 carry-over | v2.0+ (parallel) | no | stub |
 | MCP-Optional transport | ex-v1.1 roadmap | v2.0+ | no | stub |

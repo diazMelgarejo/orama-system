@@ -72,7 +72,7 @@ Each entry follows this structure:
 ## Common Categories
 
 | Category | Description |
-|----------|-------------|
+| ---------- | ------------- |
 | Premature Optimization | Added complexity without measuring first |
 | Insufficient Error Handling | Didn't handle all failure modes |
 | Visual Verification | Trusted appearance over programmatic check |

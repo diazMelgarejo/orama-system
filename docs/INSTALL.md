@@ -82,7 +82,7 @@ from `references/`, `afrp/`, and `cidf/` — keeping your context window clean.
 ### The 3 Execution Modes
 
 | Mode | When | What Happens |
-|------|------|-------------|
+| ------ | ------ | ------------- |
 | **Mode 1** Inline | 1-2 steps, single file | Direct execution, no subagents |
 | **Mode 2** + Subagents | 3-7 steps, 1-2 systems | Full 5-stage process with delegation |
 | **Mode 3** Network | 8+ steps, 3+ systems | 7-agent parallel execution network |
