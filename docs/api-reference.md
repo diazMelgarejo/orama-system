@@ -182,7 +182,10 @@ for full design rationale.
 
 ### POST /api/notifications/session
 
-Creates a 15-minute host-only browser session for the notification stream. Send an existing Authorization bearer credential from the same origin. The response sets an HttpOnly, SameSite=Strict cookie scoped to /api/notifications. A cross-origin request receives 403. Never put the token in a URL.
+Creates a 15-minute host-only browser session for the notification stream. Send an
+existing Authorization bearer credential from the same origin. The response sets an
+HttpOnly, SameSite=Strict cookie scoped to /api/notifications. A cross-origin request
+receives 403. Never put the token in a URL.
 
 Why this step exists: native browser `EventSource` cannot set custom headers, so a
 bearer credential can't reach the stream directly. This endpoint exchanges an

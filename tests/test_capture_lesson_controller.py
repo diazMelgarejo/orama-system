@@ -256,3 +256,27 @@ def test_legacy_capture_never_creates_a_new_user_level_log(tmp_path: Path) -> No
 
     assert excinfo.value.code == "ORAMASYS_LESSON_E_LEGACY_UNINITIALIZED"
     assert not target.exists()
+
+
+def test_legacy_review_without_initialized_log_exits_zero(
+    tmp_path: Path, monkeypatch, capsys
+) -> None:
+    import capture_lesson
+
+    monkeypatch.setattr(
+        capture_lesson.sys,
+        "argv",
+        [
+            "capture_lesson.py",
+            "--backend",
+            "legacy",
+            "--review",
+            "--dir",
+            str(tmp_path / "empty-project"),
+        ],
+    )
+
+    capture_lesson.main()
+
+    output = capsys.readouterr().out
+    assert "No lessons file found" in output
