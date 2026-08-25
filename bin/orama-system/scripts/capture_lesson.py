@@ -351,9 +351,7 @@ def main() -> None:
             if isinstance(backend, PTAgentBackend):
                 review_pt_memory(backend.root)
             elif isinstance(backend, LegacyMarkdownBackend):
-                if lessons_path is None:
-                    raise DeferredAnamnesisBackend.unavailable()
-                review_lessons(lessons_path)
+                review_lessons(lessons_path or backend.path)
             else:
                 raise DeferredAnamnesisBackend.unavailable()
             return
@@ -361,9 +359,7 @@ def main() -> None:
             if isinstance(backend, PTAgentBackend):
                 show_pt_stats(backend.root)
             elif isinstance(backend, LegacyMarkdownBackend):
-                if lessons_path is None:
-                    raise DeferredAnamnesisBackend.unavailable()
-                show_stats(lessons_path)
+                show_stats(lessons_path or backend.path)
             else:
                 raise DeferredAnamnesisBackend.unavailable()
             return
