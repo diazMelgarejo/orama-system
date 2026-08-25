@@ -2,7 +2,8 @@
 
 > **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Canonical home:** `orama-system/docs/v2/35-langfuse-trace-tree-pattern.md`
-> **Status:** Proposed — approve before any implementation
+> **Status:** Proposed — persistence references are partially superseded by
+> [`56-anamnesis-runtime-memory-migration.md`](56-anamnesis-runtime-memory-migration.md).
 > **Locks decision:** D18
 
 ---
@@ -14,13 +15,14 @@ is a **trace-tree model**: each session becomes a root trace with nested spans
 (generation, retrieval, evaluation), timestamped and tagged with metadata like
 model, cost, latency, input/output token counts.
 
-`capture_lesson.py` and `LESSONS.md` already capture session learnings as flat
-chronological entries. They have no hierarchy, no per-span timing, no cost
+The `capture_lesson.py` frontend and PT development memory capture session learnings
+as structured entries. They have no hierarchy, no per-span timing, no cost
 attribution, and no structured query path.
 
 The v2 distillation plan (Group B, item [1]) says: emulate the Langfuse
 **trace-tree pattern** as an additive extension of the existing lesson/LESSONS
-machinery — methodology only, never a Langfuse installation, never runtime state.
+machinery — methodology only, never a Langfuse installation. Runtime persistence is
+governed by the deferred Anamnesis contract, not by this trace plan.
 
 ---
 
@@ -76,7 +78,7 @@ Output location: `docs/distill-fable-5/traces/<session-slug>.jsonl`.
 
 | Existing hook | Change |
 |--------------|--------|
-| `capture_lesson.py --review` | `capture_lesson.py` emits **Markdown** to `LESSONS.md` — not JSON. A `trace_id` field **cannot** be injected into a Markdown template. Instead, `trace_session.py` writes a companion `lesson_ref` span entry in the JSONL trace file that records the session slug and timestamp, enabling correlation without mutating `LESSONS.md` or `capture_lesson.py`. |
+| `capture_lesson.py --review` | The controller reads PT's rendered semantic view in development; it does not emit trace JSON. A `trace_id` field belongs in neither the frontend nor rendered lesson view. Instead, `trace_session.py` writes a companion `lesson_ref` span entry with session slug and timestamp. |
 | `distill_session.py --input` | Accepts optional `--trace <file.jsonl>`; enriches extracted lessons with span context |
 | `LESSONS.md` | No change — flat chronological format preserved; trace file is a companion, not a replacement |
 
@@ -132,8 +134,9 @@ purposes; PT never reads or writes them.
 **D18 — Langfuse trace-tree is a methodology annotation layer in orama, not a service (2026-06-17)**
 
 orama emulates Langfuse's trace-tree pattern as an additive JSONL annotation layer
-(`trace_session.py`) alongside existing `capture_lesson.py`/`LESSONS.md`. Never
-a Langfuse installation, never runtime state, never a PT change. Gate doc: this file.
+(`trace_session.py`) alongside the lesson-capture frontend. Never a Langfuse
+installation. Persistence is governed by the deferred Anamnesis contract. Gate doc:
+this file.
 
 ---
 

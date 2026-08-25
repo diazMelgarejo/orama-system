@@ -7,6 +7,10 @@
 >
 > **Agentic-stack + Gbrain blend (2026-06-26):** project `.agent/` memory vs Gbrain RAG vs
 > blocked upstream Brain — see [`41-agentic-stack-gstack-gbrain-memory-blend.md`](41-agentic-stack-gstack-gbrain-memory-blend.md).
+> **Persistence migration (2026-08-25):** PT `.agent` remains canonical for v1
+> development memory. The stable lesson-capture frontend and deferred private runtime
+> Anamnesis backend are specified in
+> [`56-anamnesis-runtime-memory-migration.md`](56-anamnesis-runtime-memory-migration.md).
 
 ---
 

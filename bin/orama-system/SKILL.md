@@ -194,7 +194,7 @@ execute_method() -> visual_ok? --no--> refresh_page()
 
 For any `*.md` write or edit:
 
-1. Read `docs/LESSONS.md` and `docs/wiki/README.md` first if the change touches repo guidance or a moved doc.
+1. Read PT `.agent` development memory and `docs/wiki/README.md` first if the change touches repo guidance or a moved doc.
 2. Keep all links relative and GitHub-renderable; do not use absolute filesystem paths or sibling checkout paths.
 3. If a markdown file moves or is renamed, preserve a repo-wide redirect trail by updating the canonical index or adding a `Previous path` / `Canonical path` note where appropriate.
 4. Warn and ask the user before adding a new markdown file over 200 lines or growing an existing markdown file over 500 lines. Suggest moving details to `references/`, `docs/wiki/`, or a sub-skill.
@@ -237,7 +237,7 @@ Verify -> scripts/verify_before_done.py -> must PASS
 ### Stage 5 — Crystallize the Vision
 
 Assumptions ledger, simplification story, inevitability argument.
-Run `scripts/capture_lesson.py` if any corrections occurred.
+Run `scripts/capture_lesson.py` with `PERPETUA_TOOLS_ROOT` if any corrections occurred.
 
 ### Subagent Delegation (Directive #2)
 
@@ -310,7 +310,7 @@ python scripts/test_perplexity.py --validate --base-url https://api.perplexity.a
 | --- | -------------- | ---------------------------------------------------- |
 | 1   | Plan Node      | Write `tasks/todo.md` before any 3+ step task        |
 | 2   | Subagents      | Offload when context > 70%; one task per subagent    |
-| 3   | Self-Improve   | After correction -> `scripts/capture_lesson.py`      |
+| 3   | Self-Improve   | After correction -> controller -> PT `.agent` memory |
 | 4   | Verify First   | `scripts/verify_before_done.py` PASS required        |
 | 5   | Elegance       | Pause on non-trivial: "Is there a more elegant way?" |
 | 6   | Autonomous Fix | Bug report -> investigate -> fix -> verify -> report |
@@ -366,7 +366,7 @@ Follow the 6 directives in every non-trivial task:
 1. **Plan**: `./scripts/create_task_plan.sh "Build feature"`
 2. **Execute**: Build stage-by-stage (Context -> Architect -> Refine -> Execute -> Crystallize)
 3. **Verify**: `python scripts/verify_before_done.py` (Must PASS before done)
-4. **Learn**: `python scripts/capture_lesson.py` (Run after any correction)
+4. **Learn**: `PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --quick` (Run after any correction)
 
 ### 3. Integrated Frameworks
 

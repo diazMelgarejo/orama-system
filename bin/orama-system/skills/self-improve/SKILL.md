@@ -1,14 +1,17 @@
 ---
 name: self-improve
 version: 1.0.0
-description: Crystallize session learnings into LESSONS.md and instincts. Runs automatically at session end (Option C — proposes updates, commits only after user approval). Also invocable on-demand.
+description: Crystallize session learnings through the PT Agentic-Stack frontend and instincts. V1 uses tracked PT `.agent`; v2 runtime persistence is deferred to Anamnesis.
 user-invocable: true
 trigger: session-end
 ---
 
 # Self-Improve — v1.0.0
 
-Idempotent session-end skill. Reads what happened, proposes minimal additive updates to the canonical knowledge base, and waits for approval before committing anything.
+Idempotent session-end skill. In v1, development lessons are written through PT's
+tracked `.agent` pipeline. It reads what happened, proposes minimal additive updates,
+and waits for approval before committing anything. The deferred runtime-memory contract
+is in `docs/v2/56-anamnesis-runtime-memory-migration.md`.
 
 **Trigger modes (Option C):**
 
@@ -41,8 +44,8 @@ if _ver(skill_path) >= tuple(int(x) for x in BUNDLED.split(".")):
 ## Step 1 — Read Current Knowledge Base
 
 ```bash
-# Read LESSONS.md (canonical session log)
-cat docs/LESSONS.md 2>/dev/null || cat .claude/lessons/LESSONS.md 2>/dev/null
+# Read PT Agentic-Stack's rendered development lesson view
+test -n "$PERPETUA_TOOLS_ROOT" && cat "$PERPETUA_TOOLS_ROOT/.agent/memory/semantic/LESSONS.md"
 
 # Read instincts (behavioral patterns)
 cat .claude/homunculus/instincts/inherited/orama-system-instincts.yaml 2>/dev/null
@@ -81,7 +84,7 @@ Format each learning as a dated, concise entry:
 Before claiming any multi-step goal is complete, run one final lesson-capture pass:
 
 1. Identify reusable lessons from the just-finished work.
-2. Add durable lessons to `docs/LESSONS.md` or the relevant skill reference.
+2. Capture durable lessons through `capture_lesson.py` with `PERPETUA_TOOLS_ROOT` or update the relevant skill reference.
 3. Update the canonical in-repo skill first; local Codex installs must remain thin wrappers.
 4. If the lesson affects local Codex skill installs, update `bin/orama-system/skills/skillify/references/codex-thin-wrapper-installs.md`.
 5. Re-run the relevant validation gates before declaring completion.
@@ -92,17 +95,17 @@ For Codex skill installs, remember the current rule: local `~/.codex/skills/*` d
 
 ## Step 3 — Generate Proposed Diff
 
-Produce a concrete, minimal diff — **additive only, no deletions** from LESSONS.md unless correcting a factual error:
+Produce a concrete, minimal diff — **additive only, no deletions** from PT lesson memory unless correcting a factual error:
 
 ```bash
-# Show current tail of LESSONS.md
-tail -30 docs/LESSONS.md 2>/dev/null || tail -30 .claude/lessons/LESSONS.md 2>/dev/null
+# Show current tail of PT's rendered lesson view
+tail -30 "$PERPETUA_TOOLS_ROOT/.agent/memory/semantic/LESSONS.md"
 ```
 
 Compose the proposed addition. Show it to the user clearly:
 
 ```text
-=== PROPOSED ADDITION TO docs/LESSONS.md ===
+=== PROPOSED ADDITION TO PT .agent MEMORY ===
 
 ## [YYYY-MM-DD] <Session Summary>
 
@@ -123,7 +126,7 @@ Present:
 Self-improve proposal ready.
 
 Options:
-  A) Approve and commit — write to LESSONS.md + git commit
+  A) Approve and commit — capture through PT `.agent` + git commit
   B) Edit first — show me the text so I can revise
   C) Skip — don't save this session (discard)
 
@@ -139,23 +142,19 @@ Which? (A/B/C)
 ## Step 5 — Write and Commit (only after approval)
 
 ```bash
-# Append to canonical LESSONS.md
-cat >> docs/LESSONS.md << 'ENTRY'
-
-## [YYYY-MM-DD] <Session Title>
-
-<approved content>
-ENTRY
+# Capture through the stable controller, which delegates to PT learn.py.
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools \
+  python bin/orama-system/scripts/capture_lesson.py --quick --pattern "[Pattern]"
 
 # Stage and commit
-git add docs/LESSONS.md
+git add .agent/memory
 git commit -m "docs(lessons): crystallize session learnings [self-improve]
 
 Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>"
 
-# Push
-git push origin $(git branch --show-current)
-echo "Session learnings committed and pushed."
+# Never push automatically. Re-run the portable-memory guard after approval;
+# a human must approve any push unless an explicit policy override is configured.
+echo "Session learnings committed; push remains human-gated."
 ```
 
 ---
@@ -179,7 +178,7 @@ Propose the addition. Present separately for approval (same A/B/C gate). Only up
 
 ## Idempotency Rules
 
-- Never duplicate an entry already in LESSONS.md (check for duplicate dates/topics first)
+- Never duplicate an entry already in PT `.agent` memory (check for duplicate topics first)
 - Never overwrite existing entries — append only
 - Never bump the skill version number from inside the skill itself
 - If running multiple times in one session, only the last run's learnings are committed

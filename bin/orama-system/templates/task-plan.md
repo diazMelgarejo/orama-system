@@ -103,11 +103,12 @@ Coverage:          ___%
 
 ## ✓ Capture Lessons
 
-> Run `python scripts/capture_lesson.py` if any corrections were needed.
+> Run `PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --quick`
+> if any corrections were needed. PT `.agent` is the v1 lesson authority.
 
 Lessons captured this task:
 - [ ] None needed
-- [ ] [Pattern name] — see tasks/lessons.md
+- [ ] [Pattern name] — recorded through PT `.agent` lesson memory
 
 ---
 

@@ -240,8 +240,10 @@ guard extends `cost_guard.py` with a fail-closed `gate()`; the Anthropic leg use
 ### D18 — Langfuse trace-tree is a methodology annotation layer in orama, not a service (2026-06-17)
 
 Emulate Langfuse's trace-tree pattern as an additive JSONL annotation layer
-(`trace_session.py`) alongside existing `capture_lesson.py`/`LESSONS.md`. Never
-a Langfuse installation, never runtime state, never a PT change. Gate doc:
+(`trace_session.py`) alongside the lesson-capture frontend. Never a Langfuse
+installation. The former "never runtime state, never a PT change" persistence claim is
+partially superseded by D26: v1 delegates development memory to PT and v2 runtime
+persistence is deferred to Anamnesis. Gate doc:
 [`35-langfuse-trace-tree-pattern.md`](35-langfuse-trace-tree-pattern.md).
 
 ### D19 — ClawRouter scoring is a weighted multi-dimensional scorer inside `model_registry.py`, PT-only (2026-06-17)

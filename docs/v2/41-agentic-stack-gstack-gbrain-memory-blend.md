@@ -174,6 +174,11 @@ Implementation lives in a PT wrapper script or harness_manager plugin patch appl
 
 ## 6. Gstack + Gbrain + RAG + `.agent/` memory — how they fit
 
+> **v1/v2 migration addendum (2026-08-25):** PT `.agent` remains the canonical
+> development-memory authority in v1. Orama's `capture_lesson.py` is now a stable
+> controller to PT `learn.py`; private runtime persistence is deliberately deferred to
+> tentative Anamnesis. See [`56-anamnesis-runtime-memory-migration.md`](56-anamnesis-runtime-memory-migration.md).
+
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Harness (Cursor, Hermes, OpenClaw, Codex, Claude, Antigravity)  │

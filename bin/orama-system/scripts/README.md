@@ -32,20 +32,22 @@ python verify_before_done.py --task "API update" --dir ../my-project
 
 ## `capture_lesson.py` (Directive #3)
 
-Appends a structured lesson to `tasks/lessons.md` after any mistake or user correction.
+Stable lesson-capture frontend. In v1 it delegates development lessons to PT's
+tracked Agentic-Stack; use `--backend legacy` only for an intentional standalone
+compatibility installation. Runtime capture is reserved for provisioned v2 Anamnesis.
 
 ```bash
 # Interactive (guided prompts)
-python capture_lesson.py
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python capture_lesson.py
 
 # With known pattern
-python capture_lesson.py --pattern "Premature Optimization"
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python capture_lesson.py --quick --pattern "Premature Optimization"
 
 # Review all lessons
-python capture_lesson.py --review
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python capture_lesson.py --review
 
 # Show stats
-python capture_lesson.py --stats
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python capture_lesson.py --stats
 ```
 
 **Lesson format captures:**

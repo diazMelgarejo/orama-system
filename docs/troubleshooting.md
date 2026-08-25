@@ -46,8 +46,8 @@
 
 ## Lessons File Not Found
 
-**Symptom**: `capture_lesson.py` can't find `tasks/lessons.md`
+**Symptom**: `capture_lesson.py` reports `ORAMASYS_LESSON_E_PT_AGENT_UNAVAILABLE`
 **Solutions**:
-1. Run `./scripts/create_task_plan.sh "Task"` first — creates the tasks/ directory
-2. Or: `mkdir -p tasks && touch tasks/lessons.md`
-3. Use `--dir /path/to/project` flag to specify project directory
+1. Set `PERPETUA_TOOLS_ROOT` (or pass `--pt-root`) to the PT checkout containing `.agent/tools/learn.py`.
+2. For an intentional standalone legacy installation only, use `--backend legacy`.
+3. `--mode runtime` needs provisioned Anamnesis and fails closed until v2 provisioning exists.

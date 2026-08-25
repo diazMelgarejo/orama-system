@@ -1,6 +1,8 @@
 # Module: Lessons + SKILL.md Authoring Tooling
 
-> Status: stub — v1 carry-over, ships at own pace
+> Status: partially superseded for persistence — see
+> [`56-anamnesis-runtime-memory-migration.md`](../56-anamnesis-runtime-memory-migration.md).
+> The capture workflow remains; only its backend ownership changes.
 
 ## What it does
 
@@ -8,13 +10,14 @@ Ports the existing lessons capture system (`docs/LESSONS.md`, `/self-improve` sk
 
 ## Current state in v1.0 RC
 
-- `docs/LESSONS.md` — canonical chronological lesson log (52KB, shared across ECC/AutoResearcher/Claude sessions)
-- `scripts/capture_lesson.py` — appends lessons in Symptom → Cause → Fix → Rule format
+- PT `.agent/memory/` — canonical tracked v1 development memory, shared through PT
+- `scripts/capture_lesson.py` — stable frontend/controller; delegates to PT in development
 - `orama-system/SKILL.md` + `bin/orama-system/SKILL.md` — the mother skill
 
 ## v2 migration
 
-- Lessons format stays the same (Symptom → Cause → Fix → Rule)
+- Lessons format stays structured; PT's Agentic-Stack model is canonical in v1
+- Runtime persistence moves only when provisioned Anamnesis exists; it is not implemented here
 - `GossipBus` events can auto-trigger lesson capture at graph completion
 - SKILL.md authoring moves to a dedicated `oramasys/orama/skills/` namespace
 - AFRP gate + CIDF content insertion framework preserved as non-kernel utilities

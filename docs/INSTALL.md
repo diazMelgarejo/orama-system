@@ -113,8 +113,8 @@ bash ~/.claude/skills/orama-system/scripts/create_task_plan.sh "Build auth syste
 # Verify before marking done (Directive #4)
 python3 ~/.claude/skills/orama-system/scripts/verify_before_done.py --task "Auth system" --dir .
 
-# Capture a lesson (Directive #3)
-python3 ~/.claude/skills/orama-system/scripts/capture_lesson.py
+# Capture a development lesson (Directive #3). PT `.agent` is the v1 authority.
+PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python3 ~/.claude/skills/orama-system/scripts/capture_lesson.py --quick
 ```
 
 ## Uninstall
