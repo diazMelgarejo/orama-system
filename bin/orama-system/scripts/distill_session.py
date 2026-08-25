@@ -383,7 +383,7 @@ def main(argv=None) -> int:
         # Offline distillation is standalone: read-only lesson review must not
         # require a sibling PT checkout (CI often lacks learn.py even when
         # PERPETUA_TOOLS_ROOT is set).
-        cl_argv = ["--backend", "legacy", "--review"]
+        cl_argv = ["--backend", "legacy", "--review", "--dir", str(_REPO_ROOT)]
 
     cl_result = _run_hook(
         _SCRIPTS_DIR / "capture_lesson.py",

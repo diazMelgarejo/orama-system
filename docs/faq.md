@@ -32,7 +32,10 @@ A: No. The default in-memory backend works for development and single-machine se
 A: Single-agent for most tasks — it's faster and simpler. Multi-agent for large parallel tasks (refactoring many files, researching multiple approaches simultaneously, or when context window is a bottleneck).
 
 **Q: How do I add my own lessons?**
-A: Run `capture_lesson.py` with `PERPETUA_TOOLS_ROOT` configured; v1 delegates to PT's tracked `.agent` memory. `--backend legacy` is an explicit standalone path that uses `~/lessons.md` and migrates a pre-existing `tasks/lessons.md` there.
+A: Run `capture_lesson.py` with `PERPETUA_TOOLS_ROOT` configured; v1 delegates development lessons to PT's tracked `.agent` memory. V1 does not start a new user/runtime lesson log. `--backend legacy` preserves an already initialized compatibility log: it migrates an existing clone or installation `tasks/lessons.md` to `~/tasks/lessons.md`, or reads an existing path supplied through `--legacy-path` or `ORAMASYS_LEGACY_LESSONS_PATH`. Missing logs are never created. Runtime capture starts after v2 Anamnesis provisioning.
+
+**Q: Why do runtime `--review` and `--stats` sometimes work before v2?**
+A: They are compatibility reads only. They work when `~/tasks/lessons.md` already exists, or when an explicitly configured legacy log exists. Otherwise runtime review and stats fail closed until Anamnesis is provisioned. On successful v2 provisioning, the legacy log migrates automatically into the private runtime store.
 
 **Q: Can I customize the skill for my project?**
 A: Yes! Add a `## Project-Specific Rules` section to `bin/orama-system/SKILL.md`. Specify your stack, patterns, and constraints. The skill architecture standard supports this in its "Degrees of Freedom" section.

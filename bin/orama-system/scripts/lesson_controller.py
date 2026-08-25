@@ -112,16 +112,19 @@ class PTAgentBackend:
 
 
 class LegacyMarkdownBackend:
-    """Explicit escape hatch for standalone legacy installations only."""
+    """Read and update an already-initialized standalone legacy log only."""
 
     def __init__(self, path: Path) -> None:
         self.path = path
 
     def capture(self, payload: LessonPayload) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        existing = self.path.read_text(encoding="utf-8") if self.path.exists() else (
-            "# Lessons Learned — Self-Improvement Log\n\n---\n"
-        )
+        if not self.path.is_file():
+            raise LessonBackendUnavailable(
+                "ORAMASYS_LESSON_E_LEGACY_UNINITIALIZED",
+                "Legacy lesson capture is available only for an existing compatibility "
+                f"log; no new v1 user-level log will be created at {self.path}.",
+            )
+        existing = self.path.read_text(encoding="utf-8")
         # Write the complete replacement and atomically swap it into place so a
         # killed capture process cannot leave an incomplete lesson log behind.
         with tempfile.NamedTemporaryFile(
@@ -171,7 +174,7 @@ def resolve_backend(
             )
         return PTAgentBackend(pt_root)
     if backend_name == "legacy":
-        return LegacyMarkdownBackend(legacy_path or Path.home() / "lessons.md")
+        return LegacyMarkdownBackend(legacy_path or Path.home() / "tasks" / "lessons.md")
     raise LessonBackendUnavailable(
         "ORAMASYS_LESSON_E_BACKEND_INVALID", f"Unknown lesson backend: {backend_name}"
     )

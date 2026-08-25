@@ -35,7 +35,11 @@ python verify_before_done.py --task "API update" --dir ../my-project
 
 Stable lesson-capture frontend. In v1 it delegates development lessons to PT's
 tracked Agentic-Stack; use `--backend legacy` only for an intentional standalone
-compatibility installation. Runtime capture is reserved for provisioned v2 Anamnesis.
+compatibility installation. Legacy mode uses an already initialized
+`~/tasks/lessons.md` (or an existing `--legacy-path`) and can migrate an old
+clone/install `tasks/lessons.md` there; it never creates a new v1 log. Runtime
+capture is reserved for provisioned v2 Anamnesis. Runtime `--review` and
+`--stats` retain read-only compatibility only for those existing logs.
 
 ```bash
 # Interactive (guided prompts)

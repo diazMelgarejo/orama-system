@@ -66,28 +66,46 @@ CATEGORIES = [
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
-def find_lessons_file(start_dir: Path, *, home_dir: Path | None = None) -> Path:
-    """Migrate a legacy task log to the explicit home-level legacy location.
+def find_lessons_file(
+    start_dir: Path,
+    *,
+    configured_path: Path | None = None,
+    home_dir: Path | None = None,
+) -> Path | None:
+    """Return an initialized legacy log, migrating an old task log if necessary.
 
     The absence of an old task log is not a request to create one.  The caller
     invokes this only for the explicit legacy backend, so normal PT and runtime
     selection remains read-only with respect to historical task directories.
     """
-    destination = (home_dir or Path.home()) / "lessons.md"
+    if configured_path is not None:
+        if configured_path.is_file():
+            return configured_path
+        raise LessonBackendUnavailable(
+            "ORAMASYS_LESSON_E_LEGACY_PATH_UNAVAILABLE",
+            f"Configured legacy lesson log does not exist: {configured_path}",
+        )
+
+    destination = (home_dir or Path.home()) / "tasks" / "lessons.md"
+    if destination.is_file():
+        return destination
     current = start_dir
-    for _ in range(5):
+    while True:
         candidate = current / "tasks" / "lessons.md"
-        if candidate.exists():
+        if candidate.is_file():
             if destination.exists():
                 raise LessonBackendUnavailable(
                     "ORAMASYS_LESSON_E_LEGACY_MIGRATION_CONFLICT",
                     "Cannot migrate legacy tasks/lessons.md because the home-level "
                     f"destination already exists: {destination}",
                 )
+            destination.parent.mkdir(parents=True, exist_ok=True)
             candidate.replace(destination)
             return destination
+        if current.parent == current:
+            break
         current = current.parent
-    return destination
+    return None
 
 
 def prompt(label: str, hint: str = "", required: bool = True) -> str:
@@ -296,25 +314,45 @@ def main() -> None:
                         default="auto", help="Backend controller selection.")
     parser.add_argument("--pt-root", default=os.environ.get("PERPETUA_TOOLS_ROOT"),
                         help="Perpetua-Tools root for tracked development memory.")
+    parser.add_argument(
+        "--legacy-path",
+        default=os.environ.get("ORAMASYS_LEGACY_LESSONS_PATH"),
+        help="Existing explicit legacy lesson log; it is never created by v1.",
+    )
     args = parser.parse_args()
 
     project_dir  = Path(args.dir).resolve()
     pt_root = Path(args.pt_root).resolve() if args.pt_root else None
+    configured_legacy_path = (
+        Path(args.legacy_path).expanduser().resolve() if args.legacy_path else None
+    )
     try:
-        backend = resolve_backend(
-            mode=args.mode,
-            backend_name=args.backend,
-            pt_root=pt_root,
-            legacy_path=Path.home() / "lessons.md",
+        needs_legacy_compatibility = args.backend == "legacy" or (
+            args.mode == "runtime" and args.backend == "auto" and (args.review or args.stats)
         )
-        lessons_path = Path.home() / "lessons.md"
-        if isinstance(backend, LegacyMarkdownBackend):
-            lessons_path = find_lessons_file(project_dir)
-            backend = LegacyMarkdownBackend(lessons_path)
+        legacy_path = (
+            find_lessons_file(
+                project_dir, configured_path=configured_legacy_path
+            )
+            if needs_legacy_compatibility
+            else None
+        )
+        if legacy_path is not None and args.mode == "runtime" and args.backend == "auto":
+            backend = LegacyMarkdownBackend(legacy_path)
+        else:
+            backend = resolve_backend(
+                mode=args.mode,
+                backend_name=args.backend,
+                pt_root=pt_root,
+                legacy_path=legacy_path,
+            )
+        lessons_path = legacy_path
         if args.review:
             if isinstance(backend, PTAgentBackend):
                 review_pt_memory(backend.root)
             elif isinstance(backend, LegacyMarkdownBackend):
+                if lessons_path is None:
+                    raise DeferredAnamnesisBackend.unavailable()
                 review_lessons(lessons_path)
             else:
                 raise DeferredAnamnesisBackend.unavailable()
@@ -323,6 +361,8 @@ def main() -> None:
             if isinstance(backend, PTAgentBackend):
                 show_pt_stats(backend.root)
             elif isinstance(backend, LegacyMarkdownBackend):
+                if lessons_path is None:
+                    raise DeferredAnamnesisBackend.unavailable()
                 show_stats(lessons_path)
             else:
                 raise DeferredAnamnesisBackend.unavailable()

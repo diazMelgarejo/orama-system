@@ -103,7 +103,7 @@ YYYY-MM-DD HH:MM — [What was completed / decision made]
 
 ### Test Results
 
-```
+```text
 Unit tests:        ___ passing, ___ failing
 Integration tests: ___ passing, ___ failing
 Coverage:          ___%

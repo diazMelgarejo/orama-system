@@ -26,7 +26,22 @@ Options:
   --review          Show all existing lessons
   --stats           Show mistake category statistics
   --dir PATH        Project directory (default: ".")
+  --mode MODE       development|runtime (default: development)
+  --backend NAME    auto|pt-agent|legacy|anamnesis (default: auto)
+  --pt-root PATH    Perpetua-Tools root for development memory
+  --legacy-path PATH
+                  Existing legacy Markdown log; also configurable through
+                  ORAMASYS_LEGACY_LESSONS_PATH. V1 never creates this file.
 ```
+
+In v1, development mode delegates capture to PT `.agent`. Runtime capture fails
+closed until Anamnesis is provisioned. Runtime `--review` and `--stats` read
+only an already initialized legacy compatibility log: `~/tasks/lessons.md`, or
+an existing explicit `--legacy-path`. When the old `tasks/lessons.md` exists in
+a clone or installation directory, legacy compatibility migrates it to
+`~/tasks/lessons.md`; missing logs are not created. After successful v2
+provisioning, that legacy log migrates automatically to the private runtime
+store.
 
 ### create_task_plan.sh
 ```

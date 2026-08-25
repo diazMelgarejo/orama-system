@@ -76,7 +76,7 @@ this session used that proof: remote and local trees both resolved to
 `70cc4f650e62922619c1194ca1e21c7d2e10496a` before PR #328 moved.
 
 This is deliberately stricter than a visual PR scan. It protects against a
-wrong worktree, a partial tree payload, `git add -u`, and reverse-diff style
+wrong worktree, a partial tree payload, `git add -u`, and reverse-diff-style
 mistakes. See the [canonical guard skill](../../bin/orama-system/skills/git-file-deletion-guard/SKILL.md)
 and its [parent git-history doctrine](../../bin/orama-system/skills/git-history-surgery/SKILL.md).
 
@@ -98,7 +98,7 @@ The controller preserves the CLI workflow while changing backend ownership:
 | `--mode development --backend auto` | Requires `PERPETUA_TOOLS_ROOT` / `--pt-root`; delegates to PT `.agent/tools/learn.py` |
 | `--quick` | Collects one prevention rule and produces a complete structured payload |
 | `--review` / `--stats` with PT | Reads PT's rendered semantic lesson view; does not mutate memory |
-| `--backend legacy` | Explicit standalone compatibility path; creates/replaces the Markdown log atomically |
+| `--backend legacy` | Explicit compatibility path for an already-initialized Markdown log; it never creates a new v1 log |
 | `--mode runtime --backend auto` | Fails closed with `ORAMASYS_LESSON_E_ANAMNESIS_UNAVAILABLE` until v2 provisioning exists |
 
 The implementation and regression coverage live in
