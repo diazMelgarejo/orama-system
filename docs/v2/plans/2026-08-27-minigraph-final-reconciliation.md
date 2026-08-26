@@ -2,25 +2,30 @@
 # MiniGraph Final Reconciliation — Execution Plan
 
 **Date:** 2026-08-27  
-**Status:** In execution  
-**Canonical architecture:** [`../57-minigraph-final-reconciliation.md`](../57-minigraph-final-reconciliation.md)
+**Date basis:** Asia/Manila (UTC+08:00)  
+**Status:** in execution  
+**Architecture:** [`../57-minigraph-final-reconciliation.md`](../57-minigraph-final-reconciliation.md)
 
 ## Branch isolation
 
-Both branches were created from frozen `main` tips before writes:
+Both branches were created from frozen `main` tips before writes.
 
 | Repository | Base main | Working branch |
 | --- | --- | --- |
 | `oramasys/perpetua-core` | `8c063f41f6b8d31f6a8aa71d6c78155ea9690c90` | `2026-08-27-minigraph-final-reconciliation` |
 | `diazMelgarejo/orama-system` | `568b4167edaa25658b3a001b4f2273f774014f9a` | `2026-08-27-minigraph-final-reconciliation` |
 
-The execution environment could not create network-backed local Git worktrees because GitHub DNS was unavailable to the sandbox. Isolation was therefore preserved with fresh remote branches pinned to the exact main SHAs above. Do not rewrite this history as if literal local worktree directories existed.
+The sandbox could not create network-backed local Git worktrees because GitHub
+DNS was unavailable to the shell. Isolation was therefore preserved with fresh
+remote branches pinned to the exact `main` SHAs above.
+
+Do not rewrite this history as if literal local worktree directories existed.
 
 ---
 
-## R0 — Characterize the contracts
+## R0 — Characterize contracts
 
-Add/retain tests for:
+Add or retain tests for:
 
 - linear traversal and ordered visit provenance;
 - conditional routing after state merge;
@@ -29,23 +34,23 @@ Add/retain tests for:
 - structural interrupts;
 - compile detachment;
 - kernel no-plugin/no-optional-import architecture;
-- async function node;
-- sync function node;
-- async callable object;
-- sync function returning an awaitable;
-- actual `ToolNode` installed in a real MiniGraph;
-- invalid node delta;
-- empty/non-string route;
+- async function nodes;
+- sync function nodes;
+- async callable objects;
+- sync functions returning awaitables;
+- actual `ToolNode` execution inside MiniGraph;
+- invalid node deltas;
+- empty/non-string routes;
 - optional interrupt payload;
 - exact max-step fields.
 
-Gate: behavioral bugs are represented as tests before being considered closed.
+Behavioral bugs are not closed until represented by a regression test.
 
 ---
 
 ## R1 — Reconcile the kernel
 
-Target runtime ownership:
+Target ownership:
 
 ```text
 MiniGraph builder
@@ -63,24 +68,27 @@ Required changes:
 2. call first, then `inspect.isawaitable(result)`;
 3. require dict node deltas;
 4. preserve `nodes_visited: list[str]`;
-5. evaluate conditional edges on updated state;
+5. route on updated state;
 6. make END the sole normal terminal route;
 7. reject empty/non-string routes;
-8. define `MaxStepsExceeded.steps` as completed executions;
-9. define `last_node` as most recently entered node;
-10. use optional structural interrupt payload;
-11. remove dead `interrupt_handler` constructor API;
-12. make `CompiledGraph` the runtime and keep source builder mutable;
-13. do not introduce an arbitrary physical-line gate.
+8. count completed executions in `MaxStepsExceeded.steps`;
+9. report the most recently entered node in `last_node`;
+10. support optional structural interrupt payload;
+11. remove the dead `interrupt_handler` constructor API;
+12. keep the builder mutable and compiled topology detached;
+13. do not introduce a physical-line gate.
 
-Core implementation commit: `oramasys/perpetua-core@853b9b9243aa6fbab735ff4ae0d980f16281d5d5`.  
-Current core PR head after CI-workflow addition: `fc59956021e07bac05d4d51dd6452e6ff2ecbf32`.
+Core implementation commit:
+`853b9b9243aa6fbab735ff4ae0d980f16281d5d5`.
+
+Current core PR head after adding the test workflow:
+`fc59956021e07bac05d4d51dd6452e6ff2ecbf32`.
 
 ---
 
-## R2 — Establish one scheduler/event seam
+## R2 — One scheduler/event seam
 
-Add a control-only `GraphEvent` stream from the same scheduler used by `ainvoke()`.
+Add a control-only `GraphEvent` stream from the scheduler used by `ainvoke()`.
 
 Required public events:
 
@@ -92,42 +100,47 @@ interrupt
 done
 ```
 
-Rewrite the existing streaming plugin as a thin adapter over `CompiledGraph.asteps()`.
+Rewrite the existing streaming plugin as a thin adapter over
+`CompiledGraph.asteps()`.
 
 Acceptance:
 
-- no traversal through streaming's own `_nodes`/`_edges` loop;
+- no streaming traversal through private `_nodes`/`_edges`;
 - no duplicate max-step implementation;
 - no duplicate interrupt implementation;
 - no provider/exporter/persistence dependency in `GraphEvent`.
 
-Implemented on the same core branch/PR.
+Implemented on the same core branch and PR.
 
 ---
 
-## R2.5 — Exact-head verification
+## R2.5 — Verification
 
-A minimal `.github/workflows/test.yml` was added to `perpetua-core` to run the full package tests on Python 3.11 and 3.12 for future pull requests.
+A minimal `.github/workflows/test.yml` was added to `perpetua-core` for the full
+package tests on Python 3.11 and 3.12 in future pull requests.
 
 Verification rules:
 
-- exact PR head, not an earlier local checkout, is authoritative;
-- CodeRabbit/review status is independent from deterministic tests;
-- if GitHub Actions does not run, report that fact rather than asserting green CI;
-- merge only after the available deterministic verifier is green or the absence of repository Actions is explicitly accepted as a repository limitation.
+- the exact PR head is authoritative;
+- CodeRabbit/review and deterministic tests are separate gates;
+- never claim green CI when GitHub Actions did not run;
+- record repository-level verifier limitations explicitly.
 
 Current evidence:
 
 - baseline main recorded 62 passing tests;
-- targeted sandbox execution of the reconciled code passed ToolNode-in-graph, returned-awaitable, post-merge routing, strict contract failures, cycle accounting, compile detachment, and streaming parity;
-- CodeRabbit completed with no actionable review comments on the implementation diff;
-- GitHub Actions had not started a run for the newly introduced workflow at the time of this plan update.
+- targeted sandbox execution passed the reconciled high-risk paths;
+- the targeted sweep included real `ToolNode` execution inside MiniGraph;
+- it also covered returned-awaitable, routing, strict contracts, cycle
+  accounting, compile detachment, and streaming parity;
+- CodeRabbit produced no actionable implementation comments;
+- GitHub Actions had not started the new workflow on the current PR.
 
 Core PR: <https://github.com/oramasys/perpetua-core/pull/1>
 
 ---
 
-## R3 — Parallel reducer/join contract — deferred
+## R3 — Parallel reducers and joins — deferred
 
 Upgrade the existing `parallel.py`; do not create a competing subsystem.
 
@@ -163,13 +176,13 @@ run_id
 logical step/node
 ```
 
-Before automatic retry/resume of effectful nodes, define idempotency/dedupe semantics.
+Before automatic retry/resume of effects, define idempotency and deduplication.
 
 ---
 
-## R4 — GraphSpec/compiler/linter in `orama-system` — deferred
+## R4 — GraphSpec in `orama-system` — deferred
 
-The final face-off resolves ownership as:
+The final face-off resolves ownership as follows.
 
 ```text
 diazMelgarejo/orama-system
@@ -184,17 +197,21 @@ oramasys/perpetua-core
   realized graph execution mechanics
 ```
 
-`perpetua-core` must not import upward from `orama-system`.
+`perpetua-core` MUST NOT import upward from `orama-system`.
 
-`oramasys/oramasys` may become a consumer or runtime projection of approved GraphSpecs later, but ownership does not move there implicitly. Any such move requires a new explicit architecture decision.
+`oramasys/oramasys` may later consume or host an approved GraphSpec projection.
+Ownership does not move there implicitly; that requires a new architecture
+record.
 
-The GraphSpec phase must not inflate `perpetua-core/graph/engine.py`.
+The GraphSpec phase MUST NOT inflate `perpetua-core/graph/engine.py`.
 
 ---
 
-## R5 — Optimizer/trace learning — research only
+## R5 — Optimizer and trace learning — research only
 
-Do not ship production graph mutation until there is a versioned GraphSpec, trace corpus, locked evaluator, multi-objective metrics, candidate isolation, and promotion gate.
+Do not ship production graph mutation until there is a versioned `GraphSpec`,
+trace corpus, locked evaluator, multi-objective metrics, candidate isolation,
+and a promotion gate.
 
 Required authority separation:
 
@@ -202,19 +219,20 @@ Required authority separation:
 mutator != evaluator
 ```
 
-Trace-derived candidates should graduate through governed review/memory, not direct runtime self-rewrite.
+Trace-derived candidates should graduate through governed review/memory, not
+direct runtime self-rewrite.
 
 ---
 
 ## Merge order
 
-1. make `perpetua-core` R0–R2 deterministic tests green, or explicitly record the repository-level Actions limitation alongside the targeted verifier evidence;
-2. review exact core PR head and resolve substantive findings;
-3. merge `perpetua-core` reconciliation;
-4. merge this `orama-system` canonicalization after its review/docs checks are green;
-5. start R3 only as a new branch/PR from the then-current main.
+1. verify `perpetua-core` R0–R2 with every available deterministic gate;
+2. review the exact core PR head and resolve substantive findings;
+3. merge the core reconciliation;
+4. merge this canonicalization after review and Markdownlint are green;
+5. start R3 only from the then-current `main` in a new branch/PR.
 
-Do not bundle R3+ into the R0–R2 merge merely because the architecture record already describes them.
+Do not bundle R3+ merely because this plan already describes it.
 
 ---
 
@@ -223,8 +241,8 @@ Do not bundle R3+ into the R0–R2 merge merely because the architecture record 
 This reconciliation is complete when:
 
 - core R0–R2 changes are merged from the pinned branch;
-- the canonical architecture record is merged;
-- historical MiniGraph line-count/freeze rules are no longer treated as current authority;
-- `orama-system` is unambiguous as the owner of GraphSpec/lint/evaluation/runtime-policy authority;
-- future agents can identify exactly which repository owns kernel execution, graph specification, runtime policy, and PT telemetry/memory concerns;
-- no duplicate plugin namespace or scheduler survives.
+- this canonical architecture record is merged;
+- obsolete MiniGraph line-count/freeze rules are no longer current authority;
+- `orama-system` clearly owns GraphSpec/lint/evaluation/runtime-policy authority;
+- repository ownership is unambiguous for future agents;
+- no duplicate plugin namespace or graph scheduler survives.

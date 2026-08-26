@@ -1,33 +1,37 @@
 <!-- lint-ignore LINT-013 -->
 # 57 — MiniGraph Final Reconciliation
 
-**Status:** Canonical architecture record — 2026-08-27  
-**Applies to:** `oramasys/perpetua-core` graph kernel and `diazMelgarejo/orama-system` graph-spec/runtime-policy authority  
-**Implementation branch:** `2026-08-27-minigraph-final-reconciliation`  
-**Core implementation PR:** <https://github.com/oramasys/perpetua-core/pull/1>
+**Status:** canonical architecture record — 2026-08-27  
+**Date basis:** Asia/Manila (UTC+08:00)  
+**Core repo:** `oramasys/perpetua-core`  
+**Upper-layer authority:** `diazMelgarejo/orama-system`  
+**Core PR:** <https://github.com/oramasys/perpetua-core/pull/1>
 
-This record resolves the final face-off between the shipped canonical MiniGraph, Kimi's standalone rewrite, the subsequent Kimi/Claude review, and the current graph-engineering research companion. Future work MUST use this document when an older MiniGraph-specific statement conflicts with it.
+This record resolves the final face-off between the shipped MiniGraph, Kimi's
+standalone rewrite, the Kimi/Claude review, and the graph-engineering research.
+Future work MUST use this record when an older MiniGraph statement conflicts.
 
 ## Supersession map
 
-This document is additive history, but it supersedes the following MiniGraph-specific clauses where they conflict:
+This document preserves history but supersedes conflicting MiniGraph clauses.
 
 | Earlier authority | Superseded clause | Current rule |
 | --- | --- | --- |
-| [`00-context-and-decisions.md`](00-context-and-decisions.md) D8 implementation note | physical `~70`/`65`-line kernel framing as an architectural target | kernel stays small/pure/irreducible; physical line count is a review signal, never a semantic CI gate |
-| [`01-kernel-spec.md`](01-kernel-spec.md) §4 | old single-loop engine sketch; async-function-only invocation; implicit falsey termination | `CompiledGraph` owns the sole scheduler; returned awaitables are awaited; node/route contracts fail closed |
-| [`01-kernel-spec.md`](01-kernel-spec.md) streaming sketch | streaming may wrap/reimplement traversal | adapters consume the canonical structural `asteps()` seam |
-| [`04-build-order.md`](04-build-order.md) Phase 2 | Phase 2 described as completely closed | Phase 2 remains shipped historically, with this R0–R2 reconciliation as a correctness/architecture hardening addendum |
-| [`15-phase1-as-built.md`](15-phase1-as-built.md) | historical as-built line counts/topology | retained as history; current runtime contract is defined here and by `perpetua-core` tests |
-| [`../superpowers/specs/2026-05-17-salvage-translation-design.md`](../superpowers/specs/2026-05-17-salvage-translation-design.md) | engine `<=80` hard invariant; source-builder freeze expectations | line cap retired; builder stays mutable; compiled topology is detached and has no mutation API |
+| [`00-context-and-decisions.md`](00-context-and-decisions.md) D8 | `~70`/`65` physical-line target | Small/pure/irreducible is the invariant; physical line count is only a review signal. |
+| [`01-kernel-spec.md`](01-kernel-spec.md) §4 | old loop and async-function-only invocation | `CompiledGraph` owns one scheduler; returned awaitables are awaited; contracts fail closed. |
+| [`01-kernel-spec.md`](01-kernel-spec.md) streaming sketch | adapter may reimplement traversal | Adapters consume canonical `asteps()` events. |
+| [`04-build-order.md`](04-build-order.md) Phase 2 | Phase 2 treated as permanently closed | R0–R2 is a correctness/architecture hardening addendum. |
+| [`15-phase1-as-built.md`](15-phase1-as-built.md) | historical line counts/topology | Retained as history; this record and current tests define the runtime contract. |
+| [`../superpowers/specs/2026-05-17-salvage-translation-design.md`](../superpowers/specs/2026-05-17-salvage-translation-design.md) | `<=80` hard cap and source-builder freeze | No hard cap; builder stays mutable; compiled topology is detached. |
 
-Historical documents remain useful evidence of why the design evolved. They are not to be mechanically restored over this record.
+Historical documents remain evidence of why the design evolved. Do not
+mechanically restore their superseded constraints.
 
 ---
 
-## 1. Locked control-structure doctrine
+## 1. Control-structure doctrine
 
-Use the least powerful control structure that makes the contract explicit:
+Use the least powerful control structure that makes the contract explicit.
 
 ```text
 Prompt = one inference
@@ -36,32 +40,36 @@ Loop   = bounded repetition
 Graph  = explicit state machine
 ```
 
-A workflow graduates to a graph when topology itself is domain logic: named states, conditional routing, legitimate cycles, multiple exits, interruption/resume, fan-out/fan-in, subgraphs, or traversal provenance.
+Promote to a graph when topology is domain logic: named states, branches,
+cycles, multiple exits, interrupts, fan-out/fan-in, subgraphs, or traversal
+provenance.
 
-The graph is not merely a diagram. It is a state-transition contract with bounded execution and observable control semantics.
+A graph is a state-transition contract, not merely a diagram.
 
 ---
 
-## 2. Canonical state contract
+## 2. Canonical state
 
 `PerpetuaState` remains the one canonical in-process graph state.
 
 Non-negotiable properties:
 
-- Pydantic v2 `BaseModel`, not an alternate dataclass state;
+- Pydantic v2 `BaseModel`;
 - `scratchpad: dict[str, Any]`;
 - `nodes_visited: list[str]`;
 - nodes return `dict` deltas;
-- `PerpetuaState.merge()` remains the canonical sequential delta application path;
-- graph-run state is not long-term PT memory and is not a durable checkpoint format by itself.
+- `PerpetuaState.merge()` applies sequential node deltas;
+- graph-run state is neither PT long-term memory nor a durable checkpoint.
 
-Kimi's standalone `GraphState` is preserved only as historical design evidence. Its additive scratchpad/tuple visit merge semantics are not interchangeable with canonical `PerpetuaState.merge()`.
+Kimi's `GraphState` remains historical design evidence only. Its additive
+scratchpad and tuple-visit merge rules are not interchangeable with canonical
+`PerpetuaState.merge()` semantics.
 
 ---
 
-## 3. Canonical execution ownership
+## 3. Builder and runtime ownership
 
-The builder/runtime split is now explicit:
+The builder/runtime split is explicit.
 
 ```text
 MiniGraph
@@ -74,15 +82,18 @@ CompiledGraph
   sole scheduler owner
 ```
 
-`MiniGraph.ainvoke(state)` is a convenience operation that compiles a fresh snapshot and delegates execution to `CompiledGraph`.
+`MiniGraph.ainvoke(state)` compiles a fresh snapshot and delegates execution to
+`CompiledGraph`.
 
-`compile()` freezes the *compiled topology surface*, not the source builder. Later builder node/edge mutations MUST NOT affect an already compiled graph. Arbitrary callable objects are not deep-copied; detached topology is not magical deep immutability.
+Compilation detaches the topology, not arbitrary Python object internals.
+Later builder node/edge changes MUST NOT alter an existing compiled graph.
+The source builder remains mutable.
 
 ---
 
-## 4. Node invocation contract
+## 4. Node invocation
 
-The scheduler MUST invoke a node first and inspect the returned object:
+The scheduler invokes first and inspects the returned object.
 
 ```python
 result = node_fn(state)
@@ -90,76 +101,81 @@ if inspect.isawaitable(result):
     result = await result
 ```
 
-This is stronger than `asyncio.iscoroutinefunction(node_fn)` because it correctly supports:
+This supports:
 
-- ordinary async functions;
-- ordinary sync functions;
-- callable objects implementing `async __call__` (including the canonical `ToolNode`);
+- async functions;
+- sync functions;
+- callable objects with `async __call__`, including `ToolNode`;
 - sync functions that return awaitables.
 
-A node result MUST be a `dict` delta. `None` or another value is a contract error; the kernel does not silently coerce falsey results to `{}`.
+A node result MUST be a `dict` delta. `None` or another type is a contract
+error. The engine does not coerce falsey results to `{}`.
 
 ---
 
-## 5. Routing and termination contract
+## 5. Routing and termination
 
 `END = "__end__"` is the only normal terminal route.
 
-A static or conditional edge MUST resolve to a non-empty string. Invalid route values fail closed rather than being interpreted as successful termination.
+Every static or conditional edge MUST resolve to a non-empty string. Invalid
+route values fail closed rather than becoming implicit success.
 
-Execution order is invariant:
+Execution order is invariant.
 
 ```text
 enter node
 -> record visit
 -> execute node
--> await returned awaitable if necessary
+-> await returned awaitable if needed
 -> validate dict delta
 -> merge delta
 -> evaluate outgoing edge against UPDATED state
 ```
 
-This post-merge routing rule is part of the public graph semantics.
+Post-merge conditional routing is public graph semantics.
 
 ---
 
-## 6. Cycle-bound semantics
+## 6. Cycle bounds
 
-Every graph cycle remains bounded by `max_steps`.
+Every cycle remains bounded by `max_steps`.
 
-`MaxStepsExceeded` now has exact semantics:
+`MaxStepsExceeded` has exact semantics.
 
 ```text
 steps     = number of completed node executions
 last_node = most recently entered node
 ```
 
-The guard trips before an additional node would exceed the budget. A zero-step budget therefore reports `steps=0` and `last_node=START`.
+The guard trips before an additional node would exceed the budget. With a
+zero-step budget, the diagnostic is `steps=0` and `last_node=START`.
 
 ---
 
-## 7. Interrupt semantics
+## 7. Interrupts
 
-The kernel recognizes `Interrupt` structurally so it does not import the plugin package.
+The kernel recognizes `Interrupt` structurally so it never imports plugins.
 
-Required fields/behavior:
+Required behavior:
 
 - exception type name is `Interrupt`;
-- `prompt` is required by the structural protocol;
+- `prompt` is required;
 - `payload` is optional and read with `getattr(..., None)`;
-- graph status becomes `interrupted`;
-- metadata records interrupt node, prompt, and optional payload;
-- other exceptions propagate.
+- state becomes `interrupted`;
+- metadata records node, prompt, and optional payload;
+- unrelated exceptions propagate.
 
-The retired `interrupt_handler` constructor argument had no execution semantics and is removed rather than preserved as a misleading no-op API.
+The old `interrupt_handler` constructor argument had no execution semantics and
+is removed rather than preserved as a misleading no-op API.
 
-Durable resume is NOT introduced by this reconciliation. A later checkpoint/runtime design must define replay and idempotency semantics before claiming durable HITL resume.
+This reconciliation does NOT claim durable resume. Durable HITL requires later
+checkpoint, replay, and idempotency contracts.
 
 ---
 
 ## 8. One canonical execution seam
 
-The central architectural correction is a single structural execution seam owned by `CompiledGraph`:
+`CompiledGraph` owns one scheduler and exposes two views over it.
 
 ```text
 CompiledGraph._run(state)
@@ -169,7 +185,7 @@ CompiledGraph._run(state)
         +--> asteps(state)   -> structural GraphEvent stream
 ```
 
-Public structural event kinds are:
+Public event kinds are:
 
 ```text
 edge.selected
@@ -179,17 +195,20 @@ interrupt
 done
 ```
 
-The public `GraphEvent` contract carries only control-plane metadata such as event kind, node/target, completed-step count, and terminal reason.
+`GraphEvent` contains control-plane metadata only: event kind, node/target,
+completed-step count, and terminal reason.
 
-It does NOT carry raw prompts, state snapshots, node deltas, exporter details, database handles, provider policy, or persistence logic.
+It does NOT contain raw prompts, state snapshots, node deltas, database handles,
+provider policy, exporter configuration, or persistence logic.
 
-This seam exists so streaming, checkpoint, trace, and debugger adapters never need to copy the graph scheduler or read private `_nodes`/`_edges` topology.
+Streaming, checkpoint, trace, and debugger adapters MUST consume this seam
+instead of copying the scheduler or traversing private `_nodes`/`_edges`.
 
 ---
 
 ## 9. Plugin boundary
 
-Keep the existing canonical namespace:
+Keep the existing namespace.
 
 ```text
 perpetua_core/graph/plugins/
@@ -197,44 +216,44 @@ perpetua_core/graph/plugins/
 
 Do not create `minigraph_extras/` or another parallel plugin system.
 
-Current generic plugin concepts remain outside `engine.py`:
+Generic plugin concerns remain outside `engine.py`:
 
-- checkpointer;
-- interrupts / interrupt guard;
-- routing;
-- validation;
-- tools / ToolNode;
+- checkpointing;
+- interrupts / resume guard;
+- routing and validation;
+- tools / `ToolNode`;
 - subgraphs;
 - streaming;
 - structured LLM output;
 - parallel dispatch.
 
-The engine MUST NOT import plugins, providers, storage adapters, network clients, telemetry exporters, or upper-layer graph policy.
+The engine MUST NOT import plugins, providers, storage adapters, network
+clients, telemetry exporters, or upper-layer graph policy.
 
 ---
 
 ## 10. Parallelism before expansion
 
-The current parallel helper historically used ordered last-writer-wins merging with a scratchpad special case. That is not a sufficient generic fan-in contract.
+The existing parallel helper's ordered last-writer-wins behavior is not a
+sufficient generic fan-in contract.
 
-Before richer parallel graph semantics ship, define explicitly:
+Before richer parallel graph semantics ship, define explicit reducers and
+joins.
 
 ```text
 Reducer: REJECT_CONFLICT | FIRST | LAST | CONCAT | UNION | CUSTOM
 Join:    ALL | ANY | FIRST_SUCCESS | QUORUM | CUSTOM
 ```
 
-Branch completion timing MUST NOT silently define state merge semantics.
-
-This is R3 work, not part of the current kernel reconciliation.
+Branch completion timing MUST NOT silently define state merge behavior.
+This is deferred R3 work.
 
 ---
 
-## 11. Durability before resume claims
+## 11. Durability before resume
 
-Checkpoint evolution must upgrade the existing checkpointer, not create a second subsystem.
-
-A future durable checkpoint identity should include at least:
+Upgrade the existing checkpointer rather than introducing a second subsystem.
+A future durable identity should include at least:
 
 ```text
 checkpoint_id
@@ -247,15 +266,15 @@ logical step/node
 created_at
 ```
 
-Durable replay requires explicit effect idempotency/deduplication policy. External-write nodes cannot be automatically retried/resumed safely without such a contract.
-
-This is later R3/R4 work.
+Durable replay also requires explicit effect idempotency/deduplication policy.
+External-write nodes cannot be retried or resumed safely without that contract.
 
 ---
 
-## 12. Upper-layer graph architecture
+## 12. Upper-layer ownership
 
-`perpetua-core` executes a realized graph. The final face-off assigns the richer graph specification, linting, evaluation, version-selection, and runtime-policy authority to `diazMelgarejo/orama-system`.
+`perpetua-core` executes a realized graph. The final face-off assigns the
+richer graph-specification and runtime-policy authority to `orama-system`.
 
 Canonical future vocabulary:
 
@@ -266,16 +285,16 @@ GraphTrace      append-only observed execution evidence
 GraphCheckpoint resumable state + compatibility lineage
 ```
 
-Future `GraphSpec`/`NodeSpec`/`EdgeSpec`, graph lint, topology classification, budgets, runtime outcome taxonomy, effect policy, version selection, and workflow evaluation belong in `orama-system`, not in `MiniGraph.engine.py`.
-
-The authority boundary is:
+`GraphSpec`, `NodeSpec`, `EdgeSpec`, lint, topology classification, budgets,
+runtime outcome policy, effect policy, version selection, and evaluation belong
+in `diazMelgarejo/orama-system`, not in `MiniGraph.engine.py`.
 
 ```text
 diazMelgarejo/orama-system
   methodology + GraphSpec/NodeSpec/EdgeSpec authority
-  graph lint + version selection + evaluation + runtime policy
+  lint + version selection + evaluation + runtime policy
                   |
-                  | compiles/targets realized graph mechanics
+                  | compiles/targets realized mechanics
                   v
 oramasys/perpetua-core
   PerpetuaState + irreducible graph execution
@@ -283,30 +302,34 @@ oramasys/perpetua-core
 
 `perpetua-core` MUST NOT import upward from `orama-system`.
 
-The existing `oramasys/oramasys` repository may later consume, host, or implement an approved runtime projection of these specifications, but it is not the canonical owner established by this reconciliation. Moving ownership there requires a new explicit architecture decision rather than inference from older research diagrams.
+`oramasys/oramasys` may later consume or host an approved projection of these
+specifications. Ownership does not move there implicitly. Such a move requires
+a new explicit architecture decision.
 
 ---
 
 ## 13. Graph lint target
 
-Before executing a versioned `GraphSpec`, the `orama-system` upper layer should eventually validate:
+Before executing a versioned `GraphSpec`, the `orama-system` layer should
+validate at least:
 
 - entry exists;
-- all static targets exist;
+- static targets exist;
 - unreachable nodes are rejected or explicitly allowed;
 - every reachable path terminates or participates in a bounded cycle;
-- parallel fan-in declares join/reducer policy;
+- parallel fan-in declares join/reducer behavior;
 - durable/external-write nodes declare replay/effect policy;
 - stable graph/node IDs are present;
 - schema/version compatibility is explicit.
 
-Natural-language graph generation, if introduced, compiles to a typed validated `GraphSpec`; prose is never the runtime authority.
+Natural-language topology, if introduced, MUST compile to a typed validated
+`GraphSpec`. Prose is never runtime authority.
 
 ---
 
-## 14. Optimization/evaluation boundary
+## 14. Optimization and evaluation
 
-Automated graph evolution under `orama-system` remains a research lane until the following exist:
+Automated graph evolution remains research-only until all of these exist:
 
 ```text
 versioned GraphSpec
@@ -319,29 +342,31 @@ versioned GraphSpec
 
 Hard rule:
 
-> The component mutating a prompt, node, strategy, or graph may not alter the acceptance metric during the same experiment.
+> The component mutating a prompt, node, strategy, or graph may not alter the
+> acceptance metric during the same experiment.
 
-Trace-derived learning should flow through governed memory/review rather than direct uncontrolled runtime self-rewrite.
+Trace-derived learning should enter governed memory/review, not uncontrolled
+runtime self-rewrite.
 
 ---
 
-## 15. Reconciliation implementation status
+## 15. Implementation status
 
 Implemented in `oramasys/perpetua-core` PR #1:
 
 - canonical `PerpetuaState` retained;
 - returned-value awaitability;
-- direct `CompiledGraph` scheduler ownership;
-- strict dict-delta validation;
-- strict route validation / END-only normal termination;
+- `CompiledGraph` scheduler ownership;
+- strict node-delta and route validation;
+- END-only normal termination;
 - exact max-step diagnostics;
-- safe structural interrupt payload handling;
-- removed no-op `interrupt_handler` constructor surface;
-- detached compile regression coverage;
-- actual ToolNode-inside-MiniGraph regression coverage;
-- structural `GraphEvent` + `asteps()` seam;
-- streaming rewritten as a scheduler adapter;
-- repository-native Python 3.11/3.12 test workflow added for future PR verification.
+- optional structural interrupt payload;
+- removal of the no-op `interrupt_handler` constructor surface;
+- compile-detachment regression coverage;
+- real `ToolNode`-inside-MiniGraph regression coverage;
+- structural `GraphEvent` + `asteps()`;
+- streaming as a scheduler adapter;
+- a Python 3.11/3.12 test workflow for future PR verification.
 
 Deferred intentionally:
 
@@ -355,9 +380,9 @@ Deferred intentionally:
 
 ## 16. Acceptance invariants
 
-Any future change to this subsystem must preserve:
+Future changes MUST preserve:
 
-1. one canonical graph state model (`PerpetuaState`);
+1. one graph-state model: `PerpetuaState`;
 2. one scheduler implementation;
 3. async function/callable/returned-awaitable support;
 4. ordered `list[str]` visit provenance;
@@ -366,10 +391,12 @@ Any future change to this subsystem must preserve:
 7. deterministic bounded cycles;
 8. detached compiled topology;
 9. no plugin/provider/storage imports in the kernel;
-10. structural events remain provider/exporter independent;
-11. streaming does not traverse `_nodes`/`_edges` itself;
-12. dynamic/durable/optimization features stay outside the kernel until their contracts are proven.
+10. provider/exporter-independent structural events;
+11. streaming without private topology traversal;
+12. durable/dynamic/optimizer features outside the kernel until proven.
 
-The north star is unchanged:
+The north star remains:
 
-> Keep intelligence flexible inside nodes, keep control semantics explicit in the graph, keep effects auditable at boundaries, keep evaluation independent from mutation, and keep the kernel smaller in responsibility than the ecosystem around it.
+> Keep intelligence flexible inside nodes, control semantics explicit in the
+> graph, effects auditable at boundaries, evaluation independent from mutation,
+> and the kernel smaller in responsibility than the ecosystem around it.
