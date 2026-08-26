@@ -73,7 +73,8 @@ Required changes:
 12. make `CompiledGraph` the runtime and keep source builder mutable;
 13. do not introduce an arbitrary physical-line gate.
 
-Current implementation commit: `oramasys/perpetua-core@853b9b9243aa6fbab735ff4ae0d980f16281d5d5`.
+Core implementation commit: `oramasys/perpetua-core@853b9b9243aa6fbab735ff4ae0d980f16281d5d5`.  
+Current core PR head after CI-workflow addition: `fc59956021e07bac05d4d51dd6452e6ff2ecbf32`.
 
 ---
 
@@ -114,6 +115,13 @@ Verification rules:
 - CodeRabbit/review status is independent from deterministic tests;
 - if GitHub Actions does not run, report that fact rather than asserting green CI;
 - merge only after the available deterministic verifier is green or the absence of repository Actions is explicitly accepted as a repository limitation.
+
+Current evidence:
+
+- baseline main recorded 62 passing tests;
+- targeted sandbox execution of the reconciled code passed ToolNode-in-graph, returned-awaitable, post-merge routing, strict contract failures, cycle accounting, compile detachment, and streaming parity;
+- CodeRabbit completed with no actionable review comments on the implementation diff;
+- GitHub Actions had not started a run for the newly introduced workflow at the time of this plan update.
 
 Core PR: <https://github.com/oramasys/perpetua-core/pull/1>
 
@@ -159,22 +167,26 @@ Before automatic retry/resume of effectful nodes, define idempotency/dedupe sema
 
 ---
 
-## R4 — GraphSpec/compiler/linter in `oramasys` — deferred
+## R4 — GraphSpec/compiler/linter in `orama-system` — deferred
 
-Ownership is now resolved:
+The final face-off resolves ownership as:
 
 ```text
-orama-system
-  methodology / canonical design
-
-oramasys/oramasys
-  GraphSpec / NodeSpec / EdgeSpec
-  compiler / lint / runtime policy
+diazMelgarejo/orama-system
+  methodology + canonical design
+  GraphSpec / NodeSpec / EdgeSpec authority
+  compiler / lint / version selection
+  evaluation / runtime policy
         |
+        | compiles/targets
         v
 oramasys/perpetua-core
-  realized graph execution
+  realized graph execution mechanics
 ```
+
+`perpetua-core` must not import upward from `orama-system`.
+
+`oramasys/oramasys` may become a consumer or runtime projection of approved GraphSpecs later, but ownership does not move there implicitly. Any such move requires a new explicit architecture decision.
 
 The GraphSpec phase must not inflate `perpetua-core/graph/engine.py`.
 
@@ -196,10 +208,10 @@ Trace-derived candidates should graduate through governed review/memory, not dir
 
 ## Merge order
 
-1. make `perpetua-core` R0–R2 deterministic tests green;
+1. make `perpetua-core` R0–R2 deterministic tests green, or explicitly record the repository-level Actions limitation alongside the targeted verifier evidence;
 2. review exact core PR head and resolve substantive findings;
 3. merge `perpetua-core` reconciliation;
-4. merge this `orama-system` canonicalization after its docs/lint checks are green;
+4. merge this `orama-system` canonicalization after its review/docs checks are green;
 5. start R3 only as a new branch/PR from the then-current main.
 
 Do not bundle R3+ into the R0–R2 merge merely because the architecture record already describes them.
@@ -213,5 +225,6 @@ This reconciliation is complete when:
 - core R0–R2 changes are merged from the pinned branch;
 - the canonical architecture record is merged;
 - historical MiniGraph line-count/freeze rules are no longer treated as current authority;
+- `orama-system` is unambiguous as the owner of GraphSpec/lint/evaluation/runtime-policy authority;
 - future agents can identify exactly which repository owns kernel execution, graph specification, runtime policy, and PT telemetry/memory concerns;
 - no duplicate plugin namespace or scheduler survives.

@@ -2,7 +2,7 @@
 # 57 — MiniGraph Final Reconciliation
 
 **Status:** Canonical architecture record — 2026-08-27  
-**Applies to:** `oramasys/perpetua-core` graph kernel and `oramasys` graph-spec/runtime planning  
+**Applies to:** `oramasys/perpetua-core` graph kernel and `diazMelgarejo/orama-system` graph-spec/runtime-policy authority  
 **Implementation branch:** `2026-08-27-minigraph-final-reconciliation`  
 **Core implementation PR:** <https://github.com/oramasys/perpetua-core/pull/1>
 
@@ -255,7 +255,7 @@ This is later R3/R4 work.
 
 ## 12. Upper-layer graph architecture
 
-`perpetua-core` executes a realized graph. `oramasys` owns the richer workflow/specification layer.
+`perpetua-core` executes a realized graph. The final face-off assigns the richer graph specification, linting, evaluation, version-selection, and runtime-policy authority to `diazMelgarejo/orama-system`.
 
 Canonical future vocabulary:
 
@@ -266,26 +266,30 @@ GraphTrace      append-only observed execution evidence
 GraphCheckpoint resumable state + compatibility lineage
 ```
 
-Future `GraphSpec`/`NodeSpec`/`EdgeSpec`, graph lint, topology classification, budgets, runtime outcome taxonomy, effect policy, and workflow evaluation belong in `oramasys`, not in `MiniGraph.engine.py`.
+Future `GraphSpec`/`NodeSpec`/`EdgeSpec`, graph lint, topology classification, budgets, runtime outcome taxonomy, effect policy, version selection, and workflow evaluation belong in `orama-system`, not in `MiniGraph.engine.py`.
 
-The intended direction remains one-way:
+The authority boundary is:
 
 ```text
-oramasys/oramasys
-  graph DSL/spec/compiler/runtime policy
-             |
-             v
+diazMelgarejo/orama-system
+  methodology + GraphSpec/NodeSpec/EdgeSpec authority
+  graph lint + version selection + evaluation + runtime policy
+                  |
+                  | compiles/targets realized graph mechanics
+                  v
 oramasys/perpetua-core
-  state + irreducible execution mechanics
+  PerpetuaState + irreducible graph execution
 ```
 
-`perpetua-core` never imports upward from `oramasys`.
+`perpetua-core` MUST NOT import upward from `orama-system`.
+
+The existing `oramasys/oramasys` repository may later consume, host, or implement an approved runtime projection of these specifications, but it is not the canonical owner established by this reconciliation. Moving ownership there requires a new explicit architecture decision rather than inference from older research diagrams.
 
 ---
 
 ## 13. Graph lint target
 
-Before executing a versioned `GraphSpec`, the upper layer should eventually validate:
+Before executing a versioned `GraphSpec`, the `orama-system` upper layer should eventually validate:
 
 - entry exists;
 - all static targets exist;
@@ -302,7 +306,7 @@ Natural-language graph generation, if introduced, compiles to a typed validated 
 
 ## 14. Optimization/evaluation boundary
 
-Automated graph evolution remains a research lane until the following exist:
+Automated graph evolution under `orama-system` remains a research lane until the following exist:
 
 ```text
 versioned GraphSpec
@@ -344,7 +348,7 @@ Deferred intentionally:
 - reducer/join redesign;
 - checkpoint lineage and durable resume;
 - runtime budgets/effect policy;
-- `GraphSpec` implementation;
+- `GraphSpec`/lint/evaluation implementation in `orama-system`;
 - graph optimizer and trace miner.
 
 ---
