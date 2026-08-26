@@ -4,7 +4,7 @@
 **Date:** 2026-08-27  
 **Date basis:** Asia/Manila (UTC+08:00)  
 **Status:** in execution  
-**Architecture:** [`../57-minigraph-final-reconciliation.md`](../57-minigraph-final-reconciliation.md)
+**Architecture:** [canonical record](../57-minigraph-final-reconciliation.md)
 
 ## Branch isolation
 
