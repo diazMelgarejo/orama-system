@@ -3,7 +3,8 @@
 
 **Date:** 2026-08-27  
 **Status:** In execution  
-**Canonical architecture:** [`../57-minigraph-final-reconciliation.md`](../57-minigraph-final-reconciliation.md)
+**Canonical architecture:**
+[`../57-minigraph-final-reconciliation.md`](../57-minigraph-final-reconciliation.md)
 
 ## Branch isolation
 
@@ -14,7 +15,10 @@ Both branches were created from frozen `main` tips before writes:
 | `oramasys/perpetua-core` | `8c063f41f6b8d31f6a8aa71d6c78155ea9690c90` | `2026-08-27-minigraph-final-reconciliation` |
 | `diazMelgarejo/orama-system` | `568b4167edaa25658b3a001b4f2273f774014f9a` | `2026-08-27-minigraph-final-reconciliation` |
 
-The execution environment could not create network-backed local Git worktrees because GitHub DNS was unavailable to the sandbox. Isolation was therefore preserved with fresh remote branches pinned to the exact main SHAs above. Do not rewrite this history as if literal local worktree directories existed.
+The execution environment could not create network-backed local Git worktrees because GitHub DNS was
+unavailable to the sandbox. Isolation was therefore preserved with fresh remote branches pinned to
+the exact main SHAs above. Do not rewrite this history as if literal local worktree directories
+existed.
 
 ---
 
@@ -107,21 +111,26 @@ Implemented on the same core branch/PR.
 
 ## R2.5 — Exact-head verification
 
-A minimal `.github/workflows/test.yml` was added to `perpetua-core` to run the full package tests on Python 3.11 and 3.12 for future pull requests.
+A minimal `.github/workflows/test.yml` was added to `perpetua-core` to run the full package tests on
+Python 3.11 and 3.12 for future pull requests.
 
 Verification rules:
 
 - exact PR head, not an earlier local checkout, is authoritative;
 - CodeRabbit/review status is independent from deterministic tests;
 - if GitHub Actions does not run, report that fact rather than asserting green CI;
-- merge only after the available deterministic verifier is green or the absence of repository Actions is explicitly accepted as a repository limitation.
+merge only after the available deterministic verifier is green or the absence of repository Actions
+  is explicitly accepted as a repository limitation.
 
 Current evidence:
 
 - baseline main recorded 62 passing tests;
-- targeted sandbox execution of the reconciled code passed ToolNode-in-graph, returned-awaitable, post-merge routing, strict contract failures, cycle accounting, compile detachment, and streaming parity;
+targeted sandbox execution of the reconciled code passed ToolNode-in-graph, returned-awaitable,
+  post-merge routing, strict contract failures, cycle accounting, compile detachment, and streaming
+  parity;
 - CodeRabbit completed with no actionable review comments on the implementation diff;
-- GitHub Actions had not started a run for the newly introduced workflow at the time of this plan update.
+GitHub Actions had not started a run for the newly introduced workflow at the time of this plan
+  update.
 
 Core PR: <https://github.com/oramasys/perpetua-core/pull/1>
 
@@ -186,7 +195,9 @@ oramasys/perpetua-core
 
 `perpetua-core` must not import upward from `orama-system`.
 
-`oramasys/oramasys` may become a consumer or runtime projection of approved GraphSpecs later, but ownership does not move there implicitly. Any such move requires a new explicit architecture decision.
+`oramasys/oramasys` may become a consumer or runtime projection of approved GraphSpecs later, but
+ownership does not move there implicitly. Any such move requires a new explicit architecture
+decision.
 
 The GraphSpec phase must not inflate `perpetua-core/graph/engine.py`.
 
@@ -194,7 +205,8 @@ The GraphSpec phase must not inflate `perpetua-core/graph/engine.py`.
 
 ## R5 — Optimizer/trace learning — research only
 
-Do not ship production graph mutation until there is a versioned GraphSpec, trace corpus, locked evaluator, multi-objective metrics, candidate isolation, and promotion gate.
+Do not ship production graph mutation until there is a versioned GraphSpec, trace corpus, locked
+evaluator, multi-objective metrics, candidate isolation, and promotion gate.
 
 Required authority separation:
 
@@ -202,19 +214,22 @@ Required authority separation:
 mutator != evaluator
 ```
 
-Trace-derived candidates should graduate through governed review/memory, not direct runtime self-rewrite.
+Trace-derived candidates should graduate through governed review/memory, not direct runtime
+self-rewrite.
 
 ---
 
 ## Merge order
 
-1. make `perpetua-core` R0–R2 deterministic tests green, or explicitly record the repository-level Actions limitation alongside the targeted verifier evidence;
+1. make `perpetua-core` R0–R2 deterministic tests green, or explicitly record the
+   repository-level Actions limitation alongside the targeted verifier evidence;
 2. review exact core PR head and resolve substantive findings;
 3. merge `perpetua-core` reconciliation;
 4. merge this `orama-system` canonicalization after its review/docs checks are green;
 5. start R3 only as a new branch/PR from the then-current main.
 
-Do not bundle R3+ into the R0–R2 merge merely because the architecture record already describes them.
+Do not bundle R3+ into the R0–R2 merge merely because the architecture record already describes
+them.
 
 ---
 
@@ -226,5 +241,6 @@ This reconciliation is complete when:
 - the canonical architecture record is merged;
 - historical MiniGraph line-count/freeze rules are no longer treated as current authority;
 - `orama-system` is unambiguous as the owner of GraphSpec/lint/evaluation/runtime-policy authority;
-- future agents can identify exactly which repository owns kernel execution, graph specification, runtime policy, and PT telemetry/memory concerns;
+future agents can identify exactly which repository owns kernel execution, graph specification,
+  runtime policy, and PT telemetry/memory concerns;
 - no duplicate plugin namespace or scheduler survives.

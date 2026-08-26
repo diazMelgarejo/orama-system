@@ -2,15 +2,19 @@
 # 57 — MiniGraph Final Reconciliation
 
 **Status:** Canonical architecture record — 2026-08-27  
-**Applies to:** `oramasys/perpetua-core` graph kernel and `diazMelgarejo/orama-system` graph-spec/runtime-policy authority  
+**Applies to:** `oramasys/perpetua-core` graph kernel and `diazMelgarejo/orama-system`
+graph-spec/runtime-policy authority
 **Implementation branch:** `2026-08-27-minigraph-final-reconciliation`  
 **Core implementation PR:** <https://github.com/oramasys/perpetua-core/pull/1>
 
-This record resolves the final face-off between the shipped canonical MiniGraph, Kimi's standalone rewrite, the subsequent Kimi/Claude review, and the current graph-engineering research companion. Future work MUST use this document when an older MiniGraph-specific statement conflicts with it.
+This record resolves the final face-off between the shipped canonical MiniGraph, Kimi's standalone
+rewrite, the subsequent Kimi/Claude review, and the current graph-engineering research companion.
+Future work MUST use this document when an older MiniGraph-specific statement conflicts with it.
 
 ## Supersession map
 
-This document is additive history, but it supersedes the following MiniGraph-specific clauses where they conflict:
+This document is additive history, but it supersedes the following MiniGraph-specific clauses where
+they conflict:
 
 | Earlier authority | Superseded clause | Current rule |
 | --- | --- | --- |
@@ -21,7 +25,8 @@ This document is additive history, but it supersedes the following MiniGraph-spe
 | [`15-phase1-as-built.md`](15-phase1-as-built.md) | historical as-built line counts/topology | retained as history; current runtime contract is defined here and by `perpetua-core` tests |
 | [`../superpowers/specs/2026-05-17-salvage-translation-design.md`](../superpowers/specs/2026-05-17-salvage-translation-design.md) | engine `<=80` hard invariant; source-builder freeze expectations | line cap retired; builder stays mutable; compiled topology is detached and has no mutation API |
 
-Historical documents remain useful evidence of why the design evolved. They are not to be mechanically restored over this record.
+Historical documents remain useful evidence of why the design evolved. They are not to be
+mechanically restored over this record.
 
 ---
 
@@ -36,9 +41,12 @@ Loop   = bounded repetition
 Graph  = explicit state machine
 ```
 
-A workflow graduates to a graph when topology itself is domain logic: named states, conditional routing, legitimate cycles, multiple exits, interruption/resume, fan-out/fan-in, subgraphs, or traversal provenance.
+A workflow graduates to a graph when topology itself is domain logic: named states, conditional
+routing, legitimate cycles, multiple exits, interruption/resume, fan-out/fan-in, subgraphs, or
+traversal provenance.
 
-The graph is not merely a diagram. It is a state-transition contract with bounded execution and observable control semantics.
+The graph is not merely a diagram. It is a state-transition contract with bounded execution and
+observable control semantics.
 
 ---
 
@@ -55,7 +63,9 @@ Non-negotiable properties:
 - `PerpetuaState.merge()` remains the canonical sequential delta application path;
 - graph-run state is not long-term PT memory and is not a durable checkpoint format by itself.
 
-Kimi's standalone `GraphState` is preserved only as historical design evidence. Its additive scratchpad/tuple visit merge semantics are not interchangeable with canonical `PerpetuaState.merge()`.
+Kimi's standalone `GraphState` is preserved only as historical design evidence. Its additive
+scratchpad/tuple visit merge semantics are not interchangeable with canonical
+`PerpetuaState.merge()`.
 
 ---
 
@@ -74,9 +84,12 @@ CompiledGraph
   sole scheduler owner
 ```
 
-`MiniGraph.ainvoke(state)` is a convenience operation that compiles a fresh snapshot and delegates execution to `CompiledGraph`.
+`MiniGraph.ainvoke(state)` is a convenience operation that compiles a fresh snapshot and delegates
+execution to `CompiledGraph`.
 
-`compile()` freezes the *compiled topology surface*, not the source builder. Later builder node/edge mutations MUST NOT affect an already compiled graph. Arbitrary callable objects are not deep-copied; detached topology is not magical deep immutability.
+`compile()` freezes the *compiled topology surface*, not the source builder. Later builder node/edge
+mutations MUST NOT affect an already compiled graph. Arbitrary callable objects are not deep-copied;
+detached topology is not magical deep immutability.
 
 ---
 
@@ -97,7 +110,8 @@ This is stronger than `asyncio.iscoroutinefunction(node_fn)` because it correctl
 - callable objects implementing `async __call__` (including the canonical `ToolNode`);
 - sync functions that return awaitables.
 
-A node result MUST be a `dict` delta. `None` or another value is a contract error; the kernel does not silently coerce falsey results to `{}`.
+A node result MUST be a `dict` delta. `None` or another value is a contract error; the kernel does
+not silently coerce falsey results to `{}`.
 
 ---
 
@@ -105,7 +119,8 @@ A node result MUST be a `dict` delta. `None` or another value is a contract erro
 
 `END = "__end__"` is the only normal terminal route.
 
-A static or conditional edge MUST resolve to a non-empty string. Invalid route values fail closed rather than being interpreted as successful termination.
+A static or conditional edge MUST resolve to a non-empty string. Invalid route values fail closed
+rather than being interpreted as successful termination.
 
 Execution order is invariant:
 
@@ -134,7 +149,8 @@ steps     = number of completed node executions
 last_node = most recently entered node
 ```
 
-The guard trips before an additional node would exceed the budget. A zero-step budget therefore reports `steps=0` and `last_node=START`.
+The guard trips before an additional node would exceed the budget. A zero-step budget therefore
+reports `steps=0` and `last_node=START`.
 
 ---
 
@@ -151,9 +167,11 @@ Required fields/behavior:
 - metadata records interrupt node, prompt, and optional payload;
 - other exceptions propagate.
 
-The retired `interrupt_handler` constructor argument had no execution semantics and is removed rather than preserved as a misleading no-op API.
+The retired `interrupt_handler` constructor argument had no execution semantics and is removed
+rather than preserved as a misleading no-op API.
 
-Durable resume is NOT introduced by this reconciliation. A later checkpoint/runtime design must define replay and idempotency semantics before claiming durable HITL resume.
+Durable resume is NOT introduced by this reconciliation. A later checkpoint/runtime design must
+define replay and idempotency semantics before claiming durable HITL resume.
 
 ---
 
@@ -179,11 +197,14 @@ interrupt
 done
 ```
 
-The public `GraphEvent` contract carries only control-plane metadata such as event kind, node/target, completed-step count, and terminal reason.
+The public `GraphEvent` contract carries only control-plane metadata such as event kind,
+node/target, completed-step count, and terminal reason.
 
-It does NOT carry raw prompts, state snapshots, node deltas, exporter details, database handles, provider policy, or persistence logic.
+It does NOT carry raw prompts, state snapshots, node deltas, exporter details, database handles,
+provider policy, or persistence logic.
 
-This seam exists so streaming, checkpoint, trace, and debugger adapters never need to copy the graph scheduler or read private `_nodes`/`_edges` topology.
+This seam exists so streaming, checkpoint, trace, and debugger adapters never need to copy the graph
+scheduler or read private `_nodes`/`_edges` topology.
 
 ---
 
@@ -209,13 +230,15 @@ Current generic plugin concepts remain outside `engine.py`:
 - structured LLM output;
 - parallel dispatch.
 
-The engine MUST NOT import plugins, providers, storage adapters, network clients, telemetry exporters, or upper-layer graph policy.
+The engine MUST NOT import plugins, providers, storage adapters, network clients, telemetry
+exporters, or upper-layer graph policy.
 
 ---
 
 ## 10. Parallelism before expansion
 
-The current parallel helper historically used ordered last-writer-wins merging with a scratchpad special case. That is not a sufficient generic fan-in contract.
+The current parallel helper historically used ordered last-writer-wins merging with a scratchpad
+special case. That is not a sufficient generic fan-in contract.
 
 Before richer parallel graph semantics ship, define explicitly:
 
@@ -247,7 +270,8 @@ logical step/node
 created_at
 ```
 
-Durable replay requires explicit effect idempotency/deduplication policy. External-write nodes cannot be automatically retried/resumed safely without such a contract.
+Durable replay requires explicit effect idempotency/deduplication policy. External-write nodes
+cannot be automatically retried/resumed safely without such a contract.
 
 This is later R3/R4 work.
 
@@ -255,7 +279,9 @@ This is later R3/R4 work.
 
 ## 12. Upper-layer graph architecture
 
-`perpetua-core` executes a realized graph. The final face-off assigns the richer graph specification, linting, evaluation, version-selection, and runtime-policy authority to `diazMelgarejo/orama-system`.
+`perpetua-core` executes a realized graph. The final face-off assigns the richer graph
+specification, linting, evaluation, version-selection, and runtime-policy authority to
+`diazMelgarejo/orama-system`.
 
 Canonical future vocabulary:
 
@@ -266,7 +292,9 @@ GraphTrace      append-only observed execution evidence
 GraphCheckpoint resumable state + compatibility lineage
 ```
 
-Future `GraphSpec`/`NodeSpec`/`EdgeSpec`, graph lint, topology classification, budgets, runtime outcome taxonomy, effect policy, version selection, and workflow evaluation belong in `orama-system`, not in `MiniGraph.engine.py`.
+Future `GraphSpec`/`NodeSpec`/`EdgeSpec`, graph lint, topology classification, budgets, runtime
+outcome taxonomy, effect policy, version selection, and workflow evaluation belong in
+`orama-system`, not in `MiniGraph.engine.py`.
 
 The authority boundary is:
 
@@ -283,7 +311,10 @@ oramasys/perpetua-core
 
 `perpetua-core` MUST NOT import upward from `orama-system`.
 
-The existing `oramasys/oramasys` repository may later consume, host, or implement an approved runtime projection of these specifications, but it is not the canonical owner established by this reconciliation. Moving ownership there requires a new explicit architecture decision rather than inference from older research diagrams.
+The existing `oramasys/oramasys` repository may later consume, host, or implement an approved
+runtime projection of these specifications, but it is not the canonical owner established by this
+reconciliation. Moving ownership there requires a new explicit architecture decision rather than
+inference from older research diagrams.
 
 ---
 
@@ -300,7 +331,8 @@ Before executing a versioned `GraphSpec`, the `orama-system` upper layer should 
 - stable graph/node IDs are present;
 - schema/version compatibility is explicit.
 
-Natural-language graph generation, if introduced, compiles to a typed validated `GraphSpec`; prose is never the runtime authority.
+Natural-language graph generation, if introduced, compiles to a typed validated `GraphSpec`; prose
+is never the runtime authority.
 
 ---
 
@@ -319,9 +351,11 @@ versioned GraphSpec
 
 Hard rule:
 
-> The component mutating a prompt, node, strategy, or graph may not alter the acceptance metric during the same experiment.
+The component mutating a prompt, node, strategy, or graph may not alter the acceptance metric during
+> the same experiment.
 
-Trace-derived learning should flow through governed memory/review rather than direct uncontrolled runtime self-rewrite.
+Trace-derived learning should flow through governed memory/review rather than direct uncontrolled
+runtime self-rewrite.
 
 ---
 
@@ -372,4 +406,6 @@ Any future change to this subsystem must preserve:
 
 The north star is unchanged:
 
-> Keep intelligence flexible inside nodes, keep control semantics explicit in the graph, keep effects auditable at boundaries, keep evaluation independent from mutation, and keep the kernel smaller in responsibility than the ecosystem around it.
+Keep intelligence flexible inside nodes, keep control semantics explicit in the graph, keep effects
+> auditable at boundaries, keep evaluation independent from mutation, and keep the kernel smaller in
+> responsibility than the ecosystem around it.
