@@ -253,7 +253,8 @@ orama-system/docs/v2/
 ├── 50-mesh-security-migration-ladder.md  ← Phases A–D: mesh prep → IP expunge → P5/P6 runtime gates (grandfathered) → strict cutover at v2 launch; merge-order guidance for #223/#224/#222 + PT #287
 ├── 51-security-sentinel-orbit-passkey-mcp.md  ← v2.1 security-sentinel satellite: passkey + MCP human authorization; orbits perpetua-core; MVP HMAC bridge in docs/plans/2026-08-02-pr-body-grant-security-remediation.md
 ├── 52-tier5-frugality-storage-consumer-mapping.md  ← maps PT's Tier-5/frugality budget ledger onto the already-canonical SQLite-write-authority / DuckDB-read-only-analytics / LanceDB-optional-redacted-recall split from doc 20; docs-only, no new architecture decision, no code
-└── 56-anamnesis-runtime-memory-migration.md  ← D26: v1 PT-agent controller contract; deferred private v2 runtime-memory backend and weekly HITL promotion policy
+├── 56-anamnesis-runtime-memory-migration.md  ← D26: v1 PT-agent controller contract; deferred private v2 runtime-memory backend and weekly HITL promotion policy
+└── 57-minigraph-kimi-reconciliation-perpetua-core-findings.md  ← 3 verified MiniGraph fixes (max_steps semantics, non-dict returns, empty-route validation) + an asteps() scheduler-seam proposal, written for a Claude Code CLI session to check against oramasys/perpetua-core's actual current engine.py; this session had no org access to verify directly
 ```
 
 > **Next free slot: `57-`**
