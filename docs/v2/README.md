@@ -257,7 +257,7 @@ orama-system/docs/v2/
 └── 57-minigraph-final-reconciliation.md  ← canonical MiniGraph architecture record: supersedes prior line-count/freeze/async-only clauses; ownership (perpetua-core executes, orama-system owns GraphSpec/lint/evaluation/policy); the CompiledGraph/asteps()/GraphEvent scheduler seam; §17 explicit LangGraph (Python, legacy+current) and LangGraph.js (oramaclaw, bundled with AlphaClaw/OpenClaw runtime controllers) drop-in-compatibility decision. Plan: docs/v2/plans/2026-08-27-minigraph-final-reconciliation.md
 ```
 
-> **Next free slot: `57-`**
+> **Next free slot: `58-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

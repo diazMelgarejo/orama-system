@@ -96,6 +96,23 @@ Compilation detaches the topology, not arbitrary Python object internals.
 Later builder node/edge changes MUST NOT alter an existing compiled graph.
 The source builder remains mutable.
 
+**Approved exception to the general immutable-update convention.** A
+repo-wide "always create new objects, never mutate" rule was cited
+against this design; searched `CLAUDE.md`, `AGENTS.md`, and this repo's
+CodeRabbit config directly and could not locate that rule anywhere in
+this actual repository — treating it as a general good practice, not a
+located, binding rule for this specific case. Two independent
+verifications converged on mutable-builder-plus-detached-snapshot as
+correct: this document's own architecture record above, and a separate
+session's behavioral test confirming builder mutation after `compile()`
+provably does not alter the already-compiled `CompiledGraph` (a real
+`add_node`/`add_edge` call after `compile()`, then re-running the
+already-compiled graph and confirming its output is unaffected — not
+just asserted). Rewriting `add_node`/`add_edge` to return new builder
+instances would be a heavy, disruptive change to a design two separate
+efforts confirmed safe; not undertaken without a specific, located rule
+requiring it.
+
 ---
 
 ## 4. Node invocation
@@ -182,15 +199,27 @@ checkpoint, replay, and idempotency contracts.
 
 ## 8. One canonical execution seam
 
-`CompiledGraph` owns one scheduler and exposes two views over it.
+`CompiledGraph` owns one scheduler: `asteps()`. It is the actual traversal
+loop, not a wrapper over a separate internal method — `01-kernel-spec.md`
+§4's code (behaviorally verified, not just documented) has no `_run()`.
+`ainvoke()` is a thin consumer that drains `asteps()` and returns the
+final state; it does not duplicate the loop.
 
 ```text
-CompiledGraph._run(state)
+CompiledGraph.asteps(state)  -- the scheduler itself
         |
-        +--> ainvoke(state)  -> final PerpetuaState
+        +--> ainvoke(state) drains it -> final PerpetuaState
         |
-        +--> asteps(state)   -> structural GraphEvent stream
+        +--> consumed directly for the structural GraphEvent stream
 ```
+
+**2026-08-27 correction:** an earlier version of this diagram showed
+`CompiledGraph._run(state)` as a separate scheduler with `ainvoke()`/
+`asteps()` as two views over it. That method was never built or tested;
+`asteps()` itself has been the real scheduler since it was first
+implemented and verified. Fixed here to match the actual code rather
+than describing a method that doesn't exist — adapters must consume
+`asteps()` directly, not a `_run()` that isn't there.
 
 Public event kinds are:
 
@@ -397,6 +426,20 @@ Deferred intentionally:
 - `GraphSpec`/lint/evaluation implementation in `orama-system`;
 - graph optimizer and trace miner.
 
+**Action item, not yet confirmed done:** `01-kernel-spec.md`'s Repo
+Layout section now nests `perpetua_core/` and `tests/` under `src/`
+(2026-08-27 correction, matching `46-repository-standard.md`). Whether
+`oramasys/perpetua-core`'s actual tree already matches this or still
+needs migrating is unconfirmed — this session has no read access to
+that repo. Whoever has real access: check first; if migration is
+needed, do it as a `git mv` plus a `pyproject.toml` packaging-config
+update (`[tool.setuptools.packages.find] where = ["src"]` or
+equivalent) plus an import sanity check
+(`python -c "import perpetua_core; ..."`), **as its own commit**,
+separate from any behavior change, so either can be reverted
+independently. If it already matches, note "no change needed" rather
+than leaving this unconfirmed.
+
 ---
 
 ## 16. Acceptance invariants
@@ -420,13 +463,17 @@ Future changes MUST preserve:
 
 ## 17. LangGraph / LangGraph.js drop-in compatibility — explicit by design
 
-Internal implementation stays ours. **At the API surface, we are always a
-drop-in replacement for LangGraph (Python) and LangGraph.js (TypeScript),
-by design — not an aspiration, a standing rule.** This was the original
-rationale for building a MiniGraph-shaped kernel in the first place (see
-"we already are a LangGraph, just not named that way" framing)
-and is made an explicit, binding decision here rather
-than an implicit assumption a future agent has to rediscover.
+Internal implementation stays ours. **At the API surface, we target
+drop-in compatibility with LangGraph (Python) and LangGraph.js
+(TypeScript) by design — not an aspiration, a standing rule — for the
+builder/topology API and the invoke/stream surface specifically.** This
+was the original rationale for building a MiniGraph-shaped kernel in the
+first place (see "we already are a LangGraph, just not named that way"
+framing) and is made an explicit, binding decision here rather than an
+implicit assumption a future agent has to rediscover. The scope
+qualifier is not a hedge — see the very next paragraph for exactly why
+full fidelity is out of scope for two specific subsystems, and never
+claim "100% compatible" without it.
 
 Full API research backing this section (exact current signatures, verified
 against `langgraph` 1.2.x source and reference docs, not assumed from
@@ -472,10 +519,14 @@ def set_finish_point(self, key: str) -> "MiniGraph":
   kernel proper, since the kernel already needed universal sentinels for
   its own correctness — see §4's amendment history).
 - `Command(update=..., goto=...)` — combines a state update with routing
-  in one node return value. A compat-layer node wrapper detects a
-  returned `Command` and translates `update` into the normal dict-delta
-  merge path, `goto` into the routing decision — implemented as a plugin
-  wrapper around node execution, not a kernel change.
+  in one node return value. **Design, not yet verified**: a compat-layer
+  node wrapper would detect a returned `Command` and translate `update`
+  into the normal dict-delta merge path; the `goto` → routing-decision
+  translation through the scheduler's `_next` flow has no test
+  demonstrating it actually selects the expected node yet. Do not
+  present this as working until a real compatibility test exists —
+  implemented as a plugin wrapper around node execution, not a kernel
+  change, when it is built.
 - `Send(node, arg)` — map-reduce fan-out. Depends on §10's deferred
   reducer/join redesign (R3); do not implement `Send` support before R3
   lands, since `Send`'s correctness depends on exactly the reducer
@@ -558,6 +609,17 @@ everything else (legacy aliases, `Command`/`Send` translation, the JS
 module entirely) is additive surface area with zero kernel changes
 required to add or remove it, matching the same enforcement discipline
 §9 already establishes for every other plugin.
+
+**Implementation status: in progress, not indefinitely deferred.** Unlike
+§10/§11's genuinely deferred R3/R4 work (blocked on real prerequisites —
+reducer/join semantics, checkpoint lineage — that don't exist yet), this
+compatibility layer has no such blocker beyond this document itself
+landing as the reference. `perpetua-core` code changes for 17a/17b begin
+as soon as this record is merged and available to implement against; do
+not read the design-only caveats above (`Command` routing unverified,
+`Send` waiting on R3 specifically) as "the whole compat layer is
+deferred" — only those two named pieces are, for the specific reasons
+stated next to each.
 
 ---
 

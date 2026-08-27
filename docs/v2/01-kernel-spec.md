@@ -262,6 +262,8 @@ class CompiledGraph:
         target = edge(state) if callable(edge) else edge
         if not isinstance(target, str) or not target:
             raise ValueError(f"edge from {current!r} resolved to invalid route: {target!r}")
+        if target != END and target not in self._nodes:
+            raise ValueError(f"edge from {current!r} resolved to unknown node: {target!r}")
         return target
 
     async def asteps(self, state: PerpetuaState):
@@ -341,10 +343,10 @@ class MiniGraph:
 merge happens in `state.merge()` — single delta-application path; reducers can be
 added by subclassing `PerpetuaState` and overriding `merge()`.
 
-### 4c. SQLite checkpointer (`graph/checkpointer.py`)
+### 4c. SQLite checkpointer (`graph/plugins/checkpointer.py`)
 
 ```python
-# src/perpetua_core/graph/checkpointer.py
+# src/perpetua_core/graph/plugins/checkpointer.py
 import aiosqlite, json
 from ..state import PerpetuaState
 
@@ -371,10 +373,10 @@ class SqliteCheckpointer:
 
 Engine plumbing (in `engine.py`) accepts `checkpointer=...`; if set, persists after each node.
 
-### 4d. HITL interrupts (`graph/interrupts.py`)
+### 4d. HITL interrupts (`graph/plugins/interrupts.py`)
 
 ```python
-# src/perpetua_core/graph/interrupts.py
+# src/perpetua_core/graph/plugins/interrupts.py
 class Interrupt(Exception):
     """Raised by a node to pause graph execution and surface a HITL prompt."""
     def __init__(self, prompt: str, payload: dict | None = None):
@@ -389,12 +391,12 @@ re-enters at the interrupting node.
 
 MAESTRO 7-layer enforcement (v2.5) will use this primitive heavily for human-checkpoint gates.
 
-### 4e. Subgraphs (`graph/subgraphs.py`)
+### 4e. Subgraphs (`graph/plugins/subgraphs.py`)
 
 A subgraph is just a `MiniGraph` exposed as a single node:
 
 ```python
-# src/perpetua_core/graph/subgraphs.py
+# src/perpetua_core/graph/plugins/subgraphs.py
 from .engine import MiniGraph
 from ..state import PerpetuaState
 
@@ -408,10 +410,10 @@ def as_node(subgraph: MiniGraph):
 Critical for microkernel modularity — each non-kernel module ships as a subgraph
 that the kernel can compose.
 
-### 4f. ToolNode contract (`graph/nodes.py`)
+### 4f. ToolNode contract (`graph/plugins/nodes.py`)
 
 ```python
-# src/perpetua_core/graph/nodes.py
+# src/perpetua_core/graph/plugins/nodes.py
 from asyncio import create_subprocess_exec
 from asyncio.subprocess import PIPE
 from ..state import PerpetuaState
@@ -434,10 +436,10 @@ API-compatible with LangGraph's ToolNode contract — same call shape so externa
 frameworks (post-D5 Plugin API) can hand us tools they constructed for
 LangGraph.
 
-### 4g. Streaming (`graph/streaming.py`)
+### 4g. Streaming (`graph/plugins/streaming.py`)
 
 ```python
-# src/perpetua_core/graph/streaming.py
+# src/perpetua_core/graph/plugins/streaming.py
 from typing import AsyncGenerator
 from ..state import PerpetuaState
 
@@ -450,10 +452,10 @@ async def astream(graph, state: PerpetuaState) -> AsyncGenerator[StreamEvent, No
     ...  # implementation in Phase 2
 ```
 
-### 4h. `@tool` decorator (`graph/tool.py`)
+### 4h. `@tool` decorator (`graph/plugins/tool.py`)
 
 ```python
-# src/perpetua_core/graph/tool.py
+# src/perpetua_core/graph/plugins/tool.py
 import inspect
 from pydantic import create_model
 
@@ -555,7 +557,7 @@ These contracts are not optional modules; they are platform primitives consumed
 by the kernel, graph plugins, API layer, and PT adapter boundary:
 
 | Contract | Required shape |
-|----------|----------------|
+| --- | --- |
 | `Capability` enum | `public`, `read`, `mutate`, `lifecycle`, `file-read`, `file-write`, `model-egress`, `dangerous-worker`, `admin` |
 | `AuthContext` | actor id, auth method, scopes/capabilities, source address, correlation id |
 | `SecurityDecision` | allow/deny, required capability, reason, redaction class, audit event id |
@@ -578,14 +580,21 @@ security behavior testable before any non-kernel module ships.
    `HardwareAffinityError` for NEVER tiers.
 4. `pytest src/tests/test_minigraph.py` — 3-node graph (start → middle → end)
    runs end-to-end with state delta merging and `nodes_visited` populated.
-5. `pytest src/tests/test_checkpointer.py` — save then load reproduces identical
-   state.
-6. `pytest src/tests/test_interrupts.py` — node raises `Interrupt`, graph status
-   becomes `"interrupted"`, checkpoint saved, `aresume` continues correctly.
-7. `pytest src/tests/test_tool_decorator.py` — `@tool`-decorated function exposes
-   correct `_input_schema` Pydantic model.
-8. `pytest src/tests/test_structured_output.py` — `chat_structured()` retries on
-   parse failure and increments `retry_count`.
+5. **Future gate, not current** —
+   `pytest src/tests/test_plugins_checkpointer.py`: save then load
+   reproduces identical state. Deferred per
+   [`57-minigraph-final-reconciliation.md`](57-minigraph-final-reconciliation.md)
+   §11/§15 ("checkpoint lineage and durable resume"); not a current gate.
+6. `pytest src/tests/test_plugins_interrupts.py` — node raises
+   `Interrupt`, graph status becomes `"interrupted"` (current, structural
+   recognition only). **Future gate, not current:**
+   checkpoint-saved-and-`aresume`-continues-correctly is durable resume,
+   deferred alongside item 5.
+7. `pytest src/tests/test_plugins_tool.py` — `@tool`-decorated function
+   exposes correct `_input_schema` Pydantic model.
+8. `pytest src/tests/test_plugins_structured_output.py` —
+   `chat_structured()` retries on parse failure and increments
+   `retry_count`.
 9. **Import boundary lint**: `grep -r "from oramasys" perpetua-core/` returns
    nothing. (CI gate.)
 10. Live integration: graph node calls Mac LM Studio (`192.168.x.110:1234`) and
@@ -603,10 +612,11 @@ security behavior testable before any non-kernel module ships.
     python validators must read from it. See
     `11-idempotency-and-guard-patterns.md` §3. (CI gate.)
 13. **HITL interrupt is always-escapable (Rule 3)**:
-    `pytest src/tests/test_interrupts.py::test_interrupt_not_suppressible_by_node`
+    `pytest src/tests/test_plugins_interrupts.py::test_interrupt_not_suppressible_by_node`
     — any node that internally catches `Interrupt` and does not re-raise causes
-    this test to fail. `status="interrupted"` and `status="conflicted"` can only
-    be cleared by `aresume()` with a caller-supplied payload.
+    this test to fail (current, testable now). **Future gate, not current:**
+    `status="interrupted"`/`"conflicted"` can only be cleared by `aresume()`
+    assumes durable resume, deferred alongside items 5-6 above.
 14. **GossipBus is append-only (Rule 4)**:
     `pytest src/tests/test_gossip.py::test_no_delete_or_update` — `GossipBus`
     exposes no `delete`, `update`, or `truncate` method. All events are permanent.
@@ -635,6 +645,18 @@ security behavior testable before any non-kernel module ships.
 ## 7. Gemini Hardening Updates (2026-05-02)
 
 ### 7a. GraphPlugin Protocol
+
+> **2026-08-27 note:** superseded by the `asteps()`/`GraphEvent` scheduler
+> seam ([`57-minigraph-final-reconciliation.md`](57-minigraph-final-reconciliation.md)
+> §8). A callback Protocol (`on_node_start`/`on_node_end`) and a generator
+> yielding structural events are two different integration patterns for
+> the same observability need; neither this document nor the canonical
+> record ever reconciled them before this note, and `GraphPlugin` never
+> appears in the canonical record's implementation-status list — unlike
+> `asteps()`/`GraphEvent`, which does. Do not implement `GraphPlugin`
+> alongside `asteps()`; treat this Protocol as historical, dated content
+> (2026-05-02, predating the August reconciliation) rather than a live
+> second mechanism.
 
 To ensure architectural integrity, all Tier-3 plugins MUST implement the following Protocol:
 
