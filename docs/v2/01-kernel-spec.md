@@ -107,8 +107,17 @@ class PerpetuaState(BaseModel):
     model_hint: str | None      = None
 
     def merge(self, delta: dict[str, Any]) -> "PerpetuaState":
-        """Apply a node's output delta. Engine calls this per step."""
-        return self.model_copy(update=delta)
+        """Apply a node's output delta. Engine calls this per step.
+        deep=True is load-bearing, not defensive: model_copy's default
+        is a SHALLOW copy, so any nested mutable field not present in
+        `delta` (scratchpad, messages, metadata, nodes_visited) would
+        otherwise be the exact same dict/list object in both the old
+        and new state. Verified directly: without deep=True, mutating
+        the new state's scratchpad in place also corrupts the prior
+        state's scratchpad through the shared reference — a real
+        violation of the copy-on-write guarantee this whole design
+        depends on, not a hypothetical one."""
+        return self.model_copy(update=delta, deep=True)
 ```
 
 Field rationale:
@@ -348,7 +357,7 @@ added by subclassing `PerpetuaState` and overriding `merge()`.
 ```python
 # src/perpetua_core/graph/plugins/checkpointer.py
 import aiosqlite, json
-from ..state import PerpetuaState
+from ...state import PerpetuaState
 
 class SqliteCheckpointer:
     def __init__(self, db_path: str):
@@ -397,8 +406,8 @@ A subgraph is just a `MiniGraph` exposed as a single node:
 
 ```python
 # src/perpetua_core/graph/plugins/subgraphs.py
-from .engine import MiniGraph
-from ..state import PerpetuaState
+from ..engine import MiniGraph
+from ...state import PerpetuaState
 
 def as_node(subgraph: MiniGraph):
     async def node(state: PerpetuaState) -> dict:
@@ -416,7 +425,7 @@ that the kernel can compose.
 # src/perpetua_core/graph/plugins/nodes.py
 from asyncio import create_subprocess_exec
 from asyncio.subprocess import PIPE
-from ..state import PerpetuaState
+from ...state import PerpetuaState
 
 class ToolNode:
     """Subprocess CLI as a graph node. Used for Claude Code, Codex CLI, shell tools."""
@@ -441,7 +450,7 @@ LangGraph.
 ```python
 # src/perpetua_core/graph/plugins/streaming.py
 from typing import AsyncGenerator
-from ..state import PerpetuaState
+from ...state import PerpetuaState
 
 # Yields ("node", node_name, delta) and ("token", token_str) events.
 StreamEvent = tuple[str, str, dict] | tuple[str, str]
