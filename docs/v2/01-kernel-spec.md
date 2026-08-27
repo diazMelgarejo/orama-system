@@ -656,7 +656,20 @@ security behavior testable before any non-kernel module ships.
 > `asteps()`/`GraphEvent`, which does. Do not implement `GraphPlugin`
 > alongside `asteps()`; treat this Protocol as historical, dated content
 > (2026-05-02, predating the August reconciliation) rather than a live
-> second mechanism.
+> second mechanism. Provenance checked, not fully resolved: an
+> April-30-dated foundational scaffolding draft for this repo split
+> (plain dataclasses, not yet Pydantic — an earlier shape than this
+> document's own `PerpetuaState`) does not mention `GraphPlugin` at all,
+> confirming it came from a separate, later pass on the date this
+> section already states, not from that draft. Who authored the May 2
+> pass and why `on_node_start`/`on_node_end` specifically was chosen
+> remains unconfirmed — no record of it exists in PT's `.agent` memory
+> (searched directly, zero matches for "GraphPlugin" anywhere in that
+> repo). The closest real analogue is LangChain's `BaseCallbackHandler`
+> (`on_chain_start`/`on_chain_end` and similar) — a general
+> chain/LLM-level callback system, not LangGraph's own native
+> graph-execution observability mechanism, which is the `stream_mode`/
+> `astream_events` generator pattern `asteps()` actually matches.
 
 To ensure architectural integrity, all Tier-3 plugins MUST implement the following Protocol:
 

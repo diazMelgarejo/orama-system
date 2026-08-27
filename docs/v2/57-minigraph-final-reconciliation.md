@@ -96,22 +96,39 @@ Compilation detaches the topology, not arbitrary Python object internals.
 Later builder node/edge changes MUST NOT alter an existing compiled graph.
 The source builder remains mutable.
 
-**Approved exception to the general immutable-update convention.** A
-repo-wide "always create new objects, never mutate" rule was cited
-against this design; searched `CLAUDE.md`, `AGENTS.md`, and this repo's
-CodeRabbit config directly and could not locate that rule anywhere in
-this actual repository — treating it as a general good practice, not a
-located, binding rule for this specific case. Two independent
-verifications converged on mutable-builder-plus-detached-snapshot as
-correct: this document's own architecture record above, and a separate
-session's behavioral test confirming builder mutation after `compile()`
-provably does not alter the already-compiled `CompiledGraph` (a real
-`add_node`/`add_edge` call after `compile()`, then re-running the
+**Not an exception — copy-on-write applied at the topology layer, not
+the value layer.** A repo-wide "always create new objects, never
+mutate" rule was cited against this design; a direct search of
+`CLAUDE.md`, `AGENTS.md`, and this repo's CodeRabbit config found no
+such rule committed anywhere. Clarified directly (2026-08-27): the
+actual intent behind that kind of rule is copy-on-write — append-only,
+diff-on-top-of-original, like a git commit or a ZFS snapshot, never
+destructively rewritten in place. `PerpetuaState.merge()` already
+implements exactly that at the **value** layer, confirmed by reading
+the code directly: `return self.model_copy(update=delta)` — a new
+state object every call, the prior one untouched.
+
+`MiniGraph`/`CompiledGraph` implement the identical guarantee one layer
+up, at **topology**: `MiniGraph` is the working tree — mutable,
+in-progress, exactly like files before a commit. `compile()` is the
+commit. `CompiledGraph` is the snapshot, and this document already
+states the git-commit-equivalent guarantee above: later builder
+node/edge changes MUST NOT alter an existing compiled graph. Once
+compiled, a `CompiledGraph` never changes retroactively, the same way a
+git commit doesn't rewrite itself when the working tree keeps changing.
+`add_node`/`add_edge` mutating the *builder* is a precondition for
+copy-on-write at the compile boundary, not a violation of it — the
+finding checked for mutation at the wrong boundary. Two independent
+verifications converged on this same conclusion before either saw the
+other's reasoning: this document's own architecture record above, and a
+separate session's behavioral test confirming builder mutation after
+`compile()` provably does not alter the already-compiled snapshot (a
+real `add_node`/`add_edge` call after `compile()`, then re-running the
 already-compiled graph and confirming its output is unaffected — not
 just asserted). Rewriting `add_node`/`add_edge` to return new builder
-instances would be a heavy, disruptive change to a design two separate
-efforts confirmed safe; not undertaken without a specific, located rule
-requiring it.
+instances would collapse the working-tree/commit distinction this
+design deliberately preserves, not bring it into compliance with
+anything.
 
 ---
 
