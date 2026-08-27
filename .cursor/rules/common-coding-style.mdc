@@ -1,20 +1,56 @@
 ---
-description: "ECC coding style: immutability, file organization, error handling, validation"
+description: "ECC coding style: state boundaries, file organization, error handling, validation"
 alwaysApply: true
 ---
 # Coding Style
 
-## Immutability (CRITICAL)
+## State and Mutation Boundaries (CRITICAL)
 
-ALWAYS create new objects, NEVER mutate existing ones:
+Prefer immutable values, isolated state generations, and detached published
+snapshots. Do **not** apply a blanket "always create new objects, never mutate"
+rule to every abstraction.
 
+Use the contract of the abstraction:
+
+```text
+VALUE / VERSIONED SPECIFICATION
+  prefer copy-on-write or persistent updates
+  prior generations MUST remain unchanged
+
+BUILDER / WORKSPACE / BUFFER / CACHE
+  intentional local mutation is allowed when it is part of the documented API
+  mutation MUST NOT leak across snapshot/publication boundaries
+
+COMPILED / PUBLISHED / OBSERVED SNAPSHOT
+  treat as immutable after publication
 ```
-// Pseudocode
-WRONG:  modify(original, field, value) → changes original in-place
-CORRECT: update(original, field, value) → returns new copy with change
+
+Examples:
+
+```text
+PerpetuaState.merge(delta)
+  -> returns a deeply isolated next state; prior state remains unchanged
+
+MiniGraph.add_node()/add_edge()
+  -> intentionally mutate the construction builder and return self
+
+MiniGraph.compile()
+  -> produces a detached CompiledGraph snapshot; later builder mutations MUST
+     NOT alter the compiled runtime
+
+Future versioned GraphSpec.with_node()/with_edge()
+  -> SHOULD use immutable/persistent copy-on-write semantics because graph
+     definitions are versioned values, not construction workspaces
 ```
 
-Rationale: Immutable data prevents hidden side effects, makes debugging easier, and enables safe concurrency.
+Rationale: immutability is valuable at value, version, publication, and
+concurrency boundaries. Blanket prohibition of all mutation is not: it can
+silently break established builder APIs and can force unnecessary copying.
+Prefer the narrowest mutation scope that preserves explicit ownership,
+isolation, deterministic behavior, and safe concurrency.
+
+This section **supersedes** the previous always-applied rule:
+`ALWAYS create new objects, NEVER mutate existing ones`.
 
 ## File Organization
 
@@ -49,4 +85,5 @@ Before marking work complete:
 - [ ] No deep nesting (>4 levels)
 - [ ] Proper error handling
 - [ ] No hardcoded values (use constants or config)
-- [ ] No mutation (immutable patterns used)
+- [ ] Mutation, if used, is intentional and bounded by an explicit ownership/snapshot contract
+- [ ] Prior immutable/value generations remain isolated from later updates
