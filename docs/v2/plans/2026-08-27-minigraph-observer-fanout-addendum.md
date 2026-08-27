@@ -52,10 +52,16 @@ run_with_plugins()
 Default behavior:
 
 - deterministic registration-order delivery;
+- every registered plugin is offered every observation;
 - sync or async listener callbacks;
 - fail-closed on listener failure;
 - no detached background tasks by default;
 - no plugin traversal through `_nodes` / `_edges`.
+
+Plugins MAY deterministically act on only the observation kinds relevant to
+their own contract. Delivery symmetry is mandatory; action symmetry is not.
+For example, a checkpointer may persist only successful `node.end` boundaries
+while a tracer records the entire structural sequence.
 
 ## R2.3 — Checkpointer integration
 
@@ -78,25 +84,45 @@ This does NOT complete durable resume. R4 still owns:
 
 ## R2.4 — Required regression proof
 
-**2026-08-27 strengthening:** the original wording below ("final state
-unchanged") was underspecified — it doesn't rule out one observer
-recording a narrower event subset than another (e.g. a tracer
-recording every `node.start`/`node.end` while a checkpointer only
-records `node.end`), and "unchanged" was never anchored against an
-actual no-plugin baseline run. Verified directly before tightening
-this: both properties genuinely hold for the current design, not
-merely asserted.
+The regression proof has three distinct responsibilities. Do not conflate
+multicast delivery with plugin-specific behavior.
+
+### A. Dispatcher multicast integrity
 
 At minimum, one run MUST prove:
 
 ```text
-Checkpointer + Tracer
+SpyPlugin A + SpyPlugin B
 same CompiledGraph execution
-BOTH observers record every relevant event kind identically
-  (node.start AND node.end for each, not an asymmetric subset)
+both are delivered the same complete GraphObservation sequence
 neither races/drains the other
-final state from the plugin-enabled run == final state from an
-  equivalent no-plugin CompiledGraph.ainvoke() run on the same graph
+```
+
+### B. Semantic consumer behavior
+
+Also prove real heterogeneous plugins can filter differently after identical
+delivery:
+
+```text
+SqliteCheckpointer
+  receives every observation
+  persists only the boundary defined by its contract
+
+Tracer
+  receives every observation
+  records the event kinds required by its contract
+```
+
+The plugins are not required to record or persist identical subsets.
+
+### C. Observer transparency
+
+Run an equivalent no-plugin baseline and require:
+
+```text
+plugin-enabled final PerpetuaState
+==
+no-plugin CompiledGraph.ainvoke() final PerpetuaState
 ```
 
 Also verify:
