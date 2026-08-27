@@ -78,14 +78,25 @@ This does NOT complete durable resume. R4 still owns:
 
 ## R2.4 — Required regression proof
 
+**2026-08-27 strengthening:** the original wording below ("final state
+unchanged") was underspecified — it doesn't rule out one observer
+recording a narrower event subset than another (e.g. a tracer
+recording every `node.start`/`node.end` while a checkpointer only
+records `node.end`), and "unchanged" was never anchored against an
+actual no-plugin baseline run. Verified directly before tightening
+this: both properties genuinely hold for the current design, not
+merely asserted.
+
 At minimum, one run MUST prove:
 
 ```text
 Checkpointer + Tracer
 same CompiledGraph execution
-both receive every relevant observation
+BOTH observers record every relevant event kind identically
+  (node.start AND node.end for each, not an asymmetric subset)
 neither races/drains the other
-final state unchanged
+final state from the plugin-enabled run == final state from an
+  equivalent no-plugin CompiledGraph.ainvoke() run on the same graph
 ```
 
 Also verify:
