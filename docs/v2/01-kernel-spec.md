@@ -5,45 +5,66 @@
 > The only **blocking** spec for v2.0. Everything else (modules) ships at its own pace.
 > **Revised D8 (2026-04-30)**: MiniGraph kernel = ~70 lines (essential services only).
 > Tier-3 features (checkpointer, interrupts, subgraphs, tool, streaming, structured output)
-> ship as **graph plugins** under `perpetua_core/graph/plugins/`, loaded on demand.
+> ship as **graph plugins** under `src/perpetua_core/graph/plugins/`, loaded on demand.
 > Cold kernel has zero optional dependencies.
 
 ---
 
 ## Repo layout (`perpetua-core/`)
 
+> **2026-08-27 correction:** this tree previously placed `perpetua_core/`
+> and `tests/` as repo-root siblings, directly violating
+> [`46-repository-standard.md`](46-repository-standard.md)'s "everything
+> executable belongs under `/src`; no root-level `scripts`/`tests`/`tools`/
+> `examples`" rule -- doc 46's own "why this is additive, not a conflict"
+> section claimed this tree already complied, which was incorrect on
+> direct comparison. Corrected below; every path reference in the rest of
+> this document was updated to match, not just this diagram.
+>
+> **Packaging note, so this isn't a silent trap:** an `src`-layout package
+> is not auto-discovered by `pip install -e .` without explicit
+> configuration. `pyproject.toml` needs either
+> `[tool.setuptools.packages.find] where = ["src"]` (setuptools) or the
+> equivalent for whatever build backend is actually in use --
+> confirm which one before implementing, this doc does not show the
+> `[build-system]` table. Acceptance criterion 1 below
+> (`python -c "import perpetua_core; ..."`) will fail with a bare
+> `ModuleNotFoundError` if this step is skipped, not with an obviously
+> layout-related error.
+
 ```
 perpetua-core/
 ├── pyproject.toml            # MIT license, deps: pydantic>=2, openai, pyyaml, aiosqlite
 ├── LICENSE                   # MIT
 ├── README.md
-├── perpetua_core/
-│   ├── __init__.py
-│   ├── state.py              # PerpetuaState (Pydantic v2)
-│   ├── message.py            # Message + role enums
-│   ├── llm.py                # LLMClient (async OpenAI-compat)
-│   ├── policy.py             # HardwarePolicyResolver + HardwareAffinityError
-│   ├── gossip.py             # GossipBus (SQLite event log)
-│   ├── graph/
-│   │   ├── __init__.py
-│   │   ├── engine.py         # MiniGraph core
-│   │   ├── nodes.py          # Node base + ToolNode
-│   │   ├── edges.py          # Edge + conditional edge router
-│   │   ├── checkpointer.py   # SQLite checkpointer (resumability)
-│   │   ├── interrupts.py     # HITL pause/resume
-│   │   ├── subgraphs.py      # Subgraph composition
-│   │   ├── streaming.py      # AsyncGenerator over node + state events
-│   │   └── tool.py           # @tool decorator (Pydantic v2 schema autogen)
-│   └── config/
-│       └── model_hardware_policy.example.yml
-└── tests/
-    ├── test_state.py
-    ├── test_policy.py
-    ├── test_minigraph.py           # kernel in isolation — no plugins
-    ├── test_plugins_checkpointer.py
-    ├── test_plugins_interrupts.py
-    ├── test_plugins_tool.py
-    └── test_plugins_structured_output.py
+└── src/
+    ├── perpetua_core/
+    │   ├── __init__.py
+    │   ├── state.py              # PerpetuaState (Pydantic v2)
+    │   ├── message.py            # Message + role enums
+    │   ├── llm.py                # LLMClient (async OpenAI-compat)
+    │   ├── policy.py             # HardwarePolicyResolver + HardwareAffinityError
+    │   ├── gossip.py             # GossipBus (SQLite event log)
+    │   ├── graph/
+    │   │   ├── __init__.py
+    │   │   ├── engine.py         # MiniGraph core
+    │   │   ├── nodes.py          # Node base + ToolNode
+    │   │   ├── edges.py          # Edge + conditional edge router
+    │   │   ├── checkpointer.py   # SQLite checkpointer (resumability)
+    │   │   ├── interrupts.py     # HITL pause/resume
+    │   │   ├── subgraphs.py      # Subgraph composition
+    │   │   ├── streaming.py      # AsyncGenerator over node + state events
+    │   │   └── tool.py           # @tool decorator (Pydantic v2 schema autogen)
+    │   └── config/
+    │       └── model_hardware_policy.example.yml
+    └── tests/
+        ├── test_state.py
+        ├── test_policy.py
+        ├── test_minigraph.py           # kernel in isolation — no plugins
+        ├── test_plugins_checkpointer.py
+        ├── test_plugins_interrupts.py
+        ├── test_plugins_tool.py
+        └── test_plugins_structured_output.py
 ```
 
 **Kernel target: ~70 lines** (`graph/engine.py` only — START/END, node registry, edge routing, `ainvoke`).
@@ -55,7 +76,7 @@ Cold `MiniGraph()` with no plugins: pure Python, zero optional deps.
 ## 1. `PerpetuaState` (Pydantic v2)
 
 ```python
-# perpetua_core/state.py
+# src/perpetua_core/state.py
 from __future__ import annotations
 from typing import Any, Literal
 from pydantic import BaseModel, Field
@@ -100,7 +121,7 @@ Field rationale:
 ## 2. `LLMClient`
 
 ```python
-# perpetua_core/llm.py
+# src/perpetua_core/llm.py
 import os
 from openai import AsyncOpenAI
 
@@ -127,7 +148,7 @@ LAN routing belongs to the policy + graph layer, not the LLMClient itself. The c
 ## 3. `HardwarePolicyResolver`
 
 ```python
-# perpetua_core/policy.py
+# src/perpetua_core/policy.py
 from typing import Literal
 import yaml
 from pathlib import Path
@@ -154,7 +175,7 @@ class HardwarePolicyResolver:
 **`model_hardware_policy.example.yml`:**
 
 ```yaml
-# perpetua-core/perpetua_core/config/model_hardware_policy.example.yml
+# src/perpetua_core/config/model_hardware_policy.example.yml
 version: 1
 models:
   Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2:
@@ -182,20 +203,100 @@ State machine: nodes (callables that return state deltas), edges (router fns), s
 
 ### 4a. Core engine (`graph/engine.py`)
 
+> **2026-08-27 update:** superseded by
+> [`57-minigraph-final-reconciliation.md`](57-minigraph-final-reconciliation.md),
+> the canonical architecture record — read that document first for the
+> authoritative rules; this section is kept in sync with it, not the
+> other way around. Two independent efforts converged on the same
+> design (START/END sentinels, sync-or-async nodes, the exact
+> `MaxStepsExceeded` semantics, non-dict/empty-route rejection, and the
+> `asteps()`/`GraphEvent` scheduler seam) before either had seen the
+> other's work — see that doc's §0-§8 for the full rationale. This
+> section was also missing the builder/`CompiledGraph` split the
+> canonical record requires (§3, §8); fixed below, not just patched.
+
 ```python
-# perpetua_core/graph/engine.py
-from typing import Awaitable, Callable
+# src/perpetua_core/graph/engine.py
+import inspect
+from typing import Awaitable, Callable, Union
 from ..state import PerpetuaState
 
-NodeFn = Callable[[PerpetuaState], Awaitable[dict]]
+START = "__start__"
+END = "__end__"
+
+NodeFn = Callable[[PerpetuaState], Union[dict, Awaitable[dict]]]
 EdgeFn = Callable[[PerpetuaState], str]  # returns next node name
 
+class MaxStepsExceeded(RuntimeError):
+    def __init__(self, steps: int, last_node: str) -> None:
+        self.steps = steps          # completed node executions
+        self.last_node = last_node  # most recently entered node
+        super().__init__(f"max_steps exceeded at step {steps} (last_node={last_node!r})")
+
+class CompiledGraph:
+    """Detached topology snapshot; sole scheduler owner (§3, §8)."""
+
+    def __init__(self, nodes: dict[str, NodeFn], edges: dict[str, EdgeFn | str], max_steps: int) -> None:
+        self._nodes = dict(nodes)
+        self._edges = dict(edges)
+        self._max_steps = max_steps
+
+    def _next(self, current: str, state: PerpetuaState) -> str:
+        edge = self._edges.get(current, END)
+        target = edge(state) if callable(edge) else edge
+        if not isinstance(target, str) or not target:
+            raise ValueError(f"edge from {current!r} resolved to invalid route: {target!r}")
+        return target
+
+    async def asteps(self, state: PerpetuaState):
+        """Sole scheduler. Yields structural GraphEvent tuples
+        (kind, node, state); kind in edge.selected/node.start/node.end/
+        interrupt/done (§8). ainvoke() below only drains this."""
+        node = self._next(START, state)
+        steps, last_node = 0, START
+        while node != END:
+            if steps >= self._max_steps:
+                raise MaxStepsExceeded(steps, last_node)
+            current = node
+            yield ("node.start", current, state)
+            state = state.merge({"nodes_visited": [*state.nodes_visited, current]})
+            last_node = current
+            try:
+                result = self._nodes[current](state)
+                delta = await result if inspect.isawaitable(result) else result
+            except Exception as exc:  # noqa: BLE001 -- duck-typed interrupt boundary (§7)
+                if type(exc).__name__ == "Interrupt" and hasattr(exc, "prompt"):
+                    state = state.merge({"status": "interrupted", "metadata": {
+                        **state.metadata, "interrupt_prompt": exc.prompt,
+                        "interrupt_payload": getattr(exc, "payload", None),
+                        "interrupt_node": current,
+                    }})
+                    yield ("interrupt", current, state)
+                    return
+                raise
+            if not isinstance(delta, dict):
+                raise TypeError(f"node {current!r} returned {type(delta).__name__}; expected dict delta")
+            state = state.merge(delta)
+            yield ("node.end", current, state)
+            steps += 1
+            node = self._next(current, state)
+            yield ("edge.selected", current, state)
+        yield ("done", END, state.merge({"status": "done"}))
+
+    async def ainvoke(self, state: PerpetuaState) -> PerpetuaState:
+        final = state
+        async for _kind, _node, final in self.asteps(state):
+            pass
+        return final
+
 class MiniGraph:
-    def __init__(self):
+    """Mutable topology builder. Later changes here MUST NOT alter an
+    already-compiled CompiledGraph (§3)."""
+
+    def __init__(self, max_steps: int = 50):
         self._nodes: dict[str, NodeFn] = {}
         self._edges: dict[str, EdgeFn | str] = {}
-        self.start: str | None = None
-        self.end: str = "__end__"
+        self._max_steps = max_steps
 
     def add_node(self, name: str, fn: NodeFn) -> "MiniGraph":
         self._nodes[name] = fn
@@ -206,18 +307,16 @@ class MiniGraph:
         return self
 
     def set_start(self, name: str) -> "MiniGraph":
-        self.start = name
-        return self
+        # START is a pseudo-node: its one edge points at the real entry
+        # node, keeping entry resolution on the same lookup path as
+        # every other transition.
+        return self.add_edge(START, name)
+
+    def compile(self) -> CompiledGraph:
+        return CompiledGraph(self._nodes, self._edges, self._max_steps)
 
     async def ainvoke(self, state: PerpetuaState) -> PerpetuaState:
-        node = self.start
-        while node and node != self.end:
-            state = state.merge({"nodes_visited": [*state.nodes_visited, node]})
-            delta = await self._nodes[node](state)
-            state = state.merge(delta)
-            edge  = self._edges.get(node, self.end)
-            node  = edge(state) if callable(edge) else edge
-        return state.merge({"status": "done"})
+        return await self.compile().ainvoke(state)
 ```
 
 ### 4b. Conditional edges + state reducers — built into engine
@@ -227,7 +326,7 @@ class MiniGraph:
 ### 4c. SQLite checkpointer (`graph/checkpointer.py`)
 
 ```python
-# perpetua_core/graph/checkpointer.py
+# src/perpetua_core/graph/checkpointer.py
 import aiosqlite, json
 from ..state import PerpetuaState
 
@@ -257,7 +356,7 @@ Engine plumbing (in `engine.py`) accepts `checkpointer=...`; if set, persists af
 ### 4d. HITL interrupts (`graph/interrupts.py`)
 
 ```python
-# perpetua_core/graph/interrupts.py
+# src/perpetua_core/graph/interrupts.py
 class Interrupt(Exception):
     """Raised by a node to pause graph execution and surface a HITL prompt."""
     def __init__(self, prompt: str, payload: dict | None = None):
@@ -274,7 +373,7 @@ MAESTRO 7-layer enforcement (v2.5) will use this primitive heavily for human-che
 A subgraph is just a `MiniGraph` exposed as a single node:
 
 ```python
-# perpetua_core/graph/subgraphs.py
+# src/perpetua_core/graph/subgraphs.py
 from .engine import MiniGraph
 from ..state import PerpetuaState
 
@@ -290,7 +389,7 @@ Critical for microkernel modularity — each non-kernel module ships as a subgra
 ### 4f. ToolNode contract (`graph/nodes.py`)
 
 ```python
-# perpetua_core/graph/nodes.py
+# src/perpetua_core/graph/nodes.py
 from asyncio import create_subprocess_exec
 from asyncio.subprocess import PIPE
 from ..state import PerpetuaState
@@ -314,7 +413,7 @@ API-compatible with LangGraph's ToolNode contract — same call shape so externa
 ### 4g. Streaming (`graph/streaming.py`)
 
 ```python
-# perpetua_core/graph/streaming.py
+# src/perpetua_core/graph/streaming.py
 from typing import AsyncGenerator
 from ..state import PerpetuaState
 
@@ -330,7 +429,7 @@ async def astream(graph, state: PerpetuaState) -> AsyncGenerator[StreamEvent, No
 ### 4h. `@tool` decorator (`graph/tool.py`)
 
 ```python
-# perpetua_core/graph/tool.py
+# src/perpetua_core/graph/tool.py
 import inspect
 from pydantic import create_model
 
@@ -358,7 +457,7 @@ Implemented at `LLMClient.chat_structured(model, messages, output_schema: type[B
 ## 5. `GossipBus` (SQLite event log)
 
 ```python
-# perpetua_core/gossip.py
+# src/perpetua_core/gossip.py
 import aiosqlite, json, time
 from typing import Literal
 
@@ -437,20 +536,20 @@ security behavior testable before any non-kernel module ships.
 ## Verification (kernel acceptance criteria)
 
 1. `python -c "import perpetua_core; perpetua_core.MiniGraph()"` succeeds — no circular imports, no missing deps.
-2. `pytest tests/test_state.py` — Pydantic v2 round-trip + `merge()` delta application.
-3. `pytest tests/test_policy.py` — `check_affinity()` raises `HardwareAffinityError` for NEVER tiers.
-4. `pytest tests/test_minigraph.py` — 3-node graph (start → middle → end) runs end-to-end with state delta merging and `nodes_visited` populated.
-5. `pytest tests/test_checkpointer.py` — save then load reproduces identical state.
-6. `pytest tests/test_interrupts.py` — node raises `Interrupt`, graph status becomes `"interrupted"`, checkpoint saved, `aresume` continues correctly.
-7. `pytest tests/test_tool_decorator.py` — `@tool`-decorated function exposes correct `_input_schema` Pydantic model.
-8. `pytest tests/test_structured_output.py` — `chat_structured()` retries on parse failure and increments `retry_count`.
+2. `pytest src/tests/test_state.py` — Pydantic v2 round-trip + `merge()` delta application.
+3. `pytest src/tests/test_policy.py` — `check_affinity()` raises `HardwareAffinityError` for NEVER tiers.
+4. `pytest src/tests/test_minigraph.py` — 3-node graph (start → middle → end) runs end-to-end with state delta merging and `nodes_visited` populated.
+5. `pytest src/tests/test_checkpointer.py` — save then load reproduces identical state.
+6. `pytest src/tests/test_interrupts.py` — node raises `Interrupt`, graph status becomes `"interrupted"`, checkpoint saved, `aresume` continues correctly.
+7. `pytest src/tests/test_tool_decorator.py` — `@tool`-decorated function exposes correct `_input_schema` Pydantic model.
+8. `pytest src/tests/test_structured_output.py` — `chat_structured()` retries on parse failure and increments `retry_count`.
 9. **Import boundary lint**: `grep -r "from oramasys" perpetua-core/` returns nothing. (CI gate.)
 10. Live integration: graph node calls Mac LM Studio (`192.168.x.110:1234`) and Windows LM Studio (`192.168.x.108:1234`) per `model_hardware_policy.yml` routing; `agent_log` table in SQLite shows correct dispatch sequence.
-11. **Idempotent filesystem helpers** (mandatory for every plugin that touches the fs): every helper ships with the 4/5-state guard test from `11-idempotency-and-guard-patterns.md` §2. No fs helper is accepted in `perpetua-core/graph/plugins/` without passing `test_ensure_symlink_all_four_states_idempotent` (or equivalent for its op type). (CI gate.)
-12. **Validator agreement** (mandatory when two or more modules enforce the same allowlist): `test_validators_agree_on_*` CI gate — every shared allowlist/denylist must live in `perpetua-core/config/` and both bash and python validators must read from it. See `11-idempotency-and-guard-patterns.md` §3. (CI gate.)
-13. **HITL interrupt is always-escapable (Rule 3)**: `pytest tests/test_interrupts.py::test_interrupt_not_suppressible_by_node` — any node that internally catches `Interrupt` and does not re-raise causes this test to fail. `status="interrupted"` and `status="conflicted"` can only be cleared by `aresume()` with a caller-supplied payload.
-14. **GossipBus is append-only (Rule 4)**: `pytest tests/test_gossip.py::test_no_delete_or_update` — `GossipBus` exposes no `delete`, `update`, or `truncate` method. All events are permanent. Test queries the event count before and after a deliberately invalid operation and asserts no rows were removed.
-15. **Authorization event emitted before ToolNode subprocess (Rule 2)**: `pytest tests/test_tool_node.py::test_authorization_event_precedes_subprocess` — GossipBus receives an `authorization` event with non-empty `actor_id` and `tool_cmd` fields before any process is spawned. Test uses a mock bus and asserts event ordering.
+11. **Idempotent filesystem helpers** (mandatory for every plugin that touches the fs): every helper ships with the 4/5-state guard test from `11-idempotency-and-guard-patterns.md` §2. No fs helper is accepted in `src/perpetua_core/graph/plugins/` without passing `test_ensure_symlink_all_four_states_idempotent` (or equivalent for its op type). (CI gate.)
+12. **Validator agreement** (mandatory when two or more modules enforce the same allowlist): `test_validators_agree_on_*` CI gate — every shared allowlist/denylist must live in `src/perpetua_core/config/` and both bash and python validators must read from it. See `11-idempotency-and-guard-patterns.md` §3. (CI gate.)
+13. **HITL interrupt is always-escapable (Rule 3)**: `pytest src/tests/test_interrupts.py::test_interrupt_not_suppressible_by_node` — any node that internally catches `Interrupt` and does not re-raise causes this test to fail. `status="interrupted"` and `status="conflicted"` can only be cleared by `aresume()` with a caller-supplied payload.
+14. **GossipBus is append-only (Rule 4)**: `pytest src/tests/test_gossip.py::test_no_delete_or_update` — `GossipBus` exposes no `delete`, `update`, or `truncate` method. All events are permanent. Test queries the event count before and after a deliberately invalid operation and asserts no rows were removed.
+15. **Authorization event emitted before ToolNode subprocess (Rule 2)**: `pytest src/tests/test_tool_node.py::test_authorization_event_precedes_subprocess` — GossipBus receives an `authorization` event with non-empty `actor_id` and `tool_cmd` fields before any process is spawned. Test uses a mock bus and asserts event ordering.
 16. **Route capability manifest complete**: every non-health FastAPI route has a declared capability and test coverage for unauthenticated denial where capability is not `public`.
 17. **No bearer-in-HTML invariant**: UI/bootstrap tests assert no raw control-plane token appears in rendered HTML, JSON bootstrap blobs, logs, or frontend bundles.
 18. **Endpoint egress policy**: model probes use an unprivileged client, strip control-plane auth headers, reject unknown/public hosts by default, and pin or require approval before persistence.
