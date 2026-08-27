@@ -424,8 +424,8 @@ Internal implementation stays ours. **At the API surface, we are always a
 drop-in replacement for LangGraph (Python) and LangGraph.js (TypeScript),
 by design — not an aspiration, a standing rule.** This was the original
 rationale for building a MiniGraph-shaped kernel in the first place (see
-`1-Perplexity-Lang-Lang.md`'s "we already are a LangGraph, just not named
-that way" framing) and is made an explicit, binding decision here rather
+"we already are a LangGraph, just not named that way" framing)
+and is made an explicit, binding decision here rather
 than an implicit assumption a future agent has to rediscover.
 
 Full API research backing this section (exact current signatures, verified
