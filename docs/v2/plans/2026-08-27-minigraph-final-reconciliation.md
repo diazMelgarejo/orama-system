@@ -15,6 +15,10 @@ Both branches were created from frozen `main` tips before writes.
 | `oramasys/perpetua-core` | `8c063f41f6b8d31f6a8aa71d6c78155ea9690c90` | `2026-08-27-minigraph-final-reconciliation` |
 | `diazMelgarejo/orama-system` | `568b4167edaa25658b3a001b4f2273f774014f9a` | `2026-08-27-minigraph-final-reconciliation` |
 
+The two already-open reconciliation PRs retain the branch name shown above as
+an approved one-time exception. Any successor branch MUST use the repository
+format `yyyy-mm-dd-NNN-brief-summary`.
+
 The sandbox could not create network-backed local Git worktrees because GitHub
 DNS was unavailable to the shell. Isolation was therefore preserved with fresh
 remote branches pinned to the exact `main` SHAs above.
