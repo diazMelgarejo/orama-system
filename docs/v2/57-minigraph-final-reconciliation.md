@@ -256,11 +256,21 @@ provider policy, exporter configuration, or persistence logic.
 
 Streaming, checkpoint, trace, and debugger adapters MUST consume this seam
 instead of copying the scheduler or traversing private `_nodes`/`_edges`.
+For adapters that need multiple simultaneous observers on one run
+(e.g. a checkpointer and a tracer both watching the same `ainvoke()`
+call) — a bare `asteps()` drain is single-consumer only; verified
+directly that racing two consumers over one async generator silently
+starves one of them. Use a thin fan-out adapter that drains `asteps()`
+once and dispatches to N registered listeners; see
+[`01-kernel-spec.md`](01-kernel-spec.md) §7a for the verified
+implementation and the `GraphPlugin` interface it targets — that
+Protocol is a real, live consumer-facing interface for this purpose,
+not superseded by `asteps()` existing.
 
 Per-kind fields and ordering are defined authoritatively in
-`oramasys/perpetua-core`'s `GraphEvent` class and `CompiledGraph._run`, not
-restated here — this document is the ownership/boundary record, not the
-field-level contract. Coverage lives in that repo's `test_engine_reconciliation.py`
+`oramasys/perpetua-core`'s `GraphEvent` class and `CompiledGraph.asteps`,
+not restated here — this document is the ownership/boundary record, not
+the field-level contract. Coverage lives in that repo's `test_engine_reconciliation.py`
 and `test_streaming.py`. Consult those directly; this session has no read
 access to `oramasys/perpetua-core` to link exact paths/line ranges, so no
 placeholder path is given as confirmed. Likely locations, following this

@@ -646,30 +646,55 @@ security behavior testable before any non-kernel module ships.
 
 ### 7a. GraphPlugin Protocol
 
-> **2026-08-27 note:** superseded by the `asteps()`/`GraphEvent` scheduler
-> seam ([`57-minigraph-final-reconciliation.md`](57-minigraph-final-reconciliation.md)
-> §8). A callback Protocol (`on_node_start`/`on_node_end`) and a generator
-> yielding structural events are two different integration patterns for
-> the same observability need; neither this document nor the canonical
-> record ever reconciled them before this note, and `GraphPlugin` never
-> appears in the canonical record's implementation-status list — unlike
-> `asteps()`/`GraphEvent`, which does. Do not implement `GraphPlugin`
-> alongside `asteps()`; treat this Protocol as historical, dated content
-> (2026-05-02, predating the August reconciliation) rather than a live
-> second mechanism. Provenance checked, not fully resolved: an
-> April-30-dated foundational scaffolding draft for this repo split
-> (plain dataclasses, not yet Pydantic — an earlier shape than this
-> document's own `PerpetuaState`) does not mention `GraphPlugin` at all,
-> confirming it came from a separate, later pass on the date this
-> section already states, not from that draft. Who authored the May 2
-> pass and why `on_node_start`/`on_node_end` specifically was chosen
-> remains unconfirmed — no record of it exists in PT's `.agent` memory
-> (searched directly, zero matches for "GraphPlugin" anywhere in that
-> repo). The closest real analogue is LangChain's `BaseCallbackHandler`
-> (`on_chain_start`/`on_chain_end` and similar) — a general
-> chain/LLM-level callback system, not LangGraph's own native
-> graph-execution observability mechanism, which is the `stream_mode`/
-> `astream_events` generator pattern `asteps()` actually matches.
+> **2026-08-27 update — provenance fully resolved, synthesis corrected.**
+> Earlier note here treated this Protocol as superseded/historical.
+> That was too dismissive of real groundwork; corrected below.
+>
+> **Provenance, traced to primary sources, not speculated:**
+> [`05-feasibility-review.md`](05-feasibility-review.md) (2026-05-01)
+> first named these exact method signatures, recommending them
+> specifically so the `SqliteCheckpointer` and `HITL Interrupts`
+> plugins would have "documented hooks... rather than monkey-patching
+> the `ainvoke` loop" — a named leaky-abstraction concern, not an
+> arbitrary choice.
+> [`08-technical-architecture-review.md`](08-technical-architecture-review.md)
+> (2026-05-02, titled "Gemini-Analyzer" — an explicit label naming the
+> AI collaborator used, not informal attribution) implements that
+> recommendation near-verbatim in its own §F1, explicitly framed as
+> *differentiating* from LangGraph/CrewAI's own patterns, not copying
+> either. An earlier hypothesis here (LangChain `BaseCallbackHandler`
+> as the model) is not supported by the primary source and is retracted.
+>
+> **The real gap this Protocol correctly anticipated:** `asteps()` is a
+> single-consumer, pull-based async generator. `ainvoke()` already
+> drains it internally. Verified directly: two tasks racing over the
+> same async generator via `asyncio.gather` show one consumer silently
+> starving the other, with no error raised. If the Checkpointer AND
+> Interrupts AND a future tracer all need to observe one `ainvoke()`
+> call, a bare `asteps()` drain cannot support that without real
+> additional plumbing — exactly the multi-consumer need `GraphPlugin`
+> was designed for.
+>
+> **Synthesis, verified working, not just proposed:** `asteps()` stays
+> the sole scheduler (no duplicate scheduling logic — that finding
+> stands). A thin plugin-layer adapter drains it exactly once and fans
+> out each event to every registered `GraphPlugin` listener:
+>
+> ```python
+> # plugin-layer, not engine.py -- consumes asteps(), never reimplements it
+> async def run_with_plugins(compiled_graph, state, plugins: list[GraphPlugin]):
+>     async for kind, node, s in compiled_graph.asteps(state):
+>         for p in plugins:
+>             if kind == "node.start":
+>                 p.on_node_start(s, node)
+>             elif kind == "node.end":
+>                 p.on_node_end(s, node, {})
+> ```
+>
+> This keeps `GraphPlugin` as a real, live consumer-facing interface —
+> not historical content — while keeping the kernel's one-scheduler
+> invariant intact. Both pieces of groundwork preserved, neither a
+> casualty of the other.
 
 To ensure architectural integrity, all Tier-3 plugins MUST implement the following Protocol:
 
