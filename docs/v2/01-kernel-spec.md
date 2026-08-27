@@ -358,21 +358,30 @@ class CompiledGraph:
         return final
 
 class MiniGraph:
-    """Mutable topology builder. Later changes here MUST NOT alter an
-    already-compiled CompiledGraph (§3)."""
+    """Immutable topology builder. Each add_node/add_edge returns a NEW
+    MiniGraph via structural sharing -- only the changed dict is
+    shallow-copied; the unchanged one is shared by reference. This is
+    real copy-on-write efficiency (the same technique persistent data
+    structures and git's own tree objects use), not full deep-copying
+    on every call. Satisfies the literal "always create new objects,
+    never mutate" rule, not just a semantic argument for why mutation
+    was safe (§3's earlier framing is retired in favor of this)."""
 
-    def __init__(self, max_steps: int = 50):
-        self._nodes: dict[str, NodeFn] = {}
-        self._edges: dict[str, EdgeFn | str] = {}
+    def __init__(
+        self,
+        nodes: dict[str, NodeFn] | None = None,
+        edges: dict[str, EdgeFn | str] | None = None,
+        max_steps: int = 50,
+    ) -> None:
+        self._nodes = nodes if nodes is not None else {}
+        self._edges = edges if edges is not None else {}
         self._max_steps = max_steps
 
     def add_node(self, name: str, fn: NodeFn) -> "MiniGraph":
-        self._nodes[name] = fn
-        return self
+        return MiniGraph({**self._nodes, name: fn}, self._edges, self._max_steps)
 
     def add_edge(self, src: str, dst: str | EdgeFn) -> "MiniGraph":
-        self._edges[src] = dst
-        return self
+        return MiniGraph(self._nodes, {**self._edges, src: dst}, self._max_steps)
 
     def set_start(self, name: str) -> "MiniGraph":
         # START is a pseudo-node: its one edge points at the real entry

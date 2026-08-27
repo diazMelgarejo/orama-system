@@ -80,7 +80,7 @@ The builder/runtime split is explicit.
 
 ```text
 MiniGraph
-  mutable topology builder
+  immutable topology builder
         |
         | compile()
         v
@@ -92,46 +92,53 @@ CompiledGraph
 `MiniGraph.ainvoke(state)` compiles a fresh snapshot and delegates execution to
 `CompiledGraph`.
 
-Compilation detaches the topology, not arbitrary Python object internals.
-Later builder node/edge changes MUST NOT alter an existing compiled graph.
-The source builder remains mutable.
+**2026-08-27 resolution — bigger-picture synthesis, not a choice between
+two conflicting demands.** A review insisted the mutable-builder
+framing above ("copy-on-write applied at the topology layer") not be
+accepted as compliance with a cited "always create new objects, never
+mutate" rule, and asked for `add_node`/`add_edge` to return new
+builder instances instead. A direct search of `CLAUDE.md`, `AGENTS.md`,
+and this repo's CodeRabbit config still finds no such rule committed
+anywhere to consult directly — but rather than pick a side between the
+review's literal demand and the earlier copy-on-write reasoning, both
+are satisfied simultaneously:
 
-**Not an exception — copy-on-write applied at the topology layer, not
-the value layer.** A repo-wide "always create new objects, never
-mutate" rule was cited against this design; a direct search of
-`CLAUDE.md`, `AGENTS.md`, and this repo's CodeRabbit config found no
-such rule committed anywhere. Clarified directly (2026-08-27): the
-actual intent behind that kind of rule is copy-on-write — append-only,
-diff-on-top-of-original, like a git commit or a ZFS snapshot, never
-destructively rewritten in place. `PerpetuaState.merge()` already
-implements exactly that at the **value** layer, confirmed by reading
-the code directly: `return self.model_copy(update=delta, deep=True)` — a new
-state object every call, the prior one untouched. `deep=True` is
-load-bearing: Pydantic's default is a shallow copy, so nested mutable
-fields not present in `delta` would otherwise be shared between the
-prior and merged states (verified and fixed in `b002fc9d`).
+`MiniGraph` is now genuinely immutable. `add_node`/`add_edge` each
+return a **new** `MiniGraph` instance — verified directly: the original
+is provably untouched after either call, including the specific
+footgun this closes (a bare `g.add_node(...)` statement with no
+reassignment now correctly leaves `g` unchanged, rather than silently
+mutating it as the old design did). This is not full deep-copying on
+every call — that would defeat the purpose of a real copy-on-write
+design. It uses **structural sharing**, the same technique persistent
+data structures and git's own tree objects use for efficiency: only
+the changed dict (`_nodes` for `add_node`, `_edges` for `add_edge`)
+gets a new shallow copy; the *unchanged* dict is shared by reference
+with the original instance, since nothing ever mutates it after
+construction. Verified directly: after `g2 = g1.add_node(...)`,
+`g2._edges is g1._edges` — genuinely the same object, not a copy,
+because sharing an object that is never mutated is exactly what real
+copy-on-write permits.
 
-`MiniGraph`/`CompiledGraph` implement the identical guarantee one layer
-up, at **topology**: `MiniGraph` is the working tree — mutable,
-in-progress, exactly like files before a commit. `compile()` is the
-commit. `CompiledGraph` is the snapshot, and this document already
-states the git-commit-equivalent guarantee above: later builder
-node/edge changes MUST NOT alter an existing compiled graph. Once
-compiled, a `CompiledGraph` never changes retroactively, the same way a
-git commit doesn't rewrite itself when the working tree keeps changing.
-`add_node`/`add_edge` mutating the *builder* is a precondition for
-copy-on-write at the compile boundary, not a violation of it — the
-finding checked for mutation at the wrong boundary. Two independent
-verifications converged on this same conclusion before either saw the
-other's reasoning: this document's own architecture record above, and a
-separate session's behavioral test confirming builder mutation after
-`compile()` provably does not alter the already-compiled snapshot (a
-real `add_node`/`add_edge` call after `compile()`, then re-running the
-already-compiled graph and confirming its output is unaffected — not
-just asserted). Rewriting `add_node`/`add_edge` to return new builder
-instances would collapse the working-tree/commit distinction this
-design deliberately preserves, not bring it into compliance with
-anything.
+`PerpetuaState.merge()` already implements the same underlying
+principle at the **value** layer: `return self.model_copy(update=delta,
+deep=True)` — a new state object every call, the prior one untouched.
+`deep=True` is load-bearing here too: Pydantic's default is a shallow
+copy, so nested mutable fields not present in `delta` would otherwise
+be shared between the prior and merged states (verified and fixed in
+`b002fc9d`). `MiniGraph` now implements the same principle at the
+**topology** layer with the same rigor, not a looser standard.
+Chaining ergonomics are unaffected for the normal case
+(`MiniGraph().add_node(...).add_node(...).set_start(...)` reads and
+behaves identically) — the only observable change is that discarding a
+return value without reassigning no longer does anything, which is the
+correct, expected behavior for an immutable builder, not a regression.
+
+`compile()` is still the commit-equivalent boundary: `CompiledGraph`
+takes its own defensive `dict()` copy of whatever `_nodes`/`_edges` it
+receives — now provably redundant given the builder's own immutability,
+but kept anyway as cheap, harmless defense in depth against any future
+mutation bug elsewhere in the call chain.
 
 ---
 
