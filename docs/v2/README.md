@@ -254,7 +254,8 @@ orama-system/docs/v2/
 ├── 51-security-sentinel-orbit-passkey-mcp.md  ← v2.1 security-sentinel satellite: passkey + MCP human authorization; orbits perpetua-core; MVP HMAC bridge in docs/plans/2026-08-02-pr-body-grant-security-remediation.md
 ├── 52-tier5-frugality-storage-consumer-mapping.md  ← maps PT's Tier-5/frugality budget ledger onto the already-canonical SQLite-write-authority / DuckDB-read-only-analytics / LanceDB-optional-redacted-recall split from doc 20; docs-only, no new architecture decision, no code
 ├── 56-anamnesis-runtime-memory-migration.md  ← D26: v1 PT-agent controller contract; deferred private v2 runtime-memory backend and weekly HITL promotion policy
-└── 57-minigraph-kimi-reconciliation-perpetua-core-findings.md  ← Part I: 3 verified MiniGraph findings (max_steps semantics, non-dict returns, empty-route validation) + an asteps() proposal. Part II: literal step-by-step implementation plan for oramasys/perpetua-core, grounded in 01-kernel-spec.md's canonical API (set_start/async-only nodes/max_steps=50/GraphPlugin Protocol), incl. a flagged tests/ location conflict between 01-kernel-spec.md and 46-repository-standard.md; written for a CLI session with org access this session lacked
+├── 57-minigraph-kimi-reconciliation-perpetua-core-findings.md  ← 3 verified MiniGraph findings (max_steps semantics, non-dict returns, empty-route validation) + an asteps() proposal, reconciled against Kimi's parallel rewrite; written for a CLI session with oramasys org access this session lacked
+└── 58-minigraph-implementation-plan-perpetua-core.md  ← literal step-by-step implementation plan for oramasys/perpetua-core (split from 57 at 500 lines), grounded in 01-kernel-spec.md's canonical API (now-adopted START/END sentinels + sync-or-async nodes, max_steps=50, GraphPlugin Protocol), incl. the src/-layout migration task for the as-built repo now that 01-kernel-spec.md's own tree is fixed
 ```
 
 > **Next free slot: `57-`**

@@ -203,20 +203,40 @@ State machine: nodes (callables that return state deltas), edges (router fns), s
 
 ### 4a. Core engine (`graph/engine.py`)
 
+> **2026-08-27 amendment:** two design choices below were revised after
+> direct review, not left as originally drafted. Rationale in full at
+> [`57-minigraph-kimi-reconciliation-perpetua-core-findings.md`](57-minigraph-kimi-reconciliation-perpetua-core-findings.md)
+> §II.1 -- summarized here so this spec is self-contained:
+>
+> 1. `self.end` (a mutable per-instance attribute) is replaced with
+>    module-level `START`/`END` sentinels. An instance attribute lets two
+>    `MiniGraph`s in the same process disagree on what "end" means, for
+>    something that should be universal; sentinels also drop a null-check
+>    from the traversal loop. Real LangGraph -- the spec's own stated
+>    compatibility target -- exports `START`/`END` as module constants.
+> 2. `NodeFn` now accepts **sync or async** functions, not async-only.
+>    Forcing `async def` on a pure transform (no I/O) is exactly the
+>    syntactic-noise-for-no-benefit cost the LangGraph-compatibility goal
+>    argues against; real LangGraph accepts both for this reason.
+> `set_start()`'s naming is unchanged -- it already matched the
+> field it sets and was not part of this revision.
+
 ```python
 # src/perpetua_core/graph/engine.py
-from typing import Awaitable, Callable
+import inspect
+from typing import Awaitable, Callable, Union
 from ..state import PerpetuaState
 
-NodeFn = Callable[[PerpetuaState], Awaitable[dict]]
+START = "__start__"
+END = "__end__"
+
+NodeFn = Callable[[PerpetuaState], Union[dict, Awaitable[dict]]]
 EdgeFn = Callable[[PerpetuaState], str]  # returns next node name
 
 class MiniGraph:
     def __init__(self):
         self._nodes: dict[str, NodeFn] = {}
         self._edges: dict[str, EdgeFn | str] = {}
-        self.start: str | None = None
-        self.end: str = "__end__"
 
     def add_node(self, name: str, fn: NodeFn) -> "MiniGraph":
         self._nodes[name] = fn
@@ -227,16 +247,21 @@ class MiniGraph:
         return self
 
     def set_start(self, name: str) -> "MiniGraph":
-        self.start = name
-        return self
+        # START is a pseudo-node: its one edge points at the real entry
+        # node. This keeps entry resolution on the same lookup path as
+        # every other transition, rather than a separate self._entry
+        # attribute plus a duplicate branch in ainvoke.
+        return self.add_edge(START, name)
 
     async def ainvoke(self, state: PerpetuaState) -> PerpetuaState:
-        node = self.start
-        while node and node != self.end:
+        edge = self._edges.get(START, END)
+        node = edge(state) if callable(edge) else edge
+        while node != END:
             state = state.merge({"nodes_visited": [*state.nodes_visited, node]})
-            delta = await self._nodes[node](state)
+            result = self._nodes[node](state)
+            delta = await result if inspect.isawaitable(result) else result
             state = state.merge(delta)
-            edge  = self._edges.get(node, self.end)
+            edge  = self._edges.get(node, END)
             node  = edge(state) if callable(edge) else edge
         return state.merge({"status": "done"})
 ```
