@@ -105,8 +105,11 @@ actual intent behind that kind of rule is copy-on-write — append-only,
 diff-on-top-of-original, like a git commit or a ZFS snapshot, never
 destructively rewritten in place. `PerpetuaState.merge()` already
 implements exactly that at the **value** layer, confirmed by reading
-the code directly: `return self.model_copy(update=delta)` — a new
-state object every call, the prior one untouched.
+the code directly: `return self.model_copy(update=delta, deep=True)` — a new
+state object every call, the prior one untouched. `deep=True` is
+load-bearing: Pydantic's default is a shallow copy, so nested mutable
+fields not present in `delta` would otherwise be shared between the
+prior and merged states (verified and fixed in `b002fc9d`).
 
 `MiniGraph`/`CompiledGraph` implement the identical guarantee one layer
 up, at **topology**: `MiniGraph` is the working tree — mutable,
@@ -385,7 +388,7 @@ a new explicit architecture decision.
 
 ## 13. Graph lint target
 
-Before executing a versioned `GraphSpec`, the `orama-system` layer should
+Before executing a versioned `GraphSpec`, the `orama-system` layer MUST
 validate at least:
 
 - entry exists;
@@ -396,6 +399,9 @@ validate at least:
 - durable/external-write nodes declare replay/effect policy;
 - stable graph/node IDs are present;
 - schema/version compatibility is explicit.
+
+None of these checks are advisory. Execution MUST reject any
+specification that fails validation.
 
 Natural-language topology, if introduced, MUST compile to a typed validated
 `GraphSpec`. Prose is never runtime authority.
