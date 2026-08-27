@@ -229,20 +229,28 @@ embedded in `engine.py`.
 ### 4a. Core engine (`graph/engine.py`)
 
 > **2026-08-27 update:** superseded by
-> [`57-minigraph-final-reconciliation.md`](57-minigraph-final-reconciliation.md),
-> the canonical architecture record — read that document first for the
-> authoritative rules; this section is kept in sync with it, not the
-> other way around. Two independent efforts converged on the same
-> design (START/END sentinels, sync-or-async nodes, the exact
-> `MaxStepsExceeded` semantics, non-dict/empty-route rejection, and the
-> `asteps()`/`GraphEvent` scheduler seam) before either had seen the
-> other's work — see that doc's §0-§8 for the full rationale. This
-> section was also missing the builder/`CompiledGraph` split the
-> canonical record requires (§3, §8); fixed below, not just patched.
+> [`57-minigraph-final-reconciliation.md`](57-minigraph-final-reconciliation.md)
+> and
+> [`58-minigraph-observer-pattern-library-reconciliation.md`](58-minigraph-observer-pattern-library-reconciliation.md),
+> the canonical architecture records — read those first for the
+> authoritative rules; this section is kept in sync with them, not the
+> other way around. **Second update, same date:** the scheduler is now
+> `_run()`, not `asteps()` — doc 58 established that `asteps()` alone
+> is a sanitized, control-only projection (no state, no delta) and
+> cannot serve as a plugin fan-out source; a `Checkpointer` needs the
+> real delta, which sanitized events never carried. Verified directly
+> before rewriting: the fan-out sample two sections below previously
+> passed a hardcoded `{}` in place of the real delta because `asteps()`
+> genuinely had no delta to give it. Fixed by introducing
+> `GraphObservation` (rich: event + state + delta) as what `_run()`
+> actually yields, with `aobserve()` exposing it to trusted in-process
+> consumers and `asteps()` now a thin projection that strips it down to
+> sanitized `GraphEvent` for streaming/API/UI.
 
 ```python
 # src/perpetua_core/graph/engine.py
 import inspect
+from dataclasses import dataclass
 from typing import Awaitable, Callable, Union
 from ..state import PerpetuaState
 
@@ -257,6 +265,23 @@ class MaxStepsExceeded(RuntimeError):
         self.steps = steps          # completed node executions
         self.last_node = last_node  # most recently entered node
         super().__init__(f"max_steps exceeded at step {steps} (last_node={last_node!r})")
+
+@dataclass(frozen=True)
+class GraphEvent:
+    """Sanitized, control-plane only. Safe for streaming/API/UI --
+    excludes state and node deltas by design (§8)."""
+    kind: str   # node.start/node.end/edge.selected/interrupt/done
+    node: str
+    steps: int
+
+@dataclass(frozen=True)
+class GraphObservation:
+    """Rich, trusted, in-process record. Never crosses a process/API
+    boundary. This is what `_run()` actually yields; GraphEvent is a
+    projection over it, not the other way around."""
+    event: GraphEvent
+    state: PerpetuaState
+    delta: dict | None = None
 
 class CompiledGraph:
     """Detached topology snapshot; sole scheduler owner (§3, §8)."""
@@ -275,17 +300,18 @@ class CompiledGraph:
             raise ValueError(f"edge from {current!r} resolved to unknown node: {target!r}")
         return target
 
-    async def asteps(self, state: PerpetuaState):
-        """Sole scheduler. Yields structural GraphEvent tuples
-        (kind, node, state); kind in edge.selected/node.start/node.end/
-        interrupt/done (§8). ainvoke() below only drains this."""
+    async def _run(self, state: PerpetuaState):
+        """Sole scheduler. Yields rich GraphObservation records -- the
+        one irreducible traversal truth every projection derives from.
+        Never call this directly from plugin code; use aobserve() or
+        asteps() below."""
         node = self._next(START, state)
         steps, last_node = 0, START
         while node != END:
             if steps >= self._max_steps:
                 raise MaxStepsExceeded(steps, last_node)
             current = node
-            yield ("node.start", current, state)
+            yield GraphObservation(GraphEvent("node.start", current, steps), state)
             state = state.merge({"nodes_visited": [*state.nodes_visited, current]})
             last_node = current
             try:
@@ -298,22 +324,37 @@ class CompiledGraph:
                         "interrupt_payload": getattr(exc, "payload", None),
                         "interrupt_node": current,
                     }})
-                    yield ("interrupt", current, state)
+                    yield GraphObservation(GraphEvent("interrupt", current, steps), state)
                     return
                 raise
             if not isinstance(delta, dict):
                 raise TypeError(f"node {current!r} returned {type(delta).__name__}; expected dict delta")
             state = state.merge(delta)
-            yield ("node.end", current, state)
+            yield GraphObservation(GraphEvent("node.end", current, steps), state, delta)
             steps += 1
             node = self._next(current, state)
-            yield ("edge.selected", current, state)
-        yield ("done", END, state.merge({"status": "done"}))
+            yield GraphObservation(GraphEvent("edge.selected", current, steps), state)
+        yield GraphObservation(GraphEvent("done", END, steps), state.merge({"status": "done"}))
+
+    async def aobserve(self, state: PerpetuaState):
+        """Rich projection over _run(). Trusted in-process consumers
+        only -- checkpointer/tracer/audit/GraphPlugin dispatch (§7a).
+        Carries real state and deltas; never expose this over a
+        process/API boundary."""
+        async for obs in self._run(state):
+            yield obs
+
+    async def asteps(self, state: PerpetuaState):
+        """Sanitized projection over _run(). Safe for streaming/API/UI
+        -- strips state and delta down to control-plane-only
+        GraphEvent."""
+        async for obs in self._run(state):
+            yield obs.event
 
     async def ainvoke(self, state: PerpetuaState) -> PerpetuaState:
         final = state
-        async for _kind, _node, final in self.asteps(state):
-            pass
+        async for obs in self._run(state):
+            final = obs.state
         return final
 
 class MiniGraph:
@@ -684,25 +725,38 @@ security behavior testable before any non-kernel module ships.
 > additional plumbing — exactly the multi-consumer need `GraphPlugin`
 > was designed for.
 >
-> **Synthesis, verified working, not just proposed:** `asteps()` stays
-> the sole scheduler (no duplicate scheduling logic — that finding
-> stands). A thin plugin-layer adapter drains it exactly once and fans
-> out each event to every registered `GraphPlugin` listener:
+> **Synthesis, verified working, not just proposed — second correction,
+> same date:** the first version of this fix drained `asteps()` and
+> passed a hardcoded `{}` in place of the real delta, because
+> `asteps()`'s sanitized `GraphEvent` genuinely carries no delta at
+> all. Fixed: the dispatcher now drains `aobserve()` — the rich
+> `GraphObservation` projection §4a defines — exactly once, and fans
+> out to every registered `GraphPlugin` listener with the real state
+> and delta:
 >
 > ```python
-> # plugin-layer, not engine.py -- consumes asteps(), never reimplements it
+> # plugin-layer, not engine.py -- consumes aobserve(), never reimplements it
 > async def run_with_plugins(compiled_graph, state, plugins: list[GraphPlugin]):
->     async for kind, node, s in compiled_graph.asteps(state):
+>     async for obs in compiled_graph.aobserve(state):
 >         for p in plugins:
->             if kind == "node.start":
->                 p.on_node_start(s, node)
->             elif kind == "node.end":
->                 p.on_node_end(s, node, {})
+>             if obs.event.kind == "node.start":
+>                 p.on_node_start(obs.state, obs.event.node)
+>             elif obs.event.kind == "node.end":
+>                 p.on_node_end(obs.state, obs.event.node, obs.delta)
 > ```
+>
+> Verified directly: a `Checkpointer` plugin now genuinely receives the
+> node's real output delta (e.g. `{"scratchpad": {"real_value": 42}}`)
+> instead of an empty dict, while a `Tracer` plugin observes the exact
+> same run without racing or starving the checkpointer — both drained
+> from one `aobserve()` pass. `asteps()` stays the sanitized surface
+> for streaming/API/UI, unaffected by this fix.
 >
 > This keeps `GraphPlugin` as a real, live consumer-facing interface —
 > not historical content — while keeping the kernel's one-scheduler
-> invariant intact. Both pieces of groundwork preserved, neither a
+> invariant intact (`_run()` remains the sole scheduler; `aobserve()`
+> and `asteps()` are both projections over it, never duplicate
+> traversal logic). Both pieces of groundwork preserved, neither a
 > casualty of the other.
 
 To ensure architectural integrity, all Tier-3 plugins MUST implement the following Protocol:
