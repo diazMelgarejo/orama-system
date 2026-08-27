@@ -7,6 +7,12 @@
 **Upper-layer authority:** `diazMelgarejo/orama-system`  
 **Core PR:** <https://github.com/oramasys/perpetua-core/pull/1>
 
+**Branch-name exception:** approved for the already-open reconciliation PRs only.
+
+PR #333 and `oramasys/perpetua-core` PR #1 retain
+`2026-08-27-minigraph-final-reconciliation`. Any successor branch MUST use
+`yyyy-mm-dd-NNN-brief-summary`.
+
 This record resolves the final face-off between the shipped MiniGraph, Kimi's
 standalone rewrite, the Kimi/Claude review, and the graph-engineering research.
 Future work MUST use this record when an older MiniGraph statement conflicts.
