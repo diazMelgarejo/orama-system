@@ -29,6 +29,7 @@ This document preserves history but supersedes conflicting MiniGraph clauses.
 | [`04-build-order.md`](04-build-order.md) Phase 2 | Phase 2 treated as permanently closed | R0–R2 is a correctness/architecture hardening addendum. |
 | [`15-phase1-as-built.md`](15-phase1-as-built.md) | historical line counts/topology | Retained as history; this record and current tests define the runtime contract. |
 | [`../superpowers/specs/2026-05-17-salvage-translation-design.md`](../superpowers/specs/2026-05-17-salvage-translation-design.md) | `<=80` hard cap and source-builder freeze | No hard cap; builder stays mutable; compiled topology is detached. |
+| `docs/v2-kimi-minigraph-reconciliation-20260826` branch (old, un-merged; docs numbered 57/58 there, superseding-name-collision with this doc resolved by not merging their content directly) | Independent Kimi-rewrite reconciliation, its own max_steps/non-dict/empty-route findings, its own `asteps()` proposal, `minigraph_extras/` plugin naming | Superseded in full by this document — kept only as historical evidence that two independent efforts converged on the same design before either saw the other's work (max_steps semantics, non-dict rejection, empty-route rejection, the `asteps()`/`GraphEvent` seam all match exactly). Its `minigraph_extras/` naming is explicitly rejected by §9 above. |
 
 Historical documents remain evidence of why the design evolved. Do not
 mechanically restore their superseded constraints.
@@ -210,6 +211,18 @@ provider policy, exporter configuration, or persistence logic.
 Streaming, checkpoint, trace, and debugger adapters MUST consume this seam
 instead of copying the scheduler or traversing private `_nodes`/`_edges`.
 
+Per-kind fields and ordering are defined authoritatively in
+`oramasys/perpetua-core`'s `GraphEvent` class and `CompiledGraph._run`, not
+restated here — this document is the ownership/boundary record, not the
+field-level contract. Coverage lives in that repo's `test_engine_reconciliation.py`
+and `test_streaming.py`. Consult those directly; this session has no read
+access to `oramasys/perpetua-core` to link exact paths/line ranges, so no
+placeholder path is given as confirmed. Likely locations, following this
+same document's own `src/`-layout convention (§4's code sample) but
+**unverified**: `src/perpetua_core/graph/engine.py` and
+`src/tests/test_engine_reconciliation.py` / `src/tests/test_streaming.py`
+— confirm against the real tree before citing these as fact.
+
 ---
 
 ## 9. Plugin boundary
@@ -358,7 +371,9 @@ runtime self-rewrite.
 
 ## 15. Implementation status
 
-Implemented in `oramasys/perpetua-core` PR #1:
+**Proposed / in review** in `oramasys/perpetua-core` PR #1 (open, no merge
+commit as of this review — Python 3.11/3.12 checks succeeded; add the merge
+commit SHA here once it actually merges, not before):
 
 - canonical `PerpetuaState` retained;
 - returned-value awaitability;
@@ -400,6 +415,151 @@ Future changes MUST preserve:
 10. provider/exporter-independent structural events;
 11. streaming without private topology traversal;
 12. durable/dynamic/optimizer features outside the kernel until proven.
+
+---
+
+## 17. LangGraph / LangGraph.js drop-in compatibility — explicit by design
+
+Internal implementation stays ours. **At the API surface, we are always a
+drop-in replacement for LangGraph (Python) and LangGraph.js (TypeScript),
+by design — not an aspiration, a standing rule.** This was the original
+rationale for building a MiniGraph-shaped kernel in the first place (see
+`1-Perplexity-Lang-Lang.md`'s "we already are a LangGraph, just not named
+that way" framing) and is made an explicit, binding decision here rather
+than an implicit assumption a future agent has to rediscover.
+
+Full API research backing this section (exact current signatures, verified
+against `langgraph` 1.2.x source and reference docs, not assumed from
+memory): see the compatibility research artifact referenced in this PR's
+conversation record. Two things established there that shape this section:
+
+- LangGraph's **builder/topology API has been stable since v0.1 through
+  v1.2** (the current stable line as of August 2026) — `add_node`,
+  `add_edge`, `add_conditional_edges`, `compile` are unchanged. This makes
+  "100% API compatible" a coherent, pin-able target, not a moving one.
+- Full byte-for-byte fidelity is realistic for the **builder + invoke/stream
+  surface**, but genuinely hard for the **exact streaming event schema**
+  (`stream_mode` shapes, `astream_events` v2) and **checkpointer
+  serialization internals**. Scope those explicitly rather than silently
+  overclaiming "100%."
+
+### 17a. Python — legacy AND current surface, both, not one or the other
+
+The compatibility layer supports **both** the legacy v0.1-era method names
+(still valid, not deprecated-for-removal per LangChain's own Release
+Policy) and the current v1.2.x primitives, because real LangGraph-authored
+code in the wild uses both:
+
+**Legacy wrapper (aliases onto the canonical builder):**
+
+```python
+# perpetua_core/graph/plugins/langgraph_compat.py -- a PLUGIN, never
+# imported by engine.py itself (per §9's plugin boundary).
+def set_entry_point(self, key: str) -> "MiniGraph":
+    """Equivalent to add_edge(START, key). Legacy LangGraph v0.1 name,
+    kept because real code still uses it."""
+    return self.set_start(key)
+
+def set_finish_point(self, key: str) -> "MiniGraph":
+    """Equivalent to add_edge(key, END)."""
+    return self.add_edge(key, END)
+```
+
+**Current surface (v1.2.x), targeted explicitly:**
+
+- `START`/`END` sentinels — already canonical in `engine.py` §4 itself, not
+  a compat-layer addition (this is the one piece that belongs in the
+  kernel proper, since the kernel already needed universal sentinels for
+  its own correctness — see §4's amendment history).
+- `Command(update=..., goto=...)` — combines a state update with routing
+  in one node return value. A compat-layer node wrapper detects a
+  returned `Command` and translates `update` into the normal dict-delta
+  merge path, `goto` into the routing decision — implemented as a plugin
+  wrapper around node execution, not a kernel change.
+- `Send(node, arg)` — map-reduce fan-out. Depends on §10's deferred
+  reducer/join redesign (R3); do not implement `Send` support before R3
+  lands, since `Send`'s correctness depends on exactly the reducer
+  semantics R3 defines.
+- `interrupt(value)` — the current preferred HITL primitive (persist +
+  resume via `Command(resume=...)`), distinct from and more capable than
+  the structural `Interrupt` exception the kernel recognizes (§7). The
+  kernel's structural recognition is the substrate; a full `interrupt()`
+  implementation requires the durable checkpoint lineage §11 defers.
+  **Do not implement a partial `interrupt()`** (e.g. one that raises but
+  doesn't actually persist/resume) — that silently breaks HITL examples
+  in a way that is worse than clearly not supporting it yet.
+- `add_conditional_edges(source, path, path_map=None)` — already
+  expressible via the canonical `add_edge(src, dst_fn)` pattern; the
+  compat layer's version is a thin rename/signature-adapter, not new
+  logic.
+
+**Explicitly out of scope for now, and why:** `astream_events(version="v2")`
+(the fine-grained callback event vocabulary) and full `BaseCheckpointSaver`
+serialization fidelity. Both are real, substantial subsystems in their own
+right; claiming compatibility with either before implementing them for
+real would be the "silently overclaim 100%" failure mode this section
+exists to prevent.
+
+### 17b. JavaScript/TypeScript — `oramaclaw`, targeting LangGraph.js exactly
+
+A **separate, JS-facing module named `oramaclaw`** targets LangGraph.js's
+exact naming (verified current as of August 2026, not assumed from the
+Python API by analogy):
+
+```typescript
+import { StateGraph, Annotation, START, END, Command } from "oramaclaw";
+
+const StateAnnotation = Annotation.Root({
+  foo: Annotation<string>,
+});
+
+const graph = new StateGraph(StateAnnotation)
+  .addNode("nodeA", nodeA, { ends: ["nodeB", "nodeC"] })  // ends: declares
+  .addNode("nodeB", nodeB)                                 // Command.goto
+  .addNode("nodeC", nodeC)                                 // destinations
+  .addEdge(START, "nodeA")
+  .compile();
+```
+
+`addNode`/`addEdge` (camelCase, not the Python `add_node`/`add_edge`
+snake_case — JS convention, verified, not a naming inconsistency to
+"fix"), `Annotation.Root({...})` for state-schema definition, and the
+`ends: [...]` third-argument option on `addNode` (declares valid
+`Command.goto` destinations for an edgeless/`Command`-routed node,
+confirmed against LangGraph.js's official "Use the graph API" guide and
+its `Command` how-to doc) are the three surfaces named explicitly for
+this module to target.
+
+**Where `oramaclaw` lives and what it bundles with:** Perpetua-Tools,
+alongside the existing `packages/alphaclaw-adapter/` and
+`packages/alphaclaw-mcp/` — matching the pattern already established and
+verified for those two packages (PT `lesson_a5b40efe18d5`). `oramaclaw` is
+described as bundled with "ALL AlphaClaw- and OpenClaw-related controllers
+and commandeering components," which means it **steers those processes at
+runtime** (spawn/HTTP, matching `alphaclaw-adapter`'s own verified design)
+— it does **not** import from or modify `diazMelgarejo/AlphaClaw`'s
+repository. This boundary is load-bearing, not incidental: the same
+"runtime-only, never repo-level" distinction that let `alphaclaw-adapter`
+work stay in scope under the standing AlphaClaw exclusion applies
+identically here. Any future implementation of `oramaclaw` must confirm
+this runtime-only relationship directly (grep for git/repo operations
+against AlphaClaw's own repo, same check already performed and recorded
+for `alphaclaw-adapter`) before writing anything, not assume it.
+
+### 17c. The compatibility layer is a plugin, not a kernel change
+
+Both 17a and 17b live outside `engine.py`, consistent with §9's plugin
+boundary — a LangGraph-compatibility shim is exactly the kind of
+"capability-specific" concern `mk-1.md`'s micro-kernel principle assigns
+to plugins, not the kernel. The kernel's only concession to this goal is
+the `START`/`END` sentinel choice itself (§4), made because the kernel
+needed universal sentinels for its own internal correctness anyway —
+everything else (legacy aliases, `Command`/`Send` translation, the JS
+module entirely) is additive surface area with zero kernel changes
+required to add or remove it, matching the same enforcement discipline
+§9 already establishes for every other plugin.
+
+---
 
 The north star remains:
 
