@@ -297,6 +297,36 @@ the canonical spec already has a plugin-observability answer
 (`GraphPlugin` Protocol). §II.5 exists only to evaluate whether it is
 sufficient — not to replace it.
 
+**Two rows above are not just "canonical wins," on reflection — flag
+these for the maintainer's judgment, do not silently implement against
+canonical if the concern below is real:**
+
+- **`self.end` vs. `START`/`END` sentinels.** Canonical's `self.end` is a
+  *per-instance* attribute (`self.end: str = "__end__"`) rather than a
+  module-level constant. Two genuine costs: (1) nothing stops two
+  `MiniGraph` instances in the same process disagreeing on what "end"
+  means, which invites accidental inconsistency for something that
+  should be universal; (2) the traversal loop needs `while node and
+  node != self.end`, an extra null-check the sentinel version avoids
+  (`while node != END` is sufficient when `START`/`END` are always-defined
+  constants). Real LangGraph — which the spec explicitly targets for
+  "API-compatible... mental model" — exports `START`/`END` as importable
+  module constants, closer to the sentinel design than to `self.end`.
+  **Do not silently switch this** — it is Task 4-adjacent (a design
+  question, not a bug), file it alongside §II.5 rather than bundling it
+  into Tasks 1-3's PR.
+- **Async-only `NodeFn` vs. accepting sync or async.** Canonical requires
+  every node to be `async def`, even a pure, non-I/O transformation like
+  `lambda s: {"x": s.x + 1}`. Real LangGraph accepts both — precisely
+  because most graph nodes are simple synchronous transforms and only
+  some are I/O-bound. Forcing `async def` on the simple case is exactly
+  the syntactic-noise-for-no-benefit tradeoff the spec's own
+  LangGraph-compatibility goal argues against. **Also flag, don't
+  silently change** — this is more consequential than the sentinel
+  question, since it would break every existing node function signature
+  in the canonical repo if changed, which is a real migration cost to
+  weigh against the ergonomic gain.
+
 ### II.2 Task 1 — `max_steps` semantics (refinement, ~10 min)
 
 **Precondition:** `tests/graph/test_engine_max_steps.py` exists (OQ12,
@@ -432,30 +462,53 @@ canonical kernel that is a ~24% increase, weighed against a spec that
 sets ~70 as the target. Do not assume the delta transfers exactly;
 measure if you get that far.
 
-### II.6 Known conflict between two canonical docs — resolve, don't guess
+### II.6 Docs conflict — RESOLVED in `01-kernel-spec.md`; as-built repo still needs migrating
 
-`01-kernel-spec.md`'s file tree (line ~39) shows **root-level `tests/`**:
+**2026-08-27 update:** `01-kernel-spec.md`'s file tree previously showed
+root-level `tests/`, genuinely conflicting with
+`46-repository-standard.md`'s "no root-level tests" rule. This has been
+fixed directly in `01-kernel-spec.md` (this same commit) — the tree and
+every path reference throughout that document now nest both
+`perpetua_core/` and `tests/` under `src/`:
 
 ```text
-└── tests/
-    ├── test_state.py
-    ├── test_minigraph.py
+perpetua-core/
+├── pyproject.toml
+├── LICENSE
+├── README.md
+└── src/
+    ├── perpetua_core/
+    │   └── ...
+    └── tests/
+        └── ...
 ```
 
-`46-repository-standard.md` — explicitly cross-cutting and additive —
-says the opposite: *"Everything executable belongs under `/src`. No
-root-level: scripts, tests, tools, examples."*
+**What this does NOT do:** move any actual files in
+`oramasys/perpetua-core`. That repo was unreachable from this session
+(§0 above). `15-phase1-as-built.md` records the as-built repo's tests at
+root-level `tests/graph/test_engine_max_steps.py` — meaning the **spec**
+now says `src/tests/...` but the **real repo**, as of the last
+verifiable snapshot, still has root-level `tests/`. This is a genuine,
+separate migration task, not resolved by this doc.
 
-These cannot both hold. `46` is the newer, explicitly cross-cutting
-standard and says it is additive to earlier docs, which argues it wins.
-But `01-kernel-spec.md` is the kernel's own spec and `15-phase1-as-built.md`
-records tests at `tests/graph/test_engine_max_steps.py` (root-level),
-i.e. **as-built follows `01`, not `46`.**
+**Action for the CLI session:**
 
-**Do not silently pick one.** Put new tests wherever the existing tests
-already live (match as-built reality), and raise the contradiction as a
-separate docs issue. Relocating an existing suite is out of scope for a
-3-fix PR and would bury the actual changes.
+1. Confirm whether `oramasys/perpetua-core`'s current tree still has
+   root-level `perpetua_core/` and `tests/`, or whether it already
+   moved to `src/` independently since the last snapshot this session
+   could see.
+2. If it still needs moving: this is a mechanical `git mv` (both
+   directories under a new `src/`), a `pyproject.toml` packaging-config
+   update (see the note added to `01-kernel-spec.md`'s Repo Layout
+   section — `[tool.setuptools.packages.find] where = ["src"]` or
+   equivalent), and an import-path sanity check
+   (`python -c "import perpetua_core; ..."` per acceptance criterion 1).
+   Do this as its **own commit**, separate from Tasks 1-3 (§II.2-II.4)
+   — a pure structural move should never share a commit with a
+   behavior change, so either can be reverted independently.
+3. If it already matches `src/` layout: nothing to do here; note that
+   in the PR description as a "no change needed" outcome, same
+   discipline as §II.2-II.4.
 
 ### II.7 Verification — run before opening the PR
 
@@ -483,10 +536,14 @@ changes can affect:
 - **Branch:** `fix/minigraph-guard-semantics-and-delta-validation`
 - **One commit per task** (§II.2, §II.3, §II.4), so any single fix can
   be reverted independently.
+- **If §II.6's `src/` migration is genuinely needed**, that is its own
+  commit (or its own PR, if `git mv` + packaging-config changes touch
+  enough files to obscure the three behavior fixes) — a pure structural
+  move should never share a commit with a behavior change.
 - **§II.5 gets no commit** unless investigation concludes work is
   needed — and then it is a **separate PR**, because it is a design
   change, not a bug fix.
-- **PR description must state**, for each of the three tasks, whether
-  the canonical engine already handled it (test passed immediately) or
-  genuinely needed the fix. A "no change needed" outcome is a
-  successful, valuable result — not a failure to deliver.
+- **PR description must state**, for each of the three tasks (and the
+  §II.6 migration, if attempted), whether the canonical repo already
+  handled it or genuinely needed the change. A "no change needed"
+  outcome is a successful, valuable result — not a failure to deliver.
