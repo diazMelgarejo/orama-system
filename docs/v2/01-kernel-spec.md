@@ -1,7 +1,10 @@
 <!-- lint-ignore LINT-013 -->
 # 01 — Kernel Spec (perpetua-core, v2.0 blocking)
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
+> `.gitignore`d, never committed with secrets, personal paths, or SecOps material.
+> Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > The only **blocking** spec for v2.0. Everything else (modules) ships at its own pace.
 > **Revised D8 (2026-04-30)**: MiniGraph kernel = ~70 lines (essential services only).
 > Tier-3 features (checkpointer, interrupts, subgraphs, tool, streaming, structured output)
@@ -32,7 +35,7 @@
 > `ModuleNotFoundError` if this step is skipped, not with an obviously
 > layout-related error.
 
-```
+```text
 perpetua-core/
 ├── pyproject.toml            # MIT license, deps: pydantic>=2, openai, pyyaml, aiosqlite
 ├── LICENSE                   # MIT
@@ -109,12 +112,20 @@ class PerpetuaState(BaseModel):
 ```
 
 Field rationale:
-- `messages`/`scratchpad` — distinct: messages = chat-shaped LLM I/O; scratchpad = node-internal working memory
-- `nodes_visited` — auditable graph traversal; GossipBus cross-reference key (Grok + Rule 4)
-- `metadata` — extensible without schema bumps; `metadata["authorized_by"]` records human actor ID when an `Interrupt` is resolved via `aresume` (Grok + Rule 2)
+
+- `messages`/`scratchpad` — distinct: messages = chat-shaped LLM I/O;
+  scratchpad = node-internal working memory
+- `nodes_visited` — auditable graph traversal; GossipBus cross-reference key
+  (Grok + Rule 4)
+- `metadata` — extensible without schema bumps; `metadata["authorized_by"]`
+  records human actor ID when an `Interrupt` is resolved via `aresume`
+  (Grok + Rule 2)
 - `retry_count` — first-class; reducers increment on retry (Grok)
-- routing hints — kept on state so middle-of-graph routing decisions can read them
-- `status="conflicted"` — terminal-until-human state raised when two or more guidelines conflict; treated identically to `"interrupted"` by the engine; cleared only by `aresume(conflict_resolution=...)` (Rule 5)
+- routing hints — kept on state so middle-of-graph routing decisions can read
+  them
+- `status="conflicted"` — terminal-until-human state raised when two or more
+  guidelines conflict; treated identically to `"interrupted"` by the engine;
+  cleared only by `aresume(conflict_resolution=...)` (Rule 5)
 
 ---
 
@@ -137,6 +148,7 @@ class LLMClient:
 ```
 
 **LAN endpoints** (from user memory, verified `routing.json` distributed=true):
+
 - Mac LM Studio: `http://192.168.x.110:1234/v1`
 - Windows LM Studio: `http://192.168.x.108:1234/v1`
 - Local fallback: `http://localhost:11434/v1` (Ollama)
@@ -193,13 +205,17 @@ models:
     shared: ALLOW
 ```
 
-Carries forward the `HardwareAffinityError` re-export pattern canonicalized in `2026-04-28-perpetua-orama-master-revamp.md` Task 4.
+Carries forward the `HardwareAffinityError` re-export pattern canonicalized in
+`2026-04-28-perpetua-orama-master-revamp.md` Task 4.
 
 ---
 
 ## 4. `MiniGraph` engine — 70-line kernel + plugin system
 
-State machine: nodes (callables that return state deltas), edges (router fns), start/end. API-compatible with the LangGraph mental model so a future migration to real LangGraph remains cheap. **Tier-3 features ship as plugins**, never embedded in `engine.py`.
+State machine: nodes (callables that return state deltas), edges (router fns),
+start/end. API-compatible with the LangGraph mental model so a future migration
+to real LangGraph remains cheap. **Tier-3 features ship as plugins**, never
+embedded in `engine.py`.
 
 ### 4a. Core engine (`graph/engine.py`)
 
@@ -321,7 +337,9 @@ class MiniGraph:
 
 ### 4b. Conditional edges + state reducers — built into engine
 
-`add_edge(src, fn)` where `fn(state) -> str` is the conditional router. State merge happens in `state.merge()` — single delta-application path; reducers can be added by subclassing `PerpetuaState` and overriding `merge()`.
+`add_edge(src, fn)` where `fn(state) -> str` is the conditional router. State
+merge happens in `state.merge()` — single delta-application path; reducers can be
+added by subclassing `PerpetuaState` and overriding `merge()`.
 
 ### 4c. SQLite checkpointer (`graph/checkpointer.py`)
 
@@ -364,7 +382,10 @@ class Interrupt(Exception):
         self.payload = payload or {}
 ```
 
-Engine catches `Interrupt`, sets `state.status = "interrupted"`, persists via checkpointer, returns. Caller resumes by calling `graph.aresume(session_id, user_response=...)` which loads checkpoint and re-enters at the interrupting node.
+Engine catches `Interrupt`, sets `state.status = "interrupted"`, persists via
+checkpointer, returns. Caller resumes by calling
+`graph.aresume(session_id, user_response=...)` which loads checkpoint and
+re-enters at the interrupting node.
 
 MAESTRO 7-layer enforcement (v2.5) will use this primitive heavily for human-checkpoint gates.
 
@@ -384,7 +405,8 @@ def as_node(subgraph: MiniGraph):
     return node
 ```
 
-Critical for microkernel modularity — each non-kernel module ships as a subgraph that the kernel can compose.
+Critical for microkernel modularity — each non-kernel module ships as a subgraph
+that the kernel can compose.
 
 ### 4f. ToolNode contract (`graph/nodes.py`)
 
@@ -408,7 +430,9 @@ class ToolNode:
         }
 ```
 
-API-compatible with LangGraph's ToolNode contract — same call shape so external frameworks (post-D5 Plugin API) can hand us tools they constructed for LangGraph.
+API-compatible with LangGraph's ToolNode contract — same call shape so external
+frameworks (post-D5 Plugin API) can hand us tools they constructed for
+LangGraph.
 
 ### 4g. Streaming (`graph/streaming.py`)
 
@@ -446,11 +470,15 @@ def tool(fn):
     return fn
 ```
 
-Mirrors Pydantic AI Slim's `@tool` ergonomics but emits plain Pydantic v2 — no `pydantic-ai` runtime dep.
+Mirrors Pydantic AI Slim's `@tool` ergonomics but emits plain Pydantic v2 — no
+`pydantic-ai` runtime dep.
 
 ### 4i. Structured output validation
 
-Implemented at `LLMClient.chat_structured(model, messages, output_schema: type[BaseModel])` — calls LLM, validates against schema, retries with the schema appended to the prompt on parse failure (max retries from env). Increments `state.retry_count`.
+Implemented at `LLMClient.chat_structured(model, messages, output_schema:
+type[BaseModel])` — calls LLM, validates against schema, retries with the schema
+appended to the prompt on parse failure (max retries from env). Increments
+`state.retry_count`.
 
 ---
 
@@ -480,9 +508,15 @@ class GossipBus:
         ...
 ```
 
-Replaces volatile `.json` blobs from v1 with a durable, queryable audit trail. Shares the same SQLite database file as the checkpointer (`perpetua_core.db` by default).
+Replaces volatile `.json` blobs from v1 with a durable, queryable audit trail.
+Shares the same SQLite database file as the checkpointer (`perpetua_core.db` by
+default).
 
-**Mesh federation (v2.1+, non-kernel):** Local `GossipBus` stays the source of truth per particle. Cooperating orama / PT / perpetua-core instances may exchange **frugal tail deltas** over LAN mesh (and optionally BLE later) without replacing SQLite or adding Redis. See [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md).
+**Mesh federation (v2.1+, non-kernel):** Local `GossipBus` stays the source of
+truth per particle. Cooperating orama / PT / perpetua-core instances may exchange
+**frugal tail deltas** over LAN mesh (and optionally BLE later) without replacing
+SQLite or adding Redis. See
+[`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md).
 
 ---
 
@@ -503,7 +537,8 @@ async def run(req: RunRequest) -> RunResponse:
     return RunResponse.from_state(result)
 ```
 
-Lifted/skeletonized from today's `orama-system/api_server.py` per D9. Internal-only contract for v2.0 (D5).
+Lifted/skeletonized from today's `orama-system/api_server.py` per D9.
+Internal-only contract for v2.0 (D5).
 
 Security requirement: every non-health handler must declare a route capability
 (`public`, `read`, `mutate`, `lifecycle`, `dangerous-worker`, etc.) and pass
@@ -535,31 +570,72 @@ security behavior testable before any non-kernel module ships.
 
 ## Verification (kernel acceptance criteria)
 
-1. `python -c "import perpetua_core; perpetua_core.MiniGraph()"` succeeds — no circular imports, no missing deps.
-2. `pytest src/tests/test_state.py` — Pydantic v2 round-trip + `merge()` delta application.
-3. `pytest src/tests/test_policy.py` — `check_affinity()` raises `HardwareAffinityError` for NEVER tiers.
-4. `pytest src/tests/test_minigraph.py` — 3-node graph (start → middle → end) runs end-to-end with state delta merging and `nodes_visited` populated.
-5. `pytest src/tests/test_checkpointer.py` — save then load reproduces identical state.
-6. `pytest src/tests/test_interrupts.py` — node raises `Interrupt`, graph status becomes `"interrupted"`, checkpoint saved, `aresume` continues correctly.
-7. `pytest src/tests/test_tool_decorator.py` — `@tool`-decorated function exposes correct `_input_schema` Pydantic model.
-8. `pytest src/tests/test_structured_output.py` — `chat_structured()` retries on parse failure and increments `retry_count`.
-9. **Import boundary lint**: `grep -r "from oramasys" perpetua-core/` returns nothing. (CI gate.)
-10. Live integration: graph node calls Mac LM Studio (`192.168.x.110:1234`) and Windows LM Studio (`192.168.x.108:1234`) per `model_hardware_policy.yml` routing; `agent_log` table in SQLite shows correct dispatch sequence.
-11. **Idempotent filesystem helpers** (mandatory for every plugin that touches the fs): every helper ships with the 4/5-state guard test from `11-idempotency-and-guard-patterns.md` §2. No fs helper is accepted in `src/perpetua_core/graph/plugins/` without passing `test_ensure_symlink_all_four_states_idempotent` (or equivalent for its op type). (CI gate.)
-12. **Validator agreement** (mandatory when two or more modules enforce the same allowlist): `test_validators_agree_on_*` CI gate — every shared allowlist/denylist must live in `src/perpetua_core/config/` and both bash and python validators must read from it. See `11-idempotency-and-guard-patterns.md` §3. (CI gate.)
-13. **HITL interrupt is always-escapable (Rule 3)**: `pytest src/tests/test_interrupts.py::test_interrupt_not_suppressible_by_node` — any node that internally catches `Interrupt` and does not re-raise causes this test to fail. `status="interrupted"` and `status="conflicted"` can only be cleared by `aresume()` with a caller-supplied payload.
-14. **GossipBus is append-only (Rule 4)**: `pytest src/tests/test_gossip.py::test_no_delete_or_update` — `GossipBus` exposes no `delete`, `update`, or `truncate` method. All events are permanent. Test queries the event count before and after a deliberately invalid operation and asserts no rows were removed.
-15. **Authorization event emitted before ToolNode subprocess (Rule 2)**: `pytest src/tests/test_tool_node.py::test_authorization_event_precedes_subprocess` — GossipBus receives an `authorization` event with non-empty `actor_id` and `tool_cmd` fields before any process is spawned. Test uses a mock bus and asserts event ordering.
-16. **Route capability manifest complete**: every non-health FastAPI route has a declared capability and test coverage for unauthenticated denial where capability is not `public`.
-17. **No bearer-in-HTML invariant**: UI/bootstrap tests assert no raw control-plane token appears in rendered HTML, JSON bootstrap blobs, logs, or frontend bundles.
-18. **Endpoint egress policy**: model probes use an unprivileged client, strip control-plane auth headers, reject unknown/public hosts by default, and pin or require approval before persistence.
-19. **Security event redaction**: audit tests include fake API keys, bearer tokens, prompts, and raw transcripts and assert stored/logged events contain only redacted metadata.
+1. `python -c "import perpetua_core; perpetua_core.MiniGraph()"` succeeds — no
+   circular imports, no missing deps.
+2. `pytest src/tests/test_state.py` — Pydantic v2 round-trip + `merge()` delta
+   application.
+3. `pytest src/tests/test_policy.py` — `check_affinity()` raises
+   `HardwareAffinityError` for NEVER tiers.
+4. `pytest src/tests/test_minigraph.py` — 3-node graph (start → middle → end)
+   runs end-to-end with state delta merging and `nodes_visited` populated.
+5. `pytest src/tests/test_checkpointer.py` — save then load reproduces identical
+   state.
+6. `pytest src/tests/test_interrupts.py` — node raises `Interrupt`, graph status
+   becomes `"interrupted"`, checkpoint saved, `aresume` continues correctly.
+7. `pytest src/tests/test_tool_decorator.py` — `@tool`-decorated function exposes
+   correct `_input_schema` Pydantic model.
+8. `pytest src/tests/test_structured_output.py` — `chat_structured()` retries on
+   parse failure and increments `retry_count`.
+9. **Import boundary lint**: `grep -r "from oramasys" perpetua-core/` returns
+   nothing. (CI gate.)
+10. Live integration: graph node calls Mac LM Studio (`192.168.x.110:1234`) and
+    Windows LM Studio (`192.168.x.108:1234`) per `model_hardware_policy.yml`
+    routing; `agent_log` table in SQLite shows correct dispatch sequence.
+11. **Idempotent filesystem helpers** (mandatory for every plugin that touches the
+    fs): every helper ships with the 4/5-state guard test from
+    `11-idempotency-and-guard-patterns.md` §2. No fs helper is accepted in
+    `src/perpetua_core/graph/plugins/` without passing
+    `test_ensure_symlink_all_four_states_idempotent` (or equivalent for its op
+    type). (CI gate.)
+12. **Validator agreement** (mandatory when two or more modules enforce the same
+    allowlist): `test_validators_agree_on_*` CI gate — every shared
+    allowlist/denylist must live in `src/perpetua_core/config/` and both bash and
+    python validators must read from it. See
+    `11-idempotency-and-guard-patterns.md` §3. (CI gate.)
+13. **HITL interrupt is always-escapable (Rule 3)**:
+    `pytest src/tests/test_interrupts.py::test_interrupt_not_suppressible_by_node`
+    — any node that internally catches `Interrupt` and does not re-raise causes
+    this test to fail. `status="interrupted"` and `status="conflicted"` can only
+    be cleared by `aresume()` with a caller-supplied payload.
+14. **GossipBus is append-only (Rule 4)**:
+    `pytest src/tests/test_gossip.py::test_no_delete_or_update` — `GossipBus`
+    exposes no `delete`, `update`, or `truncate` method. All events are permanent.
+    Test queries the event count before and after a deliberately invalid operation
+    and asserts no rows were removed.
+15. **Authorization event emitted before ToolNode subprocess (Rule 2)**:
+    `pytest src/tests/test_tool_node.py::test_authorization_event_precedes_subprocess`
+    — GossipBus receives an `authorization` event with non-empty `actor_id` and
+    `tool_cmd` fields before any process is spawned. Test uses a mock bus and
+    asserts event ordering.
+16. **Route capability manifest complete**: every non-health FastAPI route has a
+    declared capability and test coverage for unauthenticated denial where
+    capability is not `public`.
+17. **No bearer-in-HTML invariant**: UI/bootstrap tests assert no raw
+    control-plane token appears in rendered HTML, JSON bootstrap blobs, logs, or
+    frontend bundles.
+18. **Endpoint egress policy**: model probes use an unprivileged client, strip
+    control-plane auth headers, reject unknown/public hosts by default, and pin
+    or require approval before persistence.
+19. **Security event redaction**: audit tests include fake API keys, bearer tokens,
+    prompts, and raw transcripts and assert stored/logged events contain only
+    redacted metadata.
 
 ---
 
 ## 7. Gemini Hardening Updates (2026-05-02)
 
 ### 7a. GraphPlugin Protocol
+
 To ensure architectural integrity, all Tier-3 plugins MUST implement the following Protocol:
 
 ```python
@@ -569,7 +645,12 @@ class GraphPlugin(Protocol):
 ```
 
 ### 7b. Infinite Loop Guard
-The `MiniGraph.ainvoke` loop MUST enforce a `max_steps` limit (default: 50) to prevent runaway processes and billing spikes.
+
+The `MiniGraph.ainvoke` loop MUST enforce a `max_steps` limit (default: 50) to
+prevent runaway processes and billing spikes.
 
 ### 7c. High-Performance GossipBus
-The `GossipBus.emit()` method MUST be non-blocking. Implementation should use an `asyncio.Queue` with a background worker that performs batched SQLite commits every 500ms.
+
+The `GossipBus.emit()` method MUST be non-blocking. Implementation should use an
+`asyncio.Queue` with a background worker that performs batched SQLite commits every
+500ms.
