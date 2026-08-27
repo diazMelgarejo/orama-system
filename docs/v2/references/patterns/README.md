@@ -1,32 +1,80 @@
 # Pattern Library — Catalogue & Cross-References
 
-Index for the 10 "Feature Extraction" pattern-mining docs in this directory. Each mines one external framework/paper into an `oramasys v2` adaptation. This README catalogues them and cross-references the ones with genuine (not forced) overlap to work landed 2026-07-12 (STM threat-model descope, D23, GossipBus claim-board dogfood, AuditLog durability). Progressive disclosure — read the linked file directly when the mapping matters, this table is pointers only.
+Index for the 10 "Feature Extraction" pattern-mining docs in this directory. Each mines one external
+framework/paper into an `oramasys v2` adaptation. This README catalogues them and cross-references
+the ones with genuine (not forced) overlap to work landed 2026-07-12 (STM threat-model descope, D23,
+GossipBus claim-board dogfood, AuditLog durability). Progressive disclosure — read the linked file
+directly when the mapping matters, this table is pointers only.
 
 | File | Source | Core mechanic | oramasys v2 adaptation |
 |---|---|---|---|
 | [`agentic-engineering-patterns.md`](agentic-engineering-patterns.md) | Karpathy (March of Nines) | Deterministic harnessing — wrap a ~90%-reliable LLM in a test-write→fix→retest loop | **Sentinel Node** (v2.5): rejects any node transition lacking a verification step |
 | [`foundry-lifecycle-patterns.md`](foundry-lifecycle-patterns.md) | Microsoft Foundry | Golden-dataset LLM-as-judge eval; microVM isolation + Entra identity; "Magentic" dynamic routing | Verification Nodes (Critic model scoring); ToolNode sandboxing via `bubblewrap`/`sandbox-exec` (**= MAESTRO Layer 4**); Policy-Gated Dynamic Routing via `HardwarePolicyResolver` |
-| [`langgraph-checkpoints.md`](langgraph-checkpoints.md) | LangGraph | Thread ID + checkpoint KV; atomic per-node writes enable perfect resumption | `SqliteCheckpointer` indexed by `session_id`; `aresume()` re-injects into the interrupted node |
+| [`langgraph-checkpoints.md`](langgraph-checkpoints.md) | LangGraph | Thread ID + checkpoint KV; atomic per-node writes enable perfect resumption | **Concept retained, "perfect resumption" claim downgraded** (2026-08-27 correction): `SqliteCheckpointer` (as `GraphPlugin`) checkpoints successful `node.end` observations; `aresume()`-driven durable resume is deferred R4 work (checkpoint/graph/version identity, replay semantics, idempotency, effect dedupe), not shipped behavior — see [`58-minigraph-observer-pattern-library-reconciliation.md`](../../58-minigraph-observer-pattern-library-reconciliation.md) §4. |
 | [`mcp-and-research-patterns.md`](mcp-and-research-patterns.md) | MCP (Anthropic), Perplexity | Standardized tool-schema client/server; iterative search→analyze→refine research loop | `@tool` auto-generates MCP-compliant schema; "Deep Search" recurrent subgraph, token-cost-bounded by Sentinel Node |
 | [`multi-agent-orchestration.md`](multi-agent-orchestration.md) | OpenAI Swarm, CrewAI, AutoGen | Swarm: handoff-as-transfer-object. CrewAI: manager delegates to workers. AutoGen: nested chats + `max_steps` guard against infinite recursion | Handoffs = conditional edges; Managers = subgraphs (Planning/Delegation/Aggregation nodes); Recursive subgraphs gated by `max_steps` |
 | [`primitive-evolution.md`](primitive-evolution.md) | Internal (v1→v2) | Redis/pub-sub → SQLite/graph-edges; manual JSON tool defs → typed decorators | State: `aiosqlite` + `PerpetuaState`. Messaging: `GossipBus` audit trail + conditional edges. Tools: `@tool` decorator |
 | [`prompt-and-task-primitives.md`](prompt-and-task-primitives.md) | CrewAI (persona/task), LangChain (templates) | Persona+task JSON config; logic-less prompt templates piped together | `agent_registry.json` persona/task schema; state-driven prompt injection from `scratchpad`; every built prompt emitted as a `GossipBus` `dispatch` event |
 | [`pydantic-ai-extraction-deep-dive.md`](pydantic-ai-extraction-deep-dive.md) | Pydantic AI | `inspect.signature` + docstring parsing + `create_model` → auto-derived tool schema, no `pydantic-ai`/`griffe` runtime dependency | "Shadow Model" pattern in `graph/tool.py`; regex-based Google-docstring parser; Sentinel Guard validates LLM tool calls against the shadow model before execution |
 | [`pydantic-ai-tools.md`](pydantic-ai-tools.md) | Pydantic AI | `@tool` decorator auto-derives JSON schema from type hints; `RunContext` dependency injection | Slim Tool decorator; state auto-injection instead of explicit `RunContext` passing |
-| [`state-reducer-patterns.md`](state-reducer-patterns.md) | LangGraph | Typed reducers (`operator.add`, custom merge fns) resolve conflict-free parallel state updates — prevents "Last Write Wins" data loss | `PerpetuaState.merge()`: accumulates `messages`, deep-merges `scratchpad`, appends `nodes_visited` — deterministic proof of parallel completion order |
+| [`state-reducer-patterns.md`](state-reducer-patterns.md) | LangGraph | Typed reducers (`operator.add`, custom merge fns) resolve conflict-free parallel state updates — prevents "Last Write Wins" data loss | **RESEARCH TARGET — R3** (2026-08-27 correction, was previously stated as current behavior): current `PerpetuaState.merge()` is `model_copy(update=delta, deep=True)` — a single whole-delta apply, not per-field accumulation. `messages`/`scratchpad`-specific merge logic and `nodes_visited` provenance are constructed explicitly by node/scheduler code today, not by typed reducers built into `merge()` itself. Generic parallel fan-in requires the field-level reducers this pattern doc describes; see [`58-minigraph-observer-pattern-library-reconciliation.md`](../../58-minigraph-observer-pattern-library-reconciliation.md) §6. |
 
 ---
 
 ## Cross-references to 2026-07-12 work (genuine overlaps only)
 
-**`foundry-lifecycle-patterns.md` ↔ MAESTRO Layer 4 / P19 audit trail.** This pattern doc's "ToolNode Sandboxing (MAESTRO Layer 4)" is the *same* MAESTRO layer already cross-referenced in [`../../03-safety-v2.5.md`](../../03-safety-v2.5.md) § "Related implementation patterns (Perpetua-Tools)" against PT's P5 (tool-authority-adjacent access control). Its "every `GossipBus` event tagged with `session_id`/`agent_id` = immutable audit trail" is the same concept PT's P19 (`AuditLog`) implements concretely — including the durable JSONL sink shipped this session (`Perpetua-Tools/orchestrator/audit_log.py`).
+**`foundry-lifecycle-patterns.md` ↔ MAESTRO Layer 4 / P19 audit trail.** This pattern doc's
+"ToolNode Sandboxing (MAESTRO Layer 4)" is the *same* MAESTRO layer already cross-referenced in
+[`../../03-safety-v2.5.md`](../../03-safety-v2.5.md) § "Related implementation patterns
+(Perpetua-Tools)" against PT's P5 (tool-authority-adjacent access control). Its "every `GossipBus`
+event tagged with `session_id`/`agent_id` = immutable audit trail" is the same concept PT's P19
+(`AuditLog`) implements concretely — including the durable JSONL sink shipped this session
+(`Perpetua-Tools/orchestrator/audit_log.py`).
 
-**`multi-agent-orchestration.md` ↔ the GossipBus claim-board dogfood.** `Perpetua-Tools/scripts/agent_coordination.py`'s `register`/`claim`/`release` this session (2 concurrent sessions coordinating the STM next-increment plan, documented in [`../../43-gossipbus-mesh-transport.md`](../../43-gossipbus-mesh-transport.md) § Real-world validation) is a live instance of the **Swarm handoff pattern** described here — `claim` ≈ a handoff transfer object, `release` ≈ returning control. The CEO-quad-review + Eng-5-voice-review fan-out this session is a **CrewAI-manager-style** delegate-then-aggregate pattern (Planning → parallel Delegation → Aggregation), run manually rather than as a coded subgraph. AutoGen's `max_steps` guard bounds agent steps or nested-chat recursion; the 15-minute hard-ceiling default in `bin/orama-system/skills/shell-hygiene/SKILL.md` § 5 bounds elapsed wall-clock time for backgrounded external CLI/agent dispatches. They address different failure modes — runaway recursive conversation versus a stalled external process — but both prevent unbounded fan-out work.
+**`multi-agent-orchestration.md` ↔ the GossipBus claim-board dogfood.**
+`Perpetua-Tools/scripts/agent_coordination.py`'s `register`/`claim`/`release` this session (2
+concurrent sessions coordinating the STM next-increment plan, documented in
+[`../../43-gossipbus-mesh-transport.md`](../../43-gossipbus-mesh-transport.md) § Real-world
+validation) is a live instance of the **Swarm handoff pattern** described here — `claim` ≈ a handoff
+transfer object, `release` ≈ returning control. The CEO-quad-review + Eng-5-voice-review fan-out
+this session is a **CrewAI-manager-style** delegate-then-aggregate pattern (Planning → parallel
+Delegation → Aggregation), run manually rather than as a coded subgraph. AutoGen's `max_steps` guard
+bounds agent steps or nested-chat recursion; the 15-minute hard-ceiling default in
+`bin/orama-system/skills/shell-hygiene/SKILL.md` § 5 bounds elapsed wall-clock time for backgrounded
+external CLI/agent dispatches. They address different failure modes — runaway recursive conversation
+versus a stalled external process — but both prevent unbounded fan-out work.
 
-**`state-reducer-patterns.md` ↔ concrete concurrent-update hazards this session.** A genuine Last Write Wins/lost-update example is two parallel graph nodes both reading `scratchpad = {"todo": ["audit"]}`: node A writes `{"todo": ["audit"], "stm": "reviewed"}` while node B writes `{"todo": ["audit"], "security": "descope-noted"}`; if the runtime stores whole-state snapshots LWW, whichever write lands last silently drops the other field. The reducer pattern prevents that by merging deltas deterministically (`messages` append, `scratchpad` deep-merge, `nodes_visited` append) instead of replacing the whole state. The `.git/index.lock` contention hit while committing STM-gate docs is analogous as a concurrency/serialization hazard — two sessions attempted to mutate one serialized repo index, so Git refused the second writer rather than allowing silent clobber; the local mitigation was a commit-retry loop, not a true reducer. `StateTransitionManager`'s per-peer `asyncio.Lock` plus monotonic `(epoch, sequence)` gate (Perpetua-Tools, unaffected by the D23 descope verdict) is the same conflict-avoidance principle applied at the peer-observation layer: serialize same-peer updates and reject late/stale observations so they cannot overwrite newer state.
+**`state-reducer-patterns.md` ↔ concrete concurrent-update hazards this session.** A genuine Last
+Write Wins/lost-update example is two parallel graph nodes both reading `scratchpad = {"todo":
+["audit"]}`: node A writes `{"todo": ["audit"], "stm": "reviewed"}` while node B writes `{"todo":
+["audit"], "security": "descope-noted"}`; if the runtime stores whole-state snapshots LWW, whichever
+write lands last silently drops the other field. **This remains a real risk, not yet closed**
+(2026-08-27 correction): the reducer pattern that would prevent it — merging deltas
+deterministically per-field instead of replacing the whole state — is R3 research-target work, not
+current `PerpetuaState.merge()` behavior; see the table row above. The `.git/index.lock` contention
+hit while committing STM-gate docs is analogous as a concurrency/serialization hazard — two sessions
+attempted to mutate one serialized repo index, so Git refused the second writer rather than allowing
+silent clobber; the local mitigation was a commit-retry loop, not a true reducer.
+`StateTransitionManager`'s per-peer `asyncio.Lock` plus monotonic `(epoch, sequence)` gate
+(Perpetua-Tools, unaffected by the D23 descope verdict) is the same conflict-avoidance principle
+applied at the peer-observation layer: serialize same-peer updates and reject late/stale
+observations so they cannot overwrite newer state.
 
-**`agentic-engineering-patterns.md` ↔ this session's own review methodology.** The Sentinel Node's "March of Nines" principle (verification-before-completion, never trust an unverified claim) is the same discipline behind this session's multi-voice adversarial review (CEO quad-review, Eng 5-voice review — every finding cross-checked against actual code, false claims documented not silently corrected) and `AuditLog.verify_chain()`'s tamper-detection (a `ChainIntegrityError` is structurally a Sentinel violation: content that doesn't match what was verified at write time).
+**`agentic-engineering-patterns.md` ↔ this session's own review methodology.** The Sentinel Node's
+"March of Nines" principle (verification-before-completion, never trust an unverified claim) is the
+same discipline behind this session's multi-voice adversarial review (CEO quad-review, Eng 5-voice
+review — every finding cross-checked against actual code, false claims documented not silently
+corrected) and `AuditLog.verify_chain()`'s tamper-detection (a `ChainIntegrityError` is structurally
+a Sentinel violation: content that doesn't match what was verified at write time).
 
-**`langgraph-checkpoints.md` ↔ AuditLog's persist-and-resume design.** The "atomic writes... enabling perfect resumption" principle is the same mechanic behind `AuditLog(persist_path=...)`'s constructor replay (this session) — reload from the exact last-written state and continue the hash chain from there, rather than a full-graph checkpoint.
+**`langgraph-checkpoints.md` ↔ AuditLog's persist-and-resume design.** The "atomic writes...
+enabling perfect resumption" principle is the same mechanic behind `AuditLog(persist_path=...)`'s
+constructor replay (this session) — reload from the exact last-written state and continue the hash
+chain from there, rather than a full-graph checkpoint.
 
-**No forced connections drawn** for `mcp-and-research-patterns.md`, `primitive-evolution.md` (already covered via its direct GossipBus overlap with doc #43, no STM-specific link), `prompt-and-task-primitives.md`, `pydantic-ai-extraction-deep-dive.md`, or `pydantic-ai-tools.md` — none have a substantive overlap with this session's STM/security-descope/coordination-board work beyond the general "auditability" theme already covered above; forcing a link would misrepresent the connection.
+**No forced connections drawn** for `mcp-and-research-patterns.md`, `primitive-evolution.md`
+(already covered via its direct GossipBus overlap with doc #43, no STM-specific link),
+`prompt-and-task-primitives.md`, `pydantic-ai-extraction-deep-dive.md`, or `pydantic-ai-tools.md` —
+none have a substantive overlap with this session's STM/security-descope/coordination-board work
+beyond the general "auditability" theme already covered above; forcing a link would misrepresent the
+connection.
