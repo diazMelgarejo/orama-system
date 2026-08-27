@@ -80,65 +80,75 @@ The builder/runtime split is explicit.
 
 ```text
 MiniGraph
-  immutable topology builder
+  mutable construction workspace
         |
         | compile()
         v
 CompiledGraph
-  detached topology snapshot
+  detached execution snapshot
   sole scheduler owner
 ```
 
 `MiniGraph.ainvoke(state)` compiles a fresh snapshot and delegates execution to
 `CompiledGraph`.
 
-**2026-08-27 resolution — bigger-picture synthesis, not a choice between
-two conflicting demands.** A review insisted the mutable-builder
-framing above ("copy-on-write applied at the topology layer") not be
-accepted as compliance with a cited "always create new objects, never
-mutate" rule, and asked for `add_node`/`add_edge` to return new
-builder instances instead. A direct search of `CLAUDE.md`, `AGENTS.md`,
-and this repo's CodeRabbit config still finds no such rule committed
-anywhere to consult directly — but rather than pick a side between the
-review's literal demand and the earlier copy-on-write reasoning, both
-are satisfied simultaneously:
+**2026-08-27 resolution, reversed same day after verification against
+real-world evidence.** A review insisted the mutable-builder framing
+below not be accepted as compliance with a cited "always create new
+objects, never mutate" rule, and asked for `add_node`/`add_edge` to
+return new builder instances instead. An earlier version of this
+section did exactly that — made `MiniGraph` immutable via structural
+sharing, satisfying the review's literal demand. **That was reverted
+the same day**, after checking it against something more important
+than the cited rule: this document's own §17 stated goal, drop-in
+compatibility with real LangGraph.
 
-`MiniGraph` is now genuinely immutable. `add_node`/`add_edge` each
-return a **new** `MiniGraph` instance — verified directly: the original
-is provably untouched after either call, including the specific
-footgun this closes (a bare `g.add_node(...)` statement with no
-reassignment now correctly leaves `g` unchanged, rather than silently
-mutating it as the old design did). This is not full deep-copying on
-every call — that would defeat the purpose of a real copy-on-write
-design. It uses **structural sharing**, the same technique persistent
-data structures and git's own tree objects use for efficiency: only
-the changed dict (`_nodes` for `add_node`, `_edges` for `add_edge`)
-gets a new shallow copy; the *unchanged* dict is shared by reference
-with the original instance, since nothing ever mutates it after
-construction. Verified directly: after `g2 = g1.add_node(...)`,
-`g2._edges is g1._edges` — genuinely the same object, not a copy,
-because sharing an object that is never mutated is exactly what real
-copy-on-write permits.
+Checked directly, not assumed: 8 independent real-world LangGraph
+sources — the official API reference, the official Graph API guide,
+and 6 separate tutorials — were searched for how `StateGraph.add_node`
+is actually called in practice. **Every single one** calls
+`builder.add_node(...)` as a bare statement in a loop or sequence,
+never `builder = builder.add_node(...)`. Zero exceptions found.
+Reproduced directly what an immutable `MiniGraph` does to that pattern:
+`builder.add_node("node_1", fn); builder.add_node("node_2", fn)` with
+an immutable builder silently discards every call — `builder._nodes`
+stays empty, no error raised. Every one of those 8 real examples would
+have been silently broken by the "compliant" immutable design. A
+finding that satisfies an unlocated, abstract rule while breaking this
+document's own primary, load-bearing architectural goal is not a
+correct resolution of that finding — it is optimizing the wrong
+objective.
 
-`PerpetuaState.merge()` already implements the same underlying
-principle at the **value** layer: `return self.model_copy(update=delta,
-deep=True)` — a new state object every call, the prior one untouched.
-`deep=True` is load-bearing here too: Pydantic's default is a shallow
-copy, so nested mutable fields not present in `delta` would otherwise
-be shared between the prior and merged states (verified and fixed in
-`b002fc9d`). `MiniGraph` now implements the same principle at the
-**topology** layer with the same rigor, not a looser standard.
-Chaining ergonomics are unaffected for the normal case
-(`MiniGraph().add_node(...).add_node(...).set_start(...)` reads and
-behaves identically) — the only observable change is that discarding a
-return value without reassigning no longer does anything, which is the
-correct, expected behavior for an immutable builder, not a regression.
+`MiniGraph.add_node`/`add_edge` mutate `self` and return `self`, the
+same pattern real `StateGraph.add_node`/`add_edge` use (both are
+documented as returning `Self`). This is not a concession to the
+review's finding — it is the design that actually serves the stated
+compatibility goal, which is the higher-priority constraint here.
 
-`compile()` is still the commit-equivalent boundary: `CompiledGraph`
-takes its own defensive `dict()` copy of whatever `_nodes`/`_edges` it
-receives — now provably redundant given the builder's own immutability,
-but kept anyway as cheap, harmless defense in depth against any future
-mutation bug elsewhere in the call chain.
+**The immutability boundary was never actually in dispute; it already
+had a natural, correct location: `compile()`.** `MiniGraph` is the
+mutable construction workspace — exactly like a real `StateGraph`
+builder before `.compile()` is called. `CompiledGraph` is the detached,
+immutable execution snapshot. Later builder node/edge changes MUST NOT
+alter an existing compiled graph — verified behaviorally (a real
+`add_node`/`add_edge` call after `compile()`, then re-running the
+already-compiled graph and confirming its output is unaffected, not
+just asserted) and unchanged by this reversal. `PerpetuaState.merge()`
+implements copy-on-write at the **value** layer
+(`model_copy(update=delta, deep=True)`, `deep=True` load-bearing —
+Pydantic's default is shallow, verified and fixed in `b002fc9d`).
+`MiniGraph`'s immutability boundary lives one layer up, at
+**topology**, exactly at `compile()` — not spread across every
+individual builder mutation, which is where LangGraph itself also
+draws the line.
+
+If the cited "always create new objects" rule genuinely exists
+somewhere this session cannot locate, and genuinely intends to bind
+`MiniGraph.add_node`/`add_edge` specifically, that is a real conflict
+between the rule and this document's own stated LangGraph-compatibility
+goal — worth resolving explicitly by whoever can locate and read the
+rule directly, not by guessing which one wins without being able to
+read both.
 
 ---
 

@@ -358,30 +358,30 @@ class CompiledGraph:
         return final
 
 class MiniGraph:
-    """Immutable topology builder. Each add_node/add_edge returns a NEW
-    MiniGraph via structural sharing -- only the changed dict is
-    shallow-copied; the unchanged one is shared by reference. This is
-    real copy-on-write efficiency (the same technique persistent data
-    structures and git's own tree objects use), not full deep-copying
-    on every call. Satisfies the literal "always create new objects,
-    never mutate" rule, not just a semantic argument for why mutation
-    was safe (§3's earlier framing is retired in favor of this)."""
+    """Mutable topology builder, matching real LangGraph's own StateGraph
+    idiom (verified against 8 independent real-world sources, not
+    assumed): add_node/add_edge mutate self and return self, so the
+    universal LangGraph pattern -- bare `builder.add_node(...)` calls
+    in a loop or sequence, never reassigned -- works unmodified. A
+    prior version of this class made add_node/add_edge return a NEW
+    instance instead; that satisfied an abstract immutability review
+    finding but was reverted (§3) after confirming it silently breaks
+    every real LangGraph example checked: none of them capture the
+    return value, so every add_node call would have been discarded.
+    Immutability's correct boundary is compile() -- see §3."""
 
-    def __init__(
-        self,
-        nodes: dict[str, NodeFn] | None = None,
-        edges: dict[str, EdgeFn | str] | None = None,
-        max_steps: int = 50,
-    ) -> None:
-        self._nodes = nodes if nodes is not None else {}
-        self._edges = edges if edges is not None else {}
+    def __init__(self, max_steps: int = 50) -> None:
+        self._nodes: dict[str, NodeFn] = {}
+        self._edges: dict[str, EdgeFn | str] = {}
         self._max_steps = max_steps
 
     def add_node(self, name: str, fn: NodeFn) -> "MiniGraph":
-        return MiniGraph({**self._nodes, name: fn}, self._edges, self._max_steps)
+        self._nodes[name] = fn
+        return self
 
     def add_edge(self, src: str, dst: str | EdgeFn) -> "MiniGraph":
-        return MiniGraph(self._nodes, {**self._edges, src: dst}, self._max_steps)
+        self._edges[src] = dst
+        return self
 
     def set_start(self, name: str) -> "MiniGraph":
         # START is a pseudo-node: its one edge points at the real entry
