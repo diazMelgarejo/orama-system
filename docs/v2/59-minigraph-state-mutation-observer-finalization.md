@@ -6,37 +6,35 @@
 [`57-minigraph-final-reconciliation.md`](57-minigraph-final-reconciliation.md),
 [`58-minigraph-observer-pattern-library-reconciliation.md`](58-minigraph-observer-pattern-library-reconciliation.md)
 
-This addendum resolves the final inconsistencies discovered after PT lesson
-`e0ff7f2d6717` caught up with the reconciliation branch. Where this document
-conflicts with older MiniGraph prose or examples, this document governs.
+This addendum resolves the remaining state-copy, mutation-boundary, and observer
+inconsistencies discovered after the final reconciliation. Where it conflicts
+with older MiniGraph prose or examples, this document governs.
 
 ## 1. The blanket no-mutation rule is superseded
 
-The actual source of the previously hard-to-locate rule was found at:
+The actual source of the previously hard-to-locate rule was:
 
 ```text
 .cursor/rules/common-coding-style.mdc
 ```
 
-Its old always-applied instruction was:
+Its former always-applied instruction was:
 
 ```text
 ALWAYS create new objects, NEVER mutate existing ones
 ```
 
-That blanket rule is superseded by the boundary-aware policy now committed in
-the same file.
-
-Canonical rule:
+That blanket rule is superseded by the boundary-aware policy committed in the
+same file.
 
 ```text
 value / versioned specification
   prefer immutable or persistent updates
-  prior generations must remain unchanged
+  prior generations MUST remain unchanged
 
 builder / workspace / buffer / cache
   intentional local mutation is allowed when it is the documented API
-  mutation must not leak across snapshot/publication boundaries
+  mutation MUST NOT leak across snapshot/publication boundaries
 
 compiled / published / observed snapshot
   treat as immutable after publication
@@ -44,25 +42,45 @@ compiled / published / observed snapshot
 
 Immutability is a boundary property, not a universal ban on local mutation.
 
-## 2. PerpetuaState generations are deeply isolated
+## 2. PerpetuaState generations and caller-owned deltas are isolated
 
-`PerpetuaState.merge(delta)` MUST return a new state using:
+`PerpetuaState.merge(delta)` MUST use both copy layers:
 
 ```python
-self.model_copy(update=delta, deep=True)
+from copy import deepcopy
+
+return self.model_copy(update=deepcopy(delta), deep=True)
 ```
 
-`deep=True` is load-bearing because Pydantic's default copy is shallow. Without
-it, untouched nested mutable fields can be aliased between state generations.
+They close different alias classes:
 
-The invariant is precise:
+- `deep=True` isolates nested mutable fields inherited from the existing model;
+- `deepcopy(delta)` isolates mutable values supplied through the caller-owned
+  update mapping.
 
-> Nodes and observers MUST treat the state they receive as immutable input.
-> `merge()` guarantees deep isolation between produced state generations; it
-> does not make every nested Python container intrinsically frozen.
+Pydantic applies `update` values after copying the existing model. Therefore
+`deep=True` alone does not detach nested mutable values supplied in `delta`.
 
-Regression coverage MUST prove mutating nested containers on a later merged
-state cannot mutate the prior state.
+The invariant is:
+
+> Nodes and observers MUST treat received `PerpetuaState` as immutable input.
+> `merge()` isolates the prior generation, the caller-owned delta values, and
+> the returned generation from one another. It does not make Python containers
+> intrinsically frozen.
+
+Regression coverage MUST prove all of these independently:
+
+1. mutating nested fields on a later state cannot mutate the prior state;
+2. mutating a caller-held nested value after `merge()` cannot mutate the merged
+   state;
+3. mutating the merged nested value cannot mutate the caller-held delta object;
+4. ordinary delta application still behaves normally.
+
+This exact correction is now implemented on `oramasys/perpetua-core` PR #1 at:
+
+```text
+488bc6cc440247ca86811c46ae0dd05869898324
+```
 
 ## 3. MiniGraph remains a mutable construction builder
 
@@ -79,39 +97,27 @@ CompiledGraph
   detached execution snapshot
 ```
 
-This preserves the existing MiniGraph API and the LangGraph-style builder
-mental model. Code such as this remains valid:
+This preserves the established LangGraph-style builder contract. Changing these
+methods to persistent-value semantics would make ordinary bare builder calls
+silently ineffective and is therefore a breaking API change.
 
-```python
-graph = MiniGraph()
-graph.add_node("a", node_a)
-graph.add_node("b", node_b)
-graph.add_edge("a", "b")
-```
-
-Changing `add_node()` or `add_edge()` to persistent-value semantics would make
-bare builder calls silently ineffective and is therefore a breaking API change,
-not an internal optimization.
-
-The immutable boundary is `compile()`: later mutations to the source builder
-MUST NOT alter an existing `CompiledGraph`.
+The immutable topology boundary is `compile()`: later mutations to the source
+builder MUST NOT alter an existing `CompiledGraph`.
 
 ## 4. Persistent structural sharing belongs in GraphSpec
 
-The structural-sharing idea recovered in `e0ff7f2d6717` is useful, but its
-natural owner is the future versioned specification layer, not MiniGraph.
-
-Recommended future shape:
+The structural-sharing idea is retained, but its natural owner is the future
+versioned specification layer.
 
 ```text
 immutable/versioned GraphSpec
   with_node() / with_edge()
-  structural sharing allowed
+  persistent structural sharing allowed
         |
         | validate + compile
         v
 MiniGraph
-  realized construction workspace
+  mutable realization builder
         |
         v
 CompiledGraph
@@ -119,12 +125,11 @@ CompiledGraph
 ```
 
 `GraphSpec` is a versioned value used for identity, diffing, optimization,
-review, and promotion. Persistent copy-on-write semantics therefore fit it
-cleanly.
+review, and promotion, so persistent copy-on-write semantics fit it cleanly.
 
 ## 5. One scheduler, two observation projections
 
-The actual core execution architecture is:
+The executable core architecture is:
 
 ```text
 CompiledGraph._run()
@@ -144,13 +149,13 @@ in-process pull               v
 ```
 
 `GraphPlugin` multicast drains `aobserve()` once and pushes each observation to
-all registered listeners. Plugins never reimplement traversal.
+registered listeners. Plugins never reimplement traversal.
 
 `GraphEvent` remains control-only. `GraphObservation` is trusted in-process
-evidence and may contain state plus the node delta at successful `node.end`.
+evidence and may contain state plus the successful `node.end` delta.
 
-Any older example that describes `asteps()` itself as the sole scheduler, or
-claims no `_run()` exists, is superseded.
+Any older example that describes `asteps()` itself as the scheduler, or claims
+no `_run()` exists, is superseded.
 
 ## 6. Observer delivery symmetry is not action symmetry
 
@@ -160,8 +165,6 @@ The dispatcher contract is:
 > registration order.
 
 A plugin MAY act only on the subset relevant to its contract.
-
-Therefore this is correct:
 
 ```text
 Checkpointer
@@ -173,76 +176,76 @@ Tracer
   records all structural events
 ```
 
-The R2.4 proof MUST distinguish:
+The R2.4 proof distinguishes:
 
-1. multicast delivery integrity — two spy plugins receive the same complete
-   sequence;
-2. semantic filtering — heterogeneous plugins may persist/record different
-   subsets after receiving the same sequence;
-3. observer transparency — plugin-enabled final state equals an equivalent
-   no-plugin `ainvoke()` result.
+1. multicast delivery integrity;
+2. deterministic semantic filtering by heterogeneous plugins;
+3. observer transparency: equivalent plugin/no-plugin runs produce equal final
+   state.
 
-The previous wording requiring all plugins to *record* identical subsets is
-superseded.
+The previous wording requiring heterogeneous plugins to *record* identical
+subsets is superseded.
 
 ## 7. Executable core is the field-level authority
 
 `orama-system` owns architecture, GraphSpec policy, lint, evaluation, and the
-normative boundary rules above. `oramasys/perpetua-core` owns executable
-field-level behavior for:
+normative boundary rules. `oramasys/perpetua-core` owns executable field-level
+behavior for:
 
 ```text
+PerpetuaState.merge()
 GraphEvent
 GraphObservation
 CompiledGraph._run()
 aobserve()
 asteps()
 MiniGraph builder methods
-PerpetuaState.merge()
 ```
 
-Long code samples in `01-kernel-spec.md` are explanatory copies, not an
-independent executable source of truth. If an example drifts from tested core
-ordering or field semantics, the tested core implementation plus docs 57-59
-win and the sample should be repaired.
+Long code samples in `01-kernel-spec.md` are explanatory copies. If a sample
+drifts from tested core ordering or field semantics, the tested core plus docs
+57–59 win and the sample MUST be repaired.
 
-**2026-08-28 status update, confirmed via direct web access to the public
-`oramasys/perpetua-core` PR #1 (not the blocked API — plain `github.com`
-page fetches, unauthenticated, work for this org even though its API does
-not):**
+## 8. Latest core review correction status
 
-- `PerpetuaState.merge()` needed a second fix beyond `deep=True`, found by
-  that PR's own second CodeRabbit review round, not by this repo's earlier
-  pass: `model_copy(deep=True)` deep-copies the *existing* model, then
-  applies `update=delta` afterward — the delta's own values are not
-  deep-copied. A caller passing a mutable reference they still hold (not a
-  fresh literal or spread) still aliases. `01-kernel-spec.md`'s sample is
-  now updated to `model_copy(update=copy.deepcopy(delta), deep=True)`,
-  verified against both leak classes directly. Confirm the real PR's fix
-  matches before assuming parity.
-- A real, apparently unresolved CI finding on that PR as of this check:
-  `.github/workflows/test.yml`'s `actions/checkout@v4` step does not set
-  `persist-credentials: false` — flagged CWE-522 by zizmor SAST, meaning
-  pull-request-controlled test steps can access the persisted contents
-  token. Outside this document's own scope to fix (CI workflow file in the
-  other repo), noted here so it isn't lost.
+The latest PT/Claude review record identified two real unfixed findings on core
+PR #1 at its prior head `876a4581...`:
 
-## 8. GraphSpec validation remains fail-closed
+1. caller-owned mutable values in `delta` could alias into the merged state;
+2. `actions/checkout@v4` retained credentials for later PR-controlled test
+   steps, flagged as CWE-522 by the review tooling.
 
-The concurrent GraphSpec correction retained during the earlier merge conflict
-is canonical:
+Both findings are now implemented on the core branch at:
 
-> Before execution, a versioned `GraphSpec` MUST pass validation. Execution
-> MUST reject specifications that fail the lint/compatibility contract.
+```text
+488bc6cc440247ca86811c46ae0dd05869898324
+```
 
-This remains upper-layer `orama-system` policy and does not move GraphSpec
-validation into the MiniGraph kernel.
+The state fix uses `deepcopy(delta)` plus `deep=True` and adds the missing
+caller-held mutable-delta regression. The workflow fix sets:
+
+```yaml
+persist-credentials: false
+```
+
+Commit existence is not sufficient closure. Exact-head Actions and current
+review threads MUST be rechecked before claiming the two findings are closed or
+before merging PR #1.
+
+## 9. GraphSpec validation remains fail-closed
+
+Before execution, a versioned `GraphSpec` MUST pass validation. Execution MUST
+reject any specification that fails the lint/compatibility contract.
+
+This is upper-layer `orama-system` policy and does not move GraphSpec validation
+into the MiniGraph kernel.
 
 ## Final state
 
 ```text
 PerpetuaState
-  deep-isolated generations
+  prior generation isolated
+  caller-owned delta isolated
 
 MiniGraph
   intentionally mutable builder
@@ -266,5 +269,6 @@ GraphSpec (future)
   fail-closed validation before realization
 ```
 
-This is the final reconciliation of the state-copy, mutation, observer, and
-versioned-specification concerns surfaced by PT lesson `e0ff7f2d6717`.
+This is the final state/mutation/observer correction. The wider pending pattern
+and PT-unbundling phases are tracked in
+[`plans/2026-08-29-pattern-backlog-and-pt-unbundling.md`](plans/2026-08-29-pattern-backlog-and-pt-unbundling.md).
