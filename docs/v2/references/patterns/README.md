@@ -10,7 +10,7 @@ directly when the mapping matters, this table is pointers only.
 | --- | --- | --- | --- |
 | [`agentic-engineering-patterns.md`](agentic-engineering-patterns.md) | Karpathy (March of Nines) | Deterministic harnessing — wrap a ~90%-reliable LLM in a test-write→fix→retest loop | **Sentinel Node** (v2.5): rejects any node transition lacking a verification step |
 | [`foundry-lifecycle-patterns.md`](foundry-lifecycle-patterns.md) | Microsoft Foundry | Golden-dataset LLM-as-judge eval; microVM isolation + Entra identity; "Magentic" dynamic routing | Verification Nodes (Critic model scoring); ToolNode sandboxing via `bubblewrap`/`sandbox-exec` (**= MAESTRO Layer 4**); Policy-Gated Dynamic Routing via `HardwarePolicyResolver` |
-| [`langgraph-checkpoints.md`](langgraph-checkpoints.md) | LangGraph | Thread ID + checkpoint KV; atomic per-node writes enable perfect resumption | **Concept retained, "perfect resumption" claim downgraded** (2026-08-27 correction): `SqliteCheckpointer` (as `GraphPlugin`) checkpoints successful `node.end` observations; `aresume()`-driven durable resume is deferred R4 work (checkpoint/graph/version identity, replay semantics, idempotency, effect dedupe), not shipped behavior — see [`58-minigraph-observer-pattern-library-reconciliation.md`](../../58-minigraph-observer-pattern-library-reconciliation.md) §4. |
+| [`langgraph-checkpoints.md`](langgraph-checkpoints.md) | LangGraph | Thread ID + checkpoint KV; atomic per-node writes provide a known saved boundary for planned re-entry | **Durable resumability retained — R4 ADOPT target.** `SqliteCheckpointer` checkpoints successful `node.end` observations now; R4 adds checkpoint/graph/version identity, replay semantics, and effect idempotency/dedupe for durable deterministic resume. Historical "perfect resumption" is **REJECT WORDING ONLY**: boundary-defined resumability, not total reversibility or time travel. See [`58-minigraph-observer-pattern-library-reconciliation.md`](../../58-minigraph-observer-pattern-library-reconciliation.md) §4. |
 | [`mcp-and-research-patterns.md`](mcp-and-research-patterns.md) | MCP (Anthropic), Perplexity | Standardized tool-schema client/server; iterative search→analyze→refine research loop | `@tool` auto-generates MCP-compliant schema; "Deep Search" recurrent subgraph, token-cost-bounded by Sentinel Node |
 | [`multi-agent-orchestration.md`](multi-agent-orchestration.md) | OpenAI Swarm, CrewAI, AutoGen | Swarm: handoff-as-transfer-object. CrewAI: manager delegates to workers. AutoGen: nested chats + `max_steps` guard against infinite recursion | Handoffs = conditional edges; Managers = subgraphs (Planning/Delegation/Aggregation nodes); Recursive subgraphs gated by `max_steps` |
 | [`primitive-evolution.md`](primitive-evolution.md) | Internal (v1→v2) | Redis/pub-sub → SQLite/graph-edges; manual JSON tool defs → typed decorators | State: `aiosqlite` + `PerpetuaState`. Messaging: `GossipBus` audit trail + conditional edges. Tools: `@tool` decorator |
@@ -67,10 +67,11 @@ review — every finding cross-checked against actual code, false claims documen
 corrected) and `AuditLog.verify_chain()`'s tamper-detection (a `ChainIntegrityError` is structurally
 a Sentinel violation: content that doesn't match what was verified at write time).
 
-**`langgraph-checkpoints.md` ↔ AuditLog's persist-and-resume design.** The "atomic writes...
-enabling perfect resumption" principle is the same mechanic behind `AuditLog(persist_path=...)`'s
-constructor replay (this session) — reload from the exact last-written state and continue the hash
-chain from there, rather than a full-graph checkpoint.
+**`langgraph-checkpoints.md` ↔ AuditLog's persist-and-resume design.** The useful principle is to
+persist an explicit known-good boundary and continue from it. `AuditLog(persist_path=...)`'s
+constructor replay (this session) is a smaller-scale example: reload the exact last-written state
+and continue the hash chain from there. That is deterministic continuation from saved state, not
+universal reversibility. The same framing governs R4 graph resumability.
 
 **No forced connections drawn** for `mcp-and-research-patterns.md`, `primitive-evolution.md`
 (already covered via its direct GossipBus overlap with doc #43, no STM-specific link),
