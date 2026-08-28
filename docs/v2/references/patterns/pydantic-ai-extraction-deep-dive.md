@@ -1,5 +1,10 @@
 # Deep Dive: Pydantic AI "Slim" Tool Extraction
 
+> **Reconciliation status (2026-08-28):** signature/schema extraction and docstring metadata
+> ergonomics -- **ADOPT**, without the `pydantic-ai` runtime dependency, which is **REJECTED** to
+> keep `perpetua-core`'s tool layer dependency-minimal. See
+> [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md).
+>
 > **Goal**: Extract the high-end ergonomics of Pydantic AI's \`@tool\` decorator without the \`pydantic-ai\` runtime or the \`griffe\` dependency.
 
 ## 1. The "V1 Hack" Baseline

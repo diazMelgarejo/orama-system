@@ -1,5 +1,10 @@
 # Feature Extraction: LangGraph State Reducers & Parallelism
 
+> **Reconciliation status (2026-08-28):** typed reducer pattern -- **ADOPT, targeted at R3**
+> (explicit per-field reducers + join policy required before generic parallel fan-in is promoted) --
+> not current `PerpetuaState.merge()` behavior, which is a single `model_copy(update=delta,
+> deep=True)` whole-delta apply. See [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md).
+>
 > **Goal:** Repurpose the "Reducer" pattern for conflict-free state updates during parallel node execution.
 
 ## 1. The "V1 Hack" Baseline

@@ -1,5 +1,11 @@
 # Feature Extraction: Pydantic AI Tool Ergonomics
 
+> **Reconciliation status (2026-08-28):** `@tool` schema-derivation ergonomics -- **ADOPT**, without
+> the `pydantic-ai` runtime dependency, which is **REJECTED**. Ownership: generic tool/ToolNode
+> mechanics and Pydantic validation live in `perpetua-core`; tool policy, effect authority, and
+> approvals live in `orama-system`. See
+> [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md).
+>
 > **Goal:** Repurpose the \`@tool\` decorator to auto-derive JSON schemas from Python type hints without the \`pydantic-ai\` runtime.
 
 ## 1. The Core Mechanic

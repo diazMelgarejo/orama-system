@@ -1,5 +1,9 @@
 # Primitive Evolution: v1 vs. Mined vs. v2
 
+> **Reconciliation status (2026-08-28):** not yet covered by the MiniGraph/GraphObservation
+> reconciliation pass -- [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md) has no row
+> for this document. Treat as unreconciled evidence, not yet classified ADOPT/ADAPT/REJECT/MOVE UP.
+>
 > **Objective:** Shed accidental complexity and replace external dependencies (Redis) with local-first, high-performance primitives.
 
 ---

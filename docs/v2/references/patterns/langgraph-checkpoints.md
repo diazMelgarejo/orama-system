@@ -1,5 +1,12 @@
 # Feature Extraction: LangGraph Checkpointers
 
+> **Reconciliation status (2026-08-28):** thread/checkpoint identity -- **ADOPT**. Atomic node
+> checkpoint boundary -- **ADAPT**: a valid persistence primitive, not a complete durable-runtime
+> contract. The "perfect resumption" wording below is **REJECTED** -- checkpoint existence alone
+> does not prove safe replay/resume; durable resume additionally requires graph/version identity,
+> replay boundary, and effect idempotency. See
+> [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md).
+>
 > **Goal:** Repurpose the "Compiled Graph" persistence model for our \`SqliteCheckpointer\`.
 
 ## 1. The Core Mechanic

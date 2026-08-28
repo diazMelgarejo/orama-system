@@ -1,5 +1,10 @@
 # Feature Extraction: Agentic Engineering Patterns
 
+> **Reconciliation status (2026-08-28):** deterministic harness/March of Nines pattern -- **ADOPT**.
+> Sentinel-as-kernel-mechanic -- **MOVE UP**: verification topology and acceptance policy live in
+> `orama-system`; MiniGraph executes an ordinary node, it does not understand "verified" or "golden
+> dataset." See [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md).
+>
 > **Ref:** Andrej Karpathy (March of Nines)
 
 ## 1. The Core Mechanic: Deterministic Harnessing

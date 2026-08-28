@@ -1,5 +1,11 @@
 # Feature Extraction: Multi-Agent Orchestration Patterns
 
+> **Reconciliation status (2026-08-28):** Swarm handoff -- **ADOPT** as a conditional edge. CrewAI
+> manager hierarchy -- **ADOPT** as GraphSpec/subgraph topology (planning/delegation/aggregation).
+> AutoGen nested chats -- **ADAPT** as bounded subgraphs. Parallel delegation cannot ship
+> generically until R3 defines reducers and join semantics. See
+> [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md).
+>
 > **Ref:** OpenAI Swarm, CrewAI, AutoGen
 
 ## 1. OpenAI Swarm: The "Handoff" Pattern

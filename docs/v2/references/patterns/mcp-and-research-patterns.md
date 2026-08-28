@@ -1,5 +1,9 @@
 # Feature Extraction: MCP & Perplexity Research Patterns
 
+> **Reconciliation status (2026-08-28):** not yet covered by the MiniGraph/GraphObservation
+> reconciliation pass -- [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md) has no row
+> for this document. Treat as unreconciled evidence, not yet classified ADOPT/ADAPT/REJECT/MOVE UP.
+>
 > **Ref:** Model Context Protocol (Anthropic), Perplexity (Research Agent)
 
 ## 1. MCP: The "Standardized Context" Standard

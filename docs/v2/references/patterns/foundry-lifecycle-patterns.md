@@ -1,5 +1,11 @@
 # Feature Extraction: Foundry Lifecycle & Evaluation
 
+> **Reconciliation status (2026-08-28):** golden-dataset evaluation -- **MOVE UP** to the
+> `orama-system` evaluator layer. Isolation principle -- **ADOPT** as effect/security policy, not
+> engine scheduling. Dynamic routing -- **MOVE UP** to GraphSpec/runtime policy, which produces a
+> concrete edge MiniGraph executes. See
+> [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md).
+>
 > **Ref:** Microsoft Foundry (Azure AI Foundry)
 
 ## 1. Evaluation: "Golden Datasets" & LLM-as-a-Judge
