@@ -6,13 +6,28 @@
 
 This file classifies the existing v2 feature-extraction library against the
 final MiniGraph architecture. The source pattern docs remain evidence; this
-matrix states which adaptations are current, revised, deferred, or rejected.
+matrix states which adaptations are current, revised, deferred, reframed, or
+intentionally excluded.
+
+## Classification rule
+
+A wording correction MUST NOT be treated as feature deletion.
+
+When historical notes use absolute language such as "perfect", "always", or
+"fully reversible", reconciliation scopes the guarantee to the system boundary
+we can actually engineer and verify. Resumability remains an explicit design
+target: save enough session/graph state and compatibility identity to resume
+predictably from a declared checkpoint boundary. This does not imply time
+travel, universal reversibility of the external world, or magical exactly-once
+side effects.
 
 | Source / pattern | Status | Canonical interpretation |
 | --- | --- | --- |
 | LangGraph thread/checkpoint identity | ADOPT | `session_id` plus future versioned checkpoint lineage. |
-| LangGraph atomic node checkpoint boundary | ADAPT | Save at explicit successful boundaries; durable replay still needs version/replay/effect policy. |
-| LangGraph "perfect resumption" wording | REJECT | Checkpoint existence alone does not prove safe replay/resume. |
+| LangGraph atomic successful-boundary checkpoints | ADOPT / ADAPT | Persist explicit successful boundaries; complete durable resume also needs compatibility and effect policy. |
+| Durable resumability | ADOPT R4 TARGET | Build deterministic resume from declared saved state/checkpoint boundaries. |
+| LangGraph "perfect resumption" wording | REJECT WORDING ONLY | Keep the capability; scope "perfect" to rigorously planned boundary-defined resume, not total reversibility or time travel. |
+| Durable deterministic resume | ADOPT TARGET | Session-state saving + lineage + replay policy + effect idempotency/dedupe. |
 | LangGraph typed reducers | ADOPT R3 | Explicit per-field reducers + join policy before generic parallel fan-in. |
 | Pydantic AI signature/schema extraction | ADOPT | Reuse `inspect.signature` + Pydantic v2 model/schema generation. |
 | Pydantic AI docstring metadata | ADOPT | Tool description ergonomics without adopting the framework runtime. |
@@ -47,7 +62,7 @@ Current behavior is intentionally simpler:
 
 ```text
 PerpetuaState.merge(delta)
-  -> Pydantic model_copy(update=delta)
+  -> Pydantic model_copy(update=delta, deep=True)
 ```
 
 `nodes_visited` accumulation is scheduler behavior. Generic reducer semantics
@@ -55,21 +70,31 @@ belong to R3 and MUST be explicit before parallel fan-in is promoted.
 
 ## Durability interpretation
 
-The LangGraph checkpoint extraction remains useful, but "checkpoint after every
-successful node" is only a persistence primitive.
+The LangGraph checkpoint extraction remains useful. A successful-boundary
+checkpoint is a persistence primitive and a necessary building block, not the
+whole durability contract.
 
-Durable graph resume requires at least:
+R4 explicitly targets **durable deterministic resume**. The goal is to plan and
+specify resumability rigorously:
 
 ```text
-checkpoint lineage
+saved session / graph state
++ checkpoint lineage
 + graph/version identity
 + state schema identity
-+ replay boundary
-+ effect idempotency / dedupe
++ explicit replay boundary
++ effect identity + idempotency / dedupe
+= deterministic resume from a declared boundary
 ```
 
-Therefore the existing `SqliteCheckpointer` is a valid generic plugin primitive,
-not yet a complete durable-runtime contract.
+This is intentionally not a claim of total reversibility. A graph can restore
+its own saved execution state; it cannot literally rewind time or erase an
+external side effect that already happened. External effects are reconciled by
+idempotency, deduplication, compensation, or explicit human/policy handling.
+
+Therefore the existing `SqliteCheckpointer` is a valid generic plugin primitive
+on the path to R4. It is not yet the complete durable-runtime contract, but the
+feature itself is retained and deliberately targeted.
 
 ## Multi-agent interpretation
 
