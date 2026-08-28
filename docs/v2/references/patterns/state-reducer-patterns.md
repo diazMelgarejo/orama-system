@@ -19,18 +19,21 @@ for stage in STAGE_SEQUENCE:
     state.stage_outputs[stage.value] = output
 ```
 
-**Problem**: No support for parallel agent work (e.g., 5 parallel Executors). If two agents write to the same key, the last one wins, leading to data loss.
+**Problem**: No support for parallel agent work (e.g., 5 parallel Executors). If two agents write to
+the same key, the last one wins, leading to data loss.
 
 ## 2. LangGraph "Magic" (Technical Analysis)
 
 LangGraph uses **Reducers** defined in the state schema:
 
 - **\`Annotated[list, operator.add]\`**: Appends all updates into a single list.
-- **Custom Reducers**: Functions like \`merge_dicts(old, new)\` that can handle deep-merging or deduplication.
+- **Custom Reducers**: Functions like \`merge_dicts(old, new)\` that can handle deep-merging or
+  deduplication.
 
 ## 3. oramasys v2: The "Reducer" Implementation
 
-Our \`perpetua_core/state.py\` (\`PerpetuaState\`) will implement a native \`merge()\` method that acts as a global reducer.
+Our \`perpetua_core/state.py\` (\`PerpetuaState\`) will implement a native \`merge()\` method that
+acts as a global reducer.
 
 ### Key Logic (Planned for state.py)
 
@@ -55,6 +58,9 @@ class PerpetuaState(BaseModel):
 
 ## 4. Integration with Primitives
 
-- **Parallel Fan-Out**: The \`MiniGraph\` engine can now spawn multiple \`await\` calls for nodes in a "Superstep." Their returned deltas are then sequentially piped through \`state.merge()\`.
-- **Audit Trace**: Because every merge appends to \`nodes_visited\`, we have a deterministic proof of which parallel agent finished first.
-- **Safety**: Prevents the "Last Write Wins" race condition without requiring a heavy lock mechanism.
+- **Parallel Fan-Out**: The \`MiniGraph\` engine can now spawn multiple \`await\` calls for nodes in
+  a "Superstep." Their returned deltas are then sequentially piped through \`state.merge()\`.
+- **Audit Trace**: Because every merge appends to \`nodes_visited\`, we have a deterministic proof
+  of which parallel agent finished first.
+- **Safety**: Prevents the "Last Write Wins" race condition without requiring a heavy lock
+  mechanism.

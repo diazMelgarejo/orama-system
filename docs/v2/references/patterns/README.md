@@ -7,7 +7,7 @@ GossipBus claim-board dogfood, AuditLog durability). Progressive disclosure — 
 directly when the mapping matters, this table is pointers only.
 
 | File | Source | Core mechanic | oramasys v2 adaptation |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | [`agentic-engineering-patterns.md`](agentic-engineering-patterns.md) | Karpathy (March of Nines) | Deterministic harnessing — wrap a ~90%-reliable LLM in a test-write→fix→retest loop | **Sentinel Node** (v2.5): rejects any node transition lacking a verification step |
 | [`foundry-lifecycle-patterns.md`](foundry-lifecycle-patterns.md) | Microsoft Foundry | Golden-dataset LLM-as-judge eval; microVM isolation + Entra identity; "Magentic" dynamic routing | Verification Nodes (Critic model scoring); ToolNode sandboxing via `bubblewrap`/`sandbox-exec` (**= MAESTRO Layer 4**); Policy-Gated Dynamic Routing via `HardwarePolicyResolver` |
 | [`langgraph-checkpoints.md`](langgraph-checkpoints.md) | LangGraph | Thread ID + checkpoint KV; atomic per-node writes enable perfect resumption | **Concept retained, "perfect resumption" claim downgraded** (2026-08-27 correction): `SqliteCheckpointer` (as `GraphPlugin`) checkpoints successful `node.end` observations; `aresume()`-driven durable resume is deferred R4 work (checkpoint/graph/version identity, replay semantics, idempotency, effect dedupe), not shipped behavior — see [`58-minigraph-observer-pattern-library-reconciliation.md`](../../58-minigraph-observer-pattern-library-reconciliation.md) §4. |

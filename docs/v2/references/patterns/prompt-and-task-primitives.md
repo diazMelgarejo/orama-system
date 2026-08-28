@@ -4,7 +4,8 @@
 > reconciliation pass -- [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md) has no row
 > for this document. Treat as unreconciled evidence, not yet classified ADOPT/ADAPT/REJECT/MOVE UP.
 >
-> **Goal:** Repurpose the "Declarative Task" model from CrewAI and the "Explicit Template" model from LangChain for our L3 orchestration.
+> **Goal:** Repurpose the "Declarative Task" model from CrewAI and the
+> "Explicit Template" model from LangChain for our L3 orchestration.
 
 ---
 
@@ -19,7 +20,8 @@ system_prompt = open("SOUL.md").read()
 response = await llm.chat(system_prompt + user_input)
 ```
 
-**Problem**: Logic was coupled to the persona. If you wanted to change the prompt, you had to edit the code or the file. No centralized management.
+**Problem**: Logic was coupled to the persona. If you wanted to change the prompt, you had to edit
+the code or the file. No centralized management.
 
 ## 2. Framework "Magic" (Technical Analysis)
 
@@ -80,6 +82,9 @@ def build_agent_prompt(agent_id: str, state: PerpetuaState) -> str:
 
 ## 4. Integration with Primitives
 
-- **State-Driven**: Because prompts pull from \`state.scratchpad\`, the same agent can behave differently depending on the previous node's output (Ghost Orchestration).
-- **Auditability**: The final generated prompt is emitted to the \`GossipBus\` as a \`dispatch\` event, ensuring 100% observability.
-- **Independence**: The microkernel remains dumb (D4); it just calls the \`build_agent_prompt\` utility provided by the \`oramasys\` layer.
+- **State-Driven**: Because prompts pull from \`state.scratchpad\`, the same agent can behave
+  differently depending on the previous node's output (Ghost Orchestration).
+- **Auditability**: The final generated prompt is emitted to the \`GossipBus\` as a \`dispatch\`
+  event, ensuring 100% observability.
+- **Independence**: The microkernel remains dumb (D4); it just calls the \`build_agent_prompt\`
+  utility provided by the \`oramasys\` layer.
