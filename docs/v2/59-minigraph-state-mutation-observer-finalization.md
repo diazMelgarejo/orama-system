@@ -76,7 +76,7 @@ Regression coverage MUST prove all of these independently:
 3. mutating the merged nested value cannot mutate the caller-held delta object;
 4. ordinary delta application still behaves normally.
 
-This exact correction is now implemented on `oramasys/perpetua-core` PR #1 at:
+This exact correction is implemented on `oramasys/perpetua-core` PR #1 at:
 
 ```text
 488bc6cc440247ca86811c46ae0dd05869898324
@@ -206,31 +206,33 @@ Long code samples in `01-kernel-spec.md` are explanatory copies. If a sample
 drifts from tested core ordering or field semantics, the tested core plus docs
 57–59 win and the sample MUST be repaired.
 
-## 8. Latest core review correction status
+## 8. Latest core review correction — closed on exact-head evidence
 
-The latest PT/Claude review record identified two real unfixed findings on core
-PR #1 at its prior head `876a4581...`:
+The latest PT/Claude review record identified two real findings on core PR #1 at
+its prior head `876a4581...`:
 
 1. caller-owned mutable values in `delta` could alias into the merged state;
 2. `actions/checkout@v4` retained credentials for later PR-controlled test
    steps, flagged as CWE-522 by the review tooling.
 
-Both findings are now implemented on the core branch at:
+Both are fixed at exact core head:
 
 ```text
 488bc6cc440247ca86811c46ae0dd05869898324
 ```
 
-The state fix uses `deepcopy(delta)` plus `deep=True` and adds the missing
-caller-held mutable-delta regression. The workflow fix sets:
+Evidence:
 
-```yaml
-persist-credentials: false
-```
+- `PerpetuaState.merge()` uses `deepcopy(delta)` plus `deep=True`;
+- the regression mutates a caller-held nested delta after merge and separately
+  mutates the merged state, proving isolation in both directions;
+- `.github/workflows/test.yml` sets `persist-credentials: false`;
+- CodeRabbit marks both corresponding review threads addressed/resolved;
+- GitHub Actions run `33218400901` completed successfully on Python 3.11 and
+  Python 3.12.
 
-Commit existence is not sufficient closure. Exact-head Actions and current
-review threads MUST be rechecked before claiming the two findings are closed or
-before merging PR #1.
+These two findings are therefore closed for the current exact head. A later head
+MUST be reverified rather than inheriting this status automatically.
 
 ## 9. GraphSpec validation remains fail-closed
 
