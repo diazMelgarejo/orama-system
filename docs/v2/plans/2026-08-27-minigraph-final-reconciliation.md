@@ -164,11 +164,33 @@ Required properties:
 
 ---
 
-## R3/R4 — Durable checkpoint lineage — deferred
+## R3/R4 — Durable deterministic resume foundation — deferred implementation
 
 Upgrade the existing SQLite checkpointer after the execution seam is stable.
 
-Required identity:
+This phase is **ADOPTED architecture**, not rejected scope. The target is durable
+deterministic resume from an explicit compatible checkpoint boundary.
+
+Canonical framing:
+
+```text
+LangGraph checkpoint/thread identity
+    ADOPT
+
+Atomic successful-boundary checkpoints
+    ADOPT / ADAPT
+
+Durable resumability
+    ADOPT — R4 target
+
+"perfect resumption"
+    REJECT WORDING ONLY
+
+durable deterministic resume
+    ADOPT TARGET
+```
+
+Required saved identity/state includes at least:
 
 ```text
 checkpoint_id
@@ -178,9 +200,16 @@ graph_version
 state_schema_version
 run_id
 logical step/node
+saved session/graph state
 ```
 
-Before automatic retry/resume of effects, define idempotency and deduplication.
+Before automatic retry/resume of effects, define replay boundaries, effect
+identity, idempotency, and deduplication.
+
+The target is precise resumability, not total reversibility. Restoring graph
+state cannot rewind time or erase an external side effect that already happened.
+External effects require idempotency, dedupe, compensation, or explicit
+human/policy reconciliation.
 
 ---
 
