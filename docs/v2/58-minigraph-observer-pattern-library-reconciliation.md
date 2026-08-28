@@ -106,15 +106,41 @@ GraphObservation + plugin fan-out
 
 Both lines of work survive.
 
-## 4. Checkpointer integration boundary
+## 4. Checkpointer and resumability boundary
 
 The existing `SqliteCheckpointer` becomes a `GraphPlugin`-compatible observer.
 It checkpoints successful `node.end` observations and does not schedule the
 graph itself.
 
-This is deliberately not yet a claim of durable replay/resume.
+That implementation is the first persistence primitive toward R4. It does not
+yet complete the R4 contract, but **durable resumability is explicitly retained
+and adopted as the R4 target**.
 
-Durable semantics still require:
+Canonical framing:
+
+```text
+LangGraph checkpoint/thread identity
+    ADOPT
+
+Atomic successful-boundary checkpoints
+    ADOPT / ADAPT
+
+Durable resumability
+    ADOPT — R4 target
+
+"perfect resumption"
+    REJECT WORDING ONLY
+
+durable deterministic resume
+    ADOPT TARGET
+```
+
+"Perfect" is not a promise that the system can reverse time. The intended
+engineering guarantee is narrower and useful: save enough session/graph state,
+identity, and replay metadata to resume predictably from an explicit compatible
+checkpoint boundary.
+
+Durable deterministic resume requires:
 
 ```text
 checkpoint_id
@@ -125,10 +151,15 @@ state_schema_version
 run_id
 logical node/step
 replay policy
+effect identity
 idempotency / effect dedupe
 ```
 
-That remains R4 work.
+If an external side effect already happened, graph-state restoration does not
+make that event unhappen. The runtime must reconcile it through idempotency,
+deduplication, compensation, or explicit human/policy handling.
+
+That is realistic resumability, not total reversibility.
 
 ## 5. Recovered pattern-library authority
 
@@ -160,7 +191,7 @@ Current sequential semantics remain:
 
 ```text
 PerpetuaState.merge(delta)
-  -> model_copy(update=delta)
+  -> model_copy(update=delta, deep=True)
 ```
 
 The scheduler explicitly appends `nodes_visited` before node execution.
@@ -196,9 +227,12 @@ R0/R1  canonical kernel reconciliation       implemented in core PR #1
 R2     GraphEvent structural projection      implemented in core PR #1
 R2.1   GraphObservation + plugin fan-out      added to core PR #1
 R3     reducers + explicit joins             deferred
-R4     checkpoint lineage + replay policy    deferred
+R4     durable deterministic resume          adopted target; implementation deferred
 R5     optimizer / trace learning            research only
 ```
+
+R4 being deferred means "not implemented in this PR", not "rejected". The
+capability remains part of the intended architecture.
 
 The implementation plan addendum is:
 
