@@ -81,6 +81,7 @@ Cold `MiniGraph()` with no plugins: pure Python, zero optional deps.
 ```python
 # src/perpetua_core/state.py
 from __future__ import annotations
+import copy
 from typing import Any, Literal
 from pydantic import BaseModel, Field
 
@@ -108,16 +109,30 @@ class PerpetuaState(BaseModel):
 
     def merge(self, delta: dict[str, Any]) -> "PerpetuaState":
         """Apply a node's output delta. Engine calls this per step.
-        deep=True is load-bearing, not defensive: model_copy's default
-        is a SHALLOW copy, so any nested mutable field not present in
-        `delta` (scratchpad, messages, metadata, nodes_visited) would
-        otherwise be the exact same dict/list object in both the old
-        and new state. Verified directly: without deep=True, mutating
-        the new state's scratchpad in place also corrupts the prior
-        state's scratchpad through the shared reference — a real
-        violation of the copy-on-write guarantee this whole design
-        depends on, not a hypothetical one."""
-        return self.model_copy(update=delta, deep=True)
+        Both deep=True AND deepcopy(delta) are load-bearing, not
+        defensive -- they close two DIFFERENT leaks, verified
+        separately, not redundant with each other.
+
+        deep=True alone: model_copy's default is shallow, so any
+        nested mutable field NOT present in `delta` (scratchpad,
+        messages, metadata, nodes_visited) would be the same dict/list
+        object in both the old and new state. Verified: without
+        deep=True, mutating the new state's scratchpad in place also
+        corrupts the prior state's scratchpad through the shared
+        reference.
+
+        deepcopy(delta) additionally: deep=True deep-copies the
+        EXISTING model's fields, then applies update=delta AFTERWARD
+        -- the delta's own values are used as-is, not deep-copied. A
+        caller passing a mutable object they still hold a reference to
+        (not a fresh literal/spread) still aliases without this.
+        Verified directly: `merge({"scratchpad": shared_dict})` then
+        mutating the caller's own `shared_dict` afterward still leaked
+        into the new state without wrapping delta in deepcopy() first
+        -- found via the real oramasys/perpetua-core PR #1's own
+        second review round, not caught by this repo's earlier
+        deep=True-only fix."""
+        return self.model_copy(update=copy.deepcopy(delta), deep=True)
 ```
 
 Field rationale:

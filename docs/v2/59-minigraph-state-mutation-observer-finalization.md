@@ -206,6 +206,27 @@ independent executable source of truth. If an example drifts from tested core
 ordering or field semantics, the tested core implementation plus docs 57-59
 win and the sample should be repaired.
 
+**2026-08-28 status update, confirmed via direct web access to the public
+`oramasys/perpetua-core` PR #1 (not the blocked API — plain `github.com`
+page fetches, unauthenticated, work for this org even though its API does
+not):**
+
+- `PerpetuaState.merge()` needed a second fix beyond `deep=True`, found by
+  that PR's own second CodeRabbit review round, not by this repo's earlier
+  pass: `model_copy(deep=True)` deep-copies the *existing* model, then
+  applies `update=delta` afterward — the delta's own values are not
+  deep-copied. A caller passing a mutable reference they still hold (not a
+  fresh literal or spread) still aliases. `01-kernel-spec.md`'s sample is
+  now updated to `model_copy(update=copy.deepcopy(delta), deep=True)`,
+  verified against both leak classes directly. Confirm the real PR's fix
+  matches before assuming parity.
+- A real, apparently unresolved CI finding on that PR as of this check:
+  `.github/workflows/test.yml`'s `actions/checkout@v4` step does not set
+  `persist-credentials: false` — flagged CWE-522 by zizmor SAST, meaning
+  pull-request-controlled test steps can access the persisted contents
+  token. Outside this document's own scope to fix (CI workflow file in the
+  other repo), noted here so it isn't lost.
+
 ## 8. GraphSpec validation remains fail-closed
 
 The concurrent GraphSpec correction retained during the earlier merge conflict
