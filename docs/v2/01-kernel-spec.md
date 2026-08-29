@@ -760,6 +760,8 @@ security behavior testable before any non-kernel module ships.
 >
 > ```python
 > # plugin-layer, not engine.py -- consumes aobserve(), never reimplements it
+> from copy import deepcopy
+>
 > async def run_with_plugins(compiled_graph, state, plugins: list[GraphPlugin]):
 >     final_state = state
 >     async for obs in compiled_graph.aobserve(state):
@@ -781,7 +783,25 @@ security behavior testable before any non-kernel module ships.
 > instead of an empty dict, while a `Tracer` plugin observes the exact
 > same run without racing or starving the checkpointer — both drained
 > from one `aobserve()` pass. `asteps()` stays the sanitized surface
-> for streaming/API/UI, unaffected by this fix.
+> for streaming/API/UI, unaffected by this fix. Also caught and fixed a
+> real bug in this same snippet while re-verifying it, not assumed
+> correct because it read plausibly: `deepcopy` was used but never
+> imported — confirmed a genuine `NameError` running the snippet as
+> written before adding the import above.
+>
+> **Precision correction, 2026-08-29 (the actual CodeRabbit finding this
+> resolves — see doc 59 §1):** `model_copy(deep=True)`/`deepcopy()` give
+> each plugin a genuinely **isolated** copy — one plugin mutating its
+> own `detached.state`/`detached.delta` cannot affect another plugin's
+> copy of the same observation, verified directly (two spies, one
+> mutates, the other's copy is unaffected). That is not the same claim
+> as **immutable**: each `detached` copy is an ordinary, mutable
+> Pydantic model and a plain dict — a plugin can still freely mutate its
+> *own* copy with no error raised. "Immutable after publication" (§3's
+> boundary-tier framing) describes the isolation guarantee actually
+> delivered here, not literal read-only enforcement; do not read this
+> section as claiming a plugin's mutation of its own detached copy would
+> raise an error, because it will not.
 >
 > This keeps `GraphPlugin` as a real, live consumer-facing interface —
 > not historical content — while keeping the kernel's one-scheduler
