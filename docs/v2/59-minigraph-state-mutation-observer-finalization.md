@@ -76,10 +76,10 @@ Regression coverage MUST prove all of these independently:
 3. mutating the merged nested value cannot mutate the caller-held delta object;
 4. ordinary delta application still behaves normally.
 
-This exact correction is implemented on `oramasys/perpetua-core` PR #1 at:
+This correction is merged in `oramasys/perpetua-core` at:
 
 ```text
-488bc6cc440247ca86811c46ae0dd05869898324
+d1c0dfca12fef5df6e6b15c602e765e299279676
 ```
 
 ## 3. MiniGraph remains a mutable construction builder
@@ -159,10 +159,31 @@ no `_run()` exists, is superseded.
 
 ## 6. Observer delivery symmetry is not action symmetry
 
+The canonical plugin callback is generic:
+
+```python
+class GraphPlugin(Protocol):
+    def on_observation(
+        self,
+        observation: GraphObservation,
+    ) -> object | Awaitable[object]: ...
+```
+
+This single callback exposes the complete observation vocabulary:
+
+```text
+edge.selected
+node.start
+node.end
+interrupt
+done
+```
+
 The dispatcher contract is:
 
 > Every registered plugin is offered every `GraphObservation` in deterministic
-> registration order.
+> registration order. Each callback result is inspected and awaited when it is
+> awaitable. Default authoritative delivery is fail-closed.
 
 A plugin MAY act only on the subset relevant to its contract.
 
@@ -176,11 +197,18 @@ Tracer
   records all structural events
 ```
 
+Delivery payloads must also be isolated. `GraphObservation` is frozen only at
+the top level; nested `PerpetuaState` collections and `delta` are mutable Python
+objects. Therefore each plugin receives a detached rich payload so a mutating
+listener cannot affect later listeners or the scheduler's live state.
+
 The R2.4 proof distinguishes:
 
 1. multicast delivery integrity;
 2. deterministic semantic filtering by heterogeneous plugins;
-3. observer transparency: equivalent plugin/no-plugin runs produce equal final
+3. callback settlement for both sync and async plugins;
+4. listener payload isolation;
+5. observer transparency: equivalent plugin/no-plugin runs produce equal final
    state.
 
 The previous wording requiring heterogeneous plugins to *record* identical
@@ -206,33 +234,40 @@ Long code samples in `01-kernel-spec.md` are explanatory copies. If a sample
 drifts from tested core ordering or field semantics, the tested core plus docs
 57–59 win and the sample MUST be repaired.
 
-## 8. Latest core review correction — closed on exact-head evidence
+## 8. Core integration and post-merge corrective findings
 
-The latest PT/Claude review record identified two real findings on core PR #1 at
-its prior head `876a4581...`:
-
-1. caller-owned mutable values in `delta` could alias into the merged state;
-2. `actions/checkout@v4` retained credentials for later PR-controlled test
-   steps, flagged as CWE-522 by the review tooling.
-
-Both are fixed at exact core head:
+Core PR #1 merged as:
 
 ```text
-488bc6cc440247ca86811c46ae0dd05869898324
+d1c0dfca12fef5df6e6b15c602e765e299279676
 ```
 
-Evidence:
+That integration closes the earlier review findings for:
 
-- `PerpetuaState.merge()` uses `deepcopy(delta)` plus `deep=True`;
-- the regression mutates a caller-held nested delta after merge and separately
-  mutates the merged state, proving isolation in both directions;
-- `.github/workflows/test.yml` sets `persist-credentials: false`;
-- CodeRabbit marks both corresponding review threads addressed/resolved;
-- GitHub Actions run `33218400901` completed successfully on Python 3.11 and
-  Python 3.12.
+- caller-owned mutable values supplied through `delta`;
+- nested state-generation isolation;
+- checkout credential persistence;
+- one private `_run()` scheduler plus rich/sanitized projections;
+- generic `on_observation(...)` fan-out with awaited callbacks.
 
-These two findings are therefore closed for the current exact head. A later head
-MUST be reverified rather than inheriting this status automatically.
+A fresh post-merge contract sweep found two additional executable gaps that a
+green test suite had not covered:
+
+1. unknown routes could pass `_resolve_edge()` and fail later as `KeyError`;
+2. all plugins received the same rich mutable payload, so one mutating listener
+   could affect later listeners or the live run.
+
+Corrective work is preserved on:
+
+```text
+2026-08-29-001-post-merge-convergence
+```
+
+The branch adds explicit unknown-route rejection at route resolution, detached
+per-listener observation payloads, and regression tests for both invariants.
+Those corrective changes are **not merged merely because they are documented
+here**; integration requires an explicit merge instruction and exact-head
+verification.
 
 ## 9. GraphSpec validation remains fail-closed
 
@@ -255,6 +290,7 @@ MiniGraph
 CompiledGraph
   detached runtime snapshot
   one _run() scheduler
+  unknown routes rejected at resolution boundary
 
 GraphObservation
   rich trusted evidence
@@ -263,8 +299,11 @@ GraphEvent
   sanitized structural projection
 
 GraphPlugin dispatcher
-  identical delivery to every plugin
+  complete generic on_observation delivery
+  sync/async callback settlement awaited
   plugin-specific deterministic filtering allowed
+  detached per-listener payloads
+  fail-closed authoritative delivery
 
 GraphSpec (future)
   immutable/versioned persistent value
