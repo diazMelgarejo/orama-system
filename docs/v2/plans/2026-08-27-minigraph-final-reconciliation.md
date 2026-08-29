@@ -146,12 +146,36 @@ PluginDispatcher
   └─ other trusted listeners
 ```
 
+The canonical callback surface is generic so every structural observation is
+representable without adding per-event methods:
+
+```python
+class GraphPlugin(Protocol):
+    def on_observation(
+        self,
+        observation: GraphObservation,
+    ) -> object | Awaitable[object]: ...
+```
+
+Delivery semantics are equally explicit:
+
+```python
+for plugin in plugins:
+    result = plugin.on_observation(detached_observation)
+    if inspect.isawaitable(result):
+        await result
+```
+
 Rules:
 
-- every plugin is offered the same complete ordered observation stream;
+- every plugin is offered the same complete ordered observation stream,
+  including `edge.selected`, `node.start`, `node.end`, `interrupt`, and `done`;
 - plugins may deterministically act on different subsets;
+- each plugin receives a detached rich payload so mutation cannot affect later
+  listeners or the scheduler's live state;
 - sync and async callbacks are supported by inspecting returned awaitables;
-- default delivery is awaited and fail-closed;
+- callback settlement is awaited before delivery proceeds;
+- default authoritative delivery is fail-closed;
 - no plugin may traverse private topology or schedule the graph itself;
 - plugin-enabled final state MUST equal an equivalent no-plugin run.
 
@@ -162,27 +186,29 @@ therefore correct.
 
 ## R2.5 — Exact-head verification and remaining observer policy
 
-Exact PR head is authoritative. CodeRabbit/review, deterministic tests, SAST,
-and Actions are separate gates.
+Exact repository state is authoritative. CodeRabbit/review, deterministic tests,
+SAST, and Actions are separate gates.
 
-The latest Claude/CodeRabbit findings on `oramasys/perpetua-core` PR #1 were:
-
-1. mutable values supplied through `delta` still aliased with the merged state
-   when only `model_copy(deep=True)` was used;
-2. `actions/checkout@v4` persisted the checkout token into later
-   pull-request-controlled test steps.
-
-Both were fixed together on the core reconciliation branch at:
+The reconciliation merged into `oramasys/perpetua-core` as:
 
 ```text
-488bc6cc440247ca86811c46ae0dd05869898324
+d1c0dfca12fef5df6e6b15c602e765e299279676
 ```
 
-The fix adds `deepcopy(delta)`, a caller-held nested mutable delta regression,
-and `persist-credentials: false`.
+That integration includes the earlier fixes for caller-owned mutable delta
+aliasing and checkout credential persistence. A post-merge contract sweep then
+identified two additional boundary gaps: unknown routes failed later as
+`KeyError`, and listeners shared one mutable rich observation payload.
 
-Do not treat the findings as closed until exact-head CI and the current review
-threads confirm the commit.
+Corrective work is preserved on:
+
+```text
+2026-08-29-001-post-merge-convergence
+```
+
+with explicit unknown-route rejection plus per-listener detached observation
+payloads and regression coverage. Do not describe those corrective changes as
+merged until they are integrated through an explicitly authorized merge.
 
 R2.5 also defines the next observer-policy contract:
 
@@ -446,15 +472,24 @@ not silently self-rewrite.
 
 ## Merge order
 
+Historical merge order for the reconciliation was:
+
 1. verify core PR #1 at its exact current head;
 2. resolve every still-valid core review finding by evidence, not assumption;
 3. merge the core reconciliation;
 4. verify orama-system PR #333 at its exact current head;
-5. merge the architecture/pattern/unbundling plan;
-6. start R2.5/R3 from then-current `main` in a correctly numbered dated branch;
-7. keep R4/R5/R6/R7 as explicit contracts rather than inflating `engine.py`;
-8. unbundle PT cluster-by-cluster with parity evidence;
-9. start R9 only after durability and independent evaluation are operational.
+5. merge the architecture/pattern/unbundling plan.
+
+Step 3 is complete at `d1c0dfca...`; step 5 is **not** authorized by this
+record. Current work must continue to verify PR #333 and the corrective core
+branch independently. No wording in this plan grants merge authority.
+
+After those gates are explicitly integrated, successor work may:
+
+1. start R2.5/R3 from then-current `main` in a correctly numbered dated branch;
+2. keep R4/R5/R6/R7 as explicit contracts rather than inflating `engine.py`;
+3. unbundle PT cluster-by-cluster with parity evidence;
+4. start R9 only after durability and independent evaluation are operational.
 
 Do not bundle R3+ merely because this plan describes them.
 
@@ -465,7 +500,8 @@ Do not bundle R3+ merely because this plan describes them.
 This reconciliation phase is complete when:
 
 - core R0–R2.4 changes are merged from the reviewed branch;
-- both latest core findings are closed on exact-head evidence;
+- post-merge corrective route and observer-isolation findings are integrated or
+  explicitly tracked as still pending;
 - this canonical architecture record and pattern placement are merged;
 - old line-count/freeze/blanket-immutability rules are not current authority;
 - `orama-system` clearly owns GraphSpec/lint/evaluation/runtime-policy authority;
