@@ -42,6 +42,21 @@ compiled / published / observed snapshot
 
 Immutability is a boundary property, not a universal ban on local mutation.
 
+**2026-08-29 gap, verified directly, not assumed:** `GraphObservation`'s
+`@dataclass(frozen=True)` (§3 below) blocks reassigning `delta`/`state` as
+*fields* — `obs.delta = x` correctly raises `FrozenInstanceError`. It does
+**not** deep-freeze their *contents*: `obs.delta["key"] = x` and
+`obs.state.scratchpad["key"] = x` both succeed silently. Confirmed the
+concrete consequence in a fan-out dispatcher: if plugin A mutates
+`obs.delta`/`obs.state` in place while processing one observation, plugin
+B — processing the *same* observation instance immediately after — sees
+plugin A's mutation. "Treat as immutable after publication" is currently
+a **discipline-based invariant for observer authors, not a type-system
+-enforced one.** If enforcement is later required, the options are a
+deep-frozen delta (e.g. `MappingProxyType`, applied recursively) or a
+genuinely immutable state variant — neither is implemented today; do not
+read this section as claiming either already exists.
+
 ## 2. PerpetuaState generations and caller-owned deltas are isolated
 
 `PerpetuaState.merge(delta)` MUST use both copy layers:
