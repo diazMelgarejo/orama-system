@@ -3,7 +3,7 @@
 > **Reconciliation status (2026-08-28):** golden-dataset evaluation -- **MOVE UP** to the
 > `orama-system` evaluator layer. Isolation principle -- **ADOPT** as effect/security policy, not
 > engine scheduling. Dynamic routing -- **MOVE UP** to GraphSpec/runtime policy, which produces a
-> concrete edge MiniGraph executes. See
+> concrete route MiniGraph executes. See
 > [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md).
 >
 > **Ref:** Microsoft Foundry (Azure AI Foundry)
@@ -13,15 +13,18 @@
 Foundry treats evaluation as a mandatory unit test. It uses high-reasoning models to score sub-agent
 outputs against a "Golden Dataset" of expected results.
 
-### oramasys v2 Adaptation: Verification Nodes
+### oramasys v2 Adaptation: evaluator-owned Verification Nodes
 
-In our \`MiniGraph\`, every critical task node is followed by a **Verification Node**.
+Verification policy belongs to the **`orama-system` evaluator/policy layer**, not to MiniGraph.
+The outer layer decides whether a critical task requires verification, which evaluator/rubric is
+authoritative, and what threshold controls promotion or retry. It may compile that decision into a
+realized graph containing an ordinary Verification Node.
 
-- **Mechanic**: The Verification Node uses a "Critic" model (e.g., Qwen 35B) to score the
-  \`PerpetuaState.scratchpad\` contents.
-- **The Logic**: If the score is below the \`elegance_threshold\` (defined in
-  \`agent_registry.json\`), the conditional edge routes the graph back to the "Refiner" node rather
-  than the "End".
+- **Mechanic**: A realized Verification Node may use a Critic model to score selected state/output.
+- **Policy**: Thresholds, judge model/rubric versions, retry/promotion decisions, and golden datasets
+  remain evaluator-layer authority.
+- **Kernel boundary**: MiniGraph executes the realized node and its concrete route; it does not
+  define what "verified" means or mandate verification topology itself.
 
 ## 2. Infrastructure: Isolated MicroVMs & Identity
 
@@ -33,9 +36,9 @@ ID).
 We cannot provide full microVMs in a "nimble" stack, but we can repurpose the **Sandbox
 Constraint**.
 
-- **Mechanic**: Our \`ToolNode\` (4f) will use the \`bubblewrap\` (Linux) or \`sandbox-exec\`
-  (macOS) command-line utilities to restrict the subprocess's filesystem access to a temporary
-  \`session_id\` directory.
+- **Mechanic**: Tool execution may use OS-native sandboxing where supported, but sandbox
+  requirements and approvals belong to the effect/security policy layer rather than MiniGraph
+  scheduling semantics.
 - **Identity**: Every \`GossipBus\` event is tagged with the \`session_id\` and \`agent_id\`,
   creating an immutable audit trail of which "identity" took which action.
 
@@ -44,19 +47,22 @@ Constraint**.
 Foundry supports "Magentic" orchestration where the system determines the best agent for the task on
 the fly.
 
-### oramasys v2 Adaptation: Policy-Gated Dynamic Routing
+### oramasys v2 Adaptation: policy-owned dynamic routing
 
-- **Mechanic**: We use our **HardwarePolicyResolver** (L2) as the "Magentic" gate.
-- **The Flow**: The Orchestrator proposes a list of 3 agents. The Resolver filters them based on
-  **live LAN telemetry**. The best reachable agent is then selected.
+- **Mechanic**: GraphSpec/runtime policy selects or validates the agent/model route using relevant
+  capability, hardware, endpoint, budget, and evaluation policy.
+- **The Flow**: The outer policy layer realizes a concrete allowed route. MiniGraph then executes
+  that route using its ordinary edge semantics; it does not become the agent/model-selection
+  policy engine.
+- **Hardware boundary**: Agate may contribute hardware fit/readiness evidence, but hardware facts do
+  not themselves own task-level agent-selection policy.
 
 ## 4. Summary: The oramasys Way
 
-We mine the **Accountability** of Foundry but implement it using **Subprocess Sandboxing** and
-**Graph-Level Verification**.
+We mine the **Accountability** of Foundry while preserving explicit ownership boundaries.
 
 | Feature | Foundry Implementation | oramasys Adaptation |
 | --- | --- | --- |
-| Evaluation | LLM-as-a-Judge | Verification Nodes + State Reducers |
-| Isolation | MicroVMs | Subprocess Sandboxing (OS-native) |
-| Routing | Magentic | Policy-Gated Dynamic Routing |
+| Evaluation | LLM-as-a-Judge | `orama-system` evaluator policy + realized Verification Nodes |
+| Isolation | MicroVMs | Effect/security policy + OS-native sandboxing where supported |
+| Routing | Magentic | GraphSpec/runtime policy realizes a route; MiniGraph executes it |

@@ -48,8 +48,8 @@ def tool(fn):
     # 1. Inspect signature
     sig = inspect.signature(fn)
     
-    # 2. Extract descriptions from docstring (Simple Regex)
-    # (We parse ":param name: description" or "name (type): description")
+    # 2. Extract descriptions from Google-style docstrings only.
+    # Example argument entry: "name (type): description"
     doc = fn.__doc__ or ""
     arg_descriptions = _parse_google_docstring(doc)
     
