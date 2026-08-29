@@ -2,13 +2,17 @@
 
 **Date:** 2026-08-29  
 **Status:** cross-repository architecture clarification  
-**Applies to:** Claude-Desktop-LLM modernization, Agate local-metal planning, PT unbundling references, and future MCP v2 integration planning
+**Applies to:** Claude-Desktop-LLM modernization, Agate local-metal planning, PT unbundling
+references, and future MCP v2 integration planning
 
 ## Canonical correction
 
-OpenTelemetry is explicitly out of scope for `diazMelgarejo/Claude-Desktop-LLM` **because observability should target Ollama and LM Studio directly through their native runtime/provider surfaces**.
+OpenTelemetry is explicitly out of scope for `diazMelgarejo/Claude-Desktop-LLM` **because
+observability should target Ollama and LM Studio directly through their native runtime/provider
+surfaces**.
 
-This rule concerns the observability implementation only. It MUST NOT be interpreted as a change to the target Claude-Desktop-LLM architecture.
+This rule concerns the observability implementation only. It MUST NOT be interpreted as a change
+to the target Claude-Desktop-LLM architecture.
 
 Retain:
 
@@ -32,7 +36,8 @@ Provider-native observability attaches at the Ollama and LM Studio runtime/provi
 
 ## Provider-native evidence
 
-The implementation should prefer native runtime/model evidence from Ollama and LM Studio for the subset actually needed by the product, such as:
+The implementation should prefer native runtime/model evidence from Ollama and LM Studio for the
+subset actually needed by the product, such as:
 
 - health and availability;
 - loaded-model state;
@@ -56,15 +61,19 @@ Collector topology
 generic telemetry backend requirement
 ```
 
-PT's OTel implementation remains valid for PT. Claude-Desktop-LLM may reuse redaction or evidence-design lessons but MUST NOT cargo-cult PT's exporter stack.
+PT's OTel implementation remains valid for PT. Claude-Desktop-LLM may reuse redaction or
+evidence-design lessons but MUST NOT cargo-cult PT's exporter stack.
 
 ## Relationship to Agate
 
-`oramasys/agate` owns the cold-local-metal hardware capability, model-fit, affinity, routing, and hard placement/resource-constraint contract.
+`oramasys/agate` owns the cold-local-metal hardware capability, model-fit, affinity, routing, and
+hard placement/resource-constraint contract.
 
-Agate is MHS-convergent, not presently MHS-conformant while the Model Hardware Standard remains a research preview.
+Agate is MHS-convergent, not presently MHS-conformant while the Model Hardware Standard remains a
+research preview.
 
-Claude-Desktop-LLM owns the canonical local runtime/provider control boundary for Ollama and LM Studio.
+Claude-Desktop-LLM owns the canonical local runtime/provider control boundary for Ollama and LM
+Studio.
 
 ```text
 Agate
@@ -79,23 +88,30 @@ Claude-Desktop-LLM
 Ollama   LM Studio
 ```
 
-No lower layer should absorb another layer's authority merely because the systems are deployed together.
+No lower layer should absorb another layer's authority merely because the systems are deployed
+together.
 
 ## MCP v2 sequencing
 
-MCP v2 work for Claude-Desktop-LLM is blocked and unscheduled until the Orama and Perpetua v2 migration into `oramasys/*` is complete and the resulting authority handoffs and integration contracts are merged and authoritative.
+MCP v2 work for Claude-Desktop-LLM is blocked and unscheduled until the Orama and Perpetua v2
+migration into `oramasys/*` is complete and the resulting authority handoffs and integration
+contracts are merged and authoritative.
 
 Therefore:
 
 - do not design Claude-Desktop-LLM around speculative MCP v2 APIs now;
 - do not introduce compatibility shims merely to anticipate unfinished v2 contracts;
-- continue security, canonicalization, provider, testing, packaging, and provider-native observability work independently of that protocol migration.
+- continue security, canonicalization, provider, testing, packaging, and provider-native
+  observability work independently of that protocol migration.
 
 ## Storage-plan correction
 
-The prepared Phase-1 patch is authoritative over the stale ASCII-only storage-name regex present in older planning text.
+The prepared Phase-1 patch is authoritative over the stale ASCII-only storage-name regex present
+in older planning text.
 
-The implementation permits ordinary spaces, Unicode, and internal dots while rejecting separators, control characters, Windows-reserved names, trailing dot/space, and containment escape, followed by resolved-parent containment verification.
+The implementation permits ordinary spaces, Unicode, and internal dots while rejecting separators,
+control characters, Windows-reserved names, trailing dot/space, and containment escape, followed
+by resolved-parent containment verification.
 
 Do not regress it to an ASCII-only regex merely to make older documents match.
 
@@ -109,4 +125,5 @@ blocked/deferred != rejected
 MHS convergence != current MHS conformance
 ```
 
-If older Claude-Desktop-LLM planning documents conflict with this reference, they should be updated or explicitly marked superseded rather than left co-authoritative.
+If older Claude-Desktop-LLM planning documents conflict with this reference, they should be updated
+or explicitly marked superseded rather than left co-authoritative.
