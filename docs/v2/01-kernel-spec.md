@@ -755,18 +755,25 @@ security behavior testable before any non-kernel module ships.
 > `asteps()`'s sanitized `GraphEvent` genuinely carries no delta at
 > all. Fixed: the dispatcher now drains `aobserve()` — the rich
 > `GraphObservation` projection §4a defines — exactly once, and fans
-> out to every registered `GraphPlugin` listener with the real state
-> and delta:
+> out to every registered `GraphPlugin` listener with detached state
+> and delta payloads:
 >
 > ```python
 > # plugin-layer, not engine.py -- consumes aobserve(), never reimplements it
 > async def run_with_plugins(compiled_graph, state, plugins: list[GraphPlugin]):
+>     final_state = state
 >     async for obs in compiled_graph.aobserve(state):
+>         final_state = obs.state
 >         for p in plugins:
->             if obs.event.kind == "node.start":
->                 p.on_node_start(obs.state, obs.event.node)
->             elif obs.event.kind == "node.end":
->                 p.on_node_end(obs.state, obs.event.node, obs.delta)
+>             detached = GraphObservation(
+>                 event=obs.event,
+>                 state=obs.state.model_copy(deep=True),
+>                 delta=deepcopy(obs.delta),
+>             )
+>             result = p.on_observation(detached)
+>             if inspect.isawaitable(result):
+>                 await result
+>     return final_state
 > ```
 >
 > Verified directly: a `Checkpointer` plugin now genuinely receives the
@@ -787,8 +794,10 @@ To ensure architectural integrity, all Tier-3 plugins MUST implement the followi
 
 ```python
 class GraphPlugin(Protocol):
-    def on_node_start(self, state: PerpetuaState, node_name: str) -> None: ...
-    def on_node_end(self, state: PerpetuaState, node_name: str, delta: dict) -> None: ...
+    def on_observation(
+        self,
+        observation: GraphObservation,
+    ) -> object | Awaitable[object]: ...
 ```
 
 ### 7b. Infinite Loop Guard
