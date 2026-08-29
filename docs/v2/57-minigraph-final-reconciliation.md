@@ -5,11 +5,11 @@
 **Date basis:** Asia/Manila (UTC+08:00)  
 **Core repo:** `oramasys/perpetua-core`  
 **Upper-layer authority:** `diazMelgarejo/orama-system`  
-**Core PR:** <https://github.com/oramasys/perpetua-core/pull/1>
+**Core integration:** `d1c0dfca12fef5df6e6b15c602e765e299279676`
 
 **Branch-name exception:** approved for the already-open reconciliation PRs only.
 
-PR #333 and `oramasys/perpetua-core` PR #1 retain
+PR #333 and the historical core reconciliation PR retain
 `2026-08-27-minigraph-final-reconciliation`. Any successor branch MUST use
 `yyyy-mm-dd-NNN-brief-summary`.
 
@@ -25,11 +25,11 @@ This document preserves history but supersedes conflicting MiniGraph clauses.
 | --- | --- | --- |
 | [`00-context-and-decisions.md`](00-context-and-decisions.md) D8 | `~70`/`65` physical-line target | Small/pure/irreducible is the invariant; physical line count is only a review signal. |
 | [`01-kernel-spec.md`](01-kernel-spec.md) §4 | old loop and async-function-only invocation | `CompiledGraph` owns one scheduler; returned awaitables are awaited; contracts fail closed. |
-| [`01-kernel-spec.md`](01-kernel-spec.md) streaming sketch | adapter may reimplement traversal | Adapters consume canonical `asteps()` events. |
+| [`01-kernel-spec.md`](01-kernel-spec.md) streaming sketch | adapter may reimplement traversal | Adapters consume canonical observation/event projections and never reimplement traversal. |
 | [`04-build-order.md`](04-build-order.md) Phase 2 | Phase 2 treated as permanently closed | R0–R2 is a correctness/architecture hardening addendum. |
 | [`15-phase1-as-built.md`](15-phase1-as-built.md) | historical line counts/topology | Retained as history; this record and current tests define the runtime contract. |
 | [`../superpowers/specs/2026-05-17-salvage-translation-design.md`](../superpowers/specs/2026-05-17-salvage-translation-design.md) | `<=80` hard cap and source-builder freeze | No hard cap; builder stays mutable; compiled topology is detached. |
-| `docs/v2-kimi-minigraph-reconciliation-20260826` branch (old, un-merged; docs numbered 57/58 there, superseding-name-collision with this doc resolved by not merging their content directly) | Independent Kimi-rewrite reconciliation, its own max_steps/non-dict/empty-route findings, its own `asteps()` proposal, `minigraph_extras/` plugin naming | Superseded in full by this document — kept only as historical evidence that two independent efforts converged on the same design before either saw the other's work (max_steps semantics, non-dict rejection, empty-route rejection, the `asteps()`/`GraphEvent` seam all match exactly). Its `minigraph_extras/` naming is explicitly rejected by §9 above. |
+| `docs/v2-kimi-minigraph-reconciliation-20260826` branch | Independent Kimi reconciliation and parallel plugin naming | Superseded by this record; retained only as historical convergence evidence. |
 
 Historical documents remain evidence of why the design evolved. Do not
 mechanically restore their superseded constraints.
@@ -92,63 +92,28 @@ CompiledGraph
 `MiniGraph.ainvoke(state)` compiles a fresh snapshot and delegates execution to
 `CompiledGraph`.
 
-**2026-08-27 resolution, reversed same day after verification against
-real-world evidence.** A review insisted the mutable-builder framing
-below not be accepted as compliance with a cited "always create new
-objects, never mutate" rule, and asked for `add_node`/`add_edge` to
-return new builder instances instead. An earlier version of this
-section did exactly that — made `MiniGraph` immutable via structural
-sharing, satisfying the review's literal demand. **That was reverted
-the same day**, after checking it against something more important
-than the cited rule: this document's own §17 stated goal, drop-in
-compatibility with real LangGraph.
+`MiniGraph.add_node`/`add_edge` mutate `self` and return `self`, matching the
+established LangGraph builder pattern. The governing repository rule now uses a
+boundary-aware mutation policy: builder/workspace mutation is allowed when it
+is the documented API and cannot leak across publication/snapshot boundaries.
 
-Checked directly, not assumed: 8 independent real-world LangGraph
-sources — the official API reference, the official Graph API guide,
-and 6 separate tutorials — were searched for how `StateGraph.add_node`
-is actually called in practice. **Every single one** calls
-`builder.add_node(...)` as a bare statement in a loop or sequence,
-never `builder = builder.add_node(...)`. Zero exceptions found.
-Reproduced directly what an immutable `MiniGraph` does to that pattern:
-`builder.add_node("node_1", fn); builder.add_node("node_2", fn)` with
-an immutable builder silently discards every call — `builder._nodes`
-stays empty, no error raised. Every one of those 8 real examples would
-have been silently broken by the "compliant" immutable design. A
-finding that satisfies an unlocated, abstract rule while breaking this
-document's own primary, load-bearing architectural goal is not a
-correct resolution of that finding — it is optimizing the wrong
-objective.
+The topology immutability boundary is `compile()`. Later builder mutations MUST
+NOT alter an existing `CompiledGraph`.
 
-`MiniGraph.add_node`/`add_edge` mutate `self` and return `self`, the
-same pattern real `StateGraph.add_node`/`add_edge` use (both are
-documented as returning `Self`). This is not a concession to the
-review's finding — it is the design that actually serves the stated
-compatibility goal, which is the higher-priority constraint here.
+`PerpetuaState.merge()` implements the value-layer isolation boundary with two
+independent copy layers:
 
-**The immutability boundary was never actually in dispute; it already
-had a natural, correct location: `compile()`.** `MiniGraph` is the
-mutable construction workspace — exactly like a real `StateGraph`
-builder before `.compile()` is called. `CompiledGraph` is the detached,
-immutable execution snapshot. Later builder node/edge changes MUST NOT
-alter an existing compiled graph — verified behaviorally (a real
-`add_node`/`add_edge` call after `compile()`, then re-running the
-already-compiled graph and confirming its output is unaffected, not
-just asserted) and unchanged by this reversal. `PerpetuaState.merge()`
-implements copy-on-write at the **value** layer
-(`model_copy(update=delta, deep=True)`, `deep=True` load-bearing —
-Pydantic's default is shallow, verified and fixed in `b002fc9d`).
-`MiniGraph`'s immutability boundary lives one layer up, at
-**topology**, exactly at `compile()` — not spread across every
-individual builder mutation, which is where LangGraph itself also
-draws the line.
+```python
+self.model_copy(update=copy.deepcopy(delta), deep=True)
+```
 
-If the cited "always create new objects" rule genuinely exists
-somewhere this session cannot locate, and genuinely intends to bind
-`MiniGraph.add_node`/`add_edge` specifically, that is a real conflict
-between the rule and this document's own stated LangGraph-compatibility
-goal — worth resolving explicitly by whoever can locate and read the
-rule directly, not by guessing which one wins without being able to
-read both.
+`deep=True` isolates inherited nested mutable state. `copy.deepcopy(delta)`
+separately isolates caller-owned mutable values supplied through the update.
+Pydantic applies update values after copying the existing model, so neither
+layer substitutes for the other.
+
+Persistent structural sharing belongs to the future immutable/versioned
+`GraphSpec` layer rather than the mutable MiniGraph construction API.
 
 ---
 
@@ -178,8 +143,10 @@ error. The engine does not coerce falsey results to `{}`.
 
 `END = "__end__"` is the only normal terminal route.
 
-Every static or conditional edge MUST resolve to a non-empty string. Invalid
-route values fail closed rather than becoming implicit success.
+Every static or conditional edge MUST resolve to a non-empty string. A target
+other than `END` MUST name a registered node. Invalid routes fail closed at the
+routing boundary rather than becoming implicit success or falling through to a
+later node lookup error.
 
 Execution order is invariant.
 
@@ -194,6 +161,13 @@ enter node
 ```
 
 Post-merge conditional routing is public graph semantics.
+
+The merged core originally validated type/emptiness but still allowed unknown
+node names to reach a later `KeyError`. Corrective work is preserved on
+`oramasys/perpetua-core` branch `2026-08-29-001-post-merge-convergence`, where
+unknown routes are rejected explicitly at resolution time with regression
+coverage. Do not describe that corrective branch as merged until explicitly
+integrated.
 
 ---
 
@@ -229,6 +203,10 @@ Required behavior:
 The old `interrupt_handler` constructor argument had no execution semantics and
 is removed rather than preserved as a misleading no-op API.
 
+Structural interrupt recognition and state updates are kernel behavior.
+Plugin-specific resume guards, persistence, replay, and durable HITL policy stay
+outside `engine.py`.
+
 This reconciliation does NOT claim durable resume. Durable HITL requires later
 checkpoint, replay, and idempotency contracts.
 
@@ -236,27 +214,31 @@ checkpoint, replay, and idempotency contracts.
 
 ## 8. One canonical execution seam
 
-`CompiledGraph` owns one scheduler: `asteps()`. It is the actual traversal
-loop, not a wrapper over a separate internal method — `01-kernel-spec.md`
-§4's code (behaviorally verified, not just documented) has no `_run()`.
-`ainvoke()` is a thin consumer that drains `asteps()` and returns the
-final state; it does not duplicate the loop.
+`CompiledGraph` owns one private scheduler implementation: `_run()`.
+Every execution view projects from that loop.
 
 ```text
-CompiledGraph.asteps(state)  -- the scheduler itself
+CompiledGraph._run(state)
+  sole scheduler
         |
-        +--> ainvoke(state) drains it -> final PerpetuaState
+        v
+GraphObservation(event, state, delta?)
         |
-        +--> consumed directly for the structural GraphEvent stream
+        +------------------------+
+        |                        |
+        v                        v
+aobserve()                 GraphEvent
+rich trusted                    |
+pull                            v
+                            asteps()
+                            sanitized pull
+        |
+        +--> ainvoke() drains rich observations -> final PerpetuaState
 ```
 
-**2026-08-27 correction:** an earlier version of this diagram showed
-`CompiledGraph._run(state)` as a separate scheduler with `ainvoke()`/
-`asteps()` as two views over it. That method was never built or tested;
-`asteps()` itself has been the real scheduler since it was first
-implemented and verified. Fixed here to match the actual code rather
-than describing a method that doesn't exist — adapters must consume
-`asteps()` directly, not a `_run()` that isn't there.
+This is the merged core architecture. Earlier prose in this document that said
+`asteps()` itself was the scheduler or that `_run()` did not exist is
+superseded.
 
 Public event kinds are:
 
@@ -268,36 +250,52 @@ interrupt
 done
 ```
 
-`GraphEvent` contains control-plane metadata only: event kind, node/target,
-completed-step count, and terminal reason.
+`GraphEvent` is the control-plane projection. It contains event kind,
+node/target, completed-step count, and terminal reason. It excludes raw prompts,
+state snapshots, node deltas, database handles, provider policy, exporter
+configuration, and persistence logic.
 
-It does NOT contain raw prompts, state snapshots, node deltas, database handles,
-provider policy, exporter configuration, or persistence logic.
+`GraphObservation` is the trusted in-process projection and may carry the
+current `PerpetuaState` plus the successful `node.end` delta.
 
-Streaming, checkpoint, trace, and debugger adapters MUST consume this seam
-instead of copying the scheduler or traversing private `_nodes`/`_edges`.
-For adapters that need multiple simultaneous observers on one run
-(e.g. a checkpointer and a tracer both watching the same `ainvoke()`
-call) — a bare `asteps()` drain is single-consumer only; verified
-directly that racing two consumers over one async generator silently
-starves one of them. Use a thin fan-out adapter that drains `asteps()`
-once and dispatches to N registered listeners; see
-[`01-kernel-spec.md`](01-kernel-spec.md) §7a for the verified
-implementation and the `GraphPlugin` interface it targets — that
-Protocol is a real, live consumer-facing interface for this purpose,
-not superseded by `asteps()` existing.
+Streaming/API/UI consumers use `asteps()`. Trusted checkpointer/tracer/plugin
+consumers use `aobserve()`. Neither surface may reimplement traversal or reach
+into private `_nodes`/`_edges` to schedule the graph.
 
-Per-kind fields and ordering are defined authoritatively in
-`oramasys/perpetua-core`'s `GraphEvent` class and `CompiledGraph.asteps`,
-not restated here — this document is the ownership/boundary record, not
-the field-level contract. Coverage lives in that repo's `test_engine_reconciliation.py`
-and `test_streaming.py`. Consult those directly; this session has no read
-access to `oramasys/perpetua-core` to link exact paths/line ranges, so no
-placeholder path is given as confirmed. Likely locations, following this
-same document's own `src/`-layout convention (§4's code sample) but
-**unverified**: `src/perpetua_core/graph/engine.py` and
-`src/tests/test_engine_reconciliation.py` / `src/tests/test_streaming.py`
-— confirm against the real tree before citing these as fact.
+A bare async generator is single-consumer, not multicast. Concurrent consumers
+may either raise `RuntimeError: anext(): asynchronous generator is already
+running` or let one consumer receive items the other does not. Multi-observer
+runs therefore use one `aobserve()` drain plus deterministic push fan-out.
+
+The canonical plugin callback is generic:
+
+```python
+class GraphPlugin(Protocol):
+    def on_observation(
+        self,
+        observation: GraphObservation,
+    ) -> object | Awaitable[object]: ...
+```
+
+This callback represents all event kinds. Each returned value is inspected and
+awaited when awaitable. Authoritative delivery is fail-closed by default.
+
+The merged fan-out initially passed the same rich observation to every plugin.
+Because nested state collections and `delta` are mutable, that allowed a
+mutating plugin to affect later listeners. The corrective core branch
+`2026-08-29-001-post-merge-convergence` supplies a detached state/delta payload
+per listener and adds a mutating-listener regression. Again, that branch is
+preserved but not merged merely by being documented here.
+
+Per-kind field behavior belongs to the tested `oramasys/perpetua-core`
+implementation. Current source paths include:
+
+```text
+src/perpetua_core/graph/engine.py
+src/perpetua_core/graph/plugins/observer.py
+src/tests/graph/test_engine_reconciliation.py
+src/tests/graph/plugins/
+```
 
 ---
 
@@ -313,14 +311,15 @@ Do not create `minigraph_extras/` or another parallel plugin system.
 
 Generic plugin concerns remain outside `engine.py`:
 
-- checkpointing;
-- interrupts / resume guard;
-- routing and validation;
+- checkpoint persistence and durable resume;
+- plugin-specific interrupt/resume guards;
+- higher-level routing/validation helpers;
 - tools / `ToolNode`;
 - subgraphs;
-- streaming;
+- streaming adapters;
 - structured LLM output;
-- parallel dispatch.
+- parallel dispatch;
+- observer fan-out policy beyond the kernel's observation seam.
 
 The engine MUST NOT import plugins, providers, storage adapters, network
 clients, telemetry exporters, or upper-layer graph policy.
@@ -417,8 +416,8 @@ validate at least:
 - stable graph/node IDs are present;
 - schema/version compatibility is explicit.
 
-None of these checks are advisory. Execution MUST reject any
-specification that fails validation.
+None of these checks are advisory. Execution MUST reject any specification that
+fails validation.
 
 Natural-language topology, if introduced, MUST compile to a typed validated
 `GraphSpec`. Prose is never runtime authority.
@@ -450,23 +449,41 @@ runtime self-rewrite.
 
 ## 15. Implementation status
 
-**Proposed / in review** in `oramasys/perpetua-core` PR #1 (open, no merge
-commit as of this review — Python 3.11/3.12 checks succeeded; add the merge
-commit SHA here once it actually merges, not before):
+The reconciliation merged into `oramasys/perpetua-core` as:
+
+```text
+d1c0dfca12fef5df6e6b15c602e765e299279676
+```
+
+Merged behavior includes:
 
 - canonical `PerpetuaState` retained;
+- two-layer state/delta isolation;
 - returned-value awaitability;
-- `CompiledGraph` scheduler ownership;
-- strict node-delta and route validation;
+- one private `_run()` scheduler;
+- rich `GraphObservation` and sanitized `GraphEvent` projections;
 - END-only normal termination;
 - exact max-step diagnostics;
 - optional structural interrupt payload;
 - removal of the no-op `interrupt_handler` constructor surface;
 - compile-detachment regression coverage;
 - real `ToolNode`-inside-MiniGraph regression coverage;
-- structural `GraphEvent` + `asteps()`;
-- streaming as a scheduler adapter;
-- a Python 3.11/3.12 test workflow for future PR verification.
+- generic plugin observation fan-out with awaited sync/async settlement;
+- Python 3.11/3.12 test workflow with checkout credentials disabled.
+
+The actual merged tree uses the documented `src/` layout, including
+`src/perpetua_core/` and `src/tests/`, so the old unconfirmed layout action item
+is closed.
+
+Post-merge corrective branch:
+
+```text
+2026-08-29-001-post-merge-convergence
+```
+
+That branch adds explicit unknown-route rejection and per-listener observation
+payload isolation with regressions. It remains unmerged until explicitly
+integrated.
 
 Deferred intentionally:
 
@@ -475,20 +492,6 @@ Deferred intentionally:
 - runtime budgets/effect policy;
 - `GraphSpec`/lint/evaluation implementation in `orama-system`;
 - graph optimizer and trace miner.
-
-**Action item, not yet confirmed done:** `01-kernel-spec.md`'s Repo
-Layout section now nests `perpetua_core/` and `tests/` under `src/`
-(2026-08-27 correction, matching `46-repository-standard.md`). Whether
-`oramasys/perpetua-core`'s actual tree already matches this or still
-needs migrating is unconfirmed — this session has no read access to
-that repo. Whoever has real access: check first; if migration is
-needed, do it as a `git mv` plus a `pyproject.toml` packaging-config
-update (`[tool.setuptools.packages.find] where = ["src"]` or
-equivalent) plus an import sanity check
-(`python -c "import perpetua_core; ..."`), **as its own commit**,
-separate from any behavior change, so either can be reverted
-independently. If it already matches, note "no change needed" rather
-than leaving this unconfirmed.
 
 ---
 
@@ -507,169 +510,67 @@ Future changes MUST preserve:
 9. no plugin/provider/storage imports in the kernel;
 10. provider/exporter-independent structural events;
 11. streaming without private topology traversal;
-12. durable/dynamic/optimizer features outside the kernel until proven.
+12. complete awaited plugin observation delivery;
+13. listener payload isolation;
+14. unknown-route rejection at the routing boundary once the corrective branch
+    is integrated;
+15. durable/dynamic/optimizer features outside the kernel until proven.
 
 ---
 
-## 17. LangGraph / LangGraph.js drop-in compatibility — explicit by design
+## 17. LangGraph / LangGraph.js compatibility target
 
-Internal implementation stays ours. **At the API surface, we target
-drop-in compatibility with LangGraph (Python) and LangGraph.js
-(TypeScript) by design — not an aspiration, a standing rule — for the
-builder/topology API and the invoke/stream surface specifically.** This
-was the original rationale for building a MiniGraph-shaped kernel in the
-first place (see "we already are a LangGraph, just not named that way"
-framing) and is made an explicit, binding decision here rather than an
-implicit assumption a future agent has to rediscover. The scope
-qualifier is not a hedge — see the very next paragraph for exactly why
-full fidelity is out of scope for two specific subsystems, and never
-claim "100% compatible" without it.
+Internal implementation stays ours. At the API surface, the standing target is
+compatibility for the supported builder/topology API and invoke/stream surface.
+Do not claim full drop-in compatibility across unimplemented subsystems.
 
-Full API research backing this section (exact current signatures, verified
-against `langgraph` 1.2.x source and reference docs, not assumed from
-memory): see the compatibility research artifact referenced in this PR's
-conversation record. Two things established there that shape this section:
+The explicitly excluded or future surfaces include exact
+`astream_events(version="v2")` fidelity and full `BaseCheckpointSaver`
+serialization compatibility.
 
-- LangGraph's **builder/topology API has been stable since v0.1 through
-  v1.2** (the current stable line as of August 2026) — `add_node`,
-  `add_edge`, `add_conditional_edges`, `compile` are unchanged. This makes
-  "100% API compatible" a coherent, pin-able target, not a moving one.
-- Full byte-for-byte fidelity is realistic for the **builder + invoke/stream
-  surface**, but genuinely hard for the **exact streaming event schema**
-  (`stream_mode` shapes, `astream_events` v2) and **checkpointer
-  serialization internals**. Scope those explicitly rather than silently
-  overclaiming "100%."
+### 17a. Python surface
 
-### 17a. Python — legacy AND current surface, both, not one or the other
-
-The compatibility layer supports **both** the legacy v0.1-era method names
-(still valid, not deprecated-for-removal per LangChain's own Release
-Policy) and the current v1.2.x primitives, because real LangGraph-authored
-code in the wild uses both:
-
-**Legacy wrapper (aliases onto the canonical builder):**
+Legacy wrapper aliases may map onto the canonical builder:
 
 ```python
-# perpetua_core/graph/plugins/langgraph_compat.py -- a PLUGIN, never
-# imported by engine.py itself (per §9's plugin boundary).
+# perpetua_core/graph/plugins/langgraph_compat.py -- a plugin, never kernel code
 def set_entry_point(self, key: str) -> "MiniGraph":
-    """Equivalent to add_edge(START, key). Legacy LangGraph v0.1 name,
-    kept because real code still uses it."""
     return self.set_start(key)
 
+
 def set_finish_point(self, key: str) -> "MiniGraph":
-    """Equivalent to add_edge(key, END)."""
     return self.add_edge(key, END)
 ```
 
-**Current surface (v1.2.x), targeted explicitly:**
+Current-surface targets include `START`/`END`, `add_conditional_edges`, and later
+compatibility primitives such as `Command` and `Send` when their prerequisites
+exist.
 
-- `START`/`END` sentinels — already canonical in `engine.py` §4 itself, not
-  a compat-layer addition (this is the one piece that belongs in the
-  kernel proper, since the kernel already needed universal sentinels for
-  its own correctness — see §4's amendment history).
-- `Command(update=..., goto=...)` — combines a state update with routing
-  in one node return value. **Design, not yet verified**: a compat-layer
-  node wrapper would detect a returned `Command` and translate `update`
-  into the normal dict-delta merge path; the `goto` → routing-decision
-  translation through the scheduler's `_next` flow has no test
-  demonstrating it actually selects the expected node yet. Do not
-  present this as working until a real compatibility test exists —
-  implemented as a plugin wrapper around node execution, not a kernel
-  change, when it is built.
-- `Send(node, arg)` — map-reduce fan-out. Depends on §10's deferred
-  reducer/join redesign (R3); do not implement `Send` support before R3
-  lands, since `Send`'s correctness depends on exactly the reducer
-  semantics R3 defines.
-- `interrupt(value)` — the current preferred HITL primitive (persist +
-  resume via `Command(resume=...)`), distinct from and more capable than
-  the structural `Interrupt` exception the kernel recognizes (§7). The
-  kernel's structural recognition is the substrate; a full `interrupt()`
-  implementation requires the durable checkpoint lineage §11 defers.
-  **Do not implement a partial `interrupt()`** (e.g. one that raises but
-  doesn't actually persist/resume) — that silently breaks HITL examples
-  in a way that is worse than clearly not supporting it yet.
-- `add_conditional_edges(source, path, path_map=None)` — already
-  expressible via the canonical `add_edge(src, dst_fn)` pattern; the
-  compat layer's version is a thin rename/signature-adapter, not new
-  logic.
+`Command(update=..., goto=...)` routing is **not yet proven**. A compatibility
+wrapper may translate the state update, but `goto` support MUST NOT be claimed
+until a real route-selection hook and compatibility test demonstrate the
+selected node through the canonical scheduler.
 
-**Explicitly out of scope for now, and why:** `astream_events(version="v2")`
-(the fine-grained callback event vocabulary) and full `BaseCheckpointSaver`
-serialization fidelity. Both are real, substantial subsystems in their own
-right; claiming compatibility with either before implementing them for
-real would be the "silently overclaim 100%" failure mode this section
-exists to prevent.
+`Send(node, arg)` depends on the deferred R3 reducer/join contract.
 
-### 17b. JavaScript/TypeScript — `oramaclaw`, targeting LangGraph.js exactly
+Full `interrupt(value)` parity depends on durable checkpoint/resume semantics;
+do not implement a partial API that only raises without real persistence and
+resume.
 
-A **separate, JS-facing module named `oramaclaw`** targets LangGraph.js's
-exact naming (verified current as of August 2026, not assumed from the
-Python API by analogy):
+### 17b. JavaScript/TypeScript — `oramaclaw`
 
-```typescript
-import { StateGraph, Annotation, START, END, Command } from "oramaclaw";
+A separate JS-facing `oramaclaw` module may target LangGraph.js naming such as
+`StateGraph`, `Annotation`, `START`, `END`, `Command`, `addNode`, and `addEdge`.
+That compatibility surface remains outside the Python kernel.
 
-const StateAnnotation = Annotation.Root({
-  foo: Annotation<string>,
-});
+Runtime steering of AlphaClaw/OpenClaw processes does not imply repository-level
+ownership or modification of those repositories.
 
-const graph = new StateGraph(StateAnnotation)
-  .addNode("nodeA", nodeA, { ends: ["nodeB", "nodeC"] })  // ends: declares
-  .addNode("nodeB", nodeB)                                 // Command.goto
-  .addNode("nodeC", nodeC)                                 // destinations
-  .addEdge(START, "nodeA")
-  .compile();
-```
+### 17c. Compatibility remains outside the kernel
 
-`addNode`/`addEdge` (camelCase, not the Python `add_node`/`add_edge`
-snake_case — JS convention, verified, not a naming inconsistency to
-"fix"), `Annotation.Root({...})` for state-schema definition, and the
-`ends: [...]` third-argument option on `addNode` (declares valid
-`Command.goto` destinations for an edgeless/`Command`-routed node,
-confirmed against LangGraph.js's official "Use the graph API" guide and
-its `Command` how-to doc) are the three surfaces named explicitly for
-this module to target.
-
-**Where `oramaclaw` lives and what it bundles with:** Perpetua-Tools,
-alongside the existing `packages/alphaclaw-adapter/` and
-`packages/alphaclaw-mcp/` — matching the pattern already established and
-verified for those two packages (PT `lesson_a5b40efe18d5`). `oramaclaw` is
-described as bundled with "ALL AlphaClaw- and OpenClaw-related controllers
-and commandeering components," which means it **steers those processes at
-runtime** (spawn/HTTP, matching `alphaclaw-adapter`'s own verified design)
-— it does **not** import from or modify `diazMelgarejo/AlphaClaw`'s
-repository. This boundary is load-bearing, not incidental: the same
-"runtime-only, never repo-level" distinction that let `alphaclaw-adapter`
-work stay in scope under the standing AlphaClaw exclusion applies
-identically here. Any future implementation of `oramaclaw` must confirm
-this runtime-only relationship directly (grep for git/repo operations
-against AlphaClaw's own repo, same check already performed and recorded
-for `alphaclaw-adapter`) before writing anything, not assume it.
-
-### 17c. The compatibility layer is a plugin, not a kernel change
-
-Both 17a and 17b live outside `engine.py`, consistent with §9's plugin
-boundary — a LangGraph-compatibility shim is exactly the kind of
-"capability-specific" concern `mk-1.md`'s micro-kernel principle assigns
-to plugins, not the kernel. The kernel's only concession to this goal is
-the `START`/`END` sentinel choice itself (§4), made because the kernel
-needed universal sentinels for its own internal correctness anyway —
-everything else (legacy aliases, `Command`/`Send` translation, the JS
-module entirely) is additive surface area with zero kernel changes
-required to add or remove it, matching the same enforcement discipline
-§9 already establishes for every other plugin.
-
-**Implementation status: in progress, not indefinitely deferred.** Unlike
-§10/§11's genuinely deferred R3/R4 work (blocked on real prerequisites —
-reducer/join semantics, checkpoint lineage — that don't exist yet), this
-compatibility layer has no such blocker beyond this document itself
-landing as the reference. `perpetua-core` code changes for 17a/17b begin
-as soon as this record is merged and available to implement against; do
-not read the design-only caveats above (`Command` routing unverified,
-`Send` waiting on R3 specifically) as "the whole compat layer is
-deferred" — only those two named pieces are, for the specific reasons
-stated next to each.
+Compatibility aliases and translation layers live outside `engine.py`.
+The kernel retains only universal execution mechanics already required for its
+own correctness.
 
 ---
 
