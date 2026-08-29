@@ -254,10 +254,12 @@ orama-system/docs/v2/
 ├── 51-security-sentinel-orbit-passkey-mcp.md  ← v2.1 security-sentinel satellite: passkey + MCP human authorization; orbits perpetua-core; MVP HMAC bridge in docs/plans/2026-08-02-pr-body-grant-security-remediation.md
 ├── 52-tier5-frugality-storage-consumer-mapping.md  ← maps PT's Tier-5/frugality budget ledger onto the already-canonical SQLite-write-authority / DuckDB-read-only-analytics / LanceDB-optional-redacted-recall split from doc 20; docs-only, no new architecture decision, no code
 ├── 56-anamnesis-runtime-memory-migration.md  ← D26: v1 PT-agent controller contract; deferred private v2 runtime-memory backend and weekly HITL promotion policy
-└── 57-minigraph-final-reconciliation.md  ← canonical MiniGraph architecture record: supersedes prior line-count/freeze/async-only clauses; ownership (perpetua-core executes, orama-system owns GraphSpec/lint/evaluation/policy); the CompiledGraph/asteps()/GraphEvent scheduler seam; §17 explicit LangGraph (Python, legacy+current) and LangGraph.js (oramaclaw, bundled with AlphaClaw/OpenClaw runtime controllers) drop-in-compatibility decision. Plan: docs/v2/plans/2026-08-27-minigraph-final-reconciliation.md
+├── 57-minigraph-final-reconciliation.md  ← canonical MiniGraph architecture record: supersedes prior line-count/freeze/async-only clauses; ownership (perpetua-core executes, orama-system owns GraphSpec/lint/evaluation/policy); the CompiledGraph/asteps()/GraphEvent scheduler seam; §17 explicit LangGraph (Python, legacy+current) and LangGraph.js (oramaclaw, bundled with AlphaClaw/OpenClaw runtime controllers) drop-in-compatibility decision. Plan: docs/v2/plans/2026-08-27-minigraph-final-reconciliation.md
+├── 58-minigraph-observer-pattern-library-reconciliation.md  ← observer/pattern-library addendum: reconciles the mined pattern catalogue against the final MiniGraph architecture
+└── 59-minigraph-state-mutation-observer-finalization.md  ← final state/mutation/observer correction; exact-head oramasys/perpetua-core PR #1 review closure evidence
 ```
 
-> **Next free slot: `58-`**
+> **Next free slot: `60-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
