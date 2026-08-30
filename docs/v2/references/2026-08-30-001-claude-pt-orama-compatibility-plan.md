@@ -42,18 +42,20 @@ requests/httpx transport, GitHub Actions.
 
 ## Repository and File Map
 
-| Repository | Create or modify | Responsibility |
-| --- | --- | --- |
-| `oramasys/telos` | `spec/endpoint-policy/v1/endpoint-policy-v1.json` | Canonical mode and decision vectors. |
-| `oramasys/telos` | `spec/endpoint-policy/v1/README.md` | Normative meanings, versioning, and error codes. |
-| `diazMelgarejo/Perpetua-Tools` | `src/utils/ssrf_fetch_policy.py`, `src/utils/ssrf_pinned_adapter.py` | PT's untrusted-egress adapter and vector runner. |
-| `diazMelgarejo/Perpetua-Tools` | `tests/test_ssrf_policy_vectors.py` | Offline PT vector conformance tests. |
-| `oramasys/Claude-Desktop-LLM` | `src/policy/endpoint-policy.ts` | Telos-v1 TypeScript provider policy adapter. |
-| `oramasys/Claude-Desktop-LLM` | `tests/endpoint-policy-vectors.test.ts` | Offline TypeScript vector conformance tests. |
-| `oramasys/phylax` | `spec/runtime-check/v1/runtime-check-v1.json` | Generic owner-defined check envelope. |
-| `oramasys/phylax` | `README.md` | Capability, versioning, and redaction requirements. |
-| `oramasys/Claude-Desktop-LLM` | `src/integration/runtime-check-client.ts` | Optional fail-closed Phylax/Telos client. |
-| `oramasys/Claude-Desktop-LLM` | `tests/runtime-check-client.test.ts` | Version, redaction, and failure behavior. |
+- **Telos:** Create `spec/endpoint-policy/v1/endpoint-policy-v1.json` for
+  canonical mode and decision vectors, and
+  `spec/endpoint-policy/v1/README.md` for normative semantics and versioning.
+- **Perpetua-Tools:** Modify `src/utils/ssrf_fetch_policy.py` and
+  `src/utils/ssrf_pinned_adapter.py`; add
+  `tests/test_ssrf_policy_vectors.py` for offline vector conformance.
+- **Claude-Desktop-LLM:** Modify `src/policy/endpoint-policy.ts`; add
+  `tests/endpoint-policy-vectors.test.ts` for TypeScript vectors.
+- **Phylax:** Create `spec/runtime-check/v1/runtime-check-v1.json` and
+  `README.md` for the owner-defined generic runtime-check envelope.
+- **Claude-Desktop-LLM integration:** Add
+  `src/integration/runtime-check-client.ts` and
+  `tests/runtime-check-client.test.ts` for version, redaction, and failure
+  behavior.
 
 ## Task 1: Publish the Telos Endpoint-Policy v1 Contract
 
