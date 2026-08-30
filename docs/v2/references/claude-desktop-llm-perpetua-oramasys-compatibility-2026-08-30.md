@@ -3,7 +3,8 @@
 **Status:** Approved architecture  
 **Date:** 2026-08-30  
 **Baseline:** `diazMelgarejo/orama-system` PR #333 at `08ad6c6f99f44aad41cfdc64c404a125c053724c`  
-**Implementation plan:** [2026-08-30-001-claude-pt-orama-compatibility-plan.md](2026-08-30-001-claude-pt-orama-compatibility-plan.md)
+**Implementation plan:**
+[2026-08-30-001-claude-pt-orama-compatibility-plan.md][implementation-plan]
 
 ## Purpose
 
@@ -21,15 +22,30 @@ or observability authority.
 
 ## Evidence-Based Audit
 
-| Area | Current Claude behavior | Perpetua baseline | Gap |
-| --- | --- | --- | --- |
-| DNS results | Resolves and pins one address. | Resolves every A/AAAA address, validates each, and rechecks the connected peer. | A multi-address hostname can contain a denied address that Claude never evaluates. |
-| Address classes | Rejects DNS-mediated loopback but can allow a configured private/LAN address. | Generic SSRF transport denies loopback, private, link-local, CGNAT, multicast, reserved, and unspecified ranges. | The two mechanisms serve different purposes but are not explicitly modeled as different modes. |
-| Endpoint ownership | A TypeScript policy is local to the Claude repository. | Python Layer 1/Layer 2 policy is the current implementation authority. | Semantics can drift across languages. |
-| Policy proof | Native `node:test` covers loopback, redirects, and selected DNS cases. | PT has a shared deny predicate and transport-level validation. | No portable conformance-vector suite exists. |
-| Runtime integration | Claude connects directly to Ollama and LM Studio only. | PT provides generic runtime, SSRF, and orchestration capabilities. | No approved versioned live integration interface exists. |
-| Observability | Provider-native state is authoritative; local JSONL is secondary. | PT observability and coordination remain separate runtime concerns. | Do not introduce an OTLP or generic event dependency into Claude. |
-| Core execution | Not consumed by Claude. | `oramasys/perpetua-core` PR #1 is merged, green, and review-clean. | No remediation belongs in Claude for the former state-alias or checkout-token findings. |
+- **DNS results:** Claude resolves and pins one address. PT resolves every
+  A/AAAA address, validates each, and rechecks the connected peer. A
+  multi-address hostname can therefore contain a denied address that Claude
+  never evaluates.
+- **Address classes:** Claude rejects DNS-mediated loopback but can allow a
+  configured private/LAN address. PT generic SSRF transport denies loopback,
+  private, link-local, CGNAT, multicast, reserved, and unspecified ranges.
+  These mechanisms serve different purposes but are not explicitly modeled as
+  different modes.
+- **Endpoint ownership:** Claude has a local TypeScript policy; PT currently
+  holds the Python Layer 1/Layer 2 implementation authority. Semantics can
+  drift across languages.
+- **Policy proof:** Claude's native `node:test` covers loopback, redirects,
+  and selected DNS cases. PT has a shared deny predicate and transport
+  validation. No portable conformance-vector suite exists.
+- **Runtime integration:** Claude connects directly to Ollama and LM Studio;
+  PT provides generic runtime, SSRF, and orchestration capabilities. No
+  approved versioned live integration interface exists.
+- **Observability:** Claude provider-native state is authoritative and local
+  JSONL is secondary. PT observability and coordination remain separate runtime
+  concerns. Claude must not receive an OTLP or generic event dependency.
+- **Core execution:** Claude does not consume Core. The former Core state-alias
+  and checkout-token findings are merged, green, and review-clean; no Claude
+  remediation belongs to them.
 
 The current TypeScript policy's claim that it simply mirrors PT is therefore too
 broad. It mirrors connection-time pinning, but not PT's full all-address,
@@ -37,15 +53,22 @@ address-class, and peer-recheck contract.
 
 ## Locked Ownership
 
-| Owner | Owns | Does not own |
-| --- | --- | --- |
-| `oramasys/perpetua-core` | Dependency-minimal generic execution mechanics. | Orama policy, provider routing, endpoint policy. |
-| `oramasys/agate` | Hardware capability, model affinity, and placement. | Provider health or security policy. |
-| `oramasys/telos` | Endpoint/network policy semantics, portable vectors, and language-specific policy adapters. | Generic runtime-check mechanism. |
-| `oramasys/phylax` | Generic runtime-check substrate and security/safety packs. | Endpoint-policy semantics or provider routing. |
-| `oramasys/oramasys` | Application orchestration, routing, and provider integration. | A generic cross-domain contracts package. |
-| `oramasys/Claude-Desktop-LLM` | Claude/Desktop-facing Ollama and LM Studio adapter. | A second security-policy authority or generic telemetry pipeline. |
-| `diazMelgarejo/Perpetua-Tools` | Existing Python runtime/security implementation until each capability is extracted. | Permanent ownership of every extracted concern. |
+- **Core** (`oramasys/perpetua-core`) owns dependency-minimal generic
+  execution mechanics, not Orama policy, provider routing, or endpoint policy.
+- **Agate** (`oramasys/agate`) owns hardware capability, model affinity, and
+  placement, not provider health or security policy.
+- **Telos** (`oramasys/telos`) owns endpoint/network policy semantics,
+  portable vectors, and language-specific policy adapters, not generic
+  runtime-check machinery.
+- **Phylax** (`oramasys/phylax`) owns generic runtime-check substrate and
+  security/safety packs, not endpoint-policy semantics or provider routing.
+- **Oramasys** (`oramasys/oramasys`) owns application orchestration, routing,
+  and provider integration, not a generic cross-domain contracts package.
+- **Claude-Desktop-LLM** owns its Claude/Desktop-facing Ollama and LM Studio
+  adapter, not a second security-policy authority or generic telemetry pipeline.
+- **Perpetua-Tools** keeps its existing Python runtime/security implementation
+  until capability extraction, but does not permanently own every extracted
+  concern.
 
 There must be no generic `oramasys/contracts` repository or package. Each
 contract remains with its semantic owner. Claude consumes Telos endpoint-policy
@@ -60,12 +83,17 @@ given mode and evidence set.
 
 ### Modes
 
-| Mode | Intended caller | Default | Explicit allowance |
-| --- | --- | --- | --- |
-| `untrusted_egress` | PT tools fetching arbitrary external URLs. | Deny all non-public, unsafe, or unresolved targets. | No private/LAN exception. |
-| `provider_local` | Claude talking to a local model runtime. | Permit direct loopback only. | None required. |
-| `provider_trusted_lan` | Claude talking to a deliberate operator-managed LAN model runtime. | Deny. | Exact hostname allowlist, operator opt-in, HTTPS for non-loopback, and address-class policy specifically allowing the trusted LAN range. |
-| `provider_public_remote` | Claude talking to an operator-approved public provider. | Deny. | Exact hostname allowlist, operator opt-in, HTTPS, and public resolved addresses only. |
+- **`untrusted_egress`:** PT tools fetching arbitrary external URLs. Deny all
+  non-public, unsafe, or unresolved targets; there is no private/LAN exception.
+- **`provider_local`:** Claude talking to a local model runtime. Permit
+  direct loopback only.
+- **`provider_trusted_lan`:** Claude talking to a deliberate,
+  operator-managed LAN model runtime. Deny by default; require exact hostname
+  allowlisting, operator opt-in, HTTPS for non-loopback, and a specifically
+  allowed trusted-LAN address class.
+- **`provider_public_remote`:** Claude talking to an operator-approved public
+  provider. Deny by default; require exact hostname allowlisting, operator
+  opt-in, HTTPS, and public resolved addresses only.
 
 A hostname resolving to loopback is never equivalent to a caller directly
 specifying loopback. It is rejected in every non-loopback mode, even when it is
@@ -171,3 +199,6 @@ Each step is independently reviewable. No dual writable authority is allowed.
   read-only for the first slice, and fail closed.
 - No new generic `oramasys/contracts`, OTLP dependency, or duplicate
   runtime-check framework is introduced.
+
+
+[implementation-plan]: 2026-08-30-001-claude-pt-orama-compatibility-plan.md
