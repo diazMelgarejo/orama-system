@@ -63,6 +63,7 @@ requests/httpx transport, GitHub Actions.
 then create `2026-08-30-001-endpoint-policy-v1`.
 
 **Files:**
+
 - Create: `spec/endpoint-policy/v1/README.md`
 - Create: `spec/endpoint-policy/v1/endpoint-policy-v1.json`
 
@@ -125,6 +126,7 @@ then create `2026-08-30-001-endpoint-policy-v1`.
 `2026-08-30-001-telos-endpoint-vectors` from current `main`.
 
 **Files:**
+
 - Modify: `src/utils/ssrf_fetch_policy.py`
 - Modify: `src/utils/ssrf_pinned_adapter.py`
 - Create: `tests/test_ssrf_policy_vectors.py`
@@ -183,6 +185,7 @@ existing deny-private behavior and validates every resolution result.
 `2026-08-30-001-telos-provider-policy-v1` from current `main`.
 
 **Files:**
+
 - Modify: `src/config.ts`
 - Modify: `src/policy/endpoint-policy.ts`
 - Modify: `tests/endpoint-policy.test.ts`
@@ -262,6 +265,7 @@ from generic egress.
 then create `2026-08-30-001-runtime-check-v1`.
 
 **Files:**
+
 - Create: `spec/runtime-check/v1/runtime-check-v1.json`
 - Create: `README.md`
 - Create: `tests/validate_runtime_check_vectors.py`
@@ -297,6 +301,7 @@ rules are referenced by Telos policy version; they are not reimplemented.
 Phylax v1 are published.
 
 **Files:**
+
 - Create: `src/integration/runtime-check-client.ts`
 - Modify: `src/config.ts`
 - Modify: `src/server/create-server.ts`
@@ -321,11 +326,33 @@ Claude retains direct local provider operation when no client is configured.
 
   Expected: FAIL because the client module is absent.
 
-- [ ] **Step 3: Implement a narrow read-only interface**
+- [ ] **Step 3: Define and implement the narrow read-only interfaces**
 
-  Use this exact TypeScript shape:
+  The route contract is owned by Oramasys; it is not a Telos or Phylax
+  substitute and does not carry endpoint secrets. Define these exact v1 shapes
+  before client logic:
 
   ```ts
+  export interface ProviderRouteRequestV1 {
+    version: "v1";
+    requestId: string;
+    providerKind: "ollama" | "lm_studio";
+    endpointMode:
+      | "provider_local"
+      | "provider_trusted_lan"
+      | "provider_public_remote";
+    requestedPolicyVersion: string;
+  }
+
+  export interface ProviderRouteDecisionV1 {
+    version: "v1";
+    requestId: string;
+    outcome: "allowed" | "denied" | "unavailable";
+    reasonCode: string;
+    policyVersion: string;
+    routeRef?: string;
+  }
+
   export interface RuntimeCheckResultV1 {
     version: "v1";
     checkId: string;
@@ -336,8 +363,13 @@ Claude retains direct local provider operation when no client is configured.
   }
   ```
 
-  Reject a response that contains raw prompt, response, authorization, endpoint
-  secret, or unrecognized fields required for approval.
+  `routeRef` is an opaque, redacted owner reference and is present only for an
+  `allowed` route. Tests must validate request serialization, response
+  validation, owner-API fixture interoperability, rejected unknown fields, and
+  that a missing, malformed, denied, or unavailable decision never approves a
+  route. Reject a response that contains raw prompt, response, authorization,
+  endpoint secret, or fields required for approval that are not in this
+  contract.
 
 - [ ] **Step 4: Wire configuration without changing default behavior**
 
@@ -370,6 +402,7 @@ separate PRs; do not combine PT, Telos, Phylax, and Claude implementation into
 one review.
 
 **Files:**
+
 - Modify: `docs/v2/references/claude-desktop-llm-perpetua-oramasys-compatibility-2026-08-30.md`
 - Modify: each affected repository README with its owner-specific contract link.
 
@@ -382,11 +415,16 @@ one review.
   Run the PT vector command and the Claude vector command against the same
   committed Telos JSON SHA. Record the SHA and command output in each PR.
 
-- [ ] **Step 2: Compare decisions by vector ID**
+- [ ] **Step 2: Compare observed adapter decisions by vector ID**
 
-  Fail the gate if any identical mode/input tuple produces different
-  `expected_decision` values. Treat a missing vector as a failure, not a
-  skipped case.
+  Each runner emits a committed `decision-report-v1` containing its adapter
+  name, Telos vector-corpus SHA, and a map of `vector_id -> observed_decision`.
+  The gate loads both reports, requires their vector-ID sets to equal the
+  corpus ID set exactly, and compares PT's observed decision with Claude's for
+  every ID. It fails on a missing or extra ID, different corpus SHA, different
+  observed decisions, or either adapter's decision differing from the vector's
+  `expected_decision`. The fixture oracle alone is never differential
+  evidence.
 
 - [ ] **Step 3: Run repository-wide verification**
 
