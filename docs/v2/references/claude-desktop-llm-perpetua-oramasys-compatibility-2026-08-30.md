@@ -155,16 +155,44 @@ A live PT/Oramasys connection starts only after the semantic owner publishes a
 versioned API. The first interface must be read-only and fail closed:
 
 ```text
-ProviderRouteRequest  -> resolve provider/runtime route
-ProviderRouteDecision -> allowed | denied | unavailable, reason code, policy version
-RuntimeCheckRequest   -> evaluate named owner-defined check
-RuntimeCheckResult    -> pass | fail | unavailable, evidence references only
+ProviderRouteRequestV1  -> resolve a provider/runtime route
+ProviderRouteDecisionV1 -> allowed | denied | unavailable, reason code,
+                           policy version, and optional opaque route reference
+RuntimeCheckRequest    -> evaluate a named owner-defined check
+RuntimeCheckResultV1   -> pass | fail | unavailable, evidence references only
 ```
 
 No raw prompts, model responses, credentials, endpoint secrets, or unrestricted
 telemetry events cross this boundary. A missing service, incompatible version,
 or unrecognized decision code leaves Claude in its local fail-closed behavior;
 it never silently falls back to an unverified remote route.
+
+### Provider-Route Contract v1
+
+Provider routing is an Oramasys-owned contract. It is distinct from Telos
+endpoint-policy decisions and Phylax runtime-check results.
+
+```text
+ProviderRouteRequestV1
+  version: "v1"
+  request_id: non-empty caller correlation ID
+  provider_kind: ollama | lm_studio
+  endpoint_mode: provider_local | provider_trusted_lan | provider_public_remote
+  requested_policy_version: non-empty version
+
+ProviderRouteDecisionV1
+  version: "v1"
+  request_id: request correlation ID
+  outcome: allowed | denied | unavailable
+  reason_code: stable owner-defined code
+  policy_version: applied version
+  route_ref: optional opaque redacted reference; allowed outcome only
+```
+
+The decision contains no raw endpoint, credential, prompt, model response, or
+unrestricted telemetry payload. Clients reject missing required fields, unknown
+outcomes, mismatched request IDs, a `route_ref` on a non-allowed outcome, and
+fields whose presence is required to approve an otherwise malformed response.
 
 ## Delivery Sequence
 
@@ -185,6 +213,18 @@ it never silently falls back to an unverified remote route.
 
 Each step is independently reviewable. No dual writable authority is allowed.
 
+## Implementation Status
+
+This architecture and its delivery sequence are approved. Telos v1 and Phylax
+v1 are approved foundations, but their repositories, versioned contracts, and
+cross-language conformance evidence are not yet published. No live
+PT/Oramasys service integration is implemented or claimed.
+
+Task 6 may replace only this section after the relevant PRs have merged. Its
+replacement must identify the immutable PR URLs and commit SHAs, the Telos
+vector-corpus SHA, and the exact verification commands. It must retain any
+unimplemented work as pending rather than implying completion.
+
 ## Acceptance Gates
 
 - Telos v1 contains the mode matrix and deterministic vectors.
@@ -199,6 +239,5 @@ Each step is independently reviewable. No dual writable authority is allowed.
   read-only for the first slice, and fail closed.
 - No new generic `oramasys/contracts`, OTLP dependency, or duplicate
   runtime-check framework is introduced.
-
 
 [implementation-plan]: 2026-08-30-001-claude-pt-orama-compatibility-plan.md
