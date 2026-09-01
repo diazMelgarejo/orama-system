@@ -1,5 +1,5 @@
 # Content Insertion Decision Framework
-**Version:** 1.2 | **License:** Apache 2.0 | **Updated:** 2026-03-20
+**Version:** 1.3 | **License:** Apache 2.0 | **Updated:** 2026-03-20
 **Single source of truth:** `content_insertion_policy.json`
 
 ---
@@ -340,7 +340,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from insert_policy_tool import content_insertion_decider
 
 SYSTEM_PROMPT = """
-You are a content insertion agent. You follow the Content Insertion Decision Framework v1.2.
+You are a content insertion agent. You follow the Content Insertion Decision Framework v1.3.
 
 RULES:
 1. Before inserting any content, call content_insertion_decider with task + env details.
@@ -411,7 +411,7 @@ inserter_agent = Agent(
     ),
     backstory=(
         "You are a precise, rule-following agent trained on the Content Insertion "
-        "Decision Framework v1.2. You never assume visual confirmation is sufficient. "
+        "Decision Framework v1.3. You never assume visual confirmation is sufficient. "
         "You never use scripting when a simpler method is available."
     ),
     tools=[content_insertion_decider],
@@ -770,7 +770,7 @@ import { handleContentInsertion } from "./contentInsertionSkill";
 
 export const contentInsertionSkill = {
   id: "content_insertion",
-  name: "Content Insertion (Decision Framework v1.2)",
+  name: "Content Insertion (Decision Framework v1.3)",
   description: "Insert content into documents or UI fields using simplicity-first method selection.",
   handler: handleContentInsertion,
   policyRef: "../../core/content_insertion_policy.json",
