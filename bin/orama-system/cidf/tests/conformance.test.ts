@@ -1,7 +1,7 @@
 /**
  * tests/conformance.test.ts
  * ──────────────────────────
- * Conformance test suite for Content Insertion Decision Framework v1.2.
+ * Conformance test suite for Content Insertion Decision Framework v1.3.
  * Same 6 test vectors as the Python suite. Results must be identical.
  *
  * Run:
@@ -295,5 +295,79 @@ describe("Linter: catches all five anti-patterns", () => {
     const decision = decide(task, env);
     const errors   = lint(decision, task, env).filter(v => v.severity === "error");
     expect(errors).toHaveLength(0);
+  });
+});
+
+
+describe("Skill-to-core synchronization regressions", () => {
+  test("one-time static veto overrides other automation signals", () => {
+    const task = makeTask({
+      is_one_time: true,
+      content_static: true,
+      frequency_estimate: 5,
+      requires_transformation: true,
+    });
+    expect(automationJustified(task)).toBe(false);
+  });
+
+  test("no eligible method returns a blocked decision", () => {
+    const decision = decide(
+      makeTask(),
+      makeEnv({
+        field_accessible: false,
+        editor_visible: false,
+        paste_supported: false,
+        upload_available: false,
+      }),
+    );
+    expect(decision.blocked).toBe(true);
+    expect(decision.chosen_tool).toBeNull();
+    expect(decision.notification_reason).toBe(
+      "no_eligible_method_and_automation_gate_closed",
+    );
+  });
+
+  test("executor error uses the next verified fallback", async () => {
+    const decision = decide(
+      makeTask({
+        is_one_time: false,
+        content_static: false,
+        frequency_estimate: 5,
+        requires_transformation: true,
+      }),
+      makeEnv({ field_accessible: true }),
+    );
+    const verifier = new FakeVerifier("marker");
+    const result = await executeWithFallback(
+      decision,
+      {
+        direct_form_input: async () => {
+          throw new Error("boom");
+        },
+        scripting: async () => undefined,
+      },
+      verifier,
+      "content",
+      "marker",
+    );
+    expect(result.status).toBe("success");
+    expect(result.tool).toBe("scripting");
+    expect(result.attempts.map(attempt => attempt.result)).toEqual([
+      "execution_failed",
+      "success",
+    ]);
+  });
+
+  test("empty signature is rejected before execution", async () => {
+    const decision = decide(makeTask({ signature: "" }), makeEnv());
+    await expect(
+      executeWithFallback(
+        decision,
+        { direct_form_input: async () => undefined },
+        new FakeVerifier(""),
+        "content",
+        "",
+      ),
+    ).rejects.toThrow("non-empty signature");
   });
 });
