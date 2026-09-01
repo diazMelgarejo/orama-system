@@ -1,13 +1,11 @@
 /**
  * contentInsertionFramework.ts
  * ─────────────────────────────
- * Platform-agnostic TypeScript library for Content Insertion Decision Framework v1.2.
+ * Platform-agnostic TypeScript library for Content Insertion Decision Framework v1.3.
  * All TypeScript-based integrations (OpenClaw, etc.) import from here.
  *
  * No runtime dependencies required.
  */
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TaskType = "content_insertion" | "automation" | "data_processing";
 export type FormatRequirement = "plain" | "rich_text" | "strict_layout";
@@ -28,7 +26,9 @@ export interface Task {
   requires_external_integration: boolean;
   content_length_chars: number;
   format_requirements: FormatRequirement;
-  signature: string;               // substring used to verify insertion succeeded
+  signature: string;
+  estimated_setup_seconds?: number;
+  estimated_run_seconds?: number;
 }
 
 export interface Env {
@@ -36,17 +36,19 @@ export interface Env {
   editor_visible: boolean;
   paste_supported: boolean;
   upload_available: boolean;
-  max_safe_chars_form_input?: number;    // default 10000
-  max_safe_chars_typing?: number;        // default 5000
+  max_safe_chars_form_input?: number;
+  max_safe_chars_typing?: number;
   formatting_preserved_on_paste?: boolean;
 }
 
 export interface Decision {
-  chosen_tool: ToolName;
+  chosen_tool: ToolName | null;
   fallback_chain: ToolName[];
   reason_codes: string[];
   automation_justified: boolean;
   verification_required: true;
+  blocked?: boolean;
+  notification_reason?: string;
 }
 
 export interface Verifier {
@@ -56,18 +58,31 @@ export interface Verifier {
 
 export interface AttemptLog {
   tool: ToolName;
-  result: "success" | "verification_failed" | "no_executor_registered";
+  result:
+    | "success"
+    | "execution_failed"
+    | "verification_failed"
+    | "verification_error"
+    | "no_executor_registered";
+  detail?: string;
 }
 
 export interface ExecutionResult {
-  status: "success" | "failed";
+  status: "success" | "failed" | "blocked";
   tool?: ToolName;
   attempts: AttemptLog[];
+  notification_reason?: string;
 }
 
-// ─── Core logic ───────────────────────────────────────────────────────────────
-
 export function automationJustified(task: Task): boolean {
+  if (task.is_one_time && task.content_static) return false;
+  if (
+    task.estimated_setup_seconds !== undefined &&
+    task.estimated_run_seconds !== undefined &&
+    task.estimated_setup_seconds > task.estimated_run_seconds
+  ) {
+    return false;
+  }
   return (
     task.frequency_estimate >= 5 ||
     task.requires_conditional_logic ||
@@ -77,55 +92,68 @@ export function automationJustified(task: Task): boolean {
 }
 
 export function decide(task: Task, env: Env): Decision {
-  const maxForm   = env.max_safe_chars_form_input ?? 10_000;
+  const maxForm = env.max_safe_chars_form_input ?? 10_000;
   const maxTyping = env.max_safe_chars_typing ?? 5_000;
-
   const reasons: string[] = [];
   const tools: ToolName[] = [];
 
-  if (env.field_accessible && task.content_length_chars <= maxForm)   tools.push("direct_form_input");
-  if (env.editor_visible   && task.content_length_chars <= maxTyping) tools.push("direct_typing");
-  if (env.paste_supported)   tools.push("clipboard_paste");
-  if (env.upload_available)  tools.push("file_upload");
+  if (env.field_accessible && task.content_length_chars <= maxForm) {
+    tools.push("direct_form_input");
+  }
+  if (env.editor_visible && task.content_length_chars <= maxTyping) {
+    tools.push("direct_typing");
+  }
+  if (env.paste_supported) tools.push("clipboard_paste");
+  if (env.upload_available) tools.push("file_upload");
 
   const justified = automationJustified(task);
-  if (justified) tools.push("scripting");
-
-  if (tools.length === 0) {
-    tools.push(justified ? "scripting" : "direct_typing");
-    reasons.push("fallback_to_default_no_env_match");
+  if (tools.length > 0) {
+    if (justified) {
+      tools.push("scripting");
+      reasons.push("scripting_deferred_until_lower_ranks_exhausted");
+    }
+    const chosen = tools[0];
+    reasons.push("chosen_" + chosen);
+    reasons.push("automation_justified=" + justified);
+    return {
+      chosen_tool: chosen,
+      fallback_chain: tools.slice(1),
+      reason_codes: reasons,
+      automation_justified: justified,
+      verification_required: true,
+    };
   }
 
-  let chosen: ToolName   = tools[0];
-  let fallback: ToolName[] = tools.slice(1);
-
-  if (chosen === "scripting" && task.is_one_time && task.content_static) {
-    reasons.push("blocked_scripting_one_time_static");
-    chosen   = fallback[0] ?? "direct_typing";
-    fallback = fallback.slice(1);
+  if (justified) {
+    return {
+      chosen_tool: "scripting",
+      fallback_chain: [],
+      reason_codes: ["chosen_scripting", "automation_justified=True"],
+      automation_justified: true,
+      verification_required: true,
+    };
   }
 
-  reasons.push(`chosen_${chosen}`);
-  reasons.push(`automation_justified=${justified}`);
-
+  const notificationReason = "no_eligible_method_and_automation_gate_closed";
   return {
-    chosen_tool: chosen,
-    fallback_chain: fallback,
-    reason_codes: reasons,
-    automation_justified: justified,
+    chosen_tool: null,
+    fallback_chain: [],
+    reason_codes: [notificationReason, "automation_justified=False"],
+    automation_justified: false,
     verification_required: true,
+    blocked: true,
+    notification_reason: notificationReason,
   };
 }
 
-// ─── Verification ─────────────────────────────────────────────────────────────
-
 export async function verify(verifier: Verifier, signature: string): Promise<boolean> {
+  if (!signature) {
+    throw new Error("CIDF verification requires a non-empty signature.");
+  }
   await verifier.refreshOnceIfNeeded();
   const text = await verifier.extractText();
   return text.includes(signature);
 }
-
-// ─── Execution loop ───────────────────────────────────────────────────────────
 
 export async function executeWithFallback(
   decision: Decision,
@@ -134,6 +162,19 @@ export async function executeWithFallback(
   content: string,
   signature: string,
 ): Promise<ExecutionResult> {
+  if (decision.blocked || !decision.chosen_tool) {
+    return {
+      status: "blocked",
+      attempts: [],
+      notification_reason:
+        decision.notification_reason ||
+        "no_eligible_method_and_automation_gate_closed",
+    };
+  }
+  if (!signature) {
+    throw new Error("CIDF execution requires a non-empty signature.");
+  }
+
   const chain: ToolName[] = [decision.chosen_tool, ...decision.fallback_chain];
   const attempts: AttemptLog[] = [];
 
@@ -143,11 +184,36 @@ export async function executeWithFallback(
       attempts.push({ tool, result: "no_executor_registered" });
       continue;
     }
-    await executor(content);
-    const ok = await verify(verifier, signature);
-    if (ok) return { status: "success", tool, attempts };
+    try {
+      await executor(content);
+    } catch (error) {
+      attempts.push({
+        tool,
+        result: "execution_failed",
+        detail: error instanceof Error ? error.name : "UnknownError",
+      });
+      continue;
+    }
+    try {
+      const verified = await verify(verifier, signature);
+      if (verified) {
+        attempts.push({ tool, result: "success" });
+        return { status: "success", tool, attempts };
+      }
+    } catch (error) {
+      attempts.push({
+        tool,
+        result: "verification_error",
+        detail: error instanceof Error ? error.name : "UnknownError",
+      });
+      continue;
+    }
     attempts.push({ tool, result: "verification_failed" });
   }
 
-  return { status: "failed", attempts };
+  return {
+    status: "failed",
+    attempts,
+    notification_reason: "all_eligible_methods_exhausted",
+  };
 }
