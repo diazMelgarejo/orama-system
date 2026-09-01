@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD022 MD031 MD032 MD036 MD040 -->
 # Content Insertion Decision Framework
 **Version:** 1.3 | **License:** Apache 2.0 | **Updated:** 2026-03-20
 **Single source of truth:** `content_insertion_policy.json`
