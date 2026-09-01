@@ -1,34 +1,34 @@
 {
   "policy_id": "content_insertion_decision_framework",
-  "framework_version": "1.2",
+  "framework_version": "1.3",
   "created": "2026-03-20",
   "purpose": "Minimize over-engineering and maximize completion rate for content insertion tasks across all AI agent frameworks.",
   "core_principle": "Use the simplest tool that works. Complexity is a cost, not a feature.",
-
   "inputs": {
     "task": {
-      "task_type":                    "content_insertion | automation | data_processing",
-      "is_one_time":                  true,
-      "frequency_estimate":           1,
-      "content_static":               true,
-      "requires_transformation":      false,
-      "requires_conditional_logic":   false,
-      "requires_external_integration":false,
-      "content_length_chars":         1200,
-      "format_requirements":          "plain | rich_text | strict_layout",
-      "signature":                    "<agent_fill: substring/hash to verify insertion>"
+      "task_type": "content_insertion | automation | data_processing",
+      "is_one_time": true,
+      "frequency_estimate": 1,
+      "content_static": true,
+      "requires_transformation": false,
+      "requires_conditional_logic": false,
+      "requires_external_integration": false,
+      "content_length_chars": 1200,
+      "format_requirements": "plain | rich_text | strict_layout",
+      "signature": "<agent_fill: substring/hash to verify insertion>",
+      "estimated_setup_seconds": null,
+      "estimated_run_seconds": null
     },
     "environment": {
-      "field_accessible":                 true,
-      "editor_visible":                   true,
-      "paste_supported":                  true,
-      "upload_available":                 false,
-      "max_safe_chars_form_input":        10000,
-      "max_safe_chars_typing":            5000,
-      "formatting_preserved_on_paste":    true
+      "field_accessible": true,
+      "editor_visible": true,
+      "paste_supported": true,
+      "upload_available": false,
+      "max_safe_chars_form_input": 10000,
+      "max_safe_chars_typing": 5000,
+      "formatting_preserved_on_paste": true
     }
   },
-
   "mode_selection": {
     "default_mode": "simplicity_first",
     "automation_justified_when_any": [
@@ -39,10 +39,10 @@
     ],
     "scripting_blocked_when_any": [
       "task.is_one_time == true AND task.content_static == true",
-      "ANY simpler method is eligible"
+      "task.estimated_setup_seconds > task.estimated_run_seconds when both estimates are known",
+      "ANY simpler method is eligible for initial selection"
     ]
   },
-
   "tool_priority_order": [
     {
       "rank": 1,
@@ -96,7 +96,6 @@
       "skill_id": "skill_scripting"
     }
   ],
-
   "verification": {
     "must_verify": true,
     "visual_confirmation_insufficient": true,
@@ -111,7 +110,6 @@
     ],
     "on_all_methods_fail": "notify_user_with_failure_log"
   },
-
   "anti_patterns": [
     {
       "id": "premature_scripting",
@@ -142,45 +140,121 @@
       "fix": "Exhaust entire fallback_chain before escalating to scripting"
     }
   ],
-
   "test_vectors": [
     {
       "id": "TV-01",
       "description": "Static text, short, field accessible",
-      "task": {"is_one_time":true,"frequency_estimate":1,"content_static":true,"requires_transformation":false,"requires_conditional_logic":false,"requires_external_integration":false,"content_length_chars":2000},
-      "env":  {"field_accessible":true,"editor_visible":true,"paste_supported":true,"upload_available":false,"max_safe_chars_form_input":10000,"max_safe_chars_typing":5000},
+      "task": {
+        "is_one_time": true,
+        "frequency_estimate": 1,
+        "content_static": true,
+        "requires_transformation": false,
+        "requires_conditional_logic": false,
+        "requires_external_integration": false,
+        "content_length_chars": 2000
+      },
+      "env": {
+        "field_accessible": true,
+        "editor_visible": true,
+        "paste_supported": true,
+        "upload_available": false,
+        "max_safe_chars_form_input": 10000,
+        "max_safe_chars_typing": 5000
+      },
       "expected_chosen_tool": "direct_form_input",
       "expected_automation_justified": false
     },
     {
       "id": "TV-02",
       "description": "Static text, 12k chars, field accessible but over limit",
-      "task": {"is_one_time":true,"frequency_estimate":1,"content_static":true,"requires_transformation":false,"requires_conditional_logic":false,"requires_external_integration":false,"content_length_chars":12000},
-      "env":  {"field_accessible":true,"editor_visible":false,"paste_supported":true,"upload_available":true,"max_safe_chars_form_input":10000,"max_safe_chars_typing":5000},
+      "task": {
+        "is_one_time": true,
+        "frequency_estimate": 1,
+        "content_static": true,
+        "requires_transformation": false,
+        "requires_conditional_logic": false,
+        "requires_external_integration": false,
+        "content_length_chars": 12000
+      },
+      "env": {
+        "field_accessible": true,
+        "editor_visible": false,
+        "paste_supported": true,
+        "upload_available": true,
+        "max_safe_chars_form_input": 10000,
+        "max_safe_chars_typing": 5000
+      },
       "expected_chosen_tool": "clipboard_paste",
       "expected_automation_justified": false
     },
     {
       "id": "TV-03",
       "description": "Rich text, paste preserves formatting",
-      "task": {"is_one_time":true,"frequency_estimate":1,"content_static":true,"requires_transformation":false,"requires_conditional_logic":false,"requires_external_integration":false,"content_length_chars":3000,"format_requirements":"rich_text"},
-      "env":  {"field_accessible":false,"editor_visible":true,"paste_supported":true,"upload_available":false,"max_safe_chars_form_input":10000,"max_safe_chars_typing":5000,"formatting_preserved_on_paste":true},
+      "task": {
+        "is_one_time": true,
+        "frequency_estimate": 1,
+        "content_static": true,
+        "requires_transformation": false,
+        "requires_conditional_logic": false,
+        "requires_external_integration": false,
+        "content_length_chars": 3000,
+        "format_requirements": "rich_text"
+      },
+      "env": {
+        "field_accessible": false,
+        "editor_visible": true,
+        "paste_supported": true,
+        "upload_available": false,
+        "max_safe_chars_form_input": 10000,
+        "max_safe_chars_typing": 5000,
+        "formatting_preserved_on_paste": true
+      },
       "expected_chosen_tool": "direct_typing",
       "expected_automation_justified": false
     },
     {
       "id": "TV-04",
       "description": "Editor not visible, upload available",
-      "task": {"is_one_time":true,"frequency_estimate":1,"content_static":true,"requires_transformation":false,"requires_conditional_logic":false,"requires_external_integration":false,"content_length_chars":4000},
-      "env":  {"field_accessible":false,"editor_visible":false,"paste_supported":false,"upload_available":true,"max_safe_chars_form_input":10000,"max_safe_chars_typing":5000},
+      "task": {
+        "is_one_time": true,
+        "frequency_estimate": 1,
+        "content_static": true,
+        "requires_transformation": false,
+        "requires_conditional_logic": false,
+        "requires_external_integration": false,
+        "content_length_chars": 4000
+      },
+      "env": {
+        "field_accessible": false,
+        "editor_visible": false,
+        "paste_supported": false,
+        "upload_available": true,
+        "max_safe_chars_form_input": 10000,
+        "max_safe_chars_typing": 5000
+      },
       "expected_chosen_tool": "file_upload",
       "expected_automation_justified": false
     },
     {
       "id": "TV-05",
       "description": "Repeatable template, 20 uses, conditional logic",
-      "task": {"is_one_time":false,"frequency_estimate":20,"content_static":false,"requires_transformation":false,"requires_conditional_logic":true,"requires_external_integration":false,"content_length_chars":500},
-      "env":  {"field_accessible":true,"editor_visible":true,"paste_supported":true,"upload_available":true,"max_safe_chars_form_input":10000,"max_safe_chars_typing":5000},
+      "task": {
+        "is_one_time": false,
+        "frequency_estimate": 20,
+        "content_static": false,
+        "requires_transformation": false,
+        "requires_conditional_logic": true,
+        "requires_external_integration": false,
+        "content_length_chars": 500
+      },
+      "env": {
+        "field_accessible": true,
+        "editor_visible": true,
+        "paste_supported": true,
+        "upload_available": true,
+        "max_safe_chars_form_input": 10000,
+        "max_safe_chars_typing": 5000
+      },
       "expected_chosen_tool": "direct_form_input",
       "expected_automation_justified": true,
       "note": "Even when automation is justified, start at rank 1; scripting is fallback"
@@ -188,24 +262,69 @@
     {
       "id": "TV-06",
       "description": "UI lag: no visual update — verify and do not duplicate",
-      "task": {"is_one_time":true,"frequency_estimate":1,"content_static":true,"requires_transformation":false,"requires_conditional_logic":false,"requires_external_integration":false,"content_length_chars":500},
-      "env":  {"field_accessible":true,"editor_visible":true,"paste_supported":true,"upload_available":false,"max_safe_chars_form_input":10000,"max_safe_chars_typing":5000},
+      "task": {
+        "is_one_time": true,
+        "frequency_estimate": 1,
+        "content_static": true,
+        "requires_transformation": false,
+        "requires_conditional_logic": false,
+        "requires_external_integration": false,
+        "content_length_chars": 500
+      },
+      "env": {
+        "field_accessible": true,
+        "editor_visible": true,
+        "paste_supported": true,
+        "upload_available": false,
+        "max_safe_chars_form_input": 10000,
+        "max_safe_chars_typing": 5000
+      },
       "expected_chosen_tool": "direct_form_input",
       "expected_automation_justified": false,
       "verification_behavior": "refresh_once_then_extract_text_before_marking_complete"
     }
   ],
-
   "outputs": {
     "decision": {
-      "chosen_tool": "string",
-      "fallback_chain": ["string"],
-      "reason_codes": ["string"],
+      "chosen_tool": "string | null",
+      "fallback_chain": [
+        "string"
+      ],
+      "reason_codes": [
+        "string"
+      ],
       "automation_justified": "boolean",
-      "verification_required": true
+      "verification_required": true,
+      "blocked": "boolean",
+      "notification_reason": "string | null"
     },
     "logging": {
-      "fields": ["task_type","chosen_tool","attempts","failure_reasons","verification_result","elapsed_ms"]
+      "fields": [
+        "task_type",
+        "chosen_tool",
+        "attempts",
+        "failure_reasons",
+        "verification_result",
+        "elapsed_ms"
+      ]
     }
+  },
+  "no_eligible_method": {
+    "outcome": "return_blocked_decision_and_notify_user",
+    "scripting": "prohibited_when_automation_gate_is_closed"
+  },
+  "required_pre_execution_checks": {
+    "enforcement": "caller_attested",
+    "target_verification": [
+      "explicit_user_target_is_authoritative",
+      "destination_conventions_read",
+      "repo_target_current_before_write"
+    ]
+  },
+  "execution_guarantees": {
+    "verification_signature": "must be non-empty",
+    "executor_error": "log_and_continue_to_next_fallback",
+    "verifier_error": "log_and_continue_to_next_fallback",
+    "success_log": "include_the_successful_attempt"
   }
 }
