@@ -1,7 +1,7 @@
 """
 linter/policy_linter.py
 ────────────────────────
-Policy linter for Content Insertion Decision Framework v1.2.
+Policy linter for Content Insertion Decision Framework v1.3.
 
 Rejects any Decision that violates the framework's five lint rules.
 Use this in CI pipelines, agent pre-execution hooks, or unit tests.
@@ -75,6 +75,11 @@ def lint(decision: Decision, task: Task, env: Env) -> List[LintViolation]:
     Run all lint rules. Returns list of violations (empty = clean).
     """
     violations: List[LintViolation] = []
+
+    # A blocked decision is the required no-method outcome: notify the user
+    # without attempting a fictitious tool or treating that stop as a lint error.
+    if decision.blocked or decision.chosen_tool is None:
+        return violations
 
     # LINT-001: Scripting chosen while simpler methods are available
     if decision.chosen_tool == "scripting" and _any_simple_method_eligible(task, env):
