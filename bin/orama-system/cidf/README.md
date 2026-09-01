@@ -1,3 +1,4 @@
+<!-- markdownlint-disable MD022 MD036 MD040 -->
 # Content Insertion Decision Framework (CIDF) v1.3
 **Runnable implementation package — Python + TypeScript**
 
