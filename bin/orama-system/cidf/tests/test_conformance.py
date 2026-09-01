@@ -1,7 +1,7 @@
 """
 tests/test_conformance.py
 ──────────────────────────
-Conformance test suite for Content Insertion Decision Framework v1.2.
+Conformance test suite for Content Insertion Decision Framework v1.3.
 
 Same 6 test vectors as the TypeScript suite.
 Both suites must produce identical results.
@@ -323,7 +323,7 @@ class TestPolicyJSON:
         path = os.path.join(os.path.dirname(__file__), "../core/content_insertion_policy.json")
         with open(path) as f:
             policy = json.load(f)
-        assert policy["framework_version"] == "1.2"
+        assert policy["framework_version"] == "1.3"
         assert "tool_priority_order" in policy
         assert "verification" in policy
         assert "anti_patterns" in policy
@@ -364,3 +364,66 @@ class TestPolicyJSON:
                 f"[{tv['id']}] {tv['description']}: "
                 f"expected {tv['expected_chosen_tool']!r}, got {result.chosen_tool!r}"
             )
+
+
+# ─── Skill-to-core synchronization regressions ─────────────────────────────────
+
+def test_one_time_static_veto_overrides_other_automation_signals():
+    task = _task(
+        is_one_time=True,
+        content_static=True,
+        frequency_estimate=5,
+        requires_transformation=True,
+    )
+    assert automation_justified(task) is False
+
+
+def test_no_eligible_method_returns_blocked_decision():
+    task = _task()
+    env = _env(
+        field_accessible=False,
+        editor_visible=False,
+        paste_supported=False,
+        upload_available=False,
+    )
+    decision = decide(task, env)
+    assert decision.blocked is True
+    assert decision.chosen_tool is None
+    assert decision.notification_reason == "no_eligible_method_and_automation_gate_closed"
+
+
+def test_executor_error_uses_next_verified_fallback():
+    task = _task(
+        is_one_time=False,
+        content_static=False,
+        frequency_estimate=5,
+        requires_transformation=True,
+    )
+    decision = decide(task, _env(field_accessible=True))
+    verifier = FakeVerifier(content_store="marker")
+    result = execute_with_fallback(
+        decision=decision,
+        executors={
+            "direct_form_input": lambda _content: (_ for _ in ()).throw(RuntimeError("boom")),
+            "scripting": lambda _content: None,
+        },
+        verifier=verifier,
+        content="content",
+        signature="marker",
+    )
+    assert result.status == "success"
+    assert result.tool == "scripting"
+    assert [attempt.result for attempt in result.attempts] == ["execution_failed", "success"]
+
+
+def test_empty_signature_is_rejected_before_execution():
+    task = _task(signature="")
+    decision = decide(task, _env(field_accessible=True))
+    with pytest.raises(ValueError, match="non-empty signature"):
+        execute_with_fallback(
+            decision=decision,
+            executors={"direct_form_input": lambda _content: None},
+            verifier=FakeVerifier(content_store=""),
+            content="content",
+            signature="",
+        )
