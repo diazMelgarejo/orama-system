@@ -1,7 +1,7 @@
 /**
  * linter/policyLinter.ts
  * ───────────────────────
- * Policy linter for Content Insertion Decision Framework v1.2.
+ * Policy linter for Content Insertion Decision Framework v1.3.
  * TypeScript port — identical lint rules to Python version.
  *
  * Usage:
@@ -55,11 +55,17 @@ function anySimpleMethodEligible(task: Task, env: Env): boolean {
 
 export function lint(decision: Decision, task: Task, env: Env): LintViolation[] {
   const violations: LintViolation[] = [];
+
+  // A blocked decision is the required no-method outcome: notify the user
+  // without attempting a fictitious tool or treating that stop as a lint error.
+  if (decision.blocked || !decision.chosen_tool) return violations;
+
+  const chosen = decision.chosen_tool;
   const minC = minEligibleComplexity(task, env);
-  const chosenC = TOOL_COMPLEXITY[decision.chosen_tool] ?? 99;
+  const chosenC = TOOL_COMPLEXITY[chosen];
 
   // LINT-001: Scripting while simpler methods are eligible
-  if (decision.chosen_tool === "scripting" && anySimpleMethodEligible(task, env)) {
+  if (chosen === "scripting" && anySimpleMethodEligible(task, env)) {
     violations.push({
       rule_id: "LINT-001",
       message: `Scripting chosen but simpler method eligible (min eligible complexity: ${minC}). Iterate from rank 1 first.`,
@@ -80,13 +86,13 @@ export function lint(decision: Decision, task: Task, env: Env): LintViolation[] 
   if (chosenC > minC) {
     violations.push({
       rule_id: "LINT-003",
-      message: `Complexity bias: chosen '${decision.chosen_tool}' (complexity=${chosenC}) but a simpler method is eligible (min complexity=${minC}).`,
+      message: `Complexity bias: chosen '${chosen}' (complexity=${chosenC}) but a simpler method is eligible (min complexity=${minC}).`,
       severity: "error",
     });
   }
 
   // LINT-004: Scripting for one-time static task
-  if (decision.chosen_tool === "scripting" && task.is_one_time && task.content_static) {
+  if (chosen === "scripting" && task.is_one_time && task.content_static) {
     violations.push({
       rule_id: "LINT-004",
       message: "Scripting gate is CLOSED: task is one-time and content is static. Use the simplest eligible method instead.",
@@ -95,10 +101,10 @@ export function lint(decision: Decision, task: Task, env: Env): LintViolation[] 
   }
 
   // LINT-005: No fallback defined
-  if (decision.fallback_chain.length === 0 && decision.chosen_tool !== "scripting") {
+  if (decision.fallback_chain.length === 0 && chosen !== "scripting") {
     violations.push({
       rule_id: "LINT-005",
-      message: `No fallback_chain defined for chosen tool '${decision.chosen_tool}'. Add at least one fallback.`,
+      message: `No fallback_chain defined for chosen tool '${chosen}'. Add at least one fallback.`,
       severity: "warning",
     });
   }
