@@ -1,13 +1,13 @@
 ---
 name: cidf
 description: Content Insertion Decision Framework v1.2 — sub-skill. Provides the executable decide(), lint_strict(), and execute_with_fallback() API for content insertion decisions. Activates whenever content must be inserted, written, pasted, uploaded, or scripted.
-version: 1.2.0
+version: 1.3.0
 license: Apache 2.0
 compatibility: claude-code, cowork, open, codex, clawdbot
 allowed-tools: bash, file-operations
 ---
 
-# CIDF Sub-Skill — Content Insertion Decision Framework v1.2
+# CIDF Sub-Skill — Content Insertion Decision Framework v1.3
 
 **Sub-skill of `bin/orama-system/SKILL.md`. Load on demand for any content insertion task.**
 
@@ -278,7 +278,7 @@ bin/orama-system/cidf/
 │   ├── policy_linter.py                ← LINT-001–005 guard
 │   └── policyLinter.ts
 └── tests/
-    ├── test_conformance.py             ← 30 pytest tests (all must pass)
+    ├── test_conformance.py             ← 34 pytest tests (all must pass)
     └── conformance.test.ts
 ```
 
@@ -288,10 +288,10 @@ bin/orama-system/cidf/
 
 | File | Must say |
 | ------ | --------- |
-| This SKILL.md `version:` | `1.2.0` |
-| `cidf/FRAMEWORK.md` header | `Version: 1.2` |
+| This SKILL.md `version:` | `1.3.0` |
+| `cidf/FRAMEWORK.md` header | `Version: 1.3` |
 | `cidf/core/content_insertion_policy.json` → `framework_version` | `"1.2"` |
-| `cidf/tests/test_conformance.py` assertion | `== "1.2"` |
+| `cidf/tests/test_conformance.py` assertion | `== "1.3"` |
 
 **Never update the policy without bumping all four in the same commit.**
 
