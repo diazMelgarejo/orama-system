@@ -1,5 +1,11 @@
 # Feature Extraction: LangGraph State Reducers & Parallelism
 
+> **Reconciliation status (2026-08-28):** typed reducer pattern -- **ADOPT, targeted at R3**
+> (explicit per-field reducers + join policy required before generic parallel fan-in is promoted) --
+> not current `PerpetuaState.merge()` behavior, which is a single whole-delta apply using
+> `model_copy(update=deepcopy(delta), deep=True)`. See
+> [`RECONCILIATION-2026-08-27.md`](RECONCILIATION-2026-08-27.md).
+>
 > **Goal:** Repurpose the "Reducer" pattern for conflict-free state updates during parallel node execution.
 
 ## 1. The "V1 Hack" Baseline
@@ -14,42 +20,54 @@ for stage in STAGE_SEQUENCE:
     state.stage_outputs[stage.value] = output
 ```
 
-**Problem**: No support for parallel agent work (e.g., 5 parallel Executors). If two agents write to the same key, the last one wins, leading to data loss.
+**Problem**: No support for parallel agent work (e.g., 5 parallel Executors). If two agents write to
+the same key, the last one wins, leading to data loss.
 
 ## 2. LangGraph "Magic" (Technical Analysis)
 
 LangGraph uses **Reducers** defined in the state schema:
 
 - **\`Annotated[list, operator.add]\`**: Appends all updates into a single list.
-- **Custom Reducers**: Functions like \`merge_dicts(old, new)\` that can handle deep-merging or deduplication.
+- **Custom Reducers**: Functions like \`merge_dicts(old, new)\` that can handle deep-merging or
+  deduplication.
 
-## 3. oramasys v2: The "Reducer" Implementation
+## 3. oramasys v2: R3 reducer target
 
-Our \`perpetua_core/state.py\` (\`PerpetuaState\`) will implement a native \`merge()\` method that acts as a global reducer.
-
-### Key Logic (Planned for state.py)
+Current `PerpetuaState.merge()` is deliberately a sequential whole-delta transition. It isolates
+both the prior state and caller-owned delta values, but it does not define per-field reducer or
+parallel join semantics:
 
 ```python
-class PerpetuaState(BaseModel):
-    messages: list[dict] = Field(default_factory=list)
-    scratchpad: dict = Field(default_factory=dict)
+from copy import deepcopy
 
+class PerpetuaState(BaseModel):
     def merge(self, delta: dict) -> "PerpetuaState":
-        # Accumulation Pattern (Mined from LangGraph)
-        new_messages = self.messages + delta.get("messages", [])
-        
-        # Merge Pattern (Custom Logic)
-        new_scratchpad = {**self.scratchpad, **delta.get("scratchpad", {})}
-        
-        return self.model_copy(update={
-            "messages": new_messages,
-            "scratchpad": new_scratchpad,
-            "nodes_visited": [*self.nodes_visited, delta.get("current_node")]
-        })
+        return self.model_copy(update=deepcopy(delta), deep=True)
 ```
+
+R3 may add explicit reducer behavior such as accumulation and custom conflict resolution, but only
+through declared per-field reducer and join policy. Do not retrofit those semantics into ordinary
+sequential `merge()` implicitly.
+
+A future reducer-aware sketch may look like:
+
+```python
+new_messages = self.messages + delta.get("messages", [])
+new_scratchpad = {**self.scratchpad, **delta.get("scratchpad", {})}
+```
+
+Those operations are examples of **planned R3 reducer choices**, not current automatic behavior.
 
 ## 4. Integration with Primitives
 
-- **Parallel Fan-Out**: The \`MiniGraph\` engine can now spawn multiple \`await\` calls for nodes in a "Superstep." Their returned deltas are then sequentially piped through \`state.merge()\`.
-- **Audit Trace**: Because every merge appends to \`nodes_visited\`, we have a deterministic proof of which parallel agent finished first.
-- **Safety**: Prevents the "Last Write Wins" race condition without requiring a heavy lock mechanism.
+- **Parallel Fan-Out — current:** whole deltas applied through `PerpetuaState.merge()` do not make
+  conflicting parallel writes deterministic. If parallel branches are merged without R3 reducers
+  and joins, conflicting fields remain completion/merge-order dependent and may overwrite one
+  another.
+- **Audit Trace — current:** `nodes_visited` records the traversal order produced by the scheduler;
+  it is not a deterministic proof of parallel branch completion order. R3 must define explicit
+  provenance if branch-completion evidence is required.
+- **Safety — current:** copy isolation prevents aliasing between state generations, but it does not
+  prevent last-write-wins conflicts between competing whole-delta updates.
+- **R3 target:** explicit typed reducers plus join policy provide deterministic fan-in semantics,
+  conflict handling, and branch provenance independent of completion timing.

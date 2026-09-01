@@ -1,0 +1,128 @@
+# Pattern Library Reconciliation — 2026-08-27
+
+**Canonical parent:**
+[`../../58-minigraph-observer-pattern-library-reconciliation.md`](
+../../58-minigraph-observer-pattern-library-reconciliation.md)
+
+This file classifies the existing v2 feature-extraction library against the
+final MiniGraph architecture. The source pattern docs remain evidence; this
+matrix states which adaptations are current, revised, deferred, reframed, or
+intentionally excluded.
+
+## Classification rule
+
+A wording correction MUST NOT be treated as feature deletion.
+
+When historical notes use absolute language such as "perfect", "always", or
+"fully reversible", reconciliation scopes the guarantee to the system boundary
+we can actually engineer and verify. Resumability remains an explicit design
+target: save enough session/graph state and compatibility identity to resume
+predictably from a declared checkpoint boundary. This does not imply time
+travel, universal reversibility of the external world, or magical exactly-once
+side effects.
+
+| Source / pattern | Status | Canonical interpretation |
+| --- | --- | --- |
+| LangGraph thread/checkpoint identity | ADOPT | `session_id` plus future versioned checkpoint lineage. |
+| LangGraph atomic successful-boundary checkpoints | ADOPT / ADAPT | Persist explicit successful boundaries; complete durable resume also needs compatibility and effect policy. |
+| Durable resumability | ADOPT R4 TARGET | Build deterministic resume from declared saved state/checkpoint boundaries. |
+| LangGraph "perfect resumption" wording | REJECT WORDING ONLY | Keep the capability; scope "perfect" to rigorously planned boundary-defined resume, not total reversibility or time travel. |
+| Durable deterministic resume | ADOPT TARGET | Session-state saving + lineage + replay policy + effect idempotency/dedupe. |
+| LangGraph typed reducers | ADOPT R3 | Explicit per-field reducers + join policy before generic parallel fan-in. |
+| Pydantic AI signature/schema extraction | ADOPT | Reuse `inspect.signature` + Pydantic v2 model/schema generation. |
+| Pydantic AI docstring metadata | ADOPT | Tool description ergonomics without adopting the framework runtime. |
+| Pydantic AI runtime dependency | REJECT | Keep `perpetua-core` tool layer dependency-minimal. |
+| Karpathy March of Nines | ADOPT | Deterministic harness + verification/evaluator doctrine. |
+| Sentinel as kernel mechanic | MOVE UP | Verification topology/policy belongs in `orama-system`; MiniGraph executes ordinary nodes. |
+| Swarm handoff | ADOPT | Conditional edge / explicit transfer state. |
+| CrewAI manager hierarchy | ADOPT | Planning/delegation/aggregation as GraphSpec/subgraph topology. |
+| AutoGen nested chats | ADAPT | Bounded subgraphs; recursion remains constrained by graph/run budgets. |
+| Foundry golden-dataset evaluation | MOVE UP | `orama-system` evaluator/verification layer. |
+| Foundry isolation | ADOPT PRINCIPLE | Tool/effect sandboxing policy, not engine scheduling. |
+| Foundry dynamic routing | MOVE UP | GraphSpec/runtime/hardware policy produces realized edge decisions. |
+| Historical GraphPlugin callbacks | RESTORE / EVOLVE | Preserve multicast push requirement through `GraphObservation` fan-out. |
+| `asteps()` as sole observer solution | REJECT | Sanitized pull stream is not multicast and lacks state/delta for durability consumers. |
+| `GraphEvent` | ADOPT | Sanitized control-plane projection for streaming/API/UI. |
+| `GraphObservation` | ADOPT | Rich trusted in-process record for checkpointer/tracer/audit/plugin dispatch. |
+
+## Correcting the state-reducer entry
+
+The older catalogue says the LangGraph reducer adaptation is already:
+
+```text
+PerpetuaState.merge()
+  accumulates messages
+  deep-merges scratchpad
+  appends nodes_visited
+```
+
+That is not the canonical current sequential contract.
+
+Current behavior is intentionally simpler:
+
+```text
+PerpetuaState.merge(delta)
+  -> Pydantic model_copy(update=delta, deep=True)
+```
+
+`nodes_visited` accumulation is scheduler behavior. Generic reducer semantics
+belong to R3 and MUST be explicit before parallel fan-in is promoted.
+
+## Durability interpretation
+
+The LangGraph checkpoint extraction remains useful. A successful-boundary
+checkpoint is a persistence primitive and a necessary building block, not the
+whole durability contract.
+
+R4 explicitly targets **durable deterministic resume**. The goal is to plan and
+specify resumability rigorously:
+
+```text
+saved session / graph state
++ checkpoint lineage
++ graph/version identity
++ state schema identity
++ explicit replay boundary
++ effect identity + idempotency / dedupe
+= deterministic resume from a declared boundary
+```
+
+This is intentionally not a claim of total reversibility. A graph can restore
+its own saved execution state; it cannot literally rewind time or erase an
+external side effect that already happened. External effects are reconciled by
+idempotency, deduplication, compensation, or explicit human/policy handling.
+
+Therefore the existing `SqliteCheckpointer` is a valid generic plugin primitive
+on the path to R4. It is not yet the complete durable-runtime contract, but the
+feature itself is retained and deliberately targeted.
+
+## Multi-agent interpretation
+
+The existing Swarm/CrewAI/AutoGen extraction survives as topology patterns:
+
+```text
+handoff        -> conditional edge
+manager        -> planning/delegation/aggregation subgraph
+nested chat    -> bounded subgraph
+parallel work  -> R3 reducers + explicit joins before generic promotion
+```
+
+This keeps framework-specific orchestration concepts out of the MiniGraph
+kernel while preserving their useful control semantics.
+
+## Evaluation interpretation
+
+Karpathy and Foundry converge on the same upper-layer principle:
+
+```text
+mutation candidate
+      |
+      v
+independent verifier / evaluator
+      |
+      v
+accept / refine / reject
+```
+
+The component mutating a prompt, strategy, node, or graph MUST NOT define or
+change the acceptance metric during the same experiment.
