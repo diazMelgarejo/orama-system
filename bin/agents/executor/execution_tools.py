@@ -94,4 +94,5 @@ def cidf_insert(
         "fallbacks_used": len(result.attempts),
         "cidf_linted":  True,
         "cidf_verified": result.status == "success",
+        "notification_reason": result.notification_reason,
     }
