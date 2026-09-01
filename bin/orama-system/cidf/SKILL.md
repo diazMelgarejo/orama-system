@@ -1,6 +1,6 @@
 ---
 name: cidf
-description: Content Insertion Decision Framework v1.2 — sub-skill. Provides the executable decide(), lint_strict(), and execute_with_fallback() API for content insertion decisions. Activates whenever content must be inserted, written, pasted, uploaded, or scripted.
+description: Content Insertion Decision Framework v1.3 — sub-skill. Provides the executable decide(), lint_strict(), and execute_with_fallback() API for content insertion decisions. Activates whenever content must be inserted, written, pasted, uploaded, or scripted.
 version: 1.3.0
 license: Apache 2.0
 compatibility: claude-code, cowork, open, codex, clawdbot
@@ -10,6 +10,30 @@ allowed-tools: bash, file-operations
 # CIDF Sub-Skill — Content Insertion Decision Framework v1.3
 
 **Sub-skill of `bin/orama-system/SKILL.md`. Load on demand for any content insertion task.**
+
+---
+
+## Purpose
+
+Give every agent one deterministic, testable decision procedure for inserting
+content — instead of ad hoc judgment calls about whether to type, paste,
+upload, or script. `decide()` always starts at the lowest-complexity eligible
+method (rank 1) and only appends scripting as a last-resort fallback when the
+automation gate is open; `lint_strict()` catches policy violations (premature
+scripting, skipped verification, complexity bias) before execution;
+`execute_with_fallback()` runs the chosen chain and enforces that every
+success is confirmed by a non-empty verification signature, never a visual
+check.
+
+## When to Use
+
+- Any time content must be inserted, written, pasted, uploaded, or scripted
+  by an agent, in any language integration (Python or TypeScript core)
+- Before choosing between a form field, direct typing, clipboard paste, file
+  upload, or a scripted/automated insertion path
+- When reviewing or writing a new integration wrapper (like
+  `bin/agents/executor/execution_tools.py`'s `cidf_insert()`) that must stay
+  aligned with the policy's current `framework_version`
 
 ---
 
@@ -267,7 +291,7 @@ machine; the repo's `repo_hygiene.py` is the portable committed backstop.
 ```text
 bin/orama-system/cidf/
 ├── SKILL.md                          ← this file (sub-skill)
-├── FRAMEWORK.md                      ← canonical v1.2 spec
+├── FRAMEWORK.md                      ← canonical v1.3 spec
 ├── references/
 │   └── integrative-editing-examples.md  ← good/bad corpus (PR #222 PR bodies; PR #12 path-scoped replay §9)
 ├── core/
@@ -290,7 +314,7 @@ bin/orama-system/cidf/
 | ------ | --------- |
 | This SKILL.md `version:` | `1.3.0` |
 | `cidf/FRAMEWORK.md` header | `Version: 1.3` |
-| `cidf/core/content_insertion_policy.json` → `framework_version` | `"1.2"` |
+| `cidf/core/content_insertion_policy.json` → `framework_version` | `"1.3"` |
 | `cidf/tests/test_conformance.py` assertion | `== "1.3"` |
 
 **Never update the policy without bumping all four in the same commit.**
@@ -300,5 +324,35 @@ bin/orama-system/cidf/
 ## Run Conformance Tests
 
 ```bash
-pytest bin/orama-system/cidf/tests/test_conformance.py -v   # must be 30 passed, 0 failed
+pytest bin/orama-system/cidf/tests/test_conformance.py -v   # must be 34 passed, 0 failed
 ```
+
+---
+
+## Boundaries
+
+### Always Do
+
+- Start `decide()` at rank 1 and let scripting fall out only as a
+  last-resort, never the initial choice, when ranks 1–4 are eligible.
+- Run `lint_strict()` before execution and treat a `LintError` as a hard stop.
+- Verify success via `execute_with_fallback()`'s non-empty-signature check —
+  never accept a visual/UI-appears-updated confirmation as ground truth.
+- Bump all four version-alignment surfaces (SKILL.md, FRAMEWORK.md, the
+  policy JSON, and the test assertion) together in the same commit.
+
+### Ask First
+
+- Changing `automation_justified()`'s gate conditions (the open/closed
+  thresholds) — this changes when every downstream caller may script.
+- Adding a new rank between existing tool_priority_order entries.
+
+### Never Do
+
+- Choose `scripting` as the initial method when any rank 1–4 tool is
+  eligible — that is the `premature_scripting` anti-pattern this framework
+  exists to prevent.
+- Treat an empty or missing verification signature as a valid success,
+  including on a blocked decision path.
+- Let the Python core, the TypeScript port, and the policy JSON drift out
+  of behavioral sync — they must implement one identical contract.

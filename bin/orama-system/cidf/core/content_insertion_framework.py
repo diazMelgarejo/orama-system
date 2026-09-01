@@ -192,6 +192,9 @@ def execute_with_fallback(
     or verifier errors move to the next eligible fallback; they never abort the
     chain or create a false success.
     """
+    if not signature:
+        raise ValueError("CIDF execution requires a non-empty signature.")
+
     if decision.blocked or decision.chosen_tool is None:
         return ExecutionResult(
             status="blocked",
@@ -200,9 +203,6 @@ def execute_with_fallback(
                 or "no_eligible_method_and_automation_gate_closed"
             ),
         )
-
-    if not signature:
-        raise ValueError("CIDF execution requires a non-empty signature.")
 
     chain = [decision.chosen_tool] + decision.fallback_chain
     attempts: List[AttemptLog] = []

@@ -399,7 +399,9 @@ def test_executor_error_uses_next_verified_fallback():
         frequency_estimate=5,
         requires_transformation=True,
     )
-    decision = decide(task, _env(field_accessible=True))
+    decision = decide(
+        task, _env(field_accessible=True, editor_visible=False, paste_supported=False)
+    )
     verifier = FakeVerifier(content_store="marker")
     result = execute_with_fallback(
         decision=decision,
@@ -427,3 +429,42 @@ def test_empty_signature_is_rejected_before_execution():
             content="content",
             signature="",
         )
+
+
+def test_empty_signature_is_rejected_even_on_a_blocked_decision():
+    task = _task(signature="")
+    decision = decide(
+        task,
+        _env(field_accessible=False, editor_visible=False, paste_supported=False),
+    )
+    assert decision.blocked is True
+    with pytest.raises(ValueError, match="non-empty signature"):
+        execute_with_fallback(
+            decision=decision,
+            executors={},
+            verifier=FakeVerifier(content_store=""),
+            content="content",
+            signature="",
+        )
+
+
+def test_setup_exceeding_run_closes_gate_even_with_other_justifying_signals():
+    task = _task(
+        is_one_time=False,
+        content_static=False,
+        frequency_estimate=5,
+        estimated_setup_seconds=10,
+        estimated_run_seconds=1,
+    )
+    assert automation_justified(task) is False
+
+
+def test_null_run_estimate_is_treated_as_unknown_not_coerced_to_zero():
+    task = _task(
+        is_one_time=False,
+        content_static=False,
+        frequency_estimate=5,
+        estimated_setup_seconds=10,
+        estimated_run_seconds=None,
+    )
+    assert automation_justified(task) is True

@@ -27,8 +27,8 @@ export interface Task {
   content_length_chars: number;
   format_requirements: FormatRequirement;
   signature: string;
-  estimated_setup_seconds?: number;
-  estimated_run_seconds?: number;
+  estimated_setup_seconds?: number | null;
+  estimated_run_seconds?: number | null;
 }
 
 export interface Env {
@@ -77,8 +77,8 @@ export interface ExecutionResult {
 export function automationJustified(task: Task): boolean {
   if (task.is_one_time && task.content_static) return false;
   if (
-    task.estimated_setup_seconds !== undefined &&
-    task.estimated_run_seconds !== undefined &&
+    task.estimated_setup_seconds != null &&
+    task.estimated_run_seconds != null &&
     task.estimated_setup_seconds > task.estimated_run_seconds
   ) {
     return false;
@@ -162,6 +162,9 @@ export async function executeWithFallback(
   content: string,
   signature: string,
 ): Promise<ExecutionResult> {
+  if (!signature) {
+    throw new Error("CIDF execution requires a non-empty signature.");
+  }
   if (decision.blocked || !decision.chosen_tool) {
     return {
       status: "blocked",
@@ -170,9 +173,6 @@ export async function executeWithFallback(
         decision.notification_reason ||
         "no_eligible_method_and_automation_gate_closed",
     };
-  }
-  if (!signature) {
-    throw new Error("CIDF execution requires a non-empty signature.");
   }
 
   const chain: ToolName[] = [decision.chosen_tool, ...decision.fallback_chain];

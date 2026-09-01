@@ -335,7 +335,11 @@ describe("Skill-to-core synchronization regressions", () => {
         frequency_estimate: 5,
         requires_transformation: true,
       }),
-      makeEnv({ field_accessible: true }),
+      makeEnv({
+        field_accessible: true,
+        editor_visible: false,
+        paste_supported: false,
+      }),
     );
     const verifier = new FakeVerifier("marker");
     const result = await executeWithFallback(
@@ -369,5 +373,41 @@ describe("Skill-to-core synchronization regressions", () => {
         "",
       ),
     ).rejects.toThrow("non-empty signature");
+  });
+
+  test("empty signature is rejected even on a blocked decision", async () => {
+    const decision = decide(
+      makeTask({ signature: "" }),
+      makeEnv({ field_accessible: false, editor_visible: false, paste_supported: false }),
+    );
+    expect(decision.blocked).toBe(true);
+    await expect(
+      executeWithFallback(decision, {}, new FakeVerifier(""), "content", ""),
+    ).rejects.toThrow("non-empty signature");
+  });
+
+  test("a null run estimate is treated as unknown, not coerced to zero", () => {
+    // estimated_setup_seconds=10 > (estimated_run_seconds ?? 0)=0 would
+    // incorrectly close the gate if null were coerced instead of treated
+    // as unknown -- regression test for that exact bug.
+    const task = makeTask({
+      is_one_time: false,
+      content_static: false,
+      frequency_estimate: 5,
+      estimated_setup_seconds: 10,
+      estimated_run_seconds: null,
+    });
+    expect(automationJustified(task)).toBe(true);
+  });
+
+  test("setup exceeding run closes the gate even with another justifying signal", () => {
+    const task = makeTask({
+      is_one_time: false,
+      content_static: false,
+      frequency_estimate: 5,
+      estimated_setup_seconds: 10,
+      estimated_run_seconds: 1,
+    });
+    expect(automationJustified(task)).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 
 
 # ---------------------------------------------------------------------------
-# CIDF Integration — Content Insertion Decision Framework v1.2
+# CIDF Integration — Content Insertion Decision Framework v1.3
 # All content writes MUST go through this wrapper
 # ---------------------------------------------------------------------------
 
@@ -63,6 +63,8 @@ def cidf_insert(
         content_length_chars=len(content),
         format_requirements=task_meta.get("format_requirements", "plain"),
         signature=signature,
+        estimated_setup_seconds=task_meta.get("estimated_setup_seconds"),
+        estimated_run_seconds=task_meta.get("estimated_run_seconds"),
     )
 
     env = Env(
@@ -89,7 +91,7 @@ def cidf_insert(
 
     return {
         "status":       result.status,
-        "cidf_version": "1.2",
+        "cidf_version": "1.3",
         "chosen_tool":  result.tool,
         "fallbacks_used": len(result.attempts),
         "cidf_linted":  True,

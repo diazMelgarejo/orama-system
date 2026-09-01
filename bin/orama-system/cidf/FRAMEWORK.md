@@ -50,7 +50,8 @@ OPEN  (any one true):   frequency ≥ 5
                         requires_external_integration
 
 CLOSED (any one true):  is_one_time AND content_static
-                        ANY rank 1–4 method is eligible
+                        estimated_setup_seconds > estimated_run_seconds (when both known)
+                        ANY rank 1–4 method is eligible for initial selection
 ```
 
 When the gate is closed and all ranks 1–4 fail: **notify the user — do not script.**
