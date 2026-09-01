@@ -1,7 +1,7 @@
 """
 content_insertion_framework.py
 ──────────────────────────────
-Platform-agnostic core library for the Content Insertion Decision Framework v1.2.
+Platform-agnostic core library for the Content Insertion Decision Framework v1.3.
 All other Python-based integrations (LangChain, CrewAI) import from here.
 
 No external dependencies required.
@@ -9,7 +9,7 @@ No external dependencies required.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Dict, List, Protocol
+from typing import Callable, Dict, List, Optional, Protocol
 
 
 # ─── Data models ──────────────────────────────────────────────────────────────
@@ -17,16 +17,18 @@ from typing import Callable, Dict, List, Protocol
 @dataclass
 class Task:
     """Describes what needs to be done."""
-    task_type: str                         # "content_insertion" | "automation" | "data_processing"
+    task_type: str
     is_one_time: bool
-    frequency_estimate: int                # total estimated runs
-    content_static: bool                   # True = no transformation or logic needed
+    frequency_estimate: int
+    content_static: bool
     requires_transformation: bool
     requires_conditional_logic: bool
     requires_external_integration: bool
     content_length_chars: int
-    format_requirements: str               # "plain" | "rich_text" | "strict_layout"
-    signature: str                         # substring used to verify insertion
+    format_requirements: str
+    signature: str
+    estimated_setup_seconds: Optional[float] = None
+    estimated_run_seconds: Optional[float] = None
 
 
 @dataclass
@@ -43,34 +45,49 @@ class Env:
 
 @dataclass
 class Decision:
-    """Output of decide(). Agent must execute chosen_tool then fallback_chain."""
-    chosen_tool: str
+    """Output of decide(). A blocked decision means notify the user; do not execute."""
+    chosen_tool: Optional[str]
     fallback_chain: List[str]
     reason_codes: List[str]
     automation_justified: bool
     verification_required: bool = True
+    blocked: bool = False
+    notification_reason: Optional[str] = None
 
 
 @dataclass
 class AttemptLog:
     tool: str
-    result: str   # "success" | "verification_failed" | "no_executor_registered"
+    result: str
+    detail: str = ""
 
 
 @dataclass
 class ExecutionResult:
-    status: str   # "success" | "failed"
-    tool: str = ""
+    status: str
+    tool: Optional[str] = None
     attempts: List[AttemptLog] = field(default_factory=list)
+    notification_reason: Optional[str] = None
 
 
 # ─── Core logic ───────────────────────────────────────────────────────────────
 
 def automation_justified(task: Task) -> bool:
     """
-    Scripting ROI gate. Returns True only when at least one justification applies.
-    Must return False for one-time static tasks regardless of other flags.
+    Return whether scripting may be considered after ranks 1–4 are exhausted.
+
+    The gate fails closed for one-time static work and when known setup time
+    exceeds one execution. Otherwise, any repeat/logic/transformation/external
+    integration signal justifies considering scripting as the final fallback.
     """
+    if task.is_one_time and task.content_static:
+        return False
+    if (
+        task.estimated_setup_seconds is not None
+        and task.estimated_run_seconds is not None
+        and task.estimated_setup_seconds > task.estimated_run_seconds
+    ):
+        return False
     return (
         task.frequency_estimate >= 5
         or task.requires_conditional_logic
@@ -82,8 +99,11 @@ def automation_justified(task: Task) -> bool:
 def decide(task: Task, env: Env) -> Decision:
     """
     Select the lowest-complexity eligible method.
-    Enforces the priority order: form_input → typing → paste → upload → scripting.
-    Scripting is added only when the automation gate is open AND it is the last resort.
+
+    Scripting never displaces ranks 1–4. It is appended only as a last-resort
+    fallback when the automation gate is open. If no method is eligible and the
+    gate is closed, return an explicit blocked decision so the caller can notify
+    the user instead of inventing an unavailable tool.
     """
     reasons: List[str] = []
     tools: List[str] = []
@@ -98,30 +118,39 @@ def decide(task: Task, env: Env) -> Decision:
         tools.append("file_upload")
 
     justified = automation_justified(task)
+    if tools:
+        if justified:
+            tools.append("scripting")
+            reasons.append("scripting_deferred_until_lower_ranks_exhausted")
+        chosen = tools[0]
+        fallback = tools[1:]
+        reasons.append(f"chosen_{chosen}")
+        reasons.append(f"automation_justified={justified}")
+        return Decision(
+            chosen_tool=chosen,
+            fallback_chain=fallback,
+            reason_codes=reasons,
+            automation_justified=justified,
+        )
+
     if justified:
-        tools.append("scripting")
+        reasons.extend(["chosen_scripting", "automation_justified=True"])
+        return Decision(
+            chosen_tool="scripting",
+            fallback_chain=[],
+            reason_codes=reasons,
+            automation_justified=True,
+        )
 
-    if not tools:
-        tools = ["scripting"] if justified else ["direct_typing"]
-        reasons.append("fallback_to_default_no_env_match")
-
-    chosen = tools[0]
-    fallback = tools[1:]
-
-    # Hard block: never script a one-time static task
-    if chosen == "scripting" and task.is_one_time and task.content_static:
-        reasons.append("blocked_scripting_one_time_static")
-        chosen = fallback[0] if fallback else "direct_typing"
-        fallback = fallback[1:] if fallback else []
-
-    reasons.append(f"chosen_{chosen}")
-    reasons.append(f"automation_justified={justified}")
-
+    notification_reason = "no_eligible_method_and_automation_gate_closed"
+    reasons.extend([notification_reason, "automation_justified=False"])
     return Decision(
-        chosen_tool=chosen,
-        fallback_chain=fallback,
+        chosen_tool=None,
+        fallback_chain=[],
         reason_codes=reasons,
-        automation_justified=justified,
+        automation_justified=False,
+        blocked=True,
+        notification_reason=notification_reason,
     )
 
 
@@ -138,9 +167,11 @@ class Verifier(Protocol):
 
 def verify(verifier: Verifier, signature: str) -> bool:
     """
-    Programmatic ground truth. Returns True only when signature
+    Programmatic ground truth. Returns True only when a non-empty signature
     is confirmed present in the extracted text.
     """
+    if not signature:
+        raise ValueError("CIDF verification requires a non-empty signature.")
     verifier.refresh_once_if_needed()
     return signature in verifier.extract_text()
 
@@ -155,9 +186,24 @@ def execute_with_fallback(
     signature: str,
 ) -> ExecutionResult:
     """
-    Execute chosen_tool, then each fallback in order.
-    Verify after each attempt. Return first success or full failure log.
+    Execute the chosen method, then each fallback in order.
+
+    Every execution, verification, and registration outcome is logged. Executor
+    or verifier errors move to the next eligible fallback; they never abort the
+    chain or create a false success.
     """
+    if decision.blocked or decision.chosen_tool is None:
+        return ExecutionResult(
+            status="blocked",
+            notification_reason=(
+                decision.notification_reason
+                or "no_eligible_method_and_automation_gate_closed"
+            ),
+        )
+
+    if not signature:
+        raise ValueError("CIDF execution requires a non-empty signature.")
+
     chain = [decision.chosen_tool] + decision.fallback_chain
     attempts: List[AttemptLog] = []
 
@@ -166,9 +212,35 @@ def execute_with_fallback(
         if executor is None:
             attempts.append(AttemptLog(tool=tool, result="no_executor_registered"))
             continue
-        executor(content)
-        if verify(verifier, signature):
+        try:
+            executor(content)
+        except Exception as error:
+            attempts.append(
+                AttemptLog(
+                    tool=tool,
+                    result="execution_failed",
+                    detail=type(error).__name__,
+                )
+            )
+            continue
+        try:
+            verified = verify(verifier, signature)
+        except Exception as error:
+            attempts.append(
+                AttemptLog(
+                    tool=tool,
+                    result="verification_error",
+                    detail=type(error).__name__,
+                )
+            )
+            continue
+        if verified:
+            attempts.append(AttemptLog(tool=tool, result="success"))
             return ExecutionResult(status="success", tool=tool, attempts=attempts)
         attempts.append(AttemptLog(tool=tool, result="verification_failed"))
 
-    return ExecutionResult(status="failed", attempts=attempts)
+    return ExecutionResult(
+        status="failed",
+        attempts=attempts,
+        notification_reason="all_eligible_methods_exhausted",
+    )
