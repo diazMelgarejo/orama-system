@@ -39,9 +39,9 @@
     ],
     "scripting_blocked_when_any": [
       "task.is_one_time == true AND task.content_static == true",
-      "task.estimated_setup_seconds > task.estimated_run_seconds when both estimates are known",
-      "ANY simpler method is eligible for initial selection"
-    ]
+      "task.estimated_setup_seconds > task.estimated_run_seconds when both estimates are known"
+    ],
+    "selection_order_invariant": "A rank 1-4 method, when eligible, always wins initial selection over scripting regardless of automation gate state -- scripting never displaces a simpler method as the chosen tool. When the gate is open and a rank 1-4 method is eligible, scripting is appended to the end of the fallback chain as a last resort, not the initial choice. When no rank 1-4 method is eligible and the gate is open, scripting becomes the chosen tool directly. Verified against content_insertion_framework.py's decide(): rank-eligibility and the automation gate are independent axes, not a single combined condition."
   },
   "tool_priority_order": [
     {
@@ -91,8 +91,9 @@
       ],
       "block_when": [
         "task.is_one_time == true AND task.content_static == true",
-        "ANY of ranks 1-4 is eligible"
+        "task.estimated_setup_seconds > task.estimated_run_seconds when both estimates are known"
       ],
+      "selection_order_note": "Never the initial choice when a rank 1-4 method is eligible -- appended to the fallback chain last, tried only after lower ranks fail. Becomes the chosen tool directly only when no rank 1-4 method is eligible. See mode_selection.selection_order_invariant.",
       "skill_id": "skill_scripting"
     }
   ],

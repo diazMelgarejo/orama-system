@@ -94,29 +94,30 @@ export function automationJustified(task: Task): boolean {
 export function decide(task: Task, env: Env): Decision {
   const maxForm = env.max_safe_chars_form_input ?? 10_000;
   const maxTyping = env.max_safe_chars_typing ?? 5_000;
-  const reasons: string[] = [];
-  const tools: ToolName[] = [];
 
-  if (env.field_accessible && task.content_length_chars <= maxForm) {
-    tools.push("direct_form_input");
-  }
-  if (env.editor_visible && task.content_length_chars <= maxTyping) {
-    tools.push("direct_typing");
-  }
-  if (env.paste_supported) tools.push("clipboard_paste");
-  if (env.upload_available) tools.push("file_upload");
+  const eligibleRanked: ToolName[] = [
+    ...(env.field_accessible && task.content_length_chars <= maxForm
+      ? (["direct_form_input"] as const)
+      : []),
+    ...(env.editor_visible && task.content_length_chars <= maxTyping
+      ? (["direct_typing"] as const)
+      : []),
+    ...(env.paste_supported ? (["clipboard_paste"] as const) : []),
+    ...(env.upload_available ? (["file_upload"] as const) : []),
+  ];
 
   const justified = automationJustified(task);
-  if (tools.length > 0) {
-    if (justified) {
-      tools.push("scripting");
-      reasons.push("scripting_deferred_until_lower_ranks_exhausted");
-    }
-    const chosen = tools[0];
-    reasons.push("chosen_" + chosen);
-    reasons.push("automation_justified=" + justified);
+  if (eligibleRanked.length > 0) {
+    const tools: ToolName[] = justified
+      ? [...eligibleRanked, "scripting"]
+      : eligibleRanked;
+    const reasons: string[] = [
+      ...(justified ? ["scripting_deferred_until_lower_ranks_exhausted"] : []),
+      "chosen_" + tools[0],
+      "automation_justified=" + justified,
+    ];
     return {
-      chosen_tool: chosen,
+      chosen_tool: tools[0],
       fallback_chain: tools.slice(1),
       reason_codes: reasons,
       automation_justified: justified,
@@ -176,39 +177,45 @@ export async function executeWithFallback(
   }
 
   const chain: ToolName[] = [decision.chosen_tool, ...decision.fallback_chain];
-  const attempts: AttemptLog[] = [];
+  let attempts: AttemptLog[] = [];
 
   for (const tool of chain) {
     const executor = executors[tool];
     if (!executor) {
-      attempts.push({ tool, result: "no_executor_registered" });
+      attempts = [...attempts, { tool, result: "no_executor_registered" }];
       continue;
     }
     try {
       await executor(content);
     } catch (error) {
-      attempts.push({
-        tool,
-        result: "execution_failed",
-        detail: error instanceof Error ? error.name : "UnknownError",
-      });
+      attempts = [
+        ...attempts,
+        {
+          tool,
+          result: "execution_failed",
+          detail: error instanceof Error ? error.name : "UnknownError",
+        },
+      ];
       continue;
     }
     try {
       const verified = await verify(verifier, signature);
       if (verified) {
-        attempts.push({ tool, result: "success" });
+        attempts = [...attempts, { tool, result: "success" }];
         return { status: "success", tool, attempts };
       }
     } catch (error) {
-      attempts.push({
-        tool,
-        result: "verification_error",
-        detail: error instanceof Error ? error.name : "UnknownError",
-      });
+      attempts = [
+        ...attempts,
+        {
+          tool,
+          result: "verification_error",
+          detail: error instanceof Error ? error.name : "UnknownError",
+        },
+      ];
       continue;
     }
-    attempts.push({ tool, result: "verification_failed" });
+    attempts = [...attempts, { tool, result: "verification_failed" }];
   }
 
   return {

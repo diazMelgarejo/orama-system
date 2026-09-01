@@ -368,7 +368,8 @@ class TestPolicyJSON:
 
 # ─── Skill-to-core synchronization regressions ─────────────────────────────────
 
-def test_one_time_static_veto_overrides_other_automation_signals():
+@pytest.mark.unit
+def test_one_time_static_veto_overrides_other_automation_signals() -> None:
     task = _task(
         is_one_time=True,
         content_static=True,
@@ -378,7 +379,8 @@ def test_one_time_static_veto_overrides_other_automation_signals():
     assert automation_justified(task) is False
 
 
-def test_no_eligible_method_returns_blocked_decision():
+@pytest.mark.unit
+def test_no_eligible_method_returns_blocked_decision() -> None:
     task = _task()
     env = _env(
         field_accessible=False,
@@ -392,7 +394,8 @@ def test_no_eligible_method_returns_blocked_decision():
     assert decision.notification_reason == "no_eligible_method_and_automation_gate_closed"
 
 
-def test_executor_error_uses_next_verified_fallback():
+@pytest.mark.unit
+def test_executor_error_uses_next_verified_fallback() -> None:
     task = _task(
         is_one_time=False,
         content_static=False,
@@ -418,7 +421,8 @@ def test_executor_error_uses_next_verified_fallback():
     assert [attempt.result for attempt in result.attempts] == ["execution_failed", "success"]
 
 
-def test_empty_signature_is_rejected_before_execution():
+@pytest.mark.unit
+def test_empty_signature_is_rejected_before_execution() -> None:
     task = _task(signature="")
     decision = decide(task, _env(field_accessible=True))
     with pytest.raises(ValueError, match="non-empty signature"):
@@ -431,7 +435,8 @@ def test_empty_signature_is_rejected_before_execution():
         )
 
 
-def test_empty_signature_is_rejected_even_on_a_blocked_decision():
+@pytest.mark.unit
+def test_empty_signature_is_rejected_even_on_a_blocked_decision() -> None:
     task = _task(signature="")
     decision = decide(
         task,
@@ -448,7 +453,8 @@ def test_empty_signature_is_rejected_even_on_a_blocked_decision():
         )
 
 
-def test_setup_exceeding_run_closes_gate_even_with_other_justifying_signals():
+@pytest.mark.unit
+def test_setup_exceeding_run_closes_gate_even_with_other_justifying_signals() -> None:
     task = _task(
         is_one_time=False,
         content_static=False,
@@ -459,7 +465,8 @@ def test_setup_exceeding_run_closes_gate_even_with_other_justifying_signals():
     assert automation_justified(task) is False
 
 
-def test_null_run_estimate_is_treated_as_unknown_not_coerced_to_zero():
+@pytest.mark.unit
+def test_null_run_estimate_is_treated_as_unknown_not_coerced_to_zero() -> None:
     task = _task(
         is_one_time=False,
         content_static=False,

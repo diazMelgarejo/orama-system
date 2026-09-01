@@ -40,12 +40,18 @@ def cidf_insert(
                       paste_supported, upload_available
         task_meta:    Dict with is_one_time, frequency_estimate, content_static,
                       requires_transformation, requires_conditional_logic,
-                      requires_external_integration
+                      requires_external_integration, and optionally
+                      estimated_setup_seconds, estimated_run_seconds (feed the
+                      automation gate's setup-vs-run comparison when both are known)
         executor_fn:  Dict of {method_name: callable} for each rank
         verifier:     Object implementing refresh_once_if_needed() + extract_text()
 
     Returns:
-        dict with status, cidf_version, chosen_tool, cidf_linted, cidf_verified
+        dict with status, cidf_version, chosen_tool, fallbacks_used,
+        cidf_linted, cidf_verified, notification_reason (set when status is
+        "blocked" -- no eligible method and the automation gate is closed --
+        or "failed" -- every eligible method was tried and none succeeded;
+        None when status is "success")
     """
     if not CIDF_AVAILABLE:
         raise RuntimeError(

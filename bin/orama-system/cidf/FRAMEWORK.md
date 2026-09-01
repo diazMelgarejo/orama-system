@@ -51,8 +51,16 @@ OPEN  (any one true):   frequency ≥ 5
 
 CLOSED (any one true):  is_one_time AND content_static
                         estimated_setup_seconds > estimated_run_seconds (when both known)
-                        ANY rank 1–4 method is eligible for initial selection
 ```
+
+**Selection order invariant** (separate from the gate above, confirmed against
+`content_insertion_framework.py`'s `decide()`): a rank 1–4 method, when
+eligible, always wins initial selection over scripting regardless of gate
+state — scripting never displaces a simpler method as the chosen tool. When
+the gate is open and a rank 1–4 method is eligible, scripting is appended to
+the end of the fallback chain as a last resort, not the initial choice. When
+no rank 1–4 method is eligible and the gate is open, scripting becomes the
+chosen tool directly.
 
 When the gate is closed and all ranks 1–4 fail: **notify the user — do not script.**
 
