@@ -155,7 +155,35 @@ This document provides extended examples and recovery procedures for each AFRP f
 - Curriculum: CIDF integrative-editing-examples §9;
   [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md).
 
+**Example (2026-09-02, real — "flaky test" diagnosed from a proxy, never traced):**
+- Proxy: a Windows CI Go test (`TestEnsureBackgroundServeReplacesIncompatibleDaemonAfterStartupWait`)
+  passed on one commit and failed on a later commit, with zero Go-code diff between
+  the two — only unrelated `.md` frontmatter fixes existed in the diff.
+- Agent's proxy conclusion: "no code diff between the two runs, and it passed once ⇒
+  flaky/timing-sensitive test, unrelated to this PR" — then told the user to click
+  "Re-run failed jobs."
+- What the proxy never checked: the *content* of the failure (`serve_background_test.go:1552`,
+  a bare `assert.True` with no diagnostic message), the actual watcher-cleanup code path
+  the test exercises, or whether the failure was deterministic under the real trigger
+  condition rather than merely absent from the agent's own two-commit sample.
+- Real root cause (found by tracing the actual code, not the diff): Windows cleanup
+  called the native fsnotify `Remove` on a watch already invalidated by a prior
+  remove/rename event, hanging the watcher shutdown — a genuine, deterministic
+  deadlock reachable whenever that event ordering occurs, not a timing coin-flip.
+  Confirmed reproducible and fixed with a regression test that fails without the fix
+  and passes with it (commits `19d0e0cf`, `737f7a5c` on
+  `fix/windows-invalidated-watch-cleanup`).
+- Why "re-run it" would never have worked: a deterministic deadlock triggered by a
+  specific event ordering doesn't self-resolve by retrying — the user correctly
+  identified this in the moment ("even if we hit Re-run 100x, it will not fix itself").
+- The absence of a diff **in the agent's own recent commits** is not evidence a bug
+  doesn't exist; the bug can predate the agent's diff entirely, or the sample size (n=1
+  pass, n=1 fail) is not enough to distinguish "flaky" from "deterministic but rarely
+  exercised by CI's actual scheduling/ordering."
+
 **Recovery:** Stop. Run the **Intent-Verification Gate** (`SKILL.md`): clarify intent via AskUserQuestion FIRST when there's interpretation risk or before any negative conclusion; replace the proxy with the method that truly answers the question; trust the user's domain signal over a first-pass check.
+
+For a test failure specifically: open the actual assertion and the code path it exercises before concluding "flaky" — a passing/failing sample of one commit each is not sufficient evidence of non-determinism, and "flaky, just retry" must never be the conclusion reached without having read what the test actually asserts and why.
 
 ---
 
