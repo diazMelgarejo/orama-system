@@ -20,6 +20,25 @@ except ImportError:
     CIDF_AVAILABLE = False
 
 
+def _validate_timing_estimate(task_meta: "dict[str, Any]", key: str) -> "float | None":
+    """Reject a non-numeric timing estimate with a clear boundary error.
+
+    decide()/automation_justified() compare these values with `>` once both
+    are known. A caller-supplied string would either raise an opaque
+    TypeError deep inside the framework core, or -- for two strings --
+    silently produce a lexicographic (not numeric) comparison. Fail at the
+    boundary instead, with a message that names the actual problem.
+    """
+    value = task_meta.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(
+            f"task_meta[{key!r}] must be a number or None, got {type(value).__name__}: {value!r}"
+        )
+    return float(value)
+
+
 def cidf_insert(
     content: str,
     signature: str,
@@ -70,8 +89,8 @@ def cidf_insert(
         content_length_chars=len(content),
         format_requirements=task_meta.get("format_requirements", "plain"),
         signature=signature,
-        estimated_setup_seconds=task_meta.get("estimated_setup_seconds"),
-        estimated_run_seconds=task_meta.get("estimated_run_seconds"),
+        estimated_setup_seconds=_validate_timing_estimate(task_meta, "estimated_setup_seconds"),
+        estimated_run_seconds=_validate_timing_estimate(task_meta, "estimated_run_seconds"),
     )
 
     env = Env(
