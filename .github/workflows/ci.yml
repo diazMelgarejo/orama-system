@@ -93,13 +93,20 @@ jobs:
       - name: Run pytest
         run: |
           pytest -q tests/
-          # Separate invocation, not combined with tests/ above: running
-          # both roots in one pytest command triggers a genuine pytest
-          # internal collection bug -- AttributeError: 'Package' object
-          # has no attribute 'obj' -- confirmed via a real failed CI run
-          # (test (3.11), 2026-09-02), not reproduced when either root
-          # is collected alone.
-          pytest -q bin/orama-system/cidf/tests/
+          # -p no:asyncio, not a version bump: the real CI failure (confirmed
+          # via the actual failed job's log, run 33576369375/100081247152)
+          # is pytest-asyncio 0.23.3's pytest_collectstart hook crashing with
+          # AttributeError: 'Package' object has no attribute 'obj' -- a
+          # known pytest 8.x+/pytest-asyncio 0.23.x incompatibility, reached
+          # here because bin/orama-system/cidf/tests/'s __init__.py-based
+          # package chain creates a Package collector node the plugin hook
+          # doesn't handle; tests/ has no such chain and never hits it.
+          # Zero tests in this suite are async (confirmed: grep "async def"
+          # bin/orama-system/cidf/tests/test_conformance.py -> 0 matches),
+          # so disabling the plugin for just this invocation has no
+          # functional cost and avoids touching the global pytest-asyncio
+          # pin other tests may depend on.
+          pytest -q bin/orama-system/cidf/tests/ -p no:asyncio
       
       - name: Run package install test
         run: |
