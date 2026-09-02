@@ -1,12 +1,13 @@
 
 
 # ---------------------------------------------------------------------------
-# CIDF Integration — Content Insertion Decision Framework v1.2
+# CIDF Integration — Content Insertion Decision Framework v1.3
 # All content writes MUST go through this wrapper
 # ---------------------------------------------------------------------------
 
 import sys
 from pathlib import Path
+from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "orama-system"))
 
 try:
@@ -19,14 +20,33 @@ except ImportError:
     CIDF_AVAILABLE = False
 
 
+def _validate_timing_estimate(task_meta: "dict[str, Any]", key: str) -> "float | None":
+    """Reject a non-numeric timing estimate with a clear boundary error.
+
+    decide()/automation_justified() compare these values with `>` once both
+    are known. A caller-supplied string would either raise an opaque
+    TypeError deep inside the framework core, or -- for two strings --
+    silently produce a lexicographic (not numeric) comparison. Fail at the
+    boundary instead, with a message that names the actual problem.
+    """
+    value = task_meta.get(key)
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(
+            f"task_meta[{key!r}] must be a number or None, got {type(value).__name__}: {value!r}"
+        )
+    return float(value)
+
+
 def cidf_insert(
     content: str,
     signature: str,
-    env_flags: dict,
-    task_meta: dict,
-    executor_fn: "dict[str, callable]",
+    env_flags: "dict[str, Any]",
+    task_meta: "dict[str, Any]",
+    executor_fn: "dict[str, Callable[[str], None]]",
     verifier: "Verifier",
-) -> dict:
+) -> "dict[str, Any]":
     """
     CIDF-compliant content insertion wrapper for executor agents.
 
@@ -40,12 +60,18 @@ def cidf_insert(
                       paste_supported, upload_available
         task_meta:    Dict with is_one_time, frequency_estimate, content_static,
                       requires_transformation, requires_conditional_logic,
-                      requires_external_integration
+                      requires_external_integration, and optionally
+                      estimated_setup_seconds, estimated_run_seconds (feed the
+                      automation gate's setup-vs-run comparison when both are known)
         executor_fn:  Dict of {method_name: callable} for each rank
         verifier:     Object implementing refresh_once_if_needed() + extract_text()
 
     Returns:
-        dict with status, cidf_version, chosen_tool, cidf_linted, cidf_verified
+        dict with status, cidf_version, chosen_tool, fallbacks_used,
+        cidf_linted, cidf_verified, notification_reason (set when status is
+        "blocked" -- no eligible method and the automation gate is closed --
+        or "failed" -- every eligible method was tried and none succeeded;
+        None when status is "success")
     """
     if not CIDF_AVAILABLE:
         raise RuntimeError(
@@ -63,6 +89,8 @@ def cidf_insert(
         content_length_chars=len(content),
         format_requirements=task_meta.get("format_requirements", "plain"),
         signature=signature,
+        estimated_setup_seconds=_validate_timing_estimate(task_meta, "estimated_setup_seconds"),
+        estimated_run_seconds=_validate_timing_estimate(task_meta, "estimated_run_seconds"),
     )
 
     env = Env(
@@ -89,9 +117,10 @@ def cidf_insert(
 
     return {
         "status":       result.status,
-        "cidf_version": "1.2",
+        "cidf_version": "1.3",
         "chosen_tool":  result.tool,
         "fallbacks_used": len(result.attempts),
         "cidf_linted":  True,
         "cidf_verified": result.status == "success",
+        "notification_reason": result.notification_reason,
     }

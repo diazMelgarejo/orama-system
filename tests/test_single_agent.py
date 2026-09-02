@@ -138,7 +138,7 @@ class TestCIDF:
     def test_policy_json_is_valid(self):
         import json
         data = json.loads((self.CIDF / "core" / "content_insertion_policy.json").read_text(encoding="utf-8"))
-        assert data["framework_version"] == "1.2"
+        assert data["framework_version"] == "1.3"
         assert len(data["tool_priority_order"]) == 5
         assert len(data["test_vectors"]) == 6
         assert data["verification"]["must_verify"] is True

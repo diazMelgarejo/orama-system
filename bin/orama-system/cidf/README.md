@@ -1,4 +1,5 @@
-# Content Insertion Decision Framework (CIDF) v1.2
+<!-- markdownlint-disable MD022 MD036 MD040 -->
+# Content Insertion Decision Framework (CIDF) v1.3
 **Runnable implementation package — Python + TypeScript**
 
 The CIDF is the executable core of the ultrathink Content Insertion principle:
@@ -108,4 +109,4 @@ LangGraph, AutoGPT, and any MCP-compatible framework.
 
 ---
 
-*CIDF v1.2 | Apache 2.0 | Part of orama-system*
+*CIDF v1.3 | Apache 2.0 | Part of orama-system*

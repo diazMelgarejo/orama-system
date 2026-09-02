@@ -93,6 +93,20 @@ jobs:
       - name: Run pytest
         run: |
           pytest -q tests/
+          # -p no:asyncio, not a version bump: the real CI failure (confirmed
+          # via the actual failed job's log, run 33576369375/100081247152)
+          # is pytest-asyncio 0.23.3's pytest_collectstart hook crashing with
+          # AttributeError: 'Package' object has no attribute 'obj' -- a
+          # known pytest 8.x+/pytest-asyncio 0.23.x incompatibility, reached
+          # here because bin/orama-system/cidf/tests/'s __init__.py-based
+          # package chain creates a Package collector node the plugin hook
+          # doesn't handle; tests/ has no such chain and never hits it.
+          # Zero tests in this suite are async (confirmed: grep "async def"
+          # bin/orama-system/cidf/tests/test_conformance.py -> 0 matches),
+          # so disabling the plugin for just this invocation has no
+          # functional cost and avoids touching the global pytest-asyncio
+          # pin other tests may depend on.
+          pytest -q bin/orama-system/cidf/tests/ -p no:asyncio
       
       - name: Run package install test
         run: |
@@ -129,6 +143,46 @@ jobs:
           python -c "from bin.shared.oramasys_core import Stage, TaskState; print('✓ oramasys_core imports OK')"
           python -c "import bin, pathlib, sys; sys.path.insert(0, str(pathlib.Path(bin.__file__).parent / 'orama-system')); from cidf.core.content_insertion_framework import decide; print('✓ CIDF imports OK')"
 
+      - name: Type-check CIDF (mypy --strict)
+        run: |
+          pip install -q ".[test]"
+          # Two invocations, not one: bin/orama-system/cidf's own files (core,
+          # linter) import each other via a bare "core.X" path (relying on
+          # policy_linter.py's own runtime sys.path.insert()), while
+          # execution_tools.py imports the same package via the full
+          # "cidf.core.X" path. Combining both roots into one mypy run makes
+          # it discover content_insertion_framework.py under two different
+          # module names and fail with a real ambiguity error -- verified
+          # directly, not a config oversight. --follow-imports=silent on the
+          # second group avoids re-checking internals group 1 already fully
+          # verifies, rather than re-triggering the same ambiguity.
+          MYPYPATH="bin/orama-system/cidf" python -m mypy \
+            bin/orama-system/cidf/core/content_insertion_framework.py \
+            bin/orama-system/cidf/linter/policy_linter.py
+          MYPYPATH="bin/orama-system" python -m mypy \
+            bin/agents/executor/execution_tools.py \
+            --follow-imports=silent
+
+  cidf-typecheck-ts:
+    name: Type-check CIDF (tsc --strict)
+    needs: [git-hygiene]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install TypeScript
+        run: npm install -g typescript@6
+
+      - name: tsc --noEmit against the committed CIDF tsconfig
+        run: |
+          cd bin/orama-system/cidf
+          tsc --noEmit --project tsconfig.json
+
   web-test:
     name: Operator console (Vitest)
     needs: [git-hygiene]
@@ -153,7 +207,7 @@ jobs:
           pnpm test
 
   build:
-    needs: [test, lint, web-test]
+    needs: [test, lint, web-test, cidf-typecheck-ts]
     runs-on: ubuntu-latest
     permissions:
       contents: read

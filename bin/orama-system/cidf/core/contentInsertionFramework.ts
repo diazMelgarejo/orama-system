@@ -1,13 +1,11 @@
 /**
  * contentInsertionFramework.ts
  * ─────────────────────────────
- * Platform-agnostic TypeScript library for Content Insertion Decision Framework v1.2.
+ * Platform-agnostic TypeScript library for Content Insertion Decision Framework v1.3.
  * All TypeScript-based integrations (OpenClaw, etc.) import from here.
  *
  * No runtime dependencies required.
  */
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 export type TaskType = "content_insertion" | "automation" | "data_processing";
 export type FormatRequirement = "plain" | "rich_text" | "strict_layout";
@@ -28,7 +26,9 @@ export interface Task {
   requires_external_integration: boolean;
   content_length_chars: number;
   format_requirements: FormatRequirement;
-  signature: string;               // substring used to verify insertion succeeded
+  signature: string;
+  estimated_setup_seconds?: number | null;
+  estimated_run_seconds?: number | null;
 }
 
 export interface Env {
@@ -36,17 +36,19 @@ export interface Env {
   editor_visible: boolean;
   paste_supported: boolean;
   upload_available: boolean;
-  max_safe_chars_form_input?: number;    // default 10000
-  max_safe_chars_typing?: number;        // default 5000
+  max_safe_chars_form_input?: number;
+  max_safe_chars_typing?: number;
   formatting_preserved_on_paste?: boolean;
 }
 
 export interface Decision {
-  chosen_tool: ToolName;
+  chosen_tool: ToolName | null;
   fallback_chain: ToolName[];
   reason_codes: string[];
   automation_justified: boolean;
   verification_required: true;
+  blocked?: boolean;
+  notification_reason?: string;
 }
 
 export interface Verifier {
@@ -56,18 +58,31 @@ export interface Verifier {
 
 export interface AttemptLog {
   tool: ToolName;
-  result: "success" | "verification_failed" | "no_executor_registered";
+  result:
+    | "success"
+    | "execution_failed"
+    | "verification_failed"
+    | "verification_error"
+    | "no_executor_registered";
+  detail?: string;
 }
 
 export interface ExecutionResult {
-  status: "success" | "failed";
+  status: "success" | "failed" | "blocked";
   tool?: ToolName;
   attempts: AttemptLog[];
+  notification_reason?: string;
 }
 
-// ─── Core logic ───────────────────────────────────────────────────────────────
-
 export function automationJustified(task: Task): boolean {
+  if (task.is_one_time && task.content_static) return false;
+  if (
+    task.estimated_setup_seconds != null &&
+    task.estimated_run_seconds != null &&
+    task.estimated_setup_seconds > task.estimated_run_seconds
+  ) {
+    return false;
+  }
   return (
     task.frequency_estimate >= 5 ||
     task.requires_conditional_logic ||
@@ -77,55 +92,76 @@ export function automationJustified(task: Task): boolean {
 }
 
 export function decide(task: Task, env: Env): Decision {
-  const maxForm   = env.max_safe_chars_form_input ?? 10_000;
+  const maxForm = env.max_safe_chars_form_input ?? 10_000;
   const maxTyping = env.max_safe_chars_typing ?? 5_000;
 
-  const reasons: string[] = [];
-  const tools: ToolName[] = [];
-
-  if (env.field_accessible && task.content_length_chars <= maxForm)   tools.push("direct_form_input");
-  if (env.editor_visible   && task.content_length_chars <= maxTyping) tools.push("direct_typing");
-  if (env.paste_supported)   tools.push("clipboard_paste");
-  if (env.upload_available)  tools.push("file_upload");
+  const eligibleRanked: ToolName[] = [
+    ...(env.field_accessible && task.content_length_chars <= maxForm
+      ? (["direct_form_input"] as const)
+      : []),
+    ...(env.editor_visible && task.content_length_chars <= maxTyping
+      ? (["direct_typing"] as const)
+      : []),
+    ...(env.paste_supported ? (["clipboard_paste"] as const) : []),
+    ...(env.upload_available ? (["file_upload"] as const) : []),
+  ];
 
   const justified = automationJustified(task);
-  if (justified) tools.push("scripting");
-
-  if (tools.length === 0) {
-    tools.push(justified ? "scripting" : "direct_typing");
-    reasons.push("fallback_to_default_no_env_match");
+  if (eligibleRanked.length > 0) {
+    const tools: ToolName[] = justified
+      ? [...eligibleRanked, "scripting"]
+      : eligibleRanked;
+    const chosen = tools[0];
+    if (chosen === undefined) {
+      // Unreachable given eligibleRanked.length > 0 above, but
+      // noUncheckedIndexedAccess correctly can't prove that statically --
+      // fail loudly rather than silently return an invalid Decision.
+      throw new Error("CIDF internal error: eligible tools list was unexpectedly empty");
+    }
+    const reasons: string[] = [
+      ...(justified ? ["scripting_deferred_until_lower_ranks_exhausted"] : []),
+      "chosen_" + chosen,
+      "automation_justified=" + justified,
+    ];
+    return {
+      chosen_tool: chosen,
+      fallback_chain: tools.slice(1),
+      reason_codes: reasons,
+      automation_justified: justified,
+      verification_required: true,
+    };
   }
 
-  let chosen: ToolName   = tools[0];
-  let fallback: ToolName[] = tools.slice(1);
-
-  if (chosen === "scripting" && task.is_one_time && task.content_static) {
-    reasons.push("blocked_scripting_one_time_static");
-    chosen   = fallback[0] ?? "direct_typing";
-    fallback = fallback.slice(1);
+  if (justified) {
+    return {
+      chosen_tool: "scripting",
+      fallback_chain: [],
+      reason_codes: ["chosen_scripting", "automation_justified=True"],
+      automation_justified: true,
+      verification_required: true,
+    };
   }
 
-  reasons.push(`chosen_${chosen}`);
-  reasons.push(`automation_justified=${justified}`);
-
+  const notificationReason = "no_eligible_method_and_automation_gate_closed";
   return {
-    chosen_tool: chosen,
-    fallback_chain: fallback,
-    reason_codes: reasons,
-    automation_justified: justified,
+    chosen_tool: null,
+    fallback_chain: [],
+    reason_codes: [notificationReason, "automation_justified=False"],
+    automation_justified: false,
     verification_required: true,
+    blocked: true,
+    notification_reason: notificationReason,
   };
 }
 
-// ─── Verification ─────────────────────────────────────────────────────────────
-
 export async function verify(verifier: Verifier, signature: string): Promise<boolean> {
+  if (!signature) {
+    throw new Error("CIDF verification requires a non-empty signature.");
+  }
   await verifier.refreshOnceIfNeeded();
   const text = await verifier.extractText();
   return text.includes(signature);
 }
-
-// ─── Execution loop ───────────────────────────────────────────────────────────
 
 export async function executeWithFallback(
   decision: Decision,
@@ -134,20 +170,64 @@ export async function executeWithFallback(
   content: string,
   signature: string,
 ): Promise<ExecutionResult> {
+  if (!signature) {
+    throw new Error("CIDF execution requires a non-empty signature.");
+  }
+  if (decision.blocked || !decision.chosen_tool) {
+    return {
+      status: "blocked",
+      attempts: [],
+      notification_reason:
+        decision.notification_reason ||
+        "no_eligible_method_and_automation_gate_closed",
+    };
+  }
+
   const chain: ToolName[] = [decision.chosen_tool, ...decision.fallback_chain];
-  const attempts: AttemptLog[] = [];
+  let attempts: AttemptLog[] = [];
 
   for (const tool of chain) {
     const executor = executors[tool];
     if (!executor) {
-      attempts.push({ tool, result: "no_executor_registered" });
+      attempts = [...attempts, { tool, result: "no_executor_registered" }];
       continue;
     }
-    await executor(content);
-    const ok = await verify(verifier, signature);
-    if (ok) return { status: "success", tool, attempts };
-    attempts.push({ tool, result: "verification_failed" });
+    try {
+      await executor(content);
+    } catch (error) {
+      attempts = [
+        ...attempts,
+        {
+          tool,
+          result: "execution_failed",
+          detail: error instanceof Error ? error.name : "UnknownError",
+        },
+      ];
+      continue;
+    }
+    try {
+      const verified = await verify(verifier, signature);
+      if (verified) {
+        attempts = [...attempts, { tool, result: "success" }];
+        return { status: "success", tool, attempts };
+      }
+    } catch (error) {
+      attempts = [
+        ...attempts,
+        {
+          tool,
+          result: "verification_error",
+          detail: error instanceof Error ? error.name : "UnknownError",
+        },
+      ];
+      continue;
+    }
+    attempts = [...attempts, { tool, result: "verification_failed" }];
   }
 
-  return { status: "failed", attempts };
+  return {
+    status: "failed",
+    attempts,
+    notification_reason: "all_eligible_methods_exhausted",
+  };
 }

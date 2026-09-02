@@ -1,5 +1,6 @@
+<!-- markdownlint-disable MD022 MD031 MD032 MD036 MD040 -->
 # Content Insertion Decision Framework
-**Version:** 1.2 | **License:** Apache 2.0 | **Updated:** 2026-03-20
+**Version:** 1.3 | **License:** Apache 2.0 | **Updated:** 2026-03-20
 **Single source of truth:** `content_insertion_policy.json`
 
 ---
@@ -49,8 +50,17 @@ OPEN  (any one true):   frequency ≥ 5
                         requires_external_integration
 
 CLOSED (any one true):  is_one_time AND content_static
-                        ANY rank 1–4 method is eligible
+                        estimated_setup_seconds > estimated_run_seconds (when both known)
 ```
+
+**Selection order invariant** (separate from the gate above, confirmed against
+`content_insertion_framework.py`'s `decide()`): a rank 1–4 method, when
+eligible, always wins initial selection over scripting regardless of gate
+state — scripting never displaces a simpler method as the chosen tool. When
+the gate is open and a rank 1–4 method is eligible, scripting is appended to
+the end of the fallback chain as a last resort, not the initial choice. When
+no rank 1–4 method is eligible and the gate is open, scripting becomes the
+chosen tool directly.
 
 When the gate is closed and all ranks 1–4 fail: **notify the user — do not script.**
 
@@ -340,7 +350,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from insert_policy_tool import content_insertion_decider
 
 SYSTEM_PROMPT = """
-You are a content insertion agent. You follow the Content Insertion Decision Framework v1.2.
+You are a content insertion agent. You follow the Content Insertion Decision Framework v1.3.
 
 RULES:
 1. Before inserting any content, call content_insertion_decider with task + env details.
@@ -411,7 +421,7 @@ inserter_agent = Agent(
     ),
     backstory=(
         "You are a precise, rule-following agent trained on the Content Insertion "
-        "Decision Framework v1.2. You never assume visual confirmation is sufficient. "
+        "Decision Framework v1.3. You never assume visual confirmation is sufficient. "
         "You never use scripting when a simpler method is available."
     ),
     tools=[content_insertion_decider],
@@ -770,7 +780,7 @@ import { handleContentInsertion } from "./contentInsertionSkill";
 
 export const contentInsertionSkill = {
   id: "content_insertion",
-  name: "Content Insertion (Decision Framework v1.2)",
+  name: "Content Insertion (Decision Framework v1.3)",
   description: "Insert content into documents or UI fields using simplicity-first method selection.",
   handler: handleContentInsertion,
   policyRef: "../../core/content_insertion_policy.json",
