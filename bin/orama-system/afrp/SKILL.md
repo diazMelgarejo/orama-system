@@ -124,7 +124,7 @@ wastes the user's time and erodes trust.
 | "tests pass" | does the feature actually work? | run it / observe behavior |
 | "`.agents/` is tidier than the user's `.agent/`" ⇒ wrote there | which dir does the user/repo actually use? | take the explicit name verbatim; read `.agent/AGENTS.md`; check origin (the canonical dir already existed) |
 | `mergeable: CONFLICTING` ⇒ merge/rebase stale PR wholesale | deliver harmonized delta without re-adding content already on base? | path-scoped replay onto fresh integration base (`merged` for periscope); see [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md) + CIDF integrative-editing-examples §9 |
-| PR pushed with 0 file delta / empty commit | empty index or blind API retry? | verify staged diff; after uncertainty, read remote before retry; compare parent/child trees |
+| PR pushed with 0 file delta / empty commit | empty index or blind API retry? | verify staged diff; after uncertainty, read remote before retry; compare parent/child trees; then confirm the expected content marker is actually present in the committed blob (see `failure-modes.md` Failure Mode 9 — a non-empty diff proves *something* changed, not that the *intended* artifact landed) |
 
 **Reflect, then route:** TRUE intent (clarify if ambiguous) → correct method (not a proxy)
 → act. Trust the user's domain signal over my first-pass check — their context exceeds mine.

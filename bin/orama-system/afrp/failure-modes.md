@@ -235,8 +235,19 @@ was inserted.
 git add <paths>
 bash scripts/git/verify-staged-for-commit.sh   # fails closed if index empty
 bash scripts/git/commit-clean.sh -m "type(scope): summary"
-git show --stat --oneline HEAD                 # confirm before push
+git show --stat --oneline HEAD                 # confirm a non-empty diff exists
+git show HEAD:<path> | grep -q "<expected-marker>"   # confirm the INTENDED content, not just SOME content, landed
 ```
+
+The last step is not optional. A non-empty diff and a parent/child tree
+delta prove that *some* content changed — they do not prove the
+*intended* artifact reached the destination (see the API-retry example
+below: `214b0c03` genuinely carried the fix, but a naive "did the ref
+advance" check alone would have missed that its child, `faf515e4`,
+carried nothing new at all — same tree as its parent). Pick
+`<expected-marker>` from the actual edit — a distinctive string, a
+section heading, a function signature — not a generic pattern that
+would also match unrelated content.
 
 Regression: `bash scripts/git/commit_clean_test.sh` (also run from `verify-git-guards.sh`).
 
