@@ -111,13 +111,20 @@ export function decide(task: Task, env: Env): Decision {
     const tools: ToolName[] = justified
       ? [...eligibleRanked, "scripting"]
       : eligibleRanked;
+    const chosen = tools[0];
+    if (chosen === undefined) {
+      // Unreachable given eligibleRanked.length > 0 above, but
+      // noUncheckedIndexedAccess correctly can't prove that statically --
+      // fail loudly rather than silently return an invalid Decision.
+      throw new Error("CIDF internal error: eligible tools list was unexpectedly empty");
+    }
     const reasons: string[] = [
       ...(justified ? ["scripting_deferred_until_lower_ranks_exhausted"] : []),
-      "chosen_" + tools[0],
+      "chosen_" + chosen,
       "automation_justified=" + justified,
     ];
     return {
-      chosen_tool: tools[0],
+      chosen_tool: chosen,
       fallback_chain: tools.slice(1),
       reason_codes: reasons,
       automation_justified: justified,
