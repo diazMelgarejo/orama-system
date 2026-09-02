@@ -15,6 +15,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** Output feels relevant to the user but is useless for the stated audience. The user recognizes their own language and context mirrored back, creating an illusion of quality.
 
 **Example:**
+
 - Query: "Write guidance for Filipinos around the world"
 - Agent finds: Mac mini, RTX 3080, orama-system, multi-agent architecture
 - Output: Advice about building distributed AI systems for economic resilience
@@ -33,6 +34,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** The audience cannot act on the output without first translating it into concrete steps. The response is intellectually interesting but operationally inert.
 
 **Example:**
+
 - Query: "How should small business owners protect themselves from tariffs?"
 - Agent output: A framework comparing supply chain resilience theories
 - Actual need: "Here are 5 things to do this week"
@@ -78,6 +80,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** The response contains sections that contradict each other. Advice for audience A conflicts with advice for audience B, but both are presented as valid. The user must do the scoping work the agent should have done.
 
 **Example:**
+
 - Query: "Develop a resilience framework"
 - Agent output: Section 1 (for individuals), Section 2 (for organizations), Section 3 (for governments), Section 4 (for communities) — each shallow, none actionable
 
@@ -94,6 +97,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** The answer is well-structured, well-cited, and completely wrong for the actual need. The user only discovers this after acting on it.
 
 **Example:**
+
 - Query: "Write a skill for conflict resolution"
 - Agent output: A complete SKILL.md file for AI agent conflict resolution in multi-agent systems
 - Actual need: A training module for HR managers on workplace conflict
@@ -102,6 +106,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Recovery:** Restart at Step 0. Run the full checklist. When in doubt about query type, classify UP (A→B, B→C) rather than down.
 
 **Example (2026-07-22, real — a slash command hiding real ambiguity):**
+
 - Query: `/skillify` (or "make me a skill"), no further context
 - Looks like: Type A/C, unambiguous — "obviously" run this repo's own
   `oramasys-skillify` skill, since that's what was invoked
@@ -119,6 +124,7 @@ This document provides extended examples and recovery procedures for each AFRP f
   Tools (disambiguation)" section.
 
 **Example (2026-07-28, real — CONFLICTING ≠ "pick one PR"):**
+
 - Surface: periscope PR #12 `mergeable: CONFLICTING` after PR #10 merged overlapping ECC
 - Looks like: Type A — "close #12 or merge #12 over #10"
 - Actually Type C: **synthesize** both ECC runs into a third state, then **path-scoped
@@ -139,11 +145,13 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** The user corrects the agent repeatedly ("you misunderstood", "did you even check", "we already did this"). Each correction reveals the agent never confirmed intent or used the right tool.
 
 **Example (2026-06-04, real):**
+
 - Proxy: `git merge-base != root` ⇒ agent declares "no orphaned branches, nothing to do."
 - Real question: does the branch's *content* converge with main? The tree-twin search showed every branch HAD a byte-identical twin needing re-anchor.
 - Also: user said "re-anchor"; agent *flattened* branches to HEAD (wrong mechanic) without confirming the meaning.
 
 **Example (2026-07-28, real — CONFLICTING PR):**
+
 - Proxy: GitHub `mergeable: CONFLICTING` ⇒ "merge or rebase the PR branch to fix it."
 - Real question: how to deliver the **harmonized synthesis** now that the integration base
   already contains overlapping content (PR #10 ECC on `merged`)?
@@ -156,6 +164,7 @@ This document provides extended examples and recovery procedures for each AFRP f
   [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md).
 
 **Example (2026-09-02, real — "flaky test" diagnosed from a proxy, never traced):**
+
 - Proxy: a Windows CI Go test (`TestEnsureBackgroundServeReplacesIncompatibleDaemonAfterStartupWait`)
   passed on one commit and failed on a later commit, with zero Go-code diff between
   the two — only unrelated `.md` frontmatter fixes existed in the diff.
@@ -213,6 +222,7 @@ line is only transport evidence. It does not prove that the intended content
 was inserted.
 
 **Example (2026-07-29, real — periscope PR #26):**
+
 - Agent ran `commit-clean.sh` twice with CI-fix messages while edits stayed unstaged.
 - Remote branch stayed on broken `ci-pr.yml` (upstream workflow) and pre-migration
   kit-ui sources; local working tree had the real fixes.
@@ -270,7 +280,7 @@ tip tree is correct. `git rev-list --count` looks catastrophic.
 **Example (2026-07-29, real — periscope PR #17 vs PR #20):**
 
 | Item | PR #17 (bad — closed) | PR #20 (good) |
-|------|------------------------|---------------|
+| --- | --- | --- |
 | Upstream | ~769 replayed commits (synthetic SHAs) | Inherits `kenn-io` @ `#1283` |
 | Periscope-only | 9 commits buried | **9 on tip** |
 | Three-dot vs `merged` | 2,169 files / 769 commits | **816 files / 9 commits** |
@@ -291,8 +301,7 @@ CIDF §10; path-scoped card PR #17 vs #20 example.
 
 ---
 
-
-```
+```text
 Response feels wrong but you can't pinpoint why?
 │
 ├── Does it mirror the user's language? → Failure Mode 4 (Mirror)
@@ -302,5 +311,6 @@ Response feels wrong but you can't pinpoint why?
 ├── Was the query classified correctly? → Failure Mode 6 (Premature Confidence)
 ├── Did I confirm intent + use the real method (not a proxy)? → Failure Mode 7 (Handwaving)
 ├── Did I replay upstream under synthetic SHAs when originals exist? → Failure Mode 8 (Synthetic SHA Replay)
-└── Did commit-clean run without git add + verify-staged? → Failure Mode 9 (Empty commit-clean)
+└── Did commit-clean run without git add, or did a blind API retry follow an
+    already-completed write? → Failure Mode 9 (Empty Publication Commit)
 ```
