@@ -187,10 +187,14 @@ For a test failure specifically: open the actual assertion and the code path it 
 
 ---
 
-## Failure Mode 9: Empty `commit-clean` Commit (Unstaged-Edits Trap)
+## Failure Mode 9: Empty Publication Commit
 
-**Trigger:** Running `bash scripts/git/commit-clean.sh` without first running
-`git add` on the paths that belong in the commit.
+**Trigger:** Advancing a ref with a commit whose tree is identical to its
+parent while claiming that content was inserted. Two confirmed triggers are:
+
+1. running `commit-clean.sh` while the intended edits remain unstaged; and
+2. blindly retrying a successful-but-late GitHub Contents API write with the
+   already-current blob and the same commit message.
 
 **Mechanism:** `commit-clean.sh` writes the **staged index** via `git write-tree`.
 It never stages files. The pre-2026-07-29 guard only rejected commits when **both**
@@ -201,6 +205,12 @@ delta** — identical tree to HEAD.
 **Symptom:** Push succeeds; PR/commit message describes fixes; `git show --stat`
 is empty; CI still fails on the old code; agents chase per-file symptoms instead of
 missing commits.
+
+This violates CIDF's core success criterion: execution is not success until a
+non-empty, programmatically checked verification signature is present in the
+destination. An HTTP success, a new SHA, a pushed ref, or a plausible subject
+line is only transport evidence. It does not prove that the intended content
+was inserted.
 
 **Example (2026-07-29, real — periscope PR #26):**
 - Agent ran `commit-clean.sh` twice with CI-fix messages while edits stayed unstaged.
@@ -219,6 +229,28 @@ git show --stat --oneline HEAD                 # confirm before push
 ```
 
 Regression: `bash scripts/git/commit_clean_test.sh` (also run from `verify-git-guards.sh`).
+
+**Example (2026-09-02, real — Periscope PR #49 API retry):**
+
+- `214b0c03` is the real insertion: parent `c8db8992`, one file changed,
+  45 insertions, tree `bd81bba7`.
+- `faf515e4` immediately follows it with the same subject, but its tree is also
+  `bd81bba7`; `git diff 214b0c03 faf515e4` is empty.
+- GitHub's raw comparison reports one commit ahead and no changed files.
+- Root cause: the first Contents API request completed after the caller's
+  observation window. A retry then fetched the already-updated blob SHA and
+  submitted byte-identical content. GitHub accepted a new commit object even
+  though the tree did not change.
+
+**API recovery / prevention:**
+
+1. After a timeout or uncertain response, read the target ref before retrying.
+2. Compare the remote blob/content signature with the intended artifact.
+3. If it already matches, record the first commit as success and do not write.
+4. After any write, require both the expected path/blob and a parent-to-child
+   tree delta; fail closed when the tree IDs are equal.
+5. Use an idempotency key or expected-old-blob precondition where the API
+   supports one; never use a new commit SHA alone as the success signature.
 
 ---
 

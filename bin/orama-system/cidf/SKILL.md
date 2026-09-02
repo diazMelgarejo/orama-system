@@ -89,6 +89,12 @@ execute → visual_ok? ──no──→ refresh() → verify_programmatically(s
 
 **Never trust visual confirmation alone.**
 
+For Git/API writes, a returned commit SHA is not the verification signature.
+Read the target ref and confirm the expected blob/content marker. When the task
+claims a content change, also require the new commit tree to differ from its
+parent. Periscope PR #49 proved why: `214b0c03` carried the real 45-line change,
+while a blind retry produced `faf515e4` with the same tree and zero file delta.
+
 ## Target Verification (pre-insert) — Mandatory
 
 Before inserting content **anywhere**, verify the *destination*, not just the method:
