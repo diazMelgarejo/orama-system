@@ -92,7 +92,14 @@ jobs:
       
       - name: Run pytest
         run: |
-          pytest -q tests/ bin/orama-system/cidf/tests/
+          pytest -q tests/
+          # Separate invocation, not combined with tests/ above: running
+          # both roots in one pytest command triggers a genuine pytest
+          # internal collection bug -- AttributeError: 'Package' object
+          # has no attribute 'obj' -- confirmed via a real failed CI run
+          # (test (3.11), 2026-09-02), not reproduced when either root
+          # is collected alone.
+          pytest -q bin/orama-system/cidf/tests/
       
       - name: Run package install test
         run: |
