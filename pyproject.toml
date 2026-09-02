@@ -33,7 +33,18 @@ test = [
     "hatchling~=1.26.0",
     "build~=1.2.0",
     "tomli~=2.0.1; python_version < \"3.11\"",
+    "mypy~=1.13",
 ]
+
+[tool.mypy]
+# Scoped deliberately to CIDF -- NOT repo-wide. A repo-wide strict mypy run
+# risks a large, unrelated blast radius across code this config was never
+# designed against. See docs comment in ci.yml's cidf-typecheck job for why
+# two separate invocations (different MYPYPATH per file group) are required
+# rather than one combined run -- verified directly, not a config oversight.
+strict = true
+namespace_packages = true
+explicit_package_bases = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -7,6 +7,7 @@
 
 import sys
 from pathlib import Path
+from typing import Any, Callable
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "orama-system"))
 
 try:
@@ -22,11 +23,11 @@ except ImportError:
 def cidf_insert(
     content: str,
     signature: str,
-    env_flags: dict,
-    task_meta: dict,
-    executor_fn: "dict[str, callable]",
+    env_flags: "dict[str, Any]",
+    task_meta: "dict[str, Any]",
+    executor_fn: "dict[str, Callable[[str], None]]",
     verifier: "Verifier",
-) -> dict:
+) -> "dict[str, Any]":
     """
     CIDF-compliant content insertion wrapper for executor agents.
 
