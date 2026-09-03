@@ -15,6 +15,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** Output feels relevant to the user but is useless for the stated audience. The user recognizes their own language and context mirrored back, creating an illusion of quality.
 
 **Example:**
+
 - Query: "Write guidance for Filipinos around the world"
 - Agent finds: Mac mini, RTX 3080, orama-system, multi-agent architecture
 - Output: Advice about building distributed AI systems for economic resilience
@@ -33,6 +34,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** The audience cannot act on the output without first translating it into concrete steps. The response is intellectually interesting but operationally inert.
 
 **Example:**
+
 - Query: "How should small business owners protect themselves from tariffs?"
 - Agent output: A framework comparing supply chain resilience theories
 - Actual need: "Here are 5 things to do this week"
@@ -78,6 +80,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** The response contains sections that contradict each other. Advice for audience A conflicts with advice for audience B, but both are presented as valid. The user must do the scoping work the agent should have done.
 
 **Example:**
+
 - Query: "Develop a resilience framework"
 - Agent output: Section 1 (for individuals), Section 2 (for organizations), Section 3 (for governments), Section 4 (for communities) — each shallow, none actionable
 
@@ -94,6 +97,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** The answer is well-structured, well-cited, and completely wrong for the actual need. The user only discovers this after acting on it.
 
 **Example:**
+
 - Query: "Write a skill for conflict resolution"
 - Agent output: A complete SKILL.md file for AI agent conflict resolution in multi-agent systems
 - Actual need: A training module for HR managers on workplace conflict
@@ -102,6 +106,7 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Recovery:** Restart at Step 0. Run the full checklist. When in doubt about query type, classify UP (A→B, B→C) rather than down.
 
 **Example (2026-07-22, real — a slash command hiding real ambiguity):**
+
 - Query: `/skillify` (or "make me a skill"), no further context
 - Looks like: Type A/C, unambiguous — "obviously" run this repo's own
   `oramasys-skillify` skill, since that's what was invoked
@@ -119,6 +124,7 @@ This document provides extended examples and recovery procedures for each AFRP f
   Tools (disambiguation)" section.
 
 **Example (2026-07-28, real — CONFLICTING ≠ "pick one PR"):**
+
 - Surface: periscope PR #12 `mergeable: CONFLICTING` after PR #10 merged overlapping ECC
 - Looks like: Type A — "close #12 or merge #12 over #10"
 - Actually Type C: **synthesize** both ECC runs into a third state, then **path-scoped
@@ -139,11 +145,13 @@ This document provides extended examples and recovery procedures for each AFRP f
 **Symptom:** The user corrects the agent repeatedly ("you misunderstood", "did you even check", "we already did this"). Each correction reveals the agent never confirmed intent or used the right tool.
 
 **Example (2026-06-04, real):**
+
 - Proxy: `git merge-base != root` ⇒ agent declares "no orphaned branches, nothing to do."
 - Real question: does the branch's *content* converge with main? The tree-twin search showed every branch HAD a byte-identical twin needing re-anchor.
 - Also: user said "re-anchor"; agent *flattened* branches to HEAD (wrong mechanic) without confirming the meaning.
 
 **Example (2026-07-28, real — CONFLICTING PR):**
+
 - Proxy: GitHub `mergeable: CONFLICTING` ⇒ "merge or rebase the PR branch to fix it."
 - Real question: how to deliver the **harmonized synthesis** now that the integration base
   already contains overlapping content (PR #10 ECC on `merged`)?
@@ -156,6 +164,7 @@ This document provides extended examples and recovery procedures for each AFRP f
   [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md).
 
 **Example (2026-09-02, real — "flaky test" diagnosed from a proxy, never traced):**
+
 - Proxy: a Windows CI Go test (`TestEnsureBackgroundServeReplacesIncompatibleDaemonAfterStartupWait`)
   passed on one commit and failed on a later commit, with zero Go-code diff between
   the two — only unrelated `.md` frontmatter fixes existed in the diff.
@@ -187,10 +196,14 @@ For a test failure specifically: open the actual assertion and the code path it 
 
 ---
 
-## Failure Mode 9: Empty `commit-clean` Commit (Unstaged-Edits Trap)
+## Failure Mode 9: Empty Publication Commit
 
-**Trigger:** Running `bash scripts/git/commit-clean.sh` without first running
-`git add` on the paths that belong in the commit.
+**Trigger:** Advancing a ref with a commit whose tree is identical to its
+parent while claiming that content was inserted. Two confirmed triggers are:
+
+1. running `commit-clean.sh` while the intended edits remain unstaged; and
+2. blindly retrying a successful-but-late GitHub Contents API write with the
+   already-current blob and the same commit message.
 
 **Mechanism:** `commit-clean.sh` writes the **staged index** via `git write-tree`.
 It never stages files. The pre-2026-07-29 guard only rejected commits when **both**
@@ -202,7 +215,14 @@ delta** — identical tree to HEAD.
 is empty; CI still fails on the old code; agents chase per-file symptoms instead of
 missing commits.
 
+This violates CIDF's core success criterion: execution is not success until a
+non-empty, programmatically checked verification signature is present in the
+destination. An HTTP success, a new SHA, a pushed ref, or a plausible subject
+line is only transport evidence. It does not prove that the intended content
+was inserted.
+
 **Example (2026-07-29, real — periscope PR #26):**
+
 - Agent ran `commit-clean.sh` twice with CI-fix messages while edits stayed unstaged.
 - Remote branch stayed on broken `ci-pr.yml` (upstream workflow) and pre-migration
   kit-ui sources; local working tree had the real fixes.
@@ -215,10 +235,43 @@ missing commits.
 git add <paths>
 bash scripts/git/verify-staged-for-commit.sh   # fails closed if index empty
 bash scripts/git/commit-clean.sh -m "type(scope): summary"
-git show --stat --oneline HEAD                 # confirm before push
+git show --stat --oneline HEAD                 # confirm a non-empty diff exists
+git show HEAD:<path> | grep -q "<expected-marker>"   # confirm the INTENDED content, not just SOME content, landed
 ```
 
+The last step is not optional. A non-empty diff and a parent/child tree
+delta prove that *some* content changed — they do not prove the
+*intended* artifact reached the destination (see the API-retry example
+below: `214b0c03` genuinely carried the fix, but a naive "did the ref
+advance" check alone would have missed that its child, `faf515e4`,
+carried nothing new at all — same tree as its parent). Pick
+`<expected-marker>` from the actual edit — a distinctive string, a
+section heading, a function signature — not a generic pattern that
+would also match unrelated content.
+
 Regression: `bash scripts/git/commit_clean_test.sh` (also run from `verify-git-guards.sh`).
+
+**Example (2026-09-02, real — Periscope PR #49 API retry):**
+
+- `214b0c03` is the real insertion: parent `c8db8992`, one file changed,
+  45 insertions, tree `bd81bba7`.
+- `faf515e4` immediately follows it with the same subject, but its tree is also
+  `bd81bba7`; `git diff 214b0c03 faf515e4` is empty.
+- GitHub's raw comparison reports one commit ahead and no changed files.
+- Root cause: the first Contents API request completed after the caller's
+  observation window. A retry then fetched the already-updated blob SHA and
+  submitted byte-identical content. GitHub accepted a new commit object even
+  though the tree did not change.
+
+**API recovery / prevention:**
+
+1. After a timeout or uncertain response, read the target ref before retrying.
+2. Compare the remote blob/content signature with the intended artifact.
+3. If it already matches, record the first commit as success and do not write.
+4. After any write, require both the expected path/blob and a parent-to-child
+   tree delta; fail closed when the tree IDs are equal.
+5. Use an idempotency key or expected-old-blob precondition where the API
+   supports one; never use a new commit SHA alone as the success signature.
 
 ---
 
@@ -238,7 +291,7 @@ tip tree is correct. `git rev-list --count` looks catastrophic.
 **Example (2026-07-29, real — periscope PR #17 vs PR #20):**
 
 | Item | PR #17 (bad — closed) | PR #20 (good) |
-|------|------------------------|---------------|
+| --- | --- | --- |
 | Upstream | ~769 replayed commits (synthetic SHAs) | Inherits `kenn-io` @ `#1283` |
 | Periscope-only | 9 commits buried | **9 on tip** |
 | Three-dot vs `merged` | 2,169 files / 769 commits | **816 files / 9 commits** |
@@ -259,8 +312,7 @@ CIDF §10; path-scoped card PR #17 vs #20 example.
 
 ---
 
-
-```
+```text
 Response feels wrong but you can't pinpoint why?
 │
 ├── Does it mirror the user's language? → Failure Mode 4 (Mirror)
@@ -270,5 +322,6 @@ Response feels wrong but you can't pinpoint why?
 ├── Was the query classified correctly? → Failure Mode 6 (Premature Confidence)
 ├── Did I confirm intent + use the real method (not a proxy)? → Failure Mode 7 (Handwaving)
 ├── Did I replay upstream under synthetic SHAs when originals exist? → Failure Mode 8 (Synthetic SHA Replay)
-└── Did commit-clean run without git add + verify-staged? → Failure Mode 9 (Empty commit-clean)
+└── Did commit-clean run without git add, or did a blind API retry follow an
+    already-completed write? → Failure Mode 9 (Empty Publication Commit)
 ```

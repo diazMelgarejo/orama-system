@@ -148,6 +148,23 @@ branch `cursor/agentsview-purified-onto-kenn-f559` = original kenn SHAs + 9 cher
 
 ---
 
+## 11. Uncertain GitHub write — verify before retry
+
+| Bad | Good |
+| --- | --- |
+| Treat an HTTP timeout as proof the write failed | Fetch the target ref and compare its blob/content signature |
+| Retry the same Contents API write immediately | Retry only when the expected content is still absent |
+| Accept a new commit SHA as proof of insertion | Require the expected path/blob and a parent-to-child tree delta |
+| Ignore an empty `git show --stat` because the subject looks right | Compare `%T` for commit and parent; equal trees prove a no-op commit |
+
+**Proof (Periscope PR #49, 2026-09-02):** `214b0c03` changed one test file
+with 45 insertions and produced tree `bd81bba7`. Its child `faf515e4` reused
+the same subject and the exact same tree. The retry therefore added history,
+not content. This is a CIDF verification failure: transport completion was
+mistaken for a non-empty destination signature.
+
+---
+
 ## Quarantined bad samples (do not run)
 
 ```markdown
