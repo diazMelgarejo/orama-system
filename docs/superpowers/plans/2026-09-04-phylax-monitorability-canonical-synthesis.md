@@ -54,7 +54,7 @@ Reference the MiniGraph kernel through `01-kernel-spec.md` without a line count.
 
 - [ ] **Step 5: Validate the new document**
 
-Run: `python scripts/review/repo_hygiene.py && git diff --check`
+Run: `python scripts/review/repo_hygiene.py . && git diff --check`
 
 Expected: both commands exit zero.
 
@@ -98,7 +98,7 @@ Add M0 decisions for the Phylax package/repository boundary and reuse inventory 
 - [ ] **Step 5: Validate and commit the modules**
 
 ```bash
-python scripts/review/repo_hygiene.py
+python scripts/review/repo_hygiene.py .
 git diff --check
 git add docs/v2/references/phylax-monitorability-part-*.md
 bash scripts/git/verify-staged-for-commit.sh
@@ -128,7 +128,7 @@ Add a forward reference explaining that Doc 55 governs telemetry and privacy tra
 - [ ] **Step 3: Validate and commit navigation**
 
 ```bash
-python scripts/review/repo_hygiene.py
+python scripts/review/repo_hygiene.py .
 git diff --check
 git add docs/v2/README.md docs/v2/55-oramasys-agent-observability-contract-adr.md
 bash scripts/git/verify-staged-for-commit.sh
@@ -150,7 +150,7 @@ bash scripts/git/commit-clean.sh -m "docs(v2): index Phylax monitorability archi
 
 - [ ] **Step 1: Run final repository checks**
 
-Run: `python scripts/review/repo_hygiene.py && git diff --check`
+Run: `python scripts/review/repo_hygiene.py . && git diff --check`
 
 Expected: both commands exit zero and no unrelated file is staged.
 

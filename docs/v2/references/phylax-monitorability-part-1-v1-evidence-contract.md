@@ -41,6 +41,8 @@ future versioned Phylax adapter may make normalized monitorability mandatory.
 
 ```python
 class MonitorabilityEnvelopeV1(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
     schema_version: Literal[1]
     otel: OTelGenAiContextV1 | None = None
     phylax: PhylaxMonitorabilityContextV1
@@ -48,8 +50,19 @@ class MonitorabilityEnvelopeV1(BaseModel):
     integrity: EvidenceIntegrityV1
 
 class RedactedEvidencePolicyV1(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid")
+
     raw_reasoning_persisted_in_packet: Literal[False]
 ```
+
+Every nested model in the envelope (`OTelGenAiContextV1`,
+`PhylaxMonitorabilityContextV1`, `RedactedEvidencePolicyV1`, `EvidenceIntegrityV1`)
+sets `model_config = ConfigDict(strict=True, extra="forbid")`. Pydantic v2's
+default is `extra="ignore"`, which would silently discard an unknown field
+rather than reject it -- every model in the shipped implementation
+(`orchestrator/handoff_validation.py`) closes this explicitly, and this
+sample must match, not merely resemble, that code. A supplied but unrecognized
+field is a validation failure, not a silent no-op.
 
 `otel` records only a legitimate operation, provider, stable logical agent,
 model, conversation, and W3C trace/span context. It must not invent a provider,
@@ -101,10 +114,15 @@ as a Phylax decision.
 - A sealed reference is an opaque, bounded identifier. It cannot be a URI,
   path, credential, or content-bearing free-form string.
 - Bounded PT identifiers match
-  `^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}$`. Opaque evidence, sealed, and grant
-  references match `^(?:evidence|sealed|grant)_[0-9a-f]{16,64}$`; reference
-  lists are non-empty and contain no duplicates. These grammar checks prevent
-  identifiers from becoming content-bearing free-form fields.
+  `^(?!/)(?!.*://)[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}$`. The base charset
+  permits `:` for namespaced identifiers (e.g. `oramasys:phylax-monitorability`),
+  but two negative lookaheads reject a leading `/` and any `://` occurrence --
+  closing a real gap where the original grammar, verified directly, allowed
+  `http://evil.example/callback` and similar URL-scheme strings to pass as a
+  valid identifier. Opaque evidence, sealed, and grant references match
+  `^(?:evidence|sealed|grant)_[0-9a-f]{16,64}$`; reference lists are non-empty
+  and contain no duplicates. These grammar checks prevent identifiers from
+  becoming content-bearing free-form fields.
 - When `monitorability` is present, its required `privacy` object must include
   `raw_reasoning_persisted_in_packet: Literal[False]` with no default; omission
   and `true` are validation errors. This closed-envelope requirement does not

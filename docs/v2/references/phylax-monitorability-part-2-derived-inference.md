@@ -7,7 +7,8 @@ Specification](../60-phylax-monitorability-design-spec.md). Doc 60 defines the
 epistemic classes and decision authority; this part specifies artifact and
 adapter implementation detail that remains subordinate to it.
 
-**Implementation modules:** [Part 1 — v1 evidence contract](phylax-monitorability-part-1-v1-evidence-contract.md) ·
+**Implementation modules:**
+[Part 1 — v1 evidence contract](phylax-monitorability-part-1-v1-evidence-contract.md) ·
 [Part 3 — migration and assurance](phylax-monitorability-part-3-migration-assurance.md)
 
 ## Objective
@@ -98,6 +99,22 @@ calibration metadata when calibrated, an expiry, a supersession list (empty when
 it replaces nothing), and an explicitly non-authoritative disposition.
 `reconstructed` and `interpolated` additionally require a bounded interval plus
 bracketing source observations; `forecast` requires an explicit future horizon.
+
+**What the model validator above enforces, and what it structurally cannot:**
+`enforce_temporal_and_calibration_rules` checks that a claimed interval is
+internally well-formed (`valid_from < expires_at`) and that calibration
+fields are paired. It cannot verify that `source_observation_refs` actually
+*bracket* that interval, because those are opaque references — resolving
+them to real observation timestamps requires the observation store, which a
+self-contained Pydantic model has no access to by design (the same
+opaque-reference discipline that keeps raw evidence out of the model at all).
+Bracketing enforcement is therefore a separate, repository-owned admission-time
+validator: it resolves each `source_observation_refs` entry against the
+observation store, confirms at least one resolved observation falls at or
+before `valid_from` and at least one at or after `expires_at` for
+`reconstructed`/`interpolated` artifacts, and rejects admission otherwise. No
+`DerivedMonitorabilityArtifactV2` reaches the governed store without passing
+through this validator first.
 On correction or replacement, append a new artifact that identifies what it
 supersedes rather than rewriting the earlier record. Expired or superseded
 artifacts are not live evidence for a new decision.
