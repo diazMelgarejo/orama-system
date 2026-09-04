@@ -9,7 +9,8 @@ Specification](../60-phylax-monitorability-design-spec.md). Doc 60 governs
 ownership, evidence meaning, authority, privacy, liveness, and migration gates;
 this part records only the PT v1 implementation boundary.
 
-**Implementation modules:** [Part 2 — derived inference](phylax-monitorability-part-2-derived-inference.md) ·
+**Implementation modules:**
+[Part 2 — derived inference](phylax-monitorability-part-2-derived-inference.md) ·
 [Part 3 — migration and assurance](phylax-monitorability-part-3-migration-assurance.md)
 
 ## Purpose

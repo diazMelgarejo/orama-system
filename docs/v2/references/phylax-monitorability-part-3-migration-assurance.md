@@ -7,7 +7,8 @@ Specification](../60-phylax-monitorability-design-spec.md). Doc 60 governs
 ownership, authority, privacy, liveness, and the required admission gates; this
 part supplies the rollout and assurance detail.
 
-**Implementation modules:** [Part 1 — v1 evidence contract](phylax-monitorability-part-1-v1-evidence-contract.md) ·
+**Implementation modules:**
+[Part 1 — v1 evidence contract](phylax-monitorability-part-1-v1-evidence-contract.md) ·
 [Part 2 — derived inference](phylax-monitorability-part-2-derived-inference.md)
 
 ## Migration ladder
