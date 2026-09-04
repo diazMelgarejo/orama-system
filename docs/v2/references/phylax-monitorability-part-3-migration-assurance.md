@@ -1,22 +1,35 @@
 # Phylax Monitorability — Part 3: Migration, Evaluation, and Assurance
 
-**Status:** rollout, test, and operational assurance plan
+**Status:** subordinate rollout, test, and operational assurance guidance
 
-**Companion parts:** [Part 1](phylax-monitorability-part-1-v1-evidence-contract.md) · [Part 2](phylax-monitorability-part-2-derived-inference.md)
+**Normative authority:** [Doc 60 — Canonical Phylax Monitorability Design
+Specification](../60-phylax-monitorability-design-spec.md). Doc 60 governs
+ownership, authority, privacy, liveness, and the required admission gates; this
+part supplies the rollout and assurance detail.
+
+**Implementation modules:** [Part 1 — v1 evidence contract](phylax-monitorability-part-1-v1-evidence-contract.md) ·
+[Part 2 — derived inference](phylax-monitorability-part-2-derived-inference.md)
 
 ## Migration ladder
 
 | Stage | Change | Required proof | Rollback |
 | --- | --- | --- | --- |
-| M0 | existing v1 handoffs without monitorability | compatibility suite passes | none |
+| M0.1 | record the Phylax package/repository boundary before any Phylax runtime code | named owning repository/package, dependency direction, and confirmation that PT remains the producer/adapter boundary | no runtime code introduced |
+| M0.2 | run the executable primitive-reuse inventory audit | for each P1, P2, and P6 candidate: repository, revision, interface, executable-source evidence, and tests; retain P4 only as the confirmed PT-owned transport/projection boundary | do not depend on an unverified reuse claim |
+| M0.3 | existing v1 handoffs without monitorability | compatibility suite passes | none |
 | M1 | optional strict PT envelope and redacted audit | schema, redaction, audit, liveness tests pass | omit envelope; keep reader |
 | M2 | new-standard producers emit envelope | producer inventory is complete | disable emission only |
 | M3 | Phylax v2 adapter consumes evidence in shadow mode | human-review calibration and privacy evidence | disable adapter; preserve audit |
 | M4 | v2 handoffs require adapter-normalized envelope | all v2 producers and claimants migrated | route legacy callers through v1 adapter |
-| M5 | guarded blocks for defined observable violations | independent evidence, review, false-block, and rollback gates | return to advisory mode |
+| M5 | guarded blocks for defined observable violations | independent observable evidence, explicit Phylax v2 admission, review, false-block, and rollback gates | return to advisory mode |
 
 No stage may be skipped. Stored v1 meaning never changes in place; the v2
 adapter is the compatibility and interpretation boundary.
+
+M0.1 and M0.2 are explicit pre-code gates, not deferred implementation work.
+They keep Core policy-free, prevent upward imports of Phylax or application
+modules, and prevent an architecture record from standing in for executable
+reuse evidence.
 
 ## Evaluation design
 
@@ -56,6 +69,20 @@ monitorability.
 | forecast survives beyond horizon | expired artifact cannot influence a new decision |
 | OTel semantic drift | mapping-version regression flags review before projection changes |
 | activity masquerades as heartbeat | admission/log/advisory leaves liveness unchanged |
+
+## Artifact-specific authorization assertions
+
+Every non-observed artifact is advisory-only. The following assertions prevent
+an inference class from becoming an authorization bypass through a future
+implementation or migration shortcut.
+
+| Artifact class | Required assertion |
+| --- | --- |
+| forecast | a forecast may warn or escalate, but cannot authorize a block; any block requires independently observable evidence for the named violation and an explicit authorized Phylax v2 decision |
+| reconstruction | a reconstruction may guide investigation, but cannot authorize a block or revise observed history; any block requires independently observable evidence and an explicit authorized Phylax v2 decision |
+| interpolation | an interpolation may fill an analysis gap for triage, but cannot authorize a block; any block requires independently observable evidence and an explicit authorized Phylax v2 decision |
+| provider summary | a provider summary remains bounded metadata/evidence rather than CoT and cannot authorize a block; any block requires independently observable evidence and an explicit authorized Phylax v2 decision |
+| CoT-derived artifact | a legitimately accessed CoT-derived artifact may raise concern or improve triage, but cannot authorize a block; any block requires independently observable evidence and an explicit authorized Phylax v2 decision |
 
 ## Operational controls
 

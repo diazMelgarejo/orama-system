@@ -1,27 +1,22 @@
 # Phylax Monitorability — Part 2: Derived Inference and Decision Model
 
-**Status:** v2 design authority; not a Perpetua-Tools v1 implementation task
+**Status:** subordinate v2 implementation guidance; not a Perpetua-Tools v1 implementation task
 
-**Companion parts:** [Part 1](phylax-monitorability-part-1-v1-evidence-contract.md) · [Part 3](phylax-monitorability-part-3-migration-assurance.md)
+**Normative authority:** [Doc 60 — Canonical Phylax Monitorability Design
+Specification](../60-phylax-monitorability-design-spec.md). Doc 60 defines the
+epistemic classes and decision authority; this part specifies artifact and
+adapter implementation detail that remains subordinate to it.
+
+**Implementation modules:** [Part 1 — v1 evidence contract](phylax-monitorability-part-1-v1-evidence-contract.md) ·
+[Part 3 — migration and assurance](phylax-monitorability-part-3-migration-assurance.md)
 
 ## Objective
 
 Phylax turns redacted operational evidence and legitimately accessible sealed
-reasoning into calibrated safety signals. It never presents an unobserved
-thought, action, causal relation, or forecast as a canonical fact.
-
-The design therefore separates four epistemic classes:
-
-| Class | Meaning | Can establish an enforcement ground? |
-| --- | --- | --- |
-| Observed | directly emitted/verified action, policy state, tool result, or approval | yes, when policy permits |
-| Derived | monitor classification over evidence | no by itself |
-| Reconstructed/interpolated | bounded hypothesis about a gap between observations | no |
-| Forecast/extrapolated | expiring estimate beyond the observation window | no |
-
-Trace membership proves correlation, not causation. A sealed reasoning reference
-may support a monitor inference but never by itself proves intent or authorizes
-an action.
+reasoning into calibrated safety signals. The epistemic meanings and authority
+limits are normative in Doc 60. This module requires a concrete, append-only
+implementation record for every non-observed artifact so it cannot be mistaken
+for an observation or a decision.
 
 ## v2 inputs
 
@@ -57,25 +52,35 @@ class DerivedMonitorabilityArtifactV2(BaseModel):
     subject_kind: Literal[
         "action", "action_sequence", "policy_state", "risk_trajectory"
     ]
-    source_evidence_refs: list[OpaqueEvidenceRef]
+    source_observation_refs: list[OpaqueEvidenceRef]
     trace_relation: Literal[
         "same_span", "ancestor_span", "descendant_span",
         "correlated_only", "causal_unknown"
     ]
     method_id: str
     method_version: str
+    model_id: str
+    model_version: str
     confidence: float
-    calibration_ref: OpaqueEvidenceRef | None
+    calibration_ref: OpaqueEvidenceRef
+    calibration_version: str
     valid_from: datetime | None
-    valid_until: datetime | None
+    expires_at: datetime
+    supersedes_artifact_ids: list[str]
     sealed_reasoning_ref: OpaqueEvidenceRef | None
     authority: Literal["advisory"]
+    disposition: Literal["advisory", "escalate", "re_evaluate", "human_review"]
 ```
 
-`reconstructed` and `interpolated` require a bounded interval plus bracketing
-evidence; `forecast` requires an explicit future horizon and expiry. A missing
-action is never inserted into the canonical event ledger. A forecast that has
-expired is not a live risk signal.
+Every non-observed artifact must include one or more source observation
+references, its method and model identifiers/versions, confidence and
+calibration metadata, an expiry, a supersession list (empty when it replaces
+nothing), and an explicitly non-authoritative disposition. `reconstructed` and
+`interpolated` additionally require a bounded interval plus bracketing source
+observations; `forecast` requires an explicit future horizon. On correction or
+replacement, append a new artifact that identifies what it supersedes rather
+than rewriting the earlier record. Expired or superseded artifacts are not live
+evidence for a new decision.
 
 ## Decision contract and authority
 
@@ -101,11 +106,12 @@ A future `block` is valid only if all conditions hold:
 1. at least one independently observable evidence reference proves the named
    policy violation;
 2. the policy pack explicitly permits blocking that violation;
-3. a trusted Phylax evaluator/issuer creates the decision; and
+3. a trusted Phylax evaluator/issuer explicitly admits the evidence through the
+   versioned Phylax v2 contract and creates the decision; and
 4. review, false-block, rollback, and retention controls are active.
 
-A derived artifact may trigger warning, re-evaluation, sampling, or human
-review. It cannot block, grant/revoke a capability, revise observed history, or
+A derived artifact may have only the non-authoritative dispositions represented
+above. It cannot block, grant/revoke a capability, revise observed history, or
 create merge/deployment authority.
 
 ## Execution lanes and access

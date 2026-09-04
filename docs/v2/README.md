@@ -74,6 +74,7 @@ LangChain/LangGraph existing ecosystem).
 | **D24** | Repository standard (cross-cutting, additive) | Repo root stays minimal; everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay in `.gitignore`d folders, never committed alongside API keys, personal paths, doxxing material, or SecOps-sensitive content. Additive — builds on top of every other standard in this tree, never overrides a stricter rule (2026-07-20 — see `46-repository-standard.md`) |
 | **D25** | Portable-memory local-topology invariant | Tracked policy names categories; concrete forbidden identity, attribution, device, path, workspace, and topology fragments live only in an off-repo local-only registry. Portable memory guards must scan source rows, archived candidates, episodic logs, and rendered views without printing matched values (2026-07-18 — see `47-portable-memory-local-topology-invariant.md`) |
 | **D26** | Provisional Anamnesis migration | PT `.agent` remains the v1 development-memory authority. The stable capture frontend delegates there now; a private, configurable runtime backend is deferred to tentative `oramasys/anamnesis`, with automatic push disabled by default (2026-08-25 — see `56-anamnesis-runtime-memory-migration.md`) |
+| **D27** | Observability and monitorability | [Doc 55](55-oramasys-agent-observability-contract-adr.md) governs observability: recording and reconstructing operation through telemetry and privacy transport. [Doc 60](60-phylax-monitorability-design-spec.md) governs monitorability: evaluating evidence sufficiency and inference classes, and defining safety decision authority. |
 
 Full rationale and the Perplexity/GPT/Gemini/Grok evidence behind each decision is in [`00-context-and-decisions.md`](./00-context-and-decisions.md).
 
@@ -256,10 +257,11 @@ orama-system/docs/v2/
 ├── 56-anamnesis-runtime-memory-migration.md  ← D26: v1 PT-agent controller contract; deferred private v2 runtime-memory backend and weekly HITL promotion policy
 ├── 57-minigraph-final-reconciliation.md  ← canonical MiniGraph architecture record: supersedes prior line-count/freeze/async-only clauses; ownership (perpetua-core executes, orama-system owns GraphSpec/lint/evaluation/policy); the CompiledGraph/asteps()/GraphEvent scheduler seam; §17 explicit LangGraph (Python, legacy+current) and LangGraph.js (oramaclaw, bundled with AlphaClaw/OpenClaw runtime controllers) drop-in-compatibility decision. Plan: docs/v2/plans/2026-08-27-minigraph-final-reconciliation.md
 ├── 58-minigraph-observer-pattern-library-reconciliation.md  ← observer/pattern-library addendum: reconciles the mined pattern catalogue against the final MiniGraph architecture
-└── 59-minigraph-state-mutation-observer-finalization.md  ← final state/mutation/observer correction; exact-head oramasys/perpetua-core PR #1 review closure evidence
+├── 59-minigraph-state-mutation-observer-finalization.md  ← final state/mutation/observer correction; exact-head oramasys/perpetua-core PR #1 review closure evidence
+└── 60-phylax-monitorability-design-spec.md  ← canonical Phylax monitorability architecture; governs evidence, epistemic inference classes, safety authority, privacy, liveness, and migration; its three references are subordinate implementation modules
 ```
 
-> **Next free slot: `60-`**
+> **Next free slot: `61-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
