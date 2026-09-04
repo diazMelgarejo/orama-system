@@ -309,7 +309,24 @@ Failures are fail-closed at schema, privacy, access, admission, and enforcement
 boundaries, while compatibility remains explicit: absent v1 monitorability is
 valid, and v1 never blocks.
 
-## 14. Source hierarchy
+## 14. Deferred migration questions
+
+The following are canonical open questions, not approved runtime work. They are
+documented here so migration can resolve them with evidence rather than silently
+inventing a second contract.
+
+| Question | Current safe position | Resolution gate |
+| --- | --- | --- |
+| Coordination-round context | The standalone `CoordinationRoundEnvelopeV1` design groups controller, scope, and stop conditions without changing `HandoffPacketV1`; see the approved design record. | M2 producer inventory and contract/fixture conformance review before any producer-emission mandate. |
+| Phylax runtime owner | No repository/package has yet been named as the executable v2 owner. | M0.1 names owner, dependency direction, validator location, and retention boundary before runtime code. |
+| Derived-artifact persistence | Append-only governed storage is required, but no implementation store is selected. | M0.1/M3 privacy, access-audit, expiry, and rollback evidence. |
+| OTel baseline evolution | The current adapter map is pinned; later GenAI semantic-convention updates are not implicit. | Mapping regression, explicit review identifier, and no-emission-before-approval gate. |
+
+These questions are docs-only planning inputs until their named gate passes. They
+do not authorize v2 code, change v1 compatibility, alter worker liveness, or
+create a policy/enforcement path.
+
+## 15. Source hierarchy
 
 Use the following precedence when statements conflict:
 
