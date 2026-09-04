@@ -24,13 +24,21 @@ The versioned adapter normalizes the v1 envelope rather than parsing Markdown,
 logs, or raw agent output:
 
 ```python
+from typing import Annotated
+from pydantic import Field, model_validator
+
 class PhylaxMonitorabilityInputV2(BaseModel):
     contract_version: Literal[2]
     source_handoff_version: Literal[1]
     redacted_observation_ref: OpaqueEvidenceRef
     policy_context: PolicyContextV2
     observable_evidence: list[ObservableEvidenceV2]
-    sealed_reasoning_ref: OpaqueEvidenceRef | None
+    sealed_reasoning_ref: OpaqueEvidenceRef | None = None
+    otel_mapping_id: Literal["oramasys.phylax.otel-map.v1"]
+    otel_semconv_baseline: Literal[
+        "open-telemetry/semantic-conventions-genai@94f432d7126f5884d30a2cdde6f4e89908ebb6fd"
+    ]
+    mapping_review_id: OpaqueEvidenceRef
 ```
 
 The adapter records source schema, redaction profile, evidence order, and the
@@ -52,7 +60,7 @@ class DerivedMonitorabilityArtifactV2(BaseModel):
     subject_kind: Literal[
         "action", "action_sequence", "policy_state", "risk_trajectory"
     ]
-    source_observation_refs: list[OpaqueEvidenceRef]
+    source_observation_refs: Annotated[list[OpaqueEvidenceRef], Field(min_length=1)]
     trace_relation: Literal[
         "same_span", "ancestor_span", "descendant_span",
         "correlated_only", "causal_unknown"
@@ -61,26 +69,55 @@ class DerivedMonitorabilityArtifactV2(BaseModel):
     method_version: str
     model_id: str
     model_version: str
-    confidence: float
-    calibration_ref: OpaqueEvidenceRef
-    calibration_version: str
-    valid_from: datetime | None
+    confidence: Annotated[float, Field(ge=0.0, le=1.0)]
+    calibration_ref: OpaqueEvidenceRef | None = None
+    calibration_version: str | None = None
+    valid_from: datetime | None = None
     expires_at: datetime
     supersedes_artifact_ids: list[str]
-    sealed_reasoning_ref: OpaqueEvidenceRef | None
+    sealed_reasoning_ref: OpaqueEvidenceRef | None = None
     authority: Literal["advisory"]
     disposition: Literal["advisory", "escalate", "re_evaluate", "human_review"]
+
+    @model_validator(mode="after")
+    def enforce_temporal_and_calibration_rules(self):
+        if (self.calibration_ref is None) != (self.calibration_version is None):
+            raise ValueError("calibration reference and version must appear together")
+        if self.epistemic_status in {"reconstructed", "interpolated"}:
+            if self.valid_from is None or self.valid_from >= self.expires_at:
+                raise ValueError("reconstruction/interpolation needs a bounded interval")
+        if self.epistemic_status == "forecast":
+            if self.valid_from is None or self.valid_from >= self.expires_at:
+                raise ValueError("forecast needs a future-bounded horizon")
+        return self
 ```
 
 Every non-observed artifact must include one or more source observation
 references, its method and model identifiers/versions, confidence and
-calibration metadata, an expiry, a supersession list (empty when it replaces
-nothing), and an explicitly non-authoritative disposition. `reconstructed` and
-`interpolated` additionally require a bounded interval plus bracketing source
-observations; `forecast` requires an explicit future horizon. On correction or
-replacement, append a new artifact that identifies what it supersedes rather
-than rewriting the earlier record. Expired or superseded artifacts are not live
-evidence for a new decision.
+calibration metadata when calibrated, an expiry, a supersession list (empty when
+it replaces nothing), and an explicitly non-authoritative disposition.
+`reconstructed` and `interpolated` additionally require a bounded interval plus
+bracketing source observations; `forecast` requires an explicit future horizon.
+On correction or replacement, append a new artifact that identifies what it
+supersedes rather than rewriting the earlier record. Expired or superseded
+artifacts are not live evidence for a new decision.
+
+This repository deliberately does not introduce a shadow Phylax runtime:
+M0.1 names its owning package before implementation. That owning package must
+implement the schema above and reject empty evidence, out-of-range confidence,
+one-sided calibration metadata, invalid status-dependent intervals, and an
+expired forecast before M3 can pass. Its conformance tests must also prove that
+omitting either nullable `sealed_reasoning_ref`, `calibration_ref`, or
+`valid_from` is accepted only where the status rule permits it.
+
+| Conformance case | Required result |
+| --- | --- |
+| no `source_observation_refs` | reject before persistence |
+| confidence below 0 or above 1 | reject before persistence |
+| only one calibration field | reject before persistence |
+| reconstruction/interpolation without a bounded interval | reject before persistence |
+| forecast with no future-bounded horizon, or after `expires_at` | reject for decision use |
+| omitted nullable field in a permitted status | accept without synthesizing a value |
 
 ## Decision contract and authority
 
@@ -92,14 +129,21 @@ class PhylaxMonitorabilityDecisionV2(BaseModel):
     policy_ids: list[str]
     observable_evidence_refs: list[OpaqueEvidenceRef]
     derived_artifact_refs: list[str]
-    monitor_rationale_summary: str
+    monitor_rationale_category: Literal[
+        "observable_evidence", "policy_match", "confidence_threshold",
+        "human_review", "insufficient_evidence"
+    ]
+    monitor_rationale_ref: OpaqueEvidenceRef | None = None
     human_review_required: bool
     retention_class: RetentionClassV2
 ```
 
 Every decision has an issuer, immutable decision ID, policy-pack version,
 timestamp, integrity hash, and append-only correlation to its source evidence.
-`monitor_rationale_summary` is concise and redacted; it must not copy CoT.
+There is no persisted free-form rationale summary. The bounded category is safe
+for ordinary telemetry; the optional rationale reference uses the Part 1 opaque
+reference grammar, is never exported in normal telemetry, and may resolve only
+inside the governed incident store. It must not carry or reveal CoT.
 
 A future `block` is valid only if all conditions hold:
 

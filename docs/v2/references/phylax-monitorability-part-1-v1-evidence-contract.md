@@ -41,17 +41,44 @@ future versioned Phylax adapter may make normalized monitorability mandatory.
 ```python
 class MonitorabilityEnvelopeV1(BaseModel):
     schema_version: Literal[1]
-    otel: OTelGenAiContextV1 | None
+    otel: OTelGenAiContextV1 | None = None
     phylax: PhylaxMonitorabilityContextV1
     privacy: RedactedEvidencePolicyV1
     integrity: EvidenceIntegrityV1
+
+class RedactedEvidencePolicyV1(BaseModel):
+    raw_reasoning_persisted_in_packet: Literal[False]
 ```
 
 `otel` records only a legitimate operation, provider, stable logical agent,
 model, conversation, and W3C trace/span context. It must not invent a provider,
 derive a conversation ID from content, or place hashes in standard identity
-fields. Mapping is a strict superset of applicable developing `gen_ai.*`
-semantics; Phylax extensions remain under `oramasys.phylax.*`.
+fields.
+
+### Frozen OTel projection contract
+
+The v1 adapter is pinned to `oramasys.phylax.otel-map.v1`, whose upstream
+baseline is `open-telemetry/semantic-conventions-genai@94f432d7126f5884d30a2cdde6f4e89908ebb6fd`
+(captured 2026-09-04). This is a reproducible input to the adapter, not a claim
+that every developing GenAI semantic convention is stable or applicable.
+
+| Projection class | Required or permitted fields | Rule |
+| --- | --- | --- |
+| W3C correlation | trace ID and span ID together | both validate as W3C IDs; neither is synthesized |
+| pinned standard `gen_ai.*` | `gen_ai.operation.name` | required whenever `otel` is present |
+| pinned standard `gen_ai.*` | `gen_ai.provider.name`, `gen_ai.request.model`, `gen_ai.response.model` | emit only when legitimately known; never infer from content |
+| Oramasys extension | `oramasys.phylax.schema_version`, `oramasys.phylax.policy_pack.id`, `oramasys.phylax.policy_pack.version`, `oramasys.phylax.risk_tier` | redacted scalar metadata from the envelope |
+| Oramasys extension | `oramasys.phylax.reported_monitor_decision`, `oramasys.phylax.severity`, `oramasys.phylax.confidence`, `oramasys.phylax.escalation_state`, `oramasys.phylax.retention_class`, `oramasys.phylax.reasoning_availability`, `oramasys.phylax.evidence_manifest_hash` | redacted scalar metadata; never a trusted Phylax decision or raw/sealed evidence |
+
+Standard attributes retain their pinned semantic meaning and may not be renamed,
+overwritten, or populated with hashed/content-derived substitutes. No
+`oramasys.phylax.*` key may collide with a standard key; unknown,
+incompatible, or non-additive changes fail closed and hold the projection until
+an explicit mapping-version approval. Evidence IDs, sealed references, raw
+reasoning, prompt/output/tool payloads, URLs, hosts, paths, and secrets are
+never projected. The v2 adapter record carries `otel_mapping_id`,
+`otel_semconv_baseline`, and the approved mapping-review identifier so Part 3
+can run the same mapping regression against a fixed baseline.
 
 The Phylax context contains policy-pack identity/version, risk tier,
 capability-grant IDs, advisory decision (`allow`, `warn`, `escalate`), severity,
@@ -77,8 +104,10 @@ as a Phylax decision.
   references match `^(?:evidence|sealed|grant)_[0-9a-f]{16,64}$`; reference
   lists are non-empty and contain no duplicates. These grammar checks prevent
   identifiers from becoming content-bearing free-form fields.
-- The packet must say `raw_reasoning_persisted_in_packet: false`, not make a
-  false claim about separately governed Phylax incident storage.
+- When `monitorability` is present, its required `privacy` object must include
+  `raw_reasoning_persisted_in_packet: Literal[False]` with no default; omission
+  and `true` are validation errors. This closed-envelope requirement does not
+  make a false claim about separately governed Phylax incident storage.
 - A manifest hash and ordered evidence references provide correlation; v1
   validates their syntax and internal consistency only.
 - The `handoff_admitted` audit projection is allowlist-only. It projects the
@@ -90,7 +119,10 @@ as a Phylax decision.
 
 1. Maintain tests for a complete envelope, closed nested models, malformed W3C
    IDs, invalid enum/authority values, the shipped opaque-reference grammar,
-   recursive raw-content rejection, and non-liveness admission.
+   recursive raw-content rejection, and non-liveness admission. The suite
+   accepts an omitted `otel`, rejects an omitted or `true`
+   `raw_reasoning_persisted_in_packet`, and rejects an unapproved OTel mapping
+   before it emits a projection.
 2. Add the Pydantic models and cross-field validators to
    `orchestrator/handoff_validation.py`; expose stable diagnostics only.
 3. Keep the post-enqueue `handoff_admitted` projection explicit, redacted, and
@@ -105,6 +137,10 @@ as a Phylax decision.
 
 - Legacy v1 packets still validate unchanged.
 - Envelope validation is strict, additive, and fail-closed.
+- The optional `otel` field is actually optional under Pydantic 2; supplied
+  monitorability still requires the `Literal[False]` raw-reasoning invariant.
+- The pinned OTel mapping emits only its enumerated keys, and a changed mapping
+  emits no projection before explicit approval.
 - A supplied v1 advisory remains caller-reported, and `block` is invalid.
 - Audit projection is allowlist-only and excludes raw/sealed/high-cardinality
   evidence data.

@@ -20,7 +20,7 @@ part supplies the rollout and assurance detail.
 | M1 | optional strict PT envelope and redacted audit | schema, redaction, audit, liveness tests pass | omit envelope; keep reader |
 | M2 | new-standard producers emit envelope | producer inventory is complete | disable emission only |
 | M3 | Phylax v2 adapter consumes evidence in shadow mode | human-review calibration and privacy evidence | disable adapter; preserve audit |
-| M4 | v2 handoffs require adapter-normalized envelope | all v2 producers and claimants migrated | route legacy callers through v1 adapter |
+| M4 | v2 handoffs require adapter-normalized envelope | all v2 producers and claimants migrated, and a mixed-version rollback test passes | legacy callers route through the v1 adapter; already-migrated v2 callers remain accepted by the v2 normalizer in advisory/shadow compatibility mode; both retain their original audit trail and gain no new enforcement authority |
 | M5 | guarded blocks for defined observable violations | independent observable evidence, explicit Phylax v2 admission, review, false-block, and rollback gates | return to advisory mode |
 
 No stage may be skipped. Stored v1 meaning never changes in place; the v2
@@ -67,7 +67,7 @@ monitorability.
 | sealed reference copied into audit | allowlist projection omits it |
 | monitor asks to block without evidence | decision validation rejects it |
 | forecast survives beyond horizon | expired artifact cannot influence a new decision |
-| OTel semantic drift | mapping-version regression flags review before projection changes |
+| OTel semantic drift | unknown, incompatible, or non-additive mappings reject or hold projection; no changed projection emits before explicit mapping approval |
 | activity masquerades as heartbeat | admission/log/advisory leaves liveness unchanged |
 
 ## Artifact-specific authorization assertions
@@ -93,6 +93,12 @@ implementation or migration shortcut.
 - Separate privacy classification from export authorization and from authority.
 - Require a human-reviewed rollback path before changing `warn`/`escalate` to
   any enforcement behavior.
+- Before M4, run a mixed-version rollback acceptance test: a legacy v1 packet
+  and a previously normalized v2 handoff are both accepted after rollback,
+  preserve their respective audit records, and remain advisory-only.
+- Before emitting a projection, run the pinned Part 1 mapping regression. A
+  mapping delta is rejected or held pending an explicit review identifier; CI
+  proves that no changed projection was emitted before that approval.
 - Preserve append-only evidence and decision records; corrections are new,
   linked records rather than rewritten historical claims.
 
@@ -102,6 +108,10 @@ Before M3, confirm that PT contains no Phylax engine, collector, background
 monitor, network export, or hidden raw-data channel. Before M5, confirm that
 the same independently observable violation would be actionable without CoT;
 CoT may improve detection and triage, never become the sole enforcement basis.
+
+Before M3, the named Phylax owner must publish the repository-owned validator
+and conformance suite specified by Part 2; this document does not substitute a
+Markdown claim for executable validation.
 
 Every repository change records its owner, contract version, migration impact,
 test evidence, and rollback decision. Telos changes only when an endpoint fact
