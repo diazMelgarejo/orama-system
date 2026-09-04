@@ -36,13 +36,13 @@ class CoordinationRoundEnvelopeV1(BaseModel):
     session_id: BoundedIdentifier
     controller_id: BoundedIdentifier
     objective_ref: OpaqueEvidenceRef
-    out_of_scope_refs: list[OpaqueEvidenceRef] = Field(default_factory=list)
+    out_of_scope_refs: list[OpaqueEvidenceRef] = Field(default_factory=list, max_length=20)
     stop_condition_codes: list[Literal[
         "task_complete", "approval_required", "validation_failure",
         "budget_exhausted", "deadline_reached", "operator_stop"
-    ]] = Field(min_length=1)
-    stop_condition_detail_refs: list[OpaqueEvidenceRef] = Field(default_factory=list)
-    ordered_handoff_refs: list[OpaqueEvidenceRef] = Field(min_length=1)
+    ]] = Field(min_length=1, max_length=6)
+    stop_condition_detail_refs: list[OpaqueEvidenceRef] = Field(default_factory=list, max_length=20)
+    ordered_handoff_refs: list[OpaqueEvidenceRef] = Field(min_length=1, max_length=20)
     authorization_ref: OpaqueEvidenceRef
     authority: Literal["coordination_only"]
     liveness_effect: Literal["none"]
@@ -56,8 +56,33 @@ class CoordinationRoundEnvelopeV1(BaseModel):
             raise ValueError("round expires_at must follow created_at")
         if len(set(self.ordered_handoff_refs)) != len(self.ordered_handoff_refs):
             raise ValueError("ordered_handoff_refs must be unique")
+        if len(self.model_dump_json().encode("utf-8")) > 8192:
+            raise ValueError("serialized envelope must not exceed 8192 bytes")
         return self
 ```
+
+### Adopted limits, and why
+
+These are newly-adopted v1 numbers, stated explicitly rather than left as
+vague "bounded" language, per direct resolution of the coordination-limits
+open question. Not invented silently: `BoundedIdentifier`/`OpaqueEvidenceRef`
+reuse Part 1's existing, already-shipped grammar (128 chars for identifiers,
+confirmed directly against the real regex; ~73 chars for opaque references,
+bounded by their own `{16,64}` hex-digest pattern) rather than defining a new
+length. The four list-length caps (20 each) and the 8192-byte total-envelope
+cap are genuinely new for this record, chosen conservatively rather than
+derived from an existing production number, since none of the checked
+existing budgets (`.agent/loops/budget.json`: `max_attempts=3`,
+`max_output_chars=200000`, `max_changed_files=10`) map cleanly onto a
+coordination-round envelope's specific shape. `stop_condition_codes` is
+capped at 6 specifically (not 20), matching the literal's own fixed
+enumeration size — a round can plausibly cite every stop condition at most
+once each, so a higher cap would only mask a real bug (duplicate codes) as
+valid data.
+
+If v2 Phylax governance later sets different numbers before M2 lands, this
+document's values are the ones to revise — they are the v1 baseline, not a
+permanent ceiling.
 
 `BoundedIdentifier` uses the established Part 1 bounded-identifier grammar.
 `OpaqueEvidenceRef` uses the established Part 1 opaque-reference grammar and

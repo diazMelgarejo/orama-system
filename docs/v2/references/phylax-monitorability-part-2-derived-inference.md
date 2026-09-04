@@ -55,6 +55,7 @@ into normal telemetry.
 ```python
 class DerivedMonitorabilityArtifactV2(BaseModel):
     artifact_id: str
+    status: Literal["active", "superseded", "retracted"]
     epistemic_status: Literal[
         "derived", "reconstructed", "interpolated", "forecast"
     ]
@@ -91,6 +92,40 @@ class DerivedMonitorabilityArtifactV2(BaseModel):
             if self.valid_from is None or self.valid_from >= self.expires_at:
                 raise ValueError("forecast needs a future-bounded horizon")
         return self
+
+
+def resolve_effective_status(
+    artifact: DerivedMonitorabilityArtifactV2,
+    all_artifacts: list[DerivedMonitorabilityArtifactV2],
+) -> Literal["active", "superseded", "retracted"]:
+    """Compute an artifact's real, current status -- never trust its own
+    stored `status` field alone for this.
+
+    Artifacts are append-only: once written, an artifact's own record can
+    never be mutated to record that something *later* superseded it. A
+    naive single supersedes-style field on the superseding artifact,
+    checked in isolation, hits exactly the bug this codebase already found
+    and fixed once this session in PT's lessons.jsonl -- a narrow
+    correction's own `supersedes` pointer only linked one specific prior
+    record, silently leaving other, equally-real duplicates unlinked and
+    still rendering as live. The fix there, and the one specified here, is
+    the same: never mutate old records: instead, resolve the reverse
+    relationship by scanning at resolution time.
+
+    An artifact's stored `status` field reflects only what was true when
+    IT was written (e.g. "active" if nothing was known to supersede it
+    yet). The actual, current status must be recomputed against the full
+    artifact set on every resolution -- retracted always wins if present;
+    otherwise, any artifact whose `supersedes_artifact_ids` includes this
+    one's `artifact_id` makes it superseded, regardless of what its own
+    stored `status` says.
+    """
+    if artifact.status == "retracted":
+        return "retracted"
+    for other in all_artifacts:
+        if artifact.artifact_id in other.supersedes_artifact_ids:
+            return "superseded"
+    return artifact.status
 ```
 
 Every non-observed artifact must include one or more source observation

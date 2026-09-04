@@ -259,9 +259,10 @@ orama-system/docs/v2/
 ├── 58-minigraph-observer-pattern-library-reconciliation.md  ← observer/pattern-library addendum: reconciles the mined pattern catalogue against the final MiniGraph architecture
 ├── 59-minigraph-state-mutation-observer-finalization.md  ← final state/mutation/observer correction; exact-head oramasys/perpetua-core PR #1 review closure evidence
 └── 60-phylax-monitorability-design-spec.md  ← canonical Phylax monitorability architecture; governs evidence, epistemic inference classes, safety authority, privacy, liveness, and migration; its three references are subordinate implementation modules
+└── 61-pt-coordination-principal-identity-design.md  ← design-only (not built): a real authenticated-principal mechanism for PT's coordination CLI, superseding the shipped PT_AGENT_ID env-var cross-check; bearer-token proposal + 3-stage migration path
 ```
 
-> **Next free slot: `61-`**
+> **Next free slot: `62-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
