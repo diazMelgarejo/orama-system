@@ -85,6 +85,8 @@ class DerivedMonitorabilityArtifactV2(BaseModel):
     def enforce_temporal_and_calibration_rules(self):
         if (self.calibration_ref is None) != (self.calibration_version is None):
             raise ValueError("calibration reference and version must appear together")
+        if self.artifact_id in self.supersedes_artifact_ids:
+            raise ValueError("an artifact cannot supersede itself")
         if self.epistemic_status in {"reconstructed", "interpolated"}:
             if self.valid_from is None or self.valid_from >= self.expires_at:
                 raise ValueError("reconstruction/interpolation needs a bounded interval")
@@ -123,6 +125,10 @@ def resolve_effective_status(
     if artifact.status == "retracted":
         return "retracted"
     for other in all_artifacts:
+        if other.artifact_id == artifact.artifact_id:
+            continue  # an artifact never supersedes itself -- defense in depth
+                      # for records predating enforce_temporal_and_calibration_rules'
+                      # construction-time rejection above
         if artifact.artifact_id in other.supersedes_artifact_ids:
             return "superseded"
     return artifact.status
@@ -234,6 +240,23 @@ A `PhylaxMonitorabilityDecisionV2` may only be constructed from
 `admissible_refs`, never the raw `derived_artifact_refs` a caller supplied --
 an expired or superseded artifact must not silently continue backing a live
 decision just because its `artifact_id` still appears in a list somewhere.
+
+**A related, currently unenforced requirement, stated honestly rather than
+silently left unaddressed:** doc 60 requires observed and non-observed
+records to never merge (§ "Observed records never merge with non-observed
+artifacts"). `source_observation_refs` on `DerivedMonitorabilityArtifactV2`
+is documented as pointing to observation evidence, but neither this document
+nor Part 1 yet defines a canonical `Observed`-class record schema to check
+membership against -- so nothing here currently rejects a
+`source_observation_refs` entry that actually points to another
+non-observed (derived/reconstructed/interpolated/forecast) artifact, which
+would let an inference chain build on inference rather than on real ground
+truth. Closing this properly needs a canonical `ObservedEventV1`-style
+schema (or equivalent epistemic-class tag on every referenceable record)
+added to Part 1's evidence contract first; `resolve_admissible_artifact_refs`
+above should then also reject any `source_observation_refs` entry whose
+resolved record is not tagged `Observed`, with its own conformance case.
+Flagged here as a concrete, named follow-up rather than assumed away.
 
 A future `block` is valid only if all conditions hold:
 

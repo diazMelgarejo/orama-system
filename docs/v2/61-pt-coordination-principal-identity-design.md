@@ -77,6 +77,22 @@ work); the raw token is generated once, shown once, and the caller is
 responsible for storing it in their own agent's local, untracked
 environment (e.g. `PT_AGENT_TOKEN`, alongside the existing `PT_AGENT_ID`).
 
+**Authoritative source across hosts.** The coordination template's own
+existing pattern already designates the Mac orchestrator as the host that
+"controls the coordination round" — this design reuses that same authority
+split rather than inventing a new one: the Mac host owns the canonical
+`principals.json`, and every registration/revocation is a write to that one
+file on that one host. Windows co-orchestrator hosts hold a synced,
+**read-only** copy, refreshed via the same LAN peer-file-inbox transport
+already used for cross-host coordination assignments (`lan_peer_assign.py`)
+— not a new sync mechanism. A Windows host with a stale copy fails closed:
+an unrecognized or since-revoked token is rejected as invalid, never
+silently accepted because the local cache hadn't caught up yet. Revocation
+propagation delay is therefore bounded by the existing peer-sync cadence,
+not instantaneous — acceptable for this threat model (misconfiguration/
+local-bug protection, stated in the threat-model section above), since it
+is not defending against a sophisticated attacker racing a revocation.
+
 **Verification.** `queue_claim` (and any future principal-checked call)
 requires both `PT_AGENT_ID` and `PT_AGENT_TOKEN` to be set. The token is
 hashed and compared against the registered hash for that `agent_id`; a
@@ -92,6 +108,16 @@ reservation check runs — the same insertion point the current
 | OS-level process identity (`SO_PEERCRED` on a Unix socket) | Only works for same-host callers over a Unix socket; this coordination layer is SQLite-file-based, not socket-based, and Windows co-orchestrator hosts (named explicitly in the coordination template) have no equivalent primitive |
 | Signed claims (each agent holds a private key, signs every claim) | Genuinely stronger (non-repudiation), but needs key provisioning/rotation infrastructure equivalent to the token approach with added asymmetric-crypto complexity, for a threat model that doesn't yet require non-repudiation |
 | Bearer token (this proposal) | Matches the actual threat model (misconfiguration/local-bug protection, not defense against a sophisticated remote attacker), reuses infrastructure this repo already has patterns for (hash-then-store, matching how the endpoint-policy security primitive elsewhere in this org already handles comparable secrets) |
+
+**`PT_AGENT_TOKEN` outcome matrix:**
+
+| State | M-id-1 / M-id-2 (fallback active) | M-id-3 (token required) |
+| --- | --- | --- |
+| Unset | Falls back to today's `PT_AGENT_ID`-only check | Rejected: token required |
+| Set, but no matching entry in `principals.json` | Rejected: unregistered token | Rejected: unregistered token |
+| Set, matches an entry marked `revoked: true` | Rejected: revoked token | Rejected: revoked token |
+| Set, hash mismatch against the registered `agent_id`'s entry | Rejected: token/identity mismatch | Rejected: token/identity mismatch |
+| Set, valid, matches a non-revoked entry for this `agent_id` | Accepted | Accepted |
 
 ## Migration path, if and when this is prioritized
 

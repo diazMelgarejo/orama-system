@@ -92,6 +92,20 @@ established for `resolve_effective_status()` in Part 2, and for the same
 reason: a field cached at construction time cannot reflect a fact (whether
 "now" is past `expires_at`) that changes after construction.
 
+**Construction-time and admission-time validity are deliberately different
+questions, stated explicitly here rather than left ambiguous.** The model
+validator only enforces that the interval is internally well-formed
+(`created_at < expires_at`) -- it does not, and must not, reject an envelope
+whose `expires_at` already lies in the past relative to *now*, because such
+an envelope can be a legitimate historical record (e.g. replayed for audit,
+loaded from an archived coordination log) rather than a malformed one. The
+conformance requirement to *reject an expired envelope* applies specifically
+at admission (dispatch/use), via `resolve_round_admissible()`, never at
+construction/deserialization. A conformance test asserting "an
+already-expired interval is rejected" must call
+`resolve_round_admissible(envelope, clock_now)` and check its return value,
+not attempt to construct the envelope and expect a `ValidationError`.
+
 ### Adopted limits, and why
 
 These are newly-adopted v1 numbers, stated explicitly rather than left as

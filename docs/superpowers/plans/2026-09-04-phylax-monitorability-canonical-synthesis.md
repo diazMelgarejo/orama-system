@@ -54,7 +54,7 @@ Reference the MiniGraph kernel through `01-kernel-spec.md` without a line count.
 
 - [ ] **Step 5: Validate the new document**
 
-Run: `python scripts/review/repo_hygiene.py . && git diff --check`
+Run: `python scripts/review/repo_hygiene.py . && git diff --cached --check`
 
 Expected: both commands exit zero.
 
@@ -99,7 +99,7 @@ Add M0 decisions for the Phylax package/repository boundary and reuse inventory 
 
 ```bash
 python scripts/review/repo_hygiene.py .
-git diff --check
+git diff --cached --check
 git add docs/v2/references/phylax-monitorability-part-*.md
 bash scripts/git/verify-staged-for-commit.sh
 bash scripts/git/commit-clean.sh -m "docs(v2): align monitorability implementation modules"
@@ -129,7 +129,7 @@ Add a forward reference explaining that Doc 55 governs telemetry and privacy tra
 
 ```bash
 python scripts/review/repo_hygiene.py .
-git diff --check
+git diff --cached --check
 git add docs/v2/README.md docs/v2/55-oramasys-agent-observability-contract-adr.md
 bash scripts/git/verify-staged-for-commit.sh
 bash scripts/git/commit-clean.sh -m "docs(v2): index Phylax monitorability architecture"
@@ -150,7 +150,7 @@ bash scripts/git/commit-clean.sh -m "docs(v2): index Phylax monitorability archi
 
 - [ ] **Step 1: Run final repository checks**
 
-Run: `python scripts/review/repo_hygiene.py . && git diff --check`
+Run: `python scripts/review/repo_hygiene.py . && git diff --cached --check`
 
 Expected: both commands exit zero and no unrelated file is staged.
 
@@ -166,7 +166,14 @@ Push `2026-09-04-monitorability-v2-references` through the authenticated GitHub 
 
 - [ ] **Step 4: Update PR #340**
 
-Describe Doc 60 as normative, the three references as implementation modules, PR #379 as the v1 bridge, and the Phase M0 Phylax repository/reuse-audit decision as an explicit pre-code gate.
+PR body changes require explicit human authorization first, not
+comment-only reporting by default: run
+`scripts/cursor/grant-pr-body-human-override.sh`, then apply the update via
+`scripts/cursor/append-pr-body.sh` using its READ → BACKUP → MERGE
+(append-only) → WRITE workflow. Do not write the PR body directly. Describe
+Doc 60 as normative, the three references as implementation modules, PR
+#379 as the v1 bridge, and the Phase M0 Phylax repository/reuse-audit
+decision as an explicit pre-code gate.
 
 - [ ] **Step 5: Publish the downloadable synthesis**
 
