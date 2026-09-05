@@ -111,13 +111,12 @@ reservation check runs — the same insertion point the current
 
 **`PT_AGENT_TOKEN` outcome matrix:**
 
-| State | M-id-1 / M-id-2 (fallback active) | M-id-3 (token required) |
-| --- | --- | --- |
-| Unset | Falls back to today's `PT_AGENT_ID`-only check | Rejected: token required |
-| Set, but no matching entry in `principals.json` | Rejected: unregistered token | Rejected: unregistered token |
-| Set, matches an entry marked `revoked: true` | Rejected: revoked token | Rejected: revoked token |
-| Set, hash mismatch against the registered `agent_id`'s entry | Rejected: token/identity mismatch | Rejected: token/identity mismatch |
-| Set, valid, matches a non-revoked entry for this `agent_id` | Accepted | Accepted |
+| State | M-id-1 (opt-in) | M-id-2 (deprecation window) | M-id-3 (token required) |
+| --- | --- | --- | --- |
+| Unset | Falls back to today's `PT_AGENT_ID`-only check | Falls back to the `PT_AGENT_ID`-only check and emits a deprecation warning | Rejected: token required |
+| Invalid or mismatched | Rejected: supplied token is unregistered or does not match the requested `agent_id` | Rejected: supplied token is unregistered or does not match the requested `agent_id` | Rejected: supplied token is unregistered or does not match the requested `agent_id` |
+| Revoked | Rejected: token's registered entry is revoked | Rejected: token's registered entry is revoked | Rejected: token's registered entry is revoked |
+| Valid | Accepted: non-revoked token matches the requested `agent_id` | Accepted: non-revoked token matches the requested `agent_id` | Accepted: non-revoked token matches the requested `agent_id` |
 
 ## Migration path, if and when this is prioritized
 
