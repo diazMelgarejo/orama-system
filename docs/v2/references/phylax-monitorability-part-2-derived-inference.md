@@ -197,6 +197,44 @@ for ordinary telemetry; the optional rationale reference uses the Part 1 opaque
 reference grammar, is never exported in normal telemetry, and may resolve only
 inside the governed incident store. It must not carry or reveal CoT.
 
+```python
+def resolve_admissible_artifact_refs(
+    derived_artifact_refs: list[str],
+    all_artifacts: list[DerivedMonitorabilityArtifactV2],
+    clock_now: datetime,
+) -> tuple[list[str], list[tuple[str, str]]]:
+    """A decision's own derived_artifact_refs list is never trusted as-is --
+    every reference is re-resolved against the current artifact set at
+    admission time, the same "never trust a stored/cached fact" discipline
+    as resolve_effective_status() and resolve_round_admissible() above.
+    Returns (admissible_refs, rejected) where each rejected entry states
+    why: unknown_artifact_id, expired, or superseded_or_retracted (via
+    resolve_effective_status(), not the artifact's own stored status
+    field alone).
+    """
+    by_id = {a.artifact_id: a for a in all_artifacts}
+    admissible: list[str] = []
+    rejected: list[tuple[str, str]] = []
+    for ref in derived_artifact_refs:
+        artifact = by_id.get(ref)
+        if artifact is None:
+            rejected.append((ref, "unknown_artifact_id"))
+            continue
+        if clock_now >= artifact.expires_at:
+            rejected.append((ref, "expired"))
+            continue
+        if resolve_effective_status(artifact, all_artifacts) != "active":
+            rejected.append((ref, "superseded_or_retracted"))
+            continue
+        admissible.append(ref)
+    return admissible, rejected
+```
+
+A `PhylaxMonitorabilityDecisionV2` may only be constructed from
+`admissible_refs`, never the raw `derived_artifact_refs` a caller supplied --
+an expired or superseded artifact must not silently continue backing a live
+decision just because its `artifact_id` still appears in a list somewhere.
+
 A future `block` is valid only if all conditions hold:
 
 1. at least one independently observable evidence reference proves the named

@@ -31,6 +31,8 @@ prompt text, or agent reasoning.
 
 ```python
 class CoordinationRoundEnvelopeV1(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
     schema_version: Literal[1]
     round_id: BoundedIdentifier
     session_id: BoundedIdentifier
@@ -52,6 +54,8 @@ class CoordinationRoundEnvelopeV1(BaseModel):
 
     @model_validator(mode="after")
     def enforce_interval_and_reference_rules(self):
+        if self.created_at.tzinfo is None or self.expires_at.tzinfo is None:
+            raise ValueError("created_at and expires_at must be timezone-aware")
         if self.created_at >= self.expires_at:
             raise ValueError("round expires_at must follow created_at")
         if len(set(self.ordered_handoff_refs)) != len(self.ordered_handoff_refs):
@@ -59,7 +63,34 @@ class CoordinationRoundEnvelopeV1(BaseModel):
         if len(self.model_dump_json().encode("utf-8")) > 8192:
             raise ValueError("serialized envelope must not exceed 8192 bytes")
         return self
+
+
+def resolve_round_admissible(envelope: CoordinationRoundEnvelopeV1, clock_now: datetime) -> bool:
+    """Admission-time expiry check, resolved fresh against one canonical UTC
+    clock at the moment of use -- never trust a boolean cached at
+    construction time, since an envelope constructed as valid can still
+    expire while sitting unused. `clock_now` must be timezone-aware and
+    should come from a single canonical clock source shared across every
+    admission check in a process, not `datetime.now()` called ad hoc at
+    each call site."""
+    return clock_now < envelope.expires_at
 ```
+
+`model_config`'s `extra="forbid"` rejects any field not declared above --
+unknown fields fail validation rather than being silently dropped, matching
+Part 1's own `MonitorabilityEnvelopeV1` discipline. `frozen=True` makes every
+field immutable after construction: `authority`, `expires_at`, and
+`ordered_handoff_refs` (along with everything else) cannot be reassigned into
+an invalid state post-validation -- the class-level guarantee this document's
+own invariants depend on holding permanently, not just at construction.
+`created_at`/`expires_at` must be timezone-aware; a naive datetime is rejected
+by the same validator that already enforces interval ordering. Admissibility
+against the current moment is deliberately a separate function, not a field
+on the envelope itself, resolved fresh at each use against one canonical UTC
+clock -- the same "compute at resolution time" discipline already
+established for `resolve_effective_status()` in Part 2, and for the same
+reason: a field cached at construction time cannot reflect a fact (whether
+"now" is past `expires_at`) that changes after construction.
 
 ### Adopted limits, and why
 
