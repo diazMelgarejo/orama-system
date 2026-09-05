@@ -150,10 +150,13 @@ them to real observation timestamps requires the observation store, which a
 self-contained Pydantic model has no access to by design (the same
 opaque-reference discipline that keeps raw evidence out of the model at all).
 Bracketing enforcement is therefore a separate, repository-owned admission-time
-validator: it resolves each `source_observation_refs` entry against the
-observation store, confirms at least one resolved observation falls at or
-before `valid_from` and at least one at or after `expires_at` for
-`reconstructed`/`interpolated` artifacts, and rejects admission otherwise. No
+validator. For every `source_observation_refs` entry, it resolves the canonical
+record, requires that every resolved source target has epistemic class
+`Observed`, and rejects every non-`Observed` target before admission. It then
+confirms at least one resolved observation falls at or before `valid_from` and
+at least one at or after `expires_at` for `reconstructed`/`interpolated`
+artifacts, preserving the timestamp and bracketing checks. An unknown or
+classless target is rejected rather than treated as observed. No
 `DerivedMonitorabilityArtifactV2` reaches the governed store without passing
 through this validator first.
 On correction or replacement, append a new artifact that identifies what it
@@ -174,6 +177,7 @@ omitting either nullable `sealed_reasoning_ref`, `calibration_ref`, or
 | confidence below 0 or above 1 | reject before persistence |
 | only one calibration field | reject before persistence |
 | reconstruction/interpolation without a bounded interval | reject before persistence |
+| source reference resolves to Derived/Reconstructed/Interpolated/Forecast | reject before persistence |
 | forecast with no future-bounded horizon, or after `expires_at` | reject for decision use |
 | omitted nullable field in a permitted status | accept without synthesizing a value |
 
@@ -240,23 +244,6 @@ A `PhylaxMonitorabilityDecisionV2` may only be constructed from
 `admissible_refs`, never the raw `derived_artifact_refs` a caller supplied --
 an expired or superseded artifact must not silently continue backing a live
 decision just because its `artifact_id` still appears in a list somewhere.
-
-**A related, currently unenforced requirement, stated honestly rather than
-silently left unaddressed:** doc 60 requires observed and non-observed
-records to never merge (§ "Observed records never merge with non-observed
-artifacts"). `source_observation_refs` on `DerivedMonitorabilityArtifactV2`
-is documented as pointing to observation evidence, but neither this document
-nor Part 1 yet defines a canonical `Observed`-class record schema to check
-membership against -- so nothing here currently rejects a
-`source_observation_refs` entry that actually points to another
-non-observed (derived/reconstructed/interpolated/forecast) artifact, which
-would let an inference chain build on inference rather than on real ground
-truth. Closing this properly needs a canonical `ObservedEventV1`-style
-schema (or equivalent epistemic-class tag on every referenceable record)
-added to Part 1's evidence contract first; `resolve_admissible_artifact_refs`
-above should then also reject any `source_observation_refs` entry whose
-resolved record is not tagged `Observed`, with its own conformance case.
-Flagged here as a concrete, named follow-up rather than assumed away.
 
 A future `block` is valid only if all conditions hold:
 
