@@ -1,8 +1,13 @@
 # ADR 60: Telos/Phylax Authority Split — Gate 0 Decisions
 
 **Status:** proposed, 2026-09-06
-**Context doc:** [`references/2026-09-06-telos-reconstruction-and-gap-closure-plan.md`](../../../references/2026-09-06-telos-reconstruction-and-gap-closure-plan.md) (OpenClaw repo)
-**Related:** [Gateway Lifecycle PR](https://github.com/oramasys/oramasys/pull/1), [`2026-09-06-telos-phylax-initial-scaffold-handoff.md`](../../../references/2026-09-06-telos-phylax-initial-scaffold-handoff.md)
+**Context doc:** [Reconstruction plan][reconstruction-plan] (OpenClaw repo)
+**Related:** [Gateway Lifecycle PR][gateway-lifecycle-pr],
+  [initial scaffold handoff][initial-scaffold-handoff]
+
+[gateway-lifecycle-pr]: https://github.com/oramasys/oramasys/pull/1
+[reconstruction-plan]: ../../../references/2026-09-06-telos-reconstruction-and-gap-closure-plan.md
+[initial-scaffold-handoff]: ../../../references/2026-09-06-telos-phylax-initial-scaffold-handoff.md
 
 ## Why this ADR exists
 
