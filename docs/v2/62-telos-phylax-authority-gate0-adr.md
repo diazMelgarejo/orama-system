@@ -147,6 +147,21 @@ consumer/dependency inventory) is the correct place to set dates.
   (`expires_at` unused, no policy-version-rollover test) remain open and are
   tracked in the gap-closure plan's Gap assessment table, not repeated here.
 
+## Regime boundary (added 2026-09-06, post-Gate-1 reconciliation)
+
+v1 (`Perpetua-Tools`, `orama-system`) and v2 (the `oramasys` GitHub org) are
+not a stepped evolution — they are separate regimes. **v1 receives no
+implementation or migration changes.** This repo (`orama-system`) is used
+going forward only as a docs/planning authority (this ADR included);
+`Perpetua-Tools` is used only for `.agent/` memory and read-only mining of
+its existing contract surfaces. All v2 implementation, including everything
+in Decisions 2–3 above, lands exclusively in `oramasys/*` repos. Where an
+earlier section of this ADR could be read as implying a PT-side edit (e.g.
+"shared behavior vectors... run in PT and Orama"), read it instead as:
+parity/conformance tests that live in v2 and observe v1 as a read-only
+golden reference, never a file change to v1. Full detail and the reconciled
+Gate 1 split: the gap-closure plan's "Regime boundary correction" section.
+
 ## Consequences
 
 - The gate-ordering rule in the gap-closure plan needs an enforcement
