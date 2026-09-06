@@ -1,4 +1,4 @@
-# ADR 60: Telos/Phylax Authority Split — Gate 0 Decisions
+# ADR 62: Telos/Phylax Authority Split — Gate 0 Decisions
 
 **Status:** proposed, 2026-09-06
 **Context doc:** [Reconstruction plan][reconstruction-plan] (OpenClaw repo)
