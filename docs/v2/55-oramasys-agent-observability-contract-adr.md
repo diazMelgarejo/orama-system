@@ -26,6 +26,13 @@
 Multi-agent coordination across `orama-system` and `Perpetua-Tools` requires rigorous observability
 without compromising on security, operational simplicity, or data privacy.
 
+### Monitorability boundary
+
+This ADR governs telemetry and privacy transport. [Doc 60 — Phylax
+Monitorability Design Specification](60-phylax-monitorability-design-spec.md)
+governs monitor evidence, inference classes, and safety authority; it does not
+alter the accepted transport requirements below.
+
 ### The Governing Decision: "Core + Planes + Adapters"
 
 Rather than inventing an ad-hoc protocol or forcing internal runtime code to imitate external
