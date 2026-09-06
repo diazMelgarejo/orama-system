@@ -1,13 +1,16 @@
 # ADR 62: Telos/Phylax Authority Split — Gate 0 Decisions
 
 **Status:** proposed, 2026-09-06
-**Context doc:** [Reconstruction plan][reconstruction-plan] (OpenClaw repo)
-**Related:** [Gateway Lifecycle PR][gateway-lifecycle-pr],
-  [initial scaffold handoff][initial-scaffold-handoff]
-
-[gateway-lifecycle-pr]: https://github.com/oramasys/oramasys/pull/1
-[reconstruction-plan]: ../../../references/2026-09-06-telos-reconstruction-and-gap-closure-plan.md
-[initial-scaffold-handoff]: ../../../references/2026-09-06-telos-phylax-initial-scaffold-handoff.md
+**Context doc:** `2026-09-06-telos-reconstruction-and-gap-closure-plan.md` — an
+external planning document that lives outside this repo (in the operator's
+local `OpenClaw/references/` workspace, not a tracked orama-system path or a
+git submodule), so it is named here, not linked, per this repo's own
+no-workstation-paths policy (`CLAUDE.md § 6`). It is not required to read
+this ADR; the relevant conclusions are restated inline below rather than
+assumed available.
+**Related:** [Gateway Lifecycle PR](https://github.com/oramasys/oramasys/pull/1)
+(portable URL). `2026-09-06-telos-phylax-initial-scaffold-handoff.md` is the
+same kind of external, unlinked reference as the context doc above.
 
 ## Why this ADR exists
 
@@ -62,6 +65,39 @@ They are not in scope for this decision; conflating them is exactly the
 "model endpoint validation vs. transport identity vs. Telos" confusion Gate 2
 exists to prevent.
 
+### Sub-decision: Phylax gets the identical treatment, explicitly
+
+This ADR's title names both Telos and Phylax; the decisions above are written
+in Telos terms but apply symmetrically to `oramasys/phylax`, stated here so
+neither is left implicit: `oramasys/phylax`'s `ArtifactRef`/`CompileRequest`/
+`RuntimeAdmissionRequest` dataclasses (commit `8ce8f69`) are canonical for
+artifact/runtime admission the same way Telos's are canonical for
+endpoint-use authorization — no separate pseudocode or PR-draft contract
+competes with them. Phylax is likewise unreleased/unconsumed, frozen pending
+this ADR, and does not get a forced Core-retirement date.
+
+### Sub-decision: conversion from transport identity into `EndpointRef`
+
+Neither Telos nor this ADR performs that conversion. `telos/src/telos/contracts.py`
+already states this explicitly (`EndpointRef` docstring): `is_public` and the
+rest of the ref's fields are trusted evidence that **must** come from the
+canonical endpoint-policy primitive (Decision 2's transport-identity layer,
+`packages/endpoint-policy`/`endpoint_policy_core.py`) before a request ever
+reaches Telos. This ADR does not design that conversion function — it belongs
+to Gate 1's importer-inventory work, not Gate 0.
+
+### Sub-decision: audit-persistence ownership
+
+`telos.EndpointAuthorizer` currently keeps `DecisionRecord`s as an in-memory
+list (`self._records`) — there is no durable audit store yet, and this ADR
+does not create one. Ownership: a durable, append-only decision/evidence
+store is Gate 3/Gate 4 scope (the gap-closure plan's Gate 4 exit evidence
+requires "audit correlation reaches lifecycle events" and Gate 3 requires
+"stored routing-state integrity validation" for the adjacent Oramasys
+lifecycle store) — not a new, separate authority. Telos's own durable store,
+when built, should reuse whatever storage pattern Gate 3 establishes for
+`RoutingStateStore` rather than inventing a second persistence mechanism.
+
 ## Decision 3: contract/versioning strategy for shared behavior vectors
 
 **Decided: JSON fixture vectors, checked into `oramasys/telos`, consumed by
@@ -75,6 +111,16 @@ Verification matrix.
 `EndpointPolicy.version` is the versioning key. A behavior-vector file names
 the policy version it was generated against; a consumer failing against a
 newer version's vectors is a signal to re-certify, not silently pass.
+
+**Fail-closed on version mismatch, stated explicitly (this was previously
+undecided):** when a consumer's `EndpointPolicy.version` does not match the
+version a behavior-vector file was generated against, the consumer MUST
+treat every decision from that policy as `deny`/`unknown_purpose` until
+re-certified against current vectors — never fall back to "compat mode" or
+skip vector validation. This mirrors `EndpointAuthorizer`'s own existing
+deny-by-default posture (`policy.evaluate()` returns a deny reason code for
+any unresolved case) rather than introducing a new, separate fallback
+behavior for the versioning layer specifically.
 
 ## Decision 4: Core compatibility timeline
 
