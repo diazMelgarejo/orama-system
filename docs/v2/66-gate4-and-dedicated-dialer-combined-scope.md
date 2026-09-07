@@ -1,7 +1,7 @@
 # Gate 4 + Dedicated Model-Server Dialer — Combined Scope for the Next PR
 
 **Status:** scope only, 2026-09-07 — no implementation in this document
-**Authority:** [ADR 62](62-telos-phylax-authority-gate0-adr.md), [Gate 2 scope](64-gate2-policy-surface-noninterchangeability-scope.md), [Gate 2 evidence](65-gate2-policy-surface-evidence.md)
+**Authority:** [ADR 62][adr62], [Gate 2 scope][gate2-scope], [Gate 2 evidence][gate2-evidence]
 **Regime boundary:** unchanged from ADR 62. Gate 4 work lands in `oramasys/*`.
 The dedicated dialer's PT-facing half is a human-reviewed PT PR, exactly like
 PT PR #380 was — never a same-repo PT edit landed by an agent.
@@ -36,8 +36,23 @@ authorizing a placeholder that gets swapped out later.
 
 Lives in `oramasys/oramasys` (the dialer, since it's a provider-adapter-level
 concern per ADR 62's authority map) and consumes `oramasys/telos`'s canonical
-`EndpointRef`/`EndpointUseRequest` types (already wired into `TelosPort` by
-PR #2 on this repo).
+`EndpointRef`/`EndpointUseRequest` types.
+
+**Merge prerequisite (Half A cannot start before this lands):**
+[`oramasys/oramasys` PR #2][oramasys-pr2] wires those canonical
+`EndpointRef`/`EndpointUseRequest` types into `TelosPort` — as of this
+writing that PR is still **open**, not merged. ADR 62 and
+[Gate 1 evidence][gate1-evidence] both require the typed `TelosPort`
+migration before Gate 4 work begins. PR #2 must merge first; Half A is
+blocked on it, not built against an assumed-complete wiring.
+
+**Merge prerequisite (Doc 65 dependency):** this document links to
+[Gate 2 evidence][gate2-evidence] (doc 65). As of this writing that document
+exists only on the still-open [PR #342][pr342], targeting a non-`main` base
+branch, not yet on `main`. Do not treat doc 65 as landed until PR #342
+merges — resolve this document's own dependency on it only once that
+merge (and the follow-on merge of its base branch into `main`) has
+actually happened, not on the assumption it will.
 
 **Dialer contract (first cut):**
 
@@ -143,3 +158,10 @@ workstation's resolver, firewall, or egress policy.
 - Any change to `ssrf_fetch_policy.py`'s own arbitrary-remote-fetch policy.
 - Gate 5 (`ResolvedRoute`) and Gate 6 (Core strangler migration) — both
   still gated on Gate 4 landing first.
+
+[adr62]: 62-telos-phylax-authority-gate0-adr.md
+[gate1-evidence]: 63-gate1-endpoint-observation-and-conformance-evidence.md
+[gate2-scope]: 64-gate2-policy-surface-noninterchangeability-scope.md
+[gate2-evidence]: 65-gate2-policy-surface-evidence.md
+[pr342]: https://github.com/diazMelgarejo/orama-system/pull/342
+[oramasys-pr2]: https://github.com/oramasys/oramasys/pull/2
