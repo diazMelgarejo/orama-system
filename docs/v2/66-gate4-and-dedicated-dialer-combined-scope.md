@@ -1,6 +1,7 @@
 # Gate 4 + Dedicated Model-Server Dialer — Combined Scope for the Next PR
 
-**Status:** scope only, 2026-09-07 — no implementation in this document
+**Status:** Half A complete (oramasys/oramasys PR #3 merged 2026-09-07);
+Half B unblocked by PT PR #380 merge — 2026-09-07
 **Authority:** [ADR 62][adr62], [Gate 2 scope][gate2-scope], [Gate 2 evidence][gate2-evidence]
 **Regime boundary:** unchanged from ADR 62. Gate 4 work lands in `oramasys/*`.
 The dedicated dialer's PT-facing half is a human-reviewed PT PR, exactly like
@@ -38,13 +39,13 @@ Lives in `oramasys/oramasys` (the dialer, since it's a provider-adapter-level
 concern per ADR 62's authority map) and consumes `oramasys/telos`'s canonical
 `EndpointRef`/`EndpointUseRequest` types.
 
-**Merge prerequisite (Half A cannot start before this lands):**
-[`oramasys/oramasys` PR #2][oramasys-pr2] wires those canonical
-`EndpointRef`/`EndpointUseRequest` types into `TelosPort` — as of this
-writing that PR is still **open**, not merged. ADR 62 and
-[Gate 1 evidence][gate1-evidence] both require the typed `TelosPort`
-migration before Gate 4 work begins. PR #2 must merge first; Half A is
-blocked on it, not built against an assumed-complete wiring.
+**Merge prerequisite (met — Half A is complete):**
+[`oramasys/oramasys` PR #3][oramasys-pr3] wired the canonical
+`EndpointRef`/`EndpointUseRequest` types into `TelosPort`, merged
+2026-09-07 (merge commit `98b2e6b`). ADR 62 and
+[Gate 1 evidence][gate1-evidence] required the typed `TelosPort`
+migration before Gate 4 work begins; that migration is now merged, so Half A
+is unblocked and complete, not built against an assumed-complete wiring.
 
 **Doc 65 dependency:** this document links to [Gate 2 evidence][gate2-evidence]
 (doc 65). [PR #342][pr342] merged it into its base branch, and that branch
@@ -90,6 +91,12 @@ redacted, correlated decision record; deny by default when the policy
 adapter cannot decide; do not yet authorize arbitrary general egress,
 provider dispatch, or hardware placement.
 
+**Exit evidence status (Half A, 2026-09-07):** met via
+[`oramasys/oramasys` PR #3][oramasys-pr3] (merged 2026-09-07T13:07:31Z,
+merge commit `98b2e6b`). allow/deny/inconclusive tests: done (suite green
+at merge); no raw URLs/credentials in decision records: done (redaction
+tested); audit correlation reaches lifecycle events: done.
+
 **Telos scope stays exactly `config_read` + `health_probe`, per Gate 4 as
 already ratified.** `model_egress` (the third `EndpointPurpose` the scaffold
 already defines) is explicitly **not** in this PR — it needs the paid-dispatch
@@ -106,7 +113,8 @@ prepared the same way PR #380 was:
    raw `httpx` directly. Route it through the new dialer instead — this is
    the "launcher configuration uses a remote model endpoint" test case from
    doc 65's matrix.
-2. `/health`, once PT PR #380 lands, has no caller-supplied host path left to
+2. `/health`: PT PR #380 merged 2026-09-07T08:48:21Z — Half B is unblocked.
+   With #380 landed, `/health` has no caller-supplied host path left to
    secure — nothing further needed there. Confirm this explicitly rather
    than assuming; if a future PT change reintroduces caller-supplied hosts,
    it must go through the dialer, not `validate_model_endpoint_url` alone.
@@ -161,4 +169,4 @@ workstation's resolver, firewall, or egress policy.
 [gate2-scope]: 64-gate2-policy-surface-noninterchangeability-scope.md
 [gate2-evidence]: 65-gate2-policy-surface-evidence.md
 [pr342]: https://github.com/diazMelgarejo/orama-system/pull/342
-[oramasys-pr2]: https://github.com/oramasys/oramasys/pull/2
+[oramasys-pr3]: https://github.com/oramasys/oramasys/pull/3
