@@ -130,17 +130,23 @@ GossipBus coordinates; GitHub PRs are the actual deliverable. Every repo in
 play uses the same pattern:
 
 1. Fetch the actual current PR head from GitHub (`gh pr view <n> --json
-   headRefOid`) before building on a branch — local git state can be stale.
-2. Work in a disposable git worktree, not the shared canonical checkout —
-   `git worktree add ~/.gstack/worktrees/<slug> origin/<branch> -b <your-fix-branch>`.
+   headRefOid`) and capture that SHA — local git state (including
+   `origin/<branch>`, even freshly fetched) can already be behind it if
+   another agent pushed between your query and your next command.
+2. Work in a disposable git worktree, based on the **captured SHA, not the
+   branch ref**, so the base can't silently advance underneath you between
+   the query and the checkout —
+   `git fetch origin <branch> && git worktree add ~/.gstack/worktrees/<slug> <captured-sha> -b <your-fix-branch>`.
 3. TDD: write the failing test first, confirm it fails for the right
    reason, then fix. Every fix in this session's history that skipped this
    step is the one that needed a second pass.
-4. Before pushing: re-fetch the remote branch and diff against it
-   (`git diff --name-status origin/<branch>..HEAD`) — if you see unexpected
-   `D` (deletion) entries for files you didn't intend to touch, stop and
-   investigate before pushing; it usually means the branch has moved since
-   you last fetched, not that you broke something.
+4. Before pushing: re-fetch the remote branch, re-query its current
+   `headRefOid`, and diff against **that freshly-queried SHA** — not a
+   branch ref that may itself have advanced again since step 2
+   (`git diff --name-status <freshly-queried-sha>..HEAD`) — if you see
+   unexpected `D` (deletion) entries for files you didn't intend to touch,
+   stop and investigate before pushing; it usually means the branch moved
+   since you last fetched, not that you broke something.
 5. Never force-push without explicit human authorization — it's blocked by
    a safety hook in this environment on purpose. If your work requires
    rewriting already-pushed history, the answer is almost always "add one
