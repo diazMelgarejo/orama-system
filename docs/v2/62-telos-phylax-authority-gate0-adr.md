@@ -162,6 +162,28 @@ parity/conformance tests that live in v2 and observe v1 as a read-only
 golden reference, never a file change to v1. Full detail and the reconciled
 Gate 1 split: the gap-closure plan's "Regime boundary correction" section.
 
+**Reconciling with Doc 61.** [Doc 61](61-pt-coordination-principal-identity-design.md)
+describes `queue_claim`, `PT_AGENT_TOKEN`, and `principals.json` — all PT-side
+concepts, since PT's own coordination CLI is what it proposes to
+authenticate. This is not a v2-implementation item this ADR silently
+authorizes by omission: Doc 61 is a **design-only proposal**, not yet
+authorized for implementation anywhere. Two distinct paths follow from it,
+and neither is a silent exception to the regime boundary:
+
+- **The steady-state target** follows the same pattern as Decisions 2–3:
+  the future principal registry, token verification, and replica-freshness
+  enforcement belong to the coordination/control-plane component in
+  `oramasys/oramasys`, not to a new PT feature. PT's `principals.json`,
+  `queue_claim`, and `PT_AGENT_TOKEN` are read-only compatibility inputs a
+  v2 implementation observes for parity during migration — they name what
+  v2 must replicate, not a v1 surface v2 is authorized to edit.
+- **An unavoidable interim PT change** (the kind the Gate 2 security-hotfix
+  PT PR needed, where the exploitable behavior lives in PT today and cannot
+  wait for the v2 replacement) is a narrow, explicitly human-authorized
+  exception, decided case by case — never inferred from this ADR, and never
+  the default path for a proposal like Doc 61 that has no live urgency
+  forcing it.
+
 ## Consequences
 
 - The gate-ordering rule in the gap-closure plan needs an enforcement
