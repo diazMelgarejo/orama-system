@@ -26,7 +26,7 @@ perpetua-core's MiniGraph kernel?"*
 | Coordination/event log | SQLite+FTS5, carried forward from `gossip_bus.py`'s real shape, with one schema fix (`kind` promoted to a first-class column) | unchanged base; DuckDB gains a materialized/scheduled view over it once query volume justifies one |
 | Semantic/RAG memory | LanceDB, one local table per machine, carried forward from `memory_store.py`'s real shape, with the write path formalized into a single background writer | unchanged base; background daemon (below) automates what's manual in v2.1 |
 | Cross-machine sync | existing, already-validated GossipBus mesh transport (Doc 43) — delta-sync, idempotent, rate-limited | same transport; no new distributed-systems machinery added at v2.5 either |
-| Query/analytics surface | none — direct, uncached reads against each store; every query re-executes live, nothing is materialized | **DuckDB, ephemeral for v2.1** — the native DuckDB↔Lance SQL extension joins LanceDB and the SQLite coordination log in one statement, computed fresh per query. v2.5 adds a scheduled materialized view; see the persistence-boundary note below |
+| Query/analytics surface | **DuckDB, ephemeral** — the native DuckDB↔Lance SQL extension joins LanceDB and the SQLite coordination log in one statement, computed fresh per query, nothing materialized or cached | adds a scheduled materialized view on top of the same DuckDB engine; see the persistence-boundary note below |
 | Background daemon (auto-vacuum, auto-embed retry, scheduled DuckDB analytics refresh) | **deferred to v2.5** | full implementation |
 | Fleet-wide analytics features (cross-agent dashboards, historical trend queries) | **deferred to v2.5** | full implementation |
 | Full P2P (witness quorum, reputation-decay, equivocation defense) | **out of scope — descoped by D23**, not merely deferred | revisit only if D23's own re-trigger condition fires (see below) |
@@ -70,10 +70,15 @@ already runs.
 
 ### Why LanceDB stays per-machine, not shared over the network
 
-LanceDB's own concurrency guidance flags concurrent writers over a shared
-network filesystem (the EFS/S3 pattern) as a real retry-storm and
-consistency hazard, and Lance is fork-unsafe under Python multiprocessing —
-both are documented LanceDB/Lance constraints, not this project's invention.
+LanceDB's own documentation states concurrent writes are supported — it does
+not require a single writer — but warns that too many concurrent writers can
+exhaust the commit-retry budget and fail, a contention/throughput risk rather
+than a correctness hazard. That risk is documented distinctly per backend:
+S3's conditional-write support gives it real (if bounded) concurrent-writer
+capacity, while EFS and other POSIX-like network filesystems are the harder
+case for safe concurrent commits — the two are not one interchangeable
+pattern. Lance is separately fork-unsafe under Python multiprocessing,
+regardless of backend. Neither constraint is this project's invention.
 Separately, and voluntarily, v2.1 also chooses a single in-process writer per
 table (the next section) — that's this project's own concurrency policy for
 simplicity, not something LanceDB requires of a single machine's local,
