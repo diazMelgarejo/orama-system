@@ -37,7 +37,7 @@ repo hooks — not honor system.
 | Role | Rule |
 | --- | --- |
 | **Approved primary authors** | Any configured `user.name` with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or the configured private owner email from local-only configuration; `Codex <codex@openai.com>` is also allowed |
-| **Co-authored-by — allowed** | Well-known public AI/vendor domains (`openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com`, subdomains) and matching name markers (`codex`, `claude`, `anthropic`, `cursor`, …) |
+| **Co-authored-by — allowed** | Well-known public AI/vendor domains (`openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com`, `cline.bot`, subdomains) and matching name markers (`codex`, `claude`, `anthropic`, `cursor`, `cline`, …) |
 | **Co-authored-by — additionally allowed AI/vendor signals** | `google.dev`, `perplexity.ai`, `x.ai`; matching name markers `gemini`, `google`, `copilot`, `perplexity`, `grok` |
 | **Co-authored-by — allowed Gmail** | `diazMelgarejo@gmail.com` plus the configured private owner email from local-only configuration |
 | **Co-authored-by — rejected** | Any other `@gmail.com` / `@googlemail.com` (unattributable personal inboxes) |
@@ -111,7 +111,7 @@ git config user.email "codex@openai.com"
 | --- | --- |
 | **Primary author** | Any name with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or the configured private owner email, or `Codex` + `codex@openai.com` (`scripts/git/check_identity.sh`) |
 | **Allowed co-author domains** | `openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com` (and subdomains) |
-| **Additional allowed AI/vendor domains** | `google.dev`, `perplexity.ai`, `x.ai`, `coderabbit.ai`, `mistral.ai`, `deepseek.com`, `cohere.com`, `meta.com`, `sourcegraph.com`, `devin.ai`, `codeium.com` (and subdomains) |
+| **Additional allowed AI/vendor domains** | `google.dev`, `perplexity.ai`, `x.ai`, `coderabbit.ai`, `mistral.ai`, `deepseek.com`, `cohere.com`, `meta.com`, `sourcegraph.com`, `devin.ai`, `codeium.com`, `nousresearch.com`, `kimi.ai`, `cline.bot` (and subdomains) |
 | **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `google`, `copilot`, `openai`, `github`, `microsoft`, `perplexity`, `grok`, `coderabbit`, `coderabbitai`, `mistral`, `deepseek`, `cohere`, `llama`, `devin`, `cody`, `codeium`, `windsurf`, `qwen` (in the trailer line) |
 | **Allowed `@gmail.com` co-authors** | `diazMelgarejo@gmail.com` plus the configured private owner email from local-only configuration |
 | **Rejected** | Any other `Co-authored-by` line with `@gmail.com` (unattributable personal inboxes) |
