@@ -46,13 +46,10 @@ writing that PR is still **open**, not merged. ADR 62 and
 migration before Gate 4 work begins. PR #2 must merge first; Half A is
 blocked on it, not built against an assumed-complete wiring.
 
-**Merge prerequisite (Doc 65 dependency):** this document links to
-[Gate 2 evidence][gate2-evidence] (doc 65). As of this writing that document
-exists only on the still-open [PR #342][pr342], targeting a non-`main` base
-branch, not yet on `main`. Do not treat doc 65 as landed until PR #342
-merges — resolve this document's own dependency on it only once that
-merge (and the follow-on merge of its base branch into `main`) has
-actually happened, not on the assumption it will.
+**Doc 65 dependency:** this document links to [Gate 2 evidence][gate2-evidence]
+(doc 65). [PR #342][pr342] merged it into its base branch, and that branch
+merged into `main`; doc 65 is live on `main` as of this writing, so the link
+above resolves.
 
 **Dialer contract (first cut):**
 
