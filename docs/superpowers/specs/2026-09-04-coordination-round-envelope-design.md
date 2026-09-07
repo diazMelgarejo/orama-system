@@ -38,13 +38,13 @@ class CoordinationRoundEnvelopeV1(BaseModel):
     session_id: BoundedIdentifier
     controller_id: BoundedIdentifier
     objective_ref: OpaqueEvidenceRef
-    out_of_scope_refs: list[OpaqueEvidenceRef] = Field(default_factory=list, max_length=20)
-    stop_condition_codes: list[Literal[
+    out_of_scope_refs: tuple[OpaqueEvidenceRef, ...] = Field(default=(), max_length=20)
+    stop_condition_codes: tuple[Literal[
         "task_complete", "approval_required", "validation_failure",
         "budget_exhausted", "deadline_reached", "operator_stop"
-    ]] = Field(min_length=1, max_length=6)
-    stop_condition_detail_refs: list[OpaqueEvidenceRef] = Field(default_factory=list, max_length=20)
-    ordered_handoff_refs: list[OpaqueEvidenceRef] = Field(min_length=1, max_length=20)
+    ], ...] = Field(min_length=1, max_length=6)
+    stop_condition_detail_refs: tuple[OpaqueEvidenceRef, ...] = Field(default=(), max_length=20)
+    ordered_handoff_refs: tuple[OpaqueEvidenceRef, ...] = Field(min_length=1, max_length=20)
     authorization_ref: OpaqueEvidenceRef
     authority: Literal["coordination_only"]
     liveness_effect: Literal["none"]
@@ -60,6 +60,8 @@ class CoordinationRoundEnvelopeV1(BaseModel):
             raise ValueError("round expires_at must follow created_at")
         if len(set(self.ordered_handoff_refs)) != len(self.ordered_handoff_refs):
             raise ValueError("ordered_handoff_refs must be unique")
+        if len(set(self.stop_condition_codes)) != len(self.stop_condition_codes):
+            raise ValueError("stop_condition_codes must not contain duplicates")
         if len(self.model_dump_json().encode("utf-8")) > 8192:
             raise ValueError("serialized envelope must not exceed 8192 bytes")
         return self
@@ -83,8 +85,22 @@ field immutable after construction: `authority`, `expires_at`, and
 `ordered_handoff_refs` (along with everything else) cannot be reassigned into
 an invalid state post-validation -- the class-level guarantee this document's
 own invariants depend on holding permanently, not just at construction.
-`created_at`/`expires_at` must be timezone-aware; a naive datetime is rejected
-by the same validator that already enforces interval ordering. Admissibility
+`frozen=True` alone only blocks *reassigning* a field; it does not make a
+mutable collection held by a field immutable in place. The four multi-value
+fields (`out_of_scope_refs`, `stop_condition_codes`, `stop_condition_detail_refs`,
+`ordered_handoff_refs`) are therefore typed as `tuple`, not `list`: a caller
+holding a reference to a `list` field could append/pop/sort it after
+construction and silently invalidate the uniqueness, length-bound, and
+8192-byte checks the model validator already ran. A `tuple` closes that gap
+because it has no in-place mutation methods for a caller to invoke; the
+tuple's contents can be no different at admission time than they were the
+instant validation passed. `created_at`/`expires_at` must be timezone-aware;
+a naive datetime is rejected by the same validator that already enforces
+interval ordering. `stop_condition_codes` is also checked for duplicate
+entries by the same validator: `max_length=6` alone bounds count, not
+distinctness, so `["task_complete", "task_complete"]` would otherwise pass
+the field constraint despite violating the "each stop condition cited at
+most once" contract. Admissibility
 against the current moment is deliberately a separate function, not a field
 on the envelope itself, resolved fresh at each use against one canonical UTC
 clock -- the same "compute at resolution time" discipline already
@@ -114,7 +130,7 @@ open question. Not invented silently: `BoundedIdentifier`/`OpaqueEvidenceRef`
 reuse Part 1's existing, already-shipped grammar (128 chars for identifiers,
 confirmed directly against the real regex; ~73 chars for opaque references,
 bounded by their own `{16,64}` hex-digest pattern) rather than defining a new
-length. The four list-length caps (20 each) and the 8192-byte total-envelope
+length. The four tuple-length caps (20 each) and the 8192-byte total-envelope
 cap are genuinely new for this record, chosen conservatively rather than
 derived from an existing production number, since none of the checked
 existing budgets (`.agent/loops/budget.json`: `max_attempts=3`,
@@ -128,6 +144,48 @@ valid data.
 If v2 Phylax governance later sets different numbers before M2 lands, this
 document's values are the ones to revise — they are the v1 baseline, not a
 permanent ceiling.
+
+### Illustrative validation example: duplicate stop-condition codes
+
+The M2 fixtures must include a case exercising the uniqueness check added to
+`enforce_interval_and_reference_rules` above -- duplicate `stop_condition_codes`
+entries are rejected even though they individually satisfy the literal type
+and the `max_length=6` bound, and distinct codes up to that bound still pass:
+
+```python
+import pytest
+
+def _base_kwargs(**overrides):
+    kwargs = dict(
+        schema_version=1,
+        round_id="round-abc123",
+        session_id="session-abc123",
+        controller_id="controller-abc123",
+        objective_ref="a" * 16,
+        ordered_handoff_refs=("b" * 16,),
+        authorization_ref="c" * 16,
+        authority="coordination_only",
+        liveness_effect="none",
+        created_at=datetime(2026, 9, 4, tzinfo=timezone.utc),
+        expires_at=datetime(2026, 9, 4, 1, tzinfo=timezone.utc),
+    )
+    kwargs.update(overrides)
+    return kwargs
+
+
+def test_duplicate_stop_condition_codes_rejected():
+    with pytest.raises(ValidationError):
+        CoordinationRoundEnvelopeV1(
+            **_base_kwargs(stop_condition_codes=("task_complete", "task_complete"))
+        )
+
+
+def test_distinct_stop_condition_codes_accepted():
+    envelope = CoordinationRoundEnvelopeV1(
+        **_base_kwargs(stop_condition_codes=("task_complete", "operator_stop"))
+    )
+    assert envelope.stop_condition_codes == ("task_complete", "operator_stop")
+```
 
 `BoundedIdentifier` uses the established Part 1 bounded-identifier grammar.
 `OpaqueEvidenceRef` uses the established Part 1 opaque-reference grammar and
@@ -168,7 +226,7 @@ following before producer emission can become a later requirement:
 | --- | --- |
 | valid round with opaque objective/scope references | accepted without copying referenced content |
 | raw text, URI, path, secret, or duplicate handoff reference | rejected before storage or projection |
-| no stop condition, invalid code, or an expired interval | rejected |
+| no stop condition, invalid code, duplicate stop condition code, or an expired interval | rejected |
 | `authority` other than `coordination_only` | rejected |
 | record creation or update | leaves liveness unchanged |
 | legacy v1 handoff with no round reference | remains valid and behaviorally unchanged |
