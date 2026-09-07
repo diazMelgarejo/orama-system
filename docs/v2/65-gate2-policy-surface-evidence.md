@@ -106,14 +106,29 @@ query parameters.
 Before allowing remote model-server hostnames in any runtime path, a PT proposal must
 also define and implement a dedicated model-server dialer that:
 
-1. resolves every A/AAAA result before dispatch and applies a model-server address
-   policy to every result;
+1. resolves every A/AAAA result before dispatch, applies a model-server address
+   policy to every result, and **binds the actual connection to the specific
+   validated address** — not merely re-resolving the hostname a second time at
+   connect, which a DNS-rebinding attacker can answer differently between the
+   policy check and the dial. Acceptable implementations: connect directly to
+   the pinned IP with the original hostname preserved for TLS SNI/cert
+   verification (the pattern already shipped in `orchestrator/otel_exporter.py`
+   per [Doc 55 § 3.4](55-oramasys-agent-observability-contract-adr.md)), or
+   validate the actually-connected peer address against the policy after the
+   socket opens and before any data is sent. Required test evidence: a
+   controlled-DNS test that answers a different address on the second
+   resolution (simulating rebinding) and asserts the prohibited address is
+   never reached;
 2. preserves intentional loopback/private LAN support while rejecting link-local,
    metadata-like, multicast, reserved, and other prohibited classes;
 3. rechecks or pins the resolved connection across redirects and retries, with
    redirects disabled until that behavior is implemented and tested;
 4. has an async-compatible client contract, timeouts, and no credential forwarding to
-   an unverified remote origin; and
+   an unverified remote origin — concretely, **requires authenticated HTTPS
+   with certificate verification for any credential-bearing request**;
+   credentials are withheld entirely when the resolved endpoint is plain
+   HTTP, and are not forwarded across a redirect to an origin that has not
+   itself passed the same HTTPS + certificate-verification check; and
 5. is used by all remote model-server callers, including launcher configuration, rather
    than treating `ssrf_request()` as a drop-in replacement for async LAN probes.
 
