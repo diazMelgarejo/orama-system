@@ -2,7 +2,12 @@
 
 **Status:** evidence complete; PT remediation proposal requires separate human-reviewed work
 **Date:** 2026-09-07
-**Authority:** [ADR 62](62-telos-phylax-authority-gate0-adr.md), [Gate 1 evidence](63-gate1-endpoint-observation-and-conformance-evidence.md), and [Gate 2 scope](64-gate2-policy-surface-noninterchangeability-scope.md)
+**Authority:** [ADR 62][adr-62], [Gate 1 evidence][gate-1-evidence], and
+[Gate 2 scope][gate-2-scope]
+
+[adr-62]: 62-telos-phylax-authority-gate0-adr.md
+[gate-1-evidence]: 63-gate1-endpoint-observation-and-conformance-evidence.md
+[gate-2-scope]: 64-gate2-policy-surface-noninterchangeability-scope.md
 **Regime boundary:** this is read-only v1 evidence. It neither changes Perpetua-Tools nor
 authorizes a v1 change. A future PT pull request must start from this evidence and be
 reviewed on PT's own timeline.
