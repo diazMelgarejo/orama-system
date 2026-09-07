@@ -3,7 +3,7 @@
 **Status:** proposed, 2026-09-06
 **Context doc:** `2026-09-06-telos-reconstruction-and-gap-closure-plan.md` — an
 external planning document that lives outside this repo (in the operator's
-local `OpenClaw/references/` workspace, not a tracked orama-system path or a
+local `../references/` workspace, not a tracked orama-system path or a
 git submodule), so it is named here, not linked, per this repo's own
 no-workstation-paths policy (`CLAUDE.md § 6`). It is not required to read
 this ADR; the relevant conclusions are restated inline below rather than
