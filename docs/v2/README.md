@@ -264,10 +264,11 @@ orama-system/docs/v2/
 ├── 63-gate1-endpoint-observation-and-conformance-evidence.md  ← Gate 1 v2-scoped evidence: read-only v1 (PT) importer/authority inventory recorded as v2 evidence (no v1 file changes), Telos JSON behavior-vector conformance contract, exit-evidence checklist honestly marking Gate 4 wiring and Layer 2 SSRF vectors as still open
 ├── 64-gate2-policy-surface-noninterchangeability-scope.md  ← historical Gate 2 scope and candidate brief; its asserted live agent-launcher validation path is corrected by Doc 65
 ├── 65-gate2-policy-surface-evidence.md  ← Gate 2 read-only completion evidence: public /health query parameters reach a raw model-server probe after syntactic-only validation when the explicit public-host opt-in is enabled; separates that confirmed gap from the launcher configuration boundary and defines a bounded PT-PR proposal
-└── 66-gate4-and-dedicated-dialer-combined-scope.md  ← combined scope for the next planned change: Gate 4's first real Telos vertical slice (config_read/health_probe only) built against a new DNS-resolving, address-class-aware model-server dialer, closing the 4 test cases PT PR #380 deliberately deferred; v2 dialer + Telos wiring (this repo) and the PT call-site adoption (separate, human-reviewed PT PR) are two repos' worth of one planned unit of work, not literally one PR
+├── 66-gate4-and-dedicated-dialer-combined-scope.md  ← combined scope for the next planned change: Gate 4's first real Telos vertical slice (config_read/health_probe only) built against a new DNS-resolving, address-class-aware model-server dialer, closing the 4 test cases PT PR #380 deliberately deferred; v2 dialer + Telos wiring (this repo) and the PT call-site adoption (separate, human-reviewed PT PR) are two repos' worth of one planned unit of work, not literally one PR
+└── 67-lancedb-duckdb-dense-info-layer-shape.md  ← v2.1 dense info layer: two stores (SQLite+FTS5 coordination log with `kind` promoted to a first-class column; per-machine LanceDB with a formalized single-writer path), cross-machine sync via the already-validated GossipBus mesh transport, DuckDB as a stateless query engine over both via the native DuckDB↔Lance extension; background daemon + fleet-analytics features deferred to v2.5; full P2P defense machinery explicitly descoped per D23, not merely deferred
 ```
 
-> **Next free slot: `67-`**
+> **Next free slot: `68-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
