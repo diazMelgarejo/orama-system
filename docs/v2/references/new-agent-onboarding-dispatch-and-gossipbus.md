@@ -132,7 +132,7 @@ play uses the same pattern:
 1. Fetch the actual current PR head from GitHub (`gh pr view <n> --json
    headRefOid`) before building on a branch — local git state can be stale.
 2. Work in a disposable git worktree, not the shared canonical checkout —
-   `git worktree add /tmp/<slug> origin/<branch> -b <your-fix-branch>`.
+   `git worktree add ~/.gstack/worktrees/<slug> origin/<branch> -b <your-fix-branch>`.
 3. TDD: write the failing test first, confirm it fails for the right
    reason, then fix. Every fix in this session's history that skipped this
    step is the one that needed a second pass.
@@ -178,27 +178,46 @@ infrastructure, not a stopgap to ignore — but it is explicitly **v1
 infrastructure that a v2-native agent should expect to migrate off of**, not
 a permanent v2 dependency.
 
-The storage roadmap already decided this (`CLAUDE.md § 8`, 2026-05-15,
-reaffirmed 2026-07-12): GossipBus's claim-board coordination history —
-agent registrations, task claims, the decision log — is
-"job/decision-history-shaped and JSON-file-backed today," and the decision
-is to **migrate it to the same LanceDB store already planned for v2 RAG and
-session memory**, rather than grow GossipBus into a bespoke, permanent
-persistence layer of its own. See
-[`43-gossipbus-mesh-transport.md`](../43-gossipbus-mesh-transport.md) for the
-live-validated mesh-transport detail behind that decision.
+**Correction to `CLAUDE.md § 8` (2026-05-15, reaffirmed 2026-07-12):** that
+section describes `Perpetua-Tools/scripts/agent_coordination.py` as
+"job/decision-history-shaped and JSON-file-backed today" and calls for
+migrating it to LanceDB. Verified against PT's current source: that script
+is now a thin compatibility wrapper (`from orchestrator.coordination import
+cli`) around `orchestrator/coordination/*`, which itself is built entirely
+on `GossipBus` — `claims.py` and `task_queue.py` both take a `GossipBus`
+instance and query it directly (`task_queue.py` already reads `kind` via
+`json_extract(payload_json, '$.kind')` against the same SQLite database this
+document's `bus.tail()`/`bus.emit()` use). There is no separate JSON-file
+store left; `agent_coordination.py` and `GossipBus` are the same underlying
+substrate. `CLAUDE.md § 8`'s framing predates that consolidation and is
+stale — it should be updated to match, but is not corrected here per the
+regime boundary (that's an orama-system `CLAUDE.md` edit, tracked
+separately, not a v1 PT change).
 
-**What this means concretely for onboarding, once that migration lands:**
-the event *shapes* in this document (`task_enqueue`/`task_claim`/
-`task_complete`/`status_update`, the `kind` field, the discipline of
-announcing before pushing) are the durable part — expect them to carry
-forward largely unchanged, since they're a coordination protocol, not a
-storage detail. The *transport* (`GossipBus()` from
-`orchestrator/gossip_bus.py`, PT-hosted SQLite) is the part that migrates.
-A v2-native onboarding doc should describe reading/writing the LanceDB-backed
-store directly (once it exists) rather than importing PT's `GossipBus` class
-from a `Perpetua-Tools` checkout — that import path is itself a v1
-dependency an eventually-pure-v2 agent shouldn't need. Until that migration
-actually lands, this document's PT-hosted instructions remain the accurate,
-literal how-to; don't preemptively code against a LanceDB interface that
-doesn't exist yet.
+**The actual v2.1 decision, per
+[Doc 67](../67-lancedb-duckdb-dense-info-layer-shape.md):** the coordination
+log — agent registrations, task claims, the decision log, everything this
+document calls GossipBus — **stays SQLite+FTS5 in v2.1**, carried forward
+from PT's real shape with one schema fix (`kind` promoted from
+`payload_json` to a first-class indexed column, populated from the same
+value callers already write). It does **not** migrate to LanceDB. LanceDB in
+v2 is scoped to semantic/RAG memory only — a different concern with a
+different access pattern, kept deliberately separate rather than merged into
+one store (see Doc 67 § "Why two stores, not a merged blob"). See
+[`43-gossipbus-mesh-transport.md`](../43-gossipbus-mesh-transport.md) for the
+live-validated mesh-transport detail this decision builds on.
+
+**What this means concretely for onboarding, once v2's coordination log
+exists as its own repo-hosted store (rather than imported from a PT
+checkout):** the event *shapes* in this document (`task_enqueue`/
+`task_claim`/`task_complete`/`status_update`, the `kind` field, the
+discipline of announcing before pushing) are the durable part — expect them
+to carry forward unchanged, since they're a coordination protocol, not a
+storage detail. What migrates is only the *hosting* — from PT's
+`orchestrator/gossip_bus.py`, reached today via a `Perpetua-Tools` checkout
+import, to a v2-native equivalent that keeps the identical SQLite+FTS5
+shape and `kind` vocabulary. A v2-native onboarding doc should describe
+that v2-hosted store directly rather than importing PT's `GossipBus` class
+— that import path is itself a v1 dependency an eventually-pure-v2 agent
+shouldn't need. Until that hosting migration actually lands, this
+document's PT-hosted instructions remain the accurate, literal how-to.

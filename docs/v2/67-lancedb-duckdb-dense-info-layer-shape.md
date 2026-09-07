@@ -26,7 +26,7 @@ perpetua-core's MiniGraph kernel?"*
 | Coordination/event log | SQLite+FTS5, carried forward from `gossip_bus.py`'s real shape, with one schema fix (`kind` promoted to a first-class column) | unchanged base; DuckDB gains a materialized/scheduled view over it once query volume justifies one |
 | Semantic/RAG memory | LanceDB, one local table per machine, carried forward from `memory_store.py`'s real shape, with the write path formalized into a single background writer | unchanged base; background daemon (below) automates what's manual in v2.1 |
 | Cross-machine sync | existing, already-validated GossipBus mesh transport (Doc 43) — delta-sync, idempotent, rate-limited | same transport; no new distributed-systems machinery added at v2.5 either |
-| Query/analytics surface | none — direct reads against each store | **DuckDB, as an ephemeral query engine** — the native DuckDB↔Lance SQL extension joins LanceDB and the SQLite coordination log in one statement; DuckDB owns no persisted state of its own |
+| Query/analytics surface | none — direct, uncached reads against each store; every query re-executes live, nothing is materialized | **DuckDB, ephemeral for v2.1** — the native DuckDB↔Lance SQL extension joins LanceDB and the SQLite coordination log in one statement, computed fresh per query. v2.5 adds a scheduled materialized view; see the persistence-boundary note below |
 | Background daemon (auto-vacuum, auto-embed retry, scheduled DuckDB analytics refresh) | **deferred to v2.5** | full implementation |
 | Fleet-wide analytics features (cross-agent dashboards, historical trend queries) | **deferred to v2.5** | full implementation |
 | Full P2P (witness quorum, reputation-decay, equivocation defense) | **out of scope — descoped by D23**, not merely deferred | revisit only if D23's own re-trigger condition fires (see below) |
@@ -46,22 +46,41 @@ a clean separation that already works for no real gain.
 
 `gossip_bus.py`'s real `EventType` column is narrow; the actual routing
 signal (`task_enqueue`/`task_claim`/`agent_register`/etc., per the
-onboarding doc's vocabulary table) lives inside the JSON `payload`, not the
-schema. That's fine for `tail()`/`search()` today, but it means `kind` isn't
-queryable by SQL — which is exactly the join DuckDB needs for the "dense
-info layer" the question asks for. **v2.1 promotes `kind` to a first-class,
-indexed column.** This is the only schema change v2.1 requires; everything
-else about the coordination log's shape is unchanged from what PT already
-runs.
+onboarding doc's vocabulary table) lives inside the JSON `payload`, read
+today via `json_extract(payload_json, '$.kind')` (already the live query
+pattern in PT's `orchestrator/coordination/task_queue.py`). That works for
+`tail()`/`search()`/CLI filtering, but it means `kind` isn't indexed —
+exactly the join DuckDB needs for the "dense info layer" the question asks
+for. **v2.1 promotes `kind` to a first-class, indexed column, populated at
+write time from the same value callers already put in `payload["kind"]`.**
+
+The contract: `bus.emit()` continues to take `payload["kind"]` exactly as
+callers already write it (no emit-API change, no dual-field requirement on
+callers) — the adapter derives the column value from `payload["kind"]` at
+insert time. A row with no `kind` in its payload gets a `NULL` column
+(payload-only consumers are unaffected either way). Existing rows are
+backfilled in one pass via `UPDATE gossip SET kind =
+json_extract(payload_json, '$.kind')` — the exact expression already in
+production use above, just materialized instead of computed per query. There
+is no reject/reconcile path because there is only one source of truth
+(`payload["kind"]`); the column is a derived index over it, not a second
+field that can disagree. This is the only schema change v2.1 requires;
+everything else about the coordination log's shape is unchanged from what PT
+already runs.
 
 ### Why LanceDB stays per-machine, not shared over the network
 
 LanceDB's own concurrency guidance flags concurrent writers over a shared
 network filesystem (the EFS/S3 pattern) as a real retry-storm and
-consistency hazard, and Lance is fork-unsafe under Python multiprocessing.
-Rather than build new locking or coordination machinery to make one shared
-table safe across Mac and Windows, v2.1 keeps each machine's LanceDB table
-local — exactly what Doc 20's v2.5 sketch already proposed — and lets
+consistency hazard, and Lance is fork-unsafe under Python multiprocessing —
+both are documented LanceDB/Lance constraints, not this project's invention.
+Separately, and voluntarily, v2.1 also chooses a single in-process writer per
+table (the next section) — that's this project's own concurrency policy for
+simplicity, not something LanceDB requires of a single machine's local,
+single-process access. Rather than build new locking or coordination
+machinery to make one shared table safe across Mac and Windows, v2.1 keeps
+each machine's LanceDB table local — exactly what Doc 20's v2.5 sketch
+already proposed — and lets
 cross-machine visibility ride the mesh transport that's already
 real-world-validated (Doc 43, validated 2026-07-12 across 2 concurrent
 sessions). No new distributed-systems surface is introduced to solve a
@@ -87,13 +106,27 @@ PT's original v2.5 sketch had DuckDB `ATTACH`ing the SQLite file directly. A
 native DuckDB↔Lance SQL extension now exists and postdates that sketch — it
 lets one SQL statement join vector search over a Lance table with relational
 data directly, without a separate ETL or sync step. That makes DuckDB the
-actual unifying "dense info layer" surface the question asks for: **it
-persists nothing of its own** — it's an ephemeral query engine reading the
-coordination log (via its SQLite scanner) and LanceDB (via the `lance`
-extension) live. Because it owns no state, standing it up in v2.1 costs
-nothing beyond the extension itself; the deferral below is specifically
-about *scheduled, fleet-wide analytics features* built on top of that query
-capability, not the query capability itself.
+actual unifying "dense info layer" surface the question asks for: **in
+v2.1, it persists nothing of its own** — it's an ephemeral query engine
+reading the coordination log (via its SQLite scanner) and LanceDB (via the
+`lance` extension) live, recomputing every query from source with no cache
+in between. Because it owns no state, standing it up in v2.1 costs nothing
+beyond the extension itself.
+
+**Persistence boundary, stated precisely (resolves the v2.1/v2.5 tension):**
+v2.1's DuckDB is exactly as described above — no materialized results, no
+refresh state, nothing DuckDB writes anywhere. v2.5's "scheduled DuckDB
+analytics refresh" (deferral below) is real, additional scope on top of
+that: it introduces a materialized view, and a materialized view by
+definition needs somewhere to persist its results and its last-refresh
+state. That store is a DuckDB-native file (a `.duckdb` database file DuckDB
+owns and writes directly, not a new bespoke store) — v2.5's daemon writes
+to it on its refresh schedule; v2.1 has no such file because v2.1 has no
+scheduled refresh to persist. The "ephemeral, owns no persisted state"
+description in the table above is therefore scoped to v2.1 only; v2.5
+explicitly and deliberately gives DuckDB one small persisted artifact
+(the materialized-view cache) as part of promoting the query capability
+into a standing analytics feature.
 
 ### The kernel boundary is unaffected
 
