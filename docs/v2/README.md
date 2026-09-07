@@ -258,11 +258,14 @@ orama-system/docs/v2/
 ├── 57-minigraph-final-reconciliation.md  ← canonical MiniGraph architecture record: supersedes prior line-count/freeze/async-only clauses; ownership (perpetua-core executes, orama-system owns GraphSpec/lint/evaluation/policy); the CompiledGraph/asteps()/GraphEvent scheduler seam; §17 explicit LangGraph (Python, legacy+current) and LangGraph.js (oramaclaw, bundled with AlphaClaw/OpenClaw runtime controllers) drop-in-compatibility decision. Plan: docs/v2/plans/2026-08-27-minigraph-final-reconciliation.md
 ├── 58-minigraph-observer-pattern-library-reconciliation.md  ← observer/pattern-library addendum: reconciles the mined pattern catalogue against the final MiniGraph architecture
 ├── 59-minigraph-state-mutation-observer-finalization.md  ← final state/mutation/observer correction; exact-head oramasys/perpetua-core PR #1 review closure evidence
-└── 60-phylax-monitorability-design-spec.md  ← canonical Phylax monitorability architecture; governs evidence, epistemic inference classes, safety authority, privacy, liveness, and migration; its three references are subordinate implementation modules
-└── 61-pt-coordination-principal-identity-design.md  ← design-only (not built): a real authenticated-principal mechanism for PT's coordination CLI, superseding the shipped PT_AGENT_ID env-var cross-check; bearer-token proposal + 3-stage migration path
+├── 60-phylax-monitorability-design-spec.md  ← canonical Phylax monitorability architecture; governs evidence, epistemic inference classes, safety authority, privacy, liveness, and migration; its three references are subordinate implementation modules
+├── 61-pt-coordination-principal-identity-design.md  ← design-only (not built): a real authenticated-principal mechanism for PT's coordination CLI, superseding the shipped PT_AGENT_ID env-var cross-check; bearer-token proposal + 3-stage migration path
+├── 62-telos-phylax-authority-gate0-adr.md  ← Gate 0 ADR resolving the Telos/Phylax endpoint-use-authorization/artifact-admission authority split (a different Phylax facet than doc 60's monitorability spec): standalone-repo status ratified, oramasys/telos dataclasses canonical over the Gateway Lifecycle PR's untyped TelosPort, behavior-vector strategy + fail-closed-on-version-mismatch, Core-timeline deferral to Gate 6, Phylax parity, transport-identity-conversion and audit-persistence ownership sub-decisions
+├── 63-gate1-endpoint-observation-and-conformance-evidence.md  ← Gate 1 v2-scoped evidence: read-only v1 (PT) importer/authority inventory recorded as v2 evidence (no v1 file changes), Telos JSON behavior-vector conformance contract, exit-evidence checklist honestly marking Gate 4 wiring and Layer 2 SSRF vectors as still open
+└── 64-gate2-policy-surface-noninterchangeability-scope.md  ← Gate 2 scope + candidate finding: agent_launcher.py's model-endpoint override path may accept an unresolved hostname (ALLOW_PUBLIC_MODEL_ENDPOINTS=1) and fetch it via raw httpx, bypassing ssrf_pinned_adapter's DNS/address-class checks entirely; dispatch brief for confirmation + read-only PT-PR proposal, never a same-repo PT edit
 ```
 
-> **Next free slot: `62-`**
+> **Next free slot: `65-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.

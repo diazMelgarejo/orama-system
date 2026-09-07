@@ -85,29 +85,24 @@ split rather than inventing a new one: the Mac host owns the canonical
 file on that one host. Windows co-orchestrator hosts hold a synced,
 **read-only** copy, refreshed via the same LAN peer-file-inbox transport
 already used for cross-host coordination assignments (`lan_peer_assign.py`)
-— not a new sync mechanism. A Windows host with a stale copy fails closed:
-an unrecognized or since-revoked token is rejected as invalid, never
-silently accepted because the local cache hadn't caught up yet. Revocation
-propagation delay is therefore bounded by the existing peer-sync cadence,
-not instantaneous — acceptable for this threat model (misconfiguration/
-local-bug protection, stated in the threat-model section above), since it
-is not defending against a sophisticated attacker racing a revocation.
+— not a new sync mechanism. A Windows host with a stale copy can accept a
+token revoked after its last successful sync; this design does not claim that
+such a replica fails closed. M-id-1 and M-id-2 therefore provide
+misconfiguration/local-bug protection only, not an immediate revocation
+guarantee. Before M-id-3 can claim token-required enforcement, the v2 runtime
+must either consult the canonical registry at claim time or persist a registry
+revision and sync timestamp, reject replicas older than a configured maximum
+age, and advance the revision on every revoke. That defines an auditable
+revocation window instead of treating peer-sync cadence as a security proof.
 
 **Verification.** `queue_claim` (and any future principal-checked call)
-requires both `PT_AGENT_ID` and `PT_AGENT_TOKEN` to be set. The token is
-hashed and compared against the registered hash for that `agent_id`; a
-mismatch, a revoked token, or a missing token is rejected before the
-reservation check runs — the same insertion point the current
-`PT_AGENT_ID`-only check uses today.
-
-**Why bearer tokens over the alternatives considered:**
-
-| Option | Rejected because |
-| --- | --- |
-| Full mTLS between agent processes | Real security, but requires a local CA, per-agent cert provisioning/rotation, and TLS termination in a CLI tool that currently has none — disproportionate to a single-machine/LAN trust boundary |
-| OS-level process identity (`SO_PEERCRED` on a Unix socket) | Only works for same-host callers over a Unix socket; this coordination layer is SQLite-file-based, not socket-based, and Windows co-orchestrator hosts (named explicitly in the coordination template) have no equivalent primitive |
-| Signed claims (each agent holds a private key, signs every claim) | Genuinely stronger (non-repudiation), but needs key provisioning/rotation infrastructure equivalent to the token approach with added asymmetric-crypto complexity, for a threat model that doesn't yet require non-repudiation |
-| Bearer token (this proposal) | Matches the actual threat model (misconfiguration/local-bug protection, not defense against a sophisticated remote attacker), reuses infrastructure this repo already has patterns for (hash-then-store, matching how the endpoint-policy security primitive elsewhere in this org already handles comparable secrets) |
+always requires `PT_AGENT_ID`. `PT_AGENT_TOKEN` enforcement is conditional
+on migration stage, per the outcome matrix below: optional (falling back to
+today's `PT_AGENT_ID`-only check) during M-id-1 and M-id-2, mandatory only
+once M-id-3 is reached. When a token is supplied, it is hashed and compared
+against the registered hash for that `agent_id`; a mismatch or a revoked
+token is rejected before the reservation check runs — the same insertion
+point the current `PT_AGENT_ID`-only check uses today.
 
 **`PT_AGENT_TOKEN` outcome matrix:**
 
@@ -117,6 +112,15 @@ reservation check runs — the same insertion point the current
 | Invalid or mismatched | Rejected: supplied token is unregistered or does not match the requested `agent_id` | Rejected: supplied token is unregistered or does not match the requested `agent_id` | Rejected: supplied token is unregistered or does not match the requested `agent_id` |
 | Revoked | Rejected: token's registered entry is revoked | Rejected: token's registered entry is revoked | Rejected: token's registered entry is revoked |
 | Valid | Accepted: non-revoked token matches the requested `agent_id` | Accepted: non-revoked token matches the requested `agent_id` | Accepted: non-revoked token matches the requested `agent_id` |
+
+**Why bearer tokens over the alternatives considered:**
+
+| Option | Rejected because |
+| --- | --- |
+| Full mTLS between agent processes | Real security, but requires a local CA, per-agent cert provisioning/rotation, and TLS termination in a CLI tool that currently has none — disproportionate to a single-machine/LAN trust boundary |
+| OS-level process identity (`SO_PEERCRED` on a Unix socket) | Only works for same-host callers over a Unix socket; this coordination layer is SQLite-file-based, not socket-based, and Windows co-orchestrator hosts (named explicitly in the coordination template) have no equivalent primitive |
+| Signed claims (each agent holds a private key, signs every claim) | Genuinely stronger (non-repudiation), but needs key provisioning/rotation infrastructure equivalent to the token approach with added asymmetric-crypto complexity, for a threat model that doesn't yet require non-repudiation |
+| Bearer token (this proposal) | Matches the actual threat model (misconfiguration/local-bug protection, not defense against a sophisticated remote attacker), reuses infrastructure this repo already has patterns for (hash-then-store, matching how the endpoint-policy security primitive elsewhere in this org already handles comparable secrets) |
 
 ## Migration path, if and when this is prioritized
 

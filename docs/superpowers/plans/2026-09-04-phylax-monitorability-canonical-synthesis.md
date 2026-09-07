@@ -54,9 +54,15 @@ Reference the MiniGraph kernel through `01-kernel-spec.md` without a line count.
 
 - [ ] **Step 5: Validate the new document**
 
-Run: `python scripts/review/repo_hygiene.py . && git diff --cached --check`
+Stage the file and run hygiene checks:
 
-Expected: both commands exit zero.
+```bash
+git add docs/v2/60-phylax-monitorability-design-spec.md
+python scripts/review/repo_hygiene.py .
+git diff --cached --check
+```
+
+Expected: all commands exit zero.
 
 - [ ] **Step 6: Commit Doc 60**
 
@@ -98,10 +104,11 @@ Add M0 decisions for the Phylax package/repository boundary and reuse inventory 
 - [ ] **Step 5: Validate and commit the modules**
 
 ```bash
+git add docs/v2/references/phylax-monitorability-part-*.md
 python scripts/review/repo_hygiene.py .
 git diff --cached --check
-git add docs/v2/references/phylax-monitorability-part-*.md
 bash scripts/git/verify-staged-for-commit.sh
+git diff --cached --check
 bash scripts/git/commit-clean.sh -m "docs(v2): align monitorability implementation modules"
 ```
 
@@ -128,10 +135,11 @@ Add a forward reference explaining that Doc 55 governs telemetry and privacy tra
 - [ ] **Step 3: Validate and commit navigation**
 
 ```bash
+git add docs/v2/README.md docs/v2/55-oramasys-agent-observability-contract-adr.md
 python scripts/review/repo_hygiene.py .
 git diff --cached --check
-git add docs/v2/README.md docs/v2/55-oramasys-agent-observability-contract-adr.md
 bash scripts/git/verify-staged-for-commit.sh
+git diff --cached --check
 bash scripts/git/commit-clean.sh -m "docs(v2): index Phylax monitorability architecture"
 ```
 
@@ -150,9 +158,18 @@ bash scripts/git/commit-clean.sh -m "docs(v2): index Phylax monitorability archi
 
 - [ ] **Step 1: Run final repository checks**
 
-Run: `python scripts/review/repo_hygiene.py . && git diff --cached --check`
+Stage all files changed in Tasks 1–3, then run hygiene checks:
 
-Expected: both commands exit zero and no unrelated file is staged.
+```bash
+git add docs/v2/60-phylax-monitorability-design-spec.md \
+        docs/v2/references/phylax-monitorability-part-*.md \
+        docs/v2/README.md \
+        docs/v2/55-oramasys-agent-observability-contract-adr.md
+python scripts/review/repo_hygiene.py .
+git diff --cached --check
+```
+
+Expected: all commands exit zero and no unrelated file is staged.
 
 - [ ] **Step 2: Run consistency scans**
 

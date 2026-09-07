@@ -25,6 +25,7 @@ The versioned adapter normalizes the v1 envelope rather than parsing Markdown,
 logs, or raw agent output:
 
 ```python
+from datetime import timedelta
 from typing import Annotated
 from pydantic import Field, model_validator
 
@@ -83,6 +84,16 @@ class DerivedMonitorabilityArtifactV2(BaseModel):
 
     @model_validator(mode="after")
     def enforce_temporal_and_calibration_rules(self):
+        for field_name, value in (
+            ("valid_from", self.valid_from),
+            ("expires_at", self.expires_at),
+        ):
+            if value is None:
+                continue  # valid_from is nullable; expires_at is required and never None here
+            if value.tzinfo is None or value.utcoffset() is None:
+                raise ValueError(f"{field_name} must be timezone-aware, not naive")
+            if value.utcoffset() != timedelta(0):
+                raise ValueError(f"{field_name} must be UTC (offset zero), got {value.utcoffset()}")
         if (self.calibration_ref is None) != (self.calibration_version is None):
             raise ValueError("calibration reference and version must appear together")
         if self.artifact_id in self.supersedes_artifact_ids:
@@ -142,9 +153,15 @@ it replaces nothing), and an explicitly non-authoritative disposition.
 bracketing source observations; `forecast` requires an explicit future horizon.
 
 **What the model validator above enforces, and what it structurally cannot:**
-`enforce_temporal_and_calibration_rules` checks that a claimed interval is
-internally well-formed (`valid_from < expires_at`) and that calibration
-fields are paired. It cannot verify that `source_observation_refs` actually
+`enforce_temporal_and_calibration_rules` requires `expires_at`, and `valid_from`
+whenever it is non-null, to be timezone-aware UTC values (offset exactly zero)
+before it compares them at all -- a naive `expires_at` must never reach
+`resolve_admissible_artifact_refs()`, where it would raise `TypeError` the
+moment it is compared (`clock_now >= artifact.expires_at`) against an aware
+`clock_now`. Only after that awareness/UTC check passes does the validator
+check that a claimed interval is internally well-formed (`valid_from <
+expires_at`) and that calibration fields are paired. It cannot verify that
+`source_observation_refs` actually
 *bracket* that interval, because those are opaque references — resolving
 them to real observation timestamps requires the observation store, which a
 self-contained Pydantic model has no access to by design (the same
@@ -185,6 +202,13 @@ omitting either nullable `sealed_reasoning_ref`, `calibration_ref`, or
 
 ```python
 class PhylaxMonitorabilityDecisionV2(BaseModel):
+    model_config = ConfigDict(strict=True, extra="forbid", frozen=True)
+
+    decision_id: BoundedIdentifier
+    issuer_id: BoundedIdentifier
+    policy_pack_version: BoundedIdentifier
+    decided_at: datetime
+    integrity_hash: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
     decision: Literal["allow", "warn", "escalate", "block"]
     severity: SeverityV2
     confidence: float
@@ -198,10 +222,20 @@ class PhylaxMonitorabilityDecisionV2(BaseModel):
     monitor_rationale_ref: OpaqueEvidenceRef | None = None
     human_review_required: bool
     retention_class: RetentionClassV2
+
+    @model_validator(mode="after")
+    def enforce_provenance_and_block_rules(self):
+        if self.decided_at.tzinfo is None or self.decided_at.utcoffset() != timedelta(0):
+            raise ValueError("decided_at must be timezone-aware UTC")
+        if self.decision == "block" and not self.observable_evidence_refs:
+            raise ValueError("block decisions require observable evidence")
+        return self
 ```
 
 Every decision has an issuer, immutable decision ID, policy-pack version,
-timestamp, integrity hash, and append-only correlation to its source evidence.
+timestamp, integrity hash, and append-only correlation to its source evidence
+— these are now represented directly on the model above, not left as prose
+the schema didn't actually enforce.
 There is no persisted free-form rationale summary. The bounded category is safe
 for ordinary telemetry; the optional rationale reference uses the Part 1 opaque
 reference grammar, is never exported in normal telemetry, and may resolve only
@@ -217,6 +251,11 @@ def resolve_admissible_artifact_refs(
     every reference is re-resolved against the current artifact set at
     admission time, the same "never trust a stored/cached fact" discipline
     as resolve_effective_status() and resolve_round_admissible() above.
+    `clock_now` must be a timezone-aware UTC datetime, matching the
+    `expires_at`/`valid_from` values that `enforce_temporal_and_calibration_rules`
+    already guarantees are aware UTC on every `DerivedMonitorabilityArtifactV2` --
+    comparing an aware `clock_now` against a naive one raises `TypeError`
+    before this function can return.
     Returns (admissible_refs, rejected) where each rejected entry states
     why: unknown_artifact_id, expired, or superseded_or_retracted (via
     resolve_effective_status(), not the artifact's own stored status
