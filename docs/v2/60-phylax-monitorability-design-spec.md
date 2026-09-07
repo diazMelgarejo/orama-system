@@ -4,11 +4,15 @@
 > admission and enforcement remain future work
 > **Date:** 2026-09-04
 > **Observability vocabulary:**
-> [55 — oramasys Agent Observability Contract](55-oramasys-agent-observability-contract-adr.md)
+> [55 — oramasys Agent Observability Contract][doc55]
 > **Implementation references:**
-> [Part 1 — v1 evidence contract](references/phylax-monitorability-part-1-v1-evidence-contract.md) ·
-> [Part 2 — derived inference](references/phylax-monitorability-part-2-derived-inference.md) ·
-> [Part 3 — migration and assurance](references/phylax-monitorability-part-3-migration-assurance.md)
+> [Part 1 — v1 evidence contract][part1] · [Part 2 — derived inference][part2] ·
+> [Part 3 — migration and assurance][part3]
+>
+> [doc55]: 55-oramasys-agent-observability-contract-adr.md
+> [part1]: references/phylax-monitorability-part-1-v1-evidence-contract.md
+> [part2]: references/phylax-monitorability-part-2-derived-inference.md
+> [part3]: references/phylax-monitorability-part-3-migration-assurance.md
 
 ## 1. Status
 
