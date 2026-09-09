@@ -69,6 +69,22 @@ def test_staged_whole_file_deletion_blocks_with_path_and_symbol(tmp_path: Path) 
     assert "git restore --staged" in result.stderr
 
 
+def test_staged_rename_is_still_treated_as_a_deletion(tmp_path: Path) -> None:
+    """Configured rename detection must not hide a whole-file removal."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    subprocess.run(["git", "config", "diff.renames", "true"], check=True, cwd=repo)
+    (repo / "tracked.txt").unlink()
+    (repo / "renamed.txt").write_text("tracked with one revision\n", encoding="utf-8")
+    subprocess.run(["git", "add", "-A"], check=True, cwd=repo)
+
+    result = _run(repo, "--staged")
+
+    assert result.returncode == EXIT_FILE_DELETION
+    assert "tracked.txt" in result.stderr
+
+
 @pytest.mark.parametrize(
     "env",
     [
@@ -121,6 +137,28 @@ def test_outgoing_range_whole_file_deletion_blocks(tmp_path: Path) -> None:
     assert result.returncode == EXIT_FILE_DELETION
     assert "tracked.txt" in result.stderr
     assert "git diff --name-status" in result.stderr
+    assert f"--source={base}" in result.stderr
+
+
+def test_outgoing_range_restore_hint_uses_range_start(tmp_path: Path) -> None:
+    """A multi-commit range cannot safely restore every deletion from HEAD^."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    base = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    (repo / "intermediate.txt").write_text("intermediate\n", encoding="utf-8")
+    subprocess.run(["git", "add", "intermediate.txt"], check=True, cwd=repo)
+    subprocess.run(["git", "commit", "-m", "intermediate"], check=True, cwd=repo)
+    _stage_deletion(repo)
+    subprocess.run(["git", "commit", "-m", "delete tracked file"], check=True, cwd=repo)
+
+    result = _run(repo, "--range", f"{base}..HEAD")
+
+    assert result.returncode == EXIT_FILE_DELETION
+    assert f"--source={base}" in result.stderr
+    assert "--source=HEAD^" not in result.stderr
 
 
 def test_guard_is_wired_at_commit_and_push_boundaries() -> None:
