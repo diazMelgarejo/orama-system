@@ -43,8 +43,9 @@ concern per ADR 62's authority map) and consumes `oramasys/telos`'s canonical
 **Merge prerequisite (met — Half A is complete):**
 [`oramasys/oramasys` PR #2][oramasys-pr2] wired the canonical
 `EndpointRef`/`EndpointUseRequest` types into `TelosPort`, merged
-2026-09-07. ADR 62 and [Gate 1 evidence][gate1-evidence] required that
-typed `TelosPort` migration before Gate 4 work begins; with it merged,
+2026-09-07 (merge commit `8732fd2`). ADR 62 and
+[Gate 1 evidence][gate1-evidence] required that typed `TelosPort`
+migration before Gate 4 work begins; with it merged,
 [`oramasys/oramasys` PR #3][oramasys-pr3] subsequently landed Half A
 itself (merge commit `98b2e6b`, per the exit-evidence record below), so
 Half A is unblocked and complete, not built against an assumed-complete
