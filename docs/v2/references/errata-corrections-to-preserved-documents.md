@@ -45,32 +45,29 @@ fix applies to R2's analogous pytest command (same document, `tail -30`
 in place of `head -10`) for the identical reason — status is captured
 before truncation, not read from the truncation command's own exit code.
 
-## E2 — `instruction-debt-remediation-plan.md`, R3b: allowlist widening — authorized by direct human decision
+## E2 — `instruction-debt-remediation-plan.md`, R3b: broad command-prefix allowlists are not a read-only authorization
 
-**Source location:** R3b, "orama-system permission allowlist." The
-preserved document's own text already states this correctly and needs no
-technical correction — it explicitly instructs "obtain security review
-before applying," which review 5148933700 repeated as its own finding.
+**Source location:** R3b, "orama-system permission allowlist."
 
-**Disposition, recorded here rather than silently assumed**: reviewed and
-explicitly authorized. The 12 proposed entries (`git status`, `git log`,
-`git diff`, `git show`, `git branch`, `git rev-parse`, `grep`, `rg`,
-`find`, `jq`, `sort`, `uniq`, each with a trailing `*`) are read-only
-commands; none introduces a mutating verb (no `push`, `commit`, `rm`,
-`merge`, or deploy command), matching the preserved document's own stated
-scope exactly. **This authorization applies to the proposal as written in
-the preserved document — it does not itself modify any real
-`.claude/settings.json` file**, which is outside this docs-only PR's
-scope and was not independently inspected as part of this authorization.
-Whoever implements this (matching the ownership map in
-[consolidated-cross-reference-and-execution-order.md](consolidated-cross-reference-and-execution-order.md),
-likely alongside C1/C4's Phylax admission-adapter work in wave M4) should
-treat this record as the sign-off, not re-request it, but should still
-verify the target file's current state before applying — this
-authorization was granted against the proposal's text, not a live diff
-against an inspected target file.
+**The correction**: the proposed trailing-`*` command prefixes are not safe
+read-only entries. `git branch`, `find`, `jq`, `sort`, and similar
+commands have argument forms that can mutate state, write output, or cause
+side effects. The absence of a mutating verb in the prefix is insufficient.
+This correction supersedes the source proposal's broad allowlist and records
+that the prior claimed authorization does not apply to it.
 
-## E3 — `oramasys-migration-execution-plan.md`, "Recommended first move" — add an explicit push-access precondition
+**Required implementation boundary**: define explicitly supported read-only
+operations and validate their arguments and effects before allowing them.
+Prefer structured read APIs where they exist. An unknown, malformed, or
+mutating form follows the ordinary deny/approval path; it does not inherit a
+command-family grant. Verify negative cases before side effects in the actual
+successor adapter. This errata changes no real `.claude/settings.json` file.
+
+This belongs with C1/C4's Phylax admission-adapter work in wave M4. It does
+not authorize a legacy settings change, an allowlist widening, or an
+unreviewed transfer of a shell policy into v2.
+
+## E3 — `oramasys-migration-execution-plan.md`, "Recommended first move" — verify target-scoped access without probing writes
 
 **Source location:** the document's closing "Recommended first move"
 section.
@@ -79,30 +76,17 @@ section.
 session tiered to `oramasys/perpetua-core` — it already has a CI
 workflow, so the hygiene gate has somewhere to land immediately."
 
-**The correction**: this recommendation assumes the executing session
-already has verified push access to `oramasys/perpetua-core`. This
-session's own experience is the concrete counter-example: its GitHub
-token has repo-level `push`/`admin` reported in capability metadata for
-`diazMelgarejo/orama-system`, yet PR creation on that same repo returned
-403 — confirmed directly, not assumed, earlier in this document
-directory's own history. Reported capability metadata is not
-authorization, a principle this same PR's own audit content (Part 1,
-§"Loading, scope, and precedence") already states independently.
-Corrected precondition, to run before Wave 0 begins on any target
-repository, not assumed from account-level permission fields:
+**The correction**: a target session needs verified authority for the actual
+authorized change, not favorable-looking capability metadata. Do not create
+empty branches, draft PRs, or other external state merely to probe access.
+Those are writes with their own scope and notification effects.
 
-1. Attempt a trivial, reversible write against the actual target
-   repository and branch (e.g., a branch creation, or a draft PR against
-   a scratch branch) before relying on that repository for Wave 0/M2
-   foundational work.
-2. If the write fails despite favorable-looking capability metadata,
-   treat the session as read-only for that repository regardless of what
-   `permissions` fields report, and escalate for a token/scope fix before
-   proceeding — do not silently fall back to a different target
-   repository as a workaround, which would be an undocumented scope
-   change to the plan.
-3. Record the verified result (not the reported capability) in the M0
-   baseline evidence this same plan already requires.
+Before Wave 0 begins, confirm repository access through an already-authorized,
+meaningful scoped change or owner-provided access evidence. If neither exists,
+treat target write access as unverified, request the required access or
+direction, and continue only independent read-only planning. Do not silently
+fall back to another target repository. Record the observed authorization and
+the exact artifact/evidence in M0; never infer it from account metadata alone.
 
 ## E4 — `portable-memory-sanitization-runbook.md`, Step 1: snapshot-copy placeholder path
 
