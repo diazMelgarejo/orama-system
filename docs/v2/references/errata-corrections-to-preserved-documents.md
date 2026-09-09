@@ -139,3 +139,81 @@ Tracked planning documentation must not embed a path such as a specific
 Use `$SUPERPOWERS_ROOT` as a neutral report locator after defining it as the
 installed Superpowers package root. This does not promise that every harness
 exports that environment variable; it is a portable documentation convention.
+
+## E9 — project test coverage has an 80% floor
+
+Any passage saying that a coverage threshold applies only when a component
+explicitly defines one is incorrect.
+
+The project-wide rule is:
+
+- maintain at least **80%** test coverage across the project;
+- if a component defines a stricter threshold, the stricter threshold applies;
+- a stricter component threshold MUST NOT be lowered to the project floor;
+- risk-based test selection remains valid, but it cannot waive the aggregate
+  coverage gate.
+
+The current integrated plan and Part 2 execution program carry this corrected
+rule.
+
+## E10 — the September semantic-only Telos scaffold was implementation drift
+
+The accepted **2026-08-29** Telos/Phylax architecture remains canonical. The
+September Telos scaffold that described Telos as semantic endpoint-use
+authorization while assigning parsing, DNS, SSRF, pinning, redirects and
+connection safety to an unnamed external endpoint/transport layer did **not**
+supersede that architecture. It was an implementation divergence and must not be
+used as authority for future work.
+
+Canonical steady-state ownership is:
+
+- `oramasys/telos` succeeds the original Tripwire design and owns **all
+  endpoint-specific security**: canonical endpoint identity, destination/address
+  classification, SSRF and metadata protection, DNS resolution/rebinding
+  defense, connection-time pinning, redirect/proxy/TLS destination safety, and
+  purpose-scoped endpoint-use authorization;
+- semantic endpoint permission and transport safety are distinct Telos
+  decisions; neither substitutes for the other;
+- `oramasys/phylax` owns generic security/safety/runtime-admission and
+  monitorability mechanisms, not endpoint-specific semantics or transport;
+- provider repositories own provider protocol/lifecycle semantics and MUST NOT
+  maintain a permanent independent secure connector;
+- PT v1 remains historical/golden behavior evidence only and is never a v2
+  runtime dependency.
+
+The corrected Telos implementation is tracked in `oramasys/telos` PR #1,
+`feat(telos): restore full Tripwire endpoint-security authority`. Its parity
+hardening head is
+`aee02988955c6abc181cd24b29e640c8891f928a`, tested clean-room against:
+
+- `diazMelgarejo/Perpetua-Tools@a551da4fa97e5fbc6f908ad077c7b6d8030a3220`;
+- `oramasys/Claude-Desktop-LLM@ba4f3910efc6496cd6476a274b93f4b877ba12b3`.
+
+Tasks 3–7 of the Telos restoration plan are implemented on that PR. Local
+verification of the exact parity-hardening tree produced **28 passing tests**
+and **91.29% line coverage**, above the 80% project floor. This does not yet
+claim the subsequent Claude-Desktop-LLM consumer-transfer task is complete.
+
+Telos and Phylax are intended to use **Apache-2.0**, matching the endpoint-policy
+package authority they replace. MIT metadata in their initial September
+scaffolds is erroneous license drift, not the intended licensing policy.
+
+## E11 — citation-contaminated architecture synthesis is not evidence
+
+The Telos/Phylax evolution writeup referred to as “Document 7” contains
+citations to unrelated external sources, including a game wiki, a
+non-architectural product page, and a general dictionary entry, as if those
+sources established repository-specific architecture claims. Such citations do
+not substantiate ADR numbers, project epochs, private contract names, ownership
+boundaries or implementation status.
+
+Required handling:
+
+- treat that writeup as an **untrusted secondary synthesis** until each
+  architecture claim is re-grounded in repository files, commits, PR/review
+  records, PT `.agent` evidence, or explicit approved decisions;
+- do not infer an author, publication date or tool provenance without the actual
+  artifact metadata/history;
+- do not replace contaminated citations with merely plausible external links;
+- preserve the contaminated artifact only as provenance/evidence of the error;
+  current canonical documents and verified repository state control execution.
