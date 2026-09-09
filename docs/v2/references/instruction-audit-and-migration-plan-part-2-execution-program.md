@@ -40,8 +40,8 @@ implementation.
 
 ### D1 — verification follows changed behavior and risk
 
-Replace unconditional “every test type / every commit / generic coverage floor”
-behavior with:
+Replace unconditional “every test type / every commit” behavior while preserving
+the project-wide coverage floor:
 
 > Choose validation from the changed behavior and risk.
 >
@@ -57,7 +57,9 @@ behavior with:
 > - UI changes: combine programmatic checks with rendered inspection.
 > - Integration/release: run the declared package/cross-package gates.
 >
-> A coverage threshold applies only when the component explicitly defines it.
+> Maintain at least 80% test coverage across the project. If a component
+> defines a stricter coverage threshold, that stricter threshold applies and
+> MUST NOT be lowered.
 
 Expected red tests are evidence, not an automatic reason to stop before
 in-scope diagnosis.
