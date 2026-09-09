@@ -19,6 +19,9 @@ M0–M9 execution program.
 - Core never imports upward into application or specialist policy owners;
 - compare decisions where useful, but never shadow-dispatch paid or
   security-sensitive provider requests;
+- maintain at least 80% test coverage across the project; when a component
+  defines a stricter coverage threshold, the stricter threshold applies and
+  must never be lowered;
 - no completion percentage is assigned before the capability ledger defines
   the denominator.
 
