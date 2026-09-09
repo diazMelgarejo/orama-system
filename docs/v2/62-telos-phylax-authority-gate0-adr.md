@@ -1,6 +1,6 @@
 # ADR 62: Telos/Phylax Authority Split — Canonical Restoration
 
-**Status:** accepted and corrected, 2026-09-10  
+**Status:** accepted, corrected, and implementation-synchronized 2026-09-10  
 **Original Gate-0 date:** 2026-09-06  
 **Canonical architecture date:** 2026-08-29
 
@@ -8,7 +8,8 @@
 
 The accepted 2026-08-29 architecture is and always was the canonical design.
 The narrower September Telos scaffold was an implementation divergence, not a
-superseding architectural decision. This ADR corrects that divergence.
+superseding architectural decision. This ADR corrects that divergence and now
+records the completed Gateway dedicated-dialer migration.
 
 - **Telos** is the single v2 authority for **all endpoint-specific security**.
 - **Phylax** is the generic compile/runtime security, safety, admission and
@@ -34,8 +35,8 @@ The initial September `oramasys/telos` scaffold incorrectly narrowed Telos to
 semantic endpoint-use authorization and described DNS, pinning and transport
 safety as somebody else's lower layer. That created an unnamed v2 owner and
 caused `oramasys/oramasys` and `oramasys/Claude-Desktop-LLM` to carry their own
-secure-dial/endpoint-policy implementations. That state is implementation
-drift and is explicitly rejected by this correction.
+secure-dial/endpoint-policy implementations. That state is implementation drift
+and is explicitly rejected by this correction.
 
 ## Decision 1: repository shape
 
@@ -63,7 +64,9 @@ Telos owns, end to end:
 11. TLS destination identity and original Host/SNI preservation;
 12. credential/header hygiene across redirects;
 13. purpose-scoped semantic endpoint-use authorization;
-14. reusable safe transport primitives for v2 provider/application consumers.
+14. reusable safe HTTP transport primitives for v2 consumers;
+15. reusable async secure-dial primitives for non-HTTP/provider-connectivity
+    consumers.
 
 A semantic allow decision is not transport-safety evidence. A transport-safe
 endpoint is not purpose-authorized by itself. Telos composes both decisions
@@ -91,27 +94,53 @@ dependencies:
 The v2 implementation is a clean-room reimplementation. No v2 runtime may
 import, execute, locate, or silently fall back to PT endpoint-security code.
 
-### Claude-Desktop-LLM evidence and transfer
+### Claude-Desktop-LLM transfer
 
-`oramasys/Claude-Desktop-LLM/src/policy/endpoint-policy.ts` was valuable v2
-implementation evidence, especially for direct-provider behavior, connection
-pinning, redirect revalidation and cancellation. It is not a permanent
-endpoint-security authority.
+`oramasys/Claude-Desktop-LLM/src/policy/endpoint-policy.ts` remains a
+provider-facing compatibility facade; endpoint security executes behind Telos.
+The exact verified consumer-transfer head is
+`6a602e8786708dbe62a112360ddde4ba63b8c3ad`.
 
-The consumer-transfer implementation is tracked in
-`oramasys/Claude-Desktop-LLM` PR #1. Its provider-facing `guardedFetch()`
-becomes a compatibility facade over the Telos bridge; endpoint security runs
-inside Telos. Exact verified consumer-transfer head at the time of this ADR
-correction: `29aa88cb4191669a575b4ba7b9734c4e98482995`.
+### Oramasys Gateway dialer — migration complete
 
-### Oramasys Gateway dialer
+The former `oramasys/oramasys/src/orama/gateway/dialer.py` security engine has
+now been strangled into Telos rather than deleted.
 
-`oramasys/oramasys/src/orama/gateway/dialer.py` is likewise transitional
-implementation evidence/compatibility code, not a second endpoint-security
-authority. Its DNS/address-classification/dial behavior must be strangled into
-Telos and reduced to an application/provider consumer adapter. Oramasys keeps
-application policy and lifecycle semantics; Telos owns the endpoint-security
-primitive.
+The historical module survives as a **thin compatibility/application-policy
+facade**. It retains:
+
+- `ModelServerDialRequest`;
+- `ModelServerDialResult`;
+- `ModelServerDialer`;
+- stable reason aliases;
+- the Gate-4 provider/purpose/port capability matrix;
+- `DialConnector` as a compatibility pointer to Telos `SecureDialConnector`.
+
+It no longer owns DNS resolution, IP/address classification, SSRF policy,
+public/private classification, endpoint-use authorization, pin selection,
+peer-pin verification, redirect/proxy/TLS destination safety or decision
+freshness/mismatch checks.
+
+Telos now exposes `SecureDialer`, `SecureDialRequest`, `SecureDialResult`,
+`SecureDialConnector`, and `ConnectedPeer`. The connector reports the actual
+peer so Telos can verify the connection terminates at the vetted pin. This
+closes the old compatibility contract gap where an opaque provider reference
+alone could not prove connection-time pinning.
+
+`GatewayLifecycle` no longer has a semantic-only preauthorization path against
+a raw `EndpointRef` and no longer permits an optional/no-dialer bypass. Config
+and health operations use mandatory Telos-backed secure dials, and the actual
+Telos decision metadata from those dials becomes the routing-state policy
+metadata.
+
+Exact verified implementation evidence:
+
+- Telos PR #1 head: `19810d0493344aa507c29c462f68afbc1b98ecf8`;
+- Telos CI run `34409993139`: Python 3.11 and 3.12 success;
+- Oramasys PR #5 head: `1eb191e99f0cc5d9604f103573aebaec2e5defc0`;
+- Oramasys CI run `34410898142`: Python 3.11 and 3.12 success, 51 tests,
+  94.27% total coverage, compile smoke success;
+- fresh review-thread sweeps: zero threads on both PRs.
 
 The v1 PT native dialer work remains valid inside the v1 regime because v1
 never consumes v2 packages. That native implementation is independent parity
@@ -120,16 +149,18 @@ work, not authority leakage from v2 back into PT.
 ## Decision 3: Telos executable contracts and parity
 
 `oramasys/telos` PR #1 restores the Tripwire/Telos authority and provides the
-current v2 implementation evidence. Its clean-room parity sources are pinned:
+current v2 implementation evidence. Its clean-room parity sources include:
 
 - `diazMelgarejo/Perpetua-Tools@a551da4fa97e5fbc6f908ad077c7b6d8030a3220`;
-- `oramasys/Claude-Desktop-LLM@ba4f3910efc6496cd6476a274b93f4b877ba12b3`.
+- `oramasys/Claude-Desktop-LLM@ba4f3910efc6496cd6476a274b93f4b877ba12b3`;
+- historical Oramasys Gateway vectors at
+  `oramasys/oramasys@8ad2574010013d9f5b40b193d316516872462130`.
 
 The implementation covers endpoint identity, address policy, DNS/rebinding,
-pinned transport, peer verification, redirect semantics, proxy isolation,
-TLS Host/SNI identity and semantic authorization composition. The exact Telos
-PR #1 head recorded by this ADR is
-`aee02988955c6abc181cd24b29e640c8891f928a`.
+pinned transport, peer verification, redirect semantics, proxy isolation, TLS
+Host/SNI identity, semantic authorization composition and bounded secure-dial
+connectivity. Current Telos evidence head:
+`19810d0493344aa507c29c462f68afbc1b98ecf8`.
 
 Required project coverage is at least **80%**. A component that defines a
 higher threshold keeps that higher threshold; it must never be lowered to
@@ -142,50 +173,31 @@ admission, provenance/integrity checks, capability admission, secrets or
 filesystem safety mechanisms assigned to it, and monitorability/security
 policy-pack infrastructure.
 
-Phylax explicitly does **not** own:
-
-- endpoint parsing/canonicalization;
-- IP/CIDR endpoint classification;
-- SSRF policy;
-- DNS rebinding defense;
-- redirect destination policy;
-- proxy isolation;
-- TLS destination identity;
-- safe dial/socket pinning.
-
+Phylax explicitly does **not** own endpoint parsing/canonicalization,
+IP/CIDR classification, SSRF, DNS rebinding defense, redirect destination
+policy, proxy isolation, TLS destination identity or safe dial/socket pinning.
 Those are Telos concerns.
 
-The initial MIT scaffold was incorrect. Telos and Phylax use Apache License
-2.0, matching the endpoint-policy authority being replaced.
+Telos and Phylax use Apache License 2.0.
 
 ## Decision 5: consumer contract rule
 
 A v2 consumer MUST NOT maintain a permanent independent endpoint-security
 implementation.
 
-Consumers may contain:
+Consumers may contain thin language/process bridge adapters,
+provider-specific request/response protocol code, provider readiness/lifecycle
+logic, application-level routing/effect policy, compatibility names and
+deterministic test doubles that do not duplicate Telos policy semantics.
 
-- thin language/process bridge adapters;
-- provider-specific request/response protocol code;
-- provider readiness/lifecycle logic;
-- application-level routing and effect policy;
-- deterministic test doubles that do not duplicate Telos policy semantics.
+Consumers may not independently own SSRF classification, DNS-rebinding policy,
+endpoint allow/deny logic that competes with Telos, socket/IP pinning policy,
+redirect destination security or proxy/TLS destination-security policy.
 
-Consumers may not independently own:
-
-- SSRF classification;
-- DNS-rebinding policy;
-- endpoint allow/deny logic that competes with Telos;
-- socket/IP pinning policy;
-- redirect destination security;
-- proxy/TLS destination-security policy.
-
-There is no silent direct-fetch fallback when Telos is unavailable. Failure to
-obtain a valid Telos result is fail-closed.
+There is no silent direct-network fallback when Telos is unavailable. Failure
+to obtain a valid Telos result is fail-closed.
 
 ## Decision 6: regime boundary
-
-v1 and v2 are separate regimes.
 
 - PT v1 continues to own and run its existing v1 endpoint/security code.
 - PT never imports v2 Telos.
@@ -198,21 +210,19 @@ v1 and v2 are separate regimes.
 
 Historical plans and preserved source documents remain historical evidence.
 Where they describe the semantic-only September scaffold or a separate unnamed
-SSRF/transport owner, this ADR and the current PR #351 errata supersede that
-interpretation.
+SSRF/transport owner, this ADR supersedes that interpretation.
 
 Repository-specific architectural claims must be grounded in repository files,
-commits, PRs/reviews, or PT `.agent` memory. Unrelated external pages are not
-valid evidence for ADR contents, project epochs, contract names, or commit
-history. Citation-contaminated secondary syntheses remain quarantined until
-claim-by-claim provenance is restored.
+commits, PRs/reviews, PT `.agent` memory or explicit approved decisions.
+Citation-contaminated secondary syntheses remain quarantined until claim-by-
+claim provenance is restored.
 
 ## Consequences
 
 - Telos is the only steady-state v2 endpoint-security authority.
-- Claude-Desktop-LLM becomes a Telos consumer.
-- Oramasys Gateway's dedicated dialer is transitional and must be outsourced
-  into Telos rather than becoming a second permanent authority.
+- Claude-Desktop-LLM is a Telos consumer.
+- Oramasys Gateway's dedicated dialer has been absorbed into Telos; the old
+  module remains only as a thin compatibility/application-policy facade.
 - Phylax stays generic and does not absorb endpoint semantics.
 - PT remains authoritative only inside v1 and as read-only parity evidence for
   v2 clean-room work.
@@ -220,12 +230,23 @@ claim-by-claim provenance is restored.
 - all projects maintain at least 80% test coverage unless an existing component
   threshold is stricter.
 
+This Gateway-complete status does **not** claim that every unrelated historical
+or legacy direct `curl`, `urllib` or `httpx` caller across the broader ecosystem
+has already been migrated. Those remain separately auditable consumer paths.
+
 ## Current implementation evidence
 
-- Telos restoration: `oramasys/telos` PR #1.
-- Claude consumer transfer: `oramasys/Claude-Desktop-LLM` PR #1.
-- Orama reconciliation: `diazMelgarejo/orama-system` PR #351.
-- PT native v1 dedicated-dialer hardening/evidence: `diazMelgarejo/Perpetua-Tools` PR #382.
+- Telos restoration + secure dial: `oramasys/telos` PR #1,
+  `19810d0493344aa507c29c462f68afbc1b98ecf8`.
+- Gateway compatibility migration: `oramasys/oramasys` PR #5,
+  `1eb191e99f0cc5d9604f103573aebaec2e5defc0`.
+- Claude consumer transfer: `oramasys/Claude-Desktop-LLM` PR #1,
+  `6a602e8786708dbe62a112360ddde4ba63b8c3ad`.
+- Phylax boundary correction: `oramasys/phylax` PR #1,
+  `9c5ad79e95c0400a0e24ef7c4f5d6fd90a9b27c5`.
+- Original Orama reconciliation: merged PR #351,
+  merge commit `101ad171444487bc186bbf8d0c6d6d67ac71d506`.
+- PT native v1 hardening/memory: `diazMelgarejo/Perpetua-Tools` PR #382.
 
 None of these references authorizes merge by itself. Merge remains a separate
 human decision.
