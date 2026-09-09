@@ -40,11 +40,13 @@ Lives in `oramasys/oramasys` (the dialer, since it's a provider-adapter-level
 concern per ADR 62's authority map) and consumes `oramasys/telos`'s canonical
 `EndpointRef`/`EndpointUseRequest` types.
 
-**Satisfied prerequisite:** [`oramasys/oramasys` PR #2][oramasys-pr2]
-merged 2026-09-07 and wired the canonical `EndpointRef`/
-`EndpointUseRequest` types into `TelosPort`. ADR 62 and
-[Gate 1 evidence][gate1-evidence] require that typed migration before Gate 4;
-Half A therefore landed on the real wiring, not an assumed-complete adapter.
+**Merge prerequisite (met — Half A is complete):**
+[`oramasys/oramasys` PR #3][oramasys-pr3] wired the canonical
+`EndpointRef`/`EndpointUseRequest` types into `TelosPort`, merged
+2026-09-07 (merge commit `98b2e6b`). ADR 62 and
+[Gate 1 evidence][gate1-evidence] required the typed `TelosPort`
+migration before Gate 4 work begins; that migration is now merged, so Half A
+is unblocked and complete, not built against an assumed-complete wiring.
 
 **Doc 65 dependency:** this document links to [Gate 2 evidence][gate2-evidence]
 (doc 65). [PR #342][pr342] merged it into its base branch, and that branch
@@ -168,6 +170,5 @@ workstation's resolver, firewall, or egress policy.
 [gate2-scope]: 64-gate2-policy-surface-noninterchangeability-scope.md
 [gate2-evidence]: 65-gate2-policy-surface-evidence.md
 [pr342]: https://github.com/diazMelgarejo/orama-system/pull/342
-[oramasys-pr2]: https://github.com/oramasys/oramasys/pull/2
 [oramasys-pr3]: https://github.com/oramasys/oramasys/pull/3
 [pt-pr382]: https://github.com/diazMelgarejo/Perpetua-Tools/pull/382
