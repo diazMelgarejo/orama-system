@@ -25,6 +25,7 @@ does not prove its claims, make an unavailable repository accessible, or waive r
 
 | Document | Purpose and status |
 | --- | --- |
+| [Consolidated cross-reference and execution order](consolidated-cross-reference-and-execution-order.md) | **Read this second.** Item-by-item cross-reference across all documents below: which proposed edits are genuine duplicates, which findings were independently confirmed by two different audits, and one concrete execution ordering against the integrated plan's waves |
 | [Full Codex report](codex-full-instruction-debt-audit-2026-09-09.md) | Complete audit findings, proposed text, coverage, scenarios, safeguards, and comparison checks |
 | [Integrated execution plan](integrated-v2-migration-plan-2026-09-09.md) | Current combined program, dependencies, owners, evidence, and finish conditions |
 | [Claude audit](instruction-debt-audit-2026-09-09.md) | Preserved original F1–F9, including independently unverified observations |
@@ -82,20 +83,16 @@ for this audit and are not automatically installed or executed by opening this p
 
 ## Relationship between the two execution plans
 
-The second audit's Part 2 includes its own complete M0–M9 work-package plan,
-independently structured (full M0–M9, ownership map, exit-evidence lists per
-package) rather than the wave/ledger shape used by the [integrated execution
-plan](integrated-v2-migration-plan-2026-09-09.md) above. **The integrated
-execution plan is the one to follow for actual sequencing** — it already
-reconciles the F1–F9/R1–R7 findings against current evidence via the
-decision ledger above, which the second audit's M0–M9 has not been checked
-against. Read the second audit's M0–M9 as an independently-produced
-reference shape (ownership map, ledger schema, exit-evidence pattern per
-package) to compare against and pull useful structure from, not as a
-second, competing sequence to execute in parallel. Neither audit's proposed
-edits (its own section A–E, or the corresponding F/R items above) should be
-applied without passing through the same reconciliation discipline the
-decision ledger already applies to the first audit.
+**Update**: the item-by-item cross-reference this note originally called
+for is now done — see [consolidated cross-reference and execution
+order](consolidated-cross-reference-and-execution-order.md). Summary of
+its conclusion: **the integrated execution plan's wave structure above
+remains the one to follow for actual sequencing.** The second audit's own
+M0–M9 (and the Codex full-audit's parallel A–E findings) turned out to be
+~20 of 26 items structurally redundant with each other, and every item
+across both has now been mapped onto a specific wave in the integrated
+plan, with prerequisites stated explicitly. Read the cross-reference
+document for the mapping; this note is kept only as a pointer to it.
 
 ## Smallest useful implementation batch
 
