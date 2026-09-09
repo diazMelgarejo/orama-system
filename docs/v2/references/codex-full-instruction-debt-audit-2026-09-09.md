@@ -303,7 +303,7 @@ The inspected target includes three package-install steps before testing. Dispos
 
 ```makefile
 test:
-	pytest
+    pytest
 
 # Keep the repository's verified development setup in a separately requested dev-install target.
 ```
@@ -442,7 +442,7 @@ The “current” paths below are hypotheses based on intersecting instructions,
 | Typo fix | Correct one sentence → broad router/methodology/Superpowers selection → root history, lessons, staged design and wrapper update references | A wrapper may fetch/pull; every-edit hook may run pytest; design or large-document rule may ask approval already covered by the request | Stops for design/review or unrelated red suite; high effort without better text evidence | Read scoped guide and sentence context; edit; diff/lint/relevant links; finish without unrelated skill or runtime suite |
 | Database migration | Add a schema field → brainstorming/TDD/executing plan → migration, security and test procedures | Write migration and regression; expected red conflicts with stop-on-failure; distinguish local isolated rehearsal from production execution | May stop at a useful expected failure, or mistake code authorization for production permission | Verify upgrade, repeatability, interrupted recovery and affected consumers; prepare production artifact/backup/rollback; obtain only still-required production approval |
 | UI visual change | Adjust layout → UI/methodology/testing → design, coverage and conflicting visual rule | Code and tests may run while visual inspection is discouraged; unknown preview access can cause another stop | Claims completion from code alone or runs a broad suite that does not assess layout | Inspect persisted diff and rendered affected view; verify interaction; if rendering is inaccessible, report the specific missing evidence without claiming visual success |
-| Failing local test | Fix a regression → debugging/TDD/execution workflow → competing stop and diagnose instructions | A hook's `tail`/`|| true` may hide failure; execution recipe may halt instead of diagnosing; setup may install packages | Stops too early or falsely passes due to masked exit; loop can continue without new evidence | Preserve real exit, classify expected/unrelated/product failure, fix within scope, rerun affected checks; stop only on an actual blocker and report unrelated baseline failures |
+| Failing local test | Fix a regression → debugging/TDD/execution workflow → competing stop and diagnose instructions | A hook's `tail`/`\|\| true` may hide failure; execution recipe may halt instead of diagnosing; setup may install packages | Stops too early or falsely passes due to masked exit; loop can continue without new evidence | Preserve real exit, classify expected/unrelated/product failure, fix within scope, rerun affected checks; stop only on an actual blocker and report unrelated baseline failures |
 | Deployment requiring approval | Prepare and deploy a named release → finishing/release/permission workflows → full menu and approval text | Existing authorization may be requested again, or a broad push grant may be misread as production approval | Stops before a reviewable artifact, or acts beyond granted effects | Build and validate concrete candidate, inspect target/effects, prepare rollout and rollback; request required approval once at the final consequential step; verify after authorized rollout |
 
 The revised paths still stop on real ambiguity, inaccessible required evidence and unapproved

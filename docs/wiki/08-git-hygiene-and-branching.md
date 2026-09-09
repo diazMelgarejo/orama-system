@@ -439,6 +439,18 @@ that contain shell commands** — it is the same check CI runs. (Learned
 paths and red-CI'd `main`. Reinforced 2026-06-22 PR #123: even placeholder
 forms and Windows env vars expose subdirectory trees.)
 
+**The real CLI accepts only an optional repository-path argument** — `python3
+scripts/review/repo_hygiene.py [repo]`, defaulting to `.`. There are no
+`--scan`, `--report`, or category-filter flags; confirmed directly against
+the script's own `argparse` definition. A preserved historical document in
+this repo's `docs/v2/references/` illustrates a hypothetical
+`src/tools/repo_hygiene.py --scan "$SNAP" --report categories` invocation as
+part of a larger sanitization procedure — that block is pseudocode
+describing an intended future interface, not the current executable command
+above, and that document is kept byte-for-byte unmodified as historical
+input (its provenance is SHA-256-pinned) rather than corrected in place.
+This note is the correction; the source document is not.
+
 **Prevention (catch it before history, not after).** The pre-commit hook
 (`.githooks/pre-commit`, activated by `bash scripts/git/install-local-hooks.sh`)
 runs the full `repo_hygiene.py` — the *same* check as CI — so a leaked
