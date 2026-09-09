@@ -26,6 +26,7 @@ does not prove its claims, make an unavailable repository accessible, or waive r
 | Document | Purpose and status |
 | --- | --- |
 | [Consolidated cross-reference and execution order](consolidated-cross-reference-and-execution-order.md) | **Read this second.** Item-by-item cross-reference across all documents below: which proposed edits are genuine duplicates, which findings were independently confirmed by two different audits, and one concrete execution ordering against the integrated plan's waves |
+| [Errata: corrections to preserved documents](errata-corrections-to-preserved-documents.md) | Corrections to 4 findings against provenance-pinned preserved documents (R3a exit-status masking, R3b allowlist authorization, the M0 push-access precondition, the snapshot-command placeholder) — written separately so the sources stay byte-for-byte unmodified |
 | [Full Codex report](codex-full-instruction-debt-audit-2026-09-09.md) | Complete audit findings, proposed text, coverage, scenarios, safeguards, and comparison checks |
 | [Integrated execution plan](integrated-v2-migration-plan-2026-09-09.md) | Current combined program, dependencies, owners, evidence, and finish conditions |
 | [Claude audit](instruction-debt-audit-2026-09-09.md) | Preserved original F1–F9, including independently unverified observations |

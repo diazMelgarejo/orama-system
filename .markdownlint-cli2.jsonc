@@ -77,6 +77,11 @@
     "**/SKILL.md",
     "**/LESSONS.md",
     "docs/archive/*-Archived-LESSONS.md",
-    "docs/superpowers/plans/**"
+    "docs/superpowers/plans/**",
+    "docs/v2/references/claude-handoff-instructions-2026-09-09.md",
+    "docs/v2/references/instruction-debt-audit-2026-09-09.md",
+    "docs/v2/references/instruction-debt-remediation-plan.md",
+    "docs/v2/references/oramasys-migration-execution-plan.md",
+    "docs/v2/references/portable-memory-sanitization-runbook.md"
   ]
 }

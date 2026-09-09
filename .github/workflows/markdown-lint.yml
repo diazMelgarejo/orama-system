@@ -50,11 +50,6 @@ jobs:
             CHANGELOG.md
             vendor/**
             docs/LESSONS.md
-            docs/v2/references/claude-handoff-instructions-2026-09-09.md
-            docs/v2/references/instruction-debt-audit-2026-09-09.md
-            docs/v2/references/instruction-debt-remediation-plan.md
-            docs/v2/references/oramasys-migration-execution-plan.md
-            docs/v2/references/portable-memory-sanitization-runbook.md
           separator: ","
 
       - name: Run markdownlint-cli2 on changed files

@@ -301,12 +301,18 @@ forms go through the ordinary permission decision; they do not inherit a wildcar
 **C5 — PT `Makefile`, test target setup side effects; adapt in successor build tooling.**
 The inspected target includes three package-install steps before testing. Disposition: split.
 
+<!-- markdownlint-disable MD010 -->
 ```makefile
 test:
-    pytest
+	pytest
 
 # Keep the repository's verified development setup in a separately requested dev-install target.
 ```
+<!-- markdownlint-enable MD010 -->
+
+Makefile recipe lines require a literal tab character, not spaces, to be
+valid if copied as written; the exception above is scoped to this one block
+only, not disabled for the rest of the document.
 
 Retain existing relevant pytest arguments in the actual implementation. Do not remove required
 setup documentation; separate dependency installation from a command advertised as a local test.
