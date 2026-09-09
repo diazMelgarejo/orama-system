@@ -1,0 +1,45 @@
+{
+  "archive_sha256": "be477e8a07218d2d158201f881870ccbdf9ae473ff5b4889da8ed4c7f09adfd7",
+  "entries": [
+    {
+      "archive_path": "instructions.txt",
+      "bytes": 6988,
+      "sha256": "55e165604c048cdfdb5ab2b4efbd834a356ba98df8fc3b7d0ced7bca19b34cff"
+    },
+    {
+      "archive_path": "docs/",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "archive_path": "docs/v2/",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "archive_path": "docs/v2/references/",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "archive_path": "docs/v2/references/instruction-debt-audit-2026-09-09.md",
+      "bytes": 20510,
+      "sha256": "8396c44a2d18f651b3a6063626c7deb0088249c05c8a9f79573767f8aff3de15"
+    },
+    {
+      "archive_path": "docs/v2/references/oramasys-migration-execution-plan.md",
+      "bytes": 15066,
+      "sha256": "01623a0b8b4e8e195aa0bd731710c8fa0f4b781d554dd4a71ab58c08640f0292"
+    },
+    {
+      "archive_path": "docs/v2/references/portable-memory-sanitization-runbook.md",
+      "bytes": 9539,
+      "sha256": "ce2e1c3b6784e7da3ead2dc5624e15a61bca28d63c5b48598b004627edff4aa1"
+    },
+    {
+      "archive_path": "docs/v2/references/instruction-debt-remediation-plan.md",
+      "bytes": 13768,
+      "sha256": "1b36f20ba16b805889c5a70802ef40b928ce07b51294545015a860d4a57c69d4"
+    }
+  ]
+}
