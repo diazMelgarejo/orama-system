@@ -1,119 +1,141 @@
 # Errata — Corrections to Preserved Historical Documents
 
-> **Status:** corrections only. The 4 source documents named below remain
-> byte-for-byte unmodified, per their explicit provenance guarantee
-> (SHA-256-pinned in
-> [claude-input-provenance-2026-09-09.json](claude-input-provenance-2026-09-09.json)).
-> This document states what's wrong and what the correct version is; it
-> does not edit the sources. Anyone implementing a correction below should
-> apply it directly to the real target file/system, not to the preserved
-> document that first proposed it.
-> **Provenance:** written in response to
-> [pullrequestreview-5148933700](https://github.com/diazMelgarejo/orama-system/pull/351#pullrequestreview-5148933700)
-> on PR #351, whose findings against these 4 documents this file resolves
-> without breaking their preservation guarantee — the same pattern already
-> used for the runbook CLI clarification in
-> [docs/wiki/08-git-hygiene-and-branching.md](../../wiki/08-git-hygiene-and-branching.md).
+**Status:** corrections only. The provenance-pinned source documents remain
+byte-for-byte unchanged. Apply these corrections through the current integrated
+plan and successor implementation, not by rewriting the historical inputs.
 
----
+See `claude-input-provenance-2026-09-09.json` for source hashes.
 
-## E1 — `instruction-debt-remediation-plan.md`, R3a: the proposed ruff-hook command masks the real exit status
+## E1 — checker pipelines must preserve the checker exit status
 
-**Source location:** R3a, "Ruff hook (both repos)."
+The preserved remediation plan includes examples where output truncation can
+replace the real `pytest`/`ruff` exit code and where `|| true` can turn failure
+into apparent success.
 
-**What the preserved document proposes**, verbatim:
-
-```json
-"command": "payload=$(cat); file=$(printf '%s' \"$payload\" | python3 -c \"import sys,json;print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))\" 2>/dev/null); [ -z \"$file\" ] && file=$(python3 -c \"import os,json;print(json.loads(os.environ.get('CLAUDE_TOOL_INPUT','{}')).get('file_path',''))\" 2>/dev/null); [[ \"$file\" == *.py ]] && ruff check \"$file\" 2>&1 | head -10 || true"
-```
-
-**The correction**: `... | head -10 || true` masks `ruff check`'s real
-exit status in two ways — the pipeline's reported exit code is `head`'s,
-not `ruff`'s, and the trailing `|| true` unconditionally overrides
-whatever exit code does survive. A hook meant to surface lint failures
-this way will never actually report one as a failure, regardless of
-whether ruff found anything. Corrected form, preserving output
-truncation while keeping ruff's real exit status:
-
-```json
-"command": "payload=$(cat); file=$(printf '%s' \"$payload\" | python3 -c \"import sys,json;print(json.load(sys.stdin).get('tool_input',{}).get('file_path',''))\" 2>/dev/null); [ -z \"$file\" ] && file=$(python3 -c \"import os,json;print(json.loads(os.environ.get('CLAUDE_TOOL_INPUT','{}')).get('file_path',''))\" 2>/dev/null); if [[ \"$file\" == *.py ]]; then out=$(ruff check \"$file\" 2>&1); status=$?; printf '%s\\n' \"$out\" | head -10; exit \"$status\"; fi; exit 0"
-```
-
-Captures ruff's status before truncating output, then exits with that
-captured status rather than truncation's or a hardcoded `true`. The same
-fix applies to R2's analogous pytest command (same document, `tail -30`
-in place of `head -10`) for the identical reason — status is captured
-before truncation, not read from the truncation command's own exit code.
-
-## E2 — `instruction-debt-remediation-plan.md`, R3b: broad command-prefix allowlists are not a read-only authorization
-
-**Source location:** R3b, "orama-system permission allowlist."
-
-**The correction**: the proposed trailing-`*` command prefixes are not safe
-read-only entries. `git branch`, `find`, `jq`, `sort`, and similar
-commands have argument forms that can mutate state, write output, or cause
-side effects. The absence of a mutating verb in the prefix is insufficient.
-This correction supersedes the source proposal's broad allowlist and records
-that the prior claimed authorization does not apply to it.
-
-**Required implementation boundary**: define explicitly supported read-only
-operations and validate their arguments and effects before allowing them.
-Prefer structured read APIs where they exist. An unknown, malformed, or
-mutating form follows the ordinary deny/approval path; it does not inherit a
-command-family grant. Verify negative cases before side effects in the actual
-successor adapter. This errata changes no real `.claude/settings.json` file.
-
-This belongs with C1/C4's Phylax admission-adapter work in wave M4. It does
-not authorize a legacy settings change, an allowlist widening, or an
-unreviewed transfer of a shell policy into v2.
-
-## E3 — `oramasys-migration-execution-plan.md`, "Recommended first move" — verify target-scoped access without probing writes
-
-**Source location:** the document's closing "Recommended first move"
-section.
-
-**What the preserved document says**, verbatim: "Wave 0 plus Wave 1, in a
-session tiered to `oramasys/perpetua-core` — it already has a CI
-workflow, so the hygiene gate has somewhere to land immediately."
-
-**The correction**: a target session needs verified authority for the actual
-authorized change, not favorable-looking capability metadata. Do not create
-empty branches, draft PRs, or other external state merely to probe access.
-Those are writes with their own scope and notification effects.
-
-Before Wave 0 begins, confirm repository access through an already-authorized,
-meaningful scoped change or owner-provided access evidence. If neither exists,
-treat target write access as unverified, request the required access or
-direction, and continue only independent read-only planning. Do not silently
-fall back to another target repository. Record the observed authorization and
-the exact artifact/evidence in M0; never infer it from account metadata alone.
-
-## E4 — `portable-memory-sanitization-runbook.md`, Step 1: snapshot-copy placeholder path
-
-**Source location:** the runbook's snapshot-creation step, immediately
-before "Step 2 — Establish the baseline with the real guard."
-
-**What the preserved document shows**, verbatim:
+Correct pattern:
 
 ```bash
-SNAP="$(mktemp -d)/agent-memory-snapshot"
-cp -a /path/to/perpetua-tools/.agent "$SNAP"
+out_file="$(mktemp)"
+if checker-command >"$out_file" 2>&1; then
+  status=0
+else
+  status=$?
+fi
+tail -30 "$out_file"
+rm -f "$out_file"
+exit "$status"
 ```
 
-**The correction**: `/path/to/perpetua-tools` is a placeholder, not a
-runnable path, and the runbook's own later steps already reference a
-`$PERPETUA_TOOLS_ROOT`-shaped variable convention for exactly this
-purpose (matching this repository's own
-[git-hygiene wiki doc](../../wiki/08-git-hygiene-and-branching.md)'s
-established "no workstation-specific literal paths in tracked files"
-discipline, which this specific line does not follow). Corrected form:
+The concrete successor hook may use a different implementation, but its
+observable contract is the same: output truncation is presentation; it does not
+change the checker result. Advisory hooks must be labelled advisory rather than
+masquerading as passing tests.
+
+## E2 — command-family wildcard rules are not read-only authorization
+
+A trailing wildcard on command names such as `git branch`, `find`, `jq` or
+`sort` does not prove read-only behavior. Some argument forms mutate refs,
+delete files, write output or execute callbacks.
+
+Required successor rule:
+
+- prefer structured read APIs;
+- where shell admission is necessary, validate supported argument/effect forms;
+- unknown, malformed or mutating forms take the ordinary deny/approval path;
+- negative tests prove rejection before side effects;
+- no legacy `.claude/settings.json` change is authorized by this errata.
+
+This maps to the M3/M4 admission contract and Phylax/runtime-policy work.
+
+## E3 — target access is verified through authorized work, not probe writes
+
+The preserved migration plan assumed a target-scoped session could begin on a
+particular successor repository.
+
+Correction:
+
+- favorable-looking capability metadata is not permission to manufacture a
+  write probe;
+- do not create empty branches, commits, draft PRs or other external state just
+  to test access;
+- verify target access through an already-authorized meaningful operation or
+  owner-provided evidence;
+- if required access is unavailable, record the exact blocker and continue
+  independent read-only planning rather than silently changing target scope.
+
+M0 records the observed authorization/evidence for every selected write target.
+
+## E4 — memory snapshot creation must fail closed
+
+The preserved runbook's literal `/path/to/perpetua-tools` is a placeholder. A
+replacement that blindly expands an unset `$PERPETUA_TOOLS_ROOT` is also unsafe:
+it can become `/.agent` and copy unrelated data if such a directory exists.
+
+Corrected runnable boundary:
 
 ```bash
+: "${PERPETUA_TOOLS_ROOT:?Set PERPETUA_TOOLS_ROOT before running Step 1}"
+test -d "$PERPETUA_TOOLS_ROOT/.agent" || {
+  printf '%s\n' "Missing Perpetua-Tools .agent directory" >&2
+  exit 1
+}
 SNAP="$(mktemp -d)/agent-memory-snapshot"
 cp -a "$PERPETUA_TOOLS_ROOT/.agent" "$SNAP"
 ```
 
-Whoever executes this runbook should set `PERPETUA_TOOLS_ROOT` to their
-actual local Perpetua-Tools checkout path before running Step 1, matching
-this repository's existing variable-substitution convention rather than
-hand-editing a literal path into the command each time.
+The snapshot stays outside worktrees and preserves bytes. Subsequent sanitation
+operates on the migration copy, never on the v1 source.
+
+## E5 — the old MiniGraph R0–R2 implementation plan is historical
+
+Any preserved/synthesized passage that still schedules these as future work is
+superseded by live successor evidence:
+
+- returned-value awaitability;
+- strict dict deltas;
+- END-only/validated routing including unknown targets;
+- detached compile semantics;
+- exact max-step diagnostics;
+- optional interrupt payload;
+- `_run()` as sole scheduler;
+- `aobserve()` rich and `asteps()` sanitized projections;
+- generic observer fan-out and per-listener payload isolation.
+
+Current future work begins at R3 reducers/joins, R4 durable deterministic
+resume, and R5 GraphSpec/application validation.
+
+## E6 — old corrective-branch status language is stale
+
+Canonical Orama docs 57/59 preserve historical wording that the unknown-route
+and per-listener-isolation corrections were only on a post-merge branch. Live
+`oramasys/perpetua-core` now contains both behaviors and dedicated regression
+coverage.
+
+Do not use the stale branch-status sentence to reopen those fixes. Repair the
+legacy canonical docs in a separately scoped documentation parity change if
+they are modified; PR #351 records the current truth for migration planning.
+
+## E7 — release dependency checks must not ban legitimate target subprocesses
+
+A previous synthesized M8 statement rejected all `runtime shell calls`. That is
+overbroad because approved provider/platform/tool adapters can legitimately use
+subprocesses.
+
+The actual forbidden boundary is legacy dependence:
+
+- no shell/subprocess invocation of v1 scripts, binaries, policy authorities,
+  memory writers or provider paths;
+- no implicit sibling checkout discovery/fallback.
+
+Target-owned subprocess adapters remain allowed when explicitly declared,
+argument/effect validated, lifecycle/cancellation tested, and independent of
+v1.
+
+## E8 — workstation-specific plugin cache paths are non-portable
+
+Tracked planning documentation must not embed a path such as a specific
+`/root/.../superpowers/6.3.0/` cache location.
+
+Use `$SUPERPOWERS_ROOT` as a neutral report locator after defining it as the
+installed Superpowers package root. This does not promise that every harness
+exports that environment variable; it is a portable documentation convention.

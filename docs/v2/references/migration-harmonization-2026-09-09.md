@@ -1,108 +1,202 @@
 # Approved migration planning: reconciled reading guide
 
-Status: approved to document and plan. Runtime remediation, memory import, settings changes,
-deployment, and legacy implementation changes have not been performed by this publication.
-The organization is `oramasys`; `oranasys` in the request is treated as a spelling error.
+**Status:** current reconciliation authority for PR #351 — 2026-09-09.
 
-## Authority and scope
+This document reconciles the provenance-pinned Claude inputs, the two audit
+tracks, PT `.agent` memory, canonical Orama `docs/v2`, and the current
+`oramasys/*` implementations. Historical inputs remain evidence; they do not
+override the current executable state or this reconciliation.
 
-The current user instruction governs this reconciliation. Both v1 repositories remain functional,
-independent systems. All implementation belongs in `oramasys/*`. The user explicitly authorized
-one exception to the v1 write boundary: publishing the full audit and approved plans under
-`diazMelgarejo/orama-system/docs/v2/references/`. This exception does not authorize changing v1
-code, hooks, permissions, agent memory, branch history, or other documentation paths.
+## Authority and preservation
 
-Orama v1 remains the temporary planning/documentation authority; PT is read-only evidence for
-memory and contract mining. Neither is a runtime, build, installation, test, CI, or fallback
-dependency of the v2 release. Historical links and source provenance are permitted.
+Both legacy repositories remain independent v1 systems. New v2 implementation
+belongs in `oramasys/*`. PR #351 is the explicitly authorized exception that
+publishes migration/audit material under this legacy repository's
+`docs/v2/references/` tree.
 
-The four Claude documents are preserved byte-for-byte as historical inputs. Their statements
-are not silently endorsed. Use this reconciliation and the integrated plan when a preserved
-proposal conflicts with the current user instruction or inspected evidence. Approval of a plan
-does not prove its claims, make an unavailable repository accessible, or waive release gates.
+The following remain provenance-pinned historical inputs and MUST NOT be edited
+merely to make their old proposals look current:
 
-## Complete reading map
+- `instruction-debt-audit-2026-09-09.md`;
+- `instruction-debt-remediation-plan.md`;
+- `oramasys-migration-execution-plan.md`;
+- `portable-memory-sanitization-runbook.md`;
+- the quoted handoff and `claude-input-provenance-2026-09-09.json`.
 
-| Document | Purpose and status |
-| --- | --- |
-| [Consolidated cross-reference and execution order](consolidated-cross-reference-and-execution-order.md) | **Read this second.** Item-by-item cross-reference across all documents below: which proposed edits are genuine duplicates, which findings were independently confirmed by two different audits, and one concrete execution ordering against the integrated plan's waves |
-| [Errata: corrections to preserved documents](errata-corrections-to-preserved-documents.md) | Corrections to 4 findings against provenance-pinned preserved documents (R3a exit-status masking, R3b allowlist authorization, the M0 push-access precondition, the snapshot-command placeholder) — written separately so the sources stay byte-for-byte unmodified |
-| [Full Codex report](codex-full-instruction-debt-audit-2026-09-09.md) | Complete audit findings, proposed text, coverage, scenarios, safeguards, and comparison checks |
-| [Integrated execution plan](integrated-v2-migration-plan-2026-09-09.md) | Current combined program, dependencies, owners, evidence, and finish conditions |
-| [Claude audit](instruction-debt-audit-2026-09-09.md) | Preserved original F1–F9, including independently unverified observations |
-| [Claude remediation](instruction-debt-remediation-plan.md) | Preserved R1–R7; apply only after the corrections below |
-| [Claude migration](oramasys-migration-execution-plan.md) | Preserved six-wave source plan; superseded where reconciled below |
-| [Claude memory runbook](portable-memory-sanitization-runbook.md) | Detailed source-before-derived procedure with corrections below |
-| [Claude handoff](claude-handoff-instructions-2026-09-09.md) | All original delivery instructions retained as quoted historical input |
-| [Provenance](claude-input-provenance-2026-09-09.json) | Original archive and entry byte counts and SHA-256 hashes |
-| [Second audit, Part 1](instruction-audit-and-migration-plan-part-1-findings-and-edits.md) | A separate, independently produced instruction audit (P0–P2 priority findings, sections A–C of proposed edits) — a different source archive, different findings (legacy authority docs, permission-checker gaps, hook side effects, merge doctrine), not a duplicate of the F1–F9/R1–R7 material above |
-| [Second audit, Part 2](instruction-audit-and-migration-plan-part-2-execution-program.md) | Same audit's remaining sections (D–E, worth-keeping, paper stress tests) and its own M0–M9 execution program |
+Use the errata and synthesized documents when those sources conflict with later
+review findings, PT memory, canonical `docs/v2`, or live successor code.
 
-## Decision ledger: additive reconciliation
+## Current executable reconciliation
 
-| ID | Input claim or proposal | Current disposition and reason |
+The earlier MiniGraph rehabilitation plan is no longer a future R0–R2 program.
+Live `oramasys/perpetua-core` now implements the reconciled execution contract:
+
+```text
+MiniGraph
+  mutable realization builder
+        |
+        | compile()
+        v
+CompiledGraph
+  detached topology snapshot
+        |
+        v
+_run(state)
+  sole scheduler
+        |
+        v
+GraphObservation(event, state, delta?)
+        |
+        +-------------------------+
+        |                         |
+        v                         v
+   aobserve()                 GraphEvent
+   rich/trusted                   |
+                                  v
+                               asteps()
+                          sanitized/control-plane
+
+ainvoke()
+  drains aobserve()
+  returns final PerpetuaState
+```
+
+Already implemented and regression-covered in Core:
+
+- canonical Pydantic `PerpetuaState`;
+- `merge(update=deepcopy(delta), deep=True)` generation/caller isolation;
+- mutable `MiniGraph` plus detached `CompiledGraph` snapshots;
+- returned-object awaitability for sync, async, callable-object, and
+  sync-returned-awaitable nodes;
+- strict `dict` node deltas; `None` is a visible contract error;
+- `END` as sole normal termination;
+- non-string, empty, and unknown routes rejected at the route boundary;
+- conditional routing against the updated state;
+- exact completed-step and `last_node` semantics;
+- structural interrupts with optional payload;
+- one scheduler with rich and sanitized observation projections;
+- deterministic plugin fan-out with detached per-listener rich payloads;
+- no provider, storage, exporter, or application-policy imports in the graph
+  scheduler.
+
+Therefore future planning MUST NOT reopen R0, R1, or R2 as unimplemented work.
+
+## Remaining graph/runtime work
+
+The open work begins after that baseline:
+
+| Phase | Current state | Required next contract |
 | --- | --- | --- |
-| D01 | Claude F1: 825 memory files; email, private-network and key-shaped matches | Preserve as Claude-reported measurements. Codex did not reproduce the private scan. Re-scan a pinned copy before import; publish categories and counts only. |
-| D02 | F2 / R2: replace every-edit pytest with a Python-only hook | Narrow further: a coherent-change check, or a fast affected check. Piping to `tail` still needs explicit exit preservation. Do not modify v1 settings. |
-| D03 | F3 / R3: inline Ruff hook reads environment rather than stdin | Static mismatch is evidence; actual execution failure is a hypothesis until a harness-payload replay. Use structured parsing and preserved failure status in the successor adapter. |
-| D04 | F4 / R1: private design-preferences skill is broad and exposes private facts | Private source was not accessible to Codex. Retain as reported, avoid reproducing facts, and compare a narrowed trigger before removal. |
-| D05 | F5 / R4: 29 of 36 Claude wrappers drift | This is a different collection from Codex's 83 `.agents` wrappers. Keep denominators separate; do not combine percentages. |
-| D06 | F6: PT wildcard allowlist is read-only | Reject this characterization. `git branch`, `find`, `sort`, and `jq` have mutating forms. Validate arguments and effects, not command prefixes. Prompt frequency remains unmeasured. |
-| D07 | F7: Stop hook is advisory | Keep that distinction. An echo is neither a validation gate nor authority to change memory. |
-| D08 | F8: v1 layout is a migration defect; all targets conform | Do not retroactively apply v2 layout to v1. Agate still has root examples and an early schema surface; Alexandria is documentation-only. Record justified target exceptions. |
-| D09 | F9 / R7: documentation needs no testing, pre-existing failures never block | Documentation needs applicable lint/link checks. A relevant baseline safety failure can block release. An unrelated failure must be reported without forcing unrelated repairs. |
-| D10 | Only two or three exactly identical root lines imply no duplication | Exact-line overlap does not measure semantic duplication. Preserve distinct harness adapters while extracting repeated history, guard, and learning recipes. |
-| D11 | All hooks are inert and cost zero in this session | This describes a particular harness, not all environments. Separate discovery bytes, loaded bodies, tool actions, and actual hook invocation. |
-| D12 | R5: add wrapper generator in v1 `src/tools/` | Put the new canonical generator in `oramasys/oramasys/src/tools/`. Generate supported discovery fields and adapter pointers only; do not propagate permission metadata or auto-update commands blindly. |
-| D13 | R6: three changed files determines lesson capture | Use reusable learning value, not file count. Capture a relevant correction privately when authorized; no unconditional end-of-task memory write or push. |
-| D14 | Migration is approximately 40% complete | Remove from the current plan. File counts and scaffolding do not establish capability completion; define the denominator through the coverage ledger first. |
-| D15 | Remaining work is only docs, skills, and memory | Reject as an established conclusion. Runtime adapters, enforcement, provider behavior, integration and release evidence still require capability-by-capability verification. |
-| D16 | Source-session owner-tier restriction blocks publication | Preserve as historical context only. This session must use its actual connector results. No empty commits or permission changes to probe access. |
-| D17 | Repository text wins if it disagrees with the user | Current user scope wins over historical source instructions. Repository contracts inform design but cannot authorize source changes the user prohibited. |
-| D18 | Anamnesis or Core is an open memory choice | Anamnesis is the named specialist owner. Its lookup returned 404: unavailable or inaccessible, not proven nonexistent. Provision/access is a dependency; do not silently relocate memory to Core. |
-| D19 | Migrate all skills blindly or exclude a whole branded family | Inventory all skills. Keep methodology canonical in Oramasys, specialist workflows with their owners, and generated harness wrappers. Give each source an explicit disposition and lineage. |
-| D20 | Archive or alter v1 at the end | Keep v1 unchanged and independently usable. Migration completion does not authorize archival settings, removal of references, or merge of old implementation PRs. |
-| D21 | Bulk-copy old docs into Alexandria | Author current v2 documents by reconciling behavior and accepted decisions, with pinned lineage. Historical v1 docs stay archived in v1. Do not treat an inferred doc-41 path as verified. |
-| D22 | Copy hygiene implementation into every target | Prefer a versioned Phylax implementation and thin pinned consumers. Alexandria consumes CI tooling without becoming a runtime package. Record any necessary generated-copy exception. |
-| D23 | Preserving row count proves memory fidelity | Preserve IDs, dates, status, provenance, supersession and reference integrity. Equal row counts can hide replacement or identity loss. |
-| D24 | Sanitization leaves embeddings valid | Changed text requires regenerated embeddings and derived indexes. Never keep stale vectors merely because the dimensions match. |
-| D25 | `repo_hygiene.py --scan --report categories` is a current command | That interface is not established by the inspected script. Treat it as proposed; implement and test a successor command before documenting it as executable. |
-| D26 | Changed baseline counts must halt the entire migration | Reconcile the pinned revision and scan scope; unresolved leaks block import/publication of that data. Independent documentation and contract work can continue. |
-| D27 | PT Half B work should be completed as the next v2 step | Mine its intent and tests, then implement the appropriate successor slice. Do not modify PT PR382 under this task. |
-| D28 | All endpoint concerns have one undifferentiated owner | Telos owns endpoint-use meaning and lifecycle. Keep parsing/dialing mechanically separate from admission. Record the primitive's owner before introducing a new shared dependency. |
+| R0 characterization | complete | preserve tests |
+| R1 kernel correction | complete | no redesign |
+| R2 scheduler/observer seam | complete | preserve `_run -> aobserve -> asteps` |
+| R3 reducers and joins | open | explicit reducer conflict policy and join semantics before generic parallel fan-in |
+| R4 durable deterministic resume | partial | checkpoint lineage, graph/run/schema identity, execution cursor, replay/effect identity, idempotency/dedupe |
+| R5 GraphSpec/lint | designed, implementation not established | versioned `GraphSpec`/`NodeSpec`/`EdgeSpec`, fail-closed validation, version selection and evaluation above Core |
+| Optimizer/trace learning | research | only after versioned specs, traces and an independent evaluator exist |
 
-## What is retained without dilution
+The existing SQLite checkpointer is a useful successful-boundary persistence
+primitive, not proof of deterministic resume. Do not add an isolated
+`start_node` API before R4 defines checkpoint compatibility, cursor semantics,
+and effect replay.
 
-Preserve the source-before-derived sanitation order, generic guards even without the private
-registry, copy-forward provenance, idempotency, non-destructive historical records, typed policy
-boundaries, relevant visual inspection, and explicit approval for production effects. Private
-snapshots stay outside git. Sanitization operates on a migration copy, never on v1 memory.
+## Canonical ownership
 
-Preserve exact security procedures where failure modes justify them. Narrow their activation
-conditions instead of deleting safeguards because of model age. Source instructions are evidence
-for this audit and are not automatically installed or executed by opening this package.
+The migration uses the authority model already captured in PT memory and Orama
+architecture records:
 
-## Relationship between the two execution plans
+| Owner | Canonical responsibility |
+| --- | --- |
+| `oramasys/perpetua-core` | irreducible execution mechanics and generic graph primitives |
+| `oramasys/oramasys` | application composition; target owner for approved GraphSpec projection, routing policy, budgets/effects, control plane, APIs/UI |
+| `oramasys/agate` | hardware capability, fit, affinity, readiness inputs for placement |
+| `oramasys/telos` | endpoint-use semantics plus endpoint/network safe-transport enforcement |
+| `oramasys/phylax` | generic runtime-check mechanism plus security/safety policy packs; domain semantics stay with their owners |
+| `oramasys/anamnesis` | private runtime memory, provenance-preserving migration, retrieval and sanitized promotion |
+| `oramasys/Claude-Desktop-LLM` | Ollama/LM Studio provider operation and provider-native readiness/health |
+| `oramasys/alexandria` | reconciled v2 specifications, ADRs, standards, migration/release evidence |
 
-**Update**: the item-by-item cross-reference this note originally called
-for is now done — see [consolidated cross-reference and execution
-order](consolidated-cross-reference-and-execution-order.md). Summary of
-its conclusion: **the integrated execution plan's wave structure above
-remains the one to follow for actual sequencing.** The second audit's own
-M0–M9 (and the Codex full-audit's parallel A–E findings) turned out to be
-~20 of 26 items structurally redundant with each other, and every item
-across both has now been mapped onto a specific wave in the integrated
-plan, with prerequisites stated explicitly. Read the cross-reference
-document for the mapping; this note is kept only as a pointer to it.
+`perpetua-core` MUST NOT regain provider, hardware, endpoint, application,
+evaluation, budget, or policy authority merely because transitional helpers
+remain there.
 
-## Smallest useful implementation batch
+## Core policy/LLM/discovery strangler rule
 
-First establish successor authority text, concise scoped `AGENTS.md` files, and the capability
-ledger. Next build the single wrapper generator and small permission/hook fixtures in their v2
-owners. Gate any memory import on sanitation evidence. Do not begin by changing legacy hooks,
-copying private memory, or running a broad source cleanup.
+Current Core `policy.py`, `llm.py`, and `discovery/` are transitional mixed
+compatibility surfaces. Reconcile them by contract and caller, not by broad file
+moves:
 
-This publication itself changes only new files in the authorized references directory. The
-existing PR350 has an independently observed merge conflict outside that directory, so this
-package uses a dedicated branch from the inspected main revision. Existing PR349, PR350, and
-PT PR382 retain their own review state; no incidental merge or history rewrite is included.
+```text
+Agate capability evidence
+  -> provider readiness evidence
+  -> Oramasys route policy
+  -> ResolvedRoute
+  -> Core execution adapter
+```
+
+A new caller supplies a resolved route; Core executes it without re-selecting a
+provider or reinterpreting hardware policy. Existing public surfaces become
+explicit compatibility facades only after parity is proven. Do not shadow
+-dispatch paid/provider requests while comparing decisions.
+
+## Current Oramasys application drift
+
+The current `oramasys/oramasys/src/orama/graph/perpetua_graph.py` directly uses
+Core hardware-policy/discovery/provider-selection helpers. Treat that as
+transitional salvage code, not the future authority map. M6 must migrate the
+composition to Agate capability evidence plus provider readiness and an
+Oramasys-owned route decision before Core execution.
+
+No live `GraphSpec` implementation was established in the inspected
+`oramasys/oramasys` graph package. The ownership decision is settled; the
+implementation/authority handoff is not complete until the successor artifact,
+validation and consumer tests exist.
+
+## Endpoint-policy convergence
+
+Endpoint work follows the same strangler discipline:
+
+- Telos owns endpoint-specific authorization, classification, DNS/connection
+  safety, redirect/proxy/TLS destination enforcement and endpoint smoke checks;
+- provider adapters own provider protocol semantics and provider-specific
+  retries/auth construction;
+- Phylax may execute generic admission/runtime checks but does not absorb
+  Telos's endpoint meaning;
+- Oramasys owns route/budget/application policy;
+- Core executes an already-resolved route.
+
+Private model endpoints, public fetches, telemetry/export destinations and mesh
+peer endpoints remain distinct policy profiles. Do not collapse them into one
+ambiguous allowlist.
+
+## Review-remediation corrections incorporated here
+
+The current execution documents also adopt the active PR #351 review findings:
+
+1. all Track-B item counts must sum explicitly rather than hiding C2/C3 as
+   uncounted overlaps;
+2. memory snapshot commands fail closed when `PERPETUA_TOOLS_ROOT` is unset or
+   does not contain `.agent`;
+3. tracked docs use `$SUPERPOWERS_ROOT`, never a workstation-specific absolute
+   plugin-cache path;
+4. the release dependency check forbids legacy-runtime shell/subprocess use,
+   not legitimate target-owned provider/platform subprocesses.
+
+## Reading order
+
+1. this reconciliation;
+2. `integrated-v2-migration-plan-2026-09-09.md` — one executable M0–M9 program;
+3. `consolidated-cross-reference-and-execution-order.md` — audit-item mapping;
+4. `errata-corrections-to-preserved-documents.md` — corrections without
+   altering pinned sources;
+5. Part 1 / Part 2 and the Codex report for audit evidence and proposed text;
+6. preserved Claude sources for provenance only.
+
+## Governing execution rule
+
+Do not estimate migration completion from file counts. For every capability,
+record its source evidence, semantic owner, target contract, implementation
+status, tests, consumer migration and authority-transfer evidence. A historical
+plan saying something is open cannot override live tested successor code; a
+live implementation also cannot silently transfer semantic ownership without
+the corresponding contract and handoff.

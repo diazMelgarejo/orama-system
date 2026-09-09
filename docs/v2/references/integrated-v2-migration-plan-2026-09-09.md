@@ -1,159 +1,344 @@
 # Integrated v2 migration implementation and execution plan
 
-Date: 2026-09-09. Read the [reconciliation](migration-harmonization-2026-09-09.md) first.
-This is the approved planning baseline, not evidence that the runtime migration is finished.
-The source repositories remain independent; no mixed-organization runtime regime is acceptable.
+**Date:** 2026-09-09  
+**Status:** current executable planning baseline for PR #351.
 
-## Ownership and interfaces
+Read [the reconciled reading guide](migration-harmonization-2026-09-09.md)
+first. Historical audit/source documents are evidence; this plan is the single
+M0–M9 execution program.
+
+## 1. Migration invariants
+
+- v1 remains independently usable and is never a runtime/build/test fallback for
+  v2;
+- implementation belongs in `oramasys/*`;
+- unbundle by stable capability and semantic authority, not by copying file
+  trees;
+- fail closed at policy/admission/route boundaries;
+- one decision has one semantic owner even when multiple adapters consume it;
+- Core never imports upward into application or specialist policy owners;
+- compare decisions where useful, but never shadow-dispatch paid or
+  security-sensitive provider requests;
+- no completion percentage is assigned before the capability ledger defines
+  the denominator.
+
+## 2. Ownership and interfaces
 
 | Repository | Owns | Must not silently absorb |
 | --- | --- | --- |
-| `oramasys/perpetua-core` | Small reusable execution/kernel primitives and stable contracts | Application policy, machine discovery, provider operations, private memory storage |
-| `oramasys/oramasys` | Application orchestration, GraphSpec, control plane, integration API/UI, accounting and methodology | A replacement copy of every specialist implementation |
-| `oramasys/agate` | Hardware inventory, capability/availability and fit decisions | Endpoint-use authorization or provider serving lifecycle |
-| `oramasys/telos` | Endpoint-use semantics, scope, expiry, revocation and lifecycle contracts | Unreviewed expansion into every transport mechanism |
-| `oramasys/phylax` | Admission, security enforcement, monitorability, provenance and reusable hygiene guards | Prompt-only assertions of safety or six manually divergent guard copies |
-| `oramasys/anamnesis` | Portable memory contracts, sanitized records and derived retrieval | A raw copy of private v1 memory |
-| `oramasys/Claude-Desktop-LLM` | Provider operation and health/readiness, subject to source verification | Hardware policy or global orchestration ownership |
-| `oramasys/alexandria` | New current v2 documentation with source lineage | Bulk imported v1 archives or runtime implementation |
+| `oramasys/perpetua-core` | `PerpetuaState`, MiniGraph/CompiledGraph execution, structural events/observations, generic graph plugins and dependency-minimal execution contracts | GraphSpec policy, hardware selection, provider operations, endpoint policy, budgets, private memory |
+| `oramasys/oramasys` | application composition, target GraphSpec projection, route/runtime policy, control plane, APIs/UI, budgets/accounting/effects, integration | duplicate copies of specialist semantics |
+| `oramasys/agate` | hardware inventory/capability, fit, affinity and placement evidence | provider serving lifecycle or endpoint authorization |
+| `oramasys/telos` | endpoint-use authorization plus endpoint/network safe-transport policy and enforcement | provider protocol semantics or application routing |
+| `oramasys/phylax` | generic runtime-check engine, admission, provenance/redaction, security/safety policy packs and monitorability | endpoint semantic ownership or application workflow state |
+| `oramasys/anamnesis` | private runtime memory, sanitized import, retrieval, provenance and controlled promotion | raw v1 memory or Core fallback storage |
+| `oramasys/Claude-Desktop-LLM` | provider-native Ollama/LM Studio operation, health/readiness and provider lifecycle | hardware placement or global orchestration |
+| `oramasys/alexandria` | reconciled v2 specifications, ADRs, standards, migration/release evidence | runtime implementation or bulk active copies of v1 archives |
 
-Contract ownership is singular; adapters may be multiple. Resolve the owner of the reusable
-endpoint parser/dialer explicitly, preserving Telos semantics and Phylax admission separation.
-Do not block independent inventory or documentation on that decision.
+Phylax owns the generic runtime-check mechanism; non-security domain policies
+retain their semantic owners. Telos remains independently fail-closed for basic
+endpoint safety.
 
-## Required coverage ledger
+## 3. Successor baseline already implemented
 
-Create a machine-readable ledger in a successor repository. Each relevant source file and each
-capability must be accounted for; file inventory alone cannot establish behavioral coverage.
-Fields: source repository, source commit, path, symbol/capability, behavior, source tests,
-destination owner/path, disposition, dependencies, target evidence, acceptance cases, status,
-decision reference, and reviewer. One source may map to several explicit capability rows.
+M5 does **not** begin from an unreconciled MiniGraph. Current
+`oramasys/perpetua-core` already provides the canonical R0–R2 baseline:
 
-Allowed dispositions: extract, adapt, reimplement, consume specialist, retain a documented
-compatibility facade, historical-only, or explicitly accepted exclusion. No unclassified row
-may disappear through a file-count summary. An exclusion needs a reason and a decision record.
-Statuses: inventoried, specified, implemented, verified, accepted exclusion, or blocked with
-the exact missing input. Mark a row verified only for the tested artifact revision.
+```text
+MiniGraph.compile()
+  -> detached CompiledGraph
 
-Inventory PT packages, orchestration, launchers, configuration, hardware, provider adapters,
-memory protocols, contracts and test fixtures. Inventory Orama agents, skills, MCP interfaces,
-API/UI, plugins, policy, documentation and generated adapters. Record binaries and inaccessible
-private assets as explicit access gaps rather than inventing their contents.
+CompiledGraph._run()
+  -> sole scheduler
+  -> GraphObservation
+       -> aobserve() rich/trusted
+       -> GraphEvent -> asteps() sanitized
 
-## Execution waves and exit evidence
+ainvoke()
+  -> drains the same scheduler/observation stream
+```
 
-| Wave | Work and dependency | Reviewable output | Exit condition |
+Preserve these tested invariants:
+
+- canonical `PerpetuaState` with two-layer state/delta isolation;
+- returned-value awaitability;
+- strict `dict` node deltas;
+- END-only normal termination;
+- non-string, empty and unknown route rejection at resolution;
+- post-merge conditional routing;
+- exact max-step diagnostics;
+- structural interrupts with optional payload;
+- detached compiled topology;
+- generic plugin fan-out with sync/async callback settlement;
+- per-listener rich-payload isolation;
+- no traversal reimplementation in plugins/adapters.
+
+Do not create a duplicate plugin namespace or reintroduce the removed no-op
+`interrupt_handler` API.
+
+## 4. Remaining Core graph work
+
+### R3 — reducers and explicit joins
+
+The current parallel helper's ordered last-writer-wins behavior is not a generic
+parallel graph contract. Before richer fan-in ships, define explicit field
+reducers and join semantics, for example:
+
+```text
+Reducer: REJECT_CONFLICT | FIRST | LAST | CONCAT | UNION | CUSTOM
+Join:    ALL | ANY | FIRST_SUCCESS | QUORUM | CUSTOM
+```
+
+Branch completion timing MUST NOT silently determine state semantics.
+
+### R4 — durable deterministic resume
+
+The SQLite checkpointer is a successful-boundary persistence primitive, not a
+complete resume contract. R4 must define at least:
+
+```text
+checkpoint_id
+parent_checkpoint_id
+graph_id
+graph_version
+state_schema_version
+run_id
+logical node/step
+execution cursor
+replay/effect policy
+effect identity
+idempotency/deduplication or compensation
+```
+
+Choose any narrow resume execution API only after those semantics are frozen.
+Restoring graph state cannot undo an external side effect.
+
+### R5 — GraphSpec and validation
+
+Target authority is the Oramasys/application specification layer, not Core.
+Implement versioned `GraphSpec`, `NodeSpec`, `EdgeSpec`, lint, version
+selection and evaluation with fail-closed validation before realization.
+Persistent/immutable structural sharing belongs here rather than in the mutable
+MiniGraph builder.
+
+## 5. Core policy/LLM/discovery strangler migration
+
+The remaining `perpetua_core/policy.py`, `llm.py` and `discovery/` surfaces are
+mixed compatibility/salvage layers. Do not move them wholesale.
+
+Target flow:
+
+```text
+Agate CapabilityEvidence
+        |
+        v
+ProviderReadiness
+        |
+        v
+Oramasys route/effect/budget policy
+        |
+        v
+ResolvedRoute
+        |
+        v
+Core execution adapter
+```
+
+Minimum contracts:
+
+| Contract | Producer | Consumer | Required meaning |
 | --- | --- | --- | --- |
-| M0: baseline | Pin all source/target revisions, active PRs and access; record regime authority | Snapshot/provenance manifest and boundary ADR | Source freeze and the narrow documentation exception are explicit; no access claim is assumed |
-| M1: coverage | Inventory all files, contract surfaces, workflows and instructions | Complete classification ledger with evidence links | No unclassified in-scope source; omissions and exclusions visible |
-| M2: foundations | Establish v2 owner guides, reproducible builds, declared commands, versions and CI | Small target PRs, dependency graph and governed adapter discovery | Each applicable target builds/tests without v1; layout exceptions documented |
-| M3: contracts | Specify cross-package requests, events, results, identity and failure semantics | Versioned contracts and conformance fixtures | Producers/consumers agree; denial and malformed inputs are covered |
-| M4: specialists | Implement Agate, Telos, Phylax, Anamnesis and provider slices | Independently testable packages and adapters | Real behavior, lifecycle, enforcement and negative cases verified |
-| M5: Core | Mine PT contracts and keep only reusable kernel responsibilities | Thin kernel with state isolation and deterministic contracts | Compatibility and affected-consumer tests pass without application-policy leakage |
-| M6: Oramasys | Integrate graph execution, control plane, budgets, accounting, effects, API and UI | End-to-end vertical slices | A complete user workflow runs with v2 packages only, including failure handling |
-| M7: knowledge | Sanitize copied memory; regenerate derived data; synthesize new docs and skills | Private import evidence, public category report, v2 documentation and generated wrappers | Provenance/identity preserved; no unresolved leak; docs match verified behavior |
-| M8: assembly | Build clean versioned release candidate with legacy repos absent | Compatibility matrix, artifact digests and integration evidence | Required release gates pass on the actual candidate and supported environments |
-| M9: release | Prepare target/environment/effects/rollback packet; obtain required approval | Reviewed release packet and, after approval, rollout evidence | Approved effects succeed; recovery and final acceptance are verified |
+| `CapabilityEvidence` | Agate | Oramasys route policy | hardware/model fit and provenance |
+| `ProviderReadiness` | provider owner | Oramasys route policy | provider/model endpoint availability and freshness |
+| `ResolvedRoute` | Oramasys | Core execution | selected provider/model plus decision evidence; no re-selection in Core |
+| provider transport | provider owner | executing node/adapter | request/response/cancel semantics, not route selection |
 
-M0 precedes M1. M2 and M3 define foundations for M4–M6. Contract-independent specialist work
-may proceed concurrently when ownership is clear. M7 documentation and skill classification can
-proceed early; memory import waits for sanitation and Anamnesis access. M8 requires all selected
-release capabilities verified. M9 cannot substitute approval for missing M8 evidence.
+Retain old Core APIs only as explicit compatibility facades while consumers are
+migrated and parity-tested. Retirement requires proof that no production caller
+still depends on an independent old decision path.
 
-Claude wave mapping: wave 0 maps to M0–M2; wave 1 to M2–M3; wave 2 to the memory part of M7;
-wave 3 to Alexandria work in M7; wave 4 to skill classification/generation in M1/M7; wave 5 to
-M8–M9. M4–M6 restore runtime work that the source plan understated.
+## 6. Endpoint-policy strangler migration
 
-## M3–M6: concrete implementation slices
+Endpoint-policy work stays independently reviewable from MiniGraph correctness.
 
-Specify execution/routing requests, endpoint-use records, hardware snapshots, policy decisions,
-memory operations, events and accounting. Define versions, principal identity, expiry, retries,
-cancellation, typed errors, idempotency, backpressure and failure propagation. Unknown or
-malformed mutating operations must not acquire permission by default.
+Telos owns endpoint-specific concerns including:
 
-Agate needs runtime inventory and decisions beyond its current schema scaffold. Telos needs
-versioned endpoint-use lifecycle tests, including expired and revoked records. Phylax needs
-actual call-path enforcement and adapter registration: prose plus a verifier function that is
-never invoked does not establish admission. Anamnesis needs a reviewed import contract and
-private storage boundary. Provider readiness must distinguish a live process from a usable
-model endpoint. Its tree was inventoried here; provider runtime was not fully audited.
+- destination classification and endpoint-use authorization;
+- SSRF/metadata protections;
+- DNS pinning/rebinding defenses;
+- redirect/proxy/TLS destination rules;
+- endpoint/network egress enforcement and operational smoke verification.
 
-Classify Core graph/state/message/discovery/policy/LLM surfaces by reusable behavior before
-moving code. Preserve intentional compatibility names without making v1 a dependency. Verify
-state isolation, cancellation and deterministic execution where promised.
+Provider adapters own protocol semantics, parsing, provider-specific retries,
+rate limits, model listing and authentication construction. Phylax owns generic
+security/safety admission and can execute Telos/Agate/Oramasys checks through a
+shared runtime-check substrate without taking their semantic ownership.
 
-In Oramasys, implement graph gateway/control-plane integration with principal and source
-references, heartbeats, safe transport, budgets, accounting and effect boundaries. Mine the
-intent and fixtures behind legacy Gate 4 and PT PR382 into a v2 slice. Do not finish the legacy
-implementation PR as a prerequisite of this migration. UI acceptance needs a rendered check
-for the touched view plus programmatic behavior evidence.
+Keep distinct profiles for private model endpoints, public fetches,
+telemetry/export destinations and mesh peers.
 
-## M7: approved memory procedure
+## 7. Required coverage ledger
 
-1. Pin the PT source revision and obtain a read-only snapshot into private staging outside git.
-2. Inventory record formats, IDs, counts, provenance, dates, status and cross-record references.
-3. Run generic secret, topology and personal-path checks plus the private literal registry.
-   The registry is an extra layer; its absence must not disable generic checks.
-4. Sanitize source records in the migration copy with structured parsers and deterministic rules.
-   Keep raw evidence privately where authorized. Do not delete source rows to make counts pass.
-5. Regenerate materialized views, search indexes and embeddings from sanitized source text.
-6. Verify stable IDs, relationships, status, lineage, supersession and intended semantics, not
-   only row counts. Scan both source and derived output; publish only categories and counts.
-7. Repeat the process to prove idempotency; resolve baseline differences against pinned inputs.
-8. Import through the reviewed Anamnesis contract once access exists. Record rollback and
-   verify retrieval. Do not fall back to Core or turn a documentation task into a memory push.
+Every in-scope capability receives an explicit row containing:
 
-The source runbook's proposed scanner flags are not an existing CLI contract. Implement a v2
-tool with tested argument parsing and redacted reports before adding runnable commands here.
-Unresolved leaks block data import; they do not block unrelated contract or documentation work.
+```text
+source_repo
+source_commit
+source_path_or_symbol
+capability/observable contract
+source tests
+semantic owner
+target contract/path
+disposition
+dependencies
+acceptance cases
+target evidence
+status
+decision reference
+reviewer
+```
 
-## M7: skill and documentation procedure
+Allowed dispositions include extract/adapt, reimplement, consume specialist,
+compatibility facade, historical-only and accepted exclusion. No row disappears
+because a file move or scaffold makes the migration look complete.
 
-Inventory every source skill and wrapper. Keep meaningful selection boundaries; historical-only
-does not mean deleted. Oramasys owns shared methodology and the wrapper generator under
-`src/tools/`; specialists own domain workflows. Generate supported names/descriptions and
-harness-specific pointers, not permission grants. Test deterministic generation and drift.
-Loading a skill must not fetch, pull, install, import memory or rewrite its checkout.
+## 8. Execution waves
 
-Author new Alexandria documents from reconciled current behavior and accepted decisions.
-Each document records pinned v1 source lineage where relevant. Preserve historical numbering as
-provenance, not as an invented file path. Authority transfers by an explicit coverage/acceptance
-record, not by copying the old archive. Keep build commands and non-obvious conventions close
-to the code; keep historical incidents and long procedures behind relevant links.
-
-## Approval, continuation and completion
-
-Continue authorized read-only work, scoped implementation and relevant local diagnosis until
-the requested deliverable is complete. Reuse existing authorization for the same target/effects.
-Do not halt on an expected regression test failure or a routine resolvable error. Stop for user
-input only when a material choice cannot be inferred, necessary access is unavailable, or the
-next consequential action needs authorization not already supplied.
-
-External messages, deployment, production data migration, destructive deletion, history rewrite,
-credential rotation and permission expansion each require authorization for their actual effects.
-Prepare a concrete artifact first. A requested draft PR may notify subscribers; distinguish that
-authorized publication from unrelated messages. Never bypass an enforced rejection.
-
-For release, include commits, dependency versions, artifact digests, target environment, exact
-validation, migration/backup/recovery steps, expected effects and rollout/rollback triggers.
-Rollback uses a known-good v2 release; the existing v1 system remains independently available.
-Complete the program only when the ledger is closed, selected workflows work without v1,
-required safety gates operate in the real harness, and acceptance evidence is recorded.
-
-## Execution ledger at this publication
-
-| Item | Status | Next evidence required |
+| Wave | Work | Exit evidence |
 | --- | --- | --- |
-| All five Claude inputs read and preserved | Complete | Original-entry hashes are in the provenance manifest |
-| Source/target main snapshots rechecked | Complete for listed repositories | Refresh before each implementation batch |
-| Audit and combined planning package | Prepared for publication | Remote commit/PR verification is reported in the handoff |
-| Exhaustive capability ledger | Pending | Every source capability classified; current file inventory is insufficient |
-| Runtime migration and instruction fixes | Not executed in this documentation batch | Target PRs and applicable test evidence |
-| Anamnesis access | Blocked: lookup returned 404 | Confirm access or provision through an authorized owner |
-| Parser/dialer shared owner | Open design decision | ADR defining ownership and avoiding a policy/transport cycle |
-| Private design skill and raw memory scan | Not independently inspected | Private, redacted evidence at a pinned revision |
-| Classic branch protection | Inaccessible to integration | Owner-provided evidence; empty rulesets do not prove no protections |
-| Existing legacy PRs | Observed, unchanged | Separate decisions; do not make them migration dependencies |
+| M0 baseline | pin source/target revisions, current PRs/access, source-freeze and regime authority | evidence manifest and unresolved-decision ledger |
+| M1 coverage | build capability/instruction/contract/document lineage ledgers | no unexplained in-scope omission |
+| M2 foundations | successor owner guides, reproducible setup/build/test commands, versions, CI and adapter discovery | targets build/test without v1; setup does not hide installation in tests |
+| M3 contracts | freeze execution, route, endpoint, admission, hardware, provider, memory, event/accounting contracts | one owner per contract; malformed/unknown/version failures explicit |
+| M4 specialists | implement/verify Agate, Telos, Phylax, Anamnesis and provider slices | real call-path enforcement and negative cases, not schema-only evidence |
+| M5 Core | preserve R0–R2; implement R3/R4 as accepted; strangle policy/LLM/discovery through typed delegation | Core contains no independent application/hardware/provider/endpoint decision engine |
+| M6 Oramasys | GraphSpec, route/control-plane composition, budgets/effects, gateway/API/UI and specialist integration | full v2 workflow with real adapters and fail-closed effects |
+| M7 knowledge | sanitize/import memory, regenerate derived indexes, migrate skills/docs with lineage | provenance preserved; no unresolved leak; no automatic v1 writeback |
+| M8 assembly | build/test coherent v2 release with v1 repos absent | tested version/digest manifest and supported-environment evidence |
+| M9 release | reviewed publication/deployment/data-migration packet and rollback | authorized rollout matches manifest and recovery is proven |
 
-No completion percentage is assigned until the capability denominator exists. Estimates in the
-preserved source reports are historical estimates, not a release claim.
+M0 precedes M1. M2/M3 enable M4–M6. Documentation classification can proceed
+before memory import; Anamnesis access gates memory import only.
+
+## 9. M2 governance and instruction cleanup
+
+- keep root successor `AGENTS.md` files concise and owner-specific;
+- skill discovery/loading is read-only and performs no fetch/pull/install or
+  memory import;
+- use `$SUPERPOWERS_ROOT` or another documented neutral locator in tracked
+  reports, never workstation-specific cache paths;
+- test commands do not install dependencies as hidden side effects;
+- permission/admission rules classify operations by validated args/effects,
+  not command-family prefixes;
+- expected red tests are evidence to diagnose, not automatic stop conditions;
+- UI correctness uses both programmatic and rendered evidence when appearance
+  is part of the contract.
+
+## 10. M4 specialist acceptance
+
+### Agate
+
+Test forbidden placement, unavailable/stale capability evidence, model fit and
+supported fallback. Do not turn Agate into provider-runtime health.
+
+### Telos
+
+Test allow/deny/unknown purpose, policy version/expiry/revocation, DNS pinning,
+redirect/proxy/TLS rules, and fail-closed endpoint evidence.
+
+### Phylax
+
+Test that the actual invocation path registers admission adapters and rejects
+unknown/malformed/missing-evidence operations before effects. A verifier file
+that is never invoked is not enforcement.
+
+### Anamnesis
+
+Test private defaults, namespace isolation, lossless/repeat-safe migration,
+sanitation, provenance, retrieval and HITL-controlled publication.
+
+### Provider owner
+
+Test readiness freshness, timeout, cancellation, unavailable provider,
+duplicate-start prevention and repeat-run idempotency.
+
+## 11. M6 Oramasys composition
+
+The current `src/orama/graph/perpetua_graph.py` directly calls Core
+hardware-policy/discovery/provider-selection helpers. Treat it as transitional
+salvage. Replace the semantic ownership in vertical slices:
+
+1. obtain Agate capability evidence;
+2. obtain provider readiness;
+3. authorize endpoint use through Telos and required admission through Phylax;
+4. resolve route/budget/effect policy in Oramasys;
+5. pass one `ResolvedRoute` to Core execution;
+6. emit/persist evidence through the approved observation/monitorability
+   boundaries.
+
+Do not connect v1 PT as a runtime dependency. Mine legacy dialer/endpoint tests
+as evidence and port the accepted behavior to the selected v2 owner.
+
+## 12. M7 memory procedure
+
+1. pin PT source revision and snapshot `.agent` outside git;
+2. require `PERPETUA_TOOLS_ROOT` and verify its `.agent` directory before copy;
+3. inventory IDs, dates, status, provenance, supersession and references;
+4. sanitize the migration copy with generic guards plus private registries;
+5. regenerate embeddings/indexes/materialized views from sanitized source;
+6. verify identity/reference integrity and representative retrieval, not row
+   count alone;
+7. repeat to prove idempotency;
+8. import only through the reviewed Anamnesis contract after provisioning;
+9. keep promotion/push human-gated unless explicitly configured otherwise.
+
+## 13. M8 dependency-boundary check
+
+Reject:
+
+- runtime imports from legacy v1 packages;
+- installation URLs or dynamic loads that make a v1 checkout a dependency;
+- implicit sibling-checkout discovery/fallback;
+- runtime shell/subprocess calls whose purpose is to invoke legacy v1 scripts,
+  binaries, memory writers, policy authorities or provider paths.
+
+Permit target-owned provider/platform subprocesses only when they are explicit
+adapters with validated arguments/effects, documented lifecycle/cancellation,
+and no legacy fallback. Examples can include approved local provider process
+management or tool execution. Historical citations and sanitized fixture
+provenance are not runtime dependencies.
+
+## 14. Release completion
+
+Migration is complete only when:
+
+- the capability/authority ledgers contain no unexplained omissions;
+- selected workflows run solely on v2 artifacts;
+- Core R0–R2 remain intact and any accepted R3/R4 work is verified;
+- GraphSpec/application policy executes above Core;
+- specialist semantic owners are used in the real call path;
+- endpoint/admission denials produce zero unauthorized effect;
+- memory/document provenance survives migration;
+- the release candidate is tested without v1 repos/services/writers present;
+- package versions and artifact digests form one reviewed manifest;
+- remaining exclusions are explicit decisions, not unfinished work labelled
+  complete.
+
+## 15. Execution ledger at this reconciliation
+
+| Item | Status | Next evidence |
+| --- | --- | --- |
+| provenance-pinned Claude inputs | preserved | keep hashes stable |
+| PT `.agent` MiniGraph/unbundling decisions | reconciled | maintain lineage in successor ADRs |
+| Core MiniGraph R0/R1/R2 | implemented in live successor | preserve exact-head regression coverage |
+| Core unknown-route and plugin-payload corrections | present in live successor | repair stale legacy docs that still call them unmerged |
+| R3 reducers/joins | open | typed reducer/join spec and tests |
+| R4 deterministic resume | partial | lineage/cursor/effect contract plus implementation |
+| GraphSpec target ownership | decided | implement/version/validate in successor application authority |
+| Core policy/LLM/discovery ownership | transitional | inventory and first `ResolvedRoute` vertical slice |
+| Oramasys graph composition | transitional | remove direct semantic dependence on Core hardware/provider selection |
+| endpoint/Telos/Phylax split | decided | continue contract/implementation conformance and real call-path wiring |
+| Anamnesis | access/provisioning still a gate for import | verify/provision target |
+| release completion | not established | close capability ledger and M8/M9 gates |
+
+No global completion percentage is assigned.
