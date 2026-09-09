@@ -118,7 +118,7 @@ they are modified; PR #351 records the current truth for migration planning.
 ## E7 — release dependency checks must not ban legitimate target subprocesses
 
 A previous synthesized M8 statement rejected all `runtime shell calls`. That is
-overbroad because approved provider/platform/tool adapters can legitimately use
+obroad because approved provider/platform/tool adapters can legitimately use
 subprocesses.
 
 The actual forbidden boundary is legacy dependence:
@@ -181,22 +181,34 @@ Canonical steady-state ownership is:
 - PT v1 remains historical/golden behavior evidence only and is never a v2
   runtime dependency.
 
-The corrected Telos implementation is tracked in `oramasys/telos` PR #1,
-`feat(telos): restore full Tripwire endpoint-security authority`. Its parity
-hardening head is
-`aee02988955c6abc181cd24b29e640c8891f928a`, tested clean-room against:
+**Ownership is canonical now; enforcement is migration-scoped.** Do not read the
+ownership table as a claim that every historical/current outbound path already
+uses Telos. Enforcement is complete only for consumers that have actually been
+migrated and verified. At this point:
+
+- the restored full Telos implementation is tracked in `oramasys/telos` PR #1;
+- the Claude-Desktop-LLM consumer transfer is implemented and CI-verified in
+  `oramasys/Claude-Desktop-LLM` PR #1 at
+  `29aa88cb4191669a575b4ba7b9734c4e98482995`;
+- the Oramasys Gateway dedicated dialer and other direct legacy/current outbound
+  call paths remain migration targets until they are explicitly converted to
+  Telos consumers and verified;
+- direct `curl`, `urllib`, `httpx`, or comparable network calls are **not**
+  implicitly considered Telos-enforced merely because this ADR/errata assigns
+  steady-state ownership to Telos.
+
+The Telos clean-room parity work is tested against:
 
 - `diazMelgarejo/Perpetua-Tools@a551da4fa97e5fbc6f908ad077c7b6d8030a3220`;
 - `oramasys/Claude-Desktop-LLM@ba4f3910efc6496cd6476a274b93f4b877ba12b3`.
 
-Tasks 3–7 of the Telos restoration plan are implemented on that PR. Local
-verification of the exact parity-hardening tree produced **28 passing tests**
-and **91.29% line coverage**, above the 80% project floor. This does not yet
-claim the subsequent Claude-Desktop-LLM consumer-transfer task is complete.
+Tasks 3–7 of the restoration plan are implemented on Telos PR #1. Their final
+completion claim remains gated on exact-head CI/review verification; historical
+local verification alone is not used to claim global consumer enforcement.
 
-Telos and Phylax are intended to use **Apache-2.0**, matching the endpoint-policy
-package authority they replace. MIT metadata in their initial September
-scaffolds is erroneous license drift, not the intended licensing policy.
+Telos and Phylax use **Apache-2.0**, matching the endpoint-policy authority they
+replace. MIT metadata in their initial September scaffolds is erroneous license
+drift, not the intended licensing policy.
 
 ## E11 — citation-contaminated architecture synthesis is not evidence
 
