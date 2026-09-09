@@ -1,37 +1,75 @@
 ---
 name: perpetua-hardware
-description: >-
-  Thin wrapper → hardware-affinity-gate (orama methodology). PT runtime policy
-  SSoT remains in Perpetua-Tools; Hermes edge uses pt-hardware-policy command.
+description: "All hardware-specific configuration lives here. `ModelRegistry` reads this file"
 ---
 
 # perpetua-hardware
 
-This is a thin wrapper. **orama methodology** lives in hardware-affinity-gate; **PT
-runtime enforcement** lives in Perpetua-Tools (one-way import).
+This is a thin wrapper. The canonical skill lives in the orama-system repo at
+the path below. Resolution is read-only and marker-verified — never fetch,
+pull, prune, install, register, or modify anything while loading a skill.
 
-- Canonical orama path (repo-relative): `bin/orama-system/skills/hardware-affinity-gate/SKILL.md`
-- PT runtime playbook (sibling repo): `$PERPETUA_TOOLS_PATH/.claude/skills/hardware-policy/SKILL.md`
-- Hermes command edge: `bin/orama-system/skills/hermes-harness/commands/pt-hardware-policy/SKILL.md`
-- Absorption map: `bin/orama-system/skills/hermes-harness/references/hermes-skill-absorption-map.md`
+- Canonical skill path (repo-relative): `hardware/SKILL.md`
 
 ## Before Use
 
+Resolve the canonical repository root, in order, using the first candidate
+whose `hardware/SKILL.md` exists as a file. Never hardcode a workstation path — search
+instead. Do not guess or fall back to a different repository's copy if none
+resolves.
+
+1. `ORAMA_SYSTEM_ROOT` or `ORAMA_SYSTEM_PATH`, if set.
+2. `$(git rev-parse --show-toplevel 2>/dev/null)` — correct only when the
+   current working directory is already inside the canonical repo itself.
+3. A bounded, marker-based search of the current git repo's parent and
+   grandparent directories (depth 2) for a sibling checkout containing `hardware/SKILL.md`
+   — the same crawl `scripts/git/resolve_sibling_git_repo.sh` performs. If
+   the current directory is not inside a git repo, this step has nothing to
+   search from and is skipped.
+
 ```bash
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-cd "$ROOT/bin/orama-system/skills/hardware-affinity-gate"
+ROOT=""
+for cand in "$ORAMA_SYSTEM_ROOT" "$ORAMA_SYSTEM_PATH" \
+    "$(git rev-parse --show-toplevel 2>/dev/null)"; do
+  [ -n "$cand" ] && [ -f "$cand/hardware/SKILL.md" ] && ROOT="$cand" && break
+done
+if [ -z "$ROOT" ] && base="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  parent="$(dirname "$base")"
+  for d in "$parent"/*/ "$(dirname "$parent")"/*/; do
+    [ -f "${d}hardware/SKILL.md" ] && ROOT="${d%/}" && break
+  done
+fi
+```
+
+If `$ROOT` is still empty, report the canonical skill as unavailable and ask
+for its location only if the task genuinely needs it.
+
+## Load Canonical Skill
+
+Read `$ROOT/hardware/SKILL.md` and follow it. Do not copy behavior from this wrapper.
+
+## Refresh (explicit maintenance only — never a side effect of loading)
+
+Synchronizing the canonical repo is a separate, explicitly authorized action.
+When asked to refresh it:
+
+```bash
+cd "$ROOT/hardware"
 git fetch origin --prune
 git status --short --branch
 ```
 
-If the repo is on a tracking branch and the worktree is clean: `git pull --ff-only`.
-If dirty or not tracking, report drift and read the canonical card with that caveat.
+If the repo is on a tracking branch and the worktree is clean:
 
-## Load Canonical Skill
+```bash
+git pull --ff-only
+```
 
-Open and follow `bin/orama-system/skills/hardware-affinity-gate/SKILL.md`. Do not copy behavior from this wrapper.
+If the worktree is dirty, the branch is not tracking origin, or fast-forward is impossible, do not overwrite local work. Report the drift and read the current canonical card with that caveat.
 
 ## Windows UTF-8 Note
+
+On Windows PowerShell, set UTF-8 explicitly before reading or writing skill files:
 
 ```powershell
 [Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false)

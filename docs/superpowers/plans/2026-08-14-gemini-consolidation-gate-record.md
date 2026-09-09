@@ -302,3 +302,78 @@ not unlocked by this gate.
   - `references/gemini-skill-consolidation-plan-review-codex-reviewer-2026-08-14.md`
   - `references/review-gemini-skill-consolidation-2026-08-14-antigravity-gemini.md`
   - `references/gemini-consolidation-findings-broadcast-2026-08-14.md` — fleet broadcast
+
+---
+
+## 9. Addendum (2026-09-09): Task 2 executed against the live root
+
+This section records the **first-ever live execution** of `--reconcile-gemini`
+against the real `~/.gemini/skills` root, for all 11 orama/perpetua-owned
+slugs in `gemini-skill-ownership.json`. It supplements § 1–8 above without
+altering them — at the time those sections were written, no live-root
+execution had occurred; that gap is closed here.
+
+### Preconditions verified before execution
+
+- `gemini-skill-ownership.json` and `gemini-frontmatter-contract.md` both
+  present, covering all 11 slugs.
+- Engine hardened since § 1's ground truth: 5 commits — atomic `index.json`
+  write (`mkstemp` + `fsync` + `os.replace` + parent-dir `fsync`), corrected
+  receipt-after-index ordering, adapter idempotence fixes, a full
+  harmonization refactor.
+- Live root state immediately before execution: all 11 slugs were still
+  **regular directories** — confirming no prior partial/informal
+  reconciliation had ever touched them.
+
+### Staged execution (all steps performed)
+
+1. **Independent OS-level backup** (`~/.gemini/skills-backup-<ts>`, outside
+   the tool's own archive mechanism) + a pre-reconciliation `--audit-gemini
+   --json` ledger — both verified against the live tree before proceeding.
+2. **Full rehearsal** against throwaway copies of the *real* content (not
+   synthetic `tmp_path` fixtures) — reconcile + verify both clean; archived
+   bytes confirmed identical to the pre-reconciliation backup via two
+   independent digest methods (whole-tree hash and `SKILL.md`-only hash,
+   matching the tool's two different internal hashing semantics); the
+   existing 20-test regression suite for lock/rollback/corruption/frontmatter
+   scenarios re-run and green.
+3. **Canary** — `git-history-surgery` (the simplest `link`-action slug)
+   reconciled live, manually confirmed the resulting symlink resolves to
+   exactly the canonical source.
+4. **Batched rollout** — the other 2 `link` slugs, then all 8 `adapter`
+   slugs, each batch reconciled then verified before the next began.
+5. **Final verification** — `--verify` clean across all 11; both digest
+   methods reconfirmed against the original ledger for every slug; full
+   generator test suite (73 tests) green.
+
+### Result
+
+All 11 slugs reconciled and verified with zero content loss. Resulting
+shapes: 3 symlinks (`code-review`, `git-history-surgery`, `orama-afrp`), 8
+generated adapter directories (the remaining 8, including the 4
+`perpetua-*` slugs). Rollback path: the Stage-1 OS-level backup, retained.
+
+### Finding: Task 4 ("Make Perpetua Global Adapters Portable") was never implemented
+
+The 4 `perpetua-*` adapter slugs (`perpetua-config`, `perpetua-hardware`,
+`perpetua-startup-intelligence`, `perpetua-tools`) generate their SKILL.md
+via `cross_repo_wrapper()`, which emits a **hardcoded literal**
+`"PERPETUA_TOOLS_PATH is not set."` regardless of the actual environment —
+confirmed via `git log -S` that this exact string has been present,
+untouched, since the function was first written (`fc384e6b`). This is not a
+regression introduced by today's live execution: the *pre-existing* archived
+content for these 4 slugs was itself a different, also-nonfunctional stub (a
+caller-cwd `git rev-parse --show-toplevel` thin wrapper, the same class of
+bug F01 fixed elsewhere in this repo, but never generated through this
+engine). Neither the before nor the after state resolves real content for
+these 4 slugs without manual intervention. § 7's task table already listed
+Task 4 as "Not started" on 2026-08-14; it remains not started. The other 7
+slugs (the 3 `link` slugs plus the 4 `orama`-owned adapters) are fully
+functional.
+
+**Recommendation:** Task 4 should be picked up as its own scoped follow-up —
+either give `cross_repo_wrapper()` a real resolution strategy for
+`PERPETUA_TOOLS_PATH` (env override, then a marker-based sibling crawl, the
+same pattern F01 established for the thin-wrapper templates) or mark these 4
+slugs `preserve-external` in the ownership manifest until that lands, so
+`--verify` doesn't imply they're production-ready when they aren't.

@@ -95,7 +95,11 @@ Full detail in `references/5-stage-methodology.md`.
 1. **Context Immersion** — scan git, docs, patterns, constraints via gbrain/CRG first.
 2. **Visionary Architecture** — elegant solution; run CIDF `decide()` before any insertion.
 3. **Ruthless Refinement** — eliminate everything non-essential.
-4. **Masterful Execution** — Plan → Craft (TDD) → Verify programmatically, never visually.
+4. **Masterful Execution** — Plan → Craft (TDD) → Verify programmatically. For
+   user-visible layout or interaction changes, also inspect the rendered result
+   at relevant viewports — visual inspection complements tests, it never replaces
+   them. Report unavailable visual tooling rather than claiming unobserved UI
+   behavior is verified.
 5. **Crystallize Vision** — assumptions ledger, simplification story, lessons captured.
 
 The **6 directives** stay active: Plan Node, Subagents, Self-Improvement, Verification
@@ -110,7 +114,13 @@ Before Done, Demand Elegance, Autonomous Bug Fixing.
   content from either branch.
 - **Six modes:** additive → union → superset → synthesize → architecturally-correct →
   api-correct; archive instead of delete when content must leave the active path.
-- **Simulate first** (`git merge --no-commit --no-ff` + `--diff-filter=U` + abort).
+- **Read-only analysis first; a real trial merge needs its own disposable worktree.**
+  Prefer read-only ref/tree/diff inspection or a supported `git merge-tree` analysis.
+  `git merge --no-commit --no-ff` + `--diff-filter=U` + abort is NOT read-only — it
+  mutates the index/worktree, and `--no-commit` is not a read-only guarantee. If a
+  real trial merge is needed, run it only in a fresh disposable worktree from the
+  verified target tip, never in a dirty or shared checkout, and record the source
+  and target SHAs. A trial merge is not authorization to publish or merge online.
 - **One harmonization pass** — no `<<<<<<<` markers; run targeted pytest before push.
 
 This is the same protocol as `bin/orama-system/references/multi-agent-collaboration-protocol.md`

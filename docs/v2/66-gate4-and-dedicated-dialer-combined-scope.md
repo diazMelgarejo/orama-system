@@ -1,13 +1,14 @@
 # Gate 4 + Dedicated Model-Server Dialer — Combined Scope for the Next PR
 
-**Status:** Half A complete (oramasys/oramasys PR #3 merged 2026-09-07);
-Half B unblocked by PT PR #380 merge — 2026-09-07
+**Status:** Half A complete (`oramasys/oramasys` PR #3 merged 2026-09-07);
+Half B implementation under review in [PT PR #382][pt-pr382], following PT
+PR #380's 2026-09-07 merge
 **Authority:** [ADR 62][adr62], [Gate 2 scope][gate2-scope], [Gate 2 evidence][gate2-evidence]
 **Regime boundary:** unchanged from ADR 62. Gate 4 work lands in `oramasys/*`.
 The dedicated dialer's PT-facing half is a human-reviewed PT PR, exactly like
 PT PR #380 was — never a same-repo PT edit landed by an agent.
 
-## Why these two are one PR, not two
+## Why these two are one change window, not one repository change
 
 PT PR #380 deliberately shipped the smallest safe fix: remove caller-supplied
 model-host overrides from the unauthenticated `/health` route. Doc 65's own
@@ -31,7 +32,7 @@ before use. Building the dialer as part of Gate 4, instead of separately,
 means Telos authorizes the actual dial path from day one instead of
 authorizing a placeholder that gets swapped out later.
 
-## Two halves, two owners, one PR
+## Two halves, two owners, one coordinated change window
 
 ### Half A — v2: the dedicated dialer + Telos wiring (this repo's normal path)
 
@@ -40,12 +41,15 @@ concern per ADR 62's authority map) and consumes `oramasys/telos`'s canonical
 `EndpointRef`/`EndpointUseRequest` types.
 
 **Merge prerequisite (met — Half A is complete):**
-[`oramasys/oramasys` PR #3][oramasys-pr3] wired the canonical
+[`oramasys/oramasys` PR #2][oramasys-pr2] wired the canonical
 `EndpointRef`/`EndpointUseRequest` types into `TelosPort`, merged
-2026-09-07 (merge commit `98b2e6b`). ADR 62 and
-[Gate 1 evidence][gate1-evidence] required the typed `TelosPort`
-migration before Gate 4 work begins; that migration is now merged, so Half A
-is unblocked and complete, not built against an assumed-complete wiring.
+2026-09-07 (merge commit `8732fd2`). ADR 62 and
+[Gate 1 evidence][gate1-evidence] required that typed `TelosPort`
+migration before Gate 4 work begins; with it merged,
+[`oramasys/oramasys` PR #3][oramasys-pr3] subsequently landed Half A
+itself (merge commit `98b2e6b`, per the exit-evidence record below), so
+Half A is unblocked and complete, not built against an assumed-complete
+wiring.
 
 **Doc 65 dependency:** this document links to [Gate 2 evidence][gate2-evidence]
 (doc 65). [PR #342][pr342] merged it into its base branch, and that branch
@@ -108,11 +112,13 @@ would silently widen Gate 4's own exit evidence beyond what was decided.
 This is the part that touches PT, and it is a **human-reviewed PT PR**,
 prepared the same way PR #380 was:
 
-1. `agent_launcher.py`'s remote model-server override path currently
-   validates with `model_endpoint_url.py` (no DNS resolution) then dials
-   raw `httpx` directly. Route it through the new dialer instead — this is
-   the "launcher configuration uses a remote model endpoint" test case from
-   doc 65's matrix.
+1. `agent_launcher.py`'s remote model-server override path formerly
+   validated with `model_endpoint_url.py` (no DNS resolution) then dialed
+   raw `httpx` directly. [PT PR #382][pt-pr382] adds a PT-native,
+   resolve-once pinned transport that preserves the configured hostname for
+   HTTP Host and TLS SNI while connecting only to the already-classified IP.
+   It deliberately mirrors the v2 dialer's address-safety contract instead
+   of importing a v2 package across the regime boundary.
 2. `/health`: PT PR #380 merged 2026-09-07T08:48:21Z — Half B is unblocked.
    With #380 landed, `/health` has no caller-supplied host path left to
    secure — nothing further needed there. Confirm this explicitly rather
@@ -140,13 +146,11 @@ workstation's resolver, firewall, or egress policy.
 
 ## Sequencing
 
-1. Wait for PT PR #380 to merge (human decision, not automatable) — Half B's
-   diff needs #380's already-landed `/health` shape as its base, not a
-   moving target.
-2. Build Half A (v2 dialer + Telos wiring) first; it has no PT dependency
-   and can start immediately.
-3. Build Half B once #380 is merged, as one PT PR reviewed the same way
-   #380 was — not landed directly by any agent.
+1. PT PR #380 merged and supplies Half B's stable `/health` base.
+2. Half A landed through `oramasys/oramasys` PR #3 after the typed TelosPort
+   prerequisite in PR #2.
+3. Half B is the human-reviewed [PT PR #382][pt-pr382]. It must pass its
+   own review and CI before merge; it is not implied complete by Half A.
 4. Both halves ship in the same overall change window, but as two separate
    PRs in two separate repos (this was never going to be literally one PR
    across two GitHub orgs) — "the same next PR" means the same planned unit
@@ -169,4 +173,6 @@ workstation's resolver, firewall, or egress policy.
 [gate2-scope]: 64-gate2-policy-surface-noninterchangeability-scope.md
 [gate2-evidence]: 65-gate2-policy-surface-evidence.md
 [pr342]: https://github.com/diazMelgarejo/orama-system/pull/342
+[oramasys-pr2]: https://github.com/oramasys/oramasys/pull/2
 [oramasys-pr3]: https://github.com/oramasys/oramasys/pull/3
+[pt-pr382]: https://github.com/diazMelgarejo/Perpetua-Tools/pull/382
