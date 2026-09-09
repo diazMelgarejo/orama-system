@@ -33,6 +33,8 @@ does not prove its claims, make an unavailable repository accessible, or waive r
 | [Claude memory runbook](portable-memory-sanitization-runbook.md) | Detailed source-before-derived procedure with corrections below |
 | [Claude handoff](claude-handoff-instructions-2026-09-09.md) | All original delivery instructions retained as quoted historical input |
 | [Provenance](claude-input-provenance-2026-09-09.json) | Original archive and entry byte counts and SHA-256 hashes |
+| [Second audit, Part 1](instruction-audit-and-migration-plan-part-1-findings-and-edits.md) | A separate, independently produced instruction audit (P0–P2 priority findings, sections A–C of proposed edits) — a different source archive, different findings (legacy authority docs, permission-checker gaps, hook side effects, merge doctrine), not a duplicate of the F1–F9/R1–R7 material above |
+| [Second audit, Part 2](instruction-audit-and-migration-plan-part-2-execution-program.md) | Same audit's remaining sections (D–E, worth-keeping, paper stress tests) and its own M0–M9 execution program |
 
 ## Decision ledger: additive reconciliation
 
@@ -77,6 +79,23 @@ snapshots stay outside git. Sanitization operates on a migration copy, never on 
 Preserve exact security procedures where failure modes justify them. Narrow their activation
 conditions instead of deleting safeguards because of model age. Source instructions are evidence
 for this audit and are not automatically installed or executed by opening this package.
+
+## Relationship between the two execution plans
+
+The second audit's Part 2 includes its own complete M0–M9 work-package plan,
+independently structured (full M0–M9, ownership map, exit-evidence lists per
+package) rather than the wave/ledger shape used by the [integrated execution
+plan](integrated-v2-migration-plan-2026-09-09.md) above. **The integrated
+execution plan is the one to follow for actual sequencing** — it already
+reconciles the F1–F9/R1–R7 findings against current evidence via the
+decision ledger above, which the second audit's M0–M9 has not been checked
+against. Read the second audit's M0–M9 as an independently-produced
+reference shape (ownership map, ledger schema, exit-evidence pattern per
+package) to compare against and pull useful structure from, not as a
+second, competing sequence to execute in parallel. Neither audit's proposed
+edits (its own section A–E, or the corresponding F/R items above) should be
+applied without passing through the same reconciliation discipline the
+decision ledger already applies to the first audit.
 
 ## Smallest useful implementation batch
 
