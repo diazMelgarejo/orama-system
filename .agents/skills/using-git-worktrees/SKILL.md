@@ -1,247 +1,79 @@
 ---
 name: using-git-worktrees
-description: >
-  Git worktree lifecycle for parallel agents on the orama-system stack.
-  Invoke when: starting parallel agent work, bootstrapping a worktree, asking
-  "should I use a worktree?", debugging port collisions, cleaning up a finished
-  worktree, or any mention of worktree, parallel agents, ENV_OFFSET, or
-  worktree-bootstrap.
+description: "Git worktree lifecycle for parallel agents on the orama-system stack. Invoke when: starting parallel agent work, bootstrapping a worktree, asking 'should I use a worktree?', debugging port collisions, cleaning up a finished worktree, or…"
 ---
 
-# Using Git Worktrees — orama-system Stack
+# using-git-worktrees
 
-> Real-time guidance. Full doctrine: `orama-system/docs/v2/22-worktree-parallel-agents.md`
-> Hardware baseline (2026-05-24): 1 Win RTX3080 (LM Studio) + Mac Ollama.
+This is a thin wrapper. The canonical skill lives in the orama-system repo at
+the path below. Resolution is read-only and marker-verified — never fetch,
+pull, prune, install, register, or modify anything while loading a skill.
 
----
+- Canonical skill path (repo-relative): `bin/orama-system/skills/using-git-worktrees/SKILL.md`
 
-## Windows PowerShell Runtime Bootstrap
+## Before Use
 
-Before git pushes, rebases, PR-branch syncs, or local test runs on the Windows
-RTX/LM Studio host, use the shared bootstrap reference:
-[`git-history-surgery/references/windows-powershell-runtime-bootstrap.md`](../git-history-surgery/references/windows-powershell-runtime-bootstrap.md).
+Resolve the canonical repository root, in order, using the first candidate
+whose `bin/orama-system/skills/using-git-worktrees/SKILL.md` exists as a file. Never hardcode a workstation path — search
+instead. Do not guess or fall back to a different repository's copy if none
+resolves.
 
----
-
-## Step 0 — Should You Use a Worktree?
-
-Ask two questions:
-
-1. **Will this agent write files?**
-2. **Is another agent currently writing to the same repo?**
-
-```text
-Both yes? → Worktree.  Run Step 1.
-Either no? → Use canonical checkout.  Stop here.
-```
-
----
-
-## Step 1 — Bootstrap
+1. `ORAMA_SYSTEM_ROOT` or `ORAMA_SYSTEM_PATH`, if set.
+2. `$(git rev-parse --show-toplevel 2>/dev/null)` — correct only when the
+   current working directory is already inside the canonical repo itself.
+3. A bounded, marker-based search of the current git repo's parent and
+   grandparent directories (depth 2) for a sibling checkout containing `bin/orama-system/skills/using-git-worktrees/SKILL.md`
+   — the same crawl `scripts/git/resolve_sibling_git_repo.sh` performs. If
+   the current directory is not inside a git repo, this step has nothing to
+   search from and is skipped.
 
 ```bash
-# From the canonical repo root
-scripts/worktree-bootstrap.sh <repo-path> <branch> <slug> [gbrain-source-id]
-
-# Example
-scripts/worktree-bootstrap.sh \
-  ~/Documents/Terminal\ xCode/claude/OpenClaw/orama-system \
-  feat/my-feature \
-  2026-05-24-my-feature \
-  orama-src
+ROOT=""
+for cand in "$ORAMA_SYSTEM_ROOT" "$ORAMA_SYSTEM_PATH" \
+    "$(git rev-parse --show-toplevel 2>/dev/null)"; do
+  [ -n "$cand" ] && [ -f "$cand/bin/orama-system/skills/using-git-worktrees/SKILL.md" ] && ROOT="$cand" && break
+done
+if [ -z "$ROOT" ] && base="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  parent="$(dirname "$base")"
+  for d in "$parent"/*/ "$(dirname "$parent")"/*/; do
+    [ -f "${d}bin/orama-system/skills/using-git-worktrees/SKILL.md" ] && ROOT="${d%/}" && break
+  done
+fi
 ```
 
-Bootstrap handles automatically (no manual steps needed):
+If `$ROOT` is still empty, report the canonical skill as unavailable and ask
+for its location only if the task genuinely needs it.
 
-- ✅ Removes stale `.git/*.lock` files
-- ✅ Warns on orphan refs with spaces
-- ✅ Creates `~/code/oramasys/worktrees/<slug>/`
-- ✅ Writes `.gbrain-source`
-- ✅ Appends macOS dedup patterns to `.gitignore`
-- ✅ Assigns `ENV_OFFSET = worktree_index × 100`
-- ✅ Writes `.worktree-env` with offset port vars
-- ✅ Updates `.cursor/environment.json` if present
+## Load Canonical Skill
 
----
+Read `$ROOT/bin/orama-system/skills/using-git-worktrees/SKILL.md` and follow it. Do not copy behavior from this wrapper.
 
-## Step 2 — Enter and Configure
+## Refresh (explicit maintenance only — never a side effect of loading)
+
+Synchronizing the canonical repo is a separate, explicitly authorized action.
+When asked to refresh it:
 
 ```bash
-cd ~/code/oramasys/worktrees/<slug>
-source .worktree-env    # loads ENV_OFFSET, port vars
-
-# Verify gbrain pin
-cat .gbrain-source      # should show e.g. "orama-src"
-
-# Verify port offset
-echo "AlphaClaw: $ALPHACLAW_PORT  PT: $PT_PORT"
+cd "$ROOT/bin/orama-system/skills/using-git-worktrees"
+git fetch origin --prune
+git status --short --branch
 ```
 
----
-
-## Step 3 — Hygiene Gate (MANDATORY before every `git commit`)
+If the repo is on a tracking branch and the worktree is clean:
 
 ```bash
-python3 scripts/review/repo_hygiene.py .
-# Must print "OK: repo hygiene checks passed"
-# WARNING = non-blocking; ERROR = fix before committing
+git pull --ff-only
 ```
 
-**If this commit includes a version bump**, run the version sync first:
+If the worktree is dirty, the branch is not tracking origin, or fast-forward is impossible, do not overwrite local work. Report the drift and read the current canonical card with that caveat.
 
-```bash
-# Edit src/orama_system/_version.py only, then:
-python3 scripts/sync_version.py          # propagate to all 25+ surfaces
-python3 -m pytest tests/test_version_docs.py  # verify
-# Then continue with repo_hygiene.py check above
+## Windows UTF-8 Note
+
+On Windows PowerShell, set UTF-8 explicitly before reading or writing skill files:
+
+```powershell
+[Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$env:PYTHONUTF8='1'
 ```
-
-See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
-See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
-
-**If this worktree is being merged into another agent's branch or into main**, invoke
-the nested-branch merge protocol before pushing:
-
-1. **Simulate** — `git merge --no-commit --no-ff <this-branch>` from the target; enumerate conflicts; abort
-2. **Enumerate to human** — show both sides of every conflict; never resolve without explicit direction
-3. **Resolution strategies**: `additive` / `union` / `superset` / `architecturally-correct` / `api-correct`
-4. **Verify**: `pytest -q` + `repo_hygiene.py` + confirm no `<<<<<<<` markers remain
-5. **Buffer**: wait 10 minutes after each GitHub merge; confirm `mergeable_state: clean`
-
-Full detail: [`git-history-surgery/references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](../git-history-surgery/references/multi-agent-collaboration-protocol.md)
-
-**Why this matters especially for worktrees:** docs, plans, and bash snippets
-written from a worktree often embed the machine-local path. Those paths are
-invisible on your machine but leak developer identity and break CI when committed.
-
-| Rule enforced | What it catches | Correct form |
-| --------------- | ---------------- | -------------- |
-| `scan_openclaw_workstation_layout` | hardcoded machine-local OpenClaw tree path | `$OPENCLAW_ROOT` |
-| `scan_personal_paths` | `/Users/<name>/…` absolute paths | `~`, `$REPO_ROOT`, `<workspace>` |
-| `scan_bidi_controls` | Hidden Unicode direction controls | remove |
-| `scan_legacy_names` | Banned terms (coordinator, etc.) | correct term |
-
-**Never skip this step** — not even for "just a small doc change."
-
----
-
-## Step 4 — Work Rules While in a Worktree
-
-### Inference (GPU)
-
-- **Never POST directly to LM Studio or Ollama.** Always via PT.
-- Start PT on your offset port: `PT_PORT=$PT_PORT python -m perpetua_tools.server`
-- Win LM Studio serializes heavy models automatically — no extra lock needed.
-
-### CRG (graph.db)
-
-```python
-# ✅ Query canonical graph — always pass repo_root
-mcp__code-review-graph__query_graph_tool(
-    repo_root="/path/to/canonical/orama-system"
-)
-
-# ❌ Never build graph from inside a worktree
-# mcp__code-review-graph__build_or_update_graph_tool()  ← blocked in worktrees
-```
-
-### Port Map (ENV_OFFSET = N × 100, where N = worktree index)
-
-| Service | Canonical | Worktree-1 | Worktree-2 |
-| --------- | ----------- | ------------ | ------------ |
-| AlphaClaw | 3000 | 3100 | 3200 |
-| PT | 8000 | 8100 | 8200 |
-| orama-api | 8001 | 8101 | 8201 |
-| portal | 8002 | 8102 | 8202 |
-
-### Sequential Numbering Coordination (`docs/v2/` and similar)
-
-**Problem:** Two parallel agents both compute "the current highest number" independently and claim
-the same ordinal (e.g., both write `18-*.md`). Git silently accepts both because the slugs differ —
-no merge conflict is raised. `repo_hygiene.py` will catch this at commit time (`scan_docv2_ordinal_collision`),
-but it is cheaper to avoid the collision than to fix it after.
-
-**Protocol — before adding any `docs/v2/NN-slug.md`:**
-
-```bash
-# 1. Check the current highest ordinal on the target branch
-ls docs/v2/ | grep '^[0-9]' | sort -V | tail -3
-
-# 2. Read the "Next free slot" line in docs/v2/README.md
-grep "Next free slot" docs/v2/README.md
-
-# 3. Claim your number — update README.md FIRST, commit, THEN write the doc
-sed -i '' 's/Next free slot: `23-`/Next free slot: `24-`/' docs/v2/README.md
-git add docs/v2/README.md
-git commit -m "chore(docs/v2): reserve slot 23 for <slug>"
-# Now write 23-<slug>.md
-```
-
-**Rule:** The `README.md` "Next free slot" update is the reservation step. A git conflict on
-that line is the coordination signal — resolve it by taking the higher number.
-
----
-
-## Step 5 — Cleanup (ALWAYS use finishing-a-development-branch)
-
-```text
-Invoke: superpowers:finishing-a-development-branch
-```
-
-The skill will:
-
-1. Verify tests pass
-2. Ask: merge / PR / keep / discard
-3. On merge or discard → run `git worktree remove <path>` automatically
-
-**Manual fallback only if skill unavailable:**
-
-```bash
-# From canonical checkout:
-git worktree remove ~/code/oramasys/worktrees/<slug>
-git worktree list    # verify removed
-git branch -d <branch>
-```
-
-⚠️ **Never `rm -rf` the worktree directory** — leaves dangling entry in `git worktree list`.
-
----
-
-## Quick Diagnostics
-
-```bash
-# List all active worktrees
-git worktree list
-
-# Check for stale locks (run from canonical .git parent)
-find .git -name "*.lock" -print
-
-# Check for orphan refs with spaces
-find .git/refs -name "* *" -print
-
-# Check gbrain pin
-cat .gbrain-source
-
-# Check port config
-cat .worktree-env
-```
-
----
-
-## Pre-flight Defenses (Dogfood Datums)
-
-| Symptom | Fix |
-| --------- | ----- |
-| `git fetch` fails: `bad object refs/heads/... 2` | `find .git/refs -name "* *"` then `git update-ref -d "refs/heads/<name>"` |
-| `git checkout` / `git stash` blocked | `find .git -name "*.lock" -delete` |
-| `.gbrain-source` missing in new worktree | `echo "<source-id>" > .gbrain-source` |
-| `git status` shows dozens of `* 2/` dirs | Bootstrap adds dedup `.gitignore`; also `rm -rf *\ 2/`. **Permanent fix — move the tree out of iCloud: see [[icloud-escape-move]].** |
-| Port collision with sibling worktree | Check `.worktree-env`; ENV_OFFSET must differ per worktree |
-| `/autoplan` Step 0 fails (base branch) | `cd` to a git repo root before invoking any skill |
-
----
-
-## Scope
-
-Applies to: **orama-system**, **Perpetua-Tools**
-Does not apply to: periscope, AlphaClaw (excluded from worktree doctrine)

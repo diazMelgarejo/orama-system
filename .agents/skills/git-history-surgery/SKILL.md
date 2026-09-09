@@ -1,171 +1,79 @@
 ---
 name: git-history-surgery
-description: >
-  End-to-end git history surgery for the orama-system stack: scrub contaminated
-  history, force-push safely, and recover/re-anchor branches after a rewrite using
-  byte-identical tree twins. Invoke when: "expunge git history", "remove secret
-  from history", "rewrite author", "scrub commits", "branches are 600 behind",
-  "orphaned branch after rewrite", "re-anchor branch to main", "branches lost
-  common ancestor", "recover deleted branch", "git history rewrite recovery",
-  "byte-identical common ancestor", or "branches all became the same".
+description: "End-to-end git history surgery for the orama-system stack: scrub contaminated history, force-push safely, and recover/re-anchor branches after a rewrite using byte-identical tree twins. Invoke when: 'expunge git history', 'remove secret…"
 ---
 
-# Git History Surgery
+# git-history-surgery
 
-One source of truth for dangerous git history operations. This skill replaces the
-former split between separate rewrite-scrub and branch-recovery skills.
+This is a thin wrapper. The canonical skill lives in the orama-system repo at
+the path below. Resolution is read-only and marker-verified — never fetch,
+pull, prune, install, register, or modify anything while loading a skill.
 
-Use it for two related jobs:
+- Canonical skill path (repo-relative): `bin/orama-system/skills/git-history-surgery/SKILL.md`
 
-| Situation | Procedure |
-| --- | --- |
-| A secret, forbidden identity, token, or workstation path landed in history | [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md) |
-| `main` was rewritten and branches look 600 commits behind/orphaned | [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md) |
+## Before Use
 
-Fail closed: preserve refs, prove the operation is necessary, and use
-`--force-with-lease` only after recording the expected remote SHA.
+Resolve the canonical repository root, in order, using the first candidate
+whose `bin/orama-system/skills/git-history-surgery/SKILL.md` exists as a file. Never hardcode a workstation path — search
+instead. Do not guess or fall back to a different repository's copy if none
+resolves.
 
-## Windows PowerShell Bootstrap
-
-Before any `fetch`, `rebase`, `push`, scrub, or local verification on the Windows
-LM Studio host, run
-[`references/windows-powershell-runtime-bootstrap.md`](references/windows-powershell-runtime-bootstrap.md).
-
-## Decision Flow
-
-1. Is there a leaked secret/identity/path in committed history?
-   Use the expunge reference, rotate any secret, and require fresh clones.
-2. Did a rewrite already happen and branches now look impossible to reason about?
-   Use the re-anchor reference and tree-twin scan. Do not trust ahead/behind counts.
-3. Is this only a normal bad commit?
-   Do not perform history surgery. Use a normal PR or revert.
-4. Mac ↔ Win (or any peer) must sync `main` while the worktree is dirty?
-   Use [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) —
-   stash → `pull --ff-only` → pop → commit → push. Never `reset --hard` or force-push `main`.
-
-## Non-Negotiables
-
-- Never paste the real forbidden token into PR titles, commit messages, issue
-  comments, shell history, or docs. Use placeholders.
-- Never force-push without a recorded lease target.
-- Never judge rewritten branches by `merge-base`, `rev-list --count`, or GitHub
-  ahead/behind alone.
-- Never flatten branches to `origin/main` unless the user explicitly asks to
-  destroy their distinct branch identity.
-- Never treat a clean git rewrite as secret remediation. Rotation is separate.
-- **Platform line endings:** do not convert Windows-serving files (`platform/windows/**`,
-  `*.cmd`, `*.bat`, `*.ps1`) to LF from macOS/Linux. Mac/Linux-owned sources stay LF.
-  See [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md).
-- **Bash 3.2 hook scripts:** macOS `/bin/bash` lacks `mapfile`. New or edited
-  `scripts/git/*.sh` must use `while read` loops (see
-  [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md)).
-  Install hooks: `bash scripts/git/install-local-hooks.sh` (includes TDD `commit-msg` gate).
-
-## Verification
-
-After any history surgery:
+1. `ORAMA_SYSTEM_ROOT` or `ORAMA_SYSTEM_PATH`, if set.
+2. `$(git rev-parse --show-toplevel 2>/dev/null)` — correct only when the
+   current working directory is already inside the canonical repo itself.
+3. A bounded, marker-based search of the current git repo's parent and
+   grandparent directories (depth 2) for a sibling checkout containing `bin/orama-system/skills/git-history-surgery/SKILL.md`
+   — the same crawl `scripts/git/resolve_sibling_git_repo.sh` performs. If
+   the current directory is not inside a git repo, this step has nothing to
+   search from and is skipped.
 
 ```bash
-python scripts/review/repo_hygiene.py .
-bash scripts/git/reanchor_scan.sh <repo> origin/main [heads|remotes|all]
-git log --all --format="%B" | grep -i "<token>"   # must print nothing
-git reflog --all | wc -l                          # should be near-zero after scrub
+ROOT=""
+for cand in "$ORAMA_SYSTEM_ROOT" "$ORAMA_SYSTEM_PATH" \
+    "$(git rev-parse --show-toplevel 2>/dev/null)"; do
+  [ -n "$cand" ] && [ -f "$cand/bin/orama-system/skills/git-history-surgery/SKILL.md" ] && ROOT="$cand" && break
+done
+if [ -z "$ROOT" ] && base="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  parent="$(dirname "$base")"
+  for d in "$parent"/*/ "$(dirname "$parent")"/*/; do
+    [ -f "${d}bin/orama-system/skills/git-history-surgery/SKILL.md" ] && ROOT="${d%/}" && break
+  done
+fi
 ```
 
-For PR branch cleanup without contamination, rebase or merge normally; do not use
-this skill unless history was rewritten or contaminated.
+If `$ROOT` is still empty, report the canonical skill as unavailable and ask
+for its location only if the task genuinely needs it.
 
-## Multi-Agent Branch Merge
+## Load Canonical Skill
 
-When independent agents produce concurrent branches, use this protocol before
-any merge. This is distinct from history surgery — no rewrite is involved, but
-the same discipline (simulate before touching, record lease targets) applies.
+Read `$ROOT/bin/orama-system/skills/git-history-surgery/SKILL.md` and follow it. Do not copy behavior from this wrapper.
 
-### Quick protocol (full detail in reference)
+## Refresh (explicit maintenance only — never a side effect of loading)
+
+Synchronizing the canonical repo is a separate, explicitly authorized action.
+When asked to refresh it:
 
 ```bash
-# 1. Simulate BOTH merges before touching either
-git merge --no-commit --no-ff <branch-A>
-git diff --name-only --diff-filter=U   # enumerate conflicts
-git merge --abort
-# repeat for branch-B
-
-# 2. Present every conflict to human; wait for direction
-# 3. Resolve all in one pass (union/superset/additive/correct strategy)
-# 4. Verify: pytest + hygiene + no remaining conflict markers
-# 5. Push → CI → GitHub API merge
-# 6. Wait 10 minutes; confirm mergeable_state: clean; proceed to next merge
+cd "$ROOT/bin/orama-system/skills/git-history-surgery"
+git fetch origin --prune
+git status --short --branch
 ```
 
-**Conflict resolution strategies:** `additive` (empty+content→take content),
-`union` (both partial→concatenate), `superset` (verify inclusion→take larger),
-`architecturally-correct` (bug→take fix), `api-correct` (casing→take lowercase).
-
-**Key invariant:** `"merged": true` on GitHub ≠ content on branch.
-Always verify: `git diff origin/main...origin/<branch>` after any merge.
-
-See full decision tree and verification commands:
-[`references/multi-agent-collaboration-protocol.md` § Nested-Branch Merge Protocol](references/multi-agent-collaboration-protocol.md)
-
-
-
-When a commit includes a version bump, always use the centralized sync script —
-**never** `sed -i` or manual multi-file edits:
+If the repo is on a tracking branch and the worktree is clean:
 
 ```bash
-# 1. Edit the single source of truth only
-#    src/orama_system/_version.py  →  __version__ = "X.Y.Z.W"
-
-# 2. Propagate to all 25+ canonical surfaces
-python3 scripts/sync_version.py
-
-# 3. Verify
-python3 -m pytest tests/test_version_docs.py
-
-# 4. Commit everything together
-git add -A
-git commit -m "chore(version): bump to X.Y.Z.W"
+git pull --ff-only
 ```
 
-If `scripts/sync_version.py --check` exits 1 after a commit, a surface is stale.
-Run the script (no flags) to fix it, then amend or add a follow-up commit.
+If the worktree is dirty, the branch is not tracking origin, or fast-forward is impossible, do not overwrite local work. Report the drift and read the current canonical card with that caveat.
 
-See: [`docs/LESSONS.md` — 2026-06-21 centralized version system](../../../../docs/LESSONS.md)
-See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) (full surface registry)
+## Windows UTF-8 Note
 
-## References
+On Windows PowerShell, set UTF-8 explicitly before reading or writing skill files:
 
-- [`references/safe-cross-host-sync-reference-card.md`](references/safe-cross-host-sync-reference-card.md) — stash-first Mac↔Win `main` sync (non-destructive; distinct from history surgery)
-- [`references/multi-agent-collaboration-protocol.md`](references/multi-agent-collaboration-protocol.md) — full nested-branch merge protocol (7 steps, 6 strategies, invariants, GitHub API commands)
-- [`skills/using-git-worktrees/SKILL.md`](../using-git-worktrees/SKILL.md) — parallel agent worktree lifecycle; Step 3 embeds the merge trigger
-- [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + Nested-Branch Merge Protocol table
-- [`references/platform-line-endings-turf.md`](references/platform-line-endings-turf.md) — CRLF on Windows turf; LF on Mac/Linux; no cross-platform EOL tug-of-war
-- [`references/expunge-contaminated-history.md`](references/expunge-contaminated-history.md)
-- [`references/reanchor-after-rewrite.md`](references/reanchor-after-rewrite.md)
-- [`references/windows-powershell-runtime-bootstrap.md`](references/windows-powershell-runtime-bootstrap.md)
-- [`references/bash-32-git-script-portability.md`](references/bash-32-git-script-portability.md) — macOS bash 3.2; no `mapfile` in hook scripts; `check_tdd_commit.sh` pattern
-- [`docs/wiki/08-git-hygiene-and-branching.md`](../../../../docs/wiki/08-git-hygiene-and-branching.md)
-- [`docs/wiki/13-alphaclaw-fork-contrib-branches.md`](../../../../docs/wiki/13-alphaclaw-fork-contrib-branches.md)
-- [`scripts/git/reanchor_scan.sh`](../../../../scripts/git/reanchor_scan.sh)
-- [`scripts/sync_version.py`](../../../../scripts/sync_version.py) — version propagation
-- [`src/orama_system/_version.py`](../../../../src/orama_system/_version.py) — single source of truth
-
-## v2 Authoring Standards
-
-When rewriting history or amending commits in skill/reference files, ensure the
-amended content is LINT-015 compliant — all fenced blocks labeled.  
-Reference: `bin/orama-system/references/skill-architecture-guide.md` § v2 Mandatory Code Creation Standards.
-
-## Related skills
-
-- [[icloud-escape-move]] — relocate a repo tree out of iCloud to a plain local path (mv → worktree repair → compatibility symlink); a freshly-moved tree can look orphaned until re-anchored with this skill.
-
-
-## Post-Review Micro-Remediation
-
-When addressing review findings (CodeRabbit or human) on an open PR: cluster
-findings by root cause, fix once at the abstraction level, keep every commit
-mechanically attributable to its failure class, and never accumulate revert
-chains — reset to a safety-ref-protected ancestor instead when policy allows.
-
-Full doctrine: [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)
+```powershell
+[Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$env:PYTHONUTF8='1'
+```

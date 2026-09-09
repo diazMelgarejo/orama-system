@@ -349,9 +349,22 @@ def repo_relative(canonical: str) -> str:
 def wrapper(spec: SkillSpec) -> str:
     # PORTABILITY CONTRACT: wrappers MUST be machine-agnostic. NEVER embed an
     # absolute path (ROOT, HOME, /Users/...) — they get committed to public
-    # repos and doxx the workstation. The canonical skill lives in the SAME git
-    # repo as this wrapper, so reference it repo-relative and resolve the repo
-    # root at runtime via `git rev-parse --show-toplevel`. verify() enforces this.
+    # repos and doxx the workstation. `~`-relative locations would also leak
+    # the workstation's directory layout, so resolution below is search-based
+    # (env override, then marker-verified crawl), never a literal path guess.
+    #
+    # RESOLUTION CONTRACT (2026-09-09, instruction-audit F01): a wrapper can be
+    # installed inside the canonical repo itself, in a sibling repo (PT,
+    # AlphaClaw), or in a global skills directory unrelated to any of them.
+    # `git rev-parse --show-toplevel` of the CALLER's cwd is only correct in
+    # the first case — in every other case it silently resolves to the wrong
+    # repo (or fails outright from a non-git cwd), and a naive script would
+    # then run `git fetch`/`git pull` there. Resolution here is read-only and
+    # marker-verified (the marker is "does the canonical file itself exist at
+    # the candidate root" — precise per-skill, not a generic repo guess);
+    # loading a skill must never fetch, pull, prune, install, register, or
+    # modify anything. Refreshing the canonical repo is a separate, explicitly
+    # authorized maintenance action below, never a load-time side effect.
     description = spec.description.replace('"', "'")
     rel = repo_relative(spec.canonical)
     rel_dir = PurePosixPath(rel).parent.as_posix()
@@ -362,17 +375,55 @@ description: "{description}"
 
 # {spec.name}
 
-This is a thin wrapper. The canonical skill lives in this repo at the path below
-(resolve the repo root at runtime — paths are never hardcoded).
+This is a thin wrapper. The canonical skill lives in the orama-system repo at
+the path below. Resolution is read-only and marker-verified — never fetch,
+pull, prune, install, register, or modify anything while loading a skill.
 
 - Canonical skill path (repo-relative): `{rel}`
 
 ## Before Use
 
-Before relying on the canonical card, check whether the canonical repository can safely sync:
+Resolve the canonical repository root, in order, using the first candidate
+whose `{rel}` exists as a file. Never hardcode a workstation path — search
+instead. Do not guess or fall back to a different repository's copy if none
+resolves.
+
+1. `ORAMA_SYSTEM_ROOT` or `ORAMA_SYSTEM_PATH`, if set.
+2. `$(git rev-parse --show-toplevel 2>/dev/null)` — correct only when the
+   current working directory is already inside the canonical repo itself.
+3. A bounded, marker-based search of the current git repo's parent and
+   grandparent directories (depth 2) for a sibling checkout containing `{rel}`
+   — the same crawl `scripts/git/resolve_sibling_git_repo.sh` performs. If
+   the current directory is not inside a git repo, this step has nothing to
+   search from and is skipped.
 
 ```bash
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+ROOT=""
+for cand in "$ORAMA_SYSTEM_ROOT" "$ORAMA_SYSTEM_PATH" \\
+    "$(git rev-parse --show-toplevel 2>/dev/null)"; do
+  [ -n "$cand" ] && [ -f "$cand/{rel}" ] && ROOT="$cand" && break
+done
+if [ -z "$ROOT" ] && base="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  parent="$(dirname "$base")"
+  for d in "$parent"/*/ "$(dirname "$parent")"/*/; do
+    [ -f "${{d}}{rel}" ] && ROOT="${{d%/}}" && break
+  done
+fi
+```
+
+If `$ROOT` is still empty, report the canonical skill as unavailable and ask
+for its location only if the task genuinely needs it.
+
+## Load Canonical Skill
+
+Read `$ROOT/{rel}` and follow it. Do not copy behavior from this wrapper.
+
+## Refresh (explicit maintenance only — never a side effect of loading)
+
+Synchronizing the canonical repo is a separate, explicitly authorized action.
+When asked to refresh it:
+
+```bash
 cd "$ROOT/{rel_dir}"
 git fetch origin --prune
 git status --short --branch
@@ -385,10 +436,6 @@ git pull --ff-only
 ```
 
 If the worktree is dirty, the branch is not tracking origin, or fast-forward is impossible, do not overwrite local work. Report the drift and read the current canonical card with that caveat.
-
-## Load Canonical Skill
-
-Open and follow `{rel}` (relative to the repo root). Do not copy behavior from this wrapper.
 
 ## Windows UTF-8 Note
 

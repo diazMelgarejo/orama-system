@@ -1,45 +1,79 @@
 ---
 name: agent-methodology
-description: orama-system 5-stage problem-solving methodology. Claude-only background knowledge.
-user-invocable: false
+description: "Use when planning or executing non-trivial multi-step work with the orama-system five-stage methodology."
 ---
 
-The orama-system methodology (ὅραμα = vision/revelation) — 5 stages. Canonical
-source: `bin/orama-system/references/oramasys-5-stages.md` (this card is the
-condensed, agent-facing summary; the reference doc is authoritative).
+# agent-methodology
 
-**1. Context Immersion** — Ground yourself deeply in the problem space before
-proposing anything. Read git history, docs, and code; understand the entire
-landscape and the *real* problem, not just the stated one.
+This is a thin wrapper. The canonical skill lives in the orama-system repo at
+the path below. Resolution is read-only and marker-verified — never fetch,
+pull, prune, install, register, or modify anything while loading a skill.
 
-**2. Visionary Architecture** — Map the solution space. Identify the critical
-path and choose the minimal approach that satisfies the crystallized constraints.
+- Canonical skill path (repo-relative): `bin/orama-system/skills/agent-methodology/SKILL.md`
 
-**3. Ruthless Refinement** — Eliminate inconsistency and complexity. Simplify the
-design before building; a simpler approach discovered here loops back to Architecture.
+## Before Use
 
-**4. Masterful Execution** — Implement with precision, one task at a time. Verify
-each step before the next; tests revealing flawed assumptions loop back to any stage.
+Resolve the canonical repository root, in order, using the first candidate
+whose `bin/orama-system/skills/agent-methodology/SKILL.md` exists as a file. Never hardcode a workstation path — search
+instead. Do not guess or fall back to a different repository's copy if none
+resolves.
 
-**5. Crystallize Vision** — Independent check: would a fresh agent, given only the
-original problem and this output, agree it is solved? Distill the result to its
-irreducible, verified core.
+1. `ORAMA_SYSTEM_ROOT` or `ORAMA_SYSTEM_PATH`, if set.
+2. `$(git rev-parse --show-toplevel 2>/dev/null)` — correct only when the
+   current working directory is already inside the canonical repo itself.
+3. A bounded, marker-based search of the current git repo's parent and
+   grandparent directories (depth 2) for a sibling checkout containing `bin/orama-system/skills/agent-methodology/SKILL.md`
+   — the same crawl `scripts/git/resolve_sibling_git_repo.sh` performs. If
+   the current directory is not inside a git repo, this step has nothing to
+   search from and is skipped.
 
-The stages form a feedback loop, not a strict line — loop back whenever a later
-stage reveals the earlier one was wrong. Apply to every non-trivial task; skip no
-stages.
+```bash
+ROOT=""
+for cand in "$ORAMA_SYSTEM_ROOT" "$ORAMA_SYSTEM_PATH" \
+    "$(git rev-parse --show-toplevel 2>/dev/null)"; do
+  [ -n "$cand" ] && [ -f "$cand/bin/orama-system/skills/agent-methodology/SKILL.md" ] && ROOT="$cand" && break
+done
+if [ -z "$ROOT" ] && base="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  parent="$(dirname "$base")"
+  for d in "$parent"/*/ "$(dirname "$parent")"/*/; do
+    [ -f "${d}bin/orama-system/skills/agent-methodology/SKILL.md" ] && ROOT="${d%/}" && break
+  done
+fi
+```
 
-## Related Skills
+If `$ROOT` is still empty, report the canonical skill as unavailable and ask
+for its location only if the task genuinely needs it.
 
-- [`../agent-coordination-heartbeat/SKILL.md`](../agent-coordination-heartbeat/SKILL.md) — Monitor agent liveness, detect dead agents, and auto-release stale claims.
-- [`../gossip-bus/SKILL.md`](../gossip-bus/SKILL.md) — Multi-agent event bus: intra-host (SQLite FTS5) and inter-host LAN peer (WS/SSE + file-drop) transports.
+## Load Canonical Skill
 
+Read `$ROOT/bin/orama-system/skills/agent-methodology/SKILL.md` and follow it. Do not copy behavior from this wrapper.
 
-## Post-Review Micro-Remediation
+## Refresh (explicit maintenance only — never a side effect of loading)
 
-When addressing review findings (CodeRabbit or human) on an open PR: cluster
-findings by root cause, fix once at the abstraction level, keep every commit
-mechanically attributable to its failure class, and never accumulate revert
-chains — reset to a safety-ref-protected ancestor instead when policy allows.
+Synchronizing the canonical repo is a separate, explicitly authorized action.
+When asked to refresh it:
 
-Full doctrine: [`references/post-review-micro-remediation.md`](../../references/post-review-micro-remediation.md)
+```bash
+cd "$ROOT/bin/orama-system/skills/agent-methodology"
+git fetch origin --prune
+git status --short --branch
+```
+
+If the repo is on a tracking branch and the worktree is clean:
+
+```bash
+git pull --ff-only
+```
+
+If the worktree is dirty, the branch is not tracking origin, or fast-forward is impossible, do not overwrite local work. Report the drift and read the current canonical card with that caveat.
+
+## Windows UTF-8 Note
+
+On Windows PowerShell, set UTF-8 explicitly before reading or writing skill files:
+
+```powershell
+[Console]::InputEncoding=[System.Text.UTF8Encoding]::new($false)
+[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$OutputEncoding=[System.Text.UTF8Encoding]::new($false)
+$env:PYTHONUTF8='1'
+```
