@@ -105,8 +105,13 @@ pipeline (see `hermes-orama` for that).
 
 ## Example
 
+Tasks run concurrently, not in sequence — pick genuinely independent
+work, not a pipeline (a task that depends on another worker's output,
+like "review the fix once it's written", can start before that output
+exists):
+
 ```text
-/hermes-delegate research the current caching strategy | write a test for the cache eviction bug | review the fix once it's written
+/hermes-delegate research the current caching strategy | audit the auth middleware for missing rate limits | summarize open PRs older than a week
 ```
 
 For direct shell use (bypassing the slash command), the underlying
@@ -115,8 +120,8 @@ implementation is `scripts/hermes_delegate.py`:
 ```bash
 python3 bin/orama-system/skills/hermes-harness/scripts/hermes_delegate.py \
   "research the current caching strategy" \
-  "write a test for the cache eviction bug" \
-  "review the fix once it's written"
+  "audit the auth middleware for missing rate limits" \
+  "summarize open PRs older than a week"
 ```
 
 ## Output Contract
