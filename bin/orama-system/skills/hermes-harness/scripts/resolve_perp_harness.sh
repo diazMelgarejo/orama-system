@@ -22,13 +22,38 @@ fi
 _PT_MARKER="orchestrator/fastapi_app.py"
 _RESOLVED_PT_ROOT_CACHE=""
 
+# Accepted PT remote URL forms (https, ssh, and the short scp-like ssh
+# form), case-insensitive host, optional trailing "/" or ".git". Anchored
+# so "diazMelgarejo/Perpetua-Tools-fork" or a different org cannot match.
+_PT_TRUSTED_REMOTE_PATTERN='^(https://github\.com/|git@github\.com:|ssh://git@github\.com/)diazMelgarejo/Perpetua-Tools(\.git)?/?$'
+
+# _pt_remote_trusted <dir>
+#   Additive trust check, scoped to this resolver only (does not modify the
+#   shared sibling_repo_is_git_root marker check other callers rely on).
+#   A candidate that matches the marker file but has NO "origin" remote
+#   configured is still accepted -- this preserves every existing
+#   marker-only fixture/workflow (a fresh `git init` local checkout has no
+#   remote at all) and matches this function's actual threat model: an
+#   unrelated repo that happens to carry the marker file AND a real,
+#   differently-owned remote is the concrete impersonation case this closes.
+#   A candidate whose "origin" remote is set but does not match the trusted
+#   pattern is rejected -- fail closed rather than silently trusting an
+#   attacker-controlled or simply wrong upstream.
+_pt_remote_trusted() {
+  local dir="$1" remote_url
+  remote_url="$(git -C "$dir" remote get-url origin 2>/dev/null || true)"
+  [[ -z "$remote_url" ]] && return 0
+  [[ "$remote_url" =~ $_PT_TRUSTED_REMOTE_PATTERN ]]
+}
+
 # resolve_pt_root resolves and prints the Perpetua-Tools repository root,
 # using configured paths, the orama .paths cache, or filesystem discovery.
 # Memoizes into _RESOLVED_PT_ROOT_CACHE so repeated calls in the same shell
 # don't re-crawl.
 resolve_pt_root() {
   if [[ -n "${_RESOLVED_PT_ROOT_CACHE:-}" ]]; then
-    if sibling_repo_is_git_root "$_RESOLVED_PT_ROOT_CACHE" "$_PT_MARKER"; then
+    if sibling_repo_is_git_root "$_RESOLVED_PT_ROOT_CACHE" "$_PT_MARKER" \
+      && _pt_remote_trusted "$_RESOLVED_PT_ROOT_CACHE"; then
       echo "$_RESOLVED_PT_ROOT_CACHE"
       return 0
     fi
@@ -42,9 +67,18 @@ resolve_pt_root() {
   path="$(sibling_repo_check_env_override "$_PT_MARKER" \
     PERPETUA_TOOLS_PATH PT_HOME PERPETUA_TOOLS_ROOT PERPETUATOOLSROOT)" || override_rc=$?
   if ((override_rc == 0)); then
-    _RESOLVED_PT_ROOT_CACHE="$(cd "$path" && pwd)"
-    echo "$_RESOLVED_PT_ROOT_CACHE"
-    return 0
+    if _pt_remote_trusted "$path"; then
+      _RESOLVED_PT_ROOT_CACHE="$(cd "$path" && pwd)"
+      echo "$_RESOLVED_PT_ROOT_CACHE"
+      return 0
+    fi
+    # Same fail-closed posture as the override_rc==2 branch below: an
+    # explicit override resolved to a marker-valid git root, but its
+    # "origin" remote does not match the trusted Perpetua-Tools pattern.
+    # Do not silently fall through to .paths/crawl discovery for some
+    # other checkout -- report exactly why this one was rejected.
+    echo "resolve_pt_root: override resolved to ${path} but its origin remote is not a trusted Perpetua-Tools remote" >&2
+    return 1
   elif ((override_rc == 2)); then
     # An explicit override was configured (PERPETUA_TOOLS_PATH / PT_HOME /
     # PERPETUA_TOOLS_ROOT / PERPETUATOOLSROOT) but none resolved to a valid,
@@ -59,7 +93,8 @@ resolve_pt_root() {
   orama_root="${ORAMA_SYSTEM_PATH:-$(git rev-parse --show-toplevel 2>/dev/null || true)}"
   if [[ -n "$orama_root" && -f "$orama_root/.paths" ]]; then
     pt_dir="$(grep '^PT_DIR=' "$orama_root/.paths" | cut -d= -f2- | tr -d '"')"
-    if [[ -n "$pt_dir" ]] && sibling_repo_is_git_root "$pt_dir" "$_PT_MARKER"; then
+    if [[ -n "$pt_dir" ]] && sibling_repo_is_git_root "$pt_dir" "$_PT_MARKER" \
+      && _pt_remote_trusted "$pt_dir"; then
       _RESOLVED_PT_ROOT_CACHE="$(cd "$pt_dir" && pwd)"
       echo "$_RESOLVED_PT_ROOT_CACHE"
       return 0
@@ -72,7 +107,7 @@ resolve_pt_root() {
   fi
   sibling_repo_crawl_collect "$HOME" "$_PT_MARKER" 3
   pt_root="$(sibling_repo_finalize "Perpetua-Tools" || true)"
-  if [[ -n "$pt_root" ]]; then
+  if [[ -n "$pt_root" ]] && _pt_remote_trusted "$pt_root"; then
     _RESOLVED_PT_ROOT_CACHE="$pt_root"
     echo "$_RESOLVED_PT_ROOT_CACHE"
     return 0
