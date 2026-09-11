@@ -1,6 +1,6 @@
 # ADR 62: Telos/Phylax Authority Split — Canonical Restoration
 
-**Status:** accepted, corrected, and implementation-synchronized 2026-09-10  
+**Status:** accepted, corrected, and implementation-synchronized 2026-09-09 UTC
 **Original Gate-0 date:** 2026-09-06  
 **Canonical architecture date:** 2026-08-29
 

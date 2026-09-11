@@ -1,4 +1,4 @@
-# Gateway → Telos absorption — post-PR-351 addendum
+# Gateway → Telos absorption — post-PR-351 addendum (2026-09-09 UTC)
 
 ## Purpose
 
@@ -6,6 +6,10 @@ PR #351 merged before the Oramasys Gateway dedicated-dialer consumer migration
 was completed. This addendum preserves the chronology: the merged restoration
 handoff remains correct evidence of the state at merge time, and this document
 records the later verified completion of that explicitly remaining dependency.
+
+The recorded completion commit is timestamped **2026-09-09T22:14:53Z**.
+UTC is the primary date basis for this evidence; no local-time date is used as
+the canonical record.
 
 ## Completed migration
 
@@ -83,7 +87,7 @@ non-Telos path when the dialer is absent or Telos fails.
 - branch: `2026-09-10-gateway-dialer-telos-absorption`;
 - exact head: `1eb191e99f0cc5d9604f103573aebaec2e5defc0`;
 - Telos dependency pin: `19810d0493344aa507c29c462f68afbc1b98ecf8`;
-- Perpetua Core dependency pin:
+- `oramasys/perpetua-core` dependency pin:
   `86225fa5c974ab2fe0b65d228a2b31888aaa440c`;
 - CI run: `34410898142`;
 - Python 3.11: success;
