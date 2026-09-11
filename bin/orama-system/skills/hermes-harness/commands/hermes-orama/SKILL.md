@@ -98,9 +98,13 @@ directly.
 
 ### Ask First
 
-- Before running this against a task with side effects (e.g. one that
-  will push code or send external messages) without reviewing the
-  crystallized result first.
+- Before invoking `hermes_harness.py` for a task whose Executor stage may
+  modify files, commit, deploy, delete, or change account settings —
+  obtain explicit confirmation before dispatch, not after. This is
+  separate from, and precedes, reviewing the crystallized result: the
+  5-stage pipeline runs Executor/Verifier before Crystallizer, so by the
+  time a crystallized result exists to review, any side effect has
+  already happened.
 
 ### Never Do
 

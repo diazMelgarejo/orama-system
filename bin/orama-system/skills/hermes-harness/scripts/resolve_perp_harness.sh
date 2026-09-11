@@ -43,7 +43,18 @@ _pt_remote_trusted() {
   local dir="$1" remote_url
   remote_url="$(git -C "$dir" remote get-url origin 2>/dev/null || true)"
   [[ -z "$remote_url" ]] && return 0
+  # GitHub's own host/org/repo routing is case-insensitive (GITHUB.com and
+  # github.com resolve identically), so a case-sensitive `[[ =~ ]]` here
+  # would wrongly reject a legitimately-configured remote that happens to
+  # differ only in case. nocasematch is restored unconditionally via the
+  # trap-free save/restore below, including on the early-return path.
+  local _was_nocasematch=0
+  shopt -q nocasematch && _was_nocasematch=1
+  shopt -s nocasematch
   [[ "$remote_url" =~ $_PT_TRUSTED_REMOTE_PATTERN ]]
+  local _matched=$?
+  ((_was_nocasematch)) || shopt -u nocasematch
+  return "$_matched"
 }
 
 # resolve_pt_root resolves and prints the Perpetua-Tools repository root,

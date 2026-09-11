@@ -308,6 +308,7 @@ def test_resolve_perp_harness_fails_on_ambiguous_crawl(tmp_path: Path, git_bin: 
     assert "ambiguous" in result.stderr.lower()
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "remote_url",
     [
@@ -329,6 +330,25 @@ def test_resolve_perp_harness_accepts_trusted_remote(
     assert result.stdout.strip() == str(pt.resolve())
 
 
+@pytest.mark.integration
+def test_resolve_perp_harness_accepts_trusted_remote_case_insensitive_host(
+    tmp_path: Path, git_bin: str
+) -> None:
+    """GitHub's own host/org/repo routing is case-insensitive, so a remote
+    that differs from the canonical URL only in case (a legitimately
+    configured, real-world case, e.g. a git client that upper-cases the
+    host) must still be trusted, not rejected as an impersonation attempt."""
+    pt = _make_pt_root(
+        tmp_path,
+        git_bin=git_bin,
+        remote_url="https://GITHUB.com/diazMelgarejo/Perpetua-Tools.git",
+    )
+    result = _run_resolver(env={"PERPETUA_TOOLS_PATH": str(pt)})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(pt.resolve())
+
+
+@pytest.mark.integration
 def test_resolve_perp_harness_rejects_untrusted_remote(
     tmp_path: Path, git_bin: str
 ) -> None:
@@ -349,6 +369,7 @@ def test_resolve_perp_harness_rejects_untrusted_remote(
     assert "not resolved" in result.stderr.lower()
 
 
+@pytest.mark.integration
 def test_resolve_perp_harness_rejects_untrusted_remote_during_crawl(
     tmp_path: Path, git_bin: str
 ) -> None:
@@ -378,6 +399,7 @@ def test_resolve_perp_harness_rejects_untrusted_remote_during_crawl(
     assert "not resolved" in result.stderr.lower()
 
 
+@pytest.mark.integration
 def test_resolve_perp_harness_no_remote_still_accepted(
     tmp_path: Path, git_bin: str
 ) -> None:

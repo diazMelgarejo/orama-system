@@ -105,11 +105,18 @@ pipeline (see `hermes-orama` for that).
 
 ## Example
 
+```text
+/hermes-delegate research the current caching strategy | write a test for the cache eviction bug | review the fix once it's written
+```
+
+For direct shell use (bypassing the slash command), the underlying
+implementation is `scripts/hermes_delegate.py`:
+
 ```bash
-bin/orama-system/skills/hermes-harness/hermes-delegate/SKILL.md \
+python3 bin/orama-system/skills/hermes-harness/scripts/hermes_delegate.py \
   "research the current caching strategy" \
-  "| write a test for the cache eviction bug" \
-  "| review the fix once it's written"
+  "write a test for the cache eviction bug" \
+  "review the fix once it's written"
 ```
 
 ## Output Contract
