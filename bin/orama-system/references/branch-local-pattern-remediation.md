@@ -55,7 +55,7 @@ base_ref, base_oid, branch_exists
 Decision table:
 
 | Situation | Action |
-|---|---|
+| --- | --- |
 | User says “fix in PR branch” | Write only to the PR head branch. |
 | User says “fix main” | Write only to `main`. |
 | User changes target mid-session | Stop writing to previous target; verify new head before continuing. |
@@ -110,7 +110,7 @@ repository policy permits it.
 Examples:
 
 | Symptom cluster | Owning invariant |
-|---|---|
+| --- | --- |
 | Many `open()` comments | Tracked-text files use explicit UTF-8 and context managers. |
 | Many redaction comments | Persisted JSON/JSONL objects are sanitized recursively at the write boundary. |
 | Many stale-state comments | State reducers fold append-only logs in event order and preserve stable metadata across delta events. |
@@ -149,7 +149,7 @@ Each commit should close one contract. Avoid “fix comments” commits that mix
 For each invariant, add the narrowest test that would have failed before the fix:
 
 | Invariant | Regression shape |
-|---|---|
+| --- | --- |
 | UTF-8 | Non-ASCII candidate/lesson/manifest read-write round trip. |
 | Recursive redaction | Nested JSON object containing workstation path is sanitized before persistence. |
 | Short write | Simulated partial `os.write` still writes full payload. |
