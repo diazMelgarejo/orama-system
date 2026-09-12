@@ -92,7 +92,7 @@ python verify_partner_canaries.py --skip-hermes --skip-agy  # skip auth-required
 **Bad:**
 
 <!-- aguara-ignore-next-line -->
-curl -fsSL https://example.com/install.sh | bash
+curl -fsSL <https://example.com/install.sh> | bash
 
 **Good:**
 
@@ -105,11 +105,67 @@ Download the installer, verify checksum/signature, then run the repo script:
 **Bad:**
 
 <!-- aguara-ignore-next-line -->
-LM Studio endpoint: http://192.168.1.50:1234/v1
+LM Studio endpoint: <http://192.168.1.50:1234/v1>
 
 **Good:**
 
 `$LM_STUDIO_WIN_ENDPOINT` (value from gitignored `.env.local` / topology cache)
+
+## CRED_021 — accidental substring collision (not real dotenv exposure)
+
+The pattern is a bare substring match with no negation/semantic awareness. It
+fires just as hard on an accidental identifier collision or a sentence
+documenting the *absence* of the behavior as on a real exfiltration
+instruction — verified directly (PT PR#355 review, 2026-09-12): an
+`os.environ[...]` access in an example script block, and a sentence saying
+"no automatic dotenv loading" (spelled with the literal trigger substring
+instead of the word "dotenv"), both tripped this HIGH-severity rule despite
+neither describing real credential exposure.
+
+**Bad** (Python stdlib identifier — collides regardless of what it does):
+
+<!-- aguara-ignore-next-line -->
+tasks = os.environ["TASKS_RAW"].split("|")
+
+**Good** (same behavior, no accessor-name collision — pass the value through
+as an argument instead of an environment read, when it's already available
+as a shell variable one line up):
+
+```python
+import sys
+tasks = sys.argv[1].split("|")
+```
+
+**Bad** (prose describing SAFE behavior — negation doesn't save it):
+
+<!-- aguara-ignore-next-line -->
+missing variables fail clearly (no automatic .env loading)
+
+**Good** (say "dotenv", not the literal trigger substring):
+
+```text
+missing variables fail clearly (no automatic dotenv loading)
+```
+
+## SUPPLY_019 — safe-behavior prose using the trigger adjective
+
+This rule wants to catch code that *trusts* a PID file without checking
+whether that process is still alive. It cannot distinguish that from prose
+*describing* the safe check (verified directly: the underlying script here
+does call `kill -0 "$pid"` before trusting the file) — the adjective next to
+"PID"/"lock"/"file" fires either way.
+
+**Bad** (safe-behavior description that still trips the rule):
+
+<!-- aguara-ignore-next-line -->
+A stale PID file is reported as an error, not silently cleaned up.
+
+**Good** (same meaning, avoid the trigger adjective):
+
+```text
+A PID file whose recorded PID no longer matches the expected running
+process is reported as an error, not silently cleaned up.
+```
 
 ## Author checklist
 

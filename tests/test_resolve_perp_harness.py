@@ -43,7 +43,13 @@ def _run_resolver(
     )
 
 
-def _make_pt_root(tmp_path: Path, name: str = "Perpetua-Tools", *, git_bin: str) -> Path:
+def _make_pt_root(
+    tmp_path: Path,
+    name: str = "Perpetua-Tools",
+    *,
+    git_bin: str,
+    remote_url: str | None = None,
+) -> Path:
     root = tmp_path / name
     root.mkdir(parents=True)
     subprocess.run([git_bin, "init", "-q"], cwd=root, check=True)
@@ -51,6 +57,10 @@ def _make_pt_root(tmp_path: Path, name: str = "Perpetua-Tools", *, git_bin: str)
     (root / "orchestrator" / "fastapi_app.py").write_text("# fixture\n", encoding="utf-8")
     (root / "src").mkdir()
     (root / "src" / "hermes_harness.py").write_text("# fixture\n", encoding="utf-8")
+    if remote_url is not None:
+        subprocess.run(
+            [git_bin, "remote", "add", "origin", remote_url], cwd=root, check=True
+        )
     return root
 
 
@@ -296,3 +306,109 @@ def test_resolve_perp_harness_fails_on_ambiguous_crawl(tmp_path: Path, git_bin: 
     )
     assert result.returncode != 0
     assert "ambiguous" in result.stderr.lower()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "remote_url",
+    [
+        "https://github.com/diazMelgarejo/Perpetua-Tools",
+        "https://github.com/diazMelgarejo/Perpetua-Tools.git",
+        "git@github.com:diazMelgarejo/Perpetua-Tools.git",
+        "ssh://git@github.com/diazMelgarejo/Perpetua-Tools.git",
+    ],
+)
+def test_resolve_perp_harness_accepts_trusted_remote(
+    tmp_path: Path, remote_url: str, git_bin: str
+) -> None:
+    """Marker-valid PT root with a REAL git remote (not the marker-only
+    fixtures above) matching the canonical Perpetua-Tools URL, in every
+    accepted form, must still resolve."""
+    pt = _make_pt_root(tmp_path, git_bin=git_bin, remote_url=remote_url)
+    result = _run_resolver(env={"PERPETUA_TOOLS_PATH": str(pt)})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(pt.resolve())
+
+
+@pytest.mark.integration
+def test_resolve_perp_harness_accepts_trusted_remote_case_insensitive_host(
+    tmp_path: Path, git_bin: str
+) -> None:
+    """GitHub's own host/org/repo routing is case-insensitive, so a remote
+    that differs from the canonical URL only in case (a legitimately
+    configured, real-world case, e.g. a git client that upper-cases the
+    host) must still be trusted, not rejected as an impersonation attempt."""
+    pt = _make_pt_root(
+        tmp_path,
+        git_bin=git_bin,
+        remote_url="https://GITHUB.com/diazMelgarejo/Perpetua-Tools.git",
+    )
+    result = _run_resolver(env={"PERPETUA_TOOLS_PATH": str(pt)})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(pt.resolve())
+
+
+@pytest.mark.integration
+def test_resolve_perp_harness_rejects_untrusted_remote(
+    tmp_path: Path, git_bin: str
+) -> None:
+    """The additive trust check this task adds: a marker-valid git root
+    whose origin remote is a REAL, configured remote but does NOT point at
+    the canonical Perpetua-Tools repo must be rejected, not silently
+    accepted on marker-file match alone (impersonation case)."""
+    pt = _make_pt_root(
+        tmp_path,
+        git_bin=git_bin,
+        remote_url="https://github.com/attacker/Perpetua-Tools-fork.git",
+    )
+    result = _run_resolver(
+        func="resolve_perp_harness_script",
+        env={"PERPETUA_TOOLS_PATH": str(pt)},
+    )
+    assert result.returncode != 0
+    assert "not resolved" in result.stderr.lower()
+
+
+@pytest.mark.integration
+def test_resolve_perp_harness_rejects_untrusted_remote_during_crawl(
+    tmp_path: Path, git_bin: str
+) -> None:
+    """Same rejection, but reached via the mother-dir crawl path rather
+    than an explicit env override -- the trust check must gate every
+    resolution path, not just the override shortcut."""
+    isolated_home = tmp_path / "home"
+    isolated_home.mkdir()
+    pt = _make_pt_root(
+        isolated_home,
+        git_bin=git_bin,
+        remote_url="https://github.com/attacker/Perpetua-Tools-fork.git",
+    )
+    orama = isolated_home / "orama-system"
+    orama.mkdir()
+    subprocess.run([git_bin, "init", "-q"], cwd=orama, check=True)
+
+    result = _run_resolver(
+        func="resolve_perp_harness_script",
+        env={
+            "HOME": str(isolated_home),
+            "ORAMA_SYSTEM_PATH": str(orama),
+        },
+        cwd=orama,
+    )
+    assert result.returncode != 0
+    assert "not resolved" in result.stderr.lower()
+
+
+@pytest.mark.integration
+def test_resolve_perp_harness_no_remote_still_accepted(
+    tmp_path: Path, git_bin: str
+) -> None:
+    """Explicit regression guard for the 'additive, not a retrofit'
+    requirement: a marker-valid PT root with NO origin remote configured
+    at all (exactly what every pre-existing fixture in this file already
+    does via plain `git init`) must keep resolving -- the trust check only
+    activates when a remote is actually present and mismatched."""
+    pt = _make_pt_root(tmp_path, git_bin=git_bin, remote_url=None)
+    result = _run_resolver(env={"PERPETUA_TOOLS_PATH": str(pt)})
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(pt.resolve())
