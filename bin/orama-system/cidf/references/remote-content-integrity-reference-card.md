@@ -8,10 +8,10 @@ verification; it does not replace AFRP live-authority checks.
 
 | Gate | Required evidence | Stop condition |
 | --- | --- | --- |
-| Local pre-commit | Target parses/compiles; local path blob SHA and byte size captured | Parse failure, unknown encoding, or no local baseline |
-| Remote branch post-write | Exact branch/ref has the same path blob SHA and byte size; fetched content has an expected marker and parses/compiles | Any mismatch, truncation, binary payload, or stale branch head |
-| Pre-merge | Gate 2 repeated for the exact PR head SHA; PR base/head and tree delta re-read | Head moved, unresolved mismatch, or empty/unrelated tree delta |
-| Post-merge | Destination ref re-read; the same path blob/content evidence retained | Destination differs from reviewed PR result |
+| 1. Local pre-commit | Target parses/compiles; local path blob SHA and byte size captured | Parse failure, unknown encoding, or no local baseline |
+| 2. Remote branch post-write | Fetched head SHA matches the expected source/base SHA; exact branch/ref has the same path blob SHA and byte size; fetched content has an expected marker and parses/compiles | Any mismatch, truncation, binary payload, or stale/moved branch head |
+| 3. Pre-merge | Gate 2 repeated for the exact PR head SHA; PR base/head and tree delta re-read | Head moved, unresolved mismatch, or empty/unrelated tree delta |
+| 4. Post-merge | Destination ref re-read; the same path blob/content evidence retained | Destination differs from reviewed PR result |
 
 ## Text transport rules
 
@@ -27,8 +27,10 @@ verification; it does not replace AFRP live-authority checks.
 ## Minimal evidence record
 
 Record the target ref, local blob SHA, remote blob SHA, byte size, validator
-command, and UTC timestamp in the PR body or incident note. Do not record
-credentials, local workstation paths, or raw binary payloads.
+command, and UTC timestamp in a PR comment (not the PR body -- some agent
+environments, including Cursor background agents, cannot reliably edit an
+existing PR body) or an incident note. Do not record credentials, local
+workstation paths, or raw binary payloads.
 
 ## Why Base64 chunking corrupts silently (verified mechanism)
 
