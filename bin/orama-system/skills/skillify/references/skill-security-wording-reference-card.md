@@ -63,9 +63,12 @@ actually sees. Export a clean tree first, then scan that:
 
 ```bash
 # Any git ref works here -- HEAD, a stash, a branch, another remote's ref.
-git archive <ref> | tar -x -C /path/to/clean-dir
-aguara scan /path/to/clean-dir/bin/orama-system/skills --ci \
-  --baseline /path/to/clean-dir/config/agent-security/aguara-skills.baseline.json \
+clean_dir=".aguara-clean-tree"
+rm -rf -- "$clean_dir"
+mkdir -p -- "$clean_dir"
+git archive <ref> | tar -x -C "$clean_dir"
+aguara scan "$clean_dir/bin/orama-system/skills" --ci \
+  --baseline "$clean_dir/config/agent-security/aguara-skills.baseline.json" \
   --disable-rule TOXIC_CROSS_002
 ```
 
@@ -101,7 +104,7 @@ aguara scan bin/orama-system/skills \
 | **No CI-conditioned danger** | Skip auth-required canaries | CI environment tokens in comments on subprocess-using scripts |
 | **No LAN literals in tracked docs** | `$LM_STUDIO_WIN_ENDPOINT`, `<win-host>` | Private LAN octets in markdown |
 | **No remote pipe-to-shell** | Link to vetted installer script path; pin versions | Remote download piped straight into a shell |
-| **Scope `allowed-tools`** | `Bash(git rev-parse *), Bash(path/to/entry-script.sh *)` — one entry per distinct top-level command the dispatcher body actually runs | Unscoped `bash`/`python`/`Bash` in `allowed-tools` (INDIRECT_010) |
+| **Scope `allowed-tools`** | `Bash(git rev-parse *) Bash(path/to/entry-script.sh *)` — one entry per distinct top-level command the dispatcher body actually runs | Unscoped `bash`/`python`/`Bash` in `allowed-tools` (INDIRECT_010) |
 
 When a real command is necessary, gate it explicitly:
 **verify source → pin version → operator approval → then run**.

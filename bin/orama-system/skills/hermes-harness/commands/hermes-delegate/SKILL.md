@@ -8,7 +8,7 @@ description: >
 argument-hint: "<task1> | <task2> | <task3> [--json]"
 version: "1.0"
 compatibility: Claude, Hermes, Codex, Cursor
-allowed-tools: Bash(git rev-parse *), Bash(python3 bin/orama-system/skills/hermes-harness/scripts/hermes_delegate.py *)
+allowed-tools: Bash(git rev-parse *) Bash(python3 bin/orama-system/skills/hermes-harness/scripts/hermes_delegate.py *)
 triggers:
   - hermes-delegate
   - parallel PT workers
@@ -170,6 +170,12 @@ task, in task order — each row carries at least `task` and `status`.
 
 - Before raising `HERMES_DELEGATE_TIMEOUT_SEC` significantly for
   long-running workers that could tie up shared PT capacity.
+- Obtain separate explicit confirmation for delegation launch and for the
+  exact independent task scopes, including every remote dispatch.
+- Obtain explicit confirmation before any worker may directly modify files.
+- Never treat read-only launch approval as approval for later side effects.
+- Never allow a worker to commit, deploy, delete, or change account settings
+  without a separate explicit confirmation.
 
 ### Never Do
 

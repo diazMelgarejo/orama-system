@@ -9,7 +9,7 @@ description: >
 argument-hint: "<start|stop|status> [task description]"
 version: "1.0"
 compatibility: Claude, Hermes, Codex, Cursor
-allowed-tools: Bash(git rev-parse *), Bash(bin/orama-system/skills/hermes-harness/scripts/hermes_spawn.sh *)
+allowed-tools: Bash(git rev-parse *) Bash(bin/orama-system/skills/hermes-harness/scripts/hermes_spawn.sh *)
 triggers:
   - hermes-spawn
   - start hermes session

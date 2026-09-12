@@ -8,7 +8,7 @@ description: >
 argument-hint: "<task description>"
 version: "1.0"
 compatibility: Claude, Hermes, Codex, Cursor
-allowed-tools: Bash(git rev-parse *), Bash(python3 *)
+allowed-tools: Bash(git rev-parse *) Bash(bin/orama-system/skills/hermes-harness/scripts/hermes_orama.sh *)
 triggers:
   - hermes-orama
   - orama 5-stage pipeline
@@ -16,15 +16,8 @@ triggers:
 disable-model-invocation: true
 ---
 ```bash
-set -euo pipefail
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-# shellcheck source=../../scripts/resolve_perp_harness.sh
-source "${REPO_ROOT}/bin/orama-system/skills/hermes-harness/scripts/resolve_perp_harness.sh"
-PERP_SCRIPT="$(resolve_perp_harness_script)"
-TASK="$*"
-[ -z "$TASK" ] && echo "Usage: /hermes-orama <task description>" && exit 1
-echo "🧠 L-PT: Orama 5-stage pipeline (PT hermes_harness, not delegate_task): $TASK"
-python3 "$PERP_SCRIPT" "$TASK"
+exec "${REPO_ROOT}/bin/orama-system/skills/hermes-harness/scripts/hermes_orama.sh" "$@"
 ```
 
 **Dispatch lane:** L-PT — [`references/hermes-dispatch-taxonomy.md`](../../references/hermes-dispatch-taxonomy.md)
@@ -55,17 +48,17 @@ foreground, via Perpetua-Tools `hermes_harness.py` — sequential
 
 ## Procedure
 
-1. Resolve the Perpetua-Tools `hermes_harness.py` script path — fails
-   closed with a clear error if PT isn't found.
-2. Print the task being run.
-3. Invoke `hermes_harness.py` directly, foreground, with the task text —
+1. Invoke the repository-owned `scripts/hermes_orama.sh` launcher, which resolves
+   the Perpetua-Tools `hermes_harness.py` script path and fails closed if PT isn't found.
+2. The launcher prints the task being run.
+3. The launcher invokes `hermes_harness.py` foreground, with the task text —
    the script itself drives all 5 stages sequentially/in-parallel as
    appropriate; this wrapper does not orchestrate the stages itself.
 
 ## Example
 
-```bash
-bin/orama-system/skills/hermes-harness/hermes-orama/SKILL.md \
+```text
+/hermes-orama \
   "design and implement a rate limiter for the /health endpoint"
 ```
 
@@ -98,13 +91,13 @@ directly.
 
 ### Ask First
 
-- Before invoking `hermes_harness.py` for a task whose Executor stage may
-  modify files, commit, deploy, delete, or change account settings —
-  obtain explicit confirmation before dispatch, not after. This is
-  separate from, and precedes, reviewing the crystallized result: the
-  5-stage pipeline runs Executor/Verifier before Crystallizer, so by the
-  time a crystallized result exists to review, any side effect has
-  already happened.
+- Obtain separate explicit confirmation for the launcher/remote dispatch and
+  for the exact task scope.
+- Obtain explicit confirmation before a task may directly modify files.
+- Never treat read-only launch approval as approval for later side effects.
+- Never allow commit, deploy, delete, or account-setting changes without a
+  separate explicit confirmation. This precedes crystallized-result review:
+  Executor/Verifier run before Crystallizer.
 
 ### Never Do
 
