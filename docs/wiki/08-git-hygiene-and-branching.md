@@ -348,6 +348,36 @@ Post-merge regression checks and stale-branch triage: ephemeral `origin/main` ba
 diff true unique branch contribution, **clean last run before and after**. Skill card:
 [`fresh-main-integrity-diff-claygo.md`](../../bin/orama-system/skills/using-git-worktrees/references/fresh-main-integrity-diff-claygo.md)
 
+### Live GitHub state before PR decisions
+
+Conversation memory, plans, local tracking refs, and earlier API responses are
+snapshots. Before creating, updating, rejecting, or calling a PR duplicate,
+query GitHub again and capture the exact state, head, and base:
+
+```bash
+git fetch origin
+gh pr view <PR> \
+  --json state,mergedAt,headRefName,headRefOid,baseRefName,baseRefOid
+git ls-remote --heads origin <head-branch>
+```
+
+A duplicate exists only when an **open** PR already has the same head branch and
+intended base. If the earlier PR is merged or closed and its branch contains a
+unique post-merge delta, open a new PR. Commits added to a branch after merge are
+not retroactively included in the old merge commit.
+
+Fail closed when the lookup is unavailable or omits decisive fields. Search
+summaries with null state are discovery aids, not authorization to act. After a
+write, fetch the PR again and verify the state, base, head SHA, and intended file
+set. The canonical decision matrix is in the [branch-local remediation card][branch-matrix].
+
+[branch-matrix]: ../../bin/orama-system/references/branch-local-pattern-remediation.md
+
+Bind writes to the state just observed when possible (`content_sha`, parent
+commit, or non-force fast-forward ref update). If the ref moves, re-read and
+re-decide; do not force or blindly retry. Creating a PR grants no authority to
+merge it, update `main` directly, force-update a ref, or delete a branch.
+
 ---
 
 ## Commit Message Quality

@@ -32,6 +32,19 @@ git status --short
 gh pr view <PR> --json headRefName,headRefOid,baseRefName,mergeable
 ```
 
+PR state is mutable. Run the PR query immediately before the branch decision,
+even when the conversation, plan, or an earlier query says the state is known.
+Include `state`, `mergedAt`, and `baseRefOid` when the client supports them. A
+response with missing or null decisive fields is incomplete evidence; use the
+canonical PR-detail endpoint instead of guessing.
+
+Record this decision tuple in the work log or PR handoff:
+
+```text
+checked_at_utc, repository, pr_number, state, merged_at,
+head_ref, head_oid, base_ref, base_oid, branch_exists
+```
+
 Decision table:
 
 | Situation | Action |
@@ -41,6 +54,44 @@ Decision table:
 | User changes target mid-session | Stop writing to previous target; verify new head before continuing. |
 | You accidentally wrote to the wrong branch | Tell the operator immediately. Do not hide it with revert spam. |
 | PR branch is non-mergeable | Do not assume rebase; first determine whether base should move, branch should rebase, or main should reset. |
+
+### Open, merged, and post-merge branch matrix
+
+"Duplicate PR" is a live relation, not a remembered label. It requires an open
+PR whose head is the exact branch and whose base is the intended target.
+
+| Live state | Branch delta relative to intended base | Required action |
+| --- | --- | --- |
+| Open PR with exact head and base | Any | Continue on that PR branch. |
+| Open PR with different head or base | Any | Do not call it a duplicate; resolve the target mismatch. |
+| Merged or closed PR | No unique commits or tree delta | Report that no unpublished branch delta exists. |
+| Merged or closed PR | Unique post-merge delta exists | Open a new PR for that delta. |
+| No matching PR | Unique delta exists | Open a new PR. |
+| Branch no longer exists | Local or unreachable commit may exist | Locate by SHA/reflog/API before declaring loss. |
+
+Never assume that commits pushed to a PR branch after its merge entered the
+merge commit. Compare the live branch head with current base and the merged PR's
+head SHA. A merged PR is historical; it cannot receive a new reviewable delta.
+
+When the user gives a direct action (for example, "create a new PR"), execute
+that action unless live evidence makes it impossible or destructive. A general
+preference such as "one PR per repository" guides consolidation among open PRs;
+it does not authorize refusing a new PR after the previous one has merged.
+
+### Race and retry discipline
+
+The live read and write form one logical transaction. Bind the write to the
+observed old state whenever the API supports it: expected blob SHA, parent
+commit, non-force fast-forward update, or equivalent precondition. If the write
+fails because the ref moved, do not force, blindly retry, or reuse the earlier
+decision. Re-read the authority, recompute the branch matrix, and stop if the
+new state changes the requested operation.
+
+Direct writes to `main`, merges, force updates, branch deletion, and closure are
+separate destructive or governance actions. A request to preserve or publish a
+branch does not imply authority for any of them. Prefer a new PR for a surviving
+post-merge delta unless the operator explicitly directs a `main` write and the
+repository policy permits it.
 
 ## Step 1 — Cluster findings by shared invariant
 
@@ -107,6 +158,16 @@ git status --short
 gh pr view <PR> --json headRefOid,mergeable,statusCheckRollup
 ```
 
+After a remote write, read the destination back and verify the expected tuple:
+
+```bash
+gh pr view <PR> --json state,baseRefName,headRefName,headRefOid,files
+```
+
+Confirm the created/updated PR is open, targets the intended base, points to the
+published SHA, and contains the intended paths. A successful API response alone
+is transport evidence, not completion evidence.
+
 For docs-only changes:
 
 ```bash
@@ -123,6 +184,12 @@ grep -R "../.." docs/next docs/archive | head
 - Deleting original source doctrine because a derived package exists.
 - Treating milestone reports as root plans.
 - Calling review complete while CI/checks are still unknown.
+- Calling a requested PR "duplicate" from memory without proving an open PR has
+  the exact head and base.
+- Treating a merged PR as a writable container for commits pushed afterward.
+- Accepting null or omitted state fields as proof that a PR is open.
+- Retrying a stale write after a non-fast-forward or precondition failure.
+- Treating permission to create a PR as permission to merge or write `main`.
 
 ## Cross-reference guidance for skills
 

@@ -93,7 +93,7 @@ the request at all* and *whether my method answers it*. Handwaving — asserting
 conclusion from a narrow proxy without confirming intent — is the #1 way this system
 wastes the user's time and erodes trust.
 
-**Two triggers force a STOP-and-clarify (AskUserQuestion FIRST, before acting):**
+**Four triggers force a STOP-and-clarify or STOP-and-verify before acting:**
 
 1. **Interpretation risk.** The request could mean ≥2 things, uses a term/operation with
    competing mechanics (e.g. "re-anchor" = flatten? graft? point-at-twin?), or the user
@@ -115,6 +115,13 @@ wastes the user's time and erodes trust.
    an explicit instruction. Overriding an unambiguous instruction is not a judgment call; it
    is the failure this protocol exists to prevent.
 
+4. **Mutable external state.** The answer or action depends on live PR, branch, issue, CI,
+   deployment, or account state. Conversation memory, a prior tool result, a local tracking
+   ref, and a plan snapshot are historical evidence, not current state. Query the authority
+   immediately before deciding or writing. If the result omits decisive fields such as PR
+   state, merged time, head ref, head SHA, or base ref, use a more authoritative endpoint or
+   stop. Do not fill missing fields from memory.
+
 **Proxy ≠ real question (examples that bit us):**
 
 | Cheap proxy I used | The real question | Right method |
@@ -125,6 +132,7 @@ wastes the user's time and erodes trust.
 | "`.agents/` is tidier than the user's `.agent/`" ⇒ wrote there | which dir does the user/repo actually use? | take the explicit name verbatim; read `.agent/AGENTS.md`; check origin (the canonical dir already existed) |
 | `mergeable: CONFLICTING` ⇒ merge/rebase stale PR wholesale | deliver harmonized delta without re-adding content already on base? | path-scoped replay onto fresh integration base (`merged` for periscope); see [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md) + CIDF integrative-editing-examples §9 |
 | PR pushed with 0 file delta / empty commit | empty index or blind API retry? | verify staged diff; after uncertainty, read remote before retry; compare parent/child trees; then confirm the expected content marker is actually present in the committed blob (see `failure-modes.md` Failure Mode 9 — a non-empty diff proves *something* changed, not that the *intended* artifact landed) |
+| remembered "open PR" ⇒ reject a direct create-PR command as duplicate | is an **open** PR currently attached to this exact head and intended base, and does the head contain post-merge commits? | fetch live PR metadata and branch head; classify with the branch-state matrix in [`branch-local-pattern-remediation.md`](../references/branch-local-pattern-remediation.md) |
 
 **Reflect, then route:** TRUE intent (clarify if ambiguous) → correct method (not a proxy)
 → act. Trust the user's domain signal over my first-pass check — their context exceeds mine.
@@ -143,6 +151,11 @@ wastes the user's time and erodes trust.
 > bundle. Path-scoped replay + integrative synthesis (CIDF §9, git-history-surgery card)
 > replaced two noisy commits with one clean delta. See
 > [`failure-modes.md`](failure-modes.md) §6–8 examples.
+>
+> Trigger 4 earned 2026-09-12 UTC (Agate PR #2): stale conversational state said the PR
+> was open, while GitHub showed it was merged. The agent overrode the user's direct request
+> to create a PR and falsely called it a duplicate. The branch still held a post-merge
+> commit, recovered through Agate PR #3. See `failure-modes.md` Failure Mode 10.
 
 ---
 
@@ -154,6 +167,8 @@ wastes the user's time and erodes trust.
 - State the gate result explicitly when using Mode 2 or 3
 - Re-run gate if the user clarifies a Type D query
 - **Run the Intent-Verification gate** on interpretation risk or before any "nothing to do" conclusion — AskUserQuestion FIRST, reflect, use the real method not a proxy
+- **Verify mutable external state live** immediately before a decision or write; record the
+  exact repository, PR/issue, state, base, head, and SHA used for the decision
 
 ### Ask First
 
@@ -167,6 +182,8 @@ wastes the user's time and erodes trust.
 - Assume expert level without signals confirming it
 - **Handwave**: assert "done / fine / nothing needed" from a narrow proxy without confirming intent or running the method that truly answers the question
 - **Override an explicit instruction with a guess**: silently substitute your own name/path/structure for the exact one the user gave, or write into an area without reading its `AGENTS.md`/`_index` (see Intent-Verification trigger 3)
+- **Treat memory as transaction state**: reject or redirect an explicit GitHub command from
+  remembered PR status without a fresh authoritative lookup
 
 ---
 

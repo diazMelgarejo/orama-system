@@ -312,6 +312,70 @@ CIDF §10; path-scoped card PR #17 vs #20 example.
 
 ---
 
+## Failure Mode 10: Stale Authority Snapshot
+
+**Trigger:** The agent decides whether to create, update, merge, close, or reject
+a GitHub operation using remembered conversation state, a plan snapshot, an old
+tool result, or a local tracking ref instead of querying the live authority.
+
+**Mechanism:** Durable memory is useful for intent, constraints, and history, but
+it is not a transaction lock. PRs merge, branches advance or disappear, CI
+finishes, and base branches move after the snapshot was recorded. The agent
+mistakes historical evidence for current state, then compounds the error by
+letting its inferred workflow override the user's explicit command.
+
+**Symptom:** The agent says an operation would be redundant, impossible, unsafe,
+or already complete without a fresh live query. Typical false claims include
+"that PR is still open," "this would create a duplicate," "the branch was lost,"
+or "the post-merge commit is already on main."
+
+**Real incident (2026-09-12 UTC — Agate PR #2):**
+
+- The user directly requested a new PR for an existing Agate branch.
+- Stale conversational context said PR #2 was open; live GitHub state showed it
+  was already merged.
+- The agent did not query GitHub. It rejected the instruction and called the new
+  PR a duplicate.
+- The existing branch still contained one post-merge commit: the relative
+  `config/model_hardware_policy.yml` compatibility symlink, documentation, and
+  regression test. A merged PR cannot absorb that later commit.
+- Recovery: query the merged PR and branch live, compare the branch head with
+  current `main`, then open Agate PR #3 for the unique delta.
+
+**Amplified risk:** The same failure class applies beyond GitHub. Any mutable
+external authority can invalidate a remembered answer: issue state, CI status,
+deployment version, package release, access grant, account setting, calendar
+entry, or remote file revision. The closer an action is to a write, the shorter
+the acceptable evidence lifetime. Transaction-time verification is mandatory.
+
+**Prevention — authority-at-action gate:**
+
+1. Preserve memory as context, never as proof of live state.
+2. Identify the authoritative system and the fields that decide the action.
+3. Query those fields immediately before the decision or write.
+4. Treat missing, null, truncated, or search-summary fields as insufficient.
+5. Match the exact repository, object number, head ref/SHA, and intended base.
+6. Apply the live-state matrix; do not silently replace an explicit command with
+   a preference inferred from an older plan.
+7. Bind the write to the observed old SHA/state when supported. On a race or
+   precondition failure, re-read and re-decide; never force or blindly retry.
+8. Keep authority narrow: creating a PR does not authorize merging it, writing
+   directly to `main`, force-updating a ref, or deleting a branch.
+9. After writing, read back the destination and verify its state, head SHA,
+   base, and intended content paths.
+
+For PR operations, "duplicate" means an **open** PR with the exact intended head
+and base. A closed or merged PR is historical. If its branch has a unique
+post-merge delta, the correct review surface is a new PR. See
+[`branch-local-pattern-remediation.md`](../references/branch-local-pattern-remediation.md).
+
+**Stop conditions:** Do not write or issue a negative conclusion when the live
+lookup is unavailable, ambiguous, or missing decisive fields. State the exact
+verification gap. Do not ask the user to repeat state that the connected
+authority can provide.
+
+---
+
 ```text
 Response feels wrong but you can't pinpoint why?
 │
@@ -322,6 +386,8 @@ Response feels wrong but you can't pinpoint why?
 ├── Was the query classified correctly? → Failure Mode 6 (Premature Confidence)
 ├── Did I confirm intent + use the real method (not a proxy)? → Failure Mode 7 (Handwaving)
 ├── Did I replay upstream under synthetic SHAs when originals exist? → Failure Mode 8 (Synthetic SHA Replay)
-└── Did commit-clean run without git add, or did a blind API retry follow an
-    already-completed write? → Failure Mode 9 (Empty Publication Commit)
+├── Did commit-clean run without git add, or did a blind API retry follow an
+│   already-completed write? → Failure Mode 9 (Empty Publication Commit)
+└── Did remembered external state replace a fresh authority query?
+    → Failure Mode 10 (Stale Authority Snapshot)
 ```

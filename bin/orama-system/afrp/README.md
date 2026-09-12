@@ -39,4 +39,8 @@ AFRP is the operational implementation of the Amplifier Principle. It ensures in
 | [`../SKILL.md`](../SKILL.md) | Parent skill — Execution Mode Router, 5-stage methodology |
 | [`../cidf/SKILL.md`](../cidf/SKILL.md) | Content insertion decisions (runs after AFRP) |
 | [`../references/amplifier-principle.md`](../references/amplifier-principle.md) | Foundational philosophy |
+| [`../references/branch-local-pattern-remediation.md`](../references/branch-local-pattern-remediation.md) | Live PR/branch state gate and post-merge delta matrix |
 
+For mutable external systems, remembered state is context only. AFRP requires a
+fresh authority query immediately before a consequential decision or write, and
+a read-after-write check against the intended state and content.
