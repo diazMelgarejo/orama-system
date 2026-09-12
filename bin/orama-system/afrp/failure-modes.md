@@ -365,8 +365,11 @@ the acceptable evidence lifetime. Transaction-time verification is mandatory.
    base, and intended content paths.
 
 For PR operations, "duplicate" means an **open** PR with the exact intended head
-and base. A closed or merged PR is historical. If its branch has a unique
-post-merge delta, the correct review surface is a new PR. See
+and base. A closed or merged PR is historical, but the two are not the same
+condition: a **merged** PR only needs a new PR when its branch has a unique
+**post-merge** delta; a **closed, never-merged** PR needs a new PR when it has
+**any** unique delta relative to the intended base, since it has no merge
+point for "post-merge" to be relative to. See
 [`branch-local-pattern-remediation.md`](../references/branch-local-pattern-remediation.md).
 
 **Stop conditions:** Do not write or issue a negative conclusion when the live

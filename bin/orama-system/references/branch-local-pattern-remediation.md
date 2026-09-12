@@ -29,20 +29,27 @@ git fetch origin
 git branch --show-current
 git rev-parse HEAD
 git status --short
-gh pr view <PR> --json headRefName,headRefOid,baseRefName,mergeable
+gh pr view <PR> --json headRefName,headRefOid,baseRefName,baseRefOid,state,mergedAt,mergeable,headRepositoryOwner,headRepository
 ```
+
+`origin` only holds the head branch for a same-repository PR. For a fork PR,
+also query `headRepositoryOwner`/`headRepository` and fetch from that
+repository specifically (e.g. `git fetch <head-owner>/<head-repo> <head-ref>`
+or an added remote pointing at it) — do not assume `origin` has the commits.
 
 PR state is mutable. Run the PR query immediately before the branch decision,
 even when the conversation, plan, or an earlier query says the state is known.
-Include `state`, `mergedAt`, and `baseRefOid` when the client supports them. A
-response with missing or null decisive fields is incomplete evidence; use the
-canonical PR-detail endpoint instead of guessing.
+A response with missing decisive fields, or with `mergedAt: null` when
+`state == MERGED`, is incomplete evidence; use the canonical PR-detail
+endpoint instead of guessing. `mergedAt: null` is valid, expected evidence
+when `state` is `OPEN` or `CLOSED` — do not treat it as missing.
 
 Record this decision tuple in the work log or PR handoff:
 
 ```text
 checked_at_utc, repository, pr_number, state, merged_at,
-head_ref, head_oid, base_ref, base_oid, branch_exists
+head_repository_owner, head_repository_name, head_ref, head_oid,
+base_ref, base_oid, branch_exists
 ```
 
 Decision table:
@@ -58,14 +65,19 @@ Decision table:
 ### Open, merged, and post-merge branch matrix
 
 "Duplicate PR" is a live relation, not a remembered label. It requires an open
-PR whose head is the exact branch and whose base is the intended target.
+PR whose head repository owner, head repository name, head branch, and head
+SHA all match the exact source being considered, and whose base is the
+intended target — a matching branch *name* alone is not sufficient, since a
+fork PR's head branch can share a name with an unrelated branch elsewhere.
 
 | Live state | Branch delta relative to intended base | Required action |
 | --- | --- | --- |
 | Open PR with exact head and base | Any | Continue on that PR branch. |
 | Open PR with different head or base | Any | Do not call it a duplicate; resolve the target mismatch. |
-| Merged or closed PR | No unique commits or tree delta | Report that no unpublished branch delta exists. |
-| Merged or closed PR | Unique post-merge delta exists | Open a new PR for that delta. |
+| Merged PR | No unique post-merge commits | Report that no unpublished branch delta exists. |
+| Merged PR | Unique post-merge delta exists | Open a new PR for that delta. |
+| Closed, never-merged PR | No unique delta relative to the intended base | Report that no unpublished branch delta exists. |
+| Closed, never-merged PR | Any unique delta relative to the intended base | Open a new PR for that delta. |
 | No matching PR | Unique delta exists | Open a new PR. |
 | Branch no longer exists | Local or unreachable commit may exist | Locate by SHA/reflog/API before declaring loss. |
 
