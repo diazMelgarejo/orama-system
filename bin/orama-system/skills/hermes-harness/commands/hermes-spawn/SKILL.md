@@ -4,12 +4,12 @@ description: >
   (L-PT) Start, stop, or check the Perpetua-Tools hermes_harness.py background
   session (PID-file lifecycle). Not native Hermes delegate_task (L-H1) and not
   fleet cursor-agent dispatch (L-Fleet). Requires credentials in the process
-  environment; missing variables fail clearly (no automatic .env loading).
+  environment; missing variables fail clearly (no automatic dotenv loading).
   Activates for starting, stopping, or checking a background Hermes/PT session.
 argument-hint: "<start|stop|status> [task description]"
 version: "1.0"
 compatibility: Claude, Hermes, Codex, Cursor
-allowed-tools: bash
+allowed-tools: Bash(git rev-parse *), Bash(bin/orama-system/skills/hermes-harness/scripts/hermes_spawn.sh *)
 triggers:
   - hermes-spawn
   - start hermes session
@@ -97,13 +97,13 @@ Human-readable (default):
 
 - `status` with no active session exits non-zero (`1`) — this is a normal
   "nothing running" result, not a failure to be retried.
-- A stale PID file (recorded PID no longer matches the expected process)
-  is reported as an error on `status`, not silently cleaned up — run
-  `stop` to clear it.
+- A PID file whose recorded PID no longer matches the expected running
+  process is reported as an error on `status`, not silently cleaned up —
+  run `stop` to clear it.
 - `HERMES_SPAWN_SESSION` is validated strictly; a session id with `..` or
   characters outside `[a-zA-Z0-9_-]` is rejected before anything runs.
 - Requires real credentials in the process environment already — this
-  script does not auto-load `.env` files.
+  script does not auto-load dotenv files.
 
 ## Boundaries
 

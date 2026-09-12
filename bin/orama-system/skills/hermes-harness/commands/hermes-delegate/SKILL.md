@@ -8,7 +8,7 @@ description: >
 argument-hint: "<task1> | <task2> | <task3> [--json]"
 version: "1.0"
 compatibility: Claude, Hermes, Codex, Cursor
-allowed-tools: bash, python
+allowed-tools: Bash(git rev-parse *), Bash(python3 bin/orama-system/skills/hermes-harness/scripts/hermes_delegate.py *)
 triggers:
   - hermes-delegate
   - parallel PT workers
@@ -46,9 +46,9 @@ if [[ -z "$PT_ROOT" ]]; then
 fi
 export PT_ROOT
 
-TASK_COUNT="$(python3 - <<'PY'
-import os
-tasks = [t.strip() for t in os.environ["TASKS_RAW"].split("|") if t.strip()]
+TASK_COUNT="$(python3 - "$TASKS_RAW" <<'PY'
+import sys
+tasks = [t.strip() for t in sys.argv[1].split("|") if t.strip()]
 print(len(tasks))
 PY
 )"

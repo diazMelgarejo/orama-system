@@ -8,7 +8,7 @@ description: >
 argument-hint: "<task description>"
 version: "1.0"
 compatibility: Claude, Hermes, Codex, Cursor
-allowed-tools: bash, python
+allowed-tools: Bash(git rev-parse *), Bash(python3 *)
 triggers:
   - hermes-orama
   - orama 5-stage pipeline
