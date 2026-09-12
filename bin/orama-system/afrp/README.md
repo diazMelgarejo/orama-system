@@ -7,13 +7,13 @@
 
 AFRP is the first skill loaded in the ultrathink processing chain. It runs before the Execution Mode Router, before CIDF, and before any agent bifurcation.
 
-```
+```text
 Task → AFRP gate → Execution Mode Router → Mode 1/2/3 → CIDF (on insertion)
 ```
 
 ## Package Structure
 
-```
+```text
 afrp/
 ├── SKILL.md          ← Main skill file (discovery + full 7-step protocol)
 ├── failure-modes.md  ← Extended failure mode taxonomy with recovery procedures
@@ -35,7 +35,7 @@ AFRP is the operational implementation of the Amplifier Principle. It ensures in
 ## Related Documents
 
 | Document | Purpose |
-|----------|---------|
+| --- | --- |
 | [`../SKILL.md`](../SKILL.md) | Parent skill — Execution Mode Router, 5-stage methodology |
 | [`../cidf/SKILL.md`](../cidf/SKILL.md) | Content insertion decisions (runs after AFRP) |
 | [`../references/amplifier-principle.md`](../references/amplifier-principle.md) | Foundational philosophy |
