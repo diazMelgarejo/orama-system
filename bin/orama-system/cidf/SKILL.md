@@ -95,6 +95,25 @@ claims a content change, also require the new commit tree to differ from its
 parent. Periscope PR #49 proved why: `214b0c03` carried the real 45-line change,
 while a blind retry produced `faf515e4` with the same tree and zero file delta.
 
+### Remote content-integrity gate (text and generated records)
+
+When a write path serializes, encodes, chunks, or transports file content, run
+three independent gates. A local diff, a returned blob SHA, or a successful API
+response satisfies none of the later gates by itself:
+
+1. **Before commit:** parse or compile the local target and record its Git blob
+   SHA and byte size.
+2. **After branch write:** fetch the exact remote branch/ref; require the same
+   path blob SHA, expected byte size, recognizable source marker, and the
+   parser/compiler appropriate to that file type.
+3. **Immediately before merge:** repeat gate 2 against the exact PR head SHA,
+   then re-read the destination after merge.
+
+For text, prefer an explicit UTF-8 content path. Base64 is permitted only when
+the transport requires it and only with byte-for-byte remote verification.
+Never merge after a local-only check. See
+[`references/remote-content-integrity-reference-card.md`](references/remote-content-integrity-reference-card.md).
+
 ## Target Verification (pre-insert) — Mandatory
 
 Before inserting content **anywhere**, verify the *destination*, not just the method:
