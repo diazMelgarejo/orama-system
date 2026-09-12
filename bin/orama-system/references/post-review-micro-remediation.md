@@ -210,6 +210,13 @@ a status field or a first glance is accurate):
   earlier in the same session, fetch the actual remote tip first. A
   local checkout that's fallen behind a push made moments earlier
   diverges silently and produces a merge/rebase based on stale state.
+- Before deciding that a requested PR is duplicate, fetch the live PR
+  detail and branch head. A remembered or previously open PR may now be
+  merged; commits added to its branch afterward are not included in that
+  merge. An incomplete search result with null state is not proof. Use
+  the open/merged/post-merge matrix in
+  [`branch-local-pattern-remediation.md`](branch-local-pattern-remediation.md),
+  and read the destination back after any write.
 - A test that duplicates production logic as a hardcoded literal (a
   regex, a constant, a list of values) rather than reading it from the
   production source will pass or fail against a stale copy forever once

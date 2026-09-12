@@ -348,6 +348,44 @@ Post-merge regression checks and stale-branch triage: ephemeral `origin/main` ba
 diff true unique branch contribution, **clean last run before and after**. Skill card:
 [`fresh-main-integrity-diff-claygo.md`](../../bin/orama-system/skills/using-git-worktrees/references/fresh-main-integrity-diff-claygo.md)
 
+### Live GitHub state before PR decisions
+
+Conversation memory, plans, local tracking refs, and earlier API responses are
+snapshots. Before creating, updating, rejecting, or calling a PR duplicate,
+query GitHub again and capture the exact state, head, and base:
+
+```bash
+git fetch origin
+gh pr view <PR> \
+  --json state,mergedAt,headRefName,headRefOid,baseRefName,baseRefOid,headRepositoryOwner,headRepository
+git ls-remote --heads origin <head-branch>
+```
+
+`origin` only holds the head branch for a same-repository PR. For a fork PR,
+query `headRepositoryOwner`/`headRepository` above and fetch/list from that
+repository specifically -- do not assume `origin` has the commits.
+
+A duplicate exists only when an **open** PR already has the same head
+repository, head branch, and intended base. A closed or merged PR is
+historical, but the two are not the same condition: a **merged** PR only
+needs a new PR when its branch has a unique **post-merge** delta (commits
+added after merge are not retroactively included in the old merge commit); a
+**closed, never-merged** PR needs a new PR when it has **any** unique delta
+relative to the intended base, since it has no merge point for "post-merge"
+to be relative to.
+
+Fail closed when the lookup is unavailable or omits decisive fields. Search
+summaries with null state are discovery aids, not authorization to act. After a
+write, fetch the PR again and verify the state, base, head SHA, and intended file
+set. The canonical decision matrix is in the [branch-local remediation card][branch-matrix].
+
+[branch-matrix]: ../../bin/orama-system/references/branch-local-pattern-remediation.md
+
+Bind writes to the state just observed when possible (`content_sha`, parent
+commit, or non-force fast-forward ref update). If the ref moves, re-read and
+re-decide; do not force or blindly retry. Creating a PR grants no authority to
+merge it, update `main` directly, force-update a ref, or delete a branch.
+
 ---
 
 ## Commit Message Quality
