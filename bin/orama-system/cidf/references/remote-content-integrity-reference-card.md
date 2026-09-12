@@ -1,92 +1,172 @@
 # Remote content-integrity reference card
 
 Use this card whenever a tracked file crosses an API, encoding, chunking, or
-generated-content boundary. It complements CIDF's ordinary destination
-verification; it does not replace AFRP live-authority checks.
+generated-content boundary. It complements CIDF destination verification and
+AFRP live-authority checks.
 
-## Required evidence
+For PR reporting/mutation authority, the normative companion is
+[`pr-metadata-authority-and-reporting-reference-card.md`](pr-metadata-authority-and-reporting-reference-card.md).
+If older examples appear broader, that authority card controls.
 
-| Gate | Required evidence | Stop condition |
-| --- | --- | --- |
-| 1. Local pre-commit | Target parses/compiles; local path blob SHA and byte size captured | Parse failure, unknown encoding, or no local baseline |
-| 2. Remote branch post-write | Fetched head SHA matches the expected source/base SHA; exact branch/ref has the same path blob SHA and byte size; fetched content has an expected marker and parses/compiles | Any mismatch, truncation, binary payload, or stale/moved branch head |
-| 3. Pre-merge | Gate 2 repeated for the exact PR head SHA; PR base/head and tree delta re-read | Head moved, unresolved mismatch, or empty/unrelated tree delta |
-| 4. Post-merge | Destination ref re-read; the same path blob/content evidence retained | Destination differs from reviewed PR result |
+## Canonical model: four integrity facts, five lifecycle checkpoints
+
+Do not confuse an integrity fact with a later revalidation of the same fact.
+The canonical model contains four independent facts:
+
+1. **Local source validity** — intended local bytes validate and have a known
+   size/hash.
+2. **Write acknowledgment** — the transport reports success and returns its
+   identifiers. This proves receipt, not intended content.
+3. **Exact remote branch integrity** — independently fetched bytes at the
+   intended exact ref/head match the intended content and validate natively.
+4. **Merged destination integrity** — after an authorized merge, independently
+   fetched destination bytes match the reviewed result and validate natively.
+
+These facts are implemented through five lifecycle checkpoints because Fact 3
+must be revalidated immediately before merge whenever branch state could have
+changed.
+
+| Checkpoint | Fact | Required evidence | Stop condition |
+| --- | --- | --- | --- |
+| A. Local pre-write | 1 | Target parses/compiles; local blob/hash and byte size captured | Parse failure, unknown encoding, or no local baseline |
+| B. Write acknowledgment | 2 | API/Git write reports success; returned commit/blob/ref identifiers captured | Error, partial failure, or ambiguous write result |
+| C. Remote post-write | 3 | Intended repo/ref fetched independently; fetched head SHA equals expected head SHA; path blob/hash, byte size, source marker, and parser/compiler match | Any mismatch, truncation, binary payload, or stale/moved head |
+| D. Exact-head pre-merge | 3 again | PR/base/head re-read live; checkpoint C repeated for exact current PR head when anything could have moved | Head/base moved, unresolved mismatch, stale review, or unrelated/empty delta |
+| E. Post-merge destination | 4 | Destination ref re-read; resulting path blob/hash, byte size, and parser/compiler match reviewed result | Destination differs from reviewed PR result |
+
+Checkpoint D is temporal revalidation of Fact 3, **not a fifth integrity fact**.
+Checkpoint E is mandatory destination integrity, not an optional reporting
+close-out.
+
+## Exact-ref identity is mandatory
+
+Blob equality proves content equality, not which branch tip was checked. For
+Fact 3, record and compare:
+
+- expected repository and branch/ref;
+- expected head SHA;
+- fetched repository and branch/ref;
+- fetched head SHA;
+- intended path;
+- local/intended blob or cryptographic hash and byte size;
+- fetched remote blob/hash and byte size;
+- native validator result;
+- UTC timestamp.
+
+Stop if the fetched head SHA differs from the head you intended to verify. Do
+not validate whichever branch tip happens to be current and attribute that
+proof to an older or different tip.
 
 ## Text transport rules
 
 - Prefer an explicit UTF-8 text write for text files.
-- Use Base64 only when the transport requires it; validate decoded byte count and
-  remote blob SHA against the local Git blob.
-- Never infer integrity from an API success response, a commit SHA, a local diff,
-  or a visual GitHub rendering.
+- Use Base64 only when the transport requires it; validate decoded byte count
+  and remote blob SHA against the intended Git blob.
+- Never infer integrity from an API success response, a returned SHA, a local
+  diff, or a visual GitHub rendering.
 - Use the file's native validator after fetching the remote object: Python
   compilation for Python, JSON/YAML/TOML parsing for data, and project-specific
   tests for generated artifacts.
 
-## Minimal evidence record
+## Evidence reporting authority
 
-Record the target ref, local blob SHA, remote blob SHA, byte size, validator
-command, and UTC timestamp in a PR comment (not the PR body -- some agent
-environments, including Cursor background agents, cannot reliably edit an
-existing PR body) or an incident note. Do not record credentials, local
-workstation paths, or raw binary payloads.
+Routine integrity evidence from unattended/autonomous/background agents or
+autoresearchers belongs in a **new PR/issue comment** or an append-only incident
+or working note. These are the safe autonomous reporting surfaces.
 
-## Why Base64 chunking corrupts silently (verified mechanism)
+Do **not** edit the PR body merely to record evidence. A PR description is
+human-controlled historical metadata. Editing it requires explicit current
+human authorization for that specific body/summary operation, such as a direct
+command, affirmative HITL/`#AskUserQuestion` approval, or the established human
+override path.
+
+When a body edit is explicitly authorized, use the anti-clobber sequence:
+
+```text
+READ -> BACKUP -> MERGE -> WRITE -> REREAD
+```
+
+The write must contain the complete integratively merged body, preserving the
+original Summary and valid historical sections. A delta-only body replacement
+is prohibited even after authorization.
+
+Generic instructions such as "update the PR", "report progress", "fix review
+comments", or an automated reviewer suggestion do not authorize PR-body
+mutation. Without explicit authorization, post a new comment/note and ask the
+human if a description edit is actually needed.
+
+Do not record credentials, personal workstation paths, or raw binary payloads
+in comments, notes, or PR metadata.
+
+## Why Base64 chunking can corrupt silently
 
 Base64 encodes input in 3-byte groups into 4-character output groups. When a
-chunk boundary falls exactly on a multiple of 3 raw bytes, each chunk encodes
-to a complete, padding-free group, and naive concatenation of the encoded
-chunks decodes back to the exact original bytes. When a chunk boundary does
-**not** land on a multiple of 3, the chunk's own encoding ends in `=` padding
-(1 or 2 padding characters) even though more real data follows in the next
-chunk. Padding characters are a decoder's end-of-stream signal: concatenating
-padded, non-final chunks produces a byte stream a standards-conformant
-decoder treats as complete at the first padding marker, silently discarding
-everything after it — no error, no exception, just short, truncated output.
+chunk boundary falls on a multiple of 3 raw bytes, that independently encoded
+chunk can be padding-free. When a non-final independently encoded chunk does
+not end on a multiple-of-3 boundary, its encoding ends in `=` padding.
+Concatenating such padded chunks into one Base64 stream before a single decode
+creates interior padding and an ambiguous/invalid transport contract.
 
-Reproduced directly before writing this: encoding 10,000 bytes of arbitrary
-content in 12,288-byte chunks (12,288 = 4,096 × 3, so every chunk boundary
-lands on a multiple of 3) produced zero mid-stream padding and decoded back
-byte-for-byte correct. The same content chunked at 7,000 bytes (not a
-multiple of 3) produced padding in the first chunk and decoded to exactly
-7,000 bytes — silently dropping the remaining 3,000, the same class of
-truncation symptom as the 79-byte incident below. This is why any chunked
-Base64 transport must use a chunk size that is a multiple of 3 (12,288 is one
-convenient, proven-safe choice, but any multiple of 3 works) — a chunk size
-that isn't is not a minor inefficiency, it is a silent, undetected-by-the-API
-corruption source, since the encode/decode calls themselves report success at
-every step. This is precisely why gate 2 (remote branch post-write) and gate
-3 (pre-merge) in this card exist: they are the only checks that would have
-caught this, since local validation and the API's own write acknowledgment
-both happen before the corruption is introduced by concatenation.
+The safe rule is not "always use 12,288 bytes". The safe rule is to define the
+producer/decoder contract explicitly:
 
-## The four integrity levels that must not be conflated
+- encode the complete payload once; or
+- if independently encoded chunks must be concatenated before one decode, make
+  every non-final raw chunk length divisible by 3; or
+- decode each encoded part independently and concatenate decoded bytes.
 
-Reconstructed from a real incident: an agent verified level 1 and treated
-level 2 as if it proved level 3, without ever separately checking 3 or 4.
+`12,288 = 4,096 × 3` remains a useful worked example because a full 12,288-byte
+raw chunk encodes to exactly 16,384 Base64 characters without padding. It is a
+convenient example, not a universal magic size.
 
-1. **Local file validity** — the file on the local working copy parses,
-   compiles, or otherwise validates.
-2. **API write acknowledgment / returned SHA** — the remote API call that
-   wrote the content returned success and a blob or commit SHA.
-3. **Remote object integrity at the exact branch head** — the actual bytes
-   stored at that ref, fetched independently and re-validated.
-4. **Merged destination integrity** — the actual bytes at the merge
-   destination, fetched and re-validated *after* the merge, since a merge
-   is itself a write that can select the wrong tree or head.
+After reconstruction, always verify the exact remote byte count/hash and native
+parser result. Alignment is transport hygiene, not integrity proof.
 
-None of these implies any of the others. An API can acknowledge a write of
-corrupted bytes exactly as readily as it acknowledges a write of correct
-ones — the acknowledgment proves the request was *received*, not that the
-*content* was what the caller intended. The correct rule: local validation,
-then remote branch fetch-and-parse, then an exact-head pre-merge recheck,
-then a destination recheck after merge. Skipping any one of the four for a
-single "it must be fine by now" assumption is how a 79-byte binary payload
-reaches `main` while every logged step along the way reported success.
+## Integrity levels must not be collapsed
+
+The incident family showed why these statements are all different:
+
+- "the local file parsed";
+- "the API accepted the write";
+- "the intended exact remote branch head contains the intended bytes";
+- "the merged destination contains the reviewed bytes".
+
+None implies the next. The correct workflow is local validation, write
+acknowledgment, exact remote fetch-and-validate, exact-head pre-merge
+revalidation, then destination revalidation after an authorized merge.
+
+## Review-state rule
+
+Review findings are temporal evidence scoped to the SHA/range actually
+reviewed. Submission time alone does not prove the latest head was examined.
+Before following or dismissing a review finding:
+
+1. read the reviewed/covered SHA or range;
+2. read the current PR head SHA;
+3. test whether the condition still exists at that head;
+4. reply with exact-head evidence.
+
+A stale recommendation should not be followed literally after its condition
+has been removed, and a current failure must not be dismissed merely because a
+similar older run was stale.
 
 ## Incident trigger
 
 If a merged text file is unreadable, binary, truncated, or fails its native
-parser, stop further merges. Open one focused repair PR from the known-good
-source and complete all four gates before merging it.
+parser, stop further merges. Open one focused repair PR from independently
+verified known-good source material and complete Facts 1–4, including the
+pre-merge revalidation of Fact 3, before any authorized merge.
+
+## Compact mnemonics
+
+Reporting authority:
+
+`AUTONOMOUS -> COMMENT/NOTE; BODY -> HUMAN AUTHORITY`
+
+Authorized PR-body edit:
+
+`READ -> BACKUP -> MERGE -> WRITE -> REREAD`
+
+Remote publication integrity:
+
+`AUTH -> REF -> BYTES -> PARSE -> REVIEW -> MERGE -> BYTES AGAIN`
