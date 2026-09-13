@@ -32,7 +32,7 @@ consistent with a reviewer suggestion.
 | Background/Cursor agent | New comments or append-only notes only | Prohibited |
 | Autoresearcher/scheduled agent | New comments or append-only notes only | Prohibited |
 | Supervised agent without explicit body-edit instruction | New comments or append-only notes only | Prohibited |
-| Supervised agent with explicit current human authorization | Comments/notes plus authorized body edit | Allowed only through anti-clobber workflow |
+| Supervised agent with explicit current human authorization | Comments/notes plus authorized body edit | Allowed only through operator grant + guarded append workflow |
 | Human operator editing directly | Human-controlled | Allowed |
 
 The safe default is deliberately asymmetric: **comments/notes are append-only
@@ -53,6 +53,14 @@ PR and specific body/summary operation:
 
 Authorization must be current and specific. Do not infer it from earlier broad
 permission to work on the branch.
+
+For an **agent-executed edit of an existing PR body**, policy authorization is
+necessary but not sufficient. The operator must also mint `operator-grant-v2`
+with `scripts/cursor/grant-pr-body-human-override.sh` using the same `--file` or
+`--message` payload, and the agent must perform the edit through
+`scripts/cursor/append-pr-body.sh`. Stop if either the grant or guarded script is
+unavailable. Direct human edits and the guard's explicit initial-body path for
+`ManagePullRequest create_pr` are outside this existing-body requirement.
 
 The following are **not** authorization to mutate the PR body:
 
@@ -90,8 +98,9 @@ require fresh exact-head authority reads and the integrity workflow below.
 
 ## Human-authorized PR-body workflow
 
-Even after explicit human authorization, a PR-body write is never a blind
-replacement. The mandatory workflow is:
+Even after explicit human authorization and the required operator grant for an
+agent-executed existing-body edit, a PR-body write is never a blind replacement.
+The mandatory workflow is:
 
 ```text
 READ -> BACKUP -> MERGE -> WRITE -> REREAD
@@ -122,9 +131,16 @@ Construct the complete intended body integratively:
 
 ### 4. WRITE
 
-Write the **full merged body**, never a delta-only fragment. Use the repository's
-approved guarded path where available. A generic body replacement API is not a
-shortcut around the guard.
+For an agent-executed existing-body edit, write the **full merged body** only via
+`scripts/cursor/append-pr-body.sh` using the same operator-granted payload. The
+guard re-reads the remote body immediately before mutation and rejects a stale
+body digest, then re-reads after the write. A generic body replacement API is
+not a shortcut around the guard.
+
+GitHub does not expose atomic conditional `PATCH` semantics for this PR-body
+endpoint, so the guarded path is optimistic concurrency control rather than a
+claim of server-side compare-and-swap. Any detected mismatch is a stop
+condition; do not retry blindly.
 
 ### 5. REREAD
 
@@ -238,7 +254,10 @@ Stop the consequential operation and use the safe reporting route when any of
 these is true:
 
 - PR-body authorization is missing or ambiguous;
+- an agent-executed existing-body edit lacks a matching `operator-grant-v2` or
+  cannot use `scripts/cursor/append-pr-body.sh`;
 - the current PR body was not read and backed up before an authorized edit;
+- the guarded pre-write body digest no longer matches the body originally read;
 - a proposed body write contains only the newest delta;
 - exact base/head identity has not been freshly read;
 - the head moved after integrity/review verification;
@@ -252,11 +271,11 @@ these is true:
 
 For reporting authority:
 
-`AUTONOMOUS -> COMMENT/NOTE; BODY -> HUMAN AUTHORITY`
+`AUTONOMOUS -> COMMENT/NOTE; BODY -> HUMAN AUTHORITY + OPERATOR GRANT`
 
-For PR-body mutation after explicit authorization:
+For agent-executed PR-body mutation after explicit authorization:
 
-`READ -> BACKUP -> MERGE -> WRITE -> REREAD`
+`GRANT -> READ -> BACKUP -> MERGE -> WRITE -> REREAD`
 
 For remote publication integrity:
 
