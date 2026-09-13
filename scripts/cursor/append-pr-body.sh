@@ -40,20 +40,33 @@ count_substring() {
   printf '%s' "$count"
 }
 
+guard_trace() {
+  # Test-only seam: records which integrity guard was actually reached, so
+  # tests can assert on runtime behaviour rather than scanning source text.
+  # Never affects production control flow -- inert unless a test sets the var.
+  if [[ -n "${PR_BODY_GUARD_TRACE_FILE:-}" ]]; then
+    printf '%s\n' "$1" >>"$PR_BODY_GUARD_TRACE_FILE"
+  fi
+}
+
 sha256_file() {
   python3 - "$1" <<'PY'
 import hashlib
 import sys
 from pathlib import Path
 
-# Normalize trailing newlines before hashing: a locally-written file
-# (via printf '%s\n') and the same content re-read back through a JSON
-# API round-trip (which does not preserve an added trailing newline)
-# must compare equal when the underlying text content is identical.
-# Confirmed directly before this fix: without normalizing, a genuinely
-# correct write was rejected as a false-positive integrity failure,
-# solely due to a one-byte trailing-newline mismatch.
-content = Path(sys.argv[1]).read_bytes().rstrip(b"\n")
+# Canonicalize exactly ONE trailing presentation newline before hashing.
+#
+# A locally-written file (printf '%s\n') gains exactly one trailing LF that a
+# JSON string field / shell command substitution round-trip does not preserve,
+# so a single LF must not count as a difference. An earlier version used
+# .rstrip(b"\n"), which stripped an UNBOUNDED number of newlines and therefore
+# hashed b"x", b"x\n" and b"x\n\n" identically -- that would silently hide a
+# real loss of meaningful trailing blank lines from a PR body. Removing at
+# most one LF is the actual contract this transport needs.
+content = Path(sys.argv[1]).read_bytes()
+if content.endswith(b"\n"):
+    content = content[:-1]
 print(hashlib.sha256(content).hexdigest())
 PY
 }
@@ -259,7 +272,8 @@ fi
 
 remote_body="$("$GH_BIN" pr view "$pr_number" --repo "$repo_slug" --json body --jq .body)"
 if [[ "$remote_body" != "$current_body" ]]; then
-  echo "error: PR body changed since initial read; aborting to avoid overwrite" >&2
+  guard_trace PR_BODY_E_STALE_ON_REREAD
+  echo "error: [PR_BODY_E_STALE_ON_REREAD] PR body changed since initial read; aborting to avoid overwrite" >&2
   echo "hint: review concurrent edits and re-run append-pr-body.sh" >&2
   exit 1
 fi
@@ -267,7 +281,8 @@ fi
 "$GH_BIN" pr view "$pr_number" --repo "$repo_slug" --json body --jq .body >"$prewrite_tmp"
 prewrite_body_digest="$(sha256_file "$prewrite_tmp")"
 if [[ "$prewrite_body_digest" != "$current_body_digest" ]]; then
-  echo "error: PR body changed immediately before write; aborting to avoid stale overwrite" >&2
+  guard_trace PR_BODY_E_STALE_PREWRITE
+  echo "error: [PR_BODY_E_STALE_PREWRITE] PR body changed immediately before write; aborting to avoid stale overwrite" >&2
   echo "hint: review concurrent edits and re-run append-pr-body.sh with a fresh operator grant if needed" >&2
   exit 1
 fi
@@ -280,7 +295,8 @@ fi
 
 "$GH_BIN" pr view "$pr_number" --repo "$repo_slug" --json body --jq .body >"$postwrite_tmp"
 if [[ "$(sha256_file "$postwrite_tmp")" != "$(sha256_file "$out")" ]]; then
-  echo "error: remote PR body does not match the merged body after write; treat as concurrency/integrity incident" >&2
+  guard_trace PR_BODY_E_POSTWRITE_MISMATCH
+  echo "error: [PR_BODY_E_POSTWRITE_MISMATCH] remote PR body does not match the merged body after write; treat as concurrency/integrity incident" >&2
   exit 1
 fi
 
