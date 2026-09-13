@@ -76,15 +76,14 @@ or working note. These are the safe autonomous reporting surfaces.
 
 Do **not** edit the PR body merely to record evidence. A PR description is
 human-controlled historical metadata. Editing it requires explicit current
-human authorization for that specific body/summary operation, such as a direct
-command, affirmative HITL/`#AskUserQuestion` approval, or the established human
-override path.
+human authorization for that specific body/summary operation.
 
-When a body edit is explicitly authorized, use the anti-clobber sequence:
-
-```text
-READ -> BACKUP -> MERGE -> WRITE -> REREAD
-```
+For an **agent-executed edit of an existing PR body**, that human authorization
+must be followed by `operator-grant-v2`: the operator runs
+`scripts/cursor/grant-pr-body-human-override.sh` with the same `--file` or
+`--message`, and the agent must use `scripts/cursor/append-pr-body.sh` for
+`READ -> BACKUP -> MERGE -> WRITE -> REREAD`. Stop if either the matching grant
+or guarded path is unavailable. Direct human edits are a separate allowed path.
 
 The write must contain the complete integratively merged body, preserving the
 original Summary and valid historical sections. A delta-only body replacement
@@ -154,18 +153,19 @@ similar older run was stale.
 
 If a merged text file is unreadable, binary, truncated, or fails its native
 parser, stop further merges. Open one focused repair PR from independently
-verified known-good source material and complete Facts 1–4, including the
-pre-merge revalidation of Fact 3, before any authorized merge.
+verified known-good source material and complete Facts 1–3, including the
+pre-merge revalidation of Fact 3, before any authorized merge. Complete Fact 4
+only after the merge by re-reading and validating the destination.
 
 ## Compact mnemonics
 
 Reporting authority:
 
-`AUTONOMOUS -> COMMENT/NOTE; BODY -> HUMAN AUTHORITY`
+`AUTONOMOUS -> COMMENT/NOTE; BODY -> HUMAN AUTHORITY + OPERATOR GRANT`
 
-Authorized PR-body edit:
+Authorized agent PR-body edit:
 
-`READ -> BACKUP -> MERGE -> WRITE -> REREAD`
+`GRANT -> READ -> BACKUP -> MERGE -> WRITE -> REREAD`
 
 Remote publication integrity:
 
