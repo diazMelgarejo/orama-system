@@ -32,12 +32,20 @@ def _run(cmd: list[str], env: dict[str, str] | None = None) -> subprocess.Comple
 def fake_gh(tmp_path: Path) -> tuple[Path, Path]:
     body_file = tmp_path / "pr-body.txt"
     body_file.write_text("summary\n<!-- CURSOR_AGENT_PR_BODY_END -->\n", encoding="utf-8")
+    view_count_file = tmp_path / "view-count.txt"
+    view_count_file.write_text("0", encoding="utf-8")
     gh = tmp_path / "gh"
     gh.write_text(
         f"""#!/usr/bin/env bash
 set -euo pipefail
 if [[ "$1" == pr && "$2" == view ]]; then
+  count=$(cat '{view_count_file}')
+  count=$((count + 1))
+  printf '%s' "$count" > '{view_count_file}'
   printf '%s' "$(cat '{body_file}')"
+  if [[ "${{FAKE_GH_CONCURRENT_AFTER_SECOND_VIEW:-0}}" == 1 && "$count" == 2 ]]; then
+    printf '%s\n' 'summary' 'concurrent operator edit' '<!-- CURSOR_AGENT_PR_BODY_END -->' > '{body_file}'
+  fi
   exit 0
 fi
 if [[ "$1" == pr && "$2" == edit ]]; then
@@ -63,10 +71,7 @@ exit 1
     return gh, body_file
 
 
-def test_append_pr_body_consumes_grant(fake_gh: tuple[Path, Path], tmp_path: Path):
-    gh_bin, body_file = fake_gh
-    append = tmp_path / "note.md"
-    append.write_text("operator note", encoding="utf-8")
+def _mint_grant(gh_bin: Path, append: Path, tmp_path: Path) -> dict[str, str]:
     env = {
         "PR_BODY_GRANT_HMAC_SECRET": "append-flow-secret",
         "GH_BIN": str(gh_bin),
@@ -87,6 +92,14 @@ def test_append_pr_body_consumes_grant(fake_gh: tuple[Path, Path], tmp_path: Pat
         env=env,
     )
     assert mint.returncode == 0, mint.stderr
+    return env
+
+
+def test_append_pr_body_consumes_grant(fake_gh: tuple[Path, Path], tmp_path: Path):
+    gh_bin, body_file = fake_gh
+    append = tmp_path / "note.md"
+    append.write_text("operator note", encoding="utf-8")
+    env = _mint_grant(gh_bin, append, tmp_path)
 
     ack_path = tmp_path / ".cursor" / "pr-body-human-override-ack"
     assert ack_path.is_file()
@@ -126,3 +139,33 @@ def test_append_pr_body_consumes_grant(fake_gh: tuple[Path, Path], tmp_path: Pat
         env=env,
     )
     assert consume_check.returncode != 0
+
+
+def test_append_pr_body_rejects_change_after_comparison(
+    fake_gh: tuple[Path, Path], tmp_path: Path
+):
+    gh_bin, body_file = fake_gh
+    append = tmp_path / "note.md"
+    append.write_text("operator note", encoding="utf-8")
+    env = _mint_grant(gh_bin, append, tmp_path)
+    env["FAKE_GH_CONCURRENT_AFTER_SECOND_VIEW"] = "1"
+
+    proc = _run(
+        [
+            "bash",
+            str(APPEND_SH),
+            "owner/repo",
+            "99",
+            "--file",
+            str(append),
+            "--title",
+            "Follow-up: test",
+        ],
+        env=env,
+    )
+
+    assert proc.returncode != 0
+    assert "changed immediately before write" in proc.stderr
+    remote_body = body_file.read_text(encoding="utf-8")
+    assert "concurrent operator edit" in remote_body
+    assert "operator note" not in remote_body
