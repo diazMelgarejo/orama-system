@@ -170,7 +170,7 @@ Before changing an integrity guard on external text metadata:
 - [[git-file-deletion-guard]] — the sibling exact-byte discipline for
   tracked-file deletions and Git data-API tree publication; this card is
   the mutable-text-metadata counterpart to that tracked-file doctrine.
-- CIDF `remote-content-integrity-reference-card.md` — the four-gate model
-  (local pre-commit, remote branch post-write, pre-merge, post-merge) this
-  card's Rule 1 refines for the specific case of text metadata rather than
-  tracked file content.
+- CIDF `remote-content-integrity-reference-card.md` — the five-checkpoint
+  model (local pre-write, write acknowledgment, remote post-write, exact-head
+  pre-merge, post-merge destination) this card's Rule 1 refines for the
+  specific case of text metadata rather than tracked file content.

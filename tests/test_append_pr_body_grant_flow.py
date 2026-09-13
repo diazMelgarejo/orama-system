@@ -42,10 +42,10 @@ if [[ "$1" == pr && "$2" == view ]]; then
   count=$(cat '{view_count_file}')
   count=$((count + 1))
   printf '%s' "$count" > '{view_count_file}'
-  printf '%s' "$(cat '{body_file}')"
   if [[ "${{FAKE_GH_CONCURRENT_AFTER_SECOND_VIEW:-0}}" == 1 && "$count" == 2 ]]; then
     printf '%s\n' 'summary' 'concurrent operator edit' '<!-- CURSOR_AGENT_PR_BODY_END -->' > '{body_file}'
   fi
+  printf '%s' "$(cat '{body_file}')"
   exit 0
 fi
 if [[ "$1" == pr && "$2" == edit ]]; then
@@ -141,9 +141,17 @@ def test_append_pr_body_consumes_grant(fake_gh: tuple[Path, Path], tmp_path: Pat
     assert consume_check.returncode != 0
 
 
-def test_append_pr_body_rejects_change_after_comparison(
+def test_append_pr_body_rejects_change_detected_on_reread(
     fake_gh: tuple[Path, Path], tmp_path: Path
 ):
+    """The fake gh's concurrent-edit hook applies before the view response is
+    emitted, so the script's own second view call (the first re-comparison
+    against the initial read) sees the already-edited body immediately --
+    not a later, separate pre-write recheck. Verified directly: an earlier
+    fixture ordering (mutate after emitting the stale response) deferred
+    visibility to a third call and a different error message; this ordering
+    was confirmed empirically before choosing this test's name and
+    assertions, not assumed from the fixture's own intent."""
     gh_bin, body_file = fake_gh
     append = tmp_path / "note.md"
     append.write_text("operator note", encoding="utf-8")
@@ -165,7 +173,7 @@ def test_append_pr_body_rejects_change_after_comparison(
     )
 
     assert proc.returncode != 0
-    assert "changed immediately before write" in proc.stderr
+    assert "changed since initial read" in proc.stderr
     remote_body = body_file.read_text(encoding="utf-8")
     assert "concurrent operator edit" in remote_body
     assert "operator note" not in remote_body
