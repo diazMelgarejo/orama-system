@@ -20,7 +20,9 @@ Mandatory workflow:
   1. Fetch current body (gh pr view --json body)
   2. Save timestamped backup (.git/pr-body-backups/<repo>-pr<N>-<ts>.md)
   3. Insert new ## Follow-up block before CURSOR_AGENT_PR_BODY_END or CodeRabbit section
-  4. gh pr edit --body-file (full merged body — integrative, not delta-only)
+  4. Re-fetch and reject a stale body immediately before write
+  5. gh pr edit --body-file (full merged body — integrative, not delta-only)
+  6. Re-read and verify the remote body equals the merged body
 
 Never pass body= with only the latest paragraph to ManagePullRequest update_pr.
 EOF
@@ -36,6 +38,16 @@ count_substring() {
     rest="${rest#*"$needle"}"
   done
   printf '%s' "$count"
+}
+
+sha256_file() {
+  python3 - "$1" <<'PY'
+import hashlib
+import sys
+from pathlib import Path
+
+print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+PY
 }
 
 normalize_follow_up_title() {
@@ -153,6 +165,8 @@ else
 fi
 
 remote_tmp="$(mktemp)"
+prewrite_tmp="$(mktemp)"
+postwrite_tmp="$(mktemp)"
 out="$(mktemp)"
 grant_finalized=0
 release_on_fail() {
@@ -161,9 +175,10 @@ release_on_fail() {
   fi
   python3 "$GRANT_LIB" release "${grant_append_args[@]}" >/dev/null 2>&1 || true
 }
-trap 'release_on_fail; rm -f "$out" "$remote_tmp"' EXIT
+trap 'release_on_fail; rm -f "$out" "$remote_tmp" "$prewrite_tmp" "$postwrite_tmp"' EXIT
 
 "$GH_BIN" pr view "$pr_number" --repo "$repo_slug" --json body --jq .body >"$remote_tmp"
+current_body_digest="$(sha256_file "$remote_tmp")"
 reconcile_rc=0
 reconcile_cmd=(
   python3 "$GRANT_LIB" reconcile "${grant_append_args[@]}"
@@ -241,9 +256,23 @@ if [[ "$remote_body" != "$current_body" ]]; then
   exit 1
 fi
 
+"$GH_BIN" pr view "$pr_number" --repo "$repo_slug" --json body --jq .body >"$prewrite_tmp"
+prewrite_body_digest="$(sha256_file "$prewrite_tmp")"
+if [[ "$prewrite_body_digest" != "$current_body_digest" ]]; then
+  echo "error: PR body changed immediately before write; aborting to avoid stale overwrite" >&2
+  echo "hint: review concurrent edits and re-run append-pr-body.sh with a fresh operator grant if needed" >&2
+  exit 1
+fi
+
 printf '%s\n' "$merged" >"$out"
 if ! "$GH_BIN" pr edit "$pr_number" --repo "$repo_slug" --body-file "$out"; then
   echo "error: gh pr edit failed" >&2
+  exit 1
+fi
+
+"$GH_BIN" pr view "$pr_number" --repo "$repo_slug" --json body --jq .body >"$postwrite_tmp"
+if [[ "$(sha256_file "$postwrite_tmp")" != "$(sha256_file "$out")" ]]; then
+  echo "error: remote PR body does not match the merged body after write; treat as concurrency/integrity incident" >&2
   exit 1
 fi
 
