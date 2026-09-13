@@ -293,16 +293,25 @@ if ! "$GH_BIN" pr edit "$pr_number" --repo "$repo_slug" --body-file "$out"; then
   exit 1
 fi
 
+# Mark remote_applied immediately once the write is accepted by the API --
+# BEFORE post-write verification, not after. release_nonce_reservation_atomic
+# (invoked via the EXIT trap on any later failure) already refuses to release
+# a reservation once remote_applied is true; that guard only protects a
+# failure path if remote_applied was set before that path could be reached.
+# Marking it after post-write verification left every failure between the
+# write and that mark -- including a genuine post-write mismatch -- free to
+# release the reservation and permit replay, despite a write having actually
+# landed. Confirmed this ordering gap directly before fixing, not assumed.
+mark_cmd=(python3 "$GRANT_LIB" mark-applied "${grant_append_args[@]}")
+if ! "${mark_cmd[@]}"; then
+  echo "error: [PR_BODY_E_MARK_APPLIED_FAILED] grant mark-applied failed immediately after PR body write — treat as security incident" >&2
+  exit 1
+fi
+
 "$GH_BIN" pr view "$pr_number" --repo "$repo_slug" --json body --jq .body >"$postwrite_tmp"
 if [[ "$(sha256_file "$postwrite_tmp")" != "$(sha256_file "$out")" ]]; then
   guard_trace PR_BODY_E_POSTWRITE_MISMATCH
   echo "error: [PR_BODY_E_POSTWRITE_MISMATCH] remote PR body does not match the merged body after write; treat as concurrency/integrity incident" >&2
-  exit 1
-fi
-
-mark_cmd=(python3 "$GRANT_LIB" mark-applied "${grant_append_args[@]}")
-if ! "${mark_cmd[@]}"; then
-  echo "error: grant mark-applied failed after PR body update — treat as security incident" >&2
   exit 1
 fi
 

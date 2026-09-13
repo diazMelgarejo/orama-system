@@ -362,3 +362,41 @@ def test_append_operations_short_circuit_on_invalid_identity(grant_lib, tmp_path
 
     ok_rec, err_rec = grant_lib.reconcile_pending_consume("bad_repo", "1", nonexistent, None, "body", "title")
     assert not ok_rec and "repo" in err_rec
+
+
+def test_follow_up_already_present_accepts_genuine_survival(grant_lib):
+    """Recovery must succeed when the original body genuinely survived the
+    write that added the follow-up block -- the normal, correct case."""
+    body = "## Summary\n\noriginal content here\n\n## Follow-up: test\n\nnew note\n"
+    assert grant_lib.follow_up_already_present(body, "new note", "Follow-up: test")
+
+
+def test_follow_up_already_present_rejects_destroyed_original_body(grant_lib):
+    """Real gap demonstrated by an independent review before this fix: the
+    prior implementation checked only that the follow-up block appeared
+    somewhere in the remote body, so a destructive write that replaced the
+    entire body with just the follow-up block would satisfy it -- letting a
+    crash-recovery retry report success over genuinely lost content. Now
+    requires the repo's own established '## Summary' heading to precede the
+    follow-up block, reusing the exact convention this repo already enforces
+    as a CI guard on PR bodies elsewhere (verify-pr-body-not-clobbered.sh)."""
+    destroyed_body = "## Follow-up: test\n\nnew note\n"
+    assert not grant_lib.follow_up_already_present(
+        destroyed_body, "new note", "Follow-up: test"
+    )
+
+
+def test_follow_up_already_present_rejects_missing_follow_up(grant_lib):
+    """Unchanged baseline: no follow-up block present at all must still fail,
+    regardless of whether a Summary heading exists."""
+    body = "## Summary\n\noriginal content here\n"
+    assert not grant_lib.follow_up_already_present(body, "new note", "Follow-up: test")
+
+
+def test_follow_up_already_present_requires_summary_before_the_follow_up(grant_lib):
+    """A Summary heading appearing only AFTER the follow-up block (e.g. a
+    reordered or reconstructed body) must not count -- the requirement is
+    that prior content precedes the follow-up, not merely that a Summary
+    heading exists anywhere in the document."""
+    body = "## Follow-up: test\n\nnew note\n\n## Summary\n\nappended after the fact\n"
+    assert not grant_lib.follow_up_already_present(body, "new note", "Follow-up: test")

@@ -137,6 +137,41 @@ report:
 A well-written, internally consistent retrospective is still a claim about
 the world, not a substitute for checking the world.
 
+## Rule 7 — a client-side re-read is not a compare-and-swap; state the actual bound honestly
+
+Verified directly, not assumed: GitHub's PR-body update endpoint does not
+honor conditional-write headers. A public bug report
+([community discussion #50084](https://github.com/orgs/community/discussions/50084))
+shows sending `If-Match` on a `PATCH` to a PR returns `412 Precondition
+Failed` — but the body updates anyway. There is no usable server-side
+compare-and-swap for this endpoint today.
+
+A pre-write re-read check (Rules 1 and 3's checkpoints) detects a
+concurrent edit that happened *before* the check runs. It cannot detect
+one that happens *between* the final check and the write itself — that
+window is real and currently unclosable by this transport. State this
+plainly in documentation and error output rather than implying the
+re-read makes the write atomic; a false claim of atomicity is worse than
+an honestly bounded guarantee.
+
+Two related, concrete gaps found and fixed in the same audit that
+established this bound:
+
+- **Grant release timing.** A write that reaches the remote but then
+  fails a *later* check (e.g. post-write verification) must not have its
+  reservation released — the remote may have changed regardless of
+  whether verification succeeded. Mark the write as applied immediately
+  once the API accepts it, before any later check that could exit the
+  script; a release guard checked only afterward protects nothing for
+  the failure paths between the write and that mark.
+- **Recovery must verify survival, not just presence.** A crash-recovery
+  check that only confirms an appended block exists somewhere in the
+  remote body can be satisfied by a destructive write that replaced the
+  *entire* body with just that block. Require genuine prior content to
+  precede the appended block — reusing an existing content-shape
+  convention (e.g. a required heading) is simpler and more consistent
+  than inventing new state to track.
+
 ## Durable future-agent checklist
 
 Before changing an integrity guard on external text metadata:

@@ -680,9 +680,26 @@ def release_grant_for_append(
 
 
 def follow_up_already_present(remote_body: str, append_block: str, title: str) -> bool:
-    """Crash reconciliation: remote body already contains this follow-up block."""
+    """Crash reconciliation: remote body already contains this follow-up
+    block AND the original body prefix survived the write that added it.
+
+    A destructive write that replaced the whole body with just the
+    follow-up block would satisfy a substring-only check and let recovery
+    report success over lost content -- confirmed as a real, demonstrated
+    gap before this fix, not a hypothetical. Requiring the prefix before
+    the follow-up to contain this repo's own established '## Summary'
+    heading (already enforced as a CI guard on PR bodies elsewhere in
+    this repo -- see scripts/git/verify-pr-body-not-clobbered.sh) reuses
+    an existing convention rather than inventing a new one, and directly
+    catches the exact scenario the review demonstrated: a body consisting
+    of only the follow-up block, with no prior content at all.
+    """
     needle = f"## {title}\n\n{append_block}"
-    return needle in remote_body
+    idx = remote_body.find(needle)
+    if idx == -1:
+        return False
+    prefix = remote_body[:idx]
+    return bool(re.search(r"^##[ \t]+Summary", prefix, re.MULTILINE))
 
 
 def reconcile_pending_consume(

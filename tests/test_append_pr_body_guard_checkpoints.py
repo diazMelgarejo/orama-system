@@ -266,3 +266,46 @@ def test_manifest_and_implementation_agree_in_both_directions():
         "Adding a guard requires adding a runtime scenario above. Removing "
         "one requires a deliberate manifest change with a rationale."
     )
+
+
+def test_postwrite_mismatch_does_not_release_the_grant_reservation(
+    ledgered_gh, tmp_path: Path
+):
+    """A real gap, demonstrated by an independent review before this fix:
+    mark-applied previously ran AFTER post-write verification, so a write
+    that succeeded but then failed that verification never recorded
+    remote_applied -- leaving the exit trap's own release path free to
+    delete the reservation despite a write having genuinely landed,
+    permitting replay. Proven here by reading the actual nonce-state file
+    a real run produces, not by inspecting the script's control flow."""
+    import json as jsonlib
+
+    gh_bin, body_file, ledger = ledgered_gh
+    append = tmp_path / "note.md"
+    append.write_text("operator note", encoding="utf-8")
+    env = _mint_grant(gh_bin, append, tmp_path)
+    env["FAKE_GH_EDIT_MODE"] = "corrupt"
+
+    proc = _run(
+        [
+            "bash", str(APPEND_SH), "owner/repo", "99",
+            "--file", str(append), "--title", "Follow-up: test",
+        ],
+        env=env,
+    )
+
+    assert proc.returncode != 0
+
+    state_path = tmp_path / ".cursor" / "pr-body-grant-nonces.json"
+    assert state_path.is_file(), "expected a nonce-state file after a write attempt"
+    state = jsonlib.loads(state_path.read_text(encoding="utf-8"))
+    reservations = state.get("reservations", {})
+    assert reservations, (
+        "reservation was deleted after a write that genuinely reached the "
+        "remote -- this permits replay of the same grant"
+    )
+    (entry,) = reservations.values()
+    assert entry.get("remote_applied") is True, (
+        "remote_applied was not recorded before the post-write mismatch "
+        "failure could exit the script"
+    )
