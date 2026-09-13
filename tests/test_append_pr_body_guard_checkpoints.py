@@ -86,7 +86,9 @@ REQUIRED_CHECKPOINTS: dict[str, GuardScenario] = {
 }
 
 
-def _run(cmd: list[str], env: dict[str, str] | None = None):
+def _run(
+    cmd: list[str], env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[str]:
     merged = os.environ.copy()
     if env:
         merged.update(env)
@@ -96,7 +98,7 @@ def _run(cmd: list[str], env: dict[str, str] | None = None):
 
 
 @pytest.fixture()
-def ledgered_gh(tmp_path: Path):
+def ledgered_gh(tmp_path: Path) -> tuple[Path, Path, Path]:
     """Fake gh that records an event ledger and supports scripted mutation.
 
     Records one line per transport event so tests can assert what actually
@@ -128,7 +130,8 @@ if [[ "$1" == pr && "$2" == view ]]; then
 concurrent operator edit
 {CURSOR_END}' > '{body_file}'
   fi
-  printf '%s' "$(cat '{body_file}')"
+  cat '{body_file}'
+  printf '\\n'
   exit 0
 fi
 if [[ "$1" == pr && "$2" == edit ]]; then
@@ -175,8 +178,8 @@ def _mint_grant(gh_bin: Path, append: Path, tmp_path: Path) -> dict[str, str]:
     "code", sorted(REQUIRED_CHECKPOINTS), ids=sorted(REQUIRED_CHECKPOINTS)
 )
 def test_required_integrity_checkpoint_is_reachable_at_runtime(
-    code: str, ledgered_gh, tmp_path: Path
-):
+    code: str, ledgered_gh: tuple[Path, Path, Path], tmp_path: Path
+) -> None:
     """Each manifest checkpoint is proven by a real run, not a source scan.
 
     Asserts three independent facts per scenario: the guard's trace records
@@ -185,7 +188,7 @@ def test_required_integrity_checkpoint_is_reachable_at_runtime(
     which is the property that actually protects the remote body.
     """
     scenario = REQUIRED_CHECKPOINTS[code]
-    gh_bin, body_file, ledger = ledgered_gh
+    gh_bin, _body_file, ledger = ledgered_gh
     append = tmp_path / "note.md"
     append.write_text("operator note", encoding="utf-8")
     env = _mint_grant(gh_bin, append, tmp_path)
@@ -221,7 +224,9 @@ def test_required_integrity_checkpoint_is_reachable_at_runtime(
     )
 
 
-def test_stale_detection_leaves_the_remote_body_untouched(ledgered_gh, tmp_path: Path):
+def test_stale_detection_leaves_the_remote_body_untouched(
+    ledgered_gh: tuple[Path, Path, Path], tmp_path: Path
+) -> None:
     """The point of the pre-write guards is not the error message -- it is
     that the operator's concurrent edit survives. Asserted directly on the
     fake remote's final content, independently of any guard code."""
@@ -246,7 +251,7 @@ def test_stale_detection_leaves_the_remote_body_untouched(ledgered_gh, tmp_path:
     assert "edit_attempt" not in ledger.read_text(encoding="utf-8")
 
 
-def test_manifest_and_implementation_agree_in_both_directions():
+def test_manifest_and_implementation_agree_in_both_directions() -> None:
     """Structural supplement to the runtime proofs above -- never a substitute.
 
     Fails on ADDITION (a new guard code ships with no required scenario) and
@@ -269,8 +274,8 @@ def test_manifest_and_implementation_agree_in_both_directions():
 
 
 def test_postwrite_mismatch_does_not_release_the_grant_reservation(
-    ledgered_gh, tmp_path: Path
-):
+    ledgered_gh: tuple[Path, Path, Path], tmp_path: Path
+) -> None:
     """A real gap, demonstrated by an independent review before this fix:
     mark-applied previously ran AFTER post-write verification, so a write
     that succeeded but then failed that verification never recorded
@@ -308,4 +313,34 @@ def test_postwrite_mismatch_does_not_release_the_grant_reservation(
     assert entry.get("remote_applied") is True, (
         "remote_applied was not recorded before the post-write mismatch "
         "failure could exit the script"
+    )
+
+
+def test_merge_preserves_meaningful_trailing_newlines(
+    ledgered_gh: tuple[Path, Path, Path], tmp_path: Path
+) -> None:
+    """Only the fake `gh --jq` presentation LF may be removed.
+
+    The stored body ends in two meaningful LFs. The old command-substitution
+    path removed both, so this exact-byte assertion is a regression test for
+    the data-loss report, independent of the stale-write checkpoint tests.
+    """
+    gh_bin, body_file, _ledger = ledgered_gh
+    original = b"## Summary\n\nhistorical body\n\n"
+    body_file.write_bytes(original)
+    append = tmp_path / "note.md"
+    append.write_bytes(b"operator note")
+    env = _mint_grant(gh_bin, append, tmp_path)
+
+    proc = _run(
+        [
+            "bash", str(APPEND_SH), "owner/repo", "99",
+            "--file", str(append), "--title", "Follow-up: test",
+        ],
+        env=env,
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert body_file.read_bytes() == (
+        original + b"\n\n## Follow-up: test\n\noperator note"
     )

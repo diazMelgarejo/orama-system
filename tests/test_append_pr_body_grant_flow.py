@@ -45,7 +45,8 @@ if [[ "$1" == pr && "$2" == view ]]; then
   if [[ "${{FAKE_GH_CONCURRENT_AFTER_SECOND_VIEW:-0}}" == 1 && "$count" == 2 ]]; then
     printf '%s\n' 'summary' 'concurrent operator edit' '<!-- CURSOR_AGENT_PR_BODY_END -->' > '{body_file}'
   fi
-  printf '%s' "$(cat '{body_file}')"
+  cat '{body_file}'
+  printf '\\n'
   exit 0
 fi
 if [[ "$1" == pr && "$2" == edit ]]; then
@@ -95,7 +96,9 @@ def _mint_grant(gh_bin: Path, append: Path, tmp_path: Path) -> dict[str, str]:
     return env
 
 
-def test_append_pr_body_consumes_grant(fake_gh: tuple[Path, Path], tmp_path: Path):
+def test_append_pr_body_consumes_grant(
+    fake_gh: tuple[Path, Path], tmp_path: Path
+) -> None:
     gh_bin, body_file = fake_gh
     append = tmp_path / "note.md"
     append.write_text("operator note", encoding="utf-8")
@@ -143,7 +146,7 @@ def test_append_pr_body_consumes_grant(fake_gh: tuple[Path, Path], tmp_path: Pat
 
 def test_append_pr_body_rejects_change_detected_on_reread(
     fake_gh: tuple[Path, Path], tmp_path: Path
-):
+) -> None:
     """The fake gh's concurrent-edit hook applies before the view response is
     emitted, so the script's own second view call (the first re-comparison
     against the initial read) sees the already-edited body immediately --
