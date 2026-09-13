@@ -206,6 +206,17 @@ LM Studio host, run
     returned tree SHA to equal local `HEAD^{tree}` before updating a ref. A
     whole-file removal needs an explicit, justified exception; line removals do not.
 
+17. Adding or changing a post-write integrity check on mutable external text
+    metadata (a PR/issue body, a comment, any GitHub-API JSON text field) —
+    not a tracked file?
+    **Mandatory:** [`references/text-metadata-integrity-and-review-completeness-reference-card.md`](references/text-metadata-integrity-and-review-completeness-reference-card.md)
+    — do not transplant exact-byte hashing from tracked-file doctrine onto a
+    text field whose transport (JSON, CLI `--jq`, shell command substitution)
+    does not preserve incidental bytes like a trailing newline; normalize
+    before hashing. Run the whole neighboring test file, not just a new
+    regression, before calling a fix GREEN. Never resolve a review thread
+    while the exact current head is CI-red on tests the fix touched.
+
 ## Non-Negotiables
 
 - Never paste the real forbidden token into PR titles, commit messages, issue
@@ -464,6 +475,11 @@ Reference: `bin/orama-system/references/skill-architecture-guide.md` § v2 Manda
   (`lesson_005f2a16600d`), merge-tool duplicate-insertion artifacts (`lesson_05c055046864`),
   and verifying a "clean" merge label the same way § Decision 13 above verifies a rebase's
   "already upstream" drop.
+- [`references/text-metadata-integrity-and-review-completeness-reference-card.md`](references/text-metadata-integrity-and-review-completeness-reference-card.md)
+  (decision item 17) — the mutable-text-metadata counterpart to this skill's own tracked-file
+  exact-byte doctrine: PR/issue body and comment writes need representation-aware integrity,
+  not blob-style hashing, plus the TDD-completeness and review-resolution-gating rules a
+  2026-09-13 incident (`diazMelgarejo/orama-system` PR #357) established the hard way.
 
 ## Post-Review Micro-Remediation
 

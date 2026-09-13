@@ -294,6 +294,15 @@ warn about, since there's nothing staged to reject.
    `HEAD^{tree}` before updating a branch ref. Full protocol:
    [`file-deletion-preflight-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/file-deletion-preflight-reference-card.md).
 
+5. **Writing or changing a post-write integrity check on a PR/issue body or
+   comment, not a tracked file:** exact-byte hashing across two
+   serialization paths (a locally-written temp file vs. a re-fetched JSON
+   text field) produces false positives, since helper-added bytes like a
+   trailing newline are not preserved by the round-trip. Normalize before
+   hashing, and run the whole neighboring test file before calling the fix
+   GREEN. Full protocol:
+   [`text-metadata-integrity-and-review-completeness-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/text-metadata-integrity-and-review-completeness-reference-card.md).
+
 ---
 
 ## Stash-First Discipline

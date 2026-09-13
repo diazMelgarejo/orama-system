@@ -67,6 +67,13 @@ proof to an older or different tip.
 - Use the file's native validator after fetching the remote object: Python
   compilation for Python, JSON/YAML/TOML parsing for data, and project-specific
   tests for generated artifacts.
+- For mutable external text metadata specifically (a PR/issue body or
+  comment, not a tracked file): exact-byte hashing across two different
+  serialization paths produces false positives, since helper-added bytes
+  like a trailing newline are not preserved by a JSON/CLI round-trip.
+  Normalize before hashing — see
+  [`../../skills/git-history-surgery/references/text-metadata-integrity-and-review-completeness-reference-card.md`](../../skills/git-history-surgery/references/text-metadata-integrity-and-review-completeness-reference-card.md)
+  Rule 1 for the verified mechanism and fix.
 
 ## Evidence reporting authority
 
