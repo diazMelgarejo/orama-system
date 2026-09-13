@@ -46,7 +46,15 @@ import hashlib
 import sys
 from pathlib import Path
 
-print(hashlib.sha256(Path(sys.argv[1]).read_bytes()).hexdigest())
+# Normalize trailing newlines before hashing: a locally-written file
+# (via printf '%s\n') and the same content re-read back through a JSON
+# API round-trip (which does not preserve an added trailing newline)
+# must compare equal when the underlying text content is identical.
+# Confirmed directly before this fix: without normalizing, a genuinely
+# correct write was rejected as a false-positive integrity failure,
+# solely due to a one-byte trailing-newline mismatch.
+content = Path(sys.argv[1]).read_bytes().rstrip(b"\n")
+print(hashlib.sha256(content).hexdigest())
 PY
 }
 
