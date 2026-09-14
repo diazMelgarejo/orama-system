@@ -45,6 +45,9 @@ if [[ "$1" == pr && "$2" == view ]]; then
   if [[ "${{FAKE_GH_CONCURRENT_AFTER_SECOND_VIEW:-0}}" == 1 && "$count" == 2 ]]; then
     printf '%s\n' 'summary' 'concurrent operator edit' '<!-- CURSOR_AGENT_PR_BODY_END -->' > '{body_file}'
   fi
+  if [[ -n "${{FAKE_GH_MUTATE_APPEND_FILE_ON_SECOND_VIEW:-}}" && "$count" == 2 ]]; then
+    printf '%s' 'changed after snapshot' > "$FAKE_GH_MUTATE_APPEND_FILE_ON_SECOND_VIEW"
+  fi
   cat '{body_file}'
   printf '\\n'
   exit 0
@@ -180,3 +183,24 @@ def test_append_pr_body_rejects_change_detected_on_reread(
     remote_body = body_file.read_text(encoding="utf-8")
     assert "concurrent operator edit" in remote_body
     assert "operator note" not in remote_body
+
+
+def test_append_pr_body_uses_one_immutable_append_snapshot(
+    fake_gh: tuple[Path, Path], tmp_path: Path
+) -> None:
+    """Every grant lifecycle operation must use the payload snapshot made at entry."""
+    gh_bin, body_file = fake_gh
+    append = tmp_path / "note.md"
+    append.write_text("authorized snapshot", encoding="utf-8")
+    env = _mint_grant(gh_bin, append, tmp_path)
+    env["FAKE_GH_MUTATE_APPEND_FILE_ON_SECOND_VIEW"] = str(append)
+
+    proc = _run(
+        ["bash", str(APPEND_SH), "owner/repo", "99", "--file", str(append)],
+        env=env,
+    )
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    remote_body = body_file.read_text(encoding="utf-8")
+    assert "authorized snapshot" in remote_body
+    assert "changed after snapshot" not in remote_body

@@ -41,6 +41,9 @@ the exact base-body digest and exact merged-body digest in its durable nonce
 reservation before the GitHub write. Crash reconciliation requires an existing
 reservation bound to the grant's append-payload digest and requires the
 freshly fetched remote body to equal the persisted merged-body digest exactly.
+That comparison and the ``remote_applied`` transition occur in one
+nonce-ledger transaction, and CLI reconciliation hashes the fetched body as
+raw bytes so CRLF and other meaningful newline bytes are not normalized away.
 
 It does not use a Summary heading, a follow-up substring, or any other prose
 shape as evidence. A body with a forged Summary and copied follow-up is a

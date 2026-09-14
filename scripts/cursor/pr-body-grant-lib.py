@@ -132,14 +132,15 @@ def content_digest_for_append(
     return f"sha256:{hashlib.sha256(data).hexdigest()}"
 
 
-def body_digest(body: str) -> str:
+def body_digest(body: str | bytes) -> str:
     """Return the exact UTF-8 identity of a PR body.
 
     This deliberately performs no newline or Unicode normalization. A
     reconciliation record must prove the exact body the approved write was
     meant to create, not merely that it contains familiar-looking prose.
     """
-    return f"sha256:{hashlib.sha256(body.encode('utf-8')).hexdigest()}"
+    body_bytes = body.encode("utf-8") if isinstance(body, str) else body
+    return f"sha256:{hashlib.sha256(body_bytes).hexdigest()}"
 
 
 def _validate_body_digest(value: str, field: str) -> None:
@@ -457,6 +458,37 @@ def mark_remote_applied_atomic(nonce: str) -> tuple[bool, str]:
         return True, ""
 
 
+def mark_matching_remote_applied_atomic(
+    nonce: str,
+    repo: str,
+    pr_number: str,
+    content_digest: str,
+    remote_body_digest: str,
+) -> tuple[bool, str]:
+    """Atomically validate a reservation's exact body identity and mark it.
+
+    Reconciliation must not validate a reservation under one lock then mark
+    it under another: a release or incompatible reuse could otherwise occur
+    between those operations. This transaction deliberately keeps the
+    identity comparison and ``remote_applied`` transition together.
+    """
+    with _locked_nonce_state() as (handle, state):
+        _prune_nonce_state(state)
+        reservation = state["reservations"].get(nonce)
+        if not reservation or not _reservation_matches(
+            reservation, repo, pr_number, content_digest
+        ):
+            return False, "grant has no matching persisted body identity for reconciliation"
+        expected_merged_digest = reservation.get("merged_body_digest")
+        if not isinstance(expected_merged_digest, str) or not expected_merged_digest:
+            return False, "grant reservation lacks persisted merged-body digest"
+        if remote_body_digest != expected_merged_digest:
+            return False, "remote body digest does not match the persisted merged-body digest"
+        reservation["remote_applied"] = True
+        _write_nonce_state(handle, state)
+        return True, ""
+
+
 def release_nonce_reservation_atomic(nonce: str) -> None:
     """Drop an in-flight reservation when remote mutation did not succeed."""
     with _locked_nonce_state() as (handle, state):
@@ -731,7 +763,7 @@ def reconcile_pending_consume(
     pr_number: str,
     file_path: str | None,
     message: str | None,
-    remote_body: str,
+    remote_body: str | bytes,
     _title: str,
     cwd: Path | None = None,
 ) -> tuple[bool, str]:
@@ -764,19 +796,9 @@ def reconcile_pending_consume(
     if not ok:
         return False, err
     nonce = fields.get("grant-nonce", "")
-    with _locked_nonce_state() as (_handle, state):
-        _prune_nonce_state(state)
-        reservation = state.get("reservations", {}).get(nonce)
-    if not reservation or not _reservation_matches(
-        reservation, repo, str(pr_number), digest
-    ):
-        return False, "grant has no matching persisted body identity for reconciliation"
-    expected_merged_digest = reservation.get("merged_body_digest")
-    if not isinstance(expected_merged_digest, str) or not expected_merged_digest:
-        return False, "grant reservation lacks persisted merged-body digest"
-    if body_digest(remote_body) != expected_merged_digest:
-        return False, "remote body digest does not match the persisted merged-body digest"
-    mark_ok, mark_err = mark_remote_applied_atomic(nonce)
+    mark_ok, mark_err = mark_matching_remote_applied_atomic(
+        nonce, repo, str(pr_number), digest, body_digest(remote_body)
+    )
     if not mark_ok:
         return False, mark_err
     return verify_grant_for_append(
@@ -954,7 +976,7 @@ def _cmd_mark_applied(args: argparse.Namespace) -> int:
 
 def _cmd_reconcile(args: argparse.Namespace) -> int:
     try:
-        remote_body = Path(args.remote_body_file).read_text(encoding="utf-8")
+        remote_body = Path(args.remote_body_file).read_bytes()
     except OSError as exc:
         print(f"error: cannot read remote body file: {exc}", file=sys.stderr)
         return 1

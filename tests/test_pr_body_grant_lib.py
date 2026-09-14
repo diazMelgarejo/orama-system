@@ -1,12 +1,14 @@
 """Tests for scripts/cursor/pr-body-grant-lib.py"""
 from __future__ import annotations
 
+from argparse import Namespace
 import hashlib
 import hmac
 import importlib.util
 import json
 import os
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
@@ -398,7 +400,9 @@ def test_append_operations_short_circuit_on_invalid_identity(grant_lib, tmp_path
     assert not ok_rec and "repo" in err_rec
 
 
-def test_reconcile_rejects_replacement_body_with_forged_summary(grant_lib, tmp_path):
+def test_reconcile_rejects_replacement_body_with_forged_summary(
+    grant_lib: ModuleType, tmp_path: Path
+) -> None:
     """Recovery needs a persisted body identity, not a Summary-shaped body.
 
     This body deliberately has both a Summary heading and the expected
@@ -450,8 +454,8 @@ def test_reconcile_rejects_replacement_body_with_forged_summary(grant_lib, tmp_p
 
 
 def test_reconcile_consumes_only_the_exact_persisted_merged_body(
-    grant_lib, tmp_path
-):
+    grant_lib: ModuleType, tmp_path: Path
+) -> None:
     append = tmp_path / "follow.md"
     append.write_text("new note", encoding="utf-8")
     grant_lib.mint_grant("owner/repo", "18", str(append), None)
@@ -477,3 +481,64 @@ def test_reconcile_consumes_only_the_exact_persisted_merged_body(
     )
 
     assert ok, err
+
+
+def test_reconcile_cli_preserves_crlf_body_bytes(
+    grant_lib: ModuleType, tmp_path: Path
+) -> None:
+    append = tmp_path / "follow.md"
+    append.write_text("exact payload", encoding="utf-8")
+    remote_body = b"## Summary\r\n\r\noperator content\r\n"
+    remote_body_file = tmp_path / "remote.md"
+    remote_body_file.write_bytes(remote_body)
+    grant_lib.mint_grant("owner/repo", "19", str(append), None)
+    ok_reserve, err_reserve = grant_lib.reserve_grant_for_append(
+        "owner/repo",
+        "19",
+        str(append),
+        None,
+        base_body_digest=grant_lib.body_digest("obsolete base"),
+        merged_body_digest=grant_lib.body_digest(remote_body),
+    )
+    assert ok_reserve, err_reserve
+
+    result = grant_lib._cmd_reconcile(
+        Namespace(
+            repo="owner/repo",
+            pr="19",
+            file=str(append),
+            message=None,
+            remote_body_file=str(remote_body_file),
+            title=None,
+        )
+    )
+
+    assert result == 0
+
+
+def test_mark_matching_remote_applied_requires_exact_identity(
+    grant_lib: ModuleType, tmp_path: Path
+) -> None:
+    append = tmp_path / "follow.md"
+    append.write_text("exact payload", encoding="utf-8")
+    grant_lib.mint_grant("owner/repo", "20", str(append), None)
+    ok_reserve, err_reserve = grant_lib.reserve_grant_for_append(
+        "owner/repo",
+        "20",
+        str(append),
+        None,
+        base_body_digest=grant_lib.body_digest("base"),
+        merged_body_digest=grant_lib.body_digest("merged"),
+    )
+    assert ok_reserve, err_reserve
+    nonce = grant_lib.read_ack_fields()["grant-nonce"]
+    digest = grant_lib.content_digest_for_append(str(append), None)
+
+    ok, err = grant_lib.mark_matching_remote_applied_atomic(
+        nonce, "owner/repo", "20", digest, grant_lib.body_digest("replacement")
+    )
+
+    assert not ok
+    assert "remote body digest" in err
+    state = json.loads(grant_lib.NONCE_STATE_PATH.read_text(encoding="utf-8"))
+    assert state["reservations"][nonce]["remote_applied"] is False

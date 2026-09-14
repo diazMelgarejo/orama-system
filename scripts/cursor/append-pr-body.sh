@@ -182,11 +182,29 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 GRANT_LIB="$SCRIPT_DIR/pr-body-grant-lib.py"
 
-grant_append_args=(--repo "$repo_slug" --pr "$pr_number")
+remote_tmp="$(mktemp)"
+reread_tmp="$(mktemp)"
+prewrite_tmp="$(mktemp)"
+postwrite_tmp="$(mktemp)"
+append_tmp="$(mktemp)"
+out="$(mktemp)"
+grant_finalized=0
+grant_append_args=(--repo "$repo_slug" --pr "$pr_number" --file "$append_tmp")
+release_on_fail() {
+  if [[ "$grant_finalized" -eq 1 ]]; then
+    return 0
+  fi
+  python3 "$GRANT_LIB" release "${grant_append_args[@]}" >/dev/null 2>&1 || true
+}
+trap 'release_on_fail; rm -f "$out" "$append_tmp" "$remote_tmp" "$reread_tmp" "$prewrite_tmp" "$postwrite_tmp"' EXIT
+
+# Freeze the payload before any grant lifecycle operation. The grant binds
+# bytes, not a mutable pathname; verify, reconcile, reserve, mark, consume,
+# and failure release must therefore all receive this same snapshot.
 if [[ -n "$append_file" ]]; then
-  grant_append_args+=(--file "$append_file")
+  cp -- "$append_file" "$append_tmp"
 else
-  grant_append_args+=(--message "$append_message")
+  printf '%s' "$append_message" >"$append_tmp"
 fi
 
 verify_cmd=(python3 "$GRANT_LIB" verify "${grant_append_args[@]}")
@@ -200,21 +218,6 @@ if [[ -z "$title" ]]; then
 else
   title="$(normalize_follow_up_title "$title")"
 fi
-
-remote_tmp="$(mktemp)"
-reread_tmp="$(mktemp)"
-prewrite_tmp="$(mktemp)"
-postwrite_tmp="$(mktemp)"
-append_tmp="$(mktemp)"
-out="$(mktemp)"
-grant_finalized=0
-release_on_fail() {
-  if [[ "$grant_finalized" -eq 1 ]]; then
-    return 0
-  fi
-  python3 "$GRANT_LIB" release "${grant_append_args[@]}" >/dev/null 2>&1 || true
-}
-trap 'release_on_fail; rm -f "$out" "$append_tmp" "$remote_tmp" "$reread_tmp" "$prewrite_tmp" "$postwrite_tmp"' EXIT
 
 "$GH_BIN" pr view "$pr_number" --repo "$repo_slug" --json body --jq .body >"$remote_tmp"
 current_body_digest="$(sha256_gh_view_body "$remote_tmp")"
@@ -233,12 +236,6 @@ fi
 if [[ "$reconcile_rc" -ne 2 ]]; then
   echo "$reconcile_cmd_output" >&2
   exit 1
-fi
-
-if [[ -n "$append_file" ]]; then
-  cp -- "$append_file" "$append_tmp"
-else
-  printf '%s' "$append_message" >"$append_tmp"
 fi
 
 backup_dir="$(resolve_git_backup_dir)"
