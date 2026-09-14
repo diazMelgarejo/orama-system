@@ -133,17 +133,18 @@ def content_digest_for_append(
 
 
 def body_digest(body: str | bytes) -> str:
-    """Return the exact UTF-8 identity of a PR body.
+    """Return a SHA-256 digest for a PR body's exact bytes.
 
-    This deliberately performs no newline or Unicode normalization. A
-    reconciliation record must prove the exact body the approved write was
-    meant to create, not merely that it contains familiar-looking prose.
+    Strings are encoded as UTF-8; bytes are hashed as provided. No newline or
+    Unicode normalization is applied because reconciliation must identify the
+    exact body the approved write was meant to create.
     """
     body_bytes = body.encode("utf-8") if isinstance(body, str) else body
     return f"sha256:{hashlib.sha256(body_bytes).hexdigest()}"
 
 
 def _validate_body_digest(value: str, field: str) -> None:
+    """Raise ``GrantError`` unless value is a lowercase ``sha256:`` digest."""
     if not DIGEST_RE.fullmatch(value):
         raise GrantError(f"{field} must be a sha256 digest")
 
