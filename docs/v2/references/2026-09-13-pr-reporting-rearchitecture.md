@@ -129,3 +129,31 @@ licenses mutation of the PR body.
   Summary heading or a copied follow-up.
 - Tests exercise the state transitions and exact remote identities, rather
   than scanning source text for error-code strings.
+
+## 2026-09-14 production-contract completion
+
+The outline above is retained as decision history. The
+[production specification](2026-09-14-pr-event-reporter-v2-production-plan.md),
+[contracts](2026-09-14-pr-event-reporter-v2-contracts.md) and
+[implementation plan](2026-09-14-pr-event-reporter-v2-implementation.md) now govern
+implementation and explicitly refine these earlier statements:
+
+- Storage is a protected per-repository evidence branch with a separately trusted
+  preservation verifier. Non-force advancement alone cannot prevent record edits.
+- The stable caller operation key binds one frozen event in a durable broker
+  ledger. A fresh event UUID or a changed digest is not a retry identity.
+- “Create exactly one pointer” is replaced by at-least-once pointer attempts and
+  consumer deduplication. GitHub comment creation has no event-idempotency key.
+- Routine events do not depend on body snapshots. The original/merged digest
+  pair and complete snapshots apply specifically to supervised legacy recovery.
+- Uncertain forbids identity release and blind replay. Reconciliation may retry
+  the same immutable event through the preservation protocol; legacy body
+  replacement has no equivalent safe automatic retry.
+- A base-equal read does not prove an earlier request cannot still complete.
+  Missing snapshots require operator action, never a fabricated Summary.
+
+This completes the v2 design, not its runtime delivery. The v1 byte claim also
+requires an exact transport boundary: raw-file hashing alone does not distinguish
+an API helper's presentation LF from an original trailing LF. Implementations
+must remove only a documented transport byte and retain original LF/CRLF bytes;
+the new event path avoids this body-transport dependency entirely.
