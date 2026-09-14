@@ -411,7 +411,12 @@ def reserve_nonce_atomic(
     base_body_digest: str,
     merged_body_digest: str,
 ) -> tuple[bool, str]:
-    """Reserve nonce before remote mutation. Idempotent for the same binding."""
+    """Persist a nonce reservation for an exact append and body transition.
+
+    Repeating the same repository, PR, append-content, base-body, and
+    merged-body binding is idempotent. A consumed or differently bound nonce
+    returns ``(False, reason)``.
+    """
     with _locked_nonce_state() as (handle, state):
         _prune_nonce_state(state)
         if nonce in state["nonces"]:
@@ -620,6 +625,13 @@ def reserve_grant_for_append(
     merged_body_digest: str,
     cwd: Path | None = None,
 ) -> tuple[bool, str]:
+    """Validate a grant and reserve its exact PR-body transition.
+
+    ``base_body_digest`` identifies the body read before merging, while
+    ``merged_body_digest`` identifies the complete body intended for the
+    remote write. Success persists the reservation and returns ``(True, "")``;
+    validation and replay conflicts return ``(False, reason)``.
+    """
     try:
         _validate_repo_slug(repo)
         _validate_pr_number(pr_number)
@@ -723,7 +735,13 @@ def reconcile_pending_consume(
     _title: str,
     cwd: Path | None = None,
 ) -> tuple[bool, str]:
-    """Consume grant when remote already has the follow-up (post-crash recovery)."""
+    """Reconcile a post-crash write against its exact reserved body digest.
+
+    The remote body and append payload must match the persisted reservation;
+    ``_title`` remains for CLI compatibility and is not inspected. A match
+    marks the remote mutation applied, consumes the nonce, and removes the
+    grant acknowledgment.
+    """
     try:
         _validate_repo_slug(repo)
         _validate_pr_number(pr_number)
