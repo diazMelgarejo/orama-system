@@ -204,3 +204,22 @@ def test_append_pr_body_uses_one_immutable_append_snapshot(
     remote_body = body_file.read_text(encoding="utf-8")
     assert "authorized snapshot" in remote_body
     assert "changed after snapshot" not in remote_body
+
+
+def test_append_pr_body_rejects_oversized_file_before_snapshot(
+    fake_gh: tuple[Path, Path], tmp_path: Path
+) -> None:
+    """An oversized source must fail before any unbounded temporary copy."""
+    gh_bin, body_file = fake_gh
+    append = tmp_path / "too-large.md"
+    append.write_bytes(b"x" * ((1024 * 1024) + 1))
+    original_body = body_file.read_bytes()
+
+    proc = _run(
+        ["bash", str(APPEND_SH), "owner/repo", "99", "--file", str(append)],
+        env={"GH_BIN": str(gh_bin), "HOME": str(tmp_path)},
+    )
+
+    assert proc.returncode != 0
+    assert "exceeds size limit" in proc.stderr
+    assert body_file.read_bytes() == original_body

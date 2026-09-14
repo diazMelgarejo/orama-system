@@ -200,9 +200,53 @@ trap 'release_on_fail; rm -f "$out" "$append_tmp" "$remote_tmp" "$reread_tmp" "$
 
 # Freeze the payload before any grant lifecycle operation. The grant binds
 # bytes, not a mutable pathname; verify, reconcile, reserve, mark, consume,
-# and failure release must therefore all receive this same snapshot.
+# and failure release must therefore all receive this same snapshot.  Validate
+# and bound a file source *before* copying it: an untrusted path must not be
+# able to fill the temporary filesystem before the grant library rejects it.
 if [[ -n "$append_file" ]]; then
-  cp -- "$append_file" "$append_tmp"
+  python3 - "$append_file" "$append_tmp" <<'PY'
+import os
+import stat
+import sys
+from pathlib import Path
+
+MAX_APPEND_FILE_BYTES = 1024 * 1024
+source = Path(sys.argv[1])
+destination = Path(sys.argv[2])
+flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+try:
+    fd = os.open(source, flags)
+except OSError as exc:
+    raise SystemExit(f"error: cannot open append file safely: {source}: {exc}") from exc
+
+try:
+    source_stat = os.fstat(fd)
+    if not stat.S_ISREG(source_stat.st_mode):
+        raise SystemExit(f"error: append file is not a regular file: {source}")
+    if source_stat.st_size > MAX_APPEND_FILE_BYTES:
+        raise SystemExit(
+            "error: append file exceeds size limit "
+            f"({source_stat.st_size} > {MAX_APPEND_FILE_BYTES} bytes): {source}"
+        )
+    chunks: list[bytes] = []
+    remaining = MAX_APPEND_FILE_BYTES + 1
+    while remaining:
+        chunk = os.read(fd, min(65536, remaining))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    data = b"".join(chunks)
+    if len(data) > MAX_APPEND_FILE_BYTES:
+        raise SystemExit(
+            "error: append file exceeds size limit "
+            f"(more than {MAX_APPEND_FILE_BYTES} bytes): {source}"
+        )
+finally:
+    os.close(fd)
+
+destination.write_bytes(data)
+PY
 else
   printf '%s' "$append_message" >"$append_tmp"
 fi
