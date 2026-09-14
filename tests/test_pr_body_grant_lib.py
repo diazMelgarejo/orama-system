@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import importlib.util
+import json
 import os
 from pathlib import Path
 
@@ -114,7 +115,12 @@ def test_nonce_replay_blocked(grant_lib, tmp_path):
     append.write_text("once", encoding="utf-8")
     grant_lib.mint_grant("owner/repo", "7", str(append), None)
     ok_reserve, err_reserve = grant_lib.reserve_grant_for_append(
-        "owner/repo", "7", str(append), None
+        "owner/repo",
+        "7",
+        str(append),
+        None,
+        base_body_digest=grant_lib.body_digest("original"),
+        merged_body_digest=grant_lib.body_digest("original\nonce"),
     )
     assert ok_reserve, err_reserve
     fields = grant_lib.read_ack_fields()
@@ -230,11 +236,25 @@ def test_reserve_release_before_remote(grant_lib, tmp_path):
     append = tmp_path / "follow.md"
     append.write_text("draft", encoding="utf-8")
     grant_lib.mint_grant("owner/repo", "3", str(append), None)
-    ok, err = grant_lib.reserve_grant_for_append("owner/repo", "3", str(append), None)
+    ok, err = grant_lib.reserve_grant_for_append(
+        "owner/repo",
+        "3",
+        str(append),
+        None,
+        base_body_digest=grant_lib.body_digest("original"),
+        merged_body_digest=grant_lib.body_digest("original\ndraft"),
+    )
     assert ok, err
     ok_rel, err_rel = grant_lib.release_grant_for_append("owner/repo", "3", str(append), None)
     assert ok_rel, err_rel
-    ok2, err2 = grant_lib.reserve_grant_for_append("owner/repo", "3", str(append), None)
+    ok2, err2 = grant_lib.reserve_grant_for_append(
+        "owner/repo",
+        "3",
+        str(append),
+        None,
+        base_body_digest=grant_lib.body_digest("original"),
+        merged_body_digest=grant_lib.body_digest("original\ndraft"),
+    )
     assert ok2, err2
 
 
@@ -242,7 +262,14 @@ def test_consume_requires_remote_applied(grant_lib, tmp_path):
     append = tmp_path / "follow.md"
     append.write_text("x", encoding="utf-8")
     grant_lib.mint_grant("owner/repo", "5", str(append), None)
-    ok, err = grant_lib.reserve_grant_for_append("owner/repo", "5", str(append), None)
+    ok, err = grant_lib.reserve_grant_for_append(
+        "owner/repo",
+        "5",
+        str(append),
+        None,
+        base_body_digest=grant_lib.body_digest("original"),
+        merged_body_digest=grant_lib.body_digest("original\nx"),
+    )
     assert ok, err
     ok_consume, err_consume = grant_lib.verify_grant_for_append(
         "owner/repo", "5", str(append), None, consume=True
@@ -351,7 +378,14 @@ def test_append_operations_short_circuit_on_invalid_identity(grant_lib, tmp_path
     ok_v, err_v = grant_lib.verify_grant_for_append("bad_repo", "1", nonexistent, None)
     assert not ok_v and "repo" in err_v
 
-    ok_r, err_r = grant_lib.reserve_grant_for_append("owner/repo", "-1", nonexistent, None)
+    ok_r, err_r = grant_lib.reserve_grant_for_append(
+        "owner/repo",
+        "-1",
+        nonexistent,
+        None,
+        base_body_digest=grant_lib.body_digest("original"),
+        merged_body_digest=grant_lib.body_digest("merged"),
+    )
     assert not ok_r and "pr_number" in err_r
 
     ok_m, err_m = grant_lib.mark_remote_applied_for_append("bad_repo", "1", nonexistent, None)
@@ -364,39 +398,82 @@ def test_append_operations_short_circuit_on_invalid_identity(grant_lib, tmp_path
     assert not ok_rec and "repo" in err_rec
 
 
-def test_follow_up_already_present_accepts_genuine_survival(grant_lib):
-    """Recovery must succeed when the original body genuinely survived the
-    write that added the follow-up block -- the normal, correct case."""
-    body = "## Summary\n\noriginal content here\n\n## Follow-up: test\n\nnew note\n"
-    assert grant_lib.follow_up_already_present(body, "new note", "Follow-up: test")
+def test_reconcile_rejects_replacement_body_with_forged_summary(grant_lib, tmp_path):
+    """Recovery needs a persisted body identity, not a Summary-shaped body.
 
+    This body deliberately has both a Summary heading and the expected
+    follow-up, but its historical Summary was replaced. The pre-fix
+    shape-only recovery path treats it as success, marks the reservation
+    remote-applied, and consumes the grant.
+    """
+    append = tmp_path / "follow.md"
+    append.write_text("new note", encoding="utf-8")
+    grant_lib.mint_grant("owner/repo", "17", str(append), None)
+    original_body = "## Summary\n\noriginal operator content"
+    expected_merged_body = (
+        f"{original_body}\n\n## Follow-up: test\n\nnew note"
+    )
+    ok_reserve, err_reserve = grant_lib.reserve_grant_for_append(
+        "owner/repo",
+        "17",
+        str(append),
+        None,
+        base_body_digest=grant_lib.body_digest(original_body),
+        merged_body_digest=grant_lib.body_digest(expected_merged_body),
+    )
+    assert ok_reserve, err_reserve
 
-def test_follow_up_already_present_rejects_destroyed_original_body(grant_lib):
-    """Real gap demonstrated by an independent review before this fix: the
-    prior implementation checked only that the follow-up block appeared
-    somewhere in the remote body, so a destructive write that replaced the
-    entire body with just the follow-up block would satisfy it -- letting a
-    crash-recovery retry report success over genuinely lost content. Now
-    requires the repo's own established '## Summary' heading to precede the
-    follow-up block, reusing the exact convention this repo already enforces
-    as a CI guard on PR bodies elsewhere (verify-pr-body-not-clobbered.sh)."""
-    destroyed_body = "## Follow-up: test\n\nnew note\n"
-    assert not grant_lib.follow_up_already_present(
-        destroyed_body, "new note", "Follow-up: test"
+    replaced_body = (
+        "## Summary\n\nforged replacement content\n\n"
+        "## Follow-up: test\n\nnew note"
+    )
+    ok, err = grant_lib.reconcile_pending_consume(
+        "owner/repo",
+        "17",
+        str(append),
+        None,
+        replaced_body,
+        "Follow-up: test",
     )
 
+    assert not ok
+    assert "body digest" in err.lower()
+    state = json.loads(grant_lib.NONCE_STATE_PATH.read_text(encoding="utf-8"))
+    nonce = grant_lib.read_ack_fields()["grant-nonce"]
+    reservation = state["reservations"][nonce]
+    assert reservation["base_body_digest"] == grant_lib.body_digest(original_body)
+    assert reservation["merged_body_digest"] == grant_lib.body_digest(
+        expected_merged_body
+    )
+    assert reservation["remote_applied"] is False
+    assert nonce not in state["nonces"]
 
-def test_follow_up_already_present_rejects_missing_follow_up(grant_lib):
-    """Unchanged baseline: no follow-up block present at all must still fail,
-    regardless of whether a Summary heading exists."""
-    body = "## Summary\n\noriginal content here\n"
-    assert not grant_lib.follow_up_already_present(body, "new note", "Follow-up: test")
 
+def test_reconcile_consumes_only_the_exact_persisted_merged_body(
+    grant_lib, tmp_path
+):
+    append = tmp_path / "follow.md"
+    append.write_text("new note", encoding="utf-8")
+    grant_lib.mint_grant("owner/repo", "18", str(append), None)
+    original_body = "## Summary\n\noriginal operator content"
+    merged_body = f"{original_body}\n\n## Follow-up: test\n\nnew note"
+    ok_reserve, err_reserve = grant_lib.reserve_grant_for_append(
+        "owner/repo",
+        "18",
+        str(append),
+        None,
+        base_body_digest=grant_lib.body_digest(original_body),
+        merged_body_digest=grant_lib.body_digest(merged_body),
+    )
+    assert ok_reserve, err_reserve
 
-def test_follow_up_already_present_requires_summary_before_the_follow_up(grant_lib):
-    """A Summary heading appearing only AFTER the follow-up block (e.g. a
-    reordered or reconstructed body) must not count -- the requirement is
-    that prior content precedes the follow-up, not merely that a Summary
-    heading exists anywhere in the document."""
-    body = "## Follow-up: test\n\nnew note\n\n## Summary\n\nappended after the fact\n"
-    assert not grant_lib.follow_up_already_present(body, "new note", "Follow-up: test")
+    ok, err = grant_lib.reconcile_pending_consume(
+        "owner/repo",
+        "18",
+        str(append),
+        None,
+        merged_body,
+        "Follow-up: test",
+    )
+
+    assert ok, err

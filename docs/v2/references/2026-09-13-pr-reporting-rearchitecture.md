@@ -34,6 +34,24 @@ The append-pr-body helper guards remain worth keeping for the exceptional
 human-authorized path. They are best-effort detection, not exclusivity or an
 atomic precondition.
 
+## V1 legacy-helper integrity binding
+
+Until automated body mutation is retired, each authorized append records both
+the exact base-body digest and exact merged-body digest in its durable nonce
+reservation before the GitHub write. Crash reconciliation requires an existing
+reservation bound to the grant's append-payload digest and requires the
+freshly fetched remote body to equal the persisted merged-body digest exactly.
+
+It does not use a Summary heading, a follow-up substring, or any other prose
+shape as evidence. A body with a forged Summary and copied follow-up is a
+mismatch incident: it must neither consume the grant nor create a new
+reservation. Older reservations without the two body digests cannot be
+reconciled automatically and require an explicit fresh authorization.
+
+This gives v1 safe detection and preserves a byte-exact recovery target. It
+does not make a later automatic restoration safe: restoring a PR body is
+another unconditional full-body replacement and retains the external race.
+
 ## Target protocol
 
 1. Build a UTF-8 report payload and validate it locally.
@@ -55,6 +73,9 @@ atomic precondition.
 The implementation may use a versioned, append-only repository record or an
 external immutable store. It must not use the PR body as the event log. A
 comment is the notification/pointer, not the sole source of truth.
+
+V2 promotes the v1 base/merged digest pair into the immutable event record,
+alongside the record's remote identity and the pointer-comment identity.
 
 ## Required durable state machine
 

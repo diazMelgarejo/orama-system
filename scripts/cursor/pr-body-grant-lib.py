@@ -93,6 +93,7 @@ def _canonical_payload(
 
 
 MAX_APPEND_FILE_BYTES = 1024 * 1024  # 1 MB maximum for append payloads
+DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 def content_digest_for_append(
@@ -129,6 +130,21 @@ def content_digest_for_append(
     else:
         raise GrantError("provide --file or --message for content digest")
     return f"sha256:{hashlib.sha256(data).hexdigest()}"
+
+
+def body_digest(body: str) -> str:
+    """Return the exact UTF-8 identity of a PR body.
+
+    This deliberately performs no newline or Unicode normalization. A
+    reconciliation record must prove the exact body the approved write was
+    meant to create, not merely that it contains familiar-looking prose.
+    """
+    return f"sha256:{hashlib.sha256(body.encode('utf-8')).hexdigest()}"
+
+
+def _validate_body_digest(value: str, field: str) -> None:
+    if not DIGEST_RE.fullmatch(value):
+        raise GrantError(f"{field} must be a sha256 digest")
 
 
 def _read_secret_from_keychain() -> str | None:
@@ -392,6 +408,8 @@ def reserve_nonce_atomic(
     repo: str,
     pr_number: str,
     content_digest: str,
+    base_body_digest: str,
+    merged_body_digest: str,
 ) -> tuple[bool, str]:
     """Reserve nonce before remote mutation. Idempotent for the same binding."""
     with _locked_nonce_state() as (handle, state):
@@ -401,7 +419,11 @@ def reserve_nonce_atomic(
         reservations = state["reservations"]
         existing = reservations.get(nonce)
         if existing:
-            if _reservation_matches(existing, repo, pr_number, content_digest):
+            if (
+                _reservation_matches(existing, repo, pr_number, content_digest)
+                and existing.get("base_body_digest") == base_body_digest
+                and existing.get("merged_body_digest") == merged_body_digest
+            ):
                 return True, ""
             return False, "grant nonce reserved for a different append operation"
         reservations[nonce] = {
@@ -409,6 +431,8 @@ def reserve_nonce_atomic(
             "repo": repo,
             "pr": str(pr_number),
             "digest": content_digest,
+            "base_body_digest": base_body_digest,
+            "merged_body_digest": merged_body_digest,
             "remote_applied": False,
         }
         _write_nonce_state(handle, state)
@@ -592,6 +616,8 @@ def reserve_grant_for_append(
     pr_number: str,
     file_path: str | None,
     message: str | None,
+    base_body_digest: str,
+    merged_body_digest: str,
     cwd: Path | None = None,
 ) -> tuple[bool, str]:
     try:
@@ -602,6 +628,8 @@ def reserve_grant_for_append(
 
     try:
         digest = content_digest_for_append(file_path, message, cwd=cwd)
+        _validate_body_digest(base_body_digest, "base_body_digest")
+        _validate_body_digest(merged_body_digest, "merged_body_digest")
     except GrantError as exc:
         return False, str(exc)
     fields = read_ack_fields()
@@ -616,7 +644,14 @@ def reserve_grant_for_append(
     if not ok:
         return False, err
     nonce = fields.get("grant-nonce", "")
-    return reserve_nonce_atomic(nonce, repo, str(pr_number), digest)
+    return reserve_nonce_atomic(
+        nonce,
+        repo,
+        str(pr_number),
+        digest,
+        base_body_digest,
+        merged_body_digest,
+    )
 
 
 def mark_remote_applied_for_append(
@@ -679,36 +714,13 @@ def release_grant_for_append(
     return True, ""
 
 
-def follow_up_already_present(remote_body: str, append_block: str, title: str) -> bool:
-    """Crash reconciliation: remote body already contains this follow-up
-    block AND the original body prefix survived the write that added it.
-
-    A destructive write that replaced the whole body with just the
-    follow-up block would satisfy a substring-only check and let recovery
-    report success over lost content -- confirmed as a real, demonstrated
-    gap before this fix, not a hypothetical. Requiring the prefix before
-    the follow-up to contain this repo's own established '## Summary'
-    heading (already enforced as a CI guard on PR bodies elsewhere in
-    this repo -- see scripts/git/verify-pr-body-not-clobbered.sh) reuses
-    an existing convention rather than inventing a new one, and directly
-    catches the exact scenario the review demonstrated: a body consisting
-    of only the follow-up block, with no prior content at all.
-    """
-    needle = f"## {title}\n\n{append_block}"
-    idx = remote_body.find(needle)
-    if idx == -1:
-        return False
-    prefix = remote_body[:idx]
-    return bool(re.search(r"^##[ \t]+Summary", prefix, re.MULTILINE))
-
-
 def reconcile_pending_consume(
     repo: str,
     pr_number: str,
     file_path: str | None,
     message: str | None,
     remote_body: str,
-    title: str,
+    _title: str,
     cwd: Path | None = None,
 ) -> tuple[bool, str]:
     """Consume grant when remote already has the follow-up (post-crash recovery)."""
@@ -722,21 +734,6 @@ def reconcile_pending_consume(
         digest = content_digest_for_append(file_path, message, cwd=cwd)
     except GrantError as exc:
         return False, str(exc)
-    if message is not None:
-        append_block = message
-    elif file_path:
-        try:
-            path = Path(file_path)
-            if not path.is_absolute():
-                base = cwd or Path.cwd()
-                path = base / path
-            append_block = path.read_text(encoding="utf-8")
-        except OSError as exc:
-            return False, f"cannot read append file for reconcile: {exc}"
-    else:
-        return False, "provide --file or --message for reconcile"
-    if not follow_up_already_present(remote_body, append_block, title):
-        return False, "remote body missing expected follow-up block"
     fields = read_ack_fields()
     ok, err = verify_grant_fields(
         fields,
@@ -749,9 +746,18 @@ def reconcile_pending_consume(
     if not ok:
         return False, err
     nonce = fields.get("grant-nonce", "")
-    reserve_ok, reserve_err = reserve_nonce_atomic(nonce, repo, str(pr_number), digest)
-    if not reserve_ok:
-        return False, reserve_err
+    with _locked_nonce_state() as (_handle, state):
+        _prune_nonce_state(state)
+        reservation = state.get("reservations", {}).get(nonce)
+    if not reservation or not _reservation_matches(
+        reservation, repo, str(pr_number), digest
+    ):
+        return False, "grant has no matching persisted body identity for reconciliation"
+    expected_merged_digest = reservation.get("merged_body_digest")
+    if not isinstance(expected_merged_digest, str) or not expected_merged_digest:
+        return False, "grant reservation lacks persisted merged-body digest"
+    if body_digest(remote_body) != expected_merged_digest:
+        return False, "remote body digest does not match the persisted merged-body digest"
     mark_ok, mark_err = mark_remote_applied_atomic(nonce)
     if not mark_ok:
         return False, mark_err
@@ -890,6 +896,8 @@ def _cmd_reserve(args: argparse.Namespace) -> int:
         args.pr,
         args.file,
         args.message,
+        args.base_body_digest,
+        args.merged_body_digest,
     )
     if ok:
         print("OK: grant reserved")
@@ -932,19 +940,6 @@ def _cmd_reconcile(args: argparse.Namespace) -> int:
     except OSError as exc:
         print(f"error: cannot read remote body file: {exc}", file=sys.stderr)
         return 1
-    if args.message is not None:
-        append_block = args.message
-    elif args.file:
-        try:
-            append_block = Path(args.file).read_text(encoding="utf-8")
-        except OSError as exc:
-            print(f"error: cannot read append file: {exc}", file=sys.stderr)
-            return 1
-    else:
-        print("error: provide --file or --message", file=sys.stderr)
-        return 1
-    if not follow_up_already_present(remote_body, append_block, args.title):
-        return 2
     ok, err = reconcile_pending_consume(
         args.repo,
         args.pr,
@@ -956,6 +951,8 @@ def _cmd_reconcile(args: argparse.Namespace) -> int:
     if ok:
         print("OK: grant reconciled and consumed")
         return 0
+    if err == "grant has no matching persisted body identity for reconciliation":
+        return 2
     print(f"error: {err}", file=sys.stderr)
     return 1
 
@@ -984,6 +981,8 @@ def main(argv: list[str] | None = None) -> int:
 
     reserve_p = sub.add_parser("reserve")
     add_append_args(reserve_p)
+    reserve_p.add_argument("--base-body-digest", required=True)
+    reserve_p.add_argument("--merged-body-digest", required=True)
     reserve_p.set_defaults(func=_cmd_reserve)
 
     release_p = sub.add_parser("release")

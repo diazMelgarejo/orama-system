@@ -235,12 +235,6 @@ if [[ "$reconcile_rc" -ne 2 ]]; then
   exit 1
 fi
 
-reserve_cmd=(python3 "$GRANT_LIB" reserve "${grant_append_args[@]}")
-if ! "${reserve_cmd[@]}"; then
-  echo "hint: operator runs grant-pr-body-human-override.sh with the same --file|--message" >&2
-  exit 1
-fi
-
 if [[ -n "$append_file" ]]; then
   cp -- "$append_file" "$append_tmp"
 else
@@ -266,6 +260,18 @@ echo "backup: $backup_path"
 
 if ! build_merged_body "$remote_tmp" "$append_tmp" "$out" "$title"; then
   echo "error: unable to build merged PR body" >&2
+  exit 1
+fi
+
+base_body_digest="sha256:$(sha256_gh_view_body "$remote_tmp")"
+merged_body_digest="sha256:$(sha256_file "$out")"
+reserve_cmd=(
+  python3 "$GRANT_LIB" reserve "${grant_append_args[@]}"
+  --base-body-digest "$base_body_digest"
+  --merged-body-digest "$merged_body_digest"
+)
+if ! "${reserve_cmd[@]}"; then
+  echo "hint: operator runs grant-pr-body-human-override.sh with the same --file|--message" >&2
   exit 1
 fi
 
