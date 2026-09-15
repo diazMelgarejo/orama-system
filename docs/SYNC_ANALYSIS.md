@@ -238,7 +238,7 @@ Perplexity-Tools has added hardware-aware orchestration:
 
 #### Model Updates 2026-03-27
 
-> **OBSOLETE**
+> ***OBSOLETE***
 
 - Qwen3.5-35B-A3B MoE (Windows): `frob/qwen3.5:35b-a3b-instruct-ud-q4_K_M`
 - Qwen3.5-9B (Mac manager): `qwen3.5:9b-instruct`
@@ -253,6 +253,8 @@ Perplexity-Tools has added hardware-aware orchestration:
    `diffusiongemma-26b-a4b-it-nvfp4.gguf`
 
 ### Sync Impact
+
+`docs(sync): mark Recommended Next Action #2 DONE in SYNC_ANALYSIS.md`
 
 **No Breaking Changes:**
 
