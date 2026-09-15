@@ -1,4 +1,4 @@
-﻿# Sync Analysis: orama-system ↔ Perplexity-Tools
+# Sync Analysis: orama-system ↔ Perplexity-Tools
 
 **Date:** 2026-04-11 | **Version:** orama-system v1.1.1.0 · PT v1.1.1.0
 
@@ -204,11 +204,19 @@ Perplexity-Tools has added hardware-aware orchestration:
   - Scans for existing AI software (Ollama, LM Studio, MLX)
   - Tiered setup guidance (Priority 1: easiest, Priority 2: advanced)
 
-#### Model Updates:
+#### Model Updates 2026-03-27
+
+> __OBSOLETE__
 
 - Qwen3.5-35B-A3B MoE (Windows): `frob/qwen3.5:35b-a3b-instruct-ud-q4_K_M`
 - Qwen3.5-9B (Mac manager): `qwen3.5:9b-instruct`
 - MLX path preferred on Apple Silicon for maximum performance
+
+#### Model Updates 2026-09-14
+
+1. Qwen3.5-9B-MLX (MacOS preferred): `qwen3.5:9b-mlx`
+2. QwOpus 3.5 (Windows with RTX-3080) `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
+3. **Gemma 4** (Windows with RTX-5080) via [FreedomAISVR/DiffusionGemma-26B-A4B-it-NVFP4-GGUF](https://huggingface.co/FreedomAISVR/DiffusionGemma-26B-A4B-it-NVFP4-GGUF/tree/) `diffusiongemma-26b-a4b-it-nvfp4.gguf`
 
 ### Sync Impactdocs(sync): mark Recommended Next Action #2 DONE in SYNC_ANALYSIS.md
 
