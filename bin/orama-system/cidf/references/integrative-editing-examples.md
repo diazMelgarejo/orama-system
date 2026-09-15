@@ -184,6 +184,28 @@ four-gate procedure in the
 
 ---
 
+## 13. Historical-document deduplication — preserve the complete record
+
+| Bad | Good |
+| --- | --- |
+| Delete both repeated table fragments, then replace them with a shorter paraphrase | Retain one complete, structurally valid canonical row containing the full unique evidence |
+| Remove a superseded recommendation because its outcome is now known | Keep the dated recommendation as historical context and add its later resolution beside it |
+| Let a current `RESOLVED` status leave earlier text phrased as a present obligation | Relabel the earlier wording as a pre-resolution proposal/rationale and cite the resolving commit or state |
+
+**Incident (Orama PR #359, 2026-09-15):** Markdownlint remediation encountered a
+duplicated OPT 3 table row. The correct repair was not to compress the surviving
+record: retain one row with the complete `tests/test_ultrathink_integration.py`
+evidence, including the 12-test routing-contract statement. Likewise, OPT 1
+and OPT 2 retain their original proposals and rationale as historical context,
+while their resolved status and implementing commits state the later outcome.
+
+**Rule:** deduplicate only redundant representation. Preserve each distinct
+claim, count, path, commitment, and historical decision; then reconcile it
+additively with the later resolution. A lint or review repair must not turn a
+historical record into a less informative summary.
+
+---
+
 ## Quarantined bad samples (do not run)
 
 ```markdown
