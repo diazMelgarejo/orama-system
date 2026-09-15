@@ -277,6 +277,11 @@ orama-system/docs/v2/
 
 ## Open questions (live)
 
+The [PR event reporter production design](references/2026-09-14-pr-event-reporter-v2-production-plan.md)
+completes the reporting redesign with storage enforcement, durable uncertainty,
+exact recovery identity, ownership, rollout and requirement-to-test mapping.
+Its linked contracts and implementation plan are design-only successor work.
+
 Tracked in [`06-open-questions.md`](./06-open-questions.md). Highlights:
 
 - Pydantic AI evaluation (as a framework competitor) at v2.1+ checkpoint
