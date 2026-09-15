@@ -139,11 +139,9 @@ distributed deployments.
 `hardware/SKILL.md`. `orchestrator/__init__.py` also updated with `__version__`
 for package metadata consistency.
 
-orama-system's `bin/orama-system/SKILL.md` should reference PT's hardware
-profiles so that, when running inside PT orchestration, ultrathink knows to
-respect PT's hardware-aware routing.
-
-**Suggested addition to ultrathink SKILL.md:**
+**Historical pre-resolution proposal:** Before `ac292db`, this analysis
+recommended that `bin/orama-system/SKILL.md` reference PT's hardware profiles
+so ultrathink would respect PT's hardware-aware routing. The proposal was:
 
 ```text
 When running inside Perplexity-Tools orchestration:
@@ -161,9 +159,10 @@ When running inside Perplexity-Tools orchestration:
 for dev/test, and `[tool.pytest.ini_options]` configuration. PT is now
 pip-installable as `perplexity-tools`.
 
-orama-system is pip-installable. PT only has `requirements.txt`. Making PT
-installable enables consistent versioning and dependency pinning across the
-stack.
+**Historical pre-resolution rationale:** Before `5082db6`, PT had only
+`requirements.txt`. Making PT installable would enable consistent versioning
+and dependency pinning across the stack; `5082db6` later delivered that
+resolution.
 
 ### OPT 3: Unified Integration Test
 
