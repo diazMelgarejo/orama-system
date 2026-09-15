@@ -31,7 +31,7 @@
 | **HAL doc cross-ref** | ✅ IN SYNC | PERPLEXITY_BRIDGE.md HAL section complete |
 | **PT hardware cross-link (OPT 1)** | ✅ RESOLVED | ultrathink `bin/orama-system/SKILL.md` references PT `hardware/SKILL.md`; `portal_server.py` and `network_autoconfig.py` are documented as active LAN helpers |
 | **PT `pyproject.toml` (OPT 2)** | ✅ RESOLVED | PT now pip-installable as `perplexity-tools`; `[tool.pytest.ini_options]` + dev extras included |
-| **Integration test suite (OPT 3)** | ✅ RESOLVED | `tests/test_ultrathink_integration.py` verifies the routing contract |
+| **Integration test suite (OPT 3)** | ✅ RESOLVED | `tests/test_ultrathink_integration.py` — 12 tests verifying routing.yml ↔ ultrathink contract |
 
 ## What IS Working (Synergized Well)
 
