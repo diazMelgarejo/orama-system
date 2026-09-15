@@ -28,10 +28,10 @@
 | **CI/CD** | ✅ IN SYNC | Both repos have `.github/workflows/ci.yml` with pytest + lint |
 | **Tests** | ✅ RESOLVED | PT now has 6 test files (56+ tests); ultrathink has 86+ tests |
 | **routing.yml** | ✅ IN SYNC | PT `config/routing.yml` has `deep_reasoning` + `code_analysis` ultrathink routes |
-| **HAL doc cross-ref** | ✅ IN SYNC | PERPLEXITY_BRIDGE.md HAL section complete; 
+| **HAL doc cross-ref** | ✅ IN SYNC | PERPLEXITY_BRIDGE.md HAL section complete |
 | **PT hardware cross-link (OPT 1)** | ✅ RESOLVED | ultrathink `bin/orama-system/SKILL.md` references PT `hardware/SKILL.md`; `portal_server.py` and `network_autoconfig.py` are documented as active LAN helpers |
 | **PT `pyproject.toml` (OPT 2)** | ✅ RESOLVED | PT now pip-installable as `perplexity-tools`; `[tool.pytest.ini_options]` + dev extras included |
-| **Integration test suite (OPT 3)** | ✅ RESOLVED | `tests/test_ultrathink_integration.py` — 12 tests verifying routing.yml ↔ ultrathink | **Integration test suite (OPT 3)** | ✅ RESOLVED | `tests/test_ultrathink_integration.py` — 12 tests verifying routing.yml ↔ ultrathink contract |
+| **Integration test suite (OPT 3)** | ✅ RESOLVED | `tests/test_ultrathink_integration.py` — 12 tests verifying routing.yml ↔ ultrathink contract |
 
 ## What IS Working (Synergized Well)
 
@@ -39,7 +39,7 @@
 
 Both repos agree on the 4-layer stack:
 
-```
+```text
 Perplexity-Tools    ← top-level orchestrator, model selection, fallback chain
 orama-system   ← reasoning engine, 5-stage methodology, CIDF
 ECC Tools           ← Stage-4 parallel sub-agent auto-selection (up to 5x)
@@ -61,13 +61,15 @@ Aligned same day (2026-03-28). Releases match.
 ### 4. SKILL.md Routing Contract — Agreed
 
 Both agree:
+
 - PT SKILL.md = top-level model selection runs **first**
-- ultrathink bin/orama-system/SKILL.md = reasoning methodology, called **by** PT when deep reasoning needed
+- ultrathink bin/orama-system/SKILL.md = reasoning methodology, called **by** PT
+  when deep reasoning is needed
 - ECC Tools = sub-agent selection for Stage-4 parallel executors
 
 ### 5. Fallback Chain — Documented and Consistent
 
-```
+```text
 PT receives task → deep reasoning? → call oramasys:8001
   → timeout? → local Qwen3:30b on Dell
   → realtime/finance? → Perplexity Grok 4.1
@@ -77,6 +79,7 @@ PT receives task → deep reasoning? → call oramasys:8001
 ### 6. Tests — Both Repos Now Covered
 
 **Perplexity-Tools** `tests/` (6 files, 56+ tests):
+
 - `test_routing.py` — routing.yml contract, ultrathink routes, autoresearch routes
 - `test_resilience.py` — connectivity resilience + fallback behaviour
 - `test_lan_discovery.py` — LAN device discovery
@@ -97,11 +100,13 @@ PT receives task → deep reasoning? → call oramasys:8001
 
 Earlier sync snapshots treated `api_server.py` as the primary bridge and
 documented `POST /ultrathink` plus `GET /health`. In the current checkout,
-`POST /oramasys` is canonical and `/ultrathink` is a deprecated compatibility shim with request/response tests.
+`POST /oramasys` is canonical and `/ultrathink` is a deprecated compatibility
+shim with request/response tests.
 
 ### GAP 2: PT `routing.yml` — ✅ RESOLVED (v0.9.5.0)
 
-`config/routing.yml` now has `deep_reasoning` and `code_analysis` routes with ultrathink endpoint + fallback to `local_qwen30b`.
+`config/routing.yml` now has `deep_reasoning` and `code_analysis` routes with
+the ultrathink endpoint and a fallback to `local_qwen30b`.
 
 ### GAP 3: `.env` Contract — ✅ RESOLVED (v0.9.5.0)
 
@@ -109,7 +114,11 @@ Both `.env.example` files contain all vars specified in PERPLEXITY_BRIDGE.md.
 
 ### GAP 4: Idempotency — ✅ RESOLVED (v0.9.7.0)
 
-Architecture decision locked: ultrathink remains **stateless** with no Redis requirement. PT is the sole orchestration layer and owns agent instantiation, tracking, queueing, budget enforcement, and file-based runtime state. Redis-backed coordination deferred to PT v1.1+ for multi-instance distributed deployments.
+Architecture decision locked: ultrathink remains **stateless** with no Redis
+requirement. PT is the sole orchestration layer and owns agent instantiation,
+tracking, queueing, budget enforcement, and file-based runtime state.
+Redis-backed coordination is deferred to PT v1.1+ for multi-instance
+distributed deployments.
 
 ### GAP 5: PT Has No Tests — ✅ RESOLVED (v0.9.8.0)
 
@@ -125,12 +134,16 @@ Architecture decision locked: ultrathink remains **stateless** with no Redis req
 
 **Status:** ✅ RESOLVED (rolling — pre-v1.0 RC)
 
-**Implemented:** ultrathink `bin/orama-system/SKILL.md` updated (commit `ac292db`) with hardware-aware routing section referencing PT `hardware/SKILL.md`. `orchestrator/__init__.py` also updated with `__version__` for package metadata consistency.
+**Implemented:** ultrathink `bin/orama-system/SKILL.md` updated (commit
+`ac292db`) with a hardware-aware routing section referencing PT
+`hardware/SKILL.md`. `orchestrator/__init__.py` also updated with `__version__`
+for package metadata consistency.
 
-orama-system's `bin/orama-system/SKILL.md` should reference PT's hardware profiles so that when running inside PT orchestration, ultrathink knows to respect PT's hardware-aware routing.
+**Historical pre-resolution proposal:** Before `ac292db`, this analysis
+recommended that `bin/orama-system/SKILL.md` reference PT's hardware profiles
+so ultrathink would respect PT's hardware-aware routing. The proposal was:
 
-**Suggested addition to ultrathink SKILL.md:**
-```
+```text
 When running inside Perplexity-Tools orchestration:
 - Respect PT's model selection for top-level agents (see hardware/SKILL.md)
 - Only override model choice when the backup HTTP path uses `reasoning_depth = ultra`
@@ -141,15 +154,25 @@ When running inside Perplexity-Tools orchestration:
 
 **Status:** ✅ RESOLVED (rolling — pre-v1.0 RC)
 
-**Implemented:** `pyproject.toml` added to Perplexity-Tools root (commit `5082db6`). Includes `[project]` metadata, `[project.optional-dependencies]` for dev/test, and `[tool.pytest.ini_options]` config. PT is now pip-installable as `perplexity-tools`.
+**Implemented:** `pyproject.toml` added to Perplexity-Tools root (commit
+`5082db6`). It includes `[project]` metadata, `[project.optional-dependencies]`
+for dev/test, and `[tool.pytest.ini_options]` configuration. PT is now
+pip-installable as `perplexity-tools`.
 
-orama-system is pip-installable. PT only has `requirements.txt`. Making PT installable enables consistent versioning and dependency pinning across the stack.
+**Historical pre-resolution rationale:** Before `5082db6`, PT had only
+`requirements.txt`. Making PT installable would enable consistent versioning
+and dependency pinning across the stack; `5082db6` later delivered that
+resolution.
 
 ### OPT 3: Unified Integration Test
 
 **Status:** ✅ RESOLVED (rolling — pre-v1.0 RC)
 
-**Implemented:** `tests/test_ultrathink_integration.py` added to Perplexity-Tools (commit `c84a5f6`). 12 tests in `TestRoutingYmlUltrathinkContract` verifying `deep_reasoning` + `code_analysis` routes declare `ULTRATHINK_ENDPOINT`, `fallback=local_qwen30b`, and `requires=[ultrathink_available]`.
+**Implemented:** `tests/test_ultrathink_integration.py` added to
+Perplexity-Tools (commit `c84a5f6`). Twelve tests in
+`TestRoutingYmlUltrathinkContract` verify that `deep_reasoning` and
+`code_analysis` routes declare `ULTRATHINK_ENDPOINT`,
+`fallback=local_qwen30b`, and `requires=[ultrathink_available]`.
 
 A single integration test that fires a task at PT and verifies it correctly routes to ultrathink:
 
@@ -174,30 +197,39 @@ def test_deep_reasoning_routes_to_ultrathink():
 All critical integration gaps from the initial analysis have been addressed.
 
 **P0 — RESOLVED:**
+
 - Historical backup path: older sync snapshots referenced `api_server.py`
-  - `POST /oramasys` and `GET /health` are implemented endpoints in this checkout; `/ultrathink` is a deprecated shim
+  - `POST /oramasys` and `GET /health` are implemented endpoints in this
+    checkout; `/ultrathink` is a deprecated shim
   - Wire to 5-stage reasoning pipeline complete
   - Runs on port 8001 as specified
   - v0.9.8.0: rate limiting, Pydantic V2 validators, security hardening
 
 **P1 — RESOLVED:**
-- ✅ orama-system `.env.example` updated with required API/model vars
-- ✅ Perplexity-Tools `.env.example` updated with `ULTRATHINK_ENDPOINT`, `ULTRATHINK_TIMEOUT`, `ULTRATHINK_ENABLED`
-- ✅ PT `config/routing.yml` now has `deep_reasoning` and `code_analysis` routes with ultrathink endpoint + fallback
 
-### New in PT v0.9.5.0: Hardware Abstraction Layer
+- ✅ orama-system `.env.example` updated with required API/model vars
+- ✅ Perplexity-Tools `.env.example` updated with `ULTRATHINK_ENDPOINT`,
+  `ULTRATHINK_TIMEOUT`, `ULTRATHINK_ENABLED`
+- ✅ PT `config/routing.yml` now has `deep_reasoning` and `code_analysis`
+  routes with the ultrathink endpoint and fallback
+
+### New in PT v0.9.5.0 — Hardware Abstraction Layer
 
 Perplexity-Tools has added hardware-aware orchestration:
 
-#### Added Files:
+#### Added Files
 
-- `hardware/SKILL.md` — Hardware profiles for `mac-studio` (Apple Silicon) and `win-rtx3080` (Dell RTX 3080)
+- `hardware/SKILL.md` — Hardware profiles for `mac-studio` (Apple Silicon)
+  and `win-rtx3080` (Dell RTX 3080)
   - Role-based model assignment matrix
   - VRAM/RAM safety rules
   - Fallback degradation chains
-- `hardware/Modelfile.win-rtx3080` — Ollama Modelfile for Qwen3.5-35B-A3B with Flash Attention + KV cache compression
-- `hardware/Modelfile.mac-studio` — Ollama Modelfile for Qwen3.5-9B manager agent with unified memory tuning
-- `agent_launcher.py` — Hardware detection script with graceful degradation (Distributed → Mac-only → LM Studio → Cloud)
+- `hardware/Modelfile.win-rtx3080` — Ollama Modelfile for Qwen3.5-35B-A3B
+  with Flash Attention + KV cache compression
+- `hardware/Modelfile.mac-studio` — Ollama Modelfile for Qwen3.5-9B manager
+  agent with unified memory tuning
+- `agent_launcher.py` — Hardware detection script with graceful degradation
+  (Distributed → Mac-only → LM Studio → Cloud)
   - Outputs routing state to `.state/agents.json`
   - 3-second timeout to avoid blocking
 - `setup_wizard.py` — Idempotent installation wizard
@@ -206,7 +238,7 @@ Perplexity-Tools has added hardware-aware orchestration:
 
 #### Model Updates 2026-03-27
 
-> __OBSOLETE__
+> ***OBSOLETE***
 
 - Qwen3.5-35B-A3B MoE (Windows): `frob/qwen3.5:35b-a3b-instruct-ud-q4_K_M`
 - Qwen3.5-9B (Mac manager): `qwen3.5:9b-instruct`
@@ -216,84 +248,113 @@ Perplexity-Tools has added hardware-aware orchestration:
 
 1. Qwen3.5-9B-MLX (MacOS preferred): `qwen3.5:9b-mlx`
 2. QwOpus 3.5 (Windows with RTX-3080) `qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2`
-3. **Gemma 4** (Windows with RTX-5080) via [FreedomAISVR/DiffusionGemma-26B-A4B-it-NVFP4-GGUF](https://huggingface.co/FreedomAISVR/DiffusionGemma-26B-A4B-it-NVFP4-GGUF/tree/) `diffusiongemma-26b-a4b-it-nvfp4.gguf`
+3. **Gemma 4** (Windows with RTX-5080) via
+   [FreedomAISVR/DiffusionGemma-26B-A4B-it-NVFP4-GGUF](https://huggingface.co/FreedomAISVR/DiffusionGemma-26B-A4B-it-NVFP4-GGUF/tree/)
+   `diffusiongemma-26b-a4b-it-nvfp4.gguf`
 
-### Sync Impactdocs(sync): mark Recommended Next Action #2 DONE in SYNC_ANALYSIS.md
+### Sync Impact
+
+`docs(sync): mark Recommended Next Action #2 DONE in SYNC_ANALYSIS.md`
 
 **No Breaking Changes:**
+
 - orama-system API contract unchanged
 - 4-layer architecture priority rule preserved
 - ultrathink remains stateless; PT owns dedup via `.state/agents.json`
 
 **Coordination Items (updated):**
+
 - [x] PERPLEXITY_BRIDGE.md updated with Hardware Abstraction Layer section
-- [x] orama-system SKILL.md should reference hardware profiles from PT for optimal model selection
-- [x] Consider adding hardware profile awareness to ultrathink's model selection if it needs to make autonomous model choices
+- [x] orama-system SKILL.md should reference hardware profiles from PT for
+  optimal model selection
+- [x] Consider adding hardware profile awareness to ultrathink's model
+  selection if it needs to make autonomous model choices
 
 **Tests & CI (P2 items RESOLVED):**
+
 - ✅ PT now has `tests/` with 6 test files (56+ tests)
 - ✅ PT now has `.github/workflows/ci.yml`
 - ✅ orama-system maintains 86+ tests + CI
 
 ### Recommended Next Actions
 
-1. ✅ **Cross-link SKILL.md files** — DONE: ultrathink SKILL.md now references PT `hardware/SKILL.md` for hardware-aware model selection
-2. ✅ **Add integration test** — DONE: `tests/test_hardware_routing.py` (commit `82cb179`) verifies PT correctly routes deep reasoning tasks to ultrathink with hardware-appropriate models (mac-studio → MLX backend; win-rtx3080 → Ollama backend).
-3. :white_check_mark: **Hardware-agnostic core + model_hint passthrough** — IMPLEMENTED BACKUP NOTE: the HTTP `api_server.py` bridge accepts `model_hint`, but PT's `hardware/SKILL.md` remains the active hardware-routing source of truth.
+1. ✅ **Cross-link SKILL.md files** — DONE: ultrathink SKILL.md now references
+   PT `hardware/SKILL.md` for hardware-aware model selection.
+2. ✅ **Add integration test** — DONE: `tests/test_hardware_routing.py` (commit
+   `82cb179`) verifies PT correctly routes deep-reasoning tasks to ultrathink
+   with hardware-appropriate models (mac-studio → MLX backend; win-rtx3080 →
+   Ollama backend).
+3. ✅ **Hardware-agnostic core + model_hint passthrough** — IMPLEMENTED BACKUP
+   NOTE: the HTTP `api_server.py` bridge accepts `model_hint`, but PT's
+   `hardware/SKILL.md` remains the active hardware-routing source of truth.
 
 ### Architecture Decision Record: ADR-001 (v0.9.9.0)
 
 **Decision:** orama-system remains fully hardware-agnostic at its core.
 
-**Context:** PT v0.9.5.0 added a Hardware Abstraction Layer (`hardware/SKILL.md`, `agent_launcher.py`) that detects mac-studio (MLX) vs win-rtx3080 (Ollama/CUDA) and assigns optimal models per hardware profile. The question arose: should ultrathink replicate this hardware detection internally?
+**Context:** PT v0.9.5.0 added a Hardware Abstraction Layer
+(`hardware/SKILL.md`, `agent_launcher.py`) that detects mac-studio (MLX) and
+win-rtx3080 (Ollama/CUDA) and assigns optimal models per hardware profile. The
+question arose: should ultrathink replicate this hardware detection internally?
 
 **Decision drivers:**
+
 - ultrathink's purpose is reasoning methodology, not hardware orchestration
 - PT already owns the hardware layer; duplication would violate the 4-layer hierarchy
 - ultrathink must remain stateless and portable (privacy-critical local-only design)
 - Adding hardware detection to ultrathink would tighten coupling and break portability
 
 **Resolution:** Hardware-agnostic core with optional `model_hint` passthrough:
+
 - `UltraThinkRequest.model_hint: Optional[str]` — PT may inject a hardware-appropriate model name
 - `_select_model()` honors `model_hint` when present; falls back to task-type heuristic otherwise
 - ultrathink logs `hint=<model>` so operators can verify PT is routing correctly
 - `metadata.model_hint_used: bool` in response so PT can audit hint acceptance
 
 **Consequences:**
+
 - mac-studio PT instance: sends `model_hint=qwen3:8b-instruct` (MLX-optimised)
 - win-rtx3080 PT instance: sends `model_hint=qwen3:30b-a3b-instruct-q4_K_M` (Ollama GGUF)
 - ultrathink standalone (no PT): falls back to internal heuristic (unchanged behavior)
 - No breaking change — `model_hint` is optional; existing callers unaffected
 
-**Status:** Implemented backup note — do not treat `api_server.py v0.9.9.0` as the active primary contract in this checkout.
+**Status:** Implemented backup note — do not treat `api_server.py v0.9.9.0` as
+the active primary contract in this checkout.
 
 ## Update 2026-03-30: v0.9.9.0 v1.0 RC Refinements [SYNC]
 
 ### Transport Naming Corrected
+
 - **HTTP Bridge (`POST /oramasys`)** is now documented as the v1.0 RC primary transport.
 - **MCP-Optional transport** (stdio JSON-RPC) renamed from "MCP-first" — planned for v1.1.
   `ultrathink_orchestration_server.py` MCP `_solve()` remains a stub; no production Ollama call yet.
 - Both repos updated: `api_server.py` docstring, `PERPLEXITY_BRIDGE.md`, both `ROADMAP_v1.1.md` files.
 
 ### Redis Import Hardened
-- `orchestrator.py` soft import: `try: import redis.asyncio as _redis_mod / except ImportError: _redis_mod = None`
+
+- `orchestrator.py` soft import: `try: import redis.asyncio as _redis_mod /
+  except ImportError: _redis_mod = None`
 - `requirements.txt` redis moved to optional comment.
 - Test `test_orchestrator_starts_without_redis_package` added.
 
 ### ECC Sync Gate Added
+
 - `ECC_SYNC_ENABLED` env var in `orchestrator/ecc_tools_sync.py` (default: true).
 - `tests/conftest.py` sets `ECC_SYNC_ENABLED=false` at session scope so tests never hit the network.
 
 ### MCP-Optional v1.1 TODO Checklists Added
-- Tier 1 (PT): `orchestrator/ultrathink_mcp_client.py`, `call_ultrathink_mcp_or_bridge()`, tests — in `PT/docs/ROADMAP_v1.1.md`.
-- Tier 2 (ultrathink): `bin/shared/ollama_client.py`, `_solve()` real pipeline, tests — in `ultrathink/docs/ROADMAP_v1.1.md`.
+
+- Tier 1 (PT): `orchestrator/ultrathink_mcp_client.py`,
+  `call_ultrathink_mcp_or_bridge()`, tests — in `PT/docs/ROADMAP_v1.1.md`.
+- Tier 2 (ultrathink): `bin/shared/ollama_client.py`, `_solve()` real pipeline,
+  tests — in `ultrathink/docs/ROADMAP_v1.1.md`.
 - Recommended sequencing: Tier 2 (server pipeline) before Tier 1 (client infrastructure).
 
 ### Test Count
+
 - PT: 108 tests passing (up from 93 before v0.9.9.0 refinements).
 - orama-system: unchanged, CI green.
 
 ---
 
 **Generated:** 2026-03-30 | **Analyst:** Claude Sonnet 4.6
-
