@@ -165,6 +165,47 @@ mistaken for a non-empty destination signature.
 
 ---
 
+## 12. Encoded text corruption — verify the remote bytes before merge
+
+| Bad | Good |
+| --- | --- |
+| Compile the local file, receive an API blob SHA, then merge | Fetch the exact remote branch path; confirm the fetched head SHA matches the expected source/base SHA, then compare blob SHA and byte size to local; parse/compile the fetched bytes before merge |
+| Treat a Base64 or chunked transfer as safe because decoding succeeded locally | Treat encoding boundaries as untrusted until the remote object is byte-identical to the intended local blob |
+| Reuse a success response from before a later branch update | Re-run the remote-content gate for the exact PR head SHA immediately before merge |
+| Repair a corrupted `main` file by assuming the PR source is sound | Fetch the repair PR's remote file and compile/parse that remote object before merge |
+
+**Incident (Perpetua Core PR #5, 2026-09-12):** a text test file was published
+as a 79-byte binary payload after an encoded content-path write. The local file
+was valid, but the remote object had not been fetched and parsed before merge.
+The correction used an explicit UTF-8 write and verified the remote blob SHA,
+size, source markers, and Python compilation. The durable rule is the
+four-gate procedure in the
+[remote content-integrity reference card](remote-content-integrity-reference-card.md).
+
+---
+
+## 13. Historical-document deduplication — preserve the complete record
+
+| Bad | Good |
+| --- | --- |
+| Delete both repeated table fragments, then replace them with a shorter paraphrase | Retain one complete, structurally valid canonical row containing the full unique evidence |
+| Remove a superseded recommendation because its outcome is now known | Keep the dated recommendation as historical context and add its later resolution beside it |
+| Let a current `RESOLVED` status leave earlier text phrased as a present obligation | Relabel the earlier wording as a pre-resolution proposal/rationale and cite the resolving commit or state |
+
+**Incident (Orama PR #359, 2026-09-15):** Markdownlint remediation encountered a
+duplicated OPT 3 table row. The correct repair was not to compress the surviving
+record: retain one row with the complete `tests/test_ultrathink_integration.py`
+evidence, including the 12-test routing-contract statement. Likewise, OPT 1
+and OPT 2 retain their original proposals and rationale as historical context,
+while their resolved status and implementing commits state the later outcome.
+
+**Rule:** deduplicate only redundant representation. Preserve each distinct
+claim, count, path, commitment, and historical decision; then reconcile it
+additively with the later resolution. A lint or review repair must not turn a
+historical record into a less informative summary.
+
+---
+
 ## Quarantined bad samples (do not run)
 
 ```markdown
