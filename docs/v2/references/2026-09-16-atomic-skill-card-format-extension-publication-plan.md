@@ -219,7 +219,8 @@ lint separately; **do not** require `outcome` / `approval_limit` on the composit
 ## 6. Document suite — publication elaboration
 
 Publish as a **versioned suite** under `oramasys/alexandria` after human review.
-Until then, keep working drafts in `~/code/OpenClaw/references/`.
+Until then, keep working drafts in `$REPO_ROOT/docs/v2/references/` (this
+directory).
 
 | Part | Working draft filename | Normative? | Contents |
 | ------ | ------------------------ | ------------ | ---------- |
@@ -374,7 +375,11 @@ Orchestrate atoms; do not restate their policy.
 
 ## Composition
 1. `git/verify-remote-head`
-2. `security/three-gate-content-integrity`
+2. `security/cidf-remote-content-integrity`
+
+CIDF remote-content integrity is **four facts at five checkpoints**
+(including write acknowledgment). Do not collapse that model into a
+"three-gate" atom name.
 
 See `composites/pre-merge-integrity.yaml` for typed edges.
 

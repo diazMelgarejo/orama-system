@@ -107,7 +107,10 @@ Order atoms; do not restate their policy.
 ## Composition
 
 1. `git/verify-remote-head`
-2. `security/three-gate-content-integrity`
+2. `security/cidf-remote-content-integrity`
+
+CIDF remote-content integrity is four facts at five checkpoints
+(including write acknowledgment), not a three-gate collapse.
 
 ## Boundaries
 

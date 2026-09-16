@@ -36,10 +36,20 @@ A card is **OSSF Atomic Skill Card Extension conforming** when:
 2. It satisfies every MUST in this part, and
 3. `format_profile` is exactly `composable-atom`.
 
-Validators MUST reject cards that declare `composable-atom` but fail Part 2.
-Validators MUST reject cards that carry Part 2 required fields without
-`format_profile: composable-atom` unless an implementation-defined migration
-shim is explicitly documented (SHOULD NOT be used in new authoring).
+Validators MUST reject cards that declare `format_profile: composable-atom`
+but fail Part 2.
+
+The Part 2 required-field set (`outcome`, `approval_limit`, typed
+`references`) is a **composable-atom conformance** check only. Validators MUST
+NOT reject `format_profile: core` or `format_profile: composite-consumer`
+cards solely because those documentation-only fields appear. Composite
+consumers are governed by [Part 3](2026-09-16-ossf-part3-composite-consumer-profile.md)
+(documentation-only Part 2 fields are allowed; routers MUST NOT treat the
+card as an atom). `core` cards follow Part 1 plus the Part 4 matrix
+(SHOULD warn; MAY fail only in an explicitly documented strict mode).
+
+An implementation-defined migration shim that rewrites a card into
+`composable-atom` MAY exist (SHOULD NOT be used in new authoring).
 
 ## 2.3 Design invariants (composable atoms)
 
@@ -95,11 +105,15 @@ the reference implementation alias (`check_ossf1_skill_md.py`, per Part 4
 §4.2) uses a hand-rolled regex frontmatter parser that stores each
 frontmatter value as a string, not a parsed structure. It cannot today parse
 or validate this typed mapping list (`type` discriminator, per-type required
-fields), and its own list-detection heuristic does not reliably accept
-flow-style YAML (`references: [{...}, {...}]`) — confirmed against this
-part's own §2.9 example during the 2026-09-16 dual review. A real YAML
-parser and versioned schema for this field are pilot deliverables, not
-assumed-already-true today.
+fields). Its list-detection heuristic (`has_list_key`) only treats a value as
+a list when a line begins with `- ` (block-style). **§2.9 below is
+block-style** (`references:` entries each start with `- {type: ...}`): the
+inner `{...}` is a flow-style *mapping*, not a flow-style *sequence*.
+`has_list_key` therefore accepts §2.9 `references` and rejects a true
+flow-style sequence such as `triggers: [pre-merge integrity]` (Part 3 §3.5)
+or `triggers: [cherry reanchor, rewritten history, headRefOid]`
+(publication plan §11.1). A real YAML parser and versioned schema for
+typed `references` are pilot deliverables, not assumed-already-true today.
 
 ## 2.6 Body — extension expectations
 

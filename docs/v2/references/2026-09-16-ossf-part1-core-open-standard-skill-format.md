@@ -54,7 +54,7 @@ Every conforming card MUST begin with YAML frontmatter delimited by `---`.
 | `name` | MUST be present. 1–64 chars, lowercase kebab-case (or profile-specific atom ID in Part 2). MUST match directory name where the construction guide applies. |
 | `description` | MUST be present. ≥20 characters. Third-person purpose text with activation context. |
 | `version` | MUST be present. Semantic version string. |
-| `allowed-tools` | MUST be present. Space-delimited tool capability list (e.g. `bash, file-operations`). |
+| `allowed-tools` | MUST be present. YAML **plain or quoted scalar** (not a sequence). Value grammar: one or more capability tokens separated by `,` with optional ASCII space after each comma (e.g. `bash, file-operations`). Tokens MUST NOT contain commas. Validators MUST split on commas and trim surrounding space; they MUST NOT treat spaces as an alternate delimiter. |
 
 ### 1.4.2 Activation
 
