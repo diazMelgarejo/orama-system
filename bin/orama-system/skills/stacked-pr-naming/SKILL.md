@@ -1,13 +1,14 @@
 ---
 name: stacked-pr-naming
+format_profile: composable-atom
 description: >-
   Canonical stacked-PR branch and title format so PR(N+1) is based on PR(N)
   and merge order is obvious in the PR name. Activates for stacked PRs,
   stack/NN branches, [NN/TT → merged] titles, security PR stacking, periscope
   onto-merged branches, PR(N+1) rebase, and conflict-minimizing merge order.
-version: 1.0.0
+version: 1.1.0
 license: Apache 2.0
-compatibility: cursor, claude-code, codex, openclaw, hermes-harness, orama-system
+compatibility: kungfu-atom, cursor, claude-code, codex, openclaw, hermes-harness, orama-system
 parent_skill: git-history-surgery
 triggers:
   - stacked PR
@@ -19,11 +20,21 @@ triggers:
   - [0/4 → merged]
   - branch naming convention
 allowed-tools: file-operations
+outcome: >-
+  Branch is stack/NN-short-topic, the PR title is
+  [NN/TT → <integration-base>] <type>: <summary>, and GitHub base is the
+  integration branch for NN=00 or stack/(NN-1)-… otherwise; PR(N+1) is based
+  on PR(N).
+approval_limit: ask-first
+references:
+  - {type: reference, path: eval/stacked-pr-naming-checklist.md}
+  - {type: owner, repo: orama-system, ref: skills/git-history-surgery}
+  - {type: pr, repo: diazMelgarejo/orama-system, id: 361}
 ---
 
 # Stacked PR Naming
 
-> **Thin OSSF-1 entry.** Full formats, repo integration bases, and worked
+> **Thin OSSF Part 2 composable-atom.** Full formats, repo integration bases, and worked
 > periscope stack:
 > [`../git-history-surgery/references/stacked-pr-naming-reference-card.md`](../git-history-surgery/references/stacked-pr-naming-reference-card.md)
 

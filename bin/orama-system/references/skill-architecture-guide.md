@@ -98,9 +98,16 @@ references/date-formats.md (loaded on demand):
 
 ### OSSF-1 extension — composable atomic skills
 
-Oramasys Standard Skill Format (OSSF-1) is enforced by
+Oramasys Standard Skill Format (OSSF-1 / OSSF Part 1) is enforced by
 `scripts/hooks/check_ossf1_skill_md.py` (frontmatter, `## Boundaries` with Always /
 Ask / Never, `## Purpose` or `## When to Use`, 500-line hard ceiling).
+
+**New** `SKILL.md` files authored as composable atoms (this PR forward) MUST
+also declare OSSF Part 2: `format_profile: composable-atom`, `outcome`,
+`approval_limit` (`never` | `ask-first` | `auto`), and a block-style typed
+`references:` list. `allowed-tools` is a comma-separated YAML scalar.
+Existing skills stay `format_profile: core` (Part 1 only) until explicitly
+migrated — do not retrofit Part 2 onto old cards in the same change.
 
 **Composable atomic skills** reuse one reference card from many thin `SKILL.md`
 files. Do **not** copy the procedure into each sibling skill.
@@ -112,7 +119,7 @@ files. Do **not** copy the procedure into each sibling skill.
 | Eval | `skills/<name>/eval/<name>-checklist.md` | Before declaring done |
 
 Example: [`skills/stacked-pr-naming/SKILL.md`](../skills/stacked-pr-naming/SKILL.md)
-orchestrates; [`skills/git-history-surgery/references/stacked-pr-naming-reference-card.md`](../skills/git-history-surgery/references/stacked-pr-naming-reference-card.md)
+is the thin Part 2 atom; [`skills/git-history-surgery/references/stacked-pr-naming-reference-card.md`](../skills/git-history-surgery/references/stacked-pr-naming-reference-card.md)
 is the shared git card. Sibling git skills (`git-pending-push-guard`,
 `using-git-worktrees`, `cursor-pr-body`, `oramasys-method`, `code-review`,
 `fable5-git-rebase-safety`, `security`, `cursor-agent`) **link** that card.

@@ -14,6 +14,8 @@ from pathlib import Path
 CANONICAL_PREFIX = "bin/orama-system/"
 MAX_LINES = 500
 MIN_DESC = 20
+ALLOWED_PROFILES = frozenset({"core", "composable-atom", "composite-consumer"})
+APPROVAL_LIMITS = frozenset({"never", "ask-first", "auto"})
 
 FM_RE = re.compile(r"^(?:<!--.*?-->\s*)?---\r?\n(.*?)\r?\n---", re.S | re.M)
 BOUNDARIES_RE = re.compile(r"^##\s+Boundaries\b.*?(?=^##\s|\Z)", re.M | re.S)
@@ -145,7 +147,50 @@ def validate(rel: Path) -> list[str]:
     if not re.search(r"^##\s+(Purpose|When to Use)\b", body, re.M):
         errors.append(f"{rel}: missing ## Purpose or ## When to Use")
 
+    # Part 1: allowed-tools is a YAML scalar, not a sequence.
+    tools_key = "allowed-tools" if "allowed-tools" in fm else "allowed_tools"
+    if tools_key in fm and has_list_key(fm, tools_key):
+        errors.append(
+            f"{rel}: allowed-tools MUST be a YAML scalar (comma-separated "
+            "tokens), not a sequence"
+        )
+
+    errors.extend(_validate_profile(rel, fm))
     return errors
+
+
+def _validate_profile(rel: Path, fm: dict[str, str]) -> list[str]:
+    """Part 4 pipeline: unknown profile fails; Part 2 only for composable-atom.
+
+    Existing core cards keep Part 1 only. New atoms that set
+    ``format_profile: composable-atom`` MUST carry outcome, approval_limit,
+    and a block-style typed ``references`` list.
+    """
+    errors: list[str] = []
+    raw = fm.get("format_profile", "").strip()
+    profile = raw or "core"
+    if profile not in ALLOWED_PROFILES:
+        errors.append(
+            f"{rel}: format_profile {profile!r} is not one of "
+            f"{sorted(ALLOWED_PROFILES)}"
+        )
+        return errors
+    if profile != "composable-atom":
+        return errors
+    if not fm.get("outcome", "").strip():
+        errors.append(f"{rel}: composable-atom missing required key 'outcome'")
+    limit = fm.get("approval_limit", "").strip()
+    if limit not in APPROVAL_LIMITS:
+        errors.append(
+            f"{rel}: composable-atom approval_limit must be one of "
+            f"{sorted(APPROVAL_LIMITS)}"
+        )
+    if not has_list_key(fm, "references"):
+        errors.append(
+            f"{rel}: composable-atom requires a block-style references: list"
+        )
+    return errors
+
 
 
 def main() -> int:
