@@ -143,6 +143,21 @@ def body_digest(body: str | bytes) -> str:
     return f"sha256:{hashlib.sha256(body_bytes).hexdigest()}"
 
 
+def canonical_gh_view_body(body: bytes) -> bytes:
+    """Remove only ``gh pr view --jq .body``'s final presentation LF.
+
+    A grant reservation hashes the exact body passed to ``gh pr edit``.  The
+    ``--jq .body`` readback used for reconciliation serializes that JSON string
+    followed by one display newline.  Keeping that transport byte makes an
+    already-landed write look different and can release a one-shot grant after
+    a crash.  This boundary-specific helper deliberately does not normalize
+    ordinary body bytes or embedded/trailing newlines in the body itself.
+    """
+    if not body.endswith(b"\n"):
+        raise GrantError("gh pr view body output is missing its presentation newline")
+    return body[:-1]
+
+
 def _validate_body_digest(value: str, field: str) -> None:
     """Raise ``GrantError`` unless value is a lowercase ``sha256:`` digest."""
     if not DIGEST_RE.fullmatch(value):
@@ -977,8 +992,8 @@ def _cmd_mark_applied(args: argparse.Namespace) -> int:
 
 def _cmd_reconcile(args: argparse.Namespace) -> int:
     try:
-        remote_body = Path(args.remote_body_file).read_bytes()
-    except OSError as exc:
+        remote_body = canonical_gh_view_body(Path(args.remote_body_file).read_bytes())
+    except (OSError, GrantError) as exc:
         print(f"error: cannot read remote body file: {exc}", file=sys.stderr)
         return 1
     ok, err = reconcile_pending_consume(

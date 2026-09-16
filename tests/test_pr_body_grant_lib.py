@@ -488,9 +488,11 @@ def test_reconcile_cli_preserves_crlf_body_bytes(
 ) -> None:
     append = tmp_path / "follow.md"
     append.write_text("exact payload", encoding="utf-8")
+    # `gh pr view --jq .body` adds one presentation LF after the JSON string.
+    # The CRLF inside the PR body remains part of the canonical body bytes.
     remote_body = b"## Summary\r\n\r\noperator content\r\n"
     remote_body_file = tmp_path / "remote.md"
-    remote_body_file.write_bytes(remote_body)
+    remote_body_file.write_bytes(remote_body + b"\n")
     grant_lib.mint_grant("owner/repo", "19", str(append), None)
     ok_reserve, err_reserve = grant_lib.reserve_grant_for_append(
         "owner/repo",
@@ -514,6 +516,48 @@ def test_reconcile_cli_preserves_crlf_body_bytes(
     )
 
     assert result == 0
+
+
+def test_reconcile_cli_consumes_already_written_body_after_crash(
+    grant_lib: ModuleType, tmp_path: Path
+) -> None:
+    """A `gh --jq` presentation LF must not prevent crash recovery.
+
+    The reservation records the exact body written by `gh pr edit`; a later
+    `gh pr view --jq .body` appends one display LF.  Reconciliation must
+    remove only that transport byte before comparing the persisted digest,
+    otherwise the EXIT trap can release an already-used one-shot grant.
+    """
+    append = tmp_path / "follow.md"
+    append.write_text("recovery note", encoding="utf-8")
+    merged_body = b"## Summary\n\noperator content\n\n## Follow-up\n\nrecovery note"
+    remote_body_file = tmp_path / "remote.md"
+    remote_body_file.write_bytes(merged_body + b"\n")
+    grant_lib.mint_grant("owner/repo", "21", str(append), None)
+    ok_reserve, err_reserve = grant_lib.reserve_grant_for_append(
+        "owner/repo",
+        "21",
+        str(append),
+        None,
+        base_body_digest=grant_lib.body_digest("obsolete base"),
+        merged_body_digest=grant_lib.body_digest(merged_body),
+    )
+    assert ok_reserve, err_reserve
+    nonce = grant_lib.read_ack_fields()["grant-nonce"]
+
+    result = grant_lib._cmd_reconcile(
+        Namespace(
+            repo="owner/repo",
+            pr="21",
+            file=str(append),
+            message=None,
+            remote_body_file=str(remote_body_file),
+            title="Follow-up",
+        )
+    )
+
+    assert result == 0
+    assert grant_lib.nonce_is_consumed(nonce)
 
 
 def test_mark_matching_remote_applied_requires_exact_identity(
