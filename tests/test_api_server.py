@@ -212,11 +212,24 @@ def test_http_bridge_uses_guarded_pt_pipeline_when_approval_refs_are_supplied(
     body = response.json()
     assert body["result"] == "tiered output"
     assert body["model_used"] == "strong-ready"
-    assert body["metadata"]["pipeline_models"] == {
-        "classify": "fast-ready",
-        "generate": "strong-ready",
-    }
+    assert "pipeline_models" not in body["metadata"]
+    assert body["metadata"]["pipeline_replay"] is False
     assert calls["trace_id"] == "approved-trace"
+
+
+def test_nested_control_plane_call_requires_pipeline_approval_refs():
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": "1"},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "CONTROL_PLANE_LOOP"
 
 
 def test_pipeline_approval_references_must_be_supplied_together():

@@ -35,7 +35,13 @@ from utils.control_plane_auth import (
 from utils.model_endpoint_url import ModelEndpointPolicyError, validate_model_endpoint_url
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator, Field
 import httpx
-from orama_system.pt_pipeline_client import PTPipelineClient, PTPipelineError
+from orama_system.pt_pipeline_client import (
+    CONTROL_PLANE_DEPTH_HEADER,
+    PTPipelineClient,
+    PTPipelineError,
+)
+
+MAX_CONTROL_PLANE_DEPTH = 2
 from bin.shared.bridge_contract import (
     OPTIMIZE_FOR_TO_REASONING_DEPTH,
     optimize_for_to_reasoning_depth,
@@ -658,10 +664,33 @@ async def _control_plane_auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+def _control_plane_depth(http_request: Request) -> int:
+    raw = http_request.headers.get(CONTROL_PLANE_DEPTH_HEADER, "").strip()
+    if not raw:
+        return 0
+    try:
+        return int(raw)
+    except ValueError:
+        return MAX_CONTROL_PLANE_DEPTH + 1
+
+
 @app.post("/oramasys", response_model=OramasysResponse)
 async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysResponse:
     start = time.perf_counter()
-    
+    inbound_depth = _control_plane_depth(http_request)
+    has_pipeline_refs = bool(req.pipeline_trace_id and req.pipeline_idempotency_key)
+    if inbound_depth >= 1 and not has_pipeline_refs:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "CONTROL_PLANE_LOOP",
+                "detail": (
+                    "Nested control-plane calls must use pipeline_trace_id and "
+                    "pipeline_idempotency_key to invoke PT's guarded pipeline route"
+                ),
+            },
+        )
+
     # Resolve reasoning depth and optimize_for (sync them)
     if req.reasoning_depth:
         reasoning_depth = req.reasoning_depth
@@ -742,7 +771,6 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
     )
 
     prompt = f"Applying {reasoning_depth}-depth reasoning for task: {req.task_description}"
-    pipeline_models: dict[str, str] = {}
     pipeline_replay = False
     if req.pipeline_trace_id and req.pipeline_idempotency_key:
         try:
@@ -751,6 +779,7 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
                 prompt=prompt,
                 trace_id=req.pipeline_trace_id,
                 idempotency_key=req.pipeline_idempotency_key,
+                control_plane_depth=inbound_depth + 1,
             )
         except PTPipelineError as exc:
             return JSONResponse(
@@ -764,10 +793,10 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
                 },
             )
         result = pipeline_result.output
-        pipeline_models = dict(pipeline_result.models_used)
         pipeline_replay = getattr(pipeline_result, "replay", False)
-        model = pipeline_models.get("generate") or next(
-            reversed(pipeline_models.values()),
+        selected_models = dict(pipeline_result.models_used)
+        model = selected_models.get("generate") or next(
+            reversed(selected_models.values()),
             model,
         )
         backend_attempted = "pt_pipeline"
@@ -791,7 +820,6 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
             "model_hint_used": req.model_hint is not None,
             "backend_priority": backend_router.priority,
             "backend_attempted": backend_attempted,
-            "pipeline_models": pipeline_models,
             "pipeline_replay": pipeline_replay,
             # PT final handoff audit — always present so callers know policy authority
             "policy_source": _policy_resolver.source,

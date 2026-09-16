@@ -57,6 +57,7 @@ async def test_client_calls_only_guarded_pt_pipeline_with_auth_and_idempotency(
     request = requests[0]
     assert request.headers["authorization"] == "Bearer pt-test-token"
     assert request.headers["idempotency-key"] == "4ee06db8-8424-4a82-9654-d24c9597ac2e"
+    assert request.headers["x-control-plane-depth"] == "1"
     assert request.url.path == "/pipelines/classify_then_generate/run"
     assert result.output == "final"
     assert result.models_used["generate"] == "strong-ready"

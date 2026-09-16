@@ -16,6 +16,7 @@ from utils.model_endpoint_url import ModelEndpointPolicyError, validate_model_en
 
 DEFAULT_CONFIG = Path(__file__).resolve().parent / "config" / "pipeline-routing.yml"
 _ALLOWED_KEYS = frozenset({"version", "enabled", "pt_base_url", "recipes"})
+CONTROL_PLANE_DEPTH_HEADER = "X-Control-Plane-Depth"
 
 
 class PTPipelineError(RuntimeError):
@@ -89,10 +90,12 @@ class PTPipelineClient:
         prompt: str,
         trace_id: str,
         idempotency_key: str,
+        control_plane_depth: int = 1,
     ) -> PTPipelineResult:
         headers = {
             **auth_headers(),
             "Idempotency-Key": idempotency_key,
+            CONTROL_PLANE_DEPTH_HEADER: str(control_plane_depth),
         }
         timeout = httpx.Timeout(120.0, connect=10.0)
         try:
