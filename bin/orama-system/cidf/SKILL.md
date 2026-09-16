@@ -114,8 +114,12 @@ response satisfies none of the later gates by itself:
 
 For text, prefer an explicit UTF-8 content path. Base64 is permitted only when
 the transport requires it and only with byte-for-byte remote verification.
-Never merge after a local-only check. See
-[`references/remote-content-integrity-reference-card.md`](references/remote-content-integrity-reference-card.md).
+Never merge after a local-only check. Terminology note: these are the four
+independent integrity *facts*; the lifecycle has five checkpoints (A-E), where
+checkpoint D revalidates Fact 3 before merge rather than adding a fifth fact.
+See the normative card for the full model:
+[`references/remote-content-integrity-reference-card.md`](references/remote-content-integrity-reference-card.md)
+— 4 facts / 5 checkpoints (A-E).
 
 ## Target Verification (pre-insert) — Mandatory
 
