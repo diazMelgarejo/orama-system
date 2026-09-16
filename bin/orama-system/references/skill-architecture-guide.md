@@ -96,6 +96,29 @@ references/date-formats.md (loaded on demand):
 
 **Result**: Context window stays clean. Detailed reference is available when the agent specifically needs it.
 
+### OSSF-1 extension — composable atomic skills
+
+Oramasys Standard Skill Format (OSSF-1) is enforced by
+`scripts/hooks/check_ossf1_skill_md.py` (frontmatter, `## Boundaries` with Always /
+Ask / Never, `## Purpose` or `## When to Use`, 500-line hard ceiling).
+
+**Composable atomic skills** reuse one reference card from many thin `SKILL.md`
+files. Do **not** copy the procedure into each sibling skill.
+
+| Layer | File | Loaded when |
+|-------|------|-------------|
+| Discovery | `skills/<name>/SKILL.md` (target ≤ 200 lines) | Skill triggers |
+| Atomic card | `skills/<hub>/references/<topic>-reference-card.md` (one level from SKILL.md) | After the thin skill, or via sibling “Related” links |
+| Eval | `skills/<name>/eval/<name>-checklist.md` | Before declaring done |
+
+Example: [`skills/stacked-pr-naming/SKILL.md`](../skills/stacked-pr-naming/SKILL.md)
+orchestrates; [`skills/git-history-surgery/references/stacked-pr-naming-reference-card.md`](../skills/git-history-surgery/references/stacked-pr-naming-reference-card.md)
+is the shared git card. Sibling git skills (`git-pending-push-guard`,
+`using-git-worktrees`, `cursor-pr-body`, `oramasys-method`, `code-review`,
+`fable5-git-rebase-safety`, `security`, `cursor-agent`) **link** that card.
+
+Same pattern as `git-pending-push-guard` → `pending-operation-push-guard-reference-card.md`.
+
 ---
 
 ## Calibrating Degrees of Freedom
