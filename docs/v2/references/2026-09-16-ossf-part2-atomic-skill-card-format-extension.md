@@ -106,9 +106,10 @@ the reference implementation alias (`check_ossf1_skill_md.py`, per Part 4
 frontmatter value as a string, not a parsed structure. It cannot today parse
 or validate this typed mapping list (`type` discriminator, per-type required
 fields). Its list-detection heuristic (`has_list_key`) only treats a value as
-a list when a line begins with `- ` (block-style). **§2.9 below is
-block-style** (`references:` entries each start with `- {type: ...}`): the
-inner `{...}` is a flow-style *mapping*, not a flow-style *sequence*.
+a list when a line begins with hyphen-space (a `-` marker then a space).
+**§2.9 below is block-style** (`references:` entries each start with that
+hyphen-space form, e.g. `- {type: ...}`): the inner `{...}` is a flow-style
+*mapping*, not a flow-style *sequence*.
 `has_list_key` therefore accepts §2.9 `references` and rejects a true
 flow-style sequence such as `triggers: [pre-merge integrity]` (Part 3 §3.5)
 or `triggers: [cherry reanchor, rewritten history, headRefOid]`
