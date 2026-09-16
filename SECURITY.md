@@ -168,10 +168,15 @@ reviewers can merge fixes in risk order without losing dependency context.
 
 ```text
 origin/main
-  └─ security/01-control-plane-auth-bind      → PR1 base: main
-      └─ security/02-model-egress-probes      → PR2 base: security/01-control-plane-auth-bind
-          └─ security/03-mcp-readonly-profile → PR3 base: security/02-model-egress-probes
+  └─ stack/00-control-plane-auth-bind      → [0/3 → main]  GitHub base: main
+      └─ stack/01-model-egress-probes      → [1/3 → main]  GitHub base: stack/00-…
+          └─ stack/02-mcp-readonly-profile → [2/3 → main]  GitHub base: stack/01-…
 ```
+
+**Naming (mandatory for every stack):** [`bin/orama-system/skills/stacked-pr-naming/SKILL.md`](bin/orama-system/skills/stacked-pr-naming/SKILL.md)
+and [`bin/orama-system/skills/git-history-surgery/references/stacked-pr-naming-reference-card.md`](bin/orama-system/skills/git-history-surgery/references/stacked-pr-naming-reference-card.md).
+Topic prefixes such as `security/01-…` remain valid **only** as `short-topic`
+inside `stack/NN-short-topic` (example: `stack/00-control-plane-auth-bind`).
 
 ### Current branch survey (2026-05-26)
 

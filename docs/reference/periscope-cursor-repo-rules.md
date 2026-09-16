@@ -36,13 +36,19 @@ carries pre-merge commits, replay **only the harmonized path delta** onto fresh
 
 ### Merge order into `merged`
 
+Use stacked naming (`stack/NN`, `[NN/TT → merged]`) from
+[`bin/orama-system/skills/stacked-pr-naming/SKILL.md`](../../bin/orama-system/skills/stacked-pr-naming/SKILL.md).
+`PR(N+1)` GitHub-bases on `PR(N)`, not all on `merged`.
+
 | Step | Branch | Content |
 |------|--------|---------|
-| **1** | `onto-merged/01-deps-cargo-tauri` | Cargo lock / tauri 2.11.1 |
-| **2** | `onto-merged/02-deps-npm-svelte-postcss` | svelte + postcss only (not full old `deps/2` branch) |
-| **3** | `onto-merged/03-docs-cursor-cloud-agents` | `AGENTS.md` Cursor Cloud section (cherry-pick, not stale PR #4 branch) |
+| **0** | `stack/00-sync-agentsview-into-merged` | Absorb grandmother lineage into `merged` first |
+| **1** | `stack/01-deps-cargo-tauri` | Cargo lock / tauri bump |
+| **2** | `stack/02-deps-npm-svelte-postcss` | svelte + postcss only (not full old `deps/2` branch) |
+| **3** | `stack/03-docs-cursor-cloud-agents` | `AGENTS.md` Cursor Cloud section (cherry-pick, not stale PR #4 branch) |
 
-Commit and push the `.cursor/rules/` files on branch **`merged`** (not `main`).
+Legacy `onto-merged/NN-…` names are superseded. Commit and push Cursor rules on
+**`merged`** (not `main`).
 
 ## What the rule encodes
 
@@ -56,9 +62,12 @@ Summarizes established doctrine from:
 
 ### Branch model
 
-- **`agentsview`** — grandmother (latest agentsview upstream)
-- **`main`** — `latentsignal-org/periscope` mirror only
-- **`merged`** — build branch; **all fork PRs base here**
+Lineage: `kenn-io/agentsview:main` → `latentsignal-org/periscope` →
+`diazMelgarejo/periscope:merged`.
+
+- **`agentsview`** — grandmother sourced from `kenn-io/agentsview:main`
+- **`main`** — mirror of `latentsignal-org/periscope` only (not a PR target)
+- **`merged`** — working/build branch combining both lines; **all fork PRs stack here**
 
 ### Cursor-only extras
 
@@ -68,7 +77,7 @@ VM Go version, CGO, frontend-before-tests, git identity, and salvage rules are i
 
 ## Related
 
-- [Agent first-open visibility](agent-first-open-visibility.md) — orama vs periscope surfaces
+- [Stacked PR naming](../../bin/orama-system/skills/stacked-pr-naming/SKILL.md) — `stack/NN` + `[NN/TT → merged]`
 - [Cursor cloud attribution](../wiki/12-cursor-cloud-commit-attribution.md) — orama-system
 - [PyPI packaging](periscope-pypi-packaging.md) — release-CI topic, not a Cursor-rules
   topic; linked here only as the other periscope reference doc in this directory

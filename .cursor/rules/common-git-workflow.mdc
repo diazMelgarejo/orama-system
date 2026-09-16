@@ -23,6 +23,8 @@ When creating PRs:
 3. Draft comprehensive PR summary
 4. Include test plan with TODOs
 5. Push with `-u` flag if new branch
+6. **Stacked PRs:** `bin/orama-system/skills/stacked-pr-naming/SKILL.md` —
+   `stack/NN-short-topic` and `[NN/TT → <integration-base>]`; `PR(N+1)` bases on `PR(N)`
 
 When **updating** existing PR bodies: follow append-only workflow — see `.cursor/rules/append-only-pr-body.mdc` and `bin/orama-system/skills/cursor-pr-body/SKILL.md`. Never pass delta-only `body=` to `ManagePullRequest` or `gh pr edit`.
 

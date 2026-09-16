@@ -8,7 +8,8 @@
 > single commit, force-with-lease — no cross-merge ping-pong.
 > **Pair with:** [`fresh-main-integrity-diff-claygo.md`](../../using-git-worktrees/references/fresh-main-integrity-diff-claygo.md)
 > Protocol B/C; [`integrative-merge.md`](../../oramasys-method/references/integrative-merge.md)
-> synthesize mode.
+> synthesize mode; [`stacked-pr-naming-reference-card.md`](stacked-pr-naming-reference-card.md)
+> for `stack/NN` GitHub bases.
 
 Origin: periscope PR #12 ECC fusion (2026-07-28). PR #10 had already merged the ECC
 bundle onto `merged`; PR #12 still stacked two commits from pre-#10 `merged`, causing
