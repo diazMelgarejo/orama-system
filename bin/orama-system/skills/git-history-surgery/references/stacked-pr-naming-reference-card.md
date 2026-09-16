@@ -1,6 +1,9 @@
 # Stacked PR Naming — Git Reference Card
 
-> **OSSF-1 atomic card.** Thin skill: [`../stacked-pr-naming/SKILL.md`](../../stacked-pr-naming/SKILL.md).
+> **OSSF Part 2 composable-atom card.** Thin skill:
+> [`../stacked-pr-naming/SKILL.md`](../../stacked-pr-naming/SKILL.md).
+> Existing sibling skills stay OSSF-1 core and **link** this card; they are
+> not retrofitted to Part 2 unless explicitly migrated.
 > Load when opening, retitling, rebasing, or stacking PRs so merge order is
 > obvious in GitHub and `PR(N+1)` is always based on `PR(N)`.
 
