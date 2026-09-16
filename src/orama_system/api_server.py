@@ -33,8 +33,9 @@ from utils.control_plane_auth import (
     redact_runtime_section,
 )
 from utils.model_endpoint_url import ModelEndpointPolicyError, validate_model_endpoint_url
-from pydantic import BaseModel, ConfigDict, field_validator, Field
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator, Field
 import httpx
+from orama_system.pt_pipeline_client import PTPipelineClient, PTPipelineError
 from bin.shared.bridge_contract import (
     OPTIMIZE_FOR_TO_REASONING_DEPTH,
     optimize_for_to_reasoning_depth,
@@ -547,6 +548,18 @@ class OramasysRequest(BaseModel):
     request_id:       Optional[str] = Field(default=None)
     session_id:       Optional[str] = Field(default=None,
                                              description="v2 session correlation ID (perpetua-core/oramasys)")
+    pipeline_trace_id: Optional[str] = Field(
+        default=None,
+        min_length=8,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Reference to a previously registered PT pipeline approval",
+    )
+    pipeline_idempotency_key: Optional[str] = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        description="Canonical UUIDv4 used by PT's durable pipeline ledger",
+    )
     backend_priority: str = Field(
         default="local",
         pattern="^(local|cloud|windows)$",
@@ -560,6 +573,14 @@ class OramasysRequest(BaseModel):
         if not v.strip():
             raise ValueError("task_description must not be blank or whitespace-only")
         return v.strip()
+
+    @model_validator(mode="after")
+    def pipeline_references_are_atomic(self) -> "OramasysRequest":
+        if bool(self.pipeline_trace_id) != bool(self.pipeline_idempotency_key):
+            raise ValueError(
+                "pipeline_trace_id and pipeline_idempotency_key must be supplied together"
+            )
+        return self
 
 
 class OramasysResponse(BaseModel):
@@ -720,9 +741,38 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
         req.request_id, reasoning_depth, model, backend_attempted,
     )
 
-    # Call backend (stubbed/mocked; real implementation uses backend_router.ordered_endpoints())
     prompt = f"Applying {reasoning_depth}-depth reasoning for task: {req.task_description}"
-    result, _ = await _call_with_fallback(prompt, model, 4000, 0.7)
+    pipeline_models: dict[str, str] = {}
+    pipeline_replay = False
+    if req.pipeline_trace_id and req.pipeline_idempotency_key:
+        try:
+            pipeline_result = await PTPipelineClient().run(
+                task_type=req.task_type,
+                prompt=prompt,
+                trace_id=req.pipeline_trace_id,
+                idempotency_key=req.pipeline_idempotency_key,
+            )
+        except PTPipelineError as exc:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": "PIPELINE_UNAVAILABLE",
+                    "detail": _client_safe_detail(
+                        exc,
+                        fallback="PT pipeline could not complete the request",
+                    ),
+                },
+            )
+        result = pipeline_result.output
+        pipeline_models = dict(pipeline_result.models_used)
+        pipeline_replay = getattr(pipeline_result, "replay", False)
+        model = pipeline_models.get("generate") or next(
+            reversed(pipeline_models.values()),
+            model,
+        )
+        backend_attempted = "pt_pipeline"
+    else:
+        result, _ = await _call_with_fallback(prompt, model, 4000, 0.7)
 
     elapsed_ms = int((time.perf_counter() - start) * 1000)
 
@@ -741,6 +791,8 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
             "model_hint_used": req.model_hint is not None,
             "backend_priority": backend_router.priority,
             "backend_attempted": backend_attempted,
+            "pipeline_models": pipeline_models,
+            "pipeline_replay": pipeline_replay,
             # PT final handoff audit — always present so callers know policy authority
             "policy_source": _policy_resolver.source,
             "pt_authoritative": _policy_resolver.pt_available,

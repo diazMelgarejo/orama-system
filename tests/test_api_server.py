@@ -175,6 +175,131 @@ def test_legacy_ultrathink_route_shims_to_oramasys(monkeypatch):
     assert body["nodes_visited"] == ["oramasys_node"]
 
 
+def test_http_bridge_uses_guarded_pt_pipeline_when_approval_refs_are_supplied(
+    monkeypatch,
+):
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs):
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {
+                    "output": "tiered output",
+                    "models_used": {
+                        "classify": "fast-ready",
+                        "generate": "strong-ready",
+                    },
+                },
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"] == "tiered output"
+    assert body["model_used"] == "strong-ready"
+    assert body["metadata"]["pipeline_models"] == {
+        "classify": "fast-ready",
+        "generate": "strong-ready",
+    }
+    assert calls["trace_id"] == "approved-trace"
+
+
+def test_pipeline_approval_references_must_be_supplied_together():
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+            },
+        )
+
+    assert response.status_code == 422
+
+
+def test_pipeline_idempotency_key_also_requires_trace_id():
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 422
+
+
+def test_http_bridge_preserves_safe_pipeline_replay(monkeypatch):
+    class FakePipelineClient:
+        async def run(self, **kwargs):
+            return type(
+                "Result",
+                (),
+                {
+                    "output": "",
+                    "models_used": {},
+                    "replay": True,
+                },
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["result"] == ""
+    assert response.json()["metadata"]["pipeline_replay"] is True
+
+
+def test_http_bridge_reports_pt_pipeline_failure_as_unavailable(monkeypatch):
+    class FakePipelineClient:
+        async def run(self, **kwargs):
+            raise api_server.PTPipelineError("PT pipeline request failed")
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"] == "PIPELINE_UNAVAILABLE"
+
+
 def test_http_health_endpoint(monkeypatch):
     monkeypatch.setattr(api_server.httpx, "AsyncClient", _FakeAsyncClient)
 
