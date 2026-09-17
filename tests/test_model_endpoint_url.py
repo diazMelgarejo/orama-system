@@ -43,6 +43,19 @@ def test_public_blocked_without_opt_in():
         validate_model_endpoint_url("http://1.1.1.1:1234")
 
 
+def test_127_prefix_hostname_not_treated_as_loopback():
+    with pytest.raises(ModelEndpointPolicyError, match="RFC1918"):
+        validate_model_endpoint_url("http://127.attacker.example:8000")
+
+
+def test_127_prefix_hostname_blocked_with_require_tls_flag():
+    with pytest.raises(ModelEndpointPolicyError, match="RFC1918"):
+        validate_model_endpoint_url(
+            "http://127.attacker.example:8000",
+            require_tls_for_non_loopback=True,
+        )
+
+
 def test_public_allowed_with_opt_in(monkeypatch):
     monkeypatch.setenv("ALLOW_PUBLIC_MODEL_ENDPOINTS", "1")
     assert validate_model_endpoint_url("http://1.1.1.1:1234") == "http://1.1.1.1:1234"
