@@ -5,18 +5,40 @@ and cross-references; replaces nothing. Every source remains authoritative
 for its own layer.
 **Date:** 2026-09-12
 **Compiled from (all verified at `diazMelgarejo/orama-system` main `bb7069c7`):**
-- [`docs/v2/44-docs-v2-skills.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/44-docs-v2-skills.md) — the v2 Skills Format Standard (normative shape, size policy, dry-run rule, acceptance criteria)
-- [`docs/v2/46-repository-standard.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/46-repository-standard.md) — cross-cutting repository standard (additive to every docs/v2 plan)
-- [`docs/v2/02-modules/lessons-and-skill-authoring.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/02-modules/lessons-and-skill-authoring.md) — authoring toolchain module
-- `bin/orama-system/skills/skillify/references/modular-skill-authoring.md` — Claude Code skill standards, intake questions, frontmatter routing, clobber/collision guards
-- `bin/orama-system/skills/skillify/references/skill-folder-template.md` — folder + SKILL.md skeleton source
-- `docs/v2/references/ORAMASYS-MASTERY-v3.md` — methodology authority (outcome-over-activity, verification-before-done/LINT-002, 3-Layer Framework)
-- Kungfu v2 plan + v1 skill inventory (`2026-09-14-kungfu-v2-composable-skills-mvp-plan.md`, `2026-09-14-kungfu-v1-skill-inventory.md`) — atom/composite/manifest layer and the five-owner routing table
-- **OSSF draft suite** (`2026-09-16-ossf-part0-introduction.md` → Parts 1–4) — normative target for **Open Standard Skill Format (core)** + **Atomic Skill Card Format Extension**
-- **OSSF-1 saga** (PT `.agent/memory/semantic/OSSF1_SKILL_FORMAT_STANDARDIZATION_SAGA_2026-08-07.md`) — fusion inventory, pilot wave, pre-commit enforcement; reconciled here 2026-09-16 via `2026-09-12-ossf1-to-atomic-card-reconciliation-plan.md`
-- PT `lesson_adda4d2b02c3`, `lesson_74da980b662b`, `lesson_1e176602744c`, `lesson_2bb73f680949` — merge/reanchor, scope, progressive disclosure, BOM traps
-- PT PR #391 + orama-system PR #357 — remote content-integrity gates (three-gate check, append-only dossier)
-- oramasys PR #12 — routed-model parity invariant (dispatch executes exactly what routing selected)
+
+- [`docs/v2/44-docs-v2-skills.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/44-docs-v2-skills.md)
+  — the v2 Skills Format Standard (normative shape, size policy, dry-run
+  rule, acceptance criteria)
+- [`docs/v2/46-repository-standard.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/46-repository-standard.md)
+  — cross-cutting repository standard (additive to every docs/v2 plan)
+- [`docs/v2/02-modules/lessons-and-skill-authoring.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/02-modules/lessons-and-skill-authoring.md)
+  — authoring toolchain module
+- `bin/orama-system/skills/skillify/references/modular-skill-authoring.md`
+  — Claude Code skill standards, intake questions, frontmatter routing,
+  clobber/collision guards
+- `bin/orama-system/skills/skillify/references/skill-folder-template.md`
+  — folder + SKILL.md skeleton source
+- `docs/v2/references/ORAMASYS-MASTERY-v3.md` — methodology authority
+  (outcome-over-activity, verification-before-done/LINT-002, 3-Layer
+  Framework)
+- Kungfu v2 plan + v1 skill inventory
+  (`2026-09-14-kungfu-v2-composable-skills-mvp-plan.md`,
+  `2026-09-14-kungfu-v1-skill-inventory.md`) — atom/composite/manifest
+  layer and the five-owner routing table
+- **OSSF draft suite** (`2026-09-16-ossf-part0-introduction.md` → Parts
+  1–4) — normative target for **Open Standard Skill Format (core)** +
+  **Atomic Skill Card Format Extension**
+- **OSSF-1 saga** (PT
+  `.agent/memory/semantic/OSSF1_SKILL_FORMAT_STANDARDIZATION_SAGA_2026-08-07.md`)
+  — fusion inventory, pilot wave, pre-commit enforcement; reconciled here
+  2026-09-16 via `2026-09-12-ossf1-to-atomic-card-reconciliation-plan.md`
+- PT `lesson_adda4d2b02c3`, `lesson_74da980b662b`, `lesson_1e176602744c`,
+  `lesson_2bb73f680949` — merge/reanchor, scope, progressive disclosure,
+  BOM traps
+- PT PR #391 + orama-system PR #357 — remote content-integrity gates
+  (three-gate check, append-only dossier)
+- oramasys PR #12 — routed-model parity invariant (dispatch executes
+  exactly what routing selected)
 
 **Format lineage (additive — retires nothing):**
 
@@ -54,6 +76,7 @@ Before writing anything, classify the new skill:
 | **C. Orbit-satellite package** | It makes policy decisions, holds credentials, dials endpoints, owns hardware/model selection, or persists memory | A specialist v2 repo: telos (endpoint/transport), phylax (security/admission), agate (hardware/model selection), anamnesis (memory/lessons), alexandria (canonical docs/specs) |
 
 **Routing precedence (applies in this order):**
+
 1. **Domain-owner routing first** — if the content makes policy decisions
    (security/admission → phylax; endpoint/transport/auth → telos;
    hardware/model selection → agate; memory/lesson persistence → anamnesis),
@@ -74,9 +97,11 @@ Before writing anything, classify the new skill:
 1. lowercase kebab-case, 1-64 chars, matching the directory name.
 2. Run the ONE shared namespace collision check before ANY write — including
    at naming time, not just publish time:
+
    ```bash
    bash "$(git rev-parse --show-toplevel)/scripts/check-skill-namespace-collision.sh" <name>
    ```
+
    Exit 0 + `clear: <name>` → safe. Exit 1 + `COLLISION: ...` → pick a
    disambiguated name (precedent: `oramasys-<name>`, e.g. `oramasys-method`,
    `oramasys-skillify`). Never continue with a colliding name.
@@ -84,6 +109,7 @@ Before writing anything, classify the new skill:
    directory set (intent, method, edit, shell, git, review, coordination),
    verb in imperative, no owner names in atom IDs.
 4. Run the in-repo clobber guard before writing:
+
    ```bash
    TARGET_DIR="bin/orama-system/skills/<name>"   # or kungfu skills/<domain>/<verb>
    [ -d "$TARGET_DIR" ] && find "$TARGET_DIR" -maxdepth 2 -type f | sort
@@ -123,7 +149,10 @@ optional `references/` — composites order atoms but never duplicate prose.
 
 ### 4.0 Open Standard Skill Format (normative draft — this guide is informative)
 
-**Normative target:** [`2026-09-16-ossf-part1-core-open-standard-skill-format.md`](2026-09-16-ossf-part1-core-open-standard-skill-format.md) (**OSSF core**). This section summarizes for onboarding; where they differ, Part 1 wins.
+**Normative target:**
+[`2026-09-16-ossf-part1-core-open-standard-skill-format.md`](2026-09-16-ossf-part1-core-open-standard-skill-format.md)
+(**OSSF core**). This section summarizes for onboarding; where they differ,
+Part 1 wins.
 
 Every skill card at every altitude (A/B/C) MUST satisfy **OSSF (core)**:
 
@@ -143,7 +172,8 @@ Every skill card at every altitude (A/B/C) MUST satisfy **OSSF (core)**:
 `outcome`, `approval_limit`, typed `references[]`, `<domain>/<verb-phrase>` name.
 
 **Composite consumers** (`format_profile: composite-consumer`) satisfy core +
-[`2026-09-16-ossf-part3-composite-consumer-profile.md`](2026-09-16-ossf-part3-composite-consumer-profile.md) only — **no Part 2 fields required**.
+[`2026-09-16-ossf-part3-composite-consumer-profile.md`](2026-09-16-ossf-part3-composite-consumer-profile.md)
+only — **no Part 2 fields required**.
 
 Kungfu atom field reconciliation (informative): Kungfu reviews Part 4 in
 [`2026-09-14-kungfu-v2-plan-reviews-ceo-eng-dx.md`](2026-09-14-kungfu-v2-plan-reviews-ceo-eng-dx.md).
@@ -195,7 +225,7 @@ paths: ["bin/orama-system/skills/**"]
 ## 5. Content routing table (where every kind of content goes)
 
 | Content | Destination |
-|---|---|
+| --- | --- |
 | Discovery metadata, 5-10 step workflow, hard prohibitions | `SKILL.md` |
 | Long rules, detailed procedures | `instructions/*.md` |
 | Golden paths and anti-patterns | `examples/good/*.md`, `examples/bad/*.md` |
