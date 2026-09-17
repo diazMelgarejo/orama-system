@@ -6,12 +6,12 @@ for its own layer.
 **Date:** 2026-09-12
 **Compiled from (all verified at `diazMelgarejo/orama-system` main `bb7069c7`):**
 
-- [`docs/v2/44-docs-v2-skills.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/44-docs-v2-skills.md)
+- [`docs/v2/44-docs-v2-skills.md`](https://github.com/diazMelgarejo/orama-system/blob/bb7069c7/docs/v2/44-docs-v2-skills.md)
   — the v2 Skills Format Standard (normative shape, size policy, dry-run
   rule, acceptance criteria)
-- [`docs/v2/46-repository-standard.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/46-repository-standard.md)
+- [`docs/v2/46-repository-standard.md`](https://github.com/diazMelgarejo/orama-system/blob/bb7069c7/docs/v2/46-repository-standard.md)
   — cross-cutting repository standard (additive to every docs/v2 plan)
-- [`docs/v2/02-modules/lessons-and-skill-authoring.md`](https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/02-modules/lessons-and-skill-authoring.md)
+- [`docs/v2/02-modules/lessons-and-skill-authoring.md`](https://github.com/diazMelgarejo/orama-system/blob/bb7069c7/docs/v2/02-modules/lessons-and-skill-authoring.md)
   — authoring toolchain module
 - `bin/orama-system/skills/skillify/references/modular-skill-authoring.md`
   — Claude Code skill standards, intake questions, frontmatter routing,
@@ -28,9 +28,9 @@ for its own layer.
 - **OSSF draft suite** (`2026-09-16-ossf-part0-introduction.md` → Parts
   1–4) — normative target for **Open Standard Skill Format (core)** +
   **Atomic Skill Card Format Extension**
-- **OSSF-1 saga** (PT
-  `.agent/memory/semantic/OSSF1_SKILL_FORMAT_STANDARDIZATION_SAGA_2026-08-07.md`)
-  — fusion inventory, pilot wave, pre-commit enforcement; reconciled here
+- **OSSF-1 saga** (PT internal saga record, 2026-08-07 — not a public path,
+  cited by date and description rather than workspace-local location) —
+  fusion inventory, pilot wave, pre-commit enforcement; reconciled here
   2026-09-16 via `2026-09-12-ossf1-to-atomic-card-reconciliation-plan.md`
 - PT `lesson_adda4d2b02c3`, `lesson_74da980b662b`, `lesson_1e176602744c`,
   `lesson_2bb73f680949` — merge/reanchor, scope, progressive disclosure,

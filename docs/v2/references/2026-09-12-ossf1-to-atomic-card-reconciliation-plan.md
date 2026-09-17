@@ -8,9 +8,10 @@
 Foundation = **Open Standard Skill Format (core)** (Part 1). Composable atoms
 use **OSSF (Atomic Skill Card Format Extension)** (Part 2). Composites use
 core + Part 3 only.
-**Sources reconciled:** OSSF-1 saga (PT `.agent/memory/semantic/
-OSSF1_SKILL_FORMAT_STANDARDIZATION_SAGA_2026-08-07.md`) + construction
-guide + doc 44 + doc 46 + skillify authoring references.
+**Sources reconciled:** OSSF-1 saga (PT internal saga record, 2026-08-07 —
+fusion inventory, pilot wave, pre-commit enforcement; not a public path,
+cited by date and description rather than workspace-local location) +
+construction guide + doc 44 + doc 46 + skillify authoring references.
 
 ## 1. Lineage declaration (additive — names the chain, retires nothing)
 
