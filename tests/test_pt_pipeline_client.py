@@ -108,3 +108,28 @@ def test_client_pipeline_url_stays_private_when_public_model_endpoints_are_allow
 
     with pytest.raises(PTPipelineError, match="trusted PT pipeline endpoint"):
         PTPipelineClient(config_path=client_config).pipeline_url("analysis")
+
+
+def test_client_rejects_plain_http_to_a_private_network_base_url(
+    client_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reproduces CodeRabbit review 5234774766 (PR#363), Finding 2.
+
+    This client sends a control-plane bearer token on every call
+    (auth_headers()); plain HTTP to a non-loopback base URL would send it
+    in cleartext across the LAN segment.
+    """
+    monkeypatch.setenv("ORAMASYS_PT_PIPELINE_BASE_URL", "http://192.168.1.50:8000")
+
+    with pytest.raises(PTPipelineError, match="trusted PT pipeline endpoint"):
+        PTPipelineClient(config_path=client_config).pipeline_url("analysis")
+
+
+def test_client_still_allows_the_documented_loopback_http_default(
+    client_config: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("ORAMASYS_PT_PIPELINE_BASE_URL", "http://localhost:8000")
+
+    url = PTPipelineClient(config_path=client_config).pipeline_url("analysis")
+
+    assert url == "http://localhost:8000/pipelines/classify_then_generate/run"

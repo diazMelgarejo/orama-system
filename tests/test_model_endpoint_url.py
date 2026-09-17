@@ -70,3 +70,55 @@ def test_parse_required_set_in_env_sentinel_skipped():
     assert parse_model_endpoint_list(raw, skip_invalid=True) == [
         "http://127.0.0.1:11434",
     ]
+
+
+# CodeRabbit review 5234774766 (PR#363), Finding 2: require_tls_for_non_loopback
+# is opt-in and default-off, so the PT pipeline client (the only caller that
+# sends a bearer token on every call) can require HTTPS beyond loopback
+# without changing behavior for LM Studio / Ollama / Windows-coder-pool
+# endpoints, which stay plain-HTTP-on-trusted-LAN by design.
+
+
+def test_default_still_allows_http_to_private_network_host():
+    assert (
+        validate_model_endpoint_url("http://192.168.1.50:8000")
+        == "http://192.168.1.50:8000"
+    )
+
+
+def test_require_tls_flag_allows_the_documented_loopback_default():
+    assert (
+        validate_model_endpoint_url(
+            "http://localhost:8000", require_tls_for_non_loopback=True
+        )
+        == "http://localhost:8000"
+    )
+    assert (
+        validate_model_endpoint_url(
+            "http://127.0.0.1:8000", require_tls_for_non_loopback=True
+        )
+        == "http://127.0.0.1:8000"
+    )
+
+
+def test_require_tls_flag_rejects_http_to_rfc1918_private_host():
+    with pytest.raises(ModelEndpointPolicyError, match="https"):
+        validate_model_endpoint_url(
+            "http://192.168.1.50:8000", require_tls_for_non_loopback=True
+        )
+
+
+def test_require_tls_flag_rejects_http_to_10_range_private_host():
+    with pytest.raises(ModelEndpointPolicyError, match="https"):
+        validate_model_endpoint_url(
+            "http://10.0.0.5:8000", require_tls_for_non_loopback=True
+        )
+
+
+def test_require_tls_flag_allows_https_to_private_network_host():
+    assert (
+        validate_model_endpoint_url(
+            "https://192.168.1.50:8443", require_tls_for_non_loopback=True
+        )
+        == "https://192.168.1.50:8443"
+    )

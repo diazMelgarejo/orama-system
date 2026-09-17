@@ -78,7 +78,17 @@ class PTPipelineClient:
             or str(self._config.get("pt_base_url", "")).strip()
         )
         try:
-            base = validate_model_endpoint_url(configured_base, allow_public=False)
+            # This client sends a control-plane bearer token on every call
+            # (see auth_headers() in run()); require_tls_for_non_loopback
+            # keeps the documented http://localhost default valid while
+            # refusing plain HTTP to any private-network (non-loopback)
+            # base URL, so that token is never sent in cleartext across a
+            # LAN segment.
+            base = validate_model_endpoint_url(
+                configured_base,
+                allow_public=False,
+                require_tls_for_non_loopback=True,
+            )
         except ModelEndpointPolicyError as exc:
             raise PTPipelineError("trusted PT pipeline endpoint is invalid") from exc
         return f"{base}/pipelines/{recipe}/run"
