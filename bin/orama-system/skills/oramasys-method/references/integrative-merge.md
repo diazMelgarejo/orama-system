@@ -125,6 +125,7 @@ Scope: Integratively merge <branch> into <base> without losing either side's int
 
 ## See also
 
+- [`../git-history-surgery/references/stacked-pr-naming-reference-card.md`](../git-history-surgery/references/stacked-pr-naming-reference-card.md) — `PR(N+1)` base + title format
 - [`multi-agent-collaboration-protocol.md`](../../references/multi-agent-collaboration-protocol.md) — full 7-step nested-branch protocol
 - [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent-collab.md) — version registry + coordination
 - Perpetua-Tools [`.agent/AGENTS.md` § Multi-agent merge](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/AGENTS.md) — portable brain entry

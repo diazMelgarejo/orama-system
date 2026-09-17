@@ -8,7 +8,9 @@
 
 ## Scope
 
-This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and **Perpetua-Tools** (job control plane, workers, RAG memory, MCP packages). AlphaClaw MCP code lives in the Perpetua-Tools tree.
+This policy covers **orama-system** (portal, ultrathink API, hygiene CI) and
+**Perpetua-Tools** (job control plane, workers, RAG memory, MCP packages).
+AlphaClaw MCP code lives in the Perpetua-Tools tree.
 
 Root security entrypoints:
 
@@ -44,15 +46,25 @@ visually collide with OWASP Agentic/MCP `T1`-style identifiers.
 | **7** | Secure-by-default orama auth + LAN bind token gate | `utils/control_plane_auth.py` (`auth_enforced()` PT-aligned default, auto-persist token); `start.sh` / `platform/windows/start.ps1` refuse weak/missing token on LAN bind; `tests/test_portal_mutating_route_auth.py` |
 | **8** | Model probe egress + portal HTML hardening | `portal_server.py` trusted/untrusted HTTP clients; HTML escape in legacy dashboard; job detail redaction; `.env.example` empty control-plane placeholders |
 
-**Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth, memory redaction). A stale local `main` checkout may not include those commits yet — see the private operator-workspace 79-commit audit appendix before assuming PT routes are protected on disk.
+**Perpetua-Tools sync note (2026-05-25):** Fixes **3** and **3c** in the table
+above are implemented on **remote** `Perpetua-Tools` `main` (control-plane auth,
+memory redaction). A stale local `main` checkout may not include those commits
+yet — see the private operator-workspace 79-commit audit appendix before
+assuming PT routes are protected on disk.
 
-**Operator checklist**
+### Operator checklist
 
-1. Set `ORAMA_CONTROL_PLANE_TOKEN` in `.env.local` (orama + PT share via `.state/control_plane_token` when PT starts).
-2. For LAN exposure: set `PORTAL_BIND_LAN=1` / `PT_BIND_LAN=1` **and** keep bearer auth enforced (`ORAMA_INSECURE_DEV=0` or token set).
-3. Run `bash scripts/git/install-local-hooks.sh` before commits in each repo clone.
+1. Set `ORAMA_CONTROL_PLANE_TOKEN` in `.env.local` (orama + PT share via
+   `.state/control_plane_token` when PT starts).
+2. For LAN exposure: set `PORTAL_BIND_LAN=1` / `PT_BIND_LAN=1` **and** keep
+   bearer auth enforced (`ORAMA_INSECURE_DEV=0` or token set).
+3. Run `bash scripts/git/install-local-hooks.sh` before commits in each repo
+   clone.
 4. Run `python3 scripts/review/repo_hygiene.py .` in both repos before push.
-5. Multi-file code exploration: **code-review-graph MCP first** (`detect_changes_tool`, `get_review_context_tool`), then gbrain, then scoped Read — see `bin/orama-system/skills/code-review/SKILL.md` (no pre-commit hook; required workflow).
+5. Multi-file code exploration: **code-review-graph MCP first**
+   (`detect_changes_tool`, `get_review_context_tool`), then gbrain, then scoped
+   Read — see `bin/orama-system/skills/code-review/SKILL.md` (no pre-commit hook;
+   required workflow).
 
 ---
 
@@ -130,7 +142,10 @@ shape instead of inventing a parallel remediation.
 - [x] Readonly MCP profile tests validate the final merged `.cursor/mcp.json`
   state, not only dry-run stack contents.
 
-**Remaining toward zero open queue:** P5 server-side swarm approval; P6 discovery operator approval before persistence; mandatory CSRF/origin guards on lifecycle routes (`POST /api/stop`, `/api/restart/*`, `/api/rediscover`); optional operator session-cookie UX via `POST /api/auth/session` (PR5 stack).
+**Remaining toward zero open queue:** P5 server-side swarm approval; P6
+discovery operator approval before persistence; mandatory CSRF/origin guards on
+lifecycle routes (`POST /api/stop`, `/api/restart/*`, `/api/rediscover`);
+optional operator session-cookie UX via `POST /api/auth/session` (PR5 stack).
 
 ---
 
@@ -168,10 +183,15 @@ reviewers can merge fixes in risk order without losing dependency context.
 
 ```text
 origin/main
-  └─ security/01-control-plane-auth-bind      → PR1 base: main
-      └─ security/02-model-egress-probes      → PR2 base: security/01-control-plane-auth-bind
-          └─ security/03-mcp-readonly-profile → PR3 base: security/02-model-egress-probes
+  └─ stack/00-control-plane-auth-bind      → [0/3 → main]  GitHub base: main
+      └─ stack/01-model-egress-probes      → [1/3 → main]  GitHub base: stack/00-…
+          └─ stack/02-mcp-readonly-profile → [2/3 → main]  GitHub base: stack/01-…
 ```
+
+**Naming (mandatory for every stack):** [`bin/orama-system/skills/stacked-pr-naming/SKILL.md`](bin/orama-system/skills/stacked-pr-naming/SKILL.md)
+and [`bin/orama-system/skills/git-history-surgery/references/stacked-pr-naming-reference-card.md`](bin/orama-system/skills/git-history-surgery/references/stacked-pr-naming-reference-card.md).
+Topic prefixes such as `security/01-…` remain valid **only** as `short-topic`
+inside `stack/NN-short-topic` (example: `stack/00-control-plane-auth-bind`).
 
 ### Current branch survey (2026-05-26)
 
@@ -252,7 +272,7 @@ duplicated, per this policy's own synchronization requirement above.
 
 ### Fix 6 — operator reference (implemented)
 
-**Perpetua-Tools — AlphaClaw MCP**
+### Perpetua-Tools — AlphaClaw MCP
 
 | Profile | Env | Effect |
 |---------|-----|--------|
@@ -263,9 +283,12 @@ duplicated, per this policy's own synchronization requirement above.
 
 Examples: `Perpetua-Tools/packages/alphaclaw-mcp/examples/mcp.readonly.json`, `mcp.elevated.json`.
 
-**Perpetua-Tools — subprocess workers:** `PT_ALLOW_DANGEROUS_CLI_WORKERS=1` required for codex/gemini/agy job backends.
+**Perpetua-Tools — subprocess workers:** `PT_ALLOW_DANGEROUS_CLI_WORKERS=1`
+required for codex/gemini/agy job backends.
 
-**orama-system — Cursor stack:** default `sync-cursor-mcp.sh --profile readonly` (CRG only); elevated adds `ai-cli-mcp` via `cursor-mcp.stack.json` or `ORAMA_MCP_ENABLE_AI_CLI=1`.
+**orama-system — Cursor stack:** default
+`sync-cursor-mcp.sh --profile readonly` (CRG only); elevated adds
+`ai-cli-mcp` via `cursor-mcp.stack.json` or `ORAMA_MCP_ENABLE_AI_CLI=1`.
 
 ---
 
@@ -371,7 +394,9 @@ If a secret is committed or exposed:
 
 ## Related docs
 
-- **79-commit audit + PR review (Appendix A):** `OpenClaw/v1/2026-05-23-security-markdown.md` in the private operator workspace — implementation status table and finding cross-ref
+- **79-commit audit + PR review (Appendix A):**
+  `OpenClaw/v1/2026-05-23-security-markdown.md` in the private operator workspace
+  — implementation status table and finding cross-ref
 - Remediation plan: [`docs/plans/2026-05-23-security-remediation-plan.md`](docs/plans/2026-05-23-security-remediation-plan.md)
 - v2 preconditions: [`docs/v2/23-security-preconditions.md`](docs/v2/23-security-preconditions.md)
 - Debug notes: [`docs/2026-05-24-security-review-debug-and-fix-notes.md`](docs/2026-05-24-security-review-debug-and-fix-notes.md)

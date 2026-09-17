@@ -8,7 +8,7 @@ credential confirmation, and minimal workflow permissions.
 
 ## Branch Naming
 
-All feature, fix, and recovery branches must use the dated monotonic format:
+Standalone feature, fix, and recovery branches must use the dated monotonic format:
 
 ```text
 yyyy-mm-dd-NNN-brief-summary
@@ -25,6 +25,21 @@ Rules:
 - Start at `001` and increment for same-day branches.
 - Keep the summary lowercase and hyphenated.
 - Never create a branch from a detached HEAD or another agent-created branch.
+
+### Stacked PRs (`stack/NN`)
+
+Dependent PR chains **do not** use the dated format. Use the OSSF-1 atomic skill
+[`bin/orama-system/skills/stacked-pr-naming/SKILL.md`](../../bin/orama-system/skills/stacked-pr-naming/SKILL.md)
+and card
+[`bin/orama-system/skills/git-history-surgery/references/stacked-pr-naming-reference-card.md`](../../bin/orama-system/skills/git-history-surgery/references/stacked-pr-naming-reference-card.md):
+
+```text
+stack/NN-short-topic
+[NN/TT → <integration-base>] <type>: <summary>
+```
+
+`PR0` bases on the repo integration branch (`main`, periscope `merged`, AlphaClaw
+`feature/MacOS-post-install`). `PR(N+1)` bases on `PR(N)`. Merge `00` first.
 
 ---
 

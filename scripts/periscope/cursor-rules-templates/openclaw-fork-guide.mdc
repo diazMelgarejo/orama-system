@@ -12,9 +12,9 @@ Canonical design: `orama-system` repo → `docs/plans/2026-05-24-periscope-l4-in
 
 | Branch | Role |
 |--------|------|
-| **`agentsview`** | **Grandmother** — latest upstream agentsview lineage; refresh feature work from here |
-| **`main`** | **Upstream mirror only** — tracks `latentsignal-org/periscope`; **not** the build target |
-| **`merged`** | **Build branch** — combines `agentsview` + `main` + fork-specific work |
+| **`agentsview`** | **Grandmother** — sourced from `kenn-io/agentsview:main` |
+| **`main`** | **Upstream mirror only** — `latentsignal-org/periscope`; **not** the build target |
+| **`merged`** | **Working/build branch** — combines grandmother + original-fork lines; **stack PRs here** |
 
 **Rules:**
 
@@ -38,13 +38,15 @@ When dependabot or agents merged to old **`main`**:
 
 Close PRs that target **`main`** (#5, #6, superseded #1–#3).
 
-**Ordered rebuild branches** (base `merged` — run `scripts/periscope/recreate-ordered-prs-onto-merged.sh`):
+**Ordered stack** (GitHub base: `merged` for `00`, then `stack/(N-1)` — see orama
+`skills/stacked-pr-naming/SKILL.md`):
 
 | Order | Branch | PR title prefix |
 |-------|--------|-----------------|
-| 1 | `onto-merged/01-deps-cargo-tauri` | `[1/3 → merged]` cargo / tauri 2.11.1 |
-| 2 | `onto-merged/02-deps-npm-svelte-postcss` | `[2/3 → merged]` svelte + postcss only |
-| 3 | `onto-merged/03-docs-cursor-cloud-agents` | `[3/3 → merged]` AGENTS.md Cursor Cloud |
+| 0 | `stack/00-sync-agentsview-into-merged` | `[0/4 → merged]` absorb grandmother lineage |
+| 1 | `stack/01-deps-cargo-tauri` | `[1/4 → merged]` cargo / tauri |
+| 2 | `stack/02-deps-npm-svelte-postcss` | `[2/4 → merged]` svelte + postcss only |
+| 3 | `stack/03-docs-cursor-cloud-agents` | `[3/4 → merged]` AGENTS.md Cursor Cloud |
 
 ## Stack position (L4)
 

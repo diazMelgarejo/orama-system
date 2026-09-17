@@ -176,6 +176,8 @@ not from memory of what you resolved.
 - [`bin/orama-system/skills/oramasys-method/references/integrative-merge.md`](../../oramasys-method/references/integrative-merge.md)
   — simulate → harmonize → **finalize before push**
 - Incident: periscope PR #39 (2026-07-30); orama PR #244 stack
+- [`stacked-pr-naming-reference-card.md`](stacked-pr-naming-reference-card.md)
+  — do not push stack step `NN` with pending `*_HEAD`; GitHub base for `NN>00` is `PR(N)`
 
 ## Skill / memory graduation
 

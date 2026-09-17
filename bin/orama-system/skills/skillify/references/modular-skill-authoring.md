@@ -50,6 +50,7 @@ Ask for:
 | Long rules and procedures | `instructions/*.md` |
 | Golden paths and anti-patterns | `examples/good/*.md`, `examples/bad/*.md` |
 | Architecture notes or external docs | `references/*.md` |
+| **Shared atomic cards** (OSSF-1 extension) | One `*-reference-card.md` under a hub skill (`git-history-surgery/references/` for git); sibling skills **link**, never copy |
 | Deterministic checks and generators | `scripts/*` |
 | Reusable output formats | `templates/*.md` |
 | Review checklist and personas | `eval/{skill-prefix}-checklist.md` |
