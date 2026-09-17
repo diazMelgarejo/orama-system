@@ -201,5 +201,8 @@ Load the **oramasys-method** skill and follow
   replacement branches.
 - Stack security PRs in policy-priority order: `PR1` starts from `main`; each
   `PR(N+1)` is rebased on the previous PR branch before opening.
+- Name and title every stack step with
+  [`bin/orama-system/skills/stacked-pr-naming/SKILL.md`](bin/orama-system/skills/stacked-pr-naming/SKILL.md)
+  (`stack/NN-…`, `[NN/TT → <integration-base>]`).
 - Rebasing or force-updating an existing remote branch requires explicit current
   user authorization.

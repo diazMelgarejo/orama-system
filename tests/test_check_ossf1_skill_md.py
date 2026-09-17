@@ -282,3 +282,105 @@ def test_main_exits_nonzero_for_scalar_triggers(tmp_path: Path) -> None:
     )
     assert result.returncode != 0
     assert "triggers" in result.stderr
+
+
+def _boundaries_ok() -> str:
+    return (
+        "## Boundaries\n\n"
+        "### Always Do\n\n- Do X.\n\n"
+        "### Ask First\n\n- Ask about Y.\n\n"
+        "### Never Do\n\n- Never Z.\n"
+    )
+
+
+def _atom_skill_text(**overrides: str) -> str:
+    fields = {
+        "name": "demo",
+        "format_profile": "composable-atom",
+        "description": "A demo skill long enough to pass the min-length check.",
+        "version": "1.0.0",
+        "compatibility": "claude-code",
+        "allowed-tools": "bash, file-operations",
+        "triggers": "\n  - demo trigger",
+        "outcome": "The demo atom reports a single observable success.",
+        "approval_limit": "ask-first",
+        "references": "\n  - {type: reference, path: eval/demo-checklist.md}",
+    }
+    fields.update(overrides)
+    fm = (
+        "---\n"
+        f"name: {fields['name']}\n"
+        f"format_profile: {fields['format_profile']}\n"
+        f"description: {fields['description']}\n"
+        f"version: {fields['version']}\n"
+        f"compatibility: {fields['compatibility']}\n"
+        f"allowed-tools: {fields['allowed-tools']}\n"
+        f"triggers:{fields['triggers']}\n"
+        f"outcome: {fields['outcome']}\n"
+        f"approval_limit: {fields['approval_limit']}\n"
+        f"references:{fields['references']}\n"
+        "---\n\n"
+        "# Demo\n\n"
+        "## Purpose\n\n"
+        "Demonstrates the skill format.\n\n"
+        f"{_boundaries_ok()}\n"
+    )
+    return fm
+
+
+@pytest.mark.integration
+def test_core_card_without_part2_fields_still_passes() -> None:
+    """Existing skills omit format_profile; Part 2 MUST NOT be required."""
+    repo = _init_test_repo_with_skill(boundaries_and_after=_boundaries_ok())
+    assert _validate_in_repo(repo) == []
+
+
+@pytest.mark.integration
+def test_composable_atom_missing_outcome_fails(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    skill_path = repo / _skill_rel_path()
+    skill_path.parent.mkdir(parents=True)
+    skill_path.write_text(_atom_skill_text(outcome=""), encoding="utf-8")
+    subprocess.run(["git", "add", _skill_rel_path().as_posix()], cwd=repo, check=True)
+    errors = _validate_in_repo(repo)
+    assert any("outcome" in e for e in errors)
+
+
+@pytest.mark.integration
+def test_composable_atom_complete_passes(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    skill_path = repo / _skill_rel_path()
+    skill_path.parent.mkdir(parents=True)
+    skill_path.write_text(_atom_skill_text(), encoding="utf-8")
+    subprocess.run(["git", "add", _skill_rel_path().as_posix()], cwd=repo, check=True)
+    assert _validate_in_repo(repo) == []
+
+
+@pytest.mark.integration
+def test_unknown_format_profile_fails_closed(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    skill_path = repo / _skill_rel_path()
+    skill_path.parent.mkdir(parents=True)
+    skill_path.write_text(_atom_skill_text(format_profile="card_kind"), encoding="utf-8")
+    subprocess.run(["git", "add", _skill_rel_path().as_posix()], cwd=repo, check=True)
+    errors = _validate_in_repo(repo)
+    assert any("format_profile" in e for e in errors)
+
+
+@pytest.mark.integration
+def test_allowed_tools_sequence_is_rejected(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    _init_test_repo(repo)
+    skill_path = repo / _skill_rel_path()
+    skill_path.parent.mkdir(parents=True)
+    text = _skill_text(_boundaries_ok()).replace(
+        "allowed-tools: bash\n",
+        "allowed-tools:\n  - bash\n  - file-operations\n",
+    )
+    skill_path.write_text(text, encoding="utf-8")
+    subprocess.run(["git", "add", _skill_rel_path().as_posix()], cwd=repo, check=True)
+    errors = _validate_in_repo(repo)
+    assert any("allowed-tools" in e for e in errors)

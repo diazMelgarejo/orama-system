@@ -145,3 +145,4 @@ Pass the **full merged body** as raw markdown:
 - `bin/orama-system/cidf/references/integrative-editing-examples.md` §1 — good/bad table
 - `docs/wiki/12-cursor-cloud-commit-attribution.md` § PR body updates
 - `docs/plans/2026-08-02-pr-body-grant-security-remediation.md` — remediation record
+- `bin/orama-system/skills/git-history-surgery/references/stacked-pr-naming-reference-card.md` — stack titles vs this append-only body path

@@ -168,6 +168,8 @@ LM Studio host, run
     with a real reproduction before writing the fix, not assumed.
 14. Recovering a stacked-PR-family branch after a sibling branch already
     merged (e.g. via squash) into the shared upstream base?
+    Naming/base chain: [`references/stacked-pr-naming-reference-card.md`](references/stacked-pr-naming-reference-card.md)
+    (`stack/NN`, `[NN/TT → <base>]`, `PR(N+1)` on `PR(N)`).
     Record an explicit upstream ref and a preserved safety ref first
     (`git branch backup/<branch>-pre-rebase HEAD`), then try
     `git rebase <upstream-base>` **before** reaching for manual
@@ -426,6 +428,8 @@ See: [`docs/wiki/06-multi-agent-collab.md`](../../../../docs/wiki/06-multi-agent
 - [`references/path-scoped-pr-replay-reference-card.md`](references/path-scoped-pr-replay-reference-card.md)
   — replay harmonized path delta onto fresh integration base; periscope PR #12 ECC + PR #17 vs
   #20 purification worked examples
+- [`references/stacked-pr-naming-reference-card.md`](references/stacked-pr-naming-reference-card.md)
+  — `stack/NN` + `[NN/TT → <base>]`; `PR(N+1)` based on `PR(N)`
 - [`../../cidf/references/integrative-editing-examples.md`](../../cidf/references/integrative-editing-examples.md)
   §9–10 — CIDF good/bad curriculum for path-scoped replay and upstream purification
 - [`../../afrp/failure-modes.md`](../../afrp/failure-modes.md)
@@ -466,6 +470,7 @@ Reference: `bin/orama-system/references/skill-architecture-guide.md` § v2 Manda
   pattern, OpSec vs SecOps vocabulary, and verification-gate discipline for keeping a leak from
   happening in the first place. Use `security` before a leak lands; use `git-history-surgery`
   once one already has.
+- [[stacked-pr-naming]] — OSSF-1 atomic skill for stacked branch/PR titles and GitHub bases.
 - [[fable5-git-rebase-safety]] — the tree-twin doctrine this skill's reanchor step relies on,
   plus a granular per-file/per-commit triage (patch-id matching, scoping against a specific
   PR's merge commit, detecting structural supersession) for auditing branches/worktrees that

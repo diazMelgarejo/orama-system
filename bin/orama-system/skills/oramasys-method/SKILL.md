@@ -167,6 +167,7 @@ Apply `references/file-truncation-check.md` after every whole-file write.
 - Apply CIDF `decide()` before any content insertion (start at rank 1)
 - Treat "ultrathink" and "oramasys" as the same trigger
 - **On PR/conflict work:** follow `references/integrative-merge.md` (additive harmonization)
+- **On stacked PRs:** follow [`../stacked-pr-naming/SKILL.md`](../stacked-pr-naming/SKILL.md) (`stack/NN`, `[NN/TT → <base>]`)
 - **Verify file truncation** after every whole-file write
 
 ### Ask First
@@ -199,6 +200,7 @@ router; CIDF is the content-insertion guard; CRG is code-review-graph.
 
 - `references/5-stage-methodology.md` — full 5-stage process + 6 directives
 - `references/integrative-merge.md` — **PR merge / conflict harmonization (additive, never-delete)**
+- [`../stacked-pr-naming/SKILL.md`](../stacked-pr-naming/SKILL.md) — stacked branch/PR naming; card under git-history-surgery `references/`
 - `references/search-frugality.md` — gbrain + gstack + CRG decision tree
 - `references/graceful-degradation.md` — unified fallback ladders (oramasys + PT model selection)
 - `references/cidf-and-mcp.md` — CIDF ranks, MCP names, legacy compatibility map

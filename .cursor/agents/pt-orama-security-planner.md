@@ -49,11 +49,13 @@ Fixing RC-1 + RC-3 closed the **critical/high cluster**. P8/P13 were defense-in-
    - Open PRs/branches (`cursor/security-*`) before proposing duplicate work
    - `docs/plans/2026-06-28-security-pr3-pr6-zero-queue-plan.md` (canonical PR3+ plan)
 3. **Map** each remaining finding to RC + preventive/runtime/verify layers (defense-in-depth table).
-4. **Design** a **stacked PR chain** — one logical fix per PR, each rebased on prior:
-   - PR3 → P5 server-side swarm approval
-   - PR4 → P6 discovery operator approval
-   - PR5 → CSRF/origin + optional `/api/auth/session` cookie UX
-   - PR6 → P3 Windows loopback-first bind parity
+4. **Design** a **stacked PR chain** — one logical fix per PR, each rebased on prior.
+   Name branches `stack/NN-…` and titles `[NN/TT → main]` per
+   `bin/orama-system/skills/stacked-pr-naming/SKILL.md`.
+   - `stack/00` → P5 server-side swarm approval (GitHub base: `main`)
+   - `stack/01` → P6 discovery operator approval (GitHub base: `stack/00-…`)
+   - `stack/02` → CSRF/origin + optional `/api/auth/session` cookie UX
+   - `stack/03` → P3 Windows loopback-first bind parity
 5. **Specify** per PR:
    - Files touched (orama vs PT)
    - Test files (TDD-first acceptance criteria)
@@ -93,6 +95,7 @@ Scope: <one sentence>
 ## Execution handoff
 
 After planning, recommend **which PR to implement first** and whether to:
+
 - stack on `cursor/security-pr1-pr2-auth-hardening-f559` (pre-merge), or
 - branch from `main` after #127/#177 merge (preferred for review isolation).
 
@@ -102,12 +105,14 @@ queue P3/P5/P6 (and agreed optional items) are closed with tests.
 ## Boundaries
 
 ### Always
+
 - Prefer existing `utils/control_plane_auth.py` and portal middleware patterns
 - Add regression tests in the same PR as the fix
 - Keep LAN bind loopback-first; explicit opt-in + strong token for any `0.0.0.0`
 - Split trusted/untrusted HTTP clients for any new outbound probes
 
 ### Never
+
 - Reintroduce bearer tokens in HTML or tracked config
 - Trust client-controlled booleans as HITL (`approved: true`)
 - Auto-persist discovery endpoints without operator approval or pinned hosts

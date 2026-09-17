@@ -18,5 +18,7 @@ Fixes found during review often need one of these to land safely.
   deciding what to reanchor, discard, or replay
 - [`../../git-pending-push-guard/SKILL.md`](../../git-pending-push-guard/SKILL.md) — guard against
   pushing with an unresolved merge/cherry-pick/revert in progress
+- [`../../stacked-pr-naming/SKILL.md`](../../stacked-pr-naming/SKILL.md) — stacked PR
+  `stack/NN` + `[NN/TT → <base>]`; review/merge in `00`→`TT-1` order
 - [`../../cursor-pr-body/SKILL.md`](../../cursor-pr-body/SKILL.md) — PR body append discipline
   (comment-only by default; operator-grant-gated body edits)

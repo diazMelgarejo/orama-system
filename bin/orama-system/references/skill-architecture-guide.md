@@ -1,4 +1,5 @@
 # SKILL.md Architecture Guide
+
 **Reference Document for orama-system**
 **Source**: Derived from "The Architectural Optimization of Agent Capability" technical analysis
 
@@ -9,6 +10,7 @@
 A SKILL.md file is the intelligence layer of an agent skill package. It transforms a general-purpose agent into a domain-specific expert by providing specialized context, methodology, and constraints.
 
 The architecture is deliberately simple to ensure platform agnosticism:
+
 - One mandatory `SKILL.md` file per skill directory
 - Optional `scripts/`, `references/`, and `assets/` subdirectories
 - Works identically across Claude Code, Cowork, Spring AI, .NET Skills Executor, GitHub Copilot
@@ -49,6 +51,7 @@ allowed-tools: bash, file-operations, web-search
 The body contains procedures the agent follows when the skill activates. It should stay **under 500 lines** to avoid the "ball-of-mud" anti-pattern.
 
 **Recommended Structure**:
+
 ```markdown
 ## Purpose
 [1–2 sentences: what this skill does and why]
@@ -96,6 +99,36 @@ references/date-formats.md (loaded on demand):
 
 **Result**: Context window stays clean. Detailed reference is available when the agent specifically needs it.
 
+### OSSF-1 extension — composable atomic skills
+
+Oramasys Standard Skill Format (OSSF-1 / OSSF Part 1) is enforced by
+`scripts/hooks/check_ossf1_skill_md.py` (frontmatter, `## Boundaries` with Always /
+Ask / Never, `## Purpose` or `## When to Use`, 500-line hard ceiling).
+
+**New** `SKILL.md` files authored as composable atoms (this PR forward) MUST
+also declare OSSF Part 2: `format_profile: composable-atom`, `outcome`,
+`approval_limit` (`never` | `ask-first` | `auto`), and a block-style typed
+`references:` list. `allowed-tools` is a comma-separated YAML scalar.
+Existing skills stay `format_profile: core` (Part 1 only) until explicitly
+migrated — do not retrofit Part 2 onto old cards in the same change.
+
+**Composable atomic skills** reuse one reference card from many thin `SKILL.md`
+files. Do **not** copy the procedure into each sibling skill.
+
+| Layer | File | Loaded when |
+|-------|------|-------------|
+| Discovery | `skills/<name>/SKILL.md` (target ≤ 200 lines) | Skill triggers |
+| Atomic card | `skills/<hub>/references/<topic>-reference-card.md` (one level from SKILL.md) | After the thin skill, or via sibling “Related” links |
+| Eval | `skills/<name>/eval/<name>-checklist.md` | Before declaring done |
+
+Example: [`skills/stacked-pr-naming/SKILL.md`](../skills/stacked-pr-naming/SKILL.md)
+is the thin Part 2 atom; [`skills/git-history-surgery/references/stacked-pr-naming-reference-card.md`](../skills/git-history-surgery/references/stacked-pr-naming-reference-card.md)
+is the shared git card. Sibling git skills (`git-pending-push-guard`,
+`using-git-worktrees`, `cursor-pr-body`, `oramasys-method`, `code-review`,
+`fable5-git-rebase-safety`, `security`, `cursor-agent`) **link** that card.
+
+Same pattern as `git-pending-push-guard` → `pending-operation-push-guard-reference-card.md`.
+
 ---
 
 ## Calibrating Degrees of Freedom
@@ -107,6 +140,7 @@ references/date-formats.md (loaded on demand):
 | **Low**        | Fragile, security-sensitive operations   | Exact, verbatim scripts                |
 
 **Examples**:
+
 - High: "Analyze code for bugs and suggest improvements" (code review)
 - Medium: "Use this PRD template to generate a requirements document" (documentation)
 - Low: "Execute this exact migration script verbatim" (database migration)
@@ -200,6 +234,7 @@ skill-directory-name/          # Matches 'name' field in frontmatter
 ## Real-World Skill Patterns
 
 ### Pattern 1: Research & Synthesis Skill
+
 ```yaml
 description: Synthesizes technical documentation from multiple sources into
   structured markdown reports. Activates for "research X", "compare X and Y",
@@ -207,6 +242,7 @@ description: Synthesizes technical documentation from multiple sources into
 ```
 
 ### Pattern 2: Code Quality Skill
+
 ```yaml
 description: Reviews Python code for bugs, performance issues, and style
   violations. Activates for "review this code", "find bugs in", "optimize this
@@ -214,6 +250,7 @@ description: Reviews Python code for bugs, performance issues, and style
 ```
 
 ### Pattern 3: Data Validation Skill
+
 ```yaml
 description: Validates structured data (JSON, CSV, YAML) against schemas and
   business rules. Returns PASS/WARNING/FAIL reports. Activates for "validate
@@ -300,7 +337,6 @@ aguara scan bin/orama-system/skills \
 *See also: `references/skill-architecture-guide.md` § File Naming Conventions for
 structural conventions.*
 
-
 ---
 
 ## Integration Notes for OpenClaw / Clawdbot / MoltBot
@@ -313,6 +349,7 @@ allowed-tools: bash read-only-filesystem web-search
 ```
 
 For OpenClaw lab automation (LAN-first, WhatsApp-controlled), skills should:
+
 - Default to sandbox mode (no silent escalation)
 - Require explicit approval for any destructive action
 - Log all tool calls to the shared state manager
