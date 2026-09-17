@@ -1,4 +1,5 @@
 # SKILL.md Architecture Guide
+
 **Reference Document for orama-system**
 **Source**: Derived from "The Architectural Optimization of Agent Capability" technical analysis
 
@@ -9,6 +10,7 @@
 A SKILL.md file is the intelligence layer of an agent skill package. It transforms a general-purpose agent into a domain-specific expert by providing specialized context, methodology, and constraints.
 
 The architecture is deliberately simple to ensure platform agnosticism:
+
 - One mandatory `SKILL.md` file per skill directory
 - Optional `scripts/`, `references/`, and `assets/` subdirectories
 - Works identically across Claude Code, Cowork, Spring AI, .NET Skills Executor, GitHub Copilot
@@ -49,6 +51,7 @@ allowed-tools: bash, file-operations, web-search
 The body contains procedures the agent follows when the skill activates. It should stay **under 500 lines** to avoid the "ball-of-mud" anti-pattern.
 
 **Recommended Structure**:
+
 ```markdown
 ## Purpose
 [1–2 sentences: what this skill does and why]
@@ -137,6 +140,7 @@ Same pattern as `git-pending-push-guard` → `pending-operation-push-guard-refer
 | **Low**        | Fragile, security-sensitive operations   | Exact, verbatim scripts                |
 
 **Examples**:
+
 - High: "Analyze code for bugs and suggest improvements" (code review)
 - Medium: "Use this PRD template to generate a requirements document" (documentation)
 - Low: "Execute this exact migration script verbatim" (database migration)
@@ -230,6 +234,7 @@ skill-directory-name/          # Matches 'name' field in frontmatter
 ## Real-World Skill Patterns
 
 ### Pattern 1: Research & Synthesis Skill
+
 ```yaml
 description: Synthesizes technical documentation from multiple sources into
   structured markdown reports. Activates for "research X", "compare X and Y",
@@ -237,6 +242,7 @@ description: Synthesizes technical documentation from multiple sources into
 ```
 
 ### Pattern 2: Code Quality Skill
+
 ```yaml
 description: Reviews Python code for bugs, performance issues, and style
   violations. Activates for "review this code", "find bugs in", "optimize this
@@ -244,6 +250,7 @@ description: Reviews Python code for bugs, performance issues, and style
 ```
 
 ### Pattern 3: Data Validation Skill
+
 ```yaml
 description: Validates structured data (JSON, CSV, YAML) against schemas and
   business rules. Returns PASS/WARNING/FAIL reports. Activates for "validate
@@ -330,7 +337,6 @@ aguara scan bin/orama-system/skills \
 *See also: `references/skill-architecture-guide.md` § File Naming Conventions for
 structural conventions.*
 
-
 ---
 
 ## Integration Notes for OpenClaw / Clawdbot / MoltBot
@@ -343,6 +349,7 @@ allowed-tools: bash read-only-filesystem web-search
 ```
 
 For OpenClaw lab automation (LAN-first, WhatsApp-controlled), skills should:
+
 - Default to sandbox mode (no silent escalation)
 - Require explicit approval for any destructive action
 - Log all tool calls to the shared state manager
