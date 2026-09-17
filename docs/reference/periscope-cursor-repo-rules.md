@@ -77,7 +77,8 @@ VM Go version, CGO, frontend-before-tests, git identity, and salvage rules are i
 
 ## Related
 
-- [Stacked PR naming](../../bin/orama-system/skills/stacked-pr-naming/SKILL.md) — `stack/NN` + `[NN/TT → merged]`
+- [Stacked PR naming](../../bin/orama-system/skills/stacked-pr-naming/SKILL.md)
+  — `stack/NN` + `[NN/TT → merged]`
 - [Cursor cloud attribution](../wiki/12-cursor-cloud-commit-attribution.md) — orama-system
 - [PyPI packaging](periscope-pypi-packaging.md) — release-CI topic, not a Cursor-rules
   topic; linked here only as the other periscope reference doc in this directory

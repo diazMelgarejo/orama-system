@@ -95,6 +95,7 @@ Scope: <one sentence>
 ## Execution handoff
 
 After planning, recommend **which PR to implement first** and whether to:
+
 - stack on `cursor/security-pr1-pr2-auth-hardening-f559` (pre-merge), or
 - branch from `main` after #127/#177 merge (preferred for review isolation).
 
@@ -104,12 +105,14 @@ queue P3/P5/P6 (and agreed optional items) are closed with tests.
 ## Boundaries
 
 ### Always
+
 - Prefer existing `utils/control_plane_auth.py` and portal middleware patterns
 - Add regression tests in the same PR as the fix
 - Keep LAN bind loopback-first; explicit opt-in + strong token for any `0.0.0.0`
 - Split trusted/untrusted HTTP clients for any new outbound probes
 
 ### Never
+
 - Reintroduce bearer tokens in HTML or tracked config
 - Trust client-controlled booleans as HITL (`approved: true`)
 - Auto-persist discovery endpoints without operator approval or pinned hosts
