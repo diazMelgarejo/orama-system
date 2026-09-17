@@ -679,17 +679,33 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
     start = time.perf_counter()
     inbound_depth = _control_plane_depth(http_request)
     has_pipeline_refs = bool(req.pipeline_trace_id and req.pipeline_idempotency_key)
-    if inbound_depth >= 1 and not has_pipeline_refs:
-        return JSONResponse(
-            status_code=409,
-            content={
-                "error": "CONTROL_PLANE_LOOP",
-                "detail": (
-                    "Nested control-plane calls must use pipeline_trace_id and "
-                    "pipeline_idempotency_key to invoke PT's guarded pipeline route"
-                ),
-            },
-        )
+    if inbound_depth >= 1:
+        if not has_pipeline_refs:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "CONTROL_PLANE_LOOP",
+                    "detail": (
+                        "Nested control-plane calls must use pipeline_trace_id and "
+                        "pipeline_idempotency_key to invoke PT's guarded pipeline route"
+                    ),
+                },
+            )
+        # MAX_CONTROL_PLANE_DEPTH bounds nesting independent of whether PT's
+        # own orchestrator separately re-validates depth -- valid pipeline
+        # refs must not exempt a request from the ceiling, only from the
+        # "must use the guarded route" check above.
+        if inbound_depth >= MAX_CONTROL_PLANE_DEPTH:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "CONTROL_PLANE_LOOP",
+                    "detail": (
+                        f"Control-plane depth {inbound_depth} is at or beyond the "
+                        f"maximum of {MAX_CONTROL_PLANE_DEPTH}; further nesting is refused"
+                    ),
+                },
+            )
 
     # Resolve reasoning depth and optimize_for (sync them)
     if req.reasoning_depth:
