@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import json
 import logging
+import re
 import time
 import importlib.util
 from typing import Optional, Any
@@ -33,8 +34,15 @@ from utils.control_plane_auth import (
     redact_runtime_section,
 )
 from utils.model_endpoint_url import ModelEndpointPolicyError, validate_model_endpoint_url
-from pydantic import BaseModel, ConfigDict, field_validator, Field
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator, Field
 import httpx
+from orama_system.pt_pipeline_client import (
+    CONTROL_PLANE_DEPTH_HEADER,
+    PTPipelineClient,
+    PTPipelineError,
+)
+
+MAX_CONTROL_PLANE_DEPTH = 2
 from bin.shared.bridge_contract import (
     OPTIMIZE_FOR_TO_REASONING_DEPTH,
     optimize_for_to_reasoning_depth,
@@ -547,6 +555,18 @@ class OramasysRequest(BaseModel):
     request_id:       Optional[str] = Field(default=None)
     session_id:       Optional[str] = Field(default=None,
                                              description="v2 session correlation ID (perpetua-core/oramasys)")
+    pipeline_trace_id: Optional[str] = Field(
+        default=None,
+        min_length=8,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9_-]+$",
+        description="Reference to a previously registered PT pipeline approval",
+    )
+    pipeline_idempotency_key: Optional[str] = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        description="Canonical UUIDv4 used by PT's durable pipeline ledger",
+    )
     backend_priority: str = Field(
         default="local",
         pattern="^(local|cloud|windows)$",
@@ -560,6 +580,14 @@ class OramasysRequest(BaseModel):
         if not v.strip():
             raise ValueError("task_description must not be blank or whitespace-only")
         return v.strip()
+
+    @model_validator(mode="after")
+    def pipeline_references_are_atomic(self) -> "OramasysRequest":
+        if bool(self.pipeline_trace_id) != bool(self.pipeline_idempotency_key):
+            raise ValueError(
+                "pipeline_trace_id and pipeline_idempotency_key must be supplied together"
+            )
+        return self
 
 
 class OramasysResponse(BaseModel):
@@ -637,10 +665,74 @@ async def _control_plane_auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+_DEPTH_RE = re.compile(r"^[0-9]+$")
+
+
+class ControlPlaneDepthInvalid(ValueError):
+    """X-Control-Plane-Depth header present but not a canonical unsigned
+    decimal integer (^[0-9]+$) -- e.g. "-1", "+1", "1_0", "2.0", "abc".
+    int() accepts several of these (PEP 515 underscores, a leading "+")
+    in ways that either skip the depth gates below entirely (a negative
+    value never satisfies >= 1) or get silently reinterpreted as a
+    different depth than what was actually sent. Distinct from a real
+    loop (ControlPlaneLoop-shaped 409s below): this is a parse failure,
+    reported as 422, never forwarded to PTPipelineClient.run.
+    """
+
+
+def _control_plane_depth(http_request: Request) -> int:
+    raw = http_request.headers.get(CONTROL_PLANE_DEPTH_HEADER, "").strip()
+    if not raw:
+        return 0
+    if _DEPTH_RE.fullmatch(raw) is None:
+        raise ControlPlaneDepthInvalid(raw)
+    return int(raw)  # safe: digits only, matched above
+
+
 @app.post("/oramasys", response_model=OramasysResponse)
 async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysResponse:
     start = time.perf_counter()
-    
+    try:
+        inbound_depth = _control_plane_depth(http_request)
+    except ControlPlaneDepthInvalid:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "CONTROL_PLANE_DEPTH_INVALID",
+                "detail": (
+                    "X-Control-Plane-Depth must be an unsigned decimal integer"
+                ),
+            },
+        )
+    has_pipeline_refs = bool(req.pipeline_trace_id and req.pipeline_idempotency_key)
+    if inbound_depth >= 1:
+        if not has_pipeline_refs:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "CONTROL_PLANE_LOOP",
+                    "detail": (
+                        "Nested control-plane calls must use pipeline_trace_id and "
+                        "pipeline_idempotency_key to invoke PT's guarded pipeline route"
+                    ),
+                },
+            )
+        # MAX_CONTROL_PLANE_DEPTH bounds nesting independent of whether PT's
+        # own orchestrator separately re-validates depth -- valid pipeline
+        # refs must not exempt a request from the ceiling, only from the
+        # "must use the guarded route" check above.
+        if inbound_depth >= MAX_CONTROL_PLANE_DEPTH:
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "error": "CONTROL_PLANE_LOOP",
+                    "detail": (
+                        f"Control-plane depth {inbound_depth} is at or beyond the "
+                        f"maximum of {MAX_CONTROL_PLANE_DEPTH}; further nesting is refused"
+                    ),
+                },
+            )
+
     # Resolve reasoning depth and optimize_for (sync them)
     if req.reasoning_depth:
         reasoning_depth = req.reasoning_depth
@@ -720,9 +812,38 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
         req.request_id, reasoning_depth, model, backend_attempted,
     )
 
-    # Call backend (stubbed/mocked; real implementation uses backend_router.ordered_endpoints())
     prompt = f"Applying {reasoning_depth}-depth reasoning for task: {req.task_description}"
-    result, _ = await _call_with_fallback(prompt, model, 4000, 0.7)
+    pipeline_replay = False
+    if req.pipeline_trace_id and req.pipeline_idempotency_key:
+        try:
+            pipeline_result = await PTPipelineClient().run(
+                task_type=req.task_type,
+                prompt=prompt,
+                trace_id=req.pipeline_trace_id,
+                idempotency_key=req.pipeline_idempotency_key,
+                control_plane_depth=inbound_depth + 1,
+            )
+        except PTPipelineError as exc:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": "PIPELINE_UNAVAILABLE",
+                    "detail": _client_safe_detail(
+                        exc,
+                        fallback="PT pipeline could not complete the request",
+                    ),
+                },
+            )
+        result = pipeline_result.output
+        pipeline_replay = getattr(pipeline_result, "replay", False)
+        selected_models = dict(pipeline_result.models_used)
+        model = selected_models.get("generate") or next(
+            reversed(selected_models.values()),
+            model,
+        )
+        backend_attempted = "pt_pipeline"
+    else:
+        result, _ = await _call_with_fallback(prompt, model, 4000, 0.7)
 
     elapsed_ms = int((time.perf_counter() - start) * 1000)
 
@@ -741,6 +862,7 @@ async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysR
             "model_hint_used": req.model_hint is not None,
             "backend_priority": backend_router.priority,
             "backend_attempted": backend_attempted,
+            "pipeline_replay": pipeline_replay,
             # PT final handoff audit — always present so callers know policy authority
             "policy_source": _policy_resolver.source,
             "pt_authoritative": _policy_resolver.pt_available,

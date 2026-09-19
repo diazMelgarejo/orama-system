@@ -307,13 +307,14 @@ jobs:
         continue-on-error: true
 
       - name: Verify model endpoint policy parity with Perpetua-Tools
+        env:
+          PERPETUA_TOOLS_ROOT: ${{ github.workspace }}/perpetua-tools-sibling
         run: |
-          if [ -d perpetua-tools-sibling ]; then
-            PERPETUA_TOOLS_ROOT="$GITHUB_WORKSPACE/perpetua-tools-sibling" \
-              python3 scripts/review/verify_model_endpoint_policy_parity.py
-          else
-            echo "skip: Perpetua-Tools not available in this CI run"
+          if [ ! -d "$PERPETUA_TOOLS_ROOT/src/utils" ]; then
+            echo "::error::Perpetua-Tools sibling missing; refusing skip."
+            exit 1
           fi
+          python3 scripts/review/verify_model_endpoint_policy_parity.py
 
       - name: Verify docs/v2 pointers in sync with downstream Perpetua-Tools
         run: |
