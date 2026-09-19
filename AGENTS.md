@@ -93,6 +93,26 @@ sweep in Unified Plan § 2 didn't catch it) — PT working memory:
 - Org-wide governance so future `oramasys/*` repos inherit identical hooks with zero drift:
   [`docs/v2/`](https://github.com/diazMelgarejo/orama-system/tree/main/docs/v2).
 
+## Shared endpoint-policy transport: `src/utils/model_endpoint_url.py`
+
+**Perpetua-Tools `src/utils/model_endpoint_url.py` is canonical (SSoT).** This repo's copy at
+the same path must be **byte-identical**, not just AST-equivalent — a docstring-only drift
+shipped invisibly once (PT commit `718ba88`, never mirrored) because the parity checker
+stripped docstrings before comparing. `scripts/review/verify_model_endpoint_policy_parity.py`
+now also compares full-file sha256 for this specific file.
+
+- **NEVER hand-edit this file here.** Copy PT's bytes verbatim:
+  `git show <PT-commit>:src/utils/model_endpoint_url.py` and confirm
+  `git hash-object` / `sha256sum` match PT's before committing.
+- **Never add an identity/provenance paragraph inside the mirrored file itself** — an earlier
+  sync (`fde9d460`) added a 7-line "keep it byte-identical" comment on this side only, which PT
+  never had, defeating the byte-identity requirement it was trying to document. Mirror identity
+  lives in this section and in the parity script's own docstring, never in the payload both
+  repos must match exactly.
+- CI (`docs-pointer-sync` job) fails closed if the Perpetua-Tools sibling checkout is missing —
+  it does not skip. A missing sibling is not evidence of parity.
+- Full incident/heal trace: `.claude/plans/pr-363-395-lockstep-heal.plan.md` on this branch.
+
 ## Cursor Cloud: git commits
 
 Cloud agents set `CURSOR_AGENT=1` and redirect `core.hookspath` to `~/.cursor/agent-hooks/…`,

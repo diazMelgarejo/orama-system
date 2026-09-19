@@ -133,3 +133,54 @@ def test_client_still_allows_the_documented_loopback_http_default(
     url = PTPipelineClient(config_path=client_config).pipeline_url("analysis")
 
     assert url == "http://localhost:8000/pipelines/classify_then_generate/run"
+
+
+def _production_client_kwargs(**overrides):
+    """Same kwargs as PTPipelineClient.run's AsyncClient, minus transport=,
+    so default httpx proxy-mount behavior applies -- MockTransport bypasses
+    mount routing entirely regardless of trust_env, so asserting mounts on
+    the MockTransport client used elsewhere in this file would not prove
+    anything about the production call path."""
+    timeout = httpx.Timeout(120.0, connect=10.0)
+    kwargs = dict(
+        timeout=timeout,
+        follow_redirects=False,
+        trust_env=False,
+    )
+    kwargs.update(overrides)
+    return kwargs
+
+
+async def test_pipeline_httpx_client_disables_env_proxy_mounts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 2: the control-plane bearer must never ride an ambient
+    HTTP_PROXY/HTTPS_PROXY/ALL_PROXY -- httpx.AsyncClient trusts the
+    environment by default (trust_env=True), which mounts proxy transports
+    and forwards Authorization to whatever that proxy is. trust_env=False
+    on the production client must leave no proxy mounts, matching the same
+    pattern already used by PT's own agent_launcher._pinned_get."""
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    monkeypatch.setenv("HTTPS_PROXY", "http://127.0.0.1:9")
+    monkeypatch.setenv("ALL_PROXY", "http://127.0.0.1:9")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    async with httpx.AsyncClient(**_production_client_kwargs()) as client:
+        assert client.trust_env is False
+        assert not client._mounts
+
+
+async def test_pipeline_httpx_client_mounts_when_trust_env_left_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Negative control for the test above: with trust_env left True under
+    the exact same proxy environment, httpx genuinely does mount a proxy
+    transport -- proves the prior test's empty _mounts reflects
+    trust_env=False actually doing something, not an environment where
+    httpx never mounts proxies at all regardless of the flag."""
+    monkeypatch.setenv("HTTP_PROXY", "http://127.0.0.1:9")
+    monkeypatch.delenv("NO_PROXY", raising=False)
+    async with httpx.AsyncClient(**_production_client_kwargs(trust_env=True)) as client:
+        assert client.trust_env is True
+        assert client._mounts
+
+

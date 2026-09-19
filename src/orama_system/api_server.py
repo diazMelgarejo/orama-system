@@ -15,6 +15,7 @@ from __future__ import annotations
 import os
 import json
 import logging
+import re
 import time
 import importlib.util
 from typing import Optional, Any
@@ -664,20 +665,45 @@ async def _control_plane_auth_middleware(request: Request, call_next):
     return await call_next(request)
 
 
+_DEPTH_RE = re.compile(r"^[0-9]+$")
+
+
+class ControlPlaneDepthInvalid(ValueError):
+    """X-Control-Plane-Depth header present but not a canonical unsigned
+    decimal integer (^[0-9]+$) -- e.g. "-1", "+1", "1_0", "2.0", "abc".
+    int() accepts several of these (PEP 515 underscores, a leading "+")
+    in ways that either skip the depth gates below entirely (a negative
+    value never satisfies >= 1) or get silently reinterpreted as a
+    different depth than what was actually sent. Distinct from a real
+    loop (ControlPlaneLoop-shaped 409s below): this is a parse failure,
+    reported as 422, never forwarded to PTPipelineClient.run.
+    """
+
+
 def _control_plane_depth(http_request: Request) -> int:
     raw = http_request.headers.get(CONTROL_PLANE_DEPTH_HEADER, "").strip()
     if not raw:
         return 0
-    try:
-        return int(raw)
-    except ValueError:
-        return MAX_CONTROL_PLANE_DEPTH + 1
+    if _DEPTH_RE.fullmatch(raw) is None:
+        raise ControlPlaneDepthInvalid(raw)
+    return int(raw)  # safe: digits only, matched above
 
 
 @app.post("/oramasys", response_model=OramasysResponse)
 async def run_oramasys(req: OramasysRequest, http_request: Request) -> OramasysResponse:
     start = time.perf_counter()
-    inbound_depth = _control_plane_depth(http_request)
+    try:
+        inbound_depth = _control_plane_depth(http_request)
+    except ControlPlaneDepthInvalid:
+        return JSONResponse(
+            status_code=422,
+            content={
+                "error": "CONTROL_PLANE_DEPTH_INVALID",
+                "detail": (
+                    "X-Control-Plane-Depth must be an unsigned decimal integer"
+                ),
+            },
+        )
     has_pipeline_refs = bool(req.pipeline_trace_id and req.pipeline_idempotency_key)
     if inbound_depth >= 1:
         if not has_pipeline_refs:

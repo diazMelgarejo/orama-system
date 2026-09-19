@@ -3,13 +3,6 @@
 Default allow: loopback and RFC1918 private addresses only.
 Set ``ALLOW_PUBLIC_MODEL_ENDPOINTS=1`` (or ``true``/``yes``/``on``) to permit public IPs
 and non-localhost DNS names.
-
-Canonical copy lives in Perpetua-Tools (``src/utils/model_endpoint_url.py``);
-Perpetua-Tools also owns the standalone, separately-licensed
-``packages/endpoint-policy/`` package this logic will eventually migrate to
-as an actual dependency once the v2 oramasys/* repo split lands. Until then,
-this is a manually-synced mirror -- keep it byte-identical to the
-Perpetua-Tools copy on policy changes, not independently edited.
 """
 from __future__ import annotations
 
@@ -60,6 +53,11 @@ def redact_endpoint_for_log(url: str) -> str:
 
 
 def _host_allowed(host: str, *, allow_public: bool) -> bool:
+    """Return whether a host is permitted by the model endpoint policy.
+
+    Loopback names and IP addresses classified as private are allowed. Link-local
+    addresses are always rejected; ``allow_public`` controls other nonempty hosts.
+    """
     normalized = host.strip().lower()
     if not normalized:
         return False
@@ -112,7 +110,7 @@ def validate_model_endpoint_url(
     on-path on the LAN segment. The documented loopback default
     (``http://localhost:8000``) always stays valid regardless of this flag.
 
-    Returns scheme://host[:port] without a trailing slash.
+    Returns ``scheme://host:port`` without a trailing slash.
     """
     if allow_public is None:
         allow_public = allow_public_model_endpoints()

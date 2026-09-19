@@ -321,6 +321,141 @@ def test_control_plane_depth_one_below_ceiling_is_forwarded_at_the_ceiling(
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize(
+    "raw_depth",
+    ["-1", "+1", "1_0", "2.0", "abc", "+0"],
+)
+def test_depth_negative_with_refs_is_invalid(
+    raw_depth: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fail-closed depth parsing (plan Task 3): int() accepts -1/+1/1_0 and
+    2.0 raises ValueError only to be mapped to a 409 -- both let a
+    non-canonical header either skip the ceiling gates entirely or get
+    conflated with a real loop. A header that isn't ^[0-9]+$ must be 422
+    CONTROL_PLANE_DEPTH_INVALID, and PTPipelineClient.run must never be
+    called on that path, refs or no refs."""
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "should not be reached", "models_used": {}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": raw_depth},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "CONTROL_PLANE_DEPTH_INVALID"
+    assert calls == {}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "raw_depth",
+    ["-1", "+1", "1_0", "2.0", "abc"],
+)
+def test_depth_negative_without_refs_is_invalid(raw_depth: str) -> None:
+    """Companion to the refs case above: the same non-canonical header
+    without pipeline refs must still be 422 INVALID, not 409 LOOP -- a
+    malformed header is a distinct condition from a well-formed nested
+    call missing its refs, and the two must not collapse into one error."""
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": raw_depth},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "CONTROL_PLANE_DEPTH_INVALID"
+
+
+@pytest.mark.integration
+def test_depth_zero_without_refs_is_top_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Header '0' (or missing/empty) is the ordinary top-level path, not a
+    nested nor an invalid one -- must not trip either the refs gate or the
+    422 gate, and may reach PTPipelineClient.run normally."""
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "tiered output", "models_used": {"generate": "strong-ready"}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": "0"},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+            },
+        )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.integration
+def test_depth_three_with_refs_is_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A well-formed header past the ceiling with valid refs is still a
+    real loop (409), not a parse failure (422) -- confirms the two error
+    paths stay genuinely distinct after the digits-only rewrite, not just
+    for malformed input."""
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "should not be reached", "models_used": {}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": "3"},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "CONTROL_PLANE_LOOP"
+    assert calls == {}
+
+
+@pytest.mark.integration
 def test_pipeline_approval_references_must_be_supplied_together() -> None:
     with TestClient(api_server.app, raise_server_exceptions=True) as client:
         response = client.post(

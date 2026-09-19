@@ -6,6 +6,7 @@ import pytest
 from utils.model_endpoint_url import (
     ModelEndpointPolicyError,
     parse_model_endpoint_list,
+    redact_endpoint_for_log,
     validate_model_endpoint_url,
 )
 
@@ -135,3 +136,36 @@ def test_require_tls_flag_allows_https_to_private_network_host():
         )
         == "https://192.168.1.50:8443"
     )
+
+
+def test_file_scheme_rejected():
+    """Task 5 union: PT's test_file_scheme_rejected. Genuinely new
+    behavior coverage, not just a renamed duplicate -- orama's suite had
+    no test for a non-http(s) scheme at all before this."""
+    with pytest.raises(ModelEndpointPolicyError, match="scheme"):
+        validate_model_endpoint_url("file:///etc/passwd")
+
+
+def test_credentials_in_url_rejected():
+    """Task 5 union: PT's test_credentials_rejected."""
+    with pytest.raises(ModelEndpointPolicyError, match="credentials"):
+        validate_model_endpoint_url("http://user:pass@127.0.3.1:1234")
+
+
+def test_empty_url_rejected():
+    """Task 5 union: PT's test_empty_rejected."""
+    with pytest.raises(ModelEndpointPolicyError, match="empty"):
+        validate_model_endpoint_url("   ")
+
+
+def test_private_ip_redacted_for_log():
+    """Task 5 union: redact_endpoint_for_log has zero coverage in this
+    file before this addition, despite the function shipping in the
+    byte-identical validator copy."""
+    out = redact_endpoint_for_log("http://127.0.4.1:1234")
+    assert "127.0.4.1" not in out
+    assert "127.0.4.*" in out
+
+
+def test_localhost_not_redacted_for_log():
+    assert "localhost" in redact_endpoint_for_log("http://localhost:1234")

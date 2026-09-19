@@ -113,6 +113,7 @@ class PTPipelineClient:
                 transport=self.transport,
                 timeout=timeout,
                 follow_redirects=False,
+                trust_env=False,
             ) as client:
                 response = await client.post(
                     self.pipeline_url(task_type),
