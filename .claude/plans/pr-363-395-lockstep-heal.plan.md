@@ -773,11 +773,11 @@ unrelated dirty `scripts/cursor/*` or `scripts/git/*`.
 git hash-object src/utils/model_endpoint_url.py
 # expect 003ac54187e98f5c38fad5906f9ec1ef43ce6f9e
 
+: "${PERPETUA_TOOLS_ROOT:?set to the Perpetua-Tools checkout}"
 sha256sum src/utils/model_endpoint_url.py
-sha256sum ../Perpetua-Tools/src/utils/model_endpoint_url.py
+sha256sum "$PERPETUA_TOOLS_ROOT/src/utils/model_endpoint_url.py"
 
-PERPETUA_TOOLS_ROOT="$(pwd)/../Perpetua-Tools" \
-  python scripts/review/verify_model_endpoint_policy_parity.py
+python scripts/review/verify_model_endpoint_policy_parity.py
 
 python -m pytest -q \
   tests/test_model_endpoint_url.py \
@@ -795,7 +795,7 @@ show the parity script ran, not skip.
 ### PT (later PR)
 
 ```bash
-ORAMA_SYSTEM_ROOT="$(pwd)/../orama-system" \
+ORAMA_SYSTEM_ROOT="${ORAMA_SYSTEM_ROOT:?set to the orama-system checkout}" \
   python scripts/review/verify_model_endpoint_policy_parity.py
 python -m pytest -q \
   tests/test_orama_bridge.py \
