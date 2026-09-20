@@ -686,7 +686,14 @@ def _control_plane_depth(http_request: Request) -> int:
         return 0
     if _DEPTH_RE.fullmatch(raw) is None:
         raise ControlPlaneDepthInvalid(raw)
-    return int(raw)  # safe: digits only, matched above
+    # Digit-only strings can still exceed sys.int_max_str_digits, which
+    # makes int() raise ValueError (a 500). Oversize is a ceiling hit
+    # (MAX+1), not CONTROL_PLANE_DEPTH_INVALID -- the regex already
+    # accepted the token. Matches PT receive-side lockstep.
+    significant = raw.lstrip("0") or "0"
+    if len(significant) > len(str(MAX_CONTROL_PLANE_DEPTH)):
+        return MAX_CONTROL_PLANE_DEPTH + 1
+    return int(raw)
 
 
 @app.post("/oramasys", response_model=OramasysResponse)

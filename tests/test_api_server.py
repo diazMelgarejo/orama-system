@@ -456,7 +456,44 @@ def test_depth_three_with_refs_is_loop(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.integration
-def test_pipeline_approval_references_must_be_supplied_together() -> None:
+def test_depth_oversized_decimal_with_refs_is_loop_not_500(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Digit-only headers longer than sys.int_max_str_digits must not
+    escape as HTTP 500 from int(); they are a ceiling hit (409 LOOP).
+    Lockstep with PT receive-side."""
+    import sys
+
+    calls: dict[str, Any] = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "should not be reached", "models_used": {}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+    limit = sys.get_int_max_str_digits()
+    raw_depth = "9" * (limit + 1 if limit else 64)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": raw_depth},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "CONTROL_PLANE_LOOP"
+    assert calls == {}
     with TestClient(api_server.app, raise_server_exceptions=True) as client:
         response = client.post(
             "/oramasys",
