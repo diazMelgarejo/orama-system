@@ -1,0 +1,11 @@
+version: 1
+enabled: true
+
+# PT owns execution, provider credentials, approval artifacts, and budgets.
+# ORAMASYS_PT_PIPELINE_BASE_URL may override this portable local default.
+pt_base_url: http://localhost:8000
+
+recipes:
+  analysis: classify_then_generate
+  planning: classify_then_generate
+  research: classify_then_generate

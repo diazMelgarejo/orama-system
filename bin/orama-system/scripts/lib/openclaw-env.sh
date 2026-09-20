@@ -17,17 +17,18 @@
 set -euo pipefail
 
 orama_git_root() {
-  if [ -n "${ORAMA_REPO_ROOT:-}" ] && [ -d "${ORAMA_REPO_ROOT}/.git" ]; then
+  # Linked worktrees use a .git file that points at the main repository.
+  if [ -n "${ORAMA_REPO_ROOT:-}" ] && [ -e "${ORAMA_REPO_ROOT}/.git" ]; then
     printf '%s\n' "$ORAMA_REPO_ROOT"
     return 0
   fi
-  if [ -n "${ORAMA_INSTALL_DIR:-}" ] && [ -d "${ORAMA_INSTALL_DIR}/.git" ]; then
+  if [ -n "${ORAMA_INSTALL_DIR:-}" ] && [ -e "${ORAMA_INSTALL_DIR}/.git" ]; then
     printf '%s\n' "$ORAMA_INSTALL_DIR"
     return 0
   fi
   local d="$PWD"
   while [ "$d" != "/" ]; do
-    if [ -d "$d/.git" ] && [ -d "$d/bin/orama-system" ]; then
+    if [ -e "$d/.git" ] && [ -d "$d/bin/orama-system" ]; then
       printf '%s\n' "$d"
       return 0
     fi

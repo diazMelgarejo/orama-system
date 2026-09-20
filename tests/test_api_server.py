@@ -7,6 +7,9 @@ Request/response tests for the HTTP bridge.
 from __future__ import annotations
 
 import json
+from typing import Any
+
+import pytest
 from fastapi.testclient import TestClient
 
 import orama_system.api_server as api_server
@@ -173,6 +176,407 @@ def test_legacy_ultrathink_route_shims_to_oramasys(monkeypatch):
     body = response.json()
     assert body["result"] == "legacy shim output"
     assert body["nodes_visited"] == ["oramasys_node"]
+
+
+@pytest.mark.integration
+def test_http_bridge_uses_guarded_pt_pipeline_when_approval_refs_are_supplied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {
+                    "output": "tiered output",
+                    "models_used": {
+                        "classify": "fast-ready",
+                        "generate": "strong-ready",
+                    },
+                },
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"] == "tiered output"
+    assert body["model_used"] == "strong-ready"
+    assert "pipeline_models" not in body["metadata"]
+    assert body["metadata"]["pipeline_replay"] is False
+    assert calls["trace_id"] == "approved-trace"
+
+
+@pytest.mark.integration
+def test_nested_control_plane_call_requires_pipeline_approval_refs() -> None:
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": "1"},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "CONTROL_PLANE_LOOP"
+
+
+@pytest.mark.integration
+def test_control_plane_depth_at_ceiling_is_rejected_even_with_valid_pipeline_refs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reproduces CodeRabbit review 5234774766 (PR#363), Finding 1.
+
+    MAX_CONTROL_PLANE_DEPTH declares a ceiling, but the only depth gate
+    was "reject depth>=1 lacking pipeline refs" -- a caller that always
+    supplies pipeline_trace_id/pipeline_idempotency_key (attacker-suppliable
+    request fields, no depth check attached) sails past it. A request
+    arriving at exactly the declared ceiling must be rejected before ever
+    calling PTPipelineClient.run and forwarding control_plane_depth one
+    past the ceiling.
+    """
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "should not be reached", "models_used": {}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": str(api_server.MAX_CONTROL_PLANE_DEPTH)},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "CONTROL_PLANE_LOOP"
+    assert calls == {}
+
+
+@pytest.mark.integration
+def test_control_plane_depth_one_below_ceiling_is_forwarded_at_the_ceiling(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Boundary companion to the ceiling-rejection test above: depth ==
+
+    MAX_CONTROL_PLANE_DEPTH - 1 with valid pipeline refs must still be
+    allowed through, forwarded as exactly MAX_CONTROL_PLANE_DEPTH -- proves
+    the new check rejects only at/after the ceiling, not one below it.
+    """
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "tiered output", "models_used": {"generate": "strong-ready"}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": str(api_server.MAX_CONTROL_PLANE_DEPTH - 1)},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 200
+    assert calls["control_plane_depth"] == api_server.MAX_CONTROL_PLANE_DEPTH
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "raw_depth",
+    ["-1", "+1", "1_0", "2.0", "abc", "+0"],
+)
+def test_depth_negative_with_refs_is_invalid(
+    raw_depth: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fail-closed depth parsing (plan Task 3): int() accepts -1/+1/1_0 and
+    2.0 raises ValueError only to be mapped to a 409 -- both let a
+    non-canonical header either skip the ceiling gates entirely or get
+    conflated with a real loop. A header that isn't ^[0-9]+$ must be 422
+    CONTROL_PLANE_DEPTH_INVALID, and PTPipelineClient.run must never be
+    called on that path, refs or no refs."""
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "should not be reached", "models_used": {}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": raw_depth},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "CONTROL_PLANE_DEPTH_INVALID"
+    assert calls == {}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "raw_depth",
+    ["-1", "+1", "1_0", "2.0", "abc"],
+)
+def test_depth_negative_without_refs_is_invalid(raw_depth: str) -> None:
+    """Companion to the refs case above: the same non-canonical header
+    without pipeline refs must still be 422 INVALID, not 409 LOOP -- a
+    malformed header is a distinct condition from a well-formed nested
+    call missing its refs, and the two must not collapse into one error."""
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": raw_depth},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "CONTROL_PLANE_DEPTH_INVALID"
+
+
+@pytest.mark.integration
+def test_depth_zero_without_refs_is_top_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Header '0' (or missing/empty) is the ordinary top-level path, not a
+    nested nor an invalid one -- must not trip either the refs gate or the
+    422 gate, and may reach PTPipelineClient.run normally."""
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "tiered output", "models_used": {"generate": "strong-ready"}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": "0"},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+            },
+        )
+
+    assert response.status_code == 200
+
+
+@pytest.mark.integration
+def test_depth_three_with_refs_is_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A well-formed header past the ceiling with valid refs is still a
+    real loop (409), not a parse failure (422) -- confirms the two error
+    paths stay genuinely distinct after the digits-only rewrite, not just
+    for malformed input."""
+    calls = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "should not be reached", "models_used": {}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": "3"},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "CONTROL_PLANE_LOOP"
+    assert calls == {}
+
+
+@pytest.mark.integration
+def test_depth_oversized_decimal_with_refs_is_loop_not_500(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Digit-only headers longer than sys.int_max_str_digits must not
+    escape as HTTP 500 from int(); they are a ceiling hit (409 LOOP).
+    Lockstep with PT receive-side."""
+    import sys
+
+    calls: dict[str, Any] = {}
+
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            calls.update(kwargs)
+            return type(
+                "Result",
+                (),
+                {"output": "should not be reached", "models_used": {}, "replay": False},
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+    limit = sys.get_int_max_str_digits()
+    raw_depth = "9" * (limit + 1 if limit else 64)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            headers={"X-Control-Plane-Depth": raw_depth},
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "CONTROL_PLANE_LOOP"
+    assert calls == {}
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+            },
+        )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.integration
+def test_pipeline_idempotency_key_also_requires_trace_id() -> None:
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.integration
+def test_http_bridge_preserves_safe_pipeline_replay(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            return type(
+                "Result",
+                (),
+                {
+                    "output": "",
+                    "models_used": {},
+                    "replay": True,
+                },
+            )()
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json()["result"] == ""
+    assert response.json()["metadata"]["pipeline_replay"] is True
+
+
+@pytest.mark.integration
+def test_http_bridge_reports_pt_pipeline_failure_as_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakePipelineClient:
+        async def run(self, **kwargs: Any) -> Any:
+            raise api_server.PTPipelineError("PT pipeline request failed")
+
+    monkeypatch.setattr(api_server, "PTPipelineClient", FakePipelineClient)
+
+    with TestClient(api_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/oramasys",
+            json={
+                "task_description": "Design a resilient orchestration layer",
+                "task_type": "planning",
+                "pipeline_trace_id": "approved-trace",
+                "pipeline_idempotency_key": "4ee06db8-8424-4a82-9654-d24c9597ac2e",
+            },
+        )
+
+    assert response.status_code == 503
+    assert response.json()["error"] == "PIPELINE_UNAVAILABLE"
 
 
 def test_http_health_endpoint(monkeypatch):

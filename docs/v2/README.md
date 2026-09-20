@@ -275,6 +275,16 @@ orama-system/docs/v2/
 
 ---
 
+## References / coordination / agent ops
+
+- [Offline/sandbox agent report](references/offline-sandbox-agent-report.md)
+  — canonical close-out for agents with no LAN / not on the same machine
+  (dual-authority with Perpetua-Tools
+  `docs/coordination/offline-sandbox-agent-report.md`; shared skill
+  `offline-sandbox-agent-report`).
+
+---
+
 ## Open questions (live)
 
 The [PR event reporter production design](references/2026-09-14-pr-event-reporter-v2-production-plan.md)
