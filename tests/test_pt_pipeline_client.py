@@ -135,7 +135,7 @@ def test_client_still_allows_the_documented_loopback_http_default(
     assert url == "http://localhost:8000/pipelines/classify_then_generate/run"
 
 
-def _production_client_kwargs(**overrides):
+def _production_client_kwargs(**overrides: object) -> dict[str, object]:
     """Same kwargs as PTPipelineClient.run's AsyncClient, minus transport=,
     so default httpx proxy-mount behavior applies -- MockTransport bypasses
     mount routing entirely regardless of trust_env, so asserting mounts on

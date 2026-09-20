@@ -44,12 +44,12 @@ def test_public_blocked_without_opt_in():
         validate_model_endpoint_url("http://1.1.1.1:1234")
 
 
-def test_127_prefix_hostname_not_treated_as_loopback():
+def test_127_prefix_hostname_not_treated_as_loopback() -> None:
     with pytest.raises(ModelEndpointPolicyError, match="RFC1918"):
         validate_model_endpoint_url("http://127.attacker.example:8000")
 
 
-def test_127_prefix_hostname_blocked_with_require_tls_flag():
+def test_127_prefix_hostname_blocked_with_require_tls_flag() -> None:
     with pytest.raises(ModelEndpointPolicyError, match="RFC1918"):
         validate_model_endpoint_url(
             "http://127.attacker.example:8000",
@@ -138,7 +138,7 @@ def test_require_tls_flag_allows_https_to_private_network_host():
     )
 
 
-def test_file_scheme_rejected():
+def test_file_scheme_rejected() -> None:
     """Task 5 union: PT's test_file_scheme_rejected. Genuinely new
     behavior coverage, not just a renamed duplicate -- orama's suite had
     no test for a non-http(s) scheme at all before this."""
@@ -146,19 +146,19 @@ def test_file_scheme_rejected():
         validate_model_endpoint_url("file:///etc/passwd")
 
 
-def test_credentials_in_url_rejected():
+def test_credentials_in_url_rejected() -> None:
     """Task 5 union: PT's test_credentials_rejected."""
     with pytest.raises(ModelEndpointPolicyError, match="credentials"):
         validate_model_endpoint_url("http://user:pass@127.0.3.1:1234")
 
 
-def test_empty_url_rejected():
+def test_empty_url_rejected() -> None:
     """Task 5 union: PT's test_empty_rejected."""
     with pytest.raises(ModelEndpointPolicyError, match="empty"):
         validate_model_endpoint_url("   ")
 
 
-def test_private_ip_redacted_for_log():
+def test_private_ip_redacted_for_log() -> None:
     """Task 5 union: redact_endpoint_for_log has zero coverage in this
     file before this addition, despite the function shipping in the
     byte-identical validator copy."""
@@ -167,5 +167,5 @@ def test_private_ip_redacted_for_log():
     assert "127.0.4.*" in out
 
 
-def test_localhost_not_redacted_for_log():
+def test_localhost_not_redacted_for_log() -> None:
     assert "localhost" in redact_endpoint_for_log("http://localhost:1234")
