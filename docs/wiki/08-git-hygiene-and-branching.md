@@ -153,8 +153,8 @@ incremented for these emails):
 
 | Repo | Bot author email |
 | --- | --- |
-| **orama-system** | `cursor[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com` |
-| **Perpetua-Tools** | `dependabot[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com` |
+| **orama-system** | `cursor[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com`, `dependabot[bot]@users.noreply.github.com` |
+| **Perpetua-Tools** | `dependabot[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com`, `github-actions[bot]@users.noreply.github.com` |
 
 The audit script (`scripts/git/audit_engine.py`) scopes this lookup **per repo**
 by name (`repo_bot_identities[repo_root.name]`) — it does not union bot
