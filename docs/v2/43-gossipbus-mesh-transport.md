@@ -54,12 +54,15 @@ Minimal surface on each particle:
 
 ```text
 GET  /api/gossip/tail?since=<cursor>&types=load,dispatch,error
-POST /api/gossip/ingest   # bearer + capability `read` / `mutate` per direction
+POST /api/gossip/ingest   # bearer + ingest capability; event replication only
 ```
 
 - **Transport:** reuse portal bearer auth + CSRF/origin guards (same bar as P5/P6).
 - **Discovery:** `last_discovery.json` / `discover.py` endpoints — no hardcoded IPs.
 - **Win↔Mac:** symmetric; either particle may initiate tail pull (coord cycles already sync git; gossip sync is orthogonal).
+- **Authority:** ingest may append a validated redacted event only. It never
+  mutates controller job state; that narrow mutation surface belongs to the
+  v2.1 Controller protocol in [`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md).
 
 ### v3? — Bluetooth / BLE mesh (bitchat analogy)
 
@@ -87,6 +90,12 @@ OQ29 tracks BLE vs LAN-only scope.
 | Portal swarm/L1 APIs | Mutating control plane | Gossip **observes** dispatches; does not replace HITL |
 
 Cross-host **mutations** still go through authenticated APIs (P5 tokens, PT `/v1/jobs`). Mesh gossip is for **observability and soft coordination**, not unsigned remote execution.
+
+For the deferred v2.1 case where a remote worker must claim work, GossipBus
+also remains non-authoritative: the controller commits an atomic state change,
+then publishes a redacted outbox event. A gossip event can never claim, renew,
+complete, release, or recover a task. See
+[`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md).
 
 ---
 
@@ -162,3 +171,4 @@ See [`06-open-questions.md`](06-open-questions.md) **OQ29** (BLE scope), **OQ30*
 - RAG plane: [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md)
 - L1 / swarm HITL: [`../plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md`](../plans/2026-06-28-security-pr3-p5-swarm-approval-execution-plan.md)
 - Frugality doctrine: [`26-tdd-and-outsourced-review-doctrine.md`](26-tdd-and-outsourced-review-doctrine.md) §3
+- Shared-claim authority: [`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md)

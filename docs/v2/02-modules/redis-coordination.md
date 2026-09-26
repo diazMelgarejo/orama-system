@@ -8,6 +8,11 @@
 
 Redis pub/sub remains a **last-resort** escape hatch if mesh tail proves insufficient at scale.
 
+Neither GossipMesh nor a future Redis backend is a claim authority. Atomic
+remote claims, leases, and recovery remain the deferred v2.1
+[`Orchestrator Controller`](../68-orchestrator-controller-satellite.md)
+protocol; changing event transport must not create a second job-state writer.
+
 ## Decision gate
 
 Do **not** implement Redis before v2.1 `GossipMesh` LAN tail is tried. v1 co-orchestration already coordinates via file inbox + portal probes without Redis.

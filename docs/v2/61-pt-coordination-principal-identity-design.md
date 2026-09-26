@@ -138,6 +138,15 @@ point the current `PT_AGENT_ID`-only check uses today.
 No timeline is set for M-id-1 in this document — it starts only when
 explicitly prioritized, not as a consequence of this doc existing.
 
+## Relationship to the v2.1 Controller
+
+This remains a v1 design record. The proposed v2.1 Orchestrator Controller
+does not import or wrap this mechanism; it consumes a Phylax-verified,
+operation-scoped capability before inspecting a task. The common lesson is
+that a caller-supplied agent identifier is not authentication. See
+[`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md)
+for the clean v2 protocol and migration boundary.
+
 ## Explicit non-goals
 
 - This does not attempt to authenticate the *human* operator behind an

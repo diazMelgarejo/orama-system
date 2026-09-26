@@ -18,6 +18,11 @@ Will this agent WRITE files AND another agent is also writing?
 `source_ref` + `expected_base_sha`, then create the worktree from that exact
 source. Shared board state is not shared file state.
 
+For remote v2.1 claims, the future Orchestrator Controller returns a
+lease-bound receipt rather than exposing a board database to workers. The
+receipt does not replace this source-line and worktree proof. See
+[`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md).
+
 ---
 
 ## 1. When to Create a Worktree

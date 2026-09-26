@@ -17,12 +17,17 @@ Port the existing 7-agent network from `orama-system/bin/agents/` into the new a
 - Drop `SOUL.md` behavioral files in favor of typed `PerpetuaState` fields
 - Replace ad-hoc message bus with `GossipBus` events
 - HITL interrupts replace synchronous human-approval loops
+- Keep work-claim authority outside the event bus. The deferred v2.1
+  [`Orchestrator Controller`](../68-orchestrator-controller-satellite.md)
+  owns atomic leases and recovery; GossipBus carries only post-commit,
+  redacted coordination events.
 
 ## Dependencies
 
 - `perpetua_core.graph.engine.MiniGraph`
 - `perpetua_core.graph.subgraphs.as_node`
 - `perpetua_core.gossip.GossipBus`
+- `orchestrator-controller` claim receipt API (v2.1, deferred)
 
 ## Open items
 
