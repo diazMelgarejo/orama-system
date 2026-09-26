@@ -34,7 +34,7 @@ a stricter, more specific rule.
 
 ## Vision
 
-**Canonical org north star:** [`../VISION.md`](../VISION.md) — triage gates,
+**Canonical org north star:** [`../../VISION.md`](../../VISION.md) — triage gates,
 priority stack, anti-goals, and v1→v2 continuity. This section summarizes;
 the root `VISION.md` governs agents and autotriage.
 
@@ -138,7 +138,7 @@ Calendar-free. Each phase gates on completion criteria, not dates.
 | `perpetua-core/` | Data + state + LLM + hardware policy + gossip + graph engine | (no internal upward deps) |
 | `oramasys/` | Graph DSL composition + FastAPI surface + app nodes | imports `perpetua_core` only |
 | `oramasys/agate/` | Hardware policy spec + future gateway/bridge layer | imports `perpetua_core` (side-car) |
-| `oramasys/orchestrator-controller/` (proposed) | v2.1 authoritative claims, leases, idempotency, recovery, and outbox | imports Core contracts; consumes Telos/Phylax decisions; never imported by Core |
+| `oramasys/oramasys` → `src/orama/orchestrator_controller/` | v2.1 authoritative claims, leases, idempotency, recovery, and outbox | **definitive home** (internal module): imports Core contracts; consumes Telos/Phylax decisions; never imported by Core |
 
 **Rule**: any time you find yourself wanting `perpetua-core` to import
 `oramasys`, you have a layering bug.
@@ -177,7 +177,7 @@ Don't sneak these into the kernel.
 | MCP-Optional transport | ex-v1.1 roadmap | v2.0+ | no | stub |
 | Redis coordination | ex-v1.1 roadmap | v2.0+ | no | stub (superseded by GossipMesh — see doc 43) |
 | **GossipBus mesh transport** | particle gossip over LAN; BLE future | v2.1+ | no | **planned** — [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md) |
-| **Orchestrator Controller** | atomic remote claims, leases, recovery, and redacted event outbox | v2.1 | no | **deferred** — [`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md); repo admission gate required |
+| **Orchestrator Controller** | atomic remote claims, leases, recovery, and redacted event outbox | v2.1 | no | **home decided** — internal module `orama.orchestrator_controller` of [`oramasys/oramasys`](https://github.com/oramasys/oramasys); standalone spin-off only through the §9 gate in [`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md) |
 | Self-improve evaluator | ex-v1.2 roadmap | considered v2.5 | no | stub |
 | RAG / memory | new | v2.0+ | no | stub |
 | Lessons + SKILL.md | v1 carry-over | v2.0+ | no | stub |

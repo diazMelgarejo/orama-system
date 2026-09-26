@@ -4,11 +4,13 @@
 
 ## What it does
 
-Port the existing 7-agent network from `orama-system/bin/agents/` into the new architecture as a `MiniGraph` subgraph. Agents: Orchestrator, Context, Architect, Refiner, Executor ×5, Verifier, Crystallizer.
+Porttheexisting7-agentnetworkfrom`orama-system/bin/agents/`intothenewarchitectureasa`MiniGraph`
+subgraph.Agents:Orchestrator,Context,Architect,Refiner,Executor×5,Verifier,Crystallizer.
 
 ## Carry-over path
 
-- Source: `orama-system/bin/agents/{orchestrator,context,architect,refiner,executor,verifier,crystallizer}/`
+- Source:
+  `orama-system/bin/agents/{orchestrator,context,architect,refiner,executor,verifier,crystallizer}/`
 - Target: `oramasys/orama/agents/network.py` as a `MiniGraph` composition
 - Each agent becomes a `MiniGraph` node; inter-agent messaging via `GossipBus`
 
@@ -31,5 +33,6 @@ Port the existing 7-agent network from `orama-system/bin/agents/` into the new a
 
 ## Open items
 
-- Whether the 7-agent topology is preserved or refactored (5-stage ultrathink maps well to 5 of the 7 agents)
+- Whether the 7-agent topology is preserved or refactored (5-stage ultrathink maps well to 5 of the
+  7 agents)
 - Agent registry format: YAML declarative vs. Python imperative

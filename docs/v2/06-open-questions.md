@@ -1,6 +1,9 @@
 # 06 — Open Questions
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never
+> committed with secrets, personal paths, or SecOps material. Additive — see
+> [`46-repository-standard.md`](46-repository-standard.md).
 Items deliberately deferred. Each has a target checkpoint for resolution.
 
 ---
@@ -8,7 +11,7 @@ Items deliberately deferred. Each has a target checkpoint for resolution.
 ## Active open questions
 
 | # | Question | Context | Resolve by |
-|---|----------|---------|------------|
+| --- | ---------- | --------- | ------------ |
 | OQ1 | **Pydantic AI as framework** — at v2.1+, evaluate whether `pydantic-ai` (`Agent`, `Tool`, `RunContext`) should supplement or replace `MiniGraph` for the application layer (not kernel). | Pydantic AI is a framework built on Pydantic v2. It's a LangGraph competitor. MiniGraph is our custom engine. The question is whether v2.1's app layer uses one, both, or neither. | v2.1 checkpoint |
 | OQ2 | **GGUF hardware spec extension** — a community RFC to add `system_requirements` to the GGUF metadata layer has been pending since Oct 2024 with no timeline. Do we wait for it, or does `agate` serve as the bridge (mapping GGUF model IDs to hardware policy)? | The GGUF format is the de facto standard for local model metadata. Adding hardware requirements to GGUF would let any GGUF loader natively enforce hardware affinity without a separate policy file. | agate v0.1 release |
 | OQ3 | **`agate` naming** — Perplexity proposed "agate" as the name for the published hardware policy spec (memorable vs. `model-hardware-policy-spec`). The repo is confirmed as `oramasys/agate`. Should the Python package also be `agate` on PyPI? Check availability. | Name availability determines distribution strategy. | agate repo setup |
@@ -23,7 +26,7 @@ Items deliberately deferred. Each has a target checkpoint for resolution.
 ## Resolved (logged for posterity)
 
 | # | Question | Resolution | Date |
-|---|----------|------------|------|
+| --- | ---------- | ------------ | ------ |
 | D1 | Clean-slate vs. evolve-in-place | Clean-slate rewrite | 2026-04-30 |
 | D2 | Repo names | `perpetua-core` + `oramasys` | 2026-04-30 |
 | D3 | v2 sequencing | v1.0 RC first | 2026-04-30 |

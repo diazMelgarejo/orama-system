@@ -1,14 +1,18 @@
 # 22 — Git Worktrees for Parallel Agents
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
-> **Quick reference.** Full design rationale in `docs/superpowers/specs/2026-05-24-worktree-parallel-agents-design.md`.
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never
+> committed with secrets, personal paths, or SecOps material. Additive — see
+> [`46-repository-standard.md`](46-repository-standard.md).
+> **Quick reference.** Full design rationale in
+> `docs/superpowers/specs/2026-05-24-worktree-parallel-agents-design.md`.
 > Applies to: orama-system, Perpetua-Tools. Excludes: periscope, AlphaClaw.
 
 ---
 
 ## TL;DR — Decision in 5 Seconds
 
-```
+```text
 Will this agent WRITE files AND another agent is also writing?
   Yes → create a worktree.  Run: scripts/worktree-bootstrap.sh <repo> <branch> <slug>
   No  → use the canonical checkout.  Done.
@@ -29,12 +33,13 @@ receipt does not replace this source-line and worktree proof. See
 
 ### 4-Quadrant Rule
 
-|                      | Isolated writes? **No** | Isolated writes? **Yes** |
-|----------------------|------------------------|--------------------------|
-| **Parallel agents?** **No**  | Canonical ✅ | Canonical ✅ |
+| Agents | Isolated writes? **No** | Isolated writes? **Yes** |
+| --- | --- | --- |
+| **Parallel agents?** **No** | Canonical ✅ | Canonical ✅ |
 | **Parallel agents?** **Yes** | Canonical ✅ | **Worktree** ✅ |
 
 **Worktree triggers — ALL must be true:**
+
 1. Agent will write/modify files
 2. Another agent is concurrently writing to the same repo
 3. The work lives on a separate named branch
@@ -45,13 +50,14 @@ If either is missing, derive it from the PR/assignment branch, post it back to
 the board, and only then bootstrap a fresh worktree from that ref.
 
 **Stay on canonical — ANY of these is enough:**
+
 - Read-only work (code review, semantic search, test runs against committed code)
 - Sequential work (one agent at a time)
 - Task completes faster than ~30s worktree bootstrap time
 
 ### Decision Tree
 
-```
+```text
 Will this agent write files?
 ├─ No  → Canonical. Done.
 └─ Yes → Is another agent already writing to canonical?
@@ -63,13 +69,14 @@ Will this agent write files?
 
 ## 2. Canonical Worktree Location
 
-```
+```text
 <v2-workspace>/worktrees/<slug>
 ```
 
 **Slug format:** `yyyy-mm-dd-<brief-purpose>` — e.g. `2026-05-24-worktree-doctrine`
 
 Why external to the repo directory:
+
 - Avoids `.gitignore` conflicts with tracked files
 - Prevents macOS Finder `* 2` dedup contamination
 - Lets multiple orama-family repos share the same hub under `<v2-workspace>/worktrees/`
@@ -91,8 +98,10 @@ scripts/worktree-bootstrap.sh \
 ```
 
 Bootstrap does (in order):
+
 1. **Pre-flight**: removes stale `.git/*.lock` files; detects orphan refs with spaces
-2. **`git worktree add`** `<v2-workspace>/worktrees/<slug>` `-b <branch>` (or attaches if the worktree already exists)
+2. **`git worktree add`** `<v2-workspace>/worktrees/<slug>` `-b <branch>` (or attaches if the
+   worktree already exists)
 3. **`.gbrain-source`**: writes from argument, or copies from canonical if omitted
 4. **`.gitignore`**: appends macOS dedup patterns (`*\ 2/`, `*\ 2.*`, `*\ 3/`, `*\ 3.*`)
 5. **Port offset**: assigns `ENV_OFFSET = index × 100`, writes `.worktree-env`
@@ -120,7 +129,7 @@ as enough; it is not.
 
 Hardware baseline (2026-05-24): **1 Windows RTX3080 (LM Studio) + Mac (Ollama)**.
 
-```
+```text
 Canonical / index 0:
   AlphaClaw  3000   |  orama-api    8001
   PT         8000   |  orama-portal 8002
@@ -146,7 +155,7 @@ and collision-free within the supported range.
 **Single chokepoint rule:** All inference routes through PT's `backend_resolver.py` +
 `dispatch_models.py`. No agent ever POSTs directly to Ollama or LM Studio.
 
-```
+```text
 Agent (any worktree)
   → PT instance on its offset port (8000, 8100, 8200 …)
     → backend_resolver selects endpoint
@@ -155,6 +164,7 @@ Agent (any worktree)
 ```
 
 When 2+ worktrees run simultaneously:
+
 - Each starts its own PT instance on its offset port
 - Each PT routes to the same Win endpoint (`$LM_STUDIO_WIN_ENDPOINTS`)
 - Win LM Studio HTTP server serializes heavy-model requests naturally — no extra lock needed
@@ -231,6 +241,7 @@ ls | grep " 2$" || true
 ```
 
 Manual cleanup (if skill unavailable):
+
 ```bash
 # 1. From canonical checkout:
 git worktree remove `<v2-workspace>/worktrees/<slug>`
@@ -243,7 +254,7 @@ git branch -d <branch>
 git push origin --delete <branch>
 ```
 
-**Never `rm -rf` a worktree directory directly** — it leaves a dangling entry in `git worktree list`.
+**Never`rm-rf`aworktreedirectorydirectly**—itleavesadanglingentryin`gitworktreelist`.
 
 ---
 
@@ -259,7 +270,7 @@ python3 scripts/review/repo_hygiene.py .
 Must exit 0 before committing. Catches:
 
 | Rule | What it blocks | Correct substitute |
-|------|---------------|--------------------|
+| ------ | --------------- | -------------------- |
 | `scan_openclaw_workstation_layout` | hardcoded machine-local OpenClaw tree path | `$OPENCLAW_ROOT` |
 | `scan_personal_paths` | concrete personal home-directory paths | `~`, `$REPO_ROOT`, `<workspace>` |
 | `scan_bidi_controls` | Hidden Unicode direction controls (Trojan-Source) | remove |
@@ -271,6 +282,7 @@ references). The worktree path is real on your machine but breaks CI and leaks
 developer identity into the public repo.
 
 **Alias for speed:**
+
 ```bash
 alias hygiene="python3 scripts/review/repo_hygiene.py ."
 ```
@@ -280,7 +292,7 @@ alias hygiene="python3 scripts/review/repo_hygiene.py ."
 ## 12. Dogfood Defenses (from `.experience-log/dogfood-notes.md`)
 
 | Datum | Problem | Defense |
-|-------|---------|---------|
+| ------- | --------- | --------- |
 | D1 | Orphan refs with spaces block `git fetch` | bootstrap pre-flight: `find .git/refs -name "* *"` |
 | D2 | Fresh worktrees don't inherit `.gbrain-source` | bootstrap always writes it |
 | D3 | Duplicate `docs/v2/` prefixes | always `ls docs/v2/` before picking a number |
@@ -298,7 +310,7 @@ alias hygiene="python3 scripts/review/repo_hygiene.py ."
 
 For real-time agent guidance during a worktree session:
 
-```
+```text
 ~/.claude/skills/using-git-worktrees/SKILL.md
 ```
 
