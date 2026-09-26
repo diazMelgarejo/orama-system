@@ -1376,23 +1376,56 @@ def _iter_staged_added_lines(diff_text: str):
             rel = _apply_diff_file_header(raw)
 
 
-def scan_staged_prohibited_address_literals(root: Path) -> list[str]:
-    """Block a commit whose index adds a prohibited address literal.
+def _address_scan_diff_spec(
+    diff_base: str | None,
+    diff_head: str | None,
+) -> tuple[list[str], str] | str:
+    """Return ``(git diff args, finding location)`` or an error string.
 
-    Reads ``git diff --cached`` only. Unstaged working-tree edits, including
-    local discovery overlays, are not part of the commit and are ignored.
-    Error text names the path, line, and address class, never the literal.
+    No endpoints means the index (``--cached``), which pre-commit uses.
+    Both endpoints mean the three-dot range CI passes for a pull request.
     """
+    if (diff_base is None) != (diff_head is None):
+        return "diff base and head must both be set"
+    if diff_base is None:
+        return ["--cached"], "staged file"
+    if (
+        not diff_base
+        or not diff_head
+        or diff_base.startswith("-")
+        or diff_head.startswith("-")
+    ):
+        return "diff refs must be non-empty and must not start with '-'"
+    return [f"{diff_base}...{diff_head}"], "commit range"
+
+
+def scan_staged_prohibited_address_literals(
+    root: Path,
+    *,
+    diff_base: str | None = None,
+    diff_head: str | None = None,
+) -> list[str]:
+    """Block prohibited address literals on added lines.
+
+    Default is ``git diff --cached`` so pre-commit ignores unstaged overlay
+    drift. CI passes ``diff_base`` and ``diff_head`` to scan the pull-request
+    range, because a CI checkout has an empty index. Error text names the
+    path, line, and address class, never the literal.
+    """
+    spec = _address_scan_diff_spec(diff_base, diff_head)
+    if isinstance(spec, str):
+        return [f"prohibited private-range scan failed: {spec}"]
+    diff_args, where = spec
     proc = run_git(
         root,
         "diff",
-        "--cached",
+        *diff_args,
         "-U0",
         "--no-color",
         "--diff-filter=ACMRT",
     )
     if proc.returncode != 0:
-        detail = proc.stderr.strip() or "git diff --cached failed"
+        detail = proc.stderr.strip() or "git diff failed"
         return [f"prohibited private-range scan failed: {detail}"]
     errors: list[str] = []
     reported: set[tuple[str, int, str]] = set()
@@ -1405,7 +1438,7 @@ def scan_staged_prohibited_address_literals(root: Path) -> list[str]:
                 continue
             reported.add(key)
             errors.append(
-                f"prohibited private-range literal ({kind}) in staged file: {rel}:{line_no}"
+                f"prohibited private-range literal ({kind}) in {where}: {rel}:{line_no}"
             )
     return errors
 
@@ -1426,6 +1459,16 @@ def report_status(root: Path) -> list[str]:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Repo hygiene guard for orama-system salvage work")
     parser.add_argument("repo", nargs="?", default=".", help="repository root")
+    parser.add_argument(
+        "--address-diff-base",
+        default=None,
+        help="base ref for the prohibited-address scan (CI); omit to scan the index",
+    )
+    parser.add_argument(
+        "--address-diff-head",
+        default=None,
+        help="head ref for the prohibited-address scan (CI); required with --address-diff-base",
+    )
     args = parser.parse_args()
 
     root = Path(args.repo).resolve()
@@ -1477,7 +1520,13 @@ def main() -> int:
     errors.extend(scan_macos_dedup_dirs(root))
     errors.extend(scan_macos_ghost_git_refs(root))
     errors.extend(scan_docv2_ordinal_collision(root))
-    errors.extend(scan_staged_prohibited_address_literals(root))
+    errors.extend(
+        scan_staged_prohibited_address_literals(
+            root,
+            diff_base=args.address_diff_base,
+            diff_head=args.address_diff_head,
+        )
+    )
     warnings = check_markdown_size_warnings(root, files)
     active_legacy, historical_legacy = classify_legacy_name_refs(root, files)
 
