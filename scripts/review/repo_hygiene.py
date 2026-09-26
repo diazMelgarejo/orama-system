@@ -1295,7 +1295,7 @@ def _parsed_address_token(raw: str) -> str | None:
     Bracketed IPv6 drops the brackets and any trailing port. A bare token is
     parsed whole first, so a compressed address is not split on its last
     hextet. Only a token ipaddress rejects is retried with a trailing ``:port``
-    removed.
+    removed (``192.168.0.1:8080``).
     """
     token = raw
     if token.startswith("[") and "]" in token:
