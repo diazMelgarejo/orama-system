@@ -43,7 +43,8 @@ if [ -f "$ROOT/scripts/hooks/check_ossf1_skill_md.py" ]; then
   python3 "$ROOT/scripts/hooks/check_ossf1_skill_md.py" || exit 1
 fi
 
-# Canonical hygiene gate — the SAME check CI runs (scripts/review/repo_hygiene.py):
+# Canonical hygiene gate — the SAME check CI runs (scripts/review/repo_hygiene.py),
+# including the staged RFC1918/loopback/ULA/CGNAT literal gate:
 # commit identity, forbidden tokens, workstation/personal paths, secrets, bidi
 # controls, markdown-link hygiene, etc. Running it here catches a leak BEFORE it
 # enters history, so the expunge-git scrub is a last resort, not the routine
