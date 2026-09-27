@@ -105,6 +105,20 @@ travels in every plane. The consolidated shape:
   `lineage` is present — its existence *is* the divergence signal, so no extra
   boolean is needed.
 
+**Scope of this restatement (non-supersession).** The card is repeated here only
+to the depth the controller needs. The consolidated envelope standard owns the
+canonical header text, and this document does not supersede the LAN transport
+envelope, the budget envelope, `MonitorabilityEnvelopeV1`, `TaskEnvelope`,
+`WorkerResult`, the Hermes dispatch envelopes, or its own §4.2 claim mechanics.
+§4.2 remains the normative claim contract and the card is additive to it.
+
+**Canonical owners for projected values.** For claim records this document is the
+canonical owner of the task and principal values (§4.2); a delivery envelope owns
+its own task and assignee values, and a standalone round record owns `round_id`.
+A record that projects any of these values must carry its canonical value
+exactly, and a mismatch is rejected before state or capability lookup. A
+projection never grants authority (IC-28).
+
 ### 3.2 Building block B — agent states
 
 Three state families exist and must never be conflated:
@@ -226,6 +240,17 @@ move a claim, and only the controller applies them.
   jobs and renders controller state. It never reimplements claim semantics, and
   no second job-state writer may exist.
 
+#### I. Projections
+
+- **Exact-match projections (IC-28):** a record that projects a task, principal,
+  or round value must carry exactly the canonical value; round references must
+  resolve to one record; a mismatch is rejected before state or capability lookup,
+  and no projection grants authority.
+- **Additive header (IC-29):** a controller envelope may carry the common header
+  without altering §4.2 semantics. §4.2 stays the normative claim contract, and
+  this document never becomes a second contract for transport, budget,
+  monitorability, dispatch, or worker-result shapes.
+
 ### 3.4 Where each invariant came from
 
 | Family | Primary sources |
@@ -238,6 +263,7 @@ move a claim, and only the controller applies them.
 | F Egress and privacy | [`47`](47-portable-memory-local-topology-invariant.md); [`54`](54-tri-stack-observability-and-l3-egress-v2.md) |
 | G Outcome semantics | this document §4.3; [`63`](63-gate1-endpoint-observation-and-conformance-evidence.md) |
 | H Dependency direction | [`62`](62-telos-phylax-authority-gate0-adr.md); [`46`](46-repository-standard.md) |
+| I Projections | the consolidated envelope standard's canonical-owner rule (board decisions of 2026-09-26/27: records 3738, 3744, 3746) and this document §4.2 |
 
 ## 4. Minimal v2.1 Protocol
 
@@ -451,6 +477,10 @@ or topology fragments are permitted.
       is delivered and no unexpired lease is reissued.
 - [ ] IC-22: scan every envelope, receipt, and published document for local
       paths, hostnames, device identifiers, and ports — zero matches.
+- [ ] IC-28: a record projecting a task, principal, or round value that differs
+      from the canonical value is rejected before capability or state lookup.
+- [ ] IC-29: adding the common header leaves every §4.2 claim field's semantics
+      unchanged (assert the claim contract conformance suite still passes).
 
 ## 11. Explicit Non-Goals
 
