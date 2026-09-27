@@ -5,6 +5,7 @@ import type { AppState } from "@/api/appState";
 interface EnvBarProps {
   state: AppState | undefined;
   isFetching?: boolean;
+  onNavigate?: (page: string) => void;
 }
 
 function IconBook() {
@@ -25,7 +26,7 @@ function IconBell() {
   );
 }
 
-export function EnvBar({ state, isFetching = false }: EnvBarProps) {
+export function EnvBar({ state, isFetching = false, onNavigate }: EnvBarProps) {
   const portalData = state?.portal?.data as
     | { version?: string; env?: string; region?: string; stage?: string }
     | undefined;
@@ -71,7 +72,12 @@ export function EnvBar({ state, isFetching = false }: EnvBarProps) {
 
       {/* Action icons + avatar */}
       <div className="flex items-center gap-2 text-ink-subtle">
-        <button type="button" className="rounded p-1 hover:bg-canvas-raised hover:text-ink transition-colors" aria-label="Docs">
+        <button
+          type="button"
+          className="rounded p-1 hover:bg-canvas-raised hover:text-ink transition-colors"
+          aria-label="Docs"
+          onClick={() => onNavigate?.("docs")}
+        >
           <IconBook />
         </button>
         <button type="button" className="rounded p-1 hover:bg-canvas-raised hover:text-ink transition-colors" aria-label="Notifications">

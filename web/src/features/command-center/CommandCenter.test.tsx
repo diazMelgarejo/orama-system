@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CommandCenter } from "./CommandCenter";
 
@@ -81,7 +81,7 @@ describe("CommandCenter nav smokes", () => {
   it("docs page renders the knowledge portal instead of the swarm composer", async () => {
     renderCommandCenter();
     await waitForConsole();
-    clickNav("Docs");
+    fireEvent.click(within(screen.getByRole("navigation")).getByRole("button", { name: "Docs" }));
 
     expect(screen.getByText("Knowledge Portal")).toBeInTheDocument();
     expect(screen.getByLabelText("Search documentation")).toBeInTheDocument();
