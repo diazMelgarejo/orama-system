@@ -4,10 +4,10 @@
 > `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never
 > committed with secrets, personal paths, or SecOps material. Additive — see
 > [`46-repository-standard.md`](46-repository-standard.md).
-> **Status:** Planned — v2.1+ non-kernel module  
-> **Date:** 2026-06-29  
+> **Status:** Planned — v2.1+ non-kernel module
+> **Date:** 2026-06-29
 > **Parent:** [`01-kernel-spec.md`](01-kernel-spec.md) §5 (local `GossipBus`),
-> [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md)  
+> [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md)
 > **v1 dogfood:** Mac↔Win file inbox + `ws-peer` + portal probes
 > ([`lan-peer-bidirectional-talk-2026-06-28.md`](../guides/lan-peer-bidirectional-talk-2026-06-28.md))
 

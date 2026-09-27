@@ -1,17 +1,17 @@
 # 69 — Agent Envelope Standard (identity card, kinds, tiers)
 
 > **Status:** published v2 standard (promoted by the human operator, 2026-09-27);
-> no runtime contract is changed by this document  
-> **Document owner:** `orama-system` (this specification)  
+> no runtime contract is changed by this document
+> **Document owner:** `orama-system` (this specification)
 > **Schema and validator owner (v2):** [`oramasys/perpetua-core`](https://github.com/oramasys/perpetua-core)
-> — neutral header, tier rules, deterministic validators  
+> — neutral header, tier rules, deterministic validators
 > **Standard implementers:** `Perpetua-Tools` for v1 artifacts, `oramasys/perpetua-core`
-> for v2 artifacts  
+> for v2 artifacts
 > **Parents:** [`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md),
 > [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md),
 > [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md),
 > [`55-oramasys-agent-observability-contract-adr.md`](55-oramasys-agent-observability-contract-adr.md),
-> [`61-pt-coordination-principal-identity-design.md`](61-pt-coordination-principal-identity-design.md)  
+> [`61-pt-coordination-principal-identity-design.md`](61-pt-coordination-principal-identity-design.md)
 > **Provenance:** [`references/2026-09-27-envelope-standard-provenance.md`](references/2026-09-27-envelope-standard-provenance.md)
 
 ---
@@ -126,8 +126,9 @@ A status record reports what one actor observed. It is **not** a liveness write
 and cannot change any claim, lease, heartbeat, or queue-write right. Envelope
 authorship of `availability` (§4) and the status kind are the same discipline:
 observation is never state mutation. The first shipping implementation is the
-PT `status` helper (I2), which must carry the header and publish no identity,
-paths, or secrets.
+PT `status` helper (I2), which must carry the header. Opaque agent labels are
+allowed. It must not publish private human identity, workspace paths, or
+other local-topology fragments (doc 47), and it must not publish secrets.
 
 ## 6. Delivery kind
 
@@ -183,8 +184,10 @@ ever grants authority.
 ## 10. Retention and privacy
 
 - **Retention boundary (operator decision, 2026-09-27):** envelope-derived
-  persistence defaults to **90 days maximum**, overridable by configuration
-  variable.
+  persistence defaults to **90 days maximum**, overridable by a configuration
+  variable. The v1 Perpetua-Tools wrapper does not enforce the clock. The v2
+  implementation in `oramasys/perpetua-core` enforces the default and the
+  override.
 - The controller and the telemetry/observability path redact **under their own
   respective policies**; this standard does not change any other existing policy.
 - `privacy_tier` uses doc 55's vocabulary (`internal_only`, `redacted`).

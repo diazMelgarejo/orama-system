@@ -2,14 +2,14 @@
 
 > **Status:** v2.1 design; **definitive home is the `oramasys/oramasys` internal
 > satellite module** (`orama.orchestrator_controller`); no runtime implementation
-> exists yet  
+> exists yet
 > **Spin-off:** a standalone `oramasys/orchestrator-controller` repository is a
-> later and unlikely option, reachable only through the admission gate in §9  
+> later and unlikely option, reachable only through the admission gate in §9
 > **Envelope standard:** the card this spec uses is published as
-> [`69-agent-envelope-standard.md`](69-agent-envelope-standard.md)  
+> [`69-agent-envelope-standard.md`](69-agent-envelope-standard.md)
 > **Parent:** [`01-kernel-spec.md`](01-kernel-spec.md),
 > [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md), and
-> [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md)  
+> [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md)
 > **Cross-cutting constraints:** [`22-worktree-parallel-agents.md`](22-worktree-parallel-agents.md),
 > [`46-repository-standard.md`](46-repository-standard.md),
 > [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md),

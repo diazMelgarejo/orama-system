@@ -360,10 +360,10 @@ Each row is one “instance” and must satisfy §Mandatory process.
 
 ## Addendum — Independent review (2026-09-26)
 
-**Reviewer:** `cursor-composer-review-20260926` (Cursor, read-only)  
+**Reviewer:** `cursor-composer-review-20260926` (Cursor, read-only)
 **Scope:** this plan + local commit `fe475c62` on
-`fix/cursor-topology-probe-identity-20260926` (base `c67d2610`)  
-**Gossip:** `topic=CURSOR_TOPOLOGY_PROBE_REVIEW_VERDICT;status=approve_with_nits`  
+`fix/cursor-topology-probe-identity-20260926` (base `c67d2610`)
+**Gossip:** `topic=CURSOR_TOPOLOGY_PROBE_REVIEW_VERDICT;status=approve_with_nits`
 **Verdict:** Approve with nits. Device-plus-inode identity and inspected-root
 `cwd` fix the prior inode-only alias and process-cwd bugs. Plan gates
 (Mode A, Phase 2 HITL, wrapper hold, W0-R1) are consistent. Push remains HITL.
@@ -551,9 +551,9 @@ plus the post-Resolution **authority** successor that is now the publish
 candidate.
 
 **Reviewer:** `cursor-composer-review-20260926` (Cursor, read-only on code;
-wrote this addendum + GossipBus sync only).  
+wrote this addendum + GossipBus sync only).
 **Gossip:** `topic=CURSOR_TOPOLOGY_DUAL_BRANCH_REVIEW` /
-`WORKER_PLAN_ADDENDUM_C`.  
+`WORKER_PLAN_ADDENDUM_C`.
 **Headline verdict:** Prefer
 `fix/cursor-topology-probe-authority-20260926` @ `84523aea` for any
 HITL push/PR. Treat `chore/…` and `fix/…-identity…` as superseded local
@@ -580,7 +580,7 @@ no consumer treats Mode A as a write grant.
 | `fix/cursor-topology-probe-identity-20260926` | `wt-probe-identity` | `fe475c62` | **11/11** | Device+inode + inspected `cwd` — **intermediate / superseded** |
 | `fix/cursor-topology-probe-authority-20260926` | `wt-probe-authority` | `84523aea` (rebased; earlier board note cited pre-rebase `e9156fb4`) | **12/12** | **Current publish candidate** — advisory + size |
 
-**Remote presence:** all three branches `ls-remote` empty (unpublished).  
+**Remote presence:** all three branches `ls-remote` empty (unpublished).
 **Lineage:** `c67d2610` ⊂ `fe475c62` (fast-forward identity on chore). Authority is a
 **rebased rewrite** of the same four logical commits onto PR#400
 (`a242bb24`), not a fast-forward of `fe475c62`. Do not treat older SHAs in
