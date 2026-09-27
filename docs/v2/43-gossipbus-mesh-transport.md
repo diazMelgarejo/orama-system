@@ -181,7 +181,7 @@ next-increment plan:
 
 Full session narrative:
 `Perpetua-Tools/docs/phase-0-specifications/2026-07-12-stm-next-increment-plan.md`
-+ `.agent/memory/episodic/AGENT_LEARNINGS.jsonl` (2026-07-12 entry).
+and `.agent/memory/episodic/AGENT_LEARNINGS.jsonl` (2026-07-12 entry).
 
 **Pattern-library cross-reference:** the claim/release mechanic validated above is a live instance
 of [`references/patterns/multi-agent-orchestration.md`](references/patterns/multi-agent-orchestration.md)'s
