@@ -110,13 +110,18 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
         optimize_for: optimize,
         preferred_device: device,
         approved: true,
+        preview_id: previewData?.preview_id ?? "",
+        approval_token: previewData?.approval_token ?? "",
       }),
     onSuccess: (data) => onLaunch?.(data),
   });
 
   const charCount = objective.length;
   const canPreview = charCount >= 6;
-  const canLaunch = charCount >= 6 && (previewData?.hardware_policy?.ok ?? true);
+  const canLaunch =
+    charCount >= 6 &&
+    Boolean(previewData?.preview_id && previewData?.approval_token) &&
+    (previewData?.hardware_policy?.ok ?? false);
 
   return (
     <section className="mb-4 rounded border border-line bg-canvas-surface">

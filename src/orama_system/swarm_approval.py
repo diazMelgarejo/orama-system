@@ -29,7 +29,7 @@ def strict_mode() -> bool:
 def grandfather_legacy() -> bool:
     if strict_mode():
         return False
-    return os.environ.get("ORAMA_SWARM_LEGACY_APPROVE", "1").strip().lower() not in ("0", "false", "no")
+    return os.environ.get("ORAMA_SWARM_LEGACY_APPROVE", "0").strip().lower() not in ("0", "false", "no")
 
 
 def _fingerprint(preview: dict[str, Any]) -> str:

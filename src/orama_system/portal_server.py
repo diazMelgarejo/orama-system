@@ -52,6 +52,7 @@ from orama_system.lan_peer_channel import (
     read_discovery_peer_ip,
 )
 from orama_system.swarm_approval import issue_approval, verify_launch
+from orama_system.knowledge_gateway import router as knowledge_router
 from orama_system.portal_notifications import (
     EventType,
     Notification,
@@ -228,12 +229,13 @@ async def _portal_lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="orama portal", version=VERSION, lifespan=_portal_lifespan)
+app.include_router(knowledge_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_allow_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "Mcp-Protocol-Version", "Mcp-Method", "Mcp-Name"],
 )
 
 

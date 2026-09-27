@@ -14,6 +14,8 @@ export interface SwarmPreviewRequest {
 
 export interface SwarmLaunchRequest extends SwarmPreviewRequest {
   approved: true;
+  preview_id: string;
+  approval_token: string;
 }
 
 export interface SwarmAssignment {
@@ -44,6 +46,9 @@ export interface SwarmPreview {
   preferred_device: PreferredDevice;
   assignments: SwarmAssignment[];
   hardware_policy: HardwarePolicyResult;
+  preview_id: string;
+  approval_token: string;
+  strict_mode: boolean;
   [k: string]: unknown;
 }
 

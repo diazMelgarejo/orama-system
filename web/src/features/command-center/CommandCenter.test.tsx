@@ -77,4 +77,21 @@ describe("CommandCenter nav smokes", () => {
     expect(screen.queryByText("Swarm Composer")).not.toBeInTheDocument();
     expect(screen.queryByText("Launch Swarm")).not.toBeInTheDocument();
   });
+
+  it("docs page renders the knowledge portal instead of the swarm composer", async () => {
+    renderCommandCenter();
+    await waitForConsole();
+    clickNav("Docs");
+
+    expect(screen.getByText("Knowledge Portal")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search documentation")).toBeInTheDocument();
+    expect(screen.queryByText("Swarm Composer")).not.toBeInTheDocument();
+  });
+
+  it("tells the operator to check portal port 8002 when app state is unreachable", async () => {
+    renderCommandCenter();
+    await waitFor(() => {
+      expect(screen.getByText(/portal_server\.py is running on port 8002/i)).toBeInTheDocument();
+    });
+  });
 });
