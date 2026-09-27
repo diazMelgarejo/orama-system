@@ -322,7 +322,7 @@ inventing a second contract.
 | Question | Current safe position | Resolution gate |
 | --- | --- | --- |
 | Coordination-round context | The standalone `CoordinationRoundEnvelopeV1` design groups controller, scope, and stop conditions without changing `HandoffPacketV1`; see the approved design record. | M2 producer inventory and contract/fixture conformance review before any producer-emission mandate. |
-| Phylax runtime owner | No repository/package has yet been named as the executable v2 owner. | M0.1 names owner, dependency direction, validator location, and retention boundary before runtime code. |
+| Phylax runtime owner | Repository named: [`oramasys/phylax`](https://github.com/oramasys/phylax) (README + `docs/BOUNDARIES.md` state the admission mandate; 10 commits at review time). Remaining M0.1 items: dependency-direction confirmation, validator location, retention boundary | M0.1 closes the four items before runtime code |
 | Derived-artifact persistence | Append-only governed storage is required, but no implementation store is selected. | M0.1/M3 privacy, access-audit, expiry, and rollback evidence. |
 | OTel baseline evolution | The current adapter map is pinned; later GenAI semantic-convention updates are not implicit. | Mapping regression, explicit review identifier, and no-emission-before-approval gate. |
 

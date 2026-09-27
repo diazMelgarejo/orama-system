@@ -5,6 +5,8 @@
 > exists yet  
 > **Spin-off:** a standalone `oramasys/orchestrator-controller` repository is a
 > later and unlikely option, reachable only through the admission gate in §9  
+> **Envelope standard:** the card this spec uses is published as
+> [`69-agent-envelope-standard.md`](69-agent-envelope-standard.md)  
 > **Parent:** [`01-kernel-spec.md`](01-kernel-spec.md),
 > [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md), and
 > [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md)  
@@ -77,49 +79,27 @@ contract: the **envelope card** (§3.1) and **agent states** (§3.2). The
 invariants in §3.3 are the crystallization of every prior plan on this subject;
 each cites the document it came from.
 
-### 3.1 Building block A — the envelope card
+### 3.1 The envelope card (canonical text in doc 69)
 
-An envelope is the identity card of one unit of work, and the same card header
-travels in every plane. The consolidated shape:
+The card's normative text now lives in
+[`69-agent-envelope-standard.md`](69-agent-envelope-standard.md) §3–§4: tiers
+U/K/C, the four planes (orthogonal to `envelope_kind`), the double-sided
+`author`/`actor` form, and the conditional `lineage` block.
 
-- **Tier U (universal, no default):** `envelope_id`, `envelope_schema_version`,
-  `envelope_kind`, `created_at` (tz-aware), `privacy_tier`, `author{agent_id,
-  model, availability}`, `actor{agent_id, instance_id, identity_verified}`,
-  `redaction.applied`. A missing Tier U field is a validation error, never a
-  silent default.
-- **Tier K (kind-required):** only what that kind means. For the controller the
-  kind is `claim`, whose required fields are §4.2's request fields; the response
-  owns lease data and the result receipt separately.
-- **Tier C (conditional, declared explicitly):** present only when the case
-  applies, and otherwise declared as `None`/empty under `extra="forbid"` so the
-  absence is a recorded decision. `lineage{on_behalf_of, prior_agent,
-  prior_agent_status, takeover, superseded_ref}` lives here.
-- **Four planes, one kind axis:** the four envelope planes
-  (`references/observability/12-MULTI-AGENT-ENVELOPES-TELEMETRY-AND-COORDINATION-STANDARDS-2026-08-24.md`,
-  an off-repo OpenClaw working reference not published in this repository)
-  classify *where* a record operates; `envelope_kind` classifies *what it means*.
-  They are orthogonal, so one `claim` card can be projected to the observability
-  plane without becoming a new kind.
-- **A double-sided card:** `actor` is who presents the record now (the only
-  verifiable identity); `author` is who originated the work. When the ids differ,
-  `lineage` is present — its existence *is* the divergence signal, so no extra
-  boolean is needed.
+For the controller the kind is `claim`, whose required panel is §4.2's request
+fields; the response owns lease data and the result receipt separately.
 
-**Scope of this restatement (non-supersession).** The card is repeated here only
-to the depth the controller needs. The consolidated envelope standard owns the
-canonical header text, and this document does not supersede the LAN transport
+**Non-supersession.** This document does not supersede the LAN transport
 envelope, the budget envelope, `MonitorabilityEnvelopeV1`, `TaskEnvelope`,
 `WorkerResult`, the Hermes dispatch envelopes, or its own §4.2 claim mechanics.
-§4.2 remains the normative claim contract and the card is additive to it.
+§4.2 remains the normative claim contract, and the header is additive to it.
 
 **Canonical owners for projected values.** For claim records this document is the
 canonical owner of the task and principal values (§4.2); a delivery envelope owns
-its own task and assignee values, and a standalone round record owns `round_id`.
-A record that projects any of these values must carry its canonical value
-exactly, and a mismatch is rejected before state or capability lookup. A
-projection never grants authority (IC-28).
+its own task and assignee values, and a standalone round record owns `round_id`
+(IC-28; full rule in doc 69 §9).
 
-### 3.2 Building block B — agent states
+### 3.2 Agent states
 
 Three state families exist and must never be conflated:
 
@@ -127,13 +107,14 @@ Three state families exist and must never be conflated:
 | --- | --- | --- | --- |
 | Agent/principal observation | `active`, `inactive`, `unknown` | any actor, at write time | what that actor observed; never authority, never a state transition |
 | Claim/lease state | `pending` → `claimed` → `completed`, or `released`, `failed`, `expired` | the controller | authoritative job lifecycle (§1) |
-| Envelope custody | author == actor, or author != actor with `lineage` | the actor | who originated versus who presents |
+| Envelope custody | author == actor, or author != actor with `lineage` | the actor | who originated versus who presents (rule in doc 69 §3) |
 
-The v1 board shows why the split matters: `heartbeat list/check/timeline` report
-liveness, and `heartbeat cleanup` *releases claims held by DEAD agents*. That is
-acceptable v1 convenience, but it is **not** the v2 rule: an observation may
-never mutate claim state. In v2 only lease expiry and documented recovery rules
-move a claim, and only the controller applies them.
+The claim/lease machine is the controller's own lifecycle and stays normative
+here. The v1 board shows why the separation matters: `heartbeat
+list/check/timeline` report liveness, and `heartbeat cleanup` *releases claims
+held by DEAD agents*. That is acceptable v1 convenience, but it is **not** the v2
+rule: an observation may never mutate claim state. In v2 only lease expiry and
+documented recovery rules move a claim, and only the controller applies them.
 
 ### 3.3 Crystallized invariants
 
@@ -256,7 +237,7 @@ move a claim, and only the controller applies them.
 | Family | Primary sources |
 | --- | --- |
 | A Authority | this document §1 and §3; [`43`](43-gossipbus-mesh-transport.md); [`61`](61-pt-coordination-principal-identity-design.md) |
-| B Identity and envelope | consolidated envelope card (`author`/`actor`/`lineage`, tiers U/K/C) and the no-liveness-write rule in §3.2 |
+| B Identity and envelope | [`69`](69-agent-envelope-standard.md) §3–§4 (card, tiers U/K/C, double-sided authorship, `lineage`) and the no-liveness-write rule in §3.2 |
 | C Atomicity and idempotency | this document §4.1–§4.3; [`11`](11-idempotency-and-guard-patterns.md) |
 | D Leases and recovery | this document §1 and §10; recovery clock rules pending implementation |
 | E Provenance | [`48`](48-board-job-source-line-schema.md); [`22`](22-worktree-parallel-agents.md) |

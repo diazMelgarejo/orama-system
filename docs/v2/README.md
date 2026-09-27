@@ -268,10 +268,11 @@ orama-system/docs/v2/
 ├── 65-gate2-policy-surface-evidence.md  ← Gate 2 read-only completion evidence: public /health query parameters reach a raw model-server probe after syntactic-only validation when the explicit public-host opt-in is enabled; separates that confirmed gap from the launcher configuration boundary and defines a bounded PT-PR proposal
 ├── 66-gate4-and-dedicated-dialer-combined-scope.md  ← combined scope for the next planned change: Gate 4's first real Telos vertical slice (config_read/health_probe only) built against a new DNS-resolving, address-class-aware model-server dialer, closing the 4 test cases PT PR #380 deliberately deferred; v2 dialer + Telos wiring (this repo) and the PT call-site adoption (separate, human-reviewed PT PR) are two repos' worth of one planned unit of work, not literally one PR
 ├── 67-lancedb-duckdb-dense-info-layer-shape.md  ← v2.1 dense info layer: two stores (SQLite+FTS5 coordination log with `kind` promoted to a first-class column; per-machine LanceDB with a formalized single-writer path), cross-machine sync via the already-validated GossipBus mesh transport, DuckDB as a stateless query engine over both via the native DuckDB↔Lance extension; background daemon + fleet-analytics features deferred to v2.5; full P2P defense machinery explicitly descoped per D23, not merely deferred
-└── 68-orchestrator-controller-satellite.md  ← v2.1 deferred authoritative job-claim controller: atomic SQLite leases/idempotency/recovery plus redacted GossipBus outbox; Telos transport + Phylax admission; remote worker receipts rather than shared-board access
+├── 68-orchestrator-controller-satellite.md  ← v2.1 authoritative job-claim controller, home decided as the `oramasys/oramasys` internal module: atomic SQLite leases/idempotency/recovery plus redacted GossipBus outbox; Telos transport + Phylax admission; remote worker receipts rather than shared-board access; carries invariants IC-1…IC-29
+└── 69-agent-envelope-standard.md  ← published v2 standard: the identity card (tiers U/K/C, four planes, double-sided `author`/`actor` with conditional `lineage`), the four kinds plus the round sibling, projection rules, retention (90-day default, overridable), and the explicit non-supersession list; document owner `orama-system`, v2 schema/validator owner `oramasys/perpetua-core`, implementers PT (v1) and perpetua-core (v2)
 ```
 
-> **Next free slot: `69-`**
+> **Next free slot: `70-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
