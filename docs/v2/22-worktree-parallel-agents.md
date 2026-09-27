@@ -254,7 +254,8 @@ git branch -d <branch>
 git push origin --delete <branch>
 ```
 
-**Never`rm-rf`aworktreedirectorydirectly**—itleavesadanglingentryin`gitworktreelist`.
+**Never `rm -rf` a worktree directory directly** — it leaves a dangling entry
+in `git worktree list`.
 
 ---
 

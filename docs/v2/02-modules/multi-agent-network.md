@@ -4,8 +4,9 @@
 
 ## What it does
 
-Porttheexisting7-agentnetworkfrom`orama-system/bin/agents/`intothenewarchitectureasa`MiniGraph`
-subgraph.Agents:Orchestrator,Context,Architect,Refiner,Executor×5,Verifier,Crystallizer.
+Port the existing 7-agent network from `orama-system/bin/agents/` into the new
+architecture as a `MiniGraph` subgraph. Agents: Orchestrator, Context,
+Architect, Refiner, Executor ×5, Verifier, Crystallizer.
 
 ## Carry-over path
 

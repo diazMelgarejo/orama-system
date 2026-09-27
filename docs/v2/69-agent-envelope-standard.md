@@ -108,14 +108,26 @@ way; verification applies to `actor.identity_verified` only.
 ### 4.1 `rationale_digest` rule (operator decision, 2026-09-27)
 
 1. **`session_id` is required** on every envelope that carries a
-   `authorship.rationale_digest`. Sessions are always named.
-2. **Salt:** session-salted **HMAC-SHA256**, the doc 55 destination-hash scheme,
-   so the digest is verifiable in the record and in the hash chain once
-   implemented.
-3. **Never salt-less:** a plain hash is non-conformant.
-4. **Last-resort fallback:** if a `session_id` is genuinely missing or lost, use a
-   per-record random salt, **record it in the hash chain as well as alongside the
-   digest**, and flag the record as a non-normal condition.
+   `authorship.rationale_digest`. Sessions are always named. `session_id` is
+   public correlation data. It is not HMAC key material and it is not the salt.
+2. **Key:** HMAC-SHA256 uses a distinct operator-held secret, the same class of
+   deployment secret as doc 50's swarm approval secret, but not that value and
+   not any field from the envelope. Verifiers read it from operator
+   configuration. If the secret is absent, the digest is unverifiable; do not
+   substitute `session_id`.
+3. **Input:** `HMAC-SHA256(key, session_salt || 0x00 || canonical_rationale_bytes)`.
+   `session_salt` is secret-independent salt bound to the named session and
+   stored with that session. This is the doc 55 destination-hash scheme: the
+   salt separates sessions, and the operator secret authenticates. The digest
+   is what the hash chain commits to.
+4. **Verification:** a verifier recomputes that MAC with the operator secret,
+   the session salt, and the same canonical bytes. Accept only an exact match.
+5. **Never salt-less:** a plain hash is non-conformant.
+6. **Last-resort fallback:** if the session salt is missing, generate a
+   per-record random salt, use it in place of `session_salt` in the MAC input,
+   store it beside the digest, and append that same salt into the hash chain.
+   Flag the record as a non-normal condition. Do not use `session_id` as the
+   salt or the key.
 
 ## 5. Status kind
 
@@ -250,7 +262,8 @@ It **must not** supersede, rename, or absorb:
 - [`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md)
   — claim contract, controller invariants `IC-1`…`IC-29`, home decision.
 - [`55-oramasys-agent-observability-contract-adr.md`](55-oramasys-agent-observability-contract-adr.md)
-  — privacy tiers and the session-salted HMAC-SHA256 scheme.
+  — privacy tiers. Destination hashes use HMAC-SHA256 with an operator secret
+  and a session salt; `session_id` is not the key (§4.1).
 - [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md)
   — `source_ref` / `expected_base_sha`.
 - [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md)

@@ -15,13 +15,15 @@
 
 ## Thesis
 
-**Thisishowwegossip.**Cooperating**particles**(an`orama-system`portal,a`Perpetua-Tools`supervisor,or
-afuture`perpetua-core`runtimeonthesamemesh)exchange**small,append-onlyGossipBusdeltas**—notfull
-SQLitereplicas,notacentralmessagebroker.
+**This is how we gossip.** Cooperating **particles** (an `orama-system` portal, a
+`Perpetua-Tools` supervisor, or a future `perpetua-core` runtime on the same
+mesh) exchange **small, append-only GossipBus deltas** — not full SQLite
+replicas, not a central message broker.
 
-Gossipisthecoordinationprimitive:whosawwhat,whatchanged,whatneedshumaneyes.Fileinboxand
-`win_job_queue`remainthe**audittrail**andoperatorhandofflane;meshgossipisthe**low-latencyfan-out**
-foreventsoperatorsandagentsalreadyemitlocally.
+Gossip is the coordination primitive: who saw what, what changed, what needs
+human eyes. File inbox and `win_job_queue` remain the **audit trail** and
+operator handoff lane; mesh gossip is the **low-latency fan-out** for events
+operators and agents already emit locally.
 
 ---
 
@@ -33,8 +35,9 @@ foreventsoperatorsandagentsalreadyemitlocally.
 | **PT** (`orchestrator/supervisor`) | `orchestrator/gossip_bus.py` (v1 shipped) | job complete, dispatch, FTS recall hits |
 | **perpetua-core** (v2 kernel) | `perpetua_core/gossip.py` | graph node start/end, affinity_check, authorization |
 
-Eachparticlekeepsits**own**append-onlylog(Rule4).Meshtransport**replicatesinterest-filteredtails**
-betweencooperatingpeers—neverreplaceslocaldurability.
+Each particle keeps its **own** append-only log (Rule 4). Mesh transport
+**replicates interest-filtered tails** between cooperating peers — never
+replaces local durability.
 
 ---
 
@@ -84,8 +87,9 @@ POST /api/gossip/ingest   # bearer + ingest capability; event replication only
 
 ### v3? — Bluetooth / BLE mesh (bitchat analogy)
 
-[bitchat](https://github.com/permissionlesstech/bitchat)andsimilarappsshow**offline,serverless**
-multi-hopmessagingoverBLE.Wedo**not**committoBLEinv2.1.
+[bitchat](https://github.com/permissionlesstech/bitchat) and similar apps show
+**offline, serverless** multi-hop messaging over BLE. We do **not** commit to
+BLE in v2.1.
 
 **If** we add it later:
 
@@ -110,8 +114,9 @@ OQ29 tracks BLE vs LAN-only scope.
 | `job_cycle_listen.log` | Mac idle-cycle telemetry (sync, probe, gate) | **Not** GossipBus transport — operator log only; no event ingest |
 | Portal swarm/L1 APIs | Mutating control plane | Gossip **observes** dispatches; does not replace HITL |
 
-Cross-host**mutations**stillgothroughauthenticatedAPIs(P5tokens,PT`/v1/jobs`).Meshgossipisfor
-**observabilityandsoftcoordination**,notunsignedremoteexecution.
+Cross-host **mutations** still go through authenticated APIs (P5 tokens, PT
+`/v1/jobs`). Mesh gossip is for **observability and soft coordination**, not
+unsigned remote execution.
 
 For the deferred v2.1 case where a remote worker must claim work, GossipBus
 also remains non-authoritative: the controller commits an atomic state change,
@@ -174,9 +179,9 @@ next-increment plan:
   future migration target once the LanceDB job/decision-history store lands,
   rather than a bespoke persistence layer of its own.
 
-Fullsessionnarrative:
-`Perpetua-Tools/docs/phase-0-specifications/2026-07-12-stm-next-increment-plan.md`+
-`.agent/memory/episodic/AGENT_LEARNINGS.jsonl`(2026-07-12entry).
+Full session narrative:
+`Perpetua-Tools/docs/phase-0-specifications/2026-07-12-stm-next-increment-plan.md`
++ `.agent/memory/episodic/AGENT_LEARNINGS.jsonl` (2026-07-12 entry).
 
 **Pattern-library cross-reference:** the claim/release mechanic validated above is a live instance
 of [`references/patterns/multi-agent-orchestration.md`](references/patterns/multi-agent-orchestration.md)'s
@@ -190,7 +195,8 @@ second writer instead of silently overwriting state. Full catalogue:
 
 ## Open questions
 
-See[`06-open-questions.md`](06-open-questions.md)**OQ29**(BLEscope),**OQ30**(CRDTvscursortail).
+See [`06-open-questions.md`](06-open-questions.md) **OQ29** (BLE scope), **OQ30**
+(CRDT vs cursor tail).
 
 ---
 

@@ -224,7 +224,7 @@ this probe.
 
 | Check | Result |
 | ----- | ------ |
-| `pwd` / toplevel | `$HOME/code/OpenClaw/perplexity-api/Perpetua-Tools` |
+| `pwd` / toplevel | `$PERPETUA_TOOLS_ROOT` |
 | `git-common-dir` | `.git` |
 | Board file | `shared-board-present` |
 | DB identity | Captured device + inode baseline; re-stat before every write-capable run |
@@ -267,8 +267,8 @@ Restart only when active agent work is idle. Prefer `agent worker` (docs) —
 ```bash
 agent worker \
   --name "condor-openclaw" \
-  --worker-dir "$HOME/code/OpenClaw/perplexity-api/Perpetua-Tools" \
-  --worker-dir "$HOME/code/OpenClaw/orama-system" \
+  --worker-dir "$PERPETUA_TOOLS_ROOT" \
+  --worker-dir "$REPO_ROOT" \
   start --verbose
 ```
 

@@ -6,8 +6,9 @@
 
 ## What it does
 
-~~ReplacesSQLite-based`GossipBus`withRedispub/sub~~**Preferredv2path:**keepper-particleSQLite
-`GossipBus`;addoptional`GossipMesh`tail/ingestbetweenparticles(orama+PT)withoutacentralbroker.
+~~Replaces SQLite-based `GossipBus` with Redis pub/sub~~ **Preferred v2 path:**
+keep per-particle SQLite `GossipBus`; add optional `GossipMesh` tail/ingest
+between particles (orama + PT) without a central broker.
 
 Redis pub/sub remains a **last-resort** escape hatch if mesh tail proves insufficient at scale.
 
@@ -18,8 +19,9 @@ protocol; changing event transport must not create a second job-state writer.
 
 ## Decision gate
 
-Do**not**implementRedisbeforev2.1`GossipMesh`LANtailistried.v1co-orchestrationalreadycoordinatesvia
-fileinbox+portalprobeswithoutRedis.
+Do **not** implement Redis before v2.1 `GossipMesh` LAN tail is tried. v1
+co-orchestration already coordinates via file inbox + portal probes without
+Redis.
 
 ## Design sketch
 
