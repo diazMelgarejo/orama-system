@@ -34,7 +34,7 @@ a stricter, more specific rule.
 
 ## Vision
 
-**Canonical org north star:** [`../VISION.md`](../VISION.md) — triage gates,
+**Canonical org north star:** [`../../VISION.md`](../../VISION.md) — triage gates,
 priority stack, anti-goals, and v1→v2 continuity. This section summarizes;
 the root `VISION.md` governs agents and autotriage.
 
@@ -138,6 +138,7 @@ Calendar-free. Each phase gates on completion criteria, not dates.
 | `perpetua-core/` | Data + state + LLM + hardware policy + gossip + graph engine | (no internal upward deps) |
 | `oramasys/` | Graph DSL composition + FastAPI surface + app nodes | imports `perpetua_core` only |
 | `oramasys/agate/` | Hardware policy spec + future gateway/bridge layer | imports `perpetua_core` (side-car) |
+| `oramasys/oramasys` → `src/orama/orchestrator_controller/` | v2.1 authoritative claims, leases, idempotency, recovery, and outbox | **definitive home** (internal module): imports Core contracts; consumes Telos/Phylax decisions; never imported by Core |
 
 **Rule**: any time you find yourself wanting `perpetua-core` to import
 `oramasys`, you have a layering bug.
@@ -176,6 +177,7 @@ Don't sneak these into the kernel.
 | MCP-Optional transport | ex-v1.1 roadmap | v2.0+ | no | stub |
 | Redis coordination | ex-v1.1 roadmap | v2.0+ | no | stub (superseded by GossipMesh — see doc 43) |
 | **GossipBus mesh transport** | particle gossip over LAN; BLE future | v2.1+ | no | **planned** — [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md) |
+| **Orchestrator Controller** | atomic remote claims, leases, recovery, and redacted event outbox | v2.1 | no | **home decided** — internal module `orama.orchestrator_controller` of [`oramasys/oramasys`](https://github.com/oramasys/oramasys); standalone spin-off only through the §9 gate in [`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md) |
 | Self-improve evaluator | ex-v1.2 roadmap | considered v2.5 | no | stub |
 | RAG / memory | new | v2.0+ | no | stub |
 | Lessons + SKILL.md | v1 carry-over | v2.0+ | no | stub |
@@ -265,10 +267,12 @@ orama-system/docs/v2/
 ├── 64-gate2-policy-surface-noninterchangeability-scope.md  ← historical Gate 2 scope and candidate brief; its asserted live agent-launcher validation path is corrected by Doc 65
 ├── 65-gate2-policy-surface-evidence.md  ← Gate 2 read-only completion evidence: public /health query parameters reach a raw model-server probe after syntactic-only validation when the explicit public-host opt-in is enabled; separates that confirmed gap from the launcher configuration boundary and defines a bounded PT-PR proposal
 ├── 66-gate4-and-dedicated-dialer-combined-scope.md  ← combined scope for the next planned change: Gate 4's first real Telos vertical slice (config_read/health_probe only) built against a new DNS-resolving, address-class-aware model-server dialer, closing the 4 test cases PT PR #380 deliberately deferred; v2 dialer + Telos wiring (this repo) and the PT call-site adoption (separate, human-reviewed PT PR) are two repos' worth of one planned unit of work, not literally one PR
-└── 67-lancedb-duckdb-dense-info-layer-shape.md  ← v2.1 dense info layer: two stores (SQLite+FTS5 coordination log with `kind` promoted to a first-class column; per-machine LanceDB with a formalized single-writer path), cross-machine sync via the already-validated GossipBus mesh transport, DuckDB as a stateless query engine over both via the native DuckDB↔Lance extension; background daemon + fleet-analytics features deferred to v2.5; full P2P defense machinery explicitly descoped per D23, not merely deferred
+├── 67-lancedb-duckdb-dense-info-layer-shape.md  ← v2.1 dense info layer: two stores (SQLite+FTS5 coordination log with `kind` promoted to a first-class column; per-machine LanceDB with a formalized single-writer path), cross-machine sync via the already-validated GossipBus mesh transport, DuckDB as a stateless query engine over both via the native DuckDB↔Lance extension; background daemon + fleet-analytics features deferred to v2.5; full P2P defense machinery explicitly descoped per D23, not merely deferred
+├── 68-orchestrator-controller-satellite.md  ← v2.1 authoritative job-claim controller, home decided as the `oramasys/oramasys` internal module: atomic SQLite leases/idempotency/recovery plus redacted GossipBus outbox; Telos transport + Phylax admission; remote worker receipts rather than shared-board access; carries invariants IC-1…IC-29
+└── 69-agent-envelope-standard.md  ← published v2 standard: the identity card (tiers U/K/C, four planes, double-sided `author`/`actor` with conditional `lineage`), the four kinds plus the round sibling, projection rules, retention (90-day default, overridable), and the explicit non-supersession list; document owner `orama-system`, v2 schema/validator owner `oramasys/perpetua-core`, implementers PT (v1) and perpetua-core (v2)
 ```
 
-> **Next free slot: `68-`**
+> **Next free slot: `70-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
@@ -303,6 +307,7 @@ Tracked in [`06-open-questions.md`](./06-open-questions.md). Highlights:
 - OQ19: `_MIRROR_BACKENDS` / `_TIER_HOSTS` — should v2 derive these from
   YAML at runtime (config-driven) or remain module-level constants?
 - OQ20: board-job source-line schema (`source_ref`/`expected_base_sha`,
-  [`48-`](48-board-job-source-line-schema.md)) — optional/provisional now;
-  hard-required for v2 is open, pending a second producer to coordinate
-  the rollout with
+  [`48-`](48-board-job-source-line-schema.md)) — optional/provisional in v1;
+  required for new v2.1 Controller tasks under
+  [`68-`](68-orchestrator-controller-satellite.md), with explicit legacy-row
+  migration or handoff rather than a silent rollout

@@ -1,16 +1,27 @@
 # Module: Redis Coordination
 
-> Status: stub — **superseded in principle** by [`43-gossipbus-mesh-transport.md`](../43-gossipbus-mesh-transport.md) (frugal GossipBus mesh). Keep this stub only if a future operator explicitly requires Redis/Valkey.
+> Status: stub — **superseded in principle** by
+> [`43-gossipbus-mesh-transport.md`](../43-gossipbus-mesh-transport.md) (frugal GossipBus mesh).
+> Keep this stub only if a future operator explicitly requires Redis/Valkey.
 
 ## What it does
 
-~~Replaces SQLite-based `GossipBus` with Redis pub/sub~~ **Preferred v2 path:** keep per-particle SQLite `GossipBus`; add optional `GossipMesh` tail/ingest between particles (orama + PT) without a central broker.
+~~Replaces SQLite-based `GossipBus` with Redis pub/sub~~ **Preferred v2 path:**
+keep per-particle SQLite `GossipBus`; add optional `GossipMesh` tail/ingest
+between particles (orama + PT) without a central broker.
 
 Redis pub/sub remains a **last-resort** escape hatch if mesh tail proves insufficient at scale.
 
+Neither GossipMesh nor a future Redis backend is a claim authority. Atomic
+remote claims, leases, and recovery remain the deferred v2.1
+[`Orchestrator Controller`](../68-orchestrator-controller-satellite.md)
+protocol; changing event transport must not create a second job-state writer.
+
 ## Decision gate
 
-Do **not** implement Redis before v2.1 `GossipMesh` LAN tail is tried. v1 co-orchestration already coordinates via file inbox + portal probes without Redis.
+Do **not** implement Redis before v2.1 `GossipMesh` LAN tail is tried. v1
+co-orchestration already coordinates via file inbox + portal probes without
+Redis.
 
 ## Design sketch
 

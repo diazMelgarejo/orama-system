@@ -1,6 +1,9 @@
 # 06 — Open Questions
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never
+> committed with secrets, personal paths, or SecOps material. Additive — see
+> [`46-repository-standard.md`](46-repository-standard.md).
 Items deliberately deferred. Each has a target checkpoint for resolution.
 
 ---
@@ -8,7 +11,7 @@ Items deliberately deferred. Each has a target checkpoint for resolution.
 ## Active open questions
 
 | # | Question | Context | Resolve by |
-|---|----------|---------|------------|
+| --- | ---------- | --------- | ------------ |
 | OQ1 | **Pydantic AI as framework** — at v2.1+, evaluate whether `pydantic-ai` (`Agent`, `Tool`, `RunContext`) should supplement or replace `MiniGraph` for the application layer (not kernel). | Pydantic AI is a framework built on Pydantic v2. It's a LangGraph competitor. MiniGraph is our custom engine. The question is whether v2.1's app layer uses one, both, or neither. | v2.1 checkpoint |
 | OQ2 | **GGUF hardware spec extension** — a community RFC to add `system_requirements` to the GGUF metadata layer has been pending since Oct 2024 with no timeline. Do we wait for it, or does `agate` serve as the bridge (mapping GGUF model IDs to hardware policy)? | The GGUF format is the de facto standard for local model metadata. Adding hardware requirements to GGUF would let any GGUF loader natively enforce hardware affinity without a separate policy file. | agate v0.1 release |
 | OQ3 | **`agate` naming** — Perplexity proposed "agate" as the name for the published hardware policy spec (memorable vs. `model-hardware-policy-spec`). The repo is confirmed as `oramasys/agate`. Should the Python package also be `agate` on PyPI? Check availability. | Name availability determines distribution strategy. | agate repo setup |
@@ -23,7 +26,7 @@ Items deliberately deferred. Each has a target checkpoint for resolution.
 ## Resolved (logged for posterity)
 
 | # | Question | Resolution | Date |
-|---|----------|------------|------|
+| --- | ---------- | ------------ | ------ |
 | D1 | Clean-slate vs. evolve-in-place | Clean-slate rewrite | 2026-04-30 |
 | D2 | Repo names | `perpetua-core` + `oramasys` | 2026-04-30 |
 | D3 | v2 sequencing | v1.0 RC first | 2026-04-30 |
@@ -52,7 +55,7 @@ Items deliberately deferred. Each has a target checkpoint for resolution.
 | OQ17 | **Typed Message wrapper** — Should `perpetua_core/message.py` add a typed wrapper for messages instead of plain `dict`? | **Resolved 2026-05-17 (RC-1):** `Message(BaseModel)` shipped in `perpetua_core/message.py` (43 lines); `tests/test_message.py` (Task 12). | ✅ Done |
 | OQ18 | **agate `NEVER` verdict integration** — The v1 `_MIRROR_BACKENDS` + `windows_only:` pattern implements a `NEVER` verdict (dispatch = hardware damage risk). How does the agate schema expose this? Options: (a) explicit `NEVER`/`PREFER`/`ALLOW` string verdicts in the YAML (cleanest, user-facing); (b) derived from `windows_only:`/`mac_only:`/`shared:` list membership (current v1, implicit); (c) separate `enforcement:` key distinguishing hard vs. soft routing. | v1 uses list-membership inference. agate schema should make this explicit — consumers (LangGraph, CrewAI, custom runtimes) need to distinguish "won't run well here" from "will OOM/crash here." The `NEVER` verdict must be unambiguous. | agate v0.1 schema design |
 | OQ19 | **Selector mirror exclusion in v2 perpetua-core** — `selector.py` in v1 carries `_MIRROR_BACKENDS` and `_TIER_HOSTS` as module-level constants. Should v2 derive these from config? | **Resolved 2026-05-17 (RC-1):** `selector.py` ships with `_MIRROR_BACKENDS` frozenset enforcing D14 mirror-exclusion policy; `_TIER_HOSTS["mac"]` = ollama-only. `test_discovery_selector.py` covers 12 cases (Task 4). | ✅ Done |
-| OQ20 | **Board-job source-line schema — optional or hard-required?** — `Perpetua-Tools` `_queue_add()` now accepts optional `source_ref`/`expected_base_sha` (validated when provided, see [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md)). Should v2 make these mandatory on every producer, and require every claimant to verify HEAD against `expected_base_sha` before starting work? | **Open, not resolved.** Deliberately left optional/provisional for now — orama-system has no board/queue producer of its own to coordinate a hard-required rollout with yet, and flipping to required would break every existing PT caller with no migration path for pre-existing queued rows. Revisit once orama-system grows an equivalent job-board mechanism, or once PT's own usage has consistently populated the fields for a full release cycle. | v2 candidate, unscheduled |
+| OQ20 | **Board-job source-line schema — optional or hard-required?** — `Perpetua-Tools` `_queue_add()` now accepts optional `source_ref`/`expected_base_sha` (validated when provided, see [`48-board-job-source-line-schema.md`](48-board-job-source-line-schema.md)). Should v2 make these mandatory on every producer, and require every claimant to verify HEAD against `expected_base_sha` before starting work? | **Scoped resolution:** v1 remains optional/provisional; the deferred v2.1 Orchestrator Controller requires both fields for every new task and claimant. Legacy queued rows need explicit migration/handoff disposition, not silent compliance. See [`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md). | v2.1 controller gate |
 
 ---
 

@@ -71,6 +71,13 @@ rather than reconstructing it:
    blocks a claim against a stale/moved source ref, not just that the
    fields round-trip correctly.
 
+For the v2.1 Orchestrator Controller, this is no longer merely an optional
+producer convention: new controller-created tasks require both fields, and a
+claim request must match the stored source line before an atomic lease can be
+issued. This does not retroactively alter the v1 rollout; see
+[`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md)
+for its explicit legacy-row disposition rule.
+
 ## See also
 
 - `Perpetua-Tools` `.agent/AGENTS.md` — the full "Board-job source line"
@@ -79,3 +86,5 @@ rather than reconstructing it:
   referenced by that doctrine for the underlying remediation procedure.
 - [`22-worktree-parallel-agents.md`](22-worktree-parallel-agents.md) — the
   parallel-worktree model this schema exists to keep claimants honest against.
+- [`68-orchestrator-controller-satellite.md`](68-orchestrator-controller-satellite.md) —
+  v2.1 controller protocol that consumes the schema as a required claim gate.
