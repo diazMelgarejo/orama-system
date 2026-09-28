@@ -16,7 +16,8 @@
 > [`56-anamnesis-runtime-memory-migration.md`](56-anamnesis-runtime-memory-migration.md).
 > **Related:** portal Markdown search on PR #368 is a Class-0 stopgap, not this
 > RAG design — see
-> [`70-portal-knowledge-hitl-development-ladder.md`](70-portal-knowledge-hitl-development-ladder.md) §6.
+> [`70-portal-knowledge-hitl-development-ladder.md`](
+> 70-portal-knowledge-hitl-development-ladder.md) §6.
 
 ---
 
