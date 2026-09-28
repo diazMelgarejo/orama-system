@@ -41,4 +41,13 @@ describe("SwarmComposer launch gate", () => {
     expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeEnabled();
     expect(screen.queryByText(/run preview first/i)).not.toBeInTheDocument();
   });
+
+  it("explains a hardware-blocked preview instead of leaving Launch silently disabled", () => {
+    renderComposer({
+      ...approvedPreview,
+      hardware_policy: { ok: false, violations: [{ reason: "NEVER_MAC" }] },
+    });
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
+    expect(screen.getByText(/hardware policy blocked this preview/i)).toBeInTheDocument();
+  });
 });

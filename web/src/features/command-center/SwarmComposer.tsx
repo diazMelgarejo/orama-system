@@ -244,6 +244,11 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
               Run Preview first to generate an approval token.
             </p>
           )}
+          {hasApproval && !hardwareOk && (
+            <p className="ml-auto text-2xs text-status-err">
+              Hardware policy blocked this preview.
+            </p>
+          )}
 
           {previewMutation.isError && (
             <span className="ml-auto text-2xs text-status-err">

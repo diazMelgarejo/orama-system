@@ -71,6 +71,15 @@ def test_issue_and_verify_token(monkeypatch: pytest.MonkeyPatch) -> None:
             preview=preview,
         )
 
+    issued3 = swarm_approval.issue_approval(preview)
+    with pytest.raises(ValueError, match="invalid approval_token"):
+        swarm_approval.verify_launch(
+            approved=True,
+            preview_id=issued3["preview_id"],
+            approval_token="short",
+            preview=preview,
+        )
+
 
 def test_token_without_explicit_approval_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORAMA_SWARM_STRICT", "1")

@@ -17,6 +17,7 @@ from utils.control_plane_auth import verify_control_plane_auth
 # MCP Streamable HTTP protocol date from https://modelcontextprotocol.io/specification/2026-07-28
 _PROTOCOL = "2026-07-28"
 _MAX_DOC_BYTES = 512_000
+_EXCERPT_CHARS = 280
 _WORD = re.compile(r"[0-9a-z][0-9a-z_.-]*", re.IGNORECASE)
 
 
@@ -31,6 +32,40 @@ router = APIRouter(dependencies=[Depends(require_operator_token)])
 def _fold(text: str) -> str:
     decomposed = unicodedata.normalize("NFKD", text)
     return "".join(ch for ch in decomposed if not unicodedata.combining(ch))
+
+
+def _fold_align(text: str) -> tuple[str, list[int]]:
+    """NFKD-fold text and map each folded index back to an original character index."""
+    chars: list[str] = []
+    origins: list[int] = []
+    for index, char in enumerate(text):
+        folded = "".join(
+            piece for piece in unicodedata.normalize("NFKD", char) if not unicodedata.combining(piece)
+        )
+        for piece in folded:
+            chars.append(piece)
+            origins.append(index)
+    return "".join(chars), origins
+
+
+def _excerpt(text: str, terms: tuple[str, ...]) -> str:
+    folded, origins = _fold_align(text)
+    folded = folded.lower()
+    starts = [folded.find(term) for term in terms]
+    starts = [start for start in starts if start >= 0]
+    if not starts or len(folded) != len(origins):
+        return " ".join(text.split())[:_EXCERPT_CHARS]
+    folded_at = min(starts)
+    orig_at = origins[folded_at]
+    half = _EXCERPT_CHARS // 2
+    start = max(0, orig_at - half)
+    end = min(len(text), start + _EXCERPT_CHARS)
+    if end - start < _EXCERPT_CHARS:
+        start = max(0, end - _EXCERPT_CHARS)
+    snippet = " ".join(text[start:end].split())
+    prefix = "…" if start > 0 else ""
+    suffix = "…" if end < len(text) else ""
+    return f"{prefix}{snippet}{suffix}"
 
 
 def _docs_root() -> Path:
@@ -59,8 +94,17 @@ def _search_docs(query: str, limit: int = 8) -> list[dict[str, Any]]:
         score = sum(folded.count(term) + (5 if term in title_lower else 0) for term in terms)
         if not score:
             continue
-        excerpt = " ".join(text.split())[:280]
-        hits.append((score, {"title": title, "path": resolved.relative_to(root).as_posix(), "excerpt": excerpt, "score": score}))
+        hits.append(
+            (
+                score,
+                {
+                    "title": title,
+                    "path": resolved.relative_to(root).as_posix(),
+                    "excerpt": _excerpt(text, terms),
+                    "score": score,
+                },
+            )
+        )
     hits.sort(key=lambda item: (-item[0], item[1]["path"]))
     return [hit for _, hit in hits[:limit]]
 

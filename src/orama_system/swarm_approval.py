@@ -97,6 +97,10 @@ def verify_launch(
     if _fingerprint(preview) != fp:
         raise ValueError("preview drift — regenerate preview")
     expected = _sign(preview_id, fp)
-    if not hmac.compare_digest(expected, approval_token):
+    try:
+        token_ok = hmac.compare_digest(expected, approval_token)
+    except (TypeError, ValueError):
+        token_ok = False
+    if not token_ok:
         raise ValueError("invalid approval_token")
     _cache.pop(preview_id, None)

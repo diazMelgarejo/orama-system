@@ -4,7 +4,7 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from orama_system.knowledge_gateway import router
+from orama_system.knowledge_gateway import _search_docs, router
 
 pytestmark = pytest.mark.unit
 
@@ -106,6 +106,22 @@ def test_accented_query_matches_folded_docs(client):
     response = client.get("/api/knowledge/search?q=deploiement")
     assert response.status_code == 200
     assert response.json()["hits"][0]["path"] == "deploiement.md"
+    assert "Déploiement" in response.json()["hits"][0]["excerpt"]
+
+
+def test_excerpt_centers_on_late_match(tmp_path, monkeypatch):
+    prefix = "Opening prose. " * 40
+    body = f"# Intro\n{prefix}Accented Déploiement UNIQUE_NEEDLE sits far from the opening.\n"
+    (tmp_path / "late.md").write_text(body, encoding="utf-8")
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    hits = _search_docs("UNIQUE_NEEDLE")
+    excerpt = hits[0]["excerpt"]
+    leading = " ".join(body.split())[:280]
+    assert hits[0]["path"] == "late.md"
+    assert "UNIQUE_NEEDLE" in excerpt
+    assert excerpt != leading
+    assert excerpt.startswith("…")
+    assert "Déploiement" in excerpt
 
 
 def test_knowledge_router_enforces_operator_token_without_portal_middleware(tmp_path, monkeypatch):
