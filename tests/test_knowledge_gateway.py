@@ -21,10 +21,14 @@ def client(tmp_path, monkeypatch):
         "# Human Approval\nThe Amplifier Principle requires a human gate.",
         encoding="utf-8",
     )
+    (tmp_path / "deploiement.md").write_text(
+        "# Déploiement\nLe déploiement Nêxtwork est documenté ici.",
+        encoding="utf-8",
+    )
     monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
     app = FastAPI()
     app.include_router(router)
-    return TestClient(app)
+    return TestClient(app, raise_server_exceptions=True)
 
 
 def test_end_user_search(client):
@@ -86,6 +90,41 @@ def test_a2a_discovery_and_direct_message(client):
     )
     assert response.json()["result"]["kind"] == "message"
     assert response.json()["result"]["parts"][0]["data"]["hits"]
+
+
+def test_mcp_initialized_notification_returns_202(client):
+    response = client.post(
+        "/api/mcp",
+        headers={"Mcp-Protocol-Version": "2026-07-28", "Mcp-Method": "notifications/initialized"},
+        json={"jsonrpc": "2.0", "method": "notifications/initialized"},
+    )
+    assert response.status_code == 202
+    assert response.content == b""
+
+
+def test_accented_query_matches_folded_docs(client):
+    response = client.get("/api/knowledge/search?q=deploiement")
+    assert response.status_code == 200
+    assert response.json()["hits"][0]["path"] == "deploiement.md"
+
+
+def test_knowledge_router_enforces_operator_token_without_portal_middleware(tmp_path, monkeypatch):
+    (tmp_path / "guide.md").write_text("# Human Approval\nA human gate.", encoding="utf-8")
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
+    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "test-operator-bearer-not-a-real-secret")
+    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
+    app = FastAPI()
+    app.include_router(router)
+    with TestClient(app, raise_server_exceptions=True) as isolated:
+        denied = isolated.get("/api/knowledge/search?q=human")
+        assert denied.status_code == 401
+        allowed = isolated.get(
+            "/api/knowledge/search?q=human",
+            headers={"Authorization": "Bearer test-operator-bearer-not-a-real-secret"},
+        )
+    assert allowed.status_code == 200
+    assert allowed.json()["hits"][0]["path"] == "guide.md"
 
 
 def test_knowledge_search_requires_bearer_when_enforced(monkeypatch):

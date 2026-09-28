@@ -117,11 +117,13 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
   });
 
   const charCount = objective.length;
+  const hasApproval = Boolean(
+    previewData?.preview_id?.trim() && previewData?.approval_token?.trim(),
+  );
+  const hardwareOk = previewData?.hardware_policy?.ok === true;
   const canPreview = charCount >= 6;
-  const canLaunch =
-    charCount >= 6 &&
-    Boolean(previewData?.preview_id && previewData?.approval_token) &&
-    (previewData?.hardware_policy?.ok ?? false);
+  const canLaunch = canPreview && hasApproval && hardwareOk;
+  const needsPreview = canPreview && !hasApproval;
 
   return (
     <section className="mb-4 rounded border border-line bg-canvas-surface">
@@ -237,6 +239,11 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
           >
             Launch Swarm
           </button>
+          {needsPreview && (
+            <p className="ml-auto text-2xs text-ink-muted">
+              Run Preview first to generate an approval token.
+            </p>
+          )}
 
           {previewMutation.isError && (
             <span className="ml-auto text-2xs text-status-err">

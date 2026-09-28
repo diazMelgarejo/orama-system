@@ -78,7 +78,10 @@ def verify_launch(
     approval_token: str | None,
     preview: dict[str, Any],
 ) -> None:
-    if grandfather_legacy() and approved and not approval_token:
+    omitted = preview_id is None and approval_token is None
+    preview_id = (preview_id or "").strip()
+    approval_token = (approval_token or "").strip()
+    if grandfather_legacy() and approved and omitted:
         return
     if not preview_id or not approval_token:
         raise ValueError("preview_id and approval_token required (call /api/swarm/preview first)")
@@ -94,6 +97,6 @@ def verify_launch(
     if _fingerprint(preview) != fp:
         raise ValueError("preview drift — regenerate preview")
     expected = _sign(preview_id, fp)
-    if not hmac.compare_digest(expected, approval_token.strip()):
+    if not hmac.compare_digest(expected, approval_token):
         raise ValueError("invalid approval_token")
     _cache.pop(preview_id, None)
