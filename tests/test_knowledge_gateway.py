@@ -54,6 +54,7 @@ def test_mcp_initialize_and_tools_list(client):
     )
     assert listed.json()["result"]["tools"][0]["name"] == "search_docs"
     assert listed.json()["result"]["tools"][0]["annotations"]["readOnlyHint"] is True
+    assert listed.json()["result"]["tools"][0]["inputSchema"]["properties"]["query"]["maxLength"] == 200
 
 
 def test_mcp_server_discover(client):
@@ -64,10 +65,9 @@ def test_mcp_server_discover(client):
     )
     assert discovered.status_code == 200
     result = discovered.json()["result"]
-    assert result["resultType"] == "complete"
-    assert result["supportedVersions"] == ["2026-07-28"]
-    assert result["capabilities"]["tools"]["listChanged"] is False
-    assert result["_meta"]["io.modelcontextprotocol/serverInfo"]["name"] == "orama-knowledge"
+    assert result["protocolVersion"] == "2026-07-28"
+    assert result["serverInfo"] == {"name": "orama-knowledge", "version": "1.0.0"}
+    assert result["capabilities"] == {"tools": {"listChanged": False}}
 
 
 def test_mcp_search_requires_current_headers(client):

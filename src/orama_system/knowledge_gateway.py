@@ -113,6 +113,14 @@ def _search_docs(query: str, limit: int = 8) -> list[dict[str, Any]]:
     return [hit for _, hit in hits[:limit]]
 
 
+def _mcp_hello() -> dict[str, Any]:
+    return {
+        "protocolVersion": _PROTOCOL,
+        "capabilities": {"tools": {"listChanged": False}},
+        "serverInfo": dict(_SERVER_INFO),
+    }
+
+
 def _rpc_error(request_id: Any, code: int, message: str) -> dict[str, Any]:
     return {"jsonrpc": "2.0", "id": request_id, "error": {"code": code, "message": message}}
 
@@ -184,28 +192,9 @@ async def mcp(request: Request) -> Response:
     if method == "notifications/initialized":
         return Response(status_code=202)
     if method == "server/discover":
-        return _rpc_response(
-            _rpc_result(
-                request_id,
-                {
-                    "resultType": "complete",
-                    "supportedVersions": [_PROTOCOL],
-                    "capabilities": {"tools": {"listChanged": False}},
-                    "instructions": "Read-only Markdown search over curated project documentation.",
-                },
-            )
-        )
+        return _rpc_response(_rpc_result(request_id, _mcp_hello()))
     if method == "initialize":
-        return _rpc_response(
-            _rpc_result(
-                request_id,
-                {
-                    "protocolVersion": _PROTOCOL,
-                    "capabilities": {"tools": {"listChanged": False}},
-                    "serverInfo": dict(_SERVER_INFO),
-                },
-            )
-        )
+        return _rpc_response(_rpc_result(request_id, _mcp_hello()))
     if method == "tools/list":
         return _rpc_response(
             _rpc_result(
@@ -218,7 +207,7 @@ async def mcp(request: Request) -> Response:
                             "annotations": {"readOnlyHint": True},
                             "inputSchema": {
                                 "type": "object",
-                                "properties": {"query": {"type": "string", "minLength": 2}},
+                                "properties": {"query": {"type": "string", "minLength": 2, "maxLength": 200}},
                                 "required": ["query"],
                                 "additionalProperties": False,
                             },
