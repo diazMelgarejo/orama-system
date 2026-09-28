@@ -53,6 +53,21 @@ def test_mcp_initialize_and_tools_list(client):
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"},
     )
     assert listed.json()["result"]["tools"][0]["name"] == "search_docs"
+    assert listed.json()["result"]["tools"][0]["annotations"]["readOnlyHint"] is True
+
+
+def test_mcp_server_discover(client):
+    discovered = client.post(
+        "/api/mcp",
+        headers={"Mcp-Protocol-Version": "2026-07-28", "Mcp-Method": "server/discover"},
+        json={"jsonrpc": "2.0", "id": "discover-1", "method": "server/discover", "params": {}},
+    )
+    assert discovered.status_code == 200
+    result = discovered.json()["result"]
+    assert result["resultType"] == "complete"
+    assert result["supportedVersions"] == ["2026-07-28"]
+    assert result["capabilities"]["tools"]["listChanged"] is False
+    assert result["_meta"]["io.modelcontextprotocol/serverInfo"]["name"] == "orama-knowledge"
 
 
 def test_mcp_search_requires_current_headers(client):
@@ -141,6 +156,55 @@ def test_knowledge_router_enforces_operator_token_without_portal_middleware(tmp_
         )
     assert allowed.status_code == 200
     assert allowed.json()["hits"][0]["path"] == "guide.md"
+
+
+def test_mcp_query_over_200_is_invalid_params(client):
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": "search_docs", "arguments": {"query": "ab" + "x" * 199}},
+    }
+    response = client.post("/api/mcp", headers=_MCP_HEADERS, json=payload)
+    assert response.json()["error"]["code"] == -32602
+
+
+def test_a2a_non_string_text_part_is_invalid_params(client):
+    response = client.post(
+        "/api/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-bad",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "messageId": "m-bad",
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": 42}],
+                }
+            },
+        },
+    )
+    assert response.json()["error"]["code"] == -32602
+
+
+def test_a2a_query_over_200_is_invalid_params(client):
+    response = client.post(
+        "/api/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-long",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "messageId": "m-long",
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": "ab" + "x" * 199}],
+                }
+            },
+        },
+    )
+    assert response.json()["error"]["code"] == -32602
 
 
 def test_mcp_malformed_json_returns_parse_error(client):

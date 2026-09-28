@@ -30,6 +30,15 @@ def test_grandfather_legacy_approve(monkeypatch: pytest.MonkeyPatch) -> None:
     swarm_approval.verify_launch(approved=True, preview_id=None, approval_token=None, preview=preview)
 
 
+def test_legacy_empty_env_does_not_grandfather(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
+    monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "")
+    assert swarm_approval.grandfather_legacy() is False
+    preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
+    with pytest.raises(ValueError, match="preview_id"):
+        swarm_approval.verify_launch(approved=True, preview_id=None, approval_token=None, preview=preview)
+
+
 def test_legacy_rejects_blank_preview_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
     monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "1")

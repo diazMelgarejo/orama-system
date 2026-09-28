@@ -112,8 +112,9 @@ stub of `portal_server.py`, and **not** deferred to merge time.
 
 Same-origin `GET /api/knowledge/search` is Markdown FTS over the docs tree
 (no DB, no embeddings, no Redis). MCP Streamable HTTP uses protocol date
-`2026-07-28` (`initialize`, `notifications/initialized` → 202,
-`tools/list`, `tools/call` for read-only `search_docs`). A2A is
+`2026-07-28` (`server/discover` required; dual-era `initialize` and
+`notifications/initialized` → 202 still accepted; `tools/list` /
+`tools/call` for read-only `search_docs`). A2A is
 synchronous `message/send` plus `GET /.well-known/agent-card.json` behind
 the same operator auth (intentional). Unicode search folds NFKD/casefold
 and excerpts from original text via an origin map.

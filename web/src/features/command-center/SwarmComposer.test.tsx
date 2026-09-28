@@ -21,9 +21,12 @@ function renderComposer(previewData?: SwarmPreview) {
   );
 }
 
+const DEFAULT_OBJECTIVE =
+  "Analyze the attached financial report and produce key risk factors, opportunities, and a 1-page executive summary.";
+
 const approvedPreview: SwarmPreview = {
-  objective: "Ship the knowledge portal",
-  task_type: "ops",
+  objective: DEFAULT_OBJECTIVE,
+  task_type: "reasoning",
   optimize_for: "quality",
   preferred_device: "auto",
   assignments: [],
@@ -62,6 +65,15 @@ describe("SwarmComposer launch gate", () => {
     fireEvent.click(screen.getByRole("button", { name: /advanced options/i }));
     expect(screen.getByText(/context profile/i)).toBeInTheDocument();
     expect(screen.getByText(/coming Phase 5/i)).toBeInTheDocument();
+  });
+
+  it("disables Launch when composer inputs no longer match the approved preview", () => {
+    renderComposer(approvedPreview);
+    fireEvent.change(screen.getByPlaceholderText(/describe what the swarm should accomplish/i), {
+      target: { value: "A different objective that still has enough characters" },
+    });
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
+    expect(screen.getByText(/inputs changed since the last approval/i)).toBeInTheDocument();
   });
 
   it("shows preview errors instead of the Preview-first hint", async () => {

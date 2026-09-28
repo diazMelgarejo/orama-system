@@ -22,5 +22,6 @@ describe("KnowledgePortal", () => {
     fireEvent.click(screen.getByRole("button", { name: "Search" }));
     await waitFor(() => expect(screen.getByText("Human Approval")).toBeInTheDocument());
     expect(screen.getByText("plans/hitl.md")).toBeInTheDocument();
+    expect(screen.getByLabelText("Search documentation")).toHaveAttribute("maxLength", "200");
   });
 });

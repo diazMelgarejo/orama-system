@@ -113,9 +113,14 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
     previewData?.preview_id?.trim() && previewData?.approval_token?.trim(),
   );
   const hardwareOk = previewData?.hardware_policy?.ok === true;
+  const previewMatches =
+    previewData?.objective === objective &&
+    previewData?.task_type === taskType &&
+    previewData?.optimize_for === optimize &&
+    previewData?.preferred_device === device;
   const canPreview = charCount >= 6;
-  const canLaunch = canPreview && hasApproval && hardwareOk;
-  const needsPreview = canPreview && !hasApproval;
+  const canLaunch = canPreview && hasApproval && hardwareOk && previewMatches;
+  const needsPreview = canPreview && (!hasApproval || !previewMatches);
   const actionError = previewMutation.isError
     ? "preview failed"
     : launchMutation.isError
@@ -225,7 +230,9 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
           </button>
           {needsPreview && !actionError && (
             <p className="ml-auto text-2xs text-ink-muted">
-              Run Preview first to generate an approval token.
+              {hasApproval
+                ? "Run Preview again — inputs changed since the last approval."
+                : "Run Preview first to generate an approval token."}
             </p>
           )}
           {actionError && (

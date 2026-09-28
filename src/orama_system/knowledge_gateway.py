@@ -1,6 +1,7 @@
 """Read-only docs search exposed to people, MCP clients, and A2A peers."""
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -18,7 +19,10 @@ from utils.control_plane_auth import verify_control_plane_auth
 _PROTOCOL = "2026-07-28"
 _MAX_DOC_BYTES = 512_000
 _EXCERPT_CHARS = 280
+_QUERY_MAX = 200
 _WORD = re.compile(r"[0-9a-z][0-9a-z_.-]*", re.IGNORECASE)
+_SERVER_INFO = {"name": "orama-knowledge", "version": "1.0.0"}
+_SERVER_INFO_META = "io.modelcontextprotocol/serverInfo"
 
 
 def require_operator_token(request: Request) -> None:
@@ -114,6 +118,10 @@ def _rpc_error(request_id: Any, code: int, message: str) -> dict[str, Any]:
 
 
 def _rpc_result(request_id: Any, result: Any) -> dict[str, Any]:
+    if isinstance(result, dict):
+        meta = dict(result.get("_meta") or {})
+        meta.setdefault(_SERVER_INFO_META, _SERVER_INFO)
+        result = {**result, "_meta": meta}
     return {"jsonrpc": "2.0", "id": request_id, "result": result}
 
 
@@ -131,18 +139,34 @@ async def _rpc_body(request: Request) -> tuple[dict[str, Any] | None, dict[str, 
     return body, None
 
 
+def _bounded_query(query: Any, *, already_stripped: bool = False) -> str:
+    if not isinstance(query, str):
+        raise ValueError("query must be a string of 2 to 200 characters")
+    candidate = query.strip() if not already_stripped else query
+    if len(candidate) < 2 or len(query) > _QUERY_MAX:
+        raise ValueError("query must be a string of 2 to 200 characters")
+    return query
+
+
 def _text_from_a2a_message(params: Any) -> str:
     message = params.get("message", {}) if isinstance(params, dict) else {}
     parts = message.get("parts", []) if isinstance(message, dict) else []
-    return " ".join(
-        part.get("text", "")
-        for part in parts
-        if isinstance(part, dict) and part.get("kind", part.get("type")) == "text"
-    ).strip()
+    texts: list[str] = []
+    for part in parts:
+        if not isinstance(part, dict) or part.get("kind", part.get("type")) != "text":
+            continue
+        text = part.get("text", "")
+        if not isinstance(text, str):
+            raise ValueError("text parts must be strings")
+        texts.append(text)
+    return " ".join(texts).strip()
 
 
 @router.get("/api/knowledge/search", tags=["knowledge"])
-def knowledge_search(q: str = Query(..., min_length=2, max_length=200), limit: int = Query(8, ge=1, le=20)) -> dict[str, Any]:
+def knowledge_search(
+    q: str = Query(..., min_length=2, max_length=_QUERY_MAX),
+    limit: int = Query(8, ge=1, le=20),
+) -> dict[str, Any]:
     return {"query": q, "hits": _search_docs(q, limit), "read_only": True}
 
 
@@ -159,6 +183,18 @@ async def mcp(request: Request) -> Response:
         return _rpc_response(_rpc_error(request_id, -32600, "Mcp-Method header must match the JSON-RPC method"))
     if method == "notifications/initialized":
         return Response(status_code=202)
+    if method == "server/discover":
+        return _rpc_response(
+            _rpc_result(
+                request_id,
+                {
+                    "resultType": "complete",
+                    "supportedVersions": [_PROTOCOL],
+                    "capabilities": {"tools": {"listChanged": False}},
+                    "instructions": "Read-only Markdown search over curated project documentation.",
+                },
+            )
+        )
     if method == "initialize":
         return _rpc_response(
             _rpc_result(
@@ -166,7 +202,7 @@ async def mcp(request: Request) -> Response:
                 {
                     "protocolVersion": _PROTOCOL,
                     "capabilities": {"tools": {"listChanged": False}},
-                    "serverInfo": {"name": "orama-knowledge", "version": "1.0.0"},
+                    "serverInfo": dict(_SERVER_INFO),
                 },
             )
         )
@@ -179,6 +215,7 @@ async def mcp(request: Request) -> Response:
                         {
                             "name": "search_docs",
                             "description": "Search local Orama project documentation (read-only)",
+                            "annotations": {"readOnlyHint": True},
                             "inputSchema": {
                                 "type": "object",
                                 "properties": {"query": {"type": "string", "minLength": 2}},
@@ -200,9 +237,11 @@ async def mcp(request: Request) -> Response:
             return _rpc_response(_rpc_error(request_id, -32601, "Unknown tool"))
         arguments = params.get("arguments", {})
         query = arguments.get("query", "") if isinstance(arguments, dict) else ""
-        if not isinstance(query, str) or len(query.strip()) < 2:
-            return _rpc_response(_rpc_error(request_id, -32602, "query must contain at least two characters"))
-        hits = _search_docs(query)
+        try:
+            query = _bounded_query(query)
+        except ValueError as exc:
+            return _rpc_response(_rpc_error(request_id, -32602, str(exc)))
+        hits = await asyncio.to_thread(_search_docs, query)
         return _rpc_response(
             _rpc_result(
                 request_id,
@@ -248,10 +287,11 @@ async def a2a(request: Request) -> dict[str, Any]:
     request_id = body.get("id")
     method = body.get("method")
     if method == "message/send":
-        query = _text_from_a2a_message(body.get("params", {}))
-        if len(query) < 2:
-            return _rpc_error(request_id, -32602, "A text query is required")
-        hits = _search_docs(query)
+        try:
+            query = _bounded_query(_text_from_a2a_message(body.get("params", {})), already_stripped=True)
+        except ValueError as exc:
+            return _rpc_error(request_id, -32602, str(exc))
+        hits = await asyncio.to_thread(_search_docs, query)
         return _rpc_result(
             request_id,
             {

@@ -2,6 +2,9 @@
 """Tests for fail-closed swarm launch."""
 from __future__ import annotations
 
+from typing import Any
+
+import pytest
 from fastapi.testclient import TestClient
 
 import orama_system.portal_server as portal_server
@@ -66,7 +69,7 @@ def test_swarm_launch_requires_approval(monkeypatch):
     assert response.status_code == 422
 
 
-def _approved_payload(client, objective):
+def _approved_payload(client: TestClient, objective: str) -> dict[str, Any]:
     preview = client.post("/api/swarm/preview", json={"objective": objective}).json()
     return {
         "objective": objective,
@@ -76,8 +79,11 @@ def _approved_payload(client, objective):
     }
 
 
-def test_swarm_launch_rejects_boolean_only_approval(monkeypatch):
-    async def fake_api_status():
+def test_swarm_launch_rejects_boolean_only_approval(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+    monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "0")
+
+    async def fake_api_status() -> dict[str, Any]:
         return _portal_status()
 
     monkeypatch.setattr(portal_server, "api_status", fake_api_status)

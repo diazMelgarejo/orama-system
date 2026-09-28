@@ -2,13 +2,17 @@ import { FormEvent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { searchKnowledge } from "@/api/knowledge";
 
+const MAX_QUERY = 200;
+
 export function KnowledgePortal() {
   const [query, setQuery] = useState("");
   const search = useMutation({ mutationFn: () => searchKnowledge(query.trim()) });
+  const trimmed = query.trim();
+  const canSearch = trimmed.length >= 2 && query.length <= MAX_QUERY;
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (query.trim().length >= 2) search.mutate();
+    if (canSearch) search.mutate();
   }
 
   return (
@@ -24,13 +28,14 @@ export function KnowledgePortal() {
         <input
           id="knowledge-query"
           value={query}
-          onChange={(event) => setQuery(event.target.value)}
+          maxLength={MAX_QUERY}
+          onChange={(event) => setQuery(event.target.value.slice(0, MAX_QUERY))}
           placeholder="Search architecture, approvals, routing…"
           className="min-w-0 flex-1 rounded border border-line bg-canvas-inset px-3 py-2 text-sm text-ink placeholder:text-ink-subtle focus:border-accent focus:outline-none"
         />
         <button
           type="submit"
-          disabled={query.trim().length < 2 || search.isPending}
+          disabled={!canSearch || search.isPending}
           className="rounded border border-accent bg-accent/10 px-4 text-xs font-semibold text-accent disabled:opacity-40"
         >
           {search.isPending ? "Searching…" : "Search"}
