@@ -6,8 +6,10 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 
 import orama_system.portal_server as portal_server
+from orama_system import swarm_approval
 
 
 class _FakeResponse:
@@ -26,6 +28,7 @@ class _FakeResponse:
 class _FakeLaunchClient:
     submitted = []
     fail_role = None
+    route_payload = {"backend_hint": "lmstudio-mac", "model_hint": "Qwen3.5-9B-MLX-4bit"}
 
     def __init__(self, *args, **kwargs):
         pass
@@ -38,7 +41,7 @@ class _FakeLaunchClient:
 
     async def post(self, url: str, json=None, **kwargs):
         if url.endswith("/models/route"):
-            return _FakeResponse({"backend_hint": "lmstudio-mac", "model_hint": "Qwen3.5-9B-MLX-4bit"})
+            return _FakeResponse(self.route_payload)
         if url.endswith("/v1/jobs"):
             self.submitted.append(json)
             role = json["metadata"]["role"]
@@ -58,14 +61,20 @@ def _portal_status(ok=True):
     }
 
 
-def _approved_payload(client, objective):
-    preview = client.post("/api/swarm/preview", json={"objective": objective}).json()
-    return {
-        "objective": objective,
-        "approved": True,
-        "preview_id": preview["preview_id"],
-        "approval_token": preview["approval_token"],
+@pytest.fixture(autouse=True)
+def _isolated_swarm_state(monkeypatch: pytest.MonkeyPatch):
+    swarm_approval._cache.clear()
+    monkeypatch.delenv("ORAMA_SWARM_APPROVAL_SECRET", raising=False)
+    monkeypatch.delenv("ORAMA_SWARM_LEGACY_APPROVE", raising=False)
+    monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
+    _FakeLaunchClient.submitted = []
+    _FakeLaunchClient.fail_role = None
+    _FakeLaunchClient.route_payload = {
+        "backend_hint": "lmstudio-mac",
+        "model_hint": "Qwen3.5-9B-MLX-4bit",
     }
+    yield
+    swarm_approval._cache.clear()
 
 
 def test_swarm_launch_requires_approval(monkeypatch):
@@ -79,10 +88,15 @@ def test_swarm_launch_requires_approval(monkeypatch):
     assert response.status_code == 422
 
 
-def _approved_payload(client: TestClient, objective: str) -> dict[str, Any]:
-    preview = client.post("/api/swarm/preview", json={"objective": objective}).json()
+def _approved_payload(
+    client: TestClient,
+    objective: str,
+    **options: Any,
+) -> dict[str, Any]:
+    request = {"objective": objective, **options}
+    preview = client.post("/api/swarm/preview", json=request).json()
     return {
-        "objective": objective,
+        **request,
         "approved": True,
         "preview_id": preview["preview_id"],
         "approval_token": preview["approval_token"],
@@ -129,6 +143,118 @@ def test_swarm_launch_blocks_on_hardware_policy(monkeypatch):
     assert _FakeLaunchClient.submitted == []
 
 
+def test_hardware_block_does_not_consume_approval(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+    status = {"ok": True}
+
+    async def fake_api_status():
+        return _portal_status(ok=status["ok"])
+
+    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        payload = _approved_payload(client, "Ship launch")
+        status["ok"] = False
+        blocked = client.post("/api/swarm/launch", json=payload)
+        status["ok"] = True
+        retried = client.post("/api/swarm/launch", json=payload)
+
+    assert blocked.status_code == 409
+    assert retried.status_code == 200
+    assert len(_FakeLaunchClient.submitted) == 5
+
+
+def test_invalid_token_is_rejected_before_hardware_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+    status_calls = 0
+
+    async def fake_api_status():
+        nonlocal status_calls
+        status_calls += 1
+        return _portal_status(ok=False)
+
+    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        payload = _approved_payload(client, "Ship launch")
+        calls_after_preview = status_calls
+        payload["approval_token"] = "deadbeef" * 8
+        response = client.post("/api/swarm/launch", json=payload)
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "invalid approval_token"
+    assert status_calls == calls_after_preview
+
+
+@pytest.mark.parametrize(
+    ("field", "preview_value", "launch_value"),
+    [
+        ("objective", "Original objective", "Different objective"),
+        ("task_type", "coding", "research"),
+        ("optimize_for", "reliability", "speed"),
+        ("preferred_device", "auto", "windows"),
+    ],
+)
+def test_launch_rejects_request_drift_from_cached_preview(
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    preview_value: str,
+    launch_value: str,
+) -> None:
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+
+    async def fake_api_status():
+        return _portal_status()
+
+    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
+    preview_request = {
+        "objective": "Ship launch",
+        "task_type": "coding",
+        "optimize_for": "reliability",
+        "preferred_device": "auto",
+        field: preview_value,
+    }
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        payload = _approved_payload(
+            client,
+            preview_request.pop("objective"),
+            **preview_request,
+        )
+        payload[field] = launch_value
+        response = client.post("/api/swarm/launch", json=payload)
+
+    assert response.status_code == 422
+    assert "preview drift" in response.json()["detail"]
+    assert _FakeLaunchClient.submitted == []
+
+
+def test_legacy_launch_does_not_mint_reusable_approval(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+    monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "1")
+
+    async def fake_api_status():
+        return _portal_status()
+
+    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/api/swarm/launch",
+            json={"objective": "Legacy launch", "approved": True},
+        )
+
+    assert response.status_code == 200
+    assert "preview_id" not in response.json()["preview"]
+    assert "approval_token" not in response.json()["preview"]
+    assert swarm_approval._cache == {}
+    assert len(_FakeLaunchClient.submitted) == 5
+
+
 def test_swarm_launch_submits_metadata_compatible_pt_jobs(monkeypatch):
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
 
@@ -156,6 +282,8 @@ def test_swarm_launch_submits_metadata_compatible_pt_jobs(monkeypatch):
     assert first["metadata"]["role"] == "context-agent"
     assert first["metadata"]["artifact_policy"] == "summary_and_refs_only"
     assert first["metadata"]["model"]
+    assert "approval_token" not in body["preview"]
+    assert "preview_id" not in body["preview"]
 
 
 def test_swarm_launch_returns_partial_dispatch_failure(monkeypatch):
@@ -179,4 +307,77 @@ def test_swarm_launch_returns_partial_dispatch_failure(monkeypatch):
     body = response.json()
     assert body["accepted"] is False
     assert body["failed_jobs"][0]["role"] == "verifier-agent"
+    assert "request" not in body["failed_jobs"][0]
     assert len(body["accepted_jobs"]) == 4
+
+
+def test_swarm_launch_approval_is_single_use_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+
+    async def fake_api_status():
+        return _portal_status()
+
+    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        payload = _approved_payload(client, "Ship once")
+        first = client.post("/api/swarm/launch", json=payload)
+        replay = client.post("/api/swarm/launch", json=payload)
+
+    assert first.status_code == 200
+    assert replay.status_code == 422
+    assert len(_FakeLaunchClient.submitted) == 5
+
+
+def test_non_string_route_hints_are_not_dispatched(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+    _FakeLaunchClient.route_payload = {
+        "backend_hint": ["lmstudio-mac"],
+        "model_hint": {"id": "model-a"},
+    }
+
+    async def fake_api_status():
+        return _portal_status()
+
+    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post(
+            "/api/swarm/launch",
+            json=_approved_payload(client, "Ship launch"),
+        )
+
+    assert response.status_code == 200
+    first = _FakeLaunchClient.submitted[0]
+    assert first["backend_hint"] == "lmstudio-mac"
+    assert "model" not in first["metadata"]
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("task_type", "bogus"),
+        ("optimize_for", "bogus"),
+        ("preferred_device", "bogus"),
+    ],
+)
+def test_swarm_request_rejects_invalid_enum_fields(field: str, value: str) -> None:
+    with pytest.raises(ValidationError):
+        portal_server.SwarmPreviewRequest(objective="Ship launch", **{field: value})
+
+
+def test_swarm_launch_requires_strict_approval_and_well_formed_credentials() -> None:
+    with pytest.raises(ValidationError):
+        portal_server.SwarmLaunchRequest(
+            objective="Ship launch",
+            approved="true",
+            preview_id="not-an-id",
+            approval_token="not-a-token",
+        )
+
+
+def test_swarm_request_rejects_oversized_objective() -> None:
+    with pytest.raises(ValidationError):
+        portal_server.SwarmPreviewRequest(objective="x" * 4001)

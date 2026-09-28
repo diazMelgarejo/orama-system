@@ -114,11 +114,11 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
   );
   const hardwareOk = previewData?.hardware_policy?.ok === true;
   const previewMatches =
-    previewData?.objective === objective &&
+    previewData?.objective === objective.trim() &&
     previewData?.task_type === taskType &&
     previewData?.optimize_for === optimize &&
     previewData?.preferred_device === device;
-  const canPreview = charCount >= 6;
+  const canPreview = objective.trim().length >= 6;
   const canLaunch = canPreview && hasApproval && hardwareOk && previewMatches;
   const needsPreview = canPreview && (!hasApproval || !previewMatches);
   const actionError = previewMutation.isError

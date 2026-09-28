@@ -33,14 +33,14 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import quote
 
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 from starlette.responses import StreamingResponse
 
 from orama_system.lan_peer_channel import (
@@ -51,7 +51,13 @@ from orama_system.lan_peer_channel import (
     read_discovery_peer_identity,
     read_discovery_peer_ip,
 )
-from orama_system.swarm_approval import cached_preview, grandfather_legacy, issue_approval, verify_launch
+from orama_system.swarm_approval import (
+    cached_preview,
+    check_launch,
+    consume_launch,
+    grandfather_legacy,
+    issue_approval,
+)
 from orama_system.knowledge_gateway import router as knowledge_router
 from orama_system.portal_notifications import (
     EventType,
@@ -1966,16 +1972,16 @@ def _dump_model(model: BaseModel) -> Dict[str, Any]:
 
 
 class SwarmPreviewRequest(BaseModel):
-    objective: str
-    task_type: str = "implementation"
-    optimize_for: str = "reliability"
-    preferred_device: str = "auto"
+    objective: str = Field(min_length=1, max_length=4000)
+    task_type: Literal["implementation", "coding", "reasoning", "research", "ops"] = "implementation"
+    optimize_for: Literal["speed", "quality", "reliability"] = "reliability"
+    preferred_device: Literal["mac", "windows", "shared", "auto"] = "auto"
 
 
 class SwarmLaunchRequest(SwarmPreviewRequest):
-    approved: bool = False
-    preview_id: str | None = None
-    approval_token: str | None = None
+    approved: StrictBool = False
+    preview_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+    approval_token: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 _SWARM_PREVIEW_ROLES = [
@@ -2038,12 +2044,27 @@ async def _route_preview_assignment(
         )
         r.raise_for_status()
         data = r.json()
-        hint = data.get("backend_hint") or data.get("backend") or data.get("provider")
-        if not hint or str(hint).strip().lower() == "auto":
+        hint = next(
+            (
+                value.strip()
+                for key in ("backend_hint", "backend", "provider")
+                if isinstance((value := data.get(key)), str) and value.strip()
+            ),
+            None,
+        )
+        if hint and hint.lower() == "auto":
             hint = None
+        model_hint = next(
+            (
+                value.strip()
+                for key in ("model_hint", "model", "model_id")
+                if isinstance((value := data.get(key)), str) and value.strip()
+            ),
+            None,
+        )
         return {
             "backend_hint": hint,
-            "model_hint": data.get("model_hint") or data.get("model") or data.get("model_id"),
+            "model_hint": model_hint,
             "routing_source": "pt:/models/route",
         }
     except Exception as exc:
@@ -2061,7 +2082,11 @@ def _fallback_backend_hint(role: str, hardware_policy: Dict[str, Any]) -> str | 
     return None
 
 
-async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
+async def _build_swarm_preview(
+    req: SwarmPreviewRequest,
+    *,
+    with_approval: bool = True,
+) -> Dict[str, Any]:
     objective = req.objective.strip()
     if not objective:
         raise HTTPException(status_code=422, detail="objective is required")
@@ -2113,11 +2138,13 @@ async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
         "hardware_policy": hardware_policy,
         "assignments": assignments,
     }
+    if not with_approval:
+        return preview
     try:
-        preview.update(issue_approval(preview))
+        approval = issue_approval(preview)
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return preview
+    return {**preview, **approval}
 
 
 def _extract_pt_job_id(payload: Any) -> Optional[str]:
@@ -2291,7 +2318,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
     )
     if stored is None and not legacy:
         try:
-            verify_launch(
+            check_launch(
                 approved=req.approved,
                 preview_id=req.preview_id,
                 approval_token=req.approval_token,
@@ -2302,10 +2329,35 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
         raise HTTPException(status_code=422, detail="preview expired or unknown — call /api/swarm/preview again")
     if stored is not None:
         preview = stored
+        launch_preview = {
+            **preview,
+            "objective": req.objective.strip(),
+            "task_type": req.task_type,
+            "optimize_for": req.optimize_for,
+            "preferred_device": req.preferred_device,
+        }
+        try:
+            check_launch(
+                approved=req.approved,
+                preview_id=req.preview_id,
+                approval_token=req.approval_token,
+                preview=launch_preview,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
         portal_status = await api_status()
         hardware_policy = portal_status.get("hardware_policy", {})
     else:
-        preview = await _build_swarm_preview(req)
+        try:
+            check_launch(
+                approved=req.approved,
+                preview_id=req.preview_id,
+                approval_token=req.approval_token,
+                preview={},
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        preview = await _build_swarm_preview(req, with_approval=False)
         hardware_policy = preview.get("hardware_policy", {})
     if not hardware_policy.get("ok", False):
         raise HTTPException(
@@ -2317,15 +2369,11 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 "accepted_jobs": [],
             },
         )
-    try:
-        verify_launch(
-            approved=req.approved,
-            preview_id=req.preview_id,
-            approval_token=req.approval_token,
-            preview=preview,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if stored is not None:
+        try:
+            consume_launch(req.preview_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     session_id = f"swarm-{uuid.uuid4().hex}"
     accepted_jobs: List[Dict[str, Any]] = []
@@ -2372,22 +2420,25 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 accepted_jobs.append({
                     "role": assignment["role"],
                     "job_id": _extract_pt_job_id(data),
-                    "response": data,
                 })
             except Exception as exc:
                 failed_jobs.append({
                     "role": assignment["role"],
                     "error": _client_safe_error(exc),
-                    "request": payload,
                 })
 
+    public_preview = {
+        key: value
+        for key, value in preview.items()
+        if key not in {"preview_id", "approval_token"}
+    }
     return {
         "accepted": not failed_jobs,
         "blocked": False,
         "session_id": session_id,
         "accepted_jobs": accepted_jobs,
         "failed_jobs": failed_jobs,
-        "preview": preview,
+        "preview": public_preview,
     }
 
 

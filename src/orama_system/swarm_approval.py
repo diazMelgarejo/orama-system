@@ -1,6 +1,7 @@
 """Server-side swarm launch approval (P5) with legacy grandfathering."""
 from __future__ import annotations
 
+import copy
 import hashlib
 import hmac
 import json
@@ -37,6 +38,8 @@ def _fingerprint(preview: dict[str, Any]) -> str:
         "objective": preview.get("objective"),
         "assignments": preview.get("assignments"),
         "task_type": preview.get("task_type"),
+        "optimize_for": preview.get("optimize_for"),
+        "preferred_device": preview.get("preferred_device"),
     }
     return hashlib.sha256(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:32]
 
@@ -71,10 +74,11 @@ def cached_preview(preview_id: str | None) -> dict[str, Any] | None:
         return None
     _fp, ts, stored = entry
     if time.time() - ts > _PREVIEW_TTL_SEC:
+        _cache.pop(preview_id, None)
         return None
     if not isinstance(stored, dict):
         return None
-    return stored
+    return copy.deepcopy(stored)
 
 
 def issue_approval(preview: dict[str, Any]) -> dict[str, Any]:
@@ -83,14 +87,15 @@ def issue_approval(preview: dict[str, Any]) -> dict[str, Any]:
     _prune_cache()
     preview_id = secrets.token_hex(16)
     fp = _fingerprint(preview)
-    _cache[preview_id] = (fp, time.time(), preview)
+    _cache[preview_id] = (fp, time.time(), copy.deepcopy(preview))
+    _prune_cache()
     token = _sign(preview_id, fp)
     if not token:
         raise ValueError("swarm approval secret is not configured")
     return {"preview_id": preview_id, "approval_token": token, "strict_mode": strict_mode()}
 
 
-def verify_launch(
+def check_launch(
     *,
     approved: bool,
     preview_id: str | None,
@@ -122,4 +127,32 @@ def verify_launch(
         token_ok = False
     if not token_ok:
         raise ValueError("invalid approval_token")
-    _cache.pop(preview_id, None)
+
+
+def consume_launch(preview_id: str | None) -> None:
+    """Atomically consume a checked preview id before dispatch."""
+    normalized = (preview_id or "").strip()
+    entry = _cache.pop(normalized, None)
+    if not entry:
+        raise ValueError("preview expired or unknown — call /api/swarm/preview again")
+    _fp, ts, _cached = entry
+    if time.time() - ts > _PREVIEW_TTL_SEC:
+        raise ValueError("preview expired")
+
+
+def verify_launch(
+    *,
+    approved: bool,
+    preview_id: str | None,
+    approval_token: str | None,
+    preview: dict[str, Any],
+) -> None:
+    check_launch(
+        approved=approved,
+        preview_id=preview_id,
+        approval_token=approval_token,
+        preview=preview,
+    )
+    if grandfather_legacy() and approved and preview_id is None and approval_token is None:
+        return
+    consume_launch(preview_id)

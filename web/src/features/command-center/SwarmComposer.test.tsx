@@ -76,6 +76,18 @@ describe("SwarmComposer launch gate", () => {
     expect(screen.getByText(/inputs changed since the last approval/i)).toBeInTheDocument();
   });
 
+  it("matches the server-normalized objective after preview", () => {
+    renderComposer({
+      ...approvedPreview,
+      objective: "Objective with surrounding whitespace",
+    });
+    fireEvent.change(screen.getByPlaceholderText(/describe what the swarm should accomplish/i), {
+      target: { value: "  Objective with surrounding whitespace  " },
+    });
+
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeEnabled();
+  });
+
   it("shows preview errors instead of the Preview-first hint", async () => {
     vi.mocked(previewSwarm).mockRejectedValueOnce(new Error("unreachable"));
     renderComposer();
