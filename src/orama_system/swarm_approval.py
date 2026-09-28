@@ -62,7 +62,7 @@ def _prune_cache() -> None:
         _cache.pop(oldest, None)
 
 
-def issue_approval(preview: dict[str, Any]) -> dict[str, str]:
+def issue_approval(preview: dict[str, Any]) -> dict[str, Any]:
     if not _secret():
         raise ValueError("swarm approval secret is not configured")
     _prune_cache()

@@ -23,6 +23,8 @@ _QUERY_MAX = 200
 _WORD = re.compile(r"[0-9a-z][0-9a-z_.-]*", re.IGNORECASE)
 _SERVER_INFO = {"name": "orama-knowledge", "version": "1.0.0"}
 _SERVER_INFO_META = "io.modelcontextprotocol/serverInfo"
+_QUERY_INVALID = "query must be a string of 2 to 200 characters"
+_TEXT_PARTS_INVALID = "text parts must be strings"
 
 
 def require_operator_token(request: Request) -> None:
@@ -149,10 +151,10 @@ async def _rpc_body(request: Request) -> tuple[dict[str, Any] | None, dict[str, 
 
 def _bounded_query(query: Any, *, already_stripped: bool = False) -> str:
     if not isinstance(query, str):
-        raise ValueError("query must be a string of 2 to 200 characters")
+        raise ValueError(_QUERY_INVALID)
     candidate = query.strip() if not already_stripped else query
     if len(candidate) < 2 or len(query) > _QUERY_MAX:
-        raise ValueError("query must be a string of 2 to 200 characters")
+        raise ValueError(_QUERY_INVALID)
     return query
 
 
@@ -165,7 +167,7 @@ def _text_from_a2a_message(params: Any) -> str:
             continue
         text = part.get("text", "")
         if not isinstance(text, str):
-            raise ValueError("text parts must be strings")
+            raise ValueError(_TEXT_PARTS_INVALID)
         texts.append(text)
     return " ".join(texts).strip()
 
@@ -228,8 +230,8 @@ async def mcp(request: Request) -> Response:
         query = arguments.get("query", "") if isinstance(arguments, dict) else ""
         try:
             query = _bounded_query(query)
-        except ValueError as exc:
-            return _rpc_response(_rpc_error(request_id, -32602, str(exc)))
+        except ValueError:
+            return _rpc_response(_rpc_error(request_id, -32602, _QUERY_INVALID))
         hits = await asyncio.to_thread(_search_docs, query)
         return _rpc_response(
             _rpc_result(
@@ -277,9 +279,13 @@ async def a2a(request: Request) -> dict[str, Any]:
     method = body.get("method")
     if method == "message/send":
         try:
-            query = _bounded_query(_text_from_a2a_message(body.get("params", {})), already_stripped=True)
-        except ValueError as exc:
-            return _rpc_error(request_id, -32602, str(exc))
+            query = _text_from_a2a_message(body.get("params", {}))
+        except ValueError:
+            return _rpc_error(request_id, -32602, _TEXT_PARTS_INVALID)
+        try:
+            query = _bounded_query(query, already_stripped=True)
+        except ValueError:
+            return _rpc_error(request_id, -32602, _QUERY_INVALID)
         hits = await asyncio.to_thread(_search_docs, query)
         return _rpc_result(
             request_id,
