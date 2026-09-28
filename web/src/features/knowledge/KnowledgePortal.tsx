@@ -6,13 +6,21 @@ const MAX_QUERY = 200;
 
 export function KnowledgePortal() {
   const [query, setQuery] = useState("");
-  const search = useMutation({ mutationFn: () => searchKnowledge(query.trim()) });
+  const [submittedQuery, setSubmittedQuery] = useState<string | null>(null);
+  const search = useMutation({ mutationFn: (term: string) => searchKnowledge(term) });
   const trimmed = query.trim();
   const canSearch = trimmed.length >= 2 && query.length <= MAX_QUERY;
+  const resultsAreCurrent =
+    submittedQuery !== null &&
+    submittedQuery === trimmed &&
+    search.data?.query === submittedQuery;
+  const currentHits = resultsAreCurrent ? search.data?.hits : undefined;
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (canSearch) search.mutate();
+    if (!canSearch) return;
+    setSubmittedQuery(trimmed);
+    search.mutate(trimmed);
   }
 
   return (
@@ -42,13 +50,15 @@ export function KnowledgePortal() {
         </button>
       </form>
       <div className="space-y-2 p-3">
-        {search.isError && (
+        {search.isError && submittedQuery === trimmed && (
           <p className="text-xs text-status-err">
-            Search failed. Confirm the Orama portal is reachable on port 8002 and authenticated.
+            Search failed. Confirm the Orama portal is reachable on port 8002.
           </p>
         )}
-        {search.data?.hits.length === 0 && <p className="text-xs text-ink-muted">No matching documentation.</p>}
-        {search.data?.hits.map((hit) => (
+        {currentHits?.length === 0 && (
+          <p className="text-xs text-ink-muted">No matching documentation.</p>
+        )}
+        {currentHits?.map((hit) => (
           <article key={hit.path} className="rounded border border-line bg-canvas-inset p-3">
             <div className="flex items-baseline justify-between gap-3">
               <h3 className="text-sm font-medium text-ink">{hit.title}</h3>

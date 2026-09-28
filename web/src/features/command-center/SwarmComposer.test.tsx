@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SwarmComposer } from "./SwarmComposer";
-import { previewSwarm } from "@/api/swarm";
+import { launchSwarm, previewSwarm } from "@/api/swarm";
 import type { SwarmPreview } from "@/api/swarm";
 
 vi.mock("@/api/swarm", () => ({
@@ -86,6 +86,28 @@ describe("SwarmComposer launch gate", () => {
     });
 
     expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeEnabled();
+  });
+
+  it("disables Launch after a successful launch until a new preview arrives", async () => {
+    vi.mocked(launchSwarm).mockResolvedValueOnce({
+      accepted: true,
+      blocked: false,
+      session_id: "swarm-test",
+      accepted_jobs: [],
+      failed_jobs: [],
+      preview: {
+        objective: DEFAULT_OBJECTIVE,
+        task_type: "reasoning",
+        optimize_for: "quality",
+        preferred_device: "auto",
+        assignments: [],
+        hardware_policy: { ok: true, violations: [] },
+      },
+    });
+    renderComposer(approvedPreview);
+    fireEvent.click(screen.getByRole("button", { name: "Launch Swarm" }));
+    await waitFor(() => expect(screen.getByText(/session swarm-test/i)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
   });
 
   it("shows preview errors instead of the Preview-first hint", async () => {

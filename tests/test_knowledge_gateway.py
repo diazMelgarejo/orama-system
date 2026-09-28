@@ -139,23 +139,15 @@ def test_excerpt_centers_on_late_match(tmp_path, monkeypatch):
     assert "Déploiement" in excerpt
 
 
-def test_knowledge_router_enforces_operator_token_without_portal_middleware(tmp_path, monkeypatch):
+def test_knowledge_search_is_public_without_operator_token(tmp_path, monkeypatch):
     (tmp_path / "guide.md").write_text("# Human Approval\nA human gate.", encoding="utf-8")
     monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
-    monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
-    monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "test-operator-bearer-not-a-real-secret")
-    monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
     app = FastAPI()
     app.include_router(router)
     with TestClient(app, raise_server_exceptions=True) as isolated:
-        denied = isolated.get("/api/knowledge/search?q=human")
-        assert denied.status_code == 401
-        allowed = isolated.get(
-            "/api/knowledge/search?q=human",
-            headers={"Authorization": "Bearer test-operator-bearer-not-a-real-secret"},
-        )
-    assert allowed.status_code == 200
-    assert allowed.json()["hits"][0]["path"] == "guide.md"
+        response = isolated.get("/api/knowledge/search?q=human")
+    assert response.status_code == 200
+    assert response.json()["hits"][0]["path"] == "guide.md"
 
 
 def test_mcp_query_over_200_is_invalid_params(client):
@@ -236,7 +228,7 @@ def test_a2a_malformed_json_returns_parse_error(client):
     assert response.json()["error"]["code"] == -32700
 
 
-def test_knowledge_search_requires_bearer_when_enforced(monkeypatch):
+def test_portal_knowledge_public_while_swarm_requires_bearer(monkeypatch):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "test-operator-bearer-not-a-real-secret")
     monkeypatch.setattr("utils.control_plane_auth.persisted_control_plane_token", lambda: "")
@@ -244,5 +236,16 @@ def test_knowledge_search_requires_bearer_when_enforced(monkeypatch):
     import orama_system.portal_server as portal_server
 
     with TestClient(portal_server.app, raise_server_exceptions=False) as portal:
-        denied = portal.get("/api/knowledge/search?q=human")
-    assert denied.status_code == 401
+        knowledge = portal.get("/api/knowledge/search?q=human")
+        swarm = portal.post("/api/swarm/preview", json={"objective": "x" * 12, "task_type": "reasoning"})
+    assert knowledge.status_code == 200
+    assert swarm.status_code == 401
+
+
+def test_search_respects_max_files_scan(tmp_path, monkeypatch):
+    for index in range(5):
+        (tmp_path / f"doc-{index}.md").write_text(f"# Doc {index}\nneedle-{index}", encoding="utf-8")
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_FILES_SCAN", "2")
+    hits = _search_docs("needle")
+    assert len(hits) <= 2

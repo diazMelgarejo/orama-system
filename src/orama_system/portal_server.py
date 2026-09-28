@@ -2430,7 +2430,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
     public_preview = {
         key: value
         for key, value in preview.items()
-        if key not in {"preview_id", "approval_token"}
+        if key not in {"preview_id", "approval_token", "strict_mode"}
     }
     return {
         "accepted": not failed_jobs,
