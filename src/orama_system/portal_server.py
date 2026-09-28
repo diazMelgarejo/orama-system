@@ -51,7 +51,7 @@ from orama_system.lan_peer_channel import (
     read_discovery_peer_identity,
     read_discovery_peer_ip,
 )
-from orama_system.swarm_approval import issue_approval, verify_launch
+from orama_system.swarm_approval import cached_preview, grandfather_legacy, issue_approval, verify_launch
 from orama_system.knowledge_gateway import router as knowledge_router
 from orama_system.portal_notifications import (
     EventType,
@@ -165,9 +165,36 @@ OPENROUTER_FREE_FALLBACKS = [
 PROBE_TIMEOUT = 3.0
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PERPETUA_TOOLS_ROOT = Path(
-    os.getenv("PERPETUA_TOOLS_ROOT", REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools")
-)
+
+
+def _resolve_perpetua_tools_root() -> Path:
+    """Locate a co-installed Perpetua-Tools checkout.
+
+    Env wins when it points at a real tree. Otherwise look for a sibling
+    clone. The historical ``perplexity-api/Perpetua-Tools`` path stays as the
+    last candidate so older layouts still resolve.
+    """
+    markers = ("orchestrator", "fastapi_app.py")
+
+    def _is_pt(path: Path) -> bool:
+        return (path / markers[0] / markers[1]).is_file()
+
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUA_TOOLS_PATH", "PERPETUATOOLSROOT"):
+        raw = os.getenv(key, "").strip()
+        if raw and _is_pt(Path(raw)):
+            return Path(raw)
+    candidates = [
+        REPO_ROOT.parent / "Perpetua-Tools",
+        REPO_ROOT.parent / "perpetua-tools",
+        REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools",
+    ]
+    for candidate in candidates:
+        if _is_pt(candidate):
+            return candidate
+    return candidates[-1]
+
+
+PERPETUA_TOOLS_ROOT = _resolve_perpetua_tools_root()
 
 _win_platform_pkg: Any = None
 _win_platform_mods: dict[str, Any] = {}
@@ -2011,16 +2038,19 @@ async def _route_preview_assignment(
         )
         r.raise_for_status()
         data = r.json()
+        hint = data.get("backend_hint") or data.get("backend") or data.get("provider")
+        if not hint or str(hint).strip().lower() == "auto":
+            hint = None
         return {
-            "backend_hint": data.get("backend_hint") or data.get("backend") or data.get("provider") or "auto",
+            "backend_hint": hint,
             "model_hint": data.get("model_hint") or data.get("model") or data.get("model_id"),
             "routing_source": "pt:/models/route",
         }
-    except Exception:
-        return {}
+    except Exception as exc:
+        return {"routing_error": type(exc).__name__}
 
 
-def _fallback_backend_hint(role: str, hardware_policy: Dict[str, Any]) -> str:
+def _fallback_backend_hint(role: str, hardware_policy: Dict[str, Any]) -> str | None:
     safe_defaults = hardware_policy.get("safe_defaults", {}) if isinstance(hardware_policy, dict) else {}
     if role in {"context-agent", "architect-agent"} and safe_defaults.get("win"):
         return "lmstudio-win"
@@ -2028,7 +2058,7 @@ def _fallback_backend_hint(role: str, hardware_policy: Dict[str, Any]) -> str:
         return "lmstudio-mac"
     if safe_defaults.get("win"):
         return "lmstudio-win"
-    return "auto"
+    return None
 
 
 async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
@@ -2058,13 +2088,16 @@ async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
     assignments = []
     for base, route in zip(_SWARM_PREVIEW_ROLES, routed):
         backend_hint = route.get("backend_hint") or _fallback_backend_hint(base["role"], hardware_policy)
-        assignments.append({
+        assignment = {
             **base,
             "backend_hint": backend_hint,
             "model_hint": route.get("model_hint"),
             "routing_source": route.get("routing_source") or "portal:fallback",
             "dispatch_allowed": False,
-        })
+        }
+        if route.get("routing_error"):
+            assignment["routing_error"] = route["routing_error"]
+        assignments.append(assignment)
 
     preview = {
         "objective": objective,
@@ -2243,19 +2276,37 @@ async def api_swarm_preview(req: SwarmPreviewRequest):
 
 @app.post("/api/swarm/launch")
 async def api_swarm_launch(req: SwarmLaunchRequest):
-    """Launch approved preview assignments as PT-owned jobs; orama stores no job state."""
-    preview = await _build_swarm_preview(req)
-    try:
-        verify_launch(
-            approved=req.approved,
-            preview_id=req.preview_id,
-            approval_token=req.approval_token,
-            preview=preview,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    """Launch the approved preview as PT-owned jobs; orama stores no job state.
 
-    hardware_policy = preview.get("hardware_policy", {})
+    Dispatch uses the cached preview from ``/api/swarm/preview``. Rebuilding
+    assignments here would mint a second token and fail the fingerprint check
+    whenever routing flickered.
+    """
+    stored = cached_preview(req.preview_id)
+    legacy = (
+        req.approved
+        and req.preview_id is None
+        and req.approval_token is None
+        and grandfather_legacy()
+    )
+    if stored is None and not legacy:
+        try:
+            verify_launch(
+                approved=req.approved,
+                preview_id=req.preview_id,
+                approval_token=req.approval_token,
+                preview={},
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail="preview expired or unknown — call /api/swarm/preview again")
+    if stored is not None:
+        preview = stored
+        portal_status = await api_status()
+        hardware_policy = portal_status.get("hardware_policy", {})
+    else:
+        preview = await _build_swarm_preview(req)
+        hardware_policy = preview.get("hardware_policy", {})
     if not hardware_policy.get("ok", False):
         raise HTTPException(
             status_code=409,
@@ -2266,6 +2317,15 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 "accepted_jobs": [],
             },
         )
+    try:
+        verify_launch(
+            approved=req.approved,
+            preview_id=req.preview_id,
+            approval_token=req.approval_token,
+            preview=preview,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     session_id = f"swarm-{uuid.uuid4().hex}"
     accepted_jobs: List[Dict[str, Any]] = []
@@ -2282,10 +2342,22 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 "verification_rubric": assignment["verification_rubric"],
                 "routing_source": assignment["routing_source"],
             }
+            model_hint = assignment.get("model_hint")
+            if isinstance(model_hint, str) and model_hint.strip():
+                metadata["model"] = model_hint.strip()
+            backend_hint = assignment.get("backend_hint")
+            if not backend_hint or str(backend_hint).strip().lower() == "auto":
+                backend_hint = None
             payload = {
                 "intent": assignment["intent"],
                 "prompt": preview["objective"],
-                "backend_hint": assignment["backend_hint"],
+                "backend_hint": backend_hint,
+                "task_type": preview["task_type"],
+                "role": assignment["role"],
+                "specialization": assignment["specialization"],
+                "session_id": session_id,
+                "parent_orchestrator_id": "orama-portal",
+                "artifact_policy": "summary_and_refs_only",
                 "constraints": {
                     "task_type": preview["task_type"],
                     "optimize_for": preview["optimize_for"],
@@ -3126,7 +3198,8 @@ async def api_spawn_agent(req: SpawnAgentRequest):
             sys.path.insert(0, _pt_root)
         from orchestrator.alphaclaw_manager import validate_routing_affinity as _vra
         _agent_model = req.model
-        _agent_platform = "mac"
+        _agent_name = (req.agent or "").lower()
+        _agent_platform = "win" if "win" in _agent_name else "mac"
         if _agent_model:
             _vra(_agent_model, _agent_platform)
             log.info("[portal] affinity OK: %s → %s", _agent_model, _agent_platform)
