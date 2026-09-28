@@ -6,11 +6,11 @@ interface WorkerAssignmentsProps {
 }
 
 const WORKER_LETTERS: Record<string, string> = {
-  "context-builder": "C",
-  architect: "A",
-  executor: "E",
-  verifier: "V",
-  crystallizer: "X",
+  "context-agent": "C",
+  "architect-agent": "A",
+  "executor-agent": "E",
+  "verifier-agent": "V",
+  "crystallizer-agent": "X",
 };
 
 function roleColor(role: string): string {
@@ -30,24 +30,20 @@ function workerLetter(role: string): string {
 }
 
 function RoutingSourceBadge({ source }: { source: string }) {
-  const [scope] = source.split(".");
+  const [scope] = source.split(":");
   const tone =
-    scope === "session" ? "info" :
-    scope === "run" ? "ok" :
-    scope === "policy" ? "neutral" : "neutral";
+    scope === "pt" ? "info" :
+    scope === "portal" ? "neutral" : "neutral";
   const label =
-    scope === "session" ? "Session" :
-    scope === "run" ? "Run" :
-    scope === "policy" ? "Policy" : source;
+    scope === "pt" ? "PT router" :
+    scope === "portal" ? "Portal fallback" : source;
   return (
     <span
       title={source}
       className={`inline-flex max-w-full items-center rounded-sm px-2 py-0.5 text-[10px] font-mono normal-case tracking-normal ring-1 ring-inset ${
         tone === "info"
           ? "bg-status-info/15 text-status-info ring-status-info/30"
-          : tone === "ok"
-            ? "bg-status-ok/15 text-status-ok ring-status-ok/30"
-            : "bg-canvas-raised text-ink-muted ring-line"
+          : "bg-canvas-raised text-ink-muted ring-line"
       }`}
     >
       <span className="truncate">{label}</span>
@@ -58,6 +54,7 @@ function RoutingSourceBadge({ source }: { source: string }) {
 function WorkerRow({ assignment }: { assignment: SwarmAssignment }) {
   const letter = workerLetter(assignment.role);
   const colorClass = roleColor(assignment.role);
+  const routingFailed = Boolean(assignment.routing_error);
 
   return (
     <tr className="border-b border-line last:border-b-0 hover:bg-canvas-raised/50">
@@ -74,8 +71,8 @@ function WorkerRow({ assignment }: { assignment: SwarmAssignment }) {
       </td>
       {/* Backend hint */}
       <td className="px-3 py-2">
-        <span className="font-mono text-2xs text-ink-muted" title={assignment.backend_hint}>
-          {assignment.backend_hint}
+        <span className="font-mono text-2xs text-ink-muted" title={assignment.backend_hint ?? undefined}>
+          {assignment.backend_hint ?? "—"}
         </span>
       </td>
       {/* Routing source */}
@@ -84,7 +81,9 @@ function WorkerRow({ assignment }: { assignment: SwarmAssignment }) {
       </td>
       {/* Status */}
       <td className="px-3 py-2">
-        <StatusBadge tone="ok" dot={false}>Ready</StatusBadge>
+        <StatusBadge tone={routingFailed ? "err" : "ok"} dot={false}>
+          {routingFailed ? "Routing failed" : "Ready"}
+        </StatusBadge>
       </td>
     </tr>
   );
@@ -92,7 +91,7 @@ function WorkerRow({ assignment }: { assignment: SwarmAssignment }) {
 
 export function WorkerAssignments({ preview }: WorkerAssignmentsProps) {
   const assignments = preview?.assignments ?? [];
-  const policyOk = preview?.hardware_policy?.ok ?? true;
+  const policyOk = preview?.hardware_policy?.ok ?? false;
   const violations = preview?.hardware_policy?.violations ?? [];
 
   return (
@@ -148,7 +147,7 @@ export function WorkerAssignments({ preview }: WorkerAssignmentsProps) {
           <div className="flex items-center justify-between border-t border-line px-3 py-1.5">
             <span className="text-2xs text-ink-subtle">
               Routing precedence:{" "}
-              <span className="font-mono text-ink-muted">Session {">"} Run {">"} Policy</span>
+              <span className="font-mono text-ink-muted">PT router {">"} hardware-policy fallback</span>
             </span>
             <button type="button" className="text-2xs text-accent hover:text-accent-hover">
               View Routing
@@ -164,11 +163,14 @@ export function WorkerAssignments({ preview }: WorkerAssignmentsProps) {
             Hardware policy violations
           </div>
           <ul className="space-y-1 text-2xs text-ink-muted">
-            {violations.map((v, i) => (
-              <li key={i} className="font-mono">
-                {v.role ?? "—"} → {v.model ?? "?"}: {v.reason ?? v.message ?? "rejected"}
-              </li>
-            ))}
+            {violations.map((violation, i) => {
+              const detail = typeof violation === "string"
+                ? violation
+                : `${violation.role ?? "—"} → ${violation.model ?? "?"}: ${
+                    violation.reason ?? violation.message ?? "rejected"
+                  }`;
+              return <li key={i} className="font-mono">{detail}</li>;
+            })}
           </ul>
         </div>
       )}

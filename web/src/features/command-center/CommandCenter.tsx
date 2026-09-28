@@ -12,6 +12,7 @@ import { WorkerAssignments } from "./WorkerAssignments";
 import { RunsTable } from "./RunsTable";
 import { ArtifactsPanel } from "./ArtifactsPanel";
 import { RoutingView } from "@/features/routing/RoutingView";
+import { KnowledgePortal } from "@/features/knowledge/KnowledgePortal";
 import {
   resolveDisplayState,
   resolveJobs,
@@ -69,6 +70,9 @@ export function CommandCenter() {
 
       case "artifacts":
         return <ArtifactsPanel artifacts={artifacts} />;
+
+      case "docs":
+        return <KnowledgePortal />;
 
       case "composer":
         return (
@@ -128,7 +132,7 @@ export function CommandCenter() {
 
       {appStateQuery.isError && (
         <div className="mt-2 rounded border border-status-err/40 bg-status-err/5 px-3 py-2 text-2xs text-status-err">
-          /api/app/state unreachable — showing mock state. Check that portal_server.py is running on port 8001.
+          /api/app/state unreachable — showing mock state. Check that portal_server.py is running on port 8002.
         </div>
       )}
     </Shell>

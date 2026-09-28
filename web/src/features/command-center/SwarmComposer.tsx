@@ -36,13 +36,6 @@ const DEVICE_OPTIONS: { value: PreferredDevice; label: string }[] = [
   { value: "shared", label: "Shared / Cloud" },
 ];
 
-const CONTEXT_PROFILES = [
-  "Default",
-  "Code Review",
-  "Research Deep Dive",
-  "Rapid Ops",
-];
-
 const MAX_OBJECTIVE = 2000;
 
 interface SegmentedControlProps<T extends string> {
@@ -88,8 +81,8 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
   const [taskType, setTaskType] = useState<TaskType>("reasoning");
   const [optimize, setOptimize] = useState<OptimizeFor>("quality");
   const [device, setDevice] = useState<PreferredDevice>("auto");
-  const [contextProfile, setContextProfile] = useState("Default");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [launchedPreviewId, setLaunchedPreviewId] = useState<string | null>(null);
 
   const previewMutation = useMutation({
     mutationFn: () =>
@@ -99,7 +92,10 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
         optimize_for: optimize,
         preferred_device: device,
       }),
-    onSuccess: (data) => onPreview?.(data),
+    onSuccess: (data) => {
+      setLaunchedPreviewId(null);
+      onPreview?.(data);
+    },
   });
 
   const launchMutation = useMutation({
@@ -110,13 +106,39 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
         optimize_for: optimize,
         preferred_device: device,
         approved: true,
+        preview_id: previewData?.preview_id ?? "",
+        approval_token: previewData?.approval_token ?? "",
       }),
-    onSuccess: (data) => onLaunch?.(data),
+    onSuccess: (data) => {
+      if (previewData?.preview_id) {
+        setLaunchedPreviewId(previewData.preview_id);
+      }
+      onLaunch?.(data);
+    },
   });
 
   const charCount = objective.length;
-  const canPreview = charCount >= 6;
-  const canLaunch = charCount >= 6 && (previewData?.hardware_policy?.ok ?? true);
+  const hasApproval = Boolean(
+    previewData?.preview_id?.trim() && previewData?.approval_token?.trim(),
+  );
+  const hardwareOk = previewData?.hardware_policy?.ok === true;
+  const previewMatches =
+    previewData?.objective === objective.trim() &&
+    previewData?.task_type === taskType &&
+    previewData?.optimize_for === optimize &&
+    previewData?.preferred_device === device;
+  const canPreview = objective.trim().length >= 6;
+  const approvalUnused =
+    Boolean(previewData?.preview_id) && previewData?.preview_id !== launchedPreviewId;
+  const canLaunch = canPreview && hasApproval && hardwareOk && previewMatches && approvalUnused;
+  const needsPreview = canPreview && (!hasApproval || !previewMatches);
+  const actionError = previewMutation.isError
+    ? "preview failed"
+    : launchMutation.isError
+      ? "launch failed"
+      : hasApproval && !hardwareOk
+        ? "Hardware policy blocked this preview."
+        : null;
 
   return (
     <section className="mb-4 rounded border border-line bg-canvas-surface">
@@ -167,32 +189,17 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
           />
         </div>
 
-        {/* Device + Context Profile row */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <span className="mb-1 block text-2xs uppercase tracking-wider text-ink-subtle">Preferred Device</span>
-            <select
-              value={device}
-              onChange={(e) => setDevice(e.target.value as PreferredDevice)}
-              className="w-full rounded border border-line bg-canvas-inset px-2 py-1.5 text-xs font-mono text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-            >
-              {DEVICE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <span className="mb-1 block text-2xs uppercase tracking-wider text-ink-subtle">Context Profile</span>
-            <select
-              value={contextProfile}
-              onChange={(e) => setContextProfile(e.target.value)}
-              className="w-full rounded border border-line bg-canvas-inset px-2 py-1.5 text-xs font-mono text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
-            >
-              {CONTEXT_PROFILES.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
+        <div>
+          <span className="mb-1 block text-2xs uppercase tracking-wider text-ink-subtle">Preferred Device</span>
+          <select
+            value={device}
+            onChange={(e) => setDevice(e.target.value as PreferredDevice)}
+            className="w-full rounded border border-line bg-canvas-inset px-2 py-1.5 text-xs font-mono text-ink focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          >
+            {DEVICE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
 
         {/* Advanced Options */}
@@ -208,7 +215,7 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
           {showAdvanced && (
             <div className="mt-2 rounded border border-line bg-canvas-inset p-2.5 text-2xs text-ink-muted">
               <p className="font-mono">
-                timeout_sec, max_workers, verifier_rubric, depth, session_id override — coming Phase 5
+                context profile, timeout_sec, max_workers, verifier_rubric, depth, session_id override — coming Phase 5
               </p>
             </div>
           )}
@@ -232,15 +239,16 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
           >
             Launch Swarm
           </button>
-
-          {previewMutation.isError && (
-            <span className="ml-auto text-2xs text-status-err">
-              preview failed
-            </span>
+          {needsPreview && !actionError && (
+            <p className="ml-auto text-2xs text-ink-muted">
+              {hasApproval
+                ? "Run Preview again — inputs changed since the last approval."
+                : "Run Preview first to generate an approval token."}
+            </p>
           )}
-          {launchMutation.isError && (
+          {actionError && (
             <span className="ml-auto text-2xs text-status-err">
-              launch failed
+              {actionError}
             </span>
           )}
         </div>

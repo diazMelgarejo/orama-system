@@ -112,7 +112,11 @@ export function NavLeft({ active = "command", onSelect }: NavLeftProps) {
             key={id}
             type="button"
             onClick={() => onSelect?.(id)}
-            className="flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs text-ink-subtle transition-colors hover:text-ink-muted"
+            className={`flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs transition-colors ${
+              active === id
+                ? "border-l-2 border-accent bg-accent/8 text-accent"
+                : "border-l-2 border-transparent text-ink-subtle hover:text-ink-muted"
+            }`}
           >
             <Icon />
             <span>{label}</span>

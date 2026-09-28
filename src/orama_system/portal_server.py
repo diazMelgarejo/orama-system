@@ -33,14 +33,14 @@ import time
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import quote
 
 import httpx
 import uvicorn
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool
 from starlette.responses import StreamingResponse
 
 from orama_system.lan_peer_channel import (
@@ -51,7 +51,14 @@ from orama_system.lan_peer_channel import (
     read_discovery_peer_identity,
     read_discovery_peer_ip,
 )
-from orama_system.swarm_approval import issue_approval, verify_launch
+from orama_system.swarm_approval import (
+    cached_preview,
+    check_launch,
+    consume_launch,
+    grandfather_legacy,
+    issue_approval,
+)
+from orama_system.knowledge_gateway import router as knowledge_router
 from orama_system.portal_notifications import (
     EventType,
     Notification,
@@ -164,9 +171,36 @@ OPENROUTER_FREE_FALLBACKS = [
 PROBE_TIMEOUT = 3.0
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PERPETUA_TOOLS_ROOT = Path(
-    os.getenv("PERPETUA_TOOLS_ROOT", REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools")
-)
+
+
+def _resolve_perpetua_tools_root() -> Path:
+    """Locate a co-installed Perpetua-Tools checkout.
+
+    Env wins when it points at a real tree. Otherwise look for a sibling
+    clone. The historical ``perplexity-api/Perpetua-Tools`` path stays as the
+    last candidate so older layouts still resolve.
+    """
+    markers = ("orchestrator", "fastapi_app.py")
+
+    def _is_pt(path: Path) -> bool:
+        return (path / markers[0] / markers[1]).is_file()
+
+    for key in ("PERPETUA_TOOLS_ROOT", "PERPETUA_TOOLS_PATH", "PERPETUATOOLSROOT"):
+        raw = os.getenv(key, "").strip()
+        if raw and _is_pt(Path(raw)):
+            return Path(raw)
+    candidates = [
+        REPO_ROOT.parent / "Perpetua-Tools",
+        REPO_ROOT.parent / "perpetua-tools",
+        REPO_ROOT.parent / "perplexity-api" / "Perpetua-Tools",
+    ]
+    for candidate in candidates:
+        if _is_pt(candidate):
+            return candidate
+    return candidates[-1]
+
+
+PERPETUA_TOOLS_ROOT = _resolve_perpetua_tools_root()
 
 _win_platform_pkg: Any = None
 _win_platform_mods: dict[str, Any] = {}
@@ -228,12 +262,13 @@ async def _portal_lifespan(_app: FastAPI):
 
 
 app = FastAPI(title="orama portal", version=VERSION, lifespan=_portal_lifespan)
+app.include_router(knowledge_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_allow_origins(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
+    allow_headers=["Authorization", "Content-Type", "Mcp-Protocol-Version", "Mcp-Method", "Mcp-Name"],
 )
 
 
@@ -1937,16 +1972,16 @@ def _dump_model(model: BaseModel) -> Dict[str, Any]:
 
 
 class SwarmPreviewRequest(BaseModel):
-    objective: str
-    task_type: str = "implementation"
-    optimize_for: str = "reliability"
-    preferred_device: str = "auto"
+    objective: str = Field(min_length=1, max_length=4000)
+    task_type: Literal["implementation", "coding", "reasoning", "research", "ops"] = "implementation"
+    optimize_for: Literal["speed", "quality", "reliability"] = "reliability"
+    preferred_device: Literal["mac", "windows", "shared", "auto"] = "auto"
 
 
 class SwarmLaunchRequest(SwarmPreviewRequest):
-    approved: bool = False
-    preview_id: str | None = None
-    approval_token: str | None = None
+    approved: StrictBool = False
+    preview_id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+    approval_token: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
 
 
 _SWARM_PREVIEW_ROLES = [
@@ -2009,16 +2044,34 @@ async def _route_preview_assignment(
         )
         r.raise_for_status()
         data = r.json()
+        hint = next(
+            (
+                value.strip()
+                for key in ("backend_hint", "backend", "provider")
+                if isinstance((value := data.get(key)), str) and value.strip()
+            ),
+            None,
+        )
+        if hint and hint.lower() == "auto":
+            hint = None
+        model_hint = next(
+            (
+                value.strip()
+                for key in ("model_hint", "model", "model_id")
+                if isinstance((value := data.get(key)), str) and value.strip()
+            ),
+            None,
+        )
         return {
-            "backend_hint": data.get("backend_hint") or data.get("backend") or data.get("provider") or "auto",
-            "model_hint": data.get("model_hint") or data.get("model") or data.get("model_id"),
+            "backend_hint": hint,
+            "model_hint": model_hint,
             "routing_source": "pt:/models/route",
         }
-    except Exception:
-        return {}
+    except Exception as exc:
+        return {"routing_error": type(exc).__name__}
 
 
-def _fallback_backend_hint(role: str, hardware_policy: Dict[str, Any]) -> str:
+def _fallback_backend_hint(role: str, hardware_policy: Dict[str, Any]) -> str | None:
     safe_defaults = hardware_policy.get("safe_defaults", {}) if isinstance(hardware_policy, dict) else {}
     if role in {"context-agent", "architect-agent"} and safe_defaults.get("win"):
         return "lmstudio-win"
@@ -2026,10 +2079,14 @@ def _fallback_backend_hint(role: str, hardware_policy: Dict[str, Any]) -> str:
         return "lmstudio-mac"
     if safe_defaults.get("win"):
         return "lmstudio-win"
-    return "auto"
+    return None
 
 
-async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
+async def _build_swarm_preview(
+    req: SwarmPreviewRequest,
+    *,
+    with_approval: bool = True,
+) -> Dict[str, Any]:
     objective = req.objective.strip()
     if not objective:
         raise HTTPException(status_code=422, detail="objective is required")
@@ -2056,13 +2113,16 @@ async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
     assignments = []
     for base, route in zip(_SWARM_PREVIEW_ROLES, routed):
         backend_hint = route.get("backend_hint") or _fallback_backend_hint(base["role"], hardware_policy)
-        assignments.append({
+        assignment = {
             **base,
             "backend_hint": backend_hint,
             "model_hint": route.get("model_hint"),
             "routing_source": route.get("routing_source") or "portal:fallback",
             "dispatch_allowed": False,
-        })
+        }
+        if route.get("routing_error"):
+            assignment["routing_error"] = route["routing_error"]
+        assignments.append(assignment)
 
     preview = {
         "objective": objective,
@@ -2078,8 +2138,13 @@ async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
         "hardware_policy": hardware_policy,
         "assignments": assignments,
     }
-    preview.update(issue_approval(preview))
-    return preview
+    if not with_approval:
+        return preview
+    try:
+        approval = issue_approval(preview)
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {**preview, **approval}
 
 
 def _extract_pt_job_id(payload: Any) -> Optional[str]:
@@ -2238,19 +2303,62 @@ async def api_swarm_preview(req: SwarmPreviewRequest):
 
 @app.post("/api/swarm/launch")
 async def api_swarm_launch(req: SwarmLaunchRequest):
-    """Launch approved preview assignments as PT-owned jobs; orama stores no job state."""
-    preview = await _build_swarm_preview(req)
-    try:
-        verify_launch(
-            approved=req.approved,
-            preview_id=req.preview_id,
-            approval_token=req.approval_token,
-            preview=preview,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    """Launch the approved preview as PT-owned jobs; orama stores no job state.
 
-    hardware_policy = preview.get("hardware_policy", {})
+    Dispatch uses the cached preview from ``/api/swarm/preview``. Rebuilding
+    assignments here would mint a second token and fail the fingerprint check
+    whenever routing flickered.
+    """
+    stored = cached_preview(req.preview_id)
+    legacy = (
+        req.approved
+        and req.preview_id is None
+        and req.approval_token is None
+        and grandfather_legacy()
+    )
+    if stored is None and not legacy:
+        try:
+            check_launch(
+                approved=req.approved,
+                preview_id=req.preview_id,
+                approval_token=req.approval_token,
+                preview={},
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(status_code=422, detail="preview expired or unknown — call /api/swarm/preview again")
+    if stored is not None:
+        preview = stored
+        launch_preview = {
+            **preview,
+            "objective": req.objective.strip(),
+            "task_type": req.task_type,
+            "optimize_for": req.optimize_for,
+            "preferred_device": req.preferred_device,
+        }
+        try:
+            check_launch(
+                approved=req.approved,
+                preview_id=req.preview_id,
+                approval_token=req.approval_token,
+                preview=launch_preview,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        portal_status = await api_status()
+        hardware_policy = portal_status.get("hardware_policy", {})
+    else:
+        try:
+            check_launch(
+                approved=req.approved,
+                preview_id=req.preview_id,
+                approval_token=req.approval_token,
+                preview={},
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        preview = await _build_swarm_preview(req, with_approval=False)
+        hardware_policy = preview.get("hardware_policy", {})
     if not hardware_policy.get("ok", False):
         raise HTTPException(
             status_code=409,
@@ -2261,6 +2369,11 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 "accepted_jobs": [],
             },
         )
+    if stored is not None:
+        try:
+            consume_launch(req.preview_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     session_id = f"swarm-{uuid.uuid4().hex}"
     accepted_jobs: List[Dict[str, Any]] = []
@@ -2277,10 +2390,22 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 "verification_rubric": assignment["verification_rubric"],
                 "routing_source": assignment["routing_source"],
             }
+            model_hint = assignment.get("model_hint")
+            if isinstance(model_hint, str) and model_hint.strip():
+                metadata["model"] = model_hint.strip()
+            backend_hint = assignment.get("backend_hint")
+            if not backend_hint or str(backend_hint).strip().lower() == "auto":
+                backend_hint = None
             payload = {
                 "intent": assignment["intent"],
                 "prompt": preview["objective"],
-                "backend_hint": assignment["backend_hint"],
+                "backend_hint": backend_hint,
+                "task_type": preview["task_type"],
+                "role": assignment["role"],
+                "specialization": assignment["specialization"],
+                "session_id": session_id,
+                "parent_orchestrator_id": "orama-portal",
+                "artifact_policy": "summary_and_refs_only",
                 "constraints": {
                     "task_type": preview["task_type"],
                     "optimize_for": preview["optimize_for"],
@@ -2295,22 +2420,25 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 accepted_jobs.append({
                     "role": assignment["role"],
                     "job_id": _extract_pt_job_id(data),
-                    "response": data,
                 })
             except Exception as exc:
                 failed_jobs.append({
                     "role": assignment["role"],
                     "error": _client_safe_error(exc),
-                    "request": payload,
                 })
 
+    public_preview = {
+        key: value
+        for key, value in preview.items()
+        if key not in {"preview_id", "approval_token", "strict_mode"}
+    }
     return {
         "accepted": not failed_jobs,
         "blocked": False,
         "session_id": session_id,
         "accepted_jobs": accepted_jobs,
         "failed_jobs": failed_jobs,
-        "preview": preview,
+        "preview": public_preview,
     }
 
 
@@ -3121,7 +3249,8 @@ async def api_spawn_agent(req: SpawnAgentRequest):
             sys.path.insert(0, _pt_root)
         from orchestrator.alphaclaw_manager import validate_routing_affinity as _vra
         _agent_model = req.model
-        _agent_platform = "mac"
+        _agent_name = (req.agent or "").lower()
+        _agent_platform = "win" if "win" in _agent_name else "mac"
         if _agent_model:
             _vra(_agent_model, _agent_platform)
             log.info("[portal] affinity OK: %s → %s", _agent_model, _agent_platform)
