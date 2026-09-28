@@ -125,7 +125,7 @@ git pull --ff-only origin main
 |---------|---------|-------------------------|--------|
 | **P6** discovery hijack | `discovery_trust.py` filter before persist | Known peers from archive + `known-peers.json`; new peers need `ORAMA_APPROVE_DISCOVERY=1` or `--ack-peer` | `tests/test_discovery_trust.py` |
 | **P5** swarm bypass | HMAC `preview_id` + `approval_token` | `ORAMA_SWARM_LEGACY_APPROVE=1` (default) accepts old `approved: true` | `tests/test_swarm_approval.py` |
-| Gossip default-open | `start.sh` refuses LAN without secret | `GOSSIP_SHARED_SECRET` required when LAN bind | PT `_require_gossip_auth` on `PT_BIND_LAN=1` |
+| Gossip default-open | `start.sh` refuses LAN without secret | `GOSSIP_SHARED_SECRET` required when LAN bind | PT `require_gossip_auth` on `/gossip/*` when `PT_BIND_LAN=1` |
 | INSECURE+LAN | `start.sh` / `control_plane_auth.py` | `ORAMA_INSECURE_DEV` cannot disable auth on LAN bind | `tests/test_control_plane_auth.py` |
 | CSRF | middleware on mutating routes | origin check on portal auth paths | portal mutating-route tests |
 
@@ -150,7 +150,7 @@ ORAMA_APPROVE_DISCOVERY=1 python3 scripts/discover.py --persist
 ### Acceptance
 
 - [ ] `start.sh` succeeds on LAN with matching `GOSSIP_SHARED_SECRET` on all nodes
-- [ ] PT `POST /v1/gossip/*` returns 401 without secret when `PT_BIND_LAN=1`
+- [ ] PT `/gossip/*` (`POST /gossip/emit`, `GET /gossip/tail`): with `PT_BIND_LAN=1` and no `GOSSIP_SHARED_SECRET` → **503**; with secret configured but missing/wrong `x-gossip-secret` → **403**; with `PT_BIND_LAN` unset/false and no secret → allowed (loopback/dev)
 - [ ] Rogue `:1234` responder on subnet is **not** auto-persisted without ack
 - [ ] Swarm launch with bearer + `approved: true` still works (grandfather mode)
 - [ ] Swarm launch with invalid/missing token fails when `ORAMA_SWARM_LEGACY_APPROVE=0`
