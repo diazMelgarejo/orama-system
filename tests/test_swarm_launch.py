@@ -35,7 +35,7 @@ class _FakeLaunchClient:
 
     async def post(self, url: str, json=None, **kwargs):
         if url.endswith("/models/route"):
-            return _FakeResponse({"backend_hint": "lmstudio-mac"})
+            return _FakeResponse({"backend_hint": "lmstudio-mac", "model_hint": "Qwen3.5-9B-MLX-4bit"})
         if url.endswith("/v1/jobs"):
             self.submitted.append(json)
             role = json["metadata"]["role"]
@@ -55,6 +55,16 @@ def _portal_status(ok=True):
     }
 
 
+def _approved_payload(client, objective):
+    preview = client.post("/api/swarm/preview", json={"objective": objective}).json()
+    return {
+        "objective": objective,
+        "approved": True,
+        "preview_id": preview["preview_id"],
+        "approval_token": preview["approval_token"],
+    }
+
+
 def test_swarm_launch_requires_approval(monkeypatch):
     async def fake_api_status():
         return _portal_status()
@@ -67,6 +77,8 @@ def test_swarm_launch_requires_approval(monkeypatch):
 
 
 def test_swarm_launch_blocks_on_hardware_policy(monkeypatch):
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+
     async def fake_api_status():
         return _portal_status(ok=False)
 
@@ -78,7 +90,7 @@ def test_swarm_launch_blocks_on_hardware_policy(monkeypatch):
     with TestClient(portal_server.app, raise_server_exceptions=False) as client:
         response = client.post(
             "/api/swarm/launch",
-            json={"objective": "Ship launch", "approved": True},
+            json=_approved_payload(client, "Ship launch"),
         )
 
     assert response.status_code == 409
@@ -87,6 +99,8 @@ def test_swarm_launch_blocks_on_hardware_policy(monkeypatch):
 
 
 def test_swarm_launch_submits_metadata_compatible_pt_jobs(monkeypatch):
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+
     async def fake_api_status():
         return _portal_status()
 
@@ -98,7 +112,7 @@ def test_swarm_launch_submits_metadata_compatible_pt_jobs(monkeypatch):
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         response = client.post(
             "/api/swarm/launch",
-            json={"objective": "Ship launch", "approved": True},
+            json=_approved_payload(client, "Ship launch"),
         )
 
     assert response.status_code == 200
@@ -106,12 +120,16 @@ def test_swarm_launch_submits_metadata_compatible_pt_jobs(monkeypatch):
     assert body["accepted"] is True
     assert len(body["accepted_jobs"]) == 5
     first = _FakeLaunchClient.submitted[0]
-    assert set(first) == {"intent", "prompt", "backend_hint", "constraints", "metadata"}
+    assert first["role"] == "context-agent"
+    assert first["task_type"] == "implementation"
     assert first["metadata"]["role"] == "context-agent"
     assert first["metadata"]["artifact_policy"] == "summary_and_refs_only"
+    assert first["metadata"]["model"]
 
 
 def test_swarm_launch_returns_partial_dispatch_failure(monkeypatch):
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+
     async def fake_api_status():
         return _portal_status()
 
@@ -123,7 +141,7 @@ def test_swarm_launch_returns_partial_dispatch_failure(monkeypatch):
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         response = client.post(
             "/api/swarm/launch",
-            json={"objective": "Ship launch", "approved": True},
+            json=_approved_payload(client, "Ship launch"),
         )
 
     assert response.status_code == 200

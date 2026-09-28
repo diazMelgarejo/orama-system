@@ -137,6 +137,8 @@ const mockPreview: SwarmPreview = {
     ok: true,
     violations: [],
   },
+  preview_id: "mock-preview",
+  approval_token: "mock-approval-token",
 };
 
 const mockArtifacts: Artifact[] = [

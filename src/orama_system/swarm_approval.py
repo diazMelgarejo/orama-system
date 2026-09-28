@@ -29,7 +29,7 @@ def strict_mode() -> bool:
 def grandfather_legacy() -> bool:
     if strict_mode():
         return False
-    return os.environ.get("ORAMA_SWARM_LEGACY_APPROVE", "1").strip().lower() not in ("0", "false", "no")
+    return os.environ.get("ORAMA_SWARM_LEGACY_APPROVE", "0").strip().lower() not in ("0", "false", "no")
 
 
 def _fingerprint(preview: dict[str, Any]) -> str:
@@ -62,7 +62,24 @@ def _prune_cache() -> None:
         _cache.pop(oldest, None)
 
 
+def cached_preview(preview_id: str | None) -> dict[str, Any] | None:
+    """Return the preview stored at issue time, without consuming it."""
+    if not preview_id:
+        return None
+    entry = _cache.get(preview_id)
+    if not entry:
+        return None
+    _fp, ts, stored = entry
+    if time.time() - ts > _PREVIEW_TTL_SEC:
+        return None
+    if not isinstance(stored, dict):
+        return None
+    return stored
+
+
 def issue_approval(preview: dict[str, Any]) -> dict[str, str]:
+    if not _secret():
+        raise ValueError("swarm approval secret is not configured")
     _prune_cache()
     preview_id = secrets.token_hex(16)
     fp = _fingerprint(preview)

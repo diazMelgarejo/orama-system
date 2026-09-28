@@ -128,7 +128,7 @@ export function CommandCenter() {
 
       {appStateQuery.isError && (
         <div className="mt-2 rounded border border-status-err/40 bg-status-err/5 px-3 py-2 text-2xs text-status-err">
-          /api/app/state unreachable — showing mock state. Check that portal_server.py is running on port 8001.
+          /api/app/state unreachable — showing mock state. Check that portal_server.py is running on port 8002.
         </div>
       )}
     </Shell>

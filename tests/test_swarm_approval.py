@@ -9,6 +9,22 @@ from orama_system import swarm_approval
 pytestmark = pytest.mark.unit
 
 
+def test_legacy_approve_defaults_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
+    monkeypatch.delenv("ORAMA_SWARM_LEGACY_APPROVE", raising=False)
+    preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
+    with pytest.raises(ValueError, match="preview_id"):
+        swarm_approval.verify_launch(approved=True, preview_id=None, approval_token=None, preview=preview)
+
+
+def test_issue_requires_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ORAMA_SWARM_APPROVAL_SECRET", raising=False)
+    monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
+    monkeypatch.delenv("GOSSIP_SHARED_SECRET", raising=False)
+    with pytest.raises(ValueError, match="secret"):
+        swarm_approval.issue_approval({"objective": "x", "assignments": [], "task_type": "implementation"})
+
+
 def test_grandfather_legacy_approve(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
     monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "1")
