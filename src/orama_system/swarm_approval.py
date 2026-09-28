@@ -63,11 +63,15 @@ def _prune_cache() -> None:
 
 
 def issue_approval(preview: dict[str, Any]) -> dict[str, str]:
+    if not _secret():
+        raise ValueError("swarm approval secret is not configured")
     _prune_cache()
     preview_id = secrets.token_hex(16)
     fp = _fingerprint(preview)
     _cache[preview_id] = (fp, time.time(), preview)
     token = _sign(preview_id, fp)
+    if not token:
+        raise ValueError("swarm approval secret is not configured")
     return {"preview_id": preview_id, "approval_token": token, "strict_mode": strict_mode()}
 
 

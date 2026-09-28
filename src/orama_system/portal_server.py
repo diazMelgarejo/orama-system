@@ -2080,7 +2080,10 @@ async def _build_swarm_preview(req: SwarmPreviewRequest) -> Dict[str, Any]:
         "hardware_policy": hardware_policy,
         "assignments": assignments,
     }
-    preview.update(issue_approval(preview))
+    try:
+        preview.update(issue_approval(preview))
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     return preview
 
 

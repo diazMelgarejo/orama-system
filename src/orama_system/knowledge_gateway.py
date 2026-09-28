@@ -121,6 +121,16 @@ def _rpc_response(payload: dict[str, Any], status_code: int = 200) -> JSONRespon
     return JSONResponse(content=payload, status_code=status_code)
 
 
+async def _rpc_body(request: Request) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    try:
+        body = await request.json()
+    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
+        return None, _rpc_error(None, -32700, "Parse error")
+    if not isinstance(body, dict):
+        return None, _rpc_error(None, -32600, "Invalid Request")
+    return body, None
+
+
 def _text_from_a2a_message(params: Any) -> str:
     message = params.get("message", {}) if isinstance(params, dict) else {}
     parts = message.get("parts", []) if isinstance(message, dict) else []
@@ -138,9 +148,9 @@ def knowledge_search(q: str = Query(..., min_length=2, max_length=200), limit: i
 
 @router.post("/api/mcp", tags=["knowledge"], response_class=Response)
 async def mcp(request: Request) -> Response:
-    body = await request.json()
-    if not isinstance(body, dict):
-        return _rpc_response(_rpc_error(None, -32600, "Invalid Request"))
+    body, error = await _rpc_body(request)
+    if error is not None or body is None:
+        return _rpc_response(error or _rpc_error(None, -32600, "Invalid Request"))
     request_id = body.get("id")
     method = body.get("method")
     if request.headers.get("Mcp-Protocol-Version") != _PROTOCOL:
@@ -232,9 +242,9 @@ def agent_card(request: Request) -> dict[str, Any]:
 
 @router.post("/api/a2a", tags=["knowledge"])
 async def a2a(request: Request) -> dict[str, Any]:
-    body = await request.json()
-    if not isinstance(body, dict):
-        return _rpc_error(None, -32600, "Invalid Request")
+    body, error = await _rpc_body(request)
+    if error is not None or body is None:
+        return error or _rpc_error(None, -32600, "Invalid Request")
     request_id = body.get("id")
     method = body.get("method")
     if method == "message/send":

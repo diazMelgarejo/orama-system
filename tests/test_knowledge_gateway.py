@@ -143,6 +143,35 @@ def test_knowledge_router_enforces_operator_token_without_portal_middleware(tmp_
     assert allowed.json()["hits"][0]["path"] == "guide.md"
 
 
+def test_mcp_malformed_json_returns_parse_error(client):
+    response = client.post(
+        "/api/mcp",
+        headers={
+            "Mcp-Protocol-Version": "2026-07-28",
+            "Mcp-Method": "initialize",
+            "Content-Type": "application/json",
+        },
+        content="{not-json",
+    )
+    assert response.status_code == 200
+    assert response.json()["error"]["code"] == -32700
+
+
+def test_a2a_non_object_json_returns_invalid_request(client):
+    response = client.post("/api/a2a", json=["not", "an", "object"])
+    assert response.json()["error"]["code"] == -32600
+
+
+def test_a2a_malformed_json_returns_parse_error(client):
+    response = client.post(
+        "/api/a2a",
+        headers={"Content-Type": "application/json"},
+        content="{not-json",
+    )
+    assert response.status_code == 200
+    assert response.json()["error"]["code"] == -32700
+
+
 def test_knowledge_search_requires_bearer_when_enforced(monkeypatch):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "test-operator-bearer-not-a-real-secret")

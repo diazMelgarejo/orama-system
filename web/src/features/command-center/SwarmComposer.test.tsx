@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SwarmComposer } from "./SwarmComposer";
+import { previewSwarm } from "@/api/swarm";
 import type { SwarmPreview } from "@/api/swarm";
 
 vi.mock("@/api/swarm", () => ({
@@ -10,8 +11,11 @@ vi.mock("@/api/swarm", () => ({
 }));
 
 function renderComposer(previewData?: SwarmPreview) {
+  const client = new QueryClient({
+    defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+  });
   return render(
-    <QueryClientProvider client={new QueryClient()}>
+    <QueryClientProvider client={client}>
       <SwarmComposer previewData={previewData} />
     </QueryClientProvider>,
   );
@@ -49,5 +53,22 @@ describe("SwarmComposer launch gate", () => {
     });
     expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
     expect(screen.getByText(/hardware policy blocked this preview/i)).toBeInTheDocument();
+  });
+
+  it("keeps Context Profile under Advanced as a Phase-5 placeholder", () => {
+    renderComposer();
+    expect(screen.queryByRole("combobox", { name: /context profile/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("Context Profile")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /advanced options/i }));
+    expect(screen.getByText(/context profile/i)).toBeInTheDocument();
+    expect(screen.getByText(/coming Phase 5/i)).toBeInTheDocument();
+  });
+
+  it("shows preview errors instead of the Preview-first hint", async () => {
+    vi.mocked(previewSwarm).mockRejectedValueOnce(new Error("unreachable"));
+    renderComposer();
+    fireEvent.click(screen.getByRole("button", { name: "Preview Plan" }));
+    await waitFor(() => expect(screen.getByText(/preview failed/i)).toBeInTheDocument());
+    expect(screen.queryByText(/run preview first/i)).not.toBeInTheDocument();
   });
 });
