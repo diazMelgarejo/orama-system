@@ -92,7 +92,7 @@ function WorkerRow({ assignment }: { assignment: SwarmAssignment }) {
 
 export function WorkerAssignments({ preview }: WorkerAssignmentsProps) {
   const assignments = preview?.assignments ?? [];
-  const policyOk = preview?.hardware_policy?.ok ?? true;
+  const policyOk = preview?.hardware_policy?.ok ?? false;
   const violations = preview?.hardware_policy?.violations ?? [];
 
   return (

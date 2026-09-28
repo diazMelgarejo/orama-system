@@ -18,6 +18,13 @@ def test_issue_approval_fails_closed_without_secret(monkeypatch: pytest.MonkeyPa
         swarm_approval.issue_approval(preview)
     monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
     monkeypatch.delenv("ORAMA_SWARM_LEGACY_APPROVE", raising=False)
+    with pytest.raises(ValueError, match="preview_id"):
+        swarm_approval.verify_launch(approved=True, preview_id=None, approval_token=None, preview=preview)
+
+
+def test_legacy_approve_defaults_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
+    monkeypatch.delenv("ORAMA_SWARM_LEGACY_APPROVE", raising=False)
     preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
     with pytest.raises(ValueError, match="preview_id"):
         swarm_approval.verify_launch(approved=True, preview_id=None, approval_token=None, preview=preview)
