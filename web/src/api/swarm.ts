@@ -67,7 +67,7 @@ export interface SwarmLaunchResult {
   session_id: string;
   accepted_jobs: SwarmLaunchAcceptedJob[];
   failed_jobs: Array<{ role: string; error: string }>;
-  preview: Omit<SwarmPreview, "preview_id" | "approval_token">;
+  preview: Omit<SwarmPreview, "preview_id" | "approval_token" | "strict_mode">;
 }
 
 export const previewSwarm = (req: SwarmPreviewRequest, signal?: AbortSignal) =>

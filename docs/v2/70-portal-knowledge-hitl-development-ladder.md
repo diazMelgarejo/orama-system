@@ -75,7 +75,7 @@ stays in [`53-maestro-swarm-v2-redesign-critique.md`](53-maestro-swarm-v2-redesi
 
 | Portal class | Name | Example on the glass | Required gate (intent) | As-built on PR #368 |
 | --- | --- | --- | --- | --- |
-| 0 | Read | Knowledge search, MCP `search_docs`, A2A `message/send` (read-only tool) | Control-plane bearer | **Shipped** — see §4 |
+| 0 | Read | Knowledge search, MCP `search_docs`, A2A `message/send` (read-only tool) | Public read (no bearer); bounded scan | **Shipped** — see §4 |
 | 1 | Soft write | Config flag / label (future portal) | Bearer + explicit confirm | Not in this slice |
 | 2 | Dispatch | Swarm launch | Server `preview_id` + `approval_token` after Preview | **Shipped** HMAC preview → launch; UI sends both tokens; Launch disabled until tokens + `hardware_policy.ok` |
 | 3 | External / identity | OIDC / external API / financial write | Class-2 + verified identity | **Deferred** — see [`51-security-sentinel-orbit-passkey-mcp.md`](51-security-sentinel-orbit-passkey-mcp.md), [`61-pt-coordination-principal-identity-design.md`](61-pt-coordination-principal-identity-design.md) |
@@ -96,28 +96,24 @@ Phase C/D (Phase D remains the v2-launch strict cutover).
 ## 4. As-built for PR #368 / v2.1 (authoritative)
 
 Knowledge, MCP, and A2A routes live on `src/orama_system/knowledge_gateway.py`.
-The router is constructed with a FastAPI dependency that calls the existing
-control-plane verifier:
-
-```python
-def require_operator_token(request: Request) -> None:
-    verify_control_plane_auth(request)
-
-router = APIRouter(dependencies=[Depends(require_operator_token)])
-```
-
 `portal_server.py` mounts that router with `app.include_router(knowledge_router)`.
-Auth is **not** a leftover one-line human patch, **not** an `ImportError`
-stub of `portal_server.py`, and **not** deferred to merge time.
+Class-0 documentation search is **public read**: `portal_path_is_public()` in
+`utils/control_plane_auth.py` exempts `/api/knowledge/*`, `/api/mcp`,
+`/api/a2a`, and `/.well-known/agent-card.json` from the control-plane bearer
+middleware. Swarm preview/launch and the rest of the operator console remain
+behind operator auth.
 
 Same-origin `GET /api/knowledge/search` is Markdown FTS over the docs tree
-(no DB, no embeddings, no Redis). MCP Streamable HTTP uses protocol date
+(no DB, no embeddings, no Redis). Scans run in a worker thread with
+`ORAMA_KNOWLEDGE_MAX_FILES_SCAN`, `ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES`,
+and `ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S` caps so a single query cannot block
+swarm approval indefinitely. MCP Streamable HTTP uses protocol date
 `2026-07-28` (`server/discover` optional probe so clients are not −32601;
 dual-era `initialize` and `notifications/initialized` → 202 still accepted;
 `tools/list` / `tools/call` for read-only `search_docs`). A2A is
-synchronous `message/send` plus `GET /.well-known/agent-card.json` behind
-the same operator auth (intentional). Unicode search folds NFKD/casefold
-and excerpts from original text via an origin map.
+synchronous `message/send` plus `GET /.well-known/agent-card.json`.
+Unicode search folds NFKD/casefold and excerpts from original text via an
+origin map.
 
 Web glass: Docs nav → `KnowledgePortal`; SwarmComposer Preview-first with
 server-issued tokens. Portal listen port in operator-facing copy is

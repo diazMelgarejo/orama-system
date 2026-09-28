@@ -39,11 +39,15 @@ _SENSITIVE_TOP_LEVEL_KEYS = frozenset(
 _PUBLIC_PORTAL_PATHS = frozenset(
     {
         "/health",
+        "/.well-known/agent-card.json",
+        "/api/mcp",
+        "/api/a2a",
     }
 )
 
 _PUBLIC_PORTAL_PREFIXES = (
     "/assets/",
+    "/api/knowledge/",
 )
 
 

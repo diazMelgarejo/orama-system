@@ -10,10 +10,8 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from starlette.responses import JSONResponse
-
-from utils.control_plane_auth import verify_control_plane_auth
 
 # MCP Streamable HTTP protocol date from https://modelcontextprotocol.io/specification/2026-07-28
 _PROTOCOL = "2026-07-28"
@@ -25,14 +23,41 @@ _SERVER_INFO = {"name": "orama-knowledge", "version": "1.0.0"}
 _SERVER_INFO_META = "io.modelcontextprotocol/serverInfo"
 _QUERY_INVALID = "query must be a string of 2 to 200 characters"
 _TEXT_PARTS_INVALID = "text parts must be strings"
+def _max_files_scan() -> int:
+    return max(1, int(os.getenv("ORAMA_KNOWLEDGE_MAX_FILES_SCAN", "2000")))
 
 
-def require_operator_token(request: Request) -> None:
-    """Same operator-token gate as the portal HTTP middleware, on this router."""
-    verify_control_plane_auth(request)
+def _max_concurrent_searches() -> int:
+    return max(1, int(os.getenv("ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES", "4")))
 
 
-router = APIRouter(dependencies=[Depends(require_operator_token)])
+def _search_timeout_s() -> float:
+    return max(0.5, float(os.getenv("ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S", "8")))
+_SEARCH_TIMEOUT_DETAIL = "documentation search timed out; retry with a narrower query"
+
+_search_sem: asyncio.Semaphore | None = None
+
+
+def _search_semaphore() -> asyncio.Semaphore:
+    global _search_sem
+    if _search_sem is None:
+        _search_sem = asyncio.Semaphore(_max_concurrent_searches())
+    return _search_sem
+
+
+async def _bounded_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
+    """Run Markdown scan off the event loop with concurrency and time limits."""
+    async with _search_semaphore():
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(_search_docs, query, limit),
+                timeout=_search_timeout_s(),
+            )
+        except TimeoutError:
+            raise HTTPException(status_code=503, detail=_SEARCH_TIMEOUT_DETAIL) from None
+
+
+router = APIRouter()
 
 
 def _fold(text: str) -> str:
@@ -85,7 +110,11 @@ def _search_docs(query: str, limit: int = 8) -> list[dict[str, Any]]:
         return []
     root = _docs_root().resolve()
     hits: list[tuple[int, dict[str, Any]]] = []
+    scanned = 0
     for path in root.rglob("*.md"):
+        scanned += 1
+        if scanned > _max_files_scan():
+            break
         try:
             resolved = path.resolve()
             resolved.relative_to(root)
@@ -173,11 +202,12 @@ def _text_from_a2a_message(params: Any) -> str:
 
 
 @router.get("/api/knowledge/search", tags=["knowledge"])
-def knowledge_search(
+async def knowledge_search(
     q: str = Query(..., min_length=2, max_length=_QUERY_MAX),
     limit: int = Query(8, ge=1, le=20),
 ) -> dict[str, Any]:
-    return {"query": q, "hits": _search_docs(q, limit), "read_only": True}
+    hits = await _bounded_search(q, limit)
+    return {"query": q, "hits": hits, "read_only": True}
 
 
 @router.post("/api/mcp", tags=["knowledge"], response_class=Response)
@@ -232,7 +262,13 @@ async def mcp(request: Request) -> Response:
             query = _bounded_query(query)
         except ValueError:
             return _rpc_response(_rpc_error(request_id, -32602, _QUERY_INVALID))
-        hits = await asyncio.to_thread(_search_docs, query)
+        try:
+            hits = await _bounded_search(query)
+        except HTTPException as exc:
+            if exc.status_code == 503:
+                detail = exc.detail if isinstance(exc.detail, str) else _SEARCH_TIMEOUT_DETAIL
+                return _rpc_response(_rpc_error(request_id, -32000, detail))
+            raise
         return _rpc_response(
             _rpc_result(
                 request_id,
@@ -286,7 +322,13 @@ async def a2a(request: Request) -> dict[str, Any]:
             query = _bounded_query(query, already_stripped=True)
         except ValueError:
             return _rpc_error(request_id, -32602, _QUERY_INVALID)
-        hits = await asyncio.to_thread(_search_docs, query)
+        try:
+            hits = await _bounded_search(query)
+        except HTTPException as exc:
+            if exc.status_code == 503:
+                detail = exc.detail if isinstance(exc.detail, str) else _SEARCH_TIMEOUT_DETAIL
+                return _rpc_error(request_id, -32000, detail)
+            raise
         return _rpc_result(
             request_id,
             {

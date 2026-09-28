@@ -82,6 +82,7 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
   const [optimize, setOptimize] = useState<OptimizeFor>("quality");
   const [device, setDevice] = useState<PreferredDevice>("auto");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [launchedPreviewId, setLaunchedPreviewId] = useState<string | null>(null);
 
   const previewMutation = useMutation({
     mutationFn: () =>
@@ -91,7 +92,10 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
         optimize_for: optimize,
         preferred_device: device,
       }),
-    onSuccess: (data) => onPreview?.(data),
+    onSuccess: (data) => {
+      setLaunchedPreviewId(null);
+      onPreview?.(data);
+    },
   });
 
   const launchMutation = useMutation({
@@ -105,7 +109,12 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
         preview_id: previewData?.preview_id ?? "",
         approval_token: previewData?.approval_token ?? "",
       }),
-    onSuccess: (data) => onLaunch?.(data),
+    onSuccess: (data) => {
+      if (previewData?.preview_id) {
+        setLaunchedPreviewId(previewData.preview_id);
+      }
+      onLaunch?.(data);
+    },
   });
 
   const charCount = objective.length;
@@ -119,7 +128,9 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
     previewData?.optimize_for === optimize &&
     previewData?.preferred_device === device;
   const canPreview = objective.trim().length >= 6;
-  const canLaunch = canPreview && hasApproval && hardwareOk && previewMatches;
+  const approvalUnused =
+    Boolean(previewData?.preview_id) && previewData?.preview_id !== launchedPreviewId;
+  const canLaunch = canPreview && hasApproval && hardwareOk && previewMatches && approvalUnused;
   const needsPreview = canPreview && (!hasApproval || !previewMatches);
   const actionError = previewMutation.isError
     ? "preview failed"
