@@ -22,6 +22,7 @@ class _FakeResponse:
 
 class _FakeRouteClient:
     fail = False
+    posts: list = []
 
     def __init__(self, *args, **kwargs):
         pass
@@ -33,6 +34,7 @@ class _FakeRouteClient:
         return False
 
     async def post(self, url: str, json=None, **kwargs):
+        self.posts.append(json)
         if self.fail:
             raise RuntimeError("route unavailable")
         return _FakeResponse({
@@ -60,6 +62,7 @@ def test_swarm_preview_returns_worker_assignments(monkeypatch):
 
     monkeypatch.setattr(portal_server, "api_status", fake_api_status)
     _FakeRouteClient.fail = False
+    _FakeRouteClient.posts = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
@@ -91,6 +94,7 @@ def test_swarm_preview_includes_backend_hints(monkeypatch):
 
     monkeypatch.setattr(portal_server, "api_status", fake_api_status)
     _FakeRouteClient.fail = False
+    _FakeRouteClient.posts = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
@@ -101,6 +105,10 @@ def test_swarm_preview_includes_backend_hints(monkeypatch):
     assert first["backend_hint"] == "pt-context-agent"
     assert first["model_hint"] == "model-for-preview"
     assert first["routing_source"] == "pt:/models/route"
+    posted = {item["role"]: item["specialization"] for item in _FakeRouteClient.posts}
+    assert posted["context-agent"] == "codebase-map"
+    assert posted["executor-agent"] == "code-change"
+    assert all("specialization" in item for item in _FakeRouteClient.posts)
 
 
 def test_swarm_preview_marks_routing_fallback(monkeypatch):
@@ -109,6 +117,7 @@ def test_swarm_preview_marks_routing_fallback(monkeypatch):
 
     monkeypatch.setattr(portal_server, "api_status", fake_api_status)
     _FakeRouteClient.fail = True
+    _FakeRouteClient.posts = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:

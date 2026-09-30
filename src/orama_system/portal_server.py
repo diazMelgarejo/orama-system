@@ -110,12 +110,29 @@ logging.basicConfig(level=logging.INFO)
 VERSION = "1.1.1.0"
 
 _CLIENT_ERROR_FALLBACK = "Request failed"
+_REPLAY_UPSTREAM_DETAILS = frozenset({
+    "Job not found",
+    "Job is not replayable",
+    "Job has no queued specification",
+})
 
 
 def _client_safe_error(exc: BaseException, *, fallback: str = _CLIENT_ERROR_FALLBACK) -> str:
     """Log full exception server-side; return a generic client-safe message."""
     log.warning("request error: %s", exc, exc_info=True)
     return fallback
+
+
+def _replay_upstream_detail(response: Any) -> str:
+    """Return a known Perpetua replay detail, or the generic client fallback."""
+    try:
+        body = response.json()
+    except Exception:
+        return _CLIENT_ERROR_FALLBACK
+    detail = body.get("detail") if isinstance(body, dict) else None
+    if isinstance(detail, str) and detail in _REPLAY_UPSTREAM_DETAILS:
+        return detail
+    return _CLIENT_ERROR_FALLBACK
 
 
 # ── IP Resolution (authoritative — reads openclaw.json, never stale hardcodes) ─
@@ -2029,6 +2046,7 @@ async def _route_preview_assignment(
     objective: str,
     task_type: str,
     role: str,
+    specialization: str,
     preferred_device: str,
 ) -> Dict[str, Any]:
     try:
@@ -2038,6 +2056,7 @@ async def _route_preview_assignment(
                 "objective": objective,
                 "task_type": task_type,
                 "role": role,
+                "specialization": specialization,
                 "preferred_device": preferred_device,
             },
             timeout=PROBE_TIMEOUT,
@@ -2104,6 +2123,7 @@ async def _build_swarm_preview(
                     objective=objective,
                     task_type=req.task_type,
                     role=item["role"],
+                    specialization=item["specialization"],
                     preferred_device=req.preferred_device,
                 )
                 for item in _SWARM_PREVIEW_ROLES
@@ -2524,11 +2544,20 @@ async def api_job_replay_proxy(job_id: str):
             - `source`: The upstream route used (`pt:/v1/jobs/{job_id}/replay`).
             - `result`: The upstream JSON response when `available` is True, `None` on failure.
             - `error`: A client-safe error message present when `available` is False.
+            - `upstream_status`: The Perpetua HTTP status when the replay request
+              returned an error response.
     """
     async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/replay")
-            r.raise_for_status()
+            if r.status_code >= 400:
+                return {
+                    "available": False,
+                    "source": "pt:/v1/jobs/{job_id}/replay",
+                    "result": None,
+                    "upstream_status": r.status_code,
+                    "error": _replay_upstream_detail(r),
+                }
             return {
                 "available": True,
                 "source": "pt:/v1/jobs/{job_id}/replay",

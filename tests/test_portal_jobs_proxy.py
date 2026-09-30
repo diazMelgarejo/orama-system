@@ -490,4 +490,29 @@ def test_jobs_proxy_replay_pt_404_error(monkeypatch):
     body = response.json()
     assert body["available"] is False
     assert body["result"] is None
-    assert body["error"]
+    assert body["error"] == "Request failed"
+    assert body["upstream_status"] == 404
+
+
+def test_jobs_proxy_replay_forwards_not_replayable(monkeypatch):
+    """PT 409 'Job is not replayable' stays a distinct portal error."""
+
+    class _NotReplayable(_FakeJobsClient):
+        async def post(self, url: str, json=None, **kwargs):
+            self.calls.append(("POST", url, json))
+            return _FakeResponse(
+                {"detail": "Job is not replayable"},
+                status_code=409,
+            )
+
+    _NotReplayable.fail = False
+    _NotReplayable.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _NotReplayable)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/jobs/job-1/replay")
+
+    body = response.json()
+    assert body["available"] is False
+    assert body["upstream_status"] == 409
+    assert body["error"] == "Job is not replayable"
