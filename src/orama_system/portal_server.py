@@ -111,6 +111,7 @@ VERSION = "1.1.1.0"
 
 _CLIENT_ERROR_FALLBACK = "Request failed"
 _REPLAY_UPSTREAM_DETAILS = frozenset({
+    # Keep in lockstep with Perpetua-Tools _replay_value_error_to_http.
     "Job not found",
     "Job is not replayable",
     "Job has no queued specification",

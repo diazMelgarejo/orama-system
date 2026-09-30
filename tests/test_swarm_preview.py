@@ -2,6 +2,8 @@
 """Tests for stateless swarm preview generation."""
 from __future__ import annotations
 
+from typing import ClassVar
+
 from fastapi.testclient import TestClient
 
 import orama_system.portal_server as portal_server
@@ -21,8 +23,10 @@ class _FakeResponse:
 
 
 class _FakeRouteClient:
+    """Shared recorder for swarm-preview route posts."""
+
     fail = False
-    posts: list = []
+    posts: ClassVar[list] = []
 
     def __init__(self, *args, **kwargs):
         pass
