@@ -88,6 +88,7 @@ from utils.control_plane_auth import (
     redact_agents_payload,
     redact_jobs_payload,
     redact_job_record,
+    redact_jobs_list,
     redact_models_payload,
     redact_portal_status_payload,
     redact_runtime_section,
@@ -2470,7 +2471,12 @@ async def api_jobs_proxy(status: Optional[str] = None):
         try:
             r = await client.get(f"{PT_URL}/v1/jobs", params=params)
             r.raise_for_status()
-            return {"available": True, "source": "pt:/v1/jobs", "jobs": _normalize_jobs_payload(r.json())}
+            raw = r.json()
+            return {
+                "available": True,
+                "source": "pt:/v1/jobs",
+                "jobs": redact_jobs_list(raw),
+            }
         except Exception as exc:
             return {
                 "available": False,
@@ -3090,13 +3096,18 @@ async def api_configure_tool(req: ConfigureToolRequest):
 
 @app.get("/api/v1/jobs")
 async def api_get_jobs(status: Optional[str] = None):
-    """Proxy to PT's /v1/jobs — used by the supervisor jobs panel JS poller."""
+    """Proxy to PT's /v1/jobs — used by the supervisor jobs panel JS poller.
+
+    Returns a **bare JSON list** (not ``{"jobs": [...]}``) so ``refreshJobs()``
+    can use ``jobs.length``. Each element is redacted; prompt and metadata never
+    leave the portal.
+    """
     params = {"status": status} if status else {}
     async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs", params=params)
             r.raise_for_status()
-            return r.json()
+            return redact_jobs_list(r.json())
         except Exception as exc:
             return []
 

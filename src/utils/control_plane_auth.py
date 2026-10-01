@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import secrets
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Mapping, MutableMapping
 
@@ -514,6 +515,28 @@ def redact_operator_value(value: Any) -> Any:
     return value
 
 
+def _coerce_job_epoch_seconds(value: Any) -> float | None:
+    """Normalize supervisor timestamps for portal pollers (ISO ``ts`` or unix)."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            return float(cleaned)
+        except ValueError:
+            pass
+        iso = cleaned.replace("Z", "+00:00")
+        try:
+            return datetime.fromisoformat(iso).timestamp()
+        except ValueError:
+            return None
+    return None
+
+
 def redact_runtime_section(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {"available": False}
@@ -531,27 +554,72 @@ def redact_runtime_section(payload: Any) -> dict[str, Any]:
 
 
 def redact_job_record(job: Mapping[str, Any]) -> dict[str, Any]:
+    """Return one supervisor job safe for portal list/detail views.
+
+    Drops ``prompt``, ``metadata``, ``spec``, and ``result``. Keeps the columns
+    the embedded jobs table renders (``intent``, ``status``, ``backend``,
+    timestamps, ``elapsed_s``), hoisting ``backend_hint`` / ``intent`` /
+    ``role`` from a nested ``spec`` when the lifecycle event omits top-level
+    copies.
+    """
     safe: dict[str, Any] = {}
-    for key in ("id", "job_id", "status", "role", "intent", "backend_hint", "created_at", "updated_at"):
+    for key in (
+        "id",
+        "job_id",
+        "status",
+        "role",
+        "intent",
+        "backend_hint",
+        "backend",
+        "created_at",
+        "updated_at",
+        "elapsed_s",
+    ):
         if key in job and job[key] is not None:
             safe[key] = job[key]
+    spec = job.get("spec")
+    if isinstance(spec, dict):
+        for key in ("intent", "role", "backend_hint"):
+            if key not in safe and spec.get(key) is not None:
+                safe[key] = spec[key]
+    if "backend" not in safe:
+        hint = safe.get("backend_hint")
+        if hint is not None:
+            safe["backend"] = hint
+    created_epoch = _coerce_job_epoch_seconds(
+        safe.get("created_at", job.get("created_at"))
+    )
+    if created_epoch is None:
+        created_epoch = _coerce_job_epoch_seconds(job.get("ts"))
+    if created_epoch is not None:
+        safe["created_at"] = created_epoch
+    updated_epoch = _coerce_job_epoch_seconds(
+        safe.get("updated_at", job.get("updated_at"))
+    )
+    if updated_epoch is not None:
+        safe["updated_at"] = updated_epoch
+    if "elapsed_s" not in safe:
+        if created_epoch is not None and updated_epoch is not None and updated_epoch >= created_epoch:
+            safe["elapsed_s"] = updated_epoch - created_epoch
     if "id" not in safe and "job_id" in safe:
         safe["id"] = safe["job_id"]
     return safe
 
 
-def redact_jobs_payload(payload: Any) -> dict[str, Any]:
-    jobs: list[dict[str, Any]] = []
-    if isinstance(payload, dict):
-        raw_jobs = payload.get("jobs", [])
-    elif isinstance(payload, list):
+def redact_jobs_list(payload: Any) -> list[dict[str, Any]]:
+    """Redact each job and return a bare list for ``GET /api/v1/jobs`` pollers."""
+    if isinstance(payload, list):
         raw_jobs = payload
+    elif isinstance(payload, dict):
+        candidate = payload.get("jobs", [])
+        raw_jobs = candidate if isinstance(candidate, list) else []
     else:
         raw_jobs = []
-    if isinstance(raw_jobs, list):
-        for item in raw_jobs:
-            if isinstance(item, dict):
-                jobs.append(redact_job_record(item))
+    return [redact_job_record(item) for item in raw_jobs if isinstance(item, dict)]
+
+
+def redact_jobs_payload(payload: Any) -> dict[str, Any]:
+    jobs = redact_jobs_list(payload)
     return {"jobs": jobs, "count": len(jobs)}
 
 
