@@ -12,14 +12,19 @@ import orama_system.portal_server as portal_server
 
 
 class _FakeResponse:
+    """Minimal httpx response stub for swarm preview route tests."""
+
     def __init__(self, payload, status_code: int = 200):
+        """Initialize the test double."""
         self._payload = payload
         self.status_code = status_code
 
     def json(self):
+        """Return the JSON body."""
         return self._payload
 
     def raise_for_status(self):
+        """Raise when the HTTP status indicates failure."""
         if self.status_code >= 400:
             raise RuntimeError(f"HTTP {self.status_code}")
 
@@ -31,15 +36,19 @@ class _FakeRouteClient:
     posts: ClassVar[list] = []
 
     def __init__(self, *args, **kwargs):
+        """Initialize the test double."""
         pass
 
     async def __aenter__(self):
+        """Enter the async context manager."""
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
+        """Exit the async context manager."""
         return False
 
     async def post(self, url: str, json=None, **kwargs):
+        """Handle a POST request in the fake client."""
         self.posts.append(json)
         if self.fail:
             raise RuntimeError("route unavailable")
@@ -50,6 +59,7 @@ class _FakeRouteClient:
 
 
 def _portal_status():
+    """Support  portal status."""
     return {
         "hardware_policy": {
             "ok": True,
@@ -100,6 +110,7 @@ def test_swarm_preview_returns_worker_assignments(monkeypatch):
 
 
 def test_swarm_preview_rejects_empty_objective():
+    """Verify swarm preview rejects empty objective."""
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         response = client.post("/api/swarm/preview", json={"objective": "   "})
 
@@ -107,6 +118,7 @@ def test_swarm_preview_rejects_empty_objective():
 
 
 def test_swarm_preview_includes_backend_hints(monkeypatch):
+    """Verify swarm preview includes backend hints."""
     _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = False
     _FakeRouteClient.posts = []
@@ -127,6 +139,7 @@ def test_swarm_preview_includes_backend_hints(monkeypatch):
 
 
 def test_swarm_preview_marks_routing_fallback(monkeypatch):
+    """Verify swarm preview marks routing fallback."""
     _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = True
     _FakeRouteClient.posts = []

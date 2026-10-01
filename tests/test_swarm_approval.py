@@ -9,6 +9,7 @@ pytestmark = pytest.mark.unit
 
 @pytest.fixture(autouse=True)
 def _isolated_swarm_approval_state(monkeypatch: pytest.MonkeyPatch):
+    """Reset swarm approval module state for isolation."""
     swarm_approval._cache.clear()
     for key in (
         "ORAMA_SWARM_APPROVAL_SECRET",
@@ -23,6 +24,7 @@ def _isolated_swarm_approval_state(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_issue_approval_fails_closed_without_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify issue approval fails closed without secret."""
     preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
     with pytest.raises(ValueError, match="secret"):
         swarm_approval.issue_approval(preview)
@@ -31,6 +33,7 @@ def test_issue_approval_fails_closed_without_secret(monkeypatch: pytest.MonkeyPa
 
 
 def test_legacy_approve_defaults_fail_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify legacy approve defaults fail closed."""
     monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
     monkeypatch.delenv("ORAMA_SWARM_LEGACY_APPROVE", raising=False)
     preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
@@ -39,6 +42,7 @@ def test_legacy_approve_defaults_fail_closed(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_grandfather_legacy_approve(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify grandfather legacy approve."""
     monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
     monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "1")
     preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
@@ -46,6 +50,7 @@ def test_grandfather_legacy_approve(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_legacy_empty_env_does_not_grandfather(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify legacy empty env does not grandfather."""
     monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
     monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "")
     assert swarm_approval.grandfather_legacy() is False
@@ -55,6 +60,7 @@ def test_legacy_empty_env_does_not_grandfather(monkeypatch: pytest.MonkeyPatch) 
 
 
 def test_legacy_rejects_blank_preview_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify legacy rejects blank preview credentials."""
     monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
     monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "1")
     preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
@@ -63,6 +69,7 @@ def test_legacy_rejects_blank_preview_credentials(monkeypatch: pytest.MonkeyPatc
 
 
 def test_strict_requires_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify strict requires token."""
     monkeypatch.setenv("ORAMA_SWARM_STRICT", "1")
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
@@ -71,6 +78,7 @@ def test_strict_requires_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_issue_and_verify_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify issue and verify token."""
     monkeypatch.setenv("ORAMA_SWARM_STRICT", "1")
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {"objective": "ship", "assignments": [{"role": "a"}], "task_type": "implementation"}
@@ -112,6 +120,7 @@ def test_issue_and_verify_token(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_cached_preview_is_isolated_from_caller_mutation(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify cached preview is isolated from caller mutation."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {
         "objective": "ship",
@@ -137,6 +146,7 @@ def test_cached_preview_is_isolated_from_caller_mutation(monkeypatch: pytest.Mon
 
 
 def test_cached_preview_evicts_expired_entry(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify cached preview evicts expired entry."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
     issued = swarm_approval.issue_approval(preview)
@@ -153,6 +163,7 @@ def test_cached_preview_evicts_expired_entry(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_cache_never_exceeds_max_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify cache never exceeds max size."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {"objective": "x", "assignments": [], "task_type": "implementation"}
 
@@ -174,6 +185,7 @@ def test_fingerprint_covers_all_dispatched_options(
     field: str,
     changed: str,
 ) -> None:
+    """Verify fingerprint covers all dispatched options."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {
         "objective": "ship",
@@ -220,6 +232,7 @@ def test_claim_launch_is_exclusive(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_check_launch_does_not_consume_but_consume_is_single_use(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Verify check launch does not consume but consume is single use."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {"objective": "ship", "assignments": [], "task_type": "implementation"}
     issued = swarm_approval.issue_approval(preview)
@@ -238,6 +251,7 @@ def test_check_launch_does_not_consume_but_consume_is_single_use(
 
 
 def test_token_without_explicit_approval_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify token without explicit approval rejected."""
     monkeypatch.setenv("ORAMA_SWARM_STRICT", "1")
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {"objective": "ship", "assignments": [], "task_type": "implementation"}
@@ -252,6 +266,7 @@ def test_token_without_explicit_approval_rejected(monkeypatch: pytest.MonkeyPatc
 
 
 def test_approval_is_single_use(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Verify approval is single use."""
     monkeypatch.setenv("ORAMA_SWARM_STRICT", "1")
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {"objective": "once", "assignments": [], "task_type": "implementation"}

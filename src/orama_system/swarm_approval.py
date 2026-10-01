@@ -19,6 +19,7 @@ _dispatch_lock = threading.Lock()
 
 
 def _secret() -> str:
+    """Return the first configured HMAC secret for swarm approval tokens."""
     for key in ("ORAMA_SWARM_APPROVAL_SECRET", "ORAMA_CONTROL_PLANE_TOKEN", "GOSSIP_SHARED_SECRET"):
         val = os.environ.get(key, "").strip()
         if val:
@@ -27,16 +28,19 @@ def _secret() -> str:
 
 
 def strict_mode() -> bool:
+    """Return whether preview credentials are mandatory for every launch."""
     return os.environ.get("ORAMA_SWARM_STRICT", "").strip().lower() in ("1", "true", "yes")
 
 
 def grandfather_legacy() -> bool:
+    """Return whether boolean-only approval is still accepted (non-strict legacy)."""
     if strict_mode():
         return False
     return os.environ.get("ORAMA_SWARM_LEGACY_APPROVE", "0").strip().lower() in ("1", "true", "yes")
 
 
 def _fingerprint(preview: dict[str, Any]) -> str:
+    """Hash the dispatch-relevant preview fields used for drift detection."""
     payload = {
         "objective": preview.get("objective"),
         "assignments": preview.get("assignments"),
@@ -48,6 +52,7 @@ def _fingerprint(preview: dict[str, Any]) -> str:
 
 
 def _sign(preview_id: str, fingerprint: str) -> str:
+    """Compute the HMAC approval token for a preview id and fingerprint."""
     secret = _secret()
     if not secret:
         return ""
@@ -59,6 +64,7 @@ def _sign(preview_id: str, fingerprint: str) -> str:
 
 
 def _prune_cache() -> None:
+    """Drop expired previews and enforce the in-memory cache size cap."""
     now = time.time()
     for preview_id, (_, ts, _) in list(_cache.items()):
         if now - ts > _PREVIEW_TTL_SEC:
@@ -85,6 +91,7 @@ def cached_preview(preview_id: str | None) -> dict[str, Any] | None:
 
 
 def issue_approval(preview: dict[str, Any]) -> dict[str, Any]:
+    """Mint ``preview_id`` / ``approval_token`` credentials for a preview payload."""
     if not _secret():
         raise ValueError("swarm approval secret is not configured")
     _prune_cache()
@@ -105,6 +112,7 @@ def check_launch(
     approval_token: str | None,
     preview: dict[str, Any],
 ) -> None:
+    """Validate approval credentials and preview drift without consuming the cache entry."""
     omitted = preview_id is None and approval_token is None
     preview_id = (preview_id or "").strip()
     approval_token = (approval_token or "").strip()
@@ -217,6 +225,7 @@ def verify_launch(
     approval_token: str | None,
     preview: dict[str, Any],
 ) -> None:
+    """Validate credentials and atomically consume the preview (legacy verify path)."""
     check_launch(
         approved=approved,
         preview_id=preview_id,

@@ -9,32 +9,43 @@ import orama_system.portal_server as portal_server
 
 
 class _FakeResponse:
+    """Minimal httpx response stub for jobs proxy tests."""
+
     def __init__(self, payload, status_code: int = 200):
+        """Initialize the test double."""
         self._payload = payload
         self.status_code = status_code
 
     def json(self):
+        """Return the JSON body."""
         return self._payload
 
     def raise_for_status(self):
+        """Raise when the HTTP status indicates failure."""
         if self.status_code >= 400:
             raise RuntimeError(f"HTTP {self.status_code}")
 
 
 class _FakeJobsClient:
+    """Record Perpetua job proxy HTTP calls for assertions."""
+
     fail = False
     calls = []
 
     def __init__(self, *args, **kwargs):
+        """Initialize the test double."""
         pass
 
     async def __aenter__(self):
+        """Enter the async context manager."""
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
+        """Exit the async context manager."""
         return False
 
     async def get(self, url: str, **kwargs):
+        """Handle a GET request in the fake client."""
         self.calls.append(("GET", url, kwargs))
         if self.fail:
             raise RuntimeError("pt down")
@@ -100,6 +111,7 @@ def test_jobs_proxy_lists_pt_jobs(monkeypatch):
 
 
 def test_jobs_proxy_gets_detail(monkeypatch):
+    """Verify jobs proxy gets detail."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -134,6 +146,7 @@ def test_jobs_proxy_cancel_posts_to_pt(monkeypatch):
 
 
 def test_jobs_proxy_replay_posts_to_pt(monkeypatch):
+    """Verify jobs proxy replay posts to pt."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -151,6 +164,7 @@ def test_jobs_proxy_replay_posts_to_pt(monkeypatch):
 
 
 def test_jobs_proxy_handles_pt_down(monkeypatch):
+    """Verify jobs proxy handles pt down."""
     _FakeJobsClient.fail = True
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -456,6 +470,7 @@ class _FakeJobsClientNotFound(_FakeJobsClient):
     """Returns a 404 HTTP error response for cancel and replay calls."""
 
     async def post(self, url: str, json=None, **kwargs):
+        """Handle a POST request in the fake client."""
         self.calls.append(("POST", url, json))
         if url.endswith("/cancel") or url.endswith("/replay"):
             return _FakeResponse({"detail": "not found"}, status_code=404)
@@ -501,12 +516,15 @@ def test_jobs_proxy_replay_forwards_not_replayable(
     """PT 409 'Job is not replayable' stays a distinct portal error."""
 
     class _NotReplayable(_FakeJobsClient):
+        """Simulate Perpetua replay rejection with HTTP 409."""
+
         async def post(
             self,
             url: str,
             json: object = None,
             **kwargs: object,
         ) -> _FakeResponse:
+            """Handle a POST request in the fake client."""
             self.calls.append(("POST", url, json))
             return _FakeResponse(
                 {"detail": "Job is not replayable"},
