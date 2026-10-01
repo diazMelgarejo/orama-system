@@ -33,8 +33,8 @@ def test_redact_job_record_strips_prompt_and_metadata() -> None:
 
 
 @pytest.mark.unit
-def test_redact_job_record_normalizes_iso_ts_to_epoch_for_panel() -> None:
-    """Map ISO ``ts`` to float epoch seconds for the jobs table."""
+def test_redact_job_record_treats_event_ts_as_updated_at() -> None:
+    """A lone lifecycle ``ts`` is the event time, not the job start."""
     safe = redact_job_record(
         {
             "job_id": "j1",
@@ -43,8 +43,28 @@ def test_redact_job_record_normalizes_iso_ts_to_epoch_for_panel() -> None:
             "ts": "2026-10-01T12:00:00+00:00",
         }
     )
+    assert "created_at" not in safe
+    assert safe["updated_at"] == 1790856000.0
+    assert "elapsed_s" not in safe
+
+
+@pytest.mark.unit
+def test_redact_job_record_elapsed_uses_created_and_updated() -> None:
+    """Elapsed time comes from explicit start and latest timestamps."""
+    safe = redact_job_record(
+        {
+            "job_id": "j1",
+            "status": "SUCCEEDED",
+            "intent": "echo",
+            "backend_hint": "echo",
+            "created_at": "2026-10-01T12:00:00+00:00",
+            "updated_at": "2026-10-01T12:00:05+00:00",
+        }
+    )
     assert safe["created_at"] == 1790856000.0
-    assert isinstance(safe["created_at"], float)
+    assert safe["updated_at"] == 1790856005.0
+    assert safe["elapsed_s"] == 5.0
+    assert safe["backend"] == "echo"
 
 
 @pytest.mark.unit
@@ -113,7 +133,8 @@ def test_redact_jobs_list_skips_malformed_row_without_breaking_list() -> None:
     listed = redact_jobs_list(payload)
     assert len(listed) == 2
     assert listed[0]["job_id"] == "ok"
-    assert listed[1]["created_at"] == 1790856000.0
+    assert "created_at" not in listed[1]
+    assert listed[1]["updated_at"] == 1790856000.0
 
 
 class _FakeJobsClient:
@@ -144,11 +165,17 @@ class _FakeJobsClient:
             "jobs": [
                 {
                     "job_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-                    "status": "RUNNING",
-                    "intent": "ops",
-                    "backend_hint": "ollama",
-                    "prompt": "hidden",
-                    "metadata": {"n": 1},
+                    "status": "SUCCEEDED",
+                    "created_at": "2026-10-01T12:00:00+00:00",
+                    "updated_at": "2026-10-01T12:00:05+00:00",
+                    "result": {"output": "hidden"},
+                    "spec": {
+                        "intent": "ops",
+                        "role": "executor-agent",
+                        "backend_hint": "ollama",
+                        "prompt": "hidden",
+                        "metadata": {"n": 1},
+                    },
                 }
             ]
         }
@@ -168,7 +195,14 @@ def test_api_v1_jobs_returns_redacted_bare_list(
 
     assert isinstance(body, list)
     assert len(body) == 1
-    assert body[0]["status"] == "RUNNING"
+    assert body[0]["status"] == "SUCCEEDED"
+    assert body[0]["intent"] == "ops"
+    assert body[0]["role"] == "executor-agent"
     assert body[0]["backend"] == "ollama"
+    assert body[0]["created_at"] == 1790856000.0
+    assert body[0]["updated_at"] == 1790856005.0
+    assert body[0]["elapsed_s"] == 5.0
     assert "prompt" not in body[0]
     assert "metadata" not in body[0]
+    assert "spec" not in body[0]
+    assert "result" not in body[0]

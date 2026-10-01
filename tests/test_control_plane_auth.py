@@ -476,7 +476,7 @@ def test_outbound_prefers_peer_token(monkeypatch):
 
 
 @pytest.mark.unit
-def test_redact_jobs_list_omits_prompt_and_metadata_for_portal_pollers():
+def test_redact_jobs_list_omits_prompt_and_metadata_for_portal_pollers() -> None:
     """Portal job list proxies must not leak supervisor prompt or metadata blobs."""
     from utils.control_plane_auth import redact_jobs_list, redact_jobs_payload
 
@@ -499,4 +499,3 @@ def test_redact_jobs_list_omits_prompt_and_metadata_for_portal_pollers():
     assert listed[0]["intent"] == "ops"
     assert wrapped["count"] == 1
     assert "prompt" not in wrapped["jobs"][0]
-

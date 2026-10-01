@@ -499,7 +499,12 @@ def test_jobs_proxy_replay_forwards_not_replayable(monkeypatch):
     """PT 409 'Job is not replayable' stays a distinct portal error."""
 
     class _NotReplayable(_FakeJobsClient):
-        async def post(self, url: str, json=None, **kwargs):
+        async def post(
+            self,
+            url: str,
+            json: object = None,
+            **kwargs: object,
+        ) -> _FakeResponse:
             self.calls.append(("POST", url, json))
             return _FakeResponse(
                 {"detail": "Job is not replayable"},
@@ -527,7 +532,12 @@ def test_jobs_proxy_replay_forwards_generic_replay_detail(
     class _GenericReplay(_FakeJobsClient):
         """Simulate Perpetua replay rejection with the generic completion message."""
 
-        async def post(self, url: str, json=None, **kwargs):
+        async def post(
+            self,
+            url: str,
+            json: object = None,
+            **kwargs: object,
+        ) -> _FakeResponse:
             """Record the replay POST and return HTTP 400 with a generic detail."""
             self.calls.append(("POST", url, json))
             return _FakeResponse(

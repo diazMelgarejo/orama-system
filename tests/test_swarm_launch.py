@@ -29,6 +29,7 @@ class _FakeLaunchClient:
     submitted = []
     cancelled = []
     fail_role = None
+    omit_job_id_for: set[str] = set()
     cancel_raises_for: set[str] = set()
     route_payload = {"backend_hint": "lmstudio-mac", "model_hint": "Qwen3.5-9B-MLX-4bit"}
 
@@ -55,6 +56,8 @@ class _FakeLaunchClient:
             role = json["metadata"]["role"]
             if role == self.fail_role:
                 raise RuntimeError("dispatch failed")
+            if role in self.omit_job_id_for:
+                return _FakeResponse({})
             return _FakeResponse({"job_id": f"job-{role}"})
         raise AssertionError(f"unexpected POST {url}")
 
@@ -94,6 +97,7 @@ def _isolated_swarm_state(monkeypatch: pytest.MonkeyPatch):
     _FakeLaunchClient.cancelled = []
     _FakeLaunchClient.cancel_raises_for = set()
     _FakeLaunchClient.fail_role = None
+    _FakeLaunchClient.omit_job_id_for = set()
     _FakeLaunchClient.route_payload = {
         "backend_hint": "lmstudio-mac",
         "model_hint": "Qwen3.5-9B-MLX-4bit",
@@ -341,6 +345,25 @@ def test_swarm_launch_blocks_retry_when_orphans_remain(monkeypatch):
     assert first.status_code == 200
     assert first.json()["launch_blocked"] is True
     assert first.json()["orphaned_jobs"]
+    assert retry.status_code == 422
+
+
+def test_swarm_launch_blocks_retry_when_accepted_job_has_no_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A successful but unidentifiable PT submit consumes the approval."""
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+    _patch_hardware_policy(monkeypatch)
+    _FakeLaunchClient.omit_job_id_for = {"context-agent"}
+    _FakeLaunchClient.fail_role = "verifier-agent"
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        payload = _approved_payload(client, "Ship launch")
+        first = client.post("/api/swarm/launch", json=payload)
+        retry = client.post("/api/swarm/launch", json=payload)
+
+    assert first.status_code == 200
+    assert first.json()["launch_blocked"] is True
+    assert first.json()["orphaned_jobs"] == ["unknown:context-agent"]
     assert retry.status_code == 422
 
 

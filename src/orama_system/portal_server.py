@@ -2489,6 +2489,10 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
             for entry in accepted_jobs:
                 job_id = entry.get("job_id")
                 if not job_id:
+                    # A 2xx without an identifier may still mean PT accepted
+                    # the job. Preserve the consumed approval until an operator
+                    # reconciles it rather than risking a duplicate on retry.
+                    orphaned_jobs.append(f"unknown:{entry.get('role')}")
                     continue
                 try:
                     cancel_r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/cancel")

@@ -569,7 +569,8 @@ def redact_job_record(job: Mapping[str, Any]) -> dict[str, Any]:
     the embedded jobs table renders (``intent``, ``status``, ``backend``,
     timestamps, ``elapsed_s``), hoisting ``backend_hint`` / ``intent`` /
     ``role`` from a nested ``spec`` when the lifecycle event omits top-level
-    copies.
+    copies. ``created_at`` is the job start. A lone event ``ts`` is the latest
+    lifecycle time and becomes ``updated_at``, not ``created_at``.
     """
     safe: dict[str, Any] = {}
     for key in (
@@ -593,16 +594,12 @@ def redact_job_record(job: Mapping[str, Any]) -> dict[str, Any]:
         hint = safe.get("backend_hint")
         if hint is not None:
             safe["backend"] = hint
-    created_epoch = _coerce_job_epoch_seconds(
-        safe.get("created_at", job.get("created_at"))
-    )
-    if created_epoch is None:
-        created_epoch = _coerce_job_epoch_seconds(job.get("ts"))
+    created_epoch = _coerce_job_epoch_seconds(job.get("created_at"))
     if created_epoch is not None:
         safe["created_at"] = created_epoch
-    updated_epoch = _coerce_job_epoch_seconds(
-        safe.get("updated_at", job.get("updated_at"))
-    )
+    updated_epoch = _coerce_job_epoch_seconds(job.get("updated_at"))
+    if updated_epoch is None:
+        updated_epoch = _coerce_job_epoch_seconds(job.get("ts"))
     if updated_epoch is not None:
         safe["updated_at"] = updated_epoch
     if "elapsed_s" not in safe:
