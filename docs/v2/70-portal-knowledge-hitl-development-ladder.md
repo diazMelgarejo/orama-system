@@ -92,6 +92,31 @@ Omitted (`None`) credentials may grandfather **only** when
 [`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md)
 Phase C/D (Phase D remains the v2-launch strict cutover).
 
+### Dispatch rollback finality
+
+The exclusive preview claim remains consumed once downstream dispatch becomes
+ambiguous. A successful cancellation HTTP response is an acknowledgement, not
+proof that the job stopped. The portal restores a claimed preview only after
+every accepted PT job reports a persisted `cancelled` terminal state.
+
+```mermaid
+sequenceDiagram
+  participant SwarmLaunch
+  participant HardwarePolicySnapshot
+  participant ApprovalStore
+  participant PTJobsAPI
+  SwarmLaunch->>HardwarePolicySnapshot: Read hardware policy
+  SwarmLaunch->>ApprovalStore: Claim cached preview
+  SwarmLaunch->>PTJobsAPI: Submit assigned jobs
+  PTJobsAPI-->>SwarmLaunch: Return submission failure
+  SwarmLaunch->>PTJobsAPI: Cancel previously accepted jobs
+  alt Every cancellation reports terminal cancelled
+    SwarmLaunch->>ApprovalStore: Restore preview
+  else Submission or cancellation outcome is unresolved
+    SwarmLaunch->>ApprovalStore: Retain consumed claim for reconciliation
+  end
+```
+
 ---
 
 ## 4. As-built for PR #368 / v2.1 (authoritative)

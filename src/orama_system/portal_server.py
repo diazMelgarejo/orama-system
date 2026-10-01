@@ -2369,7 +2369,8 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
     Dispatch uses the cached preview from ``/api/swarm/preview``. After hardware
     policy passes, ``claim_launch_for_dispatch`` atomically removes the preview
     from the approval cache so concurrent launches cannot double-submit. Failed
-    batches restore the preview only when every accepted PT job was cancelled.
+    batches restore the preview only when every accepted PT job confirms its
+    persisted ``cancelled`` terminal state.
     """
     stored = cached_preview(req.preview_id)
     legacy = (
@@ -2510,6 +2511,18 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 try:
                     cancel_r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/cancel")
                     cancel_r.raise_for_status()
+                    cancel_result = cancel_r.json()
+                    if (
+                        not isinstance(cancel_result, dict)
+                        or cancel_result.get("cancel_requested") is not True
+                        or cancel_result.get("terminal_state") != "cancelled"
+                    ):
+                        # PT can acknowledge a cancellation before the worker
+                        # reaches its durable terminal checkpoint. Retaining
+                        # the approval is safer than retrying into a possibly
+                        # still-active job.
+                        orphaned_jobs.append(str(job_id))
+                        continue
                     cancelled_jobs.append(str(job_id))
                 except Exception as cancel_exc:
                     log.warning(
