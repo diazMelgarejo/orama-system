@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """Regression tests for control-plane authentication and redaction."""
 from __future__ import annotations
 
@@ -21,6 +21,7 @@ def _make_request(
     server_host: str = "127.0.0.1",
     server_port: int = 8002,
 ) -> Request:
+    """Build a Starlette Request for middleware tests."""
     header_items = [(k.lower().encode(), v.encode()) for k, v in (headers or {}).items()]
     scope = {
         "type": "http",
@@ -40,6 +41,7 @@ def _make_request(
 
 @pytest.mark.unit
 def test_lifecycle_origin_failure_denied_returns_403_json():
+    """Verify lifecycle origin failure denied returns 403 json."""
     from utils.control_plane_auth import lifecycle_origin_failure
 
     request = _make_request(
@@ -57,6 +59,7 @@ def test_lifecycle_origin_failure_denied_returns_403_json():
 
 @pytest.mark.unit
 def test_lifecycle_origin_failure_allowed_returns_none():
+    """Verify lifecycle origin failure allowed returns none."""
     from utils.control_plane_auth import lifecycle_origin_failure
 
     request = _make_request(headers={"origin": "http://localhost:8000"})
@@ -69,6 +72,7 @@ def test_lifecycle_origin_failure_allowed_returns_none():
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_control_plane_middleware_short_circuits_on_origin_denial(monkeypatch):
+    """Verify control plane middleware short circuits on origin denial."""
     from orama_system.portal_server import _control_plane_auth_middleware
 
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
@@ -94,6 +98,7 @@ async def test_control_plane_middleware_short_circuits_on_origin_denial(monkeypa
 @pytest.mark.asyncio
 @pytest.mark.unit
 async def test_control_plane_middleware_calls_next_when_origin_allowed(monkeypatch):
+    """Verify control plane middleware calls next when origin allowed."""
     from orama_system.portal_server import _control_plane_auth_middleware
 
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
@@ -116,6 +121,7 @@ async def test_control_plane_middleware_calls_next_when_origin_allowed(monkeypat
 
 
 def test_portal_operator_routes_require_token_when_enforced(monkeypatch):
+    """Verify portal operator routes require token when enforced."""
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "portal-test-token")
 
@@ -134,6 +140,7 @@ def test_portal_operator_routes_require_token_when_enforced(monkeypatch):
 
 
 def test_peer_file_inbox_roundtrip(monkeypatch, tmp_path):
+    """Verify peer file inbox roundtrip."""
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "portal-test-token")
     monkeypatch.setattr(
@@ -167,6 +174,7 @@ def test_peer_file_inbox_roundtrip(monkeypatch, tmp_path):
 
 
 def test_peer_inbox_html_preview(monkeypatch, tmp_path):
+    """Verify peer inbox html preview."""
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "portal-test-token")
     monkeypatch.setattr(
@@ -194,6 +202,7 @@ def test_peer_inbox_html_preview(monkeypatch, tmp_path):
 
 
 def test_portal_health_stays_public_when_enforced(monkeypatch):
+    """Verify portal health stays public when enforced."""
     monkeypatch.delenv("ORAMA_INSECURE_DEV", raising=False)
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "portal-test-token")
 
@@ -205,10 +214,12 @@ def test_portal_health_stays_public_when_enforced(monkeypatch):
 
 
 def test_api_server_ultrathink_requires_token_when_enforced(monkeypatch):
+    """Verify api server ultrathink requires token when enforced."""
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "orama-test-token")
 
     async def fake_call_with_fallback(prompt, model, max_tokens, temperature):
+        """Support fake call with fallback."""
         return "ok", "http://redacted"
 
     monkeypatch.setattr(api_server, "_call_with_fallback", fake_call_with_fallback)
@@ -237,6 +248,7 @@ def test_api_server_ultrathink_requires_token_when_enforced(monkeypatch):
 
 
 def test_api_server_runtime_state_redacts_payload(monkeypatch, tmp_path):
+    """Verify api server runtime state redacts payload."""
     state_file = tmp_path / "routing.json"
     state_file.write_text(
         '{"gateway": {"gateway_ready": true, "paths": {"secret": "/tmp"}}, '
@@ -264,6 +276,7 @@ def test_api_server_runtime_state_redacts_payload(monkeypatch, tmp_path):
 
 
 def test_auth_enforced_matrix(monkeypatch):
+    """Verify auth enforced matrix."""
     from utils.control_plane_auth import auth_enforced
 
     monkeypatch.delenv("ORAMA_CONTROL_PLANE_TOKEN", raising=False)
@@ -292,6 +305,7 @@ def test_auth_enforced_matrix(monkeypatch):
 
 
 def test_auth_headers_reads_pt_persisted_token(monkeypatch, tmp_path):
+    """Verify auth headers reads pt persisted token."""
     from utils.control_plane_auth import auth_headers
 
     token_path = tmp_path / ".state" / "control_plane_token"
@@ -327,6 +341,7 @@ def test_auth_headers_discovers_pt_token_from_sibling_checkout(monkeypatch, tmp_
 
 
 def test_verify_accepts_pt_persisted_token_without_env(monkeypatch, tmp_path):
+    """Verify verify accepts pt persisted token without env."""
     from utils.control_plane_auth import resolved_control_plane_token, verify_control_plane_auth
 
     token_path = tmp_path / ".state" / "control_plane_token"
@@ -344,6 +359,7 @@ def test_verify_accepts_pt_persisted_token_without_env(monkeypatch, tmp_path):
 
 
 def test_portal_loopback_index_injects_cp_fetch_when_enforced(monkeypatch, tmp_path):
+    """Verify portal loopback index injects cp fetch when enforced."""
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "loopback-ui-token")
     # Redirect _WEB_DIST to an empty tmp dir so the React FileResponse path is
@@ -351,6 +367,7 @@ def test_portal_loopback_index_injects_cp_fetch_when_enforced(monkeypatch, tmp_p
     monkeypatch.setattr(portal_server, "_WEB_DIST", tmp_path)
 
     async def _fake_status():
+        """Support  fake status."""
         return {"services": {}, "routing": None, "activity": [], "agents": []}
 
     monkeypatch.setattr(portal_server, "api_status", _fake_status)
@@ -377,6 +394,7 @@ def test_portal_index_handles_redacted_agents_payload(monkeypatch, tmp_path):
     monkeypatch.setattr(portal_server, "_WEB_DIST", tmp_path)
 
     async def _fake_status():
+        """Support  fake status."""
         from utils.control_plane_auth import redact_portal_status_payload
 
         return redact_portal_status_payload(
@@ -402,6 +420,7 @@ def test_portal_index_handles_redacted_agents_payload(monkeypatch, tmp_path):
 
 
 def test_portal_index_requires_auth_when_not_loopback(monkeypatch):
+    """Verify portal index requires auth when not loopback."""
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "0")
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "loopback-ui-token")
     monkeypatch.setattr(
@@ -416,6 +435,7 @@ def test_portal_index_requires_auth_when_not_loopback(monkeypatch):
 
 
 def test_pt_auth_module_available_in_sibling_checkout():
+    """Verify pt auth module available in sibling checkout."""
     pytest = __import__("pytest")
     from pathlib import Path
 
@@ -427,6 +447,7 @@ def test_pt_auth_module_available_in_sibling_checkout():
 
 
 def test_accept_peer_token_during_handoff(monkeypatch):
+    """Verify accept peer token during handoff."""
     from utils.control_plane_auth import (
         control_plane_auth_mode,
         token_matches_control_plane,
@@ -451,6 +472,7 @@ def test_accept_peer_token_during_handoff(monkeypatch):
 
 
 def test_pt_only_rejects_orama_lane_key(monkeypatch, tmp_path):
+    """Verify pt only rejects orama lane key."""
     from utils.control_plane_auth import control_plane_auth_mode, token_matches_control_plane
 
     token_path = tmp_path / ".state" / "control_plane_token"
@@ -466,6 +488,7 @@ def test_pt_only_rejects_orama_lane_key(monkeypatch, tmp_path):
 
 
 def test_outbound_prefers_peer_token(monkeypatch):
+    """Verify outbound prefers peer token."""
     from utils.control_plane_auth import outbound_control_plane_tokens, resolved_control_plane_token
 
     monkeypatch.setenv("ORAMA_CONTROL_PLANE_TOKEN", "symmetric-token")
@@ -474,3 +497,28 @@ def test_outbound_prefers_peer_token(monkeypatch):
     assert outbound_control_plane_tokens()[0] == "peer-only-token"
     assert resolved_control_plane_token() == "peer-only-token"
 
+
+@pytest.mark.unit
+def test_redact_jobs_list_omits_prompt_and_metadata_for_portal_pollers() -> None:
+    """Portal job list proxies must not leak supervisor prompt or metadata blobs."""
+    from utils.control_plane_auth import redact_jobs_list, redact_jobs_payload
+
+    raw = {
+        "jobs": [
+            {
+                "job_id": "550e8400-e29b-41d4-a716-446655440000",
+                "status": "RUNNING",
+                "intent": "ops",
+                "prompt": "secret",
+                "metadata": {"session_id": "swarm-1"},
+            }
+        ]
+    }
+    listed = redact_jobs_list(raw)
+    wrapped = redact_jobs_payload(raw)
+    assert len(listed) == 1
+    assert "prompt" not in listed[0]
+    assert "metadata" not in listed[0]
+    assert listed[0]["intent"] == "ops"
+    assert wrapped["count"] == 1
+    assert "prompt" not in wrapped["jobs"][0]

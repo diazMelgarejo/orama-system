@@ -2,38 +2,50 @@
 """Tests for PT job proxy routes."""
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 import orama_system.portal_server as portal_server
 
 
 class _FakeResponse:
+    """Minimal httpx response stub for jobs proxy tests."""
+
     def __init__(self, payload, status_code: int = 200):
+        """Initialize the test double."""
         self._payload = payload
         self.status_code = status_code
 
     def json(self):
+        """Return the JSON body."""
         return self._payload
 
     def raise_for_status(self):
+        """Raise when the HTTP status indicates failure."""
         if self.status_code >= 400:
             raise RuntimeError(f"HTTP {self.status_code}")
 
 
 class _FakeJobsClient:
+    """Record Perpetua job proxy HTTP calls for assertions."""
+
     fail = False
     calls = []
 
     def __init__(self, *args, **kwargs):
+        """Initialize the test double."""
         pass
 
     async def __aenter__(self):
+        """Enter the async context manager."""
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
+        """Exit the async context manager."""
         return False
 
     async def get(self, url: str, **kwargs):
+        """Handle a GET request in the fake client."""
         self.calls.append(("GET", url, kwargs))
         if self.fail:
             raise RuntimeError("pt down")
@@ -99,6 +111,7 @@ def test_jobs_proxy_lists_pt_jobs(monkeypatch):
 
 
 def test_jobs_proxy_gets_detail(monkeypatch):
+    """Verify jobs proxy gets detail."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -133,6 +146,7 @@ def test_jobs_proxy_cancel_posts_to_pt(monkeypatch):
 
 
 def test_jobs_proxy_replay_posts_to_pt(monkeypatch):
+    """Verify jobs proxy replay posts to pt."""
     _FakeJobsClient.fail = False
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -150,6 +164,7 @@ def test_jobs_proxy_replay_posts_to_pt(monkeypatch):
 
 
 def test_jobs_proxy_handles_pt_down(monkeypatch):
+    """Verify jobs proxy handles pt down."""
     _FakeJobsClient.fail = True
     _FakeJobsClient.calls = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
@@ -455,6 +470,7 @@ class _FakeJobsClientNotFound(_FakeJobsClient):
     """Returns a 404 HTTP error response for cancel and replay calls."""
 
     async def post(self, url: str, json=None, **kwargs):
+        """Handle a POST request in the fake client."""
         self.calls.append(("POST", url, json))
         if url.endswith("/cancel") or url.endswith("/replay"):
             return _FakeResponse({"detail": "not found"}, status_code=404)
@@ -494,11 +510,21 @@ def test_jobs_proxy_replay_pt_404_error(monkeypatch):
     assert body["upstream_status"] == 404
 
 
-def test_jobs_proxy_replay_forwards_not_replayable(monkeypatch):
+def test_jobs_proxy_replay_forwards_not_replayable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """PT 409 'Job is not replayable' stays a distinct portal error."""
 
     class _NotReplayable(_FakeJobsClient):
-        async def post(self, url: str, json=None, **kwargs):
+        """Simulate Perpetua replay rejection with HTTP 409."""
+
+        async def post(
+            self,
+            url: str,
+            json: object = None,
+            **kwargs: object,
+        ) -> _FakeResponse:
+            """Handle a POST request in the fake client."""
             self.calls.append(("POST", url, json))
             return _FakeResponse(
                 {"detail": "Job is not replayable"},
@@ -516,3 +542,72 @@ def test_jobs_proxy_replay_forwards_not_replayable(monkeypatch):
     assert body["available"] is False
     assert body["upstream_status"] == 409
     assert body["error"] == "Job is not replayable"
+
+
+def test_jobs_proxy_replay_forwards_generic_replay_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Forward Perpetua generic replay 400 detail text to the portal error field."""
+
+    class _GenericReplay(_FakeJobsClient):
+        """Simulate Perpetua replay rejection with the generic completion message."""
+
+        async def post(
+            self,
+            url: str,
+            json: object = None,
+            **kwargs: object,
+        ) -> _FakeResponse:
+            """Record the replay POST and return HTTP 400 with a generic detail."""
+            self.calls.append(("POST", url, json))
+            return _FakeResponse(
+                {"detail": "Replay request could not be completed"},
+                status_code=400,
+            )
+
+    _GenericReplay.fail = False
+    _GenericReplay.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _GenericReplay)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/jobs/job-1/replay")
+
+    body = response.json()
+    assert body["error"] == "Replay request could not be completed"
+
+
+def test_jobs_proxy_replay_forwards_malformed_job_id_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Forward Perpetua malformed job id detail without rewriting the message."""
+
+    class _BadIdReplay(_FakeJobsClient):
+        """Simulate Perpetua replay rejection for a non-UUID job id."""
+
+        async def post(
+            self,
+            url: str,
+            json: object = None,
+            **kwargs: object,
+        ) -> _FakeResponse:
+            """Record the replay POST and return HTTP 400 with the UUID4 requirement."""
+            self.calls.append(("POST", url, json))
+            return _FakeResponse(
+                {
+                    "detail": "job_id must be a uuid4-formatted server-issued identifier",
+                },
+                status_code=400,
+            )
+
+    _BadIdReplay.fail = False
+    _BadIdReplay.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _BadIdReplay)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/jobs/not-a-uuid/replay")
+
+    body = response.json()
+    assert (
+        body["error"]
+        == "job_id must be a uuid4-formatted server-issued identifier"
+    )

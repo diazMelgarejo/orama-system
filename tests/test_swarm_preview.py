@@ -3,21 +3,28 @@
 from __future__ import annotations
 
 from typing import ClassVar
+from unittest.mock import AsyncMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 import orama_system.portal_server as portal_server
 
 
 class _FakeResponse:
+    """Minimal httpx response stub for swarm preview route tests."""
+
     def __init__(self, payload, status_code: int = 200):
+        """Initialize the test double."""
         self._payload = payload
         self.status_code = status_code
 
     def json(self):
+        """Return the JSON body."""
         return self._payload
 
     def raise_for_status(self):
+        """Raise when the HTTP status indicates failure."""
         if self.status_code >= 400:
             raise RuntimeError(f"HTTP {self.status_code}")
 
@@ -29,15 +36,19 @@ class _FakeRouteClient:
     posts: ClassVar[list] = []
 
     def __init__(self, *args, **kwargs):
+        """Initialize the test double."""
         pass
 
     async def __aenter__(self):
+        """Enter the async context manager."""
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
+        """Exit the async context manager."""
         return False
 
     async def post(self, url: str, json=None, **kwargs):
+        """Handle a POST request in the fake client."""
         self.posts.append(json)
         if self.fail:
             raise RuntimeError("route unavailable")
@@ -48,6 +59,7 @@ class _FakeRouteClient:
 
 
 def _portal_status():
+    """Support  portal status."""
     return {
         "hardware_policy": {
             "ok": True,
@@ -60,11 +72,23 @@ def _portal_status():
     }
 
 
-def test_swarm_preview_returns_worker_assignments(monkeypatch):
-    async def fake_api_status():
-        return _portal_status()
+def _patch_hardware_policy(monkeypatch):
+    """Stub hardware probes so preview tests do not call live LM Studio endpoints."""
 
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    async def fake_hardware_policy():
+        """Return the default ok hardware_policy snapshot used by preview routes."""
+        return _portal_status()["hardware_policy"]
+
+    monkeypatch.setattr(
+        portal_server,
+        "_portal_hardware_policy_snapshot",
+        fake_hardware_policy,
+    )
+
+
+def test_swarm_preview_returns_worker_assignments(monkeypatch):
+    """Preview includes routed worker assignments for each swarm role."""
+    _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = False
     _FakeRouteClient.posts = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
@@ -86,6 +110,7 @@ def test_swarm_preview_returns_worker_assignments(monkeypatch):
 
 
 def test_swarm_preview_rejects_empty_objective():
+    """Verify swarm preview rejects empty objective."""
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         response = client.post("/api/swarm/preview", json={"objective": "   "})
 
@@ -93,10 +118,8 @@ def test_swarm_preview_rejects_empty_objective():
 
 
 def test_swarm_preview_includes_backend_hints(monkeypatch):
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    """Verify swarm preview includes backend hints."""
+    _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = False
     _FakeRouteClient.posts = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
@@ -116,10 +139,8 @@ def test_swarm_preview_includes_backend_hints(monkeypatch):
 
 
 def test_swarm_preview_marks_routing_fallback(monkeypatch):
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    """Verify swarm preview marks routing fallback."""
+    _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = True
     _FakeRouteClient.posts = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
@@ -132,3 +153,20 @@ def test_swarm_preview_marks_routing_fallback(monkeypatch):
     assert body["routing_source"] == "portal:fallback"
     assert {item["routing_source"] for item in body["assignments"]} == {"portal:fallback"}
     assert all(item["backend_hint"] for item in body["assignments"])
+
+
+@pytest.mark.asyncio
+async def test_swarm_preview_does_not_publish_status_notification(monkeypatch):
+    """Preview must not publish api_status notifications (hardware snapshot only)."""
+    _patch_hardware_policy(monkeypatch)
+    _FakeRouteClient.fail = False
+    _FakeRouteClient.posts = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
+    publish = AsyncMock()
+    monkeypatch.setattr(portal_server._notification_publisher, "publish", publish)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/swarm/preview", json={"objective": "Review contracts"})
+
+    assert response.status_code == 200
+    publish.assert_not_called()

@@ -1,7 +1,15 @@
 # 23 — Security Preconditions (v2 gate)
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md). Portable memory and policy docs must name forbidden categories without hardcoding the concrete local fragments; see [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md).
-> **Status:** Active gate — v2 scaffold work must not proceed on a shared LAN until rows marked **done** below are true in production configs, and new v2 surfaces must satisfy the security-first platform requirements.  
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
+> `.gitignore`d, never committed with secrets, personal paths, or SecOps material.
+> Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> Portable memory and policy docs must name forbidden categories without
+> hardcoding concrete local fragments; see
+> [`47-portable-memory-local-topology-invariant.md`](47-portable-memory-local-topology-invariant.md).
+> **Status:** Active gate — v2 scaffold work must not proceed on a shared LAN until
+> rows marked **done** below are true in production configs, and new v2 surfaces
+> must satisfy the security-first platform requirements.
 > **Review source:** [`OpenClaw/v1/2026-05-23-security-markdown.md`](../../../v1/2026-05-23-security-markdown.md)
 > **Canonical policy:** [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md)
 > **Design baseline:** [`24-security-first-platform.md`](24-security-first-platform.md)
@@ -47,6 +55,10 @@
   `Authorization` headers and only persist approved/pinned endpoints
 - [ ] Readonly MCP profile tests inspect the final merged runtime config and
   fail if elevated managed workers remain enabled
+- [ ] Portal `POST` and `GET /api/mcp` and `/api/a2a` without
+  `Authorization: Bearer` (`ORAMA_CONTROL_PLANE_TOKEN` or
+  `ORAMA_CONTROL_PLANE_TOKEN_LOCAL`) return 401. `GET /api/knowledge/search`
+  stays public. No loopback exemption on MCP or A2A.
 - [ ] Every new route/tool/worker declares a capability and has auth-denial
   tests unless it is explicitly `public`
 - [ ] Portable memory, skills, coordination logs, and policy docs pass the
@@ -55,7 +67,9 @@
 
 ### Mesh security ladder (Phases A–D)
 
-Pre-v2 mesh hardening follows [`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md). Phase D (strict cutover) is a **v2 launch gate**, not a pre-v2 merge blocker.
+Pre-v2 mesh hardening follows
+[`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md).
+Phase D (strict cutover) is a **v2 launch gate**, not a pre-v2 merge blocker.
 
 **Phase A–C (pre-v2):**
 

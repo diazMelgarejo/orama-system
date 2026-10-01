@@ -1,6 +1,9 @@
 # 24 — Security-First Platform Requirements
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay
+> `.gitignore`d, never committed with secrets, personal paths, or SecOps material.
+> Additive — see [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Active design gate — security is a platform feature, not a
 > retrofit checklist.  
 > **Canonical policy:** [`../SECURITY-POLICY.md`](../SECURITY-POLICY.md)  
@@ -20,7 +23,11 @@ and glass-window APIs:
   token in HTML, no public model egress unless explicitly approved.
 - **Server-side authorization:** every control-plane read/write is authorized on
   trusted server-side code, never by hidden UI state, client-side flags, or
-  request-body "approved" booleans.
+  request-body "approved" booleans. Portal MCP (`/api/mcp`) and A2A
+  (`/api/a2a`) use that same check: `Authorization: Bearer` with
+  `ORAMA_CONTROL_PLANE_TOKEN` or `ORAMA_CONTROL_PLANE_TOKEN_LOCAL`. The
+  notification-session cookie is not a login for those paths (its `Path` is
+  `/api/notifications`). Knowledge search stays public.
 - **Capability-first execution:** subprocess workers, MCP tools, model probes,
   file access, and lifecycle controls are discrete capabilities with explicit
   grants, audit events, and tests.

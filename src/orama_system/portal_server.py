@@ -54,9 +54,11 @@ from orama_system.lan_peer_channel import (
 from orama_system.swarm_approval import (
     cached_preview,
     check_launch,
-    consume_launch,
+    claim_launch_for_dispatch,
+    finalize_launch_claim,
     grandfather_legacy,
     issue_approval,
+    release_launch_claim,
 )
 from orama_system.knowledge_gateway import router as knowledge_router
 from orama_system.portal_notifications import (
@@ -82,12 +84,12 @@ from utils.control_plane_auth import (
     lifecycle_origin_failure,
     portal_requires_auth,
     request_is_loopback,
-    resolved_control_plane_token,
     token_matches_control_plane,
     redact_activity_payload,
     redact_agents_payload,
     redact_jobs_payload,
     redact_job_record,
+    redact_jobs_list,
     redact_models_payload,
     redact_portal_status_payload,
     redact_runtime_section,
@@ -111,10 +113,13 @@ VERSION = "1.1.1.0"
 
 _CLIENT_ERROR_FALLBACK = "Request failed"
 _REPLAY_UPSTREAM_DETAILS = frozenset({
-    # Keep in lockstep with Perpetua-Tools _replay_value_error_to_http.
+    # Keep in lockstep with Perpetua-Tools _replay_value_error_to_http and
+    # _validate_job_id replay/cancel boundary messages.
     "Job not found",
     "Job is not replayable",
     "Job has no queued specification",
+    "Replay request could not be completed",
+    "job_id must be a uuid4-formatted server-issued identifier",
 })
 
 
@@ -1466,6 +1471,43 @@ def _load_hardware_policy() -> tuple[Dict[str, List[str]], str]:
     return _simple_policy_parse(policy_path.read_text(encoding="utf-8")), str(policy_path)
 
 
+async def _portal_hardware_policy_snapshot() -> Dict[str, Any]:
+    """Hardware policy from LM Studio probes only (no full status / notifications)."""
+    try:
+        _dyn_win_lms = [_get_win_lms_url()]
+    except Exception:
+        _dyn_win_lms = list(LMS_WIN_ENDPOINTS)
+
+    async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as probe_client:
+        gather_targets = [
+            _probe_lms_models(probe_client, LMS_MAC_ENDPOINT, LMS_API_TOKEN),
+            *[_probe_lms_models(probe_client, ep, LMS_API_TOKEN) for ep in _dyn_win_lms],
+        ]
+        probe_results = await asyncio.gather(*gather_targets)
+        lm_mac_ok, lm_mac_models = probe_results[0]
+        lm_win_results = probe_results[1:]
+
+    services: Dict[str, Any] = {
+        "lmstudio_mac": {
+            "ok": lm_mac_ok,
+            "models": lm_mac_models,
+            "url": LMS_MAC_ENDPOINT,
+        },
+    }
+    if len(_dyn_win_lms) == 1:
+        ok, models = lm_win_results[0] if lm_win_results else (False, [])
+        services["lmstudio_win"] = {"ok": ok, "models": models, "url": _dyn_win_lms[0]}
+    else:
+        for index, endpoint in enumerate(_dyn_win_lms):
+            ok, models = lm_win_results[index] if index < len(lm_win_results) else (False, [])
+            services[f"lmstudio_win_{index}"] = {
+                "ok": ok,
+                "models": models,
+                "url": endpoint,
+            }
+    return _hardware_policy_status(services)
+
+
 def _hardware_policy_status(services: Dict[str, Any]) -> Dict[str, Any]:
     policy, policy_path = _load_hardware_policy()
     win_only = {m.lower() for m in policy.get("windows_only", [])}
@@ -1855,15 +1897,13 @@ def _co_orchestration_html_response(
     *,
     platform_skin: str | None = None,
 ):
+    """Render the co-orchestration HTML shell with portal auth bootstrap."""
     from fastapi.responses import HTMLResponse
     from orama_system.portals.co_orchestration import render_co_orchestration_page
 
-    browser_token = ""
-    if auth_enforced() and request_is_loopback(request):
-        browser_token = resolved_control_plane_token()
     html = render_co_orchestration_page(
         version=VERSION,
-        cp_fetch_bootstrap=_portal_cp_fetch_bootstrap(browser_token),
+        cp_fetch_bootstrap=_portal_cp_fetch_bootstrap(""),
         local_role=local_platform(),
         platform_skin=platform_skin,
     )
@@ -2107,14 +2147,14 @@ async def _build_swarm_preview(
     *,
     with_approval: bool = True,
 ) -> Dict[str, Any]:
+    """Build a routed five-role swarm preview and optionally mint approval credentials."""
     objective = req.objective.strip()
     if not objective:
         raise HTTPException(status_code=422, detail="objective is required")
     if len(objective) > 4000:
         raise HTTPException(status_code=422, detail="objective is too long")
 
-    portal_status = await api_status()
-    hardware_policy = portal_status.get("hardware_policy", {})
+    hardware_policy = await _portal_hardware_policy_snapshot()
 
     async with _portal_http_client(timeout=PROBE_TIMEOUT) as client:
         routed = await asyncio.gather(
@@ -2326,9 +2366,11 @@ async def api_swarm_preview(req: SwarmPreviewRequest):
 async def api_swarm_launch(req: SwarmLaunchRequest):
     """Launch the approved preview as PT-owned jobs; orama stores no job state.
 
-    Dispatch uses the cached preview from ``/api/swarm/preview``. Rebuilding
-    assignments here would mint a second token and fail the fingerprint check
-    whenever routing flickered.
+    Dispatch uses the cached preview from ``/api/swarm/preview``. After hardware
+    policy passes, ``claim_launch_for_dispatch`` atomically removes the preview
+    from the approval cache so concurrent launches cannot double-submit. Failed
+    batches restore the preview only when every accepted PT job confirms its
+    persisted ``cancelled`` terminal state.
     """
     stored = cached_preview(req.preview_id)
     legacy = (
@@ -2348,26 +2390,16 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         raise HTTPException(status_code=422, detail="preview expired or unknown — call /api/swarm/preview again")
+    launch_preview: Dict[str, Any] | None = None
     if stored is not None:
-        preview = stored
         launch_preview = {
-            **preview,
+            **stored,
             "objective": req.objective.strip(),
             "task_type": req.task_type,
             "optimize_for": req.optimize_for,
             "preferred_device": req.preferred_device,
         }
-        try:
-            check_launch(
-                approved=req.approved,
-                preview_id=req.preview_id,
-                approval_token=req.approval_token,
-                preview=launch_preview,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        portal_status = await api_status()
-        hardware_policy = portal_status.get("hardware_policy", {})
+        hardware_policy = await _portal_hardware_policy_snapshot()
     else:
         try:
             check_launch(
@@ -2390,15 +2422,23 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 "accepted_jobs": [],
             },
         )
-    if stored is not None:
+    launch_attempt_id: str | None = None
+    if stored is not None and launch_preview is not None:
         try:
-            consume_launch(req.preview_id)
+            preview, launch_attempt_id = claim_launch_for_dispatch(
+                approved=req.approved,
+                preview_id=req.preview_id,
+                approval_token=req.approval_token,
+                preview=launch_preview,
+            )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-
     session_id = f"swarm-{uuid.uuid4().hex}"
     accepted_jobs: List[Dict[str, Any]] = []
     failed_jobs: List[Dict[str, Any]] = []
+    orphaned_jobs: List[str] = []
+    cancelled_jobs: List[str] = []
+    ambiguous_submissions: List[str] = []
     async with _portal_http_client(timeout=10.0) as client:
         for assignment in preview["assignments"]:
             metadata = {
@@ -2442,18 +2482,73 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                     "role": assignment["role"],
                     "job_id": _extract_pt_job_id(data),
                 })
+            except httpx.HTTPStatusError as exc:
+                failed_jobs.append({
+                    "role": assignment["role"],
+                    "error": _client_safe_error(exc),
+                })
+                break
             except Exception as exc:
                 failed_jobs.append({
                     "role": assignment["role"],
                     "error": _client_safe_error(exc),
                 })
+                ambiguous_submissions.append(assignment["role"])
+                break
+
+        for role in ambiguous_submissions:
+            orphaned_jobs.append(f"unknown:{role}")
+
+        if failed_jobs and accepted_jobs:
+            for entry in accepted_jobs:
+                job_id = entry.get("job_id")
+                if not job_id:
+                    # A 2xx without an identifier may still mean PT accepted
+                    # the job. Preserve the consumed approval until an operator
+                    # reconciles it rather than risking a duplicate on retry.
+                    orphaned_jobs.append(f"unknown:{entry.get('role')}")
+                    continue
+                try:
+                    cancel_r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/cancel")
+                    cancel_r.raise_for_status()
+                    cancel_result = cancel_r.json()
+                    if (
+                        not isinstance(cancel_result, dict)
+                        or cancel_result.get("cancel_requested") is not True
+                        or cancel_result.get("terminal_state") != "cancelled"
+                    ):
+                        # PT can acknowledge a cancellation before the worker
+                        # reaches its durable terminal checkpoint. Retaining
+                        # the approval is safer than retrying into a possibly
+                        # still-active job.
+                        orphaned_jobs.append(str(job_id))
+                        continue
+                    cancelled_jobs.append(str(job_id))
+                except Exception as cancel_exc:
+                    log.warning(
+                        "swarm launch rollback: cancel %s failed: %s",
+                        job_id,
+                        cancel_exc,
+                    )
+                    orphaned_jobs.append(str(job_id))
+            accepted_jobs = []
+
+    if launch_attempt_id:
+        if failed_jobs:
+            release_launch_claim(
+                req.preview_id,
+                launch_attempt_id,
+                restore_to_cache=not orphaned_jobs,
+            )
+        else:
+            finalize_launch_claim(req.preview_id, launch_attempt_id)
 
     public_preview = {
         key: value
         for key, value in preview.items()
         if key not in {"preview_id", "approval_token", "strict_mode"}
     }
-    return {
+    result: Dict[str, Any] = {
         "accepted": not failed_jobs,
         "blocked": False,
         "session_id": session_id,
@@ -2461,16 +2556,31 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
         "failed_jobs": failed_jobs,
         "preview": public_preview,
     }
+    if cancelled_jobs:
+        result["cancelled_jobs"] = cancelled_jobs
+    if orphaned_jobs:
+        result["orphaned_jobs"] = orphaned_jobs
+        result["launch_blocked"] = True
+        result["launch_blocked_reason"] = "orphaned_jobs_after_rollback"
+    if launch_attempt_id:
+        result["launch_attempt_id"] = launch_attempt_id
+    return result
 
 
 @app.get("/api/jobs")
 async def api_jobs_proxy(status: Optional[str] = None):
+    """Proxy Perpetua job list responses with operator-safe field redaction."""
     params = {"status": status} if status else {}
     async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs", params=params)
             r.raise_for_status()
-            return {"available": True, "source": "pt:/v1/jobs", "jobs": _normalize_jobs_payload(r.json())}
+            raw = r.json()
+            return {
+                "available": True,
+                "source": "pt:/v1/jobs",
+                "jobs": redact_jobs_list(raw),
+            }
         except Exception as exc:
             return {
                 "available": False,
@@ -2944,8 +3054,8 @@ async def api_status():
 
 @app.get("/api/hardware-policy")
 async def api_hardware_policy():
-    status = await api_status()
-    return status.get("hardware_policy", {})
+    """Expose the portal hardware-policy probe snapshot for operator dashboards."""
+    return await _portal_hardware_policy_snapshot()
 
 
 @app.get("/api/tools")
@@ -3017,7 +3127,12 @@ _ENV_WRITE_TARGETS = [
 
 def _write_env_var(env_var: str, value: str) -> tuple[bool, str]:
     """Write/update an env var in .env.local. Atomic write + file lock to prevent races."""
-    import fcntl, tempfile, re as _re
+    import tempfile, re as _re
+
+    try:
+        import fcntl
+    except ImportError:
+        return False, "File locking is not supported on this platform"
     if env_var not in _ALLOWED_ENV_VARS:
         return False, f"Env var {env_var!r} not in allowlist"
     if not value or len(value) < 4:
@@ -3090,13 +3205,18 @@ async def api_configure_tool(req: ConfigureToolRequest):
 
 @app.get("/api/v1/jobs")
 async def api_get_jobs(status: Optional[str] = None):
-    """Proxy to PT's /v1/jobs — used by the supervisor jobs panel JS poller."""
+    """Proxy to PT's /v1/jobs — used by the supervisor jobs panel JS poller.
+
+    Returns a **bare JSON list** (not ``{"jobs": [...]}``) so ``refreshJobs()``
+    can use ``jobs.length``. Each element is redacted; prompt and metadata never
+    leave the portal.
+    """
     params = {"status": status} if status else {}
     async with _portal_http_client(timeout=5.0) as client:
         try:
             r = await client.get(f"{PT_URL}/v1/jobs", params=params)
             r.raise_for_status()
-            return r.json()
+            return redact_jobs_list(r.json())
         except Exception as exc:
             return []
 

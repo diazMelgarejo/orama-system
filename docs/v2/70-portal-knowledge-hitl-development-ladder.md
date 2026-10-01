@@ -74,13 +74,14 @@ stays in [`53-maestro-swarm-v2-redesign-critique.md`](53-maestro-swarm-v2-redesi
 — this file does not re-argue that critique.
 
 | Portal class | Name | Example on the glass | Required gate (intent) | As-built on PR #368 |
-| --- | --- | --- | --- | --- |
-| 0 | Read | Knowledge search, MCP `search_docs`, A2A `message/send` (read-only tool) | Public read (no bearer); bounded scan | **Shipped** — see §4 |
-| 1 | Soft write | Config flag / label (future portal) | Bearer + explicit confirm | Not in this slice |
-| 2 | Dispatch | Swarm launch | Server `preview_id` + `approval_token` after Preview | **Shipped** HMAC preview → launch; UI sends both tokens; Launch disabled until tokens + `hardware_policy.ok` |
-| 3 | External / identity | OIDC / external API / financial write | Class-2 + verified identity | **Deferred** — see [`51-security-sentinel-orbit-passkey-mcp.md`](51-security-sentinel-orbit-passkey-mcp.md), [`61-pt-coordination-principal-identity-design.md`](61-pt-coordination-principal-identity-design.md) |
-| 4 | Irreversible | Fleet delete / public publish | Class-3 + out-of-band second factor | **Deferred** — D23 still forbids inventing multi-principal quorum for a single-operator LAN ([`45-`](45-single-operator-lan-threat-model-descope.md)) |
-| E | Emergency stop | Kill agents immediately | Unconditional override; never blocked by the agent graph | Kernel intent in 03 R3 (`Interrupt` / `aresume`); portal header button **not** in this slice |
+| --- | --- | --- | --- | --- | --- |
+| 0 | Read | `GET /api/knowledge/search` | Public read; bounded scan | **Shipped** — §4 |
+| 0b | Authenticated read | MCP / A2A | Bearer on every method | **Target** — §4; knowledge public |
+| 1 | Soft write | Config flag (future) | Bearer + confirm | Not in this slice |
+| 2 | Dispatch | Swarm launch | Preview + exclusive claim | **Shipped** — claim before PT posts |
+| 3 | External / identity | OIDC / financial | Class-2 + identity | **Deferred** — docs 51 + 61 |
+| 4 | Irreversible | Fleet delete / publish | Class-3 + OOB 2FA | **Deferred** — doc 45 |
+| E | Emergency stop | Kill agents | Override not blocked | R3 kernel; no portal button |
 
 HITL reality for Class 2 on this PR: Preview mints fail-closed when the
 approval secret is missing (`issue_approval` must not look successful).
@@ -91,6 +92,61 @@ Omitted (`None`) credentials may grandfather **only** when
 [`50-mesh-security-migration-ladder.md`](50-mesh-security-migration-ladder.md)
 Phase C/D (Phase D remains the v2-launch strict cutover).
 
+### Dispatch rollback finality
+
+The exclusive preview claim remains consumed once downstream dispatch becomes
+ambiguous. A successful cancellation HTTP response is an acknowledgement, not
+proof that the job stopped. The portal restores a claimed preview only after
+every accepted PT job reports a persisted `cancelled` terminal state. A
+PT cancellation is rollback-final for portal purposes only when Perpetua
+returns `terminal_state="cancelled"` **and** the corresponding supervisor
+admission entry is no longer active (`_active` on the PT side). That is
+not a guarantee that CLI child processes are dead; external execution
+containment is a separate contract (see
+[`references/portal-pt-cancel-rollback-contract.md`](references/portal-pt-cancel-rollback-contract.md)).
+
+Acknowledgement-only and unresolved outcomes remain non-retryable.
+Cancellation acknowledgement is not execution containment. For CLI-backed
+jobs, preview restoration must remain blocked unless Perpetua reports the
+required containment state according to its execution-control contract.
+
+**Authority split:** Perpetua-Tools owns job lifecycle, admission-slot
+finality, and the cancel HTTP response schema. orama-system owns exclusive
+preview claims and retry eligibility. Orama does not inspect `_active`; it
+consumes only the redacted cancel payload below.
+
+**Perpetua cancel response (rollback consumer minimum):**
+
+```json
+{
+  "cancel_requested": true,
+  "terminal_state": "cancelled"
+}
+```
+
+Any other `terminal_state`, missing fields, transport failure, or accepted
+job without a stable `job_id` keeps the approval consumed (`orphaned_jobs`,
+`launch_blocked`). Do not add a second `rollback_verified` flag on the PT
+API; the pair above is sufficient when PT also releases the admission slot.
+
+```mermaid
+sequenceDiagram
+  participant SwarmLaunch
+  participant HardwarePolicySnapshot
+  participant ApprovalStore
+  participant PTJobsAPI
+  SwarmLaunch->>HardwarePolicySnapshot: Read hardware policy
+  SwarmLaunch->>ApprovalStore: Claim cached preview
+  SwarmLaunch->>PTJobsAPI: Submit assigned jobs
+  PTJobsAPI-->>SwarmLaunch: Return submission failure
+  SwarmLaunch->>PTJobsAPI: Cancel previously accepted jobs
+  alt Every cancellation reports terminal cancelled
+    SwarmLaunch->>ApprovalStore: Restore preview
+  else Submission or cancellation outcome is unresolved
+    SwarmLaunch->>ApprovalStore: Retain consumed claim for reconciliation
+  end
+```
+
 ---
 
 ## 4. As-built for PR #368 / v2.1 (authoritative)
@@ -98,10 +154,27 @@ Phase C/D (Phase D remains the v2-launch strict cutover).
 Knowledge, MCP, and A2A routes live on `src/orama_system/knowledge_gateway.py`.
 `portal_server.py` mounts that router with `app.include_router(knowledge_router)`.
 Class-0 documentation search is **public read**: `portal_path_is_public()` in
-`utils/control_plane_auth.py` exempts `/api/knowledge/*`, `/api/mcp`,
-`/api/a2a`, and `/.well-known/agent-card.json` from the control-plane bearer
-middleware. Swarm preview/launch and the rest of the operator console remain
-behind operator auth.
+`utils/control_plane_auth.py` exempts `/api/knowledge/*` and
+`/.well-known/agent-card.json`. `/health` and `/assets/` stay public too.
+Swarm preview/launch and the rest of the operator console remain behind
+operator auth.
+
+**MCP and A2A (v2 contract).** `/api/mcp` and `/api/a2a` are operator routes,
+not public reads. A client proves identity with one of:
+
+- **Bearer.** `Authorization: Bearer` matching an orama-lane token:
+  `ORAMA_CONTROL_PLANE_TOKEN` or `ORAMA_CONTROL_PLANE_TOKEN_LOCAL`
+  (`orama_lane_token_candidates()` / `token_matches_control_plane(..., scope="orama")`).
+- **Web session cookie, when the browser will send it.**
+  `bearer_token_from_request()` also accepts the `orama_control_plane_token`
+  cookie. The only setter today is `POST /api/notifications/session`, and that
+  cookie’s `Path` is `/api/notifications`, so it is **not** sent to `/api/mcp`
+  or `/api/a2a`. A browser or desktop client of those routes sends the bearer
+  header. Do not add a loopback exemption: a local tab can reach loopback.
+
+Until the allowlist edit, `_PUBLIC_PORTAL_PATHS` still contains `/api/mcp` and
+`/api/a2a`, so unauthenticated calls succeed. Treat that as drift from this
+contract, not as the v2 rule.
 
 Same-origin `GET /api/knowledge/search` is Markdown FTS over the docs tree
 (no DB, no embeddings, no Redis). Scans run in a worker thread with
@@ -157,7 +230,7 @@ dump are **not** acceptance criteria for #368 or for v2.1.
 
 | Milestone | Theme | Where the real plan lives | Portal note |
 | --- | --- | --- | --- |
-| **v2.1** | Knowledge glass + fail-closed HITL tokens | This PR; doc 16 | §4 as-built. Auth already on the knowledge router. |
+| **v2.1** | Knowledge glass + fail-closed HITL tokens | This PR; doc 16 | §4 as-built for knowledge. MCP and A2A take the bearer or local token in §4; they are not public. |
 | **v2.2** | Observability + retrieval beyond linear scan | [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md), [`41-`](41-agentic-stack-gstack-gbrain-memory-blend.md), [`55-`](55-oramasys-agent-observability-contract-adr.md), [`67-`](67-lancedb-duckdb-dense-info-layer-shape.md) | Markdown search is a Class-0 stopgap. Bayesian/vector RAG, hallucination budgets, and p99 histograms are **not** specified here. |
 | **v2.3** | Dual-model check + Class-3 identity | [`53-`](53-maestro-swarm-v2-redesign-critique.md) (critique only), [`51-`](51-security-sentinel-orbit-passkey-mcp.md), [`61-`](61-pt-coordination-principal-identity-design.md) | OIDC/passkey/HMAC-bridge are satellite/identity plans. Do not require GitHub OIDC on knowledge search. |
 | **v2.4** | External conformity literature | [`03-safety-v2.5.md`](03-safety-v2.5.md), [`23-`](23-security-preconditions.md), [`24-`](24-security-first-platform.md), [`32-`](32-agentic-security-controls.md), [`39-`](39-maestro-owasp-genai-reference.md) | EU database registration, Annex III dossiers, and FINRA-style autonomy monitors are **external references / future conformity work**, not mandatory shipping gates while D23 + doc 23 still describe the live threat model. |

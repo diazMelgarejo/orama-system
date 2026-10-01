@@ -11,7 +11,8 @@
 > progressive-HTML or hybrid extraction path.
 > **Implementation branch:** `web-app-orchestration-v2-implementation`
 > **Eng review update:** launch, jobs, artifacts, and PT contract handling shipped before frontend build-out.
-> **Related:** knowledge-portal HITL ladder and as-built Class-0 auth —
+> **Related:** knowledge-portal HITL ladder. Knowledge search stays public;
+> portal MCP and A2A require a control-plane bearer or local token —
 > [`70-portal-knowledge-hitl-development-ladder.md`](70-portal-knowledge-hitl-development-ladder.md).
 > This plan is not superseded.
 

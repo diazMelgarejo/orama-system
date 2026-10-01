@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import os
 import secrets
+import math
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Mapping, MutableMapping
 
@@ -514,6 +516,36 @@ def redact_operator_value(value: Any) -> Any:
     return value
 
 
+def _coerce_job_epoch_seconds(value: Any) -> float | None:
+    """Normalize supervisor timestamps for portal pollers (ISO ``ts`` or unix).
+
+    Rejects non-finite floats (``NaN``, ``Infinity``) so one malformed record
+    cannot poison list responses.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        parsed = float(value)
+        return parsed if math.isfinite(parsed) else None
+    if isinstance(value, str):
+        cleaned = value.strip()
+        if not cleaned:
+            return None
+        try:
+            parsed = float(cleaned)
+            if math.isfinite(parsed):
+                return parsed
+        except ValueError:
+            pass
+        iso = cleaned.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(iso).timestamp()
+            return parsed if math.isfinite(parsed) else None
+        except ValueError:
+            return None
+    return None
+
+
 def redact_runtime_section(payload: Any) -> dict[str, Any]:
     if not isinstance(payload, dict):
         return {"available": False}
@@ -531,27 +563,76 @@ def redact_runtime_section(payload: Any) -> dict[str, Any]:
 
 
 def redact_job_record(job: Mapping[str, Any]) -> dict[str, Any]:
+    """Return one supervisor job safe for portal list/detail views.
+
+    Drops ``prompt``, ``metadata``, ``spec``, and ``result``. Keeps the columns
+    the embedded jobs table renders (``intent``, ``status``, ``backend``,
+    timestamps, ``elapsed_s``), hoisting ``backend_hint`` / ``intent`` /
+    ``role`` from a nested ``spec`` when the lifecycle event omits top-level
+    copies. ``created_at`` is the job start. A lone event ``ts`` is the latest
+    lifecycle time and becomes ``updated_at``, not ``created_at``.
+    """
     safe: dict[str, Any] = {}
-    for key in ("id", "job_id", "status", "role", "intent", "backend_hint", "created_at", "updated_at"):
+    for key in (
+        "id",
+        "job_id",
+        "status",
+        "role",
+        "intent",
+        "backend_hint",
+        "backend",
+        "elapsed_s",
+    ):
         if key in job and job[key] is not None:
             safe[key] = job[key]
+    spec = job.get("spec")
+    if isinstance(spec, dict):
+        for key in ("intent", "role", "backend_hint"):
+            if key not in safe and spec.get(key) is not None:
+                safe[key] = spec[key]
+    if "backend" not in safe:
+        hint = safe.get("backend_hint")
+        if hint is not None:
+            safe["backend"] = hint
+    created_epoch = _coerce_job_epoch_seconds(job.get("created_at"))
+    if created_epoch is not None:
+        safe["created_at"] = created_epoch
+    updated_epoch = _coerce_job_epoch_seconds(job.get("updated_at"))
+    if updated_epoch is None:
+        updated_epoch = _coerce_job_epoch_seconds(job.get("ts"))
+    if updated_epoch is not None:
+        safe["updated_at"] = updated_epoch
+    if "elapsed_s" not in safe:
+        if created_epoch is not None and updated_epoch is not None and updated_epoch >= created_epoch:
+            safe["elapsed_s"] = updated_epoch - created_epoch
     if "id" not in safe and "job_id" in safe:
         safe["id"] = safe["job_id"]
     return safe
 
 
-def redact_jobs_payload(payload: Any) -> dict[str, Any]:
-    jobs: list[dict[str, Any]] = []
-    if isinstance(payload, dict):
-        raw_jobs = payload.get("jobs", [])
-    elif isinstance(payload, list):
+def redact_jobs_list(payload: Any) -> list[dict[str, Any]]:
+    """Redact each job and return a bare list for ``GET /api/v1/jobs`` pollers."""
+    if isinstance(payload, list):
         raw_jobs = payload
+    elif isinstance(payload, dict):
+        candidate = payload.get("jobs", [])
+        raw_jobs = candidate if isinstance(candidate, list) else []
     else:
         raw_jobs = []
-    if isinstance(raw_jobs, list):
-        for item in raw_jobs:
-            if isinstance(item, dict):
-                jobs.append(redact_job_record(item))
+    redacted: list[dict[str, Any]] = []
+    for item in raw_jobs:
+        if not isinstance(item, dict):
+            continue
+        try:
+            redacted.append(redact_job_record(item))
+        except Exception:
+            continue
+    return redacted
+
+
+def redact_jobs_payload(payload: Any) -> dict[str, Any]:
+    """Wrap ``redact_jobs_list`` for legacy ``{"jobs", "count"}`` portal responses."""
+    jobs = redact_jobs_list(payload)
     return {"jobs": jobs, "count": len(jobs)}
 
 
