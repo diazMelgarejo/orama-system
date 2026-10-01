@@ -522,8 +522,13 @@ def test_jobs_proxy_replay_forwards_not_replayable(monkeypatch):
 def test_jobs_proxy_replay_forwards_generic_replay_detail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Forward Perpetua generic replay 400 detail text to the portal error field."""
+
     class _GenericReplay(_FakeJobsClient):
+        """Simulate Perpetua replay rejection with the generic completion message."""
+
         async def post(self, url: str, json=None, **kwargs):
+            """Record the replay POST and return HTTP 400 with a generic detail."""
             self.calls.append(("POST", url, json))
             return _FakeResponse(
                 {"detail": "Replay request could not be completed"},
@@ -544,8 +549,13 @@ def test_jobs_proxy_replay_forwards_generic_replay_detail(
 def test_jobs_proxy_replay_forwards_malformed_job_id_detail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Forward Perpetua malformed job id detail without rewriting the message."""
+
     class _BadIdReplay(_FakeJobsClient):
+        """Simulate Perpetua replay rejection for a non-UUID job id."""
+
         async def post(self, url: str, json=None, **kwargs):
+            """Record the replay POST and return HTTP 400 with the UUID4 requirement."""
             self.calls.append(("POST", url, json))
             return _FakeResponse(
                 {

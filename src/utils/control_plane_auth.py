@@ -634,6 +634,7 @@ def redact_jobs_list(payload: Any) -> list[dict[str, Any]]:
 
 
 def redact_jobs_payload(payload: Any) -> dict[str, Any]:
+    """Wrap ``redact_jobs_list`` for legacy ``{"jobs", "count"}`` portal responses."""
     jobs = redact_jobs_list(payload)
     return {"jobs": jobs, "count": len(jobs)}
 

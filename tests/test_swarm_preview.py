@@ -63,7 +63,10 @@ def _portal_status():
 
 
 def _patch_hardware_policy(monkeypatch):
+    """Stub hardware probes so preview tests do not call live LM Studio endpoints."""
+
     async def fake_hardware_policy():
+        """Return the default ok hardware_policy snapshot used by preview routes."""
         return _portal_status()["hardware_policy"]
 
     monkeypatch.setattr(
@@ -74,6 +77,7 @@ def _patch_hardware_policy(monkeypatch):
 
 
 def test_swarm_preview_returns_worker_assignments(monkeypatch):
+    """Preview includes routed worker assignments for each swarm role."""
     _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = False
     _FakeRouteClient.posts = []
@@ -140,6 +144,7 @@ def test_swarm_preview_marks_routing_fallback(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_swarm_preview_does_not_publish_status_notification(monkeypatch):
+    """Preview must not publish api_status notifications (hardware snapshot only)."""
     _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = False
     _FakeRouteClient.posts = []

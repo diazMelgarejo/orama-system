@@ -12,6 +12,7 @@ from utils.control_plane_auth import redact_job_record, redact_jobs_list
 
 @pytest.mark.unit
 def test_redact_job_record_strips_prompt_and_metadata() -> None:
+    """Drop prompt/metadata while keeping list columns and elapsed_s."""
     raw = {
         "job_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "status": "SUCCEEDED",
@@ -33,6 +34,7 @@ def test_redact_job_record_strips_prompt_and_metadata() -> None:
 
 @pytest.mark.unit
 def test_redact_job_record_normalizes_iso_ts_to_epoch_for_panel() -> None:
+    """Map ISO ``ts`` to float epoch seconds for the jobs table."""
     safe = redact_job_record(
         {
             "job_id": "j1",
@@ -47,6 +49,7 @@ def test_redact_job_record_normalizes_iso_ts_to_epoch_for_panel() -> None:
 
 @pytest.mark.unit
 def test_redact_job_record_rejects_non_finite_numeric_timestamps() -> None:
+    """Omit created_at when coercion yields NaN or other non-finite values."""
     safe = redact_job_record(
         {
             "job_id": "j-nan",
@@ -59,6 +62,7 @@ def test_redact_job_record_rejects_non_finite_numeric_timestamps() -> None:
 
 @pytest.mark.unit
 def test_redact_job_record_hoists_spec_fields_for_lifecycle_events() -> None:
+    """Copy intent/role/backend from nested spec when top-level fields are absent."""
     safe = redact_job_record(
         {
             "job_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -80,6 +84,7 @@ def test_redact_job_record_hoists_spec_fields_for_lifecycle_events() -> None:
 
 @pytest.mark.unit
 def test_redact_jobs_list_accepts_pt_wrapper_or_bare_list() -> None:
+    """Accept Perpetua ``{"jobs": [...]}`` or a bare supervisor list."""
     wrapped = {
         "jobs": [
             {
@@ -98,6 +103,7 @@ def test_redact_jobs_list_accepts_pt_wrapper_or_bare_list() -> None:
 
 @pytest.mark.unit
 def test_redact_jobs_list_skips_malformed_row_without_breaking_list() -> None:
+    """Skip rows that fail redaction without dropping the whole list response."""
     payload = {
         "jobs": [
             {"job_id": "ok", "status": "QUEUED", "created_at": "NaN"},
@@ -111,10 +117,13 @@ def test_redact_jobs_list_skips_malformed_row_without_breaking_list() -> None:
 
 
 class _FakeJobsClient:
+    """Minimal httpx.AsyncClient stand-in for ``GET /api/v1/jobs`` proxy tests."""
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        pass
+        """Accept the same constructor signature as httpx.AsyncClient."""
 
     async def __aenter__(self) -> _FakeJobsClient:
+        """Enter the async context manager."""
         return self
 
     async def __aexit__(
@@ -123,9 +132,11 @@ class _FakeJobsClient:
         exc: BaseException | None,
         tb: Any,
     ) -> bool:
+        """Exit the async context manager without suppressing exceptions."""
         return False
 
     async def get(self, url: str, params: Any = None, **kwargs: Any) -> MagicMock:
+        """Return a mocked Perpetua jobs list payload."""
         assert url.endswith("/v1/jobs")
         response = MagicMock()
         response.status_code = 200
@@ -148,6 +159,7 @@ class _FakeJobsClient:
 def test_api_v1_jobs_returns_redacted_bare_list(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """``GET /api/v1/jobs`` returns a redacted bare list, not a wrapped object."""
     import orama_system.portal_server as portal_server
 
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)

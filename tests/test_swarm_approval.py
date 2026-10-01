@@ -194,6 +194,7 @@ def test_fingerprint_covers_all_dispatched_options(
 
 
 def test_claim_launch_is_exclusive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only one ``claim_launch_for_dispatch`` succeeds per preview_id at a time."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     preview = {"objective": "ship", "assignments": [], "task_type": "implementation"}
     issued = swarm_approval.issue_approval(preview)

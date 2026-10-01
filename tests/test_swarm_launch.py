@@ -70,7 +70,10 @@ def _portal_status(ok=True):
 
 
 def _patch_hardware_policy(monkeypatch: pytest.MonkeyPatch, *, ok: bool = True) -> None:
+    """Stub portal hardware probes so launch tests skip live LM Studio calls."""
+
     async def fake_hardware_policy() -> dict[str, Any]:
+        """Return a minimal hardware_policy block with the requested ok flag."""
         return _portal_status(ok=ok)["hardware_policy"]
 
     monkeypatch.setattr(
@@ -186,6 +189,7 @@ def test_hardware_block_does_not_consume_approval(monkeypatch: pytest.MonkeyPatc
 
 
 def test_invalid_token_is_rejected_before_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reject forged approval tokens before any Perpetua job POST is attempted."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     _patch_hardware_policy(monkeypatch)
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
@@ -320,6 +324,7 @@ def test_swarm_launch_returns_partial_dispatch_failure(monkeypatch):
 
 
 def test_swarm_launch_blocks_retry_when_orphans_remain(monkeypatch):
+    """Block a second launch when partial dispatch left orphaned Perpetua jobs."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     _patch_hardware_policy(monkeypatch)
     _FakeLaunchClient.submitted = []
@@ -340,6 +345,7 @@ def test_swarm_launch_blocks_retry_when_orphans_remain(monkeypatch):
 
 
 def test_swarm_launch_retry_after_partial_dispatch_failure(monkeypatch):
+    """Allow one retry after rollback when every accepted job was cancelled."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     _patch_hardware_policy(monkeypatch)
     _FakeLaunchClient.submitted = []
@@ -362,6 +368,7 @@ def test_swarm_launch_retry_after_partial_dispatch_failure(monkeypatch):
 
 
 def test_swarm_launch_approval_is_single_use_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP launch consumes approval; a second POST with the same token fails."""
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
 
     _patch_hardware_policy(monkeypatch)
