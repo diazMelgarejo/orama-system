@@ -141,6 +141,30 @@ def test_sibling_ahead_of_canonical_fails_closed(tmp_path: Path) -> None:
     assert "GUARD_SYNC_E_DIVERGENCE" in result.stderr
 
 
+def test_cursor_helper_ahead_of_canonical_fails_closed(tmp_path: Path) -> None:
+    """Cursor helpers are synced payloads, not an unchecked side channel."""
+    sibling = tmp_path / "Perpetua-Tools"
+    rel = "scripts/cursor/append-pr-body.sh"
+
+    _init_repo(sibling, "Tester", "tester@example.com")
+    _commit_file(sibling, rel, "# sibling innovation\n", "cursor helper ahead")
+
+    env = os.environ.copy()
+    env["GUARD_SYNC_CANON_ROOT"] = str(ROOT)
+    result = subprocess.run(
+        ["bash", str(CHECKER), str(sibling)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+    )
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "scripts/cursor/append-pr-body.sh" in result.stdout
+    assert "GUARD_SYNC_E_DIVERGENCE" in result.stderr
+
+
 def test_githooks_directory_without_effective_hookspath_is_not_scanned(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     canon = workspace / "orama-system"
