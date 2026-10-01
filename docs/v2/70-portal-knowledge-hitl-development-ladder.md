@@ -98,12 +98,36 @@ The exclusive preview claim remains consumed once downstream dispatch becomes
 ambiguous. A successful cancellation HTTP response is an acknowledgement, not
 proof that the job stopped. The portal restores a claimed preview only after
 every accepted PT job reports a persisted `cancelled` terminal state. A
-terminally confirmed PT cancellation also releases that job’s active
-supervisor admission slot; acknowledgement-only and unresolved outcomes
-remain non-retryable. Cancellation acknowledgement is not execution
-containment. For CLI-backed jobs, preview restoration must remain blocked
-unless Perpetua reports the required containment state according to its
-execution-control contract.
+PT cancellation is rollback-final for portal purposes only when Perpetua
+returns `terminal_state="cancelled"` **and** the corresponding supervisor
+admission entry is no longer active (`_active` on the PT side). That is
+not a guarantee that CLI child processes are dead; external execution
+containment is a separate contract (see
+[`references/portal-pt-cancel-rollback-contract.md`](references/portal-pt-cancel-rollback-contract.md)).
+
+Acknowledgement-only and unresolved outcomes remain non-retryable.
+Cancellation acknowledgement is not execution containment. For CLI-backed
+jobs, preview restoration must remain blocked unless Perpetua reports the
+required containment state according to its execution-control contract.
+
+**Authority split:** Perpetua-Tools owns job lifecycle, admission-slot
+finality, and the cancel HTTP response schema. orama-system owns exclusive
+preview claims and retry eligibility. Orama does not inspect `_active`; it
+consumes only the redacted cancel payload below.
+
+**Perpetua cancel response (rollback consumer minimum):**
+
+```json
+{
+  "cancel_requested": true,
+  "terminal_state": "cancelled"
+}
+```
+
+Any other `terminal_state`, missing fields, transport failure, or accepted
+job without a stable `job_id` keeps the approval consumed (`orphaned_jobs`,
+`launch_blocked`). Do not add a second `rollback_verified` flag on the PT
+API; the pair above is sufficient when PT also releases the admission slot.
 
 ```mermaid
 sequenceDiagram
