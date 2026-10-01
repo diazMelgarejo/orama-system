@@ -14,6 +14,7 @@ pytestmark = pytest.mark.unit
 
 
 def _init_repo(path: Path, name: str, email: str) -> None:
+    """Initialize a git fixture repository with a fixed identity."""
     path.mkdir(parents=True, exist_ok=True)
     subprocess.run(["git", "init", "-b", "main"], cwd=path, check=True, capture_output=True)
     subprocess.run(
@@ -31,6 +32,7 @@ def _init_repo(path: Path, name: str, email: str) -> None:
 
 
 def _commit_file(repo: Path, rel: str, content: str, msg: str) -> None:
+    """Add and commit one file in a fixture repository."""
     dest = repo / rel
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(content, encoding="utf-8")
@@ -94,6 +96,7 @@ def test_sibling_lagging_canonical_history_passes(tmp_path: Path) -> None:
 
 
 def test_hook_git_environment_does_not_rebind_independent_siblings(tmp_path: Path) -> None:
+    """Git env from a hook must not rebind an independent sibling checkout."""
     workspace = tmp_path / "ws"
     canon = workspace / "orama-system"
     sibling = workspace / "Perpetua-Tools"
@@ -141,7 +144,32 @@ def test_sibling_ahead_of_canonical_fails_closed(tmp_path: Path) -> None:
     assert "GUARD_SYNC_E_DIVERGENCE" in result.stderr
 
 
+def test_cursor_helper_ahead_of_canonical_fails_closed(tmp_path: Path) -> None:
+    """Cursor helpers are synced payloads, not an unchecked side channel."""
+    sibling = tmp_path / "Perpetua-Tools"
+    rel = "scripts/cursor/append-pr-body.sh"
+
+    _init_repo(sibling, "Tester", "tester@example.com")
+    _commit_file(sibling, rel, "# sibling innovation\n", "cursor helper ahead")
+
+    env = os.environ.copy()
+    env["GUARD_SYNC_CANON_ROOT"] = str(ROOT)
+    result = subprocess.run(
+        ["bash", str(CHECKER), str(sibling)],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        env=env,
+    )
+
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "scripts/cursor/append-pr-body.sh" in result.stdout
+    assert "GUARD_SYNC_E_DIVERGENCE" in result.stderr
+
+
 def test_githooks_directory_without_effective_hookspath_is_not_scanned(tmp_path: Path) -> None:
+    """Inactive .githooks copies are ignored until core.hooksPath selects them."""
     workspace = tmp_path / "ws"
     canon = workspace / "orama-system"
     sibling = workspace / "Perpetua-Tools"
@@ -160,6 +188,7 @@ def test_githooks_directory_without_effective_hookspath_is_not_scanned(tmp_path:
 
 
 def test_githooks_with_effective_hookspath_is_scanned(tmp_path: Path) -> None:
+    """An active sibling pre-push ahead of canonical history fails closed for promotion."""
     workspace = tmp_path / "ws"
     canon = workspace / "orama-system"
     sibling = workspace / "Perpetua-Tools"
@@ -170,13 +199,18 @@ def test_githooks_with_effective_hookspath_is_scanned(tmp_path: Path) -> None:
 
     _init_repo(sibling, "Tester", "tester@example.com")
     subprocess.run(["git", "config", "core.hooksPath", ".githooks"], cwd=sibling, check=True)
-    _commit_file(sibling, rel, "# divergent active hook\n", "active divergent hook")
+    _commit_file(sibling, rel, "# canonical hook\n", "mirror canonical hook")
+    _commit_file(sibling, rel, "# sibling hook ahead of canonical\n", "promote this hook first")
 
     result = _run_checker(workspace, canon)
 
     assert result.returncode == 1, result.stdout + result.stderr
     assert ".githooks/pre-push" in result.stdout
+    assert "canonical lags sibling" in result.stdout
+    assert "promote sibling" in result.stdout
     assert "GUARD_SYNC_E_DIVERGENCE" in result.stderr
+
+
 def test_rejects_surplus_arguments(tmp_path: Path) -> None:
     workspace = tmp_path / "ws"
     canon = workspace / "orama-system"
@@ -222,6 +256,7 @@ def test_linked_worktree_sibling_discovered(tmp_path: Path) -> None:
 
 
 def test_canonical_linked_worktree_is_not_a_downstream_sync_target(tmp_path: Path) -> None:
+    """A linked worktree of canonical history is not a downstream mirror."""
     workspace = tmp_path / "ws"
     canon = workspace / "orama-system"
     linked_worktree = workspace / "orama-linked"
