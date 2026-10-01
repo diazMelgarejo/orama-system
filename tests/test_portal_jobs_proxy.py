@@ -495,7 +495,9 @@ def test_jobs_proxy_replay_pt_404_error(monkeypatch):
     assert body["upstream_status"] == 404
 
 
-def test_jobs_proxy_replay_forwards_not_replayable(monkeypatch):
+def test_jobs_proxy_replay_forwards_not_replayable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """PT 409 'Job is not replayable' stays a distinct portal error."""
 
     class _NotReplayable(_FakeJobsClient):
@@ -564,7 +566,12 @@ def test_jobs_proxy_replay_forwards_malformed_job_id_detail(
     class _BadIdReplay(_FakeJobsClient):
         """Simulate Perpetua replay rejection for a non-UUID job id."""
 
-        async def post(self, url: str, json=None, **kwargs):
+        async def post(
+            self,
+            url: str,
+            json: object = None,
+            **kwargs: object,
+        ) -> _FakeResponse:
             """Record the replay POST and return HTTP 400 with the UUID4 requirement."""
             self.calls.append(("POST", url, json))
             return _FakeResponse(
