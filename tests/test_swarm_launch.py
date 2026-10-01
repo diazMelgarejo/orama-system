@@ -411,7 +411,7 @@ def test_swarm_launch_blocks_retry_when_orphans_remain(monkeypatch):
         ("cancelled", False),
     ],
 )
-def test_cancellation_allows_restore_matrix(body, allows: bool) -> None:
+def test_cancellation_allows_restore_matrix(body: Any, allows: bool) -> None:
     """Canonical rollback matrix for v1 containment fields."""
     assert portal_server.cancellation_allows_restore(body) is allows
 

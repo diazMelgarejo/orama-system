@@ -1,7 +1,8 @@
 # Portal ↔ Perpetua cancel and rollback contract
 
-**Status:** v1 direct-child containment implemented (lockstep follow-up to PR #374 /
-#414). Process-tree reaping and expanded telemetry remain v2 documentation only.
+**Status:** v1 direct-child containment implemented (lockstep follow-up to PR #374
+and PR #414). Process-tree reaping and expanded telemetry remain v2
+documentation only.
 
 ## Purpose
 
