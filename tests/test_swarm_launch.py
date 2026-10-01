@@ -27,6 +27,7 @@ class _FakeResponse:
 
 class _FakeLaunchClient:
     submitted = []
+    cancelled = []
     fail_role = None
     route_payload = {"backend_hint": "lmstudio-mac", "model_hint": "Qwen3.5-9B-MLX-4bit"}
 
@@ -42,6 +43,10 @@ class _FakeLaunchClient:
     async def post(self, url: str, json=None, **kwargs):
         if url.endswith("/models/route"):
             return _FakeResponse(self.route_payload)
+        if url.endswith("/cancel"):
+            job_id = url.rsplit("/", 2)[-2]
+            self.cancelled.append(job_id)
+            return _FakeResponse({"job_id": job_id, "cancel_requested": True})
         if url.endswith("/v1/jobs"):
             self.submitted.append(json)
             role = json["metadata"]["role"]
@@ -61,6 +66,17 @@ def _portal_status(ok=True):
     }
 
 
+def _patch_hardware_policy(monkeypatch: pytest.MonkeyPatch, *, ok: bool = True) -> None:
+    async def fake_hardware_policy() -> dict[str, Any]:
+        return _portal_status(ok=ok)["hardware_policy"]
+
+    monkeypatch.setattr(
+        portal_server,
+        "_portal_hardware_policy_snapshot",
+        fake_hardware_policy,
+    )
+
+
 @pytest.fixture(autouse=True)
 def _isolated_swarm_state(monkeypatch: pytest.MonkeyPatch):
     swarm_approval._cache.clear()
@@ -68,6 +84,7 @@ def _isolated_swarm_state(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.delenv("ORAMA_SWARM_LEGACY_APPROVE", raising=False)
     monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
     _FakeLaunchClient.submitted = []
+    _FakeLaunchClient.cancelled = []
     _FakeLaunchClient.fail_role = None
     _FakeLaunchClient.route_payload = {
         "backend_hint": "lmstudio-mac",
@@ -78,10 +95,7 @@ def _isolated_swarm_state(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_swarm_launch_requires_approval(monkeypatch):
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         response = client.post("/api/swarm/launch", json={"objective": "Ship launch"})
 
@@ -107,10 +121,7 @@ def test_swarm_launch_rejects_boolean_only_approval(monkeypatch: pytest.MonkeyPa
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "0")
 
-    async def fake_api_status() -> dict[str, Any]:
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         response = client.post(
             "/api/swarm/launch",
@@ -124,11 +135,9 @@ def test_swarm_launch_rejects_boolean_only_approval(monkeypatch: pytest.MonkeyPa
 def test_swarm_launch_blocks_on_hardware_policy(monkeypatch):
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
 
-    async def fake_api_status():
-        return _portal_status(ok=False)
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch, ok=False)
     _FakeLaunchClient.submitted = []
+    _FakeLaunchClient.cancelled = []
     _FakeLaunchClient.fail_role = None
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
@@ -147,10 +156,14 @@ def test_hardware_block_does_not_consume_approval(monkeypatch: pytest.MonkeyPatc
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     status = {"ok": True}
 
-    async def fake_api_status():
-        return _portal_status(ok=status["ok"])
+    async def fake_hardware_policy():
+        return _portal_status(ok=status["ok"])["hardware_policy"]
 
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(
+        portal_server,
+        "_portal_hardware_policy_snapshot",
+        fake_hardware_policy,
+    )
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
@@ -167,25 +180,29 @@ def test_hardware_block_does_not_consume_approval(monkeypatch: pytest.MonkeyPatc
 
 def test_invalid_token_is_rejected_before_hardware_probe(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
-    status_calls = 0
+    policy_calls = 0
 
-    async def fake_api_status():
-        nonlocal status_calls
-        status_calls += 1
-        return _portal_status(ok=False)
+    async def fake_hardware_policy():
+        nonlocal policy_calls
+        policy_calls += 1
+        return _portal_status(ok=False)["hardware_policy"]
 
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(
+        portal_server,
+        "_portal_hardware_policy_snapshot",
+        fake_hardware_policy,
+    )
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         payload = _approved_payload(client, "Ship launch")
-        calls_after_preview = status_calls
+        calls_after_preview = policy_calls
         payload["approval_token"] = "deadbeef" * 8
         response = client.post("/api/swarm/launch", json=payload)
 
     assert response.status_code == 422
     assert response.json()["detail"] == "invalid approval_token"
-    assert status_calls == calls_after_preview
+    assert policy_calls == calls_after_preview
 
 
 @pytest.mark.parametrize(
@@ -205,10 +222,7 @@ def test_launch_rejects_request_drift_from_cached_preview(
 ) -> None:
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
 
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
     preview_request = {
         "objective": "Ship launch",
@@ -236,10 +250,7 @@ def test_legacy_launch_does_not_mint_reusable_approval(monkeypatch: pytest.Monke
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
     monkeypatch.setenv("ORAMA_SWARM_LEGACY_APPROVE", "1")
 
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
@@ -258,11 +269,9 @@ def test_legacy_launch_does_not_mint_reusable_approval(monkeypatch: pytest.Monke
 def test_swarm_launch_submits_metadata_compatible_pt_jobs(monkeypatch):
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
 
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     _FakeLaunchClient.submitted = []
+    _FakeLaunchClient.cancelled = []
     _FakeLaunchClient.fail_role = None
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
@@ -289,10 +298,7 @@ def test_swarm_launch_submits_metadata_compatible_pt_jobs(monkeypatch):
 def test_swarm_launch_returns_partial_dispatch_failure(monkeypatch):
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
 
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     _FakeLaunchClient.submitted = []
     _FakeLaunchClient.fail_role = "verifier-agent"
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
@@ -308,16 +314,41 @@ def test_swarm_launch_returns_partial_dispatch_failure(monkeypatch):
     assert body["accepted"] is False
     assert body["failed_jobs"][0]["role"] == "verifier-agent"
     assert "request" not in body["failed_jobs"][0]
-    assert len(body["accepted_jobs"]) == 4
+    assert body["accepted_jobs"] == []
+    assert len(body["cancelled_jobs"]) == 3
+    assert _FakeLaunchClient.cancelled == [
+        "job-context-agent",
+        "job-architect-agent",
+        "job-executor-agent",
+    ]
+
+
+def test_swarm_launch_retry_after_partial_dispatch_failure(monkeypatch):
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+    _patch_hardware_policy(monkeypatch)
+    _FakeLaunchClient.submitted = []
+    _FakeLaunchClient.cancelled = []
+    _FakeLaunchClient.fail_role = "verifier-agent"
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        payload = _approved_payload(client, "Ship launch")
+        first = client.post("/api/swarm/launch", json=payload)
+        _FakeLaunchClient.fail_role = None
+        _FakeLaunchClient.submitted = []
+        retry = client.post("/api/swarm/launch", json=payload)
+
+    assert first.status_code == 200
+    assert first.json()["accepted"] is False
+    assert retry.status_code == 200
+    assert retry.json()["accepted"] is True
+    assert len(retry.json()["accepted_jobs"]) == 5
 
 
 def test_swarm_launch_approval_is_single_use_over_http(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
 
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
@@ -337,10 +368,7 @@ def test_non_string_route_hints_are_not_dispatched(monkeypatch: pytest.MonkeyPat
         "model_hint": {"id": "model-a"},
     }
 
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:

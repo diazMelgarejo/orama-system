@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from typing import ClassVar
+from unittest.mock import AsyncMock
 
+import pytest
 from fastapi.testclient import TestClient
 
 import orama_system.portal_server as portal_server
@@ -60,11 +62,19 @@ def _portal_status():
     }
 
 
-def test_swarm_preview_returns_worker_assignments(monkeypatch):
-    async def fake_api_status():
-        return _portal_status()
+def _patch_hardware_policy(monkeypatch):
+    async def fake_hardware_policy():
+        return _portal_status()["hardware_policy"]
 
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    monkeypatch.setattr(
+        portal_server,
+        "_portal_hardware_policy_snapshot",
+        fake_hardware_policy,
+    )
+
+
+def test_swarm_preview_returns_worker_assignments(monkeypatch):
+    _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = False
     _FakeRouteClient.posts = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
@@ -93,10 +103,7 @@ def test_swarm_preview_rejects_empty_objective():
 
 
 def test_swarm_preview_includes_backend_hints(monkeypatch):
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = False
     _FakeRouteClient.posts = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
@@ -116,10 +123,7 @@ def test_swarm_preview_includes_backend_hints(monkeypatch):
 
 
 def test_swarm_preview_marks_routing_fallback(monkeypatch):
-    async def fake_api_status():
-        return _portal_status()
-
-    monkeypatch.setattr(portal_server, "api_status", fake_api_status)
+    _patch_hardware_policy(monkeypatch)
     _FakeRouteClient.fail = True
     _FakeRouteClient.posts = []
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
@@ -132,3 +136,19 @@ def test_swarm_preview_marks_routing_fallback(monkeypatch):
     assert body["routing_source"] == "portal:fallback"
     assert {item["routing_source"] for item in body["assignments"]} == {"portal:fallback"}
     assert all(item["backend_hint"] for item in body["assignments"])
+
+
+@pytest.mark.asyncio
+async def test_swarm_preview_does_not_publish_status_notification(monkeypatch):
+    _patch_hardware_policy(monkeypatch)
+    _FakeRouteClient.fail = False
+    _FakeRouteClient.posts = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeRouteClient)
+    publish = AsyncMock()
+    monkeypatch.setattr(portal_server._notification_publisher, "publish", publish)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/swarm/preview", json={"objective": "Review contracts"})
+
+    assert response.status_code == 200
+    publish.assert_not_called()

@@ -82,7 +82,6 @@ from utils.control_plane_auth import (
     lifecycle_origin_failure,
     portal_requires_auth,
     request_is_loopback,
-    resolved_control_plane_token,
     token_matches_control_plane,
     redact_activity_payload,
     redact_agents_payload,
@@ -112,10 +111,13 @@ VERSION = "1.1.1.0"
 
 _CLIENT_ERROR_FALLBACK = "Request failed"
 _REPLAY_UPSTREAM_DETAILS = frozenset({
-    # Keep in lockstep with Perpetua-Tools _replay_value_error_to_http.
+    # Keep in lockstep with Perpetua-Tools _replay_value_error_to_http and
+    # _validate_job_id replay/cancel boundary messages.
     "Job not found",
     "Job is not replayable",
     "Job has no queued specification",
+    "Replay request could not be completed",
+    "job_id must be a uuid4-formatted server-issued identifier",
 })
 
 
@@ -1467,6 +1469,43 @@ def _load_hardware_policy() -> tuple[Dict[str, List[str]], str]:
     return _simple_policy_parse(policy_path.read_text(encoding="utf-8")), str(policy_path)
 
 
+async def _portal_hardware_policy_snapshot() -> Dict[str, Any]:
+    """Hardware policy from LM Studio probes only (no full status / notifications)."""
+    try:
+        _dyn_win_lms = [_get_win_lms_url()]
+    except Exception:
+        _dyn_win_lms = list(LMS_WIN_ENDPOINTS)
+
+    async with _portal_untrusted_http_client(timeout=PROBE_TIMEOUT) as probe_client:
+        gather_targets = [
+            _probe_lms_models(probe_client, LMS_MAC_ENDPOINT, LMS_API_TOKEN),
+            *[_probe_lms_models(probe_client, ep, LMS_API_TOKEN) for ep in _dyn_win_lms],
+        ]
+        probe_results = await asyncio.gather(*gather_targets)
+        lm_mac_ok, lm_mac_models = probe_results[0]
+        lm_win_results = probe_results[1:]
+
+    services: Dict[str, Any] = {
+        "lmstudio_mac": {
+            "ok": lm_mac_ok,
+            "models": lm_mac_models,
+            "url": LMS_MAC_ENDPOINT,
+        },
+    }
+    if len(_dyn_win_lms) == 1:
+        ok, models = lm_win_results[0] if lm_win_results else (False, [])
+        services["lmstudio_win"] = {"ok": ok, "models": models, "url": _dyn_win_lms[0]}
+    else:
+        for index, endpoint in enumerate(_dyn_win_lms):
+            ok, models = lm_win_results[index] if index < len(lm_win_results) else (False, [])
+            services[f"lmstudio_win_{index}"] = {
+                "ok": ok,
+                "models": models,
+                "url": endpoint,
+            }
+    return _hardware_policy_status(services)
+
+
 def _hardware_policy_status(services: Dict[str, Any]) -> Dict[str, Any]:
     policy, policy_path = _load_hardware_policy()
     win_only = {m.lower() for m in policy.get("windows_only", [])}
@@ -1859,12 +1898,9 @@ def _co_orchestration_html_response(
     from fastapi.responses import HTMLResponse
     from orama_system.portals.co_orchestration import render_co_orchestration_page
 
-    browser_token = ""
-    if auth_enforced() and request_is_loopback(request):
-        browser_token = resolved_control_plane_token()
     html = render_co_orchestration_page(
         version=VERSION,
-        cp_fetch_bootstrap=_portal_cp_fetch_bootstrap(browser_token),
+        cp_fetch_bootstrap=_portal_cp_fetch_bootstrap(""),
         local_role=local_platform(),
         platform_skin=platform_skin,
     )
@@ -2114,8 +2150,7 @@ async def _build_swarm_preview(
     if len(objective) > 4000:
         raise HTTPException(status_code=422, detail="objective is too long")
 
-    portal_status = await api_status()
-    hardware_policy = portal_status.get("hardware_policy", {})
+    hardware_policy = await _portal_hardware_policy_snapshot()
 
     async with _portal_http_client(timeout=PROBE_TIMEOUT) as client:
         routed = await asyncio.gather(
@@ -2367,8 +2402,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
             )
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
-        portal_status = await api_status()
-        hardware_policy = portal_status.get("hardware_policy", {})
+        hardware_policy = await _portal_hardware_policy_snapshot()
     else:
         try:
             check_launch(
@@ -2391,15 +2425,11 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 "accepted_jobs": [],
             },
         )
-    if stored is not None:
-        try:
-            consume_launch(req.preview_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-
     session_id = f"swarm-{uuid.uuid4().hex}"
     accepted_jobs: List[Dict[str, Any]] = []
     failed_jobs: List[Dict[str, Any]] = []
+    orphaned_jobs: List[str] = []
+    cancelled_jobs: List[str] = []
     async with _portal_http_client(timeout=10.0) as client:
         for assignment in preview["assignments"]:
             metadata = {
@@ -2448,13 +2478,38 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                     "role": assignment["role"],
                     "error": _client_safe_error(exc),
                 })
+                break
+
+        if failed_jobs and accepted_jobs:
+            for entry in accepted_jobs:
+                job_id = entry.get("job_id")
+                if not job_id:
+                    continue
+                try:
+                    cancel_r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/cancel")
+                    cancel_r.raise_for_status()
+                    cancelled_jobs.append(str(job_id))
+                except Exception as cancel_exc:
+                    log.warning(
+                        "swarm launch rollback: cancel %s failed: %s",
+                        job_id,
+                        cancel_exc,
+                    )
+                    orphaned_jobs.append(str(job_id))
+            accepted_jobs = []
+
+    if not failed_jobs and stored is not None:
+        try:
+            consume_launch(req.preview_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
 
     public_preview = {
         key: value
         for key, value in preview.items()
         if key not in {"preview_id", "approval_token", "strict_mode"}
     }
-    return {
+    result: Dict[str, Any] = {
         "accepted": not failed_jobs,
         "blocked": False,
         "session_id": session_id,
@@ -2462,6 +2517,11 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
         "failed_jobs": failed_jobs,
         "preview": public_preview,
     }
+    if cancelled_jobs:
+        result["cancelled_jobs"] = cancelled_jobs
+    if orphaned_jobs:
+        result["orphaned_jobs"] = orphaned_jobs
+    return result
 
 
 @app.get("/api/jobs")
@@ -2950,8 +3010,7 @@ async def api_status():
 
 @app.get("/api/hardware-policy")
 async def api_hardware_policy():
-    status = await api_status()
-    return status.get("hardware_policy", {})
+    return await _portal_hardware_policy_snapshot()
 
 
 @app.get("/api/tools")
@@ -3023,7 +3082,12 @@ _ENV_WRITE_TARGETS = [
 
 def _write_env_var(env_var: str, value: str) -> tuple[bool, str]:
     """Write/update an env var in .env.local. Atomic write + file lock to prevent races."""
-    import fcntl, tempfile, re as _re
+    import tempfile, re as _re
+
+    try:
+        import fcntl
+    except ImportError:
+        return False, "File locking is not supported on this platform"
     if env_var not in _ALLOWED_ENV_VARS:
         return False, f"Env var {env_var!r} not in allowlist"
     if not value or len(value) < 4:

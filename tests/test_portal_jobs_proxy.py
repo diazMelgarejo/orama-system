@@ -516,3 +516,48 @@ def test_jobs_proxy_replay_forwards_not_replayable(monkeypatch):
     assert body["available"] is False
     assert body["upstream_status"] == 409
     assert body["error"] == "Job is not replayable"
+
+
+def test_jobs_proxy_replay_forwards_generic_replay_detail(monkeypatch):
+    class _GenericReplay(_FakeJobsClient):
+        async def post(self, url: str, json=None, **kwargs):
+            self.calls.append(("POST", url, json))
+            return _FakeResponse(
+                {"detail": "Replay request could not be completed"},
+                status_code=400,
+            )
+
+    _GenericReplay.fail = False
+    _GenericReplay.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _GenericReplay)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/jobs/job-1/replay")
+
+    body = response.json()
+    assert body["error"] == "Replay request could not be completed"
+
+
+def test_jobs_proxy_replay_forwards_malformed_job_id_detail(monkeypatch):
+    class _BadIdReplay(_FakeJobsClient):
+        async def post(self, url: str, json=None, **kwargs):
+            self.calls.append(("POST", url, json))
+            return _FakeResponse(
+                {
+                    "detail": "job_id must be a uuid4-formatted server-issued identifier",
+                },
+                status_code=400,
+            )
+
+    _BadIdReplay.fail = False
+    _BadIdReplay.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _BadIdReplay)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        response = client.post("/api/jobs/not-a-uuid/replay")
+
+    body = response.json()
+    assert (
+        body["error"]
+        == "job_id must be a uuid4-formatted server-issued identifier"
+    )
