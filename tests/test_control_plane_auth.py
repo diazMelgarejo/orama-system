@@ -474,3 +474,29 @@ def test_outbound_prefers_peer_token(monkeypatch):
     assert outbound_control_plane_tokens()[0] == "peer-only-token"
     assert resolved_control_plane_token() == "peer-only-token"
 
+
+@pytest.mark.unit
+def test_redact_jobs_list_omits_prompt_and_metadata_for_portal_pollers():
+    """Portal job list proxies must not leak supervisor prompt or metadata blobs."""
+    from utils.control_plane_auth import redact_jobs_list, redact_jobs_payload
+
+    raw = {
+        "jobs": [
+            {
+                "job_id": "550e8400-e29b-41d4-a716-446655440000",
+                "status": "RUNNING",
+                "intent": "ops",
+                "prompt": "secret",
+                "metadata": {"session_id": "swarm-1"},
+            }
+        ]
+    }
+    listed = redact_jobs_list(raw)
+    wrapped = redact_jobs_payload(raw)
+    assert len(listed) == 1
+    assert "prompt" not in listed[0]
+    assert "metadata" not in listed[0]
+    assert listed[0]["intent"] == "ops"
+    assert wrapped["count"] == 1
+    assert "prompt" not in wrapped["jobs"][0]
+
