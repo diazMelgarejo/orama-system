@@ -97,7 +97,13 @@ Phase C/D (Phase D remains the v2-launch strict cutover).
 The exclusive preview claim remains consumed once downstream dispatch becomes
 ambiguous. A successful cancellation HTTP response is an acknowledgement, not
 proof that the job stopped. The portal restores a claimed preview only after
-every accepted PT job reports a persisted `cancelled` terminal state.
+every accepted PT job reports a persisted `cancelled` terminal state. A
+terminally confirmed PT cancellation also releases that job’s active
+supervisor admission slot; acknowledgement-only and unresolved outcomes
+remain non-retryable. Cancellation acknowledgement is not execution
+containment. For CLI-backed jobs, preview restoration must remain blocked
+unless Perpetua reports the required containment state according to its
+execution-control contract.
 
 ```mermaid
 sequenceDiagram
