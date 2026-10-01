@@ -1897,6 +1897,7 @@ def _co_orchestration_html_response(
     *,
     platform_skin: str | None = None,
 ):
+    """Render the co-orchestration HTML shell with portal auth bootstrap."""
     from fastapi.responses import HTMLResponse
     from orama_system.portals.co_orchestration import render_co_orchestration_page
 
@@ -2146,6 +2147,7 @@ async def _build_swarm_preview(
     *,
     with_approval: bool = True,
 ) -> Dict[str, Any]:
+    """Build a routed five-role swarm preview and optionally mint approval credentials."""
     objective = req.objective.strip()
     if not objective:
         raise HTTPException(status_code=422, detail="objective is required")
@@ -2435,6 +2437,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
     failed_jobs: List[Dict[str, Any]] = []
     orphaned_jobs: List[str] = []
     cancelled_jobs: List[str] = []
+    ambiguous_submissions: List[str] = []
     async with _portal_http_client(timeout=10.0) as client:
         for assignment in preview["assignments"]:
             metadata = {
@@ -2478,12 +2481,22 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                     "role": assignment["role"],
                     "job_id": _extract_pt_job_id(data),
                 })
-            except Exception as exc:
+            except httpx.HTTPStatusError as exc:
                 failed_jobs.append({
                     "role": assignment["role"],
                     "error": _client_safe_error(exc),
                 })
                 break
+            except Exception as exc:
+                failed_jobs.append({
+                    "role": assignment["role"],
+                    "error": _client_safe_error(exc),
+                })
+                ambiguous_submissions.append(assignment["role"])
+                break
+
+        for role in ambiguous_submissions:
+            orphaned_jobs.append(f"unknown:{role}")
 
         if failed_jobs and accepted_jobs:
             for entry in accepted_jobs:
@@ -2543,6 +2556,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
 
 @app.get("/api/jobs")
 async def api_jobs_proxy(status: Optional[str] = None):
+    """Proxy Perpetua job list responses with operator-safe field redaction."""
     params = {"status": status} if status else {}
     async with _portal_http_client(timeout=5.0) as client:
         try:
@@ -3027,6 +3041,7 @@ async def api_status():
 
 @app.get("/api/hardware-policy")
 async def api_hardware_policy():
+    """Expose the portal hardware-policy probe snapshot for operator dashboards."""
     return await _portal_hardware_policy_snapshot()
 
 
