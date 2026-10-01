@@ -250,3 +250,34 @@ def test_githooks_change_triggers_scan_even_when_manifest_unavailable(
     # validation, never silently pass the changed hook through.
     assert result.returncode == 1, combined
     assert "guard-sync manifest unavailable" in combined, combined
+
+
+def test_cursor_payload_change_triggers_scan_even_when_manifest_unavailable(
+    tmp_path: Path,
+) -> None:
+    """When the manifest is missing, Cursor-only outgoing changes must still
+    set guard_touch so pre-push fails closed instead of skipping validation."""
+    workspace = tmp_path / "ws"
+    repo = _setup_repo_with_origin(workspace)
+    manifest = repo / "scripts" / "git" / "guard-sync-manifest.sh"
+    manifest.unlink()
+    _commit_file(
+        repo,
+        "scripts/cursor/append-pr-body.sh",
+        "#!/usr/bin/env bash\necho changed\n",
+        "modify manifest-managed cursor helper",
+    )
+
+    sibling = workspace / "Perpetua-Tools"
+    _init_repo(sibling)
+    _commit_file(
+        sibling,
+        "scripts/git/audit_engine.py",
+        "# sibling mutation absent from canonical\n",
+        "sibling mutation",
+    )
+
+    result = _run_pre_push(repo, workspace, repo)
+    combined = result.stdout + result.stderr
+    assert result.returncode == 1, combined
+    assert "guard-sync manifest unavailable" in combined, combined
