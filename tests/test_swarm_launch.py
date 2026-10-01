@@ -395,6 +395,27 @@ def test_swarm_launch_blocks_retry_when_orphans_remain(monkeypatch):
     assert retry.status_code == 422
 
 
+@pytest.mark.parametrize(
+    ("body", "allows"),
+    [
+        ({"cancel_requested": True, "terminal_state": "cancelled", "worker_kind": "cli", "containment_state": "verified"}, True),
+        ({"cancel_requested": True, "terminal_state": "cancelled", "worker_kind": "cli", "containment_state": "not-applicable"}, True),
+        ({"cancel_requested": True, "terminal_state": "cancelled", "worker_kind": "cli", "containment_state": "unresolved"}, False),
+        ({"cancel_requested": True, "terminal_state": "cancelled", "worker_kind": "cli", "containment_state": "unsupported"}, False),
+        ({"cancel_requested": True, "terminal_state": "cancelled", "worker_kind": "cli"}, True),
+        ({"cancel_requested": True, "terminal_state": "cancelled", "worker_kind": "in-process"}, True),
+        ({"cancel_requested": True, "terminal_state": "cancelled", "worker_kind": "in-process", "containment_state": "unresolved"}, True),
+        ({"cancel_requested": True, "terminal_state": "running", "worker_kind": "cli", "containment_state": "verified"}, False),
+        ({"cancel_requested": True, "worker_kind": "cli", "containment_state": "verified"}, False),
+        ({"terminal_state": "cancelled"}, False),
+        ("cancelled", False),
+    ],
+)
+def test_cancellation_allows_restore_matrix(body, allows: bool) -> None:
+    """Canonical rollback matrix for v1 containment fields."""
+    assert portal_server.cancellation_allows_restore(body) is allows
+
+
 def test_swarm_launch_blocks_retry_when_cli_containment_unresolved(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

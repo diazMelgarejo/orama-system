@@ -49,30 +49,44 @@ additional lifecycle line (still `status=cancelled`) with:
 | `worker_kind` | `cli` \| `in-process` | `cli` when a direct child was registered for the job. |
 | `containment_state` | `verified` \| `unresolved` \| `not-applicable` | Direct-child outcome after cancel. |
 
-- `verified`: registered direct child has `returncode is not None`.
-- `unresolved`: child was registered and exit was not observed within the bound.
-- `not-applicable`: no direct child was registered (echo, HTTP, or CLI cancelled
-  before `create_subprocess_exec` returned).
+- `not-applicable`: no direct CLI child exists for this job.
+- `verified`: a registered direct child has exited (`returncode is not None`).
+  Calling `terminate()` is not sufficient.
+- `unresolved`: a direct child was registered, but exit was not confirmed
+  within `CONTAINMENT_TIMEOUT_SECONDS`.
+
+`worker_kind` is derived by Perpetua from the execution path (`cli` only when a
+direct child was registered). Callers cannot submit or override it.
 
 `verified` certifies only the direct child exited, not grandchildren or detached
 helpers. Never persist PID, argv, cwd, env, stdout, or stderr on these events.
 
+Cancel confirmation (`CANCEL_CONFIRM_TIMEOUT_SECONDS`) and containment
+confirmation (`CONTAINMENT_TIMEOUT_SECONDS`) are separate bounds. v1 sets them
+to the same duration (5.0s). Containment waits use a monotonic clock.
+
+A failure while writing the containment annotation does not revoke durable
+`cancelled`. If the annotation is missing, orama applies the mixed-deploy rule.
+
 ## Orama rollback predicate (v1)
 
-Today's predicate remains: restore only when `cancel_requested is True` and
-`terminal_state == "cancelled"`.
+One function, `cancellation_allows_restore`, owns the decision:
 
-Additionally, **block** preview restore when:
+| Worker | Terminal state | Containment state | Restore |
+|---|---|---|---|
+| CLI | cancelled | verified | Yes |
+| CLI | cancelled | not-applicable | Yes |
+| CLI | cancelled | unresolved | No |
+| CLI | cancelled | any other present value | No |
+| CLI | cancelled | absent | Yes, mixed deploy |
+| non-CLI | cancelled | any or absent | Yes |
+| any | not cancelled | any | No |
+| any | missing | any | No |
 
-```text
-worker_kind == "cli"
-and containment_state is present
-and containment_state is neither "verified" nor "not-applicable"
-```
-
-Mixed deploy: when `containment_state` is **absent**, orama keeps the legacy
-rule (`terminal_state == "cancelled"` only). `worker_kind=in-process` with any
-containment value does not add a CLI gate.
+`cancel_requested` must also be true. Once a partially dispatched swarm has an
+accepted job whose cancellation cannot be positively established as
+rollback-safe, the approval claim remains consumed. The same rule covers
+ambiguous submission and cancel transport failures.
 
 ## Non-retryable outcomes (orama fail-closed)
 
@@ -85,10 +99,20 @@ containment value does not add a CLI gate.
 
 ## v2 (documentation only — not implemented)
 
-- Process-group / tree reaping and OS-specific job objects.
-- Looking Glass UI columns, new SSE event types, `unsupported` as a separate
-  public wire value, `containment_observed_at`, and Periscope schema extensions.
-- Containment for non-CLI subprocesses (`gbrain_search`, MCP stdio, etc.).
+Do not redefine v1 `verified` as process-tree containment. A later contract may
+add `containment_scope` (`direct-child`, `process-tree`, `process-group`) and
+may distinguish:
+
+- `unresolved`: containment was attempted and exit was not confirmed.
+- `unsupported`: this execution type has no containment capability.
+
+v1 does not emit `unsupported`; non-CLI work uses `not-applicable`.
+
+Also deferred: grandchild tracking, OS-specific job objects, persistent child
+identity, Looking Glass UI, new SSE event types, and Periscope schema
+extensions. Looking Glass, when built, reads redacted semantic fields
+(`worker_kind`, `terminal_state`, `containment_state`, `containment_scope`) and
+does not read PID, argv, environment, or process output.
 
 ## Cross-repository rule
 

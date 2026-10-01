@@ -2356,14 +2356,26 @@ async def api_app_state():
     }
 
 
-def _cli_containment_blocks_preview_restore(cancel_result: dict[str, Any]) -> bool:
-    """True when a v1 CLI cancel body proves direct-child containment is incomplete."""
+def cancellation_allows_restore(cancel_result: Any) -> bool:
+    """Single rollback policy for a Perpetua cancel body.
+
+    Restore only when cancellation is durable (``cancel_requested`` and
+    ``terminal_state=cancelled``) and, for CLI jobs, a present
+    ``containment_state`` is ``verified`` or ``not-applicable``. Missing
+    containment keeps mixed-deploy compatibility. Any other present CLI value
+    fails closed. ``worker_kind`` other than ``cli`` does not add a gate.
+    """
+    if not isinstance(cancel_result, dict):
+        return False
+    if cancel_result.get("cancel_requested") is not True:
+        return False
+    if cancel_result.get("terminal_state") != "cancelled":
+        return False
     if cancel_result.get("worker_kind") != "cli":
-        return False
-    containment = cancel_result.get("containment_state")
-    if containment is None:
-        return False
-    return containment not in ("verified", "not-applicable")
+        return True
+    if "containment_state" not in cancel_result:
+        return True
+    return cancel_result.get("containment_state") in ("verified", "not-applicable")
 
 
 @app.post("/api/swarm/preview")
@@ -2522,12 +2534,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                     cancel_r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/cancel")
                     cancel_r.raise_for_status()
                     cancel_result = cancel_r.json()
-                    if (
-                        not isinstance(cancel_result, dict)
-                        or cancel_result.get("cancel_requested") is not True
-                        or cancel_result.get("terminal_state") != "cancelled"
-                        or _cli_containment_blocks_preview_restore(cancel_result)
-                    ):
+                    if not cancellation_allows_restore(cancel_result):
                         # PT can acknowledge a cancellation before the worker
                         # reaches its durable terminal checkpoint. Retaining
                         # the approval is safer than retrying into a possibly
