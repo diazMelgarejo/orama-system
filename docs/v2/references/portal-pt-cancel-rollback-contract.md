@@ -41,7 +41,7 @@ Orama checks (1) and (2) for every job. (3) is a Perpetua invariant.
 Perpetua registers the **direct** subprocess created by `codex`, `gemini`, and
 `agy` workers (`DANGEROUS_CLI_BACKENDS`). After durable `cancelled` and
 admission cleanup, the supervisor attempts `terminate()` on that object only,
-waits up to `CANCEL_CONFIRM_TIMEOUT_SECONDS` (5.0s), and appends one
+waits up to `CONTAINMENT_TIMEOUT_SECONDS` (5.0s), and appends one
 additional lifecycle line (still `status=cancelled`) with:
 
 | Field | Values | Meaning |
@@ -66,7 +66,20 @@ confirmation (`CONTAINMENT_TIMEOUT_SECONDS`) are separate bounds. v1 sets them
 to the same duration (5.0s). Containment waits use a monotonic clock.
 
 A failure while writing the containment annotation does not revoke durable
-`cancelled`. If the annotation is missing, orama applies the mixed-deploy rule.
+`cancelled`. The supervisor logs the failure at WARNING. If the annotation
+never lands, orama applies the mixed-deploy rule (absent `containment_state`
+may still allow restore). That is intentional: cancellation finality beats
+telemetry persistence; operators rely on logs for annotation gaps.
+
+### v1 edge cases (documented, not process-tree scope)
+
+| Case | Perpetua behavior | Orama rollback |
+|---|---|---|
+| Cancel during `create_subprocess_exec` before `note_child` | Shield creation, await the spawned process, register, re-raise cancel; supervisor containment records `cli` + outcome | Uses cancel body when present; absent fields → mixed deploy |
+| `note_child` refuses to replace a still-running first process | Identity policy: keep first live mapping | Containment follows whichever child was registered |
+| Containment annotation write fails after durable `cancelled` | `terminal_state` stays `cancelled`; WARNING log; no PID/argv on event | Missing `containment_state` → mixed-deploy restore allowed |
+
+Process-tree reaping and grandchildren remain v2 only.
 
 ## Orama rollback predicate (v1)
 
