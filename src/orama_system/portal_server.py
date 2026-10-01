@@ -2356,6 +2356,16 @@ async def api_app_state():
     }
 
 
+def _cli_containment_blocks_preview_restore(cancel_result: dict[str, Any]) -> bool:
+    """True when a v1 CLI cancel body proves direct-child containment is incomplete."""
+    if cancel_result.get("worker_kind") != "cli":
+        return False
+    containment = cancel_result.get("containment_state")
+    if containment is None:
+        return False
+    return containment not in ("verified", "not-applicable")
+
+
 @app.post("/api/swarm/preview")
 async def api_swarm_preview(req: SwarmPreviewRequest):
     """Create a stateless five-role swarm preview; this route never dispatches."""
@@ -2516,6 +2526,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                         not isinstance(cancel_result, dict)
                         or cancel_result.get("cancel_requested") is not True
                         or cancel_result.get("terminal_state") != "cancelled"
+                        or _cli_containment_blocks_preview_restore(cancel_result)
                     ):
                         # PT can acknowledge a cancellation before the worker
                         # reaches its durable terminal checkpoint. Retaining

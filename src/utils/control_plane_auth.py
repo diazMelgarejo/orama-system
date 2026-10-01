@@ -35,6 +35,13 @@ _SENSITIVE_TOP_LEVEL_KEYS = frozenset(
         "raw_transcript",
         "chain_of_thought",
         "model_internals",
+        "pid",
+        "argv",
+        "cmdline",
+        "stdout",
+        "stderr",
+        "cwd",
+        "env",
     }
 )
 
@@ -582,6 +589,8 @@ def redact_job_record(job: Mapping[str, Any]) -> dict[str, Any]:
         "backend_hint",
         "backend",
         "elapsed_s",
+        "worker_kind",
+        "containment_state",
     ):
         if key in job and job[key] is not None:
             safe[key] = job[key]

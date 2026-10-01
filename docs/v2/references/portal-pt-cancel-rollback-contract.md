@@ -1,29 +1,28 @@
 # Portal ↔ Perpetua cancel and rollback contract
 
-**Status:** Documentation only (lockstep PR #374 / #414). No runtime change in
-this document.
+**Status:** v1 direct-child containment implemented (lockstep follow-up to PR #374 /
+#414). Process-tree reaping and expanded telemetry remain v2 documentation only.
 
 ## Purpose
 
 Define what orama may infer from a Perpetua job cancellation during swarm
-dispatch rollback, and what remains explicitly out of scope until a later
-containment workstream.
+dispatch rollback, and what remains explicitly out of scope until v2.
 
 ## States (do not conflate)
 
 ```text
 cancel requested
     ≠ supervisor task cancelled
-    ≠ child process terminated
-    ≠ process tree reaped
+    ≠ direct CLI child exited          (v1: containment_state)
+    ≠ process tree reaped              (v2)
     ≠ execution side effects ceased
 ```
 
-Orama treats **supervisor cancellation finality** and **external process
-containment** as distinct. This file records both; only the first is
-implemented for portal rollback on the lockstep branch.
+Orama treats **supervisor cancellation finality** and **direct CLI child
+containment** as distinct. v1 exposes the second only through two redacted
+fields on the cancel HTTP body and matching lifecycle events.
 
-## Rollback-final cancellation (implemented on lockstep branch)
+## Rollback-final cancellation (supervisor)
 
 For portal preview restoration after a partial swarm dispatch, each accepted
 Perpetua job must satisfy:
@@ -35,8 +34,45 @@ Perpetua job must satisfy:
    `cancel_with_terminal_state()` for pre-start cancellation; `_run_worker()`
    `finally` for running tasks).
 
-Orama checks (1) and (2) only. (3) is a Perpetua invariant; violating it
-exhausts `MAX_THREADS` and is covered by Perpetua regression tests.
+Orama checks (1) and (2) for every job. (3) is a Perpetua invariant.
+
+## v1 direct-child containment (Perpetua)
+
+Perpetua registers the **direct** subprocess created by `codex`, `gemini`, and
+`agy` workers (`DANGEROUS_CLI_BACKENDS`). After durable `cancelled` and
+admission cleanup, the supervisor attempts `terminate()` on that object only,
+waits up to `CANCEL_CONFIRM_TIMEOUT_SECONDS` (5.0s), and appends one
+additional lifecycle line (still `status=cancelled`) with:
+
+| Field | Values | Meaning |
+|---|---|---|
+| `worker_kind` | `cli` \| `in-process` | `cli` when a direct child was registered for the job. |
+| `containment_state` | `verified` \| `unresolved` \| `not-applicable` | Direct-child outcome after cancel. |
+
+- `verified`: registered direct child has `returncode is not None`.
+- `unresolved`: child was registered and exit was not observed within the bound.
+- `not-applicable`: no direct child was registered (echo, HTTP, or CLI cancelled
+  before `create_subprocess_exec` returned).
+
+`verified` certifies only the direct child exited, not grandchildren or detached
+helpers. Never persist PID, argv, cwd, env, stdout, or stderr on these events.
+
+## Orama rollback predicate (v1)
+
+Today's predicate remains: restore only when `cancel_requested is True` and
+`terminal_state == "cancelled"`.
+
+Additionally, **block** preview restore when:
+
+```text
+worker_kind == "cli"
+and containment_state is present
+and containment_state is neither "verified" nor "not-applicable"
+```
+
+Mixed deploy: when `containment_state` is **absent**, orama keeps the legacy
+rule (`terminal_state == "cancelled"` only). `worker_kind=in-process` with any
+containment value does not add a CLI gate.
 
 ## Non-retryable outcomes (orama fail-closed)
 
@@ -44,30 +80,21 @@ exhausts `MAX_THREADS` and is covered by Perpetua regression tests.
 - Ambiguous submission (transport/timeout) on a failed role.
 - Accepted job with no identifiable `job_id` (`unknown:<role>` orphan).
 - Cancel failure or orphan after rollback (`orphaned_jobs`, `launch_blocked`).
-- CLI jobs where containment is required but not reported (future contract).
+- CLI jobs reporting present `containment_state` other than `verified` or
+  `not-applicable`.
 
-## Future containment (not in PR #414 / #374)
+## v2 (documentation only — not implemented)
 
-CLI workers may spawn OS subprocesses (`worker_registry`, `dangerous_workers`).
-Supervisor task cancellation does not prove those processes exited. A later
-workstream will expose redacted containment fields (for example
-`containment_state: verified|unresolved|unsupported`) on job observations
-and portal monitors. Until then, orama must not infer containment from
-`CANCELLED` alone.
-
-## Assertion surfaces (for later implementation)
-
-| Layer | Seam |
-|---|---|
-| Perpetua | `supervisor.py`, `worker_registry.py`, `periscope_adapter.py` |
-| Orama portal | `_render_supervisor_jobs_section`, `/api/status`, notification SSE |
-| Design | `docs/next/fleet-mesh/G7-ASYNC-NOTIFICATIONS-ANALYSIS.md` |
+- Process-group / tree reaping and OS-specific job objects.
+- Looking Glass UI columns, new SSE event types, `unsupported` as a separate
+  public wire value, `containment_observed_at`, and Periscope schema extensions.
+- Containment for non-CLI subprocesses (`gbrain_search`, MCP stdio, etc.).
 
 ## Cross-repository rule
 
-**Perpetua** answers: did this job reach terminal cancellation, and does it
-still hold an admission slot?
+**Perpetua** answers: did this job reach terminal cancellation, does it still
+hold an admission slot, and (v1) did the direct CLI child exit after cancel?
 
 **Orama** answers: may this swarm approval be reused?
 
-Neither repository answers the other's question.
+Neither repository answers the other's question in full.

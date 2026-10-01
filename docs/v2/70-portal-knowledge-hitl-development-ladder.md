@@ -106,9 +106,11 @@ containment is a separate contract (see
 [`references/portal-pt-cancel-rollback-contract.md`](references/portal-pt-cancel-rollback-contract.md)).
 
 Acknowledgement-only and unresolved outcomes remain non-retryable.
-Cancellation acknowledgement is not execution containment. For CLI-backed
-jobs, preview restoration must remain blocked unless Perpetua reports the
-required containment state according to its execution-control contract.
+Cancellation acknowledgement is not execution containment. For CLI-backed jobs,
+preview restoration is blocked only when Perpetua returns `worker_kind=cli` and
+a **present** `containment_state` is neither `verified` nor `not-applicable`.
+When `containment_state` is omitted (mixed deploy), `terminal_state=cancelled`
+alone remains sufficient to restore, as before v1 containment.
 
 **Authority split:** Perpetua-Tools owns job lifecycle, admission-slot
 finality, and the cancel HTTP response schema. orama-system owns exclusive
@@ -120,9 +122,13 @@ consumes only the redacted cancel payload below.
 ```json
 {
   "cancel_requested": true,
-  "terminal_state": "cancelled"
+  "terminal_state": "cancelled",
+  "worker_kind": "cli",
+  "containment_state": "verified"
 }
 ```
+
+`worker_kind` and `containment_state` are optional for backward compatibility.
 
 Any other `terminal_state`, missing fields, transport failure, or accepted
 job without a stable `job_id` keeps the approval consumed (`orphaned_jobs`,
