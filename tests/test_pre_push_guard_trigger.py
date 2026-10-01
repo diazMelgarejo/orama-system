@@ -2,9 +2,8 @@
 
 Regression matrix rows 1-2 from the ECC push-gate analysis (2026-08-14):
 a helper script that merely lives under scripts/git/ (but isn't a manifest-
-managed guard file) must never drag in the cross-worktree divergence scan;
-a genuine manifest-managed guard-file change must still trigger it and fail
-closed when a sibling has diverged.
+managed guard file) must never trigger guard validation; canonical guard
+publication validates its local manifest without scanning unrelated worktrees.
 """
 from __future__ import annotations
 
@@ -88,6 +87,7 @@ def _setup_repo_with_origin(base: Path) -> Path:
     # over wholesale instead of guessing which files matter.
     shutil.copytree(ROOT / "scripts", local / "scripts", dirs_exist_ok=True)
     shutil.copytree(ROOT / ".githooks", local / ".githooks", dirs_exist_ok=True)
+    shutil.copytree(ROOT / ".cursor", local / ".cursor", dirs_exist_ok=True)
     subprocess.run(
         ["git", "config", "core.hooksPath", ".githooks"],
         cwd=local,
@@ -175,14 +175,16 @@ def test_helper_only_change_does_not_trigger_divergence_scan(tmp_path: Path) -> 
     assert "GUARD_SYNC_E_DIVERGENCE" not in combined, combined
 
 
-def test_guard_managed_change_triggers_divergence_scan_and_fails_closed(
+def test_canonical_guard_change_ignores_unrelated_sibling_workspace(
     tmp_path: Path,
 ) -> None:
-    """Row 2: a real manifest-managed guard file (audit_engine.py, listed in
-    GUARD_SYNC_DATA_FILES) changing, with a divergent sibling, must still
-    trigger the scan and block the push with the divergence diagnosis."""
+    """Canonical publication does not overwrite siblings, so it must not let
+    an unrelated temporary checkout block a valid source-guard push."""
     workspace = tmp_path / "ws"
     repo = _setup_repo_with_origin(workspace)
+    marker = repo / "bin/orama-system/SKILL.md"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("# canonical marker\n", encoding="utf-8")
     _commit_file(
         repo,
         "scripts/git/audit_engine.py",
@@ -201,9 +203,8 @@ def test_guard_managed_change_triggers_divergence_scan_and_fails_closed(
 
     result = _run_pre_push(repo, workspace, repo)
     combined = result.stdout + result.stderr
-    assert result.returncode == 1, combined
-    assert "guard-sync divergence" in combined, combined
-    assert "GUARD_SYNC_E_DIVERGENCE" in combined, combined
+    assert result.returncode == 0, combined
+    assert "guard-sync divergence" not in combined, combined
 
 
 def test_githooks_change_triggers_scan_even_when_manifest_unavailable(
@@ -244,10 +245,8 @@ def test_githooks_change_triggers_scan_even_when_manifest_unavailable(
 
     result = _run_pre_push(repo, workspace, repo)
     combined = result.stdout + result.stderr
-    # Before the fix: guard_touch never set, hook exits 0 silently, the
-    # .githooks/commit-msg change ships unvalidated. After the fix: the
-    # fallback recognizes .githooks/ too, the divergence path is attempted
-    # (and fails here, since check-guard-sync-divergence.sh also needs the
-    # now-missing manifest) — never a silent, unblocked pass-through.
+    # A missing manifest means the hook cannot establish the managed-path
+    # contract. It must fail before choosing either canonical or downstream
+    # validation, never silently pass the changed hook through.
     assert result.returncode == 1, combined
-    assert "guard-sync divergence" in combined, combined
+    assert "guard-sync manifest unavailable" in combined, combined
