@@ -75,13 +75,13 @@ stays in [`53-maestro-swarm-v2-redesign-critique.md`](53-maestro-swarm-v2-redesi
 
 | Portal class | Name | Example on the glass | Required gate (intent) | As-built on PR #368 |
 | --- | --- | --- | --- | --- | --- |
-| 0 | Read | Knowledge search (`GET /api/knowledge/search`) | Public read (no bearer); bounded scan | **Shipped** — see §4 |
-| 0b | Authenticated read | Portal MCP `search_docs`, A2A `message/send` | Control-plane bearer or local token on every method, including MCP `GET` | **Target** — §4. Knowledge stays public. Code still lists `/api/mcp` and `/api/a2a` in `_PUBLIC_PORTAL_PATHS` until that allowlist change lands. |
-| 1 | Soft write | Config flag / label (future portal) | Bearer + explicit confirm | Not in this slice |
-| 2 | Dispatch | Swarm launch | Server `preview_id` + `approval_token` after Preview | **Shipped** HMAC preview → launch; UI sends both tokens; Launch disabled until tokens + `hardware_policy.ok` |
-| 3 | External / identity | OIDC / external API / financial write | Class-2 + verified identity | **Deferred** — see [`51-security-sentinel-orbit-passkey-mcp.md`](51-security-sentinel-orbit-passkey-mcp.md), [`61-pt-coordination-principal-identity-design.md`](61-pt-coordination-principal-identity-design.md) |
-| 4 | Irreversible | Fleet delete / public publish | Class-3 + out-of-band second factor | **Deferred** — D23 still forbids inventing multi-principal quorum for a single-operator LAN ([`45-`](45-single-operator-lan-threat-model-descope.md)) |
-| E | Emergency stop | Kill agents immediately | Unconditional override; never blocked by the agent graph | Kernel intent in 03 R3 (`Interrupt` / `aresume`); portal header button **not** in this slice |
+| 0 | Read | `GET /api/knowledge/search` | Public read; bounded scan | **Shipped** — §4 |
+| 0b | Authenticated read | MCP / A2A | Bearer on every method | **Target** — §4; knowledge public |
+| 1 | Soft write | Config flag (future) | Bearer + confirm | Not in this slice |
+| 2 | Dispatch | Swarm launch | Preview + exclusive claim | **Shipped** — claim before PT posts |
+| 3 | External / identity | OIDC / financial | Class-2 + identity | **Deferred** — docs 51 + 61 |
+| 4 | Irreversible | Fleet delete / publish | Class-3 + OOB 2FA | **Deferred** — doc 45 |
+| E | Emergency stop | Kill agents | Override not blocked | R3 kernel; no portal button |
 
 HITL reality for Class 2 on this PR: Preview mints fail-closed when the
 approval secret is missing (`issue_approval` must not look successful).

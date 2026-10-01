@@ -7,12 +7,15 @@ import hmac
 import json
 import os
 import secrets
+import threading
 import time
 from typing import Any
 
 _PREVIEW_TTL_SEC = 300
 _MAX_CACHE_SIZE = 32
 _cache: dict[str, tuple[str, float, dict[str, Any]]] = {}
+_in_flight: dict[str, tuple[str, float, dict[str, Any], str]] = {}
+_dispatch_lock = threading.Lock()
 
 
 def _secret() -> str:
@@ -138,6 +141,73 @@ def consume_launch(preview_id: str | None) -> None:
     _fp, ts, _cached = entry
     if time.time() - ts > _PREVIEW_TTL_SEC:
         raise ValueError("preview expired")
+
+
+def claim_launch_for_dispatch(
+    *,
+    approved: bool,
+    preview_id: str | None,
+    approval_token: str | None,
+    preview: dict[str, Any],
+) -> tuple[dict[str, Any], str]:
+    """Validate approval and atomically remove the preview from the cache.
+
+    Returns the stored preview payload and a ``launch_attempt_id`` that must
+    be passed to ``finalize_launch_claim`` or ``release_launch_claim``. Only one
+    in-flight claim exists per ``preview_id``; concurrent callers lose the race
+    when the cache entry is already claimed.
+    """
+    with _dispatch_lock:
+        check_launch(
+            approved=approved,
+            preview_id=preview_id,
+            approval_token=approval_token,
+            preview=preview,
+        )
+        normalized = (preview_id or "").strip()
+        if normalized in _in_flight:
+            raise ValueError("preview expired or unknown — call /api/swarm/preview again")
+        entry = _cache.pop(normalized, None)
+        if not entry:
+            raise ValueError("preview expired or unknown — call /api/swarm/preview again")
+        fp, ts, stored = entry
+        if time.time() - ts > _PREVIEW_TTL_SEC:
+            raise ValueError("preview expired")
+        attempt_id = secrets.token_hex(16)
+        _in_flight[normalized] = (fp, ts, stored, attempt_id)
+        return copy.deepcopy(stored), attempt_id
+
+
+def finalize_launch_claim(preview_id: str | None, attempt_id: str) -> None:
+    """Drop a reserved preview after every downstream job post succeeded."""
+    normalized = (preview_id or "").strip()
+    with _dispatch_lock:
+        entry = _in_flight.get(normalized)
+        if entry and entry[3] == attempt_id:
+            _in_flight.pop(normalized, None)
+
+
+def release_launch_claim(
+    preview_id: str | None,
+    attempt_id: str,
+    *,
+    restore_to_cache: bool,
+) -> None:
+    """End a failed dispatch attempt.
+
+    When ``restore_to_cache`` is true and rollback verified every accepted job
+    was cancelled, the preview returns to the approval cache for one retry.
+    When false (orphaned jobs remain), the approval stays consumed.
+    """
+    normalized = (preview_id or "").strip()
+    with _dispatch_lock:
+        entry = _in_flight.pop(normalized, None)
+        if not entry or entry[3] != attempt_id:
+            return
+        fp, ts, stored, _attempt = entry
+        if restore_to_cache:
+            _cache[normalized] = (fp, ts, stored)
+            _prune_cache()
 
 
 def verify_launch(

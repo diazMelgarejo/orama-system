@@ -193,6 +193,29 @@ def test_fingerprint_covers_all_dispatched_options(
         )
 
 
+def test_claim_launch_is_exclusive(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+    preview = {"objective": "ship", "assignments": [], "task_type": "implementation"}
+    issued = swarm_approval.issue_approval(preview)
+    launch_preview = {**preview, "objective": "ship"}
+
+    stored, attempt = swarm_approval.claim_launch_for_dispatch(
+        approved=True,
+        preview_id=issued["preview_id"],
+        approval_token=issued["approval_token"],
+        preview=launch_preview,
+    )
+    assert stored["objective"] == "ship"
+    with pytest.raises(ValueError, match="expired or unknown"):
+        swarm_approval.claim_launch_for_dispatch(
+            approved=True,
+            preview_id=issued["preview_id"],
+            approval_token=issued["approval_token"],
+            preview=launch_preview,
+        )
+    swarm_approval.finalize_launch_claim(issued["preview_id"], attempt)
+
+
 def test_check_launch_does_not_consume_but_consume_is_single_use(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -29,6 +29,7 @@ class _FakeLaunchClient:
     submitted = []
     cancelled = []
     fail_role = None
+    cancel_raises_for: set[str] = set()
     route_payload = {"backend_hint": "lmstudio-mac", "model_hint": "Qwen3.5-9B-MLX-4bit"}
 
     def __init__(self, *args, **kwargs):
@@ -45,6 +46,8 @@ class _FakeLaunchClient:
             return _FakeResponse(self.route_payload)
         if url.endswith("/cancel"):
             job_id = url.rsplit("/", 2)[-2]
+            if job_id in self.cancel_raises_for:
+                raise RuntimeError("cancel failed")
             self.cancelled.append(job_id)
             return _FakeResponse({"job_id": job_id, "cancel_requested": True})
         if url.endswith("/v1/jobs"):
@@ -80,11 +83,13 @@ def _patch_hardware_policy(monkeypatch: pytest.MonkeyPatch, *, ok: bool = True) 
 @pytest.fixture(autouse=True)
 def _isolated_swarm_state(monkeypatch: pytest.MonkeyPatch):
     swarm_approval._cache.clear()
+    swarm_approval._in_flight.clear()
     monkeypatch.delenv("ORAMA_SWARM_APPROVAL_SECRET", raising=False)
     monkeypatch.delenv("ORAMA_SWARM_LEGACY_APPROVE", raising=False)
     monkeypatch.delenv("ORAMA_SWARM_STRICT", raising=False)
     _FakeLaunchClient.submitted = []
     _FakeLaunchClient.cancelled = []
+    _FakeLaunchClient.cancel_raises_for = set()
     _FakeLaunchClient.fail_role = None
     _FakeLaunchClient.route_payload = {
         "backend_hint": "lmstudio-mac",
@@ -92,6 +97,7 @@ def _isolated_swarm_state(monkeypatch: pytest.MonkeyPatch):
     }
     yield
     swarm_approval._cache.clear()
+    swarm_approval._in_flight.clear()
 
 
 def test_swarm_launch_requires_approval(monkeypatch):
@@ -138,6 +144,7 @@ def test_swarm_launch_blocks_on_hardware_policy(monkeypatch):
     _patch_hardware_policy(monkeypatch, ok=False)
     _FakeLaunchClient.submitted = []
     _FakeLaunchClient.cancelled = []
+    _FakeLaunchClient.cancel_raises_for = set()
     _FakeLaunchClient.fail_role = None
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
@@ -178,31 +185,19 @@ def test_hardware_block_does_not_consume_approval(monkeypatch: pytest.MonkeyPatc
     assert len(_FakeLaunchClient.submitted) == 5
 
 
-def test_invalid_token_is_rejected_before_hardware_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_invalid_token_is_rejected_before_dispatch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
-    policy_calls = 0
-
-    async def fake_hardware_policy():
-        nonlocal policy_calls
-        policy_calls += 1
-        return _portal_status(ok=False)["hardware_policy"]
-
-    monkeypatch.setattr(
-        portal_server,
-        "_portal_hardware_policy_snapshot",
-        fake_hardware_policy,
-    )
+    _patch_hardware_policy(monkeypatch)
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:
         payload = _approved_payload(client, "Ship launch")
-        calls_after_preview = policy_calls
         payload["approval_token"] = "deadbeef" * 8
         response = client.post("/api/swarm/launch", json=payload)
 
     assert response.status_code == 422
     assert response.json()["detail"] == "invalid approval_token"
-    assert policy_calls == calls_after_preview
+    assert _FakeLaunchClient.submitted == []
 
 
 @pytest.mark.parametrize(
@@ -272,6 +267,7 @@ def test_swarm_launch_submits_metadata_compatible_pt_jobs(monkeypatch):
     _patch_hardware_policy(monkeypatch)
     _FakeLaunchClient.submitted = []
     _FakeLaunchClient.cancelled = []
+    _FakeLaunchClient.cancel_raises_for = set()
     _FakeLaunchClient.fail_role = None
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
 
@@ -321,6 +317,26 @@ def test_swarm_launch_returns_partial_dispatch_failure(monkeypatch):
         "job-architect-agent",
         "job-executor-agent",
     ]
+
+
+def test_swarm_launch_blocks_retry_when_orphans_remain(monkeypatch):
+    monkeypatch.setenv("ORAMA_SWARM_APPROVAL_SECRET", "test-secret")
+    _patch_hardware_policy(monkeypatch)
+    _FakeLaunchClient.submitted = []
+    _FakeLaunchClient.cancelled = []
+    _FakeLaunchClient.cancel_raises_for = {"job-context-agent"}
+    _FakeLaunchClient.fail_role = "verifier-agent"
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeLaunchClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        payload = _approved_payload(client, "Ship launch")
+        first = client.post("/api/swarm/launch", json=payload)
+        retry = client.post("/api/swarm/launch", json=payload)
+
+    assert first.status_code == 200
+    assert first.json()["launch_blocked"] is True
+    assert first.json()["orphaned_jobs"]
+    assert retry.status_code == 422
 
 
 def test_swarm_launch_retry_after_partial_dispatch_failure(monkeypatch):

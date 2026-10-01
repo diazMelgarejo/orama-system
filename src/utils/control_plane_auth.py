@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import math
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal, Mapping, MutableMapping
@@ -516,22 +517,30 @@ def redact_operator_value(value: Any) -> Any:
 
 
 def _coerce_job_epoch_seconds(value: Any) -> float | None:
-    """Normalize supervisor timestamps for portal pollers (ISO ``ts`` or unix)."""
+    """Normalize supervisor timestamps for portal pollers (ISO ``ts`` or unix).
+
+    Rejects non-finite floats (``NaN``, ``Infinity``) so one malformed record
+    cannot poison list responses.
+    """
     if isinstance(value, bool):
         return None
     if isinstance(value, (int, float)):
-        return float(value)
+        parsed = float(value)
+        return parsed if math.isfinite(parsed) else None
     if isinstance(value, str):
         cleaned = value.strip()
         if not cleaned:
             return None
         try:
-            return float(cleaned)
+            parsed = float(cleaned)
+            if math.isfinite(parsed):
+                return parsed
         except ValueError:
             pass
         iso = cleaned.replace("Z", "+00:00")
         try:
-            return datetime.fromisoformat(iso).timestamp()
+            parsed = datetime.fromisoformat(iso).timestamp()
+            return parsed if math.isfinite(parsed) else None
         except ValueError:
             return None
     return None
@@ -571,8 +580,6 @@ def redact_job_record(job: Mapping[str, Any]) -> dict[str, Any]:
         "intent",
         "backend_hint",
         "backend",
-        "created_at",
-        "updated_at",
         "elapsed_s",
     ):
         if key in job and job[key] is not None:
@@ -615,7 +622,15 @@ def redact_jobs_list(payload: Any) -> list[dict[str, Any]]:
         raw_jobs = candidate if isinstance(candidate, list) else []
     else:
         raw_jobs = []
-    return [redact_job_record(item) for item in raw_jobs if isinstance(item, dict)]
+    redacted: list[dict[str, Any]] = []
+    for item in raw_jobs:
+        if not isinstance(item, dict):
+            continue
+        try:
+            redacted.append(redact_job_record(item))
+        except Exception:
+            continue
+    return redacted
 
 
 def redact_jobs_payload(payload: Any) -> dict[str, Any]:

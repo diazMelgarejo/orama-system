@@ -1,7 +1,8 @@
 """Portal job list proxies must redact secrets but keep poller/list shape."""
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from typing import Any
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,7 +11,7 @@ from utils.control_plane_auth import redact_job_record, redact_jobs_list
 
 
 @pytest.mark.unit
-def test_redact_job_record_strips_prompt_and_metadata():
+def test_redact_job_record_strips_prompt_and_metadata() -> None:
     raw = {
         "job_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
         "status": "SUCCEEDED",
@@ -31,7 +32,7 @@ def test_redact_job_record_strips_prompt_and_metadata():
 
 
 @pytest.mark.unit
-def test_redact_job_record_normalizes_iso_ts_to_epoch_for_panel():
+def test_redact_job_record_normalizes_iso_ts_to_epoch_for_panel() -> None:
     safe = redact_job_record(
         {
             "job_id": "j1",
@@ -45,7 +46,19 @@ def test_redact_job_record_normalizes_iso_ts_to_epoch_for_panel():
 
 
 @pytest.mark.unit
-def test_redact_job_record_hoists_spec_fields_for_lifecycle_events():
+def test_redact_job_record_rejects_non_finite_numeric_timestamps() -> None:
+    safe = redact_job_record(
+        {
+            "job_id": "j-nan",
+            "status": "RUNNING",
+            "created_at": "NaN",
+        }
+    )
+    assert "created_at" not in safe
+
+
+@pytest.mark.unit
+def test_redact_job_record_hoists_spec_fields_for_lifecycle_events() -> None:
     safe = redact_job_record(
         {
             "job_id": "550e8400-e29b-41d4-a716-446655440000",
@@ -66,7 +79,7 @@ def test_redact_job_record_hoists_spec_fields_for_lifecycle_events():
 
 
 @pytest.mark.unit
-def test_redact_jobs_list_accepts_pt_wrapper_or_bare_list():
+def test_redact_jobs_list_accepts_pt_wrapper_or_bare_list() -> None:
     wrapped = {
         "jobs": [
             {
@@ -83,37 +96,59 @@ def test_redact_jobs_list_accepts_pt_wrapper_or_bare_list():
     assert "prompt" not in redact_jobs_list(listed)[0]
 
 
-def test_api_v1_jobs_returns_redacted_bare_list(monkeypatch: pytest.MonkeyPatch):
+@pytest.mark.unit
+def test_redact_jobs_list_skips_malformed_row_without_breaking_list() -> None:
+    payload = {
+        "jobs": [
+            {"job_id": "ok", "status": "QUEUED", "created_at": "NaN"},
+            {"job_id": "good", "status": "RUNNING", "ts": "2026-10-01T12:00:00+00:00"},
+        ]
+    }
+    listed = redact_jobs_list(payload)
+    assert len(listed) == 2
+    assert listed[0]["job_id"] == "ok"
+    assert listed[1]["created_at"] == 1790856000.0
+
+
+class _FakeJobsClient:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
+    async def __aenter__(self) -> _FakeJobsClient:
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        tb: Any,
+    ) -> bool:
+        return False
+
+    async def get(self, url: str, params: Any = None, **kwargs: Any) -> MagicMock:
+        assert url.endswith("/v1/jobs")
+        response = MagicMock()
+        response.status_code = 200
+        response.json = lambda: {
+            "jobs": [
+                {
+                    "job_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                    "status": "RUNNING",
+                    "intent": "ops",
+                    "backend_hint": "ollama",
+                    "prompt": "hidden",
+                    "metadata": {"n": 1},
+                }
+            ]
+        }
+        response.raise_for_status = lambda: None
+        return response
+
+
+def test_api_v1_jobs_returns_redacted_bare_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     import orama_system.portal_server as portal_server
-
-    class _FakeJobsClient:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            return False
-
-        async def get(self, url: str, params=None, **kwargs):
-            assert url.endswith("/v1/jobs")
-            response = MagicMock()
-            response.status_code = 200
-            response.json = lambda: {
-                "jobs": [
-                    {
-                        "job_id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
-                        "status": "RUNNING",
-                        "intent": "ops",
-                        "backend_hint": "ollama",
-                        "prompt": "hidden",
-                        "metadata": {"n": 1},
-                    }
-                ]
-            }
-            response.raise_for_status = lambda: None
-            return response
 
     monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
     with TestClient(portal_server.app, raise_server_exceptions=True) as client:

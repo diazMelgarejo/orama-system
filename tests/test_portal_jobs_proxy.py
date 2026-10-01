@@ -2,6 +2,7 @@
 """Tests for PT job proxy routes."""
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 import orama_system.portal_server as portal_server
@@ -518,7 +519,9 @@ def test_jobs_proxy_replay_forwards_not_replayable(monkeypatch):
     assert body["error"] == "Job is not replayable"
 
 
-def test_jobs_proxy_replay_forwards_generic_replay_detail(monkeypatch):
+def test_jobs_proxy_replay_forwards_generic_replay_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _GenericReplay(_FakeJobsClient):
         async def post(self, url: str, json=None, **kwargs):
             self.calls.append(("POST", url, json))
@@ -538,7 +541,9 @@ def test_jobs_proxy_replay_forwards_generic_replay_detail(monkeypatch):
     assert body["error"] == "Replay request could not be completed"
 
 
-def test_jobs_proxy_replay_forwards_malformed_job_id_detail(monkeypatch):
+def test_jobs_proxy_replay_forwards_malformed_job_id_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     class _BadIdReplay(_FakeJobsClient):
         async def post(self, url: str, json=None, **kwargs):
             self.calls.append(("POST", url, json))

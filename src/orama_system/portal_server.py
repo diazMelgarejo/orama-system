@@ -54,9 +54,11 @@ from orama_system.lan_peer_channel import (
 from orama_system.swarm_approval import (
     cached_preview,
     check_launch,
-    consume_launch,
+    claim_launch_for_dispatch,
+    finalize_launch_claim,
     grandfather_legacy,
     issue_approval,
+    release_launch_claim,
 )
 from orama_system.knowledge_gateway import router as knowledge_router
 from orama_system.portal_notifications import (
@@ -2362,9 +2364,10 @@ async def api_swarm_preview(req: SwarmPreviewRequest):
 async def api_swarm_launch(req: SwarmLaunchRequest):
     """Launch the approved preview as PT-owned jobs; orama stores no job state.
 
-    Dispatch uses the cached preview from ``/api/swarm/preview``. Rebuilding
-    assignments here would mint a second token and fail the fingerprint check
-    whenever routing flickered.
+    Dispatch uses the cached preview from ``/api/swarm/preview``. After hardware
+    policy passes, ``claim_launch_for_dispatch`` atomically removes the preview
+    from the approval cache so concurrent launches cannot double-submit. Failed
+    batches restore the preview only when every accepted PT job was cancelled.
     """
     stored = cached_preview(req.preview_id)
     legacy = (
@@ -2384,24 +2387,15 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         raise HTTPException(status_code=422, detail="preview expired or unknown — call /api/swarm/preview again")
+    launch_preview: Dict[str, Any] | None = None
     if stored is not None:
-        preview = stored
         launch_preview = {
-            **preview,
+            **stored,
             "objective": req.objective.strip(),
             "task_type": req.task_type,
             "optimize_for": req.optimize_for,
             "preferred_device": req.preferred_device,
         }
-        try:
-            check_launch(
-                approved=req.approved,
-                preview_id=req.preview_id,
-                approval_token=req.approval_token,
-                preview=launch_preview,
-            )
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
         hardware_policy = await _portal_hardware_policy_snapshot()
     else:
         try:
@@ -2425,6 +2419,17 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                 "accepted_jobs": [],
             },
         )
+    launch_attempt_id: str | None = None
+    if stored is not None and launch_preview is not None:
+        try:
+            preview, launch_attempt_id = claim_launch_for_dispatch(
+                approved=req.approved,
+                preview_id=req.preview_id,
+                approval_token=req.approval_token,
+                preview=launch_preview,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     session_id = f"swarm-{uuid.uuid4().hex}"
     accepted_jobs: List[Dict[str, Any]] = []
     failed_jobs: List[Dict[str, Any]] = []
@@ -2498,11 +2503,15 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                     orphaned_jobs.append(str(job_id))
             accepted_jobs = []
 
-    if not failed_jobs and stored is not None:
-        try:
-            consume_launch(req.preview_id)
-        except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if launch_attempt_id:
+        if failed_jobs:
+            release_launch_claim(
+                req.preview_id,
+                launch_attempt_id,
+                restore_to_cache=not orphaned_jobs,
+            )
+        else:
+            finalize_launch_claim(req.preview_id, launch_attempt_id)
 
     public_preview = {
         key: value
@@ -2521,6 +2530,10 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
         result["cancelled_jobs"] = cancelled_jobs
     if orphaned_jobs:
         result["orphaned_jobs"] = orphaned_jobs
+        result["launch_blocked"] = True
+        result["launch_blocked_reason"] = "orphaned_jobs_after_rollback"
+    if launch_attempt_id:
+        result["launch_attempt_id"] = launch_attempt_id
     return result
 
 
