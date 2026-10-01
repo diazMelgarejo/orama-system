@@ -74,8 +74,9 @@ stays in [`53-maestro-swarm-v2-redesign-critique.md`](53-maestro-swarm-v2-redesi
 — this file does not re-argue that critique.
 
 | Portal class | Name | Example on the glass | Required gate (intent) | As-built on PR #368 |
-| --- | --- | --- | --- | --- |
-| 0 | Read | Knowledge search, MCP `search_docs`, A2A `message/send` (read-only tool) | Public read (no bearer); bounded scan | **Shipped** — see §4 |
+| --- | --- | --- | --- | --- | --- |
+| 0 | Read | Knowledge search (`GET /api/knowledge/search`) | Public read (no bearer); bounded scan | **Shipped** — see §4 |
+| 0b | Authenticated read | Portal MCP `search_docs`, A2A `message/send` | Control-plane bearer or local token on every method, including MCP `GET` | **Target** — §4. Knowledge stays public. Code still lists `/api/mcp` and `/api/a2a` in `_PUBLIC_PORTAL_PATHS` until that allowlist change lands. |
 | 1 | Soft write | Config flag / label (future portal) | Bearer + explicit confirm | Not in this slice |
 | 2 | Dispatch | Swarm launch | Server `preview_id` + `approval_token` after Preview | **Shipped** HMAC preview → launch; UI sends both tokens; Launch disabled until tokens + `hardware_policy.ok` |
 | 3 | External / identity | OIDC / external API / financial write | Class-2 + verified identity | **Deferred** — see [`51-security-sentinel-orbit-passkey-mcp.md`](51-security-sentinel-orbit-passkey-mcp.md), [`61-pt-coordination-principal-identity-design.md`](61-pt-coordination-principal-identity-design.md) |
@@ -98,10 +99,27 @@ Phase C/D (Phase D remains the v2-launch strict cutover).
 Knowledge, MCP, and A2A routes live on `src/orama_system/knowledge_gateway.py`.
 `portal_server.py` mounts that router with `app.include_router(knowledge_router)`.
 Class-0 documentation search is **public read**: `portal_path_is_public()` in
-`utils/control_plane_auth.py` exempts `/api/knowledge/*`, `/api/mcp`,
-`/api/a2a`, and `/.well-known/agent-card.json` from the control-plane bearer
-middleware. Swarm preview/launch and the rest of the operator console remain
-behind operator auth.
+`utils/control_plane_auth.py` exempts `/api/knowledge/*` and
+`/.well-known/agent-card.json`. `/health` and `/assets/` stay public too.
+Swarm preview/launch and the rest of the operator console remain behind
+operator auth.
+
+**MCP and A2A (v2 contract).** `/api/mcp` and `/api/a2a` are operator routes,
+not public reads. A client proves identity with one of:
+
+- **Bearer.** `Authorization: Bearer` matching an orama-lane token:
+  `ORAMA_CONTROL_PLANE_TOKEN` or `ORAMA_CONTROL_PLANE_TOKEN_LOCAL`
+  (`orama_lane_token_candidates()` / `token_matches_control_plane(..., scope="orama")`).
+- **Web session cookie, when the browser will send it.**
+  `bearer_token_from_request()` also accepts the `orama_control_plane_token`
+  cookie. The only setter today is `POST /api/notifications/session`, and that
+  cookie’s `Path` is `/api/notifications`, so it is **not** sent to `/api/mcp`
+  or `/api/a2a`. A browser or desktop client of those routes sends the bearer
+  header. Do not add a loopback exemption: a local tab can reach loopback.
+
+Until the allowlist edit, `_PUBLIC_PORTAL_PATHS` still contains `/api/mcp` and
+`/api/a2a`, so unauthenticated calls succeed. Treat that as drift from this
+contract, not as the v2 rule.
 
 Same-origin `GET /api/knowledge/search` is Markdown FTS over the docs tree
 (no DB, no embeddings, no Redis). Scans run in a worker thread with
@@ -157,7 +175,7 @@ dump are **not** acceptance criteria for #368 or for v2.1.
 
 | Milestone | Theme | Where the real plan lives | Portal note |
 | --- | --- | --- | --- |
-| **v2.1** | Knowledge glass + fail-closed HITL tokens | This PR; doc 16 | §4 as-built. Auth already on the knowledge router. |
+| **v2.1** | Knowledge glass + fail-closed HITL tokens | This PR; doc 16 | §4 as-built for knowledge. MCP and A2A take the bearer or local token in §4; they are not public. |
 | **v2.2** | Observability + retrieval beyond linear scan | [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md), [`41-`](41-agentic-stack-gstack-gbrain-memory-blend.md), [`55-`](55-oramasys-agent-observability-contract-adr.md), [`67-`](67-lancedb-duckdb-dense-info-layer-shape.md) | Markdown search is a Class-0 stopgap. Bayesian/vector RAG, hallucination budgets, and p99 histograms are **not** specified here. |
 | **v2.3** | Dual-model check + Class-3 identity | [`53-`](53-maestro-swarm-v2-redesign-critique.md) (critique only), [`51-`](51-security-sentinel-orbit-passkey-mcp.md), [`61-`](61-pt-coordination-principal-identity-design.md) | OIDC/passkey/HMAC-bridge are satellite/identity plans. Do not require GitHub OIDC on knowledge search. |
 | **v2.4** | External conformity literature | [`03-safety-v2.5.md`](03-safety-v2.5.md), [`23-`](23-security-preconditions.md), [`24-`](24-security-first-platform.md), [`32-`](32-agentic-security-controls.md), [`39-`](39-maestro-owasp-genai-reference.md) | EU database registration, Annex III dossiers, and FINRA-style autonomy monitors are **external references / future conformity work**, not mandatory shipping gates while D23 + doc 23 still describe the live threat model. |
