@@ -47,6 +47,10 @@
   `Authorization` headers and only persist approved/pinned endpoints
 - [ ] Readonly MCP profile tests inspect the final merged runtime config and
   fail if elevated managed workers remain enabled
+- [ ] Portal `POST` and `GET /api/mcp` and `/api/a2a` without
+  `Authorization: Bearer` (`ORAMA_CONTROL_PLANE_TOKEN` or
+  `ORAMA_CONTROL_PLANE_TOKEN_LOCAL`) return 401. `GET /api/knowledge/search`
+  stays public. No loopback exemption on MCP or A2A.
 - [ ] Every new route/tool/worker declares a capability and has auth-denial
   tests unless it is explicitly `public`
 - [ ] Portable memory, skills, coordination logs, and policy docs pass the
