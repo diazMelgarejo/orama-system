@@ -128,6 +128,53 @@ extensions. Looking Glass, when built, reads redacted semantic fields
 (`worker_kind`, `terminal_state`, `containment_state`, `containment_scope`) and
 does not read PID, argv, environment, or process output.
 
+### Recommendations for Future Scope (v2)
+
+To advance process containment safely without introducing regression or security debt,
+the v2 specification mandates the following hardening requirements and invariants:
+
+#### 1. Hardening Requirements for Future Shape
+
+- **Containment Scope Enumeration:** Introduce explicit `containment_scope` enum:
+  - `direct-child`: certified only for the direct subprocess spawned by supervisor.
+  - `process-group`: certified for POSIX process group / Windows Job Object boundary.
+  - `process-tree`: certified across the complete transitive process tree.
+- **Two-Phase Signal Escalation Protocol:**
+  - Phase 1: Graceful `SIGTERM` issued to process group or direct child.
+  - Phase 2: Monotonic timer wait (bounded by `CONTAINMENT_TIMEOUT_SECONDS`).
+  - Phase 3: Escalation to `SIGKILL` on timeout before final containment evaluation.
+- **Structured Telemetry Payload Extensions:**
+  - `escalation_stage`: `sigterm` | `sigkill` (records whether escalation was required).
+  - `reaped_count`: integer tally of terminated child/grandchild processes.
+  - `containment_duration_ms`: monotonic elapsed time spent in containment wait.
+- **OS-Level Containment Mechanisms:**
+  - *POSIX / Linux / macOS:* Isolate CLI jobs in dedicated process groups using
+    `os.setpgid(0, 0)` at spawn, allowing targeted `os.killpg(pgid, signal)` without
+    affecting the parent supervisor or unrelated worker tasks. Optional Linux cgroups v2
+    (`cgroup.kill`) or `prctl(PR_SET_PDEATHSIG, SIGKILL)` where kernel support exists.
+  - *Windows:* Bind worker processes to Win32 Job Objects with
+    `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` to ensure automatic tree termination.
+
+#### 2. Security Invariants for v2
+
+- **Zero Process Internals Leak Invariant:** Strict, unconditional exclusion of
+  `pid`, `argv`, `cmdline`, `env`, `cwd`, `stdout`, and `stderr` across all external
+  interfaces (REST endpoints, SSE streams, GossipBus event lines, Periscope trajectory
+  records, and Looking Glass UI). Only redacted semantic metadata may cross boundaries.
+- **Fail-Closed Rollback Invariant:** If `containment_state` is unrecognized or evaluates to
+  `unresolved`, `unsupported`, or timeout, Orama's `cancellation_allows_restore()` must
+  fail closed. The approval claim must remain consumed to prevent concurrent or duplicate
+  execution of uncontained work.
+- **Signal Boundary Isolation Invariant:** Signal escalation (`os.killpg`) must verify PGID
+  ownership before execution to prevent cross-process signal injection or accidental
+  termination of sibling tasks.
+- **Durable Cancellation Inviolability:** Any failure during grandchild discovery, process-group
+  cleanup, or telemetry serialization must never roll back or revoke the durable
+  `status: cancelled` state in the supervisor's lifecycle store.
+- **Mixed-Deploy Tolerance Invariant:** All new telemetry fields (`containment_scope`,
+  `escalation_stage`, `reaped_count`) must remain optional / nullable in JSON envelopes to
+  ensure seamless rolling upgrades across heterogeneous cluster nodes.
+
 ## Cross-repository rule
 
 **Perpetua** answers: did this job reach terminal cancellation, does it still

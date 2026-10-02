@@ -137,6 +137,22 @@ job without a stable `job_id` keeps the approval consumed (`orphaned_jobs`,
 `launch_blocked`). Do not add a second `rollback_verified` flag on the PT
 API; the pair above is sufficient when PT also releases the admission slot.
 
+**Future Scope (v2) Hardening & Invariants:**
+
+In lockstep with [`references/portal-pt-cancel-rollback-contract.md`](references/portal-pt-cancel-rollback-contract.md),
+future v2 iterations mandate:
+
+1. **Rollback Predicate Hardening:** Evaluate `containment_scope` (`direct-child` | `process-tree` |
+   `process-group`) alongside `containment_state`. Only `containment_state in ("verified",
+   "not-applicable")` permits approval restoration; any unrecognized state, `unresolved`, or
+   `unsupported` must fail closed.
+2. **Zero Process Internals Leakage:** All portal APIs, Looking Glass event streams, and admin
+   views must continue to strip and reject raw OS metadata (`pid`, `argv`, `cmdline`, `env`,
+   `cwd`, `stdout`, `stderr`), consuming strictly redacted semantic lifecycle envelopes.
+3. **Mixed-Deploy Tolerance:** Preserve backward compatibility for rolling upgrades; absent
+   optional containment fields default to legacy rollback evaluation rather than throwing
+   schema validation errors.
+
 ```mermaid
 sequenceDiagram
   participant SwarmLaunch
