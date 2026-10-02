@@ -170,7 +170,7 @@ sequenceDiagram
   SwarmLaunch->>PTJobsAPI: Submit assigned jobs
   PTJobsAPI-->>SwarmLaunch: Return submission failure
   SwarmLaunch->>PTJobsAPI: Cancel previously accepted jobs
-  alt Every cancellation reports terminal cancelled
+  alt Every cancellation passes cancellation_allows_restore
     SwarmLaunch->>ApprovalStore: Restore preview
   else Submission or cancellation outcome is unresolved
     SwarmLaunch->>ApprovalStore: Retain consumed claim for reconciliation
