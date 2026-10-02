@@ -122,6 +122,27 @@ def test_redact_jobs_list_accepts_pt_wrapper_or_bare_list() -> None:
 
 
 @pytest.mark.unit
+def test_redact_job_record_keeps_containment_fields_drops_process_secrets() -> None:
+    """Forward v1 containment columns; strip pid/argv-style process internals."""
+    safe = redact_job_record(
+        {
+            "job_id": "j-cli",
+            "status": "cancelled",
+            "worker_kind": "cli",
+            "containment_state": "verified",
+            "pid": 4242,
+            "argv": ["codex", "secret"],
+            "stdout": "leak",
+        }
+    )
+    assert safe["worker_kind"] == "cli"
+    assert safe["containment_state"] == "verified"
+    assert "pid" not in safe
+    assert "argv" not in safe
+    assert "stdout" not in safe
+
+
+@pytest.mark.unit
 def test_redact_jobs_list_skips_malformed_row_without_breaking_list() -> None:
     """Skip rows that fail redaction without dropping the whole list response."""
     payload = {

@@ -2356,6 +2356,30 @@ async def api_app_state():
     }
 
 
+def cancellation_allows_restore(cancel_result: Any) -> bool:
+    """Single rollback policy for a Perpetua cancel body.
+
+    Restore only when cancellation is durable (``cancel_requested`` and
+    ``terminal_state=cancelled``) and the containment pair is one Perpetua
+    actually produces: ``cli`` / ``verified``, or ``in-process`` /
+    ``not-applicable``. Both containment fields absent keeps mixed-deploy
+    compatibility. Any other present combination fails closed, including
+    unknown worker kinds and pairs Perpetua does not emit.
+    """
+    if not isinstance(cancel_result, dict):
+        return False
+    if cancel_result.get("cancel_requested") is not True:
+        return False
+    if cancel_result.get("terminal_state") != "cancelled":
+        return False
+    has_kind = "worker_kind" in cancel_result
+    has_containment = "containment_state" in cancel_result
+    if not has_kind and not has_containment:
+        return True
+    pair = (cancel_result.get("worker_kind"), cancel_result.get("containment_state"))
+    return pair in {("cli", "verified"), ("in-process", "not-applicable")}
+
+
 @app.post("/api/swarm/preview")
 async def api_swarm_preview(req: SwarmPreviewRequest):
     """Create a stateless five-role swarm preview; this route never dispatches."""
@@ -2512,11 +2536,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                     cancel_r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/cancel")
                     cancel_r.raise_for_status()
                     cancel_result = cancel_r.json()
-                    if (
-                        not isinstance(cancel_result, dict)
-                        or cancel_result.get("cancel_requested") is not True
-                        or cancel_result.get("terminal_state") != "cancelled"
-                    ):
+                    if not cancellation_allows_restore(cancel_result):
                         # PT can acknowledge a cancellation before the worker
                         # reaches its durable terminal checkpoint. Retaining
                         # the approval is safer than retrying into a possibly

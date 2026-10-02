@@ -106,9 +106,15 @@ containment is a separate contract (see
 [`references/portal-pt-cancel-rollback-contract.md`](references/portal-pt-cancel-rollback-contract.md)).
 
 Acknowledgement-only and unresolved outcomes remain non-retryable.
-Cancellation acknowledgement is not execution containment. For CLI-backed
-jobs, preview restoration must remain blocked unless Perpetua reports the
-required containment state according to its execution-control contract.
+Cancellation acknowledgement is not execution containment. Once either
+containment field is present, preview restoration requires exactly
+`worker_kind=cli` with `containment_state=verified`, or
+`worker_kind=in-process` with `containment_state=not-applicable`. Unknown
+kinds and pairs Perpetua does not emit fail closed. When both fields are
+omitted (mixed deploy), `terminal_state=cancelled` alone remains sufficient
+to restore. Once a partially dispatched swarm has an accepted job whose
+cancellation is not positively rollback-safe, the approval claim stays
+consumed.
 
 **Authority split:** Perpetua-Tools owns job lifecycle, admission-slot
 finality, and the cancel HTTP response schema. orama-system owns exclusive
@@ -120,14 +126,38 @@ consumes only the redacted cancel payload below.
 ```json
 {
   "cancel_requested": true,
-  "terminal_state": "cancelled"
+  "terminal_state": "cancelled",
+  "worker_kind": "cli",
+  "containment_state": "verified"
 }
 ```
 
-Any other `terminal_state`, missing fields, transport failure, or accepted
-job without a stable `job_id` keeps the approval consumed (`orphaned_jobs`,
-`launch_blocked`). Do not add a second `rollback_verified` flag on the PT
-API; the pair above is sufficient when PT also releases the admission slot.
+`worker_kind` and `containment_state` are optional only as a pair for backward
+compatibility. Legacy rollback applies when **both** fields are absent; a
+partially present or otherwise invalid pair fails closed.
+
+Any other `terminal_state`, invalid or partially present containment pair,
+transport failure, or accepted job without a stable `job_id` keeps the
+approval consumed (`orphaned_jobs`, `launch_blocked`). Do not add a second
+`rollback_verified` flag on the PT API; the pair above is sufficient when PT
+also releases the admission slot.
+
+**Future Scope (v2) Hardening & Invariants:**
+
+In lockstep with [`references/portal-pt-cancel-rollback-contract.md`](references/portal-pt-cancel-rollback-contract.md),
+future v2 iterations mandate:
+
+1. **Rollback Predicate Hardening:** Evaluate `containment_scope` (`direct-child` | `process-tree` |
+   `process-group`) alongside the ownership pair. The v1-compatible safe pairs are exactly
+   `cli` / `verified` and `in-process` / `not-applicable`; any other present pair, including
+   `cli` / `not-applicable`, unrecognized state, `unresolved`, or `unsupported`, must fail
+   closed. Preserve legacy evaluation only when both v1 containment fields are absent.
+2. **Zero Process Internals Leakage:** All portal APIs, Looking Glass event streams, and admin
+   views must continue to strip and reject raw OS metadata (`pid`, `argv`, `cmdline`, `env`,
+   `cwd`, `stdout`, `stderr`), consuming strictly redacted semantic lifecycle envelopes.
+3. **Mixed-Deploy Tolerance:** Preserve backward compatibility for rolling upgrades; only a
+   response with both containment fields absent uses legacy rollback evaluation. A single
+   absent field is malformed and must not restore an approval.
 
 ```mermaid
 sequenceDiagram
@@ -140,7 +170,7 @@ sequenceDiagram
   SwarmLaunch->>PTJobsAPI: Submit assigned jobs
   PTJobsAPI-->>SwarmLaunch: Return submission failure
   SwarmLaunch->>PTJobsAPI: Cancel previously accepted jobs
-  alt Every cancellation reports terminal cancelled
+  alt Every cancellation passes cancellation_allows_restore
     SwarmLaunch->>ApprovalStore: Restore preview
   else Submission or cancellation outcome is unresolved
     SwarmLaunch->>ApprovalStore: Retain consumed claim for reconciliation
