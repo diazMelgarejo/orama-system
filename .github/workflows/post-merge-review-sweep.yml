@@ -54,18 +54,28 @@ jobs:
                   raise RuntimeError(response["errors"])
               return response["data"]
 
-          query = """
+          def next_page_cursor(page, cursor, label):
+              if not page["hasNextPage"]:
+                  return None
+              end = page["endCursor"]
+              if not end or end == cursor:
+                  raise RuntimeError(f"{label} pagination did not advance")
+              return end
+
+          threads_query = """
           query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
             repository(owner: $owner, name: $name) {
               pullRequest(number: $number) {
                 reviewThreads(first: 100, after: $cursor) {
                   nodes {
+                    id
                     isResolved
                     path
                     line
                     originalLine
                     comments(first: 100) {
                       nodes { author { login } body url }
+                      pageInfo { hasNextPage endCursor }
                     }
                   }
                   pageInfo { hasNextPage endCursor }
@@ -75,11 +85,36 @@ jobs:
           }
           """
 
+          comments_query = """
+          query($threadId: ID!, $cursor: String) {
+            node(id: $threadId) {
+              ... on PullRequestReviewThread {
+                comments(first: 100, after: $cursor) {
+                  nodes { author { login } body url }
+                  pageInfo { hasNextPage endCursor }
+                }
+              }
+            }
+          }
+          """
+
+          def thread_comments(thread):
+              comments = list(thread["comments"]["nodes"])
+              cursor = next_page_cursor(
+                  thread["comments"]["pageInfo"], None, "Review-thread comments"
+              )
+              while cursor is not None:
+                  data = graphql(comments_query, {"threadId": thread["id"], "cursor": cursor})
+                  conn = data["node"]["comments"]
+                  comments.extend(conn["nodes"])
+                  cursor = next_page_cursor(conn["pageInfo"], cursor, "Review-thread comments")
+              return comments
+
           bots = {"coderabbitai[bot]", "cursor[bot]", "github-actions[bot]"}
           bot_threads = []
           cursor = None
           while True:
-              data = graphql(query, {
+              data = graphql(threads_query, {
                   "owner": owner,
                   "name": name,
                   "number": int(pr),
@@ -89,7 +124,7 @@ jobs:
               for thread in threads["nodes"]:
                   if thread["isResolved"]:
                       continue
-                  comments = thread["comments"]["nodes"]
+                  comments = thread_comments(thread)
                   bot_comment = next(
                       (comment for comment in reversed(comments)
                        if (comment.get("author") or {}).get("login") in bots),
@@ -98,9 +133,10 @@ jobs:
                   if bot_comment is not None:
                       bot_threads.append((thread, bot_comment))
               page = threads["pageInfo"]
-              if not page["hasNextPage"]:
+              next_cursor = next_page_cursor(page, cursor, "Review threads")
+              if next_cursor is None:
                   break
-              cursor = page["endCursor"]
+              cursor = next_cursor
 
           lines = [f"## Post-merge review sweep — PR #{pr}\n"]
           if not bot_threads:
