@@ -67,10 +67,13 @@ confirmation (`CONTAINMENT_TIMEOUT_SECONDS`) are separate bounds. v1 sets them
 to the same duration (5.0s). Containment waits use a monotonic clock.
 
 A failure while writing the containment annotation does not revoke durable
-`cancelled`. The supervisor logs the failure at WARNING. If the annotation
-never lands, orama applies the mixed-deploy rule (absent `containment_state`
-may still allow restore). That is intentional: cancellation finality beats
-telemetry persistence; operators rely on logs for annotation gaps.
+`cancelled`. Perpetua retries the annotation a bounded number of times. If a
+direct child remains registered after the final failure, its cancel response
+derives `cli` / `unresolved` from that retained containment ownership even
+though the lifecycle event has no annotation. Orama therefore fails closed and
+does not restore the preview. The mixed-deploy rule applies only when **both**
+containment fields are absent and no direct-child mapping remains, such as a
+true in-process cancellation on an older Perpetua deployment.
 
 ### v1 edge cases (documented, not process-tree scope)
 
@@ -78,7 +81,7 @@ telemetry persistence; operators rely on logs for annotation gaps.
 |---|---|---|
 | Cancel during `create_subprocess_exec` before `note_child` | Shield creation, await the spawned process, register, re-raise cancel; supervisor containment records `cli` + outcome | Uses cancel body when present; absent fields → mixed deploy |
 | `note_child` refuses to replace a still-running first process | Identity policy: keep first live mapping | Containment follows whichever child was registered |
-| Containment annotation write fails after durable `cancelled` | `terminal_state` stays `cancelled`; WARNING log; no PID/argv on event | Missing `containment_state` → mixed-deploy restore allowed |
+| Containment annotation write fails after durable `cancelled` | Retry the annotation; after final failure retain the child mapping and return `cli` / `unresolved`; no PID/argv on event | Fail closed; preview remains consumed |
 
 Process-tree reaping and grandchildren remain v2 only.
 
