@@ -2360,10 +2360,11 @@ def cancellation_allows_restore(cancel_result: Any) -> bool:
     """Single rollback policy for a Perpetua cancel body.
 
     Restore only when cancellation is durable (``cancel_requested`` and
-    ``terminal_state=cancelled``) and, for CLI jobs, a present
-    ``containment_state`` is ``verified`` or ``not-applicable``. Missing
-    containment keeps mixed-deploy compatibility. Any other present CLI value
-    fails closed. ``worker_kind`` other than ``cli`` does not add a gate.
+    ``terminal_state=cancelled``) and the containment pair is one Perpetua
+    actually produces: ``cli`` / ``verified``, or ``in-process`` /
+    ``not-applicable``. Both containment fields absent keeps mixed-deploy
+    compatibility. Any other present combination fails closed, including
+    unknown worker kinds and pairs Perpetua does not emit.
     """
     if not isinstance(cancel_result, dict):
         return False
@@ -2371,11 +2372,12 @@ def cancellation_allows_restore(cancel_result: Any) -> bool:
         return False
     if cancel_result.get("terminal_state") != "cancelled":
         return False
-    if cancel_result.get("worker_kind") != "cli":
+    has_kind = "worker_kind" in cancel_result
+    has_containment = "containment_state" in cancel_result
+    if not has_kind and not has_containment:
         return True
-    if "containment_state" not in cancel_result:
-        return True
-    return cancel_result.get("containment_state") in ("verified", "not-applicable")
+    pair = (cancel_result.get("worker_kind"), cancel_result.get("containment_state"))
+    return pair in {("cli", "verified"), ("in-process", "not-applicable")}
 
 
 @app.post("/api/swarm/preview")

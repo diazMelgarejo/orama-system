@@ -88,12 +88,15 @@ One function, `cancellation_allows_restore`, owns the decision:
 
 | Worker | Terminal state | Containment state | Restore |
 |---|---|---|---|
+| both fields absent | cancelled | absent | Yes, mixed deploy |
 | CLI | cancelled | verified | Yes |
-| CLI | cancelled | not-applicable | Yes |
-| CLI | cancelled | unresolved | No |
-| CLI | cancelled | any other present value | No |
-| CLI | cancelled | absent | Yes, mixed deploy |
-| non-CLI | cancelled | any or absent | Yes |
+| in-process | cancelled | not-applicable | Yes |
+| CLI | cancelled | not-applicable | No |
+| CLI | cancelled | unresolved or any other value | No |
+| CLI | cancelled | absent while `worker_kind` is present | No |
+| in-process | cancelled | any value other than not-applicable, or absent | No |
+| unknown or any other kind | cancelled | any | No |
+| containment present, `worker_kind` absent | cancelled | any | No |
 | any | not cancelled | any | No |
 | any | missing | any | No |
 
@@ -108,8 +111,9 @@ ambiguous submission and cancel transport failures.
 - Ambiguous submission (transport/timeout) on a failed role.
 - Accepted job with no identifiable `job_id` (`unknown:<role>` orphan).
 - Cancel failure or orphan after rollback (`orphaned_jobs`, `launch_blocked`).
-- CLI jobs reporting present `containment_state` other than `verified` or
-  `not-applicable`.
+- Any present containment pair other than `cli` / `verified` or
+  `in-process` / `not-applicable`. Legacy restore applies only when both
+  `worker_kind` and `containment_state` are absent.
 
 ## v2 (documentation only — not implemented)
 
