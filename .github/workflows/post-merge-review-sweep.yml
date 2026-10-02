@@ -34,68 +34,117 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           python3 - <<'PYEOF'
-          import json, os, urllib.request, sys
+          import json, os, urllib.request
 
           token = os.environ["GH_TOKEN"]
           repo  = os.environ["REPO"]
           pr    = os.environ["PR_NUMBER"]
+          owner, name = repo.split("/", 1)
 
-          def gh(url):
-              req = urllib.request.Request(url, headers={
+          def graphql(query, variables):
+              body = json.dumps({"query": query, "variables": variables}).encode()
+              req = urllib.request.Request("https://api.github.com/graphql", data=body, headers={
                   "Authorization": f"Bearer {token}",
                   "Accept": "application/vnd.github+json",
+                  "Content-Type": "application/json",
               })
               with urllib.request.urlopen(req) as r:
-                  return json.loads(r.read())
+                  response = json.loads(r.read())
+              if response.get("errors"):
+                  raise RuntimeError(response["errors"])
+              return response["data"]
 
-          # Pull all inline review comments
-          comments = gh(f"https://api.github.com/repos/{repo}/pulls/{pr}/comments?per_page=100")
-          # Pull all issue-level review bodies (CodeRabbit summary comments)
-          reviews  = gh(f"https://api.github.com/repos/{repo}/pulls/{pr}/reviews?per_page=100")
+          query = """
+          query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
+            repository(owner: $owner, name: $name) {
+              pullRequest(number: $number) {
+                reviewThreads(first: 100, after: $cursor) {
+                  nodes {
+                    isResolved
+                    path
+                    line
+                    originalLine
+                    comments(first: 100) {
+                      nodes { author { login } body url }
+                    }
+                  }
+                  pageInfo { hasNextPage endCursor }
+                }
+              }
+            }
+          }
+          """
 
           bots = {"coderabbitai[bot]", "cursor[bot]", "github-actions[bot]"}
-          bot_comments = [c for c in comments if c["user"]["login"] in bots]
+          bot_threads = []
+          cursor = None
+          while True:
+              data = graphql(query, {
+                  "owner": owner,
+                  "name": name,
+                  "number": int(pr),
+                  "cursor": cursor,
+              })
+              threads = data["repository"]["pullRequest"]["reviewThreads"]
+              for thread in threads["nodes"]:
+                  if thread["isResolved"]:
+                      continue
+                  comments = thread["comments"]["nodes"]
+                  bot_comment = next(
+                      (comment for comment in reversed(comments)
+                       if (comment.get("author") or {}).get("login") in bots),
+                      None,
+                  )
+                  if bot_comment is not None:
+                      bot_threads.append((thread, bot_comment))
+              page = threads["pageInfo"]
+              if not page["hasNextPage"]:
+                  break
+              cursor = page["endCursor"]
 
-          if not bot_comments:
-              print("NO_UNRESOLVED=true")
-              with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
-                  f.write("unresolved_count=0\n")
-                  f.write("summary=All review comments resolved.\n")
-              sys.exit(0)
-
-          lines = [f"## Post-merge review sweep — PR #{pr}\n",
-                   f"{len(bot_comments)} unresolved bot comment(s) need attention:\n"]
-          for c in bot_comments[:20]:
-              path = c.get("path","?")
-              line = c.get("line") or c.get("original_line","?")
-              body = c["body"][:200].replace("\n", " ")
-              lines.append(f"- **{c['user']['login']}** `{path}:{line}` — {body}")
-          if len(bot_comments) > 20:
-              lines.append(f"- _(+{len(bot_comments)-20} more — see PR review tab)_")
-          lines.append("\n> Fix directly to main: `git checkout main && <edits> && git commit && git push`")
+          lines = [f"## Post-merge review sweep — PR #{pr}\n"]
+          if not bot_threads:
+              lines.append("All bot review threads are resolved.")
+          else:
+              lines.append(f"{len(bot_threads)} unresolved bot review thread(s) need attention:\n")
+              for thread, comment in bot_threads[:20]:
+                  path = thread.get("path", "?")
+                  line = thread.get("line") or thread.get("originalLine") or "?"
+                  body = comment["body"][:200].replace("\n", " ")
+                  author = (comment.get("author") or {}).get("login", "unknown")
+                  lines.append(f"- **{author}** `{path}:{line}` — {body} ({comment['url']})")
+              if len(bot_threads) > 20:
+                  lines.append(f"- _(+{len(bot_threads)-20} more — see PR review tab)_")
+              lines.append("\n> Use a reviewed follow-up branch for any still-valid finding.")
 
           summary = "\n".join(lines)
+          with open(os.environ.get("GITHUB_STEP_SUMMARY", "/dev/null"), "a") as f:
+              f.write(summary + "\n")
+          with open("sweep-summary.md", "w", encoding="utf-8") as f:
+              f.write(summary + "\n")
           with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
-              f.write(f"unresolved_count={len(bot_comments)}\n")
-              # multiline output
-              delim = "EOF_SUMMARY"
-              f.write(f"summary<<{delim}\n{summary}\n{delim}\n")
+              f.write(f"unresolved_count={len(bot_threads)}\n")
           PYEOF
 
       - name: Comment summary on PR
         if: steps.threads.outputs.unresolved_count != '0' && steps.threads.outputs.unresolved_count != ''
+        id: comment
+        continue-on-error: true
         uses: actions/github-script@v7
-        env:
-          SWEEP_SUMMARY: ${{ steps.threads.outputs.summary }}
-          UNRESOLVED_COUNT: ${{ steps.threads.outputs.unresolved_count }}
         with:
           script: |
-            const summary = process.env.SWEEP_SUMMARY || "";
-            const unresolvedCount = process.env.UNRESOLVED_COUNT || "0";
+            const fs = require("fs");
+            const summary = fs.readFileSync("sweep-summary.md", "utf8");
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo:  context.repo.repo,
               issue_number: ${{ github.event.pull_request.number }},
               body: summary,
             });
-            core.notice(`Posted sweep summary: ${unresolvedCount} unresolved comment(s)`);
+            core.notice("Posted unresolved review-thread summary.");
+
+      - name: Record unavailable PR summary comment
+        if: steps.comment.outcome == 'failure'
+        run: |
+          echo "PR summary comment could not be posted with this repository's Actions token." >> "$GITHUB_STEP_SUMMARY"
+          echo "The review-thread summary remains available above in this workflow run."
