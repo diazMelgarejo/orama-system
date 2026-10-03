@@ -36,6 +36,7 @@ _search_semaphores: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semapho
 
 
 def _max_files_scan() -> int:
+    """Return the Markdown scan cap from env, falling back when misconfigured."""
     try:
         return max(1, int(os.getenv("ORAMA_KNOWLEDGE_MAX_FILES_SCAN", str(_DEFAULT_MAX_FILES_SCAN))))
     except ValueError:
@@ -43,6 +44,7 @@ def _max_files_scan() -> int:
 
 
 def _max_concurrent_searches() -> int:
+    """Return the concurrent search limit from env, falling back when misconfigured."""
     try:
         return max(
             1,
@@ -53,6 +55,7 @@ def _max_concurrent_searches() -> int:
 
 
 def _search_timeout_s() -> float:
+    """Return the per-search timeout budget from env, falling back when misconfigured."""
     try:
         return max(
             0.5,
@@ -63,6 +66,7 @@ def _search_timeout_s() -> float:
 
 
 def _search_semaphore() -> asyncio.Semaphore:
+    """Return the search semaphore for the current event loop."""
     loop = asyncio.get_running_loop()
     semaphore = _search_semaphores.get(loop)
     if semaphore is None:
@@ -142,6 +146,7 @@ def _search_docs(
     *,
     deadline: float | None = None,
 ) -> list[dict[str, Any]]:
+    """Scan Markdown under the docs root; stop when ``deadline`` elapses."""
     terms = tuple(dict.fromkeys(word.lower() for word in _WORD.findall(_fold(query))))
     if not terms:
         return []

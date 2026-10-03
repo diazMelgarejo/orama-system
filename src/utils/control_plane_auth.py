@@ -476,6 +476,7 @@ def cors_allow_origins() -> list[str]:
 
 
 def portal_path_is_public(path: str) -> bool:
+    """Return whether ``path`` is a Class-0 public portal route (no bearer)."""
     if path in _PUBLIC_PORTAL_PATHS:
         return True
     return any(path.startswith(prefix) for prefix in _PUBLIC_PORTAL_PREFIXES)
