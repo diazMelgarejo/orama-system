@@ -261,7 +261,7 @@ def _symlink_or_skip(link: Path, target: Path) -> None:
     try:
         link.symlink_to(target)
     except OSError:
-        pytest.skip("platform cannot create symlinks")
+        pytest.skip("symlinks unavailable")
 
 
 def test_symlink_escape_outside_root_is_skipped(tmp_path, monkeypatch):
