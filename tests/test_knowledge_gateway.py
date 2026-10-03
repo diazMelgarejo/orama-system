@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import asyncio
+import time
+from pathlib import Path
+
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from orama_system.knowledge_gateway import _search_docs, router
@@ -243,9 +247,212 @@ def test_portal_knowledge_public_while_swarm_requires_bearer(monkeypatch):
 
 
 def test_search_respects_max_files_scan(tmp_path, monkeypatch):
+    """Honor ORAMA_KNOWLEDGE_MAX_FILES_SCAN when scanning Markdown."""
     for index in range(5):
         (tmp_path / f"doc-{index}.md").write_text(f"# Doc {index}\nneedle-{index}", encoding="utf-8")
     monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
     monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_FILES_SCAN", "2")
     hits = _search_docs("needle")
     assert len(hits) <= 2
+
+
+def _symlink_or_skip(link: Path, target: Path) -> None:
+    """Create ``link`` → ``target`` or skip when the platform forbids symlinks."""
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("symlinks unavailable")
+
+
+def test_symlink_escape_outside_root_is_skipped(tmp_path, monkeypatch):
+    """Symlinks outside the docs root must not expose content in search."""
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    secret = tmp_path / "secret.md"
+    secret.write_text("# Secret\nUNIQUE_OUTSIDE_NEEDLE", encoding="utf-8")
+    (docs / "inside.md").write_text("# Inside\ninside-needle", encoding="utf-8")
+    _symlink_or_skip(docs / "escape.md", secret)
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(docs))
+    assert _search_docs("UNIQUE_OUTSIDE_NEEDLE") == []
+    assert _search_docs("inside-needle")[0]["path"] == "inside.md"
+
+
+def test_symlink_loop_is_skipped_safely(tmp_path, monkeypatch):
+    """Symlink cycles must not break the Markdown scan."""
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "ok.md").write_text("# Ok\nloop-needle-ok", encoding="utf-8")
+    loop_a = docs / "loop-a.md"
+    loop_b = docs / "loop-b.md"
+    _symlink_or_skip(loop_a, loop_b)
+    _symlink_or_skip(loop_b, loop_a)
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(docs))
+    hits = _search_docs("loop-needle-ok")
+    assert [hit["path"] for hit in hits] == ["ok.md"]
+
+
+def test_oversized_markdown_is_skipped(tmp_path, monkeypatch):
+    """Files above the byte cap are ignored during search."""
+    (tmp_path / "ok.md").write_text("# Ok\nkeep-needle", encoding="utf-8")
+    (tmp_path / "huge.md").write_bytes(b"# Huge\nkeep-needle\n" + (b"x" * 512_001))
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    hits = _search_docs("keep-needle")
+    assert [hit["path"] for hit in hits] == ["ok.md"]
+
+
+def test_search_docs_raises_when_deadline_passed(tmp_path, monkeypatch):
+    """Raise when the scan deadline is already expired."""
+    for index in range(4):
+        (tmp_path / f"doc-{index}.md").write_text(f"# Doc {index}\nneedle", encoding="utf-8")
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    with pytest.raises(TimeoutError, match="timed out"):
+        _search_docs("needle", deadline=time.monotonic() - 1)
+
+
+def test_bad_knowledge_env_values_fall_back(monkeypatch):
+    """Invalid knowledge env values fall back to documented defaults."""
+    from orama_system import knowledge_gateway as kg
+
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_FILES_SCAN", "not-int")
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES", "nope")
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S", "abc")
+    assert kg._max_files_scan() == 2000
+    assert kg._max_concurrent_searches() == 4
+    assert kg._search_timeout_s() == 8.0
+
+
+def test_queued_search_deadline_starts_after_semaphore(tmp_path, monkeypatch):
+    """Semaphore queue time must not consume the bounded search deadline."""
+    (tmp_path / "guide.md").write_text("# Human Approval\nThe human gate.", encoding="utf-8")
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES", "1")
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S", "1.0")
+    from orama_system import knowledge_gateway as kg
+
+    kg._search_semaphores.clear()
+    original = kg._search_docs
+    hold = {"seconds": 0.9}
+
+    def delayed_search(query: str, limit: int = 8, *, deadline=None):
+        """Hold the first search so the second waits on the semaphore."""
+        if hold["seconds"]:
+            time.sleep(hold["seconds"])
+            hold["seconds"] = 0
+        return original(query, limit, deadline=deadline)
+
+    monkeypatch.setattr(kg, "_search_docs", delayed_search)
+
+    async def run_pair():
+        """Run two concurrent bounded searches against a single-slot semaphore."""
+        return await asyncio.gather(
+            kg._bounded_search("human"),
+            kg._bounded_search("human"),
+        )
+
+    first, second = asyncio.run(run_pair())
+    assert first and first[0]["path"] == "guide.md"
+    assert second and second[0]["path"] == "guide.md"
+
+
+def test_search_semaphore_is_isolated_per_event_loop(monkeypatch):
+    """Each asyncio loop gets its own search semaphore instance."""
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES", "3")
+    from orama_system import knowledge_gateway as kg
+
+    kg._search_semaphores.clear()
+
+    async def grab():
+        """Return the semaphore bound to the loop running this coroutine."""
+        return kg._search_semaphore()
+
+    first = asyncio.run(grab())
+    second = asyncio.run(grab())
+    assert first is not second
+    assert first._value == 3
+    assert second._value == 3
+
+
+def test_bounded_search_wait_for_timeout_returns_503(tmp_path, monkeypatch):
+    """Slow scans surface HTTP 503 once the bounded wait expires."""
+    (tmp_path / "guide.md").write_text("# Human Approval\nThe human gate.", encoding="utf-8")
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S", "0.4")
+    from orama_system import knowledge_gateway as kg
+
+    kg._search_semaphores.clear()
+
+    def hang(_query: str, _limit: int = 8, *, deadline=None):
+        """Block longer than the configured search timeout."""
+        time.sleep(2.0)
+        return [{"title": "late", "path": "guide.md", "excerpt": "x", "score": 1}]
+
+    monkeypatch.setattr(kg, "_search_docs", hang)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(kg._bounded_search("human"))
+    assert exc.value.status_code == 503
+    assert "timed out" in exc.value.detail
+
+
+def test_knowledge_search_timeout_returns_503(client, monkeypatch):
+    """Map bounded-search timeouts to HTTP 503 on the REST search route."""
+    async def _timeout(_query: str, _limit: int = 8):
+        """Simulate a timed-out bounded search."""
+        raise HTTPException(
+            status_code=503,
+            detail="documentation search timed out; retry with a narrower query",
+        )
+
+    monkeypatch.setattr("orama_system.knowledge_gateway._bounded_search", _timeout)
+    response = client.get("/api/knowledge/search?q=human")
+    assert response.status_code == 503
+    assert "timed out" in response.json()["detail"]
+
+
+def test_mcp_and_a2a_timeout_map_to_minus_32000(client, monkeypatch):
+    """Map bounded-search timeouts to JSON-RPC -32000 for MCP and A2A."""
+    async def _timeout(_query: str, _limit: int = 8):
+        """Simulate a timed-out bounded search."""
+        raise HTTPException(
+            status_code=503,
+            detail="documentation search timed out; retry with a narrower query",
+        )
+
+    monkeypatch.setattr("orama_system.knowledge_gateway._bounded_search", _timeout)
+    mcp = client.post(
+        "/api/mcp",
+        headers=_MCP_HEADERS,
+        json={
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {"name": "search_docs", "arguments": {"query": "Amplifier"}},
+        },
+    )
+    a2a = client.post(
+        "/api/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-timeout",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "messageId": "m-timeout",
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": "Amplifier"}],
+                }
+            },
+        },
+    )
+    assert mcp.json()["error"]["code"] == -32000
+    assert a2a.json()["error"]["code"] == -32000
+
+
+def test_knowledge_search_path_is_public_not_the_prefix():
+    """Only the exact knowledge search path is public, not the whole prefix."""
+    from utils.control_plane_auth import portal_path_is_public
+
+    assert portal_path_is_public("/api/knowledge/search") is True
+    assert portal_path_is_public("/api/knowledge/admin") is False
+    assert portal_path_is_public("/api/mcp") is True
+    assert portal_path_is_public("/api/a2a") is True

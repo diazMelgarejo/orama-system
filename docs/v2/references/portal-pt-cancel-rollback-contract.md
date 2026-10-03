@@ -68,12 +68,14 @@ to the same duration (5.0s). Containment waits use a monotonic clock.
 
 A failure while writing the containment annotation does not revoke durable
 `cancelled`. Perpetua retries the annotation a bounded number of times. If a
-direct child remains registered after the final failure, its cancel response
-derives `cli` / `unresolved` from that retained containment ownership even
-though the lifecycle event has no annotation. Orama therefore fails closed and
-does not restore the preview. The mixed-deploy rule applies only when **both**
-containment fields are absent and no direct-child mapping remains, such as a
-true in-process cancellation on an older Perpetua deployment.
+direct child remains registered after the final failure, the public
+`has_registered_child()` predicate is true and the cancel HTTP body is
+`worker_kind=cli` with `containment_state=unresolved` even when the lifecycle
+event has no annotation. Orama's `cancellation_allows_restore` therefore fails
+closed and does not restore the preview. The mixed-deploy rule applies only
+when **both** containment fields are absent and no direct-child mapping
+remains, such as a true in-process cancellation on an older Perpetua
+deployment.
 
 ### v1 edge cases (documented, not process-tree scope)
 
@@ -107,6 +109,14 @@ One function, `cancellation_allows_restore`, owns the decision:
 accepted job whose cancellation cannot be positively established as
 rollback-safe, the approval claim remains consumed. The same rule covers
 ambiguous submission and cancel transport failures.
+
+## Orama cancel HTTP timeout
+
+Portal cancel POSTs (swarm-launch rollback and `POST /api/jobs/{job_id}/cancel`)
+use `PT_CANCEL_HTTP_TIMEOUT_S` (15.0s). That budget covers Perpetua
+`CANCEL_CONFIRM_TIMEOUT_SECONDS` (5.0s) plus `CONTAINMENT_TIMEOUT_SECONDS`
+(5.0s) plus annotation retries and I/O. Shorter httpx timeouts fail closed as
+orphaned/unresolved cancellations.
 
 ## Non-retryable outcomes (orama fail-closed)
 

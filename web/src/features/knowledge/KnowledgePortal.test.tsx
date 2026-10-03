@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { KnowledgePortal } from "./KnowledgePortal";
 import { searchKnowledge } from "@/api/knowledge";
+import { ApiError } from "@/api/client";
 
 vi.mock("@/api/knowledge", () => ({
   searchKnowledge: vi.fn(),
@@ -51,5 +52,22 @@ describe("KnowledgePortal", () => {
     });
     await waitFor(() => expect(searchKnowledge).toHaveBeenCalled());
     expect(screen.queryByText("Human Approval")).not.toBeInTheDocument();
+  });
+
+  it("explains a 503 timeout without the port-8002 hint", async () => {
+    vi.mocked(searchKnowledge).mockRejectedValueOnce(
+      new ApiError("503 Service Unavailable on /api/knowledge/search", 503, "/api/knowledge/search"),
+    );
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <KnowledgePortal />
+      </QueryClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText("Search documentation"), { target: { value: "approval" } });
+    fireEvent.click(screen.getByRole("button", { name: "Search" }));
+    await waitFor(() =>
+      expect(screen.getByText("search timed out; try a narrower query")).toBeInTheDocument(),
+    );
+    expect(screen.queryByText(/port 8002/i)).not.toBeInTheDocument();
   });
 });

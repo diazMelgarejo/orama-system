@@ -74,9 +74,9 @@ stays in [`53-maestro-swarm-v2-redesign-critique.md`](53-maestro-swarm-v2-redesi
 — this file does not re-argue that critique.
 
 | Portal class | Name | Example on the glass | Required gate (intent) | As-built on PR #368 |
-| --- | --- | --- | --- | --- | --- |
-| 0 | Read | `GET /api/knowledge/search` | Public read; bounded scan | **Shipped** — §4 |
-| 0b | Authenticated read | MCP / A2A | Bearer on every method | **Target** — §4; knowledge public |
+| --- | --- | --- | --- | --- |
+| 0 | Read | `GET /api/knowledge/search`, `/api/mcp` `search_docs`, `/api/a2a` `message/send` | Public read; bounded scan | **Shipped** — §4 |
+| 0b | Authenticated read | Operator jobs / activity | Bearer on mutating and operator reads | **Shipped** — swarm/jobs/cancel |
 | 1 | Soft write | Config flag (future) | Bearer + confirm | Not in this slice |
 | 2 | Dispatch | Swarm launch | Preview + exclusive claim | **Shipped** — claim before PT posts |
 | 3 | External / identity | OIDC / financial | Class-2 + identity | **Deferred** — docs 51 + 61 |
@@ -96,14 +96,16 @@ Phase C/D (Phase D remains the v2-launch strict cutover).
 
 The exclusive preview claim remains consumed once downstream dispatch becomes
 ambiguous. A successful cancellation HTTP response is an acknowledgement, not
-proof that the job stopped. The portal restores a claimed preview only after
-every accepted PT job reports a persisted `cancelled` terminal state. A
-PT cancellation is rollback-final for portal purposes only when Perpetua
-returns `terminal_state="cancelled"` **and** the corresponding supervisor
-admission entry is no longer active (`_active` on the PT side). That is
-not a guarantee that CLI child processes are dead; external execution
-containment is a separate contract (see
-[`references/portal-pt-cancel-rollback-contract.md`](references/portal-pt-cancel-rollback-contract.md)).
+proof that the job stopped. Failed-launch restore is gated by
+`cancellation_allows_restore` for **every** cancelled job. That predicate
+requires `cancel_requested=true` and `terminal_state="cancelled"`, plus an
+allowed containment pair (`cli`/`verified`, `in-process`/`not-applicable`,
+or both fields absent for mixed-deploy compatibility). Unresolved, unknown,
+or any other present pair fails closed — including a retained CLI child
+reported as `worker_kind=cli` and `containment_state=unresolved`. Admission
+slot cleanup (`_active` on the PT side) is a Perpetua invariant; orama does
+not inspect it. See
+[`references/portal-pt-cancel-rollback-contract.md`](references/portal-pt-cancel-rollback-contract.md).
 
 Acknowledgement-only and unresolved outcomes remain non-retryable.
 Cancellation acknowledgement is not execution containment. Once either
@@ -111,10 +113,10 @@ containment field is present, preview restoration requires exactly
 `worker_kind=cli` with `containment_state=verified`, or
 `worker_kind=in-process` with `containment_state=not-applicable`. Unknown
 kinds and pairs Perpetua does not emit fail closed. When both fields are
-omitted (mixed deploy), `terminal_state=cancelled` alone remains sufficient
-to restore. Once a partially dispatched swarm has an accepted job whose
-cancellation is not positively rollback-safe, the approval claim stays
-consumed.
+omitted (mixed deploy), `cancel_requested=true` and
+`terminal_state=cancelled` remain sufficient to restore. Once a partially
+dispatched swarm has an accepted job whose cancellation is not positively
+rollback-safe, the approval claim stays consumed.
 
 **Authority split:** Perpetua-Tools owns job lifecycle, admission-slot
 finality, and the cancel HTTP response schema. orama-system owns exclusive
@@ -184,27 +186,18 @@ sequenceDiagram
 Knowledge, MCP, and A2A routes live on `src/orama_system/knowledge_gateway.py`.
 `portal_server.py` mounts that router with `app.include_router(knowledge_router)`.
 Class-0 documentation search is **public read**: `portal_path_is_public()` in
-`utils/control_plane_auth.py` exempts `/api/knowledge/*` and
-`/.well-known/agent-card.json`. `/health` and `/assets/` stay public too.
-Swarm preview/launch and the rest of the operator console remain behind
-operator auth.
+`utils/control_plane_auth.py` exempts `/api/knowledge/search`,
+`/.well-known/agent-card.json`, `/api/mcp`, and `/api/a2a`. `/health` and
+`/assets/` stay public too. Swarm preview, launch, approve, cancel, and every
+other mutating operator endpoint stay behind the operator token and fail
+closed.
 
-**MCP and A2A (v2 contract).** `/api/mcp` and `/api/a2a` are operator routes,
-not public reads. A client proves identity with one of:
-
-- **Bearer.** `Authorization: Bearer` matching an orama-lane token:
-  `ORAMA_CONTROL_PLANE_TOKEN` or `ORAMA_CONTROL_PLANE_TOKEN_LOCAL`
-  (`orama_lane_token_candidates()` / `token_matches_control_plane(..., scope="orama")`).
-- **Web session cookie, when the browser will send it.**
-  `bearer_token_from_request()` also accepts the `orama_control_plane_token`
-  cookie. The only setter today is `POST /api/notifications/session`, and that
-  cookie’s `Path` is `/api/notifications`, so it is **not** sent to `/api/mcp`
-  or `/api/a2a`. A browser or desktop client of those routes sends the bearer
-  header. Do not add a loopback exemption: a local tab can reach loopback.
-
-Until the allowlist edit, `_PUBLIC_PORTAL_PATHS` still contains `/api/mcp` and
-`/api/a2a`, so unauthenticated calls succeed. Treat that as drift from this
-contract, not as the v2 rule.
+**MCP and A2A (as-built, PR #371).** `/api/mcp` `search_docs` (`readOnlyHint`,
+protocol `2026-07-28`, 200-character query cap, scan/timeout caps) and
+`/api/a2a` `message/send` for docs search are publicly readable, the same as
+`GET /api/knowledge/search`. That is the shipped rule, not a later token
+gate. JSON-RPC uses `-32700` / `-32602` / `-32000` for parse, invalid params,
+and search timeout.
 
 Same-origin `GET /api/knowledge/search` is Markdown FTS over the docs tree
 (no DB, no embeddings, no Redis). Scans run in a worker thread with
@@ -215,8 +208,9 @@ swarm approval indefinitely. MCP Streamable HTTP uses protocol date
 dual-era `initialize` and `notifications/initialized` → 202 still accepted;
 `tools/list` / `tools/call` for read-only `search_docs`). A2A is
 synchronous `message/send` plus `GET /.well-known/agent-card.json`.
-Unicode search folds NFKD/casefold and excerpts from original text via an
-origin map.
+Unicode search folds NFKD, strips combining marks, then matches with
+`.lower()` (not `casefold`). Excerpts are taken from the original text via
+an origin map.
 
 Web glass: Docs nav → `KnowledgePortal`; SwarmComposer Preview-first with
 server-issued tokens. Portal listen port in operator-facing copy is
@@ -235,9 +229,8 @@ Product thesis for the glass remains [`16-web-app-orchestration-plan.md`](16-web
   two-stranger co-signature into production because a later milestone
   table mentioned “multi-operator.” Re-run Q1–Q3 before any Class-4
   multi-principal scheme.
-- **Soft-push / draft:** PR #368 stays draft until a human merges. This
-  document does not add merge blockers, calendar ship dates, or a second
-  git process. Canonical git doctrine is
+- **Soft-push:** This document does not add merge blockers, calendar ship
+  dates, or a second git process. Canonical git doctrine is
   [`27-git-governance-zero-fragmentation.md`](27-git-governance-zero-fragmentation.md)
   (one canonical `scripts/git/`, tree-twin after rewrites, no
   ahead/behind judgments).
@@ -260,7 +253,7 @@ dump are **not** acceptance criteria for #368 or for v2.1.
 
 | Milestone | Theme | Where the real plan lives | Portal note |
 | --- | --- | --- | --- |
-| **v2.1** | Knowledge glass + fail-closed HITL tokens | This PR; doc 16 | §4 as-built for knowledge. MCP and A2A take the bearer or local token in §4; they are not public. |
+| **v2.1** | Knowledge glass + fail-closed HITL tokens | This PR; doc 16 | §4 as-built: knowledge, MCP `search_docs`, and A2A `message/send` are public Class-0 reads. Swarm launch/approve/cancel stay operator-token fail-closed. |
 | **v2.2** | Observability + retrieval beyond linear scan | [`20-rag-and-memory-design.md`](20-rag-and-memory-design.md), [`41-`](41-agentic-stack-gstack-gbrain-memory-blend.md), [`55-`](55-oramasys-agent-observability-contract-adr.md), [`67-`](67-lancedb-duckdb-dense-info-layer-shape.md) | Markdown search is a Class-0 stopgap. Bayesian/vector RAG, hallucination budgets, and p99 histograms are **not** specified here. |
 | **v2.3** | Dual-model check + Class-3 identity | [`53-`](53-maestro-swarm-v2-redesign-critique.md) (critique only), [`51-`](51-security-sentinel-orbit-passkey-mcp.md), [`61-`](61-pt-coordination-principal-identity-design.md) | OIDC/passkey/HMAC-bridge are satellite/identity plans. Do not require GitHub OIDC on knowledge search. |
 | **v2.4** | External conformity literature | [`03-safety-v2.5.md`](03-safety-v2.5.md), [`23-`](23-security-preconditions.md), [`24-`](24-security-first-platform.md), [`32-`](32-agentic-security-controls.md), [`39-`](39-maestro-owasp-genai-reference.md) | EU database registration, Annex III dossiers, and FINRA-style autonomy monitors are **external references / future conformity work**, not mandatory shipping gates while D23 + doc 23 still describe the live threat model. |
