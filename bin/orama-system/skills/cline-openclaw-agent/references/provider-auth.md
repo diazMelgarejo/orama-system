@@ -10,7 +10,7 @@ object), `model`, `timeout`, and `reasoning`.
 | --- | --- | --- | --- | --- |
 | `cline` | `zai/glm-5.2` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
 | `cline-pass` | `cline-pass/glm-5.2` | WorkOS OAuth | Cline Credits | `api.cline.bot` |
-| `anthropic` | `claude-fable-5` | API key (`sk-ant-...`) | Anthropic | `api.anthropic.com` |
+| `anthropic` | `claude-sonnet-5-5` | API key (`sk-ant-...`) | Anthropic | `api.anthropic.com` |
 | `openrouter` | `minimax/minimax-m2.5:free` | API key (`sk-or-v1-...`) | OpenRouter | `openrouter.ai` |
 | `openai-compatible` | `google/gemini-3.1-pro-preview` | API key | Google AI | `generativelanguage.googleapis.com` |
 | `openai-codex` | — | OAuth | OpenAI | `api.openai.com` |

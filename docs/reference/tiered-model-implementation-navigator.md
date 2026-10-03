@@ -146,16 +146,17 @@ This document maps the complete landscape of tiered model routing, context optim
   - Audit notes from 2026-07-22 pass (both skillify and oramasys-method upgraded, .skill packaging validated)
   - Post-merge incident: ~/.claude/skills name collision (gstack's skillify vs orama-system's skillify) — **resolved 2026-07-22**: recovered gstack's clobbered file, renamed this repo's own colliding `gstack` skill to `gstack-gbrain`, extracted a shared `scripts/check-skill-namespace-collision.sh` guard called at both naming-time (skillify intake) and publish-time (`scripts/install-skills.sh`)
 
-### Claude Code Mode 3 Execution + Model Tiering
+### Harness model governance + Claude Code Mode 3
 
-- **`bin/orama-system/references/claude-code-workflow-canonical.md`** ⭐ NEW 2026-07-22
+- **Canonical (cite, do not copy):** [Alexandria `docs/standards/model-governance.md`](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md) (PR #1, tip `e7ee9db6`)
+- **orama pin:** [`docs/standards/model-governance.md`](../standards/model-governance.md) + [`config/model-governance.yml`](../../config/model-governance.yml)
+  - Cursor / Grok Bot default: `grok-4.6` medium, fast off. `grok-4.5` banned. `auto` editor-only.
+  - Anthropic default: `claude-sonnet-5-5` medium. Opus 5.5 / Fable 5.1 need an escalation token (Fable also needs a budget cap).
+  - Does **not** reorder the frugality ladder (tiers 0–6 above). Cost gate fail-closed; cloud escalation default-deny.
+- **`bin/orama-system/references/claude-code-workflow-canonical.md`**
   - Canonical mapping: orama-system MODE 3 roles → Claude Code `Workflow` tool primitives (`agent()`/`parallel()`/`pipeline()`/`phase()`)
-  - **Mandatory model tiering** for every MODE 3 `agent()` call — never inherit the parent session's model/effort:
-    - Tier 1 (dispatch/control of non-Claude models — Codex, Cline, Kimi, Cursor, Grok, Perplexity, OpenClaw, Hermes): Haiku
-    - Tier 2 (evaluate/integrate tier-1 output only): Sonnet 5, effort medium
-    - Tier 3 (Opus / Fable 5): escalation-only — explicit user request, or `AskUserQuestion`-confirmed escalation; never automated
+  - Every MODE 3 `agent()` call sets Anthropic-path `model`/`effort` explicitly (Sonnet 5.5 medium). Never inherit Claude Code `default` (Opus 5.5).
   - Wired from `bin/orama-system/SKILL.md` MODE 3, `oramasys-method/SKILL.md` Type→Mode mapping, `references/collaborative-reasoning-safety.md`
-  - Distinct from the frugality router's tiers 0–6 above (that's TOOL routing — gbrain/CRG/Brave/Perplexity/Grok, local vs cached vs expensive external); this is MODEL routing for spawned Claude subagents specifically
 
 ### Ultrathink → Oramasys Rename
 
@@ -251,7 +252,8 @@ Both use **Ollama bge-m3** (1024-dim, local, free):
 | `GOAL.md` | Rename gates AC1–AC10 | Core | In progress | AC1 blocking, track for P0 completion |
 | `docs/v2/47-portable-memory-local-topology-invariant.md` | Security/hygiene | Core | Canonical | Read before any config edits |
 | `bin/orama-system/skills/skillify/references/dogfood-upgrade-log.md` | Self-upgrade audit trail | Reference | Live 2026-07-22 | Read for skill upgrade procedure |
-| `bin/orama-system/references/claude-code-workflow-canonical.md` | Mode 3 → `Workflow` tool mapping + mandatory model tiering | Core | Live 2026-07-22 | Read before authoring any MODE 3 `Workflow` script |
+| `docs/standards/model-governance.md` | Provider-agnostic harness defaults (Alexandria pin) | Core | Live 2026-10-03 | Cite Alexandria; do not copy the standard |
+| `bin/orama-system/references/claude-code-workflow-canonical.md` | Mode 3 → `Workflow` tool mapping + Anthropic-path Sonnet 5.5 default | Core | Live 2026-10-03 | Read before authoring any MODE 3 `Workflow` script |
 
 ---
 

@@ -120,7 +120,7 @@ Run the kanban app.
 | --- | --- | --- | --- |
 | `cline` | `zai/glm-5.2` | WorkOS OAuth | Cline Credits billing |
 | `cline-pass` | `cline-pass/glm-5.2` | WorkOS OAuth | Same token as `cline`; `lastUsedProvider` |
-| `anthropic` | `claude-fable-5` | API key | — |
+| `anthropic` | `claude-sonnet-5-5` | API key | Anthropic path default (Fable/Opus need an escalation token) |
 | `openrouter` | `minimax/minimax-m2.5:free` | API key | — |
 | `openai-compatible` | `google/gemini-3.1-pro-preview` | API key | Custom baseUrl |
 | `openai-codex` | — | OAuth | — |
