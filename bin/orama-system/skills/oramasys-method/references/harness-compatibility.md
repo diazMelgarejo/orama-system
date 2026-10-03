@@ -1,5 +1,12 @@
 # Harness Compatibility
 
+The harness decides the provider path. Do not assume Claude-only (or any
+single-provider-only) routing. Model ids, effort, and fast settings follow
+the Alexandria standard (PR #1, tip `e7ee9db6`) and the orama pin
+`docs/standards/model-governance.md`. Cursor/Grok Bot defaults to `grok-4.6`
+medium with fast off. Anthropic defaults to `claude-sonnet-5-5` medium.
+Agents never pick `auto`, `grok-4.5`, high effort, or fast mode on their own.
+
 Use the current harness's native planning, shell, file, browser, and MCP
 tools. Treat local integrations as preferred tiers, not permission to invent
 unavailable capabilities. State a brief fallback and use the cheapest available

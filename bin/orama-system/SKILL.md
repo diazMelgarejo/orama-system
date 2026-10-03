@@ -10,7 +10,7 @@ description: >-
   Treat legacy "ultrathink" prompts as oramasys invocations.
 version: 1.1.1.0
 license: Apache 2.0
-compatibility: claude-code, claude-desktop
+compatibility: claude-code, claude-desktop, cursor, grok-bot, codex, openclaw
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
 sub_skills:
   - path: afrp/SKILL.md
@@ -264,13 +264,14 @@ When context > 70% -- offload, one task per subagent:
 > canonical execution mechanism is Claude Code's own `Workflow` tool
 > (`agent()`/`parallel()`/`pipeline()`/`phase()`), gated by the same
 > `ultracode`/explicit-ask opt-in the tool itself requires — never a
-> bespoke dispatch loop. **Model tiering is mandatory, never inherited
-> from the parent:** Haiku for dispatch/control of non-Claude models
-> (Codex, Cline, Kimi, Cursor, Grok, Perplexity, OpenClaw, Hermes, ...),
-> Sonnet 5 Medium only to evaluate/integrate that output, Opus/Fable 5
-> only on explicit user request or an AskUserQuestion-confirmed
-> escalation — never automated. Full role-to-primitive mapping + tiering
-> policy: `references/claude-code-workflow-canonical.md`. This mapping is
+> bespoke dispatch loop. **Set model/effort explicitly; never inherit
+> Claude Code `default` (Opus 5.5).** Anthropic-path default is Sonnet 5.5
+> medium (`claude-sonnet-5-5`). Opus 5.5 high and Fable 5.1 need an
+> escalation token (Fable also needs a hard budget cap). `AskUserQuestion`
+> is not a token. Cursor/Grok Bot runs stay on `grok-4.6` medium / fast off
+> unless the operator names an allowed alternative. Full mapping:
+> `references/claude-code-workflow-canonical.md` and
+> `docs/standards/model-governance.md`. This Workflow mapping is
 > Claude Code-specific; other harnesses (Codex, gemini-cli, Cursor, ECC)
 > keep the abstract description below as-is.
  (Complex Tasks)
@@ -556,7 +557,8 @@ The key `agents.bindings.*.allowAgents` is rejected by the oramaclaw control pla
 | `skills/periscope-ecc/SKILL.md` | Periscope ECC lazy sidecar — idempotent Agents/Claude skill mirror verify; v2 orbiting satellite |
 | `skills/hermes-harness/SKILL.md` | Hermes onboarding, ECC cross-harness import rules, Nous Portal/LM Studio provider setup, and bounded Hermes/Gemini/AGY/Codex partner prompts |
 | `skills/hermes-harness/references/platform-affinity-routing.md` | Platform affinity bias — Mac/Linux → OpenClaw; Windows → Hermes; ECC bridges both (v1 + v2) |
-| `skills/cursor-agent/SKILL.md` | Cursor background agent (`agent` CLI) — install, auth, light-task fanout alongside Sonnet 4.6, worktree isolation, MCP integration |
+| `skills/cursor-agent/SKILL.md` | Cursor background agent (`cursor-agent` CLI) — install, auth, light-task fanout at `grok-4.6` medium / fast off, worktree isolation, MCP integration |
+| `docs/standards/model-governance.md` | Provider-agnostic harness defaults; pin of [Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md) |
 | `docs/wiki/15-hermes-windows-harness.md` | Windows Hermes launcher, Git Bash, and one-shot provider routing notes |
 | `references/local-api-fallback.md` | Local API fallback full procedure (Ollama → LM Studio → surface outage) |
 | `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |
