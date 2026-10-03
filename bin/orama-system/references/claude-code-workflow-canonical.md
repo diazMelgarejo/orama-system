@@ -54,10 +54,8 @@ to remove that ambiguity, added 2026-07-22.
 
 This file is the **Anthropic-path** mapping for MODE 3 on Claude Code.
 It does not apply Claude-only defaults to Cursor, Grok Bot, or other
-harnesses. Canonical rules:
-[Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
-(PR #1, tip `e7ee9db6`) and
-[`docs/standards/model-governance.md`](../../../docs/standards/model-governance.md).
+harnesses. Canonical rules are Alexandria PR #1 (tip `e7ee9db6`) and
+`docs/standards/model-governance.md`.
 
 `Workflow`'s `agent()` call inherits the session's resolved model when
 `opts.model` is omitted. **MODE 3 must never rely on that default** —
@@ -69,7 +67,7 @@ Vendor default effort is `high`; set `medium` explicitly. `claude-sonnet-5`
 is allowed only as a legacy pin.
 
 **Escalation A — Opus 5.5 (`claude-opus-5-5`), effort high.**
-Requires an [escalation token](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md#escalation-token)
+Requires an escalation token (Alexandria standard, "Escalation token")
 (S-AuthZ bearer **and** a fresh signed HITL approval, ≤24h). `AskUserQuestion`
 alone is not a token. Config flags, env vars, agent-writable files, and
 cached approvals are not a token.

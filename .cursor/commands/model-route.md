@@ -20,9 +20,14 @@ Config flags and env vars are not a token.
 
 ## Routing Heuristic
 
-- **Cursor / Grok Bot:** default `grok-4.6` `{effort: medium, fast: false}`. Allowed: `composer-2.5` with fast off. Never `auto` for agents. Never `grok-4.5`.
-- **Anthropic:** default `claude-sonnet-5-5` at medium. Opus 5.5 high and Fable 5.1 are escalation-only (Fable also needs a hard budget cap).
-- Fallback if the default cannot run: stay on the same path's allowed-ungated model, or report the gap. Do not escalate.
+- **Cursor / Grok Bot:** default `grok-4.6` at medium with fast off.
+  Allowed: `composer-2.5` with fast off. Never `auto` for agents.
+  Never `grok-4.5`.
+- **Anthropic:** default `claude-sonnet-5-5` at medium.
+  Opus 5.5 high and Fable 5.1 are escalation-only
+  (Fable also needs a hard budget cap).
+- Fallback if the default cannot run: stay on the same path's
+  allowed-ungated model, or report the gap. Do not escalate.
 
 ## Required Output
 
@@ -35,5 +40,6 @@ Config flags and env vars are not a token.
 ## Arguments
 
 $ARGUMENTS:
+
 - `[task-description]` optional free-text
 - `--budget low|med|high` optional (informational only; does not gate escalation)

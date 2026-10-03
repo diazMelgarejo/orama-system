@@ -7,20 +7,23 @@ alwaysApply: true
 ## Model Selection Strategy
 
 Provider-agnostic. The harness chooses the path. Agents do not self-escalate,
-turn on fast mode, or switch providers. Canonical rules:
-[Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
-(PR #1, tip `e7ee9db6`). Local pin: [`docs/standards/model-governance.md`](../../docs/standards/model-governance.md).
+turn on fast mode, or switch providers. Canonical rules: Alexandria PR #1
+(tip `e7ee9db6`). Local pin: `docs/standards/model-governance.md`.
 
 **Cursor / Grok Bot path** (this IDE, CLI, Cloud Agents, Grok Bot):
-- Default: `grok-4.6` at `{effort: medium, fast: false}` (usage `cursor-grok-4.6-medium`)
+
+- Default: `grok-4.6` at `{effort: medium, fast: false}`
+  (usage `cursor-grok-4.6-medium`)
 - Allowed: `composer-2.5` with `{fast: false}`
 - `grok-4.7` only with an escalation token; still medium, fast off
 - `grok-4.5` is banned
 - `auto` is editor-only, never for agents
 
 **Anthropic path** (Claude Code, Claude API/SDK, claude.ai):
+
 - Default: `claude-sonnet-5-5` at `medium` (`claude-sonnet-5` is a legacy pin)
-- `claude-opus-5-5` high and `claude-fable-5-1` need an escalation token; Fable also needs a hard budget cap
+- `claude-opus-5-5` high and `claude-fable-5-1` need an escalation token;
+  Fable also needs a hard budget cap
 
 An escalation token is a proven S-AuthZ bearer **plus** a fresh signed HITL
 approval (≤24h). Config flags, env vars, agent-writable files, and cached

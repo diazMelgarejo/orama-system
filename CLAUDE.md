@@ -35,7 +35,7 @@
 | HITL accountability classes | [`docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md`](docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md) |
 | Search frugality rule (gbrain → CRG → Brave → Perplexity → Grok) | [`bin/orama-system/SKILL.md § Search Policy`](bin/orama-system/SKILL.md) |
 | Win coder pool (`$WIN_CODER_ENDPOINTS`, always-utilized) | [`bin/orama-system/SKILL.md § Windows Coder Pool`](bin/orama-system/SKILL.md) |
-| Model governance (provider-agnostic harness defaults) | [Alexandria standard](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md) (PR #1, `e7ee9db6`) · orama pin [`docs/standards/model-governance.md`](docs/standards/model-governance.md) |
+| Model governance (provider-agnostic harness defaults) | Alexandria PR #1 (`e7ee9db6`) · [`docs/standards/model-governance.md`](docs/standards/model-governance.md) |
 
 **Quick invariants (full detail in doc above):**
 
@@ -51,7 +51,12 @@
 - One heavy model at a time on Windows GPU
 - `@field_validator` (Pydantic V2) — never deprecated `@validator`
 - `depth=0` validated server-side; workers cannot spawn sub-workers in V1
-- Harness model selection is provider-agnostic (Cursor default `grok-4.6` medium / fast off; Anthropic default `claude-sonnet-5-5` medium). `grok-4.5` is banned. `auto` is editor-only. Cost gate fail-closed; cloud escalation default-deny. Escalation token ≠ config/env/cache.
+- Harness model selection is provider-agnostic.
+  Cursor default: `grok-4.6` medium / fast off.
+  Anthropic default: `claude-sonnet-5-5` medium.
+  `grok-4.5` is banned. `auto` is editor-only.
+  Cost gate fail-closed; cloud escalation default-deny.
+  Escalation token ≠ config/env/cache.
 
 ---
 
