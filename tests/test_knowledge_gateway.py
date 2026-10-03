@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
 from orama_system.knowledge_gateway import _search_docs, router
@@ -249,3 +249,102 @@ def test_search_respects_max_files_scan(tmp_path, monkeypatch):
     monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_FILES_SCAN", "2")
     hits = _search_docs("needle")
     assert len(hits) <= 2
+
+
+def test_symlink_escape_outside_root_is_skipped(tmp_path, monkeypatch):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    secret = tmp_path / "secret.md"
+    secret.write_text("# Secret\nUNIQUE_OUTSIDE_NEEDLE", encoding="utf-8")
+    (docs / "inside.md").write_text("# Inside\ninside-needle", encoding="utf-8")
+    (docs / "escape.md").symlink_to(secret)
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(docs))
+    assert _search_docs("UNIQUE_OUTSIDE_NEEDLE") == []
+    assert _search_docs("inside-needle")[0]["path"] == "inside.md"
+
+
+def test_oversized_markdown_is_skipped(tmp_path, monkeypatch):
+    (tmp_path / "ok.md").write_text("# Ok\nkeep-needle", encoding="utf-8")
+    (tmp_path / "huge.md").write_bytes(b"# Huge\nkeep-needle\n" + (b"x" * 512_001))
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    hits = _search_docs("keep-needle")
+    assert [hit["path"] for hit in hits] == ["ok.md"]
+
+
+def test_search_docs_stops_when_deadline_passed(tmp_path, monkeypatch):
+    for index in range(4):
+        (tmp_path / f"doc-{index}.md").write_text(f"# Doc {index}\nneedle", encoding="utf-8")
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    import time
+
+    assert _search_docs("needle", deadline=time.monotonic() - 1) == []
+
+
+def test_bad_knowledge_env_values_fall_back(monkeypatch):
+    from orama_system import knowledge_gateway as kg
+
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_FILES_SCAN", "not-int")
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES", "nope")
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S", "abc")
+    assert kg._max_files_scan() == 2000
+    assert kg._max_concurrent_searches() == 4
+    assert kg._search_timeout_s() == 8.0
+
+
+def test_knowledge_search_timeout_returns_503(client, monkeypatch):
+    async def _timeout(_query: str, _limit: int = 8):
+        raise HTTPException(
+            status_code=503,
+            detail="documentation search timed out; retry with a narrower query",
+        )
+
+    monkeypatch.setattr("orama_system.knowledge_gateway._bounded_search", _timeout)
+    response = client.get("/api/knowledge/search?q=human")
+    assert response.status_code == 503
+    assert "timed out" in response.json()["detail"]
+
+
+def test_mcp_and_a2a_timeout_map_to_minus_32000(client, monkeypatch):
+    async def _timeout(_query: str, _limit: int = 8):
+        raise HTTPException(
+            status_code=503,
+            detail="documentation search timed out; retry with a narrower query",
+        )
+
+    monkeypatch.setattr("orama_system.knowledge_gateway._bounded_search", _timeout)
+    mcp = client.post(
+        "/api/mcp",
+        headers=_MCP_HEADERS,
+        json={
+            "jsonrpc": "2.0",
+            "id": 9,
+            "method": "tools/call",
+            "params": {"name": "search_docs", "arguments": {"query": "Amplifier"}},
+        },
+    )
+    a2a = client.post(
+        "/api/a2a",
+        json={
+            "jsonrpc": "2.0",
+            "id": "a2a-timeout",
+            "method": "message/send",
+            "params": {
+                "message": {
+                    "messageId": "m-timeout",
+                    "role": "user",
+                    "parts": [{"kind": "text", "text": "Amplifier"}],
+                }
+            },
+        },
+    )
+    assert mcp.json()["error"]["code"] == -32000
+    assert a2a.json()["error"]["code"] == -32000
+
+
+def test_knowledge_search_path_is_public_not_the_prefix():
+    from utils.control_plane_auth import portal_path_is_public
+
+    assert portal_path_is_public("/api/knowledge/search") is True
+    assert portal_path_is_public("/api/knowledge/admin") is False
+    assert portal_path_is_public("/api/mcp") is True
+    assert portal_path_is_public("/api/a2a") is True

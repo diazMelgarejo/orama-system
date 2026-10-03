@@ -5,10 +5,12 @@ import asyncio
 import json
 import os
 import re
+import time
 import unicodedata
 import uuid
 from pathlib import Path
 from typing import Any
+from weakref import WeakKeyDictionary
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from starlette.responses import JSONResponse
@@ -18,42 +20,68 @@ _PROTOCOL = "2026-07-28"
 _MAX_DOC_BYTES = 512_000
 _EXCERPT_CHARS = 280
 _QUERY_MAX = 200
+_DEFAULT_MAX_FILES_SCAN = 2000
+_DEFAULT_MAX_CONCURRENT_SEARCHES = 4
+_DEFAULT_SEARCH_TIMEOUT_S = 8.0
 _WORD = re.compile(r"[0-9a-z][0-9a-z_.-]*", re.IGNORECASE)
 _SERVER_INFO = {"name": "orama-knowledge", "version": "1.0.0"}
 _SERVER_INFO_META = "io.modelcontextprotocol/serverInfo"
 _QUERY_INVALID = "query must be a string of 2 to 200 characters"
 _TEXT_PARTS_INVALID = "text parts must be strings"
+_SEARCH_TIMEOUT_DETAIL = "documentation search timed out; retry with a narrower query"
+
+_search_semaphores: WeakKeyDictionary[asyncio.AbstractEventLoop, asyncio.Semaphore] = (
+    WeakKeyDictionary()
+)
+
+
 def _max_files_scan() -> int:
-    return max(1, int(os.getenv("ORAMA_KNOWLEDGE_MAX_FILES_SCAN", "2000")))
+    try:
+        return max(1, int(os.getenv("ORAMA_KNOWLEDGE_MAX_FILES_SCAN", str(_DEFAULT_MAX_FILES_SCAN))))
+    except ValueError:
+        return _DEFAULT_MAX_FILES_SCAN
 
 
 def _max_concurrent_searches() -> int:
-    return max(1, int(os.getenv("ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES", "4")))
+    try:
+        return max(
+            1,
+            int(os.getenv("ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES", str(_DEFAULT_MAX_CONCURRENT_SEARCHES))),
+        )
+    except ValueError:
+        return _DEFAULT_MAX_CONCURRENT_SEARCHES
 
 
 def _search_timeout_s() -> float:
-    return max(0.5, float(os.getenv("ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S", "8")))
-_SEARCH_TIMEOUT_DETAIL = "documentation search timed out; retry with a narrower query"
-
-_search_sem: asyncio.Semaphore | None = None
+    try:
+        return max(
+            0.5,
+            float(os.getenv("ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S", str(_DEFAULT_SEARCH_TIMEOUT_S))),
+        )
+    except ValueError:
+        return _DEFAULT_SEARCH_TIMEOUT_S
 
 
 def _search_semaphore() -> asyncio.Semaphore:
-    global _search_sem
-    if _search_sem is None:
-        _search_sem = asyncio.Semaphore(_max_concurrent_searches())
-    return _search_sem
+    loop = asyncio.get_running_loop()
+    semaphore = _search_semaphores.get(loop)
+    if semaphore is None:
+        semaphore = asyncio.Semaphore(_max_concurrent_searches())
+        _search_semaphores[loop] = semaphore
+    return semaphore
 
 
 async def _bounded_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
     """Run Markdown scan off the event loop with concurrency and time limits."""
+    timeout = _search_timeout_s()
+    deadline = time.monotonic() + timeout
     async with _search_semaphore():
         try:
             return await asyncio.wait_for(
-                asyncio.to_thread(_search_docs, query, limit),
-                timeout=_search_timeout_s(),
+                asyncio.to_thread(_search_docs, query, limit, deadline=deadline),
+                timeout=timeout,
             )
-        except TimeoutError:
+        except (asyncio.TimeoutError, TimeoutError):
             raise HTTPException(status_code=503, detail=_SEARCH_TIMEOUT_DETAIL) from None
 
 
@@ -104,7 +132,12 @@ def _docs_root() -> Path:
     return Path(configured).expanduser().resolve() if configured else Path(__file__).resolve().parents[2] / "docs"
 
 
-def _search_docs(query: str, limit: int = 8) -> list[dict[str, Any]]:
+def _search_docs(
+    query: str,
+    limit: int = 8,
+    *,
+    deadline: float | None = None,
+) -> list[dict[str, Any]]:
     terms = tuple(dict.fromkeys(word.lower() for word in _WORD.findall(_fold(query))))
     if not terms:
         return []
@@ -112,6 +145,8 @@ def _search_docs(query: str, limit: int = 8) -> list[dict[str, Any]]:
     hits: list[tuple[int, dict[str, Any]]] = []
     scanned = 0
     for path in root.rglob("*.md"):
+        if deadline is not None and time.monotonic() >= deadline:
+            break
         scanned += 1
         if scanned > _max_files_scan():
             break
@@ -121,7 +156,7 @@ def _search_docs(query: str, limit: int = 8) -> list[dict[str, Any]]:
             if not resolved.is_file() or resolved.stat().st_size > _MAX_DOC_BYTES:
                 continue
             text = resolved.read_text(encoding="utf-8", errors="replace")
-        except (OSError, ValueError):
+        except (OSError, ValueError, RuntimeError):
             continue
         folded = _fold(text).lower()
         title = next((line.lstrip("# ").strip() for line in text.splitlines() if line.startswith("#")), path.stem)

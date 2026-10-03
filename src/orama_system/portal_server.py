@@ -192,6 +192,15 @@ OPENROUTER_FREE_FALLBACKS = [
 ]
 
 PROBE_TIMEOUT = 3.0
+# PT cancel worst case: CANCEL_CONFIRM 5s + CONTAINMENT 5s + retries + I/O.
+PT_CANCEL_HTTP_TIMEOUT_S = 15.0
+_CANCEL_PUBLIC_FIELDS = (
+    "job_id",
+    "cancel_requested",
+    "terminal_state",
+    "worker_kind",
+    "containment_state",
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -199,9 +208,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 def _resolve_perpetua_tools_root() -> Path:
     """Locate a co-installed Perpetua-Tools checkout.
 
-    Env wins when it points at a real tree. Otherwise look for a sibling
-    clone. The historical ``perplexity-api/Perpetua-Tools`` path stays as the
-    last candidate so older layouts still resolve.
+    ``PERPETUA_TOOLS_ROOT`` / ``PERPETUA_TOOLS_PATH`` / ``PERPETUATOOLSROOT``
+    win only when the path contains ``orchestrator/fastapi_app.py`` (same
+    marker ``resolve_sibling_git_repo.sh`` uses). Otherwise walk sibling
+    clones. The historical ``perplexity-api/Perpetua-Tools`` path stays as
+    the last candidate so older layouts still resolve. Co-install ports:
+    PT ``:8000``, orama API ``:8001``, portal ``:8002``.
     """
     markers = ("orchestrator", "fastapi_app.py")
 
@@ -2364,7 +2376,8 @@ def cancellation_allows_restore(cancel_result: Any) -> bool:
     actually produces: ``cli`` / ``verified``, or ``in-process`` /
     ``not-applicable``. Both containment fields absent keeps mixed-deploy
     compatibility. Any other present combination fails closed, including
-    unknown worker kinds and pairs Perpetua does not emit.
+    unknown worker kinds, pairs Perpetua does not emit, and a retained
+    registered CLI child reported as ``cli`` / ``unresolved``.
     """
     if not isinstance(cancel_result, dict):
         return False
@@ -2380,6 +2393,17 @@ def cancellation_allows_restore(cancel_result: Any) -> bool:
     return pair in {("cli", "verified"), ("in-process", "not-applicable")}
 
 
+def _public_cancel_result(payload: Any, job_id: str) -> dict[str, Any]:
+    """Return the rollback consumer fields from a PT cancel body."""
+    safe: dict[str, Any] = {"job_id": job_id}
+    if not isinstance(payload, dict):
+        return safe
+    for key in _CANCEL_PUBLIC_FIELDS:
+        if key in payload:
+            safe[key] = payload[key]
+    return safe
+
+
 @app.post("/api/swarm/preview")
 async def api_swarm_preview(req: SwarmPreviewRequest):
     """Create a stateless five-role swarm preview; this route never dispatches."""
@@ -2393,8 +2417,13 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
     Dispatch uses the cached preview from ``/api/swarm/preview``. After hardware
     policy passes, ``claim_launch_for_dispatch`` atomically removes the preview
     from the approval cache so concurrent launches cannot double-submit. Failed
-    batches restore the preview only when every accepted PT job confirms its
-    persisted ``cancelled`` terminal state.
+    batches restore the preview only when every cancelled job passes
+    ``cancellation_allows_restore``. That predicate requires
+    ``cancel_requested is True`` and ``terminal_state == "cancelled"``, plus an
+    allowed containment pair: ``cli`` / ``verified``, ``in-process`` /
+    ``not-applicable``, or both ``worker_kind`` and ``containment_state``
+    absent (mixed-deploy compatibility). Unresolved, unknown, or any other
+    present pair fails closed.
     """
     stored = cached_preview(req.preview_id)
     legacy = (
@@ -2463,7 +2492,7 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
     orphaned_jobs: List[str] = []
     cancelled_jobs: List[str] = []
     ambiguous_submissions: List[str] = []
-    async with _portal_http_client(timeout=10.0) as client:
+    async with _portal_http_client(timeout=PT_CANCEL_HTTP_TIMEOUT_S) as client:
         for assignment in preview["assignments"]:
             metadata = {
                 "role": assignment["role"],
@@ -2537,10 +2566,11 @@ async def api_swarm_launch(req: SwarmLaunchRequest):
                     cancel_r.raise_for_status()
                     cancel_result = cancel_r.json()
                     if not cancellation_allows_restore(cancel_result):
-                        # PT can acknowledge a cancellation before the worker
-                        # reaches its durable terminal checkpoint. Retaining
-                        # the approval is safer than retrying into a possibly
-                        # still-active job.
+                        # Restore is gated by cancellation_allows_restore for
+                        # every cancelled job (durable cancelled plus an
+                        # allowed containment pair, or mixed-deploy absence of
+                        # both fields). Fail closed rather than retry into a
+                        # possibly still-active or uncontained job.
                         orphaned_jobs.append(str(job_id))
                         continue
                     cancelled_jobs.append(str(job_id))
@@ -2643,14 +2673,14 @@ async def api_job_cancel_proxy(job_id: str):
             - `result` (object|None): Parsed JSON from the upstream response on success, or None on failure.
             - `error` (str, optional): Client-safe error message present when `available` is False.
     """
-    async with _portal_http_client(timeout=5.0) as client:
+    async with _portal_http_client(timeout=PT_CANCEL_HTTP_TIMEOUT_S) as client:
         try:
             r = await client.post(f"{PT_URL}/v1/jobs/{job_id}/cancel")
             r.raise_for_status()
             return {
                 "available": True,
                 "source": "pt:/v1/jobs/{job_id}/cancel",
-                "result": r.json(),
+                "result": _public_cancel_result(r.json(), job_id),
             }
         except Exception as exc:
             return {

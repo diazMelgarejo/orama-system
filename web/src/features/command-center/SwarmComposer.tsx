@@ -132,10 +132,18 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
     Boolean(previewData?.preview_id) && previewData?.preview_id !== launchedPreviewId;
   const canLaunch = canPreview && hasApproval && hardwareOk && previewMatches && approvalUnused;
   const needsPreview = canPreview && (!hasApproval || !previewMatches);
+  const launchBlocked =
+    launchMutation.isSuccess &&
+    (launchMutation.data.accepted === false || launchMutation.data.launch_blocked === true);
+  const orphanedJobs = launchMutation.data?.orphaned_jobs ?? [];
   const actionError = previewMutation.isError
     ? "preview failed"
     : launchMutation.isError
       ? "launch failed"
+      : launchBlocked
+        ? orphanedJobs.length
+          ? `Launch blocked. Orphaned jobs: ${orphanedJobs.join(", ")}`
+          : "Launch blocked."
       : hasApproval && !hardwareOk
         ? "Hardware policy blocked this preview."
         : null;
@@ -149,7 +157,10 @@ export function SwarmComposer({ onPreview, onLaunch, previewData }: SwarmCompose
         <div className="flex items-center gap-2">
           {previewMutation.isPending && <StatusBadge tone="info" dot>previewing…</StatusBadge>}
           {launchMutation.isPending && <StatusBadge tone="info" dot>launching…</StatusBadge>}
-          {launchMutation.isSuccess && (
+          {launchMutation.isSuccess && launchBlocked && (
+            <StatusBadge tone="err" dot={false}>launch blocked</StatusBadge>
+          )}
+          {launchMutation.isSuccess && !launchBlocked && (
             <StatusBadge tone="ok" dot={false}>session {launchMutation.data.session_id}</StatusBadge>
           )}
         </div>
