@@ -72,10 +72,14 @@ def _search_semaphore() -> asyncio.Semaphore:
 
 
 async def _bounded_search(query: str, limit: int = 8) -> list[dict[str, Any]]:
-    """Run Markdown scan off the event loop with concurrency and time limits."""
+    """Run Markdown scan off the event loop with concurrency and time limits.
+
+    The deadline starts after this call acquires a semaphore slot so queue
+    wait does not consume the search budget.
+    """
     timeout = _search_timeout_s()
-    deadline = time.monotonic() + timeout
     async with _search_semaphore():
+        deadline = time.monotonic() + timeout
         try:
             return await asyncio.wait_for(
                 asyncio.to_thread(_search_docs, query, limit, deadline=deadline),
@@ -146,7 +150,7 @@ def _search_docs(
     scanned = 0
     for path in root.rglob("*.md"):
         if deadline is not None and time.monotonic() >= deadline:
-            break
+            raise TimeoutError(_SEARCH_TIMEOUT_DETAIL)
         scanned += 1
         if scanned > _max_files_scan():
             break

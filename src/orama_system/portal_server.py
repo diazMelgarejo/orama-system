@@ -2661,17 +2661,20 @@ async def api_job_detail_proxy(job_id: str):
 
 @app.post("/api/jobs/{job_id}/cancel")
 async def api_job_cancel_proxy(job_id: str):
-    """
-    Proxy-cancels a supervisor job on the Perpetua-Tools v1 jobs API.
-    
-    Sends a POST to the PT `/v1/jobs/{job_id}/cancel` endpoint and returns a summary of the upstream result suitable for client consumption.
-    
+    """Proxy-cancel a supervisor job on the Perpetua-Tools v1 jobs API.
+
+    POSTs to PT ``/v1/jobs/{job_id}/cancel``. On success, ``result`` is the
+    upstream body filtered to the five public fields via
+    ``_public_cancel_result`` (``job_id``, ``cancel_requested``,
+    ``terminal_state``, ``worker_kind``, ``containment_state``), not the
+    raw parsed JSON.
+
     Returns:
         dict: A response object containing:
-            - `available` (bool): True if the upstream cancel request succeeded, False otherwise.
-            - `source` (str): The upstream route used (`pt:/v1/jobs/{job_id}/cancel`).
-            - `result` (object|None): Parsed JSON from the upstream response on success, or None on failure.
-            - `error` (str, optional): Client-safe error message present when `available` is False.
+            - ``available`` (bool): True if the upstream cancel request succeeded.
+            - ``source`` (str): ``pt:/v1/jobs/{job_id}/cancel``.
+            - ``result`` (object|None): Allowlisted cancel fields on success, else None.
+            - ``error`` (str, optional): Client-safe message when ``available`` is False.
     """
     async with _portal_http_client(timeout=PT_CANCEL_HTTP_TIMEOUT_S) as client:
         try:

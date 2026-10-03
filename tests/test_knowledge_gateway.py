@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import asyncio
+import time
+from pathlib import Path
+
 import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
@@ -251,16 +255,36 @@ def test_search_respects_max_files_scan(tmp_path, monkeypatch):
     assert len(hits) <= 2
 
 
+def _symlink_or_skip(link: Path, target: Path) -> None:
+    try:
+        link.symlink_to(target)
+    except OSError:
+        pytest.skip("platform cannot create symlinks")
+
+
 def test_symlink_escape_outside_root_is_skipped(tmp_path, monkeypatch):
     docs = tmp_path / "docs"
     docs.mkdir()
     secret = tmp_path / "secret.md"
     secret.write_text("# Secret\nUNIQUE_OUTSIDE_NEEDLE", encoding="utf-8")
     (docs / "inside.md").write_text("# Inside\ninside-needle", encoding="utf-8")
-    (docs / "escape.md").symlink_to(secret)
+    _symlink_or_skip(docs / "escape.md", secret)
     monkeypatch.setenv("ORAMA_DOCS_ROOT", str(docs))
     assert _search_docs("UNIQUE_OUTSIDE_NEEDLE") == []
     assert _search_docs("inside-needle")[0]["path"] == "inside.md"
+
+
+def test_symlink_loop_is_skipped_safely(tmp_path, monkeypatch):
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "ok.md").write_text("# Ok\nloop-needle-ok", encoding="utf-8")
+    loop_a = docs / "loop-a.md"
+    loop_b = docs / "loop-b.md"
+    _symlink_or_skip(loop_a, loop_b)
+    _symlink_or_skip(loop_b, loop_a)
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(docs))
+    hits = _search_docs("loop-needle-ok")
+    assert [hit["path"] for hit in hits] == ["ok.md"]
 
 
 def test_oversized_markdown_is_skipped(tmp_path, monkeypatch):
@@ -271,13 +295,12 @@ def test_oversized_markdown_is_skipped(tmp_path, monkeypatch):
     assert [hit["path"] for hit in hits] == ["ok.md"]
 
 
-def test_search_docs_stops_when_deadline_passed(tmp_path, monkeypatch):
+def test_search_docs_raises_when_deadline_passed(tmp_path, monkeypatch):
     for index in range(4):
         (tmp_path / f"doc-{index}.md").write_text(f"# Doc {index}\nneedle", encoding="utf-8")
     monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
-    import time
-
-    assert _search_docs("needle", deadline=time.monotonic() - 1) == []
+    with pytest.raises(TimeoutError, match="timed out"):
+        _search_docs("needle", deadline=time.monotonic() - 1)
 
 
 def test_bad_knowledge_env_values_fall_back(monkeypatch):
@@ -289,6 +312,72 @@ def test_bad_knowledge_env_values_fall_back(monkeypatch):
     assert kg._max_files_scan() == 2000
     assert kg._max_concurrent_searches() == 4
     assert kg._search_timeout_s() == 8.0
+
+
+def test_queued_search_deadline_starts_after_semaphore(tmp_path, monkeypatch):
+    (tmp_path / "guide.md").write_text("# Human Approval\nThe human gate.", encoding="utf-8")
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES", "1")
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S", "1.0")
+    from orama_system import knowledge_gateway as kg
+
+    kg._search_semaphores.clear()
+    original = kg._search_docs
+    hold = {"seconds": 0.9}
+
+    def delayed_search(query: str, limit: int = 8, *, deadline=None):
+        if hold["seconds"]:
+            time.sleep(hold["seconds"])
+            hold["seconds"] = 0
+        return original(query, limit, deadline=deadline)
+
+    monkeypatch.setattr(kg, "_search_docs", delayed_search)
+
+    async def run_pair():
+        return await asyncio.gather(
+            kg._bounded_search("human"),
+            kg._bounded_search("human"),
+        )
+
+    first, second = asyncio.run(run_pair())
+    assert first and first[0]["path"] == "guide.md"
+    assert second and second[0]["path"] == "guide.md"
+
+
+def test_search_semaphore_is_isolated_per_event_loop(monkeypatch):
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_MAX_CONCURRENT_SEARCHES", "3")
+    from orama_system import knowledge_gateway as kg
+
+    kg._search_semaphores.clear()
+
+    async def grab():
+        return kg._search_semaphore()
+
+    first = asyncio.run(grab())
+    second = asyncio.run(grab())
+    assert first is not second
+    assert first._value == 3
+    assert second._value == 3
+
+
+def test_bounded_search_wait_for_timeout_returns_503(tmp_path, monkeypatch):
+    (tmp_path / "guide.md").write_text("# Human Approval\nThe human gate.", encoding="utf-8")
+    monkeypatch.setenv("ORAMA_DOCS_ROOT", str(tmp_path))
+    monkeypatch.setenv("ORAMA_KNOWLEDGE_SEARCH_TIMEOUT_S", "0.4")
+    from orama_system import knowledge_gateway as kg
+
+    kg._search_semaphores.clear()
+
+    def hang(_query: str, _limit: int = 8, *, deadline=None):
+        time.sleep(2.0)
+        return [{"title": "late", "path": "guide.md", "excerpt": "x", "score": 1}]
+
+    monkeypatch.setattr(kg, "_search_docs", hang)
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(kg._bounded_search("human"))
+    assert exc.value.status_code == 503
+    assert "timed out" in exc.value.detail
 
 
 def test_knowledge_search_timeout_returns_503(client, monkeypatch):
