@@ -328,6 +328,11 @@ class OramasysMCPServer:
         await persist("running")
         models: list[str] = []
         for name in SOLVE_ORDER:
+            if name == "crystallization":
+                reason = self._verifier_gate(state.to_dict())
+                if reason:  # same gate as delegate; crystallization never runs
+                    await persist("failed")
+                    return self._failure("rejected", name, reason, task_id=task_id)
             state.current_stage = STAGE_BY_NAME[name]
             await persist("running")
             try:
@@ -345,11 +350,6 @@ class OramasysMCPServer:
             state.stage_outputs[name] = {"status": "done", **result}
             if result.get("model_used"):
                 models.append(str(result["model_used"]))
-            # Verifier gate: crystallization is blocked without an approved verification.
-            if name == "verification" and result["verdict"] != Verdict.PASS.value:
-                await persist("failed")
-                return self._failure("rejected", name, f"verification verdict {result['verdict']}",
-                                     task_id=task_id)
 
         state.current_stage = Stage.DONE
         state.completed_at = utc_now_iso()
@@ -413,11 +413,14 @@ class OramasysMCPServer:
             logger.warning("Delegated stage %s failed: %s", stage_name, e)
             return self._failure("failed", stage_name, f"{type(e).__name__}: {e}"[:500], task_id=task_id)
         if task_id:
-            # Keep one source of truth: the verifier gate reads task state, so a delegated
-            # verification must land there (a later FAIL supersedes an earlier PASS).
-            existing.setdefault("stage_outputs", {})[stage_name] = {"status": "done", **result}
+            # Task state is the only record the verifier gate reads. A re-run stage replaces
+            # its output and invalidates every later stage, so a PASS can only ever refer to
+            # the outputs it actually verified (and a later FAIL supersedes an earlier PASS).
+            outputs = existing.setdefault("stage_outputs", {})
+            for later in SOLVE_ORDER[SOLVE_ORDER.index(stage_name) + 1:]:
+                outputs.pop(later, None)
+            outputs[stage_name] = {"status": "done", **result}
             await self.state.set_task_state(task_id, existing)
-            await self.state.set_stage_output(task_id, stage_name, {"status": "done", **result})
         return _tool_result({
             "status": "done",
             "stage": stage_name,

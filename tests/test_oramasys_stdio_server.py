@@ -223,3 +223,23 @@ def test_later_failing_verification_supersedes_an_earlier_pass():
     task_id = _task_with(server, {"verification": {"status": "done", "output": "v", "verdict": "PASS"}})
     call(server, "oramasys_delegate", {"stage": "verification", "task_id": task_id, "input": {}})
     assert _crystallize(server, task_id)["status"] == "rejected"
+
+
+def test_rerunning_an_upstream_stage_invalidates_a_stale_pass():
+    """A PASS verifies specific outputs; replacing one of them must revoke the PASS."""
+    executor = FakeExecutor(verdict="PASS")
+    server = OramasysMCPServer(executor=executor)
+    task_id = _task_with(server, {"verification": {"status": "done", "output": "v", "verdict": "PASS"}})
+    call(server, "oramasys_delegate", {"stage": "execution", "task_id": task_id, "input": {}})
+    outputs = asyncio.run(server.state.get_task_state(task_id))["stage_outputs"]
+    assert "verification" not in outputs and outputs["execution"]["status"] == "done"
+    assert _crystallize(server, task_id)["status"] == "rejected"
+    assert "crystallization" not in [c[0] for c in executor.calls]
+
+
+def test_solve_and_delegate_share_one_gate():
+    """solve rejects through the same gate (stage reported is the blocked crystallization)."""
+    result = call(OramasysMCPServer(executor=FakeExecutor(verdict="WARNING")),
+                  "oramasys_solve", {"task": "t"})["result"]
+    assert result["status"] == "rejected" and result["stage"] == "crystallization"
+    assert "verification verdict WARNING" in result["error"]
