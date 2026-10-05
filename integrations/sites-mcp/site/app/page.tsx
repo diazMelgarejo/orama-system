@@ -41,7 +41,12 @@ export default function Page() {
       if (save) setRetry({ key, input: serialized });
       const result = await call<{ improved: string }>(save ? 'prompts_save' : 'oramasys_prepare_prompt', save ? { ...input, request_key: key } : input);
       setOutput(result.improved);
-      if (save) { setRetry(null); await load(); setNotice('Original and structured prompt saved.'); }
+      if (save) {
+        // Keep the request key until history refreshes: a failed refresh must not turn the next
+        // click into a second record. Retrying with the same key returns the saved record.
+        try { await load(); setRetry(null); setNotice('Original and structured prompt saved.'); }
+        catch { setError('Saved, but history could not refresh. Saving again is safe and will not create a duplicate.'); }
+      }
     } catch (e) { setError(e instanceof Error ? e.message : 'Unavailable. Your input is preserved.'); }
     finally { setBusy(false); }
   }

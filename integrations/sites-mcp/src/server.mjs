@@ -1,5 +1,5 @@
 /** Stateless Sites MCP adapter. PT owns contracts and persistent record operations. */
-import { compilePrompt, PromptStore } from './perpetua.mjs';
+import { compilePrompt, PromptError, PromptStore } from './perpetua.mjs';
 
 const string = { type: 'string', maxLength: 32768 };
 const promptProperties = { original: string, role: string, goal: string, constraints: string, output_format: string };
@@ -70,8 +70,8 @@ export async function handleMcp(request, db) {
     }
     return json({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: JSON.stringify(result) }], structuredContent: result && typeof result === 'object' ? result : { record: result }, isError: false } });
   } catch (error) {
-    const detail = error instanceof Error ? error.message : '';
-    const expected = /original|Unknown field|must be|Invalid|authenticated|Idempotency/.test(detail);
-    return json({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: expected ? detail : 'Prompt storage unavailable. Retry later with the same request key.' }], isError: true } });
+    // Only typed validation errors are shown; provider/storage messages never reach clients.
+    const expected = error instanceof PromptError;
+    return json({ jsonrpc: '2.0', id, result: { content: [{ type: 'text', text: expected ? error.message : 'Prompt storage unavailable. Retry later with the same request key.' }], isError: true } });
   }
 }

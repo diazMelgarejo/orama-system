@@ -86,3 +86,11 @@ test('unexpected database failure does not expose credentials or SQL', async () 
   assert.ok(!text.includes('secret-password'));
   assert.match(text, /unavailable/);
 });
+
+test('storage errors that mimic validation wording are still sanitized', async () => {
+  const db = { prepare() { throw new Error('Invalid original: password=hunter2'); } };
+  const response = await api.handleMcp(rpc('tools/call', { name: 'prompts_list', arguments: {} }, { 'oai-authenticated-user-id': 'alice' }), db);
+  const text = await response.text();
+  assert.ok(!text.includes('hunter2'));
+  assert.match(text, /unavailable/);
+});

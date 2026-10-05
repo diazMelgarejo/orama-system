@@ -5,6 +5,10 @@
 
 - Added an independent v1 HTTP MCP adapter, private prompt UI, reviewed PT snapshot parity gate, real SQLite lifecycle tests and hosting assembly instructions.
 - Added tool SPECS and an evidence-based audit separating deterministic prompt structure from unconfigured model/network inference.
+- Stdio `oramasys_solve`/`oramasys_delegate` now fail closed without a stage executor and report
+  `done` only after real stage output (verifier gate enforced); no more `started`/`queued` stubs.
+- Review fixes: re-pinned PT snapshot (newest-first history, typed errors, byte-bounded saves),
+  clean-copy assembly, retry key kept until history refresh, shared operator-console CSS tokens.
 
 ## [1.1.0.0] - 2026-06-21
 ### Changed

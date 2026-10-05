@@ -12,8 +12,10 @@ MCP-Optional transport is planned for v1.1 — see [MCP-Optional Transport (v1.1
   behavior through `task_type` routing (`deep_reasoning`, `code_analysis`).
 - `orama-system` serves the HTTP bridge via `api_server.py` (FastAPI, port 8001).
 - The MCP server (`bin/mcp_servers/oramasys_orchestration_server.py`)
-  exposes the tool surface below but its `_solve()` is a stub — it does not yet
-  call Ollama. All production traffic flows through the HTTP bridge.
+  exposes the tool surface below. Without a configured stage executor, `oramasys_solve` and
+  `oramasys_delegate` fail closed (error result, status `unavailable`) instead of reporting
+  started/queued work; they report `done` only after real stage output. All production traffic
+  flows through the HTTP bridge.
 - MCP tool surface (v1.1+ target):
   - `oramasys_solve`
   - `oramasys_delegate`
