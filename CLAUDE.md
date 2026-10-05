@@ -26,6 +26,7 @@
 
 | Topic | Where |
 | --- | --- |
+| V1 private Sites prompt workspace; PT owns contracts/state | [`integrations/sites-mcp/SPECS.md`](integrations/sites-mcp/SPECS.md) · [audit/hand-off](docs/integrations/SITES_MCP_AUDIT_AND_HANDOFF_2026-10-05.md) |
 | Banned terminology (coordinator → orchestrator, etc.) — **has a documented persona carve-out** (relay-cursor) that's been silently reverted once already; read the full scope note, don't skim | [§ 1 / Terminology](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable) |
 | 8 governing principles | [§ 1](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md#-1--governing-principles-non-negotiable) |
 | **Hard requirements** (Mac: Ollama + qwen3.5:9b-nvfp4 + bge-m3; Win: LM Studio) | [§ 2 / Hardware](docs/2026-05-14--UNIFIED-ABSORPTION-PLAN.md) · [`../CLAUDE-instru.md § 6`](../CLAUDE-instru.md) |

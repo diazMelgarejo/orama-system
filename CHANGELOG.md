@@ -1,6 +1,11 @@
 <!-- lint-ignore LINT-013 -->
 # Changelog
 
+## [Unreleased] — Sites MCP prompt workspace
+
+- Added an independent v1 HTTP MCP adapter, private prompt UI, reviewed PT snapshot parity gate, real SQLite lifecycle tests and hosting assembly instructions.
+- Added tool SPECS and an evidence-based audit separating deterministic prompt structure from unconfigured model/network inference.
+
 ## [1.1.0.0] - 2026-06-21
 ### Changed
 - Version: standardized all canonical surfaces to 1.1.0.0 (pyproject.toml,
