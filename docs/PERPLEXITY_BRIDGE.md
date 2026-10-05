@@ -6,7 +6,8 @@
 ## Current Contract (v1.0 RC)
 
 **Active transport:** HTTP Bridge (`POST /oramasys` on port 8001 via `api_server.py`).
-MCP-Optional transport is planned for v1.1 — see [MCP-Optional Transport (v1.1)](#mcp-optional-transport-v11) below.
+MCP-Optional transport is planned for v1.1 — see
+[MCP-Optional Transport (v1.1)](#mcp-optional-transport-v11) below.
 
 - `Perplexity-Tools` remains the top-level orchestrator and selects ultrathink
   behavior through `task_type` routing (`deep_reasoning`, `code_analysis`).
@@ -46,9 +47,12 @@ The practical current mapping is:
 Perplexity-Tools owns hardware-aware routing before tasks reach ultrathink.
 
 - `mac-studio` and `win-rtx3080` profiles stay on the PT side.
-- Current PT defaults are `Mac=http://192.168.254.103:1234` and `Win=http://192.168.254.100:1234` for LM Studio.
-- PT prefers `glm-5.1:cloud` for the thin Mac orchestrator lane when the live probe succeeds, then falls back to Mac LM Studio.
-- PT prefers `Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2` for Windows heavy coding and autoresearch, with `qwen3-coder:14b` and `qwen3.5:35b-a3b-q4_K_M` retained as fallbacks.
+- Current PT defaults are `Mac=http://192.168.254.103:1234` and
+  `Win=http://192.168.254.100:1234` for LM Studio.
+- PT prefers `glm-5.1:cloud` for the thin Mac orchestrator lane when the live probe succeeds,
+  then falls back to Mac LM Studio.
+- PT prefers `Qwen3.5-27B-Claude-4.6-Opus-Reasoning-Distilled-v2` for Windows heavy coding and
+  autoresearch, with `qwen3-coder:14b` and `qwen3.5:35b-a3b-q4_K_M` retained as fallbacks.
 - ultrathink remains the hardware-agnostic local reasoning layer.
 - The implemented HTTP backup bridge accepts `model_hint`, but PT still owns
   the hardware-routing decision that produces that hint.
@@ -105,11 +109,14 @@ opt in to MCP when the environment supports it. HTTP bridge remains fully suppor
 
 ### Why MCP `_solve()` currently falls back to HTTP
 
-The MCP server's `_solve()` creates a `TaskState` and returns a stub:
+Without a configured stage executor, the MCP server's `_solve()` fails closed and returns an
+error result instead of a stub:
+
 ```json
-{"task_id": "...", "status": "started", "message": "Poll oramasys_status for updates."}
+{"status": "unavailable", "isError": true, "error": "... no stage executor is configured ..."}
 ```
-It does not call Ollama or run the 5-stage pipeline. Until Tier 2 is implemented,
+
+It does not call Ollama or run the 5-stage pipeline itself. Until Tier 2 is implemented,
 any MCP client will fall back to HTTP automatically.
 
 ### Implementation sequencing (Tier 2 before Tier 1)
@@ -131,12 +138,18 @@ real server backend first makes Tier 1 immediately verifiable.
 
 **The HTTP bridge stays fully functional at every intermediate state.**
 Nothing breaks if work is paused or abandoned between tiers:
-- Before Tier 2: MCP client (if built early) detects stub response (`status: started`, no `result`) and falls back to HTTP automatically.
-- After Tier 2, before Tier 1: MCP server returns real results; HTTP bridge unchanged, still the active primary transport.
-- After both tiers: PT tries MCP first, falls back to HTTP on any subprocess failure. HTTP is never deprecated.
+
+- Before Tier 2: MCP client (if built early) sees a non-`done` status (`unavailable`, no `result`)
+  and falls back to HTTP automatically.
+- After Tier 2, before Tier 1: MCP server returns real results; HTTP bridge unchanged, still the
+  active primary transport.
+- After both tiers: PT tries MCP first, falls back to HTTP on any subprocess failure. HTTP is never
+  deprecated.
 
 ### Checklist links
-- Tier 1 TODO: [Perpetua-Tools/docs/ROADMAP_v1.1.md](../../perplexity-api/Perpetua-Tools/docs/ROADMAP_v1.1.md)
+
+- Tier 1 TODO:
+  [Perpetua-Tools/docs/ROADMAP_v1.1.md](../../perplexity-api/Perpetua-Tools/docs/ROADMAP_v1.1.md)
 - Tier 2 TODO: [orama-system/docs/ROADMAP_v1.1.md](ROADMAP_v1.1.md)
 
 ---
