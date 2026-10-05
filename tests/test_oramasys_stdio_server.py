@@ -152,3 +152,74 @@ def test_stdio_process_is_clean_and_fails_closed_end_to_end():
     assert by_id[2]["result"]["status"] == "unavailable" and by_id[2]["result"]["isError"]
     assert by_id[None]["error"]["code"] == -32700
     assert len(out) == 3  # the notification produced no response
+
+
+# ── Verifier gate on direct delegate (clients can skip solve) ────────────────
+
+def _task_with(server, stage_outputs):
+    """Persist a task whose stage_outputs we control, bypassing solve."""
+    state = {"task_id": "t1", "status": "running", "stage_outputs": stage_outputs}
+    asyncio.run(server.state.set_task_state("t1", state))
+    return "t1"
+
+
+def _crystallize(server, task_id=None):
+    args = {"stage": "crystallization", "input": {}}
+    if task_id:
+        args["task_id"] = task_id
+    return call(server, "oramasys_delegate", args)["result"]
+
+
+def test_delegate_crystallization_without_task_id_is_rejected_and_executor_not_called():
+    executor = FakeExecutor()
+    server = OramasysMCPServer(executor=executor)
+    result = _crystallize(server)
+    assert result["status"] == "rejected" and result["isError"] is True
+    assert executor.calls == []
+    assert asyncio.run(server.state.list_keys("task:")) == []
+
+
+def test_delegate_crystallization_with_missing_verification_is_rejected():
+    executor = FakeExecutor()
+    server = OramasysMCPServer(executor=executor)
+    task_id = _task_with(server, {"context": {"status": "done", "output": "c"}})
+    result = _crystallize(server, task_id)
+    assert result["status"] == "rejected" and "no completed verification" in result["error"]
+    assert executor.calls == []
+    assert "crystallization" not in asyncio.run(server.state.get_task_state(task_id))["stage_outputs"]
+
+
+@pytest.mark.parametrize("verdict", ["FAIL", "WARNING", None])
+def test_delegate_crystallization_with_non_pass_verdict_is_rejected(verdict):
+    executor = FakeExecutor()
+    server = OramasysMCPServer(executor=executor)
+    task_id = _task_with(server, {"verification": {"status": "done", "output": "v", "verdict": verdict}})
+    result = _crystallize(server, task_id)
+    assert result["status"] == "rejected" and result["isError"] is True
+    assert executor.calls == []
+
+
+def test_delegate_crystallization_rejects_unknown_task_and_unfinished_verification():
+    server = OramasysMCPServer(executor=FakeExecutor())
+    assert _crystallize(server, "nope")["status"] == "rejected"
+    task_id = _task_with(server, {"verification": {"status": "failed", "error": "RuntimeError"}})
+    assert _crystallize(server, task_id)["status"] == "rejected"
+
+
+def test_delegate_crystallization_runs_after_pass_including_delegated_verification():
+    executor = FakeExecutor(verdict="PASS")
+    server = OramasysMCPServer(executor=executor)
+    task_id = _task_with(server, {})
+    # Verification delegated directly must land in the state the gate reads.
+    assert call(server, "oramasys_delegate",
+                {"stage": "verification", "task_id": task_id, "input": {}})["result"]["status"] == "done"
+    result = _crystallize(server, task_id)
+    assert result["status"] == "done" and result["isError"] is False
+    assert [c[0] for c in executor.calls] == ["verification", "crystallization"]
+
+
+def test_later_failing_verification_supersedes_an_earlier_pass():
+    server = OramasysMCPServer(executor=FakeExecutor(verdict="FAIL"))
+    task_id = _task_with(server, {"verification": {"status": "done", "output": "v", "verdict": "PASS"}})
+    call(server, "oramasys_delegate", {"stage": "verification", "task_id": task_id, "input": {}})
+    assert _crystallize(server, task_id)["status"] == "rejected"

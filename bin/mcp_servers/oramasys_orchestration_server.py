@@ -92,7 +92,8 @@ TOOL_SCHEMAS = [
         "name": "oramasys_delegate",
         "description": (
             "Run one oramasys stage through the configured stage executor and return its "
-            "real output, or fail closed. Never reports queued/started work as finished."
+            "real output, or fail closed. Never reports queued/started work as finished. "
+            "Crystallization requires a task_id whose verification verdict is PASS."
         ),
         "inputSchema": {
             "type": "object",
@@ -363,6 +364,22 @@ class OramasysMCPServer:
             "execution_time_ms": int((time.monotonic() - started) * 1000),
         }, False)
 
+    @staticmethod
+    def _verifier_gate(task_state: Optional[dict]) -> Optional[str]:
+        """Return why crystallization is blocked, or None when verification PASSED.
+
+        Single gate shared by solve and delegate: clients can call delegate directly, so
+        the check cannot live only in the solve loop.
+        """
+        if not task_state:
+            return "crystallization requires an existing task_id with a verification result"
+        verification = (task_state.get("stage_outputs") or {}).get("verification")
+        if not isinstance(verification, dict) or verification.get("status") != "done":
+            return "crystallization blocked: no completed verification for this task"
+        if verification.get("verdict") != Verdict.PASS.value:
+            return f"crystallization blocked: verification verdict {verification.get('verdict')}"
+        return None
+
     async def _delegate(self, args: dict) -> dict:
         """Run one stage via the executor and return its real output, or fail closed."""
         stage_name = args.get("stage")
@@ -374,16 +391,18 @@ class OramasysMCPServer:
         task_id = args.get("task_id")
         if task_id is not None and not isinstance(task_id, str):
             raise InvalidParams("task_id must be a string")
+        existing = await self.state.get_task_state(task_id) if task_id else None
+        if task_id and not existing:
+            return self._failure("rejected", stage_name, f"Task {task_id} not found")
+        if stage_name == "crystallization":
+            reason = self._verifier_gate(existing)
+            if reason:  # rejected before any executor call; nothing is persisted
+                return self._failure("rejected", stage_name, reason, task_id=task_id)
         if self.executor is None:
             return self._unavailable("oramasys_delegate")
 
-        prior: dict = {}
-        if task_id:
-            existing = await self.state.get_task_state(task_id)
-            if not existing:
-                return self._failure("rejected", stage_name, f"Task {task_id} not found")
-            prior = {k: v.get("output") for k, v in existing.get("stage_outputs", {}).items()
-                     if isinstance(v, dict)}
+        prior = {k: v.get("output") for k, v in (existing or {}).get("stage_outputs", {}).items()
+                 if isinstance(v, dict)}
         started = time.monotonic()
         try:
             result = await self._run_stage(stage_name, payload, prior)
@@ -394,6 +413,10 @@ class OramasysMCPServer:
             logger.warning("Delegated stage %s failed: %s", stage_name, e)
             return self._failure("failed", stage_name, f"{type(e).__name__}: {e}"[:500], task_id=task_id)
         if task_id:
+            # Keep one source of truth: the verifier gate reads task state, so a delegated
+            # verification must land there (a later FAIL supersedes an earlier PASS).
+            existing.setdefault("stage_outputs", {})[stage_name] = {"status": "done", **result}
+            await self.state.set_task_state(task_id, existing)
             await self.state.set_stage_output(task_id, stage_name, {"status": "done", **result})
         return _tool_result({
             "status": "done",
