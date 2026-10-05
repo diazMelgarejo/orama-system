@@ -51,7 +51,7 @@ repo hooks — not honor system.
 
 | Role | Rule |
 | --- | --- |
-| **Approved primary authors** | Any configured `user.name` with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or the configured private owner email from local-only configuration; `Codex <codex@openai.com>` is also allowed |
+| **Approved primary authors** | Any configured `user.name` with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or the configured private owner email from local-only configuration; `Codex <codex@openai.com>`, `Claude <noreply@anthropic.com>` and `Claude <claude@anthropic.com>` are also allowed (listed in `scripts/git/identity-policy.json`; listed addresses only, never a whole vendor domain) |
 | **Co-authored-by — allowed** | Well-known public AI/vendor domains (`openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com`, `cline.bot`, subdomains) and matching name markers (`codex`, `claude`, `anthropic`, `cursor`, `cline`, …) |
 | **Co-authored-by — additionally allowed AI/vendor signals** | `google.dev`, `perplexity.ai`, `x.ai`; matching name markers `gemini`, `google`, `copilot`, `perplexity`, `grok` |
 | **Co-authored-by — allowed Gmail** | `diazMelgarejo@gmail.com` plus the configured private owner email from local-only configuration |

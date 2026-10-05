@@ -137,8 +137,9 @@ Full setup: [`docs/wiki/06-multi-agent-collab.md`](docs/wiki/06-multi-agent-coll
 
 ## § 6 — Repository Identity & Git Hygiene
 
-- Commit identity: `cyre <Lawrence@cyre.me>`, `cyre <diazMelgarejo@gmail.com>`, or
-  `Codex <codex@openai.com>` — verify with `bash scripts/git/check_identity.sh`
+- Commit identity: `cyre <Lawrence@cyre.me>`, `cyre <diazMelgarejo@gmail.com>`,
+  `Codex <codex@openai.com>`, or `Claude <noreply@anthropic.com>` — verify with `bash scripts/git/check_identity.sh`.
+  Source of truth: `scripts/git/identity-policy.json` (listed addresses only, no vendor domains)
 - Official policy (authors + `Co-authored-by` allowlist):
   [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25)
   — install hooks with `bash scripts/git/install-local-hooks.sh`
