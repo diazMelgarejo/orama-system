@@ -160,7 +160,9 @@ The audit's central gap was that stdio `oramasys_solve`/`oramasys_delegate` retu
 
 - Stdio handlers now complete or fail closed. With no stage executor they return an MCP error result
   (`isError`, status `unavailable`) and persist nothing; with one they report `done` only after real
-  stage output, and crystallization is blocked unless verification passes. Failure, timeout and
+  stage output, and crystallization is blocked unless verification passes, including on direct
+  `oramasys_delegate` calls (they need a persisted `task_id` with a PASS verdict and are rejected
+  before any executor call otherwise). Failure, timeout and
   rejection are distinct statuses. Perpetua-Tools' client contract (`status == "done"` plus
   `result`) is unchanged, so its HTTP fallback still triggers on any non-done result. Tests:
   `tests/test_oramasys_stdio_server.py`.
