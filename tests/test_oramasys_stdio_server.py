@@ -290,3 +290,41 @@ def test_task_locks_do_not_accumulate():
     for _ in range(5):
         call(server, "oramasys_solve", {"task": "t"})
     assert len(server._task_locks) == 0
+
+
+class UnserializableVerdictExecutor:
+    """Verification returns a FAIL verdict whose output cannot be stored as JSON."""
+
+    async def run_stage(self, stage, task, prior):
+        import datetime
+        out = {"output": {"at": datetime.datetime(2026, 1, 1)}, "model_used": "fake"}
+        if stage.value == "verification":
+            out["verdict"] = "FAIL"
+        return out
+
+
+def test_unrecordable_rerun_revokes_the_earlier_pass_instead_of_reporting_done():
+    server = OramasysMCPServer(executor=UnserializableVerdictExecutor())
+    task_id = _task_with(server, {"verification": {"status": "done", "output": "v", "verdict": "PASS"}})
+    result = call(server, "oramasys_delegate",
+                  {"stage": "verification", "task_id": task_id, "input": {}})["result"]
+    assert result["status"] == "failed" and result["isError"] is True
+    stored = asyncio.run(server.state.get_task_state(task_id))["stage_outputs"]["verification"]
+    assert stored["status"] == "failed"
+    assert _crystallize(server, task_id)["status"] == "rejected"
+
+
+def test_state_store_write_failure_is_never_reported_as_done(monkeypatch):
+    server = OramasysMCPServer(executor=FakeExecutor())
+    task_id = _task_with(server, {})
+
+    async def refuse(*_args, **_kwargs):
+        return False
+
+    monkeypatch.setattr(server.state, "set_task_state", refuse)
+    delegated = call(server, "oramasys_delegate",
+                     {"stage": "context", "task_id": task_id, "input": {}})["result"]
+    assert delegated["status"] == "failed" and delegated["isError"] is True
+    solved = call(server, "oramasys_solve", {"task": "t"})["result"]
+    assert solved["status"] == "failed" and solved["isError"] is True
+    assert "could not be recorded" in solved["error"]

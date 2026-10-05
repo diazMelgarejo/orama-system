@@ -187,6 +187,10 @@ def _stage_timeout(environ=os.environ) -> float:
     return min(max(value, 1.0), 3600.0)
 
 
+class StateWriteError(RuntimeError):
+    """The state store refused a write; the result must not be reported as done."""
+
+
 class InvalidParams(ValueError):
     """Caller error → JSON-RPC -32602."""
 
@@ -309,7 +313,16 @@ class OramasysMCPServer:
             raise RuntimeError("executor returned no output")
         if stage is Stage.VERIFICATION and result.get("verdict") not in {v.value for v in Verdict}:
             raise RuntimeError("verification stage returned no verdict")
+        try:
+            json.dumps(result)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("executor output is not JSON-serializable") from exc
         return result
+
+    async def _record(self, task_id: str, task_state: dict) -> None:
+        """Persist task state or raise: an unrecorded result is never reported as done."""
+        if not await self.state.set_task_state(task_id, task_state):
+            raise StateWriteError(f"task state for {task_id} could not be recorded")
 
     def _failure(self, status: str, stage_name: str, error: str, **extra: Any) -> dict:
         return _tool_result({"status": status, "stage": stage_name, "error": error, **extra}, True)
@@ -330,7 +343,10 @@ class OramasysMCPServer:
 
         task_id = str(uuid.uuid4())
         async with self._task_lock(task_id):
-            return await self._solve_task(task_id, task, optimize_for, context)
+            try:
+                return await self._solve_task(task_id, task, optimize_for, context)
+            except StateWriteError as exc:
+                return self._failure("failed", "state", str(exc), task_id=task_id)
 
     async def _solve_task(self, task_id: str, task: str, optimize_for: str, context: dict) -> dict:
         """Run every stage for a new task; caller holds the task lock."""
@@ -340,7 +356,7 @@ class OramasysMCPServer:
         envelope = {"task": task, "optimize_for": optimize_for, "context": context}
 
         async def persist(status: str) -> None:
-            await self.state.set_task_state(task_id, {**state.to_dict(), "status": status})
+            await self._record(task_id, {**state.to_dict(), "status": status})
 
         await persist("running")
         models: list[str] = []
@@ -411,7 +427,10 @@ class OramasysMCPServer:
         if not task_id:
             return await self._delegate_stage(stage_name, payload, None)
         async with self._task_lock(task_id):
-            return await self._delegate_stage(stage_name, payload, task_id)
+            try:
+                return await self._delegate_stage(stage_name, payload, task_id)
+            except StateWriteError as exc:
+                return self._failure("failed", stage_name, str(exc), task_id=task_id)
 
     async def _delegate_stage(self, stage_name: str, payload: dict,
                               task_id: Optional[str]) -> dict:
@@ -429,23 +448,31 @@ class OramasysMCPServer:
         prior = {k: v.get("output") for k, v in (existing or {}).get("stage_outputs", {}).items()
                  if isinstance(v, dict)}
         started = time.monotonic()
+
+        async def record(entry: dict) -> None:
+            # Task state is the only record the verifier gate reads. Re-running a stage
+            # replaces its entry and invalidates every later stage, so a PASS can only refer
+            # to the outputs it verified; a failed re-run also revokes the earlier result.
+            outputs = existing.setdefault("stage_outputs", {})
+            for later in SOLVE_ORDER[SOLVE_ORDER.index(stage_name) + 1:]:
+                outputs.pop(later, None)
+            outputs[stage_name] = entry
+            await self._record(task_id, existing)
+
         try:
             result = await self._run_stage(stage_name, payload, prior)
         except asyncio.TimeoutError:
+            if task_id:
+                await record({"status": "timeout"})
             return self._failure("timeout", stage_name,
                                  f"stage exceeded {self.stage_timeout_s:g}s", task_id=task_id)
         except Exception as e:
             logger.warning("Delegated stage %s failed: %s", stage_name, e)
+            if task_id:
+                await record({"status": "failed", "error": type(e).__name__})
             return self._failure("failed", stage_name, f"{type(e).__name__}: {e}"[:500], task_id=task_id)
         if task_id:
-            # Task state is the only record the verifier gate reads. A re-run stage replaces
-            # its output and invalidates every later stage, so a PASS can only ever refer to
-            # the outputs it actually verified (and a later FAIL supersedes an earlier PASS).
-            outputs = existing.setdefault("stage_outputs", {})
-            for later in SOLVE_ORDER[SOLVE_ORDER.index(stage_name) + 1:]:
-                outputs.pop(later, None)
-            outputs[stage_name] = {"status": "done", **result}
-            await self.state.set_task_state(task_id, existing)
+            await record({"status": "done", **result})
         return _tool_result({
             "status": "done",
             "stage": stage_name,
