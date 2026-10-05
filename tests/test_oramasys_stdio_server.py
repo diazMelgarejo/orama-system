@@ -243,3 +243,50 @@ def test_solve_and_delegate_share_one_gate():
                   "oramasys_solve", {"task": "t"})["result"]
     assert result["status"] == "rejected" and result["stage"] == "crystallization"
     assert "verification verdict WARNING" in result["error"]
+
+
+class SequencedExecutor:
+    """Per-stage delays and a call counter, so overlapping calls interleave deterministically."""
+
+    def __init__(self, delays):
+        self.delays, self.count = delays, 0
+
+    async def run_stage(self, stage, task, prior):
+        self.count += 1
+        n = self.count
+        await asyncio.sleep(self.delays.get(stage.value, 0))
+        out = {"output": f"{stage.value}-{n}", "model_used": "fake"}
+        if stage.value == "verification":
+            out["verdict"] = "PASS"
+        return out
+
+
+def test_overlapping_delegates_on_one_task_never_lose_a_result():
+    """A slow verification must not write back a stale snapshot over a newer execution output."""
+
+    async def scenario():
+        server = OramasysMCPServer(executor=SequencedExecutor({"verification": 0.05}))
+        await server.state.set_task_state(
+            "t1", {"task_id": "t1", "stage_outputs": {"execution": {"status": "done", "output": "old"}}})
+
+        def delegate(stage, req_id):
+            return server.handle_request({"jsonrpc": "2.0", "id": req_id, "method": "tools/call",
+                                          "params": {"name": "oramasys_delegate", "arguments": {
+                                              "stage": stage, "task_id": "t1", "input": {}}}})
+
+        verify, execute = await asyncio.gather(delegate("verification", 1), delegate("execution", 2))
+        assert verify["result"]["status"] == "done" and execute["result"]["status"] == "done"
+        outputs = (await server.state.get_task_state("t1"))["stage_outputs"]
+        # Execution reported done, so its output must be what is stored.
+        assert outputs["execution"]["output"] == execute["result"]["output"] != "old"
+        # Execution ran after verification, so that PASS no longer applies.
+        assert "verification" not in outputs
+
+    asyncio.run(scenario())
+
+
+def test_task_locks_do_not_accumulate():
+    server = OramasysMCPServer(executor=FakeExecutor())
+    for _ in range(5):
+        call(server, "oramasys_solve", {"task": "t"})
+    assert len(server._task_locks) == 0

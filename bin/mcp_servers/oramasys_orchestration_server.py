@@ -43,6 +43,7 @@ import re
 import sys
 import time
 import uuid
+import weakref
 from pathlib import Path
 from typing import Any, Optional, Protocol
 
@@ -220,6 +221,17 @@ class OramasysMCPServer:
         self.bus = MessageBus()
         self.executor = executor
         self.stage_timeout_s = stage_timeout_s or _stage_timeout()
+        # One lock per task: read-state → run stage → write-state is a single critical section,
+        # so overlapping solve/delegate calls on a task cannot overwrite each other's results.
+        # Weak values: a lock disappears once no call holds it, so the map does not grow.
+        self._task_locks: "weakref.WeakValueDictionary[str, asyncio.Lock]" = (
+            weakref.WeakValueDictionary())
+
+    def _task_lock(self, task_id: str) -> asyncio.Lock:
+        lock = self._task_locks.get(task_id)
+        if lock is None:
+            lock = self._task_locks[task_id] = asyncio.Lock()
+        return lock
 
     async def handle_request(self, request: Any) -> Optional[dict]:
         """Dispatch one JSON-RPC message. Notifications (no id) return None."""
@@ -316,8 +328,13 @@ class OramasysMCPServer:
         if self.executor is None:
             return self._unavailable("oramasys_solve")  # no task record is created
 
-        started = time.monotonic()
         task_id = str(uuid.uuid4())
+        async with self._task_lock(task_id):
+            return await self._solve_task(task_id, task, optimize_for, context)
+
+    async def _solve_task(self, task_id: str, task: str, optimize_for: str, context: dict) -> dict:
+        """Run every stage for a new task; caller holds the task lock."""
+        started = time.monotonic()
         state = TaskState(task_id=task_id, task_description=task,
                           optimize_for=OptimizeFor(optimize_for))
         envelope = {"task": task, "optimize_for": optimize_for, "context": context}
@@ -391,6 +408,14 @@ class OramasysMCPServer:
         task_id = args.get("task_id")
         if task_id is not None and not isinstance(task_id, str):
             raise InvalidParams("task_id must be a string")
+        if not task_id:
+            return await self._delegate_stage(stage_name, payload, None)
+        async with self._task_lock(task_id):
+            return await self._delegate_stage(stage_name, payload, task_id)
+
+    async def _delegate_stage(self, stage_name: str, payload: dict,
+                              task_id: Optional[str]) -> dict:
+        """Gate, run and record one stage; caller holds the task lock when task_id is set."""
         existing = await self.state.get_task_state(task_id) if task_id else None
         if task_id and not existing:
             return self._failure("rejected", stage_name, f"Task {task_id} not found")

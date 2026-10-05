@@ -1,5 +1,5 @@
 /** Reproducible assembly: Site starter + Orama overlay + verified PT dependency. */
-import { readFile, writeFile, mkdir, cp, rm, readdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, cp, rm, readdir, lstat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -32,6 +32,15 @@ try { previous = JSON.parse(await readFile(provenancePath, 'utf8')).overlay_file
 for (const stale of previous.filter(file => !overlayFiles.includes(file))) {
   const target = path.resolve(siteRoot, stale);
   if (path.isAbsolute(stale) || !target.startsWith(path.resolve(siteRoot) + path.sep)) throw new Error(`Refusing to remove path outside the Site: ${stale}`);
+  // The check above is lexical. Refuse when any directory between the Site root and the target is
+  // a symlink, since rm would follow it out of the Site. (rm on the target itself unlinks a link.)
+  let dir = path.resolve(siteRoot);
+  for (const part of path.relative(dir, path.dirname(target)).split(path.sep).filter(Boolean)) {
+    dir = path.join(dir, part);
+    const info = await lstat(dir).catch(error => { if (error.code === 'ENOENT') return null; throw error; });
+    if (!info) break; // ancestor already gone: nothing to remove
+    if (info.isSymbolicLink()) throw new Error(`Refusing to remove through a symlinked directory: ${stale}`);
+  }
   await rm(target, { force: true });
 }
 await cp(path.join(here, 'site'), siteRoot, { recursive: true });

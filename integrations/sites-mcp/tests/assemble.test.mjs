@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, writeFile, readFile, cp, access } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, cp, access, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -51,4 +51,18 @@ test('assembly refuses a recorded path that escapes the Site and a drifted PT sn
   await assert.rejects(run('node', [path.join(root, 'assemble.mjs'), pt, site]), /outside the Site/);
   await writeFile(path.join(pt, 'packages/prompt-workspace/src/index.mjs'), '// drift\n');
   await assert.rejects(run('node', [path.join(root, 'assemble.mjs'), pt, site]), /reviewed snapshot/);
+});
+
+test('stale-file removal never follows a symlinked directory out of the Site', async () => {
+  const { pt, site } = await fixtures();
+  await run('node', [path.join(root, 'assemble.mjs'), pt, site]);
+  const outside = await mkdtemp(path.join(tmpdir(), 'sites-outside-'));
+  await writeFile(path.join(outside, 'victim.txt'), 'keep me');
+  await symlink(outside, path.join(site, 'linked'), 'dir');
+  const provenancePath = path.join(site, 'source-provenance.json');
+  const provenance = JSON.parse(await readFile(provenancePath, 'utf8'));
+  provenance.overlay_files.push('linked/victim.txt');
+  await writeFile(provenancePath, JSON.stringify(provenance));
+  await assert.rejects(run('node', [path.join(root, 'assemble.mjs'), pt, site]), /symlinked directory/);
+  assert.equal(await readFile(path.join(outside, 'victim.txt'), 'utf8'), 'keep me');
 });
