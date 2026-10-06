@@ -1,5 +1,5 @@
 /** Read-only release verifier. SQLite is in-memory; no assembly or repair runs here. */
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { DatabaseSync, constants } from 'node:sqlite';
 import path from 'node:path';
@@ -16,8 +16,12 @@ function signature(db) {
   return { columns, indexes: indexes.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) };
 }
 
-/** @param {string} ptRoot @param {string} siteRoot @returns {Promise<object>} */
-export async function verifyAssembled(ptRoot, siteRoot) {
+/**
+ * @param {string} ptRoot @param {string} siteRoot
+ * @param {{indexOnlyFrom?: number}} [options] Journal index from which migrations may contain only CREATE/DROP INDEX.
+ * @returns {Promise<object>}
+ */
+export async function verifyAssembled(ptRoot, siteRoot, options = {}) {
   const errors = [], migrations = [], hashes = [];
   const read = async (file, label) => { try { return await readFile(file); } catch (error) { errors.push(`${label}: ${error.code ?? error.message}`); return null; } };
   const same = (a, b, label) => { if (a && b && !a.equals(b)) errors.push(`${label}: bytes differ`); };
@@ -60,9 +64,17 @@ export async function verifyAssembled(ptRoot, siteRoot) {
       seen.add(entry.tag);
       const sql = await read(path.join(siteRoot, 'drizzle', `${entry.tag}.sql`), `migration ${entry.tag}`);
       if (!sql) continue;
+      if (Number.isInteger(options.indexOnlyFrom) && i >= options.indexOnlyFrom) {
+        // Drizzle's `--> statement-breakpoint` markers are comments; strip them before splitting.
+        const statements = sql.toString('utf8').replace(/--[^\n]*/g, '').split(';').map(statement => statement.trim()).filter(Boolean);
+        if (statements.some(statement => !/^(CREATE\s+(UNIQUE\s+)?INDEX|DROP\s+INDEX)\b/i.test(statement))) errors.push(`migration ${entry.tag}: only CREATE/DROP INDEX statements are allowed from journal index ${options.indexOnlyFrom}`);
+      }
       candidate.exec(sql.toString('utf8'));
       migrations.push({ tag: entry.tag, sha256: hash(sql) });
     }
+    // Wrangler applies every .sql file in the migrations directory in filename order, not the journal.
+    const onDisk = (await readdir(path.join(siteRoot, 'drizzle')).catch(() => [])).filter(name => name.endsWith('.sql')).sort();
+    if (JSON.stringify(onDisk) !== JSON.stringify(journal.entries.map(entry => `${entry.tag}.sql`))) errors.push('migrations: .sql files on disk must equal the journal tags, in order');
     if (JSON.stringify(signature(candidate)) !== JSON.stringify(signature(reference))) errors.push('migration schema/index parity differs from canonical history schema');
     const insert = candidate.prepare("INSERT INTO prompt_records (owner_id,id,request_key,original,improved,mode,version,created_at) VALUES ('uniqueness',?,'same-key','o','i','m','v','t')");
     insert.run('first');
@@ -87,7 +99,9 @@ export async function verifyAssembled(ptRoot, siteRoot) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const [pt, site] = process.argv.slice(2);
-  if (!pt || !site) { console.error('Usage: verify-assembled.mjs <PT checkout> <Site root>'); process.exitCode = 1; }
-  else { const result = await verifyAssembled(pt, site); console.log(JSON.stringify(result)); process.exitCode = result.verified ? 0 : 1; }
+  const args = process.argv.slice(2), flag = args.indexOf('--index-only-from');
+  const indexOnlyFrom = flag === -1 ? undefined : Number(args.splice(flag, 2)[1]);
+  const [pt, site] = args;
+  if (!pt || !site || (flag !== -1 && !Number.isInteger(indexOnlyFrom))) { console.error('Usage: verify-assembled.mjs <PT checkout> <Site root> [--index-only-from <journal index>]'); process.exitCode = 1; }
+  else { const result = await verifyAssembled(pt, site, { indexOnlyFrom }); console.log(JSON.stringify(result)); process.exitCode = result.verified ? 0 : 1; }
 }

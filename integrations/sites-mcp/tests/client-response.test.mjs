@@ -11,3 +11,11 @@ test('non-JSON platform failures are sanitized and successful envelopes retain r
   assert.deepEqual(await decodeMcpResponse(Response.json({ result: { structuredContent: expected } })), expected);
   await assert.rejects(decodeMcpResponse(Response.json({ result: { isError: true, content: [{ text: 'Validation failed' }] } })), /Validation failed/);
 });
+test('the Site\'s own JSON-RPC errors stay visible; platform bodies and bare 401s do not leak', async () => {
+  const envelope = (status, message) => new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message } }), { status, headers: { 'content-type': 'application/json' } });
+  await assert.rejects(decodeMcpResponse(envelope(413, 'Request too large')), /Request too large.*input is preserved/);
+  await assert.rejects(decodeMcpResponse(envelope(403, 'Origin not allowed')), /Origin not allowed/);
+  await assert.rejects(decodeMcpResponse(envelope(401, 'Authentication required')), /Sign in with ChatGPT/);
+  await assert.rejects(decodeMcpResponse(Response.json({ error: { message: 'provider secret' } }, { status: 500 })), error => /500/.test(error.message) && !/secret/.test(error.message));
+  await assert.rejects(decodeMcpResponse(envelope(500, 'x'.repeat(201))), /\(500\)/);
+});

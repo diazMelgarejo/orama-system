@@ -84,3 +84,22 @@ test('partial unique index cannot substitute for unconditional request-key uniqu
   await writeFile(path.join(site, 'drizzle/meta/_journal.json'), JSON.stringify({ entries: [{ idx: 0, tag: '0000_old' }] }));
   assert.equal((await verifyAssembled(pt, site)).verified, false);
 });
+
+test('an unjournaled migration file fails because Wrangler would still apply it', async t => {
+  const { pt, site } = await fixture(t);
+  await writeFile(path.join(site, 'drizzle/0002_extra.sql'), 'SELECT 1;');
+  const result = await verifyAssembled(pt, site);
+  assert.equal(result.verified, false);
+  assert.ok(result.errors.some(error => /files on disk must equal the journal/.test(error)), result.errors.join('; '));
+});
+
+test('--index-only-from rejects a rebuild migration and accepts index-only ones', async t => {
+  const { pt, site } = await fixture(t);
+  assert.deepEqual((await verifyAssembled(pt, site, { indexOnlyFrom: 1 })).errors, []);
+  const original = await readFile(path.join(site, 'drizzle/0001_history.sql'), 'utf8');
+  await writeFile(path.join(site, 'drizzle/0001_history.sql'), `${original}\n--> statement-breakpoint\nUPDATE prompt_records SET archived = archived;`);
+  const result = await verifyAssembled(pt, site, { indexOnlyFrom: 1 });
+  assert.equal(result.verified, false);
+  assert.ok(result.errors.some(error => /only CREATE\/DROP INDEX/.test(error)), result.errors.join('; '));
+  assert.deepEqual((await verifyAssembled(pt, site)).errors, [], 'the guard is opt-in');
+});
