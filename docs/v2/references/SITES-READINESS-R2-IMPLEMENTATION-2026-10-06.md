@@ -64,3 +64,24 @@ Once platform login/installation works, invoke Appendix A of the approved plan t
 the connected tool. Verify `isError:false`, mode/version, source equality/hash and the
 role/goal/constraints/output sections. Optional storage uses a fixed retry key and a
 durable `prompts_get` read-back. Preparation is deterministic formatting, not inference.
+
+## Status update after publication (appended 2026-10-06)
+
+This section supersedes the "blocked" and "unverified" wording above where the two conflict.
+Earlier text stays as the record of what was known when it was written. The facts below come from
+the implementation agent's handoff; a reviewer has not independently re-run them against the
+hosted Site.
+
+- The r2 candidate was published as a new private Site version. The owner-only allowlist was
+  reapplied without widening access.
+- Anonymous root, MCP and history requests were denied with 401 and returned no records.
+- The installed generated plugin made authenticated native calls: Appendix A prepared
+  (`structured-contract`, version 1.0.0, original preserved byte for byte), history listed, and a
+  long plan was saved in two records, read back, retried idempotently and rejected on changed
+  content. Task 5 is therefore passed for the owner's plugin session.
+- Still not verified: owner browser sign-in, two real accounts (hosted isolation), and the optional
+  forged-header probe, which needs its own authorization.
+- The first-publication reversal gate was not met. No unpublish or suspend operation is exposed,
+  and no explicit owner acceptance of a one-way publication is recorded. An earlier compatible
+  version is retained; code rollback does not reverse D1 migrations.
+- Concrete identifiers, hashes and record IDs stay in the private operator runbook.

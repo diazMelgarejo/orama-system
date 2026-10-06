@@ -58,6 +58,12 @@ node integrations/sites-mcp/local-preview.mjs "$SITE_ROOT" --isolated-config --r
 node integrations/sites-mcp/tests/local-worker-smoke.mjs "$SITE_ROOT"
 ```
 
+Verifier details: it requires the `.sql` files in `drizzle/` to equal the journal tags in order,
+because Wrangler applies every file in that directory by filename. For a release that must only add
+indexes, pass `--index-only-from <journal index>`; later migrations may then contain nothing but
+`CREATE INDEX` and `DROP INDEX`. The launcher listens on `localhost` (Wrangler's own default)
+rather than an address literal, which the repository hygiene gate rejects.
+
 The launcher resolves Site-owned Wrangler and its preload, binds only loopback,
 and preserves host settings. It requires runtime storage in an ignored, untracked
 directory or outside the checkout, resolving existing symlink ancestors and D1/config
