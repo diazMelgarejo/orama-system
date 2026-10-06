@@ -16,6 +16,22 @@ function signature(db) {
   return { columns, indexes: indexes.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) };
 }
 
+/** Split SQLite statements without interpreting comments or semicolons inside quoted tokens.
+ * @param {string} sql @returns {string[]}
+ */
+function sqlStatements(sql) {
+  const tokens = sql.match(/--[^\r\n]*|\/\*[\s\S]*?\*\/|'(?:''|[^'])*'|"(?:""|[^"])*"|\x60(?:\x60\x60|[^\x60])*\x60|\[[^\]]*\]|[\s\S]/g) ?? [];
+  const statements = [];
+  let current = '';
+  for (const token of tokens) {
+    if (token.startsWith('--') || token.startsWith('/*')) current += ' ';
+    else if (token === ';') { if (current.trim()) statements.push(current.trim()); current = ''; }
+    else current += token;
+  }
+  if (current.trim()) statements.push(current.trim());
+  return statements;
+}
+
 /**
  * @param {string} ptRoot @param {string} siteRoot
  * @param {{indexOnlyFrom?: number}} [options] Journal index from which migrations may contain only CREATE/DROP INDEX.
@@ -58,6 +74,7 @@ export async function verifyAssembled(ptRoot, siteRoot, options = {}) {
     if (!canonicalSchema) throw new Error('Canonical schema missing');
     reference.exec(canonicalSchema.toString('utf8'));
     if (!Array.isArray(journal?.entries) || !journal.entries.length) throw new Error('Migration journal empty or invalid');
+    if (options.indexOnlyFrom !== undefined && (!Number.isInteger(options.indexOnlyFrom) || options.indexOnlyFrom < 0 || options.indexOnlyFrom >= journal.entries.length)) throw new Error('indexOnlyFrom must name an existing non-negative journal index');
     const seen = new Set();
     for (const [i, entry] of journal.entries.entries()) {
       if (entry.idx !== i || typeof entry.tag !== 'string' || !/^\d{4}_[A-Za-z0-9_-]+$/.test(entry.tag) || seen.has(entry.tag)) throw new Error('Invalid migration journal order or tag');
@@ -65,8 +82,7 @@ export async function verifyAssembled(ptRoot, siteRoot, options = {}) {
       const sql = await read(path.join(siteRoot, 'drizzle', `${entry.tag}.sql`), `migration ${entry.tag}`);
       if (!sql) continue;
       if (Number.isInteger(options.indexOnlyFrom) && i >= options.indexOnlyFrom) {
-        // Drizzle's `--> statement-breakpoint` markers are comments; strip them before splitting.
-        const statements = sql.toString('utf8').replace(/--[^\n]*/g, '').split(';').map(statement => statement.trim()).filter(Boolean);
+        const statements = sqlStatements(sql.toString('utf8'));
         if (statements.some(statement => !/^(CREATE\s+(UNIQUE\s+)?INDEX|DROP\s+INDEX)\b/i.test(statement))) errors.push(`migration ${entry.tag}: only CREATE/DROP INDEX statements are allowed from journal index ${options.indexOnlyFrom}`);
       }
       candidate.exec(sql.toString('utf8'));
@@ -102,6 +118,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   const args = process.argv.slice(2), flag = args.indexOf('--index-only-from');
   const indexOnlyFrom = flag === -1 ? undefined : Number(args.splice(flag, 2)[1]);
   const [pt, site] = args;
-  if (!pt || !site || (flag !== -1 && !Number.isInteger(indexOnlyFrom))) { console.error('Usage: verify-assembled.mjs <PT checkout> <Site root> [--index-only-from <journal index>]'); process.exitCode = 1; }
+  if (args.length !== 2 || !pt || !site || (flag !== -1 && (!Number.isInteger(indexOnlyFrom) || indexOnlyFrom < 0))) { console.error('Usage: verify-assembled.mjs <PT checkout> <Site root> [--index-only-from <journal index>]'); process.exitCode = 1; }
   else { const result = await verifyAssembled(pt, site, { indexOnlyFrom }); console.log(JSON.stringify(result)); process.exitCode = result.verified ? 0 : 1; }
 }

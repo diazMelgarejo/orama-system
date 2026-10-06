@@ -103,3 +103,24 @@ test('--index-only-from rejects a rebuild migration and accepts index-only ones'
   assert.ok(result.errors.some(error => /only CREATE\/DROP INDEX/.test(error)), result.errors.join('; '));
   assert.deepEqual((await verifyAssembled(pt, site)).errors, [], 'the guard is opt-in');
 });
+
+test('index-only guard cannot be disabled by an invalid or out-of-range index', async t => {
+  const { pt, site } = await fixture(t);
+  for (const indexOnlyFrom of [-1, 2, 1.5, '1', NaN]) {
+    assert.equal((await verifyAssembled(pt, site, { indexOnlyFrom })).verified, false, String(indexOnlyFrom));
+  }
+});
+
+test('index-only guard rejects DML hidden after a line-comment marker inside a block comment', async t => {
+  const { pt, site } = await fixture(t);
+  const original = await readFile(path.join(site, 'drizzle/0001_history.sql'), 'utf8');
+  await writeFile(path.join(site, 'drizzle/0001_history.sql'), original.replace('CREATE INDEX', 'CREATE INDEX /* -- */') + ' UPDATE prompt_records SET archived = archived;');
+  assert.equal((await verifyAssembled(pt, site, { indexOnlyFrom: 1 })).verified, false);
+});
+
+test('index-only guard accepts block comments and quoted index names containing semicolons', async t => {
+  const { pt, site } = await fixture(t);
+  const original = await readFile(path.join(site, 'drizzle/0001_history.sql'), 'utf8');
+  await writeFile(path.join(site, 'drizzle/0001_history.sql'), `/* index-only upgrade */ ${original} CREATE INDEX "temporary;--index" ON prompt_records(id); DROP INDEX "temporary;--index";`);
+  assert.deepEqual((await verifyAssembled(pt, site, { indexOnlyFrom: 1 })).errors, []);
+});

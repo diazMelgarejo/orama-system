@@ -117,3 +117,22 @@ not verified / next owner / secrets: none included
 ```
 
 State what you did not verify, in the same breath as what you did.
+
+## 9. Leaf-branch review follow-up (2026-10-06 UTC)
+
+All additional Orama repairs target #387, not #386. Three new failing tests reproduced
+index-only guard gaps: an out-of-range boundary silently disabled the check, line-comment
+stripping hid DML after a block comment, and quoted semicolons rejected valid index SQL.
+The guard now validates an existing journal index and splits SQL outside comments and quotes.
+SQLite remains the syntax authority; the verifier still runs only in memory and never repairs.
+
+Fresh acceptance supersedes the pending smoke statement in section 4: the refreshed, built
+Worker passed the complete HTTP/D1 smoke using `localhost`, including migration-ledger retry,
+restart, pagination, owner isolation and original preservation. All 35 adapter tests passed
+with the prepared Site root, including the real configuration reproduction; none were skipped.
+This was local acceptance with synthetic identities, not a hosted browser or sharing test.
+
+PT #429 graduates the readiness and verifier/status lessons through its existing tools.
+Only `.agent/memory/semantic/LESSONS.md` is regenerated. Neither the retired docs lesson log
+nor the graduation/rendering implementation is changed. Historical JSONL prefixes survive.
+CodeRabbit and current CI still gate merge; no PR was merged or Site redeployed in this pass.

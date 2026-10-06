@@ -64,6 +64,10 @@ indexes, pass `--index-only-from <journal index>`; later migrations may then con
 `CREATE INDEX` and `DROP INDEX`. The launcher listens on `localhost` (Wrangler's own default)
 rather than an address literal, which the repository hygiene gate rejects.
 
+The index-only boundary must identify an existing non-negative journal entry; invalid or
+out-of-range values fail closed. SQL comments and quoted semicolons are handled before
+statement classification, and SQLite validates syntax during in-memory execution.
+
 The launcher resolves Site-owned Wrangler and its preload, binds only loopback,
 and preserves host settings. It requires runtime storage in an ignored, untracked
 directory or outside the checkout, resolving existing symlink ancestors and D1/config
