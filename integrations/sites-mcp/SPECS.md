@@ -80,7 +80,6 @@ by exposing stdio handlers. The stdio `oramasys_solve`/`oramasys_delegate` handl
 real stage output. Do not publish local portal launch/stop/config endpoints through generic MCP
 tools.
 
-
 ## 7. Readiness r2 release gates (2026-10-06)
 
 Use the independent read-only assembly verifier and built-Worker smoke runner documented

@@ -4,7 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync } from 'node
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync, spawn } from 'node:child_process';
-import { createPreviewEnv, resolveSiteLaunch } from '../local-preview.mjs';
+import { createPreviewEnv, resolveSiteLaunch, LOOPBACK_HOST } from '../local-preview.mjs';
 
 function fixture(t) {
   const site = mkdtempSync(path.join(tmpdir(), 'site with spaces '));
@@ -76,7 +76,7 @@ test('launch resolves Site dependencies and local-only arguments; CLI propagates
   const site = fixture(t), runtimeDir = path.join(site, '.sites-runtime');
   const launch = resolveSiteLaunch(site, { port: 8787, runtimeDir });
   assert.equal(launch.command, process.execPath);
-  assert.ok(launch.args.includes('127.0.0.1')); assert.ok(launch.args.includes(path.join(runtimeDir, 'd1')));
+  assert.ok(launch.args.includes(LOOPBACK_HOST)); assert.ok(launch.args.includes(path.join(runtimeDir, 'd1')));
   assert.ok(!launch.args.includes('--remote'));
   assert.equal(spawnSync(process.execPath, [new URL('../local-preview.mjs', import.meta.url).pathname, site, '--isolated-config'], { encoding: 'utf8' }).status, 7);
   writeFileSync(path.join(site, 'node_modules/wrangler/bin/wrangler.js'), "process.kill(process.pid, 'SIGTERM')");

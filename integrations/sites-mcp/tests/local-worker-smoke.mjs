@@ -7,13 +7,13 @@ import { promisify } from 'node:util';
 import { createServer } from 'node:net';
 import { once } from 'node:events';
 import path from 'node:path';
-import { createPreviewEnv, resolveSiteLaunch } from '../local-preview.mjs';
+import { createPreviewEnv, resolveSiteLaunch, LOOPBACK_HOST } from '../local-preview.mjs';
 
 const run = promisify(execFile);
 const site = process.argv[2];
 if (!site || !path.isAbsolute(site)) throw new Error('Usage: local-worker-smoke.mjs <absolute prepared Site root>');
 const runtimeDir = await mkdtemp(path.join(tmpdir(), 'sites-worker-smoke-'));
-const listener = createServer(); listener.listen(0, '127.0.0.1'); await once(listener, 'listening');
+const listener = createServer(); listener.listen(0, LOOPBACK_HOST); await once(listener, 'listening');
 const port = listener.address().port; await new Promise(resolve => listener.close(resolve));
 const launch = resolveSiteLaunch(site, { port, runtimeDir });
 const env = createPreviewEnv(site, process.env, { isolated: true, runtimeDir });
@@ -58,7 +58,7 @@ async function start() {
 }
 /** @param {string} method @param {object} params @param {string|null} [owner] @param {object} [extra] @returns {Promise<object>} */
 async function rpc(method, params, owner = null, extra = {}) {
-  const response = await fetch(`http://127.0.0.1:${port}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', ...(owner ? { 'oai-authenticated-user-id': owner } : {}), ...extra }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout(3000) });
+  const response = await fetch(`http://${LOOPBACK_HOST}:${port}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', ...(owner ? { 'oai-authenticated-user-id': owner } : {}), ...extra }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }), signal: AbortSignal.timeout(3000) });
   return { status: response.status, body: await response.json() };
 }
 /** @param {string} name @param {object} args @param {string} [owner] @returns {Promise<object>} */
@@ -83,13 +83,13 @@ try {
   const tools = (await rpc('tools/list', {})).body.result.tools;
   assert.deepEqual(tools.map(tool => tool.name), ['oramasys_prepare_prompt', 'prompts_save', 'prompts_list', 'prompts_get', 'prompts_archive']);
   assert.deepEqual(tools.map(tool => tool.annotations.readOnlyHint), [true, false, true, true, false]);
-  const notified = await fetch(`http://127.0.0.1:${port}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', 'oai-authenticated-user-id': 'local-fixture-a' }, body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/call', params: { name: 'prompts_save', arguments: { original: 'notification', request_key: 'notification' } } }) });
+  const notified = await fetch(`http://${LOOPBACK_HOST}:${port}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', 'oai-authenticated-user-id': 'local-fixture-a' }, body: JSON.stringify({ jsonrpc: '2.0', method: 'tools/call', params: { name: 'prompts_save', arguments: { original: 'notification', request_key: 'notification' } } }) });
   assert.equal(notified.status, 202); assert.equal(await notified.text(), '');
   assert.equal((await call('prompts_list', {})).items.length, 0);
   assert.equal((await rpc('tools/call', { name: 'prompts_list', arguments: {} })).status, 401);
   assert.equal((await rpc('tools/call', { name: 'prompts_list', arguments: {} }, 'local-fixture-a', { origin: 'https://foreign.invalid' })).status, 403);
-  const unsupported = await fetch(`http://127.0.0.1:${port}/mcp`, { method: 'POST', body: '{}' }); assert.equal(unsupported.status, 415);
-  const oversize = await fetch(`http://127.0.0.1:${port}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'x'.repeat(131073) }); assert.equal(oversize.status, 413);
+  const unsupported = await fetch(`http://${LOOPBACK_HOST}:${port}/mcp`, { method: 'POST', body: '{}' }); assert.equal(unsupported.status, 415);
+  const oversize = await fetch(`http://${LOOPBACK_HOST}:${port}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'x'.repeat(131073) }); assert.equal(oversize.status, 413);
   const invalid = await rpc('tools/call', { name: 'oramasys_prepare_prompt', arguments: { original: 'λ'.repeat(16385) } }, 'local-fixture-a'); assert.equal(invalid.body.result.isError, true);
   const original = '  Explain λ\r\n\n';
   const prepared = await call('oramasys_prepare_prompt', { original }); assert.equal(prepared.original, original); assert.equal(prepared.mode, 'structured-contract');
