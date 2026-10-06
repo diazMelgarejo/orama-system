@@ -79,3 +79,18 @@ by exposing stdio handlers. The stdio `oramasys_solve`/`oramasys_delegate` handl
 (isError, status `unavailable`) without a configured stage executor and report `done` only after
 real stage output. Do not publish local portal launch/stop/config endpoints through generic MCP
 tools.
+
+
+## 7. Readiness r2 release gates (2026-10-06)
+
+Use the independent read-only assembly verifier and built-Worker smoke runner documented
+in README.md. Exact source parity does not imply migrated schema parity; compare columns,
+unconditional uniqueness, history-index order, archived checks and actual query plans.
+Local runtime paths, including resolved D1/configuration symlinks, must remain ignored and
+untracked or external. Native migration application is ledgered; a second application is
+a no-op. Cancellation owns process-group cleanup.
+
+UI decoding checks gateway status before JSON parsing; an actionable authentication error
+does not prove platform OAuth repaired. Owner policy, anonymous denial, installation and
+connected authenticated preparation are independent gates. Preserve the five tools and
+owner-private audience. Concrete identifiers remain in the off-repo runbook.

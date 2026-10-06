@@ -1,5 +1,6 @@
 /** Reproducible assembly: Site starter + Orama overlay + verified PT dependency. */
-import { readFile, writeFile, mkdir, cp, rm, readdir, lstat } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, cp, rm, lstat } from 'node:fs/promises';
+import { overlayFiles as getOverlayFiles } from './overlay.mjs';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -12,18 +13,7 @@ const pinned = await readFile(path.join(here, 'src/perpetua.mjs'));
 if (!canonical.equals(pinned)) throw new Error('PT source differs from the reviewed snapshot; sync and review before assembly');
 const canonicalSchema = await readFile(path.join(ptRoot, 'packages/prompt-workspace/schema.sql'));
 if (!canonicalSchema.equals(await readFile(path.join(here, 'src/schema.sql')))) throw new Error('PT schema differs from reviewed snapshot');
-/** @param {string} dir @param {string} [prefix] @returns {Promise<string[]>} POSIX-style relative file paths. */
-async function listFiles(dir, prefix = '') {
-  const found = [];
-  for (const entry of await readdir(dir, { withFileTypes: true })) {
-    const relative = prefix ? `${prefix}/${entry.name}` : entry.name;
-    if (entry.isDirectory()) found.push(...await listFiles(path.join(dir, entry.name), relative));
-    else found.push(relative);
-  }
-  return found.sort();
-}
-const generated = ['app/lib/server.mjs', 'app/lib/perpetua.mjs'];
-const overlayFiles = [...new Set([...await listFiles(path.join(here, 'site')), ...generated])].sort();
+const overlayFiles = await getOverlayFiles(here);
 // Remove files a previous assembly owned but the current overlay no longer contains, so the
 // candidate equals the reviewed overlay. Starter files are never listed here and are never touched.
 const provenancePath = path.join(siteRoot, 'source-provenance.json');

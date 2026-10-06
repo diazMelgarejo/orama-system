@@ -1,15 +1,13 @@
 "use client";
 import { useEffect, useState } from 'react';
+import { decodeMcpResponse } from './lib/client.mjs';
 
 type RecordItem = { id: string; original_preview: string; created_at: string; mode: string };
 type Input = { original: string; role: string; goal: string; constraints: string; output_format: string };
 
 async function call<T>(name: string, args: object): Promise<T> {
   const response = await fetch('/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: crypto.randomUUID(), method: 'tools/call', params: { name, arguments: args } }) });
-  const body = await response.json() as { error?: { message: string }; result?: { isError?: boolean; content?: { text: string }[]; structuredContent: T } };
-  if (!response.ok || body.error || body.result?.isError) throw new Error(body.error?.message || body.result?.content?.[0]?.text || 'Request failed');
-  if (!body.result) throw new Error('Missing tool result');
-  return body.result.structuredContent;
+  return decodeMcpResponse<T>(response);
 }
 
 export default function Page() {
