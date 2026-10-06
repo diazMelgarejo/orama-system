@@ -51,7 +51,7 @@ repo hooks — not honor system.
 
 | Role | Rule |
 | --- | --- |
-| **Approved primary authors** | Any configured `user.name` with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or the configured private owner email from local-only configuration; `Codex <codex@openai.com>` is also allowed |
+| **Approved primary authors** | Any configured `user.name` with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or the configured private owner email from local-only configuration; `Codex <codex@openai.com>`, `Claude <noreply@anthropic.com>` and `Claude <claude@anthropic.com>` are also allowed (listed in `scripts/git/identity-policy.json`; listed addresses only, never a whole vendor domain) |
 | **Co-authored-by — allowed** | Well-known public AI/vendor domains (`openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com`, `cline.bot`, subdomains) and matching name markers (`codex`, `claude`, `anthropic`, `cursor`, `cline`, …) |
 | **Co-authored-by — additionally allowed AI/vendor signals** | `google.dev`, `perplexity.ai`, `x.ai`; matching name markers `gemini`, `google`, `copilot`, `perplexity`, `grok` |
 | **Co-authored-by — allowed Gmail** | `diazMelgarejo@gmail.com` plus the configured private owner email from local-only configuration |
@@ -124,7 +124,7 @@ git config user.email "codex@openai.com"
 
 | Category | Rule |
 | --- | --- |
-| **Primary author** | Any name with `diazMelgarejo@gmail.com`, `Lawrence@cyre.me`, or the configured private owner email, or `Codex` + `codex@openai.com` (`scripts/git/check_identity.sh`) |
+| **Primary author** | See the approved primary authors in the official commit identity policy above; the canonical list is `scripts/git/identity-policy.json`, enforced by `scripts/git/check_identity.sh` |
 | **Allowed co-author domains** | `openai.com`, `anthropic.com`, `cursor.com`, `cursor.sh`, `google.com`, `github.com`, `microsoft.com`, `azure.com` (and subdomains) |
 | **Additional allowed AI/vendor domains** | `google.dev`, `perplexity.ai`, `x.ai`, `coderabbit.ai`, `mistral.ai`, `deepseek.com`, `cohere.com`, `meta.com`, `sourcegraph.com`, `devin.ai`, `codeium.com`, `nousresearch.com`, `kimi.ai`, `cline.bot` (and subdomains) |
 | **Allowed co-author name markers** | `codex`, `claude`, `anthropic`, `cursor`, `cursoragent`, `gemini`, `google`, `copilot`, `openai`, `github`, `microsoft`, `perplexity`, `grok`, `coderabbit`, `coderabbitai`, `mistral`, `deepseek`, `cohere`, `llama`, `devin`, `cody`, `codeium`, `windsurf`, `qwen` (in the trailer line) |
@@ -153,8 +153,8 @@ incremented for these emails):
 
 | Repo | Bot author email |
 | --- | --- |
-| **orama-system** | `cursor[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com`, `dependabot[bot]@users.noreply.github.com` |
-| **Perpetua-Tools** | `dependabot[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com`, `github-actions[bot]@users.noreply.github.com` |
+| **orama-system** | `cursor[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com`, `dependabot[bot]@users.noreply.github.com`, `claude[bot]@users.noreply.github.com` |
+| **Perpetua-Tools** | `dependabot[bot]@users.noreply.github.com`, `coderabbitai[bot]@users.noreply.github.com`, `github-actions[bot]@users.noreply.github.com`, `claude[bot]@users.noreply.github.com` |
 
 The audit script (`scripts/git/audit_engine.py`) scopes this lookup **per repo**
 by name (`repo_bot_identities[repo_root.name]`) — it does not union bot

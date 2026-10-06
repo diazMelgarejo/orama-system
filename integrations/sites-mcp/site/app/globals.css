@@ -1,0 +1,116 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens mirror the Orama operator console (web/src/styles/tokens.css) and the Perpetua
+ * routing dashboard (docs/dashboard/routing-dashboard.html): dark canvas, accent blue, 4/8/12/16/24
+ * spacing. The Site is a standalone Workers app, so values are copied here, not imported. When the
+ * console tokens change, update this block only; every rule below consumes variables.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Surfaces */
+  --canvas: rgb(8, 10, 14);
+  --canvas-surface: rgb(14, 17, 23);
+  --canvas-raised: rgb(20, 24, 33);
+  --canvas-inset: rgb(5, 7, 11);
+
+  /* Lines */
+  --line: rgb(34, 40, 51);
+  --line-strong: rgb(56, 64, 80);
+
+  /* Ink */
+  --ink: rgb(231, 235, 244);
+  --ink-muted: rgb(146, 156, 175);
+
+  /* Status and accent */
+  --status-ok: rgb(94, 200, 138);
+  --status-err: rgb(239, 78, 100);
+  --accent: rgb(120, 162, 247);
+  --accent-hover: rgb(149, 184, 255);
+  --accent-mute: rgb(60, 80, 130);
+  --on-accent: rgb(8, 10, 14);
+  --error-surface: color-mix(in srgb, var(--status-err) 14%, var(--canvas));
+  --notice-surface: color-mix(in srgb, var(--status-ok) 12%, var(--canvas));
+
+  /* Spacing */
+  --gap-xs: 4px;
+  --gap-sm: 8px;
+  --gap-md: 12px;
+  --gap-lg: 16px;
+  --gap-xl: 24px;
+  --gap-2xl: 32px;
+  --gap-3xl: 48px;
+
+  /* Shape */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  /* Type */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.0625rem;
+  --width-page: 1360px;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--canvas); color: var(--ink); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+main { max-width: var(--width-page); margin: auto; padding: var(--gap-3xl) var(--gap-2xl); }
+header, .section-head, footer { display: flex; justify-content: space-between; align-items: center; gap: var(--gap-xl); }
+.eyebrow { font-size: var(--text-sm); letter-spacing: 0.13em; color: var(--accent); }
+h1 { font-size: clamp(28px, 3vw, 42px); letter-spacing: -0.035em; line-height: 1.15; margin: var(--gap-lg) 0; }
+h2 { font-size: 20px; margin: 0 0 var(--gap-xl); }
+a { color: var(--accent-hover); text-decoration: none; }
+.signin { white-space: nowrap; border: 1px solid var(--line-strong); padding: var(--gap-md) var(--gap-lg); border-radius: var(--radius-md); font-size: var(--text-sm); }
+.intro { max-width: 760px; font-size: var(--text-lg); line-height: 1.6; color: var(--ink-muted); margin: var(--gap-md) 0 var(--gap-2xl); }
+.workspace { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-xl); }
+.editor, .result, .history { border: 1px solid var(--line); border-radius: var(--radius-lg); padding: var(--gap-xl); background: var(--canvas-surface); }
+.result { background: var(--canvas-raised); }
+.fields { display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap-lg); margin: var(--gap-xl) 0; }
+label { display: block; font-size: var(--text-sm); color: var(--ink-muted); }
+textarea { display: block; width: 100%; background: var(--canvas-inset); border: 1px solid var(--line-strong); color: var(--ink); border-radius: var(--radius-sm); resize: vertical; font: var(--text-base) / 1.5 var(--font-sans); padding: var(--gap-md); margin-top: var(--gap-sm); min-height: 68px; }
+textarea:focus, button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button { background: var(--canvas-raised); color: var(--ink); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: var(--gap-md) var(--gap-lg); font: var(--text-sm) var(--font-sans); cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--accent-mute); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 700; }
+.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.actions { display: flex; justify-content: flex-end; gap: var(--gap-md); }
+.section-head h2 { margin-bottom: 0; }
+.section-head { margin-bottom: var(--gap-xl); }
+.section-head span { font-size: var(--text-sm); color: var(--ink-muted); }
+pre { font: var(--text-base) / 1.65 var(--font-mono); white-space: pre-wrap; overflow-wrap: anywhere; margin: 0; max-height: 640px; overflow: auto; }
+.empty { padding: 65px var(--gap-md); color: var(--ink-muted); line-height: 1.7; }
+.empty span { font-size: 70px; font-weight: 700; color: var(--accent-mute); }
+.empty p { max-width: 300px; }
+.empty small { font-size: var(--text-sm); color: var(--ink-muted); }
+.history { margin-top: var(--gap-xl); }
+.records { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--gap-lg); }
+article { padding: var(--gap-lg); background: var(--canvas-inset); border: 1px solid var(--line); border-radius: var(--radius-md); }
+article p { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 130px; overflow: auto; line-height: 1.5; font-size: var(--text-base); }
+article time { font-size: var(--text-sm); color: var(--ink-muted); }
+article div { display: flex; gap: var(--gap-sm); flex-wrap: wrap; }
+.error, .notice { padding: var(--gap-md) var(--gap-lg); border: 1px solid var(--status-err); background: var(--error-surface); line-height: 1.5; border-radius: var(--radius-md); }
+.notice { border-color: var(--status-ok); background: var(--notice-surface); }
+footer { font-size: var(--text-sm); color: var(--ink-muted); margin-top: 30px; line-height: 1.5; }
+footer nav { display: flex; gap: var(--gap-xl); }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+
+@media (max-width: 900px) {
+  .workspace { grid-template-columns: 1fr; }
+  .records { grid-template-columns: 1fr 1fr; }
+  .empty { padding: var(--gap-xl) var(--gap-md); }
+  .empty span { font-size: 40px; }
+}
+
+@media (max-width: 560px) {
+  main { padding: 28px var(--gap-lg); }
+  header, footer { align-items: flex-start; flex-direction: column; }
+  .fields, .records { grid-template-columns: 1fr; }
+  .editor, .result, .history { padding: var(--gap-lg); }
+  .actions { flex-direction: column; }
+  .section-head { flex-wrap: wrap; }
+}
