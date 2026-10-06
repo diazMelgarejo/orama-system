@@ -81,7 +81,9 @@ hosted Site.
   content. Task 5 is therefore passed for the owner's plugin session.
 - Still not verified: owner browser sign-in, two real accounts (hosted isolation), and the optional
   forged-header probe, which needs its own authorization.
-- The first-publication reversal gate was not met. No unpublish or suspend operation is exposed,
-  and no explicit owner acceptance of a one-way publication is recorded. An earlier compatible
+- The first-publication reversal gate was not met. The exposed Sites connector has no unpublish
+  or suspend operation; this status update does not establish whether separate owner or admin
+  controls can unpublish or suspend the Site. No explicit owner acceptance of a one-way
+  publication is recorded. An earlier compatible
   version is retained; code rollback does not reverse D1 migrations.
 - Concrete identifiers, hashes and record IDs stay in the private operator runbook.
