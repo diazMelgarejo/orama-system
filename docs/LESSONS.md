@@ -720,3 +720,15 @@ prompts deterministically; it does not run model inference.
 
 Implementation map: Orama `docs/v2/references/SITES-READINESS-R2-IMPLEMENTATION-2026-10-06.md`;
 PT working incident: `.agent/memory/working/SITES_READINESS_AND_AUTH_BOUNDARIES_2026-10-06.md`.
+
+## 2026-10-06 — Sites readiness: release gates found by review
+
+Review of the r2 release found that a verifier is only as strong as the applier it mirrors. Wrangler
+applies every `.sql` file in the migrations directory, not the Drizzle journal, so the verifier now
+requires the two to match, and offers an opt-in guard that a release adds only indexes. A UI error
+decoder must not erase the server's own error text: show a sign-in prompt for 401 only, surface
+well-formed JSON-RPC messages for other failures, and never echo provider bodies. A broad ignore
+rule (`lib/`) silently skipped a new source file; un-ignore overlay source paths instead of
+relying on memory. Address-literal gates apply to tests too: use a named hostname constant, never
+an obfuscated literal. Status text in tracked notes must be corrected additively as soon as a
+blocked gate passes, before the PR merges.

@@ -5,6 +5,9 @@ import { execFileSync, spawn } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/** Wrangler's own default listen host. A hostname, not an address literal, so hygiene scans stay meaningful. */
+export const LOOPBACK_HOST = 'localhost';
+
 /** @param {string} root @returns {void} */
 function checkRoot(root) {
   if (!path.isAbsolute(root) || !statSync(root).isDirectory()) throw new Error('Site root must be an absolute existing directory');
@@ -69,7 +72,7 @@ export function resolveSiteLaunch(siteRoot, { port, runtimeDir }) {
   if (!start.includes('--import') || !start.includes('scripts/sites-env.mjs')) throw new Error('Unsupported Site preload contract: expected --import scripts/sites-env.mjs');
   const config = path.join(siteRoot, 'dist/server/wrangler.json');
   if (!existsSync(config)) throw new Error('Build the Site before launching its local Worker');
-  return { command: process.execPath, args: ['--import', preload, entry, 'dev', '--config', config, '--local', '--persist-to', path.join(runtimeDir, 'd1'), '--ip', '127.0.0.1', '--port', String(port), '--inspector-port', '0'] };
+  return { command: process.execPath, args: ['--import', preload, entry, 'dev', '--config', config, '--local', '--persist-to', path.join(runtimeDir, 'd1'), '--ip', LOOPBACK_HOST, '--port', String(port), '--inspector-port', '0'] };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
