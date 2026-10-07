@@ -37,3 +37,70 @@ Records are retained when archived; source text is not replaced. History is newe
 `(created_at, id)`. A retry uses the same request key only for identical input. No list-all/export,
 provider cost, Python subprocess, local endpoint discovery, or permanent delete operation is
 exposed.
+
+## Readiness tools and private rollout
+
+The immediate startup workaround is a child-scoped `XDG_CONFIG_HOME` pointing to
+an absolute, ignored local directory. Do not change the developer's `HOME`.
+Wrangler's logs, registries and XDG configuration use distinct locations. A
+disposable child with a regular file as its synthetic home reproduced the
+configuration failure; an explicit XDG directory restored readiness.
+
+On Node 24, with operator-supplied absolute paths:
+
+```bash
+node integrations/sites-mcp/check-snapshot.mjs "$PERPETUA_TOOLS_ROOT"
+node integrations/sites-mcp/assemble.mjs "$PERPETUA_TOOLS_ROOT" "$SITE_ROOT"
+# In the Site root: use its package manager to generate migrations, lint,
+# typecheck without incremental output, and build.
+node integrations/sites-mcp/verify-assembled.mjs "$PERPETUA_TOOLS_ROOT" "$SITE_ROOT"
+node integrations/sites-mcp/local-preview.mjs "$SITE_ROOT" --isolated-config --runtime-dir "$RUNTIME_DIR"
+node integrations/sites-mcp/tests/local-worker-smoke.mjs "$SITE_ROOT"
+```
+
+Verifier details: it requires the `.sql` files in `drizzle/` to equal the journal tags in order,
+because Wrangler applies every file in that directory by filename. For a release that must only add
+indexes, pass `--index-only-from <journal index>`; later migrations may then contain nothing but
+`CREATE INDEX` and `DROP INDEX`. The launcher listens on `localhost` (Wrangler's own default)
+rather than an address literal, which the repository hygiene gate rejects.
+
+The index-only boundary must identify an existing non-negative journal entry; invalid or
+out-of-range values fail closed. SQL comments and quoted semicolons are handled before
+statement classification, and SQLite validates syntax during in-memory execution.
+
+The launcher resolves Site-owned Wrangler and its preload, binds only loopback,
+and preserves host settings. It requires runtime storage in an ignored, untracked
+directory or outside the checkout, resolving existing symlink ancestors and D1/config
+destinations. The child receives `SITES_RUNTIME_ROOT` so starter defaults follow that
+directory. Explicit absolute XDG configuration is preserved; invalid paths fail.
+
+The separate verifier never repairs source. It checks exact compiler, server and
+overlay bytes, provenance, manifest capabilities/bindings, migration journal order,
+canonical columns/indexes (including unconditional uniqueness), the archived CHECK
+and real store query plans. SQLite verification is in memory with disk attachment denied.
+
+Keep old migrations and journal entries unchanged. Generate an index-only follow-up
+when the old index lacks `created_at`: drop `prompt_records_owner_active`, create
+`prompt_records_owner_history(owner_id, archived, created_at, id)`. Stop if generated
+SQL changes tables, columns or rows. Code rollback does not reverse D1 migrations.
+
+The re-runnable smoke test uses disposable external local D1, verifies HTTP bounds,
+notifications, retries/conflicts, two synthetic owners, same-timestamp pagination,
+archive and restart persistence. Cancellation stops its owned Worker process group.
+The real Wrangler reproduction is opt-in:
+`SITES_MCP_SITE_ROOT="$SITE_ROOT" node --test integrations/sites-mcp/tests/local-preview.test.mjs`.
+
+Preserve the existing private Site and generated plugin. Record concrete identifiers
+only in an off-repo runbook. After publication probe anonymous root, initialize and
+read-only history before connecting. A forged-header probe needs separate owner
+authorization. Never manufacture hosted identity with fixture headers or service tokens.
+The exposed Sites connector has no unpublish operation: establish a first-publication
+reversal or obtain explicit one-way acceptance. For later updates retain the compatible
+prior saved version; redeploying it does not erase records or reverse migrations.
+
+The UI handles non-JSON 401/403 gateway errors before parsing, preserving the input and
+showing a sign-in/access explanation. This repairs opaque parser errors; OAuth denial
+at the hosting boundary remains a distinct platform issue. Check the full access policy
+and sign-in redirect before adding viewers. An installed widget message or suggested
+plugin is not a verified authenticated call. See the implementation handoff in
+`docs/v2/references/SITES-READINESS-R2-IMPLEMENTATION-2026-10-06.md`.

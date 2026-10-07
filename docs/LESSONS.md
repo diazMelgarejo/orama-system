@@ -697,3 +697,38 @@ Closed #299, #300, #301, #302 with evidence-based comments (specific file
 correspondences and test results, not just "superseded") pointing to
 #303 → #305. No new PR created — nothing was left to integrate.
 
+
+## 2026-10-06 — Sites readiness: source, migration and authentication are separate gates
+
+A passing build did not detect the missing history-index migration. Verify exact assembled
+bytes and the migrated schema independently, including partial-index semantics, active
+request-key uniqueness and actual query plans. A verifier must not write: run SQL in
+memory and deny disk attachment. Metadata must be non-null objects.
+
+Wrangler logs, registries and XDG configuration are distinct. An opt-in child-scoped
+launcher preserves host HOME, proxies and CA settings. Keep local D1/configuration/logs
+ignored and untracked or external; resolve runtime and D1/config symlinks before checking
+containment. Cancelled acceptance runs must stop their owned Worker process group.
+
+Check gateway HTTP status before parsing JSON: authorization responses may be plain text
+or HTML. A clear UI error does not repair OAuth denial. Keep owner access, deployment,
+plugin installation and actual authenticated MCP invocation as separate evidence gates.
+Do not widen sharing, manufacture identity or duplicate the Site to claim success.
+Establish first-publication rollback beforehand; later code rollback does not reverse D1.
+Preserve migration history and all historical memory bytes. The private MCP prepares
+prompts deterministically; it does not run model inference.
+
+Implementation map: Orama `docs/v2/references/SITES-READINESS-R2-IMPLEMENTATION-2026-10-06.md`;
+PT working incident: `.agent/memory/working/SITES_READINESS_AND_AUTH_BOUNDARIES_2026-10-06.md`.
+
+## 2026-10-06 — Sites readiness: release gates found by review
+
+Review of the r2 release found that a verifier is only as strong as the applier it mirrors. Wrangler
+applies every `.sql` file in the migrations directory, not the Drizzle journal, so the verifier now
+requires the two to match, and offers an opt-in guard that a release adds only indexes. A UI error
+decoder must not erase the server's own error text: show a sign-in prompt for 401 only, surface
+well-formed JSON-RPC messages for other failures, and never echo provider bodies. A broad ignore
+rule (`lib/`) silently skipped a new source file; un-ignore overlay source paths instead of
+relying on memory. Address-literal gates apply to tests too: use a named hostname constant, never
+an obfuscated literal. Status text in tracked notes must be corrected additively as soon as a
+blocked gate passes, before the PR merges.

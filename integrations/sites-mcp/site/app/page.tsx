@@ -1,17 +1,17 @@
 "use client";
 import { useEffect, useState } from 'react';
+import { decodeMcpResponse } from './lib/client.mjs';
 
 type RecordItem = { id: string; original_preview: string; created_at: string; mode: string };
 type Input = { original: string; role: string; goal: string; constraints: string; output_format: string };
 
+/** Call the same-origin MCP endpoint and decode transport/application failures. */
 async function call<T>(name: string, args: object): Promise<T> {
   const response = await fetch('/mcp', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ jsonrpc: '2.0', id: crypto.randomUUID(), method: 'tools/call', params: { name, arguments: args } }) });
-  const body = await response.json() as { error?: { message: string }; result?: { isError?: boolean; content?: { text: string }[]; structuredContent: T } };
-  if (!response.ok || body.error || body.result?.isError) throw new Error(body.error?.message || body.result?.content?.[0]?.text || 'Request failed');
-  if (!body.result) throw new Error('Missing tool result');
-  return body.result.structuredContent;
+  return decodeMcpResponse<T>(response);
 }
 
+/** Render the private prompt editor and history without invoking external inference. */
 export default function Page() {
   const [input, setInput] = useState<Input>({ original: '', role: '', goal: '', constraints: '', output_format: '' });
   const [records, setRecords] = useState<RecordItem[]>([]);
@@ -21,6 +21,7 @@ export default function Page() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [retry, setRetry] = useState<{ key: string; input: string } | null>(null);
+  /** Refresh or paginate owner-private history while retaining the server cursor. */
   async function load(before = '') {
     const result = await call<{ items: RecordItem[]; next_cursor: string | null }>('prompts_list', { limit: 20, before });
     setRecords(previous => before ? [...previous, ...result.items] : result.items);
@@ -33,6 +34,7 @@ export default function Page() {
     }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };
   }, []);
+  /** Prepare or idempotently save a contract; preserve input and retry keys on failure. */
   async function submit(save: boolean) {
     setBusy(true); setError(''); setNotice('');
     try {
@@ -50,6 +52,7 @@ export default function Page() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Unavailable. Your input is preserved.'); }
     finally { setBusy(false); }
   }
+  /** Display an accessible saved contract or a non-destructive read error. */
   async function read(id: string) {
     setError('');
     try {
@@ -58,6 +61,7 @@ export default function Page() {
       setOutput(record.improved);
     } catch (e) { setError(e instanceof Error ? e.message : 'Read failed'); }
   }
+  /** Confirm archival, retaining original bytes, then refresh visible history. */
   async function archive(id: string) {
     if (!window.confirm('Archive this prompt? Its original and structured text will remain stored.')) return;
     setError('');
