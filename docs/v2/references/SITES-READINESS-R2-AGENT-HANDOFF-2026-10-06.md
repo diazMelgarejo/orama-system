@@ -140,7 +140,7 @@ CodeRabbit and current CI still gate merge; no PR was merged or Site redeployed 
 
 ## 10. Parent-PR finalization (2026-10-07 UTC)
 
-#387 is now merged into open #386. Repairs belong on #386's current branch, not the
+PR# 387 is now merged into #386. Repairs belong on #386's current branch, not the
 closed leaf. Section 4's pending localhost smoke statement is historical and was
 superseded by section 9; section 6 now marks that first run completed. Hosted browser
 sign-in and real-account isolation remain separate, unverified gates.
