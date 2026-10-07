@@ -88,7 +88,8 @@ has not happened yet; do it before merging #386.
 ## 6. Open work, in order
 
 1. Confirm CI and CodeRabbit on #387 and #429; fix anything real; resolve threads you addressed.
-2. Run the built-Worker smoke once against a prepared Site root.
+2. Completed: built-Worker smoke against a prepared Site root; see section 9.
+   Re-run only after changes to the built Worker, assembly, migrations or launcher.
 3. Owner browser sign-in on the private Site, without widening access. A working plugin session
    does not prove it.
 4. Two real approved accounts for hosted isolation, before any sharing.
@@ -136,3 +137,35 @@ PT #429 graduates the readiness and verifier/status lessons through its existing
 Only `.agent/memory/semantic/LESSONS.md` is regenerated. Neither the retired docs lesson log
 nor the graduation/rendering implementation is changed. Historical JSONL prefixes survive.
 CodeRabbit and current CI still gate merge; no PR was merged or Site redeployed in this pass.
+
+## 10. Parent-PR finalization (2026-10-07 UTC)
+
+#387 is now merged into open #386. Repairs belong on #386's current branch, not the
+closed leaf. Section 4's pending localhost smoke statement is historical and was
+superseded by section 9; section 6 now marks that first run completed. Hosted browser
+sign-in and real-account isolation remain separate, unverified gates.
+
+The release verifier now compares complete stored CHECK expressions with canonical
+PT schema constraints. SQLite column/index PRAGMAs omit CHECKs; rejecting one probe
+value is not domain equivalence. A candidate admitting 3 previously passed while
+still rejecting 2. Regression cases also admit -1 and 999; each must fail parity.
+Behavioral probes for 2 and 3 remain defense in depth, not the equivalence proof.
+Comparison ignores comments, spacing, keyword case, identifier quoting and canonical
+table qualification. Other expression changes fail closed for explicit review;
+the verifier does not attempt to prove arbitrary SQL expressions equivalent.
+
+All named functions in the PR's changed JavaScript/TypeScript files now have JSDoc,
+including fixture helpers and the in-memory D1 adapter methods. No canonical PT
+compiler/schema bytes, historical JSONL, retired rendering paths or hosted deployment
+are changed by this repair. Fresh CodeRabbit/CI still gate merge.
+
+Current validation: the complete adapter suite passed 37 tests with no skips,
+including real Wrangler configuration reproduction. The independent named-function
+AST audit found JSDoc on 38/38 functions/declarations; CodeRabbit's coverage remains pending.
+The prepared candidate also passed the read-only migration verifier. A fresh full
+smoke attempt returned HTTP 503 instead of 413 at the oversized-request assertion;
+the isolated retry could not complete because network approval was cancelled.
+This is not a new smoke pass and does not erase section 9's prior acceptance.
+Markdownlint could not run because its package was absent from the offline cache;
+repository hygiene and whitespace checks passed. Re-run these two acceptance gates
+in an authorized prepared environment before merging; do not weaken their assertions.

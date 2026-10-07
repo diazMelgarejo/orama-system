@@ -10,7 +10,7 @@ async function envelopeMessage(response) {
   } catch { return null; }
 }
 
-/** @param {Response} response @returns {Promise<object>} */
+/** Return structured tool output or a bounded actionable error without raw provider text. @param {Response} response @returns {Promise<object>} */
 export async function decodeMcpResponse(response) {
   if (response.status === 401) throw new Error(SIGN_IN);
   if (!response.ok) {

@@ -1,7 +1,7 @@
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 export const generatedFiles = ['app/lib/server.mjs', 'app/lib/perpetua.mjs'];
-/** @param {string} dir @param {string} [prefix] @returns {Promise<string[]>} */
+/** List deterministic relative overlay files; reject links and special files. @param {string} dir @param {string} [prefix] @returns {Promise<string[]>} */
 export async function listFiles(dir, prefix = '') {
   const found = [];
   for (const entry of await readdir(dir, { withFileTypes: true })) {
@@ -12,5 +12,5 @@ export async function listFiles(dir, prefix = '') {
   }
   return found.sort();
 }
-/** @param {string} root @returns {Promise<string[]>} */
+/** Combine reviewed overlay files with generated compiler/server payloads. @param {string} root @returns {Promise<string[]>} */
 export async function overlayFiles(root) { return [...new Set([...await listFiles(path.join(root, 'site')), ...generatedFiles])].sort(); }

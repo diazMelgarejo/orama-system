@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import { createPreviewEnv, resolveSiteLaunch, LOOPBACK_HOST } from '../local-preview.mjs';
 
+/** Build a disposable Site with a controllable Wrangler CLI and automatic cleanup. */
 function fixture(t) {
   const site = mkdtempSync(path.join(tmpdir(), 'site with spaces '));
   t.after(() => rmSync(site, { recursive: true, force: true }));
@@ -93,6 +94,7 @@ test('prepared Wrangler reproduces HOME configuration failure and isolated readi
   t.after(() => rmSync(runtime, { recursive: true, force: true }));
   const home = path.join(runtime, 'synthetic-home'); writeFileSync(home, 'regular file');
   const launch = resolveSiteLaunch(site, { port: 18977, runtimeDir: runtime });
+  /** Run real Wrangler with controlled child configuration and collect readiness evidence. */
   async function probe(isolated) {
     const parent = { ...process.env, HOME: home, SITES_RUNTIME_ROOT: runtime, WRANGLER_LOG_PATH: path.join(runtime, 'logs'), WRANGLER_REGISTRY_PATH: path.join(runtime, 'registry'), MINIFLARE_REGISTRY_PATH: path.join(runtime, 'miniflare') };
     delete parent.XDG_CONFIG_HOME;

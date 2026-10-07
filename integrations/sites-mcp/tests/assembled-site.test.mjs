@@ -8,6 +8,7 @@ import { verifyAssembled } from '../verify-assembled.mjs';
 import { listFiles } from '../overlay.mjs';
 
 const root = new URL('../', import.meta.url).pathname;
+/** Assemble an isolated candidate with real migrations; register automatic cleanup. */
 async function fixture(t) {
   const base = await mkdtemp(path.join(tmpdir(), 'verify-site-')); t.after(() => rm(base, { recursive: true, force: true }));
   const pt = path.join(base, 'pt'), site = path.join(base, 'site');
@@ -24,7 +25,30 @@ async function fixture(t) {
   await writeFile(path.join(site, 'drizzle/meta/_journal.json'), JSON.stringify({ entries: [{ idx: 0, tag: '0000_old' }, { idx: 1, tag: '0001_history' }] }));
   return { pt, site };
 }
+/** Snapshot every candidate byte to detect unintended verifier writes. */
 async function tree(site) { return Promise.all((await listFiles(site)).map(async file => [file, (await readFile(path.join(site, file))).toString('hex')])); }
+
+test('archived CHECK parity rejects domains that still reject the old probe value 2', async t => {
+  const { pt, site } = await fixture(t);
+  const migration = path.join(site, 'drizzle/0000_old.sql');
+  const original = await readFile(migration, 'utf8');
+  for (const constraint of ['archived IN (0, 1, 3)', 'archived IN (0, 1, -1)', 'archived IN (0, 1, 999)', '(archived IN (0, 1)) AND archived = 0']) {
+    await writeFile(migration, original.replace('archived IN (0, 1)', constraint));
+    const before = await tree(site), result = await verifyAssembled(pt, site);
+    assert.equal(result.verified, false, constraint);
+    assert.ok(result.errors.some(error => /CHECK.*parity/.test(error)), result.errors.join('; '));
+    if (constraint === 'archived IN (0, 1, 3)') assert.ok(result.errors.includes('migration archived CHECK accepts 3'));
+    assert.deepEqual(await tree(site), before);
+  }
+});
+
+test('CHECK parity accepts formatting, identifier quoting and canonical table qualification', async t => {
+  const { pt, site } = await fixture(t);
+  const migration = path.join(site, 'drizzle/0000_old.sql');
+  const original = await readFile(migration, 'utf8');
+  await writeFile(migration, original.replace('CHECK(archived IN (0, 1))', 'check ( /* format only */ "prompt_records"."archived" in ( 0 , 1 ) )'));
+  assert.deepEqual((await verifyAssembled(pt, site)).errors, []);
+});
 
 test('fresh assembly verifies, preserves manifest, is deterministic and read-only', async t => {
   const { pt, site } = await fixture(t), before = await tree(site);

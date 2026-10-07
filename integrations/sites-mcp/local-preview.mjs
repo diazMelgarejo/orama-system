@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 /** Wrangler's own default listen host. A hostname, not an address literal, so hygiene scans stay meaningful. */
 export const LOOPBACK_HOST = 'localhost';
 
-/** @param {string} root @returns {void} */
+/** Require an absolute existing Site directory before resolving runtime paths. @param {string} root @returns {void} */
 function checkRoot(root) {
   if (!path.isAbsolute(root) || !statSync(root).isDirectory()) throw new Error('Site root must be an absolute existing directory');
 }
@@ -20,7 +20,7 @@ function physicalPath(target) {
   return path.join(realpathSync(parent), ...suffix);
 }
 
-/** @param {string} siteRoot @param {string} target @returns {void} */
+/** Reject tracked or unignored runtime writes, including symlink aliases. @param {string} siteRoot @param {string} target @returns {void} */
 function checkStorage(siteRoot, target) {
   const realRoot = realpathSync(siteRoot), realRuntime = physicalPath(target);
   const relative = path.relative(realRoot, realRuntime);
@@ -36,7 +36,7 @@ function checkStorage(siteRoot, target) {
   }
 }
 
-/** @param {string} siteRoot @param {NodeJS.ProcessEnv} parentEnv @param {{isolated:boolean,runtimeDir?:string}} options @returns {NodeJS.ProcessEnv} */
+/** Create validated child-only runtime/config directories without mutating parent settings. @param {string} siteRoot @param {NodeJS.ProcessEnv} parentEnv @param {{isolated:boolean,runtimeDir?:string}} options @returns {NodeJS.ProcessEnv} */
 export function createPreviewEnv(siteRoot, parentEnv, options) {
   checkRoot(siteRoot);
   const runtime = options.runtimeDir ?? path.join(siteRoot, '.sites-runtime');
@@ -56,7 +56,7 @@ export function createPreviewEnv(siteRoot, parentEnv, options) {
   return env;
 }
 
-/** @param {string} siteRoot @param {{port:number,runtimeDir:string}} options @returns {{command:string,args:string[]}} */
+/** Resolve the prepared Site's own Wrangler and preload into local-only launch arguments. @param {string} siteRoot @param {{port:number,runtimeDir:string}} options @returns {{command:string,args:string[]}} */
 export function resolveSiteLaunch(siteRoot, { port, runtimeDir }) {
   checkRoot(siteRoot);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Port must be 1–65535');

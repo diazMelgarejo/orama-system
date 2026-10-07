@@ -12,6 +12,7 @@ test('non-JSON platform failures are sanitized and successful envelopes retain r
   await assert.rejects(decodeMcpResponse(Response.json({ result: { isError: true, content: [{ text: 'Validation failed' }] } })), /Validation failed/);
 });
 test('the Site\'s own JSON-RPC errors stay visible; platform bodies and bare 401s do not leak', async () => {
+  /** Build a Site-owned JSON-RPC error response, distinct from a platform denial. */
   const envelope = (status, message) => new Response(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32001, message } }), { status, headers: { 'content-type': 'application/json' } });
   await assert.rejects(decodeMcpResponse(envelope(413, 'Request too large')), /Request too large.*input is preserved/);
   await assert.rejects(decodeMcpResponse(envelope(403, 'Origin not allowed')), /Origin not allowed/);

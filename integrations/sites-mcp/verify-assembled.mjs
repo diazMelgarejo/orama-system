@@ -7,13 +7,38 @@ import { fileURLToPath } from 'node:url';
 import { overlayFiles } from './overlay.mjs';
 import { PromptStore } from './src/perpetua.mjs';
 const root = path.dirname(fileURLToPath(import.meta.url));
+/** Hash exact payload bytes for source and assembly provenance. @param {Buffer|string} bytes @returns {string} */
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
-/** @param {DatabaseSync} db @returns {object} */
+/** Compare column and index structure independently of generated names. @param {DatabaseSync} db @returns {object} */
 function signature(db) {
   const columns = db.prepare('PRAGMA table_info(prompt_records)').all().map(row => [row.name, row.type.toUpperCase(), row.notnull, row.pk, row.dflt_value]);
   const indexes = db.prepare('PRAGMA index_list(prompt_records)').all().map(row => ({ unique: row.unique, partial: row.partial, columns: db.prepare(`PRAGMA index_info(${JSON.stringify(row.name)})`).all().map(col => col.name) }));
   return { columns, indexes: indexes.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b))) };
+}
+
+/** Extract complete CHECK expressions from SQLite's stored DDL, not finite value probes.
+ * Normalize comments, spacing, keyword case and identifier quoting/qualification only.
+ * Logically equivalent but differently written expressions deliberately require review.
+ * @param {DatabaseSync} db @returns {string[]}
+ */
+function checkConstraints(db) {
+  const ddl = db.prepare("SELECT sql FROM sqlite_schema WHERE type = 'table' AND name = 'prompt_records'").get()?.sql ?? '';
+  const tokens = ddl.match(/--[^\r\n]*|\/\*[\s\S]*?\*\/|'(?:''|[^'])*'|"(?:""|[^"])*"|\x60(?:\x60\x60|[^\x60])*\x60|\[[^\]]*\]|[A-Za-z_][A-Za-z_0-9]*|\s+|[\s\S]/g)?.filter(token => !/^\s+$/.test(token) && !token.startsWith('--') && !token.startsWith('/*')) ?? [];
+  const checks = [];
+  for (let i = 0; i < tokens.length; i++) {
+    if (!/^CHECK$/i.test(tokens[i]) || tokens[i + 1] !== '(') continue;
+    let depth = 1; const expression = [];
+    for (i += 2; i < tokens.length && depth; i++) {
+      const token = tokens[i];
+      if (token === '(') depth++;
+      if (token === ')') { depth--; if (depth === 0) break; }
+      expression.push(token.startsWith("'") ? token : token.replace(/^"|"$/g, '').replace(/""/g, '"').replace(/^`|`$/g, '').replace(/``/g, '`').replace(/^\[|\]$/g, '').toLowerCase());
+    }
+    if (depth) throw new Error('Unbalanced CHECK expression in stored schema');
+    checks.push(JSON.stringify(expression.filter((token, j) => !(token === 'prompt_records' && expression[j + 1] === '.') && !(token === '.' && expression[j - 1] === 'prompt_records'))));
+  }
+  return checks.sort();
 }
 
 /** Split SQLite statements without interpreting comments or semicolons inside quoted tokens.
@@ -33,13 +58,16 @@ function sqlStatements(sql) {
 }
 
 /**
+ * Verify candidate bytes and replayed migration schema read-only against canonical PT.
  * @param {string} ptRoot @param {string} siteRoot
  * @param {{indexOnlyFrom?: number}} [options] Journal index from which migrations may contain only CREATE/DROP INDEX.
  * @returns {Promise<object>}
  */
 export async function verifyAssembled(ptRoot, siteRoot, options = {}) {
   const errors = [], migrations = [], hashes = [];
+  /** Read evidence without repair; accumulate missing-file errors. */
   const read = async (file, label) => { try { return await readFile(file); } catch (error) { errors.push(`${label}: ${error.code ?? error.message}`); return null; } };
+  /** Report byte drift only when both independently read inputs exist. */
   const same = (a, b, label) => { if (a && b && !a.equals(b)) errors.push(`${label}: bytes differ`); };
   const canonical = await read(path.join(ptRoot, 'packages/prompt-workspace/src/index.mjs'), 'PT compiler');
   const canonicalSchema = await read(path.join(ptRoot, 'packages/prompt-workspace/schema.sql'), 'PT schema');
@@ -53,6 +81,7 @@ export async function verifyAssembled(ptRoot, siteRoot, options = {}) {
     same(expected, actual, file);
     if (actual) hashes.push([file, hash(actual)]);
   }
+  /** Decode a required JSON object while preserving the verifier's error ledger. */
   const parse = async (file, label) => {
     const data = await read(file, label); if (!data) return null;
     try {
@@ -92,19 +121,35 @@ export async function verifyAssembled(ptRoot, siteRoot, options = {}) {
     const onDisk = (await readdir(path.join(siteRoot, 'drizzle')).catch(() => [])).filter(name => name.endsWith('.sql')).sort();
     if (JSON.stringify(onDisk) !== JSON.stringify(journal.entries.map(entry => `${entry.tag}.sql`))) errors.push('migrations: .sql files on disk must equal the journal tags, in order');
     if (JSON.stringify(signature(candidate)) !== JSON.stringify(signature(reference))) errors.push('migration schema/index parity differs from canonical history schema');
+    if (JSON.stringify(checkConstraints(candidate)) !== JSON.stringify(checkConstraints(reference))) errors.push('migration CHECK constraint parity differs from canonical history schema');
     const insert = candidate.prepare("INSERT INTO prompt_records (owner_id,id,request_key,original,improved,mode,version,created_at) VALUES ('uniqueness',?,'same-key','o','i','m','v','t')");
     insert.run('first');
     try { insert.run('second'); errors.push('migration request-key uniqueness accepts duplicate active keys'); }
     catch (error) { if (!/UNIQUE constraint failed/.test(error.message)) errors.push(`migration uniqueness probe failed unexpectedly: ${error.message}`); }
-    try {
-      candidate.prepare("INSERT INTO prompt_records (owner_id,id,request_key,original,improved,mode,version,created_at,archived) VALUES ('probe','probe','probe','o','i','m','v','t',2)").run();
-      errors.push('migration archived CHECK accepts 2');
-    } catch (error) { if (!/CHECK constraint failed/.test(error.message)) errors.push(`migration CHECK probe failed unexpectedly: ${error.message}`); }
+    for (const value of [2, 3]) {
+      try {
+        candidate.prepare("INSERT INTO prompt_records (owner_id,id,request_key,original,improved,mode,version,created_at,archived) VALUES ('probe',?,?,'o','i','m','v','t',?)").run(`probe-${value}`, `probe-${value}`, value);
+        errors.push(`migration archived CHECK accepts ${value}`);
+      } catch (error) { if (!/CHECK constraint failed/.test(error.message)) errors.push(`migration CHECK probe failed unexpectedly: ${error.message}`); }
+    }
     const plans = [];
-    const shim = { prepare(sql) { return { bind(...args) { return { async all() {
-      plans.push(candidate.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args).map(row => row.detail).join('\n'));
-      return { results: candidate.prepare(sql).all(...args) };
-    } }; } }; } };
+    const shim = {
+      /** Adapt the store's D1 prepare contract to the in-memory candidate. */
+      prepare(sql) {
+        return {
+          /** Preserve bound parameters for both query-plan and result execution. */
+          bind(...args) {
+            return {
+              /** Record the real query plan and return the D1-shaped result rows. */
+              async all() {
+                plans.push(candidate.prepare(`EXPLAIN QUERY PLAN ${sql}`).all(...args).map(row => row.detail).join('\n'));
+                return { results: candidate.prepare(sql).all(...args) };
+              },
+            };
+          },
+        };
+      },
+    };
     const store = new PromptStore(shim);
     await store.list('probe');
     await store.list('probe', { before: '2026-10-05T00:00:00.000Z|cursor', limit: 2 });
