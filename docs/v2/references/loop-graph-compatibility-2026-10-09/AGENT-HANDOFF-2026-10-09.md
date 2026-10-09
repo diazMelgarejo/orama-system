@@ -63,3 +63,17 @@ normal push, and leave merging to an explicitly authorized human decision.
    them.
 5. Record any refusal and obtain HITL approval before overriding a hardware,
    authorization, or egress disallowance.
+
+## Revision 4 continuation
+
+The previous handoff is a historical snapshot from the initial review.
+Reuse the four open PRs; do not open duplicates. Read
+[EXECUTION-REVISION-4](EXECUTION-REVISION-4.md), D-LG-1 and D-LG-4 first.
+D-LG-1 policy ownership and offline Phase 1 are approved. General replacement,
+production provider bridges and durable HITL remain gated.
+
+Local Python 3.12 suites: Core 180 real-framework / 176 plus optional skip native;
+Oramasys 271 with ten offline cells / 261 native. Verify exact remote heads and CI
+from the latest PR comments. Merge in design → evidence → Core → application
+order. Update the production Core pin only after Core merge and rerun Oramasys.
+Do not rewrite history or interrupt another agent's processes.

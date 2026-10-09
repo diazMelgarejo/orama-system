@@ -62,3 +62,12 @@ The replacement scope is approved as a goal. The exact alias/metadata strategy,
 GraphSpec policy ownership ADR and durable HITL runtime remain proposal-stage.
 The corrected fake prototype is not shipped production aliasing code. Do not
 convert its metadata or object heuristics into authorization.
+
+## Revision 4 qualification
+
+[Execution revision 4](EXECUTION-REVISION-4.md) is the later resolution.
+The operator approved D-LG-1's independent policy binding and D-LG-4 Phase 1,
+implemented in the existing Core/Oramasys PRs with real offline framework
+evidence. This qualifies earlier ownership and native-pattern-only wording.
+It does not ratify general replacement activation, production foreign egress
+or durable grant execution. Preserve every historical source member.

@@ -1,5 +1,8 @@
 # Verification and coordination handoff — 2026-10-09 UTC
 
+**Historical cutoff:** sections through Remaining release work record revision 3
+before its first publication. The later Revision 4 section qualifies them.
+
 ## Actual changes
 
 - Core adapter validation and regression tests on base
@@ -56,3 +59,23 @@ documentation/evidence only, not production runtime modifications.
 
 Nothing here guarantees flawless full replacement execution. It closes the
 verified immediate defects and makes remaining uncertainties explicit gates.
+
+## Revision 4 — later resolution, 2026-10-09
+
+The earlier sections are the revision 3 pre-publication cutoff. Four existing
+PRs were subsequently created; this coordinated revision reuses them.
+It does not erase the earlier local verification or turn it into merge evidence.
+See [execution revision 4](EXECUTION-REVISION-4.md) for the seven requests,
+eight follow-ups, approved D-LG-1/D-LG-4 slice and remaining gates.
+
+Core real-framework suite: 180 passed, 87.98% coverage. Framework-free Core:
+176 passed, one optional LG test module skipped, 87.88% coverage.
+Oramasys: 261 framework-free tests; 271 with ten pinned real offline oracle cells.
+The candidate overlay retains the production Core pin. Wheel policy-data smoke
+and the input-order mutation harness pass. These are Python 3.12.14 observations;
+3.11 and the resulting exact-head GitHub runs must be assessed separately.
+
+The final coordination handoff and PR comments bind each logical fixing commit
+and published head. Each branch receives one normal parent-preserving update.
+Nothing is merged, closed, force-pushed or deleted. Merge order remains
+Orama #388 → PT #430 → Core #8 → Oramasys #23, with review and explicit instruction.

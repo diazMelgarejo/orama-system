@@ -51,3 +51,12 @@ duck-typed shape is not a silent fallback for a failed optional framework import
 
 See [all revision 3 resolutions](REVISION-3-RESOLUTIONS.md). The fake prototype
 is corrected research evidence, not a deployable implementation of this ADR.
+
+## Later approved bridge slice
+
+On 2026-10-09 the operator approved [D-LG-4 Phase 1](ADR-D-LG-4-PYDANTIC-AI-BRIDGE.md):
+explicit graph-as-tool and offline-only agent-as-node bridging. This qualifies
+the earlier Pydantic AI deferral for this bounded slice. Framework runtime
+adoption, production foreign egress, broad replacement and deferred approvals
+remain gated. Tiered module/symbol diagnostics are implemented without enabling
+any import interceptor. See [revision 4](EXECUTION-REVISION-4.md).
