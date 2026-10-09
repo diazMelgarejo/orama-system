@@ -17,6 +17,9 @@ both rev2 documents and both old scripts. Do not run the historical scripts as
 acceptance tests. No memory was deleted or reserialized.
 
 Current replacement proposal: [D-LG-3 revision 3](ADR-D-LG-3-REVISION-3.md).
+Ownership of reducer and join declarations: [D-LG-5](ADR-D-LG-5-REDUCER-JOIN-DECLARATIONS.md),
+checked by [`ownership-registry.json`](ownership-registry.json); see erratum E12.
+Meaning of fan-out, reducers and joins (R3): [D-LG-6](ADR-D-LG-6-R3-REDUCERS-JOINS-FANOUT.md).
 Actual outcomes and remaining gates: [verification handoff](VERIFICATION-AND-HANDOFF.md).
 
 Source archive SHA-256:
@@ -80,3 +83,8 @@ nonzero. No provider call, grant, PR mutation or real import interception occurs
 
 No fake-package evidence establishes real `Runnable` type identity, callbacks,
 `astream_events`, checkpoint wire formats, pip resolution or all-public-API parity.
+
+Current R3 qualification: [audit, replay and compatibility](../remaining-capabilities/R3-AUDIT-REPLAY-AND-COMPATIBILITY-2026-10-10.md).
+The baseline ownership registry is preserved; additive policy-R3 and Core-R3
+candidate profiles qualify their exact producer/consumer environments. A profile
+pass is not a production-pin promotion or a full API replacement claim.

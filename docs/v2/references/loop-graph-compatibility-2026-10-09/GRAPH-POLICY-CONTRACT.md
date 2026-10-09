@@ -49,8 +49,10 @@ outcomes require provider reconciliation/idempotency; audit JSONL is not dedupe.
 
 ## Evolution and acceptance
 
-Reducers, joins, state-schema versions, implementation pins, evaluation rubrics
-and policy-selection rules require explicit future schema versions. Unknown
+Reducer and join declarations live in Core's structural GraphSpec (D-LG-5); policy
+may only restrict them, in a future policy schema. State-schema versions,
+implementation pins, evaluation rubrics and policy-selection rules require
+explicit future schema versions. Unknown
 fields fail closed today. Prefer an independent policy revision over adding
 application fields to Core. Preserve policy revisions and decision lineage.
 

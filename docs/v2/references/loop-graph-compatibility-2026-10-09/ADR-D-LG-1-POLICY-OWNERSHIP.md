@@ -1,5 +1,8 @@
 # D-LG-1 — Structural graph and separately bound policy
 
+**Amended 2026-10-10 by [D-LG-5](ADR-D-LG-5-REDUCER-JOIN-DECLARATIONS.md), reducer/join
+row only.**
+
 **Decision slice:** approved by the operator on 2026-10-09. This records the
 explicit ownership amendment required by doc 57 §12 and doc 59 §7. Broader
 replacement ADRs D-LG-2/3 remain proposals. Implementation is reviewed in
@@ -32,7 +35,8 @@ GraphSpec metadata: doing so couples the hashes and risks a circular identity.
 | Nodes, static edges, router refs, declared targets, max_steps | Core | Required to describe and verify structure |
 | Structural schema_version and graph_id | Core | Kernel can verify them without policy imports |
 | Budget ceilings, effects/replay intent, policy revision | Oramasys policy | Application choices evolve independently |
-| Reducer/join declarations and version/evaluation selection | Oramasys policy design | Still gated; reject unknown fields in schema 1 |
+| Reducer/join declarations | Core structural GraphSpec (D-LG-5; was Oramasys policy) | They change the computed result, so they belong in `graph_id`; policy may only restrict |
+| Version/evaluation selection | Oramasys policy design | Still gated; reject unknown fields in schema 1 |
 | Effect identity, retries, durable grant use accounting | Oramasys composition | Outside the scheduler, requires provider reconciliation |
 | Hardware placement, admission, endpoint transport | Agate, Phylax, Telos respectively | A graph document cannot replace those authorities |
 | Architecture, acceptance gates, pattern research | Orama docs/v2 | Normative source, independent v1 system |
