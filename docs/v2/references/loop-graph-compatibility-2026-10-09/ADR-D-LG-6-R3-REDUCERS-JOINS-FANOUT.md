@@ -51,8 +51,9 @@ source ──fanout──▶ { b1, b2, … bn } ──commit──▶ then
 
 1. The source node runs and its delta merges as today.
 2. `superstep.start` is emitted with the branch names. Each branch gets `node.start`, in name
-   order. All branches receive the same snapshot, each as its own deep copy, so a branch that mutates its input cannot affect a sibling or the committed state. The branch names are appended to
-   `nodes_visited` in name order before they run.
+   order. All branches receive the same snapshot, each as its own deep copy, so a branch that
+   mutates its input cannot affect a sibling or the committed state. The branch names are
+   appended to `nodes_visited` in name order before they run.
 3. `max_steps` is checked once for the whole region: `steps + branches` must not exceed it.
    Each branch that succeeds counts as one step.
 4. Branches run concurrently. The scheduler waits for **every** branch to settle.
@@ -106,7 +107,8 @@ imports it from a string.
 ## Joins
 
 A region with no declared join behaves as `all`. A declared `all` with no parameters is
-dropped when the spec is built, so the two forms share one `graph_id`.
+dropped when the spec is built, so the two forms share one `graph_id`. Only the sole join of a
+real fan-out source is dropped; orphan or duplicate declarations are kept so lint reports them.
 
 | Kind | Admits | Region fails when |
 | --- | --- | --- |
