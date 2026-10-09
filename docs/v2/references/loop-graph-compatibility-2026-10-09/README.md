@@ -19,6 +19,7 @@ acceptance tests. No memory was deleted or reserialized.
 Current replacement proposal: [D-LG-3 revision 3](ADR-D-LG-3-REVISION-3.md).
 Ownership of reducer and join declarations: [D-LG-5](ADR-D-LG-5-REDUCER-JOIN-DECLARATIONS.md),
 checked by [`ownership-registry.json`](ownership-registry.json); see erratum E12.
+Meaning of fan-out, reducers and joins (R3): [D-LG-6](ADR-D-LG-6-R3-REDUCERS-JOINS-FANOUT.md).
 Actual outcomes and remaining gates: [verification handoff](VERIFICATION-AND-HANDOFF.md).
 
 Source archive SHA-256:
