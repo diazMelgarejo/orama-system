@@ -51,7 +51,7 @@ source ──fanout──▶ { b1, b2, … bn } ──commit──▶ then
 
 1. The source node runs and its delta merges as today.
 2. `superstep.start` is emitted with the branch names. Each branch gets `node.start`, in name
-   order. All branches receive the same snapshot. The branch names are appended to
+   order. All branches receive the same snapshot, each as its own deep copy, so a branch that mutates its input cannot affect a sibling or the committed state. The branch names are appended to
    `nodes_visited` in name order before they run.
 3. `max_steps` is checked once for the whole region: `steps + branches` must not exceed it.
    Each branch that succeeds counts as one step.
@@ -114,7 +114,7 @@ dropped when the spec is built, so the two forms share one `graph_id`.
 | `any` | Every successful branch | No branch succeeded |
 | `first_success` | The lowest-named successful branch only | No branch succeeded |
 | `quorum` (`quorum = k`) | Every successful branch | Fewer than `k` succeeded |
-| `custom` | The names returned by `fn(outcomes) -> names` | The function raises or returns an unknown name |
+| `custom` | The names returned by `fn(outcomes) -> names` | The function raises, returns an unknown or failed name, or returns no name |
 
 `custom` is a pure admission function over a tuple of per-branch outcomes (name, ok, error
 type name). It cannot change a delta. Reducers still fold what it admits.
