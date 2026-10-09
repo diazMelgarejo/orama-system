@@ -60,8 +60,10 @@ source ──fanout──▶ { b1, b2, … bn } ──commit──▶ then
 5. Outcomes are evaluated in name order. An interrupt takes precedence (below). Otherwise the
    join admits a set of successful branches or fails the region.
 6. Reducers fold the admitted deltas into one delta, which merges into state **once**.
-   Everything after this point carries the committed state, so a checkpoint taken at any
-   branch event is a post-commit checkpoint.
+   Events emitted after this point carry the committed state: the per-branch `node.end`
+   events and `superstep.commit` are post-commit checkpoints. `superstep.start` and the
+   per-branch `node.start` events precede the commit and carry the pre-commit snapshot, so a
+   checkpoint taken there is not a post-commit checkpoint.
 7. `node.end` is emitted for each admitted branch in name order, with that branch's own delta.
 8. `superstep.commit` is emitted with the folded delta. Its observation carries a
    **provenance map** from state field to the branches that supplied it. The public
@@ -101,8 +103,16 @@ whenever at least one admitted branch wrote it. For an undeclared field the defa
 
 Disagreement raises `ReducerConflict` (a `ValueError`) naming the field and the branches.
 A value of the wrong type raises `TypeError`. Both are raised before anything commits. A
-`custom` reducer must be a pure fold. Core records its reference in the spec and never
-imports it from a string.
+`custom` reducer must be a pure fold.
+
+**Binding contract for custom callables.** A `custom` reducer or join is bound by the caller
+when the graph is built, as a trusted callable object (`Reducer("custom", fn)`, `Join("custom",
+fn=...)`). Core checks at construction that `fn` is callable, and that a non-custom kind carries
+no `fn`. The spec's `ReducerSpec.ref` or `JoinSpec.ref` is derived from the bound callable with
+`stable_callable_ref`, so the reference and the callable cannot disagree within one graph.
+Core never imports a callable from a reference string: a spec loaded from JSON is a description
+only, and running it means rebuilding the graph with trusted callables and comparing `graph_id`.
+Lint warns (GS213) when a custom kind has no stable reference.
 
 ## Joins
 
