@@ -74,6 +74,8 @@
   // are cheap to keep compliant, and the PR that added this entry fixed its
   // own new reference doc rather than exempting it.
   "ignores": [
+    // Byte-preserved source archive; active revision-3 records remain linted.
+    "docs/v2/references/loop-graph-compatibility-2026-10-09/history/**",
     "**/SKILL.md",
     "**/LESSONS.md",
     "docs/archive/*-Archived-LESSONS.md",
