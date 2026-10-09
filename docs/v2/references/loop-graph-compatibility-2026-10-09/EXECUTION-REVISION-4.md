@@ -50,7 +50,7 @@ not just the abatch change.
 | G1–G3 | Prior stale state, pasted question and malformed YAML corrections retained |
 | G4 | Full local suites and pinned real oracles now evidenced; other interpreters await CI |
 | G5 | Loop-to-graph design remains a proposal, not an automatic rewrite |
-| G6 | budget_exhausted implemented above Core; taxonomy otherwise unchanged |
+| G6 | budget_exhausted implemented above Core as a non-resumable structural interrupt that stops the run (corrected in the [follow-up](FOLLOWUP-VERIFICATION-AND-HANDOFF.md)); taxonomy otherwise unchanged |
 | G7 | Approved D-LG-1 ownership split and bound policy lint implemented |
 | G8 | Native adapter executes Core; exporter runs node callables/topology under LG scheduler |
 | G9 | Reducers/joins and durable resume remain open |

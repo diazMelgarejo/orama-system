@@ -29,7 +29,7 @@ The bridge is an untrusted effect, even if the model itself is offline.
 | Text / structured output | Store local scratchpad value / JSON-mode model dump | Application data/privacy policy |
 | Typed graph-as-tool | Real LCEL wrapping and Pydantic AI tool registration tested | Full public API compatibility matrix |
 | Usage | Store request/input/output counters only | Policy-wide monotonic accounting |
-| UsageLimitExceeded | Wrapper budget_exhausted reason; Core taxonomy unchanged | Global budget enforcement |
+| UsageLimitExceeded | Non-resumable structural interrupt, reason budget_exhausted; downstream nodes do not run; Core taxonomy unchanged | Global budget enforcement |
 | DeferredToolRequests | Structural interrupt with sanitized pending count | Durable approval/resume contract |
 | Streaming / iter | Unsupported in this slice | Sanitized projection and lifecycle tests |
 | Production model/provider | Refused | Telos-backed transport plus durable admission/HITL |

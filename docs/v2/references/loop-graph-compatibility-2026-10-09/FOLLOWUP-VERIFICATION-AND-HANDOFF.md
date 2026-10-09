@@ -122,3 +122,19 @@ commit's CI before merge. Historical source attachments remain unchanged.
 The earlier tables are deliberately retained as dated intermediate evidence.
 This final section supersedes their candidate heads and counts. No broad
 replacement-parity or durable approval gate was waived.
+
+## Budget stop and portable gap errors
+
+A later review of the published heads found two remaining Oramasys defects,
+fixed in [Oramasys #23](https://github.com/oramasys/oramasys/pull/23) at
+`d938dac`:
+
+| Finding | Fix | Evidence |
+| --- | --- | --- |
+| On `UsageLimitExceeded`, `as_node` returned an error delta, so downstream nodes (including effect nodes) still ran and the run ended `done` | Raise Core's structural `Interrupt` with reason `budget_exhausted` and `resumable: false` | Two-node oracle test asserts the downstream node never runs; it fails on `1669fe6` |
+| Gap error classes could not be unpickled (two-argument constructors) | Rebuild from constructor arguments | Round-trip test; fails on `1669fe6` |
+
+Local Python 3.12 against Core candidate `b9b4477`: oracle environment 284
+passed; framework-free application suite 271 passed. Core needed no further
+change. Check the live exact-head CI before merge; this does not waive any
+gate listed above.
