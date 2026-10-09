@@ -90,3 +90,36 @@ over these already-fixed remote heads.
   Operator approval never silently bypasses enforcement.
 - Do not ratify D-LG-2/3 or claim 100% parity from this bounded test matrix.
 - Preserve v1/v2 independence and all historical memory/source attachments.
+
+
+## Final scanner and evidence-test follow-up
+
+A broader review included nitpicks outside inline threads. Core's scanner could
+miss literal concatenation and literal-only f-strings passed to dynamic imports.
+It now evaluates those bounded expressions and reports unresolved import
+arguments as DYNAMIC_UNRESOLVED for explicit review. This is a conservative
+check, not arbitrary Python evaluation. Core and Oramasys use the same logic.
+
+The test-first commit `c002407cf16675136876ecfc510dc6de36ddb1a8` produced
+exactly four expected failing tests on Python 3.11 and 3.12, with the prior 180
+passing tests unchanged. The fixing commit passes those regressions.
+
+| Final code PR | Exact head | Fresh evidence |
+| --- | --- | --- |
+| Core #8 | `b9b44775633c393ed709176a9bb1332014ab9320` | [Python 3.11/3.12 run](https://github.com/oramasys/perpetua-core/actions/runs/37941447515): 184 passed, 1 optional-module skip each; 87.88% coverage |
+| Oramasys #23 | `1669fe6bfbc93c9e0017dea9a364856bc2d37208` | [Python 3.11/3.12 oracle run](https://github.com/oramasys/oramasys/actions/runs/37941459074): 283 passed each; [regular CI](https://github.com/oramasys/oramasys/actions/runs/37941458861) also passed |
+
+The Oramasys test-only Core candidate pins the final Core head above. Do not
+substitute the earlier candidate from the first snapshot. Production promotion
+still requires Core merge approval and a merged immutable SHA.
+
+Orama's active evidence check was converted from unittest to pytest, preserving
+the isolated subprocess and all nine prototype checks. The README command was
+updated and the normal Test Suite explicitly invokes this evidence test.
+The test/build workflow at `c494d7f0fa0eb9f80c006cd2e7a7aeeeb2cb7d3b` was
+still running when this final record was written; check the current containing
+commit's CI before merge. Historical source attachments remain unchanged.
+
+The earlier tables are deliberately retained as dated intermediate evidence.
+This final section supersedes their candidate heads and counts. No broad
+replacement-parity or durable approval gate was waived.
