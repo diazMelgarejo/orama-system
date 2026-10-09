@@ -732,3 +732,17 @@ rule (`lib/`) silently skipped a new source file; un-ignore overlay source paths
 relying on memory. Address-literal gates apply to tests too: use a named hostname constant, never
 an obfuscated literal. Status text in tracked notes must be corrected additively as soon as a
 blocked gate passes, before the PR merges.
+
+## 2026-10-09 — Loop/graph revision 4: qualify history and bind separate policy
+
+A historical pre-publication handoff must carry its cutoff and a linked later
+resolution; rewriting it as if later work had already happened destroys evidence.
+Cross-repository links should point to reachable PR branches until merge.
+
+D-LG-1 explicitly keeps structure/hash/lint in Core and application policy above
+it. D-LG-4 approves only bounded offline bridging; no production provider grant
+or deferred-tool approval follows. A policy summary is a projection, not a token.
+
+The completion-order mutation and real offline oracle cells test contracts that
+stub wiring cannot prove. See the [current execution record](v2/references/loop-graph-compatibility-2026-10-09/EXECUTION-REVISION-4.md)
+and PT's append-only memory closure for the complete provenance and remaining gates.

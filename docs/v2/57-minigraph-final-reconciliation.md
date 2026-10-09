@@ -367,6 +367,16 @@ External-write nodes cannot be retried or resumed safely without that contract.
 
 ## 12. Upper-layer ownership
 
+**2026-10-09 approved D-LG-1 amendment:** Core owns its existing structural
+GraphSpec/NodeSpec/EdgeSpec, content-hash graph_id and structural lint. Oramasys
+owns a separate versioned graph-policy file bound to graph_id, with a linked
+summary transcluded at the application level. Orama docs/v2 remains the design
+authority; v1 gains no v2 runtime dependency. See the active
+[D-LG-1 decision](references/loop-graph-compatibility-2026-10-09/ADR-D-LG-1-POLICY-OWNERSHIP.md)
+and [policy contract](references/loop-graph-compatibility-2026-10-09/GRAPH-POLICY-CONTRACT.md).
+The earlier ownership assignment below is preserved as historical context and
+is qualified by this explicit decision; it is not the current code placement.
+
 `perpetua-core` executes a realized graph. The final face-off assigns the
 richer graph-specification and runtime-policy authority to `orama-system`.
 
@@ -403,6 +413,11 @@ a new explicit architecture decision.
 ---
 
 ## 13. Graph lint target
+
+**2026-10-09 qualification:** structural lint lives in Core; policy binding lint
+lives in Oramasys under D-LG-1. The full acceptance target below remains required
+before production policy admission. The implemented subset does not prove R3/R4,
+durable approval, provider dedupe or evaluation. Unimplemented gates stay blocked.
 
 Before executing a versioned `GraphSpec`, the `orama-system` layer MUST
 validate at least:
