@@ -27,7 +27,7 @@ Source archive SHA-256:
 | Owner | Deliverable | Boundary |
 | --- | --- | --- |
 | Orama `docs/v2` | This index, decisions, refusal contract, evidence protocol | Canonical design; not runtime authority |
-| PT v1 | [Evidence plan](https://github.com/diazMelgarejo/Perpetua-Tools/blob/docs/loop-graph-compatibility-evidence-r3/docs/plans/2026-10-09-minigraph-compatibility-evidence-plan.md), append-only working-memory follow-up | No v2 dependency; links are documentation only |
+| PT v1 | [Evidence plan](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/plans/2026-10-09-minigraph-compatibility-evidence-plan.md), append-only working-memory follow-up | No v2 dependency; links are documentation only |
 | Perpetua Core | `abatch()` validation and real regression tests | Existing neutral adapter only; no engine growth |
 | Oramasys v2 | Future native facade, optional LC/LG bridges, explicit replacement binding | Build on Core's adapters; do not duplicate the scheduler |
 | Agate / Phylax / Telos | Hardware / admission / endpoint-security authority | All checks precede parity; no copied policy engine |
