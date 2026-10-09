@@ -91,7 +91,6 @@ over these already-fixed remote heads.
 - Do not ratify D-LG-2/3 or claim 100% parity from this bounded test matrix.
 - Preserve v1/v2 independence and all historical memory/source attachments.
 
-
 ## Final scanner and evidence-test follow-up
 
 A broader review included nitpicks outside inline threads. Core's scanner could
