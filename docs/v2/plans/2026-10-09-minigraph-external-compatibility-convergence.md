@@ -6,7 +6,10 @@
 **Revision 3:** [execution index and preserved inputs](../references/loop-graph-compatibility-2026-10-09/README.md)
 and [current resolutions](../references/loop-graph-compatibility-2026-10-09/REVISION-3-RESOLUTIONS.md)
 qualify every historical statement below. Core's bounded adapter fix is local,
-not yet published; the full replacement program is not implemented.
+not yet published at that revision-3 cutoff. The subsequent four open PRs and
+approved D-LG-1/D-LG-4 implementation are qualified by
+[revision 4](../references/loop-graph-compatibility-2026-10-09/EXECUTION-REVISION-4.md).
+The full replacement program is not implemented.
 
 ## Purpose
 

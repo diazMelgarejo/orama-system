@@ -1,7 +1,9 @@
-# Loop/graph compatibility — revision 3 execution index
+# Loop/graph compatibility — revision 4 execution index
 
-**Date:** 2026-10-09 (UTC primary). **Status:** bounded repairs implemented
-locally; replacement compatibility and D-LG-1/2/3 remain unratified proposals.
+**Date:** 2026-10-09 (UTC primary). **Current status:** reviewed changes in four
+open coordinated PRs. Read [revision 4 execution](EXECUTION-REVISION-4.md) first.
+D-LG-1's split and D-LG-4 Phase 1 are approved; broader replacement D-LG-2/3
+and durable HITL remain gated.
 The user authorized implementation of the reviewed corrections in this session,
 not a silent declaration that the entire framework surface is compatible.
 
@@ -24,13 +26,14 @@ Source archive SHA-256:
 | Owner | Deliverable | Boundary |
 | --- | --- | --- |
 | Orama `docs/v2` | This index, decisions, refusal contract, evidence protocol | Canonical design; not runtime authority |
-| PT v1 | [Evidence plan](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/plans/2026-10-09-minigraph-compatibility-evidence-plan.md), append-only working-memory follow-up | No v2 dependency; links are documentation only |
+| PT v1 | [Evidence plan](https://github.com/diazMelgarejo/Perpetua-Tools/blob/docs/loop-graph-compatibility-evidence-r3/docs/plans/2026-10-09-minigraph-compatibility-evidence-plan.md), append-only working-memory follow-up | No v2 dependency; links are documentation only |
 | Perpetua Core | `abatch()` validation and real regression tests | Existing neutral adapter only; no engine growth |
 | Oramasys v2 | Future native facade, optional LC/LG bridges, explicit replacement binding | Build on Core's adapters; do not duplicate the scheduler |
 | Agate / Phylax / Telos | Hardware / admission / endpoint-security authority | All checks precede parity; no copied policy engine |
 
-Cross-repository links name intended publication paths; these local files are
-not on GitHub until separately published. Never mistake a link for landed work.
+Cross-repository links point to PR branches because these files are not merged
+into main. Publication and merge are distinct; latest exact heads and checks
+are recorded in the PR comments and coordination handoff.
 
 ## Execution
 
@@ -66,7 +69,8 @@ nonzero. No provider call, grant, PR mutation or real import interception occurs
 2. Human/automated review of the exact published head before merge.
 3. Pin the merged immutable Core commit in Oramasys only after it exists;
    rerun its suite. Do not substitute a branch name or fabricated SHA.
-4. Ratify ownership and replacement ADRs, inventory exact v0.x and v1.x releases,
+4. Apply the approved ownership split; separately ratify replacement ADRs,
+   inventory exact v0.x and v1.x releases,
    then run unchanged real-framework oracle fixtures in separate locked environments.
 5. Implement the [durable refusal/approval contract](../2026-10-09-compatibility-refusal-hitl-contract.md)
    as a complete security vertical slice before enabling any override path.
