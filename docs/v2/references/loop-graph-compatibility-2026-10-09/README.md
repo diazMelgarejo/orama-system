@@ -1,7 +1,8 @@
 # Loop/graph compatibility — revision 4 execution index
 
 **Date:** 2026-10-09 (UTC primary). **Current status:** reviewed changes in four
-open coordinated PRs. Read [revision 4 execution](EXECUTION-REVISION-4.md) first.
+open coordinated PRs. The [latest verified follow-up handoff](FOLLOWUP-VERIFICATION-AND-HANDOFF.md)
+records subsequent patches and CI. Read [revision 4 execution](EXECUTION-REVISION-4.md) first.
 D-LG-1's split and D-LG-4 Phase 1 are approved; broader replacement D-LG-2/3
 and durable HITL remain gated.
 The user authorized implementation of the reviewed corrections in this session,
@@ -45,7 +46,7 @@ From this directory:
 
 ```bash
 python -I evidence/alias_finder_prototype.py
-python evidence/test_evidence_scripts.py
+python -m pytest evidence/test_evidence_scripts.py -q
 python -I evidence/verify_abatch_concurrency.py --core-src /checkout/perpetua-core/src
 ```
 
