@@ -83,3 +83,8 @@ nonzero. No provider call, grant, PR mutation or real import interception occurs
 
 No fake-package evidence establishes real `Runnable` type identity, callbacks,
 `astream_events`, checkpoint wire formats, pip resolution or all-public-API parity.
+
+Current R3 qualification: [audit, replay and compatibility](../remaining-capabilities/R3-AUDIT-REPLAY-AND-COMPATIBILITY-2026-10-10.md).
+The baseline ownership registry is preserved; additive policy-R3 and Core-R3
+candidate profiles qualify their exact producer/consumer environments. A profile
+pass is not a production-pin promotion or a full API replacement claim.

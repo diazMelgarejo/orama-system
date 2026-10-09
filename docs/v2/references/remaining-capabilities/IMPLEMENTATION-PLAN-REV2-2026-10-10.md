@@ -620,6 +620,13 @@ Conflicts found while integrating, and how each was resolved:
 
 ## 15. Evidence
 
+**Subsequent review qualification:** the historical evidence table below records
+its original cutoff. See [R3 audit, replay and compatibility](R3-AUDIT-REPLAY-AND-COMPATIBILITY-2026-10-10.md)
+for current branch integration, explicit candidate registry profiles, strict
+description/policy validation and the state-snapshot-versus-replay boundary.
+Approval to continue implementation does not turn pending acceptance gates into
+shipped functionality or establish full upstream parity.
+
 | Item | Result |
 | --- | --- |
 | Registry file | `docs/v2/references/loop-graph-compatibility-2026-10-09/ownership-registry.json`, sha256 `c1bf6b519f703184745e61142f259ae8eb73d163210bb1395437f8a82c2b402f` |

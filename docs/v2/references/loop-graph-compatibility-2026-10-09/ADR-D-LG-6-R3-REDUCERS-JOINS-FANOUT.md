@@ -86,6 +86,12 @@ Outer cancellation cancels every branch and propagates. No partial commit happen
 completion. Early cancellation depends on timing and is deferred. Effect admission still sees
 every branch as a possible effect.
 
+**External-effect boundary.** Atomic commit applies to local state only. A branch
+may already have performed an external write before the region refuses or
+interrupts. R3 neither rolls that write back nor makes it safe to replay. The
+legacy SQLite checkpointer reads state only; invoking it again starts at START.
+See the [replay audit](../remaining-capabilities/R3-AUDIT-REPLAY-AND-COMPATIBILITY-2026-10-10.md).
+
 ## Reducers
 
 A reduced field's branch delta is a **contribution**, not a replacement. Outside regions,
@@ -104,6 +110,10 @@ whenever at least one admitted branch wrote it. For an undeclared field the defa
 Disagreement raises `ReducerConflict` (a `ValueError`) naming the field and the branches.
 A value of the wrong type raises `TypeError`. Both are raised before anything commits. A
 `custom` reducer must be a pure fold.
+
+Custom folds receive deep-detached base and contribution values. This protects
+previously emitted state observations if a faulty callable mutates then raises;
+it does not prove purity or authorize I/O by the callable.
 
 **Binding contract for custom callables.** A `custom` reducer or join is bound by the caller
 when the graph is built, as a trusted callable object (`Reducer("custom", fn)`, `Join("custom",
@@ -181,6 +191,13 @@ and the `fanout` edge kind become `implemented`; new records `ReducerSpec`, `Joi
 snapshot change together and the pinned digest changes with them.
 
 Until then the registry keeps those entries `planned`, which the conformance tests require.
+
+**Candidate qualification amendment.** Preserve that baseline and add explicitly
+candidate target profiles for policy restrictions on schema-1 Core and for the
+full schema-2 producer/consumer pair. They allow both actual CI environments to
+enforce exact code/record/literal conformance without declaring production
+promotion. All profiles and byte-identical consumer snapshots are digest-pinned;
+the baseline promotion sequence above remains unchanged.
 
 Sequence: this ADR, then the Core pull request, then the Oramasys policy pull request (tested
 against a candidate Core), then the pin promotion with the registry step.
