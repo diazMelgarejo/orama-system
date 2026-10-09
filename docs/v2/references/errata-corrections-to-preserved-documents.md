@@ -229,3 +229,24 @@ Required handling:
 - do not replace contaminated citations with merely plausible external links;
 - preserve the contaminated artifact only as provenance/evidence of the error;
   current canonical documents and verified repository state control execution.
+
+## E12 — GraphSpec authority wording and reducer/join placement
+
+Doc 57 §12, the 2026-08-29 pattern-backlog plan and the rev2 loop/graph drafts say
+`orama-system` holds the "GraphSpec/NodeSpec/EdgeSpec authority", and the rev2 draft
+puts `reducers` and `joins` in Oramasys policy. In code there is exactly one
+GraphSpec, in Core. `orama-system` has no schema code.
+
+Required handling:
+
+- read "orama-system GraphSpec authority" as **normative text and the ownership
+  registry**, not a schema. [D-LG-1](loop-graph-compatibility-2026-10-09/ADR-D-LG-1-POLICY-OWNERSHIP.md)
+  already moved the structural schema to Core;
+- read "orama-system GraphSpec declarations say which reducer applies" as the
+  application's graph definition, authored in Oramasys;
+- reducer and join declarations live in Core's GraphSpec and policy may only restrict
+  them, per [D-LG-5](loop-graph-compatibility-2026-10-09/ADR-D-LG-5-REDUCER-JOIN-DECLARATIONS.md);
+- the rev2 `policy.reducers` and `policy.joins` sketch is a superseded proposal;
+- field ownership is checked against
+  [`ownership-registry.json`](loop-graph-compatibility-2026-10-09/ownership-registry.json);
+- the preserved documents are not edited.
