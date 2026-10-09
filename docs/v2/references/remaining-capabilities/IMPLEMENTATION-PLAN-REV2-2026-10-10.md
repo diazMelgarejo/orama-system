@@ -21,8 +21,8 @@ separately scoped workstream.
 references, revision-4 reconciliation, and adjacent authority/security/durability designs listed in
 §12.
 
-**Status:** Revision 2, 2026-10-10 UTC. Supersedes the 2026-10-09 draft; see §13 for the decision
-ledger and §14 for the change log. Human-review draft. This document proposes implementation
+**Status:** Revision 2, 2026-10-10 Asia/Manila (2026-10-09 UTC). Supersedes the earlier draft; see §13
+for the decision ledger and §14 for the change log. Human-review draft. This document proposes implementation
 decisions; it neither ratifies unapproved ADRs nor authorizes publication, merge, production egress
 or execution. It is a master plan with independently reviewable subsystem slices, not a claim that
 every upstream API is already implementable.
