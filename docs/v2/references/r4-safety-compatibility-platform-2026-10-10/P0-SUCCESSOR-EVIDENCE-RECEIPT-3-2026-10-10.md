@@ -12,7 +12,7 @@ stay unchanged as history.
 | --- | --- | --- |
 | Orama `main` | `28672bf366e5a4a6917f2cb9236eaf696e70c97b` | Merged #394; producer revision |
 | Oramasys `main` | `9e90ac4c4d6f880f0cebf25cb17db18545c2e11b` | Merged #26: production Core pin, manifest, verifier |
-| Oramasys #27 | `2d265ac7da0b44fdf4ffafa3258c7a2fb9a35e3a` | Result-file gate, manifest schema 2 |
+| Oramasys #27 | `b6e99dc77c60c523973cccc0504776215c240399` | Result-file gate, manifest schema 2; first head `2d265ac7…` fixed after four review findings |
 | Core `main` | `4d217f6b9e94e36554a9427198b8c2c4b7febc47` | Production Core, pinned by Oramasys `main` |
 
 ## 2. Main-to-main parity (actually measured)
@@ -22,10 +22,11 @@ have identical SHA-256 digests (first 16 hex): `fbde64f2c3b2bec6`, `c1bf6b519f70
 (pre-R3, original bytes), `4972754f7ceb0ad3`, `e270493a7c924871`. CI on Oramasys `main`
 at the merge commit: eight of eight checks pass (two `test` jobs, six oracle cells).
 
-## 3. Result gate at Oramasys #27 `2d265ac`
+## 3. Result gate at Oramasys #27 `b6e99dc`
 
 Per-cell allowances measured from the green matrix: production and core-r3 378 passed and
-1 skipped; policy-r3 362 passed and 5 skipped. Floors are 360 and 345 passed. Eight of
+1 skipped; policy-r3 362 passed and 5 skipped. Floors are 360 and 345 passed. Review hardening: negative or non-numeric counts rejected, nested suites counted once,
+extra matrix cells caught in any key order, upload action pinned to a commit. Eight of
 eight checks pass with the gate enforced and a JUnit receipt retained per cell.
 
 ## 4. Open before QUALIFIED

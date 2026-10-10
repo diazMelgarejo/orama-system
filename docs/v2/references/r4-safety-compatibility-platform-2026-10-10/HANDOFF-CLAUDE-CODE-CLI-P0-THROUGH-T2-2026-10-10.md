@@ -29,7 +29,7 @@ live on 2026-10-10 UTC; re-read heads before acting, because branches move.
 | Orama #392, #393, #394 | Merged. `main` is `28672bf3…` with the canonical R3 registry and restored pre-R3 archive bytes | [#394][o394] |
 | Perpetua-Tools #432, #434 | Merged (R3 compatibility entry; entry recording merged SHAs) | [#432][pt432] |
 | Oramasys #26 | Merged. `main` is `9e90ac4c…`: production Core pin, six profiles, manifest, clean-install verifier | [#26][y26] |
-| Oramasys #27 | **Open, CI 8/8 green.** Per-cell result gate, manifest schema 2 | [#27][y27] |
+| Oramasys #27 | **Open, CI 8/8 green at `b6e99dc7…`.** Per-cell result gate, manifest schema 2, review findings fixed; one security thread (action pinning) left open for the operator | [#27][y27] |
 | Orama #395 | **Open draft.** Receipts 2 and 3 plus this handoff | [#395][o395] |
 | Core `main` | `4d217f6b…` — the production Core pin | [perpetua-core][core] |
 
