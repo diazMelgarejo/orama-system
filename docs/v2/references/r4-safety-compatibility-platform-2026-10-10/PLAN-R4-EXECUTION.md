@@ -11,8 +11,10 @@ Review amendment proposal: [P0-T2 revision 3](P0-THROUGH-T2-EXECUTION-PLAN-REV3-
 supersedes the detailed first P0-T2 roadmap and [revision 2](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md)
 for review. It qualifies candidate heads before registry promotion, separates durable T2
 accounting from T5 graph continuation, and specifies one neutral dispatch gate with bounded
-delivery. T1/T2 contract refinements remain proposals until reviewed; this note does not
-ratify them.
+delivery. Three dispatch rules are frozen by operator direction in
+[CONTRACT-DISPATCH-GATE](CONTRACT-DISPATCH-GATE.md): commit publication, batch
+reservation and adjustment grants. The remaining T1/T2 contract refinements stay
+proposals until reviewed; this note does not ratify them.
 
 - Every implementation task: reproduce a named failing invariant, implement the minimal
   reviewed change, run focused and affected suites, review the diff, commit one logical

@@ -79,9 +79,12 @@ revocation reference.
 
 **Consumption (one ledger transaction).** Verify the attestation through the Phylax
 interface; refuse if expired, revoked as last observed, the payload digest differs, the
-epoch differs from the hold's current fence epoch, the units exceed the hold, or
-`grant_id` was already consumed. Then append the adjustment event and the grant
-consumption together. The original `unknown` event stays.
+epoch differs from the hold's current fence epoch, the units exceed the hold's
+**remaining balance**, or `grant_id` was already consumed. The remaining balance is the
+held units minus every prior settlement and adjustment, computed inside the same ledger
+transaction as the consumption, so two distinct grants can never release more than the
+hold reserved. Then append the adjustment event and the grant consumption together. The
+original `unknown` event stays.
 
 - Identical retry (same `grant_id`, same payload): returns the recorded result.
 - Changed payload under a consumed or known `grant_id`: refuses.
@@ -92,8 +95,9 @@ consumption together. The original `unknown` event stays.
 If Phylax lacks this capability, an owner contract comes first and production refuses
 every adjustment until it exists.
 
-Tests: replay of a consumed grant; altered units, hold or epoch; expired and revoked
-grants; concurrent consumption of one grant; release racing a late commit; missing Phylax.
+Tests: two distinct grants that together exceed the hold (second refused); replay of a
+consumed grant; altered units, hold or epoch; expired and revoked grants; concurrent
+consumption of one grant; release racing a late commit; missing Phylax.
 
 ## 4. What this contract does not give
 
