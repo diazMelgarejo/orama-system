@@ -33,7 +33,7 @@ live on 2026-10-10 UTC; re-read heads before acting, because branches move.
 | Orama #395 | **Open draft.** Receipts 2 and 3 plus this handoff | [#395][o395] |
 | Core `main` | `4d217f6b…` — the production Core pin | [perpetua-core][core] |
 
-**P0 is not QUALIFIED.** Evidence, pinned to commits: [receipt 3][r3] (snapshot at `84f64cc3…`;
+**P0 is not QUALIFIED.** Evidence, pinned to commits: [receipt 3][r3] (snapshot at `00f91ff4…`;
 a later receipt supersedes it), [receipt 2][r2], [receipt 1][r1]. Main-to-main registry parity
 and CI on both mains are verified.
 
@@ -75,8 +75,10 @@ minimal reviewed change, run focused and affected suites, review the diff, one l
 
 ### P0 — finish qualification (current)
 
-- Remaining checklist is section 2. Exit: receipt 4, QUALIFIED then CANONICAL recorded,
-  rollback path (old pair stays active until the new pair qualifies) untouched.
+- Remaining checklist is section 2. Exit: receipt 4 recorded, then the state machine reaches
+  ACTIVATED (QUALIFIED, CANONICAL, then operator-merged consumer with green post-merge CI),
+  the dated Orama closure is published, and only then the PT correction. The rollback path
+  (old pair stays active until the new pair qualifies) is left untouched.
 - Release protocol and rollback: [REV3 §3 P0.3][rev3].
 
 ### T1 — executable identity and admission lifecycle ([REV3 §4][rev3])
@@ -140,8 +142,8 @@ exactly-once delivery claim.
 [y27]: https://github.com/oramasys/oramasys/pull/27
 [core]: https://github.com/oramasys/perpetua-core/commit/4d217f6b9e94e36554a9427198b8c2c4b7febc47
 [r1]: https://github.com/diazMelgarejo/orama-system/blob/28672bf366e5a4a6917f2cb9236eaf696e70c97b/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md
-[r2]: https://github.com/diazMelgarejo/orama-system/blob/84f64cc3334167c8391571a686606b4a5ad9174b/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-2-2026-10-10.md
-[r3]: https://github.com/diazMelgarejo/orama-system/blob/84f64cc3334167c8391571a686606b4a5ad9174b/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-3-2026-10-10.md
+[r2]: https://github.com/diazMelgarejo/orama-system/blob/00f91ff4b0f26d7b3290613f8e93f68d3b093ba7/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-2-2026-10-10.md
+[r3]: https://github.com/diazMelgarejo/orama-system/blob/00f91ff4b0f26d7b3290613f8e93f68d3b093ba7/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-3-2026-10-10.md
 [rev3]: https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md
 [gate]: https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DISPATCH-GATE.md
 [hitl]: https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-HITL-EFFECTS.md
