@@ -21,6 +21,10 @@ accounting records consumption, not graph position or permission to resume.
 [revision 2](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md), the
 [first P0-T2 plan](P0-THROUGH-T2-EXECUTION-PLAN-2026-10-10.md) and the release order in
 [the first P0 plan](PLAN-P0-CORE-PIN-PROMOTION.md). Those files remain historical inputs.
+**Amendment (2026-10-10 UTC):** current heads, pins and digests live in the
+[successor evidence receipt](P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md). The commit
+publication, batch reservation and adjustment-grant freeze blockers are closed by the
+[dispatch gate contract](CONTRACT-DISPATCH-GATE.md).
 
 ## 1. Review disposition and corrected assumptions
 
@@ -130,8 +134,12 @@ and explicit not-applicable capabilities. A separate evidence receipt binds mani
 digest, tested producer/consumer SHAs, lock digest, interpreter and actual cell outcomes.
 Do not put a file's containing commit SHA inside that same file.
 
-- [ ] Add failing byte-preservation assertion against the original blob digest above.
-- [ ] Restore original pre-R3 bytes in both repos, retain all earlier commits, rerun parity.
+- [x] Byte-preservation assertion against the original blob digest: present and passing
+  on #26 (`test_pre_r3_archive_preserves_the_original_baseline_bytes`). No surviving
+  record shows it observed failing first; this records presence, not red-first TDD.
+- [x] Original pre-R3 bytes restored in both repos (#394 `8287e40`, #26 `566409b`),
+  earlier commits retained, parity passing. Evidence: the
+  [successor receipt](P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md) §3–§4.
 - [ ] Add manifest tests rejecting missing/duplicate cells, wrong pins, wrong profile,
   mismatched canonical bytes, unknown selector and missing required checkout in CI.
 - [ ] Generate or validate the workflow matrix from this manifest; avoid a second pin table.
@@ -239,12 +247,16 @@ Existing equivalents must be reused if the T0 seam inventory finds them.
   The ledger enforces the stricter run and lease bounds without duplicate charging;
   Core's existing graph `max_steps` remains a structural safety limit.
 - Fan-out reserves each attempted branch against shared scoped limits; reducers
-  also receive attempt identities. Define charge units and rollback of unstarted
-  reservations before freezing the contract. No unaccounted parallel dispatch.
+  also receive attempt identities. No unaccounted parallel dispatch. Frozen: the whole
+  branch batch is reserved in one transaction before any branch starts; insufficient
+  budget adds no hold, charge or execution
+  ([batch reservation](CONTRACT-DISPATCH-GATE.md#2-batch-reservation-for-fan-out)).
 - `before_commit` validates current authority, stop, delivery and the existing hold
-  without reserving again. Validate and publish a local delta within one serialized
-  commit boundary; no intervening await. A stale epoch or token cannot commit.
-  Persist uncertainty when a crash occurs between local commit and settlement.
+  without reserving again. Frozen three-step boundary: await a durable commit intent,
+  recheck and publish synchronously with no intervening `await`, then await idempotent
+  settlement before further dispatch. A stale epoch or token cannot commit. A crash
+  between publication and settlement keeps the conservative hold and records
+  uncertainty ([commit publication](CONTRACT-DISPATCH-GATE.md#1-commit-publication-three-steps)).
 - Authenticate owner decisions and define epoch freshness/expiry and clock policies;
   SQLite cannot make remote revocation atomic. State that observation window explicitly.
 - T1 needs step accounting and a single-writer/fencing foundation before it can claim
@@ -362,7 +374,9 @@ alternative would need an explicit parent requirement amendment; it is not silen
   cancel/abort capabilities only. No Python coroutine/thread hard-stop claim. Isolated
   process termination may prove local termination but cannot roll back remote effects.
   Open the circuit and increment the fence epoch before discarding late results.
-- [ ] Reconcile unknown holds only through an authenticated operator adjustment event:
+- [ ] Reconcile unknown holds only through a Phylax-issued, single-use adjustment grant
+  consumed transactionally by Oramasys
+  ([adjustment grants](CONTRACT-DISPATCH-GATE.md#3-adjustment-grants-for-unknown-holds)):
   unique adjustment ID, hold ID, expected epoch, evidence, reason and integer settlement
   or release units. Reject duplicate/conflicting/oversized adjustments. Release only
   after proving dispatch/late commits cannot race it; uncertain effects require explicit
@@ -383,7 +397,9 @@ charges are proven independently of graph resume. No provider exactly-once claim
 
 ## 7. Immediate sequence and release runbook
 
-1. Freeze this revision's unified gate, accounting units, fencing and delivery contracts.
+1. Freeze this revision's unified gate, accounting units, fencing and delivery contracts;
+   commit publication, batch reservation and adjustment grants are frozen in the
+   [dispatch gate contract](CONTRACT-DISPATCH-GATE.md).
 2. Capture P0.0 drift evidence; complete the P0 manifest/install verification.
 3. Publish paired P0 PRs for qualification before canonical promotion; reuse open branches.
 4. Complete P0.3, then finish the scoped T0 contract freeze before T1/T2 code.

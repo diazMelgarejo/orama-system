@@ -33,6 +33,7 @@ A lower priority never weakens an invariant of a higher one.
 | 9 | [PLAN-R4-EXECUTION](PLAN-R4-EXECUTION.md) | Tasks T0–T11, milestones, gates, file map |
 | 10 | [REGISTER-TRACEABILITY](REGISTER-TRACEABILITY.md) | Requirement-to-task map, rev-2 crosswalk, sources |
 | 11 | [REVIEW-RECORD](REVIEW-RECORD.md) | Code-review findings, human checklist, handoff |
+| 12 | [CONTRACT-DISPATCH-GATE](CONTRACT-DISPATCH-GATE.md) | Commit publication, fan-out batch reservation, adjustment grants |
 
 ## What is and is not true today
 
@@ -75,7 +76,12 @@ Revision 3 qualifies candidate heads before promotion, separates restart-safe ac
 from graph continuation, and adds the unified dispatch gate; new T1/T2 contract details
 require review before implementation.
 
-For the current staged repair, see the [P0 qualification repair handoff](P0-QUALIFICATION-REPAIR-HANDOFF-2026-10-10.md).
+For the current staged repair, see the
+[P0 qualification repair handoff](P0-QUALIFICATION-REPAIR-HANDOFF-2026-10-10.md); current
+heads, pins and digests live in the
+[successor evidence receipt](P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md). The
+[dispatch gate contract](CONTRACT-DISPATCH-GATE.md) freezes commit publication, batch
+reservation and adjustment grants for T1/T2.
 
 The active [revision-3 P0 through T2 execution plan](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md)
 adds main/staged drift reconciliation, one neutral dispatch gate, atomic step holds,

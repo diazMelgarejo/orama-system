@@ -110,3 +110,10 @@ following proposals were rejected or narrowed for the stated evidence-based reas
 
 This record rejects implementation claims, not historical evidence. Earlier plans and
 the uploaded analysis remain readable inputs with dated supersession links.
+
+## Successor evidence — 2026-10-10 UTC
+
+Current heads, pins and registry digests are recorded once in the
+[successor evidence receipt](P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md). The SHAs above
+remain historical evidence of this handoff. The consumer stays pinned to `8287e40`:
+later #394 commits change documentation only.
