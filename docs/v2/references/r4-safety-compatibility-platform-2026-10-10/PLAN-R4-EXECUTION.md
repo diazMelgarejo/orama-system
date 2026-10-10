@@ -7,6 +7,12 @@ capability. Decision source: [D-LG-7](ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFOR
 
 ## Operating rules
 
+Review amendment proposal: [P0-T2 revision 2](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md)
+supersedes the detailed first P0-T2 roadmap for review. It qualifies candidate heads
+before registry promotion, separates durable T2 accounting from T5 graph continuation,
+and specifies bounded neutral delivery and application-owned execution guards. T1/T2
+contract refinements remain proposals until reviewed; this note does not ratify them.
+
 - Every implementation task: reproduce a named failing invariant, implement the minimal
   reviewed change, run focused and affected suites, review the diff, commit one logical
   batch. Commands come from the actual checkout, with import paths recorded.

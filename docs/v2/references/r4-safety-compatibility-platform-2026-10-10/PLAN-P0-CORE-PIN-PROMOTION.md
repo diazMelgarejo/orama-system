@@ -1,5 +1,10 @@
 # Plan — P0 bounded Core pin promotion and registry baseline
 
+> Review follow-up: the release sequence below is superseded for execution by
+> [revision 2, section 3](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md#3-p0---two-phase-qualification-then-promotion).
+> Qualify both immutable candidate heads before the canonical promotion. This earlier
+> plan remains the historical design input, not permission to merge Orama before qualification.
+
 **Status:** corrected implementation plan. The former pre-R3 baseline is retained as a
 historical registry profile; this plan promotes the reviewed R3 production baseline only
 through its stated qualification gates. Parent plan: [PLAN-R4-EXECUTION](PLAN-R4-EXECUTION.md)

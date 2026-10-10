@@ -1,9 +1,6 @@
 {
   "registry_version": 1,
-  "decision_refs": [
-    "D-LG-1",
-    "D-LG-5"
-  ],
+  "decision_refs": ["D-LG-1", "D-LG-5"],
   "rule": "One owner per fact. A field that changes what a graph computes belongs to the structural GraphSpec owned by perpetua-core. A field that only restricts who may run a graph, or how far, belongs to the policy owned by oramasys. Orama docs/v2 records the decision and this registry; it holds no runtime schema.",
   "owners": {
     "perpetua-core": "Structural schema and execution mechanics (GraphSpec, NodeSpec, EdgeSpec, graph_id, the one scheduler).",
@@ -30,50 +27,14 @@
       "owner": "perpetua-core",
       "python": "perpetua_core.graph.spec:GraphSpec",
       "fields": [
-        {
-          "name": "schema_version",
-          "category": "identity",
-          "status": "implemented"
-        },
-        {
-          "name": "graph_id",
-          "category": "identity",
-          "status": "implemented"
-        },
-        {
-          "name": "max_steps",
-          "category": "structure",
-          "status": "implemented"
-        },
-        {
-          "name": "nodes",
-          "category": "structure",
-          "status": "implemented"
-        },
-        {
-          "name": "edges",
-          "category": "structure",
-          "status": "implemented"
-        },
-        {
-          "name": "metadata",
-          "category": "annotation",
-          "status": "implemented"
-        },
-        {
-          "name": "reducers",
-          "category": "computes",
-          "status": "planned",
-          "provisional_name": true,
-          "decision": "R3"
-        },
-        {
-          "name": "joins",
-          "category": "computes",
-          "status": "planned",
-          "provisional_name": true,
-          "decision": "R3"
-        }
+        {"name": "schema_version", "category": "identity", "status": "implemented"},
+        {"name": "graph_id", "category": "identity", "status": "implemented"},
+        {"name": "max_steps", "category": "structure", "status": "implemented"},
+        {"name": "nodes", "category": "structure", "status": "implemented"},
+        {"name": "edges", "category": "structure", "status": "implemented"},
+        {"name": "metadata", "category": "annotation", "status": "implemented"},
+        {"name": "reducers", "category": "computes", "status": "planned", "provisional_name": true, "decision": "R3"},
+        {"name": "joins", "category": "computes", "status": "planned", "provisional_name": true, "decision": "R3"}
       ]
     },
     {
@@ -81,21 +42,9 @@
       "owner": "perpetua-core",
       "python": "perpetua_core.graph.spec:NodeSpec",
       "fields": [
-        {
-          "name": "name",
-          "category": "structure",
-          "status": "implemented"
-        },
-        {
-          "name": "implementation_ref",
-          "category": "structure",
-          "status": "implemented"
-        },
-        {
-          "name": "metadata",
-          "category": "annotation",
-          "status": "implemented"
-        }
+        {"name": "name", "category": "structure", "status": "implemented"},
+        {"name": "implementation_ref", "category": "structure", "status": "implemented"},
+        {"name": "metadata", "category": "annotation", "status": "implemented"}
       ]
     },
     {
@@ -103,36 +52,12 @@
       "owner": "perpetua-core",
       "python": "perpetua_core.graph.spec:EdgeSpec",
       "fields": [
-        {
-          "name": "source",
-          "category": "structure",
-          "status": "implemented"
-        },
-        {
-          "name": "kind",
-          "category": "structure",
-          "status": "implemented"
-        },
-        {
-          "name": "target",
-          "category": "structure",
-          "status": "implemented"
-        },
-        {
-          "name": "router_ref",
-          "category": "structure",
-          "status": "implemented"
-        },
-        {
-          "name": "declared_targets",
-          "category": "annotation",
-          "status": "implemented"
-        },
-        {
-          "name": "metadata",
-          "category": "annotation",
-          "status": "implemented"
-        }
+        {"name": "source", "category": "structure", "status": "implemented"},
+        {"name": "kind", "category": "structure", "status": "implemented"},
+        {"name": "target", "category": "structure", "status": "implemented"},
+        {"name": "router_ref", "category": "structure", "status": "implemented"},
+        {"name": "declared_targets", "category": "annotation", "status": "implemented"},
+        {"name": "metadata", "category": "annotation", "status": "implemented"}
       ]
     },
     {
@@ -140,50 +65,14 @@
       "owner": "oramasys",
       "python": "orama.compat.policy:GraphPolicy",
       "fields": [
-        {
-          "name": "policy_schema_version",
-          "category": "identity",
-          "status": "implemented"
-        },
-        {
-          "name": "graph_id",
-          "category": "binding",
-          "status": "implemented"
-        },
-        {
-          "name": "revision",
-          "category": "identity",
-          "status": "implemented"
-        },
-        {
-          "name": "budgets",
-          "category": "restricts",
-          "status": "implemented"
-        },
-        {
-          "name": "effects",
-          "category": "restricts",
-          "status": "implemented"
-        },
-        {
-          "name": "approval",
-          "category": "restricts",
-          "status": "implemented"
-        },
-        {
-          "name": "reducer_restrictions",
-          "category": "restricts",
-          "status": "planned",
-          "provisional_name": true,
-          "decision": "R3"
-        },
-        {
-          "name": "join_restrictions",
-          "category": "restricts",
-          "status": "planned",
-          "provisional_name": true,
-          "decision": "R3"
-        }
+        {"name": "policy_schema_version", "category": "identity", "status": "implemented"},
+        {"name": "graph_id", "category": "binding", "status": "implemented"},
+        {"name": "revision", "category": "identity", "status": "implemented"},
+        {"name": "budgets", "category": "restricts", "status": "implemented"},
+        {"name": "effects", "category": "restricts", "status": "implemented"},
+        {"name": "approval", "category": "restricts", "status": "implemented"},
+        {"name": "reducer_restrictions", "category": "restricts", "status": "planned", "provisional_name": true, "decision": "R3"},
+        {"name": "join_restrictions", "category": "restricts", "status": "planned", "provisional_name": true, "decision": "R3"}
       ]
     }
   ],
@@ -193,26 +82,10 @@
       "owner": "perpetua-core",
       "python": "perpetua_core.graph.spec:EdgeKind",
       "values": [
-        {
-          "value": "static",
-          "status": "implemented"
-        },
-        {
-          "value": "conditional",
-          "status": "implemented"
-        },
-        {
-          "value": "fanout",
-          "status": "planned",
-          "provisional_name": true,
-          "decision": "R3"
-        },
-        {
-          "value": "join",
-          "status": "planned",
-          "provisional_name": true,
-          "decision": "R3"
-        }
+        {"value": "static", "status": "implemented"},
+        {"value": "conditional", "status": "implemented"},
+        {"value": "fanout", "status": "planned", "provisional_name": true, "decision": "R3"},
+        {"value": "join", "status": "planned", "provisional_name": true, "decision": "R3"}
       ]
     }
   ]
