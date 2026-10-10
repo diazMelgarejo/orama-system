@@ -46,6 +46,7 @@ post-provision migration rules (doc 56) before any implementation.
 | Meaning | One sentence |
 | Owner | The single v2 owner |
 | Disposition | retain / alias / adapt / retire / refuse |
+| Next gate | The gate required before the term can advance |
 | Fixture | Golden translation fixture proving it, plus a prohibited-ownership-leak case |
 
 The initial table above is the seed; no term is considered retained until it has a row

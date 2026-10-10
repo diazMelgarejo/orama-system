@@ -18,6 +18,7 @@ Cell status is one of `implemented`, `policy-refused`, `technically-unsupported`
 `not-yet-implemented`. Only executed semantic conformance earns `implemented`. Count
 missing, skipped and refusal cells separately. Publish no global "drop-in percentage"
 from selected oracle passes. Keep the target broad while publishing truthful cohorts.
+Every unimplemented cell records its owner and next gate.
 
 Historical oracle versions (LangGraph 1.0.3, LangChain Core 1.0.7, Pydantic AI slim
 1.0.18) are evidence, not an automatic choice of new targets. T0 pins new targets after

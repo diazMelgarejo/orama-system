@@ -19,7 +19,7 @@ Do not share the file over a network ([multi-host](CONTRACT-MULTI-HOST-STAGES.md
 | Record | Required binding |
 | --- | --- |
 | Approval request | Principal/audience, logical operation, exact request digest, artifact set, exception IDs, requested scope |
-| Decision/grant | Request ID, authenticated decision maker, decision, UTC issuance/expiry, use limit, revocation version |
+| Decision/grant | Request ID, authenticated decision maker, decision, UTC issuance/expiry, use limit (**exactly one**; multi-use grants are not defined), revocation version |
 | Reservation | Operation and grant references, attempt ID, expected versions, fencing epoch, deadline |
 | Effect intent | Durable run ID + logical operation ID, effect kind, provider identity/key, request digest, dispatch status |
 | Effect receipt | Confirmed applied, confirmed not applied, or unknown; provider evidence; reconciliation disposition |
@@ -64,8 +64,10 @@ flight.
    UI Boolean or framework resume value is a grant by itself.
 3. Reserve atomically: validate scope, request and artifact digests, expiry, use count,
    current authority versions and worker ownership. Competing consumers conflict.
-4. Revalidate mandatory gates at **dispatch authorization**. In one transaction record the
-   dispatch intent, consume the use and write an outbox item. **This transaction is the
+4. Revalidate every mandatory gate at **dispatch authorization**: scope, request and
+   artifact digests, **grant expiry** (stored UTC plus the high-water rule in §5),
+   revocation version, authority versions, fencing epoch and worker ownership. In one
+   transaction record the dispatch intent, consume the use and write an outbox item. **This transaction is the
    linearization point for revocation versus dispatch.**
 5. Send only the recorded intent through the qualified transport. Revocation before step 4
    blocks dispatch. Revocation after it marks authorized in-flight work, requests

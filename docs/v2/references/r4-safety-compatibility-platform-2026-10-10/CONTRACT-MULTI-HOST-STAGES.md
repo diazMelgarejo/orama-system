@@ -29,8 +29,9 @@ approved mandatory dependency.
 
 Split-brain prevention requires one valid writer epoch. A lease alone cannot fence an
 external provider that ignores it, so such providers still need dedupe, containment and
-reconciliation guarantees. Stale epochs cannot commit or dispatch (see the
-[continuation contract](CONTRACT-DURABLE-CONTINUATION.md) step 1).
+reconciliation guarantees. Stale epochs cannot commit or create new dispatch
+authorizations; authorized or handed-off requests still require deduplication and
+reconciliation (see the [continuation contract](CONTRACT-DURABLE-CONTINUATION.md) step 1).
 
 ## 4. Principals and trust
 

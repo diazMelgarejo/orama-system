@@ -342,8 +342,9 @@ Join:    ALL | ANY | FIRST_SUCCESS | QUORUM | CUSTOM
 Branch completion timing MUST NOT silently define state merge behavior.
 This is deferred R3 work.
 
-> **2026-10-10 qualification:** R3 shipped as bounded single-level fan-out with these
-> reducers and joins; see [D-LG-6](references/loop-graph-compatibility-2026-10-09/ADR-D-LG-6-R3-REDUCERS-JOINS-FANOUT.md).
+> **2026-10-10 qualification:** R3 mechanics (bounded single-level fan-out, these
+> reducers and joins) are merged in Core and Oramasys, but production Core remains
+> pinned pre-R3; see [D-LG-6](references/loop-graph-compatibility-2026-10-09/ADR-D-LG-6-R3-REDUCERS-JOINS-FANOUT.md).
 > The text above is preserved as history. Later work: [D-LG-7](references/r4-safety-compatibility-platform-2026-10-10/ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md).
 
 ---

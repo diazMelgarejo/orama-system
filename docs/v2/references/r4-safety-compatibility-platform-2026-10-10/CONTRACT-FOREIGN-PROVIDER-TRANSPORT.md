@@ -46,6 +46,8 @@ security semantics.
 The worker executes one declared provider operation. It is not the graph scheduler. It
 receives only required credentials and data, a scoped capability and a fencing epoch.
 Before each I/O it rechecks permit, cancellation, fencing and endpoint admission.
+This check cannot be atomic with the remote socket write: if fencing changes after
+handoff, the request is recorded as in flight and its provider outcome is reconciled.
 
 ## 4. Outcomes
 

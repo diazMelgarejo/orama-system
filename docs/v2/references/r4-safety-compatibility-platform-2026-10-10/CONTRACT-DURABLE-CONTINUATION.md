@@ -40,7 +40,9 @@ storage adapter lives outside it.
 ## 3. Recovery algorithm
 
 1. Authenticate the resume request, resolve authoritative run ownership and acquire a new
-   **fencing epoch** by CAS. Stale workers cannot commit or dispatch.
+   **fencing epoch** by CAS. Stale workers cannot commit or create new dispatch
+   authorizations. Already authorized or handed-off work remains subject to the in-flight
+   cancellation and reconciliation rules; it is never blindly resent.
 2. Verify checkpoint integrity, parent lineage, version support and artifact binding.
    Reject changed code or policy unless a separately approved migration supplies proof.
 3. Reconcile every reachable **unknown effect** before further progress. Replay pure
