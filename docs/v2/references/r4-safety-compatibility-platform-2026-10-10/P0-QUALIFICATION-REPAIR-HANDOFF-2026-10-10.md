@@ -66,3 +66,31 @@ Publication uses two logical documentation commits and one final non-force updat
 the existing #394 branch. #26 needs no content or pin change for this planning-only
 revision: its pinned candidate registry bytes are unchanged. Preserve the uploaded
 source and all earlier plans; PT graduation still follows canonical qualification.
+
+## Revision-3 decision record: suggestions not adopted — 2026-10-10 UTC
+
+The attached REV3 synthesis was preserved unchanged as
+[review input](P0-THROUGH-T2-REV3-SYNTHESIS-INPUT.md). Its useful mechanisms were
+adopted in the active [REV3 plan](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md):
+P0.0 drift receipts, one dispatch gate, trusted callable references, bounded delivery,
+single-writer accounting, fencing, and append-only unknown-hold reconciliation. The
+following proposals were rejected or narrowed for the stated evidence-based reasons.
+
+| Suggestion or interpretation | Decision | Reason and replacement |
+|---|---|---|
+| Restore the old pre-R3 registry as Orama `main`'s canonical registry | Rejected | The old bytes are preserved only as the historical archive. Current R3 canonical bytes (`fbde64f2…`) are an intentional merged baseline; replacing them would downgrade schema and fabricate main-to-main parity. Record drift and qualify the staged pair instead. |
+| Treat P0 as unstarted because Oramasys `main` retains the old pair | Narrowed | P0 is unqualified, but #26 already stages the consumer changes. Its evidence must be evaluated at its immutable head, separately from `main`. |
+| Move or fast-forward a tag to identify the candidate | Rejected | Mutable tag identity defeats provenance and invalidates receipts. Full commit SHAs bind candidate, merge and test evidence. |
+| Discover the live producer registry from Orama `main` at consumer runtime | Rejected | Dynamic discovery allows unqualified producer changes to alter consumer behavior. The manifest and workflows pin immutable SHA/digest pairs. |
+| Let the prior `335 passed` result, `pip check`, or JSON semantic equality qualify P0 | Rejected | These checks cannot prove all six profile/interpreter cells, clean non-editable installation, PEP 610 source identity, or byte preservation. Retain them only as supporting evidence. |
+| Assert a Core `__commit__` or `__version__` field | Rejected | The inspected Core target does not export a reliable field. The clean-install verifier reads pinned package provenance from PEP 610 `direct_url.json` and runs a real symbol/graph smoke. |
+| Make Core own Phylax/Agate policy, accounting, or terminal outcome semantics | Rejected | Core needs a neutral gate protocol only. Oramasys authenticates authority, owns policy and durable accounting, and maps delivery uncertainty to terminal outcomes. |
+| Keep independent admission, delivery, and budget counters or three competing scheduler seams | Rejected | They can disagree under fan-out, crash or revocation. REV3 consolidates their execution decision into one ordered gate and one hold/settlement source while retaining Core's structural `max_steps` limit. |
+| Treat `asyncio.wait_for`, task cancellation, or a thread interrupt as guaranteed termination | Rejected | A callback may suppress cancellation and Python cannot safely kill arbitrary threads. Use bounded waiting, tracked tasks, fence epochs and supported isolation/abort mechanisms; unresolved effects remain `unknown`. |
+| Release a crash-time unknown hold automatically | Rejected | A late dispatch or commit could still race release. Reconciliation requires an authenticated, unique, evidenced append-only adjustment after fencing proves the release/settlement cannot race. |
+| Infer a last qualified pair from matching files, branch position, or an old pin | Rejected | Qualification needs retained receipts. Until they exist, report the predecessor as unknown rather than inventing a safe activation target. |
+| Add a documentation-only change to #26 for REV3 | Deferred as unnecessary | #26 already pins the immutable #394 candidate and its runtime content is unchanged. Updating it would create unrelated churn; it must change only after #394's actual merge SHA exists. |
+| Begin PT lesson/memory publication now | Rejected for now | PT continuity follows canonical qualification evidence through its append-only tooling. Planning and staged tests do not establish that evidence. |
+
+This record rejects implementation claims, not historical evidence. Earlier plans and
+the uploaded analysis remain readable inputs with dated supersession links.
