@@ -79,10 +79,13 @@ require review before implementation.
 For the current staged repair, see the
 [P0 qualification repair handoff](P0-QUALIFICATION-REPAIR-HANDOFF-2026-10-10.md); current
 heads, pins and digests live in the latest
-[successor evidence receipt 2](P0-SUCCESSOR-EVIDENCE-RECEIPT-2-2026-10-10.md) (receipt 1
-is [kept as history](P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md)). The
+[successor evidence receipt 3](P0-SUCCESSOR-EVIDENCE-RECEIPT-3-2026-10-10.md) (receipts
+[1](P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md) and
+[2](P0-SUCCESSOR-EVIDENCE-RECEIPT-2-2026-10-10.md) are kept as history). The
 [dispatch gate contract](CONTRACT-DISPATCH-GATE.md) freezes commit publication, batch
 reservation and adjustment grants for T1/T2.
+The next agent starts from the
+[Claude Code CLI handoff](HANDOFF-CLAUDE-CODE-CLI-P0-THROUGH-T2-2026-10-10.md).
 
 The active [revision-3 P0 through T2 execution plan](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md)
 adds main/staged drift reconciliation, one neutral dispatch gate, atomic step holds,
