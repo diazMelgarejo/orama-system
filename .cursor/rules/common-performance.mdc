@@ -6,20 +6,31 @@ alwaysApply: true
 
 ## Model Selection Strategy
 
-**Haiku 4.5** (90% of Sonnet capability, 3x cost savings):
-- Lightweight agents with frequent invocation
-- Pair programming and code generation
-- Worker agents in multi-agent systems
+Provider-agnostic. The harness chooses the path. Agents do not self-escalate,
+turn on fast mode, or switch providers. Canonical rules: Alexandria PR #1
+(tip `e7ee9db6`). Local pin: `docs/standards/model-governance.md`.
 
-**Sonnet 4.6** (Best coding model):
-- Main development work
-- Orchestrating multi-agent workflows
-- Complex coding tasks
+**Cursor / Grok Bot path** (this IDE, CLI, Cloud Agents, Grok Bot):
 
-**Opus 4.6** (Deepest reasoning):
-- Complex architectural decisions
-- Maximum reasoning requirements
-- Research and analysis tasks
+- Default: `grok-4.6` at `{effort: medium, fast: false}`
+  (usage `cursor-grok-4.6-medium`)
+- Allowed: `composer-2.5` with `{fast: false}`
+- `grok-4.7` only with an escalation token; still medium, fast off
+- `grok-4.5` is banned
+- `auto` is editor-only, never for agents
+
+**Anthropic path** (Claude Code, Claude API/SDK, claude.ai):
+
+- Default: `claude-sonnet-5-5` at `medium` (`claude-sonnet-5` is a legacy pin)
+- `claude-opus-5-5` high and `claude-fable-5-1` need an escalation token;
+  Fable also needs a hard budget cap
+
+An escalation token is a proven S-AuthZ bearer **plus** a fresh signed HITL
+approval (≤24h). Config flags, env vars, agent-writable files, and cached
+approvals are not proof.
+
+This does not reorder the runtime frugality ladder. Cost gate stays fail-closed.
+Cloud escalation stays default-deny.
 
 ## Context Window Management
 
@@ -49,6 +60,9 @@ For complex tasks requiring deep reasoning:
 2. Enable **Plan Mode** for structured approach
 3. Use multiple critique rounds for thorough analysis
 4. Use split role sub-agents for diverse perspectives
+
+Do not raise effort, enable fast mode, or switch to Opus/Fable/Grok 4.7 unless
+the operator asked and an escalation token covers the launch.
 
 ## Build Troubleshooting
 

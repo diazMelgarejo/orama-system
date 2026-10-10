@@ -10,6 +10,13 @@ description: >
 
 # Fable-5 Tier-Based Routing: Frugal Model Selection with Hard Timeouts
 
+Harness model ids, effort, and fast settings are **not** defined here. They
+follow [Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
+and the orama pin `docs/standards/model-governance.md`. This skill is the
+**runtime frugality ladder** (local tiers first). It does not make Claude the
+default harness path. Cost gates still raise on deny (never silent reroute).
+Cloud tiers stay escalation-gated.
+
 **⚠️ PRODUCTION v1.1 — Real Tier Structure:** This skill documents production
 routing as implemented in [`orchestrator/frugality_router.py`](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/orchestrator/frugality_router.py).
 Tier identifiers (0–6), backend names, and cost semantics match real code, not
