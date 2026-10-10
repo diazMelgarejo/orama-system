@@ -72,3 +72,5 @@ is the active review proposal. It incorporates verified architectural-review fin
 qualifies candidate heads before promotion, and separates restart-safe accounting from
 graph continuation. The [first plan](P0-THROUGH-T2-EXECUTION-PLAN-2026-10-10.md) remains
 historical; new T1/T2 contract details require review before implementation.
+
+For the current staged repair, see the [P0 qualification repair handoff](P0-QUALIFICATION-REPAIR-HANDOFF-2026-10-10.md).
