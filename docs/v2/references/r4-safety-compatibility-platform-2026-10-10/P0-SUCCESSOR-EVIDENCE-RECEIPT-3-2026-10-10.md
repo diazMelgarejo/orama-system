@@ -24,10 +24,11 @@ at the merge commit: eight of eight checks pass (two `test` jobs, six oracle cel
 
 ## 3. Result gate at Oramasys #27 `b6e99dc`
 
-Per-cell allowances measured from the green matrix: production and core-r3 378 passed and
-1 skipped; policy-r3 362 passed and 5 skipped. Floors are 360 and 345 passed. Review hardening: negative or non-numeric counts rejected, nested suites counted once,
-extra matrix cells caught in any key order, upload action pinned to a commit. Eight of
-eight checks pass with the gate enforced and a JUnit receipt retained per cell.
+Per-cell allowances measured from the green matrix: production and core-r3 378 passed and 1
+skipped; policy-r3 362 passed and 5 skipped. Floors are 360 and 345 passed. Review hardening:
+negative or non-numeric counts rejected, nested suites counted once, extra matrix cells caught
+in any key order, upload action pinned to a commit. Eight of eight checks pass with the gate
+enforced and a JUnit receipt retained per cell.
 
 ## 4. Open before QUALIFIED
 
