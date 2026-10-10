@@ -1,5 +1,10 @@
 # P0 through T2 implementation plan - revision 2
 
+> Supersession (2026-10-10 UTC): execution now follows
+> [revision 3](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md).
+> This revision remains historical. REV3 corrects the merged #393 status,
+> records the staged archive repair, and consolidates the dispatch gate.
+
 > For agentic workers: use `superpowers:executing-plans` task by task. No delegation,
 > publication or merge is implied by this document. Review the contract refinements
 > below before implementing T1/T2.

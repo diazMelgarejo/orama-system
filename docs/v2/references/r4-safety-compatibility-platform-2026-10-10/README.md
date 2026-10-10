@@ -68,9 +68,15 @@ and its [review and post-P0 roadmap](P0-REVIEW-AND-NEXT-STEPS-2026-10-10.md) def
 the promotion gates. Canonical registry promotion is not production enablement.
 
 The [revision-2 P0 through T2 execution plan](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md)
-is the active review proposal. It incorporates verified architectural-review findings,
+was the review proposal preceding revision 3. It incorporates verified architectural-review findings,
 qualifies candidate heads before promotion, and separates restart-safe accounting from
 graph continuation. The [first plan](P0-THROUGH-T2-EXECUTION-PLAN-2026-10-10.md) remains
 historical; new T1/T2 contract details require review before implementation.
 
 For the current staged repair, see the [P0 qualification repair handoff](P0-QUALIFICATION-REPAIR-HANDOFF-2026-10-10.md).
+
+The active [revision-3 P0 through T2 execution plan](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md)
+adds main/staged drift reconciliation, one neutral dispatch gate, atomic step holds,
+late-result fencing and append-only unknown-hold adjustments. It preserves the
+[uploaded review input](P0-THROUGH-T2-REV3-SYNTHESIS-INPUT.md) unchanged and records
+why canonical R3 bytes are retained rather than downgraded to the historical baseline.

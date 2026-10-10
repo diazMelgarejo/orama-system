@@ -1,5 +1,9 @@
 # Plan — P0 bounded Core pin promotion and registry baseline
 
+> Current execution (2026-10-10 UTC): [revision 3](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md)
+> supersedes this plan and the revision-2 release sequence. #393 is already merged;
+> continue forward archive repair in #394 and staged consumer qualification in #26.
+
 > Review follow-up: the release sequence below is superseded for execution by
 > [revision 2, section 3](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md#3-p0---two-phase-qualification-then-promotion).
 > Qualify both immutable candidate heads before the canonical promotion. This earlier

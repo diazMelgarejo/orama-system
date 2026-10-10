@@ -41,3 +41,28 @@ P0 is not qualified yet. The revision-2 plan requires a versioned six-cell quali
 ## Recovery rule
 
 If a published source or fixture looks wrong, preserve the existing commit as evidence, recover from the named immutable blob or commit, and publish a successor repair. Do not rewrite historical memory to make a later interpretation appear original.
+
+## Revision-3 follow-up — 2026-10-10 UTC
+
+The [REV3 execution plan](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md) now governs
+the next sequence. The earlier table records immutable staged revisions, not a promise
+that branch heads never advance. At this follow-up's start, #394 was `d711ce6425f332c24ea04ba34da9dbdefa0768b1`
+and #26 was still `566409be45257561ba0fdbc76f94a718af7aaa5c`; both were open drafts.
+
+- Retain the promoted canonical registry (`fbde64f2…`) and repaired archive (`c1bf6b51…`).
+  All four staged file pairs match bytes; consumer main remains on the earlier pair.
+- Capture a P0.0 drift receipt, then finish the six-cell manifest and clean wheel proof
+  before either draft is merged. After #394 merges, pin #26 to that actual merge SHA
+  and rerun the required cells before the consumer merge. This corrects any ambiguous
+  "after merge, before either merge" wording in prior PR metadata.
+- Freeze the unified gate contract; implement the Core seam and T1 step-ledger foundation
+  together, then extend delivery, accounting and stop. Preserve structural graph limits.
+- An abandoned task cannot gain late commit authority; an unknown hold can be adjusted
+  only through authenticated, evidenced, idempotent append-only reconciliation.
+- This change is documentation only. Earlier `335 passed` evidence is unchanged;
+  no six-cell, fresh-install, runtime gate or termination claim is added here.
+
+Publication uses two logical documentation commits and one final non-force update to
+the existing #394 branch. #26 needs no content or pin change for this planning-only
+revision: its pinned candidate registry bytes are unchanged. Preserve the uploaded
+source and all earlier plans; PT graduation still follows canonical qualification.
