@@ -33,8 +33,9 @@ live on 2026-10-10 UTC; re-read heads before acting, because branches move.
 | Orama #395 | **Open draft.** Receipts 2 and 3 plus this handoff | [#395][o395] |
 | Core `main` | `4d217f6b…` — the production Core pin | [perpetua-core][core] |
 
-**P0 is not QUALIFIED.** Evidence: [receipt 3][r3] (current), [receipt 2][r2],
-[receipt 1][r1]. Main-to-main registry parity and CI on both mains are verified.
+**P0 is not QUALIFIED.** Evidence, pinned to commits: [receipt 3][r3] (snapshot at
+`84f64cc3…`; a later receipt supersedes it), [receipt 2][r2], [receipt 1][r1]. Main-to-main registry parity and CI on both mains
+are verified.
 
 ## 2. First actions (in order)
 
@@ -43,10 +44,12 @@ live on 2026-10-10 UTC; re-read heads before acting, because branches move.
 3. Ask the operator to require the eight check names in branch protection (two `test` jobs
    and six oracle cells: production, policy-r3, core-r3 × Python 3.11, 3.12). The agent cannot
    set this and must not claim it is done.
-4. After the operator merges #395, write receipt 4 recording the final heads, then declare P0
-   QUALIFIED → CANONICAL per the state machine in [PLAN-P0][planp0]. Only then add the
-   Perpetua-Tools correction: its WORKSPACE state block still says the P0 plan is unpublished.
-5. Do not start T1 code before step 4 is recorded. T1 stays gated.
+4. After the operator merges #395 and #27, verify green post-merge CI on both mains, then
+   write receipt 4 recording the final heads. The state machine in [PLAN-P0][planp0] ends at
+   ACTIVATED (operator-merged consumer SHA plus green post-merge verification): mark it only
+   then, publish the dated Orama closure, and only after that add the Perpetua-Tools
+   correction (its WORKSPACE state block still says the P0 plan is unpublished).
+5. Do not start T1 code before step 4 is recorded in full. T1 stays gated.
 
 ## 3. What exists and where
 
@@ -136,9 +139,9 @@ exactly-once delivery claim.
 [y26]: https://github.com/oramasys/oramasys/pull/26
 [y27]: https://github.com/oramasys/oramasys/pull/27
 [core]: https://github.com/oramasys/perpetua-core/commit/4d217f6b9e94e36554a9427198b8c2c4b7febc47
-[r1]: https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md
-[r2]: https://github.com/diazMelgarejo/orama-system/blob/2026-10-10-004-p0-successor-receipt-2/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-2-2026-10-10.md
-[r3]: https://github.com/diazMelgarejo/orama-system/blob/2026-10-10-004-p0-successor-receipt-2/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-3-2026-10-10.md
+[r1]: https://github.com/diazMelgarejo/orama-system/blob/28672bf366e5a4a6917f2cb9236eaf696e70c97b/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md
+[r2]: https://github.com/diazMelgarejo/orama-system/blob/84f64cc3334167c8391571a686606b4a5ad9174b/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-2-2026-10-10.md
+[r3]: https://github.com/diazMelgarejo/orama-system/blob/84f64cc3334167c8391571a686606b4a5ad9174b/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-SUCCESSOR-EVIDENCE-RECEIPT-3-2026-10-10.md
 [rev3]: https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md
 [gate]: https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DISPATCH-GATE.md
 [hitl]: https://github.com/diazMelgarejo/orama-system/blob/main/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-HITL-EFFECTS.md

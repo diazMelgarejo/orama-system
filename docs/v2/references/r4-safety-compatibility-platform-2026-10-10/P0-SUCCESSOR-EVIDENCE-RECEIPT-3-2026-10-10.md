@@ -35,6 +35,7 @@ enforced and a JUnit receipt retained per cell.
 - [ ] Operator merges Oramasys #27; the gate then runs on `main`.
 - [ ] Branch protection requires the eight check names.
 - [ ] Operator merges Orama #395 so receipts 2 and 3 reach `main`.
-- [ ] Mark P0 QUALIFIED/CANONICAL only after the above; then PT memory correction.
+- [ ] Mark P0 ACTIVATED only after the above and green post-merge CI on both mains; publish
+  the dated Orama closure, then make the PT memory correction.
 
 [pr27]: https://github.com/oramasys/oramasys/pull/27
