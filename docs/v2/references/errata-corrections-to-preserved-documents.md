@@ -250,3 +250,20 @@ Required handling:
 - field ownership is checked against
   [`ownership-registry.json`](loop-graph-compatibility-2026-10-09/ownership-registry.json);
 - the preserved documents are not edited.
+
+## E13 — R4 draft scope labels and task numbering
+
+The operator's R4 draft
+([`source/`](r4-safety-compatibility-platform-2026-10-10/source/ORAMASYS-R4-SAFETY-COMPATIBILITY-PLATFORM-DRAFT-ADR-PLAN-HANDOFF-2026-10-10.md))
+says the revision-2 plan's "Tasks 0–11 map to T0–T11". They map by intent, not number: rev-2
+Task 5 (R3) is merged, rev-2 Task 6 is R4 T5, Task 7 is T6, Task 8 is T7, and Tasks 9–10
+split into T8–T10. Doc 57 §10 ("deferred R3 work") is stale after D-LG-6.
+
+Required handling:
+
+- use the [crosswalk](r4-safety-compatibility-platform-2026-10-10/REGISTER-TRACEABILITY.md#rev-2-crosswalk)
+  when citing rev-2 task numbers;
+- read doc 57 §10 through D-LG-6 and §11 through the proposed
+  [continuation contract](r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-CONTINUATION.md);
+- the rev-2 plan's "R3 gated" and "PR open" statements are historical, not current status;
+- the draft and the rev-2 plan are not edited.

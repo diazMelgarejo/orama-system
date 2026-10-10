@@ -342,6 +342,10 @@ Join:    ALL | ANY | FIRST_SUCCESS | QUORUM | CUSTOM
 Branch completion timing MUST NOT silently define state merge behavior.
 This is deferred R3 work.
 
+> **2026-10-10 qualification:** R3 shipped as bounded single-level fan-out with these
+> reducers and joins; see [D-LG-6](references/loop-graph-compatibility-2026-10-09/ADR-D-LG-6-R3-REDUCERS-JOINS-FANOUT.md).
+> The text above is preserved as history. Later work: [D-LG-7](references/r4-safety-compatibility-platform-2026-10-10/ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md).
+
 ---
 
 ## 11. Durability before resume
@@ -362,6 +366,12 @@ created_at
 
 Durable replay also requires explicit effect idempotency/deduplication policy.
 External-write nodes cannot be retried or resumed safely without that contract.
+
+> **2026-10-10 qualification (proposed, unratified):** the durable identity, recovery
+> algorithm and effect protocol are specified in the
+> [continuation](references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-CONTINUATION.md)
+> and [HITL/effect](references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-HITL-EFFECTS.md)
+> contracts. Until ratified and implemented, resume still starts at `START`.
 
 ---
 

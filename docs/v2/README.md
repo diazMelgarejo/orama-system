@@ -288,6 +288,10 @@ orama-system/docs/v2/
   `docs/coordination/offline-sandbox-agent-report.md`; shared skill
   `offline-sandbox-agent-report`).
 
+- [R4 safety, compatibility and platform reference set](references/r4-safety-compatibility-platform-2026-10-10/README.md)
+  — proposed D-LG-7 umbrella ADR, subsystem contracts, plan T0–T11 and review
+  record (documentation only; unratified).
+
 ---
 
 ## Open questions (live)
