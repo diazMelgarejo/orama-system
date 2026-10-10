@@ -67,8 +67,8 @@ flight.
 4. Revalidate every mandatory gate at **dispatch authorization**: scope, request and
    artifact digests, **grant expiry** (stored UTC plus the high-water rule in §5),
    revocation version, authority versions, fencing epoch and worker ownership. In one
-   transaction record the dispatch intent, consume the use and write an outbox item. **This transaction is the
-   linearization point for revocation versus dispatch.**
+   transaction record the dispatch intent, consume the use and write an outbox item.
+   **This transaction is the linearization point for revocation versus dispatch.**
 5. Send only the recorded intent through the qualified transport. Revocation before step 4
    blocks dispatch. Revocation after it marks authorized in-flight work, requests
    cancellation where supported and blocks all subsequent operations.
