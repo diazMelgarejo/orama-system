@@ -33,9 +33,9 @@ live on 2026-10-10 UTC; re-read heads before acting, because branches move.
 | Orama #395 | **Open draft.** Receipts 2 and 3 plus this handoff | [#395][o395] |
 | Core `main` | `4d217f6b…` — the production Core pin | [perpetua-core][core] |
 
-**P0 is not QUALIFIED.** Evidence, pinned to commits: [receipt 3][r3] (snapshot at
-`84f64cc3…`; a later receipt supersedes it), [receipt 2][r2], [receipt 1][r1]. Main-to-main registry parity and CI on both mains
-are verified.
+**P0 is not QUALIFIED.** Evidence, pinned to commits: [receipt 3][r3] (snapshot at `84f64cc3…`;
+a later receipt supersedes it), [receipt 2][r2], [receipt 1][r1]. Main-to-main registry parity
+and CI on both mains are verified.
 
 ## 2. First actions (in order)
 
