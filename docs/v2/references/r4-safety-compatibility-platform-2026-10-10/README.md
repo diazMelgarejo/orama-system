@@ -79,9 +79,11 @@ require review before implementation.
 For the current staged repair, see the
 [P0 qualification repair handoff](P0-QUALIFICATION-REPAIR-HANDOFF-2026-10-10.md); current
 heads, pins and digests live in the latest
-[successor evidence receipt 3](P0-SUCCESSOR-EVIDENCE-RECEIPT-3-2026-10-10.md) (receipts
-[1](P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md) and
-[2](P0-SUCCESSOR-EVIDENCE-RECEIPT-2-2026-10-10.md) are kept as history). The
+[successor evidence receipt 4](P0-SUCCESSOR-EVIDENCE-RECEIPT-4-2026-10-10.md) (P0 is
+ACTIVATED; see the [closure](P0-ACTIVATED-CLOSURE-2026-10-10.md); receipts
+[1](P0-SUCCESSOR-EVIDENCE-RECEIPT-2026-10-10.md),
+[2](P0-SUCCESSOR-EVIDENCE-RECEIPT-2-2026-10-10.md) and
+[3](P0-SUCCESSOR-EVIDENCE-RECEIPT-3-2026-10-10.md) are kept as history). The
 [dispatch gate contract](CONTRACT-DISPATCH-GATE.md) freezes commit publication, batch
 reservation and adjustment grants for T1/T2.
 The next agent starts from the
