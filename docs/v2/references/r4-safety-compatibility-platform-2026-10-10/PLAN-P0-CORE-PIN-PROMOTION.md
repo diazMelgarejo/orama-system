@@ -1,7 +1,8 @@
 # Plan — P0 bounded Core pin promotion and registry baseline
 
-**Status:** draft for operator review. Planning only: this document authorizes no pin,
-registry, schema or code change. Parent plan: [PLAN-R4-EXECUTION](PLAN-R4-EXECUTION.md)
+**Status:** corrected implementation plan. The former pre-R3 baseline is retained as a
+historical registry profile; this plan promotes the reviewed R3 production baseline only
+through its stated qualification gates. Parent plan: [PLAN-R4-EXECUTION](PLAN-R4-EXECUTION.md)
 (P0, prerequisite to M1). Evidence base:
 [T0 record](T0-RESTORATION-AND-REGISTRY-BASELINE-2026-10-10.md).
 
@@ -19,15 +20,14 @@ with a clean-install proof against the committed pin.
 over a loaded state still starts at `START`. No HITL, foreign transport or provider effect.
 No Core change. No change to the schema-1 `graph_id` of graphs not using R3 features.
 
-## 2. Pin target decision (open, operator)
+## 2. Pin target decision
 
-| Option | Value | Notes |
-| --- | --- | --- |
-| A (recommended) | Core merge commit `4d217f6b…` | The immutable merged revision; matches the T11 rule to promote only a reviewed merged producer revision |
-| B | Candidate `34e4a8d2…` | Content-identical tree to A (`0890ef97…`) but not the merge commit; acceptable only if the install source requires it |
-
-Decision rule: A unless the dependency manifest cannot reference the merge commit. If B
-is chosen, record the tree-equality proof in the PR. Do not float on a branch or tag.
+Production target: Core merge commit
+`4d217f6b9e94e36554a9427198b8c2c4b7febc47` (tree
+`0890ef970ab26fa7982ea15fc235c0fe9d1a603f`). It is the reviewed immutable merged
+producer revision. The historical `core-r3` candidate remains pinned to
+`34e4a8d22212d38d6ab100c1ad7fb2b19f56cb68`; it is never substituted for the
+production dependency. Do not float on a branch or tag.
 
 ## 3. Preconditions (all must hold; re-read live, never from this document)
 
@@ -35,8 +35,8 @@ is chosen, record the tree-equality proof in the PR. Do not float on a branch or
 - [ ] Core `main` head, tree and the target commit re-read live; unchanged or re-reviewed.
 - [ ] Oramasys `main` head and tree re-read live; no open PR touching the dependency,
   lock, registry fixtures or workflow pins without a coordination decision.
-- [ ] Canonical and fixture registry digests re-computed and equal (baseline, policy-r3,
-  core-r3); any drift stops P0 and returns to T0.
+- [ ] Canonical and fixture registry digests re-computed and equal (production baseline,
+  policy-r3, core-r3, and retained pre-R3 baseline); any drift stops P0 and returns to T0.
 - [ ] Operator authorization to open the Oramasys PR is recorded in the thread.
 
 ## 4. Work packages
@@ -55,20 +55,27 @@ the table is not touched.
 
 Reproduce before changing anything:
 
-1. Production install resolves to the pre-R3 commit and R3-dependent consumer cells are
-   red or skipped. A skip is a failure, never an accepted result.
-2. Registry baseline still marks the R3 fields `planned`.
-3. Candidate overlays pass only because the overlay pin is test-only.
+1. Production tests select the production baseline explicitly, never by `HAS_R3` or any
+   candidate overlay heuristic.
+2. A production install at the pre-R3 commit fails the production R3 conformance cell;
+   a required R3 cell cannot skip.
+3. Canonical checkout bytes or a pinned digest that differ from the selected profile fail.
+4. Historical policy-r3 and core-r3 profiles retain their own immutable Core pins and cannot
+   satisfy a production pin assertion.
 
-### P0-C Promotion (single reviewed step)
+### P0-C Canonical registry and consumer promotion
 
 In one commit batch, changed together:
 
-- production Core pin to the §2 target, in every file P0-A lists;
-- registry baseline flip: R3 fields `planned` to `implemented`, add the new records,
-  drop the provisional join edge kind;
-- the byte-identical canonical snapshot and its pinned digest;
-- docs and workflow pins named by P0-A.
+- First, update the Orama-owned canonical baseline: R3 fields become `implemented`, R3
+  records and literals become canonical, and the pre-R3 baseline is retained as an exact
+  historical profile. Candidate profiles remain immutable historical qualification inputs.
+- Then pin the Oramasys consumer workflows to the exact merged canonical Orama commit.
+- In one Oramasys commit batch, promote the production Core pin to §2, replace the consumer
+  baseline fixture with the byte-identical canonical baseline, update its digest and explicit
+  profile assertions, and update every active workflow and test revision from P0-A.
+- Candidate overlays keep their test-only role. They must not be used for production install
+  proof or to choose the default registry profile.
 
 Preserve the earlier baseline and both candidate profiles as history; do not delete them.
 The candidate overlay file keeps its test-only role.
@@ -79,9 +86,10 @@ Run against the committed pin in a clean environment, exact head:
 
 | Cell | Requirement |
 | --- | --- |
-| Clean install | New environment, no cache reuse; resolves the target commit and prints its identity |
-| Baseline profile | Complete native and oracle suites pass |
-| policy-r3 and core-r3 | Both candidate lanes pass against the promoted baseline |
+| Clean production install | New environment, no cache reuse; resolves §2 from the committed manifest and prints its identity |
+| Production baseline | Explicit `production` profile; complete native and oracle suites pass with required R3 cells |
+| policy-r3 | Historical schema-1 Core `04759a50…`; profile-specific cells pass without pretending to be production |
+| core-r3 | Historical candidate Core `34e4a8d2…`; profile-specific cells pass without changing its recorded provenance |
 | Schema compatibility | Schema-1 graphs keep their `graph_id`; schema-2 only for graphs using R3 features |
 | R3 behaviour | Settle-all branches, name-ordered folds, lowest-named `first_success`, atomic local-only merge |
 | Combined branch | Promoted pin plus any surviving consumer branches merge and pass |
@@ -92,10 +100,11 @@ Environment failures are recorded separately from defects and rerun, not waved t
 
 ### P0-E Evidence publication
 
-After the Oramasys PR is green and reviewed: update the Orama T0-style record with the
-final pin, registry digests, tree SHAs and run identities (categories and hashes only);
-then one append-only PT memory entry citing the merged SHAs. Canonical Orama evidence
-publishes before PT memory.
+Before the Oramasys PR is opened, merge the reviewed canonical Orama registry change and
+pin that exact revision in Oramasys CI. After the Oramasys PR is green, reviewed and merged,
+publish a new dated Orama P0 evidence record with final pin, registry digests, tree SHAs and
+run identities (categories and hashes only); then one append-only PT memory entry citing
+observed merged SHAs. T0 remains its immutable date-stamped restoration record.
 
 ## 5. Gates and sign-off
 
@@ -107,14 +116,16 @@ publishes before PT memory.
 | G4 Review | Operator and automated review threads resolved by commits, no unresolved findings |
 | G5 Merge | Operator merges; agents do not merge or work around a refused merge |
 
-P0 is complete only when production pin, registry baseline, snapshot digests and docs
-agree on one immutable Core revision and a clean install proves it.
+P0 is complete only when the merged canonical registry, consumer fixture, profile selection,
+production pin, snapshot digests and workflow pin agree on one immutable Core revision and a
+clean production install proves it.
 
 ## 6. Rollback
 
-Revert the single Oramasys promotion commit (no history rewrite, no force-push). Because
-pin, baseline and snapshot move together, one revert restores the pre-R3 production state
-and the candidate profiles remain as history. A partial promotion is a defect.
+Revert the Oramasys promotion commit (no history rewrite, no force-push) to restore the
+pre-R3 consumer pin and fixture. Revert the separate Orama canonical registry commit only
+if its own evidence is withdrawn. Candidate and pre-R3 profiles remain history. A partial
+consumer promotion is a defect.
 
 ## 7. Risks
 

@@ -1,12 +1,12 @@
 # P0 review and post-P0 execution roadmap
 
-**Date:** 2026-10-10 UTC. **Status:** proposed corrections for operator review.
+**Date:** 2026-10-10 UTC. **Status:** corrected implementation design; P0 qualification in progress.
 AFRP: Type C | Level Practitioner | Mode 2.
 
-The [supplied P0 draft](PLAN-P0-CORE-PIN-PROMOTION.md) is preserved unchanged.
-This addendum proposes the corrections below; it does not claim P0 implementation,
-qualification, automated review, merge or enablement. Runtime implementation starts
-after the operator approves this corrected bounded design. Agents never merge.
+The [P0 implementation plan](PLAN-P0-CORE-PIN-PROMOTION.md) incorporates the corrections
+below. This addendum records their rationale; it does not claim P0 qualification, automated
+review, merge or enablement. Runtime implementation starts with the bounded test, fixture,
+workflow and pin work described there. Agents never merge.
 The [parent plan](PLAN-R4-EXECUTION.md) remains the capability and dependency authority.
 
 ## 1. Fresh prerequisites
@@ -136,13 +136,13 @@ reviewable slices and must not implement against undefined or moving interfaces.
 No provider sandbox, production egress, H1/H2 deployment or new external credentials
 are implied by approval to open a P0 PR.
 
-## 4. PR strategy and current stop point
+## 4. PR strategy and execution state
 
-- One active logical PR per affected repository. Reuse this new Orama planning PR
-  for approved canonical P0 changes while it remains open.
-- Open an Oramasys implementation PR only after the corrected P0 design is approved
-  and its complete qualification environment is available. #22 is unrelated and
-  is not a substitute promotion branch.
+- One active logical PR per affected repository. This Orama PR carries the corrected
+  canonical P0 plan and registry promotion. The paired Oramasys P0 PR carries the exact
+  consumer pin, fixture, test and workflow update.
+- #22 is unrelated and is not a substitute promotion branch. Qualify its resulting combined
+  tree in a disposable check before claiming compatibility.
 - PT #432 is merged; never push to it again. A new PT memory PR follows observed
   canonical evidence, uses memory tooling, and preserves every historical JSONL byte.
 - No Core PR for P0. T2 is the next justified Core slice, after interface review.
@@ -152,5 +152,5 @@ are implied by approval to open a P0 PR.
   consumer have separate commits; reverting the consumer restores its old pinned
   canonical checkout. Do not claim a single commit can revert all repositories.
 
-**Pending operator decision:** approve merge target A, this corrected profile/publication
-design, and a new dated P0 evidence record. Until then, this PR is planning only.
+**Operator review remains required before merge:** verify the target revision, profile matrix,
+clean-install evidence and new dated P0 evidence record. Until then, neither PR is enabled.
