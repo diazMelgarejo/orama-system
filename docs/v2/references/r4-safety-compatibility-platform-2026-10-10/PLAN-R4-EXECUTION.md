@@ -64,8 +64,7 @@ human review. No production feature is enabled.
 - [ ] Check production and candidate pins, complete registry profiles and combined-branch
   behaviour. Plan P0 below as a bounded prerequisite.
 - [ ] Freeze T1–T5 typed records, schema migrations, failure taxonomy, the
-  [clock policy](CONTRACT-DURABLE-HITL-EFFECTS.md#5-clock-policy-approved-freeze-implementation-details-at-t0) and
-  exact file and test commands. Review them.
+  [clock policy][clock-policy] and exact file and test commands. Review them.
 - [ ] Clean bootstrap, build and import; run affected exact-head suites. Missing required
   fixtures or oracle cells fail. Record environment failures apart from bugs.
 
@@ -250,3 +249,5 @@ Two pairs: **Core ↔ Oramasys** (runtime producer/consumer) and **Orama ↔ PT*
 
 Rollback uses reviewed forward or revert commits and the last qualified producer/consumer
 pair. R4 checkpoints are not readable by older code by downgrading a pin.
+
+[clock-policy]: CONTRACT-DURABLE-HITL-EFFECTS.md#5-clock-policy-approved-freeze-implementation-details-at-t0

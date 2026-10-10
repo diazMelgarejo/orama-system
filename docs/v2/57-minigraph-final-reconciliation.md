@@ -368,11 +368,11 @@ created_at
 Durable replay also requires explicit effect idempotency/deduplication policy.
 External-write nodes cannot be retried or resumed safely without that contract.
 
-> **2026-10-10 qualification (proposed, unratified):** the durable identity, recovery
-> algorithm and effect protocol are specified in the
+> **2026-10-10 qualification (approved design; implementation pending):** the durable
+> identity, recovery algorithm and effect protocol are specified in the
 > [continuation](references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-CONTINUATION.md)
 > and [HITL/effect](references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-HITL-EFFECTS.md)
-> contracts. Until ratified and implemented, resume still starts at `START`.
+> contracts. Until implemented, resume still starts at `START`.
 
 ---
 

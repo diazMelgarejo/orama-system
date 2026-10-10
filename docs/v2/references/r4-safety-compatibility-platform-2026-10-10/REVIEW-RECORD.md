@@ -57,7 +57,8 @@ State the approved revision and any exceptions.
 - [ ] Accept the [H0 → H1 → H2](CONTRACT-MULTI-HOST-STAGES.md) sequence.
 - [ ] Confirm which T8/T9 follow-ons are in the first release; T0 selects provider and
   version cohorts from the source inventory.
-- [ ] Decide the F5 clock rule or amend it.
+- [x] Decide the F5 clock rule or amend it. Same decision as the Ratification section
+  below, owned by the operator: fail-closed clock policy approved on 2026-10-10.
 
 This checklist is the review record. It is not a request to approve work already authorized.
 
