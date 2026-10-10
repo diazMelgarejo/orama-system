@@ -62,3 +62,11 @@ qualification notes; erratum E13 records the corrections; the
 [revision-2 plan](../remaining-capabilities/IMPLEMENTATION-PLAN-REV2-2026-10-10.md)
 and [R3 audit](../remaining-capabilities/R3-AUDIT-REPLAY-AND-COMPATIBILITY-2026-10-10.md)
 stay as historical records, mapped by the [crosswalk](REGISTER-TRACEABILITY.md#rev-2-crosswalk).
+
+P0 follow-up: the [corrected P0 implementation plan](PLAN-P0-CORE-PIN-PROMOTION.md)
+and its [review and post-P0 roadmap](P0-REVIEW-AND-NEXT-STEPS-2026-10-10.md) define
+the promotion gates. Canonical registry promotion is not production enablement.
+
+The corrected [P0 through T2 execution plan](P0-THROUGH-T2-EXECUTION-PLAN-2026-10-10.md)
+separates qualified P0 consumer promotion from the later T1 admission and T2 observation/
+budget slices.
