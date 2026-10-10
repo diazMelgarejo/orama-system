@@ -62,3 +62,7 @@ qualification notes; erratum E13 records the corrections; the
 [revision-2 plan](../remaining-capabilities/IMPLEMENTATION-PLAN-REV2-2026-10-10.md)
 and [R3 audit](../remaining-capabilities/R3-AUDIT-REPLAY-AND-COMPATIBILITY-2026-10-10.md)
 stay as historical records, mapped by the [crosswalk](REGISTER-TRACEABILITY.md#rev-2-crosswalk).
+
+P0 follow-up: the [operator-supplied draft](PLAN-P0-CORE-PIN-PROMOTION.md) is preserved
+beside its [review and post-P0 roadmap](P0-REVIEW-AND-NEXT-STEPS-2026-10-10.md).
+The review is planning evidence, not a production pin or registry promotion.
