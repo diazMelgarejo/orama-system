@@ -34,7 +34,7 @@ was deleted; the draft is preserved under `source/`.
 | F2 | High | Doc 57 §10 still says reducers are "deferred R3 work"; §11 predates the checkpoint design | Fixed: additive qualification notes in doc 57 |
 | F3 | Medium | One ADR bundles seven contracts, so rejecting one blocks all | Fixed: umbrella ADR plus one file per contract, each with its own status |
 | F4 | High | Crash table omitted windows between handoff and provider acceptance, after a cancel request, and during reconciliation | Fixed: three rows added ([HITL §6](CONTRACT-DURABLE-HITL-EFFECTS.md#6-crash-windows-and-recovery)) |
-| F5 | Medium | Expiry is required "UTC after restart" but a backward clock jump would silently extend a grant | Proposed: high-water-mark rule ([HITL §5](CONTRACT-DURABLE-HITL-EFFECTS.md#5-clock-policy-proposed-freeze-at-t0)); T0 freezes it |
+| F5 | Medium | Expiry is required "UTC after restart" but a backward clock jump would silently extend a grant | Approved: high-water-mark rule ([HITL §5](CONTRACT-DURABLE-HITL-EFFECTS.md#5-clock-policy-approved-freeze-implementation-details-at-t0)); T0 freezes implementation details |
 | F6 | Medium | Draft names dispatch milestones but never lists effect states, so tests could not name transitions | Proposed: explicit effect and grant machines ([HITL §3](CONTRACT-DURABLE-HITL-EFFECTS.md#3-state-machines)) |
 | F7 | Medium | Pin promotion appears in M1 and T11 but is not a task; easy to skip | Fixed: named prerequisite P0 in the [plan](PLAN-R4-EXECUTION.md) |
 | F8 | Low | H1 needs authenticated worker identity but the draft does not say which designs supply it | Fixed: dependency on docs 49/61 stated ([multi-host §4](CONTRACT-MULTI-HOST-STAGES.md#4-principals-and-trust)) |
@@ -61,11 +61,24 @@ State the approved revision and any exceptions.
 
 This checklist is the review record. It is not a request to approve work already authorized.
 
+## Ratification (2026-10-10)
+
+The operator approved this D-LG-7 revision, all named design contracts, the priority order
+(safety → compatibility → platform interoperability), and the F5 fail-closed clock policy.
+The accepted clock recovery requires audited trusted-time evidence before dispatch resumes.
+
+Immediate continuity sequence: record this ratification in PT memory; complete T0's pinned
+inventory and evidence refresh; execute P0 as a separate Core-to-Oramasys consumer
+requalification; then begin T1/T2 and T3 in independently reviewed PR slices. No approval
+turns a design contract into a provider-effect grant, and T4/T5 remain blocked by their
+predecessor acceptance gates.
+
 ## Next-agent handoff
 
-**Authorized so far:** this documentation and planning change only.
-**Stop boundary:** no code, pin, registry flip, memory publication or merge until the
-operator reviews and authorizes the next stage.
+**Authorized so far:** the ratified documentation plus staged implementation beginning with
+T0/P0. Every slice retains its own tests, review and release gates.
+**Stop boundary:** do not bypass a predecessor gate, promote an unqualified pin, or enable
+provider effects merely because the design is approved.
 
 1. Read this set, then current root and nested instructions. Refresh live PRs first; this
    handoff goes stale.

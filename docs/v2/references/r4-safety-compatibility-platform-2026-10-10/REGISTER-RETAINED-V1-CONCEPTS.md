@@ -1,6 +1,6 @@
 # Register — permitted backward-v1 concepts
 
-**Status:** proposed under [D-LG-7](ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md).
+**Status:** approved design register under [D-LG-7](ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md).
 Plan slice: [T6](PLAN-R4-EXECUTION.md#t6--replacement-cohorts-and-retained-v1-register).
 v2 is clean-room: v1 supplies read-only behavioural evidence, never code imported at
 runtime, and v1 builds stay independent of v2 dependencies.

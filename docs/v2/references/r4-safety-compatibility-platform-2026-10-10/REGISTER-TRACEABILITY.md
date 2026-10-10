@@ -1,6 +1,6 @@
 # Register — traceability, crosswalk and sources
 
-**Status:** proposed under [D-LG-7](ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md).
+**Status:** approved design register under [D-LG-7](ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md).
 Statuses are as of drafting (2026-10-10) and must be refreshed at T0.
 
 ## Rev-2 crosswalk

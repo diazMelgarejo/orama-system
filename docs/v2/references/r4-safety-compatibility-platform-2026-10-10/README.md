@@ -1,11 +1,9 @@
 # R4 safety, compatibility and platform — reference set
 
-
 **Date:** 2026-10-10 (UTC). **Status:** approved by the operator; implementation remains
 gated by the execution plan and its evidence requirements. Documentation
 and planning only. This set authorizes no code, pin change, publication of a runtime,
 production egress or provider spend.
-
 
 This directory turns the operator's R4 draft
 ([`source/`](source/ORAMASYS-R4-SAFETY-COMPATIBILITY-PLATFORM-DRAFT-ADR-PLAN-HANDOFF-2026-10-10.md),
@@ -14,17 +12,13 @@ contract, so each can be reviewed, amended and ratified on its own. The source d
 stays as the historical input; where it and these files differ, these files govern
 after review and the difference is listed in the [review record](REVIEW-RECORD.md).
 
-
 ## Priority order (operator confirmed)
-
 
 1. **Safety.** 2. **Compatibility**, forward to LangChain/LangGraph and backward to
 permitted v1 concepts. 3. **Platform self-consistency and interoperability.**
 A lower priority never weakens an invariant of a higher one.
 
-
 ## Reading order
-
 
 | # | File | Owns |
 | --- | --- | --- |
@@ -40,9 +34,7 @@ A lower priority never weakens an invariant of a higher one.
 | 10 | [REGISTER-TRACEABILITY](REGISTER-TRACEABILITY.md) | Requirement-to-task map, rev-2 crosswalk, sources |
 | 11 | [REVIEW-RECORD](REVIEW-RECORD.md) | Code-review findings, human checklist, handoff |
 
-
 ## What is and is not true today
-
 
 - R3 mechanics (fan-out regions, reducers, joins, schema "2") are merged in Core and
   Oramasys. Production Core in Oramasys is still pinned at the pre-R3 commit; pin
@@ -53,9 +45,7 @@ A lower priority never weakens an invariant of a higher one.
   continuation and full upstream replacement are **unimplemented**. Nothing here
   says otherwise.
 
-
 ## Boundaries held by every file here
-
 
 Orama `docs/v2` is normative design authority with no schema or runtime code. Core
 stays dependency-minimal with one scheduler, `CompiledGraph._run()`. Oramasys is the
@@ -65,9 +55,10 @@ never default or published-extra dependencies. v1 stays independent of v2 runtim
 dependencies. Records name categories only; no private identity, credential, device,
 endpoint or workstation literal appears in tracked content.
 
-
 ## Relationship to existing records
-
 
 Additive. [Doc 57](../../57-minigraph-final-reconciliation.md) §10–§11 gain
 qualification notes; erratum E13 records the corrections; the
+[revision-2 plan](../remaining-capabilities/IMPLEMENTATION-PLAN-REV2-2026-10-10.md)
+and [R3 audit](../remaining-capabilities/R3-AUDIT-REPLAY-AND-COMPATIBILITY-2026-10-10.md)
+stay as historical records, mapped by the [crosswalk](REGISTER-TRACEABILITY.md#rev-2-crosswalk).
