@@ -1,15 +1,17 @@
 # P0 through T2 implementation plan - revision 2
 
-> Supersession (2026-10-10 UTC): execution now follows
-> [revision 3](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md).
-> This revision remains historical. REV3 corrects the merged #393 status,
-> records the staged archive repair, and consolidates the dispatch gate.
-
+> **SUPERSEDED (2026-10-10 UTC) by the expanded
+> [revision 3](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md).** Do not execute from
+> this file. It remains a dated historical input: revision 3 corrects the merged #393
+> status, records the staged archive repair (#394, #26), and consolidates the dispatch gate,
+> accounting, fencing and reconciliation contracts.
+>
 > For agentic workers: use `superpowers:executing-plans` task by task. No delegation,
 > publication or merge is implied by this document. Review the contract refinements
 > below before implementing T1/T2.
 
-**Status:** revised proposal for operator review, not a qualification or enablement claim.
+**Status:** SUPERSEDED by revision 3; historical proposal, not a qualification or
+enablement claim.
 **Date:** 2026-10-10 UTC. AFRP: Type C | Level Practitioner | Mode 2.
 **Goal:** finish P0 safely, then implement enforceable admission, bounded observation
 delivery, cancellation and restart-safe accounting without a second scheduler.

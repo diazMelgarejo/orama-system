@@ -1,8 +1,9 @@
 # P0 through T2 execution plan
 
 > Execution instructions superseded by the
-> [revision-2 review proposal](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md).
-> Retained as the first reviewed plan, including the claims corrected in revision 2.
+> [revision-3 plan](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md) (which supersedes
+> [revision 2](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md)).
+> Retained as the first reviewed plan, including the claims corrected in revisions 2 and 3.
 
 **Status:** execution roadmap for review. **Scope:** P0 production-pin qualification,
 then T1 artifact admission and T2 observation/budget work. **Authority:** this plan

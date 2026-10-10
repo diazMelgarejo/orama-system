@@ -1,7 +1,8 @@
 # P0 review and post-P0 execution roadmap
 
 > The release-order recommendation R1 below is superseded by the
-> [revision-2 proposal](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md).
+> [revision-3 plan](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md) (which supersedes
+> [revision 2](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md)).
 > Keep this dated reasoning and its observed prerequisite facts; do not execute its old
 > canonical-first qualification sequence.
 

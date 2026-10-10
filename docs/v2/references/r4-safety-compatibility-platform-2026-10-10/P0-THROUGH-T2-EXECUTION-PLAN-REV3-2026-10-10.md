@@ -4,7 +4,8 @@
 > publication or merge is implied by this document. Review the contract refinements
 > below before implementing T1/T2.
 
-**Status:** operator-directed planning synthesis; implementation qualification and human merge gates remain separate.
+**Status:** operator-directed planning synthesis; implementation qualification and human merge gates
+remain separate.
 **Date:** 2026-10-10 UTC. AFRP: Type C | Level Practitioner | Mode 2.
 **Goal:** finish P0 safely, then implement enforceable admission, bounded observation
 delivery, cancellation and restart-safe accounting without a second scheduler.
@@ -14,7 +15,8 @@ and atomic accounting. Core supplies mechanics; Oramasys owns policy and account
 accounting records consumption, not graph position or permission to resume.
 **Tech stack:** Python 3.11/3.12, pytest, asyncio, schema-versioned JSON, SQLite.
 **Specs:** [parent](PLAN-R4-EXECUTION.md), [admission](CONTRACT-ARTIFACT-ADMISSION.md),
-[continuation](CONTRACT-DURABLE-CONTINUATION.md), [D-LG-7](ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md).
+[continuation](CONTRACT-DURABLE-CONTINUATION.md),
+[D-LG-7](ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md).
 **Supersedes:** the execution instructions in
 [revision 2](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md), the
 [first P0-T2 plan](P0-THROUGH-T2-EXECUTION-PLAN-2026-10-10.md) and the release order in
@@ -52,7 +54,8 @@ repositories; do not reserialize the archive or erase the earlier commit.
 ### Revision-3 verification and disposition
 
 The preceding defect is preserved as the REV2 finding. It has since been repaired
-on the existing draft branches. The uploaded [REV3 synthesis](P0-THROUGH-T2-REV3-SYNTHESIS-INPUT.md),
+on the existing draft branches. The uploaded
+[REV3 synthesis](P0-THROUGH-T2-REV3-SYNTHESIS-INPUT.md),
 preserved unchanged with SHA-256 `f950d6cf81bf3010b755f3590d0a7b4414979bbde6f4760e826a71a65b97ae4c`,
 is an additional review input; this plan corrects its stale main-only claims with staged
 evidence. The user's instruction authorizes this documentation synthesis and publication;
@@ -78,7 +81,8 @@ the attachment itself does not authorize runtime promotion or a merge.
 
 **Registry decision:** retain the intended R3 canonical SHA-256
 `fbde64f2c3b2bec62f703137f5fddb480d502440b9e1b229c15292816b52f7e2`.
-Restore the pre-R3 archive SHA-256 `c1bf6b519f703184745e61142f259ae8eb73d163210bb1395437f8a82c2b402f`.
+Restore the pre-R3 archive SHA-256
+`c1bf6b519f703184745e61142f259ae8eb73d163210bb1395437f8a82c2b402f`.
 Do not replace the promoted canonical file with the old schema-1 baseline merely to
 make old consumer main appear matched. Staged policy-r3 and core-r3 digests are
 `4972754f7ceb0ad3e908f6583533fec3c59a807732ac86c3ee967df33e29e36f` and

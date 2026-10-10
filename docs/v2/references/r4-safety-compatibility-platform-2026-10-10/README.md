@@ -67,11 +67,13 @@ P0 follow-up: the [corrected P0 implementation plan](PLAN-P0-CORE-PIN-PROMOTION.
 and its [review and post-P0 roadmap](P0-REVIEW-AND-NEXT-STEPS-2026-10-10.md) define
 the promotion gates. Canonical registry promotion is not production enablement.
 
-The [revision-2 P0 through T2 execution plan](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md)
-was the review proposal preceding revision 3. It incorporates verified architectural-review findings,
-qualifies candidate heads before promotion, and separates restart-safe accounting from
-graph continuation. The [first plan](P0-THROUGH-T2-EXECUTION-PLAN-2026-10-10.md) remains
-historical; new T1/T2 contract details require review before implementation.
+The [revision-3 P0 through T2 execution plan](P0-THROUGH-T2-EXECUTION-PLAN-REV3-2026-10-10.md)
+is the current execution reference. It supersedes the
+[revision-2 plan](P0-THROUGH-T2-EXECUTION-PLAN-REV2-2026-10-10.md) and the
+[first plan](P0-THROUGH-T2-EXECUTION-PLAN-2026-10-10.md), which remain historical inputs.
+Revision 3 qualifies candidate heads before promotion, separates restart-safe accounting
+from graph continuation, and adds the unified dispatch gate; new T1/T2 contract details
+require review before implementation.
 
 For the current staged repair, see the [P0 qualification repair handoff](P0-QUALIFICATION-REPAIR-HANDOFF-2026-10-10.md).
 
