@@ -288,6 +288,12 @@ orama-system/docs/v2/
   `docs/coordination/offline-sandbox-agent-report.md`; shared skill
   `offline-sandbox-agent-report`).
 
+- [R4 safety, compatibility and platform reference set](references/r4-safety-compatibility-platform-2026-10-10/README.md)
+  — ratified D-LG-7 umbrella ADR, subsystem contracts, plan T0–T11 and review
+  record. The publication restoration and canonical registry-baseline refresh are
+  recorded in [the T0 evidence record](references/r4-safety-compatibility-platform-2026-10-10/T0-RESTORATION-AND-REGISTRY-BASELINE-2026-10-10.md);
+  documentation only, with P0 pin promotion still gated.
+
 ---
 
 ## Open questions (live)

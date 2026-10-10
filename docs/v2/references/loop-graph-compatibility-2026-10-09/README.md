@@ -88,3 +88,7 @@ Current R3 qualification: [audit, replay and compatibility](../remaining-capabil
 The baseline ownership registry is preserved; additive policy-R3 and Core-R3
 candidate profiles qualify their exact producer/consumer environments. A profile
 pass is not a production-pin promotion or a full API replacement claim.
+
+R4 (safety, compatibility, platform) proposals: [reference set](../r4-safety-compatibility-platform-2026-10-10/README.md),
+umbrella [D-LG-7](../r4-safety-compatibility-platform-2026-10-10/ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md)
+(proposed, unratified). It proposes no code and promotes no pin.

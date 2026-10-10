@@ -1,7 +1,9 @@
 # D-LG-6 — R3 mechanics: fan-out regions, reducers and joins
 
-**Status:** proposed, implementation directed by the operator on 2026-10-10. It becomes
-approved when the Core pull request that implements it is reviewed and merged. It builds on
+**Status:** approved by the operator on 2026-10-10. Implementation evidence: Perpetua Core
+PR #9 (merged as `4d217f6`) and Oramasys PR #25 (merged as `f4dbf33`). Production
+Oramasys remains pinned to pre-R3 Core until P0 requalification; approval of these mechanics
+does not claim that the production dependency has already been promoted. It builds on
 [D-LG-5](ADR-D-LG-5-REDUCER-JOIN-DECLARATIONS.md), which already settled *where* the
 declarations live. This ADR settles *what they mean*.
 
