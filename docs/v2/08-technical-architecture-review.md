@@ -1,14 +1,23 @@
 # 08 — Technical Architecture Review (Gemini-Analyzer)
 
-> **Repository standard:** everything executable lives under `/src`; no root-level `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never committed with secrets, personal paths, or SecOps material. Additive — see [`46-repository-standard.md`](46-repository-standard.md).
+> **Repository standard:** everything executable lives under `/src`; no root-level
+> `scripts`/`tests`/`tools`/`examples`; data output and produced binaries stay `.gitignore`d, never
+> committed with secrets, personal paths, or SecOps material. Additive — see
+> [`46-repository-standard.md`](46-repository-standard.md).
 > **Status:** Active | Added 2026-05-02
-> **Purpose:** Address feasibility concerns from `05-feasibility-review.md` and resolve OQ1–OQ12 from `06-open-questions.md` by synthesizing industry-standard research (MAESTRO, SWARM, Karpathy) into the oramasys v2 microkernel.
+> **Purpose:** Address feasibility concerns from `05-feasibility-review.md` and resolve OQ1–OQ12
+> from `06-open-questions.md` by synthesizing industry-standard research (MAESTRO, SWARM, Karpathy)
+> into the oramasys v2 microkernel.
 
 ---
 
 ## 1. Executive Summary
 
-The oramasys v2 architecture succeeds where other frameworks (LangGraph, CrewAI) fail by treating **hardware and security as primary citizens**. This review hardens the "Ghost Orchestrator" model by introducing deterministic safety primitives, capability-based routing, and a high-performance event bus. We maintain the "ruthless minimalism" of v2 while ensuring that safety, authorization, egress policy, and auditability are baked into the platform, not just prompts or post-hoc middleware.
+The oramasys v2 architecture succeeds where other frameworks (LangGraph, CrewAI) fail by treating
+**hardware and security as primary citizens**. This review hardens the "Ghost Orchestrator" model by
+introducing deterministic safety primitives, capability-based routing, and a high-performance event
+bus. We maintain the "ruthless minimalism" of v2 while ensuring that safety, authorization, egress
+policy, and auditability are baked into the platform, not just prompts or post-hoc middleware.
 
 ---
 
@@ -20,8 +29,10 @@ We will map our kernel hooks directly to MAESTRO layers to ensure no security "w
 
 - **Layer 3 (Agent Frameworks)**: Resolved via `MiniGraph` (D8) — deterministic handoffs.
 - **Layer 5 (Evaluation/Observability)**: Resolved via `GossipBus` (P9) — queryable audit trail.
-- **Layer 6 (Security/Compliance)**: Resolved via `HardwarePolicyResolver` (P8) — hard affinity gate.
-- **Layer 7 (Ecosystem)**: Resolved via `HITL Interrupts` (4d) — mandatory human-in-the-loop for high-risk tool calls.
+- **Layer 6 (Security/Compliance)**: Resolved via `HardwarePolicyResolver` (P8) — hard affinity
+  gate.
+- **Layer 7 (Ecosystem)**: Resolved via `HITL Interrupts` (4d) — mandatory human-in-the-loop for
+  high-risk tool calls.
 
 > **Gap flagged (2026-06-18):** Layers 1 (Foundation Models), 2 (Data
 > Operations), and 4 (Deployment & Infrastructure) have no kernel-hook
@@ -35,8 +46,10 @@ We will map our kernel hooks directly to MAESTRO layers to ensure no security "w
 
 To address the "Compounding Failure" risk (March of Nines):
 
-- **LLM-Wiki Pattern**: Our `LESSONS.md` and `SKILL.md` documents are the "Project Memory." v2 will enforce that every graph run concludes with a `GossipBus` event that triggers a "Lesson Proposal."
-- **Test-Driven Spawning**: Agents must not spawn without a "Success Criterion" defined in their `PerpetuaState.scratchpad`.
+- **LLM-Wiki Pattern**: Our `LESSONS.md` and `SKILL.md` documents are the "Project Memory." v2 will
+  enforce that every graph run concludes with a `GossipBus` event that triggers a "Lesson Proposal."
+- **Test-Driven Spawning**: Agents must not spawn without a "Success Criterion" defined in their
+  `PerpetuaState.scratchpad`.
 
 ### C. Public security baseline (D16)
 
@@ -72,7 +85,8 @@ class GraphPlugin(Protocol):
     def on_node_end(self, state: PerpetuaState, node_name: str, delta: dict) -> None: ...
 ```
 
-This resolves the "leaky abstraction" risk by providing stable hooks for the Checkpointer and Interrupts.
+This resolves the "leaky abstraction" risk by providing stable hooks for the Checkpointer and
+Interrupts.
 
 ### F2: Infinite Loop Protection (OQ12)
 
@@ -93,9 +107,13 @@ async def ainvoke(self, state: PerpetuaState, max_steps: int = 50) -> PerpetuaSt
 **Decision:** Implement the "Hot-Write" pattern.
 
 - Use `asyncio.Queue` for non-blocking `emit()`.
-- A single background task manages the SQLite connection and performs batched commits every 500ms or 50 events. This reduces disk I/O overhead by ~90% in high-frequency graphs.
+- A single background task manages the SQLite connection and performs batched commits every 500ms or
+  50 events. This reduces disk I/O overhead by ~90% in high-frequency graphs.
 
-**v2.1 extension (particle mesh):** Cross-host gossip uses frugal tail sync between cooperating orama / PT particles — not full DB replication, not Redis by default. Optional BLE transport (bitchat-class offline mesh) shares the same event envelope. See [`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md) and OQ29–OQ30.
+**v2.1 extension (particle mesh):** Cross-host gossip uses frugal tail sync between cooperating
+orama / PT particles — not full DB replication, not Redis by default. Optional BLE transport
+(bitchat-class offline mesh) shares the same event envelope. See
+[`43-gossipbus-mesh-transport.md`](43-gossipbus-mesh-transport.md) and OQ29–OQ30.
 
 ---
 
@@ -118,14 +136,19 @@ async def ainvoke(self, state: PerpetuaState, max_steps: int = 50) -> PerpetuaSt
 I am introducing the **Sentinel Node** concept as a built-in "SWARM Misalignment Kill-switch" (P2).
 
 **The Structure:**
-A special plugin that injects a `check_integrity()` call after every `N` nodes. It evaluates the `metadata["risk_score"]` and `metadata["goal_drift"]`. If thresholds are exceeded, it raises a `MAESTRO_VIOLATION` Interrupt immediately, forcing human intervention before the next agent is spawned.
+A special plugin that injects a `check_integrity()` call after every `N` nodes. It evaluates the
+`metadata["risk_score"]` and `metadata["goal_drift"]`. If thresholds are exceeded, it raises a
+`MAESTRO_VIOLATION` Interrupt immediately, forcing human intervention before the next agent is
+spawned.
 
 ---
 
 ## 6. Implementation Recommendation (The "Nimble" Vehicle)
 
-- **Repo 1 (`perpetua-core`)**: Stays under 1,000 lines. Focuses on the "March of Nines" by making every operation retryable and auditable.
-- **Repo 2 (`oramasys`)**: Acts as the "Glass Window." Handlers remain ≤ 10 lines. It is the composition layer where the 7-agent network is defined as a YAML-based graph.
+- **Repo 1 (`perpetua-core`)**: Stays under 1,000 lines. Focuses on the "March of Nines" by making
+  every operation retryable and auditable.
+- **Repo 2 (`oramasys`)**: Acts as the "Glass Window." Handlers remain ≤ 10 lines. It is the
+  composition layer where the 7-agent network is defined as a YAML-based graph.
 
 **Next Course of Action:**
 
