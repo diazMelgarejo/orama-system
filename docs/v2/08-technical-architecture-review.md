@@ -103,7 +103,7 @@ async def ainvoke(self, state: PerpetuaState, max_steps: int = 50) -> PerpetuaSt
 
 | # | Question | Resolved Decision |
 |---|----------|-------------------|
-| **OQ1** | **Pydantic AI** | Keep as a **Tool Schema Provider** ONLY. We use their \`@tool\` ergonomics but our own \`MiniGraph\` runtime. Stays out of the kernel. |
+| **OQ1** | **Pydantic AI & LangGraph** | **No runtime replacement of MiniGraph kernel.** Maximize Pydantic AI coverage across application and tool layers (typed dependency injection, `@tool` schema extraction, structured outputs, agent signatures) while maintaining 100% drop-in compatibility with LangGraph/LangChain (StateGraph protocol, checkpoint/thread identity, message wrappers). |
 | **OQ2** | **GGUF Spec** | **Do not wait.** \`agate\` (OQ3) will be our de facto bridge. If GGUF adds metadata later, we will update our \`HardwarePolicyResolver\` to read it as a priority hint. |
 | **OQ10** | **Capability-Based** | **Approved.** The \`model_hardware_policy.yml\` schema will support a \`requirements\` block (e.g., \`vram_min_gb: 12\`). |
 | **OQ8** | **Naming** | Standardize on **\`optimize_for\`** (GPT scaffold) for consistency across the LAN API. |
