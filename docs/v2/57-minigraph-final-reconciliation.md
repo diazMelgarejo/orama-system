@@ -555,7 +555,9 @@ Delivery is tracked per surface and is never overstated: the builder/topology
 API and invoke/stream surface are the first supported surfaces. Exact
 `astream_events(version="v2")` fidelity and full `BaseCheckpointSaver`
 serialization compatibility are still in progress under the same target. A
-surface is marked delivered only when a compatibility test proves it.
+surface is marked delivered only after independent evidence covers every supported package
+version, Python version, entry point, import path, observable event, error, and persistence
+behavior.
 
 ### 17a. Python surface
 
