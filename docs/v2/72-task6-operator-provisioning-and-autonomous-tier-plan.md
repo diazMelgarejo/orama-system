@@ -1,5 +1,7 @@
 # Task 6 Operator Provisioning and Autonomous Tier Implementation Plan
 
+<!-- markdownlint-disable MD013 -->
+
 > For agentic workers: use `superpowers:subagent-driven-development` for independent implementation and review, or `superpowers:executing-plans` for a single-worker execution. This document is a planning artifact; implementation starts after its written review.
 >
 > **Published copy.** The canonical, implementer-owned plan is `docs/v2/57-task6-operator-provisioning-and-autonomous-tier-plan.md` in `oramasys/oramasys` ([PR #34](https://github.com/oramasys/oramasys/pull/34)). This copy is a snapshot of that file at commit `86554b5`, published here so the roadmap referenced by [ADR 71](71-operator-provisioning-and-autonomous-tier-adr.md) is linkable before that PR merges. On any difference, the ADR controls policy and the implementer's file controls implementation detail.
