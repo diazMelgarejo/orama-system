@@ -83,7 +83,8 @@ clean tree that needs no hard reset at all. Anything it cannot prove safe is
 *refused, never erased*: status 10 dirty, 11 unpushed commits, 12 cannot verify.
 `clone_sibling` warns and leaves the checkout untouched so cloud boot is not
 killed; `CLOUD_INSTALL_ON_DIVERGED_MIRROR=fail` makes it a hard failure.
-Covered by `tests/test_cloud_install_mirror_sync.py`.
+Covered by `tests/test_cloud_install_mirror_sync.py`. Backed by PT
+`lesson_fdcff1271292` (PT PR #441, **pending merge**).
 *History:* before this, `clone_sibling` reset unconditionally and the card listed
 it as unsupported; that gap is closed.
 
