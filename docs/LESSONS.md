@@ -48,6 +48,19 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-10-03 — Align harness model defaults with Alexandria model-governance | Cursor
+
+**Scope:** orama-system live guidance + `config/model-governance.yml` pin.
+
+Seth's provider-agnostic standard (alexandria PR #1, tip `e7ee9db6`) is now
+the cited source for harness launches. Cursor/Grok Bot default is `grok-4.6`
+medium with fast off; Anthropic default is `claude-sonnet-5-5` medium;
+`grok-4.5` and agent `auto` are banned; escalation tokens are not config/env
+flags. Runtime frugality ladder unchanged; cost gate fail-closed; cloud
+escalation default-deny.
+
+---
+
 ### 2026-08-08 — ALWAYS verify, NEVER trust: PR #283's merged tree silently dropped OSSF-1 content | Claude
 
 **Scope:** orama-system git-history-surgery doctrine + PR #283 (`2026-08-07-001-harden-skills-vendor-blend-lessons`)

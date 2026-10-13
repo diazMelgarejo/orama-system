@@ -48,7 +48,7 @@ Use the right tool for the right layer. Use the cheapest agent that can succeed.
 
 | Layer | Tool | Job |
 | --- | --- | --- |
-| Main reasoning + judgment | Claude Sonnet 4.6 medium + prompt caching | Decide, edit, review, synthesize, content insertion |
+| Main reasoning + judgment | Claude Sonnet 5.5 medium + prompt caching | Decide, edit, review, synthesize, content insertion |
 | **Default coding agent** | **`cline` CLI via `cline-pass/glm-5.2` (Cline Credits)** | **Agentic coding, refactoring, tool loops — 1M ctx, no rate limits** |
 | Lightweight routing/triage | OpenRouter free-model stack (`openrouter/free` auto-router) | Quick replies, routing decisions, summarization — free but rate-limited (50 req/day) |
 | Large-context reading, when explicitly requested | `gemini-mcp-tool` | Gemini-Analyzer use-cases only, architecture mapping, visual diff, screenshot comparison, multi-file audit |
@@ -173,9 +173,9 @@ For ANY OTHER reading task (single file, narrow audit, dependency scan), route t
 "GEMINI-ANALYZER: visual-diff between @screenshot.png and live dev server"
 ```
 
-### Rule 3 — Claude Sonnet 4.6 medium for judgment + prompt caching
+### Rule 3 — Claude Sonnet 5.5 medium for judgment + prompt caching
 
-Reserve Claude Sonnet 4.6 (this session's main agent) for:
+Reserve Claude Sonnet 5.5 (this session's main agent) for:
 
 - Final judgment, taste calls, conflict resolution
 - Reviewing worker outputs and detecting drift
@@ -184,13 +184,13 @@ Reserve Claude Sonnet 4.6 (this session's main agent) for:
 
 **Prompt caching policy (Goal 2 from RC-1 plan):**
 
-When using Claude Sonnet 4.6 via the Anthropic SDK:
+When using Claude Sonnet 5.5 via the Anthropic SDK:
 
-- `model: claude-sonnet-4-6`
+- `model: claude-sonnet-5-5`
 - `thinking.effort: medium`
 - Set `cache_control` on **stable** system prompts, tool definitions, and context prefixes
 - **Simplest option — automatic placement:** pass a single `cache_control` field at the **top level** of the `messages.create()` request and the SDK auto-places the breakpoint on the last cacheable block. Reach for explicit per-block `cache_control` only when you need fine-grained control over multiple breakpoints (max 4).
-- Sonnet 4.6 minimum cacheable prompt: **1,024 tokens** (anything smaller is not cached)
+- Sonnet 5.5 minimum cacheable prompt: **1,024 tokens** (anything smaller is not cached)
 - TTL: 5 minutes default (90 minutes with `ttl: "extended"`)
 - **NEVER cache** changing suffixes — timestamps, per-run user payloads, request IDs, response IDs
 
@@ -202,7 +202,7 @@ import anthropic
 client = anthropic.Anthropic()
 
 response = client.messages.create(
-    model="claude-sonnet-4-6",
+    model="claude-sonnet-5-5",
     max_tokens=1024,
     thinking={"type": "enabled", "budget_tokens": 8000},
     system=[
@@ -425,7 +425,7 @@ Use this in `CLAUDE.md`, OpenClaw instructions, or project agent docs:
 1. Default to OpenRouter free-model stack (Nemotron → MiniMax → DeepSeek → …) for generic worker calls.
 2. Use `ollama run qwen3.5:9b-nvfp4` (local Mac) FIRST when no network/API is required (lint, format, bash scripts).
 3. Use Gemini ONLY for Gemini-Analyzer use-cases: visual diff, whole-repo architecture, multi-file stale-doc detection, large-diff code review.
-4. Use Claude Sonnet 4.6 medium + prompt caching for judgment, final synthesis, taste calls, content insertion.
+4. Use Claude Sonnet 5.5 medium + prompt caching for judgment, final synthesis, taste calls, content insertion.
 5. Use ai-cli-mcp only for isolated parallel work with PID tracking.
 6. Use absolute workFolder paths.
 7. Never let worker agents commit, deploy, delete, or change account settings without explicit confirmation.
@@ -451,7 +451,7 @@ Use this in `CLAUDE.md`, OpenClaw instructions, or project agent docs:
 | Mechanical search-replace across many files | Codex CLI via ai-cli-mcp |
 | Multiple independent worker tasks in parallel | ai-cli-mcp dispatch |
 | Messaging or channel-based routing | OpenClaw |
-| Judgment / content insertion / final synthesis | Claude Sonnet 4.6 + prompt cache |
+| Judgment / content insertion / final synthesis | Claude Sonnet 5.5 + prompt cache |
 | Repeated procedure to encode | Claude Skill |
 | Missing capability | Custom MCP server (`references/custom-mcp-server-authoring.md`) |
 
@@ -467,7 +467,7 @@ For external capabilities, add an MCP server.
 For parallel work, use ai-cli-mcp.
 For Gemini-Analyzer use-cases (visual, large-context), use Gemini.
 For everything else, use OpenRouter free models or local ollama.
-For judgment, use Claude Sonnet 4.6 medium with prompt caching.
+For judgment, use Claude Sonnet 5.5 medium with prompt caching.
 
 **Applied pattern — multi-channel steelman:** for a small but high-stakes change, fan the design out to a heterogeneous model panel (verify reachability first) for adversarial review. Recipe: [`docs/reference/multi-channel-steelman.md`](../../../../docs/reference/multi-channel-steelman.md).
 
