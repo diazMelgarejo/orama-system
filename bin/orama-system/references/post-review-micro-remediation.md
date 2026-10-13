@@ -32,6 +32,53 @@
 
 ### Phase 1 — Root-cause clustering
 
+- **Verify each finding against the code and the behaviour before it becomes a
+  fix.** A reviewer comment, a bot suggestion and a peer agent's patch are all
+  claims, and several reviewers agreeing is not evidence. Run these five checks
+  and record the outcome per finding as *valid*, *valid with a corrected premise*
+  or *declined with evidence*:
+  1. **Is the cited premise real?** Open the rule, line or symbol the finding
+     points at. Example (PT PR #440): a finding cited a portable-memory rule at a
+     line that was an unrelated lesson, and no such rule existed. The change was
+     still worth making on durability grounds, and the reply said exactly that.
+  2. **Apply it experimentally and run the existing tests.** Example (phylax
+     PR #11): two reviewers asked that a per-start reconcile compare the stored key
+     with a pristine record. Applied, it failed both existing restart tests,
+     because recording a grant legitimately mutates the active key and the check
+     runs on every start. It was declined, the reason was written into the
+     docstring, and a test pinned it so the next reviewer does not "strengthen"
+     it into a restart-bricking bug.
+  3. **Look for a tautology.** A guard whose conditions the query or a database
+     constraint already guarantees (`status != 'active'` after `WHERE status =
+     'active'`) is false assurance, not hardening.
+  4. **Look for an existing seam before accepting a new one.** Example (T2
+     delivery): a patch added `ainvoke(delivery=)` to Core while
+     `run_with_plugins(delivery=, gate=)` already existed at every pin. The new
+     seam was weaker: a listener's mutation reached the final state. Measure the
+     difference rather than assert it.
+  5. **Check what the proposed test exercises.** A test double that never fails
+     cannot demonstrate a failure-handling requirement.
+  When a correction would change a record's identity (a lesson id hashes its
+  claim), supersede it instead of editing in place.
+- **Debug the harness before the code.** When something fails and you cannot yet
+  explain it:
+  1. Reproduce on pristine `main` under the same environment first. A failure that
+     also fails there is not yours; say so with the command that proves it.
+  2. Change one environmental factor at a time: interpreter, `PYTHONPATH`, Core
+     revision.
+  3. Ask why CI is green by comparing how CI installs and invokes. Example: three
+     tests failed only in a source checkout because CI always installs the package,
+     so it never took a fallback branch that dropped `PYTHONPATH` and never supplied
+     the source root.
+  4. Read the child process's stderr, not only the assertion line.
+  5. Once you find one instance, sweep for the class (every subprocess spawner) and
+     fix the shared decision, not each call site.
+  6. A branch CI never takes is untested. Make the decision a pure function and test
+     both outcomes without a subprocess.
+  7. Prove new tests bite with a mutant: remove the load-bearing line and watch them
+     fail.
+  Own harness errors out loud. An environment override of your own (replacing
+  `PYTHONPATH` wholesale) can look like a repository bug; say it was yours.
 - **Read every finding and open every file it touches before editing
   anything.** Build an explicit file → fix mapping (a table is fine) from
   the full set of findings first. Editing as you read produces partial,
