@@ -1,6 +1,9 @@
 # Contributing to orama-system
 
-Thank you for your interest in contributing. This project is built on the orama/ultrathink methodology, so non-trivial contributions must preserve deliberate planning, verification, and auditability. Apply the same standard to contribution work: plan visibly, keep scope narrow, verify before commit, and leave links for the next human or agent who will work on this.
+Thank you for your interest in contributing. This project is built on the orama/ultrathink
+methodology, so non-trivial contributions must preserve deliberate planning, verification, and
+auditability. Apply the same standard to contribution work: plan visibly, keep scope narrow, verify
+before commit, and leave links for the next human or agent who will work on this.
 
 ---
 
@@ -8,7 +11,9 @@ Thank you for your interest in contributing. This project is built on the orama/
 
 1. **Fork** the repository
 2. **Create a branch**: `git checkout -b feature/your-feature-name`
-3. **Apply ultrathink**: Use the [root skill contract](SKILL.md), the [packaged skill entrypoint](bin/orama-system/SKILL.md), and the [5-stage methodology](bin/orama-system/references/oramasys-5-stages.md) for any non-trivial change
+3. **Apply ultrathink**: Use the [root skill contract](SKILL.md), the [packaged skill
+   entrypoint](bin/orama-system/SKILL.md), and the [5-stage
+   methodology](bin/orama-system/references/oramasys-5-stages.md) for any non-trivial change
 4. **Commit clearly**: Follow Conventional Commit standards
 5. **Push and open a PR**: Describe your changes and the problem solved
 
@@ -18,11 +23,25 @@ Thank you for your interest in contributing. This project is built on the orama/
 
 Use this map to load only the context needed for the current task.
 
-- **Methodology**: Start with [SKILL.md](SKILL.md), [bin/orama-system/SKILL.md](bin/orama-system/SKILL.md), [oramasys-5-stages.md](bin/orama-system/references/oramasys-5-stages.md), and [core-operational-directives.md](bin/orama-system/references/core-operational-directives.md).
-- **Skill authoring**: For skill edits, read [content-insertion-framework.md](bin/orama-system/references/content-insertion-framework.md) and [skill-architecture-guide.md](bin/orama-system/references/skill-architecture-guide.md) before expanding any `SKILL.md`.
-- **Multi-agent coordination**: For parallel work, scope ownership, and handoffs, use [06-multi-agent-collab.md](docs/wiki/06-multi-agent-collab.md) and [08-git-hygiene-and-branching.md](docs/wiki/08-git-hygiene-and-branching.md).
-- **Recovery and salvage work**: For history-repair branches, read [history recovery](docs/recovery/2026-04-24-001-orama-history-recovery.md), the [commit salvage matrix](docs/recovery/2026-04-24-002-commit-salvage-matrix.md), and [git safety guardrails](docs/recovery/2026-04-24-003-git-safety-guardrails.md) before running risky Git commands.
-- **Verification and lessons**: Before final handoff, consult [LESSONS.md](docs/LESSONS.md), the [wiki index](docs/wiki/README.md), [tests/README.md](tests/README.md), and the [verification checklist template](bin/orama-system/templates/verification-checklist.md).
+- **Methodology**: Start with [SKILL.md](SKILL.md),
+  [bin/orama-system/SKILL.md](bin/orama-system/SKILL.md),
+  [oramasys-5-stages.md](bin/orama-system/references/oramasys-5-stages.md), and
+  [core-operational-directives.md](bin/orama-system/references/core-operational-directives.md).
+- **Skill authoring**: For skill edits, read
+  [content-insertion-framework.md](bin/orama-system/references/content-insertion-framework.md) and
+  [skill-architecture-guide.md](bin/orama-system/references/skill-architecture-guide.md) before
+  expanding any `SKILL.md`.
+- **Multi-agent coordination**: For parallel work, scope ownership, and handoffs, use
+  [06-multi-agent-collab.md](docs/wiki/06-multi-agent-collab.md) and
+  [08-git-hygiene-and-branching.md](docs/wiki/08-git-hygiene-and-branching.md).
+- **Recovery and salvage work**: For history-repair branches, read [history
+  recovery](docs/recovery/2026-04-24-001-orama-history-recovery.md), the [commit salvage
+  matrix](docs/recovery/2026-04-24-002-commit-salvage-matrix.md), and [git safety
+  guardrails](docs/recovery/2026-04-24-003-git-safety-guardrails.md) before running risky Git
+  commands.
+- **Verification and lessons**: Before final handoff, consult [LESSONS.md](docs/LESSONS.md), the
+  [wiki index](docs/wiki/README.md), [tests/README.md](tests/README.md), and the [verification
+  checklist template](bin/orama-system/templates/verification-checklist.md).
 
 ---
 
@@ -33,20 +52,26 @@ Use this map to load only the context needed for the current task.
 - [ ] Keep `.env`, `.env.local`, and `.paths` untracked; update examples instead
 - [ ] Run `scripts/verify-package.sh` — all checks must pass
 - [ ] New skills follow the SKILL.md architecture standard (< 200 lines, YAML frontmatter)
-- [ ] Old skills should upgrade to SKILL.md architecture standard (< 500 lines, YAML frontmatter, offload to references/ and/or sub-skills/)
+- [ ] Old skills should upgrade to SKILL.md architecture standard (< 500 lines, YAML frontmatter,
+  offload to references/ and/or sub-skills/)
 - [ ] Scripts include docstrings and error handling
 - [ ] Templates include usage comments
 - [ ] Add or update tests for any new functionality
 - [ ] If any `*.md` files changed, preserve the redirect trail and keep links relative
-- [ ] If a new `*.md` file exceeds 200 lines or an existing `*.md` file exceeds 500 lines, ask whether to split details into `references/`, `docs/wiki/`, or a sub-skill before committing
+- [ ] If a new `*.md` file exceeds 200 lines or an existing `*.md` file exceeds 500 lines, ask
+  whether to split details into `references/`, `docs/wiki/`, or a sub-skill before committing
 
 ### History Recovery Only
 
-- Use salvage branch names such as `yyyy-mm-dd-001-brief-summary`; see [git hygiene and branching](docs/wiki/08-git-hygiene-and-branching.md).
+- Use salvage branch names such as `yyyy-mm-dd-001-brief-summary`; see [git hygiene and
+  branching](docs/wiki/08-git-hygiene-and-branching.md).
 - Confirm Git identity with `bash scripts/git/check_identity.sh` before committing.
-- Install repo hooks once per clone: `bash scripts/git/install-local-hooks.sh` (identity + `Co-authored-by` policy — [official policy (2026-05-25)](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25)).
+- Install repo hooks once per clone: `bash scripts/git/install-local-hooks.sh` (identity +
+  `Co-authored-by` policy — [official policy
+  (2026-05-25)](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25)).
 - Preserve dirty work before risky Git operations with `git stash push --include-untracked`.
-- Prefer manual salvage of reviewed intent over replaying tainted commit ranges; use the [commit salvage matrix](docs/recovery/2026-04-24-002-commit-salvage-matrix.md).
+- Prefer manual salvage of reviewed intent over replaying tainted commit ranges; use the [commit
+  salvage matrix](docs/recovery/2026-04-24-002-commit-salvage-matrix.md).
 
 ### Commit Message Format
 
@@ -67,7 +92,11 @@ Verification:
 Closes #issue-number
 ```
 
-Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`, `perf`, `ci`, `sec`, `arch`, `release`
+
+The scope is encouraged, not forbidden: `fix(telos): ...` and `feat(agate): ...` are the
+canonical form for cross-repo work. Reviewers and review bots must accept a scoped subject;
+the unscoped `type: description` form is also valid when no single scope applies.
 
 ### Code Style
 
@@ -89,7 +118,8 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 
 ### Please Avoid
 
-- Expanding existing `SKILL.md` files beyond 500 lines. New skill entrypoints should stay near 200 lines and offload context to `references/` or sub-skills.
+- Expanding existing `SKILL.md` files beyond 500 lines. New skill entrypoints should stay near 200
+  lines and offload context to `references/` or sub-skills.
 - Hardcoded paths or environment-specific assumptions
 - Removing the Apache 2.0 license headers
 
@@ -108,4 +138,4 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 
 Open an issue or start a Discussion on GitHub.
 
-*"Elegant contributions only. If it feels hacky, refine it."*
+> "Elegant contributions only. If it feels hacky, refine it."

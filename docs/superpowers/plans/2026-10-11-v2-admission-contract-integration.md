@@ -134,13 +134,20 @@ git commit -m "fix(telos): bind endpoint freshness to issued decisions"
 
 ```python
 def test_unattested_hardware_observation_is_derived_not_observed() -> None:
-    decision = assess_fit(policy, model, observation, evidence=FitEvidence.derived(observation))
+    decision = assess_fit(policy, model, observation, evidence=FitEvidence.derived(observation, profile_store_version="v1"))
     assert decision.evidence_class == "derived"
 
 def test_collector_evidence_binds_the_observation_digest() -> None:
-    evidence = FitEvidence.observed(observation, collector="local-hardware-collector", clock=clock)
+    evidence = FitEvidence.observed(
+        observation, profile_store_version="v1", collector="local-hardware-collector", clock=clock
+    )
     changed = replace(observation, ram_gb=observation.ram_gb + 1)
-    assert not evidence.covers(changed)
+    assert not evidence.covers(changed, "v1")
+
+def test_evidence_from_an_earlier_profile_store_version_does_not_cover() -> None:
+    evidence = FitEvidence.derived(observation, profile_store_version="v1")
+    assert evidence.covers(observation, "v1")
+    assert not evidence.covers(observation, "v2")
 ```
 
 - [ ] **Step 2: Run the focused tests and verify failure**
@@ -155,20 +162,24 @@ Expected: no evidence type exists and all decisions currently self-label as obse
 class FitEvidence:
     classification: Literal["observed", "derived"]
     observation_digest: str
+    profile_store_version: str
     observed_at: datetime | None
     collector: str | None
 
-    def covers(self, observation: HardwareObservation) -> bool:
-        return self.observation_digest == canonical_observation_digest(observation)
+    def covers(self, observation: HardwareObservation, profile_store_version: str) -> bool:
+        return (
+            self.profile_store_version == profile_store_version
+            and self.observation_digest == canonical_observation_digest(observation)
+        )
 ```
 
-`FitEvidence.derived()` must be the default for in-process caller data. `FitEvidence.observed()` is available only to the local collector boundary and must validate an aware timestamp and nonempty collector identity. `assess_fit()` must reject mismatched evidence and carry the supplied classification forward.
+`FitEvidence.derived()` must be the default for in-process caller data. `FitEvidence.observed()` is available only to the local collector boundary and must validate an aware timestamp and nonempty collector identity. `assess_fit()` must reject evidence whose observation digest or profile-store version does not match, and carry the supplied classification forward.
 
 - [ ] **Step 4: Add an explicit non-authority test**
 
 ```python
 def test_fit_decision_has_no_capability_or_claim_operation() -> None:
-    decision = assess_fit(policy, model, observation, evidence=FitEvidence.derived(observation))
+    decision = assess_fit(policy, model, observation, evidence=FitEvidence.derived(observation, profile_store_version="v1"))
     assert not hasattr(decision, "capability")
     assert not hasattr(decision, "principal")
 ```

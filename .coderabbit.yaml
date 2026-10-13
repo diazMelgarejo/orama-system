@@ -1,0 +1,17 @@
+# CodeRabbit review guidance for orama-system.
+# Commit-message format is defined in CONTRIBUTING.md and is the canonical spec;
+# reviewers must follow it rather than rewrite repo content to a different format.
+reviews:
+  path_instructions:
+    - path: "**/*.md"
+      instructions: |
+        Commit messages use `type(scope): description` as documented in CONTRIBUTING.md.
+        Allowed types: feat, fix, docs, refactor, test, chore, perf, ci, sec, arch, release.
+        A scope is encouraged; the unscoped `type: description` form is also valid.
+        Do not ask for scoped examples to be rewritten to the unscoped form.
+    - path: "docs/v2/**"
+      instructions: |
+        The 100% drop-in LangGraph/LangChain compatibility target (OQ1) is a standing,
+        in-progress target that is never dropped or qualified. It is not a delivered
+        guarantee. Do not ask for it to be scoped, reduced or removed.
+        OQ10 canonical status is the row in docs/v2/08-technical-architecture-review.md.

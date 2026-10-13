@@ -121,9 +121,9 @@ orama / PT particles — not full DB replication, not Redis by default. Optional
 
 | # | Question | Resolved Decision |
 |---|----------|-------------------|
-| **OQ1** | **Pydantic AI & LangGraph** | **No runtime replacement of MiniGraph kernel.** Maximize Pydantic AI coverage across application and tool layers (typed dependency injection, `@tool` schema extraction, structured outputs, agent signatures) while maintaining 100% drop-in compatibility with LangGraph/LangChain (StateGraph protocol, checkpoint/thread identity, message wrappers). |
+| **OQ1** | **Pydantic AI & LangGraph** | **No runtime replacement of MiniGraph kernel.** Maximize Pydantic AI coverage across application and tool layers (typed dependency injection, `@tool` schema extraction, structured outputs, agent signatures) while pursuing 100% drop-in compatibility with LangGraph/LangChain (StateGraph protocol, checkpoint/thread identity, message wrappers) as a standing target. It is work in progress, not yet finished and not a delivered guarantee; the target is never dropped or qualified. |
 | **OQ2** | **GGUF Spec** | **Do not wait.** \`agate\` (OQ3) will be our de facto bridge. If GGUF adds metadata later, we will update our \`HardwarePolicyResolver\` to read it as a priority hint. |
-| **OQ10** | **Capability-Based** | **Approved.** The \`model_hardware_policy.yml\` schema will support a \`requirements\` block (e.g., \`vram_min_gb: 12\`). |
+| **OQ10** | **Capability-Based** | **Approved (v2.2 planning).** The \`model_hardware_policy.yml\` schema will support a \`requirements\` block (e.g., \`vram_min_gb: 12\`). |
 | **OQ8** | **Naming** | Standardize on **\`optimize_for\`** (GPT scaffold) for consistency across the LAN API. |
 | **OQ13** | **Shadow Model Pattern** | **Approved.** Adopt the Pydantic AI pattern of using \`inspect\` + \`create_model\` to generate tool schemas (MCP-ready) at import time. See \`references/patterns/pydantic-ai-extraction-deep-dive.md\`. |
 | **OQ14** | **State Reducers** | **Approved.** Implement LangGraph-style reducers in \`PerpetuaState.merge()\` to handle parallel node updates without data loss. See \`references/patterns/state-reducer-patterns.md\`. |

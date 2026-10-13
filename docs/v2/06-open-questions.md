@@ -12,7 +12,7 @@ Items deliberately deferred. Each has a target checkpoint for resolution.
 
 | # | Question | Context | Status |
 | --- | ---------- | --------- | ------------ |
-| — | *None* | All baseline v2 questions (OQ1–OQ30) resolved as of 2026-10-03. Future open questions are scoped to module-specific RFCs. | **All Settled** |
+| — | *None* | All baseline v2 questions (OQ1–OQ30) resolved as of 2026-10-03, except OQ10, which is **APPROVED** and scheduled for v2.2 planning (canonical row: [`08-technical-architecture-review.md`](08-technical-architecture-review.md)). Future open questions are scoped to module-specific RFCs. | **All Settled** (OQ10: v2.2 planning, APPROVED) |
 
 ---
 
@@ -20,7 +20,7 @@ Items deliberately deferred. Each has a target checkpoint for resolution.
 
 | # | Question | Resolution | Date |
 | --- | ---------- | ------------ | ------ |
-| OQ1 | **Pydantic AI as framework vs LangGraph/LangChain** | **Resolved 2026-10-03:** No runtime replacement of MiniGraph kernel. Maximize Pydantic AI coverage across application and tool layers (typed dependency injection, `@tool` schema extraction, structured outputs, agent signatures) while maintaining 100% drop-in compatibility with LangGraph/LangChain (StateGraph protocol, checkpoint/thread identity, message wrappers). MiniGraph nodes natively host both Pydantic AI agents and LangGraph runnables. | 2026-10-03 |
+| OQ1 | **Pydantic AI as framework vs LangGraph/LangChain** | **Resolved 2026-10-03:** No runtime replacement of MiniGraph kernel. Maximize Pydantic AI coverage across application and tool layers (typed dependency injection, `@tool` schema extraction, structured outputs, agent signatures) while pursuing 100% drop-in compatibility with LangGraph/LangChain (StateGraph protocol, checkpoint/thread identity, message wrappers) as a standing target. It is work in progress, not yet finished and not a delivered guarantee; the target is never dropped or qualified. MiniGraph nodes natively host both Pydantic AI agents and LangGraph runnables. | 2026-10-03 |
 | OQ2 | **GGUF hardware spec extension** | **Resolved 2026-10-03:** Do not wait for community RFC pending since Oct 2024. Implement and publish `agate` as the de facto bridge specification mapping GGUF model IDs to hardware policy. When the upstream GGUF RFC eventually lands, `agate` will serve as the reference compiler targeting native GGUF `system_requirements` metadata keys. | 2026-10-03 |
 | OQ3 | **`agate` naming on PyPI** | **Resolved 2026-10-03:** Live PyPI check confirmed package name `agate` is TAKEN (v1.14.2, data analysis library by Christopher Groskopf). The Python package distribution name must use namespace prefix: `oramasys-agate` (or `agate-spec`), while the GitHub repository remains `oramasys/agate`. | 2026-10-03 |
 | OQ5 | **Agent identity attestation (MAESTRO Layer 3)** | **Resolved 2026-10-03:** Honor-system agent IDs (`metadata["agent_id"]`) remain sufficient for LAN-local deployment until external exposure. Upon external exposure, implement lightweight cryptographic signing by hashing the local node's control plane secret with `metadata["agent_id"]` to generate an HMAC verification signature without heavy PKI. | 2026-10-03 |
@@ -41,7 +41,7 @@ Items deliberately deferred. Each has a target checkpoint for resolution.
 | D11 | 3rd new repo | `oramasys/agate` (Hardware Policy Specification) | 2026-05-01 |
 | D12 | GitHub org | Real GitHub org `oramasys` (user to create at github.com/organizations/new) | 2026-05-01 |
 | D13 | TDD policy | Enshrined in `docs/v2/README.md` and `04-build-order.md`. tdd.md is the source of truth. | 2026-05-01 |
-| OQ10 | **Capability-Based Routing** — Should the `model_hardware_policy.yml` move from model-ID mapping to hardware capability rules (e.g. `VRAM >= 12GB`)? | Current static mapping requires manual YAML updates for every new model version. Rule-based routing would be more adaptive. | v2.2 planning |
+| OQ10 | **Capability-Based Routing** — Should the `model_hardware_policy.yml` move from model-ID mapping to hardware capability rules (e.g. `VRAM >= 12GB`)? | **Approved (v2.2 planning).** The `model_hardware_policy.yml` schema will support a `requirements` block (e.g., `vram_min_gb: 12`). Canonical row with all details: [`08-technical-architecture-review.md`](08-technical-architecture-review.md). | v2.2 planning, APPROVED |
 | OQ11 | GossipBus async | **Resolved:** `aiosqlite` used from day one in `oramasys/perpetua-core` — no sync SQLite; background writer concern resolved by async-native design | 2026-05-01 |
 | OQ4 | GitHub org `oramasys` creation | Org created; all 3 v2 repos live at `github.com/oramasys/*` | 2026-05-01 |
 | OQ7 | Python version for new repos | Python 3.11+ from day one; `requires-python = ">=3.11"` in all 3 `pyproject.toml` files | 2026-05-01 |
