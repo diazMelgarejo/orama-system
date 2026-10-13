@@ -5,7 +5,10 @@ description: >
   Invoke when: starting parallel agent work, bootstrapping a worktree, asking
   "should I use a worktree?", debugging port collisions, cleaning up a finished
   worktree, or any mention of worktree, parallel agents, ENV_OFFSET, or
-  worktree-bootstrap.
+  worktree-bootstrap. Activates when any of the invoke-when phrases appear.
+version: 1.0.0
+compatibility: claude-code, cursor, codex, gemini, openclaw, hermes
+allowed-tools: bash, file-operations
 ---
 
 # Using Git Worktrees — orama-system Stack
@@ -41,6 +44,14 @@ Stash those paths before pull/rebase; never commit overlay values. Full card:
 **Integrity / true unique branch contribution vs current `main`:** use an ephemeral
 fresh `origin/main` baseline; **CLAYGO** (clean last run before and after). Full card:
 [`references/fresh-main-integrity-diff-claygo.md`](references/fresh-main-integrity-diff-claygo.md).
+
+---
+
+## When to Use
+
+Use a worktree when an agent will write files and another agent may be writing to the same
+repo, and always for a board job unless its row names the canonical checkout as the source.
+Skip it for read-only work. Step 0 is the decision; Steps 1-5 are the lifecycle.
 
 ---
 
@@ -102,6 +113,10 @@ Bootstrap handles automatically (no manual steps needed):
 - ✅ Assigns `ENV_OFFSET = worktree_index × 100`
 - ✅ Writes `.worktree-env` with offset port vars
 - ✅ Updates `.cursor/environment.json` if present
+
+> **Creating one by hand?** `git -C <repo> worktree add <path>` resolves a relative
+> `<path>` against `<repo>`, not your cwd, which silently creates the worktree inside the
+> repo checkout. Pass an absolute path and confirm `git -C <repo> status` is clean after.
 
 ---
 
@@ -291,6 +306,26 @@ cat .worktree-env
 | `/autoplan` Step 0 fails (base branch) | `cd` to a git repo root before invoking any skill |
 
 ---
+
+## Boundaries
+
+### Always Do
+
+- Create the worktree from the board row's exact `source_ref` and confirm
+  `git rev-parse HEAD` equals `expected_base_sha` before editing.
+- Run the hygiene gate before every `git commit` and use `finishing-a-development-branch`
+  for cleanup.
+- Pass an absolute path when creating a worktree by hand and confirm the repo checkout
+  stayed clean.
+
+### Ask First
+
+- Removing a worktree that has uncommitted or unpushed work you did not create.
+
+### Never Do
+
+- Stash or discard another agent's work in a shared source worktree.
+- Continue from a stale or convenient local branch when the base SHA does not match.
 
 ## Related skills
 
