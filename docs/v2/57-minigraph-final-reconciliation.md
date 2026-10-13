@@ -547,12 +547,17 @@ Future changes MUST preserve:
 ## 17. LangGraph / LangGraph.js compatibility target
 
 Internal implementation stays ours. At the API surface, the standing target is
-compatibility for the supported builder/topology API and invoke/stream surface.
-Do not claim full drop-in compatibility across unimplemented subsystems.
+100% drop-in compatibility with LangGraph/LangChain. It is work in progress and
+not yet finished; it is a target we are actively working toward and will never
+stop, drop or qualify.
 
-The explicitly excluded or future surfaces include exact
+Delivery is tracked per surface and is never overstated: the builder/topology
+API and invoke/stream surface are the first supported surfaces. Exact
 `astream_events(version="v2")` fidelity and full `BaseCheckpointSaver`
-serialization compatibility.
+serialization compatibility are still in progress under the same target. A
+surface is marked delivered only after independent evidence covers every supported package
+version, Python version, entry point, import path, observable event, error, and persistence
+behavior.
 
 ### 17a. Python surface
 
