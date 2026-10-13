@@ -117,18 +117,50 @@ def test_a_unique_local_commit_is_refused_and_stays_reachable(pair: tuple[Path, 
     assert (mirror / "mine.txt").exists()
 
 
-def test_a_unique_commit_on_a_different_branch_head_is_refused(pair: tuple[Path, Path]) -> None:
-    """The checkout may sit on another branch; its unpushed commit is still at risk."""
+def test_a_commit_a_named_branch_still_holds_is_not_at_risk(pair: tuple[Path, Path]) -> None:
+    """Moving main loses nothing when another branch keeps the commit alive.
+
+    An integration branch that is legitimately ahead of main is the normal case for the
+    fork scripts; refusing it would make the gate useless, not safer.
+    """
+    upstream, mirror = pair
+    tip = _commit(upstream, "next.txt")
+    _git(mirror, "checkout", "-q", "-b", "feature")
+    mine = _commit(mirror, "mine.txt")
+
+    result = _sync(mirror)
+
+    assert result.returncode == SYNCED, result.stderr
+    assert _git(mirror, "rev-parse", "main") == tip
+    assert _git(mirror, "rev-parse", "feature") == mine  # untouched, still holds the commit
+
+
+def test_a_commit_only_a_detached_head_holds_is_refused(pair: tuple[Path, Path]) -> None:
+    """A detached HEAD is the one place a commit has no branch name keeping it alive."""
     upstream, mirror = pair
     _commit(upstream, "next.txt")
-    _git(mirror, "checkout", "-q", "-b", "feature")
+    _git(mirror, "checkout", "-q", "--detach")
     mine = _commit(mirror, "mine.txt")
 
     result = _sync(mirror)
 
     assert result.returncode == UNIQUE
     assert _git(mirror, "rev-parse", "HEAD") == mine
-    assert _git(mirror, "branch", "--show-current") == "feature"
+
+
+def test_a_commit_only_the_local_branch_holds_is_refused_even_when_head_is_elsewhere(
+    pair: tuple[Path, Path],
+) -> None:
+    """The branch being moved may not be checked out; its sole-holder commits still count."""
+    upstream, mirror = pair
+    _commit(upstream, "next.txt")
+    mine = _commit(mirror, "mine.txt")  # on main
+    _git(mirror, "checkout", "-q", "--detach", "origin/main")
+
+    result = _sync(mirror)
+
+    assert result.returncode == UNIQUE
+    assert _git(mirror, "rev-parse", "main") == mine
 
 
 def test_a_local_commit_already_landed_upstream_is_not_unique(pair: tuple[Path, Path]) -> None:
