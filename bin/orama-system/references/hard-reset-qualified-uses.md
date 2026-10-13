@@ -118,7 +118,9 @@ is updated with an expected-head lease so a concurrent push is not overwritten.
 Never apply this to a repo where `main` carries unique work (the canonical
 "never hard-reset `main`" rule). Covered by `tests/test_fork_main_repoint.py`.
 
-*Bugs found by applying the gate:* (1) the periscope script ran
+*Bugs found by applying the gate* (PT `lesson_7fa7d6219657` and
+`lesson_9fd72be1baa7`, both in PT PR #441, **pending merge**): (1) the periscope
+script ran
 `git fetch origin upstream`, which asks `origin` for a branch named `upstream`
 and never fetches the `upstream` remote, so the re-point target could be stale
 or missing; (2) the AlphaClaw script's second step moved the *integration*
