@@ -26,7 +26,7 @@ someone with authority to do so.*
 | # | Check | How | If it fails |
 | --- | --- | --- | --- |
 | 1 | Tree is clean | `git status --porcelain` is empty (untracked too) | commit or park on a WIP ref first |
-| 2 | Nothing unpushed is unique | `git cherry -v <target>` shows no `+` lines, or each `+` has a tree twin (see [`reanchor-after-rewrite.md`](../skills/git-history-surgery/references/reanchor-after-rewrite.md)) — **never** an ahead/behind count | back up (3) and re-anchor instead |
+| 2 | Nothing is left unreferenced | no commit reachable only from the ref(s) being moved lacks a patch-equivalent in the target (`git cherry`; see [`reanchor-after-rewrite.md`](../skills/git-history-surgery/references/reanchor-after-rewrite.md)). A commit another branch, tag or remote-tracking ref still holds is *not* at risk. A detached HEAD is the one holder with no name — **never** an ahead/behind count | back up (3) and re-anchor instead |
 | 3 | A recovery ref exists | `git branch backup/<name>-<stamp> HEAD` (or a tag) *before* resetting | create it; it costs nothing |
 | 4 | Target is an exact SHA | `git rev-parse origin/<b>` after a fresh fetch, then reset to that SHA | never reset to a name that can move mid-command |
 | 5 | You own the branch | local-only, or a branch you alone push to; or operator named it | use a fresh worktree instead (below) |
@@ -76,7 +76,7 @@ must be *checked, not assumed*: if the mirror is dirty or has unique commits,
 someone edited a mirror; fail loudly rather than erase it.
 *Implementation:* `scripts/cursor/lib-mirror-sync.sh` `mirror_sync_checkout`,
 called by `cloud-install.sh` `clone_sibling`. It checks gate 1 (clean tree,
-untracked included) and gate 2 (no commit on `HEAD` or the local branch that
+untracked included) and gate 2 (the move leaves no commit unreferenced that
 lacks a patch-equivalent in the remote), captures the target SHA once after the
 fetch (gate 4), and then moves the branch with `checkout -B <sha>` — on a verified
 clean tree that needs no hard reset at all. Anything it cannot prove safe is
@@ -91,14 +91,39 @@ it as unsupported; that gap is closed.
 
 *Where:* `scripts/periscope/rebuild-deps-prs-onto-merged.sh`;
 `scripts/git/alphaclaw-sync-integration-with-main.sh`.
-*Purpose:* in a fork where `main` is *defined* as the upstream mirror and real
-work lives on `merged` / integration branches, `main` is re-pointed to
-upstream.
+*Why these exist (first principles, from PT memory):*
+
+- **Periscope** — `main` and `agentsview` are upstream mirrors; `merged` is the
+  only integration base, and a rewrite recovery must preserve both mirror
+  parents and the proven `merged` tree (`lesson_fdb82283644f`). The script
+  exists because three dependabot PRs were merged into the mirror by mistake.
+  Re-pointing `main` restores the invariant "tree-identical to upstream" and
+  the three commits are re-homed onto `merged`. Those three SHAs are therefore
+  the *only* commits that may legitimately be dropped.
+- **AlphaClaw** — the integration branch never merges into `main`; the flow is
+  merge PRs into `main`, sync upstream into `main`, then reverse-merge `main`
+  *into* the integration branch with union merges, never deleting
+  (`lesson_881de77084d5`). Session start syncs `main` fast-forward-only
+  (`lesson_9fffe4530a95`). Moving local `main` to `origin/main` is that
+  fast-forward; local work that is not a fast-forward is anomalous, not
+  something to discard.
+
 *Qualify:* the declaration that `main` is a mirror is itself the authority
-(gate 5) — it must be written in the repo's docs, not inferred by the script.
-Gate 2 still applies; publish with an expected-head compare
-(`--force-with-lease`), never a bare force. Never apply this to a repo where
-`main` carries unique work (the canonical "never hard-reset `main`" rule).
+(gate 5) and is written in the repo's docs, not inferred by the script. The
+re-point runs through `mirror_repoint_to_upstream` / `mirror_sync_checkout`
+(`scripts/cursor/lib-mirror-sync.sh`): clean tree; every commit it would leave
+unreferenced must be one the caller **declared** (periscope: the three
+`COMMIT_*` SHAs; AlphaClaw: none); a backup ref is created first; the remote
+is updated with an expected-head lease so a concurrent push is not overwritten.
+Never apply this to a repo where `main` carries unique work (the canonical
+"never hard-reset `main`" rule). Covered by `tests/test_fork_main_repoint.py`.
+
+*Bugs found by applying the gate:* (1) the periscope script ran
+`git fetch origin upstream`, which asks `origin` for a branch named `upstream`
+and never fetches the `upstream` remote, so the re-point target could be stale
+or missing; (2) the AlphaClaw script's second step moved the *integration*
+branch to its remote with the same blind reset, silently dropping unpushed
+integration commits and reporting success.
 
 ### 4. Ruled history rewrite / expunge
 
@@ -142,10 +167,5 @@ a recommendation.
 
 ## Open items
 
-- `scripts/periscope/rebuild-deps-prs-onto-merged.sh` and
-  `scripts/git/alphaclaw-sync-integration-with-main.sh` still re-point a fork
-  `main` without running gates 1–2 (use case 3 relies on the declared-mirror
-  authority plus an expected-head lease). Candidates for the same
-  `mirror_sync_checkout` treatment; not changed here.
 - Both recommending doc sites should be re-read after the next playbook edit
   to confirm they still link here.
