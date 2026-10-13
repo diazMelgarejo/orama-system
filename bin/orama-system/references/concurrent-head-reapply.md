@@ -38,21 +38,22 @@ histories that must be combined* — never by the fact that the branch moved.
 Never reset the shared branch to make room. Work beside it:
 
 ```bash
-# 1. Learn what advanced (read-only)
+# 1. Learn what advanced (read-only), and pin the head you will build on
 git fetch origin "$BRANCH"
-git log --oneline "$MY_BASE..origin/$BRANCH"
-git diff --stat "$MY_BASE" "origin/$BRANCH"
+EXPECTED="$(git rev-parse "origin/$BRANCH")"   # captured once, here; never re-resolved
+git log --oneline "$MY_BASE..$EXPECTED"
+git diff --stat "$MY_BASE" "$EXPECTED"
 
-# 2. Fresh worktree AT the new head (absolute path — see shell-hygiene)
-git worktree add "$HUB/reapply-$STAMP" "origin/$BRANCH"
+# 2. Fresh worktree AT that exact SHA (absolute path — see shell-hygiene)
+git worktree add --detach "$HUB/reapply-$STAMP" "$EXPECTED"
 
 # 3. Reapply only your commits, oldest first, onto that head
 git -C "$HUB/reapply-$STAMP" cherry-pick "$MY_BASE..$MY_TIP"
 #    (or: git format-patch / git am for a path-scoped delta)
 
-# 4. Re-verify in the fresh worktree, then publish against the SHA from step 1
-#    (compare-and-set; a plain push would not catch a rewound branch — see below)
-EXPECTED="$(git rev-parse "origin/$BRANCH")"
+# 4. Re-verify in the fresh worktree, then publish against the SHA from step 1.
+#    Two checks, both required (see "Compare-and-set the publication" below):
+git -C "$HUB/reapply-$STAMP" merge-base --is-ancestor "$EXPECTED" HEAD || exit 1
 git -C "$HUB/reapply-$STAMP" push --force-with-lease="$BRANCH:$EXPECTED" origin HEAD:"$BRANCH"
 ```
 
@@ -77,20 +78,29 @@ The reapply is only safe if the head you re-read is still the head when you
 push. A plain `git push` is not enough: it rejects only non-fast-forward
 updates, so if the remote branch was rewound to an ancestor your reapplied tip
 is still a descendant of it and the push would silently replace the moved head.
-Compare against the SHA you fetched in step 1:
+Two checks, in this order, against the SHA captured **once, immediately after
+the step 1 fetch** (PT `lesson_129c8d545b61`, refining `lesson_590ae6342a41`;
+both in PT PR #441, **pending merge**):
 
 ```bash
-EXPECTED="$(git rev-parse "origin/$BRANCH")"   # captured at step 1, reused here
+git merge-base --is-ancestor "$EXPECTED" HEAD || { echo "tip lacks the head"; exit 1; }
 git push --force-with-lease="$BRANCH:$EXPECTED" origin HEAD:"$BRANCH"
 ```
 
-The explicit `branch:sha` form is a compare-and-set, not a force: it succeeds
-only when the remote is exactly `EXPECTED`, and your tip descends from it, so
-the update is a fast-forward. When publishing through a connector API instead
-of git, use that API's expected-head update and confirm the remote blob SHA
-equals `git hash-object` of the local bytes. If the compare fails the head
-moved again: loop to step 1, do not merge to "make it go through." See [`llm-provider-failure-modes.md`](llm-provider-failure-modes.md)
-for the connector-specific truncation and chunking failures.
+Neither is sufficient alone. The explicit `branch:sha` lease checks only that
+the remote *is* `EXPECTED`; it still permits a non-fast-forward update, so it
+cannot tell you that your tip contains that commit. The ancestry check proves
+the tip contains it, which is what makes the update a fast-forward. Do not
+re-resolve `origin/$BRANCH` after the reapply: a later fetch can advance that
+shared tracking ref to a commit your tip does not contain, and a re-resolved
+`EXPECTED` would then authorise replacing it.
+
+When publishing through a connector API instead of git, use that API's
+expected-head update, require the same ancestry, and confirm the remote blob SHA
+equals `git hash-object` of the local bytes. If either check fails the head
+moved again: loop to step 1, do not merge to "make it go through." See
+[`llm-provider-failure-modes.md`](llm-provider-failure-modes.md) for the
+connector-specific truncation and chunking failures.
 
 ---
 
