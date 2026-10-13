@@ -150,6 +150,12 @@
   from Phase 1, not one commit per file or per review comment).
 - Preserve the original PR scope and description; append updates rather
   than replacing them.
+- **When the PR branch advances while you work**, re-read the new head and
+  reapply your verified delta onto it; do not create a merge or
+  reconciliation commit merely to catch up. Method, exceptions, and the
+  provenance of this rule: [`concurrent-head-reapply.md`](concurrent-head-reapply.md).
+  Provider/connector traps that bite while publishing:
+  [`llm-provider-failure-modes.md`](llm-provider-failure-modes.md).
 
 #### PR body updates (mandatory — never skip)
 

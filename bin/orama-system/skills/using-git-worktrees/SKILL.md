@@ -194,6 +194,15 @@ invisible on your machine but leak developer identity and break CI when committe
 
 ## Step 4 — Work Rules While in a Worktree
 
+### When the PR branch advances
+
+Re-read the new head and reapply your verified delta onto it in a fresh
+worktree; do not create a catch-up merge or rebase, and do not hard-reset the
+shared branch. Method and exceptions:
+[`concurrent-head-reapply.md`](../../references/concurrent-head-reapply.md).
+The few legitimate hard-reset cases and their gate:
+[`hard-reset-qualified-uses.md`](../../references/hard-reset-qualified-uses.md).
+
 ### Inference (GPU)
 
 - **Never POST directly to LM Studio or Ollama.** Always via PT.
