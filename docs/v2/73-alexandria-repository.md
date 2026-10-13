@@ -29,14 +29,14 @@ A **documentation-only, zero-code** repository as the single source of truth for
 ### Repository Governance
 
 | Repository | Layer | Purpose | Owns |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Perpetua-Tools** | L2 (Runtime) | Implementation + orchestration | Code, config, test suites, packages, state machines |
 | **alexandria** | Documentation | Architectural specs + decisions | Specs (D1–D4+), threat models (T1–T7+), ADRs (D0–D17+), team reviews, lessons, design rationale |
 | **orama-system** | L3 (Methodology) | Stateless planning framework | Skills, gate criteria, methodology, standards, policies |
 
 ### Directory Structure
 
-```
+```text
 alexandria/
 ├── docs/
 │   ├── adr/                     # ADRs D0–D17+ (migrated from orama-system/docs/v2/)
@@ -77,23 +77,27 @@ alexandria/
 ## Implementation Plan
 
 ### Phase 1: Repository Creation (Day 1)
+
 - [ ] Create `oramasys/alexandria` as a new repo in the orama GitHub org
 - [ ] Initialize with README.md + .gitignore
 - [ ] Create `docs/v2/` directory structure
 - [ ] Copy this ADR to `docs/v2/41-alexandria-repository.md`
 
 ### Phase 2: Content Migration (Days 2–7)
+
 - [ ] Migrate Phase 0 specs (D1, D2, D4, task list, team review checklist) from PT `docs/phase-0-specifications/` to alexandria `docs/phase-0/`
 - [ ] Migrate ADRs (D0–D17+) from orama-system `docs/v2/` to alexandria `docs/v2/`
 - [ ] Consolidate LESSONS.md from both PT and orama-system into alexandria `docs/lessons/LESSONS.md`
 - [ ] Update PT + orama-system to reference alexandria docs via `git submodule add` or direct URLs
 
 ### Phase 3: Cross-Reference Updates (Days 8–14)
+
 - [ ] Update all cross-references in PT + orama-system to point to alexandria URLs
 - [ ] Update CLAUDE.md files in both repos to document the new canonical location
 - [ ] Update REPO-CROSS-REFERENCE.md in PT to list alexandria as primary source
 
 ### Phase 4: Sync Policy Implementation (Ongoing)
+
 - [ ] Create `scripts/sync-alexandria.sh` in PT + orama-system to pull alexandria changes
 - [ ] Wire script into CI/CD pre-commit hooks
 - [ ] Document in both repos' CLAUDE.md: "Before editing architectural specs, check alexandria first; sync locally via `../alexandria/scripts/sync.sh`"
@@ -103,16 +107,19 @@ alexandria/
 ## Decision Rationale
 
 ### Why a separate repo (not a monorepo)?
+
 - **Build isolation:** Documentation never breaks CI.
 - **Clear ownership:** Alexandria maintainer role is separate from L2 (runtime) and L3 (methodology) roles.
 - **Low friction:** Documentation contributors don't need to understand complex build systems.
 
 ### Why not store specs in PT or orama-system directly?
+
 - **L2 burden:** PT is production code; adds test/build complexity if specs live there.
 - **L3 bloat:** orama-system is methodology/standards; specs are too domain-specific.
 - **Navigation:** Developers don't know whether to look in PT or orama first.
 
 ### Why one-way import (not circular)?
+
 - **Prevents merge loops:** If both directions reference each other, conflict resolution becomes circular.
 - **Clear authority:** alexandria is the source; PT and orama-system consume.
 
@@ -134,14 +141,17 @@ alexandria/
 ## Alternative Considered
 
 ### Option A: Keep specs in Perpetua-Tools
+
 - Pros: Simpler (one fewer repo)
 - Cons: L2 (runtime) becomes heavy with L3 (architectural) documentation; CI/test burden grows
 
 ### Option B: Monorepo with three subdirectories
+
 - Pros: Single git history
 - Cons: Huge footprint; all three projects must coordinate on all pulls; increased merge conflicts
 
 ### Option C (CHOSEN): Separate alexandria repository with one-way import
+
 - Pros: Clean separation; documentation never breaks CI; clear navigation
 - Cons: One more repo to track; sync policy must be maintained
 
@@ -159,4 +169,3 @@ alexandria/
 - Establish release schedule: when should alexandria be tagged/released?
 - Define archive policy: what happens to Phase 0 docs after Phase 1 ships?
 - Consider: should alexandria have a CI gate (check for broken links, validate YAML frontmatter)?
-
