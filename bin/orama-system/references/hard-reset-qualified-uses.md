@@ -74,10 +74,18 @@ agent environment is reproducible.
 *Qualify:* the checkout is a **pure mirror** — declared as such. Gates 1–2
 must be *checked, not assumed*: if the mirror is dirty or has unique commits,
 someone edited a mirror; fail loudly rather than erase it.
-*Status:* **no script currently qualifies.** `scripts/cursor/cloud-install.sh`
-`clone_sibling` resets without gates 1–2, so it is an *unqualified* reset that
-this card does not endorse: treat it as unsupported until the checks land (see
-"Open items"). It is named here so the gap is visible, not as a use case.
+*Implementation:* `scripts/cursor/lib-mirror-sync.sh` `mirror_sync_checkout`,
+called by `cloud-install.sh` `clone_sibling`. It checks gate 1 (clean tree,
+untracked included) and gate 2 (no commit on `HEAD` or the local branch that
+lacks a patch-equivalent in the remote), captures the target SHA once after the
+fetch (gate 4), and then moves the branch with `checkout -B <sha>` — on a verified
+clean tree that needs no hard reset at all. Anything it cannot prove safe is
+*refused, never erased*: status 10 dirty, 11 unpushed commits, 12 cannot verify.
+`clone_sibling` warns and leaves the checkout untouched so cloud boot is not
+killed; `CLOUD_INSTALL_ON_DIVERGED_MIRROR=fail` makes it a hard failure.
+Covered by `tests/test_cloud_install_mirror_sync.py`.
+*History:* before this, `clone_sibling` reset unconditionally and the card listed
+it as unsupported; that gap is closed.
 
 ### 3. Fork `main` is an upstream mirror
 
@@ -134,8 +142,10 @@ a recommendation.
 
 ## Open items
 
-- `cloud-install.sh clone_sibling` should run gates 1–2 before resetting and
-  stop on a dirty mirror. Not changed here: it is a behavioural change to an
-  install script and needs its own test.
+- `scripts/periscope/rebuild-deps-prs-onto-merged.sh` and
+  `scripts/git/alphaclaw-sync-integration-with-main.sh` still re-point a fork
+  `main` without running gates 1–2 (use case 3 relies on the declared-mirror
+  authority plus an expected-head lease). Candidates for the same
+  `mirror_sync_checkout` treatment; not changed here.
 - Both recommending doc sites should be re-read after the next playbook edit
   to confirm they still link here.
