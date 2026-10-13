@@ -4,7 +4,14 @@ description: >-
   Safe shell command execution for agents. Covers enforced no-sleep-chain rules and
   zsh word-splitting behavior. Agents must use Monitor until-loops and
   run_in_background instead of sleep chains, and iterate command output with
-  `while IFS= read -r` rather than unquoted `for x in $var`.
+  `while IFS= read -r` rather than unquoted `for x in $var`. Also covers the silent
+  zsh traps (a variable named `path`, a colon-modifier after a parameter), quoted
+  here-docs for literal payloads, and absolute paths for hand-made worktrees.
+  Activates when waiting on long-running work, looping over command output, naming
+  shell variables, or building a ref:path or worktree path.
+version: 1.0.0
+compatibility: claude-code, cursor, codex, gemini, openclaw, hermes
+allowed-tools: bash
 when_to_use: >-
   Activates when waiting on long-running work (background tasks, npm install,
   claude update, port/health checks, PID exit) or when looping over command output
@@ -28,6 +35,15 @@ paths:
 > Origin: 2026-05-16 session — `sleep 30 && cat <task-output-file>` to wait
 > for npm install. Re-triggered: 2026-05-29 session — `sleep 15 && cat` and
 > `sleep 20 && cat` on a `claude update` background task.
+
+---
+
+## Purpose
+
+Keep agent shell execution correct on the first attempt in an environment where the shell
+is zsh, commands run under a harness that rejects leading `sleep`, and a wrong answer
+often looks like a right one. Waiting, looping, quoting and naming each have one safe
+form below; this skill is the single place they are recorded.
 
 ---
 
@@ -281,6 +297,22 @@ Rules:
 - Pass file/argument lists as explicit args or `"${array[@]}"`.
 - Quote every expansion (`"$var"`). These forms work identically in bash and zsh.
 
+## Shell Portability — zsh names and modifiers that fail silently
+
+Three more zsh-only traps. Each returns a wrong answer that looks like a right one, so the
+error surfaces several steps later as a confusing failure somewhere else.
+
+| Trap | What zsh does | Do this instead |
+| --- | --- | --- |
+| A variable named `path` | `path` is tied to `$PATH`; assigning it, even with `local path=...`, overwrites the command search path, so the next `head`, `git` or `cut` is "command not found" | Never name a variable `path`; use `file`, `target` or `fp`. Same for `status` (read-only) and `argv` |
+| `"$ref:src/a.py"` | A `:` after a parameter starts a history-style modifier (`:s`, `:t`, `:h`), so `$sha:src/x` is silently substituted | Brace it: `"${ref}:src/a.py"` |
+| `git -C <repo> worktree add <relative>` | The relative path resolves against `<repo>`, not the shell's cwd, so the worktree lands inside the repo checkout | Pass an absolute path, then `git -C <repo> status` to confirm the checkout stayed clean |
+
+How to debug it: when a probe reports "absent" or "no such path" for something you read
+moments ago, suspect the probe before the repository. Re-run it once with a literal value;
+if the literal works and the variable form does not, it is quoting, not data. State that
+the first answer was a harness error before you give the corrected one.
+
 ## Shell Quoting - Backticks in Double Quotes
 
 When you are emitting coordination-board posts or other literal shell payloads,
@@ -299,9 +331,38 @@ python3 scripts/agent_coordination.py log codex-primary-orchestrator 'Use `agent
 Rules:
 
 - Use single quotes for literal board text when possible.
-- If you need interpolation, escape backticks or use a here-doc / printf.
+- For a multi-line payload use a here-doc with a **quoted** delimiter (`<<'EOF'`). An
+  unquoted delimiter (`<<EOF`) still performs command substitution on backticks and
+  `$(...)`, so it is not a safe alternative (verified in bash 3.2 and zsh).
+- If you need interpolation, escape the backticks or build the string with `printf`.
 - Treat missing literal code spans in posted text as a sender-side quoting bug
   before suspecting the bus, storage, or receiver.
+
+## Boundaries
+
+### Always Do
+
+- Wait with `run_in_background` or a Monitor until-loop, with a hard ceiling on every
+  external dispatch.
+- Iterate command output with `while IFS= read -r` and quote every expansion.
+- Brace a parameter that is followed by a colon (`"${ref}:path"`) and use absolute paths
+  for `git worktree add`.
+- Write literal multi-line payloads through a here-doc with a quoted delimiter
+  (`<<'EOF'`).
+
+### Ask First
+
+- Killing a backgrounded process you did not start, or removing any lock file another
+  session may hold.
+- Running a downloaded installer outside a private `mktemp -d` directory.
+
+### Never Do
+
+- Put `sleep` first in a command, or poll in a chain of short sleeps.
+- Use `for x in $multiline_var` and expect word-splitting.
+- Name a variable `path` (it is tied to `$PATH`), `status` or `argv`.
+- Rely on an unquoted here-doc delimiter, or backticks inside a double-quoted payload,
+  to carry literal text.
 
 ## Related skills
 
