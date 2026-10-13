@@ -5,7 +5,10 @@ description: >
   Invoke when: starting parallel agent work, bootstrapping a worktree, asking
   "should I use a worktree?", debugging port collisions, cleaning up a finished
   worktree, or any mention of worktree, parallel agents, ENV_OFFSET, or
-  worktree-bootstrap.
+  worktree-bootstrap. Activates when any of the invoke-when phrases appear.
+version: 1.0.0
+compatibility: claude-code, cursor, codex, gemini, openclaw, hermes
+allowed-tools: bash, file-operations
 ---
 
 # Using Git Worktrees — orama-system Stack
@@ -44,6 +47,14 @@ fresh `origin/main` baseline; **CLAYGO** (clean last run before and after). Full
 
 ---
 
+## When to Use
+
+Use a worktree when an agent will write files and another agent may be writing to the same
+repo, and always for a board job unless its row names the canonical checkout as the source.
+Skip it for read-only work. Step 0 is the decision; Steps 1-5 are the lifecycle.
+
+---
+
 ## Step 0 — Should You Use a Worktree?
 
 Ask two questions:
@@ -66,8 +77,9 @@ shared checked-out files.
 Before editing:
 
 1. Read or derive the row's `source_ref` and `expected_base_sha`.
-2. Create the worktree from that exact `source_ref`.
-3. Verify `git rev-parse HEAD` equals `expected_base_sha`.
+2. If the row selects a worktree, create it from that exact `source_ref`.
+3. Verify `git rev-parse HEAD` equals `expected_base_sha` in the checkout the row
+   selected, whether that is the new worktree or the canonical checkout.
 4. If it does not, stop and update the board; do not continue from a stale or
    convenient local branch.
 5. If another agent has dirty files in the source worktree, wait for their
@@ -102,6 +114,16 @@ Bootstrap handles automatically (no manual steps needed):
 - ✅ Assigns `ENV_OFFSET = worktree_index × 100`
 - ✅ Writes `.worktree-env` with offset port vars
 - ✅ Updates `.cursor/environment.json` if present
+
+> **Creating one by hand?** `git -C <repo> worktree add <path>` resolves a relative
+> `<path>` from `<repo>`, not your cwd: `worktrees/x` lands inside the checkout and
+> `../x` lands beside it, and neither is where you are standing. Pass an absolute path
+> and confirm `git -C <repo> status` is clean after.
+>
+> **Which base?** An ordinary feature branch starts from a freshly fetched
+> `origin/main` SHA. A board job is different: create the checkout from the row's
+> exact `source_ref` and verify `expected_base_sha` before editing (see *Board Jobs
+> Require a Source Ref* above); `origin/main` is not a substitute for either.
 
 ---
 
@@ -176,6 +198,15 @@ invisible on your machine but leak developer identity and break CI when committe
 ---
 
 ## Step 4 — Work Rules While in a Worktree
+
+### When the PR branch advances
+
+Re-read the new head and reapply your verified delta onto it in a fresh
+worktree; do not create a catch-up merge or rebase, and do not hard-reset the
+shared branch. Method and exceptions:
+[`concurrent-head-reapply.md`](../../references/concurrent-head-reapply.md).
+The few legitimate hard-reset cases and their gate:
+[`hard-reset-qualified-uses.md`](../../references/hard-reset-qualified-uses.md).
 
 ### Inference (GPU)
 
@@ -291,6 +322,27 @@ cat .worktree-env
 | `/autoplan` Step 0 fails (base branch) | `cd` to a git repo root before invoking any skill |
 
 ---
+
+## Boundaries
+
+### Always Do
+
+- If the row selects a worktree, create it from the board row's exact `source_ref`.
+  Confirm `git rev-parse HEAD` equals `expected_base_sha` in the selected checkout
+  before editing.
+- Run the hygiene gate before every `git commit` and use `finishing-a-development-branch`
+  for cleanup.
+- Pass an absolute path when creating a worktree by hand and confirm the repo checkout
+  stayed clean.
+
+### Ask First
+
+- Removing a worktree that has uncommitted or unpushed work you did not create.
+
+### Never Do
+
+- Stash or discard another agent's work in a shared source worktree.
+- Continue from a stale or convenient local branch when the base SHA does not match.
 
 ## Related skills
 

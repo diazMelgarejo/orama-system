@@ -243,6 +243,8 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 | CodeRabbit re-scans on every push | Run post-merge sweep after **every** merge, not once |
 | PR branch base may be stale vs current main | Check `git merge-base` before simulating |
 | Integration PR `CONFLICTING` after sibling merged overlapping content | Branch still carries pre-base commits; use path-scoped replay onto a fresh integration base — see [`path-scoped-pr-replay-reference-card.md`](../skills/git-history-surgery/references/path-scoped-pr-replay-reference-card.md) |
+| PR branch head advanced while you worked | Re-read the head; reapply your verified delta onto it; no catch-up merge or rebase — [`concurrent-head-reapply.md`](concurrent-head-reapply.md) |
+| Tempted to hard-reset to "fix" a branch | Only for the qualified cases, through the gate — [`hard-reset-qualified-uses.md`](hard-reset-qualified-uses.md) |
 | Board job has no source ref / base SHA | Add them before editing; then work from a fresh worktree at that exact ref |
 | Draft PRs cannot be merged via API | Run `markPullRequestReadyForReview` GraphQL mutation first |
 | `scan_tracked_secrets` catches token in commit body | Never paste tokens in PR titles, commit messages, or docs |
@@ -250,7 +252,7 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
 | Symptom                                    | Cause                               | Fix                                                                   |
 | ------------------------------------------ | ----------------------------------- | --------------------------------------------------------------------- |
 | `stash pop` conflicts on your files        | Other agent pushed while you worked | `git checkout --theirs` or `--ours`; patch manually                   |
-| `rebase` add/add on every file             | No common ancestor (orphan branch)  | `git reset --hard origin/main`; re-apply files manually               |
+| `rebase` add/add on every file             | No common ancestor (orphan branch)  | Prove orphan (`git merge-base` exit 1), back up, then `git reset --hard <exact origin/main SHA>` and re-apply files — or, preferably, a fresh worktree from `origin/main` + copy files. Gate: [`hard-reset-qualified-uses.md`](hard-reset-qualified-uses.md) |
 | File appears doubled/concatenated          | Both conflict sides appended        | Keep only `lines[N:]` (good half); strip duplicate header             |
 | CI fails with real LAN IP assertion        | IP leaked into source default       | Change source to `127.0.0.1`; test validates the env-agnostic default |
 | Module constant contaminated between tests | `importlib.reload()` side effect    | `autouse` fixture that reloads before AND after each test             |
@@ -269,6 +271,12 @@ curl .../pulls/<N> | python3 -c "... print(p.get('mergeable_state'))"
   overlapping content (periscope PR #12 ECC)
 - [`skills/using-git-worktrees/SKILL.md`](../skills/using-git-worktrees/SKILL.md)
   — parallel agent worktree lifecycle; Step 3 embeds the merge-protocol trigger
+- [`concurrent-head-reapply.md`](concurrent-head-reapply.md)
+  — PR head advanced under you: reapply the delta, do not catch-up merge
+- [`hard-reset-qualified-uses.md`](hard-reset-qualified-uses.md)
+  — the legitimate hard-reset cases and the gate each must pass
+- [`llm-provider-failure-modes.md`](llm-provider-failure-modes.md)
+  — provider/harness traps, each keyed to a PT lesson id
 - [`worktree-semantic-merge-reference-card.md`](worktree-semantic-merge-reference-card.md)
   — the default, everyday-use sibling to this protocol; use it instead of
   this doc for an ordinary single-branch, single-agent merge (see the
