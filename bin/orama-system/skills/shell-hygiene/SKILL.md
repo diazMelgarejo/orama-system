@@ -306,12 +306,14 @@ error surfaces several steps later as a confusing failure somewhere else.
 | --- | --- | --- |
 | A variable named `path` | `path` is tied to `$PATH`; assigning it, even with `local path=...`, overwrites the command search path, so the next `head`, `git` or `cut` is "command not found" | Never name a variable `path`; use `file`, `target` or `fp`. Same for `status` (read-only) and `argv` |
 | `"$ref:src/a.py"` | A `:` after a parameter starts a history-style modifier (`:s`, `:t`, `:h`), so `$sha:src/x` is silently substituted | Brace it: `"${ref}:src/a.py"` |
-| `git -C <repo> worktree add <relative>` | The relative path resolves against `<repo>`, not the shell's cwd, so the worktree lands inside the repo checkout | Pass an absolute path, then `git -C <repo> status` to confirm the checkout stayed clean |
+| `git -C <repo> worktree add <relative>` | The relative path resolves from `<repo>`, not the shell's cwd: `worktrees/x` lands inside the checkout and `../x` beside it, never where you are standing | Pass an absolute path, then `git -C <repo> status` to confirm the checkout stayed clean |
 
 How to debug it: when a probe reports "absent" or "no such path" for something you read
-moments ago, suspect the probe before the repository. Re-run it once with a literal value;
-if the literal works and the variable form does not, it is quoting, not data. State that
-the first answer was a harness error before you give the corrected one.
+moments ago, suspect the probe before the repository. Print the expanded value first
+(`printf '%s\n' "$var"`) and re-run once with a literal. If the literal works and the
+variable form does not, the variable is wrong: quoting or a modifier, but equally an
+unset, stale or mistyped value, so inspect the value before naming the cause. State
+that the first answer was a harness error before you give the corrected one.
 
 ## Shell Quoting - Backticks in Double Quotes
 

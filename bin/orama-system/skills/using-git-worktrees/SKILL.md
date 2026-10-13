@@ -77,8 +77,9 @@ shared checked-out files.
 Before editing:
 
 1. Read or derive the row's `source_ref` and `expected_base_sha`.
-2. Create the worktree from that exact `source_ref`.
-3. Verify `git rev-parse HEAD` equals `expected_base_sha`.
+2. If the row selects a worktree, create it from that exact `source_ref`.
+3. Verify `git rev-parse HEAD` equals `expected_base_sha` in the checkout the row
+   selected, whether that is the new worktree or the canonical checkout.
 4. If it does not, stop and update the board; do not continue from a stale or
    convenient local branch.
 5. If another agent has dirty files in the source worktree, wait for their
@@ -115,8 +116,9 @@ Bootstrap handles automatically (no manual steps needed):
 - ✅ Updates `.cursor/environment.json` if present
 
 > **Creating one by hand?** `git -C <repo> worktree add <path>` resolves a relative
-> `<path>` against `<repo>`, not your cwd, which silently creates the worktree inside the
-> repo checkout. Pass an absolute path and confirm `git -C <repo> status` is clean after.
+> `<path>` from `<repo>`, not your cwd: `worktrees/x` lands inside the checkout and
+> `../x` lands beside it, and neither is where you are standing. Pass an absolute path
+> and confirm `git -C <repo> status` is clean after.
 
 ---
 
@@ -311,8 +313,9 @@ cat .worktree-env
 
 ### Always Do
 
-- Create the worktree from the board row's exact `source_ref` and confirm
-  `git rev-parse HEAD` equals `expected_base_sha` before editing.
+- If the row selects a worktree, create it from the board row's exact `source_ref`.
+  Confirm `git rev-parse HEAD` equals `expected_base_sha` in the selected checkout
+  before editing.
 - Run the hygiene gate before every `git commit` and use `finishing-a-development-branch`
   for cleanup.
 - Pass an absolute path when creating a worktree by hand and confirm the repo checkout

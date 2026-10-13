@@ -63,7 +63,10 @@
 - **Debug the harness before the code.** When something fails and you cannot yet
   explain it:
   1. Reproduce on pristine `main` under the same environment first. A failure that
-     also fails there is not yours; say so with the command that proves it.
+     also occurs there is a baseline failure: record it with the command that proves
+     it. That does not prove your change is uninvolved, since it may raise the
+     frequency or add a trigger, so compare conditions and frequency before deciding
+     whether it contributes.
   2. Change one environmental factor at a time: interpreter, `PYTHONPATH`, Core
      revision.
   3. Ask why CI is green by comparing how CI installs and invokes. Example: three
