@@ -276,7 +276,7 @@ orama-system/docs/v2/
 └── 73-alexandria-repository.md  ← APPROVED 2026-07-10 as ADR 41 (moved here from `oramasys/oramasys`, renumbered because `41-` is taken): `oramasys/alexandria` documentation-only repository policy; see the Alexandria mentions in `references/` for the migration plans that assume it
 ```
 
-> **Next free slot: `72-`**
+> **Next free slot: `74-`**
 > Before adding a new doc here, run `ls docs/v2/ | grep '^[0-9]' | sort -V | tail -1` to confirm the
 > highest existing number, claim `highest + 1`, and update this line. Each PR that adds a doc
 > MUST update this line — git conflict on it is the coordination signal for parallel agents.
