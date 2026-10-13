@@ -125,9 +125,9 @@ imports the former's public interfaces.
 - [Phylax adjustment-grant design](https://github.com/oramasys/phylax)
 - [Oramasys adjustment-grant consumer](https://github.com/oramasys/oramasys)
 
-The [Task 6 operator-provisioning and autonomous-tier
-plan](https://github.com/oramasys/oramasys/blob/main/docs/v2/57-task6-operator-provisioning-and-autonomous-tier-plan.md)
-is the implementation roadmap for this decision; it lives with the implementation in
-`oramasys/oramasys`, not in this repository. This ADR controls policy;
+The [Task 6 operator-provisioning and autonomous-tier plan](72-task6-operator-provisioning-and-autonomous-tier-plan.md)
+is the implementation roadmap for this decision. It is published here as a snapshot of the
+canonical file in `oramasys/oramasys` ([PR #34](https://github.com/oramasys/oramasys/pull/34)),
+which lives with the implementation. This ADR controls policy;
 implementation details in the plan must not weaken its quotas, isolation gate,
 or recovery rules.
