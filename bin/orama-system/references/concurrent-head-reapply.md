@@ -4,7 +4,9 @@
 > the PR branch while I was working." Link here; do not restate it in
 > individual skills.
 > **Origin:** Perpetua-Tools (PT) memory re-learned this rule eight separate
-> times between 2026-06-22 and 2026-10-14 (ledger below). Each time it was
+> times between 2026-06-22 and 2026-10-13 UTC (2026-10-14 PHT — the latest
+> entry was accepted 20:00 UTC, which is already the next day in the
+> Philippines; ledger below). Each time it was
 > inscribed as a local lesson and each time the next session had to rediscover
 > it. This card is the end of that loop: orama-system is canonical, PT mirrors.
 > **Underlying principle:** a PR branch is a shared linear record. Catching up
@@ -48,8 +50,10 @@ git worktree add "$HUB/reapply-$STAMP" "origin/$BRANCH"
 git -C "$HUB/reapply-$STAMP" cherry-pick "$MY_BASE..$MY_TIP"
 #    (or: git format-patch / git am for a path-scoped delta)
 
-# 4. Re-verify in the fresh worktree, then fast-forward push
-git -C "$HUB/reapply-$STAMP" push origin HEAD:"$BRANCH"
+# 4. Re-verify in the fresh worktree, then publish against the SHA from step 1
+#    (compare-and-set; a plain push would not catch a rewound branch — see below)
+EXPECTED="$(git rev-parse "origin/$BRANCH")"
+git -C "$HUB/reapply-$STAMP" push --force-with-lease="$BRANCH:$EXPECTED" origin HEAD:"$BRANCH"
 ```
 
 If a cherry-pick conflicts, the other side *changed the same lines you did*:
@@ -70,12 +74,22 @@ Catching up a shared PR branch is none of them.
 ## Compare-and-set the publication
 
 The reapply is only safe if the head you re-read is still the head when you
-push. Publish with an **expected-head compare** (`--force-with-lease` is *not*
-the tool — you are not forcing; a plain push already refuses a non-fast-forward)
-and, when publishing through a connector API rather than git, confirm the
-remote blob SHA equals `git hash-object` of the local bytes. If the push is
-rejected the head moved again: loop to step 1, do not merge to "make it go
-through." See [`llm-provider-failure-modes.md`](llm-provider-failure-modes.md)
+push. A plain `git push` is not enough: it rejects only non-fast-forward
+updates, so if the remote branch was rewound to an ancestor your reapplied tip
+is still a descendant of it and the push would silently replace the moved head.
+Compare against the SHA you fetched in step 1:
+
+```bash
+EXPECTED="$(git rev-parse "origin/$BRANCH")"   # captured at step 1, reused here
+git push --force-with-lease="$BRANCH:$EXPECTED" origin HEAD:"$BRANCH"
+```
+
+The explicit `branch:sha` form is a compare-and-set, not a force: it succeeds
+only when the remote is exactly `EXPECTED`, and your tip descends from it, so
+the update is a fast-forward. When publishing through a connector API instead
+of git, use that API's expected-head update and confirm the remote blob SHA
+equals `git hash-object` of the local bytes. If the compare fails the head
+moved again: loop to step 1, do not merge to "make it go through." See [`llm-provider-failure-modes.md`](llm-provider-failure-modes.md)
 for the connector-specific truncation and chunking failures.
 
 ---
@@ -115,7 +129,7 @@ narrow `lesson_001158f408c1` to "at landing time."
 
 ## Provenance ledger — eight formulations, one rule
 
-| # | PT lesson | Accepted (`accepted_at`) | What it says | State |
+| # | PT lesson | Accepted (`accepted_at`, UTC date) | What it says | State |
 | --- | --- | --- | --- | --- |
 | 1 | `lesson_859e6589c55f` | 2026-06-22 | push rejected: recover with a fresh-from-main branch plus cherry-pick, never merge | accepted |
 | 2 | `lesson_30de39cf9ada` | 2026-06-28 | rebase/cherry-pick post-merge orphan PRs onto current main before closing or merging | accepted |
@@ -124,9 +138,18 @@ narrow `lesson_001158f408c1` to "at landing time."
 | 5 | `lesson_4b650ec5b970` | 2026-07-17 | replaying fixes onto an existing PR branch: verify the live branch, reapply only the missing behavioural delta | accepted |
 | 6 | `lesson_9a91e4244de6` | 2026-07-27 | sideline branches must be cherry-picked onto the active PR branch before push | accepted |
 | 7 | `lesson_c4e8f12a9b3d` | 2026-07-28 | periscope PR #12: reset to fresh `origin/merged`, replay only the harmonized path delta | provisional |
-| 8 | `lesson_24b4facd84d9` | 2026-10-13 | PR head advanced: re-read it, reapply the verified delta, no catch-up merge or rebase | accepted — **PT PR #441 @ b63891c6, pending merge** |
+| 8 | `lesson_24b4facd84d9` | 2026-10-13 (20:00 UTC = 2026-10-14 04:00 PHT) | PR head advanced: re-read it, reapply the verified delta, no catch-up merge or rebase | accepted — **PT PR #441 @ b63891c6, pending merge** |
 
-Dates are the lessons' own `accepted_at` (UTC date). Rows 4 and 7 reach the
+Dates are the lessons' own `accepted_at`, shown as UTC dates; PHT (UTC+8) is
+the operator's local zone and differs by a calendar day for any entry accepted
+after 16:00 UTC.
+
+**Audit time.** This ledger was checked against PT `lessons.jsonl` (ids,
+status, `accepted_at`, claim text) at **2026-10-13 22:10 UTC / 2026-10-14
+06:10 PHT**. Re-run that check before quoting a state; `provisional` and
+`pending-merge` rows move.
+
+Rows 4 and 7 reach the
 right outcome by a hard reset; both are covered by the qualification gate in
 [`hard-reset-qualified-uses.md`](hard-reset-qualified-uses.md), and the
 fresh-worktree method above is preferred.

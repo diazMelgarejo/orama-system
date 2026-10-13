@@ -119,6 +119,11 @@ Bootstrap handles automatically (no manual steps needed):
 > `<path>` from `<repo>`, not your cwd: `worktrees/x` lands inside the checkout and
 > `../x` lands beside it, and neither is where you are standing. Pass an absolute path
 > and confirm `git -C <repo> status` is clean after.
+>
+> **Which base?** An ordinary feature branch starts from a freshly fetched
+> `origin/main` SHA. A board job is different: create the checkout from the row's
+> exact `source_ref` and verify `expected_base_sha` before editing (see *Board Jobs
+> Require a Source Ref* above); `origin/main` is not a substitute for either.
 
 ---
 

@@ -133,8 +133,9 @@ For recovery branches and other high-risk Git work:
 
 # Fix:
 git fetch origin main
+TARGET="$(git rev-parse origin/main)"                    # exact SHA, captured once
 git branch "backup/orphan-$(date +%Y%m%d-%H%M%S)" HEAD   # recovery ref first
-git reset --hard origin/main
+git reset --hard "$TARGET"
 # Then manually re-apply your 5-ish changed files from the backup ref
 ```
 

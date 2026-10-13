@@ -69,14 +69,15 @@ carry intent.
 
 ### 2. Disposable mirror of a remote branch
 
-*Where:* `scripts/cursor/cloud-install.sh` `clone_sibling`.
 *Purpose:* a sibling checkout nobody edits must equal `origin/<branch>` so the
 agent environment is reproducible.
 *Qualify:* the checkout is a **pure mirror** — declared as such. Gates 1–2
 must be *checked, not assumed*: if the mirror is dirty or has unique commits,
 someone edited a mirror; fail loudly rather than erase it.
-*Gap:* the script resets without checking 1–2. Tracked as a follow-up; see
-"Open items".
+*Status:* **no script currently qualifies.** `scripts/cursor/cloud-install.sh`
+`clone_sibling` resets without gates 1–2, so it is an *unqualified* reset that
+this card does not endorse: treat it as unsupported until the checks land (see
+"Open items"). It is named here so the gap is visible, not as a use case.
 
 ### 3. Fork `main` is an upstream mirror
 
