@@ -126,8 +126,8 @@ imports the former's public interfaces.
 - [Oramasys adjustment-grant consumer](https://github.com/oramasys/oramasys)
 
 The [Task 6 operator-provisioning and autonomous-tier plan](72-task6-operator-provisioning-and-autonomous-tier-plan.md)
-is the implementation roadmap for this decision. It is published here as a snapshot of the
-canonical file in `oramasys/oramasys` ([PR #34](https://github.com/oramasys/oramasys/pull/34)),
-which lives with the implementation. This ADR controls policy;
+is the implementation roadmap for this decision. Both documents live in this repository;
+`oramasys/oramasys` ([PR #34](https://github.com/oramasys/oramasys/pull/34)) holds only a
+temporary draft that becomes a link-only pointer. This ADR controls policy;
 implementation details in the plan must not weaken its quotas, isolation gate,
 or recovery rules.
