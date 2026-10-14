@@ -96,10 +96,11 @@ suffices; the closed evidence-class list and the release predicate there control
 does not restate the decision matrix. Retention is in section 13.3.
 
 Rules: reuse of a key with a different target or evidence fingerprint is rejected; the original
-attempt, hold and unknown event are never edited or deleted; a release is allowed only when evidence
-confirms dispatch did not occur or establishes a verified unused amount **and** fencing proves no
-late execution can race the adjustment; otherwise the reservation is preserved or consumed
-conservatively; no timeout, stale-row cleanup, restart or missing response performs reconciliation.
+attempt, hold and unknown event are never edited or deleted; a release is permitted **only under
+section 13.2's release rule**, whose conditions (evidence that dispatch did not occur or a verified
+unused amount, and fencing that excludes a late execution) are necessary there, never sufficient
+here; otherwise the reservation is preserved or consumed conservatively; no timeout, stale-row
+cleanup, restart or missing response performs reconciliation.
 
 ## 5. Idempotency, fencing, timeout and late result
 
@@ -172,7 +173,8 @@ code merges. IDs are placeholders.
 | E1-T-18 | Retention: seven-year clock starts at the later of final settlement and the final linked record; a legal, incident or dispute hold suspends deletion; redaction at write time keeps the required digests |
 | E1-T-19 | Roles: one independent principal may hold reconciler and second-approver only when policy permits, must be distinct from requester, executor and first approver, with separate scoped role events; an agent label or a second credential of the same human is never a second principal |
 | E1-T-20 | Approval quorum: a policy value above `2`, or any attempt to encode 2-of-3 or a majority in `second_approval_ref`, is refused; an enrolled third principal has no approval power without an explicit signed policy |
-| E1-T-21 | Nomination: only the operator capability may nominate; a nominee is inert until strict-mode authentication and a policy role; configuration and runtime nominations write the same audited record; an unauthenticatable nominee holds no role; revocation takes effect at the next check; distinctness is evaluated per decision |
+| E1-T-21 | Nomination: only the operator capability may nominate; a nominee is inert until strict-mode authentication and a policy role; configuration and runtime nominations write the same audited record; an unauthenticatable nominee holds no role; distinctness is evaluated per decision |
+| E1-T-22 | Enrollment idempotency and epoch: a restart or retry returns the original event for the same `enrollment_key` and payload; a changed payload is refused; role or revocation changes are new linked events; configuration changes are inert until a validated restart into a new policy epoch; runtime revocation is honoured at the next authentication check; every record carries its effective policy epoch |
 
 ## 10. Pinned cross-repository contract identities
 
@@ -392,14 +394,29 @@ automatic release, expiry or cleanup ever clears one.
   only when an effect class's policy requires approvals. Principals are identified by canonical
   `(issuer, subject)`, never by a display or agent label.
 - **Nomination.** The operator nominates the second principal either at **configuration time** (an
-  operator-owned roster entry loaded at start) or at **runtime** (an operator-authenticated
-  enrollment action). This draft names no one. Both paths write the same audited `principal_enrolled`
-  record: canonical `(issuer, subject)`, the roles nominated, the nominating operator identity, the
-  UTC time and the mode (`configuration` or `runtime`).
+  operator-owned roster entry) or at **runtime** (an operator-authenticated enrollment action). This
+  draft names no one. Both paths write the same audited `principal_enrolled` record: canonical
+  `(issuer, subject)`, the roles nominated, the nominating operator identity, the UTC time, the mode
+  (`configuration` or `runtime`), an `enrollment_key` and the immutable policy/roster version.
+- **Idempotency.** The same `enrollment_key` with the same principal, roles, mode and policy version
+  returns the **original** event, so a restart or a retried runtime request never appends a
+  duplicate authority fact. A changed payload under an existing key is refused. A change of roles or
+  a revocation is a **new, linked** event, never an edit.
+- **Effective time (one fail-closed rule).** Authority is *expanded* only at a deliberate boundary and
+  *reduced* immediately:
+  - A **configuration** enrollment or removal becomes effective only after a **validated restart
+    into a new immutable policy epoch**. The roster is never hot-reloaded; no reload protocol is
+    implied to exist.
+  - A **runtime enrollment** likewise takes effect only in a new policy epoch (expansion is
+    epoch-gated).
+  - A **runtime revocation** is resolved from the append-only authority store at **every**
+    authentication check and takes effect on the next check.
+  - Every authorization, approval and reconciliation record stores the **effective policy epoch** it
+    was decided under.
 - **Rules common to both paths.** Only the operator capability may nominate; an executor, an agent or
   the nominee itself cannot. A nomination is inert until the nominee authenticates in `strict` mode
   **and** the policy assigns the role, so a roster entry confers no approval power. A nominee that
-  cannot authenticate in `strict` mode holds no role (fail closed). Removal from the roster or a
-  runtime revocation takes effect at the next authentication check and is itself audited. Distinctness
-  from requester, executor and first approver is evaluated **per decision**, not once at nomination.
+  cannot authenticate in `strict` mode holds no role (fail closed). Every enrollment and revocation
+  is audited. Distinctness from requester, executor and first approver is evaluated **per decision**,
+  not once at nomination.
 - No code path enrolls a principal on its own.
