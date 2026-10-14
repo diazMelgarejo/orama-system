@@ -175,17 +175,23 @@ code merges. IDs are placeholders.
 | E1-T-20 | Approval quorum: a policy value above `2`, or any attempt to encode 2-of-3 or a majority in `second_approval_ref`, is refused; an enrolled third principal has no approval power without an explicit signed policy |
 | E1-T-21 | Nomination: only the operator capability may nominate; a nominee is inert until strict-mode authentication and a policy role; configuration and runtime nominations write the same audited record; an unauthenticatable nominee holds no role; distinctness is evaluated per decision |
 | E1-T-22 | Enrollment idempotency and epochs: a restart or retry returns the original enrollment event or revision for the same `enrollment_key` and payload; a changed payload is refused; role or revocation changes are new linked events; a configuration change is inert until a validated restart into a new `configuration_policy_epoch`; a runtime enrollment is refused before its authority event commits and usable only for permitted role and effect policy after it; a runtime revocation refuses new authority use after its commit; every record carries the `(configuration_policy_epoch, authority_epoch)` pair |
+| E1-T-23 | Grant purpose: a recovery settlement/release grant presented to the effect path, and an effect grant presented to the recovery path, are each refused before any mutation (ledger, holds, outbox and receipts unchanged), using the existing refusal vocabulary |
+| E1-T-24 | Inherited invariants map to named tests: concurrent single use; changed-payload reuse of an operation key is a conflict; provider-key stability across retries; revocation on **each side** of the dispatch-authorization transaction; no automatic replay of an unknown outcome |
 
 ## 10. Pinned cross-repository contract identities
 
-Frozen identities are exact commits; nothing floats on a branch.
+Frozen identities are exact commits; nothing floats on a branch. Each identity is labelled by its
+**purpose**. The purposes are distinct and need not be equal: each must match the evidence or
+contract role it is named for.
 
-| Contract | Identity |
-| --- | --- |
-| Phylax verify-only store and lifecycle (merged) | `oramasys/phylax` `main` commit `0c3e860749b3ff8f62e102679f1f415f8acf0a61` |
-| Oramasys verify-only composition and Ubuntu interop (merged with PRs #38 to #42 in one merge) | `oramasys/oramasys` `main` commit `f8898b35d5249e483b2f4a68c097957e675a0ef4` (merge of PR #43) |
-| Core production pin | `perpetua-core` `609ff0ed99cf8eca6c9ef608e764b7a25b6b9973` |
-| Producer registry checkout | `diazMelgarejo/orama-system` `65ec365293c6a892cd4f978e656cfb61c0d04b9a` |
+| Purpose | Contract | Identity |
+| --- | --- | --- |
+| Current production pin | Core, as declared by the Oramasys package | `perpetua-core` `609ff0ed99cf8eca6c9ef608e764b7a25b6b9973` |
+| Composition source (merged) | Phylax verify-only store and lifecycle; composition-only, not a production pin | `oramasys/phylax` `main` commit `0c3e860749b3ff8f62e102679f1f415f8acf0a61` |
+| Composition source (merged) | Oramasys verify-only composition and Ubuntu interop (merged with PRs #38 to #42 in one merge) | `oramasys/oramasys` `main` commit `f8898b35d5249e483b2f4a68c097957e675a0ef4` (merge of PR #43) |
+| Consumer source under qualification | The commit the M1 qualification run tests (operator choice, 2026-10-15) | `oramasys/oramasys` `f8898b35d5249e483b2f4a68c097957e675a0ef4` |
+| Qualification candidates | Final-producers set named by the schema-3 manifest; set and refreshed by the M1 qualification PR | Core `6d75cfe08af95992dddffab13ae3019aa9c41350`, Telos `931b6347142e8e66b31136e3ac8159d86eb5b2f7`, Agate `172bfc3ebf00d507856e70d0f6a0e7dbd577ffbc`, Phylax refreshed to the composition source above |
+| Producer registry checkout | Registry the manifest and workflows read | `diazMelgarejo/orama-system` `65ec365293c6a892cd4f978e656cfb61c0d04b9a` |
 
 ## 11. Operator decisions and what remains open
 
@@ -234,6 +240,15 @@ configuration or runtime (section 13.8); this draft names no one.
 section 9 inventory accepted as the T3 entry criteria; the "still open" list in section 11 answered
 or explicitly deferred with its consequence; the item 3 semantics specified; independent review
 verdicts attached at the exact head.
+
+**Ratification order (operator, 2026-10-15).** The grant-purpose contract (section 14) is folded
+into this PR. Any earlier statement that this draft was ratified therefore applies to earlier bytes
+only and is superseded. The operator ratifies **one concrete substantive head**, by a comment on
+this PR that names that head, after the Codex design verdict and the Cline checker verdict at that
+same head and after its checks pass. A reviewed **metadata-only** status addendum then records the
+ratification and points to that head and comment; any substantive difference after ratification
+requires renewed review. The historical `DRAFT` filename neither confers nor invalidates
+ratification.
 
 ## 13. Specifications closing the open semantics (PROPOSED; for independent review)
 
@@ -426,3 +441,32 @@ automatic release, expiry or cleanup ever clears one.
   is audited. Distinctness from requester, executor and first approver is evaluated **per decision**,
   not once at nomination.
 - No code path enrolls a principal on its own.
+
+## 14. Grant purpose separation (PROPOSED; folded into this draft by the operator, 2026-10-15)
+
+Two kinds of authority must never be confused, because a confusion would let a ledger recovery
+release authorize a provider effect, or the reverse.
+
+| Purpose | What it authorizes | What it must never do |
+| --- | --- | --- |
+| **Recovery settlement or release** | Settle or release an `unknown` hold after reconciliation (the existing adjustment grant) | Authorize, or stand in for, a provider effect |
+| **Effect authority** | Dispatch of exactly one logical operation to a provider | Release, settle or adjust any hold |
+
+**Rules.**
+
+1. **Cross-purpose presentation is refused before mutation.** Each issuer, verifier and consumer
+   rejects a grant of the wrong purpose before any state change: no hold, ledger, outbox or receipt
+   row is created or altered. The refusal uses the **existing** closed refusal vocabulary.
+2. **Effect authority is bound** to its logical operation identifier and the exact request digest of
+   that operation, and is single use (the contract's use limit of exactly one).
+3. **No new runtime format or refusal code is assumed here.** The versioned purpose discriminator,
+   and which existing refusal code a cross-purpose presentation maps to, are fixed in the integrated
+   T3 contract design, under the schema-versioning rule of section 13.4 (an unknown version is
+   refused with the existing `grant.schema_unsupported`).
+
+**Inherited, not redefined.** This draft does not restate these rules; it incorporates them by
+reference to the [durable effects contract](CONTRACT-DURABLE-HITL-EFFECTS.md) so there is one
+definition: the exactly-one use limit and operation-key reuse conflict (its section 2), provider-key
+stability across attempts and the dispatch protocol (its section 4), the dispatch-authorization
+transaction as the **revocation linearization point** (its section 4, step 4), and the crash-window
+table and acceptance tests (its sections 6 and 7). Tests E1-T-23 and E1-T-24 pin the mapping.
