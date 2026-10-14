@@ -183,7 +183,7 @@ Frozen identities are exact commits; nothing floats on a branch.
 | Contract | Identity |
 | --- | --- |
 | Phylax verify-only store and lifecycle (merged) | `oramasys/phylax` `main` commit `0c3e860749b3ff8f62e102679f1f415f8acf0a61` |
-| Oramasys verify-only composition and Ubuntu interop | `oramasys/oramasys` PR #43 — **TBD: exact merge commit at ratification** |
+| Oramasys verify-only composition and Ubuntu interop (merged with PRs #38 to #42 in one merge) | `oramasys/oramasys` `main` commit `f8898b35d5249e483b2f4a68c097957e675a0ef4` (merge of PR #43) |
 | Core production pin | `perpetua-core` `609ff0ed99cf8eca6c9ef608e764b7a25b6b9973` |
 | Producer registry checkout | `diazMelgarejo/orama-system` `65ec365293c6a892cd4f978e656cfb61c0d04b9a` |
 
