@@ -38,13 +38,13 @@ declared dependency. The older Core revision exercised by the core-r3 oracle cel
 
 | Lane | Artifact | Head | Pins / candidate (macOS) | CI |
 | --- | --- | --- | --- | --- |
-| Option A takeover | oramasys #38 | 8abafa6 | 733/2, 749/2 | 11/11 pass |
-| Agate evidence age | oramasys #39 | 6f68acf | 715/2, 739/2 | 11/11 pass |
-| Schema-3 manifest, data, digest | oramasys #40 | 2eccad1 | 764/2, 780/2 | 11/11 pass |
+| Option A takeover | oramasys #38 | e1208f7 | 733/2, 749/2 | 11/11 at 8abafa6; re-run pending |
+| Agate evidence age | oramasys #39 | 60f691f | 715/2, 741/2 | 11/11 at 6f68acf; re-run pending |
+| Schema-3 manifest, data, digest | oramasys #40 | ddd0694 | 811/2, 827/2 | 11/11 at 2eccad1; re-run pending |
 | Crash-window tests | oramasys #41 | d15037d | 719/2, 735/2 | 11/11 pass |
-| Interaction-risk receipt validator | oramasys #42 | c2722e1 | 735/2, 751/2 | 11/11 pass |
+| Interaction-risk receipt validator | oramasys #42 | 3f1d8af | 742/2, 758/2 | 11/11 at c2722e1; re-run pending |
 | Verify-only grant reader (L2i) | phylax #12 | 76e91e7 | 225 (full Phylax) | 3/3 pass |
-| ADR 71 note, takeover entry-point design | orama-system #405 | 7f4d5d5 | docs gates | pass |
+| ADR 71 note, takeover entry-point design | orama-system #405 | 128e878 | docs gates | pass at 7f4d5d5; re-run pending |
 | Memory graduation (16 lessons) | Perpetua-Tools #442 | a4647ff | repo gates | see PR |
 
 Counts are `passed/skipped`. Exploratory manifest digest of the committed schema-3 candidate:
@@ -82,6 +82,18 @@ package only
    workspace was
    stricter (private-file checks, no `immutable=1`); no copy was integrated.
 
+### Independent review (fresh-context, read-only, final heads)
+
+Four reviewers read the exact heads. #38, #41 and phylax #12 were approved with LOW notes. #39 was
+approved with one MEDIUM (the capability gate could not tell absent from broken) and one LOW (the
+age limit produced an allow already expired at the boundary); both were fixed. #40 was REQUESTED
+CHANGES (production pins and the consumer SHA were not bound, schema-2 behaviour was not exactly
+preserved, the digest script could exit 0 on an unbound digest) and #42 was REQUESTED CHANGES
+(probability calibration, authority-claim and independence bypasses). #405 was REQUESTED CHANGES
+(a claim attributed to the wrong repository, a stale publication statement, and an effect table
+that said no state change). All findings were applied and re-verified by replaying the reviewers'
+probes; this is a same-model-family check, not an independent-agent check.
+
 ## 6. Control-to-test register
 
 | Control | Proving test(s) | Where | Status |
@@ -93,13 +105,14 @@ package only
 | Takeover is compare-and-set on the epoch | `test_takeover_is_compare_and_set_on_the_epoch`; `test_a_competitor_that_bumps_the_epoch_after_the_snapshot_is_not_fenced_by_us` | #38 | green |
 | Mismatched stores are refused before mutation | `test_mismatched_stores_are_rejected_before_any_state_changes` | #38 | green |
 | One terminal, all recoverers converge | `test_two_concurrent_recoverers_converge_on_one_terminal`; `test_a_competitor_that_finishes_first_makes_us_return_its_receipt` | #38 | green |
-| A completed run cannot be taken over | `test_completed_run_lease_fences_takeover_and_terminal_is_unchanged` | #41 | green |
+| A completed run is returned unchanged by takeover | `test_a_completed_run_is_returned_unchanged` | #38 | green |
+| A completed run's lease fences a low-level takeover | `test_completed_run_lease_fences_takeover_and_terminal_is_unchanged` (proves the lease seam only, not the command) | #41 | green |
 | Killed in sink: settled, no terminal | `test_kill_in_sink_after_node_end_settles_accounting_without_terminal` | #41 | green |
 | Stale measurement is refused; expiry capped by its age | `test_a_measurement_older_than_the_window_is_refused_as_stale`; `test_a_decision_never_outlives_its_measurement_even_with_a_long_validity` | #39 | green (candidate Agate only) |
 | Schema relabelling cannot satisfy another schema's gate | `test_schema3_relabelled_as_schema2_is_rejected`; `test_schema2_relabelled_as_schema3_is_rejected` | #40 | green |
 | Digest binds the manifest | `test_digest_binding_accepts_matching_and_rejects_other` | #40 | green |
 | Unknown outcomes can never be omitted from a receipt | `test_unknown_outcomes_cannot_be_omitted` | #42 | green |
-| Serving verifier loads no seed or approval secret | `test_verify_only_opens_existing_state_without_secret_configuration` | phylax #12 | green |
+| Serving verifier does not call the file seed provider | `test_verify_only_opens_existing_state_without_secret_configuration` (patches `FileSeedProvider.load_seed` only; reviewers confirmed by reading that no other secret path is reachable) | phylax #12 | green, partial |
 | Serving verifier is read-only and fails closed | `test_verify_only_uses_read_only_database_and_observes_revocation`; `test_verify_only_fails_closed_without_creating_state` | phylax #12 | green |
 
 ### Controls with **no** proving test (each is itself a finding)
@@ -111,6 +124,7 @@ package only
 | Final-producers Ubuntu matrix | No Linux evidence exists |
 | Telos expiry and revocation through the real authorizer at the gateway | A1 proposals, unimplemented |
 | DNS-pin and TLS-hostname negatives | A1 proposals, unimplemented; no production connector in the gateway path |
+| Refusal branches of the verify-only store (symlink, wrong owner, loose mode, sidecars, newer schema) | No test exercises them (phylax #12 reviewer finding, open); a regression dropping a check would pass all 225 tests |
 | Serving script wired to `open_grant_verifier` | Not changed; ADR 71 serving gap remains in production (see the ADR note) |
 | Workflow matrix covers schema 3 end to end | Workflow YAML untouched |
 
