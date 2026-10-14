@@ -145,3 +145,54 @@ changed. The ADR 71 note (#405) is append-only.
 1. Decide DEC-Q-04 and DEC-Q-05; decide merges (still frozen).
 2. Provide Linux evidence and bind the A3 wheel to its source SHA before this receipt may move to QUALIFIED.
 3. Implement the missing controls in section 6 before T3 starts; T3 needs the E1 freeze (DEC-E-01) first.
+
+## 10. Addendum (appended 2026-10-14; sections 1-9 above are unchanged)
+
+State remains **STAGED**. Nothing here qualifies, activates, re-pins or authorises a merge.
+
+### 10.1 Operator decisions recorded (off-repository record)
+
+| Decision | Disposition | What it does not do |
+| --- | --- | --- |
+| DEC-Q-04 | `unknown` is retained as the machine outcome; a proven run-level no-attempt is distinguished from an identified attempt whose result is unknown; operator label "Outcome unknown - reconciliation required"; release, replay and retry only through authenticated, idempotent, append-only reconciliation. | Missing evidence is never proof of no attempt. |
+| DEC-Q-05 | The verify-only contract treats `verifier.unavailable` as distinct from invalid or revoked; unrelated service stays up, grant-backed requests fail closed with no ledger mutation; same-user and private-mode stay. | It does **not** enable serving; the serving script is still not wired (section 6). |
+| DEC-E-01 | Distinct authority is a T3 design invariant; E1 freezes the authority matrix. | T3 code stays paused until the integrated slice, evidence and independent reviewers are ready together. |
+
+The operator also accepted this receipt (X2) and the Perpetua-Tools lesson graduation as staged
+snapshots. Acceptance is not merge authorisation; the merge freeze is unchanged.
+
+### 10.2 Verify-only refusal branches: tested now versus still open
+
+The section 6 row "Refusal branches of the verify-only store" is partly closed at phylax #12 commit
+`1b4d17a` (tests; each refusal also asserts the durable bytes are unchanged):
+
+| Case | Status |
+| --- | --- |
+| Missing database in an existing private directory | tested |
+| Loose state directory | tested |
+| Symlinked database; non-regular database; direct store construction on a missing or symlinked path | tested |
+| Loose database mode (not tightened silently) | tested |
+| Another owner | tested only by simulating the effective uid; no real foreign-owned file (needs root) |
+| Symlinked and loose `-wal`, `-shm`, `-journal` sidecars | tested |
+| Newer schema (refused, not migrated) | tested |
+| No seed or P5 secret read and no durable write on open and verify | tested |
+| Changed or replaced database path after open (`verifier.unavailable`) | tested (earlier head) |
+| Stale-revocation-state versus unavailable versus invalid distinction at the Oramasys boundary | **not tested** (no Oramasys composition yet) |
+| Real read-only mounts, NFS, non-POSIX permission models | **not tested** |
+
+### 10.3 Stated limit: check, then open
+
+The verifier checks the database path and SQLite then opens that path as a separate step. A
+process able to write to the state directory could swap the file in the instant between them.
+The identity re-checks before and after connecting narrow this window and do not close it, and the
+tests show the checks fire when a swap is visible, not that the instant swap is impossible. The
+guarantee therefore holds only while the state directory is private to one user. Closing it
+requires retaining the validated connection instead of reopening by path. The same sentence is in
+the Phylax docstrings at commit `f09afb7`.
+
+### 10.4 Integration simulation (local, never pushed)
+
+The five oramasys PRs (#40, #39, #38, #41, #42) were merged in that order onto base `99283f7` in
+a scratch worktree: no conflicts; 890 passed and 2 skipped in the candidate cell, 863 and 2 in the
+production cell, 809 and 2 with the older gate-less Core. Lint findings equal main's baseline.
+This is macOS arm64 evidence only; it is not the Ubuntu matrix.
