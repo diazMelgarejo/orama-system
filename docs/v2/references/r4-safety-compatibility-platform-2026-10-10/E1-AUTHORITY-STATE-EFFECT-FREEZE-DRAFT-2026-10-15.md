@@ -174,7 +174,7 @@ code merges. IDs are placeholders.
 | E1-T-19 | Roles: one independent principal may hold reconciler and second-approver only when policy permits, must be distinct from requester, executor and first approver, with separate scoped role events; an agent label or a second credential of the same human is never a second principal |
 | E1-T-20 | Approval quorum: a policy value above `2`, or any attempt to encode 2-of-3 or a majority in `second_approval_ref`, is refused; an enrolled third principal has no approval power without an explicit signed policy |
 | E1-T-21 | Nomination: only the operator capability may nominate; a nominee is inert until strict-mode authentication and a policy role; configuration and runtime nominations write the same audited record; an unauthenticatable nominee holds no role; distinctness is evaluated per decision |
-| E1-T-22 | Enrollment idempotency and epoch: a restart or retry returns the original event for the same `enrollment_key` and payload; a changed payload is refused; role or revocation changes are new linked events; configuration changes are inert until a validated restart into a new policy epoch; runtime revocation is honoured at the next authentication check; every record carries its effective policy epoch |
+| E1-T-22 | Enrollment idempotency and epochs: a restart or retry returns the original enrollment event or revision for the same `enrollment_key` and payload; a changed payload is refused; role or revocation changes are new linked events; a configuration change is inert until a validated restart into a new `configuration_policy_epoch`; a runtime enrollment is refused before its authority event commits and usable only for permitted role and effect policy after it; a runtime revocation refuses new authority use after its commit; every record carries the `(configuration_policy_epoch, authority_epoch)` pair |
 
 ## 10. Pinned cross-repository contract identities
 
@@ -215,6 +215,7 @@ exact-head review and the operator's ratification comment on this PR:
 | Retention (ledger audit and reconciliation records) | Seven years from the later of final settlement of the hold and the final linked reconciliation or correction record; a legal, incident or dispute hold suspends deletion; redact at write time (13.3). An operational policy, not a legal claim. |
 | Principals and roles | The single operator stays primary approver and may execute; any bootstrap reconciliation is non-independent; the durable second principal is an independently controlled identity with its own `(issuer, subject)`, credential digest, `strict` mode and `reconciler` role (13.1, 13.8). |
 | Section 13.7 part 1 | Approved **only** as the bounded exception to section 13.2 named there, with its evidence predicate; absent the synchronized amendment the independent-reconciler release rule controls. Independent review at `55be8366` confirmed 13.2 and 13.7 are synchronized and ready for ratification; the draft as a whole still needs exact-head review and the operator's ratification. |
+| Authority versions | Ratified by the operator on 2026-10-15 per independent review (board row 4572): configuration changes are effective only at a validated-restart `configuration_policy_epoch`; runtime enrollment and revocation are effective at their committed, monotonic `authority_epoch`; every decision records both (13.8). |
 | Approval quorum | M2 stays at `1`. The first multi-approval policy is `2-of-2` for explicitly high-impact effect classes. General M-of-N is deferred to T4 (13.4); enrollment confers no approval power (13.8). |
 
 **Still the operator's, never assumed here.** Ratification of this draft as a whole, after the
@@ -402,17 +403,22 @@ automatic release, expiry or cleanup ever clears one.
   returns the **original** event, so a restart or a retried runtime request never appends a
   duplicate authority fact. A changed payload under an existing key is refused. A change of roles or
   a revocation is a **new, linked** event, never an edit.
-- **Effective time (one fail-closed rule).** Authority is *expanded* only at a deliberate boundary and
-  *reduced* immediately:
-  - A **configuration** enrollment or removal becomes effective only after a **validated restart
-    into a new immutable policy epoch**. The roster is never hot-reloaded; no reload protocol is
-    implied to exist.
-  - A **runtime enrollment** likewise takes effect only in a new policy epoch (expansion is
-    epoch-gated).
-  - A **runtime revocation** is resolved from the append-only authority store at **every**
-    authentication check and takes effect on the next check.
-  - Every authorization, approval and reconciliation record stores the **effective policy epoch** it
-    was decided under.
+- **Effective time: two explicit authority-version layers.**
+  - `configuration_policy_epoch` is an immutable, validated roster and configuration snapshot. A
+    **configuration** enrollment or removal becomes effective only at the next **validated restart**,
+    which starts a new `configuration_policy_epoch`. The roster is never hot-reloaded; no reload
+    protocol is implied to exist.
+  - `authority_epoch` is a monotonic, append-only **runtime** authority revision. A **runtime
+    enrollment or runtime revocation** becomes effective atomically only when its authenticated,
+    idempotent authority event **commits** and advances `authority_epoch`. It is usable for decisions
+    evaluated **after** that commit, never before it, and needs no restart.
+  - **Revocation** advances `authority_epoch`, is consulted at **every** authentication and
+    authorization check, and blocks new authority use immediately after commit. Whether an
+    already-issued grant remains consumable is governed by the grant and revocation contract, never
+    inferred from an enrollment record.
+  - Every authorization, approval, reconciliation and (later) grant issuance or consumption decision
+    records the effective pair `(configuration_policy_epoch, authority_epoch)`, or one canonical
+    composite derived from both.
 - **Rules common to both paths.** Only the operator capability may nominate; an executor, an agent or
   the nominee itself cannot. A nomination is inert until the nominee authenticates in `strict` mode
   **and** the policy assigns the role, so a roster entry confers no approval power. A nominee that
