@@ -25,8 +25,11 @@ numbers. This note is therefore 74.
 
 ## Principles
 
-1. **Owner-only.** Only the authenticated operator capability may invoke it. A run's own agent,
-   and any other principal, is refused.
+1. **Owner-only.** The implementation accepts a caller only when it presents the run's recorded owner
+   principal (the same rule as stopping a run); any other principal is refused. Whether the owner
+   principal is shared with the run's own agent is a deployment property, not enforced by this
+   function: if the agent can present the owner principal it can take over, which is why the
+   entry point must require a distinct operator capability (open question for DEC-Q-04).
 2. **Explicit.** One invocation names one run. There is no scan, no "recover all", no schedule.
 3. **No daemon.** ADR 71 lists a resident privileged recovery daemon as a non-goal. The entry
    point is a short-lived process that exits.
@@ -76,9 +79,9 @@ Exit codes are proposed, not final.
 | 2 | Invalid input or missing confirmation flag | none |
 | 3 | Caller is not the owner capability | none |
 | 4 | Run not found in the named store | none |
-| 5 | Run is already terminal with a different outcome | none |
-| 6 | CAS conflict: lease epoch changed since read | none; operator may retry |
-| 7 | Store unavailable or locked beyond the deadline | none; hard time ceiling applies |
+| 5 | Reserved: the function returns any existing receipt, so this case does not occur today | none |
+| 6 | CAS conflict: lease epoch changed since read | epoch is the competitor's; no terminal from this call; retry is safe |
+| 7 | Store unavailable or locked beyond the deadline | **may be partial**: the epoch may already have advanced and unstarted holds may be released with no terminal yet; retry completes it; hard time ceiling applies |
 | 8 | Invariant violation (corrupt lease record or digest mismatch) | none; fails closed |
 
 Every external call (store open, write) carries a hard deadline. A timeout is code 7, never a
