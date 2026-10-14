@@ -51,8 +51,12 @@ matrix allows for it.
 2. Phylax never sees a balance; Oramasys carries no cryptography and no issuer logic.
 3. A maker never countersigns its own security-critical result. Same-model or same-session
    agreement is not independent evidence.
-4. A reconciliation decision cannot be recorded by the credential that executed the effect it
-   reconciles.
+4. A reconciliation that releases a hold or confirms non-application requires a **distinct stable
+   principal identity AND a distinct credential identity** from the executor; a different credential
+   held by the same principal is not separation of duty. The reconciliation record carries an
+   independently verifiable reconciler principal and credential identity (section 4). The only
+   exception is an **explicit, audited same-human bootstrap**: it is labelled non-independent, and it
+   can never by itself convert `unknown` into `confirmed_not_applied` or release a hold.
 5. Qualification evidence is reviewed independently of its producer; "verified" claims from the
    producer never substitute for the independent check.
 
@@ -86,6 +90,13 @@ Reconciliation is explicit, authenticated, evidence-backed, idempotent and appen
 | `decided_at` | UTC timestamp from the store's authoritative clock |
 | `accounting_before`, `accounting_after` | The disposition of the reservation before and after |
 | `supersedes` | Optional link to an earlier record; corrections are new linked events |
+
+**Evidence sufficiency.** An operator attestation alone never justifies `confirmed_not_applied` or a
+release. A provider-side authoritative statement or lookup that matches the idempotency key, the
+provider receipt identifier and the payload digest may establish that fact by itself when it is
+cryptographically or administratively authoritative. Otherwise two independent corroborating evidence
+classes are required. The evidence-class list is closed; records are retained no shorter than the
+ledger's audit retention.
 
 Rules: reuse of a key with a different target or evidence fingerprint is rejected; the original
 attempt, hold and unknown event are never edited or deleted; a release is allowed only when evidence
@@ -167,13 +178,36 @@ Frozen identities are exact commits; nothing floats on a branch.
 | Core production pin | `perpetua-core` `609ff0ed99cf8eca6c9ef608e764b7a25b6b9973` |
 | Producer registry checkout | `diazMelgarejo/orama-system` `65ec365293c6a892cd4f978e656cfb61c0d04b9a` |
 
-## 11. Open decisions for the operator
+## 11. Operator decisions and what remains open
 
-1. Roster and qualification of "qualified operator" and "reconciler" capabilities.
-2. Allowed evidence classes and retention period for reconciliation evidence.
-3. Whether any effect class needs two-person approval.
-4. The Level-1 freshness bound and authoritative clock (deferred; blocks cross-user serving only).
-5. Whether Phylax receives a `production_pin` in the schema-3 manifest or stays composition-only.
+**Recorded 2026-10-15 (operator, chat; recommendations reconciled with independent review, board
+rows 4556 to 4558).** The operator approved the recommendations that Codex also made; one item is a
+recorded disagreement.
+
+| # | Decision | Disposition |
+| --- | --- | --- |
+| 1 | Executor/reconciler separation | **Decided.** Distinct principal AND distinct credential; a same-human bootstrap exception is **allowed**, audited, labelled non-independent, and cannot release a hold or confirm non-application by itself. |
+| 2 | Reconciliation evidence | **Decided.** Closed class list; an attestation alone never suffices; an authoritative provider statement or two independent corroborating classes may; retention no shorter than ledger audit retention. |
+| 3 | Two-person approval | **Decided by the operator over a recorded independent dissent.** An optional second-approver field is part of the E1 freeze now. *Dissent (Codex, row 4558):* a wire or schema change with undefined semantics is inferred implementation and future compatibility debt; add it only in the T4 transport/approval slice. **Condition recorded here:** E1 may not be ratified until the field's semantics are specified (see below). No Phylax or Oramasys code changes now. |
+| 4 | Level-1 freshness bound and clock | **Deferred.** Acceptable for M2 entry only while serving is explicitly same-UID and local-only and cross-UID or remote publication stays rejected by configuration and documentation. No TTL value or stale-observation test at Level 0. |
+| 5 | Phylax production-pin disposition | **Composition-only.** The `grant-serving` extra stays out of default dependencies. The M1 qualification PR refreshes the manifest candidate to the exact reviewed commit proven by the interop receipt (currently `0c3e860749b3ff8f62e102679f1f415f8acf0a61`), updating **every** place the candidate appears (producers entry and each final-producers candidate set); the digest then changes and is re-frozen. It is never derived dynamically from a receipt artifact. |
+
+**Item 3 conditions (required before ratification).** Because the operator chose to freeze the
+field now, E1 must define, before any code: who may be a second approver and how that identity is
+verified; that an absent field means single approval and an invalid or unverifiable second approver
+refuses the grant (fail closed); the wire version and how an older verifier treats the field; and
+which effect classes require it. Until these are written this item stays a blocker for
+ratification of the draft, not for the merge of the current PR stack.
+
+**Still open.**
+
+1. The concrete principals and the mechanism that makes a principal identity independently
+   verifiable (section 4).
+2. The closed list of evidence classes and the retention value (the value is the operator's, never
+   assumed here).
+3. The semantics list under item 3 above.
+4. The M1 qualification PR must show items 4 and 5 as implemented (constraint evidence and the
+   refreshed candidate).
 
 ## 12. Reviewer assignments and ratification
 
@@ -184,5 +218,6 @@ Frozen identities are exact commits; nothing floats on a branch.
 | Ratifier | Operator, recorded on the review PR |
 
 **Ratification checklist:** all `TBD` fields resolved; section 2 matrix accepted cell by cell;
-section 9 inventory accepted as the T3 entry criteria; open decisions in section 11 answered or
-explicitly deferred with their consequence; independent review verdicts attached at the exact head.
+section 9 inventory accepted as the T3 entry criteria; the "still open" list in section 11 answered
+or explicitly deferred with its consequence; the item 3 semantics specified; independent review
+verdicts attached at the exact head.
