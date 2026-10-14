@@ -168,10 +168,12 @@ code merges. IDs are placeholders.
 | E1-T-11 | Backup, restore and redaction; migration backup restores byte-identical digests |
 | E1-T-12 | Principal and credential distinctness: same principal with another credential is `non_independent`; `attest`/`off` verification is `non_independent` |
 | E1-T-13 | Same-human bootstrap exception covers exactly one record, cannot release a hold, cannot yield `confirmed_not_applied`, cannot be reused |
-| E1-T-14 | Evidence sufficiency matrix: attestation alone refused; one authoritative provider class suffices for applied; two independent non-attestation classes otherwise; unknown class rejected |
+| E1-T-14 | Evidence sufficiency matrix: attestation alone refused; a receipt proves applied, never not-applied; one authoritative provider class suffices for applied; unknown class rejected |
 | E1-T-15 | Second approval: absent is valid single approval; present-but-same-principal refused at issuance; unknown wire version refused (`grant.schema_unsupported`); inconsistent with class policy refused (`grant.malformed`) |
 | E1-T-16 | Retention: reconciliation records are never deleted by a restart, cleanup or backup rotation; redaction preserves digests |
-| E1-T-17 | Single-operator backlog: a non-independent record releases only on machine-verified evidence (13.7); the unresolved-hold count and oldest age are surfaced and a hold is never auto-released |
+| E1-T-17 | Bounded exception (13.7): a non-independent record releases only on a mechanically verified `NOT_ACCEPTED` assertion plus a verified fence; receipt, lookup-only, outbox-only, attestation and unverifiable statements are refused; unresolved count and oldest age surfaced; never auto-released |
+| E1-T-18 | Retention: seven-year clock starts at the later of final settlement and the final linked record; a legal, incident or dispute hold suspends deletion; redaction at write time keeps the required digests |
+| E1-T-19 | Roles: one independent principal may hold reconciler and second-approver only when policy permits, must be distinct from requester, executor and first approver, with separate scoped role events; an agent label or a second credential of the same human is never a second principal |
 
 ## 10. Pinned cross-repository contract identities
 
@@ -198,22 +200,23 @@ recorded disagreement.
 | 4 | Level-1 freshness bound and clock | **Deferred.** Acceptable for M2 entry only while serving is explicitly same-UID and local-only and cross-UID or remote publication stays rejected by configuration and documentation. No TTL value or stale-observation test at Level 0. |
 | 5 | Phylax production-pin disposition | **Composition-only.** The `grant-serving` extra stays out of default dependencies. The M1 qualification PR refreshes the manifest candidate to the exact reviewed commit proven by the interop receipt (currently `0c3e860749b3ff8f62e102679f1f415f8acf0a61`), updating **every** place the candidate appears (producers entry and each final-producers candidate set); the digest then changes and is re-frozen. It is never derived dynamically from a receipt artifact. |
 
-**Item 3 conditions (required before ratification).** Because the operator chose to freeze the
-field now, E1 must define, before any code: who may be a second approver and how that identity is
-verified; that an absent field means single approval and an invalid or unverifiable second approver
-refuses the grant (fail closed); the wire version and how an older verifier treats the field; and
-which effect classes require it. Until these are written this item stays a blocker for
-ratification of the draft, not for the merge of the current PR stack.
+**Item 3 conditions.** Satisfied in section 13.4 as a proposal: who may be a second approver and
+how verified, absent means single approval, an invalid or unverifiable second approver refuses the
+grant (fail closed), the wire version and older-verifier behaviour, and which effect classes require
+it. They stay a ratification blocker for the draft, not for the merge of the current PR stack.
 
-**Specified, awaiting independent review.** The previously open semantics are now written in
-section 13 as a proposal that closes each gap without inventing a value or a new credential format:
-principal and credential identity (13.1), evidence classes and sufficiency (13.2), retention (13.3),
-second-approval semantics (13.4), and the Level-0 constraint wording (13.5). None is ratified until
-independent review attaches verdicts at the exact head and the operator records ratification.
+**Parameters recorded on the operator's instruction "codex resolved, apply" (2026-10-15, board
+row 4561).** Codex's recommendations are applied as the draft's values and remain subject to the
+exact-head review and the operator's ratification comment on this PR:
 
-**Still the operator's, never assumed here.** The *numeric* ledger audit retention value, which real
-principals hold the `approver` and `reconciler` roles (including whether and who a second principal
-is, section 13.7), and the ratification of section 13.7 part 1.
+| Parameter | Value |
+| --- | --- |
+| Retention (ledger audit and reconciliation records) | Seven years from the later of final settlement of the hold and the final linked reconciliation or correction record; a legal, incident or dispute hold suspends deletion; redact at write time (13.3). An operational policy, not a legal claim. |
+| Principals and roles | The single operator stays primary approver and may execute; any bootstrap reconciliation is non-independent; the durable second principal is an independently controlled identity with its own `(issuer, subject)`, credential digest, `strict` mode and `reconciler` role (13.1, 13.8). |
+| Section 13.7 part 1 | Approved **only** as the bounded exception to section 13.2 named there, with its evidence predicate; absent the synchronized amendment the independent-reconciler release rule controls. |
+
+**Still the operator's, never assumed here.** *Who* the second principal is, and ratification of this
+draft as a whole after independent review.
 
 ## 12. Reviewer assignments and ratification
 
@@ -260,28 +263,47 @@ The class list is **closed**; an unlisted class is rejected.
 
 | Class | Meaning | Authoritative alone? |
 | --- | --- | --- |
-| `EV-PROVIDER-LOOKUP` | Provider-side lookup by the stable idempotency key | Yes, when it also matches the receipt identifier and payload digest |
-| `EV-PROVIDER-RECEIPT` | Provider receipt identifier plus payload digest | Yes, when it matches the idempotency key |
-| `EV-PROVIDER-SIGNED` | Statement signed by a pinned provider key | Yes |
+| `EV-PROVIDER-RECEIPT` | Provider receipt identifier plus payload digest | For **applied** only, when it matches the idempotency key; never for not-applied |
+| `EV-PROVIDER-LOOKUP` | Provider-side lookup by the stable idempotency key | For **applied** only when it also matches receipt identifier and payload digest; an ambiguous or absent result proves nothing |
+| `EV-PROVIDER-SIGNED` | Statement signed by a pinned provider key (any assertion) | Only for the assertion it makes |
+| `EV-PROVIDER-NOT-ACCEPTED` | A signed provider `NOT_ACCEPTED` assertion; its **evidence predicate** is below | Yes, for **not-applied**, within its window |
 | `EV-OUTBOX-STATE` | The dispatch outbox item was never handed off | No |
 | `EV-LEDGER-FENCE` | The holder was fenced by a lease-epoch advance | No |
 | `EV-OPERATOR-ATTESTATION` | An operator statement | **Never**; annotation only |
+
+**`EV-PROVIDER-NOT-ACCEPTED` predicate (all of it, mechanically verified):** the assertion is bound
+to the operation's idempotency key **and** payload digest, carries a provider timestamp and the
+provider's retention or deduplication window **covering the elapsed time**, and verifies against a
+**pinned** trust key. An assertion missing any element, an unverifiable one, or an ambiguous lookup
+response is not this class.
 
 Two classes are **independent** only if they come from different source systems and do not derive
 from the same log or credential.
 
 | Decision | Sufficient evidence |
 | --- | --- |
-| `confirmed_applied` | One authoritative provider class; otherwise two independent non-attestation classes |
-| `confirmed_not_applied` | An authoritative provider statement that the key was never accepted **and** a documented provider deduplication window covering the elapsed time; otherwise `EV-OUTBOX-STATE` plus `EV-LEDGER-FENCE` |
-| Release of a hold | `confirmed_not_applied` (or a verified unused amount), **and** `EV-LEDGER-FENCE`, **and** an `independent` reconciler |
+| `confirmed_applied` | One authoritative provider class for applied (`EV-PROVIDER-RECEIPT`, or `EV-PROVIDER-LOOKUP` matching all three bindings, or a verifying `EV-PROVIDER-SIGNED` applied assertion); otherwise two independent non-attestation classes |
+| `confirmed_not_applied` | `EV-PROVIDER-NOT-ACCEPTED`; otherwise `EV-OUTBOX-STATE` plus `EV-LEDGER-FENCE`, both requiring an independent reconciler |
+| Release of a hold | `confirmed_not_applied` (or a verified unused amount) **and** `EV-LEDGER-FENCE` **and** an `independent` reconciler — **except** the one bounded exception below |
 | `still_unknown` | Nothing; the hold stays charged and blocked |
+
+**The one bounded exception (synchronized with section 13.7 part 1).** A `non_independent`
+reconciler may release an `UNKNOWN` hold **only** on a mechanically verified
+`EV-PROVIDER-NOT-ACCEPTED` meeting the predicate above, **plus** a verified `EV-LEDGER-FENCE`,
+with an append-only audit record. A receipt proving acceptance is evidence for applied or
+consumed, never for not-applied or release. `EV-OUTBOX-STATE`, `EV-OPERATOR-ATTESTATION`, an
+ambiguous lookup and any statement that is not cryptographically verifiable remain insufficient
+without an `independent` reconciler. No automatic release, expiry or cleanup exception exists.
 
 ### 13.3 Retention (decision 2)
 
-Reconciliation records are retained no shorter than the ledger audit retention. This draft sets **no
-numeric value**. Until an operator ratifies a ledger audit retention policy, no reconciliation record
-is deleted. Sensitive payloads are **redacted** (the digest is kept), never deleted.
+**Seven years**, measured from the **later of** (a) final settlement of the hold and (b) the final
+linked reconciliation or correction record. A legal, incident or active-dispute hold suspends
+deletion. Ledger audit retention and reconciliation-record retention are the same period. Sensitive
+payload material is **redacted at write time**; the record keeps, for the full period, the digest,
+the principal and credential digests, the evidence classification, timestamps, the fencing epoch
+and the disposition. This is an operational policy recommendation, not a claim about universal legal
+requirements.
 
 ### 13.4 Second approval (decision 3; the conditions recorded in section 11)
 
@@ -319,34 +341,38 @@ proven by the interop receipt in **all three places** it appears (the producers 
 `final-producers` candidate sets), re-freezes the digest, and links the receipt as evidence. The
 candidate is never derived dynamically from a receipt artifact.
 
-### 13.7 Single-operator deployments: how unknown holds clear (PROPOSED; needs review)
+### 13.7 Single-operator deployments: how unknown holds clear
 
-**The problem (independent note, 2026-10-15).** With one operator, every reconciliation is
+**The problem (independent note, 2026-10-15).** With one operator every reconciliation is
 `non_independent` (13.1) and cannot release a hold, so unknown holds are recorded but never freed and
-run budgets stay charged. Left alone that is a safe but unbounded backlog.
+run budgets stay charged.
 
-**Resolution in three parts, none of which weakens a ratified rule.**
+**Part 1 — the bounded exception (approved only as follows).** Section 13.7 part 1 is approved only
+as the bounded exception to section 13.2: a `non_independent` reconciler may release an `UNKNOWN`
+hold only on a mechanically verified provider `NOT_ACCEPTED` assertion bound to the operation
+idempotency key, payload digest, provider timestamp, provider retention or deduplication window
+and a pinned trust key, **plus** a verified ledger fence, with an append-only audit record. The exception
+and its evidence predicate are named identically in 13.2; absent that synchronized amendment, the
+existing independent-reconciler release rule remains controlling.
 
-1. **Machine-verified evidence may clear a hold even when the reconciler is non-independent.** The
-   ratified rule is that the same-human exception "must not *by itself* convert `unknown` into
-   `confirmed_not_applied` or release a hold". The exception stays powerless alone. A release becomes
-   possible only when the *evidence*, not the human, carries the decision, and the system verifies it
-   mechanically without the operator's judgement:
-   - `EV-PROVIDER-SIGNED` that verifies against a pinned provider key, or
-   - `EV-PROVIDER-LOOKUP` and `EV-PROVIDER-RECEIPT` that match the idempotency key, receipt identifier
-     and payload digest,
-   - **and** `EV-LEDGER-FENCE`, **and** the record is labelled `non_independent`.
-   A decision that rests on `EV-OUTBOX-STATE`, a provider statement that cannot be mechanically
-   verified, or anything judgement-based still requires an `independent` reconciler.
-2. **A second principal is the durable fix, and it is the operator's to name.** Enrolling one is an
-   operator action, not code: a distinct `(issuer, subject)` authenticated in `strict` mode,
-   holding the `reconciler` role with its own credential. This draft does not choose who it is.
-3. **The backlog is visible, never silent.** The operator view and readiness report the count of
-   unresolved unknown holds and the age of the oldest, and label them
-   "Outcome unknown — reconciliation required". No automatic release, expiry or cleanup ever clears
-   one, and no threshold value is invented here.
+**Part 2 — the durable fix.** A second principal (section 13.8) enrolled by the operator. This draft
+does not choose who it is.
 
-**Open for review and ratification.** Part 1 is a proposal that narrows how "by itself" is read; it
-needs independent review and the operator's explicit ratification before it binds, because it lets a
-non-independent record release a hold in one case. If it is not ratified, the safe default is the
-current text: no release without an `independent` reconciler.
+**Part 3 — the backlog is visible.** The operator view and readiness report the count of unresolved
+unknown holds and the age of the oldest, labelled "Outcome unknown — reconciliation required". No
+automatic release, expiry or cleanup ever clears one.
+
+### 13.8 Roles and enrollment of the second principal
+
+- The **single operator** remains the primary approver and may execute work; any bootstrap
+  reconciliation they perform is `non_independent`.
+- The durable second principal is an **independently controlled human or service identity**: a
+  different `(issuer, subject)`, a distinct credential digest, `strict`-mode authentication, and the
+  `reconciler` role.
+- That same principal **may** also hold the `second-approver` role **only if** the authorization
+  policy explicitly permits it, and it must still be distinct from the requester, the executor and the
+  first approver. Prefer separate, scoped role grants and separate role events even when one
+  independent principal initially holds both.
+- A model or agent label, or a second credential held by the same human, **never** qualifies as a
+  second principal.
+- Enrollment is an operator action recorded as an audited event; no code path enrolls a principal.
