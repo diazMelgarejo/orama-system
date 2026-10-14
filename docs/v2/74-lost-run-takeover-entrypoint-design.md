@@ -99,8 +99,9 @@ Exit codes are proposed, not final.
 | 7 | Store unavailable or locked beyond the deadline | **may be partial**: the epoch may already have advanced and unstarted holds may be released with no terminal yet. Retry with the same takeover attempt identifier resumes that recorded attempt at its target epoch without another fence; a new identifier is a new CAS attempt. Hard time ceiling applies. |
 | 8 | Invariant violation (corrupt lease record or digest mismatch) | none; fails closed |
 
-Every external call (store open, write) carries a hard deadline. A timeout is code 7, never a
-silent hang.
+Every external call carries a hard deadline: store open, lock acquisition, every read (the
+current lease epoch, the attempt record lookup, the CAS pre-read) and every write. A blocked read
+or lock wait that exceeds the deadline is code 7, never a silent hang.
 
 ## Explicitly out of scope
 
