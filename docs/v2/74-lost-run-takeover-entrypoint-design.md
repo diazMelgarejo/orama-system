@@ -71,6 +71,15 @@ It does not apply another fence. Reusing an attempt identifier with different im
 invalid input (code 2). A different identifier is a new takeover and must pass CAS against the
 current epoch; it cannot adopt or resume another attempt's partial record.
 
+**One pending attempt per run.** While an attempt is pending (its epoch advanced and its terminal
+is not yet written), the store holds exactly one pending attempt for the run. The pending check is
+part of the **same compare-and-swap** that would start a takeover: a different identifier is refused
+with code 6, changes no state, and the output names the pending identifier so the caller can resume
+it. Only the recorded identifier may finalize, at its recorded target epoch; its finalization is
+never superseded by another identifier, so terminal ownership is unambiguous. This command does not
+clear a pending attempt whose caller identity is lost; that needs a separate, audited operator
+disposition and is recorded as an open question.
+
 ## Output
 
 On every invocation, to standard output as one structured object plus a short human line:
@@ -95,8 +104,8 @@ Exit codes are proposed, not final.
 | 3 | Caller is not the owner capability | none |
 | 4 | Run not found in the named store | none |
 | 5 | Reserved: the function returns any existing receipt, so this case does not occur today | none |
-| 6 | CAS conflict: lease epoch changed since read | epoch is the competitor's; no terminal from this call; retry is safe |
-| 7 | Store unavailable or locked beyond the deadline | **may be partial**: the epoch may already have advanced and unstarted holds may be released with no terminal yet. Retry with the same takeover attempt identifier resumes that recorded attempt at its target epoch without another fence; a new identifier is a new CAS attempt. Hard time ceiling applies. |
+| 6 | CAS conflict: lease epoch changed since read, **or a different takeover attempt is pending** | no state changed by this call; no terminal from this call; for a pending attempt the output names its identifier so it can be resumed; otherwise retry is safe |
+| 7 | Store unavailable or locked beyond the deadline | **may be partial**: the epoch may already have advanced and unstarted holds may be released with no terminal yet. Retry with the same takeover attempt identifier resumes that recorded attempt at its target epoch without another fence; a different identifier is refused with code 6 until that attempt finalizes. Hard time ceiling applies. |
 | 8 | Invariant violation (corrupt lease record or digest mismatch) | none; fails closed |
 
 Every external call carries a hard deadline: store open, lock acquisition, every read (the
