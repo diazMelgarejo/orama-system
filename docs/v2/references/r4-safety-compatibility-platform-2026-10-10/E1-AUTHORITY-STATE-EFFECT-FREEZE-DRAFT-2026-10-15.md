@@ -171,6 +171,7 @@ code merges. IDs are placeholders.
 | E1-T-14 | Evidence sufficiency matrix: attestation alone refused; one authoritative provider class suffices for applied; two independent non-attestation classes otherwise; unknown class rejected |
 | E1-T-15 | Second approval: absent is valid single approval; present-but-same-principal refused at issuance; unknown wire version refused (`grant.schema_unsupported`); inconsistent with class policy refused (`grant.malformed`) |
 | E1-T-16 | Retention: reconciliation records are never deleted by a restart, cleanup or backup rotation; redaction preserves digests |
+| E1-T-17 | Single-operator backlog: a non-independent record releases only on machine-verified evidence (13.7); the unresolved-hold count and oldest age are surfaced and a hold is never auto-released |
 
 ## 10. Pinned cross-repository contract identities
 
@@ -210,8 +211,9 @@ principal and credential identity (13.1), evidence classes and sufficiency (13.2
 second-approval semantics (13.4), and the Level-0 constraint wording (13.5). None is ratified until
 independent review attaches verdicts at the exact head and the operator records ratification.
 
-**Still the operator's, never assumed here.** The *numeric* ledger audit retention value, and which
-real principals hold the `approver` and `reconciler` roles.
+**Still the operator's, never assumed here.** The *numeric* ledger audit retention value, which real
+principals hold the `approver` and `reconciler` roles (including whether and who a second principal
+is, section 13.7), and the ratification of section 13.7 part 1.
 
 ## 12. Reviewer assignments and ratification
 
@@ -316,3 +318,35 @@ The M1 qualification PR changes the Phylax `grant-authority` candidate to the ex
 proven by the interop receipt in **all three places** it appears (the producers entry and both
 `final-producers` candidate sets), re-freezes the digest, and links the receipt as evidence. The
 candidate is never derived dynamically from a receipt artifact.
+
+### 13.7 Single-operator deployments: how unknown holds clear (PROPOSED; needs review)
+
+**The problem (independent note, 2026-10-15).** With one operator, every reconciliation is
+`non_independent` (13.1) and cannot release a hold, so unknown holds are recorded but never freed and
+run budgets stay charged. Left alone that is a safe but unbounded backlog.
+
+**Resolution in three parts, none of which weakens a ratified rule.**
+
+1. **Machine-verified evidence may clear a hold even when the reconciler is non-independent.** The
+   ratified rule is that the same-human exception "must not *by itself* convert `unknown` into
+   `confirmed_not_applied` or release a hold". The exception stays powerless alone. A release becomes
+   possible only when the *evidence*, not the human, carries the decision, and the system verifies it
+   mechanically without the operator's judgement:
+   - `EV-PROVIDER-SIGNED` that verifies against a pinned provider key, or
+   - `EV-PROVIDER-LOOKUP` and `EV-PROVIDER-RECEIPT` that match the idempotency key, receipt identifier
+     and payload digest,
+   - **and** `EV-LEDGER-FENCE`, **and** the record is labelled `non_independent`.
+   A decision that rests on `EV-OUTBOX-STATE`, a provider statement that cannot be mechanically
+   verified, or anything judgement-based still requires an `independent` reconciler.
+2. **A second principal is the durable fix, and it is the operator's to name.** Enrolling one is an
+   operator action, not code: a distinct `(issuer, subject)` authenticated in `strict` mode,
+   holding the `reconciler` role with its own credential. This draft does not choose who it is.
+3. **The backlog is visible, never silent.** The operator view and readiness report the count of
+   unresolved unknown holds and the age of the oldest, and label them
+   "Outcome unknown — reconciliation required". No automatic release, expiry or cleanup ever clears
+   one, and no threshold value is invented here.
+
+**Open for review and ratification.** Part 1 is a proposal that narrows how "by itself" is read; it
+needs independent review and the operator's explicit ratification before it binds, because it lets a
+non-independent record release a hold in one case. If it is not ratified, the safe default is the
+current text: no release without an `independent` reconciler.
