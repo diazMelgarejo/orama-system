@@ -165,7 +165,7 @@ code merges. IDs are placeholders.
 | E1-T-10 | Operator view redacts sensitive payloads and shows the two labels correctly |
 | E1-T-11 | Backup, restore and redaction; migration backup restores byte-identical digests |
 | E1-T-12 | Principal and credential distinctness: same principal with another credential is `non_independent`; `attest`/`off` verification is `non_independent` |
-| E1-T-13 | Same-human bootstrap exception covers exactly one record, cannot release a hold, cannot yield `confirmed_not_applied`, cannot be reused |
+| E1-T-13 | Same-human bootstrap exception covers exactly one record, cannot be reused, and never by itself releases a hold or yields `confirmed_not_applied`; the `bootstrap_exception` event supplies no evidence, so the section 13.7 predicate must also hold |
 | E1-T-14 | Evidence sufficiency matrix: attestation alone refused; a receipt proves applied, never not-applied; one authoritative provider class suffices for applied; unknown class rejected |
 | E1-T-15 | Second approval: absent is valid single approval; present-but-same-principal refused at issuance; unknown wire version refused (`grant.schema_unsupported`); inconsistent with class policy refused (`grant.malformed`) |
 | E1-T-16 | Retention: reconciliation records are never deleted by a restart, cleanup or backup rotation; redaction preserves digests |
