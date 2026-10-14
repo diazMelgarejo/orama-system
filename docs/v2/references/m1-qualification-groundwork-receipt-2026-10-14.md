@@ -196,3 +196,26 @@ The five oramasys PRs (#40, #39, #38, #41, #42) were merged in that order onto b
 a scratch worktree: no conflicts; 890 passed and 2 skipped in the candidate cell, 863 and 2 in the
 production cell, 809 and 2 with the older gate-less Core. Lint findings equal main's baseline.
 This is macOS arm64 evidence only; it is not the Ubuntu matrix.
+
+### 10.5 Retained verifier connection (appended; supersedes the limit in 10.3 as described here)
+
+Phylax #12 head `58610af` (CI 3/3 at that head) replaces reopen-by-path with one validated,
+retained read-only connection (commits `e8cce46`, `94d6a86`, `c469d91`, `397a81d`, `58610af`).
+What now holds, and what does not:
+
+| Property | State |
+| --- | --- |
+| The database is validated on an opened descriptor, then opened once; no later read re-resolves the path | implemented, tested |
+| State directory checked private on a held descriptor before and after the open; database must have one link | implemented, tested |
+| Descriptors SQLite opened must include the validated device and inode; the descriptor named like the database must be that inode and no sidecar name may carry it | implemented, tested (fabricated status and live swaps) |
+| A path that stops naming the held file fails closed as unavailable until `reopen()` | implemented, tested; `reopen()` is **not** wired into the composition, so adopting a replaced database needs a restart |
+| Revocation committed after open is visible on the retained connection | tested |
+| Foreign code opening the same database file in the instant of the open, outside this module's lock | **not closed**; Python cannot identify SQLite's own descriptor |
+| A same-user or root attacker | outside the boundary; it can already read the keys |
+| Descriptor proof on non-POSIX platforms | **absent**; only path checks apply |
+
+Review history: two fresh-context review rounds (same model family, so not independent) found
+and drove fixes for a process-wide descriptor diff, a hard-link-as-sidecar bypass, untested
+privacy and lock paths, and a Linux-only descriptor-number reuse flake that CI exposed. Both
+Linux-only fixes were pushed as CI-proved fix-ups after the first push of this change. An
+independent exact-head review of `58610af` is still required.
