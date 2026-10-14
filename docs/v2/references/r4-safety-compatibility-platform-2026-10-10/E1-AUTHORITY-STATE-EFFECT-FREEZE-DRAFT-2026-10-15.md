@@ -174,6 +174,7 @@ code merges. IDs are placeholders.
 | E1-T-17 | Bounded exception (13.7): a non-independent record releases only on a mechanically verified `NOT_ACCEPTED` assertion plus a verified fence; receipt, lookup-only, outbox-only, attestation and unverifiable statements are refused; unresolved count and oldest age surfaced; never auto-released |
 | E1-T-18 | Retention: seven-year clock starts at the later of final settlement and the final linked record; a legal, incident or dispute hold suspends deletion; redaction at write time keeps the required digests |
 | E1-T-19 | Roles: one independent principal may hold reconciler and second-approver only when policy permits, must be distinct from requester, executor and first approver, with separate scoped role events; an agent label or a second credential of the same human is never a second principal |
+| E1-T-20 | Approval quorum: a policy value above `2`, or any attempt to encode 2-of-3 or a majority in `second_approval_ref`, is refused; an enrolled third principal has no approval power without an explicit signed policy |
 
 ## 10. Pinned cross-repository contract identities
 
@@ -213,7 +214,8 @@ exact-head review and the operator's ratification comment on this PR:
 | --- | --- |
 | Retention (ledger audit and reconciliation records) | Seven years from the later of final settlement of the hold and the final linked reconciliation or correction record; a legal, incident or dispute hold suspends deletion; redact at write time (13.3). An operational policy, not a legal claim. |
 | Principals and roles | The single operator stays primary approver and may execute; any bootstrap reconciliation is non-independent; the durable second principal is an independently controlled identity with its own `(issuer, subject)`, credential digest, `strict` mode and `reconciler` role (13.1, 13.8). |
-| Section 13.7 part 1 | Approved **only** as the bounded exception to section 13.2 named there, with its evidence predicate; absent the synchronized amendment the independent-reconciler release rule controls. |
+| Section 13.7 part 1 | Approved **only** as the bounded exception to section 13.2 named there, with its evidence predicate; absent the synchronized amendment the independent-reconciler release rule controls. Independent review at `55be8366` confirmed 13.2 and 13.7 are synchronized and ready for ratification; the draft as a whole still needs exact-head review and the operator's ratification. |
+| Approval quorum | M2 stays at `1`. The first multi-approval policy is `2-of-2` for explicitly high-impact effect classes. General M-of-N is deferred to T4 (13.4); enrollment confers no approval power (13.8). |
 
 **Still the operator's, never assumed here.** *Who* the second principal is, and ratification of this
 draft as a whole after independent review.
@@ -322,8 +324,15 @@ requirements.
   An older verifier that does not know the new schema version refuses with the existing
   `grant.schema_unsupported`, so the field can never be silently ignored (fail closed; no mixed-version
   acceptance).
-- **Which effect classes require it.** A policy table `effect_class -> required_approvals`, default
-  `1`. At M2 no class requires `2`. Changing it needs E1 re-ratification with independent review.
+- **Approval policy.** A table `effect_class -> required_approvals` with value `1` or `2`, default
+  `1`. At M2 every class is `1`. The first multi-approval policy is a narrow **2-of-2**: the first
+  approver **and** one separately enrolled independent second approver, for explicitly high-impact
+  effect classes only. `second_approval_ref` is one scalar reference, so it **cannot** express
+  2-of-3, a majority or any M-of-N; a threshold above `2` is refused. General M-of-N is deferred to
+  T4, which must define a versioned named-principal roster, a signed policy snapshot, a canonical
+  approval-set representation (not one scalar), uniqueness, revocation and expiry rules, threshold
+  validation, membership-change behaviour, and old-verifier refusal. Changing the table needs E1
+  re-ratification with independent review.
 - **Not in this change.** No Phylax or Oramasys code or wire change; this is specification only.
 
 ### 13.5 Level-0 constraint (decision 4)
@@ -375,4 +384,9 @@ automatic release, expiry or cleanup ever clears one.
   independent principal initially holds both.
 - A model or agent label, or a second credential held by the same human, **never** qualifies as a
   second principal.
+- Additional principals are enrolled separately and acquire **no approval power by enrollment**:
+  approval authority needs an explicit policy role assignment and, from T4, a signed policy that
+  sets any M-of-N threshold. A reconciler is required for non-exception reconciliation; an approver
+  only when an effect class's policy requires approvals. Principals are identified by canonical
+  `(issuer, subject)`, never by a display or agent label.
 - Enrollment is an operator action recorded as an audited event; no code path enrolls a principal.
