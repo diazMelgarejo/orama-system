@@ -131,3 +131,36 @@ is the implementation roadmap for this decision. Both documents live in this rep
 temporary draft that becomes a link-only pointer. This ADR controls policy;
 implementation details in the plan must not weaken its quotas, isolation gate,
 or recovery rules.
+
+---
+
+## Status note, 2026-10-14: interim serving gap
+
+This note is additive. It records facts observed on 2026-10-14 and changes nothing above it.
+Each statement is labelled **V** (verified against a named source at the time of writing) or
+**P** (proposed, not verified, not in effect).
+
+- **V:** this ADR requires the serving process not to load the issuer seed or the approval-signing
+  secret, and to read the authority SQLite store through a read-only connection (see "Ownership"
+  and "Revocation and serving" above).
+- **V:** as of Phylax `main` at `e41f1e8`, the serving composition script loads both secret
+  references and calls the full-authority opener. Issuer state is written when that opener runs.
+  The verifier handed to Oramasys therefore wraps the full authority. The serving path does not
+  yet meet the verify-only requirement. This matches the plan's own statement that the current
+  composition is "not the final verify-only deployment"
+  ([plan 72](72-task6-operator-provisioning-and-autonomous-tier-plan.md), section 1).
+- **V:** a verify-only repair exists as an uncommitted local workspace in Phylax. It is not
+  committed, not published and not reviewed. It introduces a public-key-only verifier, a read-only
+  store, and an `open_grant_verifier` composition entry point. 225 Phylax tests passed locally
+  in that workspace.
+- **V:** grant serving is OFF by default, so the gap does not expose an active serving path in the
+  default configuration.
+- **P:** the local repair is the intended shape of plan 72 Tasks 1 and 5. Its disposition
+  (publish, revise, or discard) is owned by operator decision DEC-Q-05.
+
+This note does not:
+
+- change the status of this ADR (it remains APPROVED POLICY; NOT DEPLOYED);
+- claim that the repair is ratified, reviewed, countersigned or merged;
+- claim that serving is verify-only, seed-free or read-only today;
+- alter any quota, isolation gate, or recovery rule in this ADR or in plan 72.
