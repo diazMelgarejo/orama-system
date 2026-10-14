@@ -166,6 +166,11 @@ code merges. IDs are placeholders.
 | E1-T-09 | Authority separation: executor cannot reconcile; maker cannot qualify |
 | E1-T-10 | Operator view redacts sensitive payloads and shows the two labels correctly |
 | E1-T-11 | Backup, restore and redaction; migration backup restores byte-identical digests |
+| E1-T-12 | Principal and credential distinctness: same principal with another credential is `non_independent`; `attest`/`off` verification is `non_independent` |
+| E1-T-13 | Same-human bootstrap exception covers exactly one record, cannot release a hold, cannot yield `confirmed_not_applied`, cannot be reused |
+| E1-T-14 | Evidence sufficiency matrix: attestation alone refused; one authoritative provider class suffices for applied; two independent non-attestation classes otherwise; unknown class rejected |
+| E1-T-15 | Second approval: absent is valid single approval; present-but-same-principal refused at issuance; unknown wire version refused (`grant.schema_unsupported`); inconsistent with class policy refused (`grant.malformed`) |
+| E1-T-16 | Retention: reconciliation records are never deleted by a restart, cleanup or backup rotation; redaction preserves digests |
 
 ## 10. Pinned cross-repository contract identities
 
@@ -199,15 +204,14 @@ refuses the grant (fail closed); the wire version and how an older verifier trea
 which effect classes require it. Until these are written this item stays a blocker for
 ratification of the draft, not for the merge of the current PR stack.
 
-**Still open.**
+**Specified, awaiting independent review.** The previously open semantics are now written in
+section 13 as a proposal that closes each gap without inventing a value or a new credential format:
+principal and credential identity (13.1), evidence classes and sufficiency (13.2), retention (13.3),
+second-approval semantics (13.4), and the Level-0 constraint wording (13.5). None is ratified until
+independent review attaches verdicts at the exact head and the operator records ratification.
 
-1. The concrete principals and the mechanism that makes a principal identity independently
-   verifiable (section 4).
-2. The closed list of evidence classes and the retention value (the value is the operator's, never
-   assumed here).
-3. The semantics list under item 3 above.
-4. The M1 qualification PR must show items 4 and 5 as implemented (constraint evidence and the
-   refreshed candidate).
+**Still the operator's, never assumed here.** The *numeric* ledger audit retention value, and which
+real principals hold the `approver` and `reconciler` roles.
 
 ## 12. Reviewer assignments and ratification
 
@@ -221,3 +225,94 @@ ratification of the draft, not for the merge of the current PR stack.
 section 9 inventory accepted as the T3 entry criteria; the "still open" list in section 11 answered
 or explicitly deferred with its consequence; the item 3 semantics specified; independent review
 verdicts attached at the exact head.
+
+## 13. Specifications closing the open semantics (PROPOSED; for independent review)
+
+These sections reuse existing types and closed vocabularies. They add **no** new credential format,
+**no** new trust protocol and **no** new closed refusal code. Wire or schema work stays in the T3 and
+T4 slices.
+
+### 13.1 Principal and credential identity (decisions 1; resolves "concrete principals and mechanism")
+
+- **Principal identity** is the pair `(issuer, subject)` of an authenticated request result (the
+  existing `AuthResult`), never a display name.
+- **Credential identity** is a digest: the local secret fingerprint the fleet binding already records
+  for that principal, or the provider's credential identifier hashed. The token itself is never stored.
+- A reconciliation record stores `issuer`, `subject`, provider name, credential digest, the
+  verification mode (`strict`, `attest` or `off`) and an `independence` field.
+- **`independence = independent` only when** the verification mode is `strict`, the principal differs
+  from the executor's (and from the first approver's where a second approval applies), **and** the
+  credential digest differs from the executor's. Anything else is recorded `non_independent`.
+- **Same-human bootstrap exception.** A `bootstrap_exception` event records the attested human
+  identity, a reason, the exact reconciliation key it covers and a UTC time. It covers exactly one
+  record, is never reusable, always yields `non_independent`, and can never by itself produce
+  `confirmed_not_applied` or release a hold.
+- **Stated consequence.** The shared bearer capability maps to one principal today, so in the current
+  single-operator deployment **every** reconciliation is `non_independent` and cannot release a hold
+  until a second principal is configured through a provider in `strict` mode. That is the intended
+  fail-closed behaviour, not a defect.
+
+### 13.2 Evidence classes and sufficiency (decision 2)
+
+The class list is **closed**; an unlisted class is rejected.
+
+| Class | Meaning | Authoritative alone? |
+| --- | --- | --- |
+| `EV-PROVIDER-LOOKUP` | Provider-side lookup by the stable idempotency key | Yes, when it also matches the receipt identifier and payload digest |
+| `EV-PROVIDER-RECEIPT` | Provider receipt identifier plus payload digest | Yes, when it matches the idempotency key |
+| `EV-PROVIDER-SIGNED` | Statement signed by a pinned provider key | Yes |
+| `EV-OUTBOX-STATE` | The dispatch outbox item was never handed off | No |
+| `EV-LEDGER-FENCE` | The holder was fenced by a lease-epoch advance | No |
+| `EV-OPERATOR-ATTESTATION` | An operator statement | **Never**; annotation only |
+
+Two classes are **independent** only if they come from different source systems and do not derive
+from the same log or credential.
+
+| Decision | Sufficient evidence |
+| --- | --- |
+| `confirmed_applied` | One authoritative provider class; otherwise two independent non-attestation classes |
+| `confirmed_not_applied` | An authoritative provider statement that the key was never accepted **and** a documented provider deduplication window covering the elapsed time; otherwise `EV-OUTBOX-STATE` plus `EV-LEDGER-FENCE` |
+| Release of a hold | `confirmed_not_applied` (or a verified unused amount), **and** `EV-LEDGER-FENCE`, **and** an `independent` reconciler |
+| `still_unknown` | Nothing; the hold stays charged and blocked |
+
+### 13.3 Retention (decision 2)
+
+Reconciliation records are retained no shorter than the ledger audit retention. This draft sets **no
+numeric value**. Until an operator ratifies a ledger audit retention policy, no reconciliation record
+is deleted. Sensitive payloads are **redacted** (the digest is kept), never deleted.
+
+### 13.4 Second approval (decision 3; the conditions recorded in section 11)
+
+- **Field.** An optional `second_approval_ref` inside the **signed** grant payload, introduced with
+  the next grant schema version. Its value references a distinct approval decision record (request
+  digest, approver `(issuer, subject)`, decision, UTC time).
+- **Who may be a second approver.** A principal holding the `approver` role whose
+  `(issuer, subject)` differs from the first approver's and from the requesting and executing
+  principals, authenticated in `strict` mode.
+- **Where it is verified.** At **issuance**: the Phylax issuer refuses to sign when a required second
+  approval record is missing, is for a different request digest, is not distinct, or is expired or
+  revoked. The verifier and the consumer only check structure and consistency, because the reference
+  is inside the signed payload.
+- **Absent** means single approval and is valid for effect classes whose policy requires one.
+- **Present but invalid or inconsistent** at consumption is refused with the existing `grant.malformed`.
+  An older verifier that does not know the new schema version refuses with the existing
+  `grant.schema_unsupported`, so the field can never be silently ignored (fail closed; no mixed-version
+  acceptance).
+- **Which effect classes require it.** A policy table `effect_class -> required_approvals`, default
+  `1`. At M2 no class requires `2`. Changing it needs E1 re-ratification with independent review.
+- **Not in this change.** No Phylax or Oramasys code or wire change; this is specification only.
+
+### 13.5 Level-0 constraint (decision 4)
+
+M2 serving is explicitly **same-UID and local-only**. A different effective user or a non-private store
+is refused by the verifier's existing ownership and private-mode checks; remote or cross-UID
+publication of revocation state is unsupported and documented as such. No TTL value and no
+stale-observation test exist at Level 0. Level 1 must first ratify signed observation encoding, an
+authoritative clock, a freshness bound, a replay and reconciliation path, and fail-closed behaviour.
+
+### 13.6 Manifest candidate refresh (decision 5)
+
+The M1 qualification PR changes the Phylax `grant-authority` candidate to the exact reviewed commit
+proven by the interop receipt in **all three places** it appears (the producers entry and both
+`final-producers` candidate sets), re-freezes the digest, and links the receipt as evidence. The
+candidate is never derived dynamically from a receipt artifact.
