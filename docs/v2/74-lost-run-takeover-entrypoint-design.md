@@ -50,11 +50,26 @@ numbers. This note is therefore 74.
 | store reference | yes | Which durable store holds the run |
 | operator credential | yes | Single operator capability; read from environment or descriptor, never argv |
 | expected lease epoch | no | If given, the CAS uses it; else the command reads and prints it first |
+| takeover attempt identifier | yes | Opaque UUID generated once by the caller; every retry of that takeover reuses it |
 | confirmation flag | yes | An explicit flag acknowledging fence-not-proof-of-death semantics |
 | dry run | no | Report what would happen; make no change |
 
 The command takes no free-text reason that changes behaviour. An operator note, if added, is
 recorded but never interpreted.
+
+## Takeover attempt identity and replay
+
+Before advancing an epoch, the command durably records the caller-supplied attempt identifier
+with the run identifier, store reference, source epoch, target epoch, and the fixed terminal
+payload (`unknown`, `run.process_lost`). These fields are immutable for the attempt. The epoch
+advance and attempt record are one compare-and-swap operation.
+
+On a retry, the command looks up the attempt identifier before reading the current lease epoch.
+If its immutable fields match the request, it resumes that record: a pending attempt finalizes
+the terminal write at its recorded target epoch, and a completed one returns its recorded receipt.
+It does not apply another fence. Reusing an attempt identifier with different immutable fields is
+invalid input (code 2). A different identifier is a new takeover and must pass CAS against the
+current epoch; it cannot adopt or resume another attempt's partial record.
 
 ## Output
 
@@ -81,7 +96,7 @@ Exit codes are proposed, not final.
 | 4 | Run not found in the named store | none |
 | 5 | Reserved: the function returns any existing receipt, so this case does not occur today | none |
 | 6 | CAS conflict: lease epoch changed since read | epoch is the competitor's; no terminal from this call; retry is safe |
-| 7 | Store unavailable or locked beyond the deadline | **may be partial**: the epoch may already have advanced and unstarted holds may be released with no terminal yet; retry completes it; hard time ceiling applies |
+| 7 | Store unavailable or locked beyond the deadline | **may be partial**: the epoch may already have advanced and unstarted holds may be released with no terminal yet. Retry with the same takeover attempt identifier resumes that recorded attempt at its target epoch without another fence; a new identifier is a new CAS attempt. Hard time ceiling applies. |
 | 8 | Invariant violation (corrupt lease record or digest mismatch) | none; fails closed |
 
 Every external call (store open, write) carries a hard deadline. A timeout is code 7, never a
