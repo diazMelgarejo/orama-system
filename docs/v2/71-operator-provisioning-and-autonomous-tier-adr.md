@@ -131,3 +131,39 @@ is the implementation roadmap for this decision. Both documents live in this rep
 temporary draft that becomes a link-only pointer. This ADR controls policy;
 implementation details in the plan must not weaken its quotas, isolation gate,
 or recovery rules.
+
+---
+
+## Status note, 2026-10-14: interim serving gap
+
+This note is additive. It records facts observed on 2026-10-14 and changes nothing above it.
+Each statement is labelled **V** (verified against a named source at the time of writing) or
+**P** (proposed, not verified, not in effect).
+
+- **V:** this ADR requires the serving process not to load the issuer seed or the approval-signing
+  secret, and to read the authority SQLite store through a read-only connection (see "Ownership"
+  and "Revocation and serving" above).
+- **V:** the serving composition script (`scripts/serve_with_phylax_grants.py` in the oramasys
+  repository, commit `c68fda1`) requires both secret references (`PHYLAX_SEED_REF`,
+  `PHYLAX_P5_SECRET_REF`) and calls Phylax's full-authority opener `open_grant_authority`. At Phylax
+  `main` `e41f1e8` that opener loads the issuer seed and the approval secret and writes issuer state
+  when it runs, so the verifier handed to Oramasys wraps the full authority. The serving path does
+  not yet meet the verify-only requirement. This matches the plan's own statement that the current
+  composition is "not the final verify-only deployment"
+  ([plan 72](72-task6-operator-provisioning-and-autonomous-tier-plan.md), section 1).
+- **V:** a verify-only repair has since been published as a **draft** pull request against Phylax
+  (head `76e91e7`, not merged): a public-key-only verifier, a read-only store, and an
+  `open_grant_verifier` composition entry point. 225 Phylax tests pass on that head and were
+  reproduced independently. It does **not** change the serving script, so the serving path above
+  is unchanged until that wiring is done.
+- **V:** grant serving is OFF by default, so the gap does not expose an active serving path in the
+  default configuration.
+- **P:** the local repair is the intended shape of plan 72 Tasks 1 and 5. Its disposition
+  (publish, revise, or discard) is owned by operator decision DEC-Q-05.
+
+This note does not:
+
+- change the status of this ADR (it remains APPROVED POLICY; NOT DEPLOYED);
+- claim that the repair is ratified, reviewed, countersigned or merged;
+- claim that serving is verify-only, seed-free or read-only today;
+- alter any quota, isolation gate, or recovery rule in this ADR or in plan 72.
