@@ -91,12 +91,9 @@ Reconciliation is explicit, authenticated, evidence-backed, idempotent and appen
 | `accounting_before`, `accounting_after` | The disposition of the reservation before and after |
 | `supersedes` | Optional link to an earlier record; corrections are new linked events |
 
-**Evidence sufficiency.** An operator attestation alone never justifies `confirmed_not_applied` or a
-release. A provider-side authoritative statement or lookup that matches the idempotency key, the
-provider receipt identifier and the payload digest may establish that fact by itself when it is
-cryptographically or administratively authoritative. Otherwise two independent corroborating evidence
-classes are required. The evidence-class list is closed; records are retained no shorter than the
-ledger's audit retention.
+**Evidence sufficiency** is defined exclusively in section 13.2. An operator attestation never
+suffices; the closed evidence-class list and the release predicate there control, and this section
+does not restate the decision matrix. Retention is in section 13.3.
 
 Rules: reuse of a key with a different target or evidence fingerprint is rejected; the original
 attempt, hold and unknown event are never edited or deleted; a release is allowed only when evidence
@@ -175,6 +172,7 @@ code merges. IDs are placeholders.
 | E1-T-18 | Retention: seven-year clock starts at the later of final settlement and the final linked record; a legal, incident or dispute hold suspends deletion; redaction at write time keeps the required digests |
 | E1-T-19 | Roles: one independent principal may hold reconciler and second-approver only when policy permits, must be distinct from requester, executor and first approver, with separate scoped role events; an agent label or a second credential of the same human is never a second principal |
 | E1-T-20 | Approval quorum: a policy value above `2`, or any attempt to encode 2-of-3 or a majority in `second_approval_ref`, is refused; an enrolled third principal has no approval power without an explicit signed policy |
+| E1-T-21 | Nomination: only the operator capability may nominate; a nominee is inert until strict-mode authentication and a policy role; configuration and runtime nominations write the same audited record; an unauthenticatable nominee holds no role; revocation takes effect at the next check; distinctness is evaluated per decision |
 
 ## 10. Pinned cross-repository contract identities
 
@@ -217,8 +215,9 @@ exact-head review and the operator's ratification comment on this PR:
 | Section 13.7 part 1 | Approved **only** as the bounded exception to section 13.2 named there, with its evidence predicate; absent the synchronized amendment the independent-reconciler release rule controls. Independent review at `55be8366` confirmed 13.2 and 13.7 are synchronized and ready for ratification; the draft as a whole still needs exact-head review and the operator's ratification. |
 | Approval quorum | M2 stays at `1`. The first multi-approval policy is `2-of-2` for explicitly high-impact effect classes. General M-of-N is deferred to T4 (13.4); enrollment confers no approval power (13.8). |
 
-**Still the operator's, never assumed here.** *Who* the second principal is, and ratification of this
-draft as a whole after independent review.
+**Still the operator's, never assumed here.** Ratification of this draft as a whole, after the
+re-review of the corrected exact head. The second principal is nominated by the operator at
+configuration or runtime (section 13.8); this draft names no one.
 
 ## 12. Reviewer assignments and ratification
 
@@ -255,9 +254,11 @@ T4 slices.
   record, is never reusable, always yields `non_independent`, and can never by itself produce
   `confirmed_not_applied` or release a hold.
 - **Stated consequence.** The shared bearer capability maps to one principal today, so in the current
-  single-operator deployment **every** reconciliation is `non_independent` and cannot release a hold
-  until a second principal is configured through a provider in `strict` mode. That is the intended
-  fail-closed behaviour, not a defect.
+  single-operator deployment **every** reconciliation is `non_independent`. A `non_independent`
+  reconciliation **cannot release a hold except** through the mechanically verified `NOT_ACCEPTED`
+  plus ledger-fence exception of sections 13.2 and 13.7; every other release path requires an
+  `independent` reconciler, which needs a second principal enrolled in `strict` mode. That is the
+  intended fail-closed behaviour, not a defect.
 
 ### 13.2 Evidence classes and sufficiency (decision 2)
 
@@ -353,8 +354,9 @@ candidate is never derived dynamically from a receipt artifact.
 ### 13.7 Single-operator deployments: how unknown holds clear
 
 **The problem (independent note, 2026-10-15).** With one operator every reconciliation is
-`non_independent` (13.1) and cannot release a hold, so unknown holds are recorded but never freed and
-run budgets stay charged.
+`non_independent` (13.1) and cannot release a hold except through the bounded exception below, so
+holds whose evidence does not meet that predicate are recorded but not freed and run budgets stay
+charged.
 
 **Part 1 — the bounded exception (approved only as follows).** Section 13.7 part 1 is approved only
 as the bounded exception to section 13.2: a `non_independent` reconciler may release an `UNKNOWN`
@@ -389,4 +391,15 @@ automatic release, expiry or cleanup ever clears one.
   sets any M-of-N threshold. A reconciler is required for non-exception reconciliation; an approver
   only when an effect class's policy requires approvals. Principals are identified by canonical
   `(issuer, subject)`, never by a display or agent label.
-- Enrollment is an operator action recorded as an audited event; no code path enrolls a principal.
+- **Nomination.** The operator nominates the second principal either at **configuration time** (an
+  operator-owned roster entry loaded at start) or at **runtime** (an operator-authenticated
+  enrollment action). This draft names no one. Both paths write the same audited `principal_enrolled`
+  record: canonical `(issuer, subject)`, the roles nominated, the nominating operator identity, the
+  UTC time and the mode (`configuration` or `runtime`).
+- **Rules common to both paths.** Only the operator capability may nominate; an executor, an agent or
+  the nominee itself cannot. A nomination is inert until the nominee authenticates in `strict` mode
+  **and** the policy assigns the role, so a roster entry confers no approval power. A nominee that
+  cannot authenticate in `strict` mode holds no role (fail closed). Removal from the roster or a
+  runtime revocation takes effect at the next authentication check and is itself audited. Distinctness
+  from requester, executor and first approver is evaluated **per decision**, not once at nomination.
+- No code path enrolls a principal on its own.
