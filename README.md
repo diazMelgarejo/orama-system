@@ -10,6 +10,12 @@ moving to 2.0 on another repo soon
 
 **The complete agent methodology for solving impossible problems with elegance.**
 
+## Architecture Map
+
+[ARCHITECTURE.md](ARCHITECTURE.md) is the concise routing map for the method,
+skill-to-graph escalation, evidence boundaries, and the v1-to-v2 separation.
+It complements the operational guides below; it does not replace them.
+
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![SKILL.md Standard](https://img.shields.io/badge/SKILL.md-Compatible-green)](https://ecc.tools/skills)
 [![ECC Tools](https://img.shields.io/badge/ECC_Tools-Compatible-brightgreen)](https://ecc.tools)
