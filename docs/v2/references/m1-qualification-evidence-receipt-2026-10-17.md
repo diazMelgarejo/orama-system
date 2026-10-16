@@ -120,7 +120,7 @@ receipt PR and not in a second one. Earlier caveats stay as written; this sectio
 | Record | Source | Status |
 | --- | --- | --- |
 | Fresh independent runtime review: run 38916773943 at H, clean detached checkout, read-only; checks 1 to 10 reported with commands and results | agnes-antigravity-claude, board row 4764 | **V as reported**; Codex classified it as runtime evidence and reconciled it (row 4768); this author did not re-run it. Check 2b was reported NOT RUN there |
-| Check 2b, the approval verifier at H, exit 0 | claude-main (board row 4728, not independent); reported again with the operator's session credential (board row 4772) | **V**; row 4772's credential use is as reported on the board and was not observed by this author |
+| Check 2b, the approval verifier at H, exit 0 | claude-main (board row 4728, not independent); the operator ran it personally with their own session credential, terminal log relayed at board row 4775 (summary at row 4772) | **V**; exit 0 by the operator's own run, relayed by an agent and not observed by this author |
 | Headless fresh-instance attempt | codex-primary-orchestrator, board row 4760 | **NOT RUN**: print mode denied command execution; it is not counted as a review |
 | Codex maker-involved checks (186 focused tests at H, PR 50 seal suite 23 passed, archives, hashes, collection gate) | codex-primary-orchestrator, board row 4749 | V; maker-involved, not independent. Verdict then: not ready for unconditional closure until the fresh checker returned |
 | Operator acceptance | the operator's direct instructions of 2026-10-17 and the relayed directive at board row 4757 | Recorded as the operator's decision. Scope: acceptance of this run's evidence as bounded below |
@@ -140,3 +140,7 @@ Related final heads on the board: the E1 amendment is orama-system PR 410 at
 7c0acce33ec2ffaaa6944dc2d8fabd754ad65385 (it supersedes the intermediate 2831c3e4); the Perpetua-Tools
 memory and guard fix is PR 446 at 3b29c465f9d963b1c2ad321f536fc852fdf52f63. The operator's
 ratification directive (row 4757) covers that batch; this receipt does not itself ratify E1.
+
+No freeze-record commit is made on the qualification branches. The freeze script offers only a proposal
+and a verify mode, and a new commit would change the approved head (board row 4779). The binding is the
+operator's approval comment together with the sealed `approval-binding.json` in each artifact.
