@@ -62,6 +62,12 @@ serves. A standalone satellite remains possible but unlikely, and only through
 the §9 gate; until that gate is opened the standalone row in §2 is a
 documentation placeholder, not a plan.
 
+**Boot order is not authority (recorded 2026-10-17).** The controller is a boot
+module of `oramasys/oramasys`: it starts before any Orchestrator exists. The top
+Orchestrator, the first one spawned, is a client of the controller like any other
+principal. It holds a Phylax root capability scope and never writes claim state
+(IC-1, IC-6, IC-27). Spawn order confers no authority.
+
 In either shape the ownership and one-way dependencies in this document remain
 unchanged: Core supplies execution/event contracts, Telos supplies transport,
 Phylax supplies admission, and `oramasys/oramasys` composes. There is exactly
@@ -299,6 +305,11 @@ source-line fields do not match the stored task.
 | `renew` | Same principal, active lease, unexpired renewal window | Extends one lease, writes audit | New expiry and task version |
 | `complete` | Same principal, active lease, expected result digest | Finalizes task once, writes outbox/audit | Immutable completion receipt |
 | `release` | Same principal, active lease | Returns task to pending or named terminal disposition | Updated task version |
+
+**Handoff is not a seventh operation.** A handoff is a `release` by the current
+holder followed by a `claim` by the next principal, with `lineage` set when author
+and actor differ (IC-9, IC-10). The receiving principal inherits no authority from
+the releasing one, and the redacted event only announces it.
 | `fail` | Same principal, active lease | Records classified failure/disposition | Immutable failure receipt |
 | `recover-expired` | Controller recovery authority only | Expires a stale lease using a documented clock rule | Recovery receipt |
 
