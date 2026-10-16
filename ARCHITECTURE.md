@@ -78,8 +78,14 @@ The normative graph reconciliation work lives in the v2 specification corpus:
 - [MiniGraph final reconciliation](docs/v2/57-minigraph-final-reconciliation.md)
 - [Observer-pattern reconciliation](docs/v2/58-minigraph-observer-pattern-library-reconciliation.md)
 - [State-mutation and observer finalization](docs/v2/59-minigraph-state-mutation-observer-finalization.md)
+- [Structural graph and separately bound policy: D-LG-1](docs/v2/references/loop-graph-compatibility-2026-10-09/ADR-D-LG-1-POLICY-OWNERSHIP.md)
 - [Runtime memory migration boundary](docs/v2/56-anamnesis-runtime-memory-migration.md)
 - [Oramasys mastery standard](docs/v2/references/ORAMASYS-MASTERY-v3.md)
+
+D-LG-1 originated in [the approved decision commit](https://github.com/diazMelgarejo/orama-system/commit/5d3fa7ab0030917858d7123a8466559f868dd91a).
+Its current version preserves the original decision and the subsequent D-LG-5
+amendment: reducer/join declarations belong to Core's structural identity;
+application policy may restrict them.
 
 Two useful but secondary matches provide historical qualification and document
 graph semantics. They do not supersede the contracts above:
