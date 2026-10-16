@@ -1,8 +1,10 @@
 # M1 qualification evidence receipt (2026-10-17)
 
-State: **EVIDENCE RUN PASSED; receipt published on operator instruction.** This is not a
-qualification claim, not a pin promotion, not a merge and not an activation. It records metadata
-only (identifiers, digests, counts, statuses). No retained record content is reproduced here.
+State: **EVIDENCE RUN PASSED; receipt published on operator instruction. Amended 2026-10-17
+(section 8): operator acceptance recorded and the fresh independent runtime review reported.**
+This is not a qualification claim, not a pin promotion, not a merge and not an activation. It
+records metadata only (identifiers, digests, counts, statuses). No retained record content is
+reproduced here.
 
 Tags: **V** verified now, **H** historical, **D** design authority, **P** proposal, **U** unverified.
 
@@ -90,7 +92,7 @@ SHA-256 of each sealed file as recorded in each cell's evidence-status.json.
 | Full ten-check recompute, tests at H (1238 passed, 2 skipped), PR 50 review | agnes-antigravity-claude (first instance) | V; that instance wrote the ancestry guard in H, so its drift-guard check is a self-review; other checks are non-maker |
 | Ancestry guard at 9fad272 | codex-primary-orchestrator | Reviewed correct; operator accepted that review as sufficient for the guard |
 | Read-through of 9b981267..H | agy (headless, no shell) | APPROVE_SCOPED; ran no tests |
-| Fresh fully independent checker instance (run facts, repository verifiers, all ten checks) | pending | **U**; instruction posted on the coordination board; not yet returned |
+| Fresh fully independent checker instance (run facts, repository verifiers, all ten checks) | pending | **U**; instruction posted on the coordination board; not yet returned. *Superseded 2026-10-17: see section 8.* |
 
 The scenario receipts are fixed-fixture deterministic outputs reporting an unapproved status. They
 are **structural** evidence only, not behavioural or population-level evidence. Whether M1 accepts
@@ -104,8 +106,37 @@ structural-only scenario evidence is the operator's decision.
   is in oramasys draft PR 50 (head 6aa8b8b3405adbe324ef1fde1536ebfe5fb70e04, 15 of 15 checks
   green) and is not part of H; merging it changes the approved head and needs a new approval.
 
-## 7. Not done and still operator-owned
+## 7. Not done and still operator-owned (as first published; see section 8 for the amendment)
 
 Fast-forward of the qualification branch to H, commit of the freeze record, formal evidence
 acceptance, pin promotion (core 6d75cfe0, telos 931b6347, agate 172bfc3e; phylax unchanged), serving
 activation, the E1 ratification comment, and every merge.
+
+## 8. Amendment 2026-10-17 (appended; earlier sections are unchanged history)
+
+Amended on the operator's instruction and by Codex's reconciliation (board row 4768), in this existing
+receipt PR and not in a second one. Earlier caveats stay as written; this section only adds records.
+
+| Record | Source | Status |
+| --- | --- | --- |
+| Fresh independent runtime review: run 38916773943 at H, clean detached checkout, read-only; checks 1 to 10 reported with commands and results | agnes-antigravity-claude, board row 4764 | **V as reported**; Codex classified it as runtime evidence and reconciled it (row 4768); this author did not re-run it. Check 2b was reported NOT RUN there |
+| Check 2b, the approval verifier at H, exit 0 | claude-main (board row 4728, not independent); reported again with the operator's session credential (board row 4772) | **V**; row 4772's credential use is as reported on the board and was not observed by this author |
+| Headless fresh-instance attempt | codex-primary-orchestrator, board row 4760 | **NOT RUN**: print mode denied command execution; it is not counted as a review |
+| Codex maker-involved checks (186 focused tests at H, PR 50 seal suite 23 passed, archives, hashes, collection gate) | codex-primary-orchestrator, board row 4749 | V; maker-involved, not independent. Verdict then: not ready for unconditional closure until the fresh checker returned |
+| Operator acceptance | the operator's direct instructions of 2026-10-17 and the relayed directive at board row 4757 | Recorded as the operator's decision. Scope: acceptance of this run's evidence as bounded below |
+| PR 45 branch fast-forward to H | operator instruction, executed 2026-10-17; remote ref verified equal to H | Done. The branch now holds the approved harness head |
+
+Accepted boundary, stated by the operator and by Codex: the scenarios are structural fixed-fixture
+evidence, not hardware or live-population validation. Acceptance does not turn any check that was not
+run into a pass, and it does not authorize pin promotion, serving activation, T3 work or unrelated
+merges; each keeps its own gate. Serving stays fail-closed (the grant-serving switch is unset).
+
+Residual limitation recorded by Codex (row 4749): the seal checks bytes, not their origin. A non-empty
+`identity.json` copied from another run is sealed as evidence by the harness head and by PR 50. No
+substitution was seen in this run. The follow-up is a design and ownership decision, not a finding that
+the artifacts are compromised.
+
+Related final heads on the board: the E1 amendment is orama-system PR 410 at
+7c0acce33ec2ffaaa6944dc2d8fabd754ad65385 (it supersedes the intermediate 2831c3e4); the Perpetua-Tools
+memory and guard fix is PR 446 at 3b29c465f9d963b1c2ad321f536fc852fdf52f63. The operator's
+ratification directive (row 4757) covers that batch; this receipt does not itself ratify E1.
