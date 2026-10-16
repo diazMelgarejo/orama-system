@@ -9,19 +9,29 @@ independent of its v2 successors while the migration contracts are reviewed.
 ```mermaid
 flowchart LR
     R[Request] --> A[AFRP: resolve audience, intent, constraints]
-    A --> M[Orama method: select an execution mode]
+    A --> M[Orama method: select the least powerful sufficient shape]
     M --> S[Skill]
-    S --> C[Validated chain]
-    C --> L[Bounded loop]
-    L --> G[Explicit graph]
-    G --> V[Evidence and independent verification]
+    M --> C[Validated chain]
+    M --> L[Bounded loop]
+    M --> G[Explicit graph]
+    M --> K[Constellation: see the v2 owner map]
+    S --> V[Evidence and independent verification]
+    C --> V
+    L --> V
+    G --> V
+    K --> V
     V --> H[Human decision or recorded completion]
 ```
 
 Choose the least powerful shape that makes ownership, effects, recovery, and
-completion explicit. A skill is a capability; a chain sequences known steps; a
-loop needs a measurable exit condition; and a graph is warranted only when
-topology or conditional state must be made inspectable. Load the
+completion explicit. The shapes are alternatives, not stages: a skill is a
+capability; a chain sequences known steps; a loop needs a measurable exit
+condition; a graph is warranted only when topology or conditional state must be
+made inspectable; and a constellation applies when several repositories or
+owners compose one system. A *shape* is not an AFRP *mode* (Mode 1, 2, or 3
+sets how much machinery the work uses). The constellation shape is described by
+the [Oramasys architecture map](https://github.com/oramasys/oramasys/blob/main/ARCHITECTURE.md);
+this map links to it for orientation and does not depend on it at runtime. Load the
 [escalation card](bin/orama-system/cidf/references/skill-chain-loop-graph-reference-card.md)
 only when that choice is non-obvious.
 
@@ -51,6 +61,9 @@ Do not collapse distinct records into a single mutable “common ground.”
 | Knowledge | What concepts or sources are related? | Source, time, confidence, and derived-state labeling. |
 | Evidence | Why is a bounded claim supported? | Immutable references, tests, artifacts, or human decisions. |
 | Audit | Who checked what and what remains unresolved? | Independent scope, authority, and limitations. |
+
+The Oramasys architecture map mirrors this taxonomy and adds the v2 record
+shapes; change both documents together.
 
 Indexes, summaries, caches, and model consensus are derived views unless a
 contract explicitly makes them authoritative. A passing check supports only its
