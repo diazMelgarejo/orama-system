@@ -97,10 +97,13 @@ Independence rules (each is a table-driven test over every row above, allowed an
    the controlling human or service owner, the authentication root and the credential custody, and
    asserting no shared recovery factor with the executor. The attestation is an enrollment
    assumption recorded for audit; it is never evidence about a provider outcome. **OPERATOR
-   DECISION:** the minimum evidence for that attestation. Recommended: a different identity
-   provider account, a hardware-bound credential held by a different human or a separately
-   administered service, and a written owner name. Consequence if unset: no second principal can be
-   `independent`, and the bootstrap-only fail-closed behaviour of 13.1 continues.
+   DECISION (DECIDED 2026-10-17: adopt the draft's bar):** the minimum evidence for that
+   attestation is a different identity provider account, a hardware-bound credential held by a
+   different human or a separately administered service, and a written owner name. Enrolling a
+   second principal is DEFERRED (operator item I; tentatively v2.5): until then this bar is
+   recorded policy only, nothing is wired early, and no second principal is enrolled. Consequence
+   while none is enrolled: no second principal can be `independent`, and the bootstrap-only
+   fail-closed behaviour of 13.1 continues.
 3. Requester, executor and first-approver separation from the second approver and independent
    reconciler is evaluated **per decision** (13.8), using the enrolled attestation plus the
    identity comparison.
@@ -179,14 +182,17 @@ attempt was not applied, and fencing that excludes a late execution) are necessa
 sufficient here; otherwise the reservation is preserved or consumed conservatively; no timeout,
 stale-row cleanup, restart or missing response performs reconciliation.
 
-**"Verified unused amount" is removed in this amendment** (it was an undefined alternative release
-basis). Release in M2 is all-or-nothing for a hold, on `confirmed_not_applied` plus fence plus the
-reconciler rule. **OPERATOR DECISION:** recommended option is removal until a later slice defines
-an accounting proof. If the operator instead wants it kept, it needs, before ratification: a
-definition of "verified" with its evidence classes; a conservation rule (`released + consumed +
-in_flight <= reserved`, per unit, never negative, never above the reserved amount); a statement
-that oversized or negative amounts are refused; and tests for each. Consequence of removal: a
-partially used reservation stays charged until the full-hold rule can apply.
+**"Verified unused amount" is DISABLED BY DEFAULT in M2 and retained as a reserved feature; it is
+not removed (operator decision, 2026-10-17: default disable only, do not remove a feature that will
+be useful later).** It was an undefined alternative release basis, so it has no effect until a
+later signed-policy change enables it. Release in M2 is all-or-nothing for a hold, on
+`confirmed_not_applied` plus fence plus the reconciler rule. **OPERATOR DECISION (DECIDED
+2026-10-17):** disabled by default and kept in the specification. Before it may be enabled, a later
+change must supply: a definition of "verified" with its evidence classes; a conservation rule
+(`released + consumed + in_flight <= reserved`, per unit, never negative, never above the reserved
+amount); a statement that oversized or negative amounts are refused; and tests for each.
+Consequence while it is disabled: a partially used reservation stays charged until the full-hold
+rule can apply.
 
 ## 5. Idempotency, fencing, timeout and late result
 
@@ -268,11 +274,11 @@ an accepted effect. Therefore:
    recovery follows the contract's clock policy. Never silently resume from an old authorization
    snapshot.
 
-**OPERATOR DECISION:** where the rollback witness lives. Recommended: an append-only
-`authority_epoch` and event-tip record that is exported outside the store file at each commit
-batch (the issuer-side revocation log already is outside it). Consequence if unset: rollback
-detection is limited to the issuer log and provider receipts, and every restore ends in quarantine
-with affected work `unknown`.
+**OPERATOR DECISION (DECIDED 2026-10-17: yes, as recommended):** where the rollback witness
+lives. Decided: an append-only `authority_epoch` and event-tip record that is exported outside the
+store file at each commit batch (the issuer-side revocation log already is outside it).
+Consequence if unset: rollback detection is limited to the issuer log and provider receipts, and
+every restore ends in quarantine with affected work `unknown`.
 
 ## 9. Failure-test inventory (each must fail first)
 
@@ -376,7 +382,7 @@ recorded disagreement.
 | # | Decision | Disposition |
 | --- | --- | --- |
 | 1 | Executor/reconciler separation | **Decided.** Distinct principal AND distinct credential; a same-human bootstrap exception is **allowed**, audited, labelled non-independent, and cannot release a hold or confirm non-application by itself. |
-| 2 | Reconciliation evidence | **Decided.** Closed class list; an attestation alone never suffices; an authoritative provider statement or two independent corroborating classes may; retention no shorter than ledger audit retention. |
+| 2 | Reconciliation evidence | **Decided.** Closed class list; an attestation alone never suffices; an authoritative provider statement or two independent corroborating classes may; retention no shorter than ledger audit retention. Reaffirmed 2026-10-17: the two-class alternative stands as a typed extension with an empty provider-origin pair list (13.2). |
 | 3 | Two-person approval | **Decided by the operator over a recorded independent dissent.** An optional second-approver field is part of the E1 freeze now. *Dissent (Codex, row 4558):* a wire or schema change with undefined semantics is inferred implementation and future compatibility debt; add it only in the T4 transport/approval slice. **Condition recorded here:** E1 may not be ratified until the field's semantics are specified (see below). No Phylax or Oramasys code changes now. |
 | 4 | Level-1 freshness bound and clock | **Deferred.** Acceptable for M2 entry only while serving is explicitly same-UID and local-only and cross-UID or remote publication stays rejected by configuration and documentation. No TTL value or stale-observation test at Level 0. |
 | 5 | Phylax production-pin disposition | **Composition-only.** The `grant-serving` extra stays out of default dependencies. The M1 qualification PR refreshes the manifest candidate to the exact reviewed commit proven by the interop receipt (currently `0c3e860749b3ff8f62e102679f1f415f8acf0a61`), updating **every** place the candidate appears (producers entry and each final-producers candidate set); the digest then changes and is re-frozen. It is never derived dynamically from a receipt artifact. |
@@ -483,10 +489,12 @@ The class list is **closed**; an unlisted class is rejected.
    are present. The assertion is accepted only if the window covers the interval from the
    attempt's dispatch authorization to the decision time, plus a clock-skew allowance, judged
    against the store's authoritative clock and high-water mark. An assertion whose window ends at
-   or before the decision time (boundary inclusive) is refused. **OPERATOR DECISION:** the
-   skew allowance. Recommended: a small fixed value set in the signed policy, never taken from
-   the assertion itself. Consequence if unset: no assertion satisfies this item and no hold is
-   released through it.
+   or before the decision time (boundary inclusive) is refused. **OPERATOR DECISION
+   (DECIDED 2026-10-17: 60 seconds):** the skew allowance is 60 seconds, a fixed value set in the
+   signed policy, never taken from the assertion itself and not configurable per call. Because the
+   allowance is added to the interval the window must cover, a larger value is stricter (fail
+   closed) at the cost of refusing valid negatives that carry a short window. Consequence if the
+   signed policy omits it: no assertion satisfies this item and no hold is released through it.
 4. *Audience and replay.* The assertion names this deployment and provider as its audience.
    Each `assertion id` is recorded when used; an id used for another target, or presented after
    the target is dispositioned, is refused. A stale assertion that predates the attempt's
@@ -530,12 +538,18 @@ from the same log or credential.
   in `evidence[]` as conditions or context. Every evidence entry names the application or
   non-application assertion it makes, a stable operation, provider and request binding, and its
   provenance and integrity (digest or signature).
-- *Operator decision 2 is narrowed.* Section 11 decision 2 said an authoritative provider
-  statement "or two independent corroborating classes" may suffice. This amendment removes the
-  two-class alternative because no listed local class asserts provider application.
-  **OPERATOR DECISION:** confirm the narrowing (recommended). Consequence if the operator keeps a
-  two-class alternative: it must be restated as an explicit list of provider-origin class pairs
-  with a direct application assertion, and tests for each pair.
+- *Operator decision 2 is retained, with the alternative typed (operator decision, 2026-10-17: do
+  not reverse the 2026-10-14 tentative allowance).* Section 11 decision 2 said an authoritative
+  provider statement "or two independent corroborating classes" may suffice. That allowance
+  STANDS; it is not removed. The amendment's finding (E1-R02) is only that no class in the current
+  closed list asserts provider application, so a generic "any two classes" fallback would let
+  irrelevant local facts manufacture `confirmed_applied`. The alternative is therefore kept as a
+  reserved, typed extension: it may be used only for an explicit list of provider-origin class
+  pairs, each with a direct application assertion and tests for each pair. **That list is empty in
+  this draft**, so until a pair is added by a reviewed signed-policy change no combination of
+  classes satisfies the alternative and the authoritative provider statement remains the only
+  route. The typing preserves the operator's allowance and its future usefulness while keeping the
+  fail-closed property.
 
 **The one bounded exception (synchronized with section 13.7 part 1).** A `non_independent`
 reconciler may release an `UNKNOWN` hold **only** on a mechanically verified
@@ -580,9 +594,10 @@ requirements.
   `authority_pair`, so a change needs re-ratification. The authoritative source for grant validity
   is the issuer's revocation record; for roles it is the consumer's `authority_epoch` (13.8). The
   consumer reads revocation state at the dispatch-authorization transaction, the single
-  linearization point of the durable effects contract. **OPERATOR DECISION:** this cascade is the
-  recommended option. The alternative (approval revocation is advisory after issuance; only an
-  explicit grant revocation counts) is simpler but lets a revoked approver's grant stay usable.
+  linearization point of the durable effects contract. **OPERATOR DECISION (DECIDED
+  2026-10-17: cascade):** this cascade is the chosen option. The
+  alternative (approval revocation is advisory after issuance; only an explicit grant revocation
+  counts) is simpler but lets a revoked approver's grant stay usable.
   Consequence if unset: approval revocation after issuance has no defined effect and T3 cannot
   ratify the issuer slice.
   Outcomes by revocation time: *before issuance* the issuer refuses to sign; *between issuance and
@@ -591,6 +606,15 @@ requirements.
   contract's rules; *after dispatch authorization commits* the in-flight rule applies (cancel is
   a request, nothing is claimed undone, subsequent operations are blocked). A revocation
   racing the authorization transaction is decided by commit order in that one transaction.
+- **Cascade record (operator addition, 2026-10-17).** Every cascade event also records, for ALL
+  subagents spawned under the revoked approval or the grants it covered, the last operation each
+  one finished and the last operation each is known to have had in progress, each identified by its
+  stable operation reference and the `authority_pair` in force. "Last known" means the latest
+  durable record the store holds; an absent record is recorded as `none_recorded` and is never read
+  as "nothing was in progress". The record is evidence for recovery and reconciliation only: it
+  does not release a hold, does not count as evidence of a provider outcome (13.2), and does not
+  change the cascade's revocations. The vocabulary ("spawned subagent"), the field names and the
+  storage location are not frozen here; see "Not resolved from repository sources".
 - **Absent** means single approval and is valid for effect classes whose policy requires one.
 - **Present but invalid or inconsistent** at consumption is refused with the existing `grant.malformed`.
   An older verifier that does not know the new schema version refuses with the existing
@@ -765,10 +789,10 @@ quorum (2-of-2, no general M-of-N); and one neutral Core scheduler.
 | Finding | Disposition | Where | Consequence if unresolved |
 | --- | --- | --- | --- |
 | E1-R01 | Resolved: local outbox plus fence cannot yield `confirmed_not_applied`; pre-authorization is the section 3 no-attempt case | 13.2, 3 | A post-authorization crash could free a hold the provider already applied |
-| E1-R02 | Resolved: per-outcome evidence combinations; generic two-class fallback deleted; ineligible classes by construction | 13.2, 11 | Irrelevant local facts could manufacture `confirmed_applied` |
+| E1-R02 | Resolved: per-outcome evidence combinations; generic two-class fallback replaced by a typed, currently empty, provider-origin pair list (operator 2026-10-17: allowance retained); ineligible classes by construction | 13.2, 11 | Irrelevant local facts could manufacture `confirmed_applied` |
 | E1-R03 | Resolved in text: negative finality, replay, audience, window, trust-key rules. Skew value is an operator decision | 13.2, 13.7 | The 13.7 exception becomes a generic availability escape hatch |
 | E1-R04 | Resolved in text: rehearsal versus recovery, quiesce, quarantine, rollback detection. Witness location is an operator decision | 8 | A restore could resurrect spent authority or erase an accepted effect |
-| E1-R05 | Resolved in text: record, fingerprint, atomic transaction. "Verified unused amount" removed (operator to confirm) | 4, 13.2 | Two dispositions or excess freed budget under concurrency |
+| E1-R05 | Resolved in text: record, fingerprint, atomic transaction. "Verified unused amount" disabled by default and retained (operator decided 2026-10-17) | 4, 13.2 | Two dispositions or excess freed budget under concurrency |
 | E1-R06 | Resolved in text with a recommended cascade semantics; operator to choose | 13.4, 13.8 | Revoked approver's grants stay usable, or behaviour is undefined |
 | E1-R07 | Resolved in text: role-composition table and independence rules. Attestation evidence is an operator decision | 2, 2.1, 13.8 | Same-human identities could pass as independent |
 | E1-R08 | **Explicitly deferred**: no existing canonical refusal contract in this repository names a discriminator or per-direction codes, so none is frozen and none is invented. Integrated schema contract is a pre-code prerequisite; the claim that E1-T-23/24 pin the mapping is removed; "no mutation" is defined | 14, 9 | T3 purpose-separation slice stays NO-GO; E1-T-23 is a requirement, not an executable test |
@@ -787,6 +811,27 @@ quorum (2-of-2, no general M-of-N); and one neutral Core scheduler.
 7. Whether the integrated schema contract (section 14) must be reviewed before E1 ratification
    (recommended) or deferred with T3 NO-GO retained.
 
+### OPERATOR DECISIONS RECORDED 2026-10-17 (applied in one batch; still DRAFT, not ratified)
+
+The operator answered the seven questions above. The list above is kept as the original record.
+
+1. Two-independent-classes alternative: NOT reversed. Retained as a typed extension with an empty
+   provider-origin pair list (13.2, 11).
+2. Skew allowance: 60 seconds, fixed in signed policy (13.2).
+3. "Verified unused amount": disabled by default and retained, not removed (4).
+4. Rollback witness: an append-only `authority_epoch` and event-tip record exported outside the
+   store file (8.2).
+5. Approval revocation: issuer-applied cascade, and each cascade event records the last finished
+   and last known in-progress operation of ALL spawned subagents (13.4).
+6. Independence attestation bar: the draft's bar is adopted; enrolling a second principal
+   (operator item I) is deferred, tentatively to v2.5 (2.1, 13.8).
+7. Integrated schema contract (section 14): reviewed before E1 ratification; otherwise T3 stays
+   NO-GO.
+
+These change the specification bytes, so earlier design and checker verdicts do not cover this
+text. A Codex design verdict and a Cline checker verdict are needed at the new exact head. Nothing
+here ratifies E1 or authorizes T3.
+
 ### Not resolved from repository sources
 
 - No purpose discriminator or per-direction refusal code exists in the canonical refusal contract
@@ -797,3 +842,9 @@ quorum (2-of-2, no general M-of-N); and one neutral Core scheduler.
 - Which E1-T rows are already covered by M1 tests, and their node ids and proving commits.
 - Exact-head design and checker verdicts and the operator's ratification comment: none exist for
   these bytes.
+- The cascade record (13.4): the vocabulary for "spawned subagent", the field names, the storage
+  location and the E1-T row that tests it are not defined in this repository's sources.
+- The typed two-class extension (13.2): no provider-origin class pair is enumerated; the list is
+  empty until a reviewed signed-policy change adds one with per-pair tests.
+- The proof that would allow "verified unused amount" to be enabled (4): not defined; the feature
+  stays disabled.
