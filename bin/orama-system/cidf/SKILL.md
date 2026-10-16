@@ -41,6 +41,10 @@ check.
 >
 > Use the simplest tool that works. Complexity is a cost, not a feature.
 
+When orchestration shape is unclear, consult the on-demand
+[skill, chain, loop, and graph escalation card](references/skill-chain-loop-graph-reference-card.md)
+before insertion planning. It preserves the ranked methods and automation gate below.
+
 ---
 
 ## Quick API
