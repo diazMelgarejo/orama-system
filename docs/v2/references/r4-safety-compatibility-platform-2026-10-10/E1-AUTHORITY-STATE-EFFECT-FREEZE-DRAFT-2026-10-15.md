@@ -314,6 +314,7 @@ ratified. Section 9.1 maps each row.
 | E1-T-22 | Enrollment idempotency and epochs: a restart or retry returns the original enrollment event or revision for the same `enrollment_key` and payload; a changed payload is refused; role or revocation changes are new linked events; a configuration change is inert until a validated restart into a new `configuration_policy_epoch`; a runtime enrollment is refused before its authority event commits and usable only for permitted role and effect policy after it; a runtime revocation refuses new authority use after its commit; every record carries the `(configuration_policy_epoch, authority_epoch)` pair |
 | E1-T-23 | Grant purpose: a recovery settlement/release grant presented to the effect path, and an effect grant presented to the recovery path, are each refused with **no authority, accounting or effect mutation** (ledger, holds, outbox, receipts and grant use unchanged; business-state digests equal before and after), while a sanitized refusal audit record is allowed. The expected refusal code per direction is **not yet fixed** and is fixed by the integrated schema contract (section 14); this row cannot be an executable test until then. Also covers unknown version, missing and ambiguous discriminator, and valid-purpose controls |
 | E1-T-24 | Inherited invariants map to named tests: concurrent single use; changed-payload reuse of an operation key is a conflict; provider-key stability across retries; revocation on **each side** of the dispatch-authorization transaction; no automatic replay of an unknown outcome |
+| E1-T-25 | Cascade recovery witness (13.4, 13.8): issuer revocations commit atomically; consumer dispatch is refused while cascade acknowledgment or affected lineage is unavailable; duplicate notifications return one witness; all direct and transitive child runs are covered at an observation checkpoint; missing operation history is `none_recorded`, incomplete enumeration is never empty-success; the witness never releases a hold or proves a provider outcome |
 
 ### 9.1 Test map (resolves E1-R09)
 
@@ -353,6 +354,7 @@ evidence): `test_adjustment_grant_consumer.py`, `test_budget_crash_recovery.py`,
 | E1-T-22 | O | New (T3) | `test_e1_enrollment_idempotency_epochs` | Hot-reload a roster; duplicate enrollment event | T3 slice 2 |
 | E1-T-23 | P, O | New (T3), blocked | `test_e1_cross_purpose_refused_no_mutation` (both directions) | Wrong-purpose grant mutates state; refusal code unasserted | Blocked on section 14 rule 3 |
 | E1-T-24 | O | M1 seam, confirm | `test_e1_inherited_invariants` (single use, key conflict, key stability, revocation each side, no replay) | Remove any one inherited check | T3 slice 1 |
+| E1-T-25 | P, O | New (T3), schema gated | `test_e1_cascade_recovery_witness` (PROPOSED) | Permit dispatch before cascade acknowledgment; omit a descendant or treat missing history as completed; let a witness release a hold | T3 slice 2, after integrated schema review |
 
 Stages T3 slice 1, 2 and 3 are labels for this map only (effect spine, reconciliation and
 authority, operator view and retention). They are not planned work packages and do not authorize
@@ -420,8 +422,10 @@ configuration or runtime (section 13.8); this draft names no one.
 section 9 inventory accepted as the T3 entry criteria; the "still open" list in section 11 answered
 or explicitly deferred with its consequence; the item 3 semantics specified; independent review
 verdicts attached at the exact head; every **OPERATOR DECISION** in section 15 answered or
-explicitly deferred with its consequence; the integrated schema contract of section 14 reviewed or
-its deferral accepted; the section 9.1 map filled with real test node ids and proving commits.
+explicitly deferred with its consequence; the integrated schema contract of section 14 reviewed
+and pinned before ratification, as required by operator decision 7 of 2026-10-17; the section 9.1
+map filled with real test node ids and proving commits. Deferring that contract cannot satisfy
+this checklist.
 
 **Ratification order (operator, 2026-10-15).** The grant-purpose contract (section 14) is folded
 into this PR. Any earlier statement that this draft was ratified therefore applies to earlier bytes
@@ -434,7 +438,9 @@ ratification.
 
 ## 13. Specifications closing the open semantics (PROPOSED; for independent review)
 
-These sections reuse existing types and closed vocabularies. They add **no** new credential format,
+These sections intend to reuse verified existing types and closed vocabularies. Provisional
+cascade concepts and unverified refusal-code mappings remain subject to the integrated schema
+review before ratification. They add **no** new credential format,
 **no** new trust protocol and **no** new closed refusal code. Wire or schema work stays in the T3 and
 T4 slices.
 
@@ -511,7 +517,7 @@ from the same log or credential.
 
 | Decision | Sufficient evidence |
 | --- | --- |
-| `confirmed_applied` | Exactly one of: `EV-PROVIDER-RECEIPT` matching key and payload digest and provider identity; `EV-PROVIDER-LOOKUP` matching receipt identifier, payload digest and key; a verifying `EV-PROVIDER-SIGNED` assertion that **directly states application** of that key and payload. **No other combination and no fallback.** Two unrelated valid classes never substitute |
+| `confirmed_applied` | Exactly one of: `EV-PROVIDER-RECEIPT` matching key and payload digest and provider identity; `EV-PROVIDER-LOOKUP` matching receipt identifier, payload digest and key; a verifying `EV-PROVIDER-SIGNED` assertion that **directly states application** of that key and payload. The typed provider-origin pair extension below is reserved with an **empty** qualifying list today; consequently no pair or other fallback qualifies under this policy version. Two unrelated valid classes never substitute |
 | `confirmed_not_applied` | `EV-PROVIDER-NOT-ACCEPTED` meeting the full predicate above. **No other combination.** In particular `EV-OUTBOX-STATE` plus `EV-LEDGER-FENCE`, with or without an independent reconciler, never yields `confirmed_not_applied` |
 | Release of a hold | `confirmed_not_applied` **and** `EV-LEDGER-FENCE` **and** an `independent` reconciler — **except** the one bounded exception below |
 | `still_unknown` | Nothing; the hold stays charged and blocked |
@@ -541,8 +547,9 @@ from the same log or credential.
 - *Operator decision 2 is retained, with the alternative typed (operator decision, 2026-10-17: do
   not reverse the 2026-10-14 tentative allowance).* Section 11 decision 2 said an authoritative
   provider statement "or two independent corroborating classes" may suffice. That allowance
-  STANDS; it is not removed. The amendment's finding (E1-R02) is only that no class in the current
-  closed list asserts provider application, so a generic "any two classes" fallback would let
+  STANDS; it is not removed. The amendment's finding (E1-R02) is that no qualifying pair is
+  currently enumerated, although individual provider classes can assert application under the
+  table above; a generic "any two classes" fallback would let
   irrelevant local facts manufacture `confirmed_applied`. The alternative is therefore kept as a
   reserved, typed extension: it may be used only for an explicit list of provider-origin class
   pairs, each with a direct application assertion and tests for each pair. **That list is empty in
@@ -585,9 +592,13 @@ requirements.
   is inside the signed payload.
 - **Revocation semantics (resolves E1-R06; PROPOSED, signed-policy bound).**
   *Chosen semantics:* **grant revocation is the one mechanism that invalidates an issued grant**,
-  and the issuer is required to apply it as a *cascade*: revoking or expiring a referenced
-  approval record, or revoking the approver, is followed in the **same issuer-side authority
-  commit** by revocation of every unconsumed grant whose `second_approval_ref` points at it.
+  and the issuer is required to apply it as a *cascade*: revoking or expiring an issuer-side
+  referenced approval record is followed in the **same issuer-side authority commit** by
+  revocation of every unconsumed grant whose `second_approval_ref` points at it. Revoking the
+  enrolled approver's role or identity originates in the consumer transaction of 13.8; its durable
+  request causes the issuer to invalidate the corresponding approval records and revoke dependent
+  grants atomically in the issuer store. Dependent consumer dispatch stays refused while that
+  request is pending. A consumer role revision never becomes an issuer commit by implication.
   Nothing is inferred from an enrollment record (13.8); the cascade is an explicit issuer action,
   recorded as grant revocations that advance the revocation version. The semantics are identified
   by the approval-policy table version of this section and recorded with each decision's
@@ -606,15 +617,29 @@ requirements.
   contract's rules; *after dispatch authorization commits* the in-flight rule applies (cancel is
   a request, nothing is claimed undone, subsequent operations are blocked). A revocation
   racing the authorization transaction is decided by commit order in that one transaction.
-- **Cascade record (operator addition, 2026-10-17).** Every cascade event also records, for ALL
-  subagents spawned under the revoked approval or the grants it covered, the last operation each
-  one finished and the last operation each is known to have had in progress, each identified by its
-  stable operation reference and the `authority_pair` in force. "Last known" means the latest
-  durable record the store holds; an absent record is recorded as `none_recorded` and is never read
-  as "nothing was in progress". The record is evidence for recovery and reconciliation only: it
-  does not release a hold, does not count as evidence of a provider outcome (13.2), and does not
-  change the cascade's revocations. The vocabulary ("spawned subagent"), the field names and the
-  storage location are not frozen here; see "Not resolved from repository sources".
+- **Cascade record (operator addition, 2026-10-17).** Each issuer cascade emits a durable
+  notification identifying the affected approval and grants, issuer authority version and cascade
+  event. The issuer records authority facts only; it does not query consumer execution state.
+  Oramasys consumes that notification idempotently and appends a linked recovery witness in its
+  own store. That witness covers ALL direct and transitive subagent runs durably linked to the
+  affected approval or grants, recording each run's last finished operation and last known
+  in-progress operation, stable operation references and effective `authority_pair`, at a recorded
+  consumer observation checkpoint. "Last known" means the latest durable record at that
+  checkpoint; an absent operation record is `none_recorded`, never "nothing was in progress".
+  A subagent run means an execution context with a durable run identity and a recorded spawn
+  relation to a parent context; it is not a model nickname or an unaudited message. Membership
+  follows the transitive closure of those recorded spawn relations from the affected authority.
+  Missing parent bindings, cycles or an unavailable lineage index make enumeration incomplete.
+  Enrollment, admission and execution remain different facts: a recorded child gains no authority
+  merely by appearing in this recovery graph.
+  Incomplete lineage enumeration is recorded as incomplete, never as an empty affected set.
+  Duplicate notifications return the existing witness; later observations append linked updates.
+  Issuer revocation and consumer witness capture use their respective local transactions and the
+  durable outbox of section 4, never a distributed transaction. A missing or pending witness is
+  visible for recovery and cannot restore authority, release a hold or prove provider outcome.
+  The concrete lineage wire vocabulary, field names and storage layout must be fixed
+  in the integrated schema contract before ratification; these are design requirements, not new
+  wire fields or implemented records.
 - **Absent** means single approval and is valid for effect classes whose policy requires one.
 - **Present but invalid or inconsistent** at consumption is refused with the existing `grant.malformed`.
   An older verifier that does not know the new schema version refuses with the existing
@@ -705,12 +730,16 @@ automatic release, expiry or cleanup ever clears one.
     idempotent authority event **commits** and advances `authority_epoch`. It is usable for decisions
     evaluated **after** that commit, never before it, and needs no restart.
   - **Revocation** advances `authority_epoch`, is consulted at **every** authentication and
-    authorization check, and blocks new authority use immediately after commit. Whether an
-    already-issued grant remains consumable is governed by the revocation semantics chosen in
-    13.4 (issuer-applied cascade to grants), never inferred from an enrollment record. Revoking a
-    principal's enrollment therefore blocks that principal's new authority use immediately but
-    does not by itself revoke grants; the operator view lists dependent grants and approval
-    records so the issuer cascade can be run explicitly.
+    authorization check, and blocks new authority use immediately after commit. Revoking an
+    enrolled approver also commits a durable cascade request and a consumer-side restriction on
+    dependent approvals and grants in that same consumer transaction. The issuer processes the
+    request idempotently, committing the issuer authority change and dependent grant revocations
+    together as required by 13.4. These are two local commits joined by the outbox protocol of
+    section 4; there is no cross-store atomic transaction. While issuer acknowledgment or the
+    affected-grant mapping is unavailable, dependent dispatch stays refused, with the pending
+    cascade visible to the operator. An enrollment event alone is not forged into issuer
+    revocation evidence, and an operator does not need to start a later manual cascade to close
+    an authorization gap. Already-dispatched work retains the in-flight rule of 13.4.
   - Every authorization, approval, reconciliation and (later) grant issuance or consumption decision
     records the effective pair `(configuration_policy_epoch, authority_epoch)`, or one canonical
     composite derived from both.
@@ -757,10 +786,10 @@ release authorize a provider effect, or the reverse.
    version, (b) the exact existing refusal code for each of the two cross-purpose directions and for
    an unknown version, a missing discriminator and an ambiguous one, and (c) the canonical
    serialization rule of section 4. Until that contract is reviewed, T3 stays a NO-GO for the
-   purpose-separation slice. **OPERATOR DECISION:** whether to require that contract before E1
-   ratification (recommended; E1 then references it by exact commit) or to ratify E1 with this item
-   explicitly deferred and the NO-GO retained. Consequence of deferral: no T3 purpose-separation
-   code or test can merge, and E1-T-23 remains a requirement, not an executable test.
+   purpose-separation slice. **OPERATOR DECISION (2026-10-17, item 7):** this integrated contract
+   must be reviewed and referenced by exact commit before E1 ratification. Until that prerequisite
+   is met, E1 cannot be ratified, no T3 purpose-separation implementation may merge, and E1-T-23
+   remains a requirement rather than an executable test.
 4. **Effect authority supports ordinary bookkeeping only.** A valid effect grant may drive the
    reservation, consumption and outbox bookkeeping of its own single operation. It never confers
    recovery adjustment authority (settling, releasing or adjusting any hold), and a recovery grant
@@ -790,15 +819,15 @@ quorum (2-of-2, no general M-of-N); and one neutral Core scheduler.
 | --- | --- | --- | --- |
 | E1-R01 | Resolved: local outbox plus fence cannot yield `confirmed_not_applied`; pre-authorization is the section 3 no-attempt case | 13.2, 3 | A post-authorization crash could free a hold the provider already applied |
 | E1-R02 | Resolved: per-outcome evidence combinations; generic two-class fallback replaced by a typed, currently empty, provider-origin pair list (operator 2026-10-17: allowance retained); ineligible classes by construction | 13.2, 11 | Irrelevant local facts could manufacture `confirmed_applied` |
-| E1-R03 | Resolved in text: negative finality, replay, audience, window, trust-key rules. Skew value is an operator decision | 13.2, 13.7 | The 13.7 exception becomes a generic availability escape hatch |
-| E1-R04 | Resolved in text: rehearsal versus recovery, quiesce, quarantine, rollback detection. Witness location is an operator decision | 8 | A restore could resurrect spent authority or erase an accepted effect |
+| E1-R03 | Resolved in text: negative finality, replay, audience, window, trust-key rules. Operator decided 2026-10-17: 60-second skew fixed in signed policy | 13.2, 13.7 | The 13.7 exception becomes a generic availability escape hatch |
+| E1-R04 | Resolved in text: rehearsal versus recovery, quiesce, quarantine, rollback detection. Operator decided 2026-10-17: append-only witness outside the store file | 8 | A restore could resurrect spent authority or erase an accepted effect |
 | E1-R05 | Resolved in text: record, fingerprint, atomic transaction. "Verified unused amount" disabled by default and retained (operator decided 2026-10-17) | 4, 13.2 | Two dispositions or excess freed budget under concurrency |
-| E1-R06 | Resolved in text with a recommended cascade semantics; operator to choose | 13.4, 13.8 | Revoked approver's grants stay usable, or behaviour is undefined |
-| E1-R07 | Resolved in text: role-composition table and independence rules. Attestation evidence is an operator decision | 2, 2.1, 13.8 | Same-human identities could pass as independent |
+| E1-R06 | Operator decided 2026-10-17: issuer cascade with a linked consumer recovery witness; pending consumer dispatch refused; integrated schema still required | 13.4, 13.8 | Revoked approver's grants stay usable, or behaviour is undefined |
+| E1-R07 | Resolved in text: role-composition table and independence rules. Operator decided 2026-10-17: adopt the draft attestation bar; second-principal enrollment deferred | 2, 2.1, 13.8 | Same-human identities could pass as independent |
 | E1-R08 | **Explicitly deferred**: no existing canonical refusal contract in this repository names a discriminator or per-direction codes, so none is frozen and none is invented. Integrated schema contract is a pre-code prerequisite; the claim that E1-T-23/24 pin the mapping is removed; "no mutation" is defined | 14, 9 | T3 purpose-separation slice stays NO-GO; E1-T-23 is a requirement, not an executable test |
 | E1-R09 | Resolved in text: owner, existing/new, planned node, negative mutation, stage for T-01 to T-24. Real node ids and proving commits are **not** supplied and need an exact-head audit; exact-head verdicts and the operator comment are still required | 9.1, 12 | Sign-off cannot be tied to evidence at an exact head |
 
-### OPERATOR DECISION list (recommended option first; none is decided by this draft)
+### Historical operator question list (2026-10-16; answered in the next subsection)
 
 1. Narrow section 11 decision 2: remove the two-independent-classes alternative for
    `confirmed_applied` (recommended).
@@ -822,7 +851,9 @@ The operator answered the seven questions above. The list above is kept as the o
 4. Rollback witness: an append-only `authority_epoch` and event-tip record exported outside the
    store file (8.2).
 5. Approval revocation: issuer-applied cascade, and each cascade event records the last finished
-   and last known in-progress operation of ALL spawned subagents (13.4).
+   and last known in-progress operation of ALL spawned subagents (13.4). This records the operator's
+   intent: the issuer event and its linked consumer recovery witness together carry those facts;
+   the issuer does not own consumer execution history.
 6. Independence attestation bar: the draft's bar is adopted; enrolling a second principal
    (operator item I) is deferred, tentatively to v2.5 (2.1, 13.8).
 7. Integrated schema contract (section 14): reviewed before E1 ratification; otherwise T3 stays
@@ -831,6 +862,14 @@ The operator answered the seven questions above. The list above is kept as the o
 These change the specification bytes, so earlier design and checker verdicts do not cover this
 text. A Codex design verdict and a Cline checker verdict are needed at the new exact head. Nothing
 here ratifies E1 or authorizes T3.
+
+### Review harmonization, 2026-10-17 (proposed; requires review at the resulting head)
+
+The seven recorded operator decisions are preserved. Active sections 12 and 14 now require the
+integrated schema review before ratification. Sections 13.4 and 13.8 distinguish the atomic issuer
+cascade from consumer enrollment revocation, its fail-closed pending state, and the separately
+recorded consumer recovery witness. The typed provider-pair list remains empty. Concrete cascade
+schema and proving test nodes remain prerequisites; this clarification implements no T3 code.
 
 ### Not resolved from repository sources
 
@@ -842,8 +881,8 @@ here ratifies E1 or authorizes T3.
 - Which E1-T rows are already covered by M1 tests, and their node ids and proving commits.
 - Exact-head design and checker verdicts and the operator's ratification comment: none exist for
   these bytes.
-- The cascade record (13.4): the vocabulary for "spawned subagent", the field names, the storage
-  location and the E1-T row that tests it are not defined in this repository's sources.
+- The cascade witness (13.4): conceptual run membership and E1-T-25 are specified, but concrete
+  wire fields, storage layout and executable proving nodes await integrated schema review.
 - The typed two-class extension (13.2): no provider-origin class pair is enumerated; the list is
   empty until a reviewed signed-policy change adds one with per-pair tests.
 - The proof that would allow "verified unused amount" to be enabled (4): not defined; the feature
