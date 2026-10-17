@@ -870,6 +870,10 @@ automatic release, expiry or cleanup ever clears one.
 
 ## 14. Grant purpose separation (PROPOSED; folded into this draft by the operator, 2026-10-15)
 
+Proposed integrated contract for rule 3 (discriminator, versions, refusal order, test outcomes):
+[C2 purpose, version and refusal contract](E1-C2-PURPOSE-VERSION-AND-REFUSAL-CONTRACT-2026-10-18.md).
+It fixes no wire until reviewed and ratified by exact commit.
+
 Two kinds of authority must never be confused, because a confusion would let a ledger recovery
 release authorize a provider effect, or the reverse.
 
