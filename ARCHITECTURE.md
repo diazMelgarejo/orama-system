@@ -1,8 +1,11 @@
-# Architecture Map
+# Architecture Map — v1 Orama System
 
-This map explains how the legacy Orama system organizes work. It is a routing
-guide, not a replacement runtime or a second graph schema. The system remains
-independent of its v2 successors while the migration contracts are reviewed.
+This map explains how the legacy orama-system v1 organizes work. It is
+a routing guide: from a request to the owning contract, skill,
+execution shape, evidence, and explicit completion state. It is a map
+of the treasure trail—not a replacement runtime, a second graph schema, or an
+authority grant. The system will always remain independent of v2 services
+as its contracts are reviewed and migrated.
 
 ## Start Here
 
@@ -35,6 +38,10 @@ this map links to it for orientation and does not depend on it at runtime. Load 
 [escalation card](bin/orama-system/cidf/references/skill-chain-loop-graph-reference-card.md)
 only when that choice is non-obvious.
 
+That CIDF reference card is the canonical compact route for
+skill → chain → bounded loop → explicit graph escalation. CIDF remains the
+content-insertion authority after the execution shape is selected.
+
 ## What Owns What
 
 | Concern | Current owner | Boundary |
@@ -49,6 +56,20 @@ only when that choice is non-obvious.
 The owner table names boundaries, not import relationships. In particular,
 Orama v1 must not acquire a runtime dependency on successor services merely to
 draw or document a graph.
+
+## Treasures Carried by a Route
+
+Every Markdown file should help a reader locate a decision, contract, test,
+receipt, or source—not become a competing control plane. A route is complete
+only when its links make these questions answerable:
+
+| Map | What it routes to | What it must not claim |
+| --- | --- | --- |
+| Skill map | A bounded capability and its instructions | Authorization or completion by itself. |
+| Chain/loop map | Step order, checkpoint, and exit condition | That an unverified retry repaired an external effect. |
+| Graph map | State, ownership, handoffs, and typed relationships | A universal mutable common-ground record. |
+| Evidence map | Sources, tests, artifacts, and limitations | That a citation is automatically a verified claim. |
+| Constellation map | Which component owns each decision and interface | That all satellites are present or serving. |
 
 ## Five Related Graphs
 
@@ -101,17 +122,22 @@ Its current version preserves the original decision and the subsequent D-LG-5
 amendment: reducer/join declarations belong to Core's structural identity;
 application policy may restrict them.
 
-Two useful but secondary matches provide historical qualification and document
-graph semantics. They do not supersede the contracts above:
+Two useful but secondary matches provide the current qualification and
+ownership split, plus the inspectable document-graph semantics for files,
+concepts, decisions, implementation, evidence, handoffs, and security policy.
+They do not supersede the contracts above:
 
-- [PT loop/graph closure record](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/LOOP_GRAPH_REVISION4_CLOSURE_2026-10-09.md)
+- [PT loop/graph closure record](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/.agent/memory/working/LOOP_GRAPH_REVISION4_CLOSURE_2026-10-09.md):
+  qualification, ownership split, evidence rules, and open limits.
 - [Phase 0 LLM Wiki graph](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/wiki/README.md)
-  and [typed edge semantics](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/wiki/edges.md)
+  and [typed edge semantics](https://github.com/diazMelgarejo/Perpetua-Tools/blob/main/docs/phase-0-specifications/wiki/edges.md):
+  inspectable files, concepts, decisions, implementation, evidence, handoffs,
+  and security-policy links.
 
 ## Readiness Boundary
 
-This document improves navigation and design review. It does not implement the
-planned deterministic CSV proof, retrieval/model adapters, satellite wiring,
-serving, promotion, or qualification. Those changes require a separately
-reviewed owner contract, acceptance tests, evidence, and any required human
-decision.
+This document improves navigation and design review. The local-workspace proof
+now implements an offline, deterministic CSV + receipt slice; it does not
+implement retrieval/model adapters, satellite wiring, serving, promotion, or
+qualification. Those changes require a separately reviewed owner contract,
+acceptance tests, evidence, and any required human decision.
