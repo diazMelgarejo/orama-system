@@ -49,7 +49,7 @@ content-insertion authority after the execution shape is selected.
 | Audience, intent, and ambiguity | [AFRP](bin/orama-system/afrp/SKILL.md) | Route only after the task contract is clear. |
 | Method, planning, and verification | [Orama system](bin/orama-system/SKILL.md) | Guides work; it does not confer authorization. |
 | Content insertion | [CIDF](bin/orama-system/cidf/SKILL.md) | Preserve rank selection, automation gate, and readback. |
-| Working coordination and operational memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. |
+| Working coordination and operational memory | Perpetua-Tools | Treat records as scoped evidence, not universal authority. In v2, the Orchestrator Controller owns claims, handoffs, and leases; the Oramasys map has the owner row. |
 | v2 structural graph primitives | `oramasys/perpetua-core` | Do not add a parallel v1 node or edge schema. |
 | Endpoint, security, and hardware decisions | Telos, Phylax, and Agate | Keep their authority outside this method layer. |
 
@@ -94,7 +94,8 @@ stated conclusion; it is not merge, deployment, or operator approval.
 
 1. State the role, outcome, constraints, and authority boundary.
 2. Use AFRP when the request is non-trivial, audience-dependent, or ambiguous.
-3. Select a skill, chain, loop, or graph using the escalation card.
+3. Select a skill, chain, loop, graph, or constellation using the escalation card.
+   These are alternatives, not stages.
 4. Declare the state owner, effect owner, idempotency/recovery rule, and stop
    condition before an external or irreversible action.
 5. Separate maker, evaluator, and approver where the effect matters.
