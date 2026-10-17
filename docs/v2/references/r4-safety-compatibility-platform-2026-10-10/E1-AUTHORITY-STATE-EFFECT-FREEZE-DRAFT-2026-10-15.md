@@ -285,7 +285,8 @@ every restore ends in quarantine with affected work `unknown`.
 above fixes where the witness lives, not what it holds. One witness record is appended outside the
 store file for each commit batch and contains: the batch sequence number; the `authority_epoch`
 and `configuration_policy_epoch` committed by that batch; the clock high-water mark; the
-event-log tip digest; the issuer revocation version the batch read; and the highest provider
+event-log tip digest; the highest issuer permit and revocation versions the batch used; and the
+highest provider
 receipt reference per stable key. Records are append-only, chained by the previous record's
 digest, and never rewritten; a gap or a broken chain is itself rollback evidence.
 
@@ -385,7 +386,9 @@ evidence): `test_adjustment_grant_consumer.py`, `test_budget_crash_recovery.py`,
 | E1-T-24 | O | M1 seam, confirm | `test_e1_inherited_invariants` (single use, key conflict, key stability, revocation each side, no replay) | Remove any one inherited check | T3 slice 1 |
 | E1-T-25 | P, O | New (T3), schema gated | `test_e1_cascade_recovery_witness` (PROPOSED) | Permit dispatch before cascade acknowledgment; omit a descendant or treat missing history as completed; let a witness release a hold | T3 slice 2, after integrated schema review |
 | E1-T-26 | O | New (T3) | `test_e1_witness_coverage_blocks_dispatch` | Authorize dispatch while a committed batch has no published witness; treat a publication gap as absent | T3 exit |
-| E1-T-27 | P, O | New (T3), schema gated | `test_e1_issuer_revocation_barrier_before_and_during` | Authorize dispatch against a stale issuer revocation version; accept a revocation committed mid-authorization as decided by consumer commit order | T3 slice 2 |
+| E1-T-27 | P, O | New (T3), schema gated | `test_e1_issuer_revocation_vs_permit_matrix` | Revocation before the permit still yields a permit; revocation racing the permit yields both outcomes or an order the issuer log does not show; revocation after the permit but before the consumer commit is treated as pre-authorization; a pending cascade does not refuse dispatch | T3 slice 2 |
+| E1-T-29 | O | New (T3), schema gated | `test_e1_lost_permit_is_consumed_not_reissued` | Crash or timeout between permit and consumer commit leads to a second permit or a retry | T3 slice 2 |
+| E1-T-30 | P, O | New (T3), schema gated | `test_e1_permit_forged_replayed_unbound_expired_unavailable` | Accept a forged, replayed, wrong-reservation or expired permit; map an unreachable issuer to valid | T3 slice 2 |
 | E1-T-28 | O | New (T3) | `test_e1_witness_chain_gap_is_rollback` | Accept a restored store whose witness chain has a gap, a break or a higher epoch | T3 exit |
 
 Stages T3 slice 1, 2 and 3 are labels for this map only (effect spine, reconciliation and
@@ -648,15 +651,9 @@ requirements.
   and dispatch authorization* step 4 revalidation refuses and releases the reservation under the
   contract's rules; *after dispatch authorization commits* the in-flight rule applies (cancel is
   a request, nothing is claimed undone, subsequent operations are blocked). Commit order inside
-  the consumer's transaction does not order a revocation committed in the issuer's separate store,
-  so the cross-store case is closed by a fail-closed barrier, not by a race (review finding,
-  2026-10-18; PROPOSED): the authorization transaction records the issuer revocation version it
-  read and is refused unless (a) that version is the issuer's current published version, observed
-  within the Level-0 same-UID local read, and (b) the consumer has acknowledged every issuer
-  cascade event up to that version. Any pending, unacknowledged or unreadable cascade state
-  refuses dispatch and is reported as unavailable, never as valid (E1-T-06). A revocation the
-  issuer commits after that version was read is by definition after dispatch authorization and
-  takes the in-flight rule above; it is never decided by commit order across the two stores.
+  the consumer's transaction orders only consumer-owned facts. Issuer-owned revocations (grant,
+  approval, issuer) are ordered against dispatch at the issuer, by the permit of 13.4.1, so the
+  cross-store case is never decided by commit order across two stores.
 - **Cascade record (operator addition, 2026-10-17).** Each issuer cascade emits a durable
   notification identifying the affected approval and grants, issuer authority version and cascade
   event. The issuer records authority facts only; it does not query consumer execution state.
@@ -695,6 +692,78 @@ requirements.
   validation, membership-change behaviour, and old-verifier refusal. Changing the table needs E1
   re-ratification with independent review.
 - **Not in this change.** No Phylax or Oramasys code or wire change; this is specification only.
+
+### 13.4.1 Issuer-serialized dispatch permit (PROPOSED; review finding, 2026-10-18)
+
+**Problem.** Dispatch authorization (durable-effects contract, section 4, step 4) is one
+consumer transaction. Issuer-owned revocation state lives in the issuer's store. A consumer
+transaction that reads that state and then commits cannot exclude an issuer commit that lands
+between the read and the commit, and no distributed transaction is allowed (section 4). The
+contract's statement that this transaction is the linearization point is true only for facts the
+consumer store owns. This section fixes the ordering for the rest.
+
+**Principle.** Every fact is ordered by the one store that owns it; nothing is ordered by
+reading one store and committing in another.
+
+| Fact | Owner | Ordered against dispatch by |
+| --- | --- | --- |
+| Role revision, `authority_epoch`, worker ownership, fencing epoch | Consumer (Oramasys) | The dispatch-authorization transaction (as the contract says) |
+| Grant, approval and issuer revocation; grant use per reservation | Issuer (Phylax) | The issuer permit below, committed in the issuer's own transaction |
+
+**Protocol.** Steps 1 to 3 of the contract are unchanged. Step 4 becomes two ordered parts:
+
+1. **Permit request.** After a successful reservation, the consumer asks the issuer for a
+   dispatch permit bound to the grant, the request and artifact digests, the reservation
+   identity and the consumer `authority_pair`.
+2. **Permit decision (one issuer transaction).** The issuer checks that the grant, its approval
+   chain and the issuer are not revoked and that no cascade for them is pending, and that no
+   permit exists for this grant other than an identical retry. In the same transaction it records
+   the permit at issuer revocation version `R_p` and returns it. A revocation committed
+   earlier is seen and the permit is refused. A revocation committed later has a version above
+   `R_p`. Issuer commit order, inside one store, is the only order that matters.
+3. **Dispatch-authorization transaction (consumer).** In one consumer transaction, verify that
+   the permit is authentic, bound to this reservation, unexpired under the clock policy and not
+   already recorded; verify that every issuer cascade event with version up to `R_p` is
+   acknowledged here and none is pending; revalidate the consumer-owned gates; then record the
+   intent, consume the use and write the outbox item, storing the permit reference and `R_p`.
+
+**Fail closed.** Any step that cannot be shown to hold refuses dispatch and keeps the
+reservation under the contract's rules: issuer unreachable, permit missing, forged, replayed,
+unbound or expired, `R_p` not yet reflected in acknowledged cascade events, or a pending cascade
+request. Unavailable is reported as unavailable, never as valid (E1-T-06). Nothing is inferred
+from the absence of a revocation.
+
+**Boundary.** Permit issuance is the authorization point for issuer-owned revocation. A
+revocation ordered after it (version above `R_p`) is post-authorization even if the consumer has
+not yet committed step 3: the consumer applies the in-flight rule (cancellation is requested,
+nothing is claimed undone, subsequent operations are blocked), and the transport's last local
+check before I/O refuses an unsent intent once the acknowledgement is visible. That last check
+cannot be atomic with a remote write, as the contract already states; this design narrows the
+issuer-side window to a single store's commit order and does not claim to remove the in-flight
+case.
+
+**Lost permits.** A permit is single-use per reservation. If the consumer cannot show that step 3
+did not commit (crash, timeout), the grant is treated as consumed (section 8.2 step 5): no second
+permit is issued and the work is `unknown` until evidence says otherwise. This loses a use; it
+never allows a second dispatch.
+
+**Alternatives considered.**
+
+| Option | Verdict |
+| --- | --- |
+| Distributed transaction across both stores | Rejected: forbidden by section 4 and the outbox design |
+| Read revocation, then commit locally (commit order in the consumer) | Rejected: the review finding; the issuer can commit between read and commit |
+| Shared local file lock held across the read and the commit (Level 0 only) | Possible at same-UID local; rejected as the contract: order lives in OS state outside the evidence, and it does not survive Level 1 |
+| Short permit lifetime alone, with revocation taking effect after it | Rejected: leaves a known unsafe window and calls it a default |
+| Issuer-serialized permit (this section) | Chosen: one owner, one order, evidence in the issuer log, topology independent |
+
+**OPERATOR DECISION (PROPOSED; recommended: issuer-serialized permit).** The permit adds one
+issuer operation and one recorded field on the consumer side. Consequence if unset: issuer-owned
+revocation racing dispatch authorization has no defined order, and T3 cannot ratify the issuer
+slice or the E1-T-27 matrix. The durable-effects contract wording of step 4 needs a matching
+erratum at ratification (the transaction linearizes consumer-owned facts only); this draft does
+not edit the contract. Concrete wire fields, permit lifetime and storage layout are fixed in the
+integrated schema review. This is specification only: no Phylax or Oramasys code or wire change.
 
 ### 13.5 Level-0 constraint (decision 4)
 
@@ -915,8 +984,10 @@ schema and proving test nodes remain prerequisites; this clarification implement
 
 A CodeRabbit review of the previous head raised four points. Three are addressed in the text:
 the rollback witness record and publication barrier (8.2), the cross-store issuer-revocation
-barrier replacing the commit-order statement (13.4), and the security-baseline crosswalk (8.3).
-Tests E1-T-26 to E1-T-28 are added to 9.1 as PROPOSED names. The fourth, whether to split this
+issuer-serialized dispatch permit replacing the commit-order statement (13.4.1; redesigned on
+2026-10-18 after the first barrier still read before it committed), and the security-baseline
+crosswalk (8.3). Tests E1-T-26 to E1-T-30 are added to 9.1 as PROPOSED names. The fourth, whether to
+split this
 draft or its ledger into a separate reference, is an operator decision and is not taken here: the
 file stays whole until the operator decides. The seven recorded operator decisions are preserved.
 These edits change the specification bytes, so a Codex design verdict and a Cline checker verdict
@@ -938,8 +1009,8 @@ are again needed at the resulting head. Nothing here ratifies E1 or authorizes T
   empty until a reviewed signed-policy change adds one with per-pair tests.
 - The proof that would allow "verified unused amount" to be enabled (4): not defined; the feature
   stays disabled.
-- Witness wire fields, publication medium and read-back mechanism (8.2), and the issuer
-  revocation-version and cascade-acknowledgment encoding (13.4): requirements only, pending the
-  integrated schema review.
+- Witness wire fields, publication medium and read-back mechanism (8.2), and the permit, issuer
+  revocation-version and cascade-acknowledgment encoding and permit lifetime (13.4.1): requirements
+  only, pending the integrated schema review. The operator decision on the permit is open.
 - Exact OWASP, SSDF, CISA, OpenSSF and SLSA control identifiers in the 8.3 crosswalk.
 - Whether to split the draft or its amendment ledger into a separate reference (operator).
