@@ -230,6 +230,10 @@ behaviour.
 
 ## 8. Rollback and recovery (resolves E1-R04)
 
+Source-backed implementation boundary and proposed witness acceptance checks:
+[C1 recovery and test map](E1-C1-SOURCE-RECOVERY-AND-TEST-MAP-2026-10-18.md).
+This linked reconciliation is proposed for review and grants no recovery authority.
+
 Three different things are called "rollback" and must not be mixed.
 
 | Layer | Rollback |
@@ -347,6 +351,10 @@ ratified. Section 9.1 maps each row.
 | E1-T-25 | Cascade recovery witness (13.4, 13.8): issuer revocations commit atomically; consumer dispatch is refused while cascade acknowledgment or affected lineage is unavailable; duplicate notifications return one witness; all direct and transitive child runs are covered at an observation checkpoint; missing operation history is `none_recorded`, incomplete enumeration is never empty-success; the witness never releases a hold or proves a provider outcome |
 
 ### 9.1 Test map (resolves E1-R09)
+
+[C1 existing-test audit](E1-C1-SOURCE-RECOVERY-AND-TEST-MAP-2026-10-18.md)
+identifies concrete M1 nodes and their remaining E1 extensions. It distinguishes
+source inspection from executed tests; the proposed nodes below remain proposals.
 
 Columns: **Owner** is the repository expected to hold the test (O = Oramasys consumer and ledger,
 P = Phylax issuer and verifier, C = Core scheduler or contract tests, R = this repository's docs
