@@ -14,9 +14,10 @@ attention goes to the few that need words. The tool is
 | MD060 (compact) | Spaced table delimiter row | Cosmetic |
 
 It never edits fenced code, front matter, HTML comments, block quotes, indented code,
-headings, table rows or hard-break lines. A line it cannot wrap safely (a long URL, or a
-wrap that would start a line with a list or heading marker) is reported as
-`cannot wrap safely` and left alone. Rewording, deduplicating or dropping content is an
+headings, table rows or hard-break lines. It flags a line exactly when markdownlint's
+non-strict MD013 would (whitespace past the limit), so a lone long URL is left alone and
+diffs stay small. A line it cannot wrap safely (a wrap that would start a line with a list or
+heading marker) is reported as `cannot wrap safely` and left alone. Rewording, deduplicating or dropping content is an
 author decision and goes through the CIDF rules, never through a formatter.
 
 ## Procedure
