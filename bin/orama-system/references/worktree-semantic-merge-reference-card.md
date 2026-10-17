@@ -125,6 +125,7 @@ grep -rn '^<<<<<<<\|^=======$\|^>>>>>>>' <every file that had conflicts>
 
 git add <resolved files>
 python3 scripts/review/repo_hygiene.py .          # or repo's equivalent
+python3 scripts/review/md_lint_fix.py --check <touched .md>   # mechanical lint, see markdown-lint-fix.md
 markdownlint-cli2 <any touched .md files>          # or repo's equivalent
 <run the repo's real test suite for anything touched>
 git commit --no-edit   # or an explicit message describing the resolution
