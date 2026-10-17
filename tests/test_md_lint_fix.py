@@ -40,10 +40,10 @@ def test_fences_front_matter_comments_and_headings_are_untouched(tool) -> None:
     assert out == src
 
 
-def test_unwrappable_lines_are_reported_not_mangled(tool) -> None:
+def test_a_lone_long_url_is_not_a_lint_violation_and_is_not_touched(tool) -> None:
     url = "https://example.com/" + "a" * 120
     out, stuck = tool.fix(f"see {url}\n")
-    assert stuck == [1] and out == f"see {url}\n"
+    assert stuck == [] and out == f"see {url}\n"
 
 
 def test_a_wrap_never_starts_a_line_with_a_list_marker(tool) -> None:
@@ -67,3 +67,11 @@ def test_check_mode_exit_codes(tool, tmp_path: Path) -> None:
     assert tool.main(["--check", str(dirty)]) == 1
     assert tool.main(["--write", str(dirty)]) == 0
     assert dirty.read_text(encoding="utf-8") == "# T\n\ntext\n"
+
+
+def test_overflow_by_one_unbreakable_token_matches_the_linter_and_is_left_alone(tool) -> None:
+    """MD013 non-strict passes a line whose only overflow is a final long token."""
+    line = "word " * 18 + "https://example.com/" + "a" * 40
+    assert not tool.too_long(line, 100)
+    assert tool.fix(line) == (line, [])
+    assert tool.too_long("word " * 30, 100)

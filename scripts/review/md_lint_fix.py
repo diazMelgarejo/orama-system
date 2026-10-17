@@ -4,7 +4,7 @@
 Fixes only what is safe to fix without judgement, so the bytes of meaning never change:
 
 * MD022 / MD032 / MD058  blank lines around headings, lists and tables
-* MD013                  wrap prose and list items longer than the configured width
+* MD013                  wrap prose and list items the linter would flag (non-strict rule)
 * MD060 (compact)        normalise table delimiter rows such as ``|---|---|``
 
 It never touches fenced code, front matter, HTML blocks or comments, block quotes,
@@ -59,9 +59,18 @@ def normalise_delimiter(line: str) -> str:
     return "| " + " | ".join(cells) + " |"
 
 
+def too_long(line: str, width: int) -> bool:
+    """Mirror markdownlint MD013 (non-strict): flag only when whitespace follows the limit.
+
+    A line whose overflow is one unbreakable token (a URL) passes the linter, and wrapping
+    it would only churn the diff, so the tool leaves it alone.
+    """
+    return re.match(rf"^.{{{width}}}.*\s.+$", line) is not None
+
+
 def wrap(line: str, width: int) -> list[str] | None:
     """Wrap one prose or list line, or return None when it cannot be wrapped safely."""
-    if len(line) <= width or line.endswith(("  ", "\\")):
+    if not too_long(line, width) or line.endswith(("  ", "\\")):
         return [line]
     item = LIST_ITEM.match(line)
     if item:
