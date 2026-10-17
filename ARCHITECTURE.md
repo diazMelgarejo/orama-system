@@ -1,10 +1,11 @@
 # Architecture Map — v1 Orama System
 
-This is v1's minimal glue: a router from a request to the owning contract,
-skill, execution shape, evidence, and explicit completion state. It is a map
+This map explains how the legacy orama-system v1 organizes work. It is
+a routing guide: from a request to the owning contract, skill,
+execution shape, evidence, and explicit completion state. It is a map
 of the treasure trail—not a replacement runtime, a second graph schema, or an
-authority grant. The system remains independent of v2 services while its
-migration contracts are reviewed.
+authority grant. The system will always remain independent of v2 services
+as its contracts are reviewed and migrated.
 
 ## Start Here
 
