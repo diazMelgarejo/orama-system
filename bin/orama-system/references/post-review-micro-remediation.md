@@ -234,7 +234,8 @@ dropping local harmonization work.
   should lint clean" is not verification; running `markdownlint-cli2` (or
   the equivalent for the finding's domain) and reading its real output is.
   The same applies to re-running a fixed script directly, not just
-  re-reading the diff.
+  re-reading the diff. For mechanical markdown findings (blank lines, line length),
+  repair with [`markdown-lint-fix.md`](markdown-lint-fix.md) first, then lint.
 
 **Verification gotchas** (each cost real time this doctrine's own
 worked examples were built from — check these explicitly, don't assume

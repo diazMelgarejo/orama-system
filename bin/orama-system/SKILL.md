@@ -199,6 +199,7 @@ For any `*.md` write or edit:
 3. If a markdown file moves or is renamed, preserve a repo-wide redirect trail by updating the canonical index or adding a `Previous path` / `Canonical path` note where appropriate.
 4. Warn and ask the user before adding a new markdown file over 200 lines or growing an existing markdown file over 500 lines. Suggest moving details to `references/`, `docs/wiki/`, or a sub-skill.
 5. Before committing `*.md`, inspect the diff for broken anchors, stale paths, and missing redirect notes.
+6. Repair mechanical lint findings (blank lines, line length) with `scripts/review/md_lint_fix.py` before hand edits; see `references/markdown-lint-fix.md`.
 
 ## MODE 1: Inline Single-Agent (Simple Tasks)
 

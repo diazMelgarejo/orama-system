@@ -199,6 +199,10 @@ evidence, including the 12-test routing-contract statement. Likewise, OPT 1
 and OPT 2 retain their original proposals and rationale as historical context,
 while their resolved status and implementing commits state the later outcome.
 
+**Tooling:** mechanical findings (blank lines, line length) are repaired by
+`scripts/review/md_lint_fix.py` (see `bin/orama-system/references/markdown-lint-fix.md`); only
+content findings need this section's judgement.
+
 **Rule:** deduplicate only redundant representation. Preserve each distinct
 claim, count, path, commitment, and historical decision; then reconcile it
 additively with the later resolution. A lint or review repair must not turn a
