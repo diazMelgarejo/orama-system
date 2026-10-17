@@ -703,6 +703,10 @@ requirements.
 
 ### 13.4.1 Issuer-serialized dispatch permit (PROPOSED; review finding, 2026-10-18)
 
+Proposed wire fields, lifetime, storage, crash cases and the role reconciliation:
+[C2 permit wire and role reconciliation](E1-C2-PERMIT-WIRE-AND-ROLE-RECONCILIATION-2026-10-18.md).
+Proposal only; nothing in it is ratified.
+
 **Problem.** Dispatch authorization (durable-effects contract, section 4, step 4) is one
 consumer transaction. Issuer-owned revocation state lives in the issuer's store. A consumer
 transaction that reads that state and then commits cannot exclude an issuer commit that lands
