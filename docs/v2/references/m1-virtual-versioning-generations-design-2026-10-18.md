@@ -121,8 +121,8 @@ it is the operator's call and needs its own design review.
 | G2 | Option A: `ACTIVE-GENERATION.json` plus checks that every one of the repeated pins and refs agrees with it | Mutation tests: a wrong pointer, a drifted pin and a missing declaration are each refused |
 | G2b | Option B (only if the operator chooses it): constraints-file indirection for installs | Own design review; CI, production-install verifier and identity gate read one constraints file; fresh-environment drill on both interpreters |
 | G3 | State-machine validator and transition records | Illegal transitions refused; the history of gen-1 and gen-2 replays cleanly |
-| G4 | Installed-set gate: fail closed when the installed set does not match the active generation | Fresh-environment drill on both interpreters |
-| G5 | Rollback drill to gen-1 on a throwaway branch, all three fidelity classes | Receipt with the independence table |
+| G4 | Environment-per-generation: an environment builder from the generation's install plan, and a start-up gate that refuses an environment whose installed set does not match its declared generation | Fresh-environment drill on both interpreters; the gate refuses a mismatched set |
+| G5 | Rollback drill: switch from the gen-2 environment to the gen-1 environment and back, all three fidelity classes | Pointer-transition receipt with the independence table |
 | G6 | Optimizer candidate generations | Locked-evaluator rules from doc 57 section 14 satisfied first |
 
 ## 5. Risks and non-goals
@@ -145,9 +145,22 @@ Resolved 2026-10-18 (operator approval of G0, with the design reviewer's clarifi
    pointer-transition receipt.
 4. Only G1 is authorized (data-only, as above).
 
-Still open:
+Decided by the operator after G1 was opened:
 
-1. Real rollback semantics for running systems: reinstall on demand, or one environment per
-   generation with a switch.
-2. Option A (pointer as a check) before any G2 work; Option B (constraints indirection) is a
-   separate G2b design, approval and evidence path.
+1. **Rollback for running systems: one environment per generation, with a switch.** Each
+   generation has its own environment built from its own pins; a rollback activates another
+   environment through a reviewed pointer-transition receipt. No reinstall in place.
+2. **Pin location: Option A** (pointer as a check) comes first. Option B (constraints indirection,
+   the separate G2b path) is optional and is not needed for environment-per-generation rollback.
+
+Consequences, to be confirmed by a drill before they are relied on:
+
+- An environment builder can read a generation's own install plan (the plan the evidence runs
+  already used on clean runners) to build that generation's environment without touching the
+  consumer, and verify it against the generation's pins. That yields the `reproduced` fidelity
+  class. Whether the plan alone builds a working gen-1 consumer environment is not yet tested.
+- G4 becomes "an environment is bound to exactly one generation, and a start-up gate refuses an
+  environment whose installed set does not match the declared generation". G5 drills the switch
+  between the gen-1 and gen-2 environments.
+- Costs to review: disk per environment, a build and verify step per generation, and a
+  retirement rule that removes environments only for retired generations.
