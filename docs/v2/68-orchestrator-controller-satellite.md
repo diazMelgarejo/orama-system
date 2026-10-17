@@ -62,6 +62,12 @@ serves. A standalone satellite remains possible but unlikely, and only through
 the §9 gate; until that gate is opened the standalone row in §2 is a
 documentation placeholder, not a plan.
 
+**Boot order is not authority (recorded 2026-10-17).** The controller is a boot
+module of `oramasys/oramasys`: it starts before any Orchestrator exists. The top
+Orchestrator, the first one spawned, is a client of the controller like any other
+principal. It holds a Phylax root capability scope and never writes claim state
+(IC-1, IC-6, IC-27). Spawn order confers no authority.
+
 In either shape the ownership and one-way dependencies in this document remain
 unchanged: Core supplies execution/event contracts, Telos supplies transport,
 Phylax supplies admission, and `oramasys/oramasys` composes. There is exactly
@@ -261,7 +267,7 @@ tasks(task_id, state, version, source_ref, expected_base_sha, payload_digest)
 leases(task_id, principal_id, lease_id, lease_expires_at, state)
 idempotency(principal_id, operation, idempotency_key, request_digest, result)
 outbox(event_id, sequence, kind, redacted_payload, published_at)
-audit(event_id, actor, action, outcome, policy_version, occurred_at)
+audit(event_id, actor, action, outcome, lineage, policy_version, occurred_at)
 ```
 
 The task mutation and its outbox/audit records commit in the same transaction.
@@ -301,6 +307,16 @@ source-line fields do not match the stored task.
 | `release` | Same principal, active lease | Returns task to pending or named terminal disposition | Updated task version |
 | `fail` | Same principal, active lease | Records classified failure/disposition | Immutable failure receipt |
 | `recover-expired` | Controller recovery authority only | Expires a stale lease using a documented clock rule | Recovery receipt |
+
+**Handoff is not a seventh operation.** A handoff is a `release` by the current
+holder followed by a `claim` by the next principal, with `lineage` set when author
+and actor differ (IC-9, IC-10). The receiving principal inherits no authority from
+the releasing one, and the redacted event only announces it.
+
+Lineage persists with the handoff. When a request carries the validated common-header
+`lineage` (doc 69), the controller stores it in the `audit` record and includes it in
+`outbox.redacted_payload`, so the publisher's redacted event carries the provenance.
+Absent lineage stays absent; it is never inferred.
 
 Expected outcomes are explicit: unauthorized is `401`/`403`, stale version or
 already-claimed is `409`, invalid envelope is `400`, duplicate same request
