@@ -269,8 +269,9 @@ an accepted effect. Therefore:
    witness stays revoked; any attempt with dispatch authorization after the snapshot point is
    `unknown` and charged; provider reconciliation is run for stable keys before any retry.
 6. **Reopen dispatch** only when rollback is not detected, or is fully reconciled; compatibility
-   (schema and contract versions) is checked; an operator disposition records the previous and
-   accepted epochs and clock mark; and each pending reservation is revalidated. A backward-clock
+   (schema and contract versions) is checked; every committed batch is covered by a published
+   witness (the record below); an operator disposition records the previous and accepted epochs
+   and clock mark; and each pending reservation is revalidated. A backward-clock
    recovery follows the contract's clock policy. Never silently resume from an old authorization
    snapshot.
 
@@ -279,6 +280,34 @@ lives. Decided: an append-only `authority_epoch` and event-tip record that is ex
 store file at each commit batch (the issuer-side revocation log already is outside it).
 Consequence if unset: rollback detection is limited to the issuer log and provider receipts, and
 every restore ends in quarantine with affected work `unknown`.
+
+**Witness record and publication barrier (PROPOSED; review finding, 2026-10-18).** The decision
+above fixes where the witness lives, not what it holds. One witness record is appended outside the
+store file for each commit batch and contains: the batch sequence number; the `authority_epoch`
+and `configuration_policy_epoch` committed by that batch; the clock high-water mark; the
+event-log tip digest; the issuer revocation version the batch read; and the highest provider
+receipt reference per stable key. Records are append-only, chained by the previous record's
+digest, and never rewritten; a gap or a broken chain is itself rollback evidence.
+
+The barrier is fail closed. A batch is not covered until its witness record is durably published
+and read back. Dispatch authorization for work that depends on an uncovered batch is refused, and
+while any publication is pending, failed or unverifiable the store stays quarantined: it does not
+authorize dispatch, accept a grant or release a hold. A crash between commit and publication
+therefore leaves the store uncovered, and recovery treats the uncovered batch as `unknown` rather
+than as absent. This is a design requirement for the integrated schema review; it adds no wire
+field and no code (tests E1-T-26 and E1-T-28 in 9.1).
+
+### 8.3 Security-baseline crosswalk (PROPOSED; review finding, 2026-10-18)
+
+The table maps three E1 control groups to the external baselines named in the 2026-10-18
+review. It is chapter-level and descriptive: exact control or practice identifiers are confirmed
+by the independent reviewer at the resulting head, and no mapping here claims conformance.
+
+| E1 control group | OWASP ASVS / Top 10 | NIST SSDF | CISA Secure by Design / Default | OpenSSF | SLSA |
+| --- | --- | --- | --- | --- | --- |
+| Recovery procedure (8.2: quiesce, preserve, quarantine, witnesses, fail-closed reopen) | Top 10 A04 Insecure Design, A08 Software and Data Integrity Failures; ASVS business-logic and data-protection chapters | PW.1 design to meet security requirements; RV.1-RV.3 identify, assess and root-cause | Default quarantined and disabled; ownership of security outcomes | Security Insights recovery and disclosure notes | Provenance of the preserved copy is out of scope here |
+| Approval-revocation cascade and cross-store barrier (13.4) | Top 10 A01 Broken Access Control, A09 Logging and Monitoring Failures; ASVS access-control and logging chapters | PW.1; PW.8 test the executable behaviour; PS.1 protect the policy table | Fail closed by default; no hidden authority | Scorecard Code-Review (independent review before merge) | Not applicable to runtime state |
+| Grant-purpose separation (14) | Top 10 A01 Broken Access Control; ASVS access-control chapter | PW.1; PW.8; PW.9 secure defaults | Secure by Default: cross-purpose refused with no mutation | Scorecard Code-Review, Branch-Protection | Verifier and policy changes carry reviewed provenance |
 
 ## 9. Failure-test inventory (each must fail first)
 
@@ -355,6 +384,9 @@ evidence): `test_adjustment_grant_consumer.py`, `test_budget_crash_recovery.py`,
 | E1-T-23 | P, O | New (T3), blocked | `test_e1_cross_purpose_refused_no_mutation` (both directions) | Wrong-purpose grant mutates state; refusal code unasserted | Blocked on section 14 rule 3 |
 | E1-T-24 | O | M1 seam, confirm | `test_e1_inherited_invariants` (single use, key conflict, key stability, revocation each side, no replay) | Remove any one inherited check | T3 slice 1 |
 | E1-T-25 | P, O | New (T3), schema gated | `test_e1_cascade_recovery_witness` (PROPOSED) | Permit dispatch before cascade acknowledgment; omit a descendant or treat missing history as completed; let a witness release a hold | T3 slice 2, after integrated schema review |
+| E1-T-26 | O | New (T3) | `test_e1_witness_coverage_blocks_dispatch` | Authorize dispatch while a committed batch has no published witness; treat a publication gap as absent | T3 exit |
+| E1-T-27 | P, O | New (T3), schema gated | `test_e1_issuer_revocation_barrier_before_and_during` | Authorize dispatch against a stale issuer revocation version; accept a revocation committed mid-authorization as decided by consumer commit order | T3 slice 2 |
+| E1-T-28 | O | New (T3) | `test_e1_witness_chain_gap_is_rollback` | Accept a restored store whose witness chain has a gap, a break or a higher epoch | T3 exit |
 
 Stages T3 slice 1, 2 and 3 are labels for this map only (effect spine, reconciliation and
 authority, operator view and retention). They are not planned work packages and do not authorize
@@ -615,8 +647,16 @@ requirements.
   reservation* the cascade has revoked the grant and reservation is refused; *between reservation
   and dispatch authorization* step 4 revalidation refuses and releases the reservation under the
   contract's rules; *after dispatch authorization commits* the in-flight rule applies (cancel is
-  a request, nothing is claimed undone, subsequent operations are blocked). A revocation
-  racing the authorization transaction is decided by commit order in that one transaction.
+  a request, nothing is claimed undone, subsequent operations are blocked). Commit order inside
+  the consumer's transaction does not order a revocation committed in the issuer's separate store,
+  so the cross-store case is closed by a fail-closed barrier, not by a race (review finding,
+  2026-10-18; PROPOSED): the authorization transaction records the issuer revocation version it
+  read and is refused unless (a) that version is the issuer's current published version, observed
+  within the Level-0 same-UID local read, and (b) the consumer has acknowledged every issuer
+  cascade event up to that version. Any pending, unacknowledged or unreadable cascade state
+  refuses dispatch and is reported as unavailable, never as valid (E1-T-06). A revocation the
+  issuer commits after that version was read is by definition after dispatch authorization and
+  takes the in-flight rule above; it is never decided by commit order across the two stores.
 - **Cascade record (operator addition, 2026-10-17).** Each issuer cascade emits a durable
   notification identifying the affected approval and grants, issuer authority version and cascade
   event. The issuer records authority facts only; it does not query consumer execution state.
@@ -871,6 +911,17 @@ cascade from consumer enrollment revocation, its fail-closed pending state, and 
 recorded consumer recovery witness. The typed provider-pair list remains empty. Concrete cascade
 schema and proving test nodes remain prerequisites; this clarification implements no T3 code.
 
+### Review response, 2026-10-18 (proposed; requires review at the resulting head)
+
+A CodeRabbit review of the previous head raised four points. Three are addressed in the text:
+the rollback witness record and publication barrier (8.2), the cross-store issuer-revocation
+barrier replacing the commit-order statement (13.4), and the security-baseline crosswalk (8.3).
+Tests E1-T-26 to E1-T-28 are added to 9.1 as PROPOSED names. The fourth, whether to split this
+draft or its ledger into a separate reference, is an operator decision and is not taken here: the
+file stays whole until the operator decides. The seven recorded operator decisions are preserved.
+These edits change the specification bytes, so a Codex design verdict and a Cline checker verdict
+are again needed at the resulting head. Nothing here ratifies E1 or authorizes T3.
+
 ### Not resolved from repository sources
 
 - No purpose discriminator or per-direction refusal code exists in the canonical refusal contract
@@ -887,3 +938,8 @@ schema and proving test nodes remain prerequisites; this clarification implement
   empty until a reviewed signed-policy change adds one with per-pair tests.
 - The proof that would allow "verified unused amount" to be enabled (4): not defined; the feature
   stays disabled.
+- Witness wire fields, publication medium and read-back mechanism (8.2), and the issuer
+  revocation-version and cascade-acknowledgment encoding (13.4): requirements only, pending the
+  integrated schema review.
+- Exact OWASP, SSDF, CISA, OpenSSF and SLSA control identifiers in the 8.3 crosswalk.
+- Whether to split the draft or its amendment ledger into a separate reference (operator).
