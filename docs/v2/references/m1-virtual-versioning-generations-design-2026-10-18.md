@@ -19,7 +19,7 @@ trick as Internet Explorer's compatibility modes.
 | IE compatibility | Our equivalent |
 | --- | --- |
 | A document mode (IE5, IE7, IE8, edge) is an emulated behaviour of an older engine, selected without shipping the old browser | A **generation** names the older contract (pins, manifest, registry) without reverting the repository |
-| A site or page opts in: `X-UA-Compatible` per page, or an administrator's Enterprise Mode site list maps a site to the mode in which it works | A **consumer declares the generation it needs**; an `ACTIVE` pointer is the default; `edge` means "follow the active generation" |
+| A site or page opts in: `X-UA-Compatible` per page, or an administrator's Enterprise Mode site list maps a site to the mode in which it works | A **consumer explicitly declares** `generation: <id>` or `edge`; only `edge` resolves `ACTIVE`, and an undeclared production, CI or installer consumer refuses |
 | The mapping is controlled by someone accountable (developer plus IT administrator) and kept as a list | The pointer and each consumer mapping are **reviewed records**, moved only by the operator |
 | Emulation has fidelity levels: "IE8 Enterprise Mode provides higher-fidelity emulation ... using the original user agent string"; IE7 Enterprise Mode adds Compatibility View | We say how real a rollback is (section 4); a declared generation is not the same as a verified one |
 | Without a DOCTYPE a page falls back to IE5 mode; with one, IE7 mode: defaults decide when nothing is declared | A missing declaration in production, CI or an installer must refuse, never fall through to "latest" by accident |
@@ -50,8 +50,10 @@ Generations `m1-gen1` and `m1-gen2` are migrated as data first, byte for byte, w
 behaviour change.
 
 **Pointer.** One file `requirements/ACTIVE-GENERATION.json` naming a generation and the record that
-moved it. Package pins, lane files and CI install checks are **generated from, or checked
-against,** the active generation. A check fails if any repetition disagrees.
+moved it. Under the chosen Option A the pointer is a **check only**: it compares the existing
+package pins, lane files and CI install pins with the selected generation, and a check fails if any
+repetition disagrees. Generating pins or changing how installs resolve them belongs to the
+optional G2b path (section 3a), not to this stage.
 
 **Consumers.** A consumer (a CI lane, a deployment, an installer) declares `generation: <id>` or
 `edge`. **An undeclared production, CI or installer consumer refuses**; it never silently follows
