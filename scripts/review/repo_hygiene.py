@@ -8,6 +8,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 _GIT_SCRIPTS = Path(__file__).resolve().parent.parent / "git"
@@ -761,6 +762,9 @@ MACOS_DEDUP_DIR_PATTERN = re.compile(r" [2-9]$")
 MACOS_DEDUP_EXCLUDED_DIRS = frozenset({".git", ".venv", "node_modules", ".tox"})
 
 
+STALE_LOCK_AGE_SECONDS = 300  # 5 min — well past any single git op, short of a crash
+
+
 def scan_stale_git_locks(root: Path) -> list[str]:
     """Block stale .git/*.lock files (D5) — these wedge git operations.
 
@@ -768,16 +772,33 @@ def scan_stale_git_locks(root: Path) -> list[str]:
     inside the .git directory (index.lock, refs/heads/<branch>.lock, etc).
     Until removed, subsequent git commands fail with "another process holds
     the lock." Doctrine fix: `find .git -name '*.lock' -delete`.
+
+    This hygiene check itself normally runs FROM a git hook (pre-commit),
+    which means git's own index.lock — and any sibling lock a wrapping tool
+    creates for the same in-flight operation — legitimately exists at the
+    exact moment this scan runs. Flagging that lock unconditionally would
+    fail every commit on every repo, always (caught 2026-10-18: reproduced
+    identically across three separate commit attempts, each with a fresh
+    PID in the lock's own filename). Age-gate instead of existence-gate: a
+    lock younger than STALE_LOCK_AGE_SECONDS is presumed to be the current
+    operation holding it, not an abandoned one.
     """
     errors: list[str] = []
     git_dir = root / ".git"
     if not git_dir.exists():
         return errors
+    now = time.time()
     for dirpath, _dirnames, filenames in os.walk(git_dir):
         for name in filenames:
             if not name.endswith(".lock"):
                 continue
             full = Path(dirpath) / name
+            try:
+                age = now - full.stat().st_mtime
+            except OSError:
+                continue
+            if age < STALE_LOCK_AGE_SECONDS:
+                continue
             rel = repo_relative(full, root)
             errors.append(
                 f"stale lock file: {rel} — fix: find .git -name '*.lock' -delete"

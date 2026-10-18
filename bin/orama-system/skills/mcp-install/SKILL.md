@@ -97,6 +97,8 @@ The script runs these steps in order — skipping any that are already complete:
 
 **Cursor:** See [`references/cursor-mcp.md`](references/cursor-mcp.md) for merge rules and `sync-cursor-mcp.sh --also-user`.
 
+**Kimi / Windsurf (optional, run by hand; `install-mcp-stack.sh` does not run them):** `bash bin/orama-system/scripts/sync-kimi-mcp.sh` and `bash bin/orama-system/scripts/sync-windsurf-mcp.sh` — both idempotent, merge-only (never drop an unrelated server already in the target file), `--dry-run` supported. `exa`/`firecrawl` use the keyless hosted `mcp-remote` proxy (`npx -y mcp-remote@0.14.3 <url>`) — no API key stored locally, same pattern as Claude Code's own `claude.ai Exa`/`firecrawl` connections. Override target paths with `KIMI_MCP_JSON` / `WINDSURF_MCP_JSON` env vars.
+
 ### Step 4: Verify inside Claude Code
 
 After the script completes, restart Claude Code, then run:
