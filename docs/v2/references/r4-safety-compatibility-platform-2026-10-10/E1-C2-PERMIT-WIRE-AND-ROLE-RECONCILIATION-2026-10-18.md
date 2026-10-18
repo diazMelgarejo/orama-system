@@ -49,14 +49,30 @@ revocation state and refuses on any revocation or pending cascade; **refuses if 
 counter is below the request's `consumer_acked_through` or below the permit's `R_p`**, because an
 issuer behind a version the consumer already acknowledged, or behind its own earlier permit, has
 been rolled back and must stay quarantined (the same rule as 4.2, applied again because the
-consumer may have acknowledged more since the permit); records `R_f`, that current counter; and
-returns an issuer-signed **finalization** (exactly 14 fields, domain
-`phylax-dispatch-finalization-v1\x00`): `schema_version` (the integer 1), the eight request fields,
-`finalization_id`, `revocation_version` (written `R_f`), `issued_at`, `expires_at` and
-`issuer_signature`. The finalization is idempotent per (`permit_id`, `attempt_id`): an identical
-retry returns the stored bytes, and a different `attempt_id` or binding for the same permit is
+consumer may have acknowledged more since the permit); appends one **finalization event** to its
+gapless event chain in the same transaction, so `R_f` is that event's version (always above the
+counter it read) and `revocation_event_digest` is its `event_digest`; and returns an issuer-signed
+**finalization** (exactly 15 fields, domain `phylax-dispatch-finalization-v1\x00`):
+`schema_version` (the integer 1), the eight request fields, `finalization_id`, `revocation_version`
+(written `R_f`), `revocation_event_digest`, `issued_at`, `expires_at` and `issuer_signature`. The
+finalization is idempotent per (`permit_id`, `attempt_id`): an identical retry returns the stored
+bytes and appends no second event, and a different `attempt_id` or binding for the same permit is
 refused (proposed name `finalization.conflict`). Its lifetime is at most the permit's `expires_at`
 and at most the signed-policy finalization lifetime, which is an operator decision (section 6).
+
+**Why the finalization is a chain event.** The scalar floors catch a rollback that happened
+before the finalization request: the consumer had already acknowledged versions past the restored
+counter, so the request's `consumer_acked_through` exceeds it and 4.2f refuses. They cannot catch
+a rollback in the window after the request is sent and before step 4.3, when the consumer
+acknowledges events the issuer has already lost while the signed request value is stale. A
+counter, or the digest of an event that already exists, cannot expose that either: a clean
+restore has the same history up to its snapshot, and the lost events look like events the issuer
+might legitimately create later. A new event is what differs. After a restore the issuer's next
+event, at the latest its finalization event, takes a version the consumer may already hold with a
+different digest, because each `event_digest` commits to the previous one. The consumer sees the
+fork without clocks and without trusting the issuer's counter. The finalization also delivers its
+own event, so no stream round trip is needed for that event itself; events up to `R_f - 1`
+must still have been acknowledged, as before.
 
 **Step 4.3 (consumer transaction) requires all of:**
 
@@ -69,12 +85,18 @@ and at most the signed-policy finalization lifetime, which is an operator decisi
    approval chain or the issuer.** A revocation the consumer already knows refuses dispatch even
    if it was committed after the permit.
 5. The finalization obtained in 4.2f before this transaction opened is authentic, bound to this
-   permit, attempt and reservation, unexpired and not already recorded, `R_f >= R_p`, `R_f >=`
+   permit, attempt and reservation, unexpired and not already recorded, `R_f > R_p`, `R_f >`
    the finalization's signed `consumer_acked_through` (rule 3 again, read from the signed
-   finalization rather than trusting the issuer's refusal at 4.2f), and `acked_through >= R_f`.
-   It is the linearization point for issuer-owned revocation versus dispatch: a revocation the
-   issuer committed before finalization was refused there, and a later one is
-   post-authorization, not an unobserved exception to a consumer-side check.
+   finalization rather than trusting the issuer's refusal at 4.2f), and `acked_through >=
+   R_f - 1`. The finalization delivers its own event: the consumer recomputes the event digest
+   for version `R_f` from its stored digest at `R_f - 1`, the version, kind `finalization` and
+   `finalization_id`, requires it to equal `revocation_event_digest`, and then records event
+   `R_f` as acknowledged. If it already holds version `R_f` with a different digest, or has
+   recorded any divergence, it refuses. A mismatch or a divergence means the issuer's chain
+   differs from what was acknowledged: refuse and keep the issuer quarantined. It is the
+   linearization point for issuer-owned revocation versus dispatch: a revocation the issuer
+   committed before finalization was refused there, and a later one is post-authorization, not
+   an unobserved exception to a consumer-side check.
 6. The consumer-owned gates still hold (role revision, `authority_epoch`, worker ownership,
    fencing epoch).
 
@@ -126,9 +148,15 @@ A partial unique constraint permits at most one nonterminal permit for a grant; 
 allowed only by the proved-abandoned transition above, never by a second ordinary request.
 
 **Cascade acknowledgement.** The issuer emits revocation and cascade events with a gapless
-increasing `version`. The consumer keeps `issuer_cascade_ack(issuer_id, version, event_digest,
-applied_at)` and the contiguous high-water mark `acked_through`. A gap or a lag refuses dispatch
-and retries later. Nothing is inferred from silence.
+increasing `version`. Each event's `event_digest` commits to the previous event's digest and to
+its own version, kind and body, so equal digests at one version imply an identical history. The
+finalization event has kind `finalization` and revokes nothing: rule 4 of step 4.3 ignores it as
+a revocation, and the consumer acknowledges it from the finalization itself (rule 5). The consumer keeps
+`issuer_cascade_ack(issuer_id, version, event_digest, applied_at)` and the contiguous high-water
+mark `acked_through`. An event for a version the consumer already holds with a different digest
+is a **divergence**: the chain forked from what was acknowledged, dispatch is refused and the
+issuer stays quarantined. A gap or a lag refuses dispatch and retries later. Nothing is inferred
+from silence.
 
 ## 2. Ordering by owner (resolves the two cascade directions)
 
@@ -160,6 +188,9 @@ and retries later. Nothing is inferred from silence.
 | Finalization expires before step 4.3 | Refused at 4.3; the same replacement path applies, never a silent retry of 4.3 |
 | Step 4.3 already consumed the grant's use, and the issuer later issues or holds another permit | The consumer refuses it: the consumer-owned single use is the backstop against a second dispatch |
 | Issuer restored to an older state, so its counter is below `consumer_acked_through` | Permit refused; quarantine until reconciled against the consumer's stored versions |
+| Issuer restored from a clean older snapshot after the consumer acknowledged later events, before the finalization request | The request's `consumer_acked_through` exceeds the restored counter: refused at 4.2f, and by rule 5 at step 4.3 if a finalization is returned anyway |
+| The same restore, but the consumer acknowledges the lost events only after sending the request | The issuer's finalization event reuses a version the consumer holds with a different digest: divergence, refused at step 4.3 and quarantined. A digest of an existing event could not show this, because a snapshot has the same history up to its own point |
+| Issuer restored, and the consumer never acknowledged the lost events | Not visible at the consumer, which has nothing to compare. Covered by the issuer's recovery quarantine and the witness of E1 section 8.2, not by this protocol |
 | Issuer rolled back between permit and finalization, so `R_f` is below the request's `consumer_acked_through` or below `R_p` | Finalization refused at 4.2f; a finalization that is nevertheless returned is refused at step 4.3 rule 5. Either way the issuer stays quarantined and nothing is consumed |
 | Issuer unreachable, permit forged, unbound or expired | Dispatch refused; reported unavailable, never valid |
 
@@ -196,3 +227,7 @@ and its own gates pass." This pull request does not edit that contract.
 5. The re-permit attestation format: an authenticated-channel statement only (as written) or a
    consumer-signed record, and who may submit it.
 6. Ratification of the integrated contract, by exact commit, after independent review.
+7. The finalization event: the issuer's revocation counter advances on every finalization, so
+   `R_f` and the event chain count finalizations as well as revocations. Accept that, or carry
+   the clean-rollback evidence another way (an issuer-signed event timestamp, or the section 8.2
+   witness alone, which gives the consumer no in-protocol check).
