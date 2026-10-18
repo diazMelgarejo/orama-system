@@ -20,11 +20,11 @@
     },
     "exa": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.exa.ai/mcp"]
+      "args": ["-y", "mcp-remote@0.14.3", "https://mcp.exa.ai/mcp"]
     },
     "firecrawl": {
       "command": "npx",
-      "args": ["-y", "mcp-remote", "https://mcp.firecrawl.dev/v2/mcp"]
+      "args": ["-y", "mcp-remote@0.14.3", "https://mcp.firecrawl.dev/v2/mcp"]
     }
   }
 }
