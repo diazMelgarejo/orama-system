@@ -406,7 +406,8 @@ for cand in "$ORAMA_SYSTEM_ROOT" "$ORAMA_SYSTEM_PATH" \\
 done
 if [ -z "$ROOT" ] && base="$(git rev-parse --show-toplevel 2>/dev/null)"; then
   parent="$(dirname "$base")"
-  for d in "$parent"/*/ "$(dirname "$parent")"/*/; do
+  for d in "$parent"/*/ "$parent"/*/*/ \\
+      "$(dirname "$parent")"/*/ "$(dirname "$parent")"/*/*/; do
     [ -f "${{d}}{rel}" ] && ROOT="${{d%/}}" && break
   done
 fi

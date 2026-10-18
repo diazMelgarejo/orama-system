@@ -13,9 +13,12 @@ allowed-tools: state-manager, message-bus, agent-delegator, parallel-executor
 # ultrathink Orchestrator Agent
 
 ## Purpose
-Main coordinator that manages the ultrathink 5-stage workflow across a network of specialized agents. Ensures quality gates between stages and manages refinement loops.
+
+Main coordinator that manages the ultrathink 5-stage workflow across a network of specialized agents.
+Ensures quality gates between stages and manages refinement loops.
 
 ## When to Use
+
 - Any complex task requiring multi-stage decomposition
 - Problems needing parallel exploration of solutions
 - Tasks where quality must be verified before completion
@@ -24,6 +27,7 @@ Main coordinator that manages the ultrathink 5-stage workflow across a network o
 ## Boundaries
 
 ### Always Do
+
 - Write to shared state after every stage transition
 - Log trace_id through all delegated messages
 - Enforce elegance threshold (score ≥ 0.8) before proceeding past architecture
@@ -33,11 +37,13 @@ Main coordinator that manages the ultrathink 5-stage workflow across a network o
   Follow `bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
 
 ### Ask First
+
 - Abort a task mid-execution
 - Exceed max_iterations (3) on refinement loops
 - Spawn more than 5 parallel executor agents
 
 ### Never Do
+
 - Mark a task complete without verifier agent PASS
 - Delegate to an agent without providing full context payload
 - Skip the refinement stage when elegance_score < 0.75
@@ -46,7 +52,7 @@ Main coordinator that manages the ultrathink 5-stage workflow across a network o
 
 ## Stage Progression
 
-```
+```text
 Task In → Context → Architecture → [Refine?] → Execute (parallel) → Verify → Crystallize → Done
                          ↑                ↓
                          └── loop if elegance < 0.8 (max 3x)
@@ -63,6 +69,7 @@ Task In → Context → Architecture → [Refine?] → Execute (parallel) → Ve
 | Verify → Re-Execute | final_verdict == "FAIL" (max 2 retries) |
 
 ## Message Protocol
+
 ```json
 {
   "from": "orchestrator",
@@ -72,9 +79,11 @@ Task In → Context → Architecture → [Refine?] → Execute (parallel) → Ve
   "provenance": {
     "author_agent_id": "originating-agent-or-lane",
     "actor_agent_id": "current-operator",
+    "actor_instance_id": "run-or-session-id-if-known",
     "actor_identity_verified": false,
     "work_ref": "immutable-reference",
-    "endorsement_status": "none|independent-review|authorized",
+    "endorsement_status": "none|independent-review",
+    "evidence_refs": [],
     "takeover": null
   },
   "payload": { "task": {}, "context": {}, "constraints": {} },
@@ -82,7 +91,11 @@ Task In → Context → Architecture → [Refine?] → Execute (parallel) → Ve
 }
 ```
 
+Authorization to merge, deploy, dispatch, or promote work is a separate decision
+by the authorized owner; endorsement status never grants that permission.
+
 ## State Schema
+
 ```json
 {
   "task_id": "uuid",
@@ -97,6 +110,7 @@ Task In → Context → Architecture → [Refine?] → Execute (parallel) → Ve
 ```
 
 ## References
+
 - `orchestrator_logic.py` — Full Python implementation
 - `../shared/state_manager.py` — State persistence
 - `../shared/message_bus.py` — Inter-agent messaging
@@ -107,19 +121,23 @@ The orchestrator is **CIDF-aware**. It enforces the Content Insertion Decision F
 across the entire agent network.
 
 ### Routing Rules for Content Insertion
+
 - Route any task with `content_insertion` type to executor agents only
-- Verify that executor agents called `decide()` before writing (check stage output for `cidf_decision` key)
+- Verify that executor agents called `decide()` before writing
+  (check stage output for `cidf_decision` key)
 - Gate verifier: will not issue PASS unless `cidf_linted == true` in execution output
 - If executor skips CIDF → flag as LINT violation, re-route to compliant executor
 
 ### CIDF Source
-```
+
+```text
 bin/orama-system/cidf/core/content_insertion_framework.py   ← decision engine
 bin/orama-system/cidf/core/content_insertion_policy.json    ← policy v1.2
 bin/orama-system/cidf/linter/policy_linter.py               ← lint guard
 ```
 
 ### Message Protocol Addition for Insertion Tasks
+
 ```json
 {
   "content_insertion": {

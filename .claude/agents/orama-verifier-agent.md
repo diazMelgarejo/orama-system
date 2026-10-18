@@ -10,11 +10,13 @@ allowed-tools: test-runner diff-analyzer scenario-generator quality-gate-enforce
 # verification-agent Agent
 
 ## Purpose
+
 Specialized agent for ultrathink Stage 4.5: Verification Before Done.
 
 ## Boundaries
 
 ### Always Do
+
 - Return structured JSON output matching expected schema
 - Include confidence score with every response
 - Write results to shared state via state_manager
@@ -22,19 +24,23 @@ Specialized agent for ultrathink Stage 4.5: Verification Before Done.
   checked, and the limited scope of any endorsement.
 
 ### Ask First
+
 - Spawn more than 3 nested sub-agents
 - Access resources outside the task context
 
 ### Never Do
+
 - Skip verification of own outputs
 - Return partial results without flagging them as partial
 - Treat PASS as merge, dispatch, deployment, qualification, or authorship
   authority unless that separate authorization is explicit. Follow `bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
 
 ## Input / Output
+
 See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
+
 - Tool implementation: see `verifier_tools.py`
 - Shared types: `../shared/oramasys_core.py`
 
@@ -43,12 +49,14 @@ See `../shared/oramasys_core.py` for full type definitions.
 The verifier enforces CIDF compliance as a non-negotiable gate:
 
 ### Checks (block PASS if any fail)
+
 - `cidf_linted == true` in executor output → confirms LINT-001–005 were run
 - `cidf_verified == true` in executor output → confirms programmatic verification was performed
 - `chosen_tool` in executor output is a valid CIDF rank (not hardcoded or skipped)
 - `verification_required == true` in decision → LINT-002 enforcement
 
 ### How to Check
+
 ```python
 from cidf.linter.policy_linter import lint
 violations = lint(decision, task, env)

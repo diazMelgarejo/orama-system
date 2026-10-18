@@ -39,7 +39,7 @@ same facts as explicit fields or clearly labelled text:
     "identity_verified": false
   },
   "endorsement": {
-    "status": "none|independent-review|authorized",
+    "status": "none|independent-review",
     "evidence_refs": []
   },
   "takeover": null
@@ -59,6 +59,8 @@ author and actor happen to have the same `agent_id`.
   merge authorization, dispatch authorization, qualification, or completion.
 - Preserve pending review, CI, human authorization, and known-risk status in
   every summary. Only the authorized decision-maker may change those states.
+- Record authorization to merge, deploy, dispatch, or promote work as a
+  separate decision by its authorized owner, never as an endorsement status.
 
 ## Takeovers
 
@@ -91,8 +93,8 @@ claim.
 
 - For a substantive `agent_note`, pair the same actor with an `agent_pulse`.
 - Put `author`, `actor`, `endorsement`, and `takeover` fields in the payload
-  when the event carries a claim about work authored or resumed by another
-  agent. Legacy liveness-only events may remain minimal, but cannot be used as
+  for every substantive work claim, including when author and actor are the
+  same agent. Liveness-only events may remain minimal, but cannot be used as
   evidence of authorship, endorsement, or takeover.
 - Read the current board state before claiming, resuming, or contradicting
   work; append corrections rather than mutating or deleting history.

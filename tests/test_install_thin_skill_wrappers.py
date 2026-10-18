@@ -9,6 +9,7 @@ import errno
 import importlib.util
 import json
 import os
+import subprocess
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath
@@ -204,8 +205,40 @@ def test_hermes_harness_in_canonical_skills(mod):
     assert "orama-system/bin/orama-system/skills/hermes-harness/SKILL.md" in mod.CANONICAL_SKILLS
 
 
-def test_gossip_bus_in_canonical_skills(mod):
+def test_gossip_bus_in_canonical_skills(mod: ModuleType) -> None:
     assert "orama-system/bin/orama-system/skills/gossip-bus/SKILL.md" in mod.CANONICAL_SKILLS
+
+
+@pytest.mark.parametrize("relative_root", ["orama-system", "team/orama-system", "../team/orama-system"])
+def test_wrapper_discovers_nested_canonical_root(
+    mod: ModuleType, tmp_path: Path, relative_root: str
+) -> None:
+    workspace = tmp_path / "workspace"
+    app = workspace / "app"
+    app.mkdir(parents=True)
+    subprocess.run(["git", "init", "--quiet", str(app)], check=True)
+    canonical = (workspace / relative_root).resolve()
+    marker = canonical / "bin/orama-system/skills/gossip-bus/SKILL.md"
+    marker.parent.mkdir(parents=True)
+    marker.write_text("# Canonical skill\n", encoding="utf-8")
+    spec = mod.SkillSpec(
+        slug="gossip-bus",
+        canonical="orama-system/bin/orama-system/skills/gossip-bus/SKILL.md",
+        name="GossipBus",
+        description="Test discovery.",
+    )
+    sources = [mod.wrapper(spec), (ROOT / ".agents/skills/gossip-bus/SKILL.md").read_text()]
+    for source in sources:
+        discovery = source.split("```bash\n", 1)[1].split("```", 1)[0]
+        result = subprocess.run(
+            ["bash", "-c", discovery + '\nprintf "%s" "$ROOT"'],
+            cwd=app,
+            env={**os.environ, "ORAMA_SYSTEM_ROOT": "", "ORAMA_SYSTEM_PATH": ""},
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        assert Path(result.stdout).resolve() == canonical
 
 
 # ── SkillInventory / inventory_root / inventory_all_roots / render_inventory ──
