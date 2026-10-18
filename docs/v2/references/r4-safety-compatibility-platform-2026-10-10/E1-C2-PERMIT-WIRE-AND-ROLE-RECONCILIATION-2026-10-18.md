@@ -27,11 +27,14 @@ field above, `permit_id`, `revocation_version` (the issuer's gapless revocation 
 decision, written `R_p`), `issuer_authority_version`, `issued_at`, `expires_at`, `issuer_key_id`,
 `payload_digest` and `issuer_signature`. Preimage domain `phylax-dispatch-permit-v1\x00`.
 
-**Issuer decision (4.2).** In one issuer transaction: refuse if the grant, its approval chain or the
-issuer is revoked or a cascade for them is pending; refuse if `R_p` (the issuer's own counter)
-would be **below `consumer_acked_through`**, because an issuer that is behind a version the
-consumer already acknowledged has been rolled back and must stay quarantined; otherwise record the
-permit at `R_p` and return it.
+**Issuer decision (4.2).** In one issuer transaction, load the signed grant identified by
+`grant_id`. For a new permit, refuse unless `grant_payload_digest` equals the grant's signed
+`payload_digest`, and `operation_id` and `request_digest` equal the corresponding signed grant
+fields. Then refuse if the grant, its approval chain or the issuer is revoked or a cascade for them
+is pending; refuse if `R_p` (the issuer's own counter) would be **below
+`consumer_acked_through`**, because an issuer that is behind a version the consumer already
+acknowledged has been rolled back and must stay quarantined; otherwise record the permit at `R_p`
+and return it.
 
 **Step 4.3 (consumer transaction) requires all of:**
 
@@ -42,13 +45,20 @@ permit at `R_p` and return it.
    counter went backwards.
 4. **No acknowledged event of any version, including versions above `R_p`, revokes the grant, its
    approval chain or the issuer.** A revocation the consumer already knows refuses dispatch even
-   if it was committed after the permit. The in-flight rule applies only to revocations that the
-   consumer has not acknowledged when step 4.3 commits.
-5. The consumer-owned gates still hold (role revision, `authority_epoch`, worker ownership,
+   if it was committed after the permit.
+5. Before recording the intent, the consumer obtains an issuer-signed **finalization** for this
+   permit and attempt. In the issuer transaction that records finalization, the issuer re-reads the
+   grant, approval chain and issuer revocation state; any revocation or pending cascade refuses.
+   The finalization records the current issuer counter `R_f`, binds the attempt to the permit and
+   reservation, and is the linearization point for issuer-owned revocation versus dispatch. The
+   consumer verifies it and requires `acked_through >= R_f`. A later issuer revocation is therefore
+   post-authorization, not an unobserved exception to a consumer-side check.
+6. The consumer-owned gates still hold (role revision, `authority_epoch`, worker ownership,
    fencing epoch).
 
-Then, in the same transaction: record the intent, consume the use and write the outbox item, with
-`permit_id`, the permit digest, `R_p`, the effective `authority_pair` and `acked_through`.
+Then, in the same consumer transaction: record the intent, consume the use and write the outbox
+item, with `permit_id`, the permit and finalization digests, `R_p`, `R_f`, the effective
+`authority_pair` and `acked_through`.
 
 **Lifetime.** `expires_at` is at most the grant's `expires_at` and at most `issued_at` plus a
 permit lifetime fixed by the signed policy, never by the request. The value is an operator
@@ -73,14 +83,18 @@ permit, the issuer recomputes the digest and compares it with the stored one:
 `requested_at` and `consumer_acked_through` are **excluded** from the binding digest. `requested_at`
 is the consumer's own clock reading: it is recorded on the first request, never used for identity,
 freshness or expiry, and a later retry's value is ignored. `consumer_acked_through` is consumer
-state that legitimately grows; the retry returns the stored permit, and the consumer then applies
-rule 3 of step 4.3 using the value in its retry. If that value is above the stored `R_p`, the
-permit is unusable and, with a unique `grant_id`, the grant is spent (the stranding decision in
-section 3 applies).
+state that legitimately grows. A retry whose acknowledgement exceeds the stored `R_p` must not use
+the old permit. It may request a replacement only after the consumer supplies durable proof that
+step 4.3 did not commit and that its reservation was released; the issuer verifies that proof,
+marks the prior permit `abandoned`, retains its signed bytes and audit trail, then issues one new
+permit at its current counter. Otherwise the grant remains conservatively unavailable.
 
 **Issuer storage (proposed).** One table `dispatch_permits` with `permit_id` primary key,
-`grant_id` **unique**, `binding_digest`, `reservation_id`, `request_digest`, `r_p`, `requested_at`,
-`issued_at`, `expires_at` and a state.
+`grant_id`, `binding_digest`, `reservation_id`, `request_digest`, `r_p`,
+`consumer_acked_through`, `requested_at`, `issued_at`, `expires_at`, `permit_bytes` (the canonical
+signed permit), `finalization_bytes` when present, a state and an optional `replaces_permit_id`.
+A partial unique constraint permits at most one nonterminal permit for a grant; a replacement is
+allowed only by the proved-abandoned transition above, never by a second ordinary request.
 
 **Cascade acknowledgement.** The issuer emits revocation and cascade events with a gapless
 increasing `version`. The consumer keeps `issuer_cascade_ack(issuer_id, version, event_digest,
@@ -92,7 +106,7 @@ and retries later. Nothing is inferred from silence.
 | Direction | Originates at | Ordered by | Consumer effect |
 | --- | --- | --- | --- |
 | Approver or role revoked at the consumer (13.8) | Consumer, `authority_epoch` advances | The consumer transaction that commits the epoch and the durable cascade request | Step 4.3 sees the new epoch and the pending request and refuses; the issuer may still sign a permit in the gap, which is safe because 4.3 is consumer-owned |
-| Grant, approval or issuer revoked at the issuer (13.4) | Issuer, `revocation_version` advances | The issuer transaction; a permit records `R_p` | Events up to `R_p` must be acknowledged; **later events that are acknowledged before 4.3 commits also refuse**; only unacknowledged later ones are post-authorization |
+| Grant, approval or issuer revoked at the issuer (13.4) | Issuer, `revocation_version` advances | The issuer finalization transaction; a permit records `R_p` and finalization records `R_f` | The issuer refuses any revocation visible at finalization; the consumer acknowledges through `R_f`; only events after finalization are post-authorization |
 | Issuer rolled back from an older snapshot | Operations | The recovery witness (section 8.2) and rule 3 of step 4.3 | The consumer keeps the highest version it ever stored; an issuer whose counter is lower is refused and stays quarantined |
 
 ## 3. Replay and crash cases (proposed tests; no executable claim)
@@ -103,14 +117,14 @@ and retries later. Nothing is inferred from silence.
 | Permit committed, response lost | An identical retry (equal binding digest) returns the same permit; no second permit |
 | Same grant, any one immutable binding field different (reservation, request digest, artifact digest, ledger store, epoch pair) | `permit.conflict`; the stored permit is not returned; nothing changes |
 | Same grant, identical binding, different `requested_at` | Identical retry; the original permit is returned; the new `requested_at` is ignored |
-| Same grant, identical binding, higher `consumer_acked_through` than the stored `R_p` | The stored permit is returned; step 4.3 rule 3 refuses it; the grant is spent |
+| Same grant, identical binding, higher `consumer_acked_through` than the stored `R_p` | The stored permit is not usable. A replacement requires durable proof that step 4.3 did not commit and the reservation was released; otherwise the grant remains unavailable |
 | Consumer crashes after receiving the permit, before step 4.3 commits | On restart the consumer knows from its own store that 4.3 did not commit; an unexpired permit may be used once |
-| Permit expires before step 4.3 (including benign clock skew) | Refused and recorded with an expiry reason. **Stranding risk:** with a unique `grant_id` the grant cannot be re-permitted. Default stays conservative (the grant is spent); an operator decision may allow a re-permit only after the consumer proves from its own store that 4.3 never committed and the reservation is released, and only before the grant's own expiry |
+| Permit expires before step 4.3 (including benign clock skew) | Refused and recorded with an expiry reason. A replacement is allowed only after the consumer proves from its own store that 4.3 never committed and the reservation is released, the issuer verifies the proof, and the grant itself has not expired; otherwise it remains unavailable |
 | Step 4.3 committed, crash before the outbox send | The outbox protocol of section 4 governs; the attempt is `unknown` if a send may have started |
 | Permit presented for another reservation, request digest, `artifact_digest` or `authority_pair` | Refused; no state change |
 | Permit replayed after step 4.3 recorded it | Refused as already recorded |
-| Revocation committed at the issuer after `R_p`, **acknowledged before 4.3 commits** | Refused (rule 4) |
-| Revocation committed at the issuer after `R_p`, not yet acknowledged at 4.3 | Post-authorization: in-flight rule, nothing claimed undone |
+| Revocation committed at the issuer before finalization | Refused by the issuer finalization transaction |
+| Revocation committed after finalization | Post-authorization; the finalization receipt fixes the issuer-owned authorization order and nothing claims the completed authorization undone |
 | Issuer restored to an older state, so its counter is below `consumer_acked_through` | Permit refused; quarantine until reconciled against the consumer's stored versions |
 | Issuer unreachable, permit forged, unbound or expired | Dispatch refused; reported unavailable, never valid |
 
@@ -127,16 +141,16 @@ and retries later. Nothing is inferred from silence.
 | 7 | "Serving is verifier-only and never opens the issuer" versus asking the issuer for a permit at dispatch | 2 (rule 1), 13.4.1 | **Real tension** | Rule 1 must say that the serving process never loads signing material and never opens the authority store, but may call the issuer's narrow permit operation over an authenticated channel; issuer availability becomes a dispatch dependency that fails closed |
 | 8 | Independent release needs a distinct principal and credential | 2, 13.1, 13.2, 13.8 | Consistent; enrollment deferred | No change; until a second principal is enrolled, no reconciler is `independent` |
 | 9 | "Absent means single approval" for `second_approval_ref` | 13.4 | Conflicts with an exact field set, where a missing key is malformed | The wire carries the empty string for "absent"; part 1, section 3.1 records the erratum |
-| 10 | The consumer transaction is "the linearization point for revocation versus dispatch" | Durable-effects contract step 4 | **Breaking re-linearization:** issuer-owned facts move to the issuer's permit decision, with consumer acknowledgement of events | Record it as an explicit erratum at ratification (section 5), not as a passing remark |
+| 10 | The consumer transaction is "the linearization point for revocation versus dispatch" | Durable-effects contract step 4 | **Breaking re-linearization:** issuer-owned facts move to issuer finalization, with consumer acknowledgement of its receipt | Record it as an explicit erratum at ratification (section 5), not as a passing remark |
 
 ## 5. Erratum text for the durable-effects contract (not applied here)
 
 Step 4 currently reads as the linearization point for revocation. Proposed wording at ratification:
 "The dispatch-authorization transaction (step 4.3) orders the consumer-owned facts (role revision,
-`authority_epoch`, worker ownership, fencing epoch). Issuer-owned facts (grant, approval and issuer
-revocation, grant use) are ordered at the issuer by the dispatch permit and are enforced here by
-`acked_through >= R_p`, `R_p >= consumer_acked_through` and the refusal of any acknowledged
-revocation." This pull request does not edit that contract.
+`authority_epoch`, worker ownership, fencing epoch). Issuer-owned grant, approval and issuer
+revocation are ordered by the issuer's finalization transaction; the consumer verifies its receipt
+and acknowledges through `R_f`. Grant use is consumed at the consumer only after that finalization
+and its own gates pass." This pull request does not edit that contract.
 
 ## 6. Decisions left to the operator
 

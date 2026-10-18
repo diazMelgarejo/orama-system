@@ -71,7 +71,8 @@ any hold, and it carries `operation_id` and `request_digest`, so it cannot be mi
 1. Size and UTF-8 limits, strict JSON, duplicate keys, object root, and **canonical bytes**
    (re-serialize the parsed object under the canonical rules and compare with the wire): failure is
    `grant.malformed`. A non-canonical body is therefore malformed whatever its family.
-2. Read `schema_version` as an integer. An unknown value is `grant.schema_unsupported`.
+2. Require `schema_version` to be present and an integer. Missing or non-integer values are
+   `grant.malformed`; an unrecognized integer is `grant.schema_unsupported`.
 3. Read the discriminator rules for that version: version 1 requires no `purpose`; version 2
    requires `purpose == "effect"`. A missing, unknown or disagreeing discriminator is
    `grant.malformed` (ambiguity).
@@ -120,6 +121,10 @@ should say "refuses before mutation with a closed-set code, `grant.malformed` at
 order, `grant.schema_unsupported` once the version is read first", and test both.
 
 ## 7. Proposed tests for E1-T-23 (expected outcomes; no executable claim)
+
+The verifier test matrix includes a missing `schema_version` and a string-valued
+`schema_version`; both must return `grant.malformed`. An integer that is well-formed but not
+recognized by the installed schema set must return `grant.schema_unsupported`.
 
 Owner: new T3 tests. Rows 1 to 4 must be written against the legacy parser first and fail first.
 
