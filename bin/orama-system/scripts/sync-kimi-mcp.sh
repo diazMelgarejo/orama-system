@@ -37,8 +37,10 @@ for arg in "$@"; do
   esac
 done
 
+# Prefix every status line with this script's name for multi-script log clarity.
 _log() { printf '[sync-kimi-mcp] %s\n' "$*"; }
 
+# Exit with an actionable error if jq is not on PATH; every merge step below needs it.
 _require_jq() {
   command -v jq >/dev/null 2>&1 || {
     echo "Error: jq required (brew install jq)" >&2
@@ -46,6 +48,8 @@ _require_jq() {
   }
 }
 
+# Copy the stack template to $tmp and patch it with this host's CRG endpoint
+# (and Python interpreter, if resolvable) before it is merged into the target.
 _build_stack_json() {
   local tmp="$1"
   local pybin crg_base
