@@ -56,22 +56,30 @@ operation identifier), `request_digest` (exact digest of the operation request),
 `use_limit` (the integer `1`), `ledger_store_id`, `consumer_lease_epoch`, `second_approval_ref`
 (a string, empty meaning single approval; never absent and never null, so the field set stays
 exact), `issued_at`, `expires_at`, `issuer_key_id`, `issuer_ref`, `revocation_ref`,
-`payload_digest`, `issuer_signature`.
+`payload_digest`, `issuer_signature`. There is no `artifact_digest` in the grant: the issuer cannot
+verify one, so the permit treats it as consumer-asserted (see part 2).
+
+**Erratum to E1 section 13.4.** That section says an absent `second_approval_ref` means single
+approval. An exact field set rejects a missing field, so on the wire "absent" is the empty string
+and a missing key is `grant.malformed`. Policy language may still say "absent"; the wire does not.
 
 An effect grant carries no `hold_id`, `units` or `kind`, so it cannot be parsed as an adjustment of
 any hold, and it carries `operation_id` and `request_digest`, so it cannot be mistaken for one.
 
 ## 4. Parse and refusal order (proposed)
 
-1. Size and UTF-8 limits, strict JSON, duplicate keys, object root: failure is `grant.malformed`.
+1. Size and UTF-8 limits, strict JSON, duplicate keys, object root, and **canonical bytes**
+   (re-serialize the parsed object under the canonical rules and compare with the wire): failure is
+   `grant.malformed`. A non-canonical body is therefore malformed whatever its family.
 2. Read `schema_version` as an integer. An unknown value is `grant.schema_unsupported`.
 3. Read the discriminator rules for that version: version 1 requires no `purpose`; version 2
    requires `purpose == "effect"`. A missing, unknown or disagreeing discriminator is
    `grant.malformed` (ambiguity).
 4. Compare the grant's purpose with the **boundary's expected purpose**. A mismatch is
    `grant.schema_unsupported` and happens before any key lookup, signature work or store read.
-5. Exact field set for that version, canonical bytes, then the existing key, signature, expiry,
-   skew and revocation checks.
+5. Exact field set for that version, then the existing key, signature, expiry, skew and
+   revocation checks. A canonical body of the wrong family is never field-set checked against the
+   other family, so it reaches step 4 and is `grant.schema_unsupported`.
 
 Step 2 before the field set is a **change to the parser order** and needs a Phylax change for the
 new verifier. The pinned legacy parser runs the field set first, so the table below separates the
@@ -88,7 +96,7 @@ are fail closed and precede any mutation.
 | Unknown version | Either | Updated, version first | `grant.schema_unsupported` |
 | v2 without `purpose` | Effect | New | `grant.malformed` |
 | v2 with `purpose: "recovery"` | Either | New | `grant.malformed` (ambiguous) |
-| Duplicate key or non-canonical bytes | Either | Either | `grant.malformed` |
+| Duplicate key or non-canonical bytes, any family | Either | Either | `grant.malformed` (step 1 precedes the purpose comparison) |
 
 `grant.signature_invalid` is never the answer to a cross-purpose presentation, because the
 signature is not examined before step 4. `verifier.unavailable` means only that the verifier could
