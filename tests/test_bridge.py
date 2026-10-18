@@ -9,9 +9,7 @@ These tests use asyncio and mock PT's supervisor to avoid needing a live PT env.
 """
 from __future__ import annotations
 
-import asyncio
-import sys
-import types
+import os
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -183,6 +181,65 @@ class TestParallelFanOut:
         with patch.object(bridge, "dispatch_worker", side_effect=_failing):
             with pytest.raises(RuntimeError, match="executor bombed"):
                 await bridge.dispatch_parallel(workers)
+
+
+# ── Explicit direct-binary dispatch ───────────────────────────────────────────
+
+class TestDirectBinaryDispatch:
+    """Explicit direct-binary dispatch must bypass PT without unsafe fallback."""
+
+    def _make_bridge(self) -> Any:
+        from bin.agents.dispatcher import OramaToPTBridge
+
+        return OramaToPTBridge(
+            session_id="sess-direct-binary",
+            parent_orchestrator_id="orch-direct-binary",
+        )
+
+    @pytest.mark.asyncio
+    async def test_direct_binary_uses_explicit_binary_without_building_pt_spec(self) -> None:
+        """An explicit direct binary delegates only to the binary dispatcher."""
+        bridge = self._make_bridge()
+        binary_result = {"raw": "direct result"}
+
+        with (
+            patch.object(
+                bridge, "dispatch_binary", new=AsyncMock(return_value=binary_result)
+            ) as dispatch_binary,
+            patch.object(bridge, "_build_spec") as build_spec,
+        ):
+            result = await bridge.dispatch_worker(
+                role="antigravity-agent",
+                intent="review",
+                prompt="review this",
+                direct_binary=True,
+                binary_path="/opt/agent/bin",
+                binary_args=["--batch"],
+                binary_timeout_sec=12.0,
+            )
+
+        assert result == binary_result
+        dispatch_binary.assert_awaited_once_with(
+            binary="/opt/agent/bin",
+            args=["--batch"],
+            prompt="review this",
+            timeout_sec=12.0,
+        )
+        build_spec.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_direct_binary_requires_an_explicit_or_configured_binary(self) -> None:
+        """Direct dispatch fails closed when no role-specific binary is configured."""
+        bridge = self._make_bridge()
+
+        with patch.dict(os.environ, {"ANTIGRAVITY_BIN": ""}):
+            with pytest.raises(RuntimeError, match="no binary path"):
+                await bridge.dispatch_worker(
+                    role="antigravity-agent",
+                    intent="review",
+                    prompt="review this",
+                    direct_binary=True,
+                )
 
 
 # ── Gate-integration: crystallization only after verifier ─────────────────────

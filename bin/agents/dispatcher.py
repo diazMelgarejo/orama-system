@@ -27,6 +27,7 @@ Architecture (§ 5 contract):
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import sys
 from pathlib import Path
@@ -72,35 +73,6 @@ class OramaToPTBridge:
         self.session_id = session_id
         self.parent_orchestrator_id = parent_orchestrator_id
         self._pt_root = pt_root or _PT_ROOT
-
-    # ── Single worker dispatch ─────────────────────────────────────────────────
-
-    async def dispatch_worker(
-        self,
-        *,
-        role: str,
-        intent: str,
-        prompt: str,
-        specialization: Optional[str] = None,
-        backend_hint: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        constraints: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
-        """Dispatch one worker through PT and return its result dict.
-
-        PT is the runtime authority; orama just builds the spec.
-        This does NOT store state — orama is stateless.
-        """
-        spec = self._build_spec(
-            role=role,
-            intent=intent,
-            prompt=prompt,
-            specialization=specialization,
-            backend_hint=backend_hint,
-            metadata=metadata or {},
-            constraints=constraints or [],
-        )
-        return await self._run_via_pt(spec)
 
     # ── Parallel fan-out ───────────────────────────────────────────────────────
 
@@ -189,7 +161,6 @@ class OramaToPTBridge:
             intent=intent,
             prompt=prompt,
             role=role,
-            specialization=specialization,
             backend_hint=backend_hint,
             metadata={**metadata, "session_id": self.session_id},
             constraints=constraints,
@@ -230,3 +201,146 @@ class OramaToPTBridge:
             error = status.get("error", "unknown error")
             raise RuntimeError(f"PT worker failed (job={job_id}): {error}")
         return result
+
+    # ── Direct binary subagent dispatch ────────────────────────────────────────
+
+    async def dispatch_binary(
+        self,
+        *,
+        binary: str,
+        args: List[str],
+        prompt: str,
+        env: Optional[Dict[str, str]] = None,
+        cwd: Optional[Path] = None,
+        timeout_sec: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Dispatch a worker via a direct binary subagent (AntiGravity / Gemini).
+
+        This bypasses PT's OrchestrationSupervisor and invokes the binary
+        directly as a subprocess.  Use for verified subagent roles (e.g.
+        antigravity-agent, gemini-agent) where direct binary execution is the
+        proven working path.
+
+        Environment variables EXA_API_KEY and FIRECRAWL_API_KEY are passed
+        through from the caller's env so Exa and Firecrawl MCP servers can be
+        resolved by the binary (per PT .agent memory: Exa uses
+        orama-system/scripts/exa/exa-mcp-wrapper.sh as stdio MCP; Firecrawl
+        uses npm install -g firecrawl-mcp + remote HTTP at
+        https://mcp.firecrawl.dev/v2/mcp).
+
+        Args:
+            binary: Path to the binary executable (e.g. ANTIGRAVITY_BIN).
+            args: CLI args for the binary.
+            prompt: The prompt to pass to the subagent.
+            env: Extra environment variables (merged with os.environ).
+            cwd: Working directory for the subprocess.
+            timeout_sec: Optional timeout in seconds.
+
+        Returns:
+            Parsed result dict from the binary's stdout (JSON expected).
+
+        Raises:
+            RuntimeError: if the binary exits non-zero or returns invalid JSON.
+            asyncio.TimeoutError: if timeout_sec is exceeded.
+        """
+        full_env = dict(os.environ)
+        if env:
+            full_env.update(env)
+
+        # Ensure EXA/FireCrawl API keys are available for MCP resolution
+        for key in ("EXA_API_KEY", "FIRECRAWL_API_KEY"):
+            if key not in full_env:
+                full_env.pop(key, None)  # don't leak if absent
+
+        proc = await asyncio.create_subprocess_exec(
+            binary,
+            *args,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=full_env,
+            cwd=str(cwd) if cwd else None,
+        )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=prompt.encode("utf-8")),
+                timeout=timeout_sec,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise
+
+        if proc.returncode != 0:
+            err_text = stderr.decode("utf-8", errors="replace") if stderr else ""
+            raise RuntimeError(
+                f"Binary {binary} exited {proc.returncode}: {err_text}"
+            )
+
+        out_text = stdout.decode("utf-8", errors="replace")
+        try:
+            return json.loads(out_text)
+        except json.JSONDecodeError:
+            # Return raw text wrapped in a dict if not JSON
+            return {"raw": out_text}
+
+    async def dispatch_worker(
+        self,
+        *,
+        role: str,
+        intent: str,
+        prompt: str,
+        specialization: Optional[str] = None,
+        backend_hint: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        constraints: Optional[List[str]] = None,
+        direct_binary: bool = False,
+        binary_path: Optional[str] = None,
+        binary_args: Optional[List[str]] = None,
+        binary_timeout_sec: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Dispatch one worker and return its result dict.
+
+        PT is the default runtime authority; orama just builds the spec.
+        This does NOT store state — orama is stateless.
+
+        When direct_binary=True, bypasses PT's OrchestrationSupervisor and
+        invokes the binary directly via dispatch_binary().  This is the
+        AntiGravity/Gemini direct subagent path — use for verified roles where
+        direct binary execution is the proven working path.
+
+        Args:
+            direct_binary: If True, use direct binary dispatch instead of PT.
+            binary_path: Path to the binary (defaults to ANTIGRAVITY_BIN or
+                GEMINI_BIN env var based on role).
+            binary_args: CLI args for the binary.
+            binary_timeout_sec: Optional timeout for binary execution.
+        """
+        if direct_binary:
+            binary = binary_path or os.getenv(
+                "ANTIGRAVITY_BIN" if "antigravity" in role.lower() else "GEMINI_BIN",
+                "",
+            )
+            if not binary:
+                raise RuntimeError(
+                    f"direct_binary=True but no binary path for role={role!r}. "
+                    "Set binary_path or ANTIGRAVITY_BIN/GEMINI_BIN env var."
+                )
+            return await self.dispatch_binary(
+                binary=binary,
+                args=binary_args or [],
+                prompt=prompt,
+                timeout_sec=binary_timeout_sec,
+            )
+
+        spec = self._build_spec(
+            role=role,
+            intent=intent,
+            prompt=prompt,
+            specialization=specialization,
+            backend_hint=backend_hint,
+            metadata=metadata or {},
+            constraints=constraints or [],
+        )
+        return await self._run_via_pt(spec)
