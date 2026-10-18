@@ -377,7 +377,7 @@ def test_stale_skill_path_refs_are_blocked_in_hidden_tracked_files(tmp_path):
     ]
 
 
-def _age_lock_file(path, seconds_old: float) -> None:
+def _age_lock_file(path: Path, seconds_old: float) -> None:
     import os
     import time
 
@@ -419,7 +419,7 @@ def test_scan_stale_git_locks_clean_repo_returns_empty(tmp_path):
     assert repo_hygiene.scan_stale_git_locks(tmp_path) == []
 
 
-def test_scan_stale_git_locks_ignores_fresh_in_flight_lock(tmp_path) -> None:
+def test_scan_stale_git_locks_ignores_fresh_in_flight_lock(tmp_path: Path) -> None:
     """Regression (2026-10-18): a lock from the CURRENT git operation (e.g. the
     index.lock held during this very pre-commit hook run) must not be flagged.
     Reproduced identically across three separate real commit attempts, each

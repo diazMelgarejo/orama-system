@@ -5,7 +5,7 @@
 # ai-cli-mcp + exa + firecrawl) into ~/.kimi-code/mcp.json, preserving any
 # unrelated servers already present.
 #
-# exa/firecrawl use the hosted mcp-remote proxy (npx -y mcp-remote <url>) —
+# exa/firecrawl use the hosted mcp-remote proxy (npx -y mcp-remote@0.14.3 <url>) —
 # no local API key needed, same pattern already proven for Claude Code's own
 # config. CRG uses the same Ollama/bge-m3 embedding wiring as Cursor.
 #
@@ -66,7 +66,6 @@ _build_stack_json() {
 _merge_into() {
   local target="$1"
   local stack="$2"
-  mkdir -p "$(dirname "$target")"
   if [ -f "$target" ]; then
     jq -s '
       .[0] as $t | .[1] as $s |
@@ -100,6 +99,8 @@ if [ -f "$TARGET_MCP" ]; then
   [ -f "$bak" ] || cp "$TARGET_MCP" "$bak"
 fi
 
+# Create the parent first: the shell opens the redirect target before _merge_into runs.
+mkdir -p "$(dirname "$TARGET_MCP")"
 _merge_into "$TARGET_MCP" "$stack_tmp" > "${TARGET_MCP}.sync-kimi.tmp"
 jq empty "${TARGET_MCP}.sync-kimi.tmp"
 mv "${TARGET_MCP}.sync-kimi.tmp" "$TARGET_MCP"
