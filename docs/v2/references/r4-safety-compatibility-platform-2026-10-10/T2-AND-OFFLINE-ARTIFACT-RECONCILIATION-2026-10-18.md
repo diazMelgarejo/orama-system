@@ -59,7 +59,8 @@ Result: 29 passed.
 ```
 
 Tests include unsupported inputs, formula cells, receipt/input tampering,
-no egress under every privacy profile, metadata redaction, input limits, a
+a network-blocking assertion for the default local profile, no-disclosure
+checks across every privacy profile, metadata redaction, input limits, a
 bare-carriage-return CSV round trip and unknown receipt versions. This is
 bounded extractive attribution evidence. It does not establish source
 authenticity or semantic entailment.
