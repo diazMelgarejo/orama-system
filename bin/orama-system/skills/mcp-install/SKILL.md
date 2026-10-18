@@ -93,9 +93,13 @@ The script runs these steps in order — skipping any that are already complete:
 | 4c | Register `gemini-cli` in Claude Code | `claude mcp list \| grep gemini-cli` |
 | 5 | Register OpenClaw registry entries | `openclaw mcp list \| grep` each name |
 | 5b | Sync Cursor project MCP stack | `sync-cursor-mcp.sh` → `.cursor/mcp.json` (patches CRG URL: Mac `:11434`, Win `:1234`) |
+| 5c | Sync Kimi MCP stack | `sync-kimi-mcp.sh` → `~/.kimi-code/mcp.json` (CRG + ai-cli-mcp + exa + firecrawl via hosted `mcp-remote`) |
+| 5d | Sync Windsurf MCP stack | `sync-windsurf-mcp.sh` → `~/.codeium/windsurf/mcp_config.json` (same stack; preserves unrelated servers like `omniroute`) |
 | 6 | Verification summary | always runs |
 
 **Cursor:** See [`references/cursor-mcp.md`](references/cursor-mcp.md) for merge rules and `sync-cursor-mcp.sh --also-user`.
+
+**Kimi / Windsurf:** `bash bin/orama-system/scripts/sync-kimi-mcp.sh` and `bash bin/orama-system/scripts/sync-windsurf-mcp.sh` — both idempotent, merge-only (never drop an unrelated server already in the target file), `--dry-run` supported. `exa`/`firecrawl` use the keyless hosted `mcp-remote` proxy (`npx -y mcp-remote <url>`) — no API key stored locally, same pattern as Claude Code's own `claude.ai Exa`/`firecrawl` connections. Override target paths with `KIMI_MCP_JSON` / `WINDSURF_MCP_JSON` env vars.
 
 ### Step 4: Verify inside Claude Code
 
