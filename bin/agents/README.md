@@ -34,6 +34,23 @@
 
 ## Operator commands
 
+Executable preflight is available through the dispatcher without starting an
+agent or contacting PT:
+
+```bash
+python3 -m bin.agents.dispatcher --check-binary codex
+python3 -m bin.agents.dispatcher --check-binary antigravity --binary-path "$ANTIGRAVITY_BIN"
+```
+
+Discovery uses an explicit path, then the registered `*_BIN` environment
+variable, then the installed command on `PATH`. Invalid configured overrides
+fail with exit 2 and an actionable error. Success prints JSON with `binary` and
+`path`; it proves availability only, not agent identity or authorization.
+The immutable registry maps `antigravity` to `agy` and `cursor` to `cursor-agent`;
+Gemini, Codex, Claude, Ollama, and Windsurf use their matching command names.
+This registry describes discovery only. PT retains provider-specific arguments,
+prompt transport, output parsing, queueing, and process lifecycle ownership.
+
 ```bash
 # Refresh OpenClaw overlays from staging (integrative merge)
 ./scripts/sync_openclaw_overlay_from_staging.sh

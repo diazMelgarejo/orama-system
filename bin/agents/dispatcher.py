@@ -26,11 +26,16 @@ Architecture (§ 5 contract):
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
+import json
 import os
+import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, Optional
 
 
 # ── PT path bootstrap ─────────────────────────────────────────────────────────
@@ -46,6 +51,75 @@ def _bootstrap_pt_path() -> Optional[Path]:
 
 
 _PT_ROOT: Optional[Path] = _bootstrap_pt_path()
+
+
+@dataclass(frozen=True)
+class BinaryRegistration:
+    """Discovery configuration; invocation and output contracts belong to PT."""
+
+    env_var: str
+    command: str
+
+
+BINARY_REGISTRY: Mapping[str, BinaryRegistration] = MappingProxyType({
+    "antigravity": BinaryRegistration("ANTIGRAVITY_BIN", "agy"),
+    "gemini": BinaryRegistration("GEMINI_BIN", "gemini"),
+    "codex": BinaryRegistration("CODEX_BIN", "codex"),
+    "cursor": BinaryRegistration("CURSOR_BIN", "cursor-agent"),
+    "claude": BinaryRegistration("CLAUDE_BIN", "claude"),
+    "ollama": BinaryRegistration("OLLAMA_BIN", "ollama"),
+    "windsurf": BinaryRegistration("WINDSURF_BIN", "windsurf"),
+})
+
+
+def resolve_binary_path(binary_name: str, explicit_path: Optional[str] = None) -> str:
+    """Resolve an executable by explicit override, registered environment, then PATH.
+
+    A configured but invalid override fails without falling back. Resolution is
+    an availability check, not identity verification or permission to execute.
+    No subprocess, shell interpolation, installation, or service start occurs.
+    """
+    entry = BINARY_REGISTRY.get(binary_name.lower())
+    if entry is None:
+        raise ValueError(f"Unknown binary {binary_name!r}; choose a registered agent")
+    candidate = (
+        explicit_path if explicit_path is not None
+        else os.environ.get(entry.env_var, entry.command)
+    )
+    repair = (
+        f"Set {entry.env_var} or --binary-path to an executable file, "
+        f"or install {entry.command} on PATH"
+    )
+    if not candidate.strip() or "\x00" in candidate:
+        raise ValueError(f"Invalid executable configuration. {repair}")
+    found = shutil.which(os.path.expanduser(candidate))
+    if found is None or not Path(found).is_file():
+        raise ValueError(f"Agent executable is unavailable or not executable. {repair}")
+    if sys.platform == "win32":
+        # Python 3.10/3.11 which() can accept any directly named regular file.
+        extensions = {
+            extension.strip().casefold()
+            for extension in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")
+            if extension.strip()
+        }
+        if Path(found).suffix.casefold() not in extensions:
+            raise ValueError(f"Agent executable has no permitted Windows extension. {repair}")
+    return os.path.abspath(found)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Print JSON executable preflight evidence without dispatching an agent."""
+    parser = argparse.ArgumentParser(description="Check agent executable availability without execution")
+    parser.add_argument("--check-binary", required=True, choices=sorted(BINARY_REGISTRY))
+    parser.add_argument("--binary-path", help="Explicit executable override")
+    args = parser.parse_args(argv)
+    try:
+        path = resolve_binary_path(args.check_binary, args.binary_path)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    print(json.dumps({"binary": args.check_binary, "path": path}))
+    return 0
 
 
 # ── OramaToPTBridge ───────────────────────────────────────────────────────────
@@ -230,3 +304,7 @@ class OramaToPTBridge:
             error = status.get("error", "unknown error")
             raise RuntimeError(f"PT worker failed (job={job_id}): {error}")
         return result
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
