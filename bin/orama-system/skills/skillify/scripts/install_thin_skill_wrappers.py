@@ -348,6 +348,7 @@ def repo_relative(canonical: str) -> str:
 
 
 def wrapper(spec: SkillSpec) -> str:
+    """Render a portable, read-only wrapper for a canonical skill."""
     # PORTABILITY CONTRACT: wrappers MUST be machine-agnostic. NEVER embed an
     # absolute path (ROOT, HOME, /Users/...) — they get committed to public
     # repos and doxx the workstation. `~`-relative locations would also leak

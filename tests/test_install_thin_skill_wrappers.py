@@ -213,6 +213,7 @@ def test_gossip_bus_in_canonical_skills(mod: ModuleType) -> None:
 def test_wrapper_discovers_nested_canonical_root(
     mod: ModuleType, tmp_path: Path, relative_root: str
 ) -> None:
+    """Discover canonical roots nested below either workspace parent."""
     workspace = tmp_path / "workspace"
     app = workspace / "app"
     app.mkdir(parents=True)
