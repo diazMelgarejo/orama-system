@@ -45,8 +45,12 @@ transaction, the consumer sends a **finalization request** (exactly 8 fields): `
 `reservation_id`, `ledger_store_id`, `consumer_acked_through`, `authority_epoch` and
 `requested_at`. In one issuer transaction the issuer refuses unless the permit exists, is not
 terminal, has not expired and matches the request; re-reads the grant, approval chain and issuer
-revocation state and refuses on any revocation or pending cascade; records `R_f`, its current
-counter; and returns an issuer-signed **finalization** (exactly 14 fields, domain
+revocation state and refuses on any revocation or pending cascade; **refuses if its current
+counter is below the request's `consumer_acked_through` or below the permit's `R_p`**, because an
+issuer behind a version the consumer already acknowledged, or behind its own earlier permit, has
+been rolled back and must stay quarantined (the same rule as 4.2, applied again because the
+consumer may have acknowledged more since the permit); records `R_f`, that current counter; and
+returns an issuer-signed **finalization** (exactly 14 fields, domain
 `phylax-dispatch-finalization-v1\x00`): `schema_version` (the integer 1), the eight request fields,
 `finalization_id`, `revocation_version` (written `R_f`), `issued_at`, `expires_at` and
 `issuer_signature`. The finalization is idempotent per (`permit_id`, `attempt_id`): an identical
@@ -65,9 +69,11 @@ and at most the signed-policy finalization lifetime, which is an operator decisi
    approval chain or the issuer.** A revocation the consumer already knows refuses dispatch even
    if it was committed after the permit.
 5. The finalization obtained in 4.2f before this transaction opened is authentic, bound to this
-   permit, attempt and reservation, unexpired and not already recorded, and `acked_through >=
-   R_f`. It is the linearization point for issuer-owned revocation versus dispatch: a revocation
-   the issuer committed before finalization was refused there, and a later one is
+   permit, attempt and reservation, unexpired and not already recorded, `R_f >= R_p`, `R_f >=`
+   the finalization's signed `consumer_acked_through` (rule 3 again, read from the signed
+   finalization rather than trusting the issuer's refusal at 4.2f), and `acked_through >= R_f`.
+   It is the linearization point for issuer-owned revocation versus dispatch: a revocation the
+   issuer committed before finalization was refused there, and a later one is
    post-authorization, not an unobserved exception to a consumer-side check.
 6. The consumer-owned gates still hold (role revision, `authority_epoch`, worker ownership,
    fencing epoch).
@@ -130,7 +136,7 @@ and retries later. Nothing is inferred from silence.
 | --- | --- | --- | --- |
 | Approver or role revoked at the consumer (13.8) | Consumer, `authority_epoch` advances | The consumer transaction that commits the epoch and the durable cascade request | Step 4.3 sees the new epoch and the pending request and refuses; the issuer may still sign a permit in the gap, which is safe because 4.3 is consumer-owned |
 | Grant, approval or issuer revoked at the issuer (13.4) | Issuer, `revocation_version` advances | The issuer finalization transaction; a permit records `R_p` and finalization records `R_f` | The issuer refuses any revocation visible at finalization; the consumer acknowledges through `R_f`; only events after finalization are post-authorization |
-| Issuer rolled back from an older snapshot | Operations | The recovery witness (section 8.2) and rule 3 of step 4.3 | The consumer keeps the highest version it ever stored; an issuer whose counter is lower is refused and stays quarantined |
+| Issuer rolled back from an older snapshot | Operations | The recovery witness (section 8.2) and rules 3 and 5 of step 4.3 | The consumer keeps the highest version it ever stored; an issuer whose counter is lower is refused and stays quarantined |
 
 ## 3. Replay and crash cases (proposed tests; no executable claim)
 
@@ -154,6 +160,7 @@ and retries later. Nothing is inferred from silence.
 | Finalization expires before step 4.3 | Refused at 4.3; the same replacement path applies, never a silent retry of 4.3 |
 | Step 4.3 already consumed the grant's use, and the issuer later issues or holds another permit | The consumer refuses it: the consumer-owned single use is the backstop against a second dispatch |
 | Issuer restored to an older state, so its counter is below `consumer_acked_through` | Permit refused; quarantine until reconciled against the consumer's stored versions |
+| Issuer rolled back between permit and finalization, so `R_f` is below the request's `consumer_acked_through` or below `R_p` | Finalization refused at 4.2f; a finalization that is nevertheless returned is refused at step 4.3 rule 5. Either way the issuer stays quarantined and nothing is consumed |
 | Issuer unreachable, permit forged, unbound or expired | Dispatch refused; reported unavailable, never valid |
 
 ## 4. Reconciliation of sections 2, 11, 13.2, 13.4, 13.7 and 13.8
