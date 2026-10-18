@@ -204,6 +204,10 @@ def test_hermes_harness_in_canonical_skills(mod):
     assert "orama-system/bin/orama-system/skills/hermes-harness/SKILL.md" in mod.CANONICAL_SKILLS
 
 
+def test_gossip_bus_in_canonical_skills(mod):
+    assert "orama-system/bin/orama-system/skills/gossip-bus/SKILL.md" in mod.CANONICAL_SKILLS
+
+
 # ── SkillInventory / inventory_root / inventory_all_roots / render_inventory ──
 # Task 1: read-only cross-root inventory. These functions must never call an
 # install, archive, or symlink function — they only observe.

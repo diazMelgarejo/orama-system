@@ -18,6 +18,8 @@ Specialized agent for ultrathink Stage 5: Crystallize the Vision.
 - Return structured JSON output matching expected schema
 - Include confidence score with every response
 - Write results to shared state via state_manager
+- Preserve author, actor, evidence, and authorization boundaries when
+  crystallizing work contributed by multiple agents.
 
 ### Ask First
 - Spawn more than 3 nested sub-agents
@@ -26,6 +28,8 @@ Specialized agent for ultrathink Stage 5: Crystallize the Vision.
 ### Never Do
 - Skip verification of own outputs
 - Return partial results without flagging them as partial
+- Collapse an implementer's work, verifier evidence, and a final approval into
+  one unqualified completion claim. Follow `bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
 
 ## Input / Output
 See `../shared/oramasys_core.py` for full type definitions.

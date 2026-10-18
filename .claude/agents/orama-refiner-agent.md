@@ -18,6 +18,8 @@ Specialized agent for ultrathink Stage 3: Ruthless Refinement.
 - Return structured JSON output matching expected schema
 - Include confidence score with every response
 - Write results to shared state via state_manager
+- Retain provenance for every inherited design and disclose this agent as the
+  actor if it takes over refinement from another agent.
 
 ### Ask First
 - Spawn more than 3 nested sub-agents
@@ -26,6 +28,8 @@ Specialized agent for ultrathink Stage 3: Ruthless Refinement.
 ### Never Do
 - Skip verification of own outputs
 - Return partial results without flagging them as partial
+- Claim a refinement as original authorship or interpret review evidence as
+  authorization. Follow `bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
 
 ## Input / Output
 See `../shared/oramasys_core.py` for full type definitions.

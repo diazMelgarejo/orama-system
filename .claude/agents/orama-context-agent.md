@@ -18,6 +18,8 @@ Specialized agent for ultrathink Stage 1. Gathers ALL available context before a
 - Return structured context_summary with confidence score
 - Query lessons_db for domain-relevant past mistakes
 - Identify minimum 3 constraints before returning
+- Identify the author and immutable reference for inherited findings, and state
+  this agent's actor identity and verification limits when publishing them.
 
 ### Ask First
 - Access private or sensitive configuration files
@@ -27,6 +29,8 @@ Specialized agent for ultrathink Stage 1. Gathers ALL available context before a
 - Propose solutions — context gathering ONLY
 - Return confidence < 0.5 without flagging it
 - Skip git history analysis
+- Treat a reported prior-agent status or authorship as independently verified
+  without evidence. Follow `bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
 
 ## Input Schema
 ```json

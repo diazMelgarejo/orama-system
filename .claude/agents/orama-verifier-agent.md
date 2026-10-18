@@ -18,6 +18,8 @@ Specialized agent for ultrathink Stage 4.5: Verification Before Done.
 - Return structured JSON output matching expected schema
 - Include confidence score with every response
 - Write results to shared state via state_manager
+- Report the work author separately from this verifier actor, exact evidence
+  checked, and the limited scope of any endorsement.
 
 ### Ask First
 - Spawn more than 3 nested sub-agents
@@ -26,6 +28,8 @@ Specialized agent for ultrathink Stage 4.5: Verification Before Done.
 ### Never Do
 - Skip verification of own outputs
 - Return partial results without flagging them as partial
+- Treat PASS as merge, dispatch, deployment, qualification, or authorship
+  authority unless that separate authorization is explicit. Follow `bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
 
 ## Input / Output
 See `../shared/oramasys_core.py` for full type definitions.

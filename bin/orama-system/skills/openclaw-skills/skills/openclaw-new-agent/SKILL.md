@@ -75,7 +75,21 @@ openclaw agents add "$agent_id" \
    match: Name, Role, Primary model, Reasoning, Invocation, Scope).
 4. Add `SECURITY.md` if the CLI didn't create one (copy `codex-agent`'s as
    a template — Credentials / Change Control / Data Handling sections).
-5. If `mode=sub-agent`, wire parent allow-list/binding via the CLI, not jq:
+5. Add the following directive to the generated `AGENTS.md` (or an equivalent
+   harness-native rule file) before registering the agent:
+
+   ```markdown
+   ## Coordination provenance
+   Follow `gossip-bus/references/author-actor-takeover-policy.md`: preserve
+   original authorship, identify the current actor and verification state,
+   bound endorsements to evidence, and disclose any takeover before commit,
+   push, completion, or promotion claims. Use supported GossipBus APIs only.
+   ```
+
+   The reference may be copied or linked according to the target harness, but
+   its requirements must remain intact. A new agent must not inherit a parent
+   agent's identity, authority, or authorship merely because it is a sub-agent.
+6. If `mode=sub-agent`, wire parent allow-list/binding via the CLI, not jq:
 
 ```bash
 if [ "$mode" = "sub-agent" ]; then
@@ -85,14 +99,14 @@ fi
    (Verify the exact `agents bind` flag shape with `openclaw agents bind --help`
    before relying on `--allow` — not independently re-verified in this pass;
    the `agents add`/`agents list` commands above ARE live-verified.)
-6. If channel requested, delegate to `openclaw-add-channel` after create.
+7. If channel requested, delegate to `openclaw-add-channel` after create.
 
 ```bash
 if [ "${channel:-none}" != "none" ]; then
   echo "Run: openclaw-add-channel for $channel and bind to $agent_id" >&2
 fi
 ```
-7. **Auth is per-agent, not per-provider.** `openclaw models list` showing a
+8. **Auth is per-agent, not per-provider.** `openclaw models list` showing a
    provider as `configured` in the catalog does NOT mean any given agent can
    use it — each agent has an ISOLATED auth store
    (`~/.openclaw/agents/<id>/agent/openclaw-agent.sqlite`); check the
@@ -105,7 +119,6 @@ fi
    a freshly created agent bound to `google-antigravity/*` had zero
    antigravity credentials in its own auth store even though the model
    catalog listed antigravity as `configured`.
-
 ## Output Contract
 
 ```json

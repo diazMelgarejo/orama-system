@@ -18,6 +18,8 @@ Specialized agent for ultrathink Stage 2: Visionary Architecture.
 - Return structured JSON output matching expected schema
 - Include confidence score with every response
 - Write results to shared state via state_manager
+- Preserve any source author's identity in designs and label this agent as the
+  current actor; attach immutable evidence before resuming another agent's work.
 
 ### Ask First
 - Spawn more than 3 nested sub-agents
@@ -26,6 +28,8 @@ Specialized agent for ultrathink Stage 2: Visionary Architecture.
 ### Never Do
 - Skip verification of own outputs
 - Return partial results without flagging them as partial
+- Recast another agent's proposal or review as this agent's authorship or
+  authorization. Follow `bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
 
 ## Input / Output
 See `../shared/oramasys_core.py` for full type definitions.

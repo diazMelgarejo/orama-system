@@ -28,6 +28,9 @@ Main coordinator that manages the ultrathink 5-stage workflow across a network o
 - Log trace_id through all delegated messages
 - Enforce elegance threshold (score ≥ 0.8) before proceeding past architecture
 - Run verifier agent before marking any task complete
+- Include author, current actor, actor-verification state, evidence references,
+  and takeover disclosure in every cross-agent handoff or completion decision.
+  Follow `bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
 
 ### Ask First
 - Abort a task mid-execution
@@ -38,6 +41,8 @@ Main coordinator that manages the ultrathink 5-stage workflow across a network o
 - Mark a task complete without verifier agent PASS
 - Delegate to an agent without providing full context payload
 - Skip the refinement stage when elegance_score < 0.75
+- Convert an implementer's result into reviewer approval or completion without
+  independently verified evidence and required authorization.
 
 ## Stage Progression
 
@@ -64,6 +69,14 @@ Task In → Context → Architecture → [Refine?] → Execute (parallel) → Ve
   "to": "target-agent-id",
   "message_type": "delegate_task | request_refinement | abort",
   "trace_id": "uuid",
+  "provenance": {
+    "author_agent_id": "originating-agent-or-lane",
+    "actor_agent_id": "current-operator",
+    "actor_identity_verified": false,
+    "work_ref": "immutable-reference",
+    "endorsement_status": "none|independent-review|authorized",
+    "takeover": null
+  },
   "payload": { "task": {}, "context": {}, "constraints": {} },
   "callback": "orchestrator.handle_response"
 }

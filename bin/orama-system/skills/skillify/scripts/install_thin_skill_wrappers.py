@@ -117,6 +117,7 @@ CANONICAL_SKILLS = [
     "orama-system/bin/orama-system/skills/ecc-sync/SKILL.md",
     "orama-system/bin/orama-system/skills/first-run-setup/SKILL.md",
     "orama-system/bin/orama-system/skills/git-history-surgery/SKILL.md",
+    "orama-system/bin/orama-system/skills/gossip-bus/SKILL.md",
     "orama-system/bin/orama-system/skills/hermes-harness/SKILL.md",
     "orama-system/bin/orama-system/skills/mcp-install/SKILL.md",
     "orama-system/bin/orama-system/skills/mcp-orchestration/SKILL.md",
