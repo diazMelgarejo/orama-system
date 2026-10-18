@@ -230,6 +230,10 @@ behaviour.
 
 ## 8. Rollback and recovery (resolves E1-R04)
 
+Source-backed implementation boundary and proposed witness acceptance checks:
+[C1 recovery and test map](E1-C1-SOURCE-RECOVERY-AND-TEST-MAP-2026-10-18.md).
+This linked reconciliation is proposed for review and grants no recovery authority.
+
 Three different things are called "rollback" and must not be mixed.
 
 | Layer | Rollback |
@@ -347,6 +351,10 @@ ratified. Section 9.1 maps each row.
 | E1-T-25 | Cascade recovery witness (13.4, 13.8): issuer revocations commit atomically; consumer dispatch is refused while cascade acknowledgment or affected lineage is unavailable; duplicate notifications return one witness; all direct and transitive child runs are covered at an observation checkpoint; missing operation history is `none_recorded`, incomplete enumeration is never empty-success; the witness never releases a hold or proves a provider outcome |
 
 ### 9.1 Test map (resolves E1-R09)
+
+[C1 existing-test audit](E1-C1-SOURCE-RECOVERY-AND-TEST-MAP-2026-10-18.md)
+identifies concrete M1 nodes and their remaining E1 extensions. It distinguishes
+source inspection from executed tests; the proposed nodes below remain proposals.
 
 Columns: **Owner** is the repository expected to hold the test (O = Oramasys consumer and ledger,
 P = Phylax issuer and verifier, C = Core scheduler or contract tests, R = this repository's docs
@@ -695,6 +703,10 @@ requirements.
 
 ### 13.4.1 Issuer-serialized dispatch permit (PROPOSED; review finding, 2026-10-18)
 
+Proposed wire fields, lifetime, storage, crash cases and the role reconciliation:
+[C2 permit wire and role reconciliation](E1-C2-PERMIT-WIRE-AND-ROLE-RECONCILIATION-2026-10-18.md).
+Proposal only; nothing in it is ratified.
+
 **Problem.** Dispatch authorization (durable-effects contract, section 4, step 4) is one
 consumer transaction. Issuer-owned revocation state lives in the issuer's store. A consumer
 transaction that reads that state and then commits cannot exclude an issuer commit that lands
@@ -861,6 +873,10 @@ automatic release, expiry or cleanup ever clears one.
 - No code path enrolls a principal on its own.
 
 ## 14. Grant purpose separation (PROPOSED; folded into this draft by the operator, 2026-10-15)
+
+Proposed integrated contract for rule 3 (discriminator, versions, refusal order, test outcomes):
+[C2 purpose, version and refusal contract](E1-C2-PURPOSE-VERSION-AND-REFUSAL-CONTRACT-2026-10-18.md).
+It fixes no wire until reviewed and ratified by exact commit.
 
 Two kinds of authority must never be confused, because a confusion would let a ledger recovery
 release authorize a provider effect, or the reverse.
