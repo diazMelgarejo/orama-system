@@ -55,10 +55,32 @@ permit lifetime fixed by the signed policy, never by the request. The value is a
 decision; a short bound of the order of the 60-second clock allowance already decided is
 recommended. See the stranding risk in section 3.
 
+**Retry identity (proposed).** A unique `grant_id` stops a second row but does not prove that a
+repeat request is the same request. The issuer therefore persists a **binding digest** with the
+permit: the canonical digest (the manifest encoding rules) of the object made of exactly these
+nine immutable request fields: `grant_id`, `grant_payload_digest`, `operation_id`,
+`request_digest`, `artifact_digest`, `reservation_id`, `ledger_store_id`,
+`configuration_policy_epoch` and `authority_epoch`. On any request for a grant that already has a
+permit, the issuer recomputes the digest and compares it with the stored one:
+
+* **Equal:** an identical retry. The stored permit is returned unchanged, including its original
+  `issued_at`, `expires_at` and `requested_at`. An expired stored permit is not revived.
+* **Different:** a conflicting request for the same grant. It is refused with a closed permit
+  refusal (proposed name `permit.conflict`, to be fixed in the integrated schema review). The
+  stored permit is **not** returned, nothing is created or changed, and a sanitized audit record
+  may be written. A different binding never receives the stored permit.
+
+`requested_at` and `consumer_acked_through` are **excluded** from the binding digest. `requested_at`
+is the consumer's own clock reading: it is recorded on the first request, never used for identity,
+freshness or expiry, and a later retry's value is ignored. `consumer_acked_through` is consumer
+state that legitimately grows; the retry returns the stored permit, and the consumer then applies
+rule 3 of step 4.3 using the value in its retry. If that value is above the stored `R_p`, the
+permit is unusable and, with a unique `grant_id`, the grant is spent (the stranding decision in
+section 3 applies).
+
 **Issuer storage (proposed).** One table `dispatch_permits` with `permit_id` primary key,
-`grant_id` **unique**, `reservation_id`, `request_digest`, `r_p`, `issued_at`, `expires_at` and a
-state. The unique `grant_id` makes "no permit exists other than an identical retry" a database
-fact; an identical retry (same grant, reservation and request digest) returns the stored permit.
+`grant_id` **unique**, `binding_digest`, `reservation_id`, `request_digest`, `r_p`, `requested_at`,
+`issued_at`, `expires_at` and a state.
 
 **Cascade acknowledgement.** The issuer emits revocation and cascade events with a gapless
 increasing `version`. The consumer keeps `issuer_cascade_ack(issuer_id, version, event_digest,
@@ -78,7 +100,10 @@ and retries later. Nothing is inferred from silence.
 | Case | Required outcome |
 | --- | --- |
 | Issuer crashes before the permit transaction commits | No permit exists; an identical retry decides again |
-| Permit committed, response lost | An identical retry returns the same permit; no second permit |
+| Permit committed, response lost | An identical retry (equal binding digest) returns the same permit; no second permit |
+| Same grant, any one immutable binding field different (reservation, request digest, artifact digest, ledger store, epoch pair) | `permit.conflict`; the stored permit is not returned; nothing changes |
+| Same grant, identical binding, different `requested_at` | Identical retry; the original permit is returned; the new `requested_at` is ignored |
+| Same grant, identical binding, higher `consumer_acked_through` than the stored `R_p` | The stored permit is returned; step 4.3 rule 3 refuses it; the grant is spent |
 | Consumer crashes after receiving the permit, before step 4.3 commits | On restart the consumer knows from its own store that 4.3 did not commit; an unexpired permit may be used once |
 | Permit expires before step 4.3 (including benign clock skew) | Refused and recorded with an expiry reason. **Stranding risk:** with a unique `grant_id` the grant cannot be re-permitted. Default stays conservative (the grant is spent); an operator decision may allow a re-permit only after the consumer proves from its own store that 4.3 never committed and the reservation is released, and only before the grant's own expiry |
 | Step 4.3 committed, crash before the outbox send | The outbox protocol of section 4 governs; the attempt is `unknown` if a send may have started |
