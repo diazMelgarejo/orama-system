@@ -14,6 +14,19 @@ from bin.agents import dispatcher
 pytestmark = pytest.mark.integration
 
 
+EXPECTED_COMMANDS = {
+    "antigravity": "agy",
+    "gemini": "gemini",
+    "codex": "codex",
+    "cursor": "cursor-agent",
+    "claude": "claude",
+    "ollama": "ollama",
+    "windsurf": "windsurf",
+    "cline": "cline",
+    "kimi": "kimi",
+}
+
+
 def _executable(tmp_path: Path, name: str) -> Path:
     """Create a harmless executable fixture, including names containing spaces."""
     if os.name == "nt":
@@ -39,7 +52,20 @@ def test_environment_overrides_path(tmp_path: Path, monkeypatch: pytest.MonkeyPa
     assert dispatcher.resolve_binary_path("codex") == str(binary)
 
 
-@pytest.mark.parametrize("name,command", [("antigravity", "agy"), ("cursor", "cursor-agent"), ("ollama", "ollama")])
+def test_registry_matches_documented_agents() -> None:
+    """The registry, its expected commands and the operator README cannot drift apart."""
+    registry = {name: entry.command for name, entry in dispatcher.BINARY_REGISTRY.items()}
+    assert registry == EXPECTED_COMMANDS
+    readme = (Path(dispatcher.__file__).parent / "README.md").read_text(encoding="utf-8").lower()
+    for name, command in EXPECTED_COMMANDS.items():
+        if name != command:
+            assert f"`{name}` to `{command}`" in readme
+        else:
+            assert name in readme
+    assert "(`cline`" in readme and "(`kimi`" in readme
+
+
+@pytest.mark.parametrize("name,command", sorted(EXPECTED_COMMANDS.items()))
 def test_path_discovery_uses_actual_command_names(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str, command: str
 ) -> None:
@@ -50,22 +76,28 @@ def test_path_discovery_uses_actual_command_names(
     assert Path(dispatcher.resolve_binary_path(name)).samefile(binary)
 
 
+@pytest.mark.parametrize("route", ["environment", "explicit"])
 @pytest.mark.parametrize("configured", ["", "missing", "not executable", "directory", "nul\x00value"])
 def test_invalid_override_never_falls_back(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, configured: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, configured: str, route: str
 ) -> None:
     """Broken configuration must be reported instead of selecting another binary."""
     _executable(tmp_path, "codex")
     (tmp_path / "not executable").write_text("data", encoding="utf-8")
     (tmp_path / "directory").mkdir()
     monkeypatch.setenv("PATH", str(tmp_path))
-    if "\x00" in configured:
-        with pytest.raises(ValueError, match="CODEX_BIN|executable"):
-            dispatcher.resolve_binary_path("codex", configured)
-        return
-    monkeypatch.setenv("CODEX_BIN", str(tmp_path / configured) if configured else "")
+    nul = "\x00" in configured
+    if nul and route == "environment":
+        pytest.skip("an environment variable cannot hold a NUL")
+    value = configured if nul or not configured else str(tmp_path / configured)
+    if route == "environment":
+        monkeypatch.setenv("CODEX_BIN", value)
+        explicit = None
+    else:
+        monkeypatch.setenv("CODEX_BIN", str(tmp_path / "codex"))  # a valid fallback that must stay unused
+        explicit = value
     with pytest.raises(ValueError, match="CODEX_BIN|executable"):
-        dispatcher.resolve_binary_path("codex")
+        dispatcher.resolve_binary_path("codex", explicit)
 
 
 def test_unknown_agent_cannot_be_authorized_by_explicit_path(tmp_path: Path) -> None:
@@ -106,9 +138,83 @@ def test_windows_explicit_paths_respect_executable_suffixes(
     binary.write_text("fixture", encoding="utf-8")
     monkeypatch.setattr(sys, "platform", "win32")
     monkeypatch.setenv("PATHEXT", ".EXE;.CMD")
-    monkeypatch.setattr(dispatcher.shutil, "which", lambda candidate: str(binary))
+    monkeypatch.setattr(dispatcher.shutil, "which", lambda candidate, path=None: str(binary))
     if accepted:
         assert dispatcher.resolve_binary_path("codex", str(binary)) == str(binary)
     else:
         with pytest.raises(ValueError, match="executable"):
             dispatcher.resolve_binary_path("codex", str(binary))
+
+
+def test_bare_name_found_only_through_working_directory_is_refused(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows which() searches the working directory first; discovery must not trust that hit."""
+    planted = _executable(tmp_path, "codex")
+    other = tmp_path / "bin"
+    other.mkdir()
+    monkeypatch.delenv("CODEX_BIN", raising=False)
+    monkeypatch.setenv("PATH", str(other))
+    monkeypatch.setattr(dispatcher.shutil, "which", lambda candidate, path=None: str(planted))
+    with pytest.raises(ValueError, match="not found on PATH"):
+        dispatcher.resolve_binary_path("codex")
+
+
+def test_empty_path_entry_does_not_search_the_working_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A leading empty PATH entry reads as the current directory in a shell and is not trusted."""
+    _executable(tmp_path, "codex")
+    monkeypatch.delenv("CODEX_BIN", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", os.pathsep + str(tmp_path / "elsewhere"))
+    with pytest.raises(ValueError, match="not found on PATH"):
+        dispatcher.resolve_binary_path("codex")
+
+
+def test_quoted_path_entries_resolve_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows PATH entries are often quoted; a valid hit must resolve, not be refused."""
+    binary = _executable(tmp_path, "codex")
+    monkeypatch.delenv("CODEX_BIN", raising=False)
+    monkeypatch.setenv("PATH", f'"{tmp_path}"')
+    assert Path(dispatcher.resolve_binary_path("codex")).samefile(binary)
+
+
+def test_unset_path_falls_back_to_the_default_search_path(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An unset PATH uses os.defpath for both lookup and the PATH-only guard."""
+    monkeypatch.delenv("PATH", raising=False)
+    assert dispatcher._search_path() == os.defpath
+
+
+def test_relative_pathname_resolves_against_current_directory(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A candidate with a separator is a pathname, so the result depends on where it runs."""
+    binary = _executable(tmp_path, "agent")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", "")
+    assert Path(dispatcher.resolve_binary_path("codex", f".{os.sep}{binary.name}")).samefile(binary)
+    monkeypatch.chdir(tmp_path.parent)
+    with pytest.raises(ValueError, match="executable"):
+        dispatcher.resolve_binary_path("codex", f".{os.sep}{binary.name}")
+
+
+def test_home_directory_is_expanded_in_overrides(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """``~`` in an override resolves to the home directory before lookup."""
+    binary = _executable(tmp_path, "agent")
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("USERPROFILE", str(tmp_path))
+    resolved = dispatcher.resolve_binary_path("codex", f"~{os.sep}{binary.name}")
+    assert Path(resolved).samefile(binary)
+
+
+def test_unknown_agent_on_command_line_is_rejected_before_resolution(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """The parser rejects an unregistered agent: exit 2, usage on stderr, nothing on stdout."""
+    with pytest.raises(SystemExit) as exit_info:
+        dispatcher.main(["--check-binary", "not-an-agent"])
+    captured = capsys.readouterr()
+    assert exit_info.value.code == 2
+    assert "invalid choice" in captured.err
+    assert captured.out == ""

@@ -69,13 +69,50 @@ BINARY_REGISTRY: Mapping[str, BinaryRegistration] = MappingProxyType({
     "claude": BinaryRegistration("CLAUDE_BIN", "claude"),
     "ollama": BinaryRegistration("OLLAMA_BIN", "ollama"),
     "windsurf": BinaryRegistration("WINDSURF_BIN", "windsurf"),
+    "cline": BinaryRegistration("CLINE_BIN", "cline"),
+    "kimi": BinaryRegistration("KIMI_BIN", "kimi"),
 })
+
+
+def _is_bare_command(candidate: str) -> bool:
+    """True when ``candidate`` names a command to look up, not a pathname."""
+    return not any(separator and separator in candidate for separator in (os.sep, os.altsep))
+
+
+def _search_path() -> str:
+    """The ``PATH`` string used for lookup, with any quotes around entries removed.
+
+    Windows ``PATH`` entries are often quoted, which ``shutil.which`` does not
+    expect. An unset ``PATH`` falls back to ``os.defpath``.
+    """
+    raw = os.environ.get("PATH", os.defpath)
+    return os.pathsep.join(entry.strip().strip('"') for entry in raw.split(os.pathsep))
+
+
+def _on_search_path(found: str) -> bool:
+    """True when ``found`` lives in a non-empty directory listed in ``PATH``.
+
+    Empty ``PATH`` entries are skipped even though a shell reads them as the
+    current directory, so a bare name never resolves through the working
+    directory, which Windows ``shutil.which`` otherwise searches first.
+    """
+    parent = Path(found).parent
+    for entry in _search_path().split(os.pathsep):
+        try:
+            if entry and os.path.samefile(parent, entry):
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def resolve_binary_path(binary_name: str, explicit_path: Optional[str] = None) -> str:
     """Resolve an executable by explicit override, registered environment, then PATH.
 
-    A configured but invalid override fails without falling back. Resolution is
+    ``~`` is expanded. A candidate containing a path separator is a pathname,
+    resolved as given (relative ones against the current directory); a bare
+    name is looked up on ``PATH`` only. A configured but invalid override fails
+    without falling back. Resolution is
     an availability check, not identity verification or permission to execute.
     No subprocess, shell interpolation, installation, or service start occurs.
     """
@@ -92,9 +129,14 @@ def resolve_binary_path(binary_name: str, explicit_path: Optional[str] = None) -
     )
     if not candidate.strip() or "\x00" in candidate:
         raise ValueError(f"Invalid executable configuration. {repair}")
-    found = shutil.which(os.path.expanduser(candidate))
+    candidate = os.path.expanduser(candidate)
+    found = shutil.which(candidate, path=_search_path())
     if found is None or not Path(found).is_file():
         raise ValueError(f"Agent executable is unavailable or not executable. {repair}")
+    if _is_bare_command(candidate) and not _on_search_path(found):
+        raise ValueError(
+            f"Agent executable was not found on PATH (the working directory is not searched). {repair}"
+        )
     if sys.platform == "win32":
         # Python 3.10/3.11 which() can accept any directly named regular file.
         extensions = {

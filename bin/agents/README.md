@@ -43,11 +43,16 @@ python3 -m bin.agents.dispatcher --check-binary antigravity --binary-path "$ANTI
 ```
 
 Discovery uses an explicit path, then the registered `*_BIN` environment
-variable, then the installed command on `PATH`. Invalid configured overrides
-fail with exit 2 and an actionable error. Success prints JSON with `binary` and
-`path`; it proves availability only, not agent identity or authorization.
+variable, then the installed command on `PATH`. A leading `~` is expanded. A
+value containing a path separator is a pathname, resolved as given (a relative
+one against the current directory); a bare name is looked up on `PATH` only,
+never in the working directory. Invalid configured overrides fail with exit 2
+and an actionable error; an unregistered agent is rejected by the argument
+parser, also with exit 2. Success prints JSON with `binary` and `path`; it
+proves availability only, not agent identity or authorization.
 The immutable registry maps `antigravity` to `agy` and `cursor` to `cursor-agent`;
-Gemini, Codex, Claude, Ollama, and Windsurf use their matching command names.
+Gemini, Codex, Claude, Ollama, Windsurf, Cline (`cline`, the Relay adapter) and
+Kimi (`kimi`, the Nova adapter) use their matching command names.
 This registry describes discovery only. PT retains provider-specific arguments,
 prompt transport, output parsing, queueing, and process lifecycle ownership.
 
