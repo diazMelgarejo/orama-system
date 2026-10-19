@@ -149,15 +149,47 @@ def test_windows_explicit_paths_respect_executable_suffixes(
 def test_bare_name_found_only_through_working_directory_is_refused(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Windows which() searches the working directory first; discovery must not trust that hit."""
-    planted = _executable(tmp_path, "codex")
+    """A local command is ignored when no non-empty PATH directory contains it."""
+    _executable(tmp_path, "codex")
     other = tmp_path / "bin"
     other.mkdir()
     monkeypatch.delenv("CODEX_BIN", raising=False)
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("PATH", str(other))
-    monkeypatch.setattr(dispatcher.shutil, "which", lambda candidate, path=None: str(planted))
-    with pytest.raises(ValueError, match="not found on PATH"):
+    with pytest.raises(ValueError, match="unavailable"):
         dispatcher.resolve_binary_path("codex")
+
+
+def test_bare_name_skips_working_directory_and_uses_later_path_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A local shadow cannot block the same command in an approved PATH directory."""
+    _executable(tmp_path, "codex")
+    trusted = tmp_path / "trusted-bin"
+    trusted.mkdir()
+    binary = _executable(trusted, "codex")
+    monkeypatch.delenv("CODEX_BIN", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("PATH", os.pathsep + str(trusted))
+    assert Path(dispatcher.resolve_binary_path("codex")).samefile(binary)
+
+
+def test_windows_bare_name_uses_path_entry_after_working_directory_shadow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Windows bare-name lookup ignores a working-directory shadow and honors PATHEXT."""
+    shadow = tmp_path / "codex.CMD"
+    shadow.write_text("fixture", encoding="utf-8")
+    trusted = tmp_path / "trusted-bin"
+    trusted.mkdir()
+    binary = trusted / "codex.CMD"
+    binary.write_text("fixture", encoding="utf-8")
+    monkeypatch.delenv("CODEX_BIN", raising=False)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("PATHEXT", ".EXE;.CMD")
+    monkeypatch.setenv("PATH", str(trusted))
+    assert Path(dispatcher.resolve_binary_path("codex")).samefile(binary)
 
 
 def test_empty_path_entry_does_not_search_the_working_directory(
@@ -168,7 +200,7 @@ def test_empty_path_entry_does_not_search_the_working_directory(
     monkeypatch.delenv("CODEX_BIN", raising=False)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("PATH", os.pathsep + str(tmp_path / "elsewhere"))
-    with pytest.raises(ValueError, match="not found on PATH"):
+    with pytest.raises(ValueError, match="unavailable"):
         dispatcher.resolve_binary_path("codex")
 
 

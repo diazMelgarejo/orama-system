@@ -89,21 +89,37 @@ def _search_path() -> str:
     return os.pathsep.join(entry.strip().strip('"') for entry in raw.split(os.pathsep))
 
 
-def _on_search_path(found: str) -> bool:
-    """True when ``found`` lives in a non-empty directory listed in ``PATH``.
+def _search_path_entries() -> tuple[str, ...]:
+    """Return trusted PATH directories, excluding empty current-directory entries."""
+    return tuple(entry for entry in _search_path().split(os.pathsep) if entry)
 
-    Empty ``PATH`` entries are skipped even though a shell reads them as the
-    current directory, so a bare name never resolves through the working
-    directory, which Windows ``shutil.which`` otherwise searches first.
+
+def _windows_executable_extensions() -> tuple[str, ...]:
+    """Return normalized executable suffixes used for Windows bare-name lookup."""
+    return tuple(
+        extension.strip().casefold()
+        for extension in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")
+        if extension.strip()
+    )
+
+
+def _find_bare_command(command: str) -> Optional[str]:
+    """Find ``command`` only through explicit non-empty PATH directories.
+
+    ``shutil.which`` can consult the working directory on Windows before a
+    supplied PATH. Joining each approved directory ourselves keeps a planted
+    local command from shadowing a later, configured installation.
     """
-    parent = Path(found).parent
-    for entry in _search_path().split(os.pathsep):
-        try:
-            if entry and os.path.samefile(parent, entry):
-                return True
-        except OSError:
-            continue
-    return False
+    extensions = _windows_executable_extensions() if sys.platform == "win32" else ()
+    for directory in _search_path_entries():
+        base = Path(directory) / command
+        candidates = (base,)
+        if extensions and not base.suffix:
+            candidates = tuple(base.with_name(f"{base.name}{extension}") for extension in extensions)
+        for candidate in candidates:
+            if candidate.is_file() and (sys.platform == "win32" or os.access(candidate, os.X_OK)):
+                return str(candidate)
+    return None
 
 
 def resolve_binary_path(binary_name: str, explicit_path: Optional[str] = None) -> str:
@@ -130,20 +146,12 @@ def resolve_binary_path(binary_name: str, explicit_path: Optional[str] = None) -
     if not candidate.strip() or "\x00" in candidate:
         raise ValueError(f"Invalid executable configuration. {repair}")
     candidate = os.path.expanduser(candidate)
-    found = shutil.which(candidate, path=_search_path())
+    found = _find_bare_command(candidate) if _is_bare_command(candidate) else shutil.which(candidate)
     if found is None or not Path(found).is_file():
         raise ValueError(f"Agent executable is unavailable or not executable. {repair}")
-    if _is_bare_command(candidate) and not _on_search_path(found):
-        raise ValueError(
-            f"Agent executable was not found on PATH (the working directory is not searched). {repair}"
-        )
     if sys.platform == "win32":
         # Python 3.10/3.11 which() can accept any directly named regular file.
-        extensions = {
-            extension.strip().casefold()
-            for extension in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")
-            if extension.strip()
-        }
+        extensions = set(_windows_executable_extensions())
         if Path(found).suffix.casefold() not in extensions:
             raise ValueError(f"Agent executable has no permitted Windows extension. {repair}")
     return os.path.abspath(found)
