@@ -26,11 +26,16 @@ Architecture (§ 5 contract):
 """
 from __future__ import annotations
 
+import argparse
 import asyncio
+import json
 import os
+import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from types import MappingProxyType
+from typing import Any, Dict, List, Mapping, Optional
 
 
 # ── PT path bootstrap ─────────────────────────────────────────────────────────
@@ -46,6 +51,137 @@ def _bootstrap_pt_path() -> Optional[Path]:
 
 
 _PT_ROOT: Optional[Path] = _bootstrap_pt_path()
+
+
+@dataclass(frozen=True)
+class BinaryRegistration:
+    """Discovery configuration; invocation and output contracts belong to PT."""
+
+    env_var: str
+    command: str
+
+
+BINARY_REGISTRY: Mapping[str, BinaryRegistration] = MappingProxyType({
+    "antigravity": BinaryRegistration("ANTIGRAVITY_BIN", "agy"),
+    "gemini": BinaryRegistration("GEMINI_BIN", "gemini"),
+    "codex": BinaryRegistration("CODEX_BIN", "codex"),
+    "cursor": BinaryRegistration("CURSOR_BIN", "cursor-agent"),
+    "claude": BinaryRegistration("CLAUDE_BIN", "claude"),
+    "ollama": BinaryRegistration("OLLAMA_BIN", "ollama"),
+    "windsurf": BinaryRegistration("WINDSURF_BIN", "windsurf"),
+    "cline": BinaryRegistration("CLINE_BIN", "cline"),
+    "kimi": BinaryRegistration("KIMI_BIN", "kimi"),
+})
+
+
+def _is_bare_command(candidate: str) -> bool:
+    """True when ``candidate`` names a command to look up, not a pathname."""
+    if "/" in candidate or "\\" in candidate:
+        return False
+    return not (sys.platform == "win32" and len(candidate) >= 2 and candidate[1] == ":")
+
+
+def _search_path() -> str:
+    """The ``PATH`` string used for lookup, with any quotes around entries removed.
+
+    Windows ``PATH`` entries are often quoted, which ``shutil.which`` does not
+    expect. An unset ``PATH`` falls back to ``os.defpath``.
+    """
+    raw = os.environ.get("PATH", os.defpath)
+    return os.pathsep.join(entry.strip().strip('"') for entry in raw.split(os.pathsep))
+
+
+def _search_path_entries() -> tuple[str, ...]:
+    """Return trusted PATH directories, excluding empty current-directory entries."""
+    return tuple(entry for entry in _search_path().split(os.pathsep) if entry)
+
+
+def _windows_pathext() -> tuple[str, ...]:
+    """Return the PATHEXT suffixes exactly as configured, in order, without empty entries."""
+    return tuple(
+        extension.strip()
+        for extension in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")
+        if extension.strip()
+    )
+
+
+def _windows_executable_extensions() -> tuple[str, ...]:
+    """Return normalized executable suffixes used to compare, never to build, file names."""
+    return tuple(extension.casefold() for extension in _windows_pathext())
+
+
+def _find_bare_command(command: str) -> Optional[str]:
+    """Find ``command`` only through explicit non-empty PATH directories.
+
+    ``shutil.which`` can consult the working directory on Windows before a
+    supplied PATH. Joining each approved directory ourselves keeps a planted
+    local command from shadowing a later, configured installation.
+    """
+    for directory in _search_path_entries():
+        base = Path(directory) / command
+        candidates = (base,)
+        if sys.platform == "win32":
+            # File names use the PATHEXT casing as configured, so a case-sensitive
+            # filesystem finds the same file Windows would; comparison is case-insensitive.
+            candidates = (base, *(
+                base.with_name(f"{base.name}{extension}") for extension in _windows_pathext()
+            ))
+            if base.suffix.casefold() not in _windows_executable_extensions():
+                candidates = (*candidates[1:], base)
+        for candidate in candidates:
+            if candidate.is_file() and (sys.platform == "win32" or os.access(candidate, os.X_OK)):
+                return str(candidate)
+    return None
+
+
+def resolve_binary_path(binary_name: str, explicit_path: Optional[str] = None) -> str:
+    """Resolve an executable by explicit override, registered environment, then PATH.
+
+    ``~`` is expanded. A candidate containing a path separator is a pathname,
+    resolved as given (relative ones against the current directory); a bare
+    name is looked up on ``PATH`` only. A configured but invalid override fails
+    without falling back. Resolution is
+    an availability check, not identity verification or permission to execute.
+    No subprocess, shell interpolation, installation, or service start occurs.
+    """
+    entry = BINARY_REGISTRY.get(binary_name.lower())
+    if entry is None:
+        raise ValueError(f"Unknown binary {binary_name!r}; choose a registered agent")
+    candidate = (
+        explicit_path if explicit_path is not None
+        else os.environ.get(entry.env_var, entry.command)
+    )
+    repair = (
+        f"Set {entry.env_var} or --binary-path to an executable file, "
+        f"or install {entry.command} on PATH"
+    )
+    if not candidate.strip() or "\x00" in candidate:
+        raise ValueError(f"Invalid executable configuration. {repair}")
+    candidate = os.path.expanduser(candidate)
+    found = _find_bare_command(candidate) if _is_bare_command(candidate) else shutil.which(candidate)
+    if found is None or not Path(found).is_file():
+        raise ValueError(f"Agent executable is unavailable or not executable. {repair}")
+    if sys.platform == "win32":
+        # Python 3.10/3.11 which() can accept any directly named regular file.
+        extensions = set(_windows_executable_extensions())
+        if Path(found).suffix.casefold() not in extensions:
+            raise ValueError(f"Agent executable has no permitted Windows extension. {repair}")
+    return os.path.abspath(found)
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    """Print JSON executable preflight evidence without dispatching an agent."""
+    parser = argparse.ArgumentParser(description="Check agent executable availability without execution")
+    parser.add_argument("--check-binary", required=True, choices=sorted(BINARY_REGISTRY))
+    parser.add_argument("--binary-path", help="Explicit executable override")
+    args = parser.parse_args(argv)
+    try:
+        path = resolve_binary_path(args.check_binary, args.binary_path)
+    except ValueError as error:
+        print(str(error), file=sys.stderr)
+        return 2
+    print(json.dumps({"binary": args.check_binary, "path": path}))
+    return 0
 
 
 # ── OramaToPTBridge ───────────────────────────────────────────────────────────
@@ -230,3 +366,7 @@ class OramaToPTBridge:
             error = status.get("error", "unknown error")
             raise RuntimeError(f"PT worker failed (job={job_id}): {error}")
         return result
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
