@@ -237,7 +237,7 @@ def _terminate_worker(worker: _Worker) -> None:
         for pid in descendants:
             try:
                 os.kill(pid, signal.SIGTERM)
-            except ProcessLookupError:
+            except (ProcessLookupError, PermissionError):
                 pass
         if descendants:
             try:
@@ -273,7 +273,8 @@ def _linux_descendant_pids(parent_pid: int) -> list[int]:
         if not entry.isdigit():
             continue
         try:
-            stat = open(f"/proc/{entry}/stat", encoding="utf-8").read()
+            with open(f"/proc/{entry}/stat", encoding="utf-8") as stat_fh:
+                stat = stat_fh.read()
             fields = stat.rsplit(")", 1)[1].split()
             pid, ppid = int(entry), int(fields[1])
         except (IndexError, OSError, ValueError):
