@@ -99,6 +99,22 @@ different `attempt_id` or binding for the same permit is refused (proposed name
 `finalization.conflict`). Its lifetime is at most the permit's `expires_at` and at most the
 signed-policy finalization lifetime, which is 90 seconds (decision 1, section 6).
 
+**Finalization event encoding.** The finalization event's body is exactly the one-field object
+`{"finalization_id":"<opaque random identifier>"}`. It deliberately carries neither a grant nor
+a consumer identifier. Its `event_digest` is the SHA-256 hexadecimal digest of the UTF-8 bytes of
+the canonical JSON object:
+
+```json
+{"body":{"finalization_id":"<opaque random identifier>"},"kind":"finalization","previous_event_digest":"<previous digest>","version":<R_f>}
+```
+
+Canonical JSON means `json.dumps` with `sort_keys=True`, `separators=(",", ":")`,
+`ensure_ascii=False`, and `allow_nan=False`; no whitespace or alternate representation is valid.
+The event's detached issuer signature covers this digest and is not part of its preimage.
+Both the issuer's append and the consumer's rule-5 verification construct precisely this object;
+`finalization_id` is a field in the body, not the body or the digest by itself. For the first event
+of a chain, `previous_event_digest` is 64 `0` characters.
+
 **Finalization retry identity.** A finalization retry is validated on `permit_id`,
 `permit_digest`, `attempt_id`, `reservation_id`, `ledger_store_id` and `authority_epoch`
 against the stored permit and finalization; a changed value is `finalization.conflict`. A later
