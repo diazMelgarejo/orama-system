@@ -70,11 +70,14 @@ The frozen canonical body carries:
 ### Exact Field Specification
 
 1. `approval_id` (`str`): The revoked parent approval reference (`second_approval_ref`).
-2. `grant_ids` (`list[str]`): Sorted list of ASCII grant identifiers unconsumed at the time of the
-   cascade commit.
-   *(Note: For consumer dispatch gating, `grant_ids` is redundant because the consumer already holds
-   `second_approval_ref` in the signed v2 grant per Purpose contract lines 56–58; `grant_ids` serves
-   exclusively for the recovery witness and audit indexing).*
+2. `grant_ids` (`list[str]`): Sorted, duplicate-free list of canonical ASCII identifiers for
+   dependent grants whose **issuer-side authority** is affected by this cascade commit. It is not an
+   assertion that a consumer has or has not consumed, dispatched, or executed any listed grant: the
+   issuer records authority facts and does not query consumer execution state.
+   *(Note: `grant_ids` supports notification delivery, recovery-witness lookup, and audit indexing.
+   Consumer dispatch gating remains a consumer-local Step 4.3 decision over its own durable grant
+   use, acknowledgement, and authority state; this notification neither substitutes for nor changes
+   that gate.)*
 3. `issuer_authority_version` (`int`): Safe positive integer identifying the issuer authority
    epoch at the time of the cascade commit.
 
@@ -112,10 +115,21 @@ checkpoint envelope is required.
 When a consumer bootstraps from a pruned anchor at $\text{anchor\_version} > 1$:
 
 1. **Bootstrap Initialization:** The consumer executes
-   `bootstrap_anchor(issuer_id, anchor_event, verifier)`:
-   * Verifies the issuer's Ed25519 signature on `anchor_event["event_digest"]`.
-   * Records the anchor in `issuer_cascade_ack` at `version = anchor_version`.
-   * Records `anchor_version` as the immutable consumer floor.
+   `bootstrap_anchor(issuer_id, anchor_event, verifier)` as one local transaction:
+   * It reconstructs the canonical event preimage from exactly `body`, `kind`,
+     `previous_event_digest`, and `version`, using the canonical JSON encoding in Part 2.
+     It computes the SHA-256 digest of those UTF-8 bytes and requires it to equal the supplied
+     `anchor_event["event_digest"]`. Verifying a signature over a caller-supplied digest alone is
+     insufficient.
+   * It resolves `issuer_key_id` only through the locally trusted key material for `issuer_id`,
+     requires that key to belong to the declared issuer, and verifies the detached Ed25519 signature
+     over the recomputed digest. A key or issuer supplied only by the event is never trusted.
+   * On first bootstrap, it atomically persists the issuer identity and key identity, anchor
+     `version`, recomputed `event_digest`, and immutable `anchor_version` floor, and records the
+     same `(issuer_id, version, event_digest)` in `issuer_cascade_ack`.
+   * On a repeated bootstrap, the persisted issuer, key, version, digest, and floor must be exactly
+     identical or the consumer refuses and retains quarantine. An identical repeat is a no-op: it
+     must never reset, lower, or otherwise rewrite an acknowledged high-water mark or anchor floor.
 2. **Pre-Anchor Revocation Rejection (Consumer-Side Gate):** To prevent the pre-anchor revocation
    blind-spot attack (where a pre-anchor revocation is invisible to the bootstrapped consumer),
    Step 4.3 Rule 4 (acknowledgement coverage) enforces:
@@ -131,7 +145,12 @@ When a consumer bootstraps from a pruned anchor at $\text{anchor\_version} > 1$:
 
 Consumer-side execution recovery witness fields (E1 Draft lines 1022–1023) remain **open**. They
 are not frozen by this Part 3 amendment and will be defined alongside the telemetry and
-observability contract slice.
+observability contract slice. That later slice must close all of these gates before it can claim a
+witness contract: (1) the concrete field set, types, canonical encoding, and durable identity;
+(2) the publication medium, retention owner, and durability boundary; and (3) an authenticated
+read-back mechanism that verifies the published record and defines failure as unavailable rather
+than empty success. Until then, a missing or unreadable witness remains a fail-closed recovery
+condition, not evidence of no affected work.
 
 ---
 
