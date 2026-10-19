@@ -49,6 +49,89 @@ def _bootstrap_pt_path() -> Optional[Path]:
 _PT_ROOT: Optional[Path] = _bootstrap_pt_path()
 
 
+# ── Binary registry ──────────────────────────────────────────────────────────
+#
+# Each entry describes how to locate and invoke a supported subagent binary.
+#   env_var         — environment variable holding the binary path
+#   default_args    — CLI args prepended to every invocation
+#   variable_syntax — how variables/prompt are passed:
+#       "env"     → prompt + variables via environment variables
+#       "flag"    → prompt + variables via CLI flags
+#       "stdin"   → prompt via stdin, variables via environment
+#   output_format   — "json" or "raw"
+#
+
+BINARY_REGISTRY: Dict[str, Dict[str, Any]] = {
+    "antigravity": {
+        "env_var": "ANTIGRAVITY_BIN",
+        "default_args": [],
+        "variable_syntax": "stdin",
+        "output_format": "json",
+    },
+    "gemini": {
+        "env_var": "GEMINI_BIN",
+        "default_args": [],
+        "variable_syntax": "stdin",
+        "output_format": "json",
+    },
+    "codex": {
+        "env_var": "CODEX_BIN",
+        "default_args": [],
+        "variable_syntax": "stdin",
+        "output_format": "json",
+    },
+    "cursor": {
+        "env_var": "CURSOR_BIN",
+        "default_args": [],
+        "variable_syntax": "stdin",
+        "output_format": "json",
+    },
+    "claude": {
+        "env_var": "CLAUDE_BIN",
+        "default_args": [],
+        "variable_syntax": "stdin",
+        "output_format": "json",
+    },
+    "ollama": {
+        "env_var": "OLLAMA_BIN",
+        "default_args": ["serve"],
+        "variable_syntax": "flag",
+        "output_format": "raw",
+    },
+    "windsurf": {
+        "env_var": "WINDSURF_BIN",
+        "default_args": [],
+        "variable_syntax": "stdin",
+        "output_format": "json",
+    },
+}
+
+
+def resolve_binary_path(
+    binary_name: str, explicit_path: Optional[str] = None
+) -> str:
+    """Resolve a binary path from the registry or an explicit path.
+
+    Priority:
+      1. explicit_path argument
+      2. The binary's registered env var
+    """
+    if explicit_path:
+        return explicit_path
+
+    entry = BINARY_REGISTRY.get(binary_name.lower())
+    if entry:
+        env_path = os.getenv(entry["env_var"], "")
+        if env_path:
+            return env_path
+
+    raise RuntimeError(
+        f"Cannot resolve binary '{binary_name}': no explicit path given and "
+        f"environment variable not set. Register in BINARY_REGISTRY or set "
+        f"the corresponding env var."
+    )
+
+
 # ── OramaToPTBridge ───────────────────────────────────────────────────────────
 
 class OramaToPTBridge:
@@ -285,62 +368,113 @@ class OramaToPTBridge:
             # Return raw text wrapped in a dict if not JSON
             return {"raw": out_text}
 
-    async def dispatch_worker(
+    # ── Common debug wrapper for all binaries ─────────────────────────────────
+
+    async def dispatch_debug(
         self,
         *,
-        role: str,
-        intent: str,
+        binary_name: str,
         prompt: str,
-        specialization: Optional[str] = None,
-        backend_hint: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
-        constraints: Optional[List[str]] = None,
-        direct_binary: bool = False,
-        binary_path: Optional[str] = None,
-        binary_args: Optional[List[str]] = None,
-        binary_timeout_sec: Optional[float] = None,
+        variables: Optional[Dict[str, str]] = None,
+        debug_wrapper: Optional[str] = None,
+        extra_args: Optional[List[str]] = None,
+        timeout_sec: Optional[float] = None,
     ) -> Dict[str, Any]:
-        """Dispatch one worker and return its result dict.
+        """Debug a subagent binary using its registered variable syntax.
 
-        PT is the default runtime authority; orama just builds the spec.
-        This does NOT store state — orama is stateless.
+        This is a common wrapper that works with ALL registered binaries
+        (antigravity, gemini, codex, cursor, claude, ollama, windsurf).
+        It respects each binary's ``variable_syntax`` from BINARY_REGISTRY:
 
-        When direct_binary=True, bypasses PT's OrchestrationSupervisor and
-        invokes the binary directly via dispatch_binary().  This is the
-        AntiGravity/Gemini direct subagent path — use for verified roles where
-        direct binary execution is the proven working path.
+          * "env"     → variables set as env vars, prompt via stdin
+          * "flag"    → variables as CLI flags (--key value), prompt via stdin
+          * "stdin"   → prompt via stdin, variables via env vars
+
+        An optional ``debug_wrapper`` (e.g. "strace", "lldb --batch") is
+        prepended to the command so the binary can be inspected under a
+        debugger.
 
         Args:
-            direct_binary: If True, use direct binary dispatch instead of PT.
-            binary_path: Path to the binary (defaults to ANTIGRAVITY_BIN or
-                GEMINI_BIN env var based on role).
-            binary_args: CLI args for the binary.
-            binary_timeout_sec: Optional timeout for binary execution.
+            binary_name: Registered binary name from BINARY_REGISTRY.
+            prompt: The prompt to pass to the binary.
+            variables: Key-value pairs passed per the binary's variable_syntax.
+            debug_wrapper: Optional wrapper command (e.g. "strace -f").
+            extra_args: Additional CLI args appended after default_args.
+            timeout_sec: Optional timeout in seconds.
+
+        Returns:
+            Parsed result dict from the binary's stdout.
+
+        Raises:
+            RuntimeError: if binary cannot be resolved or exits non-zero.
         """
-        if direct_binary:
-            binary = binary_path or os.getenv(
-                "ANTIGRAVITY_BIN" if "antigravity" in role.lower() else "GEMINI_BIN",
-                "",
-            )
-            if not binary:
-                raise RuntimeError(
-                    f"direct_binary=True but no binary path for role={role!r}. "
-                    "Set binary_path or ANTIGRAVITY_BIN/GEMINI_BIN env var."
-                )
-            return await self.dispatch_binary(
-                binary=binary,
-                args=binary_args or [],
-                prompt=prompt,
-                timeout_sec=binary_timeout_sec,
+        entry = BINARY_REGISTRY.get(binary_name.lower())
+        if not entry:
+            raise RuntimeError(
+                f"Unknown binary_name={binary_name!r}. "
+                f"Registered: {list(BINARY_REGISTRY)}"
             )
 
-        spec = self._build_spec(
-            role=role,
-            intent=intent,
-            prompt=prompt,
-            specialization=specialization,
-            backend_hint=backend_hint,
-            metadata=metadata or {},
-            constraints=constraints or [],
+        binary = os.getenv(entry["env_var"], "")
+        if not binary:
+            raise RuntimeError(
+                f"Env var {entry['env_var']!r} not set for "
+                f"binary_name={binary_name!r}"
+            )
+
+        variable_syntax = entry.get("variable_syntax", "stdin")
+        default_args = entry.get("default_args", [])
+
+        # Build the command: [debug_wrapper, binary, *default_args, *extra_args]
+        cmd: List[str] = []
+        if debug_wrapper:
+            cmd.append(debug_wrapper)
+        cmd.append(binary)
+        cmd.extend(default_args)
+        if extra_args:
+            cmd.extend(extra_args)
+
+        full_env = dict(os.environ)
+
+        if variable_syntax == "flag":
+            # Variables passed as CLI flags: --key value
+            if variables:
+                for key, val in variables.items():
+                    cmd.extend([f"--{key}", str(val)])
+        elif variable_syntax in ("env", "stdin"):
+            # Variables passed via environment
+            if variables:
+                for key, val in variables.items():
+                    full_env[key] = str(val)
+
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            env=full_env,
         )
+
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=prompt.encode("utf-8")),
+                timeout=timeout_sec,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            raise
+
+        if proc.returncode != 0:
+            err_text = stderr.decode("utf-8", errors="replace") if stderr else ""
+            raise RuntimeError(
+                f"Binary {binary} (debug) exited {proc.returncode}: {err_text}"
+            )
+
+        out_text = stdout.decode("utf-8", errors="replace")
+        try:
+            return json.loads(out_text)
+        except json.JSONDecodeError:
+            return {"raw": out_text, "binary": binary_name, "command": cmd}
+
         return await self._run_via_pt(spec)
