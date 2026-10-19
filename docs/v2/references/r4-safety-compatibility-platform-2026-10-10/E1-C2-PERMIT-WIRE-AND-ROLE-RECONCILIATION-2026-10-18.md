@@ -58,7 +58,7 @@ counter it read) and `revocation_event_digest` is its `event_digest`; and return
 finalization is idempotent per (`permit_id`, `attempt_id`): an identical retry returns the stored
 bytes and appends no second event, and a different `attempt_id` or binding for the same permit is
 refused (proposed name `finalization.conflict`). Its lifetime is at most the permit's `expires_at`
-and at most the signed-policy finalization lifetime, which is an operator decision (section 6).
+and at most the signed-policy finalization lifetime, which is 90 seconds (decision 1, section 6).
 
 **Why the finalization is a chain event.** The scalar floors catch a rollback that happened
 before the finalization request: the consumer had already acknowledged versions past the restored
@@ -105,9 +105,9 @@ item, with `permit_id`, the permit and finalization digests, `R_p`, `R_f`, the e
 `authority_pair` and `acked_through`.
 
 **Lifetime.** `expires_at` is at most the grant's `expires_at` and at most `issued_at` plus a
-permit lifetime fixed by the signed policy, never by the request. The value is an operator
-decision; a short bound of the order of the 60-second clock allowance already decided is
-recommended. See the stranding risk in section 3.
+permit lifetime fixed by the signed policy, never by the request. The value is decided: **90
+seconds**, the same for the permit and the finalization and for every effect class (decision 1,
+section 6), above the 60-second clock allowance. See the stranding risk in section 3.
 
 **Retry identity (proposed).** A unique `grant_id` stops a second row but does not prove that a
 repeat request is the same request. The issuer therefore persists a **binding digest** with the
@@ -176,7 +176,7 @@ from silence.
 | Same grant, identical binding, different `requested_at` | Identical retry; the original permit is returned; the new `requested_at` is ignored |
 | Same grant, identical binding, higher `consumer_acked_through` than the stored `R_p` | The stored permit is not usable. A replacement requires durable proof that step 4.3 did not commit and the reservation was released; otherwise the grant remains unavailable |
 | Consumer crashes after receiving the permit, before step 4.3 commits | On restart the consumer knows from its own store that 4.3 did not commit; an unexpired permit may be used once |
-| Permit expires before step 4.3 (including benign clock skew) | Refused and recorded with an expiry reason. A replacement is allowed only after the consumer attests, from its own store, that 4.3 never committed and the reservation is released, and only before the grant's own expiry; the issuer records the attestation and does not claim to verify it. Otherwise the grant remains unavailable (operator decision, section 6) |
+| Permit expires before step 4.3 (including benign clock skew) | Refused and recorded with an expiry reason. A replacement is allowed only after the consumer attests, from its own store, that 4.3 never committed and the reservation is released, and only before the grant's own expiry, and only when the attested cause is a transient delay, a cancellation or a loss; the issuer records the attestation and does not claim to verify it. Any other cause, and any unknown or pending outcome, is treated as spent and the grant remains unavailable (decision 2, section 6) |
 | Step 4.3 committed, crash before the outbox send | The outbox protocol of section 4 governs; the attempt is `unknown` if a send may have started |
 | Permit presented for another reservation, request digest, `artifact_digest` or `authority_pair` | Refused; no state change |
 | Permit replayed after step 4.3 recorded it | Refused as already recorded |
@@ -204,7 +204,7 @@ from silence.
 | 4 | Older verifier refuses with `grant.schema_unsupported` | 13.4 | Wrong for the pinned parser (field set first) | Correct as in part 1, section 6 |
 | 5 | Consumer-originated and issuer-originated cascades | 13.4, 13.4.1, 13.8 | Two directions described in separate places | Adopt the ordering table in section 2 above |
 | 6 | "Oramasys carries no cryptography" versus the consumer verifying a permit | 2 (rule 2), 13.4.1 | Apparent conflict | Verification goes through the injected verifier port that Phylax supplies; Oramasys code still contains no signature primitive |
-| 7 | "Serving is verifier-only and never opens the issuer" versus asking the issuer for a permit at dispatch | 2 (rule 1), 13.4.1 | **Real tension** | Rule 1 must say that the serving process never loads signing material and never opens the authority store, but may call the issuer's narrow permit operation over an authenticated channel; issuer availability becomes a dispatch dependency that fails closed |
+| 7 | "Serving is verifier-only and never opens the issuer" versus asking the issuer for a permit at dispatch | 2 (rule 1), 13.4.1 | **Real tension** | Rule 1 must say that the serving process never loads signing material and never opens the authority store, but may call the issuer's narrow permit operation over an authenticated channel; issuer availability becomes a dispatch dependency that fails closed. **Decided 2026-10-19 (decision 3):** no new hard dependency for serving, verification or any non-effect operation. Effectful dispatch still needs a permit and fails closed when the issuer is unreachable, because an issuerless path would bypass replay protection |
 | 8 | Independent release needs a distinct principal and credential | 2, 13.1, 13.2, 13.8 | Consistent; enrollment deferred | No change; until a second principal is enrolled, no reconciler is `independent` |
 | 9 | "Absent means single approval" for `second_approval_ref` | 13.4 | Conflicts with an exact field set, where a missing key is malformed | The wire carries the empty string for "absent"; part 1, section 3.1 records the erratum |
 | 10 | The consumer transaction is "the linearization point for revocation versus dispatch" | Durable-effects contract step 4 | **Breaking re-linearization:** issuer-owned facts move to issuer finalization, with consumer acknowledgement of its receipt | Record it as an explicit erratum at ratification (section 5), not as a passing remark |
@@ -218,16 +218,33 @@ revocation are ordered by the issuer's finalization transaction; the consumer ve
 and acknowledges through `R_f`. Grant use is consumed at the consumer only after that finalization
 and its own gates pass." This pull request does not edit that contract.
 
-## 6. Decisions left to the operator
+## 6. Operator decisions
 
-1. Permit and finalization lifetime values, and whether they may differ per effect class.
-2. Whether an expired, never-committed permit may be re-issued (section 3) or the grant is spent.
-3. Resolution 7: issuer availability as a dispatch dependency, or a different mechanism.
-4. Which Phylax release carries the version-first parser order, and the `effect_class` registry.
-5. The re-permit attestation format: an authenticated-channel statement only (as written) or a
-   consumer-signed record, and who may submit it.
-6. Ratification of the integrated contract, by exact commit, after independent review.
-7. The finalization event: the issuer's revocation counter advances on every finalization, so
-   `R_f` and the event chain count finalizations as well as revocations. Accept that, or carry
-   the clean-rollback evidence another way (an issuer-signed event timestamp, or the section 8.2
-   witness alone, which gives the consumer no in-protocol check).
+**Decided 2026-10-19 (operator):**
+
+* **Decision 1, lifetime.** 90 seconds for the permit and the finalization, uniform across
+  effect classes. No per-class override is adopted; one needs a new decision.
+* **Decision 2, expired never-committed permit.** Assume spent first. A replacement is allowed
+  only on the consumer's authenticated attestation that the cause is a transient delay, a
+  cancellation or a loss; an unknown or pending outcome is treated as spent.
+* **Decision 3, issuer availability.** Status quo preserved, with no new hard dependency for
+  serving, verification or non-effect operations. Effectful dispatch still fails closed without
+  a permit; an issuerless dispatch path is not adopted. *Reading recorded for confirmation.*
+* **Decision 5, re-permit attestation.** An authenticated-channel statement only, as written.
+  No consumer-signed record.
+* **Decision 6, ratification.** Of the integrated contract: by exact commit, after independent
+  review.
+* **Decision 7, finalization event.** Accepted: the issuer counter advances on every
+  finalization, so `R_f` and the event chain count finalizations as well as revocations.
+  Issuer-signed timestamps and the section 8.2 witness alone are not adopted.
+
+**Still open:**
+
+* **Decision 4, Phylax release** carrying the version-first parser order and the `effect_class`
+  registry. *Recommended:* one release carries both, because the registry means nothing without
+  the parser. It is cut when the failing-first tests of part 1 (rows 1 to 4, written against the
+  legacy parser at the pinned revision) pass against its commit, not on a calendar date.
+  Verifiers adopt it before any issuer issues a v2 grant: an older verifier refuses a v2 grant
+  as `grant.malformed`, so issuance stays off until every verifier pin carries the parser.
+  Oramasys adopts it by one exact-commit pin change through the existing qualification path,
+  never a floating reference.
