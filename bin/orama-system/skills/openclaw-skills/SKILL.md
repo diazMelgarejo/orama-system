@@ -45,6 +45,18 @@ This folder is the canonical home for The Nine Skills used to operate OpenClaw c
 
 The skills are designed for deterministic use through direct skill loading, MCP middleware, CLI wrappers, editor rules, or Perpetua-Tools dispatch. They must produce the same files, naming, model routing, stow behavior, and restart flow regardless of the invoking agent.
 
+## Cross-Harness Provenance Rule
+
+Every supported harness and generated downstream agent MUST follow the
+[`GossipBus author/actor/takeover policy`](../gossip-bus/references/author-actor-takeover-policy.md)
+when it delegates, publishes coordination state, reviews work, or resumes work
+from another agent. Preserve the original author, identify the current actor
+and its actual verification state, make endorsements bounded and evidence-based,
+and disclose takeovers before commit, push, completion, or promotion claims.
+The policy is transport-neutral: use the structured envelope where supported
+and otherwise carry the same named facts in the relevant handoff or board
+payload.
+
 ## The Nine Skills
 
 | Skill ID | Purpose | Skill File |
@@ -323,6 +335,8 @@ Dispatch protocol:
 - Initialize `cc-openclaw` submodule before discovery.
 - Use env placeholders for `openclaw_home`; never hardcode workstation paths.
 - Follow search frugality order (gbrain → code-review-graph → web).
+- Carry the author/actor/takeover policy into every generated agent directive,
+  handoff adapter, and coordination-capable skill.
 
 ### Ask First
 
@@ -333,4 +347,6 @@ Dispatch protocol:
 
 - Put secrets in invocation envelopes or skill examples.
 - Bypass overlay cards and edit upstream cc-openclaw skills as canonical truth.
+- Present another agent's work, liveness, endorsement, or authorization as
+  your own without the policy-required provenance and evidence.
 - Parallel-fire all search tools when the cheapest single source suffices.

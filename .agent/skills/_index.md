@@ -8,6 +8,7 @@ Load the canonical in-repo skill, not a copied body.
 | Hermes onboarding and ECC cross-harness imports | `bin/orama-system/skills/hermes-harness/SKILL.md` |
 | AGY/Gemini/Codex/Hermes dispatch and MCP setup | `bin/orama-system/skills/mcp-orchestration/SKILL.md` |
 | OpenClaw configuration and gateway operations | `bin/orama-system/skills/openclaw-skills/SKILL.md` |
+| Multi-agent GossipBus coordination and LAN peer handoffs | `bin/orama-system/skills/gossip-bus/SKILL.md` |
 | Git branch repair, reanchor, and history scrubbing | `bin/orama-system/skills/git-history-surgery/SKILL.md` |
 | Code review | `bin/orama-system/skills/code-review/SKILL.md` |
 | Skill creation and thin wrapper installs | `bin/orama-system/skills/skillify/SKILL.md` |

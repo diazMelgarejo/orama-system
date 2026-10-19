@@ -19,6 +19,14 @@ Read the canonical source first, then use `.agent/` only as a harness adapter.
 If content belongs in every harness, put it in `bin/orama-system/skills/`,
 `docs/LESSONS.md`, or `AGENTS.md`, not here.
 
+## Coordination Provenance
+
+For delegation, board activity, review, or resumed work, follow
+`bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
+Do not conflate the work's author with the current actor, overstate identity
+verification, convert evidence into authorization, or take over work without
+the prior state and immutable evidence reference.
+
 ## Antigravity Dispatch Shape
 
 Use this bounded prompt pattern:

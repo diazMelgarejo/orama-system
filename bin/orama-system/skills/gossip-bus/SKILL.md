@@ -83,6 +83,16 @@ elsewhere.
 
 ## Instructions
 
+### Provenance, endorsement, and takeover
+
+Before emitting a coordination event that attributes work, endorses a result,
+or resumes another agent's work, follow the canonical
+[`author-actor-takeover-policy.md`](references/author-actor-takeover-policy.md).
+Keep the originating **author** distinct from the current operating **actor**;
+an actor's self-reported ID is not independently verified identity. Pair every
+substantive `agent_note` with an `agent_pulse`, and use `GossipBus.emit` rather
+than writing the SQLite store directly.
+
 ### Intra-host: emit and query
 
 ```python
@@ -128,6 +138,8 @@ Full operator playbook: `bin/orama-system/skills/hermes-harness/references/lan-p
 - Let `lan_peer_channel.py` own WS/SSE/DISCONNECTED state; don't branch on
   transport state in calling code.
 - Read peer IPs from `last_discovery.json`; never hardcode or curl-sweep.
+- Preserve explicit author, actor, endorsement, and takeover provenance for
+  coordination claims; disclose unverified identity or incomplete evidence.
 
 ### Ask First
 - Adding a third transport or bypassing the channel abstraction.
@@ -137,6 +149,8 @@ Full operator playbook: `bin/orama-system/skills/hermes-harness/references/lan-p
 - Build new same-machine coordination infrastructure when `GossipBus` already
   covers it.
 - Delete gossip/heartbeat events to hide dead agents or failed hand-offs.
+- Reassign authorship silently, spoof another agent's liveness/status, or turn
+  review evidence into approval or authorization.
 - Hardcode LAN peer IPs or credentials in payloads.
 
 ## Examples

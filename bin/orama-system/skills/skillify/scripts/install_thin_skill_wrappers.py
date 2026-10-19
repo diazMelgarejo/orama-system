@@ -117,6 +117,7 @@ CANONICAL_SKILLS = [
     "orama-system/bin/orama-system/skills/ecc-sync/SKILL.md",
     "orama-system/bin/orama-system/skills/first-run-setup/SKILL.md",
     "orama-system/bin/orama-system/skills/git-history-surgery/SKILL.md",
+    "orama-system/bin/orama-system/skills/gossip-bus/SKILL.md",
     "orama-system/bin/orama-system/skills/hermes-harness/SKILL.md",
     "orama-system/bin/orama-system/skills/mcp-install/SKILL.md",
     "orama-system/bin/orama-system/skills/mcp-orchestration/SKILL.md",
@@ -347,6 +348,7 @@ def repo_relative(canonical: str) -> str:
 
 
 def wrapper(spec: SkillSpec) -> str:
+    """Render a portable, read-only wrapper for a canonical skill."""
     # PORTABILITY CONTRACT: wrappers MUST be machine-agnostic. NEVER embed an
     # absolute path (ROOT, HOME, /Users/...) — they get committed to public
     # repos and doxx the workstation. `~`-relative locations would also leak
@@ -405,7 +407,8 @@ for cand in "$ORAMA_SYSTEM_ROOT" "$ORAMA_SYSTEM_PATH" \\
 done
 if [ -z "$ROOT" ] && base="$(git rev-parse --show-toplevel 2>/dev/null)"; then
   parent="$(dirname "$base")"
-  for d in "$parent"/*/ "$(dirname "$parent")"/*/; do
+  for d in "$parent"/*/ "$parent"/*/*/ \\
+      "$(dirname "$parent")"/*/ "$(dirname "$parent")"/*/*/; do
     [ -f "${{d}}{rel}" ] && ROOT="${{d%/}}" && break
   done
 fi

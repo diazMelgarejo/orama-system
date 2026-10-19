@@ -542,6 +542,16 @@ if [ -n "$_TO" ]; then "$_TO" N <cmd>; else <cmd>; fi
 **3. OpenClaw delegation key is `agents.defaults.subagents.allowAgents`** (or `agents.list[id].subagents.allowAgents`).
 The key `agents.bindings.*.allowAgents` is rejected by the oramaclaw control plane.
 
+## Cross-Agent Provenance Invariant
+
+All agent roles, harnesses, handoffs, reviews, and coordination records must
+follow `skills/gossip-bus/references/author-actor-takeover-policy.md`. Preserve
+the originating author independently from the current actor; represent identity
+verification truthfully; bound endorsements to independently checked evidence;
+and disclose a takeover before changing, committing, pushing, completing, or
+promoting another agent's work. No agent may fabricate another agent's pulse,
+status, authority, or authorship.
+
 ---
 
 ## Extended References
