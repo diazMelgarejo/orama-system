@@ -76,7 +76,9 @@ BINARY_REGISTRY: Mapping[str, BinaryRegistration] = MappingProxyType({
 
 def _is_bare_command(candidate: str) -> bool:
     """True when ``candidate`` names a command to look up, not a pathname."""
-    return not any(separator and separator in candidate for separator in (os.sep, os.altsep))
+    if "/" in candidate or "\\" in candidate:
+        return False
+    return not (sys.platform == "win32" and len(candidate) >= 2 and candidate[1] == ":")
 
 
 def _search_path() -> str:
@@ -110,12 +112,16 @@ def _find_bare_command(command: str) -> Optional[str]:
     supplied PATH. Joining each approved directory ourselves keeps a planted
     local command from shadowing a later, configured installation.
     """
-    extensions = _windows_executable_extensions() if sys.platform == "win32" else ()
     for directory in _search_path_entries():
         base = Path(directory) / command
         candidates = (base,)
-        if extensions and not base.suffix:
-            candidates = tuple(base.with_name(f"{base.name}{extension}") for extension in extensions)
+        if sys.platform == "win32":
+            extensions = _windows_executable_extensions()
+            candidates = (base, *(
+                base.with_name(f"{base.name}{extension}") for extension in extensions
+            ))
+            if base.suffix.casefold() not in extensions:
+                candidates = (*candidates[1:], base)
         for candidate in candidates:
             if candidate.is_file() and (sys.platform == "win32" or os.access(candidate, os.X_OK)):
                 return str(candidate)

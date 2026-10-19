@@ -192,6 +192,29 @@ def test_windows_bare_name_uses_path_entry_after_working_directory_shadow(
     assert Path(dispatcher.resolve_binary_path("codex")).samefile(binary)
 
 
+def test_windows_bare_dotted_name_uses_pathext_in_trusted_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A non-executable dotted command still receives the PATHEXT fallback."""
+    trusted = tmp_path / "trusted-bin"
+    trusted.mkdir()
+    binary = trusted / "codex.v2.CMD"
+    binary.write_text("fixture", encoding="utf-8")
+    monkeypatch.delenv("CODEX_BIN", raising=False)
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("PATHEXT", ".EXE;.CMD")
+    monkeypatch.setenv("PATH", str(trusted))
+    assert Path(dispatcher.resolve_binary_path("codex", "codex.v2")).samefile(binary)
+
+
+def test_windows_drive_qualified_name_is_not_a_bare_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Drive-qualified Windows names cannot escape the configured PATH entries."""
+    monkeypatch.setattr(sys, "platform", "win32")
+    assert not dispatcher._is_bare_command(r"C:codex.exe")
+
+
 def test_empty_path_entry_does_not_search_the_working_directory(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
