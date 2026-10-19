@@ -176,10 +176,13 @@ value alone may invalidate a permit (see retry identity).
    permit, attempt and reservation, unexpired and not already recorded, `R_f > R_p`, `R_f >`
    the finalization's signed `consumer_acked_through` (rule 3 again, read from the signed
    finalization rather than trusting the issuer's refusal at 4.2f), and `acked_through >=
-   R_f - 1`. The finalization delivers its own event: the consumer recomputes the event digest
-   for version `R_f` from its stored digest at `R_f - 1`, the version, kind `finalization` and
-   `finalization_id`, requires it to equal `revocation_event_digest`, and then records event
-   `R_f` as acknowledged. If it already holds version `R_f` with a different digest, or has
+   R_f - 1`. The finalization delivers its own event: the consumer builds exactly the canonical
+   JSON object defined in the finalization event encoding (the wrapper with `body`,
+   `kind`, `previous_event_digest` and `version`, where `previous_event_digest` is its stored
+   digest at `R_f - 1`, `version` is `R_f` and the body is `{"finalization_id": ...}`),
+   computes its SHA-256, requires the result to equal `revocation_event_digest`, and then
+   records event `R_f` as acknowledged. `finalization_id` alone is never the body or the
+   preimage. If it already holds version `R_f` with a different digest, or has
    recorded any divergence, it refuses. A mismatch or a divergence means the issuer's chain
    differs from what was acknowledged: refuse and keep the issuer quarantined. It is the
    linearization point for issuer-owned revocation versus dispatch: a revocation the issuer

@@ -273,3 +273,22 @@ def test_unknown_agent_on_command_line_is_rejected_before_resolution(
     assert exit_info.value.code == 2
     assert "invalid choice" in captured.err
     assert captured.out == ""
+
+def test_windows_candidates_use_pathext_spelling_in_configured_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """File names are built from PATHEXT as configured, so case-sensitive filesystems match.
+
+    The probe records the names tried, which keeps the check independent of whether the
+    host filesystem folds case (a lower-cased ``.cmd`` passes on macOS and fails on Linux).
+    """
+    tried: list[str] = []
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setenv("PATHEXT", ".EXE;.Cmd")
+    monkeypatch.setenv("PATH", str(tmp_path))
+    monkeypatch.setattr(Path, "is_file", lambda self: tried.append(self.name) or False)
+    assert dispatcher._find_bare_command("codex") is None
+    assert tried == ["codex.EXE", "codex.Cmd", "codex"]
+    tried.clear()
+    assert dispatcher._find_bare_command("codex.EXE") is None
+    assert tried == ["codex.EXE", "codex.EXE.EXE", "codex.EXE.Cmd"]

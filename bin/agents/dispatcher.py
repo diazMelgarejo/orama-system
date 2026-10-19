@@ -96,13 +96,18 @@ def _search_path_entries() -> tuple[str, ...]:
     return tuple(entry for entry in _search_path().split(os.pathsep) if entry)
 
 
-def _windows_executable_extensions() -> tuple[str, ...]:
-    """Return normalized executable suffixes used for Windows bare-name lookup."""
+def _windows_pathext() -> tuple[str, ...]:
+    """Return the PATHEXT suffixes exactly as configured, in order, without empty entries."""
     return tuple(
-        extension.strip().casefold()
+        extension.strip()
         for extension in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")
         if extension.strip()
     )
+
+
+def _windows_executable_extensions() -> tuple[str, ...]:
+    """Return normalized executable suffixes used to compare, never to build, file names."""
+    return tuple(extension.casefold() for extension in _windows_pathext())
 
 
 def _find_bare_command(command: str) -> Optional[str]:
@@ -116,11 +121,12 @@ def _find_bare_command(command: str) -> Optional[str]:
         base = Path(directory) / command
         candidates = (base,)
         if sys.platform == "win32":
-            extensions = _windows_executable_extensions()
+            # File names use the PATHEXT casing as configured, so a case-sensitive
+            # filesystem finds the same file Windows would; comparison is case-insensitive.
             candidates = (base, *(
-                base.with_name(f"{base.name}{extension}") for extension in extensions
+                base.with_name(f"{base.name}{extension}") for extension in _windows_pathext()
             ))
-            if base.suffix.casefold() not in extensions:
+            if base.suffix.casefold() not in _windows_executable_extensions():
                 candidates = (*candidates[1:], base)
         for candidate in candidates:
             if candidate.is_file() and (sys.platform == "win32" or os.access(candidate, os.X_OK)):
