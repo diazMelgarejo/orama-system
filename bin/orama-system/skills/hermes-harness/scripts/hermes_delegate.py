@@ -228,6 +228,23 @@ def _terminate_worker(worker: _Worker) -> None:
         except subprocess.TimeoutExpired:
             pass
         return
+    if sys.platform.startswith("linux"):
+        # A group-wide signal terminates the worker and its children together.
+        # If a child becomes a zombie first, its parent is already gone and
+        # PID 1 must reap it. Containers do not always provide a reaping PID 1,
+        # so terminate descendants first and let the direct worker reap them.
+        descendants = _linux_descendant_pids(proc.pid)
+        for pid in descendants:
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+        if descendants:
+            try:
+                proc.wait(timeout=5)
+                return
+            except subprocess.TimeoutExpired:
+                pass
     try:
         os.killpg(proc.pid, signal.SIGTERM)
     except (ProcessLookupError, PermissionError):
@@ -243,6 +260,40 @@ def _terminate_worker(worker: _Worker) -> None:
             proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             pass
+
+
+def _linux_descendant_pids(parent_pid: int) -> list[int]:
+    """Return live descendants in leaf-first order from Linux's proc table."""
+    children: dict[int, list[int]] = {}
+    try:
+        proc_entries = os.listdir("/proc")
+    except OSError:
+        return []
+    for entry in proc_entries:
+        if not entry.isdigit():
+            continue
+        try:
+            stat = open(f"/proc/{entry}/stat", encoding="utf-8").read()
+            fields = stat.rsplit(")", 1)[1].split()
+            pid, ppid = int(entry), int(fields[1])
+        except (IndexError, OSError, ValueError):
+            continue
+        children.setdefault(ppid, []).append(pid)
+
+    descendants: list[int] = []
+    seen: set[int] = set()
+
+    def collect(pid: int) -> None:
+        if pid in seen:
+            return
+        seen.add(pid)
+        for child_pid in children.get(pid, []):
+            collect(child_pid)
+        if pid != parent_pid:
+            descendants.append(pid)
+
+    collect(parent_pid)
+    return descendants
 
 
 def _parse_worker_output(worker: _Worker) -> dict[str, Any]:
