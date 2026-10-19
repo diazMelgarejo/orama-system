@@ -1,9 +1,9 @@
 # E1 C2 (Part 3): Integrated Schema Contract Amendment — Revocation, Cascade, and Retained-Anchor Checkpoints
 
-**Status:** PROPOSED AMENDMENT for independent review (Codex, Cline) and operator ratification.  
+**Status:** PROPOSED AMENDMENT for independent review (Codex, Cline) and operator ratification.
 **Precondition Context:** Answers E1 Section 14 Rule 3 and resolves items left "pending the
 integrated schema review" in [E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md](E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md)
-lines 485, 1023, and 1030.  
+lines 485, 1023, and 1030.
 **Companion Documents:**
 
 * Part 1: [`E1-C2-PURPOSE-VERSION-AND-REFUSAL-CONTRACT-2026-10-18.md`](E1-C2-PURPOSE-VERSION-AND-REFUSAL-CONTRACT-2026-10-18.md)
