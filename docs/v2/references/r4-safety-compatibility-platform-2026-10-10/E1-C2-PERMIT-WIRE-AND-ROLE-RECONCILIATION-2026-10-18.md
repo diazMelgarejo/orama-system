@@ -13,6 +13,28 @@ just before the consumer commits. "Step 4.3" is the consumer dispatch-authorizat
 No issuer call is ever made inside the 4.3 transaction: 4.1, 4.2 and 4.2f all complete first, so
 there is still no distributed transaction.
 
+## 0. The design in one page
+
+* **Flow.** Four steps: 4.1 permit request, 4.2 permit, 4.2f finalization, 4.3 the consumer
+  transaction that records the intent, consumes the use and writes the outbox item. No issuer
+  call is made inside 4.3.
+* **Who orders what.** The consumer orders its own facts at 4.3. The issuer orders its facts at
+  4.2f, and the finalization is itself an event in the issuer's hash-chained log, so a clean
+  rollback of the issuer shows up as a fork (decision 7).
+* **Identity.** One durable `attempt_id` names a dispatch attempt from before the first call, so
+  every ambiguous outcome can be named and an identical retry never mints a second object.
+* **Time.** 90 seconds for permit and finalization, strict expiry, a 15-second minimum window
+  before asking for a finalization (decisions 1 and 8).
+* **Unavailability.** Only effectful dispatch needs the issuer, and it fails closed; seven
+  independent controls, a breaker and four defined states keep an outage from becoming a bypass
+  (decision 3, section 3a).
+* **Replacement.** A grant that has any permit gets a new one only through the attested,
+  fenced, single-lineage replacement, and only for a transient delay, a cancellation or a loss
+  (decisions 2 and 5).
+* **Rollout.** One compatible Phylax release, staged by passing evidence, verifiers before
+  issuance, promoted by the operator on evidence from a named maintainer (decisions 4 and 9).
+* **Ratification.** By exact commit after independent review (decision 6).
+
 ## 1. Permit objects (proposed)
 
 Encoding follows the recovery-grant rules: canonical JSON, ASCII keys, strings and safe integers
@@ -65,6 +87,16 @@ different `attempt_id` or binding for the same permit is refused (proposed name
 `finalization.conflict`). Its lifetime is at most the permit's `expires_at` and at most the
 signed-policy finalization lifetime, which is 90 seconds (decision 1, section 6).
 
+**Catch-up in the response, and an opaque shared stream.** The chain is issuer-wide, so a consumer
+would otherwise have to acknowledge every other grant's and consumer's finalization events before
+it could finalize, and heavy traffic would stall it inside its 90-second window. The finalization
+response therefore also carries the issuer-signed events above the request's
+`consumer_acked_through` up to `R_f`, bounded by signed policy; a larger gap is refused as
+`finalization.catchup_required` and the consumer catches up on the stream first. The consumer
+ingests them contiguously and checks them for divergence exactly as it checks stream events.
+Finalization events on the shared stream carry no grant or consumer identifier: only the version,
+the kind, `finalization_id` (an opaque random identifier) and the previous digest.
+
 **Why the finalization is a chain event.** The scalar floors catch a rollback that happened
 before the finalization request: the consumer had already acknowledged versions past the restored
 counter, so the request's `consumer_acked_through` exceeds it and 4.2f refuses. They cannot catch
@@ -76,8 +108,8 @@ might legitimately create later. A new event is what differs. After a restore th
 event, at the latest its finalization event, takes a version the consumer may already hold with a
 different digest, because each `event_digest` commits to the previous one. The consumer sees the
 fork without clocks and without trusting the issuer's counter. The finalization also delivers its
-own event, so no stream round trip is needed for that event itself; events up to `R_f - 1`
-must still have been acknowledged, as before. The counter is issuer-wide, so nothing keyed to its
+own event, and the response carries the events below it, so no stream round trip is needed
+before step 4.3. The counter is issuer-wide, so nothing keyed to its
 value alone may invalidate a permit (see retry identity).
 
 **Step 4.3 (consumer transaction) requires all of:**
@@ -182,12 +214,18 @@ the consumer consumes the grant's single use inside 4.3, and refuses any later p
 finalization for a use it has already consumed, whatever the issuer holds.
 
 **Issuer storage (proposed).** One table `dispatch_permits` with `permit_id` primary key,
-`grant_id`, `attempt_id`, `binding_digest`, `ledger_store_id`, `reservation_id`, `request_digest`, `r_p`,
-`consumer_acked_through`, `requested_at`, `issued_at`, `expires_at`, `permit_bytes` (the canonical
-signed permit), `finalization_bytes` and `finalization_id` when present, a state (`issued`,
-`finalized`, `expired` or `abandoned`) and an optional `replaces_permit_id`, unique where present.
-A partial unique constraint permits at most one nonterminal permit for a grant; a replacement is
-allowed only by the proved-abandoned transition above, never by a second ordinary request.
+`grant_id`, `attempt_id`, `binding_digest`, `ledger_store_id`, `reservation_id`, `request_digest`,
+`r_p`, `consumer_acked_through`, `requested_at`, `issued_at`, `expires_at`, `permit_bytes` (the
+canonical signed permit), `finalization_bytes` and `finalization_id` when present, a state
+(`issued`, `finalized`, `expired` or `abandoned`) and an optional `replaces_permit_id`. Three
+constraints enforce the rules in the database, not only in code: at most one original permit (one
+with no `replaces_permit_id`) per `grant_id`, so an expired permit never lets an ordinary request
+insert a second row; at most one nonterminal permit per grant; and `replaces_permit_id` unique
+where present, so each permit has at most one successor. A replacement is allowed only by the
+proved-abandoned transition above, never by a second ordinary request. A second table
+`aborted_attempts` holds `attempt_id` (primary key), `grant_id`, `aborted_at` and the operator
+disposition reference; the issuer refuses a permit request whose `attempt_id` is in it. A grant
+with no permit row, for example after such an abort, has no conflict, and a new attempt proceeds.
 
 **Cascade acknowledgement.** The issuer emits revocation and cascade events with a gapless
 increasing `version`. Each event's `event_digest` commits to the previous event's digest and to
@@ -254,7 +292,17 @@ so the section 8.2 witness and quarantine stay required.
 
 Decision 3 scopes the issuer dependency to effectful dispatch. That scoping holds only if no
 configuration, classification mistake or bug can create an effect path that skips the permit. The
-controls below are independent, so one failing still leaves dispatch refused. The governing rule:
+controls below are independent, so one failing still leaves dispatch refused. Four terms are
+used exactly as defined here:
+
+| Term | Meaning |
+| --- | --- |
+| held | The attempt's reservation is kept and not freed |
+| spent | The grant's use is unavailable to any further attempt until a proof reopens it |
+| released | The reservation is freed, only on a proof: never transmitted, no permit exists (operator abort), or an attested non-commit under the fencing rules |
+| quarantined | Held and spent, with an alert; it leaves only by reconciliation |
+
+The governing rule:
 **unavailability is a state, never a verdict.** When the issuer cannot be reached, or its answer
 cannot be used, the only legal outcomes are to refuse and report unavailable and to hold the
 reservation. What may follow depends on what can be proved, as item 4 separates.
@@ -284,8 +332,14 @@ reservation. What may follow depends on what can be proved, as item 4 separates.
      `permit_id`.
    * *Admission cannot be proved* (no verified response by the deadline, so a request may have
      been admitted unseen): held, spent and quarantined. This is not an attested-release case.
-     It leaves quarantine only by an authenticated reconciliation against the issuer's record
-     for that `attempt_id`, under an operator disposition, never by a timeout.
+     It leaves quarantine only by reconciliation, never by a timeout. The operator uses a
+     read-only, operator-authenticated lookup by `attempt_id`, which never creates or changes
+     anything. If a permit or finalization exists, it is reported and the replacement path of
+     decision 2 applies, since the `permit_id` is now known. If none exists, the operator
+     disposition records an `aborted` tombstone for that `attempt_id` atomically, so a request
+     admitted late is refused; the reservation is then released and a new attempt may proceed.
+     A permit admitted unseen can only be an orphan: its signed response never reached the
+     consumer, so nothing can use it, and it expires within its lifetime.
 5. **One deadline.** An attempt's deadline is its permit's `expires_at`, or, until a permit is
    held, the attempt's start plus the permit lifetime. Every issuer call
    carries the remaining budget as its timeout, retries are identical requests with bounded
@@ -338,6 +392,19 @@ revocation are ordered by the issuer's finalization transaction; the consumer ve
 and acknowledges through `R_f`. Grant use is consumed at the consumer only after that finalization
 and its own gates pass." This pull request does not edit that contract.
 
+## 5a. Implementation delta (not applied here)
+
+The merged `decide_permit` in the runtime repository predates this text. Before the permit path is
+enabled it needs: `attempt_id` on the request and the stored permit, kept out of the binding
+digest but part of retry identity; a store lookup that returns any existing permit for the grant,
+terminal or not, so a new attempt conflicts instead of minting a second permit; the three database
+constraints, the `aborted_attempts` table and the operator lookup; and the finalization operation
+with its chain event and catch-up response. A retry with a higher acknowledgement already returns
+the stored permit there, because `consumer_acked_through` is outside the digest. None of this is a
+claim about the current runtime. The work is tracked as a queued follow-up in the runtime
+repository, started after this record merges, with failing-first and mutation-proven tests, one
+pull request.
+
 ## 6. Operator decisions
 
 **Decided 2026-10-19 (operator):**
@@ -346,8 +413,10 @@ and its own gates pass." This pull request does not edit that contract.
   effect classes. No per-class override is adopted; one needs a new decision.
 * **Decision 2, expired never-committed permit.** Assume spent first. A replacement is allowed
   only on the consumer's authenticated attestation that the cause is a transient delay, a
-  cancellation or a loss; an unknown or pending outcome, including an admission that cannot be
-  proved, stays spent, held and quarantined, and is not an attested-release case (section 3a).
+  cancellation or a loss. An unknown or pending outcome, including an admission that cannot be
+  proved, stays spent, held and quarantined until reconciled (section 3a); it is not an
+  attested-release case, but once reconciliation finds a permit the ordinary replacement path
+  applies.
 * **Decision 3, issuer availability.** Confirmed: no new hard dependency for serving,
   verification or non-effect operations. Effectful dispatch still fails closed without a
   permit, and an issuerless dispatch path is not adopted. Layered containment is section 3a.
