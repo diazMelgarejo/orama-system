@@ -251,6 +251,79 @@ class OramaToPTBridge:
             parent_orchestrator_id=self.parent_orchestrator_id,
         )
 
+    # ── Single worker dispatch (PT path) ─────────────────────────────────────
+
+    async def dispatch_worker(
+        self,
+        *,
+        role: str,
+        intent: str,
+        prompt: str,
+        specialization: Optional[str] = None,
+        backend_hint: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        constraints: Optional[List[str]] = None,
+        direct_binary: bool = False,
+        binary_name: Optional[str] = None,
+        binary_path: Optional[str] = None,
+        binary_args: Optional[List[str]] = None,
+        binary_timeout_sec: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """Dispatch one worker and return its result dict.
+
+        PT is the default runtime authority; orama just builds the spec.
+        This does NOT store state — orama is stateless.
+
+        When direct_binary=True, bypasses PT's OrchestrationSupervisor and
+        invokes the binary directly via dispatch_binary().  Supported binaries
+        are listed in BINARY_REGISTRY.
+        """
+        if direct_binary:
+            if binary_path:
+                binary = binary_path
+            elif binary_name:
+                entry = BINARY_REGISTRY.get(binary_name.lower())
+                if not entry:
+                    raise RuntimeError(
+                        f"Unknown binary_name={binary_name!r}. "
+                        f"Registered: {list(BINARY_REGISTRY)}"
+                    )
+                binary = os.getenv(entry["env_var"], "")
+                if not binary:
+                    raise RuntimeError(
+                        f"Env var {entry['env_var']!r} not set for "
+                        f"binary_name={binary_name!r}"
+                    )
+            else:
+                raise RuntimeError(
+                    "direct_binary=True requires binary_path or binary_name"
+                )
+
+            entry = BINARY_REGISTRY.get(binary_name.lower() if binary_name else {})
+            args = (entry.get("default_args", []) if entry else []) + (
+                binary_args or []
+            )
+            return await self.dispatch_binary(
+                binary=binary,
+                args=args,
+                prompt=prompt,
+                variable_syntax=(
+                    entry.get("variable_syntax", "stdin") if entry else "stdin"
+                ),
+                timeout_sec=binary_timeout_sec,
+            )
+
+        spec = self._build_spec(
+            role=role,
+            intent=intent,
+            prompt=prompt,
+            specialization=specialization,
+            backend_hint=backend_hint,
+            metadata=metadata or {},
+            constraints=constraints or [],
+        )
+        return await self._run_via_pt(spec)
+
     async def _run_via_pt(self, spec: Any) -> Dict[str, Any]:
         """Submit spec to PT's OrchestrationSupervisor and await result.
 
