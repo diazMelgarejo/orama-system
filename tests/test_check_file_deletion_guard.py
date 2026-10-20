@@ -17,6 +17,7 @@ EXIT_FILE_DELETION = 9
 
 
 def _run(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    """Run the guard script in ``repo`` with ``args`` and return the completed process."""
     command_env = os.environ.copy()
     if env:
         command_env.update(env)
@@ -31,6 +32,7 @@ def _run(repo: Path, *args: str, env: dict[str, str] | None = None) -> subproces
 
 
 def _init_repo(repo: Path) -> None:
+    """Create a repository with one committed file so the guard has a history to compare."""
     subprocess.run(["git", "init", "-q", "-b", "main"], check=True, cwd=repo)
     subprocess.run(["git", "config", "user.email", "test@example.com"], check=True, cwd=repo)
     subprocess.run(["git", "config", "user.name", "Test"], check=True, cwd=repo)
@@ -40,11 +42,13 @@ def _init_repo(repo: Path) -> None:
 
 
 def _stage_deletion(repo: Path) -> None:
+    """Delete the tracked file and stage the removal."""
     (repo / "tracked.txt").unlink()
     subprocess.run(["git", "add", "-u"], check=True, cwd=repo)
 
 
 def test_staged_clean_index_passes(tmp_path: Path) -> None:
+    """Staged clean index passes."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -56,6 +60,7 @@ def test_staged_clean_index_passes(tmp_path: Path) -> None:
 
 
 def test_staged_whole_file_deletion_blocks_with_path_and_symbol(tmp_path: Path) -> None:
+    """Staged whole file deletion blocks with path and symbol."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -93,6 +98,7 @@ def test_staged_rename_is_still_treated_as_a_deletion(tmp_path: Path) -> None:
     ],
 )
 def test_staged_deletion_requires_both_override_values(tmp_path: Path, env: dict[str, str]) -> None:
+    """Staged deletion requires both override values."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -104,6 +110,7 @@ def test_staged_deletion_requires_both_override_values(tmp_path: Path, env: dict
 
 
 def test_staged_deletion_allows_explicit_justified_override(tmp_path: Path) -> None:
+    """Staged deletion allows explicit justified override."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -123,6 +130,7 @@ def test_staged_deletion_allows_explicit_justified_override(tmp_path: Path) -> N
 
 
 def test_outgoing_range_whole_file_deletion_blocks(tmp_path: Path) -> None:
+    """Outgoing range whole file deletion blocks."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -162,6 +170,7 @@ def test_outgoing_range_restore_hint_uses_range_start(tmp_path: Path) -> None:
 
 
 def test_guard_is_wired_at_commit_and_push_boundaries() -> None:
+    """Guard is wired at commit and push boundaries."""
     pre_commit = (ROOT / ".githooks/pre-commit").read_text(encoding="utf-8")
     pre_push = (ROOT / ".githooks/pre-push").read_text(encoding="utf-8")
 
@@ -170,6 +179,7 @@ def test_guard_is_wired_at_commit_and_push_boundaries() -> None:
 
 
 def test_script_is_bash_32_syntax_compatible() -> None:
+    """Script is bash 32 syntax compatible."""
     result = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
 
@@ -181,6 +191,7 @@ def test_script_is_bash_32_syntax_compatible() -> None:
 
 
 def _git(repo: Path, *args: str) -> str:
+    """Run git in ``repo`` and return its stripped standard output."""
     return subprocess.run(
         ["git", *args], check=True, cwd=repo, capture_output=True, text=True, encoding="utf-8"
     ).stdout.strip()
@@ -188,6 +199,7 @@ def _git(repo: Path, *args: str) -> str:
 
 @pytest.mark.parametrize("renames_config", [None, "true", "false"])
 def test_staged_exact_git_mv_is_not_a_deletion(tmp_path: Path, renames_config: str | None) -> None:
+    """Staged exact git mv is not a deletion."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -202,6 +214,7 @@ def test_staged_exact_git_mv_is_not_a_deletion(tmp_path: Path, renames_config: s
 
 
 def test_staged_exact_move_into_a_subdirectory_is_not_a_deletion(tmp_path: Path) -> None:
+    """Staged exact move into a subdirectory is not a deletion."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -212,6 +225,7 @@ def test_staged_exact_move_into_a_subdirectory_is_not_a_deletion(tmp_path: Path)
 
 
 def test_outgoing_range_exact_rename_is_not_a_deletion(tmp_path: Path) -> None:
+    """Outgoing range exact rename is not a deletion."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -226,6 +240,7 @@ def test_outgoing_range_exact_rename_is_not_a_deletion(tmp_path: Path) -> None:
 
 
 def test_exact_rename_beside_a_real_deletion_blocks_only_the_deletion(tmp_path: Path) -> None:
+    """Exact rename beside a real deletion blocks only the deletion."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -262,6 +277,7 @@ def test_a_rename_with_a_single_edit_is_still_a_deletion_in_a_range(tmp_path: Pa
 
 
 def test_a_plain_deletion_is_still_blocked_after_an_unrelated_exact_rename(tmp_path: Path) -> None:
+    """A plain deletion is still blocked after an unrelated exact rename."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
