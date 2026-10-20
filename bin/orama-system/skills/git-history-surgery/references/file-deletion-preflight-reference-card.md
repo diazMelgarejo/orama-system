@@ -19,8 +19,11 @@ The guard has two independent layers:
 | Before commit | `--staged` | accidental removals placed in the index |
 | Before push | `--range <remote>..<local>` | commits made without hooks and the final outgoing tree |
 
-Both layers inspect only `git diff --diff-filter=D`. They do **not** block
-line deletions, ordinary edits, or renames.
+Both layers inspect only `git diff --diff-filter=D`, asking git for exact
+renames (`--find-renames=100%`) so a pure `git mv` is a move, not a deletion.
+They do **not** block line deletions, ordinary edits, or exact renames. A rename
+that also changes content is reported as a deletion (#349): at git's default 50%
+threshold a revised copy would otherwise mask a removal.
 
 ## Required proof bundle
 
