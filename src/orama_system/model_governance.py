@@ -1,8 +1,9 @@
 """Harness-path model governance pins for orama-system.
 
-Canonical rules live in Alexandria. This module loads the local pin file and
-refuses launches that violate it. It does not treat config flags, env vars,
-agent-writable files, or cached approvals as an escalation token.
+The proposed Alexandria rules inform the local pin file; adopting that source
+as authoritative requires a separate decision. This helper evaluates metadata
+against those pins, not signatures, bearer credentials, or task ownership.
+Config flags, env vars, agent-writable files and cached approvals are refused.
 
 This is methodology-side policy, not a second runtime router. It does not
 reorder the local-first frugality ladder. Cost-gate evaluation failures and
@@ -45,7 +46,7 @@ class LaunchSpec:
 
 @dataclass(frozen=True)
 class EscalationProof:
-    """Pointer to a real HITL proof. Never constructed from env/config flags."""
+    """Approval metadata; authenticity and task scope require external verification."""
 
     kind: str
     reference: str
@@ -54,6 +55,10 @@ class EscalationProof:
     effort: str | None = None
     fast: bool | None = None
     budget_cap: str | None = None
+    # Optional claims emitted by the trusted verifier.  This policy compares
+    # them when present; it does not establish their authenticity.
+    path: str | None = None
+    scope: str | None = None
 
 
 def _repo_root() -> Path:
@@ -125,7 +130,12 @@ def _anthropic_ungated_ids(cfg: Mapping[str, Any]) -> set[str]:
     return ids
 
 
+def _named_effort(spec: LaunchSpec) -> str | None:
+    return spec.effort or spec.reasoning_effort
+
+
 def proof_is_token(proof: EscalationProof | None, *, now: datetime | None = None) -> bool:
+    """Check metadata freshness and shape only, not signatures or authorization."""
     if proof is None:
         return False
     if proof.kind in FORBIDDEN_PROOF_KINDS:
@@ -151,6 +161,7 @@ def assert_launch_allowed(
     proof: EscalationProof | None = None,
     config: Mapping[str, Any] | None = None,
     now: datetime | None = None,
+    approval_scope: str | None = None,
 ) -> None:
     cfg = dict(config) if config is not None else load_model_governance()
     banned = {str(x) for x in cfg.get("banned_launch_ids") or []}
@@ -160,26 +171,63 @@ def assert_launch_allowed(
     if spec.launch_id in {"auto", "default"} and spec.agent:
         raise ModelGovernanceError("auto is editor-only; never for agents")
 
+    # R1: a presented proof must cover the exact requested launch tuple before
+    # any early return below; it is never silently ignored.
+    if proof is not None and not _token_covers(
+        spec, proof, now=now, approval_scope=approval_scope
+    ):
+        raise ModelGovernanceError(
+            "cloud escalation default-deny: proof expired or "
+            "model/effort/fast/path/scope mismatch"
+        )
+
     if spec.path == "cursor_grok_bot":
-        _assert_cursor_launch(spec, proof=proof, cfg=cfg, now=now)
+        _assert_cursor_launch(spec, proof=proof, cfg=cfg, now=now, approval_scope=approval_scope)
         return
     if spec.path == "anthropic":
-        _assert_anthropic_launch(spec, proof=proof, cfg=cfg, now=now)
+        _assert_anthropic_launch(spec, proof=proof, cfg=cfg, now=now, approval_scope=approval_scope)
         return
     if spec.path == "direct_xai":
-        if spec.launch_id != str(cfg["direct_xai"]["default"]["launch_id"]):
-            raise ModelGovernanceError("direct-xAI launch is default-deny without a listed default")
+        _assert_direct_xai_launch(spec, cfg=cfg)
         return
     raise ModelGovernanceError("unknown harness path")
 
 
 def _token_covers(
-    spec: LaunchSpec, proof: EscalationProof | None, *, now: datetime | None
+    spec: LaunchSpec,
+    proof: EscalationProof | None,
+    *,
+    now: datetime | None,
+    approval_scope: str | None = None,
 ) -> bool:
+    """True only if a fresh proof covers the whole normalized launch tuple.
+
+    Compared: model_id, normalized effort (effort or reasoning_effort), the
+    fast flag (anything but True is non-fast), ``path`` when the proof sets it,
+    and ``scope``. Scope is strict equality against ``approval_scope`` (None
+    matches None): a proof without a scope is refused when the caller passes a
+    scope, and a scoped proof is refused when the caller passes none.
+    """
     if not proof_is_token(proof, now=now):
         return False
     assert proof is not None
-    return proof.model_id == spec.launch_id
+    return (
+        proof.model_id == spec.launch_id
+        and proof.effort == _named_effort(spec)
+        and (proof.fast is True) == (spec.fast is True)
+        and (proof.path is None or proof.path == spec.path)
+        and proof.scope == approval_scope
+    )
+
+
+def _assert_gated_params(spec: LaunchSpec, row: Mapping[str, Any]) -> None:
+    wanted_effort = row.get("effort")
+    if wanted_effort is not None and _named_effort(spec) != str(wanted_effort):
+        raise ModelGovernanceError(
+            f"{spec.launch_id} requires effort {wanted_effort} (set explicitly)"
+        )
+    if "fast" in row and spec.fast is not bool(row["fast"]):
+        raise ModelGovernanceError(f"{spec.launch_id} requires fast={row['fast']}")
 
 
 def _assert_cursor_launch(
@@ -188,12 +236,19 @@ def _assert_cursor_launch(
     proof: EscalationProof | None,
     cfg: Mapping[str, Any],
     now: datetime | None,
+    approval_scope: str | None = None,
 ) -> None:
+    def covers() -> bool:
+        return _token_covers(spec, proof, now=now, approval_scope=approval_scope)
+
+    if spec.launch_id.startswith("claude-"):
+        _assert_anthropic_launch(spec, proof=proof, cfg=cfg, now=now, approval_scope=approval_scope)
+        return
     if spec.fast is True:
-        if spec.launch_id == "composer-2.5" and _token_covers(spec, proof, now=now):
+        if spec.launch_id == "composer-2.5" and covers():
             return
         raise ModelGovernanceError("fast mode requires an operator request plus a real escalation token")
-    if spec.effort not in (None, "medium") and not _token_covers(spec, proof, now=now):
+    if spec.effort not in (None, "medium") and not covers():
         raise ModelGovernanceError("non-medium effort requires an escalation token")
     if spec.launch_id in _ungated_cursor_ids(cfg):
         if spec.launch_id == "composer-2.5" and spec.fast is not False:
@@ -203,10 +258,11 @@ def _assert_cursor_launch(
         return
     gated = cfg["cursor_grok_bot"].get("gated") or {}
     if spec.launch_id in gated:
-        if not _token_covers(spec, proof, now=now):
+        if not covers():
             raise ModelGovernanceError("cloud escalation default-deny: escalation token required")
+        _assert_gated_params(spec, gated[spec.launch_id])
         return
-    if _token_covers(spec, proof, now=now):
+    if covers():
         return
     raise ModelGovernanceError("cloud escalation default-deny: unlisted Cursor model")
 
@@ -217,22 +273,36 @@ def _assert_anthropic_launch(
     proof: EscalationProof | None,
     cfg: Mapping[str, Any],
     now: datetime | None,
+    approval_scope: str | None = None,
 ) -> None:
+    # R2: fast mode is not a supported escalation for this policy; refuse it
+    # before any ungated-model early return.
+    if spec.fast is True:
+        raise ModelGovernanceError("fast mode is unsupported for this Anthropic policy")
     if spec.launch_id in _anthropic_ungated_ids(cfg):
-        if spec.effort != "medium":
+        if _named_effort(spec) != "medium":
             raise ModelGovernanceError("Sonnet default is medium effort, set explicitly")
         return
     gated = cfg["anthropic"].get("gated") or {}
     row = gated.get(spec.launch_id)
     if row is None:
         raise ModelGovernanceError("cloud escalation default-deny: unlisted Anthropic model")
-    if not _token_covers(spec, proof, now=now):
+    if not _token_covers(spec, proof, now=now, approval_scope=approval_scope):
         raise ModelGovernanceError("cloud escalation default-deny: escalation token required")
+    _assert_gated_params(spec, row)
     requires = row.get("requires") or []
     if isinstance(requires, str):
         requires = [requires]
     if "budget_cap" in requires and not (proof and proof.budget_cap):
         raise ModelGovernanceError("Fable requires a hard budget cap on the escalation approval")
+
+
+def _assert_direct_xai_launch(spec: LaunchSpec, cfg: Mapping[str, Any]) -> None:
+    row = cfg["direct_xai"]["default"]
+    if spec.launch_id != str(row["launch_id"]):
+        raise ModelGovernanceError("direct-xAI launch is default-deny without a listed default")
+    if spec.reasoning_effort != str(row["reasoning_effort"]):
+        raise ModelGovernanceError("direct-xAI default is grok-4.6 with reasoning_effort medium")
 
 
 def evaluate_cost_gate(*, cap_evaluable: bool, remaining: int | None) -> None:
