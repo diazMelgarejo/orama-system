@@ -20,10 +20,10 @@ source/test correspondence, or reviewer endorsement supplies no ratification or 
 authority. No serving, production emission, or pin promotion is authorized; `ORAMA_GRANT_SERVING`
 remains unset.
 
-**Reference revision:** E1 and Parts 1–2 links below name sections in that historical ratified
-commit, without changing their original status text or bytes. The status addendum is linked at
-Orama review base `55ff8ef58ef6b6202f6f521c8b5b5a7452281e1c`. Section numbers are document
-identifiers, not mutable file-line positions.
+**Reference revision:** Relative links below navigate the repository's current documents.
+Historical evidence is bound separately to the immutable snapshots in Section 7, without
+changing their original status text or bytes. Section numbers are document identifiers,
+not mutable file-line positions.
 
 ---
 
@@ -124,7 +124,13 @@ checkpoint envelope is required.
 3. **Anchor Event Retention:** The event at the prune boundary (the "anchor event") is **never
    removed** from the hot store. It is retained as the new base of the active chain.
 
-### 3.3 Consumer Anchor Floor Invariant (Consumer-Local Rule 4)
+<a id="33-consumer-anchor-floor-invariant-consumer-local-rule-4"></a>
+
+### 3.3 Consumer Anchor Floor Invariant (Additional Consumer-Local Gate)
+
+The earlier fragment `#33-consumer-anchor-floor-invariant-consumer-local-rule-4` referred
+to this section. Its former label conflated the proposed floor check with the existing
+Step 4.3 Rule 4 revocation check; those are separate gates.
 
 When a consumer bootstraps from a pruned anchor at $\text{anchor\_version} > 1$:
 
@@ -146,12 +152,13 @@ When a consumer bootstraps from a pruned anchor at $\text{anchor\_version} > 1$:
      must never reset, lower, or otherwise rewrite an acknowledged high-water mark or anchor floor.
 2. **Pre-Anchor Revocation Rejection (Consumer-Side Gate):** To prevent the pre-anchor revocation
    blind-spot attack (where a pre-anchor revocation is invisible to the bootstrapped consumer),
-   Step 4.3 Rule 4 (acknowledgement coverage) enforces:
+   this proposed additional consumer-local anchor-floor gate enforces:
    $$\text{permit}["revocation\_version"] \ge \text{consumer}["anchor\_version"]$$
-   Any permit presenting $R_p < \text{anchor\_version}$ fails consumer Step 4.3 acknowledgement
+   Any permit presenting $R_p < \text{anchor\_version}$ fails the proposed anchor-floor gate
    coverage (the consumer has not witnessed and cannot verify events prior to its anchor floor).
    The caller must obtain a fresh permit re-issued against the current chain head. This is a
-   consumer-local dispatch check; no new shared wire refusal code is added to Part 1.
+   consumer-local dispatch check, separate from Rule 4's acknowledged-event revocations and
+   the acknowledgement coverage in Rules 2, 3 and 5; no new shared wire refusal code is added.
 
 ---
 
@@ -176,7 +183,7 @@ condition, not evidence of no affected work.
 | **`revocation` Event Body** | `subject_kind` (`"grant" \| "approval" \| "issuer"`), `subject_id` (`str`: grant_id, second_approval_ref, or issuer_id) | [Part 2 Section 1, Step 4.3 Rule 4][wire-objects]; proposed body in [Section 1](#1-minimal-revocation-event-body) |
 | **`cascade` Event Body** | `approval_id` (`str`: second_approval_ref), `grant_ids` (`list[str]`), `issuer_authority_version` (`int`) | [E1 Section 13.4, Second approval][e1-approval]; proposed body in [Section 2](#2-minimal-cascade-event-body) |
 | **Anchor Checkpoint** | Retained `issuer_events` row: `version`, `kind`, `body`, `previous_event_digest`, `event_digest`, `issuer_key_id`, `signature` | [Part 2 Section 1, Capacity and retention][wire-objects]; proposed equivalence in [Section 3.1](#31-event-as-checkpoint-equivalence) |
-| **Consumer Anchor Floor** | Proposed `anchor_version` in `issuer_cascade_ack`; gating $R_p \ge \text{anchor\_version}$ under Step 4.3 Rule 4 | [Part 2 Section 1, Capacity and retention / Step 4.3][wire-objects]; proposed floor in [Section 3.3](#33-consumer-anchor-floor-invariant-consumer-local-rule-4) |
+| **Consumer Anchor Floor** | Proposed `anchor_version` in `issuer_cascade_ack`; additional consumer-local gate requiring $R_p \ge \text{anchor\_version}$ | [Part 2 Section 1, Capacity and retention / Step 4.3][wire-objects]; proposed floor in [Section 3.3](#33-consumer-anchor-floor-invariant-additional-consumer-local-gate), separate from Rule 4's revocation check |
 | **Grant v2 (Historical Part 1; Not Re-ratified Here)** | 19 closed fields from Part 1 Section 3.1 | [Part 1 Section 3.1, Proposed effect-grant fields (closed, exact set)][purpose-fields]; historical status per [addendum][status] |
 
 ## 6. Source and Test Crosswalk (Review Evidence, Not Adoption)
@@ -201,16 +208,29 @@ The [consumer test `test_ingest_accepts_revocation_events_and_authorize_ignores_
 explicitly separates opaque event ingestion from revocation interpretation. Do not count ingestion
 coverage as proof that the proposed revocation/cascade bodies or consumer anchor floor are implemented.
 
-[e1-schema]: https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#13-specifications-closing-the-open-semantics-proposed-for-independent-review
-[e1-open]: https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#not-resolved-from-repository-sources
-[e1-approval]: https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#134-second-approval-decision-3-the-conditions-recorded-in-section-11
-[e1-retention]: https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#133-retention-decision-2
-[e1-tests]: https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#91-test-map-resolves-e1-r09
-[purpose]: https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-C2-PURPOSE-VERSION-AND-REFUSAL-CONTRACT-2026-10-18.md
-[purpose-fields]: https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-C2-PURPOSE-VERSION-AND-REFUSAL-CONTRACT-2026-10-18.md#31-proposed-effect-grant-fields-closed-exact-set
-[wire]: https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-C2-PERMIT-WIRE-AND-ROLE-RECONCILIATION-2026-10-18.md
-[wire-objects]: https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-C2-PERMIT-WIRE-AND-ROLE-RECONCILIATION-2026-10-18.md#1-permit-objects-proposed
-[status]: https://github.com/diazMelgarejo/orama-system/blob/55ff8ef58ef6b6202f6f521c8b5b5a7452281e1c/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/2026-10-19-e1-specification-ratification-addendum.md#3-scope-of-parts-12-ratification-and-part-3-dependency
+## 7. Immutable Historical Evidence
+
+The relative links above are navigation. These explicit full-commit evidence links preserve
+the historical bytes used for this proposal; they do not follow later repository edits.
+Their absolute URLs are intentional evidence identifiers, including for this repository.
+
+| Source | Immutable evidence snapshot |
+| :--- | :--- |
+| E1 and its named sections | [E1 at the recorded Parts 1–2 revision](https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md) |
+| Part 1 purpose and fields | [Part 1 at the recorded revision](https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-C2-PURPOSE-VERSION-AND-REFUSAL-CONTRACT-2026-10-18.md) |
+| Part 2 permit and dispatch rules | [Part 2 at the recorded revision](https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-C2-PERMIT-WIRE-AND-ROLE-RECONCILIATION-2026-10-18.md) |
+| Ratification scope addendum | [Addendum at this proposal's review base](https://github.com/diazMelgarejo/orama-system/blob/55ff8ef58ef6b6202f6f521c8b5b5a7452281e1c/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/2026-10-19-e1-specification-ratification-addendum.md) |
+
+[e1-schema]: E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#13-specifications-closing-the-open-semantics-proposed-for-independent-review
+[e1-open]: E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#not-resolved-from-repository-sources
+[e1-approval]: E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#134-second-approval-decision-3-the-conditions-recorded-in-section-11
+[e1-retention]: E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#133-retention-decision-2
+[e1-tests]: E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#91-test-map-resolves-e1-r09
+[purpose]: E1-C2-PURPOSE-VERSION-AND-REFUSAL-CONTRACT-2026-10-18.md
+[purpose-fields]: E1-C2-PURPOSE-VERSION-AND-REFUSAL-CONTRACT-2026-10-18.md#31-proposed-effect-grant-fields-closed-exact-set
+[wire]: E1-C2-PERMIT-WIRE-AND-ROLE-RECONCILIATION-2026-10-18.md
+[wire-objects]: E1-C2-PERMIT-WIRE-AND-ROLE-RECONCILIATION-2026-10-18.md#1-permit-objects-proposed
+[status]: 2026-10-19-e1-specification-ratification-addendum.md#3-scope-of-parts-12-ratification-and-part-3-dependency
 [issuer-store]: https://github.com/oramasys/phylax/blob/2d45556493190b1ca2a58ccede5b6b19d1daa1ad/src/phylax/dispatch_permit_store.py
 [issuer-tests]: https://github.com/oramasys/phylax/blob/2d45556493190b1ca2a58ccede5b6b19d1daa1ad/src/tests/test_dispatch_permit_store.py
 [consumer-store]: https://github.com/oramasys/oramasys/blob/4c67d37c624d6bea1d4953c9777962d1f8e42a3c/src/orama/graph/dispatch_attempts.py
