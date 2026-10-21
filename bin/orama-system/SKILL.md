@@ -12,6 +12,15 @@ version: 1.1.1.0
 license: Apache 2.0
 compatibility: claude-code, claude-desktop
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
+triggers:
+  - ultrathink
+  - think deeply
+  - 5-stage
+  - verify before done
+  - content insertion
+  - AFRP
+  - CIDF
+  - oramasys
 sub_skills:
   - path: afrp/SKILL.md
     trigger: "Query is non-trivial, audience-dependent, or open-ended (Type B/C/D)"
@@ -67,6 +76,12 @@ orama-system is meant to become:
 - A **disciplined intelligence pipeline** — the 5-stage flow from context to crystallization, so insight becomes action and then reusable knowledge.
 - An **orchestration** layer — a meta-intelligence/delegation runtime above infrastructure and middleware, with clear boundaries/invariants.
 - A “delegate, not decider” runtime — it should orchestrate and execute resolved decisions, not re-derive gateway policy (teleology of humility + clarity in system role).
+
+## Purpose
+
+Use this mother skill for any non-trivial, multi-step, design-heavy or high-stakes task: it routes the
+request through the AFRP gate and a mode router, applies the 5-stage method with CIDF-governed writes,
+and ends in verified, crystallized lessons. Operational detail lives in `references/` cards.
 
 ## Pre-Flight: Spec Contract
 
@@ -192,14 +207,10 @@ execute_method() -> visual_ok? --no--> refresh_page()
 
 ## Markdown Editing Rule
 
-For any `*.md` write or edit:
-
-1. Read PT `.agent` development memory and `docs/wiki/README.md` first if the change touches repo guidance or a moved doc.
-2. Keep all links relative and GitHub-renderable; do not use absolute filesystem paths or sibling checkout paths.
-3. If a markdown file moves or is renamed, preserve a repo-wide redirect trail by updating the canonical index or adding a `Previous path` / `Canonical path` note where appropriate.
-4. Warn and ask the user before adding a new markdown file over 200 lines or growing an existing markdown file over 500 lines. Suggest moving details to `references/`, `docs/wiki/`, or a sub-skill.
-5. Before committing `*.md`, inspect the diff for broken anchors, stale paths, and missing redirect notes.
-6. Repair mechanical lint findings (blank lines, line length) with `scripts/review/md_lint_fix.py` before hand edits; see `references/markdown-lint-fix.md`.
+For any `*.md` write or edit: keep links relative, preserve redirect trails when files move, ask before
+creating a markdown file over 200 lines or growing one past 500, inspect the diff for broken anchors, and
+repair mechanical lint with `scripts/review/md_lint_fix.py`. All six steps:
+[`references/markdown-editing-rule.md`](references/markdown-editing-rule.md).
 
 ## MODE 1: Inline Single-Agent (Simple Tasks)
 
@@ -292,18 +303,10 @@ Config: `config/agent_registry.json` + `config/routing_rules.json`
 
 ### AutoResearch Integration (Mode 3 Task Type)
 
-When the coordinating system reports **`task_type`** of **`autoresearch`** or **`ml-experiment`** (from **Perpetua-Tools**):
-
-1. **Defer execution topology** to Perpetua-Tools: `POST /autoresearch/sync` must succeed (`sync_ok == true`) before deep multi-step planning assumes the GPU workspace is ready.
-2. **Reasoning layer (this repo)**: apply **CIDF / ultrathink** methodology for hypotheses, critique, and next-step narrative — but **do not** assume cloud models for autoresearch unless the user explicitly overrides (see Perpetua-Tools `SKILL.md` “autoresearch Tasks”).
-3. **GPU lock & metrics**: treat **`swarm_state.md`** (IDLE/BUSY) and **`log.txt` / `val_bpb`** as the source of truth for whether a run is active and whether metrics are valid.
-4. **Cross-repo stack**: Perpetua-Tools (orchestrator) → orama-system (reasoning) → ECC Tools (optional parallel executors) → Karpathy autoresearch loop on the GPU host.
-
-For local setup work inside Perpetua-Tools, the Perplexity client now exposes optional `base_url` and `timeout` overrides, and the smoke-test script accepts the same values:
-
-```bash
-python scripts/test_perplexity.py --validate --base-url https://api.perplexity.ai --timeout 30
-```
+When Perpetua-Tools reports `task_type` of `autoresearch` or `ml-experiment`: defer execution topology
+to Perpetua-Tools (`POST /autoresearch/sync` must succeed first), reason here with CIDF / ultrathink, and
+treat `swarm_state.md` and `log.txt` / `val_bpb` as the source of truth. Detail:
+[`references/autoresearch-task-type.md`](references/autoresearch-task-type.md).
 
 ## The 6 Directives (Always Active, All Modes)
 
@@ -352,75 +355,24 @@ python scripts/test_perplexity.py --validate --base-url https://api.perplexity.a
 
 ## Quick Start (Usage Guide)
 
-### 1. Activation
-
-Trigger the full 5-stage process with:
-
-- `ultrathink this`
-- `apply the system to: [your task]`
-- `production-ready [task]`
-
-### 2. Mandatory Workflow
-
-Follow the 6 directives in every non-trivial task:
-
-1. **Plan**: `./scripts/create_task_plan.sh "Build feature"`
-2. **Execute**: Build stage-by-stage (Context -> Architect -> Refine -> Execute -> Crystallize)
-3. **Verify**: `python scripts/verify_before_done.py` (Must PASS before done)
-4. **Learn**: `PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --quick` (Run after any correction)
-
-### 3. Integrated Frameworks
-
-- **AFRP**: Pre-router gate. Classifies and clarifies intent before architecture.
-- **CIDF v1.2**: Content insertion governance. Start at rank 1 (direct_form_input) for every write.
+Trigger the full 5-stage process with `ultrathink this`, `apply the system to: [your task]`, or
+`production-ready [task]`. Workflow commands, the six-directive checklist and the integrated
+frameworks: [`references/quick-start-usage-guide.md`](references/quick-start-usage-guide.md).
 
 > **Historical Note:** The canonical HTTP path is `/oramasys`; legacy `/ultrathink` is implemented via `api_server.py` as a deprecated v1.x compatibility shim.
 
-## OpenClaw Multi-Agent Bridge (Tier 2)
+## OpenClaw and Hermes Bridges (Tier 2)
 
-Use the `mcp-oramasys` tool to offload heavy reasoning through the
-OpenClaw gateway at `127.0.0.1:18789`. Model selection is automatic — OpenClaw
-reads `~/.openclaw/openclaw.json` and routes each `agent_id` to the correct
-live provider (LM Studio / Ollama, Mac / Windows GPU).
-
-### Capabilities
-
-- `openclaw_chat`: Route by role (`coder`, `orchestrator`, `mac-researcher`, `win-researcher`)
-- `openclaw_list_agents`: List agents registered in `~/.openclaw/openclaw.json`
-- `openclaw_orchestrate`: Dispatch Stage 4 execution tasks via OpenClaw gateway
-- `openclaw_health`: Verify gateway is running at `127.0.0.1:18789`
-
-## Hermes Cross-Harness Bridge (Tier 2 sibling)
-
-Use [`skills/hermes-harness/SKILL.md`](skills/hermes-harness/SKILL.md) when
-Hermes is the operator shell for PT-orama work. Hermes consumes canonical
-skills, MCP conventions, and bounded partner prompts; OpenClaw remains the
-runtime gateway/configuration fabric. Do not import raw `~/.hermes` state,
-secrets, personal memory, or local business artifacts into the repo.
-
-Hermes worker default: bounded coding partner. The main orama agent keeps
-judgment, CIDF write discipline, and final synthesis.
-
-Companion context:
-
-- `skills/hermes-harness/references/ecc-hermes-cross-harness.md` for ECC import
-  decisions and cross-harness boundaries.
-- `../../ANTIGRAVITY.md` and `../../.agent/AGENTS.md` for Antigravity project
-  wiring that points back to canonical orama skills instead of copying them.
-- `../../docs/wiki/15-hermes-windows-harness.md` for the Windows PATH,
-  `HERMES_GIT_BASH_PATH`, and explicit Hermes one-shot provider route.
+Offload heavy reasoning through the OpenClaw gateway with the `mcp-oramasys` tool; Hermes is the operator
+shell for PT-orama work while OpenClaw stays the runtime fabric. Capabilities and contract:
+[`references/bridges-openclaw-hermes.md`](references/bridges-openclaw-hermes.md) and
+[`skills/hermes-harness/SKILL.md`](skills/hermes-harness/SKILL.md).
 
 ## First-Run Bootstrap
 
-New machine or fresh checkout:
-
-```bash
-bash bin/orama-system/scripts/first-run-install.sh status    # fast probe
-bash bin/orama-system/scripts/first-run-install.sh install  # idempotent §0 checklist
-bash bin/orama-system/scripts/install-mcp-stack.sh          # MCP workers (separate)
-```
-
-Full steps: [`references/first-run-install.md`](references/first-run-install.md) · Agent workflow: [`skills/first-run-setup/SKILL.md`](skills/first-run-setup/SKILL.md) · **E2E (install → MCP → code review):** [`../../docs/how-to/first-run-and-code-review.md`](../../docs/how-to/first-run-and-code-review.md) · **Host surfaces:** [`../../docs/reference/agent-first-open-visibility.md`](../../docs/reference/agent-first-open-visibility.md)
+New machine or fresh checkout: run `bash bin/orama-system/scripts/first-run-install.sh status`, then
+`install`. Commands and full steps: [`references/first-run-install.md`](references/first-run-install.md)
+(Appendix B) · agent workflow: [`skills/first-run-setup/SKILL.md`](skills/first-run-setup/SKILL.md).
 
 ## References (Progressive Disclosure)
 
@@ -438,6 +390,9 @@ Load on demand for deeper context:
 - `templates/task-plan.md` — task planning template (Directive #1)
 - `templates/verification-checklist.md` — pre-completion checklist (Directive #4)
 - `templates/lessons-log.md` — self-improvement log (Directive #3)
+- `references/mother-skill-extended-references.md` — full extended reference table (moved verbatim); key
+  entries: `references/collaborative-reasoning-safety.md` (M3), `references/communication-guidelines.md` (M6),
+  `references/local-api-fallback.md`, `docs/v2/references/ORAMASYS-MASTERY-v3.md`
 
 ---
 
@@ -450,69 +405,28 @@ agent's SOUL.md and session start.
 
 → Full protocol: `references/multi-agent-collaboration-protocol.md` (load before any multi-agent session).
 
-## Code Exploration Order
-
-Use code-review-graph MCP tools BEFORE Grep/Read for any multi-file question. Chain: code-review-graph (blast-radius) → gbrain code-def (symbols) → gbrain search (decisions) → Read (confirmed files only). Never default to Grep for code questions.
-
-**RAG wiring (CLI + Desktop) — single enforcer:** the semantic lane needs the gbrain + CRG MCP servers registered in both surfaces. Do NOT re-check this per skill — run the canonical `python3 scripts/ensure-rag-mcp.py [--apply]` (also run by `start.sh`). If CRG's MCP is down, its semantic search has no CLI fallback → degrade to `gbrain search`/`code-def` (same bge-m3 vector space). Reconnect recipe: `code-review` skill § "Fix: MCP disconnected".
-
 ## Search Policy
 
-**RULE: Never guess when information is scarce.**
-Search in this order — stop at the first satisfying result:
-
-1. `/sync-gbrain` + `gbrain query "<question>"` — local semantic memory, zero cost
-2. `code-review-graph: semantic_search_nodes` — structural code context
-3. Brave Search API — web facts, current state
-4. Perplexity API (inline) — deep web synthesis
-5. Grok API — last resort only
-
-**NEVER:** parallel-fire all search tools. Use the cheapest first.
-**ALWAYS:** `AskUserQuestion` for decisions — never auto-select between ambiguous options.
-
-**Extraction, not discovery:** once this chain finds a URL, use
-[`skills/firecrawl/SKILL.md`](skills/firecrawl/SKILL.md) to scrape,
-interact with, parse, or monitor it — Firecrawl sits downstream of this
-policy, it doesn't replace it.
+**RULE: Never guess when information is scarce.** Cheapest source first, stop at the first satisfying
+result: gbrain → code-review-graph → Brave → Perplexity → Grok (last resort). Never parallel-fire;
+`AskUserQuestion` for ambiguous decisions. **Code Exploration Order:** code-review-graph → gbrain
+code-def → gbrain search → Read; never default to Grep. Full chain, RAG wiring and MCP reconnect recipe:
+[`references/search-and-code-exploration-policy.md`](references/search-and-code-exploration-policy.md).
 
 ## Windows Coder Pool
 
 **RULE: Every available Windows coder MUST be given work as soon as it is idle.**
 
 Endpoint pool: `$WIN_CODER_ENDPOINTS` (default: `192.168.254.103:1234`)
+Dispatch protocol: [`references/windows-coder-pool.md`](references/windows-coder-pool.md).
 
-Dispatch protocol:
+## OmniRoute and Periscope ECC Lazy-Sidecars (Optional)
 
-1. Before routing any task to Mac-only paths, check if a Windows coder is free.
-2. If free AND task is compatible (Python, Go, TypeScript, general coding):
-   → dispatch to Windows coder FIRST.
-3. If offline or no model loaded: skip silently, log WARN, do not fail.
-4. As more Windows coders are added to `$WIN_CODER_ENDPOINTS`, they join the pool
-   automatically — same rule applies to all.
-
-**Never leave a Windows coder idle if pending compatible work exists.**
-
-## OmniRoute Lazy-Sidecar (Optional Parallel Dispatch)
-
-> **NEVER install. NEVER require. NEVER fail if absent.**
-> **CURRENTLY DISABLED (2026-06-14).** Skip probe entirely. Use Local API Fallback below.
-> To re-enable: see `skills/omniroute/SKILL.md § Re-enable OmniRoute`.
-
-Optional local HTTP MCP server (port 20128) that fans tasks to free OpenRouter/AgentRouter
-models in parallel. Probe once at session start (token from `$OMNIROUTE_TOKEN`, never
-hardcoded); if `running`/`started`, route fan-out subtasks through it; if `unavailable`,
-continue silently on the standard stack — never warn or suggest installing it.
-
-→ Canonical sidecar (probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook): `skills/omniroute/SKILL.md`.
-
-## Periscope ECC Lazy-Sidecar (Optional Mirror Verify)
-
-> **NEVER install. NEVER require. NEVER fail if absent.**
-
-When a periscope clone with ECC bundle paths exists, agents may run the idempotent
-mirror verifier. If absent, skip silently.
-
-→ Canonical sidecar (probe + mirror contract + dependency-instinct pair policy): `skills/periscope-ecc/SKILL.md`.
+> **NEVER install. NEVER require. NEVER fail if absent.** OmniRoute is **CURRENTLY DISABLED (2026-06-14)**:
+> skip the probe and use Local API Fallback below. Detail:
+> [`references/optional-sidecars.md`](references/optional-sidecars.md); canonical sidecars:
+> [`skills/omniroute/SKILL.md`](skills/omniroute/SKILL.md),
+> [`skills/periscope-ecc/SKILL.md`](skills/periscope-ecc/SKILL.md).
 
 ## Local API Fallback (when no external API is reachable)
 
@@ -523,51 +437,14 @@ Every tier check: ≤3s timeout. Fail loudly if `$LM_STUDIO_WIN_ENDPOINTS` is se
 
 ## Shell Portability Invariants (all agents / all scripts)
 
-**1. `codex review` always needs `< /dev/null`.**
-Without it the process blocks on stdin indefinitely — the hang is invisible.
-
-```bash
-codex review "<prompt>" -c 'model_reasoning_effort="high"' < /dev/null
-```
-
-**2. Never use bare `timeout N <cmd>` on macOS.** GNU `timeout` is absent on stock macOS. Use:
-
-```bash
-_TO=$(command -v gtimeout 2>/dev/null || command -v timeout 2>/dev/null || echo "")
-if [ -n "$_TO" ]; then "$_TO" N <cmd>; else <cmd>; fi
-```
-
-`gtimeout` = Homebrew coreutils. `timeout` = Linux. Omit the wrapper only when hanging is safe to ignore.
-
-**3. OpenClaw delegation key is `agents.defaults.subagents.allowAgents`** (or `agents.list[id].subagents.allowAgents`).
-The key `agents.bindings.*.allowAgents` is rejected by the oramaclaw control plane.
+(1) `codex review` always needs `< /dev/null`; (2) never bare `timeout N <cmd>` on macOS (use
+`gtimeout`/`timeout` detection); (3) the OpenClaw delegation key is
+`agents.defaults.subagents.allowAgents`. Snippets:
+[`references/shell-portability-invariants.md`](references/shell-portability-invariants.md).
 
 ## Cross-Agent Provenance Invariant
 
-All agent roles, harnesses, handoffs, reviews, and coordination records must
-follow `skills/gossip-bus/references/author-actor-takeover-policy.md`. Preserve
-the originating author independently from the current actor; represent identity
-verification truthfully; bound endorsements to independently checked evidence;
-and disclose a takeover before changing, committing, pushing, completing, or
-promoting another agent's work. No agent may fabricate another agent's pulse,
-status, authority, or authorship.
-
----
-
-## Extended References
-
-| Reference | Content |
-| --- | --- |
-| `references/amplifier-principle.md` | Full Amplifier Principle essay |
-| `references/oramasys-5-stages.md` | Deep dive: 5-stage methodology |
-| `references/collaborative-reasoning-safety.md` | Multi-agent safety (M3) |
-| `references/communication-guidelines.md` | Writing guidelines (M6) |
-| `references/multi-agent-collaboration-protocol.md` | Pre-session sync, scope claims, version-bump registry, conflict recovery |
-| `skills/omniroute/SKILL.md` | Canonical OmniRoute sidecar — probe + parallel-dispatch + ops/config/password reset + disable/re-enable runbook |
-| `skills/periscope-ecc/SKILL.md` | Periscope ECC lazy sidecar — idempotent Agents/Claude skill mirror verify; v2 orbiting satellite |
-| `skills/hermes-harness/SKILL.md` | Hermes onboarding, ECC cross-harness import rules, Nous Portal/LM Studio provider setup, and bounded Hermes/Gemini/AGY/Codex partner prompts |
-| `skills/hermes-harness/references/platform-affinity-routing.md` | Platform affinity bias — Mac/Linux → OpenClaw; Windows → Hermes; ECC bridges both (v1 + v2) |
-| `skills/cursor-agent/SKILL.md` | Cursor background agent (`agent` CLI) — install, auth, light-task fanout alongside Sonnet 4.6, worktree isolation, MCP integration |
-| `docs/wiki/15-hermes-windows-harness.md` | Windows Hermes launcher, Git Bash, and one-shot provider routing notes |
-| `references/local-api-fallback.md` | Local API fallback full procedure (Ollama → LM Studio → surface outage) |
-| `docs/v2/references/ORAMASYS-MASTERY-v3.md` | Human-facing unified mastery reference |
+Preserve the originating author independently from the current actor, represent identity truthfully,
+bound endorsements to checked evidence, and disclose any takeover before acting on another agent's
+work; never fabricate another agent's pulse, status, authority or authorship. Full policy:
+[`references/cross-agent-provenance-invariant.md`](references/cross-agent-provenance-invariant.md).

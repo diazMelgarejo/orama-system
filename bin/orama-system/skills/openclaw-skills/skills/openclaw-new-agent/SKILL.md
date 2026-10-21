@@ -9,6 +9,14 @@ upstream: https://github.com/rahulsub-be/cc-openclaw
 upstream_license: MIT
 extends: ../cc-openclaw/.claude/skills/openclaw-new-agent/SKILL.md
 overlay_role: orama-normalized cross-harness extension
+allowed-tools: bash, file-operations
+triggers:
+  - create a new openclaw agent
+  - openclaw-new-agent
+  - /openclaw-new-agent
+  - add an openclaw agent
+  - register a sub-agent in openclaw.json
+  - scaffold openclaw agent directives
 ---
 
 ## Overlay Source
@@ -161,6 +169,29 @@ fi
   the interactive login step just because a key is available (user-stated
   policy, 2026-07-11, in the context of `google-antigravity`/Gemini access
   where a Gemini API key exists as a fallback path).
+
+## Boundaries
+
+### Always Do
+
+- Validate `agent_id` against `^[a-z0-9]+(-[a-z0-9]+)*$` before any create step.
+- Create agents with `openclaw agents add` (and wire parents with `openclaw agents bind`), then confirm with
+  `openclaw agents list`.
+- Write the six directive files, including a filled-in `IDENTITY.md` and `SECURITY.md`.
+- Add the Coordination provenance directive to the generated `AGENTS.md` before registering the agent.
+
+### Ask First
+
+- Any provider login that needs the operator's own terminal or browser (`openclaw models auth login`).
+- Binding a new agent into a parent's `allowAgents` list when the parent is not named in the request.
+- Overwriting an existing agent directory or an existing `openclaw.json` entry for the same `agent_id`.
+
+### Never Do
+
+- Hand-edit `~/.openclaw/openclaw.json` with `jq` for agent creation.
+- Treat a provider shown as `configured` in the model catalog as proof that the new agent has credentials.
+- Prefer an API key over web/OAuth login when both are available (the key is fallback only).
+- Let a new agent inherit a parent agent's identity, authority or authorship.
 
 ## See Also
 
