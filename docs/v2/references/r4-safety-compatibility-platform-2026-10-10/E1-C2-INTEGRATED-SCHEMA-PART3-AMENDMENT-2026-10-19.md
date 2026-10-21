@@ -25,6 +25,31 @@ Historical evidence is bound separately to the immutable snapshots in Section 7,
 changing their original status text or bytes. Section numbers are document identifiers,
 not mutable file-line positions.
 
+## Ratification surface
+
+This table scopes the one operator decision this document can support. It marks existing text
+and moves none of it. Only [Section 3.3](#33-consumer-anchor-floor-invariant-additional-consumer-local-gate)
+is proposed for ratification; everything else remains proposed and is a release prerequisite
+that is not part of that decision. The acceptance packet and the meaning of a ratification
+are in [Section 8](#8-ratification-acceptance-packet).
+
+| Section | Marking |
+| :--- | :--- |
+| [1. Minimal revocation event body](#1-minimal-revocation-event-body) | Remains proposed; release prerequisite, not part of this decision |
+| [2. Minimal cascade event body](#2-minimal-cascade-event-body) | Remains proposed; release prerequisite, not part of this decision |
+| [3.1 Event-as-checkpoint equivalence](#31-event-as-checkpoint-equivalence) | Remains proposed; release prerequisite (checkpoints beyond the anchor), not part of this decision |
+| [3.2 Pruning, retention and archival](#32-pruning-retention-and-archival-rule) | Remains proposed; release prerequisite, not part of this decision |
+| [3.3 Consumer anchor floor invariant](#33-consumer-anchor-floor-invariant-additional-consumer-local-gate): the bootstrap-anchor protocol, the atomic persisted identity/version/digest/floor record, and the $R_p \ge$ anchor_version floor comparison rule, with the consumer-local refusal and quarantine semantics defined inside it | **Proposed for ratification** |
+| [4. Cascade witness fields](#4-status-of-cascade-witness-fields) | Remains proposed (open); release prerequisite, not part of this decision |
+| [5. Field-set summary](#5-summary-of-proposed-field-sets-for-schema-review) | Index only; each row follows the marking of the section it summarizes |
+| [6. Source and test crosswalk](#6-source-and-test-crosswalk-review-evidence-not-adoption) | Review evidence, not adoption |
+| [7. Immutable historical evidence](#7-immutable-historical-evidence) | Evidence identifiers, not adoption |
+| [8. Ratification acceptance packet](#8-ratification-acceptance-packet) | Procedure; the packet itself is a sibling document |
+
+Nothing in this table changes the statement in the authority boundary above that the whole
+amendment is proposed. Even for Section 3.3, a ratification is a contract decision only (see
+Section 8).
+
 ---
 
 ## 1. Minimal Revocation Event Body
@@ -121,8 +146,13 @@ checkpoint envelope is required.
    to fulfill the seven-year requirement in [E1 Section 13.3, Retention][e1-retention].
    They are never deleted or
    discarded.
-3. **Anchor Event Retention:** The event at the prune boundary (the "anchor event") is **never
-   removed** from the hot store. It is retained as the new base of the active chain.
+3. **Bounded Current-Anchor Retention:** The event at the current prune boundary (the "anchor
+   event") remains in the hot store as the base of the active chain. There is at most one such
+   retained boundary event per issuer chain. When a later prune advances the boundary from $N$ to
+   $M > N$, the former $N$ anchor is migrated to the cold audit archive with the other rows below
+   $M$, and only the $M$ anchor remains hot. The archive preserves the former anchor and its
+   digest-chain evidence; hot retention is a current-checkpoint cache, not a permanent copy of
+   every historical boundary.
 
 <a id="33-consumer-anchor-floor-invariant-consumer-local-rule-4"></a>
 
@@ -145,11 +175,29 @@ When a consumer bootstraps from a pruned anchor at $\text{anchor\_version} > 1$:
      requires that key to belong to the declared issuer, and verifies the detached Ed25519 signature
      over the recomputed digest. A key or issuer supplied only by the event is never trusted.
    * On first bootstrap, it atomically persists the issuer identity and key identity, anchor
-     `version`, recomputed `event_digest`, and immutable `anchor_version` floor, and records the
-     same `(issuer_id, version, event_digest)` in `issuer_cascade_ack`.
+     `version`, recomputed `event_digest`, and immutable `anchor_version` floor. It also persists
+     a checkpoint-aware acknowledgement base `(base_version, base_digest) = (anchor_version,
+     event_digest)` and initializes `acked_through = anchor_version`; the matching
+     `(issuer_id, version, event_digest)` remains recorded in `issuer_cascade_ack` for audit.
+     The base is not a claim that events before `anchor_version` were locally replayed. It is the
+     verified signed checkpoint that makes the anchor the first acknowledged version for this
+     consumer.
    * On a repeated bootstrap, the persisted issuer, key, version, digest, and floor must be exactly
-     identical or the consumer refuses and retains quarantine. An identical repeat is a no-op: it
+     identical or the consumer refuses and retains quarantine, as defined in
+     [Anchor quarantine](#anchor-quarantine-semantics) below. An identical repeat is a no-op: it
      must never reset, lower, or otherwise rewrite an acknowledged high-water mark or anchor floor.
+   * `acked_through` is checkpoint-aware. Without a persisted base, it is the greatest contiguous
+     verified acknowledgement sequence beginning at version 1. With base version $N$, it is the
+     greatest $V \ge N$ for which the persisted, verified anchor at $N$ and every event from
+     $N + 1$ through $V$ are acknowledged without a gap. Therefore bootstrap at $N > 1$ sets
+     `acked_through` to $N$ immediately; an event at $N + 1$ advances it to $N + 1$ only after
+     verification. Missing or conflicting events above $N$ do not advance it, and the consumer
+     never fabricates acknowledgements below $N$.
+   * Rules 2, 3, and 5 use this derived checkpoint-aware `acked_through` value. Their comparisons
+     are unchanged: Rule 2 requires `acked_through >= R_p`, Rule 3 requires
+     $R_p \ge \text{consumer_acked_through}$ from the permit, and Rule 5 requires the
+     finalization coverage already specified in Part 2. The additional anchor-floor gate below is
+     separate and does not replace any of those rules.
 2. **Pre-Anchor Revocation Rejection (Consumer-Side Gate):** To prevent the pre-anchor revocation
    blind-spot attack (where a pre-anchor revocation is invisible to the bootstrapped consumer),
    this proposed additional consumer-local anchor-floor gate enforces:
@@ -159,6 +207,63 @@ When a consumer bootstraps from a pruned anchor at $\text{anchor\_version} > 1$:
    The caller must obtain a fresh permit re-issued against the current chain head. This is a
    consumer-local dispatch check, separate from Rule 4's acknowledged-event revocations and
    the acknowledgement coverage in Rules 2, 3 and 5; no new shared wire refusal code is added.
+   The refusal is defined in [Lower-floor refusal](#lower-floor-refusal) below.
+
+<a id="lower-floor-refusal"></a>
+
+**Lower-floor refusal (consumer-local).**
+
+* **Name:** `anchor_floor.permit_below_floor`. It is a consumer-local reason. It is never
+  emitted on the wire, is not part of the closed refusal vocabulary of
+  [Part 1][purpose], and adds no shared wire refusal code. The phrase "fails the gate" in
+  item 2 means exactly this refusal and nothing else.
+* **When raised:** in the Step 4.3 consumer transaction, when the issuer has a persisted anchor
+  floor and the permit's $R_p$ is below it. The comparison reads the persisted floor under the
+  same transaction that would record the intent, so a floor committed concurrently still
+  applies. An issuer with no persisted anchor (never bootstrapped from a pruned anchor) has
+  no floor and this refusal is not raised for it.
+* **State left behind:** none. The refusal happens before any authority write: no intent, no
+  outbox item, no use consumed, and the reservation is not consumed, so the caller can retry
+  with a fresh permit against the same reservation. The consumer may keep a sanitized,
+  payload-free refusal audit entry, as for other refusals.
+* **Not another gate:** it is distinct from Rule 4 (an acknowledged event revokes the grant,
+  its approval chain or the issuer) and from Rules 2, 3 and 5 (acknowledgement coverage). It
+  must not reuse their reason names, and a permit that is also refused by those rules reports
+  the first gate in the Step 4.3 order without merging reasons.
+* **Remedy:** obtain a permit re-issued against the current chain head. The floor is never
+  lowered to admit an old permit.
+
+<a id="anchor-quarantine-semantics"></a>
+
+**Anchor quarantine semantics.** These define the term "retains quarantine" used in item 1.
+They follow the existing consumer clock-quarantine pattern ([consumer slice-2 notes][consumer-clock],
+`clear_clock_quarantine`), applied to one issuer.
+
+* **What enters quarantine:** a repeated `bootstrap_anchor` for an `issuer_id` whose supplied
+  issuer, key identity, version, recomputed digest or floor differs in any field from the
+  persisted record. A bootstrap that fails digest recomputation, trusted-key resolution or
+  signature verification on first install is a plain refusal and persists nothing, so it does
+  not enter quarantine. Only a conflict with an already-persisted anchor does.
+* **Where it is stored:** in the same atomic record as the identity, version, digest and floor
+  (a quarantine flag on that row). Setting the flag is committed in the transaction that
+  detected the conflict, so it survives restart and cannot be missed by a later dispatch.
+  The conflicting evidence is kept, not applied: the persisted values are never overwritten.
+* **What it blocks:** every dispatch authorization for that issuer, rechecked under the
+  authorization write lock before any reservation is consumed (the same ordering the clock
+  quarantine uses). Read-only inspection of the record and of acknowledged events stays
+  possible. Quarantine of one issuer does not block other issuers. The blocked authorization
+  reports a consumer-local reason `anchor_quarantined`, never on the wire and with no
+  shared refusal code, and writes no authority state.
+* **How it clears:** only an audited operator procedure, `clear_anchor_quarantine`,
+  takes an injected operator authority (no default; a missing or blank reference is refused),
+  non-blank trusted evidence of which anchor is correct, and an existing quarantine. It
+  appends the previous record, the accepted record, the evidence, the operator reference and
+  a timestamp to an append-only log, in the same transaction as the clear. Nothing deletes
+  or rewrites a log row.
+* **Forbidden:** automatic clearing (by timeout, by restart, by a matching later bootstrap or
+  by any caller-supplied flag), and lowering a floor. If trusted evidence shows the persisted
+  floor itself is wrong and a lower one is correct, that is a separate operator-ratified
+  re-anchor decision outside this section, never a side effect of clearing quarantine.
 
 ---
 
@@ -197,9 +302,9 @@ approval is claimed. Parallel runtime corrections require their own exact-head e
 
 | Part 3 normative item | Status | Existing source or test covering it today | Supported conclusion and remaining gap |
 | :--- | :--- | :--- | :--- |
-| Bootstrap anchor ([Section 3.3](#33-consumer-anchor-floor-invariant-consumer-local-rule-4)) | Proposed | None yet. Nearest: [Oramasys `_check_event`, `SqliteAttemptStore.ingest_events`][consumer-store]; [tests `test_ingest_records_contiguous_events_and_is_idempotent`, `test_ingest_refuses_without_flagging_a_gap_bad_signature_or_bad_digest`][consumer-tests] | Existing ingestion verifies contiguous signed events through an injected verifier. No `bootstrap_anchor` exists in this source; digest recomputation, trusted issuer/key binding and repeat-bootstrap quarantine are unevidenced. |
+| Bootstrap anchor ([Section 3.3](#33-consumer-anchor-floor-invariant-additional-consumer-local-gate)) | Proposed | None yet. Nearest: [Oramasys `_check_event`, `SqliteAttemptStore.ingest_events`][consumer-store]; [tests `test_ingest_records_contiguous_events_and_is_idempotent`, `test_ingest_refuses_without_flagging_a_gap_bad_signature_or_bad_digest`][consumer-tests] | Existing ingestion verifies contiguous signed events through an injected verifier. No `bootstrap_anchor` exists in this source; digest recomputation, trusted issuer/key binding and repeat-bootstrap quarantine are unevidenced. |
 | Atomic persisted record (Section 3.3, item 1) | Proposed | None yet. Nearest: [Phylax `_EVENT_COLUMNS`, `_append_finalization`, `_events`][issuer-store]; [tests `test_finalization_happy_path`, `test_event_chain_digests_verify`][issuer-tests] | The issuer event row has the seven fields of [Section 3.1](#31-event-as-checkpoint-equivalence), chained digests and signatures. This supports the row substrate only; no consumer-side atomic anchor record or `anchor_version` persistence exists. |
-| $R_p \ge$ anchor floor ([Section 3.3](#33-consumer-anchor-floor-invariant-consumer-local-rule-4), item 2) | Proposed | None yet. No `anchor_version` appears in the inspected consumer source. | The floor check is not implemented or tested; existing Rule 4 tests cover revocation, not the anchor floor. |
+| $R_p \ge$ anchor floor ([Section 3.3](#33-consumer-anchor-floor-invariant-additional-consumer-local-gate), item 2) | Proposed | None yet. No `anchor_version` appears in the inspected consumer source. | The floor check is not implemented or tested; existing Rule 4 tests cover revocation, not the anchor floor. |
 | Retention and archival ([Section 3.2](#32-pruning-retention-and-archival-rule)) | Proposed | None yet. Requirement text: [Part 2 Section 1, Capacity and retention][wire-objects]; [consumer slice-2 limits][consumer-limits] | Seven-year retention is a requirement, not evidence of an archive. No archive or pruning implementation or test is identified in these inputs. |
 | Revocation and cascade bodies (Sections [1](#1-minimal-revocation-event-body)-[2](#2-minimal-cascade-event-body)) | Proposed | Partial, different mechanism. [Phylax `SqliteDispatchPermitStore._check_grant`][issuer-store]; [tests `test_grant_revoked_cascade_and_expired`, `test_finalization_grant_revoked`][issuer-tests]. [Oramasys `RevocationPort`, `SqliteAttemptStore.authorize_dispatch`][consumer-store]; [tests `test_rule4_refuses_a_revoked_grant`, `test_rule4_refuses_an_issuer_wide_revocation`][consumer-tests] | The issuer checks injected grant facts and the consumer checks an injected revocation port. Neither implements or validates the proposed body fields or approval-chain cascade processing. |
 | Execution witness ([Section 4](#4-status-of-cascade-witness-fields)) | Open | None yet. Specification only: [E1 Section 9.1, Test map, E1-T-25][e1-tests]; [E1 unresolved witness fields][e1-open] | `test_e1_cascade_recovery_witness` is a proposed test name, not an executable test. Fields, publication/retention and authenticated read-back remain open. |
@@ -221,6 +326,21 @@ Their absolute URLs are intentional evidence identifiers, including for this rep
 | Part 2 permit and dispatch rules | [Part 2 at the recorded revision](https://github.com/diazMelgarejo/orama-system/blob/59c623fa27497183d3a1c4ed19585d87623eae22/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/E1-C2-PERMIT-WIRE-AND-ROLE-RECONCILIATION-2026-10-18.md) |
 | Ratification scope addendum | [Addendum at this proposal's review base](https://github.com/diazMelgarejo/orama-system/blob/55ff8ef58ef6b6202f6f521c8b5b5a7452281e1c/docs/v2/references/r4-safety-compatibility-platform-2026-10-10/2026-10-19-e1-specification-ratification-addendum.md) |
 
+## 8. Ratification Acceptance Packet
+
+Ratifying [Section 3.3](#33-consumer-anchor-floor-invariant-additional-consumer-local-gate)
+needs the packet in the sibling document
+[E1-C2-PART3-RATIFICATION-ACCEPTANCE-PACKET-2026-10-22.md][packet]. The packet lives in its own
+file because it records this document's canonical digest, which a document cannot contain about
+itself. The packet states the current status of each of its six items and leaves the exact
+commit and digest as operator-filled placeholders. As of this revision the conformance tests do
+not exist; they are an explicit release prerequisite, and the packet cannot be complete until
+they do.
+
+A ratification of this surface is a contract and specification decision only. It authorizes no
+implementation, no serving, no pin promotion and no activation, and it leaves
+`ORAMA_GRANT_SERVING` unset. Everything outside Section 3.3 stays proposed.
+
 [e1-schema]: E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#13-specifications-closing-the-open-semantics-proposed-for-independent-review
 [e1-open]: E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#not-resolved-from-repository-sources
 [e1-approval]: E1-AUTHORITY-STATE-EFFECT-FREEZE-DRAFT-2026-10-15.md#134-second-approval-decision-3-the-conditions-recorded-in-section-11
@@ -236,3 +356,5 @@ Their absolute URLs are intentional evidence identifiers, including for this rep
 [consumer-store]: https://github.com/oramasys/oramasys/blob/4c67d37c624d6bea1d4953c9777962d1f8e42a3c/src/orama/graph/dispatch_attempts.py
 [consumer-tests]: https://github.com/oramasys/oramasys/blob/4c67d37c624d6bea1d4953c9777962d1f8e42a3c/src/tests/test_dispatch_attempts.py
 [consumer-limits]: https://github.com/oramasys/oramasys/blob/4c67d37c624d6bea1d4953c9777962d1f8e42a3c/docs/e1-c2-consumer-slice2.md#limits-and-open-items
+[packet]: E1-C2-PART3-RATIFICATION-ACCEPTANCE-PACKET-2026-10-22.md
+[consumer-clock]: https://github.com/oramasys/oramasys/blob/4c67d37c624d6bea1d4953c9777962d1f8e42a3c/docs/e1-c2-consumer-slice2.md
