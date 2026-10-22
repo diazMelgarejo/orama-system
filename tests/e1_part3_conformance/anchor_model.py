@@ -15,8 +15,18 @@ from __future__ import annotations
 import hashlib
 import json
 import sqlite3
+from collections.abc import Callable, Iterable, Mapping
+from typing import Any
 
 ZERO_DIGEST = "0" * 64
+
+Event = dict[str, Any]
+"""A signed issuer event: body, kind, previous_event_digest, version, key id, digest, signature."""
+Verifier = Callable[[Any, str, str], bool]
+"""``verifier(public_key, event_digest, signature_hex)`` returns whether the signature holds."""
+TrustedKeys = Mapping[str, Mapping[str, Any]]
+"""Consumer-held trust roots: issuer id to key id to public key (never taken from the event)."""
+Row = tuple[Any, ...]
 
 
 class AnchorRefusal(Exception):
@@ -31,7 +41,7 @@ class AnchorQuarantineClearRefused(Exception):
     pass
 
 
-def event_digest(event: dict) -> str:
+def event_digest(event: Event) -> str:
     """SHA-256 of the canonical JSON of exactly body, kind, previous_event_digest, version."""
     preimage = {k: event[k] for k in ("body", "kind", "previous_event_digest", "version")}
     raw = json.dumps(preimage, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
@@ -62,16 +72,32 @@ class AnchorConsumer:
             """
         )
 
-    # --- Section 3.3 item 1: bootstrap_anchor -------------------------------------------
-    def bootstrap_anchor(self, issuer_id, anchor_event, verifier, trusted_keys) -> None:
-        digest = event_digest(anchor_event)
-        if digest != anchor_event.get("event_digest"):
+    @staticmethod
+    def _verified_digest(
+        issuer_id: str, event: Event, verifier: Verifier, trusted_keys: TrustedKeys
+    ) -> str:
+        """Return the recomputed digest of a verified event, or raise the refusal reason.
+
+        The one definition of "verified" for both bootstrap and acknowledgement: the digest is
+        recomputed (a signature over a caller-supplied digest alone is insufficient), the key must
+        be trusted for this issuer by the consumer, and the signature must hold over the digest.
+        """
+        digest = event_digest(event)
+        if digest != event.get("event_digest"):
             raise AnchorRefusal("digest_mismatch")
-        key = trusted_keys.get(issuer_id, {}).get(anchor_event.get("issuer_key_id"))
+        key = trusted_keys.get(issuer_id, {}).get(event.get("issuer_key_id", ""))
         if key is None:
             raise AnchorRefusal("untrusted_key")
-        if not verifier(key, digest, anchor_event["signature"]):
+        if not verifier(key, digest, event.get("signature", "")):
             raise AnchorRefusal("bad_signature")
+        return digest
+
+    # --- Section 3.3 item 1: bootstrap_anchor -------------------------------------------
+    def bootstrap_anchor(
+        self, issuer_id: str, anchor_event: Event, verifier: Verifier, trusted_keys: TrustedKeys
+    ) -> None:
+        """Persist the verified anchor atomically; a differing repeat quarantines the issuer."""
+        digest = self._verified_digest(issuer_id, anchor_event, verifier, trusted_keys)
         version = anchor_event["version"]
         record = (issuer_id, anchor_event["issuer_key_id"], version, digest, version)
         self.db.execute("BEGIN IMMEDIATE")
@@ -105,8 +131,14 @@ class AnchorConsumer:
         raise AnchorConflict("conflicting_anchor")
 
     # --- checkpoint-aware acknowledgement ------------------------------------------------
-    def acknowledge(self, issuer_id, event) -> bool:
-        """Acknowledge a verified event; advance acked_through only without a gap."""
+    def acknowledge(
+        self, issuer_id: str, event: Event, verifier: Verifier, trusted_keys: TrustedKeys
+    ) -> bool:
+        """Acknowledge a verified event; advance acked_through only without a gap.
+
+        Section 3.3: an event at ``acked_through + 1`` advances it only after verification, so an
+        unverifiable event (digest, key or signature) is refused exactly like a gap or a fork.
+        """
         row = self.db.execute(
             "SELECT acked_through FROM anchor WHERE issuer_id=?", (issuer_id,)
         ).fetchone()
@@ -116,12 +148,11 @@ class AnchorConsumer:
         prev = self.db.execute(
             "SELECT digest FROM ack WHERE issuer_id=? AND version=?", (issuer_id, acked)
         ).fetchone()
-        digest = event_digest(event)
-        if (
-            event["version"] != acked + 1
-            or event["previous_event_digest"] != prev[0]
-            or digest != event.get("event_digest")
-        ):
+        if event["version"] != acked + 1 or event["previous_event_digest"] != prev[0]:
+            return False
+        try:
+            digest = self._verified_digest(issuer_id, event, verifier, trusted_keys)
+        except AnchorRefusal:
             return False
         self.db.execute("INSERT INTO ack VALUES(?,?,?)", (issuer_id, event["version"], digest))
         self.db.execute(
@@ -129,27 +160,30 @@ class AnchorConsumer:
         )
         return True
 
-    def acked_through(self, issuer_id) -> int | None:
+    def acked_through(self, issuer_id: str) -> int | None:
         row = self.db.execute(
             "SELECT acked_through FROM anchor WHERE issuer_id=?", (issuer_id,)
         ).fetchone()
         return row[0] if row else None
 
-    def record(self, issuer_id):
-        return self.db.execute("SELECT * FROM anchor WHERE issuer_id=?", (issuer_id,)).fetchone()
+    def record(self, issuer_id: str) -> Row | None:
+        row: Row | None = self.db.execute(
+            "SELECT * FROM anchor WHERE issuer_id=?", (issuer_id,)
+        ).fetchone()
+        return row
 
     # --- Section 3.3 item 2: anchor-floor gate and quarantine block -----------------------
-    def add_reservation(self, reservation_id) -> None:
+    def add_reservation(self, reservation_id: str) -> None:
         self.db.execute("INSERT INTO reservation VALUES(?,0)", (reservation_id,))
 
-    def reservation_consumed(self, reservation_id) -> bool:
+    def reservation_consumed(self, reservation_id: str) -> bool:
         return bool(
             self.db.execute(
                 "SELECT consumed FROM reservation WHERE reservation_id=?", (reservation_id,)
             ).fetchone()[0]
         )
 
-    def authorize(self, issuer_id, reservation_id, revocation_version) -> str:
+    def authorize(self, issuer_id: str, reservation_id: str, revocation_version: int) -> str:
         """Return 'authorized' or a consumer-local refusal reason; refusals write nothing."""
         self.db.execute("BEGIN IMMEDIATE")
         try:
@@ -171,10 +205,12 @@ class AnchorConsumer:
             raise
 
     def authority_writes(self) -> int:
-        return self.db.execute("SELECT COUNT(*) FROM authority_write").fetchone()[0]
+        return int(self.db.execute("SELECT COUNT(*) FROM authority_write").fetchone()[0])
 
     # --- clear_anchor_quarantine ----------------------------------------------------------
-    def clear_anchor_quarantine(self, issuer_id, *, operator_ref, evidence, ts) -> None:
+    def clear_anchor_quarantine(
+        self, issuer_id: str, *, operator_ref: str | None, evidence: str | None, ts: str
+    ) -> None:
         if not (operator_ref or "").strip():
             raise AnchorQuarantineClearRefused("operator_authority_missing")
         if not (evidence or "").strip():
@@ -198,14 +234,14 @@ class AnchorConsumer:
             self.db.execute("ROLLBACK")
             raise
 
-    def clear_log(self):
+    def clear_log(self) -> list[Row]:
         return self.db.execute("SELECT * FROM clear_log").fetchall()
 
 
 class HotStore:
     """Section 3.2 rule 3: at most one retained boundary event hot; former anchors archived."""
 
-    def __init__(self, versions) -> None:
+    def __init__(self, versions: Iterable[int]) -> None:
         self.hot = set(versions)
         self.archive: set[int] = set()
         self.anchor: int | None = None
