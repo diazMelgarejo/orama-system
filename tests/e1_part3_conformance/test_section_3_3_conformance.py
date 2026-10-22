@@ -3,6 +3,7 @@
 Covers packet item 3: cold bootstrap, checkpoint acknowledgement, repeated pruning, identical
 retry, conflicting retry and quarantine, clearing, lower-floor rejection, crash safety.
 """
+import json
 import sqlite3
 from typing import Any
 
@@ -299,6 +300,34 @@ def test_audited_clear_appends_log_and_never_lowers_floor(consumer: AnchorConsum
     assert rec[8] == 0 and rec[4] == 5
     log = consumer.clear_log()
     assert len(log) == 1 and log[0][5] == "op-1" and log[0][4] == "signed note"
+    previous, accepted = json.loads(log[0][2]), json.loads(log[0][3])
+    assert previous[8] == 1 and accepted[8] == 0  # quarantined before, cleared after
+    assert previous[:8] == accepted[:8]  # nothing else, including the floor, changed
+    assert accepted == list(rec)
+
+
+def test_ack_insert_and_high_water_mark_commit_atomically(consumer: AnchorConsumer) -> None:
+    anchor, nxt = chain(5, 6)[0], chain(5, 6)[1]
+    bootstrap(consumer, anchor)
+    consumer.db.execute(
+        "CREATE TRIGGER fail_adv BEFORE UPDATE OF acked_through ON anchor"
+        " BEGIN SELECT RAISE(ABORT, 'boom'); END"
+    )
+
+    with pytest.raises(sqlite3.DatabaseError):
+        ack(consumer, nxt)
+
+    assert consumer.acked_through(ISSUER) == 5
+    assert consumer.db.execute("SELECT COUNT(*) FROM ack WHERE version=6").fetchone()[0] == 0
+
+
+def test_malformed_signature_encoding_is_refused_not_raised(consumer: AnchorConsumer) -> None:
+    bootstrap(consumer, chain(5, 5)[0])
+    nxt = chain(5, 6)[1]
+    nxt["signature"] = "not-hex"
+
+    assert ack(consumer, nxt) is False
+    assert consumer.acked_through(ISSUER) == 5
 
 
 def test_lower_floor_permit_refused_without_authority_write_and_reservation_kept(consumer: AnchorConsumer) -> None:

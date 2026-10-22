@@ -88,7 +88,11 @@ class AnchorConsumer:
         key = trusted_keys.get(issuer_id, {}).get(event.get("issuer_key_id", ""))
         if key is None:
             raise AnchorRefusal("untrusted_key")
-        if not verifier(key, digest, event.get("signature", "")):
+        try:
+            valid = verifier(key, digest, event.get("signature", ""))
+        except (ValueError, TypeError):  # malformed signature encoding is a bad signature
+            valid = False
+        if not valid:
             raise AnchorRefusal("bad_signature")
         return digest
 
@@ -154,10 +158,17 @@ class AnchorConsumer:
             digest = self._verified_digest(issuer_id, event, verifier, trusted_keys)
         except AnchorRefusal:
             return False
-        self.db.execute("INSERT INTO ack VALUES(?,?,?)", (issuer_id, event["version"], digest))
-        self.db.execute(
-            "UPDATE anchor SET acked_through=? WHERE issuer_id=?", (event["version"], issuer_id)
-        )
+        self.db.execute("BEGIN IMMEDIATE")  # ack row and high-water mark commit together
+        try:
+            self.db.execute("INSERT INTO ack VALUES(?,?,?)", (issuer_id, event["version"], digest))
+            self.db.execute(
+                "UPDATE anchor SET acked_through=? WHERE issuer_id=?",
+                (event["version"], issuer_id),
+            )
+            self.db.execute("COMMIT")
+        except BaseException:
+            self.db.execute("ROLLBACK")
+            raise
         return True
 
     def acked_through(self, issuer_id: str) -> int | None:
@@ -222,13 +233,14 @@ class AnchorConsumer:
             ).fetchone()
             if row is None or not row[0]:
                 raise AnchorQuarantineClearRefused("no_quarantine")
-            record = json.dumps(self.record(issuer_id))
+            previous = json.dumps(self.record(issuer_id))
+            self.db.execute("UPDATE anchor SET quarantined=0 WHERE issuer_id=?", (issuer_id,))
+            accepted = json.dumps(self.record(issuer_id))  # post-update state, same transaction
             self.db.execute(
                 "INSERT INTO clear_log(issuer_id, previous, accepted, evidence, operator_ref, ts)"
                 " VALUES(?,?,?,?,?,?)",
-                (issuer_id, record, record, evidence, operator_ref, ts),
+                (issuer_id, previous, accepted, evidence, operator_ref, ts),
             )
-            self.db.execute("UPDATE anchor SET quarantined=0 WHERE issuer_id=?", (issuer_id,))
             self.db.execute("COMMIT")
         except BaseException:
             self.db.execute("ROLLBACK")
