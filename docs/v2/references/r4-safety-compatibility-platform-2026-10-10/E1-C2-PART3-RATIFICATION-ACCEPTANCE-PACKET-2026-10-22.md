@@ -99,3 +99,10 @@ and the tests, not the repository) at commit `6459b30e77a6ab22297307374e64dd8872
 APPROVE_WITH_CHANGES. Its gaps (key-identity divergence, read-only inspection under quarantine,
 append-only log, pre-anchor acknowledgements, exact refusal string) were addressed in the suite; gate
 order and concurrency remain open. No Codex or Cline verdict is recorded.
+
+**Update, same day: real-store conformance.** The same rules now also run against the real consumer
+store in draft Oramasys PR 72 (`src/tests/test_dispatch_anchor.py`, 24 tests, all passing; the full
+Oramasys suite passes). Item 3 is therefore met against real code once that PR is merged by the
+operator. Still not covered: gate order when several rules fail together, concurrent floor commits,
+and a production trusted-key adapter. The implementation is consumer-local and adds no transport,
+serving path or pin promotion.
