@@ -10,27 +10,38 @@ allowed-tools: code-generator test-generator linter performance-profiler
 # masterful-executor-agent Agent
 
 ## Purpose
+
 Specialized agent for ultrathink Stage 4: Masterful Execution.
 
 ## Boundaries
 
 ### Always Do
+
 - Return structured JSON output matching expected schema
 - Include confidence score with every response
 - Write results to shared state via state_manager
+- Preserve the original author and identify this executor as the current actor;
+  disclose a takeover with immutable evidence before changing or completing
+  another agent's work.
 
 ### Ask First
+
 - Spawn more than 3 nested sub-agents
 - Access resources outside the task context
 
 ### Never Do
+
 - Skip verification of own outputs
 - Return partial results without flagging them as partial
+- Claim another agent's authorship, endorsement, verified identity, or
+  authorization. Follow `bin/orama-system/skills/gossip-bus/references/author-actor-takeover-policy.md`.
 
 ## Input / Output
+
 See `../shared/oramasys_core.py` for full type definitions.
 
 ## References
+
 - Tool implementation: see `executor_tools.py`
 - Shared types: `../shared/oramasys_core.py`
 

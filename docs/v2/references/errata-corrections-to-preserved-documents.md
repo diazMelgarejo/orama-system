@@ -229,3 +229,41 @@ Required handling:
 - do not replace contaminated citations with merely plausible external links;
 - preserve the contaminated artifact only as provenance/evidence of the error;
   current canonical documents and verified repository state control execution.
+
+## E12 — GraphSpec authority wording and reducer/join placement
+
+Doc 57 §12, the 2026-08-29 pattern-backlog plan and the rev2 loop/graph drafts say
+`orama-system` holds the "GraphSpec/NodeSpec/EdgeSpec authority", and the rev2 draft
+puts `reducers` and `joins` in Oramasys policy. In code there is exactly one
+GraphSpec, in Core. `orama-system` has no schema code.
+
+Required handling:
+
+- read "orama-system GraphSpec authority" as **normative text and the ownership
+  registry**, not a schema. [D-LG-1](loop-graph-compatibility-2026-10-09/ADR-D-LG-1-POLICY-OWNERSHIP.md)
+  already moved the structural schema to Core;
+- read "orama-system GraphSpec declarations say which reducer applies" as the
+  application's graph definition, authored in Oramasys;
+- reducer and join declarations live in Core's GraphSpec and policy may only restrict
+  them, per [D-LG-5](loop-graph-compatibility-2026-10-09/ADR-D-LG-5-REDUCER-JOIN-DECLARATIONS.md);
+- the rev2 `policy.reducers` and `policy.joins` sketch is a superseded proposal;
+- field ownership is checked against
+  [`ownership-registry.json`](loop-graph-compatibility-2026-10-09/ownership-registry.json);
+- the preserved documents are not edited.
+
+## E13 — R4 draft scope labels and task numbering
+
+The operator's R4 draft
+([`source/`](r4-safety-compatibility-platform-2026-10-10/source/ORAMASYS-R4-SAFETY-COMPATIBILITY-PLATFORM-DRAFT-ADR-PLAN-HANDOFF-2026-10-10.md))
+says the revision-2 plan's "Tasks 0–11 map to T0–T11". They map by intent, not number: rev-2
+Task 5 (R3) is merged, rev-2 Task 6 is R4 T5, Task 7 is T6, Task 8 is T7, and Tasks 9–10
+split into T8–T10. Doc 57 §10 ("deferred R3 work") is stale after D-LG-6.
+
+Required handling:
+
+- use the [crosswalk](r4-safety-compatibility-platform-2026-10-10/REGISTER-TRACEABILITY.md#rev-2-crosswalk)
+  when citing rev-2 task numbers;
+- read doc 57 §10 through D-LG-6 and §11 through the proposed
+  [continuation contract](r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-CONTINUATION.md);
+- the rev-2 plan's "R3 gated" and "PR open" statements are historical, not current status;
+- the draft and the rev-2 plan are not edited.

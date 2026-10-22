@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 oramasys_orchestration_server.py
 ====================================
@@ -9,9 +9,15 @@ Exposes the oramasys agent network as MCP tools.
 Compatible with: Clawdbot, MoltBot, OpenClaw, Claude Code MCP client.
 
 Usage:
-    python oramasys_orchestration_server.py
-    # or
-    python oramasys_orchestration_server.py --port 8080
+    python oramasys_orchestration_server.py        # stdio transport
+
+Completion contract (fail closed):
+    oramasys_solve and oramasys_delegate report "done" only after a configured
+    StageExecutor actually ran the stage(s) and returned output. With no executor
+    they return an MCP error result (isError=true, status="unavailable") and create
+    no task record. They never report "started"/"queued" as if work were finished.
+    Executors are injected (OramasysMCPServer(executor=...)) or loaded from
+    ORAMASYS_STAGE_EXECUTOR="package.module:factory" (operator-controlled).
 
 Tools exposed:
     - oramasys_solve    : Run full 5-stage process
@@ -29,14 +35,21 @@ Integration with OpenClaw (from openclaw.json):
     }
 """
 import asyncio
+import importlib
 import json
 import logging
+import os
+import re
 import sys
+import time
+import uuid
+import weakref
 from pathlib import Path
+from typing import Any, Optional, Protocol
 
 # Add shared to path
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
-from oramasys_core import TaskState, Stage, OptimizeFor
+from oramasys_core import TaskState, Stage, OptimizeFor, Verdict, utc_now_iso
 from state_manager import StateManager
 from message_bus import MessageBus
 
@@ -50,9 +63,10 @@ TOOL_SCHEMAS = [
     {
         "name": "oramasys_solve",
         "description": (
-            "Apply the complete oramasys 5-stage process to a complex problem. "
-            "Coordinates context gathering, architecture design, refinement, "
-            "parallel execution, verification, and documentation."
+            "Run the complete oramasys 5-stage process to completion through the configured "
+            "stage executor, or fail closed (isError, status unavailable/failed/timeout/"
+            "rejected). Crystallization is blocked unless verification passes. Returns "
+            "status 'done' only when real output exists."
         ),
         "inputSchema": {
             "type": "object",
@@ -77,7 +91,11 @@ TOOL_SCHEMAS = [
     },
     {
         "name": "oramasys_delegate",
-        "description": "Delegate a specific oramasys stage to its specialist agent.",
+        "description": (
+            "Run one oramasys stage through the configured stage executor and return its "
+            "real output, or fail closed. Never reports queued/started work as finished. "
+            "Crystallization requires a task_id whose verification verdict is PASS."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
@@ -117,112 +135,369 @@ TOOL_SCHEMAS = [
 ]
 
 
+# ── Stage execution contract ─────────────────────────────────────────────────
+
+STAGE_BY_NAME = {
+    "context":         Stage.CONTEXT,
+    "architecture":    Stage.ARCHITECTURE,
+    "refinement":      Stage.REFINEMENT,
+    "execution":       Stage.EXECUTION,
+    "verification":    Stage.VERIFICATION,
+    "crystallization": Stage.CRYSTALLIZATION,
+}
+SOLVE_ORDER = ["context", "architecture", "refinement", "execution",
+               "verification", "crystallization"]
+SOLVE_ORDER_VALUES = [STAGE_BY_NAME[n].value for n in SOLVE_ORDER]
+MAX_TASK_CHARS = 32_768
+DEFAULT_STAGE_TIMEOUT_S = 600.0
+_FACTORY = re.compile(r"^[A-Za-z_][\w.]*:[A-Za-z_]\w*$")
+
+
+class StageExecutor(Protocol):
+    """Runs one stage for real and returns its output.
+
+    Return a dict with ``output`` (the stage result) and optionally ``model_used``.
+    The verification stage must also return ``verdict`` ("PASS" approves crystallization).
+    Raise to report failure; never return a placeholder.
+    """
+
+    async def run_stage(self, stage: Stage, task: dict, prior: dict) -> dict: ...
+
+
+class ExecutorUnavailable(RuntimeError):
+    """No stage executor is configured, so no work can be completed."""
+
+
+def load_executor_from_env(environ=os.environ) -> Optional[StageExecutor]:
+    """Load ORAMASYS_STAGE_EXECUTOR ("package.module:factory") or return None."""
+    spec = environ.get("ORAMASYS_STAGE_EXECUTOR", "").strip()
+    if not spec:
+        return None
+    if not _FACTORY.match(spec):
+        raise ValueError("ORAMASYS_STAGE_EXECUTOR must look like package.module:factory")
+    module_name, factory_name = spec.split(":")
+    return getattr(importlib.import_module(module_name), factory_name)()
+
+
+def _stage_timeout(environ=os.environ) -> float:
+    try:
+        value = float(environ.get("ORAMASYS_STAGE_TIMEOUT_S", DEFAULT_STAGE_TIMEOUT_S))
+    except ValueError:
+        return DEFAULT_STAGE_TIMEOUT_S
+    return min(max(value, 1.0), 3600.0)
+
+
+class StateWriteError(RuntimeError):
+    """The state store refused a write; the result must not be reported as done."""
+
+
+class InvalidParams(ValueError):
+    """Caller error → JSON-RPC -32602."""
+
+
+def _tool_result(payload: dict, is_error: bool) -> dict:
+    """Wrap a payload as an MCP tool result, keeping its fields at top level.
+
+    Perpetua-Tools' client reads ``status``/``result`` at the top level, so the
+    payload stays flat alongside MCP ``content``/``structuredContent``.
+    """
+    return {
+        **payload,
+        "content": [{"type": "text", "text": json.dumps(payload, default=str)}],
+        "structuredContent": payload,
+        "isError": is_error,
+    }
+
+
 # ── Server implementation ────────────────────────────────────────────────────
 
 class OramasysMCPServer:
-    """
-    MCP server exposing oramasys agent network.
-    Implements the MCP JSON-RPC protocol.
+    """MCP server exposing the oramasys agent network over JSON-RPC.
+
+    Work only completes through a StageExecutor. Without one, solve/delegate fail
+    closed instead of recording a task nobody will run.
     """
 
-    def __init__(self):
-        self.state = StateManager()
-        self.bus   = MessageBus()
+    def __init__(self, executor: Optional[StageExecutor] = None,
+                 state: Optional[StateManager] = None,
+                 stage_timeout_s: Optional[float] = None):
+        self.state = state or StateManager()
+        self.bus = MessageBus()
+        self.executor = executor
+        self.stage_timeout_s = stage_timeout_s or _stage_timeout()
+        # One lock per task: read-state → run stage → write-state is a single critical section,
+        # so overlapping solve/delegate calls on a task cannot overwrite each other's results.
+        # Weak values: a lock disappears once no call holds it, so the map does not grow.
+        self._task_locks: "weakref.WeakValueDictionary[str, asyncio.Lock]" = (
+            weakref.WeakValueDictionary())
 
-    async def handle_request(self, request: dict) -> dict:
-        """Dispatch MCP JSON-RPC request."""
+    def _task_lock(self, task_id: str) -> asyncio.Lock:
+        lock = self._task_locks.get(task_id)
+        if lock is None:
+            lock = self._task_locks[task_id] = asyncio.Lock()
+        return lock
+
+    async def handle_request(self, request: Any) -> Optional[dict]:
+        """Dispatch one JSON-RPC message. Notifications (no id) return None."""
+        if not isinstance(request, dict) or request.get("jsonrpc") != "2.0":
+            return self._error(None, -32600, "Invalid Request")
         method = request.get("method", "")
-        params = request.get("params", {})
+        params = request.get("params") or {}
         req_id = request.get("id")
+        is_notification = "id" not in request
+        if not isinstance(method, str) or not isinstance(params, dict):
+            return None if is_notification else self._error(req_id, -32600, "Invalid Request")
 
         try:
             if method == "initialize":
                 result = await self._initialize(params)
+            elif method == "ping":
+                result = {}
             elif method == "tools/list":
                 result = {"tools": TOOL_SCHEMAS}
             elif method == "tools/call":
-                result = await self._call_tool(params["name"], params.get("arguments", {}))
+                if not isinstance(params.get("name"), str):
+                    raise InvalidParams("tools/call requires a tool name")
+                arguments = params.get("arguments") or {}
+                if not isinstance(arguments, dict):
+                    raise InvalidParams("arguments must be an object")
+                result = await self._call_tool(params["name"], arguments)
+            elif is_notification:
+                return None  # e.g. notifications/initialized: no response, no side effect
             else:
                 return self._error(req_id, -32601, f"Method not found: {method}")
-
-            return {"jsonrpc": "2.0", "id": req_id, "result": result}
-
-        except Exception as e:
-            logger.exception("Error handling request: %s", e)
-            return self._error(req_id, -32603, str(e))
+            return None if is_notification else {"jsonrpc": "2.0", "id": req_id, "result": result}
+        except InvalidParams as e:
+            return None if is_notification else self._error(req_id, -32602, str(e))
+        except Exception:
+            logger.exception("Error handling %s", method)
+            return None if is_notification else self._error(req_id, -32603, "Internal error")
 
     async def _initialize(self, params: dict) -> dict:
         return {
             "protocolVersion": "2024-11-05",
             "capabilities": {"tools": {}},
-            "serverInfo": {
-                "name": "oramasys-orchestration-server",
-                "version": "2.0.0"
-            }
+            "serverInfo": {"name": "oramasys-orchestration-server", "version": "2.0.0"},
         }
 
     async def _call_tool(self, name: str, arguments: dict) -> dict:
-        """Route tool call to appropriate handler."""
-        if name == "oramasys_solve":
-            return await self._solve(arguments)
-        elif name == "oramasys_delegate":
-            return await self._delegate(arguments)
-        elif name == "oramasys_status":
-            return await self._status(arguments)
-        elif name == "oramasys_lessons":
-            return await self._lessons(arguments)
-        else:
-            raise ValueError(f"Unknown tool: {name}")
+        """Route a tool call. Tool failures are results (isError), not JSON-RPC errors."""
+        handlers = {
+            "oramasys_solve": self._solve,
+            "oramasys_delegate": self._delegate,
+            "oramasys_status": self._status,
+            "oramasys_lessons": self._lessons,
+        }
+        if name not in handlers:
+            raise InvalidParams(f"Unknown tool: {name}")
+        return await handlers[name](arguments)
+
+    # ── Handlers ─────────────────────────────────────────────────────────────
+
+    def _unavailable(self, tool: str) -> dict:
+        return _tool_result({
+            "status": "unavailable",
+            "error": (f"{tool} cannot complete work: no stage executor is configured. "
+                      "Nothing was started or queued. Set ORAMASYS_STAGE_EXECUTOR "
+                      "(package.module:factory) or use the HTTP bridge."),
+        }, True)
+
+    async def _run_stage(self, stage_name: str, task: dict, prior: dict) -> dict:
+        """Run one stage via the executor with a deadline; return validated output."""
+        if self.executor is None:
+            raise ExecutorUnavailable("no stage executor configured")
+        stage = STAGE_BY_NAME[stage_name]
+        result = await asyncio.wait_for(
+            self.executor.run_stage(stage, task, prior), timeout=self.stage_timeout_s)
+        if not isinstance(result, dict) or "output" not in result:
+            raise RuntimeError("executor returned no output")
+        if stage is Stage.VERIFICATION and result.get("verdict") not in {v.value for v in Verdict}:
+            raise RuntimeError("verification stage returned no verdict")
+        try:
+            json.dumps(result)
+        except (TypeError, ValueError) as exc:
+            raise RuntimeError("executor output is not JSON-serializable") from exc
+        return result
+
+    async def _record(self, task_id: str, task_state: dict) -> None:
+        """Persist task state or raise: an unrecorded result is never reported as done."""
+        if not await self.state.set_task_state(task_id, task_state):
+            raise StateWriteError(f"task state for {task_id} could not be recorded")
+
+    def _failure(self, status: str, stage_name: str, error: str, **extra: Any) -> dict:
+        return _tool_result({"status": status, "stage": stage_name, "error": error, **extra}, True)
 
     async def _solve(self, args: dict) -> dict:
-        """Kick off full oramasys pipeline."""
-        import uuid
+        """Run the full pipeline to completion, or fail closed. Never reports 'started'."""
+        task = args.get("task")
+        if not isinstance(task, str) or not task.strip() or len(task) > MAX_TASK_CHARS:
+            raise InvalidParams(f"task must be a non-empty string of at most {MAX_TASK_CHARS} characters")
+        optimize_for = args.get("optimize_for", "reliability")
+        if optimize_for not in {o.value for o in OptimizeFor}:
+            raise InvalidParams("optimize_for must be reliability, creativity or speed")
+        context = args.get("context", {})
+        if not isinstance(context, dict):
+            raise InvalidParams("context must be an object")
+        if self.executor is None:
+            return self._unavailable("oramasys_solve")  # no task record is created
+
         task_id = str(uuid.uuid4())
+        async with self._task_lock(task_id):
+            try:
+                return await self._solve_task(task_id, task, optimize_for, context)
+            except StateWriteError as exc:
+                return self._failure("failed", "state", str(exc), task_id=task_id)
 
-        state = TaskState(
-            task_id=task_id,
-            task_description=args["task"],
-            optimize_for=args.get("optimize_for", "reliability"),
-        )
-        await self.state.set_task_state(task_id, state.to_dict())
+    async def _solve_task(self, task_id: str, task: str, optimize_for: str, context: dict) -> dict:
+        """Run every stage for a new task; caller holds the task lock."""
+        started = time.monotonic()
+        state = TaskState(task_id=task_id, task_description=task,
+                          optimize_for=OptimizeFor(optimize_for))
+        envelope = {"task": task, "optimize_for": optimize_for, "context": context}
 
-        logger.info("Starting oramasys task %s: %s", task_id, args["task"])
+        async def persist(status: str) -> None:
+            await self._record(task_id, {**state.to_dict(), "status": status})
 
-        # In production: publish to orchestrator agent
-        # For now: return task_id for status polling
-        return {
+        await persist("running")
+        models: list[str] = []
+        for name in SOLVE_ORDER:
+            if name == "crystallization":
+                reason = self._verifier_gate(state.to_dict())
+                if reason:  # same gate as delegate; crystallization never runs
+                    await persist("failed")
+                    return self._failure("rejected", name, reason, task_id=task_id)
+            state.current_stage = STAGE_BY_NAME[name]
+            await persist("running")
+            try:
+                result = await self._run_stage(name, envelope, dict(state.stage_outputs))
+            except asyncio.TimeoutError:
+                state.stage_outputs[name] = {"status": "timeout"}
+                await persist("failed")
+                return self._failure("timeout", name, f"stage exceeded {self.stage_timeout_s:g}s",
+                                     task_id=task_id)
+            except Exception as e:
+                logger.warning("Stage %s failed for %s: %s", name, task_id, e)
+                state.stage_outputs[name] = {"status": "failed", "error": type(e).__name__}
+                await persist("failed")
+                return self._failure("failed", name, f"{type(e).__name__}: {e}"[:500], task_id=task_id)
+            state.stage_outputs[name] = {"status": "done", **result}
+            if result.get("model_used"):
+                models.append(str(result["model_used"]))
+
+        state.current_stage = Stage.DONE
+        state.completed_at = utc_now_iso()
+        await persist("done")
+        crystallized = state.stage_outputs["crystallization"]["output"]
+        return _tool_result({
             "task_id": task_id,
-            "status": "started",
-            "message": f"oramasys task {task_id} initiated. Poll oramasys_status for updates."
-        }
+            "status": "done",
+            "result": crystallized,
+            "stages": {n: state.stage_outputs[n]["output"] for n in SOLVE_ORDER},
+            "model_used": ",".join(dict.fromkeys(models)) or "unknown",
+            "execution_time_ms": int((time.monotonic() - started) * 1000),
+        }, False)
+
+    @staticmethod
+    def _verifier_gate(task_state: Optional[dict]) -> Optional[str]:
+        """Return why crystallization is blocked, or None when verification PASSED.
+
+        Single gate shared by solve and delegate: clients can call delegate directly, so
+        the check cannot live only in the solve loop.
+        """
+        if not task_state:
+            return "crystallization requires an existing task_id with a verification result"
+        verification = (task_state.get("stage_outputs") or {}).get("verification")
+        if not isinstance(verification, dict) or verification.get("status") != "done":
+            return "crystallization blocked: no completed verification for this task"
+        if verification.get("verdict") != Verdict.PASS.value:
+            return f"crystallization blocked: verification verdict {verification.get('verdict')}"
+        return None
 
     async def _delegate(self, args: dict) -> dict:
-        """Delegate to a specific stage agent."""
-        stage = args["stage"]
-        agent_map = {
-            "context":        "context-agent",
-            "architecture":   "architect-agent",
-            "refinement":     "refiner-agent",
-            "execution":      "executor-agent",
-            "verification":   "verifier-agent",
-            "crystallization":"crystallizer-agent"
-        }
-        target = agent_map.get(stage, "orchestrator")
-        logger.info("Delegating stage '%s' to %s", stage, target)
-        # STUB: In production, publish to message bus and await result
-        return {"delegated_to": target, "stage": stage, "status": "queued"}
+        """Run one stage via the executor and return its real output, or fail closed."""
+        stage_name = args.get("stage")
+        if stage_name not in STAGE_BY_NAME:
+            raise InvalidParams(f"stage must be one of {sorted(STAGE_BY_NAME)}")
+        payload = args.get("input")
+        if not isinstance(payload, dict):
+            raise InvalidParams("input must be an object")
+        task_id = args.get("task_id")
+        if task_id is not None and not isinstance(task_id, str):
+            raise InvalidParams("task_id must be a string")
+        if not task_id:
+            return await self._delegate_stage(stage_name, payload, None)
+        async with self._task_lock(task_id):
+            try:
+                return await self._delegate_stage(stage_name, payload, task_id)
+            except StateWriteError as exc:
+                return self._failure("failed", stage_name, str(exc), task_id=task_id)
+
+    async def _delegate_stage(self, stage_name: str, payload: dict,
+                              task_id: Optional[str]) -> dict:
+        """Gate, run and record one stage; caller holds the task lock when task_id is set."""
+        existing = await self.state.get_task_state(task_id) if task_id else None
+        if task_id and not existing:
+            return self._failure("rejected", stage_name, f"Task {task_id} not found")
+        if stage_name == "crystallization":
+            reason = self._verifier_gate(existing)
+            if reason:  # rejected before any executor call; nothing is persisted
+                return self._failure("rejected", stage_name, reason, task_id=task_id)
+        if self.executor is None:
+            return self._unavailable("oramasys_delegate")
+
+        prior = {k: v.get("output") for k, v in (existing or {}).get("stage_outputs", {}).items()
+                 if isinstance(v, dict)}
+        started = time.monotonic()
+
+        async def record(entry: dict) -> None:
+            # Task state is the only record the verifier gate reads. Re-running a stage
+            # replaces its entry and invalidates every later stage, so a PASS can only refer
+            # to the outputs it verified; a failed re-run also revokes the earlier result.
+            outputs = existing.setdefault("stage_outputs", {})
+            for later in SOLVE_ORDER[SOLVE_ORDER.index(stage_name) + 1:]:
+                outputs.pop(later, None)
+            outputs[stage_name] = entry
+            await self._record(task_id, existing)
+
+        try:
+            result = await self._run_stage(stage_name, payload, prior)
+        except asyncio.TimeoutError:
+            if task_id:
+                await record({"status": "timeout"})
+            return self._failure("timeout", stage_name,
+                                 f"stage exceeded {self.stage_timeout_s:g}s", task_id=task_id)
+        except Exception as e:
+            logger.warning("Delegated stage %s failed: %s", stage_name, e)
+            if task_id:
+                await record({"status": "failed", "error": type(e).__name__})
+            return self._failure("failed", stage_name, f"{type(e).__name__}: {e}"[:500], task_id=task_id)
+        if task_id:
+            await record({"status": "done", **result})
+        return _tool_result({
+            "status": "done",
+            "stage": stage_name,
+            "task_id": task_id,
+            "output": result["output"],
+            **({"verdict": result["verdict"]} if "verdict" in result else {}),
+            "model_used": result.get("model_used", "unknown"),
+            "execution_time_ms": int((time.monotonic() - started) * 1000),
+        }, False)
 
     async def _status(self, args: dict) -> dict:
-        task_id = args["task_id"]
-        state   = await self.state.get_task_state(task_id)
+        task_id = args.get("task_id")
+        if not isinstance(task_id, str) or not task_id:
+            raise InvalidParams("task_id must be a non-empty string")
+        state = await self.state.get_task_state(task_id)
         if not state:
-            return {"error": f"Task {task_id} not found"}
-        return state
+            return _tool_result({"status": "not_found", "error": f"Task {task_id} not found"}, True)
+        return _tool_result(state, False)
 
     async def _lessons(self, args: dict) -> dict:
+        limit = args.get("limit", 10)
+        if not isinstance(limit, int) or isinstance(limit, bool) or not 1 <= limit <= 100:
+            raise InvalidParams("limit must be an integer 1..100")
         lessons = await self.state.get_lessons(args.get("domain"))
-        limit   = args.get("limit", 10)
-        return {"lessons": lessons[:limit], "total": len(lessons)}
+        return _tool_result({"lessons": lessons[:limit], "total": len(lessons)}, False)
 
     def _error(self, req_id, code: int, message: str) -> dict:
         return {"jsonrpc": "2.0", "id": req_id, "error": {"code": code, "message": message}}
@@ -230,25 +505,38 @@ class OramasysMCPServer:
 
 # ── Stdio transport (Claude Code / MCP standard) ─────────────────────────────
 
-async def run_stdio_server():
-    """Run server over stdin/stdout (standard MCP transport)."""
-    server = OramasysMCPServer()
-    logger.info("oramasys MCP server started (stdio)")
+async def run_stdio_server(server: Optional[OramasysMCPServer] = None):
+    """Run server over stdin/stdout. One task per request so long solves don't block status."""
+    server = server or OramasysMCPServer(executor=load_executor_from_env())
+    logger.info("oramasys MCP server started (stdio, executor=%s)",
+                type(server.executor).__name__ if server.executor else "none")
+    loop = asyncio.get_running_loop()
+    pending: set[asyncio.Task] = set()
+
+    def emit(response: Optional[dict]) -> None:
+        if response is not None:
+            print(json.dumps(response), flush=True)
+
+    async def serve(request: Any) -> None:
+        emit(await server.handle_request(request))
 
     while True:
-        try:
-            line = await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
-            if not line:
-                break
-            request = json.loads(line.strip())
-            response = await server.handle_request(request)
-            print(json.dumps(response), flush=True)
-        except json.JSONDecodeError:
-            pass
-        except EOFError:
+        line = await loop.run_in_executor(None, sys.stdin.readline)
+        if not line:
             break
+        if not line.strip():
+            continue
+        try:
+            request = json.loads(line)
+        except json.JSONDecodeError:
+            emit(server._error(None, -32700, "Parse error"))
+            continue
+        task = asyncio.create_task(serve(request))
+        pending.add(task)
+        task.add_done_callback(pending.discard)
+    if pending:
+        await asyncio.gather(*pending, return_exceptions=True)
 
 
 if __name__ == "__main__":
     asyncio.run(run_stdio_server())
-

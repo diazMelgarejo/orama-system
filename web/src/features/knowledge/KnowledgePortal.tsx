@@ -1,6 +1,7 @@
 import { FormEvent, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { searchKnowledge } from "@/api/knowledge";
+import { ApiError } from "@/api/client";
 
 const MAX_QUERY = 200;
 
@@ -52,7 +53,9 @@ export function KnowledgePortal() {
       <div className="space-y-2 p-3">
         {search.isError && submittedQuery === trimmed && (
           <p className="text-xs text-status-err">
-            Search failed. Confirm the Orama portal is reachable on port 8002.
+            {search.error instanceof ApiError && search.error.status === 503
+              ? "search timed out; try a narrower query"
+              : "Search failed. Confirm the Orama portal is reachable on port 8002."}
           </p>
         )}
         {currentHits?.length === 0 && (

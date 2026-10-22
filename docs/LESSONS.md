@@ -48,6 +48,26 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 ---
 
+### 2026-07-10 — Phase 0 checkpoint review + cross-repo grounding | Claude Code
+
+**Session:** Phase 0 blocker fixes + multi-agent orchestration (Codex + Cline + Sonnet-5)
+**Repos affected:** PT (specs fixed), orama-system (alexandria ADR created)
+**Outcome:** Cross-reference catalogue created; alexandria repository policy approved
+
+#### Critical lessons
+
+1. **Two-repo invariant FIRST** — Before editing architectural specs, ALWAYS run git verification to confirm repo locations. This session edited specs from cache (`~/.gstack/projects/`) instead of canonical PT `docs/phase-0-specifications/`. User had to prompt correction. Apply two-repo check as FIRST step before multi-repo work. Pattern: `cd $(git rev-parse --show-toplevel) && git status` confirms canonical location.
+
+2. **Orama monorepo structure** — `~/code/oramasys` is a container; the actual orama-system repo is at `~/code/oramasys/oramasys/`. Non-obvious. Document in checklist: `cd ../../oramasys/oramasys/` for orama-system canonical work, NOT `cd ../../oramasys/` alone.
+
+3. **Cross-repository navigation solved by catalogue** — Created `REPO-CROSS-REFERENCE.md` in PT mapping all plans/specs/ADRs across PT (L2) and orama-system (L3). Maintenance pattern: maintain cross-reference FIRST when adding new plans; use relative paths only (no `/Users/<name>/` paths in tracked files). Golden rule: verify both repos FIRST before editing.
+
+4. **Alexandria repository policy APPROVED** — Decision: create `oramasys/alexandria` as a documentation-only, zero-code repository for centralized specs, threat models, ADRs, and team review checklists. Benefits: single source of truth (not scattered across PT + gstack cache), no code = no build burden, stable URL anchors for cross-project references, clear L2/L3 delineation. ADR #41 created in orama-system/docs/v2/41-alexandria-repository.md [now `docs/v2/73-alexandria-repository.md`; it was committed to `oramasys/oramasys` by mistake and moved here]. One-way import: PT and orama-system import FROM alexandria, never reverse (prevents circular dependency).
+
+5. **Phase 0 Fix #3 formalized** — StateTransitionManager model reconciliation resolved: adopt asymmetric hysteresis (D2 model—quick to suspect, slow to recover). Three tasks documented: D1 schema rename, D2 pseudocode detail, D4 matrix reference. Estimated 2–3 hours to execute. PHASE-0-FIX-3-AND-MEDIUM-ITEMS-DECISION-BRIEF.md created in PT for manual review.
+
+6. **Medium items (M1–M7) deferred to Phase 1b** — Discovery strategy, cache eviction, rate limit adaptation, checkpoint gates, sequence bit-width, replay dedup, STM validation pattern. Each documented with decision options + recommendations. Do NOT block Phase 1 start; track in backlog.
+
 ### 2026-10-03 — Align harness model defaults with Alexandria model-governance | Cursor
 
 **Scope:** orama-system live guidance + `config/model-governance.yml` pin.
@@ -710,3 +730,52 @@ Closed #299, #300, #301, #302 with evidence-based comments (specific file
 correspondences and test results, not just "superseded") pointing to
 #303 → #305. No new PR created — nothing was left to integrate.
 
+
+## 2026-10-06 — Sites readiness: source, migration and authentication are separate gates
+
+A passing build did not detect the missing history-index migration. Verify exact assembled
+bytes and the migrated schema independently, including partial-index semantics, active
+request-key uniqueness and actual query plans. A verifier must not write: run SQL in
+memory and deny disk attachment. Metadata must be non-null objects.
+
+Wrangler logs, registries and XDG configuration are distinct. An opt-in child-scoped
+launcher preserves host HOME, proxies and CA settings. Keep local D1/configuration/logs
+ignored and untracked or external; resolve runtime and D1/config symlinks before checking
+containment. Cancelled acceptance runs must stop their owned Worker process group.
+
+Check gateway HTTP status before parsing JSON: authorization responses may be plain text
+or HTML. A clear UI error does not repair OAuth denial. Keep owner access, deployment,
+plugin installation and actual authenticated MCP invocation as separate evidence gates.
+Do not widen sharing, manufacture identity or duplicate the Site to claim success.
+Establish first-publication rollback beforehand; later code rollback does not reverse D1.
+Preserve migration history and all historical memory bytes. The private MCP prepares
+prompts deterministically; it does not run model inference.
+
+Implementation map: Orama `docs/v2/references/SITES-READINESS-R2-IMPLEMENTATION-2026-10-06.md`;
+PT working incident: `.agent/memory/working/SITES_READINESS_AND_AUTH_BOUNDARIES_2026-10-06.md`.
+
+## 2026-10-06 — Sites readiness: release gates found by review
+
+Review of the r2 release found that a verifier is only as strong as the applier it mirrors. Wrangler
+applies every `.sql` file in the migrations directory, not the Drizzle journal, so the verifier now
+requires the two to match, and offers an opt-in guard that a release adds only indexes. A UI error
+decoder must not erase the server's own error text: show a sign-in prompt for 401 only, surface
+well-formed JSON-RPC messages for other failures, and never echo provider bodies. A broad ignore
+rule (`lib/`) silently skipped a new source file; un-ignore overlay source paths instead of
+relying on memory. Address-literal gates apply to tests too: use a named hostname constant, never
+an obfuscated literal. Status text in tracked notes must be corrected additively as soon as a
+blocked gate passes, before the PR merges.
+
+## 2026-10-09 — Loop/graph revision 4: qualify history and bind separate policy
+
+A historical pre-publication handoff must carry its cutoff and a linked later
+resolution; rewriting it as if later work had already happened destroys evidence.
+Cross-repository links should point to reachable PR branches until merge.
+
+D-LG-1 explicitly keeps structure/hash/lint in Core and application policy above
+it. D-LG-4 approves only bounded offline bridging; no production provider grant
+or deferred-tool approval follows. A policy summary is a projection, not a token.
+
+The completion-order mutation and real offline oracle cells test contracts that
+stub wiring cannot prove. See the [current execution record](v2/references/loop-graph-compatibility-2026-10-09/EXECUTION-REVISION-4.md)
+and PT's append-only memory closure for the complete provenance and remaining gates.

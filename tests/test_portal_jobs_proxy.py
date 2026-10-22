@@ -80,7 +80,18 @@ class _FakeJobsClient:
             raise RuntimeError("pt down")
         if url.endswith("/cancel"):
             job_id = url.rsplit("/", 2)[-2]
-            return _FakeResponse({"job_id": job_id, "cancel_requested": True})
+            return _FakeResponse(
+                {
+                    "job_id": job_id,
+                    "cancel_requested": True,
+                    "terminal_state": "cancelled",
+                    "worker_kind": "cli",
+                    "containment_state": "verified",
+                    "pid": 4242,
+                    "argv": ["codex", "--secret"],
+                    "stdout": "leak",
+                }
+            )
         if url.endswith("/replay"):
             job_id = url.rsplit("/", 2)[-2]
             return _FakeResponse(
@@ -143,6 +154,28 @@ def test_jobs_proxy_cancel_posts_to_pt(monkeypatch):
         f"{portal_server.PT_URL}/v1/jobs/job-1/cancel",
         None,
     )
+
+
+def test_jobs_proxy_cancel_strips_process_internals(monkeypatch):
+    """Operator cancel proxy forwards only the rollback consumer fields."""
+    _FakeJobsClient.fail = False
+    _FakeJobsClient.calls = []
+    monkeypatch.setattr(portal_server.httpx, "AsyncClient", _FakeJobsClient)
+
+    with TestClient(portal_server.app, raise_server_exceptions=True) as client:
+        body = client.post("/api/jobs/job-1/cancel").json()
+
+    result = body["result"]
+    assert result == {
+        "job_id": "job-1",
+        "cancel_requested": True,
+        "terminal_state": "cancelled",
+        "worker_kind": "cli",
+        "containment_state": "verified",
+    }
+    assert "pid" not in result
+    assert "argv" not in result
+    assert "stdout" not in result
 
 
 def test_jobs_proxy_replay_posts_to_pt(monkeypatch):

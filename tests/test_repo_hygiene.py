@@ -377,6 +377,14 @@ def test_stale_skill_path_refs_are_blocked_in_hidden_tracked_files(tmp_path):
     ]
 
 
+def _age_lock_file(path: Path, seconds_old: float) -> None:
+    import os
+    import time
+
+    old = time.time() - seconds_old
+    os.utime(path, (old, old))
+
+
 def test_scan_stale_git_locks_detects_lock_files(tmp_path):
     repo_hygiene = load_repo_hygiene()
     git_dir = tmp_path / ".git"
@@ -384,6 +392,12 @@ def test_scan_stale_git_locks_detects_lock_files(tmp_path):
     (git_dir / "index.lock").write_text("", encoding="utf-8")
     (git_dir / "refs" / "heads" / "main.lock").write_text("", encoding="utf-8")
     (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+    # Genuinely abandoned: older than the age threshold, not an in-flight op.
+    _age_lock_file(git_dir / "index.lock", repo_hygiene.STALE_LOCK_AGE_SECONDS + 60)
+    _age_lock_file(
+        git_dir / "refs" / "heads" / "main.lock",
+        repo_hygiene.STALE_LOCK_AGE_SECONDS + 60,
+    )
 
     errors = repo_hygiene.scan_stale_git_locks(tmp_path)
 
@@ -401,6 +415,21 @@ def test_scan_stale_git_locks_clean_repo_returns_empty(tmp_path):
     git_dir = tmp_path / ".git" / "refs" / "heads"
     git_dir.mkdir(parents=True)
     (tmp_path / ".git" / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
+
+    assert repo_hygiene.scan_stale_git_locks(tmp_path) == []
+
+
+def test_scan_stale_git_locks_ignores_fresh_in_flight_lock(tmp_path: Path) -> None:
+    """Regression (2026-10-18): a lock from the CURRENT git operation (e.g. the
+    index.lock held during this very pre-commit hook run) must not be flagged.
+    Reproduced identically across three separate real commit attempts, each
+    with a fresh PID in the lock's own filename, before this fix."""
+    repo_hygiene = load_repo_hygiene()
+    git_dir = tmp_path / ".git"
+    (git_dir / "refs" / "heads").mkdir(parents=True)
+    (git_dir / "index.lock").write_text("", encoding="utf-8")
+    (git_dir / "next-index-12345.lock").write_text("", encoding="utf-8")
+    (git_dir / "HEAD").write_text("ref: refs/heads/main\n", encoding="utf-8")
 
     assert repo_hygiene.scan_stale_git_locks(tmp_path) == []
 
@@ -590,6 +619,7 @@ def test_scan_stale_git_locks_paths_use_posix_separators(tmp_path):
     lock_dir = tmp_path / ".git" / "refs" / "heads"
     lock_dir.mkdir(parents=True)
     (lock_dir / "feature.lock").write_text("", encoding="utf-8")
+    _age_lock_file(lock_dir / "feature.lock", repo_hygiene.STALE_LOCK_AGE_SECONDS + 60)
 
     errors = repo_hygiene.scan_stale_git_locks(tmp_path)
 

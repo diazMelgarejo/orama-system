@@ -17,6 +17,7 @@ EXIT_FILE_DELETION = 9
 
 
 def _run(repo: Path, *args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    """Run the guard script in ``repo`` with ``args`` and return the completed process."""
     command_env = os.environ.copy()
     if env:
         command_env.update(env)
@@ -31,6 +32,7 @@ def _run(repo: Path, *args: str, env: dict[str, str] | None = None) -> subproces
 
 
 def _init_repo(repo: Path) -> None:
+    """Create a repository with one committed file so the guard has a history to compare."""
     subprocess.run(["git", "init", "-q", "-b", "main"], check=True, cwd=repo)
     subprocess.run(["git", "config", "user.email", "test@example.com"], check=True, cwd=repo)
     subprocess.run(["git", "config", "user.name", "Test"], check=True, cwd=repo)
@@ -40,11 +42,13 @@ def _init_repo(repo: Path) -> None:
 
 
 def _stage_deletion(repo: Path) -> None:
+    """Delete the tracked file and stage the removal."""
     (repo / "tracked.txt").unlink()
     subprocess.run(["git", "add", "-u"], check=True, cwd=repo)
 
 
 def test_staged_clean_index_passes(tmp_path: Path) -> None:
+    """Staged clean index passes."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -56,6 +60,7 @@ def test_staged_clean_index_passes(tmp_path: Path) -> None:
 
 
 def test_staged_whole_file_deletion_blocks_with_path_and_symbol(tmp_path: Path) -> None:
+    """Staged whole file deletion blocks with path and symbol."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -93,6 +98,7 @@ def test_staged_rename_is_still_treated_as_a_deletion(tmp_path: Path) -> None:
     ],
 )
 def test_staged_deletion_requires_both_override_values(tmp_path: Path, env: dict[str, str]) -> None:
+    """Staged deletion requires both override values."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -104,6 +110,7 @@ def test_staged_deletion_requires_both_override_values(tmp_path: Path, env: dict
 
 
 def test_staged_deletion_allows_explicit_justified_override(tmp_path: Path) -> None:
+    """Staged deletion allows explicit justified override."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -123,6 +130,7 @@ def test_staged_deletion_allows_explicit_justified_override(tmp_path: Path) -> N
 
 
 def test_outgoing_range_whole_file_deletion_blocks(tmp_path: Path) -> None:
+    """Outgoing range whole file deletion blocks."""
     repo = tmp_path / "repo"
     repo.mkdir()
     _init_repo(repo)
@@ -162,6 +170,7 @@ def test_outgoing_range_restore_hint_uses_range_start(tmp_path: Path) -> None:
 
 
 def test_guard_is_wired_at_commit_and_push_boundaries() -> None:
+    """Guard is wired at commit and push boundaries."""
     pre_commit = (ROOT / ".githooks/pre-commit").read_text(encoding="utf-8")
     pre_push = (ROOT / ".githooks/pre-push").read_text(encoding="utf-8")
 
@@ -170,5 +179,137 @@ def test_guard_is_wired_at_commit_and_push_boundaries() -> None:
 
 
 def test_script_is_bash_32_syntax_compatible() -> None:
+    """Script is bash 32 syntax compatible."""
     result = subprocess.run(["bash", "-n", str(SCRIPT)], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+# ---- exact renames are moves, not deletions -------------------------------------------------
+# Rename detection stays OFF for similar files (the #349 case above: a revised copy must not hide
+# a removal) but an EXACT rename (100% similarity) carries every byte to the new path, so it is a
+# move. The guard asks git for exact renames explicitly, independent of any diff.renames config.
+
+
+def _git(repo: Path, *args: str) -> str:
+    """Run git in ``repo`` and return its stripped standard output."""
+    return subprocess.run(
+        ["git", *args], check=True, cwd=repo, capture_output=True, text=True, encoding="utf-8"
+    ).stdout.strip()
+
+
+@pytest.mark.parametrize("renames_config", [None, "true", "false"])
+def test_staged_exact_git_mv_is_not_a_deletion(tmp_path: Path, renames_config: str | None) -> None:
+    """Staged exact git mv is not a deletion."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    if renames_config is not None:
+        _git(repo, "config", "diff.renames", renames_config)
+    _git(repo, "mv", "tracked.txt", "moved.txt")
+
+    result = _run(repo, "--staged")
+
+    assert result.returncode == EXIT_OK
+    assert result.stderr == ""
+
+
+def test_staged_exact_move_into_a_subdirectory_is_not_a_deletion(tmp_path: Path) -> None:
+    """Staged exact move into a subdirectory is not a deletion."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    (repo / "nested").mkdir()
+    _git(repo, "mv", "tracked.txt", "nested/tracked.txt")
+
+    assert _run(repo, "--staged").returncode == EXIT_OK
+
+
+def test_outgoing_range_exact_rename_is_not_a_deletion(tmp_path: Path) -> None:
+    """Outgoing range exact rename is not a deletion."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "mv", "tracked.txt", "moved.txt")
+    _git(repo, "commit", "-q", "-m", "move")
+
+    result = _run(repo, "--range", f"{base}..HEAD")
+
+    assert result.returncode == EXIT_OK
+    assert result.stderr == ""
+
+
+def test_exact_rename_beside_a_real_deletion_blocks_only_the_deletion(tmp_path: Path) -> None:
+    """Exact rename beside a real deletion blocks only the deletion."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    (repo / "other.txt").write_text("other content that is different\n", encoding="utf-8")
+    _git(repo, "add", "other.txt")
+    _git(repo, "commit", "-q", "-m", "other")
+    _git(repo, "mv", "tracked.txt", "moved.txt")
+    _git(repo, "rm", "-q", "other.txt")
+
+    result = _run(repo, "--staged")
+
+    assert result.returncode == EXIT_FILE_DELETION
+    assert "D  other.txt" in result.stderr
+    assert "tracked.txt" not in result.stderr
+    assert "moved.txt" not in result.stderr
+
+
+def test_a_rename_with_a_single_edit_is_still_a_deletion_in_a_range(tmp_path: Path) -> None:
+    """The pre-push range check keeps the #349 protection: a revised copy hides nothing."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    _git(repo, "config", "diff.renames", "true")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "mv", "tracked.txt", "moved.txt")
+    (repo / "moved.txt").write_text("tracked\none appended line\n", encoding="utf-8")
+    _git(repo, "add", "moved.txt")
+    _git(repo, "commit", "-q", "-m", "move and edit")
+
+    result = _run(repo, "--range", f"{base}..HEAD")
+
+    assert result.returncode == EXIT_FILE_DELETION
+    assert "tracked.txt" in result.stderr
+
+
+def test_a_plain_deletion_is_still_blocked_after_an_unrelated_exact_rename(tmp_path: Path) -> None:
+    """A plain deletion is still blocked after an unrelated exact rename."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    (repo / "keep.txt").write_text("keep\n", encoding="utf-8")
+    _git(repo, "add", "keep.txt")
+    _git(repo, "commit", "-q", "-m", "keep")
+    _git(repo, "mv", "keep.txt", "kept.txt")
+    _git(repo, "rm", "-q", "tracked.txt")
+
+    result = _run(repo, "--staged")
+
+    assert result.returncode == EXIT_FILE_DELETION
+    assert "D  tracked.txt" in result.stderr
+
+
+def test_a_one_line_edit_of_a_larger_file_is_not_an_exact_rename(tmp_path: Path) -> None:
+    """At git's default 50% threshold this move-and-edit would read as a rename and mask the change."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init_repo(repo)
+    body = "".join(f"line {number}\n" for number in range(40))
+    (repo / "big.txt").write_text(body, encoding="utf-8")
+    _git(repo, "add", "big.txt")
+    _git(repo, "commit", "-q", "-m", "big")
+    base = _git(repo, "rev-parse", "HEAD")
+    _git(repo, "mv", "big.txt", "bigger.txt")
+    (repo / "bigger.txt").write_text(body.replace("line 20\n", "line twenty\n"), encoding="utf-8")
+    _git(repo, "add", "bigger.txt")
+    _git(repo, "commit", "-q", "-m", "move and edit one line")
+    assert "R" in _git(repo, "diff", "--name-status", "-M", f"{base}..HEAD")  # default detection hides it
+
+    result = _run(repo, "--range", f"{base}..HEAD")
+
+    assert result.returncode == EXIT_FILE_DELETION
+    assert "big.txt" in result.stderr

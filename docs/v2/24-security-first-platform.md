@@ -23,11 +23,13 @@ and glass-window APIs:
   token in HTML, no public model egress unless explicitly approved.
 - **Server-side authorization:** every control-plane read/write is authorized on
   trusted server-side code, never by hidden UI state, client-side flags, or
-  request-body "approved" booleans. Portal MCP (`/api/mcp`) and A2A
-  (`/api/a2a`) use that same check: `Authorization: Bearer` with
-  `ORAMA_CONTROL_PLANE_TOKEN` or `ORAMA_CONTROL_PLANE_TOKEN_LOCAL`. The
-  notification-session cookie is not a login for those paths (its `Path` is
-  `/api/notifications`). Knowledge search stays public.
+  request-body "approved" booleans. Swarm launch/approve/cancel and other
+  mutating portal routes use `Authorization: Bearer` with
+  `ORAMA_CONTROL_PLANE_TOKEN` or `ORAMA_CONTROL_PLANE_TOKEN_LOCAL` and fail
+  closed. Portal MCP (`/api/mcp` `search_docs`) and A2A (`/api/a2a`
+  `message/send`) are public Class-0 docs search, the same as
+  `GET /api/knowledge/search` (PR #371). The notification-session cookie is
+  not a login for operator routes (its `Path` is `/api/notifications`).
 - **Capability-first execution:** subprocess workers, MCP tools, model probes,
   file access, and lifecycle controls are discrete capabilities with explicit
   grants, audit events, and tests.

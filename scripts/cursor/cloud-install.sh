@@ -11,6 +11,8 @@ export HOME
 export REPO_ROOT
 # shellcheck source=lib-normalize-cloud-paths.sh
 source "$(dirname "${BASH_SOURCE[0]}")/lib-normalize-cloud-paths.sh"
+# shellcheck source=lib-mirror-sync.sh
+source "$(dirname "${BASH_SOURCE[0]}")/lib-mirror-sync.sh"
 normalize_cloud_openclaw_paths
 export OPENCLAW_HOME="${OPENCLAW_HOME:-$HOME/openclaw-v1}"
 # Cloud boot must not fail when agent worktrees have dirty guard-sync paths.
@@ -65,10 +67,21 @@ clone_sibling() {
   local dest="$OPENCLAW_HOME/$name"
   if [[ -d "$dest/.git" ]]; then
     log "$name already present at $dest; syncing origin/${branch}"
-    git -C "$dest" fetch origin --prune
-    git -C "$dest" checkout "$branch" 2>/dev/null || git -C "$dest" checkout -B "$branch" "origin/${branch}"
-    git -C "$dest" reset --hard "origin/${branch}"
-    return 0
+    local rc=0
+    mirror_sync_checkout "$dest" "$branch" || rc=$?
+    case "$rc" in
+      0) return 0 ;;
+      "$MIRROR_SYNC_DIRTY" | "$MIRROR_SYNC_UNIQUE" | "$MIRROR_SYNC_UNKNOWN")
+        # Someone worked in a checkout that was assumed to be a pure mirror. Never
+        # erase it. Boot continues on the checkout as-is unless the operator asked
+        # for a hard failure (same convention as GUARD_SYNC_ON_DIRTY above).
+        warn "$name at $dest was NOT synced to origin/${branch} (mirror-sync status $rc:" \
+          "10=uncommitted changes, 11=unpushed commits, 12=cannot verify); left untouched"
+        [[ "${CLOUD_INSTALL_ON_DIVERGED_MIRROR:-skip}" == "fail" ]] && return 1
+        return 0
+        ;;
+      *) return "$rc" ;;
+    esac
   fi
   log "cloning $name (branch $branch) -> $dest"
   mkdir -p "$OPENCLAW_HOME"

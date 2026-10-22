@@ -4,10 +4,13 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import signal
+import subprocess
 import time
 import types
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock, call
 
 import pytest
 
@@ -166,14 +169,21 @@ def test_subprocess_worker_timeout_kills_child(tmp_path: Path) -> None:
             os.kill(pid, 0)
 
 
-def test_subprocess_worker_timeout_kills_grandchild(tmp_path: Path) -> None:
-    """A worker that spawns its own child must not leave it running past the deadline.
+def test_subprocess_worker_timeout_kills_grandchild_without_group_signal(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Descendant-first cleanup must not depend on process-group signaling.
 
     proc.kill() only stops the direct `python -c` child. If a worker's own
     work spawns further children (a delegation harness makes this likely),
-    those grandchildren survive unless the whole process group is signalled.
+    descendant-first cleanup lets the direct worker reap them before it exits.
     """
     mod = _load_delegate_module()
+
+    def unavailable_group_signal(_pgid: int, _signal: int) -> None:
+        raise ProcessLookupError
+
+    monkeypatch.setattr(mod.os, "killpg", unavailable_group_signal)
     pt = tmp_path / "pt"
     src = pt / "src"
     src.mkdir(parents=True)
@@ -233,6 +243,58 @@ def test_subprocess_worker_timeout_kills_grandchild(tmp_path: Path) -> None:
             break
         time.sleep(0.1)
     assert grandchild_dead, "grandchild must be killed, not just the direct child"
+
+
+def test_descendant_permission_error_falls_through_to_group_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Continue cleanup when a descendant cannot be signalled directly."""
+    mod = _load_delegate_module()
+    proc = Mock(pid=10)
+    proc.poll.return_value = None
+    proc.wait.side_effect = [subprocess.TimeoutExpired("worker", 5), 0]
+    worker = types.SimpleNamespace(proc=proc)
+    descendant_lookup = Mock(return_value=[11])
+    direct_signal = Mock(side_effect=PermissionError)
+    group_signal = Mock()
+    monkeypatch.setattr(mod, "_linux_descendant_pids", descendant_lookup)
+    monkeypatch.setattr(mod.os, "kill", direct_signal)
+    monkeypatch.setattr(mod.os, "killpg", group_signal)
+
+    mod._terminate_worker(worker)
+
+    direct_signal.assert_called_once_with(11, signal.SIGTERM)
+    group_signal.assert_called_once_with(10, signal.SIGTERM)
+
+
+def test_descendant_cleanup_escalates_to_group_sigkill_when_worker_stays_alive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Escalate after descendant-first termination leaves the worker alive."""
+    mod = _load_delegate_module()
+    proc = Mock(pid=10)
+    proc.poll.return_value = None
+    proc.wait.side_effect = [
+        subprocess.TimeoutExpired("worker", 5),
+        subprocess.TimeoutExpired("worker", 5),
+        0,
+    ]
+    worker = types.SimpleNamespace(proc=proc)
+    descendant_lookup = Mock(return_value=[11])
+    direct_signal = Mock()
+    group_signal = Mock()
+    monkeypatch.setattr(mod, "_linux_descendant_pids", descendant_lookup)
+    monkeypatch.setattr(mod.os, "kill", direct_signal)
+    monkeypatch.setattr(mod.os, "killpg", group_signal)
+
+    mod._terminate_worker(worker)
+
+    direct_signal.assert_called_once_with(11, signal.SIGTERM)
+    assert group_signal.call_args_list == [
+        call(10, signal.SIGTERM),
+        call(10, signal.SIGKILL),
+    ]
+    assert proc.wait.call_count == 3
 
 
 def test_subprocess_workers_respect_concurrency_cap(tmp_path: Path) -> None:

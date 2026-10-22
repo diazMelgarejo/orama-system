@@ -11,8 +11,9 @@
 > progressive-HTML or hybrid extraction path.
 > **Implementation branch:** `web-app-orchestration-v2-implementation`
 > **Eng review update:** launch, jobs, artifacts, and PT contract handling shipped before frontend build-out.
-> **Related:** knowledge-portal HITL ladder. Knowledge search stays public;
-> portal MCP and A2A require a control-plane bearer or local token —
+> **Related:** knowledge-portal HITL ladder. Knowledge search, MCP
+> `search_docs`, and A2A `message/send` for docs search stay public
+> (PR #371). Swarm launch/approve/cancel stay operator-token fail-closed —
 > [`70-portal-knowledge-hitl-development-ladder.md`](70-portal-knowledge-hitl-development-ladder.md).
 > This plan is not superseded.
 

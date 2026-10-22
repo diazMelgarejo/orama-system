@@ -45,18 +45,22 @@ _SENSITIVE_TOP_LEVEL_KEYS = frozenset(
     }
 )
 
+# Class-0 public reads (as-built, PR #371): health, agent card, bounded
+# docs search. /api/mcp and /api/a2a stay public (read-only search_docs /
+# message/send). Knowledge is the exact search path only — not every
+# /api/knowledge/* route. Swarm launch/approve/cancel stay operator-gated.
 _PUBLIC_PORTAL_PATHS = frozenset(
     {
         "/health",
         "/.well-known/agent-card.json",
         "/api/mcp",
         "/api/a2a",
+        "/api/knowledge/search",
     }
 )
 
 _PUBLIC_PORTAL_PREFIXES = (
     "/assets/",
-    "/api/knowledge/",
 )
 
 
@@ -472,6 +476,7 @@ def cors_allow_origins() -> list[str]:
 
 
 def portal_path_is_public(path: str) -> bool:
+    """Return whether ``path`` is a Class-0 public portal route (no bearer)."""
     if path in _PUBLIC_PORTAL_PATHS:
         return True
     return any(path.startswith(prefix) for prefix in _PUBLIC_PORTAL_PREFIXES)
@@ -572,12 +577,15 @@ def redact_runtime_section(payload: Any) -> dict[str, Any]:
 def redact_job_record(job: Mapping[str, Any]) -> dict[str, Any]:
     """Return one supervisor job safe for portal list/detail views.
 
-    Drops ``prompt``, ``metadata``, ``spec``, and ``result``. Keeps the columns
-    the embedded jobs table renders (``intent``, ``status``, ``backend``,
-    timestamps, ``elapsed_s``), hoisting ``backend_hint`` / ``intent`` /
-    ``role`` from a nested ``spec`` when the lifecycle event omits top-level
-    copies. ``created_at`` is the job start. A lone event ``ts`` is the latest
-    lifecycle time and becomes ``updated_at``, not ``created_at``.
+    Allowlist only: ``id``, ``job_id``, ``status``, ``role``, ``intent``,
+    ``backend_hint``, ``backend``, ``elapsed_s``, ``worker_kind``,
+    ``containment_state``, plus coerced timestamps. Drops ``prompt``,
+    ``metadata``, ``spec``, ``result``, and process internals (``pid``,
+    ``argv``, ``cmdline``, ``cwd``, ``env``, ``stdout``, ``stderr``). Hoists
+    ``backend_hint`` / ``intent`` / ``role`` from nested ``spec`` when the
+    lifecycle event omits top-level copies. ``created_at`` is the job start.
+    A lone event ``ts`` is the latest lifecycle time and becomes
+    ``updated_at``, not ``created_at``.
     """
     safe: dict[str, Any] = {}
     for key in (

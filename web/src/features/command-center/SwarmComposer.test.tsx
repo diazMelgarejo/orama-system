@@ -110,6 +110,34 @@ describe("SwarmComposer launch gate", () => {
     expect(screen.getByRole("button", { name: "Launch Swarm" })).toBeDisabled();
   });
 
+  it("shows an error badge and orphaned jobs instead of a green session badge", async () => {
+    vi.mocked(launchSwarm).mockResolvedValueOnce({
+      accepted: false,
+      blocked: false,
+      launch_blocked: true,
+      launch_blocked_reason: "orphaned_jobs_after_rollback",
+      session_id: "swarm-orphan",
+      accepted_jobs: [],
+      failed_jobs: [{ role: "verifier-agent", error: "fail" }],
+      cancelled_jobs: [],
+      orphaned_jobs: ["job-context-agent"],
+      launch_attempt_id: "attempt-1",
+      preview: {
+        objective: DEFAULT_OBJECTIVE,
+        task_type: "reasoning",
+        optimize_for: "quality",
+        preferred_device: "auto",
+        assignments: [],
+        hardware_policy: { ok: true, violations: [] },
+      },
+    });
+    renderComposer(approvedPreview);
+    fireEvent.click(screen.getByRole("button", { name: "Launch Swarm" }));
+    await waitFor(() => expect(screen.getByRole("status", { name: /launch blocked/i })).toBeInTheDocument());
+    expect(screen.queryByText(/session swarm-orphan/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/orphaned jobs: job-context-agent/i)).toBeInTheDocument();
+  });
+
   it("shows preview errors instead of the Preview-first hint", async () => {
     vi.mocked(previewSwarm).mockRejectedValueOnce(new Error("unreachable"));
     renderComposer();

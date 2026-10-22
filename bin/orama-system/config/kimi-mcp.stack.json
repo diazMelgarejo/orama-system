@@ -17,6 +17,14 @@
       "env": {
         "MCP_CLAUDE_DEBUG": "false"
       }
+    },
+    "exa": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote@0.14.3", "https://mcp.exa.ai/mcp"]
+    },
+    "firecrawl": {
+      "command": "npx",
+      "args": ["-y", "mcp-remote@0.14.3", "https://mcp.firecrawl.dev/v2/mcp"]
     }
   }
 }

@@ -203,9 +203,11 @@ def release_launch_claim(
 ) -> None:
     """End a failed dispatch attempt.
 
-    When ``restore_to_cache`` is true and rollback verified every accepted job
-    was cancelled, the preview returns to the approval cache for one retry.
-    When false (orphaned jobs remain), the approval stays consumed.
+    When ``restore_to_cache`` is true, every accepted job passed
+    ``cancellation_allows_restore`` (durable ``cancelled`` plus an allowed
+    containment pair, or mixed-deploy absence of both fields). The preview
+    returns to the approval cache for one retry. When false (orphaned jobs
+    remain, including ``cli`` / ``unresolved``), the approval stays consumed.
     """
     normalized = (preview_id or "").strip()
     with _dispatch_lock:

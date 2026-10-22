@@ -231,6 +231,12 @@ subsets is superseded.
 
 ## 7. Executable core is the field-level authority
 
+**2026-10-09 D-LG-1 amendment:** the earlier ownership sentence below is historical.
+Core retains structural spec, hash and structural lint; Oramasys implements the
+separate graph_id-bound policy and application summary; Orama docs/v2 owns
+normative design. See [the approved split](references/loop-graph-compatibility-2026-10-09/ADR-D-LG-1-POLICY-OWNERSHIP.md).
+No new policy engine enters Core. Agate, Phylax and Telos retain their authorities.
+
 `orama-system` owns architecture, GraphSpec policy, lint, evaluation, and the
 normative boundary rules. `oramasys/perpetua-core` owns executable field-level
 behavior for:

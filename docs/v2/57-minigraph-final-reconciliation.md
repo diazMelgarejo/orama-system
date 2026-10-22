@@ -342,6 +342,11 @@ Join:    ALL | ANY | FIRST_SUCCESS | QUORUM | CUSTOM
 Branch completion timing MUST NOT silently define state merge behavior.
 This is deferred R3 work.
 
+> **2026-10-10 qualification:** R3 mechanics (bounded single-level fan-out, these
+> reducers and joins) are merged in Core and Oramasys, but production Core remains
+> pinned pre-R3; see [D-LG-6](references/loop-graph-compatibility-2026-10-09/ADR-D-LG-6-R3-REDUCERS-JOINS-FANOUT.md).
+> The text above is preserved as history. Later work: [D-LG-7](references/r4-safety-compatibility-platform-2026-10-10/ADR-D-LG-7-R4-SAFETY-COMPATIBILITY-PLATFORM.md).
+
 ---
 
 ## 11. Durability before resume
@@ -363,9 +368,25 @@ created_at
 Durable replay also requires explicit effect idempotency/deduplication policy.
 External-write nodes cannot be retried or resumed safely without that contract.
 
+> **2026-10-10 qualification (approved design; implementation pending):** the durable
+> identity, recovery algorithm and effect protocol are specified in the
+> [continuation](references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-CONTINUATION.md)
+> and [HITL/effect](references/r4-safety-compatibility-platform-2026-10-10/CONTRACT-DURABLE-HITL-EFFECTS.md)
+> contracts. Until implemented, resume still starts at `START`.
+
 ---
 
 ## 12. Upper-layer ownership
+
+**2026-10-09 approved D-LG-1 amendment:** Core owns its existing structural
+GraphSpec/NodeSpec/EdgeSpec, content-hash graph_id and structural lint. Oramasys
+owns a separate versioned graph-policy file bound to graph_id, with a linked
+summary transcluded at the application level. Orama docs/v2 remains the design
+authority; v1 gains no v2 runtime dependency. See the active
+[D-LG-1 decision](references/loop-graph-compatibility-2026-10-09/ADR-D-LG-1-POLICY-OWNERSHIP.md)
+and [policy contract](references/loop-graph-compatibility-2026-10-09/GRAPH-POLICY-CONTRACT.md).
+The earlier ownership assignment below is preserved as historical context and
+is qualified by this explicit decision; it is not the current code placement.
 
 `perpetua-core` executes a realized graph. The final face-off assigns the
 richer graph-specification and runtime-policy authority to `orama-system`.
@@ -403,6 +424,11 @@ a new explicit architecture decision.
 ---
 
 ## 13. Graph lint target
+
+**2026-10-09 qualification:** structural lint lives in Core; policy binding lint
+lives in Oramasys under D-LG-1. The full acceptance target below remains required
+before production policy admission. The implemented subset does not prove R3/R4,
+durable approval, provider dedupe or evaluation. Unimplemented gates stay blocked.
 
 Before executing a versioned `GraphSpec`, the `orama-system` layer MUST
 validate at least:
@@ -521,12 +547,17 @@ Future changes MUST preserve:
 ## 17. LangGraph / LangGraph.js compatibility target
 
 Internal implementation stays ours. At the API surface, the standing target is
-compatibility for the supported builder/topology API and invoke/stream surface.
-Do not claim full drop-in compatibility across unimplemented subsystems.
+100% drop-in compatibility with LangGraph/LangChain. It is work in progress and
+not yet finished; it is a target we are actively working toward and will never
+stop, drop or qualify.
 
-The explicitly excluded or future surfaces include exact
+Delivery is tracked per surface and is never overstated: the builder/topology
+API and invoke/stream surface are the first supported surfaces. Exact
 `astream_events(version="v2")` fidelity and full `BaseCheckpointSaver`
-serialization compatibility.
+serialization compatibility are still in progress under the same target. A
+surface is marked delivered only after independent evidence covers every supported package
+version, Python version, entry point, import path, observable event, error, and persistence
+behavior.
 
 ### 17a. Python surface
 

@@ -18,11 +18,31 @@ git fetch origin --prune
 main_sha="$(git rev-parse "origin/${UPSTREAM_BRANCH}")"
 
 echo ">>> sync local ${UPSTREAM_BRANCH} to origin/${UPSTREAM_BRANCH}"
-git checkout "$UPSTREAM_BRANCH" 2>/dev/null || git checkout -b "$UPSTREAM_BRANCH"
-git reset --hard "$main_sha"
+# Both moves below discard whatever the branch holds beyond its remote, so they run
+# through the gated move: clean tree, and nothing left unreferenced that was not
+# already pushed. A refusal stops the script; it never erases local work.
+# shellcheck source=../cursor/lib-mirror-sync.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../cursor/lib-mirror-sync.sh"
+
+gated_move() {
+  local branch="$1" rc=0
+  mirror_sync_checkout "$AC_ROOT" "$branch" || rc=$?
+  case "$rc" in
+    0) return 0 ;;
+    "$MIRROR_SYNC_DIRTY") echo "ERROR: ${AC_ROOT} has uncommitted changes; refusing to move ${branch}" >&2 ;;
+    "$MIRROR_SYNC_UNIQUE") echo "ERROR: ${branch} holds unpushed commits (listed above); push or branch them first" >&2 ;;
+    "$MIRROR_SYNC_UNKNOWN") echo "ERROR: cannot verify that moving ${branch} is safe" >&2 ;;
+    *) echo "ERROR: could not move ${branch} (git status ${rc})" >&2 ;;
+  esac
+  return 1
+}
+
+# main is the upstream line: it moves forward to origin/main (fast-forward in effect).
+gated_move "$UPSTREAM_BRANCH" || exit 1
+main_sha="$(git rev-parse "origin/${UPSTREAM_BRANCH}")"
 
 if git show-ref --verify --quiet "refs/remotes/origin/${INTEGRATION_BRANCH}"; then
-  git checkout -B "$INTEGRATION_BRANCH" "origin/${INTEGRATION_BRANCH}"
+  gated_move "$INTEGRATION_BRANCH" || exit 1
 elif git show-ref --verify --quiet "refs/heads/${INTEGRATION_BRANCH}"; then
   git checkout "$INTEGRATION_BRANCH"
 else

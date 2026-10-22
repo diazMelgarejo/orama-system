@@ -9,6 +9,11 @@ if [[ -x "$ROOT/scripts/git/scrub_dsstore.sh" ]]; then
   bash "$ROOT/scripts/git/scrub_dsstore.sh" || true
 fi
 
+# Markdown gate: reject staged .md files that CI markdownlint would fail.
+if [ -x "$ROOT/scripts/git/check_markdown_lint.sh" ]; then
+  bash "$ROOT/scripts/git/check_markdown_lint.sh" || exit 1
+fi
+
 # Fast-fail: private LAN IPs in tracked config (3080/5080 endpoints → env vars).
 if [ -f "$ROOT/scripts/hooks/no_committed_lan_topology.py" ]; then
   if ! command -v python3 >/dev/null 2>&1; then

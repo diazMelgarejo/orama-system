@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import App from "./App";
 
@@ -23,8 +23,15 @@ function renderApp() {
 }
 
 describe("App", () => {
+  it("opens the local workspace by default", () => {
+    renderApp();
+    expect(screen.getByRole("heading", { name: "Your work, on your terms." })).toBeInTheDocument();
+    expect(screen.getByLabelText("Privacy")).toHaveValue("local");
+  });
+
   it("renders the operator console and shows mock-state fallback on API error", async () => {
     renderApp();
+    fireEvent.click(screen.getByRole("button", { name: "Operator console" }));
     expect(screen.getByText("Command")).toBeInTheDocument();
     await waitFor(() => {
       expect(

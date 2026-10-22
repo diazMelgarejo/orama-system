@@ -1,21 +1,16 @@
 import { CommandCenter } from "./features/command-center/CommandCenter";
+import { useState } from "react";
+import { Workspace } from "./features/workspace/Workspace";
+import "./features/workspace/workspace.css";
 
-/**
- * App shell — single-route operator console.
- * The visual layout is the "dense dark operator console" target from
- * docs/superpowers/specs/2026-05-14-rc1-orchestration-master-plan.md §3 Stage 4.
- *
- * Layout (top → bottom):
- *   ┌──────────────────────────────────────────────────┐
- *   │  Top env/region/API status bar                   │
- *   ├──────────────────────────────────────────────────┤
- *   │ NavLeft │ ReadinessStrip                         │
- *   │         │ SwarmComposer                          │
- *   │         │ WorkerAssignments                      │
- *   │         │ RunsTable                              │
- *   │         │ ArtifactsPanel                         │
- *   └──────────────────────────────────────────────────┘
- */
+/** Local workspace with the existing operator console available alongside it. */
 export default function App() {
-  return <CommandCenter />;
+  const [consoleOpen, setConsoleOpen] = useState(false);
+  return <>
+    <nav className="workspace-navigation" aria-label="Application">
+      <span className="workspace-brand">ORAMA <small>/ local workspace</small></span>
+      <div><button aria-pressed={!consoleOpen} onClick={() => setConsoleOpen(false)}>Workspace</button><button aria-pressed={consoleOpen} onClick={() => setConsoleOpen(true)}>Operator console</button></div>
+    </nav>
+    {consoleOpen ? <CommandCenter /> : <Workspace />}
+  </>;
 }

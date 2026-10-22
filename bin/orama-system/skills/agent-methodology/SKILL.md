@@ -55,6 +55,9 @@ stages.
 
 - Ground non-trivial work in the five stages and verify each changed boundary.
 - Use the contract-migration gate when a durable or transport contract moves.
+- For multi-agent work, preserve author/actor distinction and apply the
+  [`GossipBus provenance policy`](../gossip-bus/references/author-actor-takeover-policy.md)
+  to delegation, review, takeover, and final-status statements.
 
 ### Ask First
 
@@ -64,6 +67,8 @@ stages.
 
 - Treat a local passing caller as proof that a cross-module contract is complete.
 - Skip the verification stage for a non-trivial change.
+- Treat a previous agent's output as your authorship, or infer endorsement,
+  authorization, or completion without independently verified evidence.
 
 ## Contract Migration Gate
 

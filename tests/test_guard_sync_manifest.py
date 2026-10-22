@@ -159,3 +159,61 @@ def test_verify_guard_parity_reports_cursor_helper_drift(tmp_path: Path) -> None
 
     assert result.returncode != 0
     assert "scripts/cursor/append-pr-body.sh DRIFTED" in result.stdout
+
+
+def test_markdown_lint_gate_is_a_synced_guard_executable() -> None:
+    """The pre-commit markdown gate is byte-synced like every other guard script.
+
+    It was once listed only in a header comment ("same script in both repos"),
+    so the copies drifted within a day with nothing to notice. Being in the
+    manifest puts it under sync-attribution-guard-scripts.sh and parity checks.
+    """
+    assert "check_markdown_lint.sh" in _bash_array("GUARD_SYNC_EXECUTABLES")
+
+
+def test_markdown_lint_gate_passes_awkward_staged_paths_through_unquoted(
+    tmp_path: Path,
+) -> None:
+    """Spaces and non-ASCII names reach the linter exactly, not C-quoted.
+
+    Without NUL-delimited output git quotes such paths ("caf\\303\\251.md"), so
+    the linter would be handed a name that does not exist. A stub linter records
+    its argv so the test does not depend on markdownlint being installed.
+    """
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    env = {"PATH": str(tmp_path / "bin") + ":/usr/bin:/bin", "HOME": str(tmp_path)}
+    (tmp_path / "bin").mkdir()
+    record = tmp_path / "argv.txt"
+    stub = tmp_path / "bin" / "markdownlint-cli2"
+    stub.write_text(f'#!/bin/sh\nprintf "%s\\n" "$@" > "{record}"\n', encoding="utf-8")
+    stub.chmod(0o755)
+
+    def git(*args: str) -> None:
+        subprocess.run(["git", *args], cwd=repo, check=True, capture_output=True, env=env)
+
+    git("init", "-q")
+    awkward = ["café notes.md", "plain.md"]
+    for name in awkward:
+        (repo / name).write_text("# t\n", encoding="utf-8")
+    git("add", "--", *awkward)
+
+    result = subprocess.run(
+        ["bash", str(GIT / "check_markdown_lint.sh")],
+        cwd=repo, capture_output=True, text=True, env=env, encoding="utf-8",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert sorted(record.read_text(encoding="utf-8").splitlines()) == sorted(awkward)
+
+
+def test_markdown_lint_gate_is_silent_when_no_markdown_is_staged(tmp_path: Path) -> None:
+    """Nothing staged means exit 0 without invoking any linter (bash 3.2 safe)."""
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True, capture_output=True)
+    result = subprocess.run(
+        ["bash", str(GIT / "check_markdown_lint.sh")],
+        cwd=repo, capture_output=True, text=True, encoding="utf-8",
+    )
+    assert result.returncode == 0, result.stderr

@@ -36,12 +36,30 @@ git config user.name "${GIT_AUTHOR_NAME:-cyre}"
 git config user.email "${GIT_AUTHOR_EMAIL:-diazMelgarejo@gmail.com}"
 
 git remote add upstream "$UPSTREAM" 2>/dev/null || true
-git fetch origin upstream --prune
+# Two remotes, two fetches. (`git fetch origin upstream` asks origin for a *branch*
+# named "upstream" and never fetches the upstream remote, which left upstream/main
+# stale or missing, and the target of the re-point below is upstream/main.)
+git fetch origin --prune
+git fetch upstream --prune
+
+# main is a mirror of upstream Periscope; the dependabot commits above were merged
+# into it by mistake and are being re-homed onto `merged`. Those are the ONLY commits
+# this step may drop. Anything else on local or remote main (or uncommitted work) is
+# refused, and a backup ref is made before the remote is rewritten.
+# shellcheck source=../cursor/lib-mirror-sync.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/../cursor/lib-mirror-sync.sh"
 
 log "Reset main -> upstream Periscope (latentsignal-org/periscope main)"
-git checkout main
-git reset --hard upstream/main
-git push origin main --force-with-lease
+rc=0
+mirror_repoint_to_upstream "$REPO" main upstream/main origin \
+  "$COMMIT_GO" "$COMMIT_NPM" "$COMMIT_CARGO" || rc=$?
+case "$rc" in
+  0) ;;
+  "$MIRROR_SYNC_DIRTY") log "ERROR: $REPO has uncommitted changes; refusing to re-point main"; exit 1 ;;
+  "$MIRROR_SYNC_UNIQUE") log "ERROR: main holds commits that were not declared above (listed); refusing"; exit 1 ;;
+  "$MIRROR_SYNC_UNKNOWN") log "ERROR: cannot verify that re-pointing main is safe"; exit 1 ;;
+  *) log "ERROR: re-pointing main failed (git status $rc)"; exit "$rc" ;;
+esac
 
 log "Base branches from merged"
 git fetch origin merged
