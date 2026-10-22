@@ -105,6 +105,7 @@ def ack(
 
 
 def test_cold_bootstrap_persists_identity_floor_and_base_atomically(consumer: AnchorConsumer) -> None:
+    """Section 3.3: cold bootstrap persists identity floor and base atomically."""
     anchor = chain(5, 5)[0]
 
     bootstrap(consumer, anchor)
@@ -116,12 +117,14 @@ def test_cold_bootstrap_persists_identity_floor_and_base_atomically(consumer: An
 
 
 def test_bootstrap_at_n_gt_1_sets_acked_through_n_and_never_below(consumer: AnchorConsumer) -> None:
+    """Section 3.3: bootstrap at N > 1 sets acked through n and never below."""
     bootstrap(consumer, chain(7, 7)[0])
 
     assert consumer.acked_through(ISSUER) == 7
 
 
 def test_gap_does_not_advance_but_next_event_does(consumer: AnchorConsumer) -> None:
+    """Section 3.3: gap does not advance but next event does."""
     events = chain(5, 8)
     bootstrap(consumer, events[0])
 
@@ -134,6 +137,7 @@ def test_gap_does_not_advance_but_next_event_does(consumer: AnchorConsumer) -> N
 
 
 def test_conflicting_event_above_anchor_does_not_advance(consumer: AnchorConsumer) -> None:
+    """Section 3.3: conflicting event above anchor does not advance."""
     events = chain(5, 6)
     bootstrap(consumer, events[0])
     forged = make_event(6, previous="b" * 64)
@@ -143,6 +147,7 @@ def test_conflicting_event_above_anchor_does_not_advance(consumer: AnchorConsume
 
 
 def test_unverifiable_next_event_does_not_advance(consumer: AnchorConsumer) -> None:
+    """Section 3.3: unverifiable next event does not advance."""
     events = chain(5, 6)
     bootstrap(consumer, events[0])
     wrong_signer = make_event(6, previous=events[0]["event_digest"], signer=_OTHER)
@@ -157,6 +162,7 @@ def test_unverifiable_next_event_does_not_advance(consumer: AnchorConsumer) -> N
 
 
 def test_digest_mismatch_is_plain_refusal_and_persists_nothing(consumer: AnchorConsumer) -> None:
+    """Section 3.3: digest mismatch is plain refusal and persists nothing."""
     anchor = chain(5, 5)[0]
     anchor["event_digest"] = "0" * 64
 
@@ -167,6 +173,7 @@ def test_digest_mismatch_is_plain_refusal_and_persists_nothing(consumer: AnchorC
 
 
 def test_signature_over_caller_digest_alone_is_insufficient(consumer: AnchorConsumer) -> None:
+    """Section 3.3: signature over caller digest alone is insufficient."""
     anchor = chain(5, 5)[0]
     anchor["body"] = {"finalization_id": "tampered"}
     anchor["event_digest"] = event_digest(anchor)  # digest is consistent; only the signature is stale
@@ -178,6 +185,7 @@ def test_signature_over_caller_digest_alone_is_insufficient(consumer: AnchorCons
 
 
 def test_key_supplied_only_by_event_is_not_trusted(consumer: AnchorConsumer) -> None:
+    """Section 3.3: key supplied only by event is not trusted."""
     anchor = chain(5, 5)[0]
 
     with pytest.raises(AnchorRefusal, match="untrusted_key"):
@@ -189,6 +197,7 @@ def test_key_supplied_only_by_event_is_not_trusted(consumer: AnchorConsumer) -> 
 
 
 def test_bad_signature_is_plain_refusal(consumer: AnchorConsumer) -> None:
+    """Section 3.3: bad signature is plain refusal."""
     anchor = make_event(5, "a" * 64, signer=_OTHER)
 
     with pytest.raises(AnchorRefusal, match="bad_signature"):
@@ -198,6 +207,7 @@ def test_bad_signature_is_plain_refusal(consumer: AnchorConsumer) -> None:
 
 
 def test_identical_retry_is_noop_and_keeps_acked_through(consumer: AnchorConsumer) -> None:
+    """Section 3.3: identical retry is noop and keeps acked through."""
     events = chain(5, 7)
     bootstrap(consumer, events[0])
     ack(consumer, events[1])
@@ -210,6 +220,7 @@ def test_identical_retry_is_noop_and_keeps_acked_through(consumer: AnchorConsume
 
 
 def test_conflicting_retry_refuses_quarantines_and_keeps_persisted_values(consumer: AnchorConsumer) -> None:
+    """Section 3.3: conflicting retry refuses quarantines and keeps persisted values."""
     original = chain(5, 5)[0]
     bootstrap(consumer, original)
     before = persisted(consumer)[:8]
@@ -224,6 +235,7 @@ def test_conflicting_retry_refuses_quarantines_and_keeps_persisted_values(consum
 
 
 def test_lower_version_retry_cannot_lower_floor(consumer: AnchorConsumer) -> None:
+    """Section 3.3: lower version retry cannot lower floor."""
     bootstrap(consumer, chain(9, 9)[0])
 
     with pytest.raises(AnchorConflict):
@@ -233,6 +245,7 @@ def test_lower_version_retry_cannot_lower_floor(consumer: AnchorConsumer) -> Non
 
 
 def test_quarantine_blocks_that_issuer_only_and_writes_no_authority(consumer: AnchorConsumer) -> None:
+    """Section 3.3: quarantine blocks that issuer only and writes no authority."""
     bootstrap(consumer, chain(5, 5)[0])
     other_events = chain(2, 2)
     other_trusted = {**TRUSTED, "issuer-b": {KEY_ID: _PUB}}
@@ -249,6 +262,7 @@ def test_quarantine_blocks_that_issuer_only_and_writes_no_authority(consumer: An
 
 
 def test_matching_later_bootstrap_does_not_clear_quarantine(consumer: AnchorConsumer) -> None:
+    """Section 3.3: matching later bootstrap does not clear quarantine."""
     original = chain(5, 5)[0]
     bootstrap(consumer, original)
     with pytest.raises(AnchorConflict):
@@ -260,6 +274,7 @@ def test_matching_later_bootstrap_does_not_clear_quarantine(consumer: AnchorCons
 
 
 def test_quarantine_survives_restart_semantics_because_flag_is_in_record(consumer: AnchorConsumer) -> None:
+    """Section 3.3: quarantine survives restart semantics because flag is in record."""
     bootstrap(consumer, chain(5, 5)[0])
     with pytest.raises(AnchorConflict):
         bootstrap(consumer, make_event(5, "c" * 64))
@@ -271,6 +286,7 @@ def test_quarantine_survives_restart_semantics_because_flag_is_in_record(consume
 def test_clear_requires_operator_reference_and_evidence(
     consumer: AnchorConsumer, operator_ref: str | None, evidence: str
 ) -> None:
+    """Section 3.3: clear requires operator reference and evidence."""
     bootstrap(consumer, chain(5, 5)[0])
     with pytest.raises(AnchorConflict):
         bootstrap(consumer, make_event(5, "c" * 64))
@@ -283,6 +299,7 @@ def test_clear_requires_operator_reference_and_evidence(
 
 
 def test_clear_needs_existing_quarantine(consumer: AnchorConsumer) -> None:
+    """Section 3.3: clear needs existing quarantine."""
     bootstrap(consumer, chain(5, 5)[0])
 
     with pytest.raises(AnchorQuarantineClearRefused):
@@ -290,6 +307,7 @@ def test_clear_needs_existing_quarantine(consumer: AnchorConsumer) -> None:
 
 
 def test_audited_clear_appends_log_and_never_lowers_floor(consumer: AnchorConsumer) -> None:
+    """Section 3.3: audited clear appends log and never lowers floor."""
     bootstrap(consumer, chain(5, 5)[0])
     with pytest.raises(AnchorConflict):
         bootstrap(consumer, make_event(5, "c" * 64))
@@ -307,6 +325,7 @@ def test_audited_clear_appends_log_and_never_lowers_floor(consumer: AnchorConsum
 
 
 def test_ack_insert_and_high_water_mark_commit_atomically(consumer: AnchorConsumer) -> None:
+    """Section 3.3: ack insert and high water mark commit atomically."""
     anchor, nxt = chain(5, 6)[0], chain(5, 6)[1]
     bootstrap(consumer, anchor)
     consumer.db.execute(
@@ -322,6 +341,7 @@ def test_ack_insert_and_high_water_mark_commit_atomically(consumer: AnchorConsum
 
 
 def test_malformed_signature_encoding_is_refused_not_raised(consumer: AnchorConsumer) -> None:
+    """Section 3.3: malformed signature encoding is refused not raised."""
     bootstrap(consumer, chain(5, 5)[0])
     nxt = chain(5, 6)[1]
     nxt["signature"] = "not-hex"
@@ -331,6 +351,7 @@ def test_malformed_signature_encoding_is_refused_not_raised(consumer: AnchorCons
 
 
 def test_lower_floor_permit_refused_without_authority_write_and_reservation_kept(consumer: AnchorConsumer) -> None:
+    """Section 3.3: lower floor permit refused without authority write and reservation kept."""
     bootstrap(consumer, chain(5, 5)[0])
     consumer.add_reservation("r1")
 
@@ -342,6 +363,7 @@ def test_lower_floor_permit_refused_without_authority_write_and_reservation_kept
 
 
 def test_permit_at_or_above_floor_is_authorized(consumer: AnchorConsumer) -> None:
+    """Section 3.3: permit at or above floor is authorized."""
     bootstrap(consumer, chain(5, 5)[0])
     consumer.add_reservation("r1")
     consumer.add_reservation("r2")
@@ -351,12 +373,14 @@ def test_permit_at_or_above_floor_is_authorized(consumer: AnchorConsumer) -> Non
 
 
 def test_issuer_without_anchor_has_no_floor(consumer: AnchorConsumer) -> None:
+    """Section 3.3: issuer without anchor has no floor."""
     consumer.add_reservation("r1")
 
     assert consumer.authorize("never-bootstrapped", "r1", 0) == "authorized"
 
 
 def test_refusal_reason_is_consumer_local_not_a_wire_code(consumer: AnchorConsumer) -> None:
+    """Section 3.3: refusal reason is consumer local not a wire code."""
     bootstrap(consumer, chain(5, 5)[0])
     consumer.add_reservation("r1")
 
@@ -366,6 +390,7 @@ def test_refusal_reason_is_consumer_local_not_a_wire_code(consumer: AnchorConsum
 
 
 def test_crash_between_anchor_insert_and_ack_audit_leaves_nothing() -> None:
+    """Section 3.3: crash between anchor insert and ack audit leaves nothing."""
     crashing = AnchorConsumer(fail_after_anchor_insert=True)
 
     with pytest.raises(RuntimeError):
@@ -376,6 +401,7 @@ def test_crash_between_anchor_insert_and_ack_audit_leaves_nothing() -> None:
 
 
 def test_repeated_pruning_leaves_only_latest_anchor_hot_and_archives_former() -> None:
+    """Section 3.3: repeated pruning leaves only latest anchor hot and archives former."""
     store = HotStore(range(1, 21))
 
     store.prune_to(5)
@@ -389,6 +415,7 @@ def test_repeated_pruning_leaves_only_latest_anchor_hot_and_archives_former() ->
 
 
 def test_repeated_bootstrap_with_different_key_identity_quarantines(consumer: AnchorConsumer) -> None:
+    """Section 3.3: repeated bootstrap with different key identity quarantines."""
     bootstrap(consumer, chain(5, 5)[0])
     same_event_other_key = chain(5, 5)[0]
     same_event_other_key["issuer_key_id"] = "key-2"
@@ -401,6 +428,7 @@ def test_repeated_bootstrap_with_different_key_identity_quarantines(consumer: An
 
 
 def test_read_only_inspection_stays_possible_under_quarantine(consumer: AnchorConsumer) -> None:
+    """Section 3.3: read only inspection stays possible under quarantine."""
     events = chain(5, 6)
     bootstrap(consumer, events[0])
     ack(consumer, events[1])
@@ -412,6 +440,7 @@ def test_read_only_inspection_stays_possible_under_quarantine(consumer: AnchorCo
 
 
 def test_clear_log_rows_cannot_be_rewritten_or_deleted(consumer: AnchorConsumer) -> None:
+    """Section 3.3: clear log rows cannot be rewritten or deleted."""
     bootstrap(consumer, chain(5, 5)[0])
     with pytest.raises(AnchorConflict):
         bootstrap(consumer, make_event(5, "c" * 64))
@@ -425,6 +454,7 @@ def test_clear_log_rows_cannot_be_rewritten_or_deleted(consumer: AnchorConsumer)
 
 
 def test_events_below_the_anchor_are_never_acknowledged(consumer: AnchorConsumer) -> None:
+    """Section 3.3: events below the anchor are never acknowledged."""
     bootstrap(consumer, chain(5, 5)[0])
     below = make_event(4, "d" * 64)
 

@@ -38,7 +38,7 @@ class AnchorConflict(AnchorRefusal):
 
 
 class AnchorQuarantineClearRefused(Exception):
-    pass
+    """An audited quarantine clear was refused; the quarantine and floor are unchanged."""
 
 
 def event_digest(event: Event) -> str:
@@ -49,7 +49,9 @@ def event_digest(event: Event) -> str:
 
 
 class AnchorConsumer:
+    """Reference consumer for Section 3.3: anchor bootstrap, acknowledgement, floor gate and audited clear over SQLite."""
     def __init__(self, fail_after_anchor_insert: bool = False) -> None:
+        """Create the in-memory store; ``fail_after_anchor_insert`` injects a crash mid-bootstrap."""
         self._fail_after_anchor_insert = fail_after_anchor_insert
         self.db = sqlite3.connect(":memory:", isolation_level=None)
         self.db.executescript(
@@ -172,12 +174,14 @@ class AnchorConsumer:
         return True
 
     def acked_through(self, issuer_id: str) -> int | None:
+        """Return the contiguous acknowledged high-water mark, or None without an anchor."""
         row = self.db.execute(
             "SELECT acked_through FROM anchor WHERE issuer_id=?", (issuer_id,)
         ).fetchone()
         return row[0] if row else None
 
     def record(self, issuer_id: str) -> Row | None:
+        """Return the persisted anchor row for the issuer, or None."""
         row: Row | None = self.db.execute(
             "SELECT * FROM anchor WHERE issuer_id=?", (issuer_id,)
         ).fetchone()
@@ -185,9 +189,11 @@ class AnchorConsumer:
 
     # --- Section 3.3 item 2: anchor-floor gate and quarantine block -----------------------
     def add_reservation(self, reservation_id: str) -> None:
+        """Register an unconsumed permit reservation."""
         self.db.execute("INSERT INTO reservation VALUES(?,0)", (reservation_id,))
 
     def reservation_consumed(self, reservation_id: str) -> bool:
+        """Return whether the reservation has been consumed."""
         return bool(
             self.db.execute(
                 "SELECT consumed FROM reservation WHERE reservation_id=?", (reservation_id,)
@@ -216,12 +222,14 @@ class AnchorConsumer:
             raise
 
     def authority_writes(self) -> int:
+        """Return how many authority writes have been committed."""
         return int(self.db.execute("SELECT COUNT(*) FROM authority_write").fetchone()[0])
 
     # --- clear_anchor_quarantine ----------------------------------------------------------
     def clear_anchor_quarantine(
         self, issuer_id: str, *, operator_ref: str | None, evidence: str | None, ts: str
     ) -> None:
+        """Clear a quarantine with operator authority and evidence, logging previous and accepted records atomically; the floor never lowers."""
         if not (operator_ref or "").strip():
             raise AnchorQuarantineClearRefused("operator_authority_missing")
         if not (evidence or "").strip():
@@ -247,6 +255,7 @@ class AnchorConsumer:
             raise
 
     def clear_log(self) -> list[Row]:
+        """Return the append-only clear log rows."""
         return self.db.execute("SELECT * FROM clear_log").fetchall()
 
 
@@ -254,11 +263,13 @@ class HotStore:
     """Section 3.2 rule 3: at most one retained boundary event hot; former anchors archived."""
 
     def __init__(self, versions: Iterable[int]) -> None:
+        """Start with the given event versions hot and nothing archived."""
         self.hot = set(versions)
         self.archive: set[int] = set()
         self.anchor: int | None = None
 
     def prune_to(self, boundary: int) -> None:
+        """Archive hot versions and the prior anchor below ``boundary``; ``boundary`` becomes the anchor."""
         moving = {v for v in self.hot if v < boundary}
         if self.anchor is not None and self.anchor < boundary:
             moving.add(self.anchor)
