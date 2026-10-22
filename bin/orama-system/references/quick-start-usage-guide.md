@@ -18,12 +18,14 @@ Trigger the full 5-stage process with:
 
 ### 2. Mandatory Workflow
 
-Follow the 6 directives in every non-trivial task:
+Follow the [six operational directives](core-operational-directives.md) in every non-trivial task:
 
-1. **Plan**: `./scripts/create_task_plan.sh "Build feature"`
-2. **Execute**: Build stage-by-stage (Context -> Architect -> Refine -> Execute -> Crystallize)
-3. **Verify**: `python scripts/verify_before_done.py` (Must PASS before done)
-4. **Learn**: `PERPETUA_TOOLS_ROOT=/path/to/Perpetua-Tools python scripts/capture_lesson.py --quick` (Run after any correction)
+1. **Plan**: establish the outcome, constraints, and checks before work that has three or more dependent steps.
+2. **Delegate**: split independent work into bounded, separately reviewable assignments.
+3. **Learn**: capture corrections through the canonical PT memory workflow after material feedback or failure.
+4. **Verify**: run the checks proportionate to the changed surface before declaring completion.
+5. **Refine**: prefer the simplest coherent design; remove avoidable duplication and ambiguity.
+6. **Fix**: diagnose actionable defects to their cause, implement the narrow repair, and verify it end-to-end.
 
 ### 3. Integrated Frameworks
 
