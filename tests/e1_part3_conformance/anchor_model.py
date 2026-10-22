@@ -48,6 +48,10 @@ class AnchorConsumer:
             CREATE TABLE quarantine_evidence(issuer_id TEXT, conflicting TEXT);
             CREATE TABLE clear_log(id INTEGER PRIMARY KEY AUTOINCREMENT, issuer_id TEXT,
               previous TEXT, accepted TEXT, evidence TEXT, operator_ref TEXT, ts TEXT);
+            CREATE TRIGGER clear_log_no_update BEFORE UPDATE ON clear_log
+              BEGIN SELECT RAISE(ABORT, 'append-only'); END;
+            CREATE TRIGGER clear_log_no_delete BEFORE DELETE ON clear_log
+              BEGIN SELECT RAISE(ABORT, 'append-only'); END;
             CREATE TABLE reservation(reservation_id TEXT PRIMARY KEY, consumed INTEGER NOT NULL);
             CREATE TABLE authority_write(issuer_id TEXT, reservation_id TEXT);
             """

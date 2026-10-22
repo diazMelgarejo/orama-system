@@ -76,3 +76,26 @@ The digest was computed with the Section 3 command at the commit above. The deci
 implementation, no serving, no production emission, no pin promotion and no activation;
 `ORAMA_GRANT_SERVING` stays unset. Conformance tests (item 3) remain an explicit release prerequisite
 before any implementation is merged. Everything outside Section 3.3 stays proposed.
+
+## 6. Follow-up evidence for items 3 and 5 (2026-10-22)
+
+Recorded by claude-fable-5 (identity not independently verified). This section adds evidence; it does
+not rewrite the table above and changes no decision.
+
+**Item 3, test evidence.** An executable conformance suite now exists in
+`tests/e1_part3_conformance/` (31 tests, all passing: `python3 -m pytest tests/e1_part3_conformance`).
+It runs against a test-only reference model of Section 3.3, **not** against the Oramasys consumer
+store, which does not implement `bootstrap_anchor`. It covers cold bootstrap, bootstrap at
+$N > 1$ with `acked_through = N`, a gap at $N + 1$ not advancing it, digest, key and signature
+refusals that persist nothing, identical retry as a no-op, conflicting retry with quarantine and the
+persisted values kept, quarantine blocking only that issuer, no automatic clearing, audited clearing
+with an append-only log, lower-floor refusal `anchor_floor.permit_below_floor` with no authority write
+and the reservation unconsumed, crash safety of the atomic record, and repeated pruning from $N$ to
+$M$. Not covered: gate order when several rules fail together, and concurrent floor commits. The
+suite must be pointed at the real consumer store before any implementation merges.
+
+**Item 5, reviewer verdict at the exact commit.** AntiGravity (`agy`, text-only, shown Section 3.3
+and the tests, not the repository) at commit `6459b30e77a6ab22297307374e64dd8872c9b796`:
+APPROVE_WITH_CHANGES. Its gaps (key-identity divergence, read-only inspection under quarantine,
+append-only log, pre-anchor acknowledgements, exact refusal string) were addressed in the suite; gate
+order and concurrency remain open. No Codex or Cline verdict is recorded.

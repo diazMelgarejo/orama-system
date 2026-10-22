@@ -3,6 +3,8 @@
 Covers packet item 3: cold bootstrap, checkpoint acknowledgement, repeated pruning, identical
 retry, conflicting retry and quarantine, clearing, lower-floor rejection, crash safety.
 """
+import sqlite3
+
 import pytest
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -280,7 +282,7 @@ def test_refusal_reason_is_consumer_local_not_a_wire_code(consumer):
 
     reason = consumer.authorize(ISSUER, "r1", 1)
 
-    assert reason.startswith("anchor_floor.") and "." in reason
+    assert reason == "anchor_floor.permit_below_floor"
 
 
 def test_crash_between_anchor_insert_and_ack_audit_leaves_nothing():
@@ -304,3 +306,48 @@ def test_repeated_pruning_leaves_only_latest_anchor_hot_and_archives_former():
     assert 5 in store.archive and 12 not in store.archive
     assert {v for v in store.hot if v <= 12} == {12}  # only the new anchor remains hot
     assert store.archive == set(range(1, 12))
+
+
+def test_repeated_bootstrap_with_different_key_identity_quarantines(consumer):
+    bootstrap(consumer, chain(5, 5)[0])
+    same_event_other_key = chain(5, 5)[0]
+    same_event_other_key["issuer_key_id"] = "key-2"
+    trusted = {ISSUER: {KEY_ID: _PUB, "key-2": _PUB}}
+
+    with pytest.raises(AnchorConflict):
+        bootstrap(consumer, same_event_other_key, trusted=trusted)
+
+    assert consumer.record(ISSUER)[8] == 1 and consumer.record(ISSUER)[1] == KEY_ID
+
+
+def test_read_only_inspection_stays_possible_under_quarantine(consumer):
+    events = chain(5, 6)
+    bootstrap(consumer, events[0])
+    consumer.acknowledge(ISSUER, events[1])
+    with pytest.raises(AnchorConflict):
+        bootstrap(consumer, make_event(5, "c" * 64))
+
+    assert consumer.record(ISSUER) is not None
+    assert consumer.acked_through(ISSUER) == 6
+
+
+def test_clear_log_rows_cannot_be_rewritten_or_deleted(consumer):
+    bootstrap(consumer, chain(5, 5)[0])
+    with pytest.raises(AnchorConflict):
+        bootstrap(consumer, make_event(5, "c" * 64))
+    consumer.clear_anchor_quarantine(ISSUER, operator_ref="op", evidence="ev", ts="t")
+
+    with pytest.raises(sqlite3.DatabaseError):
+        consumer.db.execute("UPDATE clear_log SET evidence='x'")
+    with pytest.raises(sqlite3.DatabaseError):
+        consumer.db.execute("DELETE FROM clear_log")
+    assert len(consumer.clear_log()) == 1
+
+
+def test_events_below_the_anchor_are_never_acknowledged(consumer):
+    bootstrap(consumer, chain(5, 5)[0])
+    below = make_event(4, "d" * 64)
+
+    assert consumer.acknowledge(ISSUER, below) is False
+    assert consumer.acked_through(ISSUER) == 5
+    assert consumer.db.execute("SELECT COUNT(*) FROM ack WHERE version<5").fetchone()[0] == 0
