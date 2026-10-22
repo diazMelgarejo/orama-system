@@ -250,6 +250,20 @@ Full install and daisy-chain documentation: user-managed; defer to operator docs
 - [x] **`uvx code-review-graph --help`** — `first-run-install.sh` uses `uvx code-review-graph --version` in `status` (not `--help`); cold `uvx` download can take ~60s once per machine
 - [ ] Cursor agents: CRG MCP registration is **not** part of `first-run.done` — see [`docs/reference/agent-first-open-visibility.md`](../../../docs/reference/agent-first-open-visibility.md)
 
+## Appendix B — SKILL.md First-Run Bootstrap (moved verbatim from the mother skill)
+
+<!-- Moved from bin/orama-system/SKILL.md `## First-Run Bootstrap` (OSSF-1 500-line ceiling). Link targets rebased; paths in code spans are relative to the repo root. -->
+
+New machine or fresh checkout:
+
+```bash
+bash bin/orama-system/scripts/first-run-install.sh status    # fast probe
+bash bin/orama-system/scripts/first-run-install.sh install  # idempotent §0 checklist
+bash bin/orama-system/scripts/install-mcp-stack.sh          # MCP workers (separate)
+```
+
+Full steps: [`references/first-run-install.md`](../references/first-run-install.md) · Agent workflow: [`skills/first-run-setup/SKILL.md`](../skills/first-run-setup/SKILL.md) · **E2E (install → MCP → code review):** [`../../docs/how-to/first-run-and-code-review.md`](../../../docs/how-to/first-run-and-code-review.md) · **Host surfaces:** [`../../docs/reference/agent-first-open-visibility.md`](../../../docs/reference/agent-first-open-visibility.md)
+
 ---
 
 ## See also
