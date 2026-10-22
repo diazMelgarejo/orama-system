@@ -29,6 +29,7 @@ oramaclaw = "oramaclaw.cli:main"
 test = [
     "pytest~=9.0.3",
     "pytest-asyncio~=1.4.0",
+    "cryptography~=50.0",  # Ed25519 reference-model conformance tests
     "httpx2>=2.0.0,<3",  # Starlette TestClient transport
     "requests>=2.32.0,<3",
     "hatchling~=1.26.0",
