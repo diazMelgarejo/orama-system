@@ -1,7 +1,9 @@
 # E1 C2 (Part 3): ratification acceptance packet
 
-**Status:** INCOMPLETE. This packet records what an operator needs before deciding on the Part 3
-ratification surface, and the current status of each item. It is not a ratification.
+**Status:** RATIFIED BY OPERATOR DECISION on 2026-10-22 for Section 3.3 only (see Section 5);
+items 3 and 5 below remain unmet and are recorded as such. Before that decision this packet read
+INCOMPLETE. This packet records what an operator needs before deciding on the Part 3
+ratification surface, and the current status of each item. It is not itself a ratification.
 **Amendment:** [Part 3 amendment][amend], whose
 [Ratification surface](E1-C2-INTEGRATED-SCHEMA-PART3-AMENDMENT-2026-10-19.md#ratification-surface)
 marks Section 3.3 as the only section proposed for ratification.
@@ -51,3 +53,26 @@ DECISION = <ratify | defer>, <date>, <operator>
 
 [amend]: E1-C2-INTEGRATED-SCHEMA-PART3-AMENDMENT-2026-10-19.md
 [s33]: E1-C2-INTEGRATED-SCHEMA-PART3-AMENDMENT-2026-10-19.md#33-consumer-anchor-floor-invariant-additional-consumer-local-gate
+
+## 5. Operator decision (recorded 2026-10-22)
+
+Recorded by claude-fable-5 (identity not independently verified) from the operator's instruction in the
+session: "ratify Part 3: name commit 6459b30e and limit it to §3.3". The operator is the ratifying
+authority; this section records the decision and does not make it.
+
+```text
+COMMIT   = 6459b30e77a6ab22297307374e64dd8872c9b796
+SHA256   = 984065ab236f7bd9178049de312d54c501b2a393eccb229b6d8f42360b3143f4
+TESTS    = none exist (item 3 unmet); ratification is a contract/specification decision only
+REVIEWS  = agent advisory only, at an earlier head: AntiGravity NOT READY (hardening since applied);
+           three Sonnet steelman reviewers RATIFY_AFTER_EDITS; Codex hardening commit 6459b30e itself.
+           No reviewer verdict recorded at the exact commit (item 5 unmet).
+DECISION = ratify, 2026-10-22, operator
+SCOPE    = Section 3.3 only (bootstrap-anchor protocol, atomic persisted identity/version/digest/floor
+           record, R_p >= anchor_version floor rule, with its consumer-local refusal and quarantine semantics)
+```
+
+The digest was computed with the Section 3 command at the commit above. The decision authorizes no
+implementation, no serving, no production emission, no pin promotion and no activation;
+`ORAMA_GRANT_SERVING` stays unset. Conformance tests (item 3) remain an explicit release prerequisite
+before any implementation is merged. Everything outside Section 3.3 stays proposed.
