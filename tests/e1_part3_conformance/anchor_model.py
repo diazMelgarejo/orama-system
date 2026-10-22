@@ -4,6 +4,11 @@ This is a minimal sqlite model of the consumer anchor-floor invariant, written f
 ratified text so the conformance tests have something to execute. It is NOT the Oramasys
 implementation and authorizes none: no serving, emission, pin promotion or activation.
 The same tests are meant to be pointed at the real consumer store once it exists.
+
+Signing note: the tests' signer is a STAND-IN (pure Ed25519 via ``cryptography``). The real
+event scheme is Ed25519ph over ``phylax-issuer-event-v1\\x00`` + the 64 hex digest characters;
+it is verified against Phylax-signed vectors in Oramasys
+``src/tests/test_dispatch_event_ed25519ph.py``, not here.
 """
 from __future__ import annotations
 
