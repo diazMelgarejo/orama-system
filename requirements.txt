@@ -24,5 +24,5 @@ slowapi>=0.1.9
 
 # Test dependencies
 pytest>=9.0.3
-pytest-asyncio>=0.23.0
+pytest-asyncio>=1.4.0,<2
 httpx>=0.26.0

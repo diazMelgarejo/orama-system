@@ -114,7 +114,10 @@ parent_id = sys.argv[1]
 parent = next((item for item in json.load(sys.stdin) if item.get("id") == parent_id), None)
 if parent is None:
     raise SystemExit("parent agent is not registered: " + parent_id)
-allow = parent.get("subagents", {}).get("allowAgents", [])
+subagents = parent.get("subagents", {})
+if not isinstance(subagents, dict):
+    raise SystemExit("parent subagents must be an object with an allowAgents list")
+allow = subagents.get("allowAgents", [])
 if not isinstance(allow, list) or not all(isinstance(item, str) for item in allow):
     raise SystemExit("parent allowAgents must be a list of agent IDs")
 ' "$parent_agent_id"
@@ -142,6 +145,12 @@ mkdir -p "$agent_dir"
    ```
 
 5. Validate the completed files, then register the prepared workspace.
+
+`--agent-dir` requires the target Gateway to be stopped. Do not stop it
+automatically: that can interrupt other agents and active sessions. Ask the
+operator to stop the Gateway scoped to `openclaw_home`, confirm it is stopped,
+then run this registration block. Restarting the Gateway is likewise an
+operator-controlled follow-up after registration and configuration validation.
 
 ```bash
 for directive in SOUL.md IDENTITY.md USER.md AGENTS.md TOOLS.md SECURITY.md; do
@@ -172,7 +181,10 @@ parent_id, child_id = sys.argv[1:3]
 agents = json.load(sys.stdin)
 for index, agent in enumerate(agents):
     if agent.get("id") == parent_id:
-        allow = agent.get("subagents", {}).get("allowAgents", [])
+        subagents = agent.get("subagents", {})
+        if not isinstance(subagents, dict):
+            raise SystemExit("parent subagents must be an object with an allowAgents list")
+        allow = subagents.get("allowAgents", [])
         if not isinstance(allow, list) or not all(isinstance(item, str) for item in allow):
             raise SystemExit("parent allowAgents must be a list of agent IDs")
         desired = [*allow]
