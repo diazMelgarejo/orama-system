@@ -28,6 +28,7 @@ not_escalation_token:
   - cached_approval
 
 banned_launch_ids:
+  - gpt-6-astra
   - grok-4.5
   - grok-4.6
 

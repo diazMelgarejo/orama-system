@@ -118,6 +118,11 @@ def test_env_and_config_flags_are_not_escalation_tokens() -> None:
         assert_launch_allowed(spec, proof=flag_shaped)
 
 
+def test_banned_launch_ids_are_refused_before_path_dispatch() -> None:
+    with pytest.raises(ModelGovernanceError, match="banned launch id: gpt-6-astra"):
+        assert_launch_allowed(LaunchSpec(path="unknown", launch_id="gpt-6-astra"))
+
+
 def test_grok_47_default_is_ungated_and_requires_medium_fast_off() -> None:
     spec = LaunchSpec(
         path="cursor_grok_bot",
