@@ -25,6 +25,9 @@ They do not restate model ids.
   (`claude-sonnet-5` is a legacy pin only).
   `claude-opus-5-5` (high) and `claude-fable-5-1` each need an
   escalation token; Fable also needs a hard budget cap.
+- **Effort ceiling (operator ruling 10):** `xhigh` and `max` are refused on
+  every harness path, including when matching approval metadata is supplied.
+  The check applies to both effort fields before path-specific policy runs.
 - **Escalation token** means a proven control-plane (S-AuthZ) bearer
   **and** a fresh signed HITL approval (GitHub Verified signature on
   device, offline GPG/PGP, or an online signer tied to the control

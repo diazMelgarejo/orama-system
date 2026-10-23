@@ -123,6 +123,36 @@ def test_banned_launch_ids_are_refused_before_path_dispatch() -> None:
         assert_launch_allowed(LaunchSpec(path="unknown", launch_id="gpt-6-astra"))
 
 
+@pytest.mark.unit
+@pytest.mark.parametrize("effort", ["xhigh", "max"])
+@pytest.mark.parametrize("field", ["effort", "reasoning_effort"])
+def test_forbidden_effort_cannot_be_unlocked_by_approval(
+    effort: str, field: str
+) -> None:
+    """Ruling 10 rejects top-tier effort even with matching approval metadata."""
+    values = {field: effort}
+    spec = LaunchSpec(
+        path="cursor_grok_bot", launch_id="composer-2.5", fast=False, **values
+    )
+    proof = _vec_proof("composer-2.5", effort, False)
+    with pytest.raises(ModelGovernanceError, match="effort is forbidden"):
+        assert_launch_allowed(spec, proof=proof, now=_VEC_NOW)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("effort", ["xhigh", "max"])
+def test_forbidden_secondary_effort_is_not_hidden_by_medium(effort: str) -> None:
+    """Both effort fields are checked before a path-specific early return."""
+    spec = LaunchSpec(
+        path="anthropic",
+        launch_id="claude-sonnet-5-5",
+        effort="medium",
+        reasoning_effort=effort,
+    )
+    with pytest.raises(ModelGovernanceError, match="effort is forbidden"):
+        assert_launch_allowed(spec)
+
+
 def test_grok_47_default_is_ungated_and_requires_medium_fast_off() -> None:
     spec = LaunchSpec(
         path="cursor_grok_bot",
@@ -131,7 +161,7 @@ def test_grok_47_default_is_ungated_and_requires_medium_fast_off() -> None:
         fast=False,
     )
     assert_launch_allowed(spec)
-    for effort in (None, "high", "xhigh", "max"):
+    for effort in (None, "high"):
         with pytest.raises(ModelGovernanceError, match="requires effort medium"):
             assert_launch_allowed(
                 LaunchSpec(
