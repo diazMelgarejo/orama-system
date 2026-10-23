@@ -15,12 +15,11 @@ They do not restate model ids.
 
 - The **harness** chooses the path. There is no Claude-only
   (or any single-provider-only) routing default for agents.
-- **Cursor / Grok Bot:** default launch is `grok-4.6` at
+- **Cursor / Grok Bot:** default launch is `grok-4.7` at
   `{effort: medium, fast: false}`
-  (usage label `cursor-grok-4.6-medium`).
+  (usage label `cursor-grok-4.7-medium`).
   `composer-2.5` is allowed with fast off.
-  `grok-4.7` needs an escalation token and still runs medium / fast off.
-  `grok-4.5` is banned.
+  `grok-4.5` and superseded `grok-4.6` are banned.
   `auto` / `default` is editor-only, never for agents.
 - **Anthropic:** default is `claude-sonnet-5-5` at medium
   (`claude-sonnet-5` is a legacy pin only).

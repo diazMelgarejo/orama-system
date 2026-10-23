@@ -38,9 +38,9 @@ def test_cost_gate_and_cloud_escalation_invariants(cfg: dict) -> None:
     assert cfg["invariants"]["cloud_escalation"] == "default_deny"
 
 
-def test_cursor_default_is_grok_46_medium_fast_off() -> None:
+def test_cursor_default_is_grok_47_medium_fast_off() -> None:
     spec = default_launch("cursor_grok_bot")
-    assert spec.launch_id == "grok-4.6"
+    assert spec.launch_id == "grok-4.7"
     assert spec.effort == "medium"
     assert spec.fast is False
     assert_launch_allowed(spec)
@@ -58,10 +58,11 @@ def test_legacy_sonnet_5_pin_allowed(cfg: dict) -> None:
     assert_launch_allowed(spec, config=cfg)
 
 
-def test_grok_45_banned() -> None:
+@pytest.mark.parametrize("launch_id", ["grok-4.5", "grok-4.6"])
+def test_superseded_grok_launch_ids_are_banned(launch_id: str) -> None:
     spec = LaunchSpec(
         path="cursor_grok_bot",
-        launch_id="grok-4.5",
+        launch_id=launch_id,
         effort="medium",
         fast=False,
     )
@@ -117,24 +118,33 @@ def test_env_and_config_flags_are_not_escalation_tokens() -> None:
         assert_launch_allowed(spec, proof=flag_shaped)
 
 
-def test_grok_47_allowed_only_with_real_proof() -> None:
+def test_grok_47_default_is_ungated_and_requires_medium_fast_off() -> None:
     spec = LaunchSpec(
         path="cursor_grok_bot",
         launch_id="grok-4.7",
         effort="medium",
         fast=False,
     )
-    with pytest.raises(ModelGovernanceError, match="default-deny"):
-        assert_launch_allowed(spec)
-    proof = EscalationProof(
-        kind="github_verified_signoff",
-        reference="abc123verified",
-        model_id="grok-4.7",
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=2),
-        effort="medium",
-        fast=False,
-    )
-    assert_launch_allowed(spec, proof=proof)
+    assert_launch_allowed(spec)
+    for effort in (None, "high", "xhigh", "max"):
+        with pytest.raises(ModelGovernanceError, match="requires effort medium"):
+            assert_launch_allowed(
+                LaunchSpec(
+                    path="cursor_grok_bot",
+                    launch_id="grok-4.7",
+                    effort=effort,
+                    fast=False,
+                )
+            )
+    with pytest.raises(ModelGovernanceError, match="requires fast=False"):
+        assert_launch_allowed(
+            LaunchSpec(
+                path="cursor_grok_bot",
+                launch_id="grok-4.7",
+                effort="medium",
+                fast=True,
+            )
+        )
 
 
 def test_opus_and_fable_require_token_fable_needs_cap() -> None:
@@ -191,7 +201,8 @@ def test_live_guidance_has_no_stale_defaults() -> None:
         assert "claude-opus-4-8" not in text
         assert "claude-4.6-sonnet" not in text
     cursor_skill = Path("bin/orama-system/skills/cursor-agent/SKILL.md").read_text(encoding="utf-8")
-    assert "grok-4.6" in cursor_skill
+    assert "grok-4.7" in cursor_skill
+    assert "| `grok-4.6` | Grok 4.6 | **Default for agents.**" not in cursor_skill
     assert "**Default for agents.**" in cursor_skill
     workflow = Path("bin/orama-system/references/claude-code-workflow-canonical.md").read_text(encoding="utf-8")
     assert "claude-sonnet-5-5" in workflow
@@ -380,7 +391,7 @@ def test_vector_cursor_family_controls() -> None:
 
 @pytest.mark.parametrize("effort", [None, "high", "low", "medium"])
 def test_vector_direct_xai_requires_medium_effort(effort) -> None:
-    spec = LaunchSpec(path="direct_xai", launch_id="grok-4.6", reasoning_effort=effort)
+    spec = LaunchSpec(path="direct_xai", launch_id="grok-4.7", reasoning_effort=effort)
     if effort == "medium":
         assert_launch_allowed(spec)
     else:
@@ -469,13 +480,16 @@ def test_vector_unknown_proof_kind_is_not_a_token() -> None:
 
 
 @pytest.mark.parametrize("path", ["anthropic", "cursor_grok_bot"])
-def test_vector_banned_launch_id_refused_even_with_matching_proof(path) -> None:
-    spec = LaunchSpec(path=path, launch_id="grok-4.5", effort="medium", fast=False)
+@pytest.mark.parametrize("launch_id", ["grok-4.5", "grok-4.6"])
+def test_vector_banned_launch_id_refused_even_with_matching_proof(
+    path: str, launch_id: str
+) -> None:
+    spec = LaunchSpec(path=path, launch_id=launch_id, effort="medium", fast=False)
     with pytest.raises(ModelGovernanceError, match="banned"):
         assert_launch_allowed(spec)
     with pytest.raises(ModelGovernanceError, match="banned"):
         assert_launch_allowed(
-            spec, proof=_vec_proof("grok-4.5", "medium", False), now=_VEC_NOW
+            spec, proof=_vec_proof(launch_id, "medium", False), now=_VEC_NOW
         )
 
 

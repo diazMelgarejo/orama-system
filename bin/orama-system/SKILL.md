@@ -280,7 +280,7 @@ When context > 70% -- offload, one task per subagent:
 > Claude Code `default` (Opus 5.5).** Anthropic-path default is Sonnet 5.5
 > medium (`claude-sonnet-5-5`). Opus 5.5 high and Fable 5.1 need an
 > escalation token (Fable also needs a hard budget cap). `AskUserQuestion`
-> is not a token. Cursor/Grok Bot runs stay on `grok-4.6` medium / fast off
+> is not a token. Cursor/Grok Bot runs stay on `grok-4.7` medium / fast off
 > unless the operator names an allowed alternative. Full mapping:
 > `references/claude-code-workflow-canonical.md` and
 > `docs/standards/model-governance.md`. This Workflow mapping is

@@ -53,9 +53,9 @@
 - `@field_validator` (Pydantic V2) — never deprecated `@validator`
 - `depth=0` validated server-side; workers cannot spawn sub-workers in V1
 - Harness model selection is provider-agnostic.
-  Cursor default: `grok-4.6` medium / fast off.
+  Cursor default: `grok-4.7` medium / fast off.
   Anthropic default: `claude-sonnet-5-5` medium.
-  `grok-4.5` is banned. `auto` is editor-only.
+  `grok-4.5` and `grok-4.6` are banned. `auto` is editor-only.
   Cost gate fail-closed; cloud escalation default-deny.
   Escalation token ≠ config/env/cache.
 

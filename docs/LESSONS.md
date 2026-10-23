@@ -779,3 +779,17 @@ or deferred-tool approval follows. A policy summary is a projection, not a token
 The completion-order mutation and real offline oracle cells test contracts that
 stub wiring cannot prove. See the [current execution record](v2/references/loop-graph-compatibility-2026-10-09/EXECUTION-REVISION-4.md)
 and PT's append-only memory closure for the complete provenance and remaining gates.
+
+## 2026-10-23 — Model pin evidence must distinguish availability from absence
+
+An official provider result can confirm a selected model identifier and its
+accepted effort values, but a search that does not return a newer model is not
+evidence that the newer model is unreleased. Record the latter as unverified
+and recheck the provider's model list and release notes immediately before a
+pin change.
+
+When a default moves, update the executable pin, its validator, tests, and all
+active harness guidance together. Preserve superseded identifiers in the
+explicit deny list so old commands fail closed rather than silently retaining
+an obsolete default. A policy-selected value such as `medium` remains distinct
+from the provider's own default and must be enforced explicitly.

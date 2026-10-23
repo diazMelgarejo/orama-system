@@ -244,6 +244,11 @@ def _assert_cursor_launch(
     if spec.launch_id.startswith("claude-"):
         _assert_anthropic_launch(spec, proof=proof, cfg=cfg, now=now, approval_scope=approval_scope)
         return
+    default = cfg["cursor_grok_bot"]["default"]
+    default_id = str(default["launch_id"])
+    if spec.launch_id == default_id:
+        _assert_gated_params(spec, default)
+        return
     if spec.fast is True:
         if spec.launch_id == "composer-2.5" and covers():
             return
@@ -253,8 +258,6 @@ def _assert_cursor_launch(
     if spec.launch_id in _ungated_cursor_ids(cfg):
         if spec.launch_id == "composer-2.5" and spec.fast is not False:
             raise ModelGovernanceError("composer-2.5 must launch with fast off")
-        if spec.launch_id == "grok-4.6" and (spec.effort != "medium" or spec.fast is not False):
-            raise ModelGovernanceError("grok-4.6 default is medium effort with fast off")
         return
     gated = cfg["cursor_grok_bot"].get("gated") or {}
     if spec.launch_id in gated:
@@ -302,7 +305,7 @@ def _assert_direct_xai_launch(spec: LaunchSpec, cfg: Mapping[str, Any]) -> None:
     if spec.launch_id != str(row["launch_id"]):
         raise ModelGovernanceError("direct-xAI launch is default-deny without a listed default")
     if spec.reasoning_effort != str(row["reasoning_effort"]):
-        raise ModelGovernanceError("direct-xAI default is grok-4.6 with reasoning_effort medium")
+        raise ModelGovernanceError("direct-xAI default is grok-4.7 with reasoning_effort medium")
 
 
 def evaluate_cost_gate(*, cap_evaluable: bool, remaining: int | None) -> None:

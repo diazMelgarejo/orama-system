@@ -3,7 +3,7 @@
 The harness decides the provider path. Do not assume Claude-only (or any
 single-provider-only) routing. Model ids, effort, and fast settings follow
 the Alexandria standard (PR #1, tip `e7ee9db6`) and the orama pin
-`docs/standards/model-governance.md`. Cursor/Grok Bot defaults to `grok-4.6`
+`docs/standards/model-governance.md`. Cursor/Grok Bot defaults to `grok-4.7`
 medium with fast off. Anthropic defaults to `claude-sonnet-5-5` medium.
 Agents never pick `auto`, `grok-4.5`, high effort, or fast mode on their own.
 
