@@ -28,7 +28,7 @@ Each row is satisfied only by executed output at an exact head. "P" is the Phyla
 | 3 | Cascade body is exactly `approval_id`, `grant_ids`, `issuer_authority_version` (1) | `test_cascade_body_is_closed` | `test_ingest_refuses_malformed_bodies[cascade-*]` | X2 |
 | 4 | `grant_ids` strictly ascending; duplicate or unsorted refused; empty valid (3) | `test_cascade_grant_ids_must_be_strictly_ascending` | same | X3 |
 | 5 | `issuer_authority_version` is a safe integer of at least 1 (3) | `test_cascade_authority_version_is_a_positive_safe_integer` | same | X2 |
-| 6 | Event body at most 65,536 canonical bytes (4) | `test_event_body_size_is_bounded` | same | X2 |
+| 6 | Complete event at most 65,536 canonical bytes, the consumer's existing wire limit (4) | `test_event_wire_size_is_bounded`, `test_event_wire_size_boundary_is_exact` | existing wire limit test | X2 |
 | 7 | Valid events append, chain, sign and verify; digests equal the independent oracle (Section 3) | `test_append_signs_chains_and_persists_each_kind`, `test_canonical_event_vectors_match_the_independent_oracle` | `test_vendored_vectors_match_the_oracle` | X1 |
 | 8 | A refused body consumes no version and writes no row (5) | `test_refused_body_consumes_no_version` | `test_malformed_batch_persists_nothing` | X2 |
 | 9 | Issuer takes no consumer state; identical revocation is idempotent (5) | `test_append_api_takes_no_consumer_state`, `test_identical_revocation_is_idempotent` | n/a | n/a |
@@ -90,8 +90,9 @@ These are my proposals beyond the rules you listed; each is one line in the amen
    it. The proposal is printable ASCII without space, 1-1024 bytes. Strike or widen if real
    `second_approval_ref` values need spaces or non-ASCII.
 2. **Empty `grant_ids` is valid** (rule 3). It records the approval and nothing else.
-3. **64 KiB body cap** (rule 4). It bounds a cascade list; the existing permit wire limit is
-   the same value.
+3. **64 KiB event cap** (rule 4). It bounds a cascade list. It applies to the whole event, not
+   the body, because the consumer already refuses any larger event; a body-only cap would let the
+   issuer append an event the consumer can never ingest.
 4. **`approval_ref` is an optional argument** (rule 6). Callers cannot be forced to pass it
    without breaking the byte-identical shared probes, so a caller that omits it loses only the
    approval-kind match; the cascade list still catches every grant the issuer named.

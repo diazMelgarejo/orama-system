@@ -137,7 +137,9 @@ body that breaks any of them is malformed.
 3. **Cascade list.** `grant_ids` is a JSON array in strictly ascending code-point order. A
    duplicate or an out-of-order pair is malformed. An empty array is valid and records only the
    approval. `issuer_authority_version` is a safe integer from 1 to 2^53 - 1.
-4. **Bounded size.** The canonical JSON of an event body is at most 65,536 bytes.
+4. **Bounded size.** The canonical JSON of the complete seven-field event is at most 65,536
+   bytes. This is the limit the consumer already applies to every event it receives, so the issuer
+   never appends an event the consumer must refuse.
 5. **Authority facts only.** The issuer records authority facts and takes no consumer
    execution state as an input. Recording an identical revocation again returns the existing
    event and appends nothing.
