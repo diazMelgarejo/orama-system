@@ -107,6 +107,14 @@ These are my proposals beyond the rules you listed; each is one line in the amen
    tables created before the column migrate with every old row undeclared. The cascade list
    remains a second, independent refusal. Strike this choice only to keep the earlier gap.
 
+Two stated limits of choice 4 (operator choice B1, recorded in the decision checklist). First, the
+public `create_attempt` takes a typed `VerifiedDispatchGrant`, but that type is a plain value
+object: the guarantee that its facts came from a verified v2 grant is held by the composition
+adapter that builds it, which is not part of this slice, and Python's leading underscore on the
+fixture and migration primitive is a convention, not enforcement. Second, an anchor is an epoch
+floor: events below it are refused rather than backfilled, and any recovery would be a separate
+audited protocol.
+
 ## 7. Out of scope
 
 Issuer admission still reads grant and revocation facts through its injected `SignedGrantLookup`
