@@ -250,6 +250,8 @@ def test_descendant_permission_error_falls_through_to_group_cleanup(
 ) -> None:
     """Continue cleanup when a descendant cannot be signalled directly."""
     mod = _load_delegate_module()
+    # These tests describe the /proc path, so pin it regardless of the host platform.
+    monkeypatch.setattr(mod, "_descendants_authoritative", lambda: True)
     proc = Mock(pid=10)
     proc.poll.return_value = None
     proc.wait.side_effect = [subprocess.TimeoutExpired("worker", 5), 0]
@@ -316,6 +318,8 @@ def test_descendant_cleanup_escalates_to_group_sigkill_when_worker_stays_alive(
 ) -> None:
     """Escalate after descendant-first termination leaves the worker alive."""
     mod = _load_delegate_module()
+    # These tests describe the /proc path, so pin it regardless of the host platform.
+    monkeypatch.setattr(mod, "_descendants_authoritative", lambda: True)
     proc = Mock(pid=10)
     proc.poll.return_value = None
     proc.wait.side_effect = [
