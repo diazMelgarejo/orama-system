@@ -33,8 +33,9 @@ Each row is satisfied only by executed output at an exact head. "P" is the Phyla
 | 8 | A refused body consumes no version and writes no row (5) | `test_refused_body_consumes_no_version` | `test_malformed_batch_persists_nothing` | X2 |
 | 9 | Issuer takes no consumer state; identical revocation is idempotent (5) | `test_append_api_takes_no_consumer_state`, `test_identical_revocation_is_idempotent` | n/a | n/a |
 | 10 | Facts persist with the acknowledgement; replay and fork change nothing (6) | n/a | `test_ingest_persists_facts_with_the_ack`, `test_replayed_batch_is_idempotent`, `test_fork_does_not_overwrite_recorded_facts` | X7 |
-| 11 | Rule 4 refuses a grant, approval or issuer revocation (6) | n/a | `test_rule4_refuses_grant_revocation`, `..._approval_revocation`, `..._issuer_revocation` | X4, X5, X6 |
-| 12 | Rule 4 refuses a cascade-listed grant even without `approval_ref`; other issuers, approvals and grants are untouched (6) | n/a | `test_rule4_refuses_cascade_listed_grant`, `test_rule4_ignores_unrelated_facts` | X5 |
+| 11 | Rule 4 refuses a grant, approval or issuer revocation; the approval is the one bound to the attempt (6) | n/a | `test_rule4_refuses_grant_revocation`, `test_rule4_refuses_approval_revocation`, `test_rule4_refuses_issuer_revocation` | X4, X5a, X6 |
+| 12 | Rule 4 refuses a cascade-listed grant whatever its binding; other issuers, approvals and grants are untouched; single approval matches no approval revocation (6) | n/a | `test_rule4_refuses_cascade_listed_grant`, `test_rule4_ignores_unrelated_facts`, `test_single_approval_binding_matches_no_approval_revocation` | X5b |
+| 12a | The approval binding is persisted with the attempt, canonical or empty, part of its idempotent identity; the authorizing caller cannot supply it; an undeclared or legacy attempt fails closed on any approval revocation (6) | n/a | `test_approval_binding_must_be_empty_or_canonical`, `test_approval_binding_is_part_of_the_idempotent_attempt`, `test_authorizing_caller_cannot_supply_the_approval_binding`, `test_undeclared_binding_fails_closed_on_any_approval_revocation`, `test_cascade_listing_is_reported_before_an_undeclared_binding`, `test_legacy_attempts_table_gains_an_undeclared_binding` | X5c |
 | 13 | Refusal leaves no intent, outbox, grant use or consumed reservation (7) | n/a | `test_refusal_leaves_no_intent_outbox_use_or_reservation` | X8 |
 | 14 | No new shared wire refusal code (8) | `test_refusal_vocabulary_is_unchanged` | `test_no_new_authorization_rules` | X1-X8 (no new code observed) |
 
@@ -93,16 +94,16 @@ These are my proposals beyond the rules you listed; each is one line in the amen
 3. **64 KiB event cap** (rule 4). It bounds a cascade list. It applies to the whole event, not
    the body, because the consumer already refuses any larger event; a body-only cap would let the
    issuer append an event the consumer can never ingest.
-4. **`approval_ref` is an optional argument** (rule 6). **This is a known gap, not only a
-   convenience.** Callers cannot be forced to pass it without breaking the byte-identical shared
-   probes, so a caller that omits it loses the approval-kind match. The cascade list still
-   catches every grant the issuer named, but an empty or partial `grant_ids` does not, so a grant
-   whose `second_approval_ref` was revoked can pass Rule 4 when the caller omits `approval_ref`.
-   The consumer's current source does not persist `second_approval_ref` with the attempt, so
-   deriving it from stored grant facts would be a new consumer change, not a wording fix.
-   Choose one: (a) accept the optional argument and the gap, recorded in the decision; (b) require
-   a consumer change that persists the approval reference with the attempt and have Rule 4 read
-   it, with matching probe and test updates before ratification.
+4. **Rule 4 reads the approval binding persisted with the attempt** (rule 6). This replaces the
+   earlier optional `approval_ref` argument, which let a caller that omitted it pass a grant
+   whose approval was revoked when the cascade did not list that grant. The consumer now binds
+   the grant's verified `second_approval_ref` when it creates the attempt, as part of the
+   attempt's idempotent identity, and `authorize_dispatch` takes no approval argument. `""` is
+   the wire's single-approval value and matches no approval revocation. Omitting the binding
+   records the attempt as undeclared, refused as `approval_undeclared` (consumer-local) whenever
+   the issuer has revoked any approval, so omission can only over-refuse, never bypass. Attempts
+   tables created before the column migrate with every old row undeclared. The cascade list
+   remains a second, independent refusal. Strike this choice only to keep the earlier gap.
 
 ## 7. Out of scope
 

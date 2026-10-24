@@ -150,11 +150,14 @@ body that breaks any of them is malformed.
 6. **Consumer application.** A verified revocation or cascade is persisted in the same local
    transaction as its acknowledgement, and replaying it changes nothing. At Step 4.3, inside the
    existing dispatch transaction, Rule 4 additionally refuses a grant when any acknowledged event
-   revokes that grant, revokes the issuer, revokes the approval named by the grant's
-   `second_approval_ref` (only when the caller supplies it; see the acceptance matrix, section 6
-   choice 4), or lists the grant in a cascade. A
-   cascade can only add a refusal; it never satisfies or relaxes any other rule, so it neither
-   substitutes for nor changes the Step 4.3 gate.
+   revokes that grant, revokes the issuer, revokes the approval bound to the attempt, or lists the
+   grant in a cascade. The approval binding is the grant's verified `second_approval_ref`,
+   persisted once with the dispatch attempt as part of its identity; the authorizing caller
+   neither supplies nor omits it. The empty string (single approval) matches no approval
+   revocation. An attempt recorded without a binding is undeclared and is refused whenever the
+   issuer has revoked any approval, so omission fails closed. A cascade can only add a refusal;
+   it never satisfies or relaxes any other rule, so it neither substitutes for nor changes the
+   Step 4.3 gate.
 7. **Refusal leaves nothing.** A refusal under rule 6 leaves no dispatch intent, no outbox
    entry, no consumed grant use and no consumed reservation.
 8. **No new wire vocabulary.** These rules add no shared wire refusal code. Refusal reasons are
