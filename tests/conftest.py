@@ -22,7 +22,7 @@ for _name in (
     "PORTAL_BIND_LAN",
 ):
     os.environ.pop(_name, None)
-os.environ.setdefault("ORAMA_SWARM_APPROVAL_SECRET", "pytest-swarm-approval-secret")
+os.environ["ORAMA_SWARM_APPROVAL_SECRET"] = "pytest-swarm-approval-secret"
 
 
 @pytest.fixture(autouse=True)

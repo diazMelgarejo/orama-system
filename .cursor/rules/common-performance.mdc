@@ -64,6 +64,10 @@ For complex tasks requiring deep reasoning:
 Do not raise effort, enable fast mode, or switch to Opus/Fable unless
 the operator asked and an escalation token covers the launch.
 
+On the Anthropic path, a harness-classified planning launch may use
+Opus at medium or high effort without per-use approval. Non-planning
+Opus, Fable, and the Cursor path keep the requirement above.
+
 ## Build Troubleshooting
 
 If build fails:

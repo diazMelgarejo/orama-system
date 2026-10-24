@@ -14,9 +14,10 @@ The harness decides the path. Do not assume Claude-only routing.
 
 `/model-route [task-description] [--budget low|med|high]`
 
-`--budget` never authorizes Opus, Fable, high effort, or fast mode.
-Those need an escalation token (S-AuthZ bearer + fresh signed HITL, ≤24h).
-Config flags and env vars are not a token.
+`--budget` never authorizes Fable, high effort, fast mode, or non-planning
+Opus. Those need an escalation token (S-AuthZ bearer + fresh signed HITL, ≤24h).
+A harness-classified planning task may use Opus at medium or high without
+per-use approval. Config flags and env vars are not a token.
 
 ## Routing Heuristic
 
@@ -24,7 +25,8 @@ Config flags and env vars are not a token.
   Allowed: `composer-2.5` or `gpt-5.6-terra` (medium) with fast off. Never `auto` for agents.
   Never `grok-4.5` or `grok-4.6`.
 - **Anthropic:** default `claude-sonnet-5-5` at medium.
-  Opus 5.5 high and Fable 5.1 are escalation-only
+  Planning Opus may use medium or high with harness classification.
+  Non-planning Opus and Fable 5.1 need an escalation token
   (Fable also needs a hard budget cap).
 - Fallback if the default cannot run: stay on the same path's
   allowed-ungated model, or report the gap. Do not escalate.

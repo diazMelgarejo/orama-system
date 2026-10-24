@@ -272,6 +272,7 @@ def test_non_linux_cleanup_still_signals_the_group_after_the_worker_exits(
 ) -> None:
     """A ps snapshot can miss group members, so only the /proc path may skip the group signal."""
     mod = _load_delegate_module()
+    mod._IS_WINDOWS = False
     proc = Mock(pid=10)
     proc.poll.return_value = None
     proc.wait.return_value = 0
@@ -294,6 +295,7 @@ def test_linux_cleanup_skips_the_group_signal_once_the_worker_exits(
 ) -> None:
     """With complete /proc descendants, a clean worker exit ends cleanup without a group signal."""
     mod = _load_delegate_module()
+    mod._IS_WINDOWS = False
     proc = Mock(pid=10)
     proc.poll.return_value = None
     proc.wait.return_value = 0
