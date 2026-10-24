@@ -24,11 +24,11 @@ Each row is satisfied only by executed output at an exact head. "P" is the Phyla
 | # | Locked rule (amendment locked rule) | P test | O test | X scenario |
 | :--- | :--- | :--- | :--- | :--- |
 | 1 | Revocation body is exactly `subject_kind`, `subject_id`; kind is `grant`, `approval` or `issuer` (1) | `test_revocation_body_is_closed`, `test_revocation_subject_kind_vocabulary_is_closed` | `test_ingest_refuses_malformed_bodies[revocation-*]` | X2 |
-| 2 | Identifiers are canonical: ASCII U+0021-U+007E, 1-1024 bytes, refused not repaired (2) | `test_identifier_must_be_canonical` | same parameter set | X2 |
+| 2 | Identifiers are canonical: ASCII U+0021-U+007E, 1-1024 bytes, refused not repaired (2) | `test_identifier_must_be_canonical` | `test_ingest_refuses_malformed_bodies[revocation blank id / whitespace id / padded id / inner space id / non-ascii id / control id / overlong id / numeric id]` | X2 |
 | 3 | Cascade body is exactly `approval_id`, `grant_ids`, `issuer_authority_version` (1) | `test_cascade_body_is_closed` | `test_ingest_refuses_malformed_bodies[cascade-*]` | X2 |
-| 4 | `grant_ids` strictly ascending; duplicate or unsorted refused; empty valid (3) | `test_cascade_grant_ids_must_be_strictly_ascending` | same | X3 |
-| 5 | `issuer_authority_version` is a safe integer of at least 1 (3) | `test_cascade_authority_version_is_a_positive_safe_integer` | same | X2 |
-| 6 | Complete event at most 65,536 canonical bytes, the consumer's existing wire limit (4) | `test_event_wire_size_is_bounded`, `test_event_wire_size_boundary_is_exact` | existing wire limit test | X2 |
+| 4 | `grant_ids` strictly ascending; duplicate or unsorted refused; empty valid (3) | `test_cascade_grant_ids_must_be_strictly_ascending` | `test_ingest_refuses_malformed_bodies[cascade unsorted / duplicate / duplicate tail / case order]` | X3 |
+| 5 | `issuer_authority_version` is a safe integer of at least 1 (3) | `test_cascade_authority_version_is_a_positive_safe_integer` | `test_ingest_refuses_malformed_bodies[cascade version zero / negative / boolean / unsafe / string / float]` | X2 |
+| 6 | Complete event at most 65,536 canonical bytes, the consumer's existing wire limit (4) | `test_event_wire_size_is_bounded`, `test_event_wire_size_boundary_is_exact` | `test_event_wire_rejects_an_oversize_object` (`test_dispatch_consumer_wire.py`) | X2 |
 | 7 | Valid events append, chain, sign and verify; digests equal the independent oracle (Section 3) | `test_append_signs_chains_and_persists_each_kind`, `test_canonical_event_vectors_match_the_independent_oracle` | `test_vendored_vectors_match_the_oracle` | X1 |
 | 8 | A refused body consumes no version and writes no row (5) | `test_refused_body_consumes_no_version` | `test_malformed_batch_persists_nothing` | X2 |
 | 9 | Issuer takes no consumer state; identical revocation is idempotent (5) | `test_append_api_takes_no_consumer_state`, `test_identical_revocation_is_idempotent` | n/a | n/a |
@@ -93,9 +93,16 @@ These are my proposals beyond the rules you listed; each is one line in the amen
 3. **64 KiB event cap** (rule 4). It bounds a cascade list. It applies to the whole event, not
    the body, because the consumer already refuses any larger event; a body-only cap would let the
    issuer append an event the consumer can never ingest.
-4. **`approval_ref` is an optional argument** (rule 6). Callers cannot be forced to pass it
-   without breaking the byte-identical shared probes, so a caller that omits it loses only the
-   approval-kind match; the cascade list still catches every grant the issuer named.
+4. **`approval_ref` is an optional argument** (rule 6). **This is a known gap, not only a
+   convenience.** Callers cannot be forced to pass it without breaking the byte-identical shared
+   probes, so a caller that omits it loses the approval-kind match. The cascade list still
+   catches every grant the issuer named, but an empty or partial `grant_ids` does not, so a grant
+   whose `second_approval_ref` was revoked can pass Rule 4 when the caller omits `approval_ref`.
+   The consumer's current source does not persist `second_approval_ref` with the attempt, so
+   deriving it from stored grant facts would be a new consumer change, not a wording fix.
+   Choose one: (a) accept the optional argument and the gap, recorded in the decision; (b) require
+   a consumer change that persists the approval reference with the attempt and have Rule 4 read
+   it, with matching probe and test updates before ratification.
 
 ## 7. Out of scope
 

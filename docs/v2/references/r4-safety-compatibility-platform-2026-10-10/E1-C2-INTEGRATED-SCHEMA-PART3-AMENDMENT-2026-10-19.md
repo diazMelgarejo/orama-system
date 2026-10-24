@@ -137,9 +137,13 @@ body that breaks any of them is malformed.
 3. **Cascade list.** `grant_ids` is a JSON array in strictly ascending code-point order. A
    duplicate or an out-of-order pair is malformed. An empty array is valid and records only the
    approval. `issuer_authority_version` is a safe integer from 1 to 2^53 - 1.
-4. **Bounded size.** The canonical JSON of the complete seven-field event is at most 65,536
-   bytes. This is the limit the consumer already applies to every event it receives, so the issuer
-   never appends an event the consumer must refuse.
+4. **Bounded size.** The complete seven-field event (`version`, `kind`, `body`,
+   `previous_event_digest`, `event_digest`, `issuer_key_id`, `signature`) is serialized as
+   canonical JSON: object keys sorted, separators `,` and `:` with no whitespace, non-ASCII text
+   written as itself (not `\u` escapes), NaN and infinity refused, encoded as UTF-8. The cap is
+   65,536 bytes of that encoding. The issuer and the consumer use this same function, so the
+   issuer never appends an event the consumer must refuse. The four-field digest wrapper is
+   unchanged and is a different object.
 5. **Authority facts only.** The issuer records authority facts and takes no consumer
    execution state as an input. Recording an identical revocation again returns the existing
    event and appends nothing.
@@ -147,7 +151,8 @@ body that breaks any of them is malformed.
    transaction as its acknowledgement, and replaying it changes nothing. At Step 4.3, inside the
    existing dispatch transaction, Rule 4 additionally refuses a grant when any acknowledged event
    revokes that grant, revokes the issuer, revokes the approval named by the grant's
-   `second_approval_ref` (when the caller supplies it), or lists the grant in a cascade. A
+   `second_approval_ref` (only when the caller supplies it; see the acceptance matrix, section 6
+   choice 4), or lists the grant in a cascade. A
    cascade can only add a refusal; it never satisfies or relaxes any other rule, so it neither
    substitutes for nor changes the Step 4.3 gate.
 7. **Refusal leaves nothing.** A refusal under rule 6 leaves no dispatch intent, no outbox
