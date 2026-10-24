@@ -440,7 +440,13 @@ def _assert_direct_xai_launch(spec: LaunchSpec, cfg: Mapping[str, Any]) -> None:
     if spec.reasoning_effort != str(row["reasoning_effort"]):
         raise ModelGovernanceError("direct-xAI default is grok-4.7 with reasoning_effort medium")
     if spec.fast is True:
-        raise ModelGovernanceError("direct-xAI launches must have fast mode off")
+        # Metadata cannot prove an operator decision. Fast mode is an exception
+        # only through a one-use P5 operator approval that the trusted dispatcher
+        # verifies and consumes before provider invocation; this helper refuses.
+        raise ModelGovernanceError(
+            "direct-xAI fast mode is refused here; it requires a one-use P5 operator "
+            "approval enforced at the trusted dispatch boundary"
+        )
 
 
 def evaluate_cost_gate(*, cap_evaluable: bool, remaining: int | None) -> None:
