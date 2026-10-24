@@ -27,13 +27,34 @@ it. The Alexandria standard is still 🟡 Proposed.
 - This pin adds two things: the **fallback** used when that logic cannot decide
   from verifiable criteria (the harness default or an allowed alternative, never
   a self-escalation), and **alternate paths** for harnesses other than Claude Code.
-- **Escalation to Opus or Fable (operator ruling, 2026-10-24):** until the
-  escalation grant mechanism is in place, an `AskUserQuestion` confirmation
-  approves the escalation, as the existing tiering already says. The escalation
-  token below becomes the required proof only once that mechanism exists.
-  Neither path lets an agent escalate on its own.
+- **Escalation to Opus or Fable:** see
+  [Escalation approval regimes](#escalation-approval-regimes). This is the one
+  place the rule is stated; the other files link here and do not restate it.
 - Outdated model ids in the existing policy are refreshed in place. The policy
   text around them is not rewritten.
+
+## Escalation approval regimes
+
+Operator ruling, 2026-10-24. A proof cannot be demanded where nothing can issue
+or verify it, so the approval needed depends on whether the **escalation grant
+mechanism** exists. The mechanism exists only when both hold, and both are
+checkable in this repo:
+
+1. `assert_launch_allowed` has a production caller at the launch boundary
+   (today `grep` finds none outside `model_governance.py`).
+2. The control plane verifies the S-AuthZ bearer and the signed HITL approval
+   (the proof defined under "Escalation token" below).
+
+| Regime | When | What approves Opus or Fable |
+| --- | --- | --- |
+| 1, interim | Either condition is unmet (**current state**) | An operator `AskUserQuestion` confirmation, as the existing tiering says. Record the model, effort, task and, for Fable, the budget cap on the PR or issue. This is a human decision, not a token, and an agent never supplies it for itself. |
+| 2, enforced | Both conditions are met | The escalation token below, verified by the control plane. An `AskUserQuestion` confirmation alone no longer approves. |
+
+The switch is a change in the repo (a production caller and a verifier), not a
+config flag, environment variable or note, so it cannot be flipped by an agent.
+Alexandria's "Until enforcement lands" paragraph asks agents to refuse
+escalation without a proof reference. For orama that is superseded by Regime 1
+until enforcement lands; Alexandria should record the same interim rule.
 
 ## What orama must follow
 
@@ -96,4 +117,4 @@ is the template an administrator deploys at the managed boundary.
 It is a template, not enforcement from this repo.
 `assert_launch_allowed` has no production caller yet, so the managed list is
 the only barrier that stops a normal invocation from selecting
-`claude-opus-5-5` or `claude-fable-5-1` without an escalation token.
+`claude-opus-5-5` or `claude-fable-5-1` without the approval its regime requires.

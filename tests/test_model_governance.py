@@ -342,6 +342,8 @@ def test_existing_routing_policy_is_supplemented_not_replaced() -> None:
 
     pin = Path("docs/standards/model-governance.md").read_text(encoding="utf-8")
     assert "## Relationship to existing orama routing policy" in pin
+    assert "## Escalation approval regimes" in pin
+    assert "| 1, interim |" in pin and "| 2, enforced |" in pin
 
 
 # ---------------------------------------------------------------------------
