@@ -7,7 +7,7 @@ description: Recommend the best model tier for the current task based on complex
 Recommend the best model tier for the current task by complexity and budget.
 Fallback logic follows
 [Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
-(PR #1, tip `e7ee9db6`, status Proposed). Local pin: `docs/standards/model-governance.md`.
+(PR #1, tip `d6da6781`, status Proposed). Local pin: `docs/standards/model-governance.md`.
 The fallback supplements this routing heuristic; it does not replace it.
 
 ## Usage

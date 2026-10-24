@@ -36,7 +36,7 @@
 | HITL accountability classes | [`docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md`](docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md) |
 | Search frugality rule (gbrain → CRG → Brave → Perplexity → Grok) | [`bin/orama-system/SKILL.md § Search Policy`](bin/orama-system/SKILL.md) |
 | Win coder pool (`$WIN_CODER_ENDPOINTS`, always-utilized) | [`bin/orama-system/SKILL.md § Windows Coder Pool`](bin/orama-system/SKILL.md) |
-| Model governance (fallback + alternate harness paths; supplements existing routing) | Alexandria PR #1 (`e7ee9db6`) · [`docs/standards/model-governance.md`](docs/standards/model-governance.md) |
+| Model governance (fallback + alternate harness paths; supplements existing routing) | Alexandria PR #1 (`d6da6781`) · [`docs/standards/model-governance.md`](docs/standards/model-governance.md) |
 
 **Quick invariants (full detail in doc above):**
 

@@ -164,7 +164,7 @@ Three tiers — apply in order:
 The tiers above stay the policy for this skill. When they cannot decide, or a
 tier cannot run, use the Cursor-path default or an allowed alternative from
 [Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
-(PR #1, tip `e7ee9db6`, status Proposed; local pin
+(PR #1, tip `d6da6781`, status Proposed; local pin
 `docs/standards/model-governance.md`). Set effort and fast explicitly on these launches.
 
 | Model string | When to use |

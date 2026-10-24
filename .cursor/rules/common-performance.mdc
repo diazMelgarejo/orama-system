@@ -27,7 +27,7 @@ When the tier choice above cannot be made from verifiable criteria, or the
 chosen tier cannot run on the current harness, fall back to that harness's
 default or an allowed alternative, per
 [Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
-(PR #1, tip `e7ee9db6`, status Proposed; local pin
+(PR #1, tip `d6da6781`, status Proposed; local pin
 `docs/standards/model-governance.md`). This supplements the strategy above; it
 does not replace it.
 

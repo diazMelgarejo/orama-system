@@ -113,7 +113,7 @@ MODE 3 script is a bug, not an acceptable default.
 
 This tiering stays the MODE 3 policy on Claude Code.
 [Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
-(PR #1, tip `e7ee9db6`, status Proposed; local pin
+(PR #1, tip `d6da6781`, status Proposed; local pin
 `docs/standards/model-governance.md`) adds the fallback when the tiering
 cannot decide or a tier cannot run, and the alternate paths for other harnesses:
 

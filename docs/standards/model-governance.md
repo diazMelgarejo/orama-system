@@ -2,7 +2,7 @@
 
 Canonical standard (cite, do not copy):
 [Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
-([PR #1](https://github.com/oramasys/alexandria/pull/1), tip `e7ee9db6`).
+([PR #1](https://github.com/oramasys/alexandria/pull/1), tip `d6da6781`).
 
 This repo keeps a machine-readable pin at
 [`config/model-governance.yml`](../../config/model-governance.yml)
@@ -52,9 +52,10 @@ checkable in this repo:
 
 The switch is a change in the repo (a production caller and a verifier), not a
 config flag, environment variable or note, so it cannot be flipped by an agent.
-Alexandria's "Until enforcement lands" paragraph asks agents to refuse
-escalation without a proof reference. For orama that is superseded by Regime 1
-until enforcement lands; Alexandria should record the same interim rule.
+Alexandria records the same two regimes in its
+[Escalation approval regimes](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md#escalation-approval-regimes)
+section (tip `d6da6781`), so its "Until enforcement lands" rule now points at
+Regime 1 instead of requiring a proof reference.
 
 ## What orama must follow
 
