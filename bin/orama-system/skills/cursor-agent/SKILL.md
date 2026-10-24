@@ -134,16 +134,17 @@ since Cursor renames model ids between releases):
 | Model string | Display name | When to use |
 |---|---|---|
 | `composer-2.5` | Composer 2.5 | **Default for all light/parallel tasks** |
-| `auto` | Auto | Fallback when composer-2.5 unavailable or task ambiguous |
-| `claude-opus-5-5[effort=low]` | Opus 5.5 Low | Mechanical tasks (format, rename, scaffold) |
-| `claude-opus-5-5[effort=medium]` | Opus 5.5 Medium | Standard coding tasks |
-| `claude-opus-5-5[context=1m,effort=high]` | Opus 5.5 1M | Complex refactors |
+| `grok-4.7[effort=medium,fast=false]` | Grok 4.7 | Fallback when composer-2.5 is unavailable or the task is ambiguous (`auto` is editor-only: its router can pick gated models with the choice hidden) |
+| `claude-opus-5-5[effort=low]` | Opus 5.5 Low (**escalation-only**, approval per [Escalation approval regimes](../../../../docs/standards/model-governance.md#escalation-approval-regimes)) | Mechanical tasks (format, rename, scaffold) |
+| `claude-opus-5-5[effort=medium]` | Opus 5.5 Medium (**escalation-only**, approval per [Escalation approval regimes](../../../../docs/standards/model-governance.md#escalation-approval-regimes)) | Standard coding tasks |
+| `claude-opus-5-5[context=1m,effort=high]` | Opus 5.5 1M (**escalation-only**, approval per [Escalation approval regimes](../../../../docs/standards/model-governance.md#escalation-approval-regimes)) | Complex refactors |
 | `gpt-5.6-terra` | GPT-5.6 Terra | Fast, cheap file edits |
 | `claude-sonnet-5-5[effort=medium]` | Sonnet 5.5 | **Orchestrator-override only** — dispatched exclusively when Opus 5.5 Ultracode / Fable 5.1 workflow explicitly demands it |
 
 Parameterised model override syntax (bracket notation):
 
 ```bash
+# Escalation-only: run only with the approval [Escalation approval regimes](../../../../docs/standards/model-governance.md#escalation-approval-regimes) requires for Opus.
 cursor-agent --model 'claude-opus-5-5[context=1m,effort=high,fast=false]' ...
 ```
 
@@ -154,10 +155,10 @@ Three tiers — apply in order:
 | Tier | Model | When |
 |------|-------|------|
 | 1 — Default | `composer-2.5` | All light/parallel tasks; use unless there is an explicit reason not to |
-| 2 — Fallback | `auto` | When `composer-2.5` is unavailable or the task is ambiguous and Cursor should self-select |
+| 2 — Fallback | `grok-4.7[effort=medium,fast=false]` | When `composer-2.5` is unavailable or the task is ambiguous. Never `auto` for agent work (editor-only), and no silent self-selection |
 | 3 — Orchestrator-override | `claude-sonnet-5-5[effort=medium]` | ONLY when an orchestrator (Opus 5.5 Ultracode or Fable 5.1 workflow) explicitly demands it for a fan-out subtask. NOT a general default. |
 
-**Never use `claude-sonnet-5-5` as a default.** If no orchestrator has demanded it, use `composer-2.5` (or `auto` as fallback).
+**Never use `claude-sonnet-5-5` as a default.** If no orchestrator has demanded it, use `composer-2.5` (or the Tier 2 fallback; stop and report if neither can run).
 
 ### Fallback and alternate paths (supplement)
 
@@ -170,7 +171,7 @@ tier cannot run, use the Cursor-path default or an allowed alternative from
 | Model string | When to use |
 |---|---|
 | `grok-4.7` | Cursor-path harness default: `{effort: medium, fast: false}` (usage `cursor-grok-4.7-medium`) |
-| `composer-2.5` | Allowed alternative: `{fast: false}`; fast on only if the operator asks |
+| `composer-2.5` | Allowed alternative: `{fast: false}` only. Fast-on is not a tuple this pin defines |
 | `gpt-5.6-terra` | Allowed alternative (explicit operator pick): `{effort: medium, fast: false}` |
 | `claude-opus-5-5`, `claude-fable-5-1` | Operator approval per [Escalation approval regimes](../../../../docs/standards/model-governance.md#escalation-approval-regimes) (Fable also needs a hard budget cap) |
 
@@ -180,9 +181,7 @@ cursor-agent --model 'composer-2.5[fast=false]' ...
 ```
 
 - `grok-4.5` and `grok-4.6` are outdated ids; never launch them.
-- Alexandria treats `auto` as editor-only, because its router can pick gated
-  Claude models with the choice hidden. Prefer an allowed alternative above
-  before the Tier 2 `auto` fallback when the run is unattended.
+- `auto` is editor-only, because its router can pick gated Claude models with the choice hidden. It is not a fallback for agent work.
 - A fallback never self-escalates: no raised effort, fast mode, or Opus/Fable.
 
 ## Key Options (from `cursor-agent --help`)
@@ -206,7 +205,7 @@ cursor-agent --model 'composer-2.5[fast=false]' ...
 ## Light Task Fanout Pattern
 
 **Composer 2.5** (`composer-2.5`) is the default model for parallelising light work
-alongside the main orchestration session. Use `auto` as fallback when `composer-2.5`
+alongside the main orchestration session. Use the Tier 2 fallback when `composer-2.5`
 is unavailable.
 
 ```bash
@@ -214,11 +213,13 @@ is unavailable.
 # artifact dir, not /tmp: Fan-out Safety § 2 below only permits verifying
 # repository-relative paths.
 mkdir -p .cursor-agent-artifacts
-cursor-agent --print --model composer-2.5 \
+cursor-agent -w cursor-annotate-$(date +%s) \
+  --print --model 'composer-2.5[fast=false]' \
   "Add type annotations to scripts/discover.py; only functions, no variables" \
   --output-format json > .cursor-agent-artifacts/task-a.json &
 
-cursor-agent --print --model gpt-5.6-terra \
+cursor-agent -w cursor-rename-$(date +%s) \
+  --print --model 'gpt-5.6-terra[effort=medium,fast=false]' \
   "Rename all snake_case variables in tests/test_foo.py to camelCase" \
   --output-format json > .cursor-agent-artifacts/task-b.json &
 
@@ -237,7 +238,7 @@ wait   # collect when done
 | AFRP gate | Single-file refactors |
 
 **Budget note:** `cursor-agent` consumes Cursor credits (not Anthropic API tokens).
-Light tasks = `--model composer-2.5` (default) or `--model auto` (fallback) or `gpt-5.6-terra`.
+Light tasks = `--model 'composer-2.5[fast=false]'` (default) or `--model 'grok-4.7[effort=medium,fast=false]'` (fallback) or `--model 'gpt-5.6-terra[effort=medium,fast=false]'`. Never `--model auto`.
 
 ## Fan-out Safety
 
@@ -292,7 +293,7 @@ For tasks that write files and must not collide with the main session:
 
 ```bash
 cursor-agent -w cursor-fix-$(date +%s) \
-  --print --model composer-2.5 \
+  --print --model 'composer-2.5[fast=false]' \
   "Refactor scripts/foo.py to add structured logging"
 # Runs in ~/.cursor/worktrees/<repo>/cursor-fix-<ts>/
 # Review and merge back with git after the agent completes
@@ -308,12 +309,12 @@ headless jobs while the main session handles judgment work:
 mkdir -p .cursor-agent-artifacts
 _JOBS=()
 
-cursor-agent --print --model composer-2.5 \
+cursor-agent --print --model 'composer-2.5[fast=false]' \
   "Scan bin/ for TODO comments; output as JSON list" \
   --output-format json > .cursor-agent-artifacts/todos.json &
 _JOBS+=($!)
 
-cursor-agent --print --model gpt-5.6-terra \
+cursor-agent --print --model 'gpt-5.6-terra[effort=medium,fast=false]' \
   "Generate pytest stubs for every function in scripts/new_module.py" \
   --trust > .cursor-agent-artifacts/test-stubs.py &
 _JOBS+=($!)
@@ -343,7 +344,7 @@ cursor-agent mcp list
 Approve all MCPs automatically in headless mode:
 
 ```bash
-cursor-agent --print --approve-mcps --model composer-2.5 "..."
+cursor-agent --print --approve-mcps --model 'composer-2.5[fast=false]' "..."
 ```
 
 ## Windows / Hermes Harness
@@ -351,14 +352,14 @@ cursor-agent --print --approve-mcps --model composer-2.5 "..."
 On Windows, invoke from PowerShell or Git Bash:
 
 ```powershell
-cursor-agent --print --model composer-2.5 "task here" --trust
+cursor-agent --print --model 'composer-2.5[fast=false]' "task here" --trust
 ```
 
 From a Hermes-scripted workflow:
 
 ```bash
 # In Git Bash on Windows
-cursor-agent --print --model gpt-5.6-terra \
+cursor-agent --print --model 'gpt-5.6-terra[effort=medium,fast=false]' \
   "List all .py files modified in the last 24h" --output-format json
 ```
 

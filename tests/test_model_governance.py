@@ -344,6 +344,11 @@ def test_existing_routing_policy_is_supplemented_not_replaced() -> None:
     assert "## Relationship to existing orama routing policy" in pin
     assert "## Escalation approval regimes" in pin
     assert "| 1, interim |" in pin and "| 2, enforced |" in pin
+    assert "**Required deployment.**" in pin
+    skill = Path("bin/orama-system/skills/cursor-agent/SKILL.md").read_text(encoding="utf-8")
+    assert "--model auto" not in skill.replace("Never `--model auto`", "")
+    assert "fast on only if the operator asks" not in skill
+    assert "gpt-5.6-terra --" not in skill
 
 
 # ---------------------------------------------------------------------------

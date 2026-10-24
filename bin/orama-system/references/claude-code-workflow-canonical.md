@@ -75,12 +75,24 @@ is allowed only as a legacy pin.
 
 **Tier 3 — Escalation only: Opus 5.5 (`claude-opus-5-5`) and/or Fable 5.1
 (`claude-fable-5-1`).**
-NEVER automated. Exactly two legitimate triggers:
+NEVER automated by the script. Exactly two legitimate triggers:
 
 1. The user explicitly named Opus or Fable for this task.
 2. A genuine escalation where tier 2 (Sonnet Medium) could not resolve the
    work — raise an `AskUserQuestion` confirming the escalation **before**
    spawning any Opus/Fable `agent()` call. Never auto-escalate silently.
+
+At the `agent()` spawn boundary these are three distinct launch cases, not one
+shared condition. "Approval" below is what the current
+[Escalation approval regime](../../../docs/standards/model-governance.md#escalation-approval-regimes)
+requires (today the operator's `AskUserQuestion` confirmation; the escalation
+token once enforcement lands):
+
+| Launch | Needs |
+| --- | --- |
+| Opus 5.5 on a harness-classified **planning** task, medium or high effort | No per-use approval. The harness supplies the task kind; the script never does. |
+| Opus 5.5 on any **non-planning** task | Approval for that use (medium is the candidate default; explicit approved high is permitted). |
+| Fable 5.1 | Approval **and** a hard budget cap named in it, with effort medium unless the approval names another level. |
 
 Escalation is strictly ordered: tier 1 → tier 2 → tier 3, matched to
 actual task complexity. Never skip a tier "to be safe," and never reach

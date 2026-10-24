@@ -116,6 +116,16 @@ lists and restricts nothing by itself, so the project
 [`config/claude-code-managed-settings.example.json`](../../config/claude-code-managed-settings.example.json)
 is the template an administrator deploys at the managed boundary.
 It is a template, not enforcement from this repo.
+
+**Required deployment.** Every supported Claude Code environment must deploy
+that template at the managed boundary before it is used for agent work. An
+environment without it can select `claude-opus-5-5` or `claude-fable-5-1`
+with nothing but the human approval of the current regime standing in the way,
+so it is not a supported environment until the template is deployed. This repo
+cannot verify the deployment; the administrator who owns the managed boundary
+attests to it. The runtime gate that would replace this attestation is the
+Regime 2 switch above (a production caller of `assert_launch_allowed` plus a
+control-plane verifier). It does not exist yet and is not claimed here.
 `assert_launch_allowed` has no production caller yet, so the managed list is
 the only barrier that stops a normal invocation from selecting
 `claude-opus-5-5` or `claude-fable-5-1` without the approval its regime requires.
