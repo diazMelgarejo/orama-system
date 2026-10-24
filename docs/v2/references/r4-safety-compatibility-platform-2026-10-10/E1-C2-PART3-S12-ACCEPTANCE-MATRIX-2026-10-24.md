@@ -109,9 +109,12 @@ These are my proposals beyond the rules you listed; each is one line in the amen
 
 ## 7. Out of scope
 
-Issuer admission still reads revocation from its injected grant-facts port, not from its own event
-log. Closing that is a separate change. Also excluded: Sections 3.1, 3.2 and 4, the
-execution-witness fields, serving, pin promotion and activation.
+Issuer admission still reads grant and revocation facts through its injected `SignedGrantLookup`
+interface, not from its own event log. That is an issuer-side composition boundary outside this
+consumer-slice contract. The fixed lookup used by interop probes is test infrastructure, not a
+production consumer-admission source; this slice introduces no second consumer authority. Also
+excluded: Sections 3.1, 3.2 and 4, the execution-witness fields, serving, pin promotion and
+activation.
 
 [amend]: E1-C2-INTEGRATED-SCHEMA-PART3-AMENDMENT-2026-10-19.md
 [packet]: E1-C2-PART3-RATIFICATION-ACCEPTANCE-PACKET-2026-10-22.md
