@@ -560,6 +560,17 @@ def test_vector_direct_xai_requires_medium_effort(effort: str | None) -> None:
             assert_launch_allowed(spec)
 
 
+def test_vector_direct_xai_refuses_fast_mode() -> None:
+    fast = LaunchSpec(
+        path="direct_xai", launch_id="grok-4.7", reasoning_effort="medium", fast=True
+    )
+    with pytest.raises(ModelGovernanceError, match="fast mode off"):
+        assert_launch_allowed(fast)
+    assert_launch_allowed(
+        LaunchSpec(path="direct_xai", launch_id="grok-4.7", reasoning_effort="medium", fast=False)
+    )
+
+
 def test_vector_approval_optionally_binds_path_and_scope() -> None:
     spec = LaunchSpec(
         path="cursor_grok_bot", launch_id="grok-4.7", effort="medium", fast=False

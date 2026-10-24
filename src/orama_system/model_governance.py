@@ -439,6 +439,8 @@ def _assert_direct_xai_launch(spec: LaunchSpec, cfg: Mapping[str, Any]) -> None:
         raise ModelGovernanceError("direct-xAI launch is default-deny without a listed default")
     if spec.reasoning_effort != str(row["reasoning_effort"]):
         raise ModelGovernanceError("direct-xAI default is grok-4.7 with reasoning_effort medium")
+    if spec.fast is True:
+        raise ModelGovernanceError("direct-xAI launches must have fast mode off")
 
 
 def evaluate_cost_gate(*, cap_evaluable: bool, remaining: int | None) -> None:
