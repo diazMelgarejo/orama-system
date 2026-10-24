@@ -73,12 +73,12 @@ Implementation heads are added to Section 5 by the operator when the matrix is s
 ## 5. Operator record (fill when complete)
 
 ```text
-COMMIT   = <40-hex SHA of the reviewed amendment, operator fills>
-SHA256   = <64-hex digest, operator fills>
-HEADS    = <phylax 40-hex>, <oramasys 40-hex>
-TESTS    = <links to executed output for rows 1-14>
-REVIEWS  = <reviewer, head, verdict>
-DECISION = <ratify | defer>, <date>, <operator>
+COMMIT   = 03bf20b77d66c60e0a4d78e7fbb0b245151d0cfb
+SHA256   = a19ca33474b0e51e077dbb7317f3c46e6e692a310f4f5afcb796b636d4cc5f4c
+HEADS    = 849351f54839b22d62f33242a348700b40864890, 68f063017b52129f7a92de03ff9899f70f07d10a
+TESTS    = oramasys main 1999 passed, 2 skipped; phylax main 664 passed (91.09% coverage); interop probes c2_interop_probe, c2_slice2_probe, c2_part3_events_probe exit 0 both ways, probe files byte-identical (executed 2026-10-24)
+REVIEWS  = Claude Sonnet 5.5 read-only consumer and issuer re-reviews at the final heads: no blocking defect (evidence only); Codex current-head review rows 5756, 5762, 5772; AntiGravity re-review not delivered
+DECISION = ratify, 2026-10-24, operator (instruction given in the Claude session and recorded there by Claude; the operator may countersign)
 SCOPE    = Sections 1 and 2 only
 ```
 
