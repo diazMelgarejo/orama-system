@@ -202,6 +202,7 @@ def default_launch(path: str, *, config: Mapping[str, Any] | None = None) -> Lau
             path=path,
             launch_id=str(row["launch_id"]),
             reasoning_effort=str(row["reasoning_effort"]),
+            fast=bool(row.get("fast", False)),
         )
     raise ModelGovernanceError("unknown harness path")
 
@@ -242,7 +243,11 @@ def _require_consistent_effort(spec: LaunchSpec) -> None:
     for effort in (spec.effort, spec.reasoning_effort):
         if effort in ("xhigh", "max"):
             raise ModelGovernanceError(f"effort is forbidden: {effort}")
-    if spec.effort and spec.reasoning_effort and spec.effort != spec.reasoning_effort:
+    if (
+        spec.effort is not None
+        and spec.reasoning_effort is not None
+        and spec.effort != spec.reasoning_effort
+    ):
         raise ModelGovernanceError("conflicting effort fields")
 
 

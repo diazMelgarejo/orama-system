@@ -689,7 +689,7 @@ _PARITY_NOW = datetime(2026, 10, 25, tzinfo=timezone.utc)
 @pytest.mark.parametrize("entry", ["plan", "assert"])
 @pytest.mark.parametrize(
     "effort,reasoning",
-    [("medium", "high"), ("high", "medium"), ("low", "medium")],
+    [("medium", "high"), ("high", "medium"), ("low", "medium"), ("", "medium")],
 )
 def test_parity_conflicting_effort_aliases_refuse_at_both_entry_points(
     entry: str, effort: str, reasoning: str
