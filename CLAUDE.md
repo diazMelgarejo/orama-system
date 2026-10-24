@@ -36,7 +36,7 @@
 | HITL accountability classes | [`docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md`](docs/HUMAN-IN-LOOP-ACCOUNTABILITY.md) |
 | Search frugality rule (gbrain → CRG → Brave → Perplexity → Grok) | [`bin/orama-system/SKILL.md § Search Policy`](bin/orama-system/SKILL.md) |
 | Win coder pool (`$WIN_CODER_ENDPOINTS`, always-utilized) | [`bin/orama-system/SKILL.md § Windows Coder Pool`](bin/orama-system/SKILL.md) |
-| Model governance (provider-agnostic harness defaults) | Alexandria PR #1 (`e7ee9db6`) · [`docs/standards/model-governance.md`](docs/standards/model-governance.md) |
+| Model governance (fallback + alternate harness paths; supplements existing routing) | Alexandria PR #1 (`e7ee9db6`) · [`docs/standards/model-governance.md`](docs/standards/model-governance.md) |
 
 **Quick invariants (full detail in doc above):**
 
@@ -52,12 +52,12 @@
 - One heavy model at a time on Windows GPU
 - `@field_validator` (Pydantic V2) — never deprecated `@validator`
 - `depth=0` validated server-side; workers cannot spawn sub-workers in V1
-- Harness model selection is provider-agnostic.
-  Cursor default: `grok-4.7` medium / fast off.
-  Anthropic default: `claude-sonnet-5-5` medium.
-  `grok-4.5` and `grok-4.6` are banned. `auto` is editor-only.
-  Cost gate fail-closed; cloud escalation default-deny.
-  Escalation token ≠ config/env/cache.
+- Model routing keeps the existing tier policy (`.cursor/commands/model-route.md`,
+  `.cursor/rules/common-performance.mdc`, workflow tiering). When it cannot decide,
+  fall back to the harness default: Cursor `grok-4.7` medium / fast off;
+  Anthropic `claude-sonnet-5-5` medium. Never self-escalate.
+  `grok-4.5` and `grok-4.6` are outdated ids. Cost gate fail-closed;
+  cloud escalation default-deny. Escalation token ≠ config/env/cache.
 
 ---
 
@@ -104,7 +104,8 @@ Before significant changes, load the mother skill:
 | [`docs/reference/agent-first-open-visibility.md`](docs/reference/agent-first-open-visibility.md) | What Cursor / Claude Code / OpenClaw see on first open |
 | [`docs/wiki/08-git-hygiene-and-branching.md`](docs/wiki/08-git-hygiene-and-branching.md) § [Official commit identity policy (2026-05-25)](docs/wiki/08-git-hygiene-and-branching.md#official-commit-identity-policy-2026-05-25) | Approved authors, co-author allowlist, `install-local-hooks.sh` |
 | [`docs/LESSONS.md`](docs/LESSONS.md) | Chronological session log |
-| [`docs/standards/model-governance.md`](docs/standards/model-governance.md) | Provider-agnostic harness model defaults (Alexandria pin; do not copy the standard) |
+| [`docs/wiki/README.md`](docs/wiki/README.md) | Wiki index — lesson deep-dives |
+| [`docs/standards/model-governance.md`](docs/standards/model-governance.md) | Model-governance fallback and alternate harness paths (Alexandria pin; supplements, does not replace, existing routing policy) |
 
 ---
 

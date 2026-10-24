@@ -2,8 +2,9 @@
 name: cursor-agent
 description: >-
   Install, configure, and operate the Cursor Agent CLI (`cursor-agent`) for
-  fanning out light tasks in parallel. Default launch is grok-4.7 at medium
-  effort with fast off. Auto is editor-only. Never launch grok-4.5 or grok-4.6.
+  fanning out light tasks in parallel alongside the main Sonnet 5.5 session.
+  Fallback and alternate paths follow model governance (grok-4.7 medium,
+  fast off); grok-4.5 and grok-4.6 are outdated and never launched.
   Cross-platform: macOS/Linux via bash installer, Windows via PowerShell.
   DO NOT confuse with `agent` (Grok Build TUI at ~/.grok/bin/agent) — different tool.
 version: 1.2.0
@@ -50,7 +51,7 @@ dependency.
 
 ### Never Do
 
-- Do not use `auto` or a banned model for agent work.
+- Do not launch an outdated model id (`grok-4.5`, `grok-4.6`).
 
 ## Disambiguation
 
@@ -127,36 +128,62 @@ cursor-agent models              # confirms key is accepted
 
 ## Available Models
 
-Canonical rules: [Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
-and `docs/standards/model-governance.md`. Always set effort and fast explicitly.
+Key models for task fanout (from `cursor-agent models`; re-check exact strings there,
+since Cursor renames model ids between releases):
 
 | Model string | Display name | When to use |
 |---|---|---|
-| `grok-4.7` | Grok 4.7 | **Default for agents.** Launch `{effort: medium, fast: false}` (usage `cursor-grok-4.7-medium`) |
-| `composer-2.5` | Composer 2.5 | Allowed alternative. Launch `{fast: false}`. Fast on only if the operator asks. |
-| `claude-sonnet-5-5` | Sonnet 5.5 | Anthropic-path default inside Cursor: `{reasoning_effort: medium}` |
-| `claude-opus-5-5` | Opus 5.5 | Escalation token required; `{effort: high, fast: false}` |
-| `claude-fable-5-1` | Fable 5.1 | Escalation token **and** hard budget cap |
-
-`auto` / `default` is **editor-only**. Never launch it for agent work (it can
-route to gated Claude models with the choice hidden). `grok-4.5` and `grok-4.6` are **banned**.
+| `composer-2.5` | Composer 2.5 | **Default for all light/parallel tasks** |
+| `auto` | Auto | Fallback when composer-2.5 unavailable or task ambiguous |
+| `claude-opus-5-5[effort=low]` | Opus 5.5 Low | Mechanical tasks (format, rename, scaffold) |
+| `claude-opus-5-5[effort=medium]` | Opus 5.5 Medium | Standard coding tasks |
+| `claude-opus-5-5[context=1m,effort=high]` | Opus 5.5 1M | Complex refactors |
+| `gpt-5.6-terra` | GPT-5.6 Terra | Fast, cheap file edits |
+| `claude-sonnet-5-5[effort=medium]` | Sonnet 5.5 | **Orchestrator-override only** — dispatched exclusively when Opus 5.5 Ultracode / Fable 5.1 workflow explicitly demands it |
 
 Parameterised model override syntax (bracket notation):
+
+```bash
+cursor-agent --model 'claude-opus-5-5[context=1m,effort=high,fast=false]' ...
+```
+
+## Model Selection Policy
+
+Three tiers — apply in order:
+
+| Tier | Model | When |
+|------|-------|------|
+| 1 — Default | `composer-2.5` | All light/parallel tasks; use unless there is an explicit reason not to |
+| 2 — Fallback | `auto` | When `composer-2.5` is unavailable or the task is ambiguous and Cursor should self-select |
+| 3 — Orchestrator-override | `claude-sonnet-5-5[effort=medium]` | ONLY when an orchestrator (Opus 5.5 Ultracode or Fable 5.1 workflow) explicitly demands it for a fan-out subtask. NOT a general default. |
+
+**Never use `claude-sonnet-5-5` as a default.** If no orchestrator has demanded it, use `composer-2.5` (or `auto` as fallback).
+
+### Fallback and alternate paths (supplement)
+
+The tiers above stay the policy for this skill. When they cannot decide, or a
+tier cannot run, use the Cursor-path default or an allowed alternative from
+[Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
+(PR #1, tip `e7ee9db6`, status Proposed; local pin
+`docs/standards/model-governance.md`). Set effort and fast explicitly on these launches.
+
+| Model string | When to use |
+|---|---|
+| `grok-4.7` | Cursor-path harness default: `{effort: medium, fast: false}` (usage `cursor-grok-4.7-medium`) |
+| `composer-2.5` | Allowed alternative: `{fast: false}`; fast on only if the operator asks |
+| `gpt-5.6-terra` | Allowed alternative (explicit operator pick): `{effort: medium, fast: false}` |
+| `claude-opus-5-5`, `claude-fable-5-1` | Where the Alexandria escalation token is in force: token required (Fable also needs a hard budget cap) |
 
 ```bash
 cursor-agent --model 'grok-4.7[effort=medium,fast=false]' ...
 cursor-agent --model 'composer-2.5[fast=false]' ...
 ```
 
-## Model Selection Policy
-
-| Tier | Model | When |
-|------|-------|------|
-| 1 — Default | `grok-4.7` medium, fast off | All agent and coding fan-out unless the operator names another allowed model |
-| 2 — Allowed | `composer-2.5` fast off; `gpt-5.6-terra` medium, fast off | Explicit operator pick, or grok-4.7 unavailable |
-| 3 — Gated | Opus 5.5, Fable 5.1 | Only with an escalation token (S-AuthZ bearer + fresh signed HITL, ≤24h). Config/env/cache is not a token. |
-
-Never use `auto` as a fallback. Never default to Opus, Fable, grok-4.6, or grok-4.5.
+- `grok-4.5` and `grok-4.6` are outdated ids; never launch them.
+- Alexandria treats `auto` as editor-only, because its router can pick gated
+  Claude models with the choice hidden. Prefer an allowed alternative above
+  before the Tier 2 `auto` fallback when the run is unattended.
+- A fallback never self-escalates: no raised effort, fast mode, or Opus/Fable.
 
 ## Key Options (from `cursor-agent --help`)
 
@@ -178,20 +205,20 @@ Never use `auto` as a fallback. Never default to Opus, Fable, grok-4.6, or grok-
 
 ## Light Task Fanout Pattern
 
-**Grok 4.7 medium / fast off** is the default for parallelising light work.
-`composer-2.5` and `gpt-5.6-terra` (medium, fast off) are the allowed alternatives when the operator names them. Never fall back to `auto`.
+**Composer 2.5** (`composer-2.5`) is the default model for parallelising light work
+alongside the main orchestration session. Use `auto` as fallback when `composer-2.5`
+is unavailable.
 
 ```bash
 # Parallel single-turn jobs (background) -- write to a repo-relative
 # artifact dir, not /tmp: Fan-out Safety § 2 below only permits verifying
 # repository-relative paths.
 mkdir -p .cursor-agent-artifacts
-cursor-agent --print --model 'grok-4.7[effort=medium,fast=false]' \
+cursor-agent --print --model composer-2.5 \
   "Add type annotations to scripts/discover.py; only functions, no variables" \
   --output-format json > .cursor-agent-artifacts/task-a.json &
 
-# task-b uses a Tier 2 model: the operator named gpt-5.6-terra for this job.
-cursor-agent --print --model 'gpt-5.6-terra[effort=medium,fast=false]' \
+cursor-agent --print --model gpt-5.6-terra \
   "Rename all snake_case variables in tests/test_foo.py to camelCase" \
   --output-format json > .cursor-agent-artifacts/task-b.json &
 
@@ -200,7 +227,7 @@ wait   # collect when done
 
 **Division of labour:**
 
-| Main session (harness default; Cursor = grok-4.7 medium / fast off) | cursor-agent (same default) |
+| Main session (Sonnet 5.5 full orchestration) | cursor-agent (composer-2.5 default) |
 |----------------------------------------------|-------------------------------------|
 | Architecture decisions | Mechanical file edits |
 | CIDF write discipline | Grep-and-replace tasks |
@@ -210,7 +237,7 @@ wait   # collect when done
 | AFRP gate | Single-file refactors |
 
 **Budget note:** `cursor-agent` consumes Cursor credits (not Anthropic API tokens).
-Light tasks = `--model 'grok-4.7[effort=medium,fast=false]'` (default) or `--model 'composer-2.5[fast=false]'`. Never `--model auto`.
+Light tasks = `--model composer-2.5` (default) or `--model auto` (fallback) or `gpt-5.6-terra`.
 
 ## Fan-out Safety
 
@@ -265,7 +292,7 @@ For tasks that write files and must not collide with the main session:
 
 ```bash
 cursor-agent -w cursor-fix-$(date +%s) \
-  --print --model 'grok-4.7[effort=medium,fast=false]' \
+  --print --model composer-2.5 \
   "Refactor scripts/foo.py to add structured logging"
 # Runs in ~/.cursor/worktrees/<repo>/cursor-fix-<ts>/
 # Review and merge back with git after the agent completes
@@ -281,12 +308,12 @@ headless jobs while the main session handles judgment work:
 mkdir -p .cursor-agent-artifacts
 _JOBS=()
 
-cursor-agent --print --model 'grok-4.7[effort=medium,fast=false]' \
+cursor-agent --print --model composer-2.5 \
   "Scan bin/ for TODO comments; output as JSON list" \
   --output-format json > .cursor-agent-artifacts/todos.json &
 _JOBS+=($!)
 
-cursor-agent --print --model 'gpt-5.6-terra[effort=medium,fast=false]' \
+cursor-agent --print --model gpt-5.6-terra \
   "Generate pytest stubs for every function in scripts/new_module.py" \
   --trust > .cursor-agent-artifacts/test-stubs.py &
 _JOBS+=($!)
@@ -316,7 +343,7 @@ cursor-agent mcp list
 Approve all MCPs automatically in headless mode:
 
 ```bash
-cursor-agent --print --approve-mcps --model 'grok-4.7[effort=medium,fast=false]' "..."
+cursor-agent --print --approve-mcps --model composer-2.5 "..."
 ```
 
 ## Windows / Hermes Harness
@@ -324,14 +351,14 @@ cursor-agent --print --approve-mcps --model 'grok-4.7[effort=medium,fast=false]'
 On Windows, invoke from PowerShell or Git Bash:
 
 ```powershell
-cursor-agent --print --model 'grok-4.7[effort=medium,fast=false]' "task here" --trust
+cursor-agent --print --model composer-2.5 "task here" --trust
 ```
 
 From a Hermes-scripted workflow:
 
 ```bash
 # In Git Bash on Windows
-cursor-agent --print --model 'gpt-5.6-terra[effort=medium,fast=false]' \
+cursor-agent --print --model gpt-5.6-terra \
   "List all .py files modified in the last 24h" --output-format json
 ```
 

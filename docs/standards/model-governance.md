@@ -11,6 +11,25 @@ and a fail-closed checker at
 Plans and reviews link the Alexandria file.
 They do not restate model ids.
 
+## Relationship to existing orama routing policy
+
+This pin **supplements** orama's existing routing policy; it does not replace
+it. The Alexandria standard is still 🟡 Proposed.
+
+- The primary routing logic stays where it was: the tier heuristic in
+  [`.cursor/commands/model-route.md`](../../.cursor/commands/model-route.md),
+  the model selection strategy in
+  [`.cursor/rules/common-performance.mdc`](../../.cursor/rules/common-performance.mdc),
+  the MODE 3 tiering in
+  [`claude-code-workflow-canonical.md`](../../bin/orama-system/references/claude-code-workflow-canonical.md),
+  and the tiers in the
+  [cursor-agent skill](../../bin/orama-system/skills/cursor-agent/SKILL.md).
+- This pin adds two things: the **fallback** used when that logic cannot decide
+  from verifiable criteria (the harness default or an allowed alternative, never
+  a self-escalation), and **alternate paths** for harnesses other than Claude Code.
+- Outdated model ids in the existing policy are refreshed in place. The policy
+  text around them is not rewritten.
+
 ## What orama must follow
 
 - The **harness** chooses the path. There is no Claude-only

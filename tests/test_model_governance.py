@@ -309,13 +309,39 @@ def test_live_guidance_has_no_stale_defaults() -> None:
         assert "Opus 4.6" not in text
         assert "claude-opus-4-8" not in text
         assert "claude-4.6-sonnet" not in text
+        assert "claude-haiku-4-5" not in text
+        assert "gpt-5.3-codex" not in text
     cursor_skill = Path("bin/orama-system/skills/cursor-agent/SKILL.md").read_text(encoding="utf-8")
     assert "grok-4.7" in cursor_skill
     assert "| `grok-4.6` | Grok 4.6 | **Default for agents.**" not in cursor_skill
-    assert "**Default for agents.**" in cursor_skill
     workflow = Path("bin/orama-system/references/claude-code-workflow-canonical.md").read_text(encoding="utf-8")
     assert "claude-sonnet-5-5" in workflow
     assert "model: 'claude-sonnet-5'" not in workflow
+
+
+def test_existing_routing_policy_is_supplemented_not_replaced() -> None:
+    """The Alexandria pin adds fallback and alternate paths; the original tier policy stays."""
+    route = Path(".cursor/commands/model-route.md").read_text(encoding="utf-8")
+    assert "Recommend the best model tier for the current task by complexity and budget." in route
+    for tier in ("- `haiku` (`claude-haiku-5-5`)", "- `sonnet` (`claude-sonnet-5-5`)", "- `opus` (`claude-opus-5-5`)"):
+        assert tier in route
+    assert "## Fallback (when the heuristic cannot decide)" in route
+
+    perf = Path(".cursor/rules/common-performance.mdc").read_text(encoding="utf-8")
+    for heading in ("**Haiku 5.5**", "**Sonnet 5.5**", "**Opus 5.5**", "### Fallback and alternate paths"):
+        assert heading in perf
+
+    workflow = Path("bin/orama-system/references/claude-code-workflow-canonical.md").read_text(encoding="utf-8")
+    for tier in ("**Tier 1 — Dispatch/control: Haiku", "**Tier 2 — Evaluate/integrate:", "**Tier 3 — Escalation only:"):
+        assert tier in workflow
+    assert "### Fallback and alternate paths (supplement)" in workflow
+
+    cursor_skill = Path("bin/orama-system/skills/cursor-agent/SKILL.md").read_text(encoding="utf-8")
+    assert "| `composer-2.5` | Composer 2.5 | **Default for all light/parallel tasks** |" in cursor_skill
+    assert "### Fallback and alternate paths (supplement)" in cursor_skill
+
+    pin = Path("docs/standards/model-governance.md").read_text(encoding="utf-8")
+    assert "## Relationship to existing orama routing policy" in pin
 
 
 # ---------------------------------------------------------------------------
