@@ -27,6 +27,11 @@ it. The Alexandria standard is still 🟡 Proposed.
 - This pin adds two things: the **fallback** used when that logic cannot decide
   from verifiable criteria (the harness default or an allowed alternative, never
   a self-escalation), and **alternate paths** for harnesses other than Claude Code.
+- **Escalation to Opus or Fable (operator ruling, 2026-10-24):** until the
+  escalation grant mechanism is in place, an `AskUserQuestion` confirmation
+  approves the escalation, as the existing tiering already says. The escalation
+  token below becomes the required proof only once that mechanism exists.
+  Neither path lets an agent escalate on its own.
 - Outdated model ids in the existing policy are refreshed in place. The policy
   text around them is not rewritten.
 

@@ -122,8 +122,10 @@ cannot decide or a tier cannot run, and the alternate paths for other harnesses:
 - **Other harnesses:** Cursor / Grok Bot runs use `grok-4.7` medium with fast
   off, or the allowed alternatives `composer-2.5` / `gpt-5.6-terra` (medium,
   fast off). They do not inherit this Claude Code mapping.
-- **Stricter Tier 3 proof (alternate path):** where the Alexandria escalation
-  token is in force, Tier 3 also needs that token (S-AuthZ bearer plus a fresh
+- **Stricter Tier 3 proof (once the grant mechanism exists):** until the
+  escalation grant mechanism is in place, the `AskUserQuestion` confirmation
+  above approves Tier 3 (operator ruling, 2026-10-24). After that, Tier 3
+  also needs the Alexandria escalation token (S-AuthZ bearer plus a fresh
   signed HITL approval, ≤24h; Fable also needs a hard budget cap). Config
   flags, env vars, agent-writable files, and cached approvals never count.
 

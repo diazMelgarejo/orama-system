@@ -172,7 +172,7 @@ tier cannot run, use the Cursor-path default or an allowed alternative from
 | `grok-4.7` | Cursor-path harness default: `{effort: medium, fast: false}` (usage `cursor-grok-4.7-medium`) |
 | `composer-2.5` | Allowed alternative: `{fast: false}`; fast on only if the operator asks |
 | `gpt-5.6-terra` | Allowed alternative (explicit operator pick): `{effort: medium, fast: false}` |
-| `claude-opus-5-5`, `claude-fable-5-1` | Where the Alexandria escalation token is in force: token required (Fable also needs a hard budget cap) |
+| `claude-opus-5-5`, `claude-fable-5-1` | Until the escalation grant mechanism exists, an operator `AskUserQuestion` confirmation approves these (operator ruling, 2026-10-24); afterwards the Alexandria escalation token is required (Fable also needs a hard budget cap) |
 
 ```bash
 cursor-agent --model 'grok-4.7[effort=medium,fast=false]' ...
