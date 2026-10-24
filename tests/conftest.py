@@ -9,6 +9,22 @@ from typing import Any, Mapping
 import pytest
 
 
+# Test modules import ``portal_server`` during collection. Its production startup
+# deliberately loads local dotenv files with overrides, so this must run before
+# collection imports any portal module. Keep workstation LAN and bearer settings
+# outside the test process, then supply only the deterministic approval secret
+# needed by swarm-preview fixtures.
+os.environ["PYTHON_DOTENV_DISABLED"] = "1"
+for _name in (
+    "ORAMA_CONTROL_PLANE_TOKEN",
+    "PT_BIND_LAN",
+    "ORAMA_BIND_LAN",
+    "PORTAL_BIND_LAN",
+):
+    os.environ.pop(_name, None)
+os.environ.setdefault("ORAMA_SWARM_APPROVAL_SECRET", "pytest-swarm-approval-secret")
+
+
 @pytest.fixture(autouse=True)
 def _orama_insecure_dev_for_tests(monkeypatch):
     monkeypatch.setenv("ORAMA_INSECURE_DEV", "1")
