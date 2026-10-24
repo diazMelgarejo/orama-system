@@ -267,6 +267,48 @@ def test_descendant_permission_error_falls_through_to_group_cleanup(
     group_signal.assert_called_once_with(10, signal.SIGTERM)
 
 
+def test_non_linux_cleanup_still_signals_the_group_after_the_worker_exits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ps snapshot can miss group members, so only the /proc path may skip the group signal."""
+    mod = _load_delegate_module()
+    proc = Mock(pid=10)
+    proc.poll.return_value = None
+    proc.wait.return_value = 0
+    worker = types.SimpleNamespace(proc=proc)
+    direct_signal = Mock()
+    group_signal = Mock()
+    monkeypatch.setattr(mod, "_descendant_pids", Mock(return_value=[11]))
+    monkeypatch.setattr(mod, "_descendants_authoritative", lambda: False)
+    monkeypatch.setattr(mod.os, "kill", direct_signal)
+    monkeypatch.setattr(mod.os, "killpg", group_signal)
+
+    mod._terminate_worker(worker)
+
+    direct_signal.assert_called_once_with(11, signal.SIGTERM)
+    group_signal.assert_called_once_with(10, signal.SIGTERM)
+
+
+def test_linux_cleanup_skips_the_group_signal_once_the_worker_exits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With complete /proc descendants, a clean worker exit ends cleanup without a group signal."""
+    mod = _load_delegate_module()
+    proc = Mock(pid=10)
+    proc.poll.return_value = None
+    proc.wait.return_value = 0
+    worker = types.SimpleNamespace(proc=proc)
+    group_signal = Mock()
+    monkeypatch.setattr(mod, "_descendant_pids", Mock(return_value=[11]))
+    monkeypatch.setattr(mod, "_descendants_authoritative", lambda: True)
+    monkeypatch.setattr(mod.os, "kill", Mock())
+    monkeypatch.setattr(mod.os, "killpg", group_signal)
+
+    mod._terminate_worker(worker)
+
+    group_signal.assert_not_called()
+
+
 def test_descendant_cleanup_escalates_to_group_sigkill_when_worker_stays_alive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

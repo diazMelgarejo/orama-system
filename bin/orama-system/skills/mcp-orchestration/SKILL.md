@@ -187,7 +187,7 @@ Reserve Claude Sonnet 5.5 (this session's main agent) for:
 When using Claude Sonnet 5.5 via the Anthropic SDK:
 
 - `model: claude-sonnet-5-5`
-- `thinking.effort: medium`
+- `thinking.type: adaptive` and `output_config.effort: medium`
 - Set `cache_control` on **stable** system prompts, tool definitions, and context prefixes
 - **Simplest option — automatic placement:** pass a single `cache_control` field at the **top level** of the `messages.create()` request and the SDK auto-places the breakpoint on the last cacheable block. Reach for explicit per-block `cache_control` only when you need fine-grained control over multiple breakpoints (max 4).
 - Sonnet 5.5 minimum cacheable prompt: **1,024 tokens** (anything smaller is not cached)

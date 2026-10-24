@@ -239,7 +239,9 @@ def _terminate_worker(worker: _Worker) -> None:
                 os.kill(pid, signal.SIGTERM)
             except (ProcessLookupError, PermissionError):
                 pass
-        if descendants:
+        if descendants and _descendants_authoritative():
+            # Only /proc gives a complete list; elsewhere the ps snapshot can miss a
+            # surviving group member, so fall through to the group-wide signal.
             try:
                 proc.wait(timeout=5)
                 return
@@ -262,9 +264,14 @@ def _terminate_worker(worker: _Worker) -> None:
             pass
 
 
+def _descendants_authoritative() -> bool:
+    """Return True where descendant enumeration (/proc) is complete enough to skip the group signal."""
+    return sys.platform.startswith("linux")
+
+
 def _descendant_pids(parent_pid: int) -> list[int]:
     """Enumerate descendants on POSIX, keeping group cleanup as a fallback."""
-    if sys.platform.startswith("linux"):
+    if _descendants_authoritative():
         return _linux_descendant_pids(parent_pid)
     try:
         snapshot = subprocess.run(

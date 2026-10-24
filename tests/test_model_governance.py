@@ -15,6 +15,7 @@ from orama_system.model_governance import (
     default_launch,
     evaluate_cost_gate,
     load_model_governance,
+    plan_launch,
     proof_is_token,
 )
 
@@ -105,6 +106,35 @@ def test_gpt_5_6_terra_refuses_fast_and_non_medium_effort_without_proof(
     )
     with pytest.raises(ModelGovernanceError, match=match):
         assert_launch_allowed(spec)
+
+
+def test_gpt_5_6_terra_requires_its_configured_effort_to_be_set_explicitly() -> None:
+    """An unset effort is not medium: the ungated row holds Terra to the effort it names."""
+    spec = LaunchSpec(path="cursor_grok_bot", launch_id="gpt-5.6-terra", effort=None, fast=False)
+    with pytest.raises(ModelGovernanceError, match="requires effort medium"):
+        assert_launch_allowed(spec)
+
+
+def test_reasoning_effort_is_checked_like_effort_on_the_cursor_path() -> None:
+    """A non-medium reasoning_effort needs a token even when effort is unset."""
+    spec = LaunchSpec(
+        path="cursor_grok_bot", launch_id="composer-2.5", effort=None,
+        reasoning_effort="high", fast=False,
+    )
+    with pytest.raises(ModelGovernanceError, match="non-medium effort"):
+        assert_launch_allowed(spec)
+
+
+def test_assert_launch_allowed_rejects_conflicting_effort_fields() -> None:
+    """The launch gate enforces the same single-effort invariant as plan_launch."""
+    spec = LaunchSpec(
+        path="cursor_grok_bot", launch_id="composer-2.5", effort="medium",
+        reasoning_effort="high", fast=False,
+    )
+    with pytest.raises(ModelGovernanceError, match="conflicting effort fields"):
+        assert_launch_allowed(spec)
+    with pytest.raises(ModelGovernanceError, match="conflicting effort fields"):
+        plan_launch(spec)
 
 
 def test_retired_codex_low_id_is_not_an_ungated_cursor_pick() -> None:

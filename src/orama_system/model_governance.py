@@ -90,10 +90,7 @@ def plan_launch(
         raise ModelGovernanceError("unsupported harness task kind")
     if mode not in ("standard", "ultracode"):
         raise ModelGovernanceError("unsupported orchestration mode")
-    if any(value in ("xhigh", "max") for value in (spec.effort, spec.reasoning_effort)):
-        raise ModelGovernanceError("effort is forbidden")
-    if spec.effort and spec.reasoning_effort and spec.effort != spec.reasoning_effort:
-        raise ModelGovernanceError("conflicting effort fields")
+    _require_consistent_effort(spec)
     cfg = dict(config) if config is not None else load_model_governance()
     if spec.launch_id in cfg.get("banned_launch_ids", ()):
         raise ModelGovernanceError(f"banned launch id: {spec.launch_id}")
@@ -240,6 +237,15 @@ def _named_effort(spec: LaunchSpec) -> str | None:
     return spec.effort or spec.reasoning_effort
 
 
+def _require_consistent_effort(spec: LaunchSpec) -> None:
+    """Refuse forbidden effort values and two effort fields that disagree (one rule for every entry point)."""
+    for effort in (spec.effort, spec.reasoning_effort):
+        if effort in ("xhigh", "max"):
+            raise ModelGovernanceError(f"effort is forbidden: {effort}")
+    if spec.effort and spec.reasoning_effort and spec.effort != spec.reasoning_effort:
+        raise ModelGovernanceError("conflicting effort fields")
+
+
 def proof_is_token(proof: EscalationProof | None, *, now: datetime | None = None) -> bool:
     """Check metadata freshness and shape only, not signatures or authorization."""
     if proof is None:
@@ -272,9 +278,7 @@ def assert_launch_allowed(
 ) -> None:
     if task_kind not in (None, "planning", "execution"):
         raise ModelGovernanceError("unsupported harness task kind")
-    for effort in (spec.effort, spec.reasoning_effort):
-        if effort in ("xhigh", "max"):
-            raise ModelGovernanceError(f"effort is forbidden: {effort}")
+    _require_consistent_effort(spec)
     cfg = dict(config) if config is not None else load_model_governance()
     banned = {str(x) for x in cfg.get("banned_launch_ids") or []}
     if spec.launch_id in banned:
@@ -383,12 +387,10 @@ def _assert_cursor_launch(
         if spec.launch_id == "composer-2.5" and covers():
             return
         raise ModelGovernanceError("fast mode requires an operator request plus a real escalation token")
-    if spec.effort not in (None, "medium") and not covers():
+    if _named_effort(spec) not in (None, "medium") and not covers():
         raise ModelGovernanceError("non-medium effort requires an escalation token")
     if spec.launch_id in _ungated_cursor_ids(cfg):
-        row = _ungated_cursor_row(cfg, spec.launch_id)
-        if "fast" in row and spec.fast is not bool(row["fast"]):
-            raise ModelGovernanceError(f"{spec.launch_id} must launch with fast off")
+        _assert_gated_params(spec, _ungated_cursor_row(cfg, spec.launch_id))
         return
     gated = cfg["cursor_grok_bot"].get("gated") or {}
     if spec.launch_id in gated:

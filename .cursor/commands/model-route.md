@@ -14,7 +14,7 @@ The harness decides the path. Do not assume Claude-only routing.
 
 `/model-route [task-description] [--budget low|med|high]`
 
-`--budget` never authorizes Opus, Fable, Grok 4.7, high effort, or fast mode.
+`--budget` never authorizes Opus, Fable, high effort, or fast mode.
 Those need an escalation token (S-AuthZ bearer + fresh signed HITL, ≤24h).
 Config flags and env vars are not a token.
 
