@@ -73,7 +73,8 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 **Scope:** orama-system live guidance + `config/model-governance.yml` pin.
 
 Seth's provider-agnostic standard (alexandria PR #1, tip `e7ee9db6`) is now
-the cited source for harness launches. Cursor/Grok Bot default is `grok-4.6`
+the cited source for harness launches. Cursor/Grok Bot default is `grok-4.7`
+(originally recorded here as `grok-4.6`, now banned; corrected 2026-10-24)
 medium with fast off; Anthropic default is `claude-sonnet-5-5` medium;
 `grok-4.5` and agent `auto` are banned; escalation tokens are not config/env
 flags. Runtime frugality ladder unchanged; cost gate fail-closed; cloud

@@ -12,11 +12,11 @@ turn on fast mode, or switch providers. Canonical rules: Alexandria PR #1
 
 **Cursor / Grok Bot path** (this IDE, CLI, Cloud Agents, Grok Bot):
 
-- Default: `grok-4.6` at `{effort: medium, fast: false}`
-  (usage `cursor-grok-4.6-medium`)
-- Allowed: `composer-2.5` with `{fast: false}`
-- `grok-4.7` only with an escalation token; still medium, fast off
-- `grok-4.5` is banned
+- Default: `grok-4.7` at `{effort: medium, fast: false}`
+  (usage `cursor-grok-4.7-medium`)
+- Allowed: `composer-2.5` with `{fast: false}`; `gpt-5.6-terra` with
+  `{effort: medium, fast: false}` (explicit operator pick)
+- `grok-4.5` and `grok-4.6` are banned
 - `auto` is editor-only, never for agents
 
 **Anthropic path** (Claude Code, Claude API/SDK, claude.ai):

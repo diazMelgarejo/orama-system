@@ -18,7 +18,8 @@ They do not restate model ids.
 - **Cursor / Grok Bot:** default launch is `grok-4.7` at
   `{effort: medium, fast: false}`
   (usage label `cursor-grok-4.7-medium`).
-  `composer-2.5` is allowed with fast off.
+  `composer-2.5` and `gpt-5.6-terra` (medium) are allowed with fast off,
+  as explicit operator picks.
   `grok-4.5` and superseded `grok-4.6` are banned.
   `auto` / `default` is editor-only, never for agents.
 - **Anthropic:** default is `claude-sonnet-5-5` at medium
@@ -55,3 +56,20 @@ the caller must obtain and consume authenticated Phylax authority and establish
 the durable execution lease. Neither `LaunchPlan` nor `EscalationProof` proves
 that those steps happened. `assert_launch_allowed` checks the requested policy
 tuple; it does not silently execute a returned fallback or verify signatures.
+
+## Claude Code model allowlist (managed settings)
+
+`availableModels`, `deniedModels` and `enforceAvailableModels` are
+administrator keys: Claude Code enforces them from **managed or policy
+settings**. `deniedModels` is ignored, with a warning, when set in project
+settings. A project-level `availableModels` list is only merged with other
+lists and restricts nothing by itself, so the project
+[`.claude/settings.json`](../../.claude/settings.json) sets only the default
+`model`.
+
+[`config/claude-code-managed-settings.example.json`](../../config/claude-code-managed-settings.example.json)
+is the template an administrator deploys at the managed boundary.
+It is a template, not enforcement from this repo.
+`assert_launch_allowed` has no production caller yet, so the managed list is
+the only barrier that stops a normal invocation from selecting
+`claude-opus-5-5` or `claude-fable-5-1` without an escalation token.

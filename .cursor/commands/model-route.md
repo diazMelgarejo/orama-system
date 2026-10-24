@@ -20,9 +20,9 @@ Config flags and env vars are not a token.
 
 ## Routing Heuristic
 
-- **Cursor / Grok Bot:** default `grok-4.6` at medium with fast off.
-  Allowed: `composer-2.5` with fast off. Never `auto` for agents.
-  Never `grok-4.5`.
+- **Cursor / Grok Bot:** default `grok-4.7` at medium with fast off.
+  Allowed: `composer-2.5` or `gpt-5.6-terra` (medium) with fast off. Never `auto` for agents.
+  Never `grok-4.5` or `grok-4.6`.
 - **Anthropic:** default `claude-sonnet-5-5` at medium.
   Opus 5.5 high and Fable 5.1 are escalation-only
   (Fable also needs a hard budget cap).

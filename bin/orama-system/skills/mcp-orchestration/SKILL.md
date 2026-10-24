@@ -203,8 +203,9 @@ client = anthropic.Anthropic()
 
 response = client.messages.create(
     model="claude-sonnet-5-5",
-    max_tokens=1024,
-    thinking={"type": "enabled", "budget_tokens": 8000},
+    max_tokens=4096,  # covers thinking + text on Sonnet 5.5
+    thinking={"type": "adaptive"},  # budget_tokens returns HTTP 400 on Sonnet 5.5
+    output_config={"effort": "medium"},
     system=[
         {
             "type": "text",

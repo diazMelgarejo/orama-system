@@ -153,7 +153,7 @@ cursor-agent --model 'composer-2.5[fast=false]' ...
 | Tier | Model | When |
 |------|-------|------|
 | 1 — Default | `grok-4.7` medium, fast off | All agent and coding fan-out unless the operator names another allowed model |
-| 2 — Allowed | `composer-2.5` fast off | Explicit operator pick, or grok-4.7 unavailable |
+| 2 — Allowed | `composer-2.5` fast off; `gpt-5.6-terra` medium, fast off | Explicit operator pick, or grok-4.7 unavailable |
 | 3 — Gated | Opus 5.5, Fable 5.1 | Only with an escalation token (S-AuthZ bearer + fresh signed HITL, ≤24h). Config/env/cache is not a token. |
 
 Never use `auto` as a fallback. Never default to Opus, Fable, grok-4.6, or grok-4.5.
@@ -179,7 +179,7 @@ Never use `auto` as a fallback. Never default to Opus, Fable, grok-4.6, or grok-
 ## Light Task Fanout Pattern
 
 **Grok 4.7 medium / fast off** is the default for parallelising light work.
-`composer-2.5` with fast off is the allowed alternative. Never fall back to `auto`.
+`composer-2.5` and `gpt-5.6-terra` (medium, fast off) are the allowed alternatives when the operator names them. Never fall back to `auto`.
 
 ```bash
 # Parallel single-turn jobs (background) -- write to a repo-relative
@@ -190,7 +190,8 @@ cursor-agent --print --model 'grok-4.7[effort=medium,fast=false]' \
   "Add type annotations to scripts/discover.py; only functions, no variables" \
   --output-format json > .cursor-agent-artifacts/task-a.json &
 
-cursor-agent --print --model gpt-5.3-codex-low \
+# task-b uses a Tier 2 model: the operator named gpt-5.6-terra for this job.
+cursor-agent --print --model 'gpt-5.6-terra[effort=medium,fast=false]' \
   "Rename all snake_case variables in tests/test_foo.py to camelCase" \
   --output-format json > .cursor-agent-artifacts/task-b.json &
 
@@ -285,7 +286,7 @@ cursor-agent --print --model 'grok-4.7[effort=medium,fast=false]' \
   --output-format json > .cursor-agent-artifacts/todos.json &
 _JOBS+=($!)
 
-cursor-agent --print --model gpt-5.3-codex-low \
+cursor-agent --print --model 'gpt-5.6-terra[effort=medium,fast=false]' \
   "Generate pytest stubs for every function in scripts/new_module.py" \
   --trust > .cursor-agent-artifacts/test-stubs.py &
 _JOBS+=($!)
@@ -330,7 +331,7 @@ From a Hermes-scripted workflow:
 
 ```bash
 # In Git Bash on Windows
-cursor-agent --print --model gpt-5.3-codex-low \
+cursor-agent --print --model 'gpt-5.6-terra[effort=medium,fast=false]' \
   "List all .py files modified in the last 24h" --output-format json
 ```
 

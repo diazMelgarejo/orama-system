@@ -84,6 +84,36 @@ def test_composer_requires_fast_off() -> None:
         assert_launch_allowed(bad)
 
 
+def test_gpt_5_6_terra_is_an_ungated_cursor_pick_at_medium_fast_off() -> None:
+    """The official Terra id replaces the retired Codex example without needing a token."""
+    ok = LaunchSpec(
+        path="cursor_grok_bot", launch_id="gpt-5.6-terra", effort="medium", fast=False
+    )
+    assert_launch_allowed(ok)
+
+
+@pytest.mark.parametrize(
+    "effort,fast,match",
+    [("medium", True, "fast"), ("medium", None, "fast"), ("high", False, "effort")],
+)
+def test_gpt_5_6_terra_refuses_fast_and_non_medium_effort_without_proof(
+    effort: str, fast: bool | None, match: str
+) -> None:
+    """Terra keeps the Cursor controls: fast off, and medium effort unless a token covers it."""
+    spec = LaunchSpec(
+        path="cursor_grok_bot", launch_id="gpt-5.6-terra", effort=effort, fast=fast
+    )
+    with pytest.raises(ModelGovernanceError, match=match):
+        assert_launch_allowed(spec)
+
+
+def test_retired_codex_low_id_is_not_an_ungated_cursor_pick() -> None:
+    """The superseded gpt-5.3-codex-low id stays default-deny on the Cursor path."""
+    spec = LaunchSpec(path="cursor_grok_bot", launch_id="gpt-5.3-codex-low", fast=False)
+    with pytest.raises(ModelGovernanceError, match="default-deny"):
+        assert_launch_allowed(spec)
+
+
 def test_env_and_config_flags_are_not_escalation_tokens() -> None:
     env_shaped = EscalationProof(
         kind="env_var",
@@ -253,7 +283,14 @@ def test_live_guidance_has_no_stale_defaults() -> None:
 _VEC_NOW = datetime(2026, 10, 21, tzinfo=timezone.utc)
 
 
-def _vec_proof(model, effort, fast, budget=None, hours=1, **extra):
+def _vec_proof(
+    model: str,
+    effort: str | None,
+    fast: bool | None,
+    budget: str | None = None,
+    hours: int = 1,
+    **extra: str | None,
+) -> EscalationProof:
     return EscalationProof(
         kind="offline_gpg",
         reference="synthetic-policy-fixture",
@@ -275,7 +312,14 @@ def _vec_proof(model, effort, fast, budget=None, hours=1, **extra):
 @pytest.mark.parametrize("fast", [None, False, True])
 @pytest.mark.parametrize("approval", ["absent", "fresh", "expired"])
 @pytest.mark.parametrize("budget", [None, "max_tokens=8192"])
-def test_vector_family_matrix(path, model, effort, fast, approval, budget) -> None:
+def test_vector_family_matrix(
+    path: str,
+    model: str,
+    effort: str | None,
+    fast: bool | None,
+    approval: str,
+    budget: str | None,
+) -> None:
     spec = LaunchSpec(path=path, launch_id=model, effort=effort, fast=fast)
     proof = None
     if approval != "absent":
@@ -312,7 +356,11 @@ def test_vector_family_matrix(path, model, effort, fast, approval, budget) -> No
     ],
 )
 def test_vector_approval_binds_launch_tuple(
-    approved_model, approved_effort, approved_fast, hours, allowed
+    approved_model: str,
+    approved_effort: str,
+    approved_fast: bool | None,
+    hours: int,
+    allowed: bool,
 ) -> None:
     spec = LaunchSpec(
         path="cursor_grok_bot", launch_id="composer-2.5", effort="high", fast=True
@@ -338,7 +386,9 @@ def test_vector_stray_mismatched_proof_refused_on_ungated_launch() -> None:
 @pytest.mark.parametrize("fast,approved_fast", [(None, False), (False, None)])
 @pytest.mark.parametrize("reasoning_field", [False, True])
 def test_vector_nonfast_and_effort_fields_normalize(
-    fast, approved_fast, reasoning_field
+    fast: bool | None,
+    approved_fast: bool | None,
+    reasoning_field: bool,
 ) -> None:
     spec = LaunchSpec(
         path="anthropic",
@@ -424,7 +474,7 @@ def test_vector_cursor_family_controls() -> None:
 
 
 @pytest.mark.parametrize("effort", [None, "high", "low", "medium"])
-def test_vector_direct_xai_requires_medium_effort(effort) -> None:
+def test_vector_direct_xai_requires_medium_effort(effort: str | None) -> None:
     spec = LaunchSpec(path="direct_xai", launch_id="grok-4.7", reasoning_effort=effort)
     if effort == "medium":
         assert_launch_allowed(spec)
@@ -528,7 +578,7 @@ def test_vector_banned_launch_id_refused_even_with_matching_proof(
 
 
 @pytest.mark.parametrize("path", ["anthropic", "cursor_grok_bot"])
-def test_vector_fable_requires_budget_cap_on_every_path(path) -> None:
+def test_vector_fable_requires_budget_cap_on_every_path(path: str) -> None:
     spec = LaunchSpec(path=path, launch_id="claude-fable-5-1", effort="medium")
     with pytest.raises(ModelGovernanceError, match="budget cap"):
         assert_launch_allowed(

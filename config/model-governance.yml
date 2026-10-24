@@ -41,6 +41,11 @@ cursor_grok_bot:
   allowed_ungated:
     - launch_id: composer-2.5
       fast: false
+    # Official OpenAI id (developers.openai.com/api/docs/models/gpt-5.6-terra);
+    # replaces the retired gpt-5.3-codex-low examples. Explicit operator pick.
+    - launch_id: gpt-5.6-terra
+      effort: medium
+      fast: false
   gated: {}
 
 anthropic:
