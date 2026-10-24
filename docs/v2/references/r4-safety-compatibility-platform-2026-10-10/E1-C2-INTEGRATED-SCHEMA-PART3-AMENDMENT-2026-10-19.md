@@ -28,15 +28,18 @@ not mutable file-line positions.
 ## Ratification surface
 
 This table scopes the one operator decision this document can support. It marks existing text
-and moves none of it. Only [Section 3.3](#33-consumer-anchor-floor-invariant-additional-consumer-local-gate)
-is proposed for ratification; everything else remains proposed and is a release prerequisite
-that is not part of that decision. The acceptance packet and the meaning of a ratification
-are in [Section 8](#8-ratification-acceptance-packet).
+and moves none of it. [Section 3.3](#33-consumer-anchor-floor-invariant-additional-consumer-local-gate)
+was the first slice put to the operator (its decision is recorded in the packet, Section 8).
+Sections 1 and 2 are the second slice and are proposed for ratification together as one
+decision, recorded in the sibling
+[Sections 1-2 acceptance matrix][matrix]; everything else remains proposed and is a release
+prerequisite that is not part of either decision. The meaning of a ratification is in
+[Section 8](#8-ratification-acceptance-packet).
 
 | Section | Marking |
 | :--- | :--- |
-| [1. Minimal revocation event body](#1-minimal-revocation-event-body) | Remains proposed; release prerequisite, not part of this decision |
-| [2. Minimal cascade event body](#2-minimal-cascade-event-body) | Remains proposed; release prerequisite, not part of this decision |
+| [1. Minimal revocation event body](#1-minimal-revocation-event-body), including its [locked rules](#locked-rules-for-sections-1-and-2) | **Proposed for ratification** (second slice, decided together with Section 2) |
+| [2. Minimal cascade event body](#2-minimal-cascade-event-body), including its [locked rules](#locked-rules-for-sections-1-and-2) | **Proposed for ratification** (second slice, decided together with Section 1) |
 | [3.1 Event-as-checkpoint equivalence](#31-event-as-checkpoint-equivalence) | Remains proposed; release prerequisite (checkpoints beyond the anchor), not part of this decision |
 | [3.2 Pruning, retention and archival](#32-pruning-retention-and-archival-rule) | Remains proposed; release prerequisite, not part of this decision |
 | [3.3 Consumer anchor floor invariant](#33-consumer-anchor-floor-invariant-additional-consumer-local-gate): the bootstrap-anchor protocol, the atomic persisted identity/version/digest/floor record, and the $R_p \ge$ anchor_version floor comparison rule, with the consumer-local refusal and quarantine semantics defined inside it | **Proposed for ratification** |
@@ -118,6 +121,47 @@ The proposed exact body carries:
    that gate.)*
 3. `issuer_authority_version` (`int`): Safe positive integer identifying the issuer authority
    epoch at the time of the cascade commit.
+
+### Locked rules for Sections 1 and 2
+
+These rules complete the two bodies above. They bind the issuer and the consumer alike, and a
+body that breaks any of them is malformed.
+
+1. **Closed bodies.** A revocation body has exactly `subject_kind` and `subject_id`; a cascade
+   body has exactly `approval_id`, `grant_ids` and `issuer_authority_version`. A missing, extra
+   or null field is malformed. `subject_kind` is exactly `grant`, `approval` or `issuer`.
+2. **Canonical identifier.** `subject_id`, `approval_id` and every `grant_ids` element is an
+   ASCII string of 1 to 1024 bytes made only of the printable characters U+0021 to U+007E, so it
+   is never blank, padded, spaced, controlled or non-ASCII. No normalization is applied; a value
+   that is not already canonical is refused, not repaired.
+3. **Cascade list.** `grant_ids` is a JSON array in strictly ascending code-point order. A
+   duplicate or an out-of-order pair is malformed. An empty array is valid and records only the
+   approval. `issuer_authority_version` is a safe integer from 1 to 2^53 - 1.
+4. **Bounded size.** The complete seven-field event (`version`, `kind`, `body`,
+   `previous_event_digest`, `event_digest`, `issuer_key_id`, `signature`) is serialized as
+   canonical JSON: object keys sorted, separators `,` and `:` with no whitespace, non-ASCII text
+   written as itself (not `\u` escapes), NaN and infinity refused, encoded as UTF-8. The cap is
+   65,536 bytes of that encoding. The issuer and the consumer use this same function, so the
+   issuer never appends an event the consumer must refuse. The four-field digest wrapper is
+   unchanged and is a different object.
+5. **Authority facts only.** The issuer records authority facts and takes no consumer
+   execution state as an input. Recording an identical revocation again returns the existing
+   event and appends nothing.
+6. **Consumer application.** A verified revocation or cascade is persisted in the same local
+   transaction as its acknowledgement, and replaying it changes nothing. At Step 4.3, inside the
+   existing dispatch transaction, Rule 4 additionally refuses a grant when any acknowledged event
+   revokes that grant, revokes the issuer, revokes the approval bound to the attempt, or lists the
+   grant in a cascade. The approval binding is the grant's verified `second_approval_ref`,
+   persisted once with the dispatch attempt as part of its identity; the authorizing caller
+   neither supplies nor omits it. The empty string (single approval) matches no approval
+   revocation. An attempt recorded without a binding is undeclared and is refused whenever the
+   issuer has revoked any approval, so omission fails closed. A cascade can only add a refusal;
+   it never satisfies or relaxes any other rule, so it neither substitutes for nor changes the
+   Step 4.3 gate.
+7. **Refusal leaves nothing.** A refusal under rule 6 leaves no dispatch intent, no outbox
+   entry, no consumed grant use and no consumed reservation.
+8. **No new wire vocabulary.** These rules add no shared wire refusal code. Refusal reasons are
+   consumer-local, and the closed permit, finalization and abandon vocabularies are unchanged.
 
 ---
 
@@ -357,4 +401,5 @@ implementation, no serving, no pin promotion and no activation, and it leaves
 [consumer-tests]: https://github.com/oramasys/oramasys/blob/4c67d37c624d6bea1d4953c9777962d1f8e42a3c/src/tests/test_dispatch_attempts.py
 [consumer-limits]: https://github.com/oramasys/oramasys/blob/4c67d37c624d6bea1d4953c9777962d1f8e42a3c/docs/e1-c2-consumer-slice2.md#limits-and-open-items
 [packet]: E1-C2-PART3-RATIFICATION-ACCEPTANCE-PACKET-2026-10-22.md
+[matrix]: E1-C2-PART3-S12-ACCEPTANCE-MATRIX-2026-10-24.md
 [consumer-clock]: https://github.com/oramasys/oramasys/blob/4c67d37c624d6bea1d4953c9777962d1f8e42a3c/docs/e1-c2-consumer-slice2.md
