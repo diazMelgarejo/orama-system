@@ -153,6 +153,20 @@ def test_banned_launch_ids_are_refused_before_path_dispatch() -> None:
         assert_launch_allowed(LaunchSpec(path="unknown", launch_id="gpt-6-astra"))
 
 
+def test_duplicate_governance_yaml_keys_raise(tmp_path: Path) -> None:
+    """Duplicate mapping keys must not silently overwrite bans (e.g. banned_launch_ids)."""
+    path = tmp_path / "model-governance.yml"
+    path.write_text(
+        "banned_launch_ids:\n"
+        "  - grok-4.5\n"
+        "banned_launch_ids:\n"
+        "  - grok-4.6\n",
+        encoding="utf-8",
+    )
+    with pytest.raises(ModelGovernanceError, match="config unavailable"):
+        load_model_governance(str(path))
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize("effort", ["xhigh", "max"])
 @pytest.mark.parametrize("field", ["effort", "reasoning_effort"])
