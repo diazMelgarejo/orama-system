@@ -10,7 +10,7 @@ description: >-
   Treat legacy "ultrathink" prompts as oramasys invocations.
 version: 1.1.1.0
 license: Apache 2.0
-compatibility: claude-code, claude-desktop
+compatibility: claude-code, claude-desktop, cursor, grok-bot, codex, openclaw
 allowed-tools: bash, file-operations, web-search, subagent-creation, mcp-oramasys
 triggers:
   - ultrathink
@@ -277,12 +277,17 @@ When context > 70% -- offload, one task per subagent:
 > (`agent()`/`parallel()`/`pipeline()`/`phase()`), gated by the same
 > `ultracode`/explicit-ask opt-in the tool itself requires — never a
 > bespoke dispatch loop. **Model tiering is mandatory, never inherited
-> from the parent:** Haiku for dispatch/control of non-Claude models
-> (Codex, Cline, Kimi, Cursor, Grok, Perplexity, OpenClaw, Hermes, ...),
-> Sonnet 5 Medium only to evaluate/integrate that output, Opus/Fable 5
-> only on explicit user request or an AskUserQuestion-confirmed
-> escalation — never automated. Full role-to-primitive mapping + tiering
-> policy: `references/claude-code-workflow-canonical.md`. This mapping is
+> from the parent:** Haiku (`claude-haiku-5-5`) for dispatch/control of
+> non-Claude models (Codex, Cline, Kimi, Cursor, Grok, Perplexity, OpenClaw,
+> Hermes, ...), Sonnet 5.5 Medium (`claude-sonnet-5-5`) only to
+> evaluate/integrate that output, Opus 5.5/Fable 5.1 only on explicit user
+> request or an AskUserQuestion-confirmed escalation — never automated.
+> Claude Code `default` resolves to Opus 5.5, so always set model/effort.
+> Full role-to-primitive mapping + tiering policy:
+> `references/claude-code-workflow-canonical.md`. Fallback and alternate
+> harness paths (Cursor/Grok Bot `grok-4.7` medium / fast off; no
+> self-escalation) supplement this tiering via
+> `docs/standards/model-governance.md`. This Workflow mapping is
 > Claude Code-specific; other harnesses (Codex, gemini-cli, Cursor, ECC)
 > keep the abstract description below as-is.
  (Complex Tasks)

@@ -250,6 +250,9 @@ def test_descendant_permission_error_falls_through_to_group_cleanup(
 ) -> None:
     """Continue cleanup when a descendant cannot be signalled directly."""
     mod = _load_delegate_module()
+    # These tests describe the /proc path, so pin it regardless of the host platform.
+    monkeypatch.setattr(mod, "_descendants_authoritative", lambda: True)
+    mod._IS_WINDOWS = False
     proc = Mock(pid=10)
     proc.poll.return_value = None
     proc.wait.side_effect = [subprocess.TimeoutExpired("worker", 5), 0]
@@ -257,7 +260,7 @@ def test_descendant_permission_error_falls_through_to_group_cleanup(
     descendant_lookup = Mock(return_value=[11])
     direct_signal = Mock(side_effect=PermissionError)
     group_signal = Mock()
-    monkeypatch.setattr(mod, "_linux_descendant_pids", descendant_lookup)
+    monkeypatch.setattr(mod, "_descendant_pids", descendant_lookup)
     monkeypatch.setattr(mod.os, "kill", direct_signal)
     monkeypatch.setattr(mod.os, "killpg", group_signal)
 
@@ -267,11 +270,58 @@ def test_descendant_permission_error_falls_through_to_group_cleanup(
     group_signal.assert_called_once_with(10, signal.SIGTERM)
 
 
+def test_non_linux_cleanup_still_signals_the_group_after_the_worker_exits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ps snapshot can miss group members, so only the /proc path may skip the group signal."""
+    mod = _load_delegate_module()
+    mod._IS_WINDOWS = False
+    proc = Mock(pid=10)
+    proc.poll.return_value = None
+    proc.wait.return_value = 0
+    worker = types.SimpleNamespace(proc=proc)
+    direct_signal = Mock()
+    group_signal = Mock()
+    monkeypatch.setattr(mod, "_descendant_pids", Mock(return_value=[11]))
+    monkeypatch.setattr(mod, "_descendants_authoritative", lambda: False)
+    monkeypatch.setattr(mod.os, "kill", direct_signal)
+    monkeypatch.setattr(mod.os, "killpg", group_signal)
+
+    mod._terminate_worker(worker)
+
+    direct_signal.assert_called_once_with(11, signal.SIGTERM)
+    group_signal.assert_called_once_with(10, signal.SIGTERM)
+
+
+def test_linux_cleanup_skips_the_group_signal_once_the_worker_exits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With complete /proc descendants, a clean worker exit ends cleanup without a group signal."""
+    mod = _load_delegate_module()
+    mod._IS_WINDOWS = False
+    proc = Mock(pid=10)
+    proc.poll.return_value = None
+    proc.wait.return_value = 0
+    worker = types.SimpleNamespace(proc=proc)
+    group_signal = Mock()
+    monkeypatch.setattr(mod, "_descendant_pids", Mock(return_value=[11]))
+    monkeypatch.setattr(mod, "_descendants_authoritative", lambda: True)
+    monkeypatch.setattr(mod.os, "kill", Mock())
+    monkeypatch.setattr(mod.os, "killpg", group_signal)
+
+    mod._terminate_worker(worker)
+
+    group_signal.assert_not_called()
+
+
 def test_descendant_cleanup_escalates_to_group_sigkill_when_worker_stays_alive(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Escalate after descendant-first termination leaves the worker alive."""
     mod = _load_delegate_module()
+    # These tests describe the /proc path, so pin it regardless of the host platform.
+    monkeypatch.setattr(mod, "_descendants_authoritative", lambda: True)
+    mod._IS_WINDOWS = False
     proc = Mock(pid=10)
     proc.poll.return_value = None
     proc.wait.side_effect = [
@@ -283,7 +333,7 @@ def test_descendant_cleanup_escalates_to_group_sigkill_when_worker_stays_alive(
     descendant_lookup = Mock(return_value=[11])
     direct_signal = Mock()
     group_signal = Mock()
-    monkeypatch.setattr(mod, "_linux_descendant_pids", descendant_lookup)
+    monkeypatch.setattr(mod, "_descendant_pids", descendant_lookup)
     monkeypatch.setattr(mod.os, "kill", direct_signal)
     monkeypatch.setattr(mod.os, "killpg", group_signal)
 
@@ -405,18 +455,42 @@ def test_worker_construction_failure_does_not_abort_the_batch(tmp_path: Path) ->
     assert any("task-b" in f for f in follow_up)
 
 
+def test_descendant_lookup_uses_posix_snapshot_on_macos(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Find descendants leaf first without requiring a Linux proc filesystem."""
+    mod = _load_delegate_module()
+    monkeypatch.setattr(mod.sys, "platform", "darwin")
+    run = Mock(return_value=subprocess.CompletedProcess(
+        args=[], returncode=0, stdout="10 1\n11 10\n12 11\n20 1\ninvalid\n"
+    ))
+    monkeypatch.setattr(mod.subprocess, "run", run)
+    assert mod._descendant_pids(10) == [12, 11]
+    run.assert_called_once_with(
+        ["ps", "-A", "-o", "pid=", "-o", "ppid="],
+        capture_output=True, text=True, check=True, timeout=1,
+    )
+
+
+@pytest.mark.parametrize("error", [OSError(), subprocess.TimeoutExpired("ps", 1)])
+def test_descendant_lookup_failure_leaves_group_cleanup_available(
+    monkeypatch: pytest.MonkeyPatch, error: Exception,
+) -> None:
+    """Unavailable process enumeration must not prevent group termination."""
+    mod = _load_delegate_module()
+    monkeypatch.setattr(mod.sys, "platform", "darwin")
+    monkeypatch.setattr(mod.subprocess, "run", Mock(side_effect=error))
+    assert mod._descendant_pids(10) == []
+
+
 def test_deadline_stops_new_launches_leaving_queued_tasks_unlaunched(tmp_path: Path) -> None:
     """Regression for PR #280 review 4875271204: the launch loop must check
     the deadline before each new worker, not just after finishing a full
     batch of launches. With max_concurrent=1 (strictly sequential) and a
-    deadline sized for ~2 completions, later tasks should be correctly
-    reported as never started, not silently launched past the deadline.
-
-    Per-task timing (0.2s sleep, ~0.22s wall time including interpreter
-    startup) and the 0.6s deadline were verified empirically before
-    writing this test -- 2 sequential tasks reliably complete by ~0.45s,
-    a 3rd would finish around ~0.67s, past the 0.6s deadline -- giving
-    real margin on both sides rather than a razor-thin boundary.
+    deadline shorter than the whole batch, later tasks stay queued.
+    Already-started workers may correctly time out; they must not be
+    misreported as never started. Exact launch timing is tested below
+    with a controlled clock instead of interpreter-startup assumptions.
     """
     mod = _load_delegate_module()
     pt = tmp_path / "pt"
@@ -440,13 +514,46 @@ def test_deadline_stops_new_launches_leaving_queued_tasks_unlaunched(tmp_path: P
     assert len(rows) == 5
     by_task = {r["task"]: r for r in rows}
     completed = [t for t in by_task if by_task[t]["status"] == "ok"]
-    unlaunched = [t for t in by_task if by_task[t]["status"] == "error"]
+    unlaunched = [t for t in by_task if "did not start" in by_task[t].get("error", "")]
+    timed_out = [t for t in by_task if "did not complete" in by_task[t].get("error", "")]
 
     assert len(completed) >= 1, "at least the first, already-launched worker must complete"
     assert len(unlaunched) >= 1, "at least one later task must never have launched"
-    assert len(completed) + len(unlaunched) == 5
-    for t in unlaunched:
-        assert "did not start" in by_task[t]["error"], (
-            f"{t} must be reported as never started, not launched past the deadline"
-        )
+    assert len(completed) + len(unlaunched) + len(timed_out) == 5
+    for t in unlaunched + timed_out:
         assert any(t in f for f in follow_up)
+
+
+def test_launch_deadline_checked_between_worker_constructions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No construction may start at or beyond the shared deadline."""
+    mod = _load_delegate_module()
+    clock = [0.0]
+    starts: list[tuple[str, float]] = []
+    workers: list[Any] = []
+
+    def worker(task: str, pt_root: str) -> Any:
+        starts.append((task, clock[0]))
+        clock[0] += 0.6
+        obj = types.SimpleNamespace(task=task, proc=Mock(), cleanup=Mock())
+        obj.proc.poll.return_value = None
+        workers.append(obj)
+        return obj
+
+    def terminate(obj: Any) -> None:
+        obj.proc.poll.return_value = -15
+
+    monkeypatch.setattr(mod.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(mod, "_Worker", worker)
+    monkeypatch.setattr(mod, "_terminate_worker", terminate)
+    rows, _ = mod._run_subprocess_workers(
+        ["a", "b", "c", "d"], pt_root="unused", worker_timeout_sec=1,
+        max_concurrent=4,
+    )
+    assert starts == [("a", 0.0), ("b", 0.6)]
+    assert all(start < 1 for _, start in starts)
+    assert all("did not complete" in row["error"] for row in rows[:2])
+    assert all("did not start" in row["error"] for row in rows[2:])
+    for obj in workers:
+        obj.cleanup.assert_called_once()

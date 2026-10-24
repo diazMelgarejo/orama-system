@@ -82,7 +82,9 @@ cline "review this PR" \
 
 ```bash
 # Use Anthropic Claude instead of Cline GLM
-cline "task" -P anthropic -m claude-fable-5 --json -c /repo
+cline "task" -P anthropic -m claude-fable-5-1 --json -c /repo
+# Fallback when Fable is not approved for this task: the Anthropic harness default
+cline "task" -P anthropic -m claude-sonnet-5-5 --json -c /repo
 
 # Use OpenRouter free tier
 cline "task" -P openrouter -m minimax/minimax-m2.5:free --json -c /repo

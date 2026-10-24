@@ -106,3 +106,10 @@ Oramasys suite passes). Item 3 is therefore met against real code once that PR i
 operator. Still not covered: gate order when several rules fail together, concurrent floor commits,
 and a production trusted-key adapter. The implementation is consumer-local and adds no transport,
 serving path or pin promotion.
+
+**Update, later the same day: merge state and the two remaining gaps.** Oramasys PR 72 is merged
+(consumer-local implementation and 24 real-store tests). Gate order and concurrent bootstrap races
+are now pinned by Oramasys PR 73 (7 tests: quarantine, then Rule 1, then the anchor floor, then Rules
+2 and 3; identical and conflicting concurrent bootstraps; floor commit versus authorization), pending
+the operator's merge. Remaining before any serving: a production `TrustedIssuerKeys` adapter, a
+production Oramasys verifier adapter for Ed25519ph, and the Phylax signer wrapper with key custody.

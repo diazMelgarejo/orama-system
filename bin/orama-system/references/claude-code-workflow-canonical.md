@@ -53,30 +53,46 @@ to remove that ambiguity, added 2026-07-22.
 ## Model Tiering (mandatory — never inherit the parent's model/effort)
 
 `Workflow`'s `agent()` call inherits the session's resolved model when
-`opts.model` is omitted. **MODE 3 must never rely on that default.** Every
-`agent()` call in a MODE 3 script sets `model`/`effort` explicitly, per
-this three-tier frugality policy — cheapest tier that can do the job,
-escalate only when the tier below genuinely can't:
+`opts.model` is omitted. **MODE 3 must never rely on that default** (Claude
+Code `default` resolves to Opus 5.5). Every `agent()` call in a MODE 3 script
+sets `model`/`effort` explicitly, per this three-tier frugality policy —
+cheapest tier that can do the job, escalate only when the tier below genuinely
+can't:
 
-**Tier 1 — Dispatch/control: Haiku (`claude-haiku-4-5-20251001`).**
+**Tier 1 — Dispatch/control: Haiku (`claude-haiku-5-5`).**
 Job: spawn, direct, and operate every NON-Claude model/CLI this repo
 dispatches to and wants tightly controlled — Codex, Cline, Kimi, Cursor,
 Grok, Perplexity, OpenClaw, Hermes, and any other external agent. Haiku's
 job here is orchestration and control, not deep reasoning — it drives the
 dispatch, it doesn't do the thinking.
 
-**Tier 2 — Evaluate/integrate: Sonnet 5, effort medium.**
+**Tier 2 — Evaluate/integrate: Sonnet 5.5 (`claude-sonnet-5-5`), effort medium.**
 Job: ONLY evaluating and integrating tier 1's work output — grading,
 merging, synthesizing, deciding pass/fail. Never used for dispatch/control
 itself; never skipped when tier-1 output needs judgment before landing.
+Vendor default effort is `high`; set `medium` explicitly. `claude-sonnet-5`
+is allowed only as a legacy pin.
 
-**Tier 3 — Escalation only: Opus (`claude-opus-4-8`) and/or Fable 5
-(`claude-fable-5`).**
-NEVER automated. Exactly two legitimate triggers:
-1. The user explicitly named Opus or Fable 5 for this task.
+**Tier 3 — Escalation only: Opus 5.5 (`claude-opus-5-5`) and/or Fable 5.1
+(`claude-fable-5-1`).**
+NEVER automated by the script. Exactly two legitimate triggers:
+
+1. The user explicitly named Opus or Fable for this task.
 2. A genuine escalation where tier 2 (Sonnet Medium) could not resolve the
    work — raise an `AskUserQuestion` confirming the escalation **before**
-   spawning any Opus/Fable-5 `agent()` call. Never auto-escalate silently.
+   spawning any Opus/Fable `agent()` call. Never auto-escalate silently.
+
+At the `agent()` spawn boundary these are three distinct launch cases, not one
+shared condition. "Approval" below is what the current
+[Escalation approval regime](../../../docs/standards/model-governance.md#escalation-approval-regimes)
+requires (today the operator's `AskUserQuestion` confirmation; the escalation
+token once enforcement lands):
+
+| Launch | Needs |
+| --- | --- |
+| Opus 5.5 on a harness-classified **planning** task, medium or high effort | No per-use approval. The harness supplies the task kind; the script never does. |
+| Opus 5.5 on any **non-planning** task | Approval for that use (medium is the candidate default; explicit approved high is permitted). |
+| Fable 5.1 | Approval **and** a hard budget cap named in it, with effort medium unless the approval names another level. |
 
 Escalation is strictly ordered: tier 1 → tier 2 → tier 3, matched to
 actual task complexity. Never skip a tier "to be safe," and never reach
@@ -86,16 +102,16 @@ genuinely couldn't close it.
 ```js
 // Tier 1 — dispatch/control (cheap, high fan-out)
 const codexResult = await agent('Run codex exec on: ...', {
-  model: 'claude-haiku-4-5-20251001', effort: 'low',
+  model: 'claude-haiku-5-5', effort: 'low',
 })
 
 // Tier 2 — evaluate/integrate (judgment on tier-1 output, not dispatch)
 const verdict = await agent(`Evaluate and integrate: ${codexResult}`, {
-  model: 'claude-sonnet-5', effort: 'medium',
+  model: 'claude-sonnet-5-5', effort: 'medium',
 })
 
 // Tier 3 — escalation only, gated behind AskUserQuestion, never automatic
-// (omit unless the user named Opus/Fable 5, or verdict confirms tier 2
+// (omit unless the user named Opus/Fable, or verdict confirms tier 2
 // couldn't resolve it AND the user confirmed escalation)
 ```
 
@@ -104,6 +120,26 @@ const verdict = await agent(`Evaluate and integrate: ${codexResult}`, {
 session's tier for every spawned agent — including cheap dispatch/control
 work that never needed it. An unset `model` on a dispatch-tier call in a
 MODE 3 script is a bug, not an acceptable default.
+
+### Fallback and alternate paths (supplement)
+
+This tiering stays the MODE 3 policy on Claude Code.
+[Alexandria model-governance](https://github.com/oramasys/alexandria/blob/docs/mig-pack-ingest-20260925/docs/standards/model-governance.md)
+(PR #1, tip `d6da6781`, status Proposed; local pin
+`docs/standards/model-governance.md`) adds the fallback when the tiering
+cannot decide or a tier cannot run, and the alternate paths for other harnesses:
+
+- **Fallback on the Anthropic path:** `claude-sonnet-5-5` at medium. Do not
+  escalate as a fallback.
+- **Other harnesses:** Cursor / Grok Bot runs use `grok-4.7` medium with fast
+  off, or the allowed alternatives `composer-2.5` / `gpt-5.6-terra` (medium,
+  fast off). They do not inherit this Claude Code mapping.
+- **Tier 3 approval:** the `AskUserQuestion` confirmation above stays the
+  approval for now. Which regime applies, and when the Alexandria escalation
+  token replaces it, is defined once in
+  [Escalation approval regimes](../../../docs/standards/model-governance.md#escalation-approval-regimes).
+  Fable also needs a hard budget cap. Config flags, env vars, agent-writable
+  files, and cached approvals never count as approval.
 
 ## What this does NOT mean
 

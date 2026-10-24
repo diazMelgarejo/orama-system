@@ -68,6 +68,18 @@ This repo uses [continuous-learning-v2](https://github.com/affaan-m/everything-c
 
 6. **Medium items (M1–M7) deferred to Phase 1b** — Discovery strategy, cache eviction, rate limit adaptation, checkpoint gates, sequence bit-width, replay dedup, STM validation pattern. Each documented with decision options + recommendations. Do NOT block Phase 1 start; track in backlog.
 
+### 2026-10-03 — Align harness model defaults with Alexandria model-governance | Cursor
+
+**Scope:** orama-system live guidance + `config/model-governance.yml` pin.
+
+Seth's provider-agnostic standard (alexandria PR #1, tip `e7ee9db6`) is now
+the cited source for harness launches. Cursor/Grok Bot default is `grok-4.7`
+(originally recorded here as `grok-4.6`, now banned; corrected 2026-10-24)
+medium with fast off; Anthropic default is `claude-sonnet-5-5` medium;
+`grok-4.5`, `grok-4.6` and agent `auto` are banned; escalation tokens are not config/env
+flags. Runtime frugality ladder unchanged; cost gate fail-closed; cloud
+escalation default-deny.
+
 ---
 
 ### 2026-08-08 — ALWAYS verify, NEVER trust: PR #283's merged tree silently dropped OSSF-1 content | Claude
@@ -768,3 +780,17 @@ or deferred-tool approval follows. A policy summary is a projection, not a token
 The completion-order mutation and real offline oracle cells test contracts that
 stub wiring cannot prove. See the [current execution record](v2/references/loop-graph-compatibility-2026-10-09/EXECUTION-REVISION-4.md)
 and PT's append-only memory closure for the complete provenance and remaining gates.
+
+## 2026-10-23 — Model pin evidence must distinguish availability from absence
+
+An official provider result can confirm a selected model identifier and its
+accepted effort values, but a search that does not return a newer model is not
+evidence that the newer model is unreleased. Record the latter as unverified
+and recheck the provider's model list and release notes immediately before a
+pin change.
+
+When a default moves, update the executable pin, its validator, tests, and all
+active harness guidance together. Preserve superseded identifiers in the
+explicit deny list so old commands fail closed rather than silently retaining
+an obsolete default. A policy-selected value such as `medium` remains distinct
+from the provider's own default and must be enforced explicitly.

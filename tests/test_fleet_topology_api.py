@@ -226,7 +226,7 @@ class TestPeerRelayProbeEndpoint:
         """Malformed JSON should fail."""
         response = client.post(
             "/api/peer-relay-probe",
-            data="not json",
+            content="not json",
             headers={**auth_header, "Content-Type": "application/json"},
         )
         assert response.status_code == 422

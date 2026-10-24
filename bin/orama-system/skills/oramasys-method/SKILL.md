@@ -63,7 +63,8 @@ Type → Mode mapping:
 - C (8+ steps, parallel) → **Mode 3** (full 7-agent network via MCP; on
   Claude Code, execute via the `Workflow` tool under its own
   `ultracode`/explicit-ask opt-in gate, never a bespoke dispatch loop, with
-  mandatory tiered model selection; see the workflow reference.)
+  mandatory tiered model selection; see the workflow reference. Fallback
+  and alternate harness paths: `docs/standards/model-governance.md`.)
 
 ## Step 1 — Search FIRST (frugality, non-negotiable)
 
@@ -207,6 +208,7 @@ router; CIDF is the content-insertion guard; CRG is code-review-graph.
 - `references/tdd-gate.md` — TDD prescriptive gate (links `docs/TDD.md`)
 - `references/contract-migration.md` — vertical-slice contract migration and regression method
 - `references/harness-compatibility.md` — tool and MCP routing by host
+- `docs/standards/model-governance.md` — model-governance fallback and alternate harness paths (Alexandria pin; supplements the tiering)
 - `references/file-truncation-check.md` — mandatory complete-write verification
 - `../../references/contribution-standards.md` — CONTRIBUTING.md + PR-template baseline and the method's raised contribution standard (PT PR #247); pairs with `post-review-micro-remediation.md`
 - `../../references/skill-architecture-guide.md` — the repo's own SKILL.md standard this file is audited against

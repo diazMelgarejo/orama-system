@@ -228,18 +228,20 @@ def _terminate_worker(worker: _Worker) -> None:
         except subprocess.TimeoutExpired:
             pass
         return
-    if sys.platform.startswith("linux"):
+    if not _IS_WINDOWS:
         # A group-wide signal terminates the worker and its children together.
         # If a child becomes a zombie first, its parent is already gone and
         # PID 1 must reap it. Containers do not always provide a reaping PID 1,
         # so terminate descendants first and let the direct worker reap them.
-        descendants = _linux_descendant_pids(proc.pid)
+        descendants = _descendant_pids(proc.pid)
         for pid in descendants:
             try:
                 os.kill(pid, signal.SIGTERM)
             except (ProcessLookupError, PermissionError):
                 pass
-        if descendants:
+        if descendants and _descendants_authoritative():
+            # Only /proc gives a complete list; elsewhere the ps snapshot can miss a
+            # surviving group member, so fall through to the group-wide signal.
             try:
                 proc.wait(timeout=5)
                 return
@@ -262,6 +264,33 @@ def _terminate_worker(worker: _Worker) -> None:
             pass
 
 
+def _descendants_authoritative() -> bool:
+    """Return True where descendant enumeration (/proc) is complete enough to skip the group signal."""
+    return sys.platform.startswith("linux")
+
+
+def _descendant_pids(parent_pid: int) -> list[int]:
+    """Enumerate descendants on POSIX, keeping group cleanup as a fallback."""
+    if _descendants_authoritative():
+        return _linux_descendant_pids(parent_pid)
+    try:
+        snapshot = subprocess.run(
+            ["ps", "-A", "-o", "pid=", "-o", "ppid="],
+            capture_output=True, text=True, check=True, timeout=1,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    children: dict[int, list[int]] = {}
+    for row in snapshot.stdout.splitlines():
+        try:
+            pid, ppid = map(int, row.split())
+        except ValueError:
+            continue
+        if pid > 0 and ppid > 0:
+            children.setdefault(ppid, []).append(pid)
+    return _leaf_first_descendants(parent_pid, children)
+
+
 def _linux_descendant_pids(parent_pid: int) -> list[int]:
     """Return live descendants in leaf-first order from Linux's proc table."""
     children: dict[int, list[int]] = {}
@@ -281,6 +310,11 @@ def _linux_descendant_pids(parent_pid: int) -> list[int]:
             continue
         children.setdefault(ppid, []).append(pid)
 
+    return _leaf_first_descendants(parent_pid, children)
+
+
+def _leaf_first_descendants(parent_pid: int, children: dict[int, list[int]]) -> list[int]:
+    """Order one process-tree snapshot without revisiting cyclic entries."""
     descendants: list[int] = []
     seen: set[int] = set()
 
