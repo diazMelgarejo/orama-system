@@ -71,7 +71,7 @@ Review bases at the time of preparation. They identify evidence and authorize no
 
 Implementation heads are added to Section 5 by the operator when the matrix is satisfied.
 
-## 5. Operator record (fill when complete)
+## 5. Operator record (complete)
 
 ```text
 COMMIT   = 03bf20b77d66c60e0a4d78e7fbb0b245151d0cfb
