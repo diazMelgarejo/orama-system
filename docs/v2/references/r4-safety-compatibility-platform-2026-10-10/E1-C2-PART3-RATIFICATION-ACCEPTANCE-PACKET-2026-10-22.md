@@ -119,6 +119,11 @@ production Oramasys verifier adapter for Ed25519ph, and the Phylax signer wrappe
 This section reconciles later merged work without rewriting the historical
 ratification record or the evidence table above.
 
+The ratification records for Sections 1, 2, and 3.3 supersede the linked
+amendment's proposal-era labels for those sections only. The integrated
+amendment remains proposed as a whole, and Sections 3.1, 3.2, and 4 remain
+unratified.
+
 Section 4 is the unfilled template; the operator decision is recorded in Section 5.
 
 - [Oramasys PR 72](https://github.com/oramasys/oramasys/pull/72) merged at
