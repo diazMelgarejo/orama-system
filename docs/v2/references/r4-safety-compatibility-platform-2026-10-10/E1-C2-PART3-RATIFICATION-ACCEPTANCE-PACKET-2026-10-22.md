@@ -119,6 +119,8 @@ production Oramasys verifier adapter for Ed25519ph, and the Phylax signer wrappe
 This section reconciles later merged work without rewriting the historical
 ratification record or the evidence table above.
 
+Section 4 is the unfilled template; the operator decision is recorded in Section 5.
+
 - [Oramasys PR 72](https://github.com/oramasys/oramasys/pull/72) merged at
   `beb35f0a76609b2420b6bc88f3a82e6d839db439`; it supplies the consumer-local
   anchor implementation and real-store conformance coverage.
