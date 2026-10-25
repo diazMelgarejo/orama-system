@@ -430,3 +430,121 @@ def test_patch_openclaw_mac_host_still_uses_localhost(tmp_path, monkeypatch):
     D.patch_openclaw_json({"mac": {"ip": MAC, "models": MAC_MODELS}, "win": None})
     url = json.loads(oc.read_text())["models"]["providers"]["lmstudio-mac"]["baseUrl"]
     assert "localhost" in url
+
+
+# ── LM Link ambiguity, same-run Windows evidence, stale lmstudio-mac ─────────
+
+LMLINK_MODELS = ["qwen3.5-9b-mlx", "qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2"]
+
+
+def _lmlink_host(env=None, cache=None, scan_hits=None):
+    D = _windows_host(
+        env=env,
+        probes={f"http://{MAC}:1234": LMLINK_MODELS},
+        cache=cache,
+        scan_hits=scan_hits,
+    )
+    D.load_policy = lambda policy_path=None: {
+        "mac_only": [], "windows_only": ["qwen3.5-27b-claude-4.6-opus-reasoning-distilled-v2"],
+    }
+    return D
+
+
+def test_explicit_mac_ip_with_lm_link_models_is_still_the_mac():
+    D = _lmlink_host(env={"MAC_IP": MAC})
+    result = D.discover_endpoints()
+    assert result["mac"]["ip"] == MAC
+    assert result["win_peers"] == []
+
+
+def test_scan_hit_with_both_evidence_is_neither_mac_nor_win_peer(capsys):
+    D = _lmlink_host(scan_hits=[MAC])
+    result = D.discover_endpoints()
+    assert result["mac"] is None
+    assert result["win_peers"] == []
+    assert result["ambiguous"] == [MAC]
+    assert "LM Link" in capsys.readouterr().err
+
+
+def test_cached_mac_with_both_evidence_is_neither_mac_nor_win_peer():
+    cache = {"endpoints": {"mac": {"ip": MAC}, "win": {"ip": "localhost"}},
+             "models": {"mac": [], "win": []}}
+    D = _lmlink_host(cache=cache)
+    result = D.discover_endpoints()
+    assert result["mac"] is None
+    assert result["win_peers"] == []
+    assert result["ambiguous"] == [MAC]
+
+
+def test_backfill_ignores_stale_mac_that_is_a_win_peer_this_run(tmp_path):
+    # WIN_PEER_IPS unset: Win-2 is only known as Windows from this run's probes.
+    last = {
+        "endpoints": {"mac": {"ip": WIN2, "reachable": True},
+                      "win": {"ip": "localhost", "reachable": True}},
+        "models": {"mac": WIN_MODELS, "win": ["m"]},
+    }
+    live = {"mac": None, "win": {"ip": "localhost", "models": ["m"]},
+            "win_peers": [{"ip": WIN2, "models": WIN_MODELS}]}
+    D = _run_discovery_host(tmp_path, last, live=live, env={})
+    assert D.run_discovery() == 0
+    assert D.saved["endpoints"]["mac"] is None
+    assert [p["ip"] for p in D.saved["endpoints"]["win_peers"]] == [WIN2]
+
+
+def test_backfill_ignores_stale_mac_that_is_ambiguous_this_run(tmp_path):
+    last = {
+        "endpoints": {"mac": {"ip": MAC, "reachable": True},
+                      "win": {"ip": "localhost", "reachable": True}},
+        "models": {"mac": LMLINK_MODELS, "win": ["m"]},
+    }
+    live = {"mac": None, "win": {"ip": "localhost", "models": ["m"]},
+            "win_peers": [], "ambiguous": [MAC]}
+    D = _run_discovery_host(tmp_path, last, live=live, env={})
+    assert D.run_discovery() == 0
+    assert D.saved["endpoints"]["mac"] is None
+
+
+def test_recovery_tier_ignores_stale_mac_seen_as_win_peer_this_run(tmp_path):
+    tier2 = {"mac": {"ip": WIN2, "models": WIN_MODELS}, "win": {"ip": "localhost", "models": ["m"]}}
+    live = {"mac": None, "win": None, "win_peers": [{"ip": WIN2, "models": WIN_MODELS}]}
+    D = _run_discovery_host(tmp_path, None, tier2=tier2, live=live, env={})
+    assert D.run_discovery() == 0
+    assert D.saved["endpoints"]["mac"] is None
+    assert D.saved["tier"] == 2
+
+
+def test_patch_openclaw_clears_stale_localhost_lmstudio_mac_on_windows(tmp_path, monkeypatch):
+    D, oc = _patch_host(tmp_path, monkeypatch)
+    cfg = json.loads(oc.read_text())
+    cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"] = "http://localhost:1234/v1"
+    oc.write_text(json.dumps(cfg))
+    D.patch_openclaw_json({"mac": None, "win": None})
+    assert "lmstudio-mac" not in json.loads(oc.read_text())["models"]["providers"]
+
+
+def test_patch_openclaw_clears_known_windows_lmstudio_mac_on_windows(tmp_path, monkeypatch):
+    D, oc = _patch_host(tmp_path, monkeypatch)
+    cfg = json.loads(oc.read_text())
+    cfg["models"]["providers"]["lmstudio-mac"]["baseUrl"] = f"http://{LOCAL}:1234/v1"
+    oc.write_text(json.dumps(cfg))
+    D.patch_openclaw_json({"mac": None, "win": None})
+    assert "lmstudio-mac" not in json.loads(oc.read_text())["models"]["providers"]
+
+
+def test_patch_openclaw_keeps_remote_lmstudio_mac_when_mac_down_on_windows(tmp_path, monkeypatch):
+    D, oc = _patch_host(tmp_path, monkeypatch)
+    D.patch_openclaw_json({"mac": None, "win": None})
+    url = json.loads(oc.read_text())["models"]["providers"]["lmstudio-mac"]["baseUrl"]
+    assert url == OLD_MAC_URL
+
+
+def test_write_env_never_falls_back_to_localhost_mac_on_windows(tmp_path):
+    D = _load_discover()
+    D.RUNNING_ON_WINDOWS = True
+    D._local_ipv4s = lambda: {LOCAL}
+    D._load_json = lambda path: None
+    D.filter_endpoints_for_policy = lambda endpoints, policy=None: endpoints
+    D.write_env_lmstudio({"mac": None, "win": None}, {"r": str(tmp_path)})
+    assert "LM_STUDIO_MAC_ENDPOINT=\n" in (tmp_path / ".env.lmstudio").read_text()
+    D.write_env_lmstudio({"mac": {"ip": MAC, "models": []}, "win": None}, {"r": str(tmp_path)})
+    assert f"LM_STUDIO_MAC_ENDPOINT=http://{MAC}:1234\n" in (tmp_path / ".env.lmstudio").read_text()

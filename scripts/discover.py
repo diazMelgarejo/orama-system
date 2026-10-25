@@ -9,6 +9,7 @@ Idempotent: writes nothing if state hash is unchanged.
 from __future__ import annotations
 import argparse, asyncio, hashlib, ipaddress, json, logging, os, re, shutil, socket, sys, time
 import urllib.error, urllib.request
+from urllib.parse import urlsplit
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -463,11 +464,24 @@ def _mac_entry(cand: dict) -> dict:
     return entry
 
 
-def _drop_windows_mac(endpoints: dict) -> tuple[dict, bool]:
-    """Drop a cached/back-filled Mac entry whose IP is a known Windows address."""
+def _run_windows_ips(endpoints: dict) -> set[str]:
+    """Hosts this run saw as Windows (win_peers) or could not classify (ambiguous)."""
+    seen = {p.get("ip", "") for p in endpoints.get("win_peers") or []}
+    seen.update(endpoints.get("ambiguous") or [])
+    seen.discard("")
+    return seen
+
+
+def _drop_windows_mac(endpoints: dict, extra: set[str] | None = None) -> tuple[dict, bool]:
+    """Drop a cached/back-filled Mac entry whose IP is a known Windows address.
+
+    `extra` carries addresses observed as Windows (or unclassifiable) in the
+    current run, so a stale cache cannot resurrect them as the Mac.
+    """
     mac = endpoints.get("mac")
     mac_ip = (mac or {}).get("ip", "")
-    if mac and (mac_ip in _known_windows_ips() or _is_loopback_host(mac_ip)):
+    if mac and (mac_ip in _known_windows_ips() or mac_ip in (extra or set())
+                or _is_loopback_host(mac_ip)):
         print(f"  ⚠️  discarding mac {mac_ip}: known Windows address", file=sys.stderr)
         return {**endpoints, "mac": None}, True
     return endpoints, False
@@ -512,11 +526,20 @@ def discover_endpoints() -> dict:
         win_known = _known_windows_ips()
         policy_mac, policy_win = _policy_model_sets()
         win_extra: list[dict] = []
+        ambiguous: list[str] = []
 
         def _note_win(cand: dict) -> None:
             """Note win."""
             if cand["ip"] not in {p["ip"] for p in win_extra}:
                 win_extra.append({"ip": cand["ip"], "models": cand["models"]})
+
+        def _note_ambiguous(cand: dict) -> None:
+            # LM Link lists the other machine's models as local, so a host with
+            # both kinds of evidence cannot be labelled Mac or Windows.
+            print(f"  ⚠️  {cand['ip']} serves both Mac and Windows model evidence "
+                  "(LM Link?) — not labelling it as mac or win_peer", file=sys.stderr)
+            if cand["ip"] not in ambiguous:
+                ambiguous.append(cand["ip"])
 
         mac_ip = os.getenv("MAC_IP", "").strip()
         if mac_ip and (mac_ip in win_known or _is_loopback_host(mac_ip)):
@@ -525,7 +548,8 @@ def discover_endpoints() -> dict:
             mac_ip = ""
         if mac_ip:
             cand = _probe_mac_candidate(mac_ip, policy_mac, policy_win)
-            if cand and not cand["win_evidence"]:
+            # Named explicitly: refuse only on Windows evidence with no Mac evidence.
+            if cand and (cand["mac_evidence"] or not cand["win_evidence"]):
                 result["mac"] = _mac_entry(cand)
             elif cand:
                 print(f"  ⚠️  $MAC_IP={mac_ip} serves Windows-only models — not labelling it as the Mac",
@@ -544,6 +568,8 @@ def discover_endpoints() -> dict:
                     result["mac"] = _mac_entry(cand)
                     hint = " (update $MAC_IP)" if mac_ip else " (set $MAC_IP to avoid scan)"
                     print(f"  ℹ️  Mac found at cached IP {mac_last_ip}{hint}", file=sys.stderr)
+                elif cand and cand["win_evidence"] and cand["mac_evidence"]:
+                    _note_ambiguous(cand)
                 elif cand and cand["win_evidence"]:
                     _note_win(cand)
         if not result["mac"]:
@@ -559,7 +585,9 @@ def discover_endpoints() -> dict:
                     cand = _probe_mac_candidate(ip, policy_mac, policy_win)
                     if not cand:
                         continue
-                    if cand["win_evidence"]:
+                    if cand["win_evidence"] and cand["mac_evidence"]:
+                        _note_ambiguous(cand)
+                    elif cand["win_evidence"]:
                         _note_win(cand)
                     elif cand["mac_evidence"]:
                         result["mac"] = _mac_entry(cand)
@@ -582,6 +610,7 @@ def discover_endpoints() -> dict:
                 peers.append(extra)
                 seen_peer_ips.add(extra["ip"])
         result["win_peers"] = peers
+        result["ambiguous"] = [ip for ip in ambiguous if ip not in seen_peer_ips]
         return result
 
     # ── Mac/Linux host: localhost = mac, subnet scan = win ──────────────────
@@ -677,7 +706,7 @@ def probe_extra_win_peers(exclude: set[str], include_node_ips: bool = False) -> 
         if models:
             peers.append({"ip": ip, "models": models})
         else:
-            print(f"  ⚠️  Windows peer {ip} (from $WIN_PEER_IPS) not reachable", file=sys.stderr)
+            print(f"  ⚠️  Windows peer {ip} (configured Windows peer) not reachable", file=sys.stderr)
     return peers
 
 # ── Hash & state ──────────────────────────────────────────────────────────────
@@ -800,6 +829,16 @@ def patch_openclaw_json(endpoints: dict):
                  "maxTokens": 8192, "cost": {"input": 0, "output": 0}}
                 for m in mac["models"] if "embed" not in m.lower()
             ]
+    elif RUNNING_ON_WINDOWS:
+        # No valid remote Mac this run. A stale lmstudio-mac that points at
+        # loopback or a known Windows host would route to the local Windows
+        # LM Studio under the Mac's name, so drop it.
+        stale = providers.get("lmstudio-mac")
+        stale_url = str(stale.get("baseUrl") or "") if isinstance(stale, dict) else ""
+        stale_host = (urlsplit(stale_url).hostname or "") if stale_url else ""
+        if stale_host and (stale_host in _known_windows_ips() or _is_loopback_host(stale_host)):
+            print(f"  ⚠️  removing stale lmstudio-mac -> {stale_host} (not a remote Mac)", file=sys.stderr)
+            providers.pop("lmstudio-mac", None)
     elif mac:
         # lmstudio-mac ALWAYS uses localhost — the LAN IP is discovery metadata only.
         # Native Mac processes must never route to themselves via the LAN interface.
@@ -851,8 +890,10 @@ def write_env_lmstudio(endpoints: dict, repo_paths: dict):
     win_ip = (win.get("ip") or "")
     mac_ip = (mac.get("ip") or "")
     # On Windows host, Mac is remote — persist LAN IP for cross-machine routing.
-    if RUNNING_ON_WINDOWS and mac_ip not in ("", "localhost", "127.0.0.1"):
-        mac_url = f"http://{mac_ip}:1234"
+    if RUNNING_ON_WINDOWS:
+        # localhost is the Windows box here: never fall back to it as the Mac.
+        valid = bool(mac_ip) and mac_ip not in _known_windows_ips() and not _is_loopback_host(mac_ip)
+        mac_url = f"http://{mac_ip}:1234" if valid else ""
     else:
         mac_url = "http://localhost:1234"
     win_url = f"http://{win_ip}:1234" if win_ip else ""
@@ -994,6 +1035,8 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         print("🔍 Probing LM Studio endpoints...", file=sys.stderr)
         endpoints = discover_endpoints()
         tier = 1
+        # Windows evidence from THIS run must also veto stale-cache Mac entries.
+        run_win_ips = _run_windows_ips(endpoints) if RUNNING_ON_WINDOWS else set()
 
         if not endpoints["mac"] and not endpoints["win"]:
             print("⚠️  No live endpoints — trying recovery tiers...", file=sys.stderr)
@@ -1002,7 +1045,7 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
                                   (lambda: _load_tier4("lan-full"), 4, "lan-full profile")]:
                 ep = fn()
                 if ep and RUNNING_ON_WINDOWS:
-                    ep, dropped = _drop_windows_mac(ep)
+                    ep, dropped = _drop_windows_mac(ep, run_win_ips)
                     if dropped and not ep["mac"] and not ep["win"]:
                         continue
                 if ep: endpoints = ep; tier = t; print(f"  → tier {t}: {name}", file=sys.stderr); break
@@ -1013,7 +1056,7 @@ def run_discovery(force: bool = True, cached: bool = False) -> int:
         else:
             last = _load_json(LAST_DISCOVERY_JSON)
             if last:
-                win_known = _known_windows_ips() if RUNNING_ON_WINDOWS else set()
+                win_known = (_known_windows_ips() | run_win_ips) if RUNNING_ON_WINDOWS else set()
                 for role in ("mac", "win"):
                     if not endpoints[role] and last["endpoints"][role]["reachable"]:
                         role_ip = last["endpoints"][role].get("ip", "")
@@ -1093,6 +1136,8 @@ def _cmd_restore(target: str):
         matches = sorted(BACKUPS_DIR.glob(f"{target}*.json")) if BACKUPS_DIR.exists() else []
         ep = _state_to_ep(_load_json(matches[-1])) if matches else None
     if not ep: print(f"Nothing found for '{target}'."); return
+    if RUNNING_ON_WINDOWS:
+        ep, _ = _drop_windows_mac(ep)
     ep = filter_endpoints_for_policy(ep)
     backup_current_state()
     repo_paths = get_repo_paths()
