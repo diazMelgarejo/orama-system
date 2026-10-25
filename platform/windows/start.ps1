@@ -913,11 +913,18 @@ function Resolve-MacLanIp {
 #   1. Explicit env var (WIN_3080_IP / WIN_5080_IP) — user override
 #   2. PT config/devices.yml (win-rtx3080.lan_ip / win-rtx5080.lan_ip)
 # Idempotent: read-only HTTP probes, no state mutation, safe to re-run.
-$env:WIN_IP = if ($env:WIN_IP) { $env:WIN_IP } else { Topo-GetDefaultRouteIp }
+# A pre-set WIN_IP is trusted only when it is on a local interface; a stale one
+# (from .env.local or a previous run in this console) is warned about and replaced.
 $TopoLocalIps = @(Topo-GetLocalIPv4)
 # WIN_IP is an operator hint for the Windows-facing address, NOT proof of
 # locality: it must never be added to $TopoLocalIps (a stale or sibling value
 # would make the sibling look local). Local identity comes from interfaces only.
+if ($env:WIN_IP -and $env:WIN_IP -notin $TopoLocalIps) {
+    _Warn 'dual-win' "WIN_IP=$($env:WIN_IP) is not on any local interface - stale; using the default-route address instead"
+    $env:WIN_IP = Topo-GetDefaultRouteIp
+} elseif (-not $env:WIN_IP) {
+    $env:WIN_IP = Topo-GetDefaultRouteIp
+}
 
 $Win3080Ip = $env:WIN_3080_IP
 $Win5080Ip = $env:WIN_5080_IP
