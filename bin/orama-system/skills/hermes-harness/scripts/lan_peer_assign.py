@@ -32,6 +32,7 @@ import json
 import logging
 import os
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -42,6 +43,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
+import peer_tls  # noqa: E402
 import probe_lan_peer as probe  # noqa: E402
 
 # scripts → hermes-harness → skills → bin/orama-system → bin → repo root
@@ -99,6 +101,12 @@ def _peer_base(peer_ip: str, portal_port: int) -> str:
 
 
 def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
+    return _http_json_ex(method, url, payload, timeout)[0]
+
+
+def _http_json_ex(
+    method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30
+) -> tuple[Any, bool]:
     """Request, retrying across every local control-plane token candidate
     on 401/403 before giving up -- see query_peer_topology.py's _http_get
     for why (2026-07-19 D9 self-correction: resolve_control_plane_token()'s
@@ -129,14 +137,23 @@ def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, tim
         # We intentionally do NOT raise here; we simply omit the token.
         candidates = [""]  # unauthenticated path
 
+    # Per-stack trust (PEER_CA_FILE / PEER_PINNED_FINGERPRINTS), resolved
+    # BEFORE any Authorization header exists: a peer that fails verification
+    # gets no token at all (hard fail, no unverified fallback).
+    try:
+        tls_kw = peer_tls.urlopen_kwargs(url, timeout)
+    except peer_tls.PeerTrustError as exc:
+        raise SystemExit(f"peer TLS verification failed {url}: {exc} (token not sent)") from exc
+
     last_error: tuple[int, str] | None = None
     for token in candidates:
         headers = _auth_header(token) if token else {}
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout, **tls_kw) as resp:
                 raw = resp.read().decode("utf-8", errors="replace")
-                return json.loads(raw) if raw.strip() else {}
+                # authenticated == a real token travelled over verified https
+                return (json.loads(raw) if raw.strip() else {}), bool(token)
         except urllib.error.HTTPError as exc:
             try:
                 body = exc.read().decode("utf-8", errors="replace")
@@ -197,6 +214,8 @@ def cmd_drop(args: argparse.Namespace) -> int:
                 portal_port=port,
                 error=str(exc),
             )
+            _set_state(record["filename"], "queued", last_error=str(exc)[:500])
+            record["state"] = "queued"
             print(
                 json.dumps(
                     {
@@ -265,33 +284,114 @@ def cmd_read(args: argparse.Namespace) -> int:
     return 0
 
 
+_STATES = ("queued", "sent", "delivered")
+
+
+def _meta_file(filename: str) -> Path:
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import _meta_path, _resolve_within, outbox_dir
+
+    return _meta_path(_resolve_within(outbox_dir(), filename))
+
+
+def _item_state(meta: dict[str, Any]) -> str:
+    """Old .meta.json files carry no state: they are queued."""
+    st = str(meta.get("state") or "queued").strip().lower()
+    return st if st in _STATES else "queued"
+
+
+def _set_state(filename: str, state: str, **fields: Any) -> None:
+    path = _meta_file(filename)
+    meta: dict[str, Any] = {}
+    if path.is_file():
+        try:
+            meta = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            meta = {}
+    meta["state"] = state
+    meta["state_at"] = int(time.time())
+    meta.update(fields)
+    path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+
+
+def _select_items(items: list[dict[str, Any]], only: list[str]) -> list[dict[str, Any]]:
+    wanted = {Path(o).name for o in only}
+    out = []
+    for item in items:
+        name = str(item.get("filename") or "")
+        if not name:
+            continue
+        if wanted and name not in wanted and Path(name).stem not in wanted:
+            continue
+        out.append(item)
+    return out
+
+
+def cmd_outbox_status(args: argparse.Namespace) -> int:
+    """Read-only listing of outbox entries and their delivery state."""
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import list_outbox, read_outbox_file
+
+    rows = []
+    for item in list_outbox():
+        name = str(item.get("filename") or "")
+        if not name:
+            continue
+        _, meta = read_outbox_file(name)
+        rows.append(
+            {
+                "filename": name,
+                "state": _item_state(meta),
+                "peer_ip": str(meta.get("peer_ip") or ""),
+                "portal_port": str(meta.get("portal_port") or ""),
+                "queued_at": meta.get("queued_at", ""),
+                "state_at": meta.get("state_at", ""),
+                "last_error": str(meta.get("last_error") or "")[:300],
+            }
+        )
+    counts = {s: sum(1 for r in rows if r["state"] == s) for s in _STATES}
+    print(json.dumps({"items": rows, "counts": counts}, indent=2))
+    return 0
+
+
 def cmd_flush_outbox(args: argparse.Namespace) -> int:
     _ensure_orama_src()
     from orama_system.lan_peer_files import list_outbox, read_outbox_file, remove_outbox_file
 
     # Each outbox item was queued with its own intended peer_ip/portal_port
-    # (see write_outbox_file) — that stored target ALWAYS wins per item.
+    # (see write_outbox_file) -- that stored target ALWAYS wins per item.
     # --peer-ip/--portal-port on this command are only a fallback default
     # for legacy items queued before peer_ip was recorded, never an
-    # override — a batch commonly spans multiple peers, and forcing every
-    # item to one IP is exactly the bug this fixes. Previously this
-    # resolved ONE peer for the whole batch and silently sent every item
-    # there, misdelivering anything queued for a different peer.
+    # override -- a batch commonly spans multiple peers.
+    #
+    # Delivery states (recorded in each entry's .meta.json):
+    #   queued    -> not yet accepted by the peer (default; absent == queued)
+    #   sent      -> peer answered 2xx but did NOT confirm ok:true over an
+    #                authenticated channel (kept; retried by default)
+    #   delivered -> authenticated HTTPS success AND body ok:true
+    # Failures, timeouts and SECURITY_STOP leave the entry queued with
+    # last_error. Selection: --only (repeatable) and/or --state. Default
+    # (neither) retries every non-delivered entry, as before.
+    only = list(getattr(args, "only", None) or [])
+    state_filter = list(getattr(args, "state", None) or [])
+    strict = bool(getattr(args, "strict", False))
+    keep = bool(getattr(args, "keep_delivered", False))
     default_peer: tuple[str, int] | None = None
-    items = list_outbox()
     results: list[dict[str, Any]] = []
-    for item in items:
+    for item in _select_items(list_outbox(), only):
         filename = str(item.get("filename") or "")
-        if not filename:
-            continue
         body, meta = read_outbox_file(filename)
+        prior = _item_state(meta)
+        if state_filter:
+            if prior not in state_filter:
+                continue
+        elif prior == "delivered":
+            continue
         stored_ip = str(meta.get("peer_ip") or "").strip()
         if stored_ip:
             item_port_raw = str(meta.get("portal_port") or "").strip()
             item_ip, item_port = stored_ip, (int(item_port_raw) if item_port_raw else int(args.portal_port))
         else:
-            # Legacy item with no stored peer_ip — resolve once, lazily,
-            # only when actually needed.
             if default_peer is None:
                 default_peer = _resolve_peer(args)
             item_ip, item_port = default_peer
@@ -304,27 +404,60 @@ def cmd_flush_outbox(args: argparse.Namespace) -> int:
             "fanout_id": str(meta.get("fanout_id") or item.get("fanout_id") or ""),
             "source": str(meta.get("source") or probe.local_role()),
         }
-        entry = {"filename": filename, "status": "pending", "peer_ip": item_ip, "portal_port": item_port}
+        entry: dict[str, Any] = {
+            "filename": filename,
+            "status": "pending",
+            "peer_ip": item_ip,
+            "portal_port": item_port,
+        }
         try:
-            _http_json("POST", url, payload, timeout=args.timeout)
+            result, authed = _http_json_ex("POST", url, payload, timeout=args.timeout)
         except SystemExit as exc:
             entry["status"] = "error"
+            entry["state"] = "queued"
             entry["detail"] = str(exc)
+            _set_state(filename, "queued", last_error=str(exc)[:500])
         else:
-            remove_outbox_file(filename)
-            entry["status"] = "delivered"
+            confirmed = isinstance(result, dict) and result.get("ok") is True
+            if confirmed and authed:
+                entry["status"] = "delivered"
+                entry["state"] = "delivered"
+                if keep:
+                    _set_state(filename, "delivered", last_error="", delivered_at=int(time.time()))
+                else:
+                    remove_outbox_file(filename)
+            else:
+                why = (
+                    "peer response lacked ok:true"
+                    if not confirmed
+                    else "success was not on an authenticated (token over https) channel"
+                )
+                entry["status"] = "sent"
+                entry["state"] = "sent"
+                entry["detail"] = why
+                _set_state(filename, "sent", last_error=why)
         results.append(entry)
-    failed = [r for r in results if r.get("status") == "error"]
+        detail = f" ({entry['detail'][:120]})" if entry.get("detail") else ""
+        print(f"{entry['status']:9s} {filename} -> {item_ip}:{item_port}{detail}", file=sys.stderr)
+    delivered = [r for r in results if r["status"] == "delivered"]
+    remaining = [r for r in results if r["status"] != "delivered"]
+    summary = f"delivered {len(delivered)}, still queued {len(remaining)}"
+    print(summary, file=sys.stderr)
     print(
         json.dumps(
             {
-                "ok": not failed,
+                "ok": not remaining,
+                "summary": summary,
+                "delivered": len(delivered),
+                "still_queued": len(remaining),
                 "results": results,
             },
             indent=2,
         )
     )
-    return 1 if failed else 0
+    if strict:
+        return 1 if remaining else 0
+    return 1 if any(r["status"] == "error" for r in results) else 0
 
 
 def cmd_fanout(args: argparse.Namespace) -> int:
@@ -411,7 +544,18 @@ def main(argv: list[str] | None = None) -> int:
         parents=[peer_p],
         help="Retry locally queued peer drops",
     )
+    flush.add_argument("--only", action="append", default=[], metavar="FILE_OR_ID",
+                       help="Only flush this outbox filename (or stem); repeatable")
+    flush.add_argument("--state", action="append", default=[], choices=list(_STATES),
+                       help="Only flush entries in this state; repeatable")
+    flush.add_argument("--strict", action="store_true",
+                       help="Exit non-zero when anything remains queued/sent")
+    flush.add_argument("--keep-delivered", action="store_true",
+                       help="Keep delivered entries (state=delivered) instead of removing them")
     flush.set_defaults(func=cmd_flush_outbox)
+
+    stat = sub.add_parser("outbox-status", help="List outbox entries and delivery states (read-only)")
+    stat.set_defaults(func=cmd_outbox_status)
 
     fan = sub.add_parser("fanout", parents=[peer_p], help="Drop many assignments from manifest JSON")
     fan.add_argument("--manifest", required=True)

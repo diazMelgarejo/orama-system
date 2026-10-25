@@ -26,6 +26,12 @@ from typing import Any
 from urllib.parse import quote
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+import peer_tls  # noqa: E402
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _SCRIPT_DIR.parents[4]
 
 
@@ -141,7 +147,10 @@ def http_get(url: str, token: str = "", timeout: int = 8) -> tuple[int, str]:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers, method="GET")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        # Per-stack trust (PEER_CA_FILE / PEER_PINNED_FINGERPRINTS); on a
+        # verification failure this raises before any request is sent.
+        kw = peer_tls.urlopen_kwargs(url, timeout)
+        with urllib.request.urlopen(req, timeout=timeout, **kw) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             return resp.status, body[:500]
     except urllib.error.HTTPError as exc:
@@ -164,7 +173,8 @@ def http_post_json(
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        kw = peer_tls.urlopen_kwargs(url, timeout)
+        with urllib.request.urlopen(req, timeout=timeout, **kw) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             return resp.status, body[:2000]
     except urllib.error.HTTPError as exc:

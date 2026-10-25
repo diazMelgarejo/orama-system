@@ -51,6 +51,7 @@ if str(_SCRIPT_DIR) not in sys.path:
 
 # Import probe helpers (same directory)
 import probe_lan_peer as probe
+import peer_tls
 
 # Lazy orchestrator imports — populated by _import_orchestrator() on first use.
 # Kept out of module scope so importing this file never crashes pytest
@@ -249,7 +250,8 @@ def _http_get(url: str, timeout: float = DEFAULT_TIMEOUT) -> dict[str, Any] | No
     for token in candidates:
         try:
             req = urllib.request.Request(url, headers=_auth_header(token), method="GET")
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            kw = peer_tls.urlopen_kwargs(url, timeout)
+            with urllib.request.urlopen(req, timeout=timeout, **kw) as resp:
                 data = resp.read().decode("utf-8")
                 return json.loads(data) if data.strip() else None
         except urllib.error.HTTPError as exc:
