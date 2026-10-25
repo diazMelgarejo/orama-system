@@ -261,6 +261,10 @@ function _Err   { _Log 'ERROR' $args[0] $args[1] }
 # python -c: PS 5.1 mangles embedded double quotes.
 $script:BootstrapOutput = @()
 function Bootstrap-RunPython {
+    <#
+    .SYNOPSIS
+    Run a Python command during bootstrap, capturing output for later display.
+    #>
     param([string]$Python, [string[]]$PyArgs)
     if (-not (Test-Path $Python)) {
         $script:BootstrapOutput = @("interpreter not found: $Python")
@@ -279,6 +283,10 @@ function Bootstrap-RunPython {
 }
 
 function Bootstrap-TestImports {
+    <#
+    .SYNOPSIS
+    Return $true when the given Python can import the modules in -Code.
+    #>
     param([string]$Python, [string]$Code)
     if (-not (Test-Path $Python)) { return $false }
     # -I (isolated): ignore PYTHONPATH/user site left in the console by earlier
@@ -290,6 +298,10 @@ function Bootstrap-TestImports {
 # record them in the load-local.ps1 markers so a later run in the same console
 # does not mistake them for a caller override.
 function Set-LauncherPtEnv {
+    <#
+    .SYNOPSIS
+    Point PERPETUA_TOOLS_ROOT (and optionally legacy vars) at the resolved PT checkout.
+    #>
     param([string]$Dir, [switch]$RootOnly)
     $env:PERPETUA_TOOLS_ROOT = $Dir
     $env:ORAMA_LOADLOCAL_SET_PERPETUA_TOOLS_ROOT = $Dir
@@ -300,6 +312,10 @@ function Set-LauncherPtEnv {
 }
 
 function Bootstrap-ShowOutput {
+    <#
+    .SYNOPSIS
+    Print the last captured bootstrap output lines to the host.
+    #>
     foreach ($l in ($script:BootstrapOutput | Select-Object -Last 25)) { Write-Host "    $l" }
 }
 
@@ -307,6 +323,10 @@ $OramaImportProbe = 'import uvicorn, fastapi, httpx'
 $PtImportProbe = "import importlib.metadata as m, sys; m.version('perpetua-tools'); import requests, uvicorn; sys.exit(1 if any(((d.metadata['Name'] or '').lower().replace('_', '-') == 'orama-system') for d in m.distributions()) else 0)"
 
 function Heal-PtVenv {
+    <#
+    .SYNOPSIS
+    Repair the Perpetua-Tools virtual environment when imports fail.
+    #>
     param([string]$PtDir)
     $venvDir = Join-Path $PtDir '.venv'
     $venvPy  = Join-Path $venvDir 'Scripts\python.exe'

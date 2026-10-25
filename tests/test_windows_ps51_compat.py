@@ -47,7 +47,9 @@ _TOKEN = re.compile(
 
 
 def _strip(text: str, *, keep_strings: bool) -> str:
+    """Strip."""
     def repl(m: re.Match) -> str:
+        """Repl."""
         kind = m.lastgroup
         if kind in ("block", "line"):
             return " "
@@ -57,10 +59,12 @@ def _strip(text: str, *, keep_strings: bool) -> str:
 
 
 def _read(path: Path) -> str:
+    """Read."""
     return path.read_bytes().decode("utf-8-sig")
 
 
 def _checks(path: Path) -> set[str]:
+    """Checks."""
     raw = _read(path)
     code = _strip(raw, keep_strings=False)  # comments and strings removed
     with_strings = _strip(raw, keep_strings=True)  # comments removed only
@@ -82,16 +86,19 @@ def _checks(path: Path) -> set[str]:
 
 @pytest.mark.parametrize("path", [START, INSTALL])
 def test_launcher_keeps_utf8_bom(path: Path) -> None:
+    """Check that launcher keeps utf8 bom."""
     assert path.read_bytes()[:3] == b"\xef\xbb\xbf", f"{path.name} lost its UTF-8 BOM"
 
 
 @pytest.mark.parametrize("path", SCANNED, ids=lambda p: p.name)
 def test_no_powershell7_only_syntax(path: Path) -> None:
+    """Check that no powershell7 only syntax."""
     offenders = _checks(path) - ALLOWED.get(path.name, set())
     assert not offenders, f"{path.name} uses PowerShell 7-only syntax: {sorted(offenders)}"
 
 
 def test_scanner_detects_and_ignores_correctly() -> None:
+    """Check that scanner detects and ignores correctly."""
     bad = _strip("$a = $b ?? 1\n$c = $x?.y\nif ($a -and $b) { } && x\n", keep_strings=False)
     assert "??" in bad and "&&" in bad
     ok = _strip("# a && b ?? c\n$s = 'x && y ?? z'\n$t = \"p || q\"\n<# &&\n#>\n", keep_strings=False)
@@ -99,6 +106,7 @@ def test_scanner_detects_and_ignores_correctly() -> None:
 
 
 def test_paths_ps1_written_exactly_once() -> None:
+    """Check that paths ps1 written exactly once."""
     text = _strip(_read(START), keep_strings=True)
     writes = re.findall(r"(?:Set-Content|Out-File|Add-Content)\b[^\n]*\$PathsFile", text)
     assert len(writes) == 1, f".paths.ps1 must be written once, found {len(writes)}"
@@ -106,6 +114,7 @@ def test_paths_ps1_written_exactly_once() -> None:
 
 
 def test_read_only_modes_gate_mutation() -> None:
+    """Check that read only modes gate mutation."""
     text = _read(START)
     assert "$ReadOnlyMode = [bool]($Stop -or $Status -or $FleetStatus -or $HardwarePolicy)" in text
     assert "if (-not $ReadOnlyMode -and ($LanPeer -or (Test-LanBindConfigured))) {" in text
@@ -113,6 +122,7 @@ def test_read_only_modes_gate_mutation() -> None:
 
 
 def test_pt_venv_heal_runs_pip_in_pt_cwd() -> None:
+    """Check that pt venv heal runs pip in pt cwd."""
     text = _read(START)
     assert "Push-Location $PtDir" in text
     assert "Pop-Location" in text
@@ -120,12 +130,14 @@ def test_pt_venv_heal_runs_pip_in_pt_cwd() -> None:
 
 
 def test_install_ps1_pip_eap_continue() -> None:
+    """Check that install ps1 pip eap continue."""
     text = _read(INSTALL)
     assert "$ErrorActionPreference = 'Continue'" in text
     assert "$coreExit = $LASTEXITCODE" in text
 
 
 def test_api_server_version_comes_from_version_module() -> None:
+    """Check that api server version comes from version module."""
     from orama_system import api_server
     from orama_system._version import __version__ as repo_version
 
@@ -192,6 +204,7 @@ def _run_load_local(tmp_path: Path, env_text: str, extra_env: dict | None = None
 
 @needs_ps
 def test_load_local_comment_only_values_are_empty(tmp_path: Path) -> None:
+    """Check that load local comment only values are empty."""
     text = (
         "LLT_A= # comment\n"
         "LLT_B=\t#x\n"
@@ -211,6 +224,7 @@ def test_load_local_comment_only_values_are_empty(tmp_path: Path) -> None:
 
 @needs_ps
 def test_load_local_caller_value_wins(tmp_path: Path) -> None:
+    """Check that load local caller value wins."""
     got = _run_load_local(
         tmp_path,
         "PERPETUA_TOOLS_PATH=from-file\n",
@@ -223,6 +237,7 @@ def test_load_local_caller_value_wins(tmp_path: Path) -> None:
 @needs_ps
 def test_load_local_stale_value_from_previous_run_is_not_caller_set(tmp_path: Path) -> None:
     # A previous run (or the launcher) left the value and its marker behind.
+    """Check that load local stale value from previous run is not caller set."""
     got = _run_load_local(
         tmp_path,
         "PERPETUA_TOOLS_PATH=from-file\n",
@@ -237,6 +252,7 @@ def test_load_local_stale_value_from_previous_run_is_not_caller_set(tmp_path: Pa
 
 
 def test_launcher_scripts_hardening_present() -> None:
+    """Check that launcher scripts hardening present."""
     start = _read(START)
     assert "'-I', '-c', $Code" in start
     assert "Set-LauncherPtEnv" in start

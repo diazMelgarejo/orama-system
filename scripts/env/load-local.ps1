@@ -32,6 +32,10 @@ foreach ($k in $CallerWinsKeys) {
 # first one), unlike the pre-rewrite trim-based parser which returned a\"b.
 # Escapes were never documented for .env files here; avoid embedded quotes.
 function ConvertFrom-LocalEnvValue {
+    <#
+    .SYNOPSIS
+    Normalise a raw .env.local value (strip quotes and trailing comments).
+    #>
     param([string]$Raw)
     $v = $Raw.Trim()
     if ($v.Length -gt 0 -and ($v[0] -eq '"' -or $v[0] -eq "'")) {
