@@ -53,6 +53,7 @@ $FleetStatusFormat = 'text'
 $Discover = $false
 $HardwarePolicy = $false
 $LanPeer = $false
+$RestartPortal = $false
 $ValidateOnly = $false
 $ListOnly = $false
 $ListIncludeNetwork = $false
@@ -74,6 +75,7 @@ Options:
   --validate             Validate launcher arguments without environment, bootstrap,
                          discovery, or service startup.
   --lan-peer             LAN-bind services and probe the peer after startup.
+  --restart-portal       Restart only Portal and its TLS proxy; PT and orama keep running.
   --help, -h             Show this help.
 "@ | Write-Host
 }
@@ -170,6 +172,7 @@ foreach ($a in $args) {
         '^--hardware-policy$|^-HardwarePolicy$' { $HardwarePolicy = $true }
         '^--validate$|^-Validate$'     { $ValidateOnly = $true }
         '^--lan-peer$|^-LanPeer$'      { $LanPeer = $true }
+        '^--restart-portal$|^-RestartPortal$' { $RestartPortal = $true }
         '^--help$|^-h$|^-Help$'        { Show-Usage; exit 0 }
         default { throw "Unknown argument: $a. Supported: --no-open --stop --status --fleet-status[=text|json] --discover --hardware-policy --validate --lan-peer --help" }
     }
@@ -178,11 +181,14 @@ foreach ($a in $args) {
 if ($ListIncludeNetwork -and -not $ListOnly) {
     throw '--include-network is only valid with --list.'
 }
-if ($ListOnly -and ($NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+if ($ListOnly -and ($NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer -or $RestartPortal)) {
     throw '--list cannot be combined with lifecycle or probe modes.'
 }
-if ($ValidateOnly -and ($ListOnly -or $ListIncludeNetwork -or $NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+if ($ValidateOnly -and ($ListOnly -or $ListIncludeNetwork -or $NoOpen -or $Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer -or $RestartPortal)) {
     throw '--validate cannot be combined with another launcher mode.'
+}
+if ($RestartPortal -and ($Stop -or $Status -or $FleetStatus -or $Discover -or $HardwarePolicy -or $LanPeer)) {
+    throw '--restart-portal cannot be combined with another lifecycle or probe mode.'
 }
 
 if ($ValidateOnly) {
@@ -1389,15 +1395,45 @@ function Life-Settle {
     return [pscustomobject]@{ Name = $Svc.Name; Port = $Svc.Port; State = 'FAILED'; Detail = "not listening (PID $($Svc.Pid))" }
 }
 
-# Ensure partner CLI paths are present for this session (Hermes, Codex, AGY, cursor-agent).
+# Ensure partner CLI paths are present in this process without requiring User PATH registry access.
 # Placed after all read-only/lifecycle handlers so --stop, --status, --list, etc.
 # do not mutate PATH or leak script-scope variables.
 if (Test-Path "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1") {
-    & "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1"
+    & "$RepoRoot\platform\windows\ensure-partner-cli-paths.ps1" -SessionOnly
+}
+
+# Restart only owned Portal processes; never disturb PT or orama.
+if ($RestartPortal) {
+    Write-Host 'Restarting Portal (PT and orama keep running)...'
+    foreach ($service in @(
+        @{ Name = 'portal'; Pattern = 'uvicorn' },
+        @{ Name = 'portal_tls'; Pattern = 'portal_tls_proxy' }
+    )) {
+        $pidFile = Join-Path $LogDir ($service.Name + '.pid')
+        $recorded = Life-ReadPid $pidFile
+        if ($recorded -gt 0 -and (Life-PidMatches $recorded '^pythonw?[0-9.]*$' $service.Pattern)) {
+            & taskkill.exe /PID $recorded /T /F 2>$null | Out-Null
+            Write-Host "  stopped $($service.Name) PID $recorded"
+        } elseif ($recorded -gt 0) {
+            Write-Host "  $($service.Name) PID record is stale or mismatched; process not killed"
+        }
+        if (Test-Path $pidFile) { Remove-Item -LiteralPath $pidFile -Force -ErrorAction SilentlyContinue }
+    }
+    foreach ($restartPort in @($PortalPort, $PortalTlsPort)) {
+        $deadline = (Get-Date).AddSeconds(10)
+        while ((Get-Date) -lt $deadline -and (Get-PidOnPort $restartPort)) {
+            Start-Sleep -Milliseconds 250
+        }
+        if (Get-PidOnPort $restartPort) {
+            Write-Host "  port $restartPort remains occupied; normal startup will report its state"
+        }
+    }
 }
 
 # ── 1. Perpetua-Tools ─────────────────────────────────────────────────────────
 $LifeResults = @()
+$TlsSelfCheckLines = @()
+$TlsSelfCheckNotice = ''
 if ($PtDir -and (Test-Path (Join-Path $PtDir 'orchestrator\fastapi_app.py'))) {
     $svc = Start-OramaService -Name 'PT' -Port $PtPort -WorkDir $PtDir `
         -Cmd @($PtPython, '-m', 'uvicorn', 'orchestrator.fastapi_app:app',
@@ -1460,6 +1496,34 @@ if ($PortalTlsEnabled -and $PortalLoopbackOk) {
             -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
         $tlsRow = Life-Settle $svc $PortalTlsListenHost
         if ($tlsRow.State -eq 'UP' -and -not $svc.Started) { $PortalTlsReused = $true }
+        if ($tlsRow.State -eq 'UP') {
+            $prevEapCheck = $ErrorActionPreference
+            $prevPyPathCheck = $env:PYTHONPATH
+            $ErrorActionPreference = 'Continue'
+            Push-Location $PtDir
+            try {
+                $env:PYTHONPATH = "$PtDir\src;$PtDir"
+                $TlsSelfCheckLines = @(& $PtPython -m orchestrator.portal_tls_proxy --self-check `
+                    --listen-port $PortalTlsPort.ToString() --upstream-port $PortalPort.ToString() 2>&1 |
+                    ForEach-Object { "$_" })
+                $selfCheckCode = $LASTEXITCODE
+            } catch {
+                $TlsSelfCheckLines = @("self-check could not run: $($_.Exception.Message)")
+                $selfCheckCode = 1
+            } finally {
+                Pop-Location
+                $env:PYTHONPATH = $prevPyPathCheck
+                $ErrorActionPreference = $prevEapCheck
+            }
+            $olderProxy = ($selfCheckCode -eq 2 -and @($TlsSelfCheckLines | Where-Object { $_ -match 'unrecognized arguments' }).Count -gt 0)
+            if ($olderProxy) {
+                $TlsSelfCheckNotice = 'TLS self-check unavailable; update Perpetua-Tools before treating this endpoint as verified'
+            } elseif ($selfCheckCode -ne 0) {
+                $failureLine = @($TlsSelfCheckLines | Where-Object { $_ -match '^check_\w+=FAIL' } | Select-Object -First 1)
+                $detail = if ($failureLine.Count) { "TLS self-check failed: $($failureLine[0])" } else { "TLS self-check failed (exit $selfCheckCode)" }
+                $tlsRow = [pscustomobject]@{ Name = 'Portal TLS'; Port = $PortalTlsPort; State = 'FAILED'; Detail = $detail }
+            }
+        }
         $LifeResults += $tlsRow
     }
 }
@@ -1470,6 +1534,10 @@ Write-Host '── service summary ───────────────
 foreach ($r in $LifeResults) {
     Write-Host ('  {0,-10} port {1,-6} {2,-8} {3}' -f $r.Name, $r.Port, $r.State, $r.Detail)
 }
+foreach ($checkLine in $TlsSelfCheckLines) {
+    if ($checkLine -match '^(check_\w+|ca_sha256_file|self_check)=') { Write-Host "  $checkLine" }
+}
+if ($TlsSelfCheckNotice) { Write-Host "  WARNING: $TlsSelfCheckNotice" -ForegroundColor Yellow }
 $LifeFailed = @($LifeResults | Where-Object { $_.State -eq 'FAILED' })
 if ($LifeFailed.Count -gt 0) {
     Write-Host ("  {0} core service(s) failed: {1}" -f $LifeFailed.Count, (($LifeFailed | ForEach-Object { $_.Name }) -join ', '))
