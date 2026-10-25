@@ -74,7 +74,18 @@ $VenvPip    = Join-Path $VenvPath 'Scripts\pip.exe'
 _Step 'Installing core requirements...'
 $rootReqs = Join-Path $RepoRoot 'requirements.txt'
 if (Test-Path $rootReqs) {
-    & $VenvPip install -r $rootReqs --quiet
+    # pip's '[notice] new release available' goes to stderr; under EAP=Stop that
+    # becomes a terminating NativeCommandError whenever output is captured. Run
+    # under 'Continue' and judge success by the exit code instead.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $coreOut = & $VenvPip install -r $rootReqs --quiet --disable-pip-version-check 2>&1
+    $coreExit = $LASTEXITCODE
+    $ErrorActionPreference = $prevEap
+    if ($coreExit -ne 0) {
+        $coreOut | Select-Object -Last 25 | ForEach-Object { Write-Host "    $_" }
+        _Err "Core requirements install failed (pip exit $coreExit) — see output above"
+    }
     _OK 'Core requirements installed'
 } else {
     _Warn "requirements.txt not found at $rootReqs — skipping core install"
