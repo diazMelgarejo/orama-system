@@ -1,9 +1,9 @@
 # E1 C2 (Part 3): ratification acceptance packet
 
-**Status:** RATIFIED BY OPERATOR DECISION on 2026-10-22 for Section 3.3 only (see Section 5);
-items 3 and 5 below remain unmet and are recorded as such. Before that decision this packet read
-INCOMPLETE. This packet records what an operator needs before deciding on the Part 3
-ratification surface, and the current status of each item. It is not itself a ratification.
+**Status:** Section 3.3 was ratified by operator decision on 2026-10-22 (see
+Section 5). The table below preserves the evidence state when this packet was
+prepared; the current implementation and qualification disposition is recorded
+additively in Section 7. This packet is not itself a ratification.
 **Amendment:** [Part 3 amendment][amend], whose
 [Ratification surface](E1-C2-INTEGRATED-SCHEMA-PART3-AMENDMENT-2026-10-19.md#ratification-surface)
 marks Section 3.3 as the only section proposed for ratification.
@@ -113,3 +113,43 @@ are now pinned by Oramasys PR 73 (7 tests: quarantine, then Rule 1, then the anc
 2 and 3; identical and conflicting concurrent bootstraps; floor commit versus authorization), pending
 the operator's merge. Remaining before any serving: a production `TrustedIssuerKeys` adapter, a
 production Oramasys verifier adapter for Ed25519ph, and the Phylax signer wrapper with key custody.
+
+## 7. Current implementation and qualification status (2026-10-25)
+
+This section reconciles later merged work without rewriting the historical
+ratification record or the evidence table above.
+
+The ratification records for Sections 1, 2, and 3.3 supersede the linked
+amendment's proposal-era labels for those sections only. The integrated
+amendment remains proposed as a whole, and Sections 3.1, 3.2, and 4 remain
+unratified.
+
+Section 4 is the unfilled template; the operator decision is recorded in Section 5.
+
+- [Oramasys PR 72](https://github.com/oramasys/oramasys/pull/72) merged at
+  `beb35f0a76609b2420b6bc88f3a82e6d839db439`; it supplies the consumer-local
+  anchor implementation and real-store conformance coverage.
+- [Oramasys PR 73](https://github.com/oramasys/oramasys/pull/73) merged at
+  `33bec04ad689cdbdc236940ca240ff6058d49fc6`; it supplies the previously
+  pending gate-order and concurrent-bootstrap coverage. The earlier word
+  "pending" in Section 6 is therefore historical, not current status.
+- [Oramasys PR 74](https://github.com/oramasys/oramasys/pull/74) merged at
+  `112cf47420d2007c25c7bf68a86ae43f6722f9ac`, and
+  [PR 75](https://github.com/oramasys/oramasys/pull/75) merged at current
+  consumer main `68f063017b52129f7a92de03ff9899f70f07d10a`. The corresponding
+  issuer events are on Phylax main
+  `849351f54839b22d62f33242a348700b40864890` via
+  [Phylax PR 19](https://github.com/oramasys/phylax/pull/19).
+- At those exact heads, the recorded evidence is the
+  [Oramasys CI run](https://github.com/oramasys/oramasys/actions/runs/40087328610),
+  [permit interop run](https://github.com/oramasys/oramasys/actions/runs/40087328625),
+  and [Phylax CI run](https://github.com/oramasys/phylax/actions/runs/40087386751).
+  They establish the named committed test suites and reciprocal probes; they
+  do not establish deployed serving or key custody.
+
+The remaining qualification work is deliberately distinct from the merged
+in-process race coverage: independently constructed SQLite store instances
+must be qualified against one database without a shared Python mutex. Trusted
+issuer-key, verifier, and signer-custody composition likewise remain required
+before serving. Neither condition is relaxed by this status reconciliation;
+`ORAMA_GRANT_SERVING` remains unset.

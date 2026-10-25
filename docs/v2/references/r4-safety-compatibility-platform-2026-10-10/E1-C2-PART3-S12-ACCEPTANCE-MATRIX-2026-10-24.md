@@ -1,9 +1,10 @@
 # E1 C2 (Part 3, Sections 1-2): ratification acceptance matrix
 
-**Status:** PREPARED FOR OPERATOR DECISION. Nothing below is a ratification, an implementation
-authority, a serving authority or a pin promotion. `ORAMA_GRANT_SERVING` stays unset. A merge, a
-green check or an agent endorsement is not a ratification; only the operator record in Section 5
-is, and it is blank until the operator fills it.
+**Status:** RATIFIED BY OPERATOR DECISION on 2026-10-24; the recorded decision
+is in Section 5. Nothing below authorizes implementation beyond the stated
+Sections 1 and 2 scope, serving, or pin promotion. `ORAMA_GRANT_SERVING` stays
+unset. A merge, green check, or agent endorsement is not a ratification; the
+historical preparation state is preserved in this document's prior revisions.
 **Amendment:** [Part 3 amendment][amend], Sections 1 and 2 and their
 [locked rules](E1-C2-INTEGRATED-SCHEMA-PART3-AMENDMENT-2026-10-19.md#locked-rules-for-sections-1-and-2).
 **Predecessor:** Section 3.3 is a separate, already recorded decision in the
@@ -70,7 +71,7 @@ Review bases at the time of preparation. They identify evidence and authorize no
 
 Implementation heads are added to Section 5 by the operator when the matrix is satisfied.
 
-## 5. Operator record (fill when complete)
+## 5. Operator record (complete)
 
 ```text
 COMMIT   = 03bf20b77d66c60e0a4d78e7fbb0b245151d0cfb
@@ -123,6 +124,15 @@ consumer-slice contract. The fixed lookup used by interop probes is test infrast
 production consumer-admission source; this slice introduces no second consumer authority. Also
 excluded: Sections 3.1, 3.2 and 4, the execution-witness fields, serving, pin promotion and
 activation.
+
+## 8. Current status (2026-10-25)
+
+Section 5 is the complete operator record for this matrix; the former
+"prepared" and "blank" wording in the header described the pre-ratification
+state and must not be read as a current blocker. The ratified scope remains
+only Sections 1 and 2. It does not establish the missing trusted-composition
+adapters, credential custody, deployed verification, serving activation, or
+any decision about Sections 3.1, 3.2, or 4.
 
 [amend]: E1-C2-INTEGRATED-SCHEMA-PART3-AMENDMENT-2026-10-19.md
 [packet]: E1-C2-PART3-RATIFICATION-ACCEPTANCE-PACKET-2026-10-22.md
