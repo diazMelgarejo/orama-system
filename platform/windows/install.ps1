@@ -79,8 +79,7 @@ function _Err {
     Text of the error.
     #>
     param([string]$Msg)
-    Write-Host "  ✗  $Msg" -ForegroundColor Red
-    exit 1
+    Write-Host "  ✗  $Msg" -ForegroundColor Red; exit 1
 }
 
 Write-Host ''
