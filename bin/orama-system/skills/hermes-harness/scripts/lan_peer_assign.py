@@ -34,6 +34,7 @@ import json
 import logging
 import os
 import re
+import socket
 import sys
 import time
 import unicodedata
@@ -307,6 +308,41 @@ def cmd_read(args: argparse.Namespace) -> int:
         print(json.dumps({"body": body, "meta": meta}, indent=2))
     else:
         print(body)
+    return 0
+
+
+def cmd_receipt(args: argparse.Namespace) -> int:
+    """Print local, read-only receipt evidence for one file in this node's inbox."""
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import _resolve_within, inbox_dir, list_inbox
+
+    try:
+        path = _resolve_within(inbox_dir(), args.name)
+    except ValueError as exc:
+        print(f"receipt: {exc}", file=sys.stderr)
+        return 2
+    if not path.is_file():
+        print(f"receipt: not found in inbox: {path.name}", file=sys.stderr)
+        return 2
+    raw = path.read_bytes()
+    received = int(path.stat().st_mtime)
+    for entry in list_inbox():
+        if entry.get("filename") == path.name:
+            received = int(entry.get("received_at", received))
+            break
+    receipt = {
+        "filename": path.name,
+        "bytes": len(raw),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "sha256_lf": _sha256_text(raw.decode("utf-8", errors="replace")),
+        "received_utc": datetime.fromtimestamp(received, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "host": socket.gethostname(),
+    }
+    if args.json:
+        print(json.dumps(receipt, indent=2))
+    else:
+        for key, value in receipt.items():
+            print(f"{key}: {value}")
     return 0
 
 
@@ -898,6 +934,14 @@ def main(argv: list[str] | None = None) -> int:
     read.add_argument("--name", required=True)
     read.add_argument("--json", action="store_true")
     read.set_defaults(func=cmd_read)
+
+    rcpt = sub.add_parser(
+        "receipt",
+        help="Show receipt evidence (sha256, size, time, host) for one local inbox file; no network",
+    )
+    rcpt.add_argument("name", help="Inbox filename (validated; no path components)")
+    rcpt.add_argument("--json", action="store_true")
+    rcpt.set_defaults(func=cmd_receipt)
 
     flush = sub.add_parser(
         "flush-outbox",
