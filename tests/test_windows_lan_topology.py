@@ -37,12 +37,14 @@ def _function_text(name: str) -> str:
 
 
 def test_pinned_probe_call_site_unchanged() -> None:
+    """Pinned call sites of the LAN peer probe/session helpers stay intact."""
     assert "} elseif (Invoke-LanPeerProbe) {" in TEXT
     assert "Invoke-LanPeerSession -LanArgs @('should-retry')" in TEXT
     assert "Invoke-LanPeerSession -LanArgs @('record-success')" in TEXT
 
 
 def test_probe_output_captured_and_scalar_bool_returned() -> None:
+    """Probe output is captured and the function returns a scalar bool."""
     body = _function_text("Invoke-LanPeerProbe")
     # The probe call is captured, never left as a bare statement.
     assert re.search(r"\$out\s*=\s*&\s*\$UsPython\s+\$probe\s+--json.*2>&1", body)
@@ -54,6 +56,7 @@ def test_probe_output_captured_and_scalar_bool_returned() -> None:
 
 
 def test_discovery_runs_after_node_detection() -> None:
+    """Endpoint discovery is invoked only after node detection exports."""
     detect = TEXT.index("# ── Dual Windows node detection")
     export_3080 = TEXT.index("$env:WIN_3080_IP = $Win3080Ip")
     call = TEXT.index("\nInvoke-DiscoverEndpoints\r\n") if "\nInvoke-DiscoverEndpoints\r\n" in TEXT else TEXT.index("\nInvoke-DiscoverEndpoints\n")
@@ -62,6 +65,7 @@ def test_discovery_runs_after_node_detection() -> None:
 
 
 def test_local_identification_uses_all_local_ipv4_and_default_route() -> None:
+    """Local identity is derived from interface addresses and the default route."""
     assert "Get-NetIPAddress -AddressFamily IPv4" in TEXT
     assert "Get-NetRoute -DestinationPrefix '0.0.0.0/0'" in TEXT
     assert "System.Net.Sockets.Socket" not in TEXT
@@ -70,6 +74,7 @@ def test_local_identification_uses_all_local_ipv4_and_default_route() -> None:
 
 
 def test_lmstudio_probe_uses_loopback_object_and_5s_timeout() -> None:
+    """LM Studio probe uses the loopback object and a 5 s timeout."""
     body = _function_text("Test-LmStudioUp")
     assert "http://localhost" not in body
     assert "-TimeoutSec 5" in body
@@ -78,6 +83,7 @@ def test_lmstudio_probe_uses_loopback_object_and_5s_timeout() -> None:
 
 
 def test_banner_version_not_hardcoded() -> None:
+    """The banner reads the version dynamically instead of hardcoding it."""
     banner = TEXT[TEXT.index("# ── Banner") : TEXT.index("# ── Helper: start a service")]
     assert "v1.1.0.0" not in banner
     assert "Topo-GetVersion" in banner
@@ -86,6 +92,7 @@ def test_banner_version_not_hardcoded() -> None:
 
 
 def test_topology_region_has_no_ipv4_literals() -> None:
+    """The topology helper region contains no IPv4 literals."""
     start = TEXT.index("# ── Topology helpers")
     end = TEXT.index("# ── Helper: start a service")
     region = TEXT[start:end]
@@ -134,3 +141,80 @@ def test_failed_probe_returns_false_and_ok_probe_returns_true(tmp_path: Path) ->
     assert "FAIL type=Boolean value=False" in out, out + proc.stderr
     assert "OK type=Boolean value=True" in out, out + proc.stderr
     assert "abc" not in out  # token-like values are masked
+
+
+def _mask(text: str) -> str:
+    """Apply the launcher's masking rules to ``text`` using Python ``re``."""
+    keys = r"[\w-]*(?:token|secret|authorization|api[_-]?key|password|passwd|credential)[\w-]*"
+    steps = [
+        (r'(?i)("' + keys + r'"\s*:\s*")(?:[^"\\]|\\.)*(")', r"\1***\2"),
+        (r"(?i)(\b" + keys + r"\s*[=:]\s*)(?:Bearer\s+)?[^\s,;\"']+", r"\1***"),
+        (r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+", r"\1***"),
+    ]
+    for pattern, repl in steps:
+        text = re.sub(pattern.replace("(?i)", ""), repl, text, flags=re.IGNORECASE)
+    return text
+
+
+def test_mask_secrets_is_applied_before_console_and_log() -> None:
+    """Masking runs once, before both the console and the log write."""
+    body = _function_text("Topo-WriteProbeOutput")
+    mask = body.index("Topo-MaskSecrets")
+    assert mask < body.index("Write-Host") < body.index("Add-Content")
+    assert "-replace '(?i)(\"(?:[a-z_]*token" not in body
+
+
+def test_mask_secrets_source_declares_every_rule() -> None:
+    """The PowerShell source carries the JSON, key=value and Bearer rules."""
+    body = _function_text("Topo-MaskSecrets")
+    assert "api[_-]?key" in body and "password" in body
+    assert r'(?:[^"\\]|\\.)*' in body  # escaped quotes inside JSON strings
+    assert "Bearer" in body
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        '{"auth_token":"abc123","ok":true}',
+        '{"x-api-key": "k-9"}',
+        '{"access-token":"a\\"b\\"c"}',
+        'password=hunter2 next',
+        "Authorization: Bearer eyJhbGciOi.payload.sig",
+    ],
+)
+def test_masking_rules_hide_secret_values(line: str) -> None:
+    """Representative secret shapes never survive the masking rules."""
+    out = _mask(line)
+    for leaked in ("abc123", "k-9", "a\\\"b", "hunter2", "eyJhbGciOi"):
+        assert leaked not in out
+    assert "***" in out
+
+
+def test_masking_keeps_non_secret_fields() -> None:
+    """Non-secret fields pass through unchanged."""
+    assert _mask('{"status":"ok","count":3}') == '{"status":"ok","count":3}'
+
+
+def test_win_ip_is_not_proof_of_locality() -> None:
+    """``WIN_IP`` must not be appended to the local-address list."""
+    assert "$TopoLocalIps += $env:WIN_IP" not in TEXT
+    assert "$TopoLocalIps = @(Topo-GetLocalIPv4)" in TEXT
+
+
+def test_peer_endpoint_never_defaults_to_this_machine() -> None:
+    """Unknown sibling leaves the peer endpoint empty; no localhost default."""
+    assert "$WinPeerDefault = 'localhost:1234'" not in TEXT
+    block = TEXT[TEXT.index("$WinPeerIsLoopback") :]
+    block = block[: block.index("Invoke-DiscoverEndpoints")]
+    assert "else { '' }" in block
+    assert '"${WinSiblingIp}:1234"' in block
+    assert "-or $WinPeerIsLoopback" in block
+
+
+def test_orchestrator_skips_probe_without_peer() -> None:
+    """The orchestrator has no hardcoded peer and skips the probe when unset."""
+    sh = (ROOT / "bin" / "orama-system" / "orchestrator.sh").read_text(encoding="utf-8")
+    assert "192.168." not in sh
+    assert 'WIN_PEER="${WIN_PEER_ENDPOINT:-}"' in sh
+    assert '[ -n "$WIN_PEER" ] || return 1' in sh
+    assert 'if [ -z "$WIN_PEER" ]' in sh

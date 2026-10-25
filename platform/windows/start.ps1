@@ -487,6 +487,17 @@ if ($LanPeer -or (Test-LanBindConfigured)) {
     }
 }
 
+function Topo-MaskSecrets([string]$Text) {
+    # Mask secret-bearing values in captured child output: JSON string values
+    # (keys with underscores/hyphens, escaped quotes inside the value),
+    # key=value pairs, and Bearer credentials. Applied before console AND log.
+    $keys = '[\w-]*(?:token|secret|authorization|api[_-]?key|password|passwd|credential)[\w-]*'
+    $Text = $Text -replace ('(?i)("' + $keys + '"\s*:\s*")(?:[^"\\]|\\.)*(")'), '$1***$2'
+    $Text = $Text -replace ('(?i)(\b' + $keys + '\s*[=:]\s*)(?:Bearer\s+)?[^\s,;"'']+'), '$1***'
+    $Text = $Text -replace '(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+', '$1***'
+    return $Text
+}
+
 function Topo-WriteProbeOutput {
     # Show captured child output on the host and in the startup log; mask any
     # token-like JSON values before printing.
@@ -494,7 +505,7 @@ function Topo-WriteProbeOutput {
     foreach ($ln in @($Lines)) {
         $s = "$ln"
         if (-not $s.Trim()) { continue }
-        $s = $s -replace '(?i)("(?:[a-z_]*token[a-z_]*|secret|authorization|api_?key)"\s*:\s*")[^"]*(")', '$1***$2'
+        $s = Topo-MaskSecrets $s
         Write-Host "  [$Tag] $s"
         try {
             $null = New-Item -ItemType Directory -Force -Path $LogDir
@@ -876,7 +887,9 @@ function Resolve-MacLanIp {
 # Idempotent: read-only HTTP probes, no state mutation, safe to re-run.
 $env:WIN_IP = if ($env:WIN_IP) { $env:WIN_IP } else { Topo-GetDefaultRouteIp }
 $TopoLocalIps = @(Topo-GetLocalIPv4)
-if ($env:WIN_IP -and $env:WIN_IP -notin $TopoLocalIps -and (Topo-IsKnownIp $env:WIN_IP)) { $TopoLocalIps += $env:WIN_IP }
+# WIN_IP is an operator hint for the Windows-facing address, NOT proof of
+# locality: it must never be added to $TopoLocalIps (a stale or sibling value
+# would make the sibling look local). Local identity comes from interfaces only.
 
 $Win3080Ip = $env:WIN_3080_IP
 $Win5080Ip = $env:WIN_5080_IP
@@ -946,10 +959,14 @@ $env:WIN_NODES   = "$WinNodes"
 $env:WIN_SIBLING_IP = if ($WinSiblingIp -eq 'unknown') { '' } else { $WinSiblingIp }
 $env:LM_STUDIO_WIN_3080_ENDPOINTS = if ($Win3080Ip) { "http://${Win3080Ip}:1234" } else { '' }
 $env:LM_STUDIO_WIN_5080_ENDPOINTS = if ($Win5080Ip) { "http://${Win5080Ip}:1234" } else { '' }
-$WinPeerDefault = 'localhost:1234'
-if ($env:WIN_PEER_ENDPOINT) { $WinPeerDefault = $env:WIN_PEER_ENDPOINT }
-elseif (Topo-IsKnownIp $WinSiblingIp) { $WinPeerDefault = "${WinSiblingIp}:1234" }
-$env:WIN_PEER_ENDPOINT = $WinPeerDefault
+# Peer endpoint: keep an explicit remote override; replace a loopback
+# placeholder (it points at THIS machine) with the sibling when known; leave it
+# unset when the sibling is unknown so the orchestrator skips the probe rather
+# than probing this machine.
+$WinPeerIsLoopback = $env:WIN_PEER_ENDPOINT -and ($env:WIN_PEER_ENDPOINT -match '^(?:https?://)?(?:localhost|127\.\d+\.\d+\.\d+|\[?::1\]?)(?::\d+)?/?$')
+if (-not $env:WIN_PEER_ENDPOINT -or $WinPeerIsLoopback) {
+    $env:WIN_PEER_ENDPOINT = if (Topo-IsKnownIp $WinSiblingIp) { "${WinSiblingIp}:1234" } else { '' }
+}
 
 Invoke-DiscoverEndpoints
 $MacResolved = Resolve-MacLanIp
@@ -965,7 +982,7 @@ $env:OLLAMA_WINDOWS_ENDPOINT   = if ($env:OLLAMA_WINDOWS_ENDPOINT)   { $env:OLLA
 $env:LM_STUDIO_MAC_ENDPOINT    = if ($env:LM_STUDIO_MAC_ENDPOINT)    { $env:LM_STUDIO_MAC_ENDPOINT }    elseif ($MacIp -notin @('unresolved','localhost',$TopoLoopback)) { "http://${MacIp}:1234" } else { 'http://localhost:1234' }
 $env:LM_STUDIO_WIN_ENDPOINTS   = if ($env:LM_STUDIO_WIN_ENDPOINTS)   { $env:LM_STUDIO_WIN_ENDPOINTS }   else { "http://$($env:WIN_IP):1234" }
 # WIN_PEER_ENDPOINT - consumed by the dual-path orchestrator peer probe
-# (set above, before discovery: sibling node when known, else this machine).
+# (set above, before discovery: sibling node when known, else empty = no probe).
 $env:WIN_LM_STUDIO_HOST        = if ($env:WIN_LM_STUDIO_HOST)        { $env:WIN_LM_STUDIO_HOST }        else { 'localhost' }
 $env:WINDOWS_IP                = $env:WIN_IP
 
