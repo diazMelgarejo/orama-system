@@ -644,7 +644,7 @@ function Wait-ForPort {
         [string]$BindHost = ''
     )
     $probeHost = Life-ProbeHost $BindHost
-    $svcLog = Join-Path $LogDir ($Label.ToLower() + '.log')
+    $svcLog = Join-Path $LogDir (($Label.ToLower() -replace '\s+', '_') + '.log')
     Write-Host -NoNewline "  waiting for $Label (port $Port)"
     $deadline = (Get-Date).AddSeconds($MaxSeconds)
     while ((Get-Date) -lt $deadline) {
@@ -678,6 +678,16 @@ function Open-Browser {
     try { Start-Process $Url } catch { _Warn 'browser' "Could not open browser: $_" }
 }
 
+# ── Portal TLS front end (opt-in: PORTAL_TLS_ENABLED=1/true/yes) ──────────────
+# When enabled, the Portal binds loopback only and orchestrator.portal_tls_proxy
+# (Perpetua-Tools) is the single LAN-facing listener, on PORTAL_TLS_PORT.
+$PortalTlsEnabled = $false
+if ($env:PORTAL_TLS_ENABLED) {
+    $PortalTlsEnabled = ($env:PORTAL_TLS_ENABLED.Trim().ToLower() -in @('1', 'true', 'yes'))
+}
+$PortalTlsPort = if ($env:PORTAL_TLS_PORT) { [int]$env:PORTAL_TLS_PORT } else { 8443 }
+$PortalTlsListenHost = if ($env:PORTAL_TLS_LISTEN_HOST) { $env:PORTAL_TLS_LISTEN_HOST.Trim() } else { '0.0.0.0' }
+
 # ── --stop ────────────────────────────────────────────────────────────────────
 if ($Stop) {
     Write-Host 'Stopping orama-system services...'
@@ -697,6 +707,9 @@ if ($Stop) {
             $isWatcher = ($pf.BaseName -eq 'lm_link_watch')
             if ($isWatcher) {
                 $owned = Life-PidMatches $recorded '^(powershell|pwsh)$' 'lm_link_watch'
+            } elseif ($pf.BaseName -eq 'portal_tls') {
+                # Portal TLS proxy: command-line match on portal_tls_proxy, never by name.
+                $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'portal_tls_proxy'
             } else {
                 $owned = Life-PidMatches $recorded '^pythonw?[0-9.]*$' 'uvicorn'
             }
@@ -754,12 +767,12 @@ if ($Status) {
         @{Name='PT';     Port=$PtPort},
         @{Name='orama';  Port=$UsPort},
         @{Name='Portal'; Port=$PortalPort}
-    )) {
+    ) + $(if ($PortalTlsEnabled -or (Get-PidOnPort $PortalTlsPort)) { @(@{Name='Portal TLS'; Port=$PortalTlsPort}) } else { @() })) {
         $listenerPid = Get-PidOnPort $entry.Port
         if ($listenerPid) {
-            Write-Host ("  {0,-8} :{1,-5}  ● UP    (PID {2})" -f $entry.Name, $entry.Port, $listenerPid)
+            Write-Host ("  {0,-10} :{1,-5}  ● UP    (PID {2})" -f $entry.Name, $entry.Port, $listenerPid)
         } else {
-            Write-Host ("  {0,-8} :{1,-5}  ○ DOWN" -f $entry.Name, $entry.Port)
+            Write-Host ("  {0,-10} :{1,-5}  ○ DOWN" -f $entry.Name, $entry.Port)
         }
     }
     Invoke-HardwarePolicyCheck
@@ -1041,7 +1054,7 @@ function Start-OramaService {
         [string[]]$Cmd,
         [hashtable]$EnvExtra = @{}
     )
-    $slug    = $Name.ToLower()
+    $slug    = ($Name.ToLower() -replace '\s+', '_')
     $logFile = Join-Path $LogDir "$slug.log"
     $pidFile = Join-Path $LogDir "$slug.pid"
     $null    = New-Item -ItemType Directory -Force -Path $LogDir
@@ -1118,11 +1131,34 @@ $svc = Start-OramaService -Name 'orama' -Port $UsPort -WorkDir $RepoRoot `
 $LifeResults += Life-Settle $svc $UsHost
 
 # ── 3. Portal ─────────────────────────────────────────────────────────────────
+if ($PortalTlsEnabled) {
+    # The proxy is the only LAN-facing listener: force the Portal onto loopback
+    # regardless of PORTAL_BIND_LAN / PORTAL_HOST.
+    $PortalHost = [System.Net.IPAddress]::Loopback.IPAddressToString
+    Write-Host "  Portal TLS enabled: Portal binds loopback only; TLS front end on port $PortalTlsPort"
+}
 $svc = Start-OramaService -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
     -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.portal_server:app',
            '--host', $PortalHost, '--port', $PortalPort.ToString()) `
     -EnvExtra @{ PYTHONPATH = $oramaPyPath }
 $LifeResults += Life-Settle $svc $PortalHost
+
+# ── 4. Portal TLS front end (only when PORTAL_TLS_ENABLED) ────────────────────
+if ($PortalTlsEnabled) {
+    $tlsModule = if ($PtDir) { Join-Path $PtDir 'orchestrator\portal_tls_proxy.py' } else { '' }
+    if (-not $PtDir -or -not $PtPython -or -not (Test-Path $tlsModule)) {
+        Write-Host "  Portal TLS  FAILED (PORTAL_TLS_ENABLED is set but orchestrator\portal_tls_proxy.py is missing; update Perpetua-Tools)"
+        $LifeResults += [pscustomobject]@{ Name = 'Portal TLS'; Port = $PortalTlsPort; State = 'FAILED'; Detail = 'portal_tls_proxy.py missing in PT directory' }
+    } else {
+        $svc = Start-OramaService -Name 'Portal TLS' -Port $PortalTlsPort -WorkDir $PtDir `
+            -Cmd @($PtPython, '-m', 'orchestrator.portal_tls_proxy',
+                   '--listen-port', $PortalTlsPort.ToString(),
+                   '--upstream-port', $PortalPort.ToString(),
+                   '--listen-host', $PortalTlsListenHost) `
+            -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
+        $LifeResults += Life-Settle $svc $PortalTlsListenHost
+    }
+}
 
 # ── Per-service summary; a failed core service fails the launcher ─────────────
 Write-Host ''
@@ -1144,6 +1180,37 @@ Write-Host ("  ●  PT      http://localhost:{0}/health" -f $PtPort)
 Write-Host ("  ●  orama   http://localhost:{0}/health" -f $UsPort)
 Write-Host ("  ●  Portal  {0}" -f $PortalUrl)
 Write-Host ("  ○  JSON    {0}/api/status" -f $PortalUrl)
+if ($PortalTlsEnabled) {
+    # Fingerprint lines come from the proxy itself (ca_sha256_file=, ca_public_path=).
+    $tlsCaSha = ''
+    $tlsCaPath = ''
+    $prevEapFp = $ErrorActionPreference
+    $prevPyPath = $env:PYTHONPATH
+    $ErrorActionPreference = 'Continue'
+    Push-Location $PtDir
+    try {
+        $env:PYTHONPATH = "$PtDir\src;$PtDir"
+        $fpOut = @(& $PtPython -m orchestrator.portal_tls_proxy --print-fingerprint 2>&1 | ForEach-Object { "$_" })
+        foreach ($fpLine in $fpOut) {
+            if ($fpLine -match '^ca_sha256_file=(.+)$')  { $tlsCaSha  = $Matches[1].Trim() }
+            if ($fpLine -match '^ca_public_path=(.+)$')  { $tlsCaPath = $Matches[1].Trim() }
+        }
+    } finally {
+        Pop-Location
+        $env:PYTHONPATH = $prevPyPath
+        $ErrorActionPreference = $prevEapFp
+    }
+    Write-Host ("  ●  Portal TLS  https://localhost:{0}  (LAN-facing; Portal itself is loopback-only)" -f $PortalTlsPort)
+    if ($tlsCaSha -and $tlsCaPath) {
+        Write-Host ("     CA public cert : {0}" -f $tlsCaPath)
+        Write-Host ("     CA SHA-256     : {0}" -f $tlsCaSha)
+        Write-Host '     Send the CA public cert to the peer, then compare its SHA-256 through a'
+        Write-Host '     separate channel (voice, chat) before the peer trusts it. Never send a private key.'
+    } else {
+        Write-Host '     WARNING: could not read the CA fingerprint from --print-fingerprint output:'
+        foreach ($fpLine in $fpOut) { Write-Host "       | $fpLine" }
+    }
+}
 Write-Host ''
 Write-Host ("  Logs  : {0}\" -f $LogDir)
 Write-Host '  Stop  : .\platform\windows\start.ps1 --stop'
