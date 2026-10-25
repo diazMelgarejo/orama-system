@@ -28,7 +28,7 @@ def test_tls_enabled_flag_accepts_only_truthy_values():
 def test_tls_launch_block_is_gated_on_the_flag():
     src = _src()
     block = _between(src, "# ── 4. Portal TLS front end", "# ── Per-service summary")
-    assert block.lstrip().splitlines()[1].startswith("if ($PortalTlsEnabled)")
+    assert block.lstrip().splitlines()[1].startswith("if ($PortalTlsEnabled")
     assert "orchestrator.portal_tls_proxy" in block
     for needle in ("--listen-port", "--upstream-port", "--listen-host", "$PtDir\\src;$PtDir"):
         assert needle in block
@@ -47,7 +47,8 @@ def test_portal_host_forced_to_loopback_when_tls_enabled():
 
 def test_tls_proxy_counts_toward_exit_code_and_summary():
     src = _src()
-    assert "$LifeResults += Life-Settle $svc $PortalTlsListenHost" in src
+    assert "$tlsRow = Life-Settle $svc $PortalTlsListenHost" in src
+    assert "$LifeResults += $tlsRow" in src
     summary = _between(src, "# ── Per-service summary", "# ── Ready")
     assert "$_.State -eq 'FAILED'" in summary and "exit 1" in summary
 
@@ -92,3 +93,70 @@ def test_ps_file_keeps_bom_and_crlf():
     raw = START_PS1.read_bytes()
     assert raw.startswith(b"\xef\xbb\xbf")
     assert raw.count(b"\r\n") == raw.count(b"\n")
+
+
+def test_reused_portal_must_be_loopback_only_before_proxy_starts():
+    src = _src()
+    assert "function Test-PortLoopbackOnly" in src
+    assert "[System.Net.IPAddress]::IsLoopback" in src
+    portal = _between(src, "$portalRow = Life-Settle", "# ── 4. Portal TLS front end")
+    assert "Test-PortLoopbackOnly $PortalPort" in portal
+    assert "non-loopback" in portal and "State = 'FAILED'" in portal
+    # the proxy launch and the 'loopback-only' claim are both gated on the check
+    assert "if ($PortalTlsEnabled -and $PortalLoopbackOk) {" in _between(
+        src, "# ── 4. Portal TLS front end", "# ── Per-service summary"
+    )
+    ready = _between(src, "# ── Ready", "# ── Verify model fallback")
+    assert "if ($PortalTlsEnabled -and $PortalLoopbackOk)" in ready
+
+
+def test_status_row_only_for_enabled_or_recorded_proxy():
+    status = _between(_src(), "if ($Status) {", "# ── LAN discovery")
+    assert "Get-PidOnPort $PortalTlsPort" not in status
+    assert "portal_tls.pid" in status
+
+
+def test_service_summary_name_column_fits_portal_tls():
+    summary = _between(_src(), "# ── Per-service summary", "# ── Ready")
+    assert "{0,-10} port" in summary
+
+
+def _powershell51():
+    import shutil
+
+    return shutil.which("powershell.exe") or shutil.which("powershell")
+
+
+def test_loopback_probe_distinguishes_loopback_and_wildcard_listeners():
+    import socket
+    import subprocess
+
+    import pytest
+
+    ps = _powershell51()
+    if not ps or not __import__("sys").platform.startswith("win"):
+        pytest.skip("needs Windows PowerShell")
+    src = _src()
+    func = _between(src, "function Test-PortLoopbackOnly", "# Life-* helpers")
+    loop = socket.socket()
+    wild = socket.socket()
+    try:
+        loop.bind((__import__("ipaddress").ip_address(socket.gethostbyname("localhost")).compressed, 0))
+        loop.listen(1)
+        wild.bind(("", 0))
+        wild.listen(1)
+        loop_port = loop.getsockname()[1]
+        wild_port = wild.getsockname()[1]
+        script = (
+            func
+            + f"\n$a = Test-PortLoopbackOnly {loop_port}\n$b = Test-PortLoopbackOnly {wild_port}\n"
+            + "$c = Test-PortLoopbackOnly 1\nWrite-Output \"$a $b $c\"\n"
+        )
+        out = subprocess.run(
+            [ps, "-NoProfile", "-NonInteractive", "-Command", script],
+            capture_output=True, text=True, timeout=60,
+        ).stdout.strip()
+    finally:
+        loop.close()
+        wild.close()
+    assert out.splitlines()[-1] == "True False False"

@@ -574,6 +574,26 @@ function Get-PidOnPort {
     return $null
 }
 
+# True when every LISTENING socket on the port is bound to a loopback address.
+# No listener, or an unparsable address, counts as not loopback-only (fail closed).
+function Test-PortLoopbackOnly {
+    param([int]$Port)
+    $seen = 0
+    try {
+        foreach ($nsLine in @(& netstat -ano 2>$null)) {
+            if ("$nsLine" -match '^\s*TCP\s+(\S+):(\d+)\s+\S+\s+LISTENING\s+\d+') {
+                $nsAddrText = $Matches[1].Trim('[', ']')
+                if ([int]$Matches[2] -ne $Port) { continue }
+                $seen++
+                $nsAddr = $null
+                if (-not [System.Net.IPAddress]::TryParse($nsAddrText, [ref]$nsAddr)) { return $false }
+                if (-not [System.Net.IPAddress]::IsLoopback($nsAddr)) { return $false }
+            }
+        }
+    } catch { return $false }
+    return ($seen -gt 0)
+}
+
 # Life-* helpers: service lifecycle (detached launch, readiness, stop). PS 5.1 safe.
 function Life-GetProc {
     param([int]$ProcId)
@@ -767,7 +787,7 @@ if ($Status) {
         @{Name='PT';     Port=$PtPort},
         @{Name='orama';  Port=$UsPort},
         @{Name='Portal'; Port=$PortalPort}
-    ) + $(if ($PortalTlsEnabled -or (Get-PidOnPort $PortalTlsPort)) { @(@{Name='Portal TLS'; Port=$PortalTlsPort}) } else { @() })) {
+    ) + $(if ($PortalTlsEnabled -or (Test-Path (Join-Path $LogDir 'portal_tls.pid'))) { @(@{Name='Portal TLS'; Port=$PortalTlsPort}) } else { @() })) {
         $listenerPid = Get-PidOnPort $entry.Port
         if ($listenerPid) {
             Write-Host ("  {0,-10} :{1,-5}  ● UP    (PID {2})" -f $entry.Name, $entry.Port, $listenerPid)
@@ -1141,10 +1161,22 @@ $svc = Start-OramaService -Name 'Portal' -Port $PortalPort -WorkDir $RepoRoot `
     -Cmd @($UsPython, '-m', 'uvicorn', 'orama_system.portal_server:app',
            '--host', $PortalHost, '--port', $PortalPort.ToString()) `
     -EnvExtra @{ PYTHONPATH = $oramaPyPath }
-$LifeResults += Life-Settle $svc $PortalHost
+$portalRow = Life-Settle $svc $PortalHost
+$PortalLoopbackOk = $true
+$PortalTlsReused = $false
+if ($PortalTlsEnabled -and $portalRow.State -eq 'UP') {
+    # A reused Portal keeps whatever bind it was started with. The TLS proxy must
+    # never sit in front of one that also serves plain HTTP on the LAN.
+    $PortalLoopbackOk = Test-PortLoopbackOnly $PortalPort
+    if (-not $PortalLoopbackOk) {
+        Write-Host "  Portal  port $PortalPort is bound to a non-loopback address; not starting the TLS front end"
+        $portalRow = [pscustomobject]@{ Name = 'Portal'; Port = $PortalPort; State = 'FAILED'; Detail = 'bound to a non-loopback address; run --stop first' }
+    }
+}
+$LifeResults += $portalRow
 
 # ── 4. Portal TLS front end (only when PORTAL_TLS_ENABLED) ────────────────────
-if ($PortalTlsEnabled) {
+if ($PortalTlsEnabled -and $PortalLoopbackOk) {
     $tlsModule = if ($PtDir) { Join-Path $PtDir 'orchestrator\portal_tls_proxy.py' } else { '' }
     if (-not $PtDir -or -not $PtPython -or -not (Test-Path $tlsModule)) {
         Write-Host "  Portal TLS  FAILED (PORTAL_TLS_ENABLED is set but orchestrator\portal_tls_proxy.py is missing; update Perpetua-Tools)"
@@ -1156,7 +1188,9 @@ if ($PortalTlsEnabled) {
                    '--upstream-port', $PortalPort.ToString(),
                    '--listen-host', $PortalTlsListenHost) `
             -EnvExtra @{ PYTHONPATH = "$PtDir\src;$PtDir" }
-        $LifeResults += Life-Settle $svc $PortalTlsListenHost
+        $tlsRow = Life-Settle $svc $PortalTlsListenHost
+        if ($tlsRow.State -eq 'UP' -and -not $svc.Started) { $PortalTlsReused = $true }
+        $LifeResults += $tlsRow
     }
 }
 
@@ -1164,7 +1198,7 @@ if ($PortalTlsEnabled) {
 Write-Host ''
 Write-Host '── service summary ───────────────────────────────────────────────────'
 foreach ($r in $LifeResults) {
-    Write-Host ('  {0,-7} port {1,-6} {2,-8} {3}' -f $r.Name, $r.Port, $r.State, $r.Detail)
+    Write-Host ('  {0,-10} port {1,-6} {2,-8} {3}' -f $r.Name, $r.Port, $r.State, $r.Detail)
 }
 $LifeFailed = @($LifeResults | Where-Object { $_.State -eq 'FAILED' })
 if ($LifeFailed.Count -gt 0) {
@@ -1180,7 +1214,7 @@ Write-Host ("  ●  PT      http://localhost:{0}/health" -f $PtPort)
 Write-Host ("  ●  orama   http://localhost:{0}/health" -f $UsPort)
 Write-Host ("  ●  Portal  {0}" -f $PortalUrl)
 Write-Host ("  ○  JSON    {0}/api/status" -f $PortalUrl)
-if ($PortalTlsEnabled) {
+if ($PortalTlsEnabled -and $PortalLoopbackOk) {
     # Fingerprint lines come from the proxy itself (ca_sha256_file=, ca_public_path=).
     $tlsCaSha = ''
     $tlsCaPath = ''
@@ -1201,6 +1235,11 @@ if ($PortalTlsEnabled) {
         $ErrorActionPreference = $prevEapFp
     }
     Write-Host ("  ●  Portal TLS  https://localhost:{0}  (LAN-facing; Portal itself is loopback-only)" -f $PortalTlsPort)
+    if ($PortalTlsReused) {
+        Write-Host '     NOTE: the TLS front end was already running; the fingerprint below reflects the'
+        Write-Host '     current PORTAL_TLS_STATE_DIR. If it was started with another state dir, compare'
+        Write-Host '     with ca_sha256_file= in .logs\portal_tls.log, or run --stop and relaunch.'
+    }
     if ($tlsCaSha -and $tlsCaPath) {
         Write-Host ("     CA public cert : {0}" -f $tlsCaPath)
         Write-Host ("     CA SHA-256     : {0}" -f $tlsCaSha)
