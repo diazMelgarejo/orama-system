@@ -26,6 +26,12 @@ from typing import Any
 from urllib.parse import quote
 
 _SCRIPT_DIR = Path(__file__).resolve().parent
+if str(_SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(_SCRIPT_DIR))
+
+import peer_tls  # noqa: E402
+
+_SCRIPT_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _SCRIPT_DIR.parents[4]
 
 
@@ -141,7 +147,10 @@ def http_get(url: str, token: str = "", timeout: int = 8) -> tuple[int, str]:
         headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(url, headers=headers, method="GET")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        # Per-stack trust (PEER_CA_FILE / PEER_PINNED_FINGERPRINTS); on a
+        # verification failure this raises before any request is sent.
+        kw = peer_tls.urlopen_kwargs(url, timeout)
+        with urllib.request.urlopen(req, timeout=timeout, **kw) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             return resp.status, body[:500]
     except urllib.error.HTTPError as exc:
@@ -164,7 +173,8 @@ def http_post_json(
     data = json.dumps(payload).encode("utf-8")
     req = urllib.request.Request(url, data=data, headers=headers, method="POST")
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        kw = peer_tls.urlopen_kwargs(url, timeout)
+        with urllib.request.urlopen(req, timeout=timeout, **kw) as resp:
             body = resp.read().decode("utf-8", errors="replace")
             return resp.status, body[:2000]
     except urllib.error.HTTPError as exc:
@@ -383,10 +393,15 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout:
                 # When a token is present, require wss:// (fail-closed).
                 scheme = "wss" if tok else "ws"
                 url = f"{scheme}://{peer_ip}:{portal_port}/ws/portal-peer{qs}"
+                # Per-stack trust (PEER_CA_FILE / pins) for wss://; with none
+                # configured the default context applies (SSL_CERT_FILE works).
+                # Resolved before connecting, so a failure sends no token.
+                ssl_kw = peer_tls.websocket_kwargs(url, timeout)
                 async with websockets.connect(
                     url,
                     open_timeout=timeout,
                     additional_headers=headers,
+                    **ssl_kw,
                 ) as ws:
                     await ws.send(json.dumps({"type": "probe", "source": local_role()}))
                     raw = await asyncio.wait_for(ws.recv(), timeout=max(1, min(timeout, 5)))
@@ -404,6 +419,12 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout:
         except Exception as exc:
             msg = str(exc)
             last_detail = msg[:80]
+            if isinstance(exc, peer_tls.PeerTrustError):
+                return Check(
+                    "ws-peer",
+                    Status.FAIL,
+                    f"peer TLS verification failed: {msg[:120]} (token not sent)",
+                )
             if "404" in msg or "HTTP 404" in msg:
                 return Check(
                     "ws-peer",

@@ -28,12 +28,19 @@ Manifest JSON::
 from __future__ import annotations
 
 import argparse
+import hashlib
+import ipaddress
 import json
 import logging
 import os
+import re
 import sys
+import time
+import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -42,6 +49,7 @@ _SCRIPT_DIR = Path(__file__).resolve().parent
 if str(_SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPT_DIR))
 
+import peer_tls  # noqa: E402
 import probe_lan_peer as probe  # noqa: E402
 
 # scripts → hermes-harness → skills → bin/orama-system → bin → repo root
@@ -93,12 +101,38 @@ def _peer_portal_tls_enabled() -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _bracketed_host(peer_ip: str) -> str:
+    """Return the URL-authority form of a peer host. Only a real IPv6 literal
+    is bracketed; anything else containing ':' (e.g. 'host:8002') is a
+    --peer-ip typo and is refused rather than turned into a malformed URL."""
+    host = (peer_ip or "").strip()
+    bracketed = host.startswith("[") and host.endswith("]")
+    inner = host[1:-1] if bracketed else host
+    if ":" not in inner:
+        if "[" in host or "]" in host:
+            raise SystemExit("--peer-ip has unbalanced brackets; give a host or an IPv6 literal")
+        return host
+    try:
+        addr = ipaddress.ip_address(inner)
+    except ValueError:
+        raise SystemExit("--peer-ip must be a host or IPv6 literal, not host:port") from None
+    if addr.version != 6:
+        raise SystemExit("--peer-ip must be a host or IPv6 literal, not host:port")
+    return f"[{inner}]"
+
+
 def _peer_base(peer_ip: str, portal_port: int) -> str:
     scheme = "https" if _peer_portal_tls_enabled() else "http"
-    return f"{scheme}://{peer_ip}:{portal_port}"
+    return f"{scheme}://{_bracketed_host(peer_ip)}:{portal_port}"
 
 
 def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30) -> Any:
+    return _http_json_ex(method, url, payload, timeout)[0]
+
+
+def _http_json_ex(
+    method: str, url: str, payload: dict[str, Any] | None = None, timeout: int = 30
+) -> tuple[Any, bool]:
     """Request, retrying across every local control-plane token candidate
     on 401/403 before giving up -- see query_peer_topology.py's _http_get
     for why (2026-07-19 D9 self-correction: resolve_control_plane_token()'s
@@ -129,14 +163,23 @@ def _http_json(method: str, url: str, payload: dict[str, Any] | None = None, tim
         # We intentionally do NOT raise here; we simply omit the token.
         candidates = [""]  # unauthenticated path
 
+    # Per-stack trust (PEER_CA_FILE / PEER_PINNED_FINGERPRINTS), resolved
+    # BEFORE any Authorization header exists: a peer that fails verification
+    # gets no token at all (hard fail, no unverified fallback).
+    try:
+        tls_kw = peer_tls.urlopen_kwargs(url, timeout)
+    except peer_tls.PeerTrustError as exc:
+        raise SystemExit(f"peer TLS verification failed {url}: {exc} (token not sent)") from exc
+
     last_error: tuple[int, str] | None = None
     for token in candidates:
         headers = _auth_header(token) if token else {}
         req = urllib.request.Request(url, data=data, headers=headers, method=method)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
+            with urllib.request.urlopen(req, timeout=timeout, **tls_kw) as resp:
                 raw = resp.read().decode("utf-8", errors="replace")
-                return json.loads(raw) if raw.strip() else {}
+                # authenticated == a real token travelled over verified https
+                return (json.loads(raw) if raw.strip() else {}), bool(token)
         except urllib.error.HTTPError as exc:
             try:
                 body = exc.read().decode("utf-8", errors="replace")
@@ -197,6 +240,8 @@ def cmd_drop(args: argparse.Namespace) -> int:
                 portal_port=port,
                 error=str(exc),
             )
+            _set_state(record["filename"], "queued", last_error=str(exc)[:500])
+            record["state"] = "queued"
             print(
                 json.dumps(
                     {
@@ -265,66 +310,514 @@ def cmd_read(args: argparse.Namespace) -> int:
     return 0
 
 
-def cmd_flush_outbox(args: argparse.Namespace) -> int:
-    _ensure_orama_src()
-    from orama_system.lan_peer_files import list_outbox, read_outbox_file, remove_outbox_file
+_STATES = ("queued", "sent", "delivered")
+# States an operator may record out of band (outbox-resolve). Both are
+# terminal: flush/resubmit never resend them.
+_RESOLVE_STATES = ("delivered", "superseded")
+_TERMINAL_STATES = ("delivered", "superseded")
+_EVIDENCE_MAX = 500
+_CTRL_RE = re.compile(r"[\x00-\x1f\x7f-\x9f]")
+_CRED_RE = re.compile(
+    r"(?i)(bearer\s+\S+|authorization\s*[:=]|(?:token|secret|password|api[_-]?key)\s*[:=]\s*\S+)"
+)
+_HOST_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9.\-:\[\]]*$")
 
-    # Each outbox item was queued with its own intended peer_ip/portal_port
-    # (see write_outbox_file) — that stored target ALWAYS wins per item.
-    # --peer-ip/--portal-port on this command are only a fallback default
-    # for legacy items queued before peer_ip was recorded, never an
-    # override — a batch commonly spans multiple peers, and forcing every
-    # item to one IP is exactly the bug this fixes. Previously this
-    # resolved ONE peer for the whole batch and silently sent every item
-    # there, misdelivering anything queued for a different peer.
-    default_peer: tuple[str, int] | None = None
-    items = list_outbox()
-    results: list[dict[str, Any]] = []
-    for item in items:
-        filename = str(item.get("filename") or "")
-        if not filename:
-            continue
-        body, meta = read_outbox_file(filename)
-        stored_ip = str(meta.get("peer_ip") or "").strip()
-        if stored_ip:
-            item_port_raw = str(meta.get("portal_port") or "").strip()
-            item_ip, item_port = stored_ip, (int(item_port_raw) if item_port_raw else int(args.portal_port))
-        else:
-            # Legacy item with no stored peer_ip — resolve once, lazily,
-            # only when actually needed.
-            if default_peer is None:
-                default_peer = _resolve_peer(args)
-            item_ip, item_port = default_peer
-        url = f"{_peer_base(item_ip, item_port)}/api/peer-file"
-        payload = {
-            "filename": filename,
-            "body": body,
-            "assignee": str(meta.get("assignee") or item.get("assignee") or ""),
-            "topic": str(meta.get("topic") or item.get("topic") or ""),
-            "fanout_id": str(meta.get("fanout_id") or item.get("fanout_id") or ""),
-            "source": str(meta.get("source") or probe.local_role()),
-        }
-        entry = {"filename": filename, "status": "pending", "peer_ip": item_ip, "portal_port": item_port}
+
+def _meta_file(filename: str) -> Path:
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import _meta_path, _resolve_within, outbox_dir
+
+    return _meta_path(_resolve_within(outbox_dir(), filename))
+
+
+def _item_state(meta: dict[str, Any]) -> str:
+    """Old .meta.json files carry no state: they are queued."""
+    st = str(meta.get("state") or "queued").strip().lower()
+    return st if st in _STATES or st in _TERMINAL_STATES else "queued"
+
+
+def _set_state(filename: str, state: str, **fields: Any) -> None:
+    path = _meta_file(filename)
+    meta: dict[str, Any] = {}
+    if path.is_file():
         try:
-            _http_json("POST", url, payload, timeout=args.timeout)
+            meta = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            meta = {}
+    meta["state"] = state
+    meta["state_at"] = int(time.time())
+    meta.update(fields)
+    path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
+
+
+def _select_items(items: list[dict[str, Any]], only: list[str]) -> list[dict[str, Any]]:
+    wanted = {Path(o).name for o in only}
+    out = []
+    for item in items:
+        name = str(item.get("filename") or "")
+        if not name:
+            continue
+        if wanted and name not in wanted and Path(name).stem not in wanted:
+            continue
+        out.append(item)
+    return out
+
+
+def cmd_outbox_status(args: argparse.Namespace) -> int:
+    """Read-only listing of outbox entries and their delivery state."""
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import list_outbox, read_outbox_file
+
+    rows = []
+    for item in list_outbox():
+        name = str(item.get("filename") or "")
+        if not name:
+            continue
+        _, meta = read_outbox_file(name)
+        rows.append(
+            {
+                "filename": name,
+                "state": _item_state(meta),
+                "peer_ip": str(meta.get("peer_ip") or ""),
+                "portal_port": str(meta.get("portal_port") or ""),
+                "queued_at": meta.get("queued_at", ""),
+                "state_at": meta.get("state_at", ""),
+                "last_error": str(meta.get("last_error") or "")[:300],
+                "size_matches": meta.get("size_matches", ""),
+            }
+        )
+    counts = {s: sum(1 for r in rows if r["state"] == s) for s in _STATES}
+    if any(r["state"] == "superseded" for r in rows):
+        counts["superseded"] = sum(1 for r in rows if r["state"] == "superseded")
+    print(json.dumps({"items": rows, "counts": counts}, indent=2))
+    return 0
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _clean_evidence(text: str) -> str:
+    """Control chars stripped, whitespace collapsed, length-limited. Refuses
+    anything that looks like a credential (evidence is stored in clear)."""
+    raw = text or ""
+    # Control (Cc) AND invisible format/separator (Cf, Zl, Zp: zero-width
+    # space, word joiner, soft hyphen, ...) characters become spaces, so
+    # "Bearer<ZWSP>value" cannot slip past the credential filter.
+    spaced = "".join(
+        " " if unicodedata.category(c) in ("Cc", "Cf", "Zl", "Zp") else c
+        for c in _CTRL_RE.sub(" ", raw)
+    )
+    cleaned = " ".join(spaced.split())
+    # Check the raw, cleaned and NFKC-folded text: neither a control nor an
+    # invisible character between "Bearer" and the value may defeat the filter.
+    folded = unicodedata.normalize("NFKC", cleaned)
+    if _CRED_RE.search(raw) or _CRED_RE.search(cleaned) or _CRED_RE.search(folded):
+        raise SystemExit("--evidence looks like it contains a credential; refusing (never store secrets)")
+    for tok in probe.outbound_control_plane_tokens():
+        if tok and len(tok) >= 8 and (tok in raw or tok in cleaned or tok in folded):
+            raise SystemExit("--evidence contains a local token value; refusing (never store secrets)")
+    if not cleaned:
+        raise SystemExit("--evidence must not be empty")
+    return cleaned[:_EVIDENCE_MAX]
+
+
+def _pick_only(only: list[str]) -> list[dict[str, Any]]:
+    """Resolve explicit --only names to EXACTLY one outbox item each (full
+    filename, or stem when unambiguous). No bulk, no globs; any miss aborts
+    before anything is changed."""
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import list_outbox
+
+    if not only:
+        raise SystemExit("at least one --only FILE is required (no bulk operations)")
+    items = [i for i in list_outbox() if i.get("filename")]
+    picked: list[dict[str, Any]] = []
+    for raw in only:
+        key = Path(raw).name
+        matches = [i for i in items if i["filename"] == key] or [
+            i for i in items if Path(str(i["filename"])).stem == key
+        ]
+        if len(matches) != 1:
+            raise SystemExit(f"--only {key!r} matched {len(matches)} outbox items (need exactly 1)")
+        if matches[0] not in picked:
+            picked.append(matches[0])
+    return picked
+
+
+def cmd_outbox_resolve(args: argparse.Namespace) -> int:
+    """Record out-of-band evidence for explicit items. No network call, no
+    credentials accepted or stored."""
+    picked = _pick_only(list(args.only or []))
+    evidence = _clean_evidence(args.evidence)
+    rows = []
+    for item in picked:
+        name = str(item["filename"])
+        _set_state(name, args.state, resolved_at=_utc_now_iso(), evidence=evidence, last_error="")
+        rows.append({"filename": name, "state": args.state, "evidence": evidence})
+    print(json.dumps({"ok": True, "resolved": rows}, indent=2))
+    return 0
+
+
+def _peer_listing(
+    ip: str, port: int, timeout: int, cache: dict[tuple[str, int], tuple[Any, bool, str]]
+) -> tuple[Any, bool, str]:
+    """Authenticated GET of the destination's inbox listing, cached per
+    destination for one command run. Returns (data, authed, error)."""
+    key = (ip, port)
+    if key not in cache:
+        try:
+            data, authed = _http_json_ex("GET", f"{_peer_base(ip, port)}/api/peer-inbox", None, timeout)
+            cache[key] = (data, authed, "")
         except SystemExit as exc:
-            entry["status"] = "error"
-            entry["detail"] = str(exc)
+            cache[key] = (None, False, str(exc))
+    return cache[key]
+
+
+def _listed_entry(data: Any, filename: str) -> dict[str, Any] | None:
+    rows: Any = data
+    if isinstance(data, dict):
+        rows = data.get("files")
+        if rows is None:
+            rows = data.get("items")
+    if not isinstance(rows, list):
+        return None
+    for row in rows:
+        if isinstance(row, dict) and str(row.get("filename") or row.get("name") or "") == filename:
+            return row
+        if isinstance(row, str) and row == filename:
+            return {"filename": row}
+    return None
+
+
+_COLLISION_ADVICE = (
+    "same name present on peer with different or unverifiable content; "
+    "operator must resolve (outbox-resolve, or outbox-resubmit with a new explicit remote filename)"
+)
+
+
+def _sha256_text(text: str) -> str:
+    lf = text.replace("\r\n", "\n")
+    return hashlib.sha256(lf.encode("utf-8")).hexdigest()
+
+
+def _remote_content_verdict(
+    ip: str, port: int, filename: str, lf_body: str, timeout: int
+) -> tuple[str, str]:
+    """('match'|'mismatch'|'unverifiable', reason). Fetches the remote file via
+    the authenticated read path (GET /api/peer-inbox/{name}); only a body
+    fetched with a token over verified https can prove the content matches."""
+    url = f"{_peer_base(ip, port)}/api/peer-inbox/{urllib.parse.quote(filename, safe='')}"
+    if not _is_authenticated_transport(url):
+        return "unverifiable", "remote content cannot be fetched over https"
+    try:
+        result, authed = _http_json_ex("GET", url, None, timeout)
+    except SystemExit as exc:
+        return "unverifiable", f"remote content fetch failed: {str(exc)[:120]}"
+    if not authed:
+        return "unverifiable", "remote content fetch was not authenticated"
+    remote = result.get("body") if isinstance(result, dict) else None
+    if not isinstance(remote, str):
+        return "unverifiable", "remote content fetch returned no body"
+    if _sha256_text(remote) == _sha256_text(lf_body):
+        return "match", ""
+    return "mismatch", "remote content sha256 differs from local"
+
+
+def _deliver_item(
+    item: dict[str, Any],
+    body: str,
+    meta: dict[str, Any],
+    ip: str,
+    port: int,
+    *,
+    timeout: int,
+    keep: bool,
+    listing_cache: dict[tuple[str, int], tuple[Any, bool, str]],
+    record_history: bool = False,
+) -> dict[str, Any]:
+    """Send one outbox item to (ip, port) after a duplicate check.
+
+    Same transport rules as drop: token only over verified https. The outbox
+    file is never removed on failure. With record_history, a
+    {from, to, at, result} row is appended to meta["history"]; the item's
+    original peer_ip/portal_port are left untouched.
+    """
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import remove_outbox_file
+
+    filename = str(item.get("filename") or "")
+    entry: dict[str, Any] = {
+        "filename": filename,
+        "status": "pending",
+        "peer_ip": ip,
+        "portal_port": port,
+    }
+
+    def _hist(result: str) -> dict[str, Any]:
+        if not record_history:
+            return {}
+        prev = meta.get("history")
+        rows = list(prev) if isinstance(prev, list) else []
+        rows.append(
+            {
+                "from": {
+                    "peer_ip": str(meta.get("peer_ip") or ""),
+                    "portal_port": str(meta.get("portal_port") or ""),
+                },
+                "to": {"peer_ip": ip, "portal_port": str(port)},
+                "at": _utc_now_iso(),
+                "result": result[:200],
+            }
+        )
+        return {"history": rows}
+
+    data, list_authed, list_err = _peer_listing(ip, port, timeout, listing_cache)
+    if list_err:
+        # Cannot prove the file is absent: do not send. Item stays intact.
+        entry["status"] = "error"
+        entry["state"] = "queued"
+        entry["detail"] = f"duplicate check failed: {list_err}"
+        _set_state(filename, "queued", last_error=entry["detail"][:500], **_hist("error: duplicate check failed"))
+        return entry
+    found = _listed_entry(data, filename)
+    if found is not None:
+        size = found.get("bytes", found.get("size", ""))
+        # The receiver may be Windows (write_text turns LF into CRLF), so a
+        # listed size equal to either the LF or the CRLF encoding of the body
+        # counts as the same content.
+        lf_body = body.replace("\r\n", "\n")
+        local_size = len(lf_body.encode("utf-8"))
+        crlf_size = len(lf_body.replace("\n", "\r\n").encode("utf-8"))
+        size_ok = str(size) in (str(local_size), str(crlf_size))
+        if list_authed:
+            # Name and size alone are not proof of delivery: a regenerated file
+            # often keeps its length. Fetch the remote body over the same
+            # verified authenticated channel and compare SHA-256.
+            verdict, why_not = ("mismatch", "")
+            if size_ok:
+                verdict, why_not = _remote_content_verdict(ip, port, filename, lf_body, timeout)
+            if verdict != "match":
+                why = (
+                    f"name collision: listed size {size!r} vs local {local_size}/{crlf_size} bytes"
+                    + (f"; {why_not}" if why_not else "")
+                    + f"; {_COLLISION_ADVICE}"
+                )
+                entry["status"] = "error"
+                entry["state"] = "queued"
+                entry["detail"] = why
+                entry["listed_size"] = size
+                entry["size_matches"] = size_ok
+                entry["content_verified"] = False
+                _set_state(
+                    filename, "queued", last_error=why[:500], listed_size=size, local_size=local_size,
+                    size_matches=size_ok, content_verified=False, **_hist("error: name collision")
+                )
+                return entry
+            entry["status"] = "delivered"
+            entry["state"] = "delivered"
+            entry["detail"] = "present in peer inbox listing; content sha256 verified"
+            entry["content_verified"] = True
+            _set_state(
+                filename,
+                "delivered",
+                last_error="",
+                delivered_at=int(time.time()),
+                resolved_at=_utc_now_iso(),
+                evidence="present in peer inbox listing; content sha256 verified",
+                listed_size=size,
+                local_size=local_size,
+                size_matches=True,
+                content_verified=True,
+                **_hist("present"),
+            )
+        else:
+            entry["status"] = "sent"
+            entry["state"] = "sent"
+            entry["detail"] = "present in peer inbox listing, but listing was not authenticated; not resent"
+            _set_state(filename, "sent", last_error=entry["detail"], listed_size=size, **_hist("present-unauthenticated"))
+        entry["listed_size"] = size
+        entry["size_matches"] = size_ok
+        return entry
+
+    url = f"{_peer_base(ip, port)}/api/peer-file"
+    payload = {
+        "filename": filename,
+        "body": body,
+        "assignee": str(meta.get("assignee") or item.get("assignee") or ""),
+        "topic": str(meta.get("topic") or item.get("topic") or ""),
+        "fanout_id": str(meta.get("fanout_id") or item.get("fanout_id") or ""),
+        "source": str(meta.get("source") or probe.local_role()),
+    }
+    try:
+        result, authed = _http_json_ex("POST", url, payload, timeout=timeout)
+    except SystemExit as exc:
+        entry["status"] = "error"
+        entry["state"] = "queued"
+        entry["detail"] = str(exc)
+        _set_state(filename, "queued", last_error=str(exc)[:500], **_hist(f"error: {exc}"))
+        return entry
+    confirmed = isinstance(result, dict) and result.get("ok") is True
+    if confirmed and authed:
+        entry["status"] = "delivered"
+        entry["state"] = "delivered"
+        if keep or record_history:
+            _set_state(filename, "delivered", last_error="", delivered_at=int(time.time()), **_hist("delivered"))
         else:
             remove_outbox_file(filename)
-            entry["status"] = "delivered"
+    else:
+        why = (
+            "peer response lacked ok:true"
+            if not confirmed
+            else "success was not on an authenticated (token over https) channel"
+        )
+        entry["status"] = "sent"
+        entry["state"] = "sent"
+        entry["detail"] = why
+        _set_state(filename, "sent", last_error=why, **_hist("sent"))
+    return entry
+
+
+def cmd_outbox_resubmit(args: argparse.Namespace) -> int:
+    """Re-send the SAME body under the SAME remote filename to an explicitly
+    approved destination (never bulk, never implicit)."""
+    picked = _pick_only(list(args.only or []))
+    ip = (args.peer_ip or "").strip()
+    if not ip or not _HOST_RE.match(ip):
+        raise SystemExit("--peer-ip must be an explicit host")
+    try:
+        port = int(args.portal_port)
+    except (TypeError, ValueError):
+        raise SystemExit("--portal-port must be an integer") from None
+    if not 1 <= port <= 65535:
+        raise SystemExit("--portal-port must be between 1 and 65535")
+    _bracketed_host(ip)  # refuses host:port typos before anything is touched
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import read_outbox_file
+
+    cache: dict[tuple[str, int], tuple[Any, bool, str]] = {}
+    results: list[dict[str, Any]] = []
+    for item in picked:
+        filename = str(item["filename"])
+        body, meta = read_outbox_file(filename)
+        if _item_state(meta) in _TERMINAL_STATES:
+            entry = {
+                "filename": filename,
+                "status": "skipped",
+                "state": _item_state(meta),
+                "detail": "already resolved; not resent",
+            }
+        else:
+            entry = _deliver_item(
+                item, body, meta, ip, port,
+                timeout=args.timeout, keep=True, listing_cache=cache, record_history=True,
+            )
         results.append(entry)
-    failed = [r for r in results if r.get("status") == "error"]
+        print(f"{entry['status']:9s} {filename} -> {ip}:{port}", file=sys.stderr)
+    ok = all(r["status"] in ("delivered", "skipped") for r in results)
+    print(json.dumps({"ok": ok, "results": results}, indent=2))
+    return 0 if ok else 1
+
+
+def cmd_flush_outbox(args: argparse.Namespace) -> int:
+    _ensure_orama_src()
+    from orama_system.lan_peer_files import list_outbox, read_outbox_file
+
+    # Each outbox item was queued with its own intended peer_ip/portal_port
+    # (see write_outbox_file) -- that stored target ALWAYS wins per item.
+    # --peer-ip/--portal-port on this command are only a fallback default
+    # for legacy items queued before peer_ip was recorded, never an
+    # override -- a batch commonly spans multiple peers.
+    #
+    # Delivery states (recorded in each entry's .meta.json):
+    #   queued    -> not yet accepted by the peer (default; absent == queued)
+    #   sent      -> peer answered 2xx but did NOT confirm ok:true over an
+    #                authenticated channel (kept; retried by default)
+    #   delivered -> authenticated HTTPS success AND body ok:true
+    # Failures, timeouts and SECURITY_STOP leave the entry queued with
+    # last_error. Selection: --only (repeatable) and/or --state. Default
+    # (neither) retries every non-delivered entry, as before.
+    only = list(getattr(args, "only", None) or [])
+    state_filter = list(getattr(args, "state", None) or [])
+    strict = bool(getattr(args, "strict", False))
+    keep = bool(getattr(args, "keep_delivered", False))
+    default_peer: tuple[str, int] | None = None
+    listing_cache: dict[tuple[str, int], tuple[Any, bool, str]] = {}
+    results: list[dict[str, Any]] = []
+    for item in _select_items(list_outbox(), only):
+        filename = str(item.get("filename") or "")
+        body, meta = read_outbox_file(filename)
+        prior = _item_state(meta)
+        if prior in _TERMINAL_STATES:
+            continue  # delivered/superseded are never resent, even by --state
+        if state_filter and prior not in state_filter:
+            continue
+        hist = meta.get("history")
+        last_hop = hist[-1] if isinstance(hist, list) and hist and isinstance(hist[-1], dict) else {}
+        redirected = bool(last_hop.get("to")) and last_hop.get("to") != last_hop.get("from")
+        if redirected and not only:
+            # A resubmit approved another destination (whatever came of it: sent,
+            # failed duplicate check, name collision, a timeout that may have
+            # landed). Resending to the original address could duplicate it or
+            # hit a stale address; require --only.
+            skipped = {
+                "filename": filename,
+                "status": "skipped",
+                "state": prior,
+                "detail": "resubmitted to another destination; use --only to resend explicitly",
+            }
+            results.append(skipped)
+            print(f"{skipped['status']:9s} {filename} ({skipped['detail']})", file=sys.stderr)
+            continue
+        stored_ip = str(meta.get("peer_ip") or "").strip()
+        record_history = False
+        item_ip, item_port = "", 0
+        if redirected:
+            # --only: resend to the last operator-approved destination, not the
+            # stale original; keep the history trail.
+            to = last_hop["to"] if isinstance(last_hop["to"], dict) else {}
+            hop_ip = str(to.get("peer_ip") or "").strip()
+            try:
+                hop_port = int(str(to.get("portal_port") or "").strip())
+            except ValueError:
+                hop_port = 0
+            if hop_ip and 1 <= hop_port <= 65535:
+                item_ip, item_port, record_history = hop_ip, hop_port, True
+        if not record_history:
+            if stored_ip:
+                item_port_raw = str(meta.get("portal_port") or "").strip()
+                item_ip, item_port = stored_ip, (int(item_port_raw) if item_port_raw else int(args.portal_port))
+            else:
+                if default_peer is None:
+                    default_peer = _resolve_peer(args)
+                item_ip, item_port = default_peer
+        entry = _deliver_item(
+            item, body, meta, item_ip, item_port,
+            timeout=args.timeout, keep=keep or record_history, listing_cache=listing_cache,
+            record_history=record_history,
+        )
+        results.append(entry)
+        detail = f" ({entry['detail'][:120]})" if entry.get("detail") else ""
+        print(f"{entry['status']:9s} {filename} -> {item_ip}:{item_port}{detail}", file=sys.stderr)
+    delivered = [r for r in results if r["status"] == "delivered"]
+    remaining = [r for r in results if r["status"] != "delivered"]
+    summary = f"delivered {len(delivered)}, still queued {len(remaining)}"
+    print(summary, file=sys.stderr)
     print(
         json.dumps(
             {
-                "ok": not failed,
+                "ok": not remaining,
+                "summary": summary,
+                "delivered": len(delivered),
+                "still_queued": len(remaining),
                 "results": results,
             },
             indent=2,
         )
     )
-    return 1 if failed else 0
+    if strict:
+        return 1 if remaining else 0
+    return 1 if any(r["status"] == "error" for r in results) else 0
 
 
 def cmd_fanout(args: argparse.Namespace) -> int:
@@ -411,7 +904,44 @@ def main(argv: list[str] | None = None) -> int:
         parents=[peer_p],
         help="Retry locally queued peer drops",
     )
+    flush.add_argument("--only", action="append", default=[], metavar="FILE_OR_ID",
+                       help="Only flush this outbox filename (or stem); repeatable")
+    flush.add_argument("--state", action="append", default=[], choices=list(_STATES),
+                       help="Only flush entries in this state; repeatable")
+    flush.add_argument("--strict", action="store_true",
+                       help="Exit non-zero when anything remains queued/sent")
+    flush.add_argument("--keep-delivered", action="store_true",
+                       help="Keep delivered entries (state=delivered) instead of removing them")
     flush.set_defaults(func=cmd_flush_outbox)
+
+    stat = sub.add_parser("outbox-status", help="List outbox entries and delivery states (read-only)")
+    stat.set_defaults(func=cmd_outbox_status)
+
+    res = sub.add_parser(
+        "outbox-resolve",
+        help="Record out-of-band evidence (delivered/superseded) for explicit items; no network",
+    )
+    res.add_argument("--only", action="append", default=[], metavar="FILE",
+                     help="Outbox filename to resolve; repeatable; at least one required")
+    res.add_argument("--state", required=True, choices=list(_RESOLVE_STATES))
+    res.add_argument("--evidence", required=True, help="Plain-text evidence (no secrets)")
+    res.set_defaults(func=cmd_outbox_resolve)
+
+    rsub = sub.add_parser(
+        "outbox-resubmit",
+        help="Re-send the same body and filename to an explicitly approved destination",
+    )
+    rsub.add_argument("--only", action="append", default=[], metavar="FILE",
+                      help="Outbox filename to resubmit; repeatable; at least one required")
+    rsub.add_argument("--peer-ip", required=True, help="Approved destination host")
+    rsub.add_argument("--portal-port", type=int, required=True, help="Approved destination portal port")
+    rsub.add_argument(
+        "--timeout",
+        type=int,
+        default=int(os.environ.get("LAN_PEER_HTTP_TIMEOUT", "30")),
+        help="HTTP timeout in seconds",
+    )
+    rsub.set_defaults(func=cmd_outbox_resubmit)
 
     fan = sub.add_parser("fanout", parents=[peer_p], help="Drop many assignments from manifest JSON")
     fan.add_argument("--manifest", required=True)
