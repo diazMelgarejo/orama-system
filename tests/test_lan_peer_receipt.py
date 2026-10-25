@@ -1,3 +1,4 @@
+"""Tests for the local, read-only lan_peer_assign receipt command."""
 from __future__ import annotations
 
 import hashlib
@@ -18,18 +19,21 @@ import lan_peer_assign as lpa  # noqa: E402
 
 @pytest.fixture
 def inbox(monkeypatch, tmp_path):
+    """Point the LAN peer state directory at a temporary path and return its inbox directory."""
     root = tmp_path / "lan_peer"
     monkeypatch.setattr("orama_system.lan_peer_files.lan_peer_state_dir", lambda: root)
     return root / "inbox"
 
 
 def _receipt(capsys, *argv):
+    """Run the receipt command and return (exit code, stdout, stderr)."""
     rc = lpa.main(["receipt", *argv])
     cap = capsys.readouterr()
     return rc, cap.out, cap.err
 
 
 def test_receipt_reports_exact_bytes_and_lf_hash(inbox, capsys):
+    """Receipt reports the stored byte count, raw sha256 and LF-normalised sha256 of a CRLF file."""
     inbox.mkdir(parents=True)
     raw = b"# t\r\nline\r\n"
     (inbox / "canary.md").write_bytes(raw)
@@ -46,6 +50,7 @@ def test_receipt_reports_exact_bytes_and_lf_hash(inbox, capsys):
 
 
 def test_receipt_uses_inbox_metadata_time(inbox, capsys):
+    """Receipt takes received_utc from the inbox metadata when recorded."""
     from orama_system.lan_peer_files import write_inbox_file
 
     write_inbox_file("meta.md", "hello\n", assignee="win")
@@ -59,6 +64,7 @@ def test_receipt_uses_inbox_metadata_time(inbox, capsys):
 
 
 def test_receipt_falls_back_to_mtime_without_metadata(inbox, capsys):
+    """Receipt falls back to the file mtime when there is no metadata."""
     inbox.mkdir(parents=True)
     path = inbox / "bare.md"
     path.write_bytes(b"x")
@@ -69,6 +75,7 @@ def test_receipt_falls_back_to_mtime_without_metadata(inbox, capsys):
 
 
 def test_receipt_plain_output_lists_fields(inbox, capsys):
+    """Plain output lists every receipt field."""
     inbox.mkdir(parents=True)
     (inbox / "p.md").write_bytes(b"abc")
     rc, out, _ = _receipt(capsys, "p.md")
@@ -78,6 +85,7 @@ def test_receipt_plain_output_lists_fields(inbox, capsys):
 
 
 def test_receipt_missing_file_exits_2(inbox, capsys):
+    """A missing inbox file exits 2 with a not-found message and no output."""
     inbox.mkdir(parents=True)
     rc, out, err = _receipt(capsys, "nope.md")
     assert rc == 2
@@ -87,6 +95,7 @@ def test_receipt_missing_file_exits_2(inbox, capsys):
 
 @pytest.mark.parametrize("bad", ["../evil.md", "a/b.md", "..\\evil.md","x.json"])
 def test_receipt_rejects_unsafe_names(inbox, capsys, bad):
+    """Unsafe names (traversal, separators, json) are rejected with exit 2."""
     inbox.mkdir(parents=True)
     rc, out, _ = _receipt(capsys, bad)
     assert rc == 2

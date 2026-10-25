@@ -36,6 +36,7 @@ _REPO_ROOT = _SCRIPT_DIR.parents[4]
 
 
 class Status(str, Enum):
+    """Outcome of one probe check: PASS, FAIL or SKIP."""
     PASS = "PASS"
     FAIL = "FAIL"
     SKIP = "SKIP"
@@ -43,12 +44,14 @@ class Status(str, Enum):
 
 @dataclass
 class Check:
+    """Result of one named probe check, with its status and a human-readable detail."""
     name: str
     status: Status
     detail: str = ""
 
 
 def discovery_path() -> Path:
+    """Return the path of the discovery file under the per-user state directory."""
     return Path.home() / ".openclaw" / "state" / "last_discovery.json"
 
 
@@ -58,6 +61,7 @@ def probe_result_path() -> Path:
 
 
 def write_probe_result(payload: dict[str, Any]) -> Path:
+    """Write the probe payload as JSON to the local probe-result file and return its path."""
     path = probe_result_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -65,6 +69,7 @@ def write_probe_result(payload: dict[str, Any]) -> Path:
 
 
 def _parse_env_line(line: str) -> tuple[str, str] | None:
+    """Parse one dotenv line into a (key, value) pair, or None for blanks, comments and malformed lines; strips an export prefix and matching quotes."""
     raw = line.strip()
     if not raw or raw.startswith("#"):
         return None
@@ -106,6 +111,7 @@ load_repo_env()
 
 
 def load_discovery() -> dict[str, Any]:
+    """Load the discovery JSON, returning an empty dict when it is missing or unreadable."""
     path = discovery_path()
     if not path.is_file():
         return {}
@@ -116,6 +122,7 @@ def load_discovery() -> dict[str, Any]:
 
 
 def local_role() -> str:
+    """Return this node's role, mac or win, from ORAMA_PLATFORM when set and otherwise from the operating system."""
     explicit = os.environ.get("ORAMA_PLATFORM", "").strip().lower()
     if explicit in ("macos", "darwin", "mac"):
         return "mac"
@@ -127,6 +134,7 @@ def local_role() -> str:
 
 
 def peer_from_discovery(discovery: dict[str, Any], role: str) -> tuple[str, int]:
+    """Return the peer host and LM Studio port for a role from discovery data, using the WIN_IP or MAC_IP env fallback when the recorded host is empty or loopback."""
     endpoints = discovery.get("endpoints") or {}
     if role == "mac":
         peer = endpoints.get("win") or {}
@@ -142,6 +150,7 @@ def peer_from_discovery(discovery: dict[str, Any], role: str) -> tuple[str, int]
 
 
 def http_get(url: str, token: str = "", timeout: int = 8) -> tuple[int, str]:
+    """GET a URL (bearer token only when given, after per-stack TLS trust is applied) and return (status, body truncated to 500 characters); status is -1 with the error text on failure."""
     headers: dict[str, str] = {}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -276,6 +285,7 @@ def relay_probe(
 
 
 def _pt_persisted_token() -> str:
+    """Return the control-plane token persisted under the Perpetua-Tools state directory, or an empty string when none is found."""
     for var in ("PERPETUA_TOOLS_ROOT", "PERPETUATOOLSROOT", "PERPETUA_TOOLS_PATH", "PT_HOME"):
         root = os.environ.get(var, "").strip()
         if not root:
@@ -287,6 +297,7 @@ def _pt_persisted_token() -> str:
 
 
 def pt_lane_token_candidates() -> list[str]:
+    """Return the de-duplicated Perpetua-Tools lane tokens: the env token first, then the persisted one."""
     ordered: list[str] = []
     seen: set[str] = set()
     for raw in (
@@ -300,6 +311,7 @@ def pt_lane_token_candidates() -> list[str]:
 
 
 def orama_lane_token_candidates() -> list[str]:
+    """Return the de-duplicated orama lane tokens: the primary env token first, then the local one."""
     ordered: list[str] = []
     seen: set[str] = set()
     for raw in (
@@ -313,6 +325,7 @@ def orama_lane_token_candidates() -> list[str]:
 
 
 def control_plane_auth_mode() -> str:
+    """Return which token lanes are configured: joint, pt_only, orama_only or unset."""
     pt = pt_lane_token_candidates()
     orama = orama_lane_token_candidates()
     if pt and orama:
@@ -325,6 +338,7 @@ def control_plane_auth_mode() -> str:
 
 
 def _merge_unique(*groups: list[str]) -> list[str]:
+    """Merge token lists into one list keeping first-seen order and dropping empties and duplicates."""
     ordered: list[str] = []
     seen: set[str] = set()
     for group in groups:
@@ -336,6 +350,7 @@ def _merge_unique(*groups: list[str]) -> list[str]:
 
 
 def collect_control_plane_token_candidates() -> list[str]:
+    """Return all candidate control-plane tokens ordered by the configured auth mode, with the peer token appended when set."""
     peer = os.environ.get("ORAMA_CONTROL_PLANE_TOKEN_PEER", "").strip()
     extra = [peer] if peer else []
     mode = control_plane_auth_mode()
@@ -349,6 +364,7 @@ def collect_control_plane_token_candidates() -> list[str]:
 
 
 def outbound_control_plane_tokens() -> list[str]:
+    """Return the tokens to send to a peer: the peer token first, then orama lane tokens, then Perpetua-Tools lane tokens, without duplicates."""
     peer = os.environ.get("ORAMA_CONTROL_PLANE_TOKEN_PEER", "").strip()
     ordered: list[str] = []
     seen: set[str] = set()
@@ -369,6 +385,7 @@ def resolve_control_plane_token() -> str:
 
 
 def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout: int = 10) -> Check:
+    """Probe the peer portal WebSocket with each token in turn and return a PASS, FAIL or SKIP Check; a TLS trust failure fails immediately without sending a token."""
     if not peer_ip:
         return Check("ws-peer", Status.SKIP, "no peer IP")
     if not tokens:
@@ -379,6 +396,7 @@ def check_ws_peer(peer_ip: str, portal_port: int, tokens: list[str], *, timeout:
             import asyncio
 
             async def _probe(tok: str) -> str:
+                """Open the peer WebSocket with one token (wss when a token is present), send a probe message and return the first reply truncated to 200 characters."""
                 try:
                     import websockets
                 except ImportError as imp_exc:
@@ -453,6 +471,7 @@ def run_checks(
     status_timeout: int = 30,
     ws_timeout: int = 10,
 ) -> list[Check]:
+    """Run the peer checks (portal health, authenticated status, LM Studio models, WebSocket) and return their results; a single failure Check when no peer host is known."""
     if not peer_ip:
         return [Check("peer-ip", Status.FAIL, "no peer IP in discovery or env")]
 
@@ -532,6 +551,7 @@ def run_checks(
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Command-line entry point: run the relay probe or the full check suite, print the result and return the exit code."""
     p = argparse.ArgumentParser(description="Probe LAN peer orama install")
     p.add_argument("--peer-ip", help="Override peer IP (default: last_discovery.json)")
     p.add_argument("--portal-port", type=int, default=int(os.environ.get("PORTAL_PORT", "8002")))
